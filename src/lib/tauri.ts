@@ -73,4 +73,6 @@ export const tauri = {
     invoke<void>("delete_path", { projectPath, rel }),
   renamePath: (projectPath: string, oldRel: string, newRel: string) =>
     invoke<void>("rename_path", { projectPath, oldRel, newRel }),
+  resetAppData: (scope: "runtime" | "projects" | "all") =>
+    invoke<void>("reset_app_data", { scope }),
 };

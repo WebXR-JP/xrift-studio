@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { X, ExternalLink, RefreshCw } from "lucide-react";
+import { X, ExternalLink, RefreshCw, Trash2, AlertTriangle } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { tauri } from "../lib/tauri";
 import { xrift } from "../lib/xrift-cli";
 import { BrandMark } from "./Brand";
+import { ConfirmDialog } from "./ConfirmDialog";
+import { useToast } from "./Toast";
 
 type Props = {
   open: boolean;
@@ -17,13 +19,36 @@ type VersionState = {
   xriftLoading: boolean;
 };
 
+type ResetScope = "runtime" | "all";
+
+const RESET_META: Record<
+  ResetScope,
+  { title: string; description: string; confirm: string }
+> = {
+  runtime: {
+    title: "ランタイムをリセット",
+    description:
+      "同梱の Node.js と @xrift/cli を削除し、ログイン状態もクリアします。\nプロジェクトは残ります。次回起動時にランタイムが再セットアップされます。",
+    confirm: "ランタイムをリセット",
+  },
+  all: {
+    title: "完全リセット",
+    description:
+      "Node.js / @xrift/cli / ログイン状態 / すべてのプロジェクトを削除します。\nこの操作は元に戻せません。本当に実行しますか？",
+    confirm: "すべて削除する",
+  },
+};
+
 export function AboutModal({ open, onClose }: Props) {
+  const toast = useToast();
   const [v, setV] = useState<VersionState>({
     app: null,
     node: null,
     xrift: null,
     xriftLoading: true,
   });
+  const [resetScope, setResetScope] = useState<ResetScope | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -61,12 +86,38 @@ export function AboutModal({ open, onClose }: Props) {
     setV((prev) => ({ ...prev, xrift: xv, xriftLoading: false }));
   };
 
+  const runReset = async () => {
+    if (!resetScope) return;
+    setResetting(true);
+    try {
+      await tauri.resetAppData(resetScope);
+      toast({
+        kind: "success",
+        title:
+          resetScope === "all"
+            ? "完全リセットしました"
+            : "ランタイムをリセットしました",
+        description: "アプリを再読み込みします",
+      });
+      window.setTimeout(() => window.location.reload(), 600);
+    } catch (e) {
+      toast({
+        kind: "error",
+        title: "リセットに失敗しました",
+        description: String(e),
+      });
+      setResetting(false);
+      setResetScope(null);
+    }
+  };
+
   if (!open) return null;
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 backdrop-blur-sm animate-fade-in"
-      onClick={onClose}
+      onClick={() => !resetting && onClose()}
     >
       <div
         className="w-[460px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-brand-lg animate-scale-in"
@@ -111,6 +162,38 @@ export function AboutModal({ open, onClose }: Props) {
               onReload={reloadXrift}
             />
           </dl>
+
+          <div className="mt-5 rounded-lg border border-rose-200 bg-rose-50/50 px-3 py-3">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-700">
+              <AlertTriangle size={11} strokeWidth={2.5} />
+              危険領域 (Danger Zone)
+            </div>
+            <div className="mt-1 text-[11px] leading-relaxed text-rose-700/80">
+              トラブル時の最終手段です。実行するとアプリが再読み込みされます。
+            </div>
+            <div className="mt-2.5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setResetScope("runtime")}
+                disabled={resetting}
+                className="flex items-center justify-center gap-1.5 rounded-md border border-rose-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                title="Node.js / @xrift/cli / ログイン状態を削除（プロジェクトは残る）"
+              >
+                <RefreshCw size={11} strokeWidth={2.25} />
+                ランタイムのみ
+              </button>
+              <button
+                type="button"
+                onClick={() => setResetScope("all")}
+                disabled={resetting}
+                className="flex items-center justify-center gap-1.5 rounded-md bg-rose-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
+                title="プロジェクトを含めてすべて削除"
+              >
+                <Trash2 size={11} strokeWidth={2.25} />
+                完全リセット
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-zinc-100 bg-zinc-50/70 px-5 py-3">
@@ -140,6 +223,18 @@ export function AboutModal({ open, onClose }: Props) {
         </div>
       </div>
     </div>
+
+    <ConfirmDialog
+      open={resetScope !== null}
+      destructive
+      busy={resetting}
+      title={resetScope ? RESET_META[resetScope].title : ""}
+      description={resetScope ? RESET_META[resetScope].description : undefined}
+      confirmLabel={resetScope ? RESET_META[resetScope].confirm : "OK"}
+      onConfirm={runReset}
+      onClose={() => !resetting && setResetScope(null)}
+    />
+    </>
   );
 }
 

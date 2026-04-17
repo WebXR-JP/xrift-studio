@@ -47,6 +47,33 @@ npm run tauri build
 
 ビルド成果物は `src-tauri/target/release/bundle/` に出力されます（Win: `.msi` / `.exe`、macOS: `.dmg` / `.app`）。
 
+## トラブルシューティング / リセット
+
+アプリのデータはすべて下記 1 か所にまとまっています（識別子: `net.xrift.studio`）。
+
+| OS | パス |
+|---|---|
+| Windows | `%APPDATA%\net.xrift.studio\` |
+| macOS | `~/Library/Application Support/net.xrift.studio/` |
+| Linux | `~/.local/share/net.xrift.studio/` |
+
+### アプリ内から (推奨)
+
+タイトルバーの **i** アイコン → About モーダル最下部の **危険領域** から実行できます。
+
+- **ランタイムのみ**: Node.js / `@xrift/cli` / ログイン状態を削除（プロジェクトは残る）
+- **完全リセット**: プロジェクトも含めてすべて削除
+
+実行後は自動でアプリが再読み込みされ、初回セットアップからやり直せます。
+
+### 手動で完全削除
+
+アプリを終了した上で、上記フォルダごと削除してください。Windows の例:
+
+```powershell
+Remove-Item -Recurse -Force "$env:APPDATA\net.xrift.studio"
+```
+
 ## リリース (GitHub Actions)
 
 `.github/workflows/release.yml` に Windows / macOS / Linux のインストーラを自動ビルドするワークフローを用意しています。

@@ -620,6 +620,46 @@ fn get_versions() -> Versions {
 }
 
 #[tauri::command]
+fn reset_app_data(app: AppHandle, scope: String) -> Result<(), String> {
+    let root = app_root(&app)?;
+    let paths = derive_paths(&root);
+
+    // 個別のサブディレクトリを削除するヘルパ。ロック等で一部が消せなくても
+    // 続行できるよう、存在しないパスは無視する。
+    let remove = |p: &str| -> Result<(), String> {
+        let path = Path::new(p);
+        if path.exists() {
+            std::fs::remove_dir_all(path).map_err(|e| format!("{}: {}", p, e))?;
+        }
+        Ok(())
+    };
+
+    match scope.as_str() {
+        "runtime" => {
+            remove(&paths.runtime_dir)?;
+            remove(&paths.npm_prefix)?;
+            remove(&paths.npm_cache)?;
+            remove(&paths.home)?;
+        }
+        "projects" => {
+            remove(&paths.projects_root)?;
+        }
+        "all" => {
+            // 既知のサブディレクトリを個別に削除（ログイン状態・ランタイム・
+            // プロジェクトを全て含む）。Tauri 自体が app_data_dir に書く
+            // 付随データはそのまま残す。
+            remove(&paths.runtime_dir)?;
+            remove(&paths.npm_prefix)?;
+            remove(&paths.npm_cache)?;
+            remove(&paths.home)?;
+            remove(&paths.projects_root)?;
+        }
+        other => return Err(format!("unknown reset scope: {}", other)),
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn kill_pid_tree(pid: u32) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
@@ -688,6 +728,7 @@ pub fn run() {
             rename_path,
             get_versions,
             kill_pid_tree,
+            reset_app_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
