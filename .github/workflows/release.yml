@@ -1,10 +1,10 @@
-name: Release (Windows)
+name: Release
 
-# 手動実行でタグを打ち、Windows 向けインストーラ (.exe / .msi) を
-# GitHub Release に添付するワークフロー。
+# 手動実行でタグを打ち、各 OS 向けインストーラを GitHub Release に
+# 添付するワークフロー（Windows / macOS / Linux 対応）。
 #
 # 使い方:
-#   Actions タブ → "Release (Windows)" → "Run workflow" で
+#   Actions タブ → "Release" → "Run workflow" で
 #   タグ名 (例: v0.1.0) を入力して実行。
 
 on:
@@ -30,8 +30,25 @@ permissions:
 
 jobs:
   build:
-    name: Build Windows installer
-    runs-on: windows-latest
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.platform }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            label: Windows
+            args: ''
+            rust-targets: ''
+          - platform: macos-latest
+            label: macOS (universal)
+            args: '--target universal-apple-darwin'
+            rust-targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
+          - platform: ubuntu-22.04
+            label: Linux
+            args: ''
+            rust-targets: ''
 
     steps:
       - name: Checkout
@@ -45,16 +62,36 @@ jobs:
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
 
       - name: Cache Cargo build
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+          key: ${{ matrix.platform }}
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            build-essential \
+            curl \
+            wget \
+            file
 
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build & create Release
+      - name: Build & upload to Release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -67,12 +104,15 @@ jobs:
             XRift の **非公式** クライアントアプリ。Node.js / `@xrift/cli` の
             セットアップを肩代わりし、環境構築を高速化することが目的です。
 
-            ### ダウンロード (Windows)
+            ### ダウンロード
 
-            - `.msi` — Windows Installer 形式
-            - `.exe` — NSIS セットアップ形式
+            | OS | 形式 |
+            |---|---|
+            | Windows | `.msi` (Windows Installer) / `.exe` (NSIS) |
+            | macOS | `.dmg` (universal — Apple Silicon + Intel) |
+            | Linux | `.deb` / `.rpm` / `.AppImage` |
 
             ※ 本アプリは XRift 公式とは無関係の有志製ツールです。
           releaseDraft: ${{ inputs.draft }}
           prerelease: ${{ inputs.prerelease }}
-          args: --verbose
+          args: ${{ matrix.args }}

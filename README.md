@@ -49,13 +49,21 @@ npm run tauri build
 
 ## リリース (GitHub Actions)
 
-`.github/workflows/release.yml` に Windows 向けインストーラを自動ビルドするワークフローを用意しています。
+`.github/workflows/release.yml` に Windows / macOS / Linux のインストーラを自動ビルドするワークフローを用意しています。
 
-1. GitHub の **Actions** タブ → **Release (Windows)** を選択
+1. GitHub の **Actions** タブ → **Release** を選択
 2. **Run workflow** をクリック
 3. タグ名（例: `v0.1.0`）を入力して実行
 
-ビルド後、指定タグで GitHub Release が作成され、`.msi` / `.exe` が自動添付されます。プレリリース／ドラフトとして公開するオプションもあります。
+ビルド後、指定タグで GitHub Release が作成され、各 OS の成果物が自動添付されます。
+
+| OS | 成果物 |
+|---|---|
+| Windows | `.msi` (Windows Installer) / `.exe` (NSIS) |
+| macOS | `.dmg` (universal — Apple Silicon + Intel) |
+| Linux | `.deb` / `.rpm` / `.AppImage` |
+
+プレリリース／ドラフトとして公開するオプションもあります。
 
 ## 構成
 
