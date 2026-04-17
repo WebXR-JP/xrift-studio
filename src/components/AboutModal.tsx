@@ -87,13 +87,16 @@ export function AboutModal({ open, onClose }: Props) {
                 XRift Studio
               </div>
               <div className="text-xs text-zinc-500">
-                XR ワールドを作って、世界に公開するデスクトップスタジオ
+                XRift の非公式クライアント — 環境構築を高速化
               </div>
             </div>
           </div>
         </div>
 
         <div className="px-6 py-5">
+          <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
+            本アプリは XRift 公式とは無関係の有志による非公式クライアントです。環境構築の手間を減らすことを目的としています。
+          </div>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
             Versions
           </div>

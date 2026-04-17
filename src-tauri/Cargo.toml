@@ -1,8 +1,8 @@
 [package]
 name = "xrift-studio"
 version = "0.1.0"
-description = "Official desktop launcher for XRift world creators"
-authors = ["XRift"]
+description = "Unofficial XRift client app — streamlines environment setup for world creators"
+authors = ["xrift-studio contributors"]
 license = "MIT"
 edition = "2021"
 

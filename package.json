@@ -2,7 +2,7 @@
   "name": "xrift-studio",
   "private": true,
   "version": "0.1.0",
-  "description": "Official desktop launcher for XRift world creators",
+  "description": "Unofficial XRift client app — streamlines environment setup for world creators",
   "type": "module",
   "license": "MIT",
   "author": "XRift",

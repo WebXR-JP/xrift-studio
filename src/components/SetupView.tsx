@@ -70,7 +70,10 @@ export function SetupView({ status, onReady }: Props) {
             <span className="text-gradient-brand">XRift Studio</span> へようこそ
           </h1>
           <p className="mt-2 text-sm text-zinc-500">
-            XR ワールドを作って、世界に公開するデスクトップスタジオ
+            XRift の非公式クライアント — 環境構築を高速化
+          </p>
+          <p className="mt-1 text-[11px] text-zinc-400">
+            ※ 本アプリは XRift 公式とは無関係の有志製ツールです
           </p>
         </div>
 
