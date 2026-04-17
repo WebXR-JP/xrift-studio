@@ -47,6 +47,16 @@ npm run tauri build
 
 ビルド成果物は `src-tauri/target/release/bundle/` に出力されます（Win: `.msi` / `.exe`、macOS: `.dmg` / `.app`）。
 
+## リリース (GitHub Actions)
+
+`.github/workflows/release.yml` に Windows 向けインストーラを自動ビルドするワークフローを用意しています。
+
+1. GitHub の **Actions** タブ → **Release (Windows)** を選択
+2. **Run workflow** をクリック
+3. タグ名（例: `v0.1.0`）を入力して実行
+
+ビルド後、指定タグで GitHub Release が作成され、`.msi` / `.exe` が自動添付されます。プレリリース／ドラフトとして公開するオプションもあります。
+
 ## 構成
 
 ```

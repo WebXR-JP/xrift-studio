@@ -1,0 +1,78 @@
+name: Release (Windows)
+
+# 手動実行でタグを打ち、Windows 向けインストーラ (.exe / .msi) を
+# GitHub Release に添付するワークフロー。
+#
+# 使い方:
+#   Actions タブ → "Release (Windows)" → "Run workflow" で
+#   タグ名 (例: v0.1.0) を入力して実行。
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'リリースタグ (例: v0.1.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'プレリリースとして公開する'
+        required: false
+        type: boolean
+        default: false
+      draft:
+        description: 'ドラフトとして公開する (手動で publish)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Windows installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build & create Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ inputs.tag }}
+          releaseName: 'XRift Studio ${{ inputs.tag }}'
+          releaseBody: |
+            ## XRift Studio ${{ inputs.tag }}
+
+            XRift の **非公式** クライアントアプリ。Node.js / `@xrift/cli` の
+            セットアップを肩代わりし、環境構築を高速化することが目的です。
+
+            ### ダウンロード (Windows)
+
+            - `.msi` — Windows Installer 形式
+            - `.exe` — NSIS セットアップ形式
+
+            ※ 本アプリは XRift 公式とは無関係の有志製ツールです。
+          releaseDraft: ${{ inputs.draft }}
+          prerelease: ${{ inputs.prerelease }}
+          args: --verbose
