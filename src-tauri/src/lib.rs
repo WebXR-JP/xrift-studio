@@ -29,6 +29,21 @@ const NODE_EXE_NAME: &str = "node";
 #[cfg(target_os = "macos")]
 const NODE_BIN_REL: &str = "bin";
 
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+const NODE_DIST: &str = "node-v24.15.0-linux-x64";
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+const NODE_ARCHIVE_NAME: &str = "node-v24.15.0-linux-x64.tar.gz";
+
+#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+const NODE_DIST: &str = "node-v24.15.0-linux-arm64";
+#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+const NODE_ARCHIVE_NAME: &str = "node-v24.15.0-linux-arm64.tar.gz";
+
+#[cfg(target_os = "linux")]
+const NODE_EXE_NAME: &str = "node";
+#[cfg(target_os = "linux")]
+const NODE_BIN_REL: &str = "bin";
+
 fn node_url() -> String {
     format!(
         "https://nodejs.org/dist/{}/{}",
@@ -219,7 +234,7 @@ fn extract_archive(archive: &Path, dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn extract_archive(archive: &Path, dest: &Path) -> Result<(), String> {
     let file = std::fs::File::open(archive).map_err(|e| e.to_string())?;
     let gz = flate2::read::GzDecoder::new(file);
