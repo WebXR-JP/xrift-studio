@@ -153,12 +153,12 @@ export function AboutModal({ open, onClose }: Props) {
           </div>
           <dl className="mt-2 divide-y divide-zinc-100">
             <Row label="XRift Studio" value={v.app} hint="アプリ本体" />
-            <Row label="Node.js" value={v.node} hint="同梱ランタイム (LTS)" />
+            <Row label="Node.js" value={v.node} hint="アプリ同梱 (LTS)" />
             <Row
               label="@xrift/cli"
               value={v.xrift}
               loading={v.xriftLoading}
-              hint="プロジェクト作成 / アップロード"
+              hint="ワールドの作成・公開ツール"
               onReload={reloadXrift}
             />
           </dl>

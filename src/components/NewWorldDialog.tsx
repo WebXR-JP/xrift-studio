@@ -21,9 +21,9 @@ export function NewWorldDialog({ open, busy, onClose, onCreate }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 backdrop-blur-sm">
       <div className="w-[440px] rounded-xl border border-zinc-200 bg-white p-6 shadow-2xl">
-        <h2 className="text-lg font-semibold text-zinc-900">新規ワールドを作成</h2>
+        <h2 className="text-lg font-semibold text-zinc-900">新しいワールドを作る</h2>
         <p className="mt-1 text-sm text-zinc-500">
-          プロジェクト名を入力してください。半角英数字とハイフンが使えます。
+          ワールド名を入れてください（半角英数字とハイフンのみ）。
         </p>
         <input
           autoFocus

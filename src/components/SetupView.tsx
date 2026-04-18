@@ -80,12 +80,12 @@ export function SetupView({ status, onReady }: Props) {
         <div className="rounded-2xl border border-white/60 bg-white/80 p-6 shadow-brand backdrop-blur-sm">
           <div className="flex items-center gap-2 text-xs text-zinc-500">
             <Sparkles size={14} className="text-brand-500" strokeWidth={2} />
-            <span>システム非依存の隔離環境を自動でセットアップ</span>
+            <span>準備はアプリにおまかせ。ワンクリックで始められます</span>
           </div>
 
           <ul className="mt-4 space-y-2.5 text-sm">
-            <SetupItem done={status.nodeInstalled} label="Node.js v24 LTS" hint="ランタイム・npm 同梱（約 30MB）" />
-            <SetupItem done={status.xriftInstalled} label="@xrift/cli" hint="プロジェクト作成・アップロード用の CLI" />
+            <SetupItem done={status.nodeInstalled} label="Node.js v24 LTS" hint="Node.js 本体と npm を同梱（約 30MB）" />
+            <SetupItem done={status.xriftInstalled} label="@xrift/cli" hint="ワールドの作成・公開に使う公式ツール" />
           </ul>
 
           <div className="mt-4 rounded-lg bg-zinc-50 px-3 py-2 text-[11px] text-zinc-500">
@@ -151,7 +151,7 @@ export function SetupView({ status, onReady }: Props) {
         </div>
 
         <div className="mt-5 text-center text-[11px] text-zinc-400">
-          システムの Node や global npm は使用しません。完全に分離された環境で完結します。
+          お使いのシステムには影響しません。すべてアプリ専用のフォルダで完結します。
         </div>
       </div>
     </div>

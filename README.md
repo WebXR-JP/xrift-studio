@@ -1,55 +1,79 @@
 # XRift Studio
 
-[XRift](https://xrift.net/) の**非公式**クライアントアプリ。Node.js や `@xrift/cli` のセットアップを肩代わりし、**環境構築を高速化**することが目的です。プロジェクトの作成・編集・アップロードもワンクリックで。
+[XRift](https://xrift.net/) のワールドを、インストールからアップロードまで **このアプリ 1 つで** 完結できるデスクトップアプリです。
+Node.js も `@xrift/cli` もアプリが裏で用意するので、**準備ゼロで始められます**。
 
-> Status: **v0.1 (alpha)** — UI シェル + `xrift` CLI 連携まで。AI 統合は v0.2 で予定。
->
-> ⚠️ 本プロジェクトは XRift 公式とは無関係の有志によるサードパーティ製ツールです。XRift 本体に関する不具合報告等は公式チャンネルへお願いします。
+> ⚠️ 本アプリは XRift 公式とは無関係の **有志製ツール** です。XRift 本体に関する不具合は公式チャンネルへお問い合わせください。
 
-## 機能
+---
 
-- 📁 **プロジェクト一覧**: `~/xrift-projects/` 配下のワールドを自動検出
-- ✏️ **Monaco エディタ**: `src/World.tsx` をその場でちょい編集（Ctrl/⌘+S で保存）
-- 🚀 **ワンクリック操作**: ログイン / 新規ワールド / VS Code で開く / アップロード
-- 📜 **ログストリーム**: `xrift` CLI の stdout/stderr をリアルタイム表示
+## できること
 
-## 必要な環境
+- 🚀 **準備ゼロで始められる** — Node.js や CLI のインストールはアプリ任せ
+- 📁 **プロジェクト一覧** — 作ったワールドをサムネイル付きで一覧
+- ✏️ **内蔵エディタ** — ブラウザ感覚でコードを編集、`Ctrl/⌘+S` で保存
+- 🌐 **ワンクリックでプレビュー** — 「実行」を押すだけでブラウザに開発画面が開く
+- 📤 **ワンクリックで公開** — 「アップロード」で XRift に即公開、共有 URL もその場で
+- 🔄 **CLI 自動アップデート** — `@xrift/cli` に新版が出ると起動時にお知らせ
 
-- **Node.js** 20+
-- **Rust** (stable) — Tauri のビルドに必須 → https://www.rust-lang.org/learn/get-started
-- **`@xrift/cli`** がグローバルインストールされていること
-  ```bash
-  npm install -g @xrift/cli
-  ```
-- OS: Windows 10/11、macOS 12+
+## ダウンロード
 
-### Windows 追加要件
+[**最新版を GitHub Releases からダウンロード →**](https://github.com/WebXR-JP/xrift-studio/releases/latest)
 
-- [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)（"Desktop development with C++" ワークロード）
-- WebView2 Runtime（Win11 は標準搭載）
+| OS | ファイル形式 |
+|---|---|
+| Windows 10 / 11 | `.msi`（推奨）または `.exe` |
+| macOS 12+（Apple Silicon / Intel 共通） | `.dmg` |
+| Linux | `.deb` / `.rpm` / `.AppImage` |
 
-### macOS 追加要件
+## はじめての起動
 
-- Xcode Command Line Tools: `xcode-select --install`
+1. アプリを起動するとセットアップ画面が出ます
+2. **「セットアップを開始」** をクリック
+3. 以下が自動で導入されます（数十秒〜1 分ほど）
+   - **Node.js**（アプリ専用フォルダに展開、システムには影響しません）
+   - **`@xrift/cli`**（XRift の公式コマンドラインツール）
+4. 完了するとプロジェクトライブラリに移動します
 
-## 開発
+> 🔒 **システムの Node や npm は一切使いません。** すべてアプリ専用フォルダに隔離されるので、既存の開発環境を汚しません。
 
-```bash
-npm install
-npm run tauri dev
-```
+## 使い方
 
-## 配布ビルド
+### 1. ログイン
+右上の **「XRift にログイン」** ボタンを押すと、ブラウザで XRift の認証ページが開きます。認証後はアプリに戻って続きの操作ができます。
 
-```bash
-npm run tauri build
-```
+### 2. 新しいワールドを作る
+ライブラリ画面の **「+ 新規ワールド」** カードを押して名前を入力（半角英数字とハイフンが使えます）。
 
-ビルド成果物は `src-tauri/target/release/bundle/` に出力されます（Win: `.msi` / `.exe`、macOS: `.dmg` / `.app`）。
+### 3. 編集する
+作ったプロジェクトを開き、左側のファイル一覧から編集したいファイル（例: `src/World.tsx`）を選んで書き換え。`Ctrl/⌘ + S` で保存。
 
-## トラブルシューティング / リセット
+### 4. ブラウザで確認する
+上部の **「実行」** ボタンを押すと、開発サーバーが立ち上がりブラウザで自動的に開きます。ファイルを保存するとリロードされるので、作りながら即確認できます。
 
-アプリのデータはすべて下記 1 か所にまとまっています（識別子: `net.xrift.studio`）。
+### 5. アップロード
+準備ができたら **「アップロード」** ボタン。XRift に公開され、完了すると共有 URL がクリックひとつで開けるようになります。
+
+### おまけ: ターミナル / VS Code
+- **「ターミナル」** ボタン: プロジェクトのディレクトリでターミナルを開きます（Claude Code 等を起動する用途にも）
+- **「VS Code」** ボタン: システムに入っている VS Code でプロジェクトを開きます
+
+## `@xrift/cli` のアップデート
+
+起動時に新しいバージョンがあるか自動でチェックします。新版が出ていればダイアログでお知らせするので、**「アップデート」** をクリックするだけで更新完了です。
+
+## トラブルシューティング
+
+### うまく動かないとき
+
+右上の **i** アイコン → About → **危険領域（Danger Zone）** から:
+
+- **ランタイムのみリセット** — Node.js と `@xrift/cli` とログイン状態を削除して入れ直します（プロジェクトは残ります）
+- **完全リセット** — プロジェクトも含めてすべて初期化します
+
+### アプリのデータ保存場所
+
+すべてのデータは下記 1 か所にまとまっています。
 
 | OS | パス |
 |---|---|
@@ -57,64 +81,34 @@ npm run tauri build
 | macOS | `~/Library/Application Support/net.xrift.studio/` |
 | Linux | `~/.local/share/net.xrift.studio/` |
 
-### アプリ内から (推奨)
+### どうしても直らないとき（手動で完全削除）
 
-タイトルバーの **i** アイコン → About モーダル最下部の **危険領域** から実行できます。
-
-- **ランタイムのみ**: Node.js / `@xrift/cli` / ログイン状態を削除（プロジェクトは残る）
-- **完全リセット**: プロジェクトも含めてすべて削除
-
-実行後は自動でアプリが再読み込みされ、初回セットアップからやり直せます。
-
-### 手動で完全削除
-
-アプリを終了した上で、上記フォルダごと削除してください。Windows の例:
+アプリを終了してから上記フォルダごと削除してください。Windows の例:
 
 ```powershell
 Remove-Item -Recurse -Force "$env:APPDATA\net.xrift.studio"
 ```
 
-## リリース (GitHub Actions)
+## よくある質問
 
-`.github/workflows/release.yml` に Windows / macOS / Linux のインストーラを自動ビルドするワークフローを用意しています。
+**Q. 公式の XRift と何が違うの？**
+本アプリは非公式です。XRift の公式 CLI (`@xrift/cli`) を裏で呼び出して簡単に操作できるようにしているだけで、アカウントもワールドもすべて XRift 本体で管理されています。
 
-1. GitHub の **Actions** タブ → **Release** を選択
-2. **Run workflow** をクリック
-3. タグ名（例: `v0.1.0`）を入力して実行
+**Q. 既存の Node.js 環境に影響する？**
+しません。アプリは自分専用のフォルダに Node.js を置いて動くので、システムに入っている Node や npm の設定とは完全に独立しています。
 
-ビルド後、指定タグで GitHub Release が作成され、各 OS の成果物が自動添付されます。
+**Q. VS Code は必須？**
+いいえ、アプリ内のエディタで基本的な編集はできます。コード補完や拡張機能を使いたいときだけ **「VS Code」** ボタンから開いてください。
 
-| OS | 成果物 |
-|---|---|
-| Windows | `.msi` (Windows Installer) / `.exe` (NSIS) |
-| macOS | `.dmg` (universal — Apple Silicon + Intel) |
-| Linux | `.deb` / `.rpm` / `.AppImage` |
+**Q. アンインストールしてもデータは残る？**
+はい、[データ保存場所](#アプリのデータ保存場所) にワールドなどが残ります。完全に消したいときは手動で削除してください。
 
-プレリリース／ドラフトとして公開するオプションもあります。
+---
 
-## 構成
+## 開発者向け
 
-```
-src/
-  App.tsx                main layout + state
-  components/
-    Toolbar.tsx          上部アクションバー
-    Sidebar.tsx          左ペイン: プロジェクト一覧
-    EditorPane.tsx       中央: Monaco エディタ
-    LogsPane.tsx         下部: CLI ログ
-    NewWorldDialog.tsx   新規ワールド作成モーダル
-  lib/
-    tauri.ts             Rust コマンドの型付きラッパ
-    xrift-cli.ts         tauri-plugin-shell 経由で xrift CLI を実行
+ソースからビルドしたい方や開発にコントリビュートしたい方は [**DEVELOPMENT.md**](./DEVELOPMENT.md) を参照してください。
 
-src-tauri/
-  src/lib.rs             list_projects / read_world_file / write_world_file など
-  capabilities/          shell 実行許可リスト（xrift, code）
-  tauri.conf.json
-```
+## ライセンス
 
-## ロードマップ
-
-- [ ] v0.2: AI チャットパネル（Anthropic SDK、World.tsx 編集アシスタント）
-- [ ] v0.3: Node / xrift CLI 自動インストール、ログイン状態の検出
-- [ ] v0.4: コード署名、自動更新
+MIT

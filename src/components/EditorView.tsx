@@ -356,7 +356,7 @@ export function EditorView({
               onClick={handleStartDev}
               disabled={devStarting || busy}
               className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-              title="npm run dev でローカルサーバーを起動してブラウザで開く"
+              title="ローカルで起動してブラウザでプレビュー"
             >
               <Play size={11} fill="currentColor" strokeWidth={0} />
               {devStarting ? "起動中…" : "実行"}
@@ -375,7 +375,7 @@ export function EditorView({
             type="button"
             onClick={handleOpenTerminal}
             className="flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-            title="プロジェクトディレクトリでターミナルを開く（Claude Code などを起動できます）"
+            title="このプロジェクトのフォルダでターミナルを開く"
           >
             <TerminalSquare size={12} strokeWidth={2} />
             ターミナル

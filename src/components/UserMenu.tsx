@@ -50,7 +50,7 @@ export function UserMenu({ user, loading, busy, onLogin, onLogout }: Props) {
         className="flex items-center gap-1.5 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
       >
         <LogIn size={12} strokeWidth={2.25} />
-        ログインしてください
+        XRift にログイン
       </button>
     );
   }
