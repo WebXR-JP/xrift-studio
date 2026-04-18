@@ -3,8 +3,10 @@ import { ProjectLibrary } from "./components/ProjectLibrary";
 import { EditorView } from "./components/EditorView";
 import { NewWorldDialog } from "./components/NewWorldDialog";
 import { SetupView } from "./components/SetupView";
+import { UpdateDialog } from "./components/UpdateDialog";
 import { tauri, type Project, type RuntimeStatus } from "./lib/tauri";
-import { xrift, type LogLine, type Whoami } from "./lib/xrift-cli";
+import { xrift, clearCaches, type LogLine, type Whoami } from "./lib/xrift-cli";
+import { isNewer } from "./lib/semver";
 import { useToast } from "./components/Toast";
 
 function App() {
@@ -22,6 +24,13 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [showNewDialog, setShowNewDialog] = useState(false);
+
+  const [updateInfo, setUpdateInfo] = useState<{
+    current: string | null;
+    latest: string;
+  } | null>(null);
+  const [updating, setUpdating] = useState(false);
+  const [updateChecked, setUpdateChecked] = useState(false);
 
   const projectsRoot = runtime?.paths.projectsRoot ?? "";
 
@@ -76,6 +85,54 @@ function App() {
       refreshUser();
     }
   }, [runtime?.ready, refreshProjects, refreshUser]);
+
+  useEffect(() => {
+    if (!runtime?.ready || updateChecked) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const [current, latest] = await Promise.all([
+          xrift.version(silentLog),
+          tauri.checkXriftLatest(),
+        ]);
+        if (!mounted) return;
+        setUpdateChecked(true);
+        if (!latest) return;
+        if (!current || isNewer(latest, current)) {
+          setUpdateInfo({ current, latest });
+        }
+      } catch {
+        if (mounted) setUpdateChecked(true);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [runtime?.ready, updateChecked, silentLog]);
+
+  const handleUpdateXrift = async () => {
+    setUpdating(true);
+    try {
+      await tauri.updateXrift();
+      clearCaches();
+      toast({
+        kind: "success",
+        title: "@xrift/cli をアップデートしました",
+        description: updateInfo?.latest
+          ? `v${updateInfo.latest}`
+          : undefined,
+      });
+      setUpdateInfo(null);
+    } catch (e) {
+      toast({
+        kind: "error",
+        title: "アップデートに失敗しました",
+        description: String(e),
+      });
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   const wrap = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -148,6 +205,17 @@ function App() {
     );
   }
 
+  const updateDialog = (
+    <UpdateDialog
+      open={updateInfo !== null}
+      currentVersion={updateInfo?.current ?? null}
+      latestVersion={updateInfo?.latest ?? null}
+      busy={updating}
+      onUpdate={handleUpdateXrift}
+      onClose={() => !updating && setUpdateInfo(null)}
+    />
+  );
+
   if (selected) {
     return (
       <>
@@ -162,6 +230,7 @@ function App() {
           onBack={() => setSelected(null)}
           onProjectChanged={refreshProjects}
         />
+        {updateDialog}
       </>
     );
   }
@@ -187,6 +256,7 @@ function App() {
         onClose={() => setShowNewDialog(false)}
         onCreate={handleCreate}
       />
+      {updateDialog}
     </>
   );
 }

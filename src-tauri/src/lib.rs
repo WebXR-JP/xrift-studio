@@ -228,9 +228,10 @@ fn extract_archive(archive: &Path, dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
-async fn install_xrift(app: &AppHandle, paths: &RuntimePaths) -> Result<(), String> {
-    emit_progress(app, "npm-install", 0.0, "xrift CLI をインストール中...");
-
+async fn run_npm_install_global(
+    paths: &RuntimePaths,
+    package_spec: &str,
+) -> Result<(), String> {
     let mut cmd = tokio::process::Command::new(&paths.node_exe);
     cmd.arg(&paths.npm_cli_js)
         .arg("install")
@@ -241,7 +242,7 @@ async fn install_xrift(app: &AppHandle, paths: &RuntimePaths) -> Result<(), Stri
         .arg(&paths.npm_cache)
         .arg("--no-audit")
         .arg("--no-fund")
-        .arg("@xrift/cli");
+        .arg(package_spec);
 
     cmd.env_clear();
     cmd.env(
@@ -278,6 +279,40 @@ async fn install_xrift(app: &AppHandle, paths: &RuntimePaths) -> Result<(), Stri
             stdout, stderr
         ));
     }
+    Ok(())
+}
+
+async fn install_xrift(app: &AppHandle, paths: &RuntimePaths) -> Result<(), String> {
+    emit_progress(app, "npm-install", 0.0, "xrift CLI をインストール中...");
+    run_npm_install_global(paths, "@xrift/cli").await
+}
+
+#[tauri::command]
+async fn check_xrift_latest() -> Result<Option<String>, String> {
+    let url = "https://registry.npmjs.org/@xrift/cli/latest";
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client.get(url).send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Ok(None);
+    }
+    let body = resp.text().await.map_err(|e| e.to_string())?;
+    let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+    let version = json
+        .get("version")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    Ok(version)
+}
+
+#[tauri::command]
+async fn update_xrift(app: AppHandle) -> Result<(), String> {
+    let paths = runtime_paths(app.clone())?;
+    emit_progress(&app, "xrift-update", 0.0, "@xrift/cli をアップデート中...");
+    run_npm_install_global(&paths, "@xrift/cli@latest").await?;
+    emit_progress(&app, "xrift-update", 100.0, "アップデート完了");
     Ok(())
 }
 
@@ -619,44 +654,101 @@ fn get_versions() -> Versions {
     }
 }
 
+// Windows の npm でインストールされたファイルは read-only 属性が付くことがあり、
+// そのままでは remove_dir_all が `Access is denied` で失敗する。
+// このヘルパは事前に属性をクリアし、短い待機を挟みつつ数回リトライする。
+fn clear_readonly_recursive(path: &Path) {
+    let meta = match std::fs::symlink_metadata(path) {
+        Ok(m) => m,
+        Err(_) => return,
+    };
+    let mut perm = meta.permissions();
+    if perm.readonly() {
+        perm.set_readonly(false);
+        let _ = std::fs::set_permissions(path, perm);
+    }
+    if meta.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(path) {
+            for entry in entries.flatten() {
+                clear_readonly_recursive(&entry.path());
+            }
+        }
+    }
+}
+
+fn force_remove_dir_all(path: &Path) -> Result<(), String> {
+    if !path.exists() {
+        return Ok(());
+    }
+    if std::fs::remove_dir_all(path).is_ok() {
+        return Ok(());
+    }
+    clear_readonly_recursive(path);
+    let mut last_err: Option<std::io::Error> = None;
+    for attempt in 0..3 {
+        match std::fs::remove_dir_all(path) {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                last_err = Some(e);
+                std::thread::sleep(std::time::Duration::from_millis(300 * (attempt + 1)));
+                clear_readonly_recursive(path);
+            }
+        }
+    }
+    if !path.exists() {
+        return Ok(());
+    }
+    Err(format!(
+        "{}: {}",
+        path.display(),
+        last_err
+            .map(|e| e.to_string())
+            .unwrap_or_else(|| "unknown error".to_string())
+    ))
+}
+
 #[tauri::command]
 fn reset_app_data(app: AppHandle, scope: String) -> Result<(), String> {
     let root = app_root(&app)?;
     let paths = derive_paths(&root);
 
-    // 個別のサブディレクトリを削除するヘルパ。ロック等で一部が消せなくても
-    // 続行できるよう、存在しないパスは無視する。
-    let remove = |p: &str| -> Result<(), String> {
-        let path = Path::new(p);
-        if path.exists() {
-            std::fs::remove_dir_all(path).map_err(|e| format!("{}: {}", p, e))?;
+    // 削除に失敗したパスを収集し、全ターゲットを試行してからまとめてエラー化する。
+    // 途中で失敗しても残りの領域は掃除されるので、ユーザの再試行が効きやすい。
+    let mut failures: Vec<String> = Vec::new();
+    let mut try_remove = |p: &str| {
+        if let Err(e) = force_remove_dir_all(Path::new(p)) {
+            failures.push(e);
         }
-        Ok(())
     };
 
     match scope.as_str() {
         "runtime" => {
-            remove(&paths.runtime_dir)?;
-            remove(&paths.npm_prefix)?;
-            remove(&paths.npm_cache)?;
-            remove(&paths.home)?;
+            try_remove(&paths.runtime_dir);
+            try_remove(&paths.npm_prefix);
+            try_remove(&paths.npm_cache);
+            try_remove(&paths.home);
         }
         "projects" => {
-            remove(&paths.projects_root)?;
+            try_remove(&paths.projects_root);
         }
         "all" => {
             // 既知のサブディレクトリを個別に削除（ログイン状態・ランタイム・
             // プロジェクトを全て含む）。Tauri 自体が app_data_dir に書く
             // 付随データはそのまま残す。
-            remove(&paths.runtime_dir)?;
-            remove(&paths.npm_prefix)?;
-            remove(&paths.npm_cache)?;
-            remove(&paths.home)?;
-            remove(&paths.projects_root)?;
+            try_remove(&paths.runtime_dir);
+            try_remove(&paths.npm_prefix);
+            try_remove(&paths.npm_cache);
+            try_remove(&paths.home);
+            try_remove(&paths.projects_root);
         }
         other => return Err(format!("unknown reset scope: {}", other)),
     }
-    Ok(())
+
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("\n"))
+    }
 }
 
 #[tauri::command]
@@ -729,6 +821,8 @@ pub fn run() {
             get_versions,
             kill_pid_tree,
             reset_app_data,
+            check_xrift_latest,
+            update_xrift,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

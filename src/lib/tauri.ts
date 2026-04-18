@@ -75,4 +75,6 @@ export const tauri = {
     invoke<void>("rename_path", { projectPath, oldRel, newRel }),
   resetAppData: (scope: "runtime" | "projects" | "all") =>
     invoke<void>("reset_app_data", { scope }),
+  checkXriftLatest: () => invoke<string | null>("check_xrift_latest"),
+  updateXrift: () => invoke<void>("update_xrift"),
 };
