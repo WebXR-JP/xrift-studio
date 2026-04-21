@@ -13,8 +13,6 @@ type Props = {
 type VersionState = {
   app: string | null;
   node: string | null;
-  xrift: string | null;
-  xriftLoading: boolean;
 };
 
 type ResetScope = "runtime" | "all";
@@ -43,8 +41,6 @@ export function AboutModal({ open, onClose }: Props) {
   const [v, setV] = useState<VersionState>({
     app: null,
     node: null,
-    xrift: null,
-    xriftLoading: true,
   });
   const [resetScope, setResetScope] = useState<ResetScope | null>(null);
   const [resetting, setResetting] = useState(false);
@@ -52,38 +48,11 @@ export function AboutModal({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     let mounted = true;
-    (async () => {
-      try {
-        const ver = await backend.getVersions();
-        if (mounted) {
-          setV((prev) => ({
-            ...prev,
-            app: ver.appVersion,
-            node: ver.nodeVersion,
-          }));
-        }
-      } catch {
-        /* ignore */
-      }
-      try {
-        const xv = await backend.cliVersion(() => {});
-        if (mounted) {
-          setV((prev) => ({ ...prev, xrift: xv, xriftLoading: false }));
-        }
-      } catch {
-        if (mounted) setV((prev) => ({ ...prev, xriftLoading: false }));
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
+    backend.getVersions().then((ver) => {
+      if (mounted) setV({ app: ver.appVersion, node: ver.nodeVersion });
+    }).catch(() => {});
+    return () => { mounted = false; };
   }, [backend, open]);
-
-  const reloadXrift = async () => {
-    setV((prev) => ({ ...prev, xriftLoading: true }));
-    const xv = await backend.cliVersion(() => {}).catch(() => null);
-    setV((prev) => ({ ...prev, xrift: xv, xriftLoading: false }));
-  };
 
   const runReset = async () => {
     if (!resetScope) return;
@@ -152,14 +121,7 @@ export function AboutModal({ open, onClose }: Props) {
           </div>
           <dl className="mt-2 divide-y divide-zinc-100">
             <Row label="XRift Studio" value={v.app} hint="アプリ本体" />
-            <Row label="Node.js" value={v.node} hint="同梱ランタイム (LTS)" />
-            <Row
-              label="@xrift/cli"
-              value={v.xrift}
-              loading={v.xriftLoading}
-              hint="プロジェクト作成 / アップロード"
-              onReload={reloadXrift}
-            />
+            <Row label="Node.js" value={v.node} hint="同梱ランタイム" />
           </dl>
 
           <div className="mt-5 rounded-lg border border-rose-200 bg-rose-50/50 px-3 py-3">

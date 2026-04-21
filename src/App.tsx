@@ -2,10 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ProjectLibrary } from "./components/ProjectLibrary";
 import { EditorView } from "./components/EditorView";
 import { NewWorldDialog } from "./components/NewWorldDialog";
-import { SetupView } from "./components/SetupView";
-import { UpdateDialog } from "./components/UpdateDialog";
 import { getBackend, type Project, type RuntimeStatus, type LogLine, type Whoami } from "./lib/backend";
-import { isNewer } from "./lib/semver";
 import { useToast } from "./components/Toast";
 
 function App() {
@@ -25,13 +22,6 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [showNewDialog, setShowNewDialog] = useState(false);
-
-  const [updateInfo, setUpdateInfo] = useState<{
-    current: string | null;
-    latest: string;
-  } | null>(null);
-  const [updating, setUpdating] = useState(false);
-  const [updateChecked, setUpdateChecked] = useState(false);
 
   const projectsRoot = runtime?.paths.projectsRoot ?? "";
 
@@ -86,54 +76,6 @@ function App() {
       refreshUser();
     }
   }, [runtime?.ready, refreshProjects, refreshUser]);
-
-  useEffect(() => {
-    if (!runtime?.ready || updateChecked) return;
-    let mounted = true;
-    (async () => {
-      try {
-        const [current, latest] = await Promise.all([
-          backend.cliVersion(silentLog),
-          backend.checkXriftLatest(),
-        ]);
-        if (!mounted) return;
-        setUpdateChecked(true);
-        if (!latest) return;
-        if (!current || isNewer(latest, current)) {
-          setUpdateInfo({ current, latest });
-        }
-      } catch {
-        if (mounted) setUpdateChecked(true);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [backend, runtime?.ready, updateChecked, silentLog]);
-
-  const handleUpdateXrift = async () => {
-    setUpdating(true);
-    try {
-      await backend.updateXrift();
-      backend.clearCaches();
-      toast({
-        kind: "success",
-        title: "@xrift/cli をアップデートしました",
-        description: updateInfo?.latest
-          ? `v${updateInfo.latest}`
-          : undefined,
-      });
-      setUpdateInfo(null);
-    } catch (e) {
-      toast({
-        kind: "error",
-        title: "アップデートに失敗しました",
-        description: String(e),
-      });
-    } finally {
-      setUpdating(false);
-    }
-  };
 
   const wrap = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -198,41 +140,19 @@ function App() {
     );
   }
 
-  if (!runtime || !runtime.ready) {
-    return (
-      runtime && (
-        <SetupView status={runtime} onReady={(s) => setRuntime(s)} />
-      )
-    );
-  }
-
-  const updateDialog = (
-    <UpdateDialog
-      open={updateInfo !== null}
-      currentVersion={updateInfo?.current ?? null}
-      latestVersion={updateInfo?.latest ?? null}
-      busy={updating}
-      onUpdate={handleUpdateXrift}
-      onClose={() => !updating && setUpdateInfo(null)}
-    />
-  );
-
   if (selected) {
     return (
-      <>
-        <EditorView
-          project={selected}
-          user={user}
-          busy={busy}
-          appendLog={appendLog}
-          logs={logs}
-          setBusy={setBusy}
-          clearLogs={() => setLogs([])}
-          onBack={() => setSelected(null)}
-          onProjectChanged={refreshProjects}
-        />
-        {updateDialog}
-      </>
+      <EditorView
+        project={selected}
+        user={user}
+        busy={busy}
+        appendLog={appendLog}
+        logs={logs}
+        setBusy={setBusy}
+        clearLogs={() => setLogs([])}
+        onBack={() => setSelected(null)}
+        onProjectChanged={refreshProjects}
+      />
     );
   }
 
@@ -257,7 +177,6 @@ function App() {
         onClose={() => setShowNewDialog(false)}
         onCreate={handleCreate}
       />
-      {updateDialog}
     </>
   );
 }

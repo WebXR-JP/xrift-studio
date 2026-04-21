@@ -55,41 +55,11 @@ export class ElectronBackend implements Backend {
   }
 
   async runtimeStatus(): Promise<RuntimeStatus> {
-    // Electron doesn't need a separate runtime setup — Node.js is bundled
     const projectsRoot = await api().getProjectsRoot();
     return {
       ready: true,
-      nodeInstalled: true,
-      xriftInstalled: true, // We'll use SDK directly in PR2
-      paths: {
-        appRoot: "",
-        runtimeDir: "",
-        nodeDistDir: "",
-        nodeBinDir: "",
-        nodeExe: "",
-        npmCliJs: "",
-        npmPrefix: "",
-        npmCache: "",
-        home: "",
-        projectsRoot,
-        xriftCmd: "",
-        xriftJs: "",
-      },
+      paths: { projectsRoot },
     };
-  }
-
-  async setupRuntime(): Promise<RuntimeStatus> {
-    // No-op for Electron — always ready
-    return this.runtimeStatus();
-  }
-
-  async checkXriftLatest(): Promise<string | null> {
-    // Stub — SDK will be used directly in PR2
-    return null;
-  }
-
-  async updateXrift(): Promise<void> {
-    // Stub
   }
 
   async resetAppData(scope: "runtime" | "projects" | "all"): Promise<void> {
@@ -181,24 +151,15 @@ export class ElectronBackend implements Backend {
     return { code: 0, stdout: "", stderr: "" };
   }
 
-  clearCaches(): void {
-    // No-op
-  }
-
-  async cliVersion(_onLog: (l: LogLine) => void): Promise<string | null> {
-    // Stub — no CLI in Electron mode
-    return null;
-  }
-
   async createWorld(_root: string, _name: string, onLog: (l: LogLine) => void): Promise<RunResult> {
     // Stub — will use SDK in PR2
-    onLog({ kind: "stderr", text: "World creation not yet implemented in Electron mode", ts: Date.now() });
+    onLog({ kind: "stderr", text: "World creation not yet implemented", ts: Date.now() });
     return { code: 1, stdout: "", stderr: "Not implemented" };
   }
 
   async upload(_projectPath: string, onLog: (l: LogLine) => void): Promise<RunResult> {
     // Stub — will use SDK in PR2
-    onLog({ kind: "stderr", text: "Upload not yet implemented in Electron mode", ts: Date.now() });
+    onLog({ kind: "stderr", text: "Upload not yet implemented", ts: Date.now() });
     return { code: 1, stdout: "", stderr: "Not implemented" };
   }
 
@@ -222,10 +183,5 @@ export class ElectronBackend implements Backend {
         await api().stopDevServer(pid);
       },
     };
-  }
-
-  onSetupProgress(_callback: (payload: { step: string; percent: number; message: string }) => void): () => void {
-    // No-op — Electron doesn't need setup
-    return () => {};
   }
 }

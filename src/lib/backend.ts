@@ -1,6 +1,5 @@
 /**
- * Platform-agnostic backend interface.
- * Both Tauri and Electron implementations conform to this contract.
+ * Backend interface for Electron.
  */
 
 export type Project = {
@@ -22,26 +21,11 @@ export type Versions = {
   nodeVersion: string;
 };
 
-export type RuntimePaths = {
-  appRoot: string;
-  runtimeDir: string;
-  nodeDistDir: string;
-  nodeBinDir: string;
-  nodeExe: string;
-  npmCliJs: string;
-  npmPrefix: string;
-  npmCache: string;
-  home: string;
-  projectsRoot: string;
-  xriftCmd: string;
-  xriftJs: string;
-};
-
 export type RuntimeStatus = {
   ready: boolean;
-  nodeInstalled: boolean;
-  xriftInstalled: boolean;
-  paths: RuntimePaths;
+  paths: {
+    projectsRoot: string;
+  };
 };
 
 export type LogKind = "stdout" | "stderr" | "info" | "exit";
@@ -68,9 +52,6 @@ export interface Backend {
   // Runtime
   getVersions(): Promise<Versions>;
   runtimeStatus(): Promise<RuntimeStatus>;
-  setupRuntime(): Promise<RuntimeStatus>;
-  checkXriftLatest(): Promise<string | null>;
-  updateXrift(): Promise<void>;
   resetAppData(scope: "runtime" | "projects" | "all"): Promise<void>;
 
   // Projects
@@ -98,16 +79,12 @@ export interface Backend {
   openInVSCode(projectPath: string, onLog: (l: LogLine) => void): Promise<RunResult>;
   openTerminal(projectPath: string, onLog: (l: LogLine) => void): Promise<void>;
 
-  // Auth
+  // Auth (stub — will be replaced with SDK token-based auth in PR2)
   whoami(onLog: (l: LogLine) => void): Promise<Whoami | null>;
   login(onLog: (l: LogLine) => void): Promise<RunResult>;
   logout(onLog: (l: LogLine) => void): Promise<RunResult>;
-  clearCaches(): void;
 
-  // CLI version
-  cliVersion(onLog: (l: LogLine) => void): Promise<string | null>;
-
-  // World operations
+  // World operations (stub — will use SDK in PR2)
   createWorld(root: string, name: string, onLog: (l: LogLine) => void): Promise<RunResult>;
   upload(projectPath: string, onLog: (l: LogLine) => void): Promise<RunResult>;
 
@@ -117,9 +94,6 @@ export interface Backend {
     onLog: (l: LogLine) => void,
     onUrl: (url: string) => void,
   ): Promise<DevHandle>;
-
-  // Event listeners (for setup progress etc.)
-  onSetupProgress?(callback: (payload: { step: string; percent: number; message: string }) => void): () => void;
 }
 
 // Singleton backend instance - set at app startup
