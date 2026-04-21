@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { Sparkles, CheckCircle2, Loader2 } from "lucide-react";
-import { tauri, type RuntimeStatus } from "../lib/tauri";
+import { getBackend, type RuntimeStatus } from "../lib/backend";
 import { BrandMark } from "./Brand";
 
 type SetupProgress = {
@@ -16,26 +15,25 @@ type Props = {
 };
 
 export function SetupView({ status, onReady }: Props) {
+  const backend = getBackend();
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<SetupProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<SetupProgress[]>([]);
-  const unlistenRef = useRef<UnlistenFn | null>(null);
+  const unlistenRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    let mounted = true;
-    listen<SetupProgress>("setup-progress", (event) => {
-      if (!mounted) return;
-      setProgress(event.payload);
-      setLogs((prev) => [...prev, event.payload]);
-    }).then((un) => {
-      unlistenRef.current = un;
-    });
+    if (backend.onSetupProgress) {
+      const unlisten = backend.onSetupProgress((payload) => {
+        setProgress(payload);
+        setLogs((prev) => [...prev, payload]);
+      });
+      unlistenRef.current = unlisten;
+    }
     return () => {
-      mounted = false;
       unlistenRef.current?.();
     };
-  }, []);
+  }, [backend]);
 
   const start = async () => {
     setRunning(true);
@@ -43,7 +41,7 @@ export function SetupView({ status, onReady }: Props) {
     setLogs([]);
     setProgress(null);
     try {
-      const next = await tauri.setupRuntime();
+      const next = await backend.setupRuntime();
       if (next.ready) onReady(next);
       else setError("セットアップが完了しませんでした。");
     } catch (e) {

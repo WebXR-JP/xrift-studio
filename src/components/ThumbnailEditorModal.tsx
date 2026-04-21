@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import type { Project } from "../lib/tauri";
+import type { Project } from "../lib/backend";
 import { ThumbnailEditor } from "./ThumbnailEditor";
 
 type Props = {

@@ -14,7 +14,7 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
-import { tauri, type FsEntry } from "../lib/tauri";
+import { getBackend, type FsEntry } from "../lib/backend";
 import { useToast } from "./Toast";
 import { ConfirmDialog } from "./ConfirmDialog";
 
@@ -158,6 +158,7 @@ export function FileTree({
   refreshKey,
 }: Props) {
   const toast = useToast();
+  const backend = getBackend();
   const [tree, setTree] = useState<Node[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["src", "public"]));
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
@@ -178,7 +179,7 @@ export function FileTree({
   const loadDir = useCallback(
     async (rel: string): Promise<Node[]> => {
       try {
-        const entries = await tauri.listFiles(projectPath, rel);
+        const entries = await backend.listFiles(projectPath, rel);
         return entries.map((e) => ({ ...e, expanded: false, children: undefined }));
       } catch (e) {
         if (rel === "") setError(`${e}`);
@@ -265,7 +266,7 @@ export function FileTree({
       for (const f of arr) {
         const dataUrl = await fileToDataUrl(f);
         const destRel = dirRel ? `${dirRel}/${f.name}` : f.name;
-        await tauri.writeBinaryFile(projectPath, destRel, dataUrl);
+        await backend.writeBinaryFile(projectPath, destRel, dataUrl);
       }
       toast({
         kind: "success",
@@ -307,7 +308,7 @@ export function FileTree({
     }
     const newRel = dirOf(oldRel) ? `${dirOf(oldRel)}/${trimmed}` : trimmed;
     try {
-      await tauri.renamePath(projectPath, oldRel, newRel);
+      await backend.renamePath(projectPath, oldRel, newRel);
       toast({
         kind: "success",
         title: "名前を変更しました",
@@ -334,7 +335,7 @@ export function FileTree({
     if (!confirmDelete) return;
     setDeleting(true);
     try {
-      await tauri.deletePath(projectPath, confirmDelete.rel);
+      await backend.deletePath(projectPath, confirmDelete.rel);
       toast({
         kind: "success",
         title: confirmDelete.isDir

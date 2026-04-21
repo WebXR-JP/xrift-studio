@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, LogIn, LogOut, User, Copy, Check } from "lucide-react";
-import type { Whoami } from "../lib/xrift-cli";
+import type { Whoami } from "../lib/backend";
 
 type Props = {
   user: Whoami | null;

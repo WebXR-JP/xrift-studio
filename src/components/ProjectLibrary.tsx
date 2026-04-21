@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
 import { RefreshCw, Sparkles, Info, ExternalLink } from "lucide-react";
-import { openUrl } from "@tauri-apps/plugin-opener";
-import type { Project } from "../lib/tauri";
-import type { Whoami } from "../lib/xrift-cli";
+import { getBackend, type Project, type Whoami } from "../lib/backend";
 import { ProjectCard, NewProjectCard } from "./ProjectCard";
 import { BrandMark, BrandWordmark } from "./Brand";
 import { AboutModal } from "./AboutModal";
@@ -44,6 +42,7 @@ export function ProjectLibrary({
   onLogout,
   onRefresh,
 }: Props) {
+  const backend = getBackend();
   const hello = useMemo(() => greeting(), []);
   const displayName = user?.displayName;
   const [showAbout, setShowAbout] = useState(false);
@@ -128,7 +127,7 @@ export function ProjectLibrary({
               {user && (
                 <button
                   type="button"
-                  onClick={() => openUrl("https://xrift.net/").catch(() => {})}
+                  onClick={() => backend.openUrl("https://xrift.net/").catch(() => {})}
                   className="flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50"
                   title="XRift の公開ページを開く"
                 >
@@ -181,4 +180,3 @@ export function ProjectLibrary({
     </div>
   );
 }
-

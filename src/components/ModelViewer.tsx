@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Stage, Environment, Bounds } from "@react-three/drei";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { getBackend } from "../lib/backend";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
@@ -168,9 +168,10 @@ function Model({ object }: { object: THREE.Object3D }) {
 }
 
 export function ModelViewer({ projectPath, rel }: Props) {
+  const backend = getBackend();
   const format = useMemo(() => detectFormat(rel), [rel]);
   const fullPath = useMemo(() => joinPath(projectPath, rel), [projectPath, rel]);
-  const url = useMemo(() => convertFileSrc(fullPath), [fullPath]);
+  const url = useMemo(() => backend.convertFileSrc(fullPath), [backend, fullPath]);
   const { object, vrm, error, loading, reload } = useModel(url, format ?? "glb");
 
   const stats = useMemo(() => (object ? statsOf(object) : null), [object]);
