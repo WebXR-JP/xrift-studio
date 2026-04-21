@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { LogLine } from "../lib/xrift-cli";
+import type { LogLine } from "../lib/backend";
 
 type Props = {
   logs: LogLine[];

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { tauri } from "../lib/tauri";
+import { getBackend } from "../lib/backend";
 
 type Props = {
   projectPath: string;
@@ -7,6 +7,7 @@ type Props = {
 };
 
 export function ThumbnailEditor({ projectPath, onChanged }: Props) {
+  const backend = getBackend();
   const [thumb, setThumb] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -17,7 +18,7 @@ export function ThumbnailEditor({ projectPath, onChanged }: Props) {
   const reload = async () => {
     setLoading(true);
     try {
-      const t = await tauri.readThumbnail(projectPath);
+      const t = await backend.readThumbnail(projectPath);
       setThumb(t);
     } catch (e) {
       setError(`${e}`);
@@ -69,7 +70,7 @@ export function ThumbnailEditor({ projectPath, onChanged }: Props) {
     setError(null);
     try {
       const dataUrl = await fileToPngDataUrl(file);
-      await tauri.writeThumbnail(projectPath, dataUrl);
+      await backend.writeThumbnail(projectPath, dataUrl);
       setThumb(dataUrl);
       onChanged?.();
     } catch (e) {

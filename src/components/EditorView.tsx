@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ArrowLeft,
   Play,
@@ -12,16 +11,7 @@ import {
   Camera,
   Globe,
 } from "lucide-react";
-import { tauri, type Project } from "../lib/tauri";
-import {
-  xrift,
-  openInVSCode,
-  openTerminal,
-  startDevServer,
-  type DevHandle,
-  type LogLine,
-  type Whoami,
-} from "../lib/xrift-cli";
+import { getBackend, type Project, type DevHandle, type LogLine, type Whoami } from "../lib/backend";
 import { EditorPane } from "./EditorPane";
 import { LogsPane } from "./LogsPane";
 import { FileTree, classifyFile, languageOf, type FileKind } from "./FileTree";
@@ -65,6 +55,8 @@ export function EditorView({
   onProjectChanged,
 }: Props) {
   const toast = useToast();
+  const backend = getBackend();
+
   const [selectedRel, setSelectedRel] = useState<string | null>(null);
   const [selectedKind, setSelectedKind] = useState<FileKind>("text");
   const [content, setContent] = useState<string>("");
@@ -112,7 +104,7 @@ export function EditorView({
     (async () => {
       for (const candidate of DEFAULT_CANDIDATES) {
         try {
-          await tauri.readTextFile(project.path, candidate);
+          await backend.readTextFile(project.path, candidate);
           if (!cancelled) {
             setSelectedRel(candidate);
             setSelectedKind("text");
@@ -124,7 +116,7 @@ export function EditorView({
       }
       // Fallback: pick the first text file in root
       try {
-        const entries = await tauri.listFiles(project.path, "");
+        const entries = await backend.listFiles(project.path, "");
         const first = entries.find(
           (e) => !e.isDir && classifyFile(e.rel) === "text",
         );
@@ -139,14 +131,14 @@ export function EditorView({
     return () => {
       cancelled = true;
     };
-  }, [project.path]);
+  }, [backend, project.path]);
 
   const loadFile = useCallback(async () => {
     if (!selectedRel || !isText) return;
     setLoading(true);
     setError(null);
     try {
-      const txt = await tauri.readTextFile(project.path, selectedRel);
+      const txt = await backend.readTextFile(project.path, selectedRel);
       setContent(txt);
       setSavedContent(txt);
     } catch (e) {
@@ -156,7 +148,7 @@ export function EditorView({
     } finally {
       setLoading(false);
     }
-  }, [project.path, selectedRel, isText]);
+  }, [backend, project.path, selectedRel, isText]);
 
   useEffect(() => {
     if (selectedRel && isText) loadFile();
@@ -166,14 +158,14 @@ export function EditorView({
   const handleSave = useCallback(async () => {
     if (!selectedRel || !isText || !isDirty) return;
     try {
-      await tauri.writeTextFile(project.path, selectedRel, content);
+      await backend.writeTextFile(project.path, selectedRel, content);
       setSavedContent(content);
       toast({ kind: "success", title: "保存しました", description: selectedRel });
     } catch (e) {
       toast({ kind: "error", title: "保存に失敗しました", description: `${e}` });
       appendLog({ kind: "stderr", text: `save failed: ${e}`, ts: Date.now() });
     }
-  }, [isText, isDirty, project.path, selectedRel, content, appendLog, toast]);
+  }, [backend, isText, isDirty, project.path, selectedRel, content, appendLog, toast]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -197,7 +189,7 @@ export function EditorView({
 
   const handleUpload = () =>
     wrap(async () => {
-      const result = await xrift.upload(project.path, appendLog);
+      const result = await backend.upload(project.path, appendLog);
       onProjectChanged();
       const combined = `${result.stdout}\n${result.stderr}`.replace(
         /\u001b\[[0-9;]*m/g,
@@ -227,9 +219,9 @@ export function EditorView({
       }
     });
   const handleOpenVSCode = () =>
-    wrap(() => openInVSCode(project.path, appendLog));
+    wrap(() => backend.openInVSCode(project.path, appendLog));
   const handleOpenTerminal = () =>
-    openTerminal(project.path, appendLog).catch((e) =>
+    backend.openTerminal(project.path, appendLog).catch((e) =>
       appendLog({ kind: "stderr", text: `terminal failed: ${e}`, ts: Date.now() }),
     );
 
@@ -239,13 +231,13 @@ export function EditorView({
     setDevUrl(null);
     setLogsCollapsed(false);
     try {
-      const handle = await startDevServer(
+      const handle = await backend.startDevServer(
         project.path,
         appendLog,
         async (url) => {
           setDevUrl(url);
           try {
-            await openUrl(url);
+            await backend.openUrl(url);
           } catch (e) {
             appendLog({ kind: "stderr", text: `open url failed: ${e}`, ts: Date.now() });
           }
@@ -275,7 +267,7 @@ export function EditorView({
   const handleOpenDevUrl = async () => {
     if (!devUrl) return;
     try {
-      await openUrl(devUrl);
+      await backend.openUrl(devUrl);
     } catch (e) {
       appendLog({ kind: "stderr", text: `open url failed: ${e}`, ts: Date.now() });
     }
@@ -284,7 +276,7 @@ export function EditorView({
   const handleOpenPublished = async () => {
     const target = publishedUrl ?? "https://xrift.net/";
     try {
-      await openUrl(target);
+      await backend.openUrl(target);
     } catch (e) {
       appendLog({ kind: "stderr", text: `open url failed: ${e}`, ts: Date.now() });
     }

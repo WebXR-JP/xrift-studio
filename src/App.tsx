@@ -4,13 +4,14 @@ import { EditorView } from "./components/EditorView";
 import { NewWorldDialog } from "./components/NewWorldDialog";
 import { SetupView } from "./components/SetupView";
 import { UpdateDialog } from "./components/UpdateDialog";
-import { tauri, type Project, type RuntimeStatus } from "./lib/tauri";
-import { xrift, clearCaches, type LogLine, type Whoami } from "./lib/xrift-cli";
+import { getBackend, type Project, type RuntimeStatus, type LogLine, type Whoami } from "./lib/backend";
 import { isNewer } from "./lib/semver";
 import { useToast } from "./components/Toast";
 
 function App() {
   const toast = useToast();
+  const backend = getBackend();
+
   const [runtime, setRuntime] = useState<RuntimeStatus | null>(null);
   const [runtimeLoading, setRuntimeLoading] = useState(true);
 
@@ -41,33 +42,33 @@ function App() {
   const silentLog = useCallback((_l: LogLine) => {}, []);
 
   useEffect(() => {
-    tauri
+    backend
       .runtimeStatus()
       .then((s) => setRuntime(s))
       .catch((e) =>
         appendLog({ kind: "stderr", text: `runtime_status: ${e}`, ts: Date.now() }),
       )
       .finally(() => setRuntimeLoading(false));
-  }, [appendLog]);
+  }, [backend, appendLog]);
 
   const refreshUser = useCallback(async () => {
     setUserLoading(true);
     try {
-      const u = await xrift.whoami(silentLog);
+      const u = await backend.whoami(silentLog);
       setUser(u);
     } catch {
       setUser(null);
     } finally {
       setUserLoading(false);
     }
-  }, [silentLog]);
+  }, [backend, silentLog]);
 
   const refreshProjects = useCallback(async () => {
     if (!projectsRoot) return;
     setProjectsLoading(true);
     try {
-      await tauri.ensureDir(projectsRoot);
-      const list = await tauri.listProjects(projectsRoot);
+      await backend.ensureDir(projectsRoot);
+      const list = await backend.listProjects(projectsRoot);
       setProjects(list);
       setSelected((cur) =>
         cur ? list.find((p) => p.path === cur.path) ?? null : cur,
@@ -77,7 +78,7 @@ function App() {
     } finally {
       setProjectsLoading(false);
     }
-  }, [projectsRoot, appendLog]);
+  }, [backend, projectsRoot, appendLog]);
 
   useEffect(() => {
     if (runtime?.ready) {
@@ -92,8 +93,8 @@ function App() {
     (async () => {
       try {
         const [current, latest] = await Promise.all([
-          xrift.version(silentLog),
-          tauri.checkXriftLatest(),
+          backend.cliVersion(silentLog),
+          backend.checkXriftLatest(),
         ]);
         if (!mounted) return;
         setUpdateChecked(true);
@@ -108,13 +109,13 @@ function App() {
     return () => {
       mounted = false;
     };
-  }, [runtime?.ready, updateChecked, silentLog]);
+  }, [backend, runtime?.ready, updateChecked, silentLog]);
 
   const handleUpdateXrift = async () => {
     setUpdating(true);
     try {
-      await tauri.updateXrift();
-      clearCaches();
+      await backend.updateXrift();
+      backend.clearCaches();
       toast({
         kind: "success",
         title: "@xrift/cli をアップデートしました",
@@ -145,9 +146,9 @@ function App() {
 
   const handleLogin = () =>
     wrap(async () => {
-      await xrift.login(appendLog);
+      await backend.login(appendLog);
       await refreshUser();
-      const u = await xrift.whoami(silentLog).catch(() => null);
+      const u = await backend.whoami(silentLog).catch(() => null);
       if (u) {
         toast({
           kind: "success",
@@ -161,17 +162,17 @@ function App() {
 
   const handleLogout = () =>
     wrap(async () => {
-      await xrift.logout(appendLog);
+      await backend.logout(appendLog);
       setUser(null);
       toast({ kind: "info", title: "ログアウトしました" });
     });
 
   const handleCreate = (name: string) =>
     wrap(async () => {
-      const result = await xrift.createWorld(projectsRoot, name, appendLog);
+      const result = await backend.createWorld(projectsRoot, name, appendLog);
       setShowNewDialog(false);
       await refreshProjects();
-      const list = await tauri.listProjects(projectsRoot);
+      const list = await backend.listProjects(projectsRoot);
       const created = list.find((p) => p.name === name);
       if (result.code === 0) {
         toast({

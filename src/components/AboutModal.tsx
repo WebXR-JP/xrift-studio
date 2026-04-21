@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import { X, ExternalLink, RefreshCw, Trash2, AlertTriangle } from "lucide-react";
-import { openUrl } from "@tauri-apps/plugin-opener";
-import { tauri } from "../lib/tauri";
-import { xrift } from "../lib/xrift-cli";
+import { getBackend } from "../lib/backend";
 import { BrandMark } from "./Brand";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useToast } from "./Toast";
@@ -41,6 +39,7 @@ const RESET_META: Record<
 
 export function AboutModal({ open, onClose }: Props) {
   const toast = useToast();
+  const backend = getBackend();
   const [v, setV] = useState<VersionState>({
     app: null,
     node: null,
@@ -55,7 +54,7 @@ export function AboutModal({ open, onClose }: Props) {
     let mounted = true;
     (async () => {
       try {
-        const ver = await tauri.getVersions();
+        const ver = await backend.getVersions();
         if (mounted) {
           setV((prev) => ({
             ...prev,
@@ -67,7 +66,7 @@ export function AboutModal({ open, onClose }: Props) {
         /* ignore */
       }
       try {
-        const xv = await xrift.version(() => {});
+        const xv = await backend.cliVersion(() => {});
         if (mounted) {
           setV((prev) => ({ ...prev, xrift: xv, xriftLoading: false }));
         }
@@ -78,11 +77,11 @@ export function AboutModal({ open, onClose }: Props) {
     return () => {
       mounted = false;
     };
-  }, [open]);
+  }, [backend, open]);
 
   const reloadXrift = async () => {
     setV((prev) => ({ ...prev, xriftLoading: true }));
-    const xv = await xrift.version(() => {}).catch(() => null);
+    const xv = await backend.cliVersion(() => {}).catch(() => null);
     setV((prev) => ({ ...prev, xrift: xv, xriftLoading: false }));
   };
 
@@ -90,7 +89,7 @@ export function AboutModal({ open, onClose }: Props) {
     if (!resetScope) return;
     setResetting(true);
     try {
-      await tauri.resetAppData(resetScope);
+      await backend.resetAppData(resetScope);
       toast({
         kind: "success",
         title:
@@ -199,7 +198,7 @@ export function AboutModal({ open, onClose }: Props) {
         <div className="flex items-center justify-between gap-2 border-t border-zinc-100 bg-zinc-50/70 px-5 py-3">
           <button
             type="button"
-            onClick={() => openUrl("https://docs.xrift.net/").catch(() => {})}
+            onClick={() => backend.openUrl("https://docs.xrift.net/").catch(() => {})}
             className="flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-700"
           >
             <ExternalLink size={11} strokeWidth={2} />
@@ -207,7 +206,7 @@ export function AboutModal({ open, onClose }: Props) {
           </button>
           <button
             type="button"
-            onClick={() => openUrl("https://github.com/WebXR-JP").catch(() => {})}
+            onClick={() => backend.openUrl("https://github.com/WebXR-JP").catch(() => {})}
             className="flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-700"
           >
             <ExternalLink size={11} strokeWidth={2} />

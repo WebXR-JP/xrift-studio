@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ImageOff, Plus, Sparkles, Camera } from "lucide-react";
-import { tauri, type Project } from "../lib/tauri";
+import { getBackend, type Project } from "../lib/backend";
 
 type Props = {
   project: Project;
@@ -15,13 +15,14 @@ export function ProjectCard({
   onEditThumbnail,
   refreshKey = 0,
 }: Props) {
+  const backend = getBackend();
   const [thumb, setThumb] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
     setLoading(true);
-    tauri
+    backend
       .readThumbnail(project.path)
       .then((t) => {
         if (mounted) setThumb(t);

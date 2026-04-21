@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Save, Code2, RefreshCw, Info } from "lucide-react";
-import { tauri } from "../lib/tauri";
+import { getBackend } from "../lib/backend";
 import { useToast } from "./Toast";
 
 type Props = {
@@ -63,6 +63,7 @@ function fromJson(raw: string): { form: Form; parsed: any } | null {
 
 export function XriftJsonEditor({ projectPath, onOpenRaw, onRefresh }: Props) {
   const toast = useToast();
+  const backend = getBackend();
   const [form, setForm] = useState<Form>(DEFAULTS);
   const [saved, setSaved] = useState<Form>(DEFAULTS);
   const [parsed, setParsed] = useState<any>(null);
@@ -74,7 +75,7 @@ export function XriftJsonEditor({ projectPath, onOpenRaw, onRefresh }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const raw = await tauri.readTextFile(projectPath, "xrift.json");
+      const raw = await backend.readTextFile(projectPath, "xrift.json");
       const result = fromJson(raw);
       if (!result) {
         setError("xrift.json の JSON を解析できませんでした。「raw JSON で編集」を試してください。");
@@ -122,7 +123,7 @@ export function XriftJsonEditor({ projectPath, onOpenRaw, onRefresh }: Props) {
         },
       };
       const text = JSON.stringify(updated, null, 2) + "\n";
-      await tauri.writeTextFile(projectPath, "xrift.json", text);
+      await backend.writeTextFile(projectPath, "xrift.json", text);
       setSaved(form);
       setParsed(updated);
       toast({ kind: "success", title: "ワールド設定を保存しました" });

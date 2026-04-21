@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { tauri } from "../lib/tauri";
+import { getBackend } from "../lib/backend";
 
 type Props = {
   projectPath: string;
@@ -7,6 +7,7 @@ type Props = {
 };
 
 export function ImageViewer({ projectPath, rel }: Props) {
+  const backend = getBackend();
   const [src, setSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +17,7 @@ export function ImageViewer({ projectPath, rel }: Props) {
     setLoading(true);
     setError(null);
     setSrc(null);
-    tauri
+    backend
       .readImageDataUrl(projectPath, rel)
       .then((d) => {
         if (mounted) setSrc(d);

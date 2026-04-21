@@ -6,6 +6,7 @@
   "type": "module",
   "license": "MIT",
   "author": "XRift",
+  "main": "electron-dist/main.js",
   "engines": {
     "node": ">=20"
   },
@@ -16,7 +17,11 @@
     "typecheck": "tsc --noEmit",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "electron:compile": "tsc -p tsconfig.electron.json",
+    "electron:dev": "npm run electron:compile && concurrently -k \"ELECTRON=1 vite\" \"wait-on http://localhost:1420 && NODE_ENV=development electron electron-dist/main.js\"",
+    "electron:build": "ELECTRON=1 vite build && npm run electron:compile && electron-builder",
+    "electron:preview": "npm run electron:compile && NODE_ENV=production electron electron-dist/main.js"
   },
   "dependencies": {
     "@monaco-editor/react": "4.7.0",
@@ -39,8 +44,33 @@
     "@types/react-dom": "^19.1.6",
     "@types/three": "0.183.1",
     "@vitejs/plugin-react": "^4.6.0",
+    "concurrently": "^9.1.2",
+    "electron": "^35.1.2",
+    "electron-builder": "^26.0.12",
     "tailwindcss": "4.2.2",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "net.xrift.studio",
+    "productName": "XRift Studio",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron-dist/**/*"
+    ],
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": ["nsis", "zip"]
+    },
+    "linux": {
+      "target": ["AppImage", "deb"]
+    }
   }
 }

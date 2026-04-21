@@ -4,6 +4,8 @@ import tailwindcss from "@tailwindcss/vite";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
+// @ts-expect-error process is a nodejs global
+const isElectron = process.env.ELECTRON === "1";
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
@@ -26,8 +28,10 @@ export default defineConfig(async () => ({
         }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      // 3. tell Vite to ignore watching `src-tauri` and `electron`
+      ignored: ["**/src-tauri/**", "**/electron/**"],
     },
   },
+  // For Electron production build, use relative paths
+  base: isElectron ? "./" : undefined,
 }));
