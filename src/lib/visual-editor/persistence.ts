@@ -12,6 +12,10 @@ import type { PrefabDocument } from "./prefab-document";
 import type { VisualProjectDocument } from "./project-document";
 import type { RegisteredSceneComponent, SceneDocument } from "./scene-document";
 import {
+  detectOpenBrushGltfDocument,
+  extractOpenBrushMaterialSlots,
+} from "./open-brush";
+import {
   STARTER_ASSET_FOLDER_IDS,
   type StarterAssetCopyPlanEntry,
   type StarterVisualProjectPlan,
@@ -107,6 +111,19 @@ export async function prepareStarterVisualProject(
     if (!model || model.kind !== "model") continue;
 
     const modelFolders = ensureStarterModelFolders(folders, model);
+    const gltfJson = parseStarterGlbJson(loaded.bytes);
+    const openBrush = detectOpenBrushGltfDocument(gltfJson);
+    if (openBrush) {
+      assets[model.id] = {
+        ...model,
+        folderId: modelFolders.modelFolderId,
+        materialSlots: extractOpenBrushMaterialSlots(gltfJson),
+        importMetadata: model.importMetadata
+          ? { ...model.importMetadata, openBrush }
+          : model.importMetadata,
+      };
+      continue;
+    }
     const scopedManifest: AssetManifest = {
       ...plan.assets,
       folders,
@@ -119,7 +136,7 @@ export async function prepareStarterVisualProject(
       ),
     };
     const expanded = await expandGltfAssets({
-      json: parseStarterGlbJson(loaded.bytes),
+      json: gltfJson,
       modelBytes: loaded.bytes,
       sourceFormat: "glb",
       modelAssetId: model.id,

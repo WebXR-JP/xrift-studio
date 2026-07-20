@@ -8,6 +8,12 @@ const host = process.env.TAURI_DEV_HOST;
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
+  // three-icosa publishes a valid ESM `module` entry but no Node-style `main`.
+  // Serving that module directly avoids a missing optimized dependency when
+  // the lazily loaded Visual Editor first enables Open Brush rendering.
+  optimizeDeps: {
+    exclude: ["three-icosa"],
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

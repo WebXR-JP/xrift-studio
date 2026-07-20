@@ -1,60 +1,91 @@
 # XRift Studio Visual Editor Roadmap
 
+最終更新: 2026-07-21
+
 ## 目標
 
-XRift Studioだけで、Worldの新規作成、Scene編集、Asset管理、Material設定、XRift固有機能、Play、保存、変換、検査、Uploadまでを完了できる制作環境にする。ViteやCLIは内部実装として扱い、ビジュアル制作中の操作手順には出さない。
+XRift Studioだけで、World／Itemの作成、素材の取り込み、Scene編集、Play、保存、検査、XRift向け変換、Uploadまでを途切れず進められる制作環境にする。
 
-最初の実用到達点は、次の一連の操作が途切れないことである。
+Visual projectはコードを隠すだけの画面ではなく、Scene、Asset、Material、Prefabなどの型付きデータを正本として保存する。将来は、その制作データを通常のXRiftコードプロジェクトへ安全に引き渡せるようにする。
 
-1. 素材入りStarter Worldを選んで作成する。
-2. ModelまたはPrefabをAssetsからSceneへ配置する。
-3. Hierarchyで名前、親子関係、複製、削除を編集する。
-4. MaterialをInspectorで作り、Textureを割り当て、Sceneへ適用する。
-5. Collider、Spawn Point、Mirror、Portalなどをコードなしで設定する。
-6. 同じScene ViewでPlayし、Stopで編集状態へ戻る。
-7. 保存し、XRift向けに変換・検査してUploadする。
+## 現在地
 
-## 揺らがない設計判断
+状態は次の3種類で表す。
 
-- Classic projectとVisual projectは、正本と制作方法が異なる独立した導線にする。
-- Visual projectの正本はScene、Asset、Material、Prefabなどの型付きdocumentとする。
-- Scene View、Hierarchy、Inspector、Assetsは同じselectionとcommand historyを共有する。
-- Materialは共有Assetとして保持し、EntityにはMaterial IDのbindingだけを保存する。
-- Model、Texture、Material、Prefab、ParticleをAssetとして扱い、PrimitiveはCreate toolとして扱う。
-- XRift固有機能は型付きRegistry、Inspector、Scene proxy、compiler adapterが揃ったものだけ公開する。
-- 保存、変換、検査、Uploadは制作documentを破壊せず、失敗後もEditorへ戻れるようにする。
-- UIは白とneutralを基調にし、既存のLucide iconをsemantic registry経由で使う。独自SVGは追加しない。
+- **利用可能**: デスクトップ版の主要導線に接続済み。
+- **検証中**: 実装はあるが、対応データや実機での受け入れを継続中。
+- **計画中**: 仕様または実装順序を整理した段階。
 
-## 12段階
+| 制作領域 | 状態 | 現在できること |
+| --- | --- | --- |
+| Visual project | 利用可能 | World／Itemの作成、保存、再読込、autosave、reference validation。 |
+| Scene編集 | 利用可能 | Hierarchy、Scene View、Inspector、Assets、選択、transform、親子関係、複製、削除、Undo／Redo。 |
+| Model import | 利用可能 | GLB、自己完結glTF、OBJ、VRM 0.x／1.xをModel Assetとして取り込む。 |
+| Avatar pose | 利用可能 | 取り込んだボーンのXYZ回転とshape keyの値をEntityごとに保存し、Scene Viewと生成コードへ反映する。 |
+| Open Brush | 検証中 | Open Brush／Tilt Brush由来のglTFを判定し、`three-icosa`でブラシ表現を読み込む。ブラシごとの受け入れ確認を継続する。 |
+| Unity import | 検証中 | UnityPackage、`.unity`、`.prefab`を解析し、対応するScene、Prefab、Model、Textureへ変換する。Unity固有機能の完全互換ではない。 |
+| Texture／Material | 利用可能 | PNG、JPG、WebP、KTX2を取り込み、PBR Material、slot binding、thumbnailを編集する。 |
+| Audio | 利用可能 | MP3をAudio Assetとして取り込み、Audio Sourceへ割り当ててSceneと生成物へ保存する。 |
+| 表現と再利用 | 利用可能 | Primitive、Material、Particle、Prefab、Collider、XRift Componentを作成・配置する。 |
+| Play | 利用可能 | 編集状態を保持してPlay／Stopし、WorldはWASD移動、Itemは単体表示を確認する。runtime受け入れは継続する。 |
+| Compile／Upload | 利用可能 | Visual documentの保存、検査、XRift向けTSX生成、staging、World／ItemのUpload導線。 |
+| AI connection | 検証中 | アプリ内の接続パネルからMCP serverを登録し、Scene読取・編集の限定toolを呼び出す。sidecar同梱を含む配布確認を継続する。 |
+| Animation timeline | 計画中 | ボーンとshape keyのkeyframe、再生、補間、clip保存、XRift runtimeへの出力。 |
+| Visualから通常開発への移植 | 計画中 | project JSONとAssets一式を指定し、既存XRiftコードプロジェクトへ安全に移植する`npx`コマンド。 |
 
-| Step | 到達点 | 現在 | 完了条件 |
+## 今回広がった範囲
+
+- GLB／glTFに加えてOBJとVRM 0.x／1.xのimport、preview、再import、compileを接続した。
+- Model Assetからボーンとshape keyを抽出し、Entityごとの静的ポーズを保存できるようにした。
+- UnityPackage、Unity Scene、Prefabの解析と、対応Asset／Sceneへの変換経路を追加した。
+- MP3 Audio AssetとAudio Sourceの参照、配置、compileを追加した。
+- Open Brush／Tilt Brushの判定と専用rendererへの接続を追加し、ブラシ表現の受け入れを開始した。
+- AIクライアントからEditorを扱うためのMCP broker、接続パネル、限定Editor tool、配布用sidecar準備を追加した。
+- ビジュアルエディターの遅延読込失敗を識別し、アプリ再読込へ戻れる回復導線を追加した。
+
+## 現在の制約
+
+- OBJの外部MTL／Textureは自動取得しない。取り込み後にMaterial Slotへ割り当てる。
+- glTFは現時点でGLBまたは自己完結したファイルを基本とし、汎用的な複数sidecar file importは今後対応する。
+- VRMの静的ポーズは保存できるが、keyframe、clip、補間、timeline編集はまだない。
+- Unity固有Component、Shader、Script、Animationを完全には移植しない。対応内容と未対応内容をimport前に示す方針とする。
+- Open Brushはbrushごとの描画差を継続検証中。通常のMaterial overrideとは扱いを分ける。
+- Webプレビューは制作体験のデモであり、ローカルファイル操作、CLI実行、Uploadはデスクトップ版だけで行う。
+
+## ロードマップ
+
+| Phase | 到達点 | 状態 | 次の完了条件 |
 | --- | --- | --- | --- |
-| 1 | Visual document基盤 | 基盤あり、継続改善 | Project、Scene、Asset、Prefabの保存、migration、reference validationが決定的に動く。 |
-| 2 | Editor shell | 基盤あり、継続改善 | Hierarchy、Scene View、Inspector、Assetsが同じprojectとselectionを表示し、明るい統一themeで使える。 |
-| 3 | CommandとHierarchy編集 | 基盤あり | Create Empty、rename、copy、paste、duplicate、delete、reparent、Undo / Redoを主要surfaceから実行できる。 |
-| 4 | Drag and Drop | WebView互換payloadと複数slot選択まで実装、実機受入が残る | Model / Prefab / ParticleをSceneとHierarchyへ、MaterialをMeshへ、TextureをMaterial slotへdropでき、一件の履歴になる。 |
-| 5 | Material / Texture authoring | coreと主要extensionのInspector・thumbnailを実装、Scene描画を継続 | glTF core PBR、TextureInfo、UV、alpha、両面、emissive、normal、occlusion、主要extensionをInspectorで編集し、Sceneとthumbnailへ即時反映する。 |
-| 6 | Starter World / Asset library | 進行中 | 新規Worldが実用品Model、Texture、Material、Collider、Lighting、XRift Spawnを持ち、未配置素材もAssetsから再利用できる。 |
-| 7 | XRift Component / template | 8種の組み込みrecipeと保護付き設定fieldを実装、runtime受入を継続 | CreateからXRift機能をSceneへ作成またはEntityへ追加し、必須値をInspectorで設定して有効なcodeへ変換できる。 |
-| 8 | Model import pipeline | 構造契約・Inspector・同一ID再importを実装、複数fileと差分確認が残る | GLB / GLTFのnode、mesh、material slot、animation、boundsを保持し、thumbnail、reimport、複数slot overrideが動く。 |
-| 9 | Play runtime | 次段階 | World向け移動、camera、physics、interactionとItem previewを別profileで実行し、Stopでauthoring stateへ戻る。 |
-| 10 | Save / Compile / Check / Upload | 基盤あり、堅牢化中 | revision整合、staging provenance、診断元への移動、認証、進捗、再試行、正式result表示まで一つのmodalで完結する。 |
-| 11 | Workspace品質 | 計画済み | panel dock / resize / restore、shortcut設定、検索、複数選択、focus、accessibility、大規模Scene性能を実用水準にする。 |
-| 12 | Production readiness | 計画済み | migration fixture、実機gesture、失敗回復、負荷、セキュリティ、Upload sandbox、release checklistを満たす。 |
+| 1 | Visual document基盤 | 利用可能・継続改善 | migration fixtureと参照修復を増やし、旧projectも決定的に開ける。 |
+| 2 | Editor shell／command | 利用可能・継続改善 | 複数選択、検索、shortcut設定、panel restoreを実用水準にする。 |
+| 3 | Asset import | 利用可能・検証中 | sidecar付きglTF、reimport差分、欠落参照、Open Brush、Unity importの実データ受け入れを完了する。 |
+| 4 | Material／Texture／Audio | 利用可能・継続改善 | Inspector、thumbnail、Scene View、生成コードの見え方と音を一致させる。 |
+| 5 | XRift Component／Play | 利用可能・検証中 | Worldのcharacter、collider、spawn、cameraとItem previewを実runtimeで受け入れる。 |
+| 6 | Save／Compile／Upload | 利用可能・堅牢化中 | 診断元への移動、認証、再試行、staging provenance、正式result表示を一つの流れにする。 |
+| 7 | Static avatar pose | 利用可能・継続改善 | humanoid名、一般bone、shape keyの保存、再読込、生成コードをfixtureと実VRMで一致させる。 |
+| 8 | Animation authoring | 計画中 | timeline上でbone／shape key keyframeを編集・再生し、clipとして保存できる。 |
+| 9 | Code project migration CLI | 計画中 | dry-run、衝突検知、Asset copy、生成コード、provenanceを備えた安全な移植を実現する。 |
+| 10 | Production readiness | 計画中 | 大規模Scene性能、accessibility、失敗回復、security、release checklistを満たす。 |
 
-## 現在の実装優先順
+## 通常のXRift開発へ渡すCLI
 
-1. Material extensionをScene ViewとインポートModelの描画へ接続し、Inspector・thumbnail・Sceneを同じ値にする。
+想定する最終形は、Visual projectのmanifestまたはproject rootを一つ指定し、既存のXRiftコードプロジェクトへ移植するコマンドである。
+
+```bash
+npx @xrift/studio-cli migrate ./my-visual-project/xrift-studio.project.json --to ./my-xrift-world
+```
+
+このコマンドは**まだ実装されていない**。実装仕様、生成物、衝突時の方針、段階的な開発順序は[Visual Project Migration CLI](./VISUAL_PROJECT_MIGRATION_CLI.md)にまとめる。
+
+## 現在の優先順
+
+1. Open Brush、UnityPackage、OBJ、VRMを実データで受け入れ、保存後の再読込とcompileまで一致させる。
 2. Model再importへ別source選択、sidecar付きglTF、変更差分、消失slot参照一覧を追加する。
-3. Starter Worldと未配置Asset libraryへ、実利用できるModel・Texture・Materialと生成済みthumbnailを増やす。
-4. XRift組み込みrecipeを実runtimeで受け入れ、必須値、Scene proxy、compiler diagnostic、Upload結果を一致させる。
-5. WebView上のMaterial・Model・Prefab・Texture D&D、複数slot選択、Undo / Redoを一つの実機受入として確認する。
-6. World Playのcharacter、collider、spawn、cameraをScene authoringと同じdocumentから実行する。
-
-## 開発と検証の配分
-
-機能実装中はdocument contract、command、UI、compiler adapterを先に揃える。型確認と対象fixtureは変更の境界で実行し、画面全体の反復デバッグは複数機能が一つの制作フローとしてつながった節目で行う。本番buildと実Uploadは通常の開発確認には使わない。
+3. VRM／skinned modelの静的ポーズを実機で磨き、timeline用のpose／clip data contractを先に固定する。
+4. AI connectionの認証境界、timeout、sidecar同梱、失敗後の再接続をrelease環境で確認する。
+5. `@xrift/studio-cli migrate`のPhase 1として、read-only validatorとdry-run reportを実装する。
+6. Material、Play、XRift Component、Uploadを同じVisual documentから通しで受け入れる。
 
 ## 完了判定
 
-ファイルやbuttonが存在するだけでは完了としない。各Stepは、完了条件の操作を実データで最後まで実行し、保存後の再読込、Undo / Redo、失敗時の復帰、compiler出力まで一致した時に完了とする。
+ファイルやbuttonが存在するだけでは完了としない。各機能は、実データによる操作、保存後の再読込、Undo／Redo、失敗時の復帰、compiler出力まで一致した時に完了とする。CLI移植は、dry-runの内容が決定的で、手書きファイルを既定で上書きせず、同じ入力を再実行しても不要な差分を出さないことを完了条件に含める。

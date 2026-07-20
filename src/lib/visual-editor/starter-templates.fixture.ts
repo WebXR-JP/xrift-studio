@@ -3,7 +3,6 @@ import { compileVisualProject } from "./compiler/compile";
 import { serializeVisualProjectDocuments } from "./persistence";
 import type { RegisteredSceneComponent } from "./scene-document";
 import {
-  BUNDLED_STARTER_ASSET_IDS,
   STARTER_ASSET_FOLDER_IDS,
   createStarterWorldProject,
   defaultVisualStarterTemplateId,
@@ -14,14 +13,13 @@ import {
 /** Deterministic, filesystem-free assertions for the bundled world starters. */
 export function runStarterTemplateFixtureAssertions(): void {
   assert(
-    defaultVisualStarterTemplateId("world") === "social-space",
+    defaultVisualStarterTemplateId("world") === "openbrush",
     "A useful sample must be the default World starter",
   );
 
   for (const templateId of [
     "blank",
-    "social-space",
-    "gallery",
+    "openbrush",
   ] as const satisfies readonly StarterWorldTemplateId[]) {
     const plan = createStarterWorldProject(templateId, "fixture-world");
     const assets = Object.values(plan.assets.assets);
@@ -36,11 +34,12 @@ export function runStarterTemplateFixtureAssertions(): void {
       (asset) => asset.kind === "template" && asset.templateType === "prefab",
     );
 
-    assert(plan.bundledAssetCopies.length === BUNDLED_STARTER_ASSET_IDS.length,
-      `${templateId}: every bundled source must have a copy plan`);
-    assert(modelAssets.length === 4, `${templateId}: Model library is incomplete`);
-    assert(textureAssets.length >= 2, `${templateId}: Texture library is incomplete`);
-    assert(materialAssets.length === 4, `${templateId}: Material library is incomplete`);
+    assert(plan.bundledAssetCopies.length === (templateId === "openbrush" ? 2 : 0),
+      `${templateId}: bundled model and license copy plan is incorrect`);
+    assert(modelAssets.length === (templateId === "openbrush" ? 1 : 0),
+      `${templateId}: Model library is incorrect`);
+    assert(textureAssets.length === 0, `${templateId}: Texture library must stay empty`);
+    assert(materialAssets.length === 1, `${templateId}: Ground Material is missing`);
     assert(prefabAssets.length > 0, `${templateId}: Prefab library is empty`);
     assert(starterWorldContainsNoPrimitiveAssets(plan),
       `${templateId}: primitives must stay in the Create catalog`);
@@ -88,6 +87,22 @@ export function runStarterTemplateFixtureAssertions(): void {
     assert(result.canStage, `${templateId}: Starter World must compile for staging`);
     assert(!result.diagnostics.some((diagnostic) => diagnostic.severity === "blocking"),
       `${templateId}: Starter World has a blocking diagnostic`);
+    assert(
+      JSON.stringify(result.stagingPlan.runtimePackageSpecs) ===
+        JSON.stringify(
+          templateId === "openbrush" ? ["three-icosa@0.4.2-alpha.18"] : [],
+        ),
+      `${templateId}: compiler runtime package plan is incorrect`,
+    );
+    if (templateId === "openbrush") {
+      const source = result.overlayFiles.find(
+        (file) => file.relativePath === "src/World.tsx",
+      )?.content ?? "";
+      assert(source.includes("GLTFGoogleTiltBrushMaterialExtension"),
+        "OpenBrush starter must compile the three-icosa loader extension");
+      assert(source.includes("three-icosa-template/brushes/"),
+        "OpenBrush starter must compile the hosted brush library path");
+    }
 
     const serialized = serializeVisualProjectDocuments({
       project: plan.project,
@@ -108,7 +123,7 @@ export function runStarterTemplateFixtureAssertions(): void {
     ),
   );
   assert(blankModelsInScene.length === 0,
-    "Blank World must keep optional Models in the Library, not the Scene");
+    "Blank World must not place optional Models in the Scene");
 }
 
 function assertPrefabAssetReferencesExist(

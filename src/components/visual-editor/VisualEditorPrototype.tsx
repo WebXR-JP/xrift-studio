@@ -695,6 +695,7 @@ export function VisualEditorPrototype({
     setPendingImports([]);
     setImportError(null);
     setNotice(null);
+    setMcpLastActivity(null);
     setLeaving(false);
     // Saving can replace the shell bundle object without changing the open
     // project. Reset only when the actual project identity changes so queued
@@ -852,13 +853,20 @@ export function VisualEditorPrototype({
               minute: "2-digit",
               second: "2-digit",
             }).format(new Date()),
+            revision: mcpRevisionRef.current,
           });
         }
-        await tauri.completeXriftMcpRequest({
-          id: request.id,
-          ok: true,
-          result: outcome.result,
-        });
+        try {
+          await tauri.completeXriftMcpRequest({
+            id: request.id,
+            ok: true,
+            result: outcome.result,
+          });
+        } catch {
+          setMcpError(
+            "AI clientへ編集結果を返せませんでした。もう一度実行してください",
+          );
+        }
       } catch (error) {
         const editorError =
           error instanceof XriftMcpEditorToolError
@@ -867,15 +875,21 @@ export function VisualEditorPrototype({
                 "EDITOR_ERROR",
                 "AI編集を完了できませんでした",
               );
-        await tauri.completeXriftMcpRequest({
-          id: request.id,
-          ok: false,
-          error: {
-            code: editorError.code,
-            message: editorError.message,
-            details: editorError.details,
-          },
-        });
+        try {
+          await tauri.completeXriftMcpRequest({
+            id: request.id,
+            ok: false,
+            error: {
+              code: editorError.code,
+              message: editorError.message,
+              details: editorError.details,
+            },
+          });
+        } catch {
+          setMcpError(
+            "AI clientへerrorを返せませんでした。もう一度実行してください",
+          );
+        }
       }
     };
 
@@ -883,9 +897,19 @@ export function VisualEditorPrototype({
       .onXriftMcpEditorRequest((request) => {
         if (!disposed) void complete(request);
       })
-      .then((dispose) => {
-        if (disposed) dispose();
-        else unlisten = dispose;
+      .then(async (dispose) => {
+        if (disposed) {
+          dispose();
+          return;
+        }
+        unlisten = dispose;
+        try {
+          await tauri.setXriftMcpEditorReady(true);
+        } catch {
+          setMcpError(
+            "AI editor bridgeを有効にできませんでした。XRift Studioを再起動してください",
+          );
+        }
       })
       .catch(() => {
         if (!disposed) {
@@ -898,6 +922,7 @@ export function VisualEditorPrototype({
     return () => {
       disposed = true;
       unlisten?.();
+      void tauri.setXriftMcpEditorReady(false).catch(() => undefined);
     };
   }, [mcpNativeAvailable]);
   const assetImportPanelAvailability = resolveAssetOperationAvailability(
@@ -3710,7 +3735,12 @@ export function VisualEditorPrototype({
             mcpRegisteringClientId={mcpRegisteringClientId}
             mcpError={mcpError}
             mcpLastActivity={mcpLastActivity}
-            canUndo={!readOnly && !importBusy && history.past.length > 0}
+            canUndo={
+              !readOnly &&
+              !importBusy &&
+              history.past.length > 0 &&
+              mcpLastActivity?.revision === mcpRevisionRef.current
+            }
             onOpenMcp={() => {
               if (mcpClients.length === 0 && !mcpLoading) {
                 void refreshMcpClients();

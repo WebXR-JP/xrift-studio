@@ -27,6 +27,10 @@ export type CompilerStagingTemplateRequest = {
   directoryName: string;
 };
 
+const COMPILER_RUNTIME_PACKAGE_ALLOWLIST = new Set([
+  "three-icosa@0.4.2-alpha.18",
+]);
+
 const stamp = (kind: LogKind, text: string): LogLine => ({
   kind,
   text,
@@ -248,6 +252,31 @@ export const xrift = {
       onLog,
     });
   },
+  installCompilerRuntimePackages: (
+    projectPath: string,
+    packageSpecs: readonly string[],
+    onLog: (line: LogLine) => void,
+  ) => {
+    assertCompilerOwnedProjectPath(projectPath);
+    if (
+      packageSpecs.length === 0 ||
+      packageSpecs.some((spec) => !COMPILER_RUNTIME_PACKAGE_ALLOWLIST.has(spec))
+    ) {
+      throw new Error("Invalid compiler runtime package request");
+    }
+    return run({
+      bin: "npm",
+      args: [
+        "install",
+        "--save-exact",
+        "--no-audit",
+        "--no-fund",
+        ...packageSpecs,
+      ],
+      cwd: projectPath,
+      onLog,
+    });
+  },
   checkItem: (projectPath: string, onLog: (l: LogLine) => void) =>
     run({
       bin: "xrift",
@@ -282,6 +311,23 @@ export function assertCompilerStagingTarget(
     request.directoryName.includes("..")
   ) {
     throw new Error("Invalid compiler staging directory name");
+  }
+}
+
+export function assertCompilerOwnedProjectPath(projectPath: string): void {
+  const segments = projectPath
+    .trim()
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter(Boolean);
+  const directoryName = segments[segments.length - 1] ?? "";
+  const parentName = segments[segments.length - 2] ?? "";
+  if (
+    parentName !== "xrift-studio-staging" ||
+    !/^xrift-studio-[a-z0-9._-]+$/i.test(directoryName) ||
+    directoryName.includes("..")
+  ) {
+    throw new Error("Runtime packages can only be installed in compiler staging");
   }
 }
 

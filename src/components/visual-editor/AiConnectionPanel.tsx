@@ -8,6 +8,7 @@ export type XriftMcpActivity = {
   clientName: string;
   message: string;
   at: string;
+  revision: number;
 } | null;
 
 export function AiConnectionPanel({

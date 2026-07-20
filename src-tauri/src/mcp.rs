@@ -5,9 +5,9 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::process::{Command, ExitStatus, Stdio};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -30,6 +30,7 @@ const MCP_TOOL_NAMES: [&str; 4] = [
 pub struct XriftMcpBrokerState {
     pending: Mutex<HashMap<String, oneshot::Sender<XriftMcpEditorResponse>>>,
     request_lock: Mutex<()>,
+    editor_ready: AtomicBool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -157,16 +158,22 @@ pub fn start_broker(app: &AppHandle) -> Result<(), String> {
 
     let token = rendezvous.token;
     let app_handle = app.clone();
-    let listener = TcpListener::from_std(listener)
-        .map_err(|error| format!("AI editor bridgeを開始できません: {error}"))?;
     tauri::async_runtime::spawn(async move {
+        let listener = match TcpListener::from_std(listener) {
+            Ok(listener) => listener,
+            Err(error) => {
+                eprintln!("XRift Studio MCP broker could not start: {error}");
+                return;
+            }
+        };
         loop {
             match listener.accept().await {
                 Ok((stream, _address)) => {
                     let app_handle = app_handle.clone();
                     let token = token.clone();
                     tauri::async_runtime::spawn(async move {
-                        if let Err(error) = handle_broker_connection(app_handle, stream, token).await
+                        if let Err(error) =
+                            handle_broker_connection(app_handle, stream, token).await
                         {
                             eprintln!("XRift Studio MCP broker request failed: {error}");
                         }
@@ -196,6 +203,11 @@ pub async fn complete_xrift_mcp_request(
     sender
         .send(response)
         .map_err(|_| "AI editor bridgeへ結果を返せませんでした".to_string())
+}
+
+#[tauri::command]
+pub fn set_xrift_mcp_editor_ready(state: State<'_, XriftMcpBrokerState>, ready: bool) {
+    state.editor_ready.store(ready, Ordering::Release);
 }
 
 #[tauri::command]
@@ -251,9 +263,9 @@ pub async fn register_xrift_mcp_client(
         arguments.push(sidecar_path.to_string_lossy().into_owned());
         arguments.push("--rendezvous".into());
         arguments.push(rendezvous_path.to_string_lossy().into_owned());
-        let output = run_client_command(&executable, &arguments)
+        let status = run_client_command(&executable, &arguments)
             .map_err(|error| format!("{}への登録を開始できません: {error}", client.label()))?;
-        if !output.status.success() {
+        if !status.success() {
             return Err(format!(
                 "{}へ登録できませんでした。client側のMCP設定を確認してください",
                 client.label()
@@ -280,8 +292,8 @@ async fn handle_broker_connection(
     if bytes == 0 || bytes > MCP_MAX_MESSAGE_BYTES {
         return Err("AI editor bridge requestのsizeが不正です".to_string());
     }
-    let envelope: XriftMcpBrokerEnvelope =
-        serde_json::from_str(&line).map_err(|_| "AI editor bridge requestが不正です".to_string())?;
+    let envelope: XriftMcpBrokerEnvelope = serde_json::from_str(&line)
+        .map_err(|_| "AI editor bridge requestが不正です".to_string())?;
     if envelope.token != expected_token {
         return write_broker_error(
             &mut writer,
@@ -302,17 +314,34 @@ async fn handle_broker_connection(
     }
 
     let state = app.state::<XriftMcpBrokerState>();
+    if !state.editor_ready.load(Ordering::Acquire) {
+        return write_broker_error(
+            &mut writer,
+            envelope.request.id,
+            "EDITOR_UNAVAILABLE",
+            "Visual EditorでProjectを開いてから再試行してください",
+        )
+        .await;
+    }
     let _request_guard = state.request_lock.lock().await;
     let (sender, receiver) = oneshot::channel();
     let request_id = envelope.request.id.clone();
-    state.pending.lock().await.insert(request_id.clone(), sender);
+    state
+        .pending
+        .lock()
+        .await
+        .insert(request_id.clone(), sender);
     let event = XriftMcpEditorRequestEvent {
         id: request_id.clone(),
         client_name: envelope.client_name,
         tool: envelope.request.tool,
         arguments: envelope.request.arguments,
     };
-    if let Err(error) = app.emit(MCP_EVENT_NAME, event) {
+    let emit_result = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main Editor windowが見つかりません".to_string())?
+        .emit(MCP_EVENT_NAME, event);
+    if let Err(error) = emit_result {
         state.pending.lock().await.remove(&request_id);
         return write_broker_error(
             &mut writer,
@@ -352,8 +381,14 @@ async fn handle_broker_connection(
         }
     };
     let payload = serde_json::to_vec(&response).map_err(|error| error.to_string())?;
-    writer.write_all(&payload).await.map_err(|error| error.to_string())?;
-    writer.write_all(b"\n").await.map_err(|error| error.to_string())
+    writer
+        .write_all(&payload)
+        .await
+        .map_err(|error| error.to_string())?;
+    writer
+        .write_all(b"\n")
+        .await
+        .map_err(|error| error.to_string())
 }
 
 async fn write_broker_error(
@@ -369,8 +404,14 @@ async fn write_broker_error(
         error: Some(editor_error(code, message)),
     };
     let payload = serde_json::to_vec(&response).map_err(|error| error.to_string())?;
-    writer.write_all(&payload).await.map_err(|error| error.to_string())?;
-    writer.write_all(b"\n").await.map_err(|error| error.to_string())
+    writer
+        .write_all(&payload)
+        .await
+        .map_err(|error| error.to_string())?;
+    writer
+        .write_all(b"\n")
+        .await
+        .map_err(|error| error.to_string())
 }
 
 fn editor_error(code: &str, message: &str) -> XriftMcpEditorError {
@@ -414,7 +455,8 @@ fn write_private_json(path: &Path, value: &impl Serialize) -> Result<(), String>
         let mut options = std::fs::OpenOptions::new();
         options.create(true).truncate(true).write(true).mode(0o600);
         let mut file = options.open(path).map_err(|error| error.to_string())?;
-        file.write_all(&payload).map_err(|error| error.to_string())?;
+        file.write_all(&payload)
+            .map_err(|error| error.to_string())?;
     }
     #[cfg(not(unix))]
     std::fs::write(path, payload).map_err(|error| error.to_string())?;
@@ -430,7 +472,11 @@ fn detect_client(client: SupportedMcpClient) -> XriftMcpClientStatus {
         client,
         true,
         registered,
-        if registered { "登録済み" } else { "登録できます" },
+        if registered {
+            "登録済み"
+        } else {
+            "登録できます"
+        },
     )
 }
 
@@ -454,9 +500,12 @@ fn client_is_registered(client: SupportedMcpClient, executable: &Path) -> bool {
         executable,
         &["mcp".into(), "get".into(), MCP_SERVER_NAME.into()],
     )
-    .map(|output| output.status.success())
+    .map(|status| status.success())
     .unwrap_or(false)
-        && matches!(client, SupportedMcpClient::Codex | SupportedMcpClient::ClaudeCode)
+        && matches!(
+            client,
+            SupportedMcpClient::Codex | SupportedMcpClient::ClaudeCode
+        )
 }
 
 fn find_client_executable(client: SupportedMcpClient) -> Option<PathBuf> {
@@ -487,19 +536,42 @@ fn find_command_on_path(command_name: &str) -> Option<PathBuf> {
     None
 }
 
-fn run_client_command(executable: &Path, arguments: &[String]) -> std::io::Result<Output> {
+fn run_client_command(executable: &Path, arguments: &[String]) -> Result<ExitStatus, String> {
+    let mut command;
     #[cfg(windows)]
     if matches!(
         executable.extension().and_then(OsStr::to_str),
         Some(extension) if extension.eq_ignore_ascii_case("cmd") || extension.eq_ignore_ascii_case("bat")
     ) {
-        let mut command = Command::new("cmd.exe");
+        command = Command::new("cmd.exe");
         command.args(["/D", "/S", "/C"]);
         command.arg(executable);
         command.args(arguments);
-        return command.output();
+    } else {
+        command = Command::new(executable);
+        command.args(arguments);
     }
-    Command::new(executable).args(arguments).output()
+    #[cfg(not(windows))]
+    {
+        command = Command::new(executable);
+        command.args(arguments);
+    }
+    command.stdout(Stdio::null()).stderr(Stdio::null());
+    let mut child = command.spawn().map_err(|error| error.to_string())?;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        match child.try_wait().map_err(|error| error.to_string())? {
+            Some(status) => return Ok(status),
+            None if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("client commandが時間内に完了しませんでした".to_string());
+            }
+        }
+    }
 }
 
 fn resolve_sidecar_path() -> Result<PathBuf, String> {
@@ -525,7 +597,9 @@ fn resolve_sidecar_path() -> Result<PathBuf, String> {
         .into_iter()
         .find(|path| path.is_file())
         .and_then(|path| path.canonicalize().ok())
-        .ok_or_else(|| "XRift Studio MCP serverが見つかりません。アプリを再installしてください".to_string())
+        .ok_or_else(|| {
+            "XRift Studio MCP serverが見つかりません。アプリを再installしてください".to_string()
+        })
 }
 
 pub fn run_stdio_server() -> Result<(), String> {
@@ -574,13 +648,12 @@ pub fn run_stdio_server() -> Result<(), String> {
                 }),
             )?,
             "ping" => write_json_rpc_result(&mut stdout, id, json!({}))?,
-            "tools/list" => write_json_rpc_result(
-                &mut stdout,
-                id,
-                json!({ "tools": tool_definitions() }),
-            )?,
+            "tools/list" => {
+                write_json_rpc_result(&mut stdout, id, json!({ "tools": tool_definitions() }))?
+            }
             "tools/call" => {
-                let Some(tool_name) = message.pointer("/params/name").and_then(Value::as_str) else {
+                let Some(tool_name) = message.pointer("/params/name").and_then(Value::as_str)
+                else {
                     write_json_rpc_error(&mut stdout, id, -32602, "Tool name is required")?;
                     continue;
                 };
@@ -623,10 +696,12 @@ pub fn run_stdio_server() -> Result<(), String> {
                         )?;
                     }
                     Ok(response) => {
-                        let error = response.error.unwrap_or_else(|| editor_error(
-                            "EDITOR_ERROR",
-                            "XRift Studio could not complete the request",
-                        ));
+                        let error = response.error.unwrap_or_else(|| {
+                            editor_error(
+                                "EDITOR_ERROR",
+                                "XRift Studio could not complete the request",
+                            )
+                        });
                         write_json_rpc_result(
                             &mut stdout,
                             id,
@@ -682,8 +757,7 @@ fn proxy_tool_call(
         .map_err(|_| "Open XRift Studio before using its editor tools".to_string())?;
     let rendezvous: XriftMcpRendezvous = serde_json::from_slice(&payload)
         .map_err(|_| "XRift Studio connection information is invalid".to_string())?;
-    if rendezvous.schema_version != MCP_RENDEZVOUS_SCHEMA_VERSION
-        || rendezvous.host != "127.0.0.1"
+    if rendezvous.schema_version != MCP_RENDEZVOUS_SCHEMA_VERSION || rendezvous.host != "127.0.0.1"
     {
         return Err("XRift Studio connection information is not supported".to_string());
     }
@@ -709,19 +783,19 @@ fn proxy_tool_call(
     BufReader::new(stream)
         .read_line(&mut response)
         .map_err(|error| error.to_string())?;
-    serde_json::from_str(&response).map_err(|_| "XRift Studio returned an invalid response".to_string())
+    serde_json::from_str(&response)
+        .map_err(|_| "XRift Studio returned an invalid response".to_string())
 }
 
-fn write_json_rpc_result(
-    writer: &mut impl Write,
-    id: Value,
-    result: Value,
-) -> Result<(), String> {
-    serde_json::to_writer(&mut *writer, &json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "result": result
-    }))
+fn write_json_rpc_result(writer: &mut impl Write, id: Value, result: Value) -> Result<(), String> {
+    serde_json::to_writer(
+        &mut *writer,
+        &json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "result": result
+        }),
+    )
     .map_err(|error| error.to_string())?;
     writer.write_all(b"\n").map_err(|error| error.to_string())?;
     writer.flush().map_err(|error| error.to_string())
@@ -733,11 +807,14 @@ fn write_json_rpc_error(
     code: i32,
     message: &str,
 ) -> Result<(), String> {
-    serde_json::to_writer(&mut *writer, &json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "error": { "code": code, "message": message }
-    }))
+    serde_json::to_writer(
+        &mut *writer,
+        &json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "error": { "code": code, "message": message }
+        }),
+    )
     .map_err(|error| error.to_string())?;
     writer.write_all(b"\n").map_err(|error| error.to_string())?;
     writer.flush().map_err(|error| error.to_string())

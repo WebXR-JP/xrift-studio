@@ -1,0 +1,42 @@
+{
+  "name": "xrift-studio-runtime",
+  "version": "0.1.0",
+  "description": "Unofficial community runtime for XRift Studio scenes. Not affiliated with the XRift project.",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js"
+    },
+    "./three": {
+      "types": "./dist/three/index.d.ts",
+      "import": "./dist/three/index.js"
+    },
+    "./react-three-fiber": {
+      "types": "./dist/react-three-fiber/index.d.ts",
+      "import": "./dist/react-three-fiber/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@react-three/fiber": ">=9.0.0",
+    "react": ">=19.0.0",
+    "three": ">=0.180.0"
+  },
+  "devDependencies": {
+    "@react-three/fiber": "9.6.1",
+    "@types/react": "^19.2.17",
+    "@types/three": "0.185.1",
+    "react": "^19.2.7",
+    "three": "0.185.1",
+    "typescript": "~7.0.2"
+  }
+}

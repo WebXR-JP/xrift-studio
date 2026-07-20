@@ -1,6 +1,13 @@
 # Third-party assets
 
-XRift Studio currently includes no third-party files in `public/visual-editor/starter-assets`.
+## OpenBrush sample
+
+| Bundled file | Upstream source | Revision | License | SHA-256 |
+| --- | --- | --- | --- | --- |
+| `openbrush-all-brushes.glb` | [`icosa-foundation/three-icosa/examples/all_brushes.glb`](https://github.com/icosa-foundation/three-icosa/blob/18682538402ecf8470c4eee91f817ca6093acfa2/examples/all_brushes.glb) | `18682538402ecf8470c4eee91f817ca6093acfa2` | Apache-2.0 | `587fc0c477a8028a6acac21291868dbf4402f5aebd1fca71661e1ba83dd0a380` |
+| `openbrush-LICENSE.txt` | [`icosa-foundation/three-icosa/LICENSE`](https://github.com/icosa-foundation/three-icosa/blob/18682538402ecf8470c4eee91f817ca6093acfa2/LICENSE) | `18682538402ecf8470c4eee91f817ca6093acfa2` | Apache-2.0 license text | `3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5` |
+
+The OpenBrush Starter copies both files into the created project. Brush shader textures are loaded at runtime from the three-icosa template host and are not bundled here.
 
 ## Project-owned Starter Assets
 

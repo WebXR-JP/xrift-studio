@@ -45,6 +45,7 @@ export function ModelAssetInspector({
   onReimport: () => void;
 }) {
   const metadata = asset.importMetadata;
+  const openBrush = metadata?.openBrush;
   const materials = Object.values(assets.assets)
     .filter((candidate) => candidate.kind === "material")
     .sort((left, right) => left.name.localeCompare(right.name, "ja"));
@@ -105,6 +106,35 @@ export function ModelAssetInspector({
           </button>
         </div>
       </section>
+
+      {openBrush ? (
+        <section className="rounded-lg border border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 to-violet-50 p-3 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-[13px] font-semibold text-fuchsia-950">
+              OpenBrush / three-icosa
+            </h3>
+            <span className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-fuchsia-700 shadow-sm">
+              {openBrush.brushNames.length} Brushes
+            </span>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-fuchsia-900/80">
+            ソースのブラシシェーダーを既定表示に使います。Material SlotへXRift Materialを割り当てると、そのブラシだけを上書きできます。
+          </p>
+          <dl className="mt-2 grid grid-cols-[64px_minmax(0,1fr)] gap-x-2 gap-y-1 text-[11px]">
+            <dt className="text-fuchsia-700">Exporter</dt>
+            <dd className="truncate text-fuchsia-950">
+              {openBrush.exporter ?? "Open Brush glTF"}
+            </dd>
+            <dt className="text-fuchsia-700">Renderer</dt>
+            <dd className="truncate font-mono text-fuchsia-950">
+              {openBrush.rendererVersion}
+            </dd>
+          </dl>
+          <p className="mt-2 text-[11px] leading-4 text-fuchsia-800">
+            プレビューと公開実行時は、three-icosa公式テンプレートのブラシ素材をネットワークから読み込みます。
+          </p>
+        </section>
+      ) : null}
 
       {reimportState.phase !== "idle" ? (
         <div
@@ -228,7 +258,9 @@ export function ModelAssetInspector({
 
       <InspectorSection
         title={`Material Slots (${asset.materialSlots.length})`}
-        description="Model全体の既定Material。Entity側の割当が優先されます"
+        description={openBrush
+          ? "OpenBrush Brush Shaderが既定。割り当てたSlotだけXRift Materialで上書きします"
+          : "Model全体の既定Material。Entity側の割当が優先されます"}
       >
         {asset.materialSlots.length > 0 ? (
           asset.materialSlots.map((slot) => {
@@ -273,7 +305,9 @@ export function ModelAssetInspector({
                     }
                     className={INPUT_CLASS}
                   >
-                    <option value="">Model内のMaterial</option>
+                    <option value="">
+                      {openBrush ? "OpenBrush Brush Shader" : "Model内のMaterial"}
+                    </option>
                     {missing && slot.defaultMaterialAssetId ? (
                       <option value={slot.defaultMaterialAssetId}>
                         Missing: {slot.defaultMaterialAssetId}

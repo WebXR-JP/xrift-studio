@@ -37,8 +37,9 @@ import {
   type SceneEntity,
   type Vec3,
 } from "./scene-document";
+import { OPEN_BRUSH_RENDERER } from "./open-brush";
 
-export type StarterWorldTemplateId = "blank" | "social-space" | "gallery";
+export type StarterWorldTemplateId = "blank" | "openbrush";
 export type StarterItemTemplateId = "basic-item";
 export type VisualStarterTemplateId =
   | StarterWorldTemplateId
@@ -48,7 +49,8 @@ export type BundledStarterModelId =
   | "log-bench"
   | "torii-gate"
   | "mug"
-  | "wine-glass";
+  | "wine-glass"
+  | "openbrush-all-brushes";
 
 export type BundledStarterTextureId =
   | "wood-planks-clean"
@@ -58,11 +60,18 @@ export type BundledStarterAssetId =
   | BundledStarterModelId
   | BundledStarterTextureId;
 
-export type StarterAssetProvenance = {
-  ownership: "project-owned";
-  sourceName: string;
-  permissionBasis: "provided-for-xrift-studio";
-};
+export type StarterAssetProvenance =
+  | {
+      ownership: "project-owned";
+      sourceName: string;
+      permissionBasis: "provided-for-xrift-studio";
+    }
+  | {
+      ownership: "third-party";
+      sourceName: string;
+      sourceUrl: string;
+      license: "Apache-2.0";
+    };
 
 export type BundledStarterAssetDefinition = {
   id: BundledStarterAssetId;
@@ -113,6 +122,22 @@ export type StarterItemTemplateDefinition = {
 };
 
 export const BUNDLED_STARTER_ASSETS = {
+  "openbrush-all-brushes": {
+    id: "openbrush-all-brushes",
+    kind: "model",
+    publicPath: "/visual-editor/starter-assets/openbrush-all-brushes.glb",
+    projectRelativePath: "assets/starter/openbrush-all-brushes.glb",
+    byteLength: 1258708,
+    sha256:
+      "587fc0c477a8028a6acac21291868dbf4402f5aebd1fca71661e1ba83dd0a380",
+    mediaType: "model/gltf-binary",
+    provenance: {
+      ownership: "third-party",
+      sourceName: "three-icosa examples/all_brushes.glb",
+      sourceUrl: "https://github.com/icosa-foundation/three-icosa",
+      license: "Apache-2.0",
+    },
+  },
   "log-bench": {
     id: "log-bench",
     kind: "model",
@@ -206,6 +231,7 @@ export const BUNDLED_STARTER_ASSETS = {
 } as const satisfies Record<string, BundledStarterAssetDefinition>;
 
 export const BUNDLED_STARTER_ASSET_IDS = [
+  "openbrush-all-brushes",
   "log-bench",
   "torii-gate",
   "mug",
@@ -213,6 +239,16 @@ export const BUNDLED_STARTER_ASSET_IDS = [
   "wood-planks-clean",
   "polished-concrete",
 ] as const satisfies readonly BundledStarterAssetId[];
+
+const OPEN_BRUSH_LICENSE_COPY: StarterAssetCopyPlanEntry = {
+  assetId: "openbrush-apache-license",
+  bundledPublicPath: "/visual-editor/starter-assets/openbrush-LICENSE.txt",
+  targetRelativePath: "assets/starter/openbrush-LICENSE.txt",
+  expectedByteLength: 11560,
+  expectedSha256:
+    "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5",
+  mediaType: "text/plain",
+};
 
 export const STARTER_ASSET_FOLDER_IDS = {
   root: "starter-library",
@@ -225,21 +261,15 @@ export const STARTER_ASSET_FOLDER_IDS = {
 export const STARTER_WORLD_TEMPLATES = [
   {
     id: "blank",
-    name: "Blank World",
-    description: "床、照明、Spawn Pointと配置可能なStarter Libraryから始める構成",
-    bundledAssetIds: BUNDLED_STARTER_ASSET_IDS,
+    name: "Blank",
+    description: "床、照明、Spawn Pointだけの最小構成",
+    bundledAssetIds: [],
   },
   {
-    id: "social-space",
-    name: "Social Space",
-    description: "鳥居とベンチ、木板の床を配置した交流スペース",
-    bundledAssetIds: BUNDLED_STARTER_ASSET_IDS,
-  },
-  {
-    id: "gallery",
-    name: "Gallery",
-    description: "実用品のGLBと磨きコンクリート床を配置した展示ギャラリー",
-    bundledAssetIds: BUNDLED_STARTER_ASSET_IDS,
+    id: "openbrush",
+    name: "OpenBrush",
+    description: "48種類のOpenBrushストロークをthree-icosaで再現するサンプル",
+    bundledAssetIds: ["openbrush-all-brushes"],
   },
 ] as const satisfies readonly StarterWorldTemplateDefinition[];
 
@@ -275,7 +305,7 @@ export function getStarterItemTemplate(
 export function defaultVisualStarterTemplateId(
   kind: "world" | "item",
 ): VisualStarterTemplateId {
-  return kind === "world" ? "social-space" : "basic-item";
+  return kind === "world" ? "openbrush" : "basic-item";
 }
 
 export function isStarterTemplateForKind(
@@ -387,16 +417,17 @@ export function createStarterWorldProject(
     scene,
     assets,
     prefabs: prefabLibrary.documents,
-    bundledAssetCopies: bundledDefinitions.map((bundled) => {
-      return {
+    bundledAssetCopies: [
+      ...bundledDefinitions.map((bundled) => ({
         assetId: bundled.id,
         bundledPublicPath: bundled.publicPath,
         targetRelativePath: bundled.projectRelativePath,
         expectedByteLength: bundled.byteLength,
         expectedSha256: bundled.sha256,
         mediaType: bundled.mediaType,
-      };
-    }),
+      })),
+      ...(templateId === "openbrush" ? [OPEN_BRUSH_LICENSE_COPY] : []),
+    ],
   };
 }
 
@@ -485,42 +516,13 @@ function starterPrefabSeeds(
     sourceEntityId: "starter-floor",
   };
   if (templateId === "blank") return [ground];
-  if (templateId === "social-space") {
-    return [
-      ground,
-      {
-        prefabId: "starter-torii-gate",
-        assetId: "starter-prefab-torii-gate",
-        name: "Torii Gate",
-        sourceEntityId: "starter-social-torii",
-      },
-      {
-        prefabId: "starter-log-bench",
-        assetId: "starter-prefab-log-bench",
-        name: "Log Bench",
-        sourceEntityId: "starter-social-bench-1",
-      },
-    ];
-  }
   return [
     ground,
     {
-      prefabId: "starter-gallery-plinth",
-      assetId: "starter-prefab-gallery-plinth",
-      name: "Gallery Plinth",
-      sourceEntityId: "starter-gallery-plinth-feature",
-    },
-    {
-      prefabId: "starter-mug-display",
-      assetId: "starter-prefab-mug-display",
-      name: "Mug Display",
-      sourceEntityId: "starter-gallery-feature",
-    },
-    {
-      prefabId: "starter-wine-glass-display",
-      assetId: "starter-prefab-wine-glass-display",
-      name: "Wine Glass Display",
-      sourceEntityId: "starter-gallery-exhibit-1",
+      prefabId: "starter-openbrush-gallery",
+      assetId: "starter-prefab-openbrush-gallery",
+      name: "OpenBrush Brush Gallery",
+      sourceEntityId: "starter-openbrush-gallery",
     },
   ];
 }
@@ -542,56 +544,15 @@ function createTemplateEntities(
     createSpawnEntity(),
   ];
   if (templateId === "blank") return organizeStarterHierarchy(entities);
-
-  if (templateId === "social-space") {
-    entities.push(
-      createModelEntity(
-        "starter-social-torii",
-        "鳥居",
-        STARTER_MODEL_IDS.toriiGate,
-        [0, 0, -2.5],
-        [0, 0, 0],
-        [1, 1, 1],
-      ),
-      ...([-3, 3] as const).map((x, index) =>
-        createModelEntity(
-          `starter-social-bench-${index + 1}`,
-          `丸太ベンチ ${index + 1}`,
-          STARTER_MODEL_IDS.logBench,
-          [x, 0, 0.6],
-          [0, index === 0 ? 0.12 : -0.12, 0],
-          [1, 1, 1],
-        ),
-      ),
-    );
-    return organizeStarterHierarchy(entities);
-  }
-
   entities.push(
-    createGalleryPlinthEntity("starter-gallery-plinth-feature", [
-      0, 0.6, -2.2,
-    ]),
     createModelEntity(
-      "starter-gallery-feature",
-      "マグカップ展示",
-      STARTER_MODEL_IDS.mug,
-      [0, 1.2, -2.2],
-      [0, 0.35, 0],
-      [5, 5, 5],
+      "starter-openbrush-gallery",
+      "OpenBrush Brush Gallery",
+      STARTER_MODEL_IDS.openBrush,
+      [0.5, 0, 0.3],
+      [0, 0, 0],
+      [2.4, 2.4, 2.4],
     ),
-    ...([-3, 0, 3] as const).flatMap((x, index) => [
-      createGalleryPlinthEntity(`starter-gallery-plinth-${index + 1}`, [
-        x, 0.6, 1.2,
-      ]),
-      createModelEntity(
-        `starter-gallery-exhibit-${index + 1}`,
-        `ワイングラス展示 ${index + 1}`,
-        STARTER_MODEL_IDS.wineGlass,
-        [x, 1.2, 1.2],
-        [0, index * 0.35, 0],
-        [3, 3, 3],
-      ),
-    ]),
   );
   return organizeStarterHierarchy(entities);
 }
@@ -636,6 +597,7 @@ const STARTER_MODEL_IDS = {
   toriiGate: "starter-model-torii-gate",
   mug: "starter-model-mug",
   wineGlass: "starter-model-wine-glass",
+  openBrush: "starter-model-openbrush-all-brushes",
 } as const;
 
 const STARTER_MODEL_ORDER: Record<BundledStarterModelId, number> = {
@@ -643,6 +605,7 @@ const STARTER_MODEL_ORDER: Record<BundledStarterModelId, number> = {
   "torii-gate": 1,
   mug: 2,
   "wine-glass": 3,
+  "openbrush-all-brushes": 0,
 };
 
 const STARTER_TEXTURE_IDS = {
@@ -652,9 +615,6 @@ const STARTER_TEXTURE_IDS = {
 
 const STARTER_MATERIAL_IDS = {
   ground: "starter-material-ground",
-  wood: "starter-material-wood-planks",
-  concrete: "starter-material-polished-concrete",
-  accent: "starter-material-accent",
 } as const;
 
 function createStarterMaterials(
@@ -669,33 +629,6 @@ function createStarterMaterials(
       0.82,
       undefined,
       0,
-    ),
-    createMaterial(
-      STARTER_MATERIAL_IDS.wood,
-      "Wood Planks",
-      "#ffffff",
-      0,
-      0.74,
-      STARTER_TEXTURE_IDS.woodPlanks,
-      1,
-    ),
-    createMaterial(
-      STARTER_MATERIAL_IDS.concrete,
-      "Polished Concrete",
-      "#ffffff",
-      0.08,
-      0.58,
-      STARTER_TEXTURE_IDS.polishedConcrete,
-      2,
-    ),
-    createMaterial(
-      STARTER_MATERIAL_IDS.accent,
-      "Warm Accent",
-      "#c2410c",
-      0.12,
-      0.34,
-      undefined,
-      3,
     ),
   ];
 }
@@ -735,6 +668,35 @@ type StarterModelMetadata = {
 };
 
 const STARTER_MODEL_METADATA = {
+  "openbrush-all-brushes": {
+    assetId: STARTER_MODEL_IDS.openBrush,
+    name: "OpenBrush Brush Gallery",
+    materialName: "OpenBrush Brushes",
+    importMetadata: {
+      sourceFormat: "glb",
+      byteLength: 0,
+      nodeCount: 50,
+      meshCount: 48,
+      primitiveCount: 48,
+      bounds: {
+        min: [-1.41114533, 0.915535271, -1.36520159],
+        max: [0.47456786, 1.62704182, 0.791838825],
+        center: [-0.468288735, 1.2712885455, -0.2866813825],
+        size: [1.88571319, 0.711506549, 2.157040415],
+        boundingSphereRadius: 1.476057177,
+      },
+      animations: [],
+      extensionsUsed: ["GOOGLE_tilt_brush_material"],
+      extensionsRequired: [],
+      openBrush: {
+        renderer: "three-icosa",
+        rendererVersion: OPEN_BRUSH_RENDERER,
+        extensionNames: ["GOOGLE_tilt_brush_material"],
+        exporter: "Tilt Brush 0.3.0.",
+        brushNames: [],
+      },
+    },
+  },
   "log-bench": {
     assetId: STARTER_MODEL_IDS.logBench,
     name: "丸太ベンチ",
@@ -821,13 +783,16 @@ function createStarterModelAsset(bundledId: BundledStarterAssetId): ModelAsset {
     folderId: STARTER_ASSET_FOLDER_IDS.models,
     order: STARTER_MODEL_ORDER[bundledId],
     importSettings: defaultModelImportSettings(false),
-    materialSlots: [
-      {
-        slot: "material-0",
-        name: metadata.materialName,
-        sourceMaterialIndex: 0,
-      },
-    ],
+    materialSlots:
+      bundledId === "openbrush-all-brushes"
+        ? []
+        : [
+            {
+              slot: "material-0",
+              name: metadata.materialName,
+              sourceMaterialIndex: 0,
+            },
+          ],
     importMetadata: {
       ...metadata.importMetadata,
       byteLength: bundled.byteLength,
@@ -842,7 +807,8 @@ function isBundledStarterModelId(
     id === "log-bench" ||
     id === "torii-gate" ||
     id === "mug" ||
-    id === "wine-glass"
+    id === "wine-glass" ||
+    id === "openbrush-all-brushes"
   );
 }
 
@@ -901,14 +867,8 @@ function createFloorEntity(templateId: StarterWorldTemplateId): SceneEntity {
     BUILTIN_PRIMITIVE_CREATION_IDS.plane,
   );
   if (!definition) throw new Error("Builtin plane is unavailable");
-  const floorScale =
-    templateId === "gallery" ? 14 : templateId === "social-space" ? 12 : 8;
-  const floorMaterialAssetId =
-    templateId === "social-space"
-      ? STARTER_MATERIAL_IDS.wood
-      : templateId === "gallery"
-        ? STARTER_MATERIAL_IDS.concrete
-        : STARTER_MATERIAL_IDS.ground;
+  const floorScale = templateId === "openbrush" ? 10 : 8;
+  const floorMaterialAssetId = STARTER_MATERIAL_IDS.ground;
   return {
     id: "starter-floor",
     name: "床",
@@ -931,32 +891,6 @@ function createFloorEntity(templateId: StarterWorldTemplateId): SceneEntity {
         halfExtents: [0.5, 0.5, 0.01],
         fitMode: "auto",
       }),
-    ],
-  };
-}
-
-function createGalleryPlinthEntity(id: string, position: Vec3): SceneEntity {
-  const definition = getBuiltinPrimitiveCreation(
-    BUILTIN_PRIMITIVE_CREATION_IDS.box,
-  );
-  if (!definition) throw new Error("Builtin box is unavailable");
-  return {
-    id,
-    name: "展示台",
-    parentId: null,
-    children: [],
-    enabled: true,
-    components: [
-      createTransformComponent(
-        `${id}-transform`,
-        position,
-        [0, 0, 0],
-        [1.1, 1.2, 1.1],
-      ),
-      createBuiltinPrimitiveMeshComponent(`${id}-mesh`, definition, [
-        { slot: "default", materialAssetId: STARTER_MATERIAL_IDS.accent },
-      ]),
-      createBoxColliderComponent(`${id}-collider`, { fitMode: "auto" }),
     ],
   };
 }

@@ -78,6 +78,7 @@ export function executeXriftMcpEditorTool(
 function readEditorContext(
   context: XriftMcpEditorContext,
 ): XriftMcpEditorToolOutcome {
+  const sceneSettings = resolveSceneSettings(context.bundle.scene.settings);
   const selectedEntity = context.sceneSelection
     ? context.bundle.scene.entities[context.sceneSelection.id]
     : undefined;
@@ -94,6 +95,9 @@ function readEditorContext(
     editorMode: context.editorMode,
     importBusy: context.importBusy,
     saveStatus: context.saveStatus,
+    sceneSettings: {
+      fog: sceneSettings.fog,
+    },
     selectedEntity: selectedEntity
       ? { id: selectedEntity.id, name: selectedEntity.name }
       : null,

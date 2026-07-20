@@ -263,6 +263,8 @@ export const tauri = {
     invoke<XriftMcpClientStatus>("register_xrift_mcp_client", { clientId }),
   completeXriftMcpRequest: (response: XriftMcpEditorResponse) =>
     invoke<void>("complete_xrift_mcp_request", { response }),
+  setXriftMcpEditorReady: (ready: boolean) =>
+    invoke<void>("set_xrift_mcp_editor_ready", { ready }),
   onXriftMcpEditorRequest: (
     handler: (request: XriftMcpEditorRequestEvent) => void,
   ): Promise<UnlistenFn> =>

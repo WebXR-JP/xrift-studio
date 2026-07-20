@@ -41,6 +41,17 @@ export function runXriftMcpEditorToolFixtures(): void {
       fog: { enabled: false },
     },
   });
+
+  const editorContext = executeXriftMcpEditorTool(context, {
+    id: "fixture-context",
+    tool: "get_editor_context",
+    arguments: {},
+  });
+  assert(
+    typeof (editorContext.result.sceneSettings as { fog?: unknown })?.fog ===
+      "object",
+    "Editor context should expose current Fog settings",
+  );
   assert(fogResult.changed, "Fog edit should change the bundle");
   assert(
     fogResult.bundle.scene.settings?.fog.enabled === false,

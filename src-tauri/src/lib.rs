@@ -3799,6 +3799,7 @@ pub fn run() {
             check_xrift_latest,
             update_xrift,
             mcp::complete_xrift_mcp_request,
+            mcp::set_xrift_mcp_editor_ready,
             mcp::detect_xrift_mcp_clients,
             mcp::register_xrift_mcp_client,
         ])

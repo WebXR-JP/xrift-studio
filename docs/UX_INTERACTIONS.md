@@ -65,6 +65,7 @@ F-06 アイテム検査
 | MI-46 | OBJ / VRMをimportする、または配置済みModelのボーン回転・シェイプキーを編集する | Import QueueはGLB / glTFと同じvalidate、copy、parse、thumbnail、commitを使い、Model Inspectorに形式、bone、shape key件数を残す。Entity Inspectorの「モデルポーズ」は選択したboneのXYZ回転とshape keyのweightをScene Viewへ即時反映し、編集対象がAsset共通値ではなく現在のEntityであることを示す。 | 有効値だけをMesh componentの静的poseへ一件のhistoryとして保存する。同じModelの別Entityには波及しない。リセットはposeだけを初期状態へ戻し、Transform、Material、Assetを維持する。失敗時はlast-good Asset / Entity poseを保ち、対応形式または修正対象を同じImport Queue / Inspectorに示す。 |
 | MI-47 | `.unitypackage`、Unity Scene、Unity PrefabをAssetsへdropまたはImportする | Import Queueでgzip / tar展開、pathname復元、Unity YAML解析、Asset変換、Hierarchy再構築、Prefab作成、commitの順に進捗を示す。対応Model / Texture / MaterialとGameObject、Transform、Light、Audio Source、Collider、Scene環境設定を変換し、未対応class IDと件数を診断へ残す。C# / MonoBehaviourはJavaScriptへ変換しない。 | 全Asset sourceのatomic commit後だけScene、AssetManifest、Prefab documentを一件のhistoryへ反映する。成功時はPrefab / Entity / Asset件数と要確認件数、「アセットを表示」を残し、生成Prefabを`assetSelection`、再構築したrootを`sceneSelection`にする。失敗時はlast-good document setを維持して同じActivity drawerから原因を確認できる。 |
 | MI-48 | Editor のAI連携を開き、CodexまたはClaude CodeへXRift Studio MCPを登録する、または接続済みAIからScene編集を受ける | 未登録、登録中、登録済み、接続待ち、接続中、失敗を同じpanelに表示する。登録は検出済みclientとscope、実行する固定commandを示してから一度だけ実行し、処理中は重複操作を無効にする。AI編集はclient名、tool名、対象Scene、変更概要、保存状態をActivityとして残し、Scene View、Hierarchy、Inspectorを同じCommand結果へ同期する。 | 登録成功後はclientの再読み込み方法と接続待ちを残し、接続後は対象project、Scene、revision、直近の変更、Undoへ到達できる。Play、Import、revision競合、未認可project、保存失敗ではdocumentを変更せず理由と再試行先を示す。panelを閉じても接続と直近Activityを維持し、AI変更のUndoは通常のEditor historyへ合流する。 |
+| MI-49 | OpenBrush / Tilt Brush glTFをimportする、OpenBrush Starterを作成する、または対象Modelを表示・変換する | `GOOGLE_tilt_brush_material`、exporter、brush名から形式を判定し、Model InspectorへOpenBrush badge、brush数、three-icosa renderer、外部brush library利用を表示する。新規Visual WorldはBlankとOpenBrushの2カードにし、OpenBrushをおすすめ、Blankを素材なしの最小構成として区別する。 | sourceのbrush shaderを既定表示に保ち、明示的に割り当てたXRift Materialだけがslot単位で上書きする。import時の古い外部画像URLは取得せず、安全な解析用画像へ置換する。実表示・compiler stagingでは固定versionのthree-icosaと固定brush base URLを使い、load失敗時はModelだけをerror表示して同じAsset Inspectorへ戻れる。 |
 
 ## 機能一覧
 
@@ -85,6 +86,7 @@ F-06 アイテム検査
 | F-15 | OBJ / VRM import と静的モデルポーズ | MI-03, MI-05, MI-09, MI-20, MI-36, MI-41, MI-46 | OBJ / VRMをModel Assetとして配置でき、配置Entityごとにbone回転とshape key weightを保存し、再表示と生成結果で同じ静的状態を復元できる。 |
 | F-16 | UnityPackage / Scene / Prefab import | MI-03, MI-05, MI-09, MI-11, MI-13, MI-20, MI-24, MI-47 | UnityPackageの論理pathnameとGUID参照を安全に復元し、対応Assetを抽出してScene階層を再構築し、再利用可能なXRift Prefabとして保存する。未対応Asset / Componentは黙って成功扱いせず診断とprovenanceへ残し、C#変換を行わない。 |
 | F-17 | AI editor integration / MCP | MI-03, MI-05, MI-09, MI-10, MI-11, MI-13, MI-25, MI-48 | CodexまたはClaude CodeへXRift Studio MCPを一操作で登録し、認可したvisual projectの現在Scene、Asset、selection、revisionを読み取れる。Fog変更とAsset配置を通常のEditor Command、Undo、Autosaveへ合流し、AIと手操作の競合を暗黙に上書きしない。登録後は接続状態、対象Scene、直近の編集と復帰手段がEditorに残る。 |
+| F-18 | OpenBrush import / shader rendering | MI-03, MI-05, MI-09, MI-15, MI-18, MI-20, MI-27, MI-35, MI-36, MI-49 | OpenBrush / Tilt Brush形式のglTFを通常のModel Assetとして取り込み、three-icosaの専用shaderでScene Viewと生成Worldを再現する。新規WorldはBlankとOpenBrushの2サンプルから選び、OpenBrush sampleとApache-2.0 licenseを検証付きで保存できる。 |
 
 ## F-07 の状態設計
 
@@ -443,6 +445,37 @@ F-06 アイテム検査
 
 - panelを閉じても同じEditor、Scene、両selection、接続状態、直近Activityを維持する。別projectを開いた時は前projectへの書き込み認可を引き継がず、新しいcontextを取得するまで変更を拒否する。
 - AI変更の取消は通常のUndoを使い、同じCommand historyからScene、Asset、両selectionを復元する。登録解除はclient設定だけを外し、project documentとEditor historyを変更しない。
+
+## F-18 OpenBrush import / shader rendering の状態設計
+
+### 操作前
+
+- 新規Visual WorldはBlankとOpenBrushの2サンプルを表示する。OpenBrushは48種類のbrushを含むこと、three-icosaを使うこと、実行時に外部brush libraryへ接続することをカードとModel Inspectorで事前に示す。
+- 通常のGLB / glTF import入口をそのまま使う。`GOOGLE_tilt_brush_material`、旧Tilt Brush exporter、OpenBrush material名を自動判定し、ユーザーへ別形式の指定を要求しない。
+- OpenBrush sourceに含まれるshaderを既定値とし、XRift Materialの割当は明示的なslot上書きとして扱う。source shaderを大量のPBR Materialへ展開しない。
+
+### 操作中
+
+- Import Queueは既存のvalidate、copy、parse、thumbnail、commitを使う。OpenBrush exportに残る古い外部画像URLはimport解析時に取得せず、埋め込みplaceholderへ置換する。外部buffer参照は従来どおりblockする。
+- Scene ViewはOpenBrush判定済みModelにだけthree-icosa loader extensionを登録する。通常のGLB / glTF、OBJ、VRMのloaderとMaterial挙動を変更しない。
+- 公開変換ではcompiler-owned stagingに固定versionのthree-icosaだけをallowlist付きで追加する。authoring projectのpackage manifestや任意pathへpackageを追加しない。
+
+### 成功時
+
+- Model InspectorにOpenBrush / three-icosa、brush数、exporter、renderer versionを残す。Material Slotの未割当状態は「OpenBrush Brush Shader」と表示し、割当済みslotだけScene Viewと生成結果でXRift Materialに置換する。
+- OpenBrush Starterは検証済みGLBとApache-2.0 licenseをproject-relative pathへコピーし、48 slotをsourceから復元したModel Asset、配置Entity、Prefabを一つの新規projectとして開く。
+- compiler outputはGLTFLoaderへthree-icosa extensionと固定brush base URLを登録し、一時stagingのruntime dependency planへ固定package specを記録する。
+
+### 失敗時
+
+- 不正glTF、外部buffer、geometry解析失敗、copy / hash不一致ではAssetManifestとSceneを変更せず、Import Queueまたは新規作成へ戻す。OpenBrush判定だけを理由に不完全なAssetをcommitしない。
+- brush libraryのnetwork / CORS / shader load失敗はModel表示のerrorへ閉じ込め、Editor全体、他Entity、保存済みsourceを失わない。再試行と同じModel Inspectorへの復帰を保つ。
+- stagingへのthree-icosa installが失敗した場合はcheck / uploadへ進まず、authoring projectを保持したまま公開modalに失敗理由を示す。
+
+### 戻り先
+
+- Import成功後は新Model Assetを選択してOpenBrush情報とslotを確認できる。Sceneへ配置した後は同じEntityを選択し、通常のTransform、Collider、Prefab、Undo / Redoを使う。
+- Starter作成後はOpenBrush Modelが見えるScene Viewを開く。Blankへ戻って作り直す場合も、失敗projectを成功一覧へ残さない。
 
 ## 実装制約
 

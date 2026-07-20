@@ -18,6 +18,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
+    "mcp:sidecar:prepare": "node scripts/prepare-mcp-sidecar.mjs",
+    "mcp:sidecar:prepare:release": "node scripts/prepare-mcp-sidecar.mjs --release",
     "mcp:server": "pnpm dlx @hypothesi/tauri-mcp-server",
     "mcp:cli": "pnpm dlx @hypothesi/tauri-mcp-cli"
   },

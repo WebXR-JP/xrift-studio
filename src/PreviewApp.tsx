@@ -226,6 +226,37 @@ const steps = [
   },
 ];
 
+const capabilityFlow = [
+  {
+    icon: Package,
+    status: "いま使える",
+    title: "手元の素材を持ち込む",
+    text: "GLB、glTF、OBJ、VRM、UnityPackage、画像、MP3を、プロジェクトの素材として受け取ります。",
+    tone: "border-violet-200 bg-violet-50 text-violet-700",
+  },
+  {
+    icon: PanelsTopLeft,
+    status: "いま使える",
+    title: "シーンと見た目を整える",
+    text: "配置、親子関係、マテリアル、当たり判定、音、ボーン、シェイプキーの状態を保存できます。",
+    tone: "border-cyan-200 bg-cyan-50 text-cyan-700",
+  },
+  {
+    icon: Play,
+    status: "いま使える",
+    title: "歩いて確かめ、届ける",
+    text: "Playで見え方を確かめ、保存・検査・XRift向け変換からアップロードまで進められます。",
+    tone: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  },
+  {
+    icon: Code2,
+    status: "次につくる",
+    title: "いつものコード開発へ渡す",
+    text: "Visual projectのJSONと素材一式を、既存のXRiftコードプロジェクトへ安全に移すnpxコマンドを計画しています。",
+    tone: "border-dashed border-fuchsia-300 bg-fuchsia-50 text-fuchsia-700",
+  },
+];
+
 type AssetPreviewKind = "models" | "materials" | "textures";
 
 const assetPreviewContents: Record<AssetPreviewKind, Array<{ name: string; detail: string; tone: string }>> = {
@@ -493,6 +524,9 @@ export default function PreviewApp() {
           <a href="#visual-editor" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
             ビジュアルで作る
           </a>
+          <a href="#roadmap" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 lg:inline-flex">
+            現在地
+          </a>
           <a href="#action" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
             ダウンロード
           </a>
@@ -514,11 +548,11 @@ export default function PreviewApp() {
         <div className="preview-orb preview-orb-two" />
         <div className="relative max-w-3xl">
           <h1 className="max-w-3xl text-4xl font-black leading-[1.04] tracking-[-0.055em] text-zinc-950 sm:text-6xl lg:text-7xl">
-            XRiftを、
-            <span className="text-gradient-brand">もっとつくりやすく。</span>
+            思いついた景色を、
+            <span className="text-gradient-brand">その日のうちに歩ける形へ。</span>
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-8 text-zinc-600 sm:text-lg">
-            ワールドとアイテムの制作を、準備・編集・プレビュー・公開までひとつにつなぐXRift Studio。コードでも、素材を選ぶビジュアル編集でも始められます。
+            モデルやアバター、Unityの素材、音を持ち込み、配置して、その場で確かめる。XRift Studioは、準備から公開までをひとつにつなぎます。コードでも、ビジュアル編集でも始められます。
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <a
@@ -544,6 +578,12 @@ export default function PreviewApp() {
             <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white/70 px-3 py-1.5 font-medium text-zinc-700"><span aria-hidden="true" className="grid grid-cols-2 gap-px"><i className="h-1.5 w-1.5 bg-sky-500" /><i className="h-1.5 w-1.5 bg-sky-500" /><i className="h-1.5 w-1.5 bg-sky-500" /><i className="h-1.5 w-1.5 bg-sky-500" /></span>Windows</span>
             <span className="rounded-full border border-zinc-200 bg-white/70 px-3 py-1.5 font-medium text-zinc-700">macOS</span>
             <span className="rounded-full border border-zinc-200 bg-white/70 px-3 py-1.5 font-medium text-zinc-700">Linux</span>
+          </div>
+          <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-zinc-500" aria-label="取り込める素材の例">
+            <span>OBJ／VRM</span>
+            <span>UnityPackage</span>
+            <span>Texture／MP3</span>
+            <span>ボーン／シェイプキー保存</span>
           </div>
         </div>
       </section>
@@ -977,8 +1017,8 @@ export default function PreviewApp() {
         <div className="mx-auto grid max-w-6xl gap-8 rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-7 sm:p-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-center">
           <div className="max-w-2xl">
             <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">ビジュアルで作る</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">素材を選び、見た目を確かめながら作れる。</h2>
-            <p className="mt-4 text-sm leading-7 text-zinc-600">モデル、マテリアル、テクスチャをフォルダーから見つけて配置。シーンの見え方を確認しながら、コード制作と同じアプリで仕上げられます。</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">持っている素材から、そのままシーンを始める。</h2>
+            <p className="mt-4 text-sm leading-7 text-zinc-600">OBJやVRM、Unityの素材、画像、音を取り込み、見つけて配置。アバターのボーンやシェイプキーも、その見た目のまま保存しておけます。</p>
             <button
               type="button"
               onClick={() => setVisualEditorKind(sampleKind)}
@@ -992,13 +1032,64 @@ export default function PreviewApp() {
         </div>
       </section>
 
+      <section id="roadmap" className="scroll-mt-8 px-5 py-20 lg:px-8 lg:py-24">
+        <div className="mx-auto max-w-6xl">
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-start">
+            <div className="max-w-xl lg:sticky lg:top-10">
+              <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">XRift Studioの現在地</p>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 sm:text-4xl">持ち込むところから、コードへ渡すところまで。</h2>
+              <p className="mt-5 text-sm leading-7 text-zinc-600">
+                いまはビジュアル編集からXRiftへの公開までがつながっています。次は、ここで作ったデータを通常のコード開発へ安全に引き渡す出口を作ります。
+              </p>
+              <a
+                href="https://github.com/WebXR-JP/xrift-studio/blob/main/docs/VISUAL_EDITOR_ROADMAP.md"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-violet-700 transition-colors hover:text-violet-900"
+              >
+                詳しいロードマップを見る
+                <ExternalLink size={14} />
+              </a>
+            </div>
+
+            <div className="preview-capability-flow relative">
+              {capabilityFlow.map((capability, index) => {
+                const Icon = capability.icon;
+                return (
+                  <article key={capability.title} className="preview-capability-step relative grid gap-4 pb-10 pl-16 last:pb-0 sm:grid-cols-[10rem_minmax(0,1fr)] sm:pl-20">
+                    <div className={`absolute left-0 top-0 z-10 flex h-11 w-11 items-center justify-center rounded-2xl border ${capability.tone} shadow-sm`}>
+                      <Icon size={19} />
+                    </div>
+                    <div>
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-[0.12em] ${capability.tone}`}>
+                        {capability.status}
+                      </span>
+                      <p className="mt-2 text-[11px] font-semibold text-zinc-400">0{index + 1}</p>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold tracking-tight text-zinc-950">{capability.title}</h3>
+                      <p className="mt-2 text-sm leading-7 text-zinc-600">{capability.text}</p>
+                      {index === capabilityFlow.length - 1 ? (
+                        <code className="mt-4 block overflow-x-auto rounded-xl border border-fuchsia-100 bg-zinc-950 px-4 py-3 text-[11px] leading-5 text-fuchsia-100">
+                          npx @xrift/studio-cli migrate ./visual-project --to ./my-world
+                        </code>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="action" className="mx-auto max-w-6xl px-5 py-20 lg:px-8 lg:py-24">
         <div className="relative overflow-hidden rounded-3xl bg-zinc-950 px-6 py-10 text-white shadow-2xl shadow-violet-950/20 sm:px-10 sm:py-14">
           <div className="preview-cta-glow" />
           <div className="relative max-w-2xl">
             <div className="flex items-center gap-2 text-xs font-semibold text-violet-300"><CircleHelp size={15} /> デスクトップ版</div>
-            <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">XRiftを、もっとつくりやすく。</h2>
-            <p className="mt-4 text-sm leading-7 text-zinc-400">XRift Studioをダウンロードして、ワールドやアイテムの制作を始めましょう。</p>
+            <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">素材を持ち込んだら、歩いて確かめるところまで。</h2>
+            <p className="mt-4 text-sm leading-7 text-zinc-400">XRift Studioをダウンロードして、いま持っているモデルやアイデアからワールド／アイテム制作を始めましょう。</p>
             <div className="mt-7 flex flex-wrap gap-3">
               <a href="https://github.com/WebXR-JP/xrift-studio/releases/latest" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:-translate-y-0.5 hover:bg-violet-100"><Download size={15} /> 最新リリースをダウンロード</a>
               <a href="https://github.com/WebXR-JP/xrift-studio" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/5"><GitBranch size={15} /> GitHubで見る</a>

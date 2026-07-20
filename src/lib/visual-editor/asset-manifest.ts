@@ -130,6 +130,8 @@ export type ModelImportMetadata = {
   vrmVersion?: "0" | "1";
   extensionsUsed: string[];
   extensionsRequired: string[];
+  /** Present when the source uses Open Brush / Tilt Brush brush materials. */
+  openBrush?: import("./open-brush").OpenBrushModelMetadata;
 };
 
 export type ModelAsset = AssetBase<"model"> & {

@@ -48,6 +48,10 @@ import {
   expandGltfAssets,
   type GltfJson,
 } from "./gltf-derived-assets";
+import {
+  detectOpenBrushGltfDocument,
+  prepareOpenBrushGltfSource,
+} from "./open-brush";
 
 export const ASSET_IMPORT_THUMBNAIL_RENDERER_VERSION = "three-white-v1";
 export const ASSET_IMPORT_MAX_BYTES = 128 * 1024 * 1024;
@@ -672,7 +676,29 @@ async function createModelImportPlan(
     );
   }
 
-  const externalReferences = findExternalGltfReferences(parsedJson.json);
+  const openBrush = detectOpenBrushGltfDocument(parsedJson.json);
+  const discoveredExternalReferences = findExternalGltfReferences(
+    parsedJson.json,
+  );
+  const externalReferences = discoveredExternalReferences.filter(
+    (reference) => !openBrush || !reference.fieldPath.startsWith("images["),
+  );
+  if (
+    openBrush &&
+    discoveredExternalReferences.some((reference) =>
+      reference.fieldPath.startsWith("images["),
+    )
+  ) {
+    diagnostics.push({
+      severity: "warning",
+      code: "openbrush-hosted-brush-library",
+      message:
+        "OpenBrushの旧画像URLはImport時に取得せず、表示時にthree-icosaのブラシ素材へ置き換えます",
+      fileName,
+      assetId: reimportAsset?.id,
+      fieldPath: "images",
+    });
+  }
   for (const reference of externalReferences) {
     diagnostics.push({
       severity: "blocking",
@@ -694,7 +720,11 @@ async function createModelImportPlan(
 
   let gltf: GLTF;
   try {
-    gltf = await parseWithGltfLoader(bytes, classification.format);
+    gltf = await parseWithGltfLoader(
+      bytes,
+      classification.format,
+      openBrush !== undefined,
+    );
   } catch (error) {
     diagnostics.push({
       severity: "blocking",
@@ -780,6 +810,7 @@ async function createModelImportPlan(
     fileName,
     bytes.byteLength,
   );
+  if (openBrush) importMetadata.openBrush = openBrush;
   let thumbnail: ModelAsset["thumbnail"] = sourceUnchanged
     ? cloneThumbnail(reimportAsset.thumbnail)
     : staleThumbnailForReimport(reimportAsset);
@@ -823,7 +854,9 @@ async function createModelImportPlan(
     }
   }
 
-  const expanded = await expandGltfAssets({
+  const derivedAssets: Array<MaterialAsset | TextureAsset> = [];
+  if (!openBrush) {
+    const expanded = await expandGltfAssets({
     json: parsedJson.json,
     modelBytes: bytes,
     sourceFormat: classification.format === "vrm" ? "glb" : classification.format,
@@ -835,7 +868,8 @@ async function createModelImportPlan(
     textureFolderId: folderPlan.textureFolderId,
     hashBytes: sha256AssetBytes,
   });
-  materialSlots = expanded.materialSlots;
+    materialSlots = expanded.materialSlots;
+    derivedAssets.push(...expanded.materialAssets, ...expanded.textureAssets);
   writes.push(
     ...expanded.writes.map((write) => ({
       relativePath: write.relativePath,
@@ -855,6 +889,8 @@ async function createModelImportPlan(
       fieldPath: warning.fieldPath,
     })),
   );
+
+  }
 
   const asset: ModelAsset = {
     id: assetId,
@@ -890,7 +926,7 @@ async function createModelImportPlan(
     writes,
     diagnostics,
     reimportAsset?.id,
-    [...expanded.materialAssets, ...expanded.textureAssets],
+    derivedAssets,
     folderPlan.folders,
   );
 }
@@ -1450,13 +1486,15 @@ function findExternalGltfReferences(
 function parseWithGltfLoader(
   bytes: Uint8Array,
   format: "glb" | "gltf" | "vrm",
+  isOpenBrush = false,
 ): Promise<GLTF> {
   const loader = new GLTFLoader();
   if (format === "vrm") {
     loader.register((parser) => new VRMLoaderPlugin(parser));
   }
-  const source =
-    format === "gltf"
+  const source = isOpenBrush
+    ? prepareOpenBrushGltfSource(bytes, format)
+    : format === "gltf"
       ? new TextDecoder().decode(bytes)
       : toOwnedArrayBuffer(bytes);
   return new Promise((resolve, reject) => {

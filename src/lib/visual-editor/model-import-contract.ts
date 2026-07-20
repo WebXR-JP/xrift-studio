@@ -5,6 +5,7 @@ import {
   type ModelAsset,
   type SceneAsset,
 } from "./asset-manifest";
+import { isOpenBrushModelMetadata } from "./open-brush";
 
 export type ModelImportContractIssue = {
   path: string;
@@ -230,6 +231,18 @@ export function validateModelImportMetadata(
     `${path}.extensionsRequired`,
     issues,
   );
+  if (
+    value.openBrush !== undefined &&
+    !isOpenBrushModelMetadata(value.openBrush)
+  ) {
+    issues.push(
+      issue(
+        `${path}.openBrush`,
+        "type",
+        "OpenBrush metadata must describe a three-icosa renderer and brush list",
+      ),
+    );
+  }
   if (
     Array.isArray(value.extensionsUsed) &&
     Array.isArray(value.extensionsRequired)

@@ -17,6 +17,7 @@ import {
   VRMUtils,
   type VRM,
 } from "@pixiv/three-vrm";
+import { GLTFGoogleTiltBrushMaterialExtension } from "three-icosa/dist/three-icosa.module.js";
 import {
   Box3,
   DoubleSide,
@@ -29,6 +30,8 @@ import {
 import { tauri } from "../../lib/tauri";
 import {
   normalizeMaterialProperties,
+  detectOpenBrushGltfDocument,
+  OPEN_BRUSH_BRUSH_BASE_URL,
   type AssetManifest,
   type MaterialAsset,
   type ModelPoseState,
@@ -553,12 +556,18 @@ async function dataUrlToArrayBuffer(dataUrl: string): Promise<ArrayBuffer> {
 type GltfResourceDocument = {
   buffers?: Array<{ uri?: unknown }>;
   images?: Array<{ uri?: unknown }>;
+  meshes?: Array<{
+    primitives?: Array<{ material?: unknown }>;
+  }>;
 };
 
 export const PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY =
   "xriftSourceMaterialIndex";
 
-function tagSourceMaterialIndices(gltf: GLTF): void {
+function tagSourceMaterialIndices(
+  gltf: GLTF,
+  document?: GltfResourceDocument,
+): void {
   gltf.scene.traverse((child) => {
     const mesh = child as Object3D & {
       isMesh?: boolean;
@@ -568,9 +577,21 @@ function tagSourceMaterialIndices(gltf: GLTF): void {
     const materials = Array.isArray(mesh.material)
       ? mesh.material
       : [mesh.material];
-    for (const material of materials) {
+    const meshIndex = gltf.parser.associations.get(mesh)?.meshes;
+    const primitiveMaterials =
+      typeof meshIndex === "number" && Number.isInteger(meshIndex)
+        ? document?.meshes?.[meshIndex]?.primitives
+            ?.map((primitive) => primitive.material)
+            .filter(
+              (index): index is number =>
+                typeof index === "number" && Number.isInteger(index) && index >= 0,
+            ) ?? []
+        : [];
+    for (const [materialOrder, material] of materials.entries()) {
       const sourceMaterialIndex =
-        gltf.parser.associations.get(material)?.materials;
+        gltf.parser.associations.get(material)?.materials ??
+        primitiveMaterials[materialOrder] ??
+        (materials.length === 1 ? primitiveMaterials[0] : undefined);
       if (
         sourceMaterialIndex === undefined ||
         !Number.isInteger(sourceMaterialIndex) ||
@@ -630,7 +651,8 @@ async function parseSelfContainedModel(
 
   const source = format === "gltf" ? new TextDecoder().decode(bytes) : buffer;
   const document = parseGltfDocument(bytes, format);
-  if (hasExternalResources(document)) {
+  const openBrush = detectOpenBrushGltfDocument(document);
+  if (hasExternalResources(document, openBrush !== undefined)) {
     throw new Error(
       "外部ファイルを参照するglTFは表示できません。GLBまたは自己完結glTFを使用してください",
     );
@@ -641,13 +663,22 @@ async function parseSelfContainedModel(
     if (format === "vrm") {
       loader.register((parser) => new VRMLoaderPlugin(parser));
     }
+    if (openBrush) {
+      loader.register(
+        (parser) =>
+          new GLTFGoogleTiltBrushMaterialExtension(
+            parser,
+            OPEN_BRUSH_BRUSH_BASE_URL,
+          ),
+      );
+    }
     loader.parse(
       source,
       "",
       (gltf) => {
         const vrm = gltf.userData.vrm as VRM | undefined;
         if (vrm) VRMUtils.rotateVRM0(vrm);
-        tagSourceMaterialIndices(gltf);
+        tagSourceMaterialIndices(gltf, document);
         resolve(gltf.scene);
       },
       (error) => reject(error),
@@ -705,8 +736,14 @@ function readGlbJsonChunk(bytes: Uint8Array): string {
     .replace(/[\u0000\u0020]+$/g, "");
 }
 
-function hasExternalResources(document: GltfResourceDocument): boolean {
-  return [document.buffers, document.images].some((entries) =>
+function hasExternalResources(
+  document: GltfResourceDocument,
+  allowExternalImages = false,
+): boolean {
+  const resourceSets = allowExternalImages
+    ? [document.buffers]
+    : [document.buffers, document.images];
+  return resourceSets.some((entries) =>
     entries?.some(
       (entry) =>
         typeof entry.uri === "string" &&

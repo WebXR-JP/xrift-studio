@@ -243,6 +243,25 @@ export async function materializeVisualCompilation(
       "公開用サムネイルのステージング検証結果を確認できないため、アップロードを停止しました。",
     );
   }
+  if (compilation.stagingPlan.runtimePackageSpecs.length > 0) {
+    throwIfAborted(signal);
+    report({
+      stage: "compiling",
+      label: "OpenBrush描画ランタイムを準備しています",
+      detail: "three-icosaを公開用の一時プロジェクトへ追加します。",
+      percent: 52,
+      cancelSafe: false,
+    });
+    const installed = await xrift.installCompilerRuntimePackages(
+      staged.projectPath,
+      compilation.stagingPlan.runtimePackageSpecs,
+      onLog,
+    );
+    assertSucceeded(installed, "OpenBrush描画ランタイムの準備", [
+      authoringProjectPath,
+      staged.projectPath,
+    ]);
+  }
   report({
     stage: "compiling",
     label: "サムネイルを公開用ステージングへコピー済み",

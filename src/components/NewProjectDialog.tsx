@@ -5,11 +5,11 @@ import {
   Check,
   CircleDot,
   Code2,
-  Cuboid,
   Globe2,
   LayoutGrid,
   Lightbulb,
   Package,
+  Paintbrush,
   PanelsTopLeft,
   Sparkles,
   type LucideIcon,
@@ -128,39 +128,21 @@ function StarterScenePreview({
     );
   }
 
-  if (templateId === "social-space") {
+  if (templateId === "openbrush") {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 px-5" aria-hidden="true">
-        <div className="flex items-center gap-2.5">
-          <CircleDot size={17} className="text-zinc-400" />
+        <div className="flex items-center gap-3">
+          <Sparkles size={16} className="text-amber-500" />
           <span className={`relative flex h-12 w-12 items-center justify-center rounded-xl border ${surfaceClass}`}>
-            <Cuboid size={24} className={iconClass} />
-            <Sparkles size={13} className="absolute -right-1 -top-1 text-amber-500" />
-          </span>
-          <CircleDot size={17} className="text-zinc-400" />
-        </div>
-        <span className="text-[10px] font-medium tracking-wide text-zinc-500">
-          鳥居・ベンチ・木板床
-        </span>
-      </div>
-    );
-  }
-
-  if (templateId === "gallery") {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2.5 px-4" aria-hidden="true">
-        <div className="grid w-full max-w-[180px] grid-cols-3 gap-2">
-          {[Cuboid, Package, Cuboid].map((PreviewIcon, index) => (
-            <span
-              key={index}
-              className={`flex h-12 items-center justify-center rounded-md border border-b-2 ${surfaceClass}`}
-            >
-              <PreviewIcon size={index === 1 ? 22 : 19} className={iconClass} />
+            <Paintbrush size={24} className={iconClass} />
+            <span className="absolute -bottom-1 -right-1 rounded-full bg-brand-600 px-1.5 py-0.5 text-[8px] font-bold text-white">
+              48
             </span>
-          ))}
+          </span>
+          <Sparkles size={16} className="text-fuchsia-500" />
         </div>
         <span className="text-[10px] font-medium tracking-wide text-zinc-500">
-          モデル展示ギャラリー
+          three-icosa ブラシシェーダー
         </span>
       </div>
     );
@@ -275,7 +257,7 @@ export function NewProjectDialog({
                 </p>
                 <div
                   className={`mt-3 grid gap-3 ${
-                    choice.kind === "world" ? "sm:grid-cols-3" : "max-w-sm"
+                    choice.kind === "world" ? "sm:grid-cols-2" : "max-w-sm"
                   }`}
                   role="radiogroup"
                   aria-label={`${choice.kind === "world" ? "ワールド" : "アイテム"}のスターター`}

@@ -4,7 +4,7 @@ import type { VisualProjectDocument, VisualProjectKind } from "../project-docume
 import type { SceneDocument } from "../scene-document";
 import type { CompilationProvenance } from "../serialization";
 
-export const VISUAL_COMPILER_VERSION = "0.5.4" as const;
+export const VISUAL_COMPILER_VERSION = "0.5.5" as const;
 
 export type VisualCompilerDocuments = {
   project: VisualProjectDocument;
@@ -60,6 +60,8 @@ export type CompilerStagingPlan = {
   stagingDirectoryName: string;
   overlayFiles: CompilerOverlayFile[];
   assetCopyPlan: AssetCopyPlanEntry[];
+  /** Exact packages installed only in the compiler-owned staging project. */
+  runtimePackageSpecs: string[];
   /** Required XRift publication files are verified separately from user Assets. */
   requiredPublicationFiles: RequiredPublicationFileCopy[];
 };

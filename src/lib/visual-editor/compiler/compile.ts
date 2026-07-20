@@ -54,6 +54,11 @@ import {
 } from "../serialization";
 import { sha256Utf8 } from "./hash";
 import {
+  isOpenBrushModelMetadata,
+  OPEN_BRUSH_BRUSH_BASE_URL,
+  OPEN_BRUSH_RUNTIME_PACKAGE,
+} from "../open-brush";
+import {
   getPrefabAssetDocumentReference,
   isPrefabAsset,
   resolvePrefabInstances,
@@ -175,6 +180,13 @@ export function compileVisualProject(
       targetRelativePath: "public/thumbnail.png" as const,
     },
   ];
+  const runtimePackageSpecs = Object.values(documents.assets.assets).some(
+    (asset) =>
+      asset.kind === "model" &&
+      isOpenBrushModelMetadata(asset.importMetadata?.openBrush),
+  )
+    ? [OPEN_BRUSH_RUNTIME_PACKAGE]
+    : [];
 
   return {
     targetKind: documents.project.projectKind,
@@ -190,6 +202,7 @@ export function compileVisualProject(
       stagingDirectoryName,
       overlayFiles: [...overlayFiles, provenanceFile],
       assetCopyPlan,
+      runtimePackageSpecs,
       requiredPublicationFiles,
     },
   };
@@ -966,10 +979,21 @@ function renderModelMesh(
       ? fileExtension(model.source.relativePath)
       : model.importMetadata?.sourceFormat;
   const isObj = sourceExtension === "obj";
+  const isOpenBrush = isOpenBrushModelMetadata(
+    model.importMetadata?.openBrush,
+  );
   if (isObj) {
     context.fiberImports.add("useLoader");
     context.extraImports.add(
       'import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";',
+    );
+  } else if (isOpenBrush) {
+    context.fiberImports.add("useLoader");
+    context.extraImports.add(
+      'import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";',
+    );
+    context.extraImports.add(
+      '// @ts-expect-error three-icosa does not publish TypeScript declarations\nimport { GLTFGoogleTiltBrushMaterialExtension } from "three-icosa/dist/three-icosa.module.js";',
     );
   } else {
     context.dreiImports.add("useGLTF");
@@ -999,7 +1023,15 @@ function renderModelMesh(
       : "";
   const source = `const ${componentName}: FC = () => {
   const modelUrl = useCompiledAssetUrl(${urlConstant});
-  ${isObj ? "const scene = useLoader(OBJLoader, modelUrl);" : "const { scene } = useGLTF(modelUrl);"}
+  ${isObj
+    ? "const scene = useLoader(OBJLoader, modelUrl);"
+    : isOpenBrush
+      ? `const { scene } = useLoader(GLTFLoader, modelUrl, (loader) => {
+    loader.register(
+      (parser) => new GLTFGoogleTiltBrushMaterialExtension(parser, ${JSON.stringify(OPEN_BRUSH_BRUSH_BASE_URL)}),
+    );
+  });`
+      : "const { scene } = useGLTF(modelUrl);"}
 ${poseSource.declaration}
   return (
     <group scale={${formatNumber(modelScale)}}${vrm0Rotation}>
@@ -1106,8 +1138,11 @@ function resolveModelMaterialOverrides(
 
   const overrides: ModelMaterialOverride[] = [];
   for (const slot of slots) {
-    const materialAssetId =
-      bindingBySlot.get(slot.slot) ?? slot.defaultMaterialAssetId;
+    const materialAssetId = isOpenBrushModelMetadata(
+      model.importMetadata?.openBrush,
+    )
+      ? bindingBySlot.get(slot.slot)
+      : bindingBySlot.get(slot.slot) ?? slot.defaultMaterialAssetId;
     if (!materialAssetId) continue;
     context.referencedAssetIds.add(materialAssetId);
     const material = getMaterialAsset(context.assets, materialAssetId);
