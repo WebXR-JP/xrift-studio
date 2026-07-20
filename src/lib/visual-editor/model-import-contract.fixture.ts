@@ -1,0 +1,358 @@
+import {
+  ASSET_MANIFEST_SCHEMA_VERSION,
+  createDefaultMaterialAsset,
+  updateModelAsset,
+  type AssetManifest,
+  type ModelAsset,
+  type ModelImportMetadata,
+} from "./asset-manifest";
+import {
+  commitAssetImportPlan,
+  type AssetImportPlan,
+} from "./asset-import";
+import {
+  reconcileModelMaterialSlots,
+  validateModelAssetContract,
+  validateModelImportMetadata,
+} from "./model-import-contract";
+import { assetManifestCodec } from "./serialization";
+
+/** Filesystem-free contract assertions for Model import and reimport. */
+export async function runModelImportContractFixtureAssertions(): Promise<void> {
+  const materialBody = requiredMaterial("material-body", "Body Material");
+  const materialGlass = requiredMaterial("material-glass", "Glass Material");
+  const original = modelAsset({
+    sourceHash: "a".repeat(64),
+    materialSlots: [
+      {
+        slot: "authoring-body",
+        name: "Body",
+        sourceMaterialIndex: 0,
+        defaultMaterialAssetId: materialBody.id,
+      },
+      {
+        slot: "authoring-glass",
+        name: "Glass",
+        sourceMaterialIndex: 1,
+        defaultMaterialAssetId: materialGlass.id,
+      },
+    ],
+  });
+  const manifest: AssetManifest = {
+    schemaVersion: ASSET_MANIFEST_SCHEMA_VERSION,
+    assets: {
+      [original.id]: original,
+      [materialBody.id]: materialBody,
+      [materialGlass.id]: materialGlass,
+    },
+  };
+
+  const reordered = reconcileModelMaterialSlots(
+    [
+      { name: "Glass", sourceMaterialIndex: 0 },
+      { name: "Body", sourceMaterialIndex: 1 },
+      { name: "Emission", sourceMaterialIndex: 2 },
+    ],
+    original.materialSlots,
+  );
+  assert(reordered[0].slot === "authoring-glass", "Reordered Glass slot lost its identity");
+  assert(reordered[1].slot === "authoring-body", "Reordered Body slot lost its identity");
+  assert(
+    reordered[0].defaultMaterialAssetId === materialGlass.id &&
+      reordered[1].defaultMaterialAssetId === materialBody.id,
+    "Reimport discarded existing Material bindings",
+  );
+  assert(reordered[2].slot === "material-2", "New slot ID is not deterministic");
+
+  const renamed = reconcileModelMaterialSlots(
+    [{ name: "Renamed Body", sourceMaterialIndex: 0 }],
+    original.materialSlots,
+  );
+  assert(renamed.length === 1, "Removed source slot remained after reimport");
+  assert(renamed[0].slot === "authoring-body", "Renamed source slot lost index identity");
+  assert(
+    renamed[0].defaultMaterialAssetId === materialBody.id,
+    "Renamed source slot lost its Material binding",
+  );
+  assertThrows(
+    () =>
+      reconcileModelMaterialSlots([
+        { name: "A", sourceMaterialIndex: 0 },
+        { name: "B", sourceMaterialIndex: 0 },
+      ]),
+    "Duplicated discovered Material indices were accepted",
+  );
+
+  const updated = updateModelAsset(manifest, original.id, {
+    importSettings: {
+      scale: Number.NaN,
+      generateColliders: false,
+      importAnimations: false,
+    },
+    materialSlotBindings: {
+      "authoring-body": materialGlass.id,
+      "authoring-glass": null,
+      missing: materialBody.id,
+    },
+  });
+  const updatedModel = updated.assets[original.id];
+  assert(updatedModel.kind === "model", "Model updater changed the Asset kind");
+  assert(updatedModel.importSettings.scale === 1, "Invalid Model scale replaced the fallback");
+  assert(!updatedModel.importSettings.generateColliders, "Collider import flag was not updated");
+  assert(!updatedModel.importSettings.importAnimations, "Animation import flag was not updated");
+  assert(
+    updatedModel.materialSlots[0].defaultMaterialAssetId === materialGlass.id,
+    "Model slot binding was not updated",
+  );
+  assert(
+    updatedModel.materialSlots[1].defaultMaterialAssetId === undefined,
+    "Model slot binding was not removed",
+  );
+
+  const roundTrip = assetManifestCodec.parse(assetManifestCodec.serialize(updated));
+  assert(roundTrip.ok, "Valid Model metadata did not survive Asset Manifest serialization");
+  if (roundTrip.ok) {
+    const parsed = roundTrip.document.assets[original.id];
+    assert(parsed.kind === "model", "Round-tripped Model changed kind");
+    assert(parsed.importMetadata?.sourceFormat === "glb", "sourceFormat was lost");
+    assert(parsed.importMetadata?.nodeCount === 7, "nodeCount was lost");
+    assert(parsed.importMetadata?.meshCount === 3, "meshCount was lost");
+    assert(parsed.importMetadata?.animations[0]?.name === "Idle", "Animation name was lost");
+    assert(parsed.importMetadata?.bounds.size[0] === 2, "Model-local bounds were lost");
+  }
+
+  const invalidMetadata = {
+    ...metadata(),
+    bounds: { ...metadata().bounds, center: [Number.NaN, 1, 0] },
+  };
+  assert(
+    validateModelImportMetadata(invalidMetadata).some(
+      (candidate) => candidate.path.endsWith("bounds.center"),
+    ),
+    "Non-finite Model-local bounds were not rejected",
+  );
+  const invalidAsset = {
+    ...original,
+    importMetadata: { ...metadata(), nodeCount: Number.POSITIVE_INFINITY },
+  };
+  assert(
+    validateModelAssetContract(invalidAsset).some(
+      (candidate) => candidate.path.endsWith("nodeCount"),
+    ),
+    "Non-finite Model metadata was not rejected",
+  );
+  const invalidSerialized = JSON.parse(
+    assetManifestCodec.serialize(manifest),
+  ) as {
+    assets: Record<
+      string,
+      { importMetadata?: { bounds?: { center?: unknown[] } } }
+    >;
+  };
+  const serializedCenter =
+    invalidSerialized.assets[original.id].importMetadata?.bounds?.center;
+  if (!serializedCenter) throw new Error("Fixture serialized bounds are missing");
+  serializedCenter[0] = null;
+  const invalidParse = assetManifestCodec.parse(
+    JSON.stringify(invalidSerialized),
+  );
+  assert(
+    !invalidParse.ok &&
+      invalidParse.issues.some((candidate) =>
+        candidate.path.endsWith("importMetadata.bounds.center"),
+      ),
+    "Asset Manifest parser accepted invalid Model-local bounds",
+  );
+
+  const sameHashPlan: AssetImportPlan = {
+    transactionId: "asset-import-aaaaaaaaaaaaaaaaaaaa",
+    sourceHash: original.sourceHash!,
+    replacesAssetId: original.id,
+    classification: {
+      kind: "model",
+      format: "glb",
+      mimeType: "model/gltf-binary",
+      extension: "glb",
+    },
+    asset: {
+      ...original,
+      importMetadata: { ...metadata(), nodeCount: 8 },
+    },
+    writes: [],
+    diagnostics: [],
+    canCommit: true,
+  };
+  let sameHashCommitCount = 0;
+  const sameHashResult = await commitAssetImportPlan(
+    manifest,
+    sameHashPlan,
+    async () => {
+      sameHashCommitCount += 1;
+    },
+  );
+  const sameHashModel = sameHashResult.assets[original.id];
+  assert(sameHashCommitCount === 0, "Unchanged source bytes were written again");
+  assert(
+    sameHashModel.kind === "model" &&
+      sameHashModel.importMetadata?.nodeCount === 8,
+    "Same-hash reinspection did not refresh derived metadata",
+  );
+
+  const replacementSourcePath =
+    "assets/imported/models/bbbbbbbbbbbbbbbb/sample.glb";
+  const replacement: ModelAsset = {
+    ...original,
+    source: {
+      kind: "project",
+      relativePath: replacementSourcePath,
+    },
+    sourceHash: "b".repeat(64),
+    materialSlots: reordered,
+    importMetadata: {
+      ...metadata(),
+      nodeCount: 9,
+      meshCount: 4,
+      primitiveCount: 5,
+      animations: [
+        { name: "Idle", duration: 2, trackCount: 4, sourceAnimationIndex: 0 },
+        { name: "Wave", duration: 1.25, trackCount: 3, sourceAnimationIndex: 1 },
+      ],
+    },
+  };
+  const plan: AssetImportPlan = {
+    transactionId: "asset-import-bbbbbbbbbbbbbbbbbbbb",
+    sourceHash: replacement.sourceHash!,
+    replacesAssetId: original.id,
+    classification: {
+      kind: "model",
+      format: "glb",
+      mimeType: "model/gltf-binary",
+      extension: "glb",
+    },
+    asset: replacement,
+    writes: [
+      {
+        relativePath: replacementSourcePath,
+        purpose: "source",
+        mediaType: "model/gltf-binary",
+        sha256: replacement.sourceHash,
+        payload: { encoding: "bytes", bytes: new Uint8Array([1, 2, 3]) },
+      },
+    ],
+    diagnostics: [],
+    canCommit: true,
+  };
+  let commitCount = 0;
+  const committed = await commitAssetImportPlan(manifest, plan, async () => {
+    commitCount += 1;
+  });
+  const committedModel = committed.assets[original.id];
+  assert(commitCount === 1, "Model reimport did not use one atomic commit");
+  assert(committedModel.kind === "model", "Reimport changed the Asset kind");
+  assert(committedModel.id === original.id, "Reimport changed the Asset ID");
+  assert(committedModel.order === original.order, "Reimport changed the Asset order");
+  assert(
+    committedModel.importMetadata?.animations[1]?.name === "Wave",
+    "Reimport metadata was not committed",
+  );
+
+  const rejectedPlan: AssetImportPlan = {
+    ...plan,
+    sourceHash: "c".repeat(64),
+    asset: {
+      ...replacement,
+      sourceHash: "c".repeat(64),
+      importMetadata: { ...metadata(), meshCount: Number.NaN },
+    },
+  };
+  let rejectedCommitCount = 0;
+  await assertRejects(
+    () =>
+      commitAssetImportPlan(manifest, rejectedPlan, async () => {
+        rejectedCommitCount += 1;
+      }),
+    "Invalid metadata reached the atomic file commit",
+  );
+  assert(rejectedCommitCount === 0, "Invalid metadata wrote source files");
+}
+
+function modelAsset(
+  overrides: Partial<ModelAsset> = {},
+): ModelAsset {
+  return {
+    id: "model-fixture",
+    name: "Fixture Model",
+    kind: "model",
+    status: "ready",
+    source: {
+      kind: "project",
+      relativePath: "assets/imported/models/aaaaaaaaaaaaaaaa/sample.glb",
+    },
+    sourceHash: "a".repeat(64),
+    thumbnail: { status: "missing" },
+    folderId: null,
+    order: 4,
+    importSettings: {
+      scale: 1,
+      generateColliders: true,
+      optimizeMeshes: false,
+      importAnimations: true,
+    },
+    materialSlots: [],
+    importMetadata: metadata(),
+    ...overrides,
+  };
+}
+
+function metadata(): ModelImportMetadata {
+  return {
+    sourceFormat: "glb",
+    byteLength: 4096,
+    nodeCount: 7,
+    meshCount: 3,
+    primitiveCount: 4,
+    bounds: {
+      min: [-1, 0, -2],
+      max: [1, 2, 2],
+      center: [0, 1, 0],
+      size: [2, 2, 4],
+      boundingSphereRadius: 2.44948974,
+    },
+    animations: [
+      { name: "Idle", duration: 2, trackCount: 4, sourceAnimationIndex: 0 },
+    ],
+    extensionsUsed: ["KHR_materials_clearcoat"],
+    extensionsRequired: ["KHR_materials_clearcoat"],
+  };
+}
+
+function requiredMaterial(id: string, name: string) {
+  const asset = createDefaultMaterialAsset({ id, name });
+  if (!asset) throw new Error(`Fixture Material could not be created: ${id}`);
+  return asset;
+}
+
+function assertThrows(operation: () => void, message: string): void {
+  try {
+    operation();
+  } catch {
+    return;
+  }
+  throw new Error(message);
+}
+
+async function assertRejects(
+  operation: () => Promise<unknown>,
+  message: string,
+): Promise<void> {
+  try {
+    await operation();
+  } catch {
+    return;
+  }
+  throw new Error(message);
+}
+
+function assert(condition: unknown, message: string): asserts condition {
+  if (!condition) throw new Error(message);
+}

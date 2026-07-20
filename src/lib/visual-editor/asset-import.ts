@@ -16,16 +16,21 @@ import {
   type GLTF,
 } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
+  normalizeModelImportSettings,
   normalizeProjectRelativePath,
   normalizeTextureImportSettings,
   type AssetManifest,
-  type MaterialSlotDefinition,
   type ModelAsset,
   type ModelBoundsMetadata,
   type ModelImportMetadata,
   type TextureAsset,
   type TextureImportSettingsPatch,
 } from "./asset-manifest";
+import {
+  reconcileModelMaterialSlots,
+  validateModelAssetContract,
+  type DiscoveredModelMaterialSlot,
+} from "./model-import-contract";
 
 export const ASSET_IMPORT_THUMBNAIL_RENDERER_VERSION = "three-white-v1";
 export const ASSET_IMPORT_MAX_BYTES = 128 * 1024 * 1024;
@@ -77,6 +82,8 @@ export type AssetImportWrite = {
 export type AssetImportPlan = {
   transactionId: string;
   sourceHash: string;
+  /** Existing Asset replaced by a reimport. Omitted for a new import. */
+  replacesAssetId?: string;
   classification?: ClassifiedAssetImport;
   asset?: ModelAsset | TextureAsset;
   writes: AssetImportWrite[];
@@ -93,6 +100,11 @@ export type CreateAssetImportPlanInput = {
   textureImportSettings?: TextureImportSettingsPatch;
 };
 
+export type CreateModelReimportPlanInput = Omit<
+  CreateAssetImportPlanInput,
+  "folderId" | "textureImportSettings"
+>;
+
 export type AtomicAssetImportCommitRequest = {
   transactionId: string;
   /** The shell must publish all writes, or none of them. */
@@ -104,8 +116,11 @@ export type AtomicAssetImportCommit = (
 ) => Promise<void>;
 
 type GltfJson = {
+  asset?: { version?: unknown };
   materials?: Array<{ name?: unknown }>;
   meshes?: Array<{ primitives?: Array<{ material?: unknown }> }>;
+  nodes?: unknown[];
+  animations?: Array<{ name?: unknown }>;
   buffers?: Array<{ uri?: unknown }>;
   images?: Array<{ uri?: unknown }>;
   extensionsUsed?: unknown;
@@ -194,6 +209,30 @@ export function classifyAssetImport(
 export async function createAssetImportPlan(
   input: CreateAssetImportPlanInput,
 ): Promise<AssetImportPlan> {
+  return createAssetImportPlanInternal(input);
+}
+
+/**
+ * Builds a Model replacement plan while preserving its authoring identity.
+ * The caller commits it through the same atomic boundary as a new import.
+ */
+export async function createModelReimportPlan(
+  existingAsset: ModelAsset,
+  input: CreateModelReimportPlanInput,
+): Promise<AssetImportPlan> {
+  return createAssetImportPlanInternal(
+    {
+      ...input,
+      folderId: existingAsset.folderId ?? null,
+    },
+    existingAsset,
+  );
+}
+
+async function createAssetImportPlanInternal(
+  input: CreateAssetImportPlanInput,
+  reimportAsset?: ModelAsset,
+): Promise<AssetImportPlan> {
   const fileName = leafFileName(input.fileName);
   const bytes = cloneBytes(input.bytes);
   let sourceHash: string;
@@ -209,7 +248,13 @@ export async function createAssetImportPlan(
         fieldPath: "bytes",
       },
     ];
-    return blockedPlan("asset-import-unhashed", "", diagnostics);
+    return blockedPlan(
+      "asset-import-unhashed",
+      "",
+      diagnostics,
+      undefined,
+      reimportAsset?.id,
+    );
   }
   const transactionId = `asset-import-${sourceHash.slice(0, 20)}`;
   const diagnostics: AssetImportDiagnostic[] = [];
@@ -223,7 +268,13 @@ export async function createAssetImportPlan(
       fileName,
       fieldPath: "fileName",
     });
-    return blockedPlan(transactionId, sourceHash, diagnostics);
+    return blockedPlan(
+      transactionId,
+      sourceHash,
+      diagnostics,
+      undefined,
+      reimportAsset?.id,
+    );
   }
   if (bytes.byteLength === 0 || bytes.byteLength > ASSET_IMPORT_MAX_BYTES) {
     diagnostics.push({
@@ -241,6 +292,25 @@ export async function createAssetImportPlan(
       sourceHash,
       diagnostics,
       classification,
+      reimportAsset?.id,
+    );
+  }
+
+  if (reimportAsset && classification.kind !== "model") {
+    diagnostics.push({
+      severity: "blocking",
+      code: "reimport-kind-mismatch",
+      message: "Model AssetにはGLBまたはglTFを再取り込みしてください",
+      fileName,
+      assetId: reimportAsset.id,
+      fieldPath: "fileName",
+    });
+    return blockedPlan(
+      transactionId,
+      sourceHash,
+      diagnostics,
+      classification,
+      reimportAsset.id,
     );
   }
 
@@ -252,6 +322,7 @@ export async function createAssetImportPlan(
         sourceHash,
         transactionId,
         classification,
+        reimportAsset,
       )
     : createTextureImportPlan(
         input,
@@ -276,11 +347,22 @@ export async function commitAssetImportPlan(
     throw new Error("Blocking diagnostics must be resolved before import commit");
   }
   const existing = manifest.assets[plan.asset.id];
+  const isReplacement = plan.replacesAssetId === plan.asset.id;
   if (existing) {
-    if (existing.sourceHash === plan.sourceHash && existing.kind === plan.asset.kind) {
-      return manifest;
+    if (!isReplacement) {
+      if (
+        existing.sourceHash === plan.sourceHash &&
+        existing.kind === plan.asset.kind
+      ) {
+        return manifest;
+      }
+      throw new Error(`Asset ID collision: ${plan.asset.id}`);
     }
-    throw new Error(`Asset ID collision: ${plan.asset.id}`);
+    if (existing.kind !== "model" || plan.asset.kind !== "model") {
+      throw new Error("Only a Model Asset can be replaced by Model reimport");
+    }
+  } else if (plan.replacesAssetId) {
+    throw new Error(`Reimport target is missing: ${plan.replacesAssetId}`);
   }
   const folderId = plan.asset.folderId ?? null;
   if (folderId !== null && !manifest.folders?.[folderId]) {
@@ -294,20 +376,78 @@ export async function commitAssetImportPlan(
     throw new Error("Asset import plan contains an unsafe destination");
   }
 
+  if (plan.asset.kind === "model") {
+    const candidateAssets = {
+      ...manifest.assets,
+      [plan.asset.id]: plan.asset,
+    };
+    const contractIssues = validateModelAssetContract(
+      plan.asset,
+      candidateAssets,
+      `$.assets.${plan.asset.id}`,
+    );
+    if (contractIssues.length > 0) {
+      throw new Error(
+        `Model import contract is invalid: ${contractIssues[0].path} ${contractIssues[0].message}`,
+      );
+    }
+    if (
+      plan.asset.sourceHash !== plan.sourceHash ||
+      plan.asset.source.kind !== "project"
+    ) {
+      throw new Error("Model import source identity does not match its plan");
+    }
+    const sourceWrite = plan.writes.find((write) => write.purpose === "source");
+    const sourceIsAlreadyDurable =
+      isReplacement && existing?.sourceHash === plan.sourceHash;
+    if (
+      !sourceIsAlreadyDurable &&
+      (!sourceWrite ||
+        sourceWrite.relativePath !== plan.asset.source.relativePath ||
+        sourceWrite.sha256 !== plan.sourceHash)
+    ) {
+      throw new Error("Model import plan does not contain its verified source");
+    }
+  }
+
+  if (
+    isReplacement &&
+    existing?.sourceHash === plan.sourceHash &&
+    existing.kind === plan.asset.kind
+  ) {
+    return replaceImportedAsset(manifest, plan.asset, existing.order);
+  }
+
   await commit({ transactionId: plan.transactionId, writes: plan.writes });
 
-  const order =
+  const order = existing?.order ?? nextImportedAssetOrder(manifest, folderId);
+  return replaceImportedAsset(manifest, plan.asset, order);
+}
+
+function nextImportedAssetOrder(
+  manifest: AssetManifest,
+  folderId: string | null,
+): number {
+  return (
     Math.max(
       -1,
       ...Object.values(manifest.assets)
         .filter((asset) => (asset.folderId ?? null) === folderId)
         .map((asset) => asset.order ?? -1),
-    ) + 1;
+    ) + 1
+  );
+}
+
+function replaceImportedAsset(
+  manifest: AssetManifest,
+  asset: ModelAsset | TextureAsset,
+  order: number | undefined,
+): AssetManifest {
   return {
     ...manifest,
     assets: {
       ...manifest.assets,
-      [plan.asset.id]: { ...plan.asset, order },
+      [asset.id]: { ...asset, ...(order === undefined ? {} : { order }) },
     },
   };
 }
@@ -342,6 +482,7 @@ async function createModelImportPlan(
   sourceHash: string,
   transactionId: string,
   classification: Extract<ClassifiedAssetImport, { kind: "model" }>,
+  reimportAsset?: ModelAsset,
 ): Promise<AssetImportPlan> {
   const diagnostics: AssetImportDiagnostic[] = [];
   const parsedJson = parseGltfJson(bytes, classification.format);
@@ -358,6 +499,28 @@ async function createModelImportPlan(
       sourceHash,
       diagnostics,
       classification,
+      reimportAsset?.id,
+    );
+  }
+
+  const structureIssues = validateGltfImportStructure(parsedJson.json);
+  diagnostics.push(
+    ...structureIssues.map((candidate) => ({
+      severity: "blocking" as const,
+      code: candidate.code,
+      message: candidate.message,
+      fileName,
+      assetId: reimportAsset?.id,
+      fieldPath: candidate.fieldPath,
+    })),
+  );
+  if (structureIssues.length > 0) {
+    return blockedPlan(
+      transactionId,
+      sourceHash,
+      diagnostics,
+      classification,
+      reimportAsset?.id,
     );
   }
 
@@ -377,6 +540,7 @@ async function createModelImportPlan(
       sourceHash,
       diagnostics,
       classification,
+      reimportAsset?.id,
     );
   }
 
@@ -395,78 +559,123 @@ async function createModelImportPlan(
       sourceHash,
       diagnostics,
       classification,
+      reimportAsset?.id,
     );
   }
 
-  const assetId = createImportedAssetId("model", fileName, sourceHash);
-  const sourceRelativePath = createSourceDestination(
-    "models",
-    fileName,
-    sourceHash,
-    classification.extension,
-  );
-  const materialSlots = extractMaterialSlots(parsedJson.json);
+  const assetId =
+    reimportAsset?.id ?? createImportedAssetId("model", fileName, sourceHash);
+  const sourceUnchanged = reimportAsset?.sourceHash === sourceHash;
+  const sourceRelativePath =
+    sourceUnchanged && reimportAsset.source.kind === "project"
+      ? reimportAsset.source.relativePath
+      : createSourceDestination(
+          "models",
+          fileName,
+          sourceHash,
+          classification.extension,
+        );
+  let materialSlots: ModelAsset["materialSlots"];
+  try {
+    materialSlots = reconcileModelMaterialSlots(
+      extractMaterialSlots(parsedJson.json),
+      reimportAsset?.materialSlots,
+    );
+  } catch (error) {
+    diagnostics.push({
+      severity: "blocking",
+      code: "model-material-slots-invalid",
+      message: `Material slotを正規化できませんでした: ${errorMessage(error)}`,
+      fileName,
+      assetId,
+      fieldPath: "materials",
+    });
+    return blockedPlan(
+      transactionId,
+      sourceHash,
+      diagnostics,
+      classification,
+      reimportAsset?.id,
+    );
+  }
   const importMetadata = extractModelMetadata(
     gltf,
     parsedJson.json,
     classification.format,
     bytes.byteLength,
   );
-  let thumbnail: ModelAsset["thumbnail"] = { status: "missing" };
-  const writes: AssetImportWrite[] = [
-    {
-      relativePath: sourceRelativePath,
-      purpose: "source",
-      mediaType: classification.mimeType,
-      sha256: sourceHash,
-      payload: { encoding: "bytes", bytes: bytes.slice() },
-    },
-  ];
+  let thumbnail: ModelAsset["thumbnail"] = sourceUnchanged
+    ? cloneThumbnail(reimportAsset.thumbnail)
+    : staleThumbnailForReimport(reimportAsset);
+  const writes: AssetImportWrite[] = sourceUnchanged
+    ? []
+    : [
+        {
+          relativePath: sourceRelativePath,
+          purpose: "source",
+          mediaType: classification.mimeType,
+          sha256: sourceHash,
+          payload: { encoding: "bytes", bytes: bytes.slice() },
+        },
+      ];
 
-  try {
-    const rendered = await renderModelThumbnail(gltf.scene);
-    const derivedPath = `assets/.derived/thumbnails/${assetId}.${rendered.extension}`;
-    thumbnail = {
-      status: "generated",
-      derivedPath,
-      sourceHash,
-      rendererVersion: ASSET_IMPORT_THUMBNAIL_RENDERER_VERSION,
-    };
-    writes.push({
-      relativePath: derivedPath,
-      purpose: "thumbnail",
-      mediaType: rendered.mediaType,
-      payload: { encoding: "data-url", dataUrl: rendered.dataUrl },
-    });
-  } catch (error) {
-    diagnostics.push({
-      severity: "warning",
-      code: "model-thumbnail-failed",
-      message: `モデルのサムネイルを生成できませんでした: ${errorMessage(error)}`,
-      fileName,
-      assetId,
-      fieldPath: "thumbnail",
-    });
+  if (!sourceUnchanged) {
+    try {
+      const rendered = await renderModelThumbnail(gltf.scene);
+      const derivedPath = `assets/.derived/thumbnails/${assetId}-${sourceHash.slice(0, 16)}.${rendered.extension}`;
+      thumbnail = {
+        status: "generated",
+        derivedPath,
+        sourceHash,
+        rendererVersion: ASSET_IMPORT_THUMBNAIL_RENDERER_VERSION,
+      };
+      writes.push({
+        relativePath: derivedPath,
+        purpose: "thumbnail",
+        mediaType: rendered.mediaType,
+        payload: { encoding: "data-url", dataUrl: rendered.dataUrl },
+      });
+    } catch (error) {
+      diagnostics.push({
+        severity: "warning",
+        code: "model-thumbnail-failed",
+        message: `モデルのサムネイルを生成できませんでした: ${errorMessage(error)}`,
+        fileName,
+        assetId,
+        fieldPath: "thumbnail",
+      });
+    }
   }
 
   const asset: ModelAsset = {
     id: assetId,
-    name: normalizedDisplayName(input.displayName, fileName),
+    name:
+      input.displayName !== undefined
+        ? normalizedDisplayName(input.displayName, fileName)
+        : reimportAsset?.name ?? normalizedDisplayName(undefined, fileName),
     kind: "model",
     status: "ready",
     source: { kind: "project", relativePath: sourceRelativePath },
     sourceHash,
     thumbnail,
-    folderId: normalizeFolderId(input.folderId),
-    importSettings: {
-      scale: 1,
-      generateColliders: true,
-      optimizeMeshes: false,
-      importAnimations: true,
-    },
+    folderId: reimportAsset?.folderId ?? normalizeFolderId(input.folderId),
+    ...(reimportAsset?.order === undefined ? {} : { order: reimportAsset.order }),
+    importSettings: reimportAsset
+      ? normalizeModelImportSettings({}, reimportAsset.importSettings)
+      : normalizeModelImportSettings(),
     materialSlots,
     importMetadata,
   };
+  diagnostics.push(
+    ...validateModelAssetContract(asset).map((candidate) => ({
+      severity: "blocking" as const,
+      code: `model-contract-${candidate.code}`,
+      message: candidate.message,
+      fileName,
+      assetId,
+      fieldPath: candidate.path,
+    })),
+  );
   return finishPlan(
     transactionId,
     sourceHash,
@@ -474,7 +683,23 @@ async function createModelImportPlan(
     asset,
     writes,
     diagnostics,
+    reimportAsset?.id,
   );
+}
+
+function staleThumbnailForReimport(
+  asset: ModelAsset | undefined,
+): ModelAsset["thumbnail"] {
+  const thumbnail = asset?.thumbnail;
+  return thumbnail && thumbnail.status !== "missing"
+    ? { ...thumbnail, status: "stale" }
+    : { status: "missing" };
+}
+
+function cloneThumbnail(
+  thumbnail: ModelAsset["thumbnail"] | undefined,
+): ModelAsset["thumbnail"] {
+  return thumbnail ? { ...thumbnail } : { status: "missing" };
 }
 
 async function createTextureImportPlan(
@@ -614,6 +839,159 @@ function parseGltfJson(
   }
 }
 
+type GltfImportStructureIssue = {
+  code: string;
+  message: string;
+  fieldPath: string;
+};
+
+function validateGltfImportStructure(
+  json: GltfJson,
+): GltfImportStructureIssue[] {
+  const issues: GltfImportStructureIssue[] = [];
+  if (!isRecord(json.asset) || json.asset.version !== "2.0") {
+    issues.push({
+      code: "gltf-version-invalid",
+      message: "glTF 2.0のasset.versionが必要です",
+      fieldPath: "asset.version",
+    });
+  }
+
+  validateOptionalRecordArray(json.materials, "materials", issues, (entry, path) => {
+    if (entry.name !== undefined && typeof entry.name !== "string") {
+      issues.push({
+        code: "gltf-material-name-invalid",
+        message: "Material名は文字列である必要があります",
+        fieldPath: `${path}.name`,
+      });
+    }
+  });
+  validateOptionalRecordArray(json.meshes, "meshes", issues, (mesh, meshPath) => {
+    if (!Array.isArray(mesh.primitives) || mesh.primitives.length === 0) {
+      issues.push({
+        code: "gltf-mesh-primitives-invalid",
+        message: "Meshには1つ以上のprimitiveが必要です",
+        fieldPath: `${meshPath}.primitives`,
+      });
+      return;
+    }
+    mesh.primitives.forEach((primitive, primitiveIndex) => {
+      const primitivePath = `${meshPath}.primitives[${primitiveIndex}]`;
+      if (!isRecord(primitive)) {
+        issues.push({
+          code: "gltf-primitive-invalid",
+          message: "Mesh primitiveはobjectである必要があります",
+          fieldPath: primitivePath,
+        });
+        return;
+      }
+      if (primitive.material === undefined) return;
+      if (
+        !Number.isInteger(primitive.material) ||
+        Number(primitive.material) < 0 ||
+        !Array.isArray(json.materials) ||
+        Number(primitive.material) >= json.materials.length
+      ) {
+        issues.push({
+          code: "gltf-material-index-invalid",
+          message: "Mesh primitiveのMaterial indexが不正です",
+          fieldPath: `${primitivePath}.material`,
+        });
+      }
+    });
+  });
+
+  validateOptionalRecordArray(json.nodes, "nodes", issues);
+  validateOptionalRecordArray(json.animations, "animations", issues, (entry, path) => {
+    if (entry.name !== undefined && typeof entry.name !== "string") {
+      issues.push({
+        code: "gltf-animation-name-invalid",
+        message: "Animation名は文字列である必要があります",
+        fieldPath: `${path}.name`,
+      });
+    }
+  });
+  validateOptionalRecordArray(json.buffers, "buffers", issues);
+  validateOptionalRecordArray(json.images, "images", issues);
+  validateExtensionNameArray(json.extensionsUsed, "extensionsUsed", issues);
+  validateExtensionNameArray(
+    json.extensionsRequired,
+    "extensionsRequired",
+    issues,
+  );
+  if (
+    Array.isArray(json.extensionsUsed) &&
+    Array.isArray(json.extensionsRequired)
+  ) {
+    const used = new Set(json.extensionsUsed);
+    json.extensionsRequired.forEach((extension, index) => {
+      if (typeof extension === "string" && !used.has(extension)) {
+        issues.push({
+          code: "gltf-required-extension-missing",
+          message: "extensionsRequiredの拡張はextensionsUsedにも必要です",
+          fieldPath: `extensionsRequired[${index}]`,
+        });
+      }
+    });
+  }
+  return issues;
+}
+
+function validateOptionalRecordArray(
+  value: unknown,
+  path: string,
+  issues: GltfImportStructureIssue[],
+  inspect?: (entry: Record<string, unknown>, path: string) => void,
+): void {
+  if (value === undefined) return;
+  if (!Array.isArray(value)) {
+    issues.push({
+      code: "gltf-array-invalid",
+      message: `${path}は配列である必要があります`,
+      fieldPath: path,
+    });
+    return;
+  }
+  value.forEach((entry, index) => {
+    const entryPath = `${path}[${index}]`;
+    if (!isRecord(entry)) {
+      issues.push({
+        code: "gltf-entry-invalid",
+        message: `${entryPath}はobjectである必要があります`,
+        fieldPath: entryPath,
+      });
+      return;
+    }
+    inspect?.(entry, entryPath);
+  });
+}
+
+function validateExtensionNameArray(
+  value: unknown,
+  path: string,
+  issues: GltfImportStructureIssue[],
+): void {
+  if (value === undefined) return;
+  if (
+    !Array.isArray(value) ||
+    value.some((entry) => typeof entry !== "string" || !entry.trim())
+  ) {
+    issues.push({
+      code: "gltf-extensions-invalid",
+      message: `${path}には空でない拡張名だけを指定してください`,
+      fieldPath: path,
+    });
+    return;
+  }
+  if (new Set(value).size !== value.length) {
+    issues.push({
+      code: "gltf-extensions-duplicated",
+      message: `${path}の拡張名は重複できません`,
+      fieldPath: path,
+    });
+  }
+}
+
 function readGlbJsonChunk(bytes: Uint8Array): string {
   if (bytes.byteLength < 20) throw new Error("GLB header is incomplete");
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -674,7 +1052,7 @@ function parseWithGltfLoader(
   });
 }
 
-function extractMaterialSlots(json: GltfJson): MaterialSlotDefinition[] {
+function extractMaterialSlots(json: GltfJson): DiscoveredModelMaterialSlot[] {
   const usedIndices = new Set<number>();
   json.meshes?.forEach((mesh) =>
     mesh.primitives?.forEach((primitive) => {
@@ -708,18 +1086,14 @@ function extractModelMetadata(
   sourceFormat: "glb" | "gltf",
   byteLength: number,
 ): ModelImportMetadata {
-  let nodeCount = 0;
-  let meshCount = 0;
   gltf.scene.updateWorldMatrix(true, true);
-  gltf.scene.traverse((object) => {
-    nodeCount += 1;
-    if ((object as { isMesh?: boolean }).isMesh) meshCount += 1;
-  });
+  const nodeCount = json.nodes?.length ?? 0;
+  const meshCount = json.meshes?.length ?? 0;
   const primitiveCount =
     json.meshes?.reduce(
       (total, mesh) => total + (mesh.primitives?.length ?? 0),
       0,
-    ) ?? meshCount;
+    ) ?? 0;
   return {
     sourceFormat,
     byteLength,
@@ -728,9 +1102,12 @@ function extractModelMetadata(
     primitiveCount,
     bounds: extractBounds(gltf.scene),
     animations: gltf.animations.map((clip, index) => ({
-      name: clip.name.trim() || `Animation ${index + 1}`,
-      duration: finiteNumber(clip.duration),
+      name:
+        sourceName(json.animations?.[index]?.name) ??
+        (clip.name.trim() || `Animation ${index + 1}`),
+      duration: metadataNumber(clip.duration),
       trackCount: clip.tracks.length,
+      sourceAnimationIndex: index,
     })),
     extensionsUsed: stringArray(json.extensionsUsed),
     extensionsRequired: stringArray(json.extensionsRequired),
@@ -755,7 +1132,7 @@ function extractBounds(object: Object3D): ModelBoundsMetadata {
     max: vectorTuple(bounds.max),
     center: vectorTuple(center),
     size: vectorTuple(size),
-    boundingSphereRadius: finiteNumber(size.length() / 2),
+    boundingSphereRadius: metadataNumber(size.length() / 2),
   };
 }
 
@@ -973,10 +1350,12 @@ function blockedPlan(
   sourceHash: string,
   diagnostics: AssetImportDiagnostic[],
   classification?: ClassifiedAssetImport,
+  replacesAssetId?: string,
 ): AssetImportPlan {
   return {
     transactionId,
     sourceHash,
+    ...(replacesAssetId ? { replacesAssetId } : {}),
     classification,
     writes: [],
     diagnostics,
@@ -991,6 +1370,7 @@ function finishPlan(
   asset: ModelAsset | TextureAsset,
   writes: AssetImportWrite[],
   diagnostics: AssetImportDiagnostic[],
+  replacesAssetId?: string,
 ): AssetImportPlan {
   const canCommit = !diagnostics.some(
     (diagnostic) => diagnostic.severity === "blocking",
@@ -998,6 +1378,7 @@ function finishPlan(
   return {
     transactionId,
     sourceHash,
+    ...(replacesAssetId ? { replacesAssetId } : {}),
     classification,
     asset,
     writes,
@@ -1053,11 +1434,19 @@ function safeSegment(value: string): string {
 }
 
 function vectorTuple(value: Vector3): [number, number, number] {
-  return [finiteNumber(value.x), finiteNumber(value.y), finiteNumber(value.z)];
+  return [
+    metadataNumber(value.x),
+    metadataNumber(value.y),
+    metadataNumber(value.z),
+  ];
 }
 
-function finiteNumber(value: number): number {
-  return Number.isFinite(value) ? Number(value.toFixed(8)) : 0;
+function metadataNumber(value: number): number {
+  return Number.isFinite(value) ? Number(value.toFixed(8)) : value;
+}
+
+function sourceName(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function stringArray(value: unknown): string[] {

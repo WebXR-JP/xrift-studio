@@ -71,7 +71,17 @@ export type ModelImportSettings = {
   importAnimations: boolean;
 };
 
+export type ModelImportSettingsPatch = Partial<ModelImportSettings>;
+
+export const DEFAULT_MODEL_IMPORT_SETTINGS: Readonly<ModelImportSettings> = {
+  scale: 1,
+  generateColliders: true,
+  optimizeMeshes: false,
+  importAnimations: true,
+};
+
 export type ModelBoundsMetadata = {
+  /** Model-local bounds before the Asset import scale or Entity Transform. */
   min: [number, number, number];
   max: [number, number, number];
   center: [number, number, number];
@@ -83,6 +93,8 @@ export type ModelAnimationMetadata = {
   name: string;
   duration: number;
   trackCount: number;
+  /** Stable source order used when names are duplicated or renamed. */
+  sourceAnimationIndex?: number;
 };
 
 /** Derived import facts. These are safe to rebuild from the source GLB/glTF. */
@@ -103,6 +115,17 @@ export type ModelAsset = AssetBase<"model"> & {
   /** Slots discovered from glTF primitives/material indices during import. */
   materialSlots: MaterialSlotDefinition[];
   importMetadata?: ModelImportMetadata;
+};
+
+export type ModelAssetPatch = {
+  importSettings?: ModelImportSettingsPatch;
+  /**
+   * Applies authoring Material defaults by stable slot ID. `null` removes a
+   * binding; unknown slots and non-Material Asset IDs are ignored.
+   */
+  materialSlotBindings?: Readonly<
+    Record<string, string | null | undefined>
+  >;
 };
 
 export type GeometryAsset = PrimitiveAsset | ModelAsset;
@@ -143,6 +166,7 @@ export type KhrMaterialsIridescence = {
   iridescenceFactor: number;
   iridescenceTexture?: MaterialTextureInfo;
   iridescenceIor: number;
+  /** Both values are non-negative; glTF also permits a descending range. */
   iridescenceThicknessMinimum: number;
   iridescenceThicknessMaximum: number;
   iridescenceThicknessTexture?: MaterialTextureInfo;
@@ -482,6 +506,98 @@ export function getGeometryAsset(
   return asset?.kind === "primitive" || asset?.kind === "model"
     ? asset
     : undefined;
+}
+
+export function getModelAsset(
+  manifest: AssetManifest,
+  assetId: string,
+): ModelAsset | undefined {
+  const asset = manifest.assets[assetId];
+  return asset?.kind === "model" ? asset : undefined;
+}
+
+export function normalizeModelImportSettings(
+  patch: ModelImportSettingsPatch = {},
+  fallback: ModelImportSettings = DEFAULT_MODEL_IMPORT_SETTINGS,
+): ModelImportSettings {
+  const fallbackScale =
+    typeof fallback.scale === "number" &&
+    Number.isFinite(fallback.scale) &&
+    fallback.scale > 0
+      ? fallback.scale
+      : DEFAULT_MODEL_IMPORT_SETTINGS.scale;
+  return {
+    scale:
+      typeof patch.scale === "number" &&
+      Number.isFinite(patch.scale) &&
+      patch.scale > 0
+        ? patch.scale
+        : fallbackScale,
+    generateColliders:
+      typeof patch.generateColliders === "boolean"
+        ? patch.generateColliders
+        : typeof fallback.generateColliders === "boolean"
+          ? fallback.generateColliders
+          : DEFAULT_MODEL_IMPORT_SETTINGS.generateColliders,
+    optimizeMeshes:
+      typeof patch.optimizeMeshes === "boolean"
+        ? patch.optimizeMeshes
+        : typeof fallback.optimizeMeshes === "boolean"
+          ? fallback.optimizeMeshes
+          : DEFAULT_MODEL_IMPORT_SETTINGS.optimizeMeshes,
+    importAnimations:
+      typeof patch.importAnimations === "boolean"
+        ? patch.importAnimations
+        : typeof fallback.importAnimations === "boolean"
+          ? fallback.importAnimations
+          : DEFAULT_MODEL_IMPORT_SETTINGS.importAnimations,
+  };
+}
+
+/** Updates only authorable Model fields; derived import metadata stays sealed. */
+export function updateModelAsset(
+  manifest: AssetManifest,
+  assetId: string,
+  patch: ModelAssetPatch,
+): AssetManifest {
+  const asset = getModelAsset(manifest, assetId);
+  if (!asset) return manifest;
+
+  const importSettings = normalizeModelImportSettings(
+    patch.importSettings,
+    normalizeModelImportSettings(asset.importSettings),
+  );
+  const bindings = patch.materialSlotBindings;
+  const materialSlots = bindings
+    ? asset.materialSlots.map((slot) => {
+        if (!hasOwn(bindings, slot.slot)) return { ...slot };
+        const requested = bindings[slot.slot];
+        if (requested === null) {
+          const { defaultMaterialAssetId: _removed, ...withoutBinding } = slot;
+          return withoutBinding;
+        }
+        if (typeof requested !== "string") return { ...slot };
+        const materialAssetId = requested.trim();
+        if (manifest.assets[materialAssetId]?.kind !== "material") {
+          return { ...slot };
+        }
+        return { ...slot, defaultMaterialAssetId: materialAssetId };
+      })
+    : asset.materialSlots.map((slot) => ({ ...slot }));
+
+  if (
+    jsonEqual(importSettings, asset.importSettings) &&
+    jsonEqual(materialSlots, asset.materialSlots)
+  ) {
+    return manifest;
+  }
+  return {
+    ...manifest,
+    assets: {
+      ...manifest.assets,
+      [assetId]: { ...asset, importSettings, materialSlots },
+    },
+  };
 }
 
 /** Builtin primitives are creation tools, not user library assets. */
@@ -1104,7 +1220,6 @@ function applyMaterialExtensionsPatch(
       )
         ? requested.iridescenceThicknessMaximum
         : base.iridescenceThicknessMaximum;
-      const thicknessRangeIsValid = requestedMaximum >= requestedMinimum;
       const iridescenceTexture = hasOwn(requested, "iridescenceTexture")
         ? resolveTextureInfo(
             requested.iridescenceTexture,
@@ -1132,12 +1247,10 @@ function applyMaterialExtensionsPatch(
           requested.iridescenceIor >= 1
             ? requested.iridescenceIor
             : base.iridescenceIor,
-        iridescenceThicknessMinimum: thicknessRangeIsValid
-          ? requestedMinimum
-          : base.iridescenceThicknessMinimum,
-        iridescenceThicknessMaximum: thicknessRangeIsValid
-          ? requestedMaximum
-          : base.iridescenceThicknessMaximum,
+        // glTF explicitly permits a descending range so artists can reverse
+        // the G-channel thickness interpolation without editing the Texture.
+        iridescenceThicknessMinimum: requestedMinimum,
+        iridescenceThicknessMaximum: requestedMaximum,
         ...(iridescenceThicknessTexture
           ? { iridescenceThicknessTexture }
           : {}),
