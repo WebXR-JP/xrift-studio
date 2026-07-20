@@ -36,14 +36,14 @@ sudo apt install \
 ## 起動（開発モード）
 
 ```bash
-npm install
-npm run tauri dev
+pnpm install
+pnpm tauri:dev
 ```
 
 ## 配布ビルド
 
 ```bash
-npm run tauri build
+pnpm tauri:build
 ```
 
 成果物は `src-tauri/target/release/bundle/` に OS 別で出力されます。
