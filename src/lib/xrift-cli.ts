@@ -11,6 +11,14 @@ export type RunResult = {
   stderr: string;
 };
 
+/** The shell process was never created, so no remote operation could begin. */
+export class CommandSpawnError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CommandSpawnError";
+  }
+}
+
 export type CompilerStagingTemplateRequest = {
   /** App-owned directory whose final segment is `xrift-studio-staging`. */
   compilerOwnedRoot: string;
@@ -131,7 +139,7 @@ async function run({ bin, args, cwd, onLog }: RunOptions): Promise<RunResult> {
     });
     command.spawn().catch((err) => {
       onLog(stamp("stderr", `spawn failed: ${err}`));
-      reject(err);
+      reject(new CommandSpawnError(String(err)));
     });
   });
 }
@@ -251,10 +259,11 @@ export const xrift = {
     projectPath: string,
     kind: ProjectKind,
     onLog: (l: LogLine) => void,
+    verbose = false,
   ) =>
     run({
       bin: "xrift",
-      args: ["upload", kind],
+      args: verbose ? ["--verbose", "upload", kind] : ["upload", kind],
       cwd: projectPath,
       onLog,
     }),

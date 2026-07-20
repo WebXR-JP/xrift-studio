@@ -35,6 +35,9 @@ futures-util = "0.3"
 tokio = { version = "1", features = ["full"] }
 base64 = "0.22"
 
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = "2"
+
 [profile.release]
 opt-level = "s"
 panic = "abort"

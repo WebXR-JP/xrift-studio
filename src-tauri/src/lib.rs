@@ -15,7 +15,11 @@ const ASSET_MANIFEST_SCHEMA_VERSION: &str = "0.1.0";
 const PREFAB_DOCUMENT_SCHEMA_VERSION: &str = "0.1.0";
 const VISUAL_SAVE_CACHE: &str = ".cache/xrift-studio-save";
 const VISUAL_SAVE_OWNER: &str = "xrift-studio-visual-save-v1";
+const VISUAL_PUBLICATION_SAVE_OWNER: &str = "xrift-studio-publication-save-v1";
 const COMPILER_STAGING_DIRECTORY: &str = "xrift-studio-staging";
+const COMPILER_STAGING_OWNER_PATH: &str = ".xrift-studio/staging-owner.json";
+const COMPILER_STAGING_OWNER_SCHEMA_VERSION: &str = "1";
+const XRIFT_PUBLICATION_METADATA_MAX_BYTES: u64 = 16 * 1024;
 static VISUAL_PROJECT_IO_LOCK: Mutex<()> = Mutex::new(());
 static COMPILER_STAGING_IO_LOCK: Mutex<()> = Mutex::new(());
 static VISUAL_ASSET_IMPORT_IO_LOCK: Mutex<()> = Mutex::new(());
@@ -128,6 +132,45 @@ struct VisualProjectManifest {
     entry_scene_id: String,
     scene_paths: HashMap<String, String>,
     asset_manifest_path: String,
+    #[serde(default)]
+    last_publication: Option<VisualPublicationRecord>,
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct VisualPublicationRecord {
+    uploaded_at: String,
+    world_id: Option<String>,
+    item_id: Option<String>,
+    content_id: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct CompilerPublicationMetadata {
+    id: String,
+    created_at: String,
+    last_uploaded_at: String,
+}
+
+#[derive(Clone, Debug)]
+struct LoadedCompilerPublicationMetadata {
+    raw: String,
+    metadata: CompilerPublicationMetadata,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct CompilerStagingOwner {
+    schema_version: String,
+    project_id: String,
+    project_kind: String,
+    #[serde(default)]
+    pre_upload_id: Option<String>,
+    #[serde(default)]
+    pre_upload_last_uploaded_at: Option<String>,
+    #[serde(default)]
+    upload_attempt_started_unix_ms: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -1681,9 +1724,63 @@ fn transaction_id() -> String {
     format!("{}-{}", std::process::id(), nanos)
 }
 
+fn is_managed_publication_metadata_path(relative_path: &str) -> Result<bool, String> {
+    let relative = validate_relative_path(relative_path, false)?;
+    let normalized = relative.to_string_lossy().replace('\\', "/");
+    Ok(matches!(
+        normalized.to_ascii_lowercase().as_str(),
+        ".xrift/world.json" | ".xrift/item.json"
+    ))
+}
+
+fn safe_join_managed_publication_path(
+    project_root: &Path,
+    relative_path: &str,
+) -> Result<PathBuf, String> {
+    if !is_managed_publication_metadata_path(relative_path)? {
+        return Err("invalid managed XRift publication metadata path".to_string());
+    }
+    let relative = validate_relative_path(relative_path, false)?;
+    ensure_no_symlink_ancestors(project_root, &relative)?;
+    Ok(project_root.join(relative))
+}
+
+fn safe_join_save_transaction_path(
+    project_root: &Path,
+    relative_path: &str,
+    allow_managed_publication_metadata: bool,
+) -> Result<PathBuf, String> {
+    if allow_managed_publication_metadata && is_managed_publication_metadata_path(relative_path)? {
+        safe_join_managed_publication_path(project_root, relative_path)
+    } else {
+        safe_join_path(project_root, relative_path)
+    }
+}
+
 fn save_visual_documents_transaction(
     project_root: &Path,
     files: &[(String, String)],
+) -> Result<(), String> {
+    save_visual_documents_transaction_with_owner(project_root, files, VISUAL_SAVE_OWNER, false)
+}
+
+fn save_publication_metadata_transaction(
+    project_root: &Path,
+    files: &[(String, String)],
+) -> Result<(), String> {
+    save_visual_documents_transaction_with_owner(
+        project_root,
+        files,
+        VISUAL_PUBLICATION_SAVE_OWNER,
+        true,
+    )
+}
+
+fn save_visual_documents_transaction_with_owner(
+    project_root: &Path,
+    files: &[(String, String)],
+    transaction_owner: &str,
+    allow_managed_publication_metadata: bool,
 ) -> Result<(), String> {
     let transaction_root = project_root.join(VISUAL_SAVE_CACHE).join(transaction_id());
     let staged_root = transaction_root.join("staged");
@@ -1698,7 +1795,7 @@ fn save_visual_documents_transaction(
     }
     if let Err(error) = write_file_synced(
         &transaction_root.join("owner"),
-        VISUAL_SAVE_OWNER.as_bytes(),
+        transaction_owner.as_bytes(),
     ) {
         let _ = std::fs::remove_dir_all(&transaction_root);
         return Err(error);
@@ -1707,7 +1804,11 @@ fn save_visual_documents_transaction(
     let prepare_result = (|| {
         let mut entries = Vec::with_capacity(files.len());
         for (index, (relative_path, content)) in files.iter().enumerate() {
-            let target = safe_join_path(project_root, relative_path)?;
+            let target = safe_join_save_transaction_path(
+                project_root,
+                relative_path,
+                allow_managed_publication_metadata,
+            )?;
             if target.exists() {
                 let metadata = std::fs::symlink_metadata(&target).map_err(|e| e.to_string())?;
                 if !metadata.is_file() || metadata.file_type().is_symlink() {
@@ -1755,7 +1856,11 @@ fn save_visual_documents_transaction(
 
     let commit_result = (|| {
         for entry in &journal.entries {
-            let target = safe_join_path(project_root, &entry.relative_path)?;
+            let target = safe_join_save_transaction_path(
+                project_root,
+                &entry.relative_path,
+                allow_managed_publication_metadata,
+            )?;
             let staged = staged_root.join(&entry.staged_name);
             let backup = backup_root.join(&entry.backup_name);
             if entry.original_existed {
@@ -1772,7 +1877,12 @@ fn save_visual_documents_transaction(
     })();
 
     if let Err(commit_error) = commit_result {
-        return match rollback_visual_save_transaction(project_root, &transaction_root, &journal) {
+        return match rollback_visual_save_transaction(
+            project_root,
+            &transaction_root,
+            &journal,
+            allow_managed_publication_metadata,
+        ) {
             Ok(()) => {
                 let _ = std::fs::remove_dir_all(&transaction_root);
                 Err(commit_error)
@@ -1802,14 +1912,16 @@ fn recover_visual_save_transactions(project_root: &Path) -> Result<(), String> {
             continue;
         }
         let transaction_root = entry.path();
-        if std::fs::read_to_string(transaction_root.join("owner"))
-            .ok()
-            .as_deref()
-            != Some(VISUAL_SAVE_OWNER)
-        {
-            // Never mutate an unknown directory, even below the app cache path.
-            continue;
-        }
+        let allow_managed_publication_metadata =
+            match std::fs::read_to_string(transaction_root.join("owner"))
+                .ok()
+                .as_deref()
+            {
+                Some(VISUAL_SAVE_OWNER) => false,
+                Some(VISUAL_PUBLICATION_SAVE_OWNER) => true,
+                // Never mutate an unknown directory, even below the app cache path.
+                _ => continue,
+            };
         let journal_path = transaction_root.join("journal.json");
         if !journal_path.exists() {
             // The journal is written before any project document is moved, so
@@ -1830,7 +1942,12 @@ fn recover_visual_save_transactions(project_root: &Path) -> Result<(), String> {
         if journal.phase != "prepared" {
             return Err("save journal has an unsupported phase".to_string());
         }
-        rollback_visual_save_transaction(project_root, &transaction_root, &journal)?;
+        rollback_visual_save_transaction(
+            project_root,
+            &transaction_root,
+            &journal,
+            allow_managed_publication_metadata,
+        )?;
         std::fs::remove_dir_all(&transaction_root)
             .map_err(|e| format!("recovered save journal cannot be cleaned up: {}", e))?;
     }
@@ -1841,13 +1958,18 @@ fn rollback_visual_save_transaction(
     project_root: &Path,
     transaction_root: &Path,
     journal: &VisualSaveJournal,
+    allow_managed_publication_metadata: bool,
 ) -> Result<(), String> {
     let staged_root = transaction_root.join("staged");
     let backup_root = transaction_root.join("backup");
     for entry in journal.entries.iter().rev() {
         validate_journal_file_name(&entry.staged_name)?;
         validate_journal_file_name(&entry.backup_name)?;
-        let target = safe_join_path(project_root, &entry.relative_path)?;
+        let target = safe_join_save_transaction_path(
+            project_root,
+            &entry.relative_path,
+            allow_managed_publication_metadata,
+        )?;
         let staged = staged_root.join(&entry.staged_name);
         let backup = backup_root.join(&entry.backup_name);
 
@@ -1981,8 +2103,16 @@ fn ensure_no_symlink_ancestors(base: &Path, relative: &Path) -> Result<(), Strin
 
 fn validate_visual_document_path(rel: &str) -> Result<PathBuf, String> {
     let path = validate_relative_path(rel, false)?;
-    if matches!(path.components().next(), Some(Component::Normal(value)) if value == ".cache") {
-        return Err("visual project documents cannot be stored in .cache".to_string());
+    if let Some(Component::Normal(value)) = path.components().next() {
+        let root = value.to_string_lossy();
+        if root.eq_ignore_ascii_case(".cache") {
+            return Err("visual project documents cannot be stored in .cache".to_string());
+        }
+        if root.eq_ignore_ascii_case(".xrift") {
+            return Err(
+                "visual project documents cannot overwrite XRift publication metadata".to_string(),
+            );
+        }
     }
     Ok(path)
 }
@@ -2020,21 +2150,577 @@ fn compiler_staging_project(
     Ok((root.clone(), root.join(name)))
 }
 
+fn compiler_staging_owner_for_manifest(
+    manifest: &VisualProjectManifest,
+    publication: Option<&LoadedCompilerPublicationMetadata>,
+) -> CompilerStagingOwner {
+    CompilerStagingOwner {
+        schema_version: COMPILER_STAGING_OWNER_SCHEMA_VERSION.to_string(),
+        project_id: manifest.project_id.clone(),
+        project_kind: manifest.project_kind.clone(),
+        pre_upload_id: publication.map(|loaded| loaded.metadata.id.clone()),
+        pre_upload_last_uploaded_at: publication
+            .map(|loaded| loaded.metadata.last_uploaded_at.clone()),
+        upload_attempt_started_unix_ms: None,
+    }
+}
+
+fn validate_compiler_staging_owner(owner: &CompilerStagingOwner) -> Result<(), String> {
+    if owner.schema_version != COMPILER_STAGING_OWNER_SCHEMA_VERSION {
+        return Err("compiler staging owner has an unsupported schema version".to_string());
+    }
+    if owner.project_id.trim().is_empty() || owner.project_id.len() > 512 {
+        return Err("compiler staging owner has an invalid project id".to_string());
+    }
+    if !matches!(owner.project_kind.as_str(), "world" | "item") {
+        return Err("compiler staging owner has an invalid project kind".to_string());
+    }
+    match (
+        owner.pre_upload_id.as_deref(),
+        owner.pre_upload_last_uploaded_at.as_deref(),
+    ) {
+        (None, None) => {}
+        (Some(id), Some(uploaded_at))
+            if !id.trim().is_empty()
+                && id.len() <= 512
+                && !uploaded_at.trim().is_empty()
+                && uploaded_at.len() <= 128 => {}
+        _ => return Err("compiler staging owner has invalid pre-upload metadata".to_string()),
+    }
+    Ok(())
+}
+
+fn compiler_staging_owner_matches_manifest(
+    owner: &CompilerStagingOwner,
+    manifest: &VisualProjectManifest,
+) -> bool {
+    owner.schema_version == COMPILER_STAGING_OWNER_SCHEMA_VERSION
+        && owner.project_id == manifest.project_id
+        && owner.project_kind == manifest.project_kind
+}
+
+fn read_compiler_staging_owner(
+    project_root: &Path,
+) -> Result<Option<CompilerStagingOwner>, String> {
+    let path = safe_join_path(project_root, COMPILER_STAGING_OWNER_PATH)?;
+    let metadata = match std::fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.to_string()),
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err("compiler staging owner is not a regular file".to_string());
+    }
+    if metadata.len() > XRIFT_PUBLICATION_METADATA_MAX_BYTES {
+        return Err("compiler staging owner is too large".to_string());
+    }
+    let raw = std::fs::read_to_string(path)
+        .map_err(|e| format!("compiler staging owner cannot be read: {}", e))?;
+    let owner: CompilerStagingOwner = serde_json::from_str(&raw)
+        .map_err(|e| format!("compiler staging owner is invalid: {}", e))?;
+    validate_compiler_staging_owner(&owner)?;
+    Ok(Some(owner))
+}
+
+fn write_compiler_staging_owner(
+    project_root: &Path,
+    manifest: &VisualProjectManifest,
+    publication: Option<&LoadedCompilerPublicationMetadata>,
+) -> Result<(), String> {
+    let owner = compiler_staging_owner_for_manifest(manifest, publication);
+    write_compiler_staging_owner_record(project_root, &owner)
+}
+
+fn write_compiler_staging_owner_record(
+    project_root: &Path,
+    owner: &CompilerStagingOwner,
+) -> Result<(), String> {
+    validate_compiler_staging_owner(owner)?;
+    let raw = serde_json::to_string_pretty(&owner)
+        .map_err(|e| format!("compiler staging owner cannot be serialized: {}", e))?;
+    let path = safe_join_path(project_root, COMPILER_STAGING_OWNER_PATH)?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    write_file_synced(&path, format!("{}\n", raw).as_bytes())
+}
+
+fn verify_compiler_upload_advanced(
+    owner: &CompilerStagingOwner,
+    uploaded: &LoadedCompilerPublicationMetadata,
+) -> Result<(), String> {
+    if let Some(previous_id) = owner.pre_upload_id.as_deref() {
+        if previous_id != uploaded.metadata.id {
+            return Err("XRift upload changed the saved publication id".to_string());
+        }
+        if owner.pre_upload_last_uploaded_at.as_deref()
+            == Some(uploaded.metadata.last_uploaded_at.as_str())
+        {
+            return Err(
+                "XRift CLI exited without advancing the publication metadata; upload completion is unknown"
+                    .to_string(),
+            );
+        }
+    }
+    Ok(())
+}
+
+fn publication_matches_owner_baseline(
+    owner: &CompilerStagingOwner,
+    publication: Option<&LoadedCompilerPublicationMetadata>,
+) -> bool {
+    match (owner.pre_upload_id.as_deref(), publication) {
+        (None, None) => owner.pre_upload_last_uploaded_at.is_none(),
+        (Some(expected_id), Some(loaded)) => {
+            expected_id == loaded.metadata.id
+                && owner.pre_upload_last_uploaded_at.as_deref()
+                    == Some(loaded.metadata.last_uploaded_at.as_str())
+        }
+        _ => false,
+    }
+}
+
+fn xrift_publication_metadata_relative_path(project_kind: &str) -> Result<String, String> {
+    match project_kind {
+        "world" => Ok(".xrift/world.json".to_string()),
+        "item" => Ok(".xrift/item.json".to_string()),
+        _ => Err("visual project kind must be world or item".to_string()),
+    }
+}
+
+fn validate_compiler_publication_metadata(
+    metadata: &CompilerPublicationMetadata,
+) -> Result<(), String> {
+    if metadata.id.trim().is_empty() || metadata.id.len() > 512 {
+        return Err("XRift publication metadata has an invalid id".to_string());
+    }
+    for (label, value) in [
+        ("createdAt", metadata.created_at.as_str()),
+        ("lastUploadedAt", metadata.last_uploaded_at.as_str()),
+    ] {
+        if value.trim().is_empty() || value.len() > 128 {
+            return Err(format!(
+                "XRift publication metadata has an invalid {}",
+                label
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn parse_compiler_publication_metadata(
+    raw: String,
+) -> Result<LoadedCompilerPublicationMetadata, String> {
+    if raw.len() as u64 > XRIFT_PUBLICATION_METADATA_MAX_BYTES {
+        return Err("XRift publication metadata is too large".to_string());
+    }
+    let metadata: CompilerPublicationMetadata = serde_json::from_str(&raw)
+        .map_err(|e| format!("XRift publication metadata is invalid: {}", e))?;
+    validate_compiler_publication_metadata(&metadata)?;
+    Ok(LoadedCompilerPublicationMetadata { raw, metadata })
+}
+
+fn read_compiler_publication_metadata(
+    project_root: &Path,
+    project_kind: &str,
+) -> Result<Option<LoadedCompilerPublicationMetadata>, String> {
+    let relative_path = xrift_publication_metadata_relative_path(project_kind)?;
+    let relative = validate_relative_path(&relative_path, false)?;
+    ensure_no_symlink_ancestors(project_root, &relative)?;
+    let path = project_root.join(relative);
+    let file_metadata = match std::fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.to_string()),
+    };
+    if file_metadata.file_type().is_symlink() || !file_metadata.is_file() {
+        return Err("XRift publication metadata is not a regular file".to_string());
+    }
+    if file_metadata.len() > XRIFT_PUBLICATION_METADATA_MAX_BYTES {
+        return Err("XRift publication metadata is too large".to_string());
+    }
+    let raw = std::fs::read_to_string(path)
+        .map_err(|e| format!("XRift publication metadata cannot be read: {}", e))?;
+    parse_compiler_publication_metadata(raw).map(Some)
+}
+
+fn write_compiler_publication_metadata(
+    project_root: &Path,
+    project_kind: &str,
+    loaded: &LoadedCompilerPublicationMetadata,
+) -> Result<(), String> {
+    let relative_path = xrift_publication_metadata_relative_path(project_kind)?;
+    let target = safe_join_managed_publication_path(project_root, &relative_path)?;
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    write_file_synced(&target, loaded.raw.as_bytes())
+}
+
+fn persist_authoring_publication_metadata(
+    project_root: &Path,
+    project_kind: &str,
+    loaded: &LoadedCompilerPublicationMetadata,
+) -> Result<(), String> {
+    let relative_path = xrift_publication_metadata_relative_path(project_kind)?;
+    let raw = if loaded.raw.ends_with('\n') {
+        loaded.raw.clone()
+    } else {
+        format!("{}\n", loaded.raw)
+    };
+    save_publication_metadata_transaction(project_root, &[(relative_path, raw)])
+}
+
+fn manifest_publication_id(manifest: &VisualProjectManifest) -> Option<&str> {
+    let publication = manifest.last_publication.as_ref()?;
+    let kind_id = match manifest.project_kind.as_str() {
+        "world" => publication.world_id.as_deref(),
+        "item" => publication.item_id.as_deref(),
+        _ => None,
+    };
+    kind_id
+        .or(publication.content_id.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+fn persist_verified_authoring_publication_metadata(
+    authoring_root: &Path,
+    manifest: &VisualProjectManifest,
+    loaded: &LoadedCompilerPublicationMetadata,
+) -> Result<(), String> {
+    if let Some(expected_id) = manifest_publication_id(manifest) {
+        if loaded.metadata.id != expected_id {
+            return Err(
+                "XRift returned a different publication id than the saved project target"
+                    .to_string(),
+            );
+        }
+    }
+    if let Some(existing) =
+        read_compiler_publication_metadata(authoring_root, &manifest.project_kind)?
+    {
+        if existing.metadata.id != loaded.metadata.id {
+            return Err(
+                "XRift returned a different publication id than the local CLI metadata".to_string(),
+            );
+        }
+    }
+    persist_authoring_publication_metadata(authoring_root, &manifest.project_kind, loaded)
+}
+
+fn metadata_from_manifest(
+    manifest: &VisualProjectManifest,
+) -> Result<Option<LoadedCompilerPublicationMetadata>, String> {
+    let Some(id) = manifest_publication_id(manifest) else {
+        return Ok(None);
+    };
+    let uploaded_at = manifest
+        .last_publication
+        .as_ref()
+        .map(|publication| publication.uploaded_at.trim())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "saved XRift publication is missing uploadedAt".to_string())?;
+    let metadata = CompilerPublicationMetadata {
+        id: id.to_string(),
+        created_at: uploaded_at.to_string(),
+        last_uploaded_at: uploaded_at.to_string(),
+    };
+    validate_compiler_publication_metadata(&metadata)?;
+    let raw = serde_json::to_string_pretty(&metadata)
+        .map_err(|e| format!("XRift publication metadata cannot be serialized: {}", e))?;
+    Ok(Some(LoadedCompilerPublicationMetadata {
+        raw: format!("{}\n", raw),
+        metadata,
+    }))
+}
+
+fn publication_timestamp_second(value: &str) -> Option<&str> {
+    let value = value.trim();
+    let bytes = value.as_bytes();
+    if bytes.len() < 19
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || bytes[10] != b'T'
+        || bytes[13] != b':'
+        || bytes[16] != b':'
+    {
+        return None;
+    }
+    for (index, byte) in bytes[..19].iter().enumerate() {
+        if matches!(index, 4 | 7 | 10 | 13 | 16) {
+            continue;
+        }
+        if !byte.is_ascii_digit() {
+            return None;
+        }
+    }
+    value.get(..19)
+}
+
+fn select_unique_publication_candidate(
+    candidates: Vec<LoadedCompilerPublicationMetadata>,
+) -> Result<Option<LoadedCompilerPublicationMetadata>, String> {
+    let mut by_id = HashMap::new();
+    for candidate in candidates {
+        by_id
+            .entry(candidate.metadata.id.clone())
+            .or_insert(candidate);
+    }
+    if by_id.len() > 1 {
+        return Err(
+            "以前のXRift公開先が複数見つかったため、自動では選択できません。再アップロードせず公開先IDを確認してください。"
+                .to_string(),
+        );
+    }
+    Ok(by_id.into_values().next())
+}
+
+fn compiler_legacy_project_segment(value: &str) -> String {
+    let mut normalized = String::new();
+    let mut replacing = false;
+    for character in value.trim().chars() {
+        if character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-') {
+            normalized.push(character);
+            replacing = false;
+        } else if !replacing {
+            normalized.push('-');
+            replacing = true;
+        }
+    }
+    let trimmed = normalized.trim_matches('-');
+    if trimmed.is_empty() {
+        "untitled".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn legacy_staging_config_matches_manifest(
+    candidate_root: &Path,
+    manifest: &VisualProjectManifest,
+) -> bool {
+    let path = match safe_join_path(candidate_root, "xrift.json") {
+        Ok(path) => path,
+        Err(_) => return false,
+    };
+    match std::fs::symlink_metadata(&path) {
+        Ok(metadata)
+            if metadata.is_file()
+                && !metadata.file_type().is_symlink()
+                && metadata.len() <= XRIFT_PUBLICATION_METADATA_MAX_BYTES => {}
+        _ => return false,
+    }
+    let config = match std::fs::read_to_string(path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<XriftJson>(&raw).ok())
+    {
+        Some(config) => config,
+        None => return false,
+    };
+    let project_metadata = match manifest.project_kind.as_str() {
+        "world" => config.world.as_ref(),
+        "item" => config.item.as_ref(),
+        _ => None,
+    };
+    matches!(
+        project_metadata,
+        Some(project_metadata)
+            if project_metadata.title.as_deref() == Some(manifest.metadata.title.as_str())
+                && project_metadata.description.as_deref()
+                    == Some(manifest.metadata.description.as_str())
+    )
+}
+
+fn recover_legacy_compiler_publication_metadata(
+    app: &AppHandle,
+    manifest: &VisualProjectManifest,
+) -> Result<Option<LoadedCompilerPublicationMetadata>, String> {
+    let Some(publication) = manifest.last_publication.as_ref() else {
+        return Ok(None);
+    };
+    let uploaded_at = publication.uploaded_at.trim();
+    if uploaded_at.is_empty() {
+        return Ok(None);
+    }
+    let root = compiler_staging_root(app)?;
+    let entries = std::fs::read_dir(&root)
+        .map_err(|e| format!("old compiler staging cannot be inspected: {}", e))?;
+    let legacy_name_prefix = format!(
+        "xrift-studio-{}-{}-",
+        manifest.project_kind,
+        compiler_legacy_project_segment(&manifest.metadata.name)
+    );
+    let mut exact_matches = Vec::new();
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !name.starts_with("xrift-studio-") {
+            continue;
+        }
+        let file_type = match entry.file_type() {
+            Ok(file_type) => file_type,
+            Err(_) => continue,
+        };
+        if file_type.is_symlink() || !file_type.is_dir() {
+            continue;
+        }
+        let candidate_root = match entry.path().canonicalize() {
+            Ok(path) if path.starts_with(&root) => path,
+            _ => continue,
+        };
+        let owner_matches = match read_compiler_staging_owner(&candidate_root) {
+            Ok(Some(owner)) => compiler_staging_owner_matches_manifest(&owner, manifest),
+            Ok(None) => {
+                name.starts_with(&legacy_name_prefix)
+                    && legacy_staging_config_matches_manifest(&candidate_root, manifest)
+            }
+            Err(_) => false,
+        };
+        if !owner_matches {
+            continue;
+        }
+        let loaded =
+            match read_compiler_publication_metadata(&candidate_root, &manifest.project_kind) {
+                Ok(Some(loaded)) => loaded,
+                _ => continue,
+            };
+        let timestamp_matches = loaded.metadata.last_uploaded_at.trim() == uploaded_at
+            || matches!(
+                (
+                    publication_timestamp_second(&loaded.metadata.last_uploaded_at),
+                    publication_timestamp_second(uploaded_at),
+                ),
+                (Some(candidate), Some(saved)) if candidate == saved
+            );
+        if timestamp_matches {
+            exact_matches.push(loaded);
+        }
+    }
+    select_unique_publication_candidate(exact_matches)
+}
+
+fn resolve_authoring_publication_metadata(
+    app: &AppHandle,
+    authoring_root: &Path,
+    manifest: &VisualProjectManifest,
+) -> Result<(Option<LoadedCompilerPublicationMetadata>, bool), String> {
+    if let Some(loaded) =
+        read_compiler_publication_metadata(authoring_root, &manifest.project_kind)?
+    {
+        if let Some(expected_id) = manifest_publication_id(manifest) {
+            if loaded.metadata.id != expected_id {
+                return Err(
+                    "XRift publication metadata does not match the saved project target"
+                        .to_string(),
+                );
+            }
+        }
+        return Ok((Some(loaded), false));
+    }
+
+    if let Some(loaded) = metadata_from_manifest(manifest)? {
+        return Ok((Some(loaded), true));
+    }
+
+    if manifest.last_publication.is_some() {
+        let recovered = recover_legacy_compiler_publication_metadata(app, manifest)?;
+        if let Some(loaded) = recovered {
+            return Ok((Some(loaded), true));
+        }
+        return Err(
+            "以前のXRift公開先IDを復元できません。別のワールドを作らないようアップロードを停止しました。"
+                .to_string(),
+        );
+    }
+
+    Ok((None, false))
+}
+
 /// Clears only the compiler-owned directory selected by the deterministic
 /// staging name. The visual authoring project is never accepted as a target.
 #[tauri::command]
 fn prepare_compiler_staging(
     app: AppHandle,
+    authoring_project_path: String,
     directory_name: String,
 ) -> Result<CompilerStagingPaths, String> {
-    let _guard = COMPILER_STAGING_IO_LOCK
+    let _compiler_guard = COMPILER_STAGING_IO_LOCK
         .lock()
         .map_err(|_| "compiler staging I/O lock is unavailable".to_string())?;
+    let _visual_guard = VISUAL_PROJECT_IO_LOCK
+        .lock()
+        .map_err(|_| "visual project I/O lock is unavailable".to_string())?;
+
+    let authoring_root = canonical_project_root(&authoring_project_path)?;
+    recover_visual_save_transactions(&authoring_root)?;
+    let manifest_content = std::fs::read_to_string(authoring_root.join(VISUAL_PROJECT_MANIFEST))
+        .map_err(|e| format!("visual project manifest cannot be read: {}", e))?;
+    let manifest = parse_visual_project_manifest(&manifest_content)?;
+
     let (root, project) = compiler_staging_project(&app, &directory_name)?;
     if project.exists() {
         let metadata = std::fs::symlink_metadata(&project).map_err(|e| e.to_string())?;
         if metadata.file_type().is_symlink() || !metadata.is_dir() {
             return Err("compiler staging target is not a regular directory".to_string());
+        }
+        let resolved_project = project
+            .canonicalize()
+            .map_err(|e| format!("compiler staging project cannot be resolved: {}", e))?;
+        if !resolved_project.starts_with(&root) {
+            return Err("compiler staging project escapes the app-owned root".to_string());
+        }
+        let owner = read_compiler_staging_owner(&resolved_project)?;
+        if let Some(owner) = owner.as_ref() {
+            if !compiler_staging_owner_matches_manifest(owner, &manifest) {
+                return Err(
+                    "compiler staging belongs to a different visual project; it was not removed"
+                        .to_string(),
+                );
+            }
+        }
+        let staged_publication =
+            read_compiler_publication_metadata(&resolved_project, &manifest.project_kind)?;
+        match (owner.as_ref(), staged_publication.as_ref()) {
+            (None, Some(_)) => {
+                return Err(
+                    "unowned compiler staging contains an XRift publication id; it was not removed"
+                        .to_string(),
+                )
+            }
+            (Some(owner), Some(loaded)) if owner.upload_attempt_started_unix_ms.is_some() => {
+                // Only a sidecar advanced beyond the recorded pre-upload
+                // baseline proves that the prior remote attempt completed.
+                verify_compiler_upload_advanced(owner, loaded)?;
+                persist_verified_authoring_publication_metadata(
+                    &authoring_root,
+                    &manifest,
+                    loaded,
+                )?;
+            }
+            (Some(owner), Some(loaded)) => {
+                if !publication_matches_owner_baseline(owner, Some(loaded)) {
+                    return Err(
+                        "compiler staging publication metadata changed without an upload attempt"
+                            .to_string(),
+                    );
+                }
+                persist_verified_authoring_publication_metadata(
+                    &authoring_root,
+                    &manifest,
+                    loaded,
+                )?;
+            }
+            (Some(owner), None) if owner.upload_attempt_started_unix_ms.is_some() => {
+                return Err(
+                    "a previous XRift upload attempt has no saved remote result; automatic retry is blocked"
+                        .to_string(),
+                )
+            }
+            _ => {}
         }
         std::fs::remove_dir_all(&project)
             .map_err(|e| format!("old compiler staging cannot be removed: {}", e))?;
@@ -2056,9 +2742,12 @@ fn apply_compiler_staging(
     overlay_files: Vec<CompilerOverlayWrite>,
     asset_copies: Vec<CompilerAssetCopy>,
 ) -> Result<String, String> {
-    let _guard = COMPILER_STAGING_IO_LOCK
+    let _compiler_guard = COMPILER_STAGING_IO_LOCK
         .lock()
         .map_err(|_| "compiler staging I/O lock is unavailable".to_string())?;
+    let _visual_guard = VISUAL_PROJECT_IO_LOCK
+        .lock()
+        .map_err(|_| "visual project I/O lock is unavailable".to_string())?;
     let (root, project) = compiler_staging_project(&app, &directory_name)?;
     if !project.is_dir() {
         return Err("XRift staging template has not been created".to_string());
@@ -2069,8 +2758,24 @@ fn apply_compiler_staging(
     if !resolved_project.starts_with(&root) {
         return Err("compiler staging project escapes the app-owned root".to_string());
     }
+    let authoring_root = canonical_project_root(&authoring_project_path)?;
+    recover_visual_save_transactions(&authoring_root)?;
+    let manifest_content = std::fs::read_to_string(authoring_root.join(VISUAL_PROJECT_MANIFEST))
+        .map_err(|e| format!("visual project manifest cannot be read: {}", e))?;
+    let manifest = parse_visual_project_manifest(&manifest_content)?;
+    let (publication_metadata, persist_recovered_metadata) =
+        resolve_authoring_publication_metadata(&app, &authoring_root, &manifest)?;
+    if persist_recovered_metadata {
+        let loaded = publication_metadata
+            .as_ref()
+            .ok_or_else(|| "recovered XRift publication metadata is missing".to_string())?;
+        persist_authoring_publication_metadata(&authoring_root, &manifest.project_kind, loaded)?;
+    }
 
     for overlay in overlay_files {
+        if is_reserved_project_path(&overlay.relative_path)? {
+            return Err("compiler output cannot write XRift publication metadata".to_string());
+        }
         let target = safe_join(&resolved_project.to_string_lossy(), &overlay.relative_path)?;
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -2079,6 +2784,11 @@ fn apply_compiler_staging(
     }
 
     for copy in asset_copies {
+        if is_reserved_project_path(&copy.source_relative_path)?
+            || is_reserved_project_path(&copy.target_relative_path)?
+        {
+            return Err("compiler assets cannot use XRift publication metadata paths".to_string());
+        }
         let source = safe_join(&authoring_project_path, &copy.source_relative_path)?;
         let metadata = std::fs::symlink_metadata(&source)
             .map_err(|e| format!("compiler source asset cannot be read: {}", e))?;
@@ -2099,7 +2809,181 @@ fn apply_compiler_staging(
             .map_err(|e| format!("compiler asset cannot be copied: {}", e))?;
     }
 
+    if let Some(loaded) = publication_metadata.as_ref() {
+        write_compiler_publication_metadata(&resolved_project, &manifest.project_kind, loaded)?;
+    }
+    // Written last: only fully materialized staging is eligible for upload
+    // and for crash recovery of a CLI-created publication sidecar.
+    write_compiler_staging_owner(&resolved_project, &manifest, publication_metadata.as_ref())?;
+
     Ok(resolved_project.to_string_lossy().to_string())
+}
+
+/// Marks the point after which a remote commit may have happened. If the app
+/// stops before the CLI writes its sidecar, the next attempt is blocked rather
+/// than silently creating a second remote target.
+#[tauri::command]
+fn mark_compiler_upload_started(
+    app: AppHandle,
+    authoring_project_path: String,
+    directory_name: String,
+) -> Result<(), String> {
+    let _compiler_guard = COMPILER_STAGING_IO_LOCK
+        .lock()
+        .map_err(|_| "compiler staging I/O lock is unavailable".to_string())?;
+    let _visual_guard = VISUAL_PROJECT_IO_LOCK
+        .lock()
+        .map_err(|_| "visual project I/O lock is unavailable".to_string())?;
+
+    let authoring_root = canonical_project_root(&authoring_project_path)?;
+    recover_visual_save_transactions(&authoring_root)?;
+    let manifest_content = std::fs::read_to_string(authoring_root.join(VISUAL_PROJECT_MANIFEST))
+        .map_err(|e| format!("visual project manifest cannot be read: {}", e))?;
+    let manifest = parse_visual_project_manifest(&manifest_content)?;
+
+    let (root, project) = compiler_staging_project(&app, &directory_name)?;
+    let staging_root = project
+        .canonicalize()
+        .map_err(|e| format!("compiler staging project cannot be resolved: {}", e))?;
+    if !staging_root.starts_with(&root) {
+        return Err("compiler staging project escapes the app-owned root".to_string());
+    }
+    let mut owner = read_compiler_staging_owner(&staging_root)?
+        .ok_or_else(|| "compiler staging owner is missing before upload".to_string())?;
+    if !compiler_staging_owner_matches_manifest(&owner, &manifest) {
+        return Err("compiler staging owner does not match the visual project".to_string());
+    }
+    if owner.upload_attempt_started_unix_ms.is_some() {
+        return Err(
+            "a previous XRift upload attempt has an unknown remote result; automatic retry is blocked"
+                .to_string(),
+        );
+    }
+
+    let staged_publication =
+        read_compiler_publication_metadata(&staging_root, &manifest.project_kind)?;
+    let authoring_publication =
+        read_compiler_publication_metadata(&authoring_root, &manifest.project_kind)?;
+    if let Some(expected_id) = manifest_publication_id(&manifest) {
+        if authoring_publication
+            .as_ref()
+            .map(|loaded| loaded.metadata.id.as_str())
+            != Some(expected_id)
+        {
+            return Err(
+                "saved publication target changed after compiler staging was prepared".to_string(),
+            );
+        }
+    }
+    if !publication_matches_owner_baseline(&owner, staged_publication.as_ref())
+        || !publication_matches_owner_baseline(&owner, authoring_publication.as_ref())
+    {
+        return Err("publication metadata changed before upload".to_string());
+    }
+
+    let started_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| "system time is before the Unix epoch".to_string())?
+        .as_millis();
+    owner.upload_attempt_started_unix_ms = Some(
+        u64::try_from(started_at)
+            .map_err(|_| "upload attempt timestamp is out of range".to_string())?,
+    );
+    write_compiler_staging_owner_record(&staging_root, &owner)
+}
+
+/// Clears an attempt only when the CLI never reached remote transfer and the
+/// staging sidecar is byte-semantically unchanged from the recorded baseline.
+#[tauri::command]
+fn clear_compiler_upload_attempt(
+    app: AppHandle,
+    authoring_project_path: String,
+    directory_name: String,
+) -> Result<(), String> {
+    let _compiler_guard = COMPILER_STAGING_IO_LOCK
+        .lock()
+        .map_err(|_| "compiler staging I/O lock is unavailable".to_string())?;
+    let _visual_guard = VISUAL_PROJECT_IO_LOCK
+        .lock()
+        .map_err(|_| "visual project I/O lock is unavailable".to_string())?;
+
+    let authoring_root = canonical_project_root(&authoring_project_path)?;
+    recover_visual_save_transactions(&authoring_root)?;
+    let manifest_content = std::fs::read_to_string(authoring_root.join(VISUAL_PROJECT_MANIFEST))
+        .map_err(|e| format!("visual project manifest cannot be read: {}", e))?;
+    let manifest = parse_visual_project_manifest(&manifest_content)?;
+
+    let (root, project) = compiler_staging_project(&app, &directory_name)?;
+    let staging_root = project
+        .canonicalize()
+        .map_err(|e| format!("compiler staging project cannot be resolved: {}", e))?;
+    if !staging_root.starts_with(&root) {
+        return Err("compiler staging project escapes the app-owned root".to_string());
+    }
+    let mut owner = read_compiler_staging_owner(&staging_root)?
+        .ok_or_else(|| "compiler staging owner is missing after upload attempt".to_string())?;
+    if !compiler_staging_owner_matches_manifest(&owner, &manifest) {
+        return Err("compiler staging owner does not match the visual project".to_string());
+    }
+    if owner.upload_attempt_started_unix_ms.is_none() {
+        return Ok(());
+    }
+    let staged_publication =
+        read_compiler_publication_metadata(&staging_root, &manifest.project_kind)?;
+    if !publication_matches_owner_baseline(&owner, staged_publication.as_ref()) {
+        return Err(
+            "upload attempt changed XRift publication metadata and cannot be cleared".to_string(),
+        );
+    }
+    owner.upload_attempt_started_unix_ms = None;
+    write_compiler_staging_owner_record(&staging_root, &owner)
+}
+
+/// Copies the CLI-owned remote identifier back to the visual authoring
+/// project after a successful upload. The next fresh staging project restores
+/// this sidecar before invoking the CLI, so upload remains an update.
+#[tauri::command]
+fn persist_compiler_publication_metadata(
+    app: AppHandle,
+    authoring_project_path: String,
+    directory_name: String,
+) -> Result<CompilerPublicationMetadata, String> {
+    let _compiler_guard = COMPILER_STAGING_IO_LOCK
+        .lock()
+        .map_err(|_| "compiler staging I/O lock is unavailable".to_string())?;
+    let _visual_guard = VISUAL_PROJECT_IO_LOCK
+        .lock()
+        .map_err(|_| "visual project I/O lock is unavailable".to_string())?;
+
+    let authoring_root = canonical_project_root(&authoring_project_path)?;
+    recover_visual_save_transactions(&authoring_root)?;
+    let manifest_content = std::fs::read_to_string(authoring_root.join(VISUAL_PROJECT_MANIFEST))
+        .map_err(|e| format!("visual project manifest cannot be read: {}", e))?;
+    let manifest = parse_visual_project_manifest(&manifest_content)?;
+
+    let (root, project) = compiler_staging_project(&app, &directory_name)?;
+    let staging_root = project
+        .canonicalize()
+        .map_err(|e| format!("compiler staging project cannot be resolved: {}", e))?;
+    if !staging_root.starts_with(&root) {
+        return Err("compiler staging project escapes the app-owned root".to_string());
+    }
+    let loaded = read_compiler_publication_metadata(&staging_root, &manifest.project_kind)?
+        .ok_or_else(|| {
+            "XRift CLI completed without saving publication metadata; the remote result is unknown"
+                .to_string()
+        })?;
+    let owner = read_compiler_staging_owner(&staging_root)?
+        .ok_or_else(|| "compiler staging owner is missing after upload".to_string())?;
+    if !compiler_staging_owner_matches_manifest(&owner, &manifest) {
+        return Err("compiler staging owner does not match the visual project".to_string());
+    }
+    if owner.upload_attempt_started_unix_ms.is_none() {
+        return Err("compiler upload attempt was not marked before completion".to_string());
+    }
+    verify_compiler_upload_advanced(&owner, &loaded)?;
+    persist_verified_authoring_publication_metadata(&authoring_root, &manifest, &loaded)?;
+    Ok(loaded.metadata)
 }
 
 fn validate_asset_import_transaction_id(transaction_id: &str) -> Result<&str, String> {
@@ -2243,6 +3127,9 @@ fn read_text_file(project_path: String, rel: String) -> Result<String, String> {
 
 #[tauri::command]
 fn write_text_file(project_path: String, rel: String, content: String) -> Result<(), String> {
+    if is_reserved_project_path(&rel)? {
+        return Err("XRift publication metadata cannot be edited".to_string());
+    }
     let path = safe_join(&project_path, &rel)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -2299,7 +3186,24 @@ struct FsEntry {
     size: Option<u64>,
 }
 
-const SKIP_DIRS: &[&str] = &["node_modules", "dist", ".git", ".next", ".cache", "target"];
+const SKIP_DIRS: &[&str] = &[
+    "node_modules",
+    "dist",
+    ".git",
+    ".xrift",
+    ".next",
+    ".cache",
+    "target",
+];
+
+fn is_reserved_project_path(rel: &str) -> Result<bool, String> {
+    let relative = validate_relative_path(rel, false)?;
+    Ok(matches!(
+        relative.components().next(),
+        Some(Component::Normal(value))
+            if value.to_string_lossy().eq_ignore_ascii_case(".xrift")
+    ))
+}
 
 #[tauri::command]
 fn list_files(project_path: String, rel: String) -> Result<Vec<FsEntry>, String> {
@@ -2323,7 +3227,10 @@ fn list_files(project_path: String, rel: String) -> Result<Vec<FsEntry>, String>
             Err(_) => continue,
         };
         let name = entry.file_name().to_string_lossy().to_string();
-        if SKIP_DIRS.iter().any(|s| *s == name) {
+        if SKIP_DIRS
+            .iter()
+            .any(|skipped| skipped.eq_ignore_ascii_case(&name))
+        {
             continue;
         }
         let meta = match entry.metadata() {
@@ -2359,6 +3266,9 @@ fn delete_path(project_path: String, rel: String) -> Result<(), String> {
     if rel.trim().is_empty() {
         return Err("project root cannot be deleted".into());
     }
+    if is_reserved_project_path(&rel)? {
+        return Err("XRift publication metadata cannot be deleted".into());
+    }
     let path = safe_join(&project_path, &rel)?;
     if !path.exists() {
         return Err("path does not exist".into());
@@ -2377,6 +3287,9 @@ fn rename_path(project_path: String, old_rel: String, new_rel: String) -> Result
     if old_rel.trim().is_empty() || new_rel.trim().is_empty() {
         return Err("invalid path".into());
     }
+    if is_reserved_project_path(&old_rel)? || is_reserved_project_path(&new_rel)? {
+        return Err("XRift publication metadata cannot be renamed".into());
+    }
     let from = safe_join(&project_path, &old_rel)?;
     let to = safe_join(&project_path, &new_rel)?;
     if !from.exists() {
@@ -2394,6 +3307,9 @@ fn rename_path(project_path: String, old_rel: String, new_rel: String) -> Result
 
 #[tauri::command]
 fn write_binary_file(project_path: String, rel: String, data_url: String) -> Result<(), String> {
+    if is_reserved_project_path(&rel)? {
+        return Err("XRift publication metadata cannot be edited".to_string());
+    }
     let path = safe_join(&project_path, &rel)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -2563,7 +3479,21 @@ fn write_thumbnail(project_path: String, data_url: String) -> Result<(), String>
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    // Publication staging uses process-local mutexes, so desktop launches are
+    // single-instance. A second launch focuses the existing authoring window.
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }));
+    }
+
+    let builder = builder
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init());
@@ -2584,6 +3514,9 @@ pub fn run() {
             save_visual_project,
             prepare_compiler_staging,
             apply_compiler_staging,
+            mark_compiler_upload_started,
+            clear_compiler_upload_attempt,
+            persist_compiler_publication_metadata,
             commit_visual_asset_import,
             read_world_file,
             write_world_file,
@@ -2604,4 +3537,128 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn publication_metadata(id: &str, uploaded_at: &str) -> LoadedCompilerPublicationMetadata {
+        let metadata = CompilerPublicationMetadata {
+            id: id.to_string(),
+            created_at: "2026-07-19T00:00:00.000Z".to_string(),
+            last_uploaded_at: uploaded_at.to_string(),
+        };
+        LoadedCompilerPublicationMetadata {
+            raw: serde_json::to_string(&metadata).expect("metadata must serialize"),
+            metadata,
+        }
+    }
+
+    fn visual_manifest(
+        project_kind: &str,
+        publication: Option<VisualPublicationRecord>,
+    ) -> VisualProjectManifest {
+        VisualProjectManifest {
+            schema_version: "1.0.0".to_string(),
+            project_id: "project-01".to_string(),
+            project_kind: project_kind.to_string(),
+            metadata: VisualProjectMetadata {
+                name: "fixture".to_string(),
+                title: "Fixture".to_string(),
+                description: String::new(),
+            },
+            entry_scene_id: "scene-01".to_string(),
+            scene_paths: HashMap::new(),
+            asset_manifest_path: "assets/manifest.json".to_string(),
+            last_publication: publication,
+        }
+    }
+
+    #[test]
+    fn parses_official_cli_publication_metadata() {
+        let loaded = parse_compiler_publication_metadata(
+            r#"{"id":"world-01","createdAt":"2026-07-19T00:00:00.000Z","lastUploadedAt":"2026-07-20T00:00:00.000Z"}"#
+                .to_string(),
+        )
+        .expect("valid metadata must parse");
+
+        assert_eq!(loaded.metadata.id, "world-01");
+        assert_eq!(loaded.metadata.last_uploaded_at, "2026-07-20T00:00:00.000Z");
+    }
+
+    #[test]
+    fn rejects_ambiguous_legacy_publication_targets() {
+        let result = select_unique_publication_candidate(vec![
+            publication_metadata("world-01", "2026-07-20T00:00:00.000Z"),
+            publication_metadata("world-02", "2026-07-20T00:00:00.000Z"),
+        ]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn accepts_duplicate_candidates_for_the_same_target() {
+        let result = select_unique_publication_candidate(vec![
+            publication_metadata("world-01", "2026-07-20T00:00:00.000Z"),
+            publication_metadata("world-01", "2026-07-20T00:00:00.000Z"),
+        ])
+        .expect("the same remote id is unambiguous")
+        .expect("a candidate must remain");
+
+        assert_eq!(result.metadata.id, "world-01");
+    }
+
+    #[test]
+    fn rebuilds_cli_metadata_from_a_saved_world_target() {
+        let manifest = visual_manifest(
+            "world",
+            Some(VisualPublicationRecord {
+                uploaded_at: "2026-07-20T00:00:00.000Z".to_string(),
+                world_id: Some("world-01".to_string()),
+                item_id: None,
+                content_id: Some("world-01".to_string()),
+            }),
+        );
+
+        let loaded = metadata_from_manifest(&manifest)
+            .expect("saved publication must be valid")
+            .expect("saved target must produce CLI metadata");
+
+        assert_eq!(loaded.metadata.id, "world-01");
+        assert_eq!(loaded.metadata.last_uploaded_at, "2026-07-20T00:00:00.000Z");
+    }
+
+    #[test]
+    fn accepts_same_second_legacy_timestamps() {
+        assert_eq!(
+            publication_timestamp_second("2026-07-20T11:45:55.816Z"),
+            publication_timestamp_second("2026-07-20T11:45:55.851Z")
+        );
+        assert_eq!(publication_timestamp_second("not-a-date"), None);
+    }
+
+    #[test]
+    fn rejects_an_upload_that_did_not_advance_cli_metadata() {
+        let manifest = visual_manifest("world", None);
+        let previous = publication_metadata("world-01", "2026-07-20T00:00:00.000Z");
+        let owner = compiler_staging_owner_for_manifest(&manifest, Some(&previous));
+
+        assert!(verify_compiler_upload_advanced(&owner, &previous).is_err());
+
+        let uploaded = publication_metadata("world-01", "2026-07-20T00:01:00.000Z");
+        assert!(verify_compiler_upload_advanced(&owner, &uploaded).is_ok());
+    }
+
+    #[test]
+    fn reserves_cli_publication_paths_from_generic_writes() {
+        assert!(validate_visual_document_path(".xrift/world.json").is_err());
+        assert!(validate_visual_document_path(".XRIFT/item.json").is_err());
+        assert!(is_managed_publication_metadata_path(".xrift/world.json")
+            .expect("managed path must validate"));
+        assert!(
+            !is_managed_publication_metadata_path(".xrift-studio/owner.json")
+                .expect("ordinary compiler metadata path must validate")
+        );
+    }
 }

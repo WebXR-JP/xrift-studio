@@ -60,6 +60,73 @@ export function runVisualCompilerFixtureAssertions(
   const second = compileVisualProject(world, { generatedAt: fixedTime });
   assert(JSON.stringify(first) === JSON.stringify(second), "Compiler output is not deterministic");
   assert(first.canStage, "Default world fixture should be stageable");
+  const publicationOnlyWorld: VisualCompilerDocuments = {
+    ...world,
+    project: {
+      ...world.project,
+      metadata: {
+        ...world.project.metadata,
+        createdAt: "2025-12-01T00:00:00.000Z",
+        updatedAt: "2026-01-02T00:00:00.000Z",
+      },
+      lastPublication: {
+        uploadedAt: "2026-01-02T00:00:00.000Z",
+        worldId: "fixture-world-id",
+        versionNumber: 2,
+      },
+    },
+  };
+  const publicationOnlyResult = compileVisualProject(publicationOnlyWorld, {
+    generatedAt: fixedTime,
+  });
+  assert(
+    JSON.stringify(first.provenance.sourceDocuments) ===
+      JSON.stringify(publicationOnlyResult.provenance.sourceDocuments),
+    "Publication metadata and audit timestamps must not affect compiler source hashes",
+  );
+  assert(
+    first.stagingPlan.stagingDirectoryName ===
+      publicationOnlyResult.stagingPlan.stagingDirectoryName,
+    "Publication metadata must not change the project staging identity",
+  );
+  const changedTitleResult = compileVisualProject(
+    {
+      ...world,
+      project: {
+        ...world.project,
+        metadata: {
+          ...world.project.metadata,
+          title: `${world.project.metadata.title} changed`,
+        },
+      },
+    },
+    { generatedAt: fixedTime },
+  );
+  assert(
+    JSON.stringify(first.provenance.sourceDocuments) !==
+      JSON.stringify(changedTitleResult.provenance.sourceDocuments),
+    "Compilation-relevant project metadata must still affect compiler source hashes",
+  );
+  assert(
+    first.stagingPlan.stagingDirectoryName ===
+      changedTitleResult.stagingPlan.stagingDirectoryName,
+    "Authoring changes must reuse the staging identity for the same projectId",
+  );
+  const differentProjectResult = compileVisualProject(
+    {
+      ...world,
+      project: {
+        ...world.project,
+        projectId: `${world.project.projectId}-copy`,
+      },
+    },
+    { generatedAt: fixedTime },
+  );
+  assert(
+    first.stagingPlan.stagingDirectoryName !==
+      differentProjectResult.stagingPlan.stagingDirectoryName,
+    "Different projectIds must not share a compiler staging identity",
+  );
   const worldSource = first.overlayFiles.find((file) => file.relativePath === "src/World.tsx")?.content ?? "";
   assert(worldSource.includes("<SpawnPoint"), "World SpawnPoint was not generated");
   assert(worldSource.includes("castShadow={true}"), "Mesh shadow settings were not generated");

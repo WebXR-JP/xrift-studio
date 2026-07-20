@@ -1,4 +1,5 @@
 import {
+  didXriftUploadStopBeforeRemoteTransfer,
   parseXriftUploadResult,
   sanitizePublishFailure,
   type XriftUploadResult,
@@ -70,6 +71,20 @@ export function runVisualPublishFixtureAssertions(): void {
     parseXriftUploadResult("Upload completed successfully."),
     {},
     "successful output without structured fields",
+  );
+
+  assertResult(
+    parseXriftUploadResult("✅ World upload complete (version: 3)"),
+    { versionNumber: 3 },
+    "official CLI completion output",
+  );
+  assert(
+    didXriftUploadStopBeforeRemoteTransfer("No files found to upload"),
+    "Explicit pre-remote empty output was not recognized",
+  );
+  assert(
+    !didXriftUploadStopBeforeRemoteTransfer("📤 Uploading files..."),
+    "Remote transfer output was mistaken for a safe pre-remote stop",
   );
 
   const jwt = "eyJhbGciOiJIUzI1NiJ9.c2VjcmV0LXBheWxvYWQ.c2VjcmV0LXNpZ25hdHVyZQ";

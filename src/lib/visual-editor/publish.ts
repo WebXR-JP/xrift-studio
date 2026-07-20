@@ -1,6 +1,7 @@
-import type { ProjectKind } from "../tauri";
+import type { CompilerPublicationMetadata, ProjectKind } from "../tauri";
 import { tauri } from "../tauri";
 import {
+  CommandSpawnError,
   xrift,
   type LogLine,
   type RunResult,
@@ -37,6 +38,8 @@ export type XriftUploadResult = {
   versionNumber?: number;
   contentHash?: string;
   status?: string;
+  /** Timestamp persisted by the official CLI sidecar after upload. */
+  uploadedAt?: string;
   /** Present only when the CLI explicitly returns a URL. */
   url?: string;
 };
@@ -179,6 +182,7 @@ export async function materializeVisualCompilation(
     cancelSafe: true,
   });
   const paths = await tauri.prepareCompilerStaging(
+    authoringProjectPath,
     compilation.stagingPlan.stagingDirectoryName,
   );
 
@@ -294,8 +298,47 @@ export async function publishVisualProject({
       percent: 78,
       cancelSafe: false,
     });
-    const uploaded = await xrift.upload(stagingPath, kind, safeLog);
+    await tauri.markCompilerUploadStarted(
+      resolvedAuthoringPath,
+      compilation.stagingPlan.stagingDirectoryName,
+    );
+    let uploaded: Awaited<ReturnType<typeof xrift.upload>>;
+    try {
+      uploaded = await xrift.upload(stagingPath, kind, safeLog, true);
+    } catch (uploadError) {
+      if (uploadError instanceof CommandSpawnError) {
+        try {
+          await tauri.clearCompilerUploadAttempt(
+            resolvedAuthoringPath,
+            compilation.stagingPlan.stagingDirectoryName,
+          );
+        } catch (clearError) {
+          throw new Error(
+            `XRift CLIを開始できず、試行状態も安全に解除できませんでした: ${clearError}`,
+          );
+        }
+      }
+      throw uploadError;
+    }
+    const uploadOutput = `${uploaded.stdout}\n${uploaded.stderr}`;
+    if (didXriftUploadStopBeforeRemoteTransfer(uploadOutput)) {
+      try {
+        await tauri.clearCompilerUploadAttempt(
+          resolvedAuthoringPath,
+          compilation.stagingPlan.stagingDirectoryName,
+        );
+      } catch (clearError) {
+        throw new Error(
+          `XRiftの送信開始を確認できず、試行状態も安全に解除できませんでした。重複を避けるため再アップロードせずログを確認してください: ${clearError}`,
+        );
+      }
+    }
     assertSucceeded(uploaded, "XRiftへのアップロード", privatePaths);
+    if (didXriftUploadStopBeforeRemoteTransfer(uploadOutput)) {
+      throw new Error(
+        "XRift CLIはファイル送信を開始しませんでした。生成結果とログを確認してから再試行してください。",
+      );
+    }
 
     report({
       stage: "processing",
@@ -303,9 +346,32 @@ export async function publishVisualProject({
       percent: 96,
       cancelSafe: false,
     });
-    // Exit code 0 is the source of truth for completion. Some CLI versions do
-    // not emit a structured result, so an empty object is still a success.
-    return parseXriftUploadResult(`${uploaded.stdout}\n${uploaded.stderr}`);
+    let publicationMetadata: CompilerPublicationMetadata;
+    try {
+      publicationMetadata = await tauri.persistCompilerPublicationMetadata(
+        resolvedAuthoringPath,
+        compilation.stagingPlan.stagingDirectoryName,
+      );
+    } catch (metadataError) {
+      throw new Error(
+        `XRiftへの送信は完了しましたが、公開先IDをプロジェクトへ保存できませんでした。重複を避けるため再アップロードせずログを確認してください: ${metadataError}`,
+      );
+    }
+
+    const parsed = parseXriftUploadResult(uploadOutput);
+    const parsedKindId = kind === "world" ? parsed.worldId : parsed.itemId;
+    if (parsedKindId && parsedKindId !== publicationMetadata.id) {
+      throw new Error(
+        "XRiftの出力IDと保存された公開先IDが一致しません。重複を避けるため再アップロードせずログを確認してください。",
+      );
+    }
+    return compactResult({
+      ...parsed,
+      worldId: kind === "world" ? publicationMetadata.id : parsed.worldId,
+      itemId: kind === "item" ? publicationMetadata.id : parsed.itemId,
+      contentId: parsed.contentId ?? publicationMetadata.id,
+      uploadedAt: publicationMetadata.lastUploadedAt,
+    });
   } catch (error) {
     if (
       error instanceof VisualCompilationError ||
@@ -319,6 +385,11 @@ export async function publishVisualProject({
     );
     throw new Error(detail || "XRiftへのアップロード処理に失敗しました。");
   }
+}
+
+export function didXriftUploadStopBeforeRemoteTransfer(output: string): boolean {
+  const clean = output.replace(/\u001b\[[0-9;]*m/g, "");
+  return /no\s+files\s+found\s+to\s+upload/i.test(clean);
 }
 
 export function parseXriftUploadResult(output: string): XriftUploadResult {
@@ -342,7 +413,9 @@ export function parseXriftUploadResult(output: string): XriftUploadResult {
     itemId,
     contentId: explicitContentId ?? worldId ?? itemId,
     versionId: labelledString(clean, ["version id", "versionId"]),
-    versionNumber: labelledNumber(clean, ["version number", "versionNumber"]),
+    versionNumber:
+      labelledNumber(clean, ["version number", "versionNumber"]) ??
+      completedUploadVersion(clean),
     contentHash: labelledString(clean, ["content hash", "contentHash"]),
     status: labelledString(clean, ["status"]),
     url: explicitUrl(clean),
@@ -506,6 +579,13 @@ function labelledString(output: string, labels: string[]): string | undefined {
 function labelledNumber(output: string, labels: string[]): number | undefined {
   const value = labelledString(output, labels);
   return value && /^\d+$/.test(value) ? Number(value) : undefined;
+}
+
+function completedUploadVersion(output: string): number | undefined {
+  const value = output.match(
+    /(?:world|item)\s+upload\s+complete\s*\(\s*version\s*:\s*(\d+)\s*\)/i,
+  )?.[1];
+  return value ? Number(value) : undefined;
 }
 
 function explicitUrl(output: string): string | undefined {

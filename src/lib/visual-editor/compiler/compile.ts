@@ -154,14 +154,12 @@ export function compileVisualProject(
   const canStage = !uniqueDiagnostics.some(
     (diagnostic) => diagnostic.severity === "blocking",
   );
-  const sourceFingerprint = sha256Utf8(
-    sourceDocuments.map((document) => `${document.path}:${document.sha256}`).join("\n"),
-  );
+  const projectIdentity = safeFileSegment(documents.project.projectId).slice(0, 72);
   const stagingDirectoryName = [
     "xrift-studio",
     documents.project.projectKind,
-    safeFileSegment(documents.project.metadata.name),
-    sourceFingerprint.slice(0, 12),
+    projectIdentity,
+    sha256Utf8(documents.project.projectId).slice(0, 12),
   ].join("-");
 
   return {
@@ -206,7 +204,7 @@ export function computeSourceDocumentHashes(
   documents: VisualCompilerDocuments,
 ): SourceDocumentHash[] {
   const sources: Array<[string, string]> = [
-    ["xrift-studio.project.json", visualProjectDocumentCodec.serialize(documents.project)],
+    ["xrift-studio.project.json", serializeCompilerProjectSource(documents.project)],
     [documents.project.assetManifestPath, assetManifestCodec.serialize(documents.assets)],
   ];
   for (const [sceneId, relativePath] of Object.entries(
@@ -235,6 +233,25 @@ export function computeSourceDocumentHashes(
   return sources
     .sort((left, right) => left[0].localeCompare(right[0]))
     .map(([path, content]) => ({ path, sha256: sha256Utf8(content) }));
+}
+
+/**
+ * Publication history and audit timestamps do not affect generated XRift
+ * output. Keeping them out of provenance prevents a successful upload or a
+ * save-only timestamp update from making an otherwise fresh compilation stale.
+ */
+function serializeCompilerProjectSource(
+  project: VisualCompilerDocuments["project"],
+): string {
+  return stableSerializeJson({
+    ...project,
+    metadata: {
+      ...project.metadata,
+      createdAt: undefined,
+      updatedAt: undefined,
+    },
+    lastPublication: undefined,
+  });
 }
 
 export function isVisualCompilationStale(

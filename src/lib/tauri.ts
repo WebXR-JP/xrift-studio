@@ -84,6 +84,12 @@ export type CompilerAssetCopy = {
   targetRelativePath: string;
 };
 
+export type CompilerPublicationMetadata = {
+  id: string;
+  createdAt: string;
+  lastUploadedAt: string;
+};
+
 export type VisualAssetImportWrite = {
   relativePath: string;
   dataUrl: string;
@@ -114,8 +120,12 @@ export const tauri = {
     projectPath: string,
     request: VisualProjectWriteRequest,
   ) => invoke<void>("save_visual_project", { projectPath, request }),
-  prepareCompilerStaging: (directoryName: string) =>
+  prepareCompilerStaging: (
+    authoringProjectPath: string,
+    directoryName: string,
+  ) =>
     invoke<CompilerStagingPaths>("prepare_compiler_staging", {
+      authoringProjectPath,
       directoryName,
     }),
   applyCompilerStaging: (
@@ -129,6 +139,30 @@ export const tauri = {
       directoryName,
       overlayFiles,
       assetCopies,
+    }),
+  persistCompilerPublicationMetadata: (
+    authoringProjectPath: string,
+    directoryName: string,
+  ) =>
+    invoke<CompilerPublicationMetadata>("persist_compiler_publication_metadata", {
+      authoringProjectPath,
+      directoryName,
+    }),
+  markCompilerUploadStarted: (
+    authoringProjectPath: string,
+    directoryName: string,
+  ) =>
+    invoke<void>("mark_compiler_upload_started", {
+      authoringProjectPath,
+      directoryName,
+    }),
+  clearCompilerUploadAttempt: (
+    authoringProjectPath: string,
+    directoryName: string,
+  ) =>
+    invoke<void>("clear_compiler_upload_attempt", {
+      authoringProjectPath,
+      directoryName,
     }),
   commitVisualAssetImport: (
     projectPath: string,

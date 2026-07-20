@@ -54,6 +54,7 @@ export type VisualPublishResult = {
   versionNumber?: number;
   contentHash?: string;
   status?: string;
+  uploadedAt?: string;
   /** Only use a URL explicitly returned by XRift. */
   url?: string;
 };
@@ -67,6 +68,10 @@ export type VisualPublishReview = {
   displayName?: string | null;
   saved: boolean;
   compilationFresh: boolean;
+  /** Existing remote target restored before invoking the official CLI. */
+  remoteId?: string;
+  /** A legacy project has upload history whose target must be recovered. */
+  previouslyPublished?: boolean;
   diagnostics: VisualPublishDiagnostic[];
 };
 
@@ -170,6 +175,16 @@ export function VisualUploadDialog({
       ready: review.signedIn,
       action: onLogin,
       actionLabel: "ログイン",
+    },
+    {
+      id: "target",
+      label: "公開先",
+      detail: review.remoteId
+        ? `既存の${projectKind === "world" ? "ワールド" : "アイテム"}を更新します: ${review.remoteId}`
+        : review.previouslyPublished
+          ? `以前の${projectKind === "world" ? "ワールド" : "アイテム"}の公開先IDを確認して更新します`
+          : "公開先IDを確認して、新規作成または既存更新を安全に決定します",
+      ready: true,
     },
     {
       id: "documents",

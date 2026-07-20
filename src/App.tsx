@@ -30,6 +30,7 @@ import {
   saveVisualProjectToDisk,
   type PrototypeVisualProject,
   type StarterVisualProjectPlan,
+  type VisualPublicationRecord,
   type VisualStarterTemplateId,
 } from "./lib/visual-editor";
 
@@ -38,6 +39,28 @@ const VisualEditorPrototype = lazy(() =>
     default: module.VisualEditorPrototype,
   })),
 );
+
+function withLatestPublication(
+  bundle: PrototypeVisualProject,
+  knownPublication?: VisualPublicationRecord,
+): PrototypeVisualProject {
+  if (!knownPublication) return bundle;
+  const bundledPublication = bundle.project.lastPublication;
+  if (
+    bundledPublication &&
+    Date.parse(bundledPublication.uploadedAt) >=
+      Date.parse(knownPublication.uploadedAt)
+  ) {
+    return bundle;
+  }
+  return {
+    ...bundle,
+    project: {
+      ...bundle.project,
+      lastPublication: knownPublication,
+    },
+  };
+}
 
 function App() {
   const toast = useToast();
@@ -318,40 +341,44 @@ function App() {
     bundle: PrototypeVisualProject,
     notify = true,
   ): Promise<string> => {
+    const persistedBundle = withLatestPublication(
+      bundle,
+      visualSession?.bundle.project.lastPublication,
+    );
     const documents = {
-      project: bundle.project,
-      scenes: { [bundle.scene.sceneId]: bundle.scene },
-      assets: bundle.assets,
-      prefabs: bundle.prefabs,
+      project: persistedBundle.project,
+      scenes: { [persistedBundle.scene.sceneId]: persistedBundle.scene },
+      assets: persistedBundle.assets,
+      prefabs: persistedBundle.prefabs,
     };
     try {
       if (visualSession?.project) {
         await saveVisualProjectToDisk(visualSession.project.path, documents);
         setVisualSession((current) =>
-          current ? { ...current, bundle } : current,
+          current ? { ...current, bundle: persistedBundle } : current,
         );
         await refreshProjects();
         if (notify) {
           toast({
             kind: "success",
             title: "ビジュアルプロジェクトを保存しました",
-            description: bundle.project.metadata.name,
+            description: persistedBundle.project.metadata.name,
           });
         }
         return visualSession.project.path;
       } else {
         const project = await createVisualProjectOnDisk(
           projectsRoot,
-          bundle.project.metadata.name,
+          persistedBundle.project.metadata.name,
           documents,
         );
-        setVisualSession({ bundle, project });
+        setVisualSession({ bundle: persistedBundle, project });
         await refreshProjects();
         if (notify) {
           toast({
             kind: "success",
             title: "ビジュアルプロジェクトを保存しました",
-            description: bundle.project.metadata.name,
+            description: persistedBundle.project.metadata.name,
           });
         }
         return project.path;
@@ -422,7 +449,14 @@ function App() {
               projectPath={visualSession.project?.path}
               initialBundle={visualSession.bundle}
               onSave={(bundle) => handleSaveVisualProject(bundle)}
-              onUpload={(bundle) => setVisualPublishBundle(bundle)}
+              onUpload={(bundle) =>
+                setVisualPublishBundle(
+                  withLatestPublication(
+                    bundle,
+                    visualSession.bundle.project.lastPublication,
+                  ),
+                )
+              }
               onBack={handleVisualEditorBack}
             />
           </Suspense>
@@ -439,6 +473,15 @@ function App() {
             displayName: user?.displayName,
             saved: false,
             compilationFresh: false,
+            remoteId:
+              visualSession.bundle.project.projectKind === "world"
+                ? publishBundle?.project.lastPublication?.worldId ??
+                  publishBundle?.project.lastPublication?.contentId
+                : publishBundle?.project.lastPublication?.itemId ??
+                  publishBundle?.project.lastPublication?.contentId,
+            previouslyPublished: Boolean(
+              publishBundle?.project.lastPublication,
+            ),
             diagnostics: visualPublishDiagnostics,
           }}
           onClose={() => setVisualPublishBundle(null)}
@@ -509,11 +552,17 @@ function App() {
                 },
                 lastPublication: {
                   ...result,
-                  uploadedAt: new Date().toISOString(),
+                  uploadedAt: result.uploadedAt ?? new Date().toISOString(),
                 },
               },
             };
             setVisualPublishBundle(publishedBundle);
+            // Keep the authoritative remote result in memory even if the
+            // follow-up manifest write fails. A later Save must not restore an
+            // older publication target over the durable CLI sidecar.
+            setVisualSession((current) =>
+              current ? { ...current, bundle: publishedBundle } : current,
+            );
             try {
               if (!savedProjectPath) {
                 throw new Error("保存先を確認できませんでした。");
@@ -526,9 +575,6 @@ function App() {
                 assets: publishedBundle.assets,
                 prefabs: publishedBundle.prefabs,
               });
-              setVisualSession((current) =>
-                current ? { ...current, bundle: publishedBundle } : current,
-              );
               await refreshProjects();
             } catch {
               toast({

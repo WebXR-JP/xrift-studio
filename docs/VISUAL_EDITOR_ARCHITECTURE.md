@@ -63,6 +63,8 @@ my-visual-project/
     source/
       <asset-id>/
         <sanitized-original-name>
+  .xrift/
+    world.json | item.json
   .cache/
     assets/
       <asset-id>/
@@ -990,6 +992,8 @@ World Adapter はワールドのルート、物理、スポーンなどの compi
 
 Upload は editor の light theme 内に専用 modal を開き、既存の `whoami` / `login`、公開準備確認、種別別 `check --build`、`upload` 実装を再利用する。別の token store、shell command builder、公開 metadata schema を visual mode 専用に複製しない。
 
+公式 CLI が同じ公開先を更新するための remote ID は `xrift.json` ではなく、World では `.xrift/world.json`、Item では `.xrift/item.json` に保存される。Visual project はこの CLI sidecar を authoring root の非表示・編集不可 metadata として保持し、毎回作り直す staging へ upload 前に復元する。staging には `projectId` と成果物種別を持つ app-owned owner marker を最後に書き、次回 staging を消す前にも CLI sidecar を authoring project へ回収する。upload 成功後は CLI が更新した sidecar を authoring project へ journal 付きで戻してから成功結果を確定し、`lastPublication` には UI で表示する ID と結果を同期する。既存 sidecar、`lastPublication`、owner marker、CLI result の ID が一致しない場合、または以前の ID を一意に復元できない場合は、新しい remote を重複作成しないよう upload / retry を停止する。
+
 | State | 表示と動作 | 取消 / 失敗からの戻り先 |
 | --- | --- | --- |
 | `review` | target、タイトル、説明、thumbnail、既存 worldId / itemId、保存・compile freshness、diagnostic 件数を表示。未編集 placeholder や blocker を field 近くに示す | 閉じると Edit。document と remote は不変 |
@@ -1152,6 +1156,7 @@ SDK API reference の upload result は ID、version、content hash を定義す
 - [ ] review、auth-check、saving、compiling、checking、uploading、processing、succeeded、failed の各 state で進捗、取消可能性、再試行先、戻り先を読める。
 - [ ] REJECT、stale compiler input、未編集 metadata、thumbnail 欠落など blocker がある時は upload を開始しない。
 - [ ] upload 後は worldId / itemId、versionId、versionNumber、contentHash を表示し、審査中を公開済みと表示しない。
+- [ ] `.xrift/world.json` / `.xrift/item.json` の remote ID を authoring project と fresh staging の間で継承し、再 upload が同じ remote を更新する。
 - [ ] 正式 result に URL がない場合は URL pattern を推測せず、ID を表示する。結果不明の再試行で新規 remote asset を重複作成しない。
 - [ ] automated test と通常の UI 検証は fake backend / fixture を使い、実 XRift upload を発生させない。
 

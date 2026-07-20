@@ -72,6 +72,7 @@ import {
   type EntityClipboard,
   type ParticlePropertiesPatch,
   type PrototypeVisualProject,
+  type SceneSettings,
   type TextureAssetPatch,
   type TransformPatch,
   type UpdateXriftComponentPatch,
@@ -102,6 +103,7 @@ import {
   type ParticleEmitterInspectorPatch,
 } from "./InspectorPanel";
 import { SceneViewport } from "./SceneViewport";
+import { SceneSettingsPanel } from "./SceneSettingsPanel";
 import { roundTo } from "./editor-utils";
 import type {
   EditorMode,
@@ -296,6 +298,32 @@ function preparePrototypeProject(
   };
 }
 
+function synchronizeProjectShellSnapshot(
+  snapshot: EditorSessionSnapshot,
+  project: PrototypeVisualProject["project"],
+): EditorSessionSnapshot {
+  const currentProject = snapshot.bundle.project;
+  if (
+    currentProject.projectId !== project.projectId ||
+    (currentProject.metadata === project.metadata &&
+      currentProject.lastPublication === project.lastPublication)
+  ) {
+    return snapshot;
+  }
+
+  return {
+    ...snapshot,
+    bundle: {
+      ...snapshot.bundle,
+      project: {
+        ...currentProject,
+        metadata: project.metadata,
+        lastPublication: project.lastPublication,
+      },
+    },
+  };
+}
+
 function firstAssetId(bundle: PrototypeVisualProject): string | null {
   return (
     Object.values(bundle.assets.assets).find((asset) => asset.kind === "material")?.id ??
@@ -416,6 +444,7 @@ export function VisualEditorPrototype({
   const [transformSpace, setTransformSpace] = useState<TransformSpace>("world");
   const [editorMode, setEditorMode] = useState<EditorMode>("edit");
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
   const [pendingImports, setPendingImports] = useState<QueuedAssetImport[]>([]);
   const importQueueRef = useRef<QueuedAssetImport[]>([]);
   const importRunningRef = useRef(false);
@@ -488,6 +517,7 @@ export function VisualEditorPrototype({
     setModelReimportFeedback(null);
     setActiveAssetFolderId(null);
     setFrameSelectionRequest(0);
+    setSceneSettingsOpen(false);
     importQueueRef.current = [];
     setPendingImports([]);
     setImportError(null);
@@ -497,6 +527,29 @@ export function VisualEditorPrototype({
     // File objects and editor history survive the first save.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialBundle.project.projectId]);
+
+  useEffect(() => {
+    const project = initialBundle.project;
+    setHistory((current) => {
+      const past = current.past.map((snapshot) =>
+        synchronizeProjectShellSnapshot(snapshot, project),
+      );
+      const present = synchronizeProjectShellSnapshot(current.present, project);
+      const future = current.future.map((snapshot) =>
+        synchronizeProjectShellSnapshot(snapshot, project),
+      );
+      const changed =
+        present !== current.present ||
+        past.some((snapshot, index) => snapshot !== current.past[index]) ||
+        future.some((snapshot, index) => snapshot !== current.future[index]);
+
+      return changed ? { ...current, past, present, future } : current;
+    });
+  }, [
+    initialBundle.project.lastPublication,
+    initialBundle.project.metadata,
+    initialBundle.project.projectId,
+  ]);
 
   useEffect(() => {
     setLayout(loadEditorLayout(initialLayout));
@@ -549,6 +602,19 @@ export function VisualEditorPrototype({
       });
     },
     [],
+  );
+
+  const handleSceneSettingsChange = useCallback(
+    (settings: SceneSettings) => {
+      if (editorMode !== "edit") return;
+      updateScene((scene) =>
+        JSON.stringify(scene.settings) === JSON.stringify(settings)
+          ? scene
+          : { ...scene, settings },
+      );
+      setNotice("シーン設定を更新しました。保存するとWorld生成にも反映されます");
+    },
+    [editorMode, updateScene],
   );
 
   const handleUndo = useCallback(() => {
@@ -2864,6 +2930,29 @@ export function VisualEditorPrototype({
             onPlaceSceneAsset={(assetId) => handlePlaceSceneAsset(assetId)}
             externalOperationLockReason={
               assetImportPanelAvailability.disabledReason
+            }
+          />
+          <button
+            type="button"
+            onClick={() => setSceneSettingsOpen(true)}
+            aria-label="シーン設定を開く"
+            title="シーン設定を開く"
+            className="absolute z-40 flex h-9 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-100"
+            style={{ bottom: layout.assetsHeight + 10, left: 10 }}
+          >
+            <EDITOR_ICONS.settings size={14} aria-hidden="true" />
+            シーン設定
+          </button>
+          <SceneSettingsPanel
+            open={sceneSettingsOpen}
+            scene={bundle.scene}
+            projectKind={projectKind}
+            projectPath={projectPath}
+            readOnly={readOnly}
+            onClose={() => setSceneSettingsOpen(false)}
+            onChange={handleSceneSettingsChange}
+            onThumbnailChanged={() =>
+              setNotice("サムネイルを更新しました。公開前の確認にも反映されます")
             }
           />
           <button

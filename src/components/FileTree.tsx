@@ -41,6 +41,7 @@ const PROTECTED = new Set([
   "node_modules",
   "dist",
   ".git",
+  ".xrift",
   "package.json",
   "package-lock.json",
   "tsconfig.json",
@@ -48,6 +49,10 @@ const PROTECTED = new Set([
   "xrift.json",
   "index.html",
 ]);
+
+function isProtectedPath(nameOrPath: string): boolean {
+  return PROTECTED.has(nameOrPath.toLowerCase());
+}
 
 export type FileKind = "text" | "image" | "model" | "binary";
 
@@ -364,7 +369,8 @@ export function FileTree({
       node.isDir || fileKind === "text" || fileKind === "image" || fileKind === "model";
     const isDropTarget = node.isDir && dropTarget === node.rel;
     const isRenaming = renaming === node.rel;
-    const isProtected = PROTECTED.has(node.name) || PROTECTED.has(node.rel);
+    const isProtected =
+      isProtectedPath(node.name) || isProtectedPath(node.rel);
 
     return (
       <div
@@ -561,7 +567,10 @@ export function FileTree({
             icon={<Pencil size={12} strokeWidth={2} />}
             label="名前を変更"
             onClick={() => startRename(menu.rel)}
-            disabled={PROTECTED.has(basenameOf(menu.rel)) || PROTECTED.has(menu.rel)}
+            disabled={
+              isProtectedPath(basenameOf(menu.rel)) ||
+              isProtectedPath(menu.rel)
+            }
           />
           <MenuItem
             icon={<Trash2 size={12} strokeWidth={2} />}
@@ -571,7 +580,10 @@ export function FileTree({
               setMenu(null);
               setConfirmDelete({ rel: menu.rel, isDir: menu.isDir });
             }}
-            disabled={PROTECTED.has(basenameOf(menu.rel)) || PROTECTED.has(menu.rel)}
+            disabled={
+              isProtectedPath(basenameOf(menu.rel)) ||
+              isProtectedPath(menu.rel)
+            }
           />
         </div>
       )}
