@@ -21,11 +21,16 @@ import {
   type TextureAsset,
 } from "../../lib/visual-editor";
 import {
+  PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY,
   applyAssignedMaterialPreview,
+  applyAssignedMaterialPreviews,
   createAssignedMaterialPreviewMaterial,
   getModelSelectionBounds,
 } from "./ProjectModelVisual";
-import { configureMaterialPreviewTexture } from "./material-texture-preview";
+import {
+  configureMaterialPreviewTexture,
+  refreshMaterialPreviewRender,
+} from "./material-texture-preview";
 
 export function runProjectModelMaterialPreviewFixtureAssertions(): void {
   assertModelSelectionBoundsStayLocal();
@@ -189,6 +194,9 @@ export function runProjectModelMaterialPreviewFixtureAssertions(): void {
     "Core Material preview texture color spaces are incorrect",
   );
 
+  assertModelMaterialAssignmentsStayInTheirGltfSlots(assets);
+  assertAsyncTextureCompletionRequestsMaterialRender();
+
   owned.forEach((material) => material.dispose());
   texturedPreview.dispose();
   [
@@ -200,6 +208,74 @@ export function runProjectModelMaterialPreviewFixtureAssertions(): void {
   ].forEach((map) => map.dispose());
   root.geometry.dispose();
   source.dispose();
+  texture.dispose();
+}
+
+function assertModelMaterialAssignmentsStayInTheirGltfSlots(
+  assets: ReturnType<typeof updateMaterialAsset>,
+): void {
+  const orange = getMaterialAsset(assets, BUILTIN_ASSET_IDS.material.orange);
+  const blue = getMaterialAsset(assets, BUILTIN_ASSET_IDS.material.blue);
+  assert(orange && blue, "Material slot fixtures are missing");
+
+  const firstSource = new MeshPhysicalMaterial({ color: "#ffffff" });
+  firstSource.userData[PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY] = 0;
+  const secondSource = new MeshPhysicalMaterial({ color: "#ffffff" });
+  secondSource.userData[PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY] = 1;
+  const first = new Mesh(new BoxGeometry(1, 1, 1), firstSource);
+  const second = new Mesh(new BoxGeometry(1, 1, 1), secondSource);
+  const root = new Group();
+  root.add(first, second);
+
+  const owned = applyAssignedMaterialPreviews(root, [
+    { sourceMaterialIndex: 0, material: orange },
+    { sourceMaterialIndex: 1, material: blue },
+  ]);
+  const firstPreview = first.material as MeshPhysicalMaterial;
+  const secondPreview = second.material as MeshPhysicalMaterial;
+  assert(
+    firstPreview !== firstSource && secondPreview !== secondSource,
+    "Model slot overrides reused cached glTF Materials",
+  );
+  assert(
+    colorNear(
+      firstPreview.color,
+      orange.properties.pbrMetallicRoughness.baseColorFactor,
+    ) &&
+      colorNear(
+        secondPreview.color,
+        blue.properties.pbrMetallicRoughness.baseColorFactor,
+      ),
+    "Model Material overrides crossed their glTF source slots",
+  );
+
+  owned.forEach((material) => material.dispose());
+  first.geometry.dispose();
+  second.geometry.dispose();
+  firstSource.dispose();
+  secondSource.dispose();
+}
+
+function assertAsyncTextureCompletionRequestsMaterialRender(): void {
+  const material = new MeshPhysicalMaterial();
+  const texture = new Texture();
+  const materialVersion = material.version;
+  const textureVersion = texture.version;
+  let renderRequests = 0;
+  refreshMaterialPreviewRender(
+    material,
+    { baseColorMap: texture },
+    () => {
+      renderRequests += 1;
+    },
+  );
+  assert(
+    material.version > materialVersion &&
+      texture.version > textureVersion &&
+      renderRequests === 1,
+    "Async Texture completion did not invalidate its Material and Scene View",
+  );
+  material.dispose();
   texture.dispose();
 }
 
@@ -256,6 +332,17 @@ function tupleNear(
 
 function near(left: number, right: number): boolean {
   return Math.abs(left - right) < 1e-6;
+}
+
+function colorNear(
+  color: { r: number; g: number; b: number },
+  factor: readonly number[],
+): boolean {
+  return (
+    near(color.r, factor[0]) &&
+    near(color.g, factor[1]) &&
+    near(color.b, factor[2])
+  );
 }
 
 function assert(condition: unknown, message: string): asserts condition {

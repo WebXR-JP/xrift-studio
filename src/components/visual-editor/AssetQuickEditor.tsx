@@ -1,6 +1,12 @@
-import { useEffect, useState, type DragEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent,
+} from "react";
 import { Canvas } from "@react-three/fiber";
-import { Color, DoubleSide } from "three";
+import { Color, DoubleSide, type Material } from "three";
 import { tauri } from "../../lib/tauri";
 import {
   TEXTURE_COLOR_SPACES,
@@ -36,7 +42,10 @@ import {
   readEditorDragData,
 } from "./editor-drag-data";
 import { TEXTURE_DRAG_MIME } from "./types";
-import { useMaterialPreviewTextures } from "./material-texture-preview";
+import {
+  useMaterialPreviewRenderSync,
+  useMaterialPreviewTextures,
+} from "./material-texture-preview";
 
 const INPUT_CLASS =
   "h-7 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400";
@@ -100,6 +109,11 @@ function MaterialPreviewScene({
     assets ?? EMPTY_ASSET_MANIFEST,
     projectPath,
   );
+  const previewMaterialRef = useRef<Material | null>(null);
+  const capturePreviewMaterial = useCallback((material: Material | null) => {
+    previewMaterialRef.current = material;
+  }, []);
+  useMaterialPreviewRenderSync(previewMaterialRef, textures);
   const extensions = asset.properties.extensions;
   const anisotropy = extensions.KHR_materials_anisotropy;
   const clearcoat = extensions.KHR_materials_clearcoat;
@@ -139,6 +153,7 @@ function MaterialPreviewScene({
         <sphereGeometry args={[0.78, 32, 24]} />
         {unlit ? (
           <meshBasicMaterial
+            ref={capturePreviewMaterial}
             color={color}
             opacity={opacity}
             transparent={transparent}
@@ -149,6 +164,7 @@ function MaterialPreviewScene({
           />
         ) : usesPhysicalMaterial ? (
           <meshPhysicalMaterial
+            ref={capturePreviewMaterial}
             color={color}
             metalness={pbr?.metallicFactor ?? asset.properties.metalness ?? 0}
             roughness={pbr?.roughnessFactor ?? asset.properties.roughness ?? 1}
@@ -216,6 +232,7 @@ function MaterialPreviewScene({
           />
         ) : (
           <meshStandardMaterial
+            ref={capturePreviewMaterial}
             color={color}
             metalness={pbr?.metallicFactor ?? asset.properties.metalness ?? 0}
             roughness={pbr?.roughnessFactor ?? asset.properties.roughness ?? 1}

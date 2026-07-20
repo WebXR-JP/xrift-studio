@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type RefObject,
+} from "react";
+import { useThree } from "@react-three/fiber";
 import {
   ClampToEdgeWrapping,
   LinearFilter,
@@ -12,6 +19,7 @@ import {
   RepeatWrapping,
   SRGBColorSpace,
   TextureLoader,
+  type Material,
   type MeshStandardMaterial,
   type Texture,
 } from "three";
@@ -145,6 +153,34 @@ export function useMaterialPreviewTextures(
 
 /** Compatibility name retained for existing Scene View consumers. */
 export const useCoreMaterialPreviewTextures = useMaterialPreviewTextures;
+
+/**
+ * Three does not rebuild a Material's shader automatically when a map changes
+ * between `undefined` and a loaded Texture. Keep both continuous Scene Views
+ * and demand-rendered thumbnails in sync with asynchronous Texture loads.
+ */
+export function refreshMaterialPreviewRender(
+  target: Material | readonly Material[] | null | undefined,
+  textures: MaterialPreviewTextures,
+  requestRender: () => void,
+): void {
+  for (const texture of Object.values(textures)) {
+    if (texture) texture.needsUpdate = true;
+  }
+  const materials = Array.isArray(target) ? target : target ? [target] : [];
+  for (const material of materials) material.needsUpdate = true;
+  requestRender();
+}
+
+export function useMaterialPreviewRenderSync(
+  materialRef: RefObject<Material | null>,
+  textures: MaterialPreviewTextures,
+): void {
+  const invalidate = useThree((state) => state.invalidate);
+  useLayoutEffect(() => {
+    refreshMaterialPreviewRender(materialRef.current, textures, invalidate);
+  }, [invalidate, materialRef, textures]);
+}
 
 /** Applies only textures owned by the assigned Material preview. */
 export function applyCoreMaterialPreviewTextures(

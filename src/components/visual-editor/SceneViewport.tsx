@@ -30,6 +30,7 @@ import {
   Vector3,
   type Group,
   type DirectionalLight,
+  type MeshStandardMaterial,
   type Object3D,
   type ShaderMaterial,
   type Texture,
@@ -46,6 +47,7 @@ import {
   normalizeProjectRelativePath,
   resolveSceneSettings,
   type AssetManifest,
+  type MaterialAsset,
   type MeshComponent,
   type ModelAsset,
   type PrefabDocument,
@@ -65,6 +67,7 @@ import { ProjectModelVisual } from "./ProjectModelVisual";
 import {
   readProjectTextureDataUrl,
   useCoreMaterialPreviewTextures,
+  useMaterialPreviewRenderSync,
 } from "./material-texture-preview";
 import { clearEditorDragData } from "./editor-drag-data";
 import {
@@ -218,19 +221,36 @@ function MeshVisual({
       : component.geometry?.kind === "builtin-primitive"
         ? component.geometry.primitive
         : builtinDefinition?.primitive;
-  const materialAssetId = getPrimaryMaterialAssetId(component);
-  const material = materialAssetId
-    ? getMaterialAsset(assets, materialAssetId)
-    : undefined;
-  const materialTextures = useCoreMaterialPreviewTextures(
-    material,
-    assets,
-    projectPath,
-  );
   const projectModelSource =
     geometry?.kind === "model"
       ? resolveProjectModelSource(geometry, projectPath)
       : undefined;
+  const assignedModelMaterials = useMemo(
+    () =>
+      geometry?.kind === "model"
+        ? geometry.materialSlots.flatMap((slot) => {
+            if (slot.sourceMaterialIndex === undefined) return [];
+            const binding = component.materialBindings.find(
+              (candidate) => candidate.slot === slot.slot,
+            );
+            const materialAssetId =
+              binding?.materialAssetId ?? slot.defaultMaterialAssetId;
+            const material = materialAssetId
+              ? getMaterialAsset(assets, materialAssetId)
+              : undefined;
+            return material
+              ? [
+                  {
+                    slot: slot.slot,
+                    sourceMaterialIndex: slot.sourceMaterialIndex,
+                    material,
+                  },
+                ]
+              : [];
+          })
+        : [],
+    [assets, component.materialBindings, geometry],
+  );
 
   if (!component.enabled) return null;
 
@@ -244,65 +264,27 @@ function MeshVisual({
         castShadow={component.castShadow}
         receiveShadow={component.receiveShadow}
         selected={selected || materialDropHighlighted}
-        assignedMaterial={material}
-        assignedTextures={materialTextures}
+        assets={assets}
+        assignedMaterials={assignedModelMaterials}
       />
     );
   }
 
   if (primitive) {
-    const pbr = material?.properties.pbrMetallicRoughness;
-    const alphaMode = material?.properties.alphaMode ?? "OPAQUE";
-    const opacity =
-      alphaMode === "OPAQUE"
-        ? 1
-        : (pbr?.baseColorFactor[3] ?? material?.properties.opacity ?? 1);
-    const normalScale = material?.properties.normalTexture?.scale ?? 1;
+    const materialAssetId = getPrimaryMaterialAssetId(component);
+    const material = materialAssetId
+      ? getMaterialAsset(assets, materialAssetId)
+      : undefined;
     return (
-      <mesh
-        castShadow={component.castShadow}
-        receiveShadow={component.receiveShadow}
-      >
-        <PrimitiveGeometryView primitive={primitive} />
-        <meshStandardMaterial
-          color={material?.properties.color ?? "#f43f5e"}
-          metalness={pbr?.metallicFactor ?? material?.properties.metalness ?? 0}
-          roughness={pbr?.roughnessFactor ?? material?.properties.roughness ?? 1}
-          emissive={colorFactorToHex(material?.properties.emissiveFactor)}
-          emissiveIntensity={
-            material?.properties.extensions.KHR_materials_emissive_strength
-              ?.emissiveStrength ?? 1
-          }
-          opacity={opacity}
-          transparent={alphaMode === "BLEND"}
-          depthWrite={alphaMode !== "BLEND"}
-          alphaTest={
-            alphaMode === "MASK"
-              ? (material?.properties.alphaCutoff ?? 0.5)
-              : 0
-          }
-          map={materialTextures.baseColorMap}
-          metalnessMap={materialTextures.metallicRoughnessMap}
-          roughnessMap={materialTextures.metallicRoughnessMap}
-          normalMap={materialTextures.normalMap}
-          normalScale={[normalScale, normalScale]}
-          aoMap={materialTextures.occlusionMap}
-          aoMapIntensity={material?.properties.occlusionTexture?.strength ?? 1}
-          emissiveMap={materialTextures.emissiveMap}
-          side={
-            primitive === "plane" || material?.properties.doubleSided
-              ? DoubleSide
-              : undefined
-          }
-        />
-        {selected || materialDropHighlighted ? (
-          <Edges
-            color={materialDropHighlighted ? "#38bdf8" : EDITOR_SELECTION_COLOR}
-            scale={1.015}
-            threshold={12}
-          />
-        ) : null}
-      </mesh>
+      <PrimitiveMeshVisual
+        component={component}
+        primitive={primitive}
+        material={material}
+        assets={assets}
+        projectPath={projectPath}
+        selected={selected}
+        materialDropHighlighted={materialDropHighlighted}
+      />
     );
   }
 
@@ -317,6 +299,87 @@ function MeshVisual({
         <Edges
           color={materialDropHighlighted ? "#38bdf8" : EDITOR_SELECTION_COLOR}
           scale={1.02}
+        />
+      ) : null}
+    </mesh>
+  );
+}
+
+function PrimitiveMeshVisual({
+  component,
+  primitive,
+  material,
+  assets,
+  projectPath,
+  selected,
+  materialDropHighlighted,
+}: {
+  component: MeshComponent;
+  primitive: PrimitiveGeometry;
+  material?: MaterialAsset;
+  assets: AssetManifest;
+  projectPath?: string;
+  selected: boolean;
+  materialDropHighlighted: boolean;
+}) {
+  const materialTextures = useCoreMaterialPreviewTextures(
+    material,
+    assets,
+    projectPath,
+  );
+  const materialRef = useRef<MeshStandardMaterial | null>(null);
+  useMaterialPreviewRenderSync(materialRef, materialTextures);
+  const pbr = material?.properties.pbrMetallicRoughness;
+  const alphaMode = material?.properties.alphaMode ?? "OPAQUE";
+  const opacity =
+    alphaMode === "OPAQUE"
+      ? 1
+      : (pbr?.baseColorFactor[3] ?? material?.properties.opacity ?? 1);
+  const normalScale = material?.properties.normalTexture?.scale ?? 1;
+
+  return (
+    <mesh
+      castShadow={component.castShadow}
+      receiveShadow={component.receiveShadow}
+    >
+      <PrimitiveGeometryView primitive={primitive} />
+      <meshStandardMaterial
+        ref={materialRef}
+        color={material?.properties.color ?? "#f43f5e"}
+        metalness={pbr?.metallicFactor ?? material?.properties.metalness ?? 0}
+        roughness={pbr?.roughnessFactor ?? material?.properties.roughness ?? 1}
+        emissive={colorFactorToHex(material?.properties.emissiveFactor)}
+        emissiveIntensity={
+          material?.properties.extensions.KHR_materials_emissive_strength
+            ?.emissiveStrength ?? 1
+        }
+        opacity={opacity}
+        transparent={alphaMode === "BLEND"}
+        depthWrite={alphaMode !== "BLEND"}
+        alphaTest={
+          alphaMode === "MASK"
+            ? (material?.properties.alphaCutoff ?? 0.5)
+            : 0
+        }
+        map={materialTextures.baseColorMap}
+        metalnessMap={materialTextures.metallicRoughnessMap}
+        roughnessMap={materialTextures.metallicRoughnessMap}
+        normalMap={materialTextures.normalMap}
+        normalScale={[normalScale, normalScale]}
+        aoMap={materialTextures.occlusionMap}
+        aoMapIntensity={material?.properties.occlusionTexture?.strength ?? 1}
+        emissiveMap={materialTextures.emissiveMap}
+        side={
+          primitive === "plane" || material?.properties.doubleSided
+            ? DoubleSide
+            : undefined
+        }
+      />
+      {selected || materialDropHighlighted ? (
+        <Edges
+          color={materialDropHighlighted ? "#38bdf8" : EDITOR_SELECTION_COLOR}
+          scale={1.015}
+          threshold={12}
         />
       ) : null}
     </mesh>
