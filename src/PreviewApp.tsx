@@ -312,17 +312,11 @@ export default function PreviewApp() {
           </span>
         </a>
         <div className="flex items-center gap-2">
-          <a href="#capabilities" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
-            できること
-          </a>
           <a href="#workspace-preview" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
             コードで作る
           </a>
           <a href="#visual-editor" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
             ビジュアルで作る
-          </a>
-          <a href="#how-to-use" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
-            制作の流れ
           </a>
           <a href="#action" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
             ダウンロード
@@ -355,40 +349,12 @@ export default function PreviewApp() {
           <p className="mt-6 max-w-2xl text-base leading-8 text-zinc-600 sm:text-lg">
             ワールドとアイテムの制作を、準備・編集・プレビュー・公開まで支えるXRift Studio。コードでも、ビジュアルでも作れます。
           </p>
-          <div className="mt-7 grid max-w-2xl gap-3 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => selectSample("world", true)}
-              className={`rounded-2xl border bg-white/75 p-4 text-left shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md ${
-                sampleKind === "world" ? "border-violet-300 ring-2 ring-violet-100" : "border-violet-200"
-              }`}
-              aria-label="ワールドの画面サンプルを開く"
-            >
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 text-violet-700"><Globe2 size={18} /></span>
-              <div className="mt-3 text-sm font-semibold text-zinc-950">ワールドを作る</div>
-              <p className="mt-1 text-xs leading-5 text-zinc-600">人が集まり、歩き回れるXR空間の制作を始められます。</p>
-              <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-violet-700">ワールドの画面を見る <ArrowRight size={12} /></span>
-            </button>
-            <button
-              type="button"
-              onClick={() => selectSample("item", true)}
-              className={`rounded-2xl border bg-white/75 p-4 text-left shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md ${
-                sampleKind === "item" ? "border-cyan-300 ring-2 ring-cyan-100" : "border-cyan-200"
-              }`}
-              aria-label="アイテムの画面サンプルを開く"
-            >
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-100 text-cyan-700"><Box size={18} /></span>
-              <div className="mt-3 text-sm font-semibold text-zinc-950">アイテムを作る</div>
-              <p className="mt-1 text-xs leading-5 text-zinc-600">ワールドへ置いて使える3Dコンポーネントを作れます。</p>
-              <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-700">アイテムの画面を見る <ArrowRight size={12} /></span>
-            </button>
-          </div>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <a
               href="https://github.com/WebXR-JP/xrift-studio/releases/latest"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white/70 px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:-translate-y-0.5 hover:border-zinc-300 hover:text-zinc-950"
+              className="inline-flex items-center gap-2 rounded-full bg-zinc-950 px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-violet-500/20 transition hover:-translate-y-0.5 hover:bg-violet-700"
             >
               <Download size={16} />
               最新リリースをダウンロード
@@ -407,42 +373,11 @@ export default function PreviewApp() {
             <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white/70 px-3 py-1.5 font-medium text-zinc-700"><span aria-hidden="true" className="grid grid-cols-2 gap-px"><i className="h-1.5 w-1.5 bg-sky-500" /><i className="h-1.5 w-1.5 bg-sky-500" /><i className="h-1.5 w-1.5 bg-sky-500" /><i className="h-1.5 w-1.5 bg-sky-500" /></span>Windows</span>
             <span className="rounded-full border border-zinc-200 bg-white/70 px-3 py-1.5 font-medium text-zinc-700">macOS</span>
             <span className="rounded-full border border-zinc-200 bg-white/70 px-3 py-1.5 font-medium text-zinc-700">Linux</span>
-            <a href="https://xrift.net/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 font-medium text-zinc-600 underline decoration-zinc-300 underline-offset-4 hover:text-violet-700">
-              XRift 公式サイト
-              <ExternalLink size={12} />
-            </a>
           </div>
         </div>
       </section>
 
-      <section id="capabilities" className="bg-white/70 px-5 py-20 lg:px-8 lg:py-24">
-        <div className="mx-auto max-w-6xl">
-          <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">XRIFT STUDIO</p>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">始める、作る、届ける。その流れをひとつに。</h2>
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-zinc-600">
-            XRift制作で必要になる準備から公開までを、制作を止めない順番でまとめます。
-          </p>
-          <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <article className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6">
-              <Download size={16} className="text-zinc-700" />
-              <h3 className="mt-3 text-base font-semibold text-zinc-900">環境を整える</h3>
-              <p className="mt-2 text-sm leading-6 text-zinc-600">Node.jsとXRift CLIをアプリ専用の領域に準備。制作環境のセットアップから始められます。</p>
-            </article>
-            <article className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6">
-              <Code2 size={16} className="text-zinc-700" />
-              <h3 className="mt-3 text-base font-semibold text-zinc-900">コードで作る</h3>
-              <p className="mt-2 text-sm leading-6 text-zinc-600">ファイルを編集し、保存して、プレビューを確認。いつものXRift開発をスムーズに進められます。</p>
-            </article>
-            <article className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6">
-              <Upload size={16} className="text-zinc-700" />
-              <h3 className="mt-3 text-base font-semibold text-zinc-900">確かめて公開する</h3>
-              <p className="mt-2 text-sm leading-6 text-zinc-600">ローカルで動かし、公開情報を整えてXRiftへ。完成したら公開ページまで開けます。</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section id="workspace-preview" className="mx-auto max-w-6xl scroll-mt-8 px-5 pb-24 lg:px-8">
+      <section id="workspace-preview" className="mx-auto max-w-6xl scroll-mt-8 px-5 py-20 lg:px-8 lg:py-24">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">コードで作る</p>
@@ -868,31 +803,16 @@ export default function PreviewApp() {
       </section>
 
       <section id="visual-editor" className="bg-white/80 px-5 py-20 lg:px-8 lg:py-24">
-        <div className="mx-auto max-w-6xl">
-          <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">ビジュアルで作る</p>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">シーンを見ながら、素材を置いて整える。</h2>
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-zinc-600">コード制作と同じアプリで、シーンを見ながらワールドやアイテムを組み立てられます。素材を配置し、見た目や設定を調整して、その場で確認できます。</p>
-          <div className="mt-10 grid gap-5 md:grid-cols-3">
-            <article className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6">
-              <PanelsTopLeft size={18} className="text-zinc-700" />
-              <h3 className="mt-3 text-base font-semibold text-zinc-900">シーンを組み立てる</h3>
-              <p className="mt-2 text-sm leading-6 text-zinc-600">画面上でオブジェクトを配置し、位置や大きさを整えられます。</p>
-            </article>
-            <article className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6">
-              <Box size={18} className="text-zinc-700" />
-              <h3 className="mt-3 text-base font-semibold text-zinc-900">素材を管理する</h3>
-              <p className="mt-2 text-sm leading-6 text-zinc-600">モデルやテクスチャを取り込み、素材ごとの設定を確認できます。</p>
-            </article>
-            <article className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6">
-              <Play size={18} className="text-zinc-700" />
-              <h3 className="mt-3 text-base font-semibold text-zinc-900">動かして確かめる</h3>
-              <p className="mt-2 text-sm leading-6 text-zinc-600">編集状態を保ったままPlayへ切り替え、見え方を確かめられます。</p>
-            </article>
+        <div className="mx-auto flex max-w-6xl flex-col gap-8 rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-7 sm:p-10 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">ビジュアルで作る</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">シーンを見ながら、素材を置いて整える。</h2>
+            <p className="mt-4 text-sm leading-7 text-zinc-600">コード制作と同じアプリで、素材を配置し、見た目や設定を調整して、その場で確認できます。</p>
           </div>
           <button
             type="button"
             onClick={() => setVisualEditorKind(sampleKind)}
-            className="mt-8 inline-flex items-center gap-2 rounded-full bg-zinc-950 px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-violet-500/20 transition hover:-translate-y-0.5 hover:bg-violet-700"
+            className="inline-flex shrink-0 items-center gap-2 self-start rounded-full bg-zinc-950 px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-violet-500/20 transition hover:-translate-y-0.5 hover:bg-violet-700 lg:self-auto"
           >
             <PanelsTopLeft size={16} />
             ビジュアルエディターを試す
