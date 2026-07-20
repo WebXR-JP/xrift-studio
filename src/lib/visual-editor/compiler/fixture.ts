@@ -61,6 +61,25 @@ export function runVisualCompilerFixtureAssertions(
   const second = compileVisualProject(world, { generatedAt: fixedTime });
   assert(JSON.stringify(first) === JSON.stringify(second), "Compiler output is not deterministic");
   assert(first.canStage, "Default world fixture should be stageable");
+  assert(
+    JSON.stringify(first.stagingPlan.requiredPublicationFiles) ===
+      JSON.stringify([
+        {
+          purpose: "thumbnail",
+          sourceRelativePath: "public/thumbnail.png",
+          targetRelativePath: "public/thumbnail.png",
+        },
+      ]),
+    "The required publication thumbnail must be staged separately from Assets",
+  );
+  assert(
+    !first.stagingPlan.assetCopyPlan.some(
+      (entry) =>
+        entry.sourceRelativePath === "public/thumbnail.png" ||
+        entry.targetRelativePath === "public/thumbnail.png",
+    ),
+    "The publication thumbnail must not be added to the Asset copy plan",
+  );
   const publicationOnlyWorld: VisualCompilerDocuments = {
     ...world,
     project: {

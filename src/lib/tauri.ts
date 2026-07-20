@@ -84,6 +84,20 @@ export type CompilerAssetCopy = {
   targetRelativePath: string;
 };
 
+export type CompilerRequiredPublicationFileCopy = CompilerAssetCopy & {
+  purpose: "thumbnail";
+};
+
+export type CompilerRequiredPublicationFileVerification =
+  CompilerRequiredPublicationFileCopy & {
+    sha256: string;
+  };
+
+export type CompilerStagingResult = {
+  projectPath: string;
+  requiredPublicationFiles: CompilerRequiredPublicationFileVerification[];
+};
+
 export type CompilerPublicationMetadata = {
   id: string;
   createdAt: string;
@@ -133,12 +147,14 @@ export const tauri = {
     directoryName: string,
     overlayFiles: CompilerOverlayWrite[],
     assetCopies: CompilerAssetCopy[],
+    requiredPublicationFiles: CompilerRequiredPublicationFileCopy[],
   ) =>
-    invoke<string>("apply_compiler_staging", {
+    invoke<CompilerStagingResult>("apply_compiler_staging", {
       authoringProjectPath,
       directoryName,
       overlayFiles,
       assetCopies,
+      requiredPublicationFiles,
     }),
   persistCompilerPublicationMetadata: (
     authoringProjectPath: string,

@@ -100,6 +100,8 @@ export type ModelAnimationMetadata = {
 /** Derived import facts. These are safe to rebuild from the source GLB/glTF. */
 export type ModelImportMetadata = {
   sourceFormat: "glb" | "gltf";
+  /** Original leaf name used to match a same-folder import as an update. */
+  sourceFileName?: string;
   byteLength: number;
   nodeCount: number;
   meshCount: number;
@@ -297,6 +299,18 @@ export type MaterialProperties = {
 
 export type MaterialAsset = AssetBase<"material"> & {
   properties: MaterialProperties;
+  /** Present only for a Material expanded from an imported glTF/GLB. */
+  importedFromModel?: ImportedMaterialProvenance;
+};
+
+export type ImportedMaterialProvenance = {
+  modelAssetId: string;
+  sourceMaterialIndex: number;
+  sourceMaterialName: string;
+  sourceSlotId: string;
+  sourceHash: string;
+  /** Inspector edits protect the Material from later automatic reimport updates. */
+  isUserOverridden: boolean;
 };
 
 export const TEXTURE_COLOR_SPACES = ["auto", "srgb", "linear"] as const;
@@ -363,6 +377,17 @@ export type TextureImportMetadata = {
 export type TextureAsset = AssetBase<"texture"> & {
   importSettings: TextureImportSettings;
   importMetadata?: TextureImportMetadata;
+  /** Present only for an image expanded from an imported glTF/GLB. */
+  importedFromModel?: ImportedTextureProvenance;
+};
+
+export type ImportedTextureProvenance = {
+  modelAssetId: string;
+  sourceImageIndex: number;
+  sourceTextureIndex: number;
+  sourceHash: string;
+  /** Inspector recipe edits are retained when the embedded image is refreshed. */
+  isUserOverridden: boolean;
 };
 
 export type ParticleScalarRange = {
@@ -930,7 +955,18 @@ export function updateMaterialAsset(
     ...manifest,
     assets: {
       ...manifest.assets,
-      [assetId]: { ...asset, properties },
+      [assetId]: {
+        ...asset,
+        properties,
+        ...(asset.importedFromModel
+          ? {
+              importedFromModel: {
+                ...asset.importedFromModel,
+                isUserOverridden: true,
+              },
+            }
+          : {}),
+      },
     },
   };
 }
@@ -2015,7 +2051,19 @@ export function updateTextureAsset(
     ...manifest,
     assets: {
       ...manifest.assets,
-      [assetId]: { ...asset, source, importSettings },
+      [assetId]: {
+        ...asset,
+        source,
+        importSettings,
+        ...(asset.importedFromModel
+          ? {
+              importedFromModel: {
+                ...asset.importedFromModel,
+                isUserOverridden: true,
+              },
+            }
+          : {}),
+      },
     },
   };
 }

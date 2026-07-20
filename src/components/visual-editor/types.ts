@@ -31,6 +31,7 @@ export type PendingImportStatus =
   | "processing"
   | "committing"
   | "succeeded"
+  | "updated"
   | "duplicate"
   | "failed";
 

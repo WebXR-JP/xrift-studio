@@ -19,10 +19,13 @@ import {
   normalizeModelImportSettings,
   normalizeProjectRelativePath,
   normalizeTextureImportSettings,
+  type AssetFolder,
   type AssetManifest,
+  type MaterialAsset,
   type ModelAsset,
   type ModelBoundsMetadata,
   type ModelImportMetadata,
+  type SceneAsset,
   type TextureAsset,
   type TextureImportSettingsPatch,
 } from "./asset-manifest";
@@ -31,6 +34,10 @@ import {
   validateModelAssetContract,
   type DiscoveredModelMaterialSlot,
 } from "./model-import-contract";
+import {
+  expandGltfAssets,
+  type GltfJson,
+} from "./gltf-derived-assets";
 
 export const ASSET_IMPORT_THUMBNAIL_RENDERER_VERSION = "three-white-v1";
 export const ASSET_IMPORT_MAX_BYTES = 128 * 1024 * 1024;
@@ -85,7 +92,12 @@ export type AssetImportPlan = {
   /** Existing Asset replaced by a reimport. Omitted for a new import. */
   replacesAssetId?: string;
   classification?: ClassifiedAssetImport;
+  /** Primary Model or standalone Texture selected after the transaction. */
   asset?: ModelAsset | TextureAsset;
+  /** Material/Texture Assets expanded from an imported Model. */
+  derivedAssets?: Array<MaterialAsset | TextureAsset>;
+  /** Logical Asset folders created with the Model import. */
+  folders?: AssetFolder[];
   writes: AssetImportWrite[];
   diagnostics: AssetImportDiagnostic[];
   canCommit: boolean;
@@ -98,6 +110,8 @@ export type CreateAssetImportPlanInput = {
   displayName?: string;
   folderId?: string | null;
   textureImportSettings?: TextureImportSettingsPatch;
+  /** Enables same-folder update matching and derived Asset reuse. */
+  existingManifest?: AssetManifest;
 };
 
 export type CreateModelReimportPlanInput = Omit<
@@ -114,18 +128,6 @@ export type AtomicAssetImportCommitRequest = {
 export type AtomicAssetImportCommit = (
   request: AtomicAssetImportCommitRequest,
 ) => Promise<void>;
-
-type GltfJson = {
-  asset?: { version?: unknown };
-  materials?: Array<{ name?: unknown }>;
-  meshes?: Array<{ primitives?: Array<{ material?: unknown }> }>;
-  nodes?: unknown[];
-  animations?: Array<{ name?: unknown }>;
-  buffers?: Array<{ uri?: unknown }>;
-  images?: Array<{ uri?: unknown }>;
-  extensionsUsed?: unknown;
-  extensionsRequired?: unknown;
-};
 
 type ThumbnailResult = {
   dataUrl: string;
@@ -219,11 +221,13 @@ export async function createAssetImportPlan(
 export async function createModelReimportPlan(
   existingAsset: ModelAsset,
   input: CreateModelReimportPlanInput,
+  manifest?: AssetManifest,
 ): Promise<AssetImportPlan> {
   return createAssetImportPlanInternal(
     {
       ...input,
       folderId: existingAsset.folderId ?? null,
+      existingManifest: manifest ?? input.existingManifest,
     },
     existingAsset,
   );
@@ -314,6 +318,15 @@ async function createAssetImportPlanInternal(
     );
   }
 
+  const matchedModel =
+    classification.kind === "model" && !reimportAsset
+      ? findMatchingModelImport(
+          input.existingManifest,
+          fileName,
+          normalizeFolderId(input.folderId),
+        )
+      : undefined;
+
   return classification.kind === "model"
     ? createModelImportPlan(
         input,
@@ -322,7 +335,7 @@ async function createAssetImportPlanInternal(
         sourceHash,
         transactionId,
         classification,
-        reimportAsset,
+        reimportAsset ?? matchedModel,
       )
     : createTextureImportPlan(
         input,
@@ -354,20 +367,35 @@ export async function commitAssetImportPlan(
         existing.sourceHash === plan.sourceHash &&
         existing.kind === plan.asset.kind
       ) {
-        return manifest;
+        // Keep validating and applying derived Assets. This also migrates a
+        // pre-expansion Model whose content-addressed source is already durable.
+      } else {
+        throw new Error(`Asset ID collision: ${plan.asset.id}`);
       }
-      throw new Error(`Asset ID collision: ${plan.asset.id}`);
-    }
-    if (existing.kind !== "model" || plan.asset.kind !== "model") {
+    } else if (existing.kind !== "model" || plan.asset.kind !== "model") {
       throw new Error("Only a Model Asset can be replaced by Model reimport");
     }
   } else if (plan.replacesAssetId) {
     throw new Error(`Reimport target is missing: ${plan.replacesAssetId}`);
   }
-  const folderId = plan.asset.folderId ?? null;
-  if (folderId !== null && !manifest.folders?.[folderId]) {
-    throw new Error(`Asset folder does not exist: ${folderId}`);
+
+  const folders: Record<string, AssetFolder> = { ...(manifest.folders ?? {}) };
+  for (const folder of plan.folders ?? []) {
+    const current = folders[folder.id];
+    if (
+      current &&
+      (current.name !== folder.name || current.parentId !== folder.parentId)
+    ) {
+      throw new Error(`Asset folder ID collision: ${folder.id}`);
+    }
+    folders[folder.id] = current ?? { ...folder };
   }
+  for (const folder of Object.values(folders)) {
+    if (folder.parentId !== null && !folders[folder.parentId]) {
+      throw new Error(`Asset folder parent does not exist: ${folder.parentId}`);
+    }
+  }
+
   if (
     plan.writes.some(
       (write) => !isSafeAssetImportDestination(write.relativePath),
@@ -376,13 +404,32 @@ export async function commitAssetImportPlan(
     throw new Error("Asset import plan contains an unsafe destination");
   }
 
+  const plannedAssets: SceneAsset[] = [
+    plan.asset,
+    ...(plan.derivedAssets ?? []),
+  ];
+  const candidateAssets: Record<string, SceneAsset> = { ...manifest.assets };
+  for (const plannedAsset of plannedAssets) {
+    const current = candidateAssets[plannedAsset.id];
+    if (current && current.kind !== plannedAsset.kind) {
+      throw new Error(`Derived Asset ID collision: ${plannedAsset.id}`);
+    }
+    const folderId = plannedAsset.folderId ?? null;
+    if (folderId !== null && !folders[folderId]) {
+      throw new Error(`Asset folder does not exist: ${folderId}`);
+    }
+    const order =
+      current?.order ??
+      nextImportedAssetOrder(
+        { ...manifest, folders, assets: candidateAssets },
+        folderId,
+      );
+    candidateAssets[plannedAsset.id] = { ...plannedAsset, order };
+  }
+
   if (plan.asset.kind === "model") {
-    const candidateAssets = {
-      ...manifest.assets,
-      [plan.asset.id]: plan.asset,
-    };
     const contractIssues = validateModelAssetContract(
-      plan.asset,
+      candidateAssets[plan.asset.id],
       candidateAssets,
       `$.assets.${plan.asset.id}`,
     );
@@ -397,31 +444,31 @@ export async function commitAssetImportPlan(
     ) {
       throw new Error("Model import source identity does not match its plan");
     }
-    const sourceWrite = plan.writes.find((write) => write.purpose === "source");
+    const verifiedSourceWrite = plan.writes.find(
+      (write) =>
+        write.purpose === "source" &&
+        plan.asset?.source.kind === "project" &&
+        write.relativePath === plan.asset.source.relativePath,
+    );
     const sourceIsAlreadyDurable =
       isReplacement && existing?.sourceHash === plan.sourceHash;
     if (
       !sourceIsAlreadyDurable &&
-      (!sourceWrite ||
-        sourceWrite.relativePath !== plan.asset.source.relativePath ||
-        sourceWrite.sha256 !== plan.sourceHash)
+      (!verifiedSourceWrite || verifiedSourceWrite.sha256 !== plan.sourceHash)
     ) {
       throw new Error("Model import plan does not contain its verified source");
     }
   }
 
-  if (
-    isReplacement &&
-    existing?.sourceHash === plan.sourceHash &&
-    existing.kind === plan.asset.kind
-  ) {
-    return replaceImportedAsset(manifest, plan.asset, existing.order);
+  if (plan.writes.length > 0) {
+    await commit({ transactionId: plan.transactionId, writes: plan.writes });
   }
 
-  await commit({ transactionId: plan.transactionId, writes: plan.writes });
-
-  const order = existing?.order ?? nextImportedAssetOrder(manifest, folderId);
-  return replaceImportedAsset(manifest, plan.asset, order);
+  return {
+    ...manifest,
+    folders,
+    assets: candidateAssets,
+  };
 }
 
 function nextImportedAssetOrder(
@@ -436,20 +483,6 @@ function nextImportedAssetOrder(
         .map((asset) => asset.order ?? -1),
     ) + 1
   );
-}
-
-function replaceImportedAsset(
-  manifest: AssetManifest,
-  asset: ModelAsset | TextureAsset,
-  order: number | undefined,
-): AssetManifest {
-  return {
-    ...manifest,
-    assets: {
-      ...manifest.assets,
-      [asset.id]: { ...asset, ...(order === undefined ? {} : { order }) },
-    },
-  };
 }
 
 export function isSafeAssetImportDestination(value: string): boolean {
@@ -565,6 +598,17 @@ async function createModelImportPlan(
 
   const assetId =
     reimportAsset?.id ?? createImportedAssetId("model", fileName, sourceHash);
+  const modelName =
+    input.displayName !== undefined
+      ? normalizedDisplayName(input.displayName, fileName)
+      : reimportAsset?.name ?? normalizedDisplayName(undefined, fileName);
+  const folderPlan = createModelFolderPlan(
+    input.existingManifest,
+    assetId,
+    modelName,
+    normalizeFolderId(input.folderId),
+    reimportAsset,
+  );
   const sourceUnchanged = reimportAsset?.sourceHash === sourceHash;
   const sourceRelativePath =
     sourceUnchanged && reimportAsset.source.kind === "project"
@@ -602,6 +646,7 @@ async function createModelImportPlan(
     gltf,
     parsedJson.json,
     classification.format,
+    fileName,
     bytes.byteLength,
   );
   let thumbnail: ModelAsset["thumbnail"] = sourceUnchanged
@@ -647,18 +692,48 @@ async function createModelImportPlan(
     }
   }
 
+  const expanded = await expandGltfAssets({
+    json: parsedJson.json,
+    modelBytes: bytes,
+    sourceFormat: classification.format,
+    modelAssetId: assetId,
+    modelSourceHash: sourceHash,
+    materialSlots,
+    manifest: input.existingManifest,
+    materialFolderId: folderPlan.materialFolderId,
+    textureFolderId: folderPlan.textureFolderId,
+    hashBytes: sha256AssetBytes,
+  });
+  materialSlots = expanded.materialSlots;
+  writes.push(
+    ...expanded.writes.map((write) => ({
+      relativePath: write.relativePath,
+      purpose: "source" as const,
+      mediaType: write.mediaType,
+      sha256: write.sha256,
+      payload: { encoding: "bytes" as const, bytes: write.bytes },
+    })),
+  );
+  diagnostics.push(
+    ...expanded.warnings.map((warning) => ({
+      severity: "warning" as const,
+      code: warning.code,
+      message: warning.message,
+      fileName,
+      assetId,
+      fieldPath: warning.fieldPath,
+    })),
+  );
+
   const asset: ModelAsset = {
     id: assetId,
-    name:
-      input.displayName !== undefined
-        ? normalizedDisplayName(input.displayName, fileName)
-        : reimportAsset?.name ?? normalizedDisplayName(undefined, fileName),
+    name: modelName,
     kind: "model",
     status: "ready",
     source: { kind: "project", relativePath: sourceRelativePath },
     sourceHash,
     thumbnail,
-    folderId: reimportAsset?.folderId ?? normalizeFolderId(input.folderId),
+    folderId: folderPlan.modelFolderId,
     ...(reimportAsset?.order === undefined ? {} : { order: reimportAsset.order }),
     importSettings: reimportAsset
       ? normalizeModelImportSettings({}, reimportAsset.importSettings)
@@ -684,6 +759,8 @@ async function createModelImportPlan(
     writes,
     diagnostics,
     reimportAsset?.id,
+    [...expanded.materialAssets, ...expanded.textureAssets],
+    folderPlan.folders,
   );
 }
 
@@ -1084,6 +1161,7 @@ function extractModelMetadata(
   gltf: GLTF,
   json: GltfJson,
   sourceFormat: "glb" | "gltf",
+  sourceFileName: string,
   byteLength: number,
 ): ModelImportMetadata {
   gltf.scene.updateWorldMatrix(true, true);
@@ -1096,6 +1174,7 @@ function extractModelMetadata(
     ) ?? 0;
   return {
     sourceFormat,
+    sourceFileName,
     byteLength,
     nodeCount,
     meshCount,
@@ -1313,6 +1392,134 @@ function asciiAt(bytes: Uint8Array, offset: number, expected: string): boolean {
   );
 }
 
+type ModelFolderPlan = {
+  modelFolderId: string | null;
+  materialFolderId: string;
+  textureFolderId: string;
+  folders: AssetFolder[];
+};
+
+function findMatchingModelImport(
+  manifest: AssetManifest | undefined,
+  fileName: string,
+  requestedParentId: string | null,
+): ModelAsset | undefined {
+  if (!manifest) return undefined;
+  const sourceKey = fileName.trim().toLocaleLowerCase();
+  return Object.values(manifest.assets)
+    .filter((asset): asset is ModelAsset => asset.kind === "model")
+    .filter((asset) => {
+      const sourceFileName =
+        asset.importMetadata?.sourceFileName ??
+        (asset.source.kind === "project"
+          ? leafFileName(asset.source.relativePath)
+          : "");
+      if (sourceFileName.toLocaleLowerCase() !== sourceKey) return false;
+      const currentFolder = asset.folderId
+        ? manifest.folders?.[asset.folderId]
+        : undefined;
+      const logicalParent =
+        currentFolder &&
+        currentFolder.name.toLocaleLowerCase() === asset.name.toLocaleLowerCase()
+          ? currentFolder.parentId
+          : asset.folderId ?? null;
+      return (
+        logicalParent === requestedParentId ||
+        (asset.folderId ?? null) === requestedParentId
+      );
+    })
+    .sort(
+      (left, right) =>
+        (left.order ?? Number.MAX_SAFE_INTEGER) -
+          (right.order ?? Number.MAX_SAFE_INTEGER) ||
+        left.id.localeCompare(right.id),
+    )[0];
+}
+
+function createModelFolderPlan(
+  manifest: AssetManifest | undefined,
+  modelAssetId: string,
+  modelName: string,
+  requestedParentId: string | null,
+  existingModel?: ModelAsset,
+): ModelFolderPlan {
+  const knownFolders: Record<string, AssetFolder> = {
+    ...(manifest?.folders ?? {}),
+  };
+  const created: AssetFolder[] = [];
+  let modelFolderId = existingModel?.folderId ?? null;
+
+  if (!existingModel) {
+    const modelFolder = ensureImportFolder(
+      knownFolders,
+      created,
+      `folder-${safeSegment(modelAssetId)}`,
+      modelName,
+      requestedParentId,
+    );
+    modelFolderId = modelFolder.id;
+  }
+
+  const childParentId = modelFolderId;
+  const materialFolder = ensureImportFolder(
+    knownFolders,
+    created,
+    `folder-${safeSegment(modelAssetId)}-materials`,
+    childParentId ? "Materials" : `${modelName} Materials`,
+    childParentId,
+  );
+  const textureFolder = ensureImportFolder(
+    knownFolders,
+    created,
+    `folder-${safeSegment(modelAssetId)}-textures`,
+    childParentId ? "Textures" : `${modelName} Textures`,
+    childParentId,
+  );
+  return {
+    modelFolderId,
+    materialFolderId: materialFolder.id,
+    textureFolderId: textureFolder.id,
+    folders: created,
+  };
+}
+
+function ensureImportFolder(
+  knownFolders: Record<string, AssetFolder>,
+  created: AssetFolder[],
+  preferredId: string,
+  name: string,
+  parentId: string | null,
+): AssetFolder {
+  const matching = Object.values(knownFolders).find(
+    (folder) =>
+      folder.parentId === parentId &&
+      folder.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+  );
+  if (matching) return matching;
+
+  let id = preferredId;
+  let suffix = 2;
+  while (knownFolders[id]) {
+    id = `${preferredId}-${suffix}`;
+    suffix += 1;
+  }
+  const folder: AssetFolder = {
+    id,
+    name,
+    parentId,
+    order:
+      Math.max(
+        -1,
+        ...Object.values(knownFolders)
+          .filter((candidate) => candidate.parentId === parentId)
+          .map((candidate) => candidate.order),
+      ) + 1,
+  };
+  knownFolders[id] = folder;
+  created.push(folder);
+  return folder;
+}
+
 function createSourceDestination(
   category: "models" | "textures",
   fileName: string,
@@ -1371,6 +1578,8 @@ function finishPlan(
   writes: AssetImportWrite[],
   diagnostics: AssetImportDiagnostic[],
   replacesAssetId?: string,
+  derivedAssets?: Array<MaterialAsset | TextureAsset>,
+  folders?: AssetFolder[],
 ): AssetImportPlan {
   const canCommit = !diagnostics.some(
     (diagnostic) => diagnostic.severity === "blocking",
@@ -1381,6 +1590,8 @@ function finishPlan(
     ...(replacesAssetId ? { replacesAssetId } : {}),
     classification,
     asset,
+    ...(derivedAssets && derivedAssets.length > 0 ? { derivedAssets } : {}),
+    ...(folders && folders.length > 0 ? { folders } : {}),
     writes,
     diagnostics,
     canCommit,

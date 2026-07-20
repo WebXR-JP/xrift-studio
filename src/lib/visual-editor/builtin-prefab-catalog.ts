@@ -28,15 +28,6 @@ export const BUILTIN_PREFAB_RECIPE_IDS = {
   screenShareDisplay: "xrift-prefab.screen-share-display",
 } as const;
 
-export type BuiltinPrefabIcon =
-  | "spawn"
-  | "mirror"
-  | "portal"
-  | "tagBoard"
-  | "videoScreen"
-  | "liveVideo"
-  | "screenShare";
-
 export type BuiltinPrefabVisual =
   | { kind: "spawn-point"; radius: number }
   | { kind: "mirror"; size: readonly [number, number] }
@@ -48,7 +39,6 @@ export type BuiltinPrefabRecipe = {
   id: string;
   name: string;
   description: string;
-  icon: BuiltinPrefabIcon;
   projectKinds: readonly VisualProjectKind[];
   schemaId: XriftComponentSchemaId;
   componentProperties: JsonObject;
@@ -78,9 +68,8 @@ const ALL_PROJECTS = ["world", "item"] as const;
 export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.spawnPoint,
-    name: "Spawn Point",
+    name: "SpawnPoint",
     description: "プレイヤーがワールドへ入る位置と向きを配置します。",
-    icon: "spawn",
     projectKinds: WORLD_ONLY,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.spawnPoint,
     componentProperties: {
@@ -99,7 +88,6 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     id: BUILTIN_PREFAB_RECIPE_IDS.mirror,
     name: "Mirror",
     description: "XRiftのリアルタイム反射面を配置します。",
-    icon: "mirror",
     projectKinds: ALL_PROJECTS,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.mirror,
     componentProperties: {
@@ -122,7 +110,6 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     id: BUILTIN_PREFAB_RECIPE_IDS.portal,
     name: "Portal",
     description: "別のXRiftインスタンスへ移動するゲートを配置します。",
-    icon: "portal",
     projectKinds: ALL_PROJECTS,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.portal,
     componentProperties: {
@@ -144,9 +131,8 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
   },
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.tagBoard,
-    name: "Tag Board",
+    name: "TagBoard",
     description: "ユーザーがタグを選択できるボードを配置します。",
-    icon: "tagBoard",
     projectKinds: ALL_PROJECTS,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.tagBoard,
     componentProperties: {
@@ -173,9 +159,8 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
   },
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.videoScreen,
-    name: "Video Screen",
+    name: "VideoScreen",
     description: "同期再生に対応する動画スクリーンを配置します。",
-    icon: "videoScreen",
     projectKinds: ALL_PROJECTS,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.videoScreen,
     componentProperties: {
@@ -205,9 +190,8 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
   },
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.videoPlayer,
-    name: "Video Player",
+    name: "VideoPlayer",
     description: "操作UI付きの録画動画プレイヤーを配置します。",
-    icon: "videoScreen",
     projectKinds: ALL_PROJECTS,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.videoPlayer,
     componentProperties: {
@@ -229,9 +213,8 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
   },
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.liveVideoPlayer,
-    name: "Live Video Player",
+    name: "LiveVideoPlayer",
     description: "ライブストリーム向けの動画プレイヤーを配置します。",
-    icon: "liveVideo",
     projectKinds: ALL_PROJECTS,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.liveVideoPlayer,
     componentProperties: {
@@ -253,9 +236,8 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
   },
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.screenShareDisplay,
-    name: "Screen Share Display",
+    name: "ScreenShareDisplay",
     description: "画面共有の映像を表示するスクリーンを配置します。",
-    icon: "screenShare",
     projectKinds: ALL_PROJECTS,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.screenShareDisplay,
     componentProperties: {

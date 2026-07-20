@@ -1,5 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { useThree } from "@react-three/fiber";
+import {
+  GLTFLoader,
+  type GLTF,
+} from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   Box3,
@@ -13,12 +23,26 @@ import {
 import { tauri } from "../../lib/tauri";
 import {
   normalizeMaterialProperties,
+  type AssetManifest,
   type MaterialAsset,
 } from "../../lib/visual-editor";
 import {
   applyCoreMaterialPreviewTextures,
+  refreshMaterialPreviewRender,
+  useMaterialPreviewTextures,
   type CoreMaterialPreviewTextures,
 } from "./material-texture-preview";
+
+export type ProjectModelMaterialAssignment = {
+  slot: string;
+  sourceMaterialIndex: number;
+  material: MaterialAsset;
+};
+
+type ResolvedProjectModelMaterialAssignment =
+  ProjectModelMaterialAssignment & {
+    textures: CoreMaterialPreviewTextures;
+  };
 
 type Props = {
   projectPath: string;
@@ -28,8 +52,8 @@ type Props = {
   castShadow: boolean;
   receiveShadow: boolean;
   selected: boolean;
-  assignedMaterial?: MaterialAsset;
-  assignedTextures?: CoreMaterialPreviewTextures;
+  assets: AssetManifest;
+  assignedMaterials: readonly ProjectModelMaterialAssignment[];
 };
 
 type LoadState =
@@ -38,6 +62,8 @@ type LoadState =
   | { status: "error"; message: string };
 
 const MODEL_DATA_CACHE = new Map<string, Promise<string>>();
+const EMPTY_RESOLVED_MATERIALS: readonly ResolvedProjectModelMaterialAssignment[] =
+  [];
 
 export function ProjectModelVisual({
   projectPath,
@@ -47,8 +73,8 @@ export function ProjectModelVisual({
   castShadow,
   receiveShadow,
   selected,
-  assignedMaterial,
-  assignedTextures,
+  assets,
+  assignedMaterials,
 }: Props) {
   const cacheKey = `${projectPath}\n${sourceRelativePath}\n${sourceHash ?? ""}`;
   const [state, setState] = useState<LoadState>({ status: "loading" });
@@ -83,20 +109,132 @@ export function ProjectModelVisual({
     };
   }, [cacheKey, projectPath, sourceRelativePath]);
 
+  return (
+    <ProjectModelMaterialTextureResolver
+      assignments={assignedMaterials}
+      assets={assets}
+      projectPath={projectPath}
+      resolved={EMPTY_RESOLVED_MATERIALS}
+    >
+      {(resolvedMaterials) => (
+        <ProjectModelRender
+          state={state}
+          importScale={importScale}
+          castShadow={castShadow}
+          receiveShadow={receiveShadow}
+          selected={selected}
+          assignedMaterials={resolvedMaterials}
+        />
+      )}
+    </ProjectModelMaterialTextureResolver>
+  );
+}
+
+function ProjectModelMaterialTextureResolver({
+  assignments,
+  assets,
+  projectPath,
+  resolved,
+  children,
+}: {
+  assignments: readonly ProjectModelMaterialAssignment[];
+  assets: AssetManifest;
+  projectPath: string;
+  resolved: readonly ResolvedProjectModelMaterialAssignment[];
+  children: (
+    assignments: readonly ResolvedProjectModelMaterialAssignment[],
+  ) => ReactNode;
+}) {
+  const [assignment, ...remaining] = assignments;
+  if (!assignment) return children(resolved);
+  return (
+    <ProjectModelMaterialTextureSlot
+      key={`${assignment.slot}:${assignment.material.id}`}
+      assignment={assignment}
+      remaining={remaining}
+      assets={assets}
+      projectPath={projectPath}
+      resolved={resolved}
+    >
+      {children}
+    </ProjectModelMaterialTextureSlot>
+  );
+}
+
+function ProjectModelMaterialTextureSlot({
+  assignment,
+  remaining,
+  assets,
+  projectPath,
+  resolved,
+  children,
+}: {
+  assignment: ProjectModelMaterialAssignment;
+  remaining: readonly ProjectModelMaterialAssignment[];
+  assets: AssetManifest;
+  projectPath: string;
+  resolved: readonly ResolvedProjectModelMaterialAssignment[];
+  children: (
+    assignments: readonly ResolvedProjectModelMaterialAssignment[],
+  ) => ReactNode;
+}) {
+  const textures = useMaterialPreviewTextures(
+    assignment.material,
+    assets,
+    projectPath,
+  );
+  const nextResolved = useMemo(
+    () => [...resolved, { ...assignment, textures }],
+    [assignment, resolved, textures],
+  );
+  return (
+    <ProjectModelMaterialTextureResolver
+      assignments={remaining}
+      assets={assets}
+      projectPath={projectPath}
+      resolved={nextResolved}
+    >
+      {children}
+    </ProjectModelMaterialTextureResolver>
+  );
+}
+
+function ProjectModelRender({
+  state,
+  importScale,
+  castShadow,
+  receiveShadow,
+  selected,
+  assignedMaterials,
+}: {
+  state: LoadState;
+  importScale: number;
+  castShadow: boolean;
+  receiveShadow: boolean;
+  selected: boolean;
+  assignedMaterials: readonly ResolvedProjectModelMaterialAssignment[];
+}) {
   const readyObject = state.status === "ready" ? state.object : null;
   const renderedModel = useMemo(() => {
     if (!readyObject) return null;
     const object = clone(readyObject);
-    const ownedMaterials = assignedMaterial
-      ? applyAssignedMaterialPreview(
-          object,
-          assignedMaterial,
-          assignedTextures,
-        )
-      : [];
-    return { object, ownedMaterials };
-  }, [assignedMaterial, assignedTextures, readyObject]);
+    const selectionBounds = getModelSelectionBounds(object);
+    const ownedMaterials = applyAssignedMaterialPreviews(
+      object,
+      assignedMaterials,
+    );
+    return { object, ownedMaterials, selectionBounds };
+  }, [assignedMaterials, readyObject]);
   const renderedObject = renderedModel?.object ?? null;
+  const invalidate = useThree((canvasState) => canvasState.invalidate);
+
+  useLayoutEffect(() => {
+    refreshMaterialPreviewRender(
+      renderedModel?.ownedMaterials,
+      {},
+      invalidate,
+    );
+  }, [invalidate, renderedModel]);
 
   useEffect(
     () => () => {
@@ -120,11 +258,13 @@ export function ProjectModelVisual({
 
   const modelScale = Number.isFinite(importScale) ? importScale : 1;
 
-  if (renderedObject) {
+  if (renderedModel) {
     return (
       <group scale={modelScale}>
-        <primitive object={renderedObject} />
-        {selected ? <ModelSelectionBounds object={renderedObject} /> : null}
+        <primitive object={renderedModel.object} />
+        {selected ? (
+          <ModelSelectionBounds bounds={renderedModel.selectionBounds} />
+        ) : null}
       </group>
     );
   }
@@ -148,8 +288,52 @@ export function ProjectModelVisual({
   );
 }
 
+/** Applies each authoring Material only to its original glTF material slot. */
+export function applyAssignedMaterialPreviews(
+  object: Object3D,
+  assignments: readonly {
+    sourceMaterialIndex: number;
+    material: MaterialAsset;
+    textures?: CoreMaterialPreviewTextures;
+  }[],
+): Material[] {
+  const assignmentBySourceIndex = new Map(
+    assignments.map((assignment) => [
+      assignment.sourceMaterialIndex,
+      assignment,
+    ]),
+  );
+  const ownedMaterials: Material[] = [];
+  object.traverse((child) => {
+    const mesh = child as Object3D & {
+      isMesh?: boolean;
+      material?: Material | Material[];
+    };
+    if (!mesh.isMesh || !mesh.material) return;
+    const createPreview = (source: Material): Material => {
+      const sourceMaterialIndex = getSourceMaterialIndex(source);
+      const assignment =
+        sourceMaterialIndex === undefined
+          ? undefined
+          : assignmentBySourceIndex.get(sourceMaterialIndex);
+      if (!assignment) return source;
+      const preview = createAssignedMaterialPreviewMaterial(
+        source,
+        assignment.material,
+        assignment.textures,
+      );
+      ownedMaterials.push(preview);
+      return preview;
+    };
+    mesh.material = Array.isArray(mesh.material)
+      ? mesh.material.map(createPreview)
+      : createPreview(mesh.material);
+  });
+  return ownedMaterials;
+}
+
 /**
- * Clones every model material before applying the authoring override. The GLTF
+ * Compatibility helper that applies one override to every material. The GLTF
  * cache and textures stay shared/read-only while per-preview material state is
  * independently disposable.
  */
@@ -257,27 +441,45 @@ function resetSourcePhysicalEffects(material: MeshStandardMaterial): void {
   physical.transmission = 0;
 }
 
-function ModelSelectionBounds({ object }: { object: Object3D }) {
-  const bounds = useMemo(() => {
-    object.updateMatrixWorld(true);
-    const box = new Box3().setFromObject(object);
-    if (box.isEmpty()) {
-      return {
-        position: [0, 0, 0] as [number, number, number],
-        scale: [1, 1, 1] as [number, number, number],
-      };
-    }
-    const center = box.getCenter(new Vector3());
-    const size = box.getSize(new Vector3());
+export type ModelSelectionBoundsValue = {
+  position: [number, number, number];
+  scale: [number, number, number];
+};
+
+/**
+ * Resolves bounds in the model container's local coordinates. An attached
+ * Object3D is cloned first so Entity and import-scale ancestors cannot leak
+ * into Box3's world-space calculation and be applied twice by the bounds mesh.
+ */
+export function getModelSelectionBounds(
+  object: Object3D,
+): ModelSelectionBoundsValue {
+  const localObject = object.parent ? clone(object) : object;
+  localObject.updateMatrixWorld(true);
+  const box = new Box3().setFromObject(localObject);
+  if (box.isEmpty()) {
     return {
-      position: [center.x, center.y, center.z] as [number, number, number],
-      scale: [
-        Math.max(size.x * 1.02, 0.01),
-        Math.max(size.y * 1.02, 0.01),
-        Math.max(size.z * 1.02, 0.01),
-      ] as [number, number, number],
+      position: [0, 0, 0],
+      scale: [1, 1, 1],
     };
-  }, [object]);
+  }
+  const center = box.getCenter(new Vector3());
+  const size = box.getSize(new Vector3());
+  return {
+    position: [center.x, center.y, center.z],
+    scale: [
+      Math.max(size.x * 1.02, 0.01),
+      Math.max(size.y * 1.02, 0.01),
+      Math.max(size.z * 1.02, 0.01),
+    ],
+  };
+}
+
+function ModelSelectionBounds({
+  bounds,
+}: {
+  bounds: ModelSelectionBoundsValue;
+}) {
   return (
     <mesh position={bounds.position} scale={bounds.scale}>
       <boxGeometry args={[1, 1, 1]} />
@@ -303,6 +505,43 @@ type GltfResourceDocument = {
   images?: Array<{ uri?: unknown }>;
 };
 
+export const PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY =
+  "xriftSourceMaterialIndex";
+
+function tagSourceMaterialIndices(gltf: GLTF): void {
+  gltf.scene.traverse((child) => {
+    const mesh = child as Object3D & {
+      isMesh?: boolean;
+      material?: Material | Material[];
+    };
+    if (!mesh.isMesh || !mesh.material) return;
+    const materials = Array.isArray(mesh.material)
+      ? mesh.material
+      : [mesh.material];
+    for (const material of materials) {
+      const sourceMaterialIndex =
+        gltf.parser.associations.get(material)?.materials;
+      if (
+        sourceMaterialIndex === undefined ||
+        !Number.isInteger(sourceMaterialIndex) ||
+        sourceMaterialIndex < 0
+      ) {
+        continue;
+      }
+      material.userData[PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY] =
+        sourceMaterialIndex;
+    }
+  });
+}
+
+function getSourceMaterialIndex(material: Material): number | undefined {
+  const value =
+    material.userData[PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY];
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
+    ? value
+    : undefined;
+}
+
 async function parseSelfContainedModel(
   buffer: ArrayBuffer,
   sourceRelativePath: string,
@@ -324,7 +563,10 @@ async function parseSelfContainedModel(
     loader.parse(
       source,
       "",
-      (gltf) => resolve(gltf.scene),
+      (gltf) => {
+        tagSourceMaterialIndices(gltf);
+        resolve(gltf.scene);
+      },
       (error) => reject(error),
     );
   });

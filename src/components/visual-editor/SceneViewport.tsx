@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Edges, OrbitControls, TransformControls } from "@react-three/drei";
+import { Edges, Html, OrbitControls, TransformControls } from "@react-three/drei";
 import {
   useCallback,
   useEffect,
@@ -15,20 +15,28 @@ import {
   type ReactNode,
 } from "react";
 import {
+  AdditiveBlending,
   BackSide,
+  Box3,
   Color,
   DoubleSide,
   EquirectangularReflectionMapping,
   Euler,
+  MathUtils,
   Plane,
   PerspectiveCamera,
+  Quaternion,
   Raycaster,
   SRGBColorSpace,
+  Sphere,
   TextureLoader,
   Vector2,
   Vector3,
   type Group,
+  type DirectionalLight,
+  type MeshStandardMaterial,
   type Object3D,
+  type ShaderMaterial,
   type Texture,
 } from "three";
 import {
@@ -43,6 +51,7 @@ import {
   normalizeProjectRelativePath,
   resolveSceneSettings,
   type AssetManifest,
+  type MaterialAsset,
   type MeshComponent,
   type ModelAsset,
   type PrefabDocument,
@@ -62,6 +71,7 @@ import { ProjectModelVisual } from "./ProjectModelVisual";
 import {
   readProjectTextureDataUrl,
   useCoreMaterialPreviewTextures,
+  useMaterialPreviewRenderSync,
 } from "./material-texture-preview";
 import { clearEditorDragData } from "./editor-drag-data";
 import {
@@ -71,6 +81,10 @@ import {
   type SceneViewportDragIntent,
 } from "./scene-viewport-drag";
 import { createSceneViewportPreview } from "./scene-viewport-preview";
+import {
+  resolvePortalPreview,
+  resolveTagBoardPreview,
+} from "./xrift-component-preview";
 import {
   type EditorMode,
   type EditorSelection,
@@ -89,6 +103,69 @@ const PLAY_KEYS = new Set([
   "arrowright",
 ]);
 const EDIT_CAMERA_TARGET: [number, number, number] = [0, 0.7, 0];
+const EDITOR_SELECTION_COLOR = "#cbd5e1";
+const MUTED_GIZMO_COLOR = new Color("#64748b");
+
+export type SceneFocusState = {
+  entityId: string;
+  entityName: string;
+};
+
+type EditCameraSnapshot = {
+  position: Vector3;
+  quaternion: Quaternion;
+  target: Vector3;
+  up: Vector3;
+  zoom: number;
+};
+
+type TransformGizmoMaterial = {
+  color: Color;
+  opacity: number;
+  transparent: boolean;
+  needsUpdate: boolean;
+  tempColor?: Color;
+  tempOpacity?: number;
+};
+
+/**
+ * Three's default transform controls use fully saturated RGB handles. Keep the
+ * same hit areas and active-axis feedback, but make the resting controls a
+ * quiet neutral so the authored scene remains the visual focus.
+ */
+function muteTransformGizmo(controls: Object3D | null): void {
+  const transformControls = controls as (Object3D & { gizmo?: Object3D }) | null;
+  const gizmoRoot =
+    transformControls?.gizmo ??
+    controls?.children.find((child) => child.type === "TransformControlsGizmo");
+  if (!gizmoRoot) return;
+
+  const styledMaterials = new Set<TransformGizmoMaterial>();
+  gizmoRoot.traverse((object) => {
+    const candidate = object as Object3D & {
+      material?: TransformGizmoMaterial | TransformGizmoMaterial[];
+    };
+    const materials = Array.isArray(candidate.material)
+      ? candidate.material
+      : candidate.material
+        ? [candidate.material]
+        : [];
+    for (const material of materials) {
+      if (styledMaterials.has(material) || !material.color) continue;
+      styledMaterials.add(material);
+      const opacity = Math.min(
+        material.tempOpacity ?? material.opacity,
+        0.55,
+      );
+      material.color.copy(MUTED_GIZMO_COLOR);
+      material.tempColor = MUTED_GIZMO_COLOR.clone();
+      material.opacity = opacity;
+      material.tempOpacity = opacity;
+      material.transparent = true;
+      material.needsUpdate = true;
+    }
+  });
+}
 
 function isTransformControlsObject(object: Object3D): boolean {
   let current: Object3D | null = object;
@@ -161,19 +238,36 @@ function MeshVisual({
       : component.geometry?.kind === "builtin-primitive"
         ? component.geometry.primitive
         : builtinDefinition?.primitive;
-  const materialAssetId = getPrimaryMaterialAssetId(component);
-  const material = materialAssetId
-    ? getMaterialAsset(assets, materialAssetId)
-    : undefined;
-  const materialTextures = useCoreMaterialPreviewTextures(
-    material,
-    assets,
-    projectPath,
-  );
   const projectModelSource =
     geometry?.kind === "model"
       ? resolveProjectModelSource(geometry, projectPath)
       : undefined;
+  const assignedModelMaterials = useMemo(
+    () =>
+      geometry?.kind === "model"
+        ? geometry.materialSlots.flatMap((slot) => {
+            if (slot.sourceMaterialIndex === undefined) return [];
+            const binding = component.materialBindings.find(
+              (candidate) => candidate.slot === slot.slot,
+            );
+            const materialAssetId =
+              binding?.materialAssetId ?? slot.defaultMaterialAssetId;
+            const material = materialAssetId
+              ? getMaterialAsset(assets, materialAssetId)
+              : undefined;
+            return material
+              ? [
+                  {
+                    slot: slot.slot,
+                    sourceMaterialIndex: slot.sourceMaterialIndex,
+                    material,
+                  },
+                ]
+              : [];
+          })
+        : [],
+    [assets, component.materialBindings, geometry],
+  );
 
   if (!component.enabled) return null;
 
@@ -187,65 +281,27 @@ function MeshVisual({
         castShadow={component.castShadow}
         receiveShadow={component.receiveShadow}
         selected={selected || materialDropHighlighted}
-        assignedMaterial={material}
-        assignedTextures={materialTextures}
+        assets={assets}
+        assignedMaterials={assignedModelMaterials}
       />
     );
   }
 
   if (primitive) {
-    const pbr = material?.properties.pbrMetallicRoughness;
-    const alphaMode = material?.properties.alphaMode ?? "OPAQUE";
-    const opacity =
-      alphaMode === "OPAQUE"
-        ? 1
-        : (pbr?.baseColorFactor[3] ?? material?.properties.opacity ?? 1);
-    const normalScale = material?.properties.normalTexture?.scale ?? 1;
+    const materialAssetId = getPrimaryMaterialAssetId(component);
+    const material = materialAssetId
+      ? getMaterialAsset(assets, materialAssetId)
+      : undefined;
     return (
-      <mesh
-        castShadow={component.castShadow}
-        receiveShadow={component.receiveShadow}
-      >
-        <PrimitiveGeometryView primitive={primitive} />
-        <meshStandardMaterial
-          color={material?.properties.color ?? "#f43f5e"}
-          metalness={pbr?.metallicFactor ?? material?.properties.metalness ?? 0}
-          roughness={pbr?.roughnessFactor ?? material?.properties.roughness ?? 1}
-          emissive={colorFactorToHex(material?.properties.emissiveFactor)}
-          emissiveIntensity={
-            material?.properties.extensions.KHR_materials_emissive_strength
-              ?.emissiveStrength ?? 1
-          }
-          opacity={opacity}
-          transparent={alphaMode === "BLEND"}
-          depthWrite={alphaMode !== "BLEND"}
-          alphaTest={
-            alphaMode === "MASK"
-              ? (material?.properties.alphaCutoff ?? 0.5)
-              : 0
-          }
-          map={materialTextures.baseColorMap}
-          metalnessMap={materialTextures.metallicRoughnessMap}
-          roughnessMap={materialTextures.metallicRoughnessMap}
-          normalMap={materialTextures.normalMap}
-          normalScale={[normalScale, normalScale]}
-          aoMap={materialTextures.occlusionMap}
-          aoMapIntensity={material?.properties.occlusionTexture?.strength ?? 1}
-          emissiveMap={materialTextures.emissiveMap}
-          side={
-            primitive === "plane" || material?.properties.doubleSided
-              ? DoubleSide
-              : undefined
-          }
-        />
-        {selected || materialDropHighlighted ? (
-          <Edges
-            color={materialDropHighlighted ? "#38bdf8" : "#a78bfa"}
-            scale={1.015}
-            threshold={12}
-          />
-        ) : null}
-      </mesh>
+      <PrimitiveMeshVisual
+        component={component}
+        primitive={primitive}
+        material={material}
+        assets={assets}
+        projectPath={projectPath}
+        selected={selected}
+        materialDropHighlighted={materialDropHighlighted}
+      />
     );
   }
 
@@ -258,8 +314,89 @@ function MeshVisual({
       />
       {selected || materialDropHighlighted ? (
         <Edges
-          color={materialDropHighlighted ? "#38bdf8" : "#a78bfa"}
+          color={materialDropHighlighted ? "#38bdf8" : EDITOR_SELECTION_COLOR}
           scale={1.02}
+        />
+      ) : null}
+    </mesh>
+  );
+}
+
+function PrimitiveMeshVisual({
+  component,
+  primitive,
+  material,
+  assets,
+  projectPath,
+  selected,
+  materialDropHighlighted,
+}: {
+  component: MeshComponent;
+  primitive: PrimitiveGeometry;
+  material?: MaterialAsset;
+  assets: AssetManifest;
+  projectPath?: string;
+  selected: boolean;
+  materialDropHighlighted: boolean;
+}) {
+  const materialTextures = useCoreMaterialPreviewTextures(
+    material,
+    assets,
+    projectPath,
+  );
+  const materialRef = useRef<MeshStandardMaterial | null>(null);
+  useMaterialPreviewRenderSync(materialRef, materialTextures);
+  const pbr = material?.properties.pbrMetallicRoughness;
+  const alphaMode = material?.properties.alphaMode ?? "OPAQUE";
+  const opacity =
+    alphaMode === "OPAQUE"
+      ? 1
+      : (pbr?.baseColorFactor[3] ?? material?.properties.opacity ?? 1);
+  const normalScale = material?.properties.normalTexture?.scale ?? 1;
+
+  return (
+    <mesh
+      castShadow={component.castShadow}
+      receiveShadow={component.receiveShadow}
+    >
+      <PrimitiveGeometryView primitive={primitive} />
+      <meshStandardMaterial
+        ref={materialRef}
+        color={material?.properties.color ?? "#f43f5e"}
+        metalness={pbr?.metallicFactor ?? material?.properties.metalness ?? 0}
+        roughness={pbr?.roughnessFactor ?? material?.properties.roughness ?? 1}
+        emissive={colorFactorToHex(material?.properties.emissiveFactor)}
+        emissiveIntensity={
+          material?.properties.extensions.KHR_materials_emissive_strength
+            ?.emissiveStrength ?? 1
+        }
+        opacity={opacity}
+        transparent={alphaMode === "BLEND"}
+        depthWrite={alphaMode !== "BLEND"}
+        alphaTest={
+          alphaMode === "MASK"
+            ? (material?.properties.alphaCutoff ?? 0.5)
+            : 0
+        }
+        map={materialTextures.baseColorMap}
+        metalnessMap={materialTextures.metallicRoughnessMap}
+        roughnessMap={materialTextures.metallicRoughnessMap}
+        normalMap={materialTextures.normalMap}
+        normalScale={[normalScale, normalScale]}
+        aoMap={materialTextures.occlusionMap}
+        aoMapIntensity={material?.properties.occlusionTexture?.strength ?? 1}
+        emissiveMap={materialTextures.emissiveMap}
+        side={
+          primitive === "plane" || material?.properties.doubleSided
+            ? DoubleSide
+            : undefined
+        }
+      />
+      {selected || materialDropHighlighted ? (
+        <Edges
+          color={materialDropHighlighted ? "#38bdf8" : EDITOR_SELECTION_COLOR}
+          scale={1.015}
+          threshold={12}
         />
       ) : null}
     </mesh>
@@ -273,6 +410,17 @@ function LightVisual({
   component: Extract<SceneComponent, { type: "light" }>;
   selected: boolean;
 }) {
+  const directionalLightRef = useRef<DirectionalLight | null>(null);
+  const directionalTargetRef = useRef<Object3D | null>(null);
+
+  useLayoutEffect(() => {
+    const light = directionalLightRef.current;
+    const target = directionalTargetRef.current;
+    if (!light || !target) return;
+    light.target = target;
+    target.updateMatrixWorld();
+  }, [component.lightType]);
+
   if (!component.enabled) return null;
 
   return (
@@ -286,23 +434,106 @@ function LightVisual({
           castShadow={component.castShadow}
         />
       ) : (
-        <directionalLight
-          color={component.color}
-          intensity={component.intensity}
-          castShadow={component.castShadow}
-        />
+        <>
+          <directionalLight
+            ref={directionalLightRef}
+            color={component.color}
+            intensity={component.intensity}
+            castShadow={component.castShadow}
+          />
+          <object3D ref={directionalTargetRef} position={[0, 0, -1]} />
+        </>
       )}
-      <mesh scale={selected ? 1.15 : 1}>
-        <sphereGeometry args={[0.16, 18, 12]} />
+      <EditorLightIcon color={component.color} selected={selected} />
+      {component.lightType === "directional" ? (
+        <DirectionArrow
+          direction={-1}
+          color={selected ? EDITOR_SELECTION_COLOR : component.color}
+          position={[0, -0.18, 0]}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function EditorLightIcon({
+  color,
+  selected,
+}: {
+  color: string;
+  selected: boolean;
+}) {
+  const LightIcon = EDITOR_ICONS.light;
+  return (
+    <Html
+      transform
+      sprite
+      distanceFactor={7}
+      zIndexRange={[2, 0]}
+      style={{ pointerEvents: "none" }}
+    >
+      <div
+        aria-hidden="true"
+        style={{
+          alignItems: "center",
+          background: selected ? "rgba(255,255,255,0.96)" : "rgba(15,23,42,0.82)",
+          border: `2px solid ${selected ? EDITOR_SELECTION_COLOR : color}`,
+          borderRadius: 10,
+          boxShadow: selected
+            ? "0 0 0 3px rgba(148,163,184,0.28), 0 4px 14px rgba(15,23,42,0.28)"
+            : "0 3px 10px rgba(15,23,42,0.28)",
+          color: selected ? "#334155" : color,
+          display: "flex",
+          height: 34,
+          justifyContent: "center",
+          width: 34,
+        }}
+      >
+        <LightIcon size={20} strokeWidth={2} />
+      </div>
+    </Html>
+  );
+}
+
+function DirectionArrow({
+  direction,
+  color,
+  position,
+}: {
+  direction: -1 | 1;
+  color: string;
+  position: Vec3;
+}) {
+  const rotationX = direction < 0 ? -Math.PI / 2 : Math.PI / 2;
+  return (
+    <group position={position}>
+      <mesh
+        position={[0, 0, direction * 0.34]}
+        rotation={[rotationX, 0, 0]}
+        renderOrder={18}
+      >
+        <cylinderGeometry args={[0.018, 0.018, 0.58, 8]} />
         <meshBasicMaterial
-          color={selected ? "#c4b5fd" : component.color}
+          color={color}
+          transparent
+          opacity={0.8}
+          depthTest={false}
         />
       </mesh>
-      <mesh position={[0, -0.35, 0]} rotation={[0, 0, Math.PI]}>
-        <coneGeometry args={[0.18, 0.42, 16]} />
-        <meshBasicMaterial color={selected ? "#8b5cf6" : "#fbbf24"} />
+      <mesh
+        position={[0, 0, direction * 0.7]}
+        rotation={[rotationX, 0, 0]}
+        renderOrder={18}
+      >
+        <coneGeometry args={[0.08, 0.18, 12]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0.9}
+          depthTest={false}
+        />
       </mesh>
-    </>
+    </group>
   );
 }
 
@@ -346,7 +577,145 @@ function MirrorComponentVisual({
   );
 }
 
-function PortalComponentVisual({ selected }: { selected: boolean }) {
+const PORTAL_VERTEX_SHADER = `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const PORTAL_FRAGMENT_SHADER = `
+  uniform float uTime;
+  uniform vec3 uPrimary;
+  uniform vec3 uGlow;
+  uniform float uOpacity;
+  varying vec2 vUv;
+
+  void main() {
+    vec2 point = vUv - 0.5;
+    float radius = length(point) * 2.0;
+    float angle = atan(point.y, point.x);
+    float spiral = sin(angle * 6.0 - radius * 24.0 + uTime * 1.7);
+    float veins = smoothstep(0.18, 0.96, spiral);
+    float centerGlow = 1.0 - smoothstep(0.0, 1.0, radius);
+    float edge = 1.0 - smoothstep(0.88, 1.0, radius);
+    vec3 color = mix(uPrimary * 0.16, uGlow, veins * 0.58 + centerGlow * 0.28);
+    gl_FragColor = vec4(color, edge * uOpacity * (0.58 + veins * 0.3));
+  }
+`;
+
+const PORTAL_PARTICLE_POSITIONS: readonly Vec3[] = [
+  [-0.72, 0.58, 0.08],
+  [-0.92, 0.08, 0.12],
+  [-0.68, -0.5, 0.06],
+  [-0.24, 0.9, 0.1],
+  [0.34, 0.84, 0.08],
+  [0.82, 0.42, 0.12],
+  [0.88, -0.26, 0.08],
+  [0.45, -0.78, 0.1],
+];
+
+function usePrefersReducedMotion(): boolean {
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReducedMotion(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return reducedMotion;
+}
+
+function PortalSurface({
+  primary,
+  glow,
+  disabled,
+  reducedMotion,
+}: {
+  primary: string;
+  glow: string;
+  disabled: boolean;
+  reducedMotion: boolean;
+}) {
+  const materialRef = useRef<ShaderMaterial | null>(null);
+  const uniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uPrimary: { value: new Color(primary) },
+      uGlow: { value: new Color(glow) },
+      uOpacity: { value: disabled ? 0.25 : 0.82 },
+    }),
+    [disabled, glow, primary],
+  );
+
+  useFrame((_state, delta) => {
+    if (reducedMotion || disabled || !materialRef.current) return;
+    materialRef.current.uniforms.uTime.value += delta;
+  });
+
+  return (
+    <mesh position={[0, 0, -0.02]}>
+      <circleGeometry args={[0.72, 64]} />
+      <shaderMaterial
+        ref={materialRef}
+        uniforms={uniforms}
+        vertexShader={PORTAL_VERTEX_SHADER}
+        fragmentShader={PORTAL_FRAGMENT_SHADER}
+        transparent
+        depthWrite={false}
+        side={DoubleSide}
+      />
+    </mesh>
+  );
+}
+
+function PortalParticles({
+  color,
+  disabled,
+  reducedMotion,
+}: {
+  color: string;
+  disabled: boolean;
+  reducedMotion: boolean;
+}) {
+  const particlesRef = useRef<Group | null>(null);
+  useFrame((_state, delta) => {
+    if (reducedMotion || disabled || !particlesRef.current) return;
+    particlesRef.current.rotation.z += delta * 0.18;
+  });
+  return (
+    <group ref={particlesRef}>
+      {PORTAL_PARTICLE_POSITIONS.map((position, index) => (
+        <mesh key={index} position={position}>
+          <sphereGeometry args={[index % 3 === 0 ? 0.035 : 0.024, 8, 6]} />
+          <meshBasicMaterial
+            color={color}
+            transparent
+            opacity={disabled ? 0.2 : 0.72}
+            blending={AdditiveBlending}
+            depthWrite={false}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function PortalComponentVisual({
+  component,
+  selected,
+}: {
+  component: Extract<SceneComponent, { type: "xrift-component" }>;
+  selected: boolean;
+}) {
+  const preview = useMemo(
+    () => resolvePortalPreview(component.properties),
+    [component.properties],
+  );
+  const reducedMotion = usePrefersReducedMotion();
   const primary = selected ? "#8b5cf6" : "#6366f1";
   const glow = selected ? "#c4b5fd" : "#67e8f9";
   return (
@@ -359,16 +728,81 @@ function PortalComponentVisual({ selected }: { selected: boolean }) {
           emissiveIntensity={0.55}
           metalness={0.35}
           roughness={0.28}
+          transparent
+          opacity={preview.disabled ? 0.38 : 1}
         />
       </mesh>
-      <mesh position={[0, 0, -0.025]}>
-        <circleGeometry args={[0.72, 48]} />
-        <meshBasicMaterial color={glow} transparent opacity={0.28} />
+      <mesh position={[0, 0, -0.045]}>
+        <circleGeometry args={[0.72, 64]} />
+        <meshBasicMaterial color="#020617" transparent opacity={0.82} side={DoubleSide} />
       </mesh>
+      <PortalSurface
+        primary={primary}
+        glow={glow}
+        disabled={preview.disabled}
+        reducedMotion={reducedMotion}
+      />
+      <mesh position={[0, 0, 0.015]}>
+        <torusGeometry args={[0.73, 0.025, 10, 48]} />
+        <meshBasicMaterial
+          color={glow}
+          transparent
+          opacity={preview.disabled ? 0.18 : 0.62}
+          blending={AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
+      {selected ? (
+        <mesh position={[0, 0, 0.02]}>
+          <torusGeometry args={[0.96, 0.016, 8, 48]} />
+          <meshBasicMaterial color={EDITOR_SELECTION_COLOR} depthTest={false} />
+        </mesh>
+      ) : null}
+      <PortalParticles
+        color={glow}
+        disabled={preview.disabled}
+        reducedMotion={reducedMotion}
+      />
       <mesh position={[0, -1.05, 0]}>
         <cylinderGeometry args={[0.72, 0.88, 0.22, 32]} />
-        <meshStandardMaterial color="#334155" roughness={0.72} />
+        <meshStandardMaterial
+          color={preview.disabled ? "#475569" : "#334155"}
+          emissive={preview.disabled ? "#000000" : primary}
+          emissiveIntensity={preview.disabled ? 0 : 0.12}
+          roughness={0.72}
+        />
       </mesh>
+      <DirectionArrow
+        direction={1}
+        color={selected ? EDITOR_SELECTION_COLOR : "#94a3b8"}
+        position={[0, -1.02, 0.15]}
+      />
+      <Html
+        transform
+        position={[0, -0.78, 0.18]}
+        distanceFactor={6}
+        zIndexRange={[3, 0]}
+        style={{ pointerEvents: "none" }}
+      >
+        <div
+          style={{
+            background: preview.instanceId && !preview.disabled
+              ? "rgba(15,23,42,0.9)"
+              : "rgba(69,26,3,0.92)",
+            border: `1px solid ${preview.instanceId && !preview.disabled ? glow : "#f59e0b"}`,
+            borderRadius: 999,
+            color: "#f8fafc",
+            fontFamily: "system-ui, sans-serif",
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: "0.02em",
+            padding: "5px 10px",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {preview.statusLabel}
+        </div>
+      </Html>
     </group>
   );
 }
@@ -397,21 +831,135 @@ function ScreenComponentVisual({
   );
 }
 
-function BoardComponentVisual({ selected }: { selected: boolean }) {
+function BoardComponentVisual({
+  component,
+  selected,
+}: {
+  component: Extract<SceneComponent, { type: "xrift-component" }>;
+  selected: boolean;
+}) {
+  const preview = useMemo(
+    () => resolveTagBoardPreview(component.properties),
+    [component.properties],
+  );
+  const visibleColumns = Math.min(
+    preview.columns,
+    Math.max(1, preview.tags.length),
+  );
+  const rowCount = Math.max(1, Math.ceil(preview.tags.length / visibleColumns));
+  const boardHeight = Math.max(1.45, 0.82 + rowCount * 0.31);
+  const boardCenterY = 0.5 + boardHeight / 2;
   return (
-    <group position={[0, 1.2, 0]}>
-      <mesh>
-        <boxGeometry args={[2.4, 1.45, 0.1]} />
+    <group scale={preview.scale}>
+      <mesh position={[0, boardCenterY, 0]}>
+        <boxGeometry args={[2.7, boardHeight, 0.1]} />
         <meshStandardMaterial
-          color={selected ? "#ede9fe" : "#f8fafc"}
+          color={selected ? "#f8fafc" : "#e2e8f0"}
           roughness={0.76}
         />
-        <Edges color={selected ? "#8b5cf6" : "#94a3b8"} />
+        <Edges color={selected ? EDITOR_SELECTION_COLOR : "#64748b"} />
       </mesh>
-      <mesh position={[0, -1.05, 0]}>
+      <mesh position={[0, 0.2, 0]}>
         <cylinderGeometry args={[0.08, 0.1, 0.7, 12]} />
         <meshStandardMaterial color="#64748b" roughness={0.68} />
       </mesh>
+      <mesh position={[0, -0.14, 0]}>
+        <cylinderGeometry args={[0.34, 0.42, 0.12, 20]} />
+        <meshStandardMaterial color="#475569" roughness={0.74} />
+      </mesh>
+      <Html
+        transform
+        position={[0, boardCenterY, 0.065]}
+        distanceFactor={5.6}
+        zIndexRange={[3, 0]}
+        style={{ pointerEvents: "none" }}
+      >
+        <div
+          style={{
+            background: "rgba(248,250,252,0.97)",
+            border: "1px solid rgba(148,163,184,0.8)",
+            borderRadius: 12,
+            boxShadow: "0 10px 30px rgba(15,23,42,0.18)",
+            boxSizing: "border-box",
+            color: "#0f172a",
+            fontFamily: "system-ui, sans-serif",
+            padding: "13px 14px 11px",
+            width: 318,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 17,
+              fontWeight: 750,
+              lineHeight: 1.25,
+              marginBottom: 10,
+              textAlign: "center",
+            }}
+          >
+            {preview.title}
+          </div>
+          {preview.tags.length > 0 ? (
+            <div
+              style={{
+                display: "grid",
+                gap: 6,
+                gridTemplateColumns: `repeat(${visibleColumns}, minmax(0, 1fr))`,
+              }}
+            >
+              {preview.tags.map((tag) => (
+                <div
+                  key={tag.id}
+                  style={{
+                    background: `linear-gradient(rgba(15,23,42,0.14), rgba(15,23,42,0.14)), ${tag.color}`,
+                    border: "1px solid rgba(255,255,255,0.55)",
+                    borderRadius: 7,
+                    boxShadow: "inset 0 0 0 1px rgba(15,23,42,0.08)",
+                    color: "#ffffff",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    lineHeight: 1.15,
+                    minWidth: 0,
+                    overflow: "hidden",
+                    padding: "7px 5px",
+                    textAlign: "center",
+                    textOverflow: "ellipsis",
+                    textShadow: "0 1px 2px rgba(15,23,42,0.58)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {tag.label}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div
+              style={{
+                border: "1px dashed #94a3b8",
+                borderRadius: 8,
+                color: "#64748b",
+                fontSize: 12,
+                padding: "12px 8px",
+                textAlign: "center",
+              }}
+            >
+              タグがありません
+            </div>
+          )}
+          <div
+            style={{
+              color: "#64748b",
+              fontSize: 9,
+              fontWeight: 650,
+              letterSpacing: "0.08em",
+              marginTop: 8,
+              textAlign: "right",
+              textTransform: "uppercase",
+            }}
+          >
+            Editor Preview
+          </div>
+        </div>
+      </Html>
     </group>
   );
 }
@@ -498,9 +1046,9 @@ function BuiltinPrefabComponentVisual({
         />
       );
     case "portal":
-      return <PortalComponentVisual selected={selected} />;
+      return <PortalComponentVisual component={component} selected={selected} />;
     case "tag-board":
-      return <BoardComponentVisual selected={selected} />;
+      return <BoardComponentVisual component={component} selected={selected} />;
     case "screen":
       return (
         <ScreenComponentVisual
@@ -545,7 +1093,7 @@ function XriftComponentVisual({
       break;
     }
     case XRIFT_COMPONENT_SCHEMA_IDS.portal:
-      visual = <PortalComponentVisual selected={selected} />;
+      visual = <PortalComponentVisual component={component} selected={selected} />;
       break;
     case XRIFT_COMPONENT_SCHEMA_IDS.videoScreen: {
       const scale = xriftVec(component, "scale", 2, [16 / 9 * 3, 3]);
@@ -565,7 +1113,7 @@ function XriftComponentVisual({
       );
       break;
     case XRIFT_COMPONENT_SCHEMA_IDS.tagBoard:
-      visual = <BoardComponentVisual selected={selected} />;
+      visual = <BoardComponentVisual component={component} selected={selected} />;
       break;
     case XRIFT_COMPONENT_SCHEMA_IDS.video180Sphere:
       visual = (
@@ -630,10 +1178,10 @@ function ComponentVisual({
             ]}
           />
           <meshBasicMaterial
-            color="#22c55e"
+            color={EDITOR_SELECTION_COLOR}
             wireframe
             transparent
-            opacity={0.9}
+            opacity={0.45}
             depthTest={false}
           />
         </mesh>
@@ -696,7 +1244,21 @@ function EntityObject({
   children?: ReactNode;
 }) {
   const objectRef = useRef<Group>(null!);
+  const transformControlsRef = useRef<ElementRef<typeof TransformControls>>(null);
   const transform = getTransform(entity);
+
+  const setTransformControlsRef = useCallback(
+    (controls: ElementRef<typeof TransformControls> | null) => {
+      transformControlsRef.current = controls;
+      muteTransformGizmo(controls);
+    },
+    [],
+  );
+
+  useLayoutEffect(() => {
+    if (!selected || !editable || !transform) return;
+    muteTransformGizmo(transformControlsRef.current);
+  }, [editable, selected, transform]);
 
   const commitTransform = () => {
     const object = objectRef.current;
@@ -754,6 +1316,7 @@ function EntityObject({
       transform &&
       entity.id === authoringEntityId ? (
         <TransformControls
+          ref={setTransformControlsRef}
           object={objectRef}
           mode={transformMode}
           space={transformSpace}
@@ -1055,29 +1618,81 @@ function SceneEntityHierarchy({
   );
 }
 
+function findSceneEntityObject(
+  scene: Object3D,
+  entityId: string,
+): Object3D | null {
+  let result: Object3D | null = null;
+  scene.traverse((object) => {
+    if (
+      !result &&
+      object.userData.authoringEntityId === entityId &&
+      object.userData.renderedEntityId === entityId
+    ) {
+      result = object;
+    }
+  });
+  return result;
+}
+
 function CameraControls({
   editorMode,
   projectKind,
   transformDragging,
   frameSelectionRequest,
+  exitFocusRequest,
+  frameEntityId,
+  frameEntityName,
   frameTarget,
+  onFocusChange,
 }: {
   editorMode: EditorMode;
   projectKind: VisualProjectKind;
   transformDragging: boolean;
   frameSelectionRequest: number;
+  exitFocusRequest: number;
+  frameEntityId: string | null;
+  frameEntityName: string | null;
   frameTarget?: Vec3;
+  onFocusChange: (focus: SceneFocusState | null) => void;
 }) {
   const camera = useThree((state) => state.camera);
+  const threeScene = useThree((state) => state.scene);
   const controlsRef = useRef<ElementRef<typeof OrbitControls>>(null!);
   const previousMode = useRef<EditorMode>(editorMode);
   const savedEditPosition = useRef(new Vector3(7, 5, 7));
   const savedEditTarget = useRef(new Vector3(...EDIT_CAMERA_TARGET));
+  const focusSnapshotRef = useRef<EditCameraSnapshot | null>(null);
+  const focusedEntityIdRef = useRef<string | null>(null);
+  const handledFrameRequestRef = useRef(frameSelectionRequest);
+
+  const restoreFocusSnapshot = useCallback(() => {
+    const controls = controlsRef.current;
+    const snapshot = focusSnapshotRef.current;
+    if (!controls || !snapshot) {
+      focusSnapshotRef.current = null;
+      focusedEntityIdRef.current = null;
+      onFocusChange(null);
+      return false;
+    }
+    camera.position.copy(snapshot.position);
+    camera.quaternion.copy(snapshot.quaternion);
+    camera.up.copy(snapshot.up);
+    camera.zoom = snapshot.zoom;
+    controls.target.copy(snapshot.target);
+    controls.update();
+    camera.updateProjectionMatrix();
+    focusSnapshotRef.current = null;
+    focusedEntityIdRef.current = null;
+    onFocusChange(null);
+    return true;
+  }, [camera, onFocusChange]);
 
   useLayoutEffect(() => {
     const previous = previousMode.current;
     const controls = controlsRef.current;
     if (previous === "edit" && editorMode === "play") {
+      restoreFocusSnapshot();
       savedEditPosition.current.copy(camera.position);
       if (controls) savedEditTarget.current.copy(controls.target);
     } else if (previous === "play" && editorMode === "edit") {
@@ -1091,26 +1706,98 @@ function CameraControls({
       camera.updateProjectionMatrix();
     }
     previousMode.current = editorMode;
-  }, [camera, editorMode]);
+  }, [camera, editorMode, restoreFocusSnapshot]);
 
   useLayoutEffect(() => {
     const controls = controlsRef.current;
+    if (frameSelectionRequest === 0) {
+      handledFrameRequestRef.current = 0;
+      return;
+    }
     if (
+      handledFrameRequestRef.current === frameSelectionRequest ||
       editorMode !== "edit" ||
       !controls ||
-      !frameTarget ||
-      frameSelectionRequest === 0
+      !frameEntityId
     ) {
       return;
     }
-    const target = new Vector3(...frameTarget);
+    handledFrameRequestRef.current = frameSelectionRequest;
+
+    if (focusedEntityIdRef.current === frameEntityId) {
+      restoreFocusSnapshot();
+      return;
+    }
+
+    if (!focusSnapshotRef.current) {
+      focusSnapshotRef.current = {
+        position: camera.position.clone(),
+        quaternion: camera.quaternion.clone(),
+        target: controls.target.clone(),
+        up: camera.up.clone(),
+        zoom: camera.zoom,
+      };
+    }
+
+    const selectedObject = findSceneEntityObject(threeScene, frameEntityId);
+
+    const target = new Vector3();
+    let radius = 0;
+    if (selectedObject) {
+      selectedObject.updateWorldMatrix(true, true);
+      const bounds = new Box3().setFromObject(selectedObject);
+      if (!bounds.isEmpty()) {
+        const sphere = bounds.getBoundingSphere(new Sphere());
+        target.copy(sphere.center);
+        radius = sphere.radius;
+      } else {
+        selectedObject.getWorldPosition(target);
+      }
+    } else if (frameTarget) {
+      target.fromArray(frameTarget);
+    } else {
+      target.copy(controls.target);
+    }
+
     const offset = camera.position.clone().sub(controls.target);
     if (offset.lengthSq() < 0.01) offset.set(4, 3, 4);
-    offset.setLength(Math.max(2.5, Math.min(8, offset.length())));
+    let distance = Math.max(2.5, Math.min(8, offset.length()));
+    if (camera instanceof PerspectiveCamera && radius > 0.001) {
+      const verticalFov = MathUtils.degToRad(camera.fov);
+      const horizontalFov = 2 * Math.atan(
+        Math.tan(verticalFov / 2) * camera.aspect,
+      );
+      const limitingFov = Math.max(
+        Math.min(verticalFov, horizontalFov),
+        MathUtils.degToRad(1),
+      );
+      distance = Math.max(2.5, radius / Math.sin(limitingFov / 2) * 1.15);
+    }
+    offset.setLength(Math.min(distance, camera.far * 0.8));
     controls.target.copy(target);
     camera.position.copy(target.clone().add(offset));
     controls.update();
-  }, [camera, editorMode, frameSelectionRequest, frameTarget]);
+    focusedEntityIdRef.current = frameEntityId;
+    onFocusChange({
+      entityId: frameEntityId,
+      entityName: frameEntityName ?? frameEntityId,
+    });
+  }, [
+    camera,
+    editorMode,
+    frameEntityId,
+    frameEntityName,
+    frameSelectionRequest,
+    frameTarget,
+    onFocusChange,
+    restoreFocusSnapshot,
+    threeScene,
+  ]);
+
+  useLayoutEffect(() => {
+    if (exitFocusRequest === 0) return;
+    restoreFocusSnapshot();
+  }, [exitFocusRequest, restoreFocusSnapshot]);
 
   const enabled =
     editorMode === "edit"
@@ -1124,7 +1811,7 @@ function CameraControls({
       enabled={enabled}
       target={EDIT_CAMERA_TARGET}
       minDistance={2}
-      maxDistance={30}
+      maxDistance={Math.max(30, camera.far * 0.8)}
       maxPolarAngle={Math.PI / 2 - 0.03}
       enableDamping
       dampingFactor={0.08}
@@ -1439,6 +2126,10 @@ export function SceneViewport({
   onDropSceneAsset,
   onCreatePrimitive,
   frameSelectionRequest,
+  exitFocusRequest,
+  focusedEntity,
+  onFocusChange,
+  onExitFocus,
   onViewportFileDrop,
   onPlayDropAttempt,
   onDropRejected,
@@ -1466,6 +2157,10 @@ export function SceneViewport({
   onDropSceneAsset: (assetId: string, position: Vec3) => void;
   onCreatePrimitive: (creationId: string) => void;
   frameSelectionRequest: number;
+  exitFocusRequest: number;
+  focusedEntity: SceneFocusState | null;
+  onFocusChange: (focus: SceneFocusState | null) => void;
+  onExitFocus: () => void;
   onViewportFileDrop: () => void;
   onPlayDropAttempt: () => void;
   onDropRejected: (message: string) => void;
@@ -1801,7 +2496,7 @@ export function SceneViewport({
           </span>
         </div>
         <span className="text-xs text-zinc-400">
-          {editorMode === "edit" ? "Edit / Scene JSON" : profileLabel}
+          {editorMode === "edit" ? "編集モード" : profileLabel}
         </span>
       </div>
 
@@ -1872,21 +2567,13 @@ export function SceneViewport({
             shadow-mapSize-width={1024}
             shadow-mapSize-height={1024}
           />
-          <mesh
-            position={[0, -0.025, 0]}
-            rotation={[-Math.PI / 2, 0, 0]}
-            receiveShadow
-          >
-            <planeGeometry args={[60, 60]} />
-            <meshStandardMaterial color="#202024" roughness={1} />
-          </mesh>
           {sceneSettings.editor.gizmo.gridVisible ? (
             <gridHelper
               args={[
                 sceneSettings.editor.gizmo.gridSize,
                 sceneSettings.editor.gizmo.gridDivisions,
-                "#52525b",
-                "#2d2d33",
+                sceneSettings.skybox.enabled ? "#94a3b8" : "#52525b",
+                sceneSettings.skybox.enabled ? "#d5dbe3" : "#2d2d33",
               ]}
               position={[0, 0.005, 0]}
             />
@@ -1928,7 +2615,15 @@ export function SceneViewport({
             projectKind={projectKind}
             transformDragging={transformDragging}
             frameSelectionRequest={frameSelectionRequest}
+            exitFocusRequest={exitFocusRequest}
+            frameEntityId={selectedEntityId}
+            frameEntityName={
+              selectedEntityId
+                ? scene.entities[selectedEntityId]?.name ?? null
+                : null
+            }
             frameTarget={selectedTransform?.position}
+            onFocusChange={onFocusChange}
           />
           {editorMode === "play" && projectKind === "world" ? (
             <WorldPlayController
@@ -1966,6 +2661,38 @@ export function SceneViewport({
         {modelProxyVisible ? (
           <div className="pointer-events-none absolute right-2.5 top-2.5 z-10 rounded border border-amber-700/60 bg-amber-950/75 px-2 py-1 text-xs text-amber-200">
             Model proxy preview
+          </div>
+        ) : null}
+
+        {focusedEntity ? (
+          <div
+            className="absolute bottom-2.5 right-2.5 z-20 flex max-w-[min(20rem,70%)] items-center gap-3 rounded-md border border-violet-400/60 bg-zinc-950/92 px-3 py-2 text-zinc-100 shadow-lg backdrop-blur"
+            role="group"
+            aria-label="Entityフォーカス"
+          >
+            <div className="min-w-0">
+              <p
+                className="truncate text-xs font-semibold"
+                role="status"
+                aria-live="polite"
+              >
+                フォーカス中: {scene.entities[focusedEntity.entityId]?.name ?? focusedEntity.entityName}
+              </p>
+              <p className="mt-0.5 text-[11px] text-zinc-400">
+                {selection?.kind === "entity" &&
+                selection.id !== focusedEntity.entityId
+                  ? "Fで選択対象へ切替 / Escapeで解除"
+                  : "FキーまたはEscapeで解除"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onExitFocus}
+              title="フォーカスを解除 (Escape)"
+              className="shrink-0 rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs font-semibold text-zinc-100 hover:border-zinc-400 hover:bg-zinc-700"
+            >
+              解除
+            </button>
           </div>
         ) : null}
 

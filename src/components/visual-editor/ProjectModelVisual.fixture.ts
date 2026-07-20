@@ -1,11 +1,15 @@
 import {
+  Box3,
   BoxGeometry,
   DoubleSide,
+  Group,
   Mesh,
+  MeshBasicMaterial,
   MeshPhysicalMaterial,
   NoColorSpace,
   SRGBColorSpace,
   Texture,
+  Vector3,
 } from "three";
 import {
   BUILTIN_ASSET_IDS,
@@ -17,12 +21,21 @@ import {
   type TextureAsset,
 } from "../../lib/visual-editor";
 import {
+  PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY,
   applyAssignedMaterialPreview,
+  applyAssignedMaterialPreviews,
   createAssignedMaterialPreviewMaterial,
+  getModelSelectionBounds,
 } from "./ProjectModelVisual";
-import { configureMaterialPreviewTexture } from "./material-texture-preview";
+import {
+  configureMaterialPreviewTexture,
+  refreshMaterialPreviewRender,
+  resolveMaterialPreviewTextureDisplayStatus,
+} from "./material-texture-preview";
 
 export function runProjectModelMaterialPreviewFixtureAssertions(): void {
+  assertModelSelectionBoundsStayLocal();
+
   const project = createPrototypeProject("world", "model-material-preview");
   const fixtureTextureAsset: TextureAsset = {
     id: "fixture-texture-project",
@@ -182,6 +195,10 @@ export function runProjectModelMaterialPreviewFixtureAssertions(): void {
     "Core Material preview texture color spaces are incorrect",
   );
 
+  assertModelMaterialAssignmentsStayInTheirGltfSlots(assets);
+  assertAsyncTextureCompletionRequestsMaterialRender();
+  assertTextureLoadStatusOnlyReportsSupportedReadyAssets(fixtureTextureAsset);
+
   owned.forEach((material) => material.dispose());
   texturedPreview.dispose();
   [
@@ -196,8 +213,170 @@ export function runProjectModelMaterialPreviewFixtureAssertions(): void {
   texture.dispose();
 }
 
+function assertTextureLoadStatusOnlyReportsSupportedReadyAssets(
+  projectTexture: TextureAsset,
+): void {
+  assert(
+    resolveMaterialPreviewTextureDisplayStatus(projectTexture, "loading") ===
+      "loading",
+    "A supported Texture did not expose its loading state",
+  );
+  assert(
+    resolveMaterialPreviewTextureDisplayStatus(projectTexture, "ready") ===
+      "ready",
+    "A loaded Texture was not reported as ready",
+  );
+  assert(
+    resolveMaterialPreviewTextureDisplayStatus(
+      { ...projectTexture, status: "missing" },
+      "ready",
+    ) === "error",
+    "A missing Texture source was incorrectly reported as ready",
+  );
+  assert(
+    resolveMaterialPreviewTextureDisplayStatus(
+      {
+        ...projectTexture,
+        source: { kind: "builtin", key: "fixture/unsupported-texture" },
+      },
+      "ready",
+    ) === "error",
+    "An unsupported Texture source was incorrectly reported as ready",
+  );
+}
+
+function assertModelMaterialAssignmentsStayInTheirGltfSlots(
+  assets: ReturnType<typeof updateMaterialAsset>,
+): void {
+  const orange = getMaterialAsset(assets, BUILTIN_ASSET_IDS.material.orange);
+  const blue = getMaterialAsset(assets, BUILTIN_ASSET_IDS.material.blue);
+  assert(orange && blue, "Material slot fixtures are missing");
+
+  const firstSource = new MeshPhysicalMaterial({ color: "#ffffff" });
+  firstSource.userData[PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY] = 0;
+  const secondSource = new MeshPhysicalMaterial({ color: "#ffffff" });
+  secondSource.userData[PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY] = 1;
+  const first = new Mesh(new BoxGeometry(1, 1, 1), firstSource);
+  const second = new Mesh(new BoxGeometry(1, 1, 1), secondSource);
+  const root = new Group();
+  root.add(first, second);
+
+  const owned = applyAssignedMaterialPreviews(root, [
+    { sourceMaterialIndex: 0, material: orange },
+    { sourceMaterialIndex: 1, material: blue },
+  ]);
+  const firstPreview = first.material as MeshPhysicalMaterial;
+  const secondPreview = second.material as MeshPhysicalMaterial;
+  assert(
+    firstPreview !== firstSource && secondPreview !== secondSource,
+    "Model slot overrides reused cached glTF Materials",
+  );
+  assert(
+    colorNear(
+      firstPreview.color,
+      orange.properties.pbrMetallicRoughness.baseColorFactor,
+    ) &&
+      colorNear(
+        secondPreview.color,
+        blue.properties.pbrMetallicRoughness.baseColorFactor,
+      ),
+    "Model Material overrides crossed their glTF source slots",
+  );
+
+  owned.forEach((material) => material.dispose());
+  first.geometry.dispose();
+  second.geometry.dispose();
+  firstSource.dispose();
+  secondSource.dispose();
+}
+
+function assertAsyncTextureCompletionRequestsMaterialRender(): void {
+  const material = new MeshPhysicalMaterial();
+  const texture = new Texture();
+  const materialVersion = material.version;
+  const textureVersion = texture.version;
+  let renderRequests = 0;
+  refreshMaterialPreviewRender(
+    material,
+    { baseColorMap: texture },
+    () => {
+      renderRequests += 1;
+    },
+  );
+  assert(
+    material.version > materialVersion &&
+      texture.version > textureVersion &&
+      renderRequests === 1,
+    "Async Texture completion did not invalidate its Material and Scene View",
+  );
+  material.dispose();
+  texture.dispose();
+}
+
+function assertModelSelectionBoundsStayLocal(): void {
+  const model = new Group();
+  const partMaterial = new MeshBasicMaterial();
+  const part = new Mesh(new BoxGeometry(2, 4, 6), partMaterial);
+  part.position.set(1, 2, 3);
+  model.add(part);
+
+  const detachedBounds = getModelSelectionBounds(model);
+  const entity = new Group();
+  entity.position.set(10, 1, -4);
+  entity.rotation.set(0.2, 0.6, -0.1);
+  entity.scale.set(2, 3, 0.5);
+  entity.add(model);
+  entity.updateWorldMatrix(true, true);
+
+  const attachedBounds = getModelSelectionBounds(model);
+  assert(
+    tupleNear(attachedBounds.position, detachedBounds.position) &&
+      tupleNear(attachedBounds.scale, detachedBounds.scale),
+    "Entity Transform leaked into the model selection bounds",
+  );
+
+  const boundsMaterial = new MeshBasicMaterial();
+  const boundsVisual = new Mesh(new BoxGeometry(1, 1, 1), boundsMaterial);
+  boundsVisual.position.fromArray(attachedBounds.position);
+  boundsVisual.scale.fromArray(attachedBounds.scale);
+  entity.add(boundsVisual);
+  entity.updateWorldMatrix(true, true);
+
+  const modelCenter = new Box3()
+    .setFromObject(model)
+    .getCenter(new Vector3());
+  const boundsCenter = boundsVisual.getWorldPosition(new Vector3());
+  assert(
+    modelCenter.distanceTo(boundsCenter) < 1e-6,
+    "The rendered selection bounds no longer share the model's world center",
+  );
+
+  part.geometry.dispose();
+  partMaterial.dispose();
+  boundsVisual.geometry.dispose();
+  boundsMaterial.dispose();
+}
+
+function tupleNear(
+  left: [number, number, number],
+  right: [number, number, number],
+): boolean {
+  return left.every((value, index) => near(value, right[index]));
+}
+
 function near(left: number, right: number): boolean {
   return Math.abs(left - right) < 1e-6;
+}
+
+function colorNear(
+  color: { r: number; g: number; b: number },
+  factor: readonly number[],
+): boolean {
+  return (
+    near(color.r, factor[0]) &&
+    near(color.g, factor[1]) &&
+    near(color.b, factor[2])
+  );
 }
 
 function assert(condition: unknown, message: string): asserts condition {

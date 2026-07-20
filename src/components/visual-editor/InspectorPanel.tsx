@@ -1,16 +1,20 @@
 import {
   useEffect,
+  useRef,
   useState,
   type DragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { Link2 } from "lucide-react";
 import {
   getGeometryAsset,
   getBuiltinPrimitiveCreation,
   getMaterialAsset,
   getMeshMaterialSlots,
   getTransform,
+  getXriftComponentDefinition,
   EDITOR_COMPONENT_REGISTRY,
   type AssetManifest,
   type ColliderComponent,
@@ -40,7 +44,11 @@ import type {
 } from "./ModelAssetInspector";
 import { XRiftComponentInspector } from "./XRiftComponentInspector";
 import { SceneSettingsInspector } from "./SceneSettingsPanel";
-import { commandTitle, EDITOR_ICONS } from "./editor-icons";
+import {
+  commandTitle,
+  EDITOR_ICONS,
+  getEditorComponentIcon,
+} from "./editor-icons";
 import { roundTo } from "./editor-utils";
 import {
   clearEditorDragData,
@@ -130,52 +138,276 @@ function EntityNameField({
   );
 }
 
+const MIN_SCALE_MAGNITUDE = 0.0001;
+
+type TransformValueKind = "position" | "rotation" | "scale";
+
+type AxisScrubState = {
+  pointerId: number;
+  axis: "X" | "Y" | "Z";
+  axisIndex: number;
+  clientX: number;
+  clientY: number;
+  startValue: Vec3;
+  currentValue: Vec3;
+  scaleLinked: boolean;
+};
+
+function normalizeScaleAxis(value: number, fallback: number): number {
+  if (Math.abs(value) >= MIN_SCALE_MAGNITUDE) return value;
+  const sign = value < 0 ? -1 : value > 0 ? 1 : fallback < 0 ? -1 : 1;
+  return sign * MIN_SCALE_MAGNITUDE;
+}
+
+function updateVectorAxis(
+  value: Vec3,
+  axisIndex: number,
+  axisValue: number,
+  valueKind: TransformValueKind,
+  scaleLinked: boolean,
+): Vec3 {
+  const next: Vec3 = [value[0], value[1], value[2]];
+  if (valueKind !== "scale") {
+    next[axisIndex] = axisValue;
+    return next;
+  }
+
+  const normalizedAxisValue = normalizeScaleAxis(axisValue, value[axisIndex]);
+  if (!scaleLinked) {
+    next[axisIndex] = normalizedAxisValue;
+    return next;
+  }
+
+  const ratio = normalizedAxisValue / value[axisIndex];
+  return value.map((entry) =>
+    normalizeScaleAxis(entry * ratio, entry),
+  ) as Vec3;
+}
+
+function axisScrubSensitivity(valueKind: TransformValueKind): number {
+  return valueKind === "rotation" ? Math.PI / 180 : 0.01;
+}
+
+function formatTransformAxis(valueKind: TransformValueKind, value: number): string {
+  const displayed = valueKind === "rotation" ? (value * 180) / Math.PI : value;
+  return displayed.toFixed(valueKind === "position" ? 3 : 2);
+}
+
 function VectorEditor({
   label,
   value,
   valueKind,
   disabled,
+  scaleLinked = false,
+  onScaleLinkedChange,
   onChange,
+  onScrubStart,
+  onScrubChange,
+  onScrubEnd,
+  onScrubCancel,
 }: {
   label: string;
   value: Vec3;
-  valueKind: "position" | "rotation" | "scale";
+  valueKind: TransformValueKind;
   disabled: boolean;
+  scaleLinked?: boolean;
+  onScaleLinkedChange?: (linked: boolean) => void;
   onChange: (value: Vec3) => void;
+  onScrubStart?: () => void;
+  onScrubChange?: (value: Vec3) => void;
+  onScrubEnd?: () => void;
+  onScrubCancel?: () => void;
 }) {
   const axes = ["X", "Y", "Z"] as const;
+  const scrubEnabled = Boolean(
+    onScrubStart && onScrubChange && onScrubEnd && onScrubCancel,
+  );
+  const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const scrubRef = useRef<AxisScrubState | null>(null);
+  const [scrub, setScrub] = useState<AxisScrubState | null>(null);
   const displayedValues: Vec3 =
     valueKind === "rotation"
       ? (value.map((axis) => roundTo((axis * 180) / Math.PI, 2)) as Vec3)
       : (value.map((axis) => roundTo(axis, 3)) as Vec3);
 
+  const cancelScrub = (pointerId?: number) => {
+    const active = scrubRef.current;
+    if (!active || (pointerId !== undefined && active.pointerId !== pointerId)) return;
+    scrubRef.current = null;
+    setScrub(null);
+    onScrubCancel?.();
+  };
+
+  const handleAxisPointerDown = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    axis: (typeof axes)[number],
+    axisIndex: number,
+  ) => {
+    if (!scrubEnabled || disabled || event.button !== 0 || scrubRef.current) return;
+    event.preventDefault();
+    event.currentTarget.focus();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const startValue: Vec3 = [value[0], value[1], value[2]];
+    const nextScrub: AxisScrubState = {
+      pointerId: event.pointerId,
+      axis,
+      axisIndex,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      startValue,
+      currentValue: startValue,
+      scaleLinked: valueKind === "scale" && scaleLinked,
+    };
+    scrubRef.current = nextScrub;
+    setScrub(nextScrub);
+    onScrubStart?.();
+  };
+
+  const handleAxisPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const active = scrubRef.current;
+    if (!active || active.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    const modifier = event.shiftKey ? 0.1 : event.ctrlKey || event.altKey ? 10 : 1;
+    const axisValue =
+      active.currentValue[active.axisIndex] +
+      (event.clientX - active.clientX) *
+        axisScrubSensitivity(valueKind) *
+        modifier;
+    const currentValue = updateVectorAxis(
+      active.currentValue,
+      active.axisIndex,
+      axisValue,
+      valueKind,
+      active.scaleLinked,
+    );
+    const nextScrub = {
+      ...active,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      currentValue,
+    };
+    scrubRef.current = nextScrub;
+    setScrub(nextScrub);
+    onScrubChange?.(currentValue);
+  };
+
+  const handleAxisPointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const active = scrubRef.current;
+    if (!active || active.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    scrubRef.current = null;
+    setScrub(null);
+    onScrubEnd?.();
+  };
+
   return (
-    <fieldset className="grid grid-cols-[54px_repeat(3,minmax(0,1fr))] items-center gap-1.5">
-      <legend className="sr-only">{label}</legend>
-      <span className="text-xs text-slate-600">{label}</span>
-      {axes.map((axis, index) => (
-        <label key={axis} className="relative block min-w-0">
-          <span className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
-            {axis}
-          </span>
-          <input
-            type="number"
-            value={displayedValues[index]}
-            disabled={disabled}
-            step={valueKind === "rotation" ? 1 : 0.1}
-            aria-label={`${label} ${axis}`}
-            onChange={(event) => {
-              const nextValue = event.currentTarget.valueAsNumber;
-              if (!Number.isFinite(nextValue)) return;
-              const next: Vec3 = [value[0], value[1], value[2]];
-              next[index] = valueKind === "rotation" ? (nextValue * Math.PI) / 180 : nextValue;
-              onChange(next);
-            }}
-            className="h-7 w-full rounded border border-slate-300 bg-white py-1 pl-4 pr-1 text-right text-xs tabular-nums text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-          />
-        </label>
-      ))}
-    </fieldset>
+    <div className="relative">
+      <fieldset className="grid grid-cols-[54px_repeat(3,minmax(0,1fr))] items-center gap-1.5">
+        <legend className="sr-only">{label}</legend>
+        <span className="flex min-w-0 items-center gap-1 text-xs text-slate-600">
+          <span>{label}</span>
+          {valueKind === "scale" && onScaleLinkedChange ? (
+            <button
+              type="button"
+              disabled={disabled}
+              aria-label={scaleLinked ? "Scale比率の固定を解除" : "Scale比率を固定"}
+              aria-pressed={scaleLinked}
+              title={scaleLinked ? "Scale比率を固定中" : "Scaleを軸ごとに変更"}
+              onClick={() => onScaleLinkedChange?.(!scaleLinked)}
+              className={`grid h-5 w-5 shrink-0 place-items-center rounded border transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+                scaleLinked
+                  ? "border-violet-300 bg-violet-50 text-violet-700"
+                  : "border-transparent text-slate-400 hover:border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              <Link2 size={12} aria-hidden="true" />
+            </button>
+          ) : null}
+        </span>
+        {axes.map((axis, index) => (
+          <div key={axis} className="relative block min-w-0">
+            {scrubEnabled ? (
+              <button
+                type="button"
+                disabled={disabled}
+                aria-label={`${label} ${axis}をドラッグして調整`}
+                title={`${label} ${axis}を左右にドラッグ。Shift: 微調整、Ctrl/Alt: 大きく調整。ダブルクリック: 数値入力`}
+                onPointerDown={(event) => handleAxisPointerDown(event, axis, index)}
+                onPointerMove={handleAxisPointerMove}
+                onPointerUp={handleAxisPointerUp}
+                onPointerCancel={(event) => cancelScrub(event.pointerId)}
+                onLostPointerCapture={(event) => cancelScrub(event.pointerId)}
+                onDoubleClick={() => {
+                  inputRefs.current[index]?.focus();
+                  inputRefs.current[index]?.select();
+                }}
+                onKeyDown={(event) => {
+                  if (!scrubRef.current) return;
+                  event.stopPropagation();
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    cancelScrub();
+                  }
+                }}
+                className="absolute inset-y-px left-px z-10 w-5 touch-none cursor-ew-resize rounded-l text-xs font-semibold text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-400 disabled:cursor-not-allowed disabled:text-slate-300"
+              >
+                {axis}
+              </button>
+            ) : (
+              <span className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
+                {axis}
+              </span>
+            )}
+            <input
+              ref={(element) => {
+                inputRefs.current[index] = element;
+              }}
+              type="number"
+              value={displayedValues[index]}
+              disabled={disabled}
+              step={valueKind === "rotation" ? 1 : 0.1}
+              aria-label={`${label} ${axis}`}
+              onChange={(event) => {
+                const nextValue = event.currentTarget.valueAsNumber;
+                if (!Number.isFinite(nextValue)) return;
+                const normalizedValue =
+                  valueKind === "rotation" ? (nextValue * Math.PI) / 180 : nextValue;
+                if (
+                  valueKind === "scale" &&
+                  Math.abs(normalizedValue) < MIN_SCALE_MAGNITUDE
+                ) {
+                  return;
+                }
+                onChange(
+                  updateVectorAxis(
+                    value,
+                    index,
+                    normalizedValue,
+                    valueKind,
+                    valueKind === "scale" && scaleLinked,
+                  ),
+                );
+              }}
+              className="h-7 w-full rounded border border-slate-300 bg-white py-1 pl-5 pr-1 text-right text-xs tabular-nums text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+            />
+          </div>
+        ))}
+      </fieldset>
+      {scrub ? (
+        <div
+          className="pointer-events-none fixed z-50 whitespace-nowrap rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium tabular-nums text-slate-700 shadow-md"
+          style={{
+            left: Math.max(8, Math.min(scrub.clientX + 12, window.innerWidth - 190)),
+            top: Math.max(8, Math.min(scrub.clientY + 12, window.innerHeight - 36)),
+          }}
+        >
+          {label} {scrub.axis}{" "}
+          {formatTransformAxis(valueKind, scrub.startValue[scrub.axisIndex])}
+          {" → "}
+          {formatTransformAxis(valueKind, scrub.currentValue[scrub.axisIndex])}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -643,6 +875,10 @@ function EntityInspector({
   readOnly,
   onRename,
   onTransformChange,
+  onTransformScrubStart,
+  onTransformScrubChange,
+  onTransformScrubEnd,
+  onTransformScrubCancel,
   onMeshChange,
   onColliderChange,
   onAutoFitCollider,
@@ -660,6 +896,10 @@ function EntityInspector({
   readOnly: boolean;
   onRename: (name: string) => void;
   onTransformChange: (patch: TransformPatch) => void;
+  onTransformScrubStart: () => void;
+  onTransformScrubChange: (patch: TransformPatch) => void;
+  onTransformScrubEnd: () => void;
+  onTransformScrubCancel: () => void;
   onMeshChange: (componentId: string, patch: MeshInspectorPatch) => void;
   onColliderChange: (componentId: string, patch: ColliderPatch) => void;
   onAutoFitCollider: (componentId: string) => void;
@@ -680,6 +920,7 @@ function EntityInspector({
 }) {
   const transform = getTransform(entity);
   const [addComponentOpen, setAddComponentOpen] = useState(false);
+  const [scaleLinked, setScaleLinked] = useState(true);
   const registeredComponents = entity.components as RegisteredSceneComponent[];
 
   return (
@@ -687,12 +928,44 @@ function EntityInspector({
       <EntityNameField entity={entity} disabled={readOnly} onRename={onRename} />
 
       {transform ? (
-        <ComponentCard title="Transform" subtitle="シーン">
-          <VectorEditor label="Position" value={transform.position} valueKind="position" disabled={readOnly} onChange={(position) => onTransformChange({ position })} />
-          <VectorEditor label="Rotation" value={transform.rotation} valueKind="rotation" disabled={readOnly} onChange={(rotation) => onTransformChange({ rotation })} />
-          <VectorEditor label="Scale" value={transform.scale} valueKind="scale" disabled={readOnly} onChange={(scale) => onTransformChange({ scale })} />
+        <ComponentCard title="Transform" subtitle="Local">
+          <VectorEditor
+            label="Position"
+            value={transform.position}
+            valueKind="position"
+            disabled={readOnly}
+            onChange={(position) => onTransformChange({ position })}
+            onScrubStart={onTransformScrubStart}
+            onScrubChange={(position) => onTransformScrubChange({ position })}
+            onScrubEnd={onTransformScrubEnd}
+            onScrubCancel={onTransformScrubCancel}
+          />
+          <VectorEditor
+            label="Rotation"
+            value={transform.rotation}
+            valueKind="rotation"
+            disabled={readOnly}
+            onChange={(rotation) => onTransformChange({ rotation })}
+            onScrubStart={onTransformScrubStart}
+            onScrubChange={(rotation) => onTransformScrubChange({ rotation })}
+            onScrubEnd={onTransformScrubEnd}
+            onScrubCancel={onTransformScrubCancel}
+          />
+          <VectorEditor
+            label="Scale"
+            value={transform.scale}
+            valueKind="scale"
+            disabled={readOnly}
+            scaleLinked={scaleLinked}
+            onScaleLinkedChange={setScaleLinked}
+            onChange={(scale) => onTransformChange({ scale })}
+            onScrubStart={onTransformScrubStart}
+            onScrubChange={(scale) => onTransformScrubChange({ scale })}
+            onScrubEnd={onTransformScrubEnd}
+            onScrubCancel={onTransformScrubCancel}
+          />
           <p className="text-xs leading-4 text-slate-500">
-            回転は度単位で編集します。
+            軸ラベルを左右にドラッグできます。Shiftで微調整、CtrlまたはAltで大きく調整します。回転は度単位です。
           </p>
         </ComponentCard>
       ) : null}
@@ -826,6 +1099,7 @@ function EntityInspector({
                       {category}
                     </p>
                     {definitions.map((definition) => {
+                      const DefinitionIcon = getEditorComponentIcon(definition);
                       const duplicate =
                         !definition.allowMultiple &&
                         registeredComponents.some((component) =>
@@ -847,7 +1121,10 @@ function EntityInspector({
                           }}
                           className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:text-slate-400"
                         >
-                          <span>{definition.label}</span>
+                          <span className="flex min-w-0 items-center gap-2">
+                            <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
+                            <span className="truncate">{definition.label}</span>
+                          </span>
                           {duplicate ? <span className="text-xs">追加済み</span> : null}
                         </button>
                       );
@@ -873,6 +1150,10 @@ export function InspectorPanel({
   readOnly,
   onRenameEntity,
   onTransformChange,
+  onTransformScrubStart,
+  onTransformScrubChange,
+  onTransformScrubEnd,
+  onTransformScrubCancel,
   onMeshChange,
   onColliderChange,
   onAutoFitCollider,
@@ -905,6 +1186,10 @@ export function InspectorPanel({
   readOnly: boolean;
   onRenameEntity: (entityId: string, name: string) => void;
   onTransformChange: (entityId: string, patch: TransformPatch) => void;
+  onTransformScrubStart: (entityId: string) => void;
+  onTransformScrubChange: (entityId: string, patch: TransformPatch) => void;
+  onTransformScrubEnd: (entityId: string) => void;
+  onTransformScrubCancel: (entityId: string) => void;
   onMeshChange: (entityId: string, componentId: string, patch: MeshInspectorPatch) => void;
   onColliderChange: (entityId: string, componentId: string, patch: ColliderPatch) => void;
   onAutoFitCollider: (entityId: string, componentId: string) => void;
@@ -944,11 +1229,17 @@ export function InspectorPanel({
     asset?.kind === "material"
       ? countMaterialSceneReferences(scene, assets, asset.id)
       : undefined;
+  const xriftDefinition = entity?.components
+    .filter((component) => component.type === "xrift-component")
+    .map((component) => getXriftComponentDefinition(component.schemaId))
+    .find((definition) => definition !== undefined);
   const EntityIcon = entity?.components.some((component) => component.type === "light")
     ? EDITOR_ICONS.light
     : entity?.components.some((component) => component.type === "particle-emitter")
       ? EDITOR_ICONS.particle
-       : EDITOR_ICONS.sceneEntity;
+      : xriftDefinition
+        ? EDITOR_ICONS[xriftDefinition.icon]
+        : EDITOR_ICONS.sceneEntity;
   const InspectorIcon = sceneSettingsOpen ? EDITOR_ICONS.settings : EntityIcon;
 
   return (
@@ -1028,6 +1319,12 @@ export function InspectorPanel({
             readOnly={readOnly}
             onRename={(name) => onRenameEntity(entity.id, name)}
             onTransformChange={(patch) => onTransformChange(entity.id, patch)}
+            onTransformScrubStart={() => onTransformScrubStart(entity.id)}
+            onTransformScrubChange={(patch) =>
+              onTransformScrubChange(entity.id, patch)
+            }
+            onTransformScrubEnd={() => onTransformScrubEnd(entity.id)}
+            onTransformScrubCancel={() => onTransformScrubCancel(entity.id)}
             onMeshChange={(componentId, patch) => onMeshChange(entity.id, componentId, patch)}
             onColliderChange={(componentId, patch) =>
               onColliderChange(entity.id, componentId, patch)

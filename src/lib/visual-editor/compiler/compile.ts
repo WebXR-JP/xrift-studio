@@ -165,6 +165,13 @@ export function compileVisualProject(
     projectIdentity,
     sha256Utf8(documents.project.projectId).slice(0, 12),
   ].join("-");
+  const requiredPublicationFiles = [
+    {
+      purpose: "thumbnail" as const,
+      sourceRelativePath: "public/thumbnail.png" as const,
+      targetRelativePath: "public/thumbnail.png" as const,
+    },
+  ];
 
   return {
     targetKind: documents.project.projectKind,
@@ -180,6 +187,7 @@ export function compileVisualProject(
       stagingDirectoryName,
       overlayFiles: [...overlayFiles, provenanceFile],
       assetCopyPlan,
+      requiredPublicationFiles,
     },
   };
 }

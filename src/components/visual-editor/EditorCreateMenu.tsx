@@ -8,7 +8,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Cuboid,
-  Puzzle,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
@@ -21,7 +20,7 @@ import {
   type SceneEntity,
   type VisualProjectKind,
 } from "../../lib/visual-editor";
-import { EDITOR_ICONS } from "./editor-icons";
+import { EDITOR_ICONS, getEditorComponentIcon } from "./editor-icons";
 
 type CreateMenuPage = "root" | "primitive" | "xrift" | "component";
 
@@ -204,7 +203,7 @@ export function EditorCreateMenu({
               onClick={() => setPage("xrift")}
             />
             <RootChoice
-              icon={Puzzle}
+              icon={EDITOR_ICONS.component}
               title="Component"
               description={
                 selectedEntity
@@ -240,7 +239,12 @@ export function EditorCreateMenu({
           <div className="space-y-2">
             <MenuSection label="Sceneへ配置">
               {builtinPrefabRecipes.map((recipe) => {
-                const Icon = EDITOR_ICONS[recipe.icon];
+                const definition = xriftGroups
+                  .flatMap((group) => group.components)
+                  .find((entry) => entry.schemaId === recipe.schemaId);
+                const Icon = definition
+                  ? EDITOR_ICONS[definition.icon]
+                  : EDITOR_ICONS.prefab;
                 return (
                   <MenuItem
                     key={recipe.id}
@@ -269,6 +273,7 @@ export function EditorCreateMenu({
                 label={`${group.label} Component`}
               >
                 {group.components.map((definition) => {
+                  const Icon = EDITOR_ICONS[definition.icon];
                   const canCreateHost = definition.attachBehavior.kind === "leaf";
                   const duplicate = Boolean(
                     !definition.allowMultiplePerEntity &&
@@ -281,7 +286,7 @@ export function EditorCreateMenu({
                   return (
                     <MenuItem
                       key={definition.schemaId}
-                      icon={Puzzle}
+                      icon={Icon}
                       label={definition.label}
                       detail={definition.description}
                       disabled={
@@ -321,6 +326,7 @@ export function EditorCreateMenu({
                 label={CATEGORY_LABELS[category] ?? category}
               >
                 {definitions.map((definition) => {
+                  const Icon = getEditorComponentIcon(definition);
                   const duplicate = Boolean(
                     !definition.allowMultiple &&
                       selectedEntity?.components.some((component) =>
@@ -332,7 +338,7 @@ export function EditorCreateMenu({
                   return (
                     <MenuItem
                       key={definition.id}
-                      icon={Puzzle}
+                      icon={Icon}
                       label={definition.label}
                       disabled={disabled || !selectedEntity || duplicate}
                       trailing={duplicate ? "追加済み" : "追加"}

@@ -79,6 +79,7 @@ export function runAssetOperationLockFixtureAssertions(): void {
   const inactiveStatuses: PendingImportStatus[] = [
     "waiting-save",
     "succeeded",
+    "updated",
     "duplicate",
     "failed",
   ];

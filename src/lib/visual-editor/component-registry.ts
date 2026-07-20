@@ -39,6 +39,22 @@ export type XriftComponentCategory =
   | "rendering"
   | "world";
 
+export type XriftComponentIcon =
+  | "interactable"
+  | "grabbable"
+  | "mirror"
+  | "skybox"
+  | "videoScreen"
+  | "videoPlayer"
+  | "liveVideo"
+  | "videoSphere"
+  | "screenShare"
+  | "spawn"
+  | "textInput"
+  | "tagBoard"
+  | "portal"
+  | "billboardY";
+
 export type XriftComponentFieldKind =
   | "string"
   | "number"
@@ -97,6 +113,8 @@ export type XriftComponentDefinition = {
   moduleName: typeof XRIFT_COMPONENT_MODULE;
   label: string;
   description: string;
+  /** Semantic editor icon shared by every authoring surface. */
+  icon: XriftComponentIcon;
   category: XriftComponentCategory;
   allowedProjectKinds: readonly VisualProjectKind[];
   attachBehavior: XriftComponentAttachBehavior;
@@ -203,6 +221,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
     importName: "Interactable",
     label: "Interactable",
     description: "オブジェクトをクリック／インタラクト可能にします。",
+    icon: "interactable",
     category: "interaction",
     attachBehavior: OPTIONAL_WRAPPER,
     fields: [
@@ -232,6 +251,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
     importName: "Grabbable",
     label: "Grabbable",
     description: "配下のオブジェクトを掴んで移動できる対象にします。",
+    icon: "grabbable",
     category: "interaction",
     attachBehavior: REQUIRED_WRAPPER,
     fields: [
@@ -272,6 +292,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
     importName: "Mirror",
     label: "Mirror",
     description: "リアルタイム反射面を配置します。",
+    icon: "mirror",
     category: "rendering",
     attachBehavior: LEAF,
     fields: [
@@ -290,6 +311,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
     importName: "Skybox",
     label: "Skybox",
     description: "上下2色のグラデーションで全天背景を描画します。",
+    icon: "skybox",
     category: "rendering",
     attachBehavior: LEAF,
     fields: [
@@ -310,8 +332,9 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.videoScreen,
     importName: "VideoScreen",
-    label: "Video Screen",
+    label: "VideoScreen",
     description: "同期された動画再生用スクリーンを配置します。",
+    icon: "videoScreen",
     category: "media",
     attachBehavior: LEAF,
     fields: [
@@ -350,8 +373,9 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.videoPlayer,
     importName: "VideoPlayer",
-    label: "Video Player",
+    label: "VideoPlayer",
     description: "操作UI付きの録画動画プレイヤーを配置します。",
+    icon: "videoPlayer",
     category: "media",
     attachBehavior: LEAF,
     fields: mediaPlayerFields({ playing: true, supportsSync: false }),
@@ -359,8 +383,9 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.liveVideoPlayer,
     importName: "LiveVideoPlayer",
-    label: "Live Video Player",
+    label: "LiveVideoPlayer",
     description: "HLS／DASH向けのライブ動画プレイヤーを配置します。",
+    icon: "liveVideo",
     category: "media",
     attachBehavior: LEAF,
     fields: mediaPlayerFields({ playing: false, supportsSync: true }),
@@ -368,8 +393,9 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.video180Sphere,
     importName: "Video180Sphere",
-    label: "180° Video Sphere",
+    label: "Video180Sphere",
     description: "Side-by-Side形式の180度ステレオ動画を半球へ表示します。",
+    icon: "videoSphere",
     category: "media",
     attachBehavior: LEAF,
     fields: [
@@ -426,8 +452,9 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.screenShareDisplay,
     importName: "ScreenShareDisplay",
-    label: "Screen Share Display",
+    label: "ScreenShareDisplay",
     description: "画面共有の映像を3D空間に表示します。",
+    icon: "screenShare",
     category: "media",
     attachBehavior: LEAF,
     fields: [
@@ -449,8 +476,9 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.spawnPoint,
     importName: "SpawnPoint",
-    label: "XRift Spawn Point",
+    label: "SpawnPoint",
     description: "ワールド内でプレイヤーが出現する地点を指定します。",
+    icon: "spawn",
     category: "world",
     allowedProjectKinds: WORLD_PROJECT_KIND,
     attachBehavior: LEAF,
@@ -467,8 +495,9 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.textInput,
     importName: "TextInput",
-    label: "Text Input",
+    label: "TextInput",
     description: "配下の3Dオブジェクトからテキストを入力できるようにします。",
+    icon: "textInput",
     category: "interaction",
     attachBehavior: REQUIRED_WRAPPER,
     fields: [
@@ -498,8 +527,9 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.tagBoard,
     importName: "TagBoard",
-    label: "Tag Board",
+    label: "TagBoard",
     description: "ユーザーがタグを選択するボードを配置します。",
+    icon: "tagBoard",
     category: "interaction",
     attachBehavior: LEAF,
     fields: [
@@ -531,6 +561,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
     importName: "Portal",
     label: "Portal",
     description: "別のXRiftインスタンスへ移動するポータルを配置します。",
+    icon: "portal",
     category: "world",
     attachBehavior: LEAF,
     fields: [
@@ -551,8 +582,9 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.billboardY,
     importName: "BillboardY",
-    label: "Billboard Y",
+    label: "BillboardY",
     description: "配下のオブジェクトをY軸だけでカメラへ追従させます。",
+    icon: "billboardY",
     category: "rendering",
     attachBehavior: OPTIONAL_WRAPPER,
     fields: [

@@ -3,6 +3,8 @@ import {
   Box,
   Camera,
   CircleDot,
+  CirclePlay,
+  CircleHelp,
   ClipboardPaste,
   Copy,
   CopyPlus,
@@ -10,11 +12,14 @@ import {
   FileBox,
   Folder,
   DoorOpen,
+  Eye,
+  EyeOff,
   Image,
   Import,
   Lightbulb,
   List,
   LayoutGrid,
+  Keyboard,
   MapPin,
   MonitorPlay,
   Move3D,
@@ -23,12 +28,13 @@ import {
   PanelsTopLeft,
   Play,
   Plus,
+  Puzzle,
   Redo2,
   RadioTower,
   Rotate3D,
   Save,
   Scaling,
-  Settings2,
+  Settings,
   ScreenShare,
   Sparkles,
   Square,
@@ -37,9 +43,18 @@ import {
   TriangleAlert,
   Undo2,
   UploadCloud,
+  X,
   Globe,
+  Hand,
+  Pointer,
+  SquarePlay,
+  TextCursorInput,
   type LucideIcon,
 } from "lucide-react";
+import {
+  getXriftComponentDefinition,
+  type EditorComponentDefinition,
+} from "../../lib/visual-editor";
 
 export const EDITOR_ICONS = {
   back: ArrowLeft,
@@ -62,8 +77,13 @@ export const EDITOR_ICONS = {
   duplicate: CopyPlus,
   delete: Trash2,
   create: Plus,
+  component: Puzzle,
   import: Import,
-  settings: Settings2,
+  settings: Settings,
+  keyboard: Keyboard,
+  help: CircleHelp,
+  close: X,
+  layout: PanelsTopLeft,
   asset: Palette,
   undo: Undo2,
   redo: Redo2,
@@ -75,16 +95,51 @@ export const EDITOR_ICONS = {
   grid: LayoutGrid,
   list: List,
   spawn: MapPin,
+  interactable: Pointer,
+  grabbable: Hand,
   mirror: PanelsTopLeft,
+  skybox: Image,
   portal: DoorOpen,
   tagBoard: Tags,
   videoScreen: MonitorPlay,
+  videoPlayer: SquarePlay,
   liveVideo: RadioTower,
+  videoSphere: CirclePlay,
   screenShare: ScreenShare,
+  textInput: TextCursorInput,
+  billboardY: Rotate3D,
   warning: TriangleAlert,
+  visible: Eye,
+  hidden: EyeOff,
 } satisfies Record<string, LucideIcon>;
 
 export type EditorIconName = keyof typeof EDITOR_ICONS;
+
+export function getEditorComponentIcon(
+  definition: EditorComponentDefinition,
+): LucideIcon {
+  if (definition.componentType === "official-xrift" && definition.schemaId) {
+    const icon = getXriftComponentDefinition(definition.schemaId)?.icon;
+    if (icon) return EDITOR_ICONS[icon];
+  }
+  switch (definition.componentType) {
+    case "transform":
+      return EDITOR_ICONS.move;
+    case "builtin-mesh":
+    case "mesh":
+      return EDITOR_ICONS.model;
+    case "collider":
+      return EDITOR_ICONS.primitive;
+    case "light":
+      return EDITOR_ICONS.light;
+    case "spawn-point":
+      return EDITOR_ICONS.spawn;
+    case "particle-emitter":
+      return EDITOR_ICONS.particle;
+    default:
+      return EDITOR_ICONS.component;
+  }
+}
 
 export function commandTitle(
   label: string,
