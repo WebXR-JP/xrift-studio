@@ -253,10 +253,7 @@ fn extract_archive(archive: &Path, dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
-async fn run_npm_install_global(
-    paths: &RuntimePaths,
-    package_spec: &str,
-) -> Result<(), String> {
+async fn run_npm_install_global(paths: &RuntimePaths, package_spec: &str) -> Result<(), String> {
     let mut cmd = tokio::process::Command::new(&paths.node_exe);
     cmd.arg(&paths.npm_cli_js)
         .arg("install")
@@ -275,7 +272,11 @@ async fn run_npm_install_global(
         format!(
             "{}{}{}",
             paths.node_bin_dir,
-            if cfg!(target_os = "windows") { ";" } else { ":" },
+            if cfg!(target_os = "windows") {
+                ";"
+            } else {
+                ":"
+            },
             std::env::var("PATH").unwrap_or_default()
         ),
     );
@@ -379,7 +380,11 @@ async fn setup_runtime(app: AppHandle) -> Result<RuntimeStatus, String> {
 fn sandbox_env(app: AppHandle) -> Result<std::collections::HashMap<String, String>, String> {
     let paths = runtime_paths(app)?;
     let mut env = std::collections::HashMap::new();
-    let sep = if cfg!(target_os = "windows") { ";" } else { ":" };
+    let sep = if cfg!(target_os = "windows") {
+        ";"
+    } else {
+        ":"
+    };
     let path = format!(
         "{}{}{}",
         paths.node_bin_dir,
@@ -630,11 +635,7 @@ fn delete_path(project_path: String, rel: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn rename_path(
-    project_path: String,
-    old_rel: String,
-    new_rel: String,
-) -> Result<(), String> {
+fn rename_path(project_path: String, old_rel: String, new_rel: String) -> Result<(), String> {
     if old_rel.trim().is_empty() || new_rel.trim().is_empty() {
         return Err("invalid path".into());
     }
@@ -654,11 +655,7 @@ fn rename_path(
 }
 
 #[tauri::command]
-fn write_binary_file(
-    project_path: String,
-    rel: String,
-    data_url: String,
-) -> Result<(), String> {
+fn write_binary_file(project_path: String, rel: String, data_url: String) -> Result<(), String> {
     let path = safe_join(&project_path, &rel)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;

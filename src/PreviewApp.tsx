@@ -29,7 +29,8 @@ import {
 
 // ---- 実アプリ (EditorView) を再現するサンプルデータ ----
 
-type SampleFileId = "src/World.tsx" | "xrift.json" | "README.md";
+type SampleKind = "world" | "item";
+type SampleFileId = "src/World.tsx" | "src/Item.tsx" | "xrift.json" | "README.md";
 
 type TreeRow = {
   rel: string;
@@ -40,14 +41,30 @@ type TreeRow = {
 };
 
 // xrift create world が生成するワールドテンプレートのファイル構成
-const tree: TreeRow[] = [
+const worldTree: TreeRow[] = [
   { rel: "public", label: "public", depth: 0, icon: "dir" },
+  { rel: "public/thumbnail.png", label: "thumbnail.png", depth: 1, icon: "image" },
   { rel: "src", label: "src", depth: 0, icon: "dirOpen" },
   { rel: "src/components", label: "components", depth: 1, icon: "dir" },
   { rel: "src/World.tsx", label: "World.tsx", depth: 1, icon: "code", openas: "src/World.tsx" },
   { rel: "src/constants.ts", label: "constants.ts", depth: 1, icon: "code" },
   { rel: "src/index.tsx", label: "index.tsx", depth: 1, icon: "code" },
   { rel: "index.html", label: "index.html", depth: 0, icon: "code" },
+  { rel: "package.json", label: "package.json", depth: 0, icon: "package" },
+  { rel: "README.md", label: "README.md", depth: 0, icon: "text", openas: "README.md" },
+  { rel: "xrift.json", label: "xrift.json", depth: 0, icon: "json", openas: "xrift.json" },
+];
+
+// xrift create item が生成するアイテムテンプレートのファイル構成
+const itemTree: TreeRow[] = [
+  { rel: "public", label: "public", depth: 0, icon: "dir" },
+  { rel: "public/thumbnail.png", label: "thumbnail.png", depth: 1, icon: "image" },
+  { rel: "src", label: "src", depth: 0, icon: "dirOpen" },
+  { rel: "src/Item.tsx", label: "Item.tsx", depth: 1, icon: "code", openas: "src/Item.tsx" },
+  { rel: "src/dev.tsx", label: "dev.tsx", depth: 1, icon: "code" },
+  { rel: "src/index.tsx", label: "index.tsx", depth: 1, icon: "code" },
+  { rel: "index.html", label: "index.html", depth: 0, icon: "code" },
+  { rel: "vite.config.ts", label: "vite.config.ts", depth: 0, icon: "code" },
   { rel: "package.json", label: "package.json", depth: 0, icon: "package" },
   { rel: "README.md", label: "README.md", depth: 0, icon: "text", openas: "README.md" },
   { rel: "xrift.json", label: "xrift.json", depth: 0, icon: "json", openas: "xrift.json" },
@@ -111,7 +128,36 @@ const worldCode: Tok[][] = [
   [[")"]],
 ];
 
-const readmeLines = [
+const itemCode: Tok[][] = [
+  [["import", K], [" { "], ["useRef", T], [" } "], ["from", K], [" "], ["'react'", S]],
+  [["import", K], [" { "], ["useFrame", T], [" } "], ["from", K], [" "], ["'@react-three/fiber'", S]],
+  [["import", K], [" { "], ["RigidBody", T], [" } "], ["from", K], [" "], ["'@react-three/rapier'", S]],
+  [["import", K], [" "], ["type", K], [" { "], ["Mesh", T], [" } "], ["from", K], [" "], ["'three'", S]],
+  [[""]],
+  [["export", K], [" "], ["interface", K], [" ItemProps "], ["{"]],
+  [["  position", A], ["?: "], ["[number, number, number]", T], [";"]],
+  [["  scale", A], ["?: "], ["number", T], [";"]],
+  [["}"]],
+  [[""]],
+  [["export", K], [" "], ["const", K], [" Item "], ["=", P], [" ({ position = [0, 0, 0], scale = 1 }) "], ["=>", K], [" {"]],
+  [["  "], ["const", K], [" meshRef "], ["=", P], [" useRef<Mesh>(null)"]],
+  [["  useFrame((_state, delta) "], ["=>", K], [" {"]],
+  [["    "], ["if", K], [" (meshRef.current) meshRef.current.rotation.y += delta"]],
+  [["  }"]],
+  [["  "], ["return", K], [" ("]],
+  [["    <", P], ["group", T], [" position", A], ["=", P], ["{position}", N], [" scale", A], ["=", P], ["{scale}", N], [">", P]],
+  [["      <", P], ["RigidBody", T], [" type", A], ["=", P], ['"fixed"', S], [" colliders", A], ["=", P], ['"cuboid"', S], [">", P]],
+  [["        <", P], ["mesh", T], [" ref", A], ["=", P], ["{meshRef}", N], [" castShadow", A], [">", P]],
+  [["          <", P], ["boxGeometry", T], [" args", A], ["=", P], ["{[0.5, 0.5, 0.5]}", N], [" />", P]],
+  [["          <", P], ["meshStandardMaterial", T], [" color", A], ["=", P], ['"orange"', S], [" />", P]],
+  [["        </", P], ["mesh", T], [">", P]],
+  [["      </", P], ["RigidBody", T], [">", P]],
+  [["    </", P], ["group", T], [">", P]],
+  [["  )"]],
+  [["}"]],
+];
+
+const worldReadmeLines = [
   "# my-world",
   "",
   "React Three Fiber と Rapier で作られたサンプルワールドです。",
@@ -121,6 +167,19 @@ const readmeLines = [
   "- 「実行」を押す (またはターミナルで npm run dev)",
   "- ブラウザで 3D プレビューを確認",
   "- src/World.tsx を編集して保存すると即反映",
+];
+
+const itemReadmeLines = [
+  "# my-first-item",
+  "",
+  "React Three Fiber で作られた再利用可能な XRift アイテムです。",
+  "",
+  "## 開発",
+  "",
+  "- 「実行」を押す (またはターミナルで npm run dev)",
+  "- ブラウザで単体の 3D プレビューを確認",
+  "- src/Item.tsx を編集して保存すると即反映",
+  "- 公開前に xrift check item --build を実行",
 ];
 
 const devLogs = [
@@ -169,9 +228,30 @@ function scrollToWorkspace() {
 }
 
 export default function PreviewApp() {
+  const [sampleKind, setSampleKind] = useState<SampleKind>("world");
   const [activeFile, setActiveFile] = useState<SampleFileId>("src/World.tsx");
   const [running, setRunning] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
+
+  const isItem = sampleKind === "item";
+  const projectName = isItem ? "my-first-item" : "my-world";
+  const projectLabel = isItem ? "アイテム" : "ワールド";
+  const sourceFile: SampleFileId = isItem ? "src/Item.tsx" : "src/World.tsx";
+  const tree = isItem ? itemTree : worldTree;
+  const sourceCode = isItem ? itemCode : worldCode;
+  const readmeLines = isItem ? itemReadmeLines : worldReadmeLines;
+  const templateTitle = isItem ? "Sample Item" : "サンプルワールド";
+  const templateDescription = isItem
+    ? "A sample item created with XRift item template"
+    : "React Three FiberとRapierで作られたサンプルワールドです";
+
+  const selectSample = (kind: SampleKind, scroll = false) => {
+    setSampleKind(kind);
+    setActiveFile(kind === "item" ? "src/Item.tsx" : "src/World.tsx");
+    if (scroll) {
+      requestAnimationFrame(scrollToWorkspace);
+    }
+  };
 
   const startDev = () => {
     setRunning(true);
@@ -229,16 +309,32 @@ export default function PreviewApp() {
             環境を整えるところから、編集、動作確認、公開まで。XRift Studio は、ワールドやアイテムを作る流れをひとつにつなぐ、有志製のデスクトップアプリです。
           </p>
           <div className="mt-7 grid max-w-2xl gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-violet-200 bg-white/75 p-4 shadow-sm backdrop-blur">
+            <button
+              type="button"
+              onClick={() => selectSample("world", true)}
+              className={`rounded-2xl border bg-white/75 p-4 text-left shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md ${
+                sampleKind === "world" ? "border-violet-300 ring-2 ring-violet-100" : "border-violet-200"
+              }`}
+              aria-label="ワールドの画面サンプルを開く"
+            >
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 text-violet-700"><Globe2 size={18} /></span>
               <div className="mt-3 text-sm font-semibold text-zinc-950">ワールドを作る</div>
               <p className="mt-1 text-xs leading-5 text-zinc-600">人が集まり、歩き回れる XR 空間から作り始められます。</p>
-            </div>
-            <div className="rounded-2xl border border-cyan-200 bg-white/75 p-4 shadow-sm backdrop-blur">
+              <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-violet-700">ワールドの画面を見る <ArrowRight size={12} /></span>
+            </button>
+            <button
+              type="button"
+              onClick={() => selectSample("item", true)}
+              className={`rounded-2xl border bg-white/75 p-4 text-left shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md ${
+                sampleKind === "item" ? "border-cyan-300 ring-2 ring-cyan-100" : "border-cyan-200"
+              }`}
+              aria-label="アイテムの画面サンプルを開く"
+            >
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-100 text-cyan-700"><Box size={18} /></span>
               <div className="mt-3 text-sm font-semibold text-zinc-950">アイテムを作る</div>
               <p className="mt-1 text-xs leading-5 text-zinc-600">ワールドへ置いて使える 3D コンポーネントを作り始められます。</p>
-            </div>
+              <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-700">アイテムの画面を見る <ArrowRight size={12} /></span>
+            </button>
           </div>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <a
@@ -277,9 +373,42 @@ export default function PreviewApp() {
             <h2 className="mt-2 text-2xl font-bold tracking-tight text-zinc-950 sm:text-3xl">触ると、制作の流れが見える。</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">ファイルを切り替え、「実行」を押して、編集からプレビューまでのつながりを確かめられます。</p>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            デモ表示
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+            <div className="w-full sm:w-auto">
+              <div className="mb-1.5 text-[10px] font-semibold tracking-wide text-zinc-500 sm:text-right">表示するサンプル</div>
+              <div className="grid grid-cols-2 gap-1 rounded-xl border border-zinc-200 bg-white/80 p-1 shadow-sm" role="group" aria-label="表示するプロジェクト種別">
+                <button
+                  type="button"
+                  onClick={() => selectSample("world")}
+                  aria-pressed={sampleKind === "world"}
+                  className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                    sampleKind === "world"
+                      ? "bg-violet-100 text-violet-800 shadow-sm"
+                      : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
+                  }`}
+                >
+                  <Globe2 size={13} />
+                  World
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectSample("item")}
+                  aria-pressed={sampleKind === "item"}
+                  className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                    sampleKind === "item"
+                      ? "bg-cyan-100 text-cyan-800 shadow-sm"
+                      : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
+                  }`}
+                >
+                  <Box size={13} />
+                  Item
+                </button>
+              </div>
+            </div>
+            <div className="inline-flex self-end items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              デモ表示
+            </div>
           </div>
         </div>
 
@@ -301,10 +430,18 @@ export default function PreviewApp() {
               <div className="flex min-w-0 items-center gap-2">
                 <span className="flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-[11px] text-zinc-600">
                   <ArrowLeft size={11} strokeWidth={2} />
-                  ライブラリ
+                  <span className="hidden sm:inline">ライブラリ</span>
                 </span>
                 <span className="hidden text-zinc-300 sm:inline">/</span>
-                <span className="hidden truncate text-xs font-semibold text-zinc-900 sm:inline">my-world</span>
+                <span className="max-w-[72px] truncate text-[11px] font-semibold text-zinc-900 sm:max-w-none sm:text-xs">{projectName}</span>
+                <span
+                  className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+                    isItem ? "bg-cyan-100 text-cyan-800" : "bg-violet-100 text-violet-800"
+                  }`}
+                >
+                  {isItem ? <Box size={9} strokeWidth={2} /> : <Globe2 size={9} strokeWidth={2} />}
+                  {isItem ? "Item" : "World"}
+                </span>
                 {running && (
                   <span className="hidden items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 sm:flex">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
@@ -385,7 +522,7 @@ export default function PreviewApp() {
                   })}
                 </div>
                 <div className="border-t border-zinc-200 px-3 py-1.5 text-[9px] text-zinc-400">
-                  projects/my-world
+                  projects/{projectName}
                 </div>
               </aside>
 
@@ -428,9 +565,9 @@ export default function PreviewApp() {
                 </div>
 
                 <div className="h-[300px] overflow-auto bg-white sm:h-[340px]">
-                  {activeFile === "src/World.tsx" && (
+                  {activeFile === sourceFile && (
                     <div className="preview-code p-4 font-mono text-[10.5px] leading-5 sm:text-[11px]">
-                      {worldCode.map((line, i) => (
+                      {sourceCode.map((line, i) => (
                         <div key={i} className="flex min-w-max">
                           <span className="mr-4 w-5 select-none text-right text-zinc-300">{i + 1}</span>
                           <code>
@@ -447,32 +584,43 @@ export default function PreviewApp() {
                     <div className="p-4">
                       <div className="mb-3">
                         <div className="text-xs font-semibold text-zinc-900">公開情報</div>
-                        <div className="mt-0.5 text-[10px] text-zinc-500">XRift のワールド一覧で表示されるタイトルと説明文です。</div>
+                        <div className="mt-0.5 text-[10px] text-zinc-500">
+                          XRift の{projectLabel}一覧で表示されるタイトルと説明文です。
+                        </div>
                       </div>
                       <div className="space-y-3">
                         <div>
-                          <div className="text-[11px] font-medium text-zinc-700">タイトル</div>
-                          <div className="mt-1 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] text-zinc-900">my-world</div>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-[11px] font-medium text-zinc-700">{projectLabel}タイトル</div>
+                            <code className="text-[9px] text-zinc-400">{sampleKind}.title</code>
+                          </div>
+                          <div className="mt-1 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] text-zinc-900">{templateTitle}</div>
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-medium text-zinc-700">説明</span>
+                            <span className="text-[11px] font-medium text-zinc-700">{projectLabel}の説明</span>
                             <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">テンプレートのまま</span>
                           </div>
                           <div className="mt-1 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] leading-5 text-zinc-500">
-                            React Three FiberとRapierで作られたサンプルワールドです
+                            {templateDescription}
                           </div>
                           <div className="mt-1 text-[10px] text-amber-700">アップロード前に編集を求められます。</div>
                         </div>
                         <div>
                           <div className="text-[11px] font-medium text-zinc-700">サムネイル</div>
                           <div className="mt-1 flex items-center gap-3">
-                            <div className="flex h-12 w-20 items-center justify-center rounded-md border border-zinc-200 bg-gradient-to-br from-indigo-100 via-violet-100 to-fuchsia-100">
-                              <FileImage size={14} className="text-violet-400" />
+                            <div
+                              className={`flex h-12 w-20 items-center justify-center rounded-md border border-zinc-200 bg-gradient-to-br ${
+                                isItem
+                                  ? "from-amber-100 via-orange-100 to-cyan-100"
+                                  : "from-indigo-100 via-violet-100 to-fuchsia-100"
+                              }`}
+                            >
+                              {isItem ? <Box size={15} className="text-orange-500" /> : <FileImage size={14} className="text-violet-400" />}
                             </div>
                             <div className="text-[10px] leading-4 text-zinc-500">
                               public/thumbnail.png
-                              <br />ワールドカードに表示されます
+                              <br />{isItem ? "アイテムカードとインベントリ" : "ワールドカード"}に表示されます
                             </div>
                           </div>
                         </div>
@@ -569,22 +717,41 @@ export default function PreviewApp() {
                 <RefreshCw size={11} className="text-zinc-400" />
               </div>
               {running ? (
-                <div className="preview-world preview-world-running relative h-64 overflow-hidden bg-[#0d1025]">
-                  <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-indigo-900/60 to-transparent" />
-                  <div className="preview-moon absolute right-6 top-6 h-8 w-8 rounded-full bg-gradient-to-br from-white to-violet-300 shadow-[0_0_25px_rgba(196,181,253,0.7)]" />
-                  <div className="preview-grid absolute inset-x-[-20%] bottom-[-15%] h-1/2 rotate-[-10deg]" />
-                  <div className="preview-planet absolute bottom-12 left-1/2 h-24 w-24 -translate-x-1/2 rounded-full bg-gradient-to-br from-fuchsia-400 via-violet-500 to-indigo-950 shadow-[0_0_40px_rgba(139,92,246,0.65)]" />
-                  <div className="preview-ring absolute bottom-20 left-1/2 h-10 w-40 -translate-x-1/2 rotate-[-14deg] rounded-[50%] border-2 border-cyan-300/70" />
-                  <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[9px] text-white/60">
-                    <span>my-world</span>
-                    <span>3D プレビュー</span>
+                isItem ? (
+                  <div className="preview-world preview-world-running relative h-64 overflow-hidden bg-[#101827]">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(34,211,238,0.22),transparent_42%)]" />
+                    <div className="preview-grid absolute inset-x-[-20%] bottom-[-18%] h-1/2 rotate-[-6deg] opacity-50" />
+                    <div className="absolute bottom-[70px] left-1/2 h-20 w-14 -translate-x-1/2 rotate-45 rounded-xl bg-gradient-to-br from-amber-200 via-orange-400 to-fuchsia-700 shadow-[0_0_42px_rgba(251,146,60,0.72)]">
+                      <div className="absolute inset-2 rounded-lg border border-white/35 bg-gradient-to-br from-white/50 to-transparent" />
+                    </div>
+                    <div className="absolute bottom-10 left-1/2 h-7 w-28 -translate-x-1/2 rounded-[50%] border border-cyan-200/40 bg-gradient-to-b from-slate-400 to-slate-700 shadow-[0_10px_22px_rgba(0,0,0,0.45)]" />
+                    <div className="absolute bottom-6 left-1/2 h-8 w-24 -translate-x-1/2 rounded-b-xl bg-gradient-to-b from-slate-600 to-slate-900" />
+                    <div className="absolute left-3 top-3 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 text-[9px] font-medium text-cyan-100">
+                      Item 単体確認
+                    </div>
+                    <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[9px] text-white/60">
+                      <span>{projectName}</span>
+                      <span>アイテム 3D プレビュー</span>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="preview-world preview-world-running relative h-64 overflow-hidden bg-[#0d1025]">
+                    <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-indigo-900/60 to-transparent" />
+                    <div className="preview-moon absolute right-6 top-6 h-8 w-8 rounded-full bg-gradient-to-br from-white to-violet-300 shadow-[0_0_25px_rgba(196,181,253,0.7)]" />
+                    <div className="preview-grid absolute inset-x-[-20%] bottom-[-15%] h-1/2 rotate-[-10deg]" />
+                    <div className="preview-planet absolute bottom-12 left-1/2 h-24 w-24 -translate-x-1/2 rounded-full bg-gradient-to-br from-fuchsia-400 via-violet-500 to-indigo-950 shadow-[0_0_40px_rgba(139,92,246,0.65)]" />
+                    <div className="preview-ring absolute bottom-20 left-1/2 h-10 w-40 -translate-x-1/2 rotate-[-14deg] rounded-[50%] border-2 border-cyan-300/70" />
+                    <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[9px] text-white/60">
+                      <span>{projectName}</span>
+                      <span>ワールド 3D プレビュー</span>
+                    </div>
+                  </div>
+                )
               ) : (
                 <div className="flex h-64 flex-col items-center justify-center gap-2 bg-zinc-50 px-6 text-center">
-                  <Play size={18} className="text-zinc-300" />
+                  {isItem ? <Box size={18} className="text-cyan-400" /> : <Play size={18} className="text-zinc-300" />}
                   <p className="text-[11px] leading-5 text-zinc-500">
-                    「実行」を押すとローカルサーバーが起動し、既定のブラウザで 3D プレビューが開きます。
+                    「実行」を押すとローカルサーバーが起動し、{projectLabel}の 3D プレビューが開きます。
                   </p>
                 </div>
               )}
