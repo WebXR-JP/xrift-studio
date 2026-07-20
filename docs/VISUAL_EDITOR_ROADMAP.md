@@ -32,11 +32,11 @@ XRift Studioだけで、Worldの新規作成、Scene編集、Asset管理、Mater
 | 1 | Visual document基盤 | 基盤あり、継続改善 | Project、Scene、Asset、Prefabの保存、migration、reference validationが決定的に動く。 |
 | 2 | Editor shell | 基盤あり、継続改善 | Hierarchy、Scene View、Inspector、Assetsが同じprojectとselectionを表示し、明るい統一themeで使える。 |
 | 3 | CommandとHierarchy編集 | 基盤あり | Create Empty、rename、copy、paste、duplicate、delete、reparent、Undo / Redoを主要surfaceから実行できる。 |
-| 4 | Drag and Drop | 基盤あり、実機受入が残る | Model / Prefab / ParticleをSceneとHierarchyへ、MaterialをMeshへ、TextureをMaterial slotへdropでき、一件の履歴になる。 |
-| 5 | Material / Texture authoring | 進行中 | glTF core PBR、TextureInfo、UV、alpha、両面、emissive、normal、occlusion、主要extensionをInspectorで編集し、Sceneとthumbnailへ即時反映する。 |
+| 4 | Drag and Drop | WebView互換payloadと複数slot選択まで実装、実機受入が残る | Model / Prefab / ParticleをSceneとHierarchyへ、MaterialをMeshへ、TextureをMaterial slotへdropでき、一件の履歴になる。 |
+| 5 | Material / Texture authoring | coreと主要extensionのInspector・thumbnailを実装、Scene描画を継続 | glTF core PBR、TextureInfo、UV、alpha、両面、emissive、normal、occlusion、主要extensionをInspectorで編集し、Sceneとthumbnailへ即時反映する。 |
 | 6 | Starter World / Asset library | 進行中 | 新規Worldが実用品Model、Texture、Material、Collider、Lighting、XRift Spawnを持ち、未配置素材もAssetsから再利用できる。 |
-| 7 | XRift Component / template | 進行中 | CreateからXRift機能をSceneへ作成またはEntityへ追加し、必須値をInspectorで設定して有効なcodeへ変換できる。 |
-| 8 | Model import pipeline | 次段階 | GLB / GLTFのnode、mesh、material slot、animation、boundsを保持し、thumbnail、reimport、複数slot overrideが動く。 |
+| 7 | XRift Component / template | 8種の組み込みrecipeと保護付き設定fieldを実装、runtime受入を継続 | CreateからXRift機能をSceneへ作成またはEntityへ追加し、必須値をInspectorで設定して有効なcodeへ変換できる。 |
+| 8 | Model import pipeline | 構造契約・Inspector・同一ID再importを実装、複数fileと差分確認が残る | GLB / GLTFのnode、mesh、material slot、animation、boundsを保持し、thumbnail、reimport、複数slot overrideが動く。 |
 | 9 | Play runtime | 次段階 | World向け移動、camera、physics、interactionとItem previewを別profileで実行し、Stopでauthoring stateへ戻る。 |
 | 10 | Save / Compile / Check / Upload | 基盤あり、堅牢化中 | revision整合、staging provenance、診断元への移動、認証、進捗、再試行、正式result表示まで一つのmodalで完結する。 |
 | 11 | Workspace品質 | 計画済み | panel dock / resize / restore、shortcut設定、検索、複数選択、focus、accessibility、大規模Scene性能を実用水準にする。 |
@@ -44,12 +44,12 @@ XRift Studioだけで、Worldの新規作成、Scene編集、Asset管理、Mater
 
 ## 現在の実装優先順
 
-1. Material / Texture Inspectorを、共有参照と即時previewを崩さず完成させる。
-2. Starter Worldを素材入り既定値にし、Scene初期配置とAsset libraryを分離する。
-3. CreateをEmpty、Primitive、XRift Component、通常Componentに分け、選択なしでも単独XRift objectを作れるようにする。
-4. XRift objectのScene proxy、必須値、compiler diagnosticを一致させる。
-5. GLTF複数Material slotと生成thumbnailを強化する。
-6. World Playのcharacter / collider / spawn受入へ進む。
+1. Material extensionをScene ViewとインポートModelの描画へ接続し、Inspector・thumbnail・Sceneを同じ値にする。
+2. Model再importへ別source選択、sidecar付きglTF、変更差分、消失slot参照一覧を追加する。
+3. Starter Worldと未配置Asset libraryへ、実利用できるModel・Texture・Materialと生成済みthumbnailを増やす。
+4. XRift組み込みrecipeを実runtimeで受け入れ、必須値、Scene proxy、compiler diagnostic、Upload結果を一致させる。
+5. WebView上のMaterial・Model・Prefab・Texture D&D、複数slot選択、Undo / Redoを一つの実機受入として確認する。
+6. World Playのcharacter、collider、spawn、cameraをScene authoringと同じdocumentから実行する。
 
 ## 開発と検証の配分
 

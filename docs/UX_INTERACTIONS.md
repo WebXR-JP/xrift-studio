@@ -36,7 +36,7 @@ F-06 アイテム検査
 | MI-17 | visual project で compile、check、upload を開始し、必要な toolchain がない | authoring 画面を閉じず、Node.js、XRift CLI、認証のうち不足している項目とセットアップ操作を表示する。通常の Edit / 保存は利用可能なままにする。 | セットアップ後は同じ操作へ戻れる。取消時は Edit へ戻り、SceneDocument、AssetManifest、staging output、公開先を変更しない。 |
 | MI-18 | 新規作成を開く | item classic、world classic、item visual、world visual の四カードを同じ階層で表示し、成果物、制作方法、正本、作成後の画面を一文で示す。hover だけに説明を隠さない。 | 一カードの選択で名前 / 保存先確認へ進む。戻ると四カードへ戻り、前の選択を保持する。取消では project を作らない。 |
 | MI-19 | Assets の「作成 > Material」を選ぶ | 名前、標準サーフェスまたは glTF 既定値 preset、作成先 folder を compact dialog で示す。作成中も右 Entity Inspector を保つ。 | 成功時は Material Asset を一件追加して `assetSelection` にし、Entity へ binding しない。取消 / validation 失敗では AssetManifest、両 selection、history を変えない。 |
-| MI-20 | GLB / GLTF / Texture を drop または import する | Import Queue に validate、copy、parse / decode、derive、dynamic thumbnail、commit の stage、件数、bytes、取消を表示する。source 保持、resize / mipmap / compression recipe、stale 状態を右 Inspector で確認できる。 | 全検証後だけ AssetManifest へ commit する。成功時は新 Asset を `assetSelection` にし、右 Inspector で開く。明示的な Scene drop 以外は Scene を変えない。失敗 / 取消時は temporary を回収し、last-good と両 selection を維持する。 |
+| MI-20 | GLB / GLTF / Texture を drop または import する | Import Queue に validate、copy、parse / decode、derive、dynamic thumbnail、commit の stage、件数、bytes、取消を表示する。source 保持、resize / mipmap / compression recipe、stale 状態を右 Inspector で確認できる。Model再importなど別のAsset transaction中は入口を理由付きで無効化し、同じsourceへのcommitを並行実行しない。 | 全検証後だけ AssetManifest へ commit する。成功時は新 Asset を `assetSelection` にし、右 Inspector で開く。明示的な Scene drop 以外は Scene を変えない。失敗 / 取消時は temporary を回収し、last-good と両 selection を維持する。 |
 | MI-21 | thumbnail を生成、再生成、または stale 判定する | card は pending / generating / ready / stale / failed を label と status icon で示す。Model / Texture / Material は ready な generated thumbnail を優先し、それ以外だけ kind icon を fallback にする。 | 成功時は同じ Asset ID の thumbnail hash を更新する。失敗時も card と Asset を残し、再生成と診断を置く。last-good が stale なら「古いプレビュー」と明示する。 |
 | MI-22 | toolbar、menu、context menu、keyboard から Command を起動する | central Shortcut Registry の label、semantic Lucide icon、platform binding、enabled reason を全 surface で一致させる。active tool は icon、label、押下状態で示す。conflict は両 command を実行せず設定へ案内する。 | Command 成功 / 失敗へ収束する。text input、contenteditable、数値入力、IME composition 中は editor shortcut を抑止し、ユーザー override と既定へ戻す操作を Editor Preferences に保存する。 |
 | MI-23 | Copy / Paste / Duplicate / Delete を実行する | Copy は versioned buffer の対象数、Paste / Duplicate は生成予定数、Asset Delete は参照元件数を示す。document 変更を伴う操作だけを Command history に積む。 | Paste / Duplicate / Delete の Undo / Redo は同じ IDs と前後の `sceneSelection` / `assetSelection` を復元する。Copy 自体は document Undo にしない。参照を壊す Delete は置換、解除、取消なしに進めない。 |
@@ -47,11 +47,12 @@ F-06 アイテム検査
 | MI-28 | Asset folder または Asset の context menu を開く | folder では作成 / import / 新規 folder、Asset では rename / duplicate / delete / references / reimport / thumbnail regeneration を kind と state に応じて表示する。shortcut と icon は Registry と一致させる。 | 一つの操作選択または Escape / 外側 click で閉じる。実行不可項目は理由を tooltip で示し、menu を開いただけでは document や selection を変えない。 |
 | MI-29 | panel splitter を動かす、panel header を dock zone へ drag する、または layout を reset する | drag 中は resize cursor、minimum size、dock preview、最終 order を表示する。Scene / Asset data と authoring history は変更しない。 | drop で normalized size / zone / order を Editor Preferences に保存する。Escape / 領域外 drop は開始前 layout、reset は既定 layout へ戻る。保存失敗時も session layout を保ち、再試行を示す。 |
 | MI-30 | Edit 中に Hierarchy の Entity subtree を別 Entity または Scene Root へ drag する | 移動元を選択し、Entity 上では「子へ移動」、Root 領域では「Scene Root へ移動」を対象名付きで表示する。自分自身、子孫、現在と同じ親はエラー色の境界と理由で実行不可を示す。 | 有効な drop は Entity ID と subtree を維持した Reparent Command 一件として確定し、選択を維持する。Escape、領域外 drop、実行不可 target、Play 中は SceneDocument と history を変更しない。Undo / Redo は親子 link と順序を復元する。 |
-| MI-31 | Assets の XRift Prefabs から built-in recipe を Scene View へ drag する、または「配置」を実行する | Spawn Point、Mirror などを通常の project Asset と分けた読み取り専用 catalog として表示し、project kind で利用可能項目を絞る。Scene View は recipe 名と配置位置を表示する。 | drop 後は通常の Entity を一件作り選択する。Entity Transform は編集できるが、recipe を定義する XRift Component は読み取り専用表示にし、通常 Asset の rename / delete / folder move 対象にしない。Entity 自体の Delete と Undo / Redo は利用できる。 |
+| MI-31 | Assets の XRift Prefabs から built-in recipe を Scene View へ drag する、または「配置」を実行する | Spawn Point、Mirror、Portalなどを通常のproject Assetと分けた保護付きcatalogとして表示し、project kindで利用可能項目を絞る。Scene Viewはrecipe名と配置位置を表示する。 | drop後は通常のEntityを一件作り選択する。Entity Transform、recipe identity、Component削除は保護し、URLや公開先IDなどrecipeが明示した設定fieldだけInspectorで編集できる。通常Assetのrename / delete / folder move対象にはしない。Entity自体のDeleteとUndo / Redoは利用できる。必須field未設定時はcompileをblockし、そのfieldを同じInspectorで修正できる。 |
 | MI-32 | Visual Editor の render で例外が発生する | App 全体を白画面にせず、明るい既存配色の復帰面へ切り替え、落ちた機能名と制作データを保持している事実を示す。例外本文、stack、component stack、token、絶対 path は画面へ表示しない。 | 「Editorを再試行」は Boundary と Editor subtree を remount する。「プロジェクトライブラリへ戻る」または前画面へ戻る操作は既存 `onBack` を実行し、Editor 外の App 状態を維持する。 |
 | MI-33 | Particle Asset を作成・編集する、Scene / Hierarchy へ配置する、または Entity に Particle Emitter を追加する | Assets、右 Inspector、Scene View、Hierarchy のすべてで同じ Particle Asset ID を扱う。Particle の変更は Scene View の表現へ即時反映し、Asset を drop した時は Transform と Particle Emitter を持つ Entity を作る。Particle Asset がない状態で Particle Emitter を追加した時は既定 Asset を同じ操作内で作成する。 | 作成・配置・Component 追加・参照変更・削除はそれぞれ一つの履歴へ確定する。取消または失敗時は AssetManifest、SceneDocument、両 selection を開始前へ戻す。Play 中は編集操作を無効にする。 |
 | MI-34 | toolbar の Create、または Hierarchy の右クリックから Entity / Component を作成する | Create は Empty Entity、Primitive、XRift Component、通常 Component の責務別入口を示す。選択 Entity がある時は追加先を名前で示し、選択がない時も単独で成立する XRift Component は Transform 付き Entity として作成できる。wrapper は追加先 Entity がない限り無効にし、理由を表示する。 | 作成または追加は一件の history transaction とし、作成 Entity を `sceneSelection` にして Inspector を開く。Escape / 外側 click は document を変えず閉じる。Play / Import 中は無効にし、必須値が未設定なら Inspector から設定して compile blocker を解消できる。 |
 | MI-35 | Visual World の新規作成で Starter Scene を選ぶ | 既定は実用的な World Starter とし、配置済み Scene と Assets へ追加される Model / Texture の数をカード上に示す。Blank は明示的な最小構成として残し、素材入り template と混同しない。 | 作成成功時は bundled source を project-relative path へ検証付きでコピーし、Scene / Asset / Material / Collider / XRift Spawn の参照を一度に確定して Editor で開く。copy / hash / document 保存の一部が失敗した場合は不完全な project を成功表示せず、新規作成へ戻れる。 |
+| MI-36 | Model Assetを選択して構造を確認し、import設定を変更または再importする | 右Inspectorにsource/status、node・mesh・primitive、bounds、animation、Material slotと現在のimport recipeを分けて表示する。recipe変更は未適用であることを示し、source解析済みの事実と混同しない。再importでslotが消える時は確定前にScene / Prefabの影響先を列挙する。 | 再import成功時は同じAsset IDを維持し、同じslot identityへのMaterial割当を保持して追加・消失slotを明示する。影響を確認せず参照切れを成功表示しない。失敗時はlast-good metadata、thumbnail、Scene参照を維持し、原因と再試行を同じModel Inspectorに残す。Play中は閲覧のみとする。 |
 
 ## 機能一覧
 
@@ -64,7 +65,7 @@ F-06 アイテム検査
 | F-05 | 公開準備とアップロード | MI-03, MI-04, MI-05, MI-07, MI-08, MI-09, MI-17, MI-27 | 初期値の upload を防ぎ、toolchain が不足しても authoring を失わず、review から upload result / 審査状態まで続けられる。正式 result にない公開 URL は推測しない。 |
 | F-06 | アイテム検査 | MI-03, MI-05, MI-09 | ビルドを含むセキュリティチェックを実行でき、成功時は公開、失敗時はログと編集へ進める。 |
 | F-07 | ビジュアルエディター | MI-01, MI-09, MI-10, MI-11, MI-12, MI-13, MI-14, MI-15, MI-16, MI-18, MI-21, MI-22, MI-29, MI-30, MI-31, MI-32, MI-33, MI-34, MI-35 | 四カードの入口、Hierarchy、Scene View、右 Inspector、下 Assets を使い、独立 selection、Empty / primitive / XRift Component 作成、Asset / Material / Particle / XRift Prefab D&D、Hierarchy Reparent、Transform、Material / Texture / Particle 編集、動的 thumbnail、Play を扱える。panel layout は resize / dock 後も復元され、Editor render failure は App 全体へ伝播させず再試行または一覧へ復帰できる。 |
-| F-08 | Visual Asset authoring / import | MI-11, MI-15, MI-16, MI-19, MI-20, MI-21, MI-28, MI-33 | Material / Texture / Model / GLTF / Prefab / Particle を folder と動的 thumbnail 付きで管理し、source を壊さず import、右 Inspector で recipe 編集、reimport、stale 診断を行える。Asset 編集中も `sceneSelection` は保持される。 |
+| F-08 | Visual Asset authoring / import | MI-11, MI-15, MI-16, MI-19, MI-20, MI-21, MI-28, MI-33, MI-36 | Material / Texture / Model / GLTF / Prefab / Particle を folder と動的 thumbnail 付きで管理し、source を壊さず import、右 Inspector で recipe 編集、reimport、stale 診断を行える。Asset 編集中も `sceneSelection` は保持される。 |
 | F-09 | Command / Shortcut / Prefab | MI-12, MI-22, MI-23, MI-24, MI-28, MI-30, MI-31, MI-34 | toolbar、menu、keyboard、Hierarchy D&D が同じ Command / Shortcut Registry を使い、Copy / Paste / Duplicate / Delete / Reparent、Empty / Component 作成、Hierarchy からの Prefab 化、XRift built-in Prefab配置、Undo / Redo が IDs と両 selection を復元する。 |
 | F-10 | Visual Save / Compile / Preview / Upload | MI-03, MI-05, MI-07, MI-08, MI-09, MI-17, MI-25, MI-26, MI-27 | journal 付き保存、決定的 compiler / provenance、freshness 検査、区別された preview、既存 XRift check / upload を一つの editor flow で扱い、失敗や取消後も last committed authoring と戻り先を保つ。 |
 
@@ -138,6 +139,7 @@ F-06 アイテム検査
 - Assets は Model / GLTF、Texture、Material、Prefab、Particle と folder を表示し、primitive は別の Create palette に置く。Material / Model / Texture は ready な generated thumbnail、未生成時だけ kind icon を使う。
 - `sceneSelection` と `assetSelection` が独立し、右 Inspector がどちらの context を表示しているかを選択背景、header、pinned tab で示す。
 - Import 前に対応形式、source 保持、既定 max resolution / quality / mipmap / compression、resource budget、external URI が local dependency に限られることを確認できる。
+- Model Inspectorはsourceとlast-good解析結果、Material slot、animation、bounds、現在のimport recipeを同時に示し、解析済みの値と次回再import用の設定を区別する。
 
 ### 操作中
 
@@ -145,6 +147,7 @@ F-06 アイテム検査
 - Particle は Assets の作成操作から追加し、右 Inspector で emission、shape、velocity、lifetime、size、color、texture、blend を編集する。Particle Asset は Scene View または Hierarchy へ drag して Particle Emitter Entity として配置できる。
 - 右 Inspector の Asset context は source と derived、slot の色空間、recipe、stale / diagnostic を分ける。Entity context の Mesh shadow や選択 Entity を Asset field で上書きしない。
 - context menu は現在 kind / state で実行できる項目だけを有効にし、menu open だけでは selection や document を変えない。
+- Modelのscale、collider生成、mesh最適化、animation importを変更した時はrecipeだけを未保存にし、再importが必要な項目をInspector内で示す。再import中も既存Scene参照とlast-good表示を消さない。
 
 ### 成功時
 
@@ -152,11 +155,13 @@ F-06 アイテム検査
 - Particle Asset の作成は新 Asset を `assetSelection` にし、Entity への配置または Particle Emitter の追加は参照する Asset ID を SceneDocument に保持する。
 - thumbnail / derived は source / recipe / processor / target hash と一致した時だけ ready にし、同じ source を再 import しても Asset ID と参照を保つ。
 - Material の変更は共有 Asset に一度だけ保存され、同じ ID を参照する全 preview に反映する。
+- Model再importはAsset IDを維持し、slot identityが一致する既存Material bindingを保持する。新規slotは未設定として追加し、消失slotは診断に残して参照先の修正へ進める。
 
 ### 失敗時
 
 - extension、URI、budget、decode、Material field、slot binding の失敗は Asset / field / source URI を project-relative に示し、reimport、設定変更、参照置換のいずれかへ案内する。
 - temporary data を回収し、Scene / Asset / folder documents、両 selection、history、source、last-good derived を開始前のままにする。同じ設定の自動 retry loop は行わない。
+- Model metadataが非有限、bounds不正、slot重複、未対応external URIの場合は新しいmanifestを確定せず、last-good Model Assetと配置済みEntityを維持する。
 
 ### 戻り先
 
