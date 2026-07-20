@@ -130,7 +130,7 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   },
   {
     id: "entity.reparent",
-    label: "Hierarchyで親を変更",
+    label: "Hierarchyで移動・並び替え",
     category: "edit",
     bindings: [],
   },

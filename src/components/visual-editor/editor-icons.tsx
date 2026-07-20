@@ -12,6 +12,8 @@ import {
   FileBox,
   Folder,
   DoorOpen,
+  Eye,
+  EyeOff,
   Image,
   Import,
   Lightbulb,
@@ -107,6 +109,8 @@ export const EDITOR_ICONS = {
   textInput: TextCursorInput,
   billboardY: Rotate3D,
   warning: TriangleAlert,
+  visible: Eye,
+  hidden: EyeOff,
 } satisfies Record<string, LucideIcon>;
 
 export type EditorIconName = keyof typeof EDITOR_ICONS;

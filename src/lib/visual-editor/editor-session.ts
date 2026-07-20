@@ -305,7 +305,8 @@ export type EntityReparentBlockReason =
   | "parent-missing"
   | "same-entity"
   | "descendant-parent"
-  | "unchanged-parent";
+  | "unchanged-parent"
+  | "unchanged-order";
 
 export type EntityReparentDecision =
   | { allowed: true }
@@ -320,6 +321,7 @@ export function getEntityReparentDecision(
   scene: SceneDocument,
   entityId: string,
   parentEntityId: string | null,
+  siblingIndex?: number,
 ): EntityReparentDecision {
   const entity = scene.entities[entityId];
   if (!entity) return { allowed: false, reason: "entity-missing" };
@@ -329,15 +331,25 @@ export function getEntityReparentDecision(
   if (parentEntityId === entityId) {
     return { allowed: false, reason: "same-entity" };
   }
-  if (entity.parentId === parentEntityId) {
-    return { allowed: false, reason: "unchanged-parent" };
-  }
   if (
     parentEntityId !== null &&
     (collectEntityDescendantIds(scene, entityId).has(parentEntityId) ||
       entityIsAncestor(scene, entityId, parentEntityId))
   ) {
     return { allowed: false, reason: "descendant-parent" };
+  }
+  if (entity.parentId === parentEntityId) {
+    if (siblingIndex === undefined) {
+      return { allowed: false, reason: "unchanged-parent" };
+    }
+    const siblings = getHierarchySiblings(scene, parentEntityId);
+    const reordered = insertHierarchyEntity(siblings, entityId, siblingIndex);
+    if (
+      reordered.length === siblings.length &&
+      reordered.every((candidateId, index) => candidateId === siblings[index])
+    ) {
+      return { allowed: false, reason: "unchanged-order" };
+    }
   }
   return { allowed: true };
 }
@@ -351,8 +363,14 @@ export function reparentEntityHierarchy(
   scene: SceneDocument,
   entityId: string,
   parentEntityId: string | null,
+  siblingIndex?: number,
 ): SceneDocument {
-  const decision = getEntityReparentDecision(scene, entityId, parentEntityId);
+  const decision = getEntityReparentDecision(
+    scene,
+    entityId,
+    parentEntityId,
+    siblingIndex,
+  );
   if (!decision.allowed) return scene;
 
   const source = scene.entities[entityId];
@@ -370,21 +388,77 @@ export function reparentEntityHierarchy(
   }
 
   entities[entityId] = { ...source, parentId: parentEntityId };
+  let rootEntityIds = scene.rootEntityIds.filter(
+    (rootId) => rootId !== entityId,
+  );
   if (parentEntityId !== null) {
     const parent = entities[parentEntityId];
     entities[parentEntityId] = {
       ...parent,
-      children: [...parent.children, entityId],
+      children: insertHierarchyEntity(
+        parent.children,
+        entityId,
+        siblingIndex,
+      ),
     };
+  } else {
+    rootEntityIds = insertHierarchyEntity(
+      rootEntityIds,
+      entityId,
+      siblingIndex,
+    );
   }
 
   return {
     ...scene,
-    rootEntityIds: [
-      ...scene.rootEntityIds.filter((rootId) => rootId !== entityId),
-      ...(parentEntityId === null ? [entityId] : []),
-    ],
+    rootEntityIds,
     entities,
+  };
+}
+
+function getHierarchySiblings(
+  scene: SceneDocument,
+  parentEntityId: string | null,
+): readonly string[] {
+  return parentEntityId === null
+    ? scene.rootEntityIds
+    : scene.entities[parentEntityId]?.children ?? [];
+}
+
+function insertHierarchyEntity(
+  siblings: readonly string[],
+  entityId: string,
+  siblingIndex?: number,
+): string[] {
+  const withoutEntity = siblings.filter((candidateId) => candidateId !== entityId);
+  const requestedIndex =
+    typeof siblingIndex === "number" && Number.isFinite(siblingIndex)
+      ? siblingIndex
+      : withoutEntity.length;
+  const insertIndex = Math.max(
+    0,
+    Math.min(withoutEntity.length, Math.trunc(requestedIndex)),
+  );
+  return [
+    ...withoutEntity.slice(0, insertIndex),
+    entityId,
+    ...withoutEntity.slice(insertIndex),
+  ];
+}
+
+export function updateEntityEnabled(
+  scene: SceneDocument,
+  entityId: string,
+  enabled: boolean,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  if (!entity || entity.enabled === enabled) return scene;
+  return {
+    ...scene,
+    entities: {
+      ...scene.entities,
+      [entityId]: { ...entity, enabled },
+    },
   };
 }
 

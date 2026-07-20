@@ -13,6 +13,7 @@ export * from "./document-asset-creation";
 export * from "./document-asset-creation.fixture";
 export * from "./editor-history";
 export * from "./editor-session";
+export * from "./editor-session.fixture";
 export * from "./material-assignment";
 export * from "./model-import-contract";
 export * from "./model-import-contract.fixture";

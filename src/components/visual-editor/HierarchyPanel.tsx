@@ -38,17 +38,25 @@ import {
 type HierarchyRow = {
   entity: SceneEntity;
   depth: number;
+  effectiveEnabled: boolean;
 };
+
+type HierarchyDropPlacement = "before" | "inside" | "after";
 
 type HierarchyDropTarget =
   | {
       kind: "entity";
       entityId: string;
+      placement: HierarchyDropPlacement;
+      parentEntityId: string | null;
+      siblingIndex: number;
       allowed: boolean;
       message: string;
     }
   | {
       kind: "root";
+      parentEntityId: null;
+      siblingIndex: number;
       allowed: boolean;
       message: string;
     };
@@ -57,17 +65,24 @@ function flattenHierarchy(scene: SceneDocument): HierarchyRow[] {
   const rows: HierarchyRow[] = [];
   const visited = new Set<string>();
 
-  const visit = (entityId: string, depth: number) => {
+  const visit = (
+    entityId: string,
+    depth: number,
+    ancestorsEnabled: boolean,
+  ) => {
     if (visited.has(entityId)) return;
     const entity = scene.entities[entityId];
     if (!entity) return;
     visited.add(entityId);
-    rows.push({ entity, depth });
-    entity.children.forEach((childId) => visit(childId, depth + 1));
+    const effectiveEnabled = ancestorsEnabled && entity.enabled;
+    rows.push({ entity, depth, effectiveEnabled });
+    entity.children.forEach((childId) =>
+      visit(childId, depth + 1, effectiveEnabled),
+    );
   };
 
-  scene.rootEntityIds.forEach((entityId) => visit(entityId, 0));
-  Object.keys(scene.entities).forEach((entityId) => visit(entityId, 0));
+  scene.rootEntityIds.forEach((entityId) => visit(entityId, 0, true));
+  Object.keys(scene.entities).forEach((entityId) => visit(entityId, 0, true));
   return rows;
 }
 
@@ -131,6 +146,8 @@ function reparentBlockedMessage(
       return parentName
         ? `「${sourceName}」はすでに「${parentName}」の子です`
         : `「${sourceName}」はすでにScene Rootにあります`;
+    case "unchanged-order":
+      return `「${sourceName}」はすでにこの位置にあります`;
     case "entity-missing":
       return "移動元のEntityが見つかりません";
     case "parent-missing":
@@ -147,6 +164,7 @@ export function HierarchyPanel({
   onAssignMaterial,
   onDropSceneAsset,
   onDropBuiltinPrefab,
+  onEntityEnabledChange,
   onCommand,
   renameRequest,
   onRename,
@@ -159,12 +177,14 @@ export function HierarchyPanel({
   onAssignMaterial: (entityId: string, materialAssetId: string) => void;
   onDropSceneAsset: (assetId: string, parentEntityId: string | null) => void;
   onDropBuiltinPrefab: (recipeId: string, parentEntityId: string | null) => void;
+  onEntityEnabledChange: (entityId: string, enabled: boolean) => void;
   onCommand: (
     commandId: EditorCommandId,
     payload?: {
       creationId?: string;
       entityId?: string;
       parentEntityId?: string | null;
+      siblingIndex?: number;
       componentDefinitionId?: string;
     },
   ) => boolean;
@@ -252,54 +272,127 @@ export function HierarchyPanel({
 
   const describeDropTarget = (
     sourceEntityId: string,
-    parentEntityId: string | null,
+    targetEntityId: string | null,
+    placement: HierarchyDropPlacement = "inside",
   ): HierarchyDropTarget => {
     const source = scene.entities[sourceEntityId];
-    const parent = parentEntityId ? scene.entities[parentEntityId] : null;
+    if (targetEntityId === null) {
+      const siblingIndex = scene.rootEntityIds.filter(
+        (entityId) => entityId !== sourceEntityId,
+      ).length;
+      const decision = getEntityReparentDecision(
+        scene,
+        sourceEntityId,
+        null,
+        siblingIndex,
+      );
+      return decision.allowed
+        ? {
+            kind: "root",
+            parentEntityId: null,
+            siblingIndex,
+            allowed: true,
+            message: `「${source?.name ?? "Entity"}」をScene Rootの末尾へ移動`,
+          }
+        : {
+            kind: "root",
+            parentEntityId: null,
+            siblingIndex,
+            allowed: false,
+            message: reparentBlockedMessage(
+              decision.reason,
+              source?.name ?? "Entity",
+              null,
+            ),
+          };
+    }
+
+    const target = scene.entities[targetEntityId];
+    if (!target) {
+      return {
+        kind: "entity",
+        entityId: targetEntityId,
+        placement,
+        parentEntityId: null,
+        siblingIndex: 0,
+        allowed: false,
+        message: "移動先のEntityが見つかりません",
+      };
+    }
+    if (targetEntityId === sourceEntityId) {
+      return {
+        kind: "entity",
+        entityId: targetEntityId,
+        placement,
+        parentEntityId: target.parentId,
+        siblingIndex: 0,
+        allowed: false,
+        message: `「${source?.name ?? "Entity"}」は同じ位置へ移動できません`,
+      };
+    }
+
+    const parentEntityId = placement === "inside" ? target.id : target.parentId;
+    const siblings = (
+      parentEntityId === null
+        ? scene.rootEntityIds
+        : scene.entities[parentEntityId]?.children ?? []
+    ).filter((entityId) => entityId !== sourceEntityId);
+    const targetIndex = siblings.indexOf(target.id);
+    const siblingIndex =
+      placement === "inside"
+        ? siblings.length
+        : Math.max(0, targetIndex + (placement === "after" ? 1 : 0));
     const decision = getEntityReparentDecision(
       scene,
       sourceEntityId,
       parentEntityId,
+      siblingIndex,
     );
     if (decision.allowed) {
-      return parentEntityId
-        ? {
-            kind: "entity",
-            entityId: parentEntityId,
-            allowed: true,
-            message: `「${source?.name ?? "Entity"}」を「${parent?.name ?? "Entity"}」の子へ移動`,
-          }
-        : {
-            kind: "root",
-            allowed: true,
-            message: `「${source?.name ?? "Entity"}」をScene Rootへ移動`,
-          };
+      return {
+        kind: "entity",
+        entityId: target.id,
+        placement,
+        parentEntityId,
+        siblingIndex,
+        allowed: true,
+        message:
+          placement === "inside"
+            ? `「${source?.name ?? "Entity"}」を「${target.name}」の子へ移動`
+            : `「${source?.name ?? "Entity"}」を「${target.name}」の${placement === "before" ? "前" : "後"}へ移動`,
+      };
     }
-    return parentEntityId
-      ? {
-          kind: "entity",
-          entityId: parentEntityId,
-          allowed: false,
-          message: reparentBlockedMessage(
-            decision.reason,
-            source?.name ?? "Entity",
-            parent?.name ?? null,
-          ),
-        }
-      : {
-          kind: "root",
-          allowed: false,
-          message: reparentBlockedMessage(
-            decision.reason,
-            source?.name ?? "Entity",
-            null,
-          ),
-        };
+    return {
+      kind: "entity",
+      entityId: target.id,
+      placement,
+      parentEntityId,
+      siblingIndex,
+      allowed: false,
+      message: reparentBlockedMessage(
+        decision.reason,
+        source?.name ?? "Entity",
+        parentEntityId ? scene.entities[parentEntityId]?.name ?? null : null,
+      ),
+    };
+  };
+
+  const entityDropPlacement = (
+    event: DragEvent<HTMLElement>,
+  ): HierarchyDropPlacement => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const ratio = bounds.height > 0
+      ? (event.clientY - bounds.top) / bounds.height
+      : 0.5;
+    if (ratio < 0.28) return "before";
+    if (ratio > 0.72) return "after";
+    return "inside";
   };
 
   const finishEntityDrop = (
     event: DragEvent<HTMLElement>,
-    parentEntityId: string | null,
+    targetEntityId: string | null,
+    placement: HierarchyDropPlacement = "inside",
   ) => {
     if (
       !dragEntityId &&
@@ -318,13 +411,21 @@ export function HierarchyPanel({
       setDropTarget(null);
       return;
     }
-    const target = describeDropTarget(sourceEntityId, parentEntityId);
+    const target = describeDropTarget(
+      sourceEntityId,
+      targetEntityId,
+      placement,
+    );
     if (!target.allowed) {
       setDropTarget(target);
       setDragEntityId(null);
       return;
     }
-    onCommand("entity.reparent", { entityId: sourceEntityId, parentEntityId });
+    onCommand("entity.reparent", {
+      entityId: sourceEntityId,
+      parentEntityId: target.parentEntityId,
+      siblingIndex: target.siblingIndex,
+    });
     setDragEntityId(null);
     setDropTarget(null);
   };
@@ -499,7 +600,7 @@ export function HierarchyPanel({
             {assetDropTarget ? "Scene Rootへ配置" : "Scene Rootへ移動"}
           </div>
         ) : null}
-        {rows.map(({ entity, depth }) => {
+        {rows.map(({ entity, depth, effectiveEnabled }) => {
           const selected =
             selection?.kind === "entity" && selection.id === entity.id;
           const EntityIcon = getEntityIcon(entity);
@@ -576,7 +677,11 @@ export function HierarchyPanel({
                   dragEntityId ??
                   readEditorDragData(event.dataTransfer, ENTITY_DRAG_MIME).trim();
                 if (!sourceEntityId) return;
-                const target = describeDropTarget(sourceEntityId, entity.id);
+                const target = describeDropTarget(
+                  sourceEntityId,
+                  entity.id,
+                  entityDropPlacement(event),
+                );
                 setDropTarget(target);
                 if (!target.allowed) {
                   event.dataTransfer.dropEffect = "none";
@@ -609,20 +714,28 @@ export function HierarchyPanel({
                   finishPlaceableDrop(event, entity.id);
                   return;
                 }
-                finishEntityDrop(event, entity.id);
+                finishEntityDrop(
+                  event,
+                  entity.id,
+                  entityDropPlacement(event),
+                );
               }}
-              className={`group flex w-full items-stretch border-l-2 text-left text-xs transition-colors ${
+              className={`group flex w-full items-stretch border-l-2 text-left text-xs transition-[background-color,border-color,box-shadow,opacity] ${
                 assetDropTarget?.kind === "entity" &&
                 assetDropTarget.entityId === entity.id
                   ? "border-sky-600 bg-sky-100 text-sky-900 ring-1 ring-inset ring-sky-400"
                   : activeEntityDrop
                   ? activeEntityDrop.allowed
-                    ? "border-violet-600 bg-violet-100 text-violet-900 ring-1 ring-inset ring-violet-400"
+                    ? activeEntityDrop.placement === "before"
+                      ? "border-violet-400 bg-violet-50 text-violet-900 shadow-[inset_0_2px_0_#7c3aed]"
+                      : activeEntityDrop.placement === "after"
+                        ? "border-violet-400 bg-violet-50 text-violet-900 shadow-[inset_0_-2px_0_#7c3aed]"
+                        : "border-violet-600 bg-violet-100 text-violet-900 ring-1 ring-inset ring-violet-400"
                     : "border-rose-500 bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-300"
                   : selected
                     ? "border-violet-600 bg-violet-100 text-violet-900"
                     : "border-transparent text-slate-700 hover:bg-white hover:text-slate-900"
-              }`}
+              } ${effectiveEnabled ? "opacity-100" : "opacity-50"}`}
             >
               <button
                 type="button"
@@ -665,6 +778,31 @@ export function HierarchyPanel({
                 <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
                   {getEntityTypeLabel(entity)}
                 </span>
+              </button>
+              <button
+                type="button"
+                data-no-entity-drag="true"
+                disabled={readOnly}
+                aria-pressed={entity.enabled}
+                aria-label={`${entity.name}を${entity.enabled ? "無効" : "有効"}にする`}
+                title={
+                  readOnly
+                    ? "Playを停止するとEnabledを変更できます"
+                    : entity.enabled && !effectiveEnabled
+                      ? `親Entityが無効です。「${entity.name}」自身を無効にする`
+                      : `${entity.name}を${entity.enabled ? "無効" : "有効"}にする`
+                }
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onEntityEnabledChange(entity.id, !entity.enabled);
+                }}
+                className="m-1 mr-0 flex w-7 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                {entity.enabled ? (
+                  <EDITOR_ICONS.visible size={14} aria-hidden="true" />
+                ) : (
+                  <EDITOR_ICONS.hidden size={14} aria-hidden="true" />
+                )}
               </button>
               <button
                 type="button"

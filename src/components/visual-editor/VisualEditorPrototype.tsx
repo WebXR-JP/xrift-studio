@@ -58,6 +58,7 @@ import {
   reparentEntityHierarchy,
   reimportModelAssetFromDisk,
   undoEditorHistory,
+  updateEntityEnabled,
   updateEntityTransform,
   updateColliderComponent,
   updateMaterialAsset,
@@ -175,6 +176,7 @@ type EditorCommandPayload = {
   assetId?: string;
   folderId?: string | null;
   parentEntityId?: string | null;
+  siblingIndex?: number;
   componentDefinitionId?: string;
 };
 
@@ -978,7 +980,11 @@ export function VisualEditorPrototype({
   );
 
   const handleReparentEntity = useCallback(
-    (entityId: string, parentEntityId: string | null) => {
+    (
+      entityId: string,
+      parentEntityId: string | null,
+      siblingIndex?: number,
+    ) => {
       if (editorMode !== "edit" || importBusy) {
         setNotice(
           editorMode !== "edit"
@@ -992,13 +998,15 @@ export function VisualEditorPrototype({
           current.present.bundle.scene,
           entityId,
           parentEntityId,
+          siblingIndex,
         );
         if (!decision.allowed) {
           const message =
             decision.reason === "descendant-parent" ||
             decision.reason === "same-entity"
               ? "Entityを自分自身または子Entityへ移動できません"
-              : decision.reason === "unchanged-parent"
+              : decision.reason === "unchanged-parent" ||
+                  decision.reason === "unchanged-order"
                 ? "Entityはすでにこの場所にあります"
                 : "移動先のEntityが見つかりません";
           setNotice(message);
@@ -1008,14 +1016,21 @@ export function VisualEditorPrototype({
           current.present.bundle.scene,
           entityId,
           parentEntityId,
+          siblingIndex,
         );
         if (scene === current.present.bundle.scene) return current;
         const entityName = scene.entities[entityId]?.name ?? "Entity";
         const parentName = parentEntityId
           ? scene.entities[parentEntityId]?.name ?? "Entity"
           : "Scene Root";
+        const previousParentId =
+          current.present.bundle.scene.entities[entityId]?.parentId ?? null;
         setSaveStatus("dirty");
-        setNotice(`「${entityName}」を${parentName}へ移動しました`);
+        setNotice(
+          previousParentId === parentEntityId
+            ? `「${entityName}」のHierarchy順を変更しました`
+            : `「${entityName}」を${parentName}へ移動しました`,
+        );
         return commitEditorHistory(current, {
           ...current.present,
           bundle: touchProject({ ...current.present.bundle, scene }),
@@ -1239,6 +1254,23 @@ export function VisualEditorPrototype({
     (entityId: string, name: string) => {
       if (editorMode !== "edit") return;
       updateScene((scene) => renameEntity(scene, entityId, name));
+    },
+    [editorMode, updateScene],
+  );
+
+  const handleEntityEnabledChange = useCallback(
+    (entityId: string, enabled: boolean) => {
+      if (editorMode !== "edit") return;
+      updateScene((scene) => {
+        const entity = scene.entities[entityId];
+        const next = updateEntityEnabled(scene, entityId, enabled);
+        if (next !== scene) {
+          setNotice(
+            `「${entity?.name ?? "Entity"}」を${enabled ? "有効" : "無効"}にしました`,
+          );
+        }
+        return next;
+      });
     },
     [editorMode, updateScene],
   );
@@ -2538,7 +2570,11 @@ export function VisualEditorPrototype({
           return editorMode === "edit";
         case "entity.reparent":
           if (!payload.entityId) return false;
-          handleReparentEntity(payload.entityId, payload.parentEntityId ?? null);
+          handleReparentEntity(
+            payload.entityId,
+            payload.parentEntityId ?? null,
+            payload.siblingIndex,
+          );
           return editorMode === "edit" && !importBusy;
         case "prefab.create":
           if (!payload.entityId) return false;
@@ -2800,6 +2836,7 @@ export function VisualEditorPrototype({
             onDropBuiltinPrefab={(recipeId, parentEntityId) =>
               handlePlaceBuiltinPrefab(recipeId, undefined, parentEntityId)
             }
+            onEntityEnabledChange={handleEntityEnabledChange}
             onCommand={executeCommand}
             renameRequest={
               renameTarget?.kind === "entity"
