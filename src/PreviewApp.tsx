@@ -803,20 +803,27 @@ export default function PreviewApp() {
       </section>
 
       <section id="visual-editor" className="bg-white/80 px-5 py-20 lg:px-8 lg:py-24">
-        <div className="mx-auto flex max-w-6xl flex-col gap-8 rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-7 sm:p-10 lg:flex-row lg:items-end lg:justify-between">
+        <div className="mx-auto grid max-w-6xl gap-8 rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-7 sm:p-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-center">
           <div className="max-w-2xl">
             <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">ビジュアルで作る</p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">シーンを見ながら、素材を置いて整える。</h2>
             <p className="mt-4 text-sm leading-7 text-zinc-600">コード制作と同じアプリで、素材を配置し、見た目や設定を調整して、その場で確認できます。</p>
+            <button
+              type="button"
+              onClick={() => setVisualEditorKind(sampleKind)}
+              className="mt-7 inline-flex items-center gap-2 rounded-full bg-zinc-950 px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-violet-500/20 transition hover:-translate-y-0.5 hover:bg-violet-700"
+            >
+              <PanelsTopLeft size={16} />
+              ビジュアルエディターを試す
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setVisualEditorKind(sampleKind)}
-            className="inline-flex shrink-0 items-center gap-2 self-start rounded-full bg-zinc-950 px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-violet-500/20 transition hover:-translate-y-0.5 hover:bg-violet-700 lg:self-auto"
-          >
-            <PanelsTopLeft size={16} />
-            ビジュアルエディターを試す
-          </button>
+          <figure className="overflow-hidden rounded-xl border border-violet-200 bg-zinc-950 shadow-xl shadow-violet-950/10">
+            <img
+              src="./visual-editor-screenshot.png"
+              alt="XRift Studioのビジュアルエディター。シーン、素材一覧、設定パネルを同時に表示している画面"
+              className="block h-auto w-full"
+            />
+          </figure>
         </div>
       </section>
 
