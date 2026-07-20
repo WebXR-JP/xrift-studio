@@ -51,6 +51,10 @@ export type PendingImport = {
   diagnostics: PendingImportDiagnostic[];
   sourceHash?: string;
   assetId?: string;
+  result?: {
+    materialCount: number;
+    textureCount: number;
+  };
 };
 
 export type DragKind = "asset" | "files";

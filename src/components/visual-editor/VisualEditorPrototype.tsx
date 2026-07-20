@@ -2450,13 +2450,23 @@ export function VisualEditorPrototype({
             updateImportQueue((current) =>
               current.map((entry) =>
                 entry.id === queued.id
-                  ? {
-                      ...entry,
-                      status: plan.replacesAssetId ? "updated" : "succeeded",
-                      progress: 100,
-                      file: null,
-                      assetId: importedAsset.id,
-                    }
+                    ? {
+                        ...entry,
+                        status: plan.replacesAssetId ? "updated" : "succeeded",
+                        progress: 100,
+                        file: null,
+                        assetId: importedAsset.id,
+                        result: {
+                          materialCount:
+                            plan.derivedAssets?.filter(
+                              (asset) => asset.kind === "material",
+                            ).length ?? 0,
+                          textureCount:
+                            plan.derivedAssets?.filter(
+                              (asset) => asset.kind === "texture",
+                            ).length ?? 0,
+                        },
+                      }
                   : entry,
               ),
             );
@@ -3031,11 +3041,6 @@ export function VisualEditorPrototype({
           </div>
 
           <div className="flex items-center gap-2" aria-label="編集とPlayの切り替え">
-            {notice ? (
-              <span className="text-xs text-slate-500" role="status" aria-live="polite">
-                {notice}
-              </span>
-            ) : null}
             <button
               type="button"
               disabled={editorMode === "edit" && importBusy}
@@ -3111,7 +3116,7 @@ export function VisualEditorPrototype({
             onToggleTransformSpace={() => {
               if (!readOnly) executeCommand("transform.toggle-space");
             }}
-            notice={notice}
+            notice={null}
             onSelect={(selection) => {
               if (selection?.kind === "entity") {
                 setSceneSettingsOpen(false);
@@ -3200,6 +3205,7 @@ export function VisualEditorPrototype({
             selectedAssetId={assetSelection}
             pendingImports={pendingImports}
             importError={importError}
+            statusMessage={notice}
             onSelectAsset={handleSelectAsset}
             onQueueFiles={handleQueueFiles}
             onRemovePending={handleRemovePendingImport}

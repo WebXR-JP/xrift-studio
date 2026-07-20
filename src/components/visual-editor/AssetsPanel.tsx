@@ -7,7 +7,14 @@ import {
   type MouseEvent,
   type ReactElement,
 } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+  LoaderCircle,
+  PanelBottomOpen,
+} from "lucide-react";
 import type {
   AssetManifest,
   BuiltinPrefabRecipe,
@@ -66,7 +73,6 @@ type AssetFolderTreeProps = {
   customFolders: BrowserFolder[];
   kindFolders: BrowserFolder[];
   activeFolderId: string | null;
-  allAssetCount: number;
   folderItemCount: (folder: BrowserFolder) => number;
   assetMutationLocked: boolean;
   onActiveFolderChange: (folderId: string | null) => void;
@@ -84,7 +90,9 @@ const KIND_FOLDERS: BrowserFolder[] = [
     builtinPrefabs: true,
   },
   { id: "folder-models", name: "Models", icon: "model", kind: "model" },
+  { id: "folder-materials", name: "Materials", icon: "material", kind: "material" },
   { id: "folder-textures", name: "Textures", icon: "texture", kind: "texture" },
+  { id: "folder-particles", name: "Particles", icon: "particle", kind: "particle" },
   { id: "folder-prefabs", name: "Prefabs", icon: "prefab", kind: "template" },
 ];
 
@@ -174,7 +182,6 @@ function AssetFolderTree({
   customFolders,
   kindFolders,
   activeFolderId,
-  allAssetCount,
   folderItemCount,
   assetMutationLocked,
   onActiveFolderChange,
@@ -257,7 +264,6 @@ function AssetFolderTree({
     const children = childrenOf(folder.id);
     const expanded = expandedFolders.has(folder.id);
     const FolderIcon = EDITOR_ICONS.folder;
-    const KindIcon = EDITOR_ICONS[folder.icon];
     const ChevronIcon = expanded ? ChevronDown : ChevronRight;
     const isActive = activeFolderId === folder.id;
     const isDropTarget = dropTargetId === folder.id;
@@ -265,12 +271,12 @@ function AssetFolderTree({
     return (
       <div key={folder.id}>
         <div
-          className={`group flex min-w-0 items-center gap-1 rounded-md pr-1 text-xs ${
+          className={`group flex min-w-0 items-center gap-1 rounded-md pr-1 text-[13px] ${
             isDropTarget
-              ? "bg-violet-100 text-violet-900 ring-1 ring-violet-300"
+              ? "bg-brand-100 text-brand-900 ring-1 ring-brand-300"
               : isActive
-                ? "bg-violet-100 text-violet-900"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                ? "bg-brand-50 font-medium text-brand-900"
+                : "text-editor-muted hover:bg-editor-subtle hover:text-editor-text"
           }`}
           style={{ paddingLeft: `${8 + depth * 14}px` }}
           onDragOver={(event) => handleDragOver(event, folder.id)}
@@ -280,14 +286,14 @@ function AssetFolderTree({
           {children.length > 0 ? (
             <button
               type="button"
-              className="rounded p-0.5 text-slate-400 hover:bg-white hover:text-slate-700"
+              className="flex size-6 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-white hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
               aria-label={expanded ? `${folder.name}を折りたたむ` : `${folder.name}を展開する`}
               onClick={() => toggleFolder(folder.id)}
             >
               <ChevronIcon size={13} aria-hidden="true" />
             </button>
           ) : (
-            <span className="w-[18px]" aria-hidden="true" />
+            <span className="w-6" aria-hidden="true" />
           )}
           <button
             type="button"
@@ -305,19 +311,15 @@ function AssetFolderTree({
               setDropTargetId(null);
             }}
             onClick={() => onActiveFolderChange(folder.id)}
-            className="flex min-w-0 flex-1 cursor-grab items-center gap-1.5 py-1 text-left active:cursor-grabbing"
+            className="flex min-h-7 min-w-0 flex-1 cursor-grab items-center gap-2 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 active:cursor-grabbing"
             title={`${folder.name}を開く`}
           >
             {expanded ? (
-              <FolderIcon size={14} className="shrink-0 text-violet-500" aria-hidden="true" />
+              <FolderIcon size={15} className="shrink-0 text-brand-500" aria-hidden="true" />
             ) : (
               <FolderIcon size={14} className="shrink-0 text-slate-400" aria-hidden="true" />
             )}
             <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-            <span className="shrink-0 tabular-nums text-[10px] text-slate-400">
-              {folderItemCount(folder)}
-            </span>
-            <KindIcon size={11} className="shrink-0 text-slate-400" aria-hidden="true" />
           </button>
         </div>
         {expanded
@@ -335,16 +337,16 @@ function AssetFolderTree({
         key={folder.id}
         type="button"
         onClick={() => onActiveFolderChange(folder.id)}
-        className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs ${
+        className={`flex min-h-7 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 ${
           isActive
-            ? "bg-violet-100 font-semibold text-violet-900"
-            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            ? "bg-brand-50 font-medium text-brand-900"
+            : "text-editor-muted hover:bg-editor-subtle hover:text-editor-text"
         }`}
         title={`${folder.name}のアセットを表示`}
       >
         <KindIcon size={14} className="shrink-0 text-slate-500" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-        <span className="tabular-nums text-[10px] text-slate-400">
+        <span className="tabular-nums text-[11px] text-slate-400">
           {folderItemCount(folder)}
         </span>
       </button>
@@ -352,33 +354,40 @@ function AssetFolderTree({
   };
 
   return (
-    <aside className="flex w-44 shrink-0 flex-col border-r border-slate-300 bg-white" aria-label="Asset folders">
-      <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-1.5">
+    <aside className="flex w-48 shrink-0 flex-col border-r border-editor-border bg-editor-surface" aria-label="Asset folders">
+      <div className="scrollbar-thin min-h-0 flex-1 overflow-auto px-2 py-2.5">
+        <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+          ライブラリ
+        </p>
         <div
           onDragOver={(event) => handleDragOver(event, null)}
           onDragLeave={handleDragLeave}
           onDrop={(event) => handleDrop(event, null)}
-          className={`rounded-md ${dropTargetId === "__root__" ? "bg-violet-100 ring-1 ring-violet-300" : ""}`}
+          className={`rounded-md ${dropTargetId === "__root__" ? "bg-brand-100 ring-1 ring-brand-300" : ""}`}
         >
           <button
             type="button"
             onClick={() => onActiveFolderChange(null)}
-            className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs ${
+            className={`flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 ${
               activeFolderId === null
-                ? "bg-slate-200 font-semibold text-slate-900"
-                : "text-slate-700 hover:bg-slate-100"
+                ? "bg-editor-subtle font-medium text-editor-text"
+                : "text-editor-text hover:bg-editor-subtle"
             }`}
             title="Assets直下を表示"
           >
             <FolderIcon size={15} className="text-slate-500" aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate">Assets</span>
-            <span className="tabular-nums text-[10px] text-slate-400">{allAssetCount}</span>
           </button>
         </div>
 
+        <p className="mb-1 mt-3 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+          種類
+        </p>
         <div className="space-y-0.5">{kindFolders.map(renderCollection)}</div>
 
-        <div className="mx-2 my-2 border-t border-slate-200" aria-hidden="true" />
+        <p className="mb-1 mt-3 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+          フォルダー
+        </p>
         <div className="space-y-0.5">
           {childrenOf(null).map((folder) => renderCustomFolder(folder, 0))}
           {customFolders.length === 0 ? (
@@ -506,10 +515,10 @@ function AssetCard({
     return (
       <div
         onContextMenu={onOpenContext}
-        className={`group relative grid min-w-0 grid-cols-[54px_minmax(110px,1fr)_90px_70px_52px_28px] items-center gap-2 rounded-md border px-1.5 py-1 text-left ${
+        className={`group relative grid min-w-0 grid-cols-[46px_minmax(110px,1fr)_90px_70px_52px_28px] items-center gap-2 rounded-md border px-2 py-1 text-left ${
           selected
-            ? "border-violet-500 bg-violet-50 ring-1 ring-violet-200"
-            : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+            ? "border-brand-300 bg-brand-50"
+            : "border-transparent bg-editor-surface hover:bg-editor-subtle"
         }`}
       >
         <button
@@ -520,11 +529,11 @@ function AssetCard({
           aria-pressed={selected}
           onClick={() => onSelect(asset.id)}
           title={commandTitle(`${asset.name}を選択／${dragDescription}`, "SelectAsset")}
-          className="col-span-4 grid cursor-grab grid-cols-[54px_minmax(110px,1fr)_90px_70px] items-center gap-2 text-left active:cursor-grabbing"
+          className="col-span-4 grid cursor-grab grid-cols-[46px_minmax(110px,1fr)_90px_70px] items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing"
         >
           <span
             data-asset-drag-preview="true"
-            className="pointer-events-none h-10 overflow-hidden rounded border border-slate-200 bg-white"
+            className="pointer-events-none h-9 overflow-hidden rounded-md bg-editor-subtle"
           >
             <AssetThumbnail asset={asset} assets={assets} projectPath={projectPath} />
           </span>
@@ -555,7 +564,7 @@ function AssetCard({
               onPlace();
             }}
             title={commandTitle(`${asset.name}をScene Rootへ配置`, "PlaceSceneAsset")}
-            className="rounded border border-sky-300 bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-800 hover:bg-sky-100 disabled:opacity-40"
+            className="rounded-md px-2 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-40"
           >
             配置
           </button>
@@ -583,10 +592,10 @@ function AssetCard({
   return (
     <div
       onContextMenu={onOpenContext}
-      className={`group relative flex min-w-0 flex-col overflow-hidden rounded-md border bg-white text-left shadow-sm transition hover:-translate-y-px hover:shadow-md ${
+      className={`group relative flex min-w-0 flex-col overflow-hidden rounded-lg border bg-editor-surface text-left transition-colors ${
         selected
-          ? "border-violet-500 ring-2 ring-violet-200"
-          : "border-slate-200 hover:border-slate-300"
+          ? "border-brand-400 bg-brand-50/40 ring-1 ring-brand-200"
+          : "border-editor-border/70 hover:border-slate-300 hover:bg-editor-subtle"
       }`}
     >
       <button
@@ -597,11 +606,11 @@ function AssetCard({
         aria-pressed={selected}
         onClick={() => onSelect(asset.id)}
         title={commandTitle(`${asset.name}を選択／${dragDescription}`, "SelectAsset")}
-        className="flex min-w-0 flex-1 cursor-grab flex-col text-left active:cursor-grabbing"
+        className="flex min-w-0 flex-1 cursor-grab flex-col text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 active:cursor-grabbing"
       >
         <span
           data-asset-drag-preview="true"
-          className="pointer-events-none relative block h-[72px] w-full shrink-0 overflow-hidden border-b border-slate-200 bg-white"
+          className="pointer-events-none relative block h-[76px] w-full shrink-0 overflow-hidden border-b border-editor-border/70 bg-editor-subtle"
         >
           <AssetThumbnail asset={asset} assets={assets} projectPath={projectPath} />
           <span
@@ -611,22 +620,16 @@ function AssetCard({
             <KindIcon size={11} aria-hidden="true" />
             <span className="sr-only">{assetKindLabel(asset)}</span>
           </span>
-          <span
-            title={asset.status}
-            aria-label={`状態: ${asset.status}`}
-            className={`absolute bottom-1.5 right-1.5 rounded px-1.5 py-0.5 text-xs font-semibold ${
-              asset.status === "ready"
-                ? "bg-emerald-100 text-emerald-800"
-                : "bg-amber-100 text-amber-800"
-            }`}
-          >
-            {asset.status === "ready" ? (
-              <EDITOR_ICONS.visible size={11} aria-hidden="true" />
-            ) : (
+          {asset.status !== "ready" ? (
+            <span
+              title={asset.status}
+              aria-label={`状態: ${asset.status}`}
+              className="absolute bottom-1.5 right-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800"
+            >
               <EDITOR_ICONS.warning size={11} aria-hidden="true" />
-            )}
-            <span className="sr-only">{asset.status}</span>
-          </span>
+              <span className="sr-only">{asset.status}</span>
+            </span>
+          ) : null}
         </span>
         <span className="min-w-0 px-2 py-1.5">
           <span className="block truncate text-xs font-semibold text-slate-800">{asset.name}</span>
@@ -650,7 +653,7 @@ function AssetCard({
             onPlace();
           }}
           title={commandTitle(`${asset.name}をScene Rootへ配置`, "PlaceSceneAsset")}
-          className="border-t border-slate-200 bg-sky-50 px-2 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-100 disabled:opacity-40"
+          className="border-t border-editor-border/70 bg-editor-subtle px-2 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40"
         >
           Sceneへ配置
         </button>
@@ -665,7 +668,7 @@ function AssetCard({
         }}
         title={commandTitle(`${asset.name}を削除`, "DeleteAsset")}
         aria-label={`${asset.name}を削除`}
-        className={`absolute right-1.5 top-1.5 rounded bg-white/95 p-1 text-slate-500 shadow hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30 ${selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}
+        className={`absolute right-1.5 top-1.5 rounded bg-white/95 p-1 text-slate-500 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30 ${selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}
       >
         <DeleteIcon size={13} aria-hidden="true" />
       </button>
@@ -675,7 +678,6 @@ function AssetCard({
 
 function FolderCard({
   folder,
-  count,
   viewMode,
   readOnly,
   onOpen,
@@ -685,7 +687,6 @@ function FolderCard({
   onOpenContext,
 }: {
   folder: BrowserFolder;
-  count: number;
   viewMode: ViewMode;
   readOnly: boolean;
   onOpen: () => void;
@@ -761,13 +762,12 @@ function FolderCard({
     return (
       <div
         {...sharedProps}
-        className={`group grid grid-cols-[54px_minmax(110px,1fr)_90px_70px_28px] items-center gap-2 rounded-md border bg-white px-1.5 py-1 text-left ${dropTarget ? "border-violet-500 bg-violet-100 ring-2 ring-violet-200" : "border-slate-200 hover:border-violet-300 hover:bg-violet-50"}`}
+        className={`group grid grid-cols-[42px_minmax(110px,1fr)_90px_28px] items-center gap-2 rounded-md border px-2 py-1 text-left ${dropTarget ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200" : "border-transparent bg-editor-surface hover:bg-editor-subtle"}`}
       >
-        <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className="col-span-4 grid cursor-grab select-none grid-cols-[54px_minmax(110px,1fr)_90px_70px] items-center gap-2 text-left active:cursor-grabbing">
-          <span className="flex h-10 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-500"><FolderIcon size={22} aria-hidden="true" /></span>
+        <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className="col-span-3 grid cursor-grab select-none grid-cols-[42px_minmax(110px,1fr)_90px] items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing">
+          <span className="flex h-9 items-center justify-center rounded-md bg-editor-subtle text-slate-500"><FolderIcon size={20} aria-hidden="true" /></span>
           <span className="text-xs font-semibold text-slate-800">{folder.name}</span>
           <span className="flex items-center gap-1 text-xs text-slate-500"><KindIcon size={12} aria-hidden="true" /> {folder.custom ? "フォルダー" : "コレクション"}</span>
-          <span className="text-right text-xs text-slate-500">{count} items</span>
         </button>
         {folder.custom ? (
           <button type="button" disabled={readOnly} onClick={(event) => { event.stopPropagation(); onDelete(); }} title={commandTitle(`${folder.name}を削除`, "DeleteAssetFolder")} aria-label={`${folder.name}を削除`} className="rounded p-1 text-slate-400 opacity-0 hover:bg-rose-50 hover:text-rose-700 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-30"><DeleteIcon size={14} aria-hidden="true" /></button>
@@ -778,7 +778,7 @@ function FolderCard({
   return (
     <div
       {...sharedProps}
-      className={`group relative flex min-h-[72px] min-w-0 flex-col items-center justify-center gap-1 rounded-md border bg-white text-slate-600 ${dropTarget ? "border-violet-500 bg-violet-100 ring-2 ring-violet-200" : "border-slate-200 hover:border-violet-300 hover:bg-violet-50"}`}
+      className={`group relative flex min-h-[76px] min-w-0 flex-col items-center justify-center gap-1 rounded-lg border text-slate-600 ${dropTarget ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200" : "border-transparent bg-editor-surface hover:bg-editor-subtle"}`}
     >
       <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className="flex h-full w-full cursor-grab select-none flex-col items-center justify-center gap-1.5 px-2 active:cursor-grabbing">
         <span className="relative">
@@ -786,7 +786,6 @@ function FolderCard({
           <KindIcon size={11} className="absolute -bottom-0.5 -right-1 rounded bg-white" aria-hidden="true" />
         </span>
         <span className="max-w-full truncate text-xs font-semibold">{folder.name}</span>
-        <span className="text-[10px] text-slate-400">{count}</span>
       </button>
       {folder.custom ? (
         <button type="button" disabled={readOnly} onClick={(event) => { event.stopPropagation(); onDelete(); }} title={commandTitle(`${folder.name}を削除`, "DeleteAssetFolder")} aria-label={`${folder.name}を削除`} className="absolute right-1.5 top-1.5 rounded bg-white p-1 text-slate-400 opacity-0 shadow hover:bg-rose-50 hover:text-rose-700 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-30"><DeleteIcon size={13} aria-hidden="true" /></button>
@@ -888,7 +887,17 @@ function ContextMenuItem({
   );
 }
 
-function ImportQueue({
+function importInProgress(status: PendingImport["status"]): boolean {
+  return (
+    status === "waiting-save" ||
+    status === "queued" ||
+    status === "reading" ||
+    status === "processing" ||
+    status === "committing"
+  );
+}
+
+function ImportActivityDrawer({
   entries,
   error,
   projectPersisted,
@@ -896,6 +905,7 @@ function ImportQueue({
   onSaveBeforeImport,
   onRemove,
   onClearError,
+  onReveal,
 }: {
   entries: PendingImport[];
   error: string | null;
@@ -904,25 +914,32 @@ function ImportQueue({
   onSaveBeforeImport: () => void | Promise<void>;
   onRemove: (id: string) => void;
   onClearError: () => void;
+  onReveal: (entry: PendingImport) => void;
 }) {
   const waitingForSave = entries.some((entry) => entry.status === "waiting-save");
   return (
-    <div
-      className="absolute bottom-2 right-2 z-20 w-[320px] rounded-md border border-amber-300 bg-amber-50 p-2 shadow-lg"
-      role="status"
-      aria-live="polite"
+    <section
+      className="max-h-52 shrink-0 overflow-auto border-t border-editor-border bg-editor-surface px-3 py-2"
+      aria-labelledby="asset-activity-heading"
     >
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-amber-950">インポート状況</span>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div>
+          <h3 id="asset-activity-heading" className="text-xs font-semibold text-editor-text">
+            アセットアクティビティ
+          </h3>
+          <p className="text-[11px] text-editor-muted">
+            インポート結果と診断をここで確認できます。
+          </p>
+        </div>
         {error ? (
-          <button type="button" onClick={onClearError} className="text-xs text-amber-800 underline">
-            エラーを閉じる
+          <button type="button" onClick={onClearError} className="rounded px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300">
+            エラーを確認済みにする
           </button>
         ) : null}
       </div>
-      {error ? <p className="mb-1.5 text-xs leading-4 text-rose-700">{error}</p> : null}
+      {error ? <p className="mb-2 rounded-md bg-rose-50 px-2.5 py-2 text-xs leading-4 text-rose-700">{error}</p> : null}
       {!projectPersisted && waitingForSave ? (
-        <div className="mb-1.5 rounded border border-violet-200 bg-white p-2">
+        <div className="mb-2 rounded-md border border-brand-200 bg-brand-50 p-2.5">
           <p className="text-xs leading-4 text-slate-700">
             アセットの保存先を確定するため、先にプロジェクトを保存してください。選択したファイルはこのセッション内で待機します。
           </p>
@@ -930,45 +947,44 @@ function ImportQueue({
             type="button"
             disabled={projectSaving}
             onClick={() => void onSaveBeforeImport()}
-            className="mt-1.5 w-full rounded bg-violet-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:cursor-wait disabled:opacity-50"
+            className="mt-2 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-wait disabled:opacity-50"
           >
-            {projectSaving ? "保存中" : "先に保存してインポート"}
+            {projectSaving ? "保存中…" : "保存してインポートを続ける"}
           </button>
         </div>
       ) : null}
-      <div className="max-h-44 space-y-1 overflow-auto">
+      <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
         {entries.map((entry) => (
-          <ImportQueueEntry key={entry.id} entry={entry} onRemove={onRemove} />
+          <ImportQueueEntry
+            key={entry.id}
+            entry={entry}
+            onRemove={onRemove}
+            onReveal={onReveal}
+          />
         ))}
       </div>
-      <p className="mt-1.5 text-xs leading-4 text-amber-800">
-        モデルは検証後にMaterialとTextureを自動展開し、同じ名前の既存Modelは参照を保って更新します。
-      </p>
-    </div>
+    </section>
   );
 }
 
 function ImportQueueEntry({
   entry,
   onRemove,
+  onReveal,
 }: {
   entry: PendingImport;
   onRemove: (id: string) => void;
+  onReveal: (entry: PendingImport) => void;
 }) {
   const Icon = entry.resourceKind === "texture" ? EDITOR_ICONS.texture : EDITOR_ICONS.model;
   const diagnostic = entry.diagnostics[0];
   const removable = canRemoveImport(entry.status);
   return (
-    <div className="rounded border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700">
+    <article className="rounded-md bg-editor-subtle px-2.5 py-2 text-xs text-editor-text">
       <div className="flex items-center gap-1.5">
         <Icon size={12} aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate font-medium">{entry.name}</span>
         <span className="shrink-0 text-slate-400">{formatFileSize(entry.size)}</span>
-        {removable ? (
-          <button type="button" onClick={() => onRemove(entry.id)} className="shrink-0 text-slate-500 hover:text-rose-700">
-            {entry.status === "waiting-save" ? "外す" : "閉じる"}
-          </button>
-        ) : null}
       </div>
       <div className="mt-1 flex items-center justify-between gap-2">
         <span className={`font-semibold ${importStatusClass(entry.status)}`}>
@@ -980,9 +996,16 @@ function ImportQueueEntry({
           </span>
         ) : null}
       </div>
-      <div className="mt-1 h-1 overflow-hidden rounded bg-slate-100" aria-label={`進捗 ${entry.progress}%`}>
+      <div
+        className="mt-1.5 h-1 overflow-hidden rounded bg-slate-200"
+        role="progressbar"
+        aria-label={`${entry.name}の進捗`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={entry.progress}
+      >
         <div
-          className={`h-full transition-[width] ${entry.status === "failed" ? "bg-rose-500" : entry.status === "duplicate" ? "bg-sky-500" : entry.status === "succeeded" || entry.status === "updated" ? "bg-emerald-500" : "bg-violet-500"}`}
+          className={`h-full transition-[width] ${entry.status === "failed" ? "bg-rose-500" : entry.status === "duplicate" ? "bg-sky-500" : entry.status === "succeeded" || entry.status === "updated" ? "bg-emerald-500" : "bg-brand-500"}`}
           style={{ width: `${entry.progress}%` }}
         />
       </div>
@@ -994,7 +1017,114 @@ function ImportQueueEntry({
           {diagnostic.message}
         </p>
       ) : null}
-    </div>
+      {entry.result ? (
+        <p className="mt-1 text-[11px] text-editor-muted">
+          Material {entry.result.materialCount}件・Texture {entry.result.textureCount}件
+        </p>
+      ) : null}
+      {entry.assetId || removable ? (
+        <div className="mt-1.5 flex items-center justify-end gap-1">
+          {entry.assetId ? (
+            <button
+              type="button"
+              onClick={() => onReveal(entry)}
+              className="rounded px-2 py-1 text-[11px] font-semibold text-brand-700 hover:bg-brand-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+            >
+              アセットを表示
+            </button>
+          ) : null}
+          {removable ? (
+            <button
+              type="button"
+              onClick={() => onRemove(entry.id)}
+              title={entry.status === "waiting-save" ? "待機中のファイルを外す" : "履歴から削除"}
+              aria-label={entry.status === "waiting-save" ? `${entry.name}を待機中のファイルから外す` : `${entry.name}を履歴から削除`}
+              className="rounded p-1 text-slate-400 hover:bg-white hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+            >
+              <EDITOR_ICONS.close size={13} aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function AssetStatusBar({
+  entries,
+  error,
+  statusMessage,
+  activityOpen,
+  onToggleActivity,
+  onReveal,
+}: {
+  entries: PendingImport[];
+  error: string | null;
+  statusMessage: string | null;
+  activityOpen: boolean;
+  onToggleActivity: () => void;
+  onReveal: (entry: PendingImport) => void;
+}) {
+  const activeEntry = entries.find((entry) => importInProgress(entry.status));
+  const latestEntry = entries[entries.length - 1];
+  const visibleEntry = activeEntry ?? latestEntry;
+  const failed = Boolean(error) || visibleEntry?.status === "failed";
+  const succeeded =
+    visibleEntry?.status === "succeeded" ||
+    visibleEntry?.status === "updated" ||
+    visibleEntry?.status === "duplicate";
+  const canRevealVisibleEntry =
+    !activeEntry &&
+    Boolean(visibleEntry?.assetId) &&
+    (!statusMessage?.trim() || statusMessage.includes(visibleEntry?.name ?? ""));
+  const summary = activeEntry
+    ? `${activeEntry.name}・${importStatusLabel(activeEntry.status)}`
+    : error
+      ? "アセット操作でエラーが発生しました"
+      : statusMessage?.trim() ||
+        (visibleEntry
+          ? `${visibleEntry.name}・${importStatusLabel(visibleEntry.status)}`
+          : "アセット操作の準備ができています");
+
+  return (
+    <footer className="flex h-8 shrink-0 items-center gap-2 border-t border-editor-border bg-editor-surface px-3 text-[11px] text-editor-muted">
+      <div className="flex min-w-0 flex-1 items-center gap-2" role="status" aria-live="polite">
+        {activeEntry ? (
+          <LoaderCircle size={13} className="shrink-0 animate-spin text-brand-600 motion-reduce:animate-none" aria-hidden="true" />
+        ) : failed ? (
+          <CircleAlert size={13} className="shrink-0 text-rose-600" aria-hidden="true" />
+        ) : succeeded ? (
+          <CheckCircle2 size={13} className="shrink-0 text-emerald-600" aria-hidden="true" />
+        ) : (
+          <EDITOR_ICONS.asset size={13} className="shrink-0 text-slate-400" aria-hidden="true" />
+        )}
+        <span className="truncate">{summary}</span>
+        {activeEntry ? (
+          <span className="shrink-0 tabular-nums text-brand-700">{activeEntry.progress}%</span>
+        ) : null}
+      </div>
+      {canRevealVisibleEntry && visibleEntry ? (
+        <button
+          type="button"
+          onClick={() => onReveal(visibleEntry)}
+          className="rounded px-2 py-1 font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+        >
+          表示
+        </button>
+      ) : null}
+      {entries.length > 0 || error ? (
+        <button
+          type="button"
+          onClick={onToggleActivity}
+          aria-expanded={activityOpen}
+          className={`flex items-center gap-1 rounded px-2 py-1 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${activityOpen ? "bg-editor-subtle text-editor-text" : "hover:bg-editor-subtle hover:text-editor-text"}`}
+        >
+          <PanelBottomOpen size={13} aria-hidden="true" />
+          詳細
+          <ChevronDown size={12} className={`transition-transform ${activityOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+        </button>
+      ) : null}
+    </footer>
   );
 }
 
@@ -1006,6 +1136,7 @@ export function AssetsPanel({
   selectedAssetId,
   pendingImports,
   importError,
+  statusMessage,
   onSelectAsset,
   onQueueFiles,
   onRemovePending,
@@ -1033,6 +1164,7 @@ export function AssetsPanel({
   selectedAssetId: string | null;
   pendingImports: PendingImport[];
   importError: string | null;
+  statusMessage: string | null;
   onSelectAsset: (assetId: string) => void;
   onQueueFiles: (files: File[]) => void;
   onRemovePending: (id: string) => void;
@@ -1074,6 +1206,7 @@ export function AssetsPanel({
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [activityOpen, setActivityOpen] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -1144,6 +1277,10 @@ export function AssetsPanel({
         )
     : folderAssets;
   const builtinPrefabRecipes = listBuiltinPrefabRecipes(projectKind);
+  const visibleItemCount =
+    activeFolder?.builtinPrefabs && !searching
+      ? builtinPrefabRecipes.length
+      : visibleFolders.length + visibleAssets.length;
   const activeBreadcrumb = (() => {
     if (!activeFolder) return [] as BrowserFolder[];
     if (!activeFolder.custom) return [activeFolder];
@@ -1162,6 +1299,17 @@ export function AssetsPanel({
     }
     return chain;
   })();
+
+  useEffect(() => {
+    if (
+      importError ||
+      pendingImports.some(
+        (entry) => entry.status === "waiting-save" || entry.status === "failed",
+      )
+    ) {
+      setActivityOpen(true);
+    }
+  }, [importError, pendingImports]);
 
   useEffect(() => {
     if (!renameRequest) return;
@@ -1319,6 +1467,17 @@ export function AssetsPanel({
     setBreadcrumbDropTargetId(assetMutationLocked ? null : folderId);
   };
 
+  const revealImportEntry = (entry: PendingImport) => {
+    if (!entry.assetId) return;
+    const asset = assets.assets[entry.assetId];
+    if (!asset) {
+      onPhaseNotice("インポートしたアセットが見つかりませんでした");
+      return;
+    }
+    onActiveFolderChange(asset.folderId ?? null);
+    onSelectAsset(asset.id);
+  };
+
   const folderItemCount = (folder: BrowserFolder): number => {
     if (folder.kind) return allAssets.filter((asset) => asset.kind === folder.kind).length;
     if (folder.builtinPrefabs) return builtinPrefabRecipes.length;
@@ -1338,7 +1497,7 @@ export function AssetsPanel({
   return (
     <section
       ref={panelRef}
-      className={`relative min-h-0 border-t border-slate-300 bg-slate-100 ${fileDragOver ? "ring-2 ring-inset ring-violet-500" : ""}`}
+      className={`relative flex min-h-0 flex-col border-t border-editor-border bg-editor-canvas ${fileDragOver ? "ring-2 ring-inset ring-brand-500" : ""}`}
       aria-labelledby="assets-heading"
       onDragOver={handleDragOver}
       onDragLeave={(event) => {
@@ -1358,7 +1517,7 @@ export function AssetsPanel({
         onChange={handleFileInput}
         className="sr-only"
       />
-      <div className="flex h-9 items-center justify-between gap-2 border-b border-slate-300 bg-slate-50 px-3">
+      <div className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-editor-border bg-editor-surface px-3">
         <div className="flex min-w-0 items-center gap-2">
           <h2 id="assets-heading" className="text-[13px] font-semibold text-slate-800">Assets</h2>
           <nav className="flex min-w-0 items-center gap-1 text-xs text-slate-500" aria-label="Asset folder breadcrumb">
@@ -1368,7 +1527,7 @@ export function AssetsPanel({
               onDragOver={handleRootDragOver}
               onDragLeave={() => setRootDropTarget(false)}
               onDrop={(event) => handleLibraryMove(event, null)}
-              className={`rounded border px-1.5 py-0.5 ${rootDropTarget ? "border-violet-500 bg-violet-100 text-violet-800" : "border-transparent hover:bg-slate-200 hover:text-slate-800"}`}
+              className={`rounded-md px-1.5 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${rootDropTarget ? "bg-brand-100 text-brand-800" : "hover:bg-editor-subtle hover:text-editor-text"}`}
               title="Assets直下を開く。アセットまたはフォルダーをここへドロップして移動"
             >
               Assets
@@ -1386,7 +1545,7 @@ export function AssetsPanel({
                     setBreadcrumbDropTargetId(null);
                     handleLibraryMove(event, folder.id);
                   }}
-                  className={`truncate rounded border px-1 py-0.5 ${breadcrumbDropTargetId === folder.id ? "border-violet-500 bg-violet-100 text-violet-800" : `border-transparent ${index === activeBreadcrumb.length - 1 ? "font-medium text-slate-700" : "hover:bg-slate-200 hover:text-slate-800"}`}`}
+                  className={`truncate rounded-md px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${breadcrumbDropTargetId === folder.id ? "bg-brand-100 text-brand-800" : index === activeBreadcrumb.length - 1 ? "font-medium text-editor-text" : "hover:bg-editor-subtle hover:text-editor-text"}`}
                 >
                   {folder.name}
                 </button>
@@ -1408,6 +1567,8 @@ export function AssetsPanel({
             <span className="sr-only">アセットを検索</span>
             <input
               type="search"
+              name="asset-search"
+              autoComplete="off"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.currentTarget.value)}
               onKeyDown={(event) => {
@@ -1416,8 +1577,8 @@ export function AssetsPanel({
                   setSearchQuery("");
                 }
               }}
-              placeholder="検索"
-              className="h-7 w-full rounded border border-slate-300 bg-white pl-2 pr-12 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+              placeholder="アセットを検索…"
+              className="h-7 w-full rounded-md border border-editor-border bg-editor-surface pl-2.5 pr-12 text-xs text-editor-text placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-100"
             />
             {searching ? (
               <button
@@ -1430,35 +1591,35 @@ export function AssetsPanel({
               </button>
             ) : null}
           </label>
-          <span
-            className="min-w-12 text-right text-[11px] tabular-nums text-slate-500"
-            aria-live="polite"
-          >
-            {searching
-              ? `${visibleAssets.length} / ${allAssets.length}`
-              : `${allAssets.length}`}
-          </span>
           <button type="button" onClick={() => setViewMode("grid")} aria-label="グリッド表示" aria-pressed={viewMode === "grid"} title={commandTitle("グリッド表示", "SetAssetView.Grid")} className={`rounded p-1 ${viewMode === "grid" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><GridIcon size={14} aria-hidden="true" /></button>
           <button type="button" onClick={() => setViewMode("list")} aria-label="リスト表示" aria-pressed={viewMode === "list"} title={commandTitle("リスト表示", "SetAssetView.List")} className={`rounded p-1 ${viewMode === "list" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><ListIcon size={14} aria-hidden="true" /></button>
           <button type="button" disabled={assetMutationLocked} onClick={openCreationMenu} aria-label="新規アセットまたはフォルダー" title={assetMutationDisabledReason ?? "新規アセットまたはフォルダー"} className="ml-1 rounded border border-slate-300 bg-white p-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"><CreateIcon size={14} aria-hidden="true" /></button>
-          <button type="button" disabled={importLocked} onClick={() => { if (onCommand("asset.import")) fileInputRef.current?.click(); }} title={importDisabledReason ?? commandTitle("アセットをインポート", "asset.import")} className="flex items-center gap-1 rounded border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-45"><ImportIcon size={12} aria-hidden="true" />Import</button>
+          <button type="button" disabled={importLocked} onClick={() => { if (onCommand("asset.import")) fileInputRef.current?.click(); }} title={importDisabledReason ?? commandTitle("アセットをインポート", "asset.import")} className="flex items-center gap-1 rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45"><ImportIcon size={12} aria-hidden="true" />Import</button>
         </div>
       </div>
 
-      <div className="flex h-[calc(100%-2.25rem)] min-h-0">
+      <div className="flex min-h-0 flex-1">
         <AssetFolderTree
           assets={assets}
           customFolders={customFolders}
           kindFolders={KIND_FOLDERS}
           activeFolderId={activeFolderId}
-          allAssetCount={allAssets.length}
           folderItemCount={folderItemCount}
           assetMutationLocked={assetMutationLocked}
           onActiveFolderChange={onActiveFolderChange}
           onMoveAsset={onMoveAsset}
           onMoveFolder={onMoveFolder}
         />
-        <div className={`scrollbar-thin min-w-0 flex-1 overflow-auto p-2 ${viewMode === "grid" ? "grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(112px,1fr))] content-start gap-2" : "space-y-1.5"}`}>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex h-8 shrink-0 items-center justify-between border-b border-editor-border bg-editor-subtle px-3 text-xs">
+            <span className="truncate font-medium text-editor-text">
+              {searching ? `「${searchQuery.trim()}」の検索結果` : activeFolder?.name ?? "Assets直下"}
+            </span>
+            <span className="shrink-0 tabular-nums text-[11px] text-editor-muted" aria-live="polite">
+              {searching ? `${visibleAssets.length} / ${allAssets.length}件` : `${visibleItemCount}件`}
+            </span>
+          </div>
+          <div className={`scrollbar-thin min-w-0 flex-1 overflow-auto p-2.5 ${viewMode === "grid" ? "grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(118px,1fr))] content-start gap-2" : "space-y-1"}`}>
         {!activeFolder?.builtinPrefabs
           ? visibleFolders.map((folder) => (
               renameRequest?.kind === "folder" && renameRequest.id === folder.id ? (
@@ -1483,7 +1644,6 @@ export function AssetsPanel({
                   key={folder.id}
                   folder={folder}
                   viewMode={viewMode}
-                  count={folderItemCount(folder)}
                   readOnly={assetMutationLocked}
                   onOpen={() => onActiveFolderChange(folder.id)}
                   onDelete={() => onRequestDeleteFolder(folder.id)}
@@ -1568,11 +1728,12 @@ export function AssetsPanel({
             <span className="mt-1 block text-[11px]">ここへドロップするとAssets直下へ移動します</span>
           </button>
         ) : null}
+          </div>
         </div>
       </div>
 
-      {pendingImports.length > 0 || importError ? (
-        <ImportQueue
+      {activityOpen && (pendingImports.length > 0 || importError) ? (
+        <ImportActivityDrawer
           entries={pendingImports}
           error={importError}
           projectPersisted={Boolean(projectPath)}
@@ -1580,8 +1741,17 @@ export function AssetsPanel({
           onSaveBeforeImport={onSaveBeforeImport}
           onRemove={onRemovePending}
           onClearError={onClearImportError}
+          onReveal={revealImportEntry}
         />
       ) : null}
+      <AssetStatusBar
+        entries={pendingImports}
+        error={importError}
+        statusMessage={statusMessage}
+        activityOpen={activityOpen}
+        onToggleActivity={() => setActivityOpen((open) => !open)}
+        onReveal={revealImportEntry}
+      />
 
       {contextMenu ? (
         <div className="absolute z-30 w-48 rounded-md border border-slate-300 bg-white p-1 shadow-xl" style={{ left: contextMenu.x, top: contextMenu.y }} role="menu" onPointerDown={(event) => event.stopPropagation()}>
