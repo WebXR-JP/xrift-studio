@@ -33,11 +33,12 @@ import { VisualEditorErrorBoundary } from "./components/visual-editor/VisualEdit
 import {
   compilePrototypeVisualProject,
   createStarterVisualProject,
-  createStarterVisualProjectOnDisk,
+  createPreparedStarterVisualProjectOnDisk,
   createVisualProjectOnDisk,
   defaultVisualStarterTemplateId,
   publishVisualProject,
   readVisualProjectFromDisk,
+  prepareStarterVisualProject,
   sanitizePublishFailure,
   saveVisualProjectToDisk,
   type PrototypeVisualProject,
@@ -289,24 +290,25 @@ function App() {
       });
       return;
     }
-    const bundle: PrototypeVisualProject = {
-      project: starterPlan.project,
-      scene: starterPlan.scene,
-      assets: starterPlan.assets,
-      prefabs: starterPlan.prefabs,
-    };
-    if (!name || !projectsRoot) {
-      setShowNewDialog(false);
-      setVisualSession({ bundle, project: null });
-      return;
-    }
-
     void wrap(async () => {
       try {
-        const project = await createStarterVisualProjectOnDisk(
+        const prepared = await prepareStarterVisualProject(starterPlan);
+        const bundle: PrototypeVisualProject = {
+          project: prepared.plan.project,
+          scene: prepared.plan.scene,
+          assets: prepared.plan.assets,
+          prefabs: prepared.plan.prefabs,
+        };
+        if (!name || !projectsRoot) {
+          setShowNewDialog(false);
+          setVisualSession({ bundle, project: null });
+          return;
+        }
+
+        const project = await createPreparedStarterVisualProjectOnDisk(
           projectsRoot,
           name,
-          starterPlan,
+          prepared,
         );
         setShowNewDialog(false);
         setVisualSession({ bundle, project });
@@ -319,7 +321,7 @@ function App() {
       } catch (error) {
         toast({
           kind: "error",
-          title: "ビジュアルプロジェクトを作成できませんでした",
+          title: "スターターを準備できませんでした",
           description: String(error),
         });
       }

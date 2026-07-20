@@ -6,11 +6,16 @@ import {
   type VisualProjectFiles,
   type VisualProjectWriteRequest,
 } from "../tauri";
-import type { AssetManifest } from "./asset-manifest";
+import type { AssetManifest, AssetFolder, ModelAsset, SceneAsset } from "./asset-manifest";
+import { expandGltfAssets, type GltfJson } from "./gltf-derived-assets";
 import type { PrefabDocument } from "./prefab-document";
 import type { VisualProjectDocument } from "./project-document";
 import type { RegisteredSceneComponent, SceneDocument } from "./scene-document";
-import type { StarterVisualProjectPlan } from "./starter-templates";
+import {
+  STARTER_ASSET_FOLDER_IDS,
+  type StarterAssetCopyPlanEntry,
+  type StarterVisualProjectPlan,
+} from "./starter-templates";
 import {
   assetManifestCodec,
   prefabDocumentCodec,
@@ -25,6 +30,11 @@ export type VisualProjectDocuments = {
   scenes: Record<string, SceneDocument>;
   assets: AssetManifest;
   prefabs: Record<string, PrefabDocument>;
+};
+
+export type PreparedStarterVisualProject = {
+  plan: StarterVisualProjectPlan;
+  binaryDocuments: VisualBinaryDocumentWrite[];
 };
 
 export async function createVisualProjectOnDisk(
@@ -48,18 +58,111 @@ export async function createStarterVisualProjectOnDisk(
   directoryName: string,
   plan: StarterVisualProjectPlan,
 ): Promise<Project> {
-  const binaryDocuments = await materializeStarterAssetCopies(plan);
+  const prepared = await prepareStarterVisualProject(plan);
+  return createPreparedStarterVisualProjectOnDisk(
+    projectsRoot,
+    directoryName,
+    prepared,
+  );
+}
+
+export async function createPreparedStarterVisualProjectOnDisk(
+  projectsRoot: string,
+  directoryName: string,
+  prepared: PreparedStarterVisualProject,
+): Promise<Project> {
   return createVisualProjectOnDisk(
     projectsRoot,
     directoryName,
     {
-      project: plan.project,
-      scenes: { [plan.scene.sceneId]: plan.scene },
-      assets: plan.assets,
-      prefabs: plan.prefabs,
+      project: prepared.plan.project,
+      scenes: { [prepared.plan.scene.sceneId]: prepared.plan.scene },
+      assets: prepared.plan.assets,
+      prefabs: prepared.plan.prefabs,
     },
-    binaryDocuments,
+    prepared.binaryDocuments,
   );
+}
+
+/**
+ * Loads bundled starter sources and runs the same embedded glTF expansion as
+ * a normal Model import. The returned plan is used both by the editor session
+ * and by the first atomic project save, so the two paths cannot drift.
+ */
+export async function prepareStarterVisualProject(
+  plan: StarterVisualProjectPlan,
+): Promise<PreparedStarterVisualProject> {
+  const loadedCopies = await loadStarterAssetCopies(plan.bundledAssetCopies);
+  const assets: Record<string, SceneAsset> = { ...plan.assets.assets };
+  const folders: Record<string, AssetFolder> = { ...(plan.assets.folders ?? {}) };
+  const derivedDocuments: VisualBinaryDocumentWrite[] = [];
+
+  for (const loaded of loadedCopies) {
+    const model = Object.values(assets).find(
+      (candidate): candidate is ModelAsset =>
+        candidate.kind === "model" &&
+        candidate.source.kind === "project" &&
+        candidate.source.relativePath === loaded.copy.targetRelativePath,
+    );
+    if (!model || model.kind !== "model") continue;
+
+    const modelFolders = ensureStarterModelFolders(folders, model);
+    const scopedManifest: AssetManifest = {
+      ...plan.assets,
+      folders,
+      assets: Object.fromEntries(
+        Object.entries(assets).filter(
+          ([, candidate]) =>
+            (candidate.kind === "material" || candidate.kind === "texture") &&
+            candidate.importedFromModel?.modelAssetId === model.id,
+        ),
+      ),
+    };
+    const expanded = await expandGltfAssets({
+      json: parseStarterGlbJson(loaded.bytes),
+      modelBytes: loaded.bytes,
+      sourceFormat: "glb",
+      modelAssetId: model.id,
+      modelSourceHash: model.sourceHash ?? loaded.copy.expectedSha256,
+      materialSlots: model.materialSlots,
+      manifest: scopedManifest,
+      materialFolderId: modelFolders.materialFolderId,
+      textureFolderId: modelFolders.textureFolderId,
+      hashBytes: sha256StarterBytes,
+    });
+
+    assets[model.id] = {
+      ...model,
+      folderId: modelFolders.modelFolderId,
+      materialSlots: expanded.materialSlots,
+    };
+    for (const derivedAsset of [
+      ...expanded.materialAssets,
+      ...expanded.textureAssets,
+    ]) {
+      assets[derivedAsset.id] = derivedAsset;
+    }
+    for (const write of expanded.writes) {
+      derivedDocuments.push({
+        relativePath: write.relativePath,
+        dataUrl: bytesToDataUrl(write.bytes, write.mediaType),
+      });
+    }
+  }
+
+  return {
+    plan: {
+      ...plan,
+      assets: { ...plan.assets, folders, assets },
+    },
+    binaryDocuments: [
+      ...loadedCopies.map(({ copy, bytes }) => ({
+        relativePath: copy.targetRelativePath,
+        dataUrl: bytesToDataUrl(bytes, copy.mediaType),
+      })),
+      ...derivedDocuments,
+    ],
+  };
 }
 
 export async function saveVisualProjectToDisk(
@@ -409,11 +512,16 @@ function sameStrings(left: string[], right: string[]): boolean {
   );
 }
 
-async function materializeStarterAssetCopies(
-  plan: StarterVisualProjectPlan,
-): Promise<VisualBinaryDocumentWrite[]> {
+type LoadedStarterAssetCopy = {
+  copy: StarterAssetCopyPlanEntry;
+  bytes: Uint8Array;
+};
+
+async function loadStarterAssetCopies(
+  copies: readonly StarterAssetCopyPlanEntry[],
+): Promise<LoadedStarterAssetCopy[]> {
   return Promise.all(
-    plan.bundledAssetCopies.map(async (copy) => {
+    copies.map(async (copy) => {
       if (
         !copy.targetRelativePath.startsWith("assets/starter/") ||
         copy.targetRelativePath.includes("..") ||
@@ -436,12 +544,105 @@ async function materializeStarterAssetCopies(
       if (sourceHash !== copy.expectedSha256) {
         throw new Error(`Starter asset hash does not match: ${copy.assetId}`);
       }
-      return {
-        relativePath: copy.targetRelativePath,
-        dataUrl: bytesToDataUrl(bytes, copy.mediaType),
-      };
+      return { copy, bytes };
     }),
   );
+}
+
+function ensureStarterModelFolders(
+  folders: Record<string, AssetFolder>,
+  model: ModelAsset,
+): {
+  modelFolderId: string;
+  materialFolderId: string;
+  textureFolderId: string;
+} {
+  const modelFolderId = `starter-model-${model.id}`;
+  const materialFolderId = `${modelFolderId}-materials`;
+  const textureFolderId = `${modelFolderId}-textures`;
+  ensureStarterFolder(
+    folders,
+    modelFolderId,
+    model.name,
+    STARTER_ASSET_FOLDER_IDS.models,
+    nextStarterFolderOrder(folders, STARTER_ASSET_FOLDER_IDS.models),
+  );
+  ensureStarterFolder(
+    folders,
+    materialFolderId,
+    "Materials",
+    modelFolderId,
+    nextStarterFolderOrder(folders, modelFolderId),
+  );
+  ensureStarterFolder(
+    folders,
+    textureFolderId,
+    "Textures",
+    modelFolderId,
+    nextStarterFolderOrder(folders, modelFolderId),
+  );
+  return { modelFolderId, materialFolderId, textureFolderId };
+}
+
+function ensureStarterFolder(
+  folders: Record<string, AssetFolder>,
+  id: string,
+  name: string,
+  parentId: string,
+  order: number,
+): void {
+  const current = folders[id];
+  if (current) {
+    if (current.name !== name || current.parentId !== parentId) {
+      throw new Error(`Starter asset folder ID collision: ${id}`);
+    }
+    return;
+  }
+  folders[id] = { id, name, parentId, order };
+}
+
+function nextStarterFolderOrder(
+  folders: Record<string, AssetFolder>,
+  parentId: string,
+): number {
+  return (
+    Math.max(
+      -1,
+      ...Object.values(folders)
+        .filter((folder) => folder.parentId === parentId)
+        .map((folder) => folder.order),
+    ) + 1
+  );
+}
+
+function parseStarterGlbJson(bytes: Uint8Array): GltfJson {
+  if (bytes.byteLength < 20) throw new Error("Starter GLB header is incomplete");
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (view.getUint32(0, true) !== 0x46546c67) {
+    throw new Error("Starter GLB magic is invalid");
+  }
+  if (view.getUint32(4, true) !== 2) {
+    throw new Error("Only glTF 2.0 starter GLB is supported");
+  }
+  const declaredLength = view.getUint32(8, true);
+  const jsonLength = view.getUint32(12, true);
+  if (
+    declaredLength > bytes.byteLength ||
+    declaredLength < 20 ||
+    view.getUint32(16, true) !== 0x4e4f534a ||
+    20 + jsonLength > declaredLength
+  ) {
+    throw new Error("Starter GLB JSON chunk is invalid");
+  }
+  const parsed = JSON.parse(
+    new TextDecoder()
+      .decode(bytes.subarray(20, 20 + jsonLength))
+      .replace(/[\u0000\u0020]+$/g, ""),
+  ) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Starter GLB JSON root is invalid");
+  }
+  return parsed as GltfJson;
 }
 
 async function sha256StarterBytes(bytes: Uint8Array): Promise<string> {
