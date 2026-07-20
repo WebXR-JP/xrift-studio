@@ -4,9 +4,14 @@ import { tauri } from "../lib/tauri";
 type Props = {
   projectPath: string;
   onChanged?: () => void;
+  publishPreparation?: boolean;
 };
 
-export function ThumbnailEditor({ projectPath, onChanged }: Props) {
+export function ThumbnailEditor({
+  projectPath,
+  onChanged,
+  publishPreparation = false,
+}: Props) {
   const [thumb, setThumb] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -86,6 +91,11 @@ export function ThumbnailEditor({ projectPath, onChanged }: Props) {
         <div className="mt-0.5 text-[11px] text-zinc-500">
           ワールド一覧やXRift上で表示されるサムネイル画像（推奨: 1024×576 以上）
         </div>
+        {publishPreparation && (
+          <div className="mt-1 text-[11px] text-amber-800">
+            公開準備中です。画像を保存すると、公開前の確認を続けます。
+          </div>
+        )}
       </div>
       <div className="flex flex-1 items-center justify-center overflow-auto p-6">
         <div className="w-full max-w-2xl">

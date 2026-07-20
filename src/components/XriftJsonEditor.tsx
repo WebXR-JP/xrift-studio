@@ -7,6 +7,8 @@ type Props = {
   projectPath: string;
   onOpenRaw: () => void;
   onRefresh?: () => void;
+  onSaved?: () => void;
+  publishPreparation?: boolean;
 };
 
 type Form = {
@@ -61,7 +63,13 @@ function fromJson(raw: string): { form: Form; parsed: any } | null {
   }
 }
 
-export function XriftJsonEditor({ projectPath, onOpenRaw, onRefresh }: Props) {
+export function XriftJsonEditor({
+  projectPath,
+  onOpenRaw,
+  onRefresh,
+  onSaved,
+  publishPreparation = false,
+}: Props) {
   const toast = useToast();
   const [form, setForm] = useState<Form>(DEFAULTS);
   const [saved, setSaved] = useState<Form>(DEFAULTS);
@@ -127,6 +135,7 @@ export function XriftJsonEditor({ projectPath, onOpenRaw, onRefresh }: Props) {
       setParsed(updated);
       toast({ kind: "success", title: "ワールド設定を保存しました" });
       onRefresh?.();
+      onSaved?.();
     } catch (e) {
       toast({ kind: "error", title: "保存に失敗しました", description: `${e}` });
     } finally {
@@ -216,6 +225,12 @@ export function XriftJsonEditor({ projectPath, onOpenRaw, onRefresh }: Props) {
           </button>
         </div>
       </div>
+
+      {publishPreparation && (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-[11px] text-amber-800">
+          公開準備中です。タイトルと説明を保存すると、次の確認項目へ進みます。
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         <div className="mx-auto max-w-3xl space-y-6 px-6 py-6">
