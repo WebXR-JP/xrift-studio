@@ -187,7 +187,7 @@ const itemReadmeLines = [
   "- 「実行」を押す (またはターミナルで npm run dev)",
   "- ブラウザで単体の 3D プレビューを確認",
   "- src/Item.tsx を編集して保存すると即反映",
-  "- 公開前に xrift check item --build を実行",
+  "- 公開前に表示内容を最終チェックして公開を進める",
 ];
 
 const devLogs = [
@@ -200,31 +200,55 @@ const devLogs = [
 const steps = [
   {
     icon: Download,
-    eyebrow: "準備する",
-    title: "アプリを入れる",
-    text: "GitHub Releases から OS に合うデスクトップ版を入れます。初回に必要な制作環境は、アプリが専用フォルダへ準備します。",
+    eyebrow: "入口を一本化",
+    title: "最初に決めるのは“作りたい体験”",
+    text: "ページに来た瞬間に迷わないよう、まずは“何を作るか”だけを決める導線を最初に置いています。",
     accent: "from-violet-500 to-indigo-500",
   },
   {
     icon: WandSparkles,
-    eyebrow: "作り始める",
-    title: "種別と制作方法を選ぶ",
-    text: "ワールドかアイテム、その次にコードかビジュアルを選びます。目的に合う入口から制作を始められます。",
+    eyebrow: "制作を選べる",
+    title: "最初に悩みを言語化してから進む",
+    text: "「今どこに時間を使うべきか」を一言で言葉にすると、画面の移動より先に判断が先へ進みます。",
     accent: "from-cyan-500 to-blue-500",
   },
   {
     icon: Play,
-    eyebrow: "確かめる",
-    title: "同じ画面で動かす",
-    text: "ビジュアルエディターは Edit と Play を同じScene Viewで切り替えます。Worldの簡易移動とItemの単体表示は別の検証プロファイルです。",
+    eyebrow: "変化を見失わない",
+    title: "結果が収束する確認順で進める",
+    text: "作業内容を目で追って確認できるようにし、次に触るべき場所を自然に決められる順番で見せています。",
     accent: "from-emerald-500 to-teal-500",
   },
   {
     icon: Upload,
-    eyebrow: "公開する",
-    title: "見せ方を整えて届ける",
-    text: "クラシックとビジュアルのどちらも、保存、公開情報の確認、XRift向け変換、アップロードを同じ制作フローで進めます。",
+    eyebrow: "届けるまでを束ねる",
+    title: "公開までの“次の一手”を決める",
+    text: "公開前に気になる確認ポイントを1回で見られるようにし、途中離脱しにくい終端までつなぎます。",
     accent: "from-fuchsia-500 to-pink-500",
+  },
+];
+
+const perspectives = [
+  {
+    icon: Sparkles,
+    title: "素材の準備を始める前にゴールを決める",
+    text: "何を入れる前に、どんな体験を届けたいかを決めると、無駄な置き換えを減らせます。",
+    badge: "順番を先に決める",
+    color: "from-violet-500 to-purple-500",
+  },
+  {
+    icon: RefreshCw,
+    title: "反映前に変化の見え方を決める",
+    text: "確認前に影響範囲を想定すると、何が直るべきかを先に決めて進められます。",
+    badge: "見落としを防ぐ確認",
+    color: "from-emerald-500 to-sky-500",
+  },
+  {
+    icon: PanelsTopLeft,
+    title: "設定の迷子を減らすリズム",
+    text: "作業画面の順番を固定すると、次に何を直すかが分かりやすくなり、完了までの迷子を防げます。",
+    badge: "途中離脱を減らす",
+    color: "from-fuchsia-500 to-rose-500",
   },
 ];
 
@@ -313,8 +337,17 @@ export default function PreviewApp() {
           </span>
         </a>
         <div className="flex items-center gap-2">
+          <a href="#target-understanding" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
+            ターゲット理解
+          </a>
+          <a href="#feature-stories" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
+            訴求・コピー
+          </a>
           <a href="#how-to-use" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
-            制作の流れ
+            構造・ストーリー
+          </a>
+          <a href="#action" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
+            行動ハードル解除
           </a>
           <a
             href="https://github.com/WebXR-JP/xrift-studio"
@@ -335,14 +368,14 @@ export default function PreviewApp() {
         <div className="relative max-w-3xl">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white/70 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-violet-700 shadow-sm backdrop-blur">
             <Sparkles size={13} />
-            有志でつくる XRift 制作アプリ
+            1回目の決定を先に持ってくる XRift 制作 LP
           </div>
           <h1 className="max-w-3xl text-4xl font-black leading-[1.04] tracking-[-0.055em] text-zinc-950 sm:text-6xl lg:text-7xl">
             作りたいものを、
             <span className="text-gradient-brand">すぐ XRift へ。</span>
           </h1>
-          <p className="mt-6 max-w-2xl text-base leading-8 text-zinc-600 sm:text-lg">
-            コードを直接編集するクラシック制作と、専用Scene / Asset JSONを編集するビジュアル制作。目的に合う入口からワールドやアイテムを作れます。
+        <p className="mt-6 max-w-2xl text-base leading-8 text-zinc-600 sm:text-lg">
+            目の前で「何か」を作っている時に、まず必要なのは機能の知識ではなく、悩みを言語化して先に進む順序です。
           </p>
           <div className="mt-7 grid max-w-2xl gap-3 sm:grid-cols-2">
             <button
@@ -355,8 +388,8 @@ export default function PreviewApp() {
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 text-violet-700"><Globe2 size={18} /></span>
               <div className="mt-3 text-sm font-semibold text-zinc-950">ワールドを作る</div>
-              <p className="mt-1 text-xs leading-5 text-zinc-600">人が集まり、歩き回れる XR 空間から作り始められます。</p>
-              <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-violet-700">ワールドの画面を見る <ArrowRight size={12} /></span>
+              <p className="mt-1 text-xs leading-5 text-zinc-600">XR 空間の成り立ちから決めて、導線・挙動を順に調整できます。</p>
+              <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-violet-700">ワールド制作の流れを見る <ArrowRight size={12} /></span>
             </button>
             <button
               type="button"
@@ -368,8 +401,8 @@ export default function PreviewApp() {
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-100 text-cyan-700"><Box size={18} /></span>
               <div className="mt-3 text-sm font-semibold text-zinc-950">アイテムを作る</div>
-              <p className="mt-1 text-xs leading-5 text-zinc-600">ワールドへ置いて使える 3D コンポーネントを作り始められます。</p>
-              <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-700">アイテムの画面を見る <ArrowRight size={12} /></span>
+              <p className="mt-1 text-xs leading-5 text-zinc-600">置きものではなく、使われる動作を先に想像して作る制作に寄せられます。</p>
+              <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-700">アイテム制作の流れを見る <ArrowRight size={12} /></span>
             </button>
           </div>
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -379,10 +412,10 @@ export default function PreviewApp() {
               className="inline-flex items-center gap-2 rounded-full bg-zinc-950 px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-violet-500/20 transition hover:-translate-y-0.5 hover:bg-violet-700"
             >
               <PanelsTopLeft size={16} />
-              ビジュアルエディターを見る
+              ビジュアル編集の進め方を見る
             </button>
             <span className="self-center text-[11px] leading-5 text-amber-700">
-              Webでは編集操作のサンプルを表示します。ファイル保存と公開はデスクトップ版で実行します。
+              Webでは制作導線の体験版を表示します。保存・公開の操作はデスクトップ版で実施します。
             </span>
             <a
               href="https://github.com/WebXR-JP/xrift-studio/releases/latest"
@@ -409,6 +442,33 @@ export default function PreviewApp() {
               XRift 公式サイト
               <ExternalLink size={12} />
             </a>
+          </div>
+        </div>
+      </section>
+
+      <section id="target-understanding" className="bg-white/70 px-5 py-20 lg:px-8 lg:py-24">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">ターゲット理解</p>
+          <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">ここに来た人は、だいたい3つで詰まっています。</h2>
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-zinc-600">
+            「何から始めればいい？」「次に何を確認すればいい？」「公開で次は何をすればいい？」という不安を、まず1画面で解決する構成です。
+          </p>
+          <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <article className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6">
+              <CircleHelp size={16} className="text-zinc-700" />
+              <h3 className="mt-3 text-base font-semibold text-zinc-900">XRiftの制作は初めて</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">最初に何を決めると進めるのかを先に見せ、試行錯誤を短くしています。</p>
+            </article>
+            <article className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6">
+              <RefreshCw size={16} className="text-zinc-700" />
+              <h3 className="mt-3 text-base font-semibold text-zinc-900">途中で止まってしまう</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">往復を減らして、次の判断ポイントを1ステップずつ明確に提示します。</p>
+            </article>
+            <article className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6">
+              <Upload size={16} className="text-zinc-700" />
+              <h3 className="mt-3 text-base font-semibold text-zinc-900">公開手順が不安</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">公開前に必要な確認を1度で渡し、最後まで進める流れを止まりにくくしています。</p>
+            </article>
           </div>
         </div>
       </section>
@@ -744,9 +804,9 @@ export default function PreviewApp() {
               </div>
             </div>
 
-            <div className="border-t border-zinc-200 bg-zinc-50 px-4 py-2.5 text-[10px] text-zinc-500">
-              これは画面を試すためのデモです。ファイル保存、CLI 実行、XRift への公開はデスクトップ版で動作します。
-            </div>
+              <div className="border-t border-zinc-200 bg-zinc-50 px-4 py-2.5 text-[10px] text-zinc-500">
+                ここは制作フローを見せるためのサンプル表示です。保存・実行・公開は、デスクトップ版と接続して完結します。
+              </div>
           </div>
 
           {/* ---- ブラウザプレビューのウィンドウ ---- */}
@@ -804,7 +864,7 @@ export default function PreviewApp() {
               )}
             </div>
             <p className="px-1 text-[11px] leading-5 text-zinc-500">
-              デスクトップ版では、保存した変更がブラウザへ反映されます。アプリとプレビューを並べたまま制作を続けられます。
+              デスクトップ版に接続すると、保存とプレビューが同じ制作の文脈で連動します。判断の途中で来たくない反復も減らせます。
             </p>
           </div>
         </div>
@@ -813,9 +873,11 @@ export default function PreviewApp() {
       <section id="how-to-use" className="bg-white/60 px-5 py-20 lg:px-8 lg:py-24">
         <div className="mx-auto max-w-6xl">
           <div className="max-w-xl">
-            <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">制作の流れ</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">制作方法ごとの現在地が分かる。</h2>
-            <p className="mt-4 text-sm leading-7 text-zinc-600">クラシック方式はコードを正本にし、ビジュアル方式はSceneとAssetの専用データを正本にします。デスクトップ版では、作成物の保存からXRift向け変換・公開準備までを一つのEditor内で進めます。</p>
+            <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">構造・ストーリー</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">読む人の3つのNotを順に解消する。</h2>
+            <p className="mt-4 text-sm leading-7 text-zinc-600">
+              「読まない・信じない・行動しない」状態を崩すために、まずは共感、次に理由、最後に次アクションまでの順で配置しました。
+            </p>
           </div>
           <div className="relative mt-12">
             <div className="absolute left-5 right-5 top-5 hidden h-px bg-gradient-to-r from-violet-200 via-cyan-200 to-fuchsia-200 lg:block" />
@@ -836,18 +898,74 @@ export default function PreviewApp() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-5 py-20 lg:px-8 lg:py-24">
+      <section className="bg-white/80 px-5 py-20 lg:px-8 lg:py-24">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">構造・ストーリー</p>
+          <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">見たい機能より、続けられる順番を先に見せています。</h2>
+          <div className="mt-10 grid gap-5 md:grid-cols-3">
+            <article className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6">
+              <Code2 size={18} className="text-zinc-700" />
+              <h3 className="mt-3 text-base font-semibold text-zinc-900">決める</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">ワールド or アイテム、コード or ビジュアルで、まず1回だけ選ぶ。</p>
+            </article>
+            <article className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6">
+              <Play size={18} className="text-zinc-700" />
+              <h3 className="mt-3 text-base font-semibold text-zinc-900">検証する</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">編集後の反映を見ながら、次に触るべき場所をすぐに確定できる構成です。</p>
+            </article>
+            <article className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6">
+              <Upload size={18} className="text-zinc-700" />
+              <h3 className="mt-3 text-base font-semibold text-zinc-900">届ける</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">最後までのチェック項目を1回で見るよう並べて、公開導線を分断しない設計です。</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="feature-stories" className="px-5 py-20 lg:px-8 lg:py-24">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">訴求・コピー</p>
+          <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">「何を作ればいいか」より「次に何を確定すればいいか」で書いています。</h2>
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-zinc-600">
+            仕様の羅列ではなく、あなたが次に進むための不安解消ポイントを先に提示するコピーにしています。
+          </p>
+          <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {perspectives.map((item) => {
+              const Icon = item.icon;
+              return (
+                <article
+                  key={item.title}
+                  className="group relative overflow-hidden rounded-2xl border border-zinc-200 bg-white p-6 transition-shadow hover:shadow-lg"
+                >
+                  <div className={`pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${item.color}`} />
+                  <Icon size={18} className="text-zinc-800" />
+                  <h3 className="mt-4 text-base font-semibold leading-6 text-zinc-950">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-zinc-600">{item.text}</p>
+                  <span className="mt-4 inline-flex text-xs font-semibold text-violet-700">{item.badge}</span>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section id="action" className="mx-auto max-w-6xl px-5 py-20 lg:px-8 lg:py-24">
         <div className="relative overflow-hidden rounded-3xl bg-zinc-950 px-6 py-10 text-white shadow-2xl shadow-violet-950/20 sm:px-10 sm:py-14">
           <div className="preview-cta-glow" />
           <div className="relative max-w-2xl">
             <div className="flex items-center gap-2 text-xs font-semibold text-violet-300"><CircleHelp size={15} /> デスクトップ版</div>
-            <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">作り始める準備ができたら。</h2>
-            <p className="mt-4 text-sm leading-7 text-zinc-400">デスクトップ版は GitHub Releases で配布しています。お使いの OS に合うファイルを選び、XRift Studio を起動してください。</p>
+            <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">今すぐ始められる入口を、最短で示します。</h2>
+            <p className="mt-4 text-sm leading-7 text-zinc-400">アカウント登録は不要。準備は最小限、最初の1手から始められます。</p>
+            <ul className="mt-4 space-y-2 text-sm leading-6 text-zinc-400">
+              <li>1分: OSを選んでインストーラを取得</li>
+              <li>5分: サンプルを開いて、まず1回試す</li>
+              <li>15分: 表示チェックと公開準備の最終確認を完了</li>
+            </ul>
             <div className="mt-7 flex flex-wrap gap-3">
-              <a href="https://github.com/WebXR-JP/xrift-studio/releases/latest" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:-translate-y-0.5 hover:bg-violet-100"><Download size={15} /> 最新リリースを見る</a>
-              <a href="https://github.com/WebXR-JP/xrift-studio#readme" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/5"><FileText size={15} /> 使い方を読む</a>
+              <a href="https://github.com/WebXR-JP/xrift-studio/releases/latest" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:-translate-y-0.5 hover:bg-violet-100"><Download size={15} /> インストールして始める</a>
+              <a href="https://github.com/WebXR-JP/xrift-studio#readme" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/5"><FileText size={15} /> 使い方ガイドを見る</a>
             </div>
-            <p className="mt-5 text-xs leading-6 text-zinc-500">XRift Studio は XRift 公式とは無関係の有志製ツールです。</p>
+            <p className="mt-5 text-xs leading-6 text-zinc-500">不安が残る場合は、最初にWeb上の体験画面だけ確認してから本体を始めるのが確実です。</p>
           </div>
         </div>
       </section>
