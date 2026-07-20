@@ -1801,7 +1801,7 @@ export function SceneViewport({
           </span>
         </div>
         <span className="text-xs text-zinc-400">
-          {editorMode === "edit" ? "Edit / Scene JSON" : profileLabel}
+          {editorMode === "edit" ? "編集モード" : profileLabel}
         </span>
       </div>
 

@@ -53,7 +53,8 @@ F-06 アイテム検査
 | MI-34 | toolbar の Create、または Hierarchy の右クリックから Entity / Component を作成する | Create は Empty Entity、Primitive、XRift Component、通常 Component の責務別入口を示す。選択 Entity がある時は追加先を名前で示し、選択がない時も単独で成立する XRift Component は Transform 付き Entity として作成できる。wrapper は追加先 Entity がない限り無効にし、理由を表示する。 | 作成または追加は一件の history transaction とし、作成 Entity を `sceneSelection` にして Inspector を開く。Escape / 外側 click は document を変えず閉じる。Play / Import 中は無効にし、必須値が未設定なら Inspector から設定して compile blocker を解消できる。 |
 | MI-35 | Visual World の新規作成で Starter Scene を選ぶ | 既定は実用的な World Starter とし、配置済み Scene と Assets へ追加される Model / Texture の数をカード上に示す。Blank は明示的な最小構成として残し、素材入り template と混同しない。 | 作成成功時は bundled source を project-relative path へ検証付きでコピーし、Scene / Asset / Material / Collider / XRift Spawn の参照を一度に確定して Editor で開く。copy / hash / document 保存の一部が失敗した場合は不完全な project を成功表示せず、新規作成へ戻れる。 |
 | MI-36 | Model Assetを選択して構造を確認し、import設定を変更または再importする | 右Inspectorにsource/status、node・mesh・primitive、bounds、animation、Material slotと現在のimport recipeを分けて表示する。recipe変更は未適用であることを示し、source解析済みの事実と混同しない。再importでslotが消える時は確定前にScene / Prefabの影響先を列挙する。 | 再import成功時は同じAsset IDを維持し、同じslot identityへのMaterial割当を保持して追加・消失slotを明示する。影響を確認せず参照切れを成功表示しない。失敗時はlast-good metadata、thumbnail、Scene参照を維持し、原因と再試行を同じModel Inspectorに残す。Play中は閲覧のみとする。 |
-| MI-37 | 左下の「シーン設定」を開き、スカイボックス、フォグ、環境光、カメラ、ギズモを変更する | 現在のScene ViewとEntity / Asset selectionを保ったまま、右のEntity InspectorをScene Inspectorへ切り替える。数値は確定時に範囲へ補正し、色、トグル、画像Skyboxのプレビューを即時同期する。Play中は値を読み取り専用にし、停止後に同じ設定画面へ戻れる。 | 設定変更は一件のSceneDocument履歴として未保存にし、保存後の生成Worldにも反映する。戻る、Entity / Assetの選択は変更済みの値を保持して通常Inspectorへ戻る。サムネイルは保存済みprojectでだけ既存の画像編集画面を開き、保存後に公開前確認へ戻れる。 |
+| MI-37 | 左下の歯車「シーン設定」を開き、スカイボックス、フォグ、環境光、カメラ、ギズモを変更する | 現在のScene ViewとEntity / Asset selectionを保ったまま、右のEntity InspectorをScene Inspectorへ切り替える。数値は確定時に範囲へ補正し、色、トグル、画像Skyboxのプレビューを即時同期する。Play中は値を読み取り専用にし、停止後に同じ設定画面へ戻れる。 | 設定変更は一件のSceneDocument履歴として未保存にし、保存後の生成Worldにも反映する。戻る、Entity / Assetの選択は変更済みの値を保持して通常Inspectorへ戻る。サムネイルは保存済みprojectでだけ既存の画像編集画面を開き、保存後に公開前確認へ戻れる。 |
+| MI-38 | 左下のユーティリティレールからショートカット一覧、ヘルプ、シーン設定を開く | 上からキーボード、ヘルプ、歯車を小さな同一サイズで常時表示する。hover / focusでは操作名を示し、開いている項目は背景、アイコン、`aria-expanded`または押下状態で区別する。ショートカットは中央Registryの現在のbindingを分類して表示し、ヘルプは作成、選択、素材配置、Playの最短導線とレイアウト初期化を示す。 | Escape、外側click、同じボタンで補助パネルを閉じ、Scene / Asset selectionとdocumentを変えない。歯車はScene Inspectorを切り替え、レイアウト初期化は既定配置へ戻して同じEditorを継続する。 |
 
 ## 機能一覧
 
@@ -65,11 +66,11 @@ F-06 アイテム検査
 | F-04 | ローカル実行 | MI-03, MI-05, MI-08 | 実行中であることと、プレビュー URL を開く操作が分かる。 |
 | F-05 | 公開準備とアップロード | MI-03, MI-04, MI-05, MI-07, MI-08, MI-09, MI-17, MI-27 | 初期値の upload を防ぎ、toolchain が不足しても authoring を失わず、review から upload result / 審査状態まで続けられる。正式 result にない公開 URL は推測しない。 |
 | F-06 | アイテム検査 | MI-03, MI-05, MI-09 | ビルドを含むセキュリティチェックを実行でき、成功時は公開、失敗時はログと編集へ進める。 |
-| F-07 | ビジュアルエディター | MI-01, MI-09, MI-10, MI-11, MI-12, MI-13, MI-14, MI-15, MI-16, MI-18, MI-21, MI-22, MI-29, MI-30, MI-31, MI-32, MI-33, MI-34, MI-35, MI-37 | 四カードの入口、Hierarchy、Scene View、右 Inspector、下 Assets を使い、独立 selection、Empty / primitive / XRift Component 作成、Asset / Material / Particle / XRift Prefab D&D、Hierarchy Reparent、Transform、Material / Texture / Particle 編集、動的 thumbnail、Playとシーン全体の環境設定を扱える。panel layout は resize / dock 後も復元され、Editor render failure は App 全体へ伝播させず再試行または一覧へ復帰できる。 |
+| F-07 | ビジュアルエディター | MI-01, MI-09, MI-10, MI-11, MI-12, MI-13, MI-14, MI-15, MI-16, MI-18, MI-21, MI-22, MI-29, MI-30, MI-31, MI-32, MI-33, MI-34, MI-35, MI-37, MI-38 | 四カードの入口、Hierarchy、Scene View、右 Inspector、下 Assets を使い、独立 selection、Empty / primitive / XRift Component 作成、Asset / Material / Particle / XRift Prefab D&D、Hierarchy Reparent、Transform、Material / Texture / Particle 編集、動的 thumbnail、Playとシーン全体の環境設定を扱える。左下のユーティリティレールからヘルプ、ショートカット、シーン設定へ迷わず到達できる。panel layout は resize / dock 後も復元され、Editor render failure は App 全体へ伝播させず再試行または一覧へ復帰できる。 |
 | F-08 | Visual Asset authoring / import | MI-11, MI-15, MI-16, MI-19, MI-20, MI-21, MI-28, MI-33, MI-36 | Material / Texture / Model / GLTF / Prefab / Particle を folder と動的 thumbnail 付きで管理し、source を壊さず import、右 Inspector で recipe 編集、reimport、stale 診断を行える。Asset 編集中も `sceneSelection` は保持される。 |
-| F-09 | Command / Shortcut / Prefab | MI-12, MI-22, MI-23, MI-24, MI-28, MI-30, MI-31, MI-34 | toolbar、menu、keyboard、Hierarchy D&D が同じ Command / Shortcut Registry を使い、Copy / Paste / Duplicate / Delete / Reparent、Empty / Component 作成、Hierarchy からの Prefab 化、XRift built-in Prefab配置、Undo / Redo が IDs と両 selection を復元する。 |
+| F-09 | Command / Shortcut / Prefab | MI-12, MI-22, MI-23, MI-24, MI-28, MI-30, MI-31, MI-34, MI-38 | toolbar、menu、keyboard、Hierarchy D&D と左下の一覧が同じ Command / Shortcut Registry を使い、Copy / Paste / Duplicate / Delete / Reparent、Empty / Component 作成、Hierarchy からの Prefab 化、XRift built-in Prefab配置、Undo / Redo が IDs と両 selection を復元する。 |
 | F-10 | Visual Save / Compile / Preview / Upload | MI-03, MI-05, MI-07, MI-08, MI-09, MI-17, MI-25, MI-26, MI-27 | journal 付き保存、決定的 compiler / provenance、freshness 検査、区別された preview、既存 XRift check / upload を一つの editor flow で扱い、失敗や取消後も last committed authoring と戻り先を保つ。 |
-| F-12 | Scene environment settings | MI-37 | 左下から右のScene Inspectorへ切り替え、サムネイル、Skybox画像・回転・露出、Fog、環境光、Near/Far、FOV、背景、グリッド、ギズモ、スナップを一か所で設定し、Scene Viewと生成Worldに必要な値を一貫して反映する。 |
+| F-12 | Scene environment settings | MI-37, MI-38 | 左下の歯車から右のScene Inspectorへ切り替え、サムネイル、Skybox画像・回転・露出、Fog、環境光、Near/Far、FOV、背景、グリッド、ギズモ、スナップを一か所で設定し、Scene Viewと生成Worldに必要な値を一貫して反映する。 |
 
 ## F-07 の状態設計
 
@@ -175,6 +176,7 @@ F-06 アイテム検査
 ### 操作前
 
 - toolbar、context menu、tooltip、Shortcut 設定は同じ command label、semantic Lucide icon、platform binding、enabled reason を中央 Registry から表示する。
+- 左下のキーボードから現在有効なShortcut一覧を分類表示し、操作を探すために各toolbarを巡回させない。
 - Hierarchy から Assets へ drag する時は reparent ではなく Prefab 作成になること、作成先 folder、subtree / dependency 件数を drop 前に示す。
 
 ### 操作中
@@ -256,7 +258,7 @@ F-06 アイテム検査
 
 ### 操作前
 
-- 左下の「シーン設定」は、Entity / Asset selection を変えずに、右のEntity InspectorをScene Inspectorへ切り替える。設定対象は Scene 全体であり、Hierarchy の Entity として追加しない。
+- 左下の歯車「シーン設定」は、Entity / Asset selection を変えずに、右のEntity InspectorをScene Inspectorへ切り替える。設定対象は Scene 全体であり、Hierarchy の Entity として追加しない。
 - Skybox、Fog、環境光は Scene View のプレビューと生成する World の両方に反映する。SkyboxはAssetsのequirectangular画像を選択またはドロップで設定し、回転と露出も適用する。Near / Far、FOV、背景、グリッド、ギズモ、スナップは編集ビューの設定として明示する。
 - サムネイルは保存済み project でだけ編集可能にし、未保存 project では保存後に設定できる理由をボタン文言で示す。
 

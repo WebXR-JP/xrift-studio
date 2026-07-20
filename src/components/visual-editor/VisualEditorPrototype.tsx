@@ -89,6 +89,7 @@ import {
   type AssetDeleteDialogTarget,
 } from "./AssetDeleteDialog";
 import { EditorCreateMenu } from "./EditorCreateMenu";
+import { EditorUtilityRail } from "./EditorUtilityRail";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { HierarchyPanel } from "./HierarchyPanel";
 import {
@@ -452,9 +453,7 @@ export function VisualEditorPrototype({
     token: symbol;
   } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(
-    "SceneのEntityとAssetを別々に選択できます。CreateからPrimitiveを配置してください",
-  );
+  const [notice, setNotice] = useState<string | null>(null);
 
   const updateImportQueue = useCallback(
     (
@@ -520,7 +519,7 @@ export function VisualEditorPrototype({
     importQueueRef.current = [];
     setPendingImports([]);
     setImportError(null);
-    setNotice("SceneのEntityとAssetを別々に選択できます。CreateからPrimitiveを配置してください");
+    setNotice(null);
     // Saving can replace the shell bundle object without changing the open
     // project. Reset only when the actual project identity changes so queued
     // File objects and editor history survive the first save.
@@ -2633,7 +2632,7 @@ export function VisualEditorPrototype({
               <p className="truncate text-sm font-semibold text-slate-900">
                 {bundle.project.metadata.title}
               </p>
-              <p className="text-xs text-slate-500">ビジュアル制作 / シーン・アセット</p>
+              <p className="text-xs text-slate-500">ビジュアルプロジェクト</p>
             </div>
             <span className="flex shrink-0 items-center gap-1 rounded border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700">
               <KindIcon size={12} aria-hidden="true" />
@@ -2749,20 +2748,11 @@ export function VisualEditorPrototype({
           </div>
 
           <div className="flex items-center gap-2" aria-label="編集とPlayの切り替え">
-            <button
-              type="button"
-              onClick={() => executeCommand("layout.reset")}
-              aria-label="パネル配置を初期化"
-              title={commandTitle(
-                "パネル配置を初期化",
-                "layout.reset",
-                shortcutLabel("layout.reset"),
-              )}
-              className="rounded border border-slate-300 bg-white p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-            >
-              <EDITOR_ICONS.settings size={13} aria-hidden="true" />
-            </button>
-            <span className="text-xs text-slate-500" role="status" aria-live="polite">{notice}</span>
+            {notice ? (
+              <span className="text-xs text-slate-500" role="status" aria-live="polite">
+                {notice}
+              </span>
+            ) : null}
             <button
               type="button"
               disabled={editorMode === "edit" && importBusy}
@@ -2940,17 +2930,14 @@ export function VisualEditorPrototype({
               assetImportPanelAvailability.disabledReason
             }
           />
-          <button
-            type="button"
-            onClick={() => setSceneSettingsOpen(true)}
-            aria-label="シーン設定を開く"
-            title="シーン設定を開く"
-            className="absolute z-40 flex h-9 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-100"
-            style={{ bottom: layout.assetsHeight + 10, left: 10 }}
-          >
-            <EDITOR_ICONS.settings size={14} aria-hidden="true" />
-            シーン設定
-          </button>
+          <EditorUtilityRail
+            commands={resolvedCommands}
+            sceneSettingsOpen={sceneSettingsOpen}
+            onToggleSceneSettings={() =>
+              setSceneSettingsOpen((current) => !current)
+            }
+            onResetLayout={() => executeCommand("layout.reset")}
+          />
           <button
             type="button"
             aria-label="Hierarchy panelの幅を変更"
