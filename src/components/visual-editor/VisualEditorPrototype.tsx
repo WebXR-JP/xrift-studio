@@ -29,6 +29,7 @@ import {
   createPrototypeProject,
   getBuiltinPrimitiveCreation,
   getColliderAutoFitBounds,
+  getTransform,
   getMaterialAssignmentTarget,
   getMesh,
   getXriftComponentDefinition,
@@ -87,6 +88,10 @@ import {
   resolveAssetOperationAvailability,
 } from "./asset-operation-lock";
 import {
+  createSerializedAutosaveCoordinator,
+  type SerializedAutosaveCoordinator,
+} from "./autosave-coordinator";
+import {
   AssetDeleteDialog,
   type AssetDeleteDialogTarget,
 } from "./AssetDeleteDialog";
@@ -105,7 +110,10 @@ import {
   type MeshInspectorPatch,
   type ParticleEmitterInspectorPatch,
 } from "./InspectorPanel";
-import { SceneViewport } from "./SceneViewport";
+import {
+  SceneViewport,
+  type SceneFocusState,
+} from "./SceneViewport";
 import { roundTo } from "./editor-utils";
 import type {
   EditorMode,
@@ -117,6 +125,7 @@ import type {
 
 const SUPPORTED_MODEL_FILE = /\.(glb|gltf)$/i;
 const SUPPORTED_TEXTURE_FILE = /\.(png|jpe?g|webp|ktx2)$/i;
+const AUTOSAVE_DELAY_MS = 250;
 
 type SceneSelection = Extract<EditorSelection, { kind: "entity" }> | null;
 
@@ -126,7 +135,13 @@ type EditorSessionSnapshot = {
   assetSelection: string | null;
 };
 
-type SaveStatus = "dirty" | "saving" | "saved" | "error";
+type SaveStatus = "dirty" | "saving" | "saved" | "error" | "unavailable";
+
+type TransformScrubTransaction = {
+  entityId: string;
+  before: EditorSessionSnapshot;
+  saveStatus: SaveStatus;
+};
 
 type QueuedAssetImport = PendingImport & {
   file: File | null;
@@ -146,6 +161,21 @@ type ModelReimportFeedback = {
   assetId: string;
   state: ModelReimportState;
 } | null;
+
+function entityTransformMatches(
+  left: PrototypeVisualProject["scene"],
+  right: PrototypeVisualProject["scene"],
+  entityId: string,
+): boolean {
+  const leftTransform = getTransform(left, entityId);
+  const rightTransform = getTransform(right, entityId);
+  if (!leftTransform || !rightTransform) return leftTransform === rightTransform;
+  return (["position", "rotation", "scale"] as const).every((field) =>
+    leftTransform[field].every(
+      (value, index) => value === rightTransform[field][index],
+    ),
+  );
+}
 
 function modelReimportStateFromProgress(
   progress: ModelReimportProgress,
@@ -257,6 +287,10 @@ export type VisualEditorPrototypeProps = {
   ) => void | string | Promise<void | string>;
   /** Upload/export orchestration is injected by the shell when available. */
   onUpload?: (bundle: PrototypeVisualProject) => void | Promise<void>;
+  /** Fresh only after the current documents and required publication files were staged. */
+  compilationFresh?: boolean;
+  /** The thumbnail is persisted outside the authoring document set. */
+  onThumbnailChanged?: () => void;
   /** The shell can persist and restore this value per workspace. */
   initialLayout?: Partial<VisualEditorLayout>;
   onLayoutChange?: (layout: VisualEditorLayout) => void;
@@ -346,6 +380,15 @@ function importIsActive(status: PendingImport["status"]): boolean {
 
 function sanitizedImportMessage(error: unknown, projectPath: string): string {
   let message = error instanceof Error ? error.message : String(error);
+  if (message.includes("asset import target has different content")) {
+    return "既存のインポート済みデータと内容が一致しません。元ファイルを確認するか、別名で取り込んでください";
+  }
+  if (
+    message.includes("asset import target is not a regular file") ||
+    message.includes("asset import target cannot be verified")
+  ) {
+    return "既存のインポート済みデータを安全に確認できませんでした。保存先の状態を確認してください";
+  }
   const pathVariants = [projectPath, projectPath.replace(/\\/g, "/")].filter(
     (value, index, values) => value && values.indexOf(value) === index,
   );
@@ -401,6 +444,8 @@ export function VisualEditorPrototype({
   initialBundle: providedInitialBundle,
   onSave,
   onUpload,
+  compilationFresh = false,
+  onThumbnailChanged,
   initialLayout,
   onLayoutChange,
 }: VisualEditorPrototypeProps) {
@@ -424,12 +469,37 @@ export function VisualEditorPrototype({
   const bundle = history.present.bundle;
   const bundleRef = useRef(bundle);
   bundleRef.current = bundle;
+  const projectPathRef = useRef(projectPath);
+  projectPathRef.current = projectPath;
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+  const lastSavedBundleRef = useRef<PrototypeVisualProject | null>(
+    projectPath || !onSave ? bundle : null,
+  );
+  const lastSavedPathRef = useRef<string | undefined>(projectPath);
+  const autosaveTimerRef = useRef<number | null>(null);
+  const autosaveCoordinatorRef = useRef<SerializedAutosaveCoordinator<
+    PrototypeVisualProject,
+    void | string
+  > | null>(null);
+  if (!autosaveCoordinatorRef.current) {
+    autosaveCoordinatorRef.current = createSerializedAutosaveCoordinator(
+      async (savingBundle) => {
+        const save = onSaveRef.current;
+        if (!save) {
+          throw new Error("Desktop shellから自動保存callbackを指定してください");
+        }
+        return await save(savingBundle);
+      },
+    );
+  }
   const sceneSelection = history.present.sceneSelection;
   const assetSelection = history.present.assetSelection;
   const [saveStatus, setSaveStatus] = useState<SaveStatus>(
-    projectPath ? "saved" : "dirty",
+    onSave ? (projectPath ? "saved" : "dirty") : "unavailable",
   );
   const clipboardRef = useRef<EntityClipboard | null>(null);
+  const transformScrubRef = useRef<TransformScrubTransaction | null>(null);
   const [renameTarget, setRenameTarget] = useState<RenameTarget>(null);
   const [deleteDialog, setDeleteDialog] = useState<AssetDeleteDialogTarget | null>(null);
   const [pendingMaterialAssignment, setPendingMaterialAssignment] =
@@ -438,6 +508,9 @@ export function VisualEditorPrototype({
     useState<ModelReimportFeedback>(null);
   const [activeAssetFolderId, setActiveAssetFolderId] = useState<string | null>(null);
   const [frameSelectionRequest, setFrameSelectionRequest] = useState(0);
+  const [exitFocusRequest, setExitFocusRequest] = useState(0);
+  const [focusedEntity, setFocusedEntity] =
+    useState<SceneFocusState | null>(null);
   const resolvedCommands = useMemo(() => resolveEditorCommands(), []);
   const mainRef = useRef<HTMLElement>(null);
   const [layout, setLayout] = useState<VisualEditorLayout>({
@@ -457,6 +530,49 @@ export function VisualEditorPrototype({
   } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState(false);
+
+  const requestAutosave = useCallback(
+    async (
+      savingBundle: PrototypeVisualProject,
+    ): Promise<string | undefined> => {
+      if (lastSavedBundleRef.current === savingBundle) {
+        return lastSavedPathRef.current ?? projectPathRef.current;
+      }
+
+      const coordinator = autosaveCoordinatorRef.current;
+      if (!coordinator) return undefined;
+      setSaveStatus("saving");
+      try {
+        const result = await coordinator.request(savingBundle);
+        lastSavedBundleRef.current = savingBundle;
+        const savedPath =
+          typeof result === "string" ? result : projectPathRef.current;
+        if (savedPath) lastSavedPathRef.current = savedPath;
+
+        if (
+          coordinator.latestRequested() === savingBundle &&
+          bundleRef.current === savingBundle
+        ) {
+          setSaveStatus("saved");
+        } else if (coordinator.latestRequested() !== savingBundle) {
+          setSaveStatus("saving");
+        } else {
+          setSaveStatus("dirty");
+        }
+        return savedPath;
+      } catch (error) {
+        if (coordinator.latestRequested() === savingBundle) {
+          setSaveStatus("error");
+          setNotice(
+            error instanceof Error ? error.message : "自動保存に失敗しました",
+          );
+        }
+        return undefined;
+      }
+    },
+    [],
+  );
 
   const updateImportQueue = useCallback(
     (
@@ -509,20 +625,30 @@ export function VisualEditorPrototype({
 
   useEffect(() => {
     setHistory(createEditorHistory(createInitialSnapshot(), 80));
-    setSaveStatus(projectPath ? "saved" : "dirty");
+    setSaveStatus(onSave ? (projectPath ? "saved" : "dirty") : "unavailable");
+    lastSavedBundleRef.current = projectPath || !onSave ? initialBundle : null;
+    lastSavedPathRef.current = projectPath;
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
     setEditorMode("edit");
     clipboardRef.current = null;
+    transformScrubRef.current = null;
     setRenameTarget(null);
     setDeleteDialog(null);
     setPendingMaterialAssignment(null);
     setModelReimportFeedback(null);
     setActiveAssetFolderId(null);
     setFrameSelectionRequest(0);
+    setExitFocusRequest((current) => current + 1);
+    setFocusedEntity(null);
     setSceneSettingsOpen(false);
     importQueueRef.current = [];
     setPendingImports([]);
     setImportError(null);
     setNotice(null);
+    setLeaving(false);
     // Saving can replace the shell bundle object without changing the open
     // project. Reset only when the actual project identity changes so queued
     // File objects and editor history survive the first save.
@@ -551,6 +677,39 @@ export function VisualEditorPrototype({
     initialBundle.project.metadata,
     initialBundle.project.projectId,
   ]);
+
+  useEffect(() => {
+    if (!onSaveRef.current) {
+      setSaveStatus("unavailable");
+      return;
+    }
+    if (lastSavedBundleRef.current === bundle) return;
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+    autosaveTimerRef.current = window.setTimeout(() => {
+      autosaveTimerRef.current = null;
+      if (transformScrubRef.current) return;
+      void requestAutosave(bundle);
+    }, AUTOSAVE_DELAY_MS);
+    return () => {
+      if (autosaveTimerRef.current !== null) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+  }, [bundle, requestAutosave]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!onSaveRef.current) return;
+      if (lastSavedBundleRef.current === bundleRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   useEffect(() => {
     setLayout(loadEditorLayout(initialLayout));
@@ -613,7 +772,7 @@ export function VisualEditorPrototype({
           ? scene
           : { ...scene, settings },
       );
-      setNotice("シーン設定を更新しました。保存するとWorld生成にも反映されます");
+      setNotice("シーン設定を更新しました。変更を自動保存します");
     },
     [editorMode, updateScene],
   );
@@ -1241,6 +1400,103 @@ export function VisualEditorPrototype({
     [editorMode, updateScene],
   );
 
+  const handleTransformScrubStart = useCallback(
+    (entityId: string) => {
+      if (editorMode !== "edit" || transformScrubRef.current) return;
+      transformScrubRef.current = {
+        entityId,
+        before: history.present,
+        saveStatus,
+      };
+    },
+    [editorMode, history.present, saveStatus],
+  );
+
+  const handleTransformScrubChange = useCallback(
+    (entityId: string, patch: TransformPatch) => {
+      const transaction = transformScrubRef.current;
+      if (
+        editorMode !== "edit" ||
+        !transaction ||
+        transaction.entityId !== entityId
+      ) {
+        return;
+      }
+      setHistory((current) => {
+        const scene = updateEntityTransform(
+          current.present.bundle.scene,
+          entityId,
+          patch,
+        );
+        if (scene === current.present.bundle.scene) return current;
+        const nextBundle = { ...current.present.bundle, scene };
+        bundleRef.current = nextBundle;
+        setSaveStatus("dirty");
+        return replaceEditorHistoryPresent(current, {
+          ...current.present,
+          bundle: nextBundle,
+        });
+      });
+    },
+    [editorMode],
+  );
+
+  const handleTransformScrubEnd = useCallback((entityId: string) => {
+    const transaction = transformScrubRef.current;
+    if (!transaction || transaction.entityId !== entityId) return;
+    transformScrubRef.current = null;
+    setHistory((current) => {
+      if (
+        entityTransformMatches(
+          transaction.before.bundle.scene,
+          current.present.bundle.scene,
+          entityId,
+        )
+      ) {
+        bundleRef.current = transaction.before.bundle;
+        setSaveStatus(
+          lastSavedBundleRef.current === transaction.before.bundle
+            ? "saved"
+            : transaction.saveStatus,
+        );
+        return replaceEditorHistoryPresent(current, transaction.before);
+      }
+
+      const committed = {
+        ...current.present,
+        bundle: touchProject(current.present.bundle),
+      };
+      bundleRef.current = committed.bundle;
+      setSaveStatus("dirty");
+      setNotice("Transformの変更をシーンへ反映しました");
+      return commitEditorHistory(
+        { ...current, present: transaction.before },
+        committed,
+      );
+    });
+  }, []);
+
+  const handleTransformScrubCancel = useCallback((entityId: string) => {
+    const transaction = transformScrubRef.current;
+    if (!transaction || transaction.entityId !== entityId) return;
+    transformScrubRef.current = null;
+    setHistory((current) => {
+      const changed = !entityTransformMatches(
+        transaction.before.bundle.scene,
+        current.present.bundle.scene,
+        entityId,
+      );
+      bundleRef.current = transaction.before.bundle;
+      setSaveStatus(
+        lastSavedBundleRef.current === transaction.before.bundle
+          ? "saved"
+          : transaction.saveStatus,
+      );
+      if (changed) setNotice("Transformの変更を取り消しました");
+      return replaceEditorHistoryPresent(current, transaction.before);
+    });
+  }, []);
+
   const handleGizmoCommit = useCallback(
     (entityId: string, patch: TransformPatch) => {
       if (editorMode !== "edit") return;
@@ -1621,7 +1877,7 @@ export function VisualEditorPrototype({
         return;
       }
       if (!projectPath) {
-        setNotice("Modelを再インポートする前にプロジェクトを保存してください");
+        setNotice("初回の自動保存完了後にModelを再インポートできます");
         return;
       }
 
@@ -1705,13 +1961,7 @@ export function VisualEditorPrototype({
         }
         const nextBundle = touchProject({
           ...current.present.bundle,
-          assets: {
-            ...current.present.bundle.assets,
-            assets: {
-              ...current.present.bundle.assets.assets,
-              [assetId]: reimportedAsset,
-            },
-          },
+          assets: result.manifest,
         });
         bundleRef.current = nextBundle;
         setSaveStatus("dirty");
@@ -1719,10 +1969,12 @@ export function VisualEditorPrototype({
           assetId,
           state: {
             phase: "succeeded",
-            message: "Modelを再インポートしました。保存すると変更が確定します",
+            message: "Modelを再インポートしました。変更を自動保存します",
           },
         });
-        setNotice(`「${reimportedAsset.name}」を再インポートしました`);
+        setNotice(
+          `「${reimportedAsset.name}」を再インポートし、モデル由来MaterialとTextureを更新しました`,
+        );
         return commitEditorHistory(current, {
           ...current.present,
           bundle: nextBundle,
@@ -2110,22 +2362,37 @@ export function VisualEditorPrototype({
               bytes,
               mimeType: sourceFile.type,
               folderId,
+              existingManifest: workingManifest,
             });
             const diagnostics = plan.diagnostics.map(
               ({ severity, code, message }) => ({ severity, code, message }),
             );
             updateImportQueue((current) =>
-              current.map((entry) =>
-                entry.id === queued.id
-                  ? {
-                      ...entry,
-                      progress: 68,
-                      sourceHash: plan.sourceHash || undefined,
-                      assetId: plan.asset?.id,
-                      diagnostics,
-                    }
-                  : entry,
-              ),
+              current
+                .filter(
+                  (entry) =>
+                    entry.id === queued.id ||
+                    entry.name.toLocaleLowerCase() !==
+                      queued.name.toLocaleLowerCase() ||
+                    entry.sourceHash !== plan.sourceHash ||
+                    ![
+                      "succeeded",
+                      "updated",
+                      "duplicate",
+                      "failed",
+                    ].includes(entry.status),
+                )
+                .map((entry) =>
+                  entry.id === queued.id
+                    ? {
+                        ...entry,
+                        progress: 68,
+                        sourceHash: plan.sourceHash || undefined,
+                        assetId: plan.asset?.id,
+                        diagnostics,
+                      }
+                    : entry,
+                ),
             );
 
             if (!plan.canCommit || !plan.asset) {
@@ -2150,7 +2417,11 @@ export function VisualEditorPrototype({
             }
 
             const duplicate = knownByHash.get(plan.sourceHash);
-            if (duplicate) {
+            if (
+              duplicate &&
+              duplicate.kind === plan.asset.kind &&
+              !plan.replacesAssetId
+            ) {
               setHistory((current) =>
                 replaceEditorHistoryPresent(current, {
                   ...current.present,
@@ -2203,13 +2474,7 @@ export function VisualEditorPrototype({
             setHistory((current) => {
               const nextBundle = touchProject({
                 ...current.present.bundle,
-                assets: {
-                  ...current.present.bundle.assets,
-                  assets: {
-                    ...current.present.bundle.assets.assets,
-                    [importedAsset.id]: importedAsset,
-                  },
-                },
+                assets: committedManifest,
               });
               bundleRef.current = nextBundle;
               setSaveStatus("dirty");
@@ -2219,12 +2484,13 @@ export function VisualEditorPrototype({
                 assetSelection: importedAsset.id,
               });
             });
+            setActiveAssetFolderId(importedAsset.folderId ?? null);
             updateImportQueue((current) =>
               current.map((entry) =>
                 entry.id === queued.id
                   ? {
                       ...entry,
-                      status: "succeeded",
+                      status: plan.replacesAssetId ? "updated" : "succeeded",
                       progress: 100,
                       file: null,
                       assetId: importedAsset.id,
@@ -2233,7 +2499,9 @@ export function VisualEditorPrototype({
               ),
             );
             setNotice(
-              `「${importedAsset.name}」をインポートし、Asset Inspectorで開きました`,
+              plan.replacesAssetId
+                ? `「${importedAsset.name}」を更新し、MaterialとTextureの参照を維持しました`
+                : `「${importedAsset.name}」をインポートし、Material ${plan.derivedAssets?.filter((asset) => asset.kind === "material").length ?? 0}件、Texture ${plan.derivedAssets?.filter((asset) => asset.kind === "texture").length ?? 0}件を展開しました`,
             );
           } catch (error) {
             const message = sanitizedImportMessage(error, targetProjectPath);
@@ -2327,7 +2595,7 @@ export function VisualEditorPrototype({
       setNotice(`アセット${accepted.length}件のインポートを開始しました`);
       void processImportQueue(projectPath);
     } else {
-      setNotice("アセットをインポートする前にプロジェクトを保存してください");
+      setNotice("初回の自動保存完了後にアセットをインポートします");
     }
   }, [
     activeAssetFolderId,
@@ -2358,30 +2626,12 @@ export function VisualEditorPrototype({
   }, []);
 
   const runSave = useCallback(async (): Promise<string | undefined> => {
-    if (!onSave) {
-      setNotice("Desktop shellからSaveProject callbackを指定してください");
-      return undefined;
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
     }
-    const savingBundle = bundle;
-    setSaveStatus("saving");
-    try {
-      const savedProjectPath = await onSave(savingBundle);
-      const currentWasSaved = bundleRef.current === savingBundle;
-      setSaveStatus(currentWasSaved ? "saved" : "dirty");
-      setNotice(
-        currentWasSaved
-          ? "保存しました"
-          : "保存中に変更されたため、もう一度保存してください",
-      );
-      return typeof savedProjectPath === "string"
-        ? savedProjectPath
-        : projectPath;
-    } catch (error) {
-      setSaveStatus("error");
-      setNotice(error instanceof Error ? error.message : "保存に失敗しました");
-      return undefined;
-    }
-  }, [bundle, onSave, projectPath]);
+    return requestAutosave(bundleRef.current);
+  }, [requestAutosave]);
 
   const handleSaveBeforeImport = useCallback(async () => {
     const savedProjectPath = await runSave();
@@ -2466,7 +2716,7 @@ export function VisualEditorPrototype({
     (commandId: EditorCommandId, payload: EditorCommandPayload = {}): boolean => {
       switch (commandId) {
         case "project.save":
-          if (saveStatus === "saving") return false;
+          if (!onSaveRef.current || saveStatus === "saving") return false;
           void runSave();
           return true;
         case "project.publish":
@@ -2522,6 +2772,10 @@ export function VisualEditorPrototype({
             !sceneSelection?.id
           ) return false;
           setFrameSelectionRequest((current) => current + 1);
+          return true;
+        case "view.exit-focus":
+          if (editorMode !== "edit" || !focusedEntity) return false;
+          setExitFocusRequest((current) => current + 1);
           return true;
         case "transform.translate":
           if (editorMode !== "edit") return false;
@@ -2615,6 +2869,7 @@ export function VisualEditorPrototype({
       history.future.length,
       history.past.length,
       importBusy,
+      focusedEntity,
       onLayoutChange,
       requestRename,
       requestDeleteAsset,
@@ -2644,6 +2899,25 @@ export function VisualEditorPrototype({
     [resolvedCommands],
   );
 
+  const handleBack = useCallback(async () => {
+    if (leaving) return;
+    if (!onSaveRef.current) {
+      onBack();
+      return;
+    }
+    setLeaving(true);
+    while (lastSavedBundleRef.current !== bundleRef.current) {
+      const target = bundleRef.current;
+      await requestAutosave(target);
+      if (lastSavedBundleRef.current !== target) {
+        setLeaving(false);
+        return;
+      }
+    }
+    setLeaving(false);
+    onBack();
+  }, [leaving, onBack, requestAutosave]);
+
   const kindLabel = projectKind === "world" ? "World" : "Item";
   const KindIcon = projectKind === "world" ? EDITOR_ICONS.world : EDITOR_ICONS.item;
   const BackIcon = EDITOR_ICONS.back;
@@ -2659,12 +2933,13 @@ export function VisualEditorPrototype({
           <div className="flex min-w-0 items-center gap-2.5">
             <button
               type="button"
-              onClick={onBack}
+              disabled={leaving}
+              onClick={() => void handleBack()}
               title={commandTitle("プロジェクト一覧へ戻る", "CloseVisualEditor")}
-              className="flex shrink-0 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              className="flex shrink-0 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-wait disabled:opacity-50"
             >
               <BackIcon size={13} aria-hidden="true" />
-              戻る
+              {leaving ? "保存して戻っています" : "戻る"}
             </button>
             <div className="min-w-0 border-l border-slate-200 pl-2.5">
               <p className="truncate text-sm font-semibold text-slate-900">
@@ -2684,20 +2959,40 @@ export function VisualEditorPrototype({
                 ? "border-emerald-300 bg-emerald-50 text-emerald-800"
                 : saveStatus === "error"
                   ? "border-rose-300 bg-rose-50 text-rose-800"
+                  : saveStatus === "unavailable"
+                    ? "border-slate-300 bg-slate-50 text-slate-600"
                   : "border-amber-300 bg-amber-50 text-amber-800"
             }`}>
-              {saveStatus === "saved" ? "保存済み" : saveStatus === "saving" ? "保存中" : saveStatus === "error" ? "保存エラー" : "未保存"}
+              {saveStatus === "saved"
+                ? "自動保存済み"
+                : saveStatus === "saving"
+                  ? "自動保存中"
+                  : saveStatus === "error"
+                    ? "自動保存エラー"
+                    : saveStatus === "unavailable"
+                      ? "デモ・保存なし"
+                      : "自動保存待ち"}
             </span>
-            <button
-              type="button"
-              disabled={saveStatus === "saving"}
-              onClick={() => executeCommand("project.save")}
-              title={commandTitle("ビジュアルプロジェクトを保存", "project.save", shortcutLabel("project.save"))}
-              className="flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-wait disabled:opacity-50"
+            <span
+              className={`rounded border px-2 py-1 text-xs font-semibold ${
+                compilationFresh
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                  : "border-amber-300 bg-amber-50 text-amber-800"
+              }`}
             >
-              <SaveIcon size={13} aria-hidden="true" />
-              保存
-            </button>
+              {compilationFresh ? "公開用変換済み" : "公開用変換が必要"}
+            </span>
+            {saveStatus === "error" ? (
+              <button
+                type="button"
+                onClick={() => executeCommand("project.save")}
+                title={commandTitle("自動保存を再試行", "project.save", shortcutLabel("project.save"))}
+                className="flex items-center gap-1 rounded border border-rose-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+              >
+                <SaveIcon size={13} aria-hidden="true" />
+                再試行
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => executeCommand("project.publish")}
@@ -2883,6 +3178,10 @@ export function VisualEditorPrototype({
               })
             }
             frameSelectionRequest={frameSelectionRequest}
+            exitFocusRequest={exitFocusRequest}
+            focusedEntity={focusedEntity}
+            onFocusChange={setFocusedEntity}
+            onExitFocus={() => executeCommand("view.exit-focus")}
             onViewportFileDrop={() => setNotice("外部Assetは下のAssets Browserへドロップしてください")}
             onPlayDropAttempt={() => setNotice("Playを停止してからPrimitiveを配置してください")}
             onDropRejected={setNotice}
@@ -2896,6 +3195,10 @@ export function VisualEditorPrototype({
             readOnly={readOnly}
             onRenameEntity={handleRenameEntity}
             onTransformChange={handleTransformChange}
+            onTransformScrubStart={handleTransformScrubStart}
+            onTransformScrubChange={handleTransformScrubChange}
+            onTransformScrubEnd={handleTransformScrubEnd}
+            onTransformScrubCancel={handleTransformScrubCancel}
             onMeshChange={handleMeshChange}
             onColliderChange={handleColliderChange}
             onAutoFitCollider={handleAutoFitCollider}
@@ -2926,9 +3229,12 @@ export function VisualEditorPrototype({
             sceneSettingsOpen={sceneSettingsOpen}
             onCloseSceneSettings={() => setSceneSettingsOpen(false)}
             onSceneSettingsChange={handleSceneSettingsChange}
-            onThumbnailChanged={() =>
-              setNotice("サムネイルを更新しました。公開前の確認にも反映されます")
-            }
+            onThumbnailChanged={() => {
+              onThumbnailChanged?.();
+              setNotice(
+                "サムネイルを更新しました。公開用変換は更新が必要です",
+              );
+            }}
           />
           <AssetsPanel
             assets={bundle.assets}

@@ -165,6 +165,21 @@ export function validateModelImportMetadata(
       ),
     );
   }
+  if (
+    value.sourceFileName !== undefined &&
+    (typeof value.sourceFileName !== "string" ||
+      !value.sourceFileName.trim() ||
+      value.sourceFileName.includes("/") ||
+      value.sourceFileName.includes("\\"))
+  ) {
+    issues.push(
+      issue(
+        `${path}.sourceFileName`,
+        "file-name",
+        "Model sourceFileName must be a leaf file name",
+      ),
+    );
+  }
   validatePositiveInteger(value.byteLength, `${path}.byteLength`, issues);
   for (const field of ["nodeCount", "meshCount", "primitiveCount"] as const) {
     validateNonNegativeInteger(value[field], `${path}.${field}`, issues);

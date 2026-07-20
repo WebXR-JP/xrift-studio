@@ -25,6 +25,10 @@ export type VisualPublishPipelineProgress = {
   detail?: string;
   percent?: number;
   cancelSafe: boolean;
+  thumbnailStaging?: {
+    state: "verified";
+    sha256: string;
+  };
 };
 
 export type XriftUploadResult = {
@@ -207,19 +211,50 @@ export async function materializeVisualCompilation(
     paths.rootPath,
   ]);
 
-  const stagingPath = await tauri.applyCompilerStaging(
-    authoringProjectPath,
-    compilation.stagingPlan.stagingDirectoryName,
-    compilation.stagingPlan.overlayFiles.map((file) => ({
-      relativePath: file.relativePath,
-      content: file.content,
-    })),
-    compilation.stagingPlan.assetCopyPlan.map((entry) => ({
-      sourceRelativePath: entry.sourceRelativePath,
-      targetRelativePath: entry.targetRelativePath,
-    })),
+  let staged: Awaited<ReturnType<typeof tauri.applyCompilerStaging>>;
+  try {
+    staged = await tauri.applyCompilerStaging(
+      authoringProjectPath,
+      compilation.stagingPlan.stagingDirectoryName,
+      compilation.stagingPlan.overlayFiles.map((file) => ({
+        relativePath: file.relativePath,
+        content: file.content,
+      })),
+      compilation.stagingPlan.assetCopyPlan.map((entry) => ({
+        sourceRelativePath: entry.sourceRelativePath,
+        targetRelativePath: entry.targetRelativePath,
+      })),
+      compilation.stagingPlan.requiredPublicationFiles,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("required publication thumbnail")) {
+      throw new Error(
+        "公開用サムネイルをステージングへコピーして検証できませんでした。public/thumbnail.pngを設定し直してから再試行してください。",
+      );
+    }
+    throw error;
+  }
+  const thumbnail = staged.requiredPublicationFiles.find(
+    (file) => file.purpose === "thumbnail",
   );
-  return stagingPath;
+  if (!thumbnail) {
+    throw new Error(
+      "公開用サムネイルのステージング検証結果を確認できないため、アップロードを停止しました。",
+    );
+  }
+  report({
+    stage: "compiling",
+    label: "サムネイルを公開用ステージングへコピー済み",
+    detail: "コピー元とコピー先のSHA-256が一致しました。",
+    percent: 56,
+    cancelSafe: true,
+    thumbnailStaging: {
+      state: "verified",
+      sha256: thumbnail.sha256,
+    },
+  });
+  return staged.projectPath;
 }
 
 export async function publishVisualProject({

@@ -1,4 +1,12 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ProjectLibrary } from "./components/ProjectLibrary";
 import { EditorView } from "./components/EditorView";
 import { NewProjectDialog } from "./components/NewProjectDialog";
@@ -12,6 +20,10 @@ import {
 } from "./lib/tauri";
 import { xrift, clearCaches, type LogLine, type Whoami } from "./lib/xrift-cli";
 import { isNewer } from "./lib/semver";
+import {
+  inspectPublishThumbnail,
+  type PublishThumbnailReadiness,
+} from "./lib/publish-readiness";
 import { useToast } from "./components/Toast";
 import {
   VisualUploadDialog,
@@ -81,9 +93,14 @@ function App() {
     bundle: PrototypeVisualProject;
     project: Project | null;
   } | null>(null);
+  const visualSessionRef = useRef(visualSession);
+  visualSessionRef.current = visualSession;
   const [visualLoading, setVisualLoading] = useState(false);
   const [visualPublishBundle, setVisualPublishBundle] =
     useState<PrototypeVisualProject | null>(null);
+  const [visualThumbnailReadiness, setVisualThumbnailReadiness] =
+    useState<PublishThumbnailReadiness | null>(null);
+  const [visualCompilationFresh, setVisualCompilationFresh] = useState(false);
 
   const [updateInfo, setUpdateInfo] = useState<{
     current: string | null;
@@ -255,6 +272,8 @@ function App() {
     starterTemplateId: VisualStarterTemplateId =
       defaultVisualStarterTemplateId(kind),
   ) => {
+    setVisualCompilationFresh(false);
+    setVisualThumbnailReadiness(null);
     let starterPlan: StarterVisualProjectPlan;
     try {
       starterPlan = createStarterVisualProject(
@@ -312,6 +331,8 @@ function App() {
       setSelected(project);
       return;
     }
+    setVisualCompilationFresh(false);
+    setVisualThumbnailReadiness(null);
     setVisualLoading(true);
     void readVisualProjectFromDisk(project.path)
       .then((documents) => {
@@ -340,10 +361,12 @@ function App() {
   const handleSaveVisualProject = async (
     bundle: PrototypeVisualProject,
     notify = true,
+    refreshLibrary = notify,
   ): Promise<string> => {
+    const currentSession = visualSessionRef.current;
     const persistedBundle = withLatestPublication(
       bundle,
-      visualSession?.bundle.project.lastPublication,
+      currentSession?.bundle.project.lastPublication,
     );
     const documents = {
       project: persistedBundle.project,
@@ -352,12 +375,12 @@ function App() {
       prefabs: persistedBundle.prefabs,
     };
     try {
-      if (visualSession?.project) {
-        await saveVisualProjectToDisk(visualSession.project.path, documents);
-        setVisualSession((current) =>
-          current ? { ...current, bundle: persistedBundle } : current,
-        );
-        await refreshProjects();
+      if (currentSession?.project) {
+        await saveVisualProjectToDisk(currentSession.project.path, documents);
+        const nextSession = { ...currentSession, bundle: persistedBundle };
+        visualSessionRef.current = nextSession;
+        setVisualSession(nextSession);
+        if (refreshLibrary) await refreshProjects();
         if (notify) {
           toast({
             kind: "success",
@@ -365,15 +388,17 @@ function App() {
             description: persistedBundle.project.metadata.name,
           });
         }
-        return visualSession.project.path;
+        return currentSession.project.path;
       } else {
         const project = await createVisualProjectOnDisk(
           projectsRoot,
           persistedBundle.project.metadata.name,
           documents,
         );
-        setVisualSession({ bundle: persistedBundle, project });
-        await refreshProjects();
+        const nextSession = { bundle: persistedBundle, project };
+        visualSessionRef.current = nextSession;
+        setVisualSession(nextSession);
+        if (refreshLibrary) await refreshProjects();
         if (notify) {
           toast({
             kind: "success",
@@ -448,15 +473,38 @@ function App() {
               projectName={visualSession.bundle.project.metadata.name}
               projectPath={visualSession.project?.path}
               initialBundle={visualSession.bundle}
-              onSave={(bundle) => handleSaveVisualProject(bundle)}
-              onUpload={(bundle) =>
-                setVisualPublishBundle(
-                  withLatestPublication(
-                    bundle,
-                    visualSession.bundle.project.lastPublication,
-                  ),
-                )
-              }
+              compilationFresh={visualCompilationFresh}
+              onSave={(bundle) => {
+                setVisualCompilationFresh(false);
+                return handleSaveVisualProject(bundle, false, false);
+              }}
+              onThumbnailChanged={() => {
+                setVisualCompilationFresh(false);
+                const path = visualSession.project?.path;
+                if (!path) {
+                  setVisualThumbnailReadiness(null);
+                  return;
+                }
+                void inspectPublishThumbnail(
+                  path,
+                  visualSession.bundle.project.projectKind,
+                ).then(setVisualThumbnailReadiness);
+              }}
+              onUpload={(bundle) => {
+                const publishBundle = withLatestPublication(
+                  bundle,
+                  visualSession.bundle.project.lastPublication,
+                );
+                setVisualPublishBundle(publishBundle);
+                setVisualThumbnailReadiness(null);
+                const path = visualSession.project?.path;
+                if (path) {
+                  void inspectPublishThumbnail(
+                    path,
+                    publishBundle.project.projectKind,
+                  ).then(setVisualThumbnailReadiness);
+                }
+              }}
               onBack={handleVisualEditorBack}
             />
           </Suspense>
@@ -467,12 +515,17 @@ function App() {
           review={{
             title: publishBundle?.project.metadata.title ?? "",
             description: publishBundle?.project.metadata.description ?? "",
-            thumbnailReady: true,
-            thumbnailSource: "template",
+            thumbnailReady: visualThumbnailReadiness?.state === "ready",
+            thumbnailSource:
+              visualThumbnailReadiness?.source === "project"
+                ? "project"
+                : visualThumbnailReadiness?.source === "template"
+                  ? "template"
+                  : undefined,
             signedIn: user !== null,
             displayName: user?.displayName,
             saved: false,
-            compilationFresh: false,
+            compilationFresh: visualCompilationFresh,
             remoteId:
               visualSession.bundle.project.projectKind === "world"
                 ? publishBundle?.project.lastPublication?.worldId ??
@@ -486,6 +539,7 @@ function App() {
           }}
           onClose={() => setVisualPublishBundle(null)}
           onMetadataChange={(title, description) => {
+            setVisualCompilationFresh(false);
             setVisualPublishBundle((current) =>
               current
                 ? {
@@ -504,9 +558,11 @@ function App() {
             );
           }}
           onEditThumbnail={() => {
+            setVisualPublishBundle(null);
             toast({
               kind: "info",
-              title: "Scene Viewの画像を公開用サムネイルとして使用します",
+              title: "シーン設定からサムネイルを編集してください",
+              description: "左下の歯車を開き、「サムネイルを編集」を選択します。",
             });
           }}
           onLogin={() => void handleLogin()}
@@ -522,26 +578,37 @@ function App() {
           onPublish={async (report, signal) => {
             if (!publishBundle) throw new Error("公開する制作データがありません。");
             let savedProjectPath: string | null = null;
-            const result = await publishVisualProject({
-              authoringProjectPath: visualSession.project?.path,
-              kind: publishBundle.project.projectKind,
-              documents: {
-                project: publishBundle.project,
-                scenes: { [publishBundle.scene.sceneId]: publishBundle.scene },
-                assets: publishBundle.assets,
-                prefabs: publishBundle.prefabs,
-              },
-              save: async () => {
-                savedProjectPath = await handleSaveVisualProject(
-                  publishBundle,
-                  false,
-                );
-                return savedProjectPath;
-              },
-              report,
-              onLog: appendLog,
-              signal,
-            });
+            let result: Awaited<ReturnType<typeof publishVisualProject>>;
+            try {
+              result = await publishVisualProject({
+                authoringProjectPath: visualSession.project?.path,
+                kind: publishBundle.project.projectKind,
+                documents: {
+                  project: publishBundle.project,
+                  scenes: { [publishBundle.scene.sceneId]: publishBundle.scene },
+                  assets: publishBundle.assets,
+                  prefabs: publishBundle.prefabs,
+                },
+                save: async () => {
+                  savedProjectPath = await handleSaveVisualProject(
+                    publishBundle,
+                    false,
+                  );
+                  return savedProjectPath;
+                },
+                report: (progress) => {
+                  if (progress.thumbnailStaging?.state === "verified") {
+                    setVisualCompilationFresh(true);
+                  }
+                  report(progress);
+                },
+                onLog: appendLog,
+                signal,
+              });
+            } catch (error) {
+              setVisualCompilationFresh(false);
+              throw error;
+            }
             const publishedBundle: PrototypeVisualProject = {
               ...publishBundle,
               project: {

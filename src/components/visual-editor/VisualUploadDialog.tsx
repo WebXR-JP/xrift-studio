@@ -35,6 +35,10 @@ export type VisualPublishProgress = {
   percent?: number;
   /** Remote commit stages cannot promise cancellation. */
   cancelSafe: boolean;
+  thumbnailStaging?: {
+    state: "verified";
+    sha256: string;
+  };
 };
 
 export type VisualPublishDiagnostic = {
@@ -124,6 +128,9 @@ export function VisualUploadDialog({
   const [progress, setProgress] = useState<VisualPublishProgress | null>(null);
   const [result, setResult] = useState<VisualPublishResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [thumbnailStagingSha256, setThumbnailStagingSha256] = useState<
+    string | null
+  >(null);
   const cancellationRef = useRef<VisualPublishCancellationController | null>(
     null,
   );
@@ -156,11 +163,7 @@ export function VisualUploadDialog({
       id: "thumbnail",
       label: "サムネイル",
       detail: review.thumbnailReady
-        ? review.thumbnailSource === "template"
-          ? "XRiftテンプレートの既定画像を使用"
-          : review.thumbnailSource === "scene"
-            ? "Scene Viewから生成する画像を使用"
-            : "公開用画像を確認済み"
+        ? "public/thumbnail.pngを確認済み。開始時にステージングへコピーしてSHA-256を照合します"
         : "公開用サムネイルを設定してください",
       ready: review.thumbnailReady,
       action: onEditThumbnail,
@@ -214,6 +217,7 @@ export function VisualUploadDialog({
       setProgress(null);
       setResult(null);
       setError(null);
+      setThumbnailStagingSha256(null);
     }
     wasOpenRef.current = open;
   }, [open]);
@@ -244,6 +248,7 @@ export function VisualUploadDialog({
     const controller = cancellation.begin();
     setError(null);
     setResult(null);
+    setThumbnailStagingSha256(null);
     setStage("saving");
     setProgress({
       stage: "saving",
@@ -257,6 +262,9 @@ export function VisualUploadDialog({
           return;
         }
         cancellation.update(controller, nextProgress.cancelSafe);
+        if (nextProgress.thumbnailStaging?.state === "verified") {
+          setThumbnailStagingSha256(nextProgress.thumbnailStaging.sha256);
+        }
         setProgress(nextProgress);
         setStage(nextProgress.stage);
       }, controller.signal);
@@ -528,6 +536,27 @@ export function VisualUploadDialog({
               </p>
             </div>
           )}
+          {thumbnailStagingSha256 ? (
+            <div className="mt-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-left">
+              <Check
+                size={14}
+                strokeWidth={2.5}
+                className="mt-0.5 shrink-0 text-emerald-700"
+                aria-hidden="true"
+              />
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-emerald-900">
+                  公開用ステージングへコピー済み
+                </div>
+                <div className="mt-0.5 text-xs leading-5 text-emerald-800">
+                  サムネイルのコピー元とコピー先のSHA-256が一致しました。
+                </div>
+                <code className="mt-0.5 block truncate text-xs text-emerald-700">
+                  {thumbnailStagingSha256}
+                </code>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">

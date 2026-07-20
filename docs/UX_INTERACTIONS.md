@@ -41,7 +41,7 @@ F-06 アイテム検査
 | MI-22 | toolbar、menu、context menu、keyboard から Command を起動する | central Shortcut Registry の label、semantic Lucide icon、platform binding、enabled reason を全 surface で一致させる。active tool は icon、label、押下状態で示す。conflict は両 command を実行せず設定へ案内する。 | Command 成功 / 失敗へ収束する。text input、contenteditable、数値入力、IME composition 中は editor shortcut を抑止し、ユーザー override と既定へ戻す操作を Editor Preferences に保存する。 |
 | MI-23 | Copy / Paste / Duplicate / Delete を実行する | Copy は versioned buffer の対象数、Paste / Duplicate は生成予定数、Asset Delete は参照元件数を示す。document 変更を伴う操作だけを Command history に積む。 | Paste / Duplicate / Delete の Undo / Redo は同じ IDs と前後の `sceneSelection` / `assetSelection` を復元する。Copy 自体は document Undo にしない。参照を壊す Delete は置換、解除、取消なしに進めない。 |
 | MI-24 | Hierarchy の Entity subtree を Assets / folder へ drop して Prefab にする | drop target、Prefab 名、Entity / Asset dependency 件数、既存 Prefab / cycle conflict を表示する。成功前は Scene、Asset、folder のどれも変更しない。 | 成功時は Prefab Asset / document と instance metadata を一 transaction で作り、`sceneSelection` は instance root、`assetSelection` は Prefab にする。Undo / 失敗 / 取消では全 document と両 selection を元へ戻す。 |
-| MI-25 | Save または Ctrl/Cmd+S を実行する | validating、temporary write、commit の短い stage と対象 revision を header に表示する。Save 中の追加編集は未保存のまま残す。 | commit marker と全 hash 一致後だけ対象 revision を保存済みにする。失敗時は last committed set を維持して dirty のままにし、再試行、別名保存、診断を置く。crash recovery 後は復旧 revision を通知する。 |
+| MI-25 | authoring操作を一件確定する、Undo / Redoする、またはCtrl/Cmd+Sで即時保存を要求する | 確定したrevisionを短い待機時間後に自動保存し、headerを「自動保存待ち」「自動保存中」「自動保存済み」「自動保存エラー」で更新する。連続変更は最新revisionへまとめ、保存処理は必ず直列化する。Ctrl/Cmd+Sは主導線ではなく待機中の保存を即時flushする。 | commit markerと全hash一致後だけ対象revisionを保存済みにする。保存中の追加編集は次の自動保存へ引き継ぎ、古い保存完了で新しいrevisionを保存済みにしない。失敗時はlast committed setを維持し、編集を止めず同じheaderから再試行できる。戻る操作は最新revisionの保存完了を待ち、失敗時はEditorに留まる。 |
 | MI-26 | Play、generated preview、compile または check を実行する | Editor direct Play、generated staging preview、check/build を別 label にし、input fingerprint、target、stale、progress を示す。diagnostic は provenance から元 Entity / Asset / field へ link する。 | fresh hash の結果だけ成功にする。Stop / cancel は process と resource を cleanup して Edit へ戻る。公式に未記載の CLI / hosted / XFT preview を存在するように表示しない。 |
 | MI-27 | Upload modal を開き、review から remote result まで進める | review、auth-check、saving、compiling、checking、uploading、processing、succeeded、failed を一つの modal 内で段階表示し、title、description、thumbnail、diagnostic、progress、cancel / retry を現在 state に合わせる。 | 閉じると Edit に戻り、結果 ID は保持する。remote commit 後を取消済みと断定しない。成功時は正式 result の ID / version / hash、正式に返る時だけ URL を示す。test / 通常検証では実 upload をしない。 |
 | MI-28 | Asset folder または Asset の context menu を開く | folder では作成 / import / 新規 folder、Asset では rename / duplicate / delete / references / reimport / thumbnail regeneration を kind と state に応じて表示する。shortcut と icon は Registry と一致させる。 | 一つの操作選択または Escape / 外側 click で閉じる。実行不可項目は理由を tooltip で示し、menu を開いただけでは document や selection を変えない。 |
@@ -57,6 +57,9 @@ F-06 アイテム検査
 | MI-38 | 左下のユーティリティレールからショートカット一覧、ヘルプ、シーン設定を開く | 上からキーボード、ヘルプ、歯車を小さな同一サイズで常時表示する。hover / focusでは操作名を示し、開いている項目は背景、アイコン、`aria-expanded`または押下状態で区別する。ショートカットは中央Registryの現在のbindingを分類して表示し、ヘルプは作成、選択、素材配置、Playの最短導線とレイアウト初期化を示す。 | Escape、外側click、同じボタンで補助パネルを閉じ、Scene / Asset selectionとdocumentを変えない。歯車はScene Inspectorを切り替え、レイアウト初期化は既定配置へ戻して同じEditorを継続する。 |
 | MI-39 | Scene View、Hierarchy、Create、Inspector、AssetsでXRift Componentを表示する | 公式Component名と中央Registryのsemantic iconを全authoring surfaceで共有する。Lightは実照明にカメラ追従アイコンを重ね、PortalとTagBoardは保存済みPropsだけでEditor Previewを表示する。外部Contextやinstance APIはEdit中に呼び出さない。 | 選択変更やInspector編集で同じComponent IDのpreviewだけを更新し、document、selection、runtime stateを増やさない。未設定Portalは「移動先未設定」、TagBoardは設定済みtitle、columns、tags、scaleを表示する。 |
 | MI-40 | Edit 中にHierarchy行の目アイコンでEntityのEnabledを切り替える、または親EntityのTransformを変更する | Entity自身のEnabledと、親の無効化による実効状態を行のアイコンと濃淡で区別する。親を無効にするとsubtreeをScene Viewから隠し、親のPosition / Rotation / Scaleは子のlocal Transformへ階層的に反映する。 | EnabledとTransformの変更はそれぞれ一件のhistoryへ確定する。親を再び有効にすると子自身のEnabledを保ったまま復帰し、Undo / Redo、Play、生成Worldでも同じ親子関係と実効状態を再現する。 |
+| MI-41 | GLB / glTFをimportまたは再importする | Model名の論理folderとMaterials / Texturesを自動生成し、埋め込みPBR Materialと画像を独立Assetとして一覧へ追加する。同じfolder・source file名は既存Modelの更新、同一SHAの実ファイルは検証後の再利用として表示する。 | 成功時はModelを選択して専用folderを開き、Material slotから展開済みMaterialを開ける。再importはModel / slot / 派生Asset IDとScene参照を維持し、ユーザー編集済みMaterialを上書きしない。失敗時はlast-good Manifestと実ファイルを保持し、同じ履歴の前回結果と今回結果を重複表示しない。 |
+| MI-42 | Entity Inspector の Transform 軸ラベルを左右へドラッグする、または Scale の比率固定を切り替える | 軸ラベルは `ew-resize` cursor と開始値から現在値への小さな表示でスクラブ可能と伝える。Shift は微調整、Ctrl / Alt は大きな調整にし、Scene View、Inspector、ギズモを同じ local Transform へ即時同期する。Scale の比率固定中は操作軸の倍率を他軸へ適用し、不均等比率を保つ。 | pointer up で一件の Transform history として確定する。Escape / pointer cancel は開始前の値と保存状態へ戻し、履歴を追加しない。ラベルのダブルクリックは数値入力へfocusし、入力中のEditor shortcutを抑止する。 |
+| MI-43 | Edit 中に Entity を選択して F を押す | 選択 Entity の描画 bounds と子 Entity を含む中心・距離へカメラと Orbit 中心を移し、Scene View端に対象名と解除操作を表示する。boundsが空の場合だけEntityのworld位置を使う。別Entityの選択だけではカメラを移動せず、Fで対象を切り替える。 | 同じEntityで再度F、Escape、または表示中の「解除」で、開始前に保存したカメラ位置、向き、Orbit中心、ズームへ戻る。Play開始時も解除してEdit cameraを保存する。Play中、text / 数値入力、IME composition中、Entity未選択時は開始しない。 |
 
 ## 機能一覧
 
@@ -68,10 +71,10 @@ F-06 アイテム検査
 | F-04 | ローカル実行 | MI-03, MI-05, MI-08 | 実行中であることと、プレビュー URL を開く操作が分かる。 |
 | F-05 | 公開準備とアップロード | MI-03, MI-04, MI-05, MI-07, MI-08, MI-09, MI-17, MI-27 | 初期値の upload を防ぎ、toolchain が不足しても authoring を失わず、review から upload result / 審査状態まで続けられる。正式 result にない公開 URL は推測しない。 |
 | F-06 | アイテム検査 | MI-03, MI-05, MI-09 | ビルドを含むセキュリティチェックを実行でき、成功時は公開、失敗時はログと編集へ進める。 |
-| F-07 | ビジュアルエディター | MI-01, MI-09, MI-10, MI-11, MI-12, MI-13, MI-14, MI-15, MI-16, MI-18, MI-21, MI-22, MI-29, MI-30, MI-31, MI-32, MI-33, MI-34, MI-35, MI-37, MI-38, MI-40 | 四カードの入口、Hierarchy、Scene View、右 Inspector、下 Assets を使い、独立 selection、Empty / primitive / XRift Component 作成、Asset / Material / Particle / XRift Prefab D&D、Hierarchyの並び替え・親子化・Enabled、親子Transform、Material / Texture / Particle 編集、動的 thumbnail、Playとシーン全体の環境設定を扱える。左下のユーティリティレールからヘルプ、ショートカット、シーン設定へ迷わず到達できる。panel layout は resize / dock 後も復元され、Editor render failure は App 全体へ伝播させず再試行または一覧へ復帰できる。 |
-| F-08 | Visual Asset authoring / import | MI-11, MI-15, MI-16, MI-19, MI-20, MI-21, MI-28, MI-33, MI-36 | Material / Texture / Model / GLTF / Prefab / Particle を folder と動的 thumbnail 付きで管理し、source を壊さず import、右 Inspector で recipe 編集、reimport、stale 診断を行える。Asset 編集中も `sceneSelection` は保持される。 |
-| F-09 | Command / Shortcut / Prefab | MI-12, MI-22, MI-23, MI-24, MI-28, MI-30, MI-31, MI-34, MI-38 | toolbar、menu、keyboard、Hierarchy D&D と左下の一覧が同じ Command / Shortcut Registry を使い、Copy / Paste / Duplicate / Delete / Reparent、Empty / Component 作成、Hierarchy からの Prefab 化、XRift built-in Prefab配置、Undo / Redo が IDs と両 selection を復元する。 |
-| F-10 | Visual Save / Compile / Preview / Upload | MI-03, MI-05, MI-07, MI-08, MI-09, MI-17, MI-25, MI-26, MI-27 | journal 付き保存、決定的 compiler / provenance、freshness 検査、区別された preview、既存 XRift check / upload を一つの editor flow で扱い、失敗や取消後も last committed authoring と戻り先を保つ。 |
+| F-07 | ビジュアルエディター | MI-01, MI-09, MI-10, MI-11, MI-12, MI-13, MI-14, MI-15, MI-16, MI-18, MI-21, MI-22, MI-29, MI-30, MI-31, MI-32, MI-33, MI-34, MI-35, MI-37, MI-38, MI-40, MI-42, MI-43 | 四カードの入口、Hierarchy、Scene View、右 Inspector、下 Assets を使い、独立 selection、復元可能なEntityフォーカス、Empty / primitive / XRift Component 作成、Asset / Material / Particle / XRift Prefab D&D、Hierarchyの並び替え・親子化・Enabled、親子Transform、軸スクラブとScale比率固定、Material / Texture / Particle 編集、動的 thumbnail、Playとシーン全体の環境設定を扱える。左下のユーティリティレールからヘルプ、ショートカット、シーン設定へ迷わず到達できる。panel layout は resize / dock 後も復元され、Editor render failure は App 全体へ伝播させず再試行または一覧へ復帰できる。 |
+| F-08 | Visual Asset authoring / import | MI-11, MI-15, MI-16, MI-19, MI-20, MI-21, MI-28, MI-33, MI-36, MI-41 | Material / Texture / Model / GLTF / Prefab / Particle を folder と動的 thumbnail 付きで管理し、GLBの埋め込みMaterial / Textureを再利用可能なAssetへ展開する。sourceを壊さずimport、右Inspectorでrecipe編集、参照を保つreimport、stale診断を行え、Asset編集中も`sceneSelection`は保持される。 |
+| F-09 | Command / Shortcut / Prefab | MI-12, MI-22, MI-23, MI-24, MI-28, MI-30, MI-31, MI-34, MI-38, MI-43 | toolbar、menu、keyboard、Hierarchy D&D と左下の一覧が同じ Command / Shortcut Registry を使い、Copy / Paste / Duplicate / Delete / Reparent、Entityフォーカスの切替と解除、Empty / Component 作成、Hierarchy からの Prefab 化、XRift built-in Prefab配置、Undo / Redo が IDs と両 selection を復元する。 |
+| F-10 | Visual Save / Compile / Preview / Upload | MI-03, MI-05, MI-07, MI-08, MI-09, MI-17, MI-25, MI-26, MI-27 | authoring操作ごとの直列化された自動保存、journal付きcommit、決定的compiler / provenance、freshness検査、区別されたpreview、既存XRift check / uploadを一つのeditor flowで扱い、失敗や取消後もlast committed authoringと戻り先を保つ。 |
 | F-12 | Scene environment settings | MI-37, MI-38 | 左下の歯車から右のScene Inspectorへ切り替え、サムネイル、Skybox画像・回転・露出、Fog、環境光、Near/Far、FOV、背景、グリッド、ギズモ、スナップを一か所で設定し、Scene Viewと生成Worldに必要な値を一貫して反映する。 |
 | F-13 | XRift Component editor preview | MI-10, MI-34, MI-39 | 公式Component名とsemantic iconをauthoring surface全体で共有し、Light、Portal、TagBoardを実行時Contextへ接続せず設定値に忠実なEditor Previewとして確認できる。 |
 
@@ -96,7 +99,8 @@ F-06 アイテム検査
 - 子EntityのTransformはlocal値として保持し、Scene View、Play、生成Worldのすべてで親のPosition / Rotation / Scaleを継承する。
 - Material drag 中は Scene Mesh または Entity Inspector slot だけを drop target とし、slot が複数なら chooser を表示する。Texture drag は右 Material Inspector の compatible slot だけを target にする。
 - Asset のドラッグ中は Scene View だけを配置可能領域として示し、drop 前には Entity を増やさない。
-- ギズモ操作中はカメラ操作を競合させず、Scene View と Inspector の Transform 値を同期する。
+- ギズモ操作中はカメラ操作を競合させず、Scene View と Inspector の Transform 値を同期する。Inspector の軸ラベルをスクラブする時も local Transform を即時同期し、Scale の比率固定中は操作軸の倍率で不均等比率を保つ。
+- Entity選択中のFは、そのEntity subtreeの描画boundsへカメラとOrbit中心を合わせる。フォーカス中に別Entityを選択しただけでは追従せず、Fを押した時だけ対象を切り替える。
 - 待機中のギズモと選択補助線はニュートラルカラーで控えめにし、操作中の軸とAsset drop targetだけを明るく示す。
 - panel resize / dock 中は drop preview と minimum size を示し、authoring Command や selection を変更しない。
 - Material Asset の color、metalness、roughness、texture 参照は Edit 中だけ変更でき、同じ Asset ID を参照する全 Entity の preview と同期する。Entity 固有 Material 値へ複製しない。
@@ -111,7 +115,8 @@ F-06 アイテム検査
 
 - Asset の配置成功では Asset ID を参照する Entity を一つだけ追加し、Hierarchy、Scene View、Entity Inspector で同じ Entity を選択する。Undo では Entity と selection を配置前へ戻す。
 - primitive 作成成功では `CreatePrimitiveCommand` 一件で Entity と builtin geometry reference を追加し、Material drop 成功では `AssignMaterialCommand` 一件で既存 Mesh slot だけを更新する。
-- Transform 操作成功では pointer down から pointer up までを一件として確定し、選択とカメラを維持する。
+- Transform 操作成功ではギズモまたは軸ラベルの pointer down から pointer up までを一件として確定し、選択とカメラを維持する。
+- フォーカス成功では対象名とF / Escape / 解除ボタンをScene View端に残し、同じEntityでFを押すか解除操作を行うと開始前のカメラ位置、向き、Orbit中心、ズームへ戻す。
 - layout 操作成功では normalized size、dock zone、order を Editor Preferences に保存し、再起動後も復元する。
 - Material 操作成功では有効値が AssetManifest の一つの Material Asset に残り、共有する全 Entity の表示を更新する。SceneDocument と Entity 固有値は変更しない。
 - Play 開始成功では同じ Scene View で project kind に対応する profile を確認でき、runtime の変化は PlaySession にだけ残る。
@@ -122,7 +127,8 @@ F-06 アイテム検査
 ### 失敗時
 
 - 非対応ファイルは拡張子と対応形式を示し、SceneDocument、AssetManifest、selection、history を変更しない。
-- Transform に有限でない値や不正な scale が入った場合は操作前へ戻し、対象項目の近くに修正方法を示す。
+- Transform に有限でない値や不正な scale が入った場合、または軸スクラブを Escape / pointer cancel で終えた場合は操作前へ戻し、対象項目の近くに修正方法を示す。
+- 選択Entityに描画boundsがない場合はworld Transform位置をフォーカス中心にし、Entity自体を選べない場合やPlay中、入力中はカメラを変更しない。
 - Material Asset に不正な color、有限でない値、`0..1` の範囲外、欠落 texture 参照が入った場合は確定せず、右 Inspector の対象 field 近くに形式または範囲を示す。
 - 欠落 Asset 参照では Entity を消さず、欠落 ID、参照元 Entity、Asset の再 import または置換を示す。
 - primitive create point、parent、Material / Texture slot を解決できない場合は Command を確定せず、対象を選び直す操作を示す。
@@ -138,6 +144,7 @@ F-06 アイテム検査
 - Play 中にライブラリへ戻る場合は、先に Stop と同じ cleanup を実行して PlaySession を破棄する。runtime state を authoring document へ保存しない。
 - 戻った後はプロジェクトライブラリを表示し、新規作成入口を先頭に保つ。
 - Escape で未確定 dock / resize を開始前 layout へ戻し、「レイアウトをリセット」で左 Hierarchy、中央 Scene View、右 Inspector、下 Assets へ戻す。
+- フォーカス中のEscape、解除ボタン、Play開始は保存したEdit cameraへ戻し、selectionとSceneDocumentは変更しない。
 - 作成または保存 transaction が commit した project だけを一覧へ追加する。
 - 永続化を接続した後は、Scene / Prefab / Asset / folder を含む save set のいずれかが未保存なら保存、破棄、戻るの取り消しを選べる確認へ置き換える。
 
@@ -209,29 +216,29 @@ F-06 アイテム検査
 
 ### 操作前
 
-- Save は対象 revision、compile / preview は target と input freshness、Upload は title、description、thumbnail、auth、diagnostic、既存 remote ID を開始前に示す。
+- authoring操作前は直前revisionを自動保存済みとして示す。compile / previewはtargetとinput freshness、Uploadはtitle、description、thumbnail、auth、diagnostic、既存remote IDを開始前に示す。
 - Editor direct preview、generated staging preview、XRift upload / 審査を同じ「Preview」と呼ばない。公式資料にない hosted / CLI / XFT preview は選択肢に出さない。
 
 ### 操作中
 
-- Save は validate、temporary write、commit、compile は asset prepare、generate、hash / provenance、Upload modal は auth-check、saving、compiling、checking、uploading、processing を表示する。
+- authoring操作の確定後は250msの待機を挟み、最新revisionをvalidate、temporary write、commitへ進める。保存中に次の変更が確定した場合は並列writeせず、現在の保存完了後に最新revisionを続けて保存する。compileはasset prepare、generate、hash / provenance、Upload modalはauth-check、saving、compiling、checking、uploading、processingを表示する。
 - cancel button は安全に止められる stage だけ有効にする。remote upload 開始後は best effort であることを示し、結果不明のまま新規 upload を再開しない。
 
 ### 成功時
 
-- Save は commit marker と全 hash 一致後だけ対象 revision を保存済みにする。compile / check は fresh input fingerprint の result と provenance link を残す。
+- 自動保存はcommit markerと全hash一致後だけ対象revisionを保存済みにする。保存中に新しいrevisionができた場合は「自動保存中」または「自動保存待ち」を維持し、後続保存が完了してから「自動保存済み」にする。compile / checkはfresh input fingerprintのresultとprovenance linkを残す。
 - Upload は正式 result の worldId / itemId、versionId、versionNumber、contentHash と審査状態を表示する。正式 URL field がある時だけ URL を表示する。
 - Upload 成功後は CLI が `.xrift/world.json` または `.xrift/item.json` に記録した remote ID を authoring project へ保存し、次の fresh staging へ復元する。`xrift.json` を remote ID の保存先として扱わない。
 
 ### 失敗時
 
-- Save failure は last committed document set、compile failure は last-good staging、Upload failure は remote commit の有無を保ち、stage、sanitized cause、再試行先を示す。
+- 自動保存失敗はlast committed document setと未保存のEditor stateを維持し、headerへ「自動保存エラー」と再試行を表示する。新しい操作が確定した場合はその最新revisionで一度だけ再試行し、同じ内容の無限retryは行わない。compile failureはlast-good staging、Upload failureはremote commitの有無を保ち、stage、sanitized cause、再試行先を示す。
 - stale input、REJECT、未編集 metadata、auth failure を成功扱いにせず、元 Entity / Asset / field または review へ戻す。token、absolute path、raw stderr を表示しない。
 - 保存済み remote ID を一意に復元できない、または manifest、CLI sidecar、upload result の ID が一致しない場合は新規 upload を開始・再試行せず、公開先の確認を求める。
 
 ### 戻り先
 
-- modal / preview を閉じると同じ visual project の Edit、Play 前の camera、`sceneSelection`、`assetSelection`、dirty state へ戻る。
+- modal / previewを閉じると同じvisual projectのEdit、Play前のcamera、`sceneSelection`、`assetSelection`、自動保存状態へ戻る。ライブラリへ戻る時は待機中または保存中の最新revisionをflushし、失敗した場合はEditorへ留まって再試行を示す。
 - automated test と通常の UI 検証は fake backend / fixture で upload state を再現し、実 XRift upload を行わない。
 
 ## F-11 Collider authoring / export の状態設計

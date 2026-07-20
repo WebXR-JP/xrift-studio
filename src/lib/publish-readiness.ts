@@ -2,15 +2,19 @@ import { tauri, type ProjectKind } from "./tauri";
 
 export type PublishReadinessState = "ready" | "needs-attention" | "unavailable";
 
+export type PublishThumbnailReadiness = {
+  state: PublishReadinessState;
+  source: "project" | "template" | "missing" | "unavailable";
+  sha256?: string;
+};
+
 export type PublishReadiness = {
   metadata: {
     state: PublishReadinessState;
     title: string;
     description: string;
   };
-  thumbnail: {
-    state: PublishReadinessState;
-  };
+  thumbnail: PublishThumbnailReadiness;
   ready: boolean;
 };
 
@@ -77,24 +81,22 @@ async function sha256DataUrl(dataUrl: string): Promise<string | null> {
   }
 }
 
-async function readThumbnail(
+export async function inspectPublishThumbnail(
   projectPath: string,
   projectKind: ProjectKind,
-): Promise<PublishReadiness["thumbnail"]> {
+): Promise<PublishThumbnailReadiness> {
   try {
     const thumbnail = await tauri.readThumbnail(projectPath);
-    if (!thumbnail) return { state: "needs-attention" };
+    if (!thumbnail) return { state: "needs-attention", source: "missing" };
 
     const digest = await sha256DataUrl(thumbnail);
-    if (!digest) return { state: "unavailable" };
-    return {
-      state:
-        digest === TEMPLATE_THUMBNAIL_SHA256[projectKind]
-          ? "needs-attention"
-          : "ready",
-    };
+    if (!digest) return { state: "unavailable", source: "unavailable" };
+    const template = digest === TEMPLATE_THUMBNAIL_SHA256[projectKind];
+    return template
+      ? { state: "needs-attention", source: "template", sha256: digest }
+      : { state: "ready", source: "project", sha256: digest };
   } catch {
-    return { state: "unavailable" };
+    return { state: "unavailable", source: "unavailable" };
   }
 }
 
@@ -111,7 +113,7 @@ export async function inspectPublishReadiness(
         title: "",
         description: "",
       })),
-    readThumbnail(projectPath, projectKind),
+    inspectPublishThumbnail(projectPath, projectKind),
   ]);
 
   return {

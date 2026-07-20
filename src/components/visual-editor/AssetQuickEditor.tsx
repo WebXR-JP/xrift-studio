@@ -1059,6 +1059,13 @@ export function MaterialQuickEditor({
         <div className="min-w-0 self-center">
           <h3 className="truncate text-[13px] font-semibold text-slate-900">{asset.name}</h3>
           <p className="text-xs text-slate-500">glTF 2.0 標準マテリアル</p>
+          {asset.importedFromModel ? (
+            <p className={`mt-1 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${asset.importedFromModel.isUserOverridden ? "border-amber-200 bg-amber-50 text-amber-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
+              {asset.importedFromModel.isUserOverridden
+                ? "モデル由来・ユーザー編集を保護"
+                : "モデル由来・再インポートで同期"}
+            </p>
+          ) : null}
           <p className="mt-2 text-xs leading-4 text-slate-600">
             変更はプレビューとシーン内の参照メッシュへ即時反映されます。
           </p>
@@ -2016,6 +2023,13 @@ export function TextureQuickEditor({
         <div className="min-w-0 self-center">
           <h3 className="truncate text-[13px] font-semibold text-slate-900">{asset.name}</h3>
           <p className="break-all text-xs leading-4 text-slate-500">{sourceLabel(asset)}</p>
+          {asset.importedFromModel ? (
+            <p className={`mt-1 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${asset.importedFromModel.isUserOverridden ? "border-amber-200 bg-amber-50 text-amber-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
+              {asset.importedFromModel.isUserOverridden
+                ? "モデル由来・Import設定を保護"
+                : "モデル由来・再インポートで同期"}
+            </p>
+          ) : null}
         </div>
       </div>
 

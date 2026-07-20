@@ -110,7 +110,7 @@ export async function reimportModelAssetFromDisk(
       bytes,
       mimeType:
         sourceFormat === "glb" ? "model/gltf-binary" : "model/gltf+json",
-    });
+    }, manifest);
     diagnostics = plan.diagnostics;
     if (!plan.canCommit || !plan.asset) {
       const blocking = plan.diagnostics.find(

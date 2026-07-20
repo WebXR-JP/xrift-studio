@@ -132,6 +132,30 @@ function assetFolderPath(assets: AssetManifest, asset: SceneAsset): string {
   return ["Assets", ...segments].join(" / ");
 }
 
+function importedModelFolderIds(assets: AssetManifest): Set<string> {
+  const folders = assets.folders ?? {};
+  return new Set(
+    Object.values(assets.assets)
+      .filter(
+        (asset) =>
+          asset.kind === "model" &&
+          asset.folderId &&
+          folders[asset.folderId]?.name.toLocaleLowerCase() ===
+            asset.name.toLocaleLowerCase() &&
+          Object.values(folders).some(
+            (folder) =>
+              folder.parentId === asset.folderId &&
+              folder.name === "Materials",
+          ) &&
+          Object.values(folders).some(
+            (folder) =>
+              folder.parentId === asset.folderId && folder.name === "Textures",
+          ),
+      )
+      .map((asset) => asset.folderId as string),
+  );
+}
+
 function matchesAssetSearch(
   asset: SceneAsset,
   folderPath: string,
@@ -169,8 +193,10 @@ function importStatusLabel(status: PendingImport["status"]): string {
       return "確定中";
     case "succeeded":
       return "完了";
+    case "updated":
+      return "既存Assetを更新";
     case "duplicate":
-      return "登録済み";
+      return "既存Assetを再利用";
     case "failed":
       return "失敗";
   }
@@ -178,7 +204,7 @@ function importStatusLabel(status: PendingImport["status"]): string {
 
 function importStatusClass(status: PendingImport["status"]): string {
   if (status === "failed") return "text-rose-700";
-  if (status === "succeeded") return "text-emerald-700";
+  if (status === "succeeded" || status === "updated") return "text-emerald-700";
   if (status === "duplicate") return "text-sky-700";
   return "text-amber-800";
 }
@@ -187,6 +213,7 @@ function canRemoveImport(status: PendingImport["status"]): boolean {
   return (
     status === "waiting-save" ||
     status === "succeeded" ||
+    status === "updated" ||
     status === "duplicate" ||
     status === "failed"
   );
@@ -669,7 +696,7 @@ function ImportQueue({
         ))}
       </div>
       <p className="mt-1.5 text-xs leading-4 text-amber-800">
-        検証、解析、サムネイル生成、ファイル確定の後にアセット情報へ追加します。
+        モデルは検証後にMaterialとTextureを自動展開し、同じ名前の既存Modelは参照を保って更新します。
       </p>
     </div>
   );
@@ -709,7 +736,7 @@ function ImportQueueEntry({
       </div>
       <div className="mt-1 h-1 overflow-hidden rounded bg-slate-100" aria-label={`進捗 ${entry.progress}%`}>
         <div
-          className={`h-full transition-[width] ${entry.status === "failed" ? "bg-rose-500" : entry.status === "duplicate" ? "bg-sky-500" : entry.status === "succeeded" ? "bg-emerald-500" : "bg-violet-500"}`}
+          className={`h-full transition-[width] ${entry.status === "failed" ? "bg-rose-500" : entry.status === "duplicate" ? "bg-sky-500" : entry.status === "succeeded" || entry.status === "updated" ? "bg-emerald-500" : "bg-violet-500"}`}
           style={{ width: `${entry.progress}%` }}
         />
       </div>
@@ -833,6 +860,7 @@ export function AssetsPanel({
   const allFolders = [...KIND_FOLDERS, ...customFolders];
   const activeFolder = allFolders.find((folder) => folder.id === activeFolderId);
   const allAssets = Object.values(assets.assets).filter((asset) => asset.kind !== "primitive");
+  const modelFolderIds = importedModelFolderIds(assets);
   const searching = searchQuery.trim().length > 0;
   const visibleFolders = searching
     ? []
@@ -840,16 +868,28 @@ export function AssetsPanel({
       ? [
           ...KIND_FOLDERS,
           ...customFolders.filter(
-            (folder) => assets.folders?.[folder.id]?.parentId === null,
+            (folder) =>
+              assets.folders?.[folder.id]?.parentId === null &&
+              !modelFolderIds.has(folder.id),
           ),
         ]
       : activeFolder?.custom
         ? customFolders.filter(
             (folder) => assets.folders?.[folder.id]?.parentId === activeFolder.id,
           )
-        : [];
+        : activeFolder?.kind === "model"
+          ? customFolders.filter((folder) => modelFolderIds.has(folder.id))
+          : [];
   const folderAssets = activeFolder?.kind
-    ? allAssets.filter((asset) => asset.kind === activeFolder.kind)
+    ? allAssets.filter(
+        (asset) =>
+          asset.kind === activeFolder.kind &&
+          !(
+            activeFolder.kind === "model" &&
+            asset.folderId &&
+            modelFolderIds.has(asset.folderId)
+          ),
+      )
     : activeFolder?.custom
       ? allAssets.filter((asset) => (asset.folderId ?? null) === activeFolder.id)
       : activeFolder?.builtinPrefabs
@@ -880,6 +920,9 @@ export function AssetsPanel({
       if (!current) break;
       chain.unshift(current);
       currentId = assets.folders?.[currentId]?.parentId ?? null;
+    }
+    if (chain.some((folder) => modelFolderIds.has(folder.id))) {
+      chain.unshift(KIND_FOLDERS.find((folder) => folder.kind === "model")!);
     }
     return chain;
   })();

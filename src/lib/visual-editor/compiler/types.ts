@@ -4,7 +4,7 @@ import type { VisualProjectDocument, VisualProjectKind } from "../project-docume
 import type { SceneDocument } from "../scene-document";
 import type { CompilationProvenance } from "../serialization";
 
-export const VISUAL_COMPILER_VERSION = "0.5.2" as const;
+export const VISUAL_COMPILER_VERSION = "0.5.3" as const;
 
 export type VisualCompilerDocuments = {
   project: VisualProjectDocument;
@@ -47,6 +47,12 @@ export type AssetCopyPlanEntry = {
   supportedByCompiler: boolean;
 };
 
+export type RequiredPublicationFileCopy = {
+  purpose: "thumbnail";
+  sourceRelativePath: "public/thumbnail.png";
+  targetRelativePath: "public/thumbnail.png";
+};
+
 export type CompilerStagingPlan = {
   owner: "xrift-studio-compiler";
   /** Passed to `xrift create`; never points at the visual authoring project. */
@@ -54,6 +60,8 @@ export type CompilerStagingPlan = {
   stagingDirectoryName: string;
   overlayFiles: CompilerOverlayFile[];
   assetCopyPlan: AssetCopyPlanEntry[];
+  /** Required XRift publication files are verified separately from user Assets. */
+  requiredPublicationFiles: RequiredPublicationFileCopy[];
 };
 
 export type VisualCompileResult = {

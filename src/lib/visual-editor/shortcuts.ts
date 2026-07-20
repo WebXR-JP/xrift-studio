@@ -18,6 +18,7 @@ export type EditorCommandId =
   | "asset.create-particle"
   | "asset.import"
   | "view.frame-selection"
+  | "view.exit-focus"
   | "transform.translate"
   | "transform.rotate"
   | "transform.scale"
@@ -55,7 +56,7 @@ export const SHORTCUT_STORAGE_KEY =
 export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   {
     id: "project.save",
-    label: "保存",
+    label: "自動保存を今すぐ実行",
     category: "project",
     bindings: [{ key: "s", primary: true }],
   },
@@ -166,9 +167,15 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   },
   {
     id: "view.frame-selection",
-    label: "選択対象へフォーカス",
+    label: "選択対象のフォーカスを切り替え",
     category: "view",
     bindings: [{ key: "f" }],
+  },
+  {
+    id: "view.exit-focus",
+    label: "フォーカスを解除",
+    category: "view",
+    bindings: [{ key: "escape" }],
   },
   {
     id: "transform.translate",

@@ -158,6 +158,20 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
     }
     if (candidate.kind === "material") {
       validateMaterialAsset(candidate, path, value.assets, issues);
+      validateImportedAssetProvenance(
+        candidate.importedFromModel,
+        `${path}.importedFromModel`,
+        "material",
+        issues,
+      );
+    }
+    if (candidate.kind === "texture") {
+      validateImportedAssetProvenance(
+        candidate.importedFromModel,
+        `${path}.importedFromModel`,
+        "texture",
+        issues,
+      );
     }
     if (candidate.kind === "model") {
       issues.push(...validateModelAssetContract(candidate, value.assets, path));
@@ -218,6 +232,46 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
     }
   }
   return issues;
+}
+
+function validateImportedAssetProvenance(
+  value: unknown,
+  path: string,
+  kind: "material" | "texture",
+  issues: DocumentValidationIssue[],
+): void {
+  if (value === undefined) return;
+  if (!isRecord(value)) {
+    issues.push(issue(path, "type", "imported model provenance must be an object"));
+    return;
+  }
+  if (typeof value.modelAssetId !== "string" || !value.modelAssetId.trim()) {
+    issues.push(issue(`${path}.modelAssetId`, "required", "source Model Asset ID is required"));
+  }
+  if (typeof value.sourceHash !== "string" || !/^[a-f0-9]{64}$/.test(value.sourceHash)) {
+    issues.push(issue(`${path}.sourceHash`, "hash", "source Model hash must be SHA-256"));
+  }
+  if (typeof value.isUserOverridden !== "boolean") {
+    issues.push(issue(`${path}.isUserOverridden`, "type", "override state must be boolean"));
+  }
+  if (kind === "material") {
+    if (!Number.isInteger(value.sourceMaterialIndex) || Number(value.sourceMaterialIndex) < 0) {
+      issues.push(issue(`${path}.sourceMaterialIndex`, "range", "source Material index is invalid"));
+    }
+    if (typeof value.sourceMaterialName !== "string" || !value.sourceMaterialName.trim()) {
+      issues.push(issue(`${path}.sourceMaterialName`, "required", "source Material name is required"));
+    }
+    if (typeof value.sourceSlotId !== "string" || !value.sourceSlotId.trim()) {
+      issues.push(issue(`${path}.sourceSlotId`, "required", "source Material slot ID is required"));
+    }
+    return;
+  }
+  if (!Number.isInteger(value.sourceImageIndex) || Number(value.sourceImageIndex) < 0) {
+    issues.push(issue(`${path}.sourceImageIndex`, "range", "source image index is invalid"));
+  }
+  if (!Number.isInteger(value.sourceTextureIndex) || Number(value.sourceTextureIndex) < -1) {
+    issues.push(issue(`${path}.sourceTextureIndex`, "range", "source Texture index is invalid"));
+  }
 }
 
 const SUPPORTED_MATERIAL_EXTENSIONS = new Set([

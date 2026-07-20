@@ -1,7 +1,8 @@
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -234,6 +235,30 @@ struct CompilerOverlayWrite {
 struct CompilerAssetCopy {
     source_relative_path: String,
     target_relative_path: String,
+}
+
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct CompilerRequiredPublicationFileCopy {
+    purpose: String,
+    source_relative_path: String,
+    target_relative_path: String,
+}
+
+#[derive(Serialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct CompilerRequiredPublicationFileVerification {
+    purpose: String,
+    source_relative_path: String,
+    target_relative_path: String,
+    sha256: String,
+}
+
+#[derive(Serialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct CompilerStagingResult {
+    project_path: String,
+    required_publication_files: Vec<CompilerRequiredPublicationFileVerification>,
 }
 
 #[derive(Deserialize)]
@@ -2731,6 +2756,125 @@ fn prepare_compiler_staging(
     })
 }
 
+fn required_thumbnail_copy() -> CompilerRequiredPublicationFileCopy {
+    CompilerRequiredPublicationFileCopy {
+        purpose: "thumbnail".to_string(),
+        source_relative_path: "public/thumbnail.png".to_string(),
+        target_relative_path: "public/thumbnail.png".to_string(),
+    }
+}
+
+fn validate_required_publication_files(
+    copies: &[CompilerRequiredPublicationFileCopy],
+) -> Result<(), String> {
+    if copies != [required_thumbnail_copy()] {
+        return Err(
+            "compiler staging requires exactly public/thumbnail.png as its publication thumbnail"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn sha256_file(path: &Path, label: &str) -> Result<String, String> {
+    let mut file = std::fs::File::open(path)
+        .map_err(|e| format!("{} cannot be opened for SHA-256 verification: {}", label, e))?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|e| format!("{} cannot be read for SHA-256 verification: {}", label, e))?;
+        if read == 0 {
+            break;
+        }
+        digest.update(&buffer[..read]);
+    }
+    Ok(format!("{:x}", digest.finalize()))
+}
+
+fn required_publication_file_paths(
+    authoring_root: &Path,
+    staging_root: &Path,
+    copy: &CompilerRequiredPublicationFileCopy,
+) -> Result<(PathBuf, PathBuf), String> {
+    let source_relative = validate_relative_path(&copy.source_relative_path, false)?;
+    let target_relative = validate_relative_path(&copy.target_relative_path, false)?;
+    ensure_no_symlink_ancestors(authoring_root, &source_relative)?;
+    ensure_no_symlink_ancestors(staging_root, &target_relative)?;
+    Ok((
+        authoring_root.join(source_relative),
+        staging_root.join(target_relative),
+    ))
+}
+
+fn verify_required_publication_file_copy(
+    authoring_root: &Path,
+    staging_root: &Path,
+    copy: &CompilerRequiredPublicationFileCopy,
+) -> Result<CompilerRequiredPublicationFileVerification, String> {
+    let (source, target) =
+        required_publication_file_paths(authoring_root, staging_root, copy)?;
+    for (path, label) in [
+        (&source, "required publication thumbnail source"),
+        (&target, "required publication thumbnail staging target"),
+    ] {
+        let metadata = std::fs::symlink_metadata(path)
+            .map_err(|e| format!("{} cannot be read: {}", label, e))?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() || metadata.len() == 0 {
+            return Err(format!("{} is not a non-empty regular file", label));
+        }
+    }
+
+    let source_sha256 = sha256_file(&source, "required publication thumbnail source")?;
+    let target_sha256 = sha256_file(&target, "required publication thumbnail staging target")?;
+    if source_sha256 != target_sha256 {
+        return Err(
+            "required publication thumbnail SHA-256 does not match after staging".to_string(),
+        );
+    }
+
+    Ok(CompilerRequiredPublicationFileVerification {
+        purpose: copy.purpose.clone(),
+        source_relative_path: copy.source_relative_path.clone(),
+        target_relative_path: copy.target_relative_path.clone(),
+        sha256: source_sha256,
+    })
+}
+
+fn copy_required_publication_file(
+    authoring_root: &Path,
+    staging_root: &Path,
+    copy: &CompilerRequiredPublicationFileCopy,
+) -> Result<CompilerRequiredPublicationFileVerification, String> {
+    let (source, target) =
+        required_publication_file_paths(authoring_root, staging_root, copy)?;
+    let source_metadata = std::fs::symlink_metadata(&source)
+        .map_err(|e| format!("required publication thumbnail source cannot be read: {}", e))?;
+    if source_metadata.file_type().is_symlink()
+        || !source_metadata.is_file()
+        || source_metadata.len() == 0
+    {
+        return Err(
+            "required publication thumbnail source is not a non-empty regular file".to_string(),
+        );
+    }
+    if let Ok(target_metadata) = std::fs::symlink_metadata(&target) {
+        if target_metadata.file_type().is_symlink() || !target_metadata.is_file() {
+            return Err(
+                "required publication thumbnail staging target is not a regular file".to_string(),
+            );
+        }
+    }
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("required publication thumbnail directory cannot be created: {}", e))?;
+    }
+    std::fs::copy(&source, &target)
+        .map_err(|e| format!("required publication thumbnail cannot be copied: {}", e))?;
+    verify_required_publication_file_copy(authoring_root, staging_root, copy)
+}
+
 /// Applies compiler output after `xrift create` has produced the template.
 /// All source files are copied from the visual project through validated,
 /// project-relative paths; arbitrary absolute copy targets are not accepted.
@@ -2741,7 +2885,8 @@ fn apply_compiler_staging(
     directory_name: String,
     overlay_files: Vec<CompilerOverlayWrite>,
     asset_copies: Vec<CompilerAssetCopy>,
-) -> Result<String, String> {
+    required_publication_files: Vec<CompilerRequiredPublicationFileCopy>,
+) -> Result<CompilerStagingResult, String> {
     let _compiler_guard = COMPILER_STAGING_IO_LOCK
         .lock()
         .map_err(|_| "compiler staging I/O lock is unavailable".to_string())?;
@@ -2763,6 +2908,7 @@ fn apply_compiler_staging(
     let manifest_content = std::fs::read_to_string(authoring_root.join(VISUAL_PROJECT_MANIFEST))
         .map_err(|e| format!("visual project manifest cannot be read: {}", e))?;
     let manifest = parse_visual_project_manifest(&manifest_content)?;
+    validate_required_publication_files(&required_publication_files)?;
     let (publication_metadata, persist_recovered_metadata) =
         resolve_authoring_publication_metadata(&app, &authoring_root, &manifest)?;
     if persist_recovered_metadata {
@@ -2809,6 +2955,15 @@ fn apply_compiler_staging(
             .map_err(|e| format!("compiler asset cannot be copied: {}", e))?;
     }
 
+    let mut required_file_verifications = Vec::with_capacity(required_publication_files.len());
+    for copy in &required_publication_files {
+        required_file_verifications.push(copy_required_publication_file(
+            &authoring_root,
+            &resolved_project,
+            copy,
+        )?);
+    }
+
     if let Some(loaded) = publication_metadata.as_ref() {
         write_compiler_publication_metadata(&resolved_project, &manifest.project_kind, loaded)?;
     }
@@ -2816,7 +2971,10 @@ fn apply_compiler_staging(
     // and for crash recovery of a CLI-created publication sidecar.
     write_compiler_staging_owner(&resolved_project, &manifest, publication_metadata.as_ref())?;
 
-    Ok(resolved_project.to_string_lossy().to_string())
+    Ok(CompilerStagingResult {
+        project_path: resolved_project.to_string_lossy().to_string(),
+        required_publication_files: required_file_verifications,
+    })
 }
 
 /// Marks the point after which a remote commit may have happened. If the app
@@ -2880,6 +3038,15 @@ fn mark_compiler_upload_started(
     {
         return Err("publication metadata changed before upload".to_string());
     }
+
+    // Re-check immediately before handing control to the CLI. If the source
+    // thumbnail changed after staging, the compiled output is stale and the
+    // remote upload must not begin.
+    verify_required_publication_file_copy(
+        &authoring_root,
+        &staging_root,
+        &required_thumbnail_copy(),
+    )?;
 
     let started_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -3024,7 +3191,8 @@ fn decode_data_url_bytes(data_url: &str) -> Result<Vec<u8>, String> {
 }
 
 /// Publishes imported sources and derived thumbnails as a single operation.
-/// Import destinations are content-addressed and may never overwrite a file.
+/// Import destinations are content-addressed. An existing byte-identical file
+/// is reused, while a different payload at the same path is never overwritten.
 #[tauri::command]
 fn commit_visual_asset_import(
     project_path: String,
@@ -3032,13 +3200,14 @@ fn commit_visual_asset_import(
     writes: Vec<VisualAssetImportWrite>,
 ) -> Result<(), String> {
     const MAX_IMPORT_BYTES: usize = 128 * 1024 * 1024;
-    const MAX_TRANSACTION_BYTES: usize = 192 * 1024 * 1024;
+    // Model source plus extracted embedded images can approach twice the source size.
+    const MAX_TRANSACTION_BYTES: usize = 320 * 1024 * 1024;
 
     let _guard = VISUAL_ASSET_IMPORT_IO_LOCK
         .lock()
         .map_err(|_| "visual Asset import I/O lock is unavailable".to_string())?;
     let transaction_id = validate_asset_import_transaction_id(&transaction_id)?;
-    if writes.is_empty() || writes.len() > 8 {
+    if writes.is_empty() || writes.len() > 512 {
         return Err("asset import transaction has an invalid write count".to_string());
     }
 
@@ -3069,14 +3238,6 @@ fn commit_visual_asset_import(
         }
         ensure_no_symlink_ancestors(&project_root, &relative)?;
         let target = project_root.join(&relative);
-        if target.exists() {
-            let _ = std::fs::remove_dir_all(&transaction_root);
-            return Err(format!(
-                "asset import target already exists: {}",
-                write.relative_path
-            ));
-        }
-
         let bytes = decode_data_url_bytes(&write.data_url)?;
         if bytes.is_empty() || bytes.len() > MAX_IMPORT_BYTES {
             let _ = std::fs::remove_dir_all(&transaction_root);
@@ -3087,6 +3248,29 @@ fn commit_visual_asset_import(
             let _ = std::fs::remove_dir_all(&transaction_root);
             return Err("asset import transaction is too large".to_string());
         }
+
+        if let Ok(metadata) = std::fs::symlink_metadata(&target) {
+            if metadata.file_type().is_symlink() || !metadata.is_file() {
+                let _ = std::fs::remove_dir_all(&transaction_root);
+                return Err(format!(
+                    "asset import target is not a regular file: {}",
+                    write.relative_path
+                ));
+            }
+            let existing = std::fs::read(&target).map_err(|error| {
+                let _ = std::fs::remove_dir_all(&transaction_root);
+                format!("asset import target cannot be verified: {}", error)
+            })?;
+            if existing == bytes {
+                continue;
+            }
+            let _ = std::fs::remove_dir_all(&transaction_root);
+            return Err(format!(
+                "asset import target has different content: {}",
+                write.relative_path
+            ));
+        }
+
         let staged_path = transaction_root.join(format!("{:02}.asset", index));
         if let Err(error) = write_file_synced(&staged_path, &bytes) {
             let _ = std::fs::remove_dir_all(&transaction_root);
@@ -3660,5 +3844,60 @@ mod tests {
             !is_managed_publication_metadata_path(".xrift-studio/owner.json")
                 .expect("ordinary compiler metadata path must validate")
         );
+    }
+
+    #[test]
+    fn reuses_only_byte_identical_asset_import_targets() {
+        use base64::Engine;
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("test clock must be available")
+            .as_nanos();
+        let project_root = std::env::temp_dir().join(format!(
+            "xrift-studio-asset-import-{}-{}",
+            std::process::id(),
+            unique
+        ));
+        let relative_path = "assets/imported/models/aaaaaaaaaaaaaaaa/Avocado.glb";
+        let target = project_root.join(relative_path);
+        std::fs::create_dir_all(target.parent().expect("target parent must exist"))
+            .expect("fixture directory must be created");
+        std::fs::write(&target, [1_u8, 2, 3]).expect("fixture source must be written");
+        let project_path = project_root.to_string_lossy().to_string();
+        let data_url = |bytes: &[u8]| {
+            format!(
+                "data:model/gltf-binary;base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(bytes)
+            )
+        };
+
+        let reused = commit_visual_asset_import(
+            project_path.clone(),
+            "asset-import-identical-fixture".to_string(),
+            vec![VisualAssetImportWrite {
+                relative_path: relative_path.to_string(),
+                data_url: data_url(&[1, 2, 3]),
+            }],
+        );
+        assert!(reused.is_ok(), "byte-identical target must be reusable");
+
+        let rejected = commit_visual_asset_import(
+            project_path,
+            "asset-import-different-fixture".to_string(),
+            vec![VisualAssetImportWrite {
+                relative_path: relative_path.to_string(),
+                data_url: data_url(&[4, 5, 6]),
+            }],
+        );
+        assert!(rejected
+            .expect_err("different content must be rejected")
+            .contains("different content"));
+        assert_eq!(
+            std::fs::read(&target).expect("fixture source must remain readable"),
+            vec![1_u8, 2, 3]
+        );
+
+        std::fs::remove_dir_all(&project_root).expect("fixture directory must be removed");
     }
 }

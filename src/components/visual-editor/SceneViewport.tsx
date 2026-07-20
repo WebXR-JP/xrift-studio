@@ -17,14 +17,18 @@ import {
 import {
   AdditiveBlending,
   BackSide,
+  Box3,
   Color,
   DoubleSide,
   EquirectangularReflectionMapping,
   Euler,
+  MathUtils,
   Plane,
   PerspectiveCamera,
+  Quaternion,
   Raycaster,
   SRGBColorSpace,
+  Sphere,
   TextureLoader,
   Vector2,
   Vector3,
@@ -101,6 +105,19 @@ const PLAY_KEYS = new Set([
 const EDIT_CAMERA_TARGET: [number, number, number] = [0, 0.7, 0];
 const EDITOR_SELECTION_COLOR = "#cbd5e1";
 const MUTED_GIZMO_COLOR = new Color("#64748b");
+
+export type SceneFocusState = {
+  entityId: string;
+  entityName: string;
+};
+
+type EditCameraSnapshot = {
+  position: Vector3;
+  quaternion: Quaternion;
+  target: Vector3;
+  up: Vector3;
+  zoom: number;
+};
 
 type TransformGizmoMaterial = {
   color: Color;
@@ -1601,29 +1618,81 @@ function SceneEntityHierarchy({
   );
 }
 
+function findSceneEntityObject(
+  scene: Object3D,
+  entityId: string,
+): Object3D | null {
+  let result: Object3D | null = null;
+  scene.traverse((object) => {
+    if (
+      !result &&
+      object.userData.authoringEntityId === entityId &&
+      object.userData.renderedEntityId === entityId
+    ) {
+      result = object;
+    }
+  });
+  return result;
+}
+
 function CameraControls({
   editorMode,
   projectKind,
   transformDragging,
   frameSelectionRequest,
+  exitFocusRequest,
+  frameEntityId,
+  frameEntityName,
   frameTarget,
+  onFocusChange,
 }: {
   editorMode: EditorMode;
   projectKind: VisualProjectKind;
   transformDragging: boolean;
   frameSelectionRequest: number;
+  exitFocusRequest: number;
+  frameEntityId: string | null;
+  frameEntityName: string | null;
   frameTarget?: Vec3;
+  onFocusChange: (focus: SceneFocusState | null) => void;
 }) {
   const camera = useThree((state) => state.camera);
+  const threeScene = useThree((state) => state.scene);
   const controlsRef = useRef<ElementRef<typeof OrbitControls>>(null!);
   const previousMode = useRef<EditorMode>(editorMode);
   const savedEditPosition = useRef(new Vector3(7, 5, 7));
   const savedEditTarget = useRef(new Vector3(...EDIT_CAMERA_TARGET));
+  const focusSnapshotRef = useRef<EditCameraSnapshot | null>(null);
+  const focusedEntityIdRef = useRef<string | null>(null);
+  const handledFrameRequestRef = useRef(frameSelectionRequest);
+
+  const restoreFocusSnapshot = useCallback(() => {
+    const controls = controlsRef.current;
+    const snapshot = focusSnapshotRef.current;
+    if (!controls || !snapshot) {
+      focusSnapshotRef.current = null;
+      focusedEntityIdRef.current = null;
+      onFocusChange(null);
+      return false;
+    }
+    camera.position.copy(snapshot.position);
+    camera.quaternion.copy(snapshot.quaternion);
+    camera.up.copy(snapshot.up);
+    camera.zoom = snapshot.zoom;
+    controls.target.copy(snapshot.target);
+    controls.update();
+    camera.updateProjectionMatrix();
+    focusSnapshotRef.current = null;
+    focusedEntityIdRef.current = null;
+    onFocusChange(null);
+    return true;
+  }, [camera, onFocusChange]);
 
   useLayoutEffect(() => {
     const previous = previousMode.current;
     const controls = controlsRef.current;
     if (previous === "edit" && editorMode === "play") {
+      restoreFocusSnapshot();
       savedEditPosition.current.copy(camera.position);
       if (controls) savedEditTarget.current.copy(controls.target);
     } else if (previous === "play" && editorMode === "edit") {
@@ -1637,26 +1706,98 @@ function CameraControls({
       camera.updateProjectionMatrix();
     }
     previousMode.current = editorMode;
-  }, [camera, editorMode]);
+  }, [camera, editorMode, restoreFocusSnapshot]);
 
   useLayoutEffect(() => {
     const controls = controlsRef.current;
+    if (frameSelectionRequest === 0) {
+      handledFrameRequestRef.current = 0;
+      return;
+    }
     if (
+      handledFrameRequestRef.current === frameSelectionRequest ||
       editorMode !== "edit" ||
       !controls ||
-      !frameTarget ||
-      frameSelectionRequest === 0
+      !frameEntityId
     ) {
       return;
     }
-    const target = new Vector3(...frameTarget);
+    handledFrameRequestRef.current = frameSelectionRequest;
+
+    if (focusedEntityIdRef.current === frameEntityId) {
+      restoreFocusSnapshot();
+      return;
+    }
+
+    if (!focusSnapshotRef.current) {
+      focusSnapshotRef.current = {
+        position: camera.position.clone(),
+        quaternion: camera.quaternion.clone(),
+        target: controls.target.clone(),
+        up: camera.up.clone(),
+        zoom: camera.zoom,
+      };
+    }
+
+    const selectedObject = findSceneEntityObject(threeScene, frameEntityId);
+
+    const target = new Vector3();
+    let radius = 0;
+    if (selectedObject) {
+      selectedObject.updateWorldMatrix(true, true);
+      const bounds = new Box3().setFromObject(selectedObject);
+      if (!bounds.isEmpty()) {
+        const sphere = bounds.getBoundingSphere(new Sphere());
+        target.copy(sphere.center);
+        radius = sphere.radius;
+      } else {
+        selectedObject.getWorldPosition(target);
+      }
+    } else if (frameTarget) {
+      target.fromArray(frameTarget);
+    } else {
+      target.copy(controls.target);
+    }
+
     const offset = camera.position.clone().sub(controls.target);
     if (offset.lengthSq() < 0.01) offset.set(4, 3, 4);
-    offset.setLength(Math.max(2.5, Math.min(8, offset.length())));
+    let distance = Math.max(2.5, Math.min(8, offset.length()));
+    if (camera instanceof PerspectiveCamera && radius > 0.001) {
+      const verticalFov = MathUtils.degToRad(camera.fov);
+      const horizontalFov = 2 * Math.atan(
+        Math.tan(verticalFov / 2) * camera.aspect,
+      );
+      const limitingFov = Math.max(
+        Math.min(verticalFov, horizontalFov),
+        MathUtils.degToRad(1),
+      );
+      distance = Math.max(2.5, radius / Math.sin(limitingFov / 2) * 1.15);
+    }
+    offset.setLength(Math.min(distance, camera.far * 0.8));
     controls.target.copy(target);
     camera.position.copy(target.clone().add(offset));
     controls.update();
-  }, [camera, editorMode, frameSelectionRequest, frameTarget]);
+    focusedEntityIdRef.current = frameEntityId;
+    onFocusChange({
+      entityId: frameEntityId,
+      entityName: frameEntityName ?? frameEntityId,
+    });
+  }, [
+    camera,
+    editorMode,
+    frameEntityId,
+    frameEntityName,
+    frameSelectionRequest,
+    frameTarget,
+    onFocusChange,
+    restoreFocusSnapshot,
+    threeScene,
+  ]);
+
+  useLayoutEffect(() => {
+    if (exitFocusRequest === 0) return;
+    restoreFocusSnapshot();
+  }, [exitFocusRequest, restoreFocusSnapshot]);
 
   const enabled =
     editorMode === "edit"
@@ -1670,7 +1811,7 @@ function CameraControls({
       enabled={enabled}
       target={EDIT_CAMERA_TARGET}
       minDistance={2}
-      maxDistance={30}
+      maxDistance={Math.max(30, camera.far * 0.8)}
       maxPolarAngle={Math.PI / 2 - 0.03}
       enableDamping
       dampingFactor={0.08}
@@ -1985,6 +2126,10 @@ export function SceneViewport({
   onDropSceneAsset,
   onCreatePrimitive,
   frameSelectionRequest,
+  exitFocusRequest,
+  focusedEntity,
+  onFocusChange,
+  onExitFocus,
   onViewportFileDrop,
   onPlayDropAttempt,
   onDropRejected,
@@ -2012,6 +2157,10 @@ export function SceneViewport({
   onDropSceneAsset: (assetId: string, position: Vec3) => void;
   onCreatePrimitive: (creationId: string) => void;
   frameSelectionRequest: number;
+  exitFocusRequest: number;
+  focusedEntity: SceneFocusState | null;
+  onFocusChange: (focus: SceneFocusState | null) => void;
+  onExitFocus: () => void;
   onViewportFileDrop: () => void;
   onPlayDropAttempt: () => void;
   onDropRejected: (message: string) => void;
@@ -2466,7 +2615,15 @@ export function SceneViewport({
             projectKind={projectKind}
             transformDragging={transformDragging}
             frameSelectionRequest={frameSelectionRequest}
+            exitFocusRequest={exitFocusRequest}
+            frameEntityId={selectedEntityId}
+            frameEntityName={
+              selectedEntityId
+                ? scene.entities[selectedEntityId]?.name ?? null
+                : null
+            }
             frameTarget={selectedTransform?.position}
+            onFocusChange={onFocusChange}
           />
           {editorMode === "play" && projectKind === "world" ? (
             <WorldPlayController
@@ -2504,6 +2661,38 @@ export function SceneViewport({
         {modelProxyVisible ? (
           <div className="pointer-events-none absolute right-2.5 top-2.5 z-10 rounded border border-amber-700/60 bg-amber-950/75 px-2 py-1 text-xs text-amber-200">
             Model proxy preview
+          </div>
+        ) : null}
+
+        {focusedEntity ? (
+          <div
+            className="absolute bottom-2.5 right-2.5 z-20 flex max-w-[min(20rem,70%)] items-center gap-3 rounded-md border border-violet-400/60 bg-zinc-950/92 px-3 py-2 text-zinc-100 shadow-lg backdrop-blur"
+            role="group"
+            aria-label="Entityフォーカス"
+          >
+            <div className="min-w-0">
+              <p
+                className="truncate text-xs font-semibold"
+                role="status"
+                aria-live="polite"
+              >
+                フォーカス中: {scene.entities[focusedEntity.entityId]?.name ?? focusedEntity.entityName}
+              </p>
+              <p className="mt-0.5 text-[11px] text-zinc-400">
+                {selection?.kind === "entity" &&
+                selection.id !== focusedEntity.entityId
+                  ? "Fで選択対象へ切替 / Escapeで解除"
+                  : "FキーまたはEscapeで解除"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onExitFocus}
+              title="フォーカスを解除 (Escape)"
+              className="shrink-0 rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs font-semibold text-zinc-100 hover:border-zinc-400 hover:bg-zinc-700"
+            >
+              解除
+            </button>
           </div>
         ) : null}
 
