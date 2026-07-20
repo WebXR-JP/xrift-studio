@@ -1399,11 +1399,11 @@ export function InspectorPanel({
   const InspectorIcon = sceneSettingsOpen ? EDITOR_ICONS.settings : EntityIcon;
 
   return (
-    <aside className="row-span-2 flex min-h-0 flex-col border-l border-zinc-200 bg-zinc-50" aria-labelledby="inspector-heading">
-      <div className="flex h-10 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-3">
+    <aside className="row-span-2 flex min-h-0 flex-col border-l border-editor-border bg-editor-canvas" aria-labelledby="inspector-heading">
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-editor-border bg-editor-surface px-3">
         <div className="flex items-center gap-2">
-          <InspectorIcon size={14} className="text-zinc-500" aria-hidden="true" />
-          <h2 id="inspector-heading" className="text-[13px] font-semibold text-zinc-800">
+          <InspectorIcon size={14} className="text-editor-muted" aria-hidden="true" />
+          <h2 id="inspector-heading" className="text-[13px] font-semibold text-editor-text">
             {sceneSettingsOpen
               ? "Scene Inspector"
               : asset

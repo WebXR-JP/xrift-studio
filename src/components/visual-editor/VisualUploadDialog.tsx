@@ -174,7 +174,7 @@ export function VisualUploadDialog({
       label: "XRiftアカウント",
       detail: review.signedIn
         ? review.displayName || "ログイン済み"
-        : "アップロード前にログインしてください",
+        : "公開前にログインしてください",
       ready: review.signedIn,
       action: onLogin,
       actionLabel: "ログイン",
@@ -191,19 +191,19 @@ export function VisualUploadDialog({
     },
     {
       id: "documents",
-      label: "保存と変換",
+      label: "公開データ",
       detail:
         review.saved && review.compilationFresh
-          ? "保存済み・変換結果は最新"
-          : "開始時に保存し、最新データから再変換します",
+          ? "最新の編集内容を使用できます"
+          : "公開時に最新の編集内容を自動で保存・変換します",
       ready: true,
     },
     {
       id: "diagnostics",
-      label: "変換診断",
+      label: "公開チェック",
       detail:
         blockingDiagnostics.length === 0
-          ? "アップロードを止める問題はありません"
+          ? "公開を止める問題はありません"
           : `${blockingDiagnostics.length}件の問題を修正してください`,
       ready: blockingDiagnostics.length === 0,
     },
@@ -278,7 +278,7 @@ export function VisualUploadDialog({
       const aborted = controller.signal.aborted;
       setError(
         aborted
-          ? "アップロード開始前の処理を取り消しました。制作データは保持されています。"
+          ? "公開処理を始める前に取り消しました。制作データは保持されています。"
           : publishError instanceof Error
             ? publishError.message
             : String(publishError),
@@ -314,22 +314,22 @@ export function VisualUploadDialog({
             <div className="flex items-center gap-2 text-violet-700">
               <UploadCloud size={18} aria-hidden="true" />
               <span className="text-xs font-semibold uppercase tracking-wide">
-                XRift Upload
+                XRift Publish
               </span>
             </div>
             <h2 id="visual-upload-title" className="mt-1 text-xl font-semibold text-slate-950">
-              {projectLabel}をアップロード
+              {projectLabel}を公開
             </h2>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              保存、XRift向け変換、検査、アップロードをこの画面で続けて実行します。
+              最新の編集内容を保存・変換し、公開前の確認からXRiftへの送信まで進めます。
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            aria-label="アップロード画面を閉じる"
-            title={busy ? "処理が完了するまで閉じられません" : "アップロード画面を閉じる"}
+            aria-label="公開画面を閉じる"
+            title={busy ? "処理が完了するまで閉じられません" : "公開画面を閉じる"}
             className="rounded-md p-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <X size={17} aria-hidden="true" />
@@ -480,7 +480,7 @@ export function VisualUploadDialog({
                 <Check size={28} strokeWidth={2.5} aria-hidden="true" />
               </span>
               <h3 className="mt-5 text-xl font-semibold text-slate-950">
-                アップロードが完了しました
+                XRiftへの送信が完了しました
               </h3>
               <p className="mt-2 text-sm text-slate-500">
                 XRiftから返された結果をこのプロジェクトに保持します。
@@ -517,7 +517,7 @@ export function VisualUploadDialog({
                 <RotateCcw size={27} aria-hidden="true" />
               </span>
               <h3 className="mt-5 text-lg font-semibold text-slate-950">
-                アップロード準備を取り消しました
+                公開準備を取り消しました
               </h3>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
                 {error || "制作データと保存済みの内容は保持されています。"}
@@ -529,7 +529,7 @@ export function VisualUploadDialog({
                 <AlertCircle size={27} aria-hidden="true" />
               </span>
               <h3 className="mt-5 text-lg font-semibold text-slate-950">
-                アップロードを完了できませんでした
+                XRiftへ送信できませんでした
               </h3>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
                 {error || "処理を再実行するか、Editorへ戻って診断を確認してください。"}
@@ -565,10 +565,10 @@ export function VisualUploadDialog({
             {review.signedIn ? <LogIn size={13} aria-hidden="true" /> : null}
             {stage === "review"
               ? ready
-                ? "公開準備が整っています"
+                ? "公開前の確認が完了しました"
                 : "未完了の項目を修正してください"
               : stage === "succeeded"
-                ? "XRiftからアップロード結果を受信しました"
+                ? "XRiftから公開結果を受信しました"
                 : stage === "cancelled"
                   ? "制作データは保持されています"
                   : stage === "failed"
@@ -630,7 +630,7 @@ export function VisualUploadDialog({
                   className="flex items-center gap-1.5 rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <UploadCloud size={15} aria-hidden="true" />
-                  保存してアップロード
+                  XRiftへ公開
                 </button>
               </>
             )}

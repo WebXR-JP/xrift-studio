@@ -2563,7 +2563,7 @@ export function SceneViewport({
             className={`pointer-events-auto flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition-colors disabled:cursor-wait disabled:opacity-45 ${
               editorMode === "play"
                 ? "border-rose-400/70 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25"
-                : "border-violet-400/70 bg-violet-500/15 text-violet-100 hover:bg-violet-500/25"
+                : "border-brand-400/70 bg-brand-500/15 text-brand-100 hover:bg-brand-500/25"
             }`}
           >
             <PlayIcon size={13} aria-hidden="true" />

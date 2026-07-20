@@ -30,12 +30,12 @@
 
   /* Visual editor surfaces use semantic tokens so panels do not each invent
      their own slate/brand hierarchy. */
-  --color-editor-canvas: #f1f5f9;
+  --color-editor-canvas: #f4f4f5;
   --color-editor-surface: #ffffff;
-  --color-editor-subtle: #f8fafc;
-  --color-editor-border: #e2e8f0;
-  --color-editor-text: #1e293b;
-  --color-editor-muted: #64748b;
+  --color-editor-subtle: #fafafa;
+  --color-editor-border: #e4e4e7;
+  --color-editor-text: #27272a;
+  --color-editor-muted: #71717a;
 
   --animate-fade-in: fade-in 0.45s cubic-bezier(0.22, 1, 0.36, 1);
   --animate-slide-up: slide-up 0.4s cubic-bezier(0.22, 1, 0.36, 1);

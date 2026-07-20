@@ -2939,25 +2939,25 @@ export function VisualEditorPrototype({
           : EDITOR_ICONS.save;
 
   return (
-    <div className="h-screen overflow-auto bg-zinc-100">
-      <div className="flex h-full min-h-[640px] min-w-[1024px] flex-col bg-zinc-50 text-zinc-950">
-        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-zinc-200 bg-white px-3">
+    <div className="h-screen overflow-auto bg-editor-canvas">
+      <div className="flex h-full min-h-[640px] min-w-[1024px] flex-col bg-editor-canvas text-editor-text">
+        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-editor-border bg-editor-surface px-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <button
               type="button"
               disabled={leaving}
               onClick={() => void handleBack()}
               title={commandTitle("プロジェクト一覧へ戻る", "CloseVisualEditor")}
-              className="flex shrink-0 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-wait disabled:opacity-50"
+              className="flex shrink-0 items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-2.5 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-wait disabled:opacity-50"
             >
               <BackIcon size={13} aria-hidden="true" />
               {leaving ? "保存して戻っています" : "ライブラリ"}
             </button>
-            <div className="min-w-0 border-l border-zinc-200 pl-2.5">
-              <p className="truncate text-sm font-semibold text-zinc-950">
+            <div className="min-w-0 border-l border-editor-border pl-2.5">
+              <p className="truncate text-sm font-semibold text-editor-text">
                 {bundle.project.metadata.title}
               </p>
-              <p className="flex items-center gap-1 text-xs text-zinc-500">
+              <p className="flex items-center gap-1 text-xs text-editor-muted">
                 <KindIcon size={11} aria-hidden="true" />
                 {kindLabel} · ビジュアル編集
               </p>
@@ -2967,7 +2967,7 @@ export function VisualEditorPrototype({
           <div className="flex shrink-0 items-center gap-2">
             <span
               className={`flex items-center gap-1.5 text-xs font-medium ${
-                saveStatus === "error" ? "text-rose-700" : "text-zinc-500"
+                saveStatus === "error" ? "text-rose-700" : "text-editor-muted"
               }`}
               title={saveStatusTitle}
               role="status"
@@ -2991,7 +2991,7 @@ export function VisualEditorPrototype({
                 再試行
               </button>
             ) : null}
-            <span className="h-5 w-px bg-zinc-200" aria-hidden="true" />
+            <span className="h-5 w-px bg-editor-border" aria-hidden="true" />
             <button
               type="button"
               onClick={() => executeCommand("project.publish")}
@@ -3002,7 +3002,7 @@ export function VisualEditorPrototype({
                 "project.publish",
                 shortcutLabel("project.publish"),
               )}
-              className="flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-violet-200/60 hover:bg-violet-700"
+              className="flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-brand-200/60 hover:bg-brand-700"
             >
               <UploadIcon size={13} aria-hidden="true" />
               XRiftへ公開
@@ -3010,7 +3010,7 @@ export function VisualEditorPrototype({
           </div>
         </header>
 
-        <div className="flex h-10 shrink-0 items-center border-b border-zinc-200 bg-white px-2.5" role="toolbar" aria-label="ビジュアルエディターのツール">
+        <div className="flex h-10 shrink-0 items-center border-b border-editor-border bg-editor-surface px-2.5" role="toolbar" aria-label="ビジュアルエディターのツール">
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -3018,7 +3018,7 @@ export function VisualEditorPrototype({
               onClick={() => executeCommand("edit.undo")}
               aria-label="元に戻す"
               title={commandTitle("元に戻す", "edit.undo", shortcutLabel("edit.undo"))}
-              className="flex h-7 items-center gap-1 rounded border border-zinc-200 bg-white px-1.5 text-xs text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-7 items-center gap-1 rounded border border-editor-border bg-editor-surface px-1.5 text-xs text-editor-muted hover:bg-editor-subtle hover:text-editor-text disabled:cursor-not-allowed disabled:opacity-40"
             >
               <EDITOR_ICONS.undo size={13} aria-hidden="true" />
             </button>
@@ -3028,7 +3028,7 @@ export function VisualEditorPrototype({
               onClick={() => executeCommand("edit.redo")}
               aria-label="やり直す"
               title={commandTitle("やり直す", "edit.redo", shortcutLabel("edit.redo"))}
-              className="flex h-7 items-center gap-1 rounded border border-zinc-200 bg-white px-1.5 text-xs text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-7 items-center gap-1 rounded border border-editor-border bg-editor-surface px-1.5 text-xs text-editor-muted hover:bg-editor-subtle hover:text-editor-text disabled:cursor-not-allowed disabled:opacity-40"
             >
               <EDITOR_ICONS.redo size={13} aria-hidden="true" />
             </button>
@@ -3040,7 +3040,7 @@ export function VisualEditorPrototype({
                 aria-expanded={createMenuOpen}
                 onClick={() => setCreateMenuOpen((open) => !open)}
                 title={commandTitle("シーンオブジェクトを作成", "OpenCreateMenu", "Ctrl+Shift+A")}
-                className="flex h-7 items-center gap-1.5 rounded border border-zinc-200 bg-white px-2 text-xs font-semibold text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-45"
+                className="flex h-7 items-center gap-1.5 rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <CreateIcon size={13} aria-hidden="true" />
                 追加

@@ -37,10 +37,10 @@ function UtilityButton({
       aria-expanded={expanded}
       title={label}
       onClick={onClick}
-      className={`flex size-9 items-center justify-center rounded-md border shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
+      className={`flex size-8 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
         active
-          ? "border-violet-500 bg-violet-600 text-white"
-          : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100 hover:text-slate-900"
+          ? "bg-brand-600 text-white"
+          : "text-editor-muted hover:bg-editor-subtle hover:text-editor-text"
       }`}
     >
       <Icon size={17} strokeWidth={1.8} aria-hidden="true" />
@@ -98,7 +98,7 @@ export function EditorUtilityRail({
     <nav
       ref={railRef}
       aria-label="エディターのヘルプと設定"
-      className="absolute bottom-3 left-3 z-50 flex flex-col gap-1.5 rounded-lg border border-slate-300/90 bg-slate-100/95 p-1.5 shadow-md backdrop-blur"
+      className="absolute bottom-3 left-3 z-50 flex gap-0.5 rounded-lg border border-editor-border bg-editor-surface/95 p-1 shadow-sm backdrop-blur"
     >
       <UtilityButton
         label="ショートカットキー一覧"
@@ -128,7 +128,7 @@ export function EditorUtilityRail({
         <section
           role="dialog"
           aria-labelledby={`editor-${openPanel}-heading`}
-          className="absolute bottom-0 left-[calc(100%+0.5rem)] w-80 overflow-hidden rounded-lg border border-slate-300 bg-white text-slate-800 shadow-xl"
+          className="absolute bottom-[calc(100%+0.5rem)] left-0 w-80 overflow-hidden rounded-lg border border-editor-border bg-editor-surface text-editor-text shadow-xl"
         >
           <div className="flex h-11 items-center justify-between border-b border-slate-200 px-3.5">
             <h2
@@ -181,7 +181,7 @@ export function EditorUtilityRail({
               <ol className="space-y-2.5">
                 <li>
                   <span className="font-semibold text-slate-800">1. 作る</span>
-                  <p>上の「Create」から、EntityやPrimitiveをシーンへ追加します。</p>
+                  <p>上の「追加」から、EntityやPrimitiveをシーンへ加えます。</p>
                 </li>
                 <li>
                   <span className="font-semibold text-slate-800">2. 選ぶ</span>

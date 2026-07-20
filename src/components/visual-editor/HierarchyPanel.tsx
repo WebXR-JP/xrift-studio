@@ -468,15 +468,15 @@ export function HierarchyPanel({
   return (
     <aside
       ref={panelRef}
-      className="relative row-span-2 flex min-h-0 flex-col border-r border-zinc-200 bg-zinc-50"
+      className="relative row-span-2 flex min-h-0 flex-col border-r border-editor-border bg-editor-canvas"
       aria-labelledby="hierarchy-heading"
       onContextMenu={openContextMenu}
       onPointerDown={() => contextMenu && setContextMenu(null)}
     >
-      <div className="flex h-10 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-3">
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-editor-border bg-editor-surface px-3">
         <h2
           id="hierarchy-heading"
-          className="text-[13px] font-semibold text-zinc-800"
+          className="text-[13px] font-semibold text-editor-text"
         >
           Hierarchy
         </h2>
@@ -493,13 +493,13 @@ export function HierarchyPanel({
                   ? "Playを停止するとEntityを削除できます"
                   : commandTitle("選択中のEntityを削除", "edit.delete")
               }
-              className="flex h-7 items-center gap-1 rounded border border-zinc-200 bg-white px-2 text-xs font-semibold text-zinc-700 transition-colors hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-45"
+              className="flex h-7 items-center gap-1 rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-muted transition-colors hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <EDITOR_ICONS.delete size={12} aria-hidden="true" />
               削除
             </button>
           ) : null}
-          <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs tabular-nums text-zinc-500">
+          <span className="rounded bg-editor-subtle px-1.5 py-0.5 text-xs tabular-nums text-editor-muted">
             {rows.length}
           </span>
         </div>
