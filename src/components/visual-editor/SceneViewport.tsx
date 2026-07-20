@@ -23,6 +23,7 @@ import {
   EquirectangularReflectionMapping,
   Euler,
   MathUtils,
+  OrthographicCamera,
   Plane,
   PerspectiveCamera,
   Quaternion,
@@ -105,6 +106,8 @@ const PLAY_KEYS = new Set([
 const EDIT_CAMERA_TARGET: [number, number, number] = [0, 0.7, 0];
 const EDITOR_SELECTION_COLOR = "#cbd5e1";
 const MUTED_GIZMO_COLOR = new Color("#64748b");
+
+type ViewProjection = "perspective" | "orthographic";
 
 export type SceneFocusState = {
   entityId: string;
@@ -2098,10 +2101,13 @@ function EditorCameraSettings({
 }) {
   const camera = useThree((state) => state.camera);
   useEffect(() => {
-    if (!(camera instanceof PerspectiveCamera)) return;
     camera.near = settings.near;
     camera.far = settings.far;
-    camera.fov = settings.fov;
+    if (camera instanceof PerspectiveCamera) {
+      camera.fov = settings.fov;
+    } else if (camera instanceof OrthographicCamera) {
+      camera.zoom = 70;
+    }
     camera.updateProjectionMatrix();
   }, [camera, settings.far, settings.fov, settings.near]);
   return null;
@@ -2117,6 +2123,8 @@ export function SceneViewport({
   editorMode,
   transformMode,
   transformSpace,
+  onTransformModeChange,
+  onToggleTransformSpace,
   notice,
   onSelect,
   onTransformCommit,
@@ -2144,6 +2152,8 @@ export function SceneViewport({
   editorMode: EditorMode;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
+  onTransformModeChange: (mode: TransformMode) => void;
+  onToggleTransformSpace: () => void;
   notice: string | null;
   onSelect: (selection: EditorSelection) => void;
   onTransformCommit: (entityId: string, patch: TransformPatch) => void;
@@ -2174,6 +2184,7 @@ export function SceneViewport({
   const [dragOverLabel, setDragOverLabel] = useState<string | null>(null);
   const [materialDropTarget, setMaterialDropTarget] =
     useState<MaterialDropTarget | null>(null);
+  const [projection, setProjection] = useState<ViewProjection>("perspective");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [transformDragging, setTransformDragging] = useState(false);
   const transformDraggingRef = useRef(false);
@@ -2209,6 +2220,10 @@ export function SceneViewport({
   const selectedTransform = selectedEntityId
     ? getTransform(scene, selectedEntityId)
     : undefined;
+
+  useEffect(() => {
+    if (editorMode === "play") setProjection("perspective");
+  }, [editorMode]);
 
   useEffect(() => {
     pressedKeysRef.current.clear();
@@ -2483,21 +2498,67 @@ export function SceneViewport({
       className="relative flex min-h-0 flex-col overflow-hidden bg-zinc-950"
       aria-labelledby="scene-view-heading"
     >
-      <div className="flex h-9 shrink-0 items-center justify-between border-b border-zinc-700 bg-zinc-900 px-3">
-        <div className="flex items-center gap-2">
+      <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-zinc-700 bg-zinc-900 px-2.5">
+        <div className="flex min-w-0 items-center gap-2">
           <h2
             id="scene-view-heading"
             className="text-[12px] font-semibold text-zinc-100"
           >
             Scene View
           </h2>
-          <span className="rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-xs font-medium text-zinc-300">
-            Perspective
+        </div>
+        <div className="flex min-w-0 items-center gap-1.5" role="toolbar" aria-label="Scene Viewの操作">
+          {(["translate", "rotate", "scale"] as const).map((mode) => {
+            const Icon = EDITOR_ICONS[mode === "translate" ? "move" : mode];
+            const label = mode === "translate" ? "移動" : mode === "rotate" ? "回転" : "拡縮";
+            return (
+              <button
+                key={mode}
+                type="button"
+                aria-label={label}
+                aria-pressed={transformMode === mode}
+                disabled={editorMode !== "edit"}
+                onClick={() => onTransformModeChange(mode)}
+                title={commandTitle(`${label}ギズモ`, `transform.${mode}`)}
+                className={`flex size-7 items-center justify-center rounded border text-zinc-300 transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
+                  transformMode === mode
+                    ? "border-violet-400 bg-violet-500/80 text-white"
+                    : "border-zinc-700 bg-zinc-800 hover:border-zinc-500 hover:bg-zinc-700"
+                }`}
+              >
+                <Icon size={14} aria-hidden="true" />
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            aria-label={`${transformSpace === "world" ? "World" : "Local"}座標。クリックで切り替え`}
+            disabled={editorMode !== "edit"}
+            onClick={onToggleTransformSpace}
+            title={commandTitle("ギズモ座標系を切り替える", "transform.toggle-space")}
+            className="flex size-7 items-center justify-center rounded border border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            {transformSpace === "world" ? (
+              <EDITOR_ICONS.world size={14} aria-hidden="true" />
+            ) : (
+              <EDITOR_ICONS.axis size={14} aria-hidden="true" />
+            )}
+          </button>
+          <select
+            value={projection}
+            disabled={editorMode !== "edit"}
+            onChange={(event) => setProjection(event.currentTarget.value as ViewProjection)}
+            aria-label="カメラ投影方式"
+            title="Perspective / Ortho"
+            className="h-7 rounded border border-zinc-700 bg-zinc-800 px-1.5 text-[11px] font-medium text-zinc-300 outline-none hover:border-zinc-500 focus:border-violet-400 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="perspective">Perspective</option>
+            <option value="orthographic">Ortho</option>
+          </select>
+          <span className="hidden truncate text-xs text-zinc-400 xl:inline">
+            {editorMode === "edit" ? "編集" : profileLabel}
           </span>
         </div>
-        <span className="text-xs text-zinc-400">
-          {editorMode === "edit" ? "編集モード" : profileLabel}
-        </span>
       </div>
 
       <div
@@ -2525,11 +2586,15 @@ export function SceneViewport({
         onContextMenu={openContextMenu}
       >
         <Canvas
+          key={projection}
+          orthographic={projection === "orthographic"}
           shadows="basic"
           dpr={[1, 1.5]}
           camera={{
             position: [7, 5, 7],
-            fov: sceneSettings.camera.fov,
+            ...(projection === "orthographic"
+              ? { zoom: 70 }
+              : { fov: sceneSettings.camera.fov }),
             near: sceneSettings.camera.near,
             far: sceneSettings.camera.far,
           }}
@@ -2648,15 +2713,11 @@ export function SceneViewport({
           </div>
         ) : null}
 
-        <div className="pointer-events-none absolute left-2.5 top-2.5 z-10 max-w-[80%] rounded-md border border-zinc-700/80 bg-zinc-950/85 px-2.5 py-1.5 text-xs leading-4 text-zinc-200 shadow-lg backdrop-blur">
-          {editorMode === "edit" ? (
-            <span>
-              Entity選択 / {transformMode === "translate" ? "移動" : transformMode === "rotate" ? "回転" : "拡縮"}ギズモ / PrimitiveはCreateから追加
-            </span>
-          ) : (
-            <span>{profileGuide}</span>
-          )}
-        </div>
+        {editorMode === "play" ? (
+          <div className="pointer-events-none absolute left-2.5 top-2.5 z-10 max-w-[80%] rounded-md border border-zinc-700/80 bg-zinc-950/85 px-2.5 py-1.5 text-xs leading-4 text-zinc-200 shadow-lg backdrop-blur">
+            {profileGuide}
+          </div>
+        ) : null}
 
         {modelProxyVisible ? (
           <div className="pointer-events-none absolute right-2.5 top-2.5 z-10 rounded border border-amber-700/60 bg-amber-950/75 px-2 py-1 text-xs text-amber-200">

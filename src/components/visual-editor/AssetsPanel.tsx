@@ -84,10 +84,8 @@ const KIND_FOLDERS: BrowserFolder[] = [
     builtinPrefabs: true,
   },
   { id: "folder-models", name: "Models", icon: "model", kind: "model" },
-  { id: "folder-materials", name: "Materials", icon: "material", kind: "material" },
   { id: "folder-textures", name: "Textures", icon: "texture", kind: "texture" },
   { id: "folder-prefabs", name: "Prefabs", icon: "prefab", kind: "template" },
-  { id: "folder-particles", name: "Particles", icon: "particle", kind: "particle" },
 ];
 
 function assetKindLabel(asset: SceneAsset): string {
@@ -354,12 +352,8 @@ function AssetFolderTree({
   };
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r border-slate-300 bg-white" aria-label="Asset folders">
-      <div className="border-b border-slate-200 px-3 py-2">
-        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Asset Library</p>
-        <p className="mt-0.5 text-xs text-slate-500">素材の場所と種類</p>
-      </div>
-      <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-2">
+    <aside className="flex w-44 shrink-0 flex-col border-r border-slate-300 bg-white" aria-label="Asset folders">
+      <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-1.5">
         <div
           onDragOver={(event) => handleDragOver(event, null)}
           onDragLeave={handleDragLeave}
@@ -382,14 +376,9 @@ function AssetFolderTree({
           </button>
         </div>
 
-        <p className="mb-1 mt-4 px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-          種類
-        </p>
         <div className="space-y-0.5">{kindFolders.map(renderCollection)}</div>
 
-        <p className="mb-1 mt-4 px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-          フォルダー
-        </p>
+        <div className="mx-2 my-2 border-t border-slate-200" aria-hidden="true" />
         <div className="space-y-0.5">
           {childrenOf(null).map((folder) => renderCustomFolder(folder, 0))}
           {customFolders.length === 0 ? (
@@ -615,24 +604,34 @@ function AssetCard({
           className="pointer-events-none relative block h-[72px] w-full shrink-0 overflow-hidden border-b border-slate-200 bg-white"
         >
           <AssetThumbnail asset={asset} assets={assets} projectPath={projectPath} />
-          <span className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded bg-slate-950/80 px-1.5 py-0.5 text-xs font-medium text-white">
+          <span
+            className="absolute left-1.5 top-1.5 flex items-center rounded bg-slate-950/80 p-1 text-white"
+            title={assetKindLabel(asset)}
+          >
             <KindIcon size={11} aria-hidden="true" />
-            {assetKindLabel(asset)}
+            <span className="sr-only">{assetKindLabel(asset)}</span>
           </span>
           <span
+            title={asset.status}
+            aria-label={`状態: ${asset.status}`}
             className={`absolute bottom-1.5 right-1.5 rounded px-1.5 py-0.5 text-xs font-semibold ${
               asset.status === "ready"
                 ? "bg-emerald-100 text-emerald-800"
                 : "bg-amber-100 text-amber-800"
             }`}
           >
-            {asset.status}
+            {asset.status === "ready" ? (
+              <EDITOR_ICONS.visible size={11} aria-hidden="true" />
+            ) : (
+              <EDITOR_ICONS.warning size={11} aria-hidden="true" />
+            )}
+            <span className="sr-only">{asset.status}</span>
           </span>
         </span>
         <span className="min-w-0 px-2 py-1.5">
           <span className="block truncate text-xs font-semibold text-slate-800">{asset.name}</span>
           <span className="mt-0.5 block truncate text-xs text-slate-500">
-            {folderPath ?? dragDescription}
+            {folderPath ?? assetSourceLabel(asset)}
           </span>
           {folderPath ? (
             <span className="mt-0.5 block truncate text-[11px] text-slate-400" title={assetSourceLabel(asset)}>
@@ -779,15 +778,15 @@ function FolderCard({
   return (
     <div
       {...sharedProps}
-      className={`group relative flex min-h-[108px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-md border bg-white text-slate-600 shadow-sm ${dropTarget ? "border-violet-500 bg-violet-100 ring-2 ring-violet-200" : "border-slate-200 hover:border-violet-300 hover:bg-violet-50"}`}
+      className={`group relative flex min-h-[72px] min-w-0 flex-col items-center justify-center gap-1 rounded-md border bg-white text-slate-600 ${dropTarget ? "border-violet-500 bg-violet-100 ring-2 ring-violet-200" : "border-slate-200 hover:border-violet-300 hover:bg-violet-50"}`}
     >
       <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className="flex h-full w-full cursor-grab select-none flex-col items-center justify-center gap-1.5 px-2 active:cursor-grabbing">
         <span className="relative">
-          <FolderIcon size={32} strokeWidth={1.5} aria-hidden="true" />
-          <KindIcon size={13} className="absolute -bottom-0.5 -right-1 rounded bg-white" aria-hidden="true" />
+          <FolderIcon size={24} strokeWidth={1.5} aria-hidden="true" />
+          <KindIcon size={11} className="absolute -bottom-0.5 -right-1 rounded bg-white" aria-hidden="true" />
         </span>
         <span className="max-w-full truncate text-xs font-semibold">{folder.name}</span>
-        <span className="text-xs text-slate-400">{count} items</span>
+        <span className="text-[10px] text-slate-400">{count}</span>
       </button>
       {folder.custom ? (
         <button type="button" disabled={readOnly} onClick={(event) => { event.stopPropagation(); onDelete(); }} title={commandTitle(`${folder.name}を削除`, "DeleteAssetFolder")} aria-label={`${folder.name}を削除`} className="absolute right-1.5 top-1.5 rounded bg-white p-1 text-slate-400 opacity-0 shadow hover:bg-rose-50 hover:text-rose-700 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-30"><DeleteIcon size={13} aria-hidden="true" /></button>
@@ -1251,6 +1250,15 @@ export function AssetsPanel({
     });
   };
 
+  const openCreationMenu = () => {
+    const bounds = panelRef.current?.getBoundingClientRect();
+    setContextMenu({
+      x: Math.max(8, (bounds?.width ?? 240) - 200),
+      y: 42,
+      creationFolderId: resolveAssetCreationFolderId(assets, activeFolderId, {}),
+    });
+  };
+
   const handleLibraryMove = (
     event: DragEvent<HTMLElement>,
     folderId: string | null,
@@ -1325,8 +1333,7 @@ export function AssetsPanel({
   const GridIcon = EDITOR_ICONS.grid;
   const ListIcon = EDITOR_ICONS.list;
   const ImportIcon = EDITOR_ICONS.import;
-  const MaterialIcon = EDITOR_ICONS.material;
-  const ParticleIcon = EDITOR_ICONS.particle;
+  const CreateIcon = EDITOR_ICONS.create;
 
   return (
     <section
@@ -1409,7 +1416,7 @@ export function AssetsPanel({
                   setSearchQuery("");
                 }
               }}
-              placeholder="名前・種類・パスを検索"
+              placeholder="検索"
               className="h-7 w-full rounded border border-slate-300 bg-white pl-2 pr-12 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
             />
             {searching ? (
@@ -1429,12 +1436,11 @@ export function AssetsPanel({
           >
             {searching
               ? `${visibleAssets.length} / ${allAssets.length}`
-              : `${allAssets.length} assets`}
+              : `${allAssets.length}`}
           </span>
           <button type="button" onClick={() => setViewMode("grid")} aria-label="グリッド表示" aria-pressed={viewMode === "grid"} title={commandTitle("グリッド表示", "SetAssetView.Grid")} className={`rounded p-1 ${viewMode === "grid" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><GridIcon size={14} aria-hidden="true" /></button>
           <button type="button" onClick={() => setViewMode("list")} aria-label="リスト表示" aria-pressed={viewMode === "list"} title={commandTitle("リスト表示", "SetAssetView.List")} className={`rounded p-1 ${viewMode === "list" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><ListIcon size={14} aria-hidden="true" /></button>
-          <button type="button" disabled={assetMutationLocked} onClick={() => onCommand("asset.create-material")} title={assetMutationDisabledReason ?? commandTitle("Materialを作成", "asset.create-material")} className="ml-1 flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-45"><MaterialIcon size={12} aria-hidden="true" />Material</button>
-          <button type="button" disabled={assetMutationLocked} onClick={() => onCommand("asset.create-particle")} title={assetMutationDisabledReason ?? commandTitle("Particleを作成", "asset.create-particle")} className="flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-45"><ParticleIcon size={12} aria-hidden="true" />Particle</button>
+          <button type="button" disabled={assetMutationLocked} onClick={openCreationMenu} aria-label="新規アセットまたはフォルダー" title={assetMutationDisabledReason ?? "新規アセットまたはフォルダー"} className="ml-1 rounded border border-slate-300 bg-white p-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"><CreateIcon size={14} aria-hidden="true" /></button>
           <button type="button" disabled={importLocked} onClick={() => { if (onCommand("asset.import")) fileInputRef.current?.click(); }} title={importDisabledReason ?? commandTitle("アセットをインポート", "asset.import")} className="flex items-center gap-1 rounded border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-45"><ImportIcon size={12} aria-hidden="true" />Import</button>
         </div>
       </div>

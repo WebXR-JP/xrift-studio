@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  Axis3D,
   Box,
   Camera,
   CircleDot,
@@ -91,6 +92,7 @@ export const EDITOR_ICONS = {
   rotate: Rotate3D,
   scale: Scaling,
   world: Globe,
+  axis: Axis3D,
   item: Box,
   grid: LayoutGrid,
   list: List,

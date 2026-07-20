@@ -398,44 +398,6 @@ function sanitizedImportMessage(error: unknown, projectPath: string): string {
   return message.replace(/data:[^\s]+/gi, "[アセットデータ]");
 }
 
-function ToolButton({
-  active,
-  disabled,
-  shortcut,
-  label,
-  command,
-  icon,
-  onClick,
-}: {
-  active: boolean;
-  disabled: boolean;
-  shortcut: string;
-  label: string;
-  command: string;
-  icon: "move" | "rotate" | "scale";
-  onClick: () => void;
-}) {
-  const Icon = EDITOR_ICONS[icon];
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      disabled={disabled}
-      onClick={onClick}
-      title={commandTitle(label, command, shortcut)}
-      className={`flex h-7 items-center gap-1.5 rounded px-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-        active
-          ? "bg-violet-600 text-white"
-          : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-      }`}
-    >
-      <Icon size={13} aria-hidden="true" />
-      <kbd className="rounded bg-black/10 px-1 font-mono text-xs">{shortcut}</kbd>
-      {label}
-    </button>
-  );
-}
-
 export function VisualEditorPrototype({
   projectKind,
   onBack,
@@ -3066,18 +3028,6 @@ export function VisualEditorPrototype({
                 }
               />
             </div>
-            <ToolButton active={transformMode === "translate"} disabled={readOnly} shortcut={shortcutLabel("transform.translate")} label="移動" command="transform.translate" icon="move" onClick={() => executeCommand("transform.translate")} />
-            <ToolButton active={transformMode === "rotate"} disabled={readOnly} shortcut={shortcutLabel("transform.rotate")} label="回転" command="transform.rotate" icon="rotate" onClick={() => executeCommand("transform.rotate")} />
-            <ToolButton active={transformMode === "scale"} disabled={readOnly} shortcut={shortcutLabel("transform.scale")} label="拡縮" command="transform.scale" icon="scale" onClick={() => executeCommand("transform.scale")} />
-            <button
-              type="button"
-              disabled={readOnly}
-              onClick={() => executeCommand("transform.toggle-space")}
-              title={commandTitle("ギズモ座標系を切り替える", "transform.toggle-space")}
-              className="h-7 rounded border border-slate-300 bg-white px-2 text-xs text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              {transformSpace === "world" ? "World座標" : "Local座標"}
-            </button>
           </div>
 
           <div className="flex items-center gap-2" aria-label="編集とPlayの切り替え">
@@ -3155,6 +3105,12 @@ export function VisualEditorPrototype({
             editorMode={editorMode}
             transformMode={transformMode}
             transformSpace={transformSpace}
+            onTransformModeChange={(mode) => {
+              if (!readOnly) setTransformMode(mode);
+            }}
+            onToggleTransformSpace={() => {
+              if (!readOnly) executeCommand("transform.toggle-space");
+            }}
             notice={notice}
             onSelect={(selection) => {
               if (selection?.kind === "entity") {
