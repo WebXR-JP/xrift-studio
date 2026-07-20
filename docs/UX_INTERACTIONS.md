@@ -28,7 +28,7 @@ F-06 アイテム検査
 | MI-09 | 読み込み失敗、設定不備、空の状態になる | 落ち着いたエラーまたは空状態の面を表示し、原因または状況を一文で示す。 | 必ず再試行、編集、作成、ログ確認のいずれか一つ以上を置く。 |
 | MI-10 | Hierarchy または Scene View で Entity を選択する | 120ms 以内に Hierarchy の選択背景、Scene View の選択表示、Inspector の見出しと値を同じ Entity ID へ更新する。選択表示は色だけに頼らない。 | 選択のためにシーンデータや Undo 履歴は変更しない。別 Entity の選択または明示的な選択解除で終わる。 |
 | MI-11 | user Asset を Scene View / Hierarchy へ drag する、「配置」を実行する、Hierarchy / Scene の右クリックから primitive を作る、または外部ファイルを drop する | drag 中に対象と結果を表示する。Model / Prefab / Particle は Scene View では配置位置、Hierarchy では Scene Root または親 Entity を明示して Entity 配置する。Material は hover 中 Mesh slot への binding、Texture は Material Inspector slot への参照になる。右クリック Create は click point / 選択親を示す。外部 file は Import Queue の全 stage を通す。 | Escape または領域外 drop は変更せず終了する。drag と「配置」は同じ Asset placement を使い、Place / Create / Assign Material の Undo は一つの履歴で document と前の `sceneSelection` / `assetSelection` を復元する。import 失敗では SceneDocument と AssetManifest を変えない。 |
-| MI-12 | 移動、回転、拡大縮小ツールを切り替える、またはギズモを操作する | 選択ツールを押下状態と名称で示す。操作中は Scene View と Inspector の数値を同期し、カメラ操作との競合を止める。pointer down から pointer up までを一つの Command Transaction とする。 | pointer up で一件の履歴として確定する。Escape または不正値では操作前へ戻し、履歴を追加しない。Entity の選択は保つ。 |
+| MI-12 | 移動、回転、拡大縮小ツールを切り替える、またはギズモを操作する | 選択ツールを押下状態と名称で示す。ギズモは待機中のRGB色と不透明度を抑え、hoverまたはdrag中の軸だけを明るくしてSceneより目立たせない。操作中は Scene View と Inspector の数値を同期し、カメラ操作との競合を止める。pointer down から pointer up までを一つの Command Transaction とする。 | pointer up で一件の履歴として確定する。Escape または不正値では操作前へ戻し、履歴を追加しない。Entity の選択は保つ。 |
 | MI-13 | ビジュアル project を開く、保存する、または authoring document を変更する | ヘッダーに成果物種別、「ビジュアル」、保存 / stale compile / upload / 審査状態を表示し、classic code project とは正本と機能が異なることを示す。 | commit marker が指す Scene / Prefab / Asset / folder を含む全 document set の保存成功後だけ対象 revision の「未保存」を解除する。未保存で戻る時は保存、破棄、取消を選べる。 |
 | MI-14 | Edit で「Play」を実行する、または Play で「Stop」を実行する | project kind に応じて World Play Profile または Item Preview Profile を同じ Scene View に開く。Play 中は authoring をロックし、「Stop」を常に見える主操作にする。World の input / controller / physics を Item へ適用しない。Vite、CLI、port、別 browser を操作として見せない。 | PlaySession の state だけを変える。Stop で input、controller、camera、physics などを dispose し、Play 前の documents、両 selection、Inspector context、Edit camera へ戻る。初期化失敗時は Edit のまま原因と再試行を示す。 |
 | MI-15 | Assets で Asset を一回クリックする、または Entity Inspector の Asset reference を開く | Assets の選択背景と右 Inspector の Asset context を同じ `assetSelection` へ更新する。`sceneSelection` は維持し、Inspector header の Entity / Asset tab から双方へ戻れる。Entity は追加せず、Undo 履歴も増やさない。 | 別 Asset / Entity の選択または Inspector context 切替で終わる。Material は参照 Entity 数と「共有中」、Texture / Model は source と derived status を表示する。 |
@@ -53,7 +53,7 @@ F-06 アイテム検査
 | MI-34 | toolbar の Create、または Hierarchy の右クリックから Entity / Component を作成する | Create は Empty Entity、Primitive、XRift Component、通常 Component の責務別入口を示す。選択 Entity がある時は追加先を名前で示し、選択がない時も単独で成立する XRift Component は Transform 付き Entity として作成できる。wrapper は追加先 Entity がない限り無効にし、理由を表示する。 | 作成または追加は一件の history transaction とし、作成 Entity を `sceneSelection` にして Inspector を開く。Escape / 外側 click は document を変えず閉じる。Play / Import 中は無効にし、必須値が未設定なら Inspector から設定して compile blocker を解消できる。 |
 | MI-35 | Visual World の新規作成で Starter Scene を選ぶ | 既定は実用的な World Starter とし、配置済み Scene と Assets へ追加される Model / Texture の数をカード上に示す。Blank は明示的な最小構成として残し、素材入り template と混同しない。 | 作成成功時は bundled source を project-relative path へ検証付きでコピーし、Scene / Asset / Material / Collider / XRift Spawn の参照を一度に確定して Editor で開く。copy / hash / document 保存の一部が失敗した場合は不完全な project を成功表示せず、新規作成へ戻れる。 |
 | MI-36 | Model Assetを選択して構造を確認し、import設定を変更または再importする | 右Inspectorにsource/status、node・mesh・primitive、bounds、animation、Material slotと現在のimport recipeを分けて表示する。recipe変更は未適用であることを示し、source解析済みの事実と混同しない。再importでslotが消える時は確定前にScene / Prefabの影響先を列挙する。 | 再import成功時は同じAsset IDを維持し、同じslot identityへのMaterial割当を保持して追加・消失slotを明示する。影響を確認せず参照切れを成功表示しない。失敗時はlast-good metadata、thumbnail、Scene参照を維持し、原因と再試行を同じModel Inspectorに残す。Play中は閲覧のみとする。 |
-| MI-37 | 左下の歯車「シーン設定」を開き、スカイボックス、フォグ、環境光、カメラ、ギズモを変更する | 現在のScene ViewとEntity / Asset selectionを保ったまま、右のEntity InspectorをScene Inspectorへ切り替える。数値は確定時に範囲へ補正し、色、トグル、画像Skyboxのプレビューを即時同期する。Play中は値を読み取り専用にし、停止後に同じ設定画面へ戻れる。 | 設定変更は一件のSceneDocument履歴として未保存にし、保存後の生成Worldにも反映する。戻る、Entity / Assetの選択は変更済みの値を保持して通常Inspectorへ戻る。サムネイルは保存済みprojectでだけ既存の画像編集画面を開き、保存後に公開前確認へ戻れる。 |
+| MI-37 | 左下の歯車「シーン設定」を開き、スカイボックス、フォグ、環境光、カメラ、ギズモを変更する | 現在のScene ViewとEntity / Asset selectionを保ったまま、右のEntity InspectorをScene Inspectorへ切り替える。数値は確定時に範囲へ補正し、色、トグル、画像Skyboxのプレビューを即時同期する。Scene Viewへ不透明な補助床は追加せず、Skyboxまたは編集背景の上に軽いグリッドだけを表示する。Play中は値を読み取り専用にし、停止後に同じ設定画面へ戻れる。 | 設定変更は一件のSceneDocument履歴として未保存にし、保存後の生成Worldにも反映する。戻る、Entity / Assetの選択は変更済みの値を保持して通常Inspectorへ戻る。サムネイルは保存済みprojectでだけ既存の画像編集画面を開き、保存後に公開前確認へ戻れる。 |
 | MI-38 | 左下のユーティリティレールからショートカット一覧、ヘルプ、シーン設定を開く | 上からキーボード、ヘルプ、歯車を小さな同一サイズで常時表示する。hover / focusでは操作名を示し、開いている項目は背景、アイコン、`aria-expanded`または押下状態で区別する。ショートカットは中央Registryの現在のbindingを分類して表示し、ヘルプは作成、選択、素材配置、Playの最短導線とレイアウト初期化を示す。 | Escape、外側click、同じボタンで補助パネルを閉じ、Scene / Asset selectionとdocumentを変えない。歯車はScene Inspectorを切り替え、レイアウト初期化は既定配置へ戻して同じEditorを継続する。 |
 
 ## 機能一覧
@@ -92,6 +92,7 @@ F-06 アイテム検査
 - Material drag 中は Scene Mesh または Entity Inspector slot だけを drop target とし、slot が複数なら chooser を表示する。Texture drag は右 Material Inspector の compatible slot だけを target にする。
 - Asset のドラッグ中は Scene View だけを配置可能領域として示し、drop 前には Entity を増やさない。
 - ギズモ操作中はカメラ操作を競合させず、Scene View と Inspector の Transform 値を同期する。
+- 待機中のギズモと選択補助線はニュートラルカラーで控えめにし、操作中の軸とAsset drop targetだけを明るく示す。
 - panel resize / dock 中は drop preview と minimum size を示し、authoring Command や selection を変更しない。
 - Material Asset の color、metalness、roughness、texture 参照は Edit 中だけ変更でき、同じ Asset ID を参照する全 Entity の preview と同期する。Entity 固有 Material 値へ複製しない。
 - 外部 GLB / GLTF の drop は Import Queue で validate、source copy、derive、dynamic thumbnail、manifest commit まで処理する。Assets への drop は Scene 配置へ進めず、Scene への明示 drop だけが import 成功後の配置を同じ transaction intent で続ける。
@@ -260,6 +261,7 @@ F-06 アイテム検査
 
 - 左下の歯車「シーン設定」は、Entity / Asset selection を変えずに、右のEntity InspectorをScene Inspectorへ切り替える。設定対象は Scene 全体であり、Hierarchy の Entity として追加しない。
 - Skybox、Fog、環境光は Scene View のプレビューと生成する World の両方に反映する。SkyboxはAssetsのequirectangular画像を選択またはドロップで設定し、回転と露出も適用する。Near / Far、FOV、背景、グリッド、ギズモ、スナップは編集ビューの設定として明示する。
+- Scene View固有の不透明な地面は追加しない。Skybox有効時は地平線の下側までSkyboxを見せ、その上へ編集用グリッドだけを重ねる。
 - サムネイルは保存済み project でだけ編集可能にし、未保存 project では保存後に設定できる理由をボタン文言で示す。
 
 ### 操作中

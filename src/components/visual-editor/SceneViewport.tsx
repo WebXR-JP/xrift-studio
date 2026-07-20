@@ -89,6 +89,56 @@ const PLAY_KEYS = new Set([
   "arrowright",
 ]);
 const EDIT_CAMERA_TARGET: [number, number, number] = [0, 0.7, 0];
+const EDITOR_SELECTION_COLOR = "#cbd5e1";
+const MUTED_GIZMO_COLOR = new Color("#64748b");
+
+type TransformGizmoMaterial = {
+  color: Color;
+  opacity: number;
+  transparent: boolean;
+  needsUpdate: boolean;
+  tempColor?: Color;
+  tempOpacity?: number;
+};
+
+/**
+ * Three's default transform controls use fully saturated RGB handles. Keep the
+ * same hit areas and active-axis feedback, but make the resting controls a
+ * quiet neutral so the authored scene remains the visual focus.
+ */
+function muteTransformGizmo(controls: Object3D | null): void {
+  const transformControls = controls as (Object3D & { gizmo?: Object3D }) | null;
+  const gizmoRoot =
+    transformControls?.gizmo ??
+    controls?.children.find((child) => child.type === "TransformControlsGizmo");
+  if (!gizmoRoot) return;
+
+  const styledMaterials = new Set<TransformGizmoMaterial>();
+  gizmoRoot.traverse((object) => {
+    const candidate = object as Object3D & {
+      material?: TransformGizmoMaterial | TransformGizmoMaterial[];
+    };
+    const materials = Array.isArray(candidate.material)
+      ? candidate.material
+      : candidate.material
+        ? [candidate.material]
+        : [];
+    for (const material of materials) {
+      if (styledMaterials.has(material) || !material.color) continue;
+      styledMaterials.add(material);
+      const opacity = Math.min(
+        material.tempOpacity ?? material.opacity,
+        0.55,
+      );
+      material.color.copy(MUTED_GIZMO_COLOR);
+      material.tempColor = MUTED_GIZMO_COLOR.clone();
+      material.opacity = opacity;
+      material.tempOpacity = opacity;
+      material.transparent = true;
+      material.needsUpdate = true;
+    }
+  });
+}
 
 function isTransformControlsObject(object: Object3D): boolean {
   let current: Object3D | null = object;
@@ -240,7 +290,7 @@ function MeshVisual({
         />
         {selected || materialDropHighlighted ? (
           <Edges
-            color={materialDropHighlighted ? "#38bdf8" : "#a78bfa"}
+            color={materialDropHighlighted ? "#38bdf8" : EDITOR_SELECTION_COLOR}
             scale={1.015}
             threshold={12}
           />
@@ -258,7 +308,7 @@ function MeshVisual({
       />
       {selected || materialDropHighlighted ? (
         <Edges
-          color={materialDropHighlighted ? "#38bdf8" : "#a78bfa"}
+          color={materialDropHighlighted ? "#38bdf8" : EDITOR_SELECTION_COLOR}
           scale={1.02}
         />
       ) : null}
@@ -630,10 +680,10 @@ function ComponentVisual({
             ]}
           />
           <meshBasicMaterial
-            color="#22c55e"
+            color={EDITOR_SELECTION_COLOR}
             wireframe
             transparent
-            opacity={0.9}
+            opacity={0.45}
             depthTest={false}
           />
         </mesh>
@@ -696,7 +746,21 @@ function EntityObject({
   children?: ReactNode;
 }) {
   const objectRef = useRef<Group>(null!);
+  const transformControlsRef = useRef<ElementRef<typeof TransformControls>>(null);
   const transform = getTransform(entity);
+
+  const setTransformControlsRef = useCallback(
+    (controls: ElementRef<typeof TransformControls> | null) => {
+      transformControlsRef.current = controls;
+      muteTransformGizmo(controls);
+    },
+    [],
+  );
+
+  useLayoutEffect(() => {
+    if (!selected || !editable || !transform) return;
+    muteTransformGizmo(transformControlsRef.current);
+  }, [editable, selected, transform]);
 
   const commitTransform = () => {
     const object = objectRef.current;
@@ -754,6 +818,7 @@ function EntityObject({
       transform &&
       entity.id === authoringEntityId ? (
         <TransformControls
+          ref={setTransformControlsRef}
           object={objectRef}
           mode={transformMode}
           space={transformSpace}
@@ -1872,21 +1937,13 @@ export function SceneViewport({
             shadow-mapSize-width={1024}
             shadow-mapSize-height={1024}
           />
-          <mesh
-            position={[0, -0.025, 0]}
-            rotation={[-Math.PI / 2, 0, 0]}
-            receiveShadow
-          >
-            <planeGeometry args={[60, 60]} />
-            <meshStandardMaterial color="#202024" roughness={1} />
-          </mesh>
           {sceneSettings.editor.gizmo.gridVisible ? (
             <gridHelper
               args={[
                 sceneSettings.editor.gizmo.gridSize,
                 sceneSettings.editor.gizmo.gridDivisions,
-                "#52525b",
-                "#2d2d33",
+                sceneSettings.skybox.enabled ? "#94a3b8" : "#52525b",
+                sceneSettings.skybox.enabled ? "#d5dbe3" : "#2d2d33",
               ]}
               position={[0, 0.005, 0]}
             />
