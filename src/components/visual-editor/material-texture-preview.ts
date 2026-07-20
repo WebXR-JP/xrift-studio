@@ -70,6 +70,15 @@ export type MaterialPreviewTextureState = {
   statuses: MaterialPreviewTextureStatuses;
 };
 
+export function resolveMaterialPreviewTextureDisplayStatus(
+  asset: TextureAsset | undefined,
+  loadStatus: MaterialPreviewTextureLoadStatus | undefined,
+): MaterialPreviewTextureLoadStatus | undefined {
+  if (!asset) return undefined;
+  if (asset.status !== "ready" || asset.source.kind !== "project") return "error";
+  return loadStatus;
+}
+
 type PreviewTextureRequest = {
   role: MaterialPreviewTextureRole;
   textureInfo: MaterialTextureInfo;

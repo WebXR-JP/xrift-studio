@@ -30,6 +30,7 @@ import {
 import {
   configureMaterialPreviewTexture,
   refreshMaterialPreviewRender,
+  resolveMaterialPreviewTextureDisplayStatus,
 } from "./material-texture-preview";
 
 export function runProjectModelMaterialPreviewFixtureAssertions(): void {
@@ -196,6 +197,7 @@ export function runProjectModelMaterialPreviewFixtureAssertions(): void {
 
   assertModelMaterialAssignmentsStayInTheirGltfSlots(assets);
   assertAsyncTextureCompletionRequestsMaterialRender();
+  assertTextureLoadStatusOnlyReportsSupportedReadyAssets(fixtureTextureAsset);
 
   owned.forEach((material) => material.dispose());
   texturedPreview.dispose();
@@ -209,6 +211,38 @@ export function runProjectModelMaterialPreviewFixtureAssertions(): void {
   root.geometry.dispose();
   source.dispose();
   texture.dispose();
+}
+
+function assertTextureLoadStatusOnlyReportsSupportedReadyAssets(
+  projectTexture: TextureAsset,
+): void {
+  assert(
+    resolveMaterialPreviewTextureDisplayStatus(projectTexture, "loading") ===
+      "loading",
+    "A supported Texture did not expose its loading state",
+  );
+  assert(
+    resolveMaterialPreviewTextureDisplayStatus(projectTexture, "ready") ===
+      "ready",
+    "A loaded Texture was not reported as ready",
+  );
+  assert(
+    resolveMaterialPreviewTextureDisplayStatus(
+      { ...projectTexture, status: "missing" },
+      "ready",
+    ) === "error",
+    "A missing Texture source was incorrectly reported as ready",
+  );
+  assert(
+    resolveMaterialPreviewTextureDisplayStatus(
+      {
+        ...projectTexture,
+        source: { kind: "builtin", key: "fixture/unsupported-texture" },
+      },
+      "ready",
+    ) === "error",
+    "An unsupported Texture source was incorrectly reported as ready",
+  );
 }
 
 function assertModelMaterialAssignmentsStayInTheirGltfSlots(

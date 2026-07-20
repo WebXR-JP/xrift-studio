@@ -45,6 +45,7 @@ import { TEXTURE_DRAG_MIME } from "./types";
 import {
   type MaterialPreviewTextureLoadStatus,
   type MaterialPreviewTextureStatuses,
+  resolveMaterialPreviewTextureDisplayStatus,
   useMaterialPreviewRenderSync,
   useMaterialPreviewTextureState,
 } from "./material-texture-preview";
@@ -772,11 +773,10 @@ function TextureSlot({
     ? textures.find((texture) => texture.id === value.textureAssetId)
     : undefined;
   const missingReference = Boolean(value && !selectedTexture);
-  const displayedPreviewStatus = selectedTexture
-    ? selectedTexture.status !== "ready" || selectedTexture.source.kind !== "project"
-      ? "error"
-      : previewStatus
-    : undefined;
+  const displayedPreviewStatus = resolveMaterialPreviewTextureDisplayStatus(
+    selectedTexture,
+    previewStatus,
+  );
   const transform = value?.transform ?? DEFAULT_TEXTURE_TRANSFORM;
   const TextureIcon = EDITOR_ICONS.texture;
 
@@ -1398,6 +1398,7 @@ export function MaterialQuickEditor({
               textures={textures}
               projectPath={projectPath}
               disabled={readOnly}
+              previewStatus={previewTextureStatuses.clearcoatMap}
               onOpenTexture={onOpenTexture}
               onChange={(clearcoatTexture) =>
                 updateLitExtension({
@@ -1423,6 +1424,7 @@ export function MaterialQuickEditor({
               textures={textures}
               projectPath={projectPath}
               disabled={readOnly}
+              previewStatus={previewTextureStatuses.clearcoatRoughnessMap}
               onOpenTexture={onOpenTexture}
               onChange={(clearcoatRoughnessTexture) =>
                 updateLitExtension({
@@ -1437,6 +1439,7 @@ export function MaterialQuickEditor({
               textures={textures}
               projectPath={projectPath}
               disabled={readOnly}
+              previewStatus={previewTextureStatuses.clearcoatNormalMap}
               onOpenTexture={onOpenTexture}
               onChange={(value) =>
                 updateLitExtension({
@@ -1524,6 +1527,7 @@ export function MaterialQuickEditor({
               textures={textures}
               projectPath={projectPath}
               disabled={readOnly}
+              previewStatus={previewTextureStatuses.anisotropyMap}
               onOpenTexture={onOpenTexture}
               onChange={(anisotropyTexture) =>
                 updateLitExtension({
@@ -1573,6 +1577,7 @@ export function MaterialQuickEditor({
               textures={textures}
               projectPath={projectPath}
               disabled={readOnly}
+              previewStatus={previewTextureStatuses.sheenColorMap}
               onOpenTexture={onOpenTexture}
               onChange={(sheenColorTexture) =>
                 updateLitExtension({
@@ -1598,6 +1603,7 @@ export function MaterialQuickEditor({
               textures={textures}
               projectPath={projectPath}
               disabled={readOnly}
+              previewStatus={previewTextureStatuses.sheenRoughnessMap}
               onOpenTexture={onOpenTexture}
               onChange={(sheenRoughnessTexture) =>
                 updateLitExtension({
@@ -1646,6 +1652,7 @@ export function MaterialQuickEditor({
               textures={textures}
               projectPath={projectPath}
               disabled={readOnly}
+              previewStatus={previewTextureStatuses.specularIntensityMap}
               onOpenTexture={onOpenTexture}
               onChange={(specularTexture) =>
                 updateLitExtension({
@@ -1671,6 +1678,7 @@ export function MaterialQuickEditor({
               textures={textures}
               projectPath={projectPath}
               disabled={readOnly}
+              previewStatus={previewTextureStatuses.specularColorMap}
               onOpenTexture={onOpenTexture}
               onChange={(specularColorTexture) =>
                 updateLitExtension({
@@ -1748,6 +1756,7 @@ export function MaterialQuickEditor({
               textures={textures}
               projectPath={projectPath}
               disabled={readOnly}
+              previewStatus={previewTextureStatuses.transmissionMap}
               onOpenTexture={onOpenTexture}
               onChange={(transmissionTexture) =>
                 updateLitExtension({
@@ -1807,6 +1816,7 @@ export function MaterialQuickEditor({
               textures={textures}
               projectPath={projectPath}
               disabled={readOnly}
+              previewStatus={previewTextureStatuses.thicknessMap}
               onOpenTexture={onOpenTexture}
               onChange={(thicknessTexture) =>
                 updateLitExtension({
@@ -1948,6 +1958,7 @@ export function MaterialQuickEditor({
               textures={textures}
               projectPath={projectPath}
               disabled={readOnly}
+              previewStatus={previewTextureStatuses.iridescenceMap}
               onOpenTexture={onOpenTexture}
               onChange={(iridescenceTexture) =>
                 updateLitExtension({
@@ -2007,6 +2018,7 @@ export function MaterialQuickEditor({
               textures={textures}
               projectPath={projectPath}
               disabled={readOnly}
+              previewStatus={previewTextureStatuses.iridescenceThicknessMap}
               onOpenTexture={onOpenTexture}
               onChange={(iridescenceThicknessTexture) =>
                 updateLitExtension({

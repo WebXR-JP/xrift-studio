@@ -2813,8 +2813,7 @@ fn verify_required_publication_file_copy(
     staging_root: &Path,
     copy: &CompilerRequiredPublicationFileCopy,
 ) -> Result<CompilerRequiredPublicationFileVerification, String> {
-    let (source, target) =
-        required_publication_file_paths(authoring_root, staging_root, copy)?;
+    let (source, target) = required_publication_file_paths(authoring_root, staging_root, copy)?;
     for (path, label) in [
         (&source, "required publication thumbnail source"),
         (&target, "required publication thumbnail staging target"),
@@ -2847,10 +2846,13 @@ fn copy_required_publication_file(
     staging_root: &Path,
     copy: &CompilerRequiredPublicationFileCopy,
 ) -> Result<CompilerRequiredPublicationFileVerification, String> {
-    let (source, target) =
-        required_publication_file_paths(authoring_root, staging_root, copy)?;
-    let source_metadata = std::fs::symlink_metadata(&source)
-        .map_err(|e| format!("required publication thumbnail source cannot be read: {}", e))?;
+    let (source, target) = required_publication_file_paths(authoring_root, staging_root, copy)?;
+    let source_metadata = std::fs::symlink_metadata(&source).map_err(|e| {
+        format!(
+            "required publication thumbnail source cannot be read: {}",
+            e
+        )
+    })?;
     if source_metadata.file_type().is_symlink()
         || !source_metadata.is_file()
         || source_metadata.len() == 0
@@ -2867,8 +2869,12 @@ fn copy_required_publication_file(
         }
     }
     if let Some(parent) = target.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("required publication thumbnail directory cannot be created: {}", e))?;
+        std::fs::create_dir_all(parent).map_err(|e| {
+            format!(
+                "required publication thumbnail directory cannot be created: {}",
+                e
+            )
+        })?;
     }
     std::fs::copy(&source, &target)
         .map_err(|e| format!("required publication thumbnail cannot be copied: {}", e))?;
@@ -3881,9 +3887,8 @@ mod tests {
         .expect("template thumbnail must be written");
 
         let copy = required_thumbnail_copy();
-        let verification =
-            copy_required_publication_file(&authoring_root, &staging_root, &copy)
-                .expect("required thumbnail must be copied and verified");
+        let verification = copy_required_publication_file(&authoring_root, &staging_root, &copy)
+            .expect("required thumbnail must be copied and verified");
         assert_eq!(verification.purpose, "thumbnail");
         assert_eq!(
             std::fs::read(staging_root.join("public/thumbnail.png"))
@@ -3904,13 +3909,11 @@ mod tests {
             b"changed-after-staging",
         )
         .expect("source thumbnail must be changed");
-        assert!(verify_required_publication_file_copy(
-            &authoring_root,
-            &staging_root,
-            &copy
-        )
-        .expect_err("a changed source must make staging stale")
-        .contains("SHA-256 does not match"));
+        assert!(
+            verify_required_publication_file_copy(&authoring_root, &staging_root, &copy)
+                .expect_err("a changed source must make staging stale")
+                .contains("SHA-256 does not match")
+        );
 
         std::fs::remove_dir_all(&fixture_root).expect("fixture directory must be removed");
     }
