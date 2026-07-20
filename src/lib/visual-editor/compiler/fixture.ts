@@ -302,6 +302,25 @@ export function runVisualCompilerFixtureAssertions(
     )?.content ?? "";
   assert(texturedProjectResult.canStage, "Project texture should be stageable");
   assert(texturedSource.includes("useTexture"), "Texture hook was not generated");
+  assert(
+    /import \{[^}]*\buseXRift\b[^}]*\} from "@xrift\/world-components";/.test(
+      texturedSource,
+    ) &&
+      texturedSource.includes("const { baseUrl } = useXRift();"),
+    "XRift base URL runtime was not generated for the project texture",
+  );
+  assert(
+    texturedSource.includes(
+      '"xrift-studio/assets/fixture-texture-project/albedo.png" as const',
+    ) &&
+      !texturedSource.includes('"/xrift-studio/assets/'),
+    "Project texture path must be relative to the XRift base URL",
+  );
+  assert(
+    texturedSource.includes("const baseColorMapUrl = useCompiledAssetUrl(") &&
+      texturedSource.includes("useTexture(baseColorMapUrl)"),
+    "Project texture loader did not use the XRift base URL",
+  );
   assert(texturedSource.includes("map={baseColorMap}"), "Base-color map was not generated");
   assert(
     texturedProjectResult.assetCopyPlan.some(
@@ -384,6 +403,21 @@ export function runVisualCompilerFixtureAssertions(
     )?.content ?? "";
   assert(modelResult.canStage, "Project GLB should be stageable");
   assert(modelSource.includes("useGLTF"), "GLTF loader was not generated");
+  assert(
+    /import \{[^}]*\buseXRift\b[^}]*\} from "@xrift\/world-components";/.test(
+      modelSource,
+    ) &&
+      modelSource.includes("const modelUrl = useCompiledAssetUrl(") &&
+      modelSource.includes("useGLTF(modelUrl)"),
+    "Project GLB loader did not use the XRift base URL",
+  );
+  assert(
+    modelSource.includes(
+      '"xrift-studio/assets/fixture-model-project/fixture.glb" as const',
+    ) &&
+      !modelSource.includes('"/xrift-studio/assets/'),
+    "Project GLB path must be relative to the XRift base URL",
+  );
   assert(modelSource.includes("<Clone"), "Model clone was not generated");
   assert(modelSource.includes('case "Body"'), "Material slot mapping was not generated");
   assert(

@@ -424,7 +424,7 @@ function generateComponentSource(
     assetRuntimeUrls: new Map(
       assetCopyPlan
         .filter((entry) => entry.supportedByCompiler)
-        .map((entry) => [entry.assetId, publicAssetUrl(entry.targetRelativePath)]),
+        .map((entry) => [entry.assetId, publicAssetPath(entry.targetRelativePath)]),
     ),
     referencedAssetIds: new Set(),
     visitedEntityIds: new Set(),
@@ -837,7 +837,8 @@ function renderModelMesh(
     ? model.importSettings.scale
     : 1;
   const source = `const ${componentName}: FC = () => {
-  const { scene } = useGLTF(${urlConstant});
+  const modelUrl = useCompiledAssetUrl(${urlConstant});
+  const { scene } = useGLTF(modelUrl);
   return (
     <group scale={${formatNumber(modelScale)}}>
       <Clone
@@ -1399,7 +1400,8 @@ function addCompiledTexture(
     })};`,
   );
   textureLines.push(
-    `const ${variableName} = useCompiledTexture(useTexture(${urlConstant}), ${optionsConstant});`,
+    `const ${variableName}Url = useCompiledAssetUrl(${urlConstant});`,
+    `const ${variableName} = useCompiledTexture(useTexture(${variableName}Url), ${optionsConstant});`,
   );
   textureProps.push(`${materialProp}={${variableName}}`);
   return true;
@@ -1828,7 +1830,7 @@ function renderParticleEmitter(
     );
     if (textureAsset) {
       const urlConstant = registerAssetUrl(textureAsset, textureUrl, context);
-      textureLine = `  const particleMap = useTexture(${urlConstant});\n`;
+      textureLine = `  const particleMapUrl = useCompiledAssetUrl(${urlConstant});\n  const particleMap = useTexture(particleMapUrl);\n`;
       textureProp = " map={particleMap}";
     }
   }
@@ -2438,6 +2440,14 @@ function registerAssetUrl(
   context: CompileContext,
 ): string {
   const constantName = generatedIdentifier("ASSET_URL", asset.id);
+  context.imports.add("useXRift");
+  context.supportDeclarations.set(
+    "asset-url:00-runtime",
+    `const useCompiledAssetUrl = (assetPath: string): string => {
+  const { baseUrl } = useXRift();
+  return \`\${baseUrl}\${assetPath}\`;
+};`,
+  );
   context.supportDeclarations.set(
     `asset-url:${constantName}`,
     `const ${constantName} = ${JSON.stringify(runtimeUrl)} as const;`,
@@ -2445,11 +2455,11 @@ function registerAssetUrl(
   return constantName;
 }
 
-function publicAssetUrl(targetRelativePath: string): string {
+function publicAssetPath(targetRelativePath: string): string {
   const normalized = targetRelativePath.replace(/\\/g, "/");
   return normalized.startsWith("public/")
-    ? `/${normalized.slice("public/".length)}`
-    : `/${normalized}`;
+    ? normalized.slice("public/".length)
+    : normalized.replace(/^\/+/, "");
 }
 
 function isSafeRelativePath(value: string): boolean {
