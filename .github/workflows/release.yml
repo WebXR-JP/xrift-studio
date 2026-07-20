@@ -60,6 +60,9 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
+      - name: Setup Takumi Guard
+        uses: flatt-security/setup-takumi-guard-npm@v1
+
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
