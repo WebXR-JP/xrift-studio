@@ -532,7 +532,18 @@ function clonePrefabComponent(
       assetReferences: [...component.assetReferences],
       entityReferences,
       ...(component.authoring
-        ? { authoring: { ...component.authoring } }
+        ? {
+            authoring: {
+              ...component.authoring,
+              ...(component.authoring.editablePropertyNames
+                ? {
+                    editablePropertyNames: [
+                      ...component.authoring.editablePropertyNames,
+                    ],
+                  }
+                : {}),
+            },
+          }
         : {}),
     };
   }

@@ -3,6 +3,7 @@ import {
   getMaterialAsset,
   updateMaterialAsset,
   type AssetManifest,
+  type MaterialTextureInfo,
 } from "../asset-manifest";
 import {
   assetManifestCodec,
@@ -29,7 +30,15 @@ export function runMaterialExtensionFixtureAssertions(): void {
   });
   assert(textureResult.added, "Fixture texture could not be created");
 
-  const texture = { textureAssetId: textureId, texCoord: 0 };
+  const texture: MaterialTextureInfo = {
+    textureAssetId: textureId,
+    texCoord: 0,
+    transform: {
+      offset: [0.125, 0.25],
+      rotation: 0.375,
+      scale: [1.5, 0.75],
+    },
+  };
   const physicalAssets = updateMaterialAsset(
     textureResult.manifest,
     BUILTIN_ASSET_IDS.material.blue,
@@ -54,8 +63,9 @@ export function runMaterialExtensionFixtureAssertions(): void {
         KHR_materials_iridescence: {
           iridescenceFactor: 0.7,
           iridescenceIor: 1.35,
-          iridescenceThicknessMinimum: 120,
-          iridescenceThicknessMaximum: 480,
+          // Descending ranges are explicitly valid in KHR_materials_iridescence.
+          iridescenceThicknessMinimum: 480,
+          iridescenceThicknessMaximum: 120,
           iridescenceTexture: texture,
           iridescenceThicknessTexture: texture,
         },
@@ -93,24 +103,66 @@ export function runMaterialExtensionFixtureAssertions(): void {
   [
     "<meshPhysicalMaterial",
     "anisotropy={0.4}",
+    "anisotropyRotation={0.25}",
     "clearcoat={0.8}",
+    "clearcoatRoughness={0.2}",
     "dispersion={0.15}",
     "emissiveIntensity={2.5}",
     "ior={1.45}",
     "iridescence={0.7}",
+    "iridescenceIOR={1.35}",
+    "iridescenceThicknessRange={[480, 120]}",
     "sheen={1}",
+    "sheenRoughness={0.45}",
     "specularIntensity={0.85}",
     "transmission={0.65}",
     "thickness={0.4}",
+    "attenuationDistance={4}",
     "anisotropyMap={anisotropyMap}",
+    "clearcoatMap={clearcoatMap}",
+    "clearcoatRoughnessMap={clearcoatRoughnessMap}",
     "clearcoatNormalMap={clearcoatNormalMap}",
+    "clearcoatNormalScale={[0.75, 0.75]}",
+    "iridescenceMap={iridescenceMap}",
+    "iridescenceThicknessMap={iridescenceThicknessMap}",
+    "sheenColorMap={sheenColorMap}",
+    "sheenRoughnessMap={sheenRoughnessMap}",
+    "specularIntensityMap={specularIntensityMap}",
     "specularColorMap={specularColorMap}",
+    "transmissionMap={transmissionMap}",
     "thicknessMap={thicknessMap}",
+    '"offset":[0.125,0.25]',
+    '"rotation":0.375',
+    '"scale":[1.5,0.75]',
   ].forEach((fragment) =>
     assert(
       physicalSource.includes(fragment),
       `Compiled physical material is missing: ${fragment}`,
     ),
+  );
+
+  const roundTrip = assetManifestCodec.parse(
+    assetManifestCodec.serialize(physicalAssets),
+  );
+  assert(roundTrip.ok, "Physical extension manifest did not round-trip");
+  const roundTripMaterial = getMaterialAsset(
+    roundTrip.document,
+    BUILTIN_ASSET_IDS.material.blue,
+  );
+  assert(
+    roundTripMaterial?.properties.extensions.KHR_materials_anisotropy
+      ?.anisotropyTexture?.transform?.rotation === 0.375 &&
+      roundTripMaterial.properties.extensions.KHR_materials_clearcoat
+        ?.clearcoatNormalTexture?.scale === 0.75 &&
+      roundTripMaterial.properties.extensions.KHR_materials_iridescence
+        ?.iridescenceThicknessMinimum === 480 &&
+      roundTripMaterial.properties.extensions.KHR_materials_iridescence
+        ?.iridescenceThicknessMaximum === 120 &&
+      roundTripMaterial.properties.extensions.KHR_materials_specular
+        ?.specularColorFactor[0] === 1.2 &&
+      roundTripMaterial.properties.extensions.KHR_materials_volume
+        ?.attenuationDistance === 4,
+    "Typed extension values or TextureInfo were lost during serialization",
   );
 
   const unlitAssets = updateMaterialAsset(
@@ -192,6 +244,40 @@ export function runMaterialExtensionFixtureAssertions(): void {
         (candidate) => candidate.code === "extension-dependency",
       ),
     "Volume without transmission was not rejected",
+  );
+
+  const invalidDispersionDependency = updateMaterialAsset(
+    project.assets,
+    BUILTIN_ASSET_IDS.material.blue,
+    { extensions: { KHR_materials_dispersion: { dispersion: 0.2 } } },
+  );
+  const dispersionDependencyParse = assetManifestCodec.parse(
+    stableSerializeJson(invalidDispersionDependency),
+  );
+  assert(
+    !dispersionDependencyParse.ok &&
+      dispersionDependencyParse.issues.some(
+        (candidate) => candidate.code === "extension-dependency",
+      ),
+    "Dispersion without volume was not rejected",
+  );
+
+  const unlitConflict = updateMaterialAsset(
+    updateMaterialAsset(project.assets, BUILTIN_ASSET_IDS.material.blue, {
+      extensions: { KHR_materials_unlit: {} },
+    }),
+    BUILTIN_ASSET_IDS.material.blue,
+    { extensions: { KHR_materials_clearcoat: { clearcoatFactor: 1 } } },
+  );
+  const unlitConflictParse = assetManifestCodec.parse(
+    stableSerializeJson(unlitConflict),
+  );
+  assert(
+    !unlitConflictParse.ok &&
+      unlitConflictParse.issues.some(
+        (candidate) => candidate.code === "extension-conflict",
+      ),
+    "Unlit and physical extension conflict was not rejected",
   );
 }
 

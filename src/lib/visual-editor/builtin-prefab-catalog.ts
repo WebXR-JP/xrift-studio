@@ -20,13 +20,29 @@ export const BUILTIN_PREFAB_DRAG_MIME =
 export const BUILTIN_PREFAB_RECIPE_IDS = {
   spawnPoint: "xrift-prefab.spawn-point",
   mirror: "xrift-prefab.mirror",
+  portal: "xrift-prefab.portal",
+  tagBoard: "xrift-prefab.tag-board",
+  videoScreen: "xrift-prefab.video-screen",
+  videoPlayer: "xrift-prefab.video-player",
+  liveVideoPlayer: "xrift-prefab.live-video-player",
+  screenShareDisplay: "xrift-prefab.screen-share-display",
 } as const;
 
-export type BuiltinPrefabIcon = "spawn-point" | "mirror";
+export type BuiltinPrefabIcon =
+  | "spawn"
+  | "mirror"
+  | "portal"
+  | "tagBoard"
+  | "videoScreen"
+  | "liveVideo"
+  | "screenShare";
 
 export type BuiltinPrefabVisual =
   | { kind: "spawn-point"; radius: number }
-  | { kind: "mirror"; size: readonly [number, number] };
+  | { kind: "mirror"; size: readonly [number, number] }
+  | { kind: "portal" }
+  | { kind: "tag-board" }
+  | { kind: "screen"; width: number };
 
 export type BuiltinPrefabRecipe = {
   id: string;
@@ -36,6 +52,13 @@ export type BuiltinPrefabRecipe = {
   projectKinds: readonly VisualProjectKind[];
   schemaId: XriftComponentSchemaId;
   componentProperties: JsonObject;
+  /** Functional Inspector fields that remain editable after placement. */
+  editablePropertyNames: readonly string[];
+  /** Shown before placement when the recipe needs a value to compile. */
+  configuration?: {
+    requiredBeforeCompile: boolean;
+    hint: string;
+  };
   defaultTransform: {
     position: Vec3;
     rotation: Vec3;
@@ -57,13 +80,14 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     id: BUILTIN_PREFAB_RECIPE_IDS.spawnPoint,
     name: "Spawn Point",
     description: "プレイヤーがワールドへ入る位置と向きを配置します。",
-    icon: "spawn-point",
+    icon: "spawn",
     projectKinds: WORLD_ONLY,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.spawnPoint,
     componentProperties: {
       position: [0, 0, 0],
       yaw: 0,
     },
+    editablePropertyNames: [],
     defaultTransform: {
       position: [0, 0, 0],
       rotation: [0, 0, 0],
@@ -86,12 +110,170 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
       textureResolution: 1024,
       lodDistance: 10,
     },
+    editablePropertyNames: [],
     defaultTransform: {
       position: [0, 1.5, 0],
       rotation: [0, 0, 0],
       scale: [1, 1, 1],
     },
     visual: { kind: "mirror", size: [3, 2] },
+  },
+  {
+    id: BUILTIN_PREFAB_RECIPE_IDS.portal,
+    name: "Portal",
+    description: "別のXRiftインスタンスへ移動するゲートを配置します。",
+    icon: "portal",
+    projectKinds: ALL_PROJECTS,
+    schemaId: XRIFT_COMPONENT_SCHEMA_IDS.portal,
+    componentProperties: {
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      disabled: false,
+    },
+    editablePropertyNames: ["instanceId", "disabled"],
+    configuration: {
+      requiredBeforeCompile: true,
+      hint: "配置後にInspectorで移動先のInstance IDを設定してください。",
+    },
+    defaultTransform: {
+      position: [0, 0, -3],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+    visual: { kind: "portal" },
+  },
+  {
+    id: BUILTIN_PREFAB_RECIPE_IDS.tagBoard,
+    name: "Tag Board",
+    description: "ユーザーがタグを選択できるボードを配置します。",
+    icon: "tagBoard",
+    projectKinds: ALL_PROJECTS,
+    schemaId: XRIFT_COMPONENT_SCHEMA_IDS.tagBoard,
+    componentProperties: {
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: 1,
+    },
+    editablePropertyNames: [
+      "tags",
+      "columns",
+      "title",
+      "instanceStateKey",
+    ],
+    configuration: {
+      requiredBeforeCompile: false,
+      hint: "標準タグをそのまま使うか、Inspectorで内容を変更できます。",
+    },
+    defaultTransform: {
+      position: [0, 0, -3],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+    visual: { kind: "tag-board" },
+  },
+  {
+    id: BUILTIN_PREFAB_RECIPE_IDS.videoScreen,
+    name: "Video Screen",
+    description: "同期再生に対応する動画スクリーンを配置します。",
+    icon: "videoScreen",
+    projectKinds: ALL_PROJECTS,
+    schemaId: XRIFT_COMPONENT_SCHEMA_IDS.videoScreen,
+    componentProperties: {
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [16 / 9 * 3, 3],
+    },
+    editablePropertyNames: [
+      "id",
+      "url",
+      "playing",
+      "currentTime",
+      "sync",
+      "muted",
+      "volume",
+    ],
+    configuration: {
+      requiredBeforeCompile: false,
+      hint: "Inspectorで動画URLと同期方法を設定できます。",
+    },
+    defaultTransform: {
+      position: [0, 2, -4],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+    visual: { kind: "screen", width: 16 / 9 * 3 },
+  },
+  {
+    id: BUILTIN_PREFAB_RECIPE_IDS.videoPlayer,
+    name: "Video Player",
+    description: "操作UI付きの録画動画プレイヤーを配置します。",
+    icon: "videoScreen",
+    projectKinds: ALL_PROJECTS,
+    schemaId: XRIFT_COMPONENT_SCHEMA_IDS.videoPlayer,
+    componentProperties: {
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      width: 4,
+    },
+    editablePropertyNames: ["id", "url", "playing", "volume"],
+    configuration: {
+      requiredBeforeCompile: false,
+      hint: "Inspectorまたは実行中の操作UIから動画URLを設定できます。",
+    },
+    defaultTransform: {
+      position: [0, 2, -4],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+    visual: { kind: "screen", width: 4 },
+  },
+  {
+    id: BUILTIN_PREFAB_RECIPE_IDS.liveVideoPlayer,
+    name: "Live Video Player",
+    description: "ライブストリーム向けの動画プレイヤーを配置します。",
+    icon: "liveVideo",
+    projectKinds: ALL_PROJECTS,
+    schemaId: XRIFT_COMPONENT_SCHEMA_IDS.liveVideoPlayer,
+    componentProperties: {
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      width: 4,
+    },
+    editablePropertyNames: ["id", "url", "playing", "volume", "sync"],
+    configuration: {
+      requiredBeforeCompile: false,
+      hint: "Inspectorまたは実行中の操作UIから配信URLを設定できます。",
+    },
+    defaultTransform: {
+      position: [0, 2, -4],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+    visual: { kind: "screen", width: 4 },
+  },
+  {
+    id: BUILTIN_PREFAB_RECIPE_IDS.screenShareDisplay,
+    name: "Screen Share Display",
+    description: "画面共有の映像を表示するスクリーンを配置します。",
+    icon: "screenShare",
+    projectKinds: ALL_PROJECTS,
+    schemaId: XRIFT_COMPONENT_SCHEMA_IDS.screenShareDisplay,
+    componentProperties: {
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      width: 4,
+    },
+    editablePropertyNames: ["id", "targetFps"],
+    configuration: {
+      requiredBeforeCompile: false,
+      hint: "Inspectorで識別IDと更新フレームレートを設定できます。",
+    },
+    defaultTransform: {
+      position: [0, 2, -4],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+    visual: { kind: "screen", width: 4 },
   },
 ] as const;
 
@@ -159,6 +341,9 @@ export function createBuiltinPrefabEntity(
       source: "builtin-prefab",
       recipeId: recipe.id,
       readOnly: true,
+      ...(recipe.editablePropertyNames.length > 0
+        ? { editablePropertyNames: [...recipe.editablePropertyNames] }
+        : {}),
     },
   });
   if (!component) return null;
