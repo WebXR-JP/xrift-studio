@@ -10,7 +10,13 @@ import {
   GLTFLoader,
   type GLTF,
 } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
+import {
+  VRMLoaderPlugin,
+  VRMUtils,
+  type VRM,
+} from "@pixiv/three-vrm";
 import {
   Box3,
   DoubleSide,
@@ -25,6 +31,7 @@ import {
   normalizeMaterialProperties,
   type AssetManifest,
   type MaterialAsset,
+  type ModelPoseState,
 } from "../../lib/visual-editor";
 import {
   applyCoreMaterialPreviewTextures,
@@ -54,6 +61,7 @@ type Props = {
   selected: boolean;
   assets: AssetManifest;
   assignedMaterials: readonly ProjectModelMaterialAssignment[];
+  pose?: ModelPoseState;
 };
 
 type LoadState =
@@ -75,6 +83,7 @@ export function ProjectModelVisual({
   selected,
   assets,
   assignedMaterials,
+  pose,
 }: Props) {
   const cacheKey = `${projectPath}\n${sourceRelativePath}\n${sourceHash ?? ""}`;
   const [state, setState] = useState<LoadState>({ status: "loading" });
@@ -124,6 +133,7 @@ export function ProjectModelVisual({
           receiveShadow={receiveShadow}
           selected={selected}
           assignedMaterials={resolvedMaterials}
+          pose={pose}
         />
       )}
     </ProjectModelMaterialTextureResolver>
@@ -206,6 +216,7 @@ function ProjectModelRender({
   receiveShadow,
   selected,
   assignedMaterials,
+  pose,
 }: {
   state: LoadState;
   importScale: number;
@@ -213,18 +224,20 @@ function ProjectModelRender({
   receiveShadow: boolean;
   selected: boolean;
   assignedMaterials: readonly ResolvedProjectModelMaterialAssignment[];
+  pose?: ModelPoseState;
 }) {
   const readyObject = state.status === "ready" ? state.object : null;
   const renderedModel = useMemo(() => {
     if (!readyObject) return null;
     const object = clone(readyObject);
+    applyStaticModelPose(object, pose);
     const selectionBounds = getModelSelectionBounds(object);
     const ownedMaterials = applyAssignedMaterialPreviews(
       object,
       assignedMaterials,
     );
     return { object, ownedMaterials, selectionBounds };
-  }, [assignedMaterials, readyObject]);
+  }, [assignedMaterials, pose, readyObject]);
   const renderedObject = renderedModel?.object ?? null;
   const invalidate = useThree((canvasState) => canvasState.invalidate);
 
@@ -330,6 +343,43 @@ export function applyAssignedMaterialPreviews(
       : createPreview(mesh.material);
   });
   return ownedMaterials;
+}
+
+/** Applies the saved per-Entity static pose without mutating the cached Model. */
+export function applyStaticModelPose(
+  object: Object3D,
+  pose: ModelPoseState | undefined,
+): void {
+  if (!pose) return;
+  object.traverse((child) => {
+    const bone = child as Object3D & { isBone?: boolean };
+    const rotation = bone.isBone && child.name ? pose.bones[child.name] : undefined;
+    if (rotation?.every(Number.isFinite)) {
+      child.rotation.set(
+        child.rotation.x + rotation[0],
+        child.rotation.y + rotation[1],
+        child.rotation.z + rotation[2],
+      );
+    }
+    const mesh = child as Object3D & {
+      morphTargetDictionary?: Record<string, number>;
+      morphTargetInfluences?: number[];
+    };
+    if (!mesh.morphTargetDictionary || !mesh.morphTargetInfluences) return;
+    Object.entries(pose.morphTargets).forEach(([key, weight]) => {
+      const index = mesh.morphTargetDictionary?.[key];
+      if (
+        index === undefined ||
+        !Number.isFinite(weight) ||
+        weight < 0 ||
+        weight > 1
+      ) {
+        return;
+      }
+      mesh.morphTargetInfluences![index] = weight;
+    });
+  });
+  object.updateMatrixWorld(true);
 }
 
 /**
@@ -534,6 +584,28 @@ function tagSourceMaterialIndices(gltf: GLTF): void {
   });
 }
 
+function tagObjMaterialIndices(object: Object3D): void {
+  const sourceIndexByMaterial = new Map<Material, number>();
+  object.traverse((child) => {
+    const mesh = child as Object3D & {
+      isMesh?: boolean;
+      material?: Material | Material[];
+    };
+    if (!mesh.isMesh || !mesh.material) return;
+    const materials = Array.isArray(mesh.material)
+      ? mesh.material
+      : [mesh.material];
+    materials.forEach((material) => {
+      let index = sourceIndexByMaterial.get(material);
+      if (index === undefined) {
+        index = sourceIndexByMaterial.size;
+        sourceIndexByMaterial.set(material, index);
+      }
+      material.userData[PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY] = index;
+    });
+  });
+}
+
 function getSourceMaterialIndex(material: Material): number | undefined {
   const value =
     material.userData[PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY];
@@ -547,10 +619,16 @@ async function parseSelfContainedModel(
   sourceRelativePath: string,
 ): Promise<Object3D> {
   const format = modelFormat(sourceRelativePath);
-  if (!format) throw new Error("GLBまたはglTFのみ表示できます");
+  if (!format) throw new Error("GLB、glTF、OBJまたはVRMのみ表示できます");
 
   const bytes = new Uint8Array(buffer);
-  const source = format === "glb" ? buffer : new TextDecoder().decode(bytes);
+  if (format === "obj") {
+    const object = new OBJLoader().parse(new TextDecoder().decode(bytes));
+    tagObjMaterialIndices(object);
+    return object;
+  }
+
+  const source = format === "gltf" ? new TextDecoder().decode(bytes) : buffer;
   const document = parseGltfDocument(bytes, format);
   if (hasExternalResources(document)) {
     throw new Error(
@@ -560,10 +638,15 @@ async function parseSelfContainedModel(
 
   return new Promise<Object3D>((resolve, reject) => {
     const loader = new GLTFLoader();
+    if (format === "vrm") {
+      loader.register((parser) => new VRMLoaderPlugin(parser));
+    }
     loader.parse(
       source,
       "",
       (gltf) => {
+        const vrm = gltf.userData.vrm as VRM | undefined;
+        if (vrm) VRMUtils.rotateVRM0(vrm);
         tagSourceMaterialIndices(gltf);
         resolve(gltf.scene);
       },
@@ -572,21 +655,25 @@ async function parseSelfContainedModel(
   });
 }
 
-function modelFormat(sourceRelativePath: string): "glb" | "gltf" | null {
+function modelFormat(
+  sourceRelativePath: string,
+): "glb" | "gltf" | "obj" | "vrm" | null {
   const lowerPath = sourceRelativePath.toLowerCase();
   if (lowerPath.endsWith(".glb")) return "glb";
   if (lowerPath.endsWith(".gltf")) return "gltf";
+  if (lowerPath.endsWith(".obj")) return "obj";
+  if (lowerPath.endsWith(".vrm")) return "vrm";
   return null;
 }
 
 function parseGltfDocument(
   bytes: Uint8Array,
-  format: "glb" | "gltf",
+  format: "glb" | "gltf" | "vrm",
 ): GltfResourceDocument {
   const text =
-    format === "glb"
-      ? readGlbJsonChunk(bytes)
-      : new TextDecoder().decode(bytes);
+    format === "gltf"
+      ? new TextDecoder().decode(bytes)
+      : readGlbJsonChunk(bytes);
   const parsed = JSON.parse(text) as unknown;
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("glTF JSONが不正です");

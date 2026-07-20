@@ -623,6 +623,87 @@ export function runVisualCompilerFixtureAssertions(
     "Model copy plan support flag is incorrect",
   );
 
+  const objModel: ModelAsset = {
+    ...projectModel,
+    id: "fixture-model-obj",
+    name: "Fixture OBJ",
+    source: { kind: "project", relativePath: "assets/models/fixture.obj" },
+    materialSlots: [
+      {
+        slot: "body",
+        name: "Body",
+        sourceMaterialIndex: 0,
+        defaultMaterialAssetId: BUILTIN_ASSET_IDS.material.blue,
+      },
+    ],
+  };
+  const posedObjScene: SceneDocument = {
+    ...modelScene,
+    entities: {
+      ...modelScene.entities,
+      [modelEntity.id]: {
+        ...modelScene.entities[modelEntity.id],
+        components: modelScene.entities[modelEntity.id].components.map(
+          (component) =>
+            component.type === "mesh"
+              ? {
+                  ...component,
+                  geometryAssetId: objModel.id,
+                  geometry: { kind: "asset" as const, assetId: objModel.id },
+                  materialBindings: [
+                    {
+                      slot: "body",
+                      materialAssetId: BUILTIN_ASSET_IDS.material.blue,
+                    },
+                  ],
+                  modelPose: {
+                    bones: { Head: [0.1, 0.2, 0.3] as [number, number, number] },
+                    morphTargets: { Smile: 0.75 },
+                  },
+                }
+              : component,
+        ),
+      },
+    },
+  };
+  const posedObjResult = compileVisualProject(
+    {
+      ...world,
+      scenes: { [posedObjScene.sceneId]: posedObjScene },
+      assets: {
+        ...world.assets,
+        assets: { ...world.assets.assets, [objModel.id]: objModel },
+      },
+    },
+    { generatedAt: fixedTime },
+  );
+  const posedObjSource =
+    posedObjResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(posedObjResult.canStage, "Project OBJ with a static pose should be stageable");
+  [
+    'OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js"',
+    "useLoader(OBJLoader, modelUrl)",
+    "cloneSkeleton(scene)",
+    '"Head":[0.1,0.2,0.3]',
+    '"Smile":0.75',
+  ].forEach((fragment) =>
+    assert(
+      posedObjSource.includes(fragment),
+      `OBJ static pose source is missing: ${fragment}`,
+    ),
+  );
+  assert(
+    posedObjResult.assetCopyPlan.some(
+      (entry) =>
+        entry.assetId === objModel.id &&
+        entry.supportedByCompiler &&
+        entry.targetRelativePath.endsWith("fixture.obj"),
+    ),
+    "OBJ copy plan support flag is incorrect",
+  );
+
   const interactiveEntity = modelScene.entities[modelEntity.id];
   const skybox = createXriftComponent(XRIFT_COMPONENT_SCHEMA_IDS.skybox);
   const videoScreen = createXriftComponent(

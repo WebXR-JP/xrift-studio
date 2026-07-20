@@ -28,6 +28,8 @@ import {
   type MaterialBinding,
   type MaterialAssetPatch,
   type ModelAssetPatch,
+  type ModelBoneMetadata,
+  type ModelMorphTargetMetadata,
   type ModelPoseState,
   type MaterialSlotDefinition,
   type MeshComponent,
@@ -504,6 +506,14 @@ function MeshInspector({
           slot: binding.slot,
           name: binding.slot,
         }));
+  const model = geometry?.kind === "model" ? geometry : undefined;
+  const bones = model?.importMetadata?.bones ?? [];
+  const morphTargets = model?.importMetadata?.morphTargets ?? [];
+  const [selectedBoneKey, setSelectedBoneKey] = useState(bones[0]?.key ?? "");
+  useEffect(() => {
+    if (bones.some((bone) => bone.key === selectedBoneKey)) return;
+    setSelectedBoneKey(bones[0]?.key ?? "");
+  }, [bones, selectedBoneKey]);
 
   return (
     <ComponentCard title="Mesh Renderer" subtitle="シーン">
@@ -607,6 +617,18 @@ function MeshInspector({
         ) : null}
       </div>
 
+      {model ? (
+        <ModelPoseEditor
+          pose={component.modelPose}
+          bones={bones}
+          morphTargets={morphTargets}
+          selectedBoneKey={selectedBoneKey}
+          readOnly={readOnly}
+          onSelectedBoneChange={setSelectedBoneKey}
+          onChange={(modelPose) => onChange({ modelPose })}
+        />
+      ) : null}
+
       <div className="space-y-2 border-t border-slate-100 pt-2">
         <ToggleRow
           label="Cast Shadows"
@@ -622,6 +644,178 @@ function MeshInspector({
         />
       </div>
     </ComponentCard>
+  );
+}
+
+function ModelPoseEditor({
+  pose,
+  bones,
+  morphTargets,
+  selectedBoneKey,
+  readOnly,
+  onSelectedBoneChange,
+  onChange,
+}: {
+  pose?: ModelPoseState;
+  bones: readonly ModelBoneMetadata[];
+  morphTargets: readonly ModelMorphTargetMetadata[];
+  selectedBoneKey: string;
+  readOnly: boolean;
+  onSelectedBoneChange: (key: string) => void;
+  onChange: (pose: ModelPoseState) => void;
+}) {
+  const [poseOpen, setPoseOpen] = useState(
+    bones.length > 0 || morphTargets.length > 0,
+  );
+  const current: ModelPoseState = pose ?? { bones: {}, morphTargets: {} };
+  const rotation = current.bones[selectedBoneKey] ?? [0, 0, 0];
+  const hasPose =
+    Object.keys(current.bones).length > 0 ||
+    Object.keys(current.morphTargets).length > 0;
+  const availableBoneKeys = new Set(bones.map((bone) => bone.key));
+  const availableMorphKeys = new Set(morphTargets.map((target) => target.key));
+  const missingTargetCount =
+    Object.keys(current.bones).filter((key) => !availableBoneKeys.has(key)).length +
+    Object.keys(current.morphTargets).filter(
+      (key) => !availableMorphKeys.has(key),
+    ).length;
+
+  const updateBoneAxis = (axis: number, degrees: number) => {
+    if (!selectedBoneKey || !Number.isFinite(degrees)) return;
+    const nextRotation: [number, number, number] = [...rotation];
+    nextRotation[axis] = (degrees * Math.PI) / 180;
+    const bonesNext = { ...current.bones };
+    if (nextRotation.every((value) => Math.abs(value) < 1e-7)) {
+      delete bonesNext[selectedBoneKey];
+    } else {
+      bonesNext[selectedBoneKey] = nextRotation;
+    }
+    onChange({ bones: bonesNext, morphTargets: { ...current.morphTargets } });
+  };
+
+  const updateMorphTarget = (key: string, weight: number) => {
+    if (!Number.isFinite(weight)) return;
+    const morphTargetsNext = { ...current.morphTargets };
+    const normalized = Math.min(1, Math.max(0, weight));
+    if (normalized < 1e-7) delete morphTargetsNext[key];
+    else morphTargetsNext[key] = normalized;
+    onChange({ bones: { ...current.bones }, morphTargets: morphTargetsNext });
+  };
+
+  return (
+    <details
+      className="border-t border-slate-100 pt-2"
+      open={poseOpen}
+      onToggle={(event) => setPoseOpen(event.currentTarget.open)}
+    >
+      <summary className="cursor-pointer text-[13px] font-semibold uppercase tracking-wide text-slate-600">
+        モデルポーズ
+      </summary>
+      <p className="mt-1 text-xs leading-4 text-slate-500">
+        この配置だけに保存する静的なポーズです。Asset共通値や別の配置は変更しません。
+      </p>
+
+      {bones.length > 0 ? (
+        <div className="mt-2 space-y-2 rounded border border-slate-200 bg-slate-50 p-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-slate-700">
+              ボーン {bones.length}件
+            </span>
+            <span className="text-[11px] text-slate-500">回転は度単位</span>
+          </div>
+          <select
+            value={selectedBoneKey}
+            disabled={readOnly}
+            onChange={(event) => onSelectedBoneChange(event.currentTarget.value)}
+            className="h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
+          >
+            {bones.map((bone) => (
+              <option key={bone.key} value={bone.key}>
+                {bone.humanoidName
+                  ? `${bone.humanoidName} / ${bone.name}`
+                  : bone.name}
+              </option>
+            ))}
+          </select>
+          <div className="grid grid-cols-3 gap-1.5">
+            {(["X", "Y", "Z"] as const).map((axis, index) => (
+              <label key={axis} className="text-[11px] font-medium text-slate-600">
+                {axis}
+                <input
+                  type="number"
+                  min={-360}
+                  max={360}
+                  step={1}
+                  value={roundTo((rotation[index] * 180) / Math.PI, 2)}
+                  disabled={readOnly}
+                  onChange={(event) =>
+                    updateBoneAxis(index, event.currentTarget.valueAsNumber)
+                  }
+                  className="mt-1 h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs tabular-nums text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {morphTargets.length > 0 ? (
+        <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2">
+          <p className="text-xs font-semibold text-slate-700">
+            シェイプキー {morphTargets.length}件
+          </p>
+          <div className="scrollbar-thin mt-2 max-h-52 space-y-2 overflow-auto pr-1">
+            {morphTargets.map((target) => {
+              const weight = current.morphTargets[target.key] ?? 0;
+              return (
+                <label
+                  key={target.key}
+                  className="grid grid-cols-[minmax(72px,1fr)_minmax(80px,1.4fr)_42px] items-center gap-2 text-[11px] text-slate-600"
+                >
+                  <span className="truncate" title={target.name}>{target.name}</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={weight}
+                    disabled={readOnly}
+                    onChange={(event) =>
+                      updateMorphTarget(target.key, event.currentTarget.valueAsNumber)
+                    }
+                    className="w-full accent-violet-600"
+                  />
+                  <span className="text-right tabular-nums text-slate-500">
+                    {weight.toFixed(2)}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {bones.length === 0 && morphTargets.length === 0 ? (
+        <p className="mt-2 rounded border border-dashed border-slate-300 bg-slate-50 p-2 text-xs leading-4 text-slate-500">
+          このモデルには編集できるボーンまたはシェイプキーがありません。
+        </p>
+      ) : null}
+
+      {missingTargetCount > 0 ? (
+        <p className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs leading-4 text-amber-800">
+          再インポート後に見つからないポーズ対象が{missingTargetCount}件あります。残っている対象だけを適用しています。リセットすると未適用値を整理できます。
+        </p>
+      ) : null}
+
+      <button
+        type="button"
+        disabled={readOnly || !hasPose}
+        onClick={() => onChange({ bones: {}, morphTargets: {} })}
+        className="mt-2 h-8 rounded border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        ポーズをリセット
+      </button>
+    </details>
   );
 }
 

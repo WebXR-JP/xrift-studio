@@ -1,6 +1,7 @@
 import {
   Box3,
   BoxGeometry,
+  Bone,
   DoubleSide,
   Group,
   Mesh,
@@ -24,6 +25,7 @@ import {
   PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY,
   applyAssignedMaterialPreview,
   applyAssignedMaterialPreviews,
+  applyStaticModelPose,
   createAssignedMaterialPreviewMaterial,
   getModelSelectionBounds,
 } from "./ProjectModelVisual";
@@ -35,6 +37,7 @@ import {
 
 export function runProjectModelMaterialPreviewFixtureAssertions(): void {
   assertModelSelectionBoundsStayLocal();
+  assertStaticModelPoseUsesRestOffsets();
 
   const project = createPrototypeProject("world", "model-material-preview");
   const fixtureTextureAsset: TextureAsset = {
@@ -211,6 +214,36 @@ export function runProjectModelMaterialPreviewFixtureAssertions(): void {
   root.geometry.dispose();
   source.dispose();
   texture.dispose();
+}
+
+function assertStaticModelPoseUsesRestOffsets(): void {
+  const root = new Group();
+  const head = new Bone();
+  head.name = "Head";
+  head.rotation.set(0.1, 0.2, 0.3);
+  const face = new Mesh(new BoxGeometry(), new MeshBasicMaterial()) as Mesh & {
+    morphTargetDictionary: Record<string, number>;
+    morphTargetInfluences: number[];
+  };
+  face.morphTargetDictionary = { Smile: 0 };
+  face.morphTargetInfluences = [0];
+  root.add(head, face);
+
+  applyStaticModelPose(root, {
+    bones: { Head: [0.2, -0.1, 0.4] },
+    morphTargets: { Smile: 0.75 },
+  });
+
+  assert(
+    Math.abs(head.rotation.x - 0.3) < 1e-6 &&
+      Math.abs(head.rotation.y - 0.1) < 1e-6 &&
+      Math.abs(head.rotation.z - 0.7) < 1e-6,
+    "Static bone pose did not apply as a rest-pose offset",
+  );
+  assert(
+    face.morphTargetInfluences[0] === 0.75,
+    "Static shape-key pose was not applied",
+  );
 }
 
 function assertTextureLoadStatusOnlyReportsSupportedReadyAssets(

@@ -22,11 +22,24 @@ export type PrefabSourceReference = {
   rootEntityIds: string[];
 };
 
+export type PrefabImportMetadata = {
+  sourceFormat: "unity-yaml";
+  sourceName: string;
+  sourcePath: string;
+  sourceHash: string;
+  /** Unity class IDs retained as an audit trail even when Studio has no peer. */
+  componentClassCounts: Record<string, number>;
+  unsupportedComponentClassIds: string[];
+  /** Scripts are intentionally data-only; Studio never translates C# to JS. */
+  csharpConversion: "not-attempted";
+};
+
 export type PrefabDocument = {
   schemaVersion: typeof PREFAB_DOCUMENT_SCHEMA_VERSION;
   prefabId: string;
   name: string;
   source: PrefabSourceReference;
+  importMetadata?: PrefabImportMetadata;
   rootEntityIds: string[];
   entities: Record<string, SceneEntity>;
 };

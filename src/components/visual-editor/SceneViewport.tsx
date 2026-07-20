@@ -287,6 +287,7 @@ function MeshVisual({
         selected={selected || materialDropHighlighted}
         assets={assets}
         assignedMaterials={assignedModelMaterials}
+        pose={component.modelPose}
       />
     );
   }
@@ -1968,7 +1969,7 @@ function resolveProjectModelSource(
   if (!relativePath || /^[a-z][a-z0-9+.-]*:/i.test(relativePath)) {
     return undefined;
   }
-  return /\.(?:glb|gltf)$/i.test(relativePath) ? relativePath : undefined;
+  return /\.(?:glb|gltf|obj|vrm)$/i.test(relativePath) ? relativePath : undefined;
 }
 
 function hasModelProxy(

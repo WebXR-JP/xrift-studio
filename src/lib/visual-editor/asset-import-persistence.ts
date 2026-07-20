@@ -63,6 +63,44 @@ export async function commitAssetImportPlanToDisk(
 }
 
 /**
+ * Commits every file produced by a compound import in one native transaction.
+ * Unity packages use this boundary so a package cannot leave half of its
+ * convertible models and textures on disk when a later asset fails.
+ */
+export async function commitAssetImportPlansToDisk(
+  projectPath: string,
+  manifest: AssetManifest,
+  plans: readonly AssetImportPlan[],
+): Promise<AssetManifest> {
+  let candidate = manifest;
+  const writes = new Map<string, AssetImportWrite>();
+
+  for (const plan of plans) {
+    candidate = await commitAssetImportPlan(candidate, plan, async (request) => {
+      for (const write of request.writes) {
+        // Import destinations are content-addressed. Repeated package entries
+        // with the same destination therefore represent the same source.
+        writes.set(write.relativePath, write);
+      }
+    });
+  }
+
+  if (writes.size === 0) return candidate;
+  const transactionId = `asset-import-unity-${Date.now().toString(36)}`;
+  await tauri.commitVisualAssetImport(
+    projectPath,
+    transactionId,
+    await Promise.all(
+      [...writes.values()].map(async (write) => ({
+        relativePath: write.relativePath,
+        dataUrl: await importWriteDataUrl(write),
+      })),
+    ),
+  );
+  return candidate;
+}
+
+/**
  * Reimports a Model from its current project-relative source. IPC, data URL
  * transport, inspection and the atomic Asset commit stay outside React. A
  * failure always returns the exact input manifest as the last-known-good state.
@@ -85,16 +123,19 @@ export async function reimportModelAssetFromDisk(
 
   const sourcePath = asset.source.relativePath;
   const fileName = sourcePath.split("/").pop() ?? `${asset.id}.glb`;
-  const sourceFormat = fileName.toLowerCase().endsWith(".gltf")
-    ? "gltf"
-    : fileName.toLowerCase().endsWith(".glb")
-      ? "glb"
+  const extension = fileName.toLowerCase().split(".").pop();
+  const sourceFormat =
+    extension === "glb" ||
+    extension === "gltf" ||
+    extension === "obj" ||
+    extension === "vrm"
+      ? extension
       : undefined;
   if (!sourceFormat) {
     return failedModelReimport(
       manifest,
       [],
-      "再取り込み元はGLBまたはglTFである必要があります",
+      "再取り込み元はGLB、glTF、OBJまたはVRMである必要があります",
       onProgress,
     );
   }
@@ -109,7 +150,13 @@ export async function reimportModelAssetFromDisk(
       fileName,
       bytes,
       mimeType:
-        sourceFormat === "glb" ? "model/gltf-binary" : "model/gltf+json",
+        sourceFormat === "glb"
+          ? "model/gltf-binary"
+          : sourceFormat === "gltf"
+            ? "model/gltf+json"
+            : sourceFormat === "obj"
+              ? "model/obj"
+              : "model/vrm",
     }, manifest);
     diagnostics = plan.diagnostics;
     if (!plan.canCommit || !plan.asset) {

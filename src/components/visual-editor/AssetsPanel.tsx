@@ -101,7 +101,7 @@ function assetKindLabel(asset: SceneAsset): string {
     case "primitive":
       return "Primitive";
     case "model":
-      return "GLTF / Model";
+      return "Model";
     case "material":
       return "Material";
     case "texture":
@@ -976,7 +976,12 @@ function ImportQueueEntry({
   onRemove: (id: string) => void;
   onReveal: (entry: PendingImport) => void;
 }) {
-  const Icon = entry.resourceKind === "texture" ? EDITOR_ICONS.texture : EDITOR_ICONS.model;
+  const Icon =
+    entry.resourceKind === "texture"
+      ? EDITOR_ICONS.texture
+      : entry.resourceKind === "unity-package"
+        ? EDITOR_ICONS.prefab
+        : EDITOR_ICONS.model;
   const diagnostic = entry.diagnostics[0];
   const removable = canRemoveImport(entry.status);
   return (
@@ -1019,7 +1024,9 @@ function ImportQueueEntry({
       ) : null}
       {entry.result ? (
         <p className="mt-1 text-[11px] text-editor-muted">
-          Material {entry.result.materialCount}件・Texture {entry.result.textureCount}件
+          {entry.resourceKind === "unity-package"
+            ? `Prefab ${entry.result.prefabCount ?? 0}件・Entity ${entry.result.entityCount ?? 0}件・Asset ${entry.result.assetCount ?? 0}件${entry.result.warningCount ? `・要確認 ${entry.result.warningCount}件` : ""}`
+            : `Material ${entry.result.materialCount}件・Texture ${entry.result.textureCount}件`}
         </p>
       ) : null}
       {entry.assetId || removable ? (
@@ -1513,7 +1520,7 @@ export function AssetsPanel({
         type="file"
         multiple
         disabled={importLocked}
-        accept=".glb,.gltf,.png,.jpg,.jpeg,.webp,.ktx2,image/png,image/jpeg,image/webp"
+        accept=".unitypackage,.unity,.prefab,.glb,.gltf,.obj,.vrm,.png,.jpg,.jpeg,.webp,.ktx2,model/obj,model/vrm,image/png,image/jpeg,image/webp"
         onChange={handleFileInput}
         className="sr-only"
       />
@@ -1801,14 +1808,14 @@ export function AssetsPanel({
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="folder" label="新規フォルダー" command="asset.create-folder" onClick={() => { setContextMenu(null); onCommand("asset.create-folder"); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="material" label="新規マテリアル" command="asset.create-material" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-material", { folderId }); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="particle" label="新規Particle" command="asset.create-particle" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-particle", { folderId }); }} />
-          <ContextMenuItem disabled={importLocked} disabledReason={importDisabledReason} icon="texture" label="テクスチャをインポート…" command="asset.import" onClick={() => { setContextMenu(null); if (onCommand("asset.import")) fileInputRef.current?.click(); }} />
+          <ContextMenuItem disabled={importLocked} disabledReason={importDisabledReason} icon="texture" label="ファイルをインポート…" command="asset.import" onClick={() => { setContextMenu(null); if (onCommand("asset.import")) fileInputRef.current?.click(); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="prefab" label="EntityからPrefabを作成" command="prefab.create" onClick={() => { setContextMenu(null); onPhaseNotice("HierarchyのEntityをAssetsへドラッグしてください"); }} />
         </div>
       ) : null}
 
       {fileDragOver ? (
         <div className="pointer-events-none absolute inset-2 z-40 flex items-center justify-center rounded-md border-2 border-dashed border-violet-500 bg-white/95 px-4 text-center text-[12px] font-semibold leading-5 text-violet-900 shadow-lg">
-          {importDisabledReason ?? "GLB / GLTF / PNG / JPG / WebP / KTX2 を検証してインポート"}
+          {importDisabledReason ?? "UnityPackage / Scene / Prefab / Model / Texture を解析してインポート"}
         </div>
       ) : null}
     </section>

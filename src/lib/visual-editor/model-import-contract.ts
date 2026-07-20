@@ -156,12 +156,17 @@ export function validateModelImportMetadata(
     return [issue(path, "type", "Model import metadata must be an object")];
   }
   const issues: ModelImportContractIssue[] = [];
-  if (value.sourceFormat !== "glb" && value.sourceFormat !== "gltf") {
+  if (
+    value.sourceFormat !== "glb" &&
+    value.sourceFormat !== "gltf" &&
+    value.sourceFormat !== "obj" &&
+    value.sourceFormat !== "vrm"
+  ) {
     issues.push(
       issue(
         `${path}.sourceFormat`,
         "enum",
-        "Model sourceFormat must be glb or gltf",
+        "Model sourceFormat must be glb, gltf, obj or vrm",
       ),
     );
   }
@@ -186,6 +191,39 @@ export function validateModelImportMetadata(
   }
   validateModelBounds(value.bounds, `${path}.bounds`, issues);
   validateAnimations(value.animations, `${path}.animations`, issues);
+  validateNamedModelParts(value.bones, `${path}.bones`, issues);
+  validateNamedModelParts(value.morphTargets, `${path}.morphTargets`, issues);
+  if (
+    value.vrmVersion !== undefined &&
+    value.vrmVersion !== "0" &&
+    value.vrmVersion !== "1"
+  ) {
+    issues.push(
+      issue(
+        `${path}.vrmVersion`,
+        "enum",
+        "VRM version must be 0 or 1",
+      ),
+    );
+  }
+  if (value.sourceFormat !== "vrm" && value.vrmVersion !== undefined) {
+    issues.push(
+      issue(
+        `${path}.vrmVersion`,
+        "consistency",
+        "VRM version is only valid for a VRM source",
+      ),
+    );
+  }
+  if (value.sourceFormat === "vrm" && value.vrmVersion === undefined) {
+    issues.push(
+      issue(
+        `${path}.vrmVersion`,
+        "required",
+        "A VRM source requires a parsed VRM version",
+      ),
+    );
+  }
   validateUniqueStrings(value.extensionsUsed, `${path}.extensionsUsed`, issues);
   validateUniqueStrings(
     value.extensionsRequired,
@@ -535,18 +573,26 @@ function validateModelSourceMetadataConsistency(
     return;
   }
   const extension = asset.source.relativePath.split(".").pop()?.toLowerCase();
-  if (extension !== "glb" && extension !== "gltf") {
+  if (
+    extension !== "glb" &&
+    extension !== "gltf" &&
+    extension !== "obj" &&
+    extension !== "vrm"
+  ) {
     issues.push(
       issue(
         `${path}.source.relativePath`,
         "extension",
-        "Model source path must end in .glb or .gltf",
+        "Model source path must end in .glb, .gltf, .obj or .vrm",
       ),
     );
     return;
   }
   if (
-    (extension === "glb" || extension === "gltf") &&
+    (extension === "glb" ||
+      extension === "gltf" ||
+      extension === "obj" ||
+      extension === "vrm") &&
     asset.importMetadata.sourceFormat !== extension
   ) {
     issues.push(
@@ -557,6 +603,49 @@ function validateModelSourceMetadataConsistency(
       ),
     );
   }
+}
+
+function validateNamedModelParts(
+  value: unknown,
+  path: string,
+  issues: ModelImportContractIssue[],
+): void {
+  // Older manifests did not persist pose targets.
+  if (value === undefined) return;
+  if (!Array.isArray(value)) {
+    issues.push(issue(path, "type", "Model pose target metadata must be an array"));
+    return;
+  }
+  const keys = new Set<string>();
+  value.forEach((candidate, index) => {
+    const targetPath = `${path}.${index}`;
+    if (!isRecord(candidate)) {
+      issues.push(issue(targetPath, "type", "Model pose target must be an object"));
+      return;
+    }
+    if (typeof candidate.key !== "string" || !candidate.key.trim()) {
+      issues.push(issue(`${targetPath}.key`, "required", "Model pose target key is required"));
+    } else if (keys.has(candidate.key)) {
+      issues.push(issue(`${targetPath}.key`, "duplicate", "Model pose target key is duplicated"));
+    } else {
+      keys.add(candidate.key);
+    }
+    if (typeof candidate.name !== "string" || !candidate.name.trim()) {
+      issues.push(issue(`${targetPath}.name`, "required", "Model pose target name is required"));
+    }
+    if (
+      candidate.humanoidName !== undefined &&
+      (typeof candidate.humanoidName !== "string" || !candidate.humanoidName.trim())
+    ) {
+      issues.push(
+        issue(
+          `${targetPath}.humanoidName`,
+          "type",
+          "VRM humanoid bone name must be a non-empty string",
+        ),
+      );
+    }
+  });
 }
 
 function validateModelThumbnail(

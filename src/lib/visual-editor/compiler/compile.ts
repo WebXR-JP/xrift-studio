@@ -75,6 +75,7 @@ type CompileContext = {
   diagnostics: CompilerDiagnostic[];
   diagnosticKeys: Set<string>;
   imports: Set<string>;
+  extraImports: Set<string>;
   reactValueImports: Set<string>;
   reactTypeImports: Set<string>;
   fiberImports: Set<string>;
@@ -443,6 +444,7 @@ function generateComponentSource(
     diagnostics,
     diagnosticKeys: new Set(),
     imports: new Set(),
+    extraImports: new Set(),
     reactValueImports: new Set(),
     reactTypeImports: new Set(["FC"]),
     fiberImports: new Set(),
@@ -484,6 +486,7 @@ function generateComponentSource(
   const threeValueImports = new Set(context.threeValueImports);
   if (context.usesDoubleSide) threeValueImports.add("DoubleSide");
   const imports = [
+    ...[...context.extraImports].sort(),
     `import type { ${[...context.reactTypeImports].sort().join(", ")} } from "react";`,
     ...(context.reactValueImports.size > 0
       ? [`import { ${[...context.reactValueImports].sort().join(", ")} } from "react";`]
@@ -943,7 +946,7 @@ function renderModelMesh(
     addDiagnostic(context, {
       severity: "blocking",
       code: "model-source-unsupported",
-      message: "Modelはproject-relativeなGLB/GLTF sourceである必要があります",
+      message: "Modelはproject-relativeなGLB / glTF / OBJ / VRM sourceである必要があります",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: mesh.id,
@@ -957,7 +960,19 @@ function renderModelMesh(
   const urlConstant = registerAssetUrl(model, runtimeUrl, context);
   const componentName = generatedIdentifier("CompiledModel", mesh.id);
   context.dreiImports.add("Clone");
-  context.dreiImports.add("useGLTF");
+  const sourceExtension =
+    model.source.kind === "project"
+      ? fileExtension(model.source.relativePath)
+      : model.importMetadata?.sourceFormat;
+  const isObj = sourceExtension === "obj";
+  if (isObj) {
+    context.fiberImports.add("useLoader");
+    context.extraImports.add(
+      'import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";',
+    );
+  } else {
+    context.dreiImports.add("useGLTF");
+  }
 
   const materialComponents = overrides.map((override) => ({
     ...override,
@@ -975,13 +990,20 @@ function renderModelMesh(
   const modelScale = Number.isFinite(model.importSettings.scale)
     ? model.importSettings.scale
     : 1;
+  const poseSource = renderCompiledModelPose(mesh, context);
+  const vrm0Rotation =
+    model.importMetadata?.sourceFormat === "vrm" &&
+    model.importMetadata.vrmVersion === "0"
+      ? ` rotation={[0, ${formatNumber(Math.PI)}, 0]}`
+      : "";
   const source = `const ${componentName}: FC = () => {
   const modelUrl = useCompiledAssetUrl(${urlConstant});
-  const { scene } = useGLTF(modelUrl);
+  ${isObj ? "const scene = useLoader(OBJLoader, modelUrl);" : "const { scene } = useGLTF(modelUrl);"}
+${poseSource.declaration}
   return (
-    <group scale={${formatNumber(modelScale)}}>
+    <group scale={${formatNumber(modelScale)}}${vrm0Rotation}>
       <Clone
-        object={scene}
+        object={${poseSource.objectName}}
         castShadow={${mesh.castShadow}}
         receiveShadow={${mesh.receiveShadow}}${inject}
       />
@@ -990,6 +1012,56 @@ function renderModelMesh(
 };`;
   context.supportDeclarations.set(`model:${componentName}`, source);
   return `<${componentName} />`;
+}
+
+function renderCompiledModelPose(
+  mesh: MeshComponent,
+  context: CompileContext,
+): { declaration: string; objectName: string } {
+  const pose = mesh.modelPose;
+  if (
+    !pose ||
+    (Object.keys(pose.bones).length === 0 &&
+      Object.keys(pose.morphTargets).length === 0)
+  ) {
+    return { declaration: "", objectName: "scene" };
+  }
+  context.reactValueImports.add("useMemo");
+  context.extraImports.add(
+    'import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";',
+  );
+  const boneRotations = JSON.stringify(pose.bones);
+  const morphTargets = JSON.stringify(pose.morphTargets);
+  return {
+    objectName: "posedScene",
+    declaration: `  const posedScene = useMemo(() => {
+    const cloned = cloneSkeleton(scene);
+    const boneRotations = ${boneRotations} as Record<string, [number, number, number]>;
+    const morphTargetWeights = ${morphTargets} as Record<string, number>;
+    cloned.traverse((object) => {
+      const boneObject = object as typeof object & { isBone?: boolean };
+      const rotation = boneObject.isBone ? boneRotations[object.name] : undefined;
+      if (rotation) {
+        object.rotation.set(
+          object.rotation.x + rotation[0],
+          object.rotation.y + rotation[1],
+          object.rotation.z + rotation[2],
+        );
+      }
+      const meshObject = object as typeof object & {
+        morphTargetDictionary?: Record<string, number>;
+        morphTargetInfluences?: number[];
+      };
+      if (!meshObject.morphTargetDictionary || !meshObject.morphTargetInfluences) return;
+      Object.entries(morphTargetWeights).forEach(([name, weight]) => {
+        const index = meshObject.morphTargetDictionary?.[name];
+        if (index !== undefined) meshObject.morphTargetInfluences![index] = weight;
+      });
+    });
+    cloned.updateMatrixWorld(true);
+    return cloned;
+  }, [scene]);`,
+  };
 }
 
 function resolveModelMaterialOverrides(
@@ -2722,7 +2794,9 @@ function isSafeRelativePath(value: string): boolean {
 function isAllowedStaticAssetSource(asset: SceneAsset): boolean {
   if (asset.source.kind !== "project") return false;
   const extension = fileExtension(asset.source.relativePath);
-  if (asset.kind === "model") return extension === "glb" || extension === "gltf";
+  if (asset.kind === "model") {
+    return ["glb", "gltf", "obj", "vrm"].includes(extension);
+  }
   if (asset.kind === "texture") {
     return ["png", "jpg", "jpeg", "webp", "ktx2"].includes(extension);
   }

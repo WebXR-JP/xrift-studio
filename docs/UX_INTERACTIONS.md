@@ -48,7 +48,7 @@ F-06 アイテム検査
 | MI-29 | panel splitter を動かす、panel header を dock zone へ drag する、または layout を reset する | drag 中は resize cursor、minimum size、dock preview、最終 order を表示する。Scene / Asset data と authoring history は変更しない。 | drop で normalized size / zone / order を Editor Preferences に保存する。Escape / 領域外 drop は開始前 layout、reset は既定 layout へ戻る。保存失敗時も session layout を保ち、再試行を示す。 |
 | MI-30 | Edit 中に Hierarchy の Entity subtree を別 Entity または Scene Root へ drag する | 行の上端は「前へ」、中央は「子へ」、下端は「後へ」として挿入線または親候補の面を表示する。Root 領域はScene Root末尾への移動を示す。自分自身、子孫、実際に順序が変わらない位置はエラー色の境界と理由で実行不可を示す。 | 有効な drop は Entity ID と subtree を維持したHierarchy Move Command一件として確定し、同じ親内の順序変更と親子化のどちらでも選択を維持する。Escape、領域外 drop、実行不可 target、Play 中は SceneDocument と history を変更しない。Undo / Redo は親子 link と兄弟順を復元する。 |
 | MI-31 | Assets の XRift Prefabs から built-in recipe を Scene View へ drag する、または「配置」を実行する | Spawn Point、Mirror、Portalなどを通常のproject Assetと分けた保護付きcatalogとして表示し、project kindで利用可能項目を絞る。Scene Viewはrecipe名と配置位置を表示する。 | drop後は通常のEntityを一件作り選択する。Entity Transform、recipe identity、Component削除は保護し、URLや公開先IDなどrecipeが明示した設定fieldだけInspectorで編集できる。通常Assetのrename / delete / folder move対象にはしない。Entity自体のDeleteとUndo / Redoは利用できる。必須field未設定時はcompileをblockし、そのfieldを同じInspectorで修正できる。 |
-| MI-32 | Visual Editor の render で例外が発生する | App 全体を白画面にせず、明るい既存配色の復帰面へ切り替え、落ちた機能名と制作データを保持している事実を示す。例外本文、stack、component stack、token、絶対 path は画面へ表示しない。 | 「Editorを再試行」は Boundary と Editor subtree を remount する。「プロジェクトライブラリへ戻る」または前画面へ戻る操作は既存 `onBack` を実行し、Editor 外の App 状態を維持する。 |
+| MI-32 | Visual Editor の render または動的 module 読み込みで例外が発生する | App 全体を白画面にせず、明るい既存配色の復帰面へ切り替え、落ちた機能名と制作データを保持している事実を示す。例外本文、stack、component stack、token、絶対 path は画面へ表示しない。動的 module 失敗は通常の render 例外と区別し、Editor用ファイルを再取得する必要があることだけを示す。 | 通常の「Editorを再試行」は Boundary と Editor subtree を remount する。動的 module 失敗では拒否済みの `React.lazy` を再利用せず、ユーザー操作による「アプリを再読み込み」で一度だけ再取得する。自動 reload loop は行わない。「プロジェクトライブラリへ戻る」または前画面へ戻る操作は既存 `onBack` を実行し、Editor 外の App 状態を維持する。 |
 | MI-33 | Particle Asset を作成・編集する、Scene / Hierarchy へ配置する、または Entity に Particle Emitter を追加する | Assets、右 Inspector、Scene View、Hierarchy のすべてで同じ Particle Asset ID を扱う。Particle の変更は Scene View の表現へ即時反映し、Asset を drop した時は Transform と Particle Emitter を持つ Entity を作る。Particle Asset がない状態で Particle Emitter を追加した時は既定 Asset を同じ操作内で作成する。 | 作成・配置・Component 追加・参照変更・削除はそれぞれ一つの履歴へ確定する。取消または失敗時は AssetManifest、SceneDocument、両 selection を開始前へ戻す。Play 中は編集操作を無効にする。 |
 | MI-34 | toolbar の Create、または Hierarchy の右クリックから Entity / Component を作成する | Create は Empty Entity、Primitive、XRift Component、通常 Component の責務別入口を示す。選択 Entity がある時は追加先を名前で示し、選択がない時も単独で成立する XRift Component は Transform 付き Entity として作成できる。wrapper は追加先 Entity がない限り無効にし、理由を表示する。 | 作成または追加は一件の history transaction とし、作成 Entity を `sceneSelection` にして Inspector を開く。Escape / 外側 click は document を変えず閉じる。Play / Import 中は無効にし、必須値が未設定なら Inspector から設定して compile blocker を解消できる。 |
 | MI-35 | Visual World の新規作成で Starter Scene を選ぶ | 既定は実用的な World Starter とし、配置済み Scene と Assets へ追加される Model / Texture の数をカード上に示す。Blank は明示的な最小構成として残し、素材入り template と混同しない。 | 作成成功時は bundled source を project-relative path へ検証付きでコピーし、Scene / Asset / Material / Collider / XRift Spawn の参照を一度に確定して Editor で開く。copy / hash / document 保存の一部が失敗した場合は不完全な project を成功表示せず、新規作成へ戻れる。 |
@@ -60,7 +60,11 @@ F-06 アイテム検査
 | MI-41 | GLB / glTFをimportまたは再importする | Model名の論理folderとMaterials / Texturesを自動生成し、埋め込みPBR Materialと画像を独立Assetとして一覧へ追加する。同じfolder・source file名は既存Modelの更新、同一SHAの実ファイルは検証後の再利用として表示する。 | 成功時はModelを選択して専用folderを開き、Material slotから展開済みMaterialを開ける。再importはModel / slot / 派生Asset IDとScene参照を維持し、ユーザー編集済みMaterialを上書きしない。失敗時はlast-good Manifestと実ファイルを保持し、同じ履歴の前回結果と今回結果を重複表示しない。 |
 | MI-42 | Entity Inspector の Transform 軸ラベルを左右へドラッグする、または Scale の比率固定を切り替える | 軸ラベルは `ew-resize` cursor と開始値から現在値への小さな表示でスクラブ可能と伝える。Shift は微調整、Ctrl / Alt は大きな調整にし、Scene View、Inspector、ギズモを同じ local Transform へ即時同期する。Scale の比率固定中は操作軸の倍率を他軸へ適用し、不均等比率を保つ。 | pointer up で一件の Transform history として確定する。Escape / pointer cancel は開始前の値と保存状態へ戻し、履歴を追加しない。ラベルのダブルクリックは数値入力へfocusし、入力中のEditor shortcutを抑止する。 |
 | MI-43 | Edit 中に Entity を選択して F を押す | 選択 Entity の描画 bounds と子 Entity を含む中心・距離へカメラと Orbit 中心を移し、Scene View端に対象名と解除操作を表示する。boundsが空の場合だけEntityのworld位置を使う。別Entityの選択だけではカメラを移動せず、Fで対象を切り替える。 | 同じEntityで再度F、Escape、または表示中の「解除」で、開始前に保存したカメラ位置、向き、Orbit中心、ズームへ戻る。Play開始時も解除してEdit cameraを保存する。Play中、text / 数値入力、IME composition中、Entity未選択時は開始しない。 |
+| MI-44 | Create、Hierarchy右クリック、またはInspectorのAdd Componentを開く | Core、Rendering、Physics、Media、XRiftを件数付きの折りたたみsectionで表示し、同じ中央Registryから候補を取得する。現在のEntityへ追加できない項目は理由と「追加済み」を示す。 | 項目を選ぶとComponentを一件追加して同じEntityを選択したままInspectorへ到達する。Audio Sourceは音を自動再生せず、source URL、音量、loop、spatial設定をInspectorで確定できる。Escape、外側click、section開閉だけではdocumentを変更しない。 |
 | MI-45 | プロジェクトライブラリを開く、検索・並び替え・公開状態の絞り込みを行う、またはプロジェクトを削除する | 新規作成を先頭に保ち、表紙を小さくした高密度カードへ更新日時と公開済み / 未公開を表示する。検索、更新日時、公開日時、名前順と公開状態filterはproject documentを変更せず即時反映する。削除は対象名と絶対保存先、元に戻せないことを確認dialogに表示し、処理中は重複操作を無効にする。 | 並び替え・絞り込みの解除で同じ一覧へ戻る。削除成功後は一覧を再取得して対象を除き、新規作成と他projectを開く導線を保つ。失敗時は対象を残して原因を通知する。native側はprojects root直下の認識済みXRift project以外を拒否する。 |
+| MI-46 | OBJ / VRMをimportする、または配置済みModelのボーン回転・シェイプキーを編集する | Import QueueはGLB / glTFと同じvalidate、copy、parse、thumbnail、commitを使い、Model Inspectorに形式、bone、shape key件数を残す。Entity Inspectorの「モデルポーズ」は選択したboneのXYZ回転とshape keyのweightをScene Viewへ即時反映し、編集対象がAsset共通値ではなく現在のEntityであることを示す。 | 有効値だけをMesh componentの静的poseへ一件のhistoryとして保存する。同じModelの別Entityには波及しない。リセットはposeだけを初期状態へ戻し、Transform、Material、Assetを維持する。失敗時はlast-good Asset / Entity poseを保ち、対応形式または修正対象を同じImport Queue / Inspectorに示す。 |
+| MI-47 | `.unitypackage`、Unity Scene、Unity PrefabをAssetsへdropまたはImportする | Import Queueでgzip / tar展開、pathname復元、Unity YAML解析、Asset変換、Hierarchy再構築、Prefab作成、commitの順に進捗を示す。対応Model / Texture / MaterialとGameObject、Transform、Light、Audio Source、Collider、Scene環境設定を変換し、未対応class IDと件数を診断へ残す。C# / MonoBehaviourはJavaScriptへ変換しない。 | 全Asset sourceのatomic commit後だけScene、AssetManifest、Prefab documentを一件のhistoryへ反映する。成功時はPrefab / Entity / Asset件数と要確認件数、「アセットを表示」を残し、生成Prefabを`assetSelection`、再構築したrootを`sceneSelection`にする。失敗時はlast-good document setを維持して同じActivity drawerから原因を確認できる。 |
+| MI-48 | Editor のAI連携を開き、CodexまたはClaude CodeへXRift Studio MCPを登録する、または接続済みAIからScene編集を受ける | 未登録、登録中、登録済み、接続待ち、接続中、失敗を同じpanelに表示する。登録は検出済みclientとscope、実行する固定commandを示してから一度だけ実行し、処理中は重複操作を無効にする。AI編集はclient名、tool名、対象Scene、変更概要、保存状態をActivityとして残し、Scene View、Hierarchy、Inspectorを同じCommand結果へ同期する。 | 登録成功後はclientの再読み込み方法と接続待ちを残し、接続後は対象project、Scene、revision、直近の変更、Undoへ到達できる。Play、Import、revision競合、未認可project、保存失敗ではdocumentを変更せず理由と再試行先を示す。panelを閉じても接続と直近Activityを維持し、AI変更のUndoは通常のEditor historyへ合流する。 |
 
 ## 機能一覧
 
@@ -72,12 +76,15 @@ F-06 アイテム検査
 | F-04 | ローカル実行 | MI-03, MI-05, MI-08 | 実行中であることと、プレビュー URL を開く操作が分かる。 |
 | F-05 | 公開準備とアップロード | MI-03, MI-04, MI-05, MI-07, MI-08, MI-09, MI-17, MI-27 | 初期値の upload を防ぎ、toolchain が不足しても authoring を失わず、review から upload result / 審査状態まで続けられる。正式 result にない公開 URL は推測しない。 |
 | F-06 | アイテム検査 | MI-03, MI-05, MI-09 | ビルドを含むセキュリティチェックを実行でき、成功時は公開、失敗時はログと編集へ進める。 |
-| F-07 | ビジュアルエディター | MI-01, MI-09, MI-10, MI-11, MI-12, MI-13, MI-14, MI-15, MI-16, MI-18, MI-21, MI-22, MI-29, MI-30, MI-31, MI-32, MI-33, MI-34, MI-35, MI-37, MI-38, MI-40, MI-42, MI-43 | 四カードの入口、Hierarchy、Scene View、右 Inspector、下 Assets を使い、独立 selection、復元可能なEntityフォーカス、Empty / primitive / XRift Component 作成、Asset / Material / Particle / XRift Prefab D&D、Hierarchyの並び替え・親子化・Enabled、親子Transform、軸スクラブとScale比率固定、Material / Texture / Particle 編集、動的 thumbnail、Playとシーン全体の環境設定を扱える。左下のユーティリティレールからヘルプ、ショートカット、シーン設定へ迷わず到達できる。panel layout は resize / dock 後も復元され、Editor render failure は App 全体へ伝播させず再試行または一覧へ復帰できる。 |
-| F-08 | Visual Asset authoring / import | MI-11, MI-15, MI-16, MI-19, MI-20, MI-21, MI-28, MI-33, MI-36, MI-41 | Material / Texture / Model / GLTF / Prefab / Particle を左のfolder tree、種類別collection、動的thumbnail付きで管理し、GLBの埋め込みMaterial / Textureを再利用可能なAssetへ展開する。sourceを壊さずimport、右Inspectorでrecipe編集、参照を保つreimport、stale診断を行え、Asset編集中も`sceneSelection`は保持される。 |
+| F-07 | ビジュアルエディター | MI-01, MI-09, MI-10, MI-11, MI-12, MI-13, MI-14, MI-15, MI-16, MI-18, MI-21, MI-22, MI-29, MI-30, MI-31, MI-32, MI-33, MI-34, MI-35, MI-37, MI-38, MI-40, MI-42, MI-43, MI-46 | 四カードの入口、Hierarchy、Scene View、右 Inspector、下 Assets を使い、独立 selection、復元可能なEntityフォーカス、Empty / primitive / XRift Component 作成、Asset / Material / Particle / XRift Prefab D&D、Hierarchyの並び替え・親子化・Enabled、親子Transform、軸スクラブとScale比率固定、Material / Texture / Particle 編集、配置Entityごとの静的なモデルポーズ、動的 thumbnail、Playとシーン全体の環境設定を扱える。左下のユーティリティレールからヘルプ、ショートカット、シーン設定へ迷わず到達できる。panel layout は resize / dock 後も復元され、Editor render / module load failure は App 全体へ伝播させず再試行、再読み込み、一覧への復帰を選べる。 |
+| F-08 | Visual Asset authoring / import | MI-11, MI-15, MI-16, MI-19, MI-20, MI-21, MI-28, MI-33, MI-36, MI-41, MI-46 | Material / Texture / Model / GLTF / OBJ / VRM / Prefab / Particle を左のfolder tree、種類別collection、動的thumbnail付きで管理し、GLB / VRMの埋め込みMaterial / Textureを再利用可能なAssetへ展開する。sourceを壊さずimport、右Inspectorでrecipe編集、参照を保つreimport、stale診断を行え、Asset編集中も`sceneSelection`は保持される。 |
 | F-09 | Command / Shortcut / Prefab | MI-12, MI-22, MI-23, MI-24, MI-28, MI-30, MI-31, MI-34, MI-38, MI-43 | toolbar、menu、keyboard、Hierarchy D&D と左下の一覧が同じ Command / Shortcut Registry を使い、Copy / Paste / Duplicate / Delete / Reparent、Entityフォーカスの切替と解除、Empty / Component 作成、Hierarchy からの Prefab 化、XRift built-in Prefab配置、Undo / Redo が IDs と両 selection を復元する。 |
 | F-10 | Visual Save / Compile / Preview / Upload | MI-03, MI-05, MI-07, MI-08, MI-09, MI-17, MI-25, MI-26, MI-27 | authoring操作ごとの直列化された自動保存、journal付きcommit、決定的compiler / provenance、freshness検査、区別されたpreview、既存XRift check / uploadを一つのeditor flowで扱い、失敗や取消後もlast committed authoringと戻り先を保つ。 |
 | F-12 | Scene environment settings | MI-37, MI-38 | 左下の歯車から右のScene Inspectorへ切り替え、サムネイル、Skybox画像・回転・露出、Fog、環境光、Near/Far、FOV、背景、グリッド、ギズモ、スナップを一か所で設定し、Scene Viewと生成Worldに必要な値を一貫して反映する。 |
 | F-13 | XRift Component editor preview | MI-10, MI-34, MI-39 | 公式Component名とsemantic iconをauthoring surface全体で共有し、Light、Portal、TagBoardを実行時Contextへ接続せず設定値に忠実なEditor Previewとして確認できる。 |
+| F-15 | OBJ / VRM import と静的モデルポーズ | MI-03, MI-05, MI-09, MI-20, MI-36, MI-41, MI-46 | OBJ / VRMをModel Assetとして配置でき、配置Entityごとにbone回転とshape key weightを保存し、再表示と生成結果で同じ静的状態を復元できる。 |
+| F-16 | UnityPackage / Scene / Prefab import | MI-03, MI-05, MI-09, MI-11, MI-13, MI-20, MI-24, MI-47 | UnityPackageの論理pathnameとGUID参照を安全に復元し、対応Assetを抽出してScene階層を再構築し、再利用可能なXRift Prefabとして保存する。未対応Asset / Componentは黙って成功扱いせず診断とprovenanceへ残し、C#変換を行わない。 |
+| F-17 | AI editor integration / MCP | MI-03, MI-05, MI-09, MI-10, MI-11, MI-13, MI-25, MI-48 | CodexまたはClaude CodeへXRift Studio MCPを一操作で登録し、認可したvisual projectの現在Scene、Asset、selection、revisionを読み取れる。Fog変更とAsset配置を通常のEditor Command、Undo、Autosaveへ合流し、AIと手操作の競合を暗黙に上書きしない。登録後は接続状態、対象Scene、直近の編集と復帰手段がEditorに残る。 |
 
 ## F-07 の状態設計
 
@@ -321,6 +328,121 @@ F-06 アイテム検査
 ### 戻り先
 
 - 選択解除、Entity削除、Undo / Redoでは補助表示だけを同じScene documentへ追従させ、Camera、selection、runtime stateを追加で変更しない。
+
+## F-14 Basic Component menu / Audio Source の状態設計
+
+### 操作前
+
+- Create、Hierarchy右クリック、InspectorのAdd Componentは同じ基本Component Registryを使い、Core、Rendering、Physics、Media、Worldを折りたたみsectionとして表示する。ライト種別、Particle Emitter、Audio SourceはRendering / Mediaの意味が分かる名前とiconを共有する。
+- Audio Sourceは追加直後も既存Entity selectionを維持し、Inspectorでsource URLを入力できる。既定では自動再生せず、編集画面を開いただけで音を鳴らさない。
+
+### 操作中
+
+- sectionの開閉はSceneDocumentと履歴を変更しない。項目を選んだ時だけComponent追加を一件確定し、メニューを閉じて追加したComponentのInspectorを表示する。
+- Audio SourceはEnabled、source URL、Volume、Loop、Autoplay、Spatial、Reference Distance、Rolloff、Max Distanceを型と範囲を保って編集する。空URLは同じInspectorに設定方法を表示し、Editor Previewでは音声取得を開始しない。
+
+### 成功時
+
+- compilerは設定済みAudio SourceをThree.js Audio / PositionalAudioへ変換し、cameraへAudioListenerを接続する。Componentを無効化した時とEntityを破棄した時は再生、listener、buffer参照をcleanupする。
+- ライト、Particle、Audio SourceはCreate、Hierarchy、Inspectorのどの入口から追加しても同じComponent ID、初期値、重複規則、生成結果になる。
+
+### 失敗時
+
+- 空URLやload失敗でScene View全体を停止させない。空URLはcompile warningとして出力を省略し、設定済みURLのruntime load失敗は生成側Component内で音声だけを停止する。
+- 非有限値、範囲外のVolume、0以下の距離、負のRolloffは確定せず、直前のSceneDocumentとselectionを維持する。
+
+### 戻り先
+
+- Add Componentを閉じると同じEntity Inspectorへ戻る。追加後は同じEntityを選択したまま、UndoでComponent追加前へ、Redoで同じComponent IDと設定へ戻れる。
+
+## F-15 OBJ / VRM import と静的モデルポーズの状態設計
+
+### 操作前
+
+- Import入口にGLB / glTF / OBJ / VRMを同じModel形式として表示する。OBJは単体のgeometryを取り込み、外部MTL / textureは自動取得せず、必要なMaterialをXRift Studio内で割り当てることを示す。
+- VRM 0.x / 1.xはModel Assetとして取り込み、humanoidを含むboneとshape keyを最後に正常解析したmetadataとして保持する。Timelineやclip編集が今回の静的pose編集に含まれないことをUI上で区別する。
+- poseはModel Asset共通値ではなく配置EntityのMesh componentに属する。同じModelの別配置を変更しない。
+
+### 操作中
+
+- Import中は既存Import Queueで形式検証、source copy、parse、thumbnail、manifest commitを順に示し、二重Import / reimportを無効にする。
+- Entity Inspectorでは一つのboneを選び、XYZ回転を度で編集する。shape keyは0..1のweightをsliderと数値で編集し、Scene Viewへ即時反映する。
+- pose変更は有効な有限値だけを確定する。Play中は読み取り専用にし、Asset reimport中はlast-good metadataと現在のEntity poseを表示したまま編集を止める。
+
+### 成功時
+
+- Import成功後は新Model Assetを選択し、形式、bone数、shape key数、source、thumbnailをInspectorに残す。「配置」でEntityを作成してからpose編集へ進める。
+- bone回転とshape key weightはMesh componentへ保存し、Undo / Redo、project再表示、Scene View、生成結果で同じ静的状態を復元する。
+- 「ポーズをリセット」はboneとshape keyだけを初期値へ戻し、Entity Transform、Material binding、Collider、Model Assetを維持する。
+
+### 失敗時
+
+- 不正なOBJ / VRM、上限超過、読めないgeometry、VRM拡張解析失敗ではAssetManifestへcommitせず、Import Queueに形式と再選択の案内を残す。
+- OBJの外部MTL / texture参照は自動取得せずwarningにし、Model自体は読める場合に限りcommitする。欠けた見た目はMaterial slotから修正できる。
+- reimport後にpose対象のboneまたはshape keyが消えた場合は値を勝手に別対象へ移さず、残っている対象だけ適用し、Inspectorに未適用件数とリセットを示す。
+
+### 戻り先
+
+- Import Queueを閉じても新Model Assetと診断をAssets / Model Inspectorに残す。Entityを選択すると直前のpose編集へ戻れる。
+- pose編集後に別Entity / Assetを選んでも値を保持し、同じEntityへ戻ると保存済みposeを再表示する。Timeline追加時はこの静的poseを初期状態として扱える構造を維持する。
+
+## F-16 UnityPackage / Scene / Prefab import の状態設計
+
+### 操作前
+
+- AssetsのImportとdropは`.unitypackage`、`.unity`、`.prefab`を既存Model / Textureと同じ入口で受け付ける。UnityPackageはSceneだけでなく依存Assetを含む入力、単体Scene / Prefabは外部GUID Assetを同時取得しない入力として区別する。
+- 変換対象はGameObject階層、local Transform、GLB / glTF / OBJ / VRM、主要Texture、Unity Material、Mesh Renderer、Light、Audio Source設定、Collider、Fog / Ambient / Camera設定とする。FBXなど実行時Modelへ変換できないsourceも参照先と件数を診断する。
+- MonoBehaviourのclass IDと件数はPrefab provenanceへ記録するが、C#からJavaScriptへのコード変換は開始しない。
+
+### 操作中
+
+- Import Queueはreading、gzip / tar展開、`pathname`安全性検査、Unity YAML object / GUID参照解析、Asset derive、Scene再構築、Prefab生成、atomic commitを一つの進捗として表示する。処理中はModel reimportを含む別Asset mutationとPlayを無効にする。
+- Unityの左手座標系はXRift / Three.jsの右手座標系へ変換し、positionのZとquaternionを対応させる。親参照の欠落とcycleはScene Rootへ安全に戻してwarningにする。
+- 対応Asset sourceは既存のcontent-addressed保存とthumbnail生成を再利用する。同一SHAは既存Assetを選択し、同じbinaryを再コピーしない。Package内の全binary writeが揃うまでSceneDocument、AssetManifest、Prefab documentを画面へ反映しない。
+
+### 成功時
+
+- 変換したGameObject rootsを現在Sceneへ再構築し、Unity Scene / PrefabごとにPrefab documentとPrefab Assetを保存する。最後に作成または再利用したPrefabをAssetsで選択し、再構築したrootをHierarchy / Scene Viewで選択する。
+- Activity drawerにPrefab、Entity、Asset、要確認の件数を残す。Prefabのimport metadataにはsource名、package内pathname、source SHA、Unity class ID件数、未対応class ID、C#変換を行っていない事実を保存する。
+
+### 失敗時
+
+- gzip / tar破損、安全でないpathname、展開上限超過、Unity YAML不正、変換対象なし、Asset commit失敗ではlast-good SceneDocument、AssetManifest、Prefab set、両selectionを維持する。
+- 一部のAsset / Componentだけ未対応の場合は変換可能な階層を残し、FBX、外部glTF、Audio clip、MonoBehaviourなどの不足をwarningとしてActivity drawerから確認できる。黙って完全変換と表示しない。
+
+### 戻り先
+
+- 成功後は「アセットを表示」から生成Prefabへ移動し、Hierarchy / Scene Viewには再構築結果を残す。失敗後はActivity drawerを閉じても元Sceneを編集でき、同じまたは修正したpackageを再度dropできる。
+
+## F-17 AI editor integration / MCP の状態設計
+
+### 操作前
+
+- EditorのAI連携panelはCodex、Claude Codeの検出結果、登録scope、XRift Studio MCP serverの状態を表示する。native APIがないブラウザでは登録済みに見せず「デスクトップ版で利用できます」と示す。
+- MCPは現在開いているvisual projectだけを候補にし、project ID、Scene ID、session revisionを接続clientへ返す。接続しただけではSceneDocument、AssetManifest、selection、historyを変更しない。
+- AI書き込みは既定でEdit中の認可済みprojectだけに許可し、Play、Import、project切替中は理由付きで読み取り専用にする。Upload、削除、任意file、任意shell操作は初期tool setへ含めない。
+
+### 操作中
+
+- client登録は検出した実行ファイルを直接起動し、client種別ごとに固定した`mcp add`引数だけを渡す。shell文字列連結、任意command、project documentへのtoken保存は行わない。
+- MCP書き込みはtool inputのproject ID、Scene ID、expected revisionを現在sessionと照合し、純粋なEditor toolで全入力を検証してから一件のhistoryへ確定する。Fog変更とAsset配置はScene Inspector、Asset placementと同じ関数を使う。
+- 書き込み中は同じMCP brokerの変更を直列化する。成功結果には変更前後revision、対象Entity / Asset、Command概要、Autosave状態を含める。
+
+### 成功時
+
+- 登録成功後は「登録済み」、clientの再読み込み方法、接続待ちをpanelに残す。接続するとclient名、対象project / Scene、最終Activityを表示する。
+- Fog変更はScene settingsを一件更新してScene ViewとScene Inspectorへ同期する。Asset配置は新Entityを作成し、Hierarchy、Scene View、Entity Inspectorで同じEntityを選択する。どちらも通常のUndo / RedoとAutosaveを使う。
+- AI変更の結果はトーストだけにせず、対象EntityまたはScene Inspectorへ移動でき、panelから通常のUndoを実行できる。
+
+### 失敗時
+
+- client未検出、登録command失敗、server未起動、Editor未接続、未認可project、Scene不一致、stale revision、Play / Import中、validation失敗ではdocumentとhistoryを変更しない。
+- 失敗にはclientの再検出、登録再試行、Editorへ戻る、最新contextの再取得のいずれかを示す。absolute path、接続token、raw command outputを画面へ表示しない。
+
+### 戻り先
+
+- panelを閉じても同じEditor、Scene、両selection、接続状態、直近Activityを維持する。別projectを開いた時は前projectへの書き込み認可を引き継がず、新しいcontextを取得するまで変更を拒否する。
+- AI変更の取消は通常のUndoを使い、同じCommand historyからScene、Asset、両selectionを復元する。登録解除はclient設定だけを外し、project documentとEditor historyを変更しない。
 
 ## 実装制約
 

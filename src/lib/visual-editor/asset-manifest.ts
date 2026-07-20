@@ -97,9 +97,23 @@ export type ModelAnimationMetadata = {
   sourceAnimationIndex?: number;
 };
 
-/** Derived import facts. These are safe to rebuild from the source GLB/glTF. */
+export type ModelBoneMetadata = {
+  /** Stable authored key. Bone names are unique inside newly imported Models. */
+  key: string;
+  name: string;
+  /** Standard VRM humanoid name when the source declares one. */
+  humanoidName?: string;
+};
+
+export type ModelMorphTargetMetadata = {
+  /** Shape-key name applied to every source mesh that exposes this target. */
+  key: string;
+  name: string;
+};
+
+/** Derived import facts. These are safe to rebuild from the Model source. */
 export type ModelImportMetadata = {
-  sourceFormat: "glb" | "gltf";
+  sourceFormat: "glb" | "gltf" | "obj" | "vrm";
   /** Original leaf name used to match a same-folder import as an update. */
   sourceFileName?: string;
   byteLength: number;
@@ -108,6 +122,12 @@ export type ModelImportMetadata = {
   primitiveCount: number;
   bounds: ModelBoundsMetadata;
   animations: ModelAnimationMetadata[];
+  /** Optional for documents imported before static pose authoring was added. */
+  bones?: ModelBoneMetadata[];
+  /** Optional for documents imported before static pose authoring was added. */
+  morphTargets?: ModelMorphTargetMetadata[];
+  /** Present only for a successfully parsed VRM source. */
+  vrmVersion?: "0" | "1";
   extensionsUsed: string[];
   extensionsRequired: string[];
 };
@@ -449,6 +469,17 @@ export type ParticleAsset = AssetBase<"particle"> & {
   properties: ParticleProperties;
 };
 
+export type AudioImportMetadata = {
+  sourceFormat: "mp3";
+  mimeType: "audio/mpeg";
+  byteLength: number;
+};
+
+/** Imported project audio. Runtime files are copied only during compilation. */
+export type AudioAsset = AssetBase<"audio"> & {
+  importMetadata: AudioImportMetadata;
+};
+
 export type TemplateAsset = AssetBase<"template"> & {
   /** Project-relative scene-fragment document referenced by this template. */
   templatePath: string;
@@ -469,6 +500,7 @@ export type SceneAsset =
   | MaterialAsset
   | TextureAsset
   | ParticleAsset
+  | AudioAsset
   | TemplateAsset;
 
 export type AssetManifest = {
@@ -521,6 +553,14 @@ export function getTextureAsset(
 ): TextureAsset | undefined {
   const asset = manifest.assets[assetId];
   return asset?.kind === "texture" ? asset : undefined;
+}
+
+export function getAudioAsset(
+  manifest: AssetManifest,
+  assetId: string,
+): AudioAsset | undefined {
+  const asset = manifest.assets[assetId];
+  return asset?.kind === "audio" ? asset : undefined;
 }
 
 export function getGeometryAsset(

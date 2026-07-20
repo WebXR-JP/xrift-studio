@@ -92,7 +92,7 @@ export function ModelAssetInspector({
           </p>
           <p className="mt-2 text-xs leading-5 text-slate-600">
             {metadata
-              ? `${metadata.sourceFormat.toUpperCase()} · ${formatBytes(metadata.byteLength)} · ${asset.materialSlots.length} Material Slot`
+              ? `${metadata.sourceFormat.toUpperCase()}${metadata.vrmVersion ? ` ${metadata.vrmVersion}.x` : ""} · ${formatBytes(metadata.byteLength)} · ${asset.materialSlots.length} Material Slot`
               : "構造解析結果がありません"}
           </p>
           <button
@@ -123,7 +123,7 @@ export function ModelAssetInspector({
         </div>
       ) : !canReimport ? (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-          保存済みのproject-relative sourceがあるModelだけ再インポートできます。
+          保存済みのproject-relative sourceがあるGLB / glTF / OBJ / VRMだけ再インポートできます。
         </div>
       ) : null}
 
@@ -197,6 +197,10 @@ export function ModelAssetInspector({
               <Metric label="Meshes" value={metadata.meshCount} />
               <Metric label="Primitives" value={metadata.primitiveCount} />
             </dl>
+            <dl className="grid grid-cols-2 gap-2">
+              <Metric label="Bones" value={metadata.bones?.length ?? 0} />
+              <Metric label="Shape Keys" value={metadata.morphTargets?.length ?? 0} />
+            </dl>
             <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
               <p className="text-xs font-semibold text-slate-700">Local Bounds</p>
               <dl className="mt-2 grid grid-cols-[58px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
@@ -252,7 +256,7 @@ export function ModelAssetInspector({
                   </div>
                   {slot.sourceMaterialIndex !== undefined ? (
                     <span className="shrink-0 text-[11px] text-slate-500">
-                      glTF #{slot.sourceMaterialIndex}
+                      Source #{slot.sourceMaterialIndex}
                     </span>
                   ) : null}
                 </div>

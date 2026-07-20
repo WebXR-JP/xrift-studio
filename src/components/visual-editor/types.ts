@@ -45,7 +45,7 @@ export type PendingImport = {
   id: string;
   name: string;
   size: number;
-  resourceKind: "model" | "texture";
+  resourceKind: "model" | "texture" | "unity-package";
   status: PendingImportStatus;
   progress: number;
   diagnostics: PendingImportDiagnostic[];
@@ -54,6 +54,10 @@ export type PendingImport = {
   result?: {
     materialCount: number;
     textureCount: number;
+    prefabCount?: number;
+    entityCount?: number;
+    assetCount?: number;
+    warningCount?: number;
   };
 };
 

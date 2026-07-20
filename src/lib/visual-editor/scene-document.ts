@@ -47,7 +47,7 @@ export type MeshComponent = ComponentBase & {
 };
 
 export type ModelPoseState = {
-  /** Bone local Euler rotations in radians, keyed by imported bone key. */
+  /** Bone local Euler rotation offsets from the imported rest pose, in radians. */
   bones: Record<string, Vec3>;
   /** Shape-key weights in the inclusive 0..1 range. */
   morphTargets: Record<string, number>;

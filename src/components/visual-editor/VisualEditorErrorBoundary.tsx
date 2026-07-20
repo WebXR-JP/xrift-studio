@@ -21,8 +21,31 @@ export type VisualEditorErrorBoundaryProps = {
 
 type VisualEditorErrorBoundaryState = {
   failed: boolean;
+  requiresReload: boolean;
   resetKey: number;
 };
+
+const DYNAMIC_IMPORT_FAILURE_PATTERNS = [
+  "failed to fetch dynamically imported module",
+  "error loading dynamically imported module",
+  "importing a module script failed",
+  "loading chunk",
+  "chunkloaderror",
+  "unable to preload css",
+] as const;
+
+/** Dynamic imports rejected by React.lazy cannot be retried by remounting it. */
+export function isDynamicImportLoadError(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? `${error.name} ${error.message}`.toLowerCase()
+      : typeof error === "string"
+        ? error.toLowerCase()
+        : "";
+  return DYNAMIC_IMPORT_FAILURE_PATTERNS.some((pattern) =>
+    message.includes(pattern),
+  );
+}
 
 /**
  * Isolates render failures to the visual editor route.
@@ -35,13 +58,19 @@ export class VisualEditorErrorBoundary extends Component<
 > {
   state: VisualEditorErrorBoundaryState = {
     failed: false,
+    requiresReload: false,
     resetKey: 0,
   };
 
   private readonly headingRef = createRef<HTMLHeadingElement>();
 
-  static getDerivedStateFromError(): Partial<VisualEditorErrorBoundaryState> {
-    return { failed: true };
+  static getDerivedStateFromError(
+    error: unknown,
+  ): Partial<VisualEditorErrorBoundaryState> {
+    return {
+      failed: true,
+      requiresReload: isDynamicImportLoadError(error),
+    };
   }
 
   componentDidCatch(): void {
@@ -59,8 +88,13 @@ export class VisualEditorErrorBoundary extends Component<
   }
 
   private readonly resetEditor = (): void => {
+    if (this.state.requiresReload) {
+      window.location.reload();
+      return;
+    }
     this.setState((current) => ({
       failed: false,
+      requiresReload: false,
       resetKey: current.resetKey + 1,
     }));
   };
@@ -77,6 +111,7 @@ export class VisualEditorErrorBoundary extends Component<
     if (!this.state.failed) {
       return <Fragment key={this.state.resetKey}>{children}</Fragment>;
     }
+    const { requiresReload } = this.state;
 
     return (
       <main
@@ -105,7 +140,9 @@ export class VisualEditorErrorBoundary extends Component<
             tabIndex={-1}
             className="text-2xl font-semibold tracking-tight text-zinc-950 outline-none"
           >
-            {featureName}を表示できませんでした
+            {requiresReload
+              ? `${featureName}の読み込みを完了できませんでした`
+              : `${featureName}を表示できませんでした`}
           </h1>
           {projectName ? (
             <p className="mt-2 text-sm font-medium text-zinc-700">
@@ -113,7 +150,10 @@ export class VisualEditorErrorBoundary extends Component<
             </p>
           ) : null}
           <p className="mt-4 text-sm leading-7 text-zinc-600">
-            制作データはそのまま保持されています。Editorの表示を再試行するか、前の画面へ戻ってプロジェクトを開き直してください。
+            制作データはそのまま保持されています。
+            {requiresReload
+              ? " 接続が戻った後にアプリを再読み込みしてください。"
+              : " Editorの表示を再試行するか、前の画面へ戻ってプロジェクトを開き直してください。"}
           </p>
 
           <div className="mt-7 flex flex-col gap-3 sm:flex-row">
@@ -123,7 +163,7 @@ export class VisualEditorErrorBoundary extends Component<
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
             >
               <RotateCcw size={17} strokeWidth={1.9} aria-hidden="true" />
-              Editorを再試行
+              {requiresReload ? "アプリを再読み込み" : "Editorを再試行"}
             </button>
             <button
               type="button"
@@ -136,7 +176,9 @@ export class VisualEditorErrorBoundary extends Component<
           </div>
 
           <p className="mt-6 border-t border-zinc-100 pt-5 text-xs leading-5 text-zinc-500">
-            同じ状態が続く場合は、一度前の画面へ戻ってからEditorを開き直してください。
+            {requiresReload
+              ? "再読み込み後も同じ状態が続く場合は、接続を確認してからもう一度お試しください。"
+              : "同じ状態が続く場合は、一度前の画面へ戻ってからEditorを開き直してください。"}
           </p>
         </section>
       </main>

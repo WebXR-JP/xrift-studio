@@ -15,7 +15,9 @@ import {
   analyzeAssetFolderDeletion,
   autoFitBoxCollider,
   commitAssetImportPlanToDisk,
+  commitAssetImportPlansToDisk,
   createAssetImportPlan,
+  createUnityPackageImportPlan,
   addEditorComponent,
   addAssetFolder,
   addPrefabAsset,
@@ -44,6 +46,7 @@ import {
   getEntityReparentDecision,
   instantiateBuiltinPrefab,
   instantiateSceneAsset,
+  isUnityImportFileName,
   listBuiltinPrefabRecipes,
   moveLibraryAsset,
   moveLibraryFolder,
@@ -128,8 +131,9 @@ import type {
   TransformSpace,
 } from "./types";
 
-const SUPPORTED_MODEL_FILE = /\.(glb|gltf)$/i;
+const SUPPORTED_MODEL_FILE = /\.(glb|gltf|obj|vrm)$/i;
 const SUPPORTED_TEXTURE_FILE = /\.(png|jpe?g|webp|ktx2)$/i;
+const SUPPORTED_UNITY_FILE = /\.(unitypackage|unity|prefab)$/i;
 const AUTOSAVE_DELAY_MS = 250;
 
 type SceneSelection = Extract<EditorSelection, { kind: "entity" }> | null;
@@ -1514,6 +1518,19 @@ export function VisualEditorPrototype({
               : {}),
             ...(typeof patch.castShadow === "boolean" ? { castShadow: patch.castShadow } : {}),
             ...(typeof patch.receiveShadow === "boolean" ? { receiveShadow: patch.receiveShadow } : {}),
+            ...(patch.modelPose
+              ? {
+                  modelPose: {
+                    bones: Object.fromEntries(
+                      Object.entries(patch.modelPose.bones).map(([key, value]) => [
+                        key,
+                        [value[0], value[1], value[2]] as [number, number, number],
+                      ]),
+                    ),
+                    morphTargets: { ...patch.modelPose.morphTargets },
+                  },
+                }
+              : {}),
           };
           changed = JSON.stringify(next) !== JSON.stringify(component);
           return next;
@@ -1524,7 +1541,11 @@ export function VisualEditorPrototype({
           entities: { ...scene.entities, [entityId]: { ...entity, components } },
         };
       });
-      setNotice("Mesh Rendererのマテリアルスロットと影設定をシーンへ反映しました");
+      setNotice(
+        patch.modelPose
+          ? "モデルポーズをこの配置へ保存しました"
+          : "Mesh Rendererのマテリアルスロットと影設定をシーンへ反映しました",
+      );
     },
     [editorMode, updateScene],
   );
@@ -2415,6 +2436,139 @@ export function VisualEditorPrototype({
               workingManifest.folders?.[queued.folderId]
               ? queued.folderId
               : null;
+            if (
+              queued.resourceKind === "unity-package" ||
+              isUnityImportFileName(sourceFile.name)
+            ) {
+              const unityPlan = await createUnityPackageImportPlan({
+                fileName: sourceFile.name,
+                bytes,
+                bundle: bundleRef.current,
+                parentFolderId: folderId,
+                onProgress: (progress) => {
+                  updateImportQueue((current) =>
+                    current.map((entry) =>
+                      entry.id === queued.id
+                        ? {
+                            ...entry,
+                            status: "processing",
+                            progress: Math.max(18, Math.min(78, progress)),
+                          }
+                        : entry,
+                    ),
+                  );
+                },
+              });
+              const unityDiagnostics = unityPlan.diagnostics.map(
+                ({ severity, code, message }) => ({ severity, code, message }),
+              );
+              updateImportQueue((current) =>
+                current.map((entry) =>
+                  entry.id === queued.id
+                    ? {
+                        ...entry,
+                        progress: 80,
+                        sourceHash: unityPlan.sourceHash || undefined,
+                        assetId: unityPlan.selectedAssetId,
+                        diagnostics: unityDiagnostics,
+                      }
+                    : entry,
+                ),
+              );
+              if (!unityPlan.canCommit) {
+                updateImportQueue((current) =>
+                  current.map((entry) =>
+                    entry.id === queued.id
+                      ? {
+                          ...entry,
+                          status: "failed",
+                          progress: 100,
+                          file: null,
+                        }
+                      : entry,
+                  ),
+                );
+                setNotice(
+                  unityPlan.diagnostics.find(
+                    (diagnostic) => diagnostic.severity === "blocking",
+                  )?.message ?? `${queued.name}を変換できませんでした`,
+                );
+                continue;
+              }
+
+              updateImportQueue((current) =>
+                current.map((entry) =>
+                  entry.id === queued.id
+                    ? { ...entry, status: "committing", progress: 88 }
+                    : entry,
+                ),
+              );
+              await commitAssetImportPlansToDisk(
+                targetProjectPath,
+                unityPlan.assetCommitBaseManifest,
+                unityPlan.assetPlans,
+              );
+              workingManifest = unityPlan.assets;
+              Object.values(workingManifest.assets).forEach((asset) => {
+                if (asset.sourceHash) knownByHash.set(asset.sourceHash, asset);
+              });
+              setHistory((current) => {
+                const nextBundle = touchProject({
+                  ...current.present.bundle,
+                  scene: unityPlan.scene,
+                  assets: unityPlan.assets,
+                  prefabs: unityPlan.prefabs,
+                });
+                bundleRef.current = nextBundle;
+                setSaveStatus("dirty");
+                return commitEditorHistory(current, {
+                  ...current.present,
+                  bundle: nextBundle,
+                  assetSelection:
+                    unityPlan.selectedAssetId ?? current.present.assetSelection,
+                  sceneSelection:
+                    unityPlan.result.entityCount > 0 && unityPlan.scene.rootEntityIds.length > 0
+                      ? {
+                          kind: "entity",
+                          id:
+                            unityPlan.scene.rootEntityIds[
+                              unityPlan.scene.rootEntityIds.length - 1
+                            ],
+                        }
+                      : current.present.sceneSelection,
+                });
+              });
+              const selectedAsset = unityPlan.selectedAssetId
+                ? unityPlan.assets.assets[unityPlan.selectedAssetId]
+                : undefined;
+              setActiveAssetFolderId(selectedAsset?.folderId ?? null);
+              updateImportQueue((current) =>
+                current.map((entry) =>
+                  entry.id === queued.id
+                    ? {
+                        ...entry,
+                        status: "succeeded",
+                        progress: 100,
+                        file: null,
+                        assetId: unityPlan.selectedAssetId,
+                        diagnostics: unityDiagnostics,
+                        result: {
+                          materialCount: unityPlan.result.materialCount,
+                          textureCount: 0,
+                          prefabCount: unityPlan.result.prefabCount,
+                          entityCount: unityPlan.result.entityCount,
+                          assetCount: unityPlan.result.assetCount,
+                          warningCount: unityPlan.result.warningCount,
+                        },
+                      }
+                    : entry,
+                ),
+              );
+              setNotice(
+                `「${queued.name}」からPrefab ${unityPlan.result.prefabCount}件、Entity ${unityPlan.result.entityCount}件、Asset ${unityPlan.result.assetCount}件を再構築しました`,
+              );
+              continue;
+            }
             const plan = await createAssetImportPlan({
               fileName: sourceFile.name,
               bytes,
@@ -2623,20 +2777,25 @@ export function VisualEditorPrototype({
       resourceKind: PendingImport["resourceKind"];
     }> = [];
     for (const file of files) {
-      if (SUPPORTED_MODEL_FILE.test(file.name)) {
+      if (SUPPORTED_UNITY_FILE.test(file.name)) {
+        accepted.push({ file, resourceKind: "unity-package" });
+      } else if (SUPPORTED_MODEL_FILE.test(file.name)) {
         accepted.push({ file, resourceKind: "model" });
       } else if (SUPPORTED_TEXTURE_FILE.test(file.name)) {
         accepted.push({ file, resourceKind: "texture" });
       }
     }
     const unsupported = files.filter(
-      (file) => !SUPPORTED_MODEL_FILE.test(file.name) && !SUPPORTED_TEXTURE_FILE.test(file.name),
+      (file) =>
+        !SUPPORTED_UNITY_FILE.test(file.name) &&
+        !SUPPORTED_MODEL_FILE.test(file.name) &&
+        !SUPPORTED_TEXTURE_FILE.test(file.name),
     );
 
     if (unsupported.length > 0) {
       const names = unsupported.slice(0, 3).map((file) => file.name).join("、");
       setImportError(
-        `${names}${unsupported.length > 3 ? " ほか" : ""} は対象外です。GLB / GLTF / PNG / JPG / WebP / KTX2に対応します。`,
+        `${names}${unsupported.length > 3 ? " ほか" : ""} は対象外です。UnityPackage / Unity Scene / Prefab / GLB / GLTF / OBJ / VRM / PNG / JPG / WebP / KTX2に対応します。`,
       );
     } else {
       setImportError(null);

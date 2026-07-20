@@ -9,22 +9,32 @@ import {
   SRGBColorSpace,
   Vector3,
   WebGLRenderer,
+  type Material,
   type Object3D,
 } from "three";
 import {
   GLTFLoader,
   type GLTF,
 } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import {
+  VRMLoaderPlugin,
+  VRMUtils,
+  type VRM,
+} from "@pixiv/three-vrm";
 import {
   normalizeModelImportSettings,
   normalizeProjectRelativePath,
   normalizeTextureImportSettings,
+  type AudioAsset,
   type AssetFolder,
   type AssetManifest,
   type MaterialAsset,
   type ModelAsset,
+  type ModelBoneMetadata,
   type ModelBoundsMetadata,
   type ModelImportMetadata,
+  type ModelMorphTargetMetadata,
   type SceneAsset,
   type TextureAsset,
   type TextureImportSettingsPatch,
@@ -45,23 +55,36 @@ export const ASSET_IMPORT_MAX_BYTES = 128 * 1024 * 1024;
 export type SupportedAssetImportFormat =
   | "glb"
   | "gltf"
+  | "obj"
+  | "vrm"
   | "png"
   | "jpeg"
   | "webp"
-  | "ktx2";
+  | "ktx2"
+  | "mp3";
 
 export type ClassifiedAssetImport =
   | {
       kind: "model";
-      format: "glb" | "gltf";
-      mimeType: "model/gltf-binary" | "model/gltf+json";
-      extension: "glb" | "gltf";
+      format: "glb" | "gltf" | "obj" | "vrm";
+      mimeType:
+        | "model/gltf-binary"
+        | "model/gltf+json"
+        | "model/obj"
+        | "model/vrm";
+      extension: "glb" | "gltf" | "obj" | "vrm";
     }
   | {
       kind: "texture";
       format: "png" | "jpeg" | "webp" | "ktx2";
       mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/ktx2";
       extension: "png" | "jpg" | "jpeg" | "webp" | "ktx2";
+    }
+  | {
+      kind: "audio";
+      format: "mp3";
+      mimeType: "audio/mpeg";
+      extension: "mp3";
     };
 
 export type AssetImportDiagnostic = {
@@ -93,7 +116,7 @@ export type AssetImportPlan = {
   replacesAssetId?: string;
   classification?: ClassifiedAssetImport;
   /** Primary Model or standalone Texture selected after the transaction. */
-  asset?: ModelAsset | TextureAsset;
+  asset?: ModelAsset | TextureAsset | AudioAsset;
   /** Material/Texture Assets expanded from an imported Model. */
   derivedAssets?: Array<MaterialAsset | TextureAsset>;
   /** Logical Asset folders created with the Model import. */
@@ -161,6 +184,22 @@ export function classifyAssetImport(
       extension: "gltf",
     };
   }
+  if (extension === "vrm" || normalizedMime === "model/vrm") {
+    return {
+      kind: "model",
+      format: "vrm",
+      mimeType: "model/vrm",
+      extension: "vrm",
+    };
+  }
+  if (extension === "obj" || normalizedMime === "model/obj") {
+    return {
+      kind: "model",
+      format: "obj",
+      mimeType: "model/obj",
+      extension: "obj",
+    };
+  }
   if (extension === "png" || normalizedMime === "image/png") {
     return {
       kind: "texture",
@@ -199,6 +238,18 @@ export function classifyAssetImport(
       format: "ktx2",
       mimeType: "image/ktx2",
       extension: "ktx2",
+    };
+  }
+  if (
+    extension === "mp3" ||
+    normalizedMime === "audio/mpeg" ||
+    normalizedMime === "audio/mp3"
+  ) {
+    return {
+      kind: "audio",
+      format: "mp3",
+      mimeType: "audio/mpeg",
+      extension: "mp3",
     };
   }
   return undefined;
@@ -268,7 +319,7 @@ async function createAssetImportPlanInternal(
     diagnostics.push({
       severity: "blocking",
       code: "unsupported-asset-format",
-      message: "GLB、glTF、PNG、JPG、WebP、KTX2 のみ取り込めます",
+      message: "GLB、glTF、OBJ、VRM、PNG、JPG、WebP、KTX2、MP3 のみ取り込めます",
       fileName,
       fieldPath: "fileName",
     });
@@ -304,7 +355,7 @@ async function createAssetImportPlanInternal(
     diagnostics.push({
       severity: "blocking",
       code: "reimport-kind-mismatch",
-      message: "Model AssetにはGLBまたはglTFを再取り込みしてください",
+      message: "Model AssetにはGLB、glTF、OBJまたはVRMを再取り込みしてください",
       fileName,
       assetId: reimportAsset.id,
       fieldPath: "fileName",
@@ -327,17 +378,37 @@ async function createAssetImportPlanInternal(
         )
       : undefined;
 
-  return classification.kind === "model"
-    ? createModelImportPlan(
+  if (classification.kind === "model") {
+    return classification.format === "obj"
+      ? createObjModelImportPlan(
+          input,
+          fileName,
+          bytes,
+          sourceHash,
+          transactionId,
+          classification,
+          reimportAsset ?? matchedModel,
+        )
+      : createModelImportPlan(
+          input,
+          fileName,
+          bytes,
+          sourceHash,
+          transactionId,
+          classification,
+          reimportAsset ?? matchedModel,
+        );
+  }
+  return classification.kind === "texture"
+    ? createTextureImportPlan(
         input,
         fileName,
         bytes,
         sourceHash,
         transactionId,
         classification,
-        reimportAsset ?? matchedModel,
       )
-    : createTextureImportPlan(
+    : createAudioImportPlan(
         input,
         fileName,
         bytes,
@@ -517,6 +588,27 @@ async function createModelImportPlan(
   classification: Extract<ClassifiedAssetImport, { kind: "model" }>,
   reimportAsset?: ModelAsset,
 ): Promise<AssetImportPlan> {
+  if (classification.format === "obj") {
+    throw new Error("OBJ import must use the OBJ import plan");
+  }
+
+  if (plan.asset.kind === "audio") {
+    if (
+      plan.asset.sourceHash !== plan.sourceHash ||
+      plan.asset.source.kind !== "project"
+    ) {
+      throw new Error("Audio import source identity does not match its plan");
+    }
+    const verifiedSourceWrite = plan.writes.find(
+      (write) =>
+        write.purpose === "source" &&
+        plan.asset?.source.kind === "project" &&
+        write.relativePath === plan.asset.source.relativePath,
+    );
+    if (!verifiedSourceWrite || verifiedSourceWrite.sha256 !== plan.sourceHash) {
+      throw new Error("Audio import plan does not contain its verified source");
+    }
+  }
   const diagnostics: AssetImportDiagnostic[] = [];
   const parsedJson = parseGltfJson(bytes, classification.format);
   if (!parsedJson.ok) {
@@ -557,6 +649,29 @@ async function createModelImportPlan(
     );
   }
 
+  if (
+    classification.format === "vrm" &&
+    !stringArray(parsedJson.json.extensionsUsed).some(
+      (extension) => extension === "VRM" || extension === "VRMC_vrm",
+    )
+  ) {
+    diagnostics.push({
+      severity: "blocking",
+      code: "vrm-extension-missing",
+      message: "VRM 0.xまたは1.xの拡張が見つかりません。VRMとして書き出したファイルを選んでください",
+      fileName,
+      assetId: reimportAsset?.id,
+      fieldPath: "extensionsUsed",
+    });
+    return blockedPlan(
+      transactionId,
+      sourceHash,
+      diagnostics,
+      classification,
+      reimportAsset?.id,
+    );
+  }
+
   const externalReferences = findExternalGltfReferences(parsedJson.json);
   for (const reference of externalReferences) {
     diagnostics.push({
@@ -586,6 +701,22 @@ async function createModelImportPlan(
       code: "gltf-parse-failed",
       message: `Three GLTFLoaderで解析できませんでした: ${errorMessage(error)}`,
       fileName,
+    });
+    return blockedPlan(
+      transactionId,
+      sourceHash,
+      diagnostics,
+      classification,
+      reimportAsset?.id,
+    );
+  }
+  if (classification.format === "vrm" && !gltf.userData.vrm) {
+    diagnostics.push({
+      severity: "blocking",
+      code: "vrm-runtime-metadata-missing",
+      message: "VRMのhumanoid / expression metadataを解析できませんでした",
+      fileName,
+      assetId: reimportAsset?.id,
     });
     return blockedPlan(
       transactionId,
@@ -695,7 +826,7 @@ async function createModelImportPlan(
   const expanded = await expandGltfAssets({
     json: parsedJson.json,
     modelBytes: bytes,
-    sourceFormat: classification.format,
+    sourceFormat: classification.format === "vrm" ? "glb" : classification.format,
     modelAssetId: assetId,
     modelSourceHash: sourceHash,
     materialSlots,
@@ -760,6 +891,213 @@ async function createModelImportPlan(
     diagnostics,
     reimportAsset?.id,
     [...expanded.materialAssets, ...expanded.textureAssets],
+    folderPlan.folders,
+  );
+}
+
+async function createObjModelImportPlan(
+  input: CreateAssetImportPlanInput,
+  fileName: string,
+  bytes: Uint8Array,
+  sourceHash: string,
+  transactionId: string,
+  classification: Extract<ClassifiedAssetImport, { kind: "model" }>,
+  reimportAsset?: ModelAsset,
+): Promise<AssetImportPlan> {
+  const diagnostics: AssetImportDiagnostic[] = [];
+  const text = new TextDecoder().decode(bytes);
+  if (!/^\s*v\s+[-+\d.]/m.test(text) || !/^\s*f\s+\S+/m.test(text)) {
+    diagnostics.push({
+      severity: "blocking",
+      code: "obj-geometry-missing",
+      message: "OBJに頂点または面のgeometryが見つかりません",
+      fileName,
+      assetId: reimportAsset?.id,
+      fieldPath: "bytes",
+    });
+    return blockedPlan(
+      transactionId,
+      sourceHash,
+      diagnostics,
+      classification,
+      reimportAsset?.id,
+    );
+  }
+
+  let object: Object3D;
+  try {
+    object = new OBJLoader().parse(text);
+  } catch (error) {
+    diagnostics.push({
+      severity: "blocking",
+      code: "obj-parse-failed",
+      message: `Three OBJLoaderで解析できませんでした: ${errorMessage(error)}`,
+      fileName,
+      assetId: reimportAsset?.id,
+    });
+    return blockedPlan(
+      transactionId,
+      sourceHash,
+      diagnostics,
+      classification,
+      reimportAsset?.id,
+    );
+  }
+
+  const discoveredSlots = tagObjSourceMaterialIndices(object);
+  if (discoveredSlots.length === 0) {
+    diagnostics.push({
+      severity: "blocking",
+      code: "obj-renderable-mesh-missing",
+      message: "OBJに表示できるMeshが見つかりません",
+      fileName,
+      assetId: reimportAsset?.id,
+    });
+    return blockedPlan(
+      transactionId,
+      sourceHash,
+      diagnostics,
+      classification,
+      reimportAsset?.id,
+    );
+  }
+
+  if (/^\s*mtllib\s+\S+/im.test(text)) {
+    diagnostics.push({
+      severity: "warning",
+      code: "obj-external-material-library",
+      message: "OBJの外部MTL / textureは自動取得しません。配置後にMaterial Slotへ割り当ててください",
+      fileName,
+      assetId: reimportAsset?.id,
+      fieldPath: "mtllib",
+    });
+  }
+
+  const assetId =
+    reimportAsset?.id ?? createImportedAssetId("model", fileName, sourceHash);
+  const modelName =
+    input.displayName !== undefined
+      ? normalizedDisplayName(input.displayName, fileName)
+      : reimportAsset?.name ?? normalizedDisplayName(undefined, fileName);
+  const folderPlan = createModelFolderPlan(
+    input.existingManifest,
+    assetId,
+    modelName,
+    normalizeFolderId(input.folderId),
+    reimportAsset,
+  );
+  const sourceUnchanged = reimportAsset?.sourceHash === sourceHash;
+  const sourceRelativePath =
+    sourceUnchanged && reimportAsset.source.kind === "project"
+      ? reimportAsset.source.relativePath
+      : createSourceDestination("models", fileName, sourceHash, "obj");
+  let materialSlots: ModelAsset["materialSlots"];
+  try {
+    materialSlots = reconcileModelMaterialSlots(
+      discoveredSlots,
+      reimportAsset?.materialSlots,
+    );
+  } catch (error) {
+    diagnostics.push({
+      severity: "blocking",
+      code: "model-material-slots-invalid",
+      message: `Material slotを正規化できませんでした: ${errorMessage(error)}`,
+      fileName,
+      assetId,
+      fieldPath: "materials",
+    });
+    return blockedPlan(
+      transactionId,
+      sourceHash,
+      diagnostics,
+      classification,
+      reimportAsset?.id,
+    );
+  }
+
+  const metadata = extractObjectModelMetadata(
+    object,
+    "obj",
+    fileName,
+    bytes.byteLength,
+  );
+  let thumbnail: ModelAsset["thumbnail"] = sourceUnchanged
+    ? cloneThumbnail(reimportAsset.thumbnail)
+    : staleThumbnailForReimport(reimportAsset);
+  const writes: AssetImportWrite[] = sourceUnchanged
+    ? []
+    : [
+        {
+          relativePath: sourceRelativePath,
+          purpose: "source",
+          mediaType: classification.mimeType,
+          sha256: sourceHash,
+          payload: { encoding: "bytes", bytes: bytes.slice() },
+        },
+      ];
+  if (!sourceUnchanged) {
+    try {
+      const rendered = await renderModelThumbnail(object);
+      const derivedPath = `assets/.derived/thumbnails/${assetId}-${sourceHash.slice(0, 16)}.${rendered.extension}`;
+      thumbnail = {
+        status: "generated",
+        derivedPath,
+        sourceHash,
+        rendererVersion: ASSET_IMPORT_THUMBNAIL_RENDERER_VERSION,
+      };
+      writes.push({
+        relativePath: derivedPath,
+        purpose: "thumbnail",
+        mediaType: rendered.mediaType,
+        payload: { encoding: "data-url", dataUrl: rendered.dataUrl },
+      });
+    } catch (error) {
+      diagnostics.push({
+        severity: "warning",
+        code: "model-thumbnail-failed",
+        message: `モデルのサムネイルを生成できませんでした: ${errorMessage(error)}`,
+        fileName,
+        assetId,
+        fieldPath: "thumbnail",
+      });
+    }
+  }
+
+  const asset: ModelAsset = {
+    id: assetId,
+    name: modelName,
+    kind: "model",
+    status: "ready",
+    source: { kind: "project", relativePath: sourceRelativePath },
+    sourceHash,
+    thumbnail,
+    folderId: folderPlan.modelFolderId,
+    ...(reimportAsset?.order === undefined ? {} : { order: reimportAsset.order }),
+    importSettings: reimportAsset
+      ? normalizeModelImportSettings({}, reimportAsset.importSettings)
+      : normalizeModelImportSettings(),
+    materialSlots,
+    importMetadata: metadata,
+  };
+  diagnostics.push(
+    ...validateModelAssetContract(asset).map((candidate) => ({
+      severity: "blocking" as const,
+      code: `model-contract-${candidate.code}`,
+      message: candidate.message,
+      fileName,
+      assetId,
+      fieldPath: candidate.path,
+    })),
+  );
+  return finishPlan(
+    transactionId,
+    sourceHash,
+    classification,
+    asset,
+    writes,
+    diagnostics,
+    reimportAsset?.id,
+    [],
     folderPlan.folders,
   );
 }
@@ -884,20 +1222,14 @@ async function createTextureImportPlan(
 
 function parseGltfJson(
   bytes: Uint8Array,
-  format: SupportedAssetImportFormat,
+  format: "glb" | "gltf" | "vrm",
 ):
   | { ok: true; json: GltfJson }
   | { ok: false; code: string; message: string; fieldPath?: string } {
-  if (format !== "glb" && format !== "gltf") {
-    return {
-      ok: false,
-      code: "gltf-format-mismatch",
-      message: "モデル形式ではありません",
-    };
-  }
   try {
-    const jsonText =
-      format === "glb" ? readGlbJsonChunk(bytes) : new TextDecoder().decode(bytes);
+    const jsonText = format === "gltf"
+      ? new TextDecoder().decode(bytes)
+      : readGlbJsonChunk(bytes);
     const json = JSON.parse(jsonText) as unknown;
     if (!isRecord(json)) {
       return {
@@ -910,7 +1242,7 @@ function parseGltfJson(
   } catch (error) {
     return {
       ok: false,
-      code: format === "glb" ? "glb-invalid" : "gltf-json-invalid",
+      code: format === "gltf" ? "gltf-json-invalid" : "glb-invalid",
       message: errorMessage(error),
     };
   }
@@ -1117,16 +1449,93 @@ function findExternalGltfReferences(
 
 function parseWithGltfLoader(
   bytes: Uint8Array,
-  format: "glb" | "gltf",
+  format: "glb" | "gltf" | "vrm",
 ): Promise<GLTF> {
   const loader = new GLTFLoader();
+  if (format === "vrm") {
+    loader.register((parser) => new VRMLoaderPlugin(parser));
+  }
   const source =
-    format === "glb"
-      ? toOwnedArrayBuffer(bytes)
-      : new TextDecoder().decode(bytes);
+    format === "gltf"
+      ? new TextDecoder().decode(bytes)
+      : toOwnedArrayBuffer(bytes);
   return new Promise((resolve, reject) => {
-    loader.parse(source, "", resolve, reject);
+    loader.parse(
+      source,
+      "",
+      (gltf) => {
+        const vrm = gltf.userData.vrm as VRM | undefined;
+        if (vrm) VRMUtils.rotateVRM0(vrm);
+        resolve(gltf);
+      },
+      reject,
+    );
   });
+}
+
+function createAudioImportPlan(
+  input: CreateAssetImportPlanInput,
+  fileName: string,
+  bytes: Uint8Array,
+  sourceHash: string,
+  transactionId: string,
+  classification: Extract<ClassifiedAssetImport, { kind: "audio" }>,
+): AssetImportPlan {
+  const diagnostics: AssetImportDiagnostic[] = [];
+  if (!hasMp3Signature(bytes)) {
+    diagnostics.push({
+      severity: "blocking",
+      code: "mp3-signature-invalid",
+      message: "MP3のファイルシグネチャを確認できませんでした",
+      fileName,
+      fieldPath: "bytes",
+    });
+    return blockedPlan(
+      transactionId,
+      sourceHash,
+      diagnostics,
+      classification,
+    );
+  }
+
+  const assetId = createImportedAssetId("audio", fileName, sourceHash);
+  const sourceRelativePath = createSourceDestination(
+    "audio",
+    fileName,
+    sourceHash,
+    classification.extension,
+  );
+  const asset: AudioAsset = {
+    id: assetId,
+    name: normalizedDisplayName(input.displayName, fileName),
+    kind: "audio",
+    status: "ready",
+    source: { kind: "project", relativePath: sourceRelativePath },
+    sourceHash,
+    thumbnail: { status: "missing" },
+    folderId: normalizeFolderId(input.folderId),
+    importMetadata: {
+      sourceFormat: "mp3",
+      mimeType: classification.mimeType,
+      byteLength: bytes.byteLength,
+    },
+  };
+  return finishPlan(
+    transactionId,
+    sourceHash,
+    classification,
+    asset,
+    [
+      {
+        relativePath: sourceRelativePath,
+        purpose: "source",
+        mediaType: classification.mimeType,
+        sha256: sourceHash,
+        payload: { encoding: "bytes", bytes: bytes.slice() },
+      },
+    ],
+    diagnostics,
+  );
 }
 
 function extractMaterialSlots(json: GltfJson): DiscoveredModelMaterialSlot[] {
@@ -1160,11 +1569,13 @@ function extractMaterialSlots(json: GltfJson): DiscoveredModelMaterialSlot[] {
 function extractModelMetadata(
   gltf: GLTF,
   json: GltfJson,
-  sourceFormat: "glb" | "gltf",
+  sourceFormat: "glb" | "gltf" | "vrm",
   sourceFileName: string,
   byteLength: number,
 ): ModelImportMetadata {
   gltf.scene.updateWorldMatrix(true, true);
+  const vrm = gltf.userData.vrm as VRM | undefined;
+  const poseTargets = extractModelPoseTargets(gltf.scene, vrm);
   const nodeCount = json.nodes?.length ?? 0;
   const meshCount = json.meshes?.length ?? 0;
   const primitiveCount =
@@ -1188,9 +1599,127 @@ function extractModelMetadata(
       trackCount: clip.tracks.length,
       sourceAnimationIndex: index,
     })),
+    bones: poseTargets.bones,
+    morphTargets: poseTargets.morphTargets,
+    ...(vrm?.meta.metaVersion === "0" || vrm?.meta.metaVersion === "1"
+      ? { vrmVersion: vrm.meta.metaVersion }
+      : {}),
     extensionsUsed: stringArray(json.extensionsUsed),
     extensionsRequired: stringArray(json.extensionsRequired),
   };
+}
+
+function extractObjectModelMetadata(
+  object: Object3D,
+  sourceFormat: "obj",
+  sourceFileName: string,
+  byteLength: number,
+): ModelImportMetadata {
+  let nodeCount = 0;
+  let meshCount = 0;
+  let primitiveCount = 0;
+  object.traverse((child) => {
+    nodeCount += 1;
+    const mesh = child as Object3D & {
+      isMesh?: boolean;
+      material?: Material | Material[];
+    };
+    if (!mesh.isMesh) return;
+    meshCount += 1;
+    primitiveCount += Array.isArray(mesh.material) ? mesh.material.length : 1;
+  });
+  const poseTargets = extractModelPoseTargets(object);
+  return {
+    sourceFormat,
+    sourceFileName,
+    byteLength,
+    nodeCount,
+    meshCount,
+    primitiveCount,
+    bounds: extractBounds(object),
+    animations: [],
+    bones: poseTargets.bones,
+    morphTargets: poseTargets.morphTargets,
+    extensionsUsed: [],
+    extensionsRequired: [],
+  };
+}
+
+function extractModelPoseTargets(
+  object: Object3D,
+  vrm?: VRM,
+): {
+  bones: ModelBoneMetadata[];
+  morphTargets: ModelMorphTargetMetadata[];
+} {
+  const humanoidByNode = new Map<Object3D, string>();
+  Object.entries(vrm?.humanoid?.humanBones ?? {}).forEach(([name, bone]) => {
+    if (bone?.node) humanoidByNode.set(bone.node, name);
+  });
+  const boneNames = new Set<string>();
+  const morphNames = new Set<string>();
+  const bones: ModelBoneMetadata[] = [];
+  object.traverse((child) => {
+    const bone = child as Object3D & { isBone?: boolean };
+    const name = child.name.trim();
+    if (bone.isBone && name && !boneNames.has(name)) {
+      boneNames.add(name);
+      const humanoidName = humanoidByNode.get(child);
+      bones.push({
+        key: name,
+        name,
+        ...(humanoidName ? { humanoidName } : {}),
+      });
+    }
+    const mesh = child as Object3D & {
+      morphTargetDictionary?: Record<string, number>;
+    };
+    Object.keys(mesh.morphTargetDictionary ?? {}).forEach((targetName) => {
+      const normalized = targetName.trim();
+      if (!normalized || morphNames.has(normalized)) return;
+      morphNames.add(normalized);
+    });
+  });
+  return {
+    bones: bones.sort((left, right) =>
+      (left.humanoidName ?? left.name).localeCompare(
+        right.humanoidName ?? right.name,
+      ),
+    ),
+    morphTargets: [...morphNames]
+      .sort((left, right) => left.localeCompare(right))
+      .map((name) => ({ key: name, name })),
+  };
+}
+
+function tagObjSourceMaterialIndices(
+  object: Object3D,
+): DiscoveredModelMaterialSlot[] {
+  const sourceIndexByMaterial = new Map<Material, number>();
+  const discovered: DiscoveredModelMaterialSlot[] = [];
+  object.traverse((child) => {
+    const mesh = child as Object3D & {
+      isMesh?: boolean;
+      material?: Material | Material[];
+    };
+    if (!mesh.isMesh || !mesh.material) return;
+    const materials = Array.isArray(mesh.material)
+      ? mesh.material
+      : [mesh.material];
+    materials.forEach((material) => {
+      let sourceMaterialIndex = sourceIndexByMaterial.get(material);
+      if (sourceMaterialIndex === undefined) {
+        sourceMaterialIndex = sourceIndexByMaterial.size;
+        sourceIndexByMaterial.set(material, sourceMaterialIndex);
+        discovered.push({
+          name: material.name.trim() || `Material ${sourceMaterialIndex + 1}`,
+          sourceMaterialIndex,
+        });
+      }
+      material.userData.xriftSourceMaterialIndex = sourceMaterialIndex;
+    });
+  });
+  return discovered;
 }
 
 function extractBounds(object: Object3D): ModelBoundsMetadata {
