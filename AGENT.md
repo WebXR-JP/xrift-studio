@@ -24,10 +24,10 @@ pnpm build:preview       # GitHub Pages 用プレビューのビルド
 
 ## 高速フィードバックループ
 
-変更を加えたら、軽い順に次の 3 段階で確認する。ここに挙げるコマンドと読み取り操作は `.claude/settings.json` で事前許可済みなので、確認を挟まず自律的に回してよい。詳細な手順は `.claude/skills/xrift-studio-verify/SKILL.md` にある。
+変更を加えたら、軽い順に次の 3 段階で確認する。Claude Code では `.claude/settings.json` の許可設定を使い、Codex では現在のセッションの実行許可に従う。詳細な手順は `.agents/skills/xrift-studio-verify/SKILL.md` にある。
 
 1. 静的チェック: `pnpm typecheck`。Rust を触ったら `cargo check --manifest-path src-tauri/Cargo.toml`。
-2. ブラウザプレビュー: `.claude/launch.json` の `web`（vite, port 1420）を起動し、LP は `http://localhost:1420/preview.html` で確認する。HMR が効くので保存ごとに再起動しない。メインアプリは Tauri IPC 前提のためブラウザでは確認できない。
+2. ブラウザプレビュー: Vite を port 1420 で起動し、LP は `http://localhost:1420/preview.html` で確認する。Claude Code では `.claude/launch.json` の `web` 設定を再利用できる。HMR が効くので保存ごとに再起動しない。メインアプリは Tauri IPC 前提のためブラウザでは確認できない。
 3. デスクトップ実機: `pnpm tauri:dev` をバックグラウンドで起動し、Tauri MCP でスクリーンショット・DOM・コンソール・IPC を確認する。終わったらプロセスを停止する。
 
 許可なしで実行してよいもの: 上記の静的チェックとデバッグ起動、Tauri MCP による読み取り（スクリーンショット・DOM・ログ・IPC 監視）、作業単位のコミット。
@@ -80,6 +80,6 @@ pnpm build:preview       # GitHub Pages 用プレビューのビルド
 - Web プレビュー: `src/PreviewApp.tsx`
 - UX 原則: `docs/UX_PRINCIPLES.md`
 - マイクロインタラクション Wiki: `docs/UX_INTERACTIONS.md`
-- UX スキル: `.claude/skills/xrift-studio-ux/SKILL.md`
-- 機能追加の方針スキル: `.claude/skills/xrift-studio-feature/SKILL.md`
-- 検証ループスキル: `.claude/skills/xrift-studio-verify/SKILL.md`
+- UX スキル: `.agents/skills/xrift-studio-ux/SKILL.md`
+- 機能追加の方針スキル: `.agents/skills/xrift-studio-feature/SKILL.md`
+- 検証ループスキル: `.agents/skills/xrift-studio-verify/SKILL.md`
