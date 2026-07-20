@@ -3863,6 +3863,12 @@ mod tests {
             .expect("authoring public directory must be created");
         std::fs::create_dir_all(staging_root.join("public"))
             .expect("staging public directory must be created");
+        let authoring_root = authoring_root
+            .canonicalize()
+            .expect("authoring root must resolve");
+        let staging_root = staging_root
+            .canonicalize()
+            .expect("staging root must resolve");
         std::fs::write(
             authoring_root.join("public/thumbnail.png"),
             b"edited-thumbnail",
