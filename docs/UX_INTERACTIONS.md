@@ -43,7 +43,7 @@ F-06 アイテム検査
 | MI-24 | Hierarchy の Entity subtree を Assets / folder へ drop して Prefab にする | drop target、Prefab 名、Entity / Asset dependency 件数、既存 Prefab / cycle conflict を表示する。成功前は Scene、Asset、folder のどれも変更しない。 | 成功時は Prefab Asset / document と instance metadata を一 transaction で作り、`sceneSelection` は instance root、`assetSelection` は Prefab にする。Undo / 失敗 / 取消では全 document と両 selection を元へ戻す。 |
 | MI-25 | authoring操作を一件確定する、Undo / Redoする、またはCtrl/Cmd+Sで即時保存を要求する | 確定したrevisionを短い待機時間後に自動保存し、headerを「自動保存待ち」「自動保存中」「自動保存済み」「自動保存エラー」で更新する。連続変更は最新revisionへまとめ、保存処理は必ず直列化する。Ctrl/Cmd+Sは主導線ではなく待機中の保存を即時flushする。 | commit markerと全hash一致後だけ対象revisionを保存済みにする。保存中の追加編集は次の自動保存へ引き継ぎ、古い保存完了で新しいrevisionを保存済みにしない。失敗時はlast committed setを維持し、編集を止めず同じheaderから再試行できる。戻る操作は最新revisionの保存完了を待ち、失敗時はEditorに留まる。 |
 | MI-26 | Play、generated preview、compile または check を実行する | Editor direct Play、generated staging preview、check/build を別 label にし、input fingerprint、target、stale、progress を示す。diagnostic は provenance から元 Entity / Asset / field へ link する。 | fresh hash の結果だけ成功にする。Stop / cancel は process と resource を cleanup して Edit へ戻る。公式に未記載の CLI / hosted / XFT preview を存在するように表示しない。 |
-| MI-27 | Upload modal を開き、review から remote result まで進める | review、auth-check、saving、compiling、checking、uploading、processing、succeeded、failed を一つの modal 内で段階表示し、title、description、thumbnail、diagnostic、progress、cancel / retry を現在 state に合わせる。 | 閉じると Edit に戻り、結果 ID は保持する。remote commit 後を取消済みと断定しない。成功時は正式 result の ID / version / hash、正式に返る時だけ URL を示す。test / 通常検証では実 upload をしない。 |
+| MI-27 | Upload modal を開き、review から remote result まで進める | review、auth-check、saving、compiling、required thumbnail copy / SHA-256 verify、checking、uploading、processing、succeeded、failed を一つの modal 内で段階表示し、title、description、thumbnail、diagnostic、progress、cancel / retry を現在 state に合わせる。 | `public/thumbnail.png` のcopyまたはSHA一致確認に失敗した場合はremote uploadを開始しない。検証成功後は「公開用ステージングへコピー済み」を残す。閉じると Edit に戻り、結果 ID は保持する。remote commit 後を取消済みと断定しない。成功時は正式 result の ID / version / hash、正式に返る時だけ URL を示す。test / 通常検証では実 upload をしない。 |
 | MI-28 | Asset folder または Asset の context menu を開く | folder では作成 / import / 新規 folder、Asset では rename / duplicate / delete / references / reimport / thumbnail regeneration を kind と state に応じて表示する。shortcut と icon は Registry と一致させる。 | 一つの操作選択または Escape / 外側 click で閉じる。実行不可項目は理由を tooltip で示し、menu を開いただけでは document や selection を変えない。 |
 | MI-29 | panel splitter を動かす、panel header を dock zone へ drag する、または layout を reset する | drag 中は resize cursor、minimum size、dock preview、最終 order を表示する。Scene / Asset data と authoring history は変更しない。 | drop で normalized size / zone / order を Editor Preferences に保存する。Escape / 領域外 drop は開始前 layout、reset は既定 layout へ戻る。保存失敗時も session layout を保ち、再試行を示す。 |
 | MI-30 | Edit 中に Hierarchy の Entity subtree を別 Entity または Scene Root へ drag する | 行の上端は「前へ」、中央は「子へ」、下端は「後へ」として挿入線または親候補の面を表示する。Root 領域はScene Root末尾への移動を示す。自分自身、子孫、実際に順序が変わらない位置はエラー色の境界と理由で実行不可を示す。 | 有効な drop は Entity ID と subtree を維持したHierarchy Move Command一件として確定し、同じ親内の順序変更と親子化のどちらでも選択を維持する。Escape、領域外 drop、実行不可 target、Play 中は SceneDocument と history を変更しない。Undo / Redo は親子 link と兄弟順を復元する。 |
@@ -221,19 +221,19 @@ F-06 アイテム検査
 
 ### 操作中
 
-- authoring操作の確定後は250msの待機を挟み、最新revisionをvalidate、temporary write、commitへ進める。保存中に次の変更が確定した場合は並列writeせず、現在の保存完了後に最新revisionを続けて保存する。compileはasset prepare、generate、hash / provenance、Upload modalはauth-check、saving、compiling、checking、uploading、processingを表示する。
+- authoring操作の確定後は250msの待機を挟み、最新revisionをvalidate、temporary write、commitへ進める。保存中に次の変更が確定した場合は並列writeせず、現在の保存完了後に最新revisionを続けて保存する。compileはasset prepare、generate、hash / provenance、必須の`public/thumbnail.png`のstaging copyとSHA-256一致確認へ進み、Upload modalはauth-check、saving、compiling、checking、uploading、processingを表示する。
 - cancel button は安全に止められる stage だけ有効にする。remote upload 開始後は best effort であることを示し、結果不明のまま新規 upload を再開しない。
 
 ### 成功時
 
-- 自動保存はcommit markerと全hash一致後だけ対象revisionを保存済みにする。保存中に新しいrevisionができた場合は「自動保存中」または「自動保存待ち」を維持し、後続保存が完了してから「自動保存済み」にする。compile / checkはfresh input fingerprintのresultとprovenance linkを残す。
+- 自動保存はcommit markerと全hash一致後だけ対象revisionを保存済みにする。保存中に新しいrevisionができた場合は「自動保存中」または「自動保存待ち」を維持し、後続保存が完了してから「自動保存済み」にする。compile / checkはfresh input fingerprintのresultとprovenance linkを残し、サムネイルは「公開用ステージングへコピー済み」と検証SHAを表示する。
 - Upload は正式 result の worldId / itemId、versionId、versionNumber、contentHash と審査状態を表示する。正式 URL field がある時だけ URL を表示する。
 - Upload 成功後は CLI が `.xrift/world.json` または `.xrift/item.json` に記録した remote ID を authoring project へ保存し、次の fresh staging へ復元する。`xrift.json` を remote ID の保存先として扱わない。
 
 ### 失敗時
 
 - 自動保存失敗はlast committed document setと未保存のEditor stateを維持し、headerへ「自動保存エラー」と再試行を表示する。新しい操作が確定した場合はその最新revisionで一度だけ再試行し、同じ内容の無限retryは行わない。compile failureはlast-good staging、Upload failureはremote commitの有無を保ち、stage、sanitized cause、再試行先を示す。
-- stale input、REJECT、未編集 metadata、auth failure を成功扱いにせず、元 Entity / Asset / field または review へ戻す。token、absolute path、raw stderr を表示しない。
+- stale input、REJECT、未編集 metadata、auth failure、サムネイルの欠落・copy失敗・SHA不一致を成功扱いにせず、元 Entity / Asset / field または review へ戻す。サムネイル変更時はcompileをstaleにし、再staging前にremote uploadを開始しない。token、absolute path、raw stderr を表示しない。
 - 保存済み remote ID を一意に復元できない、または manifest、CLI sidecar、upload result の ID が一致しない場合は新規 upload を開始・再試行せず、公開先の確認を求める。
 
 ### 戻り先

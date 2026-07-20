@@ -57,10 +57,21 @@ export type MaterialPreviewTextures = {
 /** Compatibility alias for existing Scene View consumers. */
 export type CoreMaterialPreviewTextures = MaterialPreviewTextures;
 
-type PreviewTextureRole = keyof MaterialPreviewTextures;
+export type MaterialPreviewTextureRole = keyof MaterialPreviewTextures;
+
+export type MaterialPreviewTextureLoadStatus = "loading" | "ready" | "error";
+
+export type MaterialPreviewTextureStatuses = Partial<
+  Record<MaterialPreviewTextureRole, MaterialPreviewTextureLoadStatus>
+>;
+
+export type MaterialPreviewTextureState = {
+  textures: MaterialPreviewTextures;
+  statuses: MaterialPreviewTextureStatuses;
+};
 
 type PreviewTextureRequest = {
-  role: PreviewTextureRole;
+  role: MaterialPreviewTextureRole;
   textureInfo: MaterialTextureInfo;
   asset: TextureAsset & { source: { kind: "project"; relativePath: string } };
   colorSpace: "srgb" | "linear";
@@ -68,11 +79,11 @@ type PreviewTextureRequest = {
 
 const IMAGE_DATA_URL_CACHE = new Map<string, Promise<string>>();
 
-export function useMaterialPreviewTextures(
+export function useMaterialPreviewTextureState(
   material: MaterialAsset | undefined,
   assets: AssetManifest,
   projectPath: string | undefined,
-): MaterialPreviewTextures {
+): MaterialPreviewTextureState {
   const requests = useMemo(
     () => resolvePreviewTextureRequests(material, assets),
     [assets, material],
@@ -92,13 +103,30 @@ export function useMaterialPreviewTextures(
       ),
     [requests],
   );
-  const [textures, setTextures] = useState<MaterialPreviewTextures>({});
+  const [state, setState] = useState<MaterialPreviewTextureState>({
+    textures: {},
+    statuses: {},
+  });
 
   useEffect(() => {
     let active = true;
     let ownedTextures: Texture[] = [];
-    setTextures({});
-    if (!projectPath || requests.length === 0) {
+    if (requests.length === 0) {
+      setState({ textures: {}, statuses: {} });
+      return () => {
+        active = false;
+      };
+    }
+    const initialStatus: MaterialPreviewTextureLoadStatus = projectPath
+      ? "loading"
+      : "error";
+    setState({
+      textures: {},
+      statuses: Object.fromEntries(
+        requests.map((request) => [request.role, initialStatus]),
+      ) as MaterialPreviewTextureStatuses,
+    });
+    if (!projectPath) {
       return () => {
         active = false;
       };
@@ -116,26 +144,32 @@ export function useMaterialPreviewTextures(
             request.colorSpace,
             request.role,
           );
-          return { role: request.role, texture };
+          return { role: request.role, texture, status: "ready" as const };
         } catch {
-          return null;
+          return { role: request.role, status: "error" as const };
         }
       }),
     ).then((loaded) => {
-      const available = [];
+      const available: Array<{
+        role: MaterialPreviewTextureRole;
+        texture: Texture;
+      }> = [];
       for (const entry of loaded) {
-        if (entry) available.push(entry);
+        if (entry.status === "ready") available.push(entry);
       }
       if (!active) {
         available.forEach((entry) => entry.texture.dispose());
         return;
       }
       ownedTextures = available.map((entry) => entry.texture);
-      setTextures(
-        Object.fromEntries(
+      setState({
+        textures: Object.fromEntries(
           available.map((entry) => [entry.role, entry.texture]),
         ) as MaterialPreviewTextures,
-      );
+        statuses: Object.fromEntries(
+          loaded.map((entry) => [entry.role, entry.status]),
+        ) as MaterialPreviewTextureStatuses,
+      });
     });
 
     return () => {
@@ -148,7 +182,15 @@ export function useMaterialPreviewTextures(
   // input that can change the owned Texture set.
   }, [projectPath, requestKey]);
 
-  return textures;
+  return state;
+}
+
+export function useMaterialPreviewTextures(
+  material: MaterialAsset | undefined,
+  assets: AssetManifest,
+  projectPath: string | undefined,
+): MaterialPreviewTextures {
+  return useMaterialPreviewTextureState(material, assets, projectPath).textures;
 }
 
 /** Compatibility name retained for existing Scene View consumers. */
@@ -214,7 +256,11 @@ function resolvePreviewTextureRequests(
   const pbr = properties.pbrMetallicRoughness;
   const extensions = properties.extensions;
   const candidates: Array<
-    [PreviewTextureRole, MaterialTextureInfo | undefined, "srgb" | "linear"]
+    [
+      MaterialPreviewTextureRole,
+      MaterialTextureInfo | undefined,
+      "srgb" | "linear",
+    ]
   > = [
     ["baseColorMap", pbr.baseColorTexture, "srgb"],
     ["metallicRoughnessMap", pbr.metallicRoughnessTexture, "linear"],

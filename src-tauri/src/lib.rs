@@ -3847,6 +3847,69 @@ mod tests {
     }
 
     #[test]
+    fn copies_and_rechecks_the_required_publication_thumbnail() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("test clock must be available")
+            .as_nanos();
+        let fixture_root = std::env::temp_dir().join(format!(
+            "xrift-studio-thumbnail-staging-{}-{}",
+            std::process::id(),
+            unique
+        ));
+        let authoring_root = fixture_root.join("authoring");
+        let staging_root = fixture_root.join("staging");
+        std::fs::create_dir_all(authoring_root.join("public"))
+            .expect("authoring public directory must be created");
+        std::fs::create_dir_all(staging_root.join("public"))
+            .expect("staging public directory must be created");
+        std::fs::write(
+            authoring_root.join("public/thumbnail.png"),
+            b"edited-thumbnail",
+        )
+        .expect("authoring thumbnail must be written");
+        std::fs::write(
+            staging_root.join("public/thumbnail.png"),
+            b"template-thumbnail",
+        )
+        .expect("template thumbnail must be written");
+
+        let copy = required_thumbnail_copy();
+        let verification =
+            copy_required_publication_file(&authoring_root, &staging_root, &copy)
+                .expect("required thumbnail must be copied and verified");
+        assert_eq!(verification.purpose, "thumbnail");
+        assert_eq!(
+            std::fs::read(staging_root.join("public/thumbnail.png"))
+                .expect("staged thumbnail must remain readable"),
+            b"edited-thumbnail"
+        );
+        assert_eq!(
+            verification.sha256,
+            sha256_file(
+                &authoring_root.join("public/thumbnail.png"),
+                "fixture thumbnail"
+            )
+            .expect("fixture SHA-256 must be available")
+        );
+
+        std::fs::write(
+            authoring_root.join("public/thumbnail.png"),
+            b"changed-after-staging",
+        )
+        .expect("source thumbnail must be changed");
+        assert!(verify_required_publication_file_copy(
+            &authoring_root,
+            &staging_root,
+            &copy
+        )
+        .expect_err("a changed source must make staging stale")
+        .contains("SHA-256 does not match"));
+
+        std::fs::remove_dir_all(&fixture_root).expect("fixture directory must be removed");
+    }
+
+    #[test]
     fn reuses_only_byte_identical_asset_import_targets() {
         use base64::Engine;
 
