@@ -4,7 +4,7 @@ export const OPEN_BRUSH_EXTENSION_NAMES = [
 ] as const;
 
 export const OPEN_BRUSH_BRUSH_BASE_URL =
-  "https://icosa-gallery.github.io/three-icosa-template/brushes/";
+  "https://icosa-foundation.github.io/three-icosa-template/brushes/";
 
 export const OPEN_BRUSH_RUNTIME_PACKAGE = "three-icosa@0.4.2-alpha.18";
 export const OPEN_BRUSH_RENDERER = "three-icosa@0.4.2-alpha.18";

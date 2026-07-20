@@ -786,6 +786,22 @@ async function createModelImportPlan(
       extractMaterialSlots(parsedJson.json),
       reimportAsset?.materialSlots,
     );
+    if (openBrush) {
+      materialSlots = materialSlots.map((slot) => {
+        const defaultMaterial = slot.defaultMaterialAssetId
+          ? input.existingManifest?.assets[slot.defaultMaterialAssetId]
+          : undefined;
+        if (
+          defaultMaterial?.kind !== "material" ||
+          defaultMaterial.importedFromModel?.modelAssetId !== assetId ||
+          defaultMaterial.importedFromModel.isUserOverridden
+        ) {
+          return slot;
+        }
+        const { defaultMaterialAssetId: _autoImportedDefault, ...sourceSlot } = slot;
+        return sourceSlot;
+      });
+    }
   } catch (error) {
     diagnostics.push({
       severity: "blocking",

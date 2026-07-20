@@ -50,7 +50,6 @@ import {
   getMaterialAsset,
   getPrimaryMaterialAssetId,
   getTransform,
-  isOpenBrushModelMetadata,
   normalizeProjectRelativePath,
   resolveSceneSettings,
   type AssetManifest,
@@ -255,11 +254,8 @@ function MeshVisual({
             const binding = component.materialBindings.find(
               (candidate) => candidate.slot === slot.slot,
             );
-            const materialAssetId = isOpenBrushModelMetadata(
-              geometry.importMetadata?.openBrush,
-            )
-              ? binding?.materialAssetId
-              : binding?.materialAssetId ?? slot.defaultMaterialAssetId;
+            const materialAssetId =
+              binding?.materialAssetId ?? slot.defaultMaterialAssetId;
             const material = materialAssetId
               ? getMaterialAsset(assets, materialAssetId)
               : undefined;
