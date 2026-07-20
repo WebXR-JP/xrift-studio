@@ -17,7 +17,9 @@
     "typecheck": "tsc --noEmit",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "mcp:server": "npx -y @hypothesi/tauri-mcp-server",
+    "mcp:cli": "npx -y @hypothesi/tauri-mcp-cli"
   },
   "overrides": {
     "dompurify": "3.4.12"
