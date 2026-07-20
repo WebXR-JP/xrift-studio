@@ -24,6 +24,7 @@ import { normalizeParticleProperties } from "../particle-system";
 import type { VisualProjectKind } from "../project-document";
 import {
   type BoxColliderComponent,
+  type AudioSourceComponent,
   type ColliderComponent,
   type LightComponent,
   type MeshColliderComponent,
@@ -687,6 +688,9 @@ function renderEntity(
       if (rendered) localContent.push(rendered);
     } else if (component.type === "light") {
       localContent.push(renderLight(component));
+    } else if (component.type === "audio-source") {
+      const rendered = renderAudioSource(entity, component, context);
+      if (rendered) localContent.push(rendered);
     } else if (component.type === "spawn-point") {
       const rendered = renderSpawnPoint(entity, component.id, component.target, transform, context);
       if (rendered) localContent.push(rendered);
@@ -2288,6 +2292,101 @@ function renderLight(light: LightComponent): string {
     case "rectArea":
       return `<rectAreaLight color=${color} intensity={${intensity}} width={${formatNumber(light.width ?? 1)}} height={${formatNumber(light.height ?? 1)}} />`;
   }
+}
+
+function renderAudioSource(
+  entity: SceneEntity,
+  audio: AudioSourceComponent,
+  context: CompileContext,
+): string | null {
+  const sourceUrl = normalizeAudioRuntimeUrl(audio.sourceUrl);
+  if (!sourceUrl) {
+    addDiagnostic(context, {
+      severity: "warning",
+      code: "audio-source-url-missing",
+      message: "Audio SourceのURLが未設定のため、音声を出力しません",
+      sceneId: context.scene.sceneId,
+      entityId: entity.id,
+      componentId: audio.id,
+      fieldPath: "sourceUrl",
+    });
+    return null;
+  }
+
+  context.reactValueImports.add("useEffect");
+  context.reactValueImports.add("useMemo");
+  context.fiberImports.add("useThree");
+  ["Audio", "AudioListener", "AudioLoader", "PositionalAudio"].forEach(
+    (name) => context.threeValueImports.add(name),
+  );
+  context.supportDeclarations.set(
+    "audio-source",
+    `const xriftStudioAudioListener = new AudioListener();
+let xriftStudioAudioListenerUsers = 0;
+
+const XRiftStudioAudioSource: FC<{
+  url: string;
+  volume: number;
+  loop: boolean;
+  autoplay: boolean;
+  spatial: boolean;
+  refDistance: number;
+  rolloffFactor: number;
+  maxDistance: number;
+}> = ({ url, volume, loop, autoplay, spatial, refDistance, rolloffFactor, maxDistance }) => {
+  const camera = useThree((state) => state.camera);
+  const sound = useMemo(
+    () => spatial ? new PositionalAudio(xriftStudioAudioListener) : new Audio(xriftStudioAudioListener),
+    [spatial],
+  );
+  useEffect(() => () => {
+    if (sound.isPlaying) sound.stop();
+    sound.disconnect();
+  }, [sound]);
+  useEffect(() => {
+    if (xriftStudioAudioListener.parent !== camera) camera.add(xriftStudioAudioListener);
+    xriftStudioAudioListenerUsers += 1;
+    return () => {
+      xriftStudioAudioListenerUsers = Math.max(0, xriftStudioAudioListenerUsers - 1);
+      if (xriftStudioAudioListenerUsers === 0) camera.remove(xriftStudioAudioListener);
+    };
+  }, [camera]);
+  useEffect(() => {
+    let active = true;
+    sound.setVolume(volume);
+    sound.setLoop(loop);
+    if (sound instanceof PositionalAudio) {
+      sound.setRefDistance(refDistance);
+      sound.setRolloffFactor(rolloffFactor);
+      sound.setMaxDistance(maxDistance);
+    }
+    new AudioLoader().load(
+      url,
+      (buffer) => {
+        if (!active) return;
+        sound.setBuffer(buffer);
+        if (autoplay && !sound.isPlaying) sound.play();
+      },
+      undefined,
+      () => undefined,
+    );
+    return () => {
+      active = false;
+      if (sound.isPlaying) sound.stop();
+    };
+  }, [autoplay, loop, maxDistance, refDistance, rolloffFactor, sound, url, volume]);
+  return <primitive object={sound} />;
+};`,
+  );
+
+  return `<XRiftStudioAudioSource url=${JSON.stringify(sourceUrl)} volume={${formatNumber(audio.volume)}} loop={${audio.loop}} autoplay={${audio.autoplay}} spatial={${audio.spatial}} refDistance={${formatNumber(audio.refDistance)}} rolloffFactor={${formatNumber(audio.rolloffFactor)}} maxDistance={${formatNumber(audio.maxDistance)}} />`;
+}
+
+function normalizeAudioRuntimeUrl(value: string): string {
+  const normalized = value.trim().replace(/\\/g, "/");
+  if (normalized.startsWith("./public/")) return `/${normalized.slice(9)}`;
+  if (normalized.startsWith("public/")) return `/${normalized.slice(7)}`;
+  return normalized;
 }
 
 function renderSpawnPoint(

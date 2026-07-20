@@ -529,6 +529,40 @@ function EditorLightIcon({
   );
 }
 
+function AudioSourceVisual({ selected }: { selected: boolean }) {
+  const AudioIcon = EDITOR_ICONS.audio;
+  return (
+    <Html
+      transform
+      sprite
+      distanceFactor={7}
+      zIndexRange={[2, 0]}
+      style={{ pointerEvents: "none" }}
+    >
+      <div
+        aria-hidden="true"
+        title="Audio Source"
+        style={{
+          alignItems: "center",
+          background: selected ? "rgba(255,255,255,0.96)" : "rgba(15,23,42,0.82)",
+          border: `2px solid ${selected ? EDITOR_SELECTION_COLOR : "#a78bfa"}`,
+          borderRadius: 10,
+          boxShadow: selected
+            ? "0 0 0 3px rgba(148,163,184,0.28), 0 4px 14px rgba(15,23,42,0.28)"
+            : "0 3px 10px rgba(15,23,42,0.28)",
+          color: selected ? "#6d28d9" : "#c4b5fd",
+          display: "flex",
+          height: 34,
+          justifyContent: "center",
+          width: 34,
+        }}
+      >
+        <AudioIcon size={17} strokeWidth={2.2} />
+      </div>
+    </Html>
+  );
+}
+
 function DirectionArrow({
   direction,
   color,
@@ -1222,6 +1256,8 @@ function ComponentVisual({
       );
     case "light":
       return <LightVisual component={component} selected={selected} />;
+    case "audio-source":
+      return component.enabled ? <AudioSourceVisual selected={selected} /> : null;
     case "spawn-point":
       return component.enabled ? (
         <SpawnPointVisual selected={selected} />

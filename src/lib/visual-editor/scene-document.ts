@@ -42,6 +42,15 @@ export type MeshComponent = ComponentBase & {
   materialBindings: MaterialBinding[];
   castShadow: boolean;
   receiveShadow: boolean;
+  /** Static per-Entity Model pose. Timeline authoring can keyframe this later. */
+  modelPose?: ModelPoseState;
+};
+
+export type ModelPoseState = {
+  /** Bone local Euler rotations in radians, keyed by imported bone key. */
+  bones: Record<string, Vec3>;
+  /** Shape-key weights in the inclusive 0..1 range. */
+  morphTargets: Record<string, number>;
 };
 
 export type MeshGeometryReference =
@@ -144,6 +153,34 @@ export type ParticleEmitterComponent = ComponentBase & {
   particleAssetId: string;
 };
 
+export type AudioSourceComponent = ComponentBase & {
+  type: "audio-source";
+  /** Public URL or project-relative runtime URL. Empty until configured. */
+  sourceUrl: string;
+  volume: number;
+  loop: boolean;
+  autoplay: boolean;
+  spatial: boolean;
+  refDistance: number;
+  rolloffFactor: number;
+  maxDistance: number;
+};
+
+export type AudioSourcePatch = Partial<
+  Pick<
+    AudioSourceComponent,
+    | "enabled"
+    | "sourceUrl"
+    | "volume"
+    | "loop"
+    | "autoplay"
+    | "spatial"
+    | "refDistance"
+    | "rolloffFactor"
+    | "maxDistance"
+  >
+>;
+
 export type PrefabInstanceComponent = ComponentBase & {
   type: "prefab-instance";
   prefabAssetId: string;
@@ -187,6 +224,7 @@ export interface SceneComponentSchemaRegistry {
   mesh: MeshComponent;
   collider: ColliderComponent;
   light: LightComponent;
+  "audio-source": AudioSourceComponent;
   "spawn-point": SpawnPointComponent;
 }
 
@@ -786,6 +824,90 @@ export function updateLightComponent(
   };
 }
 
+/** Applies an Audio Source edit atomically; an invalid field rejects the patch. */
+export function updateAudioSourceComponent(
+  scene: SceneDocument,
+  entityId: string,
+  patch: AudioSourcePatch,
+  componentId?: string,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  const current = entity?.components.find(
+    (component): component is AudioSourceComponent =>
+      component.type === "audio-source" &&
+      (componentId === undefined || component.id === componentId),
+  );
+  if (!entity || !current) return scene;
+  if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") return scene;
+  if (
+    patch.sourceUrl !== undefined &&
+    (typeof patch.sourceUrl !== "string" ||
+      patch.sourceUrl.trim().length > 2048 ||
+      /^javascript:/i.test(patch.sourceUrl.trim()))
+  ) {
+    return scene;
+  }
+  if (
+    patch.volume !== undefined &&
+    (!Number.isFinite(patch.volume) || patch.volume < 0 || patch.volume > 1)
+  ) {
+    return scene;
+  }
+  if (patch.loop !== undefined && typeof patch.loop !== "boolean") return scene;
+  if (patch.autoplay !== undefined && typeof patch.autoplay !== "boolean") return scene;
+  if (patch.spatial !== undefined && typeof patch.spatial !== "boolean") return scene;
+  if (
+    patch.refDistance !== undefined &&
+    (!Number.isFinite(patch.refDistance) || patch.refDistance <= 0)
+  ) {
+    return scene;
+  }
+  if (
+    patch.rolloffFactor !== undefined &&
+    (!Number.isFinite(patch.rolloffFactor) || patch.rolloffFactor < 0)
+  ) {
+    return scene;
+  }
+  if (
+    patch.maxDistance !== undefined &&
+    (!Number.isFinite(patch.maxDistance) || patch.maxDistance <= 0)
+  ) {
+    return scene;
+  }
+
+  const refDistance = patch.refDistance ?? current.refDistance;
+  const maxDistance = patch.maxDistance ?? current.maxDistance;
+  if (maxDistance < refDistance) return scene;
+  const next: AudioSourceComponent = {
+    ...current,
+    ...patch,
+    sourceUrl:
+      patch.sourceUrl !== undefined
+        ? patch.sourceUrl.trim()
+        : current.sourceUrl,
+    refDistance,
+    maxDistance,
+  };
+  const changed = Object.keys(patch).some(
+    (key) =>
+      next[key as keyof AudioSourceComponent] !==
+      current[key as keyof AudioSourceComponent],
+  );
+  if (!changed) return scene;
+  return {
+    ...scene,
+    entities: {
+      ...scene.entities,
+      [entityId]: {
+        ...entity,
+        components: entity.components.map((component) =>
+          component.id === current.id ? next : component,
+        ),
+      },
+    },
+  };
+}
+
 function getPrimitiveColliderBounds(
   primitive: PrimitiveGeometry,
 ): ColliderAutoFitBounds {
@@ -954,6 +1076,7 @@ export function updateMeshGeometryAsset(
     geometryAssetId,
     geometry: { kind: "asset", assetId: geometryAssetId },
     materialBindings,
+    modelPose: undefined,
   });
 }
 
@@ -1313,6 +1436,19 @@ function cloneSceneComponent(
       materialBindings: component.materialBindings.map((binding) => ({
         ...binding,
       })),
+      ...(component.modelPose
+        ? {
+            modelPose: {
+              bones: Object.fromEntries(
+                Object.entries(component.modelPose.bones).map(([key, value]) => [
+                  key,
+                  cloneVec3(value),
+                ]),
+              ),
+              morphTargets: { ...component.modelPose.morphTargets },
+            },
+          }
+        : {}),
     };
   }
   if (component.type === "collider") {

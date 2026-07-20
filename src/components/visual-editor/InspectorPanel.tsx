@@ -14,8 +14,11 @@ import {
   getMaterialAsset,
   getMeshMaterialSlots,
   getTransform,
+  getEditorComponentMenuDefinitions,
   getXriftComponentDefinition,
-  EDITOR_COMPONENT_REGISTRY,
+  getXriftComponentMenuGroups,
+  type AudioSourceComponent,
+  type AudioSourcePatch,
   type AssetManifest,
   type ColliderComponent,
   type ColliderPatch,
@@ -25,6 +28,7 @@ import {
   type MaterialBinding,
   type MaterialAssetPatch,
   type ModelAssetPatch,
+  type ModelPoseState,
   type MaterialSlotDefinition,
   type MeshComponent,
   type ParticleEmitterComponent,
@@ -60,7 +64,10 @@ import {
 import { MATERIAL_DRAG_MIME } from "./types";
 
 export type MeshInspectorPatch = Partial<
-  Pick<MeshComponent, "materialBindings" | "castShadow" | "receiveShadow">
+  Pick<
+    MeshComponent,
+    "materialBindings" | "castShadow" | "receiveShadow" | "modelPose"
+  >
 >;
 
 export type ParticleEmitterInspectorPatch = Partial<
@@ -939,6 +946,105 @@ function LightInspector({
   );
 }
 
+function AudioSourceInspector({
+  component,
+  readOnly,
+  onChange,
+}: {
+  component: AudioSourceComponent;
+  readOnly: boolean;
+  onChange: (patch: AudioSourcePatch) => void;
+}) {
+  return (
+    <ComponentCard title="Audio Source" subtitle="Three.js">
+      <ToggleRow
+        label="Enabled"
+        checked={component.enabled}
+        disabled={readOnly}
+        onChange={(enabled) => onChange({ enabled })}
+      />
+      <label className="block text-xs font-medium text-slate-600">
+        Source URL
+        <input
+          type="text"
+          value={component.sourceUrl}
+          disabled={readOnly}
+          placeholder="/audio/ambient.mp3"
+          onChange={(event) => onChange({ sourceUrl: event.currentTarget.value })}
+          className="mt-1 h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100"
+        />
+      </label>
+      {!component.sourceUrl ? (
+        <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
+          public配下の音声は /audio/file.mp3 の形式で指定できます。
+        </p>
+      ) : null}
+      <ColliderNumberField
+        label="Volume"
+        value={component.volume}
+        min={0}
+        max={1}
+        step={0.05}
+        disabled={readOnly}
+        onChange={(volume) => onChange({ volume })}
+      />
+      <div className="space-y-2 border-t border-slate-100 pt-2">
+        <ToggleRow
+          label="Loop"
+          checked={component.loop}
+          disabled={readOnly}
+          onChange={(loop) => onChange({ loop })}
+        />
+        <ToggleRow
+          label="Autoplay"
+          checked={component.autoplay}
+          disabled={readOnly}
+          onChange={(autoplay) => onChange({ autoplay })}
+        />
+        <ToggleRow
+          label="Spatial"
+          checked={component.spatial}
+          disabled={readOnly}
+          onChange={(spatial) => onChange({ spatial })}
+        />
+      </div>
+      {component.spatial ? (
+        <div className="space-y-2 border-t border-slate-100 pt-2">
+          <ColliderNumberField
+            label="Reference Distance"
+            value={component.refDistance}
+            min={0.01}
+            step={0.1}
+            disabled={readOnly}
+            onChange={(refDistance) =>
+              onChange({
+                refDistance,
+                maxDistance: Math.max(component.maxDistance, refDistance),
+              })
+            }
+          />
+          <ColliderNumberField
+            label="Rolloff"
+            value={component.rolloffFactor}
+            min={0}
+            step={0.1}
+            disabled={readOnly}
+            onChange={(rolloffFactor) => onChange({ rolloffFactor })}
+          />
+          <ColliderNumberField
+            label="Max Distance"
+            value={component.maxDistance}
+            min={component.refDistance}
+            step={1}
+            disabled={readOnly}
+            onChange={(maxDistance) => onChange({ maxDistance })}
+          />
+        </div>
+      ) : null}
+    </ComponentCard>
+  );
+}
+
 function ParticleEmitterInspector({
   component,
   assets,
@@ -1040,6 +1146,7 @@ function EntityInspector({
   onAutoFitCollider,
   onRemoveCollider,
   onLightChange,
+  onAudioSourceChange,
   onParticleEmitterChange,
   onRemoveParticleEmitter,
   onOpenMaterial,
@@ -1062,6 +1169,7 @@ function EntityInspector({
   onAutoFitCollider: (componentId: string) => void;
   onRemoveCollider: (componentId: string) => void;
   onLightChange: (componentId: string, patch: LightPatch) => void;
+  onAudioSourceChange: (componentId: string, patch: AudioSourcePatch) => void;
   onParticleEmitterChange: (
     componentId: string,
     patch: ParticleEmitterInspectorPatch,
@@ -1165,6 +1273,16 @@ function EntityInspector({
             />
           );
         }
+        if (component.type === "audio-source") {
+          return (
+            <AudioSourceInspector
+              key={component.id}
+              component={component}
+              readOnly={readOnly}
+              onChange={(patch) => onAudioSourceChange(component.id, patch)}
+            />
+          );
+        }
         if (component.type === "particle-emitter") {
           return (
             <ParticleEmitterInspector
@@ -1238,31 +1356,33 @@ function EntityInspector({
           Add Component
         </button>
         {addComponentOpen ? (
-          <div className="mt-2 max-h-64 overflow-y-auto rounded-md border border-slate-300 bg-white p-1 shadow-lg">
+          <div className="mt-2 max-h-80 space-y-1 overflow-y-auto rounded-md border border-slate-300 bg-white p-1 shadow-lg">
             {(["core", "rendering", "physics", "interaction", "media", "world"] as const).map(
               (category) => {
-                const definitions = EDITOR_COMPONENT_REGISTRY.filter(
-                  (definition) =>
-                    definition.category === category &&
-                    definition.projectKinds.includes(projectKind),
+                const definitions = getEditorComponentMenuDefinitions(
+                  projectKind,
+                ).filter(
+                  (definition) => definition.category === category,
                 );
                 if (definitions.length === 0) return null;
                 return (
-                  <div key={category} className="mb-1 last:mb-0">
-                    <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      {category}
-                    </p>
+                  <details
+                    key={category}
+                    open={category === "rendering"}
+                    className="overflow-hidden rounded border border-slate-200"
+                  >
+                    <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold capitalize text-slate-600 hover:bg-slate-100">
+                      {category} <span className="text-slate-400">({definitions.length})</span>
+                    </summary>
+                    <div className="space-y-0.5 border-t border-slate-100 p-1">
                     {definitions.map((definition) => {
                       const DefinitionIcon = getEditorComponentIcon(definition);
                       const duplicate =
                         !definition.allowMultiple &&
                         registeredComponents.some((component) =>
-                          definition.componentType === "official-xrift"
-                            ? component.type === "xrift-component" &&
-                              component.schemaId === definition.schemaId
-                            : definition.componentType === "builtin-mesh"
-                              ? component.type === "mesh"
-                              : component.type === definition.componentType,
+                          definition.componentType === "builtin-mesh"
+                            ? component.type === "mesh"
+                            : component.type === definition.componentType,
                         );
                       return (
                         <button
@@ -1283,10 +1403,51 @@ function EntityInspector({
                         </button>
                       );
                     })}
-                  </div>
+                    </div>
+                  </details>
                 );
               },
             )}
+            {getXriftComponentMenuGroups(projectKind).map((group) => (
+              <details
+                key={`xrift-${group.category}`}
+                className="overflow-hidden rounded border border-slate-200"
+              >
+                <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                  XRift {group.label} <span className="text-slate-400">({group.components.length})</span>
+                </summary>
+                <div className="space-y-0.5 border-t border-slate-100 p-1">
+                  {group.components.map((definition) => {
+                    const DefinitionIcon = EDITOR_ICONS[definition.icon];
+                    const duplicate =
+                      !definition.allowMultiplePerEntity &&
+                      registeredComponents.some(
+                        (component) =>
+                          component.type === "xrift-component" &&
+                          component.schemaId === definition.schemaId,
+                      );
+                    return (
+                      <button
+                        key={definition.schemaId}
+                        type="button"
+                        disabled={duplicate}
+                        onClick={() => {
+                          onAddComponent(definition.schemaId);
+                          setAddComponentOpen(false);
+                        }}
+                        className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:text-slate-400"
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
+                          <span className="truncate">{definition.label}</span>
+                        </span>
+                        {duplicate ? <span className="text-xs">追加済み</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </details>
+            ))}
           </div>
         ) : null}
       </div>
@@ -1313,6 +1474,7 @@ export function InspectorPanel({
   onAutoFitCollider,
   onRemoveCollider,
   onLightChange,
+  onAudioSourceChange,
   onSelectAsset,
   onCloseAsset,
   onMaterialChange,
@@ -1350,6 +1512,7 @@ export function InspectorPanel({
   onAutoFitCollider: (entityId: string, componentId: string) => void;
   onRemoveCollider: (entityId: string, componentId: string) => void;
   onLightChange: (entityId: string, componentId: string, patch: LightPatch) => void;
+  onAudioSourceChange: (entityId: string, componentId: string, patch: AudioSourcePatch) => void;
   onSelectAsset: (assetId: string) => void;
   onCloseAsset: () => void;
   onMaterialChange: (assetId: string, patch: MaterialAssetPatch) => void;
@@ -1391,6 +1554,8 @@ export function InspectorPanel({
     .find((definition) => definition !== undefined);
   const EntityIcon = entity?.components.some((component) => component.type === "light")
     ? EDITOR_ICONS.light
+    : entity?.components.some((component) => component.type === "audio-source")
+      ? EDITOR_ICONS.audio
     : entity?.components.some((component) => component.type === "particle-emitter")
       ? EDITOR_ICONS.particle
       : xriftDefinition
@@ -1493,6 +1658,9 @@ export function InspectorPanel({
             }
             onLightChange={(componentId, patch) =>
               onLightChange(entity.id, componentId, patch)
+            }
+            onAudioSourceChange={(componentId, patch) =>
+              onAudioSourceChange(entity.id, componentId, patch)
             }
             onParticleEmitterChange={(componentId, patch) =>
               onParticleEmitterChange(entity.id, componentId, patch)

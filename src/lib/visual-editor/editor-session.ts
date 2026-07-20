@@ -84,6 +84,7 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
   }),
   definition("core.spawn", "Spawn Point", "world", false, "spawn-point"),
   definition("core.particle", "Particle Emitter", "rendering", true, "particle-emitter"),
+  definition("core.audio-source", "Audio Source", "media", true, "audio-source"),
   ...XRIFT_COMPONENT_REGISTRY.map(
     (component): EditorComponentDefinition => ({
       id: component.schemaId,
@@ -638,6 +639,21 @@ function createRegisteredComponent(
   if (definition.componentType === "particle-emitter") {
     const particle = Object.values(assets.assets).find((asset) => asset.kind === "particle");
     return particle ? createParticleEmitterComponent(id, particle.id) : null;
+  }
+  if (definition.componentType === "audio-source") {
+    return {
+      id,
+      type: "audio-source",
+      enabled: true,
+      sourceUrl: "",
+      volume: 1,
+      loop: false,
+      autoplay: false,
+      spatial: true,
+      refDistance: 1,
+      rolloffFactor: 1,
+      maxDistance: 10000,
+    };
   }
   return null;
 }

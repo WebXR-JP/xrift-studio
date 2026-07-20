@@ -151,6 +151,50 @@ export function runVisualCompilerFixtureAssertions(
   assert(worldSource.includes("<SpawnPoint"), "World SpawnPoint was not generated");
   assert(worldSource.includes("castShadow={true}"), "Mesh shadow settings were not generated");
 
+  const audioEntity = world.scenes[world.project.entrySceneId].entities["entity-world-object"];
+  const audioScene: SceneDocument = {
+    ...world.scenes[world.project.entrySceneId],
+    entities: {
+      ...world.scenes[world.project.entrySceneId].entities,
+      [audioEntity.id]: {
+        ...audioEntity,
+        components: [
+          ...audioEntity.components,
+          {
+            id: "fixture-audio-source",
+            type: "audio-source",
+            enabled: true,
+            sourceUrl: "public/audio/ambient.mp3",
+            volume: 0.75,
+            loop: true,
+            autoplay: false,
+            spatial: true,
+            refDistance: 1,
+            rolloffFactor: 1,
+            maxDistance: 40,
+          },
+        ],
+      },
+    },
+  };
+  const audioResult = compileVisualProject(
+    {
+      ...world,
+      scenes: { [audioScene.sceneId]: audioScene },
+    },
+    { generatedAt: fixedTime },
+  );
+  const audioSource =
+    audioResult.overlayFiles.find((file) => file.relativePath === "src/World.tsx")
+      ?.content ?? "";
+  assert(audioResult.canStage, "Configured Audio Source should be stageable");
+  assert(
+    audioSource.includes("const XRiftStudioAudioSource") &&
+      audioSource.includes('url="/audio/ambient.mp3"') &&
+      audioSource.includes("new PositionalAudio"),
+    "Three.js Audio Source runtime was not generated",
+  );
+
   const materialWorld: VisualCompilerDocuments = {
     ...world,
     assets: updateMaterialAsset(

@@ -29,6 +29,7 @@ import {
   createPrototypeProject,
   getBuiltinPrimitiveCreation,
   getColliderAutoFitBounds,
+  getEditorComponentMenuDefinitions,
   getTransform,
   getMaterialAssignmentTarget,
   getMesh,
@@ -61,6 +62,7 @@ import {
   undoEditorHistory,
   updateEntityEnabled,
   updateEntityTransform,
+  updateAudioSourceComponent,
   updateColliderComponent,
   updateLightComponent,
   updateMaterialAsset,
@@ -69,6 +71,7 @@ import {
   updateTextureAsset,
   updateXriftComponent,
   type ColliderPatch,
+  type AudioSourcePatch,
   type LightPatch,
   type MaterialAssetPatch,
   type ModelAssetPatch,
@@ -1537,6 +1540,75 @@ export function VisualEditorPrototype({
     [editorMode, updateScene],
   );
 
+  const handleCreateComponentObject = useCallback(
+    (componentDefinitionId: string) => {
+      if (editorMode !== "edit" || importBusy) return;
+      const definition = getEditorComponentMenuDefinitions(projectKind).find(
+        (candidate) => candidate.id === componentDefinitionId,
+      );
+      if (
+        !definition ||
+        definition.id === "core.transform" ||
+        definition.id === "physics.mesh-collider"
+      ) {
+        setNotice("このComponentは既存Entityへ追加してください");
+        return;
+      }
+      const fallbackParticleId = createDocumentId("particle");
+      setHistory((current) => {
+        let assets = current.present.bundle.assets;
+        let createdParticle = false;
+        if (
+          componentDefinitionId === "core.particle" &&
+          !Object.values(assets.assets).some((asset) => asset.kind === "particle")
+        ) {
+          const addedParticle = addDefaultParticleAsset(assets, {
+            id: fallbackParticleId,
+            name: "新規Particle 1",
+          });
+          if (addedParticle.added) {
+            assets = addedParticle.manifest;
+            createdParticle = true;
+          }
+        }
+        const created = createEmptyEntity(
+          current.present.bundle.scene,
+          null,
+          definition.label,
+        );
+        if (!created) return current;
+        const added = addEditorComponent(
+          created.scene,
+          assets,
+          created.entityId,
+          componentDefinitionId,
+          projectKind,
+        );
+        if (!added.added) {
+          setNotice(`${definition.label}をSceneへ作成できませんでした`);
+          return current;
+        }
+        setSaveStatus("dirty");
+        setNotice(
+          createdParticle
+            ? "Particle AssetとParticle Emitter Entityを作成しました"
+            : `${definition.label} Entityを作成しました`,
+        );
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: touchProject({
+            ...current.present.bundle,
+            assets,
+            scene: added.scene,
+          }),
+          sceneSelection: { kind: "entity", id: created.entityId },
+          assetSelection: null,
+        });
+      });
+    },
+    [editorMode, importBusy, projectKind],
+  );
+
   const handleLightChange = useCallback(
     (entityId: string, componentId: string, patch: LightPatch) => {
       if (editorMode !== "edit") return;
@@ -1544,6 +1616,17 @@ export function VisualEditorPrototype({
         updateLightComponent(scene, entityId, patch, componentId),
       );
       setNotice("Light設定をSceneへ反映しました");
+    },
+    [editorMode, updateScene],
+  );
+
+  const handleAudioSourceChange = useCallback(
+    (entityId: string, componentId: string, patch: AudioSourcePatch) => {
+      if (editorMode !== "edit") return;
+      updateScene((scene) =>
+        updateAudioSourceComponent(scene, entityId, patch, componentId),
+      );
+      setNotice("Audio Source設定をSceneへ反映しました");
     },
     [editorMode, updateScene],
   );
@@ -3063,6 +3146,7 @@ export function VisualEditorPrototype({
                 }
                 onPlaceBuiltinPrefab={handlePlaceBuiltinPrefab}
                 onCreateXriftObject={handleCreateXriftObject}
+                onCreateComponentObject={handleCreateComponentObject}
                 onAddComponent={(entityId, componentDefinitionId) =>
                   executeCommand("entity.add-component", {
                     entityId,
@@ -3105,6 +3189,7 @@ export function VisualEditorPrototype({
             builtinPrefabRecipes={builtinPrefabRecipes}
             onEntityEnabledChange={handleEntityEnabledChange}
             onCreateXriftObject={handleCreateXriftObject}
+            onCreateComponentObject={handleCreateComponentObject}
             onCommand={executeCommand}
             renameRequest={
               renameTarget?.kind === "entity"
@@ -3186,6 +3271,7 @@ export function VisualEditorPrototype({
             onAutoFitCollider={handleAutoFitCollider}
             onRemoveCollider={handleRemoveCollider}
             onLightChange={handleLightChange}
+            onAudioSourceChange={handleAudioSourceChange}
             onSelectAsset={handleSelectAsset}
             onCloseAsset={() => setAssetSelection(null)}
             onMaterialChange={handleMaterialChange}

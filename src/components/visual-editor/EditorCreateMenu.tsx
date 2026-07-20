@@ -36,6 +36,7 @@ type Props = {
   onCreatePrimitive: (creationId: string) => void;
   onPlaceBuiltinPrefab: (recipeId: string) => void;
   onCreateXriftObject: (definitionId: string) => void;
+  onCreateComponentObject: (definitionId: string) => void;
   onAddComponent: (entityId: string, definitionId: string) => void;
 };
 
@@ -60,6 +61,7 @@ export function EditorCreateMenu({
   onCreatePrimitive,
   onPlaceBuiltinPrefab,
   onCreateXriftObject,
+  onCreateComponentObject,
   onAddComponent,
 }: Props) {
   const [page, setPage] = useState<CreateMenuPage>("root");
@@ -154,7 +156,7 @@ export function EditorCreateMenu({
                 : page === "component"
                   ? selectedEntity
                     ? `「${selectedEntity.name}」へ追加`
-                    : "Hierarchyで追加先のEntityを選択してください"
+                    : "選んだComponentを持つEntityをSceneへ作成"
                   : "基本形状をSceneへ追加"}
           </div>
         </div>
@@ -202,10 +204,9 @@ export function EditorCreateMenu({
               title="Component"
               description={
                 selectedEntity
-                  ? `Transform、Collider、Lightを「${selectedEntity.name}」へ追加`
-                  : "Entityを選択してRenderer、Collider、Lightを追加"
+                  ? `Light、Audio、Particleなどを「${selectedEntity.name}」へ追加`
+                  : "Light、Audio、Particleなどの専用Entityを作成"
               }
-              disabled={!selectedEntity}
               onClick={() => setPage("component")}
             />
           </div>
@@ -232,7 +233,12 @@ export function EditorCreateMenu({
 
         {page === "xrift" ? (
           <div className="space-y-2">
-            <MenuSection label="Sceneへ配置">
+            <MenuSection
+              label="Sceneへ配置"
+              collapsible
+              count={builtinPrefabRecipes.length}
+              defaultOpen
+            >
               {builtinPrefabRecipes.map((recipe) => {
                 const definition = xriftGroups
                   .flatMap((group) => group.components)
@@ -266,6 +272,8 @@ export function EditorCreateMenu({
               <MenuSection
                 key={group.category}
                 label={`${group.label} Component`}
+                collapsible
+                count={group.components.length}
               >
                 {group.components.map((definition) => {
                   const Icon = EDITOR_ICONS[definition.icon];
@@ -319,6 +327,9 @@ export function EditorCreateMenu({
               <MenuSection
                 key={category}
                 label={CATEGORY_LABELS[category] ?? category}
+                collapsible
+                count={definitions.length}
+                defaultOpen={category === "rendering"}
               >
                 {definitions.map((definition) => {
                   const Icon = getEditorComponentIcon(definition);
@@ -330,14 +341,36 @@ export function EditorCreateMenu({
                           : component.type === definition.componentType,
                       ),
                   );
+                  const canCreateHost = ![
+                    "core.transform",
+                    "physics.mesh-collider",
+                  ].includes(definition.id);
                   return (
                     <MenuItem
                       key={definition.id}
                       icon={Icon}
                       label={definition.label}
-                      disabled={disabled || !selectedEntity || duplicate}
-                      trailing={duplicate ? "追加済み" : "追加"}
-                      onClick={() => addComponent(definition.id)}
+                      disabled={
+                        disabled ||
+                        duplicate ||
+                        (!selectedEntity && !canCreateHost)
+                      }
+                      trailing={
+                        duplicate
+                          ? "追加済み"
+                          : selectedEntity
+                            ? "追加"
+                            : canCreateHost
+                              ? "作成"
+                              : "Entityを選択"
+                      }
+                      onClick={() => {
+                        if (selectedEntity) addComponent(definition.id);
+                        else {
+                          onCreateComponentObject(definition.id);
+                          onClose();
+                        }
+                      }}
                     />
                   );
                 })}
@@ -387,11 +420,41 @@ function RootChoice({
 
 function MenuSection({
   label,
+  collapsible = false,
+  count,
+  defaultOpen = false,
   children,
 }: {
   label: string;
+  collapsible?: boolean;
+  count?: number;
+  defaultOpen?: boolean;
   children: ReactNode;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
+  if (collapsible) {
+    return (
+      <section className="overflow-hidden rounded-md border border-slate-200 bg-white">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
+          className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+        >
+          <ChevronRight
+            size={13}
+            className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+            aria-hidden="true"
+          />
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+          {typeof count === "number" ? (
+            <span className="text-[10px] tabular-nums text-slate-400">{count}</span>
+          ) : null}
+        </button>
+        {open ? <div className="space-y-0.5 border-t border-slate-100 p-1">{children}</div> : null}
+      </section>
+    );
+  }
   return (
     <section>
       <h3 className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">

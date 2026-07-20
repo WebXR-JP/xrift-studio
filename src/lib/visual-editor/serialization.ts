@@ -1305,8 +1305,13 @@ function validatePrefabComponentShape(
     ) {
       issues.push(issue(`${path}.geometry.assetId`, "reference", "geometry asset is invalid"));
     }
+    if (component.modelPose !== undefined) {
+      validateModelPoseShape(component.modelPose, `${path}.modelPose`, issues);
+    }
   } else if (component.type === "collider") {
     validateColliderComponentShape(component, path, issues);
+  } else if (component.type === "audio-source") {
+    validateAudioSourceComponentShape(component, path, issues);
   } else if (
     component.type === "particle-emitter" &&
     (typeof component.particleAssetId !== "string" || !component.particleAssetId)
@@ -1511,6 +1516,98 @@ function validateColliderComponentShape(
         ),
       );
     }
+  }
+}
+
+function validateModelPoseShape(
+  value: unknown,
+  path: string,
+  issues: DocumentValidationIssue[],
+): void {
+  if (!isRecord(value) || !isRecord(value.bones) || !isRecord(value.morphTargets)) {
+    issues.push(issue(path, "type", "Model pose must contain bone and shape-key maps"));
+    return;
+  }
+  for (const [key, rotation] of Object.entries(value.bones)) {
+    if (!key.trim() || !isFiniteNumberVec3(rotation)) {
+      issues.push(
+        issue(
+          `${path}.bones.${key}`,
+          "range",
+          "Model bone rotation must contain three finite numbers",
+        ),
+      );
+    }
+  }
+  for (const [key, weight] of Object.entries(value.morphTargets)) {
+    if (
+      !key.trim() ||
+      typeof weight !== "number" ||
+      !Number.isFinite(weight) ||
+      weight < 0 ||
+      weight > 1
+    ) {
+      issues.push(
+        issue(
+          `${path}.morphTargets.${key}`,
+          "range",
+          "Model shape-key weight must be from 0 to 1",
+        ),
+      );
+    }
+  }
+}
+
+function validateAudioSourceComponentShape(
+  component: Record<string, unknown>,
+  path: string,
+  issues: DocumentValidationIssue[],
+): void {
+  if (typeof component.enabled !== "boolean") {
+    issues.push(issue(`${path}.enabled`, "type", "Audio Source enabled must be a boolean"));
+  }
+  if (
+    typeof component.sourceUrl !== "string" ||
+    component.sourceUrl.length > 2048 ||
+    /^javascript:/i.test(component.sourceUrl.trim())
+  ) {
+    issues.push(issue(`${path}.sourceUrl`, "url", "Audio Source URL is invalid"));
+  }
+  if (
+    typeof component.volume !== "number" ||
+    !Number.isFinite(component.volume) ||
+    component.volume < 0 ||
+    component.volume > 1
+  ) {
+    issues.push(issue(`${path}.volume`, "range", "Audio Source volume must be from 0 to 1"));
+  }
+  for (const field of ["loop", "autoplay", "spatial"] as const) {
+    if (typeof component[field] !== "boolean") {
+      issues.push(issue(`${path}.${field}`, "type", `Audio Source ${field} must be a boolean`));
+    }
+  }
+  if (
+    typeof component.refDistance !== "number" ||
+    !Number.isFinite(component.refDistance) ||
+    component.refDistance <= 0
+  ) {
+    issues.push(issue(`${path}.refDistance`, "range", "Audio Source reference distance must be positive"));
+  }
+  if (
+    typeof component.rolloffFactor !== "number" ||
+    !Number.isFinite(component.rolloffFactor) ||
+    component.rolloffFactor < 0
+  ) {
+    issues.push(issue(`${path}.rolloffFactor`, "range", "Audio Source rolloff must be non-negative"));
+  }
+  if (
+    typeof component.maxDistance !== "number" ||
+    !Number.isFinite(component.maxDistance) ||
+    component.maxDistance <= 0 ||
+    (typeof component.refDistance === "number" &&
+      component.maxDistance < component.refDistance)
+  ) {
+    issues.push(issue(`${path}.maxDistance`, "range", "Audio Source max distance must cover its reference distance"));
   }
 }
 

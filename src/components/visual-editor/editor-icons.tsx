@@ -46,6 +46,7 @@ import {
   TriangleAlert,
   Undo2,
   UploadCloud,
+  Volume2,
   X,
   Globe,
   Hand,
@@ -70,6 +71,7 @@ export const EDITOR_ICONS = {
   primitive: Cuboid,
   sceneEntity: FileBox,
   light: Lightbulb,
+  audio: Volume2,
   camera: Camera,
   save: Save,
   saved: Check,
@@ -142,6 +144,8 @@ export function getEditorComponentIcon(
       return EDITOR_ICONS.spawn;
     case "particle-emitter":
       return EDITOR_ICONS.particle;
+    case "audio-source":
+      return EDITOR_ICONS.audio;
     default:
       return EDITOR_ICONS.component;
   }

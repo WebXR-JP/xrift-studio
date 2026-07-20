@@ -95,6 +95,9 @@ function getEntityTypeLabel(entity: SceneEntity): string {
   if (entity.components.some((component) => component.type === "light")) {
     return "Light";
   }
+  if (entity.components.some((component) => component.type === "audio-source")) {
+    return "Audio";
+  }
   if (
     entity.components.some((component) => component.type === "particle-emitter")
   ) {
@@ -118,6 +121,9 @@ function getEntityTypeLabel(entity: SceneEntity): string {
 function getEntityIcon(entity: SceneEntity) {
   if (entity.components.some((component) => component.type === "light")) {
     return EDITOR_ICONS.light;
+  }
+  if (entity.components.some((component) => component.type === "audio-source")) {
+    return EDITOR_ICONS.audio;
   }
   if (
     entity.components.some((component) => component.type === "particle-emitter")
@@ -169,6 +175,7 @@ export function HierarchyPanel({
   builtinPrefabRecipes,
   onEntityEnabledChange,
   onCreateXriftObject,
+  onCreateComponentObject,
   onCommand,
   renameRequest,
   onRename,
@@ -184,6 +191,7 @@ export function HierarchyPanel({
   builtinPrefabRecipes: readonly BuiltinPrefabRecipe[];
   onEntityEnabledChange: (entityId: string, enabled: boolean) => void;
   onCreateXriftObject: (definitionId: string) => void;
+  onCreateComponentObject: (definitionId: string) => void;
   onCommand: (
     commandId: EditorCommandId,
     payload?: {
@@ -880,184 +888,277 @@ export function HierarchyPanel({
                 );
               })}
               <div className="my-1 border-t border-slate-200" />
-              <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Add Component
-              </p>
-              {getEditorComponentMenuDefinitions(projectKind).map((definition) => {
-                const DefinitionIcon = getEditorComponentIcon(definition);
-                const entity = contextMenu.entityId
-                  ? scene.entities[contextMenu.entityId]
-                  : undefined;
-                const duplicate =
-                  !definition.allowMultiple &&
-                  entity?.components.some((component) =>
-                    definition.componentType === "official-xrift"
-                      ? component.type === "xrift-component" &&
-                        component.schemaId === definition.schemaId
-                      : definition.componentType === "builtin-mesh"
-                        ? component.type === "mesh"
-                        : component.type === definition.componentType,
-                  );
+              <details open className="overflow-hidden rounded border border-slate-200">
+                <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                  Add Component ({getEditorComponentMenuDefinitions(projectKind).length})
+                </summary>
+                <div className="space-y-1 border-t border-slate-100 p-1">
+                  {(["core", "rendering", "physics", "media", "world"] as const).map(
+                    (category) => {
+                      const definitions = getEditorComponentMenuDefinitions(
+                        projectKind,
+                      ).filter((definition) => definition.category === category);
+                      if (definitions.length === 0) return null;
+                      return (
+                        <details key={category} open={category === "rendering"}>
+                          <summary className="cursor-pointer select-none rounded px-1.5 py-1 text-xs font-medium capitalize text-slate-500 hover:bg-slate-50">
+                            {category} ({definitions.length})
+                          </summary>
+                          <div className="space-y-0.5 pl-1">
+                            {definitions.map((definition) => {
+                              const DefinitionIcon = getEditorComponentIcon(definition);
+                              const entity = contextMenu.entityId
+                                ? scene.entities[contextMenu.entityId]
+                                : undefined;
+                              const duplicate =
+                                !definition.allowMultiple &&
+                                entity?.components.some((component) =>
+                                  definition.componentType === "builtin-mesh"
+                                    ? component.type === "mesh"
+                                    : component.type === definition.componentType,
+                                );
+                              return (
+                                <button
+                                  key={definition.id}
+                                  type="button"
+                                  disabled={readOnly || duplicate}
+                                  onClick={() => {
+                                    const entityId = contextMenu.entityId ?? undefined;
+                                    setContextMenu(null);
+                                    onCommand("entity.add-component", {
+                                      entityId,
+                                      componentDefinitionId: definition.id,
+                                    });
+                                  }}
+                                  className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
+                                >
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
+                                    <span className="truncate">{definition.label}</span>
+                                  </span>
+                                  {duplicate ? (
+                                    <span className="text-xs text-slate-400">追加済み</span>
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </details>
+                      );
+                    },
+                  )}
+                </div>
+              </details>
+            </>
+          ) : null}
+          {!contextMenu.entityId ? (
+            <details open className="overflow-hidden rounded border border-slate-200">
+              <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                Add Component ({getEditorComponentMenuDefinitions(projectKind).length})
+              </summary>
+              <div className="space-y-1 border-t border-slate-100 p-1">
+                {(["core", "rendering", "physics", "media", "world"] as const).map(
+                  (category) => {
+                    const definitions = getEditorComponentMenuDefinitions(
+                      projectKind,
+                    ).filter((definition) => definition.category === category);
+                    if (definitions.length === 0) return null;
+                    return (
+                      <details key={category} open={category === "rendering"}>
+                        <summary className="cursor-pointer select-none rounded px-1.5 py-1 text-xs font-medium capitalize text-slate-500 hover:bg-slate-50">
+                          {category} ({definitions.length})
+                        </summary>
+                        <div className="space-y-0.5 pl-1">
+                          {definitions.map((definition) => {
+                            const DefinitionIcon = getEditorComponentIcon(definition);
+                            const canCreateHost = ![
+                              "core.transform",
+                              "physics.mesh-collider",
+                            ].includes(definition.id);
+                            return (
+                              <button
+                                key={definition.id}
+                                type="button"
+                                disabled={readOnly || !canCreateHost}
+                                onClick={() => {
+                                  setContextMenu(null);
+                                  onCreateComponentObject(definition.id);
+                                }}
+                                className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
+                              >
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
+                                  <span className="truncate">{definition.label}</span>
+                                </span>
+                                <span className="text-xs text-slate-400">
+                                  {canCreateHost ? "作成" : "Entityを選択"}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </details>
+                    );
+                  },
+                )}
+              </div>
+            </details>
+          ) : null}
+          <div className="my-1 border-t border-slate-200" />
+          <details className="overflow-hidden rounded border border-slate-200">
+            <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
+              XRift Component ({getXriftComponentMenuGroups(projectKind).reduce(
+                (count, group) => count + group.components.length,
+                0,
+              )})
+            </summary>
+            <div className="space-y-1 border-t border-slate-100 p-1">
+              {getXriftComponentMenuGroups(projectKind).map((group) => (
+                <details key={group.category}>
+                  <summary className="cursor-pointer select-none rounded px-1.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50">
+                    {group.label} ({group.components.length})
+                  </summary>
+                  <div className="space-y-0.5 pl-1">
+                    {group.components.map((definition) => {
+                      const DefinitionIcon = EDITOR_ICONS[definition.icon];
+                      const entity = contextMenu.entityId
+                        ? scene.entities[contextMenu.entityId]
+                        : undefined;
+                      const duplicate = Boolean(
+                        entity &&
+                          !definition.allowMultiplePerEntity &&
+                          entity.components.some(
+                            (component) =>
+                              component.type === "xrift-component" &&
+                              component.schemaId === definition.schemaId,
+                          ),
+                      );
+                      const canCreateHost = definition.attachBehavior.kind === "leaf";
+                      return (
+                        <button
+                          key={definition.schemaId}
+                          type="button"
+                          disabled={
+                            readOnly ||
+                            duplicate ||
+                            (!contextMenu.entityId && !canCreateHost)
+                          }
+                          onClick={() => {
+                            const entityId = contextMenu.entityId;
+                            setContextMenu(null);
+                            if (entityId) {
+                              onCommand("entity.add-component", {
+                                entityId,
+                                componentDefinitionId: definition.schemaId,
+                              });
+                            } else {
+                              onCreateXriftObject(definition.schemaId);
+                            }
+                          }}
+                          className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
+                            <span className="truncate">{definition.label}</span>
+                          </span>
+                          <span className="text-xs text-slate-400">
+                            {duplicate
+                              ? "追加済み"
+                              : contextMenu.entityId
+                                ? "追加"
+                                : canCreateHost
+                                  ? "作成"
+                                  : "Entityを選択"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </details>
+          <div className="my-1 border-t border-slate-200" />
+          <details className="overflow-hidden rounded border border-slate-200">
+            <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
+              XRift Prefab ({builtinPrefabRecipes.length})
+            </summary>
+            <div className="space-y-0.5 border-t border-slate-100 p-1">
+              {builtinPrefabRecipes.map((recipe) => {
+                const definition = getXriftComponentDefinition(recipe.schemaId);
+                const DefinitionIcon = definition
+                  ? EDITOR_ICONS[definition.icon]
+                  : EDITOR_ICONS.prefab;
                 return (
                   <button
-                    key={definition.id}
+                    key={recipe.id}
                     type="button"
-                    disabled={readOnly || duplicate}
+                    disabled={readOnly}
                     onClick={() => {
-                      const entityId = contextMenu.entityId ?? undefined;
+                      const parentEntityId = contextMenu.entityId;
                       setContextMenu(null);
-                      onCommand("entity.add-component", {
-                        entityId,
-                        componentDefinitionId: definition.id,
-                      });
+                      onDropBuiltinPrefab(recipe.id, parentEntityId);
                     }}
+                    title={recipe.description}
                     className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
                   >
                     <span className="flex min-w-0 items-center gap-2">
                       <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
-                      <span className="truncate">{definition.label}</span>
+                      <span className="truncate">{recipe.name}</span>
                     </span>
                     <span className="text-xs text-slate-400">
-                      {duplicate ? "追加済み" : definition.category}
+                      {recipe.configuration?.requiredBeforeCompile ? "設定" : "作成"}
                     </span>
                   </button>
                 );
               })}
-            </>
-          ) : null}
+            </div>
+          </details>
           <div className="my-1 border-t border-slate-200" />
-          <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            XRift Component
-          </p>
-          {getXriftComponentMenuGroups(projectKind).flatMap((group) =>
-            group.components.map((definition) => {
-              const DefinitionIcon = EDITOR_ICONS[definition.icon];
-              const entity = contextMenu.entityId
-                ? scene.entities[contextMenu.entityId]
-                : undefined;
-              const duplicate = Boolean(
-                entity &&
-                  !definition.allowMultiplePerEntity &&
-                  entity.components.some(
-                    (component) =>
-                      component.type === "xrift-component" &&
-                      component.schemaId === definition.schemaId,
-                  ),
-              );
-              const canCreateHost = definition.attachBehavior.kind === "leaf";
-              return (
-                <button
-                  key={definition.schemaId}
-                  type="button"
-                  disabled={
-                    readOnly ||
-                    duplicate ||
-                    (!contextMenu.entityId && !canCreateHost)
-                  }
-                  onClick={() => {
-                    const entityId = contextMenu.entityId;
-                    setContextMenu(null);
-                    if (entityId) {
-                      onCommand("entity.add-component", {
-                        entityId,
-                        componentDefinitionId: definition.schemaId,
-                      });
-                    } else {
-                      onCreateXriftObject(definition.schemaId);
-                    }
-                  }}
-                  className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
-                    <span className="truncate">{definition.label}</span>
-                  </span>
-                  <span className="text-xs text-slate-400">
-                    {duplicate
-                      ? "追加済み"
-                      : contextMenu.entityId
-                        ? "追加"
-                        : canCreateHost
-                          ? "作成"
-                          : "Entityを選択"}
-                  </span>
-                </button>
-              );
-            }),
-          )}
-          <div className="my-1 border-t border-slate-200" />
-          <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            XRift Prefab
-          </p>
-          {builtinPrefabRecipes.map((recipe) => {
-            const definition = getXriftComponentDefinition(recipe.schemaId);
-            const DefinitionIcon = definition
-              ? EDITOR_ICONS[definition.icon]
-              : EDITOR_ICONS.prefab;
-            return (
+          <details open className="overflow-hidden rounded border border-slate-200">
+            <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
+              Scene Object ({BUILTIN_PRIMITIVE_CREATION_CATALOG.length + 1})
+            </summary>
+            <div className="space-y-0.5 border-t border-slate-100 p-1">
               <button
-                key={recipe.id}
                 type="button"
                 disabled={readOnly}
                 onClick={() => {
                   const parentEntityId = contextMenu.entityId;
                   setContextMenu(null);
-                  onDropBuiltinPrefab(recipe.id, parentEntityId);
+                  onCommand("entity.create-empty", { parentEntityId });
                 }}
-                title={recipe.description}
-                className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
+                title={commandTitle(
+                  contextMenu.entityId
+                    ? "選択Entityの子にEmpty Entityを作成"
+                    : "Scene RootにEmpty Entityを作成",
+                  "entity.create-empty",
+                )}
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
               >
-                <span className="flex min-w-0 items-center gap-2">
-                  <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
-                  <span className="truncate">{recipe.name}</span>
-                </span>
-                <span className="text-xs text-slate-400">
-                  {recipe.configuration?.requiredBeforeCompile ? "設定" : "作成"}
-                </span>
+                <EDITOR_ICONS.sceneEntity size={14} aria-hidden="true" />
+                Empty Entity
               </button>
-            );
-          })}
-          <button
-            type="button"
-            disabled={readOnly}
-            onClick={() => {
-              const parentEntityId = contextMenu.entityId;
-              setContextMenu(null);
-              onCommand("entity.create-empty", { parentEntityId });
-            }}
-            title={commandTitle(
-              contextMenu.entityId
-                ? "選択Entityの子にEmpty Entityを作成"
-                : "Scene RootにEmpty Entityを作成",
-              "entity.create-empty",
-            )}
-            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
-          >
-            <EDITOR_ICONS.sceneEntity size={14} aria-hidden="true" />
-            Empty Entity
-          </button>
-          <div className="my-1 border-t border-slate-200" />
-          <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Create Mesh
-          </p>
-          {BUILTIN_PRIMITIVE_CREATION_CATALOG.map((entry) => (
-            <button
-              key={entry.creationId}
-              type="button"
-              disabled={readOnly}
-              onClick={() => {
-                setContextMenu(null);
-                onCommand("entity.create-primitive", {
-                  creationId: entry.creationId,
-                });
-              }}
-              title={commandTitle(`${entry.name}をSceneへ作成`, "entity.create-primitive")}
-              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
-            >
-              <EDITOR_ICONS.primitive size={14} aria-hidden="true" />
-              {entry.name}
-            </button>
-          ))}
+              {BUILTIN_PRIMITIVE_CREATION_CATALOG.map((entry) => (
+                <button
+                  key={entry.creationId}
+                  type="button"
+                  disabled={readOnly}
+                  onClick={() => {
+                    setContextMenu(null);
+                    onCommand("entity.create-primitive", {
+                      creationId: entry.creationId,
+                    });
+                  }}
+                  title={commandTitle(`${entry.name}をSceneへ作成`, "entity.create-primitive")}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
+                >
+                  <EDITOR_ICONS.primitive size={14} aria-hidden="true" />
+                  {entry.name}
+                </button>
+              ))}
+            </div>
+          </details>
         </div>
       ) : null}
     </aside>
