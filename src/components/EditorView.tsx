@@ -30,6 +30,11 @@ import { ImageViewer } from "./ImageViewer";
 import { ModelViewer } from "./ModelViewer";
 import { XriftJsonEditor } from "./XriftJsonEditor";
 import { useToast } from "./Toast";
+import {
+  inspectPublishReadiness,
+  type PublishReadiness,
+} from "../lib/publish-readiness";
+import { PublishReadinessDialog } from "./PublishReadinessDialog";
 
 type Props = {
   project: Project;
@@ -81,6 +86,9 @@ export function EditorView({
   const devHandleRef = useRef<DevHandle | null>(null);
 
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [publishReadiness, setPublishReadiness] = useState<PublishReadiness | null>(null);
+  const [checkingPublish, setCheckingPublish] = useState(false);
+  const [resumePublishAfterPreparation, setResumePublishAfterPreparation] = useState(false);
 
   const isDirty = content !== savedContent;
   const isXriftJson = selectedRel === "xrift.json";
@@ -195,7 +203,7 @@ export function EditorView({
     }
   };
 
-  const handleUpload = () =>
+  const performUpload = () =>
     wrap(async () => {
       const result = await xrift.upload(project.path, appendLog);
       onProjectChanged();
@@ -226,6 +234,55 @@ export function EditorView({
         });
       }
     });
+
+  const checkPublishReadiness = async () => {
+    if (checkingPublish || busy) return;
+    setCheckingPublish(true);
+    try {
+      const readiness = await inspectPublishReadiness(project.path);
+      if (readiness.ready) {
+        setPublishReadiness(null);
+        setResumePublishAfterPreparation(false);
+        await performUpload();
+      } else {
+        setPublishReadiness(readiness);
+        setResumePublishAfterPreparation(true);
+      }
+    } catch (error) {
+      appendLog({
+        kind: "stderr",
+        text: `publish readiness check failed: ${error}`,
+        ts: Date.now(),
+      });
+      toast({
+        kind: "error",
+        title: "公開準備を確認できませんでした",
+        description: "xrift.json とサムネイルを確認してください",
+      });
+    } finally {
+      setCheckingPublish(false);
+    }
+  };
+
+  const handleUpload = () => {
+    void checkPublishReadiness();
+  };
+
+  const handlePreparationChanged = () => {
+    if (resumePublishAfterPreparation) void checkPublishReadiness();
+  };
+
+  const handleEditPublishMetadata = () => {
+    setPublishReadiness(null);
+    setSelectedRel("xrift.json");
+    setSelectedKind("text");
+    setXriftJsonRaw(false);
+  };
+
+  const handleEditPublishThumbnail = () => {
+    setPublishReadiness(null);
+    handleOpenThumbnail();
+  };
   const handleOpenVSCode = () =>
     wrap(() => openInVSCode(project.path, appendLog));
   const handleOpenTerminal = () =>
@@ -393,12 +450,12 @@ export function EditorView({
           <button
             type="button"
             onClick={handleUpload}
-            disabled={busy || !user}
+            disabled={busy || checkingPublish || !user}
             title={!user ? "ログインしてください" : "XRift にアップロード"}
             className="flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-violet-500 disabled:opacity-50"
           >
             <Upload size={12} strokeWidth={2} />
-            アップロード
+            {checkingPublish ? "公開情報を確認中…" : "アップロード"}
           </button>
         </div>
       </header>
@@ -482,6 +539,8 @@ export function EditorView({
               projectPath={project.path}
               onOpenRaw={() => setXriftJsonRaw(true)}
               onRefresh={onProjectChanged}
+              onSaved={handlePreparationChanged}
+              publishPreparation={resumePublishAfterPreparation}
             />
           ) : isText ? (
             <EditorPane
@@ -497,10 +556,12 @@ export function EditorView({
           ) : isThumbnail ? (
             <ThumbnailEditor
               projectPath={project.path}
+              publishPreparation={resumePublishAfterPreparation}
               onChanged={() => {
                 onProjectChanged();
                 setFileTreeKey((k) => k + 1);
                 toast({ kind: "success", title: "サムネイルを更新しました" });
+                handlePreparationChanged();
               }}
             />
           ) : isImage ? (
@@ -521,6 +582,15 @@ export function EditorView({
           />
         </div>
       </div>
+      <PublishReadinessDialog
+        readiness={publishReadiness}
+        onEditMetadata={handleEditPublishMetadata}
+        onEditThumbnail={handleEditPublishThumbnail}
+        onClose={() => {
+          setPublishReadiness(null);
+          setResumePublishAfterPreparation(false);
+        }}
+      />
     </div>
   );
 }
