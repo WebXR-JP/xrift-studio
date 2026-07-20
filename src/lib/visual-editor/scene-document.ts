@@ -12,6 +12,7 @@ import {
   type BuiltinPrimitiveCreationDefinition,
 } from "./creation-catalog";
 import { createDocumentId } from "./document-id";
+import type { SceneSettings } from "./scene-settings";
 
 export const SCENE_DOCUMENT_SCHEMA_VERSION = "0.1.0" as const;
 
@@ -187,6 +188,8 @@ export type SceneDocument = {
   schemaVersion: typeof SCENE_DOCUMENT_SCHEMA_VERSION;
   sceneId: string;
   name: string;
+  /** Optional only to remain compatible with documents saved before scene settings. */
+  settings?: SceneSettings;
   rootEntityIds: string[];
   entities: Record<string, SceneEntity>;
 };

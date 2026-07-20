@@ -187,7 +187,9 @@ export function runVisualCompilerFixtureAssertions(
       (file) => file.relativePath === "src/World.tsx",
     )?.content ?? "";
   assert(
-    particleSource.includes('import { useFrame } from "@react-three/fiber";'),
+    /import \{[^}]*\buseFrame\b[^}]*\} from "@react-three\/fiber";/.test(
+      particleSource,
+    ),
     "Particle runtime frame loop was not generated",
   );
   assert(

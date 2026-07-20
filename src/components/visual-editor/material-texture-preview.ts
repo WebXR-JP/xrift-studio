@@ -261,7 +261,8 @@ function resolvePreviewTextureRequests(
   });
 }
 
-async function readProjectTextureDataUrl(
+/** Reads an imported project texture for editor-only Three previews. */
+export async function readProjectTextureDataUrl(
   projectPath: string,
   asset: PreviewTextureRequest["asset"],
 ): Promise<string> {

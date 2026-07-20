@@ -43,6 +43,21 @@ export type ViewportClientRect = Pick<
   "left" | "top" | "width" | "height"
 >;
 
+/** Movement required to distinguish a camera gesture from a right-click. */
+export const SCENE_VIEW_RIGHT_DRAG_THRESHOLD_PX = 6;
+
+export function hasPointerMovedBeyondThreshold(
+  startX: number,
+  startY: number,
+  currentX: number,
+  currentY: number,
+  threshold = SCENE_VIEW_RIGHT_DRAG_THRESHOLD_PX,
+): boolean {
+  const deltaX = currentX - startX;
+  const deltaY = currentY - startY;
+  return deltaX * deltaX + deltaY * deltaY >= threshold * threshold;
+}
+
 /** Deterministic fallback used only before the Three camera bridge is ready. */
 export function fallbackViewportGroundPosition(
   clientX: number,

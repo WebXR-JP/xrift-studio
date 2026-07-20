@@ -37,6 +37,10 @@ import {
   type XRiftComponent,
 } from "../scene-document";
 import {
+  resolveSceneSettings,
+  type SceneSettings,
+} from "../scene-settings";
+import {
   assetManifestCodec,
   isCompilationStale,
   prefabDocumentCodec,
@@ -448,6 +452,8 @@ function generateComponentSource(
     activeEntityIds: new Set(),
     usesDoubleSide: false,
   };
+  const sceneSettings = resolveSceneSettings(scene.settings);
+  const sceneEnvironment = renderSceneEnvironment(sceneSettings, context);
   const roots = scene.rootEntityIds.flatMap((entityId) => {
     const rendered = renderEntity(entityId, context, 0);
     return rendered ? [rendered] : [];
@@ -497,11 +503,115 @@ function generateComponentSource(
     .map(([, declaration]) => declaration)
     .join("\n\n");
   if (declarations) imports.push("", declarations);
-  const body = roots.length > 0 ? roots.map((root) => indent(root, 3)).join("\n") : "      {null}";
+  const renderedScene = [...sceneEnvironment, ...roots];
+  const body = renderedScene.length > 0
+    ? renderedScene.map((entry) => indent(entry, 3)).join("\n")
+    : "      {null}";
   if (projectKind === "world") {
     return `${imports.join("\n")}\n\nexport interface WorldProps {\n  position?: [number, number, number];\n  scale?: number;\n}\n\nexport const World: FC<WorldProps> = ({ position = [0, 0, 0], scale = 1 }) => (\n  <group position={position} scale={scale}>\n${body}\n  </group>\n);\n`;
   }
   return `${imports.join("\n")}\n\nexport interface ItemProps {\n  position?: [number, number, number];\n  scale?: number;\n}\n\nexport const Item: FC<ItemProps> = ({ position = [0, 0, 0], scale = 1 }) => (\n  <group position={position} scale={scale}>\n${body}\n  </group>\n);\n\nexport default Item;\n`;
+}
+
+function renderSceneEnvironment(
+  settings: SceneSettings,
+  context: CompileContext,
+): string[] {
+  const content: string[] = [
+    `<ambientLight color={${JSON.stringify(settings.ambient.color)}} intensity={${formatNumber(settings.ambient.intensity)}} />`,
+  ];
+
+  if (settings.skybox.enabled) {
+    const imageAssetId = settings.skybox.imageAssetId;
+    const imageAsset = imageAssetId ? context.assets.assets[imageAssetId] : undefined;
+    const imageUrl = imageAssetId ? context.assetRuntimeUrls.get(imageAssetId) : undefined;
+    if (imageAssetId && imageAsset?.kind === "texture" && imageUrl) {
+      context.referencedAssetIds.add(imageAssetId);
+      context.reactValueImports.add("useEffect");
+      ["useLoader", "useThree"].forEach((name) => context.fiberImports.add(name));
+      ["EquirectangularReflectionMapping", "SRGBColorSpace", "TextureLoader"].forEach(
+        (name) => context.threeValueImports.add(name),
+      );
+      context.supportDeclarations.set(
+        "scene-environment:image-skybox",
+        `const XRiftStudioImageSkybox: FC<{ src: string; rotation: number; exposure: number }> = ({ src, rotation, exposure }) => {
+  const scene = useThree((state) => state.scene);
+  const texture = useLoader(TextureLoader, src);
+  useEffect(() => {
+    const previousBackground = scene.background;
+    const previousEnvironment = scene.environment;
+    const previousBackgroundIntensity = scene.backgroundIntensity;
+    const previousEnvironmentIntensity = scene.environmentIntensity;
+    const previousBackgroundRotation = scene.backgroundRotation.clone();
+    const previousEnvironmentRotation = scene.environmentRotation.clone();
+    texture.colorSpace = SRGBColorSpace;
+    texture.mapping = EquirectangularReflectionMapping;
+    texture.needsUpdate = true;
+    scene.background = texture;
+    scene.environment = texture;
+    scene.backgroundIntensity = exposure;
+    scene.environmentIntensity = exposure;
+    scene.backgroundRotation.set(0, rotation, 0);
+    scene.environmentRotation.set(0, rotation, 0);
+    return () => {
+      scene.background = previousBackground;
+      scene.environment = previousEnvironment;
+      scene.backgroundIntensity = previousBackgroundIntensity;
+      scene.environmentIntensity = previousEnvironmentIntensity;
+      scene.backgroundRotation.copy(previousBackgroundRotation);
+      scene.environmentRotation.copy(previousEnvironmentRotation);
+    };
+  }, [exposure, rotation, scene, texture]);
+  return null;
+};`,
+      );
+      content.push(
+        `<XRiftStudioImageSkybox src={${JSON.stringify(imageUrl)}} rotation={${formatNumber((settings.skybox.rotationDegrees * Math.PI) / 180)}} exposure={${formatNumber(settings.skybox.exposure)}} />`,
+      );
+    } else {
+      if (imageAssetId) {
+        addDiagnostic(context, {
+          severity: "warning",
+          code: "skybox-image-unavailable",
+          message: "Skybox画像を生成Worldに含められないため、グラデーションにフォールバックしました",
+          sceneId: context.scene.sceneId,
+          assetId: imageAssetId,
+          fieldPath: "settings.skybox.imageAssetId",
+        });
+      }
+      context.imports.add("Skybox");
+      content.push(
+        `<Skybox topColor={${sceneColorNumber(settings.skybox.topColor)}} bottomColor={${sceneColorNumber(settings.skybox.bottomColor)}} offset={${formatNumber(settings.skybox.offset)}} exponent={${formatNumber(settings.skybox.exponent)}} />`,
+      );
+    }
+  }
+
+  if (settings.fog.enabled) {
+    context.reactValueImports.add("useEffect");
+    context.fiberImports.add("useThree");
+    context.threeValueImports.add("Fog");
+    context.supportDeclarations.set(
+      "scene-environment:fog",
+      `const XRiftStudioSceneFog: FC = () => {
+  const scene = useThree((state) => state.scene);
+  useEffect(() => {
+    const previousFog = scene.fog;
+    scene.fog = new Fog(${JSON.stringify(settings.fog.color)}, ${formatNumber(settings.fog.near)}, ${formatNumber(settings.fog.far)});
+    return () => {
+      scene.fog = previousFog;
+    };
+  }, [scene]);
+  return null;
+};`,
+    );
+    content.unshift("<XRiftStudioSceneFog />");
+  }
+
+  return content;
+}
+
+function sceneColorNumber(value: string): number {
+  return Number.parseInt(value.slice(1), 16);
 }
 
 function renderEntity(

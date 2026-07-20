@@ -21,6 +21,7 @@ import {
 import {
   fallbackViewportGroundPosition,
   getSceneViewportDragIntent,
+  hasPointerMovedBeyondThreshold,
 } from "./scene-viewport-drag";
 import { createSceneViewportPreview } from "./scene-viewport-preview";
 
@@ -123,6 +124,14 @@ export function runEditorDragDataFixture(): void {
     }),
     [-5, 0, 4],
     "Scene View fallback placement must clamp outside pointer coordinates",
+  );
+  assert(
+    !hasPointerMovedBeyondThreshold(100, 100, 105, 103),
+    "A small right-click movement must remain a context-menu click",
+  );
+  assert(
+    hasPointerMovedBeyondThreshold(100, 100, 106, 100),
+    "A right-click movement past the threshold must become a camera drag",
   );
 
   const { scene, assets, prefabs, prefabAsset } = createPlacementDocuments();

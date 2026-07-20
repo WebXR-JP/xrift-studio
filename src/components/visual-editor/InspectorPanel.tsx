@@ -24,6 +24,7 @@ import {
   type ParticleEmitterComponent,
   type ParticlePropertiesPatch,
   type SceneDocument,
+  type SceneSettings,
   type SceneEntity,
   type TextureAssetPatch,
   type TransformPatch,
@@ -38,6 +39,7 @@ import type {
   ModelReimportState,
 } from "./ModelAssetInspector";
 import { XRiftComponentInspector } from "./XRiftComponentInspector";
+import { SceneSettingsInspector } from "./SceneSettingsPanel";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { roundTo } from "./editor-utils";
 import {
@@ -890,6 +892,10 @@ export function InspectorPanel({
   onAddComponent,
   onUpdateXriftComponent,
   onRemoveXriftComponent,
+  sceneSettingsOpen,
+  onCloseSceneSettings,
+  onSceneSettingsChange,
+  onThumbnailChanged,
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
@@ -926,6 +932,11 @@ export function InspectorPanel({
     patch: UpdateXriftComponentPatch,
   ) => void;
   onRemoveXriftComponent: (entityId: string, componentId: string) => void;
+  /** The right inspector can temporarily present scene-wide settings. */
+  sceneSettingsOpen: boolean;
+  onCloseSceneSettings: () => void;
+  onSceneSettingsChange: (settings: SceneSettings) => void;
+  onThumbnailChanged: () => void;
 }) {
   const entity = selectedEntityId ? scene.entities[selectedEntityId] : undefined;
   const asset = selectedAssetId ? assets.assets[selectedAssetId] : undefined;
@@ -937,19 +948,33 @@ export function InspectorPanel({
     ? EDITOR_ICONS.light
     : entity?.components.some((component) => component.type === "particle-emitter")
       ? EDITOR_ICONS.particle
-      : EDITOR_ICONS.sceneEntity;
+       : EDITOR_ICONS.sceneEntity;
+  const InspectorIcon = sceneSettingsOpen ? EDITOR_ICONS.settings : EntityIcon;
 
   return (
     <aside className="row-span-2 flex min-h-0 flex-col border-l border-slate-300 bg-slate-100" aria-labelledby="inspector-heading">
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-slate-300 bg-slate-50 px-3">
         <div className="flex items-center gap-2">
-          <EntityIcon size={14} className="text-slate-500" aria-hidden="true" />
+          <InspectorIcon size={14} className="text-slate-500" aria-hidden="true" />
           <h2 id="inspector-heading" className="text-[13px] font-semibold text-slate-800">
-            {asset ? "Asset Inspector" : "Entity Inspector"}
+            {sceneSettingsOpen
+              ? "Scene Inspector"
+              : asset
+                ? "Asset Inspector"
+                : "Entity Inspector"}
           </h2>
         </div>
         <div className="flex items-center gap-1">
-          {asset && entity ? (
+          {sceneSettingsOpen ? (
+            <button
+              type="button"
+              onClick={onCloseSceneSettings}
+              title="Entity Inspectorへ戻る"
+              className="rounded border border-slate-300 bg-white px-1.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+            >
+              Entity
+            </button>
+          ) : asset && entity ? (
             <button
               type="button"
               onClick={onCloseAsset}
@@ -959,7 +984,9 @@ export function InspectorPanel({
               Entity
             </button>
           ) : null}
-          <span className="max-w-28 truncate text-xs text-slate-500">{asset?.name ?? entity?.name ?? "未選択"}</span>
+          <span className="max-w-28 truncate text-xs text-slate-500">
+            {sceneSettingsOpen ? scene.name : asset?.name ?? entity?.name ?? "未選択"}
+          </span>
         </div>
       </div>
       {readOnly ? (
@@ -968,7 +995,17 @@ export function InspectorPanel({
         </div>
       ) : null}
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-3">
-        {asset ? (
+        {sceneSettingsOpen ? (
+          <SceneSettingsInspector
+            scene={scene}
+            assets={assets}
+            projectKind={projectKind}
+            projectPath={projectPath}
+            readOnly={readOnly}
+            onChange={onSceneSettingsChange}
+            onThumbnailChanged={onThumbnailChanged}
+          />
+        ) : asset ? (
           <AssetQuickEditor
             asset={asset}
             assets={assets}

@@ -719,8 +719,196 @@ export function validateSceneDocument(value: unknown): DocumentValidationIssue[]
     "SceneDocument",
     true,
   );
+  if (isRecord(value) && value.settings !== undefined) {
+    validateSceneSettings(value.settings, "$.settings", issues);
+  }
   validateSceneComponentShapes(value, issues);
   return issues;
+}
+
+function validateSceneSettings(
+  value: unknown,
+  path: string,
+  issues: DocumentValidationIssue[],
+): void {
+  if (!isRecord(value)) {
+    issues.push(issue(path, "type", "scene settings must be an object"));
+    return;
+  }
+  validateKnownKeys(
+    value,
+    ["skybox", "fog", "ambient", "camera", "editor"],
+    path,
+    issues,
+  );
+  validateSceneSettingsObject(
+    value.skybox,
+    [
+      "enabled",
+      "imageAssetId",
+      "topColor",
+      "bottomColor",
+      "offset",
+      "exponent",
+      "rotationDegrees",
+      "exposure",
+    ],
+    `${path}.skybox`,
+    issues,
+    (entry) => {
+      validateBoolean(entry, "enabled", `${path}.skybox`, issues);
+      validateColor(entry, "topColor", `${path}.skybox`, issues);
+      validateColor(entry, "bottomColor", `${path}.skybox`, issues);
+      validateFinite(entry, "offset", `${path}.skybox`, issues);
+      validateFinite(entry, "exponent", `${path}.skybox`, issues, 0.01);
+      if (
+        entry.imageAssetId !== undefined &&
+        (typeof entry.imageAssetId !== "string" || !entry.imageAssetId.trim())
+      ) {
+        issues.push(issue(`${path}.skybox.imageAssetId`, "type", "imageAssetId must be a non-empty string when set"));
+      }
+      // These fields were introduced after the initial settings schema; absent
+      // values are normalized by resolveSceneSettings when old projects open.
+      if (entry.rotationDegrees !== undefined) {
+        validateFinite(entry, "rotationDegrees", `${path}.skybox`, issues);
+      }
+      if (entry.exposure !== undefined) {
+        validateFinite(entry, "exposure", `${path}.skybox`, issues, 0);
+      }
+    },
+  );
+  validateSceneSettingsObject(
+    value.fog,
+    ["enabled", "color", "near", "far"],
+    `${path}.fog`,
+    issues,
+    (entry) => {
+      validateBoolean(entry, "enabled", `${path}.fog`, issues);
+      validateColor(entry, "color", `${path}.fog`, issues);
+      validateFinite(entry, "near", `${path}.fog`, issues, 0);
+      validateFinite(entry, "far", `${path}.fog`, issues, 0.001);
+      if (
+        isFiniteNumber(entry.near) &&
+        isFiniteNumber(entry.far) &&
+        entry.far <= entry.near
+      ) {
+        issues.push(issue(`${path}.fog.far`, "range", "fog far must be greater than near"));
+      }
+    },
+  );
+  validateSceneSettingsObject(
+    value.ambient,
+    ["color", "intensity"],
+    `${path}.ambient`,
+    issues,
+    (entry) => {
+      validateColor(entry, "color", `${path}.ambient`, issues);
+      validateFinite(entry, "intensity", `${path}.ambient`, issues, 0);
+    },
+  );
+  validateSceneSettingsObject(
+    value.camera,
+    ["near", "far", "fov"],
+    `${path}.camera`,
+    issues,
+    (entry) => {
+      validateFinite(entry, "near", `${path}.camera`, issues, 0.0001);
+      validateFinite(entry, "far", `${path}.camera`, issues, 0.0001);
+      validateFinite(entry, "fov", `${path}.camera`, issues, 1);
+      if (
+        isFiniteNumber(entry.near) &&
+        isFiniteNumber(entry.far) &&
+        entry.far <= entry.near
+      ) {
+        issues.push(issue(`${path}.camera.far`, "range", "camera far must be greater than near"));
+      }
+    },
+  );
+  validateSceneSettingsObject(
+    value.editor,
+    ["backgroundColor", "gizmo"],
+    `${path}.editor`,
+    issues,
+    (entry) => {
+      validateColor(entry, "backgroundColor", `${path}.editor`, issues);
+      validateSceneSettingsObject(
+        entry.gizmo,
+        [
+          "size",
+          "gridVisible",
+          "gridSize",
+          "gridDivisions",
+          "snapEnabled",
+          "translateSnap",
+          "rotateSnapDegrees",
+          "scaleSnap",
+        ],
+        `${path}.editor.gizmo`,
+        issues,
+        (gizmo) => {
+          validateFinite(gizmo, "size", `${path}.editor.gizmo`, issues, 0.1);
+          validateBoolean(gizmo, "gridVisible", `${path}.editor.gizmo`, issues);
+          validateFinite(gizmo, "gridSize", `${path}.editor.gizmo`, issues, 1);
+          if (!Number.isInteger(gizmo.gridDivisions) || Number(gizmo.gridDivisions) < 1) {
+            issues.push(issue(`${path}.editor.gizmo.gridDivisions`, "range", "grid divisions must be a positive integer"));
+          }
+          validateBoolean(gizmo, "snapEnabled", `${path}.editor.gizmo`, issues);
+          validateFinite(gizmo, "translateSnap", `${path}.editor.gizmo`, issues, 0.001);
+          validateFinite(gizmo, "rotateSnapDegrees", `${path}.editor.gizmo`, issues, 0.1);
+          validateFinite(gizmo, "scaleSnap", `${path}.editor.gizmo`, issues, 0.001);
+        },
+      );
+    },
+  );
+}
+
+function validateSceneSettingsObject(
+  value: unknown,
+  keys: readonly string[],
+  path: string,
+  issues: DocumentValidationIssue[],
+  validate: (entry: Record<string, unknown>) => void,
+): void {
+  if (!isRecord(value)) {
+    issues.push(issue(path, "type", "scene settings section must be an object"));
+    return;
+  }
+  validateKnownKeys(value, keys, path, issues);
+  validate(value);
+}
+
+function validateBoolean(
+  value: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: DocumentValidationIssue[],
+): void {
+  if (typeof value[key] !== "boolean") {
+    issues.push(issue(`${path}.${key}`, "type", `${key} must be a boolean`));
+  }
+}
+
+function validateColor(
+  value: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: DocumentValidationIssue[],
+): void {
+  if (typeof value[key] !== "string" || !/^#[0-9a-f]{6}$/i.test(value[key])) {
+    issues.push(issue(`${path}.${key}`, "color", `${key} must be a #RRGGBB color`));
+  }
+}
+
+function validateFinite(
+  value: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: DocumentValidationIssue[],
+  min?: number,
+): void {
+  if (!isFiniteNumber(value[key]) || (min !== undefined && value[key] < min)) {
+    issues.push(issue(`${path}.${key}`, "range", `${key} must be a finite number${min === undefined ? "" : ` greater than or equal to ${min}`}`));
+  }
 }
 
 export function validatePrefabDocument(value: unknown): DocumentValidationIssue[] {

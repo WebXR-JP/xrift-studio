@@ -103,7 +103,6 @@ import {
   type ParticleEmitterInspectorPatch,
 } from "./InspectorPanel";
 import { SceneViewport } from "./SceneViewport";
-import { SceneSettingsPanel } from "./SceneSettingsPanel";
 import { roundTo } from "./editor-utils";
 import type {
   EditorMode,
@@ -1959,6 +1958,7 @@ export function VisualEditorPrototype({
   );
 
   const handleSelectAsset = useCallback((assetId: string) => {
+    setSceneSettingsOpen(false);
     setAssetSelection(assetId);
     setNotice("Asset Inspectorへ切り替えました。シーン内の選択は維持しています");
   }, []);
@@ -2796,6 +2796,7 @@ export function VisualEditorPrototype({
             projectKind={projectKind}
             onSelect={(selection) => {
               if (selection?.kind === "entity") {
+                setSceneSettingsOpen(false);
                 setSceneSelection(selection);
                 setAssetSelection(null);
               }
@@ -2833,6 +2834,7 @@ export function VisualEditorPrototype({
             notice={notice}
             onSelect={(selection) => {
               if (selection?.kind === "entity") {
+                setSceneSettingsOpen(false);
                 setSceneSelection(selection);
                 setAssetSelection(null);
               }
@@ -2892,6 +2894,12 @@ export function VisualEditorPrototype({
             }
             onUpdateXriftComponent={handleUpdateXriftComponent}
             onRemoveXriftComponent={handleRemoveXriftComponent}
+            sceneSettingsOpen={sceneSettingsOpen}
+            onCloseSceneSettings={() => setSceneSettingsOpen(false)}
+            onSceneSettingsChange={handleSceneSettingsChange}
+            onThumbnailChanged={() =>
+              setNotice("サムネイルを更新しました。公開前の確認にも反映されます")
+            }
           />
           <AssetsPanel
             assets={bundle.assets}
@@ -2943,18 +2951,6 @@ export function VisualEditorPrototype({
             <EDITOR_ICONS.settings size={14} aria-hidden="true" />
             シーン設定
           </button>
-          <SceneSettingsPanel
-            open={sceneSettingsOpen}
-            scene={bundle.scene}
-            projectKind={projectKind}
-            projectPath={projectPath}
-            readOnly={readOnly}
-            onClose={() => setSceneSettingsOpen(false)}
-            onChange={handleSceneSettingsChange}
-            onThumbnailChanged={() =>
-              setNotice("サムネイルを更新しました。公開前の確認にも反映されます")
-            }
-          />
           <button
             type="button"
             aria-label="Hierarchy panelの幅を変更"

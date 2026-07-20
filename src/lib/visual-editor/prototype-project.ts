@@ -27,6 +27,7 @@ import {
   type SceneDocument,
   type SceneEntity,
 } from "./scene-document";
+import { DEFAULT_SCENE_SETTINGS } from "./scene-settings";
 
 export const BUILTIN_ASSET_IDS = {
   geometry: {
@@ -468,6 +469,7 @@ export function createPrototypeProject(
     schemaVersion: SCENE_DOCUMENT_SCHEMA_VERSION,
     sceneId,
     name: "メインシーン",
+    settings: DEFAULT_SCENE_SETTINGS,
     rootEntityIds: entities.map((entity) => entity.id),
     entities: toEntityRecord(entities),
   };

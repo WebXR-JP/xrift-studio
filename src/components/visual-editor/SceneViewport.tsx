@@ -11,16 +11,25 @@ import {
   type ElementRef,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import {
+  BackSide,
+  Color,
   DoubleSide,
+  EquirectangularReflectionMapping,
+  Euler,
   Plane,
+  PerspectiveCamera,
   Raycaster,
+  SRGBColorSpace,
+  TextureLoader,
   Vector2,
   Vector3,
   type Group,
   type Object3D,
+  type Texture,
 } from "three";
 import {
   BUILTIN_PRIMITIVE_CREATION_CATALOG,
@@ -32,6 +41,7 @@ import {
   getPrimaryMaterialAssetId,
   getTransform,
   normalizeProjectRelativePath,
+  resolveSceneSettings,
   type AssetManifest,
   type MeshComponent,
   type ModelAsset,
@@ -40,18 +50,24 @@ import {
   type SceneComponent,
   type SceneDocument,
   type SceneEntity,
+  type SceneSettings,
   type TransformPatch,
+  type TextureAsset,
   type Vec3,
   type VisualProjectKind,
 } from "../../lib/visual-editor";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { ParticleEmitterVisual } from "./ParticleEmitterVisual";
 import { ProjectModelVisual } from "./ProjectModelVisual";
-import { useCoreMaterialPreviewTextures } from "./material-texture-preview";
+import {
+  readProjectTextureDataUrl,
+  useCoreMaterialPreviewTextures,
+} from "./material-texture-preview";
 import { clearEditorDragData } from "./editor-drag-data";
 import {
   fallbackViewportGroundPosition,
   getSceneViewportDragIntent,
+  hasPointerMovedBeyondThreshold,
   type SceneViewportDragIntent,
 } from "./scene-viewport-drag";
 import { createSceneViewportPreview } from "./scene-viewport-preview";
@@ -73,6 +89,23 @@ const PLAY_KEYS = new Set([
   "arrowright",
 ]);
 const EDIT_CAMERA_TARGET: [number, number, number] = [0, 0.7, 0];
+
+function isTransformControlsObject(object: Object3D): boolean {
+  let current: Object3D | null = object;
+  while (current) {
+    if ((current as Object3D & { isTransformControls?: boolean }).isTransformControls) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+}
+
+function isTransformControlsPointerEvent(
+  intersections: readonly { object: Object3D }[],
+): boolean {
+  return intersections.some(({ object }) => isTransformControlsObject(object));
+}
 
 function colorFactorToHex(value: [number, number, number] | undefined): string {
   if (!value) return "#000000";
@@ -635,10 +668,12 @@ function EntityObject({
   editable,
   transformMode,
   transformSpace,
+  gizmo,
   projectPath,
   onSelect,
   onTransformCommit,
   onDraggingChange,
+  transformDraggingRef,
   materialDragActive,
   materialDropTarget,
   children,
@@ -650,10 +685,12 @@ function EntityObject({
   editable: boolean;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
+  gizmo: SceneSettings["editor"]["gizmo"];
   projectPath?: string;
   onSelect: (entityId: string) => void;
   onTransformCommit: (entityId: string, patch: TransformPatch) => void;
   onDraggingChange: (dragging: boolean) => void;
+  transformDraggingRef: { current: boolean };
   materialDragActive: boolean;
   materialDropTarget: MaterialDropReadyTarget | null;
   children?: ReactNode;
@@ -685,6 +722,12 @@ function EntityObject({
           editable
             ? (event) => {
                 event.stopPropagation();
+                if (
+                  transformDraggingRef.current ||
+                  isTransformControlsPointerEvent(event.intersections)
+                ) {
+                  return;
+                }
                 onSelect(authoringEntityId);
               }
             : undefined
@@ -714,10 +757,21 @@ function EntityObject({
           object={objectRef}
           mode={transformMode}
           space={transformSpace}
-          size={0.82}
-          onMouseDown={() => onDraggingChange(true)}
+          size={gizmo.size}
+          translationSnap={gizmo.snapEnabled ? gizmo.translateSnap : undefined}
+          rotationSnap={
+            gizmo.snapEnabled
+              ? (gizmo.rotateSnapDegrees * Math.PI) / 180
+              : undefined
+          }
+          scaleSnap={gizmo.snapEnabled ? gizmo.scaleSnap : undefined}
+          onMouseDown={() => {
+            transformDraggingRef.current = true;
+            onDraggingChange(true);
+          }}
           onMouseUp={() => {
             commitTransform();
+            transformDraggingRef.current = false;
             onDraggingChange(false);
           }}
         />
@@ -922,10 +976,12 @@ function SceneEntityHierarchy({
   editable,
   transformMode,
   transformSpace,
+  gizmo,
   projectPath,
   onSelect,
   onTransformCommit,
   onDraggingChange,
+  transformDraggingRef,
   materialDragActive,
   materialDropTarget,
   ancestors = new Set<string>(),
@@ -938,10 +994,12 @@ function SceneEntityHierarchy({
   editable: boolean;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
+  gizmo: SceneSettings["editor"]["gizmo"];
   projectPath?: string;
   onSelect: (entityId: string) => void;
   onTransformCommit: (entityId: string, patch: TransformPatch) => void;
   onDraggingChange: (dragging: boolean) => void;
+  transformDraggingRef: { current: boolean };
   materialDragActive: boolean;
   materialDropTarget: MaterialDropReadyTarget | null;
   ancestors?: ReadonlySet<string>;
@@ -963,9 +1021,11 @@ function SceneEntityHierarchy({
       editable={editable}
       transformMode={transformMode}
       transformSpace={transformSpace}
+      gizmo={gizmo}
       onSelect={onSelect}
       onTransformCommit={onTransformCommit}
       onDraggingChange={onDraggingChange}
+      transformDraggingRef={transformDraggingRef}
       materialDragActive={materialDragActive}
       materialDropTarget={materialDropTarget}
     >
@@ -980,10 +1040,12 @@ function SceneEntityHierarchy({
           editable={editable}
           transformMode={transformMode}
           transformSpace={transformSpace}
+          gizmo={gizmo}
           projectPath={projectPath}
           onSelect={onSelect}
           onTransformCommit={onTransformCommit}
           onDraggingChange={onDraggingChange}
+          transformDraggingRef={transformDraggingRef}
           materialDragActive={materialDragActive}
           materialDropTarget={materialDropTarget}
           ancestors={nextAncestors}
@@ -1175,6 +1237,189 @@ function hasModelProxy(
   );
 }
 
+const SKYBOX_VERTEX_SHADER = `
+  varying vec3 vDirection;
+  void main() {
+    vDirection = normalize(position);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const SKYBOX_FRAGMENT_SHADER = `
+  uniform vec3 uTopColor;
+  uniform vec3 uBottomColor;
+  uniform float uOffset;
+  uniform float uExponent;
+  uniform float uExposure;
+  varying vec3 vDirection;
+  void main() {
+    float t = clamp(vDirection.y * 0.5 + 0.5 + uOffset, 0.0, 1.0);
+    t = pow(t, max(uExponent, 0.01));
+    gl_FragColor = vec4(mix(uBottomColor, uTopColor, t) * uExposure, 1.0);
+  }
+`;
+
+function useSceneSkyboxTexture(
+  assets: AssetManifest,
+  imageAssetId: string | undefined,
+  projectPath: string | undefined,
+): Texture | null {
+  const asset = imageAssetId ? assets.assets[imageAssetId] : undefined;
+  const textureAsset =
+    asset?.kind === "texture" && asset.source.kind === "project"
+      ? (asset as TextureAsset & {
+          source: { kind: "project"; relativePath: string };
+        })
+      : undefined;
+  const textureKey = textureAsset
+    ? [
+        projectPath ?? "",
+        textureAsset.id,
+        textureAsset.sourceHash ?? "",
+        textureAsset.source.relativePath,
+        textureAsset.importSettings.flipY,
+      ].join("\\n")
+    : "";
+  const [texture, setTexture] = useState<Texture | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    let ownedTexture: Texture | null = null;
+    setTexture(null);
+    if (!projectPath || !textureAsset) {
+      return () => {
+        active = false;
+      };
+    }
+
+    void readProjectTextureDataUrl(projectPath, textureAsset)
+      .then((dataUrl) => new TextureLoader().loadAsync(dataUrl))
+      .then((nextTexture) => {
+        nextTexture.name = `${textureAsset.name} (skybox)`;
+        nextTexture.colorSpace = SRGBColorSpace;
+        nextTexture.flipY = textureAsset.importSettings.flipY;
+        nextTexture.mapping = EquirectangularReflectionMapping;
+        nextTexture.needsUpdate = true;
+        if (!active) {
+          nextTexture.dispose();
+          return;
+        }
+        ownedTexture = nextTexture;
+        setTexture(nextTexture);
+      })
+      .catch(() => {
+        if (active) setTexture(null);
+      });
+
+    return () => {
+      active = false;
+      ownedTexture?.dispose();
+      ownedTexture = null;
+    };
+  }, [projectPath, textureAsset, textureKey]);
+
+  return texture;
+}
+
+function ImageSkyboxPreview({
+  texture,
+  settings,
+}: {
+  texture: Texture;
+  settings: SceneSettings["skybox"];
+}) {
+  const scene = useThree((state) => state.scene);
+  useEffect(() => {
+    const previousBackground = scene.background;
+    const previousEnvironment = scene.environment;
+    const previousBackgroundIntensity = scene.backgroundIntensity;
+    const previousEnvironmentIntensity = scene.environmentIntensity;
+    const previousBackgroundRotation = new Euler().copy(scene.backgroundRotation);
+    const previousEnvironmentRotation = new Euler().copy(scene.environmentRotation);
+    const rotation = (settings.rotationDegrees * Math.PI) / 180;
+
+    texture.mapping = EquirectangularReflectionMapping;
+    scene.background = texture;
+    scene.environment = texture;
+    scene.backgroundIntensity = settings.exposure;
+    scene.environmentIntensity = settings.exposure;
+    scene.backgroundRotation.set(0, rotation, 0);
+    scene.environmentRotation.set(0, rotation, 0);
+
+    return () => {
+      scene.background = previousBackground;
+      scene.environment = previousEnvironment;
+      scene.backgroundIntensity = previousBackgroundIntensity;
+      scene.environmentIntensity = previousEnvironmentIntensity;
+      scene.backgroundRotation.copy(previousBackgroundRotation);
+      scene.environmentRotation.copy(previousEnvironmentRotation);
+    };
+  }, [scene, settings.exposure, settings.rotationDegrees, texture]);
+  return null;
+}
+
+function SceneSkyboxPreview({
+  settings,
+  assets,
+  projectPath,
+}: {
+  settings: SceneSettings["skybox"];
+  assets: AssetManifest;
+  projectPath: string | undefined;
+}) {
+  const imageTexture = useSceneSkyboxTexture(
+    assets,
+    settings.enabled ? settings.imageAssetId : undefined,
+    projectPath,
+  );
+  if (!settings.enabled) return null;
+  if (imageTexture) {
+    return <ImageSkyboxPreview texture={imageTexture} settings={settings} />;
+  }
+  const materialKey = [
+    settings.topColor,
+    settings.bottomColor,
+    settings.offset,
+    settings.exponent,
+    settings.exposure,
+  ].join(":");
+  return (
+    <mesh scale={100} frustumCulled={false} renderOrder={-1}>
+      <sphereGeometry args={[1, 32, 20]} />
+      <shaderMaterial
+        key={materialKey}
+        side={BackSide}
+        depthWrite={false}
+        vertexShader={SKYBOX_VERTEX_SHADER}
+        fragmentShader={SKYBOX_FRAGMENT_SHADER}
+        uniforms={{
+          uTopColor: { value: new Color(settings.topColor) },
+          uBottomColor: { value: new Color(settings.bottomColor) },
+          uOffset: { value: settings.offset },
+          uExponent: { value: settings.exponent },
+          uExposure: { value: settings.exposure },
+        }}
+      />
+    </mesh>
+  );
+}
+
+function EditorCameraSettings({
+  settings,
+}: {
+  settings: SceneSettings["camera"];
+}) {
+  const camera = useThree((state) => state.camera);
+  useEffect(() => {
+    if (!(camera instanceof PerspectiveCamera)) return;
+    camera.near = settings.near;
+    camera.far = settings.far;
+    camera.fov = settings.fov;
+    camera.updateProjectionMatrix();
+  }, [camera, settings.far, settings.fov, settings.near]);
+  return null;
+}
+
 export function SceneViewport({
   scene,
   assets,
@@ -1236,9 +1481,21 @@ export function SceneViewport({
     useState<MaterialDropTarget | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [transformDragging, setTransformDragging] = useState(false);
+  const transformDraggingRef = useRef(false);
+  const rightPointerGestureRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    moved: boolean;
+    suppressContextMenu: boolean;
+  } | null>(null);
   const preview = useMemo(
     () => createSceneViewportPreview(scene, assets, prefabs),
     [assets, prefabs, scene],
+  );
+  const sceneSettings = useMemo(
+    () => resolveSceneSettings(scene.settings),
+    [scene.settings],
   );
   const runtimeSpawn = useMemo(
     () => findRuntimeSpawn(preview.scene),
@@ -1359,6 +1616,62 @@ export function SceneViewport({
     setMaterialDropTarget(null);
   };
 
+  const handleViewportPointerDown = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    if (event.button === 2) {
+      rightPointerGestureRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        moved: false,
+        suppressContextMenu: false,
+      };
+    }
+    if (contextMenu) setContextMenu(null);
+    if (editorMode === "play" && projectKind === "world") {
+      viewportRef.current?.focus();
+    }
+  };
+
+  const handleViewportPointerMove = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    const gesture = rightPointerGestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId || gesture.moved) {
+      return;
+    }
+    if (
+      hasPointerMovedBeyondThreshold(
+        gesture.startX,
+        gesture.startY,
+        event.clientX,
+        event.clientY,
+      )
+    ) {
+      gesture.moved = true;
+    }
+  };
+
+  const handleViewportPointerUp = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    const gesture = rightPointerGestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    if (
+      !gesture.moved &&
+      hasPointerMovedBeyondThreshold(
+        gesture.startX,
+        gesture.startY,
+        event.clientX,
+        event.clientY,
+      )
+    ) {
+      gesture.moved = true;
+    }
+    gesture.suppressContextMenu = gesture.moved;
+  };
+
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     const intent = getSceneViewportDragIntent(event.dataTransfer);
     if (!intent) return;
@@ -1431,7 +1744,13 @@ export function SceneViewport({
 
   const openContextMenu = (event: MouseEvent<HTMLDivElement>) => {
     if (editorMode !== "edit") return;
+    const gesture = rightPointerGestureRef.current;
     event.preventDefault();
+    if (gesture?.suppressContextMenu || gesture?.moved) {
+      rightPointerGestureRef.current = null;
+      return;
+    }
+    rightPointerGestureRef.current = null;
     const bounds = event.currentTarget.getBoundingClientRect();
     setContextMenu({
       x: Math.min(event.clientX - bounds.left, Math.max(8, bounds.width - 190)),
@@ -1498,11 +1817,11 @@ export function SceneViewport({
         onKeyDown={handlePlayKeyDown}
         onKeyUp={handlePlayKeyUp}
         onBlur={() => pressedKeysRef.current.clear()}
-        onPointerDown={() => {
-          if (contextMenu) setContextMenu(null);
-          if (editorMode === "play" && projectKind === "world") {
-            viewportRef.current?.focus();
-          }
+        onPointerDown={handleViewportPointerDown}
+        onPointerMove={handleViewportPointerMove}
+        onPointerUp={handleViewportPointerUp}
+        onPointerCancel={() => {
+          rightPointerGestureRef.current = null;
         }}
         onDragEnterCapture={handleDragEnter}
         onDragOverCapture={handleDragOver}
@@ -1513,14 +1832,39 @@ export function SceneViewport({
         <Canvas
           shadows="basic"
           dpr={[1, 1.5]}
-          camera={{ position: [7, 5, 7], fov: 46, near: 0.1, far: 250 }}
+          camera={{
+            position: [7, 5, 7],
+            fov: sceneSettings.camera.fov,
+            near: sceneSettings.camera.near,
+            far: sceneSettings.camera.far,
+          }}
           onPointerMissed={() => {
-            if (editorMode === "edit") onSelect(null);
+            if (editorMode === "edit" && !transformDraggingRef.current) {
+              onSelect(null);
+            }
           }}
         >
-          <color attach="background" args={["#18181b"]} />
-          <fog attach="fog" args={["#18181b", 28, 80]} />
-          <ambientLight intensity={0.55} />
+          <color attach="background" args={[sceneSettings.editor.backgroundColor]} />
+          {sceneSettings.fog.enabled ? (
+            <fog
+              attach="fog"
+              args={[
+                sceneSettings.fog.color,
+                sceneSettings.fog.near,
+                sceneSettings.fog.far,
+              ]}
+            />
+          ) : null}
+          <SceneSkyboxPreview
+            settings={sceneSettings.skybox}
+            assets={assets}
+            projectPath={projectPath}
+          />
+          <EditorCameraSettings settings={sceneSettings.camera} />
+          <ambientLight
+            color={sceneSettings.ambient.color}
+            intensity={sceneSettings.ambient.intensity}
+          />
           <directionalLight
             position={[7, 10, 6]}
             intensity={1.35}
@@ -1536,10 +1880,17 @@ export function SceneViewport({
             <planeGeometry args={[60, 60]} />
             <meshStandardMaterial color="#202024" roughness={1} />
           </mesh>
-          <gridHelper
-            args={[40, 40, "#52525b", "#2d2d33"]}
-            position={[0, 0.005, 0]}
-          />
+          {sceneSettings.editor.gizmo.gridVisible ? (
+            <gridHelper
+              args={[
+                sceneSettings.editor.gizmo.gridSize,
+                sceneSettings.editor.gizmo.gridDivisions,
+                "#52525b",
+                "#2d2d33",
+              ]}
+              position={[0, 0.005, 0]}
+            />
+          ) : null}
 
           <SceneDropProjectionBridge resolverRef={dropResolverRef} />
 
@@ -1557,11 +1908,16 @@ export function SceneViewport({
               editable={editorMode === "edit"}
               transformMode={transformMode}
               transformSpace={transformSpace}
+              gizmo={sceneSettings.editor.gizmo}
               onSelect={(entityId) =>
                 onSelect({ kind: "entity", id: entityId })
               }
               onTransformCommit={onTransformCommit}
-              onDraggingChange={setTransformDragging}
+              onDraggingChange={(dragging) => {
+                transformDraggingRef.current = dragging;
+                setTransformDragging(dragging);
+              }}
+              transformDraggingRef={transformDraggingRef}
               materialDragActive={dragOverKind === "material"}
               materialDropTarget={readyMaterialDropTarget}
             />
@@ -1619,6 +1975,7 @@ export function SceneViewport({
             style={{ left: contextMenu.x, top: contextMenu.y }}
             role="menu"
             onPointerDown={(event) => event.stopPropagation()}
+            onContextMenu={(event) => event.stopPropagation()}
           >
             <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
               Create Mesh
