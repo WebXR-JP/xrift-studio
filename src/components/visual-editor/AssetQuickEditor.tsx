@@ -273,43 +273,27 @@ export function MaterialThumbnail({
   );
 }
 
-function CheckerSurface({ children }: { children: React.ReactNode }) {
+function AssetThumbnailFallback({ asset }: { asset: SceneAsset }) {
+  const Icon =
+    asset.kind === "particle"
+      ? EDITOR_ICONS.particle
+      : asset.kind === "template"
+        ? EDITOR_ICONS.prefab
+        : asset.kind === "texture"
+          ? EDITOR_ICONS.texture
+          : asset.kind === "model"
+            ? EDITOR_ICONS.model
+            : EDITOR_ICONS.asset;
+  const label =
+    asset.status === "invalid"
+      ? "解析失敗・再生成"
+      : asset.status === "missing"
+        ? "ソース未検出・再取込"
+        : "プレビュー準備中";
   return (
-    <div
-      className="relative flex h-full w-full items-center justify-center overflow-hidden text-slate-600"
-      style={{
-        backgroundColor: "#e2e8f0",
-        backgroundImage:
-          "linear-gradient(45deg,#cbd5e1 25%,transparent 25%),linear-gradient(-45deg,#cbd5e1 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#cbd5e1 75%),linear-gradient(-45deg,transparent 75%,#cbd5e1 75%)",
-        backgroundPosition: "0 0,0 8px,8px -8px,-8px 0",
-        backgroundSize: "16px 16px",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-function ProxyModelThumbnail() {
-  return (
-    <div className="relative h-full w-full overflow-hidden bg-slate-50">
-      <Canvas
-        frameloop="demand"
-        dpr={[1, 1.25]}
-        camera={{ position: [2.2, 1.8, 2.5], fov: 38 }}
-        gl={{ antialias: true, alpha: false }}
-      >
-        <color attach="background" args={["#f8fafc"]} />
-        <ambientLight intensity={1.4} />
-        <directionalLight position={[3, 4, 2]} intensity={2.8} />
-        <mesh rotation={[0.15, 0.5, 0]}>
-          <boxGeometry args={[1.05, 1.05, 1.05]} />
-          <meshStandardMaterial color="#94a3b8" roughness={0.72} metalness={0.08} />
-        </mesh>
-      </Canvas>
-      <span className="absolute bottom-1 right-1 rounded bg-slate-950/80 px-1.5 py-0.5 text-xs text-slate-100">
-        Proxy / 未生成
-      </span>
+    <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-slate-100 px-2 text-center text-slate-500">
+      <Icon size={24} aria-hidden="true" />
+      <span className="text-xs font-medium">{label}</span>
     </div>
   );
 }
@@ -359,7 +343,7 @@ function ProjectAssetThumbnail({
       <div className="relative h-full w-full bg-white">
         <img
           src={state.dataUrl}
-          alt={`${asset.name}の生成済みサムネイル`}
+          alt={`${asset.name}のプレビュー`}
           draggable={false}
           className="h-full w-full bg-white object-contain p-1"
         />
@@ -377,7 +361,9 @@ function ProjectAssetThumbnail({
     <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-white text-slate-500">
       <Icon size={22} aria-hidden="true" />
       <span className="text-xs font-medium">
-        {state.status === "loading" ? "サムネイル読み込み中" : "サムネイルを読み込めません"}
+        {state.status === "loading"
+          ? "プレビュー準備中"
+          : "プレビュー読込失敗・再生成"}
       </span>
     </div>
   );
@@ -392,6 +378,8 @@ export function AssetThumbnail({
   assets?: AssetManifest;
   projectPath?: string;
 }) {
+  if (asset.status !== "ready") return <AssetThumbnailFallback asset={asset} />;
+
   if (asset.kind === "material") {
     return (
       <MaterialThumbnail
@@ -415,32 +403,22 @@ export function AssetThumbnail({
       />
     );
   }
-  if (asset.kind === "model") return <ProxyModelThumbnail />;
-
-  if (asset.kind === "texture") {
-    const TextureIcon = EDITOR_ICONS.texture;
+  if (
+    projectPath &&
+    asset.kind === "texture" &&
+    asset.source.kind === "project" &&
+    /\.(?:png|jpe?g|webp)$/i.test(asset.source.relativePath)
+  ) {
     return (
-      <CheckerSurface>
-        <div className="flex flex-col items-center gap-1 rounded bg-white/85 px-2 py-1.5 shadow-sm">
-          <TextureIcon size={22} aria-hidden="true" />
-          <span className="text-xs font-semibold">プレビュー未生成</span>
-        </div>
-      </CheckerSurface>
+      <ProjectAssetThumbnail
+        asset={asset}
+        projectPath={projectPath}
+        derivedPath={asset.source.relativePath}
+        stale={false}
+      />
     );
   }
-
-  const Icon =
-    asset.kind === "particle"
-      ? EDITOR_ICONS.particle
-      : asset.kind === "template"
-        ? EDITOR_ICONS.prefab
-        : EDITOR_ICONS.asset;
-  return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-slate-200 text-slate-500">
-      <Icon size={24} aria-hidden="true" />
-      <span className="text-xs font-medium">サムネイル未生成</span>
-    </div>
-  );
+  return <AssetThumbnailFallback asset={asset} />;
 }
 
 function EditorSection({

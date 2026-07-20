@@ -12,7 +12,9 @@ import {
   createPrototypeProject,
   getMaterialAsset,
   getTextureAsset,
+  normalizeTextureImportSettings,
   updateMaterialAsset,
+  type TextureAsset,
 } from "../../lib/visual-editor";
 import {
   applyAssignedMaterialPreview,
@@ -22,12 +24,27 @@ import { configureMaterialPreviewTexture } from "./material-texture-preview";
 
 export function runProjectModelMaterialPreviewFixtureAssertions(): void {
   const project = createPrototypeProject("world", "model-material-preview");
+  const fixtureTextureAsset: TextureAsset = {
+    id: "fixture-texture-project",
+    name: "Fixture Texture",
+    kind: "texture",
+    status: "ready",
+    source: { kind: "project", relativePath: "assets/fixture-texture.png" },
+    thumbnail: { status: "missing" },
+    importSettings: normalizeTextureImportSettings(),
+  };
   const textureInfo = {
-    textureAssetId: BUILTIN_ASSET_IDS.texture.checker,
+    textureAssetId: fixtureTextureAsset.id,
     texCoord: 0,
   };
   const assets = updateMaterialAsset(
-    project.assets,
+    {
+      ...project.assets,
+      assets: {
+        ...project.assets.assets,
+        [fixtureTextureAsset.id]: fixtureTextureAsset,
+      },
+    },
     BUILTIN_ASSET_IDS.material.orange,
     {
       pbrMetallicRoughness: {
@@ -110,8 +127,8 @@ export function runProjectModelMaterialPreviewFixtureAssertions(): void {
   assert(owned.length === 1 && owned[0] === preview, "Owned Material tracking failed");
 
   const textureAsset = getTextureAsset(
-    project.assets,
-    BUILTIN_ASSET_IDS.texture.checker,
+    assets,
+    textureInfo.textureAssetId,
   );
   assert(textureAsset, "Texture Asset fixture is missing");
   const baseColorMap = new Texture();

@@ -316,12 +316,27 @@ export function runVisualCompilerFixtureAssertions(
     "Box and Mesh Colliders must share one trimesh RigidBody",
   );
 
+  const unsupportedBuiltinTexture: TextureAsset = {
+    id: "fixture-texture-builtin-unsupported",
+    name: "Unsupported Builtin Texture",
+    kind: "texture",
+    status: "ready",
+    source: { kind: "builtin", key: "fixture/unsupported-texture" },
+    thumbnail: { status: "missing" },
+    importSettings: normalizeTextureImportSettings(),
+  };
   const textureWorld: VisualCompilerDocuments = {
     ...world,
     assets: updateMaterialAsset(
-      world.assets,
+      {
+        ...world.assets,
+        assets: {
+          ...world.assets.assets,
+          [unsupportedBuiltinTexture.id]: unsupportedBuiltinTexture,
+        },
+      },
       BUILTIN_ASSET_IDS.material.blue,
-      { baseColorTextureId: BUILTIN_ASSET_IDS.texture.checker },
+      { baseColorTextureId: unsupportedBuiltinTexture.id },
     ),
   };
   const textureResult = compileVisualProject(textureWorld, {

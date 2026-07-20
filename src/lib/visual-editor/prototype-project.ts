@@ -1,12 +1,10 @@
 import {
   ASSET_MANIFEST_SCHEMA_VERSION,
   normalizeMaterialProperties,
-  normalizeTextureImportSettings,
   type AssetManifest,
   type MaterialAsset,
   type PrimitiveAsset,
   type SceneAsset,
-  type TextureAsset,
 } from "./asset-manifest";
 import {
   BUILTIN_PRIMITIVE_CREATION_IDS,
@@ -44,9 +42,6 @@ export const BUILTIN_ASSET_IDS = {
     orange: "builtin-material-orange",
     slate: "builtin-material-slate",
   },
-  texture: {
-    checker: "builtin-texture-checker",
-  },
 } as const;
 
 export const BUILTIN_MATERIAL_ASSETS = [
@@ -81,29 +76,6 @@ export const BUILTIN_MATERIAL_ASSETS = [
     "#cbd5e1",
   ),
 ] satisfies readonly MaterialAsset[];
-
-export const BUILTIN_TEXTURE_ASSETS = [
-  {
-    id: BUILTIN_ASSET_IDS.texture.checker,
-    name: "チェッカー",
-    kind: "texture",
-    status: "ready",
-    source: { kind: "builtin", key: "texture/checker" },
-    thumbnail: { status: "missing" },
-    importSettings: normalizeTextureImportSettings({
-      colorSpace: "srgb",
-      generateMipmaps: true,
-      resize: { mode: "max-size", maxSize: 1024 },
-      sampler: {
-        wrapS: "repeat",
-        wrapT: "repeat",
-        magFilter: "linear",
-        minFilter: "linear-mipmap-linear",
-      },
-      compression: { format: "source", quality: 80 },
-    }),
-  },
-] satisfies readonly TextureAsset[];
 
 export const BUILTIN_PRIMITIVE_ASSETS = [
   createBuiltinPrimitive(
@@ -266,14 +238,6 @@ function cloneBuiltinAsset(asset: SceneAsset): SceneAsset {
     };
   }
 
-  if (asset.kind === "texture") {
-    return {
-      ...asset,
-      source: { ...asset.source },
-      importSettings: normalizeTextureImportSettings(asset.importSettings),
-    };
-  }
-
   if (asset.kind === "particle") {
     return {
       ...asset,
@@ -287,7 +251,7 @@ function cloneBuiltinAsset(asset: SceneAsset): SceneAsset {
 
 function createBuiltinAssetManifest(): AssetManifest {
   // Primitive tools live in the creation catalog and never appear as Assets.
-  const assets = [...BUILTIN_MATERIAL_ASSETS, ...BUILTIN_TEXTURE_ASSETS];
+  const assets = [...BUILTIN_MATERIAL_ASSETS];
   return {
     schemaVersion: ASSET_MANIFEST_SCHEMA_VERSION,
     assets: Object.fromEntries(
