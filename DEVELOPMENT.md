@@ -50,7 +50,7 @@ pnpm tauri:dev
 4. 失敗後に、ログまたは再試行などの復帰手段が分かる。
 5. 一覧へ戻ったときに、変更結果と新規作成の入口が見つかる。
 
-`pnpm typecheck` は必要に応じて実行します。`pnpm build`、`pnpm tauri:dev`、`pnpm tauri:build`、インストーラ生成、実機 UI 操作は、成果物・アプリデータ・外部公開先に影響するため、実行前にユーザーへ目的と副作用を示して許可を得ます。Markdown の追加・編集時には絵文字を使いません。
+日常の検証は AGENT.md の「高速フィードバックループ」に従います。`pnpm typecheck`、`cargo check`、ブラウザプレビュー（`.claude/launch.json` の `web` サーバーで `http://localhost:1420/preview.html`）、検証目的の `pnpm tauri:dev` と Tauri MCP による読み取りは、そのまま実行して構いません。`pnpm tauri:build`、インストーラ生成、実機での書き込みを伴う UI 操作は、成果物・アプリデータ・外部公開先に影響するため、実行前にユーザーへ目的と副作用を示して許可を得ます。Markdown の追加・編集時には絵文字を使いません。
 
 ## 配布ビルド
 

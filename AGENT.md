@@ -22,6 +22,18 @@ pnpm tauri:build         # OS 向けパッケージのビルド
 pnpm build:preview       # GitHub Pages 用プレビューのビルド
 ```
 
+## 高速フィードバックループ
+
+変更を加えたら、軽い順に次の 3 段階で確認する。ここに挙げるコマンドと読み取り操作は `.claude/settings.json` で事前許可済みなので、確認を挟まず自律的に回してよい。詳細な手順は `.claude/skills/xrift-studio-verify/SKILL.md` にある。
+
+1. 静的チェック: `pnpm typecheck`。Rust を触ったら `cargo check --manifest-path src-tauri/Cargo.toml`。
+2. ブラウザプレビュー: `.claude/launch.json` の `web`（vite, port 1420）を起動し、LP は `http://localhost:1420/preview.html` で確認する。HMR が効くので保存ごとに再起動しない。メインアプリは Tauri IPC 前提のためブラウザでは確認できない。
+3. デスクトップ実機: `pnpm tauri:dev` をバックグラウンドで起動し、Tauri MCP でスクリーンショット・DOM・コンソール・IPC を確認する。終わったらプロセスを停止する。
+
+許可なしで実行してよいもの: 上記の静的チェックとデバッグ起動、Tauri MCP による読み取り（スクリーンショット・DOM・ログ・IPC 監視）、作業単位のコミット。
+
+事前にユーザーの許可が必要なもの: `pnpm tauri:build` とインストーラ生成、実機での書き込みを伴う UI 操作（ログイン、アップロード、削除、リセット）、アプリデータや公開先の変更、`git push`。
+
 ## Tauri MCP Bridge
 
 このプロジェクトは、開発時の画面確認・UI 操作・コンソールログ・IPC 監視のために
@@ -31,6 +43,7 @@ pnpm build:preview       # GitHub Pages 用プレビューのビルド
 - Tauri 側の `tauri-plugin-mcp-bridge` は `debug_assertions` のときだけ有効になる。リリースビルドへ開発用ブリッジを追加しない。
 - `src-tauri/tauri.conf.json` の `withGlobalTauri` と `src-tauri/capabilities/default.json` の `mcp-bridge:default` は MCP 接続に必要な設定なので、削除しない。
 - MCP を使うときは、まず `pnpm tauri:dev` でアプリを起動し、その後 AI クライアントを MCP 設定ごと再読み込みする。
+- セッションに `tauri` MCP サーバーが接続されていない場合は、`pnpm mcp:cli`（@hypothesi/tauri-mcp-cli）で同じ操作を CLI から行える。
 - 画面を変更したら、MCP でスクリーンショットまたは DOM スナップショットを取得し、主要導線・コンソールエラー・必要な IPC を確認する。
 
 ## MCP を使った確認の例
@@ -56,7 +69,7 @@ pnpm build:preview       # GitHub Pages 用プレビューのビルド
 - 新しい画面は、まずブラウザで動く React の状態・表示を作り、Tauri 固有処理を小さな IPC ラッパーへ分離する。
 - ネイティブ API が使えないブラウザプレビューでは、成功したように見せるモックを実機能と混同させない。画面上でサンプル・デモであることを明示する。
 - Rust コマンドへ外部入力を渡すときは、既存のパス検証と権限制御を維持し、任意のパス実行や削除を追加しない。
-- `pnpm typecheck` は必要に応じて実行してよい。`pnpm build`、`pnpm tauri:dev`、`pnpm tauri:build`、インストーラ生成、実機 UI 操作は、実行前に目的、副作用、対象を示してユーザーの許可を得る。許可なくビルド成果物、アプリデータ、公開先を変更しない。
+- 検証は「高速フィードバックループ」の 3 段階に従う。`pnpm typecheck`、`cargo check`、ブラウザプレビュー、検証目的の `pnpm tauri:dev` 起動と MCP での読み取りは許可なしで行う。`pnpm tauri:build`、インストーラ生成、実機での書き込みを伴う UI 操作は、実行前に目的と副作用を示してユーザーの許可を得る。許可なくビルド成果物、アプリデータ、公開先を変更しない。
 - 作業単位ごとに意図が分かるコミットを作成し、ユーザーの指示がある場合は `main` へ Push する。
 
 ## 参照
@@ -67,4 +80,6 @@ pnpm build:preview       # GitHub Pages 用プレビューのビルド
 - Web プレビュー: `src/PreviewApp.tsx`
 - UX 原則: `docs/UX_PRINCIPLES.md`
 - マイクロインタラクション Wiki: `docs/UX_INTERACTIONS.md`
-- UX スキル: `skills/xrift-studio-ux/SKILL.md`
+- UX スキル: `.claude/skills/xrift-studio-ux/SKILL.md`
+- 機能追加の方針スキル: `.claude/skills/xrift-studio-feature/SKILL.md`
+- 検証ループスキル: `.claude/skills/xrift-studio-verify/SKILL.md`

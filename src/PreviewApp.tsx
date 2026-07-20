@@ -1,66 +1,162 @@
 import { useState } from "react";
 import {
+  ArrowLeft,
   ArrowRight,
   Box,
+  Camera,
   Check,
-  ChevronRight,
   CircleHelp,
   Code2,
+  Download,
   ExternalLink,
-  Eye,
   FileCode2,
+  FileImage,
+  FileJson,
+  FileText,
   Folder,
+  FolderOpen,
   GitBranch,
   Globe2,
-  MonitorPlay,
   Package,
   Play,
+  RefreshCw,
   Sparkles,
+  Square,
   TerminalSquare,
   Upload,
   WandSparkles,
 } from "lucide-react";
 
-const files = [
-  { name: "World.tsx", icon: FileCode2 },
-  { name: "materials.ts", icon: Code2 },
-  { name: "README.md", icon: FileCode2 },
+// ---- 実アプリ (EditorView) を再現するサンプルデータ ----
+
+type SampleFileId = "src/World.tsx" | "xrift.json" | "README.md";
+
+type TreeRow = {
+  rel: string;
+  label: string;
+  depth: number;
+  icon: "dir" | "dirOpen" | "code" | "json" | "image" | "text" | "package";
+  openas?: SampleFileId;
+};
+
+// xrift create world が生成するテンプレートのファイル構成
+const tree: TreeRow[] = [
+  { rel: "public", label: "public", depth: 0, icon: "dir" },
+  { rel: "src", label: "src", depth: 0, icon: "dirOpen" },
+  { rel: "src/components", label: "components", depth: 1, icon: "dir" },
+  { rel: "src/World.tsx", label: "World.tsx", depth: 1, icon: "code", openas: "src/World.tsx" },
+  { rel: "src/constants.ts", label: "constants.ts", depth: 1, icon: "code" },
+  { rel: "src/index.tsx", label: "index.tsx", depth: 1, icon: "code" },
+  { rel: "index.html", label: "index.html", depth: 0, icon: "code" },
+  { rel: "package.json", label: "package.json", depth: 0, icon: "package" },
+  { rel: "README.md", label: "README.md", depth: 0, icon: "text", openas: "README.md" },
+  { rel: "xrift.json", label: "xrift.json", depth: 0, icon: "json", openas: "xrift.json" },
 ];
 
-const codeLines = [
-  ["import", " Scene, { NeonGarden }", " from", " \"./scene\";"],
-  ["", ""],
-  ["export", " default", " function", " World() {"],
-  ["  return", " ("],
-  ["    <Scene", " environment=\"night\"", " camera=\"orbit\""],
-  ["      <NeonGarden", " color=\"#8b5cf6\"", " flowers={24}"],
-  ["        fog=\"soft\"", " interactive"],
-  ["      />"],
-  ["    </Scene>"],
-  ["  );"],
-  ["}"],
+function TreeIcon({ icon, selected }: { icon: TreeRow["icon"]; selected: boolean }) {
+  const cls = selected
+    ? "text-violet-600"
+    : icon === "dir" || icon === "dirOpen"
+      ? "text-zinc-500"
+      : "text-zinc-400";
+  const p = { size: 14, strokeWidth: 1.75, className: cls } as const;
+  switch (icon) {
+    case "dir":
+      return <Folder {...p} />;
+    case "dirOpen":
+      return <FolderOpen {...p} />;
+    case "json":
+      return <FileJson {...p} />;
+    case "image":
+      return <FileImage {...p} />;
+    case "text":
+      return <FileText {...p} />;
+    case "package":
+      return <Package {...p} />;
+    default:
+      return <FileCode2 {...p} />;
+  }
+}
+
+// World.tsx テンプレートの抜粋 (トークン: [テキスト, 色クラス])
+type Tok = [string] | [string, string];
+const K = "text-violet-600"; // キーワード
+const S = "text-amber-700"; // 文字列
+const T = "text-sky-700"; // コンポーネント / タグ
+const A = "text-violet-500"; // 属性
+const C = "text-emerald-600"; // コメント
+const N = "text-teal-700"; // 数値・式
+const P = "text-zinc-400"; // 記号
+
+const worldCode: Tok[][] = [
+  [["import", K], [" { "], ["SpawnPoint", T], [" } "], ["from", K], [" "], ["'@xrift/world-components'", S]],
+  [["import", K], [" { "], ["RigidBody", T], [" } "], ["from", K], [" "], ["'@react-three/rapier'", S]],
+  [[""]],
+  [["export", K], [" "], ["const", K], [" World "], ["=", P], [" () "], ["=>", K], [" ("]],
+  [["  <", P], ["group", T], [">", P]],
+  [["    "], ["{/* プレイヤーのスポーン地点 */}", C]],
+  [["    <", P], ["SpawnPoint", T], [" />", P]],
+  [[""]],
+  [["    <", P], ["ambientLight", T], [" intensity", A], ["=", P], ["{0.3}", N], [" />", P]],
+  [["    <", P], ["directionalLight", T], [" position", A], ["=", P], ["{[5, 10, 5]}", N], [" castShadow", A], [" />", P]],
+  [[""]],
+  [["    "], ["{/* 地面 */}", C]],
+  [["    <", P], ["RigidBody", T], [" type", A], ["=", P], ['"fixed"', S], [" colliders", A], ["=", P], ['"cuboid"', S], [">", P]],
+  [["      <", P], ["mesh", T], [" rotation", A], ["=", P], ["{[-Math.PI / 2, 0, 0]}", N], [" receiveShadow", A], [">", P]],
+  [["        <", P], ["planeGeometry", T], [" args", A], ["=", P], ["{[30, 30]}", N], [" />", P]],
+  [["        <", P], ["meshLambertMaterial", T], [" color", A], ["=", P], ['"#7fb069"', S], [" />", P]],
+  [["      </", P], ["mesh", T], [">", P]],
+  [["    </", P], ["RigidBody", T], [">", P]],
+  [["  </", P], ["group", T], [">", P]],
+  [[")"]],
 ];
 
-const featureCards = [
+const readmeLines = [
+  "# my-world",
+  "",
+  "React Three Fiber と Rapier で作られたサンプルワールドです。",
+  "",
+  "## 開発",
+  "",
+  "- 「実行」を押す (またはターミナルで npm run dev)",
+  "- ブラウザで 3D プレビューを確認",
+  "- src/World.tsx を編集して保存すると即反映",
+];
+
+const devLogs = [
+  { text: "$ npm run dev", cls: "text-zinc-700" },
+  { text: "  VITE v7.3.1  ready in 432 ms", cls: "text-zinc-700" },
+  { text: "  ➜  Local:   http://localhost:5173/", cls: "text-zinc-700" },
+  { text: "ブラウザでプレビューを開きました", cls: "text-violet-700 font-medium" },
+];
+
+const steps = [
   {
-    icon: Package,
-    eyebrow: "SETUP",
-    title: "準備はアプリにおまかせ",
-    text: "Node.js と @xrift/cli を専用フォルダへ用意。既存の環境を汚しません。",
+    icon: Download,
+    eyebrow: "INSTALL",
+    title: "インストールして起動",
+    text: "GitHub Releases からダウンロード。初回起動で Node.js と @xrift/cli を専用フォルダへ自動セットアップします。既存の環境は汚しません。",
     accent: "from-violet-500 to-indigo-500",
   },
   {
-    icon: Code2,
+    icon: WandSparkles,
     eyebrow: "CREATE",
-    title: "コードを書いて、すぐ確認",
-    text: "内蔵エディタから実行。保存した変更はブラウザのプレビューへ反映されます。",
+    title: "ログインして作成",
+    text: "XRift アカウントでログインし、テンプレートから新しいワールドを作成。React Three Fiber + Rapier のサンプルが入っています。",
     accent: "from-cyan-500 to-blue-500",
+  },
+  {
+    icon: Play,
+    eyebrow: "EDIT & RUN",
+    title: "編集して実行",
+    text: "内蔵エディタで World.tsx を編集して保存。「実行」でローカルサーバーが起動し、ブラウザの 3D プレビューに反映されます。",
+    accent: "from-emerald-500 to-teal-500",
   },
   {
     icon: Upload,
     eyebrow: "PUBLISH",
-    title: "できたワールドを公開",
-    text: "XRift CLI とつながるデスクトップアプリから、ワンクリックでアップロード。",
+    title: "アップロードして公開",
+    text: "タイトル・説明・サムネイルを確認してからアップロード。審査が完了すると XRift に公開され、ワールドの URL を開けます。",
     accent: "from-fuchsia-500 to-pink-500",
   },
 ];
@@ -73,8 +169,20 @@ function scrollToWorkspace() {
 }
 
 export default function PreviewApp() {
-  const [activeFile, setActiveFile] = useState("World.tsx");
-  const [isRunning, setIsRunning] = useState(true);
+  const [activeFile, setActiveFile] = useState<SampleFileId>("src/World.tsx");
+  const [running, setRunning] = useState(false);
+  const [logsOpen, setLogsOpen] = useState(false);
+
+  const startDev = () => {
+    setRunning(true);
+    setLogsOpen(true);
+  };
+  const stopDev = () => {
+    setRunning(false);
+  };
+
+  const headerButton =
+    "hidden items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 md:flex";
 
   return (
     <main className="preview-shell overflow-hidden">
@@ -89,8 +197,8 @@ export default function PreviewApp() {
           </span>
         </a>
         <div className="flex items-center gap-2">
-          <a href="#features" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
-            できること
+          <a href="#how-to-use" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
+            使い方
           </a>
           <a
             href="https://github.com/WebXR-JP/xrift-studio"
@@ -118,7 +226,7 @@ export default function PreviewApp() {
             <span className="text-gradient-brand">すぐにワールドへ。</span>
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-8 text-zinc-600 sm:text-lg">
-            XRift Studio は、セットアップから編集、ブラウザ確認、公開までをひとつにつなぐ非公式クライアントです。ここでは、ブラウザで動く部分をサンプルとして体験できます。
+            XRift Studio は、セットアップから編集、ブラウザ確認、公開までをひとつにつなぐ非公式クライアントです。ここでは、実際の制作画面をサンプルとして体験できます。
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <button
@@ -151,7 +259,7 @@ export default function PreviewApp() {
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-violet-600">Interactive sample</p>
-            <h2 className="mt-2 text-2xl font-bold tracking-tight text-zinc-950 sm:text-3xl">制作画面をブラウザで見る</h2>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight text-zinc-950 sm:text-3xl">実際の制作画面をブラウザで体験</h2>
           </div>
           <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -159,120 +267,319 @@ export default function PreviewApp() {
           </div>
         </div>
 
-        <div className="preview-window overflow-hidden rounded-2xl border border-zinc-800/10 bg-zinc-950 shadow-2xl shadow-violet-950/20">
-          <div className="flex h-11 items-center justify-between border-b border-white/10 bg-zinc-900 px-4">
-            <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
-              <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-            </div>
-            <div className="rounded-md bg-white/5 px-3 py-1 text-[10px] font-medium text-zinc-400">neon-garden / XRift Studio</div>
-            <div className="w-12" />
-          </div>
-
-          <div className="grid min-h-[520px] lg:grid-cols-[190px_minmax(0,1fr)_minmax(300px,0.9fr)]">
-            <aside className="border-b border-white/10 bg-zinc-900/70 p-4 lg:border-b-0 lg:border-r">
-              <div className="mb-5 flex items-center gap-2 text-xs font-semibold text-zinc-200">
-                <Folder size={14} className="text-violet-300" />
-                neon-garden
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          {/* ---- アプリ本体のウィンドウ (EditorView の再現) ---- */}
+          <div className="preview-window overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-violet-950/10">
+            <div className="flex h-9 items-center border-b border-zinc-200 bg-zinc-100 px-4">
+              <div className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
               </div>
-              <div className="space-y-1">
-                {files.map((file) => {
-                  const Icon = file.icon;
-                  const active = activeFile === file.name;
-                  return (
+              <div className="flex-1 text-center text-[10px] font-medium text-zinc-500">XRift Studio</div>
+              <div className="w-12" />
+            </div>
+
+            {/* ヘッダー (実アプリと同じ並び) */}
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-200 bg-white px-3 py-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-[11px] text-zinc-600">
+                  <ArrowLeft size={11} strokeWidth={2} />
+                  ライブラリ
+                </span>
+                <span className="text-zinc-300">/</span>
+                <span className="truncate text-xs font-semibold text-zinc-900">my-world</span>
+                {running && (
+                  <span className="hidden items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 sm:flex">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                    http://localhost:5173
+                    <ExternalLink size={9} strokeWidth={2} />
+                  </span>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {running ? (
+                  <button
+                    type="button"
+                    onClick={stopDev}
+                    className="flex items-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-100"
+                  >
+                    <Square size={9} fill="currentColor" strokeWidth={0} />
+                    停止
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={startDev}
+                    className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                    title="ローカルで起動してブラウザでプレビュー"
+                  >
+                    <Play size={10} fill="currentColor" strokeWidth={0} />
+                    実行
+                  </button>
+                )}
+                <span className={headerButton}>
+                  <Camera size={11} strokeWidth={2} />
+                  サムネイル
+                </span>
+                <span className={headerButton}>
+                  <TerminalSquare size={11} strokeWidth={2} />
+                  ターミナル
+                </span>
+                <span className={headerButton}>
+                  <Code2 size={11} strokeWidth={2} />
+                  VS Code
+                </span>
+                <span className="flex items-center gap-1.5 rounded-md bg-violet-600 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-sm">
+                  <Upload size={11} strokeWidth={2} />
+                  アップロード
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[168px_minmax(0,1fr)] sm:grid-cols-[200px_minmax(0,1fr)]">
+              {/* ファイルツリー */}
+              <aside className="flex flex-col border-r border-zinc-200 bg-white">
+                <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Files</span>
+                  <RefreshCw size={11} strokeWidth={2} className="text-zinc-400" />
+                </div>
+                <div className="flex-1 overflow-y-auto py-1">
+                  {tree.map((row) => {
+                    const selected = row.openas === activeFile;
+                    const openable = row.openas !== undefined;
+                    return (
+                      <button
+                        type="button"
+                        key={row.rel}
+                        onClick={openable ? () => setActiveFile(row.openas as SampleFileId) : undefined}
+                        className={`flex w-full items-center gap-1.5 px-3 py-1 text-left text-[11px] ${
+                          selected
+                            ? "bg-violet-50 font-medium text-violet-700"
+                            : openable
+                              ? "text-zinc-600 hover:bg-zinc-50"
+                              : "cursor-default text-zinc-500"
+                        }`}
+                        style={{ paddingLeft: `${12 + row.depth * 14}px` }}
+                      >
+                        <TreeIcon icon={row.icon} selected={selected} />
+                        {row.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="border-t border-zinc-200 px-3 py-1.5 text-[9px] text-zinc-400">
+                  projects/my-world
+                </div>
+              </aside>
+
+              {/* エディタ領域 */}
+              <div className="flex min-w-0 flex-col">
+                <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-2">
+                  <div className="flex items-center gap-2 text-[11px] text-zinc-700">
+                    {activeFile === "xrift.json" ? (
+                      <FileJson size={13} className="text-violet-500" />
+                    ) : activeFile === "README.md" ? (
+                      <FileText size={13} className="text-violet-500" />
+                    ) : (
+                      <FileCode2 size={13} className="text-violet-500" />
+                    )}
+                    {activeFile}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-emerald-600">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    保存済み
+                  </div>
+                </div>
+
+                <div className="h-[340px] overflow-auto bg-white">
+                  {activeFile === "src/World.tsx" && (
+                    <div className="preview-code p-4 font-mono text-[10.5px] leading-5 sm:text-[11px]">
+                      {worldCode.map((line, i) => (
+                        <div key={i} className="flex min-w-max">
+                          <span className="mr-4 w-5 select-none text-right text-zinc-300">{i + 1}</span>
+                          <code>
+                            {line.map((tok, j) => (
+                              <span key={j} className={tok[1] ?? "text-zinc-700"}>{tok[0]}</span>
+                            ))}
+                          </code>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {activeFile === "xrift.json" && (
+                    <div className="p-4">
+                      <div className="mb-3">
+                        <div className="text-xs font-semibold text-zinc-900">公開情報</div>
+                        <div className="mt-0.5 text-[10px] text-zinc-500">XRift のワールド一覧で表示されるタイトルと説明文です。</div>
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <div className="text-[11px] font-medium text-zinc-700">タイトル</div>
+                          <div className="mt-1 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] text-zinc-900">my-world</div>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-medium text-zinc-700">説明</span>
+                            <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">テンプレートのまま</span>
+                          </div>
+                          <div className="mt-1 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] leading-5 text-zinc-500">
+                            React Three FiberとRapierで作られたサンプルワールドです
+                          </div>
+                          <div className="mt-1 text-[10px] text-amber-700">アップロード前に編集を求められます。</div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] font-medium text-zinc-700">サムネイル</div>
+                          <div className="mt-1 flex items-center gap-3">
+                            <div className="flex h-12 w-20 items-center justify-center rounded-md border border-zinc-200 bg-gradient-to-br from-indigo-100 via-violet-100 to-fuchsia-100">
+                              <FileImage size={14} className="text-violet-400" />
+                            </div>
+                            <div className="text-[10px] leading-4 text-zinc-500">
+                              public/thumbnail.png
+                              <br />ワールドカードに表示されます
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeFile === "README.md" && (
+                    <div className="p-4 font-mono text-[11px] leading-6 text-zinc-700">
+                      {readmeLines.map((line, i) => (
+                        <div key={i} className={line.startsWith("#") ? "font-semibold text-zinc-900" : ""}>
+                          {line || " "}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* ログペイン (実アプリの LogsPane) */}
+                {logsOpen ? (
+                  <div className="border-t border-zinc-200">
+                    <div className="flex items-center justify-between border-b border-zinc-200 bg-zinc-50 px-4 py-1.5">
+                      <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                        <span className="font-medium">Logs</span>
+                        {running && (
+                          <span className="flex items-center gap-1 text-violet-600">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500" />
+                            実行中
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setLogsOpen(false)}
+                        className="rounded px-1.5 py-0.5 text-[10px] text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+                      >
+                        たたむ
+                      </button>
+                    </div>
+                    <div className="h-24 overflow-y-auto bg-white px-4 py-2 font-mono text-[10px] leading-5">
+                      {running ? (
+                        devLogs.map((l, i) => (
+                          <div key={i} className={l.cls}>{l.text}</div>
+                        ))
+                      ) : (
+                        <div className="text-zinc-400">コマンドを実行するとここにログが流れます。</div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex h-8 items-center justify-between border-t border-zinc-200 bg-zinc-50 px-4">
                     <button
                       type="button"
-                      key={file.name}
-                      onClick={() => setActiveFile(file.name)}
-                      className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs transition ${active ? "bg-violet-500/20 text-violet-200" : "text-zinc-500 hover:bg-white/5 hover:text-zinc-300"}`}
+                      onClick={() => setLogsOpen(true)}
+                      className="flex items-center gap-2 text-[11px] text-zinc-500 hover:text-zinc-800"
                     >
-                      <Icon size={14} />
-                      {file.name}
+                      <span className="font-medium">Logs</span>
+                      {running && (
+                        <span className="flex items-center gap-1 text-[10px] text-violet-600">
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500" />
+                          実行中
+                        </span>
+                      )}
                     </button>
-                  );
-                })}
-              </div>
-              <div className="mt-8 border-t border-white/10 pt-4 text-[10px] leading-5 text-zinc-500">
-                <div className="mb-2 flex items-center gap-1.5 font-semibold text-zinc-400"><TerminalSquare size={13} /> Runtime</div>
-                Node.js 24 LTS
-                <br />@xrift/cli 0.24.2
-              </div>
-            </aside>
-
-            <div className="min-w-0 border-b border-white/10 bg-[#111116] lg:border-b-0 lg:border-r">
-              <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-                <div className="flex items-center gap-2 text-xs text-zinc-300"><FileCode2 size={14} className="text-violet-300" /> {activeFile}</div>
-                <div className="flex items-center gap-1.5 text-[10px] text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Saved</div>
-              </div>
-              <div className="preview-code overflow-auto p-5 font-mono text-[11px] leading-6 sm:text-xs">
-                {codeLines.map((line, index) => (
-                  <div key={`${line.join("")}-${index}`} className="flex min-w-max">
-                    <span className="mr-5 w-4 select-none text-right text-zinc-700">{index + 1}</span>
-                    <code>
-                      <span className="text-violet-300">{line[0]}</span>
-                      <span className="text-zinc-300">{line[1]}</span>
-                      <span className="text-cyan-300">{line[2]}</span>
-                      <span className="text-amber-200">{line[3]}</span>
-                    </code>
+                    <button
+                      type="button"
+                      onClick={() => setLogsOpen(true)}
+                      className="text-[10px] text-zinc-400 hover:text-zinc-700"
+                    >
+                      展開
+                    </button>
                   </div>
-                ))}
-                <div className="mt-5 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] text-zinc-500">
-                  <span className="text-emerald-400">✓</span> Changes are ready to preview
-                </div>
+                )}
               </div>
             </div>
 
-            <div className="bg-zinc-100 p-3 sm:p-4">
-              <div className="mb-3 flex items-center justify-between px-1">
-                <div className="flex items-center gap-2 text-xs font-semibold text-zinc-700"><Eye size={14} className="text-violet-600" /> World preview</div>
-                <button
-                  type="button"
-                  onClick={() => setIsRunning((running) => !running)}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[10px] font-semibold transition ${isRunning ? "bg-emerald-100 text-emerald-700" : "bg-zinc-200 text-zinc-600"}`}
-                >
-                  <Play size={11} fill="currentColor" /> {isRunning ? "Running" : "Run"}
-                </button>
-              </div>
-              <div className={`preview-world relative min-h-[360px] overflow-hidden rounded-xl border border-violet-200/50 bg-[#0d1025] ${isRunning ? "preview-world-running" : ""}`}>
-                <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-indigo-900/60 to-transparent" />
-                <div className="preview-moon absolute right-8 top-8 h-10 w-10 rounded-full bg-gradient-to-br from-white to-violet-300 shadow-[0_0_30px_rgba(196,181,253,0.7)]" />
-                <div className="preview-grid absolute inset-x-[-20%] bottom-[-15%] h-1/2 rotate-[-10deg]" />
-                <div className="preview-planet absolute bottom-16 left-1/2 h-32 w-32 -translate-x-1/2 rounded-full bg-gradient-to-br from-fuchsia-400 via-violet-500 to-indigo-950 shadow-[0_0_50px_rgba(139,92,246,0.65)]" />
-                <div className="preview-ring absolute bottom-28 left-1/2 h-14 w-52 -translate-x-1/2 rotate-[-14deg] rounded-[50%] border-2 border-cyan-300/70" />
-                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-[10px] text-white/60">
-                  <span className="inline-flex items-center gap-1.5"><Globe2 size={12} /> localhost:1420</span>
-                  <span>neon-garden</span>
-                </div>
-                {!isRunning && <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/55 text-xs font-semibold text-white">Preview paused</div>}
-              </div>
+            <div className="border-t border-zinc-200 bg-zinc-50 px-4 py-2.5 text-[10px] text-zinc-500">
+              実アプリの画面を再現したサンプルです。ファイル操作・CLI 実行・XRift への公開はデスクトップ版で動作します。
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 bg-zinc-900 px-4 py-3">
-            <div className="flex items-center gap-2 text-[10px] text-zinc-500"><MonitorPlay size={13} className="text-cyan-300" /> Web ではここまでを体験できます</div>
-            <div className="flex items-center gap-2 text-[10px] text-zinc-500"><WandSparkles size={13} className="text-violet-300" /> Desktop app unlocks the full workflow</div>
+          {/* ---- ブラウザプレビューのウィンドウ ---- */}
+          <div className="flex flex-col gap-3">
+            <div className={`overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl shadow-violet-950/10 ${running ? "" : "opacity-90"}`}>
+              <div className="flex h-9 items-center gap-2 border-b border-zinc-200 bg-zinc-100 px-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-zinc-300" />
+                  <span className="h-2 w-2 rounded-full bg-zinc-300" />
+                </div>
+                <div className="flex flex-1 items-center gap-1.5 rounded-md bg-white px-2.5 py-1 text-[10px] text-zinc-500">
+                  <Globe2 size={11} className={running ? "text-emerald-500" : "text-zinc-400"} />
+                  localhost:5173
+                </div>
+                <RefreshCw size={11} className="text-zinc-400" />
+              </div>
+              {running ? (
+                <div className="preview-world preview-world-running relative h-64 overflow-hidden bg-[#0d1025]">
+                  <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-indigo-900/60 to-transparent" />
+                  <div className="preview-moon absolute right-6 top-6 h-8 w-8 rounded-full bg-gradient-to-br from-white to-violet-300 shadow-[0_0_25px_rgba(196,181,253,0.7)]" />
+                  <div className="preview-grid absolute inset-x-[-20%] bottom-[-15%] h-1/2 rotate-[-10deg]" />
+                  <div className="preview-planet absolute bottom-12 left-1/2 h-24 w-24 -translate-x-1/2 rounded-full bg-gradient-to-br from-fuchsia-400 via-violet-500 to-indigo-950 shadow-[0_0_40px_rgba(139,92,246,0.65)]" />
+                  <div className="preview-ring absolute bottom-20 left-1/2 h-10 w-40 -translate-x-1/2 rotate-[-14deg] rounded-[50%] border-2 border-cyan-300/70" />
+                  <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[9px] text-white/60">
+                    <span>my-world</span>
+                    <span>3D プレビュー</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex h-64 flex-col items-center justify-center gap-2 bg-zinc-50 px-6 text-center">
+                  <Play size={18} className="text-zinc-300" />
+                  <p className="text-[11px] leading-5 text-zinc-500">
+                    「実行」を押すとローカルサーバーが起動し、既定のブラウザで 3D プレビューが開きます。
+                  </p>
+                </div>
+              )}
+            </div>
+            <p className="px-1 text-[11px] leading-5 text-zinc-500">
+              実行中は World.tsx を保存するたびにブラウザへ反映されます。プレビューは別ウィンドウのブラウザで開くため、アプリと並べて確認できます。
+            </p>
           </div>
         </div>
       </section>
 
-      <section id="features" className="bg-white/60 px-5 py-20 lg:px-8 lg:py-24">
+      <section id="how-to-use" className="bg-white/60 px-5 py-20 lg:px-8 lg:py-24">
         <div className="mx-auto max-w-6xl">
           <div className="max-w-xl">
-            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-violet-600">From idea to XRift</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">Web で見えるのは、制作体験の入口。</h2>
-            <p className="mt-4 text-sm leading-7 text-zinc-600">ログインやローカルファイル操作はデスクトップ版の役割。GitHub Pages では「何ができるソフトなのか」が伝わるところに絞っています。</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-violet-600">How it works</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">使い方は 4 ステップ。</h2>
+            <p className="mt-4 text-sm leading-7 text-zinc-600">環境構築から公開まで、ターミナルを開かずに進められます。ログインやローカルファイル操作はデスクトップ版の役割です。</p>
           </div>
-          <div className="mt-10 grid gap-4 md:grid-cols-3">
-            {featureCards.map((feature) => {
-              const Icon = feature.icon;
+          <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {steps.map((step, i) => {
+              const Icon = step.icon;
               return (
-                <article key={feature.title} className="group rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-violet-900/10">
-                  <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${feature.accent} text-white shadow-lg`}><Icon size={20} /></div>
-                  <p className="mt-6 text-[10px] font-bold tracking-[0.2em] text-zinc-400">{feature.eyebrow}</p>
-                  <h3 className="mt-2 text-base font-bold text-zinc-950">{feature.title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-zinc-600">{feature.text}</p>
-                  <div className="mt-5 inline-flex items-center gap-1 text-xs font-semibold text-violet-700 transition group-hover:gap-2">詳しく見る <ChevronRight size={13} /></div>
+                <article key={step.title} className="group rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-violet-900/10">
+                  <div className="flex items-start justify-between">
+                    <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${step.accent} text-white shadow-lg`}><Icon size={20} /></div>
+                    <span className="text-2xl font-black tracking-tight text-zinc-100 transition group-hover:text-violet-100">{i + 1}</span>
+                  </div>
+                  <p className="mt-6 text-[10px] font-bold tracking-[0.2em] text-zinc-400">{step.eyebrow}</p>
+                  <h3 className="mt-2 text-base font-bold text-zinc-950">{step.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-zinc-600">{step.text}</p>
                 </article>
               );
             })}
@@ -284,9 +591,9 @@ export default function PreviewApp() {
         <div className="relative overflow-hidden rounded-3xl bg-zinc-950 px-6 py-10 text-white shadow-2xl shadow-violet-950/20 sm:px-10 sm:py-14">
           <div className="preview-cta-glow" />
           <div className="relative max-w-2xl">
-            <div className="flex items-center gap-2 text-xs font-semibold text-violet-300"><CircleHelp size={15} /> Desktop app preview</div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-violet-300"><CircleHelp size={15} /> Desktop app</div>
             <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">続きは GitHub Releases から。</h2>
-            <p className="mt-4 text-sm leading-7 text-zinc-400">Web プレビューは雰囲気と制作フローを紹介するためのものです。実際の CLI セットアップ、ログイン、ファイル編集、公開は Tauri アプリで動作します。</p>
+            <p className="mt-4 text-sm leading-7 text-zinc-400">Web プレビューは制作フローを紹介するためのものです。実際のセットアップ、ログイン、ファイル編集、実行、公開は Tauri 製デスクトップアプリで動作します。</p>
             <div className="mt-7 flex flex-wrap gap-3">
               <a href="https://github.com/WebXR-JP/xrift-studio/releases/latest" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:-translate-y-0.5 hover:bg-violet-100">最新版をダウンロード <ArrowRight size={15} /></a>
               <a href="https://github.com/WebXR-JP/xrift-studio" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/5"><GitBranch size={15} /> ソースを見る</a>
