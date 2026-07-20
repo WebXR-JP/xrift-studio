@@ -1,4 +1,5 @@
 import type {
+  AudioAsset,
   AssetManifest,
   ModelAsset,
   ParticleAsset,
@@ -13,6 +14,7 @@ import {
 import {
   createMeshColliderComponent,
   createMeshComponent,
+  createAudioSourceComponent,
   createParticleEmitterComponent,
   createTransformComponent,
   type MaterialBinding,
@@ -27,7 +29,7 @@ export type SceneAssetPlacementResult =
       scene: SceneDocument;
       entityId: string;
       assetName: string;
-      assetKind: "model" | "particle" | "prefab";
+      assetKind: "model" | "particle" | "prefab" | "audio";
     }
   | {
       placed: false;
@@ -42,11 +44,12 @@ export type SceneAssetPlacementResult =
 
 export function isScenePlaceableAsset(
   asset: SceneAsset | undefined,
-): asset is ModelAsset | ParticleAsset | PrefabAsset {
+): asset is AudioAsset | ModelAsset | ParticleAsset | PrefabAsset {
   return Boolean(
     asset &&
       (asset.kind === "model" ||
         asset.kind === "particle" ||
+        asset.kind === "audio" ||
         (asset.kind === "template" && asset.templateType === "prefab")),
   );
 }
@@ -73,7 +76,7 @@ export function instantiateSceneAsset(
   const entityId = createDocumentId("entity");
   const position = options.position ?? [0, 0, 0];
   let entity: SceneEntity;
-  let assetKind: "model" | "particle" | "prefab";
+  let assetKind: "model" | "particle" | "prefab" | "audio";
 
   if (!isScenePlaceableAsset(asset)) {
     return { placed: false, scene, reason: "unsupported-kind" };
@@ -98,6 +101,15 @@ export function instantiateSceneAsset(
       parentEntityId,
     );
     assetKind = "particle";
+  } else if (asset.kind === "audio") {
+    entity = createAudioEntity(
+      scene,
+      entityId,
+      asset,
+      position,
+      parentEntityId,
+    );
+    assetKind = "audio";
   } else if (asset.kind === "template") {
     const prefabAsset = asset;
     const prefab = resolvePrefabDocument(prefabAsset, prefabs);
@@ -152,6 +164,33 @@ export function instantiateSceneAsset(
           ? [...scene.rootEntityIds, entityId]
           : scene.rootEntityIds,
     },
+  };
+}
+
+function createAudioEntity(
+  scene: SceneDocument,
+  entityId: string,
+  asset: AudioAsset,
+  position: Vec3,
+  parentEntityId: string | null,
+): SceneEntity {
+  const audioSource = createAudioSourceComponent(
+    createDocumentId("component-audio-source"),
+    asset.id,
+  );
+  return {
+    id: entityId,
+    name: uniqueEntityName(scene, asset.name),
+    parentId: parentEntityId,
+    children: [],
+    enabled: true,
+    components: [
+      createTransformComponent(
+        createDocumentId("component-transform"),
+        position,
+      ),
+      ...(audioSource ? [audioSource] : []),
+    ],
   };
 }
 

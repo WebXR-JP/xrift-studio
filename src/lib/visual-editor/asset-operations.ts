@@ -17,6 +17,7 @@ export type AssetReferenceKind =
   | "scene-geometry"
   | "scene-material"
   | "scene-particle"
+  | "scene-audio"
   | "scene-prefab"
   | "scene-xrift"
   | "material-texture"
@@ -26,6 +27,7 @@ export type AssetReferenceKind =
   | "prefab-geometry"
   | "prefab-material"
   | "prefab-particle"
+  | "prefab-audio"
   | "prefab-prefab"
   | "prefab-xrift";
 
@@ -81,6 +83,7 @@ const ASSET_REFERENCE_LABELS: Record<AssetReferenceKind, string> = {
   "scene-geometry": "Mesh geometry",
   "scene-material": "Mesh material slot",
   "scene-particle": "Particle emitter",
+  "scene-audio": "Audio Source",
   "scene-prefab": "Prefab instance",
   "scene-xrift": "XRift component",
   "material-texture": "Material texture slot",
@@ -90,6 +93,7 @@ const ASSET_REFERENCE_LABELS: Record<AssetReferenceKind, string> = {
   "prefab-geometry": "Prefab mesh geometry",
   "prefab-material": "Prefab mesh material slot",
   "prefab-particle": "Prefab particle emitter",
+  "prefab-audio": "Prefab Audio Source",
   "prefab-prefab": "Nested Prefab instance",
   "prefab-xrift": "Prefab XRift component",
 };
@@ -359,7 +363,7 @@ function collectComponentReferences(
   scope: "scene" | "prefab",
   add: (reference: AssetReferenceLocation) => void,
 ): void {
-  const kind = (suffix: "geometry" | "material" | "particle" | "prefab" | "xrift") =>
+  const kind = (suffix: "geometry" | "material" | "particle" | "audio" | "prefab" | "xrift") =>
     `${scope}-${suffix}` as AssetReferenceKind;
   if (component.type === "mesh") {
     const geometryAssetId =
@@ -394,6 +398,16 @@ function collectComponentReferences(
       ownerId: entity.id,
       ownerName: entity.name,
       detail: "Particle emitter",
+    });
+  } else if (
+    component.type === "audio-source" &&
+    component.audioAssetId === assetId
+  ) {
+    add({
+      kind: kind("audio"),
+      ownerId: entity.id,
+      ownerName: entity.name,
+      detail: "Audio Source",
     });
   } else if (
     component.type === "prefab-instance" &&

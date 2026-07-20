@@ -14,6 +14,7 @@ import {
   TEXTURE_MAG_FILTERS,
   TEXTURE_MIN_FILTERS,
   TEXTURE_WRAP_MODES,
+  type AudioAsset,
   type AssetManifest,
   type Color3,
   type Color4,
@@ -30,6 +31,7 @@ import {
   type TextureAssetPatch,
 } from "../../lib/visual-editor";
 import { EDITOR_ICONS } from "./editor-icons";
+import { formatFileSize } from "./editor-utils";
 import { ParticleAssetInspector } from "./ParticleAssetInspector";
 import {
   ModelAssetInspector,
@@ -309,6 +311,8 @@ function AssetThumbnailFallback({ asset }: { asset: SceneAsset }) {
   const Icon =
     asset.kind === "particle"
       ? EDITOR_ICONS.particle
+      : asset.kind === "audio"
+        ? EDITOR_ICONS.audio
       : asset.kind === "template"
         ? EDITOR_ICONS.prefab
         : asset.kind === "texture"
@@ -321,11 +325,42 @@ function AssetThumbnailFallback({ asset }: { asset: SceneAsset }) {
       ? "解析失敗・再生成"
       : asset.status === "missing"
         ? "ソース未検出・再取込"
+        : asset.kind === "audio"
+          ? "MP3"
         : "プレビュー準備中";
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-slate-100 px-2 text-center text-slate-500">
       <Icon size={24} aria-hidden="true" />
       <span className="text-xs font-medium">{label}</span>
+    </div>
+  );
+}
+
+function AudioAssetInspector({ asset }: { asset: AudioAsset }) {
+  const AudioIcon = EDITOR_ICONS.audio;
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3 rounded-md border border-slate-200 bg-white p-3">
+        <div className="flex size-12 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-600">
+          <AudioIcon size={24} aria-hidden="true" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="truncate text-[13px] font-semibold text-slate-900">
+            {asset.name}
+          </h3>
+          <p className="mt-0.5 text-xs text-slate-500">
+            MP3・{formatFileSize(asset.importMetadata.byteLength)}
+          </p>
+        </div>
+      </div>
+      <EditorSection title="Source">
+        <p className="break-all text-xs leading-4 text-slate-600">
+          {sourceLabel(asset)}
+        </p>
+        <p className="text-[11px] leading-4 text-slate-500">
+          Audio Sourceから参照され、実行・公開時に管理済み音声としてコピーされます。
+        </p>
+      </EditorSection>
     </div>
   );
 }
@@ -2332,6 +2367,10 @@ export function AssetQuickEditor({
         onChange={(patch) => onParticleChange(asset.id, patch)}
       />
     );
+  }
+
+  if (asset.kind === "audio") {
+    return <AudioAssetInspector asset={asset} />;
   }
 
   return (

@@ -4,8 +4,16 @@ import {
   type EditorCommandDefinition,
 } from "../../lib/visual-editor";
 import { EDITOR_ICONS } from "./editor-icons";
+import {
+  AiConnectionPanel,
+  type XriftMcpActivity,
+} from "./AiConnectionPanel";
+import type {
+  XriftMcpClientId,
+  XriftMcpClientStatus,
+} from "../../lib/tauri";
 
-type UtilityPanel = "shortcuts" | "help" | null;
+type UtilityPanel = "ai" | "shortcuts" | "help" | null;
 
 const CATEGORY_LABELS: Record<EditorCommandDefinition["category"], string> = {
   project: "プロジェクト",
@@ -25,7 +33,7 @@ function UtilityButton({
   label: string;
   active?: boolean;
   expanded?: boolean;
-  icon: "keyboard" | "help" | "settings";
+  icon: "ai" | "keyboard" | "help" | "settings";
   onClick: () => void;
 }) {
   const Icon = EDITOR_ICONS[icon];
@@ -53,11 +61,33 @@ export function EditorUtilityRail({
   sceneSettingsOpen,
   onToggleSceneSettings,
   onResetLayout,
+  mcpNativeAvailable,
+  mcpClients,
+  mcpLoading,
+  mcpRegisteringClientId,
+  mcpError,
+  mcpLastActivity,
+  canUndo,
+  onOpenMcp,
+  onRefreshMcp,
+  onRegisterMcpClient,
+  onUndo,
 }: {
   commands: readonly EditorCommandDefinition[];
   sceneSettingsOpen: boolean;
   onToggleSceneSettings: () => void;
   onResetLayout: () => void;
+  mcpNativeAvailable: boolean;
+  mcpClients: readonly XriftMcpClientStatus[];
+  mcpLoading: boolean;
+  mcpRegisteringClientId: XriftMcpClientId | null;
+  mcpError: string | null;
+  mcpLastActivity: XriftMcpActivity;
+  canUndo: boolean;
+  onOpenMcp: () => void;
+  onRefreshMcp: () => void;
+  onRegisterMcpClient: (clientId: XriftMcpClientId) => void;
+  onUndo: () => void;
 }) {
   const [openPanel, setOpenPanel] = useState<UtilityPanel>(null);
   const railRef = useRef<HTMLElement>(null);
@@ -101,6 +131,16 @@ export function EditorUtilityRail({
       className="absolute bottom-3 left-3 z-50 flex gap-0.5 rounded-lg border border-editor-border bg-editor-surface/95 p-1 shadow-sm backdrop-blur"
     >
       <UtilityButton
+        label="AI接続"
+        icon="ai"
+        active={openPanel === "ai"}
+        expanded={openPanel === "ai"}
+        onClick={() => {
+          if (openPanel !== "ai") onOpenMcp();
+          togglePanel("ai");
+        }}
+      />
+      <UtilityButton
         label="ショートカットキー一覧"
         icon="keyboard"
         active={openPanel === "shortcuts"}
@@ -135,7 +175,11 @@ export function EditorUtilityRail({
               id={`editor-${openPanel}-heading`}
               className="text-sm font-semibold text-slate-900"
             >
-              {openPanel === "shortcuts" ? "ショートカットキー" : "エディターの使い方"}
+              {openPanel === "ai"
+                ? "AI接続"
+                : openPanel === "shortcuts"
+                  ? "ショートカットキー"
+                  : "エディターの使い方"}
             </h2>
             <button
               type="button"
@@ -148,7 +192,20 @@ export function EditorUtilityRail({
             </button>
           </div>
 
-          {openPanel === "shortcuts" ? (
+          {openPanel === "ai" ? (
+            <AiConnectionPanel
+              nativeAvailable={mcpNativeAvailable}
+              clients={mcpClients}
+              loading={mcpLoading}
+              registeringClientId={mcpRegisteringClientId}
+              error={mcpError}
+              lastActivity={mcpLastActivity}
+              canUndo={canUndo}
+              onRefresh={onRefreshMcp}
+              onRegister={onRegisterMcpClient}
+              onUndo={onUndo}
+            />
+          ) : openPanel === "shortcuts" ? (
             <div className="scrollbar-thin max-h-[min(28rem,calc(100vh-10rem))] space-y-4 overflow-y-auto p-3.5">
               {shortcutGroups.map((group) => (
                 <section key={group.category} aria-labelledby={`shortcut-${group.category}`}>

@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Axis3D,
   Box,
+  Bot,
   Camera,
   Check,
   CircleDot,
@@ -117,6 +118,8 @@ export const EDITOR_ICONS = {
   textInput: TextCursorInput,
   billboardY: Rotate3D,
   warning: TriangleAlert,
+  ai: Bot,
+  refresh: RefreshCw,
   visible: Eye,
   hidden: EyeOff,
 } satisfies Record<string, LucideIcon>;

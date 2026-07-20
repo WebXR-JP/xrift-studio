@@ -1,5 +1,6 @@
 import {
   getGeometryAsset,
+  getAudioAsset,
   getGeometryMaterialSlots,
   getMaterialAsset,
   getTextureAsset,
@@ -2371,19 +2372,51 @@ function renderAudioSource(
   audio: AudioSourceComponent,
   context: CompileContext,
 ): string | null {
-  const sourceUrl = normalizeAudioRuntimeUrl(audio.sourceUrl);
-  if (!sourceUrl) {
+  const audioAssetId = audio.audioAssetId?.trim() ?? "";
+  if (!audioAssetId) {
     addDiagnostic(context, {
       severity: "warning",
-      code: "audio-source-url-missing",
-      message: "Audio SourceのURLが未設定のため、音声を出力しません",
+      code: "audio-source-asset-missing",
+      message: audio.sourceUrl?.trim()
+        ? "直接URLのAudio Sourceは出力されません。MP3をAudio Assetとして取り込んでください"
+        : "Audio Assetが未設定のため、音声を出力しません",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: audio.id,
-      fieldPath: "sourceUrl",
+      fieldPath: "audioAssetId",
     });
     return null;
   }
+  context.referencedAssetIds.add(audioAssetId);
+  const asset = getAudioAsset(context.assets, audioAssetId);
+  if (!asset) {
+    addDiagnostic(context, {
+      severity: "blocking",
+      code: "audio-source-asset-invalid",
+      message: "Audio Sourceの参照先がAudio Assetではありません",
+      sceneId: context.scene.sceneId,
+      entityId: entity.id,
+      componentId: audio.id,
+      assetId: audioAssetId,
+      fieldPath: "audioAssetId",
+    });
+    return null;
+  }
+  const runtimeUrl = context.assetRuntimeUrls.get(asset.id);
+  if (!runtimeUrl) {
+    addDiagnostic(context, {
+      severity: "blocking",
+      code: "audio-asset-source-unsupported",
+      message: "Audio Assetはproject-relativeなMP3 sourceである必要があります",
+      sceneId: context.scene.sceneId,
+      entityId: entity.id,
+      componentId: audio.id,
+      assetId: asset.id,
+      fieldPath: "audioAssetId",
+    });
+    return null;
+  }
+  const assetPath = registerAssetUrl(asset, runtimeUrl, context);
 
   context.reactValueImports.add("useEffect");
   context.reactValueImports.add("useMemo");
@@ -2397,7 +2430,7 @@ function renderAudioSource(
 let xriftStudioAudioListenerUsers = 0;
 
 const XRiftStudioAudioSource: FC<{
-  url: string;
+  assetPath: string;
   volume: number;
   loop: boolean;
   autoplay: boolean;
@@ -2405,8 +2438,9 @@ const XRiftStudioAudioSource: FC<{
   refDistance: number;
   rolloffFactor: number;
   maxDistance: number;
-}> = ({ url, volume, loop, autoplay, spatial, refDistance, rolloffFactor, maxDistance }) => {
+}> = ({ assetPath, volume, loop, autoplay, spatial, refDistance, rolloffFactor, maxDistance }) => {
   const camera = useThree((state) => state.camera);
+  const url = useCompiledAssetUrl(assetPath);
   const sound = useMemo(
     () => spatial ? new PositionalAudio(xriftStudioAudioListener) : new Audio(xriftStudioAudioListener),
     [spatial],
@@ -2451,14 +2485,7 @@ const XRiftStudioAudioSource: FC<{
 };`,
   );
 
-  return `<XRiftStudioAudioSource url=${JSON.stringify(sourceUrl)} volume={${formatNumber(audio.volume)}} loop={${audio.loop}} autoplay={${audio.autoplay}} spatial={${audio.spatial}} refDistance={${formatNumber(audio.refDistance)}} rolloffFactor={${formatNumber(audio.rolloffFactor)}} maxDistance={${formatNumber(audio.maxDistance)}} />`;
-}
-
-function normalizeAudioRuntimeUrl(value: string): string {
-  const normalized = value.trim().replace(/\\/g, "/");
-  if (normalized.startsWith("./public/")) return `/${normalized.slice(9)}`;
-  if (normalized.startsWith("public/")) return `/${normalized.slice(7)}`;
-  return normalized;
+  return `<XRiftStudioAudioSource assetPath={${assetPath}} volume={${formatNumber(audio.volume)}} loop={${audio.loop}} autoplay={${audio.autoplay}} spatial={${audio.spatial}} refDistance={${formatNumber(audio.refDistance)}} rolloffFactor={${formatNumber(audio.rolloffFactor)}} maxDistance={${formatNumber(audio.maxDistance)}} />`;
 }
 
 function renderSpawnPoint(
@@ -2528,7 +2555,7 @@ function diagnoseReferencedUnsupportedAssets(context: CompileContext): void {
         assetId,
       });
     } else if (
-      (asset.kind === "texture" || asset.kind === "model") &&
+      (asset.kind === "texture" || asset.kind === "model" || asset.kind === "audio") &&
       !context.assetRuntimeUrls.has(asset.id)
     ) {
       addDiagnostic(
@@ -2555,7 +2582,7 @@ function diagnoseUnsupportedAssets(
     if (diagnosed.has(asset.id)) continue;
     if (
       (asset.kind === "template" && !isPrefabAsset(asset)) ||
-      ((asset.kind === "texture" || asset.kind === "model") &&
+      ((asset.kind === "texture" || asset.kind === "model" || asset.kind === "audio") &&
         !isAssetSupportedByCompiler(asset))
     ) {
       diagnostics.push(
@@ -2800,6 +2827,7 @@ function isAllowedStaticAssetSource(asset: SceneAsset): boolean {
   if (asset.kind === "texture") {
     return ["png", "jpg", "jpeg", "webp", "ktx2"].includes(extension);
   }
+  if (asset.kind === "audio") return extension === "mp3";
   return false;
 }
 
@@ -2813,6 +2841,7 @@ function isAssetSupportedByCompiler(asset: SceneAsset): boolean {
     return false;
   }
   if (asset.kind === "model") return true;
+  if (asset.kind === "audio") return true;
   if (asset.kind !== "texture") return false;
   const extension = fileExtension(asset.source.relativePath);
   return (
@@ -2829,7 +2858,12 @@ function fileExtension(relativePath: string): string {
 }
 
 function assetPurpose(asset: SceneAsset): AssetCopyPlanEntry["purpose"] {
-  if (asset.kind === "texture" || asset.kind === "model" || asset.kind === "particle") return asset.kind;
+  if (
+    asset.kind === "texture" ||
+    asset.kind === "model" ||
+    asset.kind === "audio" ||
+    asset.kind === "particle"
+  ) return asset.kind;
   if (asset.kind === "template") return "prefab";
   return "other";
 }

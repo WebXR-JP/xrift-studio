@@ -8,6 +8,8 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 
+pub mod mcp;
+
 const NODE_VERSION: &str = "v24.15.0";
 const VISUAL_PROJECT_MANIFEST: &str = "xrift-studio.project.json";
 const VISUAL_PROJECT_SCHEMA_VERSION: &str = "0.1.0";
@@ -3750,6 +3752,11 @@ pub fn run() {
     }
 
     let builder = builder
+        .manage(mcp::XriftMcpBrokerState::default())
+        .setup(|app| {
+            mcp::start_broker(app.handle())?;
+            Ok(())
+        })
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init());
@@ -3791,6 +3798,9 @@ pub fn run() {
             reset_app_data,
             check_xrift_latest,
             update_xrift,
+            mcp::complete_xrift_mcp_request,
+            mcp::detect_xrift_mcp_clients,
+            mcp::register_xrift_mcp_client,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

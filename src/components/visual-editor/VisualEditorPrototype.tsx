@@ -57,6 +57,9 @@ import {
   renameAssetFolder,
   renameEntity,
   resolveEditorCommands,
+  executeXriftMcpEditorTool,
+  XRIFT_MCP_EDITOR_TOOLS,
+  XriftMcpEditorToolError,
   shortcutForCommand,
   redoEditorHistory,
   replaceEditorHistoryPresent,
@@ -89,7 +92,14 @@ import {
   type UpdateXriftComponentPatch,
   type Vec3,
   type VisualProjectKind,
+  type XriftMcpEditorToolName,
 } from "../../lib/visual-editor";
+import {
+  tauri,
+  type XriftMcpClientId,
+  type XriftMcpClientStatus,
+  type XriftMcpEditorRequestEvent,
+} from "../../lib/tauri";
 import { AssetsPanel } from "./AssetsPanel";
 import {
   hasActiveAssetImport,
@@ -105,6 +115,7 @@ import {
 } from "./AssetDeleteDialog";
 import { EditorCreateMenu } from "./EditorCreateMenu";
 import { EditorUtilityRail } from "./EditorUtilityRail";
+import type { XriftMcpActivity } from "./AiConnectionPanel";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { HierarchyPanel } from "./HierarchyPanel";
 import {
@@ -133,6 +144,7 @@ import type {
 
 const SUPPORTED_MODEL_FILE = /\.(glb|gltf|obj|vrm)$/i;
 const SUPPORTED_TEXTURE_FILE = /\.(png|jpe?g|webp|ktx2)$/i;
+const SUPPORTED_AUDIO_FILE = /\.mp3$/i;
 const SUPPORTED_UNITY_FILE = /\.(unitypackage|unity|prefab)$/i;
 const AUTOSAVE_DELAY_MS = 250;
 
@@ -440,6 +452,17 @@ export function VisualEditorPrototype({
   const bundle = history.present.bundle;
   const bundleRef = useRef(bundle);
   bundleRef.current = bundle;
+  const mcpRevisionRef = useRef(0);
+  const mcpRevisionBundleRef = useRef(bundle);
+  const mcpRevisionProjectRef = useRef(bundle.project.projectId);
+  if (mcpRevisionProjectRef.current !== bundle.project.projectId) {
+    mcpRevisionProjectRef.current = bundle.project.projectId;
+    mcpRevisionBundleRef.current = bundle;
+    mcpRevisionRef.current = 0;
+  } else if (mcpRevisionBundleRef.current !== bundle) {
+    mcpRevisionBundleRef.current = bundle;
+    mcpRevisionRef.current += 1;
+  }
   const projectPathRef = useRef(projectPath);
   projectPathRef.current = projectPath;
   const onSaveRef = useRef(onSave);
@@ -466,6 +489,10 @@ export function VisualEditorPrototype({
   }
   const sceneSelection = history.present.sceneSelection;
   const assetSelection = history.present.assetSelection;
+  const sceneSelectionRef = useRef(sceneSelection);
+  sceneSelectionRef.current = sceneSelection;
+  const assetSelectionRef = useRef(assetSelection);
+  assetSelectionRef.current = assetSelection;
   const [saveStatus, setSaveStatus] = useState<SaveStatus>(
     onSave ? (projectPath ? "saved" : "dirty") : "unavailable",
   );
@@ -502,6 +529,55 @@ export function VisualEditorPrototype({
   const [importError, setImportError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
+  const mcpNativeAvailable = tauri.isAvailable();
+  const [mcpClients, setMcpClients] = useState<XriftMcpClientStatus[]>([]);
+  const [mcpLoading, setMcpLoading] = useState(false);
+  const [mcpRegisteringClientId, setMcpRegisteringClientId] =
+    useState<XriftMcpClientId | null>(null);
+  const [mcpError, setMcpError] = useState<string | null>(null);
+  const [mcpLastActivity, setMcpLastActivity] =
+    useState<XriftMcpActivity>(null);
+
+  const refreshMcpClients = useCallback(async () => {
+    if (!mcpNativeAvailable) return;
+    setMcpLoading(true);
+    setMcpError(null);
+    try {
+      setMcpClients(await tauri.detectXriftMcpClients());
+    } catch {
+      setMcpError(
+        "AI clientを確認できませんでした。XRift Studioを再起動して再試行してください",
+      );
+    } finally {
+      setMcpLoading(false);
+    }
+  }, [mcpNativeAvailable]);
+
+  const registerMcpClient = useCallback(
+    async (clientId: XriftMcpClientId) => {
+      if (!mcpNativeAvailable || mcpRegisteringClientId) return;
+      setMcpRegisteringClientId(clientId);
+      setMcpError(null);
+      try {
+        const status = await tauri.registerXriftMcpClient(clientId);
+        setMcpClients((current) =>
+          current.map((client) => (client.id === status.id ? status : client)),
+        );
+        setNotice(
+          `${status.label}へXRift Studioを登録しました。clientを再起動すると利用できます`,
+        );
+      } catch (error) {
+        setMcpError(
+          typeof error === "string" && error.trim()
+            ? error
+            : "AI clientへ登録できませんでした。clientのinstall状態を確認してください",
+        );
+      } finally {
+        setMcpRegisteringClientId(null);
+      }
+    },
+    [mcpNativeAvailable, mcpRegisteringClientId],
+  );
 
   const requestAutosave = useCallback(
     async (
@@ -708,6 +784,122 @@ export function VisualEditorPrototype({
   const importBusy =
     modelReimportBusy ||
     pendingImports.some((entry) => importIsActive(entry.status));
+  const editorModeRef = useRef(editorMode);
+  editorModeRef.current = editorMode;
+  const importBusyRef = useRef(importBusy);
+  importBusyRef.current = importBusy;
+  const saveStatusRef = useRef(saveStatus);
+  saveStatusRef.current = saveStatus;
+
+  useEffect(() => {
+    if (!mcpNativeAvailable) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    const complete = async (
+      request: XriftMcpEditorRequestEvent,
+    ): Promise<void> => {
+      try {
+        if (
+          !XRIFT_MCP_EDITOR_TOOLS.includes(
+            request.tool as XriftMcpEditorToolName,
+          )
+        ) {
+          throw new XriftMcpEditorToolError(
+            "TOOL_NOT_FOUND",
+            "対応していないAI editor toolです",
+          );
+        }
+        const sourceBundle = bundleRef.current;
+        const outcome = executeXriftMcpEditorTool(
+          {
+            bundle: sourceBundle,
+            sceneSelection: sceneSelectionRef.current,
+            assetSelection: assetSelectionRef.current,
+            editorMode: editorModeRef.current,
+            importBusy: importBusyRef.current,
+            revision: mcpRevisionRef.current,
+            saveStatus: saveStatusRef.current,
+          },
+          {
+            id: request.id,
+            tool: request.tool as XriftMcpEditorToolName,
+            arguments: request.arguments,
+          },
+        );
+
+        if (outcome.changed) {
+          mcpRevisionRef.current += 1;
+          mcpRevisionBundleRef.current = outcome.bundle;
+          bundleRef.current = outcome.bundle;
+          sceneSelectionRef.current = outcome.sceneSelection;
+          assetSelectionRef.current = outcome.assetSelection;
+          saveStatusRef.current = "dirty";
+          setHistory((current) =>
+            commitEditorHistory(current, {
+              bundle: outcome.bundle,
+              sceneSelection: outcome.sceneSelection,
+              assetSelection: outcome.assetSelection,
+            }),
+          );
+          setSaveStatus("dirty");
+          setNotice(`${outcome.activity}。変更を自動保存します`);
+          setMcpLastActivity({
+            clientName: request.clientName || "AI client",
+            message: outcome.activity,
+            at: new Intl.DateTimeFormat("ja-JP", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            }).format(new Date()),
+          });
+        }
+        await tauri.completeXriftMcpRequest({
+          id: request.id,
+          ok: true,
+          result: outcome.result,
+        });
+      } catch (error) {
+        const editorError =
+          error instanceof XriftMcpEditorToolError
+            ? error
+            : new XriftMcpEditorToolError(
+                "EDITOR_ERROR",
+                "AI編集を完了できませんでした",
+              );
+        await tauri.completeXriftMcpRequest({
+          id: request.id,
+          ok: false,
+          error: {
+            code: editorError.code,
+            message: editorError.message,
+            details: editorError.details,
+          },
+        });
+      }
+    };
+
+    void tauri
+      .onXriftMcpEditorRequest((request) => {
+        if (!disposed) void complete(request);
+      })
+      .then((dispose) => {
+        if (disposed) dispose();
+        else unlisten = dispose;
+      })
+      .catch(() => {
+        if (!disposed) {
+          setMcpError(
+            "AI editor bridgeへ接続できませんでした。XRift Studioを再起動してください",
+          );
+        }
+      });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [mcpNativeAvailable]);
   const assetImportPanelAvailability = resolveAssetOperationAvailability(
     "asset-import",
     {
@@ -1180,8 +1372,8 @@ export function VisualEditorPrototype({
       if (editorMode !== "edit" || importBusy) {
         setNotice(
           editorMode !== "edit"
-            ? "Playを停止してからModel / Prefab / Particleを配置してください"
-            : "アセットのインポート完了後にModel / Prefab / Particleを配置してください",
+            ? "Playを停止してからアセットを配置してください"
+            : "アセットのインポート完了後に配置してください",
         );
         return;
       }
@@ -2783,19 +2975,22 @@ export function VisualEditorPrototype({
         accepted.push({ file, resourceKind: "model" });
       } else if (SUPPORTED_TEXTURE_FILE.test(file.name)) {
         accepted.push({ file, resourceKind: "texture" });
+      } else if (SUPPORTED_AUDIO_FILE.test(file.name)) {
+        accepted.push({ file, resourceKind: "audio" });
       }
     }
     const unsupported = files.filter(
       (file) =>
         !SUPPORTED_UNITY_FILE.test(file.name) &&
         !SUPPORTED_MODEL_FILE.test(file.name) &&
-        !SUPPORTED_TEXTURE_FILE.test(file.name),
+        !SUPPORTED_TEXTURE_FILE.test(file.name) &&
+        !SUPPORTED_AUDIO_FILE.test(file.name),
     );
 
     if (unsupported.length > 0) {
       const names = unsupported.slice(0, 3).map((file) => file.name).join("、");
       setImportError(
-        `${names}${unsupported.length > 3 ? " ほか" : ""} は対象外です。UnityPackage / Unity Scene / Prefab / GLB / GLTF / OBJ / VRM / PNG / JPG / WebP / KTX2に対応します。`,
+        `${names}${unsupported.length > 3 ? " ほか" : ""} は対象外です。UnityPackage / Unity Scene / Prefab / GLB / GLTF / OBJ / VRM / PNG / JPG / WebP / KTX2 / MP3に対応します。`,
       );
     } else {
       setImportError(null);
@@ -3509,6 +3704,21 @@ export function VisualEditorPrototype({
               setSceneSettingsOpen((current) => !current)
             }
             onResetLayout={() => executeCommand("layout.reset")}
+            mcpNativeAvailable={mcpNativeAvailable}
+            mcpClients={mcpClients}
+            mcpLoading={mcpLoading}
+            mcpRegisteringClientId={mcpRegisteringClientId}
+            mcpError={mcpError}
+            mcpLastActivity={mcpLastActivity}
+            canUndo={!readOnly && !importBusy && history.past.length > 0}
+            onOpenMcp={() => {
+              if (mcpClients.length === 0 && !mcpLoading) {
+                void refreshMcpClients();
+              }
+            }}
+            onRefreshMcp={() => void refreshMcpClients()}
+            onRegisterMcpClient={(clientId) => void registerMcpClient(clientId)}
+            onUndo={handleUndo}
           />
           <button
             type="button"

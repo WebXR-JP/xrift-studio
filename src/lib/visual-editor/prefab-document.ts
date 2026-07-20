@@ -49,6 +49,7 @@ export type AssetReferenceCollection = {
   materialAssetIds: string[];
   textureAssetIds: string[];
   particleAssetIds: string[];
+  audioAssetIds: string[];
   prefabAssetIds: string[];
   xriftAssetIds: string[];
 };
@@ -186,6 +187,7 @@ export function collectSceneAssetReferences(
   const materials = new Set<string>();
   const textures = new Set<string>();
   const particles = new Set<string>();
+  const audio = new Set<string>();
   const prefabs = new Set<string>();
   const xrift = new Set<string>();
   const visited = new Set<string>();
@@ -209,6 +211,8 @@ export function collectSceneAssetReferences(
         );
       } else if (component.type === "particle-emitter") {
         particles.add(component.particleAssetId);
+      } else if (component.type === "audio-source" && component.audioAssetId) {
+        audio.add(component.audioAssetId);
       } else if (component.type === "prefab-instance") {
         prefabs.add(component.prefabAssetId);
       } else if (component.type === "xrift-component") {
@@ -237,6 +241,7 @@ export function collectSceneAssetReferences(
     materialAssetIds: [...materials].sort(),
     textureAssetIds: [...textures].sort(),
     particleAssetIds: [...particles].sort(),
+    audioAssetIds: [...audio].sort(),
     prefabAssetIds: [...prefabs].sort(),
     xriftAssetIds: [...xrift].sort(),
   };

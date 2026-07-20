@@ -1,6 +1,7 @@
 import {
   normalizeTextureImportSettings,
   updateMaterialAsset,
+  type AudioAsset,
   type AssetManifest,
   type ModelAsset,
   type TextureAsset,
@@ -152,6 +153,43 @@ export function runVisualCompilerFixtureAssertions(
   assert(worldSource.includes("castShadow={true}"), "Mesh shadow settings were not generated");
 
   const audioEntity = world.scenes[world.project.entrySceneId].entities["entity-world-object"];
+  const audioAsset: AudioAsset = {
+    id: "fixture-audio-ambient",
+    name: "Ambient",
+    kind: "audio",
+    status: "ready",
+    source: {
+      kind: "project",
+      relativePath: "assets/imported/audio/fixture/ambient.mp3",
+    },
+    sourceHash: "c".repeat(64),
+    thumbnail: { status: "missing" },
+    importMetadata: {
+      sourceFormat: "mp3",
+      mimeType: "audio/mpeg",
+      byteLength: 4096,
+    },
+  };
+  const audioAssets: AssetManifest = {
+    ...world.assets,
+    assets: { ...world.assets.assets, [audioAsset.id]: audioAsset },
+  };
+  const audioPlacement = instantiateSceneAsset(
+    world.scenes[world.project.entrySceneId],
+    audioAssets,
+    world.prefabs ?? {},
+    audioAsset.id,
+  );
+  assert(audioPlacement.placed, "Audio Asset fixture could not be placed");
+  assert(
+    audioPlacement.placed &&
+      audioPlacement.scene.entities[audioPlacement.entityId]?.components.some(
+        (component) =>
+          component.type === "audio-source" &&
+          component.audioAssetId === audioAsset.id,
+      ),
+    "Audio Asset placement did not create a linked Audio Source",
+  );
   const audioScene: SceneDocument = {
     ...world.scenes[world.project.entrySceneId],
     entities: {
@@ -164,7 +202,7 @@ export function runVisualCompilerFixtureAssertions(
             id: "fixture-audio-source",
             type: "audio-source",
             enabled: true,
-            sourceUrl: "public/audio/ambient.mp3",
+            audioAssetId: audioAsset.id,
             volume: 0.75,
             loop: true,
             autoplay: false,
@@ -180,6 +218,7 @@ export function runVisualCompilerFixtureAssertions(
   const audioResult = compileVisualProject(
     {
       ...world,
+      assets: audioAssets,
       scenes: { [audioScene.sceneId]: audioScene },
     },
     { generatedAt: fixedTime },
@@ -190,9 +229,25 @@ export function runVisualCompilerFixtureAssertions(
   assert(audioResult.canStage, "Configured Audio Source should be stageable");
   assert(
     audioSource.includes("const XRiftStudioAudioSource") &&
-      audioSource.includes('url="/audio/ambient.mp3"') &&
+      audioSource.includes("useCompiledAssetUrl(assetPath)") &&
+      audioSource.includes(
+        '"xrift-studio-fixture-audio-ambient-ambient.mp3" as const',
+      ) &&
       audioSource.includes("new PositionalAudio"),
     "Three.js Audio Source runtime was not generated",
+  );
+  assert(
+    audioResult.stagingPlan.assetCopyPlan.some(
+      (entry) =>
+        entry.assetId === audioAsset.id &&
+        entry.purpose === "audio" &&
+        entry.sourceRelativePath ===
+          "assets/imported/audio/fixture/ambient.mp3" &&
+        entry.targetRelativePath ===
+          "public/xrift-studio-fixture-audio-ambient-ambient.mp3" &&
+        entry.supportedByCompiler,
+    ),
+    "Audio Asset was not added to the final staging copy plan",
   );
 
   const materialWorld: VisualCompilerDocuments = {

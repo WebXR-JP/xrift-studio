@@ -140,6 +140,7 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
     "material",
     "texture",
     "particle",
+    "audio",
     "template",
   ]);
   const prefabPaths = new Map<string, string>();
@@ -175,6 +176,32 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
     }
     if (candidate.kind === "model") {
       issues.push(...validateModelAssetContract(candidate, value.assets, path));
+    }
+    if (candidate.kind === "audio") {
+      if (
+        !isRecord(candidate.importMetadata) ||
+        candidate.importMetadata.sourceFormat !== "mp3" ||
+        candidate.importMetadata.mimeType !== "audio/mpeg" ||
+        !Number.isInteger(candidate.importMetadata.byteLength) ||
+        Number(candidate.importMetadata.byteLength) <= 0
+      ) {
+        issues.push(
+          issue(
+            `${path}.importMetadata`,
+            "audio-metadata",
+            "Audio Asset metadata must describe a non-empty MP3 source",
+          ),
+        );
+      }
+      if (!isRecord(candidate.source) || candidate.source.kind !== "project") {
+        issues.push(
+          issue(
+            `${path}.source`,
+            "audio-source",
+            "Audio Asset source must be project-relative",
+          ),
+        );
+      }
     }
     if (
       candidate.folderId !== undefined &&
@@ -1567,11 +1594,19 @@ function validateAudioSourceComponentShape(
     issues.push(issue(`${path}.enabled`, "type", "Audio Source enabled must be a boolean"));
   }
   if (
-    typeof component.sourceUrl !== "string" ||
-    component.sourceUrl.length > 2048 ||
-    /^javascript:/i.test(component.sourceUrl.trim())
+    component.audioAssetId !== undefined &&
+    (typeof component.audioAssetId !== "string" ||
+      component.audioAssetId.length > 256)
   ) {
-    issues.push(issue(`${path}.sourceUrl`, "url", "Audio Source URL is invalid"));
+    issues.push(issue(`${path}.audioAssetId`, "reference", "Audio Asset reference is invalid"));
+  }
+  if (
+    component.sourceUrl !== undefined &&
+    (typeof component.sourceUrl !== "string" ||
+      component.sourceUrl.length > 2048 ||
+      /^javascript:/i.test(component.sourceUrl.trim()))
+  ) {
+    issues.push(issue(`${path}.sourceUrl`, "url", "Legacy Audio Source URL is invalid"));
   }
   if (
     typeof component.volume !== "number" ||

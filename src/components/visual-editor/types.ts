@@ -4,7 +4,7 @@ export const MATERIAL_DRAG_MIME =
   "application/x-xrift-visual-editor-material" as const;
 export const TEXTURE_DRAG_MIME =
   "application/x-xrift-visual-editor-texture" as const;
-/** Scene placement intent for imported Model/Prefab assets. */
+/** Scene placement intent for imported Model/Prefab/Particle/Audio assets. */
 export const SCENE_ASSET_DRAG_MIME =
   "application/x-xrift-visual-editor-scene-asset" as const;
 /** Asset Browser organization intent; never interpreted as scene placement. */
@@ -45,7 +45,7 @@ export type PendingImport = {
   id: string;
   name: string;
   size: number;
-  resourceKind: "model" | "texture" | "unity-package";
+  resourceKind: "model" | "texture" | "audio" | "unity-package";
   status: PendingImportStatus;
   progress: number;
   diagnostics: PendingImportDiagnostic[];

@@ -1,4 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export type ProjectKind = "world" | "item";
 export type ProjectFormat = "classic" | "visual";
@@ -112,7 +113,38 @@ export type VisualAssetImportWrite = {
   dataUrl: string;
 };
 
+export type XriftMcpClientId = "codex" | "claude-code";
+
+export type XriftMcpClientStatus = {
+  id: XriftMcpClientId;
+  label: string;
+  installed: boolean;
+  registered: boolean;
+  message: string;
+};
+
+export type XriftMcpEditorRequestEvent = {
+  id: string;
+  clientName: string;
+  tool: string;
+  arguments: Record<string, unknown>;
+};
+
+export type XriftMcpEditorErrorResponse = {
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
+};
+
+export type XriftMcpEditorResponse = {
+  id: string;
+  ok: boolean;
+  result?: Record<string, unknown>;
+  error?: XriftMcpEditorErrorResponse;
+};
+
 export const tauri = {
+  isAvailable: () => isTauri(),
   getVersions: () => invoke<Versions>("get_versions"),
   runtimePaths: () => invoke<RuntimePaths>("runtime_paths"),
   runtimeStatus: () => invoke<RuntimeStatus>("runtime_status"),
@@ -225,4 +257,16 @@ export const tauri = {
     invoke<void>("reset_app_data", { scope }),
   checkXriftLatest: () => invoke<string | null>("check_xrift_latest"),
   updateXrift: () => invoke<void>("update_xrift"),
+  detectXriftMcpClients: () =>
+    invoke<XriftMcpClientStatus[]>("detect_xrift_mcp_clients"),
+  registerXriftMcpClient: (clientId: XriftMcpClientId) =>
+    invoke<XriftMcpClientStatus>("register_xrift_mcp_client", { clientId }),
+  completeXriftMcpRequest: (response: XriftMcpEditorResponse) =>
+    invoke<void>("complete_xrift_mcp_request", { response }),
+  onXriftMcpEditorRequest: (
+    handler: (request: XriftMcpEditorRequestEvent) => void,
+  ): Promise<UnlistenFn> =>
+    listen<XriftMcpEditorRequestEvent>("xrift-mcp-editor-request", (event) =>
+      handler(event.payload),
+    ),
 };

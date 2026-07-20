@@ -27,7 +27,7 @@ F-06 アイテム検査
 | MI-08 | ローカル実行、upload または審査結果を得る | local preview は実行中、upload 完了は ID / version / content hash、審査中は「処理中」、公開済みは「公開済み」と別 label で示す。公式 result に URL がある時だけ URL を表示する。 | URL を ID から推測しない。Stop、status refresh、結果コピー、Editor へ戻るのうち現在可能な操作を残す。古い結果は input hash と version を添えて区別する。 |
 | MI-09 | 読み込み失敗、設定不備、空の状態になる | 落ち着いたエラーまたは空状態の面を表示し、原因または状況を一文で示す。 | 必ず再試行、編集、作成、ログ確認のいずれか一つ以上を置く。 |
 | MI-10 | Hierarchy または Scene View で Entity を選択する | 120ms 以内に Hierarchy の選択背景、Scene View の選択表示、Inspector の見出しと値を同じ Entity ID へ更新する。選択表示は色だけに頼らない。 | 選択のためにシーンデータや Undo 履歴は変更しない。別 Entity の選択または明示的な選択解除で終わる。 |
-| MI-11 | user Asset を Scene View / Hierarchy へ drag する、「配置」を実行する、Hierarchy / Scene の右クリックから primitive を作る、または外部ファイルを drop する | drag 中に対象と結果を表示する。Model / Prefab / Particle は Scene View では配置位置、Hierarchy では Scene Root または親 Entity を明示して Entity 配置する。Material は hover 中 Mesh slot への binding、Texture は Material Inspector slot への参照になる。右クリック Create は click point / 選択親を示す。外部 file は Import Queue の全 stage を通す。 | Escape または領域外 drop は変更せず終了する。drag と「配置」は同じ Asset placement を使い、Place / Create / Assign Material の Undo は一つの履歴で document と前の `sceneSelection` / `assetSelection` を復元する。import 失敗では SceneDocument と AssetManifest を変えない。 |
+| MI-11 | user Asset を Scene View / Hierarchy へ drag する、「配置」を実行する、Hierarchy / Scene の右クリックから primitive を作る、または外部ファイルを drop する | drag 中に対象と結果を表示する。Model / Prefab / Particle / Audio は Scene View では配置位置、Hierarchy では Scene Root または親 Entity を明示して Entity 配置する。Audioは参照元Audio Assetを設定済みのAudio Source Entityになる。Material は hover 中 Mesh slot への binding、Texture は Material Inspector slot への参照になる。右クリック Create は click point / 選択親を示す。外部 file は Import Queue の全 stage を通す。 | Escape または領域外 drop は変更せず終了する。drag と「配置」は同じ Asset placement を使い、Place / Create / Assign Material の Undo は一つの履歴で document と前の `sceneSelection` / `assetSelection` を復元する。import 失敗では SceneDocument と AssetManifest を変えない。 |
 | MI-12 | 移動、回転、拡大縮小ツールを切り替える、またはギズモを操作する | 選択ツールを押下状態と名称で示す。ギズモは待機中のRGB色と不透明度を抑え、hoverまたはdrag中の軸だけを明るくしてSceneより目立たせない。操作中は Scene View と Inspector の数値を同期し、カメラ操作との競合を止める。pointer down から pointer up までを一つの Command Transaction とする。 | pointer up で一件の履歴として確定する。Escape または不正値では操作前へ戻し、履歴を追加しない。Entity の選択は保つ。 |
 | MI-13 | ビジュアル project を開く、保存する、または authoring document を変更する | ヘッダーには成果物種別、「ビジュアル」、保存状態だけを静かに表示する。stale compile は常時警告にせず、公開 review で自動保存・変換される事実と現在の診断を示す。 | commit marker が指す Scene / Prefab / Asset / folder を含む全 document set の保存成功後だけ対象 revision の「未保存」を解除する。未保存で戻る時は保存、破棄、取消を選べる。 |
 | MI-14 | Edit で「Play」を実行する、または Play で「Stop」を実行する | project kind に応じて World Play Profile または Item Preview Profile を同じ Scene View に開く。Play / Stop は Scene View ヘッダー中央の同じ位置に置き、Play 中は authoring をロックして「Stop」を常に見える主操作にする。World の input / controller / physics を Item へ適用しない。Vite、CLI、port、別 browser を操作として見せない。 | PlaySession の state だけを変える。Stop で input、controller、camera、physics などを dispose し、Play 前の documents、両 selection、Inspector context、Edit camera へ戻る。初期化失敗時は Edit のまま原因と再試行を示す。 |
@@ -36,7 +36,7 @@ F-06 アイテム検査
 | MI-17 | visual project で compile、check、upload を開始し、必要な toolchain がない | authoring 画面を閉じず、Node.js、XRift CLI、認証のうち不足している項目とセットアップ操作を表示する。通常の Edit / 保存は利用可能なままにする。 | セットアップ後は同じ操作へ戻れる。取消時は Edit へ戻り、SceneDocument、AssetManifest、staging output、公開先を変更しない。 |
 | MI-18 | 新規作成を開く | item classic、world classic、item visual、world visual の四カードを同じ階層で表示し、成果物、制作方法、正本、作成後の画面を一文で示す。hover だけに説明を隠さない。 | 一カードの選択で名前 / 保存先確認へ進む。戻ると四カードへ戻り、前の選択を保持する。取消では project を作らない。 |
 | MI-19 | Assets の「作成 > Material」を選ぶ | 名前、標準サーフェスまたは glTF 既定値 preset、作成先 folder を compact dialog で示す。作成中も右 Entity Inspector を保つ。 | 成功時は Material Asset を一件追加して `assetSelection` にし、Entity へ binding しない。取消 / validation 失敗では AssetManifest、両 selection、history を変えない。 |
-| MI-20 | GLB / GLTF / Texture を drop または import する | Editor下部のAsset status barへ現在のstageと進捗を表示し、詳細を開くとActivity drawerでvalidate、copy、parse / decode、derive、dynamic thumbnail、commit、件数、bytes、診断を確認できる。完了項目を閉じなくても制作を継続でき、source保持、resize / mipmap / compression recipe、stale状態は右Inspectorで確認できる。Model再importなど別のAsset transaction中は入口を理由付きで無効化し、同じsourceへのcommitを並行実行しない。 | 全検証後だけAssetManifestへcommitする。成功時はstatus barとdrawerにMaterial / Textureの展開件数と「アセットを表示」を残し、新Assetを`assetSelection`にできる。明示的なScene drop以外はSceneを変えない。失敗時はdrawerを開いて原因を示し、取消時はtemporaryを回収してlast-goodと両selectionを維持する。 |
+| MI-20 | GLB / GLTF / Texture / MP3 を drop または import する | Editor下部のAsset status barへ現在のstageと進捗を表示し、詳細を開くとActivity drawerでvalidate、copy、parse / decode、derive、dynamic thumbnail、commit、件数、bytes、診断を確認できる。完了項目を閉じなくても制作を継続でき、source保持、resize / mipmap / compression recipe、stale状態は右Inspectorで確認できる。Model再importなど別のAsset transaction中は入口を理由付きで無効化し、同じsourceへのcommitを並行実行しない。MP3はシグネチャ検証後にAudio Assetとしてproject管理下へ原本を保存し、編集画面では自動再生しない。 | 全検証後だけAssetManifestへcommitする。成功時はstatus barとdrawerにMaterial / Textureの展開件数と「アセットを表示」を残し、新Assetを`assetSelection`にできる。明示的なScene drop以外はSceneを変えない。失敗時はdrawerを開いて原因を示し、取消時はtemporaryを回収してlast-goodと両selectionを維持する。 |
 | MI-21 | thumbnail を生成、再生成、または stale 判定する | card は pending / generating / ready / stale / failed を label と status icon で示す。Model / Texture / Material は ready な generated thumbnail を優先し、それ以外だけ kind icon を fallback にする。 | 成功時は同じ Asset ID の thumbnail hash を更新する。失敗時も card と Asset を残し、再生成と診断を置く。last-good が stale なら「古いプレビュー」と明示する。 |
 | MI-22 | toolbar、menu、context menu、keyboard から Command を起動する | central Shortcut Registry の label、semantic Lucide icon、platform binding、enabled reason を全 surface で一致させる。active tool は icon、label、押下状態で示す。conflict は両 command を実行せず設定へ案内する。 | Command 成功 / 失敗へ収束する。text input、contenteditable、数値入力、IME composition 中は editor shortcut を抑止し、ユーザー override と既定へ戻す操作を Editor Preferences に保存する。 |
 | MI-23 | Copy / Paste / Duplicate / Delete を実行する | Copy は versioned buffer の対象数、Paste / Duplicate は生成予定数、Asset Delete は参照元件数を示す。document 変更を伴う操作だけを Command history に積む。 | Paste / Duplicate / Delete の Undo / Redo は同じ IDs と前後の `sceneSelection` / `assetSelection` を復元する。Copy 自体は document Undo にしない。参照を壊す Delete は置換、解除、取消なしに進めない。 |
@@ -334,21 +334,21 @@ F-06 アイテム検査
 ### 操作前
 
 - Create、Hierarchy右クリック、InspectorのAdd Componentは同じ基本Component Registryを使い、Core、Rendering、Physics、Media、Worldを折りたたみsectionとして表示する。ライト種別、Particle Emitter、Audio SourceはRendering / Mediaの意味が分かる名前とiconを共有する。
-- Audio Sourceは追加直後も既存Entity selectionを維持し、Inspectorでsource URLを入力できる。既定では自動再生せず、編集画面を開いただけで音を鳴らさない。
+- Audio Sourceは追加直後も既存Entity selectionを維持し、InspectorでImport済みAudio Assetを選択できる。直接URLは新規設定に使わず、既定では自動再生せず、編集画面を開いただけで音を鳴らさない。
 
 ### 操作中
 
 - sectionの開閉はSceneDocumentと履歴を変更しない。項目を選んだ時だけComponent追加を一件確定し、メニューを閉じて追加したComponentのInspectorを表示する。
-- Audio SourceはEnabled、source URL、Volume、Loop、Autoplay、Spatial、Reference Distance、Rolloff、Max Distanceを型と範囲を保って編集する。空URLは同じInspectorに設定方法を表示し、Editor Previewでは音声取得を開始しない。
+- Audio SourceはEnabled、Audio Asset、Volume、Loop、Autoplay、Spatial、Reference Distance、Rolloff、Max Distanceを型と範囲を保って編集する。Audio Assetがない時は同じInspectorからMP3 Importの入口を理解でき、Editor Previewでは音声取得を開始しない。
 
 ### 成功時
 
-- compilerは設定済みAudio SourceをThree.js Audio / PositionalAudioへ変換し、cameraへAudioListenerを接続する。Componentを無効化した時とEntityを破棄した時は再生、listener、buffer参照をcleanupする。
+- compilerは参照されたAudio AssetのMP3をstagingの公開用アセットへコピーし、そのURLをThree.js Audio / PositionalAudioへ変換してcameraへAudioListenerを接続する。Componentを無効化した時とEntityを破棄した時は再生、listener、buffer参照をcleanupする。
 - ライト、Particle、Audio SourceはCreate、Hierarchy、Inspectorのどの入口から追加しても同じComponent ID、初期値、重複規則、生成結果になる。
 
 ### 失敗時
 
-- 空URLやload失敗でScene View全体を停止させない。空URLはcompile warningとして出力を省略し、設定済みURLのruntime load失敗は生成側Component内で音声だけを停止する。
+- 未設定Audio Assetやload失敗でScene View全体を停止させない。未設定はcompile warningとして出力を省略し、参照切れ・MP3以外のsourceはcompileをblockする。runtime load失敗は生成側Component内で音声だけを停止する。
 - 非有限値、範囲外のVolume、0以下の距離、負のRolloffは確定せず、直前のSceneDocumentとselectionを維持する。
 
 ### 戻り先

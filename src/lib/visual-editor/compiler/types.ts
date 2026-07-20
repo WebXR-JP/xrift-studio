@@ -43,7 +43,7 @@ export type AssetCopyPlanEntry = {
   assetId: string;
   sourceRelativePath: string;
   targetRelativePath: string;
-  purpose: "texture" | "model" | "particle" | "prefab" | "other";
+  purpose: "texture" | "model" | "audio" | "particle" | "prefab" | "other";
   supportedByCompiler: boolean;
 };
 

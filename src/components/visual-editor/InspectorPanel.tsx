@@ -1142,13 +1142,23 @@ function LightInspector({
 
 function AudioSourceInspector({
   component,
+  assets,
   readOnly,
   onChange,
+  onOpenAsset,
 }: {
   component: AudioSourceComponent;
+  assets: AssetManifest;
   readOnly: boolean;
   onChange: (patch: AudioSourcePatch) => void;
+  onOpenAsset: (assetId: string) => void;
 }) {
+  const audioAssets = Object.values(assets.assets)
+    .filter((asset) => asset.kind === "audio")
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const selectedAudio = component.audioAssetId
+    ? assets.assets[component.audioAssetId]
+    : undefined;
   return (
     <ComponentCard title="Audio Source" subtitle="Three.js">
       <ToggleRow
@@ -1158,19 +1168,35 @@ function AudioSourceInspector({
         onChange={(enabled) => onChange({ enabled })}
       />
       <label className="block text-xs font-medium text-slate-600">
-        Source URL
-        <input
-          type="text"
-          value={component.sourceUrl}
+        Audio Asset
+        <select
+          value={component.audioAssetId ?? ""}
           disabled={readOnly}
-          placeholder="/audio/ambient.mp3"
-          onChange={(event) => onChange({ sourceUrl: event.currentTarget.value })}
+          onChange={(event) =>
+            onChange({ audioAssetId: event.currentTarget.value })
+          }
           className="mt-1 h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100"
-        />
+        >
+          <option value="">未設定</option>
+          {audioAssets.map((asset) => (
+            <option key={asset.id} value={asset.id}>
+              {asset.name}
+            </option>
+          ))}
+        </select>
       </label>
-      {!component.sourceUrl ? (
+      {selectedAudio?.kind === "audio" ? (
+        <button
+          type="button"
+          onClick={() => onOpenAsset(selectedAudio.id)}
+          className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-100"
+        >
+          {selectedAudio.name}を開く
+        </button>
+      ) : null}
+      {audioAssets.length === 0 ? (
         <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
-          public配下の音声は /audio/file.mp3 の形式で指定できます。
+          AssetsのインポートからMP3を追加してください。
         </p>
       ) : null}
       <ColliderNumberField
@@ -1472,8 +1498,10 @@ function EntityInspector({
             <AudioSourceInspector
               key={component.id}
               component={component}
+              assets={assets}
               readOnly={readOnly}
               onChange={(patch) => onAudioSourceChange(component.id, patch)}
+              onOpenAsset={onOpenMaterial}
             />
           );
         }

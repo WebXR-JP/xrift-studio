@@ -37,6 +37,7 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "three": "0.185.1",
+    "three-icosa": "0.4.2-alpha.18",
     "yaml": "2.9.0"
   },
   "devDependencies": {

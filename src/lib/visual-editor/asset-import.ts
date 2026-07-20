@@ -115,7 +115,7 @@ export type AssetImportPlan = {
   /** Existing Asset replaced by a reimport. Omitted for a new import. */
   replacesAssetId?: string;
   classification?: ClassifiedAssetImport;
-  /** Primary Model or standalone Texture selected after the transaction. */
+  /** Primary Model, standalone Texture, or Audio selected after the transaction. */
   asset?: ModelAsset | TextureAsset | AudioAsset;
   /** Material/Texture Assets expanded from an imported Model. */
   derivedAssets?: Array<MaterialAsset | TextureAsset>;
@@ -531,6 +531,24 @@ export async function commitAssetImportPlan(
     }
   }
 
+  if (plan.asset.kind === "audio") {
+    if (
+      plan.asset.sourceHash !== plan.sourceHash ||
+      plan.asset.source.kind !== "project"
+    ) {
+      throw new Error("Audio import source identity does not match its plan");
+    }
+    const verifiedSourceWrite = plan.writes.find(
+      (write) =>
+        write.purpose === "source" &&
+        plan.asset?.source.kind === "project" &&
+        write.relativePath === plan.asset.source.relativePath,
+    );
+    if (!verifiedSourceWrite || verifiedSourceWrite.sha256 !== plan.sourceHash) {
+      throw new Error("Audio import plan does not contain its verified source");
+    }
+  }
+
   if (plan.writes.length > 0) {
     await commit({ transactionId: plan.transactionId, writes: plan.writes });
   }
@@ -590,24 +608,6 @@ async function createModelImportPlan(
 ): Promise<AssetImportPlan> {
   if (classification.format === "obj") {
     throw new Error("OBJ import must use the OBJ import plan");
-  }
-
-  if (plan.asset.kind === "audio") {
-    if (
-      plan.asset.sourceHash !== plan.sourceHash ||
-      plan.asset.source.kind !== "project"
-    ) {
-      throw new Error("Audio import source identity does not match its plan");
-    }
-    const verifiedSourceWrite = plan.writes.find(
-      (write) =>
-        write.purpose === "source" &&
-        plan.asset?.source.kind === "project" &&
-        write.relativePath === plan.asset.source.relativePath,
-    );
-    if (!verifiedSourceWrite || verifiedSourceWrite.sha256 !== plan.sourceHash) {
-      throw new Error("Audio import plan does not contain its verified source");
-    }
   }
   const diagnostics: AssetImportDiagnostic[] = [];
   const parsedJson = parseGltfJson(bytes, classification.format);
@@ -1915,6 +1915,36 @@ function hasTextureSignature(
   return signature.every((value, index) => bytes[index] === value);
 }
 
+function hasMp3Signature(bytes: Uint8Array): boolean {
+  if (
+    bytes.byteLength >= 3 &&
+    bytes[0] === 0x49 &&
+    bytes[1] === 0x44 &&
+    bytes[2] === 0x33
+  ) {
+    return true;
+  }
+  const scanLength = Math.min(bytes.byteLength - 2, 4096);
+  for (let index = 0; index < scanLength; index += 1) {
+    const first = bytes[index];
+    const second = bytes[index + 1];
+    const third = bytes[index + 2];
+    if (first !== 0xff || (second & 0xe0) !== 0xe0) continue;
+    const layer = (second >> 1) & 0x03;
+    const bitrateIndex = (third >> 4) & 0x0f;
+    const sampleRateIndex = (third >> 2) & 0x03;
+    if (
+      layer !== 0 &&
+      bitrateIndex !== 0 &&
+      bitrateIndex !== 0x0f &&
+      sampleRateIndex !== 0x03
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function asciiAt(bytes: Uint8Array, offset: number, expected: string): boolean {
   return [...expected].every(
     (character, index) => bytes[offset + index] === character.charCodeAt(0),
@@ -2050,7 +2080,7 @@ function ensureImportFolder(
 }
 
 function createSourceDestination(
-  category: "models" | "textures",
+  category: "models" | "textures" | "audio",
   fileName: string,
   sourceHash: string,
   extension: string,
@@ -2064,7 +2094,7 @@ function createSourceDestination(
 }
 
 function createImportedAssetId(
-  kind: "model" | "texture",
+  kind: "model" | "texture" | "audio",
   fileName: string,
   sourceHash: string,
 ): string {
@@ -2103,7 +2133,7 @@ function finishPlan(
   transactionId: string,
   sourceHash: string,
   classification: ClassifiedAssetImport,
-  asset: ModelAsset | TextureAsset,
+  asset: ModelAsset | TextureAsset | AudioAsset,
   writes: AssetImportWrite[],
   diagnostics: AssetImportDiagnostic[],
   replacesAssetId?: string,

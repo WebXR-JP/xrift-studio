@@ -434,6 +434,8 @@ function validatePrefabReferences(
           }
         } else if (component.type === "particle-emitter") {
           requireAsset(assets, component.particleAssetId, ["particle"]);
+        } else if (component.type === "audio-source" && component.audioAssetId) {
+          requireAsset(assets, component.audioAssetId, ["audio"]);
         } else if (component.type === "prefab-instance") {
           requireAsset(assets, component.prefabAssetId, ["template"]);
           const target = prefabByAssetId.get(component.prefabAssetId);

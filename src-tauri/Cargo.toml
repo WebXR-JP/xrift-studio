@@ -5,6 +5,7 @@ description = "Community-built desktop app for creating XRift worlds and items"
 authors = ["xrift-studio contributors"]
 license = "MIT"
 edition = "2021"
+default-run = "xrift-studio"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

@@ -92,6 +92,7 @@ const KIND_FOLDERS: BrowserFolder[] = [
   { id: "folder-models", name: "Models", icon: "model", kind: "model" },
   { id: "folder-materials", name: "Materials", icon: "material", kind: "material" },
   { id: "folder-textures", name: "Textures", icon: "texture", kind: "texture" },
+  { id: "folder-audio", name: "Audio", icon: "audio", kind: "audio" },
   { id: "folder-particles", name: "Particles", icon: "particle", kind: "particle" },
   { id: "folder-prefabs", name: "Prefabs", icon: "prefab", kind: "template" },
 ];
@@ -108,6 +109,8 @@ function assetKindLabel(asset: SceneAsset): string {
       return "Texture";
     case "particle":
       return "Particle";
+    case "audio":
+      return "Audio";
     case "template":
       return "Prefab";
   }
@@ -123,6 +126,8 @@ function assetIconName(asset: SceneAsset): EditorIconName {
       return "texture";
     case "particle":
       return "particle";
+    case "audio":
+      return "audio";
     case "template":
       return "prefab";
     case "primitive":
@@ -979,6 +984,8 @@ function ImportQueueEntry({
   const Icon =
     entry.resourceKind === "texture"
       ? EDITOR_ICONS.texture
+      : entry.resourceKind === "audio"
+        ? EDITOR_ICONS.audio
       : entry.resourceKind === "unity-package"
         ? EDITOR_ICONS.prefab
         : EDITOR_ICONS.model;
@@ -1026,6 +1033,8 @@ function ImportQueueEntry({
         <p className="mt-1 text-[11px] text-editor-muted">
           {entry.resourceKind === "unity-package"
             ? `Prefab ${entry.result.prefabCount ?? 0}件・Entity ${entry.result.entityCount ?? 0}件・Asset ${entry.result.assetCount ?? 0}件${entry.result.warningCount ? `・要確認 ${entry.result.warningCount}件` : ""}`
+            : entry.resourceKind === "audio"
+              ? "Audio Asset 1件"
             : `Material ${entry.result.materialCount}件・Texture ${entry.result.textureCount}件`}
         </p>
       ) : null}
@@ -1520,7 +1529,7 @@ export function AssetsPanel({
         type="file"
         multiple
         disabled={importLocked}
-        accept=".unitypackage,.unity,.prefab,.glb,.gltf,.obj,.vrm,.png,.jpg,.jpeg,.webp,.ktx2,model/obj,model/vrm,image/png,image/jpeg,image/webp"
+        accept=".unitypackage,.unity,.prefab,.glb,.gltf,.obj,.vrm,.png,.jpg,.jpeg,.webp,.ktx2,.mp3,model/obj,model/vrm,image/png,image/jpeg,image/webp,audio/mpeg"
         onChange={handleFileInput}
         className="sr-only"
       />

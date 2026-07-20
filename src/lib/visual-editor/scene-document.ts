@@ -155,8 +155,10 @@ export type ParticleEmitterComponent = ComponentBase & {
 
 export type AudioSourceComponent = ComponentBase & {
   type: "audio-source";
-  /** Public URL or project-relative runtime URL. Empty until configured. */
-  sourceUrl: string;
+  /** Imported Audio Asset. Empty or undefined for unconfigured/legacy data. */
+  audioAssetId?: string;
+  /** @deprecated Direct URLs are retained only so older documents can load. */
+  sourceUrl?: string;
   volume: number;
   loop: boolean;
   autoplay: boolean;
@@ -170,7 +172,7 @@ export type AudioSourcePatch = Partial<
   Pick<
     AudioSourceComponent,
     | "enabled"
-    | "sourceUrl"
+    | "audioAssetId"
     | "volume"
     | "loop"
     | "autoplay"
@@ -341,6 +343,27 @@ export function createParticleEmitterComponent(
     type: "particle-emitter",
     enabled: true,
     particleAssetId: normalizedAssetId,
+  };
+}
+
+export function createAudioSourceComponent(
+  id: string,
+  audioAssetId = "",
+): AudioSourceComponent | null {
+  const normalizedId = id.trim();
+  if (!normalizedId) return null;
+  return {
+    id: normalizedId,
+    type: "audio-source",
+    enabled: true,
+    audioAssetId: audioAssetId.trim(),
+    volume: 1,
+    loop: false,
+    autoplay: false,
+    spatial: true,
+    refDistance: 1,
+    rolloffFactor: 1,
+    maxDistance: 10000,
   };
 }
 
@@ -840,10 +863,9 @@ export function updateAudioSourceComponent(
   if (!entity || !current) return scene;
   if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") return scene;
   if (
-    patch.sourceUrl !== undefined &&
-    (typeof patch.sourceUrl !== "string" ||
-      patch.sourceUrl.trim().length > 2048 ||
-      /^javascript:/i.test(patch.sourceUrl.trim()))
+    patch.audioAssetId !== undefined &&
+    (typeof patch.audioAssetId !== "string" ||
+      patch.audioAssetId.trim().length > 256)
   ) {
     return scene;
   }
@@ -881,10 +903,10 @@ export function updateAudioSourceComponent(
   const next: AudioSourceComponent = {
     ...current,
     ...patch,
-    sourceUrl:
-      patch.sourceUrl !== undefined
-        ? patch.sourceUrl.trim()
-        : current.sourceUrl,
+    audioAssetId:
+      patch.audioAssetId !== undefined
+        ? patch.audioAssetId.trim()
+        : current.audioAssetId ?? "",
     refDistance,
     maxDistance,
   };

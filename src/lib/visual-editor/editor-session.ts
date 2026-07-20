@@ -8,6 +8,7 @@ import { createDocumentId } from "./document-id";
 import type { VisualProjectKind } from "./project-document";
 import {
   cloneEntityHierarchy,
+  createAudioSourceComponent,
   createBoxColliderComponent,
   createBuiltinPrimitiveMeshComponent,
   createMeshColliderComponent,
@@ -641,19 +642,10 @@ function createRegisteredComponent(
     return particle ? createParticleEmitterComponent(id, particle.id) : null;
   }
   if (definition.componentType === "audio-source") {
-    return {
-      id,
-      type: "audio-source",
-      enabled: true,
-      sourceUrl: "",
-      volume: 1,
-      loop: false,
-      autoplay: false,
-      spatial: true,
-      refDistance: 1,
-      rolloffFactor: 1,
-      maxDistance: 10000,
-    };
+    const audio = Object.values(assets.assets).find(
+      (asset) => asset.kind === "audio",
+    );
+    return createAudioSourceComponent(id, audio?.id ?? "");
   }
   return null;
 }

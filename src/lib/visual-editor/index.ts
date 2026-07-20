@@ -3,6 +3,7 @@ export * from "./asset-operations";
 export * from "./asset-placement";
 export * from "./asset-import";
 export * from "./asset-import-persistence";
+export * from "./audio-import.fixture";
 export * from "./builtin-prefab-catalog";
 export * from "./builtin-prefab-catalog.fixture";
 export * from "./component-registry";
