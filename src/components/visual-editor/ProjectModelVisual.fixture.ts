@@ -1,11 +1,15 @@
 import {
+  Box3,
   BoxGeometry,
   DoubleSide,
+  Group,
   Mesh,
+  MeshBasicMaterial,
   MeshPhysicalMaterial,
   NoColorSpace,
   SRGBColorSpace,
   Texture,
+  Vector3,
 } from "three";
 import {
   BUILTIN_ASSET_IDS,
@@ -19,10 +23,13 @@ import {
 import {
   applyAssignedMaterialPreview,
   createAssignedMaterialPreviewMaterial,
+  getModelSelectionBounds,
 } from "./ProjectModelVisual";
 import { configureMaterialPreviewTexture } from "./material-texture-preview";
 
 export function runProjectModelMaterialPreviewFixtureAssertions(): void {
+  assertModelSelectionBoundsStayLocal();
+
   const project = createPrototypeProject("world", "model-material-preview");
   const fixtureTextureAsset: TextureAsset = {
     id: "fixture-texture-project",
@@ -194,6 +201,57 @@ export function runProjectModelMaterialPreviewFixtureAssertions(): void {
   root.geometry.dispose();
   source.dispose();
   texture.dispose();
+}
+
+function assertModelSelectionBoundsStayLocal(): void {
+  const model = new Group();
+  const partMaterial = new MeshBasicMaterial();
+  const part = new Mesh(new BoxGeometry(2, 4, 6), partMaterial);
+  part.position.set(1, 2, 3);
+  model.add(part);
+
+  const detachedBounds = getModelSelectionBounds(model);
+  const entity = new Group();
+  entity.position.set(10, 1, -4);
+  entity.rotation.set(0.2, 0.6, -0.1);
+  entity.scale.set(2, 3, 0.5);
+  entity.add(model);
+  entity.updateWorldMatrix(true, true);
+
+  const attachedBounds = getModelSelectionBounds(model);
+  assert(
+    tupleNear(attachedBounds.position, detachedBounds.position) &&
+      tupleNear(attachedBounds.scale, detachedBounds.scale),
+    "Entity Transform leaked into the model selection bounds",
+  );
+
+  const boundsMaterial = new MeshBasicMaterial();
+  const boundsVisual = new Mesh(new BoxGeometry(1, 1, 1), boundsMaterial);
+  boundsVisual.position.fromArray(attachedBounds.position);
+  boundsVisual.scale.fromArray(attachedBounds.scale);
+  entity.add(boundsVisual);
+  entity.updateWorldMatrix(true, true);
+
+  const modelCenter = new Box3()
+    .setFromObject(model)
+    .getCenter(new Vector3());
+  const boundsCenter = boundsVisual.getWorldPosition(new Vector3());
+  assert(
+    modelCenter.distanceTo(boundsCenter) < 1e-6,
+    "The rendered selection bounds no longer share the model's world center",
+  );
+
+  part.geometry.dispose();
+  partMaterial.dispose();
+  boundsVisual.geometry.dispose();
+  boundsMaterial.dispose();
+}
+
+function tupleNear(
+  left: [number, number, number],
+  right: [number, number, number],
+): boolean {
+  return left.every((value, index) => near(value, right[index]));
 }
 
 function near(left: number, right: number): boolean {

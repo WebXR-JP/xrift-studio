@@ -87,6 +87,7 @@ export function ProjectModelVisual({
   const renderedModel = useMemo(() => {
     if (!readyObject) return null;
     const object = clone(readyObject);
+    const selectionBounds = getModelSelectionBounds(object);
     const ownedMaterials = assignedMaterial
       ? applyAssignedMaterialPreview(
           object,
@@ -94,7 +95,7 @@ export function ProjectModelVisual({
           assignedTextures,
         )
       : [];
-    return { object, ownedMaterials };
+    return { object, ownedMaterials, selectionBounds };
   }, [assignedMaterial, assignedTextures, readyObject]);
   const renderedObject = renderedModel?.object ?? null;
 
@@ -120,11 +121,13 @@ export function ProjectModelVisual({
 
   const modelScale = Number.isFinite(importScale) ? importScale : 1;
 
-  if (renderedObject) {
+  if (renderedModel) {
     return (
       <group scale={modelScale}>
-        <primitive object={renderedObject} />
-        {selected ? <ModelSelectionBounds object={renderedObject} /> : null}
+        <primitive object={renderedModel.object} />
+        {selected ? (
+          <ModelSelectionBounds bounds={renderedModel.selectionBounds} />
+        ) : null}
       </group>
     );
   }
@@ -257,27 +260,45 @@ function resetSourcePhysicalEffects(material: MeshStandardMaterial): void {
   physical.transmission = 0;
 }
 
-function ModelSelectionBounds({ object }: { object: Object3D }) {
-  const bounds = useMemo(() => {
-    object.updateMatrixWorld(true);
-    const box = new Box3().setFromObject(object);
-    if (box.isEmpty()) {
-      return {
-        position: [0, 0, 0] as [number, number, number],
-        scale: [1, 1, 1] as [number, number, number],
-      };
-    }
-    const center = box.getCenter(new Vector3());
-    const size = box.getSize(new Vector3());
+export type ModelSelectionBoundsValue = {
+  position: [number, number, number];
+  scale: [number, number, number];
+};
+
+/**
+ * Resolves bounds in the model container's local coordinates. An attached
+ * Object3D is cloned first so Entity and import-scale ancestors cannot leak
+ * into Box3's world-space calculation and be applied twice by the bounds mesh.
+ */
+export function getModelSelectionBounds(
+  object: Object3D,
+): ModelSelectionBoundsValue {
+  const localObject = object.parent ? clone(object) : object;
+  localObject.updateMatrixWorld(true);
+  const box = new Box3().setFromObject(localObject);
+  if (box.isEmpty()) {
     return {
-      position: [center.x, center.y, center.z] as [number, number, number],
-      scale: [
-        Math.max(size.x * 1.02, 0.01),
-        Math.max(size.y * 1.02, 0.01),
-        Math.max(size.z * 1.02, 0.01),
-      ] as [number, number, number],
+      position: [0, 0, 0],
+      scale: [1, 1, 1],
     };
-  }, [object]);
+  }
+  const center = box.getCenter(new Vector3());
+  const size = box.getSize(new Vector3());
+  return {
+    position: [center.x, center.y, center.z],
+    scale: [
+      Math.max(size.x * 1.02, 0.01),
+      Math.max(size.y * 1.02, 0.01),
+      Math.max(size.z * 1.02, 0.01),
+    ],
+  };
+}
+
+function ModelSelectionBounds({
+  bounds,
+}: {
+  bounds: ModelSelectionBoundsValue;
+}) {
   return (
     <mesh position={bounds.position} scale={bounds.scale}>
       <boxGeometry args={[1, 1, 1]} />
