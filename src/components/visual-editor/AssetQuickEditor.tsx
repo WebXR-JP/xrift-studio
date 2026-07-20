@@ -43,8 +43,10 @@ import {
 } from "./editor-drag-data";
 import { TEXTURE_DRAG_MIME } from "./types";
 import {
+  type MaterialPreviewTextureLoadStatus,
+  type MaterialPreviewTextureStatuses,
   useMaterialPreviewRenderSync,
-  useMaterialPreviewTextures,
+  useMaterialPreviewTextureState,
 } from "./material-texture-preview";
 
 const INPUT_CLASS =
@@ -94,21 +96,26 @@ function MaterialPreviewScene({
   asset,
   assets,
   projectPath,
+  onTextureStatusesChange,
 }: {
   asset: MaterialAsset;
   assets?: AssetManifest;
   projectPath?: string;
+  onTextureStatusesChange?: (statuses: MaterialPreviewTextureStatuses) => void;
 }) {
   const pbr = asset.properties.pbrMetallicRoughness;
   const color = colorToHex(pbr?.baseColorFactor, asset.properties.color ?? "#ffffff");
   const baseAlpha = pbr?.baseColorFactor?.[3] ?? asset.properties.opacity ?? 1;
   const opacity = asset.properties.alphaMode === "OPAQUE" ? 1 : baseAlpha;
   const emissive = colorToHex(asset.properties.emissiveFactor, "#000000");
-  const textures = useMaterialPreviewTextures(
+  const { textures, statuses } = useMaterialPreviewTextureState(
     asset,
     assets ?? EMPTY_ASSET_MANIFEST,
     projectPath,
   );
+  useEffect(() => {
+    onTextureStatusesChange?.(statuses);
+  }, [onTextureStatusesChange, statuses]);
   const previewMaterialRef = useRef<Material | null>(null);
   const capturePreviewMaterial = useCallback((material: Material | null) => {
     previewMaterialRef.current = material;
@@ -270,11 +277,13 @@ export function MaterialThumbnail({
   assets,
   projectPath,
   className = "h-full w-full",
+  onTextureStatusesChange,
 }: {
   asset: MaterialAsset;
   assets?: AssetManifest;
   projectPath?: string;
   className?: string;
+  onTextureStatusesChange?: (statuses: MaterialPreviewTextureStatuses) => void;
 }) {
   return (
     <div className={`overflow-hidden bg-slate-50 ${className}`}>
@@ -284,7 +293,12 @@ export function MaterialThumbnail({
         camera={{ position: [0, 0, 2.7], fov: 34 }}
         gl={{ antialias: true, alpha: false }}
       >
-        <MaterialPreviewScene asset={asset} assets={assets} projectPath={projectPath} />
+        <MaterialPreviewScene
+          asset={asset}
+          assets={assets}
+          projectPath={projectPath}
+          onTextureStatusesChange={onTextureStatusesChange}
+        />
       </Canvas>
     </div>
   );
@@ -738,6 +752,7 @@ function TextureSlot({
   textures,
   projectPath,
   disabled,
+  previewStatus,
   onChange,
   onOpenTexture,
 }: {
@@ -747,6 +762,7 @@ function TextureSlot({
   textures: TextureAsset[];
   projectPath?: string;
   disabled: boolean;
+  previewStatus?: MaterialPreviewTextureLoadStatus;
   onChange: (value: TextureSlotPatch) => void;
   onOpenTexture: (assetId: string) => void;
 }) {
@@ -756,6 +772,11 @@ function TextureSlot({
     ? textures.find((texture) => texture.id === value.textureAssetId)
     : undefined;
   const missingReference = Boolean(value && !selectedTexture);
+  const displayedPreviewStatus = selectedTexture
+    ? selectedTexture.status !== "ready" || selectedTexture.source.kind !== "project"
+      ? "error"
+      : previewStatus
+    : undefined;
   const transform = value?.transform ?? DEFAULT_TEXTURE_TRANSFORM;
   const TextureIcon = EDITOR_ICONS.texture;
 
@@ -877,6 +898,24 @@ function TextureSlot({
       {missingReference && value ? (
         <p className="mt-2 text-[11px] font-medium leading-4 text-rose-700">
           参照先のTexture Assetが見つかりません。別のTextureを選ぶか解除してください。
+        </p>
+      ) : null}
+      {displayedPreviewStatus ? (
+        <p
+          role={displayedPreviewStatus === "error" ? "alert" : "status"}
+          className={`mt-2 rounded border px-2 py-1.5 text-[11px] font-medium leading-4 ${
+            displayedPreviewStatus === "ready"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : displayedPreviewStatus === "loading"
+                ? "border-sky-200 bg-sky-50 text-sky-800"
+                : "border-rose-200 bg-rose-50 text-rose-800"
+          }`}
+        >
+          {displayedPreviewStatus === "ready"
+            ? "シーンビューに反映済み"
+            : displayedPreviewStatus === "loading"
+              ? "シーンビューへ反映中…"
+              : "シーンビューでTextureを読み込めませんでした。Texture設定を確認してください。"}
         </p>
       ) : null}
 
@@ -1031,6 +1070,18 @@ export function MaterialQuickEditor({
   const textures = Object.values(assets.assets).filter(
     (candidate): candidate is TextureAsset => candidate.kind === "texture",
   );
+  const [previewTextureState, setPreviewTextureState] = useState<{
+    assetId: string;
+    statuses: MaterialPreviewTextureStatuses;
+  }>({ assetId: asset.id, statuses: {} });
+  const previewTextureStatuses =
+    previewTextureState.assetId === asset.id ? previewTextureState.statuses : {};
+  const handleTextureStatusesChange = useCallback(
+    (statuses: MaterialPreviewTextureStatuses) => {
+      setPreviewTextureState({ assetId: asset.id, statuses });
+    },
+    [asset.id],
+  );
   const baseColor = colorToHex(pbr.baseColorFactor, asset.properties.color);
   const emissiveColor = colorToHex(asset.properties.emissiveFactor, "#000000");
   const extensions = asset.properties.extensions;
@@ -1054,7 +1105,12 @@ export function MaterialQuickEditor({
     <div className="space-y-3">
       <div className="grid grid-cols-[112px_minmax(0,1fr)] gap-3 rounded-md border border-slate-200 bg-white p-3 shadow-sm">
         <div className="h-28 overflow-hidden rounded-md border border-slate-300 shadow-sm">
-          <MaterialThumbnail asset={asset} assets={assets} projectPath={projectPath} />
+          <MaterialThumbnail
+            asset={asset}
+            assets={assets}
+            projectPath={projectPath}
+            onTextureStatusesChange={handleTextureStatusesChange}
+          />
         </div>
         <div className="min-w-0 self-center">
           <h3 className="truncate text-[13px] font-semibold text-slate-900">{asset.name}</h3>
@@ -1145,6 +1201,7 @@ export function MaterialQuickEditor({
           textures={textures}
           projectPath={projectPath}
           disabled={readOnly}
+          previewStatus={previewTextureStatuses.baseColorMap}
           onOpenTexture={onOpenTexture}
           onChange={(baseColorTexture) =>
             onChange({ pbrMetallicRoughness: { baseColorTexture } })
@@ -1176,6 +1233,7 @@ export function MaterialQuickEditor({
           textures={textures}
           projectPath={projectPath}
           disabled={readOnly}
+          previewStatus={previewTextureStatuses.metallicRoughnessMap}
           onOpenTexture={onOpenTexture}
           onChange={(metallicRoughnessTexture) =>
             onChange({ pbrMetallicRoughness: { metallicRoughnessTexture } })
@@ -1191,6 +1249,7 @@ export function MaterialQuickEditor({
           textures={textures}
           projectPath={projectPath}
           disabled={readOnly}
+          previewStatus={previewTextureStatuses.normalMap}
           onOpenTexture={onOpenTexture}
           onChange={(value) =>
             onChange({
@@ -1218,6 +1277,7 @@ export function MaterialQuickEditor({
           textures={textures}
           projectPath={projectPath}
           disabled={readOnly}
+          previewStatus={previewTextureStatuses.occlusionMap}
           onOpenTexture={onOpenTexture}
           onChange={(value) =>
             onChange({
@@ -1262,6 +1322,7 @@ export function MaterialQuickEditor({
           textures={textures}
           projectPath={projectPath}
           disabled={readOnly}
+          previewStatus={previewTextureStatuses.emissiveMap}
           onOpenTexture={onOpenTexture}
           onChange={(emissiveTexture) => onChange({ emissiveTexture })}
         />
