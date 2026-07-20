@@ -9,6 +9,8 @@ export * from "./component-registry";
 export * from "./creation-catalog";
 export * from "./compiler";
 export * from "./document-id";
+export * from "./document-asset-creation";
+export * from "./document-asset-creation.fixture";
 export * from "./editor-history";
 export * from "./editor-session";
 export * from "./material-assignment";

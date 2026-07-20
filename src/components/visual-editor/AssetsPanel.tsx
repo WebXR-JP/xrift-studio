@@ -17,6 +17,7 @@ import {
   BUILTIN_PREFAB_DRAG_MIME,
   isScenePlaceableAsset,
   listBuiltinPrefabRecipes,
+  resolveAssetCreationFolderId,
 } from "../../lib/visual-editor";
 import { AssetThumbnail } from "./AssetQuickEditor";
 import { commandTitle, EDITOR_ICONS, type EditorIconName } from "./editor-icons";
@@ -46,6 +47,7 @@ type ContextMenuState = {
   y: number;
   assetId?: string;
   folderId?: string;
+  creationFolderId: string | null;
 } | null;
 type BrowserFolder = {
   id: string;
@@ -765,7 +767,11 @@ export function AssetsPanel({
   onActiveFolderChange: (folderId: string | null) => void;
   onCommand: (
     commandId: EditorCommandId,
-    payload?: { assetId?: string; folderId?: string; entityId?: string },
+    payload?: {
+      assetId?: string;
+      folderId?: string | null;
+      entityId?: string;
+    },
   ) => boolean;
   renameRequest:
     | { kind: "asset" | "folder"; id: string; requestId: number }
@@ -953,6 +959,11 @@ export function AssetsPanel({
       x: Math.min(event.clientX - bounds.left, Math.max(8, bounds.width - 190)),
       y: Math.min(event.clientY - bounds.top, Math.max(8, bounds.height - 160)),
       ...target,
+      creationFolderId: resolveAssetCreationFolderId(
+        assets,
+        activeFolderId,
+        target,
+      ),
     });
   };
 
@@ -1314,8 +1325,8 @@ export function AssetsPanel({
             />
           ) : null}
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="folder" label="新規フォルダー" command="asset.create-folder" onClick={() => { setContextMenu(null); onCommand("asset.create-folder"); }} />
-          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="material" label="新規マテリアル" command="asset.create-material" onClick={() => { setContextMenu(null); onCommand("asset.create-material"); }} />
-          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="particle" label="新規Particle" command="asset.create-particle" onClick={() => { setContextMenu(null); onCommand("asset.create-particle"); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="material" label="新規マテリアル" command="asset.create-material" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-material", { folderId }); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="particle" label="新規Particle" command="asset.create-particle" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-particle", { folderId }); }} />
           <ContextMenuItem disabled={importLocked} disabledReason={importDisabledReason} icon="texture" label="テクスチャをインポート…" command="asset.import" onClick={() => { setContextMenu(null); if (onCommand("asset.import")) fileInputRef.current?.click(); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="prefab" label="EntityからPrefabを作成" command="prefab.create" onClick={() => { setContextMenu(null); onPhaseNotice("HierarchyのEntityをAssetsへドラッグしてください"); }} />
         </div>

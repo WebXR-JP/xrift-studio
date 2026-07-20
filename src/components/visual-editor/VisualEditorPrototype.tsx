@@ -9,9 +9,10 @@ import {
 } from "react";
 import {
   BUILTIN_ASSET_IDS,
+  addDefaultDocumentAsset,
+  addDefaultParticleAsset,
   analyzeAssetDeletion,
   analyzeAssetFolderDeletion,
-  addDefaultParticleAsset,
   autoFitBoxCollider,
   commitAssetImportPlanToDisk,
   createAssetImportPlan,
@@ -46,6 +47,7 @@ import {
   moveLibraryFolder,
   pasteEntityHierarchy,
   removeXriftComponent,
+  resolveAssetCreationFolderId,
   renameAsset,
   renameAssetFolder,
   renameEntity,
@@ -63,7 +65,6 @@ import {
   updateParticleAsset,
   updateTextureAsset,
   updateXriftComponent,
-  type MaterialAsset,
   type ColliderPatch,
   type MaterialAssetPatch,
   type ModelAssetPatch,
@@ -172,7 +173,7 @@ type EditorCommandPayload = {
   creationId?: string;
   entityId?: string;
   assetId?: string;
-  folderId?: string;
+  folderId?: string | null;
   parentEntityId?: string | null;
   componentDefinitionId?: string;
 };
@@ -1731,62 +1732,64 @@ export function VisualEditorPrototype({
     [editorMode, setBundle],
   );
 
-  const handleCreateMaterial = useCallback(() => {
-    if (editorMode !== "edit") return;
-    const assetId = createDocumentId("material");
-    setBundle((current) => {
-      const count = Object.values(current.assets.assets).filter(
-        (asset) => asset.kind === "material" && asset.source.kind === "document",
-      ).length;
-      const asset: MaterialAsset = {
-        id: assetId,
-        name: `新規マテリアル ${count + 1}`,
-        kind: "material",
-        status: "ready",
-        source: { kind: "document" },
-        properties: normalizeMaterialProperties({
-          pbrMetallicRoughness: {
-            baseColorFactor: [0.82, 0.84, 0.9, 1],
-            metallicFactor: 0,
-            roughnessFactor: 0.65,
-          },
-        }),
-      };
-      return touchProject({
-        ...current,
-        assets: {
-          ...current.assets,
-          assets: { ...current.assets.assets, [assetId]: asset },
-        },
+  const handleCreateDocumentAsset = useCallback(
+    (
+      kind: "material" | "particle",
+      requestedFolderId?: string | null,
+    ) => {
+      if (editorMode !== "edit" || importBusy) {
+        setNotice(
+          editorMode !== "edit"
+            ? "Playを停止してからAssetを作成してください"
+            : "アセットのインポート完了後に作成してください",
+        );
+        return;
+      }
+      const assetId = createDocumentId(kind);
+      setHistory((current) => {
+        const assets = current.present.bundle.assets;
+        if (
+          requestedFolderId !== undefined &&
+          requestedFolderId !== null &&
+          !assets.folders?.[requestedFolderId]
+        ) {
+          setNotice("作成先のFolderが見つかりません。Folderを開き直してください");
+          return current;
+        }
+        const folderId =
+          requestedFolderId === undefined
+            ? resolveAssetCreationFolderId(assets, activeAssetFolderId)
+            : requestedFolderId;
+        const added = addDefaultDocumentAsset(assets, {
+          kind,
+          id: assetId,
+          folderId,
+        });
+        if (!added.added) {
+          setNotice("Assetを作成できませんでした。作成先を確認してください");
+          return current;
+        }
+        const destination = folderId
+          ? `「${assets.folders?.[folderId]?.name ?? "Folder"}」`
+          : "Assets直下";
+        setSaveStatus("dirty");
+        setNotice(
+          kind === "material"
+            ? `標準glTFマテリアルを${destination}に作成し、Asset Inspectorで開きました`
+            : `Particleを${destination}に作成し、Asset Inspectorで開きました`,
+        );
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: touchProject({
+            ...current.present.bundle,
+            assets: added.manifest,
+          }),
+          assetSelection: added.assetId,
+        });
       });
-    });
-    setAssetSelection(assetId);
-    setNotice("標準glTFマテリアルを作成し、Asset Inspectorで開きました");
-  }, [editorMode]);
-
-  const handleCreateParticle = useCallback(() => {
-    if (editorMode !== "edit") return;
-    const assetId = createDocumentId("particle");
-    setBundle((current) => {
-      const count = Object.values(current.assets.assets).filter(
-        (asset) => asset.kind === "particle" && asset.source.kind === "document",
-      ).length;
-      const folderId =
-        activeAssetFolderId && current.assets.folders?.[activeAssetFolderId]
-          ? activeAssetFolderId
-          : null;
-      const added = addDefaultParticleAsset(current.assets, {
-        id: assetId,
-        name: `新規Particle ${count + 1}`,
-        folderId,
-      });
-      return added.added
-        ? touchProject({ ...current, assets: added.manifest })
-        : current;
-    });
-    setAssetSelection(assetId);
-    setNotice("Particleを作成し、Asset Inspectorで開きました");
-  }, [activeAssetFolderId, editorMode, setAssetSelection, setBundle]);
+    },
+    [activeAssetFolderId, editorMode, importBusy],
+  );
 
   const handleCreateAssetFolder = useCallback(() => {
     if (editorMode !== "edit") return;
@@ -2545,11 +2548,11 @@ export function VisualEditorPrototype({
           handleCreateAssetFolder();
           return editorMode === "edit";
         case "asset.create-material":
-          handleCreateMaterial();
-          return editorMode === "edit";
+          handleCreateDocumentAsset("material", payload.folderId);
+          return editorMode === "edit" && !importBusy;
         case "asset.create-particle":
-          handleCreateParticle();
-          return editorMode === "edit";
+          handleCreateDocumentAsset("particle", payload.folderId);
+          return editorMode === "edit" && !importBusy;
         case "asset.import":
           return editorMode === "edit";
       }
@@ -2563,8 +2566,7 @@ export function VisualEditorPrototype({
       handleAddComponent,
       handleCopy,
       handleCreateAssetFolder,
-      handleCreateMaterial,
-      handleCreateParticle,
+      handleCreateDocumentAsset,
       handleCreatePrefab,
       handleCreateEmpty,
       handleDelete,
