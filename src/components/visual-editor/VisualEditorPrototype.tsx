@@ -62,12 +62,14 @@ import {
   updateEntityEnabled,
   updateEntityTransform,
   updateColliderComponent,
+  updateLightComponent,
   updateMaterialAsset,
   updateModelAsset,
   updateParticleAsset,
   updateTextureAsset,
   updateXriftComponent,
   type ColliderPatch,
+  type LightPatch,
   type MaterialAssetPatch,
   type ModelAssetPatch,
   type ModelReimportProgress,
@@ -1535,6 +1537,17 @@ export function VisualEditorPrototype({
     [editorMode, updateScene],
   );
 
+  const handleLightChange = useCallback(
+    (entityId: string, componentId: string, patch: LightPatch) => {
+      if (editorMode !== "edit") return;
+      updateScene((scene) =>
+        updateLightComponent(scene, entityId, patch, componentId),
+      );
+      setNotice("Light設定をSceneへ反映しました");
+    },
+    [editorMode, updateScene],
+  );
+
   const handleAutoFitCollider = useCallback(
     (entityId: string, componentId: string) => {
       if (editorMode !== "edit") return;
@@ -2890,94 +2903,114 @@ export function VisualEditorPrototype({
     onBack();
   }, [leaving, onBack, requestAutosave]);
 
-  const kindLabel = projectKind === "world" ? "World" : "Item";
+  const kindLabel = projectKind === "world" ? "ワールド" : "アイテム";
   const KindIcon = projectKind === "world" ? EDITOR_ICONS.world : EDITOR_ICONS.item;
   const BackIcon = EDITOR_ICONS.back;
   const SaveIcon = EDITOR_ICONS.save;
   const UploadIcon = EDITOR_ICONS.upload;
   const CreateIcon = EDITOR_ICONS.create;
-  const PlayIcon = editorMode === "play" ? EDITOR_ICONS.stop : EDITOR_ICONS.play;
+  const saveStatusLabel =
+    saveStatus === "saved"
+      ? "保存済み"
+      : saveStatus === "saving"
+        ? "保存中"
+        : saveStatus === "error"
+          ? "保存エラー"
+          : saveStatus === "unavailable"
+            ? "デモ"
+            : "保存待ち";
+  const saveStatusTitle =
+    saveStatus === "saved"
+      ? "変更は自動保存されています"
+      : saveStatus === "saving"
+        ? "変更を自動保存しています"
+        : saveStatus === "error"
+          ? "変更を保存できませんでした"
+          : saveStatus === "unavailable"
+            ? "Webデモでは保存されません"
+            : "変更はまもなく自動保存されます";
+  const SaveStatusIcon =
+    saveStatus === "saved"
+      ? EDITOR_ICONS.saved
+      : saveStatus === "saving"
+        ? EDITOR_ICONS.saving
+        : saveStatus === "error"
+          ? EDITOR_ICONS.warning
+          : EDITOR_ICONS.save;
 
   return (
-    <div className="h-screen overflow-auto bg-slate-200">
-      <div className="flex h-full min-h-[640px] min-w-[1024px] flex-col bg-slate-100 text-slate-900">
-        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-slate-300 bg-white px-3 shadow-sm">
+    <div className="h-screen overflow-auto bg-zinc-100">
+      <div className="flex h-full min-h-[640px] min-w-[1024px] flex-col bg-zinc-50 text-zinc-950">
+        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-zinc-200 bg-white px-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <button
               type="button"
               disabled={leaving}
               onClick={() => void handleBack()}
               title={commandTitle("プロジェクト一覧へ戻る", "CloseVisualEditor")}
-              className="flex shrink-0 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-wait disabled:opacity-50"
+              className="flex shrink-0 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-wait disabled:opacity-50"
             >
               <BackIcon size={13} aria-hidden="true" />
-              {leaving ? "保存して戻っています" : "戻る"}
+              {leaving ? "保存して戻っています" : "ライブラリ"}
             </button>
-            <div className="min-w-0 border-l border-slate-200 pl-2.5">
-              <p className="truncate text-sm font-semibold text-slate-900">
+            <div className="min-w-0 border-l border-zinc-200 pl-2.5">
+              <p className="truncate text-sm font-semibold text-zinc-950">
                 {bundle.project.metadata.title}
               </p>
-              <p className="text-xs text-slate-500">ビジュアルプロジェクト</p>
+              <p className="flex items-center gap-1 text-xs text-zinc-500">
+                <KindIcon size={11} aria-hidden="true" />
+                {kindLabel} · ビジュアル編集
+              </p>
             </div>
-            <span className="flex shrink-0 items-center gap-1 rounded border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700">
-              <KindIcon size={12} aria-hidden="true" />
-              {kindLabel}
-            </span>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5">
-            <span className={`rounded border px-2 py-1 text-xs font-semibold ${
-              saveStatus === "saved"
-                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                : saveStatus === "error"
-                  ? "border-rose-300 bg-rose-50 text-rose-800"
-                  : saveStatus === "unavailable"
-                    ? "border-slate-300 bg-slate-50 text-slate-600"
-                  : "border-amber-300 bg-amber-50 text-amber-800"
-            }`}>
-              {saveStatus === "saved"
-                ? "自動保存済み"
-                : saveStatus === "saving"
-                  ? "自動保存中"
-                  : saveStatus === "error"
-                    ? "自動保存エラー"
-                    : saveStatus === "unavailable"
-                      ? "デモ・保存なし"
-                      : "自動保存待ち"}
-            </span>
+          <div className="flex shrink-0 items-center gap-2">
             <span
-              className={`rounded border px-2 py-1 text-xs font-semibold ${
-                compilationFresh
-                  ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                  : "border-amber-300 bg-amber-50 text-amber-800"
+              className={`flex items-center gap-1.5 text-xs font-medium ${
+                saveStatus === "error" ? "text-rose-700" : "text-zinc-500"
               }`}
+              title={saveStatusTitle}
+              role="status"
+              aria-live="polite"
             >
-              {compilationFresh ? "公開用変換済み" : "公開用変換が必要"}
+              <SaveStatusIcon
+                size={13}
+                className={saveStatus === "saving" ? "animate-spin" : undefined}
+                aria-hidden="true"
+              />
+              {saveStatusLabel}
             </span>
             {saveStatus === "error" ? (
               <button
                 type="button"
                 onClick={() => executeCommand("project.save")}
                 title={commandTitle("自動保存を再試行", "project.save", shortcutLabel("project.save"))}
-                className="flex items-center gap-1 rounded border border-rose-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                className="flex items-center gap-1 rounded border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
               >
                 <SaveIcon size={13} aria-hidden="true" />
                 再試行
               </button>
             ) : null}
+            <span className="h-5 w-px bg-zinc-200" aria-hidden="true" />
             <button
               type="button"
               onClick={() => executeCommand("project.publish")}
-              title={commandTitle("XRiftへアップロード", "project.publish", shortcutLabel("project.publish"))}
-              className="flex items-center gap-1 rounded border border-violet-500 bg-violet-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-violet-700"
+              title={commandTitle(
+                compilationFresh
+                  ? "公開内容を確認してXRiftへ送信"
+                  : "最新の編集内容は公開画面で自動的に保存・変換されます",
+                "project.publish",
+                shortcutLabel("project.publish"),
+              )}
+              className="flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-violet-200/60 hover:bg-violet-700"
             >
               <UploadIcon size={13} aria-hidden="true" />
-              アップロード
+              XRiftへ公開
             </button>
           </div>
         </header>
 
-        <div className="flex h-11 shrink-0 items-center justify-between border-b border-slate-300 bg-slate-50 px-2.5" role="toolbar" aria-label="ビジュアルエディターのツール">
+        <div className="flex h-10 shrink-0 items-center border-b border-zinc-200 bg-white px-2.5" role="toolbar" aria-label="ビジュアルエディターのツール">
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -2985,7 +3018,7 @@ export function VisualEditorPrototype({
               onClick={() => executeCommand("edit.undo")}
               aria-label="元に戻す"
               title={commandTitle("元に戻す", "edit.undo", shortcutLabel("edit.undo"))}
-              className="flex h-7 items-center gap-1 rounded border border-slate-300 bg-white px-1.5 text-xs text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-7 items-center gap-1 rounded border border-zinc-200 bg-white px-1.5 text-xs text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <EDITOR_ICONS.undo size={13} aria-hidden="true" />
             </button>
@@ -2995,7 +3028,7 @@ export function VisualEditorPrototype({
               onClick={() => executeCommand("edit.redo")}
               aria-label="やり直す"
               title={commandTitle("やり直す", "edit.redo", shortcutLabel("edit.redo"))}
-              className="flex h-7 items-center gap-1 rounded border border-slate-300 bg-white px-1.5 text-xs text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-7 items-center gap-1 rounded border border-zinc-200 bg-white px-1.5 text-xs text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <EDITOR_ICONS.redo size={13} aria-hidden="true" />
             </button>
@@ -3007,10 +3040,10 @@ export function VisualEditorPrototype({
                 aria-expanded={createMenuOpen}
                 onClick={() => setCreateMenuOpen((open) => !open)}
                 title={commandTitle("シーンオブジェクトを作成", "OpenCreateMenu", "Ctrl+Shift+A")}
-                className="flex h-7 items-center gap-1.5 rounded border border-violet-300 bg-violet-50 px-2 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
+                className="flex h-7 items-center gap-1.5 rounded border border-zinc-200 bg-white px-2 text-xs font-semibold text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <CreateIcon size={13} aria-hidden="true" />
-                Create
+                追加
               </button>
               <EditorCreateMenu
                 open={createMenuOpen}
@@ -3040,23 +3073,6 @@ export function VisualEditorPrototype({
             </div>
           </div>
 
-          <div className="flex items-center gap-2" aria-label="編集とPlayの切り替え">
-            <button
-              type="button"
-              disabled={editorMode === "edit" && importBusy}
-              aria-pressed={editorMode === "play"}
-              onClick={() => executeCommand("play.toggle")}
-              title={commandTitle(editorMode === "play" ? "Playを停止" : importBusy ? "アセットのインポート完了後にPlayを開始" : "Playを開始", "play.toggle", shortcutLabel("play.toggle"))}
-              className={`flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-semibold disabled:cursor-wait disabled:opacity-50 ${
-                editorMode === "play"
-                  ? "border border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100"
-                  : "bg-violet-600 text-white hover:bg-violet-700"
-              }`}
-            >
-              <PlayIcon size={14} aria-hidden="true" />
-              {editorMode === "play" ? "停止" : "Play"}
-            </button>
-          </div>
         </div>
 
         <main
@@ -3086,7 +3102,9 @@ export function VisualEditorPrototype({
             onDropBuiltinPrefab={(recipeId, parentEntityId) =>
               handlePlaceBuiltinPrefab(recipeId, undefined, parentEntityId)
             }
+            builtinPrefabRecipes={builtinPrefabRecipes}
             onEntityEnabledChange={handleEntityEnabledChange}
+            onCreateXriftObject={handleCreateXriftObject}
             onCommand={executeCommand}
             renameRequest={
               renameTarget?.kind === "entity"
@@ -3110,6 +3128,9 @@ export function VisualEditorPrototype({
             editorMode={editorMode}
             transformMode={transformMode}
             transformSpace={transformSpace}
+            playDisabled={editorMode === "edit" && importBusy}
+            playShortcut={shortcutLabel("play.toggle")}
+            onTogglePlay={() => executeCommand("play.toggle")}
             onTransformModeChange={(mode) => {
               if (!readOnly) setTransformMode(mode);
             }}
@@ -3164,6 +3185,7 @@ export function VisualEditorPrototype({
             onColliderChange={handleColliderChange}
             onAutoFitCollider={handleAutoFitCollider}
             onRemoveCollider={handleRemoveCollider}
+            onLightChange={handleLightChange}
             onSelectAsset={handleSelectAsset}
             onCloseAsset={() => setAssetSelection(null)}
             onMaterialChange={handleMaterialChange}
@@ -3192,9 +3214,7 @@ export function VisualEditorPrototype({
             onSceneSettingsChange={handleSceneSettingsChange}
             onThumbnailChanged={() => {
               onThumbnailChanged?.();
-              setNotice(
-                "サムネイルを更新しました。公開用変換は更新が必要です",
-              );
+              setNotice("サムネイルを更新しました。変更は公開時に反映されます");
             }}
           />
           <AssetsPanel

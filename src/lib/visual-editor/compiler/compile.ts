@@ -2272,14 +2272,22 @@ const CompiledParticleEmitter: FC<{
 }
 
 function renderLight(light: LightComponent): string {
-  const tag =
-    light.lightType === "ambient"
-      ? "ambientLight"
-      : light.lightType === "directional"
-        ? "directionalLight"
-        : "pointLight";
-  const shadow = light.lightType === "ambient" ? "" : ` castShadow={${light.castShadow}}`;
-  return `<${tag} color=${JSON.stringify(light.color)} intensity={${formatNumber(light.intensity)}}${shadow} />`;
+  const intensity = formatNumber(light.intensity);
+  const color = JSON.stringify(light.color);
+  switch (light.lightType) {
+    case "ambient":
+      return `<ambientLight color=${color} intensity={${intensity}} />`;
+    case "directional":
+      return `<directionalLight color=${color} intensity={${intensity}} castShadow={${light.castShadow}} />`;
+    case "hemisphere":
+      return `<hemisphereLight color=${color} groundColor=${JSON.stringify(light.groundColor ?? "#334155")} intensity={${intensity}} />`;
+    case "point":
+      return `<pointLight color=${color} intensity={${intensity}} distance={${formatNumber(light.distance ?? 0)}} decay={${formatNumber(light.decay ?? 2)}} castShadow={${light.castShadow}} />`;
+    case "spot":
+      return `<spotLight color=${color} intensity={${intensity}} distance={${formatNumber(light.distance ?? 0)}} angle={${formatNumber(light.angle ?? Math.PI / 3)}} penumbra={${formatNumber(light.penumbra ?? 0.5)}} decay={${formatNumber(light.decay ?? 2)}} castShadow={${light.castShadow}} />`;
+    case "rectArea":
+      return `<rectAreaLight color=${color} intensity={${intensity}} width={${formatNumber(light.width ?? 1)}} height={${formatNumber(light.height ?? 1)}} />`;
+  }
 }
 
 function renderSpawnPoint(

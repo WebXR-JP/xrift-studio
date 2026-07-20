@@ -16,6 +16,7 @@ import {
   createTransformComponent,
   fitBoxColliderToMesh,
   getMesh,
+  type LightComponent,
   type RegisteredSceneComponent,
   type SceneComponent,
   type SceneDocument,
@@ -41,6 +42,7 @@ export type EditorComponentDefinition = {
     | "builtin-mesh"
     | "official-xrift";
   schemaId?: string;
+  lightType?: LightComponent["lightType"];
 };
 
 const BOTH_PROJECT_KINDS = ["world", "item"] as const;
@@ -62,7 +64,24 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
     true,
     "collider",
   ),
-  definition("core.light", "Light", "rendering", true, "light"),
+  definition("core.light.ambient", "Ambient Light", "rendering", true, "light", {
+    lightType: "ambient",
+  }),
+  definition("core.light.directional", "Directional Light", "rendering", true, "light", {
+    lightType: "directional",
+  }),
+  definition("core.light.hemisphere", "Hemisphere Light", "rendering", true, "light", {
+    lightType: "hemisphere",
+  }),
+  definition("core.light.point", "Point Light", "rendering", true, "light", {
+    lightType: "point",
+  }),
+  definition("core.light.spot", "Spot Light", "rendering", true, "light", {
+    lightType: "spot",
+  }),
+  definition("core.light.area", "Area Light", "rendering", true, "light", {
+    lightType: "rectArea",
+  }),
   definition("core.spawn", "Spawn Point", "world", false, "spawn-point"),
   definition("core.particle", "Particle Emitter", "rendering", true, "particle-emitter"),
   ...XRIFT_COMPONENT_REGISTRY.map(
@@ -77,6 +96,17 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
     }),
   ),
 ] as const;
+
+/** Components shown by both the Create menu and Hierarchy context menu. */
+export function getEditorComponentMenuDefinitions(
+  projectKind: VisualProjectKind,
+): readonly EditorComponentDefinition[] {
+  return EDITOR_COMPONENT_REGISTRY.filter(
+    (definition) =>
+      definition.componentType !== "official-xrift" &&
+      definition.projectKinds.includes(projectKind),
+  );
+}
 
 export type AddEditorComponentResult = {
   scene: SceneDocument;
@@ -515,6 +545,7 @@ function definition(
   category: EditorComponentCategory,
   allowMultiple: boolean,
   componentType: EditorComponentDefinition["componentType"],
+  options: Pick<EditorComponentDefinition, "lightType"> = {},
 ): EditorComponentDefinition {
   return {
     id,
@@ -523,6 +554,7 @@ function definition(
     allowMultiple,
     componentType,
     projectKinds: BOTH_PROJECT_KINDS,
+    ...options,
   };
 }
 
@@ -576,14 +608,23 @@ function createRegisteredComponent(
     return getMesh(entity) ? createMeshColliderComponent(id) : null;
   }
   if (definition.componentType === "light") {
+    const lightType = definition.lightType ?? "point";
     return {
       id,
       type: "light",
       enabled: true,
-      lightType: "point",
+      lightType,
       color: "#ffffff",
-      intensity: 1,
-      castShadow: false,
+      intensity: lightType === "ambient" || lightType === "hemisphere" ? 0.6 : 1,
+      castShadow: lightType === "directional" || lightType === "point" || lightType === "spot",
+      ...(lightType === "hemisphere" ? { groundColor: "#334155" } : {}),
+      ...(lightType === "point" || lightType === "spot"
+        ? { distance: 0, decay: 2 }
+        : {}),
+      ...(lightType === "spot"
+        ? { angle: Math.PI / 3, penumbra: 0.5 }
+        : {}),
+      ...(lightType === "rectArea" ? { width: 1, height: 1 } : {}),
     };
   }
   if (definition.componentType === "spawn-point") {

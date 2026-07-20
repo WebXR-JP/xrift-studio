@@ -8,9 +8,11 @@ import {
 import {
   BUILTIN_PRIMITIVE_CREATION_CATALOG,
   BUILTIN_PREFAB_DRAG_MIME,
-  EDITOR_COMPONENT_REGISTRY,
   getEntityReparentDecision,
+  getEditorComponentMenuDefinitions,
   getXriftComponentDefinition,
+  getXriftComponentMenuGroups,
+  type BuiltinPrefabRecipe,
   type EntityReparentBlockReason,
   type EditorCommandId,
   type SceneDocument,
@@ -164,7 +166,9 @@ export function HierarchyPanel({
   onAssignMaterial,
   onDropSceneAsset,
   onDropBuiltinPrefab,
+  builtinPrefabRecipes,
   onEntityEnabledChange,
+  onCreateXriftObject,
   onCommand,
   renameRequest,
   onRename,
@@ -177,7 +181,9 @@ export function HierarchyPanel({
   onAssignMaterial: (entityId: string, materialAssetId: string) => void;
   onDropSceneAsset: (assetId: string, parentEntityId: string | null) => void;
   onDropBuiltinPrefab: (recipeId: string, parentEntityId: string | null) => void;
+  builtinPrefabRecipes: readonly BuiltinPrefabRecipe[];
   onEntityEnabledChange: (entityId: string, enabled: boolean) => void;
+  onCreateXriftObject: (definitionId: string) => void;
   onCommand: (
     commandId: EditorCommandId,
     payload?: {
@@ -462,15 +468,15 @@ export function HierarchyPanel({
   return (
     <aside
       ref={panelRef}
-      className="relative row-span-2 flex min-h-0 flex-col border-r border-slate-300 bg-slate-100"
+      className="relative row-span-2 flex min-h-0 flex-col border-r border-zinc-200 bg-zinc-50"
       aria-labelledby="hierarchy-heading"
       onContextMenu={openContextMenu}
       onPointerDown={() => contextMenu && setContextMenu(null)}
     >
-      <div className="flex h-10 shrink-0 items-center justify-between border-b border-slate-300 bg-slate-50 px-3">
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-3">
         <h2
           id="hierarchy-heading"
-          className="text-[13px] font-semibold text-slate-800"
+          className="text-[13px] font-semibold text-zinc-800"
         >
           Hierarchy
         </h2>
@@ -487,13 +493,13 @@ export function HierarchyPanel({
                   ? "Playを停止するとEntityを削除できます"
                   : commandTitle("選択中のEntityを削除", "edit.delete")
               }
-              className="flex h-7 items-center gap-1 rounded border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700 transition-colors hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-45"
+              className="flex h-7 items-center gap-1 rounded border border-zinc-200 bg-white px-2 text-xs font-semibold text-zinc-700 transition-colors hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <EDITOR_ICONS.delete size={12} aria-hidden="true" />
               削除
             </button>
           ) : null}
-          <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs tabular-nums text-slate-600">
+          <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs tabular-nums text-zinc-500">
             {rows.length}
           </span>
         </div>
@@ -877,9 +883,7 @@ export function HierarchyPanel({
               <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Add Component
               </p>
-              {EDITOR_COMPONENT_REGISTRY.filter((definition) =>
-                definition.projectKinds.includes(projectKind),
-              ).map((definition) => {
+              {getEditorComponentMenuDefinitions(projectKind).map((definition) => {
                 const DefinitionIcon = getEditorComponentIcon(definition);
                 const entity = contextMenu.entityId
                   ? scene.entities[contextMenu.entityId]
@@ -919,9 +923,100 @@ export function HierarchyPanel({
                   </button>
                 );
               })}
-              <div className="my-1 border-t border-slate-200" />
             </>
           ) : null}
+          <div className="my-1 border-t border-slate-200" />
+          <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            XRift Component
+          </p>
+          {getXriftComponentMenuGroups(projectKind).flatMap((group) =>
+            group.components.map((definition) => {
+              const DefinitionIcon = EDITOR_ICONS[definition.icon];
+              const entity = contextMenu.entityId
+                ? scene.entities[contextMenu.entityId]
+                : undefined;
+              const duplicate = Boolean(
+                entity &&
+                  !definition.allowMultiplePerEntity &&
+                  entity.components.some(
+                    (component) =>
+                      component.type === "xrift-component" &&
+                      component.schemaId === definition.schemaId,
+                  ),
+              );
+              const canCreateHost = definition.attachBehavior.kind === "leaf";
+              return (
+                <button
+                  key={definition.schemaId}
+                  type="button"
+                  disabled={
+                    readOnly ||
+                    duplicate ||
+                    (!contextMenu.entityId && !canCreateHost)
+                  }
+                  onClick={() => {
+                    const entityId = contextMenu.entityId;
+                    setContextMenu(null);
+                    if (entityId) {
+                      onCommand("entity.add-component", {
+                        entityId,
+                        componentDefinitionId: definition.schemaId,
+                      });
+                    } else {
+                      onCreateXriftObject(definition.schemaId);
+                    }
+                  }}
+                  className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
+                    <span className="truncate">{definition.label}</span>
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {duplicate
+                      ? "追加済み"
+                      : contextMenu.entityId
+                        ? "追加"
+                        : canCreateHost
+                          ? "作成"
+                          : "Entityを選択"}
+                  </span>
+                </button>
+              );
+            }),
+          )}
+          <div className="my-1 border-t border-slate-200" />
+          <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            XRift Prefab
+          </p>
+          {builtinPrefabRecipes.map((recipe) => {
+            const definition = getXriftComponentDefinition(recipe.schemaId);
+            const DefinitionIcon = definition
+              ? EDITOR_ICONS[definition.icon]
+              : EDITOR_ICONS.prefab;
+            return (
+              <button
+                key={recipe.id}
+                type="button"
+                disabled={readOnly}
+                onClick={() => {
+                  const parentEntityId = contextMenu.entityId;
+                  setContextMenu(null);
+                  onDropBuiltinPrefab(recipe.id, parentEntityId);
+                }}
+                title={recipe.description}
+                className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
+                  <span className="truncate">{recipe.name}</span>
+                </span>
+                <span className="text-xs text-slate-400">
+                  {recipe.configuration?.requiredBeforeCompile ? "設定" : "作成"}
+                </span>
+              </button>
+            );
+          })}
           <button
             type="button"
             disabled={readOnly}

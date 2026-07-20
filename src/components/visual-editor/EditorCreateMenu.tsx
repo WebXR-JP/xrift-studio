@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import {
   BUILTIN_PRIMITIVE_CREATION_CATALOG,
-  EDITOR_COMPONENT_REGISTRY,
+  getEditorComponentMenuDefinitions,
   getXriftComponentMenuGroups,
   type BuiltinPrefabRecipe,
   type EditorComponentDefinition,
@@ -80,12 +80,7 @@ export function EditorCreateMenu({
   }, [onClose, open]);
 
   const componentGroups = useMemo(() => {
-    const definitions = EDITOR_COMPONENT_REGISTRY.filter(
-      (definition) =>
-        definition.componentType !== "official-xrift" &&
-        definition.id !== "core.spawn" &&
-        definition.projectKinds.includes(projectKind),
-    );
+    const definitions = getEditorComponentMenuDefinitions(projectKind);
     return Array.from(
       definitions.reduce((groups, definition) => {
         const entries = groups.get(definition.category) ?? [];

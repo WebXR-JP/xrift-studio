@@ -37,6 +37,7 @@ import {
   type DirectionalLight,
   type MeshStandardMaterial,
   type Object3D,
+  type SpotLight,
   type ShaderMaterial,
   type Texture,
 } from "three";
@@ -414,10 +415,11 @@ function LightVisual({
   selected: boolean;
 }) {
   const directionalLightRef = useRef<DirectionalLight | null>(null);
+  const spotLightRef = useRef<SpotLight | null>(null);
   const directionalTargetRef = useRef<Object3D | null>(null);
 
   useLayoutEffect(() => {
-    const light = directionalLightRef.current;
+    const light = directionalLightRef.current ?? spotLightRef.current;
     const target = directionalTargetRef.current;
     if (!light || !target) return;
     light.target = target;
@@ -430,11 +432,40 @@ function LightVisual({
     <>
       {component.lightType === "ambient" ? (
         <ambientLight color={component.color} intensity={component.intensity} />
+      ) : component.lightType === "hemisphere" ? (
+        <hemisphereLight
+          color={component.color}
+          groundColor={component.groundColor ?? "#334155"}
+          intensity={component.intensity}
+        />
       ) : component.lightType === "point" ? (
         <pointLight
           color={component.color}
           intensity={component.intensity}
+          distance={component.distance ?? 0}
+          decay={component.decay ?? 2}
           castShadow={component.castShadow}
+        />
+      ) : component.lightType === "spot" ? (
+        <>
+          <spotLight
+            ref={spotLightRef}
+            color={component.color}
+            intensity={component.intensity}
+            distance={component.distance ?? 0}
+            angle={component.angle ?? Math.PI / 3}
+            penumbra={component.penumbra ?? 0.5}
+            decay={component.decay ?? 2}
+            castShadow={component.castShadow}
+          />
+          <object3D ref={directionalTargetRef} position={[0, 0, -1]} />
+        </>
+      ) : component.lightType === "rectArea" ? (
+        <rectAreaLight
+          color={component.color}
+          intensity={component.intensity}
+          width={component.width ?? 1}
+          height={component.height ?? 1}
         />
       ) : (
         <>
@@ -448,7 +479,7 @@ function LightVisual({
         </>
       )}
       <EditorLightIcon color={component.color} selected={selected} />
-      {component.lightType === "directional" ? (
+      {component.lightType === "directional" || component.lightType === "spot" ? (
         <DirectionArrow
           direction={-1}
           color={selected ? EDITOR_SELECTION_COLOR : component.color}
@@ -2123,6 +2154,9 @@ export function SceneViewport({
   editorMode,
   transformMode,
   transformSpace,
+  playDisabled,
+  playShortcut,
+  onTogglePlay,
   onTransformModeChange,
   onToggleTransformSpace,
   notice,
@@ -2152,6 +2186,9 @@ export function SceneViewport({
   editorMode: EditorMode;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
+  playDisabled: boolean;
+  playShortcut?: string;
+  onTogglePlay: () => void;
   onTransformModeChange: (mode: TransformMode) => void;
   onToggleTransformSpace: () => void;
   notice: string | null;
@@ -2476,6 +2513,7 @@ export function SceneViewport({
       : "ドラッグでアイテムをOrbit確認";
   const readyMaterialDropTarget =
     materialDropTarget?.status === "ready" ? materialDropTarget : null;
+  const PlayIcon = editorMode === "play" ? EDITOR_ICONS.stop : EDITOR_ICONS.play;
   const dropMessage =
     editorMode === "play"
       ? "Playを停止してから配置してください"
@@ -2498,7 +2536,7 @@ export function SceneViewport({
       className="relative flex min-h-0 flex-col overflow-hidden bg-zinc-950"
       aria-labelledby="scene-view-heading"
     >
-      <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-zinc-700 bg-zinc-900 px-2.5">
+      <div className="relative flex h-9 shrink-0 items-center justify-between gap-2 border-b border-zinc-700 bg-zinc-900 px-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <h2
             id="scene-view-heading"
@@ -2506,6 +2544,31 @@ export function SceneViewport({
           >
             Scene View
           </h2>
+        </div>
+        <div className="pointer-events-none absolute inset-y-0 left-1/2 z-10 flex -translate-x-1/2 items-center">
+          <button
+            type="button"
+            disabled={playDisabled}
+            aria-pressed={editorMode === "play"}
+            onClick={onTogglePlay}
+            title={commandTitle(
+              editorMode === "play"
+                ? "Playを停止"
+                : playDisabled
+                  ? "アセットの読み込みが終わるとPlayできます"
+                  : "Playを開始",
+              "play.toggle",
+              playShortcut,
+            )}
+            className={`pointer-events-auto flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition-colors disabled:cursor-wait disabled:opacity-45 ${
+              editorMode === "play"
+                ? "border-rose-400/70 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25"
+                : "border-violet-400/70 bg-violet-500/15 text-violet-100 hover:bg-violet-500/25"
+            }`}
+          >
+            <PlayIcon size={13} aria-hidden="true" />
+            {editorMode === "play" ? "停止" : "Play"}
+          </button>
         </div>
         <div className="flex min-w-0 items-center gap-1.5" role="toolbar" aria-label="Scene Viewの操作">
           {(["translate", "rotate", "scale"] as const).map((mode) => {

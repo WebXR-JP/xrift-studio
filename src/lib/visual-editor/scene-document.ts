@@ -91,13 +91,48 @@ export type ColliderComponent =
   | BoxColliderComponent
   | MeshColliderComponent;
 
+export const LIGHT_TYPES = [
+  "ambient",
+  "directional",
+  "hemisphere",
+  "point",
+  "spot",
+  "rectArea",
+] as const;
+export type LightType = (typeof LIGHT_TYPES)[number];
+
 export type LightComponent = ComponentBase & {
   type: "light";
-  lightType: "ambient" | "directional" | "point";
+  lightType: LightType;
   color: string;
   intensity: number;
   castShadow: boolean;
+  groundColor?: string;
+  distance?: number;
+  decay?: number;
+  angle?: number;
+  penumbra?: number;
+  width?: number;
+  height?: number;
 };
+
+export type LightPatch = Partial<
+  Pick<
+    LightComponent,
+    | "enabled"
+    | "lightType"
+    | "color"
+    | "intensity"
+    | "castShadow"
+    | "groundColor"
+    | "distance"
+    | "decay"
+    | "angle"
+    | "penumbra"
+    | "width"
+    | "height"
+  >
+>;
 
 export type SpawnPointComponent = ComponentBase & {
   type: "spawn-point";
@@ -226,6 +261,10 @@ function isValidFriction(value: number): boolean {
 
 function isValidRestitution(value: number): boolean {
   return Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+function isLightType(value: string): value is LightType {
+  return (LIGHT_TYPES as readonly string[]).includes(value);
 }
 
 function isColliderFitMode(value: string): value is ColliderFitMode {
@@ -655,6 +694,96 @@ export function updateColliderComponent(
   }
   if (collidersEqual(current, next)) return scene;
   return replaceCollider(scene, entityId, current.id, next);
+}
+
+/** Applies a light edit atomically; an invalid field rejects the whole patch. */
+export function updateLightComponent(
+  scene: SceneDocument,
+  entityId: string,
+  patch: LightPatch,
+  componentId?: string,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  const current = entity?.components.find(
+    (component): component is LightComponent =>
+      component.type === "light" &&
+      (componentId === undefined || component.id === componentId),
+  );
+  if (!entity || !current) return scene;
+  if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") return scene;
+  if (patch.lightType !== undefined && !isLightType(patch.lightType)) return scene;
+  if (
+    patch.color !== undefined &&
+    (typeof patch.color !== "string" || patch.color.trim().length === 0)
+  ) {
+    return scene;
+  }
+  if (
+    patch.groundColor !== undefined &&
+    (typeof patch.groundColor !== "string" || patch.groundColor.trim().length === 0)
+  ) {
+    return scene;
+  }
+  if (
+    patch.intensity !== undefined &&
+    (!Number.isFinite(patch.intensity) || patch.intensity < 0)
+  ) {
+    return scene;
+  }
+  if (patch.castShadow !== undefined && typeof patch.castShadow !== "boolean") return scene;
+  if (
+    patch.distance !== undefined &&
+    (!Number.isFinite(patch.distance) || patch.distance < 0)
+  ) {
+    return scene;
+  }
+  if (
+    patch.decay !== undefined &&
+    (!Number.isFinite(patch.decay) || patch.decay < 0)
+  ) {
+    return scene;
+  }
+  if (
+    patch.angle !== undefined &&
+    (!Number.isFinite(patch.angle) || patch.angle <= 0 || patch.angle > Math.PI / 2)
+  ) {
+    return scene;
+  }
+  if (
+    patch.penumbra !== undefined &&
+    (!Number.isFinite(patch.penumbra) || patch.penumbra < 0 || patch.penumbra > 1)
+  ) {
+    return scene;
+  }
+  if (
+    (patch.width !== undefined &&
+      (!Number.isFinite(patch.width) || patch.width <= 0)) ||
+    (patch.height !== undefined &&
+      (!Number.isFinite(patch.height) || patch.height <= 0))
+  ) {
+    return scene;
+  }
+
+  const next: LightComponent = {
+    ...current,
+    ...patch,
+  };
+  const changed = Object.keys(patch).some(
+    (key) => next[key as keyof LightComponent] !== current[key as keyof LightComponent],
+  );
+  if (!changed) return scene;
+  return {
+    ...scene,
+    entities: {
+      ...scene.entities,
+      [entityId]: {
+        ...entity,
+        components: entity.components.map((component) =>
+          component.id === current.id ? next : component,
+        ),
+      },
+    },
+  };
 }
 
 function getPrimitiveColliderBounds(

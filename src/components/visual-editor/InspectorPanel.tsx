@@ -20,6 +20,8 @@ import {
   type ColliderComponent,
   type ColliderPatch,
   type JsonValue,
+  type LightComponent,
+  type LightPatch,
   type MaterialBinding,
   type MaterialAssetPatch,
   type ModelAssetPatch,
@@ -64,6 +66,15 @@ export type MeshInspectorPatch = Partial<
 export type ParticleEmitterInspectorPatch = Partial<
   Pick<ParticleEmitterComponent, "enabled" | "particleAssetId">
 >;
+
+const LIGHT_LABELS: Record<LightComponent["lightType"], string> = {
+  ambient: "Ambient Light",
+  directional: "Directional Light",
+  hemisphere: "Hemisphere Light",
+  point: "Point Light",
+  spot: "Spot Light",
+  rectArea: "Area Light",
+};
 
 function ComponentCard({
   title,
@@ -783,6 +794,151 @@ function ColliderInspector({
   );
 }
 
+function LightInspector({
+  component,
+  readOnly,
+  onChange,
+}: {
+  component: LightComponent;
+  readOnly: boolean;
+  onChange: (patch: LightPatch) => void;
+}) {
+  const supportsShadow = ["directional", "point", "spot"].includes(component.lightType);
+
+  return (
+    <ComponentCard title={LIGHT_LABELS[component.lightType]} subtitle="Three.js">
+      <ToggleRow
+        label="Enabled"
+        checked={component.enabled}
+        disabled={readOnly}
+        onChange={(enabled) => onChange({ enabled })}
+      />
+      <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+        Type
+        <select
+          value={component.lightType}
+          disabled={readOnly}
+          onChange={(event) =>
+            onChange({ lightType: event.currentTarget.value as LightComponent["lightType"] })
+          }
+          className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
+        >
+          {Object.entries(LIGHT_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+      </label>
+      <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+        <span>Color</span>
+        <input
+          type="color"
+          value={component.color}
+          disabled={readOnly}
+          onChange={(event) => onChange({ color: event.currentTarget.value })}
+          className="h-8 w-full cursor-pointer rounded border border-slate-300 bg-white p-1 disabled:cursor-not-allowed disabled:opacity-50"
+        />
+      </div>
+      <ColliderNumberField
+        label="Intensity"
+        value={component.intensity}
+        min={0}
+        step={0.1}
+        disabled={readOnly}
+        onChange={(intensity) => onChange({ intensity })}
+      />
+
+      {component.lightType === "hemisphere" ? (
+        <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 border-t border-slate-100 pt-2 text-xs text-slate-700">
+          <span>Ground Color</span>
+          <input
+            type="color"
+            value={component.groundColor ?? "#334155"}
+            disabled={readOnly}
+            onChange={(event) => onChange({ groundColor: event.currentTarget.value })}
+            className="h-8 w-full cursor-pointer rounded border border-slate-300 bg-white p-1 disabled:cursor-not-allowed disabled:opacity-50"
+          />
+        </div>
+      ) : null}
+
+      {component.lightType === "point" || component.lightType === "spot" ? (
+        <div className="space-y-2 border-t border-slate-100 pt-2">
+          <ColliderNumberField
+            label="Distance"
+            value={component.distance ?? 0}
+            min={0}
+            step={0.1}
+            disabled={readOnly}
+            onChange={(distance) => onChange({ distance })}
+          />
+          <ColliderNumberField
+            label="Decay"
+            value={component.decay ?? 2}
+            min={0}
+            step={0.1}
+            disabled={readOnly}
+            onChange={(decay) => onChange({ decay })}
+          />
+        </div>
+      ) : null}
+
+      {component.lightType === "spot" ? (
+        <div className="space-y-2 border-t border-slate-100 pt-2">
+          <ColliderNumberField
+            label="Angle (°)"
+            value={((component.angle ?? Math.PI / 3) * 180) / Math.PI}
+            min={1}
+            max={90}
+            step={1}
+            disabled={readOnly}
+            onChange={(degrees) => onChange({ angle: (degrees * Math.PI) / 180 })}
+          />
+          <ColliderNumberField
+            label="Penumbra"
+            value={component.penumbra ?? 0.5}
+            min={0}
+            max={1}
+            step={0.05}
+            disabled={readOnly}
+            onChange={(penumbra) => onChange({ penumbra })}
+          />
+        </div>
+      ) : null}
+
+      {component.lightType === "rectArea" ? (
+        <div className="space-y-2 border-t border-slate-100 pt-2">
+          <ColliderNumberField
+            label="Width"
+            value={component.width ?? 1}
+            min={0.01}
+            step={0.1}
+            disabled={readOnly}
+            onChange={(width) => onChange({ width })}
+          />
+          <ColliderNumberField
+            label="Height"
+            value={component.height ?? 1}
+            min={0.01}
+            step={0.1}
+            disabled={readOnly}
+            onChange={(height) => onChange({ height })}
+          />
+        </div>
+      ) : null}
+
+      {supportsShadow ? (
+        <div className="border-t border-slate-100 pt-2">
+          <ToggleRow
+            label="Cast Shadows"
+            checked={component.castShadow}
+            disabled={readOnly}
+            onChange={(castShadow) => onChange({ castShadow })}
+          />
+        </div>
+      ) : null}
+    </ComponentCard>
+  );
+}
+
 function ParticleEmitterInspector({
   component,
   assets,
@@ -883,6 +1039,7 @@ function EntityInspector({
   onColliderChange,
   onAutoFitCollider,
   onRemoveCollider,
+  onLightChange,
   onParticleEmitterChange,
   onRemoveParticleEmitter,
   onOpenMaterial,
@@ -904,6 +1061,7 @@ function EntityInspector({
   onColliderChange: (componentId: string, patch: ColliderPatch) => void;
   onAutoFitCollider: (componentId: string) => void;
   onRemoveCollider: (componentId: string) => void;
+  onLightChange: (componentId: string, patch: LightPatch) => void;
   onParticleEmitterChange: (
     componentId: string,
     patch: ParticleEmitterInspectorPatch,
@@ -999,16 +1157,12 @@ function EntityInspector({
         }
         if (component.type === "light") {
           return (
-            <ComponentCard key={component.id} title="Light" subtitle={component.lightType}>
-              <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
-                <dt className="text-slate-500">カラー</dt>
-                <dd className="text-right font-mono text-slate-700">{component.color}</dd>
-                <dt className="text-slate-500">強度</dt>
-                <dd className="text-right tabular-nums text-slate-700">{component.intensity}</dd>
-                <dt className="text-slate-500">影</dt>
-                <dd className="text-right text-slate-700">{component.castShadow ? "On" : "Off"}</dd>
-              </dl>
-            </ComponentCard>
+            <LightInspector
+              key={component.id}
+              component={component}
+              readOnly={readOnly}
+              onChange={(patch) => onLightChange(component.id, patch)}
+            />
           );
         }
         if (component.type === "particle-emitter") {
@@ -1158,6 +1312,7 @@ export function InspectorPanel({
   onColliderChange,
   onAutoFitCollider,
   onRemoveCollider,
+  onLightChange,
   onSelectAsset,
   onCloseAsset,
   onMaterialChange,
@@ -1194,6 +1349,7 @@ export function InspectorPanel({
   onColliderChange: (entityId: string, componentId: string, patch: ColliderPatch) => void;
   onAutoFitCollider: (entityId: string, componentId: string) => void;
   onRemoveCollider: (entityId: string, componentId: string) => void;
+  onLightChange: (entityId: string, componentId: string, patch: LightPatch) => void;
   onSelectAsset: (assetId: string) => void;
   onCloseAsset: () => void;
   onMaterialChange: (assetId: string, patch: MaterialAssetPatch) => void;
@@ -1243,11 +1399,11 @@ export function InspectorPanel({
   const InspectorIcon = sceneSettingsOpen ? EDITOR_ICONS.settings : EntityIcon;
 
   return (
-    <aside className="row-span-2 flex min-h-0 flex-col border-l border-slate-300 bg-slate-100" aria-labelledby="inspector-heading">
-      <div className="flex h-10 shrink-0 items-center justify-between border-b border-slate-300 bg-slate-50 px-3">
+    <aside className="row-span-2 flex min-h-0 flex-col border-l border-zinc-200 bg-zinc-50" aria-labelledby="inspector-heading">
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-3">
         <div className="flex items-center gap-2">
-          <InspectorIcon size={14} className="text-slate-500" aria-hidden="true" />
-          <h2 id="inspector-heading" className="text-[13px] font-semibold text-slate-800">
+          <InspectorIcon size={14} className="text-zinc-500" aria-hidden="true" />
+          <h2 id="inspector-heading" className="text-[13px] font-semibold text-zinc-800">
             {sceneSettingsOpen
               ? "Scene Inspector"
               : asset
@@ -1334,6 +1490,9 @@ export function InspectorPanel({
             }
             onRemoveCollider={(componentId) =>
               onRemoveCollider(entity.id, componentId)
+            }
+            onLightChange={(componentId, patch) =>
+              onLightChange(entity.id, componentId, patch)
             }
             onParticleEmitterChange={(componentId, patch) =>
               onParticleEmitterChange(entity.id, componentId, patch)
