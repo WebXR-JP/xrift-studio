@@ -244,6 +244,32 @@ function App() {
       toast({ kind: "info", title: "ログアウトしました" });
     });
 
+  const handleDeleteProject = async (project: Project): Promise<boolean> => {
+    setBusy(true);
+    try {
+      await tauri.deleteProject(projectsRoot, project.path);
+      setProjects((current) =>
+        current.filter((candidate) => candidate.path !== project.path),
+      );
+      await refreshProjects();
+      toast({
+        kind: "success",
+        title: "プロジェクトを削除しました",
+        description: project.title || project.name,
+      });
+      return true;
+    } catch (error) {
+      toast({
+        kind: "error",
+        title: "プロジェクトを削除できませんでした",
+        description: String(error),
+      });
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleCreate = (kind: ProjectKind, name: string) =>
     wrap(async () => {
       const result = await xrift.createProject(projectsRoot, kind, name, appendLog);
@@ -726,6 +752,7 @@ function App() {
         busy={busy}
         projectsRoot={projectsRoot}
         onOpen={handleOpenProject}
+        onDelete={handleDeleteProject}
         onNew={() => setShowNewDialog(true)}
         onLogin={handleLogin}
         onLogout={handleLogout}

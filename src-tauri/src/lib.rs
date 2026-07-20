@@ -113,6 +113,9 @@ struct Project {
     format: String,
     title: Option<String>,
     description: Option<String>,
+    modified_at_ms: Option<u64>,
+    uploaded_at: Option<String>,
+    publication_id: Option<String>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -680,10 +683,60 @@ fn list_projects(root: String) -> Result<Vec<Project>, String> {
             format: "classic".to_string(),
             title,
             description,
+            modified_at_ms: file_modified_at_ms(&xrift_json),
+            uploaded_at: None,
+            publication_id: None,
         });
     }
     projects.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(projects)
+}
+
+fn file_modified_at_ms(path: &Path) -> Option<u64> {
+    path.metadata()
+        .ok()?
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|duration| u64::try_from(duration.as_millis()).ok())
+}
+
+fn resolve_deletable_project(root: &str, project_path: &str) -> Result<PathBuf, String> {
+    let root = PathBuf::from(root)
+        .canonicalize()
+        .map_err(|e| format!("project root cannot be resolved: {}", e))?;
+    let project = PathBuf::from(project_path)
+        .canonicalize()
+        .map_err(|e| format!("project cannot be resolved: {}", e))?;
+
+    if project.parent() != Some(root.as_path()) {
+        return Err("only direct children of the project root can be deleted".to_string());
+    }
+    if !project.is_dir() {
+        return Err("project deletion target is not a directory".to_string());
+    }
+    if !project.join(VISUAL_PROJECT_MANIFEST).is_file()
+        && !project.join("xrift.json").is_file()
+    {
+        return Err("project deletion target is not a recognized XRift project".to_string());
+    }
+    Ok(project)
+}
+
+#[tauri::command]
+fn delete_project(root: String, project_path: String) -> Result<(), String> {
+    let project = resolve_deletable_project(&root, &project_path)?;
+    force_remove_dir_all(&project).map_err(|error| {
+        format!(
+            "プロジェクト「{}」を削除できません: {}",
+            project
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("project"),
+            error
+        )
+    })
 }
 
 struct ValidatedVisualWrite {
@@ -1545,6 +1598,19 @@ fn project_from_visual_manifest(path: &Path, manifest: &VisualProjectManifest) -
         } else {
             Some(manifest.metadata.description.clone())
         },
+        modified_at_ms: file_modified_at_ms(&path.join(VISUAL_PROJECT_MANIFEST)),
+        uploaded_at: manifest
+            .last_publication
+            .as_ref()
+            .map(|publication| publication.uploaded_at.clone()),
+        publication_id: manifest.last_publication.as_ref().and_then(|publication| {
+            match manifest.project_kind.as_str() {
+                "world" => publication.world_id.clone(),
+                "item" => publication.item_id.clone(),
+                _ => publication.content_id.clone(),
+            }
+            .or_else(|| publication.content_id.clone())
+        }),
     }
 }
 
@@ -3699,6 +3765,7 @@ pub fn run() {
             sandbox_env,
             ensure_dir,
             list_projects,
+            delete_project,
             create_visual_project,
             read_visual_project,
             save_visual_project,
@@ -3763,6 +3830,49 @@ mod tests {
             asset_manifest_path: "assets/manifest.json".to_string(),
             last_publication: publication,
         }
+    }
+
+    #[test]
+    fn project_delete_boundary_accepts_only_direct_recognized_projects() {
+        let fixture_root = std::env::temp_dir().join(format!(
+            "xrift-studio-project-delete-boundary-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("fixture clock must follow unix epoch")
+                .as_nanos()
+        ));
+        let direct_project = fixture_root.join("direct-project");
+        let nested_project = fixture_root.join("group").join("nested-project");
+        let unrelated_directory = fixture_root.join("unrelated");
+        std::fs::create_dir_all(&direct_project).expect("direct project must be created");
+        std::fs::create_dir_all(&nested_project).expect("nested project must be created");
+        std::fs::create_dir_all(&unrelated_directory)
+            .expect("unrelated directory must be created");
+        std::fs::write(direct_project.join("xrift.json"), "{}")
+            .expect("direct project marker must be written");
+        std::fs::write(nested_project.join("xrift.json"), "{}")
+            .expect("nested project marker must be written");
+
+        assert_eq!(
+            resolve_deletable_project(
+                &fixture_root.to_string_lossy(),
+                &direct_project.to_string_lossy(),
+            )
+            .expect("direct recognized project must be accepted"),
+            direct_project.canonicalize().expect("direct project must resolve"),
+        );
+        assert!(resolve_deletable_project(
+            &fixture_root.to_string_lossy(),
+            &nested_project.to_string_lossy(),
+        )
+        .is_err());
+        assert!(resolve_deletable_project(
+            &fixture_root.to_string_lossy(),
+            &unrelated_directory.to_string_lossy(),
+        )
+        .is_err());
+
+        std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
     }
 
     #[test]

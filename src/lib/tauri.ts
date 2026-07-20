@@ -10,6 +10,9 @@ export type Project = {
   format: ProjectFormat;
   title: string | null;
   description: string | null;
+  modifiedAtMs: number | null;
+  uploadedAt: string | null;
+  publicationId: string | null;
 };
 
 export type RuntimePaths = {
@@ -118,6 +121,8 @@ export const tauri = {
   ensureDir: (path: string) => invoke<void>("ensure_dir", { path }),
   listProjects: (root: string) =>
     invoke<Project[]>("list_projects", { root }),
+  deleteProject: (root: string, projectPath: string) =>
+    invoke<void>("delete_project", { root, projectPath }),
   createVisualProject: (
     root: string,
     directoryName: string,

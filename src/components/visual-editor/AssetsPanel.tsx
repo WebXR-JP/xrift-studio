@@ -610,7 +610,7 @@ function AssetCard({
       >
         <span
           data-asset-drag-preview="true"
-          className="pointer-events-none relative block h-[76px] w-full shrink-0 overflow-hidden border-b border-editor-border/70 bg-editor-subtle"
+          className="pointer-events-none relative block h-16 w-full shrink-0 overflow-hidden border-b border-editor-border/70 bg-editor-subtle"
         >
           <AssetThumbnail asset={asset} assets={assets} projectPath={projectPath} />
           <span
@@ -778,7 +778,7 @@ function FolderCard({
   return (
     <div
       {...sharedProps}
-      className={`group relative flex min-h-[76px] min-w-0 flex-col items-center justify-center gap-1 rounded-lg border text-slate-600 ${dropTarget ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200" : "border-transparent bg-editor-surface hover:bg-editor-subtle"}`}
+      className={`group relative flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border text-slate-600 ${dropTarget ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200" : "border-transparent bg-editor-surface hover:bg-editor-subtle"}`}
     >
       <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className="flex h-full w-full cursor-grab select-none flex-col items-center justify-center gap-1.5 px-2 active:cursor-grabbing">
         <span className="relative">
@@ -1619,7 +1619,7 @@ export function AssetsPanel({
               {searching ? `${visibleAssets.length} / ${allAssets.length}件` : `${visibleItemCount}件`}
             </span>
           </div>
-          <div className={`scrollbar-thin min-w-0 flex-1 overflow-auto p-2.5 ${viewMode === "grid" ? "grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(118px,1fr))] content-start gap-2" : "space-y-1"}`}>
+          <div className={`scrollbar-thin min-w-0 flex-1 overflow-auto p-2 ${viewMode === "grid" ? "grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(104px,1fr))] content-start gap-1.5" : "space-y-1"}`}>
         {!activeFolder?.builtinPrefabs
           ? visibleFolders.map((folder) => (
               renameRequest?.kind === "folder" && renameRequest.id === folder.id ? (

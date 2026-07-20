@@ -1,13 +1,28 @@
 import { useMemo, useState } from "react";
-import { RefreshCw, Sparkles, Info, ExternalLink } from "lucide-react";
+import {
+  ArrowUpDown,
+  ExternalLink,
+  Info,
+  RefreshCw,
+  Search,
+  X,
+} from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Project } from "../lib/tauri";
 import type { Whoami } from "../lib/xrift-cli";
-import { ProjectCard, NewProjectCard } from "./ProjectCard";
+import { NewProjectCard, ProjectCard } from "./ProjectCard";
 import { BrandMark, BrandWordmark } from "./Brand";
 import { AboutModal } from "./AboutModal";
 import { UserMenu } from "./UserMenu";
 import { ThumbnailEditorModal } from "./ThumbnailEditorModal";
+import { ConfirmDialog } from "./ConfirmDialog";
+
+type ProjectSort =
+  | "updated-desc"
+  | "updated-asc"
+  | "uploaded-desc"
+  | "name-asc";
+type PublishFilter = "all" | "published" | "unpublished";
 
 type Props = {
   projects: Project[];
@@ -16,19 +31,32 @@ type Props = {
   userLoading: boolean;
   busy: boolean;
   projectsRoot: string;
-  onOpen: (p: Project) => void;
+  onOpen: (project: Project) => void;
+  onDelete: (project: Project) => Promise<boolean>;
   onNew: () => void;
   onLogin: () => void;
   onLogout: () => void;
   onRefresh: () => void;
 };
 
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 5) return "こんばんは";
-  if (h < 11) return "おはようございます";
-  if (h < 18) return "こんにちは";
-  return "こんばんは";
+function compareProjects(sort: ProjectSort) {
+  return (left: Project, right: Project) => {
+    if (sort === "name-asc") {
+      return (left.title || left.name).localeCompare(right.title || right.name, "ja");
+    }
+    if (sort === "uploaded-desc") {
+      return (
+        (Date.parse(right.uploadedAt ?? "") || 0) -
+          (Date.parse(left.uploadedAt ?? "") || 0) ||
+        (right.modifiedAtMs ?? 0) - (left.modifiedAtMs ?? 0)
+      );
+    }
+    const direction = sort === "updated-asc" ? 1 : -1;
+    return (
+      ((left.modifiedAtMs ?? 0) - (right.modifiedAtMs ?? 0)) * direction ||
+      (left.title || left.name).localeCompare(right.title || right.name, "ja")
+    );
+  };
 }
 
 export function ProjectLibrary({
@@ -39,42 +67,75 @@ export function ProjectLibrary({
   busy,
   projectsRoot,
   onOpen,
+  onDelete,
   onNew,
   onLogin,
   onLogout,
   onRefresh,
 }: Props) {
-  const hello = useMemo(() => greeting(), []);
-  const displayName = user?.displayName;
   const [showAbout, setShowAbout] = useState(false);
   const [editingThumb, setEditingThumb] = useState<Project | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [thumbRefresh, setThumbRefresh] = useState(0);
+  const [sort, setSort] = useState<ProjectSort>("updated-desc");
+  const [publishFilter, setPublishFilter] = useState<PublishFilter>("all");
+  const [query, setQuery] = useState("");
+
+  const visibleProjects = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase("ja");
+    return projects
+      .filter((project) => {
+        if (publishFilter === "published" && !project.uploadedAt) return false;
+        if (publishFilter === "unpublished" && project.uploadedAt) return false;
+        if (!normalizedQuery) return true;
+        return [project.name, project.title, project.description]
+          .filter((value): value is string => Boolean(value))
+          .some((value) => value.toLocaleLowerCase("ja").includes(normalizedQuery));
+      })
+      .sort(compareProjects(sort));
+  }, [projects, publishFilter, query, sort]);
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    try {
+      const deleted = await onDelete(deleteTarget);
+      if (deleted) setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const filtered = publishFilter !== "all" || query.trim().length > 0;
 
   return (
-    <div className="flex h-screen flex-col bg-aurora-subtle text-zinc-900">
-      <header className="flex items-center justify-between gap-4 border-b border-zinc-200 bg-white/80 px-6 py-3.5 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
-          <BrandMark size={32} />
-          <BrandWordmark sub="プロジェクトライブラリ" />
+    <div className="flex h-screen flex-col bg-zinc-100 text-zinc-900">
+      <header className="flex h-13 shrink-0 items-center justify-between gap-4 border-b border-zinc-200 bg-white px-4">
+        <div className="flex items-center gap-2.5">
+          <BrandMark size={28} />
+          <BrandWordmark sub="プロジェクト" />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => setShowAbout(true)}
-            className="flex items-center justify-center rounded-md border border-zinc-200 bg-white p-1.5 text-zinc-500 hover:bg-zinc-50"
+            className="flex items-center justify-center rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
             title="バージョン情報"
+            aria-label="バージョン情報"
           >
-            <Info size={13} strokeWidth={2} />
+            <Info size={14} aria-hidden="true" />
           </button>
           <button
             type="button"
             onClick={onRefresh}
             disabled={loading}
-            className="flex items-center justify-center rounded-md border border-zinc-200 bg-white p-1.5 text-zinc-500 hover:bg-zinc-50 disabled:opacity-50"
-            title="再読み込み"
+            className="flex items-center justify-center rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50"
+            title="プロジェクトを再読み込み"
+            aria-label="プロジェクトを再読み込み"
           >
-            <RefreshCw size={13} strokeWidth={2} className={loading ? "animate-spin" : ""} />
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} aria-hidden="true" />
           </button>
           <UserMenu
             user={user}
@@ -85,100 +146,152 @@ export function ProjectLibrary({
           />
         </div>
       </header>
+
       <AboutModal open={showAbout} onClose={() => setShowAbout(false)} />
-      {editingThumb && (
+      {editingThumb ? (
         <ThumbnailEditorModal
           project={editingThumb}
           onClose={() => setEditingThumb(null)}
-          onChanged={() => setThumbRefresh((k) => k + 1)}
+          onChanged={() => setThumbRefresh((key) => key + 1)}
         />
-      )}
+      ) : null}
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="プロジェクトを削除"
+        description={
+          deleteTarget
+            ? `「${deleteTarget.title || deleteTarget.name}」を保存先から完全に削除します。\n${deleteTarget.path}\n\nこの操作は元に戻せません。`
+            : undefined
+        }
+        confirmLabel="削除する"
+        destructive
+        busy={deleting}
+        onConfirm={() => void confirmDelete()}
+        onClose={() => !deleting && setDeleteTarget(null)}
+      />
 
-      <main className="flex-1 overflow-y-auto scrollbar-thin">
-        <div className="mx-auto max-w-7xl px-6 py-8">
-          {/* Hero */}
-          <div className="mb-8 flex items-end justify-between gap-6 animate-fade-in">
-            <div>
-              <div className="text-xs font-medium text-brand-600">
-                <span className="inline-flex items-center gap-1.5">
-                  <Sparkles size={12} strokeWidth={2.25} />
-                  XRift Studio
+      <main className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+        <div className="mx-auto max-w-[1600px] px-4 py-4">
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-baseline gap-2">
+                <h1 className="text-lg font-semibold tracking-tight text-zinc-900">
+                  プロジェクト
+                </h1>
+                <span className="text-xs tabular-nums text-zinc-500">
+                  {filtered ? `${visibleProjects.length} / ${projects.length}件` : `${projects.length}件`}
                 </span>
               </div>
-              <h1 className="mt-1 text-[28px] font-semibold tracking-tight text-zinc-900">
-                {hello}
-                {displayName && (
-                  <>
-                    、<span className="text-gradient-brand">{displayName}</span>
-                    <span className="text-zinc-400"> さん</span>
-                  </>
-                )}
-              </h1>
-              <p className="mt-1 text-sm text-zinc-500">
-                {displayName
-                  ? "今日はどんなワールドやアイテムを作りますか？"
-                  : "XR ワールドとアイテムを作って、XRift に公開しましょう。"}
+              <p className="mt-0.5 max-w-xl truncate font-mono text-[10px] text-zinc-400" title={projectsRoot}>
+                {projectsRoot}
               </p>
             </div>
-            <div className="flex flex-col items-end gap-2 text-xs text-zinc-500">
-              <div className="tabular-nums">{projects.length} 件のプロジェクト</div>
-              <div className="truncate font-mono text-[10px] text-zinc-400" title={projectsRoot}>
-                {projectsRoot}
-              </div>
-              {user && (
+
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <label className="relative block w-52">
+                <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" aria-hidden="true" />
+                <span className="sr-only">プロジェクトを検索</span>
+                <input
+                  type="search"
+                  name="project-search"
+                  autoComplete="off"
+                  value={query}
+                  onChange={(event) => setQuery(event.currentTarget.value)}
+                  placeholder="プロジェクトを検索…"
+                  className="h-8 w-full rounded-md border border-zinc-200 bg-white pl-8 pr-8 text-xs text-zinc-800 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-100"
+                />
+                {query ? (
+                  <button
+                    type="button"
+                    onClick={() => setQuery("")}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+                    aria-label="検索をクリア"
+                  >
+                    <X size={12} aria-hidden="true" />
+                  </button>
+                ) : null}
+              </label>
+
+              <select
+                value={publishFilter}
+                onChange={(event) => setPublishFilter(event.currentTarget.value as PublishFilter)}
+                className="h-8 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus-visible:outline-none focus-visible:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-100"
+                aria-label="公開状態で絞り込み"
+              >
+                <option value="all">すべての公開状態</option>
+                <option value="published">公開済み</option>
+                <option value="unpublished">未公開</option>
+              </select>
+
+              <label className="relative">
+                <ArrowUpDown size={12} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400" aria-hidden="true" />
+                <span className="sr-only">並び順</span>
+                <select
+                  value={sort}
+                  onChange={(event) => setSort(event.currentTarget.value as ProjectSort)}
+                  className="h-8 rounded-md border border-zinc-200 bg-white pl-7 pr-7 text-xs text-zinc-700 focus-visible:outline-none focus-visible:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-100"
+                >
+                  <option value="updated-desc">更新日時・新しい順</option>
+                  <option value="updated-asc">更新日時・古い順</option>
+                  <option value="uploaded-desc">公開日時・新しい順</option>
+                  <option value="name-asc">名前順</option>
+                </select>
+              </label>
+
+              {user ? (
                 <button
                   type="button"
                   onClick={() => openUrl("https://xrift.net/").catch(() => {})}
-                  className="flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50"
-                  title="XRift の公開ページを開く"
+                  className="flex h-8 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2.5 text-xs text-zinc-700 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+                  title="XRiftの公開ページを開く"
                 >
-                  <ExternalLink size={10} strokeWidth={2} />
-                  XRift で確認
+                  <ExternalLink size={12} aria-hidden="true" />
+                  XRift
                 </button>
-              )}
+              ) : null}
             </div>
           </div>
 
-          {/* Grid */}
-          <div
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-            style={{ animation: "fade-in 0.5s 0.1s both cubic-bezier(0.22, 1, 0.36, 1)" }}
-          >
-            <NewProjectCard onClick={onNew} />
-            {projects.map((p, i) => (
-              <div
-                key={p.path}
-                style={{ animation: `fade-in 0.5s ${0.15 + i * 0.04}s both cubic-bezier(0.22, 1, 0.36, 1)` }}
-              >
-                <ProjectCard
-                  project={p}
-                  onOpen={() => onOpen(p)}
-                  onEditThumbnail={() => setEditingThumb(p)}
-                  refreshKey={thumbRefresh}
-                />
-              </div>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-2.5">
+            <NewProjectCard busy={busy} onClick={onNew} />
+            {visibleProjects.map((project) => (
+              <ProjectCard
+                key={project.path}
+                project={project}
+                busy={busy || deleting}
+                onOpen={() => onOpen(project)}
+                onEditThumbnail={() => setEditingThumb(project)}
+                onDelete={() => setDeleteTarget(project)}
+                refreshKey={thumbRefresh}
+              />
             ))}
           </div>
 
-          {!loading && projects.length === 0 && (
-            <div className="mx-auto mt-12 max-w-md text-center">
-              <div className="relative mx-auto mb-4 h-20 w-20">
-                <div className="absolute inset-0 rounded-2xl gradient-brand-soft" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Sparkles size={28} className="text-brand-500" strokeWidth={1.75} />
-                </div>
-              </div>
-              <div className="text-sm text-zinc-700">
-                まだプロジェクトがありません。
-              </div>
-              <div className="mt-1 text-xs text-zinc-500">
-                「新規プロジェクト」から、作るものとコード／ビジュアルの制作方法を選びましょう。
-              </div>
+          {!loading && projects.length === 0 ? (
+            <div className="mt-6 rounded-lg border border-dashed border-zinc-300 bg-white/60 px-4 py-5 text-center">
+              <p className="text-sm font-medium text-zinc-700">まだプロジェクトがありません</p>
+              <p className="mt-1 text-xs text-zinc-500">上の「新規プロジェクト」から制作を始められます。</p>
             </div>
-          )}
+          ) : null}
+
+          {!loading && projects.length > 0 && visibleProjects.length === 0 ? (
+            <div className="mt-6 rounded-lg border border-zinc-200 bg-white px-4 py-5 text-center">
+              <p className="text-sm font-medium text-zinc-700">条件に一致するプロジェクトがありません</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setPublishFilter("all");
+                }}
+                className="mt-2 rounded-md px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+              >
+                絞り込みを解除
+              </button>
+            </div>
+          ) : null}
+
         </div>
       </main>
     </div>
   );
 }
-

@@ -1,27 +1,48 @@
 import { useEffect, useState } from "react";
 import {
-  ImageOff,
-  Plus,
-  Sparkles,
-  Camera,
   Box,
-  Globe2,
+  CalendarClock,
+  Camera,
+  Cloud,
   Code2,
+  Globe2,
+  ImageOff,
   PanelsTopLeft,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { tauri, type Project } from "../lib/tauri";
 
+const PROJECT_DATE_FORMATTER = new Intl.DateTimeFormat("ja-JP", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 type Props = {
   project: Project;
+  busy: boolean;
   onOpen: () => void;
   onEditThumbnail: () => void;
+  onDelete: () => void;
   refreshKey?: number;
 };
 
+export function formatProjectDate(value: number | string | null): string {
+  if (value === null) return "日時不明";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "日時不明";
+  return PROJECT_DATE_FORMATTER.format(date);
+}
+
 export function ProjectCard({
   project,
+  busy,
   onOpen,
   onEditThumbnail,
+  onDelete,
   refreshKey = 0,
 }: Props) {
   const [thumb, setThumb] = useState<string | null>(null);
@@ -32,8 +53,8 @@ export function ProjectCard({
     setLoading(true);
     tauri
       .readThumbnail(project.path)
-      .then((t) => {
-        if (mounted) setThumb(t);
+      .then((thumbnail) => {
+        if (mounted) setThumb(thumbnail);
       })
       .catch(() => mounted && setThumb(null))
       .finally(() => mounted && setLoading(false));
@@ -43,107 +64,135 @@ export function ProjectCard({
   }, [project.path, refreshKey]);
 
   return (
-    <div
-      className="group relative overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-brand-300 hover:shadow-brand-lg"
-    >
+    <article className="group flex min-h-28 overflow-hidden rounded-lg border border-zinc-200 bg-white transition-colors hover:border-zinc-300 hover:bg-zinc-50/60">
       <button
         type="button"
+        disabled={busy}
         onClick={onOpen}
-        className="flex w-full flex-col text-left"
+        className="flex min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 disabled:cursor-wait"
+        title={`${project.title || project.name}を開く`}
       >
-        <div className="relative aspect-video w-full overflow-hidden bg-gradient-to-br from-brand-100 via-zinc-100 to-blue-100">
+        <span className="relative w-28 shrink-0 overflow-hidden border-r border-zinc-200 bg-zinc-100">
           {thumb ? (
             <img
               src={thumb}
-              alt={project.name}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              alt={`${project.title || project.name}の表紙`}
+              className="h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-full items-center justify-center">
-              <div className="flex flex-col items-center gap-1 text-zinc-400">
-                <ImageOff size={30} strokeWidth={1.5} />
-                <span className="text-[10px]">
-                  {loading ? "読み込み中…" : "サムネイルなし"}
-                </span>
-              </div>
-            </div>
+            <span className="flex h-full flex-col items-center justify-center gap-1 text-zinc-400">
+              <ImageOff size={20} strokeWidth={1.5} aria-hidden="true" />
+              <span className="text-[9px]">
+                {loading ? "読込中" : "表紙なし"}
+              </span>
+            </span>
           )}
-          <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/25 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-        </div>
-        <div className="flex flex-1 flex-col gap-1 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span
-              className="inline-flex items-center gap-1 rounded bg-zinc-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-600"
-              title={project.kind === "item" ? "XRift アイテム" : "XRift ワールド"}
-            >
-              {project.kind === "item" ? <Box size={10} strokeWidth={2} /> : <Globe2 size={10} strokeWidth={2} />}
+        </span>
+
+        <span className="flex min-w-0 flex-1 flex-col px-3 py-2.5">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-zinc-500">
+              {project.kind === "item" ? (
+                <Box size={11} aria-hidden="true" />
+              ) : (
+                <Globe2 size={11} aria-hidden="true" />
+              )}
               {project.kind === "item" ? "Item" : "World"}
             </span>
-            <span
-              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
-                project.format === "visual"
-                  ? "bg-violet-50 text-violet-700"
-                  : "bg-sky-50 text-sky-700"
-              }`}
-              title={
-                project.format === "visual"
-                  ? "Scene / Asset JSONを編集するビジュアルプロジェクト"
-                  : "XRiftコードを直接編集するクラシックプロジェクト"
-              }
-            >
+            <span className="text-zinc-300" aria-hidden="true">/</span>
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-zinc-500">
               {project.format === "visual" ? (
-                <PanelsTopLeft size={10} strokeWidth={2} />
+                <PanelsTopLeft size={11} aria-hidden="true" />
               ) : (
-                <Code2 size={10} strokeWidth={2} />
+                <Code2 size={11} aria-hidden="true" />
               )}
               {project.format === "visual" ? "Visual" : "Classic"}
             </span>
-          </div>
-          <div className="font-semibold text-zinc-900 group-hover:text-brand-700">
+          </span>
+          <span className="mt-1 truncate text-sm font-semibold text-zinc-900 group-hover:text-brand-700">
             {project.title || project.name}
-          </div>
-          {project.title && project.title !== project.name && (
-            <div className="line-clamp-1 text-[11px] text-zinc-400">{project.name}</div>
-          )}
-          {project.description && (
-            <div className="line-clamp-2 text-xs text-zinc-500">{project.description}</div>
-          )}
-        </div>
+          </span>
+          {project.title && project.title !== project.name ? (
+            <span className="truncate text-[10px] text-zinc-400">{project.name}</span>
+          ) : null}
+          {project.description ? (
+            <span className="mt-1 line-clamp-1 text-[11px] text-zinc-500">
+              {project.description}
+            </span>
+          ) : null}
+          <span className="mt-auto flex items-center gap-3 pt-2 text-[10px] text-zinc-500">
+            <span
+              className="inline-flex min-w-0 items-center gap-1"
+              title={`更新: ${formatProjectDate(project.modifiedAtMs)}`}
+            >
+              <CalendarClock size={11} className="shrink-0" aria-hidden="true" />
+              <span className="truncate">{formatProjectDate(project.modifiedAtMs)}</span>
+            </span>
+            <span
+              className={`inline-flex shrink-0 items-center gap-1 ${
+                project.uploadedAt ? "text-emerald-700" : "text-zinc-400"
+              }`}
+              title={
+                project.uploadedAt
+                  ? `公開: ${formatProjectDate(project.uploadedAt)}${project.publicationId ? ` / ${project.publicationId}` : ""}`
+                  : "まだXRiftへ公開されていません"
+              }
+            >
+              <Cloud size={11} aria-hidden="true" />
+              {project.uploadedAt ? "公開済み" : "未公開"}
+            </span>
+          </span>
+        </span>
       </button>
 
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onEditThumbnail();
-        }}
-        className="absolute right-2 top-2 flex items-center gap-1 rounded-md bg-white/90 px-2 py-1 text-[11px] font-medium text-zinc-700 opacity-0 shadow-sm backdrop-blur-sm transition hover:bg-white group-hover:opacity-100"
-        title="サムネイルを編集"
-      >
-        <Camera size={11} strokeWidth={2} />
-        編集
-      </button>
-    </div>
+      <div className="flex w-10 shrink-0 flex-col items-center justify-start gap-1 border-l border-zinc-100 py-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onEditThumbnail}
+          className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-40"
+          title="表紙を編集"
+          aria-label={`${project.title || project.name}の表紙を編集`}
+        >
+          <Camera size={14} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onDelete}
+          className="rounded-md p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:opacity-40"
+          title="プロジェクトを削除"
+          aria-label={`${project.title || project.name}を削除`}
+        >
+          <Trash2 size={14} aria-hidden="true" />
+        </button>
+      </div>
+    </article>
   );
 }
 
-export function NewProjectCard({ onClick }: { onClick: () => void }) {
+export function NewProjectCard({
+  busy,
+  onClick,
+}: {
+  busy: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
+      disabled={busy}
       onClick={onClick}
-      className="group relative flex aspect-video flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border-2 border-dashed border-zinc-300 bg-white/60 text-zinc-500 transition-all hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700"
+      className="flex min-h-28 items-center gap-3 rounded-lg border border-dashed border-zinc-300 bg-white/70 px-4 text-left text-zinc-600 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50"
     >
-      <div className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-        <div className="h-full w-full gradient-brand-soft" />
-      </div>
-      <div className="relative rounded-full border border-current p-2.5 transition-transform duration-300 group-hover:scale-110">
-        <Plus size={18} strokeWidth={2.25} />
-      </div>
-      <span className="relative text-sm font-medium">新規プロジェクト</span>
-      <span className="relative mt-0.5 flex items-center gap-1 text-[10px] text-zinc-400 group-hover:text-brand-500">
-        <Sparkles size={9} strokeWidth={2} />
-        種別と制作方法を選んで開始
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-current">
+        <Plus size={16} aria-hidden="true" />
+      </span>
+      <span>
+        <span className="block text-sm font-semibold">新規プロジェクト</span>
+        <span className="mt-0.5 block text-[11px] text-zinc-500">
+          種別と制作方法を選んで開始
+        </span>
       </span>
     </button>
   );
