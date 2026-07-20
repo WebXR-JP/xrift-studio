@@ -72,7 +72,7 @@ F-06 アイテム検査
 | F-05 | 公開準備とアップロード | MI-03, MI-04, MI-05, MI-07, MI-08, MI-09, MI-17, MI-27 | 初期値の upload を防ぎ、toolchain が不足しても authoring を失わず、review から upload result / 審査状態まで続けられる。正式 result にない公開 URL は推測しない。 |
 | F-06 | アイテム検査 | MI-03, MI-05, MI-09 | ビルドを含むセキュリティチェックを実行でき、成功時は公開、失敗時はログと編集へ進める。 |
 | F-07 | ビジュアルエディター | MI-01, MI-09, MI-10, MI-11, MI-12, MI-13, MI-14, MI-15, MI-16, MI-18, MI-21, MI-22, MI-29, MI-30, MI-31, MI-32, MI-33, MI-34, MI-35, MI-37, MI-38, MI-40, MI-42, MI-43 | 四カードの入口、Hierarchy、Scene View、右 Inspector、下 Assets を使い、独立 selection、復元可能なEntityフォーカス、Empty / primitive / XRift Component 作成、Asset / Material / Particle / XRift Prefab D&D、Hierarchyの並び替え・親子化・Enabled、親子Transform、軸スクラブとScale比率固定、Material / Texture / Particle 編集、動的 thumbnail、Playとシーン全体の環境設定を扱える。左下のユーティリティレールからヘルプ、ショートカット、シーン設定へ迷わず到達できる。panel layout は resize / dock 後も復元され、Editor render failure は App 全体へ伝播させず再試行または一覧へ復帰できる。 |
-| F-08 | Visual Asset authoring / import | MI-11, MI-15, MI-16, MI-19, MI-20, MI-21, MI-28, MI-33, MI-36, MI-41 | Material / Texture / Model / GLTF / Prefab / Particle を folder と動的 thumbnail 付きで管理し、GLBの埋め込みMaterial / Textureを再利用可能なAssetへ展開する。sourceを壊さずimport、右Inspectorでrecipe編集、参照を保つreimport、stale診断を行え、Asset編集中も`sceneSelection`は保持される。 |
+| F-08 | Visual Asset authoring / import | MI-11, MI-15, MI-16, MI-19, MI-20, MI-21, MI-28, MI-33, MI-36, MI-41 | Material / Texture / Model / GLTF / Prefab / Particle を左のfolder tree、種類別collection、動的thumbnail付きで管理し、GLBの埋め込みMaterial / Textureを再利用可能なAssetへ展開する。sourceを壊さずimport、右Inspectorでrecipe編集、参照を保つreimport、stale診断を行え、Asset編集中も`sceneSelection`は保持される。 |
 | F-09 | Command / Shortcut / Prefab | MI-12, MI-22, MI-23, MI-24, MI-28, MI-30, MI-31, MI-34, MI-38, MI-43 | toolbar、menu、keyboard、Hierarchy D&D と左下の一覧が同じ Command / Shortcut Registry を使い、Copy / Paste / Duplicate / Delete / Reparent、Entityフォーカスの切替と解除、Empty / Component 作成、Hierarchy からの Prefab 化、XRift built-in Prefab配置、Undo / Redo が IDs と両 selection を復元する。 |
 | F-10 | Visual Save / Compile / Preview / Upload | MI-03, MI-05, MI-07, MI-08, MI-09, MI-17, MI-25, MI-26, MI-27 | authoring操作ごとの直列化された自動保存、journal付きcommit、決定的compiler / provenance、freshness検査、区別されたpreview、既存XRift check / uploadを一つのeditor flowで扱い、失敗や取消後もlast committed authoringと戻り先を保つ。 |
 | F-12 | Scene environment settings | MI-37, MI-38 | 左下の歯車から右のScene Inspectorへ切り替え、サムネイル、Skybox画像・回転・露出、Fog、環境光、Near/Far、FOV、背景、グリッド、ギズモ、スナップを一か所で設定し、Scene Viewと生成Worldに必要な値を一貫して反映する。 |
@@ -152,7 +152,7 @@ F-06 アイテム検査
 
 ### 操作前
 
-- Assets は Model / GLTF、Texture、Material、Prefab、Particle と folder を表示し、primitive は別の Create palette に置く。Material / Model / Texture は ready な generated thumbnail、未生成時だけ kind icon を使う。
+- Assets は左のfolder treeに実フォルダーの親子関係を常時表示し、右側に選択フォルダーの内容を出す。Model / GLTF、Texture、Material、Prefab、Particleの種類別collectionは実フォルダーと区別し、primitiveは別のCreate paletteに置く。Material / Model / Textureはreadyなgenerated thumbnail、未生成時だけkind iconを使う。
 - `sceneSelection` と `assetSelection` が独立し、右 Inspector がどちらの context を表示しているかを選択背景、header、pinned tab で示す。
 - Import 前に対応形式、source 保持、既定 max resolution / quality / mipmap / compression、resource budget、external URI が local dependency に限られることを確認できる。
 - Model Inspectorはsourceとlast-good解析結果、Material slot、animation、bounds、現在のimport recipeを同時に示し、解析済みの値と次回再import用の設定を区別する。

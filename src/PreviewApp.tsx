@@ -204,17 +204,17 @@ const steps = [
     accent: "from-violet-500 to-indigo-500",
   },
   {
-    icon: WandSparkles,
-    eyebrow: "作り始める",
-    title: "種別と制作方法を選ぶ",
-    text: "ワールドかアイテムを選び、コードまたはビジュアルで制作を始めます。",
+    icon: FolderOpen,
+    eyebrow: "素材を選ぶ",
+    title: "見つけて、配置する",
+    text: "左のフォルダーツリーからモデルや見た目の素材を見つけ、シーンへ配置します。",
     accent: "from-cyan-500 to-blue-500",
   },
   {
     icon: Play,
-    eyebrow: "確かめる",
-    title: "保存して動かす",
-    text: "編集した内容を保存し、ローカルプレビューやPlayで見え方と動きを確認します。",
+    eyebrow: "整える",
+    title: "見え方を確かめる",
+    text: "位置、光、マテリアルを調整し、保存した内容をその場でプレビューします。",
     accent: "from-emerald-500 to-teal-500",
   },
   {
@@ -225,6 +225,99 @@ const steps = [
     accent: "from-fuchsia-500 to-pink-500",
   },
 ];
+
+type AssetPreviewKind = "models" | "materials" | "textures";
+
+const assetPreviewContents: Record<AssetPreviewKind, Array<{ name: string; detail: string; tone: string }>> = {
+  models: [
+    { name: "Avocado.glb", detail: "Model · 7.9 MB", tone: "from-emerald-200 to-lime-100" },
+    { name: "WineGlass.glb", detail: "Model · 2.4 MB", tone: "from-sky-200 to-indigo-100" },
+  ],
+  materials: [
+    { name: "Avocado Material", detail: "Material · shared", tone: "from-lime-200 to-emerald-100" },
+    { name: "Glass Surface", detail: "Material · transparent", tone: "from-cyan-200 to-sky-100" },
+  ],
+  textures: [
+    { name: "Avocado Base Color", detail: "Texture · sRGB", tone: "from-emerald-300 to-lime-100" },
+    { name: "Glass Normal", detail: "Texture · Linear", tone: "from-violet-200 to-sky-100" },
+  ],
+};
+
+function AssetLibraryPreview() {
+  const [activeKind, setActiveKind] = useState<AssetPreviewKind>("materials");
+  const activeLabel = activeKind === "models" ? "Models" : activeKind === "materials" ? "Materials" : "Textures";
+
+  return (
+    <div
+      className="overflow-hidden rounded-xl border border-violet-200 bg-white shadow-xl shadow-violet-950/10"
+      role="img"
+      aria-label="LP用デモ。左側のフォルダーツリーからMaterialsを選び、マテリアル一覧を表示している画面"
+    >
+      <div className="flex items-center gap-1.5 border-b border-zinc-200 bg-zinc-50 px-3 py-2">
+        <span className="h-2 w-2 rounded-full bg-rose-300" />
+        <span className="h-2 w-2 rounded-full bg-amber-300" />
+        <span className="h-2 w-2 rounded-full bg-emerald-300" />
+        <span className="ml-2 text-[10px] font-semibold text-zinc-500">XRift Studio · Assets</span>
+      </div>
+      <div className="grid min-h-[270px] grid-cols-[132px_minmax(0,1fr)]">
+        <aside className="border-r border-zinc-200 bg-zinc-50/80 p-2.5 text-[10px] text-zinc-600">
+          <div className="flex items-center gap-1.5 rounded-md bg-zinc-200 px-2 py-1.5 font-semibold text-zinc-900">
+            <Folder size={13} className="text-zinc-500" />
+            Assets
+            <span className="ml-auto text-[9px] text-zinc-400">12</span>
+          </div>
+          <p className="mb-1 mt-4 px-2 text-[8px] font-bold uppercase tracking-[0.14em] text-zinc-400">種類</p>
+          <div className="space-y-0.5">
+            {(["models", "materials", "textures"] as AssetPreviewKind[]).map((kind) => {
+              const label = kind === "models" ? "Models" : kind === "materials" ? "Materials" : "Textures";
+              const Icon = kind === "models" ? Box : kind === "materials" ? WandSparkles : FileImage;
+              return (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => setActiveKind(kind)}
+                  className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left ${activeKind === kind ? "bg-violet-100 font-semibold text-violet-900" : "hover:bg-white"}`}
+                >
+                  <Icon size={12} />
+                  <span>{label}</span>
+                  <span className="ml-auto text-[9px] text-zinc-400">2</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mb-1 mt-4 px-2 text-[8px] font-bold uppercase tracking-[0.14em] text-zinc-400">フォルダー</p>
+          <div className="space-y-1 px-2 text-[10px]">
+            <div className="flex items-center gap-1.5 font-medium text-zinc-700"><FolderOpen size={12} className="text-violet-500" />Avocado</div>
+            <div className="ml-4 flex items-center gap-1.5 text-violet-800"><Folder size={11} />Materials</div>
+            <div className="ml-4 flex items-center gap-1.5 text-zinc-500"><Folder size={11} />Textures</div>
+          </div>
+        </aside>
+        <div className="min-w-0 bg-white p-3">
+          <div className="flex items-center justify-between gap-2 border-b border-zinc-100 pb-2">
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-semibold text-zinc-800">Assets / Avocado / {activeLabel}</p>
+              <p className="mt-0.5 text-[9px] text-zinc-400">素材を選択してInspectorで編集</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-semibold text-emerald-700">デモ表示</span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {assetPreviewContents[activeKind].map((asset) => (
+              <div key={asset.name} className="overflow-hidden rounded-md border border-zinc-200 bg-white">
+                <div className={`flex h-20 items-center justify-center bg-gradient-to-br ${asset.tone}`}>
+                  {activeKind === "materials" ? <WandSparkles size={24} className="text-white/80" /> : activeKind === "textures" ? <FileImage size={24} className="text-white/80" /> : <Box size={24} className="text-white/80" />}
+                </div>
+                <div className="p-2">
+                  <p className="truncate text-[10px] font-semibold text-zinc-800">{asset.name}</p>
+                  <p className="mt-0.5 truncate text-[9px] text-zinc-400">{asset.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function scrollToWorkspace() {
   document.getElementById("workspace-preview")?.scrollIntoView({
@@ -339,7 +432,7 @@ export default function PreviewApp() {
             <span className="text-gradient-brand">もっとつくりやすく。</span>
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-8 text-zinc-600 sm:text-lg">
-            ワールドとアイテムの制作を、準備・編集・プレビュー・公開まで支えるXRift Studio。コードでも、ビジュアルでも作れます。
+            ワールドとアイテムの制作を、準備・編集・プレビュー・公開までひとつにつなぐXRift Studio。コードでも、素材を選ぶビジュアル編集でも始められます。
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <a
@@ -772,7 +865,7 @@ export default function PreviewApp() {
             <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">制作の流れ</p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">作り始めて、確かめて、XRiftへ届ける。</h2>
             <p className="mt-4 text-sm leading-7 text-zinc-600">
-              ワールドかアイテムを選び、制作方法を決めたら、保存とプレビューを繰り返します。準備ができたら、公開情報を確認してXRiftへアップロードします。
+              ワールドかアイテムを選び、素材を集めて配置したら、保存とプレビューを繰り返します。準備ができたら、公開情報を確認してXRiftへ届けます。
             </p>
           </div>
           <div className="relative mt-12">
@@ -798,8 +891,8 @@ export default function PreviewApp() {
         <div className="mx-auto grid max-w-6xl gap-8 rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-7 sm:p-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-center">
           <div className="max-w-2xl">
             <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">ビジュアルで作る</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">コードが書けなくても、ワールドを作れる。</h2>
-            <p className="mt-4 text-sm leading-7 text-zinc-600">素材を配置し、見た目や設定を調整して、その場で確認できます。コード制作と同じアプリで、目的に合う作り方を選べます。</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">素材を選び、見た目を確かめながら作れる。</h2>
+            <p className="mt-4 text-sm leading-7 text-zinc-600">モデル、マテリアル、テクスチャをフォルダーから見つけて配置。シーンの見え方を確認しながら、コード制作と同じアプリで仕上げられます。</p>
             <button
               type="button"
               onClick={() => setVisualEditorKind(sampleKind)}
@@ -809,13 +902,7 @@ export default function PreviewApp() {
               ビジュアルエディターを試す
             </button>
           </div>
-          <figure className="overflow-hidden rounded-xl border border-violet-200 bg-zinc-950 shadow-xl shadow-violet-950/10">
-            <img
-              src="./visual-editor-screenshot.png"
-              alt="XRift Studioのビジュアルエディター。シーン、素材一覧、設定パネルを同時に表示している画面"
-              className="block h-auto w-full"
-            />
-          </figure>
+          <AssetLibraryPreview />
         </div>
       </section>
 

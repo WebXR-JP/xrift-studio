@@ -5,7 +5,9 @@ import {
   type ChangeEvent,
   type DragEvent,
   type MouseEvent,
+  type ReactElement,
 } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type {
   AssetManifest,
   BuiltinPrefabRecipe,
@@ -57,6 +59,19 @@ type BrowserFolder = {
   kind?: SceneAsset["kind"];
   custom?: boolean;
   builtinPrefabs?: boolean;
+};
+
+type AssetFolderTreeProps = {
+  assets: AssetManifest;
+  customFolders: BrowserFolder[];
+  kindFolders: BrowserFolder[];
+  activeFolderId: string | null;
+  allAssetCount: number;
+  folderItemCount: (folder: BrowserFolder) => number;
+  assetMutationLocked: boolean;
+  onActiveFolderChange: (folderId: string | null) => void;
+  onMoveAsset: (assetId: string, folderId: string | null) => void;
+  onMoveFolder: (folderId: string, parentId: string | null) => void;
 };
 
 const XRIFT_PREFABS_FOLDER_ID = "virtual-xrift-prefabs";
@@ -153,6 +168,238 @@ function importedModelFolderIds(assets: AssetManifest): Set<string> {
           ),
       )
       .map((asset) => asset.folderId as string),
+  );
+}
+
+function AssetFolderTree({
+  assets,
+  customFolders,
+  kindFolders,
+  activeFolderId,
+  allAssetCount,
+  folderItemCount,
+  assetMutationLocked,
+  onActiveFolderChange,
+  onMoveAsset,
+  onMoveFolder,
+}: AssetFolderTreeProps) {
+  const FolderIcon = EDITOR_ICONS.folder;
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
+    () => new Set(customFolders.map((folder) => folder.id)),
+  );
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeFolderId || !assets.folders?.[activeFolderId]) return;
+    setExpandedFolders((current) => {
+      const next = new Set(current);
+      let folderId: string | null = activeFolderId;
+      const visited = new Set<string>();
+      while (folderId && !visited.has(folderId)) {
+        visited.add(folderId);
+        next.add(folderId);
+        folderId = assets.folders?.[folderId]?.parentId ?? null;
+      }
+      return next;
+    });
+  }, [activeFolderId, assets.folders]);
+
+  const childrenOf = (parentId: string | null) =>
+    customFolders.filter(
+      (folder) => (assets.folders?.[folder.id]?.parentId ?? null) === parentId,
+    );
+
+  const toggleFolder = (folderId: string) => {
+    setExpandedFolders((current) => {
+      const next = new Set(current);
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
+      return next;
+    });
+  };
+
+  const handleDrop = (event: DragEvent<HTMLElement>, folderId: string | null) => {
+    const assetId = readEditorDragData(
+      event.dataTransfer,
+      ASSET_LIBRARY_ITEM_DRAG_MIME,
+    ).trim();
+    const sourceFolderId = readEditorDragData(
+      event.dataTransfer,
+      ASSET_LIBRARY_FOLDER_DRAG_MIME,
+    ).trim();
+    if (!assetId && !sourceFolderId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    clearEditorDragData();
+    setDropTargetId(null);
+    if (assetMutationLocked) return;
+    if (assetId) onMoveAsset(assetId, folderId);
+    else if (sourceFolderId) onMoveFolder(sourceFolderId, folderId);
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLElement>, folderId: string | null) => {
+    const hasLibraryPayload =
+      hasEditorDragData(event.dataTransfer, ASSET_LIBRARY_ITEM_DRAG_MIME) ||
+      hasEditorDragData(event.dataTransfer, ASSET_LIBRARY_FOLDER_DRAG_MIME);
+    if (!hasLibraryPayload) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = assetMutationLocked ? "none" : "move";
+    setDropTargetId(assetMutationLocked ? null : folderId ?? "__root__");
+  };
+
+  const handleDragLeave = (event: DragEvent<HTMLElement>) => {
+    const target = event.relatedTarget;
+    if (!(target instanceof Node && event.currentTarget.contains(target))) {
+      setDropTargetId(null);
+    }
+  };
+
+  const renderCustomFolder = (folder: BrowserFolder, depth: number): ReactElement => {
+    const children = childrenOf(folder.id);
+    const expanded = expandedFolders.has(folder.id);
+    const FolderIcon = EDITOR_ICONS.folder;
+    const KindIcon = EDITOR_ICONS[folder.icon];
+    const ChevronIcon = expanded ? ChevronDown : ChevronRight;
+    const isActive = activeFolderId === folder.id;
+    const isDropTarget = dropTargetId === folder.id;
+
+    return (
+      <div key={folder.id}>
+        <div
+          className={`group flex min-w-0 items-center gap-1 rounded-md pr-1 text-xs ${
+            isDropTarget
+              ? "bg-violet-100 text-violet-900 ring-1 ring-violet-300"
+              : isActive
+                ? "bg-violet-100 text-violet-900"
+                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          }`}
+          style={{ paddingLeft: `${8 + depth * 14}px` }}
+          onDragOver={(event) => handleDragOver(event, folder.id)}
+          onDragLeave={handleDragLeave}
+          onDrop={(event) => handleDrop(event, folder.id)}
+        >
+          {children.length > 0 ? (
+            <button
+              type="button"
+              className="rounded p-0.5 text-slate-400 hover:bg-white hover:text-slate-700"
+              aria-label={expanded ? `${folder.name}を折りたたむ` : `${folder.name}を展開する`}
+              onClick={() => toggleFolder(folder.id)}
+            >
+              <ChevronIcon size={13} aria-hidden="true" />
+            </button>
+          ) : (
+            <span className="w-[18px]" aria-hidden="true" />
+          )}
+          <button
+            type="button"
+            draggable={!assetMutationLocked}
+            data-editor-drag-source="asset-folder"
+            onDragStart={(event) => {
+              if (assetMutationLocked) return;
+              writeEditorDragData(event.dataTransfer, {
+                [ASSET_LIBRARY_FOLDER_DRAG_MIME]: folder.id,
+              });
+              event.dataTransfer.effectAllowed = "move";
+            }}
+            onDragEnd={() => {
+              clearEditorDragData();
+              setDropTargetId(null);
+            }}
+            onClick={() => onActiveFolderChange(folder.id)}
+            className="flex min-w-0 flex-1 cursor-grab items-center gap-1.5 py-1 text-left active:cursor-grabbing"
+            title={`${folder.name}を開く`}
+          >
+            {expanded ? (
+              <FolderIcon size={14} className="shrink-0 text-violet-500" aria-hidden="true" />
+            ) : (
+              <FolderIcon size={14} className="shrink-0 text-slate-400" aria-hidden="true" />
+            )}
+            <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+            <span className="shrink-0 tabular-nums text-[10px] text-slate-400">
+              {folderItemCount(folder)}
+            </span>
+            <KindIcon size={11} className="shrink-0 text-slate-400" aria-hidden="true" />
+          </button>
+        </div>
+        {expanded
+          ? children.map((child) => renderCustomFolder(child, depth + 1))
+          : null}
+      </div>
+    );
+  };
+
+  const renderCollection = (folder: BrowserFolder) => {
+    const isActive = activeFolderId === folder.id;
+    const KindIcon = EDITOR_ICONS[folder.icon];
+    return (
+      <button
+        key={folder.id}
+        type="button"
+        onClick={() => onActiveFolderChange(folder.id)}
+        className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs ${
+          isActive
+            ? "bg-violet-100 font-semibold text-violet-900"
+            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+        }`}
+        title={`${folder.name}のアセットを表示`}
+      >
+        <KindIcon size={14} className="shrink-0 text-slate-500" aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+        <span className="tabular-nums text-[10px] text-slate-400">
+          {folderItemCount(folder)}
+        </span>
+      </button>
+    );
+  };
+
+  return (
+    <aside className="flex w-56 shrink-0 flex-col border-r border-slate-300 bg-white" aria-label="Asset folders">
+      <div className="border-b border-slate-200 px-3 py-2">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Asset Library</p>
+        <p className="mt-0.5 text-xs text-slate-500">素材の場所と種類</p>
+      </div>
+      <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-2">
+        <div
+          onDragOver={(event) => handleDragOver(event, null)}
+          onDragLeave={handleDragLeave}
+          onDrop={(event) => handleDrop(event, null)}
+          className={`rounded-md ${dropTargetId === "__root__" ? "bg-violet-100 ring-1 ring-violet-300" : ""}`}
+        >
+          <button
+            type="button"
+            onClick={() => onActiveFolderChange(null)}
+            className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs ${
+              activeFolderId === null
+                ? "bg-slate-200 font-semibold text-slate-900"
+                : "text-slate-700 hover:bg-slate-100"
+            }`}
+            title="Assets直下を表示"
+          >
+            <FolderIcon size={15} className="text-slate-500" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate">Assets</span>
+            <span className="tabular-nums text-[10px] text-slate-400">{allAssetCount}</span>
+          </button>
+        </div>
+
+        <p className="mb-1 mt-4 px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+          種類
+        </p>
+        <div className="space-y-0.5">{kindFolders.map(renderCollection)}</div>
+
+        <p className="mb-1 mt-4 px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+          フォルダー
+        </p>
+        <div className="space-y-0.5">
+          {childrenOf(null).map((folder) => renderCustomFolder(folder, 0))}
+          {customFolders.length === 0 ? (
+            <p className="px-2 py-2 text-[11px] leading-4 text-slate-400">
+              フォルダーはまだありません。右クリックから作成できます。
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </aside>
   );
 }
 
@@ -868,9 +1115,7 @@ export function AssetsPanel({
       ? [
           ...KIND_FOLDERS,
           ...customFolders.filter(
-            (folder) =>
-              assets.folders?.[folder.id]?.parentId === null &&
-              !modelFolderIds.has(folder.id),
+            (folder) => assets.folders?.[folder.id]?.parentId === null,
           ),
         ]
       : activeFolder?.custom
@@ -881,15 +1126,7 @@ export function AssetsPanel({
           ? customFolders.filter((folder) => modelFolderIds.has(folder.id))
           : [];
   const folderAssets = activeFolder?.kind
-    ? allAssets.filter(
-        (asset) =>
-          asset.kind === activeFolder.kind &&
-          !(
-            activeFolder.kind === "model" &&
-            asset.folderId &&
-            modelFolderIds.has(asset.folderId)
-          ),
-      )
+    ? allAssets.filter((asset) => asset.kind === activeFolder.kind)
     : activeFolder?.custom
       ? allAssets.filter((asset) => (asset.folderId ?? null) === activeFolder.id)
       : activeFolder?.builtinPrefabs
@@ -1202,7 +1439,20 @@ export function AssetsPanel({
         </div>
       </div>
 
-      <div className={`scrollbar-thin h-[calc(100%-2.25rem)] min-h-0 overflow-auto p-2 ${viewMode === "grid" ? "grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(112px,1fr))] content-start gap-2" : "space-y-1.5"}`}>
+      <div className="flex h-[calc(100%-2.25rem)] min-h-0">
+        <AssetFolderTree
+          assets={assets}
+          customFolders={customFolders}
+          kindFolders={KIND_FOLDERS}
+          activeFolderId={activeFolderId}
+          allAssetCount={allAssets.length}
+          folderItemCount={folderItemCount}
+          assetMutationLocked={assetMutationLocked}
+          onActiveFolderChange={onActiveFolderChange}
+          onMoveAsset={onMoveAsset}
+          onMoveFolder={onMoveFolder}
+        />
+        <div className={`scrollbar-thin min-w-0 flex-1 overflow-auto p-2 ${viewMode === "grid" ? "grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(112px,1fr))] content-start gap-2" : "space-y-1.5"}`}>
         {!activeFolder?.builtinPrefabs
           ? visibleFolders.map((folder) => (
               renameRequest?.kind === "folder" && renameRequest.id === folder.id ? (
@@ -1312,6 +1562,7 @@ export function AssetsPanel({
             <span className="mt-1 block text-[11px]">ここへドロップするとAssets直下へ移動します</span>
           </button>
         ) : null}
+        </div>
       </div>
 
       {pendingImports.length > 0 || importError ? (
