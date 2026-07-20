@@ -11,6 +11,8 @@ import {
   RefreshCw,
   Camera,
   Globe,
+  Box,
+  ShieldCheck,
 } from "lucide-react";
 import { tauri, type Project } from "../lib/tauri";
 import {
@@ -49,6 +51,7 @@ type Props = {
 };
 
 const DEFAULT_CANDIDATES = [
+  "src/Item.tsx",
   "src/World.tsx",
   "src/index.tsx",
   "src/main.tsx",
@@ -205,7 +208,7 @@ export function EditorView({
 
   const performUpload = () =>
     wrap(async () => {
-      const result = await xrift.upload(project.path, appendLog);
+      const result = await xrift.upload(project.path, project.kind, appendLog);
       onProjectChanged();
       const combined = `${result.stdout}\n${result.stderr}`.replace(
         /\u001b\[[0-9;]*m/g,
@@ -239,7 +242,7 @@ export function EditorView({
     if (checkingPublish || busy) return;
     setCheckingPublish(true);
     try {
-      const readiness = await inspectPublishReadiness(project.path);
+      const readiness = await inspectPublishReadiness(project.path, project.kind);
       if (readiness.ready) {
         setPublishReadiness(null);
         setResumePublishAfterPreparation(false);
@@ -267,6 +270,24 @@ export function EditorView({
   const handleUpload = () => {
     void checkPublishReadiness();
   };
+
+  const handleItemCheck = () =>
+    wrap(async () => {
+      setLogsCollapsed(false);
+      const result = await xrift.checkItem(project.path, appendLog);
+      if (result.code === 0) {
+        toast({
+          kind: "success",
+          title: "アイテムのセキュリティチェックに通過しました",
+        });
+      } else {
+        toast({
+          kind: "error",
+          title: "アイテムのセキュリティチェックに失敗しました",
+          description: "ログを確認して修正してください",
+        });
+      }
+    });
 
   const handlePreparationChanged = () => {
     if (resumePublishAfterPreparation) void checkPublishReadiness();
@@ -352,6 +373,8 @@ export function EditorView({
     setSelectedKind("image");
   };
 
+  const projectLabel = project.kind === "item" ? "アイテム" : "ワールド";
+
   return (
     <div className="flex h-screen flex-col bg-zinc-50 text-zinc-900">
       <header className="flex items-center justify-between gap-3 border-b border-zinc-200 bg-white px-4 py-2.5">
@@ -371,6 +394,10 @@ export function EditorView({
               <div className="text-[10px] text-zinc-500">{project.title}</div>
             )}
           </div>
+          <span className="inline-flex items-center gap-1 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-600">
+            {project.kind === "item" ? <Box size={10} strokeWidth={2} /> : <Globe size={10} strokeWidth={2} />}
+            {projectLabel}
+          </span>
           {devUrl && (
             <button
               type="button"
@@ -388,7 +415,7 @@ export function EditorView({
               type="button"
               onClick={handleOpenPublished}
               className="ml-2 flex items-center gap-1.5 rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-[11px] font-medium text-brand-700 hover:bg-brand-100"
-              title="アップロード済みワールドを XRift で開く"
+              title={`アップロード済み${projectLabel}を XRift で開く`}
             >
               <Globe size={10} strokeWidth={2} />
               XRift で開く
@@ -447,6 +474,18 @@ export function EditorView({
             <Code2 size={12} strokeWidth={2} />
             VS Code
           </button>
+          {project.kind === "item" && (
+            <button
+              type="button"
+              onClick={handleItemCheck}
+              disabled={busy || checkingPublish}
+              className="flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+              title="ビルドを含むアイテムのセキュリティチェックを実行"
+            >
+              <ShieldCheck size={12} strokeWidth={2} />
+              チェック
+            </button>
+          )}
           <button
             type="button"
             onClick={handleUpload}
@@ -537,6 +576,7 @@ export function EditorView({
           ) : isXriftJsonForm ? (
             <XriftJsonEditor
               projectPath={project.path}
+              projectKind={project.kind}
               onOpenRaw={() => setXriftJsonRaw(true)}
               onRefresh={onProjectChanged}
               onSaved={handlePreparationChanged}
@@ -556,6 +596,7 @@ export function EditorView({
           ) : isThumbnail ? (
             <ThumbnailEditor
               projectPath={project.path}
+              projectKind={project.kind}
               publishPreparation={resumePublishAfterPreparation}
               onChanged={() => {
                 onProjectChanged();
@@ -584,6 +625,7 @@ export function EditorView({
       </div>
       <PublishReadinessDialog
         readiness={publishReadiness}
+        projectKind={project.kind}
         onEditMetadata={handleEditPublishMetadata}
         onEditThumbnail={handleEditPublishThumbnail}
         onClose={() => {

@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { ProjectLibrary } from "./components/ProjectLibrary";
 import { EditorView } from "./components/EditorView";
-import { NewWorldDialog } from "./components/NewWorldDialog";
+import { NewProjectDialog } from "./components/NewProjectDialog";
 import { SetupView } from "./components/SetupView";
 import { UpdateDialog } from "./components/UpdateDialog";
-import { tauri, type Project, type RuntimeStatus } from "./lib/tauri";
+import {
+  tauri,
+  type Project,
+  type ProjectKind,
+  type RuntimeStatus,
+} from "./lib/tauri";
 import { xrift, clearCaches, type LogLine, type Whoami } from "./lib/xrift-cli";
 import { isNewer } from "./lib/semver";
 import { useToast } from "./components/Toast";
@@ -166,24 +171,24 @@ function App() {
       toast({ kind: "info", title: "ログアウトしました" });
     });
 
-  const handleCreate = (name: string) =>
+  const handleCreate = (kind: ProjectKind, name: string) =>
     wrap(async () => {
-      const result = await xrift.createWorld(projectsRoot, name, appendLog);
+      const result = await xrift.createProject(projectsRoot, kind, name, appendLog);
       setShowNewDialog(false);
       await refreshProjects();
       const list = await tauri.listProjects(projectsRoot);
-      const created = list.find((p) => p.name === name);
+      const created = list.find((p) => p.name === name && p.kind === kind);
       if (result.code === 0) {
         toast({
           kind: "success",
-          title: "ワールドを作成しました",
+          title: `${kind === "item" ? "アイテム" : "ワールド"}を作成しました`,
           description: name,
         });
         if (created) setSelected(created);
       } else {
         toast({
           kind: "error",
-          title: "ワールド作成に失敗しました",
+          title: `${kind === "item" ? "アイテム" : "ワールド"}の作成に失敗しました`,
           description: "ログを確認してください",
         });
       }
@@ -250,7 +255,7 @@ function App() {
         onLogout={handleLogout}
         onRefresh={refreshProjects}
       />
-      <NewWorldDialog
+      <NewProjectDialog
         open={showNewDialog}
         busy={busy}
         onClose={() => setShowNewDialog(false)}

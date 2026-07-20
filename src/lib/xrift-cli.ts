@@ -1,6 +1,6 @@
 import { Command, type Child } from "@tauri-apps/plugin-shell";
 import { platform } from "@tauri-apps/plugin-os";
-import { tauri, type RuntimePaths } from "./tauri";
+import { tauri, type ProjectKind, type RuntimePaths } from "./tauri";
 
 export type LogKind = "stdout" | "stderr" | "info" | "exit";
 export type LogLine = { kind: LogKind; text: string; ts: number };
@@ -203,17 +203,33 @@ export const xrift = {
     if (!result || result.code !== 0) return null;
     return parseWhoami(result.stdout + "\n" + result.stderr);
   },
-  createWorld: (root: string, name: string, onLog: (l: LogLine) => void) =>
+  createProject: (
+    root: string,
+    kind: ProjectKind,
+    name: string,
+    onLog: (l: LogLine) => void,
+  ) =>
     run({
       bin: "xrift",
-      args: ["create", "world", name, "-y"],
+      args: ["create", kind, name, "-y"],
       cwd: root,
       onLog,
     }),
-  upload: (projectPath: string, onLog: (l: LogLine) => void) =>
+  checkItem: (projectPath: string, onLog: (l: LogLine) => void) =>
     run({
       bin: "xrift",
-      args: ["upload", "world"],
+      args: ["check", "item", "--build"],
+      cwd: projectPath,
+      onLog,
+    }),
+  upload: (
+    projectPath: string,
+    kind: ProjectKind,
+    onLog: (l: LogLine) => void,
+  ) =>
+    run({
+      bin: "xrift",
+      args: ["upload", kind],
       cwd: projectPath,
       onLog,
     }),

@@ -1,5 +1,6 @@
 .preview-shell {
   min-height: 100%;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 10% 8%, rgba(196, 181, 253, 0.22), transparent 30rem),
     radial-gradient(circle at 92% 10%, rgba(125, 211, 252, 0.18), transparent 28rem),
@@ -49,6 +50,12 @@
   white-space: pre;
 }
 
+.preview-shell a:focus-visible,
+.preview-shell button:focus-visible {
+  outline: 3px solid rgba(124, 58, 237, 0.35);
+  outline-offset: 3px;
+}
+
 .preview-world-running .preview-planet {
   animation: float 4s ease-in-out infinite;
 }
@@ -80,11 +87,33 @@
   to { transform: translateX(-50%) rotate(346deg); }
 }
 
+@media (max-width: 639px) {
+  .preview-orb-one {
+    top: 3rem;
+    right: -7rem;
+    width: 16rem;
+    height: 16rem;
+  }
+
+  .preview-orb-two {
+    top: 22rem;
+    right: -2rem;
+    width: 6rem;
+    height: 6rem;
+  }
+
+  .preview-code {
+    min-width: 34rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .preview-orb-one,
-  .preview-orb-two,
-  .preview-world-running .preview-planet,
-  .preview-world-running .preview-ring {
-    animation: none;
+  .preview-shell *,
+  .preview-shell *::before,
+  .preview-shell *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

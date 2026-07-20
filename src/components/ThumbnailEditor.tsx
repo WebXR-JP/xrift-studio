@@ -1,17 +1,21 @@
 import { useEffect, useRef, useState } from "react";
-import { tauri } from "../lib/tauri";
+import { tauri, type ProjectKind } from "../lib/tauri";
 
 type Props = {
   projectPath: string;
+  projectKind: ProjectKind;
   onChanged?: () => void;
   publishPreparation?: boolean;
 };
 
 export function ThumbnailEditor({
   projectPath,
+  projectKind,
   onChanged,
   publishPreparation = false,
 }: Props) {
+  const projectLabel = projectKind === "item" ? "アイテム" : "ワールド";
+  const recommendedSize = projectKind === "item" ? "512×512" : "1024×576 以上";
   const [thumb, setThumb] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -89,7 +93,7 @@ export function ThumbnailEditor({
       <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-2">
         <div className="text-xs font-medium text-zinc-700">public/thumbnail.png</div>
         <div className="mt-0.5 text-[11px] text-zinc-500">
-          ワールド一覧やXRift上で表示されるサムネイル画像（推奨: 1024×576 以上）
+          {projectLabel}一覧やXRift上で表示されるサムネイル画像（推奨: {recommendedSize}）
         </div>
         {publishPreparation && (
           <div className="mt-1 text-[11px] text-amber-800">

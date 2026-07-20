@@ -89,12 +89,22 @@ struct SetupProgress {
 struct Project {
     name: String,
     path: String,
+    kind: String,
+    title: Option<String>,
+    description: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ProjectMetadata {
     title: Option<String>,
     description: Option<String>,
 }
 
 #[derive(Deserialize)]
 struct XriftJson {
+    world: Option<ProjectMetadata>,
+    item: Option<ProjectMetadata>,
+    // 古いプロジェクトをライブラリから消さないための後方互換用。
     title: Option<String>,
     description: Option<String>,
 }
@@ -437,14 +447,23 @@ fn list_projects(root: String) -> Result<Vec<Project>, String> {
             .and_then(|n| n.to_str())
             .unwrap_or("")
             .to_string();
-        let (title, description) = std::fs::read_to_string(&xrift_json)
+        let (kind, title, description) = std::fs::read_to_string(&xrift_json)
             .ok()
             .and_then(|c| serde_json::from_str::<XriftJson>(&c).ok())
-            .map(|j| (j.title, j.description))
-            .unwrap_or((None, None));
+            .map(|j| {
+                if let Some(item) = j.item {
+                    ("item".to_string(), item.title, item.description)
+                } else if let Some(world) = j.world {
+                    ("world".to_string(), world.title, world.description)
+                } else {
+                    ("world".to_string(), j.title, j.description)
+                }
+            })
+            .unwrap_or(("world".to_string(), None, None));
         projects.push(Project {
             name,
             path: path.to_string_lossy().to_string(),
+            kind,
             title,
             description,
         });

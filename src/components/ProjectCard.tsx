@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ImageOff, Plus, Sparkles, Camera } from "lucide-react";
+import { ImageOff, Plus, Sparkles, Camera, Box, Globe2 } from "lucide-react";
 import { tauri, type Project } from "../lib/tauri";
 
 type Props = {
@@ -62,11 +62,20 @@ export function ProjectCard({
           <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/25 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
         </div>
         <div className="flex flex-1 flex-col gap-1 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span
+              className="inline-flex items-center gap-1 rounded bg-zinc-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-600"
+              title={project.kind === "item" ? "XRift アイテム" : "XRift ワールド"}
+            >
+              {project.kind === "item" ? <Box size={10} strokeWidth={2} /> : <Globe2 size={10} strokeWidth={2} />}
+              {project.kind === "item" ? "Item" : "World"}
+            </span>
+          </div>
           <div className="font-semibold text-zinc-900 group-hover:text-brand-700">
-            {project.name}
+            {project.title || project.name}
           </div>
           {project.title && project.title !== project.name && (
-            <div className="line-clamp-1 text-xs text-zinc-500">{project.title}</div>
+            <div className="line-clamp-1 text-[11px] text-zinc-400">{project.name}</div>
           )}
           {project.description && (
             <div className="line-clamp-2 text-xs text-zinc-500">{project.description}</div>
@@ -103,10 +112,10 @@ export function NewProjectCard({ onClick }: { onClick: () => void }) {
       <div className="relative rounded-full border border-current p-2.5 transition-transform duration-300 group-hover:scale-110">
         <Plus size={18} strokeWidth={2.25} />
       </div>
-      <span className="relative text-sm font-medium">新規ワールド</span>
+      <span className="relative text-sm font-medium">新規プロジェクト</span>
       <span className="relative mt-0.5 flex items-center gap-1 text-[10px] text-zinc-400 group-hover:text-brand-500">
         <Sparkles size={9} strokeWidth={2} />
-        テンプレートから作成
+        ワールドまたはアイテムを作成
       </span>
     </button>
   );

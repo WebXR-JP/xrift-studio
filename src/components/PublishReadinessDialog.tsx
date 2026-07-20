@@ -1,9 +1,11 @@
 import { useEffect } from "react";
 import { Check, FileText, Image, Pencil, X } from "lucide-react";
 import type { PublishReadiness, PublishReadinessState } from "../lib/publish-readiness";
+import type { ProjectKind } from "../lib/tauri";
 
 type Props = {
   readiness: PublishReadiness | null;
+  projectKind: ProjectKind;
   onEditMetadata: () => void;
   onEditThumbnail: () => void;
   onClose: () => void;
@@ -33,6 +35,7 @@ function stateLabel(state: PublishReadinessState, templateLabel: string) {
 
 export function PublishReadinessDialog({
   readiness,
+  projectKind,
   onEditMetadata,
   onEditThumbnail,
   onClose,
@@ -48,9 +51,11 @@ export function PublishReadinessDialog({
 
   if (!readiness) return null;
 
+  const projectLabel = projectKind === "item" ? "アイテム" : "ワールド";
+
   const metadataNeedsAttention = readiness.metadata.state !== "ready";
   const nextLabel = metadataNeedsAttention
-    ? "ワールド情報を編集"
+    ? `${projectLabel}情報を編集`
     : "サムネイルを設定";
   const nextAction = metadataNeedsAttention ? onEditMetadata : onEditThumbnail;
 
@@ -76,7 +81,7 @@ export function PublishReadinessDialog({
             公開前の準備
           </div>
           <p className="mt-1 text-xs leading-relaxed text-zinc-600">
-            このまま公開すると、XRift 上で初期ワールドのように表示される可能性があります。公開情報を整えてからアップロードします。
+            このまま公開すると、XRift 上で初期{projectLabel}のように表示される可能性があります。公開情報を整えてからアップロードします。
           </p>
         </div>
 
@@ -86,7 +91,7 @@ export function PublishReadinessDialog({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 text-sm font-medium text-zinc-900">
                 <FileText size={14} strokeWidth={2} className="text-zinc-500" />
-                ワールド情報
+                {projectLabel}情報
               </div>
               <div className="mt-1 text-[11px] text-zinc-500">
                 {stateLabel(readiness.metadata.state, "テンプレートのままです")}

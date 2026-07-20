@@ -116,8 +116,8 @@ export function ProjectLibrary({
               </h1>
               <p className="mt-1 text-sm text-zinc-500">
                 {displayName
-                  ? "今日はどんなワールドを作りますか？"
-                  : "XR ワールドを作って、世界に公開しましょう。"}
+                  ? "今日はどんなワールドやアイテムを作りますか？"
+                  : "XR ワールドとアイテムを作って、XRift に公開しましょう。"}
               </p>
             </div>
             <div className="flex flex-col items-end gap-2 text-xs text-zinc-500">
@@ -169,10 +169,10 @@ export function ProjectLibrary({
                 </div>
               </div>
               <div className="text-sm text-zinc-700">
-                まだワールドがありません。
+                まだプロジェクトがありません。
               </div>
               <div className="mt-1 text-xs text-zinc-500">
-                「+ 新規ワールド」から、あなたの最初の XR 空間を作ってみましょう。
+                「新規プロジェクト」から、ワールドまたはアイテムのテンプレートを選びましょう。
               </div>
             </div>
           )}

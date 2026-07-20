@@ -138,7 +138,7 @@ export function AboutModal({ open, onClose }: Props) {
                 XRift Studio
               </div>
               <div className="text-xs text-zinc-500">
-                XRift の非公式クライアント — 環境構築を高速化
+                XRift の制作をひとつの画面でつなぐデスクトップアプリ
               </div>
             </div>
           </div>
@@ -146,7 +146,7 @@ export function AboutModal({ open, onClose }: Props) {
 
         <div className="px-6 py-5">
           <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
-            本アプリは XRift 公式とは無関係の有志による非公式クライアントです。環境構築の手間を減らすことを目的としています。
+            本アプリは XRift 公式とは無関係の有志製ツールです。ワールドやアイテムの作成、確認、公開を進めやすくすることを目的としています。
           </div>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
             Versions
@@ -158,7 +158,7 @@ export function AboutModal({ open, onClose }: Props) {
               label="@xrift/cli"
               value={v.xrift}
               loading={v.xriftLoading}
-              hint="ワールドの作成・公開ツール"
+              hint="ワールドやアイテムの作成・公開ツール"
               onReload={reloadXrift}
             />
           </dl>
@@ -203,15 +203,15 @@ export function AboutModal({ open, onClose }: Props) {
             className="flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-700"
           >
             <ExternalLink size={11} strokeWidth={2} />
-            ドキュメント
+            XRift 公式ドキュメント
           </button>
           <button
             type="button"
-            onClick={() => openUrl("https://github.com/WebXR-JP").catch(() => {})}
+            onClick={() => openUrl("https://github.com/WebXR-JP/xrift-studio").catch(() => {})}
             className="flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-700"
           >
             <ExternalLink size={11} strokeWidth={2} />
-            GitHub (WebXR-JP)
+            XRift Studio の GitHub
           </button>
           <button
             type="button"

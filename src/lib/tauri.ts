@@ -1,8 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export type ProjectKind = "world" | "item";
+
 export type Project = {
   name: string;
   path: string;
+  kind: ProjectKind;
   title: string | null;
   description: string | null;
 };

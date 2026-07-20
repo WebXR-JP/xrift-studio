@@ -1,11 +1,11 @@
 {
   "name": "xrift-studio",
   "private": true,
-  "version": "0.1.0",
-  "description": "Unofficial XRift client app — streamlines environment setup for world creators",
+  "version": "0.2.0",
+  "description": "Community-built desktop app for creating XRift worlds and items",
   "type": "module",
   "license": "MIT",
-  "author": "XRift",
+  "author": "xrift-studio contributors",
   "engines": {
     "node": ">=20"
   },
@@ -18,8 +18,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "mcp:server": "npx -y @hypothesi/tauri-mcp-server",
-    "mcp:cli": "npx -y @hypothesi/tauri-mcp-cli"
+    "mcp:server": "pnpm dlx @hypothesi/tauri-mcp-server",
+    "mcp:cli": "pnpm dlx @hypothesi/tauri-mcp-cli"
   },
   "overrides": {
     "dompurify": "3.4.12"

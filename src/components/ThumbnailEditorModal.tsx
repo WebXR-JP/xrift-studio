@@ -22,7 +22,7 @@ export function ThumbnailEditorModal({ project, onClose, onChanged }: Props) {
           <div>
             <div className="text-sm font-semibold text-zinc-900">サムネイル</div>
             <div className="text-[11px] text-zinc-500">
-              {project.name} · ワールド一覧やカードに表示される画像
+              {project.name} · {project.kind === "item" ? "アイテム" : "ワールド"}一覧やカードに表示される画像
             </div>
           </div>
           <button
@@ -36,6 +36,7 @@ export function ThumbnailEditorModal({ project, onClose, onChanged }: Props) {
         <div className="flex-1 overflow-hidden">
           <ThumbnailEditor
             projectPath={project.path}
+            projectKind={project.kind}
             onChanged={onChanged}
           />
         </div>

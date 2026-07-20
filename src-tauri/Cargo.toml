@@ -1,7 +1,7 @@
 [package]
 name = "xrift-studio"
-version = "0.1.0"
-description = "Unofficial XRift client app — streamlines environment setup for world creators"
+version = "0.2.0"
+description = "Community-built desktop app for creating XRift worlds and items"
 authors = ["xrift-studio contributors"]
 license = "MIT"
 edition = "2021"
@@ -39,4 +39,3 @@ base64 = "0.22"
 opt-level = "s"
 panic = "abort"
 strip = true
-

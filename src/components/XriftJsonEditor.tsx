@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Save, Code2, RefreshCw, Info } from "lucide-react";
-import { tauri } from "../lib/tauri";
+import { tauri, type ProjectKind } from "../lib/tauri";
 import { useToast } from "./Toast";
 
 type Props = {
   projectPath: string;
+  projectKind: ProjectKind;
   onOpenRaw: () => void;
   onRefresh?: () => void;
   onSaved?: () => void;
@@ -21,6 +22,8 @@ type Form = {
   allowInfiniteJump: boolean;
   cameraNear: number;
   cameraFar: number;
+  allowedDomains: string;
+  allowedCodeRules: string;
 };
 
 const DEFAULTS: Form = {
@@ -33,29 +36,45 @@ const DEFAULTS: Form = {
   allowInfiniteJump: true,
   cameraNear: 0.1,
   cameraFar: 1000,
+  allowedDomains: "",
+  allowedCodeRules: "",
 };
 
-function fromJson(raw: string): { form: Form; parsed: any } | null {
+function toCommaSeparated(value: unknown): string {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string").join(", ")
+    : "";
+}
+
+function fromJson(
+  raw: string,
+  projectKind: ProjectKind,
+): { form: Form; parsed: any } | null {
   try {
     const parsed = JSON.parse(raw);
-    const w = parsed?.world ?? {};
+    const config = parsed?.[projectKind] ?? {};
     return {
       parsed,
       form: {
-        title: w.title ?? "",
-        description: w.description ?? "",
-        thumbnailPath: w.thumbnailPath ?? DEFAULTS.thumbnailPath,
-        distDir: w.distDir ?? DEFAULTS.distDir,
-        buildCommand: w.buildCommand ?? DEFAULTS.buildCommand,
-        gravity: typeof w.physics?.gravity === "number" ? w.physics.gravity : DEFAULTS.gravity,
+        title: config.title ?? "",
+        description: config.description ?? "",
+        thumbnailPath: config.thumbnailPath ?? DEFAULTS.thumbnailPath,
+        distDir: config.distDir ?? DEFAULTS.distDir,
+        buildCommand: config.buildCommand ?? DEFAULTS.buildCommand,
+        gravity:
+          typeof config.physics?.gravity === "number"
+            ? config.physics.gravity
+            : DEFAULTS.gravity,
         allowInfiniteJump:
-          typeof w.physics?.allowInfiniteJump === "boolean"
-            ? w.physics.allowInfiniteJump
+          typeof config.physics?.allowInfiniteJump === "boolean"
+            ? config.physics.allowInfiniteJump
             : DEFAULTS.allowInfiniteJump,
         cameraNear:
-          typeof w.camera?.near === "number" ? w.camera.near : DEFAULTS.cameraNear,
+          typeof config.camera?.near === "number" ? config.camera.near : DEFAULTS.cameraNear,
         cameraFar:
-          typeof w.camera?.far === "number" ? w.camera.far : DEFAULTS.cameraFar,
+          typeof config.camera?.far === "number" ? config.camera.far : DEFAULTS.cameraFar,
+        allowedDomains: toCommaSeparated(config.permissions?.allowedDomains),
+        allowedCodeRules: toCommaSeparated(config.permissions?.allowedCodeRules),
       },
     };
   } catch {
@@ -65,12 +84,14 @@ function fromJson(raw: string): { form: Form; parsed: any } | null {
 
 export function XriftJsonEditor({
   projectPath,
+  projectKind,
   onOpenRaw,
   onRefresh,
   onSaved,
   publishPreparation = false,
 }: Props) {
   const toast = useToast();
+  const projectLabel = projectKind === "item" ? "アイテム" : "ワールド";
   const [form, setForm] = useState<Form>(DEFAULTS);
   const [saved, setSaved] = useState<Form>(DEFAULTS);
   const [parsed, setParsed] = useState<any>(null);
@@ -83,7 +104,7 @@ export function XriftJsonEditor({
     setError(null);
     try {
       const raw = await tauri.readTextFile(projectPath, "xrift.json");
-      const result = fromJson(raw);
+      const result = fromJson(raw, projectKind);
       if (!result) {
         setError("xrift.json の JSON を解析できませんでした。「raw JSON で編集」を試してください。");
       } else {
@@ -96,7 +117,7 @@ export function XriftJsonEditor({
     } finally {
       setLoading(false);
     }
-  }, [projectPath]);
+  }, [projectPath, projectKind]);
 
   useEffect(() => {
     load();
@@ -108,32 +129,53 @@ export function XriftJsonEditor({
     setSaving(true);
     try {
       const base = parsed ?? {};
+      const current = base[projectKind] ?? {};
+      const shared = {
+        ...current,
+        title: form.title || undefined,
+        description: form.description || undefined,
+        thumbnailPath: form.thumbnailPath || DEFAULTS.thumbnailPath,
+        distDir: form.distDir || DEFAULTS.distDir,
+        buildCommand: form.buildCommand || DEFAULTS.buildCommand,
+      };
+      const projectConfig =
+        projectKind === "world"
+          ? {
+              ...shared,
+              physics: {
+                ...(current.physics ?? {}),
+                gravity: form.gravity,
+                allowInfiniteJump: form.allowInfiniteJump,
+              },
+              camera: {
+                ...(current.camera ?? {}),
+                near: form.cameraNear,
+                far: form.cameraFar,
+              },
+            }
+          : {
+              ...shared,
+              permissions: {
+                ...(current.permissions ?? {}),
+                allowedDomains: form.allowedDomains
+                  .split(",")
+                  .map((domain) => domain.trim())
+                  .filter(Boolean),
+                allowedCodeRules: form.allowedCodeRules
+                  .split(",")
+                  .map((rule) => rule.trim())
+                  .filter(Boolean),
+              },
+            };
       const updated = {
         ...base,
-        world: {
-          ...(base.world ?? {}),
-          title: form.title || undefined,
-          description: form.description || undefined,
-          thumbnailPath: form.thumbnailPath || DEFAULTS.thumbnailPath,
-          distDir: form.distDir || DEFAULTS.distDir,
-          buildCommand: form.buildCommand || DEFAULTS.buildCommand,
-          physics: {
-            ...(base.world?.physics ?? {}),
-            gravity: form.gravity,
-            allowInfiniteJump: form.allowInfiniteJump,
-          },
-          camera: {
-            ...(base.world?.camera ?? {}),
-            near: form.cameraNear,
-            far: form.cameraFar,
-          },
-        },
+        [projectKind]: projectConfig,
       };
       const text = JSON.stringify(updated, null, 2) + "\n";
       await tauri.writeTextFile(projectPath, "xrift.json", text);
       setSaved(form);
       setParsed(updated);
-      toast({ kind: "success", title: "ワールド設定を保存しました" });
+      toast({ kind: "success", title: `${projectLabel}設定を保存しました` });
       onRefresh?.();
       onSaved?.();
     } catch (e) {
@@ -201,7 +243,7 @@ export function XriftJsonEditor({
             <span className="h-1.5 w-1.5 rounded-full bg-amber-500" title="未保存" />
           )}
           <span className="rounded bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-brand-700">
-            World 設定
+            {projectLabel}設定
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -236,14 +278,14 @@ export function XriftJsonEditor({
         <div className="mx-auto max-w-3xl space-y-6 px-6 py-6">
           <Section
             title="基本情報"
-            hint="XRift のワールド一覧で表示されるタイトルと説明文です。アップロード時のデフォルト値として使われます。"
+            hint={`XRift の${projectLabel}一覧で表示されるタイトルと説明文です。アップロード時のデフォルト値として使われます。`}
           >
-            <Field label="タイトル" hint="XRift のワールドカードに表示されます">
+            <Field label="タイトル" hint={`XRift の${projectLabel}カードに表示されます`}>
               <input
                 type="text"
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
-                placeholder="My XR World"
+                placeholder={projectKind === "item" ? "My XR Item" : "My XR World"}
                 className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
               />
             </Field>
@@ -252,7 +294,7 @@ export function XriftJsonEditor({
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 rows={3}
-                placeholder="どんなワールドか簡単に説明しましょう"
+                placeholder={`どんな${projectLabel}か簡単に説明しましょう`}
                 className="w-full resize-none rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
               />
             </Field>
@@ -277,7 +319,7 @@ export function XriftJsonEditor({
                 className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-[12px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
               />
             </Field>
-            <Field label="ビルドコマンド" hint="xrift upload world 実行前に自動実行されます。">
+            <Field label="ビルドコマンド" hint={`xrift upload ${projectKind} 実行前に自動実行されます。`}>
               <input
                 type="text"
                 value={form.buildCommand}
@@ -288,57 +330,85 @@ export function XriftJsonEditor({
             </Field>
           </Section>
 
-          <Section title="物理">
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="重力 (gravity)" hint="地球: 9.81 / 月: 1.62">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={form.gravity}
-                  onChange={(e) => setForm({ ...form, gravity: Number(e.target.value) })}
-                  className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm tabular-nums outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
-                />
-              </Field>
-              <Field label="無限ジャンプ" hint="ON で空中でもジャンプ可能（デモ向き）">
-                <label className="inline-flex cursor-pointer items-center gap-2 pt-1">
-                  <input
-                    type="checkbox"
-                    checked={form.allowInfiniteJump}
-                    onChange={(e) =>
-                      setForm({ ...form, allowInfiniteJump: e.target.checked })
-                    }
-                    className="h-4 w-4 rounded border-zinc-300 text-brand-600 focus:ring-brand-500"
-                  />
-                  <span className="text-sm text-zinc-700">
-                    {form.allowInfiniteJump ? "有効" : "無効"}
-                  </span>
-                </label>
-              </Field>
-            </div>
-          </Section>
+          {projectKind === "world" ? (
+            <>
+              <Section title="物理">
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="重力 (gravity)" hint="地球: 9.81 / 月: 1.62">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={form.gravity}
+                      onChange={(e) => setForm({ ...form, gravity: Number(e.target.value) })}
+                      className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm tabular-nums outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                    />
+                  </Field>
+                  <Field label="無限ジャンプ" hint="ON で空中でもジャンプ可能（デモ向き）">
+                    <label className="inline-flex cursor-pointer items-center gap-2 pt-1">
+                      <input
+                        type="checkbox"
+                        checked={form.allowInfiniteJump}
+                        onChange={(e) =>
+                          setForm({ ...form, allowInfiniteJump: e.target.checked })
+                        }
+                        className="h-4 w-4 rounded border-zinc-300 text-brand-600 focus:ring-brand-500"
+                      />
+                      <span className="text-sm text-zinc-700">
+                        {form.allowInfiniteJump ? "有効" : "無効"}
+                      </span>
+                    </label>
+                  </Field>
+                </div>
+              </Section>
 
-          <Section title="カメラ">
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="near" hint="これより近いオブジェクトは描画されない">
+              <Section title="カメラ">
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="near" hint="これより近いオブジェクトは描画されない">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={form.cameraNear}
+                      onChange={(e) => setForm({ ...form, cameraNear: Number(e.target.value) })}
+                      className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm tabular-nums outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                    />
+                  </Field>
+                  <Field label="far" hint="これより遠いオブジェクトは描画されない">
+                    <input
+                      type="number"
+                      step="1"
+                      value={form.cameraFar}
+                      onChange={(e) => setForm({ ...form, cameraFar: Number(e.target.value) })}
+                      className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm tabular-nums outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                    />
+                  </Field>
+                </div>
+              </Section>
+            </>
+          ) : (
+            <Section
+              title="権限"
+              hint="アイテムが外部サービスや特別な API を使う場合だけ設定します。審査時に考慮されます。"
+            >
+              <Field label="許可するドメイン" hint="カンマ区切り。例: api.example.com, cdn.example.com">
                 <input
-                  type="number"
-                  step="0.01"
-                  value={form.cameraNear}
-                  onChange={(e) => setForm({ ...form, cameraNear: Number(e.target.value) })}
-                  className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm tabular-nums outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                  type="text"
+                  value={form.allowedDomains}
+                  onChange={(e) => setForm({ ...form, allowedDomains: e.target.value })}
+                  placeholder="api.example.com, cdn.example.com"
+                  className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-[12px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
                 />
               </Field>
-              <Field label="far" hint="これより遠いオブジェクトは描画されない">
+              <Field label="緩和するコードルール" hint="カンマ区切り。必要な場合だけ指定します。">
                 <input
-                  type="number"
-                  step="1"
-                  value={form.cameraFar}
-                  onChange={(e) => setForm({ ...form, cameraFar: Number(e.target.value) })}
-                  className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm tabular-nums outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                  type="text"
+                  value={form.allowedCodeRules}
+                  onChange={(e) => setForm({ ...form, allowedCodeRules: e.target.value })}
+                  placeholder="no-network-without-permission"
+                  className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-[12px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
                 />
               </Field>
-            </div>
-          </Section>
+            </Section>
+          )}
 
           <div className="flex items-start gap-2 rounded-lg bg-brand-50 px-3 py-2.5 text-[11px] text-brand-900">
             <Info size={13} className="mt-0.5 shrink-0 text-brand-600" strokeWidth={2} />

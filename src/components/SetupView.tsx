@@ -70,10 +70,10 @@ export function SetupView({ status, onReady }: Props) {
             <span className="text-gradient-brand">XRift Studio</span> へようこそ
           </h1>
           <p className="mt-2 text-sm text-zinc-500">
-            XRift の非公式クライアント — 環境構築を高速化
+            ワールドやアイテムを、作り始めるところから公開まで
           </p>
           <p className="mt-1 text-[11px] text-zinc-400">
-            ※ 本アプリは XRift 公式とは無関係の有志製ツールです
+            XRift 公式とは無関係の有志製ツールです
           </p>
         </div>
 
@@ -85,7 +85,7 @@ export function SetupView({ status, onReady }: Props) {
 
           <ul className="mt-4 space-y-2.5 text-sm">
             <SetupItem done={status.nodeInstalled} label="Node.js v24 LTS" hint="Node.js 本体と npm を同梱（約 30MB）" />
-            <SetupItem done={status.xriftInstalled} label="@xrift/cli" hint="ワールドの作成・公開に使う公式ツール" />
+            <SetupItem done={status.xriftInstalled} label="@xrift/cli" hint="ワールドやアイテムの作成・公開に使う XRift 公式ツール" />
           </ul>
 
           <div className="mt-4 rounded-lg bg-zinc-50 px-3 py-2 text-[11px] text-zinc-500">
