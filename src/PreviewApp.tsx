@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -243,21 +243,83 @@ const assetPreviewContents: Record<AssetPreviewKind, Array<{ name: string; detai
   ],
 };
 
+const assetTourSteps: Array<{
+  kind: AssetPreviewKind;
+  label: string;
+  detail: string;
+  path: string;
+  scenePlaced?: boolean;
+}> = [
+  {
+    kind: "models",
+    label: "モデルを選ぶ",
+    detail: "Avocado.glbを見つける",
+    path: "Assets / Models",
+  },
+  {
+    kind: "materials",
+    label: "Materialを開く",
+    detail: "展開された見た目を選ぶ",
+    path: "Assets / Avocado / Materials",
+  },
+  {
+    kind: "textures",
+    label: "Textureを確認する",
+    detail: "色や質感の素材を調整する",
+    path: "Assets / Avocado / Textures",
+  },
+  {
+    kind: "materials",
+    label: "Sceneへ配置する",
+    detail: "見た目を確かめて配置する",
+    path: "Assets / Avocado / Materials",
+    scenePlaced: true,
+  },
+];
+
 function AssetLibraryPreview() {
-  const [activeKind, setActiveKind] = useState<AssetPreviewKind>("materials");
-  const activeLabel = activeKind === "models" ? "Models" : activeKind === "materials" ? "Materials" : "Textures";
+  const [tourStep, setTourStep] = useState(0);
+  const [playing, setPlaying] = useState(true);
+  const currentStep = assetTourSteps[tourStep];
+  const activeKind = currentStep.kind;
+
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setPlaying(false);
+      return;
+    }
+    if (!playing) return;
+    const timer = window.setInterval(() => {
+      setTourStep((current) => (current + 1) % assetTourSteps.length);
+    }, 2200);
+    return () => window.clearInterval(timer);
+  }, [playing]);
+
+  const selectKind = (kind: AssetPreviewKind) => {
+    const step = assetTourSteps.findIndex((candidate) => candidate.kind === kind);
+    setTourStep(step >= 0 ? step : 0);
+    setPlaying(false);
+  };
 
   return (
     <div
       className="overflow-hidden rounded-xl border border-violet-200 bg-white shadow-xl shadow-violet-950/10"
-      role="img"
-      aria-label="LP用デモ。左側のフォルダーツリーからMaterialsを選び、マテリアル一覧を表示している画面"
     >
       <div className="flex items-center gap-1.5 border-b border-zinc-200 bg-zinc-50 px-3 py-2">
         <span className="h-2 w-2 rounded-full bg-rose-300" />
         <span className="h-2 w-2 rounded-full bg-amber-300" />
         <span className="h-2 w-2 rounded-full bg-emerald-300" />
         <span className="ml-2 text-[10px] font-semibold text-zinc-500">XRift Studio · Assets</span>
+        <button
+          type="button"
+          onClick={() => setPlaying((current) => !current)}
+          aria-pressed={playing}
+          title={playing ? "デモを停止" : "デモを再生"}
+          className="ml-auto inline-flex items-center gap-1 rounded border border-zinc-200 bg-white px-2 py-1 text-[9px] font-semibold text-zinc-600 transition-colors hover:border-violet-300 hover:text-violet-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 motion-reduce:transition-none"
+        >
+          {playing ? <Square size={9} fill="currentColor" aria-hidden="true" /> : <Play size={9} fill="currentColor" aria-hidden="true" />}
+          {playing ? "停止" : "再生"}
+        </button>
       </div>
       <div className="grid min-h-[270px] grid-cols-[132px_minmax(0,1fr)]">
         <aside className="border-r border-zinc-200 bg-zinc-50/80 p-2.5 text-[10px] text-zinc-600">
@@ -275,8 +337,8 @@ function AssetLibraryPreview() {
                 <button
                   key={kind}
                   type="button"
-                  onClick={() => setActiveKind(kind)}
-                  className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left ${activeKind === kind ? "bg-violet-100 font-semibold text-violet-900" : "hover:bg-white"}`}
+                  onClick={() => selectKind(kind)}
+                  className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 motion-reduce:transition-none ${activeKind === kind ? "bg-violet-100 font-semibold text-violet-900" : ""}`}
                 >
                   <Icon size={12} />
                   <span>{label}</span>
@@ -293,16 +355,16 @@ function AssetLibraryPreview() {
           </div>
         </aside>
         <div className="min-w-0 bg-white p-3">
-          <div className="flex items-center justify-between gap-2 border-b border-zinc-100 pb-2">
-            <div className="min-w-0">
-              <p className="truncate text-[10px] font-semibold text-zinc-800">Assets / Avocado / {activeLabel}</p>
-              <p className="mt-0.5 text-[9px] text-zinc-400">素材を選択してInspectorで編集</p>
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-100 pb-2">
+              <div className="min-w-0">
+              <p className="truncate text-[10px] font-semibold text-zinc-800">{currentStep.path}</p>
+              <p className="mt-0.5 text-[9px] text-zinc-400">{currentStep.detail}</p>
             </div>
-            <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-semibold text-emerald-700">デモ表示</span>
+            <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-semibold text-emerald-700">LPデモ</span>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="mt-3 grid grid-cols-2 gap-2" aria-live="polite">
             {assetPreviewContents[activeKind].map((asset) => (
-              <div key={asset.name} className="overflow-hidden rounded-md border border-zinc-200 bg-white">
+              <div key={asset.name} className="overflow-hidden rounded-md border border-zinc-200 bg-white transition-[border-color,transform,box-shadow] duration-300 motion-reduce:transition-none">
                 <div className={`flex h-20 items-center justify-center bg-gradient-to-br ${asset.tone}`}>
                   {activeKind === "materials" ? <WandSparkles size={24} className="text-white/80" /> : activeKind === "textures" ? <FileImage size={24} className="text-white/80" /> : <Box size={24} className="text-white/80" />}
                 </div>
@@ -311,6 +373,30 @@ function AssetLibraryPreview() {
                   <p className="mt-0.5 truncate text-[9px] text-zinc-400">{asset.detail}</p>
                 </div>
               </div>
+            ))}
+          </div>
+          {currentStep.scenePlaced ? (
+            <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[9px] text-emerald-800">
+              <span className="font-semibold">Scene View</span>
+              <span>Avocado.glb · Material適用済み</span>
+            </div>
+          ) : null}
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-zinc-100 pt-2">
+            {assetTourSteps.map((step, index) => (
+              <button
+                key={step.label}
+                type="button"
+                onClick={() => {
+                  setTourStep(index);
+                  setPlaying(false);
+                }}
+                aria-label={`${index + 1}. ${step.label}`}
+                aria-pressed={tourStep === index}
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 motion-reduce:transition-none ${tourStep === index ? "bg-violet-100 text-violet-800" : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"}`}
+              >
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                {step.label}
+              </button>
             ))}
           </div>
         </div>
