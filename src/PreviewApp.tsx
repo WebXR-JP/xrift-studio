@@ -335,11 +335,11 @@ export default function PreviewApp() {
         <div className="preview-orb preview-orb-two" />
         <div className="relative max-w-3xl">
           <h1 className="max-w-3xl text-4xl font-black leading-[1.04] tracking-[-0.055em] text-zinc-950 sm:text-6xl lg:text-7xl">
-            XRiftを、
-            <span className="text-gradient-brand">もっとつくりやすく。</span>
+            コードが書けなくても、
+            <span className="text-gradient-brand">XRiftをつくれる。</span>
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-8 text-zinc-600 sm:text-lg">
-            ワールドとアイテムの制作を、準備・編集・プレビュー・公開まで支えるXRift Studio。コードでも、ビジュアルでも作れます。
+            素材を置いて整えるビジュアル制作から、XRiftのワールドやアイテム作りを始められます。コードで深く作り込む流れも、ひとつのアプリで支えます。
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <a
@@ -798,8 +798,8 @@ export default function PreviewApp() {
         <div className="mx-auto grid max-w-6xl gap-8 rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-7 sm:p-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-center">
           <div className="max-w-2xl">
             <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">ビジュアルで作る</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">シーンを見ながら、素材を置いて整える。</h2>
-            <p className="mt-4 text-sm leading-7 text-zinc-600">コード制作と同じアプリで、素材を配置し、見た目や設定を調整して、その場で確認できます。</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">コードを書かずに、シーンを組み立てる。</h2>
+            <p className="mt-4 text-sm leading-7 text-zinc-600">素材を配置し、見た目や設定を調整して、その場で確認できます。コード制作と同じアプリで、目的に合う作り方を選べます。</p>
             <button
               type="button"
               onClick={() => setVisualEditorKind(sampleKind)}
@@ -824,7 +824,7 @@ export default function PreviewApp() {
           <div className="preview-cta-glow" />
           <div className="relative max-w-2xl">
             <div className="flex items-center gap-2 text-xs font-semibold text-violet-300"><CircleHelp size={15} /> デスクトップ版</div>
-            <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">XRiftを、もっとつくりやすく。</h2>
+            <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">XRiftを、つくってみよう。</h2>
             <p className="mt-4 text-sm leading-7 text-zinc-400">XRift Studioをダウンロードして、ワールドやアイテムの制作を始めましょう。</p>
             <div className="mt-7 flex flex-wrap gap-3">
               <a href="https://github.com/WebXR-JP/xrift-studio/releases/latest" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:-translate-y-0.5 hover:bg-violet-100"><Download size={15} /> 最新リリースをダウンロード</a>
