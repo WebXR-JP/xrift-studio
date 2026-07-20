@@ -71,6 +71,8 @@ export type XriftComponentFieldDefinition = {
   nestedDefaults?: JsonObject;
   /** The value is documented as an identifier unique to this component kind. */
   uniqueWithinScene?: boolean;
+  /** Documented string syntax which must pass before compile can proceed. */
+  format?: "uuid";
 };
 
 export type XriftComponentAttachBehavior = {
@@ -164,6 +166,14 @@ export type UpdateXriftComponentPatch = {
 
 const BOTH_PROJECT_KINDS = ["world", "item"] as const;
 const WORLD_PROJECT_KIND = ["world"] as const;
+const BUILTIN_PREFAB_PROTECTED_PROPERTY_NAMES = new Set([
+  "position",
+  "rotation",
+  "scale",
+  "size",
+  "width",
+  "yaw",
+]);
 
 const DEFAULT_TAGS: JsonValue = [
   { color: "#2ECC71", id: "want-talk", label: "話したい" },
@@ -524,7 +534,9 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
     category: "world",
     attachBehavior: LEAF,
     fields: [
-      field("instanceId", "Instance ID", "移動先のインスタンスID。", "string", true),
+      field("instanceId", "Instance ID", "移動先のインスタンスUUID。", "string", true, {
+        format: "uuid",
+      }),
       field("position", "Position", "ポータルの位置。", "vec3", false, {
         defaultValue: [0, 0, 0],
       }),
@@ -647,6 +659,18 @@ export function isXriftComponentAuthoringLocked(
   return component.authoring?.source === "builtin-prefab" && component.authoring.readOnly;
 }
 
+export function isBuiltinPrefabPropertyEditable(
+  component: XRiftComponent,
+  propertyName: string,
+): boolean {
+  return Boolean(
+    component.authoring?.source === "builtin-prefab" &&
+      component.authoring.readOnly &&
+      component.authoring.editablePropertyNames?.includes(propertyName) &&
+      !BUILTIN_PREFAB_PROTECTED_PROPERTY_NAMES.has(propertyName),
+  );
+}
+
 export function createXriftComponent(
   schemaId: string,
   options: CreateXriftComponentOptions = {},
@@ -679,6 +703,13 @@ export function createXriftComponent(
             source: options.authoring.source,
             recipeId: options.authoring.recipeId,
             readOnly: true,
+            ...(options.authoring.editablePropertyNames
+              ? {
+                  editablePropertyNames: [
+                    ...options.authoring.editablePropertyNames,
+                  ],
+                }
+              : {}),
           },
         }
       : {}),
@@ -907,13 +938,24 @@ export function updateXriftComponent(
     );
   }
   if (component.authoring?.readOnly) {
-    return mutationFailure(
-      scene,
-      "xrift-component-authoring-locked",
-      "Builtin PrefabのXRift Componentは読み取り専用です。TransformはEntity側で編集できます。",
-      `${entityPath(entityId)}.components[${componentIndex}]`,
-      { entityId, componentId, schemaId: component.schemaId },
-    );
+    const requestedPropertyNames = Object.keys(patch.properties ?? {});
+    const changesProtectedState =
+      patch.enabled !== undefined ||
+      patch.assetReferences !== undefined ||
+      patch.entityReferences !== undefined ||
+      requestedPropertyNames.some(
+        (propertyName) =>
+          !isBuiltinPrefabPropertyEditable(component, propertyName),
+      );
+    if (changesProtectedState) {
+      return mutationFailure(
+        scene,
+        "xrift-component-authoring-locked",
+        "Builtin PrefabではInspectorに許可された設定だけを変更できます。構成とTransformは保護されています。",
+        `${entityPath(entityId)}.components[${componentIndex}]`,
+        { entityId, componentId, schemaId: component.schemaId },
+      );
+    }
   }
 
   const properties = cloneJsonObject(component.properties);
@@ -1149,11 +1191,7 @@ export function validateXriftComponent(
   }
   if (
     value.authoring !== undefined &&
-    (!isRecord(value.authoring) ||
-      value.authoring.source !== "builtin-prefab" ||
-      typeof value.authoring.recipeId !== "string" ||
-      !value.authoring.recipeId.trim() ||
-      value.authoring.readOnly !== true)
+    !isValidComponentAuthoringMetadata(value.authoring)
   ) {
     diagnostics.push(
       makeDiagnostic(
@@ -1212,6 +1250,28 @@ export function validateXriftComponent(
   const fields = new Map(
     definition.fields.map((fieldDefinition) => [fieldDefinition.name, fieldDefinition]),
   );
+  if (
+    isValidComponentAuthoringMetadata(value.authoring) &&
+    value.authoring.editablePropertyNames
+  ) {
+    for (const propertyName of value.authoring.editablePropertyNames) {
+      if (
+        fields.has(propertyName) &&
+        !BUILTIN_PREFAB_PROTECTED_PROPERTY_NAMES.has(propertyName)
+      ) {
+        continue;
+      }
+      diagnostics.push(
+        makeDiagnostic(
+          "error",
+          "invalid-xrift-component",
+          `Builtin Prefabの編集許可項目「${propertyName}」は${definition.label}で変更できません。`,
+          `${path}.authoring.editablePropertyNames`,
+          { ...common, schemaId: definition.schemaId },
+        ),
+      );
+    }
+  }
   for (const fieldDefinition of definition.fields) {
     const fieldValue = value.properties[fieldDefinition.name];
     if (fieldValue === undefined) {
@@ -1276,6 +1336,15 @@ export function validateXriftComponentFieldValue(
     if (typeof value !== "string") return typeFailure("string");
     if (definition.required && !value.trim()) {
       return { code: "empty", message: "空文字にはできません。" };
+    }
+    if (
+      definition.format === "uuid" &&
+      !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value)
+    ) {
+      return {
+        code: "type",
+        message: "ハイフン区切りのUUIDである必要があります。",
+      };
     }
     return null;
   }
@@ -1405,6 +1474,7 @@ function field(
       | "nestedDefaults"
       | "range"
       | "uniqueWithinScene"
+      | "format"
     >
   > = {},
 ): XriftComponentFieldDefinition {
@@ -1509,6 +1579,27 @@ function isXYZ(value: unknown): boolean {
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function isValidComponentAuthoringMetadata(
+  value: unknown,
+): value is ComponentAuthoringMetadata {
+  if (
+    !isRecord(value) ||
+    value.source !== "builtin-prefab" ||
+    typeof value.recipeId !== "string" ||
+    !value.recipeId.trim() ||
+    value.readOnly !== true
+  ) {
+    return false;
+  }
+  const editablePropertyNames = value.editablePropertyNames;
+  return (
+    editablePropertyNames === undefined ||
+    (isStringArray(editablePropertyNames) &&
+      editablePropertyNames.every((entry) => entry.trim().length > 0) &&
+      new Set(editablePropertyNames).size === editablePropertyNames.length)
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

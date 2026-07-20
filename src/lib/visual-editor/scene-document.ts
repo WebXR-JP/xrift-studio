@@ -125,6 +125,12 @@ export type ComponentAuthoringMetadata = {
   recipeId: string;
   /** Built-in XRift recipes remain replaceable by deleting the Entity itself. */
   readOnly: true;
+  /**
+   * Functional recipe inputs which remain editable in the Inspector.
+   * Component identity, lifecycle, transform props and every unlisted field
+   * stay protected by `readOnly`.
+   */
+  editablePropertyNames?: string[];
 };
 
 /** Typed boundary for XRift-specific component schemas registered later. */
@@ -1196,6 +1202,20 @@ function cloneSceneComponent(
       entityReferences: component.entityReferences.map(
         (entityId) => entityIdMap[entityId] ?? entityId,
       ),
+      ...(component.authoring
+        ? {
+            authoring: {
+              ...component.authoring,
+              ...(component.authoring.editablePropertyNames
+                ? {
+                    editablePropertyNames: [
+                      ...component.authoring.editablePropertyNames,
+                    ],
+                  }
+                : {}),
+            },
+          }
+        : {}),
     };
   }
   return { ...component, id };

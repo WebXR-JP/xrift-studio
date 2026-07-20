@@ -4,6 +4,8 @@ import {
   normalizeMaterialProperties,
   type AssetManifest,
 } from "./asset-manifest";
+import { getBuiltinPrefabRecipe } from "./builtin-prefab-catalog";
+import { validateModelAssetContract } from "./model-import-contract";
 import { normalizeParticleProperties } from "./particle-system";
 import {
   PREFAB_DOCUMENT_SCHEMA_VERSION,
@@ -18,6 +20,7 @@ import {
   COLLIDER_FIT_MODES,
   COLLIDER_MESH_MODES,
   SCENE_DOCUMENT_SCHEMA_VERSION,
+  type ComponentAuthoringMetadata,
   type SceneDocument,
 } from "./scene-document";
 
@@ -155,6 +158,9 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
     }
     if (candidate.kind === "material") {
       validateMaterialAsset(candidate, path, value.assets, issues);
+    }
+    if (candidate.kind === "model") {
+      issues.push(...validateModelAssetContract(candidate, value.assets, path));
     }
     if (
       candidate.folderId !== undefined &&
@@ -459,21 +465,6 @@ function validateMaterialExtension(
       );
       nonNegative("iridescenceThicknessMinimum");
       nonNegative("iridescenceThicknessMaximum");
-      const minimum = extension.iridescenceThicknessMinimum;
-      const maximum = extension.iridescenceThicknessMaximum;
-      if (
-        isNonNegativeNumber(minimum) &&
-        isNonNegativeNumber(maximum) &&
-        maximum < minimum
-      ) {
-        issues.push(
-          issue(
-            `${path}.iridescenceThicknessMaximum`,
-            "range",
-            "iridescence thickness maximum must not be below its minimum",
-          ),
-        );
-      }
       texture("iridescenceTexture");
       texture("iridescenceThicknessTexture");
       break;
@@ -728,7 +719,7 @@ export function validateSceneDocument(value: unknown): DocumentValidationIssue[]
     "SceneDocument",
     true,
   );
-  validateSceneColliderComponents(value, issues);
+  validateSceneComponentShapes(value, issues);
   return issues;
 }
 
@@ -1094,13 +1085,7 @@ function validatePrefabComponentShape(
       issues.push(issue(`${path}.entityReferences`, "reference", "entityReferences are invalid"));
     }
     if (component.authoring !== undefined) {
-      if (
-        !isRecord(component.authoring) ||
-        component.authoring.source !== "builtin-prefab" ||
-        typeof component.authoring.recipeId !== "string" ||
-        !component.authoring.recipeId.trim() ||
-        component.authoring.readOnly !== true
-      ) {
+      if (!isValidComponentAuthoringMetadata(component.authoring)) {
         issues.push(
           issue(
             `${path}.authoring`,
@@ -1108,12 +1093,66 @@ function validatePrefabComponentShape(
             "XRift component authoring metadata is invalid",
           ),
         );
+      } else {
+        const recipe = getBuiltinPrefabRecipe(component.authoring.recipeId);
+        const editablePropertyNames =
+          component.authoring.editablePropertyNames ?? [];
+        if (!recipe) {
+          issues.push(
+            issue(
+              `${path}.authoring.recipeId`,
+              "reference",
+              "XRift component recipe is not registered",
+            ),
+          );
+        } else {
+          if (component.schemaId !== recipe.schemaId) {
+            issues.push(
+              issue(
+                `${path}.schemaId`,
+                "reference",
+                "XRift component schema does not match its protected recipe",
+              ),
+            );
+          }
+          if (
+            editablePropertyNames.some(
+              (propertyName) =>
+                !recipe.editablePropertyNames.includes(propertyName),
+            )
+          ) {
+            issues.push(
+              issue(
+                `${path}.authoring.editablePropertyNames`,
+                "reference",
+                "XRift component editable properties exceed its protected recipe",
+              ),
+            );
+          }
+        }
       }
     }
   }
 }
 
-function validateSceneColliderComponents(
+function isValidComponentAuthoringMetadata(
+  value: unknown,
+): value is ComponentAuthoringMetadata {
+  return (
+    isRecord(value) &&
+    value.source === "builtin-prefab" &&
+    typeof value.recipeId === "string" &&
+    value.recipeId.trim().length > 0 &&
+    value.readOnly === true &&
+    (value.editablePropertyNames === undefined ||
+      (isUniqueStringArray(value.editablePropertyNames, true) &&
+        value.editablePropertyNames.every(
+          (propertyName) => propertyName.trim().length > 0,
+        )))
+  );
+}
+
+function validateSceneComponentShapes(
   value: unknown,
   issues: DocumentValidationIssue[],
 ): void {
@@ -1121,8 +1160,8 @@ function validateSceneColliderComponents(
   for (const [entityId, entity] of Object.entries(value.entities)) {
     if (!isRecord(entity) || !Array.isArray(entity.components)) continue;
     for (const [index, component] of entity.components.entries()) {
-      if (!isRecord(component) || component.type !== "collider") continue;
-      validateColliderComponentShape(
+      if (!isRecord(component)) continue;
+      validatePrefabComponentShape(
         component,
         `$.entities.${entityId}.components.${index}`,
         issues,

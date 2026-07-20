@@ -1,10 +1,13 @@
 import {
+  assignMaterialToMeshSlots,
   assignMaterialToPrimaryMeshSlot,
   commitEditorHistory,
   createEditorHistory,
   createPrototypeProject,
+  getMaterialAssignmentTarget,
   getMesh,
   redoEditorHistory,
+  type ModelAsset,
   undoEditorHistory,
 } from "../../lib/visual-editor";
 import { writeAssetCardDragData } from "./asset-card-drag";
@@ -169,6 +172,196 @@ export function runMaterialDragFixtureAssertions(): void {
         (binding) => binding.materialAssetId === replacement.id,
       ),
     "Redo did not restore the assigned Material binding",
+  );
+
+  const sourceMesh = getMesh(meshEntity);
+  assert(sourceMesh, "Multi-slot fixture Mesh is missing");
+  const secondaryMesh = {
+    ...sourceMesh,
+    id: `${sourceMesh.id}-secondary`,
+    materialBindings: [],
+  };
+  const multiMeshScene = {
+    ...project.scene,
+    entities: {
+      ...project.scene.entities,
+      [meshEntity.id]: {
+        ...meshEntity,
+        components: [...meshEntity.components, secondaryMesh],
+      },
+    },
+  };
+  const exactTarget = getMaterialAssignmentTarget(
+    multiMeshScene,
+    project.assets,
+    meshEntity.id,
+    secondaryMesh.id,
+  );
+  assert(
+    exactTarget.ready && exactTarget.meshId === secondaryMesh.id,
+    "Material target did not preserve the raycast Mesh component id",
+  );
+  const exactAssignment = assignMaterialToPrimaryMeshSlot(
+    multiMeshScene,
+    project.assets,
+    meshEntity.id,
+    replacement.id,
+    secondaryMesh.id,
+  );
+  assert(
+    exactAssignment.applied,
+    "Exact Mesh component Material assignment was rejected",
+  );
+  assert(
+    getMesh(exactAssignment.scene.entities[meshEntity.id], sourceMesh.id)
+      ?.materialBindings.some(
+        (binding) => binding.materialAssetId === replacement.id,
+      ) !== true,
+    "Exact Mesh assignment changed the first Mesh on the Entity",
+  );
+  assert(
+    getMesh(exactAssignment.scene.entities[meshEntity.id], secondaryMesh.id)
+      ?.materialBindings.some(
+        (binding) => binding.materialAssetId === replacement.id,
+      ) === true,
+    "Exact Mesh assignment did not change the raycast Mesh",
+  );
+  const disabledMultiMeshScene = {
+    ...multiMeshScene,
+    entities: {
+      ...multiMeshScene.entities,
+      [meshEntity.id]: {
+        ...multiMeshScene.entities[meshEntity.id],
+        components: multiMeshScene.entities[meshEntity.id].components.map(
+          (component) =>
+            component.id === secondaryMesh.id && component.type === "mesh"
+              ? { ...component, enabled: false }
+              : component,
+        ),
+      },
+    },
+  };
+  const disabledTarget = getMaterialAssignmentTarget(
+    disabledMultiMeshScene,
+    project.assets,
+    meshEntity.id,
+    secondaryMesh.id,
+  );
+  assert(
+    !disabledTarget.ready && disabledTarget.reason === "mesh-missing",
+    "Disabled Mesh was exposed as a Material drop target",
+  );
+  const disabledAssignment = assignMaterialToPrimaryMeshSlot(
+    disabledMultiMeshScene,
+    project.assets,
+    meshEntity.id,
+    replacement.id,
+    secondaryMesh.id,
+  );
+  assert(
+    !disabledAssignment.applied &&
+      disabledAssignment.reason === "mesh-missing" &&
+      disabledAssignment.scene === disabledMultiMeshScene,
+    "Disabled Mesh accepted a Material assignment",
+  );
+  const missingComponentAssignment = assignMaterialToPrimaryMeshSlot(
+    multiMeshScene,
+    project.assets,
+    meshEntity.id,
+    replacement.id,
+    "missing-mesh-component",
+  );
+  assert(
+    !missingComponentAssignment.applied &&
+      missingComponentAssignment.reason === "mesh-missing" &&
+      missingComponentAssignment.scene === multiMeshScene,
+    "Missing Mesh component fell back to the first Mesh",
+  );
+  const multiSlotModel: ModelAsset = {
+    id: "fixture-model-multi-slot",
+    name: "Multi Slot Model",
+    kind: "model",
+    status: "ready",
+    source: { kind: "project", relativePath: "assets/models/multi-slot.glb" },
+    importSettings: {
+      scale: 1,
+      generateColliders: true,
+      optimizeMeshes: false,
+      importAnimations: true,
+    },
+    materialSlots: [
+      { slot: "material-0", name: "Body", sourceMaterialIndex: 0 },
+      { slot: "material-1", name: "Trim", sourceMaterialIndex: 1 },
+    ],
+  };
+  const multiSlotScene = {
+    ...project.scene,
+    entities: {
+      ...project.scene.entities,
+      [meshEntity.id]: {
+        ...meshEntity,
+        components: meshEntity.components.map((component) =>
+          component.id === sourceMesh.id && component.type === "mesh"
+            ? {
+                ...component,
+                geometryAssetId: multiSlotModel.id,
+                geometry: { kind: "asset" as const, assetId: multiSlotModel.id },
+                materialBindings: [],
+              }
+            : component,
+        ),
+      },
+    },
+  };
+  const multiSlotAssets = {
+    ...project.assets,
+    assets: {
+      ...project.assets.assets,
+      [multiSlotModel.id]: multiSlotModel,
+    },
+  };
+  const target = getMaterialAssignmentTarget(
+    multiSlotScene,
+    multiSlotAssets,
+    meshEntity.id,
+    sourceMesh.id,
+  );
+  assert(
+    target.ready && target.slots.length === 2,
+    "Multi-slot Material target did not expose both slots",
+  );
+  const allSlots = assignMaterialToMeshSlots(
+    multiSlotScene,
+    multiSlotAssets,
+    meshEntity.id,
+    replacement.id,
+    ["material-0", "material-1"],
+    sourceMesh.id,
+  );
+  assert(allSlots.applied, "Multi-slot Material assignment was rejected");
+  const assignedSlots = getMesh(allSlots.scene.entities[meshEntity.id])
+    ?.materialBindings.filter(
+      (binding) => binding.materialAssetId === replacement.id,
+    )
+    .map((binding) => binding.slot)
+    .sort();
+  assert(
+    assignedSlots?.join(",") === "material-0,material-1",
+    "Multi-slot assignment did not update every selected slot",
+  );
+  const invalidSlot = assignMaterialToMeshSlots(
+    multiSlotScene,
+    multiSlotAssets,
+    meshEntity.id,
+    replacement.id,
+    ["material-0", "missing-slot"],
+    sourceMesh.id,
+  );
+  assert(
+    !invalidSlot.applied &&
+      invalidSlot.reason === "slot-missing" &&
+      invalidSlot.scene === multiSlotScene,
+    "Invalid slot selection partially changed the Scene",
   );
 }
 
