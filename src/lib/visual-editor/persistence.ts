@@ -136,15 +136,28 @@ export async function prepareStarterVisualProject(
       folderId: modelFolders.modelFolderId,
       materialSlots: expanded.materialSlots,
     };
+    const starterTexturePaths = new Map(
+      expanded.writes.map((write) => [
+        write.relativePath,
+        starterDerivedAssetPath(loaded.copy.assetId, write.relativePath),
+      ]),
+    );
+    const starterTextureAssets = expanded.textureAssets.map((asset) => {
+      if (asset.source.kind !== "project") return asset;
+      const relativePath = starterTexturePaths.get(asset.source.relativePath);
+      return relativePath
+        ? { ...asset, source: { ...asset.source, relativePath } }
+        : asset;
+    });
     for (const derivedAsset of [
       ...expanded.materialAssets,
-      ...expanded.textureAssets,
+      ...starterTextureAssets,
     ]) {
       assets[derivedAsset.id] = derivedAsset;
     }
     for (const write of expanded.writes) {
       derivedDocuments.push({
-        relativePath: write.relativePath,
+        relativePath: starterTexturePaths.get(write.relativePath) ?? write.relativePath,
         dataUrl: bytesToDataUrl(write.bytes, write.mediaType),
       });
     }
@@ -643,6 +656,17 @@ function parseStarterGlbJson(bytes: Uint8Array): GltfJson {
     throw new Error("Starter GLB JSON root is invalid");
   }
   return parsed as GltfJson;
+}
+
+function starterDerivedAssetPath(
+  starterAssetId: string,
+  relativePath: string,
+): string {
+  const importedPrefix = "assets/imported/";
+  const suffix = relativePath.startsWith(importedPrefix)
+    ? relativePath.slice(importedPrefix.length)
+    : relativePath.replace(/^assets\//, "");
+  return `assets/starter/${starterAssetId}/${suffix}`;
 }
 
 async function sha256StarterBytes(bytes: Uint8Array): Promise<string> {
