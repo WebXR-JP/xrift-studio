@@ -29,6 +29,7 @@ import {
   BUILTIN_ASSET_IDS,
   createPrototypeProject,
 } from "../prototype-project";
+import { resolveSceneSettings } from "../scene-settings";
 import {
   compilePrototypeVisualProject,
   compileVisualProject,
@@ -380,7 +381,7 @@ export function runVisualCompilerFixtureAssertions(
   );
   assert(
     texturedSource.includes(
-      '"xrift-studio/assets/fixture-texture-project/albedo.png" as const',
+      '"xrift-studio-fixture-texture-project-albedo.png" as const',
     ) &&
       !texturedSource.includes('"/xrift-studio/assets/'),
     "Project texture path must be relative to the XRift base URL",
@@ -394,9 +395,53 @@ export function runVisualCompilerFixtureAssertions(
   assert(
     texturedProjectResult.assetCopyPlan.some(
       (entry) =>
-        entry.assetId === projectTexture.id && entry.supportedByCompiler,
+        entry.assetId === projectTexture.id &&
+        entry.supportedByCompiler &&
+        entry.targetRelativePath ===
+          "public/xrift-studio-fixture-texture-project-albedo.png",
     ),
     "Texture copy plan support flag is incorrect",
+  );
+
+  const sourceScene = world.scenes[world.project.entrySceneId];
+  const sourceSceneSettings = resolveSceneSettings(sourceScene.settings);
+  const imageSkyboxScene: SceneDocument = {
+    ...sourceScene,
+    settings: {
+      ...sourceSceneSettings,
+      skybox: {
+        ...sourceSceneSettings.skybox,
+        imageAssetId: projectTexture.id,
+        rotationDegrees: 45,
+        exposure: 1.25,
+      },
+    },
+  };
+  const imageSkyboxResult = compileVisualProject(
+    {
+      ...world,
+      assets: projectTextureAssets,
+      scenes: { [imageSkyboxScene.sceneId]: imageSkyboxScene },
+    },
+    { generatedAt: fixedTime },
+  );
+  const imageSkyboxSource =
+    imageSkyboxResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(imageSkyboxResult.canStage, "Image Skybox fixture should be stageable");
+  [
+    "XRiftStudioImageSkybox",
+    "EquirectangularReflectionMapping",
+    "TextureLoader",
+    '"xrift-studio-fixture-texture-project-albedo.png"',
+    "rotation={0.78539816}",
+    "exposure={1.25}",
+  ].forEach((fragment) =>
+    assert(
+      imageSkyboxSource.includes(fragment),
+      `Image Skybox source is missing: ${fragment}`,
+    ),
   );
 
   const projectModel: ModelAsset = {
@@ -482,7 +527,7 @@ export function runVisualCompilerFixtureAssertions(
   );
   assert(
     modelSource.includes(
-      '"xrift-studio/assets/fixture-model-project/fixture.glb" as const',
+      '"xrift-studio-fixture-model-project-fixture.glb" as const',
     ) &&
       !modelSource.includes('"/xrift-studio/assets/'),
     "Project GLB path must be relative to the XRift base URL",
@@ -491,7 +536,11 @@ export function runVisualCompilerFixtureAssertions(
   assert(modelSource.includes('case "Body"'), "Material slot mapping was not generated");
   assert(
     modelResult.assetCopyPlan.some(
-      (entry) => entry.assetId === projectModel.id && entry.supportedByCompiler,
+      (entry) =>
+        entry.assetId === projectModel.id &&
+        entry.supportedByCompiler &&
+        entry.targetRelativePath ===
+          "public/xrift-studio-fixture-model-project-fixture.glb",
     ),
     "Model copy plan support flag is incorrect",
   );

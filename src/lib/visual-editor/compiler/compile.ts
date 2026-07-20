@@ -2415,7 +2415,11 @@ function createAssetCopyPlan(
       continue;
     }
     const fileName = asset.source.relativePath.split("/").filter(Boolean).pop() ?? "asset.bin";
-    const targetRelativePath = `public/xrift-studio/assets/${safeFileSegment(asset.id)}/${safeFileSegment(fileName)}`;
+    // XRift SDK 0.1.1 passes Node's platform-native relative paths to the
+    // upload API. Nested dist files therefore become backslash object keys on
+    // Windows and cannot be fetched with browser URL paths. Keep generated
+    // assets at the public root until the SDK normalizes remote paths.
+    const targetRelativePath = `public/xrift-studio-${safeFileSegment(asset.id)}-${safeFileSegment(fileName)}`;
     if (targets.has(targetRelativePath)) {
       diagnostics.push({
         severity: "blocking",
