@@ -224,7 +224,7 @@ function SkyboxImageField({
   onChange: (imageAssetId: string | undefined) => void;
 }) {
   const textures = Object.values(assets.assets).filter(
-    (asset) => asset.kind === "texture",
+    (asset) => asset.kind === "texture" && asset.source.kind === "project",
   );
   const assigned = imageAssetId ? assets.assets[imageAssetId] : undefined;
   const canDrop = (event: DragEvent<HTMLDivElement>) =>
@@ -266,7 +266,7 @@ function SkyboxImageField({
           if (assets.assets[nextAssetId]?.kind === "texture") onChange(nextAssetId);
         }}
       >
-        {assigned?.kind === "texture"
+        {assigned?.kind === "texture" && assigned.source.kind === "project"
           ? `設定中: ${assigned.name}。Assetsから別の画像をここへドロップできます。`
           : imageAssetId
             ? "設定済みの画像がAssetsに見つかりません。別のTextureを選択してください。"

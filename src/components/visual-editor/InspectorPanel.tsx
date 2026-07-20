@@ -969,10 +969,10 @@ export function InspectorPanel({
             <button
               type="button"
               onClick={onCloseSceneSettings}
-              title="Entity Inspectorへ戻る"
+              title="前のInspectorへ戻る"
               className="rounded border border-slate-300 bg-white px-1.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
             >
-              Entity
+              戻る
             </button>
           ) : asset && entity ? (
             <button
