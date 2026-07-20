@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -18,6 +18,7 @@ import {
   GitBranch,
   Globe2,
   Package,
+  PanelsTopLeft,
   Play,
   RefreshCw,
   Sparkles,
@@ -26,6 +27,13 @@ import {
   Upload,
   WandSparkles,
 } from "lucide-react";
+import { VisualEditorErrorBoundary } from "./components/visual-editor/VisualEditorErrorBoundary";
+
+const VisualEditorPrototype = lazy(() =>
+  import("./components/visual-editor/VisualEditorPrototype").then((module) => ({
+    default: module.VisualEditorPrototype,
+  })),
+);
 
 // ---- 実アプリ (EditorView) を再現するサンプルデータ ----
 
@@ -200,22 +208,22 @@ const steps = [
   {
     icon: WandSparkles,
     eyebrow: "作り始める",
-    title: "ワールドかアイテムを選ぶ",
-    text: "作りたい種別と名前を選ぶと、すぐ編集できるプロジェクトが開きます。作成したものはライブラリからいつでも再開できます。",
+    title: "種別と制作方法を選ぶ",
+    text: "ワールドかアイテム、その次にコードかビジュアルを選びます。目的に合う入口から制作を始められます。",
     accent: "from-cyan-500 to-blue-500",
   },
   {
     icon: Play,
     eyebrow: "確かめる",
-    title: "編集しながら動かす",
-    text: "コードや素材を編集して「実行」を押すと、ブラウザで動きを確認できます。保存した変更は、そのままプレビューへ反映されます。",
+    title: "同じ画面で動かす",
+    text: "ビジュアルエディターは Edit と Play を同じScene Viewで切り替えます。Worldの簡易移動とItemの単体表示は別の検証プロファイルです。",
     accent: "from-emerald-500 to-teal-500",
   },
   {
     icon: Upload,
     eyebrow: "公開する",
     title: "見せ方を整えて届ける",
-    text: "タイトル、説明、サムネイルを確認してから XRift へアップロードします。アイテムは公開前のセキュリティチェックも実行できます。",
+    text: "クラシックとビジュアルのどちらも、保存、公開情報の確認、XRift向け変換、アップロードを同じ制作フローで進めます。",
     accent: "from-fuchsia-500 to-pink-500",
   },
 ];
@@ -232,6 +240,34 @@ export default function PreviewApp() {
   const [activeFile, setActiveFile] = useState<SampleFileId>("src/World.tsx");
   const [running, setRunning] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
+  const [visualEditorKind, setVisualEditorKind] = useState<SampleKind | null>(null);
+  const closeVisualEditor = () => setVisualEditorKind(null);
+
+  if (visualEditorKind) {
+    return (
+      <VisualEditorErrorBoundary
+        key={visualEditorKind}
+        featureName="ビジュアルエディターのデモ"
+        projectName={`visual-${visualEditorKind}-demo`}
+        backLabel="紹介ページへ戻る"
+        onBack={closeVisualEditor}
+      >
+        <Suspense
+          fallback={
+            <div className="flex h-screen items-center justify-center bg-zinc-50 text-sm text-zinc-600">
+              ビジュアルエディターを準備しています…
+            </div>
+          }
+        >
+          <VisualEditorPrototype
+            projectKind={visualEditorKind}
+            projectName={`visual-${visualEditorKind}-demo`}
+            onBack={closeVisualEditor}
+          />
+        </Suspense>
+      </VisualEditorErrorBoundary>
+    );
+  }
 
   const isItem = sampleKind === "item";
   const projectName = isItem ? "my-first-item" : "my-world";
@@ -306,7 +342,7 @@ export default function PreviewApp() {
             <span className="text-gradient-brand">すぐ XRift へ。</span>
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-8 text-zinc-600 sm:text-lg">
-            環境を整えるところから、編集、動作確認、公開まで。XRift Studio は、ワールドやアイテムを作る流れをひとつにつなぐ、有志製のデスクトップアプリです。
+            コードを直接編集するクラシック制作と、専用Scene / Asset JSONを編集するビジュアル制作。目的に合う入口からワールドやアイテムを作れます。
           </p>
           <div className="mt-7 grid max-w-2xl gap-3 sm:grid-cols-2">
             <button
@@ -337,11 +373,22 @@ export default function PreviewApp() {
             </button>
           </div>
           <div className="mt-8 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setVisualEditorKind(sampleKind)}
+              className="inline-flex items-center gap-2 rounded-full bg-zinc-950 px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-violet-500/20 transition hover:-translate-y-0.5 hover:bg-violet-700"
+            >
+              <PanelsTopLeft size={16} />
+              ビジュアルエディターを見る
+            </button>
+            <span className="self-center text-[11px] leading-5 text-amber-700">
+              Webでは編集操作のサンプルを表示します。ファイル保存と公開はデスクトップ版で実行します。
+            </span>
             <a
               href="https://github.com/WebXR-JP/xrift-studio/releases/latest"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-full bg-zinc-950 px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-violet-500/20 transition hover:-translate-y-0.5 hover:bg-violet-700"
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white/70 px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:-translate-y-0.5 hover:border-zinc-300 hover:text-zinc-950"
             >
               <Download size={16} />
               デスクトップ版を入手
@@ -351,7 +398,7 @@ export default function PreviewApp() {
               onClick={scrollToWorkspace}
               className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white/70 px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:-translate-y-0.5 hover:border-zinc-300 hover:text-zinc-950"
             >
-              画面を試す
+              コード編集画面を見る
               <ArrowRight size={15} />
             </button>
           </div>
@@ -369,9 +416,9 @@ export default function PreviewApp() {
       <section id="workspace-preview" className="mx-auto max-w-6xl scroll-mt-8 px-5 pb-24 lg:px-8">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">画面を試す</p>
-            <h2 className="mt-2 text-2xl font-bold tracking-tight text-zinc-950 sm:text-3xl">触ると、制作の流れが見える。</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">ファイルを切り替え、「実行」を押して、編集からプレビューまでのつながりを確かめられます。</p>
+            <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">クラシック方式</p>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight text-zinc-950 sm:text-3xl">コードで作る流れも、そのまま残す。</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">ファイルを切り替え、「実行」を押して、従来のコード編集からプレビューまでを確かめられます。</p>
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
             <div className="w-full sm:w-auto">
@@ -767,8 +814,8 @@ export default function PreviewApp() {
         <div className="mx-auto max-w-6xl">
           <div className="max-w-xl">
             <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">制作の流れ</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">迷わず、公開まで進める。</h2>
-            <p className="mt-4 text-sm leading-7 text-zinc-600">準備、作成、確認、公開が同じ流れの中にあるので、次に開くツールや打つコマンドを探し直す必要がありません。</p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">制作方法ごとの現在地が分かる。</h2>
+            <p className="mt-4 text-sm leading-7 text-zinc-600">クラシック方式はコードを正本にし、ビジュアル方式はSceneとAssetの専用データを正本にします。デスクトップ版では、作成物の保存からXRift向け変換・公開準備までを一つのEditor内で進めます。</p>
           </div>
           <div className="relative mt-12">
             <div className="absolute left-5 right-5 top-5 hidden h-px bg-gradient-to-r from-violet-200 via-cyan-200 to-fuchsia-200 lg:block" />

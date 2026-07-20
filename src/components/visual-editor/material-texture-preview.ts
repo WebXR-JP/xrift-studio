@@ -1,0 +1,241 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  ClampToEdgeWrapping,
+  LinearFilter,
+  LinearMipmapLinearFilter,
+  LinearMipmapNearestFilter,
+  MirroredRepeatWrapping,
+  NearestFilter,
+  NearestMipmapLinearFilter,
+  NearestMipmapNearestFilter,
+  NoColorSpace,
+  RepeatWrapping,
+  SRGBColorSpace,
+  TextureLoader,
+  type MeshStandardMaterial,
+  type Texture,
+} from "three";
+import { tauri } from "../../lib/tauri";
+import {
+  getTextureAsset,
+  normalizeMaterialProperties,
+  type AssetManifest,
+  type MaterialAsset,
+  type MaterialProperties,
+  type MaterialTextureInfo,
+  type TextureAsset,
+} from "../../lib/visual-editor";
+
+export type CoreMaterialPreviewTextures = {
+  baseColorMap?: Texture;
+  metallicRoughnessMap?: Texture;
+  normalMap?: Texture;
+  occlusionMap?: Texture;
+  emissiveMap?: Texture;
+};
+
+type PreviewTextureRole = keyof CoreMaterialPreviewTextures;
+
+type PreviewTextureRequest = {
+  role: PreviewTextureRole;
+  textureInfo: MaterialTextureInfo;
+  asset: TextureAsset & { source: { kind: "project"; relativePath: string } };
+  colorSpace: "srgb" | "linear";
+};
+
+const IMAGE_DATA_URL_CACHE = new Map<string, Promise<string>>();
+
+export function useCoreMaterialPreviewTextures(
+  material: MaterialAsset | undefined,
+  assets: AssetManifest,
+  projectPath: string | undefined,
+): CoreMaterialPreviewTextures {
+  const requests = useMemo(
+    () => resolvePreviewTextureRequests(material, assets),
+    [assets, material],
+  );
+  const requestKey = useMemo(
+    () =>
+      JSON.stringify(
+        requests.map((request) => ({
+          role: request.role,
+          assetId: request.asset.id,
+          sourceHash: request.asset.sourceHash ?? "",
+          relativePath: request.asset.source.relativePath,
+          textureInfo: request.textureInfo,
+          importSettings: request.asset.importSettings,
+          colorSpace: request.colorSpace,
+        })),
+      ),
+    [requests],
+  );
+  const [textures, setTextures] = useState<CoreMaterialPreviewTextures>({});
+
+  useEffect(() => {
+    let active = true;
+    let ownedTextures: Texture[] = [];
+    setTextures({});
+    if (!projectPath || requests.length === 0) {
+      return () => {
+        active = false;
+      };
+    }
+
+    void Promise.all(
+      requests.map(async (request) => {
+        try {
+          const dataUrl = await readProjectTextureDataUrl(projectPath, request.asset);
+          const texture = await new TextureLoader().loadAsync(dataUrl);
+          configureMaterialPreviewTexture(
+            texture,
+            request.asset,
+            request.textureInfo,
+            request.colorSpace,
+            request.role,
+          );
+          return { role: request.role, texture };
+        } catch {
+          return null;
+        }
+      }),
+    ).then((loaded) => {
+      const available = [];
+      for (const entry of loaded) {
+        if (entry) available.push(entry);
+      }
+      if (!active) {
+        available.forEach((entry) => entry.texture.dispose());
+        return;
+      }
+      ownedTextures = available.map((entry) => entry.texture);
+      setTextures(
+        Object.fromEntries(
+          available.map((entry) => [entry.role, entry.texture]),
+        ) as CoreMaterialPreviewTextures,
+      );
+    });
+
+    return () => {
+      active = false;
+      ownedTextures.forEach((texture) => texture.dispose());
+      ownedTextures = [];
+    };
+  }, [projectPath, requestKey, requests]);
+
+  return textures;
+}
+
+/** Applies only textures owned by the assigned Material preview. */
+export function applyCoreMaterialPreviewTextures(
+  target: MeshStandardMaterial,
+  properties: MaterialProperties,
+  textures: CoreMaterialPreviewTextures,
+): void {
+  target.map = textures.baseColorMap ?? null;
+  target.metalnessMap = textures.metallicRoughnessMap ?? null;
+  target.roughnessMap = textures.metallicRoughnessMap ?? null;
+  target.normalMap = textures.normalMap ?? null;
+  const normalScale = properties.normalTexture?.scale ?? 1;
+  target.normalScale.set(normalScale, normalScale);
+  target.aoMap = textures.occlusionMap ?? null;
+  target.aoMapIntensity = properties.occlusionTexture?.strength ?? 1;
+  target.emissiveMap = textures.emissiveMap ?? null;
+  target.alphaMap = null;
+  target.needsUpdate = true;
+}
+
+function resolvePreviewTextureRequests(
+  material: MaterialAsset | undefined,
+  assets: AssetManifest,
+): PreviewTextureRequest[] {
+  if (!material) return [];
+  const properties = normalizeMaterialProperties(
+    material.properties as unknown as Parameters<
+      typeof normalizeMaterialProperties
+    >[0],
+  );
+  const pbr = properties.pbrMetallicRoughness;
+  const candidates: Array<
+    [PreviewTextureRole, MaterialTextureInfo | undefined, "srgb" | "linear"]
+  > = [
+    ["baseColorMap", pbr.baseColorTexture, "srgb"],
+    ["metallicRoughnessMap", pbr.metallicRoughnessTexture, "linear"],
+    ["normalMap", properties.normalTexture, "linear"],
+    ["occlusionMap", properties.occlusionTexture, "linear"],
+    ["emissiveMap", properties.emissiveTexture, "srgb"],
+  ];
+  return candidates.flatMap(([role, textureInfo, colorSpace]) => {
+    if (!textureInfo) return [];
+    const asset = getTextureAsset(assets, textureInfo.textureAssetId);
+    if (!asset || asset.source.kind !== "project") return [];
+    return [
+      {
+        role,
+        textureInfo,
+        asset: asset as PreviewTextureRequest["asset"],
+        colorSpace,
+      },
+    ];
+  });
+}
+
+async function readProjectTextureDataUrl(
+  projectPath: string,
+  asset: PreviewTextureRequest["asset"],
+): Promise<string> {
+  const key = [
+    projectPath,
+    asset.id,
+    asset.sourceHash ?? "",
+    asset.source.relativePath,
+  ].join("\n");
+  const existing = IMAGE_DATA_URL_CACHE.get(key);
+  if (existing) return existing;
+  const pending = tauri.readImageDataUrl(projectPath, asset.source.relativePath);
+  IMAGE_DATA_URL_CACHE.set(key, pending);
+  try {
+    return await pending;
+  } catch (error) {
+    IMAGE_DATA_URL_CACHE.delete(key);
+    throw error;
+  }
+}
+
+export function configureMaterialPreviewTexture(
+  texture: Texture,
+  asset: TextureAsset,
+  textureInfo: MaterialTextureInfo,
+  colorSpace: "srgb" | "linear",
+  role = "material",
+): void {
+  const settings = asset.importSettings;
+  texture.name = `${asset.name} (${role})`;
+  texture.channel = textureInfo.texCoord;
+  texture.colorSpace =
+    colorSpace === "srgb" ? SRGBColorSpace : NoColorSpace;
+  texture.flipY = settings.flipY;
+  texture.generateMipmaps = settings.generateMipmaps;
+  texture.wrapS = {
+    "clamp-to-edge": ClampToEdgeWrapping,
+    "mirrored-repeat": MirroredRepeatWrapping,
+    repeat: RepeatWrapping,
+  }[settings.sampler.wrapS];
+  texture.wrapT = {
+    "clamp-to-edge": ClampToEdgeWrapping,
+    "mirrored-repeat": MirroredRepeatWrapping,
+    repeat: RepeatWrapping,
+  }[settings.sampler.wrapT];
+  texture.magFilter = {
+    linear: LinearFilter,
+    nearest: NearestFilter,
+  }[settings.sampler.magFilter];
+  texture.minFilter = {
+    linear: LinearFilter,
+    "linear-mipmap-linear": LinearMipmapLinearFilter,
+    "linear-mipmap-nearest": LinearMipmapNearestFilter,
+    nearest: NearestFilter,
+    "nearest-mipmap-linear": NearestMipmapLinearFilter,
+    "nearest-mipmap-nearest": NearestMipmapNearestFilter,
+  }[settings.sampler.minFilter];
+  texture.needsUpdate = true;
+}

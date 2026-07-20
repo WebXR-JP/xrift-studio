@@ -11,6 +11,14 @@ export type RunResult = {
   stderr: string;
 };
 
+export type CompilerStagingTemplateRequest = {
+  /** App-owned directory whose final segment is `xrift-studio-staging`. */
+  compilerOwnedRoot: string;
+  kind: ProjectKind;
+  /** Must be the compiler-generated `xrift-studio-*` directory name. */
+  directoryName: string;
+};
+
 const stamp = (kind: LogKind, text: string): LogLine => ({
   kind,
   text,
@@ -215,6 +223,23 @@ export const xrift = {
       cwd: root,
       onLog,
     }),
+  /**
+   * Creates an XRift template only in a compiler-owned staging root. Overlay
+   * application is a separate step; this function never receives or writes an
+   * authoring project path.
+   */
+  createCompilerStagingTemplate: (
+    request: CompilerStagingTemplateRequest,
+    onLog: (line: LogLine) => void,
+  ) => {
+    assertCompilerStagingTarget(request);
+    return run({
+      bin: "xrift",
+      args: ["create", request.kind, request.directoryName, "-y"],
+      cwd: request.compilerOwnedRoot,
+      onLog,
+    });
+  },
   checkItem: (projectPath: string, onLog: (l: LogLine) => void) =>
     run({
       bin: "xrift",
@@ -234,6 +259,22 @@ export const xrift = {
       onLog,
     }),
 };
+
+export function assertCompilerStagingTarget(
+  request: CompilerStagingTemplateRequest,
+): void {
+  const root = request.compilerOwnedRoot.trim().replace(/\\/g, "/");
+  const finalSegment = root.split("/").filter(Boolean).pop();
+  if (finalSegment !== "xrift-studio-staging") {
+    throw new Error("Compiler staging root must end with xrift-studio-staging");
+  }
+  if (
+    !/^xrift-studio-[a-z0-9._-]+$/i.test(request.directoryName) ||
+    request.directoryName.includes("..")
+  ) {
+    throw new Error("Invalid compiler staging directory name");
+  }
+}
 
 export async function openInVSCode(
   projectPath: string,

@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/*
+ * R3F thumbnails set pointer-events inline on their Canvas wrapper.  A plain
+ * pointer-events-none class on the card preview is therefore not sufficient:
+ * the Canvas can become the native drag source and the Asset button never
+ * receives dragstart in WebView.  Keep the complete preview subtree inert so
+ * every visible part of the card starts the same Asset drag gesture.
+ */
+[data-asset-drag-preview="true"],
+[data-asset-drag-preview="true"] * {
+  pointer-events: none !important;
+}
+
 @theme {
   --color-brand-50: #f5f3ff;
   --color-brand-100: #ede9fe;

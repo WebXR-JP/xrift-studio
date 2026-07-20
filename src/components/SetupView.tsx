@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { Sparkles, CheckCircle2, Loader2 } from "lucide-react";
-import { tauri, type RuntimeStatus } from "../lib/tauri";
+import {
+  Box,
+  CheckCircle2,
+  Globe2,
+  Loader2,
+  PanelsTopLeft,
+  Sparkles,
+} from "lucide-react";
+import { tauri, type ProjectKind, type RuntimeStatus } from "../lib/tauri";
 import { BrandMark } from "./Brand";
 
 type SetupProgress = {
@@ -13,9 +20,10 @@ type SetupProgress = {
 type Props = {
   status: RuntimeStatus;
   onReady: (status: RuntimeStatus) => void;
+  onOpenVisualEditor: (kind: ProjectKind) => void;
 };
 
-export function SetupView({ status, onReady }: Props) {
+export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<SetupProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -148,6 +156,42 @@ export function SetupView({ status, onReady }: Props) {
               </>
             )}
           </button>
+
+          <div className="mt-5 border-t border-zinc-200 pt-5">
+            <div className="flex items-start gap-2.5">
+              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-50 text-cyan-700">
+                <PanelsTopLeft size={16} strokeWidth={2} />
+              </span>
+              <div>
+                <div className="text-xs font-semibold text-zinc-800">
+                  環境準備なしでビジュアル制作を始める
+                </div>
+                <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+                  SceneとAssetの編集・保存にはNode.jsやXRift CLIは不要です。XRiftへの変換・公開時に必要な環境は後から準備できます。
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={running}
+                onClick={() => onOpenVisualEditor("world")}
+                className="flex items-center justify-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 transition hover:border-violet-300 hover:bg-violet-100 disabled:opacity-50"
+              >
+                <Globe2 size={14} strokeWidth={2} />
+                Worldを作る
+              </button>
+              <button
+                type="button"
+                disabled={running}
+                onClick={() => onOpenVisualEditor("item")}
+                className="flex items-center justify-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-800 transition hover:border-cyan-300 hover:bg-cyan-100 disabled:opacity-50"
+              >
+                <Box size={14} strokeWidth={2} />
+                Itemを作る
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="mt-5 text-center text-[11px] text-zinc-400">

@@ -1,11 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export type ProjectKind = "world" | "item";
+export type ProjectFormat = "classic" | "visual";
 
 export type Project = {
   name: string;
   path: string;
   kind: ProjectKind;
+  format: ProjectFormat;
   title: string | null;
   description: string | null;
 };
@@ -44,6 +46,49 @@ export type Versions = {
   nodeVersion: string;
 };
 
+export type VisualDocumentFile = {
+  relativePath: string;
+  content: string;
+};
+
+export type VisualProjectFiles = {
+  projectJson: string;
+  sceneDocuments: VisualDocumentFile[];
+  /** Empty for projects created before prefab document persistence. */
+  prefabDocuments: VisualDocumentFile[];
+  assetManifestJson: string;
+};
+
+export type VisualBinaryDocumentWrite = {
+  /** Normalized project-relative path. Data URLs are transport-only. */
+  relativePath: string;
+  dataUrl: string;
+};
+
+export type VisualProjectWriteRequest = VisualProjectFiles & {
+  binaryDocuments?: VisualBinaryDocumentWrite[];
+};
+
+export type CompilerStagingPaths = {
+  rootPath: string;
+  projectPath: string;
+};
+
+export type CompilerOverlayWrite = {
+  relativePath: string;
+  content: string;
+};
+
+export type CompilerAssetCopy = {
+  sourceRelativePath: string;
+  targetRelativePath: string;
+};
+
+export type VisualAssetImportWrite = {
+  relativePath: string;
+  dataUrl: string;
+};
+
 export const tauri = {
   getVersions: () => invoke<Versions>("get_versions"),
   runtimePaths: () => invoke<RuntimePaths>("runtime_paths"),
@@ -53,6 +98,48 @@ export const tauri = {
   ensureDir: (path: string) => invoke<void>("ensure_dir", { path }),
   listProjects: (root: string) =>
     invoke<Project[]>("list_projects", { root }),
+  createVisualProject: (
+    root: string,
+    directoryName: string,
+    request: VisualProjectWriteRequest,
+  ) =>
+    invoke<Project>("create_visual_project", {
+      root,
+      directoryName,
+      request,
+    }),
+  readVisualProject: (projectPath: string) =>
+    invoke<VisualProjectFiles>("read_visual_project", { projectPath }),
+  saveVisualProject: (
+    projectPath: string,
+    request: VisualProjectWriteRequest,
+  ) => invoke<void>("save_visual_project", { projectPath, request }),
+  prepareCompilerStaging: (directoryName: string) =>
+    invoke<CompilerStagingPaths>("prepare_compiler_staging", {
+      directoryName,
+    }),
+  applyCompilerStaging: (
+    authoringProjectPath: string,
+    directoryName: string,
+    overlayFiles: CompilerOverlayWrite[],
+    assetCopies: CompilerAssetCopy[],
+  ) =>
+    invoke<string>("apply_compiler_staging", {
+      authoringProjectPath,
+      directoryName,
+      overlayFiles,
+      assetCopies,
+    }),
+  commitVisualAssetImport: (
+    projectPath: string,
+    transactionId: string,
+    writes: VisualAssetImportWrite[],
+  ) =>
+    invoke<void>("commit_visual_asset_import", {
+      projectPath,
+      transactionId,
+      writes,
+    }),
   readWorldFile: (projectPath: string) =>
     invoke<string>("read_world_file", { projectPath }),
   writeWorldFile: (projectPath: string, content: string) =>
@@ -66,6 +153,9 @@ export const tauri = {
   writeThumbnail: (projectPath: string, dataUrl: string) =>
     invoke<void>("write_thumbnail", { projectPath, dataUrl }),
   readImageDataUrl: (projectPath: string, rel: string) =>
+    invoke<string>("read_image_data_url", { projectPath, rel }),
+  /** Reads a validated project-relative binary as a data URL (models included). */
+  readProjectFileDataUrl: (projectPath: string, rel: string) =>
     invoke<string>("read_image_data_url", { projectPath, rel }),
   killPidTree: (pid: number) => invoke<void>("kill_pid_tree", { pid }),
   listFiles: (projectPath: string, rel: string) =>

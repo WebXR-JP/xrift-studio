@@ -34,7 +34,7 @@ const TEXT_EXT = new Set([
   ".env",
   ".gitignore",
 ]);
-const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]);
+const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
 const MODEL_EXT = new Set([".glb", ".gltf", ".vrm", ".fbx", ".obj", ".drc"]);
 
 const PROTECTED = new Set([

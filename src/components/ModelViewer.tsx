@@ -227,7 +227,7 @@ export function ModelViewer({ projectPath, rel }: Props) {
         {object && (
           <>
             <Canvas
-              shadows
+              shadows="basic"
               dpr={[1, 2]}
               camera={{ position: [2.5, 2, 4], fov: 45 }}
               style={{ width: "100%", height: "100%" }}

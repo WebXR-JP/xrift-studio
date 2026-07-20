@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ImagePlus } from "lucide-react";
 import { tauri, type ProjectKind } from "../lib/tauri";
 
 type Props = {
@@ -92,11 +93,11 @@ export function ThumbnailEditor({
     <div className="flex h-full flex-col bg-white">
       <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-2">
         <div className="text-xs font-medium text-zinc-700">public/thumbnail.png</div>
-        <div className="mt-0.5 text-[11px] text-zinc-500">
+        <div className="mt-0.5 text-xs text-zinc-500">
           {projectLabel}一覧やXRift上で表示されるサムネイル画像（推奨: {recommendedSize}）
         </div>
         {publishPreparation && (
-          <div className="mt-1 text-[11px] text-amber-800">
+          <div className="mt-1 text-xs text-amber-800">
             公開準備中です。画像を保存すると、公開前の確認を続けます。
           </div>
         )}
@@ -135,13 +136,9 @@ export function ThumbnailEditor({
               </>
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-400">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <path d="M21 15l-5-5L5 21" />
-                </svg>
+                <ImagePlus size={48} strokeWidth={1.5} aria-hidden="true" />
                 <div className="text-sm">サムネイル未設定</div>
-                <div className="text-[11px]">ドラッグ&ドロップ または下のボタンから画像を追加</div>
+                <div className="text-xs">ドラッグ&ドロップ または下のボタンから画像を追加</div>
               </div>
             )}
             <button

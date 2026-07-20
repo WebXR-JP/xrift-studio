@@ -172,7 +172,7 @@ export function ProjectLibrary({
                 まだプロジェクトがありません。
               </div>
               <div className="mt-1 text-xs text-zinc-500">
-                「新規プロジェクト」から、ワールドまたはアイテムのテンプレートを選びましょう。
+                「新規プロジェクト」から、作るものとコード／ビジュアルの制作方法を選びましょう。
               </div>
             </div>
           )}

@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
-import { ImageOff, Plus, Sparkles, Camera, Box, Globe2 } from "lucide-react";
+import {
+  ImageOff,
+  Plus,
+  Sparkles,
+  Camera,
+  Box,
+  Globe2,
+  Code2,
+  PanelsTopLeft,
+} from "lucide-react";
 import { tauri, type Project } from "../lib/tauri";
 
 type Props = {
@@ -70,6 +79,25 @@ export function ProjectCard({
               {project.kind === "item" ? <Box size={10} strokeWidth={2} /> : <Globe2 size={10} strokeWidth={2} />}
               {project.kind === "item" ? "Item" : "World"}
             </span>
+            <span
+              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+                project.format === "visual"
+                  ? "bg-violet-50 text-violet-700"
+                  : "bg-sky-50 text-sky-700"
+              }`}
+              title={
+                project.format === "visual"
+                  ? "Scene / Asset JSONを編集するビジュアルプロジェクト"
+                  : "XRiftコードを直接編集するクラシックプロジェクト"
+              }
+            >
+              {project.format === "visual" ? (
+                <PanelsTopLeft size={10} strokeWidth={2} />
+              ) : (
+                <Code2 size={10} strokeWidth={2} />
+              )}
+              {project.format === "visual" ? "Visual" : "Classic"}
+            </span>
           </div>
           <div className="font-semibold text-zinc-900 group-hover:text-brand-700">
             {project.title || project.name}
@@ -115,7 +143,7 @@ export function NewProjectCard({ onClick }: { onClick: () => void }) {
       <span className="relative text-sm font-medium">新規プロジェクト</span>
       <span className="relative mt-0.5 flex items-center gap-1 text-[10px] text-zinc-400 group-hover:text-brand-500">
         <Sparkles size={9} strokeWidth={2} />
-        ワールドまたはアイテムを作成
+        種別と制作方法を選んで開始
       </span>
     </button>
   );
