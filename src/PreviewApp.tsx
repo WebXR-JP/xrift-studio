@@ -20,7 +20,6 @@ import {
   PanelsTopLeft,
   Play,
   RefreshCw,
-  Sparkles,
   Square,
   TerminalSquare,
   Upload,
@@ -307,9 +306,6 @@ export default function PreviewApp() {
             <Box size={18} strokeWidth={2.2} />
           </span>
           <span className="text-sm font-bold tracking-tight text-zinc-950">XRift Studio</span>
-          <span className="hidden rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 sm:inline-flex">
-            WEB PREVIEW
-          </span>
         </a>
         <div className="flex items-center gap-2">
           <a href="#workspace-preview" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
@@ -338,10 +334,6 @@ export default function PreviewApp() {
         <div className="preview-orb preview-orb-one" />
         <div className="preview-orb preview-orb-two" />
         <div className="relative max-w-3xl">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white/70 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-violet-700 shadow-sm backdrop-blur">
-            <Sparkles size={13} />
-            XRift 非公式のコミュニティ製アプリ
-          </div>
           <h1 className="max-w-3xl text-4xl font-black leading-[1.04] tracking-[-0.055em] text-zinc-950 sm:text-6xl lg:text-7xl">
             XRiftを、
             <span className="text-gradient-brand">もっとつくりやすく。</span>
@@ -838,14 +830,12 @@ export default function PreviewApp() {
               <a href="https://github.com/WebXR-JP/xrift-studio/releases/latest" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:-translate-y-0.5 hover:bg-violet-100"><Download size={15} /> 最新リリースをダウンロード</a>
               <a href="https://github.com/WebXR-JP/xrift-studio" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/5"><GitBranch size={15} /> GitHubで見る</a>
             </div>
-            <p className="mt-5 text-xs leading-6 text-zinc-500">XRift Studioは、XRift公式とは無関係のコミュニティ製デスクトップアプリです。</p>
           </div>
         </div>
       </section>
 
       <footer className="border-t border-zinc-200/70 px-5 py-8 lg:px-8">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between">
-          <span>XRift Studio は有志が制作する非公式デスクトップアプリです。</span>
+        <div className="mx-auto flex max-w-6xl justify-end text-xs text-zinc-500">
           <div className="flex flex-wrap gap-x-4 gap-y-2">
             <a href="https://xrift.net/" target="_blank" rel="noreferrer" className="hover:text-violet-700">XRift 公式サイト</a>
             <a href="https://github.com/WebXR-JP/xrift-studio" target="_blank" rel="noreferrer" className="hover:text-violet-700">GitHub</a>
