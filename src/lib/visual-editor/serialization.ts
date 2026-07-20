@@ -239,6 +239,43 @@ function validateMaterialAsset(
     return;
   }
   const properties = asset.properties;
+  if (isRecord(properties.pbrMetallicRoughness)) {
+    validateMaterialTextureInfo(
+      properties.pbrMetallicRoughness.baseColorTexture,
+      `${path}.properties.pbrMetallicRoughness.baseColorTexture`,
+      assets,
+      issues,
+      "core",
+    );
+    validateMaterialTextureInfo(
+      properties.pbrMetallicRoughness.metallicRoughnessTexture,
+      `${path}.properties.pbrMetallicRoughness.metallicRoughnessTexture`,
+      assets,
+      issues,
+      "core",
+    );
+  }
+  validateMaterialTextureInfo(
+    properties.normalTexture,
+    `${path}.properties.normalTexture`,
+    assets,
+    issues,
+    "normal",
+  );
+  validateMaterialTextureInfo(
+    properties.occlusionTexture,
+    `${path}.properties.occlusionTexture`,
+    assets,
+    issues,
+    "occlusion",
+  );
+  validateMaterialTextureInfo(
+    properties.emissiveTexture,
+    `${path}.properties.emissiveTexture`,
+    assets,
+    issues,
+    "core",
+  );
   if (properties.extensions === undefined) return;
   if (!isRecord(properties.extensions)) {
     issues.push(
@@ -326,7 +363,7 @@ function validateMaterialExtension(
       `${path}.${key}`,
       assets,
       issues,
-      normal,
+      normal ? "normal" : "core",
     );
   const unit = (key: string) =>
     validateOptionalNumber(extension, key, path, issues, isUnitNumber, "from 0 to 1");
@@ -589,7 +626,7 @@ function validateMaterialTextureInfo(
   path: string,
   assets: Record<string, unknown>,
   issues: DocumentValidationIssue[],
-  normal: boolean,
+  kind: "core" | "normal" | "occlusion",
 ): void {
   if (value === undefined) return;
   if (!isRecord(value)) {
@@ -598,7 +635,13 @@ function validateMaterialTextureInfo(
   }
   validateKnownKeys(
     value,
-    normal ? ["textureAssetId", "texCoord", "scale"] : ["textureAssetId", "texCoord"],
+    [
+      "textureAssetId",
+      "texCoord",
+      "transform",
+      ...(kind === "normal" ? ["scale"] : []),
+      ...(kind === "occlusion" ? ["strength"] : []),
+    ],
     path,
     issues,
   );
@@ -617,13 +660,45 @@ function validateMaterialTextureInfo(
       issue(`${path}.texCoord`, "range", "texture coordinate must be a non-negative integer"),
     );
   }
-  if (normal && !isFiniteNumber(value.scale)) {
+  if (kind === "normal" && !isFiniteNumber(value.scale)) {
     issues.push(issue(`${path}.scale`, "range", "normal texture scale must be finite"));
+  }
+  if (kind === "occlusion" && !isUnitNumber(value.strength)) {
+    issues.push(
+      issue(`${path}.strength`, "range", "occlusion texture strength must be from 0 to 1"),
+    );
+  }
+  validateMaterialTextureTransform(value.transform, `${path}.transform`, issues);
+}
+
+function validateMaterialTextureTransform(
+  value: unknown,
+  path: string,
+  issues: DocumentValidationIssue[],
+): void {
+  if (value === undefined) return;
+  if (!isRecord(value)) {
+    issues.push(issue(path, "type", "texture transform must be an object"));
+    return;
+  }
+  validateKnownKeys(value, ["offset", "rotation", "scale"], path, issues);
+  if (!isFiniteVector2(value.offset)) {
+    issues.push(issue(`${path}.offset`, "range", "texture offset must contain two finite numbers"));
+  }
+  if (!isFiniteNumber(value.rotation)) {
+    issues.push(issue(`${path}.rotation`, "range", "texture rotation must be finite"));
+  }
+  if (!isFiniteVector2(value.scale)) {
+    issues.push(issue(`${path}.scale`, "range", "texture scale must contain two finite numbers"));
   }
 }
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+function isFiniteVector2(value: unknown): value is [number, number] {
+  return Array.isArray(value) && value.length === 2 && value.every(isFiniteNumber);
 }
 
 function isUnitNumber(value: unknown): value is number {

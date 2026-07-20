@@ -8,7 +8,9 @@ import {
 import {
   BUILTIN_PRIMITIVE_CREATION_CATALOG,
   EDITOR_COMPONENT_REGISTRY,
+  XRIFT_COMPONENT_SCHEMA_IDS,
   getEntityReparentDecision,
+  getXriftComponentDefinition,
   type EntityReparentBlockReason,
   type EditorCommandId,
   type SceneDocument,
@@ -80,6 +82,15 @@ function getEntityTypeLabel(entity: SceneEntity): string {
   if (entity.components.some((component) => component.type === "spawn-point")) {
     return "Spawn";
   }
+  const xriftComponent = entity.components.find(
+    (component) => component.type === "xrift-component",
+  );
+  if (xriftComponent?.type === "xrift-component") {
+    return (
+      getXriftComponentDefinition(xriftComponent.schemaId)?.label ??
+      "XRift Component"
+    );
+  }
   return "Entity";
 }
 
@@ -91,6 +102,18 @@ function getEntityIcon(entity: SceneEntity) {
     entity.components.some((component) => component.type === "particle-emitter")
   ) {
     return EDITOR_ICONS.particle;
+  }
+  const xriftComponent = entity.components.find(
+    (component) => component.type === "xrift-component",
+  );
+  if (xriftComponent?.type === "xrift-component") {
+    if (xriftComponent.schemaId === XRIFT_COMPONENT_SCHEMA_IDS.spawnPoint) {
+      return EDITOR_ICONS.spawn;
+    }
+    if (xriftComponent.schemaId === XRIFT_COMPONENT_SCHEMA_IDS.mirror) {
+      return EDITOR_ICONS.mirror;
+    }
+    return EDITOR_ICONS.prefab;
   }
   return EDITOR_ICONS.sceneEntity;
 }
@@ -744,6 +767,26 @@ export function HierarchyPanel({
               <div className="my-1 border-t border-slate-200" />
             </>
           ) : null}
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={() => {
+              const parentEntityId = contextMenu.entityId;
+              setContextMenu(null);
+              onCommand("entity.create-empty", { parentEntityId });
+            }}
+            title={commandTitle(
+              contextMenu.entityId
+                ? "選択Entityの子にEmpty Entityを作成"
+                : "Scene RootにEmpty Entityを作成",
+              "entity.create-empty",
+            )}
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
+          >
+            <EDITOR_ICONS.sceneEntity size={14} aria-hidden="true" />
+            Empty Entity
+          </button>
+          <div className="my-1 border-t border-slate-200" />
           <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
             Create Mesh
           </p>

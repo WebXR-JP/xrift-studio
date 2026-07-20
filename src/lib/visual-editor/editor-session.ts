@@ -153,6 +153,68 @@ export function addEditorComponent(
   };
 }
 
+export type CreateEmptyEntityResult = {
+  scene: SceneDocument;
+  entityId: string;
+};
+
+/** Creates a transform-only Entity at Scene root or under an existing parent. */
+export function createEmptyEntity(
+  scene: SceneDocument,
+  parentId: string | null = null,
+  requestedName = "Empty Entity",
+): CreateEmptyEntityResult | null {
+  if (parentId !== null && !scene.entities[parentId]) return null;
+
+  const baseName = requestedName.trim() || "Empty Entity";
+  const existingNames = new Set(
+    Object.values(scene.entities).map((entity) =>
+      entity.name.toLocaleLowerCase(),
+    ),
+  );
+  let name = baseName;
+  let suffix = 2;
+  while (existingNames.has(name.toLocaleLowerCase())) {
+    name = `${baseName} ${suffix}`;
+    suffix += 1;
+  }
+
+  const entityId = createDocumentId("entity");
+  const entity: SceneEntity = {
+    id: entityId,
+    name,
+    parentId,
+    children: [],
+    enabled: true,
+    components: [
+      createTransformComponent(createDocumentId("component-transform")),
+    ],
+  };
+  const parent = parentId ? scene.entities[parentId] : undefined;
+
+  return {
+    entityId,
+    scene: {
+      ...scene,
+      rootEntityIds: parentId
+        ? scene.rootEntityIds
+        : [...scene.rootEntityIds, entityId],
+      entities: {
+        ...scene.entities,
+        ...(parent
+          ? {
+              [parent.id]: {
+                ...parent,
+                children: [...parent.children, entityId],
+              },
+            }
+          : {}),
+        [entityId]: entity,
+      },
+    },
+  };
+}
+
 export type EntityClipboard = {
   scene: SceneDocument;
   rootEntityIds: string[];

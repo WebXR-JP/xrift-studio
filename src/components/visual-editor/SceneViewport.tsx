@@ -24,6 +24,7 @@ import {
 } from "three";
 import {
   BUILTIN_PRIMITIVE_CREATION_CATALOG,
+  XRIFT_COMPONENT_SCHEMA_IDS,
   getBuiltinPrefabRecipe,
   getBuiltinPrimitiveCreation,
   getMaterialAsset,
@@ -275,6 +276,159 @@ function SpawnPointVisual({ selected }: { selected: boolean }) {
   );
 }
 
+function MirrorComponentVisual({
+  size,
+  color,
+  selected,
+}: {
+  size: readonly [number, number];
+  color?: string;
+  selected: boolean;
+}) {
+  return (
+    <mesh>
+      <planeGeometry args={[size[0], size[1]]} />
+      <meshStandardMaterial
+        color={selected ? "#a78bfa" : color ?? "#bae6fd"}
+        metalness={0.7}
+        roughness={0.18}
+        transparent
+        opacity={0.72}
+        side={DoubleSide}
+      />
+      <Edges color={selected ? "#8b5cf6" : "#38bdf8"} />
+    </mesh>
+  );
+}
+
+function PortalComponentVisual({ selected }: { selected: boolean }) {
+  const primary = selected ? "#8b5cf6" : "#6366f1";
+  const glow = selected ? "#c4b5fd" : "#67e8f9";
+  return (
+    <group position={[0, 1.15, 0]}>
+      <mesh>
+        <torusGeometry args={[0.82, 0.1, 14, 48]} />
+        <meshStandardMaterial
+          color={primary}
+          emissive={primary}
+          emissiveIntensity={0.55}
+          metalness={0.35}
+          roughness={0.28}
+        />
+      </mesh>
+      <mesh position={[0, 0, -0.025]}>
+        <circleGeometry args={[0.72, 48]} />
+        <meshBasicMaterial color={glow} transparent opacity={0.28} />
+      </mesh>
+      <mesh position={[0, -1.05, 0]}>
+        <cylinderGeometry args={[0.72, 0.88, 0.22, 32]} />
+        <meshStandardMaterial color="#334155" roughness={0.72} />
+      </mesh>
+    </group>
+  );
+}
+
+function ScreenComponentVisual({
+  width,
+  selected,
+}: {
+  width: number;
+  selected: boolean;
+}) {
+  const height = Math.max(0.4, width * 9 / 16);
+  return (
+    <group>
+      <mesh>
+        <boxGeometry args={[width, height, 0.08]} />
+        <meshStandardMaterial
+          color={selected ? "#ddd6fe" : "#0f172a"}
+          emissive={selected ? "#7c3aed" : "#0284c7"}
+          emissiveIntensity={selected ? 0.22 : 0.12}
+          roughness={0.38}
+        />
+        <Edges color={selected ? "#8b5cf6" : "#64748b"} />
+      </mesh>
+    </group>
+  );
+}
+
+function BoardComponentVisual({ selected }: { selected: boolean }) {
+  return (
+    <group position={[0, 1.2, 0]}>
+      <mesh>
+        <boxGeometry args={[2.4, 1.45, 0.1]} />
+        <meshStandardMaterial
+          color={selected ? "#ede9fe" : "#f8fafc"}
+          roughness={0.76}
+        />
+        <Edges color={selected ? "#8b5cf6" : "#94a3b8"} />
+      </mesh>
+      <mesh position={[0, -1.05, 0]}>
+        <cylinderGeometry args={[0.08, 0.1, 0.7, 12]} />
+        <meshStandardMaterial color="#64748b" roughness={0.68} />
+      </mesh>
+    </group>
+  );
+}
+
+function VideoSphereComponentVisual({
+  radius,
+  selected,
+}: {
+  radius: number;
+  selected: boolean;
+}) {
+  return (
+    <mesh>
+      <sphereGeometry args={[Math.max(radius, 0.5), 36, 20, 0, Math.PI]} />
+      <meshStandardMaterial
+        color={selected ? "#c4b5fd" : "#0f172a"}
+        emissive={selected ? "#7c3aed" : "#0369a1"}
+        emissiveIntensity={0.16}
+        transparent
+        opacity={0.28}
+        wireframe={!selected}
+        side={DoubleSide}
+      />
+    </mesh>
+  );
+}
+
+function xriftVec(
+  component: Extract<SceneComponent, { type: "xrift-component" }>,
+  property: string,
+  size: 2 | 3,
+  fallback: number[],
+): number[] {
+  const value = component.properties[property];
+  return Array.isArray(value) &&
+    value.length === size &&
+    value.every((entry) => typeof entry === "number" && Number.isFinite(entry))
+    ? (value as number[])
+    : fallback;
+}
+
+function xriftNumber(
+  component: Extract<SceneComponent, { type: "xrift-component" }>,
+  property: string,
+  fallback: number,
+): number {
+  const value = component.properties[property];
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function xriftColor(
+  component: Extract<SceneComponent, { type: "xrift-component" }>,
+  property: string,
+  fallback: number,
+): string {
+  const value = Math.max(
+    0,
+    Math.min(0xffffff, Math.round(xriftNumber(component, property, fallback))),
+  );
+  return `#${value.toString(16).padStart(6, "0")}`;
+}
+
 function BuiltinPrefabComponentVisual({
   component,
   selected,
@@ -291,19 +445,85 @@ function BuiltinPrefabComponentVisual({
     return <SpawnPointVisual selected={selected} />;
   }
   return (
-    <group>
-      <mesh>
-        <planeGeometry args={[recipe.visual.size[0], recipe.visual.size[1]]} />
-        <meshStandardMaterial
-          color={selected ? "#a78bfa" : "#bae6fd"}
-          metalness={0.7}
-          roughness={0.18}
-          transparent
-          opacity={0.72}
-          side={DoubleSide}
+    <MirrorComponentVisual
+      size={recipe.visual.size}
+      color={xriftColor(component, "color", 0xb5b5b5)}
+      selected={selected}
+    />
+  );
+}
+
+function XriftComponentVisual({
+  component,
+  selected,
+}: {
+  component: Extract<SceneComponent, { type: "xrift-component" }>;
+  selected: boolean;
+}) {
+  if (!component.enabled) return null;
+  if (component.authoring?.source === "builtin-prefab") {
+    return (
+      <BuiltinPrefabComponentVisual component={component} selected={selected} />
+    );
+  }
+
+  const position = xriftVec(component, "position", 3, [0, 0, 0]) as Vec3;
+  const rotation = xriftVec(component, "rotation", 3, [0, 0, 0]) as Vec3;
+  let visual: ReactNode = null;
+
+  switch (component.schemaId) {
+    case XRIFT_COMPONENT_SCHEMA_IDS.spawnPoint:
+      visual = <SpawnPointVisual selected={selected} />;
+      break;
+    case XRIFT_COMPONENT_SCHEMA_IDS.mirror: {
+      const size = xriftVec(component, "size", 2, [3, 2]) as [number, number];
+      visual = (
+        <MirrorComponentVisual
+          size={size}
+          color={xriftColor(component, "color", 0xb5b5b5)}
+          selected={selected}
         />
-        <Edges color={selected ? "#8b5cf6" : "#38bdf8"} />
-      </mesh>
+      );
+      break;
+    }
+    case XRIFT_COMPONENT_SCHEMA_IDS.portal:
+      visual = <PortalComponentVisual selected={selected} />;
+      break;
+    case XRIFT_COMPONENT_SCHEMA_IDS.videoScreen: {
+      const scale = xriftVec(component, "scale", 2, [16 / 9 * 3, 3]);
+      visual = (
+        <ScreenComponentVisual width={Math.max(scale[0] ?? 4, 0.4)} selected={selected} />
+      );
+      break;
+    }
+    case XRIFT_COMPONENT_SCHEMA_IDS.videoPlayer:
+    case XRIFT_COMPONENT_SCHEMA_IDS.liveVideoPlayer:
+    case XRIFT_COMPONENT_SCHEMA_IDS.screenShareDisplay:
+      visual = (
+        <ScreenComponentVisual
+          width={Math.max(xriftNumber(component, "width", 4), 0.4)}
+          selected={selected}
+        />
+      );
+      break;
+    case XRIFT_COMPONENT_SCHEMA_IDS.tagBoard:
+      visual = <BoardComponentVisual selected={selected} />;
+      break;
+    case XRIFT_COMPONENT_SCHEMA_IDS.video180Sphere:
+      visual = (
+        <VideoSphereComponentVisual
+          radius={xriftNumber(component, "radius", 5)}
+          selected={selected}
+        />
+      );
+      break;
+    default:
+      return null;
+  }
+
+  return (
+    <group position={position} rotation={rotation}>
+      {visual}
     </group>
   );
 }
@@ -367,7 +587,7 @@ function ComponentVisual({
     }
     case "xrift-component":
       return (
-        <BuiltinPrefabComponentVisual
+        <XriftComponentVisual
           component={component}
           selected={selected}
         />

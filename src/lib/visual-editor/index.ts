@@ -23,4 +23,5 @@ export * from "./prototype-project";
 export * from "./scene-document";
 export * from "./serialization";
 export * from "./starter-templates";
+export * from "./starter-templates.fixture";
 export * from "./shortcuts";

@@ -8,6 +8,7 @@ export type EditorCommandId =
   | "edit.duplicate"
   | "edit.delete"
   | "selection.rename"
+  | "entity.create-empty"
   | "entity.create-primitive"
   | "entity.add-component"
   | "entity.reparent"
@@ -108,6 +109,12 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
     label: "名前を変更",
     category: "edit",
     bindings: [{ key: "f2" }],
+  },
+  {
+    id: "entity.create-empty",
+    label: "空のEntityを作成",
+    category: "edit",
+    bindings: [],
   },
   {
     id: "entity.create-primitive",

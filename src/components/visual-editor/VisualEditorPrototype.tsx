@@ -9,7 +9,6 @@ import {
 } from "react";
 import {
   BUILTIN_ASSET_IDS,
-  BUILTIN_PRIMITIVE_CREATION_CATALOG,
   analyzeAssetDeletion,
   analyzeAssetFolderDeletion,
   addDefaultParticleAsset,
@@ -24,11 +23,13 @@ import {
   commitEditorHistory,
   createEditorHistory,
   createDocumentId,
+  createEmptyEntity,
   createPrefabDocument,
   createPrototypeProject,
   getBuiltinPrimitiveCreation,
   getColliderAutoFitBounds,
   getMesh,
+  getXriftComponentDefinition,
   normalizeMaterialProperties,
   commandForKeyboardEvent,
   copyEntityHierarchy,
@@ -77,6 +78,7 @@ import {
   AssetDeleteDialog,
   type AssetDeleteDialogTarget,
 } from "./AssetDeleteDialog";
+import { EditorCreateMenu } from "./EditorCreateMenu";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { HierarchyPanel } from "./HierarchyPanel";
 import {
@@ -961,6 +963,92 @@ export function VisualEditorPrototype({
       setNotice(`「${definition.name}」をシーンへ追加しました`);
     },
     [bundle, editorMode, setAssetSelection, setBundle, setSceneSelection],
+  );
+
+  const handleCreateEmpty = useCallback(
+    (parentEntityId: string | null = null) => {
+      if (editorMode !== "edit" || importBusy) {
+        setNotice(
+          editorMode !== "edit"
+            ? "Playを停止してからEntityを作成してください"
+            : "アセットのインポート完了後にEntityを作成してください",
+        );
+        return;
+      }
+      setHistory((current) => {
+        const result = createEmptyEntity(
+          current.present.bundle.scene,
+          parentEntityId,
+        );
+        if (!result) {
+          setNotice("Entityの作成先が見つかりませんでした");
+          return current;
+        }
+        setSaveStatus("dirty");
+        const parentName = parentEntityId
+          ? result.scene.entities[parentEntityId]?.name
+          : null;
+        setNotice(
+          parentName
+            ? `「${parentName}」の子にEmpty Entityを作成しました`
+            : "Scene RootにEmpty Entityを作成しました",
+        );
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: touchProject({
+            ...current.present.bundle,
+            scene: result.scene,
+          }),
+          sceneSelection: { kind: "entity", id: result.entityId },
+          assetSelection: null,
+        });
+      });
+    },
+    [editorMode, importBusy],
+  );
+
+  const handleCreateXriftObject = useCallback(
+    (componentDefinitionId: string) => {
+      if (editorMode !== "edit" || importBusy) return;
+      const definition = getXriftComponentDefinition(componentDefinitionId);
+      if (!definition || definition.attachBehavior.kind !== "leaf") {
+        setNotice("このXRift Componentは既存Entityへ追加してください");
+        return;
+      }
+      setHistory((current) => {
+        const created = createEmptyEntity(
+          current.present.bundle.scene,
+          null,
+          definition.label,
+        );
+        if (!created) return current;
+        const added = addEditorComponent(
+          created.scene,
+          current.present.bundle.assets,
+          created.entityId,
+          definition.schemaId,
+          projectKind,
+        );
+        if (!added.added) {
+          setNotice(`${definition.label}をSceneへ作成できませんでした`);
+          return current;
+        }
+        setSaveStatus("dirty");
+        setNotice(
+          `${definition.label}をSceneへ作成しました。Inspectorで設定できます`,
+        );
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: touchProject({
+            ...current.present.bundle,
+            scene: added.scene,
+          }),
+          sceneSelection: { kind: "entity", id: created.entityId },
+          assetSelection: null,
+        });
+      });
+    },
+    [editorMode, importBusy, projectKind],
   );
 
   const handleTransformChange = useCallback(
@@ -2007,6 +2095,9 @@ export function VisualEditorPrototype({
           }
           onLayoutChange?.(DEFAULT_EDITOR_LAYOUT);
           return true;
+        case "entity.create-empty":
+          handleCreateEmpty(payload.parentEntityId ?? null);
+          return editorMode === "edit" && !importBusy;
         case "entity.create-primitive":
           if (!payload.creationId) return false;
           handlePlacePrimitive(payload.creationId);
@@ -2048,6 +2139,7 @@ export function VisualEditorPrototype({
       handleCreateMaterial,
       handleCreateParticle,
       handleCreatePrefab,
+      handleCreateEmpty,
       handleDelete,
       handleDuplicate,
       handlePaste,
@@ -2179,6 +2271,7 @@ export function VisualEditorPrototype({
               <button
                 type="button"
                 disabled={readOnly || importBusy}
+                aria-haspopup="menu"
                 aria-expanded={createMenuOpen}
                 onClick={() => setCreateMenuOpen((open) => !open)}
                 title={commandTitle("シーンオブジェクトを作成", "OpenCreateMenu", "Ctrl+Shift+A")}
@@ -2187,53 +2280,31 @@ export function VisualEditorPrototype({
                 <CreateIcon size={13} aria-hidden="true" />
                 Create
               </button>
-              {createMenuOpen ? (
-                <div className="absolute left-0 top-8 z-50 w-64 rounded-md border border-slate-300 bg-white p-1.5 shadow-xl">
-                  <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Primitive</p>
-                  {BUILTIN_PRIMITIVE_CREATION_CATALOG.map((entry) => (
-                    <button
-                      key={entry.creationId}
-                      type="button"
-                      onClick={() => {
-                        executeCommand("entity.create-primitive", {
-                          creationId: entry.creationId,
-                        });
-                        setCreateMenuOpen(false);
-                      }}
-                      title={commandTitle(`${entry.name}を作成`, "entity.create-primitive")}
-                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800"
-                    >
-                      <EDITOR_ICONS.primitive size={14} aria-hidden="true" />
-                      <span className="flex-1">{entry.name}</span>
-                      <span className="text-xs text-slate-400">Sceneへ追加</span>
-                    </button>
-                  ))}
-                  <div className="my-1 border-t border-slate-200" />
-                  <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">XRift Component</p>
-                  {builtinPrefabRecipes.map((recipe) => {
-                    const RecipeIcon = recipe.icon === "spawn-point" ? EDITOR_ICONS.spawn : EDITOR_ICONS.mirror;
-                    return (
-                      <button
-                        key={recipe.id}
-                        type="button"
-                        disabled={readOnly || importBusy}
-                        onClick={() => {
-                          handlePlaceBuiltinPrefab(recipe.id);
-                          setCreateMenuOpen(false);
-                        }}
-                        title={commandTitle(`${recipe.name}を配置`, "PlaceBuiltinPrefab")}
-                        className="flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-sky-50 hover:text-sky-800 disabled:opacity-40"
-                      >
-                        <RecipeIcon size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-                        <span className="min-w-0">
-                          <span className="block font-medium">{recipe.name}</span>
-                          <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{recipe.description}</span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
+              <EditorCreateMenu
+                open={createMenuOpen}
+                readOnly={readOnly}
+                importBusy={importBusy}
+                projectKind={projectKind}
+                selectedEntity={
+                  sceneSelection?.id
+                    ? bundle.scene.entities[sceneSelection.id]
+                    : undefined
+                }
+                builtinPrefabRecipes={builtinPrefabRecipes}
+                onClose={() => setCreateMenuOpen(false)}
+                onCreateEmpty={() => executeCommand("entity.create-empty")}
+                onCreatePrimitive={(creationId) =>
+                  executeCommand("entity.create-primitive", { creationId })
+                }
+                onPlaceBuiltinPrefab={handlePlaceBuiltinPrefab}
+                onCreateXriftObject={handleCreateXriftObject}
+                onAddComponent={(entityId, componentDefinitionId) =>
+                  executeCommand("entity.add-component", {
+                    entityId,
+                    componentDefinitionId,
+                  })
+                }
+              />
             </div>
             <ToolButton active={transformMode === "translate"} disabled={readOnly} shortcut={shortcutLabel("transform.translate")} label="移動" command="transform.translate" icon="move" onClick={() => executeCommand("transform.translate")} />
             <ToolButton active={transformMode === "rotate"} disabled={readOnly} shortcut={shortcutLabel("transform.rotate")} label="回転" command="transform.rotate" icon="rotate" onClick={() => executeCommand("transform.rotate")} />

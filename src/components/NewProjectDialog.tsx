@@ -140,7 +140,7 @@ function StarterScenePreview({
           <CircleDot size={17} className="text-zinc-400" />
         </div>
         <span className="text-[10px] font-medium tracking-wide text-zinc-500">
-          中央展示・交流マーカー
+          鳥居・ベンチ・木板床
         </span>
       </div>
     );
@@ -191,13 +191,15 @@ export function NewProjectDialog({
   const [choiceId, setChoiceId] = useState<CreationChoice["id"] | null>(null);
   const [name, setName] = useState("");
   const [starterTemplateId, setStarterTemplateId] =
-    useState<VisualStarterTemplateId>("blank");
+    useState<VisualStarterTemplateId>(
+      defaultVisualStarterTemplateId("world"),
+    );
 
   useEffect(() => {
     if (!open) return;
     setChoiceId(null);
     setName("");
-    setStarterTemplateId("blank");
+    setStarterTemplateId(defaultVisualStarterTemplateId("world"));
   }, [open]);
 
   const choice = useMemo(
@@ -266,10 +268,10 @@ export function NewProjectDialog({
             {choice.method === "visual" && (
               <fieldset className="mt-6">
                 <legend className="text-sm font-medium text-zinc-700">
-                  最初のシーン
+                  最初のシーンとAssets
                 </legend>
                 <p className="mt-1 text-xs leading-5 text-zinc-500">
-                  作成後は、すべての配置とマテリアルをエディターで変更できます。
+                  配置済みのシーンと再利用できる素材をまとめて用意します。作成後はすべて編集できます。
                 </p>
                 <div
                   className={`mt-3 grid gap-3 ${
@@ -280,7 +282,9 @@ export function NewProjectDialog({
                 >
                   {starterTemplates.map((template) => {
                     const selected = template.id === starterTemplateId;
-                    const recommended = template.id === "blank";
+                    const recommended =
+                      template.id ===
+                      defaultVisualStarterTemplateId(choice.kind);
                     return (
                       <button
                         key={template.id}
@@ -328,6 +332,12 @@ export function NewProjectDialog({
                           <p className="mt-1 text-xs leading-5 text-zinc-500">
                             {template.description}
                           </p>
+                          <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">
+                            <Package size={12} aria-hidden="true" />
+                            {template.bundledAssetIds.length > 0
+                              ? `${template.bundledAssetIds.length}個の素材をAssetsへ追加`
+                              : "基本オブジェクトのみ"}
+                          </div>
                         </div>
                       </button>
                     );

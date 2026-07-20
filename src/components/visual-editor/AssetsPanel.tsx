@@ -105,6 +105,52 @@ function assetIconName(asset: SceneAsset): EditorIconName {
   }
 }
 
+function assetSourceLabel(asset: SceneAsset): string {
+  if (asset.source.kind === "project") return asset.source.relativePath;
+  if (asset.source.kind === "builtin") return asset.source.key;
+  return "document";
+}
+
+function assetFolderPath(assets: AssetManifest, asset: SceneAsset): string {
+  const segments: string[] = [];
+  const visited = new Set<string>();
+  let folderId = asset.folderId ?? null;
+  while (folderId && !visited.has(folderId)) {
+    visited.add(folderId);
+    const folder = assets.folders?.[folderId];
+    if (!folder) {
+      segments.unshift("不明なフォルダー");
+      break;
+    }
+    segments.unshift(folder.name);
+    folderId = folder.parentId;
+  }
+  return ["Assets", ...segments].join(" / ");
+}
+
+function matchesAssetSearch(
+  asset: SceneAsset,
+  folderPath: string,
+  query: string,
+): boolean {
+  const tokens = query
+    .trim()
+    .toLocaleLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (tokens.length === 0) return true;
+  const searchable = [
+    asset.name,
+    asset.kind,
+    assetKindLabel(asset),
+    assetSourceLabel(asset),
+    folderPath,
+  ]
+    .join(" ")
+    .toLocaleLowerCase();
+  return tokens.every((token) => searchable.includes(token));
+}
+
 function importStatusLabel(status: PendingImport["status"]): string {
   switch (status) {
     case "waiting-save":
@@ -144,6 +190,7 @@ function canRemoveImport(status: PendingImport["status"]): boolean {
 
 function AssetCard({
   asset,
+  assets,
   projectPath,
   selected,
   viewMode,
@@ -152,8 +199,10 @@ function AssetCard({
   onPlace,
   onDelete,
   onOpenContext,
+  folderPath,
 }: {
   asset: SceneAsset;
+  assets: AssetManifest;
   projectPath?: string;
   selected: boolean;
   viewMode: ViewMode;
@@ -162,6 +211,7 @@ function AssetCard({
   onPlace: () => void;
   onDelete: () => void;
   onOpenContext: (event: MouseEvent<HTMLElement>) => void;
+  folderPath?: string;
 }) {
   const KindIcon = EDITOR_ICONS[assetIconName(asset)];
   const DeleteIcon = EDITOR_ICONS.delete;
@@ -209,13 +259,18 @@ function AssetCard({
             data-asset-drag-preview="true"
             className="pointer-events-none h-10 overflow-hidden rounded border border-slate-200 bg-white"
           >
-            <AssetThumbnail asset={asset} projectPath={projectPath} />
+            <AssetThumbnail asset={asset} assets={assets} projectPath={projectPath} />
           </span>
           <span className="min-w-0">
             <span className="block truncate text-xs font-semibold text-slate-800">{asset.name}</span>
             <span className="block truncate text-xs text-slate-500">
-              {asset.source.kind === "project" ? asset.source.relativePath : asset.source.kind}
+              {assetSourceLabel(asset)}
             </span>
+            {folderPath ? (
+              <span className="block truncate text-[11px] text-slate-400" title={folderPath}>
+                {folderPath}
+              </span>
+            ) : null}
           </span>
           <span className="flex items-center gap-1 text-xs text-slate-500">
             <KindIcon size={12} aria-hidden="true" />
@@ -281,7 +336,7 @@ function AssetCard({
           data-asset-drag-preview="true"
           className="pointer-events-none relative block h-[72px] w-full shrink-0 overflow-hidden border-b border-slate-200 bg-white"
         >
-          <AssetThumbnail asset={asset} projectPath={projectPath} />
+          <AssetThumbnail asset={asset} assets={assets} projectPath={projectPath} />
           <span className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded bg-slate-950/80 px-1.5 py-0.5 text-xs font-medium text-white">
             <KindIcon size={11} aria-hidden="true" />
             {assetKindLabel(asset)}
@@ -299,8 +354,13 @@ function AssetCard({
         <span className="min-w-0 px-2 py-1.5">
           <span className="block truncate text-xs font-semibold text-slate-800">{asset.name}</span>
           <span className="mt-0.5 block truncate text-xs text-slate-500">
-            {dragDescription}
+            {folderPath ?? dragDescription}
           </span>
+          {folderPath ? (
+            <span className="mt-0.5 block truncate text-[11px] text-slate-400" title={assetSourceLabel(asset)}>
+              {assetSourceLabel(asset)}
+            </span>
+          ) : null}
         </span>
       </button>
       {placeable ? (
@@ -715,6 +775,7 @@ export function AssetsPanel({
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [renameDraft, setRenameDraft] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -735,25 +796,40 @@ export function AssetsPanel({
   const allFolders = [...KIND_FOLDERS, ...customFolders];
   const activeFolder = allFolders.find((folder) => folder.id === activeFolderId);
   const allAssets = Object.values(assets.assets).filter((asset) => asset.kind !== "primitive");
-  const visibleFolders = !activeFolderId
-    ? [
-        ...KIND_FOLDERS,
-        ...customFolders.filter(
-          (folder) => assets.folders?.[folder.id]?.parentId === null,
-        ),
-      ]
-    : activeFolder?.custom
-      ? customFolders.filter(
-          (folder) => assets.folders?.[folder.id]?.parentId === activeFolder.id,
-        )
-      : [];
-  const visibleAssets = activeFolder?.kind
+  const searching = searchQuery.trim().length > 0;
+  const visibleFolders = searching
+    ? []
+    : !activeFolderId
+      ? [
+          ...KIND_FOLDERS,
+          ...customFolders.filter(
+            (folder) => assets.folders?.[folder.id]?.parentId === null,
+          ),
+        ]
+      : activeFolder?.custom
+        ? customFolders.filter(
+            (folder) => assets.folders?.[folder.id]?.parentId === activeFolder.id,
+          )
+        : [];
+  const folderAssets = activeFolder?.kind
     ? allAssets.filter((asset) => asset.kind === activeFolder.kind)
     : activeFolder?.custom
       ? allAssets.filter((asset) => (asset.folderId ?? null) === activeFolder.id)
       : activeFolder?.builtinPrefabs
         ? []
         : allAssets.filter((asset) => (asset.folderId ?? null) === null);
+  const visibleAssets = searching
+    ? allAssets
+        .filter((asset) =>
+          matchesAssetSearch(asset, assetFolderPath(assets, asset), searchQuery),
+        )
+        .sort(
+          (left, right) =>
+            left.name.localeCompare(right.name) ||
+            left.kind.localeCompare(right.kind) ||
+            left.id.localeCompare(right.id),
+        )
+    : folderAssets;
   const builtinPrefabRecipes = listBuiltinPrefabRecipes(projectKind);
   const activeBreadcrumb = (() => {
     if (!activeFolder) return [] as BrowserFolder[];
@@ -978,6 +1054,40 @@ export function AssetsPanel({
           </nav>
         </div>
         <div className="flex items-center gap-1">
+          <label className="relative flex h-7 w-52 items-center">
+            <span className="sr-only">アセットを検索</span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && searchQuery) {
+                  event.preventDefault();
+                  setSearchQuery("");
+                }
+              }}
+              placeholder="名前・種類・パスを検索"
+              className="h-7 w-full rounded border border-slate-300 bg-white pl-2 pr-12 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+            />
+            {searching ? (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                aria-label="検索をクリア"
+              >
+                クリア
+              </button>
+            ) : null}
+          </label>
+          <span
+            className="min-w-12 text-right text-[11px] tabular-nums text-slate-500"
+            aria-live="polite"
+          >
+            {searching
+              ? `${visibleAssets.length} / ${allAssets.length}`
+              : `${allAssets.length} assets`}
+          </span>
           <button type="button" onClick={() => setViewMode("grid")} aria-label="グリッド表示" aria-pressed={viewMode === "grid"} title={commandTitle("グリッド表示", "SetAssetView.Grid")} className={`rounded p-1 ${viewMode === "grid" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><GridIcon size={14} aria-hidden="true" /></button>
           <button type="button" onClick={() => setViewMode("list")} aria-label="リスト表示" aria-pressed={viewMode === "list"} title={commandTitle("リスト表示", "SetAssetView.List")} className={`rounded p-1 ${viewMode === "list" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><ListIcon size={14} aria-hidden="true" /></button>
           <button type="button" disabled={readOnly} onClick={() => onCommand("asset.create-material")} title={commandTitle("Materialを作成", "asset.create-material")} className="ml-1 flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-45"><MaterialIcon size={12} aria-hidden="true" />Material</button>
@@ -1022,7 +1132,7 @@ export function AssetsPanel({
               )
             ))
           : null}
-        {activeFolder?.builtinPrefabs
+        {activeFolder?.builtinPrefabs && !searching
           ? builtinPrefabRecipes.map((recipe) => (
               <BuiltinPrefabCard
                 key={recipe.id}
@@ -1055,6 +1165,7 @@ export function AssetsPanel({
             <AssetCard
               key={asset.id}
               asset={asset}
+              assets={assets}
               projectPath={projectPath}
               selected={asset.id === selectedAssetId}
               viewMode={viewMode}
@@ -1063,10 +1174,26 @@ export function AssetsPanel({
               onPlace={() => onPlaceSceneAsset(asset.id)}
               onDelete={() => onRequestDeleteAsset(asset.id)}
               onOpenContext={(event) => openContextMenu(event, { assetId: asset.id })}
+              folderPath={searching ? assetFolderPath(assets, asset) : undefined}
             />
           )
         ))}
-        {activeFolderId && visibleAssets.length === 0 && visibleFolders.length === 0 && (!activeFolder?.builtinPrefabs || builtinPrefabRecipes.length === 0) ? (
+        {searching && visibleAssets.length === 0 ? (
+          <div className="col-span-full rounded border border-dashed border-slate-300 bg-white px-4 py-4 text-center text-xs text-slate-600">
+            <p className="font-semibold text-slate-700">一致するアセットがありません</p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              名前、種類、ソースパス、フォルダーパスを検索できます。
+            </p>
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="mt-2 rounded border border-slate-300 bg-slate-50 px-2 py-1 font-semibold text-slate-700 hover:bg-slate-100"
+            >
+              検索をクリア
+            </button>
+          </div>
+        ) : null}
+        {!searching && activeFolderId && visibleAssets.length === 0 && visibleFolders.length === 0 && (!activeFolder?.builtinPrefabs || builtinPrefabRecipes.length === 0) ? (
           <button
             type="button"
             onClick={() => onActiveFolderChange(null)}

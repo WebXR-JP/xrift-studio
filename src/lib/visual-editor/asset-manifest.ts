@@ -110,10 +110,23 @@ export type GeometryAsset = PrimitiveAsset | ModelAsset;
 export type Color3 = [number, number, number];
 export type Color4 = [number, number, number, number];
 
+/**
+ * UV transform using the same semantics as glTF `KHR_texture_transform`.
+ * Omission means the glTF defaults: offset [0, 0], rotation 0, scale [1, 1].
+ */
+export type MaterialTextureTransform = {
+  offset: [number, number];
+  /** Counter-clockwise rotation in radians around the UV origin. */
+  rotation: number;
+  scale: [number, number];
+};
+
 export type MaterialTextureInfo = {
   textureAssetId: string;
   /** glTF TEXCOORD_n set. */
   texCoord: number;
+  /** Omitted until authored, so default slots do not inflate the manifest. */
+  transform?: MaterialTextureTransform;
 };
 
 export type NormalTextureInfo = MaterialTextureInfo & {
@@ -513,19 +526,40 @@ export function isValidMaterialSlotDefinition(
   );
 }
 
+export type MaterialTextureTransformPatch = {
+  offset?: [number, number];
+  rotation?: number;
+  scale?: [number, number];
+};
+
 export type MaterialTextureInfoPatch =
   | string
-  | { textureAssetId: string; texCoord?: number }
+  | {
+      textureAssetId: string;
+      texCoord?: number;
+      /** `null` removes the optional transform and restores glTF defaults. */
+      transform?: MaterialTextureTransformPatch | null;
+    }
   | null;
 
 export type NormalTextureInfoPatch =
   | string
-  | { textureAssetId: string; texCoord?: number; scale?: number }
+  | {
+      textureAssetId: string;
+      texCoord?: number;
+      scale?: number;
+      transform?: MaterialTextureTransformPatch | null;
+    }
   | null;
 
 export type OcclusionTextureInfoPatch =
   | string
-  | { textureAssetId: string; texCoord?: number; strength?: number }
+  | {
+      textureAssetId: string;
+      texCoord?: number;
+      strength?: number;
+      transform?: MaterialTextureTransformPatch | null;
+    }
   | null;
 
 export type PbrMetallicRoughnessPatch = {
@@ -1578,7 +1612,61 @@ function resolveTextureInfo(
         ? requestedTexCoord
         : undefined;
   if (texCoord === undefined) return cloneTextureInfo(fallback);
-  return { textureAssetId, texCoord };
+
+  const sameTexture = textureAssetId === fallback?.textureAssetId;
+  const fallbackTransform = sameTexture ? fallback?.transform : undefined;
+  let transform = cloneTextureTransform(fallbackTransform);
+  if (typeof value !== "string" && hasOwn(value, "transform")) {
+    if (value.transform === null) {
+      transform = undefined;
+    } else if (value.transform !== undefined) {
+      const offset = value.transform.offset ?? fallbackTransform?.offset ?? [0, 0];
+      const rotation = value.transform.rotation ?? fallbackTransform?.rotation ?? 0;
+      const scale = value.transform.scale ?? fallbackTransform?.scale ?? [1, 1];
+      if (
+        !isFiniteVector2(offset) ||
+        !isFiniteNumber(rotation) ||
+        !isFiniteVector2(scale)
+      ) {
+        return cloneTextureInfo(fallback);
+      }
+      transform = isDefaultTextureTransform(offset, rotation, scale)
+        ? undefined
+        : {
+            offset: [offset[0], offset[1]],
+            rotation,
+            scale: [scale[0], scale[1]],
+          };
+    }
+  }
+
+  return {
+    textureAssetId,
+    texCoord,
+    ...(transform ? { transform } : {}),
+  };
+}
+
+function isFiniteVector2(value: unknown): value is [number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length === 2 &&
+    value.every(isFiniteNumber)
+  );
+}
+
+function isDefaultTextureTransform(
+  offset: [number, number],
+  rotation: number,
+  scale: [number, number],
+): boolean {
+  return (
+    offset[0] === 0 &&
+    offset[1] === 0 &&
+    rotation === 0 &&
+    scale[0] === 1 &&
+    scale[1] === 1
+  );
 }
 
 function pickUnitValue(
@@ -1619,19 +1707,52 @@ function cloneColor4(value: Color4): Color4 {
 function cloneTextureInfo(
   value: MaterialTextureInfo | undefined,
 ): MaterialTextureInfo | undefined {
-  return value ? { ...value } : undefined;
+  return value
+    ? {
+        ...value,
+        ...(value.transform
+          ? { transform: cloneTextureTransform(value.transform) }
+          : {}),
+      }
+    : undefined;
 }
 
 function cloneNormalTextureInfo(
   value: NormalTextureInfo | undefined,
 ): NormalTextureInfo | undefined {
-  return value ? { ...value } : undefined;
+  return value
+    ? {
+        ...value,
+        ...(value.transform
+          ? { transform: cloneTextureTransform(value.transform) }
+          : {}),
+      }
+    : undefined;
 }
 
 function cloneOcclusionTextureInfo(
   value: OcclusionTextureInfo | undefined,
 ): OcclusionTextureInfo | undefined {
-  return value ? { ...value } : undefined;
+  return value
+    ? {
+        ...value,
+        ...(value.transform
+          ? { transform: cloneTextureTransform(value.transform) }
+          : {}),
+      }
+    : undefined;
+}
+
+function cloneTextureTransform(
+  value: MaterialTextureTransform | undefined,
+): MaterialTextureTransform | undefined {
+  return value
+    ? {
+        offset: [value.offset[0], value.offset[1]],
+        rotation: value.rotation,
+        scale: [value.scale[0], value.scale[1]],
+      }
+    : undefined;
 }
 
 export const DEFAULT_TEXTURE_IMPORT_SETTINGS: TextureImportSettings = {

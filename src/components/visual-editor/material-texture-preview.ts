@@ -237,5 +237,14 @@ export function configureMaterialPreviewTexture(
     "nearest-mipmap-linear": NearestMipmapLinearFilter,
     "nearest-mipmap-nearest": NearestMipmapNearestFilter,
   }[settings.sampler.minFilter];
+  if (textureInfo.transform) {
+    texture.offset.set(...textureInfo.transform.offset);
+    texture.rotation = textureInfo.transform.rotation;
+    texture.repeat.set(...textureInfo.transform.scale);
+  } else {
+    texture.offset.set(0, 0);
+    texture.rotation = 0;
+    texture.repeat.set(1, 1);
+  }
   texture.needsUpdate = true;
 }

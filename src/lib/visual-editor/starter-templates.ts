@@ -1,11 +1,17 @@
 import {
   normalizeMaterialProperties,
   normalizeTextureImportSettings,
+  type AssetFolder,
   type AssetManifest,
   type MaterialAsset,
   type ModelAsset,
+  type PrefabAsset,
   type TextureAsset,
 } from "./asset-manifest";
+import {
+  BUILTIN_PREFAB_RECIPE_IDS,
+  createBuiltinPrefabEntity,
+} from "./builtin-prefab-catalog";
 import {
   BUILTIN_PRIMITIVE_CREATION_IDS,
   getBuiltinPrimitiveCreation,
@@ -16,12 +22,18 @@ import {
   type PrototypeVisualProject,
 } from "./prototype-project";
 import {
+  createPrefabAsset,
+  createPrefabDocument,
+  type PrefabDocument,
+} from "./prefab-document";
+import {
   createBuiltinPrimitiveMeshComponent,
   createBoxColliderComponent,
   createMeshComponent,
   createMeshColliderComponent,
   createTransformComponent,
   type LightComponent,
+  type SceneDocument,
   type SceneEntity,
   type Vec3,
 } from "./scene-document";
@@ -193,24 +205,41 @@ export const BUNDLED_STARTER_ASSETS = {
   },
 } as const satisfies Record<string, BundledStarterAssetDefinition>;
 
+export const BUNDLED_STARTER_ASSET_IDS = [
+  "log-bench",
+  "torii-gate",
+  "mug",
+  "wine-glass",
+  "wood-planks-clean",
+  "polished-concrete",
+] as const satisfies readonly BundledStarterAssetId[];
+
+export const STARTER_ASSET_FOLDER_IDS = {
+  root: "starter-library",
+  models: "starter-library-models",
+  materials: "starter-library-materials",
+  textures: "starter-library-textures",
+  prefabs: "starter-library-prefabs",
+} as const;
+
 export const STARTER_WORLD_TEMPLATES = [
   {
     id: "blank",
     name: "Blank World",
-    description: "床、ライト、SpawnPointだけから始める最小構成",
-    bundledAssetIds: [],
+    description: "床、照明、Spawn Pointと配置可能なStarter Libraryから始める構成",
+    bundledAssetIds: BUNDLED_STARTER_ASSET_IDS,
   },
   {
     id: "social-space",
     name: "Social Space",
     description: "鳥居とベンチ、木板の床を配置した交流スペース",
-    bundledAssetIds: ["torii-gate", "log-bench", "wood-planks-clean"],
+    bundledAssetIds: BUNDLED_STARTER_ASSET_IDS,
   },
   {
     id: "gallery",
     name: "Gallery",
     description: "実用品のGLBと磨きコンクリート床を配置した展示ギャラリー",
-    bundledAssetIds: ["mug", "wine-glass", "polished-concrete"],
+    bundledAssetIds: BUNDLED_STARTER_ASSET_IDS,
   },
 ] as const satisfies readonly StarterWorldTemplateDefinition[];
 
@@ -246,7 +275,7 @@ export function getStarterItemTemplate(
 export function defaultVisualStarterTemplateId(
   kind: "world" | "item",
 ): VisualStarterTemplateId {
-  return kind === "world" ? "blank" : "basic-item";
+  return kind === "world" ? "social-space" : "basic-item";
 }
 
 export function isStarterTemplateForKind(
@@ -256,6 +285,41 @@ export function isStarterTemplateForKind(
   return kind === "world"
     ? STARTER_WORLD_TEMPLATES.some((template) => template.id === templateId)
     : STARTER_ITEM_TEMPLATES.some((template) => template.id === templateId);
+}
+
+function createStarterAssetFolders(): Record<string, AssetFolder> {
+  return {
+    [STARTER_ASSET_FOLDER_IDS.root]: {
+      id: STARTER_ASSET_FOLDER_IDS.root,
+      name: "Starter Library",
+      parentId: null,
+      order: 0,
+    },
+    [STARTER_ASSET_FOLDER_IDS.models]: {
+      id: STARTER_ASSET_FOLDER_IDS.models,
+      name: "Models",
+      parentId: STARTER_ASSET_FOLDER_IDS.root,
+      order: 0,
+    },
+    [STARTER_ASSET_FOLDER_IDS.materials]: {
+      id: STARTER_ASSET_FOLDER_IDS.materials,
+      name: "Materials",
+      parentId: STARTER_ASSET_FOLDER_IDS.root,
+      order: 1,
+    },
+    [STARTER_ASSET_FOLDER_IDS.textures]: {
+      id: STARTER_ASSET_FOLDER_IDS.textures,
+      name: "Textures",
+      parentId: STARTER_ASSET_FOLDER_IDS.root,
+      order: 2,
+    },
+    [STARTER_ASSET_FOLDER_IDS.prefabs]: {
+      id: STARTER_ASSET_FOLDER_IDS.prefabs,
+      name: "Prefabs",
+      parentId: STARTER_ASSET_FOLDER_IDS.root,
+      order: 3,
+    },
+  };
 }
 
 /** Creates documents plus an explicit copy plan; it performs no file writes. */
@@ -275,8 +339,9 @@ export function createStarterWorldProject(
   const textures = bundledDefinitions
     .filter((definition) => definition.kind === "texture")
     .map((definition) => createStarterTextureAsset(definition.id));
-  const assets: AssetManifest = {
+  const baseAssets: AssetManifest = {
     ...prototype.assets,
+    folders: createStarterAssetFolders(),
     assets: {
       ...prototype.assets.assets,
       ...Object.fromEntries(customMaterials.map((asset) => [asset.id, asset])),
@@ -285,11 +350,27 @@ export function createStarterWorldProject(
     },
   };
   const entities = createTemplateEntities(templateId);
-  const scene = {
+  const scene: SceneDocument = {
     ...prototype.scene,
     name: definition.name,
-    rootEntityIds: entities.map((entity) => entity.id),
+    rootEntityIds: entities
+      .filter((entity) => entity.parentId === null)
+      .map((entity) => entity.id),
     entities: Object.fromEntries(entities.map((entity) => [entity.id, entity])),
+  };
+  const prefabLibrary = createStarterPrefabLibrary(
+    templateId,
+    scene,
+    baseAssets,
+  );
+  const assets: AssetManifest = {
+    ...baseAssets,
+    assets: {
+      ...baseAssets.assets,
+      ...Object.fromEntries(
+        prefabLibrary.assets.map((asset) => [asset.id, asset]),
+      ),
+    },
   };
   const project = {
     ...prototype.project,
@@ -305,7 +386,7 @@ export function createStarterWorldProject(
     project,
     scene,
     assets,
-    prefabs: prototype.prefabs,
+    prefabs: prefabLibrary.documents,
     bundledAssetCopies: bundledDefinitions.map((bundled) => {
       return {
         assetId: bundled.id,
@@ -354,6 +435,96 @@ export function createStarterVisualProject(
     : createStarterItemProject(templateId as StarterItemTemplateId, projectName);
 }
 
+type StarterPrefabSeed = {
+  prefabId: string;
+  assetId: string;
+  name: string;
+  sourceEntityId: string;
+};
+
+function createStarterPrefabLibrary(
+  templateId: StarterWorldTemplateId,
+  scene: SceneDocument,
+  assets: AssetManifest,
+): { assets: PrefabAsset[]; documents: Record<string, PrefabDocument> } {
+  const prefabAssets: PrefabAsset[] = [];
+  const documents: Record<string, PrefabDocument> = {};
+  const seeds = starterPrefabSeeds(templateId);
+
+  seeds.forEach((seed, order) => {
+    const result = createPrefabDocument(scene, assets, {
+      prefabId: seed.prefabId,
+      name: seed.name,
+      sourceRootEntityIds: [seed.sourceEntityId],
+      generateId: (kind, sourceId) =>
+        `${seed.prefabId}-${kind}-${sourceId}`,
+    });
+    const prefabPath = `prefabs/starter/${seed.prefabId}.prefab.json`;
+    const asset = createPrefabAsset(seed.assetId, seed.name, prefabPath);
+    if (!result || !asset) {
+      throw new Error(`Starter Prefab could not be created: ${seed.prefabId}`);
+    }
+    documents[result.document.prefabId] = result.document;
+    prefabAssets.push({
+      ...asset,
+      folderId: STARTER_ASSET_FOLDER_IDS.prefabs,
+      order,
+    });
+  });
+
+  return { assets: prefabAssets, documents };
+}
+
+function starterPrefabSeeds(
+  templateId: StarterWorldTemplateId,
+): StarterPrefabSeed[] {
+  const ground: StarterPrefabSeed = {
+    prefabId: "starter-ground",
+    assetId: "starter-prefab-ground",
+    name: "Ground Platform",
+    sourceEntityId: "starter-floor",
+  };
+  if (templateId === "blank") return [ground];
+  if (templateId === "social-space") {
+    return [
+      ground,
+      {
+        prefabId: "starter-torii-gate",
+        assetId: "starter-prefab-torii-gate",
+        name: "Torii Gate",
+        sourceEntityId: "starter-social-torii",
+      },
+      {
+        prefabId: "starter-log-bench",
+        assetId: "starter-prefab-log-bench",
+        name: "Log Bench",
+        sourceEntityId: "starter-social-bench-1",
+      },
+    ];
+  }
+  return [
+    ground,
+    {
+      prefabId: "starter-gallery-plinth",
+      assetId: "starter-prefab-gallery-plinth",
+      name: "Gallery Plinth",
+      sourceEntityId: "starter-gallery-plinth-feature",
+    },
+    {
+      prefabId: "starter-mug-display",
+      assetId: "starter-prefab-mug-display",
+      name: "Mug Display",
+      sourceEntityId: "starter-gallery-feature",
+    },
+    {
+      prefabId: "starter-wine-glass-display",
+      assetId: "starter-prefab-wine-glass-display",
+      name: "Wine Glass Display",
+      sourceEntityId: "starter-gallery-exhibit-1",
+    },
+  ];
+}
+
 function createTemplateEntities(
   templateId: StarterWorldTemplateId,
 ): SceneEntity[] {
@@ -370,7 +541,7 @@ function createTemplateEntities(
     ),
     createSpawnEntity(),
   ];
-  if (templateId === "blank") return entities;
+  if (templateId === "blank") return organizeStarterHierarchy(entities);
 
   if (templateId === "social-space") {
     entities.push(
@@ -393,7 +564,7 @@ function createTemplateEntities(
         ),
       ),
     );
-    return entities;
+    return organizeStarterHierarchy(entities);
   }
 
   entities.push(
@@ -422,7 +593,42 @@ function createTemplateEntities(
       ),
     ]),
   );
-  return entities;
+  return organizeStarterHierarchy(entities);
+}
+
+function organizeStarterHierarchy(entities: SceneEntity[]): SceneEntity[] {
+  const lightingIds = new Set(["starter-ambient", "starter-sun"]);
+  const spawnId = "starter-spawn";
+  const environmentChildren = entities
+    .filter((entity) => !lightingIds.has(entity.id) && entity.id !== spawnId)
+    .map((entity) => entity.id);
+  const lightingChildren = entities
+    .filter((entity) => lightingIds.has(entity.id))
+    .map((entity) => entity.id);
+  const environment: SceneEntity = {
+    id: "starter-environment",
+    name: "Environment",
+    parentId: null,
+    children: environmentChildren,
+    enabled: true,
+    components: [
+      createTransformComponent("starter-environment-transform"),
+    ],
+  };
+  const lighting: SceneEntity = {
+    id: "starter-lighting",
+    name: "Lighting",
+    parentId: null,
+    children: lightingChildren,
+    enabled: true,
+    components: [createTransformComponent("starter-lighting-transform")],
+  };
+  const organized = entities.map((entity) => {
+    if (lightingIds.has(entity.id)) return { ...entity, parentId: lighting.id };
+    if (entity.id === spawnId) return entity;
+    return { ...entity, parentId: environment.id };
+  });
+  return [environment, lighting, ...organized];
 }
 
 const STARTER_MODEL_IDS = {
@@ -432,45 +638,66 @@ const STARTER_MODEL_IDS = {
   wineGlass: "starter-model-wine-glass",
 } as const;
 
+const STARTER_MODEL_ORDER: Record<BundledStarterModelId, number> = {
+  "log-bench": 0,
+  "torii-gate": 1,
+  mug: 2,
+  "wine-glass": 3,
+};
+
 const STARTER_TEXTURE_IDS = {
   woodPlanks: "starter-texture-wood-planks-clean",
   polishedConcrete: "starter-texture-polished-concrete",
 } as const;
 
 const STARTER_MATERIAL_IDS = {
-  floor: "starter-material-floor",
-  gallery: "starter-material-gallery-accent",
+  ground: "starter-material-ground",
+  wood: "starter-material-wood-planks",
+  concrete: "starter-material-polished-concrete",
+  accent: "starter-material-accent",
 } as const;
 
 function createStarterMaterials(
-  templateId: StarterWorldTemplateId,
+  _templateId: StarterWorldTemplateId,
 ): MaterialAsset[] {
-  const materials = [
+  return [
     createMaterial(
-      STARTER_MATERIAL_IDS.floor,
-      "Starter Floor",
-      templateId === "gallery" ? "#e2e8f0" : "#dbe4ee",
+      STARTER_MATERIAL_IDS.ground,
+      "Neutral Ground",
+      "#dbe4ee",
       0,
       0.82,
-      templateId === "social-space"
-        ? STARTER_TEXTURE_IDS.woodPlanks
-        : templateId === "gallery"
-          ? STARTER_TEXTURE_IDS.polishedConcrete
-          : undefined,
+      undefined,
+      0,
+    ),
+    createMaterial(
+      STARTER_MATERIAL_IDS.wood,
+      "Wood Planks",
+      "#ffffff",
+      0,
+      0.74,
+      STARTER_TEXTURE_IDS.woodPlanks,
+      1,
+    ),
+    createMaterial(
+      STARTER_MATERIAL_IDS.concrete,
+      "Polished Concrete",
+      "#ffffff",
+      0.08,
+      0.58,
+      STARTER_TEXTURE_IDS.polishedConcrete,
+      2,
+    ),
+    createMaterial(
+      STARTER_MATERIAL_IDS.accent,
+      "Warm Accent",
+      "#c2410c",
+      0.12,
+      0.34,
+      undefined,
+      3,
     ),
   ];
-  if (templateId === "gallery") {
-    materials.push(
-      createMaterial(
-        STARTER_MATERIAL_IDS.gallery,
-        "Gallery Accent",
-        "#8b5cf6",
-        0.18,
-        0.28,
-      ),
-    );
-  }
-  return materials;
 }
 
 function createMaterial(
@@ -480,6 +707,7 @@ function createMaterial(
   metalness: number,
   roughness: number,
   baseColorTextureId?: string,
+  order = 0,
 ): MaterialAsset {
   return {
     id,
@@ -488,6 +716,8 @@ function createMaterial(
     status: "ready",
     source: { kind: "document" },
     thumbnail: { status: "missing" },
+    folderId: STARTER_ASSET_FOLDER_IDS.materials,
+    order,
     properties: normalizeMaterialProperties({
       color,
       metalness,
@@ -588,6 +818,8 @@ function createStarterModelAsset(bundledId: BundledStarterAssetId): ModelAsset {
     source: { kind: "project", relativePath: bundled.projectRelativePath },
     sourceHash: bundled.sha256,
     thumbnail: { status: "missing" },
+    folderId: STARTER_ASSET_FOLDER_IDS.models,
+    order: STARTER_MODEL_ORDER[bundledId],
     importSettings: defaultModelImportSettings(false),
     materialSlots: [
       {
@@ -630,6 +862,8 @@ function createStarterTextureAsset(bundledId: BundledStarterAssetId): TextureAss
     source: { kind: "project", relativePath: bundled.projectRelativePath },
     sourceHash: bundled.sha256,
     thumbnail: { status: "missing" },
+    folderId: STARTER_ASSET_FOLDER_IDS.textures,
+    order: isWood ? 0 : 1,
     importSettings: normalizeTextureImportSettings({
       colorSpace: "srgb",
       generateMipmaps: true,
@@ -669,6 +903,12 @@ function createFloorEntity(templateId: StarterWorldTemplateId): SceneEntity {
   if (!definition) throw new Error("Builtin plane is unavailable");
   const floorScale =
     templateId === "gallery" ? 14 : templateId === "social-space" ? 12 : 8;
+  const floorMaterialAssetId =
+    templateId === "social-space"
+      ? STARTER_MATERIAL_IDS.wood
+      : templateId === "gallery"
+        ? STARTER_MATERIAL_IDS.concrete
+        : STARTER_MATERIAL_IDS.ground;
   return {
     id: "starter-floor",
     name: "床",
@@ -685,7 +925,7 @@ function createFloorEntity(templateId: StarterWorldTemplateId): SceneEntity {
       createBuiltinPrimitiveMeshComponent(
         "starter-floor-mesh",
         definition,
-        [{ slot: "default", materialAssetId: STARTER_MATERIAL_IDS.floor }],
+        [{ slot: "default", materialAssetId: floorMaterialAssetId }],
       ),
       createBoxColliderComponent("starter-floor-collider", {
         halfExtents: [0.5, 0.5, 0.01],
@@ -714,7 +954,7 @@ function createGalleryPlinthEntity(id: string, position: Vec3): SceneEntity {
         [1.1, 1.2, 1.1],
       ),
       createBuiltinPrimitiveMeshComponent(`${id}-mesh`, definition, [
-        { slot: "default", materialAssetId: STARTER_MATERIAL_IDS.gallery },
+        { slot: "default", materialAssetId: STARTER_MATERIAL_IDS.accent },
       ]),
       createBoxColliderComponent(`${id}-collider`, { fitMode: "auto" }),
     ],
@@ -751,22 +991,19 @@ function createLightEntity(
 }
 
 function createSpawnEntity(): SceneEntity {
-  return {
-    id: "starter-spawn",
-    name: "SpawnPoint",
-    parentId: null,
-    children: [],
-    enabled: true,
-    components: [
-      createTransformComponent("starter-spawn-transform", [0, 0.05, 4]),
-      {
-        id: "starter-spawn-component",
-        type: "spawn-point",
-        enabled: true,
-        target: "player",
-      },
-    ],
-  };
+  const created = createBuiltinPrefabEntity(
+    "world",
+    BUILTIN_PREFAB_RECIPE_IDS.spawnPoint,
+    {
+      entityId: "starter-spawn",
+      componentId: "starter-spawn-xrift-component",
+      transformComponentId: "starter-spawn-transform",
+      name: "Spawn Point",
+      position: [0, 0.05, 4],
+    },
+  );
+  if (!created) throw new Error("Builtin Spawn Point recipe is unavailable");
+  return created.entity;
 }
 
 function createModelEntity(

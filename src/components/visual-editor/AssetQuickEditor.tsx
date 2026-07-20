@@ -14,6 +14,8 @@ import {
   type MaterialAsset,
   type MaterialAssetPatch,
   type MaterialTextureInfo,
+  type MaterialTextureInfoPatch,
+  type MaterialTextureTransform,
   type ParticlePropertiesPatch,
   type SceneAsset,
   type TextureAsset,
@@ -27,9 +29,15 @@ import {
   readEditorDragData,
 } from "./editor-drag-data";
 import { TEXTURE_DRAG_MIME } from "./types";
+import { useCoreMaterialPreviewTextures } from "./material-texture-preview";
 
 const INPUT_CLASS =
   "h-7 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400";
+
+const EMPTY_ASSET_MANIFEST: AssetManifest = {
+  schemaVersion: "0.1.0",
+  assets: {},
+};
 
 function clampUnit(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -61,11 +69,24 @@ function sourceLabel(asset: SceneAsset): string {
   return "Document内の設定（画像データなし）";
 }
 
-function MaterialPreviewScene({ asset }: { asset: MaterialAsset }) {
+function MaterialPreviewScene({
+  asset,
+  assets,
+  projectPath,
+}: {
+  asset: MaterialAsset;
+  assets?: AssetManifest;
+  projectPath?: string;
+}) {
   const pbr = asset.properties.pbrMetallicRoughness;
   const color = colorToHex(pbr?.baseColorFactor, asset.properties.color ?? "#ffffff");
   const opacity = pbr?.baseColorFactor?.[3] ?? asset.properties.opacity ?? 1;
   const emissive = colorToHex(asset.properties.emissiveFactor, "#000000");
+  const textures = useCoreMaterialPreviewTextures(
+    asset,
+    assets ?? EMPTY_ASSET_MANIFEST,
+    projectPath,
+  );
 
   return (
     <>
@@ -84,6 +105,17 @@ function MaterialPreviewScene({ asset }: { asset: MaterialAsset }) {
           transparent={asset.properties.alphaMode === "BLEND" || opacity < 1}
           alphaTest={asset.properties.alphaMode === "MASK" ? asset.properties.alphaCutoff : 0}
           side={asset.properties.doubleSided ? DoubleSide : undefined}
+          map={textures.baseColorMap}
+          metalnessMap={textures.metallicRoughnessMap}
+          roughnessMap={textures.metallicRoughnessMap}
+          normalMap={textures.normalMap}
+          normalScale={[
+            asset.properties.normalTexture?.scale ?? 1,
+            asset.properties.normalTexture?.scale ?? 1,
+          ]}
+          aoMap={textures.occlusionMap}
+          aoMapIntensity={asset.properties.occlusionTexture?.strength ?? 1}
+          emissiveMap={textures.emissiveMap}
         />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.83, 0]}>
@@ -96,9 +128,13 @@ function MaterialPreviewScene({ asset }: { asset: MaterialAsset }) {
 
 export function MaterialThumbnail({
   asset,
+  assets,
+  projectPath,
   className = "h-full w-full",
 }: {
   asset: MaterialAsset;
+  assets?: AssetManifest;
+  projectPath?: string;
   className?: string;
 }) {
   return (
@@ -109,7 +145,7 @@ export function MaterialThumbnail({
         camera={{ position: [0, 0, 2.7], fov: 34 }}
         gl={{ antialias: true, alpha: false }}
       >
-        <MaterialPreviewScene asset={asset} />
+        <MaterialPreviewScene asset={asset} assets={assets} projectPath={projectPath} />
       </Canvas>
     </div>
   );
@@ -227,12 +263,22 @@ function ProjectAssetThumbnail({
 
 export function AssetThumbnail({
   asset,
+  assets,
   projectPath,
 }: {
   asset: SceneAsset;
+  assets?: AssetManifest;
   projectPath?: string;
 }) {
-  if (asset.kind === "material") return <MaterialThumbnail asset={asset} />;
+  if (asset.kind === "material") {
+    return (
+      <MaterialThumbnail
+        asset={asset}
+        assets={assets}
+        projectPath={projectPath}
+      />
+    );
+  }
   if (
     projectPath &&
     asset.thumbnail &&
@@ -311,7 +357,20 @@ function RangeControl({
     <label className="block text-xs text-slate-600">
       <span className="mb-1 flex items-center justify-between gap-2">
         <span>{label}</span>
-        <output className="tabular-nums text-slate-800">{value.toFixed(2)}</output>
+        <input
+          type="number"
+          aria-label={`${label}の数値`}
+          min={min}
+          max={max}
+          step={step}
+          value={Number.isInteger(step) ? value : Number(value.toFixed(3))}
+          disabled={disabled}
+          onChange={(event) => {
+            const next = event.currentTarget.valueAsNumber;
+            if (Number.isFinite(next) && next >= min && next <= max) onChange(next);
+          }}
+          className="h-6 w-20 rounded border border-slate-300 bg-white px-1.5 text-right text-xs tabular-nums text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+        />
       </span>
       <input
         type="range"
@@ -330,44 +389,120 @@ function RangeControl({
   );
 }
 
-function TextureSlot({
+const DEFAULT_TEXTURE_TRANSFORM: MaterialTextureTransform = {
+  offset: [0, 0],
+  rotation: 0,
+  scale: [1, 1],
+};
+
+type TextureSlotPatch = Exclude<MaterialTextureInfoPatch, string>;
+
+function TextureVectorControl({
   label,
   value,
-  textures,
   disabled,
   onChange,
 }: {
   label: string;
+  value: [number, number];
+  disabled: boolean;
+  onChange: (value: [number, number]) => void;
+}) {
+  return (
+    <fieldset className="min-w-0">
+      <legend className="mb-1 text-[11px] font-medium text-slate-500">{label}</legend>
+      <div className="grid grid-cols-2 gap-1">
+        {(["X", "Y"] as const).map((axis, index) => (
+          <label key={axis} className="relative block">
+            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-slate-400">
+              {axis}
+            </span>
+            <input
+              type="number"
+              step={0.01}
+              value={value[index]}
+              disabled={disabled}
+              aria-label={`${label} ${axis}`}
+              onChange={(event) => {
+                const next = event.currentTarget.valueAsNumber;
+                if (!Number.isFinite(next)) return;
+                onChange(index === 0 ? [next, value[1]] : [value[0], next]);
+              }}
+              className="h-7 w-full rounded border border-slate-300 bg-white py-1 pl-5 pr-1 text-right text-xs tabular-nums text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+            />
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function TextureSlot({
+  label,
+  description,
+  value,
+  textures,
+  projectPath,
+  disabled,
+  onChange,
+  onOpenTexture,
+}: {
+  label: string;
+  description: string;
   value?: MaterialTextureInfo;
   textures: TextureAsset[];
+  projectPath?: string;
   disabled: boolean;
-  onChange: (value: MaterialTextureInfo | null) => void;
+  onChange: (value: TextureSlotPatch) => void;
+  onOpenTexture: (assetId: string) => void;
 }) {
   const [dropActive, setDropActive] = useState(false);
+  const [showTransform, setShowTransform] = useState(Boolean(value?.transform));
+  const selectedTexture = value
+    ? textures.find((texture) => texture.id === value.textureAssetId)
+    : undefined;
+  const missingReference = Boolean(value && !selectedTexture);
+  const transform = value?.transform ?? DEFAULT_TEXTURE_TRANSFORM;
+  const TextureIcon = EDITOR_ICONS.texture;
+
+  useEffect(() => {
+    if (value?.transform) setShowTransform(true);
+  }, [value?.transform]);
+
+  const updateTransform = (patch: Partial<MaterialTextureTransform>) => {
+    if (!value) return;
+    onChange({
+      ...value,
+      transform: {
+        offset: patch.offset ?? transform.offset,
+        rotation: patch.rotation ?? transform.rotation,
+        scale: patch.scale ?? transform.scale,
+      },
+    });
+  };
+
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    if (
-      disabled ||
-      !hasEditorDragData(event.dataTransfer, TEXTURE_DRAG_MIME)
-    ) return;
+    if (disabled || !hasEditorDragData(event.dataTransfer, TEXTURE_DRAG_MIME)) return;
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = "copy";
     setDropActive(true);
   };
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    if (disabled) return;
-    if (!hasEditorDragData(event.dataTransfer, TEXTURE_DRAG_MIME)) return;
+    if (disabled || !hasEditorDragData(event.dataTransfer, TEXTURE_DRAG_MIME)) return;
     event.preventDefault();
     event.stopPropagation();
-    const textureAssetId = readEditorDragData(
-      event.dataTransfer,
-      TEXTURE_DRAG_MIME,
-    );
+    const textureAssetId = readEditorDragData(event.dataTransfer, TEXTURE_DRAG_MIME);
     clearEditorDragData();
     setDropActive(false);
     if (!textures.some((texture) => texture.id === textureAssetId)) return;
-    onChange({ textureAssetId, texCoord: value?.texCoord ?? 0 });
+    onChange({
+      ...(value ?? {}),
+      textureAssetId,
+      texCoord: value?.texCoord ?? 0,
+    });
   };
+
   return (
     <div
       onDragOverCapture={handleDragOver}
@@ -378,59 +513,187 @@ function TextureSlot({
         setDropActive(false);
       }}
       onDropCapture={handleDrop}
-      className={`relative grid grid-cols-[68px_minmax(0,1fr)_54px] items-end gap-1.5 rounded border p-1 transition-colors ${dropActive ? "border-violet-500 bg-violet-50 ring-2 ring-violet-200" : "border-transparent"}`}
+      className={`relative rounded-md border p-2 transition-colors ${
+        dropActive
+          ? "border-violet-500 bg-violet-50 ring-2 ring-violet-200"
+          : missingReference
+            ? "border-rose-300 bg-rose-50/60"
+            : "border-slate-200 bg-slate-50/70"
+      }`}
     >
-      <label className="block min-w-0 text-xs text-slate-600">
-        <span className="mb-1 block truncate">{label}</span>
-        <select
-          value={value?.textureAssetId ?? ""}
-          disabled={disabled || textures.length === 0}
-          onChange={(event) => {
-            const textureAssetId = event.currentTarget.value;
-            onChange(
-              textureAssetId
-                ? { textureAssetId, texCoord: value?.texCoord ?? 0 }
-                : null,
-            );
-          }}
-          className={INPUT_CLASS}
-        >
-          <option value="">なし</option>
-          {textures.map((texture) => (
-            <option key={texture.id} value={texture.id}>
-              {texture.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="block text-xs text-slate-600">
-        <span className="mb-1 block">UV</span>
-        <input
-          type="number"
-          min={0}
-          step={1}
-          value={value?.texCoord ?? 0}
-          disabled={disabled || !value}
-          onChange={(event) => {
-            if (!value) return;
-            const texCoord = event.currentTarget.valueAsNumber;
-            if (Number.isInteger(texCoord) && texCoord >= 0) {
-              onChange({ ...value, texCoord });
-            }
-          }}
-          className={INPUT_CLASS}
-        />
-      </label>
-      <button
-        type="button"
-        disabled={disabled || !value}
-        onClick={() => onChange(null)}
-        className="h-7 rounded border border-slate-300 bg-white px-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        解除
-      </button>
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-slate-800">{label}</p>
+          <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{description}</p>
+        </div>
+        {value?.transform ? (
+          <span className="shrink-0 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800">
+            UV変換
+          </span>
+        ) : null}
+      </div>
+
+      <div className="grid grid-cols-[40px_minmax(0,1fr)] gap-2">
+        <div className="h-10 overflow-hidden rounded border border-slate-200 bg-white">
+          {selectedTexture ? (
+            <AssetThumbnail asset={selectedTexture} projectPath={projectPath} />
+          ) : (
+            <span className="flex h-full items-center justify-center text-slate-400">
+              <TextureIcon size={18} aria-hidden="true" />
+            </span>
+          )}
+        </div>
+        <label className="block min-w-0 text-[11px] text-slate-500">
+          Texture Asset
+          <select
+            value={value?.textureAssetId ?? ""}
+            disabled={disabled || textures.length === 0}
+            onChange={(event) => {
+              const textureAssetId = event.currentTarget.value;
+              onChange(
+                textureAssetId
+                  ? {
+                      ...(value ?? {}),
+                      textureAssetId,
+                      texCoord: value?.texCoord ?? 0,
+                    }
+                  : null,
+              );
+            }}
+            className={INPUT_CLASS}
+          >
+            <option value="">なし</option>
+            {missingReference && value ? (
+              <option value={value.textureAssetId}>不明な参照: {value.textureAssetId}</option>
+            ) : null}
+            {textures.map((texture) => (
+              <option key={texture.id} value={texture.id}>
+                {texture.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {textures.length === 0 ? (
+        <p className="mt-2 rounded border border-dashed border-slate-300 bg-white px-2 py-1.5 text-[11px] leading-4 text-slate-500">
+          利用できるTexture Assetがありません。Assetsへ画像をインポートしてください。
+        </p>
+      ) : null}
+      {missingReference && value ? (
+        <p className="mt-2 text-[11px] font-medium leading-4 text-rose-700">
+          参照先のTexture Assetが見つかりません。別のTextureを選ぶか解除してください。
+        </p>
+      ) : null}
+
+      {value ? (
+        <div className="mt-2 space-y-2 border-t border-slate-200 pt-2">
+          <div className="grid grid-cols-[64px_minmax(0,1fr)] gap-2">
+            <label className="block text-[11px] text-slate-500">
+              UV Set
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={value.texCoord}
+                disabled={disabled}
+                onChange={(event) => {
+                  const texCoord = event.currentTarget.valueAsNumber;
+                  if (Number.isInteger(texCoord) && texCoord >= 0) {
+                    onChange({ ...value, texCoord });
+                  }
+                }}
+                className={INPUT_CLASS}
+              />
+            </label>
+            <div className="min-w-0 text-[11px] text-slate-500">
+              <span className="block">Sampler参照</span>
+              <p className="mt-1 truncate rounded border border-slate-200 bg-white px-2 py-1.5 text-slate-700" title={selectedTexture ? `${selectedTexture.importSettings.sampler.wrapS} / ${selectedTexture.importSettings.sampler.wrapT} / ${selectedTexture.importSettings.sampler.minFilter}` : "参照先なし"}>
+                {selectedTexture
+                  ? `${selectedTexture.importSettings.sampler.wrapS} · ${selectedTexture.importSettings.sampler.wrapT} · ${selectedTexture.importSettings.sampler.minFilter}`
+                  : "参照先なし"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowTransform((current) => !current)}
+              className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              {showTransform ? "UV Transformを閉じる" : "UV Transformを設定"}
+            </button>
+            <button
+              type="button"
+              disabled={!selectedTexture}
+              onClick={() => selectedTexture && onOpenTexture(selectedTexture.id)}
+              className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Texture設定を開く
+            </button>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(null)}
+              className="ml-auto rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              解除
+            </button>
+          </div>
+
+          {showTransform ? (
+            <div className="space-y-2 rounded border border-sky-200 bg-white p-2">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[11px] leading-4 text-slate-500">
+                  glTF KHR_texture_transform互換。未設定時はOffset 0、Rotation 0°、Scale 1です。
+                </p>
+                <button
+                  type="button"
+                  disabled={disabled || !value.transform}
+                  onClick={() => onChange({ ...value, transform: null })}
+                  className="shrink-0 rounded border border-slate-300 bg-white px-1.5 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  初期値へ戻す
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <TextureVectorControl
+                  label="Offset"
+                  value={transform.offset}
+                  disabled={disabled}
+                  onChange={(offset) => updateTransform({ offset })}
+                />
+                <TextureVectorControl
+                  label="Scale"
+                  value={transform.scale}
+                  disabled={disabled}
+                  onChange={(scale) => updateTransform({ scale })}
+                />
+              </div>
+              <label className="block text-[11px] font-medium text-slate-500">
+                Rotation (°)
+                <input
+                  type="number"
+                  step={1}
+                  value={Number(((transform.rotation * 180) / Math.PI).toFixed(2))}
+                  disabled={disabled}
+                  onChange={(event) => {
+                    const degrees = event.currentTarget.valueAsNumber;
+                    if (Number.isFinite(degrees)) {
+                      updateTransform({ rotation: (degrees * Math.PI) / 180 });
+                    }
+                  }}
+                  className={INPUT_CLASS}
+                />
+              </label>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {dropActive ? (
-        <span className="pointer-events-none absolute inset-x-1 bottom-0 rounded bg-violet-600 px-1 py-0.5 text-center text-[11px] font-semibold text-white">
+        <span className="pointer-events-none absolute inset-1 flex items-center justify-center rounded bg-violet-600/95 px-2 text-center text-xs font-semibold text-white shadow-sm">
           {label}へTextureを設定
         </span>
       ) : null}
@@ -441,13 +704,19 @@ function TextureSlot({
 export function MaterialQuickEditor({
   asset,
   assets,
+  projectPath,
+  referenceSummary,
   readOnly,
   onChange,
+  onOpenTexture,
 }: {
   asset: MaterialAsset;
   assets: AssetManifest;
+  projectPath?: string;
+  referenceSummary?: { entityCount: number; slotCount: number };
   readOnly: boolean;
   onChange: (patch: MaterialAssetPatch) => void;
+  onOpenTexture: (assetId: string) => void;
 }) {
   const pbr = asset.properties.pbrMetallicRoughness;
   const textures = Object.values(assets.assets).filter(
@@ -461,13 +730,18 @@ export function MaterialQuickEditor({
     <div className="space-y-3">
       <div className="grid grid-cols-[112px_minmax(0,1fr)] gap-3 rounded-md border border-slate-200 bg-white p-3 shadow-sm">
         <div className="h-28 overflow-hidden rounded-md border border-slate-300 shadow-sm">
-          <MaterialThumbnail asset={asset} />
+          <MaterialThumbnail asset={asset} assets={assets} projectPath={projectPath} />
         </div>
         <div className="min-w-0 self-center">
           <h3 className="truncate text-[13px] font-semibold text-slate-900">{asset.name}</h3>
           <p className="text-xs text-slate-500">glTF 2.0 標準マテリアル</p>
           <p className="mt-2 text-xs leading-4 text-slate-600">
             変更はプレビューとシーン内の参照メッシュへ即時反映されます。
+          </p>
+          <p className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">
+            {referenceSummary && referenceSummary.slotCount > 0
+              ? `共有中: ${referenceSummary.entityCount} Entity / ${referenceSummary.slotCount} Slot`
+              : "シーン内の参照はありません"}
           </p>
         </div>
       </div>
@@ -512,10 +786,13 @@ export function MaterialQuickEditor({
           }
         />
         <TextureSlot
-          label="Texture"
+          label="Base Color Texture"
+          description="RGBは色、Aは透明度として使用します。"
           value={pbr.baseColorTexture}
           textures={textures}
+          projectPath={projectPath}
           disabled={readOnly}
+          onOpenTexture={onOpenTexture}
           onChange={(baseColorTexture) =>
             onChange({ pbrMetallicRoughness: { baseColorTexture } })
           }
@@ -540,10 +817,13 @@ export function MaterialQuickEditor({
           }
         />
         <TextureSlot
-          label="Packed Map"
+          label="Metallic / Roughness Texture"
+          description="GにRoughness、BにMetallicを格納するglTF packed mapです。"
           value={pbr.metallicRoughnessTexture}
           textures={textures}
+          projectPath={projectPath}
           disabled={readOnly}
+          onOpenTexture={onOpenTexture}
           onChange={(metallicRoughnessTexture) =>
             onChange({ pbrMetallicRoughness: { metallicRoughnessTexture } })
           }
@@ -553,9 +833,12 @@ export function MaterialQuickEditor({
       <EditorSection title="Normal / Occlusion">
         <TextureSlot
           label="Normal"
+          description="タンジェント空間の法線マップ。Linearで扱います。"
           value={asset.properties.normalTexture}
           textures={textures}
+          projectPath={projectPath}
           disabled={readOnly}
+          onOpenTexture={onOpenTexture}
           onChange={(value) =>
             onChange({
               normalTexture: value
@@ -577,9 +860,12 @@ export function MaterialQuickEditor({
         />
         <TextureSlot
           label="Occlusion"
+          description="Rチャンネルを遮蔽強度として使用します。"
           value={asset.properties.occlusionTexture}
           textures={textures}
+          projectPath={projectPath}
           disabled={readOnly}
+          onOpenTexture={onOpenTexture}
           onChange={(value) =>
             onChange({
               occlusionTexture: value
@@ -617,10 +903,13 @@ export function MaterialQuickEditor({
           </span>
         </label>
         <TextureSlot
-          label="Texture"
+          label="Emissive Texture"
+          description="発光色へ乗算するsRGBテクスチャです。"
           value={asset.properties.emissiveTexture}
           textures={textures}
+          projectPath={projectPath}
           disabled={readOnly}
+          onOpenTexture={onOpenTexture}
           onChange={(emissiveTexture) => onChange({ emissiveTexture })}
         />
       </EditorSection>
@@ -665,9 +954,12 @@ export function MaterialQuickEditor({
             />
             <TextureSlot
               label="Factor map"
+              description="Rチャンネルで遊色効果の強さを制御します。"
               value={iridescence.iridescenceTexture}
               textures={textures}
+              projectPath={projectPath}
               disabled={readOnly}
+              onOpenTexture={onOpenTexture}
               onChange={(iridescenceTexture) =>
                 onChange({
                   extensions: {
@@ -728,9 +1020,12 @@ export function MaterialQuickEditor({
             </div>
             <TextureSlot
               label="Thickness map"
+              description="Gチャンネルで薄膜の厚みを補間します。"
               value={iridescence.iridescenceThicknessTexture}
               textures={textures}
+              projectPath={projectPath}
               disabled={readOnly}
+              onOpenTexture={onOpenTexture}
               onChange={(iridescenceThicknessTexture) =>
                 onChange({
                   extensions: {
@@ -955,7 +1250,9 @@ export function AssetQuickEditor({
   asset,
   assets,
   projectPath,
+  referenceSummary,
   readOnly,
+  onSelectAsset,
   onMaterialChange,
   onParticleChange,
   onTextureChange,
@@ -963,7 +1260,9 @@ export function AssetQuickEditor({
   asset: SceneAsset;
   assets: AssetManifest;
   projectPath?: string;
+  referenceSummary?: { entityCount: number; slotCount: number };
   readOnly: boolean;
+  onSelectAsset: (assetId: string) => void;
   onMaterialChange: (assetId: string, patch: MaterialAssetPatch) => void;
   onParticleChange: (assetId: string, patch: ParticlePropertiesPatch) => void;
   onTextureChange: (assetId: string, patch: TextureAssetPatch) => void;
@@ -973,8 +1272,11 @@ export function AssetQuickEditor({
       <MaterialQuickEditor
         asset={asset}
         assets={assets}
+        projectPath={projectPath}
+        referenceSummary={referenceSummary}
         readOnly={readOnly}
         onChange={(patch) => onMaterialChange(asset.id, patch)}
+        onOpenTexture={onSelectAsset}
       />
     );
   }

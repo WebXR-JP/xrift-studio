@@ -653,15 +653,22 @@ export function createXriftComponent(
 ): XRiftComponent | null {
   const definition = getXriftComponentDefinition(schemaId);
   if (!definition) return null;
+  const componentId =
+    options.componentId?.trim() || createDocumentId("component");
   const defaults = createDefaultXriftComponentProperties(definition.schemaId) ?? {};
+  const requiredAuthoringDefaults = createRequiredAuthoringDefaults(
+    definition,
+    componentId,
+  );
   return {
-    id: options.componentId?.trim() || createDocumentId("component"),
+    id: componentId,
     type: "xrift-component",
     enabled: options.enabled ?? true,
     schemaId: definition.schemaId,
     schemaVersion: definition.schemaVersion,
     properties: {
       ...defaults,
+      ...requiredAuthoringDefaults,
       ...(options.properties ? cloneJsonObject(options.properties) : {}),
     },
     assetReferences: [...(options.assetReferences ?? [])],
@@ -676,6 +683,40 @@ export function createXriftComponent(
         }
       : {}),
   };
+}
+
+function createRequiredAuthoringDefaults(
+  definition: XriftComponentDefinition,
+  componentId: string,
+): JsonObject {
+  const suffix = componentId
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(-10)
+    .toLowerCase();
+  const componentName = definition.importName
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .toLowerCase();
+  const result: JsonObject = {};
+
+  for (const fieldDefinition of definition.fields) {
+    if (!fieldDefinition.required || fieldDefinition.defaultValue !== undefined) {
+      continue;
+    }
+    if (
+      fieldDefinition.kind === "string" &&
+      fieldDefinition.uniqueWithinScene
+    ) {
+      result[fieldDefinition.name] = `${componentName}-${suffix || "component"}`;
+    } else if (fieldDefinition.kind === "grabbable-transform") {
+      result[fieldDefinition.name] = {
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: 1,
+      };
+    }
+  }
+  return result;
 }
 
 export function addXriftComponent(

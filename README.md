@@ -160,6 +160,8 @@ AGENT.md                   AI エージェント向け開発ルール
 DEVELOPMENT.md             OS 別の開発・リリース手順
 docs/UX_PRINCIPLES.md      再現可能な制作体験の設計原則
 docs/UX_INTERACTIONS.md    状態ごとの動きと機能一覧を定義する Wiki
+docs/VISUAL_EDITOR_ARCHITECTURE.md Visual project のデータ・実行境界
+docs/VISUAL_EDITOR_ROADMAP.md      12段階の実装順序と完了条件
 .agents/skills/            XRift Studio の実装・UX・検証に使うエージェントスキル
 ```
 
@@ -179,14 +181,7 @@ docs/UX_INTERACTIONS.md    状態ごとの動きと機能一覧を定義する W
 
 ## 開発状況
 
-XRift Studio は開発中です。動作する機能を優先して公開しており、OS や XRift 側の変更によって一部機能が利用できない場合があります。
-
-今後の候補:
-
-- AI チャットによる `World.tsx` 編集支援
-- ログイン状態の検出と再認証フローの改善
-- コード署名と自動更新
-- より詳しいビルド・公開ログ
+XRift Studio は開発中です。Visual Editor は Material / Texture、Starter World、XRift Componentを現在の優先領域とし、その後にModel import、Play runtime、workspace品質、production readinessへ進みます。実装順序と「何をもって完了とするか」は [Visual Editor Roadmap](./docs/VISUAL_EDITOR_ROADMAP.md) にまとめています。
 
 ## ライセンス
 

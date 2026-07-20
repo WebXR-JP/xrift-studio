@@ -119,6 +119,11 @@ function FieldEditor({
   readOnly: boolean;
   onChange: (value: JsonValue | undefined) => void;
 }) {
+  const requiredValueMissing =
+    field.required &&
+    (value === undefined ||
+      value === null ||
+      (typeof value === "string" && value.trim().length === 0));
   const label = (
     <div className="mb-1 flex items-center justify-between gap-2">
       <span className="text-xs font-semibold text-slate-600">
@@ -142,6 +147,11 @@ function FieldEditor({
     <div>
       {label}
       {renderFieldControl(field, value, readOnly, onChange)}
+      {requiredValueMissing ? (
+        <p className="mt-1 text-xs font-medium leading-4 text-rose-700">
+          この値を設定するとXRift向けの変換を実行できます。
+        </p>
+      ) : null}
       <p className="mt-1 text-xs leading-4 text-slate-400">
         {field.description}
       </p>

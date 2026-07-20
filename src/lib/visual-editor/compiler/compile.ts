@@ -1393,6 +1393,9 @@ function addCompiledTexture(
       minFilter: settings.sampler.minFilter,
       wrapS: settings.sampler.wrapS,
       wrapT: settings.sampler.wrapT,
+      ...(textureInfo.transform
+        ? { uvTransform: textureInfo.transform }
+        : {}),
     })};`,
   );
   textureLines.push(
@@ -1439,6 +1442,11 @@ function registerCompiledTextureRuntime(context: CompileContext): void {
     | "linear-mipmap-linear";
   wrapS: "repeat" | "clamp-to-edge" | "mirrored-repeat";
   wrapT: "repeat" | "clamp-to-edge" | "mirrored-repeat";
+  uvTransform?: {
+    offset: [number, number];
+    rotation: number;
+    scale: [number, number];
+  };
 };
 
 const COMPILED_TEXTURE_WRAP = {
@@ -1472,6 +1480,11 @@ function useCompiledTexture(source: Texture, options: CompiledTextureOptions): T
     clone.minFilter = COMPILED_TEXTURE_MIN_FILTER[options.minFilter];
     clone.wrapS = COMPILED_TEXTURE_WRAP[options.wrapS];
     clone.wrapT = COMPILED_TEXTURE_WRAP[options.wrapT];
+    if (options.uvTransform) {
+      clone.offset.set(...options.uvTransform.offset);
+      clone.rotation = options.uvTransform.rotation;
+      clone.repeat.set(...options.uvTransform.scale);
+    }
     clone.needsUpdate = true;
     return clone;
   }, [source, options]);

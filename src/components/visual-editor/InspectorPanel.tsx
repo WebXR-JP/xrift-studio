@@ -916,6 +916,10 @@ export function InspectorPanel({
 }) {
   const entity = selectedEntityId ? scene.entities[selectedEntityId] : undefined;
   const asset = selectedAssetId ? assets.assets[selectedAssetId] : undefined;
+  const materialReferenceSummary =
+    asset?.kind === "material"
+      ? countMaterialSceneReferences(scene, assets, asset.id)
+      : undefined;
   const EntityIcon = entity?.components.some((component) => component.type === "light")
     ? EDITOR_ICONS.light
     : entity?.components.some((component) => component.type === "particle-emitter")
@@ -956,7 +960,9 @@ export function InspectorPanel({
             asset={asset}
             assets={assets}
             projectPath={projectPath}
+            referenceSummary={materialReferenceSummary}
             readOnly={readOnly}
+            onSelectAsset={onSelectAsset}
             onMaterialChange={onMaterialChange}
             onParticleChange={onParticleChange}
             onTextureChange={onTextureChange}
@@ -1005,4 +1011,29 @@ export function InspectorPanel({
       </div>
     </aside>
   );
+}
+
+function countMaterialSceneReferences(
+  scene: SceneDocument,
+  assets: AssetManifest,
+  materialAssetId: string,
+): { entityCount: number; slotCount: number } {
+  const entityIds = new Set<string>();
+  let slotCount = 0;
+  for (const entity of Object.values(scene.entities)) {
+    for (const component of entity.components) {
+      if (component.type !== "mesh") continue;
+      const slots = getMeshMaterialSlots(component, assets);
+      for (const slot of slots) {
+        const binding = component.materialBindings.find(
+          (candidate) => candidate.slot === slot.slot,
+        );
+        const assignedId = binding?.materialAssetId ?? slot.defaultMaterialAssetId;
+        if (assignedId !== materialAssetId) continue;
+        slotCount += 1;
+        entityIds.add(entity.id);
+      }
+    }
+  }
+  return { entityCount: entityIds.size, slotCount };
 }
