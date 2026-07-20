@@ -19,7 +19,7 @@ import {
   addAssetFolder,
   addPrefabAsset,
   addBuiltinPrimitiveEntity,
-  assignMaterialToPrimaryMeshSlot,
+  assignMaterialToMeshSlots,
   commitEditorHistory,
   createEditorHistory,
   createDocumentId,
@@ -28,6 +28,7 @@ import {
   createPrototypeProject,
   getBuiltinPrimitiveCreation,
   getColliderAutoFitBounds,
+  getMaterialAssignmentTarget,
   getMesh,
   getXriftComponentDefinition,
   normalizeMaterialProperties,
@@ -53,16 +54,20 @@ import {
   redoEditorHistory,
   replaceEditorHistoryPresent,
   reparentEntityHierarchy,
+  reimportModelAssetFromDisk,
   undoEditorHistory,
   updateEntityTransform,
   updateColliderComponent,
   updateMaterialAsset,
+  updateModelAsset,
   updateParticleAsset,
   updateTextureAsset,
   updateXriftComponent,
   type MaterialAsset,
   type ColliderPatch,
   type MaterialAssetPatch,
+  type ModelAssetPatch,
+  type ModelReimportProgress,
   type EditorCommandId,
   type EntityClipboard,
   type ParticlePropertiesPatch,
@@ -75,12 +80,22 @@ import {
 } from "../../lib/visual-editor";
 import { AssetsPanel } from "./AssetsPanel";
 import {
+  hasActiveAssetImport,
+  resolveAssetOperationAvailability,
+} from "./asset-operation-lock";
+import {
   AssetDeleteDialog,
   type AssetDeleteDialogTarget,
 } from "./AssetDeleteDialog";
 import { EditorCreateMenu } from "./EditorCreateMenu";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { HierarchyPanel } from "./HierarchyPanel";
+import {
+  ALL_MATERIAL_SLOTS,
+  MaterialSlotAssignmentDialog,
+  type MaterialSlotAssignmentOption,
+} from "./MaterialSlotAssignmentDialog";
+import type { ModelReimportState } from "./ModelAssetInspector";
 import {
   InspectorPanel,
   type MeshInspectorPatch,
@@ -113,6 +128,37 @@ type QueuedAssetImport = PendingImport & {
   file: File | null;
   folderId: string | null;
 };
+
+type PendingMaterialAssignment = {
+  entityId: string;
+  meshComponentId: string;
+  entityName: string;
+  materialAssetId: string;
+  materialName: string;
+  slots: MaterialSlotAssignmentOption[];
+} | null;
+
+type ModelReimportFeedback = {
+  assetId: string;
+  state: ModelReimportState;
+} | null;
+
+function modelReimportStateFromProgress(
+  progress: ModelReimportProgress,
+): ModelReimportState {
+  switch (progress.phase) {
+    case "reading-source":
+      return { phase: "reading", message: progress.message };
+    case "inspecting-source":
+      return { phase: "processing", message: progress.message };
+    case "committing-assets":
+      return { phase: "committing", message: progress.message };
+    case "complete":
+      return { phase: "succeeded", message: progress.message };
+    case "failed":
+      return { phase: "failed", message: progress.message };
+  }
+}
 
 type RenameTarget =
   | { kind: "entity"; id: string; requestId: number }
@@ -355,6 +401,10 @@ export function VisualEditorPrototype({
   const clipboardRef = useRef<EntityClipboard | null>(null);
   const [renameTarget, setRenameTarget] = useState<RenameTarget>(null);
   const [deleteDialog, setDeleteDialog] = useState<AssetDeleteDialogTarget | null>(null);
+  const [pendingMaterialAssignment, setPendingMaterialAssignment] =
+    useState<PendingMaterialAssignment>(null);
+  const [modelReimportFeedback, setModelReimportFeedback] =
+    useState<ModelReimportFeedback>(null);
   const [activeAssetFolderId, setActiveAssetFolderId] = useState<string | null>(null);
   const [frameSelectionRequest, setFrameSelectionRequest] = useState(0);
   const resolvedCommands = useMemo(() => resolveEditorCommands(), []);
@@ -369,6 +419,10 @@ export function VisualEditorPrototype({
   const [pendingImports, setPendingImports] = useState<QueuedAssetImport[]>([]);
   const importQueueRef = useRef<QueuedAssetImport[]>([]);
   const importRunningRef = useRef(false);
+  const assetOperationRef = useRef<{
+    kind: "asset-import" | "model-reimport";
+    token: symbol;
+  } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(
     "SceneのEntityとAssetを別々に選択できます。CreateからPrimitiveを配置してください",
@@ -430,6 +484,8 @@ export function VisualEditorPrototype({
     clipboardRef.current = null;
     setRenameTarget(null);
     setDeleteDialog(null);
+    setPendingMaterialAssignment(null);
+    setModelReimportFeedback(null);
     setActiveAssetFolderId(null);
     setFrameSelectionRequest(0);
     importQueueRef.current = [];
@@ -459,7 +515,26 @@ export function VisualEditorPrototype({
   }, [layout]);
 
   const readOnly = editorMode === "play";
-  const importBusy = pendingImports.some((entry) => importIsActive(entry.status));
+  const modelReimportBusy = Boolean(
+    modelReimportFeedback &&
+      (modelReimportFeedback.state.phase === "reading" ||
+        modelReimportFeedback.state.phase === "processing" ||
+        modelReimportFeedback.state.phase === "committing"),
+  );
+  const importBusy =
+    modelReimportBusy ||
+    pendingImports.some((entry) => importIsActive(entry.status));
+  const assetImportPanelAvailability = resolveAssetOperationAvailability(
+    "asset-import",
+    {
+      readOnly: false,
+      assetImportActive:
+        importRunningRef.current || hasActiveAssetImport(pendingImports),
+      modelReimportActive:
+        modelReimportBusy ||
+        assetOperationRef.current?.kind === "model-reimport",
+    },
+  );
   const builtinPrefabRecipes = useMemo(
     () => listBuiltinPrefabRecipes(projectKind),
     [projectKind],
@@ -774,7 +849,11 @@ export function VisualEditorPrototype({
   );
 
   const handlePlaceBuiltinPrefab = useCallback(
-    (recipeId: string, position?: Vec3) => {
+    (
+      recipeId: string,
+      position?: Vec3,
+      parentEntityId: string | null = null,
+    ) => {
       if (editorMode !== "edit" || importBusy) {
         setNotice(
           editorMode !== "edit"
@@ -784,6 +863,13 @@ export function VisualEditorPrototype({
         return;
       }
       setHistory((current) => {
+        if (
+          parentEntityId !== null &&
+          !current.present.bundle.scene.entities[parentEntityId]
+        ) {
+          setNotice("配置先のEntityが見つかりません");
+          return current;
+        }
         const result = instantiateBuiltinPrefab(
           current.present.bundle.scene,
           projectKind,
@@ -794,13 +880,29 @@ export function VisualEditorPrototype({
           setNotice("このプロジェクトにはXRift Componentを配置できませんでした");
           return current;
         }
+        const scene =
+          parentEntityId === null
+            ? result.scene
+            : reparentEntityHierarchy(
+                result.scene,
+                result.entityId,
+                parentEntityId,
+              );
         setSaveStatus("dirty");
-        setNotice(`「${result.recipe.name}」をSceneへ配置しました`);
+        const parentName =
+          parentEntityId === null
+            ? null
+            : current.present.bundle.scene.entities[parentEntityId]?.name;
+        setNotice(
+          parentName
+            ? `「${result.recipe.name}」を「${parentName}」の子へ配置しました`
+            : `「${result.recipe.name}」をSceneへ配置しました`,
+        );
         return commitEditorHistory(current, {
           ...current.present,
           bundle: touchProject({
             ...current.present.bundle,
-            scene: result.scene,
+            scene,
           }),
           sceneSelection: { kind: "entity", id: result.entityId },
           assetSelection: null,
@@ -1237,46 +1339,135 @@ export function VisualEditorPrototype({
     [editorMode, updateScene],
   );
 
-  const handleAssignMaterial = useCallback(
-    (entityId: string, materialAssetId: string) => {
+  const commitMaterialAssignment = useCallback(
+    (
+      entityId: string,
+      materialAssetId: string,
+      slots: readonly string[],
+      meshComponentId?: string,
+    ) => {
       if (editorMode !== "edit") {
         setNotice("Playを停止してからMaterialを適用してください");
         return;
       }
-      const assignment = assignMaterialToPrimaryMeshSlot(
+      setHistory((current) => {
+        const assignment = assignMaterialToMeshSlots(
+          current.present.bundle.scene,
+          current.present.bundle.assets,
+          entityId,
+          materialAssetId,
+          slots,
+          meshComponentId,
+        );
+        if (!assignment.applied) {
+          const message = {
+            "entity-missing": "Materialの適用先Entityが見つかりません",
+            "mesh-missing": "MaterialはMeshを持つEntityへドロップしてください",
+            "material-missing": "ドラッグしたMaterial Assetが見つかりません",
+            "slot-missing": "Meshに適用できるMaterial slotがありません",
+            unchanged: "選択したSlotにはこのMaterialが適用済みです",
+          }[assignment.reason];
+          setNotice(message);
+          return current;
+        }
+        const nextBundle = touchProject({
+          ...current.present.bundle,
+          scene: assignment.scene,
+        });
+        bundleRef.current = nextBundle;
+        setSaveStatus("dirty");
+        setNotice(
+          assignment.slots.length === 1
+            ? `Materialを「${assignment.slots[0]}」slotへ適用しました`
+            : `Materialを${assignment.slots.length}個のslotへ適用しました`,
+        );
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: nextBundle,
+          sceneSelection: { kind: "entity", id: entityId },
+          assetSelection: materialAssetId,
+        });
+      });
+    },
+    [editorMode],
+  );
+
+  const handleAssignMaterial = useCallback(
+    (
+      entityId: string,
+      materialAssetId: string,
+      meshComponentId?: string,
+    ) => {
+      if (editorMode !== "edit") {
+        setNotice("Playを停止してからMaterialを適用してください");
+        return;
+      }
+      const target = getMaterialAssignmentTarget(
         bundle.scene,
         bundle.assets,
         entityId,
-        materialAssetId,
+        meshComponentId,
       );
-      if (!assignment.applied) {
+      if (!target.ready) {
         const message = {
           "entity-missing": "Materialの適用先Entityが見つかりません",
           "mesh-missing": "MaterialはMeshを持つEntityへドロップしてください",
-          "material-missing": "ドラッグしたMaterial Assetが見つかりません",
           "slot-missing": "Meshに適用できるMaterial slotがありません",
-          unchanged: "このMaterialはすでにprimary slotへ適用されています",
-        }[assignment.reason];
+        }[target.reason];
         setNotice(message);
         return;
       }
-      setBundle(
-        touchProject({
-          ...bundle,
-          scene: assignment.scene,
-        }),
+      const material = bundle.assets.assets[materialAssetId];
+      if (material?.kind !== "material") {
+        setNotice("ドラッグしたMaterial Assetが見つかりません");
+        return;
+      }
+      if (target.slots.length === 1) {
+        commitMaterialAssignment(
+          entityId,
+          materialAssetId,
+          [target.slots[0].slot],
+          target.meshId,
+        );
+        return;
+      }
+
+      const entity = bundle.scene.entities[entityId];
+      const mesh = entity?.components.find(
+        (component) => component.id === target.meshId && component.type === "mesh",
       );
-      setSceneSelection({ kind: "entity", id: entityId });
-      setAssetSelection(materialAssetId);
-      setNotice(`MaterialをMeshの「${assignment.slot}」slotへ適用しました`);
+      if (!entity || mesh?.type !== "mesh") {
+        setNotice("Materialの適用先Meshが見つかりません");
+        return;
+      }
+      const slots = target.slots.map((slot) => {
+        const binding = mesh.materialBindings.find(
+          (candidate) => candidate.slot === slot.slot,
+        );
+        const currentMaterialId =
+          binding?.materialAssetId ?? slot.defaultMaterialAssetId;
+        const currentMaterial = currentMaterialId
+          ? bundle.assets.assets[currentMaterialId]
+          : undefined;
+        return {
+          ...slot,
+          currentMaterialName:
+            currentMaterial?.kind === "material"
+              ? currentMaterial.name
+              : undefined,
+        };
+      });
+      setPendingMaterialAssignment({
+        entityId,
+        meshComponentId: target.meshId,
+        entityName: entity.name,
+        materialAssetId,
+        materialName: material.name,
+        slots,
+      });
+      setNotice("適用するMaterial slotを選択してください");
     },
-    [
-      bundle,
-      editorMode,
-      setAssetSelection,
-      setBundle,
-      setSceneSelection,
-    ],
+    [bundle, commitMaterialAssignment, editorMode],
   );
 
   const handleMaterialChange = useCallback(
@@ -1293,6 +1484,161 @@ export function VisualEditorPrototype({
       });
     },
     [editorMode],
+  );
+
+  const handleModelChange = useCallback(
+    (assetId: string, patch: ModelAssetPatch) => {
+      if (editorMode !== "edit") return;
+      if (modelReimportBusy) {
+        setNotice("Modelの再インポート完了後に設定を変更できます");
+        return;
+      }
+      setBundle((current) => {
+        const assets = updateModelAsset(current.assets, assetId, patch);
+        if (assets === current.assets) {
+          setNotice("Model設定は変更されませんでした。不正値は元の値を保持します");
+          return current;
+        }
+        setNotice("ModelのImport Recipeと既定Material割当を更新しました");
+        return touchProject({ ...current, assets });
+      });
+    },
+    [editorMode, modelReimportBusy, setBundle],
+  );
+
+  const handleReimportModel = useCallback(
+    async (assetId: string) => {
+      const availability = resolveAssetOperationAvailability(
+        "model-reimport",
+        {
+          readOnly: editorMode !== "edit",
+          assetImportActive:
+            importRunningRef.current ||
+            hasActiveAssetImport(importQueueRef.current),
+          modelReimportActive:
+            assetOperationRef.current?.kind === "model-reimport",
+        },
+      );
+      if (!availability.allowed) {
+        setNotice(availability.disabledReason);
+        return;
+      }
+      if (!projectPath) {
+        setNotice("Modelを再インポートする前にプロジェクトを保存してください");
+        return;
+      }
+
+      const startingBundle = bundleRef.current;
+      const startingAsset = startingBundle.assets.assets[assetId];
+      if (startingAsset?.kind !== "model") {
+        setNotice("再インポートするModel Assetが見つかりません");
+        return;
+      }
+      if (startingAsset.source.kind !== "project") {
+        setNotice("プロジェクト内に保存されたModelだけ再インポートできます");
+        return;
+      }
+
+      const operationToken = Symbol("model-reimport");
+      assetOperationRef.current = {
+        kind: "model-reimport",
+        token: operationToken,
+      };
+
+      setModelReimportFeedback({
+        assetId,
+        state: { phase: "reading", message: "モデルファイルを読み込んでいます" },
+      });
+      setNotice(`「${startingAsset.name}」の再インポートを開始しました`);
+
+      try {
+        const result = await reimportModelAssetFromDisk(
+          projectPath,
+          startingBundle.assets,
+          assetId,
+          (progress) => {
+            setModelReimportFeedback({
+              assetId,
+              state: modelReimportStateFromProgress(progress),
+            });
+          },
+        );
+
+      if (!result.ok) {
+        setModelReimportFeedback({
+          assetId,
+          state: { phase: "failed", message: result.message },
+        });
+        setNotice(result.message);
+        return;
+      }
+
+      const reimportedAsset = result.manifest.assets[assetId];
+      if (reimportedAsset?.kind !== "model") {
+        const message = "再インポート結果を確認できませんでした。元のAssetは保持されています";
+        setModelReimportFeedback({
+          assetId,
+          state: { phase: "failed", message },
+        });
+        setNotice(message);
+        return;
+      }
+
+      if (bundleRef.current.assets.assets[assetId] !== startingAsset) {
+        const message =
+          "処理中にModel設定が変更されたため、自動適用を取り消しました。元のAssetは保持されています";
+        setModelReimportFeedback({
+          assetId,
+          state: { phase: "failed", message },
+        });
+        setNotice(message);
+        return;
+      }
+
+        setHistory((current) => {
+        if (current.present.bundle.assets.assets[assetId] !== startingAsset) {
+          const message =
+            "処理中にModel設定が変更されたため、自動適用を取り消しました。元のAssetは保持されています";
+          setModelReimportFeedback({
+            assetId,
+            state: { phase: "failed", message },
+          });
+          setNotice(message);
+          return current;
+        }
+        const nextBundle = touchProject({
+          ...current.present.bundle,
+          assets: {
+            ...current.present.bundle.assets,
+            assets: {
+              ...current.present.bundle.assets.assets,
+              [assetId]: reimportedAsset,
+            },
+          },
+        });
+        bundleRef.current = nextBundle;
+        setSaveStatus("dirty");
+        setModelReimportFeedback({
+          assetId,
+          state: {
+            phase: "succeeded",
+            message: "Modelを再インポートしました。保存すると変更が確定します",
+          },
+        });
+        setNotice(`「${reimportedAsset.name}」を再インポートしました`);
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: nextBundle,
+          assetSelection: assetId,
+        });
+        });
+      } finally {
+        if (assetOperationRef.current?.token === operationToken) {
+          assetOperationRef.current = null;
+        }
+      }
+    },
+    [editorMode, projectPath],
   );
 
   const handleTextureChange = useCallback(
@@ -1585,10 +1931,16 @@ export function VisualEditorPrototype({
       if (
         !targetProjectPath ||
         importRunningRef.current ||
+        assetOperationRef.current?.kind === "model-reimport" ||
         editorMode !== "edit"
       ) {
         return;
       }
+      const operationToken = Symbol("asset-import");
+      assetOperationRef.current = {
+        kind: "asset-import",
+        token: operationToken,
+      };
       importRunningRef.current = true;
       let workingManifest = bundleRef.current.assets;
       const knownByHash = new Map(
@@ -1810,14 +2162,24 @@ export function VisualEditorPrototype({
         }
       } finally {
         importRunningRef.current = false;
+        if (assetOperationRef.current?.token === operationToken) {
+          assetOperationRef.current = null;
+        }
       }
     },
     [editorMode, updateImportQueue],
   );
 
   const handleQueueFiles = useCallback((files: File[]) => {
-    if (editorMode !== "edit") {
-      setNotice("Playを停止してからアセットをインポートしてください");
+    const availability = resolveAssetOperationAvailability("asset-import", {
+      readOnly: editorMode !== "edit",
+      assetImportActive:
+        importRunningRef.current || hasActiveAssetImport(importQueueRef.current),
+      modelReimportActive:
+        assetOperationRef.current?.kind === "model-reimport",
+    });
+    if (!availability.allowed) {
+      setNotice(availability.disabledReason);
       return;
     }
     const accepted: Array<{
@@ -2163,7 +2525,7 @@ export function VisualEditorPrototype({
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
-      if (deleteDialog) return;
+      if (deleteDialog || pendingMaterialAssignment) return;
       if (event.repeat) return;
       const command = commandForKeyboardEvent(event, resolvedCommands);
       if (!command) return;
@@ -2171,7 +2533,7 @@ export function VisualEditorPrototype({
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [deleteDialog, executeCommand, resolvedCommands]);
+  }, [deleteDialog, executeCommand, pendingMaterialAssignment, resolvedCommands]);
 
   const shortcutLabel = useCallback(
     (commandId: EditorCommandId) =>
@@ -2376,6 +2738,9 @@ export function VisualEditorPrototype({
             onDropSceneAsset={(assetId, parentEntityId) =>
               handlePlaceSceneAsset(assetId, { parentEntityId })
             }
+            onDropBuiltinPrefab={(recipeId, parentEntityId) =>
+              handlePlaceBuiltinPrefab(recipeId, undefined, parentEntityId)
+            }
             onCommand={executeCommand}
             renameRequest={
               renameTarget?.kind === "entity"
@@ -2441,6 +2806,13 @@ export function VisualEditorPrototype({
             onSelectAsset={handleSelectAsset}
             onCloseAsset={() => setAssetSelection(null)}
             onMaterialChange={handleMaterialChange}
+            onModelChange={handleModelChange}
+            onReimportModel={handleReimportModel}
+            modelReimportState={
+              modelReimportFeedback?.assetId === assetSelection
+                ? modelReimportFeedback.state
+                : { phase: "idle" }
+            }
             onParticleChange={handleParticleChange}
             onTextureChange={handleTextureChange}
             onParticleEmitterChange={handleParticleEmitterChange}
@@ -2490,6 +2862,9 @@ export function VisualEditorPrototype({
             onMoveFolder={handleMoveAssetFolder}
             onPlaceBuiltinPrefab={handlePlaceBuiltinPrefab}
             onPlaceSceneAsset={(assetId) => handlePlaceSceneAsset(assetId)}
+            externalOperationLockReason={
+              assetImportPanelAvailability.disabledReason
+            }
           />
           <button
             type="button"
@@ -2504,6 +2879,29 @@ export function VisualEditorPrototype({
               target={deleteDialog}
               onCancel={() => setDeleteDialog(null)}
               onConfirm={confirmAssetLibraryDelete}
+            />
+          ) : null}
+          {pendingMaterialAssignment ? (
+            <MaterialSlotAssignmentDialog
+              entityName={pendingMaterialAssignment.entityName}
+              materialName={pendingMaterialAssignment.materialName}
+              slots={pendingMaterialAssignment.slots}
+              onCancel={() => {
+                setPendingMaterialAssignment(null);
+                setNotice("Materialの適用を取り消しました");
+              }}
+              onConfirm={(choice) => {
+                const pending = pendingMaterialAssignment;
+                setPendingMaterialAssignment(null);
+                commitMaterialAssignment(
+                  pending.entityId,
+                  pending.materialAssetId,
+                  choice === ALL_MATERIAL_SLOTS
+                    ? pending.slots.map((slot) => slot.slot)
+                    : [choice],
+                  pending.meshComponentId,
+                );
+              }}
             />
           ) : null}
           <button

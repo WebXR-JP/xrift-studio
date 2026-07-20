@@ -7,6 +7,7 @@ import {
 } from "react";
 import {
   BUILTIN_PRIMITIVE_CREATION_CATALOG,
+  BUILTIN_PREFAB_DRAG_MIME,
   EDITOR_COMPONENT_REGISTRY,
   XRIFT_COMPONENT_SCHEMA_IDS,
   getEntityReparentDecision,
@@ -147,6 +148,7 @@ export function HierarchyPanel({
   onSelect,
   onAssignMaterial,
   onDropSceneAsset,
+  onDropBuiltinPrefab,
   onCommand,
   renameRequest,
   onRename,
@@ -158,6 +160,7 @@ export function HierarchyPanel({
   onSelect: (selection: EditorSelection) => void;
   onAssignMaterial: (entityId: string, materialAssetId: string) => void;
   onDropSceneAsset: (assetId: string, parentEntityId: string | null) => void;
+  onDropBuiltinPrefab: (recipeId: string, parentEntityId: string | null) => void;
   onCommand: (
     commandId: EditorCommandId,
     payload?: {
@@ -328,21 +331,33 @@ export function HierarchyPanel({
     setDropTarget(null);
   };
 
-  const finishSceneAssetDrop = (
+  const hasPlaceableDrop = (event: DragEvent<HTMLElement>) =>
+    hasEditorDragData(event.dataTransfer, SCENE_ASSET_DRAG_MIME) ||
+    hasEditorDragData(event.dataTransfer, BUILTIN_PREFAB_DRAG_MIME);
+
+  const finishPlaceableDrop = (
     event: DragEvent<HTMLElement>,
     parentEntityId: string | null,
   ) => {
-    if (!hasEditorDragData(event.dataTransfer, SCENE_ASSET_DRAG_MIME)) return;
+    if (!hasPlaceableDrop(event)) return;
     event.preventDefault();
     event.stopPropagation();
+    const recipeId = readEditorDragData(
+      event.dataTransfer,
+      BUILTIN_PREFAB_DRAG_MIME,
+    ).trim();
     const assetId = readEditorDragData(
       event.dataTransfer,
       SCENE_ASSET_DRAG_MIME,
     ).trim();
     clearEditorDragData();
     setAssetDropTarget(null);
-    if (readOnly || !assetId) return;
-    onDropSceneAsset(assetId, parentEntityId);
+    if (readOnly) return;
+    if (recipeId) {
+      onDropBuiltinPrefab(recipeId, parentEntityId);
+      return;
+    }
+    if (assetId) onDropSceneAsset(assetId, parentEntityId);
   };
 
   return (
@@ -410,17 +425,17 @@ export function HierarchyPanel({
         role="tree"
         aria-label="SceneのEntity階層"
         onDragEnter={(event) => {
-          if (!hasEditorDragData(event.dataTransfer, SCENE_ASSET_DRAG_MIME)) return;
+          if (!hasPlaceableDrop(event)) return;
           event.preventDefault();
           event.stopPropagation();
           if (readOnly) return;
           setAssetDropTarget({
             kind: "root",
-            message: "Model / Prefab / ParticleをScene Rootへ配置",
+            message: "Asset / XRift PrefabをScene Rootへ配置",
           });
         }}
         onDragOver={(event) => {
-          if (!hasEditorDragData(event.dataTransfer, SCENE_ASSET_DRAG_MIME)) return;
+          if (!hasPlaceableDrop(event)) return;
           event.preventDefault();
           event.stopPropagation();
           event.dataTransfer.dropEffect = readOnly ? "none" : "copy";
@@ -430,7 +445,7 @@ export function HierarchyPanel({
           if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
           setAssetDropTarget(null);
         }}
-        onDrop={(event) => finishSceneAssetDrop(event, null)}
+        onDrop={(event) => finishPlaceableDrop(event, null)}
       >
         {dragEntityId || assetDropTarget ? (
           <div
@@ -444,14 +459,14 @@ export function HierarchyPanel({
                 : "border-slate-300 bg-white text-slate-500"
             }`}
             onDragOver={(event) => {
-              if (hasEditorDragData(event.dataTransfer, SCENE_ASSET_DRAG_MIME)) {
+              if (hasPlaceableDrop(event)) {
                 event.preventDefault();
                 event.stopPropagation();
                 event.dataTransfer.dropEffect = readOnly ? "none" : "copy";
                 if (readOnly) return;
                 setAssetDropTarget({
                   kind: "root",
-                  message: "Model / Prefab / ParticleをScene Rootへ配置",
+                  message: "Asset / XRift PrefabをScene Rootへ配置",
                 });
                 return;
               }
@@ -475,8 +490,8 @@ export function HierarchyPanel({
               event.dataTransfer.dropEffect = "move";
             }}
             onDrop={(event) => {
-              if (hasEditorDragData(event.dataTransfer, SCENE_ASSET_DRAG_MIME)) {
-                finishSceneAssetDrop(event, null);
+              if (hasPlaceableDrop(event)) {
+                finishPlaceableDrop(event, null);
                 return;
               }
               finishEntityDrop(event, null);
@@ -547,14 +562,14 @@ export function HierarchyPanel({
                     : "none";
                   return;
                 }
-                if (hasEditorDragData(event.dataTransfer, SCENE_ASSET_DRAG_MIME)) {
+                if (hasPlaceableDrop(event)) {
                   event.preventDefault();
                   event.stopPropagation();
                   event.dataTransfer.dropEffect = "copy";
                   setAssetDropTarget({
                     kind: "entity",
                     entityId: entity.id,
-                    message: `Model / Prefab / Particleを「${entity.name}」の子へ配置`,
+                    message: `Asset / XRift Prefabを「${entity.name}」の子へ配置`,
                   });
                   return;
                 }
@@ -592,8 +607,8 @@ export function HierarchyPanel({
                   handleMaterialDrop(event, entity.id);
                   return;
                 }
-                if (hasEditorDragData(event.dataTransfer, SCENE_ASSET_DRAG_MIME)) {
-                  finishSceneAssetDrop(event, entity.id);
+                if (hasPlaceableDrop(event)) {
+                  finishPlaceableDrop(event, entity.id);
                   return;
                 }
                 finishEntityDrop(event, entity.id);

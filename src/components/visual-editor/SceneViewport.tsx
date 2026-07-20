@@ -27,6 +27,7 @@ import {
   XRIFT_COMPONENT_SCHEMA_IDS,
   getBuiltinPrefabRecipe,
   getBuiltinPrimitiveCreation,
+  getMaterialAssignmentTarget,
   getMaterialAsset,
   getPrimaryMaterialAssetId,
   getTransform,
@@ -103,11 +104,13 @@ function MeshVisual({
   component,
   assets,
   selected,
+  materialDropHighlighted,
   projectPath,
 }: {
   component: MeshComponent;
   assets: AssetManifest;
   selected: boolean;
+  materialDropHighlighted: boolean;
   projectPath?: string;
 }) {
   const geometryAssetId =
@@ -150,7 +153,7 @@ function MeshVisual({
         importScale={geometry.importSettings.scale}
         castShadow={component.castShadow}
         receiveShadow={component.receiveShadow}
-        selected={selected}
+        selected={selected || materialDropHighlighted}
         assignedMaterial={material}
         assignedTextures={materialTextures}
       />
@@ -202,8 +205,12 @@ function MeshVisual({
               : undefined
           }
         />
-        {selected ? (
-          <Edges color="#a78bfa" scale={1.015} threshold={12} />
+        {selected || materialDropHighlighted ? (
+          <Edges
+            color={materialDropHighlighted ? "#38bdf8" : "#a78bfa"}
+            scale={1.015}
+            threshold={12}
+          />
         ) : null}
       </mesh>
     );
@@ -216,7 +223,12 @@ function MeshVisual({
         color={geometry?.kind === "model" ? "#71717a" : "#fb7185"}
         wireframe
       />
-      {selected ? <Edges color="#a78bfa" scale={1.02} /> : null}
+      {selected || materialDropHighlighted ? (
+        <Edges
+          color={materialDropHighlighted ? "#38bdf8" : "#a78bfa"}
+          scale={1.02}
+        />
+      ) : null}
     </mesh>
   );
 }
@@ -441,16 +453,29 @@ function BuiltinPrefabComponentVisual({
   }
   const recipe = getBuiltinPrefabRecipe(component.authoring.recipeId);
   if (!recipe) return null;
-  if (recipe.visual.kind === "spawn-point") {
-    return <SpawnPointVisual selected={selected} />;
+  switch (recipe.visual.kind) {
+    case "spawn-point":
+      return <SpawnPointVisual selected={selected} />;
+    case "mirror":
+      return (
+        <MirrorComponentVisual
+          size={recipe.visual.size}
+          color={xriftColor(component, "color", 0xb5b5b5)}
+          selected={selected}
+        />
+      );
+    case "portal":
+      return <PortalComponentVisual selected={selected} />;
+    case "tag-board":
+      return <BoardComponentVisual selected={selected} />;
+    case "screen":
+      return (
+        <ScreenComponentVisual
+          width={recipe.visual.width}
+          selected={selected}
+        />
+      );
   }
-  return (
-    <MirrorComponentVisual
-      size={recipe.visual.size}
-      color={xriftColor(component, "color", 0xb5b5b5)}
-      selected={selected}
-    />
-  );
 }
 
 function XriftComponentVisual({
@@ -532,11 +557,15 @@ function ComponentVisual({
   component,
   assets,
   selected,
+  materialDragActive,
+  materialDropHighlighted,
   projectPath,
 }: {
   component: SceneComponent;
   assets: AssetManifest;
   selected: boolean;
+  materialDragActive: boolean;
+  materialDropHighlighted: boolean;
   projectPath?: string;
 }) {
   switch (component.type) {
@@ -544,12 +573,15 @@ function ComponentVisual({
       return null;
     case "mesh":
       return (
-        <MeshVisual
-          component={component}
-          assets={assets}
-          selected={selected}
-          projectPath={projectPath}
-        />
+        <group userData={{ meshComponentId: component.id }}>
+          <MeshVisual
+            component={component}
+            assets={assets}
+            selected={materialDragActive ? materialDropHighlighted : selected}
+            materialDropHighlighted={materialDropHighlighted}
+            projectPath={projectPath}
+          />
+        </group>
       );
     case "collider":
       if (!component.enabled || !selected || component.shape !== "box") {
@@ -607,6 +639,8 @@ function EntityObject({
   onSelect,
   onTransformCommit,
   onDraggingChange,
+  materialDragActive,
+  materialDropTarget,
   children,
 }: {
   entity: SceneEntity;
@@ -620,6 +654,8 @@ function EntityObject({
   onSelect: (entityId: string) => void;
   onTransformCommit: (entityId: string, patch: TransformPatch) => void;
   onDraggingChange: (dragging: boolean) => void;
+  materialDragActive: boolean;
+  materialDropTarget: MaterialDropReadyTarget | null;
   children?: ReactNode;
 }) {
   const objectRef = useRef<Group>(null!);
@@ -660,6 +696,11 @@ function EntityObject({
             component={component}
             assets={assets}
             selected={selected}
+            materialDragActive={materialDragActive}
+            materialDropHighlighted={
+              materialDropTarget?.entityId === authoringEntityId &&
+              materialDropTarget.meshComponentId === component.id
+            }
             projectPath={projectPath}
           />
         ))}
@@ -689,6 +730,7 @@ type SceneDropHit = {
   groundPosition: Vec3 | null;
   authoringEntityId: string | null;
   renderedEntityId: string | null;
+  meshComponentId: string | null;
 };
 
 type SceneDropResolver = (clientX: number, clientY: number) => SceneDropHit;
@@ -696,20 +738,118 @@ type SceneDropResolver = (clientX: number, clientY: number) => SceneDropHit;
 function entityDropMetadata(object: Object3D): {
   authoringEntityId: string;
   renderedEntityId: string;
+  meshComponentId: string;
 } | null {
   let current: Object3D | null = object;
+  let meshComponentId: string | null = null;
   while (current) {
+    const candidateMeshComponentId = current.userData.meshComponentId;
+    if (
+      meshComponentId === null &&
+      typeof candidateMeshComponentId === "string"
+    ) {
+      meshComponentId = candidateMeshComponentId;
+    }
     const authoringEntityId = current.userData.authoringEntityId;
     const renderedEntityId = current.userData.renderedEntityId;
     if (
+      meshComponentId !== null &&
       typeof authoringEntityId === "string" &&
       typeof renderedEntityId === "string"
     ) {
-      return { authoringEntityId, renderedEntityId };
+      return { authoringEntityId, renderedEntityId, meshComponentId };
     }
     current = current.parent;
   }
   return null;
+}
+
+type MaterialDropReadyTarget = {
+  status: "ready";
+  entityId: string;
+  meshComponentId: string;
+};
+
+type MaterialDropRejectedTarget = {
+  status: "rejected";
+  message: string;
+};
+
+type MaterialDropTarget =
+  | MaterialDropReadyTarget
+  | MaterialDropRejectedTarget;
+
+function resolveMaterialDropTarget(
+  scene: SceneDocument,
+  assets: AssetManifest,
+  hit: SceneDropHit | undefined,
+): MaterialDropTarget {
+  if (
+    !hit?.authoringEntityId ||
+    !hit.renderedEntityId ||
+    !hit.meshComponentId
+  ) {
+    return {
+      status: "rejected",
+      message: "Materialを適用するMeshの上へドロップしてください",
+    };
+  }
+  if (hit.renderedEntityId !== hit.authoringEntityId) {
+    return {
+      status: "rejected",
+      message:
+        "Prefab内のMeshはインスタンスから直接変更できません。Prefab Assetを編集してください",
+    };
+  }
+
+  const entity = scene.entities[hit.authoringEntityId];
+  const mesh = entity?.components.find(
+    (component): component is MeshComponent =>
+      component.type === "mesh" && component.id === hit.meshComponentId,
+  );
+  if (!entity?.enabled || !mesh?.enabled) {
+    return {
+      status: "rejected",
+      message: "ドロップ先に有効なMeshがありません",
+    };
+  }
+  const target = getMaterialAssignmentTarget(
+    scene,
+    assets,
+    hit.authoringEntityId,
+    hit.meshComponentId,
+  );
+  if (!target.ready) {
+    return {
+      status: "rejected",
+      message:
+        target.reason === "slot-missing"
+          ? "ドロップ先のMeshに適用できるMaterial slotがありません"
+          : "ドロップ先に編集可能なMeshがありません",
+    };
+  }
+  return {
+    status: "ready",
+    entityId: hit.authoringEntityId,
+    meshComponentId: target.meshId,
+  };
+}
+
+function materialDropTargetsEqual(
+  left: MaterialDropTarget | null,
+  right: MaterialDropTarget | null,
+): boolean {
+  if (left === right) return true;
+  if (!left || !right || left.status !== right.status) return false;
+  if (left.status === "rejected" && right.status === "rejected") {
+    return left.message === right.message;
+  }
+  return (
+    left.status === "ready" &&
+    right.status === "ready" &&
+    left.entityId === right.entityId &&
+    left.meshComponentId === right.meshComponentId
+  );
 }
 
 /** Keeps DOM drag events aligned with the live Orbit camera and scene graph. */
@@ -735,6 +875,7 @@ function SceneDropProjectionBridge({
           groundPosition: null,
           authoringEntityId: null,
           renderedEntityId: null,
+          meshComponentId: null,
         };
       }
       pointer.set(
@@ -745,11 +886,13 @@ function SceneDropProjectionBridge({
 
       let authoringEntityId: string | null = null;
       let renderedEntityId: string | null = null;
+      let meshComponentId: string | null = null;
       for (const intersection of raycaster.intersectObjects(scene.children, true)) {
         const metadata = entityDropMetadata(intersection.object);
         if (!metadata) continue;
         authoringEntityId = metadata.authoringEntityId;
         renderedEntityId = metadata.renderedEntityId;
+        meshComponentId = metadata.meshComponentId;
         break;
       }
       const position = raycaster.ray.intersectPlane(groundPlane, groundHit);
@@ -759,6 +902,7 @@ function SceneDropProjectionBridge({
           : null,
         authoringEntityId,
         renderedEntityId,
+        meshComponentId,
       };
     };
     return () => {
@@ -782,6 +926,8 @@ function SceneEntityHierarchy({
   onSelect,
   onTransformCommit,
   onDraggingChange,
+  materialDragActive,
+  materialDropTarget,
   ancestors = new Set<string>(),
 }: {
   entityId: string;
@@ -796,6 +942,8 @@ function SceneEntityHierarchy({
   onSelect: (entityId: string) => void;
   onTransformCommit: (entityId: string, patch: TransformPatch) => void;
   onDraggingChange: (dragging: boolean) => void;
+  materialDragActive: boolean;
+  materialDropTarget: MaterialDropReadyTarget | null;
   ancestors?: ReadonlySet<string>;
 }) {
   const entity = scene.entities[entityId];
@@ -818,6 +966,8 @@ function SceneEntityHierarchy({
       onSelect={onSelect}
       onTransformCommit={onTransformCommit}
       onDraggingChange={onDraggingChange}
+      materialDragActive={materialDragActive}
+      materialDropTarget={materialDropTarget}
     >
       {entity.children.map((childId) => (
         <SceneEntityHierarchy
@@ -834,6 +984,8 @@ function SceneEntityHierarchy({
           onSelect={onSelect}
           onTransformCommit={onTransformCommit}
           onDraggingChange={onDraggingChange}
+          materialDragActive={materialDragActive}
+          materialDropTarget={materialDropTarget}
           ancestors={nextAncestors}
         />
       ))}
@@ -1060,7 +1212,11 @@ export function SceneViewport({
   onSelect: (selection: EditorSelection) => void;
   onTransformCommit: (entityId: string, patch: TransformPatch) => void;
   onDropPrimitive: (creationId: string, position: Vec3) => void;
-  onDropMaterial: (entityId: string, materialAssetId: string) => void;
+  onDropMaterial: (
+    entityId: string,
+    materialAssetId: string,
+    meshComponentId: string,
+  ) => void;
   onDropBuiltinPrefab: (recipeId: string, position: Vec3) => void;
   onDropSceneAsset: (assetId: string, position: Vec3) => void;
   onCreatePrimitive: (creationId: string) => void;
@@ -1076,6 +1232,8 @@ export function SceneViewport({
     SceneViewportDragIntent["kind"] | null
   >(null);
   const [dragOverLabel, setDragOverLabel] = useState<string | null>(null);
+  const [materialDropTarget, setMaterialDropTarget] =
+    useState<MaterialDropTarget | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [transformDragging, setTransformDragging] = useState(false);
   const preview = useMemo(
@@ -1128,12 +1286,26 @@ export function SceneViewport({
     event.preventDefault();
     event.stopPropagation();
     setDragOverKind(intent.kind);
+    if (intent.kind === "material") {
+      const nextTarget = resolveMaterialDropTarget(
+        scene,
+        assets,
+        dropResolverRef.current?.(event.clientX, event.clientY),
+      );
+      setMaterialDropTarget((current) =>
+        materialDropTargetsEqual(current, nextTarget) ? current : nextTarget,
+      );
+    } else {
+      setMaterialDropTarget(null);
+    }
     if (intent.kind === "builtin-prefab") {
       setDragOverLabel(
         getBuiltinPrefabRecipe(intent.id)?.name ?? null,
       );
     } else if (intent.kind === "scene-asset") {
       setDragOverLabel(assets.assets[intent.id]?.name ?? null);
+    } else {
+      setDragOverLabel(null);
     }
   };
 
@@ -1142,7 +1314,28 @@ export function SceneViewport({
     if (!intent) return;
     event.preventDefault();
     event.stopPropagation();
-    event.dataTransfer.dropEffect = editorMode === "edit" ? "copy" : "none";
+    const nextMaterialTarget =
+      intent.kind === "material"
+        ? resolveMaterialDropTarget(
+            scene,
+            assets,
+            dropResolverRef.current?.(event.clientX, event.clientY),
+          )
+        : null;
+    if (intent.kind === "material") {
+      setMaterialDropTarget((current) =>
+        materialDropTargetsEqual(current, nextMaterialTarget)
+          ? current
+          : nextMaterialTarget,
+      );
+    } else if (materialDropTarget) {
+      setMaterialDropTarget(null);
+    }
+    event.dataTransfer.dropEffect =
+      editorMode === "edit" &&
+      (intent.kind !== "material" || nextMaterialTarget?.status === "ready")
+        ? "copy"
+        : "none";
     if (dragOverKind !== intent.kind) setDragOverKind(intent.kind);
     if (intent.kind === "builtin-prefab" && !dragOverLabel) {
       setDragOverLabel(
@@ -1163,6 +1356,7 @@ export function SceneViewport({
     }
     setDragOverKind(null);
     setDragOverLabel(null);
+    setMaterialDropTarget(null);
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -1173,6 +1367,7 @@ export function SceneViewport({
     clearEditorDragData();
     setDragOverKind(null);
     setDragOverLabel(null);
+    setMaterialDropTarget(null);
     const projected = dropResolverRef.current?.(event.clientX, event.clientY);
     const fallbackPosition = fallbackViewportGroundPosition(
       event.clientX,
@@ -1191,27 +1386,13 @@ export function SceneViewport({
     }
 
     if (intent.kind === "material") {
-      const targetEntityId =
-        projected?.authoringEntityId ?? selectedEntityId;
-      if (!targetEntityId) {
-        onDropRejected("Materialを適用するMeshへドロップするか、HierarchyでMeshを選択してください");
+      const target = resolveMaterialDropTarget(scene, assets, projected);
+      if (target.status === "rejected") {
+        onDropRejected(target.message);
+      } else if (!intent.id) {
+        onDropRejected("Materialのドラッグ情報を読み取れませんでした。もう一度ドラッグしてください");
       } else {
-        const target = scene.entities[targetEntityId];
-        const hasEditableMesh = target?.components.some(
-          (component) => component.type === "mesh" && component.enabled,
-        );
-        if (!hasEditableMesh) {
-          onDropRejected(
-            projected?.renderedEntityId &&
-              projected.renderedEntityId !== targetEntityId
-              ? "Prefab内のMeshはインスタンスから直接変更できません。Prefab Assetを編集してください"
-              : "ドロップ先のEntityに編集可能なMeshがありません",
-          );
-        } else if (!intent.id) {
-          onDropRejected("Materialのドラッグ情報を読み取れませんでした。もう一度ドラッグしてください");
-        } else {
-          onDropMaterial(targetEntityId, intent.id);
-        }
+        onDropMaterial(target.entityId, intent.id, target.meshComponentId);
       }
       return;
     }
@@ -1264,13 +1445,19 @@ export function SceneViewport({
     projectKind === "world"
       ? "WASD / 矢印キーでキャラクターを移動"
       : "ドラッグでアイテムをOrbit確認";
+  const readyMaterialDropTarget =
+    materialDropTarget?.status === "ready" ? materialDropTarget : null;
   const dropMessage =
     editorMode === "play"
       ? "Playを停止してから配置してください"
       : dragOverKind === "files"
         ? "外部モデルは下のAssetsへドロップ"
         : dragOverKind === "material"
-          ? "カーソル直下のMeshへMaterialを適用"
+          ? materialDropTarget?.status === "rejected"
+            ? materialDropTarget.message
+            : readyMaterialDropTarget
+              ? `${scene.entities[readyMaterialDropTarget.entityId]?.name ?? "Mesh"}へMaterialを適用`
+              : "Materialを適用するMeshの上へ移動"
           : dragOverKind === "builtin-prefab"
             ? `${dragOverLabel ?? "XRift Component"}を配置`
             : dragOverKind === "scene-asset"
@@ -1375,6 +1562,8 @@ export function SceneViewport({
               }
               onTransformCommit={onTransformCommit}
               onDraggingChange={setTransformDragging}
+              materialDragActive={dragOverKind === "material"}
+              materialDropTarget={readyMaterialDropTarget}
             />
           ))}
 
@@ -1394,7 +1583,16 @@ export function SceneViewport({
         </Canvas>
 
         {dragOverKind ? (
-          <div className="pointer-events-none absolute inset-3 z-20 flex items-center justify-center rounded-lg border-2 border-dashed border-violet-400 bg-violet-500/15 text-xs font-semibold text-violet-100 backdrop-blur-[2px]">
+          <div
+            className={`pointer-events-none absolute inset-3 z-20 flex items-center justify-center rounded-lg border-2 border-dashed px-4 text-center text-xs font-semibold backdrop-blur-[2px] ${
+              dragOverKind === "material" && materialDropTarget?.status === "rejected"
+                ? "border-rose-400 bg-rose-500/15 text-rose-100"
+                : dragOverKind === "material" && readyMaterialDropTarget
+                  ? "border-sky-400 bg-sky-500/10 text-sky-100"
+                  : "border-violet-400 bg-violet-500/15 text-violet-100"
+            }`}
+            aria-live="polite"
+          >
             {dropMessage}
           </div>
         ) : null}

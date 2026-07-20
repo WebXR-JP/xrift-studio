@@ -18,6 +18,7 @@ import {
   type JsonValue,
   type MaterialBinding,
   type MaterialAssetPatch,
+  type ModelAssetPatch,
   type MaterialSlotDefinition,
   type MeshComponent,
   type ParticleEmitterComponent,
@@ -32,6 +33,10 @@ import {
   type RegisteredSceneComponent,
 } from "../../lib/visual-editor";
 import { AssetQuickEditor } from "./AssetQuickEditor";
+import type {
+  ModelReimportImpactNotice,
+  ModelReimportState,
+} from "./ModelAssetInspector";
 import { XRiftComponentInspector } from "./XRiftComponentInspector";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { roundTo } from "./editor-utils";
@@ -873,6 +878,10 @@ export function InspectorPanel({
   onSelectAsset,
   onCloseAsset,
   onMaterialChange,
+  onModelChange,
+  onReimportModel,
+  modelReimportState,
+  modelReimportImpactNotice,
   onParticleChange,
   onTextureChange,
   onParticleEmitterChange,
@@ -897,6 +906,10 @@ export function InspectorPanel({
   onSelectAsset: (assetId: string) => void;
   onCloseAsset: () => void;
   onMaterialChange: (assetId: string, patch: MaterialAssetPatch) => void;
+  onModelChange: (assetId: string, patch: ModelAssetPatch) => void;
+  onReimportModel: (assetId: string) => void;
+  modelReimportState: ModelReimportState;
+  modelReimportImpactNotice?: ModelReimportImpactNotice | null;
   onParticleChange: (assetId: string, patch: ParticlePropertiesPatch) => void;
   onTextureChange: (assetId: string, patch: TextureAssetPatch) => void;
   onParticleEmitterChange: (
@@ -964,6 +977,10 @@ export function InspectorPanel({
             readOnly={readOnly}
             onSelectAsset={onSelectAsset}
             onMaterialChange={onMaterialChange}
+            onModelChange={onModelChange}
+            onReimportModel={onReimportModel}
+            modelReimportState={modelReimportState}
+            modelReimportImpactNotice={modelReimportImpactNotice}
             onParticleChange={onParticleChange}
             onTextureChange={onTextureChange}
           />

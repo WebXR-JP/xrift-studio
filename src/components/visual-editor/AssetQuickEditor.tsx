@@ -1,6 +1,6 @@
 import { useEffect, useState, type DragEvent } from "react";
 import { Canvas } from "@react-three/fiber";
-import { DoubleSide } from "three";
+import { Color, DoubleSide } from "three";
 import { tauri } from "../../lib/tauri";
 import {
   TEXTURE_COLOR_SPACES,
@@ -13,9 +13,11 @@ import {
   type Color4,
   type MaterialAsset,
   type MaterialAssetPatch,
+  type MaterialExtensionsPatch,
   type MaterialTextureInfo,
   type MaterialTextureInfoPatch,
   type MaterialTextureTransform,
+  type ModelAssetPatch,
   type ParticlePropertiesPatch,
   type SceneAsset,
   type TextureAsset,
@@ -24,12 +26,17 @@ import {
 import { EDITOR_ICONS } from "./editor-icons";
 import { ParticleAssetInspector } from "./ParticleAssetInspector";
 import {
+  ModelAssetInspector,
+  type ModelReimportImpactNotice,
+  type ModelReimportState,
+} from "./ModelAssetInspector";
+import {
   clearEditorDragData,
   hasEditorDragData,
   readEditorDragData,
 } from "./editor-drag-data";
 import { TEXTURE_DRAG_MIME } from "./types";
-import { useCoreMaterialPreviewTextures } from "./material-texture-preview";
+import { useMaterialPreviewTextures } from "./material-texture-preview";
 
 const INPUT_CLASS =
   "h-7 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400";
@@ -63,6 +70,11 @@ function hexToRgb(value: string): Color3 | null {
   ];
 }
 
+function colorToThree(value: Color3 | undefined, fallback: Color3): Color {
+  const source = value ?? fallback;
+  return new Color(source[0], source[1], source[2]);
+}
+
 function sourceLabel(asset: SceneAsset): string {
   if (asset.source.kind === "builtin") return `Builtin / ${asset.source.key}`;
   if (asset.source.kind === "project") return asset.source.relativePath;
@@ -80,13 +92,42 @@ function MaterialPreviewScene({
 }) {
   const pbr = asset.properties.pbrMetallicRoughness;
   const color = colorToHex(pbr?.baseColorFactor, asset.properties.color ?? "#ffffff");
-  const opacity = pbr?.baseColorFactor?.[3] ?? asset.properties.opacity ?? 1;
+  const baseAlpha = pbr?.baseColorFactor?.[3] ?? asset.properties.opacity ?? 1;
+  const opacity = asset.properties.alphaMode === "OPAQUE" ? 1 : baseAlpha;
   const emissive = colorToHex(asset.properties.emissiveFactor, "#000000");
-  const textures = useCoreMaterialPreviewTextures(
+  const textures = useMaterialPreviewTextures(
     asset,
     assets ?? EMPTY_ASSET_MANIFEST,
     projectPath,
   );
+  const extensions = asset.properties.extensions;
+  const anisotropy = extensions.KHR_materials_anisotropy;
+  const clearcoat = extensions.KHR_materials_clearcoat;
+  const dispersion = extensions.KHR_materials_dispersion;
+  const emissiveStrength =
+    extensions.KHR_materials_emissive_strength?.emissiveStrength ?? 1;
+  const ior = extensions.KHR_materials_ior;
+  const iridescence = extensions.KHR_materials_iridescence;
+  const sheen = extensions.KHR_materials_sheen;
+  const specular = extensions.KHR_materials_specular;
+  const transmission = extensions.KHR_materials_transmission;
+  const volume = extensions.KHR_materials_volume;
+  const unlit = extensions.KHR_materials_unlit !== undefined;
+  const usesPhysicalMaterial = Boolean(
+    anisotropy ||
+      clearcoat ||
+      dispersion ||
+      ior ||
+      iridescence ||
+      sheen ||
+      specular ||
+      transmission ||
+      volume,
+  );
+  const transparent = asset.properties.alphaMode === "BLEND";
+  const alphaTest =
+    asset.properties.alphaMode === "MASK" ? asset.properties.alphaCutoff : 0;
+  const side = asset.properties.doubleSided ? DoubleSide : undefined;
 
   return (
     <>
@@ -96,27 +137,108 @@ function MaterialPreviewScene({
       <directionalLight position={[-2, -1, 1]} intensity={0.65} color="#ddd6fe" />
       <mesh rotation={[0.16, 0.42, 0]}>
         <sphereGeometry args={[0.78, 32, 24]} />
-        <meshStandardMaterial
-          color={color}
-          metalness={pbr?.metallicFactor ?? asset.properties.metalness ?? 0}
-          roughness={pbr?.roughnessFactor ?? asset.properties.roughness ?? 1}
-          emissive={emissive}
-          opacity={opacity}
-          transparent={asset.properties.alphaMode === "BLEND" || opacity < 1}
-          alphaTest={asset.properties.alphaMode === "MASK" ? asset.properties.alphaCutoff : 0}
-          side={asset.properties.doubleSided ? DoubleSide : undefined}
-          map={textures.baseColorMap}
-          metalnessMap={textures.metallicRoughnessMap}
-          roughnessMap={textures.metallicRoughnessMap}
-          normalMap={textures.normalMap}
-          normalScale={[
-            asset.properties.normalTexture?.scale ?? 1,
-            asset.properties.normalTexture?.scale ?? 1,
-          ]}
-          aoMap={textures.occlusionMap}
-          aoMapIntensity={asset.properties.occlusionTexture?.strength ?? 1}
-          emissiveMap={textures.emissiveMap}
-        />
+        {unlit ? (
+          <meshBasicMaterial
+            color={color}
+            opacity={opacity}
+            transparent={transparent}
+            depthWrite={asset.properties.alphaMode !== "BLEND"}
+            alphaTest={alphaTest}
+            side={side}
+            map={textures.baseColorMap}
+          />
+        ) : usesPhysicalMaterial ? (
+          <meshPhysicalMaterial
+            color={color}
+            metalness={pbr?.metallicFactor ?? asset.properties.metalness ?? 0}
+            roughness={pbr?.roughnessFactor ?? asset.properties.roughness ?? 1}
+            emissive={emissive}
+            emissiveIntensity={emissiveStrength}
+            opacity={opacity}
+            transparent={transparent}
+            depthWrite={asset.properties.alphaMode !== "BLEND"}
+            alphaTest={alphaTest}
+            side={side}
+            map={textures.baseColorMap}
+            metalnessMap={textures.metallicRoughnessMap}
+            roughnessMap={textures.metallicRoughnessMap}
+            normalMap={textures.normalMap}
+            normalScale={[
+              asset.properties.normalTexture?.scale ?? 1,
+              asset.properties.normalTexture?.scale ?? 1,
+            ]}
+            aoMap={textures.occlusionMap}
+            aoMapIntensity={asset.properties.occlusionTexture?.strength ?? 1}
+            emissiveMap={textures.emissiveMap}
+            anisotropy={anisotropy?.anisotropyStrength ?? 0}
+            anisotropyRotation={anisotropy?.anisotropyRotation ?? 0}
+            anisotropyMap={textures.anisotropyMap}
+            clearcoat={clearcoat?.clearcoatFactor ?? 0}
+            clearcoatMap={textures.clearcoatMap}
+            clearcoatRoughness={clearcoat?.clearcoatRoughnessFactor ?? 0}
+            clearcoatRoughnessMap={textures.clearcoatRoughnessMap}
+            clearcoatNormalMap={textures.clearcoatNormalMap}
+            clearcoatNormalScale={[
+              clearcoat?.clearcoatNormalTexture?.scale ?? 1,
+              clearcoat?.clearcoatNormalTexture?.scale ?? 1,
+            ]}
+            dispersion={dispersion?.dispersion ?? 0}
+            ior={ior?.ior === 0 ? 1000 : (ior?.ior ?? 1.5)}
+            iridescence={iridescence?.iridescenceFactor ?? 0}
+            iridescenceIOR={iridescence?.iridescenceIor ?? 1.3}
+            iridescenceThicknessRange={[
+              iridescence?.iridescenceThicknessMinimum ?? 100,
+              iridescence?.iridescenceThicknessMaximum ?? 400,
+            ]}
+            iridescenceMap={textures.iridescenceMap}
+            iridescenceThicknessMap={textures.iridescenceThicknessMap}
+            sheen={sheen ? 1 : 0}
+            sheenColor={colorToThree(sheen?.sheenColorFactor, [0, 0, 0])}
+            sheenColorMap={textures.sheenColorMap}
+            sheenRoughness={sheen?.sheenRoughnessFactor ?? 0}
+            sheenRoughnessMap={textures.sheenRoughnessMap}
+            specularIntensity={specular?.specularFactor ?? 1}
+            specularIntensityMap={textures.specularIntensityMap}
+            specularColor={colorToThree(
+              specular?.specularColorFactor,
+              [1, 1, 1],
+            )}
+            specularColorMap={textures.specularColorMap}
+            transmission={transmission?.transmissionFactor ?? 0}
+            transmissionMap={textures.transmissionMap}
+            thickness={volume?.thicknessFactor ?? 0}
+            thicknessMap={textures.thicknessMap}
+            attenuationDistance={volume?.attenuationDistance ?? Number.POSITIVE_INFINITY}
+            attenuationColor={colorToThree(
+              volume?.attenuationColor,
+              [1, 1, 1],
+            )}
+          />
+        ) : (
+          <meshStandardMaterial
+            color={color}
+            metalness={pbr?.metallicFactor ?? asset.properties.metalness ?? 0}
+            roughness={pbr?.roughnessFactor ?? asset.properties.roughness ?? 1}
+            emissive={emissive}
+            emissiveIntensity={emissiveStrength}
+            opacity={opacity}
+            transparent={transparent}
+            depthWrite={asset.properties.alphaMode !== "BLEND"}
+            alphaTest={alphaTest}
+            side={side}
+            map={textures.baseColorMap}
+            metalnessMap={textures.metallicRoughnessMap}
+            roughnessMap={textures.metallicRoughnessMap}
+            normalMap={textures.normalMap}
+            normalScale={[
+              asset.properties.normalTexture?.scale ?? 1,
+              asset.properties.normalTexture?.scale ?? 1,
+            ]}
+            aoMap={textures.occlusionMap}
+            aoMapIntensity={asset.properties.occlusionTexture?.strength ?? 1}
+            emissiveMap={textures.emissiveMap}
+          />
+        )}
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.83, 0]}>
         <circleGeometry args={[0.86, 32]} />
@@ -342,6 +464,7 @@ function RangeControl({
   min = 0,
   max = 1,
   step = 0.01,
+  description,
   disabled,
   onChange,
 }: {
@@ -350,6 +473,7 @@ function RangeControl({
   min?: number;
   max?: number;
   step?: number;
+  description?: string;
   disabled: boolean;
   onChange: (value: number) => void;
 }) {
@@ -385,7 +509,182 @@ function RangeControl({
         }}
         className="w-full accent-violet-600 disabled:cursor-not-allowed disabled:opacity-50"
       />
+      {description ? (
+        <span className="mt-1 block text-[11px] leading-4 text-slate-500">
+          {description}
+        </span>
+      ) : null}
     </label>
+  );
+}
+
+function NumberControl({
+  label,
+  value,
+  min,
+  max,
+  step = 0.01,
+  description,
+  disabled,
+  isAllowed,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  description?: string;
+  disabled: boolean;
+  isAllowed?: (value: number) => boolean;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="block text-xs text-slate-600">
+      <span className="mb-1 block">{label}</span>
+      <input
+        type="number"
+        value={Number(value.toFixed(4))}
+        min={min}
+        max={max}
+        step={step}
+        disabled={disabled}
+        onChange={(event) => {
+          const next = event.currentTarget.valueAsNumber;
+          if (!Number.isFinite(next)) return;
+          if (min !== undefined && next < min) return;
+          if (max !== undefined && next > max) return;
+          if (isAllowed && !isAllowed(next)) return;
+          onChange(next);
+        }}
+        className={INPUT_CLASS}
+      />
+      {description ? (
+        <span className="mt-1 block text-[11px] leading-4 text-slate-500">
+          {description}
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
+function Color3Control({
+  label,
+  value,
+  description,
+  max,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: Color3;
+  description: string;
+  max?: number;
+  disabled: boolean;
+  onChange: (value: Color3) => void;
+}) {
+  const hex = colorToHex(value, "#ffffff");
+  return (
+    <fieldset className="min-w-0">
+      <legend className="sr-only">{label}</legend>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="text-xs text-slate-600">{label}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="font-mono text-[11px] text-slate-500">{hex}</span>
+          <input
+            type="color"
+            value={hex}
+            disabled={disabled}
+            aria-label={`${label}のカラーピッカー`}
+            onChange={(event) => {
+              const color = hexToRgb(event.currentTarget.value);
+              if (color) onChange(color);
+            }}
+            className="h-7 w-9 rounded border border-slate-300 bg-white p-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+          />
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-1">
+        {(["R", "G", "B"] as const).map((channel, index) => (
+          <label key={channel} className="relative block">
+            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-slate-400">
+              {channel}
+            </span>
+            <input
+              type="number"
+              min={0}
+              max={max}
+              step={0.01}
+              value={Number(value[index].toFixed(3))}
+              disabled={disabled}
+              aria-label={`${label} ${channel}`}
+              onChange={(event) => {
+                const next = event.currentTarget.valueAsNumber;
+                if (!Number.isFinite(next) || next < 0) return;
+                if (max !== undefined && next > max) return;
+                const color: Color3 = [value[0], value[1], value[2]];
+                color[index] = next;
+                onChange(color);
+              }}
+              className="h-7 w-full rounded border border-slate-300 bg-white py-1 pl-5 pr-1 text-right text-xs tabular-nums text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+            />
+          </label>
+        ))}
+      </div>
+      <p className="mt-1 text-[11px] leading-4 text-slate-500">{description}</p>
+    </fieldset>
+  );
+}
+
+function MaterialExtensionSection({
+  title,
+  extensionName,
+  description,
+  enabled,
+  readOnly,
+  onToggle,
+  children,
+}: {
+  title: string;
+  extensionName: string;
+  description: string;
+  enabled: boolean;
+  readOnly: boolean;
+  onToggle: (enabled: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      className={`rounded-md border bg-white p-2 shadow-sm transition-colors ${
+        enabled ? "border-violet-200" : "border-slate-200"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h4 className="text-[13px] font-semibold text-slate-800">{title}</h4>
+          <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{description}</p>
+          <code className="mt-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
+            {extensionName}
+          </code>
+        </div>
+        <label className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-slate-600">
+          <span>{enabled ? "有効" : "無効"}</span>
+          <input
+            type="checkbox"
+            checked={enabled}
+            disabled={readOnly}
+            aria-label={`${title}を有効にする`}
+            onChange={(event) => onToggle(event.currentTarget.checked)}
+            className="h-4 w-4 accent-violet-600"
+          />
+        </label>
+      </div>
+      {enabled ? (
+        <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
+          {children}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -701,6 +1000,21 @@ function TextureSlot({
   );
 }
 
+function disabledLitMaterialExtensions(): MaterialExtensionsPatch {
+  return {
+    KHR_materials_anisotropy: null,
+    KHR_materials_clearcoat: null,
+    KHR_materials_dispersion: null,
+    KHR_materials_emissive_strength: null,
+    KHR_materials_ior: null,
+    KHR_materials_iridescence: null,
+    KHR_materials_sheen: null,
+    KHR_materials_specular: null,
+    KHR_materials_transmission: null,
+    KHR_materials_volume: null,
+  };
+}
+
 export function MaterialQuickEditor({
   asset,
   assets,
@@ -724,7 +1038,22 @@ export function MaterialQuickEditor({
   );
   const baseColor = colorToHex(pbr.baseColorFactor, asset.properties.color);
   const emissiveColor = colorToHex(asset.properties.emissiveFactor, "#000000");
-  const iridescence = asset.properties.extensions.KHR_materials_iridescence;
+  const extensions = asset.properties.extensions;
+  const anisotropy = extensions.KHR_materials_anisotropy;
+  const clearcoat = extensions.KHR_materials_clearcoat;
+  const dispersion = extensions.KHR_materials_dispersion;
+  const emissiveStrength = extensions.KHR_materials_emissive_strength;
+  const ior = extensions.KHR_materials_ior;
+  const iridescence = extensions.KHR_materials_iridescence;
+  const sheen = extensions.KHR_materials_sheen;
+  const specular = extensions.KHR_materials_specular;
+  const transmission = extensions.KHR_materials_transmission;
+  const unlit = extensions.KHR_materials_unlit;
+  const volume = extensions.KHR_materials_volume;
+  const updateExtensions = (patch: MaterialExtensionsPatch) =>
+    onChange({ extensions: patch });
+  const updateLitExtension = (patch: MaterialExtensionsPatch) =>
+    updateExtensions({ KHR_materials_unlit: null, ...patch });
 
   return (
     <div className="space-y-3">
@@ -745,6 +1074,28 @@ export function MaterialQuickEditor({
           </p>
         </div>
       </div>
+
+      <MaterialExtensionSection
+        title="Unlit"
+        extensionName="KHR_materials_unlit"
+        description="シーンのライトを使わず、Base Colorをそのまま表示します。"
+        enabled={unlit !== undefined}
+        readOnly={readOnly}
+        onToggle={(enabled) =>
+          updateExtensions(
+            enabled
+              ? {
+                  ...disabledLitMaterialExtensions(),
+                  KHR_materials_unlit: {},
+                }
+              : { KHR_materials_unlit: null },
+          )
+        }
+      >
+        <p className="rounded border border-sky-200 bg-sky-50 px-2 py-1.5 text-[11px] leading-4 text-sky-800">
+          UnlitではBase Colorと透明度だけを使用します。切り替え時に互換性のないライティング拡張は解除されます。
+        </p>
+      </MaterialExtensionSection>
 
       <EditorSection title="Base Color RGBA">
         <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
@@ -847,11 +1198,11 @@ export function MaterialQuickEditor({
             })
           }
         />
-        <RangeControl
+        <NumberControl
           label="Normal scale"
           value={asset.properties.normalTexture?.scale ?? 1}
-          min={0}
-          max={2}
+          step={0.01}
+          description="有限値。負の値では法線方向を反転します。"
           disabled={readOnly || !asset.properties.normalTexture}
           onChange={(scale) => {
             const current = asset.properties.normalTexture;
@@ -914,105 +1265,673 @@ export function MaterialQuickEditor({
         />
       </EditorSection>
 
-      <EditorSection title="KHR_materials_iridescence">
-        <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
-          Iridescence
-          <input
-            type="checkbox"
-            checked={Boolean(iridescence)}
+      <MaterialExtensionSection
+        title="Emissive Strength"
+        extensionName="KHR_materials_emissive_strength"
+        description="Emissiveの明るさを1倍より強くし、発光表現を調整します。"
+        enabled={Boolean(emissiveStrength)}
+        readOnly={readOnly}
+        onToggle={(enabled) =>
+          enabled
+            ? updateLitExtension({
+                KHR_materials_emissive_strength: { emissiveStrength: 2 },
+              })
+            : updateExtensions({ KHR_materials_emissive_strength: null })
+        }
+      >
+        {emissiveStrength ? (
+          <NumberControl
+            label="Strength"
+            value={emissiveStrength.emissiveStrength}
+            min={0}
+            step={0.1}
+            description="0以上。1がglTFの標準強度で、1を超える値はBloomやTone Mappingにも影響します。"
             disabled={readOnly}
-            onChange={(event) =>
-              onChange({
-                extensions: {
-                  KHR_materials_iridescence: event.currentTarget.checked
-                    ? {
-                        iridescenceFactor: 1,
-                        iridescenceIor: 1.3,
-                        iridescenceThicknessMinimum: 100,
-                        iridescenceThicknessMaximum: 400,
-                      }
-                    : null,
+            onChange={(value) =>
+              updateLitExtension({
+                KHR_materials_emissive_strength: {
+                  emissiveStrength: value,
                 },
               })
             }
-            className="h-4 w-4 accent-violet-600"
           />
-        </label>
-        {iridescence ? (
+        ) : null}
+      </MaterialExtensionSection>
+
+      <MaterialExtensionSection
+        title="Clearcoat"
+        extensionName="KHR_materials_clearcoat"
+        description="塗装やワニスのような透明な上塗り層を追加します。"
+        enabled={Boolean(clearcoat)}
+        readOnly={readOnly}
+        onToggle={(enabled) =>
+          enabled
+            ? updateLitExtension({
+                KHR_materials_clearcoat: {
+                  clearcoatFactor: 1,
+                  clearcoatRoughnessFactor: 0.15,
+                },
+              })
+            : updateExtensions({ KHR_materials_clearcoat: null })
+        }
+      >
+        {clearcoat ? (
           <>
             <RangeControl
-              label="Factor"
-              value={iridescence.iridescenceFactor}
+              label="Layer intensity"
+              value={clearcoat.clearcoatFactor}
+              description="0〜1。0では上塗り層が無効になり、RチャンネルのTextureと乗算します。"
               disabled={readOnly}
-              onChange={(iridescenceFactor) =>
-                onChange({
-                  extensions: {
-                    KHR_materials_iridescence: { iridescenceFactor },
+              onChange={(clearcoatFactor) =>
+                updateLitExtension({
+                  KHR_materials_clearcoat: { clearcoatFactor },
+                })
+              }
+            />
+            <TextureSlot
+              label="Clearcoat map"
+              description="Linear TextureのRチャンネルで層の強さを制御します。"
+              value={clearcoat.clearcoatTexture}
+              textures={textures}
+              projectPath={projectPath}
+              disabled={readOnly}
+              onOpenTexture={onOpenTexture}
+              onChange={(clearcoatTexture) =>
+                updateLitExtension({
+                  KHR_materials_clearcoat: { clearcoatTexture },
+                })
+              }
+            />
+            <RangeControl
+              label="Layer roughness"
+              value={clearcoat.clearcoatRoughnessFactor}
+              description="0〜1。0は鋭い反射、1は粗い反射です。GチャンネルのTextureと乗算します。"
+              disabled={readOnly}
+              onChange={(clearcoatRoughnessFactor) =>
+                updateLitExtension({
+                  KHR_materials_clearcoat: { clearcoatRoughnessFactor },
+                })
+              }
+            />
+            <TextureSlot
+              label="Clearcoat roughness map"
+              description="Linear TextureのGチャンネルで上塗り層の粗さを制御します。"
+              value={clearcoat.clearcoatRoughnessTexture}
+              textures={textures}
+              projectPath={projectPath}
+              disabled={readOnly}
+              onOpenTexture={onOpenTexture}
+              onChange={(clearcoatRoughnessTexture) =>
+                updateLitExtension({
+                  KHR_materials_clearcoat: { clearcoatRoughnessTexture },
+                })
+              }
+            />
+            <TextureSlot
+              label="Clearcoat normal map"
+              description="上塗り層だけに適用するタンジェント空間のLinear法線マップです。"
+              value={clearcoat.clearcoatNormalTexture}
+              textures={textures}
+              projectPath={projectPath}
+              disabled={readOnly}
+              onOpenTexture={onOpenTexture}
+              onChange={(value) =>
+                updateLitExtension({
+                  KHR_materials_clearcoat: {
+                    clearcoatNormalTexture: value
+                      ? {
+                          ...value,
+                          scale: clearcoat.clearcoatNormalTexture?.scale ?? 1,
+                        }
+                      : null,
+                  },
+                })
+              }
+            />
+            <NumberControl
+              label="Clearcoat normal scale"
+              value={clearcoat.clearcoatNormalTexture?.scale ?? 1}
+              step={0.01}
+              description="有限値。負の値では法線方向を反転します。"
+              disabled={readOnly || !clearcoat.clearcoatNormalTexture}
+              onChange={(scale) => {
+                if (!clearcoat.clearcoatNormalTexture) return;
+                updateLitExtension({
+                  KHR_materials_clearcoat: {
+                    clearcoatNormalTexture: {
+                      ...clearcoat.clearcoatNormalTexture,
+                      scale,
+                    },
+                  },
+                });
+              }}
+            />
+          </>
+        ) : null}
+      </MaterialExtensionSection>
+
+      <MaterialExtensionSection
+        title="Anisotropy"
+        extensionName="KHR_materials_anisotropy"
+        description="ヘアライン金属など、方向性を持つ細長い反射を表現します。"
+        enabled={Boolean(anisotropy)}
+        readOnly={readOnly}
+        onToggle={(enabled) =>
+          enabled
+            ? updateLitExtension({
+                KHR_materials_anisotropy: {
+                  anisotropyStrength: 0.5,
+                  anisotropyRotation: 0,
+                },
+              })
+            : updateExtensions({ KHR_materials_anisotropy: null })
+        }
+      >
+        {anisotropy ? (
+          <>
+            <RangeControl
+              label="Strength"
+              value={anisotropy.anisotropyStrength}
+              description="0〜1。Textureを使う場合はBチャンネルの強さと乗算します。"
+              disabled={readOnly}
+              onChange={(anisotropyStrength) =>
+                updateLitExtension({
+                  KHR_materials_anisotropy: { anisotropyStrength },
+                })
+              }
+            />
+            <NumberControl
+              label="Rotation (°)"
+              value={(anisotropy.anisotropyRotation * 180) / Math.PI}
+              step={1}
+              description="タンジェントから反時計回りの角度。保存時はラジアンへ変換します。"
+              disabled={readOnly}
+              onChange={(degrees) =>
+                updateLitExtension({
+                  KHR_materials_anisotropy: {
+                    anisotropyRotation: (degrees * Math.PI) / 180,
                   },
                 })
               }
             />
             <TextureSlot
+              label="Anisotropy map"
+              description="Linear Texture。RGに方向、Bに強さを格納します。"
+              value={anisotropy.anisotropyTexture}
+              textures={textures}
+              projectPath={projectPath}
+              disabled={readOnly}
+              onOpenTexture={onOpenTexture}
+              onChange={(anisotropyTexture) =>
+                updateLitExtension({
+                  KHR_materials_anisotropy: { anisotropyTexture },
+                })
+              }
+            />
+          </>
+        ) : null}
+      </MaterialExtensionSection>
+
+      <MaterialExtensionSection
+        title="Sheen"
+        extensionName="KHR_materials_sheen"
+        description="布やベルベットのような、輪郭側に現れる柔らかな反射層です。"
+        enabled={Boolean(sheen)}
+        readOnly={readOnly}
+        onToggle={(enabled) =>
+          enabled
+            ? updateLitExtension({
+                KHR_materials_sheen: {
+                  sheenColorFactor: [0.5, 0.5, 0.5],
+                  sheenRoughnessFactor: 0.4,
+                },
+              })
+            : updateExtensions({ KHR_materials_sheen: null })
+        }
+      >
+        {sheen ? (
+          <>
+            <Color3Control
+              label="Sheen color"
+              value={sheen.sheenColorFactor}
+              max={1}
+              description="Linear RGB、各チャンネル0〜1。すべて0でSheen層は無効です。"
+              disabled={readOnly}
+              onChange={(sheenColorFactor) =>
+                updateLitExtension({
+                  KHR_materials_sheen: { sheenColorFactor },
+                })
+              }
+            />
+            <TextureSlot
+              label="Sheen color map"
+              description="sRGB TextureのRGBをSheen colorへ乗算します。"
+              value={sheen.sheenColorTexture}
+              textures={textures}
+              projectPath={projectPath}
+              disabled={readOnly}
+              onOpenTexture={onOpenTexture}
+              onChange={(sheenColorTexture) =>
+                updateLitExtension({
+                  KHR_materials_sheen: { sheenColorTexture },
+                })
+              }
+            />
+            <RangeControl
+              label="Sheen roughness"
+              value={sheen.sheenRoughnessFactor}
+              description="0〜1。AlphaチャンネルのTextureと乗算します。"
+              disabled={readOnly}
+              onChange={(sheenRoughnessFactor) =>
+                updateLitExtension({
+                  KHR_materials_sheen: { sheenRoughnessFactor },
+                })
+              }
+            />
+            <TextureSlot
+              label="Sheen roughness map"
+              description="Linear TextureのAlphaチャンネルで粗さを制御します。"
+              value={sheen.sheenRoughnessTexture}
+              textures={textures}
+              projectPath={projectPath}
+              disabled={readOnly}
+              onOpenTexture={onOpenTexture}
+              onChange={(sheenRoughnessTexture) =>
+                updateLitExtension({
+                  KHR_materials_sheen: { sheenRoughnessTexture },
+                })
+              }
+            />
+          </>
+        ) : null}
+      </MaterialExtensionSection>
+
+      <MaterialExtensionSection
+        title="Specular"
+        extensionName="KHR_materials_specular"
+        description="非金属表面の鏡面反射の強さとF0色を調整します。"
+        enabled={Boolean(specular)}
+        readOnly={readOnly}
+        onToggle={(enabled) =>
+          enabled
+            ? updateLitExtension({
+                KHR_materials_specular: {
+                  specularFactor: 1,
+                  specularColorFactor: [1, 1, 1],
+                },
+              })
+            : updateExtensions({ KHR_materials_specular: null })
+        }
+      >
+        {specular ? (
+          <>
+            <RangeControl
+              label="Intensity"
+              value={specular.specularFactor}
+              description="0〜1。Textureを使う場合はAlphaチャンネルと乗算します。"
+              disabled={readOnly}
+              onChange={(specularFactor) =>
+                updateLitExtension({
+                  KHR_materials_specular: { specularFactor },
+                })
+              }
+            />
+            <TextureSlot
+              label="Specular intensity map"
+              description="Linear TextureのAlphaチャンネルで鏡面反射の強さを制御します。"
+              value={specular.specularTexture}
+              textures={textures}
+              projectPath={projectPath}
+              disabled={readOnly}
+              onOpenTexture={onOpenTexture}
+              onChange={(specularTexture) =>
+                updateLitExtension({
+                  KHR_materials_specular: { specularTexture },
+                })
+              }
+            />
+            <Color3Control
+              label="F0 color"
+              value={specular.specularColorFactor}
+              description="Linear RGB、各チャンネル0以上。HDR値は数値欄から1を超えて設定できます。"
+              disabled={readOnly}
+              onChange={(specularColorFactor) =>
+                updateLitExtension({
+                  KHR_materials_specular: { specularColorFactor },
+                })
+              }
+            />
+            <TextureSlot
+              label="Specular color map"
+              description="sRGB TextureのRGBをF0 colorへ乗算します。"
+              value={specular.specularColorTexture}
+              textures={textures}
+              projectPath={projectPath}
+              disabled={readOnly}
+              onOpenTexture={onOpenTexture}
+              onChange={(specularColorTexture) =>
+                updateLitExtension({
+                  KHR_materials_specular: { specularColorTexture },
+                })
+              }
+            />
+          </>
+        ) : null}
+      </MaterialExtensionSection>
+
+      <MaterialExtensionSection
+        title="Index of Refraction"
+        extensionName="KHR_materials_ior"
+        description="誘電体の反射と屈折に使う屈折率を指定します。"
+        enabled={Boolean(ior)}
+        readOnly={readOnly}
+        onToggle={(enabled) =>
+          enabled
+            ? updateLitExtension({ KHR_materials_ior: { ior: 1.5 } })
+            : updateExtensions({ KHR_materials_ior: null })
+        }
+      >
+        {ior ? (
+          <NumberControl
+            label="IOR"
+            value={ior.ior}
+            min={0}
+            step={0.01}
+            isAllowed={(value) => value === 0 || value >= 1}
+            description="1以上。一般的な素材は1〜2程度です。0はglTFの特殊な互換モードとして保持されます。"
+            disabled={readOnly}
+            onChange={(value) =>
+              updateLitExtension({ KHR_materials_ior: { ior: value } })
+            }
+          />
+        ) : null}
+      </MaterialExtensionSection>
+
+      <MaterialExtensionSection
+        title="Transmission"
+        extensionName="KHR_materials_transmission"
+        description="表面を通過する光の割合を指定し、ガラスなどの透過を表現します。"
+        enabled={Boolean(transmission)}
+        readOnly={readOnly}
+        onToggle={(enabled) =>
+          enabled
+            ? updateLitExtension({
+                KHR_materials_transmission: { transmissionFactor: 1 },
+              })
+            : updateExtensions({
+                KHR_materials_transmission: null,
+                KHR_materials_volume: null,
+                KHR_materials_dispersion: null,
+              })
+        }
+      >
+        {transmission ? (
+          <>
+            <RangeControl
+              label="Transmission"
+              value={transmission.transmissionFactor}
+              description="0〜1。1で、鏡面反射されなかった光をすべて透過します。RチャンネルのTextureと乗算します。"
+              disabled={readOnly}
+              onChange={(transmissionFactor) =>
+                updateLitExtension({
+                  KHR_materials_transmission: { transmissionFactor },
+                })
+              }
+            />
+            <TextureSlot
+              label="Transmission map"
+              description="Linear TextureのRチャンネルで透過率を制御します。"
+              value={transmission.transmissionTexture}
+              textures={textures}
+              projectPath={projectPath}
+              disabled={readOnly}
+              onOpenTexture={onOpenTexture}
+              onChange={(transmissionTexture) =>
+                updateLitExtension({
+                  KHR_materials_transmission: { transmissionTexture },
+                })
+              }
+            />
+          </>
+        ) : null}
+      </MaterialExtensionSection>
+
+      <MaterialExtensionSection
+        title="Volume"
+        extensionName="KHR_materials_volume"
+        description="閉じたメッシュ内部の厚みと、光が吸収される距離・色を設定します。"
+        enabled={Boolean(volume)}
+        readOnly={readOnly}
+        onToggle={(enabled) =>
+          enabled
+            ? updateLitExtension({
+                KHR_materials_transmission: transmission ?? {
+                  transmissionFactor: 1,
+                },
+                KHR_materials_volume: {
+                  thicknessFactor: 0.5,
+                  attenuationColor: [1, 1, 1],
+                },
+              })
+            : updateExtensions({
+                KHR_materials_volume: null,
+                KHR_materials_dispersion: null,
+              })
+        }
+      >
+        {volume ? (
+          <>
+            <p className="rounded border border-sky-200 bg-sky-50 px-2 py-1.5 text-[11px] leading-4 text-sky-800">
+              VolumeにはTransmissionが必要です。有効化時に同じ変更として準備されます。厚みが0より大きい場合は閉じたメッシュを使用してください。
+            </p>
+            <NumberControl
+              label="Thickness"
+              value={volume.thicknessFactor}
+              min={0}
+              step={0.01}
+              description="0以上、メッシュ座標系の距離。0では薄い表面として扱います。"
+              disabled={readOnly}
+              onChange={(thicknessFactor) =>
+                updateLitExtension({
+                  KHR_materials_volume: { thicknessFactor },
+                })
+              }
+            />
+            <TextureSlot
+              label="Thickness map"
+              description="Linear TextureのGチャンネルをThicknessへ乗算します。"
+              value={volume.thicknessTexture}
+              textures={textures}
+              projectPath={projectPath}
+              disabled={readOnly}
+              onOpenTexture={onOpenTexture}
+              onChange={(thicknessTexture) =>
+                updateLitExtension({
+                  KHR_materials_volume: { thicknessTexture },
+                })
+              }
+            />
+            <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
+              <span>
+                有限の減衰距離
+                <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">
+                  無効時はglTF標準の無限距離です。
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={volume.attenuationDistance !== undefined}
+                disabled={readOnly}
+                onChange={(event) =>
+                  updateLitExtension({
+                    KHR_materials_volume: {
+                      attenuationDistance: event.currentTarget.checked ? 1 : null,
+                    },
+                  })
+                }
+                className="h-4 w-4 accent-violet-600"
+              />
+            </label>
+            {volume.attenuationDistance !== undefined ? (
+              <NumberControl
+                label="Attenuation distance"
+                value={volume.attenuationDistance}
+                min={0.0001}
+                step={0.01}
+                description="0より大きいワールド距離。白色光がAttenuation colorへ変化する平均距離です。"
+                disabled={readOnly}
+                onChange={(attenuationDistance) =>
+                  updateLitExtension({
+                    KHR_materials_volume: { attenuationDistance },
+                  })
+                }
+              />
+            ) : null}
+            <Color3Control
+              label="Attenuation color"
+              value={volume.attenuationColor}
+              max={1}
+              description="Linear RGB、各チャンネル0〜1。減衰距離に達した白色光の色です。"
+              disabled={readOnly}
+              onChange={(attenuationColor) =>
+                updateLitExtension({
+                  KHR_materials_volume: { attenuationColor },
+                })
+              }
+            />
+          </>
+        ) : null}
+      </MaterialExtensionSection>
+
+      <MaterialExtensionSection
+        title="Dispersion"
+        extensionName="KHR_materials_dispersion"
+        description="透過する光の色分離を追加し、宝石や高分散ガラスを表現します。"
+        enabled={Boolean(dispersion)}
+        readOnly={readOnly}
+        onToggle={(enabled) =>
+          enabled
+            ? updateLitExtension({
+                KHR_materials_transmission: transmission ?? {
+                  transmissionFactor: 1,
+                },
+                KHR_materials_volume: volume ?? {
+                  thicknessFactor: 0.5,
+                  attenuationColor: [1, 1, 1],
+                },
+                KHR_materials_dispersion: { dispersion: 0.2 },
+              })
+            : updateExtensions({ KHR_materials_dispersion: null })
+        }
+      >
+        {dispersion ? (
+          <>
+            <p className="rounded border border-sky-200 bg-sky-50 px-2 py-1.5 text-[11px] leading-4 text-sky-800">
+              DispersionにはVolumeとTransmissionが必要です。有効化時に同じ変更として準備されます。
+            </p>
+            <NumberControl
+              label="Dispersion"
+              value={dispersion.dispersion}
+              min={0}
+              step={0.01}
+              description="0以上。0〜1が現実的な範囲で、1を超える値も強調表現として有効です。"
+              disabled={readOnly}
+              onChange={(value) =>
+                updateLitExtension({
+                  KHR_materials_dispersion: { dispersion: value },
+                })
+              }
+            />
+          </>
+        ) : null}
+      </MaterialExtensionSection>
+
+      <MaterialExtensionSection
+        title="Iridescence"
+        extensionName="KHR_materials_iridescence"
+        description="薄膜干渉による、見る角度で色が変化する遊色効果を追加します。"
+        enabled={Boolean(iridescence)}
+        readOnly={readOnly}
+        onToggle={(enabled) =>
+          enabled
+            ? updateLitExtension({
+                KHR_materials_iridescence: {
+                  iridescenceFactor: 1,
+                  iridescenceIor: 1.3,
+                  iridescenceThicknessMinimum: 100,
+                  iridescenceThicknessMaximum: 400,
+                },
+              })
+            : updateExtensions({ KHR_materials_iridescence: null })
+        }
+      >
+        {iridescence ? (
+          <>
+            <RangeControl
+              label="Factor"
+              value={iridescence.iridescenceFactor}
+              description="0〜1。Linear TextureのRチャンネルと乗算します。"
+              disabled={readOnly}
+              onChange={(iridescenceFactor) =>
+                updateLitExtension({
+                  KHR_materials_iridescence: { iridescenceFactor },
+                })
+              }
+            />
+            <TextureSlot
               label="Factor map"
-              description="Rチャンネルで遊色効果の強さを制御します。"
+              description="Linear TextureのRチャンネルで遊色効果の強さを制御します。"
               value={iridescence.iridescenceTexture}
               textures={textures}
               projectPath={projectPath}
               disabled={readOnly}
               onOpenTexture={onOpenTexture}
               onChange={(iridescenceTexture) =>
-                onChange({
-                  extensions: {
-                    KHR_materials_iridescence: { iridescenceTexture },
-                  },
+                updateLitExtension({
+                  KHR_materials_iridescence: { iridescenceTexture },
                 })
               }
             />
-            <RangeControl
+            <NumberControl
               label="IOR"
               value={iridescence.iridescenceIor}
               min={1}
-              max={3}
+              step={0.01}
+              description="1以上。薄膜層の屈折率で、glTF標準値は1.3です。"
               disabled={readOnly}
               onChange={(iridescenceIor) =>
-                onChange({
-                  extensions: {
-                    KHR_materials_iridescence: { iridescenceIor },
-                  },
+                updateLitExtension({
+                  KHR_materials_iridescence: { iridescenceIor },
                 })
               }
             />
             <div className="grid grid-cols-2 gap-2">
-              <RangeControl
+              <NumberControl
                 label="Thickness min"
                 value={iridescence.iridescenceThicknessMinimum}
                 min={0}
-                max={1200}
                 step={1}
+                description="0以上のnm値。TextureのG=0で使われ、Maxより大きい逆方向の範囲も有効です。"
                 disabled={readOnly}
                 onChange={(iridescenceThicknessMinimum) =>
-                  onChange({
-                    extensions: {
-                      KHR_materials_iridescence: {
-                        iridescenceThicknessMinimum,
-                      },
+                  updateLitExtension({
+                    KHR_materials_iridescence: {
+                      iridescenceThicknessMinimum,
                     },
                   })
                 }
               />
-              <RangeControl
+              <NumberControl
                 label="Thickness max"
                 value={iridescence.iridescenceThicknessMaximum}
                 min={0}
-                max={1200}
                 step={1}
+                description="0以上のnm値。TextureのG=1で使われます。"
                 disabled={readOnly}
                 onChange={(iridescenceThicknessMaximum) =>
-                  onChange({
-                    extensions: {
-                      KHR_materials_iridescence: {
-                        iridescenceThicknessMaximum,
-                      },
+                  updateLitExtension({
+                    KHR_materials_iridescence: {
+                      iridescenceThicknessMaximum,
                     },
                   })
                 }
@@ -1020,29 +1939,23 @@ export function MaterialQuickEditor({
             </div>
             <TextureSlot
               label="Thickness map"
-              description="Gチャンネルで薄膜の厚みを補間します。"
+              description="Linear TextureのGチャンネルで最小〜最大の薄膜厚を補間します。"
               value={iridescence.iridescenceThicknessTexture}
               textures={textures}
               projectPath={projectPath}
               disabled={readOnly}
               onOpenTexture={onOpenTexture}
               onChange={(iridescenceThicknessTexture) =>
-                onChange({
-                  extensions: {
-                    KHR_materials_iridescence: {
-                      iridescenceThicknessTexture,
-                    },
+                updateLitExtension({
+                  KHR_materials_iridescence: {
+                    iridescenceThicknessTexture,
                   },
                 })
               }
             />
           </>
-        ) : (
-          <p className="text-xs leading-4 text-slate-500">
-            有効にするとFactor mapとThickness mapへTextureをドロップできます。
-          </p>
-        )}
-      </EditorSection>
+        ) : null}
+      </MaterialExtensionSection>
 
       <EditorSection title="Alpha / Sidedness">
         <label className="block text-xs text-slate-600">
@@ -1254,6 +2167,10 @@ export function AssetQuickEditor({
   readOnly,
   onSelectAsset,
   onMaterialChange,
+  onModelChange,
+  onReimportModel,
+  modelReimportState,
+  modelReimportImpactNotice,
   onParticleChange,
   onTextureChange,
 }: {
@@ -1264,6 +2181,10 @@ export function AssetQuickEditor({
   readOnly: boolean;
   onSelectAsset: (assetId: string) => void;
   onMaterialChange: (assetId: string, patch: MaterialAssetPatch) => void;
+  onModelChange: (assetId: string, patch: ModelAssetPatch) => void;
+  onReimportModel: (assetId: string) => void;
+  modelReimportState: ModelReimportState;
+  modelReimportImpactNotice?: ModelReimportImpactNotice | null;
   onParticleChange: (assetId: string, patch: ParticlePropertiesPatch) => void;
   onTextureChange: (assetId: string, patch: TextureAssetPatch) => void;
 }) {
@@ -1277,6 +2198,34 @@ export function AssetQuickEditor({
         readOnly={readOnly}
         onChange={(patch) => onMaterialChange(asset.id, patch)}
         onOpenTexture={onSelectAsset}
+      />
+    );
+  }
+
+  if (asset.kind === "model") {
+    const reimportBusy =
+      modelReimportState.phase === "reading" ||
+      modelReimportState.phase === "processing" ||
+      modelReimportState.phase === "committing" ||
+      modelReimportState.phase === "review";
+    return (
+      <ModelAssetInspector
+        asset={asset}
+        assets={assets}
+        preview={
+          <AssetThumbnail
+            asset={asset}
+            assets={assets}
+            projectPath={projectPath}
+          />
+        }
+        readOnly={readOnly || reimportBusy}
+        canReimport={Boolean(projectPath && asset.source.kind === "project")}
+        reimportState={modelReimportState}
+        reimportImpactNotice={modelReimportImpactNotice}
+        onChange={(patch) => onModelChange(asset.id, patch)}
+        onOpenMaterial={onSelectAsset}
+        onReimport={() => onReimportModel(asset.id)}
       />
     );
   }

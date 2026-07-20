@@ -200,7 +200,7 @@ export function EditorCreateMenu({
             <RootChoice
               icon={Sparkles}
               title="XRift Component"
-              description="Spawn、MirrorなどXRift向けの機能"
+              description="XRift向けの配置済み機能とComponent"
               onClick={() => setPage("xrift")}
             />
             <RootChoice
@@ -240,18 +240,23 @@ export function EditorCreateMenu({
           <div className="space-y-2">
             <MenuSection label="Sceneへ配置">
               {builtinPrefabRecipes.map((recipe) => {
-                const Icon =
-                  recipe.icon === "spawn-point"
-                    ? EDITOR_ICONS.spawn
-                    : EDITOR_ICONS.mirror;
+                const Icon = EDITOR_ICONS[recipe.icon];
                 return (
                   <MenuItem
                     key={recipe.id}
                     icon={Icon}
                     label={recipe.name}
-                    detail={recipe.description}
+                    detail={
+                      recipe.configuration
+                        ? `${recipe.description} ${recipe.configuration.hint}`
+                        : recipe.description
+                    }
                     disabled={disabled}
-                    trailing="配置"
+                    trailing={
+                      recipe.configuration?.requiredBeforeCompile
+                        ? "配置後に設定"
+                        : "配置"
+                    }
                     onClick={() => placeRecipe(recipe.id)}
                   />
                 );

@@ -38,6 +38,7 @@ import {
   clearAssetCardDragData,
   writeAssetCardDragData,
 } from "./asset-card-drag";
+import { hasActiveAssetImport } from "./asset-operation-lock";
 
 type ViewMode = "grid" | "list";
 type ContextMenuState = {
@@ -529,7 +530,7 @@ function BuiltinPrefabCard({
   readOnly: boolean;
   onPlace: () => void;
 }) {
-  const Icon = recipe.icon === "spawn-point" ? EDITOR_ICONS.spawn : EDITOR_ICONS.mirror;
+  const Icon = EDITOR_ICONS[recipe.icon];
   const handleDragStart = (event: DragEvent<HTMLElement>) => {
     writeEditorDragData(event.dataTransfer, {
       [BUILTIN_PREFAB_DRAG_MIME]: recipe.id,
@@ -548,15 +549,15 @@ function BuiltinPrefabCard({
           title={`${recipe.name}をSceneへドラッグ`}
         >
           <span className="pointer-events-none flex h-10 items-center justify-center rounded border border-sky-100 bg-sky-50 text-sky-700"><Icon size={22} aria-hidden="true" /></span>
-          <span className="pointer-events-none min-w-0"><span className="block truncate text-xs font-semibold text-slate-800">{recipe.name}</span><span className="block text-[11px] font-medium text-sky-700">XRift 組み込み</span></span>
-          <span className="pointer-events-none line-clamp-2 text-xs leading-4 text-slate-500">{recipe.description}</span>
+          <span className="pointer-events-none min-w-0"><span className="block truncate text-xs font-semibold text-slate-800">{recipe.name}</span><span className="block text-[11px] font-medium text-sky-700">XRift 組み込み{recipe.configuration?.requiredBeforeCompile ? "・配置後に設定" : ""}</span></span>
+          <span className="pointer-events-none line-clamp-2 text-xs leading-4 text-slate-500" title={recipe.configuration?.hint}>{recipe.description}</span>
         </div>
         <button type="button" disabled={readOnly} onClick={onPlace} className="rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-40">配置</button>
       </div>
     );
   }
   return (
-    <article className="flex min-h-[124px] min-w-0 flex-col rounded-md border border-sky-200 bg-white p-2 shadow-sm">
+    <article className="flex min-h-[132px] min-w-0 flex-col rounded-md border border-sky-200 bg-white p-2 shadow-sm">
       <div
         draggable={!readOnly}
         data-editor-drag-source="builtin-prefab"
@@ -567,6 +568,11 @@ function BuiltinPrefabCard({
       >
         <div className="pointer-events-none flex items-start gap-2"><span className="rounded bg-sky-50 p-2 text-sky-700"><Icon size={22} aria-hidden="true" /></span><div className="min-w-0"><h3 className="truncate text-[13px] font-semibold text-slate-800">{recipe.name}</h3><p className="text-[11px] font-medium text-sky-700">XRift 組み込み</p></div></div>
         <p className="pointer-events-none mt-1.5 line-clamp-2 text-xs leading-4 text-slate-500">{recipe.description}</p>
+        {recipe.configuration?.requiredBeforeCompile ? (
+          <p className="pointer-events-none mt-1 line-clamp-2 text-[11px] font-medium leading-4 text-amber-700" title={recipe.configuration.hint}>
+            配置後にInspectorで設定
+          </p>
+        ) : null}
       </div>
       <button type="button" disabled={readOnly} onClick={onPlace} title={commandTitle(`${recipe.name}をSceneへ配置`, "PlaceBuiltinPrefab")} className="mt-auto rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-40">配置</button>
     </article>
@@ -578,12 +584,14 @@ function ContextMenuItem({
   label,
   command,
   disabled = false,
+  disabledReason,
   onClick,
 }: {
   icon: EditorIconName;
   label: string;
   command: string;
   disabled?: boolean;
+  disabledReason?: string | null;
   onClick: () => void;
 }) {
   const Icon = EDITOR_ICONS[icon];
@@ -592,7 +600,7 @@ function ContextMenuItem({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      title={commandTitle(label, command)}
+      title={disabled && disabledReason ? disabledReason : commandTitle(label, command)}
       className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-700"
     >
       <Icon size={14} aria-hidden="true" />
@@ -737,6 +745,7 @@ export function AssetsPanel({
   onMoveFolder,
   onPlaceBuiltinPrefab,
   onPlaceSceneAsset,
+  externalOperationLockReason = null,
 }: {
   assets: AssetManifest;
   projectPath?: string;
@@ -768,6 +777,12 @@ export function AssetsPanel({
   onMoveFolder: (folderId: string, parentId: string | null) => void;
   onPlaceBuiltinPrefab: (recipeId: string) => void;
   onPlaceSceneAsset: (assetId: string) => void;
+  /**
+   * Reason supplied by an Asset operation owned outside this panel, such as
+   * Model reimport. Selection/navigation stay available while mutations and
+   * new file queue entries are rejected at every panel entry point.
+   */
+  externalOperationLockReason?: string | null;
 }) {
   const [fileDragOver, setFileDragOver] = useState(false);
   const [rootDropTarget, setRootDropTarget] = useState(false);
@@ -780,11 +795,23 @@ export function AssetsPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const readOnly = editorMode === "play";
+  const normalizedExternalLockReason =
+    externalOperationLockReason?.trim() || null;
+  const activeAssetImport = hasActiveAssetImport(pendingImports);
+  const importDisabledReason = readOnly
+    ? "Playを停止してからアセットをインポートしてください"
+    : normalizedExternalLockReason;
+  const importLocked = Boolean(importDisabledReason);
   const assetMutationLocked =
     readOnly ||
-    pendingImports.some((entry) =>
-      ["queued", "reading", "processing", "committing"].includes(entry.status),
-    );
+    Boolean(normalizedExternalLockReason) ||
+    activeAssetImport;
+  const assetMutationDisabledReason = readOnly
+    ? "Playを停止してからアセットを編集してください"
+    : normalizedExternalLockReason ??
+      (activeAssetImport
+        ? "アセットのインポート完了後に編集できます"
+        : null);
   const customFolders: BrowserFolder[] = Object.values(assets.folders ?? {})
     .sort((left, right) => left.order - right.order || left.name.localeCompare(right.name))
     .map((folder) => ({
@@ -865,12 +892,12 @@ export function AssetsPanel({
     if (hasEditorDragData(event.dataTransfer, ENTITY_DRAG_MIME)) {
       event.preventDefault();
       event.stopPropagation();
-      event.dataTransfer.dropEffect = readOnly ? "none" : "copy";
+      event.dataTransfer.dropEffect = assetMutationLocked ? "none" : "copy";
       return;
     }
     if (getDragKind(event.dataTransfer) !== "files") return;
     event.preventDefault();
-    event.dataTransfer.dropEffect = readOnly ? "none" : "copy";
+    event.dataTransfer.dropEffect = importLocked ? "none" : "copy";
     setFileDragOver(true);
   };
 
@@ -884,8 +911,10 @@ export function AssetsPanel({
       ).trim();
       clearEditorDragData();
       setFileDragOver(false);
-      if (!readOnly && entityId) onCommand("prefab.create", { entityId });
-      else if (!readOnly) {
+      if (assetMutationLocked) {
+        if (assetMutationDisabledReason) onPhaseNotice(assetMutationDisabledReason);
+      } else if (entityId) onCommand("prefab.create", { entityId });
+      else {
         onPhaseNotice("Prefab化するEntityを読み取れませんでした");
       }
       return;
@@ -893,13 +922,22 @@ export function AssetsPanel({
     if (getDragKind(event.dataTransfer) !== "files") return;
     event.preventDefault();
     setFileDragOver(false);
-    if (!readOnly) onQueueFiles(Array.from(event.dataTransfer.files));
+    if (importDisabledReason) {
+      onPhaseNotice(importDisabledReason);
+      return;
+    }
+    onQueueFiles(Array.from(event.dataTransfer.files));
   };
 
   const handleFileInput = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.currentTarget.files ?? []);
-    if (files.length > 0) onQueueFiles(files);
     event.currentTarget.value = "";
+    if (files.length === 0) return;
+    if (importDisabledReason) {
+      onPhaseNotice(importDisabledReason);
+      return;
+    }
+    onQueueFiles(files);
   };
 
   const openContextMenu = (
@@ -1013,6 +1051,7 @@ export function AssetsPanel({
         ref={fileInputRef}
         type="file"
         multiple
+        disabled={importLocked}
         accept=".glb,.gltf,.png,.jpg,.jpeg,.webp,.ktx2,image/png,image/jpeg,image/webp"
         onChange={handleFileInput}
         className="sr-only"
@@ -1054,6 +1093,15 @@ export function AssetsPanel({
           </nav>
         </div>
         <div className="flex items-center gap-1">
+          {normalizedExternalLockReason ? (
+            <span
+              role="status"
+              className="max-w-44 truncate rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800"
+              title={normalizedExternalLockReason}
+            >
+              {normalizedExternalLockReason}
+            </span>
+          ) : null}
           <label className="relative flex h-7 w-52 items-center">
             <span className="sr-only">アセットを検索</span>
             <input
@@ -1090,9 +1138,9 @@ export function AssetsPanel({
           </span>
           <button type="button" onClick={() => setViewMode("grid")} aria-label="グリッド表示" aria-pressed={viewMode === "grid"} title={commandTitle("グリッド表示", "SetAssetView.Grid")} className={`rounded p-1 ${viewMode === "grid" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><GridIcon size={14} aria-hidden="true" /></button>
           <button type="button" onClick={() => setViewMode("list")} aria-label="リスト表示" aria-pressed={viewMode === "list"} title={commandTitle("リスト表示", "SetAssetView.List")} className={`rounded p-1 ${viewMode === "list" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><ListIcon size={14} aria-hidden="true" /></button>
-          <button type="button" disabled={readOnly} onClick={() => onCommand("asset.create-material")} title={commandTitle("Materialを作成", "asset.create-material")} className="ml-1 flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-45"><MaterialIcon size={12} aria-hidden="true" />Material</button>
-          <button type="button" disabled={readOnly} onClick={() => onCommand("asset.create-particle")} title={commandTitle("Particleを作成", "asset.create-particle")} className="flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-45"><ParticleIcon size={12} aria-hidden="true" />Particle</button>
-          <button type="button" disabled={readOnly} onClick={() => { if (onCommand("asset.import")) fileInputRef.current?.click(); }} title={commandTitle("アセットをインポート", "asset.import")} className="flex items-center gap-1 rounded border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-45"><ImportIcon size={12} aria-hidden="true" />Import</button>
+          <button type="button" disabled={assetMutationLocked} onClick={() => onCommand("asset.create-material")} title={assetMutationDisabledReason ?? commandTitle("Materialを作成", "asset.create-material")} className="ml-1 flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-45"><MaterialIcon size={12} aria-hidden="true" />Material</button>
+          <button type="button" disabled={assetMutationLocked} onClick={() => onCommand("asset.create-particle")} title={assetMutationDisabledReason ?? commandTitle("Particleを作成", "asset.create-particle")} className="flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-45"><ParticleIcon size={12} aria-hidden="true" />Particle</button>
+          <button type="button" disabled={importLocked} onClick={() => { if (onCommand("asset.import")) fileInputRef.current?.click(); }} title={importDisabledReason ?? commandTitle("アセットをインポート", "asset.import")} className="flex items-center gap-1 rounded border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-45"><ImportIcon size={12} aria-hidden="true" />Import</button>
         </div>
       </div>
 
@@ -1265,17 +1313,17 @@ export function AssetsPanel({
               }}
             />
           ) : null}
-          <ContextMenuItem disabled={readOnly} icon="folder" label="新規フォルダー" command="asset.create-folder" onClick={() => { setContextMenu(null); onCommand("asset.create-folder"); }} />
-          <ContextMenuItem disabled={readOnly} icon="material" label="新規マテリアル" command="asset.create-material" onClick={() => { setContextMenu(null); onCommand("asset.create-material"); }} />
-          <ContextMenuItem disabled={readOnly} icon="particle" label="新規Particle" command="asset.create-particle" onClick={() => { setContextMenu(null); onCommand("asset.create-particle"); }} />
-          <ContextMenuItem disabled={readOnly} icon="texture" label="テクスチャをインポート…" command="asset.import" onClick={() => { setContextMenu(null); if (onCommand("asset.import")) fileInputRef.current?.click(); }} />
-          <ContextMenuItem disabled={readOnly} icon="prefab" label="EntityからPrefabを作成" command="prefab.create" onClick={() => { setContextMenu(null); onPhaseNotice("HierarchyのEntityをAssetsへドラッグしてください"); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="folder" label="新規フォルダー" command="asset.create-folder" onClick={() => { setContextMenu(null); onCommand("asset.create-folder"); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="material" label="新規マテリアル" command="asset.create-material" onClick={() => { setContextMenu(null); onCommand("asset.create-material"); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="particle" label="新規Particle" command="asset.create-particle" onClick={() => { setContextMenu(null); onCommand("asset.create-particle"); }} />
+          <ContextMenuItem disabled={importLocked} disabledReason={importDisabledReason} icon="texture" label="テクスチャをインポート…" command="asset.import" onClick={() => { setContextMenu(null); if (onCommand("asset.import")) fileInputRef.current?.click(); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="prefab" label="EntityからPrefabを作成" command="prefab.create" onClick={() => { setContextMenu(null); onPhaseNotice("HierarchyのEntityをAssetsへドラッグしてください"); }} />
         </div>
       ) : null}
 
       {fileDragOver ? (
         <div className="pointer-events-none absolute inset-2 z-40 flex items-center justify-center rounded-md border-2 border-dashed border-violet-500 bg-white/95 px-4 text-center text-[12px] font-semibold leading-5 text-violet-900 shadow-lg">
-          {readOnly ? "Playを停止してからインポートしてください" : "GLB / GLTF / PNG / JPG / WebP / KTX2 を検証してインポート"}
+          {importDisabledReason ?? "GLB / GLTF / PNG / JPG / WebP / KTX2 を検証してインポート"}
         </div>
       ) : null}
     </section>

@@ -1,6 +1,7 @@
 import { LockKeyhole, Trash2 } from "lucide-react";
 import {
   getXriftComponentDefinition,
+  isBuiltinPrefabPropertyEditable,
   type JsonObject,
   type JsonValue,
   type XRiftComponent,
@@ -38,7 +39,16 @@ export function XRiftComponentInspector({
   }
 
   const recipeLocked = component.authoring?.readOnly === true;
-  const effectiveReadOnly = readOnly || recipeLocked;
+  const editablePropertyNames = new Set(
+    definition.fields
+      .filter((field) =>
+        isBuiltinPrefabPropertyEditable(component, field.name),
+      )
+      .map((field) => field.name),
+  );
+  const editableFieldLabels = definition.fields
+    .filter((field) => editablePropertyNames.has(field.name))
+    .map((field) => field.label);
 
   return (
     <section className="overflow-hidden rounded-md border border-slate-300 bg-white shadow-sm">
@@ -48,7 +58,7 @@ export function XRiftComponentInspector({
             <input
               type="checkbox"
               checked={component.enabled}
-              disabled={effectiveReadOnly}
+              disabled={readOnly || recipeLocked}
               onChange={(event) => onEnabledChange(event.currentTarget.checked)}
               aria-label={`${definition.label}を有効化`}
               className="h-4 w-4 accent-violet-600"
@@ -72,7 +82,7 @@ export function XRiftComponentInspector({
         </div>
         <button
           type="button"
-          disabled={effectiveReadOnly}
+          disabled={readOnly || recipeLocked}
           onClick={onRemove}
           aria-label={`${definition.label}を削除`}
           title={`${definition.label}を削除`}
@@ -85,7 +95,9 @@ export function XRiftComponentInspector({
       <div className="space-y-3 p-3">
         {recipeLocked ? (
           <div className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs leading-4 text-slate-600">
-            XRift PrefabのComponent設定は読み取り専用です。位置・回転・大きさはEntityのTransformで調整できます。
+            {editableFieldLabels.length > 0
+              ? `XRift Prefabの構成は保護されています。${editableFieldLabels.join("、")}はこのテンプレートの設定として変更できます。位置・回転・大きさはEntityのTransformで調整します。`
+              : "XRift PrefabのComponent設定は読み取り専用です。位置・回転・大きさはEntityのTransformで調整できます。"}
           </div>
         ) : null}
         {definition.fields.map((field) => (
@@ -93,7 +105,14 @@ export function XRiftComponentInspector({
             key={field.name}
             field={field}
             value={component.properties[field.name]}
-            readOnly={effectiveReadOnly || !component.enabled}
+            readOnly={
+              readOnly ||
+              !component.enabled ||
+              (recipeLocked && !editablePropertyNames.has(field.name))
+            }
+            templateEditable={
+              recipeLocked && editablePropertyNames.has(field.name)
+            }
             onChange={(value) => onPropertyChange(field.name, value)}
           />
         ))}
@@ -112,11 +131,13 @@ function FieldEditor({
   field,
   value,
   readOnly,
+  templateEditable,
   onChange,
 }: {
   field: XriftComponentFieldDefinition;
   value: JsonValue | undefined;
   readOnly: boolean;
+  templateEditable: boolean;
   onChange: (value: JsonValue | undefined) => void;
 }) {
   const requiredValueMissing =
@@ -130,6 +151,11 @@ function FieldEditor({
         {field.label}
         {field.required ? <span className="ml-1 text-rose-600">*</span> : null}
       </span>
+      {templateEditable ? (
+        <span className="rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">
+          設定可能
+        </span>
+      ) : null}
       {!field.required && value !== undefined ? (
         <button
           type="button"

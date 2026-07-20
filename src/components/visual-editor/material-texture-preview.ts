@@ -26,15 +26,30 @@ import {
   type TextureAsset,
 } from "../../lib/visual-editor";
 
-export type CoreMaterialPreviewTextures = {
+export type MaterialPreviewTextures = {
   baseColorMap?: Texture;
   metallicRoughnessMap?: Texture;
   normalMap?: Texture;
   occlusionMap?: Texture;
   emissiveMap?: Texture;
+  anisotropyMap?: Texture;
+  clearcoatMap?: Texture;
+  clearcoatRoughnessMap?: Texture;
+  clearcoatNormalMap?: Texture;
+  iridescenceMap?: Texture;
+  iridescenceThicknessMap?: Texture;
+  sheenColorMap?: Texture;
+  sheenRoughnessMap?: Texture;
+  specularIntensityMap?: Texture;
+  specularColorMap?: Texture;
+  transmissionMap?: Texture;
+  thicknessMap?: Texture;
 };
 
-type PreviewTextureRole = keyof CoreMaterialPreviewTextures;
+/** Compatibility alias for existing Scene View consumers. */
+export type CoreMaterialPreviewTextures = MaterialPreviewTextures;
+
+type PreviewTextureRole = keyof MaterialPreviewTextures;
 
 type PreviewTextureRequest = {
   role: PreviewTextureRole;
@@ -45,11 +60,11 @@ type PreviewTextureRequest = {
 
 const IMAGE_DATA_URL_CACHE = new Map<string, Promise<string>>();
 
-export function useCoreMaterialPreviewTextures(
+export function useMaterialPreviewTextures(
   material: MaterialAsset | undefined,
   assets: AssetManifest,
   projectPath: string | undefined,
-): CoreMaterialPreviewTextures {
+): MaterialPreviewTextures {
   const requests = useMemo(
     () => resolvePreviewTextureRequests(material, assets),
     [assets, material],
@@ -69,7 +84,7 @@ export function useCoreMaterialPreviewTextures(
       ),
     [requests],
   );
-  const [textures, setTextures] = useState<CoreMaterialPreviewTextures>({});
+  const [textures, setTextures] = useState<MaterialPreviewTextures>({});
 
   useEffect(() => {
     let active = true;
@@ -111,7 +126,7 @@ export function useCoreMaterialPreviewTextures(
       setTextures(
         Object.fromEntries(
           available.map((entry) => [entry.role, entry.texture]),
-        ) as CoreMaterialPreviewTextures,
+        ) as MaterialPreviewTextures,
       );
     });
 
@@ -120,10 +135,16 @@ export function useCoreMaterialPreviewTextures(
       ownedTextures.forEach((texture) => texture.dispose());
       ownedTextures = [];
     };
-  }, [projectPath, requestKey, requests]);
+  // Scalar Material edits must not clear and reload every unchanged Texture.
+  // `requestKey` contains every source, slot, transform, sampler, and color-space
+  // input that can change the owned Texture set.
+  }, [projectPath, requestKey]);
 
   return textures;
 }
+
+/** Compatibility name retained for existing Scene View consumers. */
+export const useCoreMaterialPreviewTextures = useMaterialPreviewTextures;
 
 /** Applies only textures owned by the assigned Material preview. */
 export function applyCoreMaterialPreviewTextures(
@@ -155,6 +176,7 @@ function resolvePreviewTextureRequests(
     >[0],
   );
   const pbr = properties.pbrMetallicRoughness;
+  const extensions = properties.extensions;
   const candidates: Array<
     [PreviewTextureRole, MaterialTextureInfo | undefined, "srgb" | "linear"]
   > = [
@@ -163,6 +185,66 @@ function resolvePreviewTextureRequests(
     ["normalMap", properties.normalTexture, "linear"],
     ["occlusionMap", properties.occlusionTexture, "linear"],
     ["emissiveMap", properties.emissiveTexture, "srgb"],
+    [
+      "anisotropyMap",
+      extensions.KHR_materials_anisotropy?.anisotropyTexture,
+      "linear",
+    ],
+    [
+      "clearcoatMap",
+      extensions.KHR_materials_clearcoat?.clearcoatTexture,
+      "linear",
+    ],
+    [
+      "clearcoatRoughnessMap",
+      extensions.KHR_materials_clearcoat?.clearcoatRoughnessTexture,
+      "linear",
+    ],
+    [
+      "clearcoatNormalMap",
+      extensions.KHR_materials_clearcoat?.clearcoatNormalTexture,
+      "linear",
+    ],
+    [
+      "iridescenceMap",
+      extensions.KHR_materials_iridescence?.iridescenceTexture,
+      "linear",
+    ],
+    [
+      "iridescenceThicknessMap",
+      extensions.KHR_materials_iridescence?.iridescenceThicknessTexture,
+      "linear",
+    ],
+    [
+      "sheenColorMap",
+      extensions.KHR_materials_sheen?.sheenColorTexture,
+      "srgb",
+    ],
+    [
+      "sheenRoughnessMap",
+      extensions.KHR_materials_sheen?.sheenRoughnessTexture,
+      "linear",
+    ],
+    [
+      "specularIntensityMap",
+      extensions.KHR_materials_specular?.specularTexture,
+      "linear",
+    ],
+    [
+      "specularColorMap",
+      extensions.KHR_materials_specular?.specularColorTexture,
+      "srgb",
+    ],
+    [
+      "transmissionMap",
+      extensions.KHR_materials_transmission?.transmissionTexture,
+      "linear",
+    ],
+    [
+      "thicknessMap",
+      extensions.KHR_materials_volume?.thicknessTexture,
+      "linear",
+    ],
   ];
   return candidates.flatMap(([role, textureInfo, colorSpace]) => {
     if (!textureInfo) return [];
