@@ -55,6 +55,7 @@ F-06 アイテム検査
 | MI-36 | Model Assetを選択して構造を確認し、import設定を変更または再importする | 右Inspectorにsource/status、node・mesh・primitive、bounds、animation、Material slotと現在のimport recipeを分けて表示する。recipe変更は未適用であることを示し、source解析済みの事実と混同しない。再importでslotが消える時は確定前にScene / Prefabの影響先を列挙する。 | 再import成功時は同じAsset IDを維持し、同じslot identityへのMaterial割当を保持して追加・消失slotを明示する。影響を確認せず参照切れを成功表示しない。失敗時はlast-good metadata、thumbnail、Scene参照を維持し、原因と再試行を同じModel Inspectorに残す。Play中は閲覧のみとする。 |
 | MI-37 | 左下の歯車「シーン設定」を開き、スカイボックス、フォグ、環境光、カメラ、ギズモを変更する | 現在のScene ViewとEntity / Asset selectionを保ったまま、右のEntity InspectorをScene Inspectorへ切り替える。数値は確定時に範囲へ補正し、色、トグル、画像Skyboxのプレビューを即時同期する。Scene Viewへ不透明な補助床は追加せず、Skyboxまたは編集背景の上に軽いグリッドだけを表示する。Play中は値を読み取り専用にし、停止後に同じ設定画面へ戻れる。 | 設定変更は一件のSceneDocument履歴として未保存にし、保存後の生成Worldにも反映する。戻る、Entity / Assetの選択は変更済みの値を保持して通常Inspectorへ戻る。サムネイルは保存済みprojectでだけ既存の画像編集画面を開き、保存後に公開前確認へ戻れる。 |
 | MI-38 | 左下のユーティリティレールからショートカット一覧、ヘルプ、シーン設定を開く | 上からキーボード、ヘルプ、歯車を小さな同一サイズで常時表示する。hover / focusでは操作名を示し、開いている項目は背景、アイコン、`aria-expanded`または押下状態で区別する。ショートカットは中央Registryの現在のbindingを分類して表示し、ヘルプは作成、選択、素材配置、Playの最短導線とレイアウト初期化を示す。 | Escape、外側click、同じボタンで補助パネルを閉じ、Scene / Asset selectionとdocumentを変えない。歯車はScene Inspectorを切り替え、レイアウト初期化は既定配置へ戻して同じEditorを継続する。 |
+| MI-39 | Scene View、Hierarchy、Create、Inspector、AssetsでXRift Componentを表示する | 公式Component名と中央Registryのsemantic iconを全authoring surfaceで共有する。Lightは実照明にカメラ追従アイコンを重ね、PortalとTagBoardは保存済みPropsだけでEditor Previewを表示する。外部Contextやinstance APIはEdit中に呼び出さない。 | 選択変更やInspector編集で同じComponent IDのpreviewだけを更新し、document、selection、runtime stateを増やさない。未設定Portalは「移動先未設定」、TagBoardは設定済みtitle、columns、tags、scaleを表示する。 |
 
 ## 機能一覧
 
@@ -71,6 +72,7 @@ F-06 アイテム検査
 | F-09 | Command / Shortcut / Prefab | MI-12, MI-22, MI-23, MI-24, MI-28, MI-30, MI-31, MI-34, MI-38 | toolbar、menu、keyboard、Hierarchy D&D と左下の一覧が同じ Command / Shortcut Registry を使い、Copy / Paste / Duplicate / Delete / Reparent、Empty / Component 作成、Hierarchy からの Prefab 化、XRift built-in Prefab配置、Undo / Redo が IDs と両 selection を復元する。 |
 | F-10 | Visual Save / Compile / Preview / Upload | MI-03, MI-05, MI-07, MI-08, MI-09, MI-17, MI-25, MI-26, MI-27 | journal 付き保存、決定的 compiler / provenance、freshness 検査、区別された preview、既存 XRift check / upload を一つの editor flow で扱い、失敗や取消後も last committed authoring と戻り先を保つ。 |
 | F-12 | Scene environment settings | MI-37, MI-38 | 左下の歯車から右のScene Inspectorへ切り替え、サムネイル、Skybox画像・回転・露出、Fog、環境光、Near/Far、FOV、背景、グリッド、ギズモ、スナップを一か所で設定し、Scene Viewと生成Worldに必要な値を一貫して反映する。 |
+| F-13 | XRift Component editor preview | MI-10, MI-34, MI-39 | 公式Component名とsemantic iconをauthoring surface全体で共有し、Light、Portal、TagBoardを実行時Contextへ接続せず設定値に忠実なEditor Previewとして確認できる。 |
 
 ## F-07 の状態設計
 
@@ -283,6 +285,31 @@ F-06 アイテム検査
 ### 戻り先
 
 - ヘッダーの戻る、Entity / Assetの選択はScene Inspectorだけを閉じ、直前のScene Viewとselection、編集位置へ戻る。確定済みの変更は保存または Undo で扱う。
+
+## F-13 XRift Component editor preview の状態設計
+
+### 操作前
+
+- Hierarchy、Create、Inspector、AssetsはComponent Registryの公式名、説明、semantic iconを使用する。Scene Viewは保存済みPropsとEntity Transformだけを入力にし、XRift Context、UsersContext、instance APIへ接続しない。
+- Lightは実際の照明Nodeを維持しつつ、編集用のカメラ追従アイコンだけを補助表示する。Directional LightとPortalはローカル前方向を矢印で示す。
+
+### 操作中
+
+- InspectorでPortalの`instanceId` / `disabled`、TagBoardの`title` / `columns` / `tags` / `scale`を変更すると、同じComponentのEditor Previewへ即時反映する。通信、ユーザー状態の生成、Scene history以外の副作用は起こさない。
+- Portalの渦巻きとパーティクルは`prefers-reduced-motion`時に静止しても状態が分かる形状と文言を維持する。
+
+### 成功時
+
+- Portalは明るい枠、暗い面、渦巻き、グロー、粒子、台座、状態文言、前方向を表示する。`instanceId`未設定時は実在しない移動先情報を作らず「移動先未設定」と表示する。
+- TagBoardは設定済みtitle、columns、Tag label / color、均一scaleを表示する。実ユーザー情報や選択済みTagDisplayはEditor Previewで捏造しない。
+
+### 失敗時
+
+- 欠落または不正なPropsはRegistry defaultまたは落ち着いた空状態へフォールバックし、Scene View全体を停止させない。Portal情報取得失敗という状態は、Editor Previewが取得自体を行わないため生成しない。
+
+### 戻り先
+
+- 選択解除、Entity削除、Undo / Redoでは補助表示だけを同じScene documentへ追従させ、Camera、selection、runtime stateを追加で変更しない。
 
 ## 実装制約
 

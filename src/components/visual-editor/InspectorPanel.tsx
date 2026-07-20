@@ -11,6 +11,7 @@ import {
   getMaterialAsset,
   getMeshMaterialSlots,
   getTransform,
+  getXriftComponentDefinition,
   EDITOR_COMPONENT_REGISTRY,
   type AssetManifest,
   type ColliderComponent,
@@ -40,7 +41,11 @@ import type {
 } from "./ModelAssetInspector";
 import { XRiftComponentInspector } from "./XRiftComponentInspector";
 import { SceneSettingsInspector } from "./SceneSettingsPanel";
-import { commandTitle, EDITOR_ICONS } from "./editor-icons";
+import {
+  commandTitle,
+  EDITOR_ICONS,
+  getEditorComponentIcon,
+} from "./editor-icons";
 import { roundTo } from "./editor-utils";
 import {
   clearEditorDragData,
@@ -826,6 +831,7 @@ function EntityInspector({
                       {category}
                     </p>
                     {definitions.map((definition) => {
+                      const DefinitionIcon = getEditorComponentIcon(definition);
                       const duplicate =
                         !definition.allowMultiple &&
                         registeredComponents.some((component) =>
@@ -847,7 +853,10 @@ function EntityInspector({
                           }}
                           className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:text-slate-400"
                         >
-                          <span>{definition.label}</span>
+                          <span className="flex min-w-0 items-center gap-2">
+                            <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
+                            <span className="truncate">{definition.label}</span>
+                          </span>
                           {duplicate ? <span className="text-xs">追加済み</span> : null}
                         </button>
                       );
@@ -944,11 +953,17 @@ export function InspectorPanel({
     asset?.kind === "material"
       ? countMaterialSceneReferences(scene, assets, asset.id)
       : undefined;
+  const xriftDefinition = entity?.components
+    .filter((component) => component.type === "xrift-component")
+    .map((component) => getXriftComponentDefinition(component.schemaId))
+    .find((definition) => definition !== undefined);
   const EntityIcon = entity?.components.some((component) => component.type === "light")
     ? EDITOR_ICONS.light
     : entity?.components.some((component) => component.type === "particle-emitter")
       ? EDITOR_ICONS.particle
-       : EDITOR_ICONS.sceneEntity;
+      : xriftDefinition
+        ? EDITOR_ICONS[xriftDefinition.icon]
+        : EDITOR_ICONS.sceneEntity;
   const InspectorIcon = sceneSettingsOpen ? EDITOR_ICONS.settings : EntityIcon;
 
   return (

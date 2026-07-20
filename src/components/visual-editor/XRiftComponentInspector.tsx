@@ -7,6 +7,7 @@ import {
   type XRiftComponent,
   type XriftComponentFieldDefinition,
 } from "../../lib/visual-editor";
+import { EDITOR_ICONS } from "./editor-icons";
 
 type Props = {
   component: XRiftComponent;
@@ -49,6 +50,7 @@ export function XRiftComponentInspector({
   const editableFieldLabels = definition.fields
     .filter((field) => editablePropertyNames.has(field.name))
     .map((field) => field.label);
+  const ComponentIcon = EDITOR_ICONS[definition.icon];
 
   return (
     <section className="overflow-hidden rounded-md border border-slate-300 bg-white shadow-sm">
@@ -63,6 +65,7 @@ export function XRiftComponentInspector({
               aria-label={`${definition.label}を有効化`}
               className="h-4 w-4 accent-violet-600"
             />
+            <ComponentIcon size={14} className="text-slate-500" aria-hidden="true" />
             <h3 className="truncate text-[13px] font-semibold text-slate-900">
               {definition.label}
             </h3>

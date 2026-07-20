@@ -15,6 +15,7 @@ import type {
 } from "../../lib/visual-editor";
 import {
   BUILTIN_PREFAB_DRAG_MIME,
+  getXriftComponentDefinition,
   isScenePlaceableAsset,
   listBuiltinPrefabRecipes,
   resolveAssetCreationFolderId,
@@ -532,7 +533,10 @@ function BuiltinPrefabCard({
   readOnly: boolean;
   onPlace: () => void;
 }) {
-  const Icon = EDITOR_ICONS[recipe.icon];
+  const definition = getXriftComponentDefinition(recipe.schemaId);
+  const Icon = definition
+    ? EDITOR_ICONS[definition.icon]
+    : EDITOR_ICONS.prefab;
   const handleDragStart = (event: DragEvent<HTMLElement>) => {
     writeEditorDragData(event.dataTransfer, {
       [BUILTIN_PREFAB_DRAG_MIME]: recipe.id,

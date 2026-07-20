@@ -9,7 +9,6 @@ import {
   BUILTIN_PRIMITIVE_CREATION_CATALOG,
   BUILTIN_PREFAB_DRAG_MIME,
   EDITOR_COMPONENT_REGISTRY,
-  XRIFT_COMPONENT_SCHEMA_IDS,
   getEntityReparentDecision,
   getXriftComponentDefinition,
   type EntityReparentBlockReason,
@@ -18,7 +17,11 @@ import {
   type SceneEntity,
   type VisualProjectKind,
 } from "../../lib/visual-editor";
-import { commandTitle, EDITOR_ICONS } from "./editor-icons";
+import {
+  commandTitle,
+  EDITOR_ICONS,
+  getEditorComponentIcon,
+} from "./editor-icons";
 import {
   clearEditorDragData,
   hasEditorDragData,
@@ -108,13 +111,8 @@ function getEntityIcon(entity: SceneEntity) {
     (component) => component.type === "xrift-component",
   );
   if (xriftComponent?.type === "xrift-component") {
-    if (xriftComponent.schemaId === XRIFT_COMPONENT_SCHEMA_IDS.spawnPoint) {
-      return EDITOR_ICONS.spawn;
-    }
-    if (xriftComponent.schemaId === XRIFT_COMPONENT_SCHEMA_IDS.mirror) {
-      return EDITOR_ICONS.mirror;
-    }
-    return EDITOR_ICONS.prefab;
+    const icon = getXriftComponentDefinition(xriftComponent.schemaId)?.icon;
+    return icon ? EDITOR_ICONS[icon] : EDITOR_ICONS.prefab;
   }
   return EDITOR_ICONS.sceneEntity;
 }
@@ -744,6 +742,7 @@ export function HierarchyPanel({
               {EDITOR_COMPONENT_REGISTRY.filter((definition) =>
                 definition.projectKinds.includes(projectKind),
               ).map((definition) => {
+                const DefinitionIcon = getEditorComponentIcon(definition);
                 const entity = contextMenu.entityId
                   ? scene.entities[contextMenu.entityId]
                   : undefined;
@@ -772,7 +771,10 @@ export function HierarchyPanel({
                     }}
                     className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
                   >
-                    <span>{definition.label}</span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
+                      <span className="truncate">{definition.label}</span>
+                    </span>
                     <span className="text-xs text-slate-400">
                       {duplicate ? "追加済み" : definition.category}
                     </span>
