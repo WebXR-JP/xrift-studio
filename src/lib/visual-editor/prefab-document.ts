@@ -42,6 +42,8 @@ export type PrefabDocument = {
   importMetadata?: PrefabImportMetadata;
   rootEntityIds: string[];
   entities: Record<string, SceneEntity>;
+  /** Prefab Entity ID to editable source Scene Entity ID. */
+  sourceEntityMap?: Record<string, string>;
 };
 
 export type AssetReferenceCollection = {
@@ -96,12 +98,50 @@ export function createPrefabDocument(
       },
       rootEntityIds: [...clone.rootEntityIds],
       entities: clone.entities,
+      sourceEntityMap: Object.fromEntries(
+        Object.entries(clone.entityIdMap).map(([sourceEntityId, prefabEntityId]) => [
+          prefabEntityId,
+          sourceEntityId,
+        ]),
+      ),
     },
     references: collectSceneAssetReferences(
       scene,
       assets,
       input.sourceRootEntityIds,
     ),
+  };
+}
+
+export function updatePrefabDocumentFromSource(
+  scene: SceneDocument,
+  assets: AssetManifest,
+  document: PrefabDocument,
+): CreatePrefabDocumentResult | null {
+  if (document.source.sceneId !== scene.sceneId) return null;
+  const prefabEntityIdBySource = new Map(
+    Object.entries(document.sourceEntityMap ?? {}).map(
+      ([prefabEntityId, sourceEntityId]) => [sourceEntityId, prefabEntityId],
+    ),
+  );
+  const updated = createPrefabDocument(scene, assets, {
+    prefabId: document.prefabId,
+    name: document.name,
+    sourceRootEntityIds: [...document.source.rootEntityIds],
+    generateId: (kind, sourceId) =>
+      kind === "entity" && prefabEntityIdBySource.has(sourceId)
+        ? prefabEntityIdBySource.get(sourceId)!
+        : `${document.prefabId}/${kind}/${sourceId}`,
+  });
+  if (!updated) return null;
+  return {
+    ...updated,
+    document: {
+      ...updated.document,
+      ...(document.importMetadata
+        ? { importMetadata: structuredClone(document.importMetadata) }
+        : {}),
+    },
   };
 }
 

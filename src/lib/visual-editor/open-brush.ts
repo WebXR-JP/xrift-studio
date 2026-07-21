@@ -1,3 +1,5 @@
+import { Euler, Matrix4, Quaternion, Vector3 } from "three";
+
 export const OPEN_BRUSH_EXTENSION_NAMES = [
   "GOOGLE_tilt_brush_material",
   "GOOGLE_tilt_brush_techniques",
@@ -20,11 +22,40 @@ export type OpenBrushModelMetadata = {
   extensionNames: string[];
   exporter?: string;
   brushNames: string[];
+  /** glTF nodes retained for non-destructive Hierarchy/Prefab expansion. */
+  nodes?: OpenBrushNodeMetadata[];
+};
+
+export type OpenBrushNodeMetadata = {
+  sourceNodeIndex: number;
+  name: string;
+  parentSourceNodeIndex?: number;
+  childSourceNodeIndices: number[];
+  meshIndex?: number;
+  sourceMaterialIndices: number[];
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
 };
 
 export type OpenBrushMaterialSlot = {
   slot: string;
   name: string;
+  sourceMaterialIndex: number;
+};
+
+/**
+ * Authoring reference to one three-icosa brush preset. The GLSL and texture
+ * files stay owned by the pinned brush library; the Material Asset records the
+ * stable preset identity instead of flattening it into a Standard/PBR shader.
+ */
+export type OpenBrushMaterialShader = {
+  kind: "openbrush";
+  renderer: "three-icosa";
+  rendererVersion: string;
+  brushName: string;
+  brushGuid?: string;
+  brushBaseUrl: string;
   sourceMaterialIndex: number;
 };
 
@@ -68,6 +99,7 @@ export function detectOpenBrushGltfDocument(
     extensionNames,
     ...(exporter ? { exporter } : {}),
     brushNames: [...new Set(brushNames)],
+    nodes: extractOpenBrushNodeHierarchy(value),
   };
 }
 
@@ -81,8 +113,73 @@ export function isOpenBrushModelMetadata(
     Array.isArray(value.extensionNames) &&
     value.extensionNames.every((entry) => typeof entry === "string") &&
     Array.isArray(value.brushNames) &&
-    value.brushNames.every((entry) => typeof entry === "string")
+    value.brushNames.every((entry) => typeof entry === "string") &&
+    (value.nodes === undefined ||
+      (Array.isArray(value.nodes) && value.nodes.every(isOpenBrushNodeMetadata)))
   );
+}
+
+export function extractOpenBrushNodeHierarchy(
+  value: unknown,
+): OpenBrushNodeMetadata[] {
+  if (!isRecord(value) || !Array.isArray(value.nodes)) return [];
+  const nodes = value.nodes;
+  const meshes = Array.isArray(value.meshes) ? value.meshes : [];
+  const parentByNodeIndex = new Map<number, number>();
+
+  nodes.forEach((candidate, parentIndex) => {
+    if (!isRecord(candidate) || !Array.isArray(candidate.children)) return;
+    candidate.children.forEach((childIndex) => {
+      if (
+        typeof childIndex === "number" &&
+        Number.isInteger(childIndex) &&
+        childIndex >= 0 &&
+        childIndex < nodes.length &&
+        !parentByNodeIndex.has(childIndex)
+      ) {
+        parentByNodeIndex.set(childIndex, parentIndex);
+      }
+    });
+  });
+
+  return nodes.map((candidate, sourceNodeIndex) => {
+    const node = isRecord(candidate) ? candidate : {};
+    const meshIndex = integerIndex(node.mesh, meshes.length);
+    const mesh = meshIndex === undefined ? undefined : meshes[meshIndex];
+    const sourceMaterialIndices = isRecord(mesh) && Array.isArray(mesh.primitives)
+      ? [
+          ...new Set(
+            mesh.primitives.flatMap((primitive) => {
+              if (!isRecord(primitive)) return [];
+              const materialIndex = integerIndex(primitive.material);
+              return materialIndex === undefined ? [] : [materialIndex];
+            }),
+          ),
+        ]
+      : [];
+    const childSourceNodeIndices = Array.isArray(node.children)
+      ? [
+          ...new Set(
+            node.children.flatMap((childIndex) => {
+              const index = integerIndex(childIndex, nodes.length);
+              return index === undefined ? [] : [index];
+            }),
+          ),
+        ]
+      : [];
+    const transform = openBrushNodeTransform(node);
+    return {
+      sourceNodeIndex,
+      name: openBrushNodeName(node.name, sourceNodeIndex),
+      ...(parentByNodeIndex.has(sourceNodeIndex)
+        ? { parentSourceNodeIndex: parentByNodeIndex.get(sourceNodeIndex) }
+        : {}),
+      childSourceNodeIndices,
+      ...(meshIndex === undefined ? {} : { meshIndex }),
+      sourceMaterialIndices,
+      ...transform,
+    };
+  });
 }
 
 export function extractOpenBrushMaterialSlots(
@@ -112,6 +209,56 @@ export function extractOpenBrushMaterialSlots(
       sourceMaterialIndex: index,
     };
   });
+}
+
+export function extractOpenBrushMaterialShader(
+  value: unknown,
+  sourceMaterialIndex: number,
+): OpenBrushMaterialShader | undefined {
+  if (!isRecord(value) || !Array.isArray(value.materials)) return undefined;
+  const candidate = value.materials[sourceMaterialIndex];
+  if (!isRecord(candidate)) return undefined;
+  const sourceName =
+    typeof candidate.name === "string" ? candidate.name.trim() : "";
+  const extensions = isRecord(candidate.extensions)
+    ? candidate.extensions
+    : undefined;
+  const extension = OPEN_BRUSH_EXTENSION_NAMES.map((name) =>
+    isRecord(extensions?.[name]) ? extensions[name] : undefined,
+  ).find((entry) => entry !== undefined);
+  const brushGuid =
+    typeof extension?.guid === "string" && extension.guid.trim()
+      ? extension.guid.trim()
+      : undefined;
+  if (!sourceName && !brushGuid) return undefined;
+  return {
+    kind: "openbrush",
+    renderer: "three-icosa",
+    rendererVersion: OPEN_BRUSH_RENDERER,
+    brushName: normalizeBrushName(sourceName, sourceMaterialIndex),
+    ...(brushGuid ? { brushGuid } : {}),
+    brushBaseUrl: OPEN_BRUSH_BRUSH_BASE_URL,
+    sourceMaterialIndex,
+  };
+}
+
+export function isOpenBrushMaterialShader(
+  value: unknown,
+): value is OpenBrushMaterialShader {
+  if (!isRecord(value)) return false;
+  return (
+    value.kind === "openbrush" &&
+    value.renderer === "three-icosa" &&
+    typeof value.rendererVersion === "string" &&
+    Boolean(value.rendererVersion.trim()) &&
+    typeof value.brushName === "string" &&
+    Boolean(value.brushName.trim()) &&
+    (value.brushGuid === undefined ||
+      (typeof value.brushGuid === "string" && Boolean(value.brushGuid.trim()))) &&
+    typeof value.brushBaseUrl === "string" &&
+    /^https:\/\//.test(value.brushBaseUrl) &&
+    integerIndex(value.sourceMaterialIndex) !== undefined
+  );
 }
 
 /**
@@ -213,6 +360,77 @@ function collectRecordKeys(value: unknown, target: Set<string>): void {
 function normalizeBrushName(name: string, index: number): string {
   const normalized = name.replace(/^(?:ob-|brush_|material_)/i, "").trim();
   return normalized || `Brush ${index + 1}`;
+}
+
+function openBrushNodeName(value: unknown, index: number): string {
+  if (typeof value !== "string" || !value.trim()) return `OpenBrush Node ${index + 1}`;
+  const source = value.trim();
+  const brush = source
+    .replace(/^brush_/i, "")
+    .replace(/_g\d+_b\d+$/i, "")
+    .trim();
+  return brush || source;
+}
+
+function openBrushNodeTransform(node: JsonRecord): Pick<
+  OpenBrushNodeMetadata,
+  "position" | "rotation" | "scale"
+> {
+  const position = new Vector3();
+  const quaternion = new Quaternion();
+  const scale = new Vector3(1, 1, 1);
+  const matrix = finiteNumberArray(node.matrix, 16);
+  if (matrix) {
+    new Matrix4().fromArray(matrix).decompose(position, quaternion, scale);
+  } else {
+    const translation = finiteNumberArray(node.translation, 3);
+    const sourceRotation = finiteNumberArray(node.rotation, 4);
+    const sourceScale = finiteNumberArray(node.scale, 3);
+    if (translation) position.fromArray(translation);
+    if (sourceRotation) quaternion.fromArray(sourceRotation).normalize();
+    if (sourceScale) scale.fromArray(sourceScale);
+  }
+  const euler = new Euler().setFromQuaternion(quaternion, "XYZ");
+  return {
+    position: [position.x, position.y, position.z],
+    rotation: [euler.x, euler.y, euler.z],
+    scale: [scale.x, scale.y, scale.z],
+  };
+}
+
+function isOpenBrushNodeMetadata(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return (
+    integerIndex(value.sourceNodeIndex) !== undefined &&
+    typeof value.name === "string" &&
+    (value.parentSourceNodeIndex === undefined ||
+      integerIndex(value.parentSourceNodeIndex) !== undefined) &&
+    isIntegerArray(value.childSourceNodeIndices) &&
+    (value.meshIndex === undefined || integerIndex(value.meshIndex) !== undefined) &&
+    isIntegerArray(value.sourceMaterialIndices) &&
+    finiteNumberArray(value.position, 3) !== undefined &&
+    finiteNumberArray(value.rotation, 3) !== undefined &&
+    finiteNumberArray(value.scale, 3) !== undefined
+  );
+}
+
+function integerIndex(value: unknown, upperBound?: number): number | undefined {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    return undefined;
+  }
+  return upperBound !== undefined && value >= upperBound ? undefined : value;
+}
+
+function isIntegerArray(value: unknown): boolean {
+  return Array.isArray(value) && value.every((entry) => integerIndex(entry) !== undefined);
+}
+
+function finiteNumberArray(value: unknown, length: number): number[] | undefined {
+  return Array.isArray(value) &&
+    value.length === length &&
+    value.every((entry) => typeof entry === "number" && Number.isFinite(entry))
+    ? value
+    : undefined;
 }
 
 function isExternalUri(value: string): boolean {

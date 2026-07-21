@@ -1580,6 +1580,15 @@ fn decode_starter_asset_data_url(data_url: &str, relative_path: &str) -> Result<
         return Ok(bytes);
     }
 
+    if relative_path.ends_with(".txt") && media_type == "text/plain" {
+        let text = std::str::from_utf8(&bytes)
+            .map_err(|_| "starter text asset must be valid UTF-8".to_string())?;
+        if text.contains('\0') {
+            return Err("starter text asset must not contain NUL bytes".to_string());
+        }
+        return Ok(bytes);
+    }
+
     Err("starter asset media type does not match its file extension".to_string())
 }
 
@@ -3971,6 +3980,46 @@ mod tests {
             !is_managed_publication_metadata_path(".xrift-studio/owner.json")
                 .expect("ordinary compiler metadata path must validate")
         );
+    }
+
+    #[test]
+    fn validates_plain_text_starter_assets() {
+        use base64::Engine;
+
+        let data_url = |media_type: &str, bytes: &[u8]| {
+            format!(
+                "data:{media_type};base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(bytes)
+            )
+        };
+
+        let license = b"Apache License\r\nVersion 2.0\r\n";
+        assert_eq!(
+            decode_starter_asset_data_url(
+                &data_url("text/plain", license),
+                "assets/starter/openbrush-LICENSE.txt",
+            )
+            .expect("a UTF-8 text starter asset must be accepted"),
+            license
+        );
+        assert!(decode_starter_asset_data_url(
+            &data_url("application/octet-stream", license),
+            "assets/starter/openbrush-LICENSE.txt",
+        )
+        .expect_err("a mismatched text media type must be rejected")
+        .contains("media type does not match"));
+        assert!(decode_starter_asset_data_url(
+            &data_url("text/plain", &[0xff, 0xfe]),
+            "assets/starter/openbrush-LICENSE.txt",
+        )
+        .expect_err("non-UTF-8 text must be rejected")
+        .contains("valid UTF-8"));
+        assert!(decode_starter_asset_data_url(
+            &data_url("text/plain", b"license\0payload"),
+            "assets/starter/openbrush-LICENSE.txt",
+        )
+        .expect_err("text containing a NUL byte must be rejected")
+        .contains("must not contain NUL"));
     }
 
     #[test]

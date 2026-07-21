@@ -54,7 +54,12 @@ export type ModelPoseState = {
 };
 
 export type MeshGeometryReference =
-  | { kind: "asset"; assetId: string }
+  | {
+      kind: "asset";
+      assetId: string;
+      /** Selects one glTF node while sharing the original Model source. */
+      sourceNodeIndex?: number;
+    }
   | {
       kind: "builtin-primitive";
       creationId: string;
@@ -371,14 +376,24 @@ export function createMeshComponent(
   id: string,
   geometryAssetId: string,
   materialBindings: MaterialBinding[],
-  options: { castShadow?: boolean; receiveShadow?: boolean } = {},
+  options: {
+    castShadow?: boolean;
+    receiveShadow?: boolean;
+    sourceNodeIndex?: number;
+  } = {},
 ): MeshComponent {
   return {
     id,
     type: "mesh",
     enabled: true,
     geometryAssetId,
-    geometry: { kind: "asset", assetId: geometryAssetId },
+    geometry: {
+      kind: "asset",
+      assetId: geometryAssetId,
+      ...(options.sourceNodeIndex !== undefined
+        ? { sourceNodeIndex: options.sourceNodeIndex }
+        : {}),
+    },
     materialBindings: normalizeMaterialBindings(materialBindings),
     castShadow: options.castShadow ?? true,
     receiveShadow: options.receiveShadow ?? true,
@@ -987,7 +1002,28 @@ export function getMeshMaterialSlots(
       ? mesh.geometry.assetId
       : mesh.geometryAssetId;
   const geometry = getGeometryAsset(assets, assetId);
-  if (geometry) return getGeometryMaterialSlots(geometry);
+  if (geometry) {
+    const slots = getGeometryMaterialSlots(geometry);
+    const sourceNodeIndex =
+      mesh.geometry?.kind === "asset"
+        ? mesh.geometry.sourceNodeIndex
+        : undefined;
+    const node =
+      geometry.kind === "model" && sourceNodeIndex !== undefined
+        ? geometry.importMetadata?.openBrush?.nodes?.find(
+            (candidate) => candidate.sourceNodeIndex === sourceNodeIndex,
+          )
+        : undefined;
+    if (node) {
+      const sourceIndices = new Set(node.sourceMaterialIndices);
+      return slots.filter(
+        (slot) =>
+          slot.sourceMaterialIndex !== undefined &&
+          sourceIndices.has(slot.sourceMaterialIndex),
+      );
+    }
+    return slots;
+  }
 
   return (
     getBuiltinPrimitiveCreation(mesh.geometryAssetId)?.materialSlots.map(

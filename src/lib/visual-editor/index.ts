@@ -23,6 +23,7 @@ export * from "./model-import-contract.fixture";
 export * from "./model-reimport-impact";
 export * from "./model-reimport-impact.fixture";
 export * from "./open-brush";
+export * from "./open-brush-hierarchy";
 export * from "./open-brush.fixture";
 export * from "./prefab-document";
 export * from "./persistence";

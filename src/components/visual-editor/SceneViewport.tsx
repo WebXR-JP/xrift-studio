@@ -288,6 +288,11 @@ function MeshVisual({
         assets={assets}
         assignedMaterials={assignedModelMaterials}
         pose={component.modelPose}
+        sourceNodeIndex={
+          component.geometry?.kind === "asset"
+            ? component.geometry.sourceNodeIndex
+            : undefined
+        }
       />
     );
   }

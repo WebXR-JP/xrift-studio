@@ -54,7 +54,11 @@ export type XriftThreeLoaderOptions = {
   manager?: LoadingManager;
 };
 
-type LoadedModel = { root: Object3D; animations: AnimationClip[] };
+type LoadedModel = {
+  root: Object3D;
+  animations: AnimationClip[];
+  sourceMaterials: ReadonlyMap<number, Material>;
+};
 
 export class XriftThreeLoader {
   readonly assetBaseUrl?: string;
@@ -179,7 +183,7 @@ export class XriftThreeLoader {
     if (asset.sourceFormat === "obj") {
       const root = await new OBJLoader(this.manager).loadAsync(url);
       root.scale.multiplyScalar(asset.scale);
-      return { root, animations: [] };
+      return { root, animations: [], sourceMaterials: new Map() };
     }
     const loader = new GLTFLoader(this.manager);
     if (asset.openBrush?.renderer === "three-icosa") {
@@ -197,7 +201,11 @@ export class XriftThreeLoader {
     const gltf = await loader.loadAsync(url);
     tagSourceMaterialIndices(gltf);
     gltf.scene.scale.multiplyScalar(asset.scale);
-    return { root: gltf.scene, animations: gltf.animations };
+    return {
+      root: gltf.scene,
+      animations: gltf.animations,
+      sourceMaterials: collectSourceMaterials(gltf.scene),
+    };
   }
 
   private async loadTexture(
@@ -294,8 +302,17 @@ export class XriftThreeLoader {
         });
         return null;
       }
-      const instance = cloneSkeleton(loaded.root);
-      applyModelMaterials(instance, component, input.manifest, input.materials);
+      const instance = selectRuntimeSourceNode(
+        cloneSkeleton(loaded.root),
+        component.geometry.sourceNodeIndex,
+      );
+      applyModelMaterials(
+        instance,
+        loaded,
+        component,
+        input.manifest,
+        input.materials,
+      );
       applyModelPose(instance, component);
       instance.traverse((object) => {
         if (object instanceof Mesh) {
@@ -375,6 +392,7 @@ function materialForBinding(
 
 function applyModelMaterials(
   root: Object3D,
+  loaded: LoadedModel,
   component: Extract<XriftRuntimeComponent, { type: "mesh" }>,
   manifest: XriftRuntimeManifest,
   materials: ReadonlyMap<string, Material>,
@@ -399,10 +417,43 @@ function applyModelMaterials(
           candidate.name === material.name,
       );
       const materialId = slot ? bindingBySlot.get(slot.slot) : undefined;
+      const materialAsset = materialId ? manifest.assets[materialId] : undefined;
+      if (
+        materialAsset?.kind === "material" &&
+        materialAsset.shader?.kind === "openbrush"
+      ) {
+        return (
+          loaded.sourceMaterials
+            .get(materialAsset.shader.sourceMaterialIndex)
+            ?.clone() ?? material
+        );
+      }
       return (materialId ? materials.get(materialId) : undefined) ?? material;
     });
     object.material = Array.isArray(object.material) ? next : next[0] ?? object.material;
   });
+}
+
+function collectSourceMaterials(root: Object3D): Map<number, Material> {
+  const materials = new Map<number, Material>();
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    const entries = Array.isArray(object.material)
+      ? object.material
+      : [object.material];
+    for (const material of entries) {
+      const sourceIndex = material.userData.xriftSourceMaterialIndex;
+      if (
+        typeof sourceIndex === "number" &&
+        Number.isInteger(sourceIndex) &&
+        sourceIndex >= 0 &&
+        !materials.has(sourceIndex)
+      ) {
+        materials.set(sourceIndex, material);
+      }
+    }
+  });
+  return materials;
 }
 
 type RuntimeGltfDocument = {
@@ -411,10 +462,14 @@ type RuntimeGltfDocument = {
 
 function tagSourceMaterialIndices(gltf: GLTF): void {
   const parser = gltf.parser as unknown as {
-    associations: Map<unknown, { materials?: number; meshes?: number }>;
+    associations: Map<unknown, { materials?: number; meshes?: number; nodes?: number }>;
     json?: RuntimeGltfDocument;
   };
   gltf.scene.traverse((object) => {
+    const sourceNodeIndex = parser.associations.get(object)?.nodes;
+    if (typeof sourceNodeIndex === "number" && Number.isInteger(sourceNodeIndex)) {
+      object.userData.xriftSourceNodeIndex = sourceNodeIndex;
+    }
     if (!(object instanceof Mesh)) return;
     const materials = Array.isArray(object.material)
       ? object.material
@@ -439,6 +494,39 @@ function tagSourceMaterialIndices(gltf: GLTF): void {
       }
     });
   });
+}
+
+function selectRuntimeSourceNode(
+  root: Object3D,
+  sourceNodeIndex: number | undefined,
+): Object3D {
+  if (sourceNodeIndex === undefined) return root;
+  let selected: Object3D | undefined;
+  root.traverse((candidate) => {
+    if (
+      selected === undefined &&
+      candidate.userData.xriftSourceNodeIndex === sourceNodeIndex
+    ) {
+      selected = candidate;
+    }
+  });
+  if (!selected) {
+    const missing = new Group();
+    missing.userData.xriftMissingSourceNodeIndex = sourceNodeIndex;
+    return missing;
+  }
+  for (const child of [...selected.children]) {
+    if (typeof child.userData.xriftSourceNodeIndex === "number") {
+      selected.remove(child);
+    }
+  }
+  selected.removeFromParent();
+  selected.position.set(0, 0, 0);
+  selected.quaternion.identity();
+  selected.scale.set(1, 1, 1);
+  selected.updateMatrix();
+  selected.updateMatrixWorld(true);
+  return selected;
 }
 
 function applyModelPose(

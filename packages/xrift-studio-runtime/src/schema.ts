@@ -21,7 +21,7 @@ export type XriftRuntimeGeometry =
       kind: "primitive";
       primitive: "box" | "sphere" | "cylinder" | "cone" | "plane";
     }
-  | { kind: "model"; assetId: string };
+  | { kind: "model"; assetId: string; sourceNodeIndex?: number };
 
 export type XriftRuntimeMaterialBinding = {
   slot: string;
@@ -164,6 +164,15 @@ export type XriftRuntimeAsset =
       kind: "material";
       name: string;
       properties: Record<string, unknown>;
+      shader?: {
+        kind: "openbrush";
+        renderer: "three-icosa";
+        rendererVersion: string;
+        brushName: string;
+        brushGuid?: string;
+        brushBaseUrl: string;
+        sourceMaterialIndex: number;
+      };
     }
   | {
       id: string;

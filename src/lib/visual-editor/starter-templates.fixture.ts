@@ -1,7 +1,11 @@
 import { getPrefabAssetDocumentReference } from "./compiler/prefab-resolver";
 import { compileVisualProject } from "./compiler/compile";
 import { serializeVisualProjectDocuments } from "./persistence";
-import type { RegisteredSceneComponent } from "./scene-document";
+import { updatePrefabDocumentFromSource } from "./prefab-document";
+import {
+  createTransformComponent,
+  type RegisteredSceneComponent,
+} from "./scene-document";
 import {
   STARTER_ASSET_FOLDER_IDS,
   createStarterWorldProject,
@@ -36,6 +40,16 @@ export function runStarterTemplateFixtureAssertions(): void {
 
     assert(plan.bundledAssetCopies.length === (templateId === "openbrush" ? 2 : 0),
       `${templateId}: bundled model and license copy plan is incorrect`);
+    if (templateId === "openbrush") {
+      const licenseCopy = plan.bundledAssetCopies.find(
+        (copy) => copy.assetId === "openbrush-apache-license",
+      );
+      assert(
+        licenseCopy?.targetRelativePath.endsWith(".txt") &&
+          licenseCopy.mediaType === "text/plain",
+        "openbrush: license extension and media type must match",
+      );
+    }
     assert(modelAssets.length === (templateId === "openbrush" ? 1 : 0),
       `${templateId}: Model library is incorrect`);
     assert(textureAssets.length === 0, `${templateId}: Texture library must stay empty`);
@@ -132,6 +146,42 @@ export function runStarterTemplateFixtureAssertions(): void {
   );
   assert(blankModelsInScene.length === 0,
     "Blank World must not place optional Models in the Scene");
+
+  const groundPrefab = blank.prefabs["starter-ground"];
+  assert(groundPrefab !== undefined, "Ground Prefab fixture is missing");
+  const childId = "starter-floor-fixture-child";
+  const floor = blank.scene.entities["starter-floor"];
+  const editedScene = {
+    ...blank.scene,
+    entities: {
+      ...blank.scene.entities,
+      "starter-floor": {
+        ...floor,
+        children: [...floor.children, childId],
+      },
+      [childId]: {
+        id: childId,
+        name: "Updated Prefab Child",
+        parentId: "starter-floor",
+        children: [],
+        enabled: true,
+        components: [createTransformComponent(`${childId}-transform`)],
+      },
+    },
+  };
+  const updatedPrefab = updatePrefabDocumentFromSource(
+    editedScene,
+    blank.assets,
+    groundPrefab,
+  );
+  assert(updatedPrefab !== null, "Prefab source update failed");
+  assert(Object.keys(updatedPrefab.document.entities).length === 2,
+    "Prefab Update did not retain the edited child hierarchy");
+  assert(Object.values(updatedPrefab.document.entities).some(
+    (entity) => entity.name === "Updated Prefab Child"),
+  "Prefab Update did not copy the edited child Entity");
+  assert(Object.keys(updatedPrefab.document.sourceEntityMap ?? {}).length === 2,
+    "Prefab Update did not retain source Entity mappings");
 }
 
 function assertPrefabAssetReferencesExist(

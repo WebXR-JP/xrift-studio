@@ -782,7 +782,12 @@ function createStarterModelAsset(bundledId: BundledStarterAssetId): ModelAsset {
     thumbnail: { status: "missing" },
     folderId: STARTER_ASSET_FOLDER_IDS.models,
     order: STARTER_MODEL_ORDER[bundledId],
-    importSettings: defaultModelImportSettings(false),
+    importSettings: {
+      ...defaultModelImportSettings(false),
+      ...(bundledId === "openbrush-all-brushes"
+        ? { generateColliders: false }
+        : {}),
+    },
     materialSlots:
       bundledId === "openbrush-all-brushes"
         ? []

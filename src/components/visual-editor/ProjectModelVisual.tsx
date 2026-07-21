@@ -22,6 +22,7 @@ import {
   Box3,
   DoubleSide,
   FrontSide,
+  Group,
   MeshStandardMaterial,
   Vector3,
   type Material,
@@ -65,6 +66,7 @@ type Props = {
   assets: AssetManifest;
   assignedMaterials: readonly ProjectModelMaterialAssignment[];
   pose?: ModelPoseState;
+  sourceNodeIndex?: number;
 };
 
 type LoadState =
@@ -73,6 +75,7 @@ type LoadState =
   | { status: "error"; message: string };
 
 const MODEL_DATA_CACHE = new Map<string, Promise<string>>();
+const MODEL_OBJECT_CACHE = new Map<string, Promise<Object3D>>();
 const EMPTY_RESOLVED_MATERIALS: readonly ResolvedProjectModelMaterialAssignment[] =
   [];
 
@@ -87,6 +90,7 @@ export function ProjectModelVisual({
   assets,
   assignedMaterials,
   pose,
+  sourceNodeIndex,
 }: Props) {
   const cacheKey = `${projectPath}\n${sourceRelativePath}\n${sourceHash ?? ""}`;
   const [state, setState] = useState<LoadState>({ status: "loading" });
@@ -94,20 +98,25 @@ export function ProjectModelVisual({
   useEffect(() => {
     let active = true;
     setState({ status: "loading" });
-    const promise =
+    const dataPromise =
       MODEL_DATA_CACHE.get(cacheKey) ??
       tauri.readProjectFileDataUrl(projectPath, sourceRelativePath);
-    MODEL_DATA_CACHE.set(cacheKey, promise);
+    MODEL_DATA_CACHE.set(cacheKey, dataPromise);
+    const promise =
+      MODEL_OBJECT_CACHE.get(cacheKey) ??
+      dataPromise
+        .then(dataUrlToArrayBuffer)
+        .then((buffer) => parseSelfContainedModel(buffer, sourceRelativePath));
+    MODEL_OBJECT_CACHE.set(cacheKey, promise);
 
     void promise
-      .then(dataUrlToArrayBuffer)
-      .then((buffer) => parseSelfContainedModel(buffer, sourceRelativePath))
       .then((object) => {
         if (!active) return;
         setState({ status: "ready", object });
       })
       .catch((error) => {
         MODEL_DATA_CACHE.delete(cacheKey);
+        MODEL_OBJECT_CACHE.delete(cacheKey);
         if (active) {
           setState({
             status: "error",
@@ -137,6 +146,7 @@ export function ProjectModelVisual({
           selected={selected}
           assignedMaterials={resolvedMaterials}
           pose={pose}
+          sourceNodeIndex={sourceNodeIndex}
         />
       )}
     </ProjectModelMaterialTextureResolver>
@@ -220,6 +230,7 @@ function ProjectModelRender({
   selected,
   assignedMaterials,
   pose,
+  sourceNodeIndex,
 }: {
   state: LoadState;
   importScale: number;
@@ -228,19 +239,23 @@ function ProjectModelRender({
   selected: boolean;
   assignedMaterials: readonly ResolvedProjectModelMaterialAssignment[];
   pose?: ModelPoseState;
+  sourceNodeIndex?: number;
 }) {
   const readyObject = state.status === "ready" ? state.object : null;
   const renderedModel = useMemo(() => {
     if (!readyObject) return null;
-    const object = clone(readyObject);
+    const source = clone(readyObject);
+    const sourceMaterials = collectSourceMaterials(source);
+    const object = selectSourceModelNode(source, sourceNodeIndex);
     applyStaticModelPose(object, pose);
     const selectionBounds = getModelSelectionBounds(object);
     const ownedMaterials = applyAssignedMaterialPreviews(
       object,
       assignedMaterials,
+      sourceMaterials,
     );
     return { object, ownedMaterials, selectionBounds };
-  }, [assignedMaterials, pose, readyObject]);
+  }, [assignedMaterials, pose, readyObject, sourceNodeIndex]);
   const renderedObject = renderedModel?.object ?? null;
   const invalidate = useThree((canvasState) => canvasState.invalidate);
 
@@ -312,6 +327,7 @@ export function applyAssignedMaterialPreviews(
     material: MaterialAsset;
     textures?: CoreMaterialPreviewTextures;
   }[],
+  sourceMaterials: ReadonlyMap<number, Material> = collectSourceMaterials(object),
 ): Material[] {
   const assignmentBySourceIndex = new Map(
     assignments.map((assignment) => [
@@ -337,6 +353,7 @@ export function applyAssignedMaterialPreviews(
         source,
         assignment.material,
         assignment.textures,
+        sourceMaterials,
       );
       ownedMaterials.push(preview);
       return preview;
@@ -429,7 +446,16 @@ export function createAssignedMaterialPreviewMaterial(
   source: Material,
   assignedMaterial: MaterialAsset,
   assignedTextures: CoreMaterialPreviewTextures = {},
-): MeshStandardMaterial {
+  sourceMaterials: ReadonlyMap<number, Material> = new Map(),
+): Material {
+  if (assignedMaterial.shader?.kind === "openbrush") {
+    const preset = sourceMaterials.get(
+      assignedMaterial.shader.sourceMaterialIndex,
+    );
+    const preview = (preset ?? source).clone();
+    preview.name = `material_${assignedMaterial.shader.brushName}`;
+    return preview;
+  }
   const preview = isMeshStandardMaterial(source)
     ? source.clone()
     : new MeshStandardMaterial({ name: source.name });
@@ -465,6 +491,28 @@ export function createAssignedMaterialPreviewMaterial(
   resetSourcePhysicalEffects(preview);
   preview.needsUpdate = true;
   return preview;
+}
+
+function collectSourceMaterials(object: Object3D): Map<number, Material> {
+  const materials = new Map<number, Material>();
+  object.traverse((child) => {
+    const mesh = child as Object3D & {
+      isMesh?: boolean;
+      material?: Material | Material[];
+    };
+    if (!mesh.isMesh || !mesh.material) return;
+    const entries = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const material of entries) {
+      const sourceMaterialIndex = getSourceMaterialIndex(material);
+      if (
+        sourceMaterialIndex !== undefined &&
+        !materials.has(sourceMaterialIndex)
+      ) {
+        materials.set(sourceMaterialIndex, material);
+      }
+    }
+  });
+  return materials;
 }
 
 function isMeshStandardMaterial(
@@ -563,6 +611,8 @@ type GltfResourceDocument = {
 
 export const PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY =
   "xriftSourceMaterialIndex";
+export const PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY =
+  "xriftSourceNodeIndex";
 
 function tagSourceMaterialIndices(
   gltf: GLTF,
@@ -573,6 +623,15 @@ function tagSourceMaterialIndices(
       isMesh?: boolean;
       material?: Material | Material[];
     };
+    const sourceNodeIndex = gltf.parser.associations.get(child)?.nodes;
+    if (
+      typeof sourceNodeIndex === "number" &&
+      Number.isInteger(sourceNodeIndex) &&
+      sourceNodeIndex >= 0
+    ) {
+      child.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] =
+        sourceNodeIndex;
+    }
     if (!mesh.isMesh || !mesh.material) return;
     const materials = Array.isArray(mesh.material)
       ? mesh.material
@@ -603,6 +662,45 @@ function tagSourceMaterialIndices(
         sourceMaterialIndex;
     }
   });
+}
+
+/** Keeps one authored glTF node while its Transform lives on the Scene Entity. */
+export function selectSourceModelNode(
+  root: Object3D,
+  sourceNodeIndex: number | undefined,
+): Object3D {
+  if (sourceNodeIndex === undefined) return root;
+  let selected: Object3D | undefined;
+  root.traverse((candidate) => {
+    if (
+      selected === undefined &&
+      candidate.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] ===
+        sourceNodeIndex
+    ) {
+      selected = candidate;
+    }
+  });
+  if (!selected) {
+    const missing = new Group();
+    missing.name = `Missing glTF node ${sourceNodeIndex}`;
+    missing.userData.xriftMissingSourceNodeIndex = sourceNodeIndex;
+    return missing;
+  }
+  for (const child of [...selected.children]) {
+    if (
+      typeof child.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] ===
+      "number"
+    ) {
+      selected.remove(child);
+    }
+  }
+  selected.removeFromParent();
+  selected.position.set(0, 0, 0);
+  selected.quaternion.identity();
+  selected.scale.set(1, 1, 1);
+  selected.updateMatrix();
+  selected.updateMatrixWorld(true);
+  return selected;
 }
 
 function tagObjMaterialIndices(object: Object3D): void {

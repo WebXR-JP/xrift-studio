@@ -1,6 +1,8 @@
 import {
   detectOpenBrushGltfDocument,
+  extractOpenBrushMaterialShader,
   extractOpenBrushMaterialSlots,
+  isOpenBrushMaterialShader,
   prepareOpenBrushGltfSource,
 } from "./open-brush";
 
@@ -16,13 +18,31 @@ export function runOpenBrushFixtureAssertions(): void {
       },
     ],
     meshes: [{ primitives: [{ material: 0 }] }],
+    nodes: [
+      { name: "brush_Light_g0_b0", mesh: 0, children: [1] },
+      { name: "node_SceneLight_0_i1", translation: [1, 2, 3] },
+    ],
   };
   const metadata = detectOpenBrushGltfDocument(document);
   assert(metadata?.renderer === "three-icosa", "OpenBrush renderer was not detected");
   assert(metadata.brushNames[0] === "Light", "Brush name was not normalized");
+  assert(metadata.nodes?.length === 2, "OpenBrush node hierarchy was not extracted");
+  assert(metadata.nodes?.[0]?.name === "Light",
+    "OpenBrush brush Entity name was not normalized");
+  assert(metadata.nodes?.[0]?.sourceMaterialIndices[0] === 0,
+    "OpenBrush node material index was not retained");
+  assert(metadata.nodes?.[1]?.parentSourceNodeIndex === 0,
+    "OpenBrush parent-child relationship was not retained");
+  assert(metadata.nodes?.[1]?.position[1] === 2,
+    "OpenBrush node Transform was not retained");
   const slots = extractOpenBrushMaterialSlots(document);
   assert(slots.length === 1 && slots[0].sourceMaterialIndex === 0,
     "OpenBrush material slot was not extracted");
+  const shader = extractOpenBrushMaterialShader(document, 0);
+  assert(shader?.brushName === "Light" && shader.brushGuid === "fixture",
+    "OpenBrush custom Material preset was not extracted");
+  assert(isOpenBrushMaterialShader(shader),
+    "OpenBrush custom Material preset is not serializable");
 
   const gltfBytes = new TextEncoder().encode(JSON.stringify(document));
   const preparedGltf = prepareOpenBrushGltfSource(gltfBytes, "gltf");

@@ -19,15 +19,18 @@ import {
   getTextureAsset,
   normalizeTextureImportSettings,
   updateMaterialAsset,
+  type MaterialAsset,
   type TextureAsset,
 } from "../../lib/visual-editor";
 import {
   PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY,
+  PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY,
   applyAssignedMaterialPreview,
   applyAssignedMaterialPreviews,
   applyStaticModelPose,
   createAssignedMaterialPreviewMaterial,
   getModelSelectionBounds,
+  selectSourceModelNode,
 } from "./ProjectModelVisual";
 import {
   configureMaterialPreviewTexture,
@@ -38,6 +41,7 @@ import {
 export function runProjectModelMaterialPreviewFixtureAssertions(): void {
   assertModelSelectionBoundsStayLocal();
   assertStaticModelPoseUsesRestOffsets();
+  assertSourceNodeSelectionDoesNotDuplicateTheWholeModel();
 
   const project = createPrototypeProject("world", "model-material-preview");
   const fixtureTextureAsset: TextureAsset = {
@@ -176,7 +180,7 @@ export function runProjectModelMaterialPreviewFixtureAssertions(): void {
       occlusionMap,
       emissiveMap,
     },
-  );
+  ) as MeshPhysicalMaterial;
   assert(
     texturedPreview.map === baseColorMap &&
       texturedPreview.metalnessMap === metallicRoughnessMap &&
@@ -199,6 +203,7 @@ export function runProjectModelMaterialPreviewFixtureAssertions(): void {
   );
 
   assertModelMaterialAssignmentsStayInTheirGltfSlots(assets);
+  assertOpenBrushMaterialKeepsCustomShader(assigned);
   assertAsyncTextureCompletionRequestsMaterialRender();
   assertTextureLoadStatusOnlyReportsSupportedReadyAssets(fixtureTextureAsset);
 
@@ -214,6 +219,73 @@ export function runProjectModelMaterialPreviewFixtureAssertions(): void {
   root.geometry.dispose();
   source.dispose();
   texture.dispose();
+}
+
+function assertOpenBrushMaterialKeepsCustomShader(
+  fallback: MaterialAsset,
+): void {
+  const source = new MeshBasicMaterial({ color: "#ff0000" });
+  source.userData[PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY] = 0;
+  const brushPreset = new MeshBasicMaterial({ color: "#00ffff" });
+  brushPreset.userData[PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY] = 1;
+  const openBrushMaterial: MaterialAsset = {
+    ...fallback,
+    id: "fixture-openbrush-light",
+    name: "brush_Light",
+    shader: {
+      kind: "openbrush",
+      renderer: "three-icosa",
+      rendererVersion: "three-icosa@fixture",
+      brushName: "Light",
+      brushGuid: "fixture-guid",
+      brushBaseUrl: "https://example.invalid/brushes/",
+      sourceMaterialIndex: 1,
+    },
+  };
+  const preview = createAssignedMaterialPreviewMaterial(
+    source,
+    openBrushMaterial,
+    {},
+    new Map([[1, brushPreset]]),
+  );
+  assert(
+    preview !== source &&
+      preview.name === "material_Light" &&
+      (preview as MeshBasicMaterial).color.equals(brushPreset.color),
+    "OpenBrush Material was flattened into a Standard Material preview",
+  );
+  preview.dispose();
+  source.dispose();
+  brushPreset.dispose();
+}
+
+function assertSourceNodeSelectionDoesNotDuplicateTheWholeModel(): void {
+  const root = new Group();
+  const first = new Group();
+  first.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] = 0;
+  const second = new Group();
+  second.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] = 1;
+  second.position.set(4, 5, 6);
+  const nestedSourceNode = new Group();
+  nestedSourceNode.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] = 2;
+  const ownMesh = new Mesh(new BoxGeometry(), new MeshBasicMaterial());
+  second.add(ownMesh, nestedSourceNode);
+  root.add(first, second);
+
+  const selected = selectSourceModelNode(root, 1);
+  assert(selected === second, "The requested glTF node was not selected");
+  assert(selected.parent === null, "The selected glTF node remained attached to the whole Model");
+  assert(
+    selected.position.lengthSq() === 0 && selected.scale.equals(new Vector3(1, 1, 1)),
+    "The source Transform was applied twice after node expansion",
+  );
+  assert(
+    selected.children.length === 1 && selected.children[0] === ownMesh,
+    "A nested source node was duplicated inside the selected node",
+  );
+
+  ownMesh.geometry.dispose();
+  (ownMesh.material as MeshBasicMaterial).dispose();
 }
 
 function assertStaticModelPoseUsesRestOffsets(): void {

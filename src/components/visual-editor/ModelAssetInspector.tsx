@@ -118,7 +118,7 @@ export function ModelAssetInspector({
             </span>
           </div>
           <p className="mt-2 text-xs leading-5 text-fuchsia-900/80">
-            ソースのブラシシェーダーを既定表示に使います。Material SlotへXRift Materialを割り当てると、そのブラシだけを上書きできます。
+            各brushをthree-icosa専用Material Assetとして展開し、対応するMaterial Slotへ初期設定します。通常のXRift Materialを割り当てると、そのブラシだけを上書きできます。
           </p>
           <dl className="mt-2 grid grid-cols-[64px_minmax(0,1fr)] gap-x-2 gap-y-1 text-[11px]">
             <dt className="text-fuchsia-700">Exporter</dt>

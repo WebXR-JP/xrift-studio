@@ -6,6 +6,7 @@ import {
 } from "./asset-manifest";
 import { getBuiltinPrefabRecipe } from "./builtin-prefab-catalog";
 import { validateModelAssetContract } from "./model-import-contract";
+import { isOpenBrushMaterialShader } from "./open-brush";
 import { normalizeParticleProperties } from "./particle-system";
 import {
   PREFAB_DOCUMENT_SCHEMA_VERSION,
@@ -321,6 +322,15 @@ function validateMaterialAsset(
   assets: Record<string, unknown>,
   issues: DocumentValidationIssue[],
 ): void {
+  if (asset.shader !== undefined && !isOpenBrushMaterialShader(asset.shader)) {
+    issues.push(
+      issue(
+        `${path}.shader`,
+        "custom-material",
+        "OpenBrush Material shader descriptor is invalid",
+      ),
+    );
+  }
   if (!isRecord(asset.properties)) {
     issues.push(issue(`${path}.properties`, "type", "material properties must be an object"));
     return;
@@ -1033,6 +1043,36 @@ export function validatePrefabDocument(value: unknown): DocumentValidationIssue[
   }
   if (!isRecord(value.entities) || !Array.isArray(value.rootEntityIds)) return issues;
 
+  if (value.sourceEntityMap !== undefined) {
+    if (!isRecord(value.sourceEntityMap)) {
+      issues.push(
+        issue("$.sourceEntityMap", "type", "sourceEntityMap must be an object"),
+      );
+    } else {
+      const sourceIds = new Set<string>();
+      for (const [prefabEntityId, sourceEntityId] of Object.entries(
+        value.sourceEntityMap,
+      )) {
+        if (
+          !value.entities[prefabEntityId] ||
+          typeof sourceEntityId !== "string" ||
+          !sourceEntityId.trim() ||
+          sourceIds.has(sourceEntityId)
+        ) {
+          issues.push(
+            issue(
+              `$.sourceEntityMap.${prefabEntityId}`,
+              "reference",
+              "sourceEntityMap entry is invalid or duplicated",
+            ),
+          );
+        } else {
+          sourceIds.add(sourceEntityId);
+        }
+      }
+    }
+  }
+
   const rootIds = new Set(value.rootEntityIds.filter((id): id is string => typeof id === "string"));
   const componentIds = new Set<string>();
   for (const [entityId, candidate] of Object.entries(value.entities)) {
@@ -1331,6 +1371,21 @@ function validatePrefabComponentShape(
       (typeof component.geometry.assetId !== "string" || !component.geometry.assetId)
     ) {
       issues.push(issue(`${path}.geometry.assetId`, "reference", "geometry asset is invalid"));
+    }
+    if (
+      isRecord(component.geometry) &&
+      component.geometry.kind === "asset" &&
+      component.geometry.sourceNodeIndex !== undefined &&
+      (!Number.isInteger(component.geometry.sourceNodeIndex) ||
+        Number(component.geometry.sourceNodeIndex) < 0)
+    ) {
+      issues.push(
+        issue(
+          `${path}.geometry.sourceNodeIndex`,
+          "range",
+          "sourceNodeIndex must be a non-negative integer",
+        ),
+      );
     }
     if (component.modelPose !== undefined) {
       validateModelPoseShape(component.modelPose, `${path}.modelPose`, issues);

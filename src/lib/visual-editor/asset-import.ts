@@ -871,8 +871,7 @@ async function createModelImportPlan(
   }
 
   const derivedAssets: Array<MaterialAsset | TextureAsset> = [];
-  if (!openBrush) {
-    const expanded = await expandGltfAssets({
+  const expanded = await expandGltfAssets({
     json: parsedJson.json,
     modelBytes: bytes,
     sourceFormat: classification.format === "vrm" ? "glb" : classification.format,
@@ -883,9 +882,10 @@ async function createModelImportPlan(
     materialFolderId: folderPlan.materialFolderId,
     textureFolderId: folderPlan.textureFolderId,
     hashBytes: sha256AssetBytes,
+    ...(openBrush ? { openBrush } : {}),
   });
-    materialSlots = expanded.materialSlots;
-    derivedAssets.push(...expanded.materialAssets, ...expanded.textureAssets);
+  materialSlots = expanded.materialSlots;
+  derivedAssets.push(...expanded.materialAssets, ...expanded.textureAssets);
   writes.push(
     ...expanded.writes.map((write) => ({
       relativePath: write.relativePath,
@@ -905,8 +905,6 @@ async function createModelImportPlan(
       fieldPath: warning.fieldPath,
     })),
   );
-
-  }
 
   const asset: ModelAsset = {
     id: assetId,

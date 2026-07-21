@@ -9,12 +9,17 @@ import {
 import type { AssetManifest, AssetFolder, ModelAsset, SceneAsset } from "./asset-manifest";
 import { expandGltfAssets, type GltfJson } from "./gltf-derived-assets";
 import type { PrefabDocument } from "./prefab-document";
+import { updatePrefabDocumentFromSource } from "./prefab-document";
 import type { VisualProjectDocument } from "./project-document";
 import type { RegisteredSceneComponent, SceneDocument } from "./scene-document";
 import {
   detectOpenBrushGltfDocument,
   extractOpenBrushMaterialSlots,
 } from "./open-brush";
+import {
+  expandOpenBrushModelEntityHierarchy,
+  hasOpenBrushNodeHierarchy,
+} from "./open-brush-hierarchy";
 import {
   STARTER_ASSET_FOLDER_IDS,
   type StarterAssetCopyPlanEntry,
@@ -113,17 +118,9 @@ export async function prepareStarterVisualProject(
     const modelFolders = ensureStarterModelFolders(folders, model);
     const gltfJson = parseStarterGlbJson(loaded.bytes);
     const openBrush = detectOpenBrushGltfDocument(gltfJson);
-    if (openBrush) {
-      assets[model.id] = {
-        ...model,
-        folderId: modelFolders.modelFolderId,
-        materialSlots: extractOpenBrushMaterialSlots(gltfJson),
-        importMetadata: model.importMetadata
-          ? { ...model.importMetadata, openBrush }
-          : model.importMetadata,
-      };
-      continue;
-    }
+    const sourceMaterialSlots = openBrush
+      ? extractOpenBrushMaterialSlots(gltfJson)
+      : model.materialSlots;
     const scopedManifest: AssetManifest = {
       ...plan.assets,
       folders,
@@ -141,17 +138,26 @@ export async function prepareStarterVisualProject(
       sourceFormat: "glb",
       modelAssetId: model.id,
       modelSourceHash: model.sourceHash ?? loaded.copy.expectedSha256,
-      materialSlots: model.materialSlots,
+      materialSlots: sourceMaterialSlots,
       manifest: scopedManifest,
       materialFolderId: modelFolders.materialFolderId,
       textureFolderId: modelFolders.textureFolderId,
       hashBytes: sha256StarterBytes,
+      ...(openBrush ? { openBrush } : {}),
     });
 
     assets[model.id] = {
       ...model,
       folderId: modelFolders.modelFolderId,
       materialSlots: expanded.materialSlots,
+      ...(openBrush && model.importMetadata
+        ? {
+            importMetadata: {
+              ...model.importMetadata,
+              openBrush,
+            },
+          }
+        : {}),
     };
     const starterTexturePaths = new Map(
       expanded.writes.map((write) => [
@@ -180,10 +186,33 @@ export async function prepareStarterVisualProject(
     }
   }
 
+  const expandedAssets: AssetManifest = { ...plan.assets, folders, assets };
+  const openBrushModel = Object.values(assets).find(
+    (candidate): candidate is ModelAsset =>
+      candidate.kind === "model" && hasOpenBrushNodeHierarchy(candidate),
+  );
+  const scene = openBrushModel
+    ? expandOpenBrushModelEntityHierarchy(
+        plan.scene,
+        expandedAssets,
+        openBrushModel,
+        "starter-openbrush-gallery",
+      )
+    : plan.scene;
+  const prefabs = Object.fromEntries(
+    Object.entries(plan.prefabs).map(([prefabId, document]) => [
+      prefabId,
+      updatePrefabDocumentFromSource(scene, expandedAssets, document)?.document ??
+        document,
+    ]),
+  );
+
   return {
     plan: {
       ...plan,
-      assets: { ...plan.assets, folders, assets },
+      scene,
+      assets: expandedAssets,
+      prefabs,
     },
     binaryDocuments: [
       ...loadedCopies.map(({ copy, bytes }) => ({

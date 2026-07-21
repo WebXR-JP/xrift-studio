@@ -321,6 +321,8 @@ export type MaterialProperties = {
 
 export type MaterialAsset = AssetBase<"material"> & {
   properties: MaterialProperties;
+  /** Custom renderer preset retained without flattening it into glTF PBR. */
+  shader?: import("./open-brush").OpenBrushMaterialShader;
   /** Present only for a Material expanded from an imported glTF/GLB. */
   importedFromModel?: ImportedMaterialProvenance;
 };

@@ -8,6 +8,10 @@ import type {
 } from "./asset-manifest";
 import { createDocumentId } from "./document-id";
 import {
+  expandOpenBrushModelEntityHierarchy,
+  hasOpenBrushNodeHierarchy,
+} from "./open-brush-hierarchy";
+import {
   createPrefabInstanceComponent,
   type PrefabDocument,
 } from "./prefab-document";
@@ -151,19 +155,29 @@ export function instantiateSceneAsset(
       children: [...parent.children, entityId],
     };
   }
+  const placedScene: SceneDocument = {
+    ...scene,
+    entities,
+    rootEntityIds:
+      parentEntityId === null
+        ? [...scene.rootEntityIds, entityId]
+        : scene.rootEntityIds,
+  };
+  const expandedScene =
+    asset.kind === "model" && hasOpenBrushNodeHierarchy(asset)
+      ? expandOpenBrushModelEntityHierarchy(
+          placedScene,
+          assets,
+          asset,
+          entityId,
+        )
+      : placedScene;
   return {
     placed: true,
     assetKind,
     assetName: asset.name,
     entityId,
-    scene: {
-      ...scene,
-      entities,
-      rootEntityIds:
-        parentEntityId === null
-          ? [...scene.rootEntityIds, entityId]
-          : scene.rootEntityIds,
-    },
+    scene: expandedScene,
   };
 }
 

@@ -35,6 +35,7 @@ import {
   type MeshComponent,
   type ParticleEmitterComponent,
   type ParticlePropertiesPatch,
+  type PrefabDocument,
   type SceneDocument,
   type SceneSettings,
   type SceneEntity,
@@ -84,6 +85,42 @@ const LIGHT_LABELS: Record<LightComponent["lightType"], string> = {
   spot: "Spot Light",
   rectArea: "Area Light",
 };
+
+type PrefabSourceContext = {
+  prefabId: string;
+  name: string;
+  sourceRootEntityId: string;
+};
+
+function findPrefabSourceContext(
+  scene: SceneDocument,
+  prefabs: Readonly<Record<string, PrefabDocument>>,
+  entityId: string,
+): PrefabSourceContext | undefined {
+  const contains = (rootEntityId: string): boolean => {
+    const pending = [rootEntityId];
+    const visited = new Set<string>();
+    while (pending.length > 0) {
+      const current = pending.pop()!;
+      if (current === entityId) return true;
+      if (visited.has(current)) continue;
+      visited.add(current);
+      scene.entities[current]?.children.forEach((childId) => pending.push(childId));
+    }
+    return false;
+  };
+  return Object.values(prefabs)
+    .filter((document) => document.source.sceneId === scene.sceneId)
+    .flatMap((document) =>
+      document.source.rootEntityIds
+        .filter(contains)
+        .map((sourceRootEntityId) => ({
+          prefabId: document.prefabId,
+          name: document.name,
+          sourceRootEntityId,
+        })),
+    )[0];
+}
 
 function ComponentCard({
   title,
@@ -507,6 +544,7 @@ function MeshInspector({
           name: binding.slot,
         }));
   const model = geometry?.kind === "model" ? geometry : undefined;
+  const openBrush = model?.importMetadata?.openBrush;
   const bones = model?.importMetadata?.bones ?? [];
   const morphTargets = model?.importMetadata?.morphTargets ?? [];
   const [selectedBoneKey, setSelectedBoneKey] = useState(bones[0]?.key ?? "");
@@ -591,7 +629,9 @@ function MeshInspector({
                   }
                   className="h-7 min-w-0 rounded border border-slate-300 bg-white px-1.5 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                 >
-                  <option value="">未設定</option>
+                  <option value="">
+                    {openBrush ? "OpenBrush Brush Shader" : "未設定"}
+                  </option>
                   {materials.map((material) => (
                     <option key={material.id} value={material.id}>{material.name}</option>
                   ))}
@@ -606,7 +646,15 @@ function MeshInspector({
                   編集
                 </button>
               </div>
-              <p className="mt-1 text-xs text-slate-500">マテリアルをここへドロップ</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {assigned?.shader?.kind === "openbrush"
+                  ? `${assigned.shader.brushName}をthree-icosa専用Materialとして設定済み`
+                  : openBrush && !assigned
+                    ? "source brushを使用中。ドロップするとXRift Materialで上書きします"
+                    : openBrush
+                      ? "通常のXRift MaterialでOpenBrush shaderを上書き中"
+                      : "マテリアルをここへドロップ"}
+              </p>
             </div>
           );
         })}
@@ -1374,6 +1422,8 @@ function EntityInspector({
   onAddComponent,
   onUpdateXriftComponent,
   onRemoveXriftComponent,
+  prefabSource,
+  onUpdatePrefab,
 }: {
   entity: SceneEntity;
   assets: AssetManifest;
@@ -1403,6 +1453,8 @@ function EntityInspector({
     patch: UpdateXriftComponentPatch,
   ) => void;
   onRemoveXriftComponent: (componentId: string) => void;
+  prefabSource?: PrefabSourceContext;
+  onUpdatePrefab: (prefabId: string) => void;
 }) {
   const transform = getTransform(entity);
   const [addComponentOpen, setAddComponentOpen] = useState(false);
@@ -1412,6 +1464,22 @@ function EntityInspector({
   return (
     <div className="space-y-3">
       <EntityNameField entity={entity} disabled={readOnly} onRename={onRename} />
+
+      {prefabSource ? (
+        <ComponentCard title="Prefab Source" subtitle={prefabSource.name}>
+          <p className="text-xs leading-4 text-slate-600">
+            このEntityを含むHierarchyがPrefabの編集元です。構造や値を変更した後、UpdateでPrefab documentへ反映します。
+          </p>
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={() => onUpdatePrefab(prefabSource.prefabId)}
+            className="w-full rounded border border-violet-300 bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-40"
+          >
+            PrefabをUpdate
+          </button>
+        </ComponentCard>
+      ) : null}
 
       {transform ? (
         <ComponentCard title="Transform" subtitle="Local">
@@ -1716,6 +1784,9 @@ export function InspectorPanel({
   onCloseSceneSettings,
   onSceneSettingsChange,
   onThumbnailChanged,
+  prefabs,
+  onSelectPrefabSourceEntity,
+  onUpdatePrefab,
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
@@ -1763,9 +1834,15 @@ export function InspectorPanel({
   onCloseSceneSettings: () => void;
   onSceneSettingsChange: (settings: SceneSettings) => void;
   onThumbnailChanged: () => void;
+  prefabs: Readonly<Record<string, PrefabDocument>>;
+  onSelectPrefabSourceEntity: (entityId: string) => void;
+  onUpdatePrefab: (prefabId: string) => void;
 }) {
   const entity = selectedEntityId ? scene.entities[selectedEntityId] : undefined;
   const asset = selectedAssetId ? assets.assets[selectedAssetId] : undefined;
+  const prefabSource = entity
+    ? findPrefabSourceContext(scene, prefabs, entity.id)
+    : undefined;
   const materialReferenceSummary =
     asset?.kind === "material"
       ? countMaterialSceneReferences(scene, assets, asset.id)
@@ -1854,6 +1931,9 @@ export function InspectorPanel({
             modelReimportImpactNotice={modelReimportImpactNotice}
             onParticleChange={onParticleChange}
             onTextureChange={onTextureChange}
+            prefabs={prefabs}
+            onSelectPrefabSourceEntity={onSelectPrefabSourceEntity}
+            onUpdatePrefab={onUpdatePrefab}
           />
         ) : entity ? (
           <EntityInspector
@@ -1901,6 +1981,8 @@ export function InspectorPanel({
             onRemoveXriftComponent={(componentId) =>
               onRemoveXriftComponent(entity.id, componentId)
             }
+            prefabSource={prefabSource}
+            onUpdatePrefab={onUpdatePrefab}
           />
         ) : (
           <div className="rounded-md border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-xs leading-5 text-slate-500">

@@ -74,6 +74,7 @@ import {
   updateMaterialAsset,
   updateModelAsset,
   updateParticleAsset,
+  updatePrefabDocumentFromSource,
   updateTextureAsset,
   updateXriftComponent,
   type ColliderPatch,
@@ -2089,6 +2090,14 @@ export function VisualEditorPrototype({
         setNotice("Materialの適用先Meshが見つかりません");
         return;
       }
+      const geometryAssetId =
+        mesh.geometry?.kind === "asset"
+          ? mesh.geometry.assetId
+          : mesh.geometryAssetId;
+      const geometryAsset = bundle.assets.assets[geometryAssetId];
+      const usesOpenBrushSource =
+        geometryAsset?.kind === "model" &&
+        Boolean(geometryAsset.importMetadata?.openBrush);
       const slots = target.slots.map((slot) => {
         const binding = mesh.materialBindings.find(
           (candidate) => candidate.slot === slot.slot,
@@ -2103,7 +2112,9 @@ export function VisualEditorPrototype({
           currentMaterialName:
             currentMaterial?.kind === "material"
               ? currentMaterial.name
-              : undefined,
+              : usesOpenBrushSource
+                ? "OpenBrush Brush Shader"
+                : undefined,
         };
       });
       setPendingMaterialAssignment({
@@ -2434,6 +2445,48 @@ export function VisualEditorPrototype({
       });
     },
     [editorMode],
+  );
+
+  const handleUpdatePrefab = useCallback(
+    (prefabId: string) => {
+      if (editorMode !== "edit" || importBusy) {
+        setNotice(
+          editorMode !== "edit"
+            ? "Playを停止してからPrefabをUpdateしてください"
+            : "アセットのインポート完了後にPrefabをUpdateしてください",
+        );
+        return;
+      }
+      setHistory((current) => {
+        const document = current.present.bundle.prefabs[prefabId];
+        if (!document) {
+          setNotice("UpdateするPrefab documentが見つかりません");
+          return current;
+        }
+        const updated = updatePrefabDocumentFromSource(
+          current.present.bundle.scene,
+          current.present.bundle.assets,
+          document,
+        );
+        if (!updated) {
+          setNotice("Prefab sourceのHierarchyを読み取れませんでした");
+          return current;
+        }
+        setSaveStatus("dirty");
+        setNotice(`「${document.name}」を現在のHierarchyで更新しました`);
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: touchProject({
+            ...current.present.bundle,
+            prefabs: {
+              ...current.present.bundle.prefabs,
+              [prefabId]: updated.document,
+            },
+          }),
+        });
+      });
+    },
+    [editorMode, importBusy],
   );
 
   const handleAddComponent = useCallback(
@@ -3635,6 +3688,7 @@ export function VisualEditorPrototype({
           <InspectorPanel
             scene={bundle.scene}
             assets={bundle.assets}
+            prefabs={bundle.prefabs}
             projectPath={projectPath}
             selectedEntityId={sceneSelection?.id ?? null}
             selectedAssetId={assetSelection}
@@ -3681,6 +3735,17 @@ export function VisualEditorPrototype({
               onThumbnailChanged?.();
               setNotice("サムネイルを更新しました。変更は公開時に反映されます");
             }}
+            onSelectPrefabSourceEntity={(entityId) => {
+              if (!bundle.scene.entities[entityId]) {
+                setNotice("Prefab source Entityが見つかりません");
+                return;
+              }
+              setAssetSelection(null);
+              setSceneSettingsOpen(false);
+              setSceneSelection({ kind: "entity", id: entityId });
+              setNotice("Prefabの編集元Hierarchyを開きました");
+            }}
+            onUpdatePrefab={handleUpdatePrefab}
           />
           <AssetsPanel
             assets={bundle.assets}

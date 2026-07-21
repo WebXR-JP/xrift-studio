@@ -14,6 +14,7 @@ import {
   TEXTURE_MAG_FILTERS,
   TEXTURE_MIN_FILTERS,
   TEXTURE_WRAP_MODES,
+  getPrefabAssetDocumentReference,
   type AudioAsset,
   type AssetManifest,
   type Color3,
@@ -26,6 +27,8 @@ import {
   type MaterialTextureTransform,
   type ModelAssetPatch,
   type ParticlePropertiesPatch,
+  type PrefabDocument,
+  type PrefabAsset,
   type SceneAsset,
   type TextureAsset,
   type TextureAssetPatch,
@@ -288,6 +291,19 @@ export function MaterialThumbnail({
   className?: string;
   onTextureStatusesChange?: (statuses: MaterialPreviewTextureStatuses) => void;
 }) {
+  if (asset.shader?.kind === "openbrush") {
+    return (
+      <div
+        className={`flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-violet-950 via-indigo-700 to-cyan-400 px-2 text-center text-white ${className}`}
+        title={`${asset.shader.brushName} / three-icosa`}
+      >
+        <span className="text-xl font-black tracking-tight">OB</span>
+        <span className="mt-0.5 max-w-full truncate text-[10px] font-semibold">
+          {asset.shader.brushName}
+        </span>
+      </div>
+    );
+  }
   return (
     <div className={`overflow-hidden bg-slate-50 ${className}`}>
       <Canvas
@@ -332,6 +348,99 @@ function AssetThumbnailFallback({ asset }: { asset: SceneAsset }) {
     <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-slate-100 px-2 text-center text-slate-500">
       <Icon size={24} aria-hidden="true" />
       <span className="text-xs font-medium">{label}</span>
+    </div>
+  );
+}
+
+function PrefabQuickEditor({
+  asset,
+  document,
+  readOnly,
+  onSelectSourceEntity,
+  onUpdate,
+}: {
+  asset: PrefabAsset;
+  document?: PrefabDocument;
+  readOnly: boolean;
+  onSelectSourceEntity: (entityId: string) => void;
+  onUpdate: () => void;
+}) {
+  if (!document) {
+    return (
+      <div className="rounded border border-rose-200 bg-rose-50 p-3 text-xs leading-5 text-rose-800">
+        Prefab documentが見つかりません。Assetの参照先を確認してください。
+      </div>
+    );
+  }
+  const rows: Array<{ id: string; depth: number }> = [];
+  const visited = new Set<string>();
+  const visit = (entityId: string, depth: number) => {
+    if (visited.has(entityId) || !document.entities[entityId]) return;
+    visited.add(entityId);
+    rows.push({ id: entityId, depth });
+    document.entities[entityId].children.forEach((childId) =>
+      visit(childId, depth + 1),
+    );
+  };
+  document.rootEntityIds.forEach((entityId) => visit(entityId, 0));
+  const firstSourceRoot = document.source.rootEntityIds[0];
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md border border-slate-200 bg-white p-3">
+        <h3 className="truncate text-[13px] font-semibold text-slate-900">
+          {asset.name}
+        </h3>
+        <p className="mt-1 text-xs text-slate-500">
+          {rows.length} Entity・{document.rootEntityIds.length} Root
+        </p>
+      </div>
+      <EditorSection title="Prefab Hierarchy">
+        <div className="max-h-80 overflow-y-auto rounded border border-slate-200 bg-slate-50 p-1">
+          {rows.map(({ id, depth }) => {
+            const entity = document.entities[id];
+            const sourceEntityId = document.sourceEntityMap?.[id];
+            return (
+              <button
+                key={id}
+                type="button"
+                disabled={!sourceEntityId}
+                onClick={() => sourceEntityId && onSelectSourceEntity(sourceEntityId)}
+                className="flex h-7 w-full items-center rounded px-2 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-default disabled:text-slate-500"
+                style={{ paddingLeft: `${8 + depth * 14}px` }}
+                title={
+                  sourceEntityId
+                    ? `${entity.name}をsource Hierarchyで開く`
+                    : entity.name
+                }
+              >
+                <span className="truncate">{entity.name}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs leading-4 text-slate-500">
+          Entityを選ぶと編集元のHierarchyへ移動します。構造を変更した後はUpdateでPrefabへ反映します。
+        </p>
+      </EditorSection>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          disabled={!firstSourceRoot}
+          onClick={() => firstSourceRoot && onSelectSourceEntity(firstSourceRoot)}
+          className="rounded border border-slate-300 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+        >
+          Sourceを開く
+        </button>
+        <button
+          type="button"
+          disabled={readOnly}
+          onClick={onUpdate}
+          className="rounded border border-violet-300 bg-violet-50 px-2 py-2 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-40"
+        >
+          PrefabをUpdate
+        </button>
+      </div>
     </div>
   );
 }
@@ -1084,15 +1193,7 @@ function disabledLitMaterialExtensions(): MaterialExtensionsPatch {
   };
 }
 
-export function MaterialQuickEditor({
-  asset,
-  assets,
-  projectPath,
-  referenceSummary,
-  readOnly,
-  onChange,
-  onOpenTexture,
-}: {
+type MaterialQuickEditorProps = {
   asset: MaterialAsset;
   assets: AssetManifest;
   projectPath?: string;
@@ -1100,7 +1201,86 @@ export function MaterialQuickEditor({
   readOnly: boolean;
   onChange: (patch: MaterialAssetPatch) => void;
   onOpenTexture: (assetId: string) => void;
-}) {
+};
+
+export function MaterialQuickEditor(props: MaterialQuickEditorProps) {
+  if (props.asset.shader?.kind === "openbrush") {
+    return <OpenBrushMaterialQuickEditor {...props} />;
+  }
+  return <StandardMaterialQuickEditor {...props} />;
+}
+
+function OpenBrushMaterialQuickEditor({
+  asset,
+  assets,
+  projectPath,
+  referenceSummary,
+}: MaterialQuickEditorProps) {
+  const shader = asset.shader;
+  if (!shader || shader.kind !== "openbrush") return null;
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-[112px_minmax(0,1fr)] gap-3 rounded-md border border-violet-200 bg-white p-3 shadow-sm">
+        <div className="h-28 overflow-hidden rounded-md border border-violet-300 shadow-sm">
+          <MaterialThumbnail asset={asset} assets={assets} projectPath={projectPath} />
+        </div>
+        <div className="min-w-0 self-center">
+          <h3 className="truncate text-[13px] font-semibold text-slate-900">
+            {asset.name}
+          </h3>
+          <p className="text-xs font-medium text-violet-700">
+            OpenBrush Brush Material
+          </p>
+          <p className="mt-2 text-xs leading-4 text-slate-600">
+            three-icosaのGLSL・uniform・brush textureを保持する専用Materialです。
+          </p>
+          <p className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">
+            {referenceSummary && referenceSummary.slotCount > 0
+              ? `共有中: ${referenceSummary.entityCount} Entity / ${referenceSummary.slotCount} Slot`
+              : "シーン内の参照はありません"}
+          </p>
+        </div>
+      </div>
+
+      <EditorSection title="Brush preset">
+        <dl className="grid grid-cols-[92px_minmax(0,1fr)] gap-x-2 gap-y-1.5 text-xs">
+          <dt className="text-slate-500">Brush</dt>
+          <dd className="font-semibold text-slate-800">{shader.brushName}</dd>
+          <dt className="text-slate-500">Renderer</dt>
+          <dd className="text-slate-700">{shader.rendererVersion}</dd>
+          <dt className="text-slate-500">glTF Material</dt>
+          <dd className="text-slate-700">#{shader.sourceMaterialIndex}</dd>
+          {shader.brushGuid ? (
+            <>
+              <dt className="text-slate-500">Brush GUID</dt>
+              <dd className="break-all font-mono text-[10px] text-slate-700">
+                {shader.brushGuid}
+              </dd>
+            </>
+          ) : null}
+          <dt className="text-slate-500">Source Model</dt>
+          <dd className="break-all font-mono text-[10px] text-slate-700">
+            {asset.importedFromModel?.modelAssetId ?? "—"}
+          </dd>
+        </dl>
+      </EditorSection>
+
+      <p className="rounded-md border border-sky-200 bg-sky-50 px-2.5 py-2 text-[11px] leading-4 text-sky-800">
+        このMaterialはStandard/PBRへ変換せず、固定されたthree-icosa brush libraryから再構築します。通常のXRift MaterialをSlotへ割り当てた場合だけ見た目を上書きします。
+      </p>
+    </div>
+  );
+}
+
+function StandardMaterialQuickEditor({
+  asset,
+  assets,
+  projectPath,
+  referenceSummary,
+  readOnly,
+  onChange,
+  onOpenTexture,
+}: MaterialQuickEditorProps) {
   const pbr = asset.properties.pbrMetallicRoughness;
   const textures = Object.values(assets.assets).filter(
     (candidate): candidate is TextureAsset => candidate.kind === "texture",
@@ -2290,6 +2470,9 @@ export function AssetQuickEditor({
   modelReimportImpactNotice,
   onParticleChange,
   onTextureChange,
+  prefabs,
+  onSelectPrefabSourceEntity,
+  onUpdatePrefab,
 }: {
   asset: SceneAsset;
   assets: AssetManifest;
@@ -2304,6 +2487,9 @@ export function AssetQuickEditor({
   modelReimportImpactNotice?: ModelReimportImpactNotice | null;
   onParticleChange: (assetId: string, patch: ParticlePropertiesPatch) => void;
   onTextureChange: (assetId: string, patch: TextureAssetPatch) => void;
+  prefabs: Readonly<Record<string, PrefabDocument>>;
+  onSelectPrefabSourceEntity: (entityId: string) => void;
+  onUpdatePrefab: (prefabId: string) => void;
 }) {
   if (asset.kind === "material") {
     return (
@@ -2371,6 +2557,20 @@ export function AssetQuickEditor({
 
   if (asset.kind === "audio") {
     return <AudioAssetInspector asset={asset} />;
+  }
+
+  const prefabReference = getPrefabAssetDocumentReference(asset);
+  if (prefabReference) {
+    const { prefabId } = prefabReference;
+    return (
+      <PrefabQuickEditor
+        asset={prefabReference.asset}
+        document={prefabs[prefabId]}
+        readOnly={readOnly}
+        onSelectSourceEntity={onSelectPrefabSourceEntity}
+        onUpdate={() => onUpdatePrefab(prefabId)}
+      />
+    );
   }
 
   return (

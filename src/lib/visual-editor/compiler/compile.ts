@@ -1065,7 +1065,7 @@ function renderModelMesh(
   ${isObj
     ? "const scene = useLoader(OBJLoader, modelUrl);"
     : isOpenBrush
-      ? `const { scene } = useLoader(GLTFLoader, modelUrl, (loader) => {
+      ? `const { scene, parser } = useLoader(GLTFLoader, modelUrl, (loader) => {
     loader.register(
       (parser) => new GLTFGoogleTiltBrushMaterialExtension(parser, ${JSON.stringify(OPEN_BRUSH_BRUSH_BASE_URL)}),
     );
@@ -1091,10 +1091,15 @@ function renderCompiledModelPose(
   context: CompileContext,
 ): { declaration: string; objectName: string } {
   const pose = mesh.modelPose;
+  const sourceNodeIndex =
+    mesh.geometry?.kind === "asset"
+      ? mesh.geometry.sourceNodeIndex
+      : undefined;
   if (
-    !pose ||
-    (Object.keys(pose.bones).length === 0 &&
-      Object.keys(pose.morphTargets).length === 0)
+    sourceNodeIndex === undefined &&
+    (!pose ||
+      (Object.keys(pose.bones).length === 0 &&
+        Object.keys(pose.morphTargets).length === 0))
   ) {
     return { declaration: "", objectName: "scene" };
   }
@@ -1102,15 +1107,44 @@ function renderCompiledModelPose(
   context.extraImports.add(
     'import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";',
   );
-  const boneRotations = JSON.stringify(pose.bones);
-  const morphTargets = JSON.stringify(pose.morphTargets);
+  const boneRotations = JSON.stringify(pose?.bones ?? {});
+  const morphTargets = JSON.stringify(pose?.morphTargets ?? {});
+  const selectSourceNode = sourceNodeIndex === undefined
+    ? ""
+    : `    const originals: typeof scene.children = [];
+    const copies: typeof scene.children = [];
+    scene.traverse((object) => originals.push(object));
+    cloned.traverse((object) => copies.push(object));
+    originals.forEach((original, index) => {
+      const nodeIndex = parser.associations.get(original)?.nodes;
+      if (typeof nodeIndex === "number" && copies[index]) {
+        copies[index].userData.xriftSourceNodeIndex = nodeIndex;
+      }
+    });
+    let selected = copies.find(
+      (object) => object.userData.xriftSourceNodeIndex === ${sourceNodeIndex},
+    );
+    if (selected) {
+      for (const child of [...selected.children]) {
+        if (typeof child.userData.xriftSourceNodeIndex === "number") selected.remove(child);
+      }
+      selected.removeFromParent();
+      selected.position.set(0, 0, 0);
+      selected.quaternion.identity();
+      selected.scale.set(1, 1, 1);
+    } else {
+      cloned.clear();
+      selected = cloned;
+    }
+`;
   return {
-    objectName: "posedScene",
-    declaration: `  const posedScene = useMemo(() => {
+    objectName: "compiledScene",
+    declaration: `  const compiledScene = useMemo(() => {
     const cloned = cloneSkeleton(scene);
+${selectSourceNode}    const output = ${sourceNodeIndex === undefined ? "cloned" : "selected"};
     const boneRotations = ${boneRotations} as Record<string, [number, number, number]>;
     const morphTargetWeights = ${morphTargets} as Record<string, number>;
-    cloned.traverse((object) => {
+    output.traverse((object) => {
       const boneObject = object as typeof object & { isBone?: boolean };
       const rotation = boneObject.isBone ? boneRotations[object.name] : undefined;
       if (rotation) {
@@ -1130,9 +1164,9 @@ function renderCompiledModelPose(
         if (index !== undefined) meshObject.morphTargetInfluences![index] = weight;
       });
     });
-    cloned.updateMatrixWorld(true);
-    return cloned;
-  }, [scene]);`,
+    output.updateMatrixWorld(true);
+    return output;
+  }, [scene${sourceNodeIndex === undefined ? "" : ", parser"}]);`,
   };
 }
 
@@ -1143,6 +1177,9 @@ function resolveModelMaterialOverrides(
   context: CompileContext,
 ): ModelMaterialOverride[] {
   const slots = getGeometryMaterialSlots(model);
+  const openBrushModel = isOpenBrushModelMetadata(
+    model.importMetadata?.openBrush,
+  );
   const slotById = new Map(slots.map((slot) => [slot.slot, slot]));
   const bindingBySlot = new Map<string, string>();
   for (const binding of mesh.materialBindings) {
@@ -1177,9 +1214,7 @@ function resolveModelMaterialOverrides(
 
   const overrides: ModelMaterialOverride[] = [];
   for (const slot of slots) {
-    const materialAssetId = isOpenBrushModelMetadata(
-      model.importMetadata?.openBrush,
-    )
+    const materialAssetId = openBrushModel
       ? bindingBySlot.get(slot.slot)
       : bindingBySlot.get(slot.slot) ?? slot.defaultMaterialAssetId;
     if (!materialAssetId) continue;
@@ -1196,6 +1231,23 @@ function resolveModelMaterialOverrides(
         assetId: materialAssetId,
         fieldPath: `materialBindings.${slot.slot}`,
       });
+      continue;
+    }
+    if (openBrushModel && material.shader?.kind === "openbrush") {
+      if (material.shader.sourceMaterialIndex !== slot.sourceMaterialIndex) {
+        addDiagnostic(context, {
+          severity: "blocking",
+          code: "openbrush-material-preset-mismatch",
+          message: `OpenBrush Material「${material.name}」は元のbrush slotへ割り当ててください`,
+          sceneId: context.scene.sceneId,
+          entityId: entity.id,
+          componentId: mesh.id,
+          assetId: material.id,
+          fieldPath: `materialBindings.${slot.slot}`,
+        });
+      }
+      // Identity presets are already reconstructed by the three-icosa loader.
+      // Only ordinary XRift Materials become JSX material injections.
       continue;
     }
     overrides.push({ slot, material });

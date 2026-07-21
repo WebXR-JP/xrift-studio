@@ -214,7 +214,16 @@ function resolveRuntimeGeometry(
       ? component.geometry.assetId
       : component.geometryAssetId;
   const geometry = getGeometryAsset(assets, assetId);
-  if (geometry?.kind === "model") return { kind: "model", assetId: geometry.id };
+  if (geometry?.kind === "model") {
+    return {
+      kind: "model",
+      assetId: geometry.id,
+      ...(component.geometry?.kind === "asset" &&
+      component.geometry.sourceNodeIndex !== undefined
+        ? { sourceNodeIndex: component.geometry.sourceNodeIndex }
+        : {}),
+    };
+  }
   if (geometry?.kind === "primitive") {
     return { kind: "primitive", primitive: geometry.primitive };
   }
@@ -290,6 +299,9 @@ function compileRuntimeAsset(
       kind: "material",
       name: asset.name,
       properties: JSON.parse(JSON.stringify(asset.properties)),
+      ...(asset.shader
+        ? { shader: JSON.parse(JSON.stringify(asset.shader)) }
+        : {}),
     };
   }
   if (asset.kind === "particle") {

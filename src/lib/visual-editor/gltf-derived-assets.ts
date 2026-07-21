@@ -16,6 +16,10 @@ import {
   type TextureImportMetadata,
   type TextureSamplerSettings,
 } from "./asset-manifest";
+import {
+  extractOpenBrushMaterialShader,
+  type OpenBrushModelMetadata,
+} from "./open-brush";
 
 type JsonObject = Record<string, unknown>;
 type GltfTextureInfoPatch = Exclude<
@@ -62,6 +66,8 @@ export type ExpandGltfAssetsInput = {
   materialFolderId: string;
   textureFolderId: string;
   hashBytes: (bytes: Uint8Array) => Promise<string>;
+  /** Retains three-icosa brush presets instead of treating them as PBR maps. */
+  openBrush?: OpenBrushModelMetadata;
 };
 
 export type ExpandedGltfAssets = {
@@ -97,8 +103,10 @@ export async function expandGltfAssets(
   input: ExpandGltfAssetsInput,
 ): Promise<ExpandedGltfAssets> {
   const warnings: GltfDerivedAssetWarning[] = [];
-  const images = await extractImages(input, warnings);
-  const textureExpansion = expandTextures(input, images, warnings);
+  const images = input.openBrush ? [] : await extractImages(input, warnings);
+  const textureExpansion = input.openBrush
+    ? { textures: [], textureAssetIds: new Map<number, string>() }
+    : expandTextures(input, images, warnings);
   const materialAssets = expandMaterials(
     input,
     textureExpansion.textureAssetIds,
@@ -407,8 +415,17 @@ function expandMaterials(
       return { ...previous, importedFromModel: provenance };
     }
     const properties = normalizeMaterialProperties(
-      materialPatch(material, materialIndex, textureAssetIds, warnings),
+      materialPatch(
+        material,
+        materialIndex,
+        textureAssetIds,
+        warnings,
+        Boolean(input.openBrush),
+      ),
     );
+    const shader = input.openBrush
+      ? extractOpenBrushMaterialShader(input.json, materialIndex)
+      : undefined;
     return {
       id:
         previous?.id ??
@@ -421,6 +438,7 @@ function expandMaterials(
       folderId: previous?.folderId ?? input.materialFolderId,
       ...(previous?.order === undefined ? {} : { order: previous.order }),
       properties,
+      ...(shader ? { shader } : {}),
       importedFromModel: provenance,
     };
   });
@@ -431,38 +449,49 @@ function materialPatch(
   materialIndex: number,
   textureAssetIds: ReadonlyMap<number, string>,
   warnings: GltfDerivedAssetWarning[],
+  ignoreTextures = false,
 ): MaterialAssetPatch {
   const pbr = objectValue(material.pbrMetallicRoughness) ?? {};
-  const baseColorTexture = textureInfo(
-    pbr.baseColorTexture,
-    textureAssetIds,
-    `materials[${materialIndex}].pbrMetallicRoughness.baseColorTexture`,
-    warnings,
-  );
-  const metallicRoughnessTexture = textureInfo(
-    pbr.metallicRoughnessTexture,
-    textureAssetIds,
-    `materials[${materialIndex}].pbrMetallicRoughness.metallicRoughnessTexture`,
-    warnings,
-  );
-  const normal = normalTextureInfo(
-    material.normalTexture,
-    textureAssetIds,
-    `materials[${materialIndex}].normalTexture`,
-    warnings,
-  );
-  const occlusion = occlusionTextureInfo(
-    material.occlusionTexture,
-    textureAssetIds,
-    `materials[${materialIndex}].occlusionTexture`,
-    warnings,
-  );
-  const emissive = textureInfo(
-    material.emissiveTexture,
-    textureAssetIds,
-    `materials[${materialIndex}].emissiveTexture`,
-    warnings,
-  );
+  const baseColorTexture = ignoreTextures
+    ? undefined
+    : textureInfo(
+        pbr.baseColorTexture,
+        textureAssetIds,
+        `materials[${materialIndex}].pbrMetallicRoughness.baseColorTexture`,
+        warnings,
+      );
+  const metallicRoughnessTexture = ignoreTextures
+    ? undefined
+    : textureInfo(
+        pbr.metallicRoughnessTexture,
+        textureAssetIds,
+        `materials[${materialIndex}].pbrMetallicRoughness.metallicRoughnessTexture`,
+        warnings,
+      );
+  const normal = ignoreTextures
+    ? undefined
+    : normalTextureInfo(
+        material.normalTexture,
+        textureAssetIds,
+        `materials[${materialIndex}].normalTexture`,
+        warnings,
+      );
+  const occlusion = ignoreTextures
+    ? undefined
+    : occlusionTextureInfo(
+        material.occlusionTexture,
+        textureAssetIds,
+        `materials[${materialIndex}].occlusionTexture`,
+        warnings,
+      );
+  const emissive = ignoreTextures
+    ? undefined
+    : textureInfo(
+        material.emissiveTexture,
+        textureAssetIds,
+        `materials[${materialIndex}].emissiveTexture`,
+        warnings,
+      );
   const baseColorFactor = colorTuple(pbr.baseColorFactor, 4, [1, 1, 1, 1]);
   const emissiveFactor = colorTuple(material.emissiveFactor, 3, [0, 0, 0]);
   return {
