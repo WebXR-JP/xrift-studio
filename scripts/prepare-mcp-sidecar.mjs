@@ -8,6 +8,12 @@ const repositoryRoot = path.resolve(
   "..",
 );
 const release = process.argv.includes("--release");
+const targetArgumentIndex = process.argv.indexOf("--target");
+const requestedTarget =
+  targetArgumentIndex === -1 ? null : process.argv[targetArgumentIndex + 1];
+if (targetArgumentIndex !== -1 && !requestedTarget) {
+  throw new Error("--target には Rust target triple を指定してください");
+}
 const sidecarTargetDirectory = path.join(
   repositoryRoot,
   "src-tauri",
@@ -27,6 +33,7 @@ const cargoArguments = [
   "--locked",
 ];
 if (release) cargoArguments.push("--release");
+if (requestedTarget) cargoArguments.push("--target", requestedTarget);
 
 run("cargo", cargoArguments, false, {
   // The sidecar is the file Tauri validates. Disable that validation only
@@ -34,19 +41,21 @@ run("cargo", cargoArguments, false, {
   TAURI_CONFIG: JSON.stringify({ bundle: { externalBin: [] } }),
 });
 const rustcVersion = run("rustc", ["-vV"], true);
-const targetTriple = rustcVersion
+const hostTarget = rustcVersion
   .split(/\r?\n/)
   .find((line) => line.startsWith("host: "))
   ?.slice("host: ".length)
   .trim();
-if (!targetTriple) {
+if (!hostTarget) {
   throw new Error("Rust host targetを取得できませんでした");
 }
+const targetTriple = requestedTarget ?? hostTarget;
 
 const executableSuffix = process.platform === "win32" ? ".exe" : "";
 const profile = release ? "release" : "debug";
 const source = path.join(
   sidecarTargetDirectory,
+  ...(requestedTarget ? [requestedTarget] : []),
   profile,
   `xrift-studio-mcp${executableSuffix}`,
 );
