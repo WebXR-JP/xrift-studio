@@ -20,6 +20,7 @@ import type {
   CompilerDiagnostic,
   VisualCompilerDocuments,
 } from "./types";
+import { OPEN_BRUSH_BRUSH_BASE_URL } from "../open-brush";
 
 export function compileRuntimeManifest(
   documents: VisualCompilerDocuments,
@@ -116,6 +117,14 @@ function compileRuntimeEntity(
       continue;
     }
     if (component.type === "xrift-component") {
+      appendRuntimeAdapterDiagnostic(
+        diagnostics,
+        component.type,
+        sceneId,
+        entity.id,
+        component.id,
+        "missing",
+      );
       components.push({
         id: component.id,
         type: component.type,
@@ -127,6 +136,25 @@ function compileRuntimeEntity(
         entityReferences: [...component.entityReferences],
       });
       continue;
+    }
+    if (component.type === "audio-source" || component.type === "particle-emitter") {
+      appendRuntimeAdapterDiagnostic(
+        diagnostics,
+        component.type,
+        sceneId,
+        entity.id,
+        component.id,
+        "missing",
+      );
+    } else if (component.type === "collider" || component.type === "spawn-point") {
+      appendRuntimeAdapterDiagnostic(
+        diagnostics,
+        component.type,
+        sceneId,
+        entity.id,
+        component.id,
+        "metadata-only",
+      );
     }
     components.push(
       JSON.parse(JSON.stringify(component)) as XriftRuntimeComponent,
@@ -148,6 +176,30 @@ function compileRuntimeEntity(
         : { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
     components,
   };
+}
+
+function appendRuntimeAdapterDiagnostic(
+  diagnostics: CompilerDiagnostic[],
+  componentType: string,
+  sceneId: string,
+  entityId: string,
+  componentId: string,
+  support: "missing" | "metadata-only",
+): void {
+  diagnostics.push({
+    severity: "warning",
+    code:
+      support === "missing"
+        ? "runtime-component-adapter-missing"
+        : "runtime-component-metadata-only",
+    message:
+      support === "missing"
+        ? `xrift-studio-runtimeは${componentType}の実行adapterにまだ対応していません`
+        : `xrift-studio-runtimeは${componentType}をmetadataとして保持しますが、実行動作にはまだ接続しません`,
+    sceneId,
+    entityId,
+    componentId,
+  });
 }
 
 function resolveRuntimeGeometry(
@@ -194,6 +246,7 @@ function compileRuntimeAsset(
   url: string | undefined,
 ): XriftRuntimeAsset | null {
   if (asset.kind === "model" && url) {
+    const openBrush = asset.importMetadata?.openBrush;
     return {
       id: asset.id,
       kind: "model",
@@ -201,6 +254,16 @@ function compileRuntimeAsset(
       url,
       sourceFormat: asset.importMetadata?.sourceFormat,
       scale: asset.importSettings.scale,
+      ...(openBrush
+        ? {
+            openBrush: {
+              renderer: openBrush.renderer,
+              rendererVersion: openBrush.rendererVersion,
+              extensionNames: [...openBrush.extensionNames],
+              brushBaseUrl: OPEN_BRUSH_BRUSH_BASE_URL,
+            },
+          }
+        : {}),
       materialSlots: asset.materialSlots.map((slot) => ({
         slot: slot.slot,
         name: slot.name,

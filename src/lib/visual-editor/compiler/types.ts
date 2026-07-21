@@ -74,10 +74,13 @@ export type VisualCompileResult = {
   assetCopyPlan: AssetCopyPlanEntry[];
   provenance: CompilationProvenance;
   provenanceFile: CompilerOverlayFile;
+  runtimeManifestFile?: CompilerOverlayFile;
   stagingPlan: CompilerStagingPlan;
 };
 
 export type VisualCompilerOptions = {
   /** Injectable to make fixtures byte-for-byte deterministic. */
   generatedAt?: string;
+  /** Keeps desktop publish on generated JSX until the npm runtime is available. */
+  outputMode?: "classic-jsx" | "classic-runtime";
 };

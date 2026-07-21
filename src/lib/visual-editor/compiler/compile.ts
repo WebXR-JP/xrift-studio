@@ -73,6 +73,9 @@ import {
   type VisualCompilerOptions,
 } from "./types";
 import { compileXriftComponent } from "./xrift-component-registry";
+import { compileRuntimeManifest } from "./runtime-manifest";
+
+const XRIFT_STUDIO_RUNTIME_PACKAGE = "xrift-studio-runtime@0.1.0" as const;
 
 type CompileContext = {
   projectKind: VisualProjectKind;
@@ -109,6 +112,7 @@ export function compileVisualProject(
   options: VisualCompilerOptions = {},
 ): VisualCompileResult {
   const generatedAt = options.generatedAt ?? new Date().toISOString();
+  const outputMode = options.outputMode ?? "classic-jsx";
   const sourceDocuments = computeSourceDocumentHashes(documents);
   const provenance: CompilationProvenance = {
     sourceDocuments,
@@ -118,7 +122,11 @@ export function compileVisualProject(
   };
   const diagnostics: CompilerDiagnostic[] = [];
   validateCompilerDocuments(documents, diagnostics);
-  const assetCopyPlan = createAssetCopyPlan(documents.assets, diagnostics);
+  const assetCopyPlan = createAssetCopyPlan(
+    documents.assets,
+    diagnostics,
+    outputMode,
+  );
   const entryScene = documents.scenes[documents.project.entrySceneId];
   const resolvedEntryScene = entryScene
     ? resolvePrefabInstances(
@@ -136,15 +144,44 @@ export function compileVisualProject(
       resolvedEntryScene.scene.sceneId,
     );
   }
-  const generated = resolvedEntryScene
-    ? generateComponentSource(
+  let runtimeManifestFile: CompilerOverlayFile | undefined;
+  let generated: string;
+  if (outputMode === "classic-runtime") {
+    // Keep the JSX pass as a diagnostic oracle while runtime adapters reach
+    // feature parity. Runtime export emits a thin, target-neutral adapter.
+    if (resolvedEntryScene) {
+      generateComponentSource(
         documents.project.projectKind,
         resolvedEntryScene.scene,
         documents.assets,
         assetCopyPlan,
         diagnostics,
-      )
-    : emptySource(documents.project.projectKind);
+      );
+    }
+    const runtimeManifest = compileRuntimeManifest(
+      documents,
+      resolvedEntryScene?.scene ?? null,
+      assetCopyPlan,
+      VISUAL_COMPILER_VERSION,
+      diagnostics,
+    );
+    generated = generateRuntimeAdapterSource(documents.project.projectKind);
+    runtimeManifestFile = compilerFile(
+      "public/xrift/runtime.json",
+      stableSerializeJson(runtimeManifest),
+      "metadata",
+    );
+  } else {
+    generated = resolvedEntryScene
+      ? generateComponentSource(
+          documents.project.projectKind,
+          resolvedEntryScene.scene,
+          documents.assets,
+          assetCopyPlan,
+          diagnostics,
+        )
+      : emptySource(documents.project.projectKind);
+  }
   const xriftJson = generateXriftJson(
     documents.project.projectKind,
     documents.project.metadata.title,
@@ -156,6 +193,7 @@ export function compileVisualProject(
     compilerFile(sourcePath, generated),
     compilerFile("xrift.json", xriftJson, "metadata"),
   ];
+  if (runtimeManifestFile) overlayFiles.push(runtimeManifestFile);
   diagnoseUnsupportedAssets(documents.assets, diagnostics);
   const uniqueDiagnostics = deduplicateDiagnostics(diagnostics);
   const provenanceFile = compilerFile(
@@ -180,13 +218,13 @@ export function compileVisualProject(
       targetRelativePath: "public/thumbnail.png" as const,
     },
   ];
-  const runtimePackageSpecs = Object.values(documents.assets.assets).some(
+  const runtimePackageSpecs: string[] =
+    outputMode === "classic-runtime" ? [XRIFT_STUDIO_RUNTIME_PACKAGE] : [];
+  if (Object.values(documents.assets.assets).some(
     (asset) =>
       asset.kind === "model" &&
       isOpenBrushModelMetadata(asset.importMetadata?.openBrush),
-  )
-    ? [OPEN_BRUSH_RUNTIME_PACKAGE]
-    : [];
+  )) runtimePackageSpecs.push(OPEN_BRUSH_RUNTIME_PACKAGE);
 
   return {
     targetKind: documents.project.projectKind,
@@ -196,6 +234,7 @@ export function compileVisualProject(
     assetCopyPlan,
     provenance,
     provenanceFile,
+    ...(runtimeManifestFile ? { runtimeManifestFile } : {}),
     stagingPlan: {
       owner: "xrift-studio-compiler",
       templateKind: documents.project.projectKind,
@@ -2635,6 +2674,7 @@ function diagnoseUnsupportedAssets(
 function createAssetCopyPlan(
   assets: AssetManifest,
   diagnostics: CompilerDiagnostic[],
+  outputMode: NonNullable<VisualCompilerOptions["outputMode"]>,
 ): AssetCopyPlanEntry[] {
   const plan: AssetCopyPlanEntry[] = [];
   const targets = new Set<string>();
@@ -2664,11 +2704,10 @@ function createAssetCopyPlan(
       continue;
     }
     const fileName = asset.source.relativePath.split("/").filter(Boolean).pop() ?? "asset.bin";
-    // XRift SDK 0.1.1 passes Node's platform-native relative paths to the
-    // upload API. Nested dist files therefore become backslash object keys on
-    // Windows and cannot be fetched with browser URL paths. Keep generated
-    // assets at the public root until the SDK normalizes remote paths.
-    const targetRelativePath = `public/xrift-studio-${safeFileSegment(asset.id)}-${safeFileSegment(fileName)}`;
+    const targetRelativePath =
+      outputMode === "classic-runtime"
+        ? `public/xrift/assets/${safeFileSegment(asset.id)}-${safeFileSegment(fileName)}`
+        : `public/xrift-studio-${safeFileSegment(asset.id)}-${safeFileSegment(fileName)}`;
     if (targets.has(targetRelativePath)) {
       diagnostics.push({
         severity: "blocking",
@@ -2901,6 +2940,18 @@ function assetPurpose(asset: SceneAsset): AssetCopyPlanEntry["purpose"] {
   ) return asset.kind;
   if (asset.kind === "template") return "prefab";
   return "other";
+}
+
+function generateRuntimeAdapterSource(kind: VisualProjectKind): string {
+  const component = kind === "world" ? "World" : "Item";
+  const runtimeComponent = kind === "world" ? "XriftWorld" : "XriftItem";
+  const defaultExport = kind === "item" ? `\nexport default ${component};\n` : "";
+  return `import type { FC } from "react";
+import { ${runtimeComponent} } from "xrift-studio-runtime/react-three-fiber";
+
+export const ${component}: FC = () => (
+  <${runtimeComponent} manifest="/xrift/runtime.json" />
+);${defaultExport}`;
 }
 
 function emptySource(kind: VisualProjectKind): string {

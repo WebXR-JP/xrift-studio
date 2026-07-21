@@ -925,13 +925,17 @@ VisualProjectDocument + SceneDocument + AssetManifest
   -> world または item compiler profile validation
   -> Asset resolution / derived artifact preparation
   -> target-neutral scene model
-  -> R3F / Three adapter + World Adapter または Item Adapter
+  -> xrift-studio.runtime JSON + Asset copy plan
+  -> xrift-studio-runtime/three または /react-three-fiber
+  -> 薄い World Adapter または Item Adapter
   -> staging XRift classic project (package.json + xrift.json + src/)
   -> 既存 XRift check / build
   -> upload
 ```
 
 このパイプラインは実装境界であり、ビジュアルモードの操作手順として露出しない。ユーザーは同じエディターの Play を押し、Scene View 内で確認し、Stop で Edit へ戻る。Vite のポート、CLI コマンド、開発サーバー、別ブラウザの URL を選んだり起動したりする必要はない。
+
+Runtime packageがnpm公開されるまで、compiler coreは既存desktop Publish向けの`classic-jsx`とClassic export CLI向けの`classic-runtime`を明示的に切り替える。これはScene変換器の複製ではなく、同じ検証、Prefab展開、Asset plan、diagnostics、provenanceから出力adapterだけを選ぶ移行境界である。
 
 Editor Play は visual documents を Three / R3F preview adapter が直接読むため、Node.js、XRift CLI、別の Vite process を要求しない。toolchain がなくてもビジュアル project を作成・編集・保存できる。Compiler、check、upload を実行する時だけ runtime gate で Node.js / XRift CLI / 認証状態を検査し、不足時は authoring を閉じずにセットアップ導線を示す。
 
@@ -964,8 +968,12 @@ XRiftStudioProvenance
 
 ### 9.4 Code Generation
 
+- 開発版の`classic-runtime` modeは`public/xrift/runtime.json`と薄いadapterを生成する。既存desktop PublishはRuntime package公開まで`classic-jsx` modeを維持する。
 - 出力先は OS の一時ディレクトリまたは visual project の `.cache/generated-xrift/` とし、authoring root に `package.json` や `src/` を生成しない。
 - staging project 全体を compiler 所有とし、自動生成 marker と source document hash を記録する。次回 compile で破棄・再生成でき、ユーザー編集は受け付けない。
+- `public/xrift/runtime.json`は編集用documentを直接公開せず、実行時に必要なScene、Entity、Transform、Component、Asset URLだけを持つ`xrift-studio.runtime` schemaへ変換する。
+- `src/World.tsx`または`src/Item.tsx`は`xrift-studio-runtime/react-three-fiber`を呼ぶ薄いadapterとし、大量のScene JSXを正本として生成しない。
+- 素のThree.js利用者は`xrift-studio-runtime/three`だけをimportでき、React／Tauri／CLIをbundleへ含めない。ModelとTextureは並列にloadし、形式固有rendererは対象Assetがある場合だけ遅延loadする。
 - Entity、Asset、プロパティの出力順を安定させ、同じ canonical input set と compiler / adapter version から同じ staging project を生成する。
 - Component / Asset Registry は target-neutral な schema、reference、validation 層と、Three preview、R3F、XRift world、XRift item の target adapter 層に分ける。
 - Mesh、Light などは allow-list 済み adapter だけで変換する。document 内の文字列を `eval`、`Function`、任意の動的 import として実行しない。
@@ -1014,9 +1022,10 @@ SDK API reference の upload result は ID、version、content hash を定義す
 
 - classic project の任意 JSX を visual documents へ解析・round-trip しない。classic から visual への自動変換も提供しない。
 - visual project 内に手書き `src/` や、生成対象外 adapter を混在させない。拡張は versioned Component / Asset / runtime plugin contract として明示的に設計する。
-- Export / Eject は最新の staging project を、ユーザーが選んだ新しい空ディレクトリへ classic project としてコピーする。
-- Eject 先の `package.json`、`xrift.json`、`src/` はユーザー所有へ移し、生成 marker と visual project への自動同期を外す。元の visual project は変更しない。
-- Eject は一方向であり、Eject 先の変更を元の visual project へ戻さない。既存 directory の上書きや同一 root への Eject は拒否する。
+- Export / Eject は`xrift-studio convert <visual-project> --to classic --out <directory>`と同じcompiler coreを使い、新しい空directoryへRuntime JSON付きClassic projectを作る。
+- Eject先の`package.json`、`xrift.json`、`src/`、`public/xrift/`はユーザー所有へ移す。由来とhashを`.xrift-studio/export-manifest.json`へ残すが、自動同期やVisualへの逆変換は行わない。
+- `--update`は同じVisual project由来で、manifest記録後にfile追加・削除・変更がないexportだけに許可する。Classic側を編集した後は更新を拒否し、既存directoryへの混在や`--force`を提供しない。
+- Ejectは一方向であり、Eject先の変更を元のVisual projectへ戻さない。sourceとoutputが同一または親子になる配置も拒否する。
 
 ## 10. セキュリティと認証境界
 

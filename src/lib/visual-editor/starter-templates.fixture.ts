@@ -82,7 +82,10 @@ export function runStarterTemplateFixtureAssertions(): void {
         assets: plan.assets,
         prefabs: plan.prefabs,
       },
-      { generatedAt: "2026-01-01T00:00:00.000Z" },
+      {
+        generatedAt: "2026-01-01T00:00:00.000Z",
+        outputMode: "classic-runtime",
+      },
     );
     assert(result.canStage, `${templateId}: Starter World must compile for staging`);
     assert(!result.diagnostics.some((diagnostic) => diagnostic.severity === "blocking"),
@@ -90,18 +93,23 @@ export function runStarterTemplateFixtureAssertions(): void {
     assert(
       JSON.stringify(result.stagingPlan.runtimePackageSpecs) ===
         JSON.stringify(
-          templateId === "openbrush" ? ["three-icosa@0.4.2-alpha.18"] : [],
+          templateId === "openbrush"
+            ? [
+                "xrift-studio-runtime@0.1.0",
+                "three-icosa@0.4.2-alpha.18",
+              ]
+            : ["xrift-studio-runtime@0.1.0"],
         ),
       `${templateId}: compiler runtime package plan is incorrect`,
     );
     if (templateId === "openbrush") {
-      const source = result.overlayFiles.find(
-        (file) => file.relativePath === "src/World.tsx",
+      const runtimeManifest = result.overlayFiles.find(
+        (file) => file.relativePath === "public/xrift/runtime.json",
       )?.content ?? "";
-      assert(source.includes("GLTFGoogleTiltBrushMaterialExtension"),
-        "OpenBrush starter must compile the three-icosa loader extension");
-      assert(source.includes("three-icosa-template/brushes/"),
-        "OpenBrush starter must compile the hosted brush library path");
+      assert(runtimeManifest.includes('"renderer": "three-icosa"'),
+        "OpenBrush starter must describe its runtime renderer");
+      assert(runtimeManifest.includes("three-icosa-template/brushes/"),
+        "OpenBrush starter must preserve the hosted brush library path");
     }
 
     const serialized = serializeVisualProjectDocuments({

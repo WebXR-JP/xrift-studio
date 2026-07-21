@@ -92,17 +92,6 @@
   background: linear-gradient(to bottom, rgba(139, 92, 246, 0.45), rgba(34, 211, 238, 0.4), rgba(16, 185, 129, 0.4), rgba(217, 70, 239, 0.35));
 }
 
-.preview-capability-step:last-child::after {
-  content: "計画中";
-  position: absolute;
-  top: -0.55rem;
-  right: 0;
-  color: rgba(161, 161, 170, 0.7);
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-}
-
 @keyframes orbit {
   from { transform: translateX(-50%) rotate(-14deg); }
   to { transform: translateX(-50%) rotate(346deg); }

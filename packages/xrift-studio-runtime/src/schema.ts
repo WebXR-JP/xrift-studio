@@ -133,6 +133,12 @@ export type XriftRuntimeAsset =
       url: string;
       sourceFormat?: "glb" | "gltf" | "obj" | "vrm";
       scale: number;
+      openBrush?: {
+        renderer: "three-icosa";
+        rendererVersion: string;
+        extensionNames: string[];
+        brushBaseUrl: string;
+      };
       materialSlots: Array<{
         slot: string;
         name: string;

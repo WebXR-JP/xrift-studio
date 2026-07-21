@@ -50,7 +50,9 @@ export async function convertVisualProject(options) {
     targetKind: source.documents.project.projectKind,
   });
 
-  const compilation = compileVisualProject(source.documents);
+  const compilation = compileVisualProject(source.documents, {
+    outputMode: "classic-runtime",
+  });
   const diagnostics = [
     ...source.diagnostics,
     ...compilation.diagnostics,
@@ -514,13 +516,32 @@ async function runXriftCreate(kind, projectName, cwd, onProgress) {
   ];
   onProgress?.(`$ xrift ${args.join(" ")}`);
   await new Promise((resolve, reject) => {
-    const child = spawn(executable, args, {
-      cwd,
-      env: process.env,
-      shell: false,
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    let child;
+    try {
+      child = spawn(
+        process.platform === "win32"
+          ? process.env.ComSpec || "cmd.exe"
+          : executable,
+        process.platform === "win32"
+          ? ["/d", "/s", "/c", executable, ...args]
+          : args,
+        {
+          cwd,
+          env: process.env,
+          shell: false,
+          windowsHide: true,
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      );
+    } catch (error) {
+      reject(
+        new ConvertError(
+          "xrift-create-unavailable",
+          `xrift createを開始できません: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
+      return;
+    }
     const stderr = [];
     child.stdout.on("data", (chunk) => onProgress?.(chunk.toString().trimEnd()));
     child.stderr.on("data", (chunk) => {

@@ -250,10 +250,10 @@ const capabilityFlow = [
   },
   {
     icon: Code2,
-    status: "次につくる",
+    status: "開発版あり",
     title: "いつものコード開発へ渡す",
-    text: "Visual projectのJSONと素材一式を、既存のXRiftコードプロジェクトへ安全に移すnpxコマンドを計画しています。",
-    tone: "border-dashed border-fuchsia-300 bg-fuchsia-50 text-fuchsia-700",
+    text: "Visual projectをRuntime JSON付きの新しいClassic projectへ一方向に書き出します。Three.jsから同じデータを読み込めます。",
+    tone: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700",
   },
 ];
 
@@ -1039,7 +1039,7 @@ export default function PreviewApp() {
               <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">XRift Studioの現在地</p>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 sm:text-4xl">持ち込むところから、コードへ渡すところまで。</h2>
               <p className="mt-5 text-sm leading-7 text-zinc-600">
-                いまはビジュアル編集からXRiftへの公開までがつながっています。次は、ここで作ったデータを通常のコード開発へ安全に引き渡す出口を作ります。
+                ビジュアル編集からXRiftへの公開に加え、同じ制作データをRuntime JSONとして通常のコード開発へ引き渡す開発版CLIを用意しています。
               </p>
               <a
                 href="https://github.com/WebXR-JP/xrift-studio/blob/main/docs/VISUAL_EDITOR_ROADMAP.md"
@@ -1071,7 +1071,7 @@ export default function PreviewApp() {
                       <p className="mt-2 text-sm leading-7 text-zinc-600">{capability.text}</p>
                       {index === capabilityFlow.length - 1 ? (
                         <code className="mt-4 block overflow-x-auto rounded-xl border border-fuchsia-100 bg-zinc-950 px-4 py-3 text-[11px] leading-5 text-fuchsia-100">
-                          npx @xrift/studio-cli migrate ./visual-project --to ./my-world
+                          npx xrift-studio convert ./visual-project --to classic --out ./my-world
                         </code>
                       ) : null}
                     </div>

@@ -26,10 +26,21 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "dependencies": {
+    "three-icosa": "0.4.2-alpha.18"
+  },
   "peerDependencies": {
     "@react-three/fiber": ">=9.0.0",
     "react": ">=19.0.0",
     "three": ">=0.180.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-three/fiber": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@react-three/fiber": "9.6.1",
