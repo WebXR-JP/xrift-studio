@@ -160,16 +160,37 @@ repository内で次が接続済みである。
 - `xrift-studio-runtime/react-three-fiber`の`XriftWorld`／`XriftItem` adapter。
 - Open Brush metadataと必要時だけの`three-icosa` loader。
 - Runtime JSONからThree.js sceneを作るfixtureと、改変済みexportの更新拒否fixture。
+- Visual Editor headerの「Classicへ書き出す」とOS folder picker。
+- 既存Classic projectへ、Visual Project IDごとに分離したRuntime、Asset、接続componentを追加するflow。
+- component追加、backup付きentry切替、npm dependency install、folder／VS Code／terminal／接続snippetの完了導線。
 
 未完了:
 
 - npmへの`xrift-studio`／`xrift-studio-runtime`公開。
 - Audio、Particle、Collider physics、XRift固有ComponentのRuntime adapter完全対応。
-- desktop Visual Editorの「Classicへ書き出す」画面。
 - 任意の`xrift check`実行option。現行公式CLI contractを確認してから追加する。
 - `.xriftpack`のpack／import。
 
 未対応Componentを黙って完成扱いにせず、compile reportまたはruntime diagnosticsへ残す。
+
+## Desktop Editorから既存Classicへ追加
+
+Visual Editor headerの「Classicへ書き出す」は、OSのfolder pickerで同じ種別の既存Classic projectを選択する。CLIの新規project exportとは安全境界を分け、既存の`xrift.json`、thumbnail、手書きentryを既定では上書きしない。
+
+```text
+public/xrift-studio/<visual-project-id>/
+  runtime.json
+  assets/
+
+src/xrift-studio/<visual-project-id>/
+  Scene.tsx
+
+.xrift-studio/exports/<visual-project-id>/
+  export-manifest.json
+  compiler-provenance.json
+```
+
+既定の「コンポーネントとして追加」は接続snippetを完了画面に残す。「エントリーを切り替える」は明示確認後だけ既存`World.tsx`／`Item.tsx`を管理領域へbackupして置き換える。npm projectでは固定allow-listのpackageを自動installし、pnpm／Yarn／Bunでは別lockfileを作らずdependency記録と既存package managerでのinstall案内までにする。
 
 ## 将来のpackage分離
 

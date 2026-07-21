@@ -29,6 +29,7 @@ export type CompilerStagingTemplateRequest = {
 
 const COMPILER_RUNTIME_PACKAGE_ALLOWLIST = new Set([
   "three-icosa@0.4.2-alpha.18",
+  "xrift-studio-runtime@0.1.0",
 ]);
 
 const stamp = (kind: LogKind, text: string): LogLine => ({
@@ -274,6 +275,33 @@ export const xrift = {
         ...packageSpecs,
       ],
       cwd: projectPath,
+      onLog,
+    });
+  },
+  installClassicExportPackages: (
+    projectPath: string,
+    packageSpecs: readonly string[],
+    onLog: (line: LogLine) => void,
+  ) => {
+    const normalizedPath = projectPath.trim();
+    if (
+      !normalizedPath ||
+      normalizedPath.includes("\0") ||
+      packageSpecs.length === 0 ||
+      packageSpecs.some((spec) => !COMPILER_RUNTIME_PACKAGE_ALLOWLIST.has(spec))
+    ) {
+      throw new Error("Invalid Classic export package request");
+    }
+    return run({
+      bin: "npm",
+      args: [
+        "install",
+        "--save-exact",
+        "--no-audit",
+        "--no-fund",
+        ...packageSpecs,
+      ],
+      cwd: normalizedPath,
       onLog,
     });
   },

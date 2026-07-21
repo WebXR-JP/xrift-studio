@@ -1,6 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 
 export type ProjectKind = "world" | "item";
 export type ProjectFormat = "classic" | "visual";
@@ -237,6 +238,15 @@ export type XriftMcpEditorResponse = {
 
 export const tauri = {
   isAvailable: () => isTauri(),
+  selectDirectory: (title: string, defaultPath?: string) =>
+    openDialog({
+      title,
+      directory: true,
+      multiple: false,
+      recursive: true,
+      ...(defaultPath ? { defaultPath } : {}),
+    }),
+  openPath: (path: string) => openPath(path),
   openUrl: (url: string) => openUrl(url),
   getVersions: () => invoke<Versions>("get_versions"),
   runtimePaths: () => invoke<RuntimePaths>("runtime_paths"),

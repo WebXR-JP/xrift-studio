@@ -9,6 +9,7 @@
     "shell:default",
     "os:default",
     "mcp-bridge:default",
+    "dialog:allow-open",
     {
       "identifier": "shell:allow-spawn",
       "allow": [

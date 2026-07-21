@@ -87,6 +87,7 @@ export const EDITOR_ICONS = {
   create: Plus,
   component: Puzzle,
   import: Import,
+  export: Package,
   settings: Settings,
   keyboard: Keyboard,
   help: CircleHelp,

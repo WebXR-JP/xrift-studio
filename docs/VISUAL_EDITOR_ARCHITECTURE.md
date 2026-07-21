@@ -1022,7 +1022,9 @@ SDK API reference の upload result は ID、version、content hash を定義す
 
 - classic project の任意 JSX を visual documents へ解析・round-trip しない。classic から visual への自動変換も提供しない。
 - visual project 内に手書き `src/` や、生成対象外 adapter を混在させない。拡張は versioned Component / Asset / runtime plugin contract として明示的に設計する。
-- Export / Eject は`xrift-studio convert <visual-project> --to classic --out <directory>`と同じcompiler coreを使い、新しい空directoryへRuntime JSON付きClassic projectを作る。
+- CLIのExport / Ejectは`xrift-studio convert <visual-project> --to classic --out <directory>`と同じcompiler coreを使い、新しい空directoryへRuntime JSON付きClassic projectを作る。
+- Desktop Editorの「Classicへ書き出す」はOS folder pickerで同種の既存Classic projectを検査し、Visual Project IDごとの`public/xrift-studio/`、`src/xrift-studio/`、`.xrift-studio/exports/`へRuntime、Asset、bridge、provenanceを追加する。既存`xrift.json`、thumbnail、entryは既定で変更しない。
+- 既存Classicへの追加はcomponent接続を既定とし、entry切替はbackupと明示確認を必要とする。npmだけ固定allow-listのdependency installを自動化し、他package managerのlockfileをnpmで混在させない。
 - Eject先の`package.json`、`xrift.json`、`src/`、`public/xrift/`はユーザー所有へ移す。由来とhashを`.xrift-studio/export-manifest.json`へ残すが、自動同期やVisualへの逆変換は行わない。
 - `--update`は同じVisual project由来で、manifest記録後にfile追加・削除・変更がないexportだけに許可する。Classic側を編集した後は更新を拒否し、既存directoryへの混在や`--force`を提供しない。
 - Ejectは一方向であり、Eject先の変更を元のVisual projectへ戻さない。sourceとoutputが同一または親子になる配置も拒否する。
@@ -1153,7 +1155,7 @@ SDK API reference の upload result は ID、version、content hash を定義す
 - [ ] arbitrary JSX や手編集 staging を visual document へ reverse import せず、再生成または一方向 Eject だけを提示する。
 - [ ] world / item profile の違反を生成前に検出できる。
 - [ ] visual authoring root に compiler が `package.json`、`xrift.json`、`src/` を生成しない。
-- [ ] Eject は新しい classic project だけを作り、元 visual project と既存 directory を変更しない。
+- [ ] CLI Ejectは新しいclassic projectだけを作る。Desktopの既存Classic追加はVisual Project IDごとの所有領域だけを更新し、手書きentryは明示確認なしに変更しない。
 - [ ] Editor direct preview と generated item の local dev preview を別 profile として表示し、公式に未記載の CLI / hosted / XFT preview を実装済みと表示しない。
 - [ ] Import、Save、compile または生成失敗後も最後に committed な document set、revision、両 selection、履歴が壊れない。
 - [ ] upload token、絶対パス、Blob URL が authoring document と staging project へ含まれない。

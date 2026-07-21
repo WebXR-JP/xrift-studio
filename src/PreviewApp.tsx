@@ -1039,7 +1039,7 @@ export default function PreviewApp() {
               <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">XRift Studioの現在地</p>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 sm:text-4xl">持ち込むところから、コードへ渡すところまで。</h2>
               <p className="mt-5 text-sm leading-7 text-zinc-600">
-                ビジュアル編集からXRiftへの公開に加え、同じ制作データをRuntime JSONとして通常のコード開発へ引き渡す開発版CLIを用意しています。
+                ビジュアル編集からXRiftへの公開に加え、Editorの「Classicへ書き出す」またはCLIから、同じ制作データをRuntime JSONとして通常のコード開発へ引き渡せます。
               </p>
               <a
                 href="https://github.com/WebXR-JP/xrift-studio/blob/main/docs/VISUAL_EDITOR_ROADMAP.md"

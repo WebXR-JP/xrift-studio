@@ -19,6 +19,7 @@ import {
 import { XriftThreeLoader } from "../packages/xrift-studio-runtime/src/three/index.ts";
 import { runStarterTemplateFixtureAssertions } from "../src/lib/visual-editor/starter-templates.fixture.ts";
 import { runVisualCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/fixture.ts";
+import { runClassicExportFixtureAssertions } from "../src/lib/visual-editor/classic-export.fixture.ts";
 
 const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "xrift-studio-convert-"));
 const previousXriftBin = process.env.XRIFT_STUDIO_XRIFT_BIN;
@@ -111,6 +112,7 @@ try {
   assert(modifiedRejected, "--update must reject a modified Classic export");
   runVisualCompilerFixtureAssertions();
   runStarterTemplateFixtureAssertions();
+  await runClassicExportFixtureAssertions();
   process.stdout.write("convert/runtime fixture passed\n");
 } finally {
   if (previousXriftBin === undefined) {
