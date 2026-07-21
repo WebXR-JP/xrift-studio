@@ -118,6 +118,11 @@ jobs:
             src-tauri/binaries/xrift-studio-mcp-sidecar-aarch64-apple-darwin \
             src-tauri/binaries/xrift-studio-mcp-sidecar-x86_64-apple-darwin \
             -output src-tauri/binaries/xrift-studio-mcp-sidecar-universal-apple-darwin
+          mkdir -p src-tauri/target/universal-apple-darwin/release
+          lipo -create \
+            src-tauri/target-mcp-sidecar/aarch64-apple-darwin/release/xrift-studio-mcp \
+            src-tauri/target-mcp-sidecar/x86_64-apple-darwin/release/xrift-studio-mcp \
+            -output src-tauri/target/universal-apple-darwin/release/xrift-studio-mcp
 
       - name: Build & upload to Release
         uses: tauri-apps/tauri-action@v0
