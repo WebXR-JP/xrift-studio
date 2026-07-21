@@ -13,6 +13,8 @@ dist-ssr
 preview-dist
 *.local
 src-tauri/binaries/
+src-tauri/updater.key
+src-tauri/updater.key.pub
 
 # Editor directories and files
 .vscode/*

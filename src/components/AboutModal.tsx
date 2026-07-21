@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
-import { X, ExternalLink, RefreshCw, Trash2, AlertTriangle } from "lucide-react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  CircleCheck,
+  Download,
+  ExternalLink,
+  RefreshCw,
+  Trash2,
+  X,
+} from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { tauri } from "../lib/tauri";
 import { xrift } from "../lib/xrift-cli";
@@ -9,6 +18,17 @@ import { useToast } from "./Toast";
 
 type Props = {
   open: boolean;
+  appUpdatePhase:
+    | "idle"
+    | "checking"
+    | "current"
+    | "available"
+    | "downloading"
+    | "installing"
+    | "error";
+  latestAppVersion: string | null;
+  onCheckAppUpdate: () => void;
+  onOpenAppUpdate: () => void;
   onClose: () => void;
 };
 
@@ -39,7 +59,14 @@ const RESET_META: Record<
   },
 };
 
-export function AboutModal({ open, onClose }: Props) {
+export function AboutModal({
+  open,
+  appUpdatePhase,
+  latestAppVersion,
+  onCheckAppUpdate,
+  onOpenAppUpdate,
+  onClose,
+}: Props) {
   const toast = useToast();
   const [v, setV] = useState<VersionState>({
     app: null,
@@ -162,6 +189,82 @@ export function AboutModal({ open, onClose }: Props) {
               onReload={reloadXrift}
             />
           </dl>
+
+          <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50/60 px-3 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 gap-2">
+                {appUpdatePhase === "current" ? (
+                  <CircleCheck
+                    size={14}
+                    className="mt-0.5 shrink-0 text-emerald-600"
+                    aria-hidden="true"
+                  />
+                ) : appUpdatePhase === "error" ? (
+                  <AlertCircle
+                    size={14}
+                    className="mt-0.5 shrink-0 text-rose-600"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Download
+                    size={14}
+                    className="mt-0.5 shrink-0 text-brand-700"
+                    aria-hidden="true"
+                  />
+                )}
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-zinc-800">
+                    {appUpdatePhase === "checking"
+                      ? "アプリの更新を確認しています…"
+                      : appUpdatePhase === "current"
+                        ? "XRift Studio は最新版です"
+                        : appUpdatePhase === "available"
+                          ? `XRift Studio v${latestAppVersion ?? "最新"} を利用できます`
+                          : appUpdatePhase === "downloading" ||
+                              appUpdatePhase === "installing"
+                            ? "アプリをアップデートしています…"
+                            : appUpdatePhase === "error"
+                              ? "更新情報を確認できませんでした"
+                              : "XRift Studio の更新を確認できます"}
+                  </div>
+                  <div className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+                    {appUpdatePhase === "available"
+                      ? "更新内容を確認して、そのままインストールできます。"
+                      : appUpdatePhase === "error"
+                        ? "ネットワーク接続を確認して再試行してください。"
+                        : "GitHub Releases からアプリ本体の最新版を確認します。"}
+                  </div>
+                </div>
+              </div>
+              {appUpdatePhase === "available" ? (
+                <button
+                  type="button"
+                  onClick={onOpenAppUpdate}
+                  className="shrink-0 rounded-md bg-brand-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-brand-500"
+                >
+                  更新内容を見る
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onCheckAppUpdate}
+                  disabled={
+                    appUpdatePhase === "checking" ||
+                    appUpdatePhase === "downloading" ||
+                    appUpdatePhase === "installing"
+                  }
+                  className="flex shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                >
+                  <RefreshCw
+                    size={10}
+                    className={appUpdatePhase === "checking" ? "animate-spin" : ""}
+                    aria-hidden="true"
+                  />
+                  更新を確認
+                </button>
+              )}
+            </div>
+          </div>
 
           <div className="mt-5 rounded-lg border border-rose-200 bg-rose-50/50 px-3 py-3">
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-700">

@@ -7,6 +7,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_updater::UpdaterExt;
 
 mod external_store;
 pub mod mcp;
@@ -3605,6 +3606,81 @@ fn get_versions() -> Versions {
     }
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppUpdateInfo {
+    current_version: String,
+    version: String,
+    body: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AppUpdateProgress {
+    phase: String,
+    downloaded: u64,
+    content_length: Option<u64>,
+}
+
+#[tauri::command]
+async fn check_app_update(app: AppHandle) -> Result<Option<AppUpdateInfo>, String> {
+    let update = app
+        .updater()
+        .map_err(|error| format!("更新機能を初期化できませんでした: {error}"))?
+        .check()
+        .await
+        .map_err(|error| format!("更新情報を取得できませんでした: {error}"))?;
+
+    Ok(update.map(|update| AppUpdateInfo {
+        current_version: update.current_version,
+        version: update.version,
+        body: update.body,
+    }))
+}
+
+#[tauri::command]
+async fn install_app_update(app: AppHandle) -> Result<(), String> {
+    let update = app
+        .updater()
+        .map_err(|error| format!("更新機能を初期化できませんでした: {error}"))?
+        .check()
+        .await
+        .map_err(|error| format!("更新情報を再確認できませんでした: {error}"))?
+        .ok_or_else(|| "利用できる更新が見つかりませんでした。".to_string())?;
+
+    let download_app = app.clone();
+    let install_app = app.clone();
+    let mut downloaded = 0_u64;
+    update
+        .download_and_install(
+            move |chunk_length, content_length| {
+                downloaded += chunk_length as u64;
+                let _ = download_app.emit(
+                    "app-update-progress",
+                    AppUpdateProgress {
+                        phase: "downloading".to_string(),
+                        downloaded,
+                        content_length,
+                    },
+                );
+            },
+            move || {
+                let _ = install_app.emit(
+                    "app-update-progress",
+                    AppUpdateProgress {
+                        phase: "installing".to_string(),
+                        downloaded: 0,
+                        content_length: None,
+                    },
+                );
+            },
+        )
+        .await
+        .map_err(|error| format!("更新をインストールできませんでした: {error}"))?;
+
+    app.restart();
+}
+
 // Windows の npm でインストールされたファイルは read-only 属性が付くことがあり、
 // そのままでは remove_dir_all が `Access is denied` で失敗する。
 // このヘルパは事前に属性をクリアし、短い待機を挟みつつ数回リトライする。
@@ -3778,6 +3854,7 @@ pub fn run() {
         })
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init());
 
@@ -3817,6 +3894,8 @@ pub fn run() {
             delete_path,
             rename_path,
             get_versions,
+            check_app_update,
+            install_app_update,
             kill_pid_tree,
             reset_app_data,
             check_xrift_latest,
