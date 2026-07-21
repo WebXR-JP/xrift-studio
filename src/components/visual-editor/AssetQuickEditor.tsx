@@ -38,8 +38,6 @@ import { formatFileSize } from "./editor-utils";
 import { ParticleAssetInspector } from "./ParticleAssetInspector";
 import { CustomMaterialPreview } from "./CustomMaterialPreview";
 import type { ProjectModelMaterialRuntimeInfo } from "./ProjectModelVisual";
-import { CustomMaterialPreview } from "./CustomMaterialPreview";
-import type { ProjectModelMaterialRuntimeInfo } from "./ProjectModelVisual";
 import {
   ModelAssetInspector,
   type ModelReimportImpactNotice,
