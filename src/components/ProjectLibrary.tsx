@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   ArrowUpDown,
-  Download,
   ExternalLink,
   Info,
   RefreshCw,
@@ -38,17 +37,6 @@ type Props = {
   onLogin: () => void;
   onLogout: () => void;
   onRefresh: () => void;
-  appUpdatePhase:
-    | "idle"
-    | "checking"
-    | "current"
-    | "available"
-    | "downloading"
-    | "installing"
-    | "error";
-  latestAppVersion: string | null;
-  onCheckAppUpdate: () => void;
-  onOpenAppUpdate: () => void;
 };
 
 function compareProjects(sort: ProjectSort) {
@@ -84,10 +72,6 @@ export function ProjectLibrary({
   onLogin,
   onLogout,
   onRefresh,
-  appUpdatePhase,
-  latestAppVersion,
-  onCheckAppUpdate,
-  onOpenAppUpdate,
 }: Props) {
   const [showAbout, setShowAbout] = useState(false);
   const [editingThumb, setEditingThumb] = useState<Project | null>(null);
@@ -134,17 +118,6 @@ export function ProjectLibrary({
         </div>
 
         <div className="flex items-center gap-1.5">
-          {appUpdatePhase === "available" ? (
-            <button
-              type="button"
-              onClick={onOpenAppUpdate}
-              className="flex h-7 items-center gap-1 rounded-md border border-brand-200 bg-brand-50 px-2 text-[11px] font-medium text-brand-700 hover:bg-brand-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
-              title={`XRift Studio v${latestAppVersion ?? "最新"}へアップデート`}
-            >
-              <Download size={11} aria-hidden="true" />
-              v{latestAppVersion ?? "最新"} 更新
-            </button>
-          ) : null}
           <button
             type="button"
             onClick={() => setShowAbout(true)}
@@ -176,10 +149,6 @@ export function ProjectLibrary({
 
       <AboutModal
         open={showAbout}
-        appUpdatePhase={appUpdatePhase}
-        latestAppVersion={latestAppVersion}
-        onCheckAppUpdate={onCheckAppUpdate}
-        onOpenAppUpdate={onOpenAppUpdate}
         onClose={() => setShowAbout(false)}
       />
       {editingThumb ? (

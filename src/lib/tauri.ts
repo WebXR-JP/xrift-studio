@@ -52,18 +52,6 @@ export type Versions = {
   nodeVersion: string;
 };
 
-export type AppUpdateInfo = {
-  currentVersion: string;
-  version: string;
-  body: string | null;
-};
-
-export type AppUpdateProgress = {
-  phase: "downloading" | "installing";
-  downloaded: number;
-  contentLength: number | null;
-};
-
 export type VisualDocumentFile = {
   relativePath: string;
   content: string;
@@ -261,14 +249,6 @@ export const tauri = {
   openPath: (path: string) => openPath(path),
   openUrl: (url: string) => openUrl(url),
   getVersions: () => invoke<Versions>("get_versions"),
-  checkAppUpdate: () => invoke<AppUpdateInfo | null>("check_app_update"),
-  installAppUpdate: () => invoke<void>("install_app_update"),
-  onAppUpdateProgress: (
-    handler: (progress: AppUpdateProgress) => void,
-  ): Promise<UnlistenFn> =>
-    listen<AppUpdateProgress>("app-update-progress", (event) =>
-      handler(event.payload),
-    ),
   runtimePaths: () => invoke<RuntimePaths>("runtime_paths"),
   runtimeStatus: () => invoke<RuntimeStatus>("runtime_status"),
   setupRuntime: () => invoke<RuntimeStatus>("setup_runtime"),

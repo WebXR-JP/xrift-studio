@@ -10,7 +10,7 @@ use tokio::io::AsyncWriteExt;
 const POLY_HAVEN_API: &str = "https://api.polyhaven.com";
 const POLY_HAVEN_PROVIDER_ID: &str = "poly-haven";
 const POLY_HAVEN_USER_AGENT: &str =
-    "XRiftStudio/0.5.0 (+https://github.com/xrift-studio/xrift-studio; asset-browser)";
+    "XRiftStudio/0.5.1 (+https://github.com/xrift-studio/xrift-studio; asset-browser)";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

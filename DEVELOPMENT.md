@@ -93,8 +93,6 @@ src-tauri/                 Rust バックエンド (Tauri v2)
 |---|---|
 | `runtime_status` | Node.js と @xrift/cli がインストール済みか確認 |
 | `setup_runtime` | Node.js ダウンロード → 展開 → @xrift/cli インストール |
-| `check_app_update` | GitHub Releases から署名済みアプリ更新を確認 |
-| `install_app_update` | 更新を取得・署名検証・インストールして再起動 |
 | `check_xrift_latest` | npm registry から @xrift/cli の最新版を取得 |
 | `update_xrift` | `npm i -g @xrift/cli@latest` を実行 |
 | `reset_app_data` | scope に応じてアプリデータを削除（runtime / projects / all） |
@@ -105,19 +103,11 @@ src-tauri/                 Rust バックエンド (Tauri v2)
 
 `.github/workflows/release.yml` で Windows / macOS / Linux のインストーラを一括ビルドします。
 
-初回だけ、gitignore 済みの `src-tauri/updater.key` を安全な場所へバックアップし、内容を GitHub Actions の `TAURI_SIGNING_PRIVATE_KEY` secret に登録します。この鍵を失うと既存インストールへ更新を配信できません。公開鍵は `src-tauri/tauri.conf.json` に含まれています。
-
-```powershell
-Get-Content -Raw src-tauri/updater.key | gh secret set TAURI_SIGNING_PRIVATE_KEY
-```
-
-鍵にパスワードを設定する運用へ切り替える場合は、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secret も登録します。
-
-更新機能を含む最初のリリースは既存の v0.4.0 から自動配信できません。利用者がその版を一度手動インストールした後、次のリリースからアプリ内更新が有効になります。
+更新署名や更新用の秘密鍵は不要です。アプリ本体の更新は GitHub Releases から利用者が手動でダウンロードしてインストールします。
 
 1. GitHub Actions タブ → **Release** → **Run workflow**
 2. タグ名（例: `v0.1.0`）を入力して実行
-3. 完了後、GitHub Release に全 OS の成果物、署名、`latest.json` が自動添付されます
+3. 完了後、GitHub Release に全 OS のインストーラが自動添付されます
 
 | OS | 生成される成果物 |
 |---|---|
