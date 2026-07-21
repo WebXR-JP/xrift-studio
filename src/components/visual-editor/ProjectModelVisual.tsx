@@ -17,7 +17,6 @@ import {
   VRMUtils,
   type VRM,
 } from "@pixiv/three-vrm";
-import { GLTFGoogleTiltBrushMaterialExtension } from "three-icosa/dist/three-icosa.module.js";
 import {
   Box3,
   DoubleSide,
@@ -31,8 +30,13 @@ import {
 import { tauri } from "../../lib/tauri";
 import {
   normalizeMaterialProperties,
+  applyCustomShaderSourceOverrides,
+  bindCustomShaderGeometryAttributes,
+  hasCustomShaderEntrypoints,
+  inspectCustomShaderUniforms,
+  readCustomShaderAttributeBindings,
   detectOpenBrushGltfDocument,
-  OPEN_BRUSH_BRUSH_BASE_URL,
+  resolveOpenBrushEditorBrushBaseUrl,
   type AssetManifest,
   type MaterialAsset,
   type ModelPoseState,
@@ -43,6 +47,13 @@ import {
   useMaterialPreviewTextures,
   type CoreMaterialPreviewTextures,
 } from "./material-texture-preview";
+import {
+  createOpenBrushPreviewExtension,
+  markOpenBrushPbrFallback,
+  normalizeOpenBrushGlslSource,
+  readOpenBrushPbrFallback,
+  type OpenBrushPbrFallbackInfo,
+} from "../../lib/visual-editor/open-brush-preview-loader";
 
 export type ProjectModelMaterialAssignment = {
   slot: string;
@@ -67,12 +78,34 @@ type Props = {
   assignedMaterials: readonly ProjectModelMaterialAssignment[];
   pose?: ModelPoseState;
   sourceNodeIndex?: number;
+  /** Centers and scales one source node for a compact Asset Inspector preview. */
+  fitPreview?: boolean;
+  loadRevision?: number;
+  onLoadStateChange?: (state: ProjectModelLoadState) => void;
+  onMaterialRuntimeInfoChange?: (
+    materials: readonly ProjectModelMaterialRuntimeInfo[],
+  ) => void;
 };
 
-type LoadState =
+export type ProjectModelLoadState =
   | { status: "loading" }
   | { status: "ready"; object: Object3D }
   | { status: "error"; message: string };
+
+export type ProjectModelMaterialRuntimeInfo = {
+  name: string;
+  materialType: string;
+  shaderKind: "raw" | "shader" | "standard" | "other";
+  glslVersion?: string;
+  vertexShader?: string;
+  fragmentShader?: string;
+  uniformNames: string[];
+  textureNames: string[];
+  resourcePaths: string[];
+  attributeBindings: ReturnType<typeof readCustomShaderAttributeBindings>;
+  uniformBindings: ReturnType<typeof inspectCustomShaderUniforms>;
+  pbrFallback?: OpenBrushPbrFallbackInfo;
+};
 
 const MODEL_DATA_CACHE = new Map<string, Promise<string>>();
 const MODEL_OBJECT_CACHE = new Map<string, Promise<Object3D>>();
@@ -91,9 +124,13 @@ export function ProjectModelVisual({
   assignedMaterials,
   pose,
   sourceNodeIndex,
+  fitPreview = false,
+  loadRevision = 0,
+  onLoadStateChange,
+  onMaterialRuntimeInfoChange,
 }: Props) {
-  const cacheKey = `${projectPath}\n${sourceRelativePath}\n${sourceHash ?? ""}`;
-  const [state, setState] = useState<LoadState>({ status: "loading" });
+  const cacheKey = `${projectPath}\n${sourceRelativePath}\n${sourceHash ?? ""}\n${loadRevision}`;
+  const [state, setState] = useState<ProjectModelLoadState>({ status: "loading" });
 
   useEffect(() => {
     let active = true;
@@ -130,6 +167,10 @@ export function ProjectModelVisual({
     };
   }, [cacheKey, projectPath, sourceRelativePath]);
 
+  useEffect(() => {
+    onLoadStateChange?.(state);
+  }, [onLoadStateChange, state]);
+
   return (
     <ProjectModelMaterialTextureResolver
       assignments={assignedMaterials}
@@ -147,6 +188,8 @@ export function ProjectModelVisual({
           assignedMaterials={resolvedMaterials}
           pose={pose}
           sourceNodeIndex={sourceNodeIndex}
+          fitPreview={fitPreview}
+          onMaterialRuntimeInfoChange={onMaterialRuntimeInfoChange}
         />
       )}
     </ProjectModelMaterialTextureResolver>
@@ -231,8 +274,10 @@ function ProjectModelRender({
   assignedMaterials,
   pose,
   sourceNodeIndex,
+  fitPreview,
+  onMaterialRuntimeInfoChange,
 }: {
-  state: LoadState;
+  state: ProjectModelLoadState;
   importScale: number;
   castShadow: boolean;
   receiveShadow: boolean;
@@ -240,6 +285,10 @@ function ProjectModelRender({
   assignedMaterials: readonly ResolvedProjectModelMaterialAssignment[];
   pose?: ModelPoseState;
   sourceNodeIndex?: number;
+  fitPreview: boolean;
+  onMaterialRuntimeInfoChange?: (
+    materials: readonly ProjectModelMaterialRuntimeInfo[],
+  ) => void;
 }) {
   const readyObject = state.status === "ready" ? state.object : null;
   const renderedModel = useMemo(() => {
@@ -258,6 +307,15 @@ function ProjectModelRender({
   }, [assignedMaterials, pose, readyObject, sourceNodeIndex]);
   const renderedObject = renderedModel?.object ?? null;
   const invalidate = useThree((canvasState) => canvasState.invalidate);
+  const materialRuntimeInfo = useMemo(
+    () =>
+      renderedModel?.ownedMaterials.map(inspectProjectModelMaterialRuntime) ?? [],
+    [renderedModel],
+  );
+
+  useEffect(() => {
+    onMaterialRuntimeInfoChange?.(materialRuntimeInfo);
+  }, [materialRuntimeInfo, onMaterialRuntimeInfoChange]);
 
   useLayoutEffect(() => {
     refreshMaterialPreviewRender(
@@ -290,9 +348,21 @@ function ProjectModelRender({
   const modelScale = Number.isFinite(importScale) ? importScale : 1;
 
   if (renderedModel) {
+    const previewScale = fitPreview
+      ? 1.5 / Math.max(...renderedModel.selectionBounds.scale, 0.01)
+      : 1;
+    const previewOffset: [number, number, number] = fitPreview
+      ? renderedModel.selectionBounds.position.map((value) => -value) as [
+          number,
+          number,
+          number,
+        ]
+      : [0, 0, 0];
     return (
-      <group scale={modelScale}>
-        <primitive object={renderedModel.object} />
+      <group scale={modelScale * previewScale}>
+        <group position={previewOffset}>
+          <primitive object={renderedModel.object} />
+        </group>
         {selected ? (
           <ModelSelectionBounds bounds={renderedModel.selectionBounds} />
         ) : null}
@@ -319,6 +389,92 @@ function ProjectModelRender({
   );
 }
 
+/** Serializes the material actually attached by a custom preview adapter. */
+export function inspectProjectModelMaterialRuntime(
+  material: Material,
+): ProjectModelMaterialRuntimeInfo {
+  const shader = material as Material & {
+    isRawShaderMaterial?: boolean;
+    isShaderMaterial?: boolean;
+    glslVersion?: unknown;
+    vertexShader?: unknown;
+    fragmentShader?: unknown;
+    uniforms?: Record<string, { value?: unknown }>;
+  };
+  const uniformEntries = Object.entries(shader.uniforms ?? {});
+  const textureNames = new Set<string>();
+  uniformEntries.forEach(([uniformName, uniform]) => {
+    collectMaterialTextureNames(uniform.value, uniformName, textureNames);
+  });
+  collectStandardMaterialTextureNames(material, textureNames);
+  const pbrFallback = readOpenBrushPbrFallback(material);
+  return {
+    name: material.name,
+    materialType: material.type,
+    shaderKind: shader.isRawShaderMaterial
+      ? "raw"
+      : shader.isShaderMaterial
+        ? "shader"
+        : isMeshStandardMaterial(material)
+          ? "standard"
+          : "other",
+    ...(shader.glslVersion === undefined || shader.glslVersion === null
+      ? {}
+      : { glslVersion: String(shader.glslVersion) }),
+    ...(typeof shader.vertexShader === "string"
+      ? { vertexShader: shader.vertexShader }
+      : {}),
+    ...(typeof shader.fragmentShader === "string"
+      ? { fragmentShader: shader.fragmentShader }
+      : {}),
+    uniformNames: uniformEntries.map(([name]) => name).sort(),
+    textureNames: [...textureNames].sort(),
+    resourcePaths: readOpenBrushResourcePaths(material),
+    attributeBindings: readCustomShaderAttributeBindings(material),
+    uniformBindings: inspectCustomShaderUniforms(material),
+    ...(pbrFallback ? { pbrFallback } : {}),
+  };
+}
+
+function readOpenBrushResourcePaths(material: Material): string[] {
+  const value = material.userData.xriftOpenBrushResourcePaths;
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
+function collectMaterialTextureNames(
+  value: unknown,
+  fallbackName: string,
+  output: Set<string>,
+): void {
+  if (Array.isArray(value)) {
+    value.forEach((entry) =>
+      collectMaterialTextureNames(entry, fallbackName, output),
+    );
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  const texture = value as { isTexture?: boolean; name?: string };
+  if (texture.isTexture) output.add(texture.name?.trim() || fallbackName);
+}
+
+function collectStandardMaterialTextureNames(
+  material: Material,
+  output: Set<string>,
+): void {
+  const standard = material as Material & Record<string, unknown>;
+  [
+    "map",
+    "metalnessMap",
+    "roughnessMap",
+    "normalMap",
+    "aoMap",
+    "emissiveMap",
+    "alphaMap",
+  ].forEach((slot) => collectMaterialTextureNames(standard[slot], slot, output));
+}
+
 /** Applies each authoring Material only to its original glTF material slot. */
 export function applyAssignedMaterialPreviews(
   object: Object3D,
@@ -326,6 +482,7 @@ export function applyAssignedMaterialPreviews(
     sourceMaterialIndex: number;
     material: MaterialAsset;
     textures?: CoreMaterialPreviewTextures;
+    customShaderMaterial?: Material;
   }[],
   sourceMaterials: ReadonlyMap<number, Material> = collectSourceMaterials(object),
 ): Material[] {
@@ -354,7 +511,47 @@ export function applyAssignedMaterialPreviews(
         assignment.material,
         assignment.textures,
         sourceMaterials,
+        assignment.customShaderMaterial,
       );
+      if (assignment.material.shader?.kind === "openbrush") {
+        const geometry = (mesh as typeof mesh & { geometry?: import("three").BufferGeometry }).geometry;
+        if (geometry && (preview as { isShaderMaterial?: boolean }).isShaderMaterial) {
+          if (!hasCustomShaderEntrypoints(preview)) {
+            preview.dispose();
+            const fallback = isMeshStandardMaterial(source)
+              ? source.clone()
+              : new MeshStandardMaterial({ name: source.name });
+            markOpenBrushPbrFallback(fallback, {
+              renderer: "gltf-pbr",
+              reason: "shader-load-error",
+              brushName: assignment.material.shader.brushName,
+              message: "Vertex or fragment shader has no void main() entrypoint",
+            });
+            ownedMaterials.push(fallback);
+            return fallback;
+          }
+          const bindings = bindCustomShaderGeometryAttributes(
+            geometry,
+            preview,
+            assignment.material.shader.attributeBindings,
+          );
+          const missing = bindings.filter((binding) => binding.status === "missing");
+          if (missing.length > 0) {
+            preview.dispose();
+            const fallback = isMeshStandardMaterial(source)
+              ? source.clone()
+              : new MeshStandardMaterial({ name: source.name });
+            markOpenBrushPbrFallback(fallback, {
+              renderer: "gltf-pbr",
+              reason: "attribute-mismatch",
+              brushName: assignment.material.shader.brushName,
+              message: `Missing geometry attributes: ${missing.map((binding) => binding.shaderName).join(", ")}`,
+            });
+            ownedMaterials.push(fallback);
+            return fallback;
+          }
+        }
+      }
       ownedMaterials.push(preview);
       return preview;
     };
@@ -447,12 +644,35 @@ export function createAssignedMaterialPreviewMaterial(
   assignedMaterial: MaterialAsset,
   assignedTextures: CoreMaterialPreviewTextures = {},
   sourceMaterials: ReadonlyMap<number, Material> = new Map(),
+  customShaderMaterial?: Material,
 ): Material {
   if (assignedMaterial.shader?.kind === "openbrush") {
     const preset = sourceMaterials.get(
       assignedMaterial.shader.sourceMaterialIndex,
     );
-    const preview = (preset ?? source).clone();
+    const preview = (customShaderMaterial ?? preset ?? source).clone();
+    const overrides = assignedMaterial.shader.sourceOverrides;
+    applyCustomShaderSourceOverrides(
+      preview,
+      overrides
+        ? {
+            ...(overrides.vertexShader !== undefined
+              ? {
+                  vertexShader: normalizeOpenBrushGlslSource(
+                    overrides.vertexShader,
+                  ),
+                }
+              : {}),
+            ...(overrides.fragmentShader !== undefined
+              ? {
+                  fragmentShader: normalizeOpenBrushGlslSource(
+                    overrides.fragmentShader,
+                  ),
+                }
+              : {}),
+          }
+        : undefined,
+    );
     preview.name = `material_${assignedMaterial.shader.brushName}`;
     return preview;
   }
@@ -764,9 +984,9 @@ async function parseSelfContainedModel(
     if (openBrush) {
       loader.register(
         (parser) =>
-          new GLTFGoogleTiltBrushMaterialExtension(
+          createOpenBrushPreviewExtension(
             parser,
-            OPEN_BRUSH_BRUSH_BASE_URL,
+            resolveOpenBrushEditorBrushBaseUrl(),
           ),
       );
     }

@@ -43,6 +43,17 @@ export function runOpenBrushFixtureAssertions(): void {
     "OpenBrush custom Material preset was not extracted");
   assert(isOpenBrushMaterialShader(shader),
     "OpenBrush custom Material preset is not serializable");
+  assert(
+    isOpenBrushMaterialShader({
+      ...shader,
+      sourceOverrides: { vertexShader: "void main() {}" },
+      attributeBindings: {
+        a_position: { sourceAttribute: "position" },
+        a_color: { defaultValue: [1, 1, 1, 1] },
+      },
+    }),
+    "An editable custom shader copy or attribute mapping is not serializable",
+  );
 
   const gltfBytes = new TextEncoder().encode(JSON.stringify(document));
   const preparedGltf = prepareOpenBrushGltfSource(gltfBytes, "gltf");

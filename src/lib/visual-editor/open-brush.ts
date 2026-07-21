@@ -8,6 +8,21 @@ export const OPEN_BRUSH_EXTENSION_NAMES = [
 export const OPEN_BRUSH_BRUSH_BASE_URL =
   "https://icosa-foundation.github.io/three-icosa-template/brushes/";
 
+/**
+ * Editor previews use the pinned brush library shipped with XRift Studio.
+ * Published runtimes keep using OPEN_BRUSH_BRUSH_BASE_URL until their output
+ * pipeline also copies the brush library into the generated project.
+ */
+export const OPEN_BRUSH_EDITOR_BRUSH_BASE_PATH =
+  "/visual-editor/openbrush/brushes/";
+
+export function resolveOpenBrushEditorBrushBaseUrl(
+  origin = typeof window === "undefined" ? undefined : window.location.origin,
+): string {
+  if (!origin || origin === "null") return OPEN_BRUSH_EDITOR_BRUSH_BASE_PATH;
+  return new URL(OPEN_BRUSH_EDITOR_BRUSH_BASE_PATH, `${origin}/`).href;
+}
+
 export const OPEN_BRUSH_RUNTIME_PACKAGE = "three-icosa@0.4.2-alpha.18";
 export const OPEN_BRUSH_RENDERER = "three-icosa@0.4.2-alpha.18";
 
@@ -57,6 +72,16 @@ export type OpenBrushMaterialShader = {
   brushGuid?: string;
   brushBaseUrl: string;
   sourceMaterialIndex: number;
+  /** Material-owned editable copy layered over the pinned brush preset. */
+  sourceOverrides?: {
+    vertexShader?: string;
+    fragmentShader?: string;
+  };
+  /** Optional explicit Mesh attribute mapping; omitted entries use semantics. */
+  attributeBindings?: Record<
+    string,
+    { sourceAttribute?: string; defaultValue?: number[] }
+  >;
 };
 
 export function detectOpenBrushGltfDocument(
@@ -257,8 +282,39 @@ export function isOpenBrushMaterialShader(
       (typeof value.brushGuid === "string" && Boolean(value.brushGuid.trim()))) &&
     typeof value.brushBaseUrl === "string" &&
     /^https:\/\//.test(value.brushBaseUrl) &&
-    integerIndex(value.sourceMaterialIndex) !== undefined
+    integerIndex(value.sourceMaterialIndex) !== undefined &&
+    isOpenBrushSourceOverrides(value.sourceOverrides) &&
+    isOpenBrushAttributeBindings(value.attributeBindings)
   );
+}
+
+function isOpenBrushSourceOverrides(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isRecord(value)) return false;
+  return (
+    (value.vertexShader === undefined || typeof value.vertexShader === "string") &&
+    (value.fragmentShader === undefined ||
+      typeof value.fragmentShader === "string")
+  );
+}
+
+function isOpenBrushAttributeBindings(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isRecord(value)) return false;
+  return Object.entries(value).every(([name, binding]) => {
+    if (!name || !isRecord(binding)) return false;
+    return (
+      (binding.sourceAttribute === undefined ||
+        typeof binding.sourceAttribute === "string") &&
+      (binding.defaultValue === undefined ||
+        (Array.isArray(binding.defaultValue) &&
+          binding.defaultValue.length >= 1 &&
+          binding.defaultValue.length <= 4 &&
+          binding.defaultValue.every(
+            (entry) => typeof entry === "number" && Number.isFinite(entry),
+          )))
+    );
+  });
 }
 
 /**

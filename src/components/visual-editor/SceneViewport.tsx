@@ -43,6 +43,7 @@ import {
   type ShaderMaterial,
   type Texture,
 } from "three";
+import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 import {
   BUILTIN_PRIMITIVE_CREATION_CATALOG,
   XRIFT_COMPONENT_SCHEMA_IDS,
@@ -68,11 +69,13 @@ import {
   type SceneDocument,
   type SceneEntity,
   type SceneSettings,
+  type SkyboxAsset,
   type TransformPatch,
   type TextureAsset,
   type Vec3,
   type VisualProjectKind,
 } from "../../lib/visual-editor";
+import { tauri } from "../../lib/tauri";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { ParticleEmitterVisual } from "./ParticleEmitterVisual";
 import { ProjectModelVisual } from "./ProjectModelVisual";
@@ -2114,13 +2117,20 @@ function useSceneSkyboxTexture(
           source: { kind: "project"; relativePath: string };
         })
       : undefined;
-  const textureKey = textureAsset
+  const skyboxAsset =
+    asset?.kind === "skybox" && asset.source.kind === "project"
+      ? (asset as SkyboxAsset & {
+          source: { kind: "project"; relativePath: string };
+        })
+      : undefined;
+  const sourceAsset = skyboxAsset ?? textureAsset;
+  const textureKey = sourceAsset
     ? [
         projectPath ?? "",
-        textureAsset.id,
-        textureAsset.sourceHash ?? "",
-        textureAsset.source.relativePath,
-        textureAsset.importSettings.flipY,
+        sourceAsset.id,
+        sourceAsset.sourceHash ?? "",
+        sourceAsset.source.relativePath,
+        textureAsset?.importSettings.flipY ?? false,
       ].join("\\n")
     : "";
   const [texture, setTexture] = useState<Texture | null>(null);
@@ -2129,18 +2139,26 @@ function useSceneSkyboxTexture(
     let active = true;
     let ownedTexture: Texture | null = null;
     setTexture(null);
-    if (!projectPath || !textureAsset) {
+    if (!projectPath || !sourceAsset) {
       return () => {
         active = false;
       };
     }
 
-    void readProjectTextureDataUrl(projectPath, textureAsset)
-      .then((dataUrl) => new TextureLoader().loadAsync(dataUrl))
+    const readSource = skyboxAsset
+      ? tauri.readProjectFileDataUrl(projectPath, skyboxAsset.source.relativePath)
+      : readProjectTextureDataUrl(projectPath, textureAsset!);
+    void readSource
+      .then(async (dataUrl): Promise<Texture> => {
+        if (skyboxAsset?.sourceFormat === "hdr") {
+          return await new RGBELoader().loadAsync(dataUrl);
+        }
+        return await new TextureLoader().loadAsync(dataUrl);
+      })
       .then((nextTexture) => {
-        nextTexture.name = `${textureAsset.name} (skybox)`;
-        nextTexture.colorSpace = SRGBColorSpace;
-        nextTexture.flipY = textureAsset.importSettings.flipY;
+        nextTexture.name = `${sourceAsset.name} (skybox)`;
+        if (!skyboxAsset) nextTexture.colorSpace = SRGBColorSpace;
+        nextTexture.flipY = textureAsset?.importSettings.flipY ?? false;
         nextTexture.mapping = EquirectangularReflectionMapping;
         nextTexture.needsUpdate = true;
         if (!active) {
@@ -2159,7 +2177,7 @@ function useSceneSkyboxTexture(
       ownedTexture?.dispose();
       ownedTexture = null;
     };
-  }, [projectPath, textureAsset, textureKey]);
+  }, [projectPath, skyboxAsset, sourceAsset, textureAsset, textureKey]);
 
   return texture;
 }
@@ -2286,6 +2304,7 @@ export function SceneViewport({
   onTransformCommit,
   onDropPrimitive,
   onDropMaterial,
+  onDropSkybox,
   onDropBuiltinPrefab,
   onDropSceneAsset,
   onCreatePrimitive,
@@ -2322,6 +2341,7 @@ export function SceneViewport({
     materialAssetId: string,
     meshComponentId: string,
   ) => void;
+  onDropSkybox: (assetId: string) => void;
   onDropBuiltinPrefab: (recipeId: string, position: Vec3) => void;
   onDropSceneAsset: (assetId: string, position: Vec3) => void;
   onCreatePrimitive: (creationId: string) => void;
@@ -2429,6 +2449,8 @@ export function SceneViewport({
         getBuiltinPrefabRecipe(intent.id)?.name ?? null,
       );
     } else if (intent.kind === "scene-asset") {
+      setDragOverLabel(assets.assets[intent.id]?.name ?? null);
+    } else if (intent.kind === "skybox") {
       setDragOverLabel(assets.assets[intent.id]?.name ?? null);
     } else {
       setDragOverLabel(null);
@@ -2567,6 +2589,15 @@ export function SceneViewport({
       return;
     }
 
+    if (intent.kind === "skybox") {
+      if (intent.id && assets.assets[intent.id]?.kind === "skybox") {
+        onDropSkybox(intent.id);
+      } else {
+        onDropRejected("Skyboxのドラッグ情報を読み取れませんでした。もう一度ドラッグしてください");
+      }
+      return;
+    }
+
     if (intent.kind === "material") {
       const target = resolveMaterialDropTarget(scene, assets, projected);
       if (target.status === "rejected") {
@@ -2647,6 +2678,8 @@ export function SceneViewport({
             : readyMaterialDropTarget
               ? `${scene.entities[readyMaterialDropTarget.entityId]?.name ?? "Mesh"}へMaterialを適用`
               : "Materialを適用するMeshの上へ移動"
+          : dragOverKind === "skybox"
+            ? `${dragOverLabel ?? "Skybox"}をシーン全体へ設定`
           : dragOverKind === "builtin-prefab"
             ? `${dragOverLabel ?? "XRift Component"}を配置`
             : dragOverKind === "scene-asset"

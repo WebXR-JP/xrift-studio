@@ -8,12 +8,16 @@ import {
   MeshBasicMaterial,
   MeshPhysicalMaterial,
   NoColorSpace,
+  RawShaderMaterial,
   SRGBColorSpace,
   Texture,
   Vector3,
+  type Material,
 } from "three";
 import {
   BUILTIN_ASSET_IDS,
+  applyCustomShaderSourceOverrides,
+  bindCustomShaderGeometryAttributes,
   createPrototypeProject,
   getMaterialAsset,
   getTextureAsset,
@@ -30,6 +34,7 @@ import {
   applyStaticModelPose,
   createAssignedMaterialPreviewMaterial,
   getModelSelectionBounds,
+  inspectProjectModelMaterialRuntime,
   selectSourceModelNode,
 } from "./ProjectModelVisual";
 import {
@@ -37,11 +42,23 @@ import {
   refreshMaterialPreviewRender,
   resolveMaterialPreviewTextureDisplayStatus,
 } from "./material-texture-preview";
+import {
+  installOpenBrushPbrFallback,
+  normalizeOpenBrushGlslSource,
+  readOpenBrushPbrFallback,
+} from "../../lib/visual-editor/open-brush-preview-loader";
 
-export function runProjectModelMaterialPreviewFixtureAssertions(): void {
+export async function runProjectModelMaterialPreviewFixtureAssertions(): Promise<void> {
+  assert(
+    normalizeOpenBrushGlslSource("#version 300 es\r\nvoid main() {}") ===
+      "void main() {}",
+    "the OpenBrush adapter should let Three.js own the GLSL version directive",
+  );
   assertModelSelectionBoundsStayLocal();
   assertStaticModelPoseUsesRestOffsets();
   assertSourceNodeSelectionDoesNotDuplicateTheWholeModel();
+  assertCustomShaderRuntimeCanBeInspected();
+  await assertOpenBrushPbrFallbackKeepsTheModelUsable();
 
   const project = createPrototypeProject("world", "model-material-preview");
   const fixtureTextureAsset: TextureAsset = {
@@ -219,6 +236,112 @@ export function runProjectModelMaterialPreviewFixtureAssertions(): void {
   root.geometry.dispose();
   source.dispose();
   texture.dispose();
+}
+
+async function assertOpenBrushPbrFallbackKeepsTheModelUsable(): Promise<void> {
+  const unsupportedMaterial = new MeshPhysicalMaterial({ color: "#b45309" });
+  const unsupportedMesh = new Mesh(new BoxGeometry(), unsupportedMaterial);
+  const unsupportedExtension = {
+    replaceMaterial: async (
+      _mesh: { material: Material | Material[] },
+      _brushName: string,
+    ) => undefined,
+  };
+  installOpenBrushPbrFallback(unsupportedExtension);
+  await unsupportedExtension.replaceMaterial(
+    unsupportedMesh,
+    "FutureOpenBrushPreset",
+  );
+  const unsupportedFallback = readOpenBrushPbrFallback(unsupportedMaterial);
+  assert(
+    unsupportedMesh.material === unsupportedMaterial &&
+      unsupportedFallback?.reason === "unsupported-preset",
+    "An unknown OpenBrush preset did not keep its original glTF PBR Material",
+  );
+
+  const failedMaterial = new MeshPhysicalMaterial({ color: "#be123c" });
+  const failedMesh = new Mesh(new BoxGeometry(), failedMaterial);
+  const failedExtension = {
+    replaceMaterial: async (
+      _mesh: { material: Material | Material[] },
+      _brushName: string,
+    ) => {
+      throw new Error("fixture shader resource missing");
+    },
+  };
+  installOpenBrushPbrFallback(failedExtension);
+  await failedExtension.replaceMaterial(failedMesh, "BrokenBrush");
+  const failedInfo = inspectProjectModelMaterialRuntime(failedMaterial);
+  assert(
+    failedMesh.material === failedMaterial &&
+      failedInfo.shaderKind === "standard" &&
+      failedInfo.pbrFallback?.reason === "shader-load-error" &&
+      failedInfo.pbrFallback.message.includes("resource missing"),
+    "A failed OpenBrush shader did not fall back to its inspectable glTF PBR Material",
+  );
+
+  unsupportedMesh.geometry.dispose();
+  unsupportedMaterial.dispose();
+  failedMesh.geometry.dispose();
+  failedMaterial.dispose();
+}
+
+function assertCustomShaderRuntimeCanBeInspected(): void {
+  const brushTexture = new Texture();
+  brushTexture.name = "DoubleTaperedMarker_MainTex";
+  const material = new RawShaderMaterial({
+    name: "material_DoubleTaperedMarker",
+    vertexShader:
+      "in vec3 a_position;\nin vec4 a_color;\nin vec3 customPosition;\nuniform float u_time;\nvoid main() {\n  gl_Position = vec4(a_position, 1.0);\n}",
+    fragmentShader:
+      "uniform sampler2D u_MainTex;\nvoid main() {\n  gl_FragColor = vec4(1.0);\n}",
+    uniforms: {
+      u_MainTex: { value: brushTexture },
+      u_time: { value: 0 },
+    },
+  });
+  const geometry = new BoxGeometry();
+  const bindings = bindCustomShaderGeometryAttributes(geometry, material, {
+    customPosition: { sourceAttribute: "position" },
+  });
+  const info = inspectProjectModelMaterialRuntime(material);
+  assert(
+    info.shaderKind === "raw" &&
+      info.materialType === "RawShaderMaterial" &&
+      info.uniformNames.join(",") === "u_MainTex,u_time" &&
+      info.textureNames[0] === "DoubleTaperedMarker_MainTex" &&
+      info.vertexShader?.includes("gl_Position") &&
+      info.fragmentShader?.includes("gl_FragColor") &&
+      bindings.some(
+        (binding) =>
+          binding.shaderName === "a_position" &&
+          binding.sourceAttribute === "position",
+      ) &&
+      bindings.some(
+        (binding) =>
+          binding.shaderName === "customPosition" &&
+          binding.sourceAttribute === "position",
+      ) &&
+      bindings.some(
+        (binding) =>
+          binding.shaderName === "a_color" && binding.status === "default",
+      ) &&
+      info.uniformBindings.some(
+        (uniform) =>
+          uniform.name === "u_MainTex" && uniform.status === "texture",
+      ),
+    "Custom shader runtime details were not exposed to the Material Inspector",
+  );
+  applyCustomShaderSourceOverrides(material, {
+    fragmentShader: "void main() { gl_FragColor = vec4(0.5); }",
+  });
+  assert(
+    material.fragmentShader.includes("vec4(0.5)"),
+    "A Material-owned shader source copy was not applied",
+  );
+  geometry.dispose();
+  material.dispose();
+  brushTexture.dispose();
 }
 
 function assertOpenBrushMaterialKeepsCustomShader(

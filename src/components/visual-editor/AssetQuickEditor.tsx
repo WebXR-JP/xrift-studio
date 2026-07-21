@@ -36,6 +36,8 @@ import {
 import { EDITOR_ICONS } from "./editor-icons";
 import { formatFileSize } from "./editor-utils";
 import { ParticleAssetInspector } from "./ParticleAssetInspector";
+import { CustomMaterialPreview } from "./CustomMaterialPreview";
+import type { ProjectModelMaterialRuntimeInfo } from "./ProjectModelVisual";
 import {
   ModelAssetInspector,
   type ModelReimportImpactNotice,
@@ -333,6 +335,8 @@ function AssetThumbnailFallback({ asset }: { asset: SceneAsset }) {
         ? EDITOR_ICONS.prefab
         : asset.kind === "texture"
           ? EDITOR_ICONS.texture
+          : asset.kind === "skybox"
+            ? EDITOR_ICONS.skybox
           : asset.kind === "model"
             ? EDITOR_ICONS.model
             : EDITOR_ICONS.asset;
@@ -1215,16 +1219,61 @@ function OpenBrushMaterialQuickEditor({
   assets,
   projectPath,
   referenceSummary,
+  readOnly,
+  onChange,
 }: MaterialQuickEditorProps) {
   const shader = asset.shader;
+  const [runtimeInfo, setRuntimeInfo] =
+    useState<ProjectModelMaterialRuntimeInfo | null>(null);
+  const handleRuntimeInfoChange = useCallback(
+    (info: ProjectModelMaterialRuntimeInfo | null) => setRuntimeInfo(info),
+    [],
+  );
   if (!shader || shader.kind !== "openbrush") return null;
+  const updateShaderSource = (
+    stage: "vertexShader" | "fragmentShader",
+    source: string | undefined,
+  ) => {
+    const sourceOverrides = { ...(shader.sourceOverrides ?? {}) };
+    if (source === undefined) delete sourceOverrides[stage];
+    else sourceOverrides[stage] = source;
+    onChange({
+      shader: {
+        ...shader,
+        sourceOverrides:
+          Object.keys(sourceOverrides).length > 0 ? sourceOverrides : undefined,
+      },
+    });
+  };
+  const updateAttributeSource = (
+    shaderName: string,
+    sourceAttribute: string,
+  ) => {
+    const attributeBindings = { ...(shader.attributeBindings ?? {}) };
+    const normalized = sourceAttribute.trim();
+    if (normalized) attributeBindings[shaderName] = { sourceAttribute: normalized };
+    else delete attributeBindings[shaderName];
+    onChange({
+      shader: {
+        ...shader,
+        attributeBindings:
+          Object.keys(attributeBindings).length > 0
+            ? attributeBindings
+            : undefined,
+      },
+    });
+  };
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-[112px_minmax(0,1fr)] gap-3 rounded-md border border-violet-200 bg-white p-3 shadow-sm">
-        <div className="h-28 overflow-hidden rounded-md border border-violet-300 shadow-sm">
-          <MaterialThumbnail asset={asset} assets={assets} projectPath={projectPath} />
-        </div>
-        <div className="min-w-0 self-center">
+      <div className="overflow-hidden rounded-md border border-violet-200 bg-white shadow-sm">
+        <CustomMaterialPreview
+          asset={asset}
+          assets={assets}
+          projectPath={projectPath}
+          className="h-44 w-full"
+          onRuntimeInfoChange={handleRuntimeInfoChange}
+        />
+        <div className="min-w-0 p-3">
           <h3 className="truncate text-[13px] font-semibold text-slate-900">
             {asset.name}
           </h3>
@@ -1265,10 +1314,279 @@ function OpenBrushMaterialQuickEditor({
         </dl>
       </EditorSection>
 
+      <EditorSection title="Resolved custom shader">
+        {runtimeInfo ? (
+          <div className="space-y-2 text-xs">
+            <dl className="grid grid-cols-[92px_minmax(0,1fr)] gap-x-2 gap-y-1.5">
+              <dt className="text-slate-500">Material</dt>
+              <dd
+                className={`font-semibold ${
+                  runtimeInfo.pbrFallback
+                    ? "text-amber-700"
+                    : "text-emerald-700"
+                }`}
+              >
+                {runtimeInfo.materialType} / {runtimeInfo.pbrFallback ? "PBR fallback" : "適用済み"}
+              </dd>
+              <dt className="text-slate-500">Shader</dt>
+              <dd className="text-slate-700">
+                {runtimeInfo.pbrFallback
+                  ? "glTF 2.0 PBR"
+                  : runtimeInfo.shaderKind === "raw"
+                  ? "RawShaderMaterial"
+                  : runtimeInfo.shaderKind}
+              </dd>
+              {runtimeInfo.pbrFallback ? (
+                <>
+                  <dt className="text-slate-500">Fallback</dt>
+                  <dd className="text-amber-700">
+                    {formatOpenBrushFallbackReason(runtimeInfo.pbrFallback.reason)}
+                  </dd>
+                  <dt className="text-slate-500">Brush</dt>
+                  <dd className="break-all font-mono text-[10px] text-slate-700">
+                    {runtimeInfo.pbrFallback.brushName}
+                  </dd>
+                </>
+              ) : (
+                <>
+                  <dt className="text-slate-500">GLSL</dt>
+                  <dd className="text-slate-700">
+                    {runtimeInfo.glslVersion ?? "WebGL compatible"}
+                  </dd>
+                  <dt className="text-slate-500">Vertex</dt>
+                  <dd className="text-slate-700">
+                    {shaderLineCount(runtimeInfo.vertexShader)} lines
+                  </dd>
+                  <dt className="text-slate-500">Fragment</dt>
+                  <dd className="text-slate-700">
+                    {shaderLineCount(runtimeInfo.fragmentShader)} lines
+                  </dd>
+                  <dt className="text-slate-500">Uniforms</dt>
+                  <dd className="text-slate-700">
+                    {runtimeInfo.uniformNames.length}
+                  </dd>
+                  <dt className="text-slate-500">Attributes</dt>
+                  <dd className="text-slate-700">
+                    {formatAttributeBindingSummary(runtimeInfo.attributeBindings)}
+                  </dd>
+                </>
+              )}
+              <dt className="text-slate-500">Textures</dt>
+              <dd className="break-words text-slate-700">
+                {runtimeInfo.textureNames.length > 0
+                  ? runtimeInfo.textureNames.join(", ")
+                  : "なし"}
+              </dd>
+              <dt className="text-slate-500">Resources</dt>
+              <dd className="whitespace-pre-wrap break-words font-mono text-[9px] leading-4 text-slate-700">
+                {runtimeInfo.resourcePaths.length > 0
+                  ? runtimeInfo.resourcePaths.join("\n")
+                  : runtimeInfo.pbrFallback
+                    ? "GLB内のPBR / texture"
+                    : "three-icosa preset内"}
+              </dd>
+            </dl>
+
+            {runtimeInfo.pbrFallback ? (
+              <div className="space-y-2">
+                <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-800">
+                  {runtimeInfo.pbrFallback.message}
+                </p>
+                {shader.sourceOverrides?.vertexShader !== undefined ? (
+                  <ShaderSourceEditor
+                    label="Vertex GLSLを修正"
+                    source={shader.sourceOverrides.vertexShader}
+                    overridden
+                    readOnly={readOnly}
+                    onChange={(source) =>
+                      updateShaderSource("vertexShader", source)
+                    }
+                  />
+                ) : null}
+                {shader.sourceOverrides?.fragmentShader !== undefined ? (
+                  <ShaderSourceEditor
+                    label="Fragment GLSLを修正"
+                    source={shader.sourceOverrides.fragmentShader}
+                    overridden
+                    readOnly={readOnly}
+                    onChange={(source) =>
+                      updateShaderSource("fragmentShader", source)
+                    }
+                  />
+                ) : null}
+              </div>
+            ) : (
+              <>
+                <details className="rounded border border-slate-200 bg-slate-50">
+                  <summary className="cursor-pointer px-2 py-1.5 font-semibold text-slate-700">
+                    Uniform一覧を表示
+                  </summary>
+                  <p className="whitespace-pre-wrap break-words border-t border-slate-200 px-2 py-1.5 font-mono text-[10px] leading-4 text-slate-600">
+                    {runtimeInfo.uniformBindings.length > 0
+                      ? runtimeInfo.uniformBindings
+                          .map(
+                            (uniform) =>
+                              `${uniform.glslType} ${uniform.name} · ${formatUniformBindingStatus(uniform.status)}`,
+                          )
+                          .join("\n")
+                      : runtimeInfo.uniformNames.join(", ") || "Uniformなし"}
+                  </p>
+                </details>
+
+                <details className="rounded border border-slate-200 bg-slate-50">
+                  <summary className="cursor-pointer px-2 py-1.5 font-semibold text-slate-700">
+                    Mesh attribute対応を表示
+                  </summary>
+                  <div className="space-y-1.5 border-t border-slate-200 p-2">
+                    {runtimeInfo.attributeBindings.length > 0 ? (
+                      runtimeInfo.attributeBindings.map((binding) => (
+                        <label
+                          key={binding.shaderName}
+                          className="grid grid-cols-[minmax(0,1fr)_minmax(88px,0.9fr)] items-center gap-2"
+                        >
+                          <span className="min-w-0 truncate font-mono text-[10px] text-slate-600">
+                            {binding.glslType} {binding.shaderName}
+                          </span>
+                          <input
+                            type="text"
+                            value={
+                              shader.attributeBindings?.[binding.shaderName]
+                                ?.sourceAttribute ?? ""
+                            }
+                            placeholder={
+                              binding.sourceAttribute ??
+                              (binding.status === "default" ? "既定値" : "未設定")
+                            }
+                            disabled={readOnly}
+                            onChange={(event) =>
+                              updateAttributeSource(
+                                binding.shaderName,
+                                event.currentTarget.value,
+                              )
+                            }
+                            className="min-w-0 rounded border border-slate-300 bg-white px-1.5 py-1 font-mono text-[10px] text-slate-700 disabled:bg-slate-100"
+                            aria-label={`${binding.shaderName}のMesh attribute`}
+                          />
+                        </label>
+                      ))
+                    ) : (
+                      <p className="text-[10px] text-slate-500">
+                        宣言されたvertex attributeなし
+                      </p>
+                    )}
+                    <p className="text-[9px] leading-3 text-slate-500">
+                      空欄は自動semantic mapping。任意のgeometry attribute名で上書きできます。
+                    </p>
+                  </div>
+                </details>
+
+                <ShaderSourceEditor
+                  label="Vertex GLSLを表示"
+                  source={
+                    shader.sourceOverrides?.vertexShader ??
+                    runtimeInfo.vertexShader
+                  }
+                  overridden={shader.sourceOverrides?.vertexShader !== undefined}
+                  readOnly={readOnly}
+                  onChange={(source) => updateShaderSource("vertexShader", source)}
+                />
+                <ShaderSourceEditor
+                  label="Fragment GLSLを表示"
+                  source={
+                    shader.sourceOverrides?.fragmentShader ??
+                    runtimeInfo.fragmentShader
+                  }
+                  overridden={shader.sourceOverrides?.fragmentShader !== undefined}
+                  readOnly={readOnly}
+                  onChange={(source) => updateShaderSource("fragmentShader", source)}
+                />
+              </>
+            )}
+          </div>
+        ) : (
+          <p className="rounded border border-slate-200 bg-slate-50 px-2 py-2 text-[11px] leading-4 text-slate-600">
+            リアルタイムプレビューでthree-icosa shaderを解決すると、実際のGLSL・uniform・brush texture情報をここに表示します。
+          </p>
+        )}
+      </EditorSection>
+
       <p className="rounded-md border border-sky-200 bg-sky-50 px-2.5 py-2 text-[11px] leading-4 text-sky-800">
-        このMaterialはStandard/PBRへ変換せず、固定されたthree-icosa brush libraryから再構築します。通常のXRift MaterialをSlotへ割り当てた場合だけ見た目を上書きします。
+        このMaterialは元Modelの該当nodeとmaterial indexをPreview Adapterで分離し、埋め込み済みのthree-icosa brush libraryから再構築します。未対応presetまたはshader読込失敗時だけ、GLB内のPBR Materialへ安全にフォールバックします。
       </p>
     </div>
+  );
+}
+
+function formatOpenBrushFallbackReason(
+  reason: "unsupported-preset" | "shader-load-error" | "attribute-mismatch",
+): string {
+  if (reason === "unsupported-preset") return "未対応preset";
+  return reason === "attribute-mismatch"
+    ? "Mesh attribute不足"
+    : "shader読込失敗";
+}
+
+function shaderLineCount(source: string | undefined): number {
+  return source ? source.split(/\r?\n/).length : 0;
+}
+
+function formatAttributeBindingSummary(
+  bindings: ProjectModelMaterialRuntimeInfo["attributeBindings"],
+): string {
+  if (bindings.length === 0) return "なし";
+  const bound = bindings.filter((binding) => binding.status === "bound").length;
+  const defaults = bindings.filter(
+    (binding) => binding.status === "default",
+  ).length;
+  const missing = bindings.length - bound - defaults;
+  return `${bound} linked / ${defaults} default / ${missing} missing`;
+}
+
+function formatUniformBindingStatus(
+  status: ProjectModelMaterialRuntimeInfo["uniformBindings"][number]["status"],
+): string {
+  if (status === "texture") return "texture設定済み";
+  return status === "value" ? "値設定済み" : "未設定";
+}
+
+function ShaderSourceEditor({
+  label,
+  source,
+  overridden,
+  readOnly,
+  onChange,
+}: {
+  label: string;
+  source: string | undefined;
+  overridden: boolean;
+  readOnly: boolean;
+  onChange: (source: string | undefined) => void;
+}) {
+  return (
+    <details className="rounded border border-slate-200 bg-slate-950">
+      <summary className="cursor-pointer px-2 py-1.5 font-semibold text-slate-200">
+        {label}{overridden ? " · Material copy編集中" : ""}
+      </summary>
+      <div className="border-t border-slate-700 p-2">
+        <textarea
+          value={source ?? ""}
+          readOnly={readOnly}
+          spellCheck={false}
+          onChange={(event) => onChange(event.currentTarget.value)}
+          className="h-56 w-full resize-y bg-transparent font-mono text-[9px] leading-4 text-slate-200 outline-none read-only:text-slate-400"
+          aria-label={label}
+        />
+        {overridden && !readOnly ? (
+          <button
+            type="button"
+            onClick={() => onChange(undefined)}
+            className="mt-1 rounded border border-slate-600 px-2 py-1 text-[10px] font-semibold text-slate-200 hover:bg-slate-800"
+          >
+            presetへ戻す
+          </button>
+        ) : null}
+      </div>
+    </details>
   );
 }
 
