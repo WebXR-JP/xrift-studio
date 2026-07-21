@@ -140,6 +140,7 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
     "model",
     "material",
     "texture",
+    "skybox",
     "particle",
     "audio",
     "template",

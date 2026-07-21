@@ -34,6 +34,8 @@ import {
   Vector2,
   Vector3,
   type Group,
+  type Material,
+  type Mesh,
   type DirectionalLight,
   type MeshStandardMaterial,
   type Object3D,
@@ -46,11 +48,15 @@ import {
   XRIFT_COMPONENT_SCHEMA_IDS,
   getBuiltinPrefabRecipe,
   getBuiltinPrimitiveCreation,
+  applyCustomShaderSourceOverrides,
+  bindCustomShaderGeometryAttributes,
+  hasCustomShaderEntrypoints,
   getMaterialAssignmentTarget,
   getMaterialAsset,
   getPrimaryMaterialAssetId,
   getTransform,
   normalizeProjectRelativePath,
+  resolveOpenBrushEditorBrushBaseUrl,
   resolveSceneSettings,
   type AssetManifest,
   type MaterialAsset,
@@ -70,6 +76,10 @@ import {
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { ParticleEmitterVisual } from "./ParticleEmitterVisual";
 import { ProjectModelVisual } from "./ProjectModelVisual";
+import {
+  loadOpenBrushPreviewMaterial,
+  normalizeOpenBrushGlslSource,
+} from "../../lib/visual-editor/open-brush-preview-loader";
 import {
   readProjectTextureDataUrl,
   useCoreMaterialPreviewTextures,
@@ -354,8 +364,44 @@ function PrimitiveMeshVisual({
     assets,
     projectPath,
   );
+  const customShaderMaterial = useOpenBrushPrimitiveMaterial(material);
+  const meshRef = useRef<Mesh | null>(null);
+  const customShaderInstance = useMemo(() => {
+    const instance = customShaderMaterial?.clone();
+    if (!instance || material?.shader?.kind !== "openbrush") return instance;
+    const overrides = material.shader.sourceOverrides;
+    applyCustomShaderSourceOverrides(
+      instance,
+      overrides
+        ? {
+            ...(overrides.vertexShader !== undefined
+              ? { vertexShader: normalizeOpenBrushGlslSource(overrides.vertexShader) }
+              : {}),
+            ...(overrides.fragmentShader !== undefined
+              ? { fragmentShader: normalizeOpenBrushGlslSource(overrides.fragmentShader) }
+              : {}),
+          }
+        : undefined,
+    );
+    return hasCustomShaderEntrypoints(instance) ? instance : undefined;
+  }, [customShaderMaterial, material?.shader]);
   const materialRef = useRef<MeshStandardMaterial | null>(null);
   useMaterialPreviewRenderSync(materialRef, materialTextures);
+  useLayoutEffect(() => {
+    if (!meshRef.current || !customShaderInstance) return;
+    bindCustomShaderGeometryAttributes(
+      meshRef.current.geometry,
+      customShaderInstance,
+      material?.shader?.kind === "openbrush"
+        ? material.shader.attributeBindings
+        : undefined,
+    );
+    customShaderInstance.needsUpdate = true;
+  }, [customShaderInstance, material?.shader, primitive]);
+  useEffect(
+    () => () => customShaderInstance?.dispose(),
+    [customShaderInstance],
+  );
   const pbr = material?.properties.pbrMetallicRoughness;
   const alphaMode = material?.properties.alphaMode ?? "OPAQUE";
   const opacity =
@@ -366,10 +412,14 @@ function PrimitiveMeshVisual({
 
   return (
     <mesh
+      ref={meshRef}
       castShadow={component.castShadow}
       receiveShadow={component.receiveShadow}
     >
       <PrimitiveGeometryView primitive={primitive} />
+      {customShaderInstance ? (
+        <primitive object={customShaderInstance} attach="material" />
+      ) : (
       <meshStandardMaterial
         ref={materialRef}
         color={material?.properties.color ?? "#f43f5e"}
@@ -402,6 +452,7 @@ function PrimitiveMeshVisual({
             : undefined
         }
       />
+      )}
       {selected || materialDropHighlighted ? (
         <Edges
           color={materialDropHighlighted ? "#38bdf8" : EDITOR_SELECTION_COLOR}
@@ -533,6 +584,35 @@ function EditorLightIcon({
       </div>
     </Html>
   );
+}
+
+function useOpenBrushPrimitiveMaterial(
+  material: MaterialAsset | undefined,
+): Material | undefined {
+  const [resolved, setResolved] = useState<Material>();
+  useEffect(() => {
+    let active = true;
+    setResolved(undefined);
+    if (material?.shader?.kind !== "openbrush") {
+      return () => {
+        active = false;
+      };
+    }
+    void loadOpenBrushPreviewMaterial(
+      material.shader.brushName,
+      resolveOpenBrushEditorBrushBaseUrl(),
+    )
+      .then((preset) => {
+        if (active) setResolved(preset);
+      })
+      .catch(() => {
+        if (active) setResolved(undefined);
+      });
+    return () => {
+      active = false;
+    };
+  }, [material?.shader]);
+  return resolved;
 }
 
 function AudioSourceVisual({ selected }: { selected: boolean }) {

@@ -10,6 +10,7 @@ import {
   ASSET_LIBRARY_ITEM_DRAG_MIME,
   MATERIAL_DRAG_MIME,
   SCENE_ASSET_DRAG_MIME,
+  SKYBOX_DRAG_MIME,
   TEXTURE_DRAG_MIME,
 } from "./types";
 
@@ -23,6 +24,7 @@ export function writeAssetCardDragData(
   };
   if (asset.kind === "material") entries[MATERIAL_DRAG_MIME] = asset.id;
   if (asset.kind === "texture") entries[TEXTURE_DRAG_MIME] = asset.id;
+  if (asset.kind === "skybox") entries[SKYBOX_DRAG_MIME] = asset.id;
   if (isScenePlaceableAsset(asset)) entries[SCENE_ASSET_DRAG_MIME] = asset.id;
   writeEditorDragData(dataTransfer, entries);
 }

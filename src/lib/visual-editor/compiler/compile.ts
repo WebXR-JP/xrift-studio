@@ -590,18 +590,30 @@ function renderSceneEnvironment(
     const imageAssetId = settings.skybox.imageAssetId;
     const imageAsset = imageAssetId ? context.assets.assets[imageAssetId] : undefined;
     const imageUrl = imageAssetId ? context.assetRuntimeUrls.get(imageAssetId) : undefined;
-    if (imageAssetId && imageAsset?.kind === "texture" && imageUrl) {
+    if (
+      imageAssetId &&
+      (imageAsset?.kind === "texture" || imageAsset?.kind === "skybox") &&
+      imageUrl
+    ) {
       context.referencedAssetIds.add(imageAssetId);
       context.reactValueImports.add("useEffect");
       ["useLoader", "useThree"].forEach((name) => context.fiberImports.add(name));
-      ["EquirectangularReflectionMapping", "SRGBColorSpace", "TextureLoader"].forEach(
-        (name) => context.threeValueImports.add(name),
-      );
+      context.threeValueImports.add("EquirectangularReflectionMapping");
+      const hdrSkybox = imageAsset.kind === "skybox" && imageAsset.sourceFormat === "hdr";
+      const loaderName = hdrSkybox ? "RGBELoader" : "TextureLoader";
+      if (hdrSkybox) {
+        context.extraImports.add(
+          'import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";',
+        );
+      } else {
+        context.threeValueImports.add("SRGBColorSpace");
+        context.threeValueImports.add("TextureLoader");
+      }
       context.supportDeclarations.set(
         "scene-environment:image-skybox",
         `const XRiftStudioImageSkybox: FC<{ src: string; rotation: number; exposure: number }> = ({ src, rotation, exposure }) => {
   const scene = useThree((state) => state.scene);
-  const texture = useLoader(TextureLoader, src);
+  const texture = useLoader(${loaderName}, src);
   useEffect(() => {
     const previousBackground = scene.background;
     const previousEnvironment = scene.environment;
@@ -609,7 +621,7 @@ function renderSceneEnvironment(
     const previousEnvironmentIntensity = scene.environmentIntensity;
     const previousBackgroundRotation = scene.backgroundRotation.clone();
     const previousEnvironmentRotation = scene.environmentRotation.clone();
-    texture.colorSpace = SRGBColorSpace;
+    ${hdrSkybox ? "" : "texture.colorSpace = SRGBColorSpace;"}
     texture.mapping = EquirectangularReflectionMapping;
     texture.needsUpdate = true;
     scene.background = texture;
@@ -2681,7 +2693,7 @@ function diagnoseReferencedUnsupportedAssets(context: CompileContext): void {
         assetId,
       });
     } else if (
-      (asset.kind === "texture" || asset.kind === "model" || asset.kind === "audio") &&
+      (asset.kind === "texture" || asset.kind === "skybox" || asset.kind === "model" || asset.kind === "audio") &&
       !context.assetRuntimeUrls.has(asset.id)
     ) {
       addDiagnostic(
@@ -2708,7 +2720,7 @@ function diagnoseUnsupportedAssets(
     if (diagnosed.has(asset.id)) continue;
     if (
       (asset.kind === "template" && !isPrefabAsset(asset)) ||
-      ((asset.kind === "texture" || asset.kind === "model" || asset.kind === "audio") &&
+      ((asset.kind === "texture" || asset.kind === "skybox" || asset.kind === "model" || asset.kind === "audio") &&
         !isAssetSupportedByCompiler(asset))
     ) {
       diagnostics.push(
@@ -2953,6 +2965,7 @@ function isAllowedStaticAssetSource(asset: SceneAsset): boolean {
   if (asset.kind === "texture") {
     return ["png", "jpg", "jpeg", "webp", "ktx2"].includes(extension);
   }
+  if (asset.kind === "skybox") return ["hdr", "exr", "png", "jpg", "jpeg", "webp"].includes(extension);
   if (asset.kind === "audio") return extension === "mp3";
   return false;
 }
@@ -2968,6 +2981,7 @@ function isAssetSupportedByCompiler(asset: SceneAsset): boolean {
   }
   if (asset.kind === "model") return true;
   if (asset.kind === "audio") return true;
+  if (asset.kind === "skybox") return ["hdr", "png", "jpg", "jpeg", "webp"].includes(fileExtension(asset.source.relativePath));
   if (asset.kind !== "texture") return false;
   const extension = fileExtension(asset.source.relativePath);
   return (
@@ -2986,6 +3000,7 @@ function fileExtension(relativePath: string): string {
 function assetPurpose(asset: SceneAsset): AssetCopyPlanEntry["purpose"] {
   if (
     asset.kind === "texture" ||
+    asset.kind === "skybox" ||
     asset.kind === "model" ||
     asset.kind === "audio" ||
     asset.kind === "particle"

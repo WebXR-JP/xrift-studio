@@ -11,6 +11,7 @@ export * from "./creation-catalog";
 export * from "./compiler";
 export * from "./document-id";
 export * from "./document-asset-creation";
+export * from "./external-store";
 export * from "./document-asset-creation.fixture";
 export * from "./editor-history";
 export * from "./editor-session";

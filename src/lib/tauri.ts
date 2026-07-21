@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 export type ProjectKind = "world" | "item";
 export type ProjectFormat = "classic" | "visual";
@@ -113,6 +114,67 @@ export type VisualAssetImportWrite = {
   dataUrl: string;
 };
 
+export type ExternalStoreAssetKind = "hdri" | "texture" | "model";
+
+export type ExternalStoreAsset = {
+  providerId: string;
+  externalId: string;
+  name: string;
+  description: string;
+  category: string;
+  tags: string[];
+  thumbnailUrl: string;
+  assetKind: ExternalStoreAssetKind;
+  maxResolution?: [number, number];
+  downloadCount: number;
+  authors: string[];
+  assetUrl: string;
+  licenseName: string;
+  licenseUrl: string;
+};
+
+export type ExternalStoreResolution = {
+  id: string;
+  label: string;
+  byteLength: number;
+  fileCount: number;
+};
+
+export type ExternalStoreAssetOptions = {
+  providerId: string;
+  externalId: string;
+  assetKind: ExternalStoreAssetKind;
+  resolutions: ExternalStoreResolution[];
+};
+
+export type ExternalStoreInstallRequest = {
+  providerId: string;
+  externalId: string;
+  resolution: string;
+};
+
+export type ExternalStoreInstalledFile = {
+  role: "environment" | "base-color" | "normal" | "arm";
+  relativePath: string;
+  byteLength: number;
+  sha256: string;
+  format: string;
+};
+
+export type ExternalStoreInstallResult = {
+  providerId: string;
+  providerName: string;
+  externalId: string;
+  name: string;
+  assetKind: "hdri" | "texture";
+  resolution: string;
+  files: ExternalStoreInstalledFile[];
+  authors: string[];
+  assetUrl: string;
+  licenseName: string;
+  licenseUrl: string;
+};
+
 export type XriftMcpClientId =
   | "codex"
   | "claude-code"
@@ -175,6 +237,7 @@ export type XriftMcpEditorResponse = {
 
 export const tauri = {
   isAvailable: () => isTauri(),
+  openUrl: (url: string) => openUrl(url),
   getVersions: () => invoke<Versions>("get_versions"),
   runtimePaths: () => invoke<RuntimePaths>("runtime_paths"),
   runtimeStatus: () => invoke<RuntimeStatus>("runtime_status"),
@@ -256,6 +319,21 @@ export const tauri = {
       projectPath,
       transactionId,
       writes,
+    }),
+  listExternalStoreAssets: (providerId: string) =>
+    invoke<ExternalStoreAsset[]>("list_external_store_assets", { providerId }),
+  getExternalStoreAssetOptions: (providerId: string, externalId: string) =>
+    invoke<ExternalStoreAssetOptions>("get_external_store_asset_options", {
+      providerId,
+      externalId,
+    }),
+  installExternalStoreAsset: (
+    projectPath: string,
+    request: ExternalStoreInstallRequest,
+  ) =>
+    invoke<ExternalStoreInstallResult>("install_external_store_asset", {
+      projectPath,
+      request,
     }),
   readWorldFile: (projectPath: string) =>
     invoke<string>("read_world_file", { projectPath }),

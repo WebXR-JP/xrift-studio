@@ -8,6 +8,7 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 
+mod external_store;
 pub mod mcp;
 
 const NODE_VERSION: &str = "v24.15.0";
@@ -3800,6 +3801,9 @@ pub fn run() {
             clear_compiler_upload_attempt,
             persist_compiler_publication_metadata,
             commit_visual_asset_import,
+            external_store::list_external_store_assets,
+            external_store::get_external_store_asset_options,
+            external_store::install_external_store_asset,
             read_world_file,
             write_world_file,
             read_text_file,

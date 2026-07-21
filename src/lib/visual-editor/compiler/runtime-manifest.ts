@@ -290,6 +290,16 @@ function compileRuntimeAsset(
       flipY: asset.importSettings.flipY,
     };
   }
+  if (asset.kind === "skybox" && url) {
+    return {
+      id: asset.id,
+      kind: "skybox",
+      name: asset.name,
+      url,
+      sourceFormat: asset.sourceFormat,
+      projection: asset.projection,
+    };
+  }
   if (asset.kind === "audio" && url) {
     return { id: asset.id, kind: "audio", name: asset.name, url };
   }

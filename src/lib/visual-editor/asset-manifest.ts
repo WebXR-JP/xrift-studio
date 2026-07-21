@@ -27,6 +27,17 @@ export type AssetThumbnailDescriptor =
       rendererVersion: string;
     };
 
+/** Provider-neutral credit retained when an Asset is installed from a store. */
+export type AssetAttribution = {
+  providerId: string;
+  providerName: string;
+  externalId: string;
+  assetUrl: string;
+  licenseName: string;
+  licenseUrl: string;
+  authors: string[];
+};
+
 export type AssetBase<Kind extends string> = {
   id: string;
   name: string;
@@ -40,6 +51,7 @@ export type AssetBase<Kind extends string> = {
   folderId?: string | null;
   /** Stable sibling order; gaps are intentionally allowed. */
   order?: number;
+  attribution?: AssetAttribution;
 };
 
 export type PrimitiveGeometry =
@@ -473,6 +485,13 @@ export type ParticleAsset = AssetBase<"particle"> & {
   properties: ParticleProperties;
 };
 
+/** Equirectangular environment image kept distinct from a surface Texture. */
+export type SkyboxAsset = AssetBase<"skybox"> & {
+  projection: "equirectangular";
+  sourceFormat: "hdr" | "exr" | "image";
+  byteLength?: number;
+};
+
 export type AudioImportMetadata = {
   sourceFormat: "mp3";
   mimeType: "audio/mpeg";
@@ -503,6 +522,7 @@ export type SceneAsset =
   | ModelAsset
   | MaterialAsset
   | TextureAsset
+  | SkyboxAsset
   | ParticleAsset
   | AudioAsset
   | TemplateAsset;
@@ -840,6 +860,7 @@ export type MaterialExtensionsPatch = Partial<{
 }>;
 
 export type MaterialAssetPatch = {
+  shader?: import("./open-brush").OpenBrushMaterialShader;
   pbrMetallicRoughness?: PbrMetallicRoughnessPatch;
   normalTexture?: NormalTextureInfoPatch;
   occlusionTexture?: OcclusionTextureInfoPatch;
@@ -992,8 +1013,14 @@ export function updateMaterialAsset(
     asset.properties as unknown as MaterialAssetPatch,
   );
   const properties = applyMaterialPatch(current, patch, manifest);
+  const shader = patch.shader ?? asset.shader;
 
-  if (jsonEqual(properties, asset.properties)) return manifest;
+  if (
+    jsonEqual(properties, asset.properties) &&
+    jsonEqual(shader, asset.shader)
+  ) {
+    return manifest;
+  }
 
   return {
     ...manifest,
@@ -1002,6 +1029,7 @@ export function updateMaterialAsset(
       [assetId]: {
         ...asset,
         properties,
+        ...(shader ? { shader } : {}),
         ...(asset.importedFromModel
           ? {
               importedFromModel: {

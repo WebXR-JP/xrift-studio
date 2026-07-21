@@ -155,6 +155,14 @@ export type XriftRuntimeAsset =
     }
   | {
       id: string;
+      kind: "skybox";
+      name: string;
+      url: string;
+      sourceFormat: "hdr" | "exr" | "image";
+      projection: "equirectangular";
+    }
+  | {
+      id: string;
       kind: "audio";
       name: string;
       url: string;
@@ -172,6 +180,14 @@ export type XriftRuntimeAsset =
         brushGuid?: string;
         brushBaseUrl: string;
         sourceMaterialIndex: number;
+        sourceOverrides?: {
+          vertexShader?: string;
+          fragmentShader?: string;
+        };
+        attributeBindings?: Record<
+          string,
+          { sourceAttribute?: string; defaultValue?: number[] }
+        >;
       };
     }
   | {

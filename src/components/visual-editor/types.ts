@@ -4,6 +4,8 @@ export const MATERIAL_DRAG_MIME =
   "application/x-xrift-visual-editor-material" as const;
 export const TEXTURE_DRAG_MIME =
   "application/x-xrift-visual-editor-texture" as const;
+export const SKYBOX_DRAG_MIME =
+  "application/x-xrift-visual-editor-skybox" as const;
 /** Scene placement intent for imported Model/Prefab/Particle/Audio assets. */
 export const SCENE_ASSET_DRAG_MIME =
   "application/x-xrift-visual-editor-scene-asset" as const;

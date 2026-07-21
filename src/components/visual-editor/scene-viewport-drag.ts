@@ -3,6 +3,7 @@ import {
   ASSET_DRAG_MIME,
   MATERIAL_DRAG_MIME,
   SCENE_ASSET_DRAG_MIME,
+  SKYBOX_DRAG_MIME,
 } from "./types";
 import {
   hasEditorDragData,
@@ -13,6 +14,7 @@ export type SceneViewportDragIntent =
   | { kind: "files" }
   | { kind: "builtin-prefab"; id: string }
   | { kind: "material"; id: string }
+  | { kind: "skybox"; id: string }
   | { kind: "scene-asset"; id: string }
   | { kind: "primitive"; id: string };
 
@@ -27,6 +29,7 @@ export function getSceneViewportDragIntent(
 
   const candidates = [
     ["builtin-prefab", BUILTIN_PREFAB_DRAG_MIME],
+    ["skybox", SKYBOX_DRAG_MIME],
     ["material", MATERIAL_DRAG_MIME],
     ["scene-asset", SCENE_ASSET_DRAG_MIME],
     ["primitive", ASSET_DRAG_MIME],

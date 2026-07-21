@@ -13,7 +13,7 @@ import {
   hasEditorDragData,
   readEditorDragData,
 } from "./editor-drag-data";
-import { TEXTURE_DRAG_MIME } from "./types";
+import { SKYBOX_DRAG_MIME, TEXTURE_DRAG_MIME } from "./types";
 
 type SceneSettingsInspectorProps = {
   scene: SceneDocument;
@@ -223,26 +223,30 @@ function SkyboxImageField({
   disabled: boolean;
   onChange: (imageAssetId: string | undefined) => void;
 }) {
-  const textures = Object.values(assets.assets).filter(
-    (asset) => asset.kind === "texture" && asset.source.kind === "project",
+  const skyboxes = Object.values(assets.assets).filter(
+    (asset) =>
+      (asset.kind === "skybox" || asset.kind === "texture") &&
+      asset.source.kind === "project",
   );
   const assigned = imageAssetId ? assets.assets[imageAssetId] : undefined;
   const canDrop = (event: DragEvent<HTMLDivElement>) =>
-    !disabled && hasEditorDragData(event.dataTransfer, TEXTURE_DRAG_MIME);
+    !disabled &&
+    (hasEditorDragData(event.dataTransfer, SKYBOX_DRAG_MIME) ||
+      hasEditorDragData(event.dataTransfer, TEXTURE_DRAG_MIME));
 
   return (
     <div className="space-y-2">
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-slate-700">画像（Assets）</span>
+        <span className="mb-1 block text-xs font-medium text-slate-700">Skybox（Assets）</span>
         <select
           value={imageAssetId ?? ""}
-          disabled={disabled || textures.length === 0}
+          disabled={disabled || skyboxes.length === 0}
           onChange={(event) => onChange(event.currentTarget.value || undefined)}
           className="h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
         >
           <option value="">グラデーションを使用</option>
-          {textures.map((texture) => (
-            <option key={texture.id} value={texture.id}>{texture.name}</option>
+          {skyboxes.map((skybox) => (
+            <option key={skybox.id} value={skybox.id}>{skybox.name}{skybox.kind === "texture" ? "（従来Texture）" : ""}</option>
           ))}
         </select>
       </label>
@@ -261,16 +265,21 @@ function SkyboxImageField({
           if (!canDrop(event)) return;
           event.preventDefault();
           event.stopPropagation();
-          const nextAssetId = readEditorDragData(event.dataTransfer, TEXTURE_DRAG_MIME);
+          const nextAssetId =
+            readEditorDragData(event.dataTransfer, SKYBOX_DRAG_MIME) ||
+            readEditorDragData(event.dataTransfer, TEXTURE_DRAG_MIME);
           clearEditorDragData();
-          if (assets.assets[nextAssetId]?.kind === "texture") onChange(nextAssetId);
+          if (
+            assets.assets[nextAssetId]?.kind === "skybox" ||
+            assets.assets[nextAssetId]?.kind === "texture"
+          ) onChange(nextAssetId);
         }}
       >
-        {assigned?.kind === "texture" && assigned.source.kind === "project"
-          ? `設定中: ${assigned.name}。Assetsから別の画像をここへドロップできます。`
+        {(assigned?.kind === "skybox" || assigned?.kind === "texture") && assigned.source.kind === "project"
+          ? `設定中: ${assigned.name}。Assetsから別のSkyboxをここへドロップできます。`
           : imageAssetId
             ? "設定済みの画像がAssetsに見つかりません。別のTextureを選択してください。"
-            : "equirectangular（横長パノラマ）画像をAssetsからここへドロップできます。"}
+            : "Skybox AssetをAssetsからここへドロップできます。"}
       </div>
     </div>
   );
