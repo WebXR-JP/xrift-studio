@@ -109,9 +109,15 @@ jobs:
             throw new Error("Release tag must match app version: " + expected);
           }'
 
-      - name: Prepare Intel macOS MCP sidecar
+      - name: Prepare universal macOS MCP sidecar
         if: matrix.platform == 'macos-latest'
-        run: pnpm mcp:sidecar:prepare:release --target x86_64-apple-darwin
+        run: |
+          pnpm mcp:sidecar:prepare:release --target aarch64-apple-darwin
+          pnpm mcp:sidecar:prepare:release --target x86_64-apple-darwin
+          lipo -create \
+            src-tauri/binaries/xrift-studio-mcp-sidecar-aarch64-apple-darwin \
+            src-tauri/binaries/xrift-studio-mcp-sidecar-x86_64-apple-darwin \
+            -output src-tauri/binaries/xrift-studio-mcp-sidecar-universal-apple-darwin
 
       - name: Build & upload to Release
         uses: tauri-apps/tauri-action@v0
