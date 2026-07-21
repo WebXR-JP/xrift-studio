@@ -10,6 +10,7 @@ import {
 import {
   BUILTIN_ASSET_IDS,
   addDefaultDocumentAsset,
+  applyExternalStoreInstall,
   addDefaultParticleAsset,
   analyzeAssetDeletion,
   analyzeAssetFolderDeletion,
@@ -53,6 +54,7 @@ import {
   pasteEntityHierarchy,
   removeXriftComponent,
   resolveAssetCreationFolderId,
+  resolveSceneSettings,
   renameAsset,
   renameAssetFolder,
   renameEntity,
@@ -71,6 +73,7 @@ import {
   updateAudioSourceComponent,
   updateColliderComponent,
   updateLightComponent,
+  updateMeshShadowSettings,
   updateMaterialAsset,
   updateModelAsset,
   updateParticleAsset,
@@ -100,8 +103,12 @@ import {
   type XriftMcpClientId,
   type XriftMcpClientStatus,
   type XriftMcpEditorRequestEvent,
+  type XriftOllamaConfigurationResult,
+  type XriftOllamaIntegrationId,
+  type XriftOllamaStatus,
 } from "../../lib/tauri";
 import { AssetsPanel } from "./AssetsPanel";
+import { ExternalAssetStoreDialog } from "./ExternalAssetStoreDialog";
 import {
   hasActiveAssetImport,
   resolveAssetOperationAvailability,
@@ -309,6 +316,8 @@ export type VisualEditorPrototypeProps = {
   ) => void | string | Promise<void | string>;
   /** Upload/export orchestration is injected by the shell when available. */
   onUpload?: (bundle: PrototypeVisualProject) => void | Promise<void>;
+  /** Opens the desktop Classic export flow without changing authoring data. */
+  onClassicExport?: (bundle: PrototypeVisualProject) => void | Promise<void>;
   /** Fresh only after the current documents and required publication files were staged. */
   compilationFresh?: boolean;
   /** The thumbnail is persisted outside the authoring document set. */
@@ -428,6 +437,7 @@ export function VisualEditorPrototype({
   initialBundle: providedInitialBundle,
   onSave,
   onUpload,
+  onClassicExport,
   compilationFresh = false,
   onThumbnailChanged,
   initialLayout,
@@ -490,6 +500,12 @@ export function VisualEditorPrototype({
   }
   const sceneSelection = history.present.sceneSelection;
   const assetSelection = history.present.assetSelection;
+  const [selectedEntityIds, setSelectedEntityIds] = useState<string[]>(() =>
+    sceneSelection?.id ? [sceneSelection.id] : [],
+  );
+  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>(() =>
+    assetSelection ? [assetSelection] : [],
+  );
   const sceneSelectionRef = useRef(sceneSelection);
   sceneSelectionRef.current = sceneSelection;
   const assetSelectionRef = useRef(assetSelection);
@@ -520,6 +536,7 @@ export function VisualEditorPrototype({
   const [editorMode, setEditorMode] = useState<EditorMode>("edit");
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
+  const [externalStoreOpen, setExternalStoreOpen] = useState(false);
   const [pendingImports, setPendingImports] = useState<QueuedAssetImport[]>([]);
   const importQueueRef = useRef<QueuedAssetImport[]>([]);
   const importRunningRef = useRef(false);
@@ -536,6 +553,11 @@ export function VisualEditorPrototype({
   const [mcpRegisteringClientId, setMcpRegisteringClientId] =
     useState<XriftMcpClientId | null>(null);
   const [mcpError, setMcpError] = useState<string | null>(null);
+  const [ollamaStatus, setOllamaStatus] = useState<XriftOllamaStatus | null>(null);
+  const [ollamaConfiguring, setOllamaConfiguring] = useState(false);
+  const [ollamaError, setOllamaError] = useState<string | null>(null);
+  const [ollamaResult, setOllamaResult] =
+    useState<XriftOllamaConfigurationResult | null>(null);
   const [mcpLastActivity, setMcpLastActivity] =
     useState<XriftMcpActivity>(null);
 
@@ -543,11 +565,18 @@ export function VisualEditorPrototype({
     if (!mcpNativeAvailable) return;
     setMcpLoading(true);
     setMcpError(null);
+    setOllamaError(null);
+    setOllamaResult(null);
     try {
-      setMcpClients(await tauri.detectXriftMcpClients());
+      const [clients, ollama] = await Promise.all([
+        tauri.detectXriftMcpClients(),
+        tauri.detectXriftOllama(),
+      ]);
+      setMcpClients(clients);
+      setOllamaStatus(ollama);
     } catch {
       setMcpError(
-        "AI clientを確認できませんでした。XRift Studioを再起動して再試行してください",
+        "AI clientまたはOllamaを確認できませんでした。XRift Studioを再起動して再試行してください",
       );
     } finally {
       setMcpLoading(false);
@@ -556,7 +585,13 @@ export function VisualEditorPrototype({
 
   const registerMcpClient = useCallback(
     async (clientId: XriftMcpClientId) => {
-      if (!mcpNativeAvailable || mcpRegisteringClientId) return;
+      if (
+        !mcpNativeAvailable ||
+        mcpRegisteringClientId ||
+        ollamaConfiguring
+      ) {
+        return;
+      }
       setMcpRegisteringClientId(clientId);
       setMcpError(null);
       try {
@@ -577,7 +612,64 @@ export function VisualEditorPrototype({
         setMcpRegisteringClientId(null);
       }
     },
-    [mcpNativeAvailable, mcpRegisteringClientId],
+    [mcpNativeAvailable, mcpRegisteringClientId, ollamaConfiguring],
+  );
+
+  const configureOllama = useCallback(
+    async (integrationId: XriftOllamaIntegrationId, model: string) => {
+      if (
+        !mcpNativeAvailable ||
+        ollamaConfiguring ||
+        mcpRegisteringClientId
+      ) {
+        return;
+      }
+      const target = mcpClients.find((client) => client.id === integrationId);
+      if (!target?.installed) {
+        setOllamaError(
+          "構成先のAI clientが見つかりません。先にclientをinstallしてください",
+        );
+        return;
+      }
+
+      setOllamaConfiguring(true);
+      setOllamaError(null);
+      setOllamaResult(null);
+      try {
+        if (!target.registered || target.needsUpdate) {
+          setMcpRegisteringClientId(integrationId);
+          const status = await tauri.registerXriftMcpClient(integrationId);
+          setMcpClients((current) =>
+            current.map((client) =>
+              client.id === status.id ? status : client,
+            ),
+          );
+        }
+        const result = await tauri.configureXriftOllama(
+          integrationId,
+          model,
+        );
+        setOllamaResult(result);
+        setNotice(
+          `${result.integrationLabel}をOllamaの${result.model}で構成しました。clientを起動または再起動してください`,
+        );
+      } catch (error) {
+        setOllamaError(
+          typeof error === "string" && error.trim()
+            ? error
+            : "OllamaでAI clientを構成できませんでした。Ollamaとclientの状態を確認してください",
+        );
+      } finally {
+        setMcpRegisteringClientId(null);
+        setOllamaConfiguring(false);
+      }
+    },
+    [
+      mcpClients,
+      mcpNativeAvailable,
+      mcpRegisteringClientId,
+      ollamaConfiguring,
+    ],
   );
 
   const requestAutosave = useCallback(
@@ -654,6 +746,7 @@ export function VisualEditorPrototype({
   );
 
   const setSceneSelection = useCallback((selection: SceneSelection) => {
+    setSelectedEntityIds(selection?.id ? [selection.id] : []);
     setHistory((current) =>
       replaceEditorHistoryPresent(current, {
         ...current.present,
@@ -663,10 +756,43 @@ export function VisualEditorPrototype({
   }, []);
 
   const setAssetSelection = useCallback((assetId: string | null) => {
+    setSelectedAssetIds(assetId ? [assetId] : []);
     setHistory((current) =>
       replaceEditorHistoryPresent(current, {
         ...current.present,
         assetSelection: assetId,
+      }),
+    );
+  }, []);
+
+  const handleEntitySelectionChange = useCallback((entityIds: string[], primaryEntityId: string | null) => {
+    const validIds = [...new Set(entityIds)].filter((id) => Boolean(bundleRef.current.scene.entities[id]));
+    setSceneSettingsOpen(false);
+    setSelectedEntityIds(validIds);
+    setSelectedAssetIds([]);
+    setAssetSelection(null);
+    setHistory((current) =>
+      replaceEditorHistoryPresent(current, {
+        ...current.present,
+        sceneSelection: primaryEntityId && validIds.includes(primaryEntityId)
+          ? { kind: "entity", id: primaryEntityId }
+          : validIds[0]
+            ? { kind: "entity", id: validIds[0] }
+            : null,
+      }),
+    );
+  }, [setAssetSelection]);
+
+  const handleAssetSelectionChange = useCallback((assetIds: string[], primaryAssetId: string | null) => {
+    const validIds = [...new Set(assetIds)].filter((id) => Boolean(bundleRef.current.assets.assets[id]));
+    setSceneSettingsOpen(false);
+    setSelectedAssetIds(validIds);
+    setHistory((current) =>
+      replaceEditorHistoryPresent(current, {
+        ...current.present,
+        assetSelection: primaryAssetId && validIds.includes(primaryAssetId)
+          ? primaryAssetId
+          : validIds[0] ?? null,
       }),
     );
   }, []);
@@ -688,6 +814,8 @@ export function VisualEditorPrototype({
     setPendingMaterialAssignment(null);
     setModelReimportFeedback(null);
     setActiveAssetFolderId(null);
+    setSelectedEntityIds(initialBundle.scene.rootEntityIds[0] ? [initialBundle.scene.rootEntityIds[0]] : []);
+    setSelectedAssetIds(firstAssetId(initialBundle) ? [firstAssetId(initialBundle)!] : []);
     setFrameSelectionRequest(0);
     setExitFocusRequest((current) => current + 1);
     setFocusedEntity(null);
@@ -797,6 +925,7 @@ export function VisualEditorPrototype({
     if (!mcpNativeAvailable) return;
     let disposed = false;
     let unlisten: (() => void) | undefined;
+    let heartbeat: number | undefined;
 
     const complete = async (
       request: XriftMcpEditorRequestEvent,
@@ -906,6 +1035,9 @@ export function VisualEditorPrototype({
         unlisten = dispose;
         try {
           await tauri.setXriftMcpEditorReady(true);
+          heartbeat = window.setInterval(() => {
+            void tauri.setXriftMcpEditorReady(true).catch(() => undefined);
+          }, 5_000);
         } catch {
           setMcpError(
             "AI editor bridgeを有効にできませんでした。XRift Studioを再起動してください",
@@ -923,6 +1055,7 @@ export function VisualEditorPrototype({
     return () => {
       disposed = true;
       unlisten?.();
+      if (heartbeat !== undefined) window.clearInterval(heartbeat);
       void tauri.setXriftMcpEditorReady(false).catch(() => undefined);
     };
   }, [mcpNativeAvailable]);
@@ -1032,17 +1165,24 @@ export function VisualEditorPrototype({
   }, [bundle, editorMode, sceneSelection?.id, setAssetSelection, setBundle, setSceneSelection]);
 
   const handleDelete = useCallback((requestedEntityId?: string) => {
-    const entityId = requestedEntityId ?? sceneSelection?.id;
-    if (editorMode !== "edit" || !entityId) return;
-    const source = bundle.scene.entities[entityId];
-    if (!source) return;
-    const scene = deleteEntityHierarchy(bundle.scene, [source.id]);
+    const entityIds = requestedEntityId
+      ? [requestedEntityId]
+      : selectedEntityIds.length > 0
+        ? selectedEntityIds
+        : sceneSelection?.id
+          ? [sceneSelection.id]
+          : [];
+    if (editorMode !== "edit" || entityIds.length === 0) return;
+    const sourceNames = entityIds
+      .map((entityId) => bundle.scene.entities[entityId]?.name)
+      .filter((name): name is string => Boolean(name));
+    const scene = deleteEntityHierarchy(bundle.scene, entityIds);
     if (scene === bundle.scene) return;
     setBundle(touchProject({ ...bundle, scene }));
     setSceneSelection(null);
     setAssetSelection(null);
-    setNotice(`「${source.name}」を削除しました`);
-  }, [bundle, editorMode, sceneSelection?.id, setAssetSelection, setBundle, setSceneSelection]);
+    setNotice(sourceNames.length === 1 ? `「${sourceNames[0]}」を削除しました` : `${sourceNames.length}件のEntityを削除しました`);
+  }, [bundle, editorMode, sceneSelection?.id, selectedEntityIds, setAssetSelection, setBundle, setSceneSelection]);
 
   const requestDeleteAsset = useCallback(
     (assetId: string) => {
@@ -1779,6 +1919,79 @@ export function VisualEditorPrototype({
     [editorMode, updateScene],
   );
 
+  const handleExternalStoreInstalled = useCallback(
+    (
+      result: Parameters<typeof applyExternalStoreInstall>[1],
+      applySkybox: boolean,
+    ) => {
+      setHistory((current) => {
+        const applied = applyExternalStoreInstall(
+          current.present.bundle.assets,
+          result,
+        );
+        const scene = applySkybox
+          ? {
+              ...current.present.bundle.scene,
+              settings: {
+                ...resolveSceneSettings(current.present.bundle.scene.settings),
+                skybox: {
+                  ...resolveSceneSettings(current.present.bundle.scene.settings).skybox,
+                  enabled: true,
+                  imageAssetId: applied.primaryAssetId,
+                },
+              },
+            }
+          : current.present.bundle.scene;
+        const primary = applied.manifest.assets[applied.primaryAssetId];
+        setActiveAssetFolderId(primary?.folderId ?? null);
+        setSaveStatus("dirty");
+        setNotice(
+          applySkybox
+            ? `「${result.name}」をインストールし、Skyboxへ設定しました`
+            : `「${result.name}」をインストールしました。Assetsで選択されています`,
+        );
+        return commitEditorHistory(current, {
+          bundle: touchProject({
+            ...current.present.bundle,
+            assets: applied.manifest,
+            scene,
+          }),
+          sceneSelection: null,
+          assetSelection: applied.primaryAssetId,
+        });
+      });
+      setSceneSettingsOpen(false);
+    },
+    [],
+  );
+
+  const handleAssignSkybox = useCallback(
+    (assetId: string) => {
+      if (editorMode !== "edit") return;
+      const asset = bundle.assets.assets[assetId];
+      if (asset?.kind !== "skybox") {
+        setNotice("Skybox Assetを読み取れませんでした");
+        return;
+      }
+      updateScene((scene) => {
+        const settings = resolveSceneSettings(scene.settings);
+        return {
+          ...scene,
+          settings: {
+            ...settings,
+            skybox: {
+              ...settings.skybox,
+              enabled: true,
+              imageAssetId: assetId,
+            },
+          },
+        };
+      });
+      setNotice(`「${asset.name}」をSkyboxへ設定しました`);
+    },
+    [bundle.assets.assets, editorMode, updateScene],
+  );
+
   const handleCreateComponentObject = useCallback(
     (componentDefinitionId: string) => {
       if (editorMode !== "edit" || importBusy) return;
@@ -1857,6 +2070,74 @@ export function VisualEditorPrototype({
       setNotice("Light設定をSceneへ反映しました");
     },
     [editorMode, updateScene],
+  );
+
+  const handleSetSelectedEntitiesEnabled = useCallback(
+    (enabled: boolean) => {
+      if (editorMode !== "edit" || selectedEntityIds.length < 2) return;
+      updateScene((scene) => selectedEntityIds.reduce(
+        (next, entityId) => updateEntityEnabled(next, entityId, enabled),
+        scene,
+      ));
+      setNotice(`${selectedEntityIds.length}件のEntityを${enabled ? "有効" : "無効"}にしました`);
+    },
+    [editorMode, selectedEntityIds, updateScene],
+  );
+
+  const handleSetSelectedMeshShadow = useCallback(
+    (patch: Pick<MeshInspectorPatch, "castShadow" | "receiveShadow">) => {
+      if (editorMode !== "edit" || selectedEntityIds.length < 2) return;
+      updateScene((scene) => selectedEntityIds.reduce((next, entityId) => {
+        const entity = next.entities[entityId];
+        if (!entity) return next;
+        return entity.components
+          .filter((component) => component.type === "mesh")
+          .reduce(
+            (withComponent, component) => updateMeshShadowSettings(withComponent, entityId, patch, component.id),
+            next,
+          );
+      }, scene));
+      setNotice(`${selectedEntityIds.length}件のMesh Rendererへ影設定を反映しました`);
+    },
+    [editorMode, selectedEntityIds, updateScene],
+  );
+
+  const handleSetSelectedLightShadow = useCallback(
+    (castShadow: boolean) => {
+      if (editorMode !== "edit" || selectedEntityIds.length < 2) return;
+      updateScene((scene) => selectedEntityIds.reduce((next, entityId) => {
+        const entity = next.entities[entityId];
+        if (!entity) return next;
+        return entity.components
+          .filter((component) => component.type === "light")
+          .reduce(
+            (withComponent, component) => updateLightComponent(withComponent, entityId, { castShadow }, component.id),
+            next,
+          );
+      }, scene));
+      setNotice(`${selectedEntityIds.length}件のLightへCast Shadow設定を反映しました`);
+    },
+    [editorMode, selectedEntityIds, updateScene],
+  );
+
+  const handleApplySelectedMaterialPatch = useCallback(
+    (patch: MaterialAssetPatch) => {
+      if (editorMode !== "edit" || selectedAssetIds.length < 2) return;
+      setBundle((current) => {
+        const materialIds = selectedAssetIds.filter(
+          (assetId) => current.assets.assets[assetId]?.kind === "material",
+        );
+        if (materialIds.length !== selectedAssetIds.length) return current;
+        const assets = materialIds.reduce(
+          (next, assetId) => updateMaterialAsset(next, assetId, patch),
+          current.assets,
+        );
+        if (assets === current.assets) return current;
+        setNotice(`${materialIds.length}件のMaterialを更新し、参照中のMesh previewへ反映しました`);
+        return touchProject({ ...current, assets });
+      });
+    },
+    [editorMode, selectedAssetIds, setBundle],
   );
 
   const handleAudioSourceChange = useCallback(
@@ -3173,6 +3454,22 @@ export function VisualEditorPrototype({
     }
   }, [bundle, onUpload]);
 
+  const runClassicExport = useCallback(async () => {
+    if (!onClassicExport) {
+      setNotice("Classicへの書き出しはデスクトップ版で利用できます");
+      return;
+    }
+    try {
+      await onClassicExport(bundle);
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Classicへの書き出しを開始できませんでした",
+      );
+    }
+  }, [bundle, onClassicExport]);
+
   const beginResize = (
     kind: "hierarchy" | "inspector" | "assets",
     event: ReactPointerEvent<HTMLButtonElement>,
@@ -3423,6 +3720,7 @@ export function VisualEditorPrototype({
   const BackIcon = EDITOR_ICONS.back;
   const SaveIcon = EDITOR_ICONS.save;
   const UploadIcon = EDITOR_ICONS.upload;
+  const ExportIcon = EDITOR_ICONS.export;
   const CreateIcon = EDITOR_ICONS.create;
   const saveStatusLabel =
     saveStatus === "saved"
@@ -3507,6 +3805,15 @@ export function VisualEditorPrototype({
               </button>
             ) : null}
             <span className="h-5 w-px bg-editor-border" aria-hidden="true" />
+            <button
+              type="button"
+              onClick={() => void runClassicExport()}
+              title="Runtime JSONとAssetをXRift Classicプロジェクトへ書き出す"
+              className="flex items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-3 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle"
+            >
+              <ExportIcon size={13} aria-hidden="true" />
+              Classicへ書き出す
+            </button>
             <button
               type="button"
               onClick={() => executeCommand("project.publish")}
@@ -3602,15 +3909,10 @@ export function VisualEditorPrototype({
           <HierarchyPanel
             scene={bundle.scene}
             selection={sceneSelection}
+            selectedEntityIds={selectedEntityIds}
             readOnly={readOnly}
             projectKind={projectKind}
-            onSelect={(selection) => {
-              if (selection?.kind === "entity") {
-                setSceneSettingsOpen(false);
-                setSceneSelection(selection);
-                setAssetSelection(null);
-              }
-            }}
+            onSelectionChange={handleEntitySelectionChange}
             onAssignMaterial={handleAssignMaterial}
             onDropSceneAsset={(assetId, parentEntityId) =>
               handlePlaceSceneAsset(assetId, { parentEntityId })
@@ -3667,6 +3969,7 @@ export function VisualEditorPrototype({
               handlePlacePrimitive(creationId, position)
             }
             onDropMaterial={handleAssignMaterial}
+            onDropSkybox={handleAssignSkybox}
             onDropBuiltinPrefab={handlePlaceBuiltinPrefab}
             onDropSceneAsset={(assetId, position) =>
               handlePlaceSceneAsset(assetId, { position })
@@ -3692,6 +3995,8 @@ export function VisualEditorPrototype({
             projectPath={projectPath}
             selectedEntityId={sceneSelection?.id ?? null}
             selectedAssetId={assetSelection}
+            selectedEntityIds={selectedEntityIds}
+            selectedAssetIds={selectedAssetIds}
             readOnly={readOnly}
             onRenameEntity={handleRenameEntity}
             onTransformChange={handleTransformChange}
@@ -3746,6 +4051,10 @@ export function VisualEditorPrototype({
               setNotice("Prefabの編集元Hierarchyを開きました");
             }}
             onUpdatePrefab={handleUpdatePrefab}
+            onSetEntitiesEnabled={handleSetSelectedEntitiesEnabled}
+            onSetMeshShadow={handleSetSelectedMeshShadow}
+            onSetLightShadow={handleSetSelectedLightShadow}
+            onApplyMaterialPatch={handleApplySelectedMaterialPatch}
           />
           <AssetsPanel
             assets={bundle.assets}
@@ -3753,10 +4062,12 @@ export function VisualEditorPrototype({
             projectKind={projectKind}
             editorMode={editorMode}
             selectedAssetId={assetSelection}
+            selectedAssetIds={selectedAssetIds}
             pendingImports={pendingImports}
             importError={importError}
             statusMessage={notice}
             onSelectAsset={handleSelectAsset}
+            onAssetSelectionChange={handleAssetSelectionChange}
             onQueueFiles={handleQueueFiles}
             onRemovePending={handleRemovePendingImport}
             onClearImportError={() => setImportError(null)}
@@ -3783,6 +4094,7 @@ export function VisualEditorPrototype({
             onMoveFolder={handleMoveAssetFolder}
             onPlaceBuiltinPrefab={handlePlaceBuiltinPrefab}
             onPlaceSceneAsset={(assetId) => handlePlaceSceneAsset(assetId)}
+            onOpenExternalStore={() => setExternalStoreOpen(true)}
             externalOperationLockReason={
               assetImportPanelAvailability.disabledReason
             }
@@ -3799,6 +4111,10 @@ export function VisualEditorPrototype({
             mcpLoading={mcpLoading}
             mcpRegisteringClientId={mcpRegisteringClientId}
             mcpError={mcpError}
+            ollamaStatus={ollamaStatus}
+            ollamaConfiguring={ollamaConfiguring}
+            ollamaError={ollamaError}
+            ollamaResult={ollamaResult}
             mcpLastActivity={mcpLastActivity}
             canUndo={
               !readOnly &&
@@ -3807,13 +4123,30 @@ export function VisualEditorPrototype({
               mcpLastActivity?.revision === mcpRevisionRef.current
             }
             onOpenMcp={() => {
-              if (mcpClients.length === 0 && !mcpLoading) {
+              if (
+                (mcpClients.length === 0 || ollamaStatus === null) &&
+                !mcpLoading
+              ) {
                 void refreshMcpClients();
               }
             }}
             onRefreshMcp={() => void refreshMcpClients()}
             onRegisterMcpClient={(clientId) => void registerMcpClient(clientId)}
+            onConfigureOllama={(integrationId, model) =>
+              void configureOllama(integrationId, model)
+            }
             onUndo={handleUndo}
+          />
+          <ExternalAssetStoreDialog
+            open={externalStoreOpen}
+            projectPath={projectPath}
+            disabledReason={
+              readOnly
+                ? "Playを停止してから外部アセットを追加してください"
+                : assetImportPanelAvailability.disabledReason
+            }
+            onClose={() => setExternalStoreOpen(false)}
+            onInstalled={handleExternalStoreInstalled}
           />
           <button
             type="button"

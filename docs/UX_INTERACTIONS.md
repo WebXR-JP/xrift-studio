@@ -64,8 +64,12 @@ F-06 アイテム検査
 | MI-45 | プロジェクトライブラリを開く、検索・並び替え・公開状態の絞り込みを行う、またはプロジェクトを削除する | 新規作成を先頭に保ち、表紙を小さくした高密度カードへ更新日時と公開済み / 未公開を表示する。検索、更新日時、公開日時、名前順と公開状態filterはproject documentを変更せず即時反映する。削除は対象名と絶対保存先、元に戻せないことを確認dialogに表示し、処理中は重複操作を無効にする。 | 並び替え・絞り込みの解除で同じ一覧へ戻る。削除成功後は一覧を再取得して対象を除き、新規作成と他projectを開く導線を保つ。失敗時は対象を残して原因を通知する。native側はprojects root直下の認識済みXRift project以外を拒否する。 |
 | MI-46 | OBJ / VRMをimportする、または配置済みModelのボーン回転・シェイプキーを編集する | Import QueueはGLB / glTFと同じvalidate、copy、parse、thumbnail、commitを使い、Model Inspectorに形式、bone、shape key件数を残す。Entity Inspectorの「モデルポーズ」は選択したboneのXYZ回転とshape keyのweightをScene Viewへ即時反映し、編集対象がAsset共通値ではなく現在のEntityであることを示す。 | 有効値だけをMesh componentの静的poseへ一件のhistoryとして保存する。同じModelの別Entityには波及しない。リセットはposeだけを初期状態へ戻し、Transform、Material、Assetを維持する。失敗時はlast-good Asset / Entity poseを保ち、対応形式または修正対象を同じImport Queue / Inspectorに示す。 |
 | MI-47 | `.unitypackage`、Unity Scene、Unity PrefabをAssetsへdropまたはImportする | Import Queueでgzip / tar展開、pathname復元、Unity YAML解析、Asset変換、Hierarchy再構築、Prefab作成、commitの順に進捗を示す。対応Model / Texture / MaterialとGameObject、Transform、Light、Audio Source、Collider、Scene環境設定を変換し、未対応class IDと件数を診断へ残す。C# / MonoBehaviourはJavaScriptへ変換しない。 | 全Asset sourceのatomic commit後だけScene、AssetManifest、Prefab documentを一件のhistoryへ反映する。成功時はPrefab / Entity / Asset件数と要確認件数、「アセットを表示」を残し、生成Prefabを`assetSelection`、再構築したrootを`sceneSelection`にする。失敗時はlast-good document setを維持して同じActivity drawerから原因を確認できる。 |
-| MI-48 | Editor のAI連携を開き、CodexまたはClaude CodeへXRift Studio MCPを登録する、または接続済みAIからScene編集を受ける | 未登録、登録中、登録済み、接続待ち、接続中、失敗を同じpanelに表示する。登録は検出済みclientとscope、実行する固定commandを示してから一度だけ実行し、処理中は重複操作を無効にする。AI編集はclient名、tool名、対象Scene、変更概要、保存状態をActivityとして残し、Scene View、Hierarchy、Inspectorを同じCommand結果へ同期する。 | 登録成功後はclientの再読み込み方法と接続待ちを残し、接続後は対象project、Scene、revision、直近の変更、Undoへ到達できる。Play、Import、revision競合、未認可project、保存失敗ではdocumentを変更せず理由と再試行先を示す。panelを閉じても接続と直近Activityを維持し、AI変更のUndoは通常のEditor historyへ合流する。 |
+| MI-48 | Editor のAI連携を開き、対応clientへXRift Studio MCPを登録する、Ollamaのローカルモデルで対応clientを構成する、または接続済みAIからScene編集を受ける | 未登録、登録中、登録済み、接続待ち、接続中、失敗を同じpanelに表示する。登録は検出済みclientとscope、実行する固定commandを示してから一度だけ実行し、処理中は重複操作を無効にする。OllamaはMCP clientではなくmodel providerとして分離し、ローカルmodelと構成先clientを明示選択してから、XRift MCP登録とprovider構成を一つの主操作で順に実行する。AI編集はclient名、tool名、対象Scene、変更概要、保存状態をActivityとして残し、Scene View、Hierarchy、Inspectorを同じCommand結果へ同期する。 | 登録成功後はclientの再読み込み方法と接続待ちを残し、Ollama構成後はmodel名、構成先client、起動方法を残す。接続後は対象project、Scene、revision、直近の変更、Undoへ到達できる。Play、Import、revision競合、未認可project、保存失敗ではdocumentを変更せず理由と再試行先を示す。panelを閉じても接続と直近Activityを維持し、AI変更のUndoは通常のEditor historyへ合流する。 |
 | MI-49 | OpenBrush / Tilt Brush glTFをimportする、OpenBrush Starterを作成する、または対象Model / Materialを表示・変換する | `GOOGLE_tilt_brush_material`、exporter、brush名から形式を判定し、Model InspectorへOpenBrush badge、brush数、three-icosa rendererを表示する。Material InspectorはCustom Material Preview Adapterで元Modelの該当nodeを分離し、埋め込みbrush libraryから実ストローク形状、実GLSL、uniform、brush textureをリアルタイム描画する。 | 各source brushをbrush名、GUID、renderer version、source material indexを持つOpenBrush Material Assetへ展開して対応slotへ初期設定する。対応presetは専用shader、未対応presetまたはshader resource失敗時はGLB内のglTF PBR Materialを保持し、previewとInspectorへfallback理由を示す。明示的に割り当てた通常のXRift Materialだけがslot単位で上書きする。import時の古い外部画像URLは取得せず、安全な解析用画像へ置換する。 |
+| MI-50 | Visual Editorの「Classicへ書き出す」を開き、既存XRift Classic projectを選択する | OSのfolder picker後に`package.json`、`xrift.json`、World／Item entry、package managerを検査し、コンポーネント追加またはバックアップ付きentry切替、Runtime package installの結果を一つのdialogでreviewする。処理中は保存、compile、file追加、installのstageとprogressを表示し、閉じる操作と二重実行を止める。 | 成功時はRuntime JSON、Asset、接続componentをVisual Project IDごとの管理領域へ置き、folder、VS Code、terminal、接続snippetへ到達できる。既存entryは既定で変更せず、entry切替は確認後にbackupを残す。失敗時はVisual projectと既存手書きentryを維持し、folder再選択、再実行、package managerでのinstallへ戻れる。 |
+| MI-51 | アプリ起動後またはAboutの「更新を確認」でXRift Studio本体の更新を検知する | 確認中は制作を妨げず、更新がある時だけ現在版、最新版、リリースノートをdialogに表示する。「後で」を選ぶとライブラリheaderとAboutに更新導線を残す。download中はbytesと割合、install中は再起動準備を示し、閉じる操作と二重実行を止める。 | 署名検証済み更新のinstall後にアプリを再起動し、新しい現在版と完了通知を表示する。確認またはinstall失敗時は現在のアプリを維持し、Aboutまたは同じdialogから再試行できる。 |
+| MI-52 | Assetsの「外部から追加」を開く、外部Assetをinstallする、またはSkybox AssetをScene Viewへdragする | provider名、検索、種別、thumbnail、作者、license、配布ページ、解像度とdownload目安を同じdialogに表示する。download中は主操作を無効にし、providerが返した固定domainのfileだけをproject管理下へ保存する。Skybox drag中はScene全体へ設定されることを表示する。 | 成功時はMaterialと参照Texture、またはSkybox AssetをAssetsで選択し、任意ならSkyboxへ直ちに設定する。失敗時はmanifestとSceneを変更せず同じAssetと解像度から再試行できる。provider creditとlicenseはAssetに保持し、一覧とInspectorから確認できる。 |
+| MI-53 | Hierarchy または Assets で Shift / Ctrl・Cmd を使って複数選択する | 選択行・カードを同じ選択色で示し、Inspector見出しに件数を表示する。Shiftは表示順の範囲、Ctrl・Cmdは追加／解除とし、Entityは共通するMesh Renderer / Light、Materialは共通PBR値だけを表示する。 | 一括変更は一件のhistoryとして確定し、Undoで全対象を戻す。HierarchyのDeleteと右クリックの削除は選択済みEntity全体を一回で削除し、選択解除または単体選択で通常Inspectorへ戻る。Play中は選択を維持して編集操作を無効にする。 |
 
 ## 機能一覧
 
@@ -77,7 +81,7 @@ F-06 アイテム検査
 | F-04 | ローカル実行 | MI-03, MI-05, MI-08 | 実行中であることと、プレビュー URL を開く操作が分かる。 |
 | F-05 | 公開準備とアップロード | MI-03, MI-04, MI-05, MI-07, MI-08, MI-09, MI-17, MI-27 | 初期値の upload を防ぎ、toolchain が不足しても authoring を失わず、review から upload result / 審査状態まで続けられる。正式 result にない公開 URL は推測しない。 |
 | F-06 | アイテム検査 | MI-03, MI-05, MI-09 | ビルドを含むセキュリティチェックを実行でき、成功時は公開、失敗時はログと編集へ進める。 |
-| F-07 | ビジュアルエディター | MI-01, MI-09, MI-10, MI-11, MI-12, MI-13, MI-14, MI-15, MI-16, MI-18, MI-21, MI-22, MI-29, MI-30, MI-31, MI-32, MI-33, MI-34, MI-35, MI-37, MI-38, MI-40, MI-42, MI-43, MI-46 | 四カードの入口、Hierarchy、Scene View、右 Inspector、下 Assets を使い、独立 selection、復元可能なEntityフォーカス、Empty / primitive / XRift Component 作成、Asset / Material / Particle / XRift Prefab D&D、Hierarchyの並び替え・親子化・Enabled、親子Transform、軸スクラブとScale比率固定、Material / Texture / Particle 編集、配置Entityごとの静的なモデルポーズ、動的 thumbnail、Playとシーン全体の環境設定を扱える。左下のユーティリティレールからヘルプ、ショートカット、シーン設定へ迷わず到達できる。panel layout は resize / dock 後も復元され、Editor render / module load failure は App 全体へ伝播させず再試行、再読み込み、一覧への復帰を選べる。 |
+| F-07 | ビジュアルエディター | MI-01, MI-09, MI-10, MI-11, MI-12, MI-13, MI-14, MI-15, MI-16, MI-18, MI-21, MI-22, MI-29, MI-30, MI-31, MI-32, MI-33, MI-34, MI-35, MI-37, MI-38, MI-40, MI-42, MI-43, MI-46, MI-53 | 四カードの入口、Hierarchy、Scene View、右 Inspector、下 Assets を使い、独立 selection、複数選択時の共通プロパティ編集、復元可能なEntityフォーカス、Empty / primitive / XRift Component 作成、Asset / Material / Particle / XRift Prefab D&D、Hierarchyの並び替え・親子化・Enabled、親子Transform、軸スクラブとScale比率固定、Material / Texture / Particle 編集、配置Entityごとの静的なモデルポーズ、動的 thumbnail、Playとシーン全体の環境設定を扱える。左下のユーティリティレールからヘルプ、ショートカット、シーン設定へ迷わず到達できる。panel layout は resize / dock 後も復元され、Editor render / module load failure は App 全体へ伝播させず再試行、再読み込み、一覧への復帰を選べる。 |
 | F-08 | Visual Asset authoring / import | MI-11, MI-15, MI-16, MI-19, MI-20, MI-21, MI-28, MI-33, MI-36, MI-41, MI-46 | Material / Texture / Model / GLTF / OBJ / VRM / Prefab / Particle を左のfolder tree、種類別collection、動的thumbnail付きで管理し、GLB / VRMの埋め込みMaterial / Textureを再利用可能なAssetへ展開する。sourceを壊さずimport、右Inspectorでrecipe編集、参照を保つreimport、stale診断を行え、Asset編集中も`sceneSelection`は保持される。 |
 | F-09 | Command / Shortcut / Prefab | MI-12, MI-22, MI-23, MI-24, MI-28, MI-30, MI-31, MI-34, MI-38, MI-43 | toolbar、menu、keyboard、Hierarchy D&D と左下の一覧が同じ Command / Shortcut Registry を使い、Copy / Paste / Duplicate / Delete / Reparent、Entityフォーカスの切替と解除、Empty / Component 作成、Hierarchy からの Prefab 化、XRift built-in Prefab配置、Undo / Redo が IDs と両 selection を復元する。 |
 | F-10 | Visual Save / Compile / Preview / Upload | MI-03, MI-05, MI-07, MI-08, MI-09, MI-17, MI-25, MI-26, MI-27 | authoring操作ごとの直列化された自動保存、journal付きcommit、決定的compiler / provenance、freshness検査、区別されたpreview、既存XRift check / uploadを一つのeditor flowで扱い、失敗や取消後もlast committed authoringと戻り先を保つ。 |
@@ -85,8 +89,11 @@ F-06 アイテム検査
 | F-13 | XRift Component editor preview | MI-10, MI-34, MI-39 | 公式Component名とsemantic iconをauthoring surface全体で共有し、Light、Portal、TagBoardを実行時Contextへ接続せず設定値に忠実なEditor Previewとして確認できる。 |
 | F-15 | OBJ / VRM import と静的モデルポーズ | MI-03, MI-05, MI-09, MI-20, MI-36, MI-41, MI-46 | OBJ / VRMをModel Assetとして配置でき、配置Entityごとにbone回転とshape key weightを保存し、再表示と生成結果で同じ静的状態を復元できる。 |
 | F-16 | UnityPackage / Scene / Prefab import | MI-03, MI-05, MI-09, MI-11, MI-13, MI-20, MI-24, MI-47 | UnityPackageの論理pathnameとGUID参照を安全に復元し、対応Assetを抽出してScene階層を再構築し、再利用可能なXRift Prefabとして保存する。未対応Asset / Componentは黙って成功扱いせず診断とprovenanceへ残し、C#変換を行わない。 |
-| F-17 | AI editor integration / MCP | MI-03, MI-05, MI-09, MI-10, MI-11, MI-13, MI-25, MI-48 | CodexまたはClaude CodeへXRift Studio MCPを一操作で登録し、認可したvisual projectの現在Scene、Asset、selection、revisionを読み取れる。Fog変更とAsset配置を通常のEditor Command、Undo、Autosaveへ合流し、AIと手操作の競合を暗黙に上書きしない。登録後は接続状態、対象Scene、直近の編集と復帰手段がEditorに残る。 |
+| F-17 | AI editor integration / MCP | MI-03, MI-05, MI-09, MI-10, MI-11, MI-13, MI-25, MI-48 | 対応AI clientへXRift Studio MCPを一操作で登録し、必要ならOllamaのローカルmodelをCodex、Claude Code、OpenCodeのproviderとして構成する。認可したvisual projectの現在Scene、Asset、selection、revisionを読み取り、Fog変更とAsset配置を通常のEditor Command、Undo、Autosaveへ合流し、AIと手操作の競合を暗黙に上書きしない。登録後は接続状態、対象Scene、直近の編集と復帰手段がEditorに残る。 |
 | F-18 | OpenBrush import / shader rendering | MI-03, MI-05, MI-09, MI-15, MI-18, MI-20, MI-27, MI-35, MI-36, MI-49 | OpenBrush / Tilt Brush形式のglTFを通常のModel Assetとして取り込み、three-icosaの専用shaderでScene Viewと生成Worldを再現する。新規WorldはBlankとOpenBrushの2サンプルから選び、OpenBrush sampleとApache-2.0 licenseを検証付きで保存できる。 |
+| F-19 | VisualからClassicへの書き出し | MI-03, MI-04, MI-05, MI-09, MI-17, MI-26, MI-50 | Visual Editorの日常導線から任意の同種Classic projectを検査し、Runtime JSON、Asset、接続component、固定dependencyを手書き領域と分離して追加できる。成功後はfolder、VS Code、terminal、接続snippetへ進める。 |
+| F-20 | XRift Studio本体の更新 | MI-03, MI-04, MI-05, MI-09, MI-51 | 起動時またはAboutから署名済み更新を確認し、現在版、最新版、更新内容を見て延期またはinstallできる。進捗を確認したまま再起動し、更新後の版または失敗時の再試行へ到達できる。 |
+| F-21 | 外部Asset StoreとSkybox Asset | MI-03, MI-04, MI-05, MI-09, MI-11, MI-15, MI-52 | Assetsから提供元、作者、licenseを確認して外部Material、Texture、HDRIを追加する。HDRIは独立したSkybox Assetになり、install直後またはScene Viewへのdragでシーン全体へ設定できる。provider境界はUIと保存形式から分離し、追加ストアへ拡張できる。 |
 
 ## F-07 の状態設計
 
@@ -104,6 +111,7 @@ F-06 アイテム検査
 ### 操作中
 
 - Asset の一回クリックは `assetSelection` と右 Inspector の Asset context を更新し、`sceneSelection` を維持する。Model / Prefab を Scene View へ drag するか「配置」を実行するまで Entity を増やさない。
+- Hierarchy と Assets は Shift の範囲選択、Ctrl・Cmd の追加／解除を受け付ける。複数選択時は右Inspectorで対象数と、全対象が持つMesh Renderer / LightまたはMaterialの共通プロパティだけを表示する。
 - Hierarchy / Scene の右クリック Create は selected parent / click point を menu header に示し、primitive 選択前には Entity を増やさない。
 - Hierarchyの行D&Dは上端と下端を兄弟順の挿入位置、中央を親子化として扱う。行の目アイコンはEntity自身のEnabledを切り替え、親が無効なsubtreeは実効状態が分かる濃淡にする。
 - 子EntityのTransformはlocal値として保持し、Scene View、Play、生成Worldのすべてで親のPosition / Rotation / Scaleを継承する。
@@ -129,6 +137,7 @@ F-06 アイテム検査
 - フォーカス成功では対象名とF / Escape / 解除ボタンをScene View端に残し、同じEntityでFを押すか解除操作を行うと開始前のカメラ位置、向き、Orbit中心、ズームへ戻す。
 - layout 操作成功では normalized size、dock zone、order を Editor Preferences に保存し、再起動後も復元する。
 - Material 操作成功では有効値が AssetManifest の一つの Material Asset に残り、共有する全 Entity の表示を更新する。SceneDocument と Entity 固有値は変更しない。
+- 複数Entityの削除と共通プロパティ変更、複数MaterialのPBR変更は、対象全体を一件のhistoryとして確定する。
 - Play 開始成功では同じ Scene View で project kind に対応する profile を確認でき、runtime の変化は PlaySession にだけ残る。
 - Stop 成功では PlaySession を破棄し、Play 前と同じ SceneDocument、AssetManifest、selection、Edit camera へ戻る。runtime の位置や状態を保存済みまたは未保存の authoring 変更として扱わない。
 - GLB / GLTF の import 成功は source / derived / thumbnail / manifest commit の完了と新 Asset card を表示する。Scene 配置は Scene drop または後続の「配置」が成功した時だけ別結果として示す。
@@ -420,25 +429,27 @@ F-06 アイテム検査
 
 ### 操作前
 
-- EditorのAI連携panelはCodex、Claude Codeの検出結果、登録scope、XRift Studio MCP serverの状態を表示する。native APIがないブラウザでは登録済みに見せず「デスクトップ版で利用できます」と示す。
+- EditorのAI連携panelはCodex、Claude Code、Claude Desktop / Cowork、OpenCode、Cursorの検出結果、登録scope、XRift Studio MCP serverの状態を表示する。OllamaはMCP client一覧へ混在させず、ローカルmodel providerとしてinstall状態、version、model一覧、構成先clientを別sectionに表示する。native APIがないブラウザでは登録済みに見せず「デスクトップ版で利用できます」と示す。Claude Desktop / Coworkはローカルsessionだけを対象にし、remote CoworkではローカルMCPを起動できないことを登録前に示す。
 - MCPは現在開いているvisual projectだけを候補にし、project ID、Scene ID、session revisionを接続clientへ返す。接続しただけではSceneDocument、AssetManifest、selection、historyを変更しない。
 - AI書き込みは既定でEdit中の認可済みprojectだけに許可し、Play、Import、project切替中は理由付きで読み取り専用にする。Upload、削除、任意file、任意shell操作は初期tool setへ含めない。
 
 ### 操作中
 
-- client登録は検出した実行ファイルを直接起動し、client種別ごとに固定した`mcp add`引数だけを渡す。shell文字列連結、任意command、project documentへのtoken保存は行わない。
+- CodexとClaude Codeのclient登録は検出した実行ファイルを直接起動し、client種別ごとに固定した`mcp add`引数だけを渡す。Claude Desktop / CoworkとCursorは既存設定をbackupし、`mcpServers.xrift-studio`だけをmergeする。OpenCodeは既存設定をbackupし、`mcp.xrift-studio`へ公式のlocal server形式をmergeする。登録するMCP serverは内容hash付きでapp dataへcopyし、Cargoの開発出力をclientから直接起動しない。shell文字列連結、任意command、project documentへのtoken保存は行わない。
+- Ollama構成はinstall済みmodelの完全一致を再確認し、tool calling非対応modelは設定を変更せず拒否する。構成先はCodex、Claude Code、OpenCodeのallowlistに限定し、固定引数の`ollama launch <client> --model <model> --config --yes`をshell経由ではなく直接実行する。同じ操作内でXRift MCPが未登録または更新対象なら先に既存登録処理を完了する。model download、任意command実行、Ollama APIの外部hostへの接続は行わない。
 - MCP書き込みはtool inputのproject ID、Scene ID、expected revisionを現在sessionと照合し、純粋なEditor toolで全入力を検証してから一件のhistoryへ確定する。Fog変更とAsset配置はScene Inspector、Asset placementと同じ関数を使う。
-- 書き込み中は同じMCP brokerの変更を直列化する。成功結果には変更前後revision、対象Entity / Asset、Command概要、Autosave状態を含める。
+- 書き込み中は同じMCP brokerの変更を直列化する。複数のAI clientが同時に操作した場合、短いqueue timeoutを超えたrequestは`EDITOR_BUSY`で終了し、最新contextの再取得と再試行を促す。Editorの準備状態は定期heartbeatで更新し、WebViewの再読み込みやcrash後には自動失効させる。接続数、最初のmessage読込時間、message sizeを制限し、停止したclientが他clientを長時間塞がないようにする。成功結果には変更前後revision、対象Entity / Asset、Command概要、Autosave状態を含める。
 
 ### 成功時
 
-- 登録成功後は「登録済み」、clientの再読み込み方法、接続待ちをpanelに残す。接続するとclient名、対象project / Scene、最終Activityを表示する。
+- 登録成功後は「登録済み」、clientの再読み込み方法、接続待ちをpanelに残す。登録先の実行fileが現在のapp-data版と異なる場合は「更新」を表示し、明示操作で内容hash付きの最新版へ移行する。Claude Desktop / CoworkではDesktop appの再起動が必要なことを表示する。接続するとclient名、対象project / Scene、最終Activityを表示する。
+- Ollama構成中はmodelとclientのselect、再検出、MCP登録を含む他の構成操作を無効にする。成功時はmodel名とclient名を残し、clientの起動または再起動を促す。Ollama未起動、modelなし、`launch`非対応version、tool非対応model、client未検出、構成timeoutでは既存のclient設定とproject documentを追加変更せず、Ollama起動、model追加、更新、client install、再試行のうち該当する復帰先を示す。
 - Fog変更はScene settingsを一件更新してScene ViewとScene Inspectorへ同期する。Asset配置は新Entityを作成し、Hierarchy、Scene View、Entity Inspectorで同じEntityを選択する。どちらも通常のUndo / RedoとAutosaveを使う。
 - AI変更の結果はトーストだけにせず、対象EntityまたはScene Inspectorへ移動でき、panelから通常のUndoを実行できる。
 
 ### 失敗時
 
-- client未検出、登録command失敗、server未起動、Editor未接続、未認可project、Scene不一致、stale revision、Play / Import中、validation失敗ではdocumentとhistoryを変更しない。
+- client未検出、登録command失敗、server未起動、Editor未接続、未認可project、Scene不一致、stale revision、Editor busy、Play / Import中、validation失敗ではdocumentとhistoryを変更しない。
 - 失敗にはclientの再検出、登録再試行、Editorへ戻る、最新contextの再取得のいずれかを示す。absolute path、接続token、raw command outputを画面へ表示しない。
 
 ### 戻り先
@@ -486,6 +497,85 @@ F-06 アイテム検査
 
 - Import成功後は新Model Assetを選択してOpenBrush情報とslotを確認できる。Sceneへ配置した後は同じEntityを選択し、通常のTransform、Collider、Prefab、Undo / Redoを使う。
 - Starter作成後はOpenBrush Modelが見えるScene Viewを開く。Blankへ戻って作り直す場合も、失敗projectを成功一覧へ残さない。
+
+## F-19 VisualからClassicへの書き出しの状態設計
+
+### 操作前
+
+- Visual Editor headerの「Classicへ書き出す」から開始し、現在のVisual projectを閉じない。Classic側のReact／JavaScriptをVisualへ逆変換しない一方向exportであることを最初に示す。
+- OSのfolder pickerで同じWorld／Item種別のClassic projectを選び、`package.json`、`xrift.json`、`src/World.tsx`または`src/Item.tsx`、package managerを検査してから書き込みを有効にする。
+- 既定は既存entryを保つ「コンポーネントとして追加」とする。「エントリーを切り替える」は既存fileをbackupして置き換える事実への明示確認を必要とする。
+
+### 操作中
+
+- 最新Visual documentsを先に保存し、`classic-runtime` compiler modeでRuntime JSON、Asset copy plan、diagnostics、provenanceを作る。blocking diagnosticがあればClassic側へ書き始めない。
+- 生成物は`public/xrift-studio/<project-id>/`、`src/xrift-studio/<project-id>/`、`.xrift-studio/exports/<project-id>/`へ分離する。既存`xrift.json`とthumbnailをVisual metadataで上書きしない。
+- npm projectでは固定allow-listのRuntime packageを自動installできる。pnpm／Yarn／Bun projectは別lockfileを作らず、`package.json`へのdependency記録と既存package managerでのinstall案内までにする。
+
+### 成功時
+
+- Runtime JSON、Asset、接続component、provenance、export manifestを残す。entry切替時は元entryのbackup pathをmanifest管理領域へ保存する。
+- 完了dialogに「フォルダーを開く」「VS Codeで開く」「ターミナルを開く」を残す。コンポーネント追加ではentryへ貼るimport／JSX snippetをコピーできる。
+
+### 失敗時
+
+- folder検査、Visual保存、compileが失敗した場合はClassic projectを変更しない。対象file不足、kind不一致、blocking diagnosticを同じdialogで修正または選び直せる。
+- package install失敗時は生成内容とdependency記録を保持し、公開済みpackageまたは既存package managerで再実行できる事実を示す。成功に見せない。
+
+### 戻り先
+
+- 取消または完了後にdialogを閉じると、同じVisual Editor、Scene、selection、camera、保存状態へ戻る。Classic側の編集結果をVisual documentsへ取り込まない。
+
+## F-20 XRift Studio本体の更新の状態設計
+
+### 操作前
+
+- 起動後にGitHub Releasesの署名済み更新情報を静かに確認する。最新版なら制作を遮らず、Aboutの「最新版です」へ状態を残す。
+- 更新がある時は現在版、最新版、リリースノート、「更新して再起動」「後で」を同じdialogに置く。延期後もライブラリheaderとAboutから再び開ける。
+
+### 操作中
+
+- download中は取得bytesと取得可能な場合の割合、install中は再起動準備を表示する。処理中はdialogを閉じられず、更新と確認の二重実行を無効にする。
+- install直前に同じendpointを再確認し、署名検証に成功した成果物だけを適用する。アプリ管理外のproject、Node.js、XRift CLIは変更しない。
+
+### 成功時
+
+- install完了後にアプリを自動再起動する。再起動後のアプリversionが更新対象と一致した時だけ完了通知を表示し、Aboutは新しい現在版と「最新版です」を示す。
+
+### 失敗時
+
+- 自動確認の失敗は制作を遮らない。Aboutに再確認を残す。download、署名検証、installの失敗はdialogに原因と「再試行」を表示し、現在のアプリを継続利用できる。
+
+### 戻り先
+
+- 「後で」または確認失敗では現在の画面を維持する。成功時は再起動したXRift Studioの通常起動画面へ戻り、project一覧とアプリversionを再取得する。
+
+## F-21 外部Asset StoreとSkybox Assetの状態設計
+
+### 操作前
+
+- Assets headerの「外部から追加」から開始し、現在のprovider、対応種別、提供元creditを最初から表示する。Poly HavenではSkybox / HDRI、Material / Textureをinstall可能にし、Modelは未対応であることを選択時に明示する。
+- 各Assetにはthumbnail、説明、作者、license、配布ページ、解像度、download容量を表示する。project未保存、Play中、別Asset処理中は理由を示してinstallを無効にする。
+
+### 操作中
+
+- catalogとfile情報はXRift Studio固有のUser-Agentで取得する。install要求に任意URLを含めず、provider ID、Asset ID、解像度からnative側でfile情報を再取得し、許可したHTTPS domainだけをproject管理下へ保存する。
+- Materialはbase color、normal、ARMをTexture Assetにし、それらを参照するMaterial Assetを一つ作る。HDRIはsurface Textureと混同せずequirectangular Skybox Assetにする。download中はdialogを閉じる操作と二重実行を止める。
+
+### 成功時
+
+- installしたMaterialまたはSkyboxをAssetsで選択し、provider、作者、license、配布ページをAssetに保持する。HDRIで「インストール後にSkyboxへ設定」が有効なら、同じhistoryでScene settingsへ参照を設定する。
+- Skybox AssetをScene ViewまたはScene settingsのdrop領域へdragすると、Entityを作らずシーン全体の背景とenvironmentへ設定する。回転と露出は従来のScene settingsから続けて調整できる。
+
+### 失敗時
+
+- catalog、file情報、download、保存、Asset作成の失敗では既存AssetManifestとSceneを変更しない。同じprovider、Asset、解像度を保持し、原因を見て再試行できる。
+- providerが未対応、file domainが許可外、保存先に異なる内容がある、HDRIまたは必須base colorがない場合はinstallを完了扱いにしない。
+
+### 戻り先
+
+- dialogを閉じると同じVisual Editor、Scene、選択、cameraへ戻る。成功後は選択済みAssetのInspectorへ到達し、SkyboxはScene ViewへのdragまたはScene settingsから変更できる。
+- 将来のprovider追加では共通catalog、download option、attribution、install resultを再利用し、Assets側にprovider固有の保存構造やlicense文言を散在させない。
 
 ## 実装制約
 

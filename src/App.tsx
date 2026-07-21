@@ -13,12 +13,24 @@ import { NewProjectDialog } from "./components/NewProjectDialog";
 import { SetupView } from "./components/SetupView";
 import { UpdateDialog } from "./components/UpdateDialog";
 import {
+  AppUpdateDialog,
+  type AppUpdatePhase,
+} from "./components/AppUpdateDialog";
+import {
   tauri,
+  type AppUpdateInfo,
   type Project,
   type ProjectKind,
   type RuntimeStatus,
 } from "./lib/tauri";
-import { xrift, clearCaches, type LogLine, type Whoami } from "./lib/xrift-cli";
+import {
+  xrift,
+  clearCaches,
+  openInVSCode,
+  openTerminal,
+  type LogLine,
+  type Whoami,
+} from "./lib/xrift-cli";
 import { isNewer } from "./lib/semver";
 import {
   inspectPublishThumbnail,
@@ -30,8 +42,11 @@ import {
   type VisualPublishDiagnostic,
 } from "./components/visual-editor/VisualUploadDialog";
 import { VisualEditorErrorBoundary } from "./components/visual-editor/VisualEditorErrorBoundary";
+import { ClassicExportDialog } from "./components/visual-editor/ClassicExportDialog";
 import {
   compilePrototypeVisualProject,
+  exportVisualProjectToClassic,
+  inspectClassicExportTarget,
   createStarterVisualProject,
   createPreparedStarterVisualProjectOnDisk,
   createVisualProjectOnDisk,
@@ -42,6 +57,9 @@ import {
   sanitizePublishFailure,
   saveVisualProjectToDisk,
   type PrototypeVisualProject,
+  type ClassicExportIntegration,
+  type ClassicExportProgress,
+  type ClassicExportTarget,
   type StarterVisualProjectPlan,
   type VisualPublicationRecord,
   type VisualStarterTemplateId,
@@ -99,6 +117,8 @@ function App() {
   const [visualLoading, setVisualLoading] = useState(false);
   const [visualPublishBundle, setVisualPublishBundle] =
     useState<PrototypeVisualProject | null>(null);
+  const [visualClassicExportBundle, setVisualClassicExportBundle] =
+    useState<PrototypeVisualProject | null>(null);
   const [visualThumbnailReadiness, setVisualThumbnailReadiness] =
     useState<PublishThumbnailReadiness | null>(null);
   const [visualCompilationFresh, setVisualCompilationFresh] = useState(false);
@@ -110,6 +130,25 @@ function App() {
   const [updating, setUpdating] = useState(false);
   const [updateChecked, setUpdateChecked] = useState(false);
 
+  const [appUpdate, setAppUpdate] = useState<{
+    phase:
+      | "idle"
+      | "checking"
+      | "current"
+      | AppUpdatePhase;
+    info: AppUpdateInfo | null;
+    downloaded: number;
+    contentLength: number | null;
+    error: string | null;
+  }>({
+    phase: "idle",
+    info: null,
+    downloaded: 0,
+    contentLength: null,
+    error: null,
+  });
+  const [appUpdateDialogOpen, setAppUpdateDialogOpen] = useState(false);
+
   const projectsRoot = runtime?.paths.projectsRoot ?? "";
 
   const appendLog = useCallback((line: LogLine) => {
@@ -117,6 +156,66 @@ function App() {
   }, []);
 
   const silentLog = useCallback((_l: LogLine) => {}, []);
+
+  const checkForAppUpdate = useCallback(async (showWhenAvailable: boolean) => {
+    setAppUpdate((previous) => ({
+      ...previous,
+      phase: "checking",
+      error: null,
+    }));
+    try {
+      const info = await tauri.checkAppUpdate();
+      if (info) {
+        setAppUpdate({
+          phase: "available",
+          info,
+          downloaded: 0,
+          contentLength: null,
+          error: null,
+        });
+        if (showWhenAvailable) setAppUpdateDialogOpen(true);
+      } else {
+        setAppUpdate({
+          phase: "current",
+          info: null,
+          downloaded: 0,
+          contentLength: null,
+          error: null,
+        });
+      }
+    } catch (error) {
+      setAppUpdate({
+        phase: "error",
+        info: null,
+        downloaded: 0,
+        contentLength: null,
+        error: String(error),
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    void checkForAppUpdate(true);
+  }, [checkForAppUpdate]);
+
+  useEffect(() => {
+    const completedVersion = window.localStorage.getItem(
+      "xrift-studio-app-update-target",
+    );
+    if (!completedVersion) return;
+    tauri
+      .getVersions()
+      .then((versions) => {
+        if (versions.appVersion !== completedVersion) return;
+        window.localStorage.removeItem("xrift-studio-app-update-target");
+        toast({
+          kind: "success",
+          title: "XRift Studio をアップデートしました",
+          description: `v${versions.appVersion}`,
+        });
+      })
+      .catch(() => {});
+  }, [toast]);
 
   useEffect(() => {
     tauri
@@ -209,6 +308,46 @@ function App() {
       });
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleInstallAppUpdate = async () => {
+    if (!appUpdate.info) return;
+    setAppUpdate((previous) => ({
+      ...previous,
+      phase: "downloading",
+      downloaded: 0,
+      contentLength: null,
+      error: null,
+    }));
+    window.localStorage.setItem(
+      "xrift-studio-app-update-target",
+      appUpdate.info.version,
+    );
+
+    const unlisten = await tauri
+      .onAppUpdateProgress((progress) => {
+        setAppUpdate((previous) => ({
+          ...previous,
+          phase: progress.phase,
+          downloaded: progress.downloaded,
+          contentLength: progress.contentLength,
+          error: null,
+        }));
+      })
+      .catch(() => () => {});
+
+    try {
+      await tauri.installAppUpdate();
+    } catch (error) {
+      window.localStorage.removeItem("xrift-studio-app-update-target");
+      setAppUpdate((previous) => ({
+        ...previous,
+        phase: "error",
+        error: String(error),
+      }));
+    } finally {
+      unlisten();
     }
   };
 
@@ -474,10 +613,30 @@ function App() {
     [visualPublishBundle, visualSession?.project?.path],
   );
 
+  const appUpdateDialog = (
+    <AppUpdateDialog
+      open={appUpdateDialogOpen}
+      info={appUpdate.info}
+      phase={
+        appUpdate.phase === "downloading" ||
+        appUpdate.phase === "installing" ||
+        appUpdate.phase === "error"
+          ? appUpdate.phase
+          : "available"
+      }
+      downloaded={appUpdate.downloaded}
+      contentLength={appUpdate.contentLength}
+      error={appUpdate.error}
+      onUpdate={() => void handleInstallAppUpdate()}
+      onClose={() => setAppUpdateDialogOpen(false)}
+    />
+  );
+
   if (visualSession) {
     const publishBundle = visualPublishBundle;
     const handleVisualEditorBack = () => {
       setVisualPublishBundle(null);
+      setVisualClassicExportBundle(null);
       setVisualSession(null);
       void refreshProjects();
     };
@@ -532,6 +691,9 @@ function App() {
                     publishBundle.project.projectKind,
                   ).then(setVisualThumbnailReadiness);
                 }
+              }}
+              onClassicExport={(bundle) => {
+                setVisualClassicExportBundle(bundle);
               }}
               onBack={handleVisualEditorBack}
             />
@@ -680,6 +842,64 @@ function App() {
             return result;
           }}
         />
+        <ClassicExportDialog
+          open={visualClassicExportBundle !== null}
+          projectKind={visualSession.bundle.project.projectKind}
+          projectName={visualSession.bundle.project.metadata.name}
+          onClose={() => setVisualClassicExportBundle(null)}
+          onChooseTarget={async () => {
+            const selectedPath = await tauri.selectDirectory(
+              "XRift Classicプロジェクトを選択",
+              projectsRoot || undefined,
+            );
+            if (!selectedPath || Array.isArray(selectedPath)) return null;
+            return inspectClassicExportTarget(
+              selectedPath,
+              visualSession.bundle.project.projectKind,
+            );
+          }}
+          onExport={async (
+            target: ClassicExportTarget,
+            integration: ClassicExportIntegration,
+            installDependencies: boolean,
+            report: (progress: ClassicExportProgress) => void,
+          ) => {
+            const exportBundle = visualClassicExportBundle;
+            if (!exportBundle) {
+              throw new Error("書き出すVisualプロジェクトがありません。");
+            }
+            const result = await exportVisualProjectToClassic({
+              authoringProjectPath: visualSession.project?.path ?? "",
+              target,
+              documents: {
+                project: exportBundle.project,
+                scenes: { [exportBundle.scene.sceneId]: exportBundle.scene },
+                assets: exportBundle.assets,
+                prefabs: exportBundle.prefabs,
+              },
+              integration,
+              installDependencies,
+              save: () => handleSaveVisualProject(exportBundle, false),
+              report,
+              onLog: appendLog,
+            });
+            toast({
+              kind: "success",
+              title: "XRift Classicへ書き出しました",
+              description:
+                integration === "component"
+                  ? "接続コードを追加すると既存Sceneと一緒に利用できます。"
+                  : "バックアップを残してエントリーを切り替えました。",
+            });
+            return result;
+          }}
+          onOpenFolder={(path) => tauri.openPath(path)}
+          onOpenVSCode={async (path) => {
+            await openInVSCode(path, appendLog);
+          }}
+          onOpenTerminal={(path) => openTerminal(path, appendLog)}
+        />
+        {appUpdateDialog}
       </>
     );
   }
@@ -738,6 +958,7 @@ function App() {
           onProjectChanged={refreshProjects}
         />
         {updateDialog}
+        {appUpdateDialog}
       </>
     );
   }
@@ -757,6 +978,10 @@ function App() {
         onLogin={handleLogin}
         onLogout={handleLogout}
         onRefresh={refreshProjects}
+        appUpdatePhase={appUpdate.phase}
+        latestAppVersion={appUpdate.info?.version ?? null}
+        onCheckAppUpdate={() => void checkForAppUpdate(true)}
+        onOpenAppUpdate={() => setAppUpdateDialogOpen(true)}
       />
       <NewProjectDialog
         open={showNewDialog}
@@ -766,6 +991,7 @@ function App() {
         onOpenVisualEditor={handleOpenVisualEditor}
       />
       {updateDialog}
+      {appUpdateDialog}
     </>
   );
 }

@@ -12,6 +12,7 @@ import {
   getGeometryAsset,
   getBuiltinPrimitiveCreation,
   getMaterialAsset,
+  normalizeMaterialProperties,
   getMeshMaterialSlots,
   getTransform,
   getEditorComponentMenuDefinitions,
@@ -47,6 +48,7 @@ import {
   type RegisteredSceneComponent,
 } from "../../lib/visual-editor";
 import { AssetQuickEditor } from "./AssetQuickEditor";
+import { tauri } from "../../lib/tauri";
 import type {
   ModelReimportImpactNotice,
   ModelReimportState,
@@ -693,6 +695,104 @@ function MeshInspector({
       </div>
     </ComponentCard>
   );
+}
+
+function MultiSelectionInspector({
+  scene,
+  assets,
+  selectedEntityIds,
+  selectedAssetIds,
+  readOnly,
+  onSetEntitiesEnabled,
+  onSetMeshShadow,
+  onSetLightShadow,
+  onApplyMaterialPatch,
+}: {
+  scene: SceneDocument;
+  assets: AssetManifest;
+  selectedEntityIds: readonly string[];
+  selectedAssetIds: readonly string[];
+  readOnly: boolean;
+  onSetEntitiesEnabled: (enabled: boolean) => void;
+  onSetMeshShadow: (patch: Pick<MeshInspectorPatch, "castShadow" | "receiveShadow">) => void;
+  onSetLightShadow: (castShadow: boolean) => void;
+  onApplyMaterialPatch: (patch: MaterialAssetPatch) => void;
+}) {
+  const entities = selectedEntityIds
+    .map((id) => scene.entities[id])
+    .filter((entity): entity is SceneEntity => Boolean(entity));
+  const selectedAssets = selectedAssetIds
+    .map((id) => assets.assets[id])
+    .filter((asset): asset is NonNullable<typeof asset> => Boolean(asset));
+  const entityMode = entities.length > 1 && selectedAssets.length === 0;
+  const materials = selectedAssets.filter((asset) => asset.kind === "material");
+  const allMaterials = selectedAssets.length > 1 && materials.length === selectedAssets.length;
+  const allHaveMesh = entityMode && entities.every((entity) => entity.components.some((component) => component.type === "mesh"));
+  const allHaveLight = entityMode && entities.every((entity) => entity.components.some((component) => component.type === "light"));
+  const sameBoolean = (values: boolean[]) =>
+    values.length > 0 && values.every((value) => value === values[0]) ? values[0] : null;
+  const meshCastShadow = sameBoolean(entities.flatMap((entity) => entity.components.filter((component) => component.type === "mesh").map((component) => component.castShadow)));
+  const meshReceiveShadow = sameBoolean(entities.flatMap((entity) => entity.components.filter((component) => component.type === "mesh").map((component) => component.receiveShadow)));
+  const lightCastShadow = sameBoolean(entities.flatMap((entity) => entity.components.filter((component) => component.type === "light").map((component) => component.castShadow)));
+  const materialProperties = materials.map((asset) => normalizeMaterialProperties(asset.properties as MaterialAssetPatch));
+  const sameValue = <T,>(values: T[]) => values.length > 0 && values.every((value) => value === values[0]) ? values[0] : undefined;
+  const materialColor = sameValue(materialProperties.map((properties) => properties.color));
+  const materialMetalness = sameValue(materialProperties.map((properties) => properties.metalness));
+  const materialRoughness = sameValue(materialProperties.map((properties) => properties.roughness));
+
+  if (entityMode) {
+    return (
+      <div className="space-y-3">
+        <ComponentCard title="複数のEntity" subtitle={`${entities.length}件`}>
+          <p className="text-xs leading-5 text-slate-600">共通するコンポーネントだけを一括変更できます。変更は一回のUndoにまとまります。</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={readOnly} onClick={() => onSetEntitiesEnabled(true)} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">有効にする</button>
+            <button type="button" disabled={readOnly} onClick={() => onSetEntitiesEnabled(false)} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">無効にする</button>
+          </div>
+        </ComponentCard>
+        {allHaveMesh ? (
+          <ComponentCard title="Mesh Renderer" subtitle="全選択で共通">
+            <p className="text-xs text-slate-500">Cast Shadow: {meshCastShadow === null ? "一部異なる" : meshCastShadow ? "有効" : "無効"} / Receive Shadow: {meshReceiveShadow === null ? "一部異なる" : meshReceiveShadow ? "有効" : "無効"}</p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" disabled={readOnly} onClick={() => onSetMeshShadow({ castShadow: true })} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">Cast Shadowを有効</button>
+              <button type="button" disabled={readOnly} onClick={() => onSetMeshShadow({ castShadow: false })} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">Cast Shadowを無効</button>
+              <button type="button" disabled={readOnly} onClick={() => onSetMeshShadow({ receiveShadow: true })} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">Receive Shadowを有効</button>
+              <button type="button" disabled={readOnly} onClick={() => onSetMeshShadow({ receiveShadow: false })} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">Receive Shadowを無効</button>
+            </div>
+          </ComponentCard>
+        ) : null}
+        {allHaveLight ? (
+          <ComponentCard title="Light" subtitle="全選択で共通">
+            <p className="text-xs text-slate-500">Cast Shadow: {lightCastShadow === null ? "一部異なる" : lightCastShadow ? "有効" : "無効"}</p>
+            <div className="flex gap-2">
+              <button type="button" disabled={readOnly} onClick={() => onSetLightShadow(true)} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">Cast Shadowを有効</button>
+              <button type="button" disabled={readOnly} onClick={() => onSetLightShadow(false)} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">Cast Shadowを無効</button>
+            </div>
+          </ComponentCard>
+        ) : null}
+        {!allHaveMesh && !allHaveLight ? <p className="rounded border border-dashed border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">共通のMesh RendererまたはLightコンポーネントはありません。</p> : null}
+      </div>
+    );
+  }
+
+  if (allMaterials) {
+    return (
+      <div className="space-y-3">
+        <ComponentCard title="複数のMaterial" subtitle={`${materials.length}件`}>
+          <p className="text-xs leading-5 text-slate-600">共通のPBR値をまとめて変更します。カラー、Metalness、Roughnessは参照中のすべてのMesh previewへ反映されます。</p>
+          <label className="block text-xs font-semibold text-slate-600">Base Color
+            <span className="mt-1 flex items-center gap-2"><input type="color" disabled={readOnly} value={materialColor ?? "#ffffff"} onChange={(event) => onApplyMaterialPatch({ color: event.currentTarget.value })} className="h-8 w-12 rounded border border-slate-300 bg-white p-0.5 disabled:opacity-45" /><span className="font-normal text-slate-500">{materialColor ?? "一部異なる"}</span></span>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs font-semibold text-slate-600">Metalness<input type="number" min="0" max="1" step="0.01" disabled={readOnly} value={materialMetalness ?? ""} placeholder="一部異なる" onChange={(event) => { const value = Number(event.currentTarget.value); if (Number.isFinite(value)) onApplyMaterialPatch({ metalness: value }); }} className="mt-1 h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs disabled:opacity-45" /></label>
+            <label className="text-xs font-semibold text-slate-600">Roughness<input type="number" min="0" max="1" step="0.01" disabled={readOnly} value={materialRoughness ?? ""} placeholder="一部異なる" onChange={(event) => { const value = Number(event.currentTarget.value); if (Number.isFinite(value)) onApplyMaterialPatch({ roughness: value }); }} className="mt-1 h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs disabled:opacity-45" /></label>
+          </div>
+        </ComponentCard>
+      </div>
+    );
+  }
+
+  return <p className="rounded border border-dashed border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">複数選択では同種のEntityまたはMaterialを選ぶと共通プロパティを編集できます。</p>;
 }
 
 function ModelPoseEditor({
@@ -1752,6 +1852,8 @@ export function InspectorPanel({
   projectPath,
   selectedEntityId,
   selectedAssetId,
+  selectedEntityIds,
+  selectedAssetIds,
   readOnly,
   onRenameEntity,
   onTransformChange,
@@ -1787,12 +1889,18 @@ export function InspectorPanel({
   prefabs,
   onSelectPrefabSourceEntity,
   onUpdatePrefab,
+  onSetEntitiesEnabled,
+  onSetMeshShadow,
+  onSetLightShadow,
+  onApplyMaterialPatch,
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
   projectPath?: string;
   selectedEntityId: string | null;
   selectedAssetId: string | null;
+  selectedEntityIds: readonly string[];
+  selectedAssetIds: readonly string[];
   readOnly: boolean;
   onRenameEntity: (entityId: string, name: string) => void;
   onTransformChange: (entityId: string, patch: TransformPatch) => void;
@@ -1837,6 +1945,10 @@ export function InspectorPanel({
   prefabs: Readonly<Record<string, PrefabDocument>>;
   onSelectPrefabSourceEntity: (entityId: string) => void;
   onUpdatePrefab: (prefabId: string) => void;
+  onSetEntitiesEnabled: (enabled: boolean) => void;
+  onSetMeshShadow: (patch: Pick<MeshInspectorPatch, "castShadow" | "receiveShadow">) => void;
+  onSetLightShadow: (castShadow: boolean) => void;
+  onApplyMaterialPatch: (patch: MaterialAssetPatch) => void;
 }) {
   const entity = selectedEntityId ? scene.entities[selectedEntityId] : undefined;
   const asset = selectedAssetId ? assets.assets[selectedAssetId] : undefined;
@@ -1861,6 +1973,8 @@ export function InspectorPanel({
         ? EDITOR_ICONS[xriftDefinition.icon]
         : EDITOR_ICONS.sceneEntity;
   const InspectorIcon = sceneSettingsOpen ? EDITOR_ICONS.settings : EntityIcon;
+  const multiSelectionActive =
+    !sceneSettingsOpen && (selectedEntityIds.length > 1 || selectedAssetIds.length > 1);
 
   return (
     <aside className="row-span-2 flex min-h-0 flex-col border-l border-editor-border bg-editor-canvas" aria-labelledby="inspector-heading">
@@ -1870,6 +1984,8 @@ export function InspectorPanel({
           <h2 id="inspector-heading" className="text-[13px] font-semibold text-editor-text">
             {sceneSettingsOpen
               ? "Scene Inspector"
+              : multiSelectionActive
+                ? "Multi Inspector"
               : asset
                 ? "Asset Inspector"
                 : "Entity Inspector"}
@@ -1896,7 +2012,11 @@ export function InspectorPanel({
             </button>
           ) : null}
           <span className="max-w-28 truncate text-xs text-slate-500">
-            {sceneSettingsOpen ? scene.name : asset?.name ?? entity?.name ?? "未選択"}
+            {sceneSettingsOpen
+              ? scene.name
+              : multiSelectionActive
+                ? `${Math.max(selectedEntityIds.length, selectedAssetIds.length)}件を選択`
+                : asset?.name ?? entity?.name ?? "未選択"}
           </span>
         </div>
       </div>
@@ -1916,25 +2036,54 @@ export function InspectorPanel({
             onChange={onSceneSettingsChange}
             onThumbnailChanged={onThumbnailChanged}
           />
-        ) : asset ? (
-          <AssetQuickEditor
-            asset={asset}
+        ) : multiSelectionActive ? (
+          <MultiSelectionInspector
+            scene={scene}
             assets={assets}
-            projectPath={projectPath}
-            referenceSummary={materialReferenceSummary}
+            selectedEntityIds={selectedEntityIds}
+            selectedAssetIds={selectedAssetIds}
             readOnly={readOnly}
-            onSelectAsset={onSelectAsset}
-            onMaterialChange={onMaterialChange}
-            onModelChange={onModelChange}
-            onReimportModel={onReimportModel}
-            modelReimportState={modelReimportState}
-            modelReimportImpactNotice={modelReimportImpactNotice}
-            onParticleChange={onParticleChange}
-            onTextureChange={onTextureChange}
-            prefabs={prefabs}
-            onSelectPrefabSourceEntity={onSelectPrefabSourceEntity}
-            onUpdatePrefab={onUpdatePrefab}
+            onSetEntitiesEnabled={onSetEntitiesEnabled}
+            onSetMeshShadow={onSetMeshShadow}
+            onSetLightShadow={onSetLightShadow}
+            onApplyMaterialPatch={onApplyMaterialPatch}
           />
+        ) : asset ? (
+          <div className="space-y-3">
+            {asset.attribution ? (
+              <section className="rounded-md border border-slate-200 bg-slate-50 p-2.5 text-xs leading-5 text-slate-600" aria-label="外部アセットのクレジット">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p><span className="font-semibold text-slate-800">{asset.attribution.providerName}</span> から追加</p>
+                    <p>作者: {asset.attribution.authors.join("、") || "contributors"}</p>
+                  </div>
+                  <span className="rounded bg-white px-1.5 py-0.5 font-semibold text-slate-700 ring-1 ring-slate-200">{asset.attribution.licenseName}</span>
+                </div>
+                <div className="mt-1 flex gap-3">
+                  <button type="button" onClick={() => void tauri.openUrl(asset.attribution!.assetUrl)} className="font-semibold text-brand-700 hover:underline">配布ページを開く</button>
+                  <button type="button" onClick={() => void tauri.openUrl(asset.attribution!.licenseUrl)} className="font-semibold text-brand-700 hover:underline">ライセンスを確認</button>
+                </div>
+              </section>
+            ) : null}
+            <AssetQuickEditor
+              asset={asset}
+              assets={assets}
+              projectPath={projectPath}
+              referenceSummary={materialReferenceSummary}
+              readOnly={readOnly}
+              onSelectAsset={onSelectAsset}
+              onMaterialChange={onMaterialChange}
+              onModelChange={onModelChange}
+              onReimportModel={onReimportModel}
+              modelReimportState={modelReimportState}
+              modelReimportImpactNotice={modelReimportImpactNotice}
+              onParticleChange={onParticleChange}
+              onTextureChange={onTextureChange}
+              prefabs={prefabs}
+              onSelectPrefabSourceEntity={onSelectPrefabSourceEntity}
+              onUpdatePrefab={onUpdatePrefab}
+            />
+          </div>
         ) : entity ? (
           <EntityInspector
             entity={entity}

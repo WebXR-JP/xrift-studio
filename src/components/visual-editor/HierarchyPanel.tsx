@@ -166,9 +166,10 @@ function reparentBlockedMessage(
 export function HierarchyPanel({
   scene,
   selection,
+  selectedEntityIds,
   readOnly,
   projectKind,
-  onSelect,
+  onSelectionChange,
   onAssignMaterial,
   onDropSceneAsset,
   onDropBuiltinPrefab,
@@ -182,9 +183,10 @@ export function HierarchyPanel({
 }: {
   scene: SceneDocument;
   selection: EditorSelection;
+  selectedEntityIds: readonly string[];
   readOnly: boolean;
   projectKind: VisualProjectKind;
-  onSelect: (selection: EditorSelection) => void;
+  onSelectionChange: (entityIds: string[], primaryEntityId: string | null) => void;
   onAssignMaterial: (entityId: string, materialAssetId: string) => void;
   onDropSceneAsset: (assetId: string, parentEntityId: string | null) => void;
   onDropBuiltinPrefab: (recipeId: string, parentEntityId: string | null) => void;
@@ -225,6 +227,32 @@ export function HierarchyPanel({
     selection?.kind === "entity" && scene.entities[selection.id]
       ? selection.id
       : null;
+  const selectionAnchorRef = useRef<string | null>(selectedEntityId);
+
+  const selectEntity = (entityId: string, event?: MouseEvent<HTMLElement>) => {
+    const currentIds = selectedEntityIds.filter((id) => Boolean(scene.entities[id]));
+    const additive = Boolean(event?.ctrlKey || event?.metaKey);
+    if (event?.shiftKey && selectionAnchorRef.current) {
+      const anchorIndex = rows.findIndex((row) => row.entity.id === selectionAnchorRef.current);
+      const targetIndex = rows.findIndex((row) => row.entity.id === entityId);
+      if (anchorIndex >= 0 && targetIndex >= 0) {
+        const start = Math.min(anchorIndex, targetIndex);
+        const end = Math.max(anchorIndex, targetIndex);
+        onSelectionChange(rows.slice(start, end + 1).map((row) => row.entity.id), entityId);
+        return;
+      }
+    }
+    if (additive) {
+      const nextIds = currentIds.includes(entityId)
+        ? currentIds.filter((id) => id !== entityId)
+        : [...currentIds, entityId];
+      onSelectionChange(nextIds, nextIds.includes(entityId) ? entityId : nextIds[nextIds.length - 1] ?? null);
+      selectionAnchorRef.current = entityId;
+      return;
+    }
+    selectionAnchorRef.current = entityId;
+    onSelectionChange([entityId], entityId);
+  };
 
   useEffect(() => {
     if (!renameRequest) return;
@@ -489,22 +517,22 @@ export function HierarchyPanel({
           Hierarchy
         </h2>
         <div className="flex items-center gap-1.5">
-          {selectedEntityId ? (
+          {selectedEntityIds.length > 0 ? (
             <button
               type="button"
               disabled={readOnly}
               onClick={() =>
-                onCommand("edit.delete", { entityId: selectedEntityId })
+                onCommand("edit.delete")
               }
               title={
                 readOnly
                   ? "Playを停止するとEntityを削除できます"
-                  : commandTitle("選択中のEntityを削除", "edit.delete")
+                  : commandTitle(`${selectedEntityIds.length}件のEntityを削除`, "edit.delete")
               }
               className="flex h-7 items-center gap-1 rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-muted transition-colors hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <EDITOR_ICONS.delete size={12} aria-hidden="true" />
-              削除
+              {selectedEntityIds.length > 1 ? `${selectedEntityIds.length}件を削除` : "削除"}
             </button>
           ) : null}
           <span className="rounded bg-editor-subtle px-1.5 py-0.5 text-xs tabular-nums text-editor-muted">
@@ -615,8 +643,7 @@ export function HierarchyPanel({
           </div>
         ) : null}
         {rows.map(({ entity, depth, effectiveEnabled }) => {
-          const selected =
-            selection?.kind === "entity" && selection.id === entity.id;
+          const selected = selectedEntityIds.includes(entity.id);
           const EntityIcon = getEntityIcon(entity);
           const renaming = renameRequest?.id === entity.id;
           const activeEntityDrop =
@@ -661,7 +688,7 @@ export function HierarchyPanel({
               data-hierarchy-entity-id={entity.id}
               onContextMenu={(event) => {
                 event.stopPropagation();
-                if (!readOnly) onSelect({ kind: "entity", id: entity.id });
+                if (!readOnly && !selected) selectEntity(entity.id);
                 openContextMenu(event, entity.id);
               }}
               onDragOverCapture={(event) => {
@@ -763,7 +790,7 @@ export function HierarchyPanel({
                     ? "Playを停止するとEntityを選択できます"
                     : commandTitle(`${entity.name}を選択`, "SelectEntity")
                 }
-                onClick={() => onSelect({ kind: "entity", id: entity.id })}
+                onClick={(event) => selectEntity(entity.id, event)}
                 onDragStart={(event) => {
                   writeEditorDragData(event.dataTransfer, {
                     [ENTITY_DRAG_MIME]: entity.id,
@@ -773,7 +800,7 @@ export function HierarchyPanel({
                   event.dataTransfer.effectAllowed = "copyMove";
                   setDragEntityId(entity.id);
                   setDropTarget(null);
-                  onSelect({ kind: "entity", id: entity.id });
+                  selectEntity(entity.id);
                 }}
                 onDragEnd={() => {
                   clearEditorDragData();
@@ -824,7 +851,10 @@ export function HierarchyPanel({
                 disabled={readOnly}
                 onClick={(event) => {
                   event.stopPropagation();
-                  onCommand("edit.delete", { entityId: entity.id });
+                  onCommand(
+                    "edit.delete",
+                    selected ? undefined : { entityId: entity.id },
+                  );
                 }}
                 aria-label={`${entity.name}を削除`}
                 title={
@@ -873,7 +903,12 @@ export function HierarchyPanel({
                     onClick={() => {
                       const entityId = contextMenu.entityId ?? undefined;
                       setContextMenu(null);
-                      onCommand(commandId, { entityId });
+                      onCommand(
+                        commandId,
+                        commandId === "edit.delete" && entityId && selectedEntityIds.includes(entityId)
+                          ? undefined
+                          : { entityId },
+                      );
                     }}
                     title={
                       readOnly

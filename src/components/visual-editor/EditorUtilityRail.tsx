@@ -11,6 +11,9 @@ import {
 import type {
   XriftMcpClientId,
   XriftMcpClientStatus,
+  XriftOllamaConfigurationResult,
+  XriftOllamaIntegrationId,
+  XriftOllamaStatus,
 } from "../../lib/tauri";
 
 type UtilityPanel = "ai" | "shortcuts" | "help" | null;
@@ -66,11 +69,16 @@ export function EditorUtilityRail({
   mcpLoading,
   mcpRegisteringClientId,
   mcpError,
+  ollamaStatus,
+  ollamaConfiguring,
+  ollamaError,
+  ollamaResult,
   mcpLastActivity,
   canUndo,
   onOpenMcp,
   onRefreshMcp,
   onRegisterMcpClient,
+  onConfigureOllama,
   onUndo,
 }: {
   commands: readonly EditorCommandDefinition[];
@@ -82,11 +90,19 @@ export function EditorUtilityRail({
   mcpLoading: boolean;
   mcpRegisteringClientId: XriftMcpClientId | null;
   mcpError: string | null;
+  ollamaStatus: XriftOllamaStatus | null;
+  ollamaConfiguring: boolean;
+  ollamaError: string | null;
+  ollamaResult: XriftOllamaConfigurationResult | null;
   mcpLastActivity: XriftMcpActivity;
   canUndo: boolean;
   onOpenMcp: () => void;
   onRefreshMcp: () => void;
   onRegisterMcpClient: (clientId: XriftMcpClientId) => void;
+  onConfigureOllama: (
+    integrationId: XriftOllamaIntegrationId,
+    model: string,
+  ) => void;
   onUndo: () => void;
 }) {
   const [openPanel, setOpenPanel] = useState<UtilityPanel>(null);
@@ -199,10 +215,15 @@ export function EditorUtilityRail({
               loading={mcpLoading}
               registeringClientId={mcpRegisteringClientId}
               error={mcpError}
+              ollama={ollamaStatus}
+              ollamaConfiguring={ollamaConfiguring}
+              ollamaError={ollamaError}
+              ollamaResult={ollamaResult}
               lastActivity={mcpLastActivity}
               canUndo={canUndo}
               onRefresh={onRefreshMcp}
               onRegister={onRegisterMcpClient}
+              onConfigureOllama={onConfigureOllama}
               onUndo={onUndo}
             />
           ) : openPanel === "shortcuts" ? (

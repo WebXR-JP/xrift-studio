@@ -244,11 +244,19 @@ export async function materializeVisualCompilation(
     );
   }
   if (compilation.stagingPlan.runtimePackageSpecs.length > 0) {
+    const includesOpenBrushRuntime =
+      compilation.stagingPlan.runtimePackageSpecs.includes(
+        "three-icosa@0.4.2-alpha.18",
+      );
     throwIfAborted(signal);
     report({
       stage: "compiling",
-      label: "OpenBrush描画ランタイムを準備しています",
-      detail: "three-icosaを公開用の一時プロジェクトへ追加します。",
+      label: includesOpenBrushRuntime
+        ? "OpenBrush描画ランタイムを準備しています"
+        : "XRift Studio描画ランタイムを準備しています",
+      detail: includesOpenBrushRuntime
+        ? "汎用Runtimeとthree-icosaを公開用の一時プロジェクトへ追加します。"
+        : "汎用Runtimeを公開用の一時プロジェクトへ追加します。",
       percent: 52,
       cancelSafe: false,
     });
@@ -257,7 +265,7 @@ export async function materializeVisualCompilation(
       compilation.stagingPlan.runtimePackageSpecs,
       onLog,
     );
-    assertSucceeded(installed, "OpenBrush描画ランタイムの準備", [
+    assertSucceeded(installed, "描画ランタイムの準備", [
       authoringProjectPath,
       staged.projectPath,
     ]);

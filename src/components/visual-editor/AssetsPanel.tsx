@@ -14,6 +14,7 @@ import {
   CircleAlert,
   LoaderCircle,
   PanelBottomOpen,
+  Store,
 } from "lucide-react";
 import type {
   AssetManifest,
@@ -92,6 +93,7 @@ const KIND_FOLDERS: BrowserFolder[] = [
   { id: "folder-models", name: "Models", icon: "model", kind: "model" },
   { id: "folder-materials", name: "Materials", icon: "material", kind: "material" },
   { id: "folder-textures", name: "Textures", icon: "texture", kind: "texture" },
+  { id: "folder-skyboxes", name: "Skyboxes", icon: "skybox", kind: "skybox" },
   { id: "folder-audio", name: "Audio", icon: "audio", kind: "audio" },
   { id: "folder-particles", name: "Particles", icon: "particle", kind: "particle" },
   { id: "folder-prefabs", name: "Prefabs", icon: "prefab", kind: "template" },
@@ -107,6 +109,8 @@ function assetKindLabel(asset: SceneAsset): string {
       return "Material";
     case "texture":
       return "Texture";
+    case "skybox":
+      return "Skybox";
     case "particle":
       return "Particle";
     case "audio":
@@ -124,6 +128,8 @@ function assetIconName(asset: SceneAsset): EditorIconName {
       return "material";
     case "texture":
       return "texture";
+    case "skybox":
+      return "skybox";
     case "particle":
       return "particle";
     case "audio":
@@ -136,6 +142,9 @@ function assetIconName(asset: SceneAsset): EditorIconName {
 }
 
 function assetSourceLabel(asset: SceneAsset): string {
+  if (asset.attribution) {
+    return `${asset.attribution.providerName} · ${asset.attribution.licenseName}`;
+  }
   if (asset.source.kind === "project") return asset.source.relativePath;
   if (asset.source.kind === "builtin") return asset.source.key;
   return "document";
@@ -488,7 +497,7 @@ function AssetCard({
   selected: boolean;
   viewMode: ViewMode;
   readOnly: boolean;
-  onSelect: (assetId: string) => void;
+  onSelect: (assetId: string, event: MouseEvent<HTMLButtonElement>) => void;
   onPlace: () => void;
   onDelete: () => void;
   onOpenContext: (event: MouseEvent<HTMLElement>) => void;
@@ -532,7 +541,7 @@ function AssetCard({
           onDragStart={handleDragStart}
           onDragEnd={clearAssetCardDragData}
           aria-pressed={selected}
-          onClick={() => onSelect(asset.id)}
+          onClick={(event) => onSelect(asset.id, event)}
           title={commandTitle(`${asset.name}を選択／${dragDescription}`, "SelectAsset")}
           className="col-span-4 grid cursor-grab grid-cols-[46px_minmax(110px,1fr)_90px_70px] items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing"
         >
@@ -609,7 +618,7 @@ function AssetCard({
         onDragStart={handleDragStart}
         onDragEnd={clearAssetCardDragData}
         aria-pressed={selected}
-        onClick={() => onSelect(asset.id)}
+        onClick={(event) => onSelect(asset.id, event)}
         title={commandTitle(`${asset.name}を選択／${dragDescription}`, "SelectAsset")}
         className="flex min-w-0 flex-1 cursor-grab flex-col text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 active:cursor-grabbing"
       >
@@ -1150,10 +1159,12 @@ export function AssetsPanel({
   projectKind,
   editorMode,
   selectedAssetId,
+  selectedAssetIds,
   pendingImports,
   importError,
   statusMessage,
   onSelectAsset,
+  onAssetSelectionChange,
   onQueueFiles,
   onRemovePending,
   onClearImportError,
@@ -1171,6 +1182,7 @@ export function AssetsPanel({
   onMoveFolder,
   onPlaceBuiltinPrefab,
   onPlaceSceneAsset,
+  onOpenExternalStore,
   externalOperationLockReason = null,
 }: {
   assets: AssetManifest;
@@ -1178,10 +1190,12 @@ export function AssetsPanel({
   projectKind: VisualProjectKind;
   editorMode: EditorMode;
   selectedAssetId: string | null;
+  selectedAssetIds: readonly string[];
   pendingImports: PendingImport[];
   importError: string | null;
   statusMessage: string | null;
   onSelectAsset: (assetId: string) => void;
+  onAssetSelectionChange: (assetIds: string[], primaryAssetId: string | null) => void;
   onQueueFiles: (files: File[]) => void;
   onRemovePending: (id: string) => void;
   onClearImportError: () => void;
@@ -1208,6 +1222,7 @@ export function AssetsPanel({
   onMoveFolder: (folderId: string, parentId: string | null) => void;
   onPlaceBuiltinPrefab: (recipeId: string) => void;
   onPlaceSceneAsset: (assetId: string) => void;
+  onOpenExternalStore: () => void;
   /**
    * Reason supplied by an Asset operation owned outside this panel, such as
    * Model reimport. Selection/navigation stay available while mutations and
@@ -1226,6 +1241,7 @@ export function AssetsPanel({
   const renameInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLElement>(null);
+  const selectionAnchorRef = useRef<string | null>(selectedAssetId);
   const readOnly = editorMode === "play";
   const normalizedExternalLockReason =
     externalOperationLockReason?.trim() || null;
@@ -1292,6 +1308,32 @@ export function AssetsPanel({
             left.id.localeCompare(right.id),
         )
     : folderAssets;
+  const handleAssetSelect = (
+    assetId: string,
+    event: MouseEvent<HTMLButtonElement>,
+  ) => {
+    const currentIds = selectedAssetIds.filter((id) => Boolean(assets.assets[id]));
+    if (event.shiftKey && selectionAnchorRef.current) {
+      const anchorIndex = visibleAssets.findIndex((asset) => asset.id === selectionAnchorRef.current);
+      const targetIndex = visibleAssets.findIndex((asset) => asset.id === assetId);
+      if (anchorIndex >= 0 && targetIndex >= 0) {
+        const start = Math.min(anchorIndex, targetIndex);
+        const end = Math.max(anchorIndex, targetIndex);
+        onAssetSelectionChange(visibleAssets.slice(start, end + 1).map((asset) => asset.id), assetId);
+        return;
+      }
+    }
+    if (event.ctrlKey || event.metaKey) {
+      const nextIds = currentIds.includes(assetId)
+        ? currentIds.filter((id) => id !== assetId)
+        : [...currentIds, assetId];
+      onAssetSelectionChange(nextIds, nextIds.includes(assetId) ? assetId : nextIds[nextIds.length - 1] ?? null);
+      selectionAnchorRef.current = assetId;
+      return;
+    }
+    selectionAnchorRef.current = assetId;
+    onAssetSelectionChange([assetId], assetId);
+  };
   const builtinPrefabRecipes = listBuiltinPrefabRecipes(projectKind);
   const visibleItemCount =
     activeFolder?.builtinPrefabs && !searching
@@ -1610,6 +1652,7 @@ export function AssetsPanel({
           <button type="button" onClick={() => setViewMode("grid")} aria-label="グリッド表示" aria-pressed={viewMode === "grid"} title={commandTitle("グリッド表示", "SetAssetView.Grid")} className={`rounded p-1 ${viewMode === "grid" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><GridIcon size={14} aria-hidden="true" /></button>
           <button type="button" onClick={() => setViewMode("list")} aria-label="リスト表示" aria-pressed={viewMode === "list"} title={commandTitle("リスト表示", "SetAssetView.List")} className={`rounded p-1 ${viewMode === "list" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><ListIcon size={14} aria-hidden="true" /></button>
           <button type="button" disabled={assetMutationLocked} onClick={openCreationMenu} aria-label="新規アセットまたはフォルダー" title={assetMutationDisabledReason ?? "新規アセットまたはフォルダー"} className="ml-1 rounded border border-slate-300 bg-white p-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"><CreateIcon size={14} aria-hidden="true" /></button>
+          <button type="button" disabled={assetMutationLocked} onClick={onOpenExternalStore} title={assetMutationDisabledReason ?? "外部ストアからアセットを追加"} className="flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45"><Store size={12} aria-hidden="true" />外部から追加</button>
           <button type="button" disabled={importLocked} onClick={() => { if (onCommand("asset.import")) fileInputRef.current?.click(); }} title={importDisabledReason ?? commandTitle("アセットをインポート", "asset.import")} className="flex items-center gap-1 rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45"><ImportIcon size={12} aria-hidden="true" />インポート</button>
         </div>
       </div>
@@ -1705,10 +1748,10 @@ export function AssetsPanel({
               asset={asset}
               assets={assets}
               projectPath={projectPath}
-              selected={asset.id === selectedAssetId}
+              selected={selectedAssetIds.includes(asset.id)}
               viewMode={viewMode}
               readOnly={assetMutationLocked}
-              onSelect={onSelectAsset}
+              onSelect={handleAssetSelect}
               onPlace={() => onPlaceSceneAsset(asset.id)}
               onDelete={() => onRequestDeleteAsset(asset.id)}
               onOpenContext={(event) => openContextMenu(event, { assetId: asset.id })}
