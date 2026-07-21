@@ -1,13 +1,46 @@
 import { instantiateSceneAsset, isScenePlaceableAsset } from "./asset-placement";
+import {
+  getBuiltinPrefabRecipe,
+  instantiateBuiltinPrefab,
+} from "./builtin-prefab-catalog";
+import { BUILTIN_PRIMITIVE_CREATION_IDS } from "./creation-catalog";
+import { createDocumentId } from "./document-id";
+import {
+  addEditorComponent,
+  createEmptyEntity as createEmptySceneEntity,
+  deleteEntityHierarchy,
+} from "./editor-session";
+import {
+  assignMaterialToMeshSlots,
+  assignMaterialToPrimaryMeshSlot,
+} from "./material-assignment";
 import type { PrototypeVisualProject } from "./prototype-project";
+import {
+  addBuiltinPrimitiveEntity,
+  duplicateEntityHierarchy,
+  renameEntity as renameEntityInScene,
+  updateEntityTransform,
+  type SceneDocument,
+  type SceneEntity,
+  type Vec3,
+} from "./scene-document";
 import { resolveSceneSettings, type SceneFogSettings } from "./scene-settings";
-import type { Vec3 } from "./scene-document";
 
 export const XRIFT_MCP_EDITOR_TOOLS = [
   "get_editor_context",
   "list_assets",
   "update_scene_settings",
   "place_asset",
+  "list_entities",
+  "create_primitive",
+  "place_builtin_prefab",
+  "add_component",
+  "update_transform",
+  "set_material",
+  "rename_entity",
+  "duplicate_entity",
+  "delete_entity",
+  "create_empty_entity",
 ] as const;
 
 export type XriftMcpEditorToolName = (typeof XRIFT_MCP_EDITOR_TOOLS)[number];
@@ -72,6 +105,26 @@ export function executeXriftMcpEditorTool(
       return updateSceneSettings(context, request.arguments);
     case "place_asset":
       return placeAsset(context, request.arguments);
+    case "list_entities":
+      return listEntities(context);
+    case "create_primitive":
+      return createPrimitive(context, request.arguments);
+    case "place_builtin_prefab":
+      return placeBuiltinPrefab(context, request.arguments);
+    case "add_component":
+      return addComponent(context, request.arguments);
+    case "update_transform":
+      return updateTransform(context, request.arguments);
+    case "set_material":
+      return setMaterial(context, request.arguments);
+    case "rename_entity":
+      return renameEntity(context, request.arguments);
+    case "duplicate_entity":
+      return duplicateEntity(context, request.arguments);
+    case "delete_entity":
+      return deleteEntity(context, request.arguments);
+    case "create_empty_entity":
+      return createEmptyEntity(context, request.arguments);
   }
 }
 
@@ -220,6 +273,445 @@ function placeAsset(
   };
 }
 
+function listEntities(context: XriftMcpEditorContext): XriftMcpEditorToolOutcome {
+  const entities = Object.values(context.bundle.scene.entities)
+    .map((entity) => ({
+      id: entity.id,
+      name: entity.name,
+      parentId: entity.parentId,
+      children: entity.children,
+      enabled: entity.enabled,
+      components: entity.components,
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+  return unchanged(context, { entities, count: entities.length }, "Entity一覧を取得しました");
+}
+
+function createPrimitive(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const shape = requiredEnum(
+    argumentsValue.shape,
+    "shape",
+    ["box", "sphere", "cylinder", "cone", "plane"] as const,
+  );
+  const position = optionalVec3(argumentsValue.position, "position");
+  const requestedMaterialAssetId = optionalString(argumentsValue.materialAssetId);
+  const materialAssetId =
+    requestedMaterialAssetId ??
+    Object.values(context.bundle.assets.assets).find((asset) => asset.kind === "material")?.id;
+  if (!materialAssetId) {
+    throw new XriftMcpEditorToolError(
+      "NO_MATERIAL_AVAILABLE",
+      "Projectに割り当てられるMaterialがありません",
+    );
+  }
+  const placement = addBuiltinPrimitiveEntity(
+    context.bundle.scene,
+    context.bundle.assets,
+    BUILTIN_PRIMITIVE_CREATION_IDS[shape],
+    materialAssetId,
+    position,
+  );
+  if (!placement) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      "指定されたMaterialでPrimitiveを作成できません",
+      { materialAssetId },
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, scene: placement.scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: placement.entityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId: placement.entityId,
+      shape,
+      materialAssetId,
+      position,
+    },
+    activity: `AIが${shape}を作成しました`,
+  };
+}
+
+function placeBuiltinPrefab(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const recipeId = requiredString(argumentsValue.recipeId, "recipeId");
+  const position = optionalVec3(argumentsValue.position, "position");
+  const recipe = getBuiltinPrefabRecipe(recipeId);
+  if (!recipe) {
+    throw new XriftMcpEditorToolError(
+      "RECIPE_NOT_FOUND",
+      "指定されたPrefab recipeが見つかりません",
+      { recipeId },
+    );
+  }
+  const projectKind = context.bundle.project.projectKind;
+  if (!recipe.projectKinds.includes(projectKind)) {
+    throw new XriftMcpEditorToolError(
+      "PROJECT_KIND_MISMATCH",
+      `このPrefabは${projectKind} projectでは配置できません`,
+      { recipeId, projectKind },
+    );
+  }
+  const placement = instantiateBuiltinPrefab(
+    context.bundle.scene,
+    projectKind,
+    recipeId,
+    position,
+  );
+  if (!placement) {
+    throw new XriftMcpEditorToolError(
+      "PLACEMENT_FAILED",
+      "Prefabを配置できませんでした",
+      { recipeId },
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, scene: placement.scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: placement.entityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId: placement.entityId,
+      recipeId,
+      recipeName: placement.recipe.name,
+      position,
+    },
+    activity: `AIが「${placement.recipe.name}」をSceneへ配置しました`,
+  };
+}
+
+function addComponent(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const definitionId = requiredString(argumentsValue.definitionId, "definitionId");
+  const result = addEditorComponent(
+    context.bundle.scene,
+    context.bundle.assets,
+    entityId,
+    definitionId,
+    context.bundle.project.projectKind,
+  );
+  if (!result.added) {
+    throw new XriftMcpEditorToolError(
+      addComponentFailureCode(result.reason),
+      addComponentFailureMessage(result.reason),
+      { entityId, definitionId, reason: result.reason },
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, scene: result.scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: entityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId,
+      definitionId,
+      componentId: result.componentId,
+    },
+    activity: `AIが${definitionId}をEntityへ追加しました`,
+  };
+}
+
+function updateTransform(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  requireEntity(context.bundle.scene, entityId);
+  const position = optionalVec3(argumentsValue.position, "position");
+  const rotation = optionalVec3(argumentsValue.rotation, "rotation");
+  const scale = optionalVec3(argumentsValue.scale, "scale");
+  const componentId = optionalString(argumentsValue.componentId);
+  if (!position && !rotation && !scale) {
+    invalidArgument("position, rotation, scale", "少なくとも1つ");
+  }
+  const scene = updateEntityTransform(
+    context.bundle.scene,
+    entityId,
+    { position, rotation, scale },
+    componentId,
+  );
+  if (scene === context.bundle.scene) {
+    return unchanged(
+      context,
+      {
+        projectId: context.bundle.project.projectId,
+        sceneId: context.bundle.scene.sceneId,
+        revision: context.revision,
+        entityId,
+      },
+      "Transformはすでに指定された状態です",
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: entityId },
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId,
+      position,
+      rotation,
+      scale,
+    },
+    activity: "AIがTransformを更新しました",
+  };
+}
+
+function setMaterial(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const materialAssetId = requiredString(argumentsValue.materialAssetId, "materialAssetId");
+  const slot = optionalString(argumentsValue.slot);
+  const meshComponentId = optionalString(argumentsValue.meshComponentId);
+  const outcome = slot
+    ? assignMaterialToMeshSlots(
+        context.bundle.scene,
+        context.bundle.assets,
+        entityId,
+        materialAssetId,
+        [slot],
+        meshComponentId,
+      )
+    : assignMaterialToPrimaryMeshSlot(
+        context.bundle.scene,
+        context.bundle.assets,
+        entityId,
+        materialAssetId,
+        meshComponentId,
+      );
+  if (!outcome.applied) {
+    if (outcome.reason === "unchanged") {
+      return unchanged(
+        context,
+        {
+          projectId: context.bundle.project.projectId,
+          sceneId: context.bundle.scene.sceneId,
+          revision: context.revision,
+          entityId,
+          materialAssetId,
+        },
+        "Materialはすでに指定された状態です",
+      );
+    }
+    throw new XriftMcpEditorToolError(
+      setMaterialFailureCode(outcome.reason),
+      setMaterialFailureMessage(outcome.reason),
+      { entityId, materialAssetId, slot, reason: outcome.reason },
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, scene: outcome.scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: entityId },
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId,
+      materialAssetId,
+      slots: "slots" in outcome ? outcome.slots : [outcome.slot],
+    },
+    activity: "AIがMaterialを割り当てました",
+  };
+}
+
+function renameEntity(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const name = requiredString(argumentsValue.name, "name");
+  requireEntity(context.bundle.scene, entityId);
+  const scene = renameEntityInScene(context.bundle.scene, entityId, name);
+  if (scene === context.bundle.scene) {
+    return unchanged(
+      context,
+      {
+        projectId: context.bundle.project.projectId,
+        sceneId: context.bundle.scene.sceneId,
+        revision: context.revision,
+        entityId,
+        name,
+      },
+      "Entity名はすでに指定された状態です",
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: entityId },
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId,
+      name,
+    },
+    activity: `AIがEntityを「${name}」に改名しました`,
+  };
+}
+
+function duplicateEntity(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const parentEntityId = optionalNullableString(argumentsValue.parentEntityId, "parentEntityId");
+  const position = optionalVec3(argumentsValue.position, "position");
+  requireEntity(context.bundle.scene, entityId);
+  if (parentEntityId !== null) {
+    requireEntity(context.bundle.scene, parentEntityId);
+  }
+  const duplication = duplicateEntityHierarchy(
+    context.bundle.scene,
+    [entityId],
+    (kind) => createDocumentId(kind),
+    parentEntityId,
+  );
+  if (!duplication) {
+    throw new XriftMcpEditorToolError(
+      "DUPLICATE_FAILED",
+      "Entityを複製できませんでした",
+      { entityId, parentEntityId },
+    );
+  }
+  const newEntityId = duplication.clone.rootEntityIds[0];
+  const scene = position
+    ? updateEntityTransform(duplication.scene, newEntityId, { position })
+    : duplication.scene;
+  const bundle = touchProject(context, { ...context.bundle, scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: newEntityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      sourceEntityId: entityId,
+      entityId: newEntityId,
+      parentEntityId,
+      position,
+    },
+    activity: "AIがEntityを複製しました",
+  };
+}
+
+function deleteEntity(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const scene = deleteEntityHierarchy(context.bundle.scene, [entityId]);
+  if (scene === context.bundle.scene) {
+    throw new XriftMcpEditorToolError(
+      "ENTITY_NOT_FOUND",
+      "指定されたEntityが見つかりません",
+      { entityId },
+    );
+  }
+  const wasSelected = context.sceneSelection?.id === entityId;
+  const bundle = touchProject(context, { ...context.bundle, scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: wasSelected ? null : context.sceneSelection,
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId,
+    },
+    activity: "AIがEntityを削除しました",
+  };
+}
+
+function createEmptyEntity(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const name = optionalString(argumentsValue.name) ?? "Empty Entity";
+  const parentEntityId = optionalNullableString(argumentsValue.parentEntityId, "parentEntityId");
+  if (parentEntityId !== null) {
+    requireEntity(context.bundle.scene, parentEntityId);
+  }
+  const created = createEmptySceneEntity(context.bundle.scene, parentEntityId, name);
+  if (!created) {
+    throw new XriftMcpEditorToolError(
+      "PARENT_NOT_FOUND",
+      "指定された親Entityが見つかりません",
+      { parentEntityId },
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, scene: created.scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: created.entityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId: created.entityId,
+      name,
+      parentEntityId,
+    },
+    activity: "AIが空のEntityを作成しました",
+  };
+}
+
 function assertWritableContext(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
@@ -353,6 +845,82 @@ function placementFailureMessage(reason: string): string {
   }
 }
 
+function requireEntity(scene: SceneDocument, entityId: string): SceneEntity {
+  const entity = scene.entities[entityId];
+  if (!entity) {
+    throw new XriftMcpEditorToolError(
+      "ENTITY_NOT_FOUND",
+      "指定されたEntityが見つかりません",
+      { entityId },
+    );
+  }
+  return entity;
+}
+
+function addComponentFailureCode(reason?: string): string {
+  switch (reason) {
+    case "entity-missing":
+      return "ENTITY_NOT_FOUND";
+    case "definition-missing":
+      return "DEFINITION_NOT_FOUND";
+    case "project-kind":
+      return "PROJECT_KIND_MISMATCH";
+    case "duplicate":
+      return "DUPLICATE_COMPONENT";
+    case "dependency-missing":
+      return "DEPENDENCY_MISSING";
+    default:
+      return "COMPONENT_NOT_ADDED";
+  }
+}
+
+function addComponentFailureMessage(reason?: string): string {
+  switch (reason) {
+    case "entity-missing":
+      return "指定されたEntityが見つかりません";
+    case "definition-missing":
+      return "指定されたComponentの定義が見つかりません";
+    case "project-kind":
+      return "このComponentは現在のProject種別では追加できません";
+    case "duplicate":
+      return "同じComponentが既に追加されています";
+    case "dependency-missing":
+      return "依存する条件が満たされていないため追加できません";
+    default:
+      return "Componentを追加できませんでした";
+  }
+}
+
+function setMaterialFailureCode(reason: string): string {
+  switch (reason) {
+    case "entity-missing":
+      return "ENTITY_NOT_FOUND";
+    case "mesh-missing":
+      return "MESH_NOT_FOUND";
+    case "material-missing":
+      return "MATERIAL_NOT_FOUND";
+    case "slot-missing":
+      return "SLOT_NOT_FOUND";
+    default:
+      return "MATERIAL_NOT_APPLIED";
+  }
+}
+
+function setMaterialFailureMessage(reason: string): string {
+  switch (reason) {
+    case "entity-missing":
+      return "指定されたEntityが見つかりません";
+    case "mesh-missing":
+      return "指定されたEntityにMeshがありません";
+    case "material-missing":
+      return "指定されたMaterial Assetが見つかりません";
+    case "slot-missing":
+      return "指定されたMaterial slotが見つかりません";
+    default:
+      return "Materialを割り当てられませんでした";
+  }
+}
+
 function recordValue(value: unknown, name: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     invalidArgument(name, "object");
@@ -367,6 +935,17 @@ function requiredString(value: unknown, name: string): string {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function requiredEnum<T extends string>(
+  value: unknown,
+  name: string,
+  allowed: readonly T[],
+): T {
+  if (typeof value !== "string" || !(allowed as readonly string[]).includes(value)) {
+    invalidArgument(name, allowed.join(" | "));
+  }
+  return value as T;
 }
 
 function optionalNullableString(value: unknown, name: string): string | null {

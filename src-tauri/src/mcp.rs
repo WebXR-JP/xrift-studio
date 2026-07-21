@@ -25,11 +25,21 @@ const MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS: u64 = 15_000;
 const MCP_MAX_CONCURRENT_CONNECTIONS: usize = 32;
 const MCP_MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 const MCP_MAX_CLIENT_NAME_CHARS: usize = 128;
-const MCP_TOOL_NAMES: [&str; 4] = [
+const MCP_TOOL_NAMES: [&str; 14] = [
     "get_editor_context",
     "list_assets",
     "update_scene_settings",
     "place_asset",
+    "list_entities",
+    "create_primitive",
+    "place_builtin_prefab",
+    "add_component",
+    "update_transform",
+    "set_material",
+    "rename_entity",
+    "duplicate_entity",
+    "delete_entity",
+    "create_empty_entity",
 ];
 static MCP_MONOTONIC_START: OnceLock<Instant> = OnceLock::new();
 
@@ -1896,6 +1906,213 @@ fn tool_definitions() -> Value {
                     "parentEntityId": { "type": ["string", "null"] }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "assetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "list_entities",
+            "description": "List every entity in the current scene with its hierarchy (parentId/children) and components.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "create_primitive",
+            "description": "Create a builtin primitive shape (box, sphere, cylinder, cone, or plane) as a new scene entity.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "shape": { "type": "string", "enum": ["box", "sphere", "cylinder", "cone", "plane"] },
+                    "materialAssetId": { "type": "string" },
+                    "position": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "shape"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "place_builtin_prefab",
+            "description": "Place a builtin XRift prefab (SpawnPoint, Mirror, Portal, TagBoard, VideoScreen, VideoPlayer, LiveVideoPlayer, or ScreenShareDisplay) into the scene.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "recipeId": {
+                        "type": "string",
+                        "enum": [
+                            "xrift-prefab.spawn-point",
+                            "xrift-prefab.mirror",
+                            "xrift-prefab.portal",
+                            "xrift-prefab.tag-board",
+                            "xrift-prefab.video-screen",
+                            "xrift-prefab.video-player",
+                            "xrift-prefab.live-video-player",
+                            "xrift-prefab.screen-share-display"
+                        ]
+                    },
+                    "position": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "recipeId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "add_component",
+            "description": "Add a component (light, collider, mesh renderer, particle emitter, audio source, spawn point, or an XRift component such as Interactable, Grabbable, Mirror, Skybox, VideoScreen, VideoPlayer, LiveVideoPlayer, Video180Sphere, ScreenShareDisplay, SpawnPoint, TextInput, TagBoard, Portal, or BillboardY) to an existing entity.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string" },
+                    "definitionId": {
+                        "type": "string",
+                        "enum": [
+                            "core.mesh",
+                            "physics.box-collider",
+                            "physics.mesh-collider",
+                            "core.light.ambient",
+                            "core.light.directional",
+                            "core.light.hemisphere",
+                            "core.light.point",
+                            "core.light.spot",
+                            "core.light.area",
+                            "core.spawn",
+                            "core.particle",
+                            "core.audio-source",
+                            "xrift.interactable",
+                            "xrift.grabbable",
+                            "xrift.mirror",
+                            "xrift.skybox",
+                            "xrift.video-screen",
+                            "xrift.video-player",
+                            "xrift.live-video-player",
+                            "xrift.video-180-sphere",
+                            "xrift.screen-share-display",
+                            "xrift.spawn-point",
+                            "xrift.text-input",
+                            "xrift.tag-board",
+                            "xrift.portal",
+                            "xrift.billboard-y"
+                        ]
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "definitionId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "update_transform",
+            "description": "Update position, rotation, and/or scale on an existing entity's Transform component.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string" },
+                    "position": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+                    "rotation": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+                    "scale": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+                    "componentId": { "type": "string" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "set_material",
+            "description": "Assign a material asset to a mesh slot on an existing entity.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string" },
+                    "materialAssetId": { "type": "string" },
+                    "slot": { "type": "string" },
+                    "meshComponentId": { "type": "string" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "materialAssetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "rename_entity",
+            "description": "Rename an existing entity.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string" },
+                    "name": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "name"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "duplicate_entity",
+            "description": "Duplicate an entity and its child hierarchy, optionally reparenting or repositioning the copy.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string" },
+                    "parentEntityId": { "type": ["string", "null"] },
+                    "position": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "delete_entity",
+            "description": "Delete an entity and its child hierarchy from the scene.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "create_empty_entity",
+            "description": "Create an empty transform-only entity, useful as a group or container.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "name": { "type": "string" },
+                    "parentEntityId": { "type": ["string", "null"] }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision"],
                 "additionalProperties": false
             }
         }
