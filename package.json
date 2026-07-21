@@ -24,7 +24,7 @@
     "mcp:sidecar:prepare": "node scripts/prepare-mcp-sidecar.mjs",
     "mcp:sidecar:prepare:release": "node scripts/prepare-mcp-sidecar.mjs --release",
     "mcp:server": "pnpm dlx @hypothesi/tauri-mcp-server",
-    "mcp:cli": "pnpm dlx @hypothesi/tauri-mcp-cli",
+    "mcp:cli": "pnpm --package=@hypothesi/tauri-mcp-cli dlx tauri-mcp",
     "cli:build": "vite build --config vite.cli.config.mjs",
     "cli:test": "pnpm cli:build && node dist/cli/fixture.mjs",
     "runtime:build": "pnpm --filter xrift-studio-runtime build",

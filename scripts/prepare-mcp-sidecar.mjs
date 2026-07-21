@@ -8,12 +8,23 @@ const repositoryRoot = path.resolve(
   "..",
 );
 const release = process.argv.includes("--release");
+const sidecarTargetDirectory = path.join(
+  repositoryRoot,
+  "src-tauri",
+  "target-mcp-sidecar",
+);
 const cargoArguments = [
   "build",
   "--manifest-path",
   "src-tauri/Cargo.toml",
   "--bin",
   "xrift-studio-mcp",
+  // Keep this as an explicit Cargo CLI option. On Windows an inherited or
+  // case-duplicated environment variable can otherwise resolve to Cargo's
+  // normal target directory, which may contain a running legacy MCP binary.
+  "--target-dir",
+  sidecarTargetDirectory,
+  "--locked",
 ];
 if (release) cargoArguments.push("--release");
 
@@ -35,16 +46,14 @@ if (!targetTriple) {
 const executableSuffix = process.platform === "win32" ? ".exe" : "";
 const profile = release ? "release" : "debug";
 const source = path.join(
-  repositoryRoot,
-  "src-tauri",
-  "target",
+  sidecarTargetDirectory,
   profile,
   `xrift-studio-mcp${executableSuffix}`,
 );
 const destinationDirectory = path.join(repositoryRoot, "src-tauri", "binaries");
 const destination = path.join(
   destinationDirectory,
-  `xrift-studio-mcp-${targetTriple}${executableSuffix}`,
+  `xrift-studio-mcp-sidecar-${targetTriple}${executableSuffix}`,
 );
 mkdirSync(destinationDirectory, { recursive: true });
 copyFileSync(source, destination);

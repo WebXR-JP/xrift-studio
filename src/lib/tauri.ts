@@ -113,13 +113,43 @@ export type VisualAssetImportWrite = {
   dataUrl: string;
 };
 
-export type XriftMcpClientId = "codex" | "claude-code";
+export type XriftMcpClientId =
+  | "codex"
+  | "claude-code"
+  | "claude-desktop"
+  | "opencode"
+  | "cursor";
 
 export type XriftMcpClientStatus = {
   id: XriftMcpClientId;
   label: string;
   installed: boolean;
   registered: boolean;
+  needsUpdate: boolean;
+  message: string;
+};
+
+export type XriftOllamaIntegrationId = Extract<
+  XriftMcpClientId,
+  "codex" | "claude-code" | "opencode"
+>;
+
+export type XriftOllamaModelStatus = {
+  name: string;
+};
+
+export type XriftOllamaStatus = {
+  installed: boolean;
+  version: string | null;
+  launchSupported: boolean;
+  models: XriftOllamaModelStatus[];
+  message: string;
+};
+
+export type XriftOllamaConfigurationResult = {
+  integrationId: XriftOllamaIntegrationId;
+  integrationLabel: string;
+  model: string;
   message: string;
 };
 
@@ -261,6 +291,16 @@ export const tauri = {
     invoke<XriftMcpClientStatus[]>("detect_xrift_mcp_clients"),
   registerXriftMcpClient: (clientId: XriftMcpClientId) =>
     invoke<XriftMcpClientStatus>("register_xrift_mcp_client", { clientId }),
+  detectXriftOllama: () =>
+    invoke<XriftOllamaStatus>("detect_xrift_ollama"),
+  configureXriftOllama: (
+    integrationId: XriftOllamaIntegrationId,
+    model: string,
+  ) =>
+    invoke<XriftOllamaConfigurationResult>("configure_xrift_ollama", {
+      integrationId,
+      model,
+    }),
   completeXriftMcpRequest: (response: XriftMcpEditorResponse) =>
     invoke<void>("complete_xrift_mcp_request", { response }),
   setXriftMcpEditorReady: (ready: boolean) =>

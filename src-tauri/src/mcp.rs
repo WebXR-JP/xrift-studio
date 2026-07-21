@@ -3,34 +3,54 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::ffi::OsStr;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::{Child, Command, ExitStatus, Output, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::OnceLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{oneshot, Mutex, Semaphore};
 
 const MCP_SERVER_NAME: &str = "xrift-studio";
 const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
 const MCP_RENDEZVOUS_SCHEMA_VERSION: u32 = 1;
 const MCP_EVENT_NAME: &str = "xrift-mcp-editor-request";
 const MCP_REQUEST_TIMEOUT_SECONDS: u64 = 30;
+const MCP_INITIAL_MESSAGE_TIMEOUT_SECONDS: u64 = 5;
+const MCP_EDITOR_QUEUE_TIMEOUT_MILLISECONDS: u64 = 2_000;
+const MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS: u64 = 15_000;
+const MCP_MAX_CONCURRENT_CONNECTIONS: usize = 32;
 const MCP_MAX_MESSAGE_BYTES: usize = 1024 * 1024;
+const MCP_MAX_CLIENT_NAME_CHARS: usize = 128;
 const MCP_TOOL_NAMES: [&str; 4] = [
     "get_editor_context",
     "list_assets",
     "update_scene_settings",
     "place_asset",
 ];
+static MCP_MONOTONIC_START: OnceLock<Instant> = OnceLock::new();
 
-#[derive(Default)]
 pub struct XriftMcpBrokerState {
     pending: Mutex<HashMap<String, oneshot::Sender<XriftMcpEditorResponse>>>,
     request_lock: Mutex<()>,
-    editor_ready: AtomicBool,
+    editor_heartbeat: AtomicU64,
+    ollama_configuration_active: AtomicBool,
+    connections: Semaphore,
+}
+
+impl Default for XriftMcpBrokerState {
+    fn default() -> Self {
+        Self {
+            pending: Mutex::new(HashMap::new()),
+            request_lock: Mutex::new(()),
+            editor_heartbeat: AtomicU64::new(0),
+            ollama_configuration_active: AtomicBool::new(false),
+            connections: Semaphore::new(MCP_MAX_CONCURRENT_CONNECTIONS),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -58,6 +78,12 @@ struct XriftMcpBrokerEnvelope {
     token: String,
     client_name: String,
     request: XriftMcpToolRequest,
+}
+
+enum LimitedLine {
+    Eof,
+    Line(Vec<u8>),
+    TooLarge,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -96,24 +122,67 @@ pub struct XriftMcpClientStatus {
     pub label: String,
     pub installed: bool,
     pub registered: bool,
+    pub needs_update: bool,
     pub message: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct XriftOllamaModelStatus {
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct XriftOllamaStatus {
+    pub installed: bool,
+    pub version: Option<String>,
+    pub launch_supported: bool,
+    pub models: Vec<XriftOllamaModelStatus>,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct XriftOllamaConfigurationResult {
+    pub integration_id: String,
+    pub integration_label: String,
+    pub model: String,
+    pub message: String,
+}
+
+struct ClientRegistration {
+    registered: bool,
+    command: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug)]
 enum SupportedMcpClient {
     Codex,
     ClaudeCode,
+    ClaudeDesktop,
+    OpenCode,
+    Cursor,
 }
 
 impl SupportedMcpClient {
-    fn all() -> [Self; 2] {
-        [Self::Codex, Self::ClaudeCode]
+    fn all() -> [Self; 5] {
+        [
+            Self::Codex,
+            Self::ClaudeCode,
+            Self::ClaudeDesktop,
+            Self::OpenCode,
+            Self::Cursor,
+        ]
     }
 
     fn id(self) -> &'static str {
         match self {
             Self::Codex => "codex",
             Self::ClaudeCode => "claude-code",
+            Self::ClaudeDesktop => "claude-desktop",
+            Self::OpenCode => "opencode",
+            Self::Cursor => "cursor",
         }
     }
 
@@ -121,18 +190,75 @@ impl SupportedMcpClient {
         match self {
             Self::Codex => "Codex",
             Self::ClaudeCode => "Claude Code",
+            Self::ClaudeDesktop => "Claude Desktop / Cowork",
+            Self::OpenCode => "OpenCode",
+            Self::Cursor => "Cursor",
         }
     }
 
-    fn command_name(self) -> &'static str {
+    fn command_name(self) -> Option<&'static str> {
         match self {
-            Self::Codex => "codex",
-            Self::ClaudeCode => "claude",
+            Self::Codex => Some("codex"),
+            Self::ClaudeCode => Some("claude"),
+            Self::ClaudeDesktop => None,
+            Self::OpenCode => Some("opencode"),
+            Self::Cursor => Some("cursor"),
         }
     }
 
     fn parse(value: &str) -> Option<Self> {
         Self::all().into_iter().find(|client| client.id() == value)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum SupportedOllamaIntegration {
+    Codex,
+    ClaudeCode,
+    OpenCode,
+}
+
+impl SupportedOllamaIntegration {
+    fn all() -> [Self; 3] {
+        [Self::Codex, Self::ClaudeCode, Self::OpenCode]
+    }
+
+    fn id(self) -> &'static str {
+        match self {
+            Self::Codex => "codex",
+            Self::ClaudeCode => "claude-code",
+            Self::OpenCode => "opencode",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Codex => "Codex",
+            Self::ClaudeCode => "Claude Code",
+            Self::OpenCode => "OpenCode",
+        }
+    }
+
+    fn launch_id(self) -> &'static str {
+        match self {
+            Self::Codex => "codex",
+            Self::ClaudeCode => "claude",
+            Self::OpenCode => "opencode",
+        }
+    }
+
+    fn mcp_client(self) -> SupportedMcpClient {
+        match self {
+            Self::Codex => SupportedMcpClient::Codex,
+            Self::ClaudeCode => SupportedMcpClient::ClaudeCode,
+            Self::OpenCode => SupportedMcpClient::OpenCode,
+        }
+    }
+
+    fn parse(value: &str) -> Option<Self> {
+        Self::all()
+            .into_iter()
+            .find(|integration| integration.id() == value)
     }
 }
 
@@ -207,23 +333,27 @@ pub async fn complete_xrift_mcp_request(
 
 #[tauri::command]
 pub fn set_xrift_mcp_editor_ready(state: State<'_, XriftMcpBrokerState>, ready: bool) {
-    state.editor_ready.store(ready, Ordering::Release);
+    state.editor_heartbeat.store(
+        if ready { mcp_monotonic_tick() } else { 0 },
+        Ordering::Release,
+    );
 }
 
 #[tauri::command]
 pub async fn detect_xrift_mcp_clients(app: AppHandle) -> Result<Vec<XriftMcpClientStatus>, String> {
+    let expected_sidecar_path = resolve_sidecar_path().ok().and_then(|source| {
+        app.path().app_data_dir().ok().and_then(|directory| {
+            registration_sidecar_destination(&source, &directory.join("mcp").join("bin")).ok()
+        })
+    });
     tauri::async_runtime::spawn_blocking(move || {
         SupportedMcpClient::all()
             .into_iter()
-            .map(detect_client)
+            .map(|client| detect_client(client, expected_sidecar_path.as_deref()))
             .collect()
     })
     .await
     .map_err(|error| format!("AI clientの確認に失敗しました: {error}"))
-    .map(|statuses| {
-        let _ = app;
-        statuses
-    })
 }
 
 #[tauri::command]
@@ -233,36 +363,76 @@ pub async fn register_xrift_mcp_client(
 ) -> Result<XriftMcpClientStatus, String> {
     let client = SupportedMcpClient::parse(&client_id)
         .ok_or_else(|| "対応していないAI clientです".to_string())?;
-    let sidecar_path = resolve_sidecar_path()?;
+    let sidecar_source_path = resolve_sidecar_path()?;
+    let sidecar_install_directory = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("app data pathを取得できません: {error}"))?
+        .join("mcp")
+        .join("bin");
     let rendezvous_path = rendezvous_path(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
+        if is_managed_config_client(client) && !managed_config_client_installed(client) {
+            return Err(format!(
+                "{}が見つかりません。先にclientをinstallしてください",
+                client.label()
+            ));
+        }
+        let sidecar_path =
+            install_registration_sidecar(&sidecar_source_path, &sidecar_install_directory)?;
+        if is_managed_config_client(client) {
+            let registered_command = managed_config_registration_command(client);
+            let updating = registered_command.is_some()
+                && (!managed_config_registration_enabled(client)
+                    || !registered_command
+                        .as_deref()
+                        .is_some_and(|command| same_path(command, &sidecar_path)));
+            register_managed_config_client(client, &sidecar_path, &rendezvous_path)?;
+            return Ok(client_status(
+                client,
+                true,
+                true,
+                if updating {
+                    "更新しました。再起動してください"
+                } else {
+                    "登録しました。再起動してください"
+                },
+            ));
+        }
         let executable = find_client_executable(client).ok_or_else(|| {
             format!(
                 "{}が見つかりません。先にclientをinstallしてください",
                 client.label()
             )
         })?;
-        if client_is_registered(client, &executable) {
+        let registration = client_registration(client, &executable);
+        if registration.registered
+            && registration
+                .command
+                .as_deref()
+                .is_some_and(|command| same_path(command, &sidecar_path))
+        {
             return Ok(client_status(client, true, true, "登録済み"));
         }
-        let mut arguments: Vec<String> = match client {
-            SupportedMcpClient::Codex => vec![
-                "mcp".into(),
-                "add".into(),
-                MCP_SERVER_NAME.into(),
-                "--".into(),
-            ],
-            SupportedMcpClient::ClaudeCode => vec![
-                "mcp".into(),
-                "add".into(),
-                "--scope".into(),
-                "user".into(),
-                MCP_SERVER_NAME.into(),
-            ],
-        };
-        arguments.push(sidecar_path.to_string_lossy().into_owned());
-        arguments.push("--rendezvous".into());
-        arguments.push(rendezvous_path.to_string_lossy().into_owned());
+        let updating = registration.registered;
+        if updating && matches!(client, SupportedMcpClient::ClaudeCode) {
+            let remove_status = run_client_command(
+                &executable,
+                &[
+                    "mcp".into(),
+                    "remove".into(),
+                    "--scope".into(),
+                    "user".into(),
+                    MCP_SERVER_NAME.into(),
+                ],
+            )
+            .map_err(|error| format!("Claude Codeの旧登録を更新できません: {error}"))?;
+            if !remove_status.success() {
+                return Err("Claude Codeの旧登録を更新できませんでした".to_string());
+            }
+        }
+        let arguments = registration_arguments(client, &sidecar_path, &rendezvous_path)
+            .ok_or_else(|| "このAI clientはCLI登録に対応していません".to_string())?;
         let status = run_client_command(&executable, &arguments)
             .map_err(|error| format!("{}への登録を開始できません: {error}", client.label()))?;
         if !status.success() {
@@ -271,10 +441,85 @@ pub async fn register_xrift_mcp_client(
                 client.label()
             ));
         }
-        Ok(client_status(client, true, true, "登録しました"))
+        Ok(client_status(
+            client,
+            true,
+            true,
+            if updating {
+                "更新しました"
+            } else {
+                "登録しました"
+            },
+        ))
     })
     .await
     .map_err(|error| format!("AI clientへの登録に失敗しました: {error}"))?
+}
+
+#[tauri::command]
+pub async fn detect_xrift_ollama() -> Result<XriftOllamaStatus, String> {
+    tauri::async_runtime::spawn_blocking(detect_ollama)
+        .await
+        .map_err(|error| format!("Ollamaの確認に失敗しました: {error}"))
+}
+
+#[tauri::command]
+pub async fn configure_xrift_ollama(
+    state: State<'_, XriftMcpBrokerState>,
+    integration_id: String,
+    model: String,
+) -> Result<XriftOllamaConfigurationResult, String> {
+    let integration = SupportedOllamaIntegration::parse(&integration_id)
+        .ok_or_else(|| "Ollamaで構成できないAI clientです".to_string())?;
+    if state
+        .ollama_configuration_active
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return Err("別のOllama構成を実行中です。完了後に再試行してください".to_string());
+    }
+
+    let task = tauri::async_runtime::spawn_blocking(move || {
+        configure_ollama_integration(integration, &model)
+    })
+    .await;
+    state
+        .ollama_configuration_active
+        .store(false, Ordering::Release);
+
+    task.map_err(|error| format!("Ollama構成の実行に失敗しました: {error}"))?
+}
+
+fn registration_arguments(
+    client: SupportedMcpClient,
+    sidecar_path: &Path,
+    rendezvous_path: &Path,
+) -> Option<Vec<String>> {
+    let mut arguments: Vec<String> = match client {
+        SupportedMcpClient::Codex => vec![
+            "mcp".into(),
+            "add".into(),
+            MCP_SERVER_NAME.into(),
+            "--".into(),
+        ],
+        SupportedMcpClient::ClaudeCode => vec![
+            "mcp".into(),
+            "add".into(),
+            "--scope".into(),
+            "user".into(),
+            MCP_SERVER_NAME.into(),
+            // Claude Code parses subprocess flags as its own options unless
+            // the command is introduced by the explicit stdio separator.
+            "--".into(),
+        ],
+        SupportedMcpClient::ClaudeDesktop
+        | SupportedMcpClient::OpenCode
+        | SupportedMcpClient::Cursor => return None,
+    };
+    arguments.push(sidecar_path.to_string_lossy().into_owned());
+    arguments.push("--rendezvous".into());
+    arguments.push(rendezvous_path.to_string_lossy().into_owned());
+    Some(arguments)
 }
 
 async fn handle_broker_connection(
@@ -282,13 +527,23 @@ async fn handle_broker_connection(
     stream: TcpStream,
     expected_token: String,
 ) -> Result<(), String> {
+    let state = app.state::<XriftMcpBrokerState>();
+    let _connection_permit = state
+        .connections
+        .try_acquire()
+        .map_err(|_| "AI editor bridgeの同時接続数が上限に達しました".to_string())?;
     let (reader, mut writer) = stream.into_split();
-    let mut reader = tokio::io::BufReader::new(reader);
+    let reader = tokio::io::BufReader::new(reader);
     let mut line = String::new();
-    let bytes = reader
-        .read_line(&mut line)
-        .await
-        .map_err(|error| error.to_string())?;
+    let bytes = tokio::time::timeout(
+        Duration::from_secs(MCP_INITIAL_MESSAGE_TIMEOUT_SECONDS),
+        reader
+            .take((MCP_MAX_MESSAGE_BYTES + 1) as u64)
+            .read_line(&mut line),
+    )
+    .await
+    .map_err(|_| "AI editor bridge requestの受信が時間切れです".to_string())?
+    .map_err(|error| error.to_string())?;
     if bytes == 0 || bytes > MCP_MAX_MESSAGE_BYTES {
         return Err("AI editor bridge requestのsizeが不正です".to_string());
     }
@@ -313,8 +568,11 @@ async fn handle_broker_connection(
         .await;
     }
 
-    let state = app.state::<XriftMcpBrokerState>();
-    if !state.editor_ready.load(Ordering::Acquire) {
+    if !editor_heartbeat_is_fresh(
+        state.editor_heartbeat.load(Ordering::Acquire),
+        mcp_monotonic_tick(),
+    ) {
+        state.editor_heartbeat.store(0, Ordering::Release);
         return write_broker_error(
             &mut writer,
             envelope.request.id,
@@ -323,7 +581,23 @@ async fn handle_broker_connection(
         )
         .await;
     }
-    let _request_guard = state.request_lock.lock().await;
+    let _request_guard = match tokio::time::timeout(
+        Duration::from_millis(MCP_EDITOR_QUEUE_TIMEOUT_MILLISECONDS),
+        state.request_lock.lock(),
+    )
+    .await
+    {
+        Ok(guard) => guard,
+        Err(_) => {
+            return write_broker_error(
+                &mut writer,
+                envelope.request.id,
+                "EDITOR_BUSY",
+                "別のAI編集を処理中です。少し待ってから最新contextを取得してください",
+            )
+            .await;
+        }
+    };
     let (sender, receiver) = oneshot::channel();
     let request_id = envelope.request.id.clone();
     state
@@ -369,6 +643,7 @@ async fn handle_broker_connection(
         },
         Err(_) => {
             state.pending.lock().await.remove(&request_id);
+            state.editor_heartbeat.store(0, Ordering::Release);
             XriftMcpEditorResponse {
                 id: request_id,
                 ok: false,
@@ -381,6 +656,15 @@ async fn handle_broker_connection(
         }
     };
     let payload = serde_json::to_vec(&response).map_err(|error| error.to_string())?;
+    if payload.len() > MCP_MAX_MESSAGE_BYTES {
+        return write_broker_error(
+            &mut writer,
+            response.id,
+            "RESPONSE_TOO_LARGE",
+            "Editorの応答がsize上限を超えました",
+        )
+        .await;
+    }
     writer
         .write_all(&payload)
         .await
@@ -422,7 +706,27 @@ fn editor_error(code: &str, message: &str) -> XriftMcpEditorError {
     }
 }
 
+fn mcp_monotonic_tick() -> u64 {
+    let started_at = MCP_MONOTONIC_START.get_or_init(Instant::now);
+    u64::try_from(started_at.elapsed().as_millis())
+        .unwrap_or(u64::MAX - 1)
+        .saturating_add(1)
+}
+
+fn editor_heartbeat_is_fresh(last_heartbeat: u64, now: u64) -> bool {
+    last_heartbeat > 0
+        && now.saturating_sub(last_heartbeat) <= MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS
+}
+
 fn create_session_token(app: &AppHandle, port: u16) -> String {
+    let mut random = [0_u8; 32];
+    if getrandom::fill(&mut random).is_ok() {
+        return bytes_to_hex(&random);
+    }
+
+    // OS randomness should be available on supported desktop platforms. Keep
+    // a per-process fallback so a transient provider failure does not prevent
+    // the editor itself from starting.
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_nanos())
@@ -433,6 +737,16 @@ fn create_session_token(app: &AppHandle, port: u16) -> String {
     digest.update(port.to_le_bytes());
     digest.update(now.to_le_bytes());
     format!("{:x}", digest.finalize())
+}
+
+fn bytes_to_hex(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        let _ = write!(&mut output, "{byte:02x}");
+    }
+    output
 }
 
 fn rendezvous_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -449,6 +763,10 @@ fn write_private_json(path: &Path, value: &impl Serialize) -> Result<(), String>
         .ok_or_else(|| "AI editor bridgeの保存先が不正です".to_string())?;
     std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     let payload = serde_json::to_vec(value).map_err(|error| error.to_string())?;
+    write_private_bytes(path, &payload)
+}
+
+fn write_private_bytes(path: &Path, payload: &[u8]) -> Result<(), String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
@@ -463,16 +781,58 @@ fn write_private_json(path: &Path, value: &impl Serialize) -> Result<(), String>
     Ok(())
 }
 
-fn detect_client(client: SupportedMcpClient) -> XriftMcpClientStatus {
+fn detect_client(
+    client: SupportedMcpClient,
+    expected_sidecar_path: Option<&Path>,
+) -> XriftMcpClientStatus {
+    if is_managed_config_client(client) {
+        if !managed_config_client_installed(client) {
+            return client_status(client, false, false, "未検出");
+        }
+        let registered_command = managed_config_registration_command(client);
+        let registered = registered_command.is_some();
+        let needs_update = registered
+            && (!managed_config_registration_enabled(client)
+                || expected_sidecar_path.is_some_and(|expected| {
+                    !expected.is_file()
+                        || !registered_command
+                            .as_deref()
+                            .is_some_and(|command| same_path(command, expected))
+                }));
+        if needs_update {
+            return client_update_status(client);
+        }
+        return client_status(
+            client,
+            true,
+            registered,
+            if registered {
+                "登録済み"
+            } else {
+                "登録できます"
+            },
+        );
+    }
     let Some(executable) = find_client_executable(client) else {
         return client_status(client, false, false, "未検出");
     };
-    let registered = client_is_registered(client, &executable);
+    let registration = client_registration(client, &executable);
+    let needs_update = registration.registered
+        && expected_sidecar_path.is_some_and(|expected| {
+            !expected.is_file()
+                || !registration
+                    .command
+                    .as_deref()
+                    .is_some_and(|command| same_path(command, expected))
+        });
+    if needs_update {
+        return client_update_status(client);
+    }
     client_status(
         client,
         true,
-        registered,
-        if registered {
+        registration.registered,
+        if registration.registered {
             "登録済み"
         } else {
             "登録できます"
@@ -491,32 +851,565 @@ fn client_status(
         label: client.label().to_string(),
         installed,
         registered,
+        needs_update: false,
         message: message.to_string(),
     }
 }
 
-fn client_is_registered(client: SupportedMcpClient, executable: &Path) -> bool {
-    run_client_command(
+fn client_update_status(client: SupportedMcpClient) -> XriftMcpClientStatus {
+    XriftMcpClientStatus {
+        id: client.id().to_string(),
+        label: client.label().to_string(),
+        installed: true,
+        registered: true,
+        needs_update: true,
+        message: "MCP serverを更新できます".to_string(),
+    }
+}
+
+fn client_registration(client: SupportedMcpClient, executable: &Path) -> ClientRegistration {
+    if !matches!(
+        client,
+        SupportedMcpClient::Codex | SupportedMcpClient::ClaudeCode
+    ) {
+        return ClientRegistration {
+            registered: false,
+            command: None,
+        };
+    }
+    match run_client_command_output(
         executable,
         &["mcp".into(), "get".into(), MCP_SERVER_NAME.into()],
-    )
-    .map(|status| status.success())
-    .unwrap_or(false)
-        && matches!(
-            client,
-            SupportedMcpClient::Codex | SupportedMcpClient::ClaudeCode
-        )
+    ) {
+        Ok(output) if output.status.success() => ClientRegistration {
+            registered: true,
+            command: parse_registered_command(&output.stdout),
+        },
+        _ => ClientRegistration {
+            registered: false,
+            command: None,
+        },
+    }
 }
 
 fn find_client_executable(client: SupportedMcpClient) -> Option<PathBuf> {
-    find_command_on_path(client.command_name())
+    client.command_name().and_then(find_command_on_path)
+}
+
+fn is_managed_config_client(client: SupportedMcpClient) -> bool {
+    matches!(
+        client,
+        SupportedMcpClient::ClaudeDesktop
+            | SupportedMcpClient::OpenCode
+            | SupportedMcpClient::Cursor
+    )
+}
+
+fn managed_config_path(client: SupportedMcpClient) -> Option<PathBuf> {
+    match client {
+        SupportedMcpClient::ClaudeDesktop => claude_desktop_config_path(),
+        SupportedMcpClient::OpenCode => opencode_config_path(),
+        SupportedMcpClient::Cursor => cursor_config_path(),
+        SupportedMcpClient::Codex | SupportedMcpClient::ClaudeCode => None,
+    }
+}
+
+fn managed_config_client_installed(client: SupportedMcpClient) -> bool {
+    let Some(config_path) = managed_config_path(client) else {
+        return false;
+    };
+    let config_location_exists =
+        config_path.is_file() || config_path.parent().is_some_and(Path::is_dir);
+    config_location_exists || find_client_executable(client).is_some()
+}
+
+fn claude_desktop_config_path() -> Option<PathBuf> {
+    dirs::config_dir().map(|directory| directory.join("Claude").join("claude_desktop_config.json"))
+}
+
+fn opencode_config_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|directory| {
+        directory
+            .join(".config")
+            .join("opencode")
+            .join("opencode.json")
+    })
+}
+
+fn cursor_config_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|directory| directory.join(".cursor").join("mcp.json"))
+}
+
+fn managed_config_registration_command(client: SupportedMcpClient) -> Option<PathBuf> {
+    let config_path = managed_config_path(client)?;
+    let config = read_json_file(&config_path).ok().flatten()?;
+    match client {
+        SupportedMcpClient::ClaudeDesktop | SupportedMcpClient::Cursor => config
+            .get("mcpServers")
+            .and_then(Value::as_object)
+            .and_then(|servers| servers.get(MCP_SERVER_NAME))
+            .and_then(Value::as_object)
+            .and_then(|server| server.get("command"))
+            .and_then(Value::as_str)
+            .map(PathBuf::from),
+        SupportedMcpClient::OpenCode => config
+            .get("mcp")
+            .and_then(Value::as_object)
+            .and_then(|servers| servers.get(MCP_SERVER_NAME))
+            .and_then(Value::as_object)
+            .and_then(|server| server.get("command"))
+            .and_then(Value::as_array)
+            .and_then(|command| command.first())
+            .and_then(Value::as_str)
+            .map(PathBuf::from),
+        SupportedMcpClient::Codex | SupportedMcpClient::ClaudeCode => None,
+    }
+}
+
+fn managed_config_registration_enabled(client: SupportedMcpClient) -> bool {
+    if !matches!(client, SupportedMcpClient::OpenCode) {
+        return true;
+    }
+    let Some(config_path) = managed_config_path(client) else {
+        return false;
+    };
+    let Some(server) = read_json_file(&config_path)
+        .ok()
+        .flatten()
+        .and_then(|config| {
+            config
+                .get("mcp")
+                .and_then(Value::as_object)
+                .and_then(|servers| servers.get(MCP_SERVER_NAME))
+                .and_then(Value::as_object)
+                .cloned()
+        })
+    else {
+        return true;
+    };
+    server.get("type").and_then(Value::as_str) == Some("local")
+        && server
+            .get("enabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+}
+
+fn register_managed_config_client(
+    client: SupportedMcpClient,
+    sidecar_path: &Path,
+    rendezvous_path: &Path,
+) -> Result<(), String> {
+    let config_path = managed_config_path(client)
+        .ok_or_else(|| format!("{}の設定先を取得できません", client.label()))?;
+    let config_directory = config_path
+        .parent()
+        .ok_or_else(|| format!("{}の設定先が不正です", client.label()))?;
+    if matches!(client, SupportedMcpClient::ClaudeDesktop) && !config_directory.is_dir() {
+        return Err(
+            "Claude Desktopが見つかりません。先にClaude Desktopを起動してください".to_string(),
+        );
+    }
+    std::fs::create_dir_all(config_directory)
+        .map_err(|_| format!("{}の設定先を作成できません", client.label()))?;
+
+    let original = if config_path.is_file() {
+        let metadata = std::fs::metadata(&config_path).map_err(|error| error.to_string())?;
+        if metadata.len() > MCP_MAX_MESSAGE_BYTES as u64 {
+            return Err(format!("{}の設定fileが大きすぎます", client.label()));
+        }
+        Some(std::fs::read(&config_path).map_err(|error| error.to_string())?)
+    } else {
+        None
+    };
+    let config = match original.as_deref() {
+        Some(bytes) if !bytes.is_empty() => serde_json::from_slice(bytes)
+            .map_err(|_| format!("{}のMCP設定がJSONとして不正です", client.label()))?,
+        _ => json!({}),
+    };
+    let config = match client {
+        SupportedMcpClient::ClaudeDesktop | SupportedMcpClient::Cursor => {
+            merge_mcp_servers_config(config, sidecar_path, rendezvous_path, client.label())?
+        }
+        SupportedMcpClient::OpenCode => {
+            merge_opencode_config(config, sidecar_path, rendezvous_path)?
+        }
+        SupportedMcpClient::Codex | SupportedMcpClient::ClaudeCode => {
+            return Err("このAI clientは設定file登録に対応していません".to_string());
+        }
+    };
+
+    if let Some(bytes) = original.as_deref() {
+        write_config_backup(&config_path, bytes, client.label())?;
+    }
+    let mut payload = serde_json::to_vec_pretty(&config).map_err(|error| error.to_string())?;
+    payload.push(b'\n');
+    write_private_bytes(&config_path, &payload)
+        .map_err(|_| format!("{}のMCP設定を保存できませんでした", client.label()))
+}
+
+fn read_json_file(path: &Path) -> Result<Option<Value>, String> {
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let metadata = std::fs::metadata(path).map_err(|error| error.to_string())?;
+    if metadata.len() > MCP_MAX_MESSAGE_BYTES as u64 {
+        return Err("MCP設定fileが大きすぎます".to_string());
+    }
+    let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
+    if bytes.is_empty() {
+        return Ok(Some(json!({})));
+    }
+    serde_json::from_slice(&bytes)
+        .map(Some)
+        .map_err(|error| error.to_string())
+}
+
+fn merge_mcp_servers_config(
+    mut config: Value,
+    sidecar_path: &Path,
+    rendezvous_path: &Path,
+    client_label: &str,
+) -> Result<Value, String> {
+    let root = config
+        .as_object_mut()
+        .ok_or_else(|| format!("{client_label}のMCP設定rootがobjectではありません"))?;
+    if !root.contains_key("mcpServers") {
+        root.insert("mcpServers".to_string(), json!({}));
+    }
+    let servers = root
+        .get_mut("mcpServers")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| format!("{client_label}のmcpServers設定がobjectではありません"))?;
+    servers.insert(
+        MCP_SERVER_NAME.to_string(),
+        json!({
+            "command": sidecar_path.to_string_lossy(),
+            "args": ["--rendezvous", rendezvous_path.to_string_lossy()],
+        }),
+    );
+    Ok(config)
+}
+
+fn merge_opencode_config(
+    mut config: Value,
+    sidecar_path: &Path,
+    rendezvous_path: &Path,
+) -> Result<Value, String> {
+    let root = config
+        .as_object_mut()
+        .ok_or_else(|| "OpenCodeのMCP設定rootがobjectではありません".to_string())?;
+    if !root.contains_key("mcp") {
+        root.insert("mcp".to_string(), json!({}));
+    }
+    let servers = root
+        .get_mut("mcp")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| "OpenCodeのmcp設定がobjectではありません".to_string())?;
+    servers.insert(
+        MCP_SERVER_NAME.to_string(),
+        json!({
+            "type": "local",
+            "command": [
+                sidecar_path.to_string_lossy(),
+                "--rendezvous",
+                rendezvous_path.to_string_lossy()
+            ],
+            "enabled": true,
+        }),
+    );
+    Ok(config)
+}
+
+fn write_config_backup(
+    config_path: &Path,
+    payload: &[u8],
+    client_label: &str,
+) -> Result<(), String> {
+    let file_name = config_path
+        .file_name()
+        .and_then(OsStr::to_str)
+        .ok_or_else(|| format!("{client_label}の設定file名が不正です"))?;
+    let backup_path = config_path.with_file_name(format!("{file_name}.xrift-studio.backup"));
+    let mut options = std::fs::OpenOptions::new();
+    options.create_new(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    match options.open(backup_path) {
+        Ok(mut file) => file.write_all(payload).map_err(|error| error.to_string()),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+    .map_err(|_| format!("{client_label}設定のbackupを作成できませんでした"))
+}
+
+fn install_registration_sidecar(source: &Path, directory: &Path) -> Result<PathBuf, String> {
+    let payload = std::fs::read(source)
+        .map_err(|_| "XRift Studio MCP serverを読み込めませんでした".to_string())?;
+    let destination = registration_sidecar_destination_for_payload(&payload, directory);
+    std::fs::create_dir_all(directory)
+        .map_err(|_| "MCP serverのinstall先を作成できませんでした".to_string())?;
+
+    if destination.is_file() {
+        let installed = std::fs::read(&destination)
+            .map_err(|_| "install済みMCP serverを確認できませんでした".to_string())?;
+        if installed != payload {
+            return Err("install済みMCP serverの内容を確認できませんでした".to_string());
+        }
+    } else {
+        let mut options = std::fs::OpenOptions::new();
+        options.create_new(true).write(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o700);
+        }
+        let mut file = options
+            .open(&destination)
+            .map_err(|_| "MCP serverをinstallできませんでした".to_string())?;
+        file.write_all(&payload)
+            .map_err(|_| "MCP serverをinstallできませんでした".to_string())?;
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&destination, std::fs::Permissions::from_mode(0o700))
+            .map_err(|_| "MCP serverの実行権限を設定できませんでした".to_string())?;
+    }
+
+    destination
+        .canonicalize()
+        .map_err(|_| "installしたMCP serverを確認できませんでした".to_string())
+}
+
+fn registration_sidecar_destination(source: &Path, directory: &Path) -> Result<PathBuf, String> {
+    let payload = std::fs::read(source)
+        .map_err(|_| "XRift Studio MCP serverを読み込めませんでした".to_string())?;
+    Ok(registration_sidecar_destination_for_payload(
+        &payload, directory,
+    ))
+}
+
+fn registration_sidecar_destination_for_payload(payload: &[u8], directory: &Path) -> PathBuf {
+    let digest = Sha256::digest(payload);
+    let digest = format!("{digest:x}");
+    let suffix = if cfg!(windows) { ".exe" } else { "" };
+    directory.join(format!("xrift-studio-mcp-{}{suffix}", &digest[..12]))
+}
+
+fn detect_ollama() -> XriftOllamaStatus {
+    let Some(executable) = find_ollama_executable() else {
+        return XriftOllamaStatus {
+            installed: false,
+            version: None,
+            launch_supported: false,
+            models: Vec::new(),
+            message: "未検出".to_string(),
+        };
+    };
+
+    let version = run_ollama_command_output(&executable, &["--version".into()])
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| parse_ollama_version(&output.stdout));
+    let launch_supported =
+        run_ollama_command_output(&executable, &["launch".into(), "--help".into()])
+            .is_ok_and(|output| output.status.success());
+    let models = run_ollama_command_output(&executable, &["list".into()])
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| parse_ollama_models(&output.stdout))
+        .unwrap_or_default();
+    let message = if !launch_supported {
+        "更新するとAI clientを構成できます"
+    } else if models.is_empty() {
+        "Ollamaを起動し、modelを追加してください"
+    } else {
+        "ローカルmodelを利用できます"
+    };
+
+    XriftOllamaStatus {
+        installed: true,
+        version,
+        launch_supported,
+        models: models
+            .into_iter()
+            .map(|name| XriftOllamaModelStatus { name })
+            .collect(),
+        message: message.to_string(),
+    }
+}
+
+fn configure_ollama_integration(
+    integration: SupportedOllamaIntegration,
+    model: &str,
+) -> Result<XriftOllamaConfigurationResult, String> {
+    let executable = find_ollama_executable()
+        .ok_or_else(|| "Ollamaが見つかりません。先にOllamaをinstallしてください".to_string())?;
+    if find_client_executable(integration.mcp_client()).is_none() {
+        return Err(format!(
+            "{}が見つかりません。先にclientをinstallしてください",
+            integration.label()
+        ));
+    }
+    let list_output = run_ollama_command_output(&executable, &["list".into()])
+        .map_err(|_| "Ollamaへ接続できません。Ollamaを起動して再試行してください".to_string())?;
+    if !list_output.status.success() {
+        return Err("Ollamaへ接続できません。Ollamaを起動して再試行してください".to_string());
+    }
+    let models = parse_ollama_models(&list_output.stdout);
+    if model.is_empty() || !models.iter().any(|candidate| candidate == model) {
+        return Err("選択したOllama modelが見つかりません。再検出してください".to_string());
+    }
+    let show_output = run_ollama_command_output(&executable, &["show".into(), model.into()])
+        .map_err(|_| "Ollama modelの機能を確認できませんでした".to_string())?;
+    if !show_output.status.success() {
+        return Err("Ollama modelの機能を確認できませんでした".to_string());
+    }
+    if !ollama_model_supports_tools(&show_output.stdout) {
+        return Err(
+            "このOllama modelはtool callingに対応していません。別のmodelを選んでください"
+                .to_string(),
+        );
+    }
+
+    let arguments = ollama_configuration_arguments(integration, model);
+    let status = run_ollama_command(&executable, &arguments)
+        .map_err(|error| format!("Ollamaのclient構成を完了できません: {error}"))?;
+    if !status.success() {
+        return Err(format!(
+            "Ollamaで{}を構成できませんでした。client側のmodel設定を確認してください",
+            integration.label()
+        ));
+    }
+
+    Ok(XriftOllamaConfigurationResult {
+        integration_id: integration.id().to_string(),
+        integration_label: integration.label().to_string(),
+        model: model.to_string(),
+        message: "構成しました。clientを起動または再起動してください".to_string(),
+    })
+}
+
+fn ollama_configuration_arguments(
+    integration: SupportedOllamaIntegration,
+    model: &str,
+) -> Vec<String> {
+    vec![
+        "launch".into(),
+        integration.launch_id().into(),
+        "--model".into(),
+        model.into(),
+        "--config".into(),
+        "--yes".into(),
+    ]
+}
+
+fn parse_ollama_version(stdout: &[u8]) -> Option<String> {
+    String::from_utf8_lossy(stdout)
+        .split_whitespace()
+        .rev()
+        .find(|value| {
+            value
+                .chars()
+                .next()
+                .is_some_and(|first| first.is_ascii_digit())
+        })
+        .map(|value| value.trim_start_matches('v').to_string())
+}
+
+fn parse_ollama_models(stdout: &[u8]) -> Vec<String> {
+    String::from_utf8_lossy(stdout)
+        .lines()
+        .filter_map(|line| line.split_whitespace().next())
+        .filter(|name| !name.eq_ignore_ascii_case("name"))
+        .map(str::to_string)
+        .collect()
+}
+
+fn ollama_model_supports_tools(stdout: &[u8]) -> bool {
+    let output = String::from_utf8_lossy(stdout);
+    let mut capabilities = false;
+    for line in output.lines() {
+        let value = line.trim();
+        if value.eq_ignore_ascii_case("Capabilities") {
+            capabilities = true;
+            continue;
+        }
+        if capabilities && value.is_empty() {
+            break;
+        }
+        if capabilities && value.eq_ignore_ascii_case("tools") {
+            return true;
+        }
+    }
+    false
+}
+
+fn find_ollama_executable() -> Option<PathBuf> {
+    if let Some(executable) = find_command_on_path("ollama") {
+        return Some(executable);
+    }
+    #[cfg(windows)]
+    if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
+        let executable = PathBuf::from(local_app_data)
+            .join("Programs")
+            .join("Ollama")
+            .join("ollama.exe");
+        if executable.is_file() {
+            return Some(executable);
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let executable = PathBuf::from("/Applications/Ollama.app/Contents/Resources/ollama");
+        if executable.is_file() {
+            return Some(executable);
+        }
+    }
+    None
+}
+
+fn run_ollama_command(executable: &Path, arguments: &[String]) -> Result<ExitStatus, String> {
+    let mut command = ollama_command(executable, arguments);
+    command.stdout(Stdio::null()).stderr(Stdio::null());
+    let child = command.spawn().map_err(|error| error.to_string())?;
+    wait_for_client_command(child)
+}
+
+fn run_ollama_command_output(executable: &Path, arguments: &[String]) -> Result<Output, String> {
+    let mut command = ollama_command(executable, arguments);
+    command.stdout(Stdio::piped()).stderr(Stdio::null());
+    let mut child = command.spawn().map_err(|error| error.to_string())?;
+    let status = wait_for_client_command_status(&mut child)?;
+    let mut stdout = Vec::new();
+    if let Some(mut pipe) = child.stdout.take() {
+        pipe.read_to_end(&mut stdout)
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(Output {
+        status,
+        stdout,
+        stderr: Vec::new(),
+    })
+}
+
+fn ollama_command(executable: &Path, arguments: &[String]) -> Command {
+    let mut command = client_command(executable, arguments);
+    command.env("OLLAMA_HOST", "127.0.0.1:11434");
+    command
 }
 
 fn find_command_on_path(command_name: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     let directories: Vec<PathBuf> = std::env::split_paths(&path).collect();
     #[cfg(windows)]
-    let extensions = ["exe", "cmd", "bat"];
+    // Package-manager shims are the supported CLI entry points. A WindowsApps
+    // executable can exist on PATH while rejecting direct CreateProcess calls.
+    let extensions = ["cmd", "bat", "exe"];
     #[cfg(not(windows))]
     let extensions = [""];
 
@@ -537,6 +1430,30 @@ fn find_command_on_path(command_name: &str) -> Option<PathBuf> {
 }
 
 fn run_client_command(executable: &Path, arguments: &[String]) -> Result<ExitStatus, String> {
+    let mut command = client_command(executable, arguments);
+    command.stdout(Stdio::null()).stderr(Stdio::null());
+    let child = command.spawn().map_err(|error| error.to_string())?;
+    wait_for_client_command(child)
+}
+
+fn run_client_command_output(executable: &Path, arguments: &[String]) -> Result<Output, String> {
+    let mut command = client_command(executable, arguments);
+    command.stdout(Stdio::piped()).stderr(Stdio::null());
+    let mut child = command.spawn().map_err(|error| error.to_string())?;
+    let status = wait_for_client_command_status(&mut child)?;
+    let mut stdout = Vec::new();
+    if let Some(mut pipe) = child.stdout.take() {
+        pipe.read_to_end(&mut stdout)
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(Output {
+        status,
+        stdout,
+        stderr: Vec::new(),
+    })
+}
+
+fn client_command(executable: &Path, arguments: &[String]) -> Command {
     let mut command;
     #[cfg(windows)]
     if matches!(
@@ -556,8 +1473,14 @@ fn run_client_command(executable: &Path, arguments: &[String]) -> Result<ExitSta
         command = Command::new(executable);
         command.args(arguments);
     }
-    command.stdout(Stdio::null()).stderr(Stdio::null());
-    let mut child = command.spawn().map_err(|error| error.to_string())?;
+    command
+}
+
+fn wait_for_client_command(mut child: Child) -> Result<ExitStatus, String> {
+    wait_for_client_command_status(&mut child)
+}
+
+fn wait_for_client_command_status(child: &mut Child) -> Result<ExitStatus, String> {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         match child.try_wait().map_err(|error| error.to_string())? {
@@ -574,6 +1497,31 @@ fn run_client_command(executable: &Path, arguments: &[String]) -> Result<ExitSta
     }
 }
 
+fn parse_registered_command(stdout: &[u8]) -> Option<PathBuf> {
+    String::from_utf8_lossy(stdout).lines().find_map(|line| {
+        let (key, value) = line.trim().split_once(':')?;
+        if !key.trim().eq_ignore_ascii_case("command") {
+            return None;
+        }
+        let value = value.trim().trim_matches('"');
+        (!value.is_empty()).then(|| PathBuf::from(value))
+    })
+}
+
+fn same_path(left: &Path, right: &Path) -> bool {
+    let left = left.canonicalize().unwrap_or_else(|_| left.to_path_buf());
+    let right = right.canonicalize().unwrap_or_else(|_| right.to_path_buf());
+    #[cfg(windows)]
+    {
+        left.to_string_lossy()
+            .eq_ignore_ascii_case(&right.to_string_lossy())
+    }
+    #[cfg(not(windows))]
+    {
+        left == right
+    }
+}
+
 fn resolve_sidecar_path() -> Result<PathBuf, String> {
     let binary_name = if cfg!(windows) {
         "xrift-studio-mcp.exe"
@@ -583,9 +1531,22 @@ fn resolve_sidecar_path() -> Result<PathBuf, String> {
     let mut candidates = Vec::new();
     if let Ok(current_exe) = std::env::current_exe() {
         if let Some(parent) = current_exe.parent() {
+            let bundled_binary_name = if cfg!(windows) {
+                "xrift-studio-mcp-sidecar.exe"
+            } else {
+                "xrift-studio-mcp-sidecar"
+            };
+            candidates.push(parent.join(bundled_binary_name));
             candidates.push(parent.join(binary_name));
         }
     }
+    #[cfg(debug_assertions)]
+    candidates.push(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target-mcp-sidecar")
+            .join("debug")
+            .join(binary_name),
+    );
     #[cfg(debug_assertions)]
     candidates.push(
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -605,16 +1566,22 @@ fn resolve_sidecar_path() -> Result<PathBuf, String> {
 pub fn run_stdio_server() -> Result<(), String> {
     let rendezvous_path = parse_rendezvous_argument()?;
     let stdin = std::io::stdin();
+    let mut stdin = BufReader::new(stdin.lock());
     let mut stdout = std::io::stdout().lock();
     let mut client_name = "AI client".to_string();
     let request_counter = AtomicU64::new(1);
-    for line in BufReader::new(stdin.lock()).lines() {
-        let line = line.map_err(|error| error.to_string())?;
-        if line.len() > MCP_MAX_MESSAGE_BYTES {
-            write_json_rpc_error(&mut stdout, Value::Null, -32600, "Request is too large")?;
-            continue;
-        }
-        let message: Value = match serde_json::from_str(&line) {
+    loop {
+        let line = match read_limited_line(&mut stdin, MCP_MAX_MESSAGE_BYTES)
+            .map_err(|error| error.to_string())?
+        {
+            LimitedLine::Eof => break,
+            LimitedLine::TooLarge => {
+                write_json_rpc_error(&mut stdout, Value::Null, -32600, "Request is too large")?;
+                continue;
+            }
+            LimitedLine::Line(line) => line,
+        };
+        let message: Value = match serde_json::from_slice(&line) {
             Ok(message) => message,
             Err(_) => {
                 write_json_rpc_error(&mut stdout, Value::Null, -32700, "Parse error")?;
@@ -630,7 +1597,7 @@ pub fn run_stdio_server() -> Result<(), String> {
                 .pointer("/params/clientInfo/name")
                 .and_then(Value::as_str)
             {
-                client_name = name.to_string();
+                client_name = name.chars().take(MCP_MAX_CLIENT_NAME_CHARS).collect();
             }
         }
         let Some(id) = id else {
@@ -644,7 +1611,7 @@ pub fn run_stdio_server() -> Result<(), String> {
                     "protocolVersion": MCP_PROTOCOL_VERSION,
                     "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": { "name": MCP_SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each write, then verify the result. XRift Studio must be open with a visual project."
+                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each write, then verify the result. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. XRift Studio must be open with a visual project."
                 }),
             )?,
             "ping" => write_json_rpc_result(&mut stdout, id, json!({}))?,
@@ -729,6 +1696,44 @@ pub fn run_stdio_server() -> Result<(), String> {
     Ok(())
 }
 
+fn read_limited_line(reader: &mut impl BufRead, max_bytes: usize) -> std::io::Result<LimitedLine> {
+    let mut line = Vec::new();
+    let mut too_large = false;
+    loop {
+        let buffer = reader.fill_buf()?;
+        if buffer.is_empty() {
+            return Ok(if too_large {
+                LimitedLine::TooLarge
+            } else if line.is_empty() {
+                LimitedLine::Eof
+            } else {
+                LimitedLine::Line(line)
+            });
+        }
+        let consumed = buffer
+            .iter()
+            .position(|byte| *byte == b'\n')
+            .map(|position| position + 1)
+            .unwrap_or(buffer.len());
+        let completed = buffer[consumed - 1] == b'\n';
+        if !too_large {
+            if line.len().saturating_add(consumed) > max_bytes {
+                too_large = true;
+            } else {
+                line.extend_from_slice(&buffer[..consumed]);
+            }
+        }
+        reader.consume(consumed);
+        if completed {
+            return Ok(if too_large {
+                LimitedLine::TooLarge
+            } else {
+                LimitedLine::Line(line)
+            });
+        }
+    }
+}
+
 fn parse_rendezvous_argument() -> Result<PathBuf, String> {
     let mut arguments = std::env::args_os().skip(1);
     while let Some(argument) = arguments.next() {
@@ -753,6 +1758,11 @@ fn proxy_tool_call(
     client_name: &str,
     request: XriftMcpToolRequest,
 ) -> Result<XriftMcpEditorResponse, String> {
+    let rendezvous_metadata = std::fs::metadata(rendezvous_path)
+        .map_err(|_| "Open XRift Studio before using its editor tools".to_string())?;
+    if rendezvous_metadata.len() > MCP_MAX_MESSAGE_BYTES as u64 {
+        return Err("XRift Studio connection information is invalid".to_string());
+    }
     let payload = std::fs::read(rendezvous_path)
         .map_err(|_| "Open XRift Studio before using its editor tools".to_string())?;
     let rendezvous: XriftMcpRendezvous = serde_json::from_slice(&payload)
@@ -768,7 +1778,7 @@ fn proxy_tool_call(
     .map_err(|_| "XRift Studio is not running".to_string())?;
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(
-            MCP_REQUEST_TIMEOUT_SECONDS + 2,
+            MCP_REQUEST_TIMEOUT_SECONDS + (MCP_EDITOR_QUEUE_TIMEOUT_MILLISECONDS / 1_000) + 5,
         )))
         .map_err(|error| error.to_string())?;
     let envelope = XriftMcpBrokerEnvelope {
@@ -780,9 +1790,13 @@ fn proxy_tool_call(
     stream.write_all(b"\n").map_err(|error| error.to_string())?;
     stream.flush().map_err(|error| error.to_string())?;
     let mut response = String::new();
-    BufReader::new(stream)
+    let bytes = BufReader::new(stream)
+        .take((MCP_MAX_MESSAGE_BYTES + 1) as u64)
         .read_line(&mut response)
         .map_err(|error| error.to_string())?;
+    if bytes == 0 || bytes > MCP_MAX_MESSAGE_BYTES {
+        return Err("XRift Studio returned an invalid response".to_string());
+    }
     serde_json::from_str(&response)
         .map_err(|_| "XRift Studio returned an invalid response".to_string())
 }
@@ -891,6 +1905,7 @@ fn tool_definitions() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
 
     #[test]
     fn tool_list_exposes_the_initial_editor_surface() {
@@ -910,6 +1925,290 @@ mod tests {
             SupportedMcpClient::parse("codex"),
             Some(SupportedMcpClient::Codex)
         ));
+        assert!(matches!(
+            SupportedMcpClient::parse("claude-desktop"),
+            Some(SupportedMcpClient::ClaudeDesktop)
+        ));
+        assert!(matches!(
+            SupportedMcpClient::parse("opencode"),
+            Some(SupportedMcpClient::OpenCode)
+        ));
+        assert!(matches!(
+            SupportedMcpClient::parse("cursor"),
+            Some(SupportedMcpClient::Cursor)
+        ));
         assert!(SupportedMcpClient::parse("unknown").is_none());
+    }
+
+    #[test]
+    fn ollama_integrations_are_allowlisted() {
+        assert!(matches!(
+            SupportedOllamaIntegration::parse("codex"),
+            Some(SupportedOllamaIntegration::Codex)
+        ));
+        assert!(matches!(
+            SupportedOllamaIntegration::parse("claude-code"),
+            Some(SupportedOllamaIntegration::ClaudeCode)
+        ));
+        assert!(matches!(
+            SupportedOllamaIntegration::parse("opencode"),
+            Some(SupportedOllamaIntegration::OpenCode)
+        ));
+        assert!(SupportedOllamaIntegration::parse("cursor").is_none());
+        assert!(SupportedOllamaIntegration::parse("unknown").is_none());
+    }
+
+    #[test]
+    fn ollama_list_parser_only_returns_model_names() {
+        let output = b"NAME          ID              SIZE      MODIFIED\nqwen3:14b     abcdef123456    9.3 GB    3 weeks ago\ngemma4:e2b    fedcba654321    7.2 GB    2 months ago\n";
+
+        assert_eq!(
+            parse_ollama_models(output),
+            vec!["qwen3:14b".to_string(), "gemma4:e2b".to_string()]
+        );
+    }
+
+    #[test]
+    fn ollama_tool_capability_is_required() {
+        let supported =
+            b"  Capabilities\n    completion\n    tools\n    thinking\n\n  Parameters\n";
+        let unsupported = b"  Capabilities\n    completion\n    vision\n\n  Parameters\n";
+
+        assert!(ollama_model_supports_tools(supported));
+        assert!(!ollama_model_supports_tools(unsupported));
+    }
+
+    #[test]
+    fn ollama_configuration_uses_fixed_non_launching_arguments() {
+        assert_eq!(
+            ollama_configuration_arguments(SupportedOllamaIntegration::ClaudeCode, "qwen3:14b"),
+            vec![
+                "launch",
+                "claude",
+                "--model",
+                "qwen3:14b",
+                "--config",
+                "--yes",
+            ]
+        );
+    }
+
+    #[test]
+    fn broker_rejects_connections_over_the_bounded_capacity() {
+        let state = XriftMcpBrokerState::default();
+        let permits: Vec<_> = (0..MCP_MAX_CONCURRENT_CONNECTIONS)
+            .map(|_| state.connections.try_acquire().expect("connection permit"))
+            .collect();
+
+        assert!(state.connections.try_acquire().is_err());
+        drop(permits);
+        assert!(state.connections.try_acquire().is_ok());
+    }
+
+    #[tokio::test]
+    async fn broker_serializes_editor_requests() {
+        let state = XriftMcpBrokerState::default();
+        let _first_request = state.request_lock.lock().await;
+
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), state.request_lock.lock())
+                .await
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn editor_heartbeat_expires_after_the_lease_window() {
+        let heartbeat = 100;
+
+        assert!(editor_heartbeat_is_fresh(
+            heartbeat,
+            heartbeat + MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS
+        ));
+        assert!(!editor_heartbeat_is_fresh(
+            heartbeat,
+            heartbeat + MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS + 1
+        ));
+        assert!(!editor_heartbeat_is_fresh(0, heartbeat));
+    }
+
+    #[test]
+    fn claude_registration_separates_the_stdio_command_from_cli_options() {
+        let arguments = registration_arguments(
+            SupportedMcpClient::ClaudeCode,
+            Path::new("xrift-studio-mcp"),
+            Path::new("rendezvous.json"),
+        )
+        .expect("Claude Code registration arguments");
+        assert_eq!(
+            arguments,
+            vec![
+                "mcp",
+                "add",
+                "--scope",
+                "user",
+                MCP_SERVER_NAME,
+                "--",
+                "xrift-studio-mcp",
+                "--rendezvous",
+                "rendezvous.json",
+            ]
+        );
+    }
+
+    #[test]
+    fn claude_desktop_registration_preserves_existing_settings() {
+        let config = json!({
+            "preferences": { "theme": "dark" },
+            "mcpServers": {
+                "existing-server": {
+                    "command": "existing-command"
+                }
+            }
+        });
+        let merged = merge_mcp_servers_config(
+            config,
+            Path::new("xrift-studio-mcp"),
+            Path::new("rendezvous.json"),
+            "Claude Desktop",
+        )
+        .expect("merge Claude Desktop config");
+
+        assert_eq!(merged.pointer("/preferences/theme"), Some(&json!("dark")));
+        assert_eq!(
+            merged.pointer("/mcpServers/existing-server/command"),
+            Some(&json!("existing-command"))
+        );
+        assert_eq!(
+            merged.pointer("/mcpServers/xrift-studio/command"),
+            Some(&json!("xrift-studio-mcp"))
+        );
+        assert_eq!(
+            merged.pointer("/mcpServers/xrift-studio/args"),
+            Some(&json!(["--rendezvous", "rendezvous.json"]))
+        );
+    }
+
+    #[test]
+    fn cursor_registration_preserves_existing_servers() {
+        let config = json!({
+            "mcpServers": {
+                "existing-server": { "command": "existing-command" }
+            }
+        });
+        let merged = merge_mcp_servers_config(
+            config,
+            Path::new("xrift-studio-mcp"),
+            Path::new("rendezvous.json"),
+            "Cursor",
+        )
+        .expect("merge Cursor config");
+
+        assert_eq!(
+            merged.pointer("/mcpServers/existing-server/command"),
+            Some(&json!("existing-command"))
+        );
+        assert_eq!(
+            merged.pointer("/mcpServers/xrift-studio/command"),
+            Some(&json!("xrift-studio-mcp"))
+        );
+    }
+
+    #[test]
+    fn opencode_registration_uses_local_command_array_and_preserves_settings() {
+        let config = json!({
+            "$schema": "https://opencode.ai/config.json",
+            "mcp": {
+                "existing-server": { "type": "remote", "url": "https://example.com/mcp" }
+            }
+        });
+        let merged = merge_opencode_config(
+            config,
+            Path::new("xrift-studio-mcp"),
+            Path::new("rendezvous.json"),
+        )
+        .expect("merge OpenCode config");
+
+        assert_eq!(
+            merged.pointer("/$schema"),
+            Some(&json!("https://opencode.ai/config.json"))
+        );
+        assert_eq!(
+            merged.pointer("/mcp/existing-server/url"),
+            Some(&json!("https://example.com/mcp"))
+        );
+        assert_eq!(
+            merged.pointer("/mcp/xrift-studio/type"),
+            Some(&json!("local"))
+        );
+        assert_eq!(
+            merged.pointer("/mcp/xrift-studio/command"),
+            Some(&json!([
+                "xrift-studio-mcp",
+                "--rendezvous",
+                "rendezvous.json"
+            ]))
+        );
+        assert_eq!(
+            merged.pointer("/mcp/xrift-studio/enabled"),
+            Some(&json!(true))
+        );
+    }
+
+    #[test]
+    fn limited_line_discards_an_oversized_message_and_recovers() {
+        let mut input = vec![b'x'; 9];
+        input.extend_from_slice(b"\n{}\n");
+        let mut reader = Cursor::new(input);
+
+        assert!(matches!(
+            read_limited_line(&mut reader, 8).expect("oversized line"),
+            LimitedLine::TooLarge
+        ));
+        match read_limited_line(&mut reader, 8).expect("next line") {
+            LimitedLine::Line(line) => assert_eq!(line, b"{}\n"),
+            _ => panic!("expected the next bounded line"),
+        }
+        assert!(matches!(
+            read_limited_line(&mut reader, 8).expect("end of input"),
+            LimitedLine::Eof
+        ));
+    }
+
+    #[test]
+    fn token_hex_encoding_has_a_stable_width() {
+        assert_eq!(
+            bytes_to_hex(&[0x00, 0x0f, 0x10, 0xff]),
+            "000f10ff".to_string()
+        );
+    }
+
+    #[test]
+    fn registered_command_parser_supports_codex_and_claude_output() {
+        let codex = b"xrift-studio\n  enabled: true\n  command: C:\\MCP\\server.exe\n";
+        let claude = b"xrift-studio:\n  Scope: User config\n  Command: C:\\MCP\\server.exe\n";
+
+        assert_eq!(
+            parse_registered_command(codex),
+            Some(PathBuf::from(r"C:\MCP\server.exe"))
+        );
+        assert_eq!(
+            parse_registered_command(claude),
+            Some(PathBuf::from(r"C:\MCP\server.exe"))
+        );
+    }
+
+    #[test]
+    fn registration_sidecar_name_changes_with_binary_content() {
+        let directory = Path::new("mcp-bin");
+        let first = registration_sidecar_destination_for_payload(b"first", directory);
+        let second = registration_sidecar_destination_for_payload(b"second", directory);
+
+        assert_ne!(first, second);
+        assert_eq!(first.parent(), Some(directory));
+        assert!(first
+            .file_stem()
+            .and_then(OsStr::to_str)
+            .is_some_and(|name| name.starts_with("xrift-studio-mcp-")));
     }
 }
