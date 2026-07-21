@@ -718,9 +718,7 @@ fn resolve_deletable_project(root: &str, project_path: &str) -> Result<PathBuf, 
     if !project.is_dir() {
         return Err("project deletion target is not a directory".to_string());
     }
-    if !project.join(VISUAL_PROJECT_MANIFEST).is_file()
-        && !project.join("xrift.json").is_file()
-    {
+    if !project.join(VISUAL_PROJECT_MANIFEST).is_file() && !project.join("xrift.json").is_file() {
         return Err("project deletion target is not a recognized XRift project".to_string());
     }
     Ok(project)
@@ -1026,10 +1024,10 @@ fn validate_prefab_document(
             relative_path
         ));
     }
-    if !value
+    if value
         .get("name")
         .and_then(|entry| entry.as_str())
-        .is_some_and(|entry| !entry.trim().is_empty())
+        .is_none_or(|entry| entry.trim().is_empty())
     {
         return Err(format!("Prefab name is required: {}", relative_path));
     }
@@ -3609,6 +3607,9 @@ fn get_versions() -> Versions {
 // Windows の npm でインストールされたファイルは read-only 属性が付くことがあり、
 // そのままでは remove_dir_all が `Access is denied` で失敗する。
 // このヘルパは事前に属性をクリアし、短い待機を挟みつつ数回リトライする。
+// Windows branch intentionally clears the DOS read-only flag. Unix restores
+// only owner-write permission instead of making the entry world-writable.
+#[allow(clippy::permissions_set_readonly_false)]
 fn clear_readonly_recursive(path: &Path) {
     let meta = match std::fs::symlink_metadata(path) {
         Ok(m) => m,
@@ -3616,6 +3617,14 @@ fn clear_readonly_recursive(path: &Path) {
     };
     let mut perm = meta.permissions();
     if perm.readonly() {
+        #[cfg(windows)]
+        perm.set_readonly(false);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            perm.set_mode(perm.mode() | 0o200);
+        }
+        #[cfg(not(any(windows, unix)))]
         perm.set_readonly(false);
         let _ = std::fs::set_permissions(path, perm);
     }
