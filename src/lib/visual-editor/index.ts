@@ -9,6 +9,7 @@ export * from "./builtin-prefab-catalog.fixture";
 export * from "./component-registry";
 export * from "./creation-catalog";
 export * from "./compiler";
+export * from "./custom-shader-contract";
 export * from "./classic-export";
 export * from "./document-id";
 export * from "./document-asset-creation";
