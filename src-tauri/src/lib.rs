@@ -3906,8 +3906,7 @@ mod tests {
         let unrelated_directory = fixture_root.join("unrelated");
         std::fs::create_dir_all(&direct_project).expect("direct project must be created");
         std::fs::create_dir_all(&nested_project).expect("nested project must be created");
-        std::fs::create_dir_all(&unrelated_directory)
-            .expect("unrelated directory must be created");
+        std::fs::create_dir_all(&unrelated_directory).expect("unrelated directory must be created");
         std::fs::write(direct_project.join("xrift.json"), "{}")
             .expect("direct project marker must be written");
         std::fs::write(nested_project.join("xrift.json"), "{}")
@@ -3919,7 +3918,9 @@ mod tests {
                 &direct_project.to_string_lossy(),
             )
             .expect("direct recognized project must be accepted"),
-            direct_project.canonicalize().expect("direct project must resolve"),
+            direct_project
+                .canonicalize()
+                .expect("direct project must resolve"),
         );
         assert!(resolve_deletable_project(
             &fixture_root.to_string_lossy(),
