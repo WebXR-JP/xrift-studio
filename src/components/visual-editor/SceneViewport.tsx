@@ -774,16 +774,18 @@ const PORTAL_FRAGMENT_SHADER = `
   }
 `;
 
-const PORTAL_PARTICLE_POSITIONS: readonly Vec3[] = [
-  [-0.72, 0.68, 0.12],
-  [-0.92, 0.38, -0.16],
-  [-0.68, 0.25, 0.48],
-  [-0.24, 0.92, -0.62],
-  [0.34, 0.78, 0.66],
-  [0.82, 0.52, -0.36],
-  [0.88, 0.3, 0.22],
-  [0.45, 0.86, -0.72],
-];
+const PORTAL_PARTICLE_POSITIONS: readonly Vec3[] = Array.from(
+  { length: 30 },
+  (_, index): Vec3 => {
+    const phase = index * 2.399963229728653;
+    const radius = 0.55 + (index % 6) * 0.105;
+    return [
+      Math.cos(phase) * radius,
+      0.28 + ((index * 7) % 13) * 0.055,
+      Math.sin(phase) * radius,
+    ];
+  },
+);
 
 function usePrefersReducedMotion(): boolean {
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -826,8 +828,8 @@ function PortalSurface({
   });
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.16, 0]}>
-      <circleGeometry args={[0.9, 64]} />
+    <mesh rotation={[Math.PI, 0, 0]} position={[0, 0.2175, 0]}>
+      <coneGeometry args={[0.9, 0.135, 24, 12, true]} />
       <shaderMaterial
         ref={materialRef}
         uniforms={uniforms}
@@ -885,8 +887,8 @@ function PortalComponentVisual({
     [component.properties],
   );
   const reducedMotion = usePrefersReducedMotion();
-  const primary = selected ? "#8b5cf6" : "#6366f1";
-  const glow = selected ? "#c4b5fd" : "#67e8f9";
+  const primary = "#9955ff";
+  const glow = "#bb88ff";
   return (
     <group>
       <mesh position={[0, 0.075, 0]} rotation={[0, Math.PI / 4, 0]}>
@@ -936,14 +938,21 @@ function PortalComponentVisual({
       />
       <Billboard follow lockX={false} lockY={false} lockZ={false} position={[0, 0.92, 0]}>
         <mesh>
-          <planeGeometry args={[1.2, 1.2]} />
+          <circleGeometry args={[0.6, 64]} />
           <meshStandardMaterial
             color={preview.instanceId ? "#17112b" : "#050505"}
             emissive={preview.instanceId ? primary : "#000000"}
             emissiveIntensity={preview.disabled ? 0.05 : 0.24}
             roughness={0.5}
           />
-          <Edges color={preview.disabled ? "#64748b" : glow} />
+        </mesh>
+        <mesh position={[0, 0, 0.012]}>
+          <torusGeometry args={[0.6, 0.018, 8, 64]} />
+          <meshBasicMaterial
+            color={preview.disabled ? "#64748b" : glow}
+            transparent
+            opacity={preview.disabled ? 0.35 : 0.82}
+          />
         </mesh>
       </Billboard>
       <Html

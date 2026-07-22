@@ -7,6 +7,7 @@ export * from "./audio-import.fixture";
 export * from "./builtin-prefab-catalog";
 export * from "./builtin-prefab-catalog.fixture";
 export * from "./component-registry";
+export * from "./component-code-import";
 export * from "./creation-catalog";
 export * from "./compiler";
 export * from "./classic-export";

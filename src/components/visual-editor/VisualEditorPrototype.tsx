@@ -11,6 +11,7 @@ import {
   BUILTIN_ASSET_IDS,
   addDefaultDocumentAsset,
   applyExternalStoreInstall,
+  applyComponentCodeImportPlan,
   addDefaultParticleAsset,
   analyzeAssetDeletion,
   analyzeAssetFolderDeletion,
@@ -82,6 +83,7 @@ import {
   updateTextureAsset,
   updateXriftComponent,
   type ColliderPatch,
+  type ComponentCodeImportPlan,
   type AnimationPatch,
   type AudioSourcePatch,
   type LightPatch,
@@ -124,6 +126,7 @@ import {
   type AssetDeleteDialogTarget,
 } from "./AssetDeleteDialog";
 import { EditorCreateMenu } from "./EditorCreateMenu";
+import { ComponentCodeImportDialog } from "./ComponentCodeImportDialog";
 import { EditorUtilityRail } from "./EditorUtilityRail";
 import type { XriftMcpActivity } from "./AiConnectionPanel";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
@@ -559,6 +562,7 @@ export function VisualEditorPrototype({
   const [transformSpace, setTransformSpace] = useState<TransformSpace>("world");
   const [editorMode, setEditorMode] = useState<EditorMode>("edit");
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [componentImportOpen, setComponentImportOpen] = useState(false);
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
   const [externalStoreOpen, setExternalStoreOpen] = useState(false);
   const [pendingImports, setPendingImports] = useState<QueuedAssetImport[]>([]);
@@ -1743,6 +1747,57 @@ export function VisualEditorPrototype({
       });
     },
     [editorMode, importBusy, projectKind],
+  );
+
+  const handleComponentCodeImport = useCallback(
+    (plan: ComponentCodeImportPlan): boolean => {
+      if (editorMode !== "edit" || importBusy) {
+        setNotice(
+          editorMode !== "edit"
+            ? "Playを停止してからXRift Componentを追加してください"
+            : "アセットのインポート完了後にXRift Componentを追加してください",
+        );
+        return false;
+      }
+      const result = applyComponentCodeImportPlan({
+        scene: bundle.scene,
+        assets: bundle.assets,
+        projectKind,
+        plan,
+      });
+      if (result.entityIds.length === 0) {
+        setNotice(
+          result.diagnostics[0]?.message ??
+            "変換したComponentをSceneへ追加できませんでした",
+        );
+        return false;
+      }
+      const selectedEntityId = result.entityIds[result.entityIds.length - 1];
+      setHistory((current) =>
+        commitEditorHistory(current, {
+          ...current.present,
+          bundle: touchProject({
+            ...current.present.bundle,
+            scene: result.scene,
+            assets: result.assets,
+          }),
+          sceneSelection: { kind: "entity", id: selectedEntityId },
+          assetSelection: null,
+        }),
+      );
+      setSaveStatus("dirty");
+      const warningCount = [
+        ...plan.diagnostics,
+        ...result.diagnostics,
+      ].filter((diagnostic) => diagnostic.severity === "warning").length;
+      setNotice(
+        warningCount > 0
+          ? `${result.entityIds.length}件をSceneへ追加しました。${warningCount}件の変換メモがあります`
+          : `${result.entityIds.length}件を公式XRift ComponentとしてSceneへ追加しました`,
+      );
+      return true;
+    },
+    [bundle.assets, bundle.scene, editorMode, importBusy, projectKind],
   );
 
   const handleTransformChange = useCallback(
@@ -3969,9 +4024,26 @@ export function VisualEditorPrototype({
                 }
               />
             </div>
+            <button
+              type="button"
+              disabled={readOnly || importBusy || editorMode !== "edit"}
+              onClick={() => setComponentImportOpen(true)}
+              title="公式XRift Component一覧とDrei / React Three Fiber変換を開く"
+              className="flex h-7 items-center gap-1.5 rounded border border-violet-200 bg-violet-50 px-2 text-xs font-semibold text-violet-700 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <EDITOR_ICONS.world size={13} aria-hidden="true" />
+              XRift Component
+            </button>
           </div>
 
         </div>
+
+        <ComponentCodeImportDialog
+          open={componentImportOpen}
+          projectKind={projectKind}
+          onClose={() => setComponentImportOpen(false)}
+          onImport={handleComponentCodeImport}
+        />
 
         <main
           ref={mainRef}

@@ -71,6 +71,7 @@ F-06 アイテム検査
 | MI-52 | Assetsの「外部から追加」を開く、HDR / EXRをimportする、外部Assetをinstallする、またはSkybox AssetをScene Viewへdragする | provider名、検索、種別、thumbnail、作者、license、配布ページ、解像度、HDR / EXR形式とdownload目安を同じdialogに表示する。ローカルHDR / EXRはシグネチャ検証後にSkyboxとしてqueueへ表示する。download中は主操作を無効にし、providerが返した固定domainのfileだけをproject管理下へ保存する。Skybox drag中はScene全体へ設定されることを表示する。 | 成功時はMaterialと参照Texture、または形式を保持したSkybox AssetをAssetsで選択し、任意ならSkyboxへ直ちに設定する。失敗時はmanifestとSceneを変更せず同じAsset、解像度、形式から再試行できる。provider creditとlicenseはAssetに保持し、一覧とInspectorから確認できる。 |
 | MI-53 | Hierarchy または Assets で Shift / Ctrl・Cmd を使って複数選択する | 選択行・カードを同じ選択色で示し、Inspector見出しに件数を表示する。Shiftは表示順の範囲、Ctrl・Cmdは追加／解除とし、Entityは共通するMesh Renderer / Light、Materialは共通PBR値だけを表示する。 | 一括変更は一件のhistoryとして確定し、Undoで全対象を戻す。HierarchyのDeleteと右クリックの削除は選択済みEntity全体を一回で削除し、選択解除または単体選択で通常Inspectorへ戻る。Play中は選択を維持して編集操作を無効にする。 |
 | MI-54 | Animation clipを含み`importAnimations`が有効なGLB / glTF ModelをSceneへ配置し、Playを開始する | 配置EntityへAnimation Componentを自動追加し、Inspectorに先頭clip名、長さ、track数、Autoplay、Loopを表示する。Edit中は静止し、Play開始時だけ有効なAutoplayで先頭clipを再生する。 | Loop有効時はPlay中と生成結果で繰り返す。Loop無効時は一度で停止する。Stop、Component無効化、Entity破棄ではmixerを停止してEdit時の姿勢へ戻す。clip欠落時はScene View全体を止めず同じInspectorに理由を示す。 |
+| MI-55 | toolbarから「XRift Component」を開き、公式Componentを選ぶ、またはDrei / React Three FiberのTSXを変換する | 公開中の`@xrift/world-components`検証version、公式source、利用可能な全Componentをサムネイル付きで下段gridへ表示する。選択中Componentの公式import例と変換件数を同じdialogに示す。TSXは実行せず、named import、JSX構造、静的literalだけを解析し、動的式、未対応Drei要素、失われるHDRI参照を行番号付き診断へ残す。 | 追加成功時は全Entity / Material / XRift Componentを一件のhistory transactionへ確定し、最後の追加Entityを選択してScene ViewとInspectorへ到達する。失敗時はSceneとAssetManifestを変更せず入力と診断を保持する。PortalのEditor Previewは公式実装の床面vortex、四角い石のpedestal、浮遊thumbnail構造を再現し、instance APIへ接続しない。 |
 
 ## 機能一覧
 
@@ -96,6 +97,36 @@ F-06 アイテム検査
 | F-20 | XRift Studio本体の更新 | MI-03, MI-04, MI-05, MI-09, MI-51 | 起動時またはAboutから署名済み更新を確認し、現在版、最新版、更新内容を見て延期またはinstallできる。進捗を確認したまま再起動し、更新後の版または失敗時の再試行へ到達できる。 |
 | F-21 | 外部Asset StoreとSkybox Asset | MI-03, MI-04, MI-05, MI-09, MI-11, MI-15, MI-52 | Assetsから提供元、作者、license、HDR / EXR形式を確認して外部Material、Texture、HDRIを追加する。ローカルまたは外部のHDR / EXRは独立したSkybox Assetになり、import / install直後またはScene Viewへのdragでシーン全体へ設定できる。provider境界はUIと保存形式から分離し、追加ストアへ拡張できる。 |
 | F-22 | GLB / glTF Animation自動再生 | MI-11, MI-13, MI-14, MI-36, MI-54 | Animationを含むModelを配置するとAnimation Componentが付き、先頭clipのAutoplayとLoopをInspectorで確認・変更できる。Edit中は静止し、Playと生成結果だけで再生し、Stop後は制作状態へ戻る。 |
+| F-23 | 公式XRift ComponentカタログとTSX変換 | MI-03, MI-04, MI-05, MI-09, MI-34, MI-39, MI-55 | 公開package versionと公式sourceを確認しながら、配置可能な公式Componentを全件サムネイル付きで選べる。Drei / React Three Fiberの標準primitive、Billboard、Reflector、Skyと公式XRift JSXを安全なScene dataへ変換し、未対応コードを実行または完全変換と誤表示せず、追加後のEntityとInspectorへ到達できる。 |
+
+## F-23 公式XRift ComponentカタログとTSX変換の状態設計
+
+### 操作前
+
+- toolbarに「XRift Component」を常設し、Play中または別import中は理由付きで無効にする。
+- 公式カタログはproject kindで配置可能なComponentを全件表示し、各カードにComponent名、category、識別用thumbnailを置く。`DevEnvironment`はScene Componentではなくdev entry用wrapperとして別注記する。
+- 選択中Componentには公開package version、公式source、実際に生成するnamed importとJSX sampleを表示する。
+
+### 処理中
+
+- 公式sampleまたは貼り付けTSXをJavaScriptとして実行しない。import alias、JSX tag、string / boolean / number / array / object literal、`Math.PI`を含む有限な数式だけを解析する。
+- Drei primitiveはStudio primitiveとMaterialへ、`Billboard`は`BillboardY`へ、`Reflector`は`Mirror`へ、`Sky` / `Environment`は`Skybox`へ変換する。動的callbackと未対応Componentは診断へ残す。
+- Scene、AssetManifest、selectionは「追加」を確定するまで変更しない。
+
+### 成功時
+
+- 追加Entity、必要なMaterial、公式XRift Componentを一つのUndo履歴へ確定し、最後のEntityを選択してInspectorで公式Propsを編集できる。
+- compilerは`@xrift/world-components`から公式名をimportする。Portalなど実行時Contextが必要なComponentもEditorでは外部通信せず、生成結果で公式runtimeを使用する。
+
+### 失敗時
+
+- JSXなし、対応要素なし、project kind不一致、Entity / Material / Component作成失敗では追加を成功表示しない。
+- 入力コードと行番号付き診断をdialogに保持し、literalへの修正、未対応要素の除去、別Componentの選択へ戻れる。
+
+### 戻り先
+
+- キャンセルとEscapeはSceneを変更せず同じEditorへ戻る。
+- 成功後はScene View、Hierarchy、右Inspectorが追加Entityへ同期し、Undoで追加前の両selectionとdocument setへ戻れる。
 
 ## F-07 の状態設計
 
