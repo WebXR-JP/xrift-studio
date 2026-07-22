@@ -1,4 +1,5 @@
 import { LockKeyhole, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import {
   getXriftComponentDefinition,
   isBuiltinPrefabPropertyEditable,
@@ -349,6 +350,16 @@ function renderFieldControl(
     );
   }
 
+  if (field.kind === "json-object") {
+    return (
+      <JsonObjectEditor
+        value={value}
+        disabled={readOnly}
+        onChange={onChange}
+      />
+    );
+  }
+
   if (field.kind === "tags") {
     return (
       <TagsEditor
@@ -367,6 +378,59 @@ function renderFieldControl(
       onChange={(event) => onChange(event.currentTarget.value)}
       className={INPUT_CLASS}
     />
+  );
+}
+
+function JsonObjectEditor({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: JsonValue | undefined;
+  disabled: boolean;
+  onChange: (value: JsonValue | undefined) => void;
+}) {
+  const serialized =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? JSON.stringify(value, null, 2)
+      : "{}";
+  const [draft, setDraft] = useState(serialized);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft(serialized);
+    setError(null);
+  }, [serialized]);
+
+  const commit = () => {
+    try {
+      const parsed: unknown = JSON.parse(draft);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        setError("JSON objectを入力してください。");
+        return;
+      }
+      setError(null);
+      onChange(parsed as JsonValue);
+    } catch {
+      setError("JSONの形式を確認してください。");
+    }
+  };
+
+  return (
+    <div>
+      <textarea
+        value={draft}
+        disabled={disabled}
+        rows={5}
+        spellCheck={false}
+        onChange={(event) => setDraft(event.currentTarget.value)}
+        onBlur={commit}
+        className={`${INPUT_CLASS} h-auto min-h-24 resize-y py-2 font-mono leading-4`}
+      />
+      {error ? (
+        <p className="mt-1 text-xs font-medium text-rose-700">{error}</p>
+      ) : null}
+    </div>
   );
 }
 

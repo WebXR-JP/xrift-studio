@@ -22,6 +22,7 @@ export const BUILTIN_PREFAB_RECIPE_IDS = {
   mirror: "xrift-prefab.mirror",
   portal: "xrift-prefab.portal",
   tagBoard: "xrift-prefab.tag-board",
+  entryLogBoard: "xrift-prefab.entry-log-board",
   videoScreen: "xrift-prefab.video-screen",
   videoPlayer: "xrift-prefab.video-player",
   liveVideoPlayer: "xrift-prefab.live-video-player",
@@ -33,6 +34,7 @@ export type BuiltinPrefabVisual =
   | { kind: "mirror"; size: readonly [number, number] }
   | { kind: "portal" }
   | { kind: "tag-board" }
+  | { kind: "entry-log-board" }
   | { kind: "screen"; width: number };
 
 export type BuiltinPrefabRecipe = {
@@ -105,6 +107,45 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
       scale: [1, 1, 1],
     },
     visual: { kind: "mirror", size: [3, 2] },
+  },
+  {
+    id: BUILTIN_PREFAB_RECIPE_IDS.entryLogBoard,
+    name: "EntryLogBoard",
+    description: "入退室履歴を同期表示する公式XRiftボードを配置します。",
+    projectKinds: ALL_PROJECTS,
+    schemaId: XRIFT_COMPONENT_SCHEMA_IDS.entryLogBoard,
+    componentProperties: {
+      stateNamespace: "entry-log",
+      maxEntries: 10,
+      displayNameFallback: "Unknown",
+      labels: { join: "入室", leave: "退室" },
+      colors: {
+        join: "#4CAF50",
+        leave: "#F44336",
+        background: "#1a1a2e",
+        text: "#ffffff",
+      },
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: 1,
+    },
+    editablePropertyNames: [
+      "stateNamespace",
+      "maxEntries",
+      "displayNameFallback",
+      "labels",
+      "colors",
+    ],
+    configuration: {
+      requiredBeforeCompile: false,
+      hint: "Inspectorで履歴件数、文言、配色を変更できます。",
+    },
+    defaultTransform: {
+      position: [0, 1.5, -3],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+    visual: { kind: "entry-log-board" },
   },
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.portal,

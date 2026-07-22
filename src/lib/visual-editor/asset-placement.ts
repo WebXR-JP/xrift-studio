@@ -18,6 +18,7 @@ import {
 import {
   createMeshColliderComponent,
   createMeshComponent,
+  createAnimationComponent,
   createAudioSourceComponent,
   createParticleEmitterComponent,
   createTransformComponent,
@@ -164,7 +165,9 @@ export function instantiateSceneAsset(
         : scene.rootEntityIds,
   };
   const expandedScene =
-    asset.kind === "model" && hasModelNodeHierarchy(asset)
+    asset.kind === "model" &&
+    hasModelNodeHierarchy(asset) &&
+    !hasImportedAnimations(asset)
       ? expandModelEntityHierarchy(
           placedScene,
           assets,
@@ -250,6 +253,9 @@ function createModelEntity(
         ? [{ slot: slot.slot, materialAssetId: slot.defaultMaterialAssetId }]
         : [],
   );
+  const animation = hasImportedAnimations(asset)
+    ? createAnimationComponent(createDocumentId("component-animation"))
+    : null;
   return {
     id: entityId,
     name: uniqueEntityName(scene, asset.name),
@@ -266,6 +272,7 @@ function createModelEntity(
         asset.id,
         materialBindings,
       ),
+      ...(animation ? [animation] : []),
       ...(asset.importSettings.generateColliders
         ? [
             createMeshColliderComponent(
@@ -276,6 +283,13 @@ function createModelEntity(
         : []),
     ],
   };
+}
+
+function hasImportedAnimations(asset: ModelAsset): boolean {
+  return (
+    asset.importSettings.importAnimations &&
+    Boolean(asset.importMetadata?.animations.length)
+  );
 }
 
 function resolvePrefabDocument(

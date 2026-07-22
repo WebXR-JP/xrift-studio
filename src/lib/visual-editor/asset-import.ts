@@ -36,6 +36,7 @@ import {
   type ModelImportMetadata,
   type ModelMorphTargetMetadata,
   type SceneAsset,
+  type SkyboxAsset,
   type TextureAsset,
   type TextureImportSettingsPatch,
 } from "./asset-manifest";
@@ -70,6 +71,8 @@ export type SupportedAssetImportFormat =
   | "jpeg"
   | "webp"
   | "ktx2"
+  | "hdr"
+  | "exr"
   | "mp3";
 
 export type ClassifiedAssetImport =
@@ -88,6 +91,12 @@ export type ClassifiedAssetImport =
       format: "png" | "jpeg" | "webp" | "ktx2";
       mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/ktx2";
       extension: "png" | "jpg" | "jpeg" | "webp" | "ktx2";
+    }
+  | {
+      kind: "skybox";
+      format: "hdr" | "exr";
+      mimeType: "image/vnd.radiance" | "image/x-exr";
+      extension: "hdr" | "exr";
     }
   | {
       kind: "audio";
@@ -124,8 +133,8 @@ export type AssetImportPlan = {
   /** Existing Asset replaced by a reimport. Omitted for a new import. */
   replacesAssetId?: string;
   classification?: ClassifiedAssetImport;
-  /** Primary Model, standalone Texture, or Audio selected after the transaction. */
-  asset?: ModelAsset | TextureAsset | AudioAsset;
+  /** Primary Model, standalone Texture/Skybox, or Audio selected after the transaction. */
+  asset?: ModelAsset | TextureAsset | SkyboxAsset | AudioAsset;
   /** Material/Texture Assets expanded from an imported Model. */
   derivedAssets?: Array<MaterialAsset | TextureAsset>;
   /** Logical Asset folders created with the Model import. */
@@ -249,6 +258,41 @@ export function classifyAssetImport(
       extension: "ktx2",
     };
   }
+  if (extension === "hdr") {
+    return {
+      kind: "skybox",
+      format: "hdr",
+      mimeType: "image/vnd.radiance",
+      extension: "hdr",
+    };
+  }
+  if (extension === "exr") {
+    return {
+      kind: "skybox",
+      format: "exr",
+      mimeType: "image/x-exr",
+      extension: "exr",
+    };
+  }
+  if (
+    normalizedMime === "image/vnd.radiance" ||
+    normalizedMime === "image/x-hdr"
+  ) {
+    return {
+      kind: "skybox",
+      format: "hdr",
+      mimeType: "image/vnd.radiance",
+      extension: "hdr",
+    };
+  }
+  if (normalizedMime === "image/x-exr") {
+    return {
+      kind: "skybox",
+      format: "exr",
+      mimeType: "image/x-exr",
+      extension: "exr",
+    };
+  }
   if (
     extension === "mp3" ||
     normalizedMime === "audio/mpeg" ||
@@ -328,7 +372,7 @@ async function createAssetImportPlanInternal(
     diagnostics.push({
       severity: "blocking",
       code: "unsupported-asset-format",
-      message: "GLB、glTF、OBJ、VRM、PNG、JPG、WebP、KTX2、MP3 のみ取り込めます",
+      message: "GLB、glTF、OBJ、VRM、PNG、JPG、WebP、KTX2、HDR、EXR、MP3 のみ取り込めます",
       fileName,
       fieldPath: "fileName",
     });
@@ -408,16 +452,8 @@ async function createAssetImportPlanInternal(
           reimportAsset ?? matchedModel,
         );
   }
-  return classification.kind === "texture"
-    ? createTextureImportPlan(
-        input,
-        fileName,
-        bytes,
-        sourceHash,
-        transactionId,
-        classification,
-      )
-    : createAudioImportPlan(
+  if (classification.kind === "texture") {
+    return createTextureImportPlan(
         input,
         fileName,
         bytes,
@@ -425,6 +461,25 @@ async function createAssetImportPlanInternal(
         transactionId,
         classification,
       );
+  }
+  if (classification.kind === "skybox") {
+    return createSkyboxImportPlan(
+      input,
+      fileName,
+      bytes,
+      sourceHash,
+      transactionId,
+      classification,
+    );
+  }
+  return createAudioImportPlan(
+    input,
+    fileName,
+    bytes,
+    sourceHash,
+    transactionId,
+    classification,
+  );
 }
 
 /**
@@ -540,12 +595,12 @@ export async function commitAssetImportPlan(
     }
   }
 
-  if (plan.asset.kind === "audio") {
+  if (plan.asset.kind === "audio" || plan.asset.kind === "skybox") {
     if (
       plan.asset.sourceHash !== plan.sourceHash ||
       plan.asset.source.kind !== "project"
     ) {
-      throw new Error("Audio import source identity does not match its plan");
+      throw new Error("Imported source identity does not match its plan");
     }
     const verifiedSourceWrite = plan.writes.find(
       (write) =>
@@ -554,7 +609,7 @@ export async function commitAssetImportPlan(
         write.relativePath === plan.asset.source.relativePath,
     );
     if (!verifiedSourceWrite || verifiedSourceWrite.sha256 !== plan.sourceHash) {
-      throw new Error("Audio import plan does not contain its verified source");
+      throw new Error("Import plan does not contain its verified source");
     }
   }
 
@@ -1255,6 +1310,68 @@ async function createTextureImportPlan(
     classification,
     asset,
     writes,
+    diagnostics,
+  );
+}
+
+function createSkyboxImportPlan(
+  input: CreateAssetImportPlanInput,
+  fileName: string,
+  bytes: Uint8Array,
+  sourceHash: string,
+  transactionId: string,
+  classification: Extract<ClassifiedAssetImport, { kind: "skybox" }>,
+): AssetImportPlan {
+  const diagnostics: AssetImportDiagnostic[] = [];
+  if (!hasHdriSignature(bytes, classification.format)) {
+    diagnostics.push({
+      severity: "blocking",
+      code: "hdri-signature-invalid",
+      message: `${classification.format.toUpperCase()} のHDRIファイルシグネチャが不正です`,
+      fileName,
+      fieldPath: "bytes",
+    });
+    return blockedPlan(
+      transactionId,
+      sourceHash,
+      diagnostics,
+      classification,
+    );
+  }
+  const assetId = createImportedAssetId("skybox", fileName, sourceHash);
+  const sourceRelativePath = createSourceDestination(
+    "skyboxes",
+    fileName,
+    sourceHash,
+    classification.extension,
+  );
+  const asset: SkyboxAsset = {
+    id: assetId,
+    name: normalizedDisplayName(input.displayName, fileName),
+    kind: "skybox",
+    status: "ready",
+    source: { kind: "project", relativePath: sourceRelativePath },
+    sourceHash,
+    thumbnail: { status: "missing" },
+    folderId: normalizeFolderId(input.folderId),
+    projection: "equirectangular",
+    sourceFormat: classification.format,
+    byteLength: bytes.byteLength,
+  };
+  return finishPlan(
+    transactionId,
+    sourceHash,
+    classification,
+    asset,
+    [
+      {
+        relativePath: sourceRelativePath,
+        purpose: "source",
+        mediaType: classification.mimeType,
+        sha256: sourceHash,
+        payload: { encoding: "bytes", bytes: bytes.slice() },
+      },
+    ],
     diagnostics,
   );
 }
@@ -2078,6 +2195,40 @@ function hasTextureSignature(
   return signature.every((value, index) => bytes[index] === value);
 }
 
+function hasHdriSignature(
+  bytes: Uint8Array,
+  format: "hdr" | "exr",
+): boolean {
+  if (format === "exr") {
+    return (
+      // OpenEXR starts with a four-byte magic number followed by its
+      // four-byte version field. A magic-only/truncated file is not usable.
+      bytes.byteLength >= 8 &&
+      bytes[0] === 0x76 &&
+      bytes[1] === 0x2f &&
+      bytes[2] === 0x31 &&
+      bytes[3] === 0x01
+    );
+  }
+  if (!asciiAt(bytes, 0, "#?RADIANCE") && !asciiAt(bytes, 0, "#?RGBE")) {
+    return false;
+  }
+  const header = new TextDecoder().decode(
+    bytes.subarray(0, Math.min(bytes.byteLength, 8192)),
+  );
+  if (!/(?:^|\r?\n)FORMAT=32-bit_rle_(?:rgbe|xyze)\r?\n/i.test(header)) {
+    return false;
+  }
+  const resolution = /\r?\n\r?\n[+-][XY]\s+\d+\s+[+-][XY]\s+\d+\r?\n/.exec(
+    header,
+  );
+  // An RGBE/XYZE pixel occupies four bytes. Requiring one complete pixel also
+  // rejects a valid-looking header whose download was cut off before data.
+  return Boolean(
+    resolution && bytes.byteLength >= resolution.index + resolution[0].length + 4,
+  );
+}
+
 function hasMp3Signature(bytes: Uint8Array): boolean {
   if (
     bytes.byteLength >= 3 &&
@@ -2243,7 +2394,7 @@ function ensureImportFolder(
 }
 
 function createSourceDestination(
-  category: "models" | "textures" | "audio",
+  category: "models" | "textures" | "skyboxes" | "audio",
   fileName: string,
   sourceHash: string,
   extension: string,
@@ -2257,7 +2408,7 @@ function createSourceDestination(
 }
 
 function createImportedAssetId(
-  kind: "model" | "texture" | "audio",
+  kind: "model" | "texture" | "skybox" | "audio",
   fileName: string,
   sourceHash: string,
 ): string {
@@ -2296,7 +2447,7 @@ function finishPlan(
   transactionId: string,
   sourceHash: string,
   classification: ClassifiedAssetImport,
-  asset: ModelAsset | TextureAsset | AudioAsset,
+  asset: ModelAsset | TextureAsset | SkyboxAsset | AudioAsset,
   writes: AssetImportWrite[],
   diagnostics: AssetImportDiagnostic[],
   replacesAssetId?: string,

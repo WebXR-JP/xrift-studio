@@ -209,10 +209,12 @@ export function ModelAssetInspector({
         />
         <RecipeToggle
           label="Animationを取り込む"
-          description="保存値のみ表示。現在の再インポート処理には反映されません"
+          description="Animationを含むModelを新しく配置した時、自動再生用Componentを追加します"
           checked={asset.importSettings.importAnimations}
-          disabled
-          status="未対応"
+          disabled={readOnly}
+          onChange={(importAnimations) =>
+            onChange({ importSettings: { importAnimations } })
+          }
         />
       </InspectorSection>
 

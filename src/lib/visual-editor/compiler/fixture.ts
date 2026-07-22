@@ -4,6 +4,7 @@ import {
   type AudioAsset,
   type AssetManifest,
   type ModelAsset,
+  type SkyboxAsset,
   type TextureAsset,
 } from "../asset-manifest";
 import { instantiateSceneAsset } from "../asset-placement";
@@ -572,11 +573,144 @@ export function runVisualCompilerFixtureAssertions(
     "rotation={0.78539816}",
     "flipY={true}",
     "exposure={1.25}",
+    "const src = useCompiledAssetUrl(assetPath);",
+    "useLoader(TextureLoader, src)",
   ].forEach((fragment) =>
     assert(
       imageSkyboxSource.includes(fragment),
       `Image Skybox source is missing: ${fragment}`,
     ),
+  );
+
+  const projectHdrSkybox: SkyboxAsset = {
+    id: "external-poly-haven-noon_grass-skybox",
+    name: "Noon Grass",
+    kind: "skybox",
+    status: "ready",
+    source: {
+      kind: "project",
+      relativePath:
+        "assets/imported/external/poly-haven/noon_grass/noon_grass_environment_1k.hdr",
+    },
+    sourceHash: "fixture-noon-grass-sha256",
+    projection: "equirectangular",
+    sourceFormat: "hdr",
+    thumbnail: { status: "missing" },
+  };
+  const hdrSkyboxScene: SceneDocument = {
+    ...sourceScene,
+    settings: {
+      ...sourceSceneSettings,
+      skybox: {
+        ...sourceSceneSettings.skybox,
+        imageAssetId: projectHdrSkybox.id,
+      },
+    },
+  };
+  const hdrSkyboxResult = compileVisualProject(
+    {
+      ...world,
+      assets: {
+        ...world.assets,
+        assets: {
+          ...world.assets.assets,
+          [projectHdrSkybox.id]: projectHdrSkybox,
+        },
+      },
+      scenes: { [hdrSkyboxScene.sceneId]: hdrSkyboxScene },
+    },
+    { generatedAt: fixedTime },
+  );
+  const hdrSkyboxSource =
+    hdrSkyboxResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(hdrSkyboxResult.canStage, "HDR Skybox fixture should be stageable");
+  [
+    'import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";',
+    '"xrift-studio-external-poly-haven-noon_grass-skybox-noon_grass_environment_1k.hdr" as const',
+    "const src = useCompiledAssetUrl(assetPath);",
+    "useLoader(HDRLoader, src)",
+  ].forEach((fragment) =>
+    assert(
+      hdrSkyboxSource.includes(fragment),
+      `HDR Skybox source is missing: ${fragment}`,
+    ),
+  );
+  assert(
+    hdrSkyboxResult.assetCopyPlan.some(
+      (entry) =>
+        entry.assetId === projectHdrSkybox.id &&
+        entry.supportedByCompiler &&
+        entry.targetRelativePath ===
+          "public/xrift-studio-external-poly-haven-noon_grass-skybox-noon_grass_environment_1k.hdr",
+    ),
+    "HDR Skybox copy plan support flag is incorrect",
+  );
+
+  const projectExrSkybox: SkyboxAsset = {
+    ...projectHdrSkybox,
+    id: "external-poly-haven-noon_grass-exr-skybox",
+    source: {
+      kind: "project",
+      relativePath:
+        "assets/imported/external/poly-haven/noon_grass/noon_grass_environment_1k.exr",
+    },
+    sourceHash: "fixture-noon-grass-exr-sha256",
+    sourceFormat: "exr",
+  };
+  const exrSkyboxSceneSettings = resolveSceneSettings(
+    hdrSkyboxScene.settings,
+  );
+  const exrSkyboxResult = compileVisualProject(
+    {
+      ...world,
+      assets: {
+        ...world.assets,
+        assets: {
+          ...world.assets.assets,
+          [projectExrSkybox.id]: projectExrSkybox,
+        },
+      },
+      scenes: {
+        [hdrSkyboxScene.sceneId]: {
+          ...hdrSkyboxScene,
+          settings: {
+            ...exrSkyboxSceneSettings,
+            skybox: {
+              ...exrSkyboxSceneSettings.skybox,
+              imageAssetId: projectExrSkybox.id,
+            },
+          },
+        },
+      },
+    },
+    { generatedAt: fixedTime },
+  );
+  const exrSkyboxSource =
+    exrSkyboxResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(exrSkyboxResult.canStage, "EXR Skybox fixture should be stageable");
+  [
+    'import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";',
+    '"xrift-studio-external-poly-haven-noon_grass-exr-skybox-noon_grass_environment_1k.exr" as const',
+    "const src = useCompiledAssetUrl(assetPath);",
+    "useLoader(EXRLoader, src)",
+  ].forEach((fragment) =>
+    assert(
+      exrSkyboxSource.includes(fragment),
+      `EXR Skybox source is missing: ${fragment}`,
+    ),
+  );
+  assert(
+    exrSkyboxResult.assetCopyPlan.some(
+      (entry) =>
+        entry.assetId === projectExrSkybox.id &&
+        entry.supportedByCompiler &&
+        entry.targetRelativePath.endsWith("noon_grass_environment_1k.exr"),
+    ),
+    "EXR Skybox copy plan support flag is incorrect",
   );
 
   const projectModel: ModelAsset = {
@@ -589,7 +723,43 @@ export function runVisualCompilerFixtureAssertions(
       scale: 1,
       generateColliders: false,
       optimizeMeshes: false,
-      importAnimations: false,
+      importAnimations: true,
+    },
+    importMetadata: {
+      sourceFormat: "glb",
+      byteLength: 4096,
+      nodeCount: 1,
+      meshCount: 1,
+      primitiveCount: 2,
+      bounds: {
+        min: [-0.5, 0, -0.5],
+        max: [0.5, 1, 0.5],
+        center: [0, 0.5, 0],
+        size: [1, 1, 1],
+        boundingSphereRadius: 0.866,
+      },
+      animations: [
+        {
+          name: "Idle",
+          duration: 2,
+          trackCount: 4,
+          sourceAnimationIndex: 0,
+        },
+      ],
+      nodes: [
+        {
+          sourceNodeIndex: 0,
+          name: "Animated Root",
+          childSourceNodeIndices: [],
+          meshIndex: 0,
+          sourceMaterialIndices: [0, 1],
+          position: [0, 0, 0],
+          rotation: [0, 0, 0],
+          scale: [1, 1, 1],
+        },
+      ],
+      extensionsUsed: [],
+      extensionsRequired: [],
     },
     materialSlots: [
       {
@@ -668,6 +838,146 @@ export function runVisualCompilerFixtureAssertions(
     "Project GLB path must be relative to the XRift base URL",
   );
   assert(modelSource.includes("<Clone"), "Model clone was not generated");
+  const animationPlacement = instantiateSceneAsset(
+    sourceScene,
+    modelProject.assets,
+    modelProject.prefabs ?? {},
+    projectModel.id,
+  );
+  assert(animationPlacement.placed, "Animated GLB fixture could not be placed");
+  if (animationPlacement.placed) {
+    const placedEntity = animationPlacement.scene.entities[animationPlacement.entityId];
+    assert(
+      placedEntity?.components.some(
+        (component) =>
+          component.type === "animation" &&
+          component.autoplay &&
+          component.loop,
+      ),
+      "Animated GLB placement did not create an autoplay loop component",
+    );
+    assert(
+      placedEntity?.components.some((component) => component.type === "mesh") &&
+        placedEntity.children.length === 0,
+      "Animated GLB placement must keep the source hierarchy together for clip playback",
+    );
+    const animationDocuments: VisualCompilerDocuments = {
+      ...modelProject,
+      scenes: {
+        [animationPlacement.scene.sceneId]: animationPlacement.scene,
+      },
+    };
+    const animationResult = compileVisualProject(
+      animationDocuments,
+      { generatedAt: fixedTime },
+    );
+    const animationSource =
+      animationResult.overlayFiles.find(
+        (file) => file.relativePath === "src/World.tsx",
+      )?.content ?? "";
+    assert(animationResult.canStage, "Animated GLB should be stageable");
+    [
+      "useAnimations",
+      "const { scene, animations } = useGLTF(modelUrl);",
+      "const animationRoot = useRef<Group>(null);",
+      "const firstAnimationName = names[0];",
+      "action.setLoop(LoopRepeat, Infinity);",
+      "ref={animationRoot}",
+    ].forEach((fragment) =>
+      assert(
+        animationSource.includes(fragment),
+        `Animated GLB source is missing: ${fragment}`,
+      ),
+    );
+    const retainedAnimationResult = compileVisualProject(
+      {
+        ...animationDocuments,
+        assets: {
+          ...animationDocuments.assets,
+          assets: {
+            ...animationDocuments.assets.assets,
+            [projectModel.id]: {
+              ...projectModel,
+              importSettings: {
+                ...projectModel.importSettings,
+                importAnimations: false,
+              },
+            },
+          },
+        },
+      },
+      { generatedAt: fixedTime },
+    );
+    assert(
+      retainedAnimationResult.overlayFiles.some(
+        (file) =>
+          file.relativePath === "src/World.tsx" &&
+          file.content.includes("useAnimations"),
+      ),
+      "An existing Animation component stopped after the placement recipe changed",
+    );
+    const runtimeAnimationResult = compileVisualProject(animationDocuments, {
+      generatedAt: fixedTime,
+      outputMode: "classic-runtime",
+    });
+    assert(
+      runtimeAnimationResult.runtimeManifestFile?.content.includes(
+        '"type": "animation"',
+      ),
+      "Runtime manifest did not preserve the Animation component",
+    );
+  }
+  const hierarchyModel: ModelAsset = {
+    ...projectModel,
+    id: "fixture-model-hierarchy",
+    name: "Fixture Hierarchy Model",
+    importSettings: {
+      ...projectModel.importSettings,
+      scale: 0.01,
+      importAnimations: false,
+    },
+    importMetadata: {
+      ...projectModel.importMetadata!,
+      animations: [],
+    },
+  };
+  const hierarchyAssets: AssetManifest = {
+    ...modelProject.assets,
+    assets: {
+      ...modelProject.assets.assets,
+      [hierarchyModel.id]: hierarchyModel,
+    },
+  };
+  const hierarchyPlacement = instantiateSceneAsset(
+    sourceScene,
+    hierarchyAssets,
+    modelProject.prefabs ?? {},
+    hierarchyModel.id,
+  );
+  assert(hierarchyPlacement.placed, "Static hierarchy GLB could not be placed");
+  if (hierarchyPlacement.placed) {
+    const hierarchyResult = compileVisualProject(
+      {
+        ...modelProject,
+        assets: hierarchyAssets,
+        scenes: {
+          [hierarchyPlacement.scene.sceneId]: hierarchyPlacement.scene,
+        },
+      },
+      { generatedAt: fixedTime },
+    );
+    const hierarchySource =
+      hierarchyResult.overlayFiles.find(
+        (file) => file.relativePath === "src/World.tsx",
+      )?.content ?? "";
+    assert(hierarchyResult.canStage, "Static hierarchy GLB should be stageable");
+    assert(
+      hierarchySource.includes(
+        "const { scene, parser } = useGLTF(modelUrl);",
+      ) && hierarchySource.includes("<group scale={1}>"),
+      "Expanded GLB source must retain parser associations without reapplying import scale",
+    );
+  }
   assert(modelSource.includes('case "Body"'), "Material slot mapping was not generated");
   assert(
     modelResult.assetCopyPlan.some(
@@ -685,6 +995,8 @@ export function runVisualCompilerFixtureAssertions(
     id: "fixture-model-obj",
     name: "Fixture OBJ",
     source: { kind: "project", relativePath: "assets/models/fixture.obj" },
+    importSettings: { ...projectModel.importSettings, importAnimations: false },
+    importMetadata: undefined,
     materialSlots: [
       {
         slot: "body",
@@ -738,7 +1050,10 @@ export function runVisualCompilerFixtureAssertions(
     posedObjResult.overlayFiles.find(
       (file) => file.relativePath === "src/World.tsx",
     )?.content ?? "";
-  assert(posedObjResult.canStage, "Project OBJ with a static pose should be stageable");
+  assert(
+    posedObjResult.canStage,
+    `Project OBJ with a static pose should be stageable: ${JSON.stringify(posedObjResult.diagnostics)}`,
+  );
   [
     'OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js"',
     "useLoader(OBJLoader, modelUrl)",

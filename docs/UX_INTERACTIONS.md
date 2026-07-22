@@ -36,7 +36,7 @@ F-06 アイテム検査
 | MI-17 | visual project で compile、check、upload を開始し、必要な toolchain がない | authoring 画面を閉じず、Node.js、XRift CLI、認証のうち不足している項目とセットアップ操作を表示する。通常の Edit / 保存は利用可能なままにする。 | セットアップ後は同じ操作へ戻れる。取消時は Edit へ戻り、SceneDocument、AssetManifest、staging output、公開先を変更しない。 |
 | MI-18 | 新規作成を開く | item classic、world classic、item visual、world visual の四カードを同じ階層で表示し、成果物、制作方法、正本、作成後の画面を一文で示す。hover だけに説明を隠さない。 | 一カードの選択で名前 / 保存先確認へ進む。戻ると四カードへ戻り、前の選択を保持する。取消では project を作らない。 |
 | MI-19 | Assets の「作成 > Material」を選ぶ | 名前、標準サーフェスまたは glTF 既定値 preset、作成先 folder を compact dialog で示す。作成中も右 Entity Inspector を保つ。 | 成功時は Material Asset を一件追加して `assetSelection` にし、Entity へ binding しない。取消 / validation 失敗では AssetManifest、両 selection、history を変えない。 |
-| MI-20 | GLB / GLTF / Texture / MP3 を drop または import する | Editor下部のAsset status barへ現在のstageと進捗を表示し、詳細を開くとActivity drawerでvalidate、copy、parse / decode、derive、dynamic thumbnail、commit、件数、bytes、診断を確認できる。完了項目を閉じなくても制作を継続でき、source保持、resize / mipmap / compression recipe、stale状態は右Inspectorで確認できる。Model再importなど別のAsset transaction中は入口を理由付きで無効化し、同じsourceへのcommitを並行実行しない。MP3はシグネチャ検証後にAudio Assetとしてproject管理下へ原本を保存し、編集画面では自動再生しない。 | 全検証後だけAssetManifestへcommitする。成功時はstatus barとdrawerにMaterial / Textureの展開件数と「アセットを表示」を残し、新Assetを`assetSelection`にできる。明示的なScene drop以外はSceneを変えない。失敗時はdrawerを開いて原因を示し、取消時はtemporaryを回収してlast-goodと両selectionを維持する。 |
+| MI-20 | GLB / GLTF / Texture / HDRI / MP3 を drop または import する | Editor下部のAsset status barへ現在のstageと進捗を表示し、詳細を開くとActivity drawerでvalidate、copy、parse / decode、derive、dynamic thumbnail、commit、件数、bytes、診断を確認できる。完了項目を閉じなくても制作を継続でき、source保持、resize / mipmap / compression recipe、stale状態は右Inspectorで確認できる。Model再importなど別のAsset transaction中は入口を理由付きで無効化し、同じsourceへのcommitを並行実行しない。HDR / EXRはシグネチャ検証後にequirectangular Skybox Assetとして保存し、同じ履歴で現在SceneのSkyboxへ設定する。MP3はシグネチャ検証後にAudio Assetとしてproject管理下へ原本を保存し、編集画面では自動再生しない。 | 全検証後だけAssetManifestへcommitする。成功時はstatus barとdrawerにMaterial / Textureの展開件数、またはSkyboxへの設定結果と「アセットを表示」を残し、新Assetを`assetSelection`にできる。HDRI以外のAssetsへのimportは明示的なScene dropなしにSceneを変えない。失敗時はdrawerを開いて原因を示し、取消時はtemporaryを回収してlast-goodと両selectionを維持する。 |
 | MI-21 | thumbnail を生成、再生成、または stale 判定する | card は pending / generating / ready / stale / failed を label と status icon で示す。Model / Texture / Material は ready な generated thumbnail を優先し、それ以外だけ kind icon を fallback にする。 | 成功時は同じ Asset ID の thumbnail hash を更新する。失敗時も card と Asset を残し、再生成と診断を置く。last-good が stale なら「古いプレビュー」と明示する。 |
 | MI-22 | toolbar、menu、context menu、keyboard から Command を起動する | central Shortcut Registry の label、semantic Lucide icon、platform binding、enabled reason を全 surface で一致させる。active tool は icon、label、押下状態で示す。conflict は両 command を実行せず設定へ案内する。 | Command 成功 / 失敗へ収束する。text input、contenteditable、数値入力、IME composition 中は editor shortcut を抑止し、ユーザー override と既定へ戻す操作を Editor Preferences に保存する。 |
 | MI-23 | Copy / Paste / Duplicate / Delete を実行する | Copy は versioned buffer の対象数、Paste / Duplicate は生成予定数、Asset Delete は参照元件数を示す。document 変更を伴う操作だけを Command history に積む。 | Paste / Duplicate / Delete の Undo / Redo は同じ IDs と前後の `sceneSelection` / `assetSelection` を復元する。Copy 自体は document Undo にしない。参照を壊す Delete は置換、解除、取消なしに進めない。 |
@@ -68,8 +68,9 @@ F-06 アイテム検査
 | MI-49 | OpenBrush / Tilt Brush glTFをimportする、OpenBrush Starterを作成する、または対象Model / Materialを表示・変換する | `GOOGLE_tilt_brush_material`、exporter、brush名から形式を判定し、Model InspectorへOpenBrush badge、brush数、three-icosa rendererを表示する。Material InspectorはCustom Material Preview Adapterで元Modelの該当nodeを分離し、埋め込みbrush libraryから実ストローク形状、実GLSL、uniform、brush textureをリアルタイム描画する。 | 各source brushをbrush名、GUID、renderer version、source material indexを持つOpenBrush Material Assetへ展開して対応slotへ初期設定する。対応presetは専用shader、未対応presetまたはshader resource失敗時はGLB内のglTF PBR Materialを保持し、previewとInspectorへfallback理由を示す。明示的に割り当てた通常のXRift Materialだけがslot単位で上書きする。import時の古い外部画像URLは取得せず、安全な解析用画像へ置換する。 |
 | MI-50 | Visual Editorの「Classicへ書き出す」を開き、既存XRift Classic projectを選択する | OSのfolder picker後に`package.json`、`xrift.json`、World／Item entry、package managerを検査し、コンポーネント追加またはバックアップ付きentry切替、Runtime package installの結果を一つのdialogでreviewする。処理中は保存、compile、file追加、installのstageとprogressを表示し、閉じる操作と二重実行を止める。 | 成功時はRuntime JSON、Asset、接続componentをVisual Project IDごとの管理領域へ置き、folder、VS Code、terminal、接続snippetへ到達できる。既存entryは既定で変更せず、entry切替は確認後にbackupを残す。失敗時はVisual projectと既存手書きentryを維持し、folder再選択、再実行、package managerでのinstallへ戻れる。 |
 | MI-51 | アプリ起動後またはAboutの「更新を確認」でXRift Studio本体の更新を検知する | 確認中は制作を妨げず、更新がある時だけ現在版、最新版、リリースノートをdialogに表示する。「後で」を選ぶとライブラリheaderとAboutに更新導線を残す。download中はbytesと割合、install中は再起動準備を示し、閉じる操作と二重実行を止める。 | 署名検証済み更新のinstall後にアプリを再起動し、新しい現在版と完了通知を表示する。確認またはinstall失敗時は現在のアプリを維持し、Aboutまたは同じdialogから再試行できる。 |
-| MI-52 | Assetsの「外部から追加」を開く、外部Assetをinstallする、またはSkybox AssetをScene Viewへdragする | provider名、検索、種別、thumbnail、作者、license、配布ページ、解像度とdownload目安を同じdialogに表示する。download中は主操作を無効にし、providerが返した固定domainのfileだけをproject管理下へ保存する。Skybox drag中はScene全体へ設定されることを表示する。 | 成功時はMaterialと参照Texture、またはSkybox AssetをAssetsで選択し、任意ならSkyboxへ直ちに設定する。失敗時はmanifestとSceneを変更せず同じAssetと解像度から再試行できる。provider creditとlicenseはAssetに保持し、一覧とInspectorから確認できる。 |
+| MI-52 | Assetsの「外部から追加」を開く、HDR / EXRをimportする、外部Assetをinstallする、またはSkybox AssetをScene Viewへdragする | provider名、検索、種別、thumbnail、作者、license、配布ページ、解像度、HDR / EXR形式とdownload目安を同じdialogに表示する。ローカルHDR / EXRはシグネチャ検証後にSkyboxとしてqueueへ表示する。download中は主操作を無効にし、providerが返した固定domainのfileだけをproject管理下へ保存する。Skybox drag中はScene全体へ設定されることを表示する。 | 成功時はMaterialと参照Texture、または形式を保持したSkybox AssetをAssetsで選択し、任意ならSkyboxへ直ちに設定する。失敗時はmanifestとSceneを変更せず同じAsset、解像度、形式から再試行できる。provider creditとlicenseはAssetに保持し、一覧とInspectorから確認できる。 |
 | MI-53 | Hierarchy または Assets で Shift / Ctrl・Cmd を使って複数選択する | 選択行・カードを同じ選択色で示し、Inspector見出しに件数を表示する。Shiftは表示順の範囲、Ctrl・Cmdは追加／解除とし、Entityは共通するMesh Renderer / Light、Materialは共通PBR値だけを表示する。 | 一括変更は一件のhistoryとして確定し、Undoで全対象を戻す。HierarchyのDeleteと右クリックの削除は選択済みEntity全体を一回で削除し、選択解除または単体選択で通常Inspectorへ戻る。Play中は選択を維持して編集操作を無効にする。 |
+| MI-54 | Animation clipを含み`importAnimations`が有効なGLB / glTF ModelをSceneへ配置し、Playを開始する | 配置EntityへAnimation Componentを自動追加し、Inspectorに先頭clip名、長さ、track数、Autoplay、Loopを表示する。Edit中は静止し、Play開始時だけ有効なAutoplayで先頭clipを再生する。 | Loop有効時はPlay中と生成結果で繰り返す。Loop無効時は一度で停止する。Stop、Component無効化、Entity破棄ではmixerを停止してEdit時の姿勢へ戻す。clip欠落時はScene View全体を止めず同じInspectorに理由を示す。 |
 
 ## 機能一覧
 
@@ -81,8 +82,8 @@ F-06 アイテム検査
 | F-04 | ローカル実行 | MI-03, MI-05, MI-08 | 実行中であることと、プレビュー URL を開く操作が分かる。 |
 | F-05 | 公開準備とアップロード | MI-03, MI-04, MI-05, MI-07, MI-08, MI-09, MI-17, MI-27 | 初期値の upload を防ぎ、toolchain が不足しても authoring を失わず、review から upload result / 審査状態まで続けられる。正式 result にない公開 URL は推測しない。 |
 | F-06 | アイテム検査 | MI-03, MI-05, MI-09 | ビルドを含むセキュリティチェックを実行でき、成功時は公開、失敗時はログと編集へ進める。 |
-| F-07 | ビジュアルエディター | MI-01, MI-09, MI-10, MI-11, MI-12, MI-13, MI-14, MI-15, MI-16, MI-18, MI-21, MI-22, MI-29, MI-30, MI-31, MI-32, MI-33, MI-34, MI-35, MI-37, MI-38, MI-40, MI-42, MI-43, MI-46, MI-53 | 四カードの入口、Hierarchy、Scene View、右 Inspector、下 Assets を使い、独立 selection、複数選択時の共通プロパティ編集、復元可能なEntityフォーカス、Empty / primitive / XRift Component 作成、Asset / Material / Particle / XRift Prefab D&D、Hierarchyの並び替え・親子化・Enabled、親子Transform、軸スクラブとScale比率固定、Material / Texture / Particle 編集、配置Entityごとの静的なモデルポーズ、動的 thumbnail、Playとシーン全体の環境設定を扱える。左下のユーティリティレールからヘルプ、ショートカット、シーン設定へ迷わず到達できる。panel layout は resize / dock 後も復元され、Editor render / module load failure は App 全体へ伝播させず再試行、再読み込み、一覧への復帰を選べる。 |
-| F-08 | Visual Asset authoring / import | MI-11, MI-15, MI-16, MI-19, MI-20, MI-21, MI-28, MI-33, MI-36, MI-41, MI-46 | Material / Texture / Model / GLTF / OBJ / VRM / Prefab / Particle を左のfolder tree、種類別collection、動的thumbnail付きで管理し、GLB / VRMの埋め込みMaterial / Textureを再利用可能なAssetへ展開する。sourceを壊さずimport、右Inspectorでrecipe編集、参照を保つreimport、stale診断を行え、Asset編集中も`sceneSelection`は保持される。 |
+| F-07 | ビジュアルエディター | MI-01, MI-09, MI-10, MI-11, MI-12, MI-13, MI-14, MI-15, MI-16, MI-18, MI-21, MI-22, MI-29, MI-30, MI-31, MI-32, MI-33, MI-34, MI-35, MI-37, MI-38, MI-40, MI-42, MI-43, MI-46, MI-53, MI-54 | 四カードの入口、Hierarchy、Scene View、右 Inspector、下 Assets を使い、独立 selection、複数選択時の共通プロパティ編集、復元可能なEntityフォーカス、Empty / primitive / XRift Component 作成、Asset / Material / Particle / XRift Prefab D&D、Hierarchyの並び替え・親子化・Enabled、親子Transform、軸スクラブとScale比率固定、Material / Texture / Particle 編集、配置Entityごとの静的なモデルポーズ、GLB / glTF AnimationのPlay時自動再生、動的 thumbnail、Playとシーン全体の環境設定を扱える。左下のユーティリティレールからヘルプ、ショートカット、シーン設定へ迷わず到達できる。panel layout は resize / dock 後も復元され、Editor render / module load failure は App 全体へ伝播させず再試行、再読み込み、一覧への復帰を選べる。 |
+| F-08 | Visual Asset authoring / import | MI-11, MI-15, MI-16, MI-19, MI-20, MI-21, MI-28, MI-33, MI-36, MI-41, MI-46, MI-54 | Material / Texture / Skybox / Model / GLTF / OBJ / VRM / Prefab / Particle を左のfolder tree、種類別collection、動的thumbnail付きで管理し、GLB / VRMの埋め込みMaterial / Textureを再利用可能なAssetへ展開する。HDR / EXRはSkybox Assetとして取り込み、現在Sceneへ直ちに設定する。sourceを壊さずimport、右Inspectorでrecipe編集、参照を保つreimport、stale診断を行え、Animation取り込みを有効にしたModelは配置時に再生設定へ到達できる。Asset編集中も`sceneSelection`は保持される。 |
 | F-09 | Command / Shortcut / Prefab | MI-12, MI-22, MI-23, MI-24, MI-28, MI-30, MI-31, MI-34, MI-38, MI-43 | toolbar、menu、keyboard、Hierarchy D&D と左下の一覧が同じ Command / Shortcut Registry を使い、Copy / Paste / Duplicate / Delete / Reparent、Entityフォーカスの切替と解除、Empty / Component 作成、Hierarchy からの Prefab 化、XRift built-in Prefab配置、Undo / Redo が IDs と両 selection を復元する。 |
 | F-10 | Visual Save / Compile / Preview / Upload | MI-03, MI-05, MI-07, MI-08, MI-09, MI-17, MI-25, MI-26, MI-27 | authoring操作ごとの直列化された自動保存、journal付きcommit、決定的compiler / provenance、freshness検査、区別されたpreview、既存XRift check / uploadを一つのeditor flowで扱い、失敗や取消後もlast committed authoringと戻り先を保つ。 |
 | F-12 | Scene environment settings | MI-37, MI-38 | 左下の歯車から右のScene Inspectorへ切り替え、サムネイル、Skybox画像・回転・露出、Fog、環境光、Near/Far、FOV、背景、グリッド、ギズモ、スナップを一か所で設定し、Scene Viewと生成Worldに必要な値を一貫して反映する。 |
@@ -93,7 +94,8 @@ F-06 アイテム検査
 | F-18 | OpenBrush import / shader rendering | MI-03, MI-05, MI-09, MI-15, MI-18, MI-20, MI-27, MI-35, MI-36, MI-49 | OpenBrush / Tilt Brush形式のglTFを通常のModel Assetとして取り込み、three-icosaの専用shaderでScene Viewと生成Worldを再現する。新規WorldはBlankとOpenBrushの2サンプルから選び、OpenBrush sampleとApache-2.0 licenseを検証付きで保存できる。 |
 | F-19 | VisualからClassicへの書き出し | MI-03, MI-04, MI-05, MI-09, MI-17, MI-26, MI-50 | Visual Editorの日常導線から任意の同種Classic projectを検査し、Runtime JSON、Asset、接続component、固定dependencyを手書き領域と分離して追加できる。成功後はfolder、VS Code、terminal、接続snippetへ進める。 |
 | F-20 | XRift Studio本体の更新 | MI-03, MI-04, MI-05, MI-09, MI-51 | 起動時またはAboutから署名済み更新を確認し、現在版、最新版、更新内容を見て延期またはinstallできる。進捗を確認したまま再起動し、更新後の版または失敗時の再試行へ到達できる。 |
-| F-21 | 外部Asset StoreとSkybox Asset | MI-03, MI-04, MI-05, MI-09, MI-11, MI-15, MI-52 | Assetsから提供元、作者、licenseを確認して外部Material、Texture、HDRIを追加する。HDRIは独立したSkybox Assetになり、install直後またはScene Viewへのdragでシーン全体へ設定できる。provider境界はUIと保存形式から分離し、追加ストアへ拡張できる。 |
+| F-21 | 外部Asset StoreとSkybox Asset | MI-03, MI-04, MI-05, MI-09, MI-11, MI-15, MI-52 | Assetsから提供元、作者、license、HDR / EXR形式を確認して外部Material、Texture、HDRIを追加する。ローカルまたは外部のHDR / EXRは独立したSkybox Assetになり、import / install直後またはScene Viewへのdragでシーン全体へ設定できる。provider境界はUIと保存形式から分離し、追加ストアへ拡張できる。 |
+| F-22 | GLB / glTF Animation自動再生 | MI-11, MI-13, MI-14, MI-36, MI-54 | Animationを含むModelを配置するとAnimation Componentが付き、先頭clipのAutoplayとLoopをInspectorで確認・変更できる。Edit中は静止し、Playと生成結果だけで再生し、Stop後は制作状態へ戻る。 |
 
 ## F-07 の状態設計
 
@@ -173,12 +175,12 @@ F-06 アイテム検査
 
 - Assets は左のfolder treeに実フォルダーの親子関係を常時表示し、右側に選択フォルダーの内容を出す。Model / GLTF、Texture、Material、Prefab、Particleの種類別collectionは実フォルダーと区別し、primitiveは別のCreate paletteに置く。Material / Model / Textureはreadyなgenerated thumbnail、未生成時だけkind iconを使う。
 - `sceneSelection` と `assetSelection` が独立し、右 Inspector がどちらの context を表示しているかを選択背景、header、pinned tab で示す。
-- Import 前に対応形式、source 保持、既定 max resolution / quality / mipmap / compression、resource budget、external URI が local dependency に限られることを確認できる。
+- Import 前に対応形式、HDR / EXRがSkyboxへ直ちに設定されること、source 保持、既定 max resolution / quality / mipmap / compression、resource budget、external URI が local dependency に限られることを確認できる。
 - Model Inspectorはsourceとlast-good解析結果、Material slot、animation、bounds、現在のimport recipeを同時に示し、解析済みの値と次回再import用の設定を区別する。
 
 ### 操作中
 
-- Material 作成は dialog 内の validation、Texture / Model import は Import Queue の validate、copy、decode、derive、thumbnail、commit を表示し、cancel を処理中 stage に合わせる。
+- Material 作成は dialog 内の validation、Texture / Model / HDRI import は Import Queue の validate、copy、decode、derive、thumbnail、commit を表示し、cancel を処理中 stage に合わせる。
 - Particle は Assets の作成操作から追加し、右 Inspector で emission、shape、velocity、lifetime、size、color、texture、blend を編集する。Particle Asset は Scene View または Hierarchy へ drag して Particle Emitter Entity として配置できる。
 - 右 Inspector の Asset context は source と derived、slot の色空間、recipe、stale / diagnostic を分ける。Entity context の Mesh shadow や選択 Entity を Asset field で上書きしない。
 - context menu は現在 kind / state で実行できる項目だけを有効にし、menu open だけでは selection や document を変えない。
@@ -186,7 +188,7 @@ F-06 アイテム検査
 
 ### 成功時
 
-- Import / Material 作成は AssetManifest と folder membership を一度だけ確定し、新 Asset を `assetSelection` にする。`sceneSelection` と SceneDocument は維持する。
+- Import / Material 作成は AssetManifest と folder membership を一度だけ確定し、新 Asset を `assetSelection` にする。HDR / EXR importだけは同じ履歴でScene settingsのSkybox参照も確定し、それ以外は`sceneSelection`とSceneDocumentを維持する。
 - Particle Asset の作成は新 Asset を `assetSelection` にし、Entity への配置または Particle Emitter の追加は参照する Asset ID を SceneDocument に保持する。
 - thumbnail / derived は source / recipe / processor / target hash と一致した時だけ ready にし、同じ source を再 import しても Asset ID と参照を保つ。
 - Material の変更は共有 Asset に一度だけ保存され、同じ ID を参照する全 preview に反映する。
@@ -291,13 +293,13 @@ F-06 アイテム検査
 ### 操作前
 
 - 左下の歯車「シーン設定」は、Entity / Asset selection を変えずに、右のEntity InspectorをScene Inspectorへ切り替える。設定対象は Scene 全体であり、Hierarchy の Entity として追加しない。
-- Skybox、Fog、環境光は Scene View のプレビューと生成する World の両方に反映する。SkyboxはAssetsのequirectangular画像を選択またはドロップで設定し、回転と露出も適用する。Near / Far、FOV、背景、グリッド、ギズモ、スナップは編集ビューの設定として明示する。
+- Skybox、Fog、環境光は Scene View のプレビューと生成する World の両方に反映する。SkyboxはAssetsのequirectangular Skybox Assetまたは従来Textureを選択・ドロップで設定し、回転と露出も適用する。HDR / EXRを直接importした場合は新しいSkybox Assetを同じSceneへ設定する。Near / Far、FOV、背景、グリッド、ギズモ、スナップは編集ビューの設定として明示する。
 - Scene View固有の不透明な地面は追加しない。Skybox有効時は地平線の下側までSkyboxを見せ、その上へ編集用グリッドだけを重ねる。
 - サムネイルは保存済み project でだけ編集可能にし、未保存 project では保存後に設定できる理由をボタン文言で示す。
 
 ### 操作中
 
-- 色、トグル、数値の変更は対象 section 内で即時にプレビューへ反映する。数値入力は Enter または focus を外した時に確定し、不正値は直前の有効値へ戻す。Skybox画像はTexture Assetだけを受け付け、選択・ドロップできない画像は既存設定を変えない。
+- 色、トグル、数値の変更は対象 section 内で即時にプレビューへ反映する。数値入力は Enter または focus を外した時に確定し、不正値は直前の有効値へ戻す。Skybox画像はSkybox Assetまたは従来Textureだけを受け付け、選択・ドロップできない画像は既存設定を変えない。
 - Fog の終了距離は開始距離より大きく、Camera Far は Near より大きく保つ。Play 中は document を変えず、各 control を読み取り専用にする。
 - ギズモのスナップは移動、回転、拡縮に同じ設定を適用し、グリッドの表示を切っても Entity や SceneDocument の構造は変えない。
 
@@ -555,27 +557,58 @@ F-06 アイテム検査
 ### 操作前
 
 - Assets headerの「外部から追加」から開始し、現在のprovider、対応種別、提供元creditを最初から表示する。Poly HavenではSkybox / HDRI、Material / Textureをinstall可能にし、Modelは未対応であることを選択時に明示する。
-- 各Assetにはthumbnail、説明、作者、license、配布ページ、解像度、download容量を表示する。project未保存、Play中、別Asset処理中は理由を示してinstallを無効にする。
+- 各Assetにはthumbnail、説明、作者、license、配布ページ、解像度、HDR / EXR形式、download容量を表示する。project未保存、Play中、別Asset処理中は理由を示してinstallを無効にする。ローカルの`.hdr` / `.exr`も通常のImport入口から選べることをfile pickerに示す。
 
 ### 操作中
 
 - catalogとfile情報はXRift Studio固有のUser-Agentで取得する。install要求に任意URLを含めず、provider ID、Asset ID、解像度からnative側でfile情報を再取得し、許可したHTTPS domainだけをproject管理下へ保存する。
-- Materialはbase color、normal、ARMをTexture Assetにし、それらを参照するMaterial Assetを一つ作る。HDRIはsurface Textureと混同せずequirectangular Skybox Assetにする。download中はdialogを閉じる操作と二重実行を止める。
+- Materialはbase color、normal、ARMをTexture Assetにし、それらを参照するMaterial Assetを一つ作る。HDRIは選択したHDRまたはEXRだけを取得し、surface Textureと混同せず形式を保持したequirectangular Skybox Assetにする。ローカルImportでもHDR / EXRのシグネチャを検証し、HTML fallbackなど不正な内容はcommitしない。download中はdialogを閉じる操作と二重実行を止める。
 
 ### 成功時
 
-- installしたMaterialまたはSkyboxをAssetsで選択し、provider、作者、license、配布ページをAssetに保持する。HDRIで「インストール後にSkyboxへ設定」が有効なら、同じhistoryでScene settingsへ参照を設定する。
+- installしたMaterialまたはSkyboxをAssetsで選択し、provider、作者、license、配布ページをAssetに保持する。HDRIで「インストール後にSkyboxへ設定」が有効なら、同じhistoryでScene settingsへ参照を設定する。ローカルHDR / EXRのimport成功時も作成したSkybox Assetを選択し、同じhistoryでScene settingsへ設定する。
 - Skybox AssetをScene ViewまたはScene settingsのdrop領域へdragすると、Entityを作らずシーン全体の背景とenvironmentへ設定する。回転と露出は従来のScene settingsから続けて調整できる。
 
 ### 失敗時
 
-- catalog、file情報、download、保存、Asset作成の失敗では既存AssetManifestとSceneを変更しない。同じprovider、Asset、解像度を保持し、原因を見て再試行できる。
+- catalog、file情報、download、保存、Asset作成の失敗では既存AssetManifestとSceneを変更しない。同じprovider、Asset、解像度、HDR / EXR形式を保持し、原因を見て再試行できる。
 - providerが未対応、file domainが許可外、保存先に異なる内容がある、HDRIまたは必須base colorがない場合はinstallを完了扱いにしない。
 
 ### 戻り先
 
 - dialogを閉じると同じVisual Editor、Scene、選択、cameraへ戻る。成功後は選択済みAssetのInspectorへ到達し、SkyboxはScene ViewへのdragまたはScene settingsから変更できる。
 - 将来のprovider追加では共通catalog、download option、attribution、install resultを再利用し、Assets側にprovider固有の保存構造やlicense文言を散在させない。
+
+## F-22 GLB / glTF Animation自動再生の状態設計
+
+### 操作前
+
+- Model Inspectorはソースから検出したAnimation名、長さ、track数と、配置時にAnimationを取り込む設定を表示する。timelineやclip編集がまだ含まれないことと、今回の再生対象が先頭clipであることを区別する。
+- Animationを含み`importAnimations`が有効なModelは、Sceneへ配置した時にMesh Rendererと同じEntityへAnimation Componentを一つ追加する。Animationを壊さないため、配置時にソースnodeを別Entityへ自動分割しない。
+- Edit中はModelを静止させ、InspectorでEnabled、Autoplay、Loopと対象clipを確認できる。
+
+### 操作中
+
+- AutoplayとLoopの変更は一件のScene historyとして確定し、同じEntity selectionとModel Asset参照を維持する。Play中は読み取り専用にする。
+- Play開始時にEnabledとAutoplayが有効なら先頭clipをリセットして再生する。Loop有効時は繰り返し、無効時は一度再生して最終姿勢で止める。
+- Animation mixerは対象Entity内のModelだけを更新し、SceneDocument、AssetManifest、Undo historyへruntime姿勢を書き戻さない。
+
+### 成功時
+
+- Scene ViewのPlayと生成するClassic JSX、Runtime manifest adapterが同じAutoplay / Loop設定で先頭clipを再生する。
+- Stop後はmixerとactionを破棄し、Edit中のModel姿勢、Entity Transform、selection、cameraへ戻る。
+- 保存と再表示後もAnimation ComponentのEnabled、Autoplay、Loopを復元する。
+
+### 失敗時
+
+- clipが欠落する、Model参照が変わる、loadに失敗する場合はAnimationだけを開始せず、Scene View全体と他Entityを継続表示する。InspectorにAnimationを含むModelが必要であることを示す。
+- AnimationのないEntityへAdd Componentを行った場合はSceneDocumentを変更せず、Animationを含むModelを同じEntityへ配置するよう案内する。
+- runtimeでclipを解決できない場合は無限retryを行わず、Modelのlast-good表示とEditへの復帰を維持する。
+
+### 戻り先
+
+- Component設定後も同じEntity Inspectorへ留まり、PlayからStopすると同じAnimation設定と選択へ戻る。
+- Model Assetを選ぶと検出済みclip一覧と取り込み設定を確認でき、Entityへ戻ると再生設定を続けられる。
 
 ## 実装制約
 

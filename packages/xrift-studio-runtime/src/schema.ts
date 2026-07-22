@@ -73,6 +73,13 @@ export type XriftRuntimeComponent =
     }
   | {
       id: string;
+      type: "animation";
+      enabled: boolean;
+      autoplay: boolean;
+      loop: boolean;
+    }
+  | {
+      id: string;
       type: "audio-source";
       enabled: boolean;
       audioAssetId?: string;

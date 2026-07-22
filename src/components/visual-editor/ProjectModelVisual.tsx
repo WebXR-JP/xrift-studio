@@ -5,7 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import {
   GLTFLoader,
   type GLTF,
@@ -19,13 +19,17 @@ import {
 } from "@pixiv/three-vrm";
 import {
   Box3,
+  AnimationMixer,
   DoubleSide,
   FrontSide,
   Group,
+  LoopOnce,
+  LoopRepeat,
   MeshStandardMaterial,
   Vector4,
   Vector3,
   type Material,
+  type AnimationClip,
   type Object3D,
 } from "three";
 import { tauri } from "../../lib/tauri";
@@ -40,6 +44,7 @@ import {
   resolveOpenBrushEditorBrushBaseUrl,
   validateGltfNodeHierarchy,
   type AssetManifest,
+  type AnimationComponent,
   type MaterialAsset,
   type ModelPoseState,
 } from "../../lib/visual-editor";
@@ -80,6 +85,8 @@ type Props = {
   assets: AssetManifest;
   assignedMaterials: readonly ProjectModelMaterialAssignment[];
   pose?: ModelPoseState;
+  animation?: AnimationComponent;
+  playing?: boolean;
   sourceNodeIndex?: number;
   /** Centers and scales one source node for a compact Asset Inspector preview. */
   fitPreview?: boolean;
@@ -92,7 +99,7 @@ type Props = {
 
 export type ProjectModelLoadState =
   | { status: "loading" }
-  | { status: "ready"; object: Object3D }
+  | { status: "ready"; object: Object3D; animations: AnimationClip[] }
   | { status: "error"; message: string };
 
 export type ProjectModelMaterialRuntimeInfo = {
@@ -111,7 +118,9 @@ export type ProjectModelMaterialRuntimeInfo = {
 };
 
 const MODEL_DATA_CACHE = new Map<string, Promise<string>>();
-const MODEL_OBJECT_CACHE = new Map<string, Promise<Object3D>>();
+type ProjectModelData = { object: Object3D; animations: AnimationClip[] };
+
+const MODEL_OBJECT_CACHE = new Map<string, Promise<ProjectModelData>>();
 const EMPTY_RESOLVED_MATERIALS: readonly ResolvedProjectModelMaterialAssignment[] =
   [];
 
@@ -126,6 +135,8 @@ export function ProjectModelVisual({
   assets,
   assignedMaterials,
   pose,
+  animation,
+  playing = false,
   sourceNodeIndex,
   fitPreview = false,
   loadRevision = 0,
@@ -150,9 +161,9 @@ export function ProjectModelVisual({
     MODEL_OBJECT_CACHE.set(cacheKey, promise);
 
     void promise
-      .then((object) => {
+      .then((data) => {
         if (!active) return;
-        setState({ status: "ready", object });
+        setState({ status: "ready", ...data });
       })
       .catch((error) => {
         MODEL_DATA_CACHE.delete(cacheKey);
@@ -190,6 +201,8 @@ export function ProjectModelVisual({
           selected={selected}
           assignedMaterials={resolvedMaterials}
           pose={pose}
+          animation={animation}
+          playing={playing}
           sourceNodeIndex={sourceNodeIndex}
           fitPreview={fitPreview}
           onMaterialRuntimeInfoChange={onMaterialRuntimeInfoChange}
@@ -276,6 +289,8 @@ function ProjectModelRender({
   selected,
   assignedMaterials,
   pose,
+  animation,
+  playing,
   sourceNodeIndex,
   fitPreview,
   onMaterialRuntimeInfoChange,
@@ -287,6 +302,8 @@ function ProjectModelRender({
   selected: boolean;
   assignedMaterials: readonly ResolvedProjectModelMaterialAssignment[];
   pose?: ModelPoseState;
+  animation?: AnimationComponent;
+  playing: boolean;
   sourceNodeIndex?: number;
   fitPreview: boolean;
   onMaterialRuntimeInfoChange?: (
@@ -294,6 +311,7 @@ function ProjectModelRender({
   ) => void;
 }) {
   const readyObject = state.status === "ready" ? state.object : null;
+  const animations = state.status === "ready" ? state.animations : [];
   const renderedModel = useMemo(() => {
     if (!readyObject) return null;
     // Sanitize the cached source before SkeletonUtils.clone recurses through it.
@@ -312,6 +330,17 @@ function ProjectModelRender({
     return { object, ownedMaterials, selectionBounds };
   }, [assignedMaterials, pose, readyObject, sourceNodeIndex]);
   const renderedObject = renderedModel?.object ?? null;
+  const mixer = useMemo(
+    () => (renderedObject ? new AnimationMixer(renderedObject) : null),
+    [renderedObject],
+  );
+  const playbackActive = Boolean(
+    mixer &&
+      playing &&
+      animation?.enabled &&
+      animation.autoplay &&
+      animations[0],
+  );
   const invalidate = useThree((canvasState) => canvasState.invalidate);
   const materialRuntimeInfo = useMemo(
     () =>
@@ -351,7 +380,35 @@ function ProjectModelRender({
     });
   }, [castShadow, receiveShadow, renderedObject]);
 
-  const modelScale = Number.isFinite(importScale) ? importScale : 1;
+  useEffect(() => {
+    const clip = animations[0];
+    if (!mixer || !renderedObject || !playbackActive || !clip || !animation) {
+      return;
+    }
+    const action = mixer.clipAction(clip);
+    action.reset();
+    action.clampWhenFinished = !animation.loop;
+    action.setLoop(animation.loop ? LoopRepeat : LoopOnce, animation.loop ? Infinity : 1);
+    action.play();
+    invalidate();
+    return () => {
+      action.stop();
+      mixer.stopAllAction();
+      mixer.uncacheClip(clip);
+      renderedObject.updateMatrixWorld(true);
+      invalidate();
+    };
+  }, [animation, animations, invalidate, mixer, playbackActive, renderedObject]);
+
+  useFrame((_, delta) => {
+    if (playbackActive) mixer?.update(Math.min(delta, 0.1));
+  });
+
+  // Expanded node Entities already carry the source Model scale on their
+  // generated glTF roots so child translations and geometry scale together.
+  const modelScale = sourceNodeIndex === undefined && Number.isFinite(importScale)
+    ? importScale
+    : 1;
 
   if (renderedModel) {
     const previewScale = fitPreview
@@ -761,17 +818,19 @@ export function applyOpenBrushMaterialAssetProperties(
     uniforms.u_Cutoff.value = properties.alphaCutoff;
   }
   const factor = properties.pbrMetallicRoughness.baseColorFactor;
-  if (!shader.fragmentShader?.includes("in vec4 v_color;")) return;
+  const varyingDeclaration = "in vec4 v_color;";
+  const varyingIndex = shader.fragmentShader?.indexOf(varyingDeclaration) ?? -1;
+  if (varyingIndex < 0 || !shader.fragmentShader) return;
   if (!uniforms.xriftBaseColorFactor) {
     uniforms.xriftBaseColorFactor = { value: new Vector4(...factor) };
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "in vec4 v_color;",
-      [
-        "in vec4 xriftOriginalVertexColor;",
-        "uniform vec4 xriftBaseColorFactor;",
-        "#define v_color (xriftOriginalVertexColor * xriftBaseColorFactor)",
-      ].join("\n"),
-    );
+    const bodyStart = varyingIndex + varyingDeclaration.length;
+    const shaderHeader = shader.fragmentShader.slice(0, bodyStart);
+    const shaderBody = shader.fragmentShader
+      .slice(bodyStart)
+      .replace(/\bv_color\b/g, "(v_color * xriftBaseColorFactor)");
+    // Keep the vertex/fragment varying name identical. Renaming only the
+    // fragment input makes WebGL reject the linked shader program.
+    shader.fragmentShader = `${shaderHeader}\nuniform vec4 xriftBaseColorFactor;${shaderBody}`;
   } else if (uniforms.xriftBaseColorFactor.value instanceof Vector4) {
     uniforms.xriftBaseColorFactor.value.set(...factor);
   } else {
@@ -1024,7 +1083,7 @@ function getSourceMaterialIndex(material: Material): number | undefined {
 async function parseSelfContainedModel(
   buffer: ArrayBuffer,
   sourceRelativePath: string,
-): Promise<Object3D> {
+): Promise<ProjectModelData> {
   const format = modelFormat(sourceRelativePath);
   if (!format) throw new Error("GLB、glTF、OBJまたはVRMのみ表示できます");
 
@@ -1032,7 +1091,7 @@ async function parseSelfContainedModel(
   if (format === "obj") {
     const object = new OBJLoader().parse(new TextDecoder().decode(bytes));
     tagObjMaterialIndices(object);
-    return object;
+    return { object, animations: [] };
   }
 
   const source = format === "gltf" ? new TextDecoder().decode(bytes) : buffer;
@@ -1048,7 +1107,7 @@ async function parseSelfContainedModel(
     );
   }
 
-  return new Promise<Object3D>((resolve, reject) => {
+  return new Promise<ProjectModelData>((resolve, reject) => {
     const loader = new GLTFLoader();
     if (format === "vrm") {
       loader.register((parser) => new VRMLoaderPlugin(parser));
@@ -1070,7 +1129,7 @@ async function parseSelfContainedModel(
         if (vrm) VRMUtils.rotateVRM0(vrm);
         repairImportedObject3DHierarchy(gltf.scene);
         tagSourceMaterialIndices(gltf, document);
-        resolve(gltf.scene);
+        resolve({ object: gltf.scene, animations: gltf.animations });
       },
       (error) => reject(error),
     );

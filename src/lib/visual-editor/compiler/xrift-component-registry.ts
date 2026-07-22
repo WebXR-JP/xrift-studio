@@ -135,6 +135,9 @@ export function compileXriftComponent(
   const textBinding = definition.runtimeBindings.find(
     (binding) => binding.generation === "managed-text-state",
   );
+  const noopBindings = definition.runtimeBindings.filter(
+    (binding) => binding.generation === "noop-callback",
+  );
   if (transformBinding) {
     return compileManagedTransformWrapper(
       component,
@@ -154,7 +157,10 @@ export function compileXriftComponent(
     );
   }
 
-  const propText = renderProps(props);
+  const propText = renderProps(
+    props,
+    noopBindings.map((binding) => `${binding.name}={() => {}}`),
+  );
   const wrapper = definition.attachBehavior.kind === "wrapper";
   return {
     definition,
@@ -241,11 +247,15 @@ function compileManagedTextWrapper(
   };
 }
 
-function renderProps(props: ReadonlyMap<string, JsonValue>): string {
+function renderProps(
+  props: ReadonlyMap<string, JsonValue>,
+  runtimeProps: readonly string[] = [],
+): string {
   const rendered = [...props.entries()].map(
     ([name, value]) => `${name}={${JSON.stringify(value)}}`,
   );
-  return rendered.length > 0 ? ` ${rendered.join(" ")}` : "";
+  const allProps = [...rendered, ...runtimeProps];
+  return allProps.length > 0 ? ` ${allProps.join(" ")}` : "";
 }
 
 function generatedComponentName(importName: string, componentId: string): string {

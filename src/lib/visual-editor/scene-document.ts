@@ -188,6 +188,17 @@ export type AudioSourcePatch = Partial<
   >
 >;
 
+/** Plays the first animation clip embedded in the sibling Model Asset. */
+export type AnimationComponent = ComponentBase & {
+  type: "animation";
+  autoplay: boolean;
+  loop: boolean;
+};
+
+export type AnimationPatch = Partial<
+  Pick<AnimationComponent, "enabled" | "autoplay" | "loop">
+>;
+
 export type PrefabInstanceComponent = ComponentBase & {
   type: "prefab-instance";
   prefabAssetId: string;
@@ -231,6 +242,7 @@ export interface SceneComponentSchemaRegistry {
   mesh: MeshComponent;
   collider: ColliderComponent;
   light: LightComponent;
+  animation: AnimationComponent;
   "audio-source": AudioSourceComponent;
   "spawn-point": SpawnPointComponent;
 }
@@ -369,6 +381,18 @@ export function createAudioSourceComponent(
     refDistance: 1,
     rolloffFactor: 1,
     maxDistance: 10000,
+  };
+}
+
+export function createAnimationComponent(id: string): AnimationComponent | null {
+  const normalizedId = id.trim();
+  if (!normalizedId) return null;
+  return {
+    id: normalizedId,
+    type: "animation",
+    enabled: true,
+    autoplay: true,
+    loop: true,
   };
 }
 
@@ -945,6 +969,45 @@ export function updateAudioSourceComponent(
   };
 }
 
+/** Applies an Animation playback edit atomically. */
+export function updateAnimationComponent(
+  scene: SceneDocument,
+  entityId: string,
+  patch: AnimationPatch,
+  componentId?: string,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  const current = entity?.components.find(
+    (component): component is AnimationComponent =>
+      component.type === "animation" &&
+      (componentId === undefined || component.id === componentId),
+  );
+  if (!entity || !current) return scene;
+  if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") return scene;
+  if (patch.autoplay !== undefined && typeof patch.autoplay !== "boolean") return scene;
+  if (patch.loop !== undefined && typeof patch.loop !== "boolean") return scene;
+
+  const next: AnimationComponent = { ...current, ...patch };
+  const changed = Object.keys(patch).some(
+    (key) =>
+      next[key as keyof AnimationComponent] !==
+      current[key as keyof AnimationComponent],
+  );
+  if (!changed) return scene;
+  return {
+    ...scene,
+    entities: {
+      ...scene.entities,
+      [entityId]: {
+        ...entity,
+        components: entity.components.map((component) =>
+          component.id === current.id ? next : component,
+        ),
+      },
+    },
+  };
+}
+
 function getPrimitiveColliderBounds(
   primitive: PrimitiveGeometry,
 ): ColliderAutoFitBounds {
@@ -1010,8 +1073,10 @@ export function getMeshMaterialSlots(
         : undefined;
     const node =
       geometry.kind === "model" && sourceNodeIndex !== undefined
-        ? (geometry.importMetadata?.openBrush?.nodes ??
-            geometry.importMetadata?.nodes)?.find(
+        ? (geometry.importMetadata?.openBrush?.nodes?.length
+            ? geometry.importMetadata.openBrush.nodes
+            : geometry.importMetadata?.nodes
+          )?.find(
             (candidate) => candidate.sourceNodeIndex === sourceNodeIndex,
           )
         : undefined;

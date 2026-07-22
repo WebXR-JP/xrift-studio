@@ -47,7 +47,12 @@ export type PendingImport = {
   id: string;
   name: string;
   size: number;
-  resourceKind: "model" | "texture" | "audio" | "unity-package";
+  resourceKind:
+    | "model"
+    | "texture"
+    | "skybox"
+    | "audio"
+    | "unity-package";
   status: PendingImportStatus;
   progress: number;
   diagnostics: PendingImportDiagnostic[];

@@ -83,6 +83,9 @@ export function applyExternalStoreInstall(
   if (result.assetKind === "hdri") {
     const file = result.files.find((entry) => entry.role === "environment");
     if (!file) throw new Error("Skybox用のHDRIファイルがありません");
+    if (file.format !== "hdr" && file.format !== "exr") {
+      throw new Error("Skybox用のHDRまたはEXRファイルを確認できません");
+    }
     const id = `${baseId}-skybox`;
     const asset: SkyboxAsset = {
       id,
@@ -96,7 +99,7 @@ export function applyExternalStoreInstall(
       order,
       attribution: credit,
       projection: "equirectangular",
-      sourceFormat: file.format === "exr" ? "exr" : "hdr",
+      sourceFormat: file.format,
       byteLength: file.byteLength,
     };
     assets[id] = asset;

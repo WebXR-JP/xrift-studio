@@ -73,6 +73,7 @@ export const EDITOR_ICONS = {
   sceneEntity: FileBox,
   light: Lightbulb,
   audio: Volume2,
+  animation: CirclePlay,
   camera: Camera,
   save: Save,
   saved: Check,
@@ -111,6 +112,7 @@ export const EDITOR_ICONS = {
   skybox: Image,
   portal: DoorOpen,
   tagBoard: Tags,
+  entryLogBoard: List,
   videoScreen: MonitorPlay,
   videoPlayer: SquarePlay,
   liveVideo: RadioTower,
@@ -148,6 +150,8 @@ export function getEditorComponentIcon(
       return EDITOR_ICONS.spawn;
     case "particle-emitter":
       return EDITOR_ICONS.particle;
+    case "animation":
+      return EDITOR_ICONS.animation;
     case "audio-source":
       return EDITOR_ICONS.audio;
     default:

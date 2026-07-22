@@ -116,6 +116,7 @@ export type VisualAssetImportWrite = {
 };
 
 export type ExternalStoreAssetKind = "hdri" | "texture" | "model";
+export type ExternalStoreFileFormat = "hdr" | "exr";
 
 export type ExternalStoreAsset = {
   providerId: string;
@@ -139,6 +140,14 @@ export type ExternalStoreResolution = {
   label: string;
   byteLength: number;
   fileCount: number;
+  formats: ExternalStoreFormatOption[];
+};
+
+export type ExternalStoreFormatOption = {
+  id: ExternalStoreFileFormat;
+  label: string;
+  byteLength: number;
+  fileCount: number;
 };
 
 export type ExternalStoreAssetOptions = {
@@ -152,6 +161,7 @@ export type ExternalStoreInstallRequest = {
   providerId: string;
   externalId: string;
   resolution: string;
+  format?: ExternalStoreFileFormat;
 };
 
 export type ExternalStoreInstalledFile = {

@@ -22,6 +22,7 @@ import {
   getMaterialAsset,
   getTextureAsset,
   normalizeTextureImportSettings,
+  repairImportedObject3DHierarchy,
   updateMaterialAsset,
   type MaterialAsset,
   type TextureAsset,
@@ -29,6 +30,7 @@ import {
 import {
   PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY,
   PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY,
+  applyOpenBrushMaterialAssetProperties,
   applyAssignedMaterialPreview,
   applyAssignedMaterialPreviews,
   applyStaticModelPose,
@@ -57,6 +59,7 @@ export async function runProjectModelMaterialPreviewFixtureAssertions(): Promise
   assertModelSelectionBoundsStayLocal();
   assertStaticModelPoseUsesRestOffsets();
   assertSourceNodeSelectionDoesNotDuplicateTheWholeModel();
+  assertObject3DHierarchyRepairKeepsValidOwner();
   assertCustomShaderRuntimeCanBeInspected();
   await assertOpenBrushPbrFallbackKeepsTheModelUsable();
 
@@ -221,6 +224,7 @@ export async function runProjectModelMaterialPreviewFixtureAssertions(): Promise
 
   assertModelMaterialAssignmentsStayInTheirGltfSlots(assets);
   assertOpenBrushMaterialKeepsCustomShader(assigned);
+  assertOpenBrushBaseColorFactorPreservesShaderInterface(assigned);
   assertAsyncTextureCompletionRequestsMaterialRender();
   assertTextureLoadStatusOnlyReportsSupportedReadyAssets(fixtureTextureAsset);
 
@@ -236,6 +240,79 @@ export async function runProjectModelMaterialPreviewFixtureAssertions(): Promise
   root.geometry.dispose();
   source.dispose();
   texture.dispose();
+}
+
+function assertOpenBrushBaseColorFactorPreservesShaderInterface(
+  fallback: MaterialAsset,
+): void {
+  const shader = new RawShaderMaterial({
+    vertexShader: [
+      "out vec4 v_color;",
+      "void main() {",
+      "  v_color = vec4(1.0);",
+      "  gl_Position = vec4(0.0);",
+      "}",
+    ].join("\n"),
+    fragmentShader: [
+      "in vec4 v_color;",
+      "out vec4 fragColor;",
+      "void main() {",
+      "  fragColor = v_color;",
+      "}",
+    ].join("\n"),
+    uniforms: {},
+  });
+  const openBrushMaterial: MaterialAsset = {
+    ...fallback,
+    id: "fixture-openbrush-tinted",
+    properties: {
+      ...fallback.properties,
+      pbrMetallicRoughness: {
+        ...fallback.properties.pbrMetallicRoughness,
+        baseColorFactor: [0.25, 0.5, 0.75, 1],
+      },
+    },
+    shader: {
+      kind: "openbrush",
+      renderer: "three-icosa",
+      rendererVersion: "three-icosa@fixture",
+      brushName: "Tinted Fixture",
+      brushBaseUrl: "https://example.invalid/brushes/",
+      sourceMaterialIndex: 0,
+    },
+  };
+
+  applyOpenBrushMaterialAssetProperties(shader, openBrushMaterial, {});
+  assert(
+    shader.vertexShader.includes("out vec4 v_color;") &&
+      shader.fragmentShader.includes("in vec4 v_color;") &&
+      !shader.fragmentShader.includes("xriftOriginalVertexColor") &&
+      shader.fragmentShader.includes(
+        "fragColor = (v_color * xriftBaseColorFactor);",
+      ),
+    "OpenBrush base color changed the linked vertex/fragment varying name",
+  );
+  shader.dispose();
+}
+
+function assertObject3DHierarchyRepairKeepsValidOwner(): void {
+  const root = new Group();
+  const staleParent = new Group();
+  const validParent = new Group();
+  const child = new Group();
+  root.add(staleParent, validParent);
+  validParent.add(child);
+  staleParent.children.push(child);
+
+  const result = repairImportedObject3DHierarchy(root);
+  assert(
+    result.removedLinks === 1 &&
+      staleParent.children.length === 0 &&
+      validParent.children.length === 1 &&
+      validParent.children[0] === child &&
+      child.parent === validParent,
+    "Hierarchy repair removed a valid owner while pruning a stale child link",
+  );
 }
 
 async function assertOpenBrushPbrFallbackKeepsTheModelUsable(): Promise<void> {

@@ -41,6 +41,7 @@ export * from "./project-document";
 export * from "./prototype-project";
 export * from "./scene-document";
 export * from "./scene-settings";
+export * from "./skybox-import.fixture";
 export * from "./serialization";
 export * from "./starter-templates";
 export * from "./starter-templates.fixture";

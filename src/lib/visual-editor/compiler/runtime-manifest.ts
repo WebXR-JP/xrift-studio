@@ -116,6 +116,16 @@ function compileRuntimeEntity(
       });
       continue;
     }
+    if (component.type === "animation") {
+      components.push({
+        id: component.id,
+        type: "animation",
+        enabled: component.enabled,
+        autoplay: component.autoplay,
+        loop: component.loop,
+      });
+      continue;
+    }
     if (component.type === "xrift-component") {
       appendRuntimeAdapterDiagnostic(
         diagnostics,

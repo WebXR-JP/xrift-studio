@@ -10,6 +10,10 @@ import type {
 } from "./scene-document";
 
 export const XRIFT_COMPONENT_MODULE = "@xrift/world-components" as const;
+/** npm package version used to verify the authoring registry. */
+export const XRIFT_COMPONENT_API_VERSION = "0.43.0" as const;
+export const XRIFT_COMPONENT_API_SOURCE =
+  "https://github.com/WebXR-JP/xrift-world-components" as const;
 export const XRIFT_COMPONENT_SCHEMA_VERSION = "1.0.0" as const;
 
 /** Stable authoring IDs. Import names remain aliases for prototype documents. */
@@ -26,6 +30,7 @@ export const XRIFT_COMPONENT_SCHEMA_IDS = {
   spawnPoint: "xrift.spawn-point",
   textInput: "xrift.text-input",
   tagBoard: "xrift.tag-board",
+  entryLogBoard: "xrift.entry-log-board",
   portal: "xrift.portal",
   billboardY: "xrift.billboard-y",
 } as const;
@@ -52,6 +57,7 @@ export type XriftComponentIcon =
   | "spawn"
   | "textInput"
   | "tagBoard"
+  | "entryLogBoard"
   | "portal"
   | "billboardY";
 
@@ -65,6 +71,7 @@ export type XriftComponentFieldKind =
   | "number-or-vec3"
   | "color-number"
   | "grabbable-transform"
+  | "json-object"
   | "tags";
 
 export type XriftComponentFieldRange = {
@@ -72,6 +79,8 @@ export type XriftComponentFieldRange = {
   max?: number;
   step?: number;
 };
+
+export type XriftJsonObjectPropertyKind = "string" | "number" | "boolean";
 
 export type XriftComponentFieldDefinition = {
   name: string;
@@ -85,6 +94,10 @@ export type XriftComponentFieldDefinition = {
   enumValues?: readonly string[];
   /** Defaults of optional members inside an object-shaped field. */
   nestedDefaults?: JsonObject;
+  /** Allowed keys and primitive value types for a JSON object prop. */
+  jsonObjectProperties?: Readonly<
+    Record<string, XriftJsonObjectPropertyKind>
+  >;
   /** The value is documented as an identifier unique to this component kind. */
   uniqueWithinScene?: boolean;
   /** Documented string syntax which must pass before compile can proceed. */
@@ -103,7 +116,11 @@ export type XriftRuntimeBindingDefinition = {
   required: boolean;
   description: string;
   /** Fixed Studio adapter; authoring JSON never contains executable code. */
-  generation: "none" | "managed-transform-state" | "managed-text-state";
+  generation:
+    | "none"
+    | "noop-callback"
+    | "managed-transform-state"
+    | "managed-text-state";
 };
 
 export type XriftComponentDefinition = {
@@ -211,8 +228,8 @@ const OPTIONAL_WRAPPER = { kind: "wrapper", childrenRequired: false } as const;
 const REQUIRED_WRAPPER = { kind: "wrapper", childrenRequired: true } as const;
 
 /**
- * Declarative authoring registry sourced from the official world-components API
- * reference. DevEnvironment is intentionally absent because it is a local-only
+ * Declarative authoring registry verified against the published package version
+ * above. DevEnvironment is intentionally absent because it is a local-only
  * development helper rather than authoring data.
  */
 export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
@@ -223,7 +240,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
     description: "オブジェクトをクリック／インタラクト可能にします。",
     icon: "interactable",
     category: "interaction",
-    attachBehavior: OPTIONAL_WRAPPER,
+    attachBehavior: REQUIRED_WRAPPER,
     fields: [
       field("id", "ID", "一意の識別子。", "string", true, {
         uniqueWithinScene: true,
@@ -240,9 +257,9 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
       runtimeBinding(
         "onInteract",
         "callback",
-        false,
+        true,
         "インタラクト時にIDを受け取るコールバック。",
-        "none",
+        "noop-callback",
       ),
     ],
   }),
@@ -554,6 +571,60 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
       field("scale", "Scale", "ボード全体の均一スケール。", "number", false, {
         defaultValue: 1,
       }),
+    ],
+  }),
+  componentDefinition({
+    schemaId: XRIFT_COMPONENT_SCHEMA_IDS.entryLogBoard,
+    importName: "EntryLogBoard",
+    label: "EntryLogBoard",
+    description: "ワールドへの入退室履歴を同期表示するボードを配置します。",
+    icon: "entryLogBoard",
+    category: "world",
+    attachBehavior: LEAF,
+    fields: [
+      field("stateNamespace", "State namespace", "複数ボードを識別する同期状態キー。", "string", false, {
+        defaultValue: "entry-log",
+        uniqueWithinScene: true,
+      }),
+      field("maxEntries", "Maximum entries", "表示する入退室履歴の最大件数。", "number", false, {
+        defaultValue: 10,
+        range: { min: 1, step: 1 },
+      }),
+      field("displayNameFallback", "Name fallback", "表示名を取得できない場合の文言。", "string", false, {
+        defaultValue: "Unknown",
+      }),
+      field("labels", "Labels", "入室・退室ラベルの上書き。", "json-object", false, {
+        defaultValue: { join: "入室", leave: "退室" },
+        jsonObjectProperties: { join: "string", leave: "string" },
+      }),
+      field("colors", "Colors", "入室、退室、背景、文字色の上書き。", "json-object", false, {
+        defaultValue: {
+          join: "#4CAF50",
+          leave: "#F44336",
+          background: "#1a1a2e",
+          text: "#ffffff",
+        },
+        jsonObjectProperties: {
+          join: "string",
+          leave: "string",
+          background: "string",
+          text: "string",
+        },
+      }),
+      field("position", "Position", "ボードの位置。", "vec3", false, {
+        defaultValue: [0, 0, 0],
+      }),
+      field("rotation", "Rotation", "ボードの回転。", "vec3", false, {
+        defaultValue: [0, 0, 0],
+      }),
+      field("scale", "Scale", "ボード全体の均一スケール。", "number", false, {
+        defaultValue: 1,
+      }),
+    ],
+    runtimeBindings: [
+      runtimeBinding("formatTimestamp", "callback", false, "時刻の表示形式を変更するコールバック。", "none"),
+      runtimeBinding("onJoin", "callback", false, "入室時のコールバック。", "none"),
+      runtimeBinding("onLeave", "callback", false, "退室時のコールバック。", "none"),
     ],
   }),
   componentDefinition({
@@ -1442,6 +1513,29 @@ export function validateXriftComponentFieldValue(
     }
     return null;
   }
+  if (definition.kind === "json-object") {
+    if (!isRecord(value) || !isSerializableJsonValue(value)) {
+      return typeFailure("JSON object");
+    }
+    const propertyDefinitions = definition.jsonObjectProperties;
+    if (!propertyDefinitions) return null;
+    for (const [key, propertyValue] of Object.entries(value)) {
+      const expectedKind = propertyDefinitions[key];
+      if (!expectedKind) {
+        return {
+          code: "type",
+          message: `未対応のキーです: ${key}`,
+        };
+      }
+      if (typeof propertyValue !== expectedKind) {
+        return {
+          code: "type",
+          message: `${key}は${expectedKind}である必要があります。`,
+        };
+      }
+    }
+    return null;
+  }
   if (definition.kind === "tags") {
     if (!Array.isArray(value)) return typeFailure("Tag[]");
     const ids = new Set<string>();
@@ -1504,6 +1598,7 @@ function field(
       | "defaultValue"
       | "enumValues"
       | "nestedDefaults"
+      | "jsonObjectProperties"
       | "range"
       | "uniqueWithinScene"
       | "format"

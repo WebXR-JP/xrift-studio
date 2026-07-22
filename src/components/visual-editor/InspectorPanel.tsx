@@ -18,6 +18,8 @@ import {
   getEditorComponentMenuDefinitions,
   getXriftComponentDefinition,
   getXriftComponentMenuGroups,
+  type AnimationComponent,
+  type AnimationPatch,
   type AudioSourceComponent,
   type AudioSourcePatch,
   type AssetManifest,
@@ -1413,6 +1415,73 @@ function AudioSourceInspector({
   );
 }
 
+function AnimationInspector({
+  component,
+  entity,
+  assets,
+  readOnly,
+  onChange,
+}: {
+  component: AnimationComponent;
+  entity: SceneEntity;
+  assets: AssetManifest;
+  readOnly: boolean;
+  onChange: (patch: AnimationPatch) => void;
+}) {
+  const model = entity.components
+    .filter((candidate) => candidate.type === "mesh")
+    .map((mesh) => {
+      const assetId =
+        mesh.geometry?.kind === "asset"
+          ? mesh.geometry.assetId
+          : mesh.geometryAssetId;
+      const asset = assets.assets[assetId];
+      return asset?.kind === "model" ? asset : undefined;
+    })
+    .find((asset) => Boolean(asset?.importMetadata?.animations.length));
+  const clip = model?.importMetadata?.animations[0];
+
+  return (
+    <ComponentCard title="Animation" subtitle="GLB / glTF">
+      <ToggleRow
+        label="Enabled"
+        checked={component.enabled}
+        disabled={readOnly}
+        onChange={(enabled) => onChange({ enabled })}
+      />
+      <div className="space-y-2 border-t border-slate-100 pt-2">
+        <ToggleRow
+          label="Autoplay"
+          checked={component.autoplay}
+          disabled={readOnly}
+          onChange={(autoplay) => onChange({ autoplay })}
+        />
+        <ToggleRow
+          label="Loop"
+          checked={component.loop}
+          disabled={readOnly}
+          onChange={(loop) => onChange({ loop })}
+        />
+      </div>
+      {clip ? (
+        <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs leading-4 text-slate-600">
+          <span className="font-semibold text-slate-800">{clip.name}</span>
+          <span className="ml-1 text-slate-500">
+            {clip.duration.toFixed(2)}秒 · {clip.trackCount} tracks
+          </span>
+          <p className="mt-1">
+            Play開始時に先頭のAnimationを{component.loop ? "繰り返し" : "一度だけ"}再生します。
+          </p>
+        </div>
+      ) : (
+        <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
+          Animationを含むModelが同じEntityにありません。
+        </p>
+      )}
+    </ComponentCard>
+  );
+}
+
 function ParticleEmitterInspector({
   component,
   assets,
@@ -1514,6 +1583,7 @@ function EntityInspector({
   onAutoFitCollider,
   onRemoveCollider,
   onLightChange,
+  onAnimationChange,
   onAudioSourceChange,
   onParticleEmitterChange,
   onRemoveParticleEmitter,
@@ -1539,6 +1609,7 @@ function EntityInspector({
   onAutoFitCollider: (componentId: string) => void;
   onRemoveCollider: (componentId: string) => void;
   onLightChange: (componentId: string, patch: LightPatch) => void;
+  onAnimationChange: (componentId: string, patch: AnimationPatch) => void;
   onAudioSourceChange: (componentId: string, patch: AudioSourcePatch) => void;
   onParticleEmitterChange: (
     componentId: string,
@@ -1670,6 +1741,18 @@ function EntityInspector({
               readOnly={readOnly}
               onChange={(patch) => onAudioSourceChange(component.id, patch)}
               onOpenAsset={onOpenMaterial}
+            />
+          );
+        }
+        if (component.type === "animation") {
+          return (
+            <AnimationInspector
+              key={component.id}
+              component={component}
+              entity={entity}
+              assets={assets}
+              readOnly={readOnly}
+              onChange={(patch) => onAnimationChange(component.id, patch)}
             />
           );
         }
@@ -1866,6 +1949,7 @@ export function InspectorPanel({
   onAutoFitCollider,
   onRemoveCollider,
   onLightChange,
+  onAnimationChange,
   onAudioSourceChange,
   onSelectAsset,
   onCloseAsset,
@@ -1913,6 +1997,7 @@ export function InspectorPanel({
   onAutoFitCollider: (entityId: string, componentId: string) => void;
   onRemoveCollider: (entityId: string, componentId: string) => void;
   onLightChange: (entityId: string, componentId: string, patch: LightPatch) => void;
+  onAnimationChange: (entityId: string, componentId: string, patch: AnimationPatch) => void;
   onAudioSourceChange: (entityId: string, componentId: string, patch: AudioSourcePatch) => void;
   onSelectAsset: (assetId: string) => void;
   onCloseAsset: () => void;
@@ -2109,6 +2194,9 @@ export function InspectorPanel({
             }
             onLightChange={(componentId, patch) =>
               onLightChange(entity.id, componentId, patch)
+            }
+            onAnimationChange={(componentId, patch) =>
+              onAnimationChange(entity.id, componentId, patch)
             }
             onAudioSourceChange={(componentId, patch) =>
               onAudioSourceChange(entity.id, componentId, patch)

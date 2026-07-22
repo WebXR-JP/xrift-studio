@@ -1399,6 +1399,8 @@ function validatePrefabComponentShape(
     validateColliderComponentShape(component, path, issues);
   } else if (component.type === "audio-source") {
     validateAudioSourceComponentShape(component, path, issues);
+  } else if (component.type === "animation") {
+    validateAnimationComponentShape(component, path, issues);
   } else if (
     component.type === "particle-emitter" &&
     (typeof component.particleAssetId !== "string" || !component.particleAssetId)
@@ -1703,6 +1705,24 @@ function validateAudioSourceComponentShape(
       component.maxDistance < component.refDistance)
   ) {
     issues.push(issue(`${path}.maxDistance`, "range", "Audio Source max distance must cover its reference distance"));
+  }
+}
+
+function validateAnimationComponentShape(
+  component: Record<string, unknown>,
+  path: string,
+  issues: DocumentValidationIssue[],
+): void {
+  for (const field of ["enabled", "autoplay", "loop"] as const) {
+    if (typeof component[field] !== "boolean") {
+      issues.push(
+        issue(
+          `${path}.${field}`,
+          "type",
+          `Animation ${field} must be a boolean`,
+        ),
+      );
+    }
   }
 }
 

@@ -4,6 +4,18 @@ export type Object3DHierarchyRepairResult = {
   removedLinks: number;
 };
 
+function removeStaleChildLink(parent: Object3D, child: Object3D): boolean {
+  const childIndex = parent.children.indexOf(child);
+  if (childIndex < 0) return false;
+  parent.children.splice(childIndex, 1);
+  // Object3D.remove() always clears child.parent, even when this is only a
+  // stale duplicate link and another Object3D is the legitimate owner.
+  if (child.parent === parent && !parent.children.includes(child)) {
+    child.parent = null;
+  }
+  return true;
+}
+
 /** Remove malformed duplicate/cyclic parent-child links from imported models. */
 export function repairImportedObject3DHierarchy(
   root: Object3D,
@@ -39,8 +51,7 @@ export function repairImportedObject3DHierarchy(
       visited.has(candidate) ||
       candidate.parent !== frame.object
     ) {
-      frame.object.remove(child);
-      removedLinks += 1;
+      if (removeStaleChildLink(frame.object, child)) removedLinks += 1;
       continue;
     }
     visited.add(candidate);

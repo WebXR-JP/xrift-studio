@@ -17,9 +17,9 @@ import {
   extractOpenBrushMaterialSlots,
 } from "./open-brush";
 import {
-  expandOpenBrushModelEntityHierarchy,
   hasOpenBrushNodeHierarchy,
 } from "./open-brush-hierarchy";
+import { expandModelEntityHierarchy } from "./model-hierarchy";
 import {
   STARTER_ASSET_FOLDER_IDS,
   type StarterAssetCopyPlanEntry,
@@ -218,7 +218,7 @@ export async function prepareStarterVisualProject(
       candidate.kind === "model" && hasOpenBrushNodeHierarchy(candidate),
   );
   const scene = openBrushModel
-    ? expandOpenBrushModelEntityHierarchy(
+    ? expandModelEntityHierarchy(
         plan.scene,
         expandedAssets,
         openBrushModel,

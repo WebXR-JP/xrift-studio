@@ -3430,6 +3430,8 @@ fn read_image_data_url(project_path: String, rel: String) -> Result<String, Stri
         Some("glb") => "model/gltf-binary",
         Some("gltf") => "model/gltf+json",
         Some("ktx2") => "image/ktx2",
+        Some("hdr") => "image/vnd.radiance",
+        Some("exr") => "image/x-exr",
         _ => "application/octet-stream",
     };
     use base64::Engine;

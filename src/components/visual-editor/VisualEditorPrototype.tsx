@@ -70,6 +70,7 @@ import {
   undoEditorHistory,
   updateEntityEnabled,
   updateEntityTransform,
+  updateAnimationComponent,
   updateAudioSourceComponent,
   updateColliderComponent,
   updateLightComponent,
@@ -81,6 +82,7 @@ import {
   updateTextureAsset,
   updateXriftComponent,
   type ColliderPatch,
+  type AnimationPatch,
   type AudioSourcePatch,
   type LightPatch,
   type MaterialAssetPatch,
@@ -152,6 +154,7 @@ import type {
 
 const SUPPORTED_MODEL_FILE = /\.(glb|gltf|obj|vrm)$/i;
 const SUPPORTED_TEXTURE_FILE = /\.(png|jpe?g|webp|ktx2)$/i;
+const SUPPORTED_HDRI_FILE = /\.(hdr|exr)$/i;
 const SUPPORTED_AUDIO_FILE = /\.mp3$/i;
 const SUPPORTED_UNITY_FILE = /\.(unitypackage|unity|prefab)$/i;
 const AUTOSAVE_DELAY_MS = 250;
@@ -204,6 +207,27 @@ function entityTransformMatches(
       (value, index) => value === rightTransform[field][index],
     ),
   );
+}
+
+function assignSkyboxToScene(
+  scene: PrototypeVisualProject["scene"],
+  assetId: string,
+): PrototypeVisualProject["scene"] {
+  const settings = resolveSceneSettings(scene.settings);
+  if (settings.skybox.enabled && settings.skybox.imageAssetId === assetId) {
+    return scene;
+  }
+  return {
+    ...scene,
+    settings: {
+      ...settings,
+      skybox: {
+        ...settings.skybox,
+        enabled: true,
+        imageAssetId: assetId,
+      },
+    },
+  };
 }
 
 function modelReimportStateFromProgress(
@@ -2151,6 +2175,17 @@ export function VisualEditorPrototype({
     [editorMode, updateScene],
   );
 
+  const handleAnimationChange = useCallback(
+    (entityId: string, componentId: string, patch: AnimationPatch) => {
+      if (editorMode !== "edit") return;
+      updateScene((scene) =>
+        updateAnimationComponent(scene, entityId, patch, componentId),
+      );
+      setNotice("Animation設定をSceneへ反映しました");
+    },
+    [editorMode, updateScene],
+  );
+
   const handleAutoFitCollider = useCallback(
     (entityId: string, componentId: string) => {
       if (editorMode !== "edit") return;
@@ -3185,12 +3220,36 @@ export function VisualEditorPrototype({
               duplicate.kind === plan.asset.kind &&
               !plan.replacesAssetId
             ) {
-              setHistory((current) =>
-                replaceEditorHistoryPresent(current, {
+              setHistory((current) => {
+                if (duplicate.kind !== "skybox") {
+                  return replaceEditorHistoryPresent(current, {
+                    ...current.present,
+                    assetSelection: duplicate.id,
+                  });
+                }
+                const scene = assignSkyboxToScene(
+                  current.present.bundle.scene,
+                  duplicate.id,
+                );
+                if (scene === current.present.bundle.scene) {
+                  return replaceEditorHistoryPresent(current, {
+                    ...current.present,
+                    assetSelection: duplicate.id,
+                  });
+                }
+                const nextBundle = touchProject({
+                  ...current.present.bundle,
+                  scene,
+                });
+                bundleRef.current = nextBundle;
+                setSaveStatus("dirty");
+                return commitEditorHistory(current, {
                   ...current.present,
+                  bundle: nextBundle,
                   assetSelection: duplicate.id,
-                }),
-              );
+                });
+              });
+              setActiveAssetFolderId(duplicate.folderId ?? null);
               updateImportQueue((current) =>
                 current.map((entry) =>
                   entry.id === queued.id
@@ -3212,7 +3271,11 @@ export function VisualEditorPrototype({
                     : entry,
                 ),
               );
-              setNotice(`同じ内容のアセット「${duplicate.name}」は登録済みです`);
+              setNotice(
+                duplicate.kind === "skybox"
+                  ? `登録済みの「${duplicate.name}」をSkyboxへ設定しました`
+                  : `同じ内容のアセット「${duplicate.name}」は登録済みです`,
+              );
               continue;
             }
 
@@ -3235,9 +3298,16 @@ export function VisualEditorPrototype({
             workingManifest = committedManifest;
             knownByHash.set(plan.sourceHash, importedAsset);
             setHistory((current) => {
+              const scene = importedAsset.kind === "skybox"
+                ? assignSkyboxToScene(
+                    current.present.bundle.scene,
+                    importedAsset.id,
+                  )
+                : current.present.bundle.scene;
               const nextBundle = touchProject({
                 ...current.present.bundle,
                 assets: committedManifest,
+                scene,
               });
               bundleRef.current = nextBundle;
               setSaveStatus("dirty");
@@ -3272,9 +3342,11 @@ export function VisualEditorPrototype({
               ),
             );
             setNotice(
-              plan.replacesAssetId
-                ? `「${importedAsset.name}」を更新し、MaterialとTextureの参照を維持しました`
-                : `「${importedAsset.name}」をインポートし、Material ${plan.derivedAssets?.filter((asset) => asset.kind === "material").length ?? 0}件、Texture ${plan.derivedAssets?.filter((asset) => asset.kind === "texture").length ?? 0}件を展開しました`,
+              importedAsset.kind === "skybox"
+                ? `「${importedAsset.name}」をインポートし、Skyboxへ設定しました`
+                : plan.replacesAssetId
+                  ? `「${importedAsset.name}」を更新し、MaterialとTextureの参照を維持しました`
+                  : `「${importedAsset.name}」をインポートし、Material ${plan.derivedAssets?.filter((asset) => asset.kind === "material").length ?? 0}件、Texture ${plan.derivedAssets?.filter((asset) => asset.kind === "texture").length ?? 0}件を展開しました`,
             );
           } catch (error) {
             const message = sanitizedImportMessage(error, targetProjectPath);
@@ -3334,6 +3406,8 @@ export function VisualEditorPrototype({
         accepted.push({ file, resourceKind: "model" });
       } else if (SUPPORTED_TEXTURE_FILE.test(file.name)) {
         accepted.push({ file, resourceKind: "texture" });
+      } else if (SUPPORTED_HDRI_FILE.test(file.name)) {
+        accepted.push({ file, resourceKind: "skybox" });
       } else if (SUPPORTED_AUDIO_FILE.test(file.name)) {
         accepted.push({ file, resourceKind: "audio" });
       }
@@ -3343,13 +3417,14 @@ export function VisualEditorPrototype({
         !SUPPORTED_UNITY_FILE.test(file.name) &&
         !SUPPORTED_MODEL_FILE.test(file.name) &&
         !SUPPORTED_TEXTURE_FILE.test(file.name) &&
+        !SUPPORTED_HDRI_FILE.test(file.name) &&
         !SUPPORTED_AUDIO_FILE.test(file.name),
     );
 
     if (unsupported.length > 0) {
       const names = unsupported.slice(0, 3).map((file) => file.name).join("、");
       setImportError(
-        `${names}${unsupported.length > 3 ? " ほか" : ""} は対象外です。UnityPackage / Unity Scene / Prefab / GLB / GLTF / OBJ / VRM / PNG / JPG / WebP / KTX2 / MP3に対応します。`,
+        `${names}${unsupported.length > 3 ? " ほか" : ""} は対象外です。UnityPackage / Unity Scene / Prefab / GLB / GLTF / OBJ / VRM / PNG / JPG / WebP / KTX2 / HDR / EXR / MP3に対応します。`,
       );
     } else {
       setImportError(null);
@@ -4009,6 +4084,7 @@ export function VisualEditorPrototype({
             onAutoFitCollider={handleAutoFitCollider}
             onRemoveCollider={handleRemoveCollider}
             onLightChange={handleLightChange}
+            onAnimationChange={handleAnimationChange}
             onAudioSourceChange={handleAudioSourceChange}
             onSelectAsset={handleSelectAsset}
             onCloseAsset={() => setAssetSelection(null)}

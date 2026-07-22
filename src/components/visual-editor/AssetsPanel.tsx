@@ -993,11 +993,13 @@ function ImportQueueEntry({
   const Icon =
     entry.resourceKind === "texture"
       ? EDITOR_ICONS.texture
-      : entry.resourceKind === "audio"
-        ? EDITOR_ICONS.audio
-      : entry.resourceKind === "unity-package"
-        ? EDITOR_ICONS.prefab
-        : EDITOR_ICONS.model;
+      : entry.resourceKind === "skybox"
+        ? EDITOR_ICONS.skybox
+        : entry.resourceKind === "audio"
+          ? EDITOR_ICONS.audio
+          : entry.resourceKind === "unity-package"
+            ? EDITOR_ICONS.prefab
+            : EDITOR_ICONS.model;
   const diagnostic = entry.diagnostics[0];
   const removable = canRemoveImport(entry.status);
   return (
@@ -1042,9 +1044,11 @@ function ImportQueueEntry({
         <p className="mt-1 text-[11px] text-editor-muted">
           {entry.resourceKind === "unity-package"
             ? `Prefab ${entry.result.prefabCount ?? 0}件・Entity ${entry.result.entityCount ?? 0}件・Asset ${entry.result.assetCount ?? 0}件${entry.result.warningCount ? `・要確認 ${entry.result.warningCount}件` : ""}`
-            : entry.resourceKind === "audio"
-              ? "Audio Asset 1件"
-            : `Material ${entry.result.materialCount}件・Texture ${entry.result.textureCount}件`}
+            : entry.resourceKind === "skybox"
+              ? "Skybox Asset 1件・Sceneへ設定済み"
+              : entry.resourceKind === "audio"
+                ? "Audio Asset 1件"
+                : `Material ${entry.result.materialCount}件・Texture ${entry.result.textureCount}件`}
         </p>
       ) : null}
       {entry.assetId || removable ? (
@@ -1571,7 +1575,7 @@ export function AssetsPanel({
         type="file"
         multiple
         disabled={importLocked}
-        accept=".unitypackage,.unity,.prefab,.glb,.gltf,.obj,.vrm,.png,.jpg,.jpeg,.webp,.ktx2,.mp3,model/obj,model/vrm,image/png,image/jpeg,image/webp,audio/mpeg"
+        accept=".unitypackage,.unity,.prefab,.glb,.gltf,.obj,.vrm,.png,.jpg,.jpeg,.webp,.ktx2,.hdr,.exr,.mp3,model/obj,model/vrm,image/png,image/jpeg,image/webp,image/vnd.radiance,image/x-hdr,image/x-exr,audio/mpeg"
         onChange={handleFileInput}
         className="sr-only"
       />

@@ -27,6 +27,32 @@ export function runModelHierarchyFixtureAssertions(): void {
       nodes[1]?.parentSourceNodeIndex === 0,
     "Selected glTF node hierarchy was not extracted",
   );
+  const repairedNodes = extractGltfModelNodeHierarchy({
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [
+      { children: [1, 2] },
+      { children: [2] },
+      { children: [0] },
+    ],
+  });
+  assert(
+    repairedNodes[0]?.childSourceNodeIndices.join(",") === "1,2" &&
+      repairedNodes[1]?.childSourceNodeIndices.length === 0 &&
+      repairedNodes[2]?.childSourceNodeIndices.length === 0 &&
+      repairedNodes[2]?.parentSourceNodeIndex === 0,
+    "Malformed duplicate or cyclic glTF links reached Model metadata",
+  );
+  assert(
+    extractGltfModelNodeHierarchy({
+      scene: 0,
+      scenes: [{ nodes: [0] }],
+      skins: [{}],
+      meshes: [{ primitives: [] }],
+      nodes: [{ mesh: 0, skin: 0 }],
+    }).length === 0,
+    "Skinned Models must remain one Entity for bind-pose playback",
+  );
 
   const model: ModelAsset = {
     id: "model-hierarchy-fixture",
@@ -35,7 +61,7 @@ export function runModelHierarchyFixtureAssertions(): void {
     status: "ready",
     source: { kind: "project", relativePath: "assets/town.glb" },
     importSettings: {
-      scale: 1,
+      scale: 0.01,
       generateColliders: false,
       optimizeMeshes: false,
       importAnimations: true,
@@ -87,6 +113,19 @@ export function runModelHierarchyFixtureAssertions(): void {
   assert(
     sourceChild?.parentId === sourceRoot.id,
     "Model node parent-child relationship was not retained",
+  );
+  const sourceRootTransform = sourceRoot.components.find(
+    (component) => component.type === "transform",
+  );
+  const sourceChildTransform = sourceChild.components.find(
+    (component) => component.type === "transform",
+  );
+  assert(
+    JSON.stringify(sourceRootTransform?.scale) ===
+      JSON.stringify([0.01, 0.01, 0.01]) &&
+      JSON.stringify(sourceChildTransform?.position) ===
+        JSON.stringify([1, 2, 3]),
+    "Model import scale must wrap root geometry and child translations once",
   );
   assert(
     sourceChild.components.some(

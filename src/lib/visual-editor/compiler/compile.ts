@@ -24,6 +24,7 @@ import type { PrototypeVisualProject } from "../prototype-project";
 import { normalizeParticleProperties } from "../particle-system";
 import type { VisualProjectKind } from "../project-document";
 import {
+  type AnimationComponent,
   type BoxColliderComponent,
   type AudioSourceComponent,
   type ColliderComponent,
@@ -596,6 +597,7 @@ function renderSceneEnvironment(
       imageUrl
     ) {
       context.referencedAssetIds.add(imageAssetId);
+      const imageAssetPath = registerAssetUrl(imageAsset, imageUrl, context);
       context.reactValueImports.add("useEffect");
       ["useLoader", "useThree"].forEach((name) => context.fiberImports.add(name));
       context.threeValueImports.add("EquirectangularReflectionMapping");
@@ -620,8 +622,9 @@ function renderSceneEnvironment(
       }
       context.supportDeclarations.set(
         "scene-environment:image-skybox",
-        `const XRiftStudioImageSkybox: FC<{ src: string; rotation: number; flipY: boolean; exposure: number }> = ({ src, rotation, flipY, exposure }) => {
+        `const XRiftStudioImageSkybox: FC<{ assetPath: string; rotation: number; flipY: boolean; exposure: number }> = ({ assetPath, rotation, flipY, exposure }) => {
   const scene = useThree((state) => state.scene);
+  const src = useCompiledAssetUrl(assetPath);
   const texture = useLoader(${loaderName}, src);
   useEffect(() => {
     const previousBackground = scene.background;
@@ -653,7 +656,7 @@ function renderSceneEnvironment(
 };`,
       );
       content.push(
-        `<XRiftStudioImageSkybox src={${JSON.stringify(imageUrl)}} rotation={${formatNumber((settings.skybox.rotationDegrees * Math.PI) / 180)}} flipY={${settings.skybox.flipY}} exposure={${formatNumber(settings.skybox.exposure)}} />`,
+        `<XRiftStudioImageSkybox assetPath={${imageAssetPath}} rotation={${formatNumber((settings.skybox.rotationDegrees * Math.PI) / 180)}} flipY={${settings.skybox.flipY}} exposure={${formatNumber(settings.skybox.exposure)}} />`,
       );
     } else {
       if (imageAssetId) {
@@ -752,6 +755,22 @@ function renderEntity(
     addDiagnostic(context, entityDiagnostic(entity, "multiple-transforms", "複数の Transform のうち先頭だけを使用します", "warning"));
   }
   const transform = transforms[0];
+  const animationComponents = entity.components.filter(
+    (component): component is AnimationComponent =>
+      component.type === "animation" && component.enabled,
+  );
+  if (animationComponents.length > 1) {
+    addDiagnostic(
+      context,
+      entityDiagnostic(
+        entity,
+        "multiple-animation-components",
+        "複数のAnimationのうち先頭だけを使用します",
+        "warning",
+      ),
+    );
+  }
+  const animation = animationComponents[0];
   const localContent: string[] = [];
   const wrappers: RenderedXriftWrapper[] = [];
   for (const component of entity.components as RegisteredSceneComponent[]) {
@@ -762,8 +781,11 @@ function renderEntity(
       continue;
     }
     if (component.type === "mesh") {
-      const rendered = renderMesh(entity, component, context);
+      const rendered = renderMesh(entity, component, context, animation);
       if (rendered) localContent.push(rendered);
+    } else if (component.type === "animation") {
+      // Playback is applied by the sibling Model renderer.
+      continue;
     } else if (component.type === "light") {
       localContent.push(renderLight(component));
     } else if (component.type === "audio-source") {
@@ -957,11 +979,12 @@ function renderMesh(
   entity: SceneEntity,
   mesh: MeshComponent,
   context: CompileContext,
+  animation?: AnimationComponent,
 ): string | null {
   const geometry = resolveMeshGeometry(mesh, context);
   if (!geometry) return null;
   if (geometry.kind === "model") {
-    return renderModelMesh(entity, mesh, geometry.asset, context);
+    return renderModelMesh(entity, mesh, geometry.asset, context, animation);
   }
   const material = resolveMeshMaterial(mesh, context);
   const materialJsx = material
@@ -1014,6 +1037,7 @@ function renderModelMesh(
   mesh: MeshComponent,
   model: ModelAsset,
   context: CompileContext,
+  animation?: AnimationComponent,
 ): string | null {
   context.referencedAssetIds.add(model.id);
   const runtimeUrl = context.assetRuntimeUrls.get(model.id);
@@ -1043,6 +1067,23 @@ function renderModelMesh(
   const isOpenBrush = isOpenBrushModelMetadata(
     model.importMetadata?.openBrush,
   );
+  const animationClip = model.importMetadata?.animations[0];
+  const autoplay = Boolean(
+    animation?.autoplay &&
+      animationClip &&
+      !isObj,
+  );
+  if (animation && !animationClip) {
+    addDiagnostic(context, {
+      severity: "warning",
+      code: "animation-clip-missing",
+      message: "Animationを再生できるclipがModelにありません",
+      sceneId: context.scene.sceneId,
+      entityId: entity.id,
+      componentId: animation.id,
+      assetId: model.id,
+    });
+  }
   if (isObj) {
     context.fiberImports.add("useLoader");
     context.extraImports.add(
@@ -1059,6 +1100,13 @@ function renderModelMesh(
   } else {
     context.dreiImports.add("useGLTF");
   }
+  if (autoplay) {
+    context.dreiImports.add("useAnimations");
+    context.reactValueImports.add("useEffect");
+    context.reactValueImports.add("useRef");
+    context.threeTypeImports.add("Group");
+    context.threeValueImports.add(animation?.loop ? "LoopRepeat" : "LoopOnce");
+  }
 
   const materialComponents = overrides.map((override) => ({
     ...override,
@@ -1073,29 +1121,52 @@ function renderModelMesh(
     materialComponents,
     getGeometryMaterialSlots(model).length === 1,
   );
-  const modelScale = Number.isFinite(model.importSettings.scale)
-    ? model.importSettings.scale
-    : 1;
+  const sourceNodeIndex =
+    mesh.geometry?.kind === "asset"
+      ? mesh.geometry.sourceNodeIndex
+      : undefined;
+  const modelScale =
+    sourceNodeIndex === undefined && Number.isFinite(model.importSettings.scale)
+      ? model.importSettings.scale
+      : 1;
   const poseSource = renderCompiledModelPose(mesh, context);
   const vrm0Rotation =
     model.importMetadata?.sourceFormat === "vrm" &&
     model.importMetadata.vrmVersion === "0"
       ? ` rotation={[0, ${formatNumber(Math.PI)}, 0]}`
       : "";
-  const source = `const ${componentName}: FC = () => {
-  const modelUrl = useCompiledAssetUrl(${urlConstant});
-  ${isObj
+  const loaderSource = isObj
     ? "const scene = useLoader(OBJLoader, modelUrl);"
     : isOpenBrush
-      ? `const { scene, parser } = useLoader(GLTFLoader, modelUrl, (loader) => {
+      ? `const { scene, parser${autoplay ? ", animations" : ""} } = useLoader(GLTFLoader, modelUrl, (loader) => {
     loader.register(
       (parser) => new GLTFGoogleTiltBrushMaterialExtension(parser, ${JSON.stringify(OPEN_BRUSH_BRUSH_BASE_URL)}),
     );
   });`
-      : "const { scene } = useGLTF(modelUrl);"}
+      : sourceNodeIndex === undefined
+        ? `const { scene${autoplay ? ", animations" : ""} } = useGLTF(modelUrl);`
+        : `const { scene, parser${autoplay ? ", animations" : ""} } = useGLTF(modelUrl);`;
+  const animationSource = autoplay
+    ? `  const animationRoot = useRef<Group>(null);
+  const { actions, names } = useAnimations(animations, animationRoot);
+  useEffect(() => {
+    const firstAnimationName = names[0];
+    const action = firstAnimationName ? actions[firstAnimationName] : undefined;
+    if (!action) return;
+    action.reset();
+    action.clampWhenFinished = ${!animation?.loop};
+    action.setLoop(${animation?.loop ? "LoopRepeat, Infinity" : "LoopOnce, 1"});
+    action.play();
+    return () => action.stop();
+  }, [actions, names]);`
+    : "";
+  const source = `const ${componentName}: FC = () => {
+  const modelUrl = useCompiledAssetUrl(${urlConstant});
+  ${loaderSource}
 ${poseSource.declaration}
+${animationSource}
   return (
-    <group scale={${formatNumber(modelScale)}}${vrm0Rotation}>
+    <group${autoplay ? " ref={animationRoot}" : ""} scale={${formatNumber(modelScale)}}${vrm0Rotation}>
       <Clone
         object={${poseSource.objectName}}
         castShadow={${mesh.castShadow}}
@@ -2991,7 +3062,7 @@ function isAssetSupportedByCompiler(asset: SceneAsset): boolean {
   }
   if (asset.kind === "model") return true;
   if (asset.kind === "audio") return true;
-  if (asset.kind === "skybox") return ["hdr", "png", "jpg", "jpeg", "webp"].includes(fileExtension(asset.source.relativePath));
+  if (asset.kind === "skybox") return ["hdr", "exr", "png", "jpg", "jpeg", "webp"].includes(fileExtension(asset.source.relativePath));
   if (asset.kind !== "texture") return false;
   const extension = fileExtension(asset.source.relativePath);
   return (

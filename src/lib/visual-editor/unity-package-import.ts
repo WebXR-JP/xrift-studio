@@ -109,7 +109,7 @@ type ConvertedUnityDocument = {
   diagnostics: UnityImportDiagnostic[];
 };
 
-const SUPPORTED_PACKAGE_ASSET = /\.(glb|gltf|obj|vrm|png|jpe?g|webp|ktx2)$/i;
+const SUPPORTED_PACKAGE_ASSET = /\.(glb|gltf|obj|vrm|png|jpe?g|webp|ktx2|hdr|exr)$/i;
 const UNITY_DOCUMENT = /\.(unity|prefab)$/i;
 const UNITY_MATERIAL = /\.mat$/i;
 const UNITY_GUID = /^[0-9a-f]{32}$/i;
@@ -1414,6 +1414,10 @@ function mimeTypeForPath(path: string): string {
       return "image/webp";
     case "ktx2":
       return "image/ktx2";
+    case "hdr":
+      return "image/vnd.radiance";
+    case "exr":
+      return "image/x-exr";
     default:
       return "application/octet-stream";
   }

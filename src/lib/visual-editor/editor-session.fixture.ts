@@ -63,6 +63,22 @@ export function runEditorSessionHierarchyFixtureAssertions(): void {
     "a subtree must not be moved below one of its descendants",
   );
 
+  const corruptedScene = corruptedHierarchyFixtureScene();
+  const corruptedCycle = getEntityReparentDecision(
+    corruptedScene,
+    "entity-a",
+    "entity-b",
+  );
+  assert(
+    !corruptedCycle.allowed && corruptedCycle.reason === "descendant-parent",
+    "a stale child link must not allow a cyclic hierarchy move",
+  );
+  assert(
+    reparentEntityHierarchy(corruptedScene, "entity-a", "entity-b") ===
+      corruptedScene,
+    "a rejected corrupt-document move must leave the Scene unchanged",
+  );
+
   const disabled = updateEntityEnabled(parented, "entity-a", false);
   assert(
     disabled.entities["entity-a"]?.enabled === false,
@@ -87,6 +103,22 @@ function hierarchyFixtureScene(): SceneDocument {
     name: "Hierarchy fixture",
     rootEntityIds: ["entity-a", "entity-b", "entity-c"],
     entities,
+  };
+}
+
+function corruptedHierarchyFixtureScene(): SceneDocument {
+  return {
+    schemaVersion: SCENE_DOCUMENT_SCHEMA_VERSION,
+    sceneId: "scene-corrupted-hierarchy-fixture",
+    name: "Corrupted hierarchy fixture",
+    rootEntityIds: ["entity-a", "entity-b"],
+    entities: {
+      "entity-a": entity("entity-a", null, ["entity-middle"]),
+      "entity-middle": entity("entity-middle", "entity-a", ["entity-b"]),
+      // Legacy corruption: the child array reaches entity-b, but its parentId
+      // still marks it as a root.
+      "entity-b": entity("entity-b"),
+    },
   };
 }
 

@@ -71,7 +71,7 @@ UIはTauri commandを直接呼ばない。`reimportModelAssetFromDisk` が次を
 
 Model Inspectorは、last-goodの構造情報、現在のimport recipe、既定Material slot bindingを分けて表示する。現在のproject-relative sourceは同じAsset IDのまま再取り込みでき、処理中の進捗、成功、失敗を同じInspectorへ残す。処理中に対象Assetが編集された場合は結果を自動適用せず、直前のAssetを保持する。
 
-消失slotがある時は、適用前の確認または適用後に残す結果として、slot名、stable ID、失われるModel既定Material、影響するScene / Prefabの割当を同じInspectorに表示する。`optimizeMeshes`と`importAnimations`はschema互換のため値を保持するが、現在のprocessorは値を処理へ反映しないため、Inspectorでは「未対応」として読み取り専用で表示する。
+消失slotがある時は、適用前の確認または適用後に残す結果として、slot名、stable ID、失われるModel既定Material、影響するScene / Prefabの割当を同じInspectorに表示する。`optimizeMeshes`はschema互換のため値を保持するが、現在のprocessorは値を処理へ反映しないため、Inspectorでは「未対応」として読み取り専用で表示する。`importAnimations`は配置時のAnimation Component自動追加を制御し、検出済みclipがあるModelだけを対象にする。
 
 残る作業は次のとおりである。
 

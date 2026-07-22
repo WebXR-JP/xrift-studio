@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import type { ThreeElements } from "@react-three/fiber";
+import { useFrame, type ThreeElements } from "@react-three/fiber";
+import { AnimationMixer, LoopOnce, LoopRepeat } from "three";
 
-import type { XriftRuntimeManifest } from "../schema.js";
+import type {
+  XriftRuntimeComponent,
+  XriftRuntimeManifest,
+} from "../schema.js";
 import {
   disposeXriftLoadResult,
   XriftThreeLoader,
@@ -69,5 +73,63 @@ function XriftRuntimeScene({
     };
   }, [expectedKind, loader, manifest, onError, onLoad]);
 
-  return result ? <primitive object={result.root} /> : fallback;
+  return result ? (
+    <>
+      <primitive object={result.root} />
+      <XriftRuntimeAnimations result={result} />
+    </>
+  ) : fallback;
+}
+
+function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
+  const playbacks = useMemo(() => {
+    const scene = result.manifest.scenes[result.manifest.entryScene];
+    if (!scene) return [];
+    return Object.values(scene.entities).flatMap((entity) => {
+      const target = result.entities.get(entity.id);
+      const clips = result.animationClipsByEntity.get(entity.id) ?? [];
+      const clip = clips[0];
+      if (!target || !clip) return [];
+      const component = entity.components.find(
+        (
+          candidate,
+        ): candidate is Extract<
+          XriftRuntimeComponent,
+          { type: "animation" }
+        > =>
+          candidate.type === "animation" &&
+          candidate.enabled,
+      );
+      return component?.autoplay
+        ? [{ component, clip, mixer: new AnimationMixer(target) }]
+        : [];
+    });
+  }, [result]);
+
+  useEffect(() => {
+    for (const playback of playbacks) {
+      const action = playback.mixer.clipAction(playback.clip);
+      action.reset();
+      action.clampWhenFinished = !playback.component.loop;
+      action.setLoop(
+        playback.component.loop ? LoopRepeat : LoopOnce,
+        playback.component.loop ? Infinity : 1,
+      );
+      action.play();
+    }
+    return () => {
+      for (const playback of playbacks) {
+        playback.mixer.stopAllAction();
+        playback.mixer.uncacheRoot(playback.mixer.getRoot());
+      }
+    };
+  }, [playbacks]);
+
+  useFrame((_, delta) => {
+    for (const playback of playbacks) {
+      playback.mixer.update(Math.min(delta, 0.1));
+    }
+  });
+
+  return null;
 }

@@ -152,6 +152,25 @@ export async function runModelImportContractFixtureAssertions(): Promise<void> {
     ),
     "Non-finite Model-local bounds were not rejected",
   );
+  const cyclicMetadata = metadata();
+  cyclicMetadata.nodes = [
+    {
+      ...cyclicMetadata.nodes![0],
+      parentSourceNodeIndex: 1,
+      childSourceNodeIndices: [1],
+    },
+    {
+      ...cyclicMetadata.nodes![1],
+      parentSourceNodeIndex: 0,
+      childSourceNodeIndices: [0],
+    },
+  ];
+  assert(
+    validateModelImportMetadata(cyclicMetadata).some(
+      (candidate) => candidate.code === "cycle",
+    ),
+    "Cyclic retained Model metadata was not rejected",
+  );
   const invalidAsset = {
     ...original,
     importMetadata: { ...metadata(), nodeCount: Number.POSITIVE_INFINITY },

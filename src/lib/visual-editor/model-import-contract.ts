@@ -817,12 +817,15 @@ function validateModelNodes(
         : [],
     ),
   );
+  const parentByChild = new Map<number, number>();
   value.forEach((candidate, index) => {
     if (!isRecord(candidate)) return;
     const targetPath = `${path}.${index}`;
+    const sourceNodeIndex = Number(candidate.sourceNodeIndex);
+    const parentSourceNodeIndex = Number(candidate.parentSourceNodeIndex);
     if (
       Number.isInteger(candidate.parentSourceNodeIndex) &&
-      !declaredIndices.has(Number(candidate.parentSourceNodeIndex))
+      !declaredIndices.has(parentSourceNodeIndex)
     ) {
       issues.push(issue(
         `${targetPath}.parentSourceNodeIndex`,
@@ -830,18 +833,95 @@ function validateModelNodes(
         "Model node parent is not retained in this scene",
       ));
     }
+    if (
+      Number.isInteger(candidate.parentSourceNodeIndex) &&
+      parentSourceNodeIndex === sourceNodeIndex
+    ) {
+      issues.push(issue(
+        `${targetPath}.parentSourceNodeIndex`,
+        "cycle",
+        "Model node cannot be its own parent",
+      ));
+    }
     if (Array.isArray(candidate.childSourceNodeIndices)) {
       candidate.childSourceNodeIndices.forEach((childIndex, childOffset) => {
-        if (Number.isInteger(childIndex) && !declaredIndices.has(Number(childIndex))) {
+        const normalizedChildIndex = Number(childIndex);
+        if (Number.isInteger(childIndex) && !declaredIndices.has(normalizedChildIndex)) {
           issues.push(issue(
             `${targetPath}.childSourceNodeIndices.${childOffset}`,
             "reference",
             "Model node child is not retained in this scene",
           ));
+          return;
+        }
+        if (!Number.isInteger(childIndex)) return;
+        if (normalizedChildIndex === sourceNodeIndex) {
+          issues.push(issue(
+            `${targetPath}.childSourceNodeIndices.${childOffset}`,
+            "cycle",
+            "Model node cannot contain itself",
+          ));
+          return;
+        }
+        const previousParent = parentByChild.get(normalizedChildIndex);
+        if (previousParent !== undefined && previousParent !== sourceNodeIndex) {
+          issues.push(issue(
+            `${targetPath}.childSourceNodeIndices.${childOffset}`,
+            "unique-parent",
+            "Model node cannot have multiple parents",
+          ));
+        } else {
+          parentByChild.set(normalizedChildIndex, sourceNodeIndex);
         }
       });
     }
   });
+
+  value.forEach((candidate, index) => {
+    if (!isRecord(candidate) || !Number.isInteger(candidate.sourceNodeIndex)) return;
+    const sourceNodeIndex = Number(candidate.sourceNodeIndex);
+    const linkedParent = parentByChild.get(sourceNodeIndex);
+    const declaredParent = Number.isInteger(candidate.parentSourceNodeIndex)
+      ? Number(candidate.parentSourceNodeIndex)
+      : undefined;
+    if (linkedParent !== declaredParent) {
+      issues.push(issue(
+        `${path}.${index}.parentSourceNodeIndex`,
+        "hierarchy",
+        "Model node parent and child links must match",
+      ));
+    }
+  });
+
+  const visitState = new Map<number, 0 | 1 | 2>();
+  let reportedCycle = false;
+  for (const start of declaredIndices) {
+    if (visitState.get(start) === 2) continue;
+    const pending: Array<{ nodeIndex: number; leaving: boolean }> = [
+      { nodeIndex: start, leaving: false },
+    ];
+    while (pending.length > 0) {
+      const frame = pending.pop()!;
+      if (frame.leaving) {
+        visitState.set(frame.nodeIndex, 2);
+        continue;
+      }
+      if (visitState.get(frame.nodeIndex) === 1) {
+        if (!reportedCycle) {
+          issues.push(issue(path, "cycle", "Model node hierarchy must be acyclic"));
+          reportedCycle = true;
+        }
+        continue;
+      }
+      if (visitState.get(frame.nodeIndex) === 2) continue;
+      visitState.set(frame.nodeIndex, 1);
+      pending.push({ nodeIndex: frame.nodeIndex, leaving: true });
+      const parent = parentByChild.get(frame.nodeIndex);
+      if (parent !== undefined) {
+        pending.push({ nodeIndex: parent, leaving: false });
+      }
+    }
+  }
 }
 
 function validateModelNodeIndexArray(

@@ -56,6 +56,57 @@ export function runXriftComponentRegistryFixtureAssertions(): void {
     "VideoPlayer must not emit the LiveVideoPlayer-only sync prop",
   );
 
+  const interactable = requiredComponent(
+    XRIFT_COMPONENT_SCHEMA_IDS.interactable,
+  );
+  const compiledInteractable = compileXriftComponent(
+    interactable,
+    "world",
+    FIXTURE_SOURCE,
+  );
+  assert(
+    compiledInteractable.mode === "wrapper" &&
+      compiledInteractable.jsx?.includes("onInteract={() => {}}") === true,
+    "Interactable must emit its required safe callback adapter",
+  );
+
+  const entryLogBoard = requiredComponent(
+    XRIFT_COMPONENT_SCHEMA_IDS.entryLogBoard,
+  );
+  const compiledEntryLogBoard = compileXriftComponent(
+    entryLogBoard,
+    "world",
+    FIXTURE_SOURCE,
+  );
+  assert(
+    compiledEntryLogBoard.mode === "leaf" &&
+      compiledEntryLogBoard.importName === "EntryLogBoard" &&
+      compiledEntryLogBoard.jsx?.includes(
+        'labels={{"join":"入室","leave":"退室"}}',
+      ) === true &&
+      compiledEntryLogBoard.jsx.includes(
+        'colors={{"join":"#4CAF50","leave":"#F44336","background":"#1a1a2e","text":"#ffffff"}}',
+      ),
+    "EntryLogBoard must emit validated nested object defaults",
+  );
+  const invalidEntryLogBoard = createXriftComponent(
+    XRIFT_COMPONENT_SCHEMA_IDS.entryLogBoard,
+    { properties: { labels: { join: 123 } } },
+  );
+  assert(invalidEntryLogBoard, "Invalid EntryLogBoard fixture was not created");
+  const compiledInvalidEntryLogBoard = compileXriftComponent(
+    invalidEntryLogBoard,
+    "world",
+    FIXTURE_SOURCE,
+  );
+  assert(
+    compiledInvalidEntryLogBoard.mode === "unsupported" &&
+      compiledInvalidEntryLogBoard.diagnostics.some(
+        (diagnostic) => diagnostic.code === "invalid-xrift-component-prop",
+      ),
+    "EntryLogBoard accepted a nested object value that violates its Props type",
+  );
+
   const liveVideoPlayer = requiredComponent(
     XRIFT_COMPONENT_SCHEMA_IDS.liveVideoPlayer,
     { id: "fixture-live-player" },

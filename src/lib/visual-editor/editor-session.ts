@@ -8,6 +8,7 @@ import { createDocumentId } from "./document-id";
 import type { VisualProjectKind } from "./project-document";
 import {
   cloneEntityHierarchy,
+  createAnimationComponent,
   createAudioSourceComponent,
   createBoxColliderComponent,
   createBuiltinPrimitiveMeshComponent,
@@ -85,6 +86,7 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
   }),
   definition("core.spawn", "Spawn Point", "world", false, "spawn-point"),
   definition("core.particle", "Particle Emitter", "rendering", true, "particle-emitter"),
+  definition("core.animation", "Animation", "rendering", false, "animation"),
   definition("core.audio-source", "Audio Source", "media", true, "audio-source"),
   ...XRIFT_COMPONENT_REGISTRY.map(
     (component): EditorComponentDefinition => ({
@@ -517,28 +519,64 @@ export function renameAsset(
  * Retain the slower child-link check only for legacy/corrupt documents whose
  * parent chain is not internally consistent.
  */
+const ENTITY_HIERARCHY_CONSISTENCY_CACHE = new WeakMap<
+  SceneDocument,
+  boolean
+>();
+
+function entityHierarchyLinksAreConsistent(scene: SceneDocument): boolean {
+  const cached = ENTITY_HIERARCHY_CONSISTENCY_CACHE.get(scene);
+  if (cached !== undefined) return cached;
+
+  let consistent = true;
+  const linkedParentByChild = new Map<string, string>();
+  for (const parent of Object.values(scene.entities)) {
+    for (const childId of parent.children) {
+      if (
+        linkedParentByChild.has(childId) ||
+        scene.entities[childId]?.parentId !== parent.id
+      ) {
+        consistent = false;
+        break;
+      }
+      linkedParentByChild.set(childId, parent.id);
+    }
+    if (!consistent) break;
+  }
+  if (consistent) {
+    for (const entity of Object.values(scene.entities)) {
+      const linkedParentId = linkedParentByChild.get(entity.id);
+      if (
+        (entity.parentId === null && linkedParentId !== undefined) ||
+        (entity.parentId !== null && linkedParentId !== entity.parentId)
+      ) {
+        consistent = false;
+        break;
+      }
+    }
+  }
+
+  ENTITY_HIERARCHY_CONSISTENCY_CACHE.set(scene, consistent);
+  return consistent;
+}
+
 function wouldCreateEntityHierarchyCycle(
   scene: SceneDocument,
   ancestorId: string,
   entityId: string,
 ): boolean {
-  let parentLinksAreConsistent = true;
   const visited = new Set<string>();
   let currentId: string | null = entityId;
-  while (currentId !== null && !visited.has(currentId)) {
+  while (currentId !== null) {
     if (currentId === ancestorId) return true;
+    // Do not attach a subtree below an already cyclic parent chain.
+    if (visited.has(currentId)) return true;
     visited.add(currentId);
-    const current: SceneEntity | undefined = scene.entities[currentId];
-    const parentId: string | null = current?.parentId ?? null;
-    if (
-      parentId !== null &&
-      !scene.entities[parentId]?.children.includes(currentId)
-    ) {
-      parentLinksAreConsistent = false;
-    }
-    currentId = parentId;
+    currentId = scene.entities[currentId]?.parentId ?? null;
   }
-  if (parentLinksAreConsistent) return false;
+  // Valid immutable documents use the O(depth) parent-chain check above. Cache
+  // the full bidirectional-link scan so repeated dragover events stay cheap.
+  if (entityHierarchyLinksAreConsistent(scene)) return false;
 
   const descendants = new Set<string>();
   const pending = [...(scene.entities[ancestorId]?.children ?? [])];
@@ -651,6 +689,11 @@ function createRegisteredComponent(
     const particle = Object.values(assets.assets).find((asset) => asset.kind === "particle");
     return particle ? createParticleEmitterComponent(id, particle.id) : null;
   }
+  if (definition.componentType === "animation") {
+    return entityHasImportedAnimation(entity, assets)
+      ? createAnimationComponent(id)
+      : null;
+  }
   if (definition.componentType === "audio-source") {
     const audio = Object.values(assets.assets).find(
       (asset) => asset.kind === "audio",
@@ -658,4 +701,23 @@ function createRegisteredComponent(
     return createAudioSourceComponent(id, audio?.id ?? "");
   }
   return null;
+}
+
+function entityHasImportedAnimation(
+  entity: SceneEntity,
+  assets: AssetManifest,
+): boolean {
+  return entity.components.some((component) => {
+    if (component.type !== "mesh") return false;
+    const assetId =
+      component.geometry?.kind === "asset"
+        ? component.geometry.assetId
+        : component.geometryAssetId;
+    const asset = assets.assets[assetId];
+    return (
+      asset?.kind === "model" &&
+      asset.importSettings.importAnimations &&
+      Boolean(asset.importMetadata?.animations.length)
+    );
+  });
 }

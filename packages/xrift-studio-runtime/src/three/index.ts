@@ -44,6 +44,7 @@ import {
 export type XriftLoadResult = {
   root: Group;
   animations: AnimationClip[];
+  animationClipsByEntity: Map<string, AnimationClip[]>;
   entities: Map<string, Object3D>;
   diagnostics: XriftRuntimeDiagnostic[];
   manifest: XriftRuntimeManifest;
@@ -124,6 +125,7 @@ export class XriftThreeLoader {
     const materials = this.createMaterials(manifest, textures, diagnostics);
     const entities = new Map<string, Object3D>();
     const animations: AnimationClip[] = [];
+    const animationClipsByEntity = new Map<string, AnimationClip[]>();
 
     for (const entity of Object.values(entryScene.entities)) {
       const group = new Group();
@@ -161,12 +163,20 @@ export class XriftThreeLoader {
           models,
           materials,
           animations,
+          animationClipsByEntity,
           diagnostics,
         });
         if (object) group.add(object);
       }
     }
-    return { root, animations, entities, diagnostics, manifest };
+    return {
+      root,
+      animations,
+      animationClipsByEntity,
+      entities,
+      diagnostics,
+      manifest,
+    };
   }
 
   private resolveAssetBase(manifestUrl?: string | URL): URL {
@@ -275,6 +285,7 @@ export class XriftThreeLoader {
     models: ReadonlyMap<string, LoadedModel>;
     materials: ReadonlyMap<string, Material>;
     animations: AnimationClip[];
+    animationClipsByEntity: Map<string, AnimationClip[]>;
     diagnostics: XriftRuntimeDiagnostic[];
   }): Object3D | null {
     const { component } = input;
@@ -321,9 +332,16 @@ export class XriftThreeLoader {
         }
       });
       input.animations.push(...loaded.animations);
+      if (loaded.animations.length > 0) {
+        input.animationClipsByEntity.set(input.entity.id, [
+          ...(input.animationClipsByEntity.get(input.entity.id) ?? []),
+          ...loaded.animations,
+        ]);
+      }
       instance.userData.xriftStudioComponentId = component.id;
       return instance;
     }
+    if (component.type === "animation") return null;
     if (component.type === "light") return createLight(component);
     if (component.type === "spawn-point" || component.type === "collider") {
       const marker = new Group();

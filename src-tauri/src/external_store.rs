@@ -47,6 +47,16 @@ pub struct ExternalStoreResolution {
     pub label: String,
     pub byte_length: u64,
     pub file_count: usize,
+    pub formats: Vec<ExternalStoreFormatOption>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalStoreFormatOption {
+    pub id: String,
+    pub label: String,
+    pub byte_length: u64,
+    pub file_count: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -55,6 +65,7 @@ pub struct ExternalStoreInstallRequest {
     pub provider_id: String,
     pub external_id: String,
     pub resolution: String,
+    pub format: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -264,13 +275,34 @@ fn download_leaf(
     })
 }
 
-fn hdri_specs(root: &Value, resolution: &str) -> Vec<DownloadSpec> {
-    download_leaf(root, "hdri", resolution, &["hdr"])
+fn hdri_specs(root: &Value, resolution: &str, format: &str) -> Vec<DownloadSpec> {
+    if !matches!(format, "hdr" | "exr") {
+        return Vec::new();
+    }
+    download_leaf(root, "hdri", resolution, &[format])
         .map(|mut spec| {
             spec.role = "environment";
             vec![spec]
         })
         .unwrap_or_default()
+}
+
+fn hdri_format_options(root: &Value, resolution: &str) -> Vec<ExternalStoreFormatOption> {
+    ["hdr", "exr"]
+        .into_iter()
+        .filter_map(|format| {
+            let specs = hdri_specs(root, resolution, format);
+            if specs.is_empty() {
+                return None;
+            }
+            Some(ExternalStoreFormatOption {
+                id: format.to_string(),
+                label: format.to_ascii_uppercase(),
+                byte_length: specs.iter().map(|entry| entry.size).sum(),
+                file_count: specs.len(),
+            })
+        })
+        .collect()
 }
 
 fn texture_specs(root: &Value, resolution: &str) -> Vec<DownloadSpec> {
@@ -294,10 +326,15 @@ fn available_resolutions(root: &Value, kind: &str) -> Vec<ExternalStoreResolutio
     candidates
         .into_iter()
         .filter_map(|resolution| {
-            let specs = if kind == "hdri" {
-                hdri_specs(root, resolution)
+            let (specs, formats) = if kind == "hdri" {
+                let formats = hdri_format_options(root, resolution);
+                let specs = formats
+                    .first()
+                    .map(|format| hdri_specs(root, resolution, &format.id))
+                    .unwrap_or_default();
+                (specs, formats)
             } else {
-                texture_specs(root, resolution)
+                (texture_specs(root, resolution), Vec::new())
             };
             if specs.is_empty()
                 || (kind == "texture" && !specs.iter().any(|entry| entry.role == "base-color"))
@@ -309,6 +346,7 @@ fn available_resolutions(root: &Value, kind: &str) -> Vec<ExternalStoreResolutio
                 label: resolution.to_uppercase(),
                 byte_length: specs.iter().map(|entry| entry.size).sum(),
                 file_count: specs.len(),
+                formats,
             })
         })
         .collect()
@@ -362,12 +400,15 @@ async fn download_to(path: &Path, spec: &DownloadSpec) -> Result<(u64, String), 
     let mut stream = response.bytes_stream();
     let mut digest = Sha256::new();
     let mut size = 0u64;
+    let mut prefix = Vec::with_capacity(16);
     while let Some(chunk) = stream.next().await {
         let bytes = chunk.map_err(|error| error.to_string())?;
         size = size.saturating_add(bytes.len() as u64);
         if size > 768 * 1024 * 1024 {
             return Err("外部アセットが許可サイズを超えています".to_string());
         }
+        let remaining_prefix = 16usize.saturating_sub(prefix.len());
+        prefix.extend_from_slice(&bytes[..bytes.len().min(remaining_prefix)]);
         digest.update(&bytes);
         file.write_all(&bytes)
             .await
@@ -377,7 +418,23 @@ async fn download_to(path: &Path, spec: &DownloadSpec) -> Result<(u64, String), 
     if size == 0 {
         return Err("ダウンロードしたファイルが空です".to_string());
     }
+    if matches!(spec.extension.as_str(), "hdr" | "exr")
+        && !has_environment_file_signature(&prefix, &spec.extension)
+    {
+        return Err(format!(
+            "ダウンロードした{}ファイルの形式を確認できませんでした",
+            spec.extension.to_ascii_uppercase()
+        ));
+    }
     Ok((size, format!("{:x}", digest.finalize())))
+}
+
+fn has_environment_file_signature(bytes: &[u8], format: &str) -> bool {
+    match format {
+        "hdr" => bytes.starts_with(b"#?RADIANCE") || bytes.starts_with(b"#?RGBE"),
+        "exr" => bytes.starts_with(&[0x76, 0x2f, 0x31, 0x01]),
+        _ => false,
+    }
 }
 
 fn file_sha256(path: &Path) -> Result<String, String> {
@@ -412,8 +469,26 @@ pub async fn install_external_store_asset(
     }
     let files = fetch_poly_haven_json(&format!("/files/{}", id)).await?;
     let specs = if kind == "hdri" {
-        hdri_specs(&files, &resolution)
+        let format = request
+            .format
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("hdr")
+            .to_ascii_lowercase();
+        if !matches!(format.as_str(), "hdr" | "exr") {
+            return Err("Skyboxのファイル形式が不正です".to_string());
+        }
+        hdri_specs(&files, &resolution, &format)
     } else {
+        if request
+            .format
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|value| !value.is_empty())
+        {
+            return Err("MaterialではSkyboxのファイル形式を指定できません".to_string());
+        }
         texture_specs(&files, &resolution)
     };
     if specs.is_empty()
@@ -538,6 +613,38 @@ mod tests {
         assert_eq!(resolutions.len(), 1);
         assert_eq!(resolutions[0].byte_length, 60);
         assert_eq!(resolutions[0].file_count, 3);
+        assert!(resolutions[0].formats.is_empty());
+    }
+
+    #[test]
+    fn hdri_resolution_exposes_hdr_and_exr_as_separate_skybox_formats() {
+        let files: Value = serde_json::json!({
+            "hdri": {
+                "1k": {
+                    "hdr": { "url": "https://dl.polyhaven.org/environment.hdr", "size": 10 },
+                    "exr": { "url": "https://dl.polyhaven.org/environment.exr", "size": 8 }
+                }
+            }
+        });
+        let resolutions = available_resolutions(&files, "hdri");
+        assert_eq!(resolutions.len(), 1);
+        assert_eq!(resolutions[0].formats.len(), 2);
+        assert_eq!(resolutions[0].formats[0].id, "hdr");
+        assert_eq!(resolutions[0].formats[0].byte_length, 10);
+        assert_eq!(resolutions[0].formats[1].id, "exr");
+        assert_eq!(resolutions[0].formats[1].byte_length, 8);
+        assert_eq!(hdri_specs(&files, "1k", "exr")[0].extension, "exr");
+    }
+
+    #[test]
+    fn environment_file_signatures_reject_html_fallbacks() {
+        assert!(has_environment_file_signature(b"#?RADIANCE\n", "hdr"));
+        assert!(has_environment_file_signature(
+            &[0x76, 0x2f, 0x31, 0x01],
+            "exr"
+        ));
+        assert!(!has_environment_file_signature(b"<!doctype html>", "hdr"));
+        assert!(!has_environment_file_signature(b"<!doctype html>", "exr"));
     }
 
     #[test]

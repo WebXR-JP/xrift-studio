@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Edges, Html, OrbitControls, TransformControls } from "@react-three/drei";
+import { Billboard, Edges, Html, OrbitControls, TransformControls } from "@react-three/drei";
 import {
   useCallback,
   useEffect,
@@ -61,6 +61,7 @@ import {
   resolveOpenBrushEditorBrushBaseUrl,
   resolveSceneSettings,
   type AssetManifest,
+  type AnimationComponent,
   type MaterialAsset,
   type MeshComponent,
   type ModelAsset,
@@ -233,12 +234,16 @@ function PrimitiveGeometryView({ primitive }: { primitive: PrimitiveGeometry }) 
 
 function MeshVisual({
   component,
+  animation,
+  playing,
   assets,
   selected,
   materialDropHighlighted,
   projectPath,
 }: {
   component: MeshComponent;
+  animation?: AnimationComponent;
+  playing: boolean;
   assets: AssetManifest;
   selected: boolean;
   materialDropHighlighted: boolean;
@@ -305,6 +310,8 @@ function MeshVisual({
         assets={assets}
         assignedMaterials={assignedModelMaterials}
         pose={component.modelPose}
+        animation={animation}
+        playing={playing}
         sourceNodeIndex={
           component.geometry?.kind === "asset"
             ? component.geometry.sourceNodeIndex
@@ -768,14 +775,14 @@ const PORTAL_FRAGMENT_SHADER = `
 `;
 
 const PORTAL_PARTICLE_POSITIONS: readonly Vec3[] = [
-  [-0.72, 0.58, 0.08],
-  [-0.92, 0.08, 0.12],
-  [-0.68, -0.5, 0.06],
-  [-0.24, 0.9, 0.1],
-  [0.34, 0.84, 0.08],
-  [0.82, 0.42, 0.12],
-  [0.88, -0.26, 0.08],
-  [0.45, -0.78, 0.1],
+  [-0.72, 0.68, 0.12],
+  [-0.92, 0.38, -0.16],
+  [-0.68, 0.25, 0.48],
+  [-0.24, 0.92, -0.62],
+  [0.34, 0.78, 0.66],
+  [0.82, 0.52, -0.36],
+  [0.88, 0.3, 0.22],
+  [0.45, 0.86, -0.72],
 ];
 
 function usePrefersReducedMotion(): boolean {
@@ -819,8 +826,8 @@ function PortalSurface({
   });
 
   return (
-    <mesh position={[0, 0, -0.02]}>
-      <circleGeometry args={[0.72, 64]} />
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.16, 0]}>
+      <circleGeometry args={[0.9, 64]} />
       <shaderMaterial
         ref={materialRef}
         uniforms={uniforms}
@@ -846,7 +853,7 @@ function PortalParticles({
   const particlesRef = useRef<Group | null>(null);
   useFrame((_state, delta) => {
     if (reducedMotion || disabled || !particlesRef.current) return;
-    particlesRef.current.rotation.z += delta * 0.18;
+    particlesRef.current.rotation.y += delta * 0.18;
   });
   return (
     <group ref={particlesRef}>
@@ -881,22 +888,24 @@ function PortalComponentVisual({
   const primary = selected ? "#8b5cf6" : "#6366f1";
   const glow = selected ? "#c4b5fd" : "#67e8f9";
   return (
-    <group position={[0, 1.15, 0]}>
-      <mesh>
-        <torusGeometry args={[0.82, 0.1, 14, 48]} />
+    <group>
+      <mesh position={[0, 0.075, 0]} rotation={[0, Math.PI / 4, 0]}>
+        <cylinderGeometry args={[1.25, 1.4, 0.15, 4]} />
         <meshStandardMaterial
-          color={primary}
-          emissive={primary}
-          emissiveIntensity={0.55}
-          metalness={0.35}
-          roughness={0.28}
-          transparent
-          opacity={preview.disabled ? 0.38 : 1}
+          color={preview.disabled ? "#475569" : "#333333"}
+          roughness={0.86}
+          metalness={0.08}
         />
       </mesh>
-      <mesh position={[0, 0, -0.045]}>
-        <circleGeometry args={[0.72, 64]} />
-        <meshBasicMaterial color="#020617" transparent opacity={0.82} side={DoubleSide} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.155, 0]}>
+        <circleGeometry args={[1.02, 48]} />
+        <meshBasicMaterial
+          color={glow}
+          transparent
+          opacity={preview.disabled ? 0.08 : 0.2}
+          blending={AdditiveBlending}
+          depthWrite={false}
+        />
       </mesh>
       <PortalSurface
         primary={primary}
@@ -904,8 +913,8 @@ function PortalComponentVisual({
         disabled={preview.disabled}
         reducedMotion={reducedMotion}
       />
-      <mesh position={[0, 0, 0.015]}>
-        <torusGeometry args={[0.73, 0.025, 10, 48]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.17, 0]}>
+        <torusGeometry args={[0.9, 0.025, 10, 48]} />
         <meshBasicMaterial
           color={glow}
           transparent
@@ -915,8 +924,8 @@ function PortalComponentVisual({
         />
       </mesh>
       {selected ? (
-        <mesh position={[0, 0, 0.02]}>
-          <torusGeometry args={[0.96, 0.016, 8, 48]} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.18, 0]}>
+          <torusGeometry args={[1.5, 0.018, 8, 48]} />
           <meshBasicMaterial color={EDITOR_SELECTION_COLOR} depthTest={false} />
         </mesh>
       ) : null}
@@ -925,23 +934,21 @@ function PortalComponentVisual({
         disabled={preview.disabled}
         reducedMotion={reducedMotion}
       />
-      <mesh position={[0, -1.05, 0]}>
-        <cylinderGeometry args={[0.72, 0.88, 0.22, 32]} />
-        <meshStandardMaterial
-          color={preview.disabled ? "#475569" : "#334155"}
-          emissive={preview.disabled ? "#000000" : primary}
-          emissiveIntensity={preview.disabled ? 0 : 0.12}
-          roughness={0.72}
-        />
-      </mesh>
-      <DirectionArrow
-        direction={1}
-        color={selected ? EDITOR_SELECTION_COLOR : "#94a3b8"}
-        position={[0, -1.02, 0.15]}
-      />
+      <Billboard follow lockX={false} lockY={false} lockZ={false} position={[0, 0.92, 0]}>
+        <mesh>
+          <planeGeometry args={[1.2, 1.2]} />
+          <meshStandardMaterial
+            color={preview.instanceId ? "#17112b" : "#050505"}
+            emissive={preview.instanceId ? primary : "#000000"}
+            emissiveIntensity={preview.disabled ? 0.05 : 0.24}
+            roughness={0.5}
+          />
+          <Edges color={preview.disabled ? "#64748b" : glow} />
+        </mesh>
+      </Billboard>
       <Html
         transform
-        position={[0, -0.78, 0.18]}
+        position={[0, 1.72, 0]}
         distanceFactor={6}
         zIndexRange={[3, 0]}
         style={{ pointerEvents: "none" }}
@@ -1126,6 +1133,100 @@ function BoardComponentVisual({
   );
 }
 
+function EntryLogBoardComponentVisual({
+  component,
+  selected,
+}: {
+  component: Extract<SceneComponent, { type: "xrift-component" }>;
+  selected: boolean;
+}) {
+  const maxEntries = Math.max(
+    1,
+    Math.round(xriftNumber(component, "maxEntries", 10)),
+  );
+  const scale = Math.max(0.1, xriftNumber(component, "scale", 1));
+  const colors = component.properties.colors;
+  const colorObject =
+    colors && typeof colors === "object" && !Array.isArray(colors)
+      ? colors
+      : {};
+  const background =
+    typeof colorObject.background === "string"
+      ? colorObject.background
+      : "#1a1a2e";
+  const textColor =
+    typeof colorObject.text === "string" ? colorObject.text : "#ffffff";
+  const joinColor =
+    typeof colorObject.join === "string" ? colorObject.join : "#4CAF50";
+  const leaveColor =
+    typeof colorObject.leave === "string" ? colorObject.leave : "#F44336";
+  const visibleRows = Math.min(maxEntries, 5);
+  const boardHeight = 0.72 + visibleRows * 0.28;
+  return (
+    <group scale={scale}>
+      <mesh position={[0, boardHeight / 2, 0]}>
+        <boxGeometry args={[2.2, boardHeight, 0.08]} />
+        <meshStandardMaterial color={background} roughness={0.78} />
+        <Edges color={selected ? EDITOR_SELECTION_COLOR : "#64748b"} />
+      </mesh>
+      <Html
+        transform
+        position={[0, boardHeight / 2, 0.05]}
+        distanceFactor={5.6}
+        zIndexRange={[3, 0]}
+        style={{ pointerEvents: "none" }}
+      >
+        <div
+          style={{
+            background,
+            border: `1px solid ${selected ? "#cbd5e1" : "#475569"}`,
+            borderRadius: 8,
+            boxSizing: "border-box",
+            color: textColor,
+            fontFamily: "system-ui, sans-serif",
+            padding: "12px 14px",
+            width: 286,
+          }}
+        >
+          <div style={{ fontSize: 16, fontWeight: 750, marginBottom: 8 }}>
+            入退室ログ
+          </div>
+          {Array.from({ length: visibleRows }, (_, index) => {
+            const joined = index % 2 === 0;
+            return (
+              <div
+                key={index}
+                style={{
+                  alignItems: "center",
+                  borderTop: "1px solid rgba(148,163,184,0.2)",
+                  display: "grid",
+                  fontSize: 10,
+                  gap: 7,
+                  gridTemplateColumns: "8px 1fr auto",
+                  padding: "6px 0",
+                }}
+              >
+                <span
+                  style={{
+                    background: joined ? joinColor : leaveColor,
+                    borderRadius: 999,
+                    height: 7,
+                    width: 7,
+                  }}
+                />
+                <span style={{ opacity: 0.78 }}>Preview user {index + 1}</span>
+                <span style={{ color: joined ? joinColor : leaveColor }}>
+                  {joined ? "入室" : "退室"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </Html>
+    </group>
+  );
+}
+
 function VideoSphereComponentVisual({
   radius,
   selected,
@@ -1211,6 +1312,8 @@ function BuiltinPrefabComponentVisual({
       return <PortalComponentVisual component={component} selected={selected} />;
     case "tag-board":
       return <BoardComponentVisual component={component} selected={selected} />;
+    case "entry-log-board":
+      return <EntryLogBoardComponentVisual component={component} selected={selected} />;
     case "screen":
       return (
         <ScreenComponentVisual
@@ -1277,6 +1380,11 @@ function XriftComponentVisual({
     case XRIFT_COMPONENT_SCHEMA_IDS.tagBoard:
       visual = <BoardComponentVisual component={component} selected={selected} />;
       break;
+    case XRIFT_COMPONENT_SCHEMA_IDS.entryLogBoard:
+      visual = (
+        <EntryLogBoardComponentVisual component={component} selected={selected} />
+      );
+      break;
     case XRIFT_COMPONENT_SCHEMA_IDS.video180Sphere:
       visual = (
         <VideoSphereComponentVisual
@@ -1298,6 +1406,8 @@ function XriftComponentVisual({
 
 function ComponentVisual({
   component,
+  animation,
+  playing,
   assets,
   selected,
   materialDragActive,
@@ -1305,6 +1415,8 @@ function ComponentVisual({
   projectPath,
 }: {
   component: SceneComponent;
+  animation?: AnimationComponent;
+  playing: boolean;
   assets: AssetManifest;
   selected: boolean;
   materialDragActive: boolean;
@@ -1319,6 +1431,8 @@ function ComponentVisual({
         <group userData={{ meshComponentId: component.id }}>
           <MeshVisual
             component={component}
+            animation={animation}
+            playing={playing}
             assets={assets}
             selected={materialDragActive ? materialDropHighlighted : selected}
             materialDropHighlighted={materialDropHighlighted}
@@ -1352,6 +1466,8 @@ function ComponentVisual({
       return <LightVisual component={component} selected={selected} />;
     case "audio-source":
       return component.enabled ? <AudioSourceVisual selected={selected} /> : null;
+    case "animation":
+      return null;
     case "spawn-point":
       return component.enabled ? (
         <SpawnPointVisual selected={selected} />
@@ -1378,6 +1494,7 @@ function EntityObject({
   assets,
   selected,
   editable,
+  playing,
   transformMode,
   transformSpace,
   gizmo,
@@ -1395,6 +1512,7 @@ function EntityObject({
   assets: AssetManifest;
   selected: boolean;
   editable: boolean;
+  playing: boolean;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
   gizmo: SceneSettings["editor"]["gizmo"];
@@ -1410,6 +1528,10 @@ function EntityObject({
   const objectRef = useRef<Group>(null!);
   const transformControlsRef = useRef<ElementRef<typeof TransformControls>>(null);
   const transform = getTransform(entity);
+  const animation = entity.components.find(
+    (component): component is AnimationComponent =>
+      component.type === "animation" && component.enabled,
+  );
 
   const setTransformControlsRef = useCallback(
     (controls: ElementRef<typeof TransformControls> | null) => {
@@ -1463,6 +1585,8 @@ function EntityObject({
           <ComponentVisual
             key={component.id}
             component={component}
+            animation={animation}
+            playing={playing}
             assets={assets}
             selected={selected}
             materialDragActive={materialDragActive}
@@ -1701,6 +1825,7 @@ function SceneEntityHierarchy({
   assets,
   selectedEntityId,
   editable,
+  playing,
   transformMode,
   transformSpace,
   gizmo,
@@ -1719,6 +1844,7 @@ function SceneEntityHierarchy({
   assets: AssetManifest;
   selectedEntityId: string | null;
   editable: boolean;
+  playing: boolean;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
   gizmo: SceneSettings["editor"]["gizmo"];
@@ -1746,6 +1872,7 @@ function SceneEntityHierarchy({
       projectPath={projectPath}
       selected={selectedEntityId === authoringEntityId}
       editable={editable}
+      playing={playing}
       transformMode={transformMode}
       transformSpace={transformSpace}
       gizmo={gizmo}
@@ -1765,6 +1892,7 @@ function SceneEntityHierarchy({
           assets={assets}
           selectedEntityId={selectedEntityId}
           editable={editable}
+          playing={playing}
           transformMode={transformMode}
           transformSpace={transformSpace}
           gizmo={gizmo}
@@ -2886,6 +3014,7 @@ export function SceneViewport({
               projectPath={projectPath}
               selectedEntityId={selectedEntityId}
               editable={editorMode === "edit"}
+              playing={editorMode === "play"}
               transformMode={transformMode}
               transformSpace={transformSpace}
               gizmo={sceneSettings.editor.gizmo}

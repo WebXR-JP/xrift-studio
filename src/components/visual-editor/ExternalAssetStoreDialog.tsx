@@ -12,6 +12,7 @@ import {
   tauri,
   type ExternalStoreAsset,
   type ExternalStoreAssetOptions,
+  type ExternalStoreFileFormat,
   type ExternalStoreInstallResult,
 } from "../../lib/tauri";
 import { formatFileSize } from "./editor-utils";
@@ -43,6 +44,7 @@ export function ExternalAssetStoreDialog({
   const [options, setOptions] = useState<ExternalStoreAssetOptions | null>(null);
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [resolution, setResolution] = useState("");
+  const [fileFormat, setFileFormat] = useState<ExternalStoreFileFormat | "">("");
   const [applySkybox, setApplySkybox] = useState(true);
   const [installing, setInstalling] = useState(false);
   const [installedName, setInstalledName] = useState<string | null>(null);
@@ -73,6 +75,7 @@ export function ExternalAssetStoreDialog({
     if (!open || !selected || selected.assetKind === "model") {
       setOptions(null);
       setResolution("");
+      setFileFormat("");
       return;
     }
     let active = true;
@@ -86,6 +89,7 @@ export function ExternalAssetStoreDialog({
         setOptions(next);
         const preferred = next.resolutions.find((entry) => entry.id === "2k") ?? next.resolutions[0];
         setResolution(preferred?.id ?? "");
+        setFileFormat(preferred?.formats.find((entry) => entry.id === "hdr")?.id ?? preferred?.formats[0]?.id ?? "");
       })
       .catch((reason: unknown) => {
         if (active) setError(errorMessage(reason, "ダウンロード情報を取得できませんでした"));
@@ -109,9 +113,27 @@ export function ExternalAssetStoreDialog({
       .slice(0, 120);
   }, [assets, kind, query]);
   const selectedResolution = options?.resolutions.find((entry) => entry.id === resolution);
+  const selectedFormat = selectedResolution?.formats.find((entry) => entry.id === fileFormat);
+
+  const selectResolution = (nextResolution: string) => {
+    setResolution(nextResolution);
+    const next = options?.resolutions.find((entry) => entry.id === nextResolution);
+    setFileFormat((current) =>
+      next?.formats.some((entry) => entry.id === current)
+        ? current
+        : next?.formats.find((entry) => entry.id === "hdr")?.id ?? next?.formats[0]?.id ?? "",
+    );
+  };
 
   const install = async () => {
-    if (!projectPath || !selected || !resolution || installing || disabledReason) return;
+    if (
+      !projectPath ||
+      !selected ||
+      !resolution ||
+      (selected.assetKind === "hdri" && !fileFormat) ||
+      installing ||
+      disabledReason
+    ) return;
     setInstalling(true);
     setError(null);
     setInstalledName(null);
@@ -120,9 +142,15 @@ export function ExternalAssetStoreDialog({
         providerId: selected.providerId,
         externalId: selected.externalId,
         resolution,
+        ...(selected.assetKind === "hdri" ? { format: fileFormat as ExternalStoreFileFormat } : {}),
       });
       onInstalled(result, result.assetKind === "hdri" && applySkybox);
-      setInstalledName(result.name);
+      const environmentFormat = result.files.find((entry) => entry.role === "environment")?.format;
+      setInstalledName(
+        environmentFormat
+          ? `${result.name} (${environmentFormat.toUpperCase()})`
+          : result.name,
+      );
     } catch (reason) {
       setError(errorMessage(reason, "アセットをインストールできませんでした"));
     } finally {
@@ -180,15 +208,15 @@ export function ExternalAssetStoreDialog({
                 <dl className="grid grid-cols-[76px_1fr] gap-x-2 gap-y-1.5 text-xs"><dt className="text-slate-400">提供元</dt><dd className="font-medium text-slate-700">Poly Haven</dd><dt className="text-slate-400">作者</dt><dd className="text-slate-700">{selected.authors.join("、") || "Poly Haven contributors"}</dd><dt className="text-slate-400">ライセンス</dt><dd><button type="button" onClick={() => void tauri.openUrl(selected.licenseUrl)} className="font-medium text-brand-700 hover:underline">{selected.licenseName}</button></dd><dt className="text-slate-400">カテゴリ</dt><dd className="text-slate-700">{selected.category || "未分類"}</dd></dl>
                 {selected.assetKind === "model" ? <Notice text="Modelの直接インストールは次の対応項目です。現在はSkyboxとMaterialを追加できます。" /> : (
                   <>
-                    <label className="block"><span className="mb-1 block text-xs font-semibold text-slate-700">解像度</span><select value={resolution} disabled={optionsLoading || installing} onChange={(event) => setResolution(event.currentTarget.value)} className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-xs disabled:bg-slate-100"><option value="">選択してください</option>{options?.resolutions.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}・{formatFileSize(entry.byteLength)}・{entry.fileCount}ファイル</option>)}</select>{optionsLoading ? <p className="mt-1 text-[11px] text-slate-500">利用可能なファイルを確認中です</p> : null}{selectedResolution ? <p className="mt-1 text-[11px] text-slate-500">ダウンロード目安 {formatFileSize(selectedResolution.byteLength)}</p> : null}</label>
-                    {selected.assetKind === "hdri" ? <label className="flex items-start gap-2 rounded-md bg-slate-50 p-2.5 text-xs text-slate-700"><input type="checkbox" checked={applySkybox} onChange={(event) => setApplySkybox(event.currentTarget.checked)} className="mt-0.5" /><span><span className="block font-semibold">インストール後にSkyboxへ設定</span><span className="mt-0.5 block text-[11px] text-slate-500">後からAssetsのSkyboxをScene Viewへドロップして変更できます。</span></span></label> : <Notice text="Diffuse、Normal、ARMをTextureとして保存し、参照済みMaterialを作成します。" />}
+                    <label className="block"><span className="mb-1 block text-xs font-semibold text-slate-700">解像度</span><select value={resolution} disabled={optionsLoading || installing} onChange={(event) => selectResolution(event.currentTarget.value)} className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-xs disabled:bg-slate-100"><option value="">選択してください</option>{options?.resolutions.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}{selected.assetKind === "hdri" ? `・${entry.formats.map((format) => format.label).join(" / ")}` : `・${formatFileSize(entry.byteLength)}・${entry.fileCount}ファイル`}</option>)}</select>{optionsLoading ? <p className="mt-1 text-[11px] text-slate-500">利用可能なファイルを確認中です</p> : null}</label>
+                    {selected.assetKind === "hdri" ? <><label className="block"><span className="mb-1 block text-xs font-semibold text-slate-700">ファイル形式</span><select value={fileFormat} disabled={optionsLoading || installing || !selectedResolution} onChange={(event) => setFileFormat(event.currentTarget.value as ExternalStoreFileFormat)} className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-xs disabled:bg-slate-100"><option value="">選択してください</option>{selectedResolution?.formats.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}・{formatFileSize(entry.byteLength)}</option>)}</select>{selectedFormat ? <p className="mt-1 text-[11px] text-slate-500">ダウンロード目安 {formatFileSize(selectedFormat.byteLength)}。{selectedFormat.label}をSkybox Assetとして保存します。</p> : null}</label><label className="flex items-start gap-2 rounded-md bg-slate-50 p-2.5 text-xs text-slate-700"><input type="checkbox" checked={applySkybox} onChange={(event) => setApplySkybox(event.currentTarget.checked)} className="mt-0.5" /><span><span className="block font-semibold">インストール後にSkyboxへ設定</span><span className="mt-0.5 block text-[11px] text-slate-500">HDRとEXRはどちらもSkybox Assetになります。後からScene Viewへドロップして変更できます。</span></span></label></> : <><p className="text-[11px] text-slate-500">ダウンロード目安 {selectedResolution ? formatFileSize(selectedResolution.byteLength) : "—"}</p><Notice text="Diffuse、Normal、ARMをTextureとして保存し、参照済みMaterialを作成します。" /></>}
                   </>
                 )}
                 {!projectPath ? <Notice tone="warning" text="先にプロジェクトを保存すると外部アセットを追加できます。" /> : null}
                 {disabledReason ? <Notice tone="warning" text={disabledReason} /> : null}
                 {error ? <div className="flex gap-2 rounded-md border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-800" role="alert"><CircleAlert size={15} className="shrink-0" /><span>{error}</span></div> : null}
                 {installedName ? <div className="flex gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2.5 text-xs text-emerald-800" role="status"><CheckCircle2 size={15} className="shrink-0" /><span>「{installedName}」を追加しました。Assetsで選択されています。</span></div> : null}
-                {selected.assetKind !== "model" ? <button type="button" disabled={!projectPath || !resolution || installing || optionsLoading || Boolean(disabledReason)} onClick={() => void install()} className="flex h-10 w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-45">{installing ? <><LoaderCircle size={16} className="animate-spin" />ダウンロード中</> : selected.assetKind === "hdri" && applySkybox ? "インストールしてSkyboxに設定" : "プロジェクトへインストール"}</button> : null}
+                {selected.assetKind !== "model" ? <button type="button" disabled={!projectPath || !resolution || (selected.assetKind === "hdri" && !fileFormat) || installing || optionsLoading || Boolean(disabledReason)} onClick={() => void install()} className="flex h-10 w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-45">{installing ? <><LoaderCircle size={16} className="animate-spin" />ダウンロード中</> : selected.assetKind === "hdri" && applySkybox ? `${fileFormat.toUpperCase()}をインストールしてSkyboxに設定` : "プロジェクトへインストール"}</button> : null}
               </div>
             ) : <StoreState icon={<Store size={22} />} text="アセットを選択してください" />}
           </aside>
