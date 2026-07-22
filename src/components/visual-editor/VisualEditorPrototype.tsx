@@ -77,6 +77,7 @@ import {
   updateLightComponent,
   updateMeshShadowSettings,
   updateMaterialAsset,
+  updateAssetThumbnail,
   updateModelAsset,
   updateParticleAsset,
   updatePrefabDocumentFromSource,
@@ -88,6 +89,7 @@ import {
   type AudioSourcePatch,
   type LightPatch,
   type MaterialAssetPatch,
+  type AssetThumbnailDescriptor,
   type ModelAssetPatch,
   type ModelReimportProgress,
   type EditorCommandId,
@@ -112,6 +114,7 @@ import {
   type XriftOllamaStatus,
 } from "../../lib/tauri";
 import { AssetsPanel } from "./AssetsPanel";
+import { MaterialThumbnailGenerationQueue } from "./MaterialThumbnailGenerationQueue";
 import { ExternalAssetStoreDialog } from "./ExternalAssetStoreDialog";
 import {
   hasActiveAssetImport,
@@ -2818,6 +2821,40 @@ export function VisualEditorPrototype({
     [editorMode],
   );
 
+  const handleMaterialThumbnailGenerated = useCallback(
+    (assetId: string, thumbnail: AssetThumbnailDescriptor) => {
+      if (editorModeRef.current !== "edit" || importBusyRef.current) return;
+      setHistory((current) => {
+        const assets = updateAssetThumbnail(
+          current.present.bundle.assets,
+          assetId,
+          thumbnail,
+        );
+        if (assets === current.present.bundle.assets) return current;
+        const nextBundle = { ...current.present.bundle, assets };
+        bundleRef.current = nextBundle;
+        setSaveStatus("dirty");
+        return replaceEditorHistoryPresent(current, {
+          ...current.present,
+          bundle: nextBundle,
+        });
+      });
+    },
+    [],
+  );
+
+  const handleMaterialThumbnailFailure = useCallback(
+    (assetId: string, _message: string) => {
+      const asset = bundleRef.current.assets.assets[assetId];
+      setNotice(
+        asset?.kind === "material"
+          ? `「${asset.name}」のサムネイルを更新できませんでした。プロジェクトを開き直すかMaterialを変更すると再試行します`
+          : "Materialサムネイルの準備に失敗しました。プロジェクトを開き直すと再試行します",
+      );
+    },
+    [],
+  );
+
   const handleUpdatePrefab = useCallback(
     (prefabId: string) => {
       if (editorMode !== "edit" || importBusy) {
@@ -4246,6 +4283,13 @@ export function VisualEditorPrototype({
             externalOperationLockReason={
               assetImportPanelAvailability.disabledReason
             }
+          />
+          <MaterialThumbnailGenerationQueue
+            assets={bundle.assets}
+            projectPath={projectPath}
+            enabled={editorMode === "edit" && !importBusy}
+            onGenerated={handleMaterialThumbnailGenerated}
+            onFailed={handleMaterialThumbnailFailure}
           />
           <EditorUtilityRail
             commands={resolvedCommands}

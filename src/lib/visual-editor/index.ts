@@ -20,6 +20,7 @@ export * from "./editor-history";
 export * from "./editor-session";
 export * from "./editor-session.fixture";
 export * from "./material-assignment";
+export * from "./material-thumbnail";
 export * from "./mcp-editor-tools";
 export * from "./mcp-editor-tools.fixture";
 export * from "./model-import-contract";

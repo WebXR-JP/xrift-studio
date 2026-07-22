@@ -57,6 +57,7 @@ import {
   useMaterialPreviewRenderSync,
   useMaterialPreviewTextureState,
 } from "./material-texture-preview";
+import { WebGlThumbnailCapture } from "./WebGlThumbnailCapture";
 
 const INPUT_CLASS =
   "h-7 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400";
@@ -287,13 +288,37 @@ export function MaterialThumbnail({
   projectPath,
   className = "h-full w-full",
   onTextureStatusesChange,
+  captureKey,
+  onCapture,
+  onCaptureError,
 }: {
   asset: MaterialAsset;
   assets?: AssetManifest;
   projectPath?: string;
   className?: string;
   onTextureStatusesChange?: (statuses: MaterialPreviewTextureStatuses) => void;
+  captureKey?: string;
+  onCapture?: (dataUrl: string) => void;
+  onCaptureError?: (message: string) => void;
 }) {
+  const [previewTextureState, setPreviewTextureState] = useState<{
+    assetId: string;
+    statuses: MaterialPreviewTextureStatuses;
+  } | null>(null);
+  const handleTextureStatusesChange = useCallback(
+    (statuses: MaterialPreviewTextureStatuses) => {
+      setPreviewTextureState({ assetId: asset.id, statuses });
+      onTextureStatusesChange?.(statuses);
+    },
+    [asset.id, onTextureStatusesChange],
+  );
+  const captureReady = Boolean(
+    captureKey &&
+      onCapture &&
+      previewTextureState?.assetId === asset.id &&
+      !Object.values(previewTextureState.statuses).includes("loading"),
+  );
+
   if (asset.shader?.kind === "openbrush") {
     return (
       <CustomMaterialPreview
@@ -302,6 +327,9 @@ export function MaterialThumbnail({
         projectPath={projectPath}
         className={className}
         compact
+        captureKey={captureKey}
+        onCapture={onCapture}
+        onCaptureError={onCaptureError}
       />
     );
   }
@@ -311,14 +339,26 @@ export function MaterialThumbnail({
         frameloop="demand"
         dpr={[1, 1.25]}
         camera={{ position: [0, 0, 2.7], fov: 34 }}
-        gl={{ antialias: true, alpha: false }}
+        gl={{
+          antialias: true,
+          alpha: false,
+          preserveDrawingBuffer: Boolean(onCapture),
+        }}
       >
         <MaterialPreviewScene
           asset={asset}
           assets={assets}
           projectPath={projectPath}
-          onTextureStatusesChange={onTextureStatusesChange}
+          onTextureStatusesChange={handleTextureStatusesChange}
         />
+        {captureKey && onCapture ? (
+          <WebGlThumbnailCapture
+            captureKey={captureKey}
+            ready={captureReady}
+            onCapture={onCapture}
+            onError={onCaptureError}
+          />
+        ) : null}
       </Canvas>
     </div>
   );
@@ -338,7 +378,9 @@ function AssetThumbnailFallback({ asset }: { asset: SceneAsset }) {
             ? EDITOR_ICONS.skybox
           : asset.kind === "model"
             ? EDITOR_ICONS.model
-            : EDITOR_ICONS.asset;
+            : asset.kind === "material"
+              ? EDITOR_ICONS.material
+              : EDITOR_ICONS.asset;
   const label =
     asset.status === "invalid"
       ? "解析失敗・再生成"
@@ -535,7 +577,13 @@ function ProjectAssetThumbnail({
     );
   }
 
-  const Icon = EDITOR_ICONS[asset.kind === "texture" ? "texture" : "model"];
+  const Icon = EDITOR_ICONS[
+    asset.kind === "texture"
+      ? "texture"
+      : asset.kind === "material"
+        ? "material"
+        : "model"
+  ];
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-white text-slate-500">
       <Icon size={22} aria-hidden="true" />
@@ -550,7 +598,6 @@ function ProjectAssetThumbnail({
 
 export function AssetThumbnail({
   asset,
-  assets,
   projectPath,
 }: {
   asset: SceneAsset;
@@ -560,12 +607,15 @@ export function AssetThumbnail({
   if (asset.status !== "ready") return <AssetThumbnailFallback asset={asset} />;
 
   if (asset.kind === "material") {
-    return (
-      <MaterialThumbnail
+    return projectPath && asset.thumbnail && asset.thumbnail.status !== "missing" ? (
+      <ProjectAssetThumbnail
         asset={asset}
-        assets={assets}
         projectPath={projectPath}
+        derivedPath={asset.thumbnail.derivedPath}
+        stale={asset.thumbnail.status === "stale"}
       />
+    ) : (
+      <AssetThumbnailFallback asset={asset} />
     );
   }
   if (

@@ -1045,6 +1045,9 @@ export function updateMaterialAsset(
         ...asset,
         properties,
         ...(shader ? { shader } : {}),
+        ...(asset.thumbnail?.status === "generated"
+          ? { thumbnail: { ...asset.thumbnail, status: "stale" as const } }
+          : {}),
         ...(asset.importedFromModel
           ? {
               importedFromModel: {

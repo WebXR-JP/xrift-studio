@@ -19,6 +19,7 @@ import {
   type ProjectModelLoadState,
   type ProjectModelMaterialRuntimeInfo,
 } from "./ProjectModelVisual";
+import { WebGlThumbnailCapture } from "./WebGlThumbnailCapture";
 
 export type CustomMaterialPreviewSource = {
   renderer: "three-icosa";
@@ -41,6 +42,9 @@ type Props = {
   onRuntimeInfoChange?: (
     info: ProjectModelMaterialRuntimeInfo | null,
   ) => void;
+  captureKey?: string;
+  onCapture?: (dataUrl: string) => void;
+  onCaptureError?: (message: string) => void;
 };
 
 /**
@@ -109,15 +113,23 @@ export function CustomMaterialPreview({
   className = "h-full w-full",
   compact = false,
   onRuntimeInfoChange,
+  captureKey,
+  onCapture,
+  onCaptureError,
 }: Props) {
   const resolution = useMemo(
     () => resolveCustomMaterialPreviewSource(asset, assets),
     [asset, assets],
   );
   const [loadRevision, setLoadRevision] = useState(0);
-  const [loadState, setLoadState] = useState<ProjectModelLoadState>({
-    status: "loading",
-  });
+  const [loadSnapshot, setLoadSnapshot] = useState<{
+    assetId: string;
+    state: ProjectModelLoadState;
+  }>({ assetId: asset.id, state: { status: "loading" } });
+  const loadState =
+    loadSnapshot.assetId === asset.id
+      ? loadSnapshot.state
+      : ({ status: "loading" } satisfies ProjectModelLoadState);
   const [runtimeInfo, setRuntimeInfo] =
     useState<ProjectModelMaterialRuntimeInfo | null>(null);
   const assignment = useMemo(
@@ -135,11 +147,18 @@ export function CustomMaterialPreview({
   );
 
   useEffect(() => {
-    setLoadState({ status: "loading" });
+    setLoadSnapshot({ assetId: asset.id, state: { status: "loading" } });
     setLoadRevision(0);
     setRuntimeInfo(null);
     onRuntimeInfoChange?.(null);
   }, [asset.id, onRuntimeInfoChange]);
+
+  const handleLoadStateChange = useCallback(
+    (state: ProjectModelLoadState) => {
+      setLoadSnapshot({ assetId: asset.id, state });
+    },
+    [asset.id],
+  );
 
   const handleRuntimeInfo = useCallback(
     (materials: readonly ProjectModelMaterialRuntimeInfo[]) => {
@@ -149,6 +168,22 @@ export function CustomMaterialPreview({
     },
     [onRuntimeInfoChange],
   );
+
+  useEffect(() => {
+    if (
+      captureKey &&
+      loadSnapshot.assetId === asset.id &&
+      loadState.status === "error"
+    ) {
+      onCaptureError?.(loadState.message);
+    }
+  }, [
+    asset.id,
+    captureKey,
+    loadSnapshot.assetId,
+    loadState,
+    onCaptureError,
+  ]);
 
   if (!projectPath || resolution.status === "unavailable") {
     const reason = projectPath
@@ -178,7 +213,11 @@ export function CustomMaterialPreview({
         frameloop={compact ? "demand" : "always"}
         dpr={[1, 1.5]}
         camera={{ position: [0, 0.15, 2.65], fov: 34 }}
-        gl={{ antialias: true, alpha: false }}
+        gl={{
+          antialias: true,
+          alpha: false,
+          preserveDrawingBuffer: Boolean(onCapture),
+        }}
       >
         <color attach="background" args={["#0f172a"]} />
         <ambientLight intensity={1.25} />
@@ -190,6 +229,7 @@ export function CustomMaterialPreview({
         />
         <PreviewTurntable enabled={!compact}>
           <ProjectModelVisual
+            key={`${asset.id}-${loadRevision}`}
             projectPath={projectPath}
             sourceRelativePath={sourceRelativePath}
             sourceHash={model.sourceHash}
@@ -201,10 +241,20 @@ export function CustomMaterialPreview({
             sourceNodeIndex={sourceNodeIndex}
             fitPreview
             loadRevision={loadRevision}
-            onLoadStateChange={setLoadState}
+            onLoadStateChange={handleLoadStateChange}
             onMaterialRuntimeInfoChange={handleRuntimeInfo}
           />
         </PreviewTurntable>
+        {captureKey && onCapture ? (
+          <WebGlThumbnailCapture
+            captureKey={captureKey}
+            ready={
+              loadSnapshot.assetId === asset.id && loadState.status === "ready"
+            }
+            onCapture={onCapture}
+            onError={onCaptureError}
+          />
+        ) : null}
         {!compact ? (
           <OrbitControls
             makeDefault
