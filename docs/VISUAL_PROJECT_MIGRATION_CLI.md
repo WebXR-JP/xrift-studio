@@ -89,7 +89,7 @@ classic-world/
   "format": "xrift-studio.runtime",
   "schemaVersion": "1.0.0",
   "generator": "xrift-studio",
-  "compilerVersion": "0.5.5",
+  "compilerVersion": "0.5.6",
   "projectId": "project-id",
   "projectKind": "world",
   "entryScene": "scene-id",
