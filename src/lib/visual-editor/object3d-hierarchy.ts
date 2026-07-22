@@ -11,29 +11,46 @@ export function repairImportedObject3DHierarchy(
   let removedLinks = 0;
   root.removeFromParent();
   const visited = new Set<Object3D>([root]);
-  const active = new Set<Object3D>();
+  const active = new Set<Object3D>([root]);
+  const pending: Array<{
+    object: Object3D;
+    children: Object3D[];
+    nextChildIndex: number;
+  }> = [{ object: root, children: [...root.children], nextChildIndex: 0 }];
 
-  const visit = (object: Object3D) => {
-    active.add(object);
-    for (const child of [...object.children]) {
-      const candidate = child as Object3D | undefined;
-      if (
-        !candidate ||
-        candidate === object ||
-        active.has(candidate) ||
-        visited.has(candidate) ||
-        candidate.parent !== object
-      ) {
-        object.remove(child);
-        removedLinks += 1;
-        continue;
-      }
-      visited.add(candidate);
-      visit(candidate);
+  // Object3D.traverse() and a recursive visitor both overflow the JS stack for
+  // deeply nested imported glTF/VRM files. Keep the same active-path cycle
+  // check, but walk the tree explicitly so a malformed source can be rejected
+  // or repaired without taking the editor down first.
+  while (pending.length > 0) {
+    const frame = pending[pending.length - 1];
+    if (frame.nextChildIndex >= frame.children.length) {
+      active.delete(frame.object);
+      pending.pop();
+      continue;
     }
-    active.delete(object);
-  };
 
-  visit(root);
+    const child = frame.children[frame.nextChildIndex++];
+    const candidate = child as Object3D | undefined;
+    if (
+      !candidate ||
+      candidate === frame.object ||
+      active.has(candidate) ||
+      visited.has(candidate) ||
+      candidate.parent !== frame.object
+    ) {
+      frame.object.remove(child);
+      removedLinks += 1;
+      continue;
+    }
+    visited.add(candidate);
+    active.add(candidate);
+    pending.push({
+      object: candidate,
+      children: [...candidate.children],
+      nextChildIndex: 0,
+    });
+  }
+
   return { removedLinks };
 }

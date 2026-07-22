@@ -1,5 +1,9 @@
 import { createPrototypeProject } from "./prototype-project";
-import { createUnityPackageImportPlan, parseUnityYamlText } from "./unity-package-import";
+import {
+  createUnityPackageImportPlan,
+  parseUnityYamlText,
+  UNITY_HIERARCHY_MAX_DEPTH,
+} from "./unity-package-import";
 
 const UNITY_SCENE_FIXTURE = `%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
@@ -121,6 +125,107 @@ export async function runUnityPackageImportFixture(): Promise<void> {
     ),
     "UnityPackage pathname must survive extraction",
   );
+
+  const cyclicPlan = await createUnityPackageImportPlan({
+    fileName: "Cycle.prefab",
+    bytes: new TextEncoder().encode(UNITY_CYCLIC_HIERARCHY_FIXTURE),
+    bundle: createPrototypeProject("world", "unity-cycle-fixture"),
+  });
+  const cycleRoot = Object.values(cyclicPlan.scene.entities).find(
+    (entity) => entity.name === "Cycle Root",
+  );
+  const cycleChild = Object.values(cyclicPlan.scene.entities).find(
+    (entity) => entity.name === "Cycle Child",
+  );
+  const cycleDescendant = Object.values(cyclicPlan.scene.entities).find(
+    (entity) => entity.name === "Cycle Descendant",
+  );
+  assert(
+    cycleChild?.parentId === null &&
+      cycleRoot?.parentId === cycleChild.id &&
+      cycleDescendant?.parentId === cycleChild.id,
+    "Cycle repair detached a non-cyclic Unity descendant",
+  );
+
+  const deepPlan = await createUnityPackageImportPlan({
+    fileName: "Deep.prefab",
+    bytes: new TextEncoder().encode(
+      unityDeepHierarchyFixture(UNITY_HIERARCHY_MAX_DEPTH + 1),
+    ),
+    bundle: createPrototypeProject("world", "unity-deep-hierarchy-fixture"),
+  });
+  assert(
+    deepPlan.diagnostics.some(
+      (diagnostic) => diagnostic.code === "unity-hierarchy-too-deep",
+    ),
+    "Overly deep Unity hierarchy was not reported before entering the editor",
+  );
+  assert(
+    !Object.values(deepPlan.scene.entities).some((entity) =>
+      entity.name.startsWith("Deep Entity"),
+    ),
+    "Overly deep Unity hierarchy reached the editor Scene",
+  );
+}
+
+const UNITY_CYCLIC_HIERARCHY_FIXTURE = `%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1
+GameObject:
+  m_Name: Cycle Root
+  m_IsActive: 1
+--- !u!4 &11
+Transform:
+  m_GameObject: {fileID: 1}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Father: {fileID: 22}
+--- !u!1 &2
+GameObject:
+  m_Name: Cycle Child
+  m_IsActive: 1
+--- !u!4 &22
+Transform:
+  m_GameObject: {fileID: 2}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Father: {fileID: 33}
+--- !u!1 &3
+GameObject:
+  m_Name: Cycle Descendant
+  m_IsActive: 1
+--- !u!4 &33
+Transform:
+  m_GameObject: {fileID: 3}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Father: {fileID: 22}
+`;
+
+function unityDeepHierarchyFixture(depth: number): string {
+  const lines = ["%YAML 1.1", "%TAG !u! tag:unity3d.com,2011:"];
+  for (let index = 0; index < depth; index += 1) {
+    const gameObjectId = index * 2 + 1;
+    const transformId = gameObjectId + 1;
+    const parentTransformId = index === 0 ? 0 : transformId - 2;
+    lines.push(
+      `--- !u!1 &${gameObjectId}`,
+      "GameObject:",
+      `  m_Name: Deep Entity ${index}`,
+      "  m_IsActive: 1",
+      `--- !u!4 &${transformId}`,
+      "Transform:",
+      `  m_GameObject: {fileID: ${gameObjectId}}`,
+      "  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}",
+      "  m_LocalPosition: {x: 0, y: 0, z: 0}",
+      "  m_LocalScale: {x: 1, y: 1, z: 1}",
+      `  m_Father: {fileID: ${parentTransformId}}`,
+    );
+  }
+  return lines.join("\n");
 }
 
 function assert(condition: unknown, message: string): asserts condition {

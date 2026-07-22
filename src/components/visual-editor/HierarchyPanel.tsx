@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type DragEvent,
@@ -66,26 +67,74 @@ type HierarchyDropTarget =
 function flattenHierarchy(scene: SceneDocument): HierarchyRow[] {
   const rows: HierarchyRow[] = [];
   const visited = new Set<string>();
+  const pending: Array<{
+    entityId: string;
+    depth: number;
+    ancestorsEnabled: boolean;
+  }> = [];
+  const candidates = [...scene.rootEntityIds, ...Object.keys(scene.entities)];
+  for (let index = candidates.length - 1; index >= 0; index -= 1) {
+    pending.push({
+      entityId: candidates[index],
+      depth: 0,
+      ancestorsEnabled: true,
+    });
+  }
 
-  const visit = (
-    entityId: string,
-    depth: number,
-    ancestorsEnabled: boolean,
-  ) => {
-    if (visited.has(entityId)) return;
+  while (pending.length > 0) {
+    const { entityId, depth, ancestorsEnabled } = pending.pop()!;
+    if (visited.has(entityId)) continue;
     const entity = scene.entities[entityId];
-    if (!entity) return;
+    if (!entity) continue;
     visited.add(entityId);
     const effectiveEnabled = ancestorsEnabled && entity.enabled;
     rows.push({ entity, depth, effectiveEnabled });
-    entity.children.forEach((childId) =>
-      visit(childId, depth + 1, effectiveEnabled),
-    );
-  };
-
-  scene.rootEntityIds.forEach((entityId) => visit(entityId, 0, true));
-  Object.keys(scene.entities).forEach((entityId) => visit(entityId, 0, true));
+    for (let index = entity.children.length - 1; index >= 0; index -= 1) {
+      pending.push({
+        entityId: entity.children[index],
+        depth: depth + 1,
+        ancestorsEnabled: effectiveEnabled,
+      });
+    }
+  }
   return rows;
+}
+
+function sameDropTarget(
+  left: HierarchyDropTarget | null,
+  right: HierarchyDropTarget | null,
+): boolean {
+  if (left === right) return true;
+  if (!left || !right || left.kind !== right.kind) return false;
+  if (
+    left.parentEntityId !== right.parentEntityId ||
+    left.siblingIndex !== right.siblingIndex ||
+    left.allowed !== right.allowed ||
+    left.message !== right.message
+  ) {
+    return false;
+  }
+  return left.kind === "root"
+    ? true
+    : right.kind === "entity" &&
+        left.entityId === right.entityId &&
+        left.placement === right.placement;
+}
+
+function sameAssetDropTarget(
+  left: { kind: "entity" | "root"; entityId?: string; message: string } | null,
+  right: { kind: "entity" | "root"; entityId?: string; message: string } | null,
+): boolean {
+  return (
+    left === right ||
+    Boolean(
+      left &&
+        right &&
+        left.kind === right.kind &&
+        left.entityId === right.entityId &&
+        left.message === right.message,
+    )
+  );
 }
 
 function getEntityTypeLabel(entity: SceneEntity): string {
@@ -207,7 +256,7 @@ export function HierarchyPanel({
   renameRequest: { id: string; requestId: number } | null;
   onRename: (entityId: string, name: string) => void;
 }) {
-  const rows = flattenHierarchy(scene);
+  const rows = useMemo(() => flattenHierarchy(scene), [scene]);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -223,6 +272,24 @@ export function HierarchyPanel({
     entityId?: string;
     message: string;
   } | null>(null);
+  const selectedEntityIdSet = useMemo(
+    () => new Set(selectedEntityIds),
+    [selectedEntityIds],
+  );
+  const replaceDropTarget = (target: HierarchyDropTarget | null) => {
+    setDropTarget((current) =>
+      sameDropTarget(current, target) ? current : target,
+    );
+  };
+  const replaceAssetDropTarget = (target: {
+    kind: "entity" | "root";
+    entityId?: string;
+    message: string;
+  } | null) => {
+    setAssetDropTarget((current) =>
+      sameAssetDropTarget(current, target) ? current : target,
+    );
+  };
   const selectedEntityId =
     selection?.kind === "entity" && scene.entities[selection.id]
       ? selection.id
@@ -459,7 +526,7 @@ export function HierarchyPanel({
       placement,
     );
     if (!target.allowed) {
-      setDropTarget(target);
+      replaceDropTarget(target);
       setDragEntityId(null);
       return;
     }
@@ -570,7 +637,7 @@ export function HierarchyPanel({
           event.preventDefault();
           event.stopPropagation();
           if (readOnly) return;
-          setAssetDropTarget({
+          replaceAssetDropTarget({
             kind: "root",
             message: "Asset / XRift PrefabをScene Rootへ配置",
           });
@@ -605,7 +672,7 @@ export function HierarchyPanel({
                 event.stopPropagation();
                 event.dataTransfer.dropEffect = readOnly ? "none" : "copy";
                 if (readOnly) return;
-                setAssetDropTarget({
+                replaceAssetDropTarget({
                   kind: "root",
                   message: "Asset / XRift PrefabをScene Rootへ配置",
                 });
@@ -622,7 +689,7 @@ export function HierarchyPanel({
                 readEditorDragData(event.dataTransfer, ENTITY_DRAG_MIME).trim();
               if (!sourceEntityId) return;
               const target = describeDropTarget(sourceEntityId, null);
-              setDropTarget(target);
+              replaceDropTarget(target);
               if (!target.allowed) {
                 event.dataTransfer.dropEffect = "none";
                 return;
@@ -643,7 +710,7 @@ export function HierarchyPanel({
           </div>
         ) : null}
         {rows.map(({ entity, depth, effectiveEnabled }) => {
-          const selected = selectedEntityIds.includes(entity.id);
+          const selected = selectedEntityIdSet.has(entity.id);
           const EntityIcon = getEntityIcon(entity);
           const renaming = renameRequest?.id === entity.id;
           const activeEntityDrop =
@@ -706,7 +773,7 @@ export function HierarchyPanel({
                   event.preventDefault();
                   event.stopPropagation();
                   event.dataTransfer.dropEffect = "copy";
-                  setAssetDropTarget({
+                  replaceAssetDropTarget({
                     kind: "entity",
                     entityId: entity.id,
                     message: `Asset / XRift Prefabを「${entity.name}」の子へ配置`,
@@ -723,7 +790,7 @@ export function HierarchyPanel({
                   entity.id,
                   entityDropPlacement(event),
                 );
-                setDropTarget(target);
+                replaceDropTarget(target);
                 if (!target.allowed) {
                   event.dataTransfer.dropEffect = "none";
                   return;

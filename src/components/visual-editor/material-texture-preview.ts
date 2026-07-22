@@ -27,6 +27,7 @@ import { tauri } from "../../lib/tauri";
 import {
   getTextureAsset,
   normalizeMaterialProperties,
+  resolveOpenBrushBuiltinTextureUrl,
   type AssetManifest,
   type MaterialAsset,
   type MaterialProperties,
@@ -52,12 +53,17 @@ export type MaterialPreviewTextures = {
   specularColorMap?: Texture;
   transmissionMap?: Texture;
   thicknessMap?: Texture;
+  /** Sampler uniforms used by an optional custom material renderer. */
+  shaderUniforms?: Record<string, Texture>;
 };
 
 /** Compatibility alias for existing Scene View consumers. */
 export type CoreMaterialPreviewTextures = MaterialPreviewTextures;
 
-export type MaterialPreviewTextureRole = keyof MaterialPreviewTextures;
+export type MaterialPreviewTextureRole = Exclude<
+  keyof MaterialPreviewTextures,
+  "shaderUniforms"
+>;
 
 export type MaterialPreviewTextureLoadStatus = "loading" | "ready" | "error";
 
@@ -75,14 +81,26 @@ export function resolveMaterialPreviewTextureDisplayStatus(
   loadStatus: MaterialPreviewTextureLoadStatus | undefined,
 ): MaterialPreviewTextureLoadStatus | undefined {
   if (!asset) return undefined;
-  if (asset.status !== "ready" || asset.source.kind !== "project") return "error";
+  if (
+    asset.status !== "ready" ||
+    (asset.source.kind !== "project" &&
+      (asset.source.kind !== "builtin" ||
+        !resolveOpenBrushBuiltinTextureUrl(asset.source.key)))
+  ) {
+    return "error";
+  }
   return loadStatus;
 }
 
 type PreviewTextureRequest = {
-  role: MaterialPreviewTextureRole;
+  role?: MaterialPreviewTextureRole;
+  uniformName?: string;
   textureInfo: MaterialTextureInfo;
-  asset: TextureAsset & { source: { kind: "project"; relativePath: string } };
+  asset: TextureAsset & {
+    source:
+      | { kind: "project"; relativePath: string }
+      | { kind: "builtin"; key: string };
+  };
   colorSpace: "srgb" | "linear";
 };
 
@@ -101,10 +119,13 @@ export function useMaterialPreviewTextureState(
     () =>
       JSON.stringify(
         requests.map((request) => ({
-          role: request.role,
+          role: request.role ?? `uniform:${request.uniformName ?? ""}`,
           assetId: request.asset.id,
           sourceHash: request.asset.sourceHash ?? "",
-          relativePath: request.asset.source.relativePath,
+          source:
+            request.asset.source.kind === "project"
+              ? request.asset.source.relativePath
+              : request.asset.source.key,
           textureInfo: request.textureInfo,
           importSettings: request.asset.importSettings,
           colorSpace: request.colorSpace,
@@ -132,7 +153,9 @@ export function useMaterialPreviewTextureState(
     setState({
       textures: {},
       statuses: Object.fromEntries(
-        requests.map((request) => [request.role, initialStatus]),
+        requests.flatMap((request) =>
+          request.role ? [[request.role, initialStatus] as const] : [],
+        ),
       ) as MaterialPreviewTextureStatuses,
     });
     if (!projectPath) {
@@ -144,25 +167,22 @@ export function useMaterialPreviewTextureState(
     void Promise.all(
       requests.map(async (request) => {
         try {
-          const dataUrl = await readProjectTextureDataUrl(projectPath, request.asset);
+          const dataUrl = await readMaterialPreviewTextureUrl(projectPath, request.asset);
           const texture = await new TextureLoader().loadAsync(dataUrl);
           configureMaterialPreviewTexture(
             texture,
             request.asset,
             request.textureInfo,
             request.colorSpace,
-            request.role,
+            request.role ?? request.uniformName ?? "shader sampler",
           );
-          return { role: request.role, texture, status: "ready" as const };
+          return { ...request, texture, status: "ready" as const };
         } catch {
-          return { role: request.role, status: "error" as const };
+          return { ...request, status: "error" as const };
         }
       }),
     ).then((loaded) => {
-      const available: Array<{
-        role: MaterialPreviewTextureRole;
-        texture: Texture;
-      }> = [];
+        const available: Array<PreviewTextureRequest & { texture: Texture }> = [];
       for (const entry of loaded) {
         if (entry.status === "ready") available.push(entry);
       }
@@ -171,14 +191,23 @@ export function useMaterialPreviewTextureState(
         return;
       }
       ownedTextures = available.map((entry) => entry.texture);
-      setState({
-        textures: Object.fromEntries(
-          available.map((entry) => [entry.role, entry.texture]),
-        ) as MaterialPreviewTextures,
-        statuses: Object.fromEntries(
-          loaded.map((entry) => [entry.role, entry.status]),
-        ) as MaterialPreviewTextureStatuses,
-      });
+        const shaderUniforms: Record<string, Texture> = {};
+        const textures: MaterialPreviewTextures = {};
+        for (const entry of available) {
+          if (entry.uniformName) shaderUniforms[entry.uniformName] = entry.texture;
+          else if (entry.role) textures[entry.role] = entry.texture;
+        }
+        if (Object.keys(shaderUniforms).length > 0) {
+          textures.shaderUniforms = shaderUniforms;
+        }
+        setState({
+          textures,
+          statuses: Object.fromEntries(
+            loaded.flatMap((entry) =>
+              entry.role ? [[entry.role, entry.status] as const] : [],
+            ),
+          ) as MaterialPreviewTextureStatuses,
+        });
     });
 
     return () => {
@@ -337,10 +366,21 @@ function resolvePreviewTextureRequests(
       "linear",
     ],
   ];
-  return candidates.flatMap(([role, textureInfo, colorSpace]) => {
+  const requests: PreviewTextureRequest[] = candidates.flatMap(([
+    role,
+    textureInfo,
+    colorSpace,
+  ]) => {
     if (!textureInfo) return [];
     const asset = getTextureAsset(assets, textureInfo.textureAssetId);
-    if (!asset || asset.source.kind !== "project") return [];
+    if (
+      !asset ||
+      (asset.source.kind !== "project" &&
+        (asset.source.kind !== "builtin" ||
+          !resolveOpenBrushBuiltinTextureUrl(asset.source.key)))
+    ) {
+      return [];
+    }
     return [
       {
         role,
@@ -350,13 +390,37 @@ function resolvePreviewTextureRequests(
       },
     ];
   });
+  const shaderBindings = material.shader?.textureBindings ?? {};
+  for (const [uniformName, binding] of Object.entries(shaderBindings)) {
+    const asset = getTextureAsset(assets, binding.textureAssetId);
+    if (
+      !asset ||
+      (asset.source.kind !== "project" &&
+        (asset.source.kind !== "builtin" ||
+          !resolveOpenBrushBuiltinTextureUrl(asset.source.key)))
+    ) {
+      continue;
+    }
+    requests.push({
+      uniformName,
+      textureInfo: { textureAssetId: asset.id, texCoord: 0 },
+      asset: asset as PreviewTextureRequest["asset"],
+      colorSpace: "linear",
+    });
+  }
+  return requests;
 }
 
 /** Reads an imported project texture for editor-only Three previews. */
-export async function readProjectTextureDataUrl(
+export async function readMaterialPreviewTextureUrl(
   projectPath: string,
   asset: PreviewTextureRequest["asset"],
 ): Promise<string> {
+  if (asset.source.kind === "builtin") {
+    const url = resolveOpenBrushBuiltinTextureUrl(asset.source.key);
+    if (!url) throw new Error(`Unsupported builtin Texture: ${asset.source.key}`);
+    return url;
+  }
   const key = [
     projectPath,
     asset.id,
@@ -374,6 +438,9 @@ export async function readProjectTextureDataUrl(
     throw error;
   }
 }
+
+/** Compatibility name for existing project-only preview consumers. */
+export const readProjectTextureDataUrl = readMaterialPreviewTextureUrl;
 
 export function configureMaterialPreviewTexture(
   texture: Texture,

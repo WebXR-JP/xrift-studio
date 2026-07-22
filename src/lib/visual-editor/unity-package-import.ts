@@ -40,6 +40,8 @@ import { resolveSceneSettings, type SceneSettings } from "./scene-settings";
 export const UNITY_PACKAGE_MAX_COMPRESSED_BYTES = 256 * 1024 * 1024;
 export const UNITY_PACKAGE_MAX_EXPANDED_BYTES = 768 * 1024 * 1024;
 export const UNITY_PACKAGE_MAX_ENTRIES = 20_000;
+/** SceneViewport and the exporter render Entity trees recursively. */
+export const UNITY_HIERARCHY_MAX_DEPTH = 256;
 
 export type UnityImportDiagnostic = {
   severity: "blocking" | "warning";
@@ -799,7 +801,25 @@ function convertUnityDocument(
     };
   }
 
-  repairUnityHierarchy(entities, diagnostics, sourcePath);
+  const hierarchy = repairUnityHierarchy(entities, diagnostics, sourcePath);
+  if (hierarchy.maxDepth > UNITY_HIERARCHY_MAX_DEPTH) {
+    diagnostics.push({
+      severity: "warning",
+      code: "unity-hierarchy-too-deep",
+      message: `「${sourcePath}」のHierarchy深度は${hierarchy.maxDepth}です。安定して編集できる上限${UNITY_HIERARCHY_MAX_DEPTH}を超えるため、このScene / Prefabは追加しませんでした`,
+      sourcePath,
+    });
+    return {
+      entities: {},
+      rootEntityIds: [],
+      ...(applySceneSettings
+        ? { settings: unitySceneSettings(objects, currentScene.settings) }
+        : {}),
+      componentClassCounts,
+      unsupportedComponentClassIds,
+      diagnostics,
+    };
+  }
   const rootEntityIds = Object.values(entities)
     .filter((entity) => entity.parentId === null)
     .map((entity) => entity.id);
@@ -844,26 +864,41 @@ function repairUnityHierarchy(
   entities: Record<string, SceneEntity>,
   diagnostics: UnityImportDiagnostic[],
   sourcePath: string,
-): void {
+): { maxDepth: number } {
   for (const entity of Object.values(entities)) {
     if (entity.parentId && !entities[entity.parentId]) entity.parentId = null;
   }
+
+  // Every Entity has at most one parent, so this is a collection of linked
+  // lists. The former implementation walked every parent chain independently;
+  // a 10,000-deep Unity hierarchy therefore performed roughly 50 million
+  // parent lookups before React had a chance to update. Mark each chain once
+  // and detach the first node in every cycle, preserving non-cyclic descendants.
+  const completed = new Set<string>();
   for (const entity of Object.values(entities)) {
-    const visited = new Set([entity.id]);
-    let parentId = entity.parentId;
-    while (parentId) {
-      if (visited.has(parentId)) {
-        entity.parentId = null;
+    if (completed.has(entity.id)) continue;
+    const path: string[] = [];
+    const indexByEntityId = new Map<string, number>();
+    let currentId: string | null = entity.id;
+    while (currentId && !completed.has(currentId)) {
+      const cycleStart = indexByEntityId.get(currentId);
+      if (cycleStart !== undefined) {
+        const cycleRoot = entities[currentId];
+        cycleRoot.parentId = null;
         diagnostics.push({
           severity: "warning",
           code: "unity-hierarchy-cycle",
-          message: `「${entity.name}」の循環した親参照をScene Rootへ戻しました`,
+          message: `「${cycleRoot.name}」の循環した親参照をScene Rootへ戻しました`,
           sourcePath,
         });
         break;
       }
-      visited.add(parentId);
-      parentId = entities[parentId]?.parentId ?? null;
+      indexByEntityId.set(currentId, path.length);
+      path.push(currentId);
+      currentId = entities[currentId]?.parentId ?? null;
+    }
+    for (const pathEntityId of path) {
+      completed.add(pathEntityId);
     }
   }
   Object.values(entities).forEach((entity) => {
@@ -872,6 +907,21 @@ function repairUnityHierarchy(
   for (const entity of Object.values(entities)) {
     if (entity.parentId) entities[entity.parentId]?.children.push(entity.id);
   }
+
+  let maxDepth = 0;
+  const pending = Object.values(entities)
+    .filter((entity) => entity.parentId === null)
+    .map((entity) => ({ id: entity.id, depth: 1 }));
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    maxDepth = Math.max(maxDepth, current.depth);
+    const currentEntity = entities[current.id];
+    if (!currentEntity) continue;
+    for (const childId of currentEntity.children) {
+      pending.push({ id: childId, depth: current.depth + 1 });
+    }
+  }
+  return { maxDepth };
 }
 
 function unityMeshAssetId(

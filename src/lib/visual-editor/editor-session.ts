@@ -365,8 +365,7 @@ export function getEntityReparentDecision(
   }
   if (
     parentEntityId !== null &&
-    (collectEntityDescendantIds(scene, entityId).has(parentEntityId) ||
-      entityIsAncestor(scene, entityId, parentEntityId))
+    wouldCreateEntityHierarchyCycle(scene, entityId, parentEntityId)
   ) {
     return { allowed: false, reason: "descendant-parent" };
   }
@@ -511,34 +510,45 @@ export function renameAsset(
   };
 }
 
-function collectEntityDescendantIds(
+/**
+ * Valid Editor documents maintain matching parentId and children links. During
+ * dragover, following the proposed parent's ancestor chain is O(depth), while
+ * walking the dragged subtree is O(all descendants) on every pointer event.
+ * Retain the slower child-link check only for legacy/corrupt documents whose
+ * parent chain is not internally consistent.
+ */
+function wouldCreateEntityHierarchyCycle(
   scene: SceneDocument,
+  ancestorId: string,
   entityId: string,
-): Set<string> {
+): boolean {
+  let parentLinksAreConsistent = true;
+  const visited = new Set<string>();
+  let currentId: string | null = entityId;
+  while (currentId !== null && !visited.has(currentId)) {
+    if (currentId === ancestorId) return true;
+    visited.add(currentId);
+    const current: SceneEntity | undefined = scene.entities[currentId];
+    const parentId: string | null = current?.parentId ?? null;
+    if (
+      parentId !== null &&
+      !scene.entities[parentId]?.children.includes(currentId)
+    ) {
+      parentLinksAreConsistent = false;
+    }
+    currentId = parentId;
+  }
+  if (parentLinksAreConsistent) return false;
+
   const descendants = new Set<string>();
-  const pending = [...(scene.entities[entityId]?.children ?? [])];
+  const pending = [...(scene.entities[ancestorId]?.children ?? [])];
   while (pending.length > 0) {
     const candidateId = pending.pop();
     if (!candidateId || descendants.has(candidateId)) continue;
     descendants.add(candidateId);
     pending.push(...(scene.entities[candidateId]?.children ?? []));
   }
-  return descendants;
-}
-
-function entityIsAncestor(
-  scene: SceneDocument,
-  ancestorId: string,
-  entityId: string,
-): boolean {
-  const visited = new Set<string>();
-  let currentId: string | null = entityId;
-  while (currentId !== null && !visited.has(currentId)) {
-    if (currentId === ancestorId) return true;
-    visited.add(currentId);
-    currentId = scene.entities[currentId]?.parentId ?? null;
-  }
-  return false;
+  return descendants.has(entityId);
 }
 
 function definition(

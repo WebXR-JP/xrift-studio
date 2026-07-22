@@ -15,6 +15,7 @@ import {
   TEXTURE_MIN_FILTERS,
   TEXTURE_WRAP_MODES,
   getPrefabAssetDocumentReference,
+  resolveOpenBrushBuiltinTextureUrl,
   type AudioAsset,
   type AssetManifest,
   type Color3,
@@ -295,15 +296,13 @@ export function MaterialThumbnail({
 }) {
   if (asset.shader?.kind === "openbrush") {
     return (
-      <div
-        className={`flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-violet-950 via-indigo-700 to-cyan-400 px-2 text-center text-white ${className}`}
-        title={`${asset.shader.brushName} / three-icosa`}
-      >
-        <span className="text-xl font-black tracking-tight">OB</span>
-        <span className="mt-0.5 max-w-full truncate text-[10px] font-semibold">
-          {asset.shader.brushName}
-        </span>
-      </div>
+      <CustomMaterialPreview
+        asset={asset}
+        assets={assets ?? EMPTY_ASSET_MANIFEST}
+        projectPath={projectPath}
+        className={className}
+        compact
+      />
     );
   }
   return (
@@ -597,6 +596,21 @@ export function AssetThumbnail({
         stale={false}
       />
     );
+  }
+  if (asset.kind === "texture" && asset.source.kind === "builtin") {
+    const sourceUrl = resolveOpenBrushBuiltinTextureUrl(asset.source.key);
+    if (sourceUrl) {
+      return (
+        <div className="h-full w-full bg-white">
+          <img
+            src={sourceUrl}
+            alt={`${asset.name}のプレビュー`}
+            draggable={false}
+            className="h-full w-full object-contain p-1"
+          />
+        </div>
+      );
+    }
   }
   return <AssetThumbnailFallback asset={asset} />;
 }
@@ -1208,13 +1222,10 @@ type MaterialQuickEditorProps = {
 };
 
 export function MaterialQuickEditor(props: MaterialQuickEditorProps) {
-  if (props.asset.shader?.kind === "openbrush") {
-    return <OpenBrushMaterialQuickEditor {...props} />;
-  }
   return <StandardMaterialQuickEditor {...props} />;
 }
 
-function OpenBrushMaterialQuickEditor({
+export function OpenBrushMaterialQuickEditor({
   asset,
   assets,
   projectPath,
@@ -1600,6 +1611,7 @@ function StandardMaterialQuickEditor({
   onOpenTexture,
 }: MaterialQuickEditorProps) {
   const pbr = asset.properties.pbrMetallicRoughness;
+  const openBrush = asset.shader?.kind === "openbrush" ? asset.shader : undefined;
   const textures = Object.values(assets.assets).filter(
     (candidate): candidate is TextureAsset => candidate.kind === "texture",
   );
@@ -1647,7 +1659,9 @@ function StandardMaterialQuickEditor({
         </div>
         <div className="min-w-0 self-center">
           <h3 className="truncate text-[13px] font-semibold text-slate-900">{asset.name}</h3>
-          <p className="text-xs text-slate-500">glTF 2.0 標準マテリアル</p>
+          <p className="text-xs text-slate-500">
+            {openBrush ? `OpenBrush ブラシ · ${openBrush.brushName}` : "glTF 2.0 標準マテリアル"}
+          </p>
           {asset.importedFromModel ? (
             <p className={`mt-1 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${asset.importedFromModel.isUserOverridden ? "border-amber-200 bg-amber-50 text-amber-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
               {asset.importedFromModel.isUserOverridden
@@ -1665,6 +1679,29 @@ function StandardMaterialQuickEditor({
           </p>
         </div>
       </div>
+
+      {openBrush ? (
+        <EditorSection title="OpenBrush 表現">
+          <p className="text-xs leading-4 text-slate-600">
+            ブラシ固有の描画を保ったまま、下のテクスチャと基本値を編集できます。
+          </p>
+          <details className="rounded border border-slate-200 bg-slate-50">
+            <summary className="cursor-pointer px-2 py-1.5 text-[11px] font-semibold text-slate-700">
+              詳細設定
+            </summary>
+            <dl className="grid grid-cols-[76px_minmax(0,1fr)] gap-x-2 gap-y-1 border-t border-slate-200 px-2 py-2 text-[11px]">
+              <dt className="text-slate-500">ブラシ</dt>
+              <dd className="font-medium text-slate-800">{openBrush.brushName}</dd>
+              <dt className="text-slate-500">Texture</dt>
+              <dd className="text-slate-700">
+                {Object.keys(openBrush.textureBindings ?? {}).length > 0
+                  ? Object.keys(openBrush.textureBindings ?? {}).length
+                  : "GLBのMaterial slotを使用"}
+              </dd>
+            </dl>
+          </details>
+        </EditorSection>
+      ) : null}
 
       <MaterialExtensionSection
         title="Unlit"

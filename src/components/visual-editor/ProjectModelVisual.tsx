@@ -23,6 +23,7 @@ import {
   FrontSide,
   Group,
   MeshStandardMaterial,
+  Vector4,
   Vector3,
   type Material,
   type Object3D,
@@ -677,7 +678,13 @@ export function createAssignedMaterialPreviewMaterial(
           }
         : undefined,
     );
+    applyOpenBrushMaterialAssetProperties(
+      preview,
+      assignedMaterial,
+      assignedTextures,
+    );
     preview.name = `material_${assignedMaterial.shader.brushName}`;
+    preview.needsUpdate = true;
     return preview;
   }
   const preview = isMeshStandardMaterial(source)
@@ -715,6 +722,61 @@ export function createAssignedMaterialPreviewMaterial(
   resetSourcePhysicalEffects(preview);
   preview.needsUpdate = true;
   return preview;
+}
+
+/**
+ * Keeps the ordinary Material Asset controls meaningful for OpenBrush too.
+ * Texture Assets feed the brush sampler uniforms, while base color and
+ * roughness become safe, opt-in uniforms when the brush shader exposes the
+ * corresponding inputs.
+ */
+export function applyOpenBrushMaterialAssetProperties(
+  material: Material,
+  assignedMaterial: MaterialAsset,
+  textures: CoreMaterialPreviewTextures,
+): void {
+  if (assignedMaterial.shader?.kind !== "openbrush") return;
+  const shader = material as Material & {
+    uniforms?: Record<string, { value: unknown }>;
+    fragmentShader?: string;
+    needsUpdate?: boolean;
+  };
+  const properties = normalizeMaterialProperties(
+    assignedMaterial.properties as unknown as Parameters<
+      typeof normalizeMaterialProperties
+    >[0],
+  );
+  const uniforms = shader.uniforms;
+  if (!uniforms) return;
+  for (const [uniformName, texture] of Object.entries(
+    textures.shaderUniforms ?? {},
+  )) {
+    if (uniforms[uniformName]) uniforms[uniformName].value = texture;
+  }
+  if (uniforms.u_Shininess) {
+    uniforms.u_Shininess.value = 1 - properties.pbrMetallicRoughness.roughnessFactor;
+  }
+  if (uniforms.u_Cutoff && properties.alphaMode === "MASK") {
+    uniforms.u_Cutoff.value = properties.alphaCutoff;
+  }
+  const factor = properties.pbrMetallicRoughness.baseColorFactor;
+  if (!shader.fragmentShader?.includes("in vec4 v_color;")) return;
+  if (!uniforms.xriftBaseColorFactor) {
+    uniforms.xriftBaseColorFactor = { value: new Vector4(...factor) };
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "in vec4 v_color;",
+      [
+        "in vec4 xriftOriginalVertexColor;",
+        "uniform vec4 xriftBaseColorFactor;",
+        "#define v_color (xriftOriginalVertexColor * xriftBaseColorFactor)",
+      ].join("\n"),
+    );
+  } else if (uniforms.xriftBaseColorFactor.value instanceof Vector4) {
+    uniforms.xriftBaseColorFactor.value.set(...factor);
+  } else {
+    uniforms.xriftBaseColorFactor.value = new Vector4(...factor);
+  }
+  shader.needsUpdate = true;
 }
 
 function collectSourceMaterials(object: Object3D): Map<number, Material> {

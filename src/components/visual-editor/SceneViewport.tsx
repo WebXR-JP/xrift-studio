@@ -78,7 +78,10 @@ import {
 import { tauri } from "../../lib/tauri";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { ParticleEmitterVisual } from "./ParticleEmitterVisual";
-import { ProjectModelVisual } from "./ProjectModelVisual";
+import {
+  applyOpenBrushMaterialAssetProperties,
+  ProjectModelVisual,
+} from "./ProjectModelVisual";
 import {
   loadOpenBrushPreviewMaterial,
   normalizeOpenBrushGlslSource,
@@ -386,8 +389,9 @@ function PrimitiveMeshVisual({
           }
         : undefined,
     );
+    applyOpenBrushMaterialAssetProperties(instance, material, materialTextures);
     return hasCustomShaderEntrypoints(instance) ? instance : undefined;
-  }, [customShaderMaterial, material?.shader]);
+  }, [customShaderMaterial, material, materialTextures]);
   const materialRef = useRef<MeshStandardMaterial | null>(null);
   useMaterialPreviewRenderSync(materialRef, materialTextures);
   useLayoutEffect(() => {

@@ -18,6 +18,7 @@ import {
 } from "./asset-manifest";
 import {
   extractOpenBrushMaterialShader,
+  openBrushBuiltinTextureKey,
   type OpenBrushModelMetadata,
 } from "./open-brush";
 
@@ -105,7 +106,7 @@ export async function expandGltfAssets(
   const warnings: GltfDerivedAssetWarning[] = [];
   const images = input.openBrush ? [] : await extractImages(input, warnings);
   const textureExpansion = input.openBrush
-    ? { textures: [], textureAssetIds: new Map<number, string>() }
+    ? expandOpenBrushTextures(input, warnings)
     : expandTextures(input, images, warnings);
   const materialAssets = expandMaterials(
     input,
@@ -312,6 +313,168 @@ function expandTextures(
   return { textures, textureAssetIds };
 }
 
+/**
+ * OpenBrush files retain the original Tilt Brush image URLs. The editor ships
+ * the matching, version-pinned brush library, so expose those images as normal
+ * builtin Texture Assets instead of discarding their glTF texture slots.
+ */
+function expandOpenBrushTextures(
+  input: ExpandGltfAssetsInput,
+  warnings: GltfDerivedAssetWarning[],
+): { textures: ExpandedTexture[]; textureAssetIds: Map<number, string> } {
+  const existing = Object.values(input.manifest?.assets ?? {}).filter(
+    (asset): asset is TextureAsset => asset.kind === "texture",
+  );
+  const textures: ExpandedTexture[] = [];
+  const textureAssetIds = new Map<number, string>();
+  const sharedByRecipe = new Map<string, TextureAsset>();
+
+  for (const [textureIndex, texture] of (input.json.textures ?? []).entries()) {
+    const imageIndex = integerValue(texture.source);
+    const image = imageIndex === undefined ? undefined : input.json.images?.[imageIndex];
+    const sourceUri = image ? stringValue(image.uri) : undefined;
+    const builtinKey = sourceUri ? openBrushBuiltinTextureKey(sourceUri) : undefined;
+    if (imageIndex === undefined || !image || !builtinKey) {
+      warnings.push({
+        code: "openbrush-texture-source-unavailable",
+        message: `OpenBrush Texture ${textureIndex + 1} をブラシ素材へ対応付けられませんでした`,
+        fieldPath: `textures[${textureIndex}].source`,
+      });
+      continue;
+    }
+    const settings = textureSettings(input.json, texture);
+    const recipeKey = `${builtinKey}:${JSON.stringify(settings.sampler)}`;
+    const shared = sharedByRecipe.get(recipeKey);
+    if (shared) {
+      textureAssetIds.set(textureIndex, shared.id);
+      continue;
+    }
+    const previous = existing.find(
+      (asset) =>
+        asset.importedFromModel?.modelAssetId === input.modelAssetId &&
+        asset.importedFromModel.sourceTextureIndex === textureIndex &&
+        asset.importedFromModel.sourceImageIndex === imageIndex,
+    );
+    const reused = previous ?? existing.find(
+      (asset) =>
+        asset.source.kind === "builtin" &&
+        asset.source.key === builtinKey &&
+        JSON.stringify(asset.importSettings.sampler) === JSON.stringify(settings.sampler),
+    );
+    if (reused && !previous) {
+      textures.push({
+        asset: reused,
+        sourceImageIndex: imageIndex,
+        sourceTextureIndex: textureIndex,
+      });
+      sharedByRecipe.set(recipeKey, reused);
+      textureAssetIds.set(textureIndex, reused.id);
+      continue;
+    }
+    const extension = openBrushTextureFormat(builtinKey);
+    const asset: TextureAsset = {
+      id: reused?.id ?? `texture-${safeSegment(input.modelAssetId)}-${textureIndex}`,
+      name: reused?.name ?? cleanName(stringValue(texture.name), openBrushTextureName(builtinKey)),
+      kind: "texture",
+      status: "ready",
+      source: { kind: "builtin", key: builtinKey },
+      sourceHash: input.modelSourceHash,
+      thumbnail: { status: "missing" },
+      folderId: reused?.folderId ?? input.textureFolderId,
+      ...(reused?.order === undefined ? {} : { order: reused.order }),
+      importSettings:
+        previous?.importedFromModel?.isUserOverridden
+          ? previous.importSettings
+          : settings,
+      importMetadata: {
+        sourceFormat: extension,
+        mimeType: extension === "jpeg" ? "image/jpeg" : extension === "webp" ? "image/webp" : "image/png",
+        byteLength: 0,
+      },
+      importedFromModel: {
+        modelAssetId: input.modelAssetId,
+        sourceImageIndex: imageIndex,
+        sourceTextureIndex: textureIndex,
+        sourceHash: input.modelSourceHash,
+        isUserOverridden:
+          previous?.importedFromModel?.isUserOverridden ?? false,
+      },
+    };
+    const expanded = { asset, sourceImageIndex: imageIndex, sourceTextureIndex: textureIndex };
+    textures.push(expanded);
+    sharedByRecipe.set(recipeKey, asset);
+    textureAssetIds.set(textureIndex, asset.id);
+  }
+  return { textures, textureAssetIds };
+}
+
+function openBrushTextureFormat(
+  key: string,
+): TextureImportMetadata["sourceFormat"] {
+  if (/\.jpe?g$/i.test(key)) return "jpeg";
+  return /\.webp$/i.test(key) ? "webp" : "png";
+}
+
+function openBrushTextureName(key: string): string {
+  const fileName = key.slice(key.lastIndexOf("/") + 1);
+  return fileName.replace(/\.[^.]+$/, "") || "OpenBrush Texture";
+}
+
+function createOpenBrushMaterialShader(
+  input: ExpandGltfAssetsInput,
+  material: JsonObject,
+  materialIndex: number,
+  textureAssetIds: ReadonlyMap<number, string>,
+) {
+  if (!input.openBrush) return undefined;
+  const shader = extractOpenBrushMaterialShader(input.json, materialIndex);
+  if (!shader) return undefined;
+  const textureBindings = openBrushTextureBindings(
+    input.json,
+    material,
+    textureAssetIds,
+  );
+  return Object.keys(textureBindings).length > 0
+    ? { ...shader, textureBindings }
+    : shader;
+}
+
+function openBrushTextureBindings(
+  json: GltfJson,
+  material: JsonObject,
+  textureAssetIds: ReadonlyMap<number, string>,
+): Record<string, { textureAssetId: string }> {
+  const bindings: Record<string, { textureAssetId: string }> = {};
+  const candidates: Array<[unknown, "u_MainTex" | "u_BumpMap" | "u_AlphaMask"]> = [
+    [objectValue(material.pbrMetallicRoughness)?.baseColorTexture, "u_MainTex"],
+    [material.normalTexture, "u_BumpMap"],
+    [material.emissiveTexture, "u_AlphaMask"],
+  ];
+  for (const [textureInfo, fallbackUniform] of candidates) {
+    const textureIndex = integerValue(objectValue(textureInfo)?.index);
+    const textureAssetId =
+      textureIndex === undefined ? undefined : textureAssetIds.get(textureIndex);
+    if (textureIndex === undefined || !textureAssetId) continue;
+    const sourceImageIndex = integerValue(json.textures?.[textureIndex]?.source);
+    const sourceUri =
+      sourceImageIndex === undefined
+        ? undefined
+        : stringValue(json.images?.[sourceImageIndex]?.uri);
+    const uniform = openBrushSamplerUniform(sourceUri) ?? fallbackUniform;
+    bindings[uniform] = { textureAssetId };
+  }
+  return bindings;
+}
+
+function openBrushSamplerUniform(
+  sourceUri: string | undefined,
+): "u_MainTex" | "u_BumpMap" | "u_AlphaMask" | undefined {
+  if (!sourceUri) return undefined;
+  if (/alphamask/i.test(sourceUri)) return "u_AlphaMask";
+  if (/bumpmap/i.test(sourceUri)) return "u_BumpMap";
+  return /maintex/i.test(sourceUri) ? "u_MainTex" : undefined;
+}
+
 function createExpandedTexture(
   input: ExpandGltfAssetsInput,
   image: EmbeddedImage,
@@ -420,12 +583,14 @@ function expandMaterials(
         materialIndex,
         textureAssetIds,
         warnings,
-        Boolean(input.openBrush),
       ),
     );
-    const shader = input.openBrush
-      ? extractOpenBrushMaterialShader(input.json, materialIndex)
-      : undefined;
+    const shader = createOpenBrushMaterialShader(
+      input,
+      material,
+      materialIndex,
+      textureAssetIds,
+    );
     return {
       id:
         previous?.id ??
@@ -449,49 +614,38 @@ function materialPatch(
   materialIndex: number,
   textureAssetIds: ReadonlyMap<number, string>,
   warnings: GltfDerivedAssetWarning[],
-  ignoreTextures = false,
 ): MaterialAssetPatch {
   const pbr = objectValue(material.pbrMetallicRoughness) ?? {};
-  const baseColorTexture = ignoreTextures
-    ? undefined
-    : textureInfo(
-        pbr.baseColorTexture,
-        textureAssetIds,
-        `materials[${materialIndex}].pbrMetallicRoughness.baseColorTexture`,
-        warnings,
-      );
-  const metallicRoughnessTexture = ignoreTextures
-    ? undefined
-    : textureInfo(
-        pbr.metallicRoughnessTexture,
-        textureAssetIds,
-        `materials[${materialIndex}].pbrMetallicRoughness.metallicRoughnessTexture`,
-        warnings,
-      );
-  const normal = ignoreTextures
-    ? undefined
-    : normalTextureInfo(
-        material.normalTexture,
-        textureAssetIds,
-        `materials[${materialIndex}].normalTexture`,
-        warnings,
-      );
-  const occlusion = ignoreTextures
-    ? undefined
-    : occlusionTextureInfo(
-        material.occlusionTexture,
-        textureAssetIds,
-        `materials[${materialIndex}].occlusionTexture`,
-        warnings,
-      );
-  const emissive = ignoreTextures
-    ? undefined
-    : textureInfo(
-        material.emissiveTexture,
-        textureAssetIds,
-        `materials[${materialIndex}].emissiveTexture`,
-        warnings,
-      );
+  const baseColorTexture = textureInfo(
+    pbr.baseColorTexture,
+    textureAssetIds,
+    `materials[${materialIndex}].pbrMetallicRoughness.baseColorTexture`,
+    warnings,
+  );
+  const metallicRoughnessTexture = textureInfo(
+    pbr.metallicRoughnessTexture,
+    textureAssetIds,
+    `materials[${materialIndex}].pbrMetallicRoughness.metallicRoughnessTexture`,
+    warnings,
+  );
+  const normal = normalTextureInfo(
+    material.normalTexture,
+    textureAssetIds,
+    `materials[${materialIndex}].normalTexture`,
+    warnings,
+  );
+  const occlusion = occlusionTextureInfo(
+    material.occlusionTexture,
+    textureAssetIds,
+    `materials[${materialIndex}].occlusionTexture`,
+    warnings,
+  );
+  const emissive = textureInfo(
+    material.emissiveTexture,
+    textureAssetIds,
+    `materials[${materialIndex}].emissiveTexture`,
+    warnings,
+  );
   const baseColorFactor = colorTuple(pbr.baseColorFactor, 4, [1, 1, 1, 1]);
   const emissiveFactor = colorTuple(material.emissiveFactor, 3, [0, 0, 0]);
   return {

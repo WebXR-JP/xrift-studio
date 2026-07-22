@@ -56,6 +56,9 @@ import { repairImportedObject3DHierarchy } from "./object3d-hierarchy";
 
 export const ASSET_IMPORT_THUMBNAIL_RENDERER_VERSION = "three-white-v1";
 export const ASSET_IMPORT_MAX_BYTES = 128 * 1024 * 1024;
+/** Guards recursive library and React render paths before GLTFLoader runs. */
+export const ASSET_IMPORT_MAX_MODEL_NODES = 10_000;
+export const ASSET_IMPORT_MAX_MODEL_HIERARCHY_DEPTH = 256;
 
 export type SupportedAssetImportFormat =
   | "glb"
@@ -684,22 +687,6 @@ async function createModelImportPlan(
   const externalReferences = discoveredExternalReferences.filter(
     (reference) => !openBrush || !reference.fieldPath.startsWith("images["),
   );
-  if (
-    openBrush &&
-    discoveredExternalReferences.some((reference) =>
-      reference.fieldPath.startsWith("images["),
-    )
-  ) {
-    diagnostics.push({
-      severity: "warning",
-      code: "openbrush-hosted-brush-library",
-      message:
-        "OpenBrushの旧画像URLはImport時に取得せず、表示時にthree-icosaのブラシ素材へ置き換えます",
-      fileName,
-      assetId: reimportAsset?.id,
-      fieldPath: "images",
-    });
-  }
   for (const reference of externalReferences) {
     diagnostics.push({
       severity: "blocking",
@@ -1362,6 +1349,7 @@ function validateGltfImportStructure(
   });
 
   validateOptionalRecordArray(json.nodes, "nodes", issues);
+  validateGltfNodeHierarchy(json.nodes, issues);
   validateOptionalRecordArray(json.animations, "animations", issues, (entry, path) => {
     if (entry.name !== undefined && typeof entry.name !== "string") {
       issues.push({
@@ -1424,6 +1412,124 @@ function validateOptionalRecordArray(
     }
     inspect?.(entry, entryPath);
   });
+}
+
+/**
+ * glTF node children must form a bounded forest. GLTFLoader, Three traversal,
+ * SkeletonUtils.clone, and the editor viewport all recurse through that tree;
+ * validating it before loading prevents a malformed or hostile VRM from
+ * overflowing the renderer stack during a drop.
+ */
+function validateGltfNodeHierarchy(
+  value: unknown,
+  issues: GltfImportStructureIssue[],
+): void {
+  if (value === undefined) return;
+  if (!Array.isArray(value)) return;
+  if (value.length > ASSET_IMPORT_MAX_MODEL_NODES) {
+    issues.push({
+      code: "gltf-node-count-too-large",
+      message: `モデルのnode数は${ASSET_IMPORT_MAX_MODEL_NODES}以下にしてください`,
+      fieldPath: "nodes",
+    });
+    return;
+  }
+
+  const childrenByNode = value.map(() => [] as number[]);
+  const parentCount = value.map(() => 0);
+  for (const [nodeIndex, candidate] of value.entries()) {
+    if (!isRecord(candidate) || candidate.children === undefined) continue;
+    if (!Array.isArray(candidate.children)) {
+      issues.push({
+        code: "gltf-node-children-invalid",
+        message: "node.childrenはnode indexの配列である必要があります",
+        fieldPath: `nodes[${nodeIndex}].children`,
+      });
+      continue;
+    }
+    const localChildren = new Set<number>();
+    for (const [childOffset, child] of candidate.children.entries()) {
+      const fieldPath = `nodes[${nodeIndex}].children[${childOffset}]`;
+      if (
+        typeof child !== "number" ||
+        !Number.isInteger(child) ||
+        child < 0 ||
+        child >= value.length
+      ) {
+        issues.push({
+          code: "gltf-node-child-index-invalid",
+          message: "node.childrenの参照先が見つかりません",
+          fieldPath,
+        });
+        continue;
+      }
+      if (localChildren.has(child)) {
+        issues.push({
+          code: "gltf-node-child-duplicated",
+          message: "同じnodeを複数回childrenへ追加できません",
+          fieldPath,
+        });
+        continue;
+      }
+      localChildren.add(child);
+      childrenByNode[nodeIndex].push(child);
+      parentCount[child] += 1;
+      if (parentCount[child] > 1) {
+        issues.push({
+          code: "gltf-node-multiple-parents",
+          message: "nodeは複数の親を持てません",
+          fieldPath,
+        });
+      }
+    }
+  }
+
+  const state = value.map(() => 0);
+  let maximumDepth = 0;
+  let reportedCycle = false;
+  for (let start = 0; start < value.length; start += 1) {
+    if (state[start] !== 0) continue;
+    const pending: Array<{ nodeIndex: number; nextChildIndex: number; depth: number }> = [
+      { nodeIndex: start, nextChildIndex: 0, depth: 1 },
+    ];
+    state[start] = 1;
+    while (pending.length > 0) {
+      const frame = pending[pending.length - 1];
+      maximumDepth = Math.max(maximumDepth, frame.depth);
+      const children = childrenByNode[frame.nodeIndex];
+      if (frame.nextChildIndex >= children.length) {
+        state[frame.nodeIndex] = 2;
+        pending.pop();
+        continue;
+      }
+      const childIndex = children[frame.nextChildIndex++];
+      if (state[childIndex] === 1) {
+        if (!reportedCycle) {
+          issues.push({
+            code: "gltf-node-hierarchy-cycle",
+            message: "node hierarchyに循環があります",
+            fieldPath: `nodes[${frame.nodeIndex}].children`,
+          });
+          reportedCycle = true;
+        }
+        continue;
+      }
+      if (state[childIndex] === 2) continue;
+      state[childIndex] = 1;
+      pending.push({
+        nodeIndex: childIndex,
+        nextChildIndex: 0,
+        depth: frame.depth + 1,
+      });
+    }
+  }
+  if (maximumDepth > ASSET_IMPORT_MAX_MODEL_HIERARCHY_DEPTH) {
+    issues.push({
+      code: "gltf-node-hierarchy-too-deep",
+      message: `モデルのHierarchy深度は${ASSET_IMPORT_MAX_MODEL_HIERARCHY_DEPTH}以下にしてください`,
+      fieldPath: "nodes",
+    });
+  }
 }
 
 function validateExtensionNameArray(

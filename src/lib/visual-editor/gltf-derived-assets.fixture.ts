@@ -142,6 +142,73 @@ export async function runGltfDerivedAssetFixtureAssertions(): Promise<void> {
       .roughnessFactor === 0.23,
     "Reimport overwrote a user-edited Material",
   );
+
+  const openBrushJson: GltfJson = {
+    asset: { version: "2.0" },
+    images: [
+      {
+        uri: "https://www.tiltbrush.com/shaders/brushes/OilPaint-fixture/OilPaint-fixture-v10.0-MainTex.png",
+      },
+      {
+        uri: "https://www.tiltbrush.com/shaders/brushes/OilPaint-fixture/OilPaint-fixture-v10.0-BumpMap.png",
+      },
+    ],
+    textures: [{ source: 0 }, { source: 1 }],
+    materials: [
+      {
+        name: "brush_OilPaint",
+        pbrMetallicRoughness: {
+          baseColorTexture: { index: 0 },
+          roughnessFactor: 0.6,
+        },
+        normalTexture: { index: 1 },
+        extensions: {
+          GOOGLE_tilt_brush_material: { guid: "fixture-brush-guid" },
+        },
+      },
+    ],
+  };
+  const openBrushExpanded = await expandGltfAssets({
+    json: openBrushJson,
+    modelBytes: new Uint8Array(),
+    sourceFormat: "glb",
+    modelAssetId: "model-openbrush-fixture",
+    modelSourceHash: "c".repeat(64),
+    materialSlots: [
+      { slot: "material-0", name: "brush_OilPaint", sourceMaterialIndex: 0 },
+    ],
+    materialFolderId: "folder-openbrush-materials",
+    textureFolderId: "folder-openbrush-textures",
+    hashBytes: fixtureHash,
+    openBrush: {
+      renderer: "three-icosa",
+      rendererVersion: "three-icosa@fixture",
+      extensionNames: ["GOOGLE_tilt_brush_material"],
+      brushNames: ["OilPaint"],
+    },
+  });
+  const openBrushMaterial = openBrushExpanded.materialAssets[0];
+  assert(
+    openBrushExpanded.textureAssets.length === 2 &&
+      openBrushExpanded.textureAssets.every(
+        (asset) => asset.source.kind === "builtin",
+      ),
+    "OpenBrush brush maps were not exposed as Texture Assets",
+  );
+  assert(
+    openBrushMaterial.properties.pbrMetallicRoughness.baseColorTexture
+      ?.textureAssetId === openBrushExpanded.textureAssets[0].id &&
+      openBrushMaterial.properties.normalTexture?.textureAssetId ===
+        openBrushExpanded.textureAssets[1].id,
+    "OpenBrush Material did not retain standard Texture Asset slots",
+  );
+  assert(
+    openBrushMaterial.shader?.textureBindings?.u_MainTex?.textureAssetId ===
+      openBrushExpanded.textureAssets[0].id &&
+      openBrushMaterial.shader.textureBindings?.u_BumpMap?.textureAssetId ===
+        openBrushExpanded.textureAssets[1].id,
+    "OpenBrush sampler uniforms were not connected to Texture Assets",
+  );
 }
 
 function pngFixture(): Uint8Array {

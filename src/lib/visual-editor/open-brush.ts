@@ -16,11 +16,72 @@ export const OPEN_BRUSH_BRUSH_BASE_URL =
 export const OPEN_BRUSH_EDITOR_BRUSH_BASE_PATH =
   "/visual-editor/openbrush/brushes/";
 
+/** AssetSource builtin key prefix for images bundled with the brush library. */
+export const OPEN_BRUSH_BUILTIN_TEXTURE_KEY_PREFIX = "openbrush:";
+
 export function resolveOpenBrushEditorBrushBaseUrl(
   origin = typeof window === "undefined" ? undefined : window.location.origin,
 ): string {
   if (!origin || origin === "null") return OPEN_BRUSH_EDITOR_BRUSH_BASE_PATH;
   return new URL(OPEN_BRUSH_EDITOR_BRUSH_BASE_PATH, `${origin}/`).href;
+}
+
+/**
+ * Turns either a legacy Tilt Brush URL or a brush-library-relative path into
+ * the stable builtin key used by Texture Assets. Only PNG/JPEG/WebP resources
+ * under the brush library are accepted, so imported glTF URLs never become
+ * arbitrary runtime fetch targets.
+ */
+export function openBrushBuiltinTextureKey(
+  resource: string,
+): string | undefined {
+  const normalized = resource.trim().replace(/\\/g, "/");
+  if (!normalized) return undefined;
+  let pathname = normalized;
+  try {
+    pathname = new URL(normalized, "https://xrift.invalid/").pathname;
+  } catch {
+    return undefined;
+  }
+  const marker = "/brushes/";
+  const markerIndex = pathname.toLowerCase().lastIndexOf(marker);
+  const relative = (markerIndex >= 0
+    ? pathname.slice(markerIndex + marker.length)
+    : pathname.replace(/^\/+/, "")
+  ).split("/");
+  if (
+    relative.length < 2 ||
+    relative.some((segment) => !segment || segment === "." || segment === "..")
+  ) {
+    return undefined;
+  }
+  let path: string;
+  try {
+    path = relative.map((segment) => decodeURIComponent(segment)).join("/");
+  } catch {
+    return undefined;
+  }
+  return /\.(?:png|jpe?g|webp)$/i.test(path)
+    ? `${OPEN_BRUSH_BUILTIN_TEXTURE_KEY_PREFIX}${path}`
+    : undefined;
+}
+
+/** Resolves a whitelisted OpenBrush Texture Asset source to the bundled file. */
+export function resolveOpenBrushBuiltinTextureUrl(
+  key: string,
+  origin = typeof window === "undefined" ? undefined : window.location.origin,
+): string | undefined {
+  if (!key.startsWith(OPEN_BRUSH_BUILTIN_TEXTURE_KEY_PREFIX)) return undefined;
+  const relative = key.slice(OPEN_BRUSH_BUILTIN_TEXTURE_KEY_PREFIX.length);
+  if (!relative || relative.split("/").some((segment) => !segment || segment === "." || segment === "..")) {
+    return undefined;
+  }
+  const encodedPath = relative
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  const path = `${OPEN_BRUSH_EDITOR_BRUSH_BASE_PATH}${encodedPath}`;
+  return origin && origin !== "null" ? new URL(path, origin).href : path;
 }
 
 export const OPEN_BRUSH_RUNTIME_PACKAGE = "three-icosa@0.4.2-alpha.18";
@@ -82,6 +143,12 @@ export type OpenBrushMaterialShader = {
     string,
     { sourceAttribute?: string; defaultValue?: number[] }
   >;
+  /**
+   * Texture Asset bindings for sampler uniforms supplied by the brush preset.
+   * Keeping these as Asset IDs makes brush maps replaceable by the same UI
+   * used for ordinary glTF material texture slots.
+   */
+  textureBindings?: Record<string, { textureAssetId: string }>;
 };
 
 export function detectOpenBrushGltfDocument(
@@ -284,7 +351,8 @@ export function isOpenBrushMaterialShader(
     /^https:\/\//.test(value.brushBaseUrl) &&
     integerIndex(value.sourceMaterialIndex) !== undefined &&
     isOpenBrushSourceOverrides(value.sourceOverrides) &&
-    isOpenBrushAttributeBindings(value.attributeBindings)
+    isOpenBrushAttributeBindings(value.attributeBindings) &&
+    isOpenBrushTextureBindings(value.textureBindings)
   );
 }
 
@@ -315,6 +383,18 @@ function isOpenBrushAttributeBindings(value: unknown): boolean {
           )))
     );
   });
+}
+
+function isOpenBrushTextureBindings(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isRecord(value)) return false;
+  return Object.entries(value).every(
+    ([uniform, binding]) =>
+      Boolean(uniform.trim()) &&
+      isRecord(binding) &&
+      typeof binding.textureAssetId === "string" &&
+      Boolean(binding.textureAssetId.trim()),
+  );
 }
 
 /**

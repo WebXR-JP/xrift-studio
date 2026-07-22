@@ -37,6 +37,7 @@ type Props = {
   assets: AssetManifest;
   projectPath?: string;
   className?: string;
+  compact?: boolean;
   onRuntimeInfoChange?: (
     info: ProjectModelMaterialRuntimeInfo | null,
   ) => void;
@@ -106,6 +107,7 @@ export function CustomMaterialPreview({
   assets,
   projectPath,
   className = "h-full w-full",
+  compact = false,
   onRuntimeInfoChange,
 }: Props) {
   const resolution = useMemo(
@@ -173,7 +175,7 @@ export function CustomMaterialPreview({
       }
     >
       <Canvas
-        frameloop="always"
+        frameloop={compact ? "demand" : "always"}
         dpr={[1, 1.5]}
         camera={{ position: [0, 0.15, 2.65], fov: 34 }}
         gl={{ antialias: true, alpha: false }}
@@ -186,7 +188,7 @@ export function CustomMaterialPreview({
           intensity={0.8}
           color="#c4b5fd"
         />
-        <PreviewTurntable>
+        <PreviewTurntable enabled={!compact}>
           <ProjectModelVisual
             projectPath={projectPath}
             sourceRelativePath={sourceRelativePath}
@@ -203,17 +205,19 @@ export function CustomMaterialPreview({
             onMaterialRuntimeInfoChange={handleRuntimeInfo}
           />
         </PreviewTurntable>
-        <OrbitControls
-          makeDefault
-          enableDamping
-          dampingFactor={0.08}
-          enablePan={false}
-          minDistance={1.4}
-          maxDistance={5}
-        />
+        {!compact ? (
+          <OrbitControls
+            makeDefault
+            enableDamping
+            dampingFactor={0.08}
+            enablePan={false}
+            minDistance={1.4}
+            maxDistance={5}
+          />
+        ) : null}
       </Canvas>
 
-      <span
+      {!compact ? <span
         className={`pointer-events-none absolute left-2 top-2 rounded border px-1.5 py-0.5 text-[10px] font-semibold backdrop-blur ${
           loadState.status === "ready"
             ? runtimeInfo?.pbrFallback
@@ -231,9 +235,9 @@ export function CustomMaterialPreview({
           : loadState.status === "error"
             ? "shader読込失敗"
             : "three-icosa shaderを再構築中"}
-      </span>
+      </span> : null}
 
-      {loadState.status === "error" ? (
+      {!compact && loadState.status === "error" ? (
         <div className="absolute inset-x-2 bottom-2 rounded border border-rose-300/40 bg-rose-950/90 p-2 text-[10px] leading-4 text-rose-100 backdrop-blur">
           <p>{loadState.message}</p>
           <button
@@ -244,15 +248,15 @@ export function CustomMaterialPreview({
             再試行
           </button>
         </div>
-      ) : runtimeInfo?.pbrFallback ? (
+      ) : !compact && runtimeInfo?.pbrFallback ? (
         <div className="pointer-events-none absolute inset-x-2 bottom-2 rounded border border-amber-300/40 bg-amber-950/90 px-2 py-1.5 text-[10px] leading-4 text-amber-100 backdrop-blur">
           {formatPbrFallbackReason(runtimeInfo.pbrFallback.reason)}
         </div>
-      ) : (
+      ) : !compact ? (
         <span className="pointer-events-none absolute inset-x-2 bottom-1.5 text-center text-[9px] text-slate-300/80">
           実ストローク形状 · ドラッグで回転 · ホイールでズーム
         </span>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -268,10 +272,16 @@ function formatPbrFallbackReason(
     : "専用shaderを再構築できなかったため、GLB内のPBR Materialを表示しています";
 }
 
-function PreviewTurntable({ children }: { children: ReactNode }) {
+function PreviewTurntable({
+  children,
+  enabled,
+}: {
+  children: ReactNode;
+  enabled: boolean;
+}) {
   const ref = useRef<Group>(null);
   useFrame((_, delta) => {
-    if (ref.current) ref.current.rotation.y += Math.min(delta, 0.05) * 0.22;
+    if (enabled && ref.current) ref.current.rotation.y += Math.min(delta, 0.05) * 0.22;
   });
   return <group ref={ref}>{children}</group>;
 }

@@ -7,7 +7,9 @@ import {
   type ModelImportMetadata,
 } from "./asset-manifest";
 import {
+  ASSET_IMPORT_MAX_MODEL_HIERARCHY_DEPTH,
   commitAssetImportPlan,
+  createAssetImportPlan,
   type AssetImportPlan,
 } from "./asset-import";
 import {
@@ -274,6 +276,41 @@ export async function runModelImportContractFixtureAssertions(): Promise<void> {
     "Invalid metadata reached the atomic file commit",
   );
   assert(rejectedCommitCount === 0, "Invalid metadata wrote source files");
+
+  const deeplyNestedNodes = Array.from(
+    { length: ASSET_IMPORT_MAX_MODEL_HIERARCHY_DEPTH + 1 },
+    (_, index) =>
+      index < ASSET_IMPORT_MAX_MODEL_HIERARCHY_DEPTH
+        ? { children: [index + 1] }
+        : {},
+  );
+  const deepHierarchyPlan = await createAssetImportPlan({
+    fileName: "too-deep.vrm",
+    mimeType: "model/vrm",
+    bytes: glbJsonBytes({ asset: { version: "2.0" }, nodes: deeplyNestedNodes }),
+  });
+  assert(
+    !deepHierarchyPlan.canCommit &&
+      deepHierarchyPlan.diagnostics.some(
+        (diagnostic) => diagnostic.code === "gltf-node-hierarchy-too-deep",
+      ),
+    "Deep VRM node hierarchy reached GLTFLoader instead of being rejected",
+  );
+}
+
+function glbJsonBytes(value: unknown): Uint8Array {
+  const json = new TextEncoder().encode(JSON.stringify(value));
+  const paddedLength = Math.ceil(json.byteLength / 4) * 4;
+  const bytes = new Uint8Array(20 + paddedLength);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 0x46546c67, true);
+  view.setUint32(4, 2, true);
+  view.setUint32(8, bytes.byteLength, true);
+  view.setUint32(12, paddedLength, true);
+  view.setUint32(16, 0x4e4f534a, true);
+  bytes.set(json, 20);
+  bytes.fill(0x20, 20 + json.byteLength);
+  return bytes;
 }
 
 function modelAsset(
