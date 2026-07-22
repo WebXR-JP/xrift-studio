@@ -52,6 +52,7 @@ import {
   detectOpenBrushGltfDocument,
   prepareOpenBrushGltfSource,
 } from "./open-brush";
+import { repairImportedObject3DHierarchy } from "./object3d-hierarchy";
 
 export const ASSET_IMPORT_THUMBNAIL_RENDERER_VERSION = "three-white-v1";
 export const ASSET_IMPORT_MAX_BYTES = 128 * 1024 * 1024;
@@ -1518,6 +1519,7 @@ function parseWithGltfLoader(
       (gltf) => {
         const vrm = gltf.userData.vrm as VRM | undefined;
         if (vrm) VRMUtils.rotateVRM0(vrm);
+        repairImportedObject3DHierarchy(gltf.scene);
         resolve(gltf);
       },
       reject,

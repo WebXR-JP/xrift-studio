@@ -54,6 +54,7 @@ import {
   readOpenBrushPbrFallback,
   type OpenBrushPbrFallbackInfo,
 } from "../../lib/visual-editor/open-brush-preview-loader";
+import { repairImportedObject3DHierarchy } from "../../lib/visual-editor/object3d-hierarchy";
 
 export type ProjectModelMaterialAssignment = {
   slot: string;
@@ -293,7 +294,10 @@ function ProjectModelRender({
   const readyObject = state.status === "ready" ? state.object : null;
   const renderedModel = useMemo(() => {
     if (!readyObject) return null;
+    // Sanitize the cached source before SkeletonUtils.clone recurses through it.
+    repairImportedObject3DHierarchy(readyObject);
     const source = clone(readyObject);
+    repairImportedObject3DHierarchy(source);
     const sourceMaterials = collectSourceMaterials(source);
     const object = selectSourceModelNode(source, sourceNodeIndex);
     applyStaticModelPose(object, pose);
@@ -996,6 +1000,7 @@ async function parseSelfContainedModel(
       (gltf) => {
         const vrm = gltf.userData.vrm as VRM | undefined;
         if (vrm) VRMUtils.rotateVRM0(vrm);
+        repairImportedObject3DHierarchy(gltf.scene);
         tagSourceMaterialIndices(gltf, document);
         resolve(gltf.scene);
       },
