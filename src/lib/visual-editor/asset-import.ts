@@ -53,6 +53,7 @@ import {
   prepareOpenBrushGltfSource,
 } from "./open-brush";
 import { repairImportedObject3DHierarchy } from "./object3d-hierarchy";
+import { extractGltfModelNodeHierarchy } from "./model-hierarchy";
 
 export const ASSET_IMPORT_THUMBNAIL_RENDERER_VERSION = "three-white-v1";
 export const ASSET_IMPORT_MAX_BYTES = 128 * 1024 * 1024;
@@ -1762,6 +1763,7 @@ function extractModelMetadata(
     })),
     bones: poseTargets.bones,
     morphTargets: poseTargets.morphTargets,
+    nodes: extractGltfModelNodeHierarchy(json),
     ...(vrm?.meta.metaVersion === "0" || vrm?.meta.metaVersion === "1"
       ? { vrmVersion: vrm.meta.metaVersion }
       : {}),

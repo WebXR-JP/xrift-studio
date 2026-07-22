@@ -123,6 +123,19 @@ export type ModelMorphTargetMetadata = {
   name: string;
 };
 
+/** One authored glTF node retained for non-destructive Hierarchy expansion. */
+export type ModelNodeMetadata = {
+  sourceNodeIndex: number;
+  name: string;
+  parentSourceNodeIndex?: number;
+  childSourceNodeIndices: number[];
+  meshIndex?: number;
+  sourceMaterialIndices: number[];
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
+};
+
 /** Derived import facts. These are safe to rebuild from the Model source. */
 export type ModelImportMetadata = {
   sourceFormat: "glb" | "gltf" | "obj" | "vrm";
@@ -138,6 +151,8 @@ export type ModelImportMetadata = {
   bones?: ModelBoneMetadata[];
   /** Optional for documents imported before static pose authoring was added. */
   morphTargets?: ModelMorphTargetMetadata[];
+  /** Optional for documents imported before glTF Hierarchy expansion was added. */
+  nodes?: ModelNodeMetadata[];
   /** Present only for a successfully parsed VRM source. */
   vrmVersion?: "0" | "1";
   extensionsUsed: string[];

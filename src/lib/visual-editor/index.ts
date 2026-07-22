@@ -25,6 +25,8 @@ export * from "./model-import-contract";
 export * from "./model-import-contract.fixture";
 export * from "./model-reimport-impact";
 export * from "./model-reimport-impact.fixture";
+export * from "./model-hierarchy";
+export * from "./model-hierarchy.fixture";
 export * from "./object3d-hierarchy";
 export * from "./open-brush";
 export * from "./open-brush-hierarchy";

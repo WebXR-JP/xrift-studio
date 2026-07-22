@@ -8,9 +8,9 @@ import type {
 } from "./asset-manifest";
 import { createDocumentId } from "./document-id";
 import {
-  expandOpenBrushModelEntityHierarchy,
-  hasOpenBrushNodeHierarchy,
-} from "./open-brush-hierarchy";
+  expandModelEntityHierarchy,
+  hasModelNodeHierarchy,
+} from "./model-hierarchy";
 import {
   createPrefabInstanceComponent,
   type PrefabDocument,
@@ -164,8 +164,8 @@ export function instantiateSceneAsset(
         : scene.rootEntityIds,
   };
   const expandedScene =
-    asset.kind === "model" && hasOpenBrushNodeHierarchy(asset)
-      ? expandOpenBrushModelEntityHierarchy(
+    asset.kind === "model" && hasModelNodeHierarchy(asset)
+      ? expandModelEntityHierarchy(
           placedScene,
           assets,
           asset,

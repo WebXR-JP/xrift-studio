@@ -18,9 +18,26 @@ import {
   validateModelImportMetadata,
 } from "./model-import-contract";
 import { assetManifestCodec } from "./serialization";
+import { extractGltfModelNodeHierarchy } from "./model-hierarchy";
 
 /** Filesystem-free contract assertions for Model import and reimport. */
 export async function runModelImportContractFixtureAssertions(): Promise<void> {
+  const extractedNodes = extractGltfModelNodeHierarchy({
+    scene: 0,
+    scenes: [{ nodes: [0] }, { nodes: [2] }],
+    meshes: [{ primitives: [{ material: 0 }] }],
+    nodes: [
+      { name: "Ward", children: [1] },
+      { name: "nishitoda_5chome", mesh: 0, translation: [1, 2, 3] },
+      { name: "Unused scene node", mesh: 0 },
+    ],
+  });
+  assert(extractedNodes.length === 2,
+    "Nodes outside the selected glTF scene were retained");
+  assert(extractedNodes[1]?.name === "nishitoda_5chome" &&
+    extractedNodes[1]?.parentSourceNodeIndex === 0,
+  "Selected glTF node hierarchy was not extracted");
+
   const materialBody = requiredMaterial("material-body", "Body Material");
   const materialGlass = requiredMaterial("material-glass", "Glass Material");
   const original = modelAsset({
@@ -121,6 +138,8 @@ export async function runModelImportContractFixtureAssertions(): Promise<void> {
     assert(parsed.importMetadata?.meshCount === 3, "meshCount was lost");
     assert(parsed.importMetadata?.animations[0]?.name === "Idle", "Animation name was lost");
     assert(parsed.importMetadata?.bounds.size[0] === 2, "Model-local bounds were lost");
+    assert(parsed.importMetadata?.nodes?.[1]?.name === "nishitoda_5chome",
+      "Model node hierarchy was lost");
   }
 
   const invalidMetadata = {
@@ -357,6 +376,28 @@ function metadata(): ModelImportMetadata {
     },
     animations: [
       { name: "Idle", duration: 2, trackCount: 4, sourceAnimationIndex: 0 },
+    ],
+    nodes: [
+      {
+        sourceNodeIndex: 0,
+        name: "Ward",
+        childSourceNodeIndices: [1],
+        sourceMaterialIndices: [],
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+      },
+      {
+        sourceNodeIndex: 1,
+        name: "nishitoda_5chome",
+        parentSourceNodeIndex: 0,
+        childSourceNodeIndices: [],
+        meshIndex: 0,
+        sourceMaterialIndices: [0],
+        position: [1, 2, 3],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+      },
     ],
     extensionsUsed: ["KHR_materials_clearcoat"],
     extensionsRequired: ["KHR_materials_clearcoat"],

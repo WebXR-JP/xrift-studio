@@ -194,6 +194,13 @@ export function validateModelImportMetadata(
   validateAnimations(value.animations, `${path}.animations`, issues);
   validateNamedModelParts(value.bones, `${path}.bones`, issues);
   validateNamedModelParts(value.morphTargets, `${path}.morphTargets`, issues);
+  validateModelNodes(
+    value.nodes,
+    value.nodeCount,
+    value.meshCount,
+    `${path}.nodes`,
+    issues,
+  );
   if (
     value.vrmVersion !== undefined &&
     value.vrmVersion !== "0" &&
@@ -712,6 +719,157 @@ function validatePositiveInteger(
   if (!Number.isInteger(value) || Number(value) <= 0) {
     issues.push(issue(path, "range", "Value must be a positive integer"));
   }
+}
+
+function validateModelNodes(
+  value: unknown,
+  nodeCount: unknown,
+  meshCount: unknown,
+  path: string,
+  issues: ModelImportContractIssue[],
+): void {
+  if (value === undefined) return;
+  if (!Array.isArray(value)) {
+    issues.push(issue(path, "type", "Model nodes must be an array"));
+    return;
+  }
+  const sourceNodeIndices = new Set<number>();
+  value.forEach((candidate, index) => {
+    const targetPath = `${path}.${index}`;
+    if (!isRecord(candidate)) {
+      issues.push(issue(targetPath, "type", "Model node must be an object"));
+      return;
+    }
+    if (
+      !Number.isInteger(candidate.sourceNodeIndex) ||
+      Number(candidate.sourceNodeIndex) < 0 ||
+      (Number.isInteger(nodeCount) && Number(candidate.sourceNodeIndex) >= Number(nodeCount))
+    ) {
+      issues.push(issue(
+        `${targetPath}.sourceNodeIndex`,
+        "reference",
+        "Model node source index is outside nodeCount",
+      ));
+    } else if (sourceNodeIndices.has(Number(candidate.sourceNodeIndex))) {
+      issues.push(issue(
+        `${targetPath}.sourceNodeIndex`,
+        "unique",
+        "Model node source indices must be unique",
+      ));
+    } else {
+      sourceNodeIndices.add(Number(candidate.sourceNodeIndex));
+    }
+    if (typeof candidate.name !== "string" || !candidate.name.trim()) {
+      issues.push(issue(`${targetPath}.name`, "required", "Model node name is required"));
+    }
+    if (
+      candidate.parentSourceNodeIndex !== undefined &&
+      (!Number.isInteger(candidate.parentSourceNodeIndex) ||
+        Number(candidate.parentSourceNodeIndex) < 0 ||
+        (Number.isInteger(nodeCount) &&
+          Number(candidate.parentSourceNodeIndex) >= Number(nodeCount)))
+    ) {
+      issues.push(issue(
+        `${targetPath}.parentSourceNodeIndex`,
+        "reference",
+        "Model node parent index is outside nodeCount",
+      ));
+    }
+    validateModelNodeIndexArray(
+      candidate.childSourceNodeIndices,
+      nodeCount,
+      `${targetPath}.childSourceNodeIndices`,
+      issues,
+    );
+    if (
+      candidate.meshIndex !== undefined &&
+      (!Number.isInteger(candidate.meshIndex) ||
+        Number(candidate.meshIndex) < 0 ||
+        (Number.isInteger(meshCount) && Number(candidate.meshIndex) >= Number(meshCount)))
+    ) {
+      issues.push(issue(
+        `${targetPath}.meshIndex`,
+        "reference",
+        "Model node mesh index is outside meshCount",
+      ));
+    }
+    validateModelNodeIndexArray(
+      candidate.sourceMaterialIndices,
+      undefined,
+      `${targetPath}.sourceMaterialIndices`,
+      issues,
+    );
+    for (const field of ["position", "rotation", "scale"] as const) {
+      if (!isFiniteVec3(candidate[field])) {
+        issues.push(issue(
+          `${targetPath}.${field}`,
+          "finite-vec3",
+          `Model node ${field} must contain three finite numbers`,
+        ));
+      }
+    }
+  });
+
+  const declaredIndices = new Set(
+    value.flatMap((candidate) =>
+      isRecord(candidate) && Number.isInteger(candidate.sourceNodeIndex)
+        ? [Number(candidate.sourceNodeIndex)]
+        : [],
+    ),
+  );
+  value.forEach((candidate, index) => {
+    if (!isRecord(candidate)) return;
+    const targetPath = `${path}.${index}`;
+    if (
+      Number.isInteger(candidate.parentSourceNodeIndex) &&
+      !declaredIndices.has(Number(candidate.parentSourceNodeIndex))
+    ) {
+      issues.push(issue(
+        `${targetPath}.parentSourceNodeIndex`,
+        "reference",
+        "Model node parent is not retained in this scene",
+      ));
+    }
+    if (Array.isArray(candidate.childSourceNodeIndices)) {
+      candidate.childSourceNodeIndices.forEach((childIndex, childOffset) => {
+        if (Number.isInteger(childIndex) && !declaredIndices.has(Number(childIndex))) {
+          issues.push(issue(
+            `${targetPath}.childSourceNodeIndices.${childOffset}`,
+            "reference",
+            "Model node child is not retained in this scene",
+          ));
+        }
+      });
+    }
+  });
+}
+
+function validateModelNodeIndexArray(
+  value: unknown,
+  upperBound: unknown,
+  path: string,
+  issues: ModelImportContractIssue[],
+): void {
+  if (!Array.isArray(value)) {
+    issues.push(issue(path, "type", "Model node indices must be an array"));
+    return;
+  }
+  const seen = new Set<number>();
+  value.forEach((entry, index) => {
+    if (
+      !Number.isInteger(entry) ||
+      Number(entry) < 0 ||
+      (Number.isInteger(upperBound) && Number(entry) >= Number(upperBound))
+    ) {
+      issues.push(issue(`${path}.${index}`, "reference", "Model node index is invalid"));
+      return;
+    }
+    if (seen.has(Number(entry))) {
+      issues.push(issue(`${path}.${index}`, "unique", "Model node indices must be unique"));
+      return;
+    }
+    seen.add(Number(entry));
+  });
 }
 
 function validateNonNegativeInteger(

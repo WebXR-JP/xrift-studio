@@ -1010,7 +1010,8 @@ export function getMeshMaterialSlots(
         : undefined;
     const node =
       geometry.kind === "model" && sourceNodeIndex !== undefined
-        ? geometry.importMetadata?.openBrush?.nodes?.find(
+        ? (geometry.importMetadata?.openBrush?.nodes ??
+            geometry.importMetadata?.nodes)?.find(
             (candidate) => candidate.sourceNodeIndex === sourceNodeIndex,
           )
         : undefined;
