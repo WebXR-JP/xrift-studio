@@ -91,6 +91,11 @@ export type StarterAssetCopyPlanEntry = {
   expectedByteLength: number;
   expectedSha256: string;
   mediaType: string;
+  /**
+   * Models and textures need byte-for-byte verification before import. License
+   * text must be copied, but line-ending changes must not block a starter.
+   */
+  integrity: "strict" | "license-text";
 };
 
 export type StarterWorldProjectPlan = PrototypeVisualProject & {
@@ -248,6 +253,7 @@ const OPEN_BRUSH_LICENSE_COPY: StarterAssetCopyPlanEntry = {
   expectedSha256:
     "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5",
   mediaType: "text/plain",
+  integrity: "license-text",
 };
 
 export const STARTER_ASSET_FOLDER_IDS = {
@@ -425,6 +431,7 @@ export function createStarterWorldProject(
         expectedByteLength: bundled.byteLength,
         expectedSha256: bundled.sha256,
         mediaType: bundled.mediaType,
+        integrity: "strict" as const,
       })),
       ...(templateId === "openbrush" ? [OPEN_BRUSH_LICENSE_COPY] : []),
     ],

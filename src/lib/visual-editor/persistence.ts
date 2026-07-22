@@ -46,6 +46,32 @@ export type PreparedStarterVisualProject = {
   binaryDocuments: VisualBinaryDocumentWrite[];
 };
 
+export type StarterAssetCopyFailureReason =
+  | "load"
+  | "empty"
+  | "size"
+  | "hash"
+  | "license-content";
+
+/**
+ * A user-facing failure while retrieving a bundled starter file. Keeping the
+ * failed copy and validation stage lets the create flow distinguish a broken
+ * model from a license copy problem.
+ */
+export class StarterAssetCopyError extends Error {
+  constructor(
+    readonly copy: StarterAssetCopyPlanEntry,
+    readonly reason: StarterAssetCopyFailureReason,
+    readonly details: {
+      actualByteLength?: number;
+      responseStatus?: number;
+    } = {},
+  ) {
+    super(`Starter asset copy failed: ${copy.assetId} (${reason})`);
+    this.name = "StarterAssetCopyError";
+  }
+}
+
 export async function createVisualProjectOnDisk(
   projectsRoot: string,
   directoryName: string,
@@ -591,22 +617,57 @@ async function loadStarterAssetCopies(
       ) {
         throw new Error("Starter asset destination must be under assets/starter");
       }
-      const response = await fetch(copy.bundledPublicPath, {
-        cache: "force-cache",
-      });
+      let response: Response;
+      try {
+        response = await fetch(versionedStarterAssetUrl(copy), {
+          // The content hash changes whenever a bundled source changes. Reload
+          // also avoids retaining a stale WebView response under the same URL.
+          cache: "reload",
+        });
+      } catch {
+        throw new StarterAssetCopyError(copy, "load");
+      }
       if (!response.ok) {
-        throw new Error(`Starter asset could not be loaded: ${copy.assetId}`);
+        throw new StarterAssetCopyError(copy, "load", {
+          responseStatus: response.status,
+        });
       }
       const bytes = new Uint8Array(await response.arrayBuffer());
-      if (bytes.byteLength !== copy.expectedByteLength) {
-        throw new Error(`Starter asset size does not match: ${copy.assetId}`);
-      }
-      const sourceHash = await sha256StarterBytes(bytes);
-      if (sourceHash !== copy.expectedSha256) {
-        throw new Error(`Starter asset hash does not match: ${copy.assetId}`);
+      if (copy.integrity === "strict") {
+        if (bytes.byteLength !== copy.expectedByteLength) {
+          throw new StarterAssetCopyError(copy, "size", {
+            actualByteLength: bytes.byteLength,
+          });
+        }
+        const sourceHash = await sha256StarterBytes(bytes);
+        if (sourceHash !== copy.expectedSha256) {
+          throw new StarterAssetCopyError(copy, "hash", {
+            actualByteLength: bytes.byteLength,
+          });
+        }
+      } else if (!isApacheTwoLicenseText(bytes)) {
+        throw new StarterAssetCopyError(
+          copy,
+          bytes.byteLength === 0 ? "empty" : "license-content",
+          { actualByteLength: bytes.byteLength },
+        );
       }
       return { copy, bytes };
     }),
+  );
+}
+
+function versionedStarterAssetUrl(copy: StarterAssetCopyPlanEntry): string {
+  const separator = copy.bundledPublicPath.includes("?") ? "&" : "?";
+  return `${copy.bundledPublicPath}${separator}v=${encodeURIComponent(copy.expectedSha256)}`;
+}
+
+function isApacheTwoLicenseText(bytes: Uint8Array): boolean {
+  const text = new TextDecoder().decode(bytes);
+  return (
+    text.includes("Apache License") &&
+    text.includes("Version 2.0, January 2004") &&
+    text.includes("END OF TERMS AND CONDITIONS")
   );
 }
 

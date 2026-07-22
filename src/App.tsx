@@ -51,6 +51,7 @@ import {
   prepareStarterVisualProject,
   sanitizePublishFailure,
   saveVisualProjectToDisk,
+  StarterAssetCopyError,
   type PrototypeVisualProject,
   type ClassicExportIntegration,
   type ClassicExportProgress,
@@ -360,10 +361,17 @@ function App() {
           description: `${name} / ビジュアル`,
         });
       } catch (error) {
+        const starterCopyError =
+          error instanceof StarterAssetCopyError ? error : undefined;
         toast({
           kind: "error",
-          title: "スターターを準備できませんでした",
-          description: String(error),
+          title:
+            starterCopyError?.copy.integrity === "license-text"
+              ? "OpenBrush ライセンスをコピーできませんでした"
+              : starterCopyError
+                ? "OpenBrush モデルを検証できませんでした"
+                : "スターターを準備できませんでした",
+          description: describeStarterPreparationError(error),
         });
       }
     });
@@ -844,6 +852,33 @@ function App() {
       {updateDialog}
     </>
   );
+}
+
+function describeStarterPreparationError(error: unknown): string {
+  if (!(error instanceof StarterAssetCopyError)) return String(error);
+
+  const { copy, details, reason } = error;
+  const label =
+    copy.integrity === "license-text"
+      ? "OpenBrush ライセンス"
+      : "OpenBrush モデル";
+  const receivedSize = details.actualByteLength;
+  const formatBytes = (value: number) => `${value.toLocaleString("ja-JP")} bytes`;
+
+  switch (reason) {
+    case "load":
+      return details.responseStatus === undefined
+        ? `${label}を読み込めませんでした。アプリを再起動して、もう一度お試しください。`
+        : `${label}を読み込めませんでした（HTTP ${details.responseStatus}）。アプリを再起動して、もう一度お試しください。`;
+    case "empty":
+      return `${label}が空です。アプリを再起動して、もう一度お試しください。`;
+    case "size":
+      return `${label}のサイズが一致しません。取得値: ${formatBytes(receivedSize ?? 0)}、期待値: ${formatBytes(copy.expectedByteLength)}。アプリを再起動して、もう一度お試しください。`;
+    case "hash":
+      return `${label}のSHA-256が一致しません。取得値: ${formatBytes(receivedSize ?? 0)}。アプリを再起動して、もう一度お試しください。`;
+    case "license-content":
+      return `${label}の内容を確認できませんでした。アプリを再起動して、もう一度お試しください。`;
+  }
 }
 
 export default App;

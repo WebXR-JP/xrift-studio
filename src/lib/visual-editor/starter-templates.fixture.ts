@@ -46,8 +46,17 @@ export function runStarterTemplateFixtureAssertions(): void {
       );
       assert(
         licenseCopy?.targetRelativePath.endsWith(".txt") &&
-          licenseCopy.mediaType === "text/plain",
+          licenseCopy.mediaType === "text/plain" &&
+          licenseCopy.integrity === "license-text",
         "openbrush: license extension and media type must match",
+      );
+      assert(
+        plan.bundledAssetCopies.some(
+          (copy) =>
+            copy.assetId === "openbrush-all-brushes" &&
+            copy.integrity === "strict",
+        ),
+        "openbrush: model must retain strict integrity verification",
       );
     }
     assert(modelAssets.length === (templateId === "openbrush" ? 1 : 0),
