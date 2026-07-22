@@ -13,6 +13,8 @@ export type SceneSkyboxSettings = {
   exponent: number;
   /** Horizontal rotation of an equirectangular image, in degrees. */
   rotationDegrees: number;
+  /** Flip the image vertically when the source orientation is upside down. */
+  flipY: boolean;
   /** Background and environment intensity for an image skybox. */
   exposure: number;
 };
@@ -66,6 +68,7 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
     offset: 0,
     exponent: 1,
     rotationDegrees: 0,
+    flipY: false,
     exposure: 1,
   },
   fog: {
@@ -174,6 +177,7 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
         skybox.rotationDegrees,
         DEFAULT_SCENE_SETTINGS.skybox.rotationDegrees,
       ),
+      flipY: booleanOr(skybox.flipY, DEFAULT_SCENE_SETTINGS.skybox.flipY),
       exposure: finiteOr(
         skybox.exposure,
         DEFAULT_SCENE_SETTINGS.skybox.exposure,

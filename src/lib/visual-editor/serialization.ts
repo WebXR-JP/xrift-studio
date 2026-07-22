@@ -843,6 +843,7 @@ function validateSceneSettings(
       "offset",
       "exponent",
       "rotationDegrees",
+      "flipY",
       "exposure",
     ],
     `${path}.skybox`,
@@ -863,6 +864,9 @@ function validateSceneSettings(
       // values are normalized by resolveSceneSettings when old projects open.
       if (entry.rotationDegrees !== undefined) {
         validateFinite(entry, "rotationDegrees", `${path}.skybox`, issues);
+      }
+      if (entry.flipY !== undefined) {
+        validateBoolean(entry, "flipY", `${path}.skybox`, issues);
       }
       if (entry.exposure !== undefined) {
         validateFinite(entry, "exposure", `${path}.skybox`, issues, 0);

@@ -43,7 +43,8 @@ import {
   type ShaderMaterial,
   type Texture,
 } from "three";
-import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
+import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
+import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
 import {
   BUILTIN_PRIMITIVE_CREATION_CATALOG,
   XRIFT_COMPONENT_SCHEMA_IDS,
@@ -2113,6 +2114,7 @@ function useSceneSkyboxTexture(
   assets: AssetManifest,
   imageAssetId: string | undefined,
   projectPath: string | undefined,
+  flipY: boolean,
 ): Texture | null {
   const asset = imageAssetId ? assets.assets[imageAssetId] : undefined;
   const textureAsset =
@@ -2134,7 +2136,7 @@ function useSceneSkyboxTexture(
         sourceAsset.id,
         sourceAsset.sourceHash ?? "",
         sourceAsset.source.relativePath,
-        textureAsset?.importSettings.flipY ?? false,
+        flipY,
       ].join("\\n")
     : "";
   const [texture, setTexture] = useState<Texture | null>(null);
@@ -2155,14 +2157,17 @@ function useSceneSkyboxTexture(
     void readSource
       .then(async (dataUrl): Promise<Texture> => {
         if (skyboxAsset?.sourceFormat === "hdr") {
-          return await new RGBELoader().loadAsync(dataUrl);
+          return await new HDRLoader().loadAsync(dataUrl);
+        }
+        if (skyboxAsset?.sourceFormat === "exr") {
+          return await new EXRLoader().loadAsync(dataUrl);
         }
         return await new TextureLoader().loadAsync(dataUrl);
       })
       .then((nextTexture) => {
         nextTexture.name = `${sourceAsset.name} (skybox)`;
         if (!skyboxAsset) nextTexture.colorSpace = SRGBColorSpace;
-        nextTexture.flipY = textureAsset?.importSettings.flipY ?? false;
+        nextTexture.flipY = flipY;
         nextTexture.mapping = EquirectangularReflectionMapping;
         nextTexture.needsUpdate = true;
         if (!active) {
@@ -2181,7 +2186,7 @@ function useSceneSkyboxTexture(
       ownedTexture?.dispose();
       ownedTexture = null;
     };
-  }, [projectPath, skyboxAsset, sourceAsset, textureAsset, textureKey]);
+  }, [flipY, projectPath, skyboxAsset, sourceAsset, textureAsset, textureKey]);
 
   return texture;
 }
@@ -2236,6 +2241,7 @@ function SceneSkyboxPreview({
     assets,
     settings.enabled ? settings.imageAssetId : undefined,
     projectPath,
+    settings.flipY,
   );
   if (!settings.enabled) return null;
   if (imageTexture) {

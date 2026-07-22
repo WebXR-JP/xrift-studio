@@ -335,6 +335,13 @@ export function SceneSettingsInspector({
             }
           />
           <NumberField label="画像の回転 (度)" value={settings.skybox.rotationDegrees} step={1} disabled={imageControlsDisabled} onChange={(rotationDegrees) => update({ ...settings, skybox: { ...settings.skybox, rotationDegrees } })} />
+          <Toggle
+            label="画像を上下反転"
+            description="HDRIが上下逆に見える場合に有効にします。"
+            checked={settings.skybox.flipY}
+            disabled={imageControlsDisabled}
+            onChange={(flipY) => update({ ...settings, skybox: { ...settings.skybox, flipY } })}
+          />
           <NumberField label="画像の露出" value={settings.skybox.exposure} min={0} step={0.05} disabled={imageControlsDisabled} onChange={(exposure) => update({ ...settings, skybox: { ...settings.skybox, exposure } })} />
           <ColorField label="上空の色" value={settings.skybox.topColor} disabled={readOnly || !settings.skybox.enabled || Boolean(settings.skybox.imageAssetId)} onChange={(topColor) => update({ ...settings, skybox: { ...settings.skybox, topColor } })} />
           <ColorField label="地平線の色" value={settings.skybox.bottomColor} disabled={readOnly || !settings.skybox.enabled || Boolean(settings.skybox.imageAssetId)} onChange={(bottomColor) => update({ ...settings, skybox: { ...settings.skybox, bottomColor } })} />

@@ -546,6 +546,7 @@ export function runVisualCompilerFixtureAssertions(
         ...sourceSceneSettings.skybox,
         imageAssetId: projectTexture.id,
         rotationDegrees: 45,
+        flipY: true,
         exposure: 1.25,
       },
     },
@@ -569,6 +570,7 @@ export function runVisualCompilerFixtureAssertions(
     "TextureLoader",
     '"xrift-studio-fixture-texture-project-albedo.png"',
     "rotation={0.78539816}",
+    "flipY={true}",
     "exposure={1.25}",
   ].forEach((fragment) =>
     assert(

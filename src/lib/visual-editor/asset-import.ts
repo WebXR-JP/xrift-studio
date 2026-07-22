@@ -1286,7 +1286,7 @@ function parseGltfJson(
   }
 }
 
-type GltfImportStructureIssue = {
+export type GltfImportStructureIssue = {
   code: string;
   message: string;
   fieldPath: string;
@@ -1349,7 +1349,7 @@ function validateGltfImportStructure(
   });
 
   validateOptionalRecordArray(json.nodes, "nodes", issues);
-  validateGltfNodeHierarchy(json.nodes, issues);
+  issues.push(...validateGltfNodeHierarchy(json.nodes));
   validateOptionalRecordArray(json.animations, "animations", issues, (entry, path) => {
     if (entry.name !== undefined && typeof entry.name !== "string") {
       issues.push({
@@ -1420,19 +1420,19 @@ function validateOptionalRecordArray(
  * validating it before loading prevents a malformed or hostile VRM from
  * overflowing the renderer stack during a drop.
  */
-function validateGltfNodeHierarchy(
+export function validateGltfNodeHierarchy(
   value: unknown,
-  issues: GltfImportStructureIssue[],
-): void {
-  if (value === undefined) return;
-  if (!Array.isArray(value)) return;
+): GltfImportStructureIssue[] {
+  const issues: GltfImportStructureIssue[] = [];
+  if (value === undefined) return issues;
+  if (!Array.isArray(value)) return issues;
   if (value.length > ASSET_IMPORT_MAX_MODEL_NODES) {
     issues.push({
       code: "gltf-node-count-too-large",
       message: `モデルのnode数は${ASSET_IMPORT_MAX_MODEL_NODES}以下にしてください`,
       fieldPath: "nodes",
     });
-    return;
+    return issues;
   }
 
   const childrenByNode = value.map(() => [] as number[]);
@@ -1530,6 +1530,7 @@ function validateGltfNodeHierarchy(
       fieldPath: "nodes",
     });
   }
+  return issues;
 }
 
 function validateExtensionNameArray(

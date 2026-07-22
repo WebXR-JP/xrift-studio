@@ -600,10 +600,19 @@ function renderSceneEnvironment(
       ["useLoader", "useThree"].forEach((name) => context.fiberImports.add(name));
       context.threeValueImports.add("EquirectangularReflectionMapping");
       const hdrSkybox = imageAsset.kind === "skybox" && imageAsset.sourceFormat === "hdr";
-      const loaderName = hdrSkybox ? "RGBELoader" : "TextureLoader";
+      const exrSkybox = imageAsset.kind === "skybox" && imageAsset.sourceFormat === "exr";
+      const loaderName = hdrSkybox
+        ? "HDRLoader"
+        : exrSkybox
+          ? "EXRLoader"
+          : "TextureLoader";
       if (hdrSkybox) {
         context.extraImports.add(
-          'import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";',
+          'import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";',
+        );
+      } else if (exrSkybox) {
+        context.extraImports.add(
+          'import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";',
         );
       } else {
         context.threeValueImports.add("SRGBColorSpace");
@@ -611,7 +620,7 @@ function renderSceneEnvironment(
       }
       context.supportDeclarations.set(
         "scene-environment:image-skybox",
-        `const XRiftStudioImageSkybox: FC<{ src: string; rotation: number; exposure: number }> = ({ src, rotation, exposure }) => {
+        `const XRiftStudioImageSkybox: FC<{ src: string; rotation: number; flipY: boolean; exposure: number }> = ({ src, rotation, flipY, exposure }) => {
   const scene = useThree((state) => state.scene);
   const texture = useLoader(${loaderName}, src);
   useEffect(() => {
@@ -621,7 +630,8 @@ function renderSceneEnvironment(
     const previousEnvironmentIntensity = scene.environmentIntensity;
     const previousBackgroundRotation = scene.backgroundRotation.clone();
     const previousEnvironmentRotation = scene.environmentRotation.clone();
-    ${hdrSkybox ? "" : "texture.colorSpace = SRGBColorSpace;"}
+    ${hdrSkybox ? "" : exrSkybox ? "" : "texture.colorSpace = SRGBColorSpace;"}
+    texture.flipY = flipY;
     texture.mapping = EquirectangularReflectionMapping;
     texture.needsUpdate = true;
     scene.background = texture;
@@ -638,12 +648,12 @@ function renderSceneEnvironment(
       scene.backgroundRotation.copy(previousBackgroundRotation);
       scene.environmentRotation.copy(previousEnvironmentRotation);
     };
-  }, [exposure, rotation, scene, texture]);
+  }, [exposure, flipY, rotation, scene, texture]);
   return null;
 };`,
       );
       content.push(
-        `<XRiftStudioImageSkybox src={${JSON.stringify(imageUrl)}} rotation={${formatNumber((settings.skybox.rotationDegrees * Math.PI) / 180)}} exposure={${formatNumber(settings.skybox.exposure)}} />`,
+        `<XRiftStudioImageSkybox src={${JSON.stringify(imageUrl)}} rotation={${formatNumber((settings.skybox.rotationDegrees * Math.PI) / 180)}} flipY={${settings.skybox.flipY}} exposure={${formatNumber(settings.skybox.exposure)}} />`,
       );
     } else {
       if (imageAssetId) {

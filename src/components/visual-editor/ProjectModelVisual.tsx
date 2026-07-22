@@ -38,6 +38,7 @@ import {
   readCustomShaderAttributeBindings,
   detectOpenBrushGltfDocument,
   resolveOpenBrushEditorBrushBaseUrl,
+  validateGltfNodeHierarchy,
   type AssetManifest,
   type MaterialAsset,
   type ModelPoseState,
@@ -890,6 +891,7 @@ async function dataUrlToArrayBuffer(dataUrl: string): Promise<ArrayBuffer> {
 type GltfResourceDocument = {
   buffers?: Array<{ uri?: unknown }>;
   images?: Array<{ uri?: unknown }>;
+  nodes?: unknown[];
   meshes?: Array<{
     primitives?: Array<{ material?: unknown }>;
   }>;
@@ -1035,6 +1037,10 @@ async function parseSelfContainedModel(
 
   const source = format === "gltf" ? new TextDecoder().decode(bytes) : buffer;
   const document = parseGltfDocument(bytes, format);
+  const hierarchyIssue = validateGltfNodeHierarchy(document.nodes)[0];
+  if (hierarchyIssue) {
+    throw new Error(`モデルのHierarchyを読み取れません: ${hierarchyIssue.message}`);
+  }
   const openBrush = detectOpenBrushGltfDocument(document);
   if (hasExternalResources(document, openBrush !== undefined)) {
     throw new Error(
