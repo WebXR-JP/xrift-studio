@@ -36,6 +36,8 @@ const NODE_ARCHIVE_NAME: &str = "node-v24.15.0-win-x64.zip";
 const NODE_EXE_NAME: &str = "node.exe";
 #[cfg(target_os = "windows")]
 const NODE_BIN_REL: &str = "";
+#[cfg(target_os = "windows")]
+const NPM_CLI_REL: &str = "node_modules/npm/bin/npm-cli.js";
 
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 const NODE_DIST: &str = "node-v24.15.0-darwin-arm64";
@@ -51,6 +53,8 @@ const NODE_ARCHIVE_NAME: &str = "node-v24.15.0-darwin-x64.tar.gz";
 const NODE_EXE_NAME: &str = "node";
 #[cfg(target_os = "macos")]
 const NODE_BIN_REL: &str = "bin";
+#[cfg(target_os = "macos")]
+const NPM_CLI_REL: &str = "lib/node_modules/npm/bin/npm-cli.js";
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 const NODE_DIST: &str = "node-v24.15.0-linux-x64";
@@ -66,6 +70,8 @@ const NODE_ARCHIVE_NAME: &str = "node-v24.15.0-linux-arm64.tar.gz";
 const NODE_EXE_NAME: &str = "node";
 #[cfg(target_os = "linux")]
 const NODE_BIN_REL: &str = "bin";
+#[cfg(target_os = "linux")]
+const NPM_CLI_REL: &str = "lib/node_modules/npm/bin/npm-cli.js";
 
 fn node_url() -> String {
     format!(
@@ -318,11 +324,7 @@ fn derive_paths(root: &Path) -> RuntimePaths {
         node_dist_dir.join(NODE_BIN_REL)
     };
     let node_exe = node_bin_dir.join(NODE_EXE_NAME);
-    let npm_cli_js = node_dist_dir
-        .join("node_modules")
-        .join("npm")
-        .join("bin")
-        .join("npm-cli.js");
+    let npm_cli_js = node_dist_dir.join(NPM_CLI_REL);
     let npm_prefix = root.join("npm-prefix");
     let npm_cache = root.join("npm-cache");
     let home = root.join("home");
@@ -375,7 +377,7 @@ fn runtime_paths(app: AppHandle) -> Result<RuntimePaths, String> {
 #[tauri::command]
 fn runtime_status(app: AppHandle) -> Result<RuntimeStatus, String> {
     let paths = runtime_paths(app)?;
-    let node_installed = Path::new(&paths.node_exe).exists();
+    let node_installed = node_runtime_installed(&paths);
     let xrift_installed = Path::new(&paths.xrift_cmd).exists();
     Ok(RuntimeStatus {
         ready: node_installed && xrift_installed,
@@ -383,6 +385,10 @@ fn runtime_status(app: AppHandle) -> Result<RuntimeStatus, String> {
         xrift_installed,
         paths,
     })
+}
+
+fn node_runtime_installed(paths: &RuntimePaths) -> bool {
+    Path::new(&paths.node_exe).is_file() && Path::new(&paths.npm_cli_js).is_file()
 }
 
 fn emit_progress(app: &AppHandle, step: &str, percent: f64, message: &str) {
@@ -552,7 +558,7 @@ async fn setup_runtime(app: AppHandle) -> Result<RuntimeStatus, String> {
         std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
     }
 
-    if !Path::new(&paths.node_exe).exists() {
+    if !node_runtime_installed(&paths) {
         emit_progress(&app, "download", 0.0, "Node.js をダウンロード中...");
         let archive = download_node(&app, &paths).await?;
         emit_progress(&app, "extract", 0.0, "アーカイブを展開中...");
@@ -3835,6 +3841,22 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn derives_the_bundled_npm_entrypoint_for_this_platform() {
+        let paths = derive_paths(Path::new("/xrift-studio-test"));
+
+        assert_eq!(
+            Path::new(&paths.npm_cli_js),
+            Path::new(&paths.node_dist_dir).join(NPM_CLI_REL)
+        );
+
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        assert!(Path::new(&paths.npm_cli_js).ends_with("lib/node_modules/npm/bin/npm-cli.js"));
+
+        #[cfg(target_os = "windows")]
+        assert!(Path::new(&paths.npm_cli_js).ends_with("node_modules/npm/bin/npm-cli.js"));
+    }
 
     fn publication_metadata(id: &str, uploaded_at: &str) -> LoadedCompilerPublicationMetadata {
         let metadata = CompilerPublicationMetadata {
