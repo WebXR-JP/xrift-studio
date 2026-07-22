@@ -26,6 +26,7 @@ export type XriftRuntimeGeometry =
 export type XriftRuntimeMaterialBinding = {
   slot: string;
   materialAssetId: string;
+  sourceNodeIndex?: number;
 };
 
 export type XriftRuntimeComponent =
@@ -40,6 +41,14 @@ export type XriftRuntimeComponent =
       modelPose?: {
         bones: Record<string, [number, number, number]>;
         morphTargets: Record<string, number>;
+        nodes?: Record<
+          string,
+          {
+            position: [number, number, number];
+            rotation: [number, number, number];
+            scale: [number, number, number];
+          }
+        >;
       };
     }
   | {

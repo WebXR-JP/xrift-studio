@@ -66,6 +66,7 @@ import { repairImportedObject3DHierarchy } from "../../lib/visual-editor/object3
 export type ProjectModelMaterialAssignment = {
   slot: string;
   sourceMaterialIndex: number;
+  sourceNodeIndex?: number;
   material: MaterialAsset;
 };
 
@@ -543,17 +544,28 @@ export function applyAssignedMaterialPreviews(
   object: Object3D,
   assignments: readonly {
     sourceMaterialIndex: number;
+    sourceNodeIndex?: number;
     material: MaterialAsset;
     textures?: CoreMaterialPreviewTextures;
     customShaderMaterial?: Material;
   }[],
   sourceMaterials: ReadonlyMap<number, Material> = collectSourceMaterials(object),
 ): Material[] {
-  const assignmentBySourceIndex = new Map(
-    assignments.map((assignment) => [
-      assignment.sourceMaterialIndex,
-      assignment,
-    ]),
+  const globalAssignmentBySourceIndex = new Map(
+    assignments
+      .filter((assignment) => assignment.sourceNodeIndex === undefined)
+      .map((assignment) => [assignment.sourceMaterialIndex, assignment]),
+  );
+  const nodeAssignmentByKey = new Map(
+    assignments
+      .filter(
+        (assignment): assignment is typeof assignment & { sourceNodeIndex: number } =>
+          assignment.sourceNodeIndex !== undefined,
+      )
+      .map((assignment) => [
+        `${assignment.sourceNodeIndex}:${assignment.sourceMaterialIndex}`,
+        assignment,
+      ]),
   );
   const ownedMaterials: Material[] = [];
   object.traverse((child) => {
@@ -564,10 +576,14 @@ export function applyAssignedMaterialPreviews(
     if (!mesh.isMesh || !mesh.material) return;
     const createPreview = (source: Material): Material => {
       const sourceMaterialIndex = getSourceMaterialIndex(source);
-      const assignment =
-        sourceMaterialIndex === undefined
-          ? undefined
-          : assignmentBySourceIndex.get(sourceMaterialIndex);
+      const sourceNodeIndex = findSourceNodeIndex(child);
+      const assignment = sourceMaterialIndex === undefined
+        ? undefined
+        : (sourceNodeIndex === undefined
+            ? undefined
+            : nodeAssignmentByKey.get(
+                `${sourceNodeIndex}:${sourceMaterialIndex}`,
+              )) ?? globalAssignmentBySourceIndex.get(sourceMaterialIndex);
       if (!assignment) return source;
       const preview = createAssignedMaterialPreviewMaterial(
         source,
@@ -632,6 +648,30 @@ export function applyStaticModelPose(
 ): void {
   if (!pose) return;
   object.traverse((child) => {
+    const sourceNodeIndex = child.userData[
+      PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY
+    ];
+    const nodeOffset =
+      typeof sourceNodeIndex === "number"
+        ? pose.nodes?.[String(sourceNodeIndex)]
+        : undefined;
+    if (nodeOffset) {
+      child.position.set(
+        child.position.x + nodeOffset.position[0],
+        child.position.y + nodeOffset.position[1],
+        child.position.z + nodeOffset.position[2],
+      );
+      child.rotation.set(
+        child.rotation.x + nodeOffset.rotation[0],
+        child.rotation.y + nodeOffset.rotation[1],
+        child.rotation.z + nodeOffset.rotation[2],
+      );
+      child.scale.set(
+        child.scale.x * nodeOffset.scale[0],
+        child.scale.y * nodeOffset.scale[1],
+        child.scale.z * nodeOffset.scale[2],
+      );
+    }
     const bone = child as Object3D & { isBone?: boolean };
     const rotation = bone.isBone && child.name ? pose.bones[child.name] : undefined;
     if (rotation?.every(Number.isFinite)) {
@@ -660,6 +700,20 @@ export function applyStaticModelPose(
     });
   });
   object.updateMatrixWorld(true);
+}
+
+function findSourceNodeIndex(object: Object3D): number | undefined {
+  let current: Object3D | null = object;
+  while (current) {
+    const value = current.userData[
+      PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY
+    ];
+    if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
+      return value;
+    }
+    current = current.parent;
+  }
+  return undefined;
 }
 
 /**

@@ -166,8 +166,7 @@ export function instantiateSceneAsset(
   };
   const expandedScene =
     asset.kind === "model" &&
-    hasModelNodeHierarchy(asset) &&
-    !hasImportedAnimations(asset)
+    hasModelNodeHierarchy(asset)
       ? expandModelEntityHierarchy(
           placedScene,
           assets,

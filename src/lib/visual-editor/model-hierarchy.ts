@@ -9,9 +9,14 @@ import {
   createMeshColliderComponent,
   createMeshComponent,
   createTransformComponent,
+  getTransform,
+  updateEntityTransform,
   type MaterialBinding,
+  type MeshComponent,
   type SceneDocument,
   type SceneEntity,
+  type TransformPatch,
+  type Vec3,
 } from "./scene-document";
 
 type JsonRecord = Record<string, unknown>;
@@ -24,22 +29,17 @@ export function extractGltfModelNodeHierarchy(value: unknown): ModelNodeMetadata
   const skins = Array.isArray(value.skins) ? value.skins : [];
   const hierarchy = selectedSceneNodeHierarchy(value, nodes);
   const includedNodeIndices = hierarchy.includedNodeIndices;
-  // A selected SkinnedMesh depends on joints outside the selected node and
-  // cannot be split into independent Scene Entities without breaking its bind
-  // pose. Keep skinned glTF/VRM Models as one Model Entity.
-  if (
-    [...includedNodeIndices].some((nodeIndex) => {
-      const node = nodes[nodeIndex];
-      return isRecord(node) && integerIndex(node.skin, skins.length) !== undefined;
-    })
-  ) {
-    return [];
-  }
+  const jointNodeIndices = new Set(
+    skins.flatMap((skin) =>
+      isRecord(skin) ? validChildIndices(skin.joints, nodes.length) : [],
+    ),
+  );
 
   return nodes.flatMap((candidate, sourceNodeIndex) => {
     if (!includedNodeIndices.has(sourceNodeIndex)) return [];
     const node = isRecord(candidate) ? candidate : {};
     const meshIndex = integerIndex(node.mesh, meshes.length);
+    const skinIndex = integerIndex(node.skin, skins.length);
     const mesh = meshIndex === undefined ? undefined : meshes[meshIndex];
     const sourceMaterialIndices = isRecord(mesh) && Array.isArray(mesh.primitives)
       ? [
@@ -65,6 +65,8 @@ export function extractGltfModelNodeHierarchy(value: unknown): ModelNodeMetadata
         : {}),
       childSourceNodeIndices,
       ...(meshIndex === undefined ? {} : { meshIndex }),
+      ...(skinIndex === undefined ? {} : { skinIndex }),
+      ...(jointNodeIndices.has(sourceNodeIndex) ? { isBone: true } : {}),
       sourceMaterialIndices,
       ...modelNodeTransform(node),
     }];
@@ -98,6 +100,10 @@ export function expandModelEntityHierarchy(
   const nodes = getModelNodeHierarchy(asset);
   if (!root || nodes.length === 0) return scene;
 
+  const keepsSharedModel = nodes.some(
+    (node) => node.isBone || node.skinIndex !== undefined,
+  ) || Boolean(asset.importMetadata?.animations.length);
+
   const kind = asset.importMetadata?.openBrush?.nodes?.length ? "openbrush" : "model";
   const generatedPrefix = `${rootEntityId}-${kind}-node-`;
   const nodeId = (sourceNodeIndex: number) =>
@@ -122,9 +128,12 @@ export function expandModelEntityHierarchy(
       ...root.children.filter((childId) => !childId.startsWith(generatedPrefix)),
       ...generatedRootIds,
     ],
-    components: root.components.filter(
-      (component) => component.type !== "mesh" && component.type !== "collider",
-    ),
+    components: keepsSharedModel
+      ? root.components
+      : root.components.filter(
+          (component) =>
+            component.type !== "mesh" && component.type !== "collider",
+        ),
   };
 
   for (const node of nodes) {
@@ -138,19 +147,22 @@ export function expandModelEntityHierarchy(
     const importScale = Number.isFinite(asset.importSettings.scale)
       ? asset.importSettings.scale
       : 1;
+    const position = node.position.map((value) =>
+      isGeneratedRoot ? value * importScale : value,
+    ) as [number, number, number];
+    const rotation = [...node.rotation] as [number, number, number];
+    const scale = node.scale.map((value) =>
+      isGeneratedRoot ? value * importScale : value,
+    ) as [number, number, number];
     const components: SceneEntity["components"] = [
       createTransformComponent(
         `${entityId}-transform`,
-        node.position.map((value) =>
-          isGeneratedRoot ? value * importScale : value,
-        ) as [number, number, number],
-        [...node.rotation],
-        node.scale.map((value) =>
-          isGeneratedRoot ? value * importScale : value,
-        ) as [number, number, number],
+        position,
+        rotation,
+        scale,
       ),
     ];
-    if (node.meshIndex !== undefined) {
+    if (!keepsSharedModel && node.meshIndex !== undefined) {
       components.push(
         createMeshComponent(
           `${entityId}-mesh`,
@@ -180,10 +192,106 @@ export function expandModelEntityHierarchy(
         .map(nodeId),
       enabled: true,
       components,
+      ...(keepsSharedModel
+        ? {
+            modelNode: {
+              modelEntityId: rootEntityId,
+              modelAssetId: asset.id,
+              sourceNodeIndex: node.sourceNodeIndex,
+              nodeType: node.isBone
+                ? "bone" as const
+                : node.skinIndex !== undefined
+                  ? "skinned-mesh" as const
+                  : node.meshIndex !== undefined
+                    ? "mesh" as const
+                    : "node" as const,
+              sourceMaterialIndices: [...node.sourceMaterialIndices],
+              restPosition: position,
+              restRotation: rotation,
+              restScale: scale,
+              ...(isGeneratedRoot && importScale !== 1
+                ? { rootImportScale: importScale }
+                : {}),
+            },
+          }
+        : {}),
     };
   }
 
   return { ...scene, entities };
+}
+
+/**
+ * Updates an expanded Model node and mirrors its local offset to the shared
+ * Mesh pose so Skin, Animation, and one source Model remain intact.
+ */
+export function updateModelNodeEntityTransform(
+  scene: SceneDocument,
+  entityId: string,
+  patch: TransformPatch,
+): SceneDocument {
+  const nextScene = updateEntityTransform(scene, entityId, patch);
+  if (nextScene === scene) return scene;
+  const entity = nextScene.entities[entityId];
+  const modelNode = entity?.modelNode;
+  const transform = entity ? getTransform(entity) : undefined;
+  if (!modelNode || !transform) return nextScene;
+  const modelEntity = nextScene.entities[modelNode.modelEntityId];
+  const mesh = modelEntity?.components.find(
+    (component): component is MeshComponent => component.type === "mesh",
+  );
+  if (!modelEntity || !mesh) return nextScene;
+
+  const rootScale = modelNode.rootImportScale ?? 1;
+  const offset = {
+    position: transform.position.map(
+      (value, index) =>
+        (value - modelNode.restPosition[index]) / rootScale,
+    ) as Vec3,
+    rotation: transform.rotation.map(
+      (value, index) => value - modelNode.restRotation[index],
+    ) as Vec3,
+    scale: transform.scale.map((value, index) =>
+      value / modelNode.restScale[index],
+    ) as Vec3,
+  };
+  const nodes = { ...(mesh.modelPose?.nodes ?? {}) };
+  const key = String(modelNode.sourceNodeIndex);
+  if (isIdentityNodeOffset(offset.position, offset.rotation, offset.scale)) {
+    delete nodes[key];
+  } else {
+    nodes[key] = offset;
+  }
+  const modelPose = {
+    bones: { ...(mesh.modelPose?.bones ?? {}) },
+    morphTargets: { ...(mesh.modelPose?.morphTargets ?? {}) },
+    ...(Object.keys(nodes).length > 0 ? { nodes } : {}),
+  };
+  const components = modelEntity.components.map((component) =>
+    component.id === mesh.id && component.type === "mesh"
+      ? { ...component, modelPose }
+      : component,
+  );
+  return {
+    ...nextScene,
+    entities: {
+      ...nextScene.entities,
+      [modelEntity.id]: { ...modelEntity, components },
+    },
+  };
+}
+
+function isIdentityNodeOffset(
+  position: Vec3,
+  rotation: Vec3,
+  scale: Vec3,
+): boolean {
+  const epsilon = 1e-7;
+  return (
+    position.every((value) => Math.abs(value) < epsilon) &&
+    rotation.every((value) => Math.abs(value) < epsilon) &&
+    scale.every((value) => Math.abs(value - 1) < epsilon)
+  );
 }
 
 type SelectedSceneNodeHierarchy = {

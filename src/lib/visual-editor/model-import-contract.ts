@@ -793,6 +793,27 @@ function validateModelNodes(
         "Model node mesh index is outside meshCount",
       ));
     }
+    if (
+      candidate.skinIndex !== undefined &&
+      (!Number.isInteger(candidate.skinIndex) ||
+        Number(candidate.skinIndex) < 0)
+    ) {
+      issues.push(issue(
+        `${targetPath}.skinIndex`,
+        "reference",
+        "Model node skin index must be a non-negative integer",
+      ));
+    }
+    if (
+      candidate.isBone !== undefined &&
+      typeof candidate.isBone !== "boolean"
+    ) {
+      issues.push(issue(
+        `${targetPath}.isBone`,
+        "type",
+        "Model node isBone must be a boolean",
+      ));
+    }
     validateModelNodeIndexArray(
       candidate.sourceMaterialIndices,
       undefined,

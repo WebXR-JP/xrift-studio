@@ -51,6 +51,14 @@ export type ModelPoseState = {
   bones: Record<string, Vec3>;
   /** Shape-key weights in the inclusive 0..1 range. */
   morphTargets: Record<string, number>;
+  /** Per-source-node local Transform offsets authored through expanded Hierarchy nodes. */
+  nodes?: Record<string, ModelNodeTransformOffset>;
+};
+
+export type ModelNodeTransformOffset = {
+  position: Vec3;
+  rotation: Vec3;
+  scale: Vec3;
 };
 
 export type MeshGeometryReference =
@@ -69,6 +77,8 @@ export type MeshGeometryReference =
 export type MaterialBinding = {
   slot: string;
   materialAssetId: string;
+  /** Limits a Model material override to one expanded glTF node. */
+  sourceNodeIndex?: number;
 };
 
 export const COLLIDER_FIT_MODES = ["manual", "auto"] as const;
@@ -274,6 +284,21 @@ export type SceneEntity = {
   children: string[];
   enabled: boolean;
   components: RegisteredSceneComponent[];
+  /** Editor-only link for a node exposed from one shared skinned/animated Model. */
+  modelNode?: ModelNodeAuthoringMetadata;
+};
+
+export type ModelNodeAuthoringMetadata = {
+  modelEntityId: string;
+  modelAssetId: string;
+  sourceNodeIndex: number;
+  nodeType: "node" | "mesh" | "skinned-mesh" | "bone";
+  sourceMaterialIndices: number[];
+  restPosition: Vec3;
+  restRotation: Vec3;
+  restScale: Vec3;
+  /** Root-node transforms are displayed after applying the Model import scale. */
+  rootImportScale?: number;
 };
 
 export type SceneDocument = {
@@ -1105,6 +1130,7 @@ export function setMeshMaterialBinding(
   slot: string,
   materialAssetId: string | null,
   componentId?: string,
+  sourceNodeIndex?: number,
 ): SceneDocument {
   const entity = scene.entities[entityId];
   const mesh = entity ? getMesh(entity, componentId) : undefined;
@@ -1120,10 +1146,16 @@ export function setMeshMaterialBinding(
   }
 
   const nextBindings = mesh.materialBindings.filter(
-    (binding) => binding.slot !== normalizedSlot,
+    (binding) =>
+      binding.slot !== normalizedSlot ||
+      binding.sourceNodeIndex !== sourceNodeIndex,
   );
   if (materialAssetId !== null) {
-    nextBindings.push({ slot: normalizedSlot, materialAssetId });
+    nextBindings.push({
+      slot: normalizedSlot,
+      materialAssetId,
+      ...(sourceNodeIndex === undefined ? {} : { sourceNodeIndex }),
+    });
   }
   const normalized = orderMaterialBindings(
     normalizeMaterialBindings(nextBindings),
@@ -1468,6 +1500,22 @@ export function cloneEntityHierarchy(
         entityIdMap[childId] ? [entityIdMap[childId]] : [],
       ),
       components,
+      ...(source.modelNode
+        ? {
+            modelNode: {
+              ...source.modelNode,
+              modelEntityId:
+                entityIdMap[source.modelNode.modelEntityId] ??
+                source.modelNode.modelEntityId,
+              sourceMaterialIndices: [
+                ...source.modelNode.sourceMaterialIndices,
+              ],
+              restPosition: cloneVec3(source.modelNode.restPosition),
+              restRotation: cloneVec3(source.modelNode.restRotation),
+              restScale: cloneVec3(source.modelNode.restScale),
+            },
+          }
+        : {}),
     };
   }
 
@@ -1570,6 +1618,22 @@ function cloneSceneComponent(
                 ]),
               ),
               morphTargets: { ...component.modelPose.morphTargets },
+              ...(component.modelPose.nodes
+                ? {
+                    nodes: Object.fromEntries(
+                      Object.entries(component.modelPose.nodes).map(
+                        ([key, value]) => [
+                          key,
+                          {
+                            position: cloneVec3(value.position),
+                            rotation: cloneVec3(value.rotation),
+                            scale: cloneVec3(value.scale),
+                          },
+                        ],
+                      ),
+                    ),
+                  }
+                : {}),
             },
           }
         : {}),
@@ -1703,7 +1767,17 @@ function normalizeMaterialBindings(
     const slot = binding.slot.trim();
     const materialAssetId = binding.materialAssetId.trim();
     if (!slot || !materialAssetId) continue;
-    bySlot.set(slot, { slot, materialAssetId });
+    const sourceNodeIndex =
+      typeof binding.sourceNodeIndex === "number" &&
+      Number.isInteger(binding.sourceNodeIndex) &&
+      binding.sourceNodeIndex >= 0
+        ? binding.sourceNodeIndex
+        : undefined;
+    bySlot.set(`${sourceNodeIndex ?? "global"}:${slot}`, {
+      slot,
+      materialAssetId,
+      ...(sourceNodeIndex === undefined ? {} : { sourceNodeIndex }),
+    });
   }
   return [...bySlot.values()];
 }
@@ -1716,7 +1790,8 @@ function orderMaterialBindings(
   return [...bindings].sort(
     (left, right) =>
       (slotOrder.get(left.slot) ?? Number.MAX_SAFE_INTEGER) -
-      (slotOrder.get(right.slot) ?? Number.MAX_SAFE_INTEGER),
+        (slotOrder.get(right.slot) ?? Number.MAX_SAFE_INTEGER) ||
+      (left.sourceNodeIndex ?? -1) - (right.sourceNodeIndex ?? -1),
   );
 }
 
@@ -1729,7 +1804,8 @@ function materialBindingsEqual(
     left.every(
       (binding, index) =>
         binding.slot === right[index]?.slot &&
-        binding.materialAssetId === right[index]?.materialAssetId,
+        binding.materialAssetId === right[index]?.materialAssetId &&
+        binding.sourceNodeIndex === right[index]?.sourceNodeIndex,
     )
   );
 }

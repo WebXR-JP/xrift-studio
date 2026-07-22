@@ -1030,6 +1030,7 @@ function resolveMeshGeometry(
 type ModelMaterialOverride = {
   slot: MaterialSlotDefinition;
   material: MaterialAsset;
+  sourceNodeIndex?: number;
 };
 
 function renderModelMesh(
@@ -1125,6 +1126,12 @@ function renderModelMesh(
     mesh.geometry?.kind === "asset"
       ? mesh.geometry.sourceNodeIndex
       : undefined;
+  const needsParser =
+    sourceNodeIndex !== undefined ||
+    Boolean(mesh.modelPose?.nodes && Object.keys(mesh.modelPose.nodes).length) ||
+    mesh.materialBindings.some(
+      (binding) => binding.sourceNodeIndex !== undefined,
+    );
   const modelScale =
     sourceNodeIndex === undefined && Number.isFinite(model.importSettings.scale)
       ? model.importSettings.scale
@@ -1143,7 +1150,7 @@ function renderModelMesh(
       (parser) => new GLTFGoogleTiltBrushMaterialExtension(parser, ${JSON.stringify(OPEN_BRUSH_BRUSH_BASE_URL)}),
     );
   });`
-      : sourceNodeIndex === undefined
+      : !needsParser
         ? `const { scene${autoplay ? ", animations" : ""} } = useGLTF(modelUrl);`
         : `const { scene, parser${autoplay ? ", animations" : ""} } = useGLTF(modelUrl);`;
   const animationSource = autoplay
@@ -1188,8 +1195,14 @@ function renderCompiledModelPose(
     mesh.geometry?.kind === "asset"
       ? mesh.geometry.sourceNodeIndex
       : undefined;
+  const needsSourceNodeTags =
+    sourceNodeIndex !== undefined ||
+    Boolean(pose?.nodes && Object.keys(pose.nodes).length) ||
+    mesh.materialBindings.some(
+      (binding) => binding.sourceNodeIndex !== undefined,
+    );
   if (
-    sourceNodeIndex === undefined &&
+    !needsSourceNodeTags &&
     (!pose ||
       (Object.keys(pose.bones).length === 0 &&
         Object.keys(pose.morphTargets).length === 0))
@@ -1202,9 +1215,9 @@ function renderCompiledModelPose(
   );
   const boneRotations = JSON.stringify(pose?.bones ?? {});
   const morphTargets = JSON.stringify(pose?.morphTargets ?? {});
-  const selectSourceNode = sourceNodeIndex === undefined
-    ? ""
-    : `    const originals: typeof scene.children = [];
+  const nodeTransforms = JSON.stringify(pose?.nodes ?? {});
+  const tagSourceNodes = needsSourceNodeTags
+    ? `    const originals: typeof scene.children = [];
     const copies: typeof scene.children = [];
     scene.traverse((object) => originals.push(object));
     cloned.traverse((object) => copies.push(object));
@@ -1214,7 +1227,11 @@ function renderCompiledModelPose(
         copies[index].userData.xriftSourceNodeIndex = nodeIndex;
       }
     });
-    let selected = copies.find(
+`
+    : "";
+  const selectSourceNode = sourceNodeIndex === undefined
+    ? ""
+    : `    let selected = copies.find(
       (object) => object.userData.xriftSourceNodeIndex === ${sourceNodeIndex},
     );
     if (selected) {
@@ -1234,10 +1251,32 @@ function renderCompiledModelPose(
     objectName: "compiledScene",
     declaration: `  const compiledScene = useMemo(() => {
     const cloned = cloneSkeleton(scene);
-${selectSourceNode}    const output = ${sourceNodeIndex === undefined ? "cloned" : "selected"};
+${tagSourceNodes}${selectSourceNode}    const output = ${sourceNodeIndex === undefined ? "cloned" : "selected"};
     const boneRotations = ${boneRotations} as Record<string, [number, number, number]>;
     const morphTargetWeights = ${morphTargets} as Record<string, number>;
+    const nodeTransforms = ${nodeTransforms} as Record<string, { position: [number, number, number]; rotation: [number, number, number]; scale: [number, number, number] }>;
     output.traverse((object) => {
+      const sourceNodeIndex = object.userData.xriftSourceNodeIndex;
+      const nodeTransform = typeof sourceNodeIndex === "number"
+        ? nodeTransforms[String(sourceNodeIndex)]
+        : undefined;
+      if (nodeTransform) {
+        object.position.set(
+          object.position.x + nodeTransform.position[0],
+          object.position.y + nodeTransform.position[1],
+          object.position.z + nodeTransform.position[2],
+        );
+        object.rotation.set(
+          object.rotation.x + nodeTransform.rotation[0],
+          object.rotation.y + nodeTransform.rotation[1],
+          object.rotation.z + nodeTransform.rotation[2],
+        );
+        object.scale.set(
+          object.scale.x * nodeTransform.scale[0],
+          object.scale.y * nodeTransform.scale[1],
+          object.scale.z * nodeTransform.scale[2],
+        );
+      }
       const boneObject = object as typeof object & { isBone?: boolean };
       const rotation = boneObject.isBone ? boneRotations[object.name] : undefined;
       if (rotation) {
@@ -1259,7 +1298,7 @@ ${selectSourceNode}    const output = ${sourceNodeIndex === undefined ? "cloned"
     });
     output.updateMatrixWorld(true);
     return output;
-  }, [scene${sourceNodeIndex === undefined ? "" : ", parser"}]);`,
+  }, [scene${needsSourceNodeTags ? ", parser" : ""}]);`,
   };
 }
 
@@ -1276,7 +1315,8 @@ function resolveModelMaterialOverrides(
   const slotById = new Map(slots.map((slot) => [slot.slot, slot]));
   const bindingBySlot = new Map<string, string>();
   for (const binding of mesh.materialBindings) {
-    if (bindingBySlot.has(binding.slot)) {
+    const bindingKey = `${binding.sourceNodeIndex ?? "global"}:${binding.slot}`;
+    if (bindingBySlot.has(bindingKey)) {
       addDiagnostic(context, {
         severity: "blocking",
         code: "model-material-binding-duplicate",
@@ -1302,15 +1342,16 @@ function resolveModelMaterialOverrides(
       });
       continue;
     }
-    bindingBySlot.set(binding.slot, binding.materialAssetId);
+    bindingBySlot.set(bindingKey, binding.materialAssetId);
   }
 
   const overrides: ModelMaterialOverride[] = [];
-  for (const slot of slots) {
-    const materialAssetId = openBrushModel
-      ? bindingBySlot.get(slot.slot)
-      : bindingBySlot.get(slot.slot) ?? slot.defaultMaterialAssetId;
-    if (!materialAssetId) continue;
+  const appendOverride = (
+    slot: MaterialSlotDefinition,
+    materialAssetId: string | undefined,
+    sourceNodeIndex?: number,
+  ) => {
+    if (!materialAssetId) return;
     context.referencedAssetIds.add(materialAssetId);
     const material = getMaterialAsset(context.assets, materialAssetId);
     if (!material) {
@@ -1324,7 +1365,7 @@ function resolveModelMaterialOverrides(
         assetId: materialAssetId,
         fieldPath: `materialBindings.${slot.slot}`,
       });
-      continue;
+      return;
     }
     if (openBrushModel && material.shader?.kind === "openbrush") {
       if (material.shader.sourceMaterialIndex !== slot.sourceMaterialIndex) {
@@ -1341,14 +1382,31 @@ function resolveModelMaterialOverrides(
       }
       // Identity presets are already reconstructed by the three-icosa loader.
       // Only ordinary XRift Materials become JSX material injections.
-      continue;
+      return;
     }
-    overrides.push({ slot, material });
+    overrides.push({
+      slot,
+      material,
+      ...(sourceNodeIndex === undefined ? {} : { sourceNodeIndex }),
+    });
+  };
+  for (const slot of slots) {
+    const materialAssetId = openBrushModel
+      ? bindingBySlot.get(`global:${slot.slot}`)
+      : bindingBySlot.get(`global:${slot.slot}`) ?? slot.defaultMaterialAssetId;
+    appendOverride(slot, materialAssetId);
+  }
+  for (const binding of mesh.materialBindings) {
+    if (binding.sourceNodeIndex === undefined) continue;
+    const slot = slotById.get(binding.slot);
+    if (!slot) continue;
+    appendOverride(slot, binding.materialAssetId, binding.sourceNodeIndex);
   }
 
   const bySourceName = new Map<string, string>();
   for (const override of overrides) {
-    const previous = bySourceName.get(override.slot.name);
+    const sourceKey = `${override.sourceNodeIndex ?? "global"}:${override.slot.name}`;
+    const previous = bySourceName.get(sourceKey);
     if (previous && previous !== override.material.id) {
       addDiagnostic(context, {
         severity: "blocking",
@@ -1374,38 +1432,63 @@ function renderModelMaterialInjection(
   allowWildcard: boolean,
 ): string {
   if (overrides.length === 0) return "";
-  const uniqueByName = new Map<
+  const globalByName = new Map<
     string,
     ModelMaterialOverride & { componentName: string }
   >();
-  overrides.forEach((override) => uniqueByName.set(override.slot.name, override));
+  const nodeByKey = new Map<
+    string,
+    ModelMaterialOverride & { componentName: string }
+  >();
+  overrides.forEach((override) => {
+    if (override.sourceNodeIndex === undefined) {
+      globalByName.set(override.slot.name, override);
+    } else {
+      nodeByKey.set(
+        `${override.sourceNodeIndex}:${override.slot.name}`,
+        override,
+      );
+    }
+  });
   const wildcard =
-    allowWildcard && uniqueByName.size === 1
-      ? [...uniqueByName.values()][0]
+    allowWildcard && nodeByKey.size === 0 && globalByName.size === 1
+      ? [...globalByName.values()][0]
       : undefined;
-  const cases = [...uniqueByName.entries()]
+  const nodeCases = [...nodeByKey.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(
+      ([sourceKey, override]) =>
+        `        case ${JSON.stringify(sourceKey)}:\n          return <${override.componentName} key={key} attach={attach} />;`,
+    )
+    .join("\n");
+  const globalCases = [...globalByName.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(
       ([sourceName, override]) =>
-        `      case ${JSON.stringify(sourceName)}:\n        return <${override.componentName} key={key} attach={attach} />;`,
+        `        case ${JSON.stringify(sourceName)}:\n          return <${override.componentName} key={key} attach={attach} />;`,
     )
     .join("\n");
   const resolver = wildcard
-    ? `    return <${wildcard.componentName} key={key} attach={attach} />;`
-    : `    switch (materialName) {\n${cases}\n      default:\n        return null;\n    }`;
-  const materialParameter = wildcard ? "_material" : "material";
-  const materialName = wildcard
-    ? ""
-    : `    const materialName =
-      typeof material === "object" && material !== null && "name" in material
-        ? String(material.name)
-        : "";
-`;
+    ? `      return <${wildcard.componentName} key={key} attach={attach} />;`
+    : `${nodeCases ? `      if (typeof sourceNodeIndex === "number") {\n        switch (\`\${sourceNodeIndex}:\${materialName}\`) {\n${nodeCases}\n        }\n      }\n` : ""}      switch (materialName) {\n${globalCases}\n        default:\n          return null;\n      }`;
   return `
         inject={(object) => {
+          let sourceNodeObject: typeof object | null = object;
+          let sourceNodeIndex: number | undefined;
+          while (sourceNodeObject) {
+            const candidate = sourceNodeObject.userData?.xriftSourceNodeIndex;
+            if (typeof candidate === "number") {
+              sourceNodeIndex = candidate;
+              break;
+            }
+            sourceNodeObject = sourceNodeObject.parent;
+          }
           if (!("material" in object)) return null;
-          const renderOverride = (${materialParameter}: unknown, attach: string, key: string) => {
-${materialName}
+          const renderOverride = (material: unknown, attach: string, key: string) => {
+            const materialName =
+              typeof material === "object" && material !== null && "name" in material
+                ? String(material.name)
+                : "";
 ${resolver}
           };
           const sourceMaterial = object.material;

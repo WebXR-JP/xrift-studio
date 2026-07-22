@@ -130,6 +130,10 @@ export type ModelNodeMetadata = {
   parentSourceNodeIndex?: number;
   childSourceNodeIndices: number[];
   meshIndex?: number;
+  /** glTF skin used by this node when it owns a skinned mesh. */
+  skinIndex?: number;
+  /** True when this node is referenced by a glTF skin as a joint. */
+  isBone?: boolean;
   sourceMaterialIndices: number[];
   position: [number, number, number];
   rotation: [number, number, number];

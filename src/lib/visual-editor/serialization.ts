@@ -1365,7 +1365,10 @@ function validatePrefabComponentShape(
         (binding) =>
           !isRecord(binding) ||
           typeof binding.materialAssetId !== "string" ||
-          !binding.materialAssetId,
+          !binding.materialAssetId ||
+          (binding.sourceNodeIndex !== undefined &&
+            (!Number.isInteger(binding.sourceNodeIndex) ||
+              Number(binding.sourceNodeIndex) < 0)),
       )
     ) {
       issues.push(issue(`${path}.materialBindings`, "reference", "material binding is invalid"));
@@ -1495,6 +1498,18 @@ function validateSceneComponentShapes(
   if (!isRecord(value) || !isRecord(value.entities)) return;
   for (const [entityId, entity] of Object.entries(value.entities)) {
     if (!isRecord(entity) || !Array.isArray(entity.components)) continue;
+    if (
+      entity.modelNode !== undefined &&
+      !isValidModelNodeAuthoringMetadata(entity.modelNode)
+    ) {
+      issues.push(
+        issue(
+          `$.entities.${entityId}.modelNode`,
+          "type",
+          "Model node authoring metadata is invalid",
+        ),
+      );
+    }
     for (const [index, component] of entity.components.entries()) {
       if (!isRecord(component)) continue;
       validatePrefabComponentShape(
@@ -1645,6 +1660,30 @@ function validateModelPoseShape(
       );
     }
   }
+  if (value.nodes !== undefined) {
+    if (!isRecord(value.nodes)) {
+      issues.push(issue(`${path}.nodes`, "type", "Model node pose must be a map"));
+    } else {
+      for (const [key, transform] of Object.entries(value.nodes)) {
+        if (
+          !/^\d+$/.test(key) ||
+          !isRecord(transform) ||
+          !isFiniteNumberVec3(transform.position) ||
+          !isFiniteNumberVec3(transform.rotation) ||
+          !isFiniteNumberVec3(transform.scale) ||
+          transform.scale.some((entry) => Math.abs(entry) < 0.0001)
+        ) {
+          issues.push(
+            issue(
+              `${path}.nodes.${key}`,
+              "range",
+              "Model node pose must contain finite position, rotation, and non-zero scale",
+            ),
+          );
+        }
+      }
+    }
+  }
 }
 
 function validateAudioSourceComponentShape(
@@ -1706,6 +1745,33 @@ function validateAudioSourceComponentShape(
   ) {
     issues.push(issue(`${path}.maxDistance`, "range", "Audio Source max distance must cover its reference distance"));
   }
+}
+
+function isValidModelNodeAuthoringMetadata(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.modelEntityId === "string" &&
+    value.modelEntityId.trim().length > 0 &&
+    typeof value.modelAssetId === "string" &&
+    value.modelAssetId.trim().length > 0 &&
+    Number.isInteger(value.sourceNodeIndex) &&
+    Number(value.sourceNodeIndex) >= 0 &&
+    ["node", "mesh", "skinned-mesh", "bone"].includes(
+      String(value.nodeType),
+    ) &&
+    Array.isArray(value.sourceMaterialIndices) &&
+    value.sourceMaterialIndices.every(
+      (entry) => Number.isInteger(entry) && Number(entry) >= 0,
+    ) &&
+    isFiniteNumberVec3(value.restPosition) &&
+    isFiniteNumberVec3(value.restRotation) &&
+    isFiniteNumberVec3(value.restScale) &&
+    value.restScale.every((entry) => Math.abs(entry) >= 0.0001) &&
+    (value.rootImportScale === undefined ||
+      (typeof value.rootImportScale === "number" &&
+        Number.isFinite(value.rootImportScale) &&
+        Math.abs(value.rootImportScale) >= 0.0001))
+  );
 }
 
 function validateAnimationComponentShape(

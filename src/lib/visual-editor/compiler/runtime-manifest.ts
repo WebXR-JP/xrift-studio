@@ -107,6 +107,9 @@ function compileRuntimeEntity(
         materialBindings: component.materialBindings.map((binding) => ({
           slot: binding.slot,
           materialAssetId: binding.materialAssetId,
+          ...(binding.sourceNodeIndex === undefined
+            ? {}
+            : { sourceNodeIndex: binding.sourceNodeIndex }),
         })),
         castShadow: component.castShadow,
         receiveShadow: component.receiveShadow,

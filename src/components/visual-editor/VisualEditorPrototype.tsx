@@ -70,7 +70,7 @@ import {
   reimportModelAssetFromDisk,
   undoEditorHistory,
   updateEntityEnabled,
-  updateEntityTransform,
+  updateModelNodeEntityTransform,
   updateAnimationComponent,
   updateAudioSourceComponent,
   updateColliderComponent,
@@ -1806,7 +1806,9 @@ export function VisualEditorPrototype({
   const handleTransformChange = useCallback(
     (entityId: string, patch: TransformPatch) => {
       if (editorMode !== "edit") return;
-      updateScene((scene) => updateEntityTransform(scene, entityId, patch));
+      updateScene((scene) =>
+        updateModelNodeEntityTransform(scene, entityId, patch),
+      );
     },
     [editorMode, updateScene],
   );
@@ -1834,7 +1836,7 @@ export function VisualEditorPrototype({
         return;
       }
       setHistory((current) => {
-        const scene = updateEntityTransform(
+        const scene = updateModelNodeEntityTransform(
           current.present.bundle.scene,
           entityId,
           patch,
@@ -1911,7 +1913,9 @@ export function VisualEditorPrototype({
   const handleGizmoCommit = useCallback(
     (entityId: string, patch: TransformPatch) => {
       if (editorMode !== "edit") return;
-      updateScene((scene) => updateEntityTransform(scene, entityId, patch));
+      updateScene((scene) =>
+        updateModelNodeEntityTransform(scene, entityId, patch),
+      );
       setNotice("ギズモの変更をシーンへ反映しました");
     },
     [editorMode, updateScene],
@@ -1968,6 +1972,22 @@ export function VisualEditorPrototype({
                       ]),
                     ),
                     morphTargets: { ...patch.modelPose.morphTargets },
+                    ...(patch.modelPose.nodes
+                      ? {
+                          nodes: Object.fromEntries(
+                            Object.entries(patch.modelPose.nodes).map(
+                              ([key, value]) => [
+                                key,
+                                {
+                                  position: [...value.position] as [number, number, number],
+                                  rotation: [...value.rotation] as [number, number, number],
+                                  scale: [...value.scale] as [number, number, number],
+                                },
+                              ],
+                            ),
+                          ),
+                        }
+                      : {}),
                   },
                 }
               : {}),
@@ -2457,7 +2477,8 @@ export function VisualEditorPrototype({
       }
 
       const entity = bundle.scene.entities[entityId];
-      const mesh = entity?.components.find(
+      const meshEntity = bundle.scene.entities[target.meshEntityId];
+      const mesh = meshEntity?.components.find(
         (component) => component.id === target.meshId && component.type === "mesh",
       );
       if (!entity || mesh?.type !== "mesh") {
@@ -2474,10 +2495,19 @@ export function VisualEditorPrototype({
         Boolean(geometryAsset.importMetadata?.openBrush);
       const slots = target.slots.map((slot) => {
         const binding = mesh.materialBindings.find(
-          (candidate) => candidate.slot === slot.slot,
+          (candidate) =>
+            candidate.slot === slot.slot &&
+            candidate.sourceNodeIndex === target.sourceNodeIndex,
+        );
+        const globalBinding = mesh.materialBindings.find(
+          (candidate) =>
+            candidate.slot === slot.slot &&
+            candidate.sourceNodeIndex === undefined,
         );
         const currentMaterialId =
-          binding?.materialAssetId ?? slot.defaultMaterialAssetId;
+          binding?.materialAssetId ??
+          globalBinding?.materialAssetId ??
+          slot.defaultMaterialAssetId;
         const currentMaterial = currentMaterialId
           ? bundle.assets.assets[currentMaterialId]
           : undefined;

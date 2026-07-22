@@ -501,11 +501,27 @@ function replaceMaterialBinding(
   bindings: MaterialBinding[],
   slot: string,
   materialAssetId: string,
+  sourceNodeIndex?: number,
 ): MaterialBinding[] {
-  const found = bindings.some((binding) => binding.slot === slot);
-  if (!found) return [...bindings, { slot, materialAssetId }];
+  const found = bindings.some(
+    (binding) =>
+      binding.slot === slot &&
+      binding.sourceNodeIndex === sourceNodeIndex,
+  );
+  if (!found) {
+    return [
+      ...bindings,
+      {
+        slot,
+        materialAssetId,
+        ...(sourceNodeIndex === undefined ? {} : { sourceNodeIndex }),
+      },
+    ];
+  }
   return bindings.map((binding) =>
-    binding.slot === slot ? { ...binding, materialAssetId } : binding,
+    binding.slot === slot && binding.sourceNodeIndex === sourceNodeIndex
+      ? { ...binding, materialAssetId }
+      : binding,
   );
 }
 
@@ -520,12 +536,16 @@ function MeshInspector({
   readOnly,
   onChange,
   onOpenMaterial,
+  showModelPose = true,
+  materialBindingSourceNodeIndex,
 }: {
   component: MeshComponent;
   assets: AssetManifest;
   readOnly: boolean;
   onChange: (patch: MeshInspectorPatch) => void;
   onOpenMaterial: (assetId: string) => void;
+  showModelPose?: boolean;
+  materialBindingSourceNodeIndex?: number;
 }) {
   const geometryAssetId =
     component.geometry?.kind === "asset"
@@ -573,7 +593,11 @@ function MeshInspector({
           マテリアル
         </h4>
         {slots.map((slot) => {
-          const binding = component.materialBindings.find((candidate) => candidate.slot === slot.slot);
+          const binding = component.materialBindings.find(
+            (candidate) =>
+              candidate.slot === slot.slot &&
+              candidate.sourceNodeIndex === materialBindingSourceNodeIndex,
+          );
           const assignedId = binding?.materialAssetId ?? slot.defaultMaterialAssetId ?? "";
           const assigned = assignedId ? getMaterialAsset(assets, assignedId) : undefined;
           return (
@@ -606,6 +630,7 @@ function MeshInspector({
                     component.materialBindings,
                     slot.slot,
                     materialAssetId,
+                    materialBindingSourceNodeIndex,
                   ),
                 });
               }}
@@ -628,6 +653,7 @@ function MeshInspector({
                         component.materialBindings,
                         slot.slot,
                         event.currentTarget.value,
+                        materialBindingSourceNodeIndex,
                       ),
                     })
                   }
@@ -669,7 +695,7 @@ function MeshInspector({
         ) : null}
       </div>
 
-      {model ? (
+      {model && showModelPose ? (
         <ModelPoseEditor
           pose={component.modelPose}
           bones={bones}
@@ -696,6 +722,130 @@ function MeshInspector({
         />
       </div>
     </ComponentCard>
+  );
+}
+
+function ModelNodeInspector({
+  entity,
+  scene,
+  assets,
+  readOnly,
+  onMeshChange,
+  onOpenMaterial,
+}: {
+  entity: SceneEntity;
+  scene: SceneDocument;
+  assets: AssetManifest;
+  readOnly: boolean;
+  onMeshChange: (
+    entityId: string,
+    componentId: string,
+    patch: MeshInspectorPatch,
+  ) => void;
+  onOpenMaterial: (assetId: string) => void;
+}) {
+  const node = entity.modelNode;
+  if (!node) return null;
+  const modelEntity = scene.entities[node.modelEntityId];
+  const mesh = modelEntity?.components.find(
+    (component): component is MeshComponent => component.type === "mesh",
+  );
+  const model = assets.assets[node.modelAssetId];
+  const nodeSourceIndices = new Set(node.sourceMaterialIndices);
+  const nodeSlots = model?.kind === "model"
+    ? model.materialSlots.filter(
+        (slot) =>
+          slot.sourceMaterialIndex !== undefined &&
+          nodeSourceIndices.has(slot.sourceMaterialIndex),
+      )
+    : [];
+  const nodeBindings = mesh
+    ? nodeSlots.flatMap((slot) => {
+        const binding = mesh.materialBindings.find(
+          (candidate) =>
+            candidate.slot === slot.slot &&
+            candidate.sourceNodeIndex === node.sourceNodeIndex,
+        ) ?? mesh.materialBindings.find(
+          (candidate) =>
+            candidate.slot === slot.slot &&
+            candidate.sourceNodeIndex === undefined,
+        );
+        return binding
+          ? [{ ...binding, sourceNodeIndex: node.sourceNodeIndex }]
+          : [];
+      })
+    : [];
+  const nodeMesh = mesh
+    ? {
+        ...mesh,
+        geometryAssetId: node.modelAssetId,
+        geometry: {
+          kind: "asset" as const,
+          assetId: node.modelAssetId,
+          sourceNodeIndex: node.sourceNodeIndex,
+        },
+        materialBindings: nodeBindings,
+      }
+    : undefined;
+
+  return (
+    <div className="space-y-3">
+      <ComponentCard
+        title={
+          node.nodeType === "bone"
+            ? "Bone"
+            : node.nodeType === "skinned-mesh"
+              ? "Skinned Mesh Node"
+              : node.nodeType === "mesh"
+                ? "Mesh Node"
+                : "Model Node"
+        }
+        subtitle={`glTF #${node.sourceNodeIndex}`}
+      >
+        <dl className="grid grid-cols-[70px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
+          <dt className="text-slate-500">Model</dt>
+          <dd className="truncate text-right font-medium text-slate-700">
+            {model?.name ?? node.modelAssetId}
+          </dd>
+          <dt className="text-slate-500">編集</dt>
+          <dd className="text-right text-slate-700">
+            {node.nodeType === "bone" ? "関節Transform" : "Node Transform"}
+          </dd>
+        </dl>
+        <p className="border-t border-slate-100 pt-2 text-xs leading-5 text-slate-500">
+          Transformは共有Modelのこのノードだけへ適用されます。SkinとAnimationは親のModel Entityで維持します。
+        </p>
+      </ComponentCard>
+      {nodeMesh && node.sourceMaterialIndices.length > 0 ? (
+        <MeshInspector
+          component={nodeMesh}
+          assets={assets}
+          readOnly={readOnly}
+          showModelPose={false}
+          materialBindingSourceNodeIndex={node.sourceNodeIndex}
+          onOpenMaterial={onOpenMaterial}
+          onChange={(patch) => {
+            if (!mesh || !modelEntity) return;
+            const preserved = mesh.materialBindings.filter(
+              (binding) => binding.sourceNodeIndex !== node.sourceNodeIndex,
+            );
+            const materialBindings = patch.materialBindings
+              ? [
+                  ...preserved,
+                  ...patch.materialBindings.map((binding) => ({
+                    ...binding,
+                    sourceNodeIndex: node.sourceNodeIndex,
+                  })),
+                ]
+              : undefined;
+            onMeshChange(modelEntity.id, mesh.id, {
+              ...patch,
+              ...(materialBindings ? { materialBindings } : {}),
+            });
+          }}
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -1570,6 +1720,7 @@ function ParticleEmitterInspector({
 
 function EntityInspector({
   entity,
+  scene,
   assets,
   readOnly,
   onRename,
@@ -1579,6 +1730,7 @@ function EntityInspector({
   onTransformScrubEnd,
   onTransformScrubCancel,
   onMeshChange,
+  onModelNodeMeshChange,
   onColliderChange,
   onAutoFitCollider,
   onRemoveCollider,
@@ -1596,6 +1748,7 @@ function EntityInspector({
   onUpdatePrefab,
 }: {
   entity: SceneEntity;
+  scene: SceneDocument;
   assets: AssetManifest;
   readOnly: boolean;
   onRename: (name: string) => void;
@@ -1605,6 +1758,11 @@ function EntityInspector({
   onTransformScrubEnd: () => void;
   onTransformScrubCancel: () => void;
   onMeshChange: (componentId: string, patch: MeshInspectorPatch) => void;
+  onModelNodeMeshChange: (
+    entityId: string,
+    componentId: string,
+    patch: MeshInspectorPatch,
+  ) => void;
   onColliderChange: (componentId: string, patch: ColliderPatch) => void;
   onAutoFitCollider: (componentId: string) => void;
   onRemoveCollider: (componentId: string) => void;
@@ -1693,6 +1851,17 @@ function EntityInspector({
             軸ラベルを左右にドラッグできます。Shiftで微調整、CtrlまたはAltで大きく調整します。回転は度単位です。
           </p>
         </ComponentCard>
+      ) : null}
+
+      {entity.modelNode ? (
+        <ModelNodeInspector
+          entity={entity}
+          scene={scene}
+          assets={assets}
+          readOnly={readOnly}
+          onMeshChange={onModelNodeMeshChange}
+          onOpenMaterial={onOpenMaterial}
+        />
       ) : null}
 
       {entity.components.map((component) => {
@@ -2172,6 +2341,7 @@ export function InspectorPanel({
         ) : entity ? (
           <EntityInspector
             entity={entity}
+            scene={scene}
             assets={assets}
             readOnly={readOnly}
             onRename={(name) => onRenameEntity(entity.id, name)}
@@ -2183,6 +2353,7 @@ export function InspectorPanel({
             onTransformScrubEnd={() => onTransformScrubEnd(entity.id)}
             onTransformScrubCancel={() => onTransformScrubCancel(entity.id)}
             onMeshChange={(componentId, patch) => onMeshChange(entity.id, componentId, patch)}
+            onModelNodeMeshChange={onMeshChange}
             onColliderChange={(componentId, patch) =>
               onColliderChange(entity.id, componentId, patch)
             }

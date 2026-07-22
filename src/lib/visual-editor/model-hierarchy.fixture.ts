@@ -7,6 +7,7 @@ import { instantiateSceneAsset } from "./asset-placement";
 import {
   extractGltfModelNodeHierarchy,
   hasModelNodeHierarchy,
+  updateModelNodeEntityTransform,
 } from "./model-hierarchy";
 import { SCENE_DOCUMENT_SCHEMA_VERSION } from "./scene-document";
 
@@ -43,15 +44,21 @@ export function runModelHierarchyFixtureAssertions(): void {
       repairedNodes[2]?.parentSourceNodeIndex === 0,
     "Malformed duplicate or cyclic glTF links reached Model metadata",
   );
+  const skinnedNodes = extractGltfModelNodeHierarchy({
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    skins: [{ joints: [1] }],
+    meshes: [{ primitives: [{ material: 0 }] }],
+    nodes: [
+      { name: "Body", mesh: 0, skin: 0, children: [1] },
+      { name: "Hips" },
+    ],
+  });
   assert(
-    extractGltfModelNodeHierarchy({
-      scene: 0,
-      scenes: [{ nodes: [0] }],
-      skins: [{}],
-      meshes: [{ primitives: [] }],
-      nodes: [{ mesh: 0, skin: 0 }],
-    }).length === 0,
-    "Skinned Models must remain one Entity for bind-pose playback",
+    skinnedNodes.length === 2 &&
+      skinnedNodes[0]?.skinIndex === 0 &&
+      skinnedNodes[1]?.isBone === true,
+    "Skin and Bone nodes must remain available for Hierarchy authoring",
   );
 
   const model: ModelAsset = {
@@ -135,6 +142,62 @@ export function runModelHierarchyFixtureAssertions(): void {
         component.geometry.sourceNodeIndex === 1,
     ),
     "Expanded Model Mesh did not retain its source node index",
+  );
+
+  const avatar: ModelAsset = {
+    ...model,
+    id: "avatar-hierarchy-fixture",
+    name: "Avatar",
+    importMetadata: {
+      ...model.importMetadata!,
+      sourceFormat: "vrm",
+      nodeCount: 2,
+      nodes: skinnedNodes,
+      bones: [{ key: "Hips", name: "Hips", humanoidName: "hips" }],
+      vrmVersion: "1",
+    },
+  };
+  const avatarManifest: AssetManifest = {
+    schemaVersion: ASSET_MANIFEST_SCHEMA_VERSION,
+    assets: { [avatar.id]: avatar },
+  };
+  const avatarPlacement = instantiateSceneAsset(
+    {
+      schemaVersion: SCENE_DOCUMENT_SCHEMA_VERSION,
+      sceneId: "scene-avatar-hierarchy-fixture",
+      name: "Avatar hierarchy fixture",
+      rootEntityIds: [],
+      entities: {},
+    },
+    avatarManifest,
+    {},
+    avatar.id,
+  );
+  assert(avatarPlacement.placed, "Avatar hierarchy fixture could not be placed");
+  if (!avatarPlacement.placed) return;
+  const avatarRoot = avatarPlacement.scene.entities[avatarPlacement.entityId];
+  const bodyNode = avatarPlacement.scene.entities[avatarRoot.children[0]];
+  const hipsNode = avatarPlacement.scene.entities[bodyNode.children[0]];
+  assert(
+    avatarRoot.components.some((component) => component.type === "mesh") &&
+      bodyNode.modelNode?.nodeType === "skinned-mesh" &&
+      hipsNode.modelNode?.nodeType === "bone" &&
+      !bodyNode.components.some((component) => component.type === "mesh"),
+    "Avatar must keep one shared Skin renderer while exposing Mesh and Bone nodes",
+  );
+  const posedAvatarScene = updateModelNodeEntityTransform(
+    avatarPlacement.scene,
+    hipsNode.id,
+    { rotation: [0.1, 0.2, 0.3] },
+  );
+  const avatarMesh = posedAvatarScene.entities[avatarRoot.id]?.components.find(
+    (component) => component.type === "mesh",
+  );
+  assert(
+    avatarMesh?.type === "mesh" &&
+      JSON.stringify(avatarMesh.modelPose?.nodes?.["1"]?.rotation) ===
+        JSON.stringify([0.1, 0.2, 0.3]),
+    "Bone Entity Transform must update the shared Model pose",
   );
 }
 

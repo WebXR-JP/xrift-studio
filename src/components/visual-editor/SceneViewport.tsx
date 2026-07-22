@@ -269,12 +269,14 @@ function MeshVisual({
       ? resolveProjectModelSource(geometry, projectPath)
       : undefined;
   const assignedModelMaterials = useMemo(
-    () =>
-      geometry?.kind === "model"
-        ? geometry.materialSlots.flatMap((slot) => {
+    () => {
+      if (geometry?.kind !== "model") return [];
+      const globalAssignments = geometry.materialSlots.flatMap((slot) => {
             if (slot.sourceMaterialIndex === undefined) return [];
             const binding = component.materialBindings.find(
-              (candidate) => candidate.slot === slot.slot,
+              (candidate) =>
+                candidate.slot === slot.slot &&
+                candidate.sourceNodeIndex === undefined,
             );
             const materialAssetId =
               binding?.materialAssetId ?? slot.defaultMaterialAssetId;
@@ -289,9 +291,25 @@ function MeshVisual({
                     material,
                   },
                 ]
-              : [];
-          })
-        : [],
+                : [];
+          });
+      const nodeAssignments = component.materialBindings.flatMap((binding) => {
+        if (binding.sourceNodeIndex === undefined) return [];
+        const slot = geometry.materialSlots.find(
+          (candidate) => candidate.slot === binding.slot,
+        );
+        const material = getMaterialAsset(assets, binding.materialAssetId);
+        return slot?.sourceMaterialIndex !== undefined && material
+          ? [{
+              slot: slot.slot,
+              sourceMaterialIndex: slot.sourceMaterialIndex,
+              sourceNodeIndex: binding.sourceNodeIndex,
+              material,
+            }]
+          : [];
+      });
+      return [...globalAssignments, ...nodeAssignments];
+    },
     [assets, component.materialBindings, geometry],
   );
 

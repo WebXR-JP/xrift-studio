@@ -31,6 +31,8 @@ export type MaterialAssignmentTargetResult =
   | {
       ready: true;
       meshId: string;
+      meshEntityId: string;
+      sourceNodeIndex?: number;
       slots: MaterialSlotDefinition[];
     }
   | {
@@ -63,13 +65,28 @@ export function getMaterialAssignmentTarget(
 ): MaterialAssignmentTargetResult {
   const entity = scene.entities[entityId];
   if (!entity?.enabled) return { ready: false, reason: "entity-missing" };
-  const mesh = getMesh(entity, meshComponentId);
+  const meshEntity = entity.modelNode
+    ? scene.entities[entity.modelNode.modelEntityId]
+    : entity;
+  const mesh = meshEntity ? getMesh(meshEntity, meshComponentId) : undefined;
   if (!mesh?.enabled) return { ready: false, reason: "mesh-missing" };
-  const slots = getMeshMaterialSlots(mesh, assets);
+  const sourceMaterialIndices = entity.modelNode
+    ? new Set(entity.modelNode.sourceMaterialIndices)
+    : undefined;
+  const slots = getMeshMaterialSlots(mesh, assets).filter(
+    (slot) =>
+      !sourceMaterialIndices ||
+      (slot.sourceMaterialIndex !== undefined &&
+        sourceMaterialIndices.has(slot.sourceMaterialIndex)),
+  );
   if (slots.length === 0) return { ready: false, reason: "slot-missing" };
   return {
     ready: true,
     meshId: mesh.id,
+    meshEntityId: meshEntity.id,
+    ...(entity.modelNode
+      ? { sourceNodeIndex: entity.modelNode.sourceNodeIndex }
+      : {}),
     slots: slots.map((slot) => ({ ...slot })),
   };
 }
@@ -113,10 +130,11 @@ export function assignMaterialToMeshSlots(
     nextScene = setMeshMaterialBinding(
       nextScene,
       assets,
-      entityId,
+      target.meshEntityId,
       slot,
       materialAssetId,
       target.meshId,
+      target.sourceNodeIndex,
     );
   }
   if (nextScene === scene) {

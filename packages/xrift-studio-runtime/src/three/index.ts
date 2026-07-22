@@ -421,7 +421,10 @@ function applyModelMaterials(
       : undefined;
   if (!asset || asset.kind !== "model") return;
   const bindingBySlot = new Map(
-    component.materialBindings.map((binding) => [binding.slot, binding.materialAssetId]),
+    component.materialBindings.map((binding) => [
+      `${binding.sourceNodeIndex ?? "global"}:${binding.slot}`,
+      binding.materialAssetId,
+    ]),
   );
   root.traverse((object) => {
     if (!(object instanceof Mesh)) return;
@@ -434,7 +437,13 @@ function applyModelMaterials(
           candidate.sourceMaterialIndex === index ||
           candidate.name === material.name,
       );
-      const materialId = slot ? bindingBySlot.get(slot.slot) : undefined;
+      const sourceNodeIndex = nearestSourceNodeIndex(object);
+      const materialId = slot
+        ? (sourceNodeIndex === undefined
+            ? undefined
+            : bindingBySlot.get(`${sourceNodeIndex}:${slot.slot}`)) ??
+          bindingBySlot.get(`global:${slot.slot}`)
+        : undefined;
       const materialAsset = materialId ? manifest.assets[materialId] : undefined;
       if (
         materialAsset?.kind === "material" &&
@@ -553,6 +562,21 @@ function applyModelPose(
 ): void {
   if (!component.modelPose) return;
   root.traverse((object) => {
+    const sourceNodeIndex = object.userData.xriftSourceNodeIndex;
+    const nodeTransform = typeof sourceNodeIndex === "number"
+      ? component.modelPose?.nodes?.[String(sourceNodeIndex)]
+      : undefined;
+    if (nodeTransform) {
+      object.position.x += nodeTransform.position[0];
+      object.position.y += nodeTransform.position[1];
+      object.position.z += nodeTransform.position[2];
+      object.rotation.x += nodeTransform.rotation[0];
+      object.rotation.y += nodeTransform.rotation[1];
+      object.rotation.z += nodeTransform.rotation[2];
+      object.scale.x *= nodeTransform.scale[0];
+      object.scale.y *= nodeTransform.scale[1];
+      object.scale.z *= nodeTransform.scale[2];
+    }
     const rotation = component.modelPose?.bones[object.name];
     if (rotation) {
       object.rotation.x += rotation[0];
@@ -567,6 +591,19 @@ function applyModelPose(
       if (index !== undefined) object.morphTargetInfluences[index] = weight;
     }
   });
+  root.updateMatrixWorld(true);
+}
+
+function nearestSourceNodeIndex(object: Object3D): number | undefined {
+  let current: Object3D | null = object;
+  while (current) {
+    const value = current.userData.xriftSourceNodeIndex;
+    if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
+      return value;
+    }
+    current = current.parent;
+  }
+  return undefined;
 }
 
 function createLight(

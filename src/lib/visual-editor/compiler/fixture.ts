@@ -796,9 +796,21 @@ export function runVisualCompilerFixtureAssertions(
                   },
                   {
                     slot: "detail",
-                    materialAssetId: BUILTIN_ASSET_IDS.material.violet,
+                    materialAssetId: BUILTIN_ASSET_IDS.material.orange,
+                    sourceNodeIndex: 0,
                   },
                 ],
+                modelPose: {
+                  bones: {},
+                  morphTargets: {},
+                  nodes: {
+                    "0": {
+                      position: [0.1, 0, 0] as [number, number, number],
+                      rotation: [0, 0.2, 0] as [number, number, number],
+                      scale: [1, 1, 1] as [number, number, number],
+                    },
+                  },
+                },
               }
             : component,
         ),
@@ -838,6 +850,12 @@ export function runVisualCompilerFixtureAssertions(
     "Project GLB path must be relative to the XRift base URL",
   );
   assert(modelSource.includes("<Clone"), "Model clone was not generated");
+  assert(
+    modelSource.includes("sourceNodeObject.parent") &&
+      modelSource.includes('"0:Detail"') &&
+      modelSource.includes('"0":{"position":[0.1,0,0]'),
+    "Expanded Model node pose and Material override were not generated",
+  );
   const animationPlacement = instantiateSceneAsset(
     sourceScene,
     modelProject.assets,
@@ -858,8 +876,13 @@ export function runVisualCompilerFixtureAssertions(
     );
     assert(
       placedEntity?.components.some((component) => component.type === "mesh") &&
-        placedEntity.children.length === 0,
-      "Animated GLB placement must keep the source hierarchy together for clip playback",
+        placedEntity.children.length > 0 &&
+        placedEntity.children.every(
+          (childId) =>
+            animationPlacement.scene.entities[childId]?.modelNode
+              ?.modelEntityId === placedEntity.id,
+        ),
+      "Animated GLB placement must expose source nodes while keeping one shared renderer",
     );
     const animationDocuments: VisualCompilerDocuments = {
       ...modelProject,

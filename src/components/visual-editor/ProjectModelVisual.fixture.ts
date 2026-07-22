@@ -223,6 +223,7 @@ export async function runProjectModelMaterialPreviewFixtureAssertions(): Promise
   );
 
   assertModelMaterialAssignmentsStayInTheirGltfSlots(assets);
+  assertModelNodeMaterialOverridesStayIsolated(assets);
   assertOpenBrushMaterialKeepsCustomShader(assigned);
   assertOpenBrushBaseColorFactorPreservesShaderInterface(assigned);
   assertAsyncTextureCompletionRequestsMaterialRender();
@@ -492,6 +493,7 @@ function assertStaticModelPoseUsesRestOffsets(): void {
   const root = new Group();
   const head = new Bone();
   head.name = "Head";
+  head.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] = 7;
   head.rotation.set(0.1, 0.2, 0.3);
   const face = new Mesh(new BoxGeometry(), new MeshBasicMaterial()) as Mesh & {
     morphTargetDictionary: Record<string, number>;
@@ -504,18 +506,66 @@ function assertStaticModelPoseUsesRestOffsets(): void {
   applyStaticModelPose(root, {
     bones: { Head: [0.2, -0.1, 0.4] },
     morphTargets: { Smile: 0.75 },
+    nodes: {
+      "7": {
+        position: [0.1, 0.2, 0.3],
+        rotation: [0.05, 0, -0.05],
+        scale: [1, 1.5, 1],
+      },
+    },
   });
 
   assert(
-    Math.abs(head.rotation.x - 0.3) < 1e-6 &&
+    Math.abs(head.rotation.x - 0.35) < 1e-6 &&
       Math.abs(head.rotation.y - 0.1) < 1e-6 &&
-      Math.abs(head.rotation.z - 0.7) < 1e-6,
+      Math.abs(head.rotation.z - 0.65) < 1e-6 &&
+      tupleNear([head.position.x, head.position.y, head.position.z], [0.1, 0.2, 0.3]) &&
+      near(head.scale.y, 1.5),
     "Static bone pose did not apply as a rest-pose offset",
   );
   assert(
     face.morphTargetInfluences[0] === 0.75,
     "Static shape-key pose was not applied",
   );
+}
+
+function assertModelNodeMaterialOverridesStayIsolated(
+  assets: ReturnType<typeof updateMaterialAsset>,
+): void {
+  const orange = getMaterialAsset(assets, BUILTIN_ASSET_IDS.material.orange);
+  const blue = getMaterialAsset(assets, BUILTIN_ASSET_IDS.material.blue);
+  assert(orange && blue, "Node Material fixtures are missing");
+  const firstSource = new MeshPhysicalMaterial({ color: "#ffffff" });
+  firstSource.userData[PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY] = 0;
+  const secondSource = new MeshPhysicalMaterial({ color: "#ffffff" });
+  secondSource.userData[PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY] = 0;
+  const first = new Mesh(new BoxGeometry(), firstSource);
+  first.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] = 3;
+  const second = new Mesh(new BoxGeometry(), secondSource);
+  second.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] = 4;
+  const root = new Group();
+  root.add(first, second);
+
+  const owned = applyAssignedMaterialPreviews(root, [
+    { sourceMaterialIndex: 0, material: orange },
+    { sourceMaterialIndex: 0, sourceNodeIndex: 4, material: blue },
+  ]);
+  assert(
+    colorNear(
+      (first.material as MeshPhysicalMaterial).color,
+      orange.properties.pbrMetallicRoughness.baseColorFactor,
+    ) &&
+      colorNear(
+        (second.material as MeshPhysicalMaterial).color,
+        blue.properties.pbrMetallicRoughness.baseColorFactor,
+      ),
+    "A node-specific Material override leaked to another Model node",
+  );
+  owned.forEach((material) => material.dispose());
+  first.geometry.dispose();
+  second.geometry.dispose();
+  firstSource.dispose();
+  secondSource.dispose();
 }
 
 function assertTextureLoadStatusOnlyReportsSupportedReadyAssets(

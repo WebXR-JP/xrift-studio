@@ -138,6 +138,10 @@ function sameAssetDropTarget(
 }
 
 function getEntityTypeLabel(entity: SceneEntity): string {
+  if (entity.modelNode?.nodeType === "bone") return "Bone";
+  if (entity.modelNode?.nodeType === "skinned-mesh") return "Skin";
+  if (entity.modelNode?.nodeType === "mesh") return "Mesh";
+  if (entity.modelNode) return "Node";
   if (entity.components.some((component) => component.type === "mesh")) {
     return "Mesh";
   }
@@ -168,6 +172,7 @@ function getEntityTypeLabel(entity: SceneEntity): string {
 }
 
 function getEntityIcon(entity: SceneEntity) {
+  if (entity.modelNode) return EDITOR_ICONS.model;
   if (entity.components.some((component) => component.type === "light")) {
     return EDITOR_ICONS.light;
   }
@@ -764,7 +769,7 @@ export function HierarchyPanel({
                   event.preventDefault();
                   event.dataTransfer.dropEffect = entity.components.some(
                     (component) => component.type === "mesh",
-                  )
+                  ) || Boolean(entity.modelNode?.sourceMaterialIndices.length)
                     ? "copy"
                     : "none";
                   return;
