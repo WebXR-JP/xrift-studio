@@ -59,3 +59,4 @@ export * from "./starter-templates.fixture";
 export * from "./shortcuts";
 export * from "./unity-package-import";
 export * from "./unity-package-import.fixture";
+export * from "./vram-estimate";

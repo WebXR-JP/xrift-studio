@@ -50,6 +50,7 @@ import { ClassicExportDialog } from "./components/visual-editor/ClassicExportDia
 import {
   compilePrototypeVisualProject,
   exportVisualProjectToClassic,
+  estimateWorldVram,
   inspectClassicExportTarget,
   createStarterVisualProject,
   createPreparedStarterVisualProjectOnDisk,
@@ -738,6 +739,9 @@ function App() {
               publishBundle?.project.lastPublication,
             ),
             diagnostics: visualPublishDiagnostics,
+            vramEstimate: publishBundle
+              ? estimateWorldVram(publishBundle)
+              : undefined,
           }}
           onClose={() => setVisualPublishBundle(null)}
           onMetadataChange={(title, description) => {

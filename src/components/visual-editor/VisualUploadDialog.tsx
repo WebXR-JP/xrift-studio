@@ -4,6 +4,7 @@ import {
   Check,
   ExternalLink,
   FileCheck2,
+  Gauge,
   Image,
   Loader2,
   LogIn,
@@ -13,6 +14,11 @@ import {
 } from "lucide-react";
 import type { ProjectKind } from "../../lib/tauri";
 import { VisualPublishCancellationController } from "../../lib/visual-editor/publish-cancellation";
+import {
+  formatVramBytes,
+  type WorldVramEstimate,
+} from "../../lib/visual-editor/vram-estimate";
+import { VramEstimateDialog } from "./VramEstimateDialog";
 
 export type VisualPublishStage =
   | "review"
@@ -77,6 +83,7 @@ export type VisualPublishReview = {
   /** A legacy project has upload history whose target must be recovered. */
   previouslyPublished?: boolean;
   diagnostics: VisualPublishDiagnostic[];
+  vramEstimate?: WorldVramEstimate;
 };
 
 type Props = {
@@ -131,6 +138,7 @@ export function VisualUploadDialog({
   const [thumbnailStagingSha256, setThumbnailStagingSha256] = useState<
     string | null
   >(null);
+  const [vramDetailsOpen, setVramDetailsOpen] = useState(false);
   const cancellationRef = useRef<VisualPublishCancellationController | null>(
     null,
   );
@@ -218,6 +226,7 @@ export function VisualUploadDialog({
       setResult(null);
       setError(null);
       setThumbnailStagingSha256(null);
+      setVramDetailsOpen(false);
     }
     wasOpenRef.current = open;
   }, [open]);
@@ -225,12 +234,12 @@ export function VisualUploadDialog({
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || busy) return;
+      if (event.key !== "Escape" || busy || vramDetailsOpen) return;
       onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [busy, onClose, open]);
+  }, [busy, onClose, open, vramDetailsOpen]);
 
   useEffect(
     () => () => {
@@ -412,6 +421,35 @@ export function VisualUploadDialog({
                   ) : null}
                 </div>
               ))}
+
+              {review.vramEstimate ? (
+                <button
+                  type="button"
+                  onClick={() => setVramDetailsOpen(true)}
+                  className="flex w-full items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 p-3.5 text-left hover:border-violet-300 hover:bg-violet-100"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-violet-700 shadow-sm">
+                    <Gauge size={18} aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-slate-900">
+                      VRAM使用量の目安
+                    </span>
+                    <span className="mt-0.5 block text-xs leading-5 text-slate-600">
+                      実行時 約
+                      {formatVramBytes(review.vramEstimate.runtimeLowBytes)}〜
+                      {formatVramBytes(review.vramEstimate.runtimeHighBytes)}
+                      {" / "}
+                      {review.vramEstimate.recommendations.length > 0
+                        ? `${review.vramEstimate.recommendations.length}件の改善候補`
+                        : "優先度の高い改善候補なし"}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs font-semibold text-violet-700">
+                    詳細を見る
+                  </span>
+                </button>
+              ) : null}
 
               {review.diagnostics.length > 0 ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
@@ -637,6 +675,14 @@ export function VisualUploadDialog({
           </div>
         </footer>
       </section>
+      {review.vramEstimate ? (
+        <VramEstimateDialog
+          open={vramDetailsOpen}
+          estimate={review.vramEstimate}
+          subjectLabel={projectLabel}
+          onClose={() => setVramDetailsOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
