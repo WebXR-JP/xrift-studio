@@ -31,8 +31,10 @@ import {
   isScenePlaceableAsset,
   listBuiltinPrefabRecipes,
   resolveAssetCreationFolderId,
+  xriftComponentCatalogThumbnailUrl,
 } from "../../lib/visual-editor";
 import { AssetThumbnail } from "./AssetQuickEditor";
+import { CatalogThumbnailImage } from "./CatalogThumbnailImage";
 import { resolveProjectThumbnailAssetPath } from "../../lib/project-thumbnail";
 import { commandTitle, EDITOR_ICONS, type EditorIconName } from "./editor-icons";
 import { formatFileSize, getDragKind } from "./editor-utils";
@@ -834,6 +836,9 @@ function BuiltinPrefabCard({
   const Icon = definition
     ? EDITOR_ICONS[definition.icon]
     : EDITOR_ICONS.prefab;
+  const thumbnailUrl = definition
+    ? xriftComponentCatalogThumbnailUrl(definition.importName)
+    : null;
   const handleDragStart = (event: DragEvent<HTMLElement>) => {
     writeEditorDragData(event.dataTransfer, {
       [BUILTIN_PREFAB_DRAG_MIME]: recipe.id,
@@ -851,7 +856,16 @@ function BuiltinPrefabCard({
           className="col-span-3 grid cursor-grab select-none grid-cols-[54px_minmax(110px,1fr)_minmax(120px,1fr)] items-center gap-2 active:cursor-grabbing"
           title={`${recipe.name}をSceneへドラッグ`}
         >
-          <span className="pointer-events-none flex h-10 items-center justify-center rounded border border-sky-100 bg-sky-50 text-sky-700"><Icon size={22} aria-hidden="true" /></span>
+          {thumbnailUrl ? (
+            <CatalogThumbnailImage
+              src={thumbnailUrl}
+              alt={`${recipe.name}の公式プレビュー`}
+              className="pointer-events-none h-10 w-[54px] rounded border border-sky-100"
+              fallback={<Icon size={22} aria-hidden="true" />}
+            />
+          ) : (
+            <span className="pointer-events-none flex h-10 items-center justify-center rounded border border-sky-100 bg-sky-50 text-sky-700"><Icon size={22} aria-hidden="true" /></span>
+          )}
           <span className="pointer-events-none min-w-0"><span className="block truncate text-xs font-semibold text-slate-800">{recipe.name}</span><span className="block text-[11px] font-medium text-sky-700">XRift 組み込み{recipe.configuration?.requiredBeforeCompile ? "・配置後に設定" : ""}</span></span>
           <span className="pointer-events-none line-clamp-2 text-xs leading-4 text-slate-500" title={recipe.configuration?.hint}>{recipe.description}</span>
         </div>
@@ -860,7 +874,7 @@ function BuiltinPrefabCard({
     );
   }
   return (
-    <article className="flex min-h-[132px] min-w-0 flex-col rounded-md border border-sky-200 bg-white p-2 shadow-sm">
+    <article className="flex min-h-[184px] min-w-0 flex-col rounded-md border border-sky-200 bg-white p-2 shadow-sm">
       <div
         draggable={!readOnly}
         data-editor-drag-source="builtin-prefab"
@@ -869,7 +883,19 @@ function BuiltinPrefabCard({
         className="min-w-0 flex-1 cursor-grab select-none active:cursor-grabbing"
         title={`${recipe.name}をSceneへドラッグ`}
       >
-        <div className="pointer-events-none flex items-start gap-2"><span className="rounded bg-sky-50 p-2 text-sky-700"><Icon size={22} aria-hidden="true" /></span><div className="min-w-0"><h3 className="truncate text-[13px] font-semibold text-slate-800">{recipe.name}</h3><p className="text-[11px] font-medium text-sky-700">XRift 組み込み</p></div></div>
+        {thumbnailUrl ? (
+          <CatalogThumbnailImage
+            src={thumbnailUrl}
+            alt={`${recipe.name}の公式プレビュー`}
+            className="pointer-events-none aspect-video w-full rounded border border-sky-100"
+            fallback={<Icon size={22} aria-hidden="true" />}
+          />
+        ) : (
+          <div className="pointer-events-none flex aspect-video w-full items-center justify-center rounded border border-sky-100 bg-sky-50 text-sky-700">
+            <Icon size={22} aria-hidden="true" />
+          </div>
+        )}
+        <div className="pointer-events-none mt-2 flex min-w-0 items-start gap-1.5"><Icon size={15} className="mt-0.5 shrink-0 text-sky-700" aria-hidden="true" /><div className="min-w-0"><h3 className="truncate text-[13px] font-semibold text-slate-800">{recipe.name}</h3><p className="text-[11px] font-medium text-sky-700">XRift 組み込み</p></div></div>
         <p className="pointer-events-none mt-1.5 line-clamp-2 text-xs leading-4 text-slate-500">{recipe.description}</p>
         {recipe.configuration?.requiredBeforeCompile ? (
           <p className="pointer-events-none mt-1 line-clamp-2 text-[11px] font-medium leading-4 text-amber-700" title={recipe.configuration.hint}>
