@@ -50,6 +50,7 @@ import {
   type UpdateXriftComponentPatch,
   type Vec3,
   type VisualProjectKind,
+  type VisualProjectMetadata,
   type RegisteredSceneComponent,
   type RigidBodyComponent,
   type RigidBodyPatch,
@@ -2802,6 +2803,7 @@ function EntityInspector({
 export function InspectorPanel({
   scene,
   assets,
+  metadata,
   projectPath,
   selectedEntityId,
   selectedAssetId,
@@ -2845,6 +2847,7 @@ export function InspectorPanel({
   sceneSettingsOpen,
   onCloseSceneSettings,
   onSceneSettingsChange,
+  onProjectMetadataChange,
   onThumbnailChanged,
   prefabs,
   onSelectPrefabSourceEntity,
@@ -2856,6 +2859,7 @@ export function InspectorPanel({
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
+  metadata: VisualProjectMetadata;
   projectPath?: string;
   selectedEntityId: string | null;
   selectedAssetId: string | null;
@@ -2912,6 +2916,9 @@ export function InspectorPanel({
   sceneSettingsOpen: boolean;
   onCloseSceneSettings: () => void;
   onSceneSettingsChange: (settings: SceneSettings) => void;
+  onProjectMetadataChange: (
+    metadata: Pick<VisualProjectMetadata, "title" | "description">,
+  ) => void;
   onThumbnailChanged: () => void;
   prefabs: Readonly<Record<string, PrefabDocument>>;
   onSelectPrefabSourceEntity: (entityId: string) => void;
@@ -3002,10 +3009,12 @@ export function InspectorPanel({
           <SceneSettingsInspector
             scene={scene}
             assets={assets}
+            metadata={metadata}
             projectKind={projectKind}
             projectPath={projectPath}
             readOnly={readOnly}
             onChange={onSceneSettingsChange}
+            onMetadataChange={onProjectMetadataChange}
             onThumbnailChanged={onThumbnailChanged}
           />
         ) : multiSelectionActive ? (

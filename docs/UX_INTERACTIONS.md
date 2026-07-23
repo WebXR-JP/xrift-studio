@@ -53,7 +53,7 @@ F-06 アイテム検査
 | MI-34 | toolbar の Create、または Hierarchy の右クリックから Entity / Component を作成する | Create は Empty Entity、Primitive、XRift Component、通常 Component の責務別入口を示す。選択 Entity がある時は追加先を名前で示し、選択がない時も単独で成立する XRift Component は Transform 付き Entity として作成できる。wrapper は追加先 Entity がない限り無効にし、理由を表示する。 | 作成または追加は一件の history transaction とし、作成 Entity を `sceneSelection` にして Inspector を開く。Escape / 外側 click は document を変えず閉じる。Play / Import 中は無効にし、必須値が未設定なら Inspector から設定して compile blocker を解消できる。 |
 | MI-35 | Visual World の新規作成で Starter Scene を選ぶ | 既定は実用的な World Starter とし、配置済み Scene と Assets へ追加される Model / Texture の数をカード上に示す。Blank は明示的な最小構成として残し、素材入り template と混同しない。 | 作成成功時は bundled source を project-relative path へ検証付きでコピーし、Scene / Asset / Material / Collider / XRift Spawn の参照を一度に確定して Editor で開く。copy / hash / document 保存の一部が失敗した場合は不完全な project を成功表示せず、新規作成へ戻れる。 |
 | MI-36 | Model Assetを選択して構造を確認し、import設定を変更または再importする | 右Inspectorにsource/status、node・mesh・primitive、bounds、animation、Material slotと現在のimport recipeを分けて表示する。recipe変更は未適用であることを示し、source解析済みの事実と混同しない。再importでslotが消える時は確定前にScene / Prefabの影響先を列挙する。 | 再import成功時は同じAsset IDを維持し、同じslot identityへのMaterial割当を保持して追加・消失slotを明示する。影響を確認せず参照切れを成功表示しない。失敗時はlast-good metadata、thumbnail、Scene参照を維持し、原因と再試行を同じModel Inspectorに残す。Play中は閲覧のみとする。 |
-| MI-37 | 左下の歯車「シーン設定」を開き、スカイボックス、フォグ、環境光、カメラ、ギズモを変更する | 現在のScene ViewとEntity / Asset selectionを保ったまま、右のEntity InspectorをScene Inspectorへ切り替える。Skybox画像の背景表示とIBLライティングは独立したトグルにし、両方、片方、どちらも使用しない状態を即時同期する。数値は確定時に範囲へ補正する。Scene Viewへ不透明な補助床は追加せず、Skyboxまたは編集背景の上に軽いグリッドだけを表示する。Play中は値を読み取り専用にし、停止後に同じ設定画面へ戻れる。 | 設定変更は一件のSceneDocument履歴として未保存にし、保存後の生成Worldにも背景とIBLを独立して反映する。戻る、Entity / Assetの選択は変更済みの値を保持して通常Inspectorへ戻る。サムネイルは保存済みprojectでだけ既存の画像編集画面を開き、保存後に公開前確認へ戻れる。 |
+| MI-37 | 左下の歯車「シーン設定」を開き、公開情報、スカイボックス、フォグ、環境光、カメラ、ギズモを変更する | 現在のScene ViewとEntity / Asset selectionを保ったまま、右のEntity InspectorをScene Inspectorへ切り替える。ワールド名またはアイテム名と説明は現在の公開情報を表示し、入力欄から移動した時に確定する。Skybox画像の背景表示とIBLライティングは独立したトグルにし、両方、片方、どちらも使用しない状態を即時同期する。数値は確定時に範囲へ補正する。Scene Viewへ不透明な補助床は追加せず、Skyboxまたは編集背景の上に軽いグリッドだけを表示する。Play中は値を読み取り専用にし、停止後に同じ設定画面へ戻れる。 | 設定変更はProjectまたはSceneDocumentを未保存にして自動保存へ合流し、公開情報はヘッダー、公開前確認、生成する`xrift.json`へ反映する。戻る、Entity / Assetの選択は変更済みの値を保持して通常Inspectorへ戻る。サムネイルは保存済みprojectでだけ既存の画像編集画面を開き、保存後に公開前確認へ戻れる。 |
 | MI-38 | 左下のユーティリティレールからショートカット一覧、ヘルプ、シーン設定を開く | 上からキーボード、ヘルプ、歯車を小さな同一サイズで常時表示する。hover / focusでは操作名を示し、開いている項目は背景、アイコン、`aria-expanded`または押下状態で区別する。ショートカットは中央Registryの現在のbindingを分類して表示し、ヘルプは作成、選択、素材配置、Playの最短導線とレイアウト初期化を示す。 | Escape、外側click、同じボタンで補助パネルを閉じ、Scene / Asset selectionとdocumentを変えない。歯車はScene Inspectorを切り替え、レイアウト初期化は既定配置へ戻して同じEditorを継続する。 |
 | MI-39 | Scene View、Hierarchy、Create、Inspector、AssetsでXRift Componentを表示する | 公式Component名と中央Registryのsemantic iconを全authoring surfaceで共有する。EditとPlayは`@xrift/world-components`本体を同じrendererで描画し、必要なContextだけをStudio Provider bridgeから注入する。Componentの外観をSVG、CSS図形、DOM疑似表示、Studio独自の旧実装へ置き換えない。 | 選択変更やInspector編集で同じComponent IDの公式描画だけを更新し、document、selection、外部runtime stateを増やさない。Portalのinstance取得と遷移はStudio内の副作用なしimplementationへ接続する。wrapper Componentは同じEntityの実childrenを包む。 |
 | MI-40 | Edit 中にHierarchy行の目アイコンでEntityのEnabledを切り替える、または親EntityのTransformを変更する | Entity自身のEnabledと、親の無効化による実効状態を行のアイコンと濃淡で区別する。親を無効にするとsubtreeをScene Viewから隠し、親のPosition / Rotation / Scaleは子のlocal Transformへ階層的に反映する。 | EnabledとTransformの変更はそれぞれ一件のhistoryへ確定する。親を再び有効にすると子自身のEnabledを保ったまま復帰し、Undo / Redo、Play、生成Worldでも同じ親子関係と実効状態を再現する。 |
@@ -73,7 +73,7 @@ F-06 アイテム検査
 | MI-54 | Animation clipを含み`importAnimations`が有効なGLB / glTF ModelをSceneへ配置し、Playを開始する | 配置EntityへAnimation Componentを自動追加し、Inspectorに先頭clip名、長さ、track数、Autoplay、Loopを表示する。Edit中は静止し、Play開始時だけ有効なAutoplayで先頭clipを再生する。 | Loop有効時はPlay中と生成結果で繰り返す。Loop無効時は一度で停止する。Play中にEnabled、Autoplay、Loopまたは同じEntityのTransform / Colliderを変更した時は、そのEntityのmixerとphysics bodyだけを破棄して先頭から再実行する。Stop、Component無効化、Entity破棄ではmixerを停止してEdit時の姿勢へ戻す。clip欠落時はScene View全体を止めず同じInspectorに理由を示す。 |
 | MI-55 | 外部リソースの「XRift公式 Component」で公式Componentを選ぶ | 公開中の`@xrift/world-components`検証version、公式source、利用可能な全Componentをgridへ表示する。thumbnailはpackage本体と公式sample childを固定generatorで事前描画し、Component名と公式badgeを焼き込んだ保存済みWebPを使う。versionが変わる時は保存先revisionを更新して全件を再生成し、SVG／CSSだけの識別用イラストへ置換しない。選択中Componentにはdescription、category、named import、versionを表示し、`DevEnvironment`はScene用でない理由を示す。 | 追加成功時は公式XRift Componentを一件のhistory transactionへ確定し、追加Entityを選択してScene ViewとInspectorへ到達する。Play、別Import中、project kind不一致、変換診断errorではSceneを変更せず理由を同じ詳細欄に残す。 |
 | MI-56 | GLB / VRM ModelをSceneへ配置し、展開されたNode、Bone、MeshをHierarchyで選択する | sourceの親子順を保つEntity treeをModel Entityの下へ表示し、行末をNode / Bone / Mesh / Skinで区別する。SkinまたはAnimationを含むModelは一つの共有Rendererを維持し、選択NodeのInspectorへsource node番号、共有Model、編集対象を表示する。Bone / Node TransformはScene Viewと共有Model poseへ即時同期し、Mesh / Skin行にはそのnodeが使うMaterial slotだけを表示する。 | Transformとnode別Material変更を一件のhistoryへ保存し、Undo / Redo、再表示、Classic JSX、Runtime manifestで同じ結果を復元する。同じsource materialを使う別nodeへnode別上書きを漏らさない。parse失敗時は単一Entityへ偽装せずImport Queueへ戻し、last-good Asset / Sceneを維持する。 |
-| MI-57 | Hierarchyの親Entityを折り畳む、展開する、検索で絞り込む、またはEntityのEnabledを変更する | 子を持つ行だけに展開状態と件数が分かる矢印を表示し、折り畳み中は子孫行だけを隠す。検索は名前、Entity種類、Component種類、Enabledの語を空白区切りで絞り込み、一致したEntityと祖先だけを自動展開する。折り畳みと検索はSceneDocumentとUndo履歴を変更しない。単一Entity Inspectorの先頭はUnityと同じ順序でEnabledチェックと名前を一行に置き、Prefab sourceはアイコン、名前、更新アイコンだけを続ける。説明は常設せずtooltipと読み上げ名に移す。親が無効な子は継承された非表示状態をHierarchyの濃淡とInspectorの状態アイコンで示す。 | 検索を消すと検索前の折り畳み状態と同じ順序へ戻る。Scene Viewなどから折り畳まれた子孫を選択した時は祖先を自動展開して選択行とInspectorへ到達させる。Enabled変更は一件のauthoring historyとしてScene View、Play、生成結果へ反映し、子Entity自身のEnabled値は保持する。一致なしでは検索語とクリア操作を表示する。 |
+| MI-57 | Hierarchyの親Entityを折り畳む、展開する、検索で絞り込む、矢印キーで移動する、またはEntityのEnabledを変更する | 子を持つ行だけに展開状態と件数が分かる矢印を表示し、折り畳み中は子孫行だけを隠す。上下キーは表示中の前後、右キーは展開または最初の子、左キーは折り畳みまたは親、Home / Endは先頭 / 末尾へ選択を移し、選択行を表示範囲へ追従させる。Shift+上下は表示順の範囲選択とし、文字入力・IME変換中はHierarchy操作を抑止する。検索は名前、Entity種類、Component種類、Enabledの語を空白区切りで絞り込み、一致したEntityと祖先だけを自動展開する。折り畳み、検索、キー選択はSceneDocumentとUndo履歴を変更しない。単一Entity Inspectorの先頭はUnityと同じ順序でEnabledチェックと名前を一行に置き、Prefab sourceはアイコン、名前、更新アイコンだけを続ける。説明は常設せずtooltipと読み上げ名に移す。親が無効な子は継承された非表示状態をHierarchyの濃淡とInspectorの状態アイコンで示す。 | 検索を消すと検索前の折り畳み状態と同じ順序へ戻る。Scene Viewなどから折り畳まれた子孫を選択した時は祖先を自動展開して選択行とInspectorへ到達させる。Play中も選択移動と開閉は利用できるがScene構造とhistoryは変更しない。Enabled変更は一件のauthoring historyとしてScene View、Play、生成結果へ反映し、子Entity自身のEnabled値は保持する。一致なしでは検索語とクリア操作を表示する。 |
 | MI-58 | Entity InspectorでMesh Rendererを有効・無効にする、Material slotを確認する、またはMaterialを選択する | Mesh RendererのEnabledはComponent見出しの先頭へ置く。Material slotは入れ子のカード枠を使わず区切り線で並べ、Base Color、透明度、Texture有無を示すスウォッチ、選択欄、詳細を開くアイコンを一行にする。Material名だけに識別を依存せず、説明はtooltipと読み上げ名へ移す。 | EnabledとMaterial割当はそれぞれ一件のhistoryとしてScene View、Play、生成結果へ反映する。Materialを開いてもEntity選択を保持し、戻ると同じslotへ復帰できる。参照切れはスウォッチを未設定表示にし、既存bindingを暗黙に別Materialへ置換しない。 |
 | MI-59 | Scene InspectorでSkyboxの投影方式を変更する | 無限遠、ボックス、地面付きドームを用途の説明とともに同じ選択欄へ表示する。ボックスとドームでは有限Skyメッシュの位置、回転、スケール、投影中心だけを続けて表示し、数値確定時にScene Viewへ同期する。ボックス底面とドームの平坦部は位置Yを床面の基準とし、環境Textureは有限メッシュ表示でもIBLへ利用する。 | 変更は一件のSceneDocument履歴として保存対象にし、Undo / Redo、再表示、Play、生成Worldで同じ投影を復元する。Play中は読み取り専用にし、旧Sceneでは無限遠と既定メッシュ値を補完する。不正値は確定せず現在の投影と選択を保つ。 |
 | MI-60 | Material InspectorでTextureを設定する、AnimationからMaterial graphを開く、またはInteractivityのpointer nodeを選ぶ | 各Texture slotでUV Setと「タイリング / UV変換」を隠さず表示し、Offset、X/Yタイリング、Rotationを`KHR_texture_transform`として編集する。1以外のタイリングでSamplerがRepeatでない時はTexture設定への修正案を同じslotへ出す。Animation InspectorはMaterial Animation用graphを列挙し、pointer/interpolateへ移動できる。Interactivity Node InspectorはMaterial Assetと色、PBR factor、Texture offset / scale / rotationのpresetを選ぶとcanonical pointer、型、Material indexを同時設定する。 | Material変更はAsset history、graph変更はInteractivity Asset historyとして確定し、Scene selectionを失わない。MCPもMaterial読取・更新・Texture transform・Material pointer設定を同じvalidationとrevision境界で実行する。Play、Import、stale revision、不正slotではlast-goodを維持する。 |
@@ -81,6 +81,8 @@ F-06 アイテム検査
 | MI-62 | Edit中のScene Viewで目的別の表示モードを切り替える | toolbarの一つの「表示」選択に「シーン」「ライトなし」「ワイヤー」「コライダー」を置く。「シーン」だけが保存済みSkybox、Fog、Light、Materialを通常描画し、他のモードは明るいneutral背景で確認対象を強調する。「コライダー」はBoxとMesh Colliderを表示し、Meshを持たない補助Componentを隠す。個別のSkybox / Fog / Lightスイッチをtoolbarへ並べない。 | 切替はScene Viewだけに即時反映し、SceneDocument、Editor history、自動保存、compile、Play結果を変更しない。Play開始時は通常の実行表示にし、Stop後は直前のEdit表示モードへ戻る。未対応Materialは架空の本来表示を作らずneutral fallbackで形状を維持する。 |
 | MI-63 | HierarchyでEntityの種類を絞り込む | 検索欄の直下にMesh、Light、Collider、Audio、Particle、Animation、Spawn、XRift Componentのsemantic iconを一列で置き、hover / focusで日本語名を示す。複数選択は種類同士をOR、文字検索とはANDで適用し、一致Entityとその祖先だけを自動展開する。 | 絞り込みはselection、SceneDocument、historyを変更しない。押下中のiconは背景と`aria-pressed`で示し、再押下で解除する。すべて解除すると絞り込み前の折り畳み状態へ戻り、0件時は条件を一度にクリアできる。 |
 | MI-64 | Visual Editor右上の「Import」を開き、Model / 3D Asset、R3F TSX、またはXRift Classic projectを選ぶ | 右上は外部catalogではなく変換とfile取込の入口に限定する。Model / 3D Assetは既存Import Queueへ接続し、対応拡張子を同じfile pickerで選べる。R3F / ClassicはTSX貼付とfolder選択を同じ変換dialogへ集約し、Classicはfolder選択後に`package.json`、`xrift.json`、同種entryを検査してentry source、対象path、読み込んだ`src` module数を表示する。TSXは実行せず、import graph、JSX構造、静的literalだけを解析する。 | fileは既存のvalidate、copy、parse、thumbnail、commitを通り、変換は全Entity / Material / Light / Collider / XRift Componentを一件のhistory transactionへ確定する。最後の追加EntityまたはAssetを選択し、`group`、RigidBody、公式wrapper、local Componentの親子境界をHierarchyへ残す。Playまたは別Import中は理由付きで入口を無効にする。 |
+| MI-65 | project thumbnailを画像選択またはTexture Assetのcontext menuから設定する | 保存中は選択操作を無効にし、成功時は画像上に「設定済み」と保存先を表示する。Visual Editorでは編集modalを閉じてScene Inspectorへ戻り、現在設定中の実画像と「設定済み」を常設する。Texture Assetはproject source、またはHDR / EXR等の生成済みpreviewをPNGへ変換して使用する。 | 成功時は`public/thumbnail.png`への保存完了後だけ通知し、compileをstaleにする。Textureからの設定後はScene Inspectorを開いて同じ画像を再取得する。未保存project、Play中、画像の欠落・decode・保存失敗では既存thumbnailを維持し、同じ入口から再試行できる。 |
+| MI-66 | AboutのDanger Zoneからランタイムまたは全データのリセットを開始する | CLI version確認中は削除操作を無効にし、確認dialogでは対象と復元不能な範囲を明示する。実行中はdialogを閉じられず、削除対象を通常pathから分離してから再読み込みする。 | 成功時は再読み込みして新しいsetupまたは空のproject一覧へ進む。物理削除をすぐ完了できない旧データは退避し、次回起動時に再回収する。退避にも失敗した場合はdialogを保ち、実行中のterminalやeditorを閉じて同じ操作を再試行できる。 |
 
 ## 機能一覧
 
@@ -92,11 +94,11 @@ F-06 アイテム検査
 | F-04 | ローカル実行 | MI-03, MI-05, MI-08 | 実行中であることと、プレビュー URL を開く操作が分かる。 |
 | F-05 | 公開準備とアップロード | MI-03, MI-04, MI-05, MI-07, MI-08, MI-09, MI-17, MI-27 | 初期値の upload を防ぎ、toolchain が不足しても authoring を失わず、review から upload result / 審査状態まで続けられる。正式 result にない公開 URL は推測しない。 |
 | F-06 | アイテム検査 | MI-03, MI-05, MI-09 | ビルドを含むセキュリティチェックを実行でき、成功時は公開、失敗時はログと編集へ進める。 |
-| F-07 | ビジュアルエディター | MI-01, MI-09, MI-10, MI-11, MI-12, MI-13, MI-14, MI-15, MI-16, MI-18, MI-21, MI-22, MI-29, MI-30, MI-31, MI-32, MI-33, MI-34, MI-35, MI-37, MI-38, MI-40, MI-42, MI-43, MI-46, MI-53, MI-54, MI-56, MI-57, MI-58, MI-59, MI-60, MI-62, MI-63, MI-64 | 四カードの入口、Hierarchy、Scene View、右 Inspector、下 Assets を使い、独立 selection、Scene Viewを含む複数選択と共通プロパティ編集、復元可能なEntityフォーカス、目的別のScene View表示、Empty / primitive / XRift Component 作成、Asset / Material / Particle / XRift Prefab D&D、Hierarchyの文字検索・種類フィルター・折り畳み・並び替え・親子化・Enabled、親子Transform、軸スクラブとScale比率固定、ComponentごとのEnabled、視覚的なMaterial選択、Material / Texture / Particle 編集、Material Textureのタイリング、Animation / InteractivityからのMaterial操作、配置Entityごとの静的なモデルポーズ、GLB / VRMのNode・Bone・Mesh別編集、GLB / glTF AnimationのPlay時自動再生、動的 thumbnail、Playとシーン全体の環境設定、右上のModel / R3F / Classic Importを扱える。左下のユーティリティレールからヘルプ、ショートカット、シーン設定へ迷わず到達できる。panel layout は resize / dock 後も復元され、Editor render / module load failure は App 全体へ伝播させず再試行、再読み込み、一覧への復帰を選べる。 |
-| F-08 | Visual Asset authoring / import | MI-11, MI-15, MI-16, MI-19, MI-20, MI-21, MI-28, MI-33, MI-36, MI-41, MI-46, MI-54, MI-56 | Material / Texture / Model / GLTF / OBJ / VRM / Prefab / Particle を左のfolder tree、種類別collection、保存済みthumbnail付きで管理し、GLB / VRMの埋め込みMaterial / Textureを再利用可能なAssetへ展開する。Materialは変更時だけ一時rendererでthumbnailを更新し、card自体はWebGL contextを保持しない。HDR / EXRはequirectangular用途を持つTexture Assetとして取り込み、現在Sceneへ直ちに設定し、ソースから保存済みthumbnailを自動生成・再生成する。sourceを壊さずimport、右InspectorでFlip Yを含むrecipe編集、参照を保つreimport、stale診断を行え、配置したGLB / VRMはNode・Bone・Mesh単位で編集できる。Animation取り込みを有効にしたModelは配置時に再生設定へ到達できる。Asset編集中も`sceneSelection`は保持される。 |
+| F-07 | ビジュアルエディター | MI-01, MI-09, MI-10, MI-11, MI-12, MI-13, MI-14, MI-15, MI-16, MI-18, MI-21, MI-22, MI-29, MI-30, MI-31, MI-32, MI-33, MI-34, MI-35, MI-37, MI-38, MI-40, MI-42, MI-43, MI-46, MI-53, MI-54, MI-56, MI-57, MI-58, MI-59, MI-60, MI-62, MI-63, MI-64, MI-65 | 四カードの入口、Hierarchy、Scene View、右 Inspector、下 Assets を使い、独立 selection、Scene Viewを含む複数選択と共通プロパティ編集、復元可能なEntityフォーカス、目的別のScene View表示、Empty / primitive / XRift Component 作成、Asset / Material / Particle / XRift Prefab D&D、Hierarchyの文字検索・種類フィルター・折り畳み・並び替え・親子化・Enabled、親子Transform、軸スクラブとScale比率固定、ComponentごとのEnabled、視覚的なMaterial選択、Material / Texture / Particle 編集、Material Textureのタイリング、Animation / InteractivityからのMaterial操作、配置Entityごとの静的なモデルポーズ、GLB / VRMのNode・Bone・Mesh別編集、GLB / glTF AnimationのPlay時自動再生、動的 thumbnail、Texture Assetから設定できるproject thumbnail、Playとシーン全体の環境設定、右上のModel / R3F / Classic Importを扱える。左下のユーティリティレールからヘルプ、ショートカット、シーン設定へ迷わず到達できる。panel layout は resize / dock 後も復元され、Editor render / module load failure は App 全体へ伝播させず再試行、再読み込み、一覧への復帰を選べる。 |
+| F-08 | Visual Asset authoring / import | MI-11, MI-15, MI-16, MI-19, MI-20, MI-21, MI-28, MI-33, MI-36, MI-41, MI-46, MI-54, MI-56, MI-65 | Material / Texture / Model / GLTF / OBJ / VRM / Prefab / Particle を左のfolder tree、種類別collection、保存済みthumbnail付きで管理し、GLB / VRMの埋め込みMaterial / Textureを再利用可能なAssetへ展開する。Materialは変更時だけ一時rendererでthumbnailを更新し、card自体はWebGL contextを保持しない。HDR / EXRはequirectangular用途を持つTexture Assetとして取り込み、現在Sceneへ直ちに設定し、ソースから保存済みthumbnailを自動生成・再生成する。Texture Assetはcontext menuからproject thumbnailへ設定し、Scene Inspectorで実画像を確認できる。sourceを壊さずimport、右InspectorでFlip Yを含むrecipe編集、参照を保つreimport、stale診断を行え、配置したGLB / VRMはNode・Bone・Mesh単位で編集できる。Animation取り込みを有効にしたModelは配置時に再生設定へ到達できる。Asset編集中も`sceneSelection`は保持される。 |
 | F-09 | Command / Shortcut / Prefab | MI-12, MI-22, MI-23, MI-24, MI-28, MI-30, MI-31, MI-34, MI-38, MI-43 | toolbar、menu、keyboard、Hierarchy D&D と左下の一覧が同じ Command / Shortcut Registry を使い、Copy / Paste / Duplicate / Delete / Reparent、Entityフォーカスの切替と解除、Empty / Component 作成、Hierarchy からの Prefab 化、XRift built-in Prefab配置、Undo / Redo が IDs と両 selection を復元する。 |
 | F-10 | Visual Save / Compile / Preview / Upload | MI-03, MI-05, MI-07, MI-08, MI-09, MI-17, MI-25, MI-26, MI-27 | authoring操作ごとの直列化された自動保存、journal付きcommit、決定的compiler / provenance、freshness検査、区別されたpreview、既存XRift check / uploadを一つのeditor flowで扱い、失敗や取消後もlast committed authoringと戻り先を保つ。 |
-| F-12 | Scene environment settings | MI-37, MI-38, MI-59 | 左下の歯車から右のScene Inspectorへ切り替え、サムネイル、Skyboxの背景表示・IBLライティング、無限遠・ボックス・地面付きドーム投影、画像・回転・明るさ・有限メッシュTransform・投影中心、Fog、環境光、Near/Far、FOV、背景、グリッド、ギズモ、スナップを一か所で設定し、Scene Viewと生成Worldに必要な値を一貫して反映する。 |
+| F-12 | Scene environment settings | MI-37, MI-38, MI-59 | 左下の歯車から右のScene Inspectorへ切り替え、ワールド名またはアイテム名、説明、サムネイル、Skyboxの背景表示・IBLライティング、無限遠・ボックス・地面付きドーム投影、画像・回転・明るさ・有限メッシュTransform・投影中心、Fog、環境光、Near/Far、FOV、背景、グリッド、ギズモ、スナップを一か所で設定し、公開情報、Scene View、生成Worldへ一貫して反映する。 |
 | F-13 | XRift Component editor preview | MI-10, MI-34, MI-39 | EditとPlayで公式package本体と同じRendererを使い、Portal、TagBoardを含むComponentの実際の見た目をStudio独自デザインへ置換せず確認できる。外部runtime機能だけを副作用なしProvider bridgeへ差し替える。 |
 | F-15 | OBJ / VRM import と静的モデルポーズ | MI-03, MI-05, MI-09, MI-20, MI-36, MI-41, MI-46, MI-56 | OBJ / VRMをModel Assetとして配置でき、VRMのNode・Bone・Skinned MeshをHierarchyから選び、配置EntityごとのTransform、node別Material、shape key weightを保存し、再表示と生成結果で同じ静的状態を復元できる。 |
 | F-16 | UnityPackage / Scene / Prefab import | MI-03, MI-05, MI-09, MI-11, MI-13, MI-20, MI-24, MI-47 | UnityPackageの論理pathnameとGUID参照を安全に復元し、対応Assetを抽出してScene階層を再構築し、再利用可能なXRift Prefabとして保存する。未対応Asset / Componentは黙って成功扱いせず診断とprovenanceへ残し、C#変換を行わない。 |
@@ -108,6 +110,7 @@ F-06 アイテム検査
 | F-22 | GLB / glTF Animation自動再生 | MI-11, MI-13, MI-14, MI-36, MI-54, MI-56 | Animationを含むModelを配置するとAnimation Componentが付き、source NodeをHierarchyへ展開したまま先頭clipのAutoplayとLoopをInspectorで確認・変更できる。Edit中は静止し、Playと生成結果だけで再生し、Stop後は制作状態へ戻る。 |
 | F-23 | 公式XRift ComponentカタログとClassic / TSX変換 | MI-03, MI-04, MI-05, MI-09, MI-34, MI-39, MI-52, MI-55, MI-64 | 外部リソースで公開package versionと公式sourceを確認しながら、配置可能な公式Componentを全件サムネイル付きで選べる。右上ImportからDrei / React Three Fiberの標準primitiveとLight、Rapier RigidBody、公式XRift JSXを安全なScene dataへ変換する。既存Classicは検査済みentryを同じ変換器へ渡し、未対応custom codeやAssetを完全変換と誤表示せず、追加後のEntityとInspectorへ到達できる。 |
 | F-24 | glTF Material制御とBehavior連携 | MI-15, MI-16, MI-25, MI-60 | Material Textureのタイリング、Offset、Rotation、UV SetをglTF互換値として編集し、MCP、Animation導線、KHR_interactivity pointer nodeから同じMaterial設定へ到達できる。Runtime manifestでもTexture transformとRepeat samplerを維持する。 |
+| F-26 | アプリデータのリセット | MI-03, MI-04, MI-05, MI-09, MI-66 | 実行中CLIとの競合や一時的なfile lockで部分的な状態を残さず、ランタイムのみまたは全データを確実に新しい起動から分離する。失敗時は対象と再試行方法を確認したまま復帰できる。 |
 
 ## F-23 公式XRift ComponentカタログとClassic / TSX変換の状態設計
 
@@ -483,7 +486,7 @@ F-06 アイテム検査
 
 ### 操作前
 
-- EditorのAI連携panelはCodex、Claude Code、Claude Desktop / Cowork、OpenCode、Cursorの検出結果、登録scope、XRift Studio MCP serverの状態を表示する。OllamaはMCP client一覧へ混在させず、ローカルmodel providerとしてinstall状態、version、model一覧、構成先clientを別sectionに表示する。native APIがないブラウザでは登録済みに見せず「デスクトップ版で利用できます」と示す。Claude Desktop / Coworkはローカルsessionだけを対象にし、remote CoworkではローカルMCPを起動できないことを登録前に示す。
+- EditorのAI連携panelはCodex、Claude Code、Claude Desktop / Cowork、OpenCode、Cursorの検出結果、登録scope、XRift Studio MCP serverの状態を表示する。Codexは現在の`PATH`に加えて、公式installer、Codex app同梱CLI、npm、pnpm、WinGet、Homebrew、standalone installerの標準配置を確認し、起動時の環境変数が古い場合も再起動なしで検出する。OllamaはMCP client一覧へ混在させず、ローカルmodel providerとしてinstall状態、version、model一覧、構成先clientを別sectionに表示する。native APIがないブラウザでは登録済みに見せず「デスクトップ版で利用できます」と示す。Claude Desktop / Coworkはローカルsessionだけを対象にし、remote CoworkではローカルMCPを起動できないことを登録前に示す。
 - MCPは現在開いているvisual projectだけを候補にし、project ID、Scene ID、session revisionを接続clientへ返す。接続しただけではSceneDocument、AssetManifest、selection、historyを変更しない。
 - AI書き込みは既定でEdit中の認可済みprojectだけに許可し、Play、Import、project切替中は理由付きで読み取り専用にする。Upload、削除、任意file、任意shell操作は初期tool setへ含めない。
 
@@ -725,6 +728,34 @@ F-06 アイテム検査
 ### 戻り先
 
 - Explorerを閉じる、dropを領域外で終える、Escapeでmenuを閉じる場合はいずれも、操作前のEditorと両selectionへ戻る。
+
+## F-26 アプリデータのリセットの状態設計
+
+参照: MI-03, MI-04, MI-05, MI-09, MI-66
+
+### 操作前
+
+- AboutのDanger Zoneで、ランタイムのみはprojectを残し、完全リセットはprojectを含むことを確認できる。
+- `@xrift/cli`のversion確認中は、実行中のNode.jsと削除が競合しないようリセットを開始できない。
+
+### 操作中
+
+- 確認dialogの主操作を「実行中」に変えて無効化し、背景click、Escape、閉じる操作を無効にする。
+- 通常pathを削除できない場合は同じアプリデータ領域の退避名へ移し、新しい起動が旧データを参照しない状態を先に確定する。
+
+### 成功時
+
+- 成功通知後にアプリを再読み込みし、ランタイムのみならsetup、完全リセットならsetup後の空のproject一覧へ進む。
+- 退避した旧データは次回起動時にバックグラウンドで再回収し、新しい制作操作を妨げない。
+
+### 失敗時
+
+- 退避にも失敗した対象とOS errorを確認dialog内に残し、実行中のterminalやeditorを閉じる案内を示す。
+- dialogを閉じず同じ主操作から再試行でき、取消ではAboutへ戻る。
+
+### 戻り先
+
+- 成功時は再読み込み後のsetupまたはproject一覧、失敗・取消時はAboutのDanger Zoneへ戻る。
 
 ## 実装制約
 

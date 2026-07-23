@@ -1,6 +1,8 @@
-import { useEffect, useState, type DragEvent, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { useCallback, useEffect, useState, type DragEvent, type ReactNode } from "react";
+import { CheckCircle2, ImagePlus, X } from "lucide-react";
 import { ThumbnailEditor } from "../ThumbnailEditor";
+import { tauri } from "../../lib/tauri";
+import { PROJECT_THUMBNAIL_CHANGED_EVENT } from "../../lib/project-thumbnail";
 import {
   isEnvironmentTextureAsset,
   resolveSceneSettings,
@@ -8,6 +10,7 @@ import {
   type SceneDocument,
   type SceneSettings,
   type VisualProjectKind,
+  type VisualProjectMetadata,
 } from "../../lib/visual-editor";
 import {
   clearEditorDragData,
@@ -19,10 +22,12 @@ import { SKYBOX_DRAG_MIME, TEXTURE_DRAG_MIME } from "./types";
 type SceneSettingsInspectorProps = {
   scene: SceneDocument;
   assets: AssetManifest;
+  metadata: VisualProjectMetadata;
   projectKind: VisualProjectKind;
   projectPath?: string;
   readOnly: boolean;
   onChange: (settings: SceneSettings) => void;
+  onMetadataChange: (metadata: Pick<VisualProjectMetadata, "title" | "description">) => void;
   onThumbnailChanged: () => void;
 };
 
@@ -164,6 +169,73 @@ function NumberField({
         }}
         className="h-7 w-24 rounded border border-slate-300 bg-white px-2 text-right text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
       />
+    </label>
+  );
+}
+
+function MetadataField({
+  label,
+  value,
+  multiline = false,
+  maxLength,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  multiline?: boolean;
+  maxLength: number;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+
+  const commit = () => {
+    const next = draft.trim();
+    setDraft(next);
+    if (next !== value) onChange(next);
+  };
+  const commonClassName =
+    "w-full rounded border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400";
+
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-slate-700">{label}</span>
+      {multiline ? (
+        <textarea
+          value={draft}
+          rows={4}
+          maxLength={maxLength}
+          disabled={disabled}
+          onChange={(event) => setDraft(event.currentTarget.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setDraft(value);
+              event.currentTarget.blur();
+            }
+          }}
+          className={`${commonClassName} min-h-20 resize-y leading-5`}
+        />
+      ) : (
+        <input
+          type="text"
+          value={draft}
+          maxLength={maxLength}
+          disabled={disabled}
+          onChange={(event) => setDraft(event.currentTarget.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+            if (event.key === "Escape") {
+              setDraft(value);
+              event.currentTarget.blur();
+            }
+          }}
+          className={commonClassName}
+        />
+      )}
     </label>
   );
 }
@@ -435,13 +507,18 @@ function SkyboxImageField({
 export function SceneSettingsInspector({
   scene,
   assets,
+  metadata,
   projectKind,
   projectPath,
   readOnly,
   onChange,
+  onMetadataChange,
   onThumbnailChanged,
 }: SceneSettingsInspectorProps) {
   const [thumbnailOpen, setThumbnailOpen] = useState(false);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const [thumbnailLoading, setThumbnailLoading] = useState(Boolean(projectPath));
+  const [thumbnailError, setThumbnailError] = useState<string | null>(null);
   const settings = resolveSceneSettings(scene.settings);
   const update = (next: SceneSettings) => onChange(next);
   const disabledHint = readOnly
@@ -451,19 +528,125 @@ export function SceneSettingsInspector({
   const skyboxControlsDisabled = readOnly || !settings.skybox.enabled;
   const exposureControlsDisabled =
     readOnly || (!settings.skybox.enabled && !settings.skybox.iblEnabled);
+  const loadThumbnail = useCallback(async () => {
+    if (!projectPath) {
+      setThumbnailPreview(null);
+      setThumbnailLoading(false);
+      setThumbnailError(null);
+      return;
+    }
+    setThumbnailLoading(true);
+    setThumbnailError(null);
+    setThumbnailPreview(null);
+    try {
+      setThumbnailPreview(await tauri.readThumbnail(projectPath));
+    } catch (error) {
+      setThumbnailError(`${error}`);
+    } finally {
+      setThumbnailLoading(false);
+    }
+  }, [projectPath]);
+
+  useEffect(() => {
+    void loadThumbnail();
+  }, [loadThumbnail]);
+
+  useEffect(() => {
+    const reloadThumbnail = () => void loadThumbnail();
+    window.addEventListener(PROJECT_THUMBNAIL_CHANGED_EVENT, reloadThumbnail);
+    return () =>
+      window.removeEventListener(
+        PROJECT_THUMBNAIL_CHANGED_EVENT,
+        reloadThumbnail,
+      );
+  }, [loadThumbnail]);
 
   return (
     <>
       <div className="space-y-3">
+        <Section
+          title="公開情報"
+          description="一覧と公開ページに表示する名前と説明です。"
+        >
+          <MetadataField
+            label={projectKind === "world" ? "ワールド名" : "アイテム名"}
+            value={metadata.title}
+            maxLength={120}
+            disabled={readOnly}
+            onChange={(title) =>
+              onMetadataChange({ title, description: metadata.description })
+            }
+          />
+          <MetadataField
+            label="説明"
+            value={metadata.description}
+            multiline
+            maxLength={1000}
+            disabled={readOnly}
+            onChange={(description) =>
+              onMetadataChange({ title: metadata.title, description })
+            }
+          />
+          <p className="text-[11px] leading-4 text-slate-500">
+            入力欄から移動すると変更を自動保存します。公開前にも同じ内容を確認できます。
+          </p>
+        </Section>
+
         <Section title="サムネイル" description="一覧と公開情報に表示する画像です。">
+          <div className="relative aspect-video overflow-hidden rounded-md border border-slate-200 bg-slate-100">
+            {thumbnailLoading ? (
+              <div className="flex h-full items-center justify-center text-[11px] text-slate-500">
+                サムネイルを確認中…
+              </div>
+            ) : thumbnailPreview ? (
+              <>
+                <img
+                  src={thumbnailPreview}
+                  alt="現在設定されているサムネイル"
+                  className="h-full w-full object-cover"
+                />
+                <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white shadow-sm">
+                  <CheckCircle2 size={11} aria-hidden="true" />
+                  設定済み
+                </span>
+              </>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-1 text-slate-500">
+                <ImagePlus size={22} strokeWidth={1.5} aria-hidden="true" />
+                <span className="text-[11px] font-medium">サムネイル未設定</span>
+              </div>
+            )}
+          </div>
+          {thumbnailError ? (
+            <div className="rounded border border-rose-200 bg-rose-50 px-2.5 py-2 text-[11px] text-rose-700">
+              <p>サムネイルを確認できませんでした。</p>
+              <button
+                type="button"
+                onClick={() => void loadThumbnail()}
+                className="mt-1 font-semibold underline underline-offset-2"
+              >
+                再試行
+              </button>
+            </div>
+          ) : null}
           <button
             type="button"
-            disabled={!projectPath}
+            disabled={!projectPath || readOnly}
             onClick={() => setThumbnailOpen(true)}
-            title={projectPath ? "サムネイルを編集" : "保存済みプロジェクトを開くと設定できます"}
+            title={
+              readOnly
+                ? "Playを停止してからサムネイルを変更できます"
+                : projectPath
+                  ? "サムネイルを変更"
+                  : "保存済みプロジェクトを開くと設定できます"
+            }
             className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
           >
-            {projectPath ? "サムネイルを編集" : "保存後にサムネイルを設定"}
+            {projectPath
+              ? thumbnailPreview
+                ? "サムネイルを変更"
+                : "サムネイルを設定"
+              : "保存後にサムネイルを設定"}
           </button>
         </Section>
 
@@ -608,7 +791,10 @@ export function SceneSettingsInspector({
           projectPath={projectPath}
           projectKind={projectKind}
           onClose={() => setThumbnailOpen(false)}
-          onChanged={onThumbnailChanged}
+          onChanged={() => {
+            setThumbnailOpen(false);
+            onThumbnailChanged();
+          }}
         />
       ) : null}
     </>

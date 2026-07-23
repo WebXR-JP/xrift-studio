@@ -688,6 +688,14 @@ fn list_projects(root: String) -> Result<Vec<Project>, String> {
                 }
             })
             .unwrap_or(("world".to_string(), None, None));
+        // The XRift CLI records the remote target after the first successful
+        // upload. This sidecar, rather than xrift.json, is the source of truth
+        // for whether a classic project has an upload history.
+        let publication = path.canonicalize().ok().and_then(|canonical_path| {
+            read_compiler_publication_metadata(&canonical_path, &kind)
+                .ok()
+                .flatten()
+        });
         projects.push(Project {
             name,
             path: path.to_string_lossy().to_string(),
@@ -696,8 +704,10 @@ fn list_projects(root: String) -> Result<Vec<Project>, String> {
             title,
             description,
             modified_at_ms: file_modified_at_ms(&xrift_json),
-            uploaded_at: None,
-            publication_id: None,
+            uploaded_at: publication
+                .as_ref()
+                .map(|loaded| loaded.metadata.last_uploaded_at.clone()),
+            publication_id: publication.map(|loaded| loaded.metadata.id),
         });
     }
     projects.sort_by(|a, b| a.name.cmp(&b.name));
@@ -3806,8 +3816,10 @@ fn clear_readonly_recursive(path: &Path) {
 }
 
 fn force_remove_dir_all(path: &Path) -> Result<(), String> {
-    if !path.exists() {
-        return Ok(());
+    match path.try_exists() {
+        Ok(false) => return Ok(()),
+        Ok(true) => {}
+        Err(error) => return Err(format!("{}: {}", path.display(), error)),
     }
     if std::fs::remove_dir_all(path).is_ok() {
         return Ok(());
@@ -3824,7 +3836,7 @@ fn force_remove_dir_all(path: &Path) -> Result<(), String> {
             }
         }
     }
-    if !path.exists() {
+    if matches!(path.try_exists(), Ok(false)) {
         return Ok(());
     }
     Err(format!(
@@ -3836,6 +3848,59 @@ fn force_remove_dir_all(path: &Path) -> Result<(), String> {
     ))
 }
 
+const RESET_PENDING_PREFIX: &str = ".reset-pending-";
+
+fn pending_reset_path(root: &Path, path: &Path) -> PathBuf {
+    let label = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("data");
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    root.join(format!(
+        "{}{}-{}-{}",
+        RESET_PENDING_PREFIX,
+        label,
+        std::process::id(),
+        nonce
+    ))
+}
+
+fn remove_or_quarantine_for_reset(root: &Path, path: &Path) -> Result<(), String> {
+    let remove_error = match force_remove_dir_all(path) {
+        Ok(()) => return Ok(()),
+        Err(error) => error,
+    };
+
+    // Windows can keep individual Node.js or project files open briefly even
+    // after their process exits. Moving the old directory out of the canonical
+    // path lets the app restart with clean data; a later startup retries the
+    // physical deletion once those handles have closed.
+    let pending = pending_reset_path(root, path);
+    std::fs::rename(path, &pending).map_err(|rename_error| {
+        format!("{}\n退避にも失敗しました: {}", remove_error, rename_error)
+    })?;
+    let _ = force_remove_dir_all(&pending);
+    Ok(())
+}
+
+fn cleanup_pending_resets(root: &Path) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        if name
+            .to_str()
+            .is_some_and(|value| value.starts_with(RESET_PENDING_PREFIX))
+        {
+            let _ = force_remove_dir_all(&entry.path());
+        }
+    }
+}
+
 #[tauri::command]
 fn reset_app_data(app: AppHandle, scope: String) -> Result<(), String> {
     let root = app_root(&app)?;
@@ -3845,7 +3910,7 @@ fn reset_app_data(app: AppHandle, scope: String) -> Result<(), String> {
     // 途中で失敗しても残りの領域は掃除されるので、ユーザの再試行が効きやすい。
     let mut failures: Vec<String> = Vec::new();
     let mut try_remove = |p: &str| {
-        if let Err(e) = force_remove_dir_all(Path::new(p)) {
+        if let Err(e) = remove_or_quarantine_for_reset(&root, Path::new(p)) {
             failures.push(e);
         }
     };
@@ -3941,6 +4006,9 @@ pub fn run() {
         .manage(mcp::XriftMcpBrokerState::default())
         .setup(|app| {
             mcp::start_broker(app.handle())?;
+            if let Ok(root) = app_root(app.handle()) {
+                std::thread::spawn(move || cleanup_pending_resets(&root));
+            }
             Ok(())
         })
         .plugin(tauri_plugin_shell::init())
@@ -4005,6 +4073,56 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn reset_fixture_root(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "xrift-studio-reset-{}-{}-{}",
+            label,
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock must be after epoch")
+                .as_nanos()
+        ))
+    }
+
+    #[test]
+    fn reset_removes_the_canonical_directory() {
+        let fixture_root = reset_fixture_root("canonical");
+        let runtime = fixture_root.join("runtime");
+        std::fs::create_dir_all(runtime.join("node")).expect("runtime fixture must be created");
+        std::fs::write(runtime.join("node").join("node.exe"), b"fixture")
+            .expect("runtime fixture file must be written");
+
+        remove_or_quarantine_for_reset(&fixture_root, &runtime)
+            .expect("runtime reset must succeed");
+
+        assert!(!runtime.exists(), "canonical runtime path must be removed");
+        cleanup_pending_resets(&fixture_root);
+        let _ = std::fs::remove_dir_all(&fixture_root);
+    }
+
+    #[test]
+    fn startup_cleanup_only_removes_pending_reset_directories() {
+        let fixture_root = reset_fixture_root("pending");
+        let pending = fixture_root.join(format!("{}projects-fixture", RESET_PENDING_PREFIX));
+        let projects = fixture_root.join("projects");
+        std::fs::create_dir_all(&pending).expect("pending fixture must be created");
+        std::fs::create_dir_all(&projects).expect("projects fixture must be created");
+        std::fs::write(pending.join("old-project.json"), b"{}")
+            .expect("pending fixture file must be written");
+        std::fs::write(projects.join("current-project.json"), b"{}")
+            .expect("current fixture file must be written");
+
+        cleanup_pending_resets(&fixture_root);
+
+        assert!(!pending.exists(), "pending reset data must be collected");
+        assert!(
+            projects.exists(),
+            "canonical project data must be preserved"
+        );
+        std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
+    }
 
     #[test]
     fn visual_asset_explorer_targets_stay_inside_the_project() {
@@ -4159,6 +4277,58 @@ mod tests {
 
         assert_eq!(loaded.metadata.id, "world-01");
         assert_eq!(loaded.metadata.last_uploaded_at, "2026-07-20T00:00:00.000Z");
+    }
+
+    #[test]
+    fn lists_classic_projects_with_official_cli_publication_metadata() {
+        let fixture_root = std::env::temp_dir().join(format!(
+            "xrift-studio-project-publication-list-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("fixture clock must follow unix epoch")
+                .as_nanos()
+        ));
+        let published_project = fixture_root.join("published-world");
+        let unpublished_project = fixture_root.join("unpublished-world");
+        std::fs::create_dir_all(published_project.join(".xrift"))
+            .expect("published project metadata directory must be created");
+        std::fs::create_dir_all(&unpublished_project).expect("unpublished project must be created");
+        std::fs::write(
+            published_project.join("xrift.json"),
+            r#"{"world":{"distDir":"./dist","title":"Published"}}"#,
+        )
+        .expect("published project manifest must be written");
+        std::fs::write(
+            published_project.join(".xrift").join("world.json"),
+            r#"{"id":"world-01","createdAt":"2026-07-19T00:00:00.000Z","lastUploadedAt":"2026-07-20T00:00:00.000Z"}"#,
+        )
+        .expect("publication metadata must be written");
+        std::fs::write(
+            unpublished_project.join("xrift.json"),
+            r#"{"world":{"distDir":"./dist","title":"Unpublished"}}"#,
+        )
+        .expect("unpublished project manifest must be written");
+
+        let projects = list_projects(fixture_root.to_string_lossy().to_string())
+            .expect("projects must be listed");
+        let published = projects
+            .iter()
+            .find(|project| project.name == "published-world")
+            .expect("published project must be present");
+        let unpublished = projects
+            .iter()
+            .find(|project| project.name == "unpublished-world")
+            .expect("unpublished project must be present");
+
+        assert_eq!(published.publication_id.as_deref(), Some("world-01"));
+        assert_eq!(
+            published.uploaded_at.as_deref(),
+            Some("2026-07-20T00:00:00.000Z")
+        );
+        assert_eq!(unpublished.publication_id, None);
+        assert_eq!(unpublished.uploaded_at, None);
+
+        std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
     }
 
     #[test]

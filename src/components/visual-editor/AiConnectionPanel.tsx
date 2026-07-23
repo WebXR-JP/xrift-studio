@@ -184,6 +184,11 @@ export function AiConnectionPanel({
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-slate-800">{client.label}</p>
                   <p className="mt-0.5 text-[11px] text-slate-500">{client.message}</p>
+                  {client.id === "codex" && !client.installed ? (
+                    <p className="mt-1 max-w-64 text-[10px] leading-4 text-slate-400">
+                      公式インストーラー、Codexアプリ、npm、pnpm、WinGetの標準配置を確認します。
+                    </p>
+                  ) : null}
                 </div>
                 <button
                   type="button"

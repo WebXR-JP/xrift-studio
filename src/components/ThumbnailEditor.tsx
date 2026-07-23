@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { ImagePlus } from "lucide-react";
+import { CheckCircle2, ImagePlus } from "lucide-react";
 import { tauri, type ProjectKind } from "../lib/tauri";
+import {
+  announceProjectThumbnailChanged,
+  imageDataUrlToPng,
+} from "../lib/project-thumbnail";
 
 type Props = {
   projectPath: string;
@@ -22,6 +26,7 @@ export function ThumbnailEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reload = async () => {
@@ -29,6 +34,7 @@ export function ThumbnailEditor({
     try {
       const t = await tauri.readThumbnail(projectPath);
       setThumb(t);
+      setJustSaved(false);
     } catch (e) {
       setError(`${e}`);
     } finally {
@@ -41,31 +47,11 @@ export function ThumbnailEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectPath]);
 
-  const fileToPngDataUrl = (file: File): Promise<string> =>
+  const fileToDataUrl = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => {
-        const img = new Image();
-        img.onload = () => {
-          const target = 1024;
-          const ratio = Math.min(target / img.width, target / img.height);
-          const w = Math.round(img.width * ratio);
-          const h = Math.round(img.height * ratio);
-          const canvas = document.createElement("canvas");
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            reject(new Error("canvas context failed"));
-            return;
-          }
-          ctx.drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL("image/png"));
-        };
-        img.onerror = () => reject(new Error("image decode failed"));
-        img.src = reader.result as string;
-      };
-      reader.onerror = () => reject(new Error("file read failed"));
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("画像ファイルを読み込めませんでした"));
       reader.readAsDataURL(file);
     });
 
@@ -77,10 +63,13 @@ export function ThumbnailEditor({
     }
     setSaving(true);
     setError(null);
+    setJustSaved(false);
     try {
-      const dataUrl = await fileToPngDataUrl(file);
+      const dataUrl = await imageDataUrlToPng(await fileToDataUrl(file));
       await tauri.writeThumbnail(projectPath, dataUrl);
       setThumb(dataUrl);
+      setJustSaved(true);
+      announceProjectThumbnailChanged();
       onChanged?.();
     } catch (e) {
       setError(`${e}`);
@@ -92,7 +81,15 @@ export function ThumbnailEditor({
   return (
     <div className="flex h-full flex-col bg-white">
       <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-2">
-        <div className="text-xs font-medium text-zinc-700">public/thumbnail.png</div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-xs font-medium text-zinc-700">public/thumbnail.png</div>
+          {thumb && !loading ? (
+            <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+              <CheckCircle2 size={12} aria-hidden="true" />
+              設定済み
+            </span>
+          ) : null}
+        </div>
         <div className="mt-0.5 text-xs text-zinc-500">
           {projectLabel}一覧やXRift上で表示されるサムネイル画像（推奨: {recommendedSize}）
         </div>
@@ -180,6 +177,21 @@ export function ThumbnailEditor({
           {error && (
             <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
               {error}
+            </div>
+          )}
+          {justSaved && (
+            <div
+              className="mt-3 flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
+              role="status"
+              aria-live="polite"
+            >
+              <CheckCircle2 size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+              <span>
+                <span className="block font-semibold">サムネイルを設定しました</span>
+                <span className="mt-0.5 block text-emerald-700">
+                  この画像は保存済みで、一覧と公開情報に使用されます。
+                </span>
+              </span>
             </div>
           )}
         </div>

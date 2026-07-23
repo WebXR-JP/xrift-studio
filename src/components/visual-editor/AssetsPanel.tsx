@@ -33,6 +33,7 @@ import {
   resolveAssetCreationFolderId,
 } from "../../lib/visual-editor";
 import { AssetThumbnail } from "./AssetQuickEditor";
+import { resolveProjectThumbnailAssetPath } from "../../lib/project-thumbnail";
 import { commandTitle, EDITOR_ICONS, type EditorIconName } from "./editor-icons";
 import { formatFileSize, getDragKind } from "./editor-utils";
 import {
@@ -1191,6 +1192,7 @@ export function AssetsPanel({
   renameRequest,
   onRename,
   onRequestDeleteAsset,
+  onSetProjectThumbnail,
   onRequestDeleteFolder,
   onMoveAsset,
   onMoveFolder,
@@ -1233,6 +1235,7 @@ export function AssetsPanel({
     | null;
   onRename: (target: { kind: "asset" | "folder"; id: string }, name: string) => void;
   onRequestDeleteAsset: (assetId: string) => void;
+  onSetProjectThumbnail: (assetId: string) => void | Promise<void>;
   onRequestDeleteFolder: (folderId: string) => void;
   onMoveAsset: (assetId: string, folderId: string | null) => void;
   onMoveFolder: (folderId: string, parentId: string | null) => void;
@@ -1869,6 +1872,34 @@ export function AssetsPanel({
                 const assetId = contextMenu.assetId;
                 setContextMenu(null);
                 if (assetId) onPlaceSceneAsset(assetId);
+              }}
+            />
+          ) : null}
+          {contextMenu.assetId &&
+          (assets.assets[contextMenu.assetId]?.kind === "texture" ||
+            assets.assets[contextMenu.assetId]?.kind === "skybox") ? (
+            <ContextMenuItem
+              icon="camera"
+              label="サムネイルに設定"
+              command="asset.set-project-thumbnail"
+              disabled={
+                assetMutationLocked ||
+                !projectPath ||
+                !resolveProjectThumbnailAssetPath(
+                  assets.assets[contextMenu.assetId],
+                )
+              }
+              disabledReason={
+                assetMutationLocked
+                  ? assetMutationDisabledReason
+                  : !projectPath
+                    ? "プロジェクトを保存すると設定できます"
+                    : "このTextureには使用できる画像がありません"
+              }
+              onClick={() => {
+                const assetId = contextMenu.assetId;
+                setContextMenu(null);
+                if (assetId) void onSetProjectThumbnail(assetId);
               }}
             />
           ) : null}

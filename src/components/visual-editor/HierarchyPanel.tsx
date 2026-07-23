@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type DragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
 } from "react";
 import {
@@ -83,6 +84,15 @@ type HierarchyDropTarget =
       allowed: boolean;
       message: string;
     };
+
+function isTextEntryTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target.isContentEditable
+  );
+}
 
 function flattenHierarchy(
   scene: SceneDocument,
@@ -445,6 +455,7 @@ export function HierarchyPanel({
     entityId: string | null;
   } | null>(null);
   const panelRef = useRef<HTMLElement>(null);
+  const entityButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const [renameDraft, setRenameDraft] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
   const [dragEntityId, setDragEntityId] = useState<string | null>(null);
@@ -555,6 +566,131 @@ export function HierarchyPanel({
     selectionAnchorRef.current = entityId;
     onSelectionChange([entityId], entityId);
   };
+
+  const focusEntityRow = (entityId: string) => {
+    window.requestAnimationFrame(() => {
+      const button = entityButtonRefs.current.get(entityId);
+      button?.scrollIntoView({ block: "nearest" });
+      button?.focus({ preventScroll: true });
+    });
+  };
+
+  const selectEntityWithKeyboard = (entityId: string, extendSelection: boolean) => {
+    if (extendSelection) {
+      const fallbackAnchorId =
+        selectedEntityId && rows.some((row) => row.entity.id === selectedEntityId)
+          ? selectedEntityId
+          : entityId;
+      const anchorId =
+        selectionAnchorRef.current &&
+        rows.some((row) => row.entity.id === selectionAnchorRef.current)
+          ? selectionAnchorRef.current
+          : fallbackAnchorId;
+      selectionAnchorRef.current = anchorId;
+      const anchorIndex = rows.findIndex((row) => row.entity.id === anchorId);
+      const targetIndex = rows.findIndex((row) => row.entity.id === entityId);
+      const start = Math.min(anchorIndex, targetIndex);
+      const end = Math.max(anchorIndex, targetIndex);
+      onSelectionChange(
+        rows.slice(start, end + 1).map((row) => row.entity.id),
+        entityId,
+      );
+    } else {
+      selectionAnchorRef.current = entityId;
+      onSelectionChange([entityId], entityId);
+    }
+    focusEntityRow(entityId);
+  };
+
+  const handleHierarchyKeyDown = (
+    event: ReactKeyboardEvent<HTMLDivElement>,
+  ) => {
+    if (
+      event.defaultPrevented ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.nativeEvent.isComposing ||
+      isTextEntryTarget(event.target) ||
+      rows.length === 0
+    ) {
+      return;
+    }
+
+    const focusedEntityId =
+      event.target instanceof HTMLElement
+        ? event.target
+            .closest<HTMLElement>("[data-hierarchy-entity-id]")
+            ?.dataset.hierarchyEntityId ?? null
+        : null;
+    const currentEntityId =
+      focusedEntityId ??
+      (selectedEntityId &&
+      rows.some((row) => row.entity.id === selectedEntityId)
+        ? selectedEntityId
+        : rows[0].entity.id);
+    const currentIndex = rows.findIndex(
+      (row) => row.entity.id === currentEntityId,
+    );
+    if (currentIndex < 0) return;
+
+    const currentRow = rows[currentIndex];
+    let targetEntityId: string | null = null;
+    if (event.key === "ArrowDown" && currentIndex < rows.length - 1) {
+      targetEntityId = rows[currentIndex + 1].entity.id;
+    } else if (event.key === "ArrowUp" && currentIndex > 0) {
+      targetEntityId = rows[currentIndex - 1].entity.id;
+    } else if (event.key === "Home") {
+      targetEntityId = rows[0].entity.id;
+    } else if (event.key === "End") {
+      targetEntityId = rows[rows.length - 1].entity.id;
+    } else if (event.key === "ArrowRight") {
+      if (currentRow.canCollapse && currentRow.collapsed) {
+        toggleEntityCollapsed(currentEntityId);
+        focusEntityRow(currentEntityId);
+      } else {
+        const nextRow = rows[currentIndex + 1];
+        if (nextRow?.depth === currentRow.depth + 1) {
+          targetEntityId = nextRow.entity.id;
+        }
+      }
+    } else if (event.key === "ArrowLeft") {
+      if (currentRow.canCollapse && !currentRow.collapsed) {
+        toggleEntityCollapsed(currentEntityId);
+        focusEntityRow(currentEntityId);
+      } else {
+        const parentEntityId = currentRow.entity.parentId;
+        if (
+          parentEntityId &&
+          rows.some((row) => row.entity.id === parentEntityId)
+        ) {
+          targetEntityId = parentEntityId;
+        }
+      }
+    } else {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    if (targetEntityId) {
+      selectEntityWithKeyboard(
+        targetEntityId,
+        event.shiftKey &&
+          (event.key === "ArrowDown" || event.key === "ArrowUp"),
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedEntityId) return;
+    const frame = window.requestAnimationFrame(() => {
+      entityButtonRefs.current
+        .get(selectedEntityId)
+        ?.scrollIntoView({ block: "nearest" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [rows, selectedEntityId]);
 
   useEffect(() => {
     if (!renameRequest) return;
@@ -930,6 +1066,8 @@ export function HierarchyPanel({
         className="scrollbar-thin min-h-0 flex-1 overflow-y-auto py-1.5"
         role="tree"
         aria-label="SceneのEntity階層"
+        tabIndex={rows.length > 0 ? 0 : -1}
+        onKeyDown={handleHierarchyKeyDown}
         onDragEnter={(event) => {
           if (!hasPlaceableDrop(event)) return;
           event.preventDefault();
@@ -1231,14 +1369,14 @@ export function HierarchyPanel({
                 type="button"
                 draggable={!readOnly}
                 data-editor-drag-source="hierarchy-entity"
-                disabled={readOnly}
+                data-hierarchy-entity-select="true"
+                ref={(element) => {
+                  if (element) entityButtonRefs.current.set(entity.id, element);
+                  else entityButtonRefs.current.delete(entity.id);
+                }}
                 aria-pressed={selected}
                 aria-label={`${entity.name}、${getEntityTypeLabel(entity)}`}
-                title={
-                  readOnly
-                    ? "Playを停止するとEntityを選択できます"
-                    : commandTitle(`${entity.name}を選択`, "SelectEntity")
-                }
+                title={commandTitle(`${entity.name}を選択`, "SelectEntity")}
                 onClick={(event) => selectEntity(entity.id, event)}
                 onDragStart={(event) => {
                   writeEditorDragData(event.dataTransfer, {

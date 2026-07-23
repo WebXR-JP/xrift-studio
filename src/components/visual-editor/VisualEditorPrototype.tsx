@@ -133,6 +133,7 @@ import {
   type XriftOllamaIntegrationId,
   type XriftOllamaStatus,
 } from "../../lib/tauri";
+import { setProjectThumbnailFromAsset } from "../../lib/project-thumbnail";
 import { AssetsPanel } from "./AssetsPanel";
 import { EnvironmentTextureThumbnailGenerationQueue } from "./EnvironmentTextureThumbnailGenerationQueue";
 import { MaterialThumbnailGenerationQueue } from "./MaterialThumbnailGenerationQueue";
@@ -1096,6 +1097,7 @@ export function VisualEditorPrototype({
   editorModeRef.current = editorMode;
   const importBusyRef = useRef(importBusy);
   importBusyRef.current = importBusy;
+  const projectThumbnailBusyRef = useRef(false);
   const saveStatusRef = useRef(saveStatus);
   saveStatusRef.current = saveStatus;
 
@@ -2031,6 +2033,32 @@ export function VisualEditorPrototype({
       });
     },
     [editorMode, importBusy, projectKind],
+  );
+
+  const handleProjectMetadataChange = useCallback(
+    (metadata: { title: string; description: string }) => {
+      if (editorMode !== "edit") return;
+      setBundle((current) => {
+        if (
+          current.project.metadata.title === metadata.title &&
+          current.project.metadata.description === metadata.description
+        ) {
+          return current;
+        }
+        return touchProject({
+          ...current,
+          project: {
+            ...current.project,
+            metadata: {
+              ...current.project.metadata,
+              ...metadata,
+            },
+          },
+        });
+      });
+      setNotice("公開情報を更新しました。変更を自動保存します");
+    },
+    [editorMode, setBundle],
   );
 
   const handleComponentCodeImport = useCallback(
@@ -3340,6 +3368,36 @@ export function VisualEditorPrototype({
       });
     },
     [editorMode, setBundle],
+  );
+
+  const handleSetProjectThumbnailFromAsset = useCallback(
+    async (assetId: string) => {
+      if (projectThumbnailBusyRef.current) return;
+      if (!projectPath) {
+        setNotice("プロジェクトを保存するとサムネイルを設定できます");
+        return;
+      }
+      const asset = bundleRef.current.assets.assets[assetId];
+      if (!asset || (asset.kind !== "texture" && asset.kind !== "skybox")) {
+        setNotice("サムネイルに使用できるTexture Assetが見つかりません");
+        return;
+      }
+      projectThumbnailBusyRef.current = true;
+      setNotice(`「${asset.name}」をサムネイルに設定中です`);
+      try {
+        await setProjectThumbnailFromAsset(projectPath, asset);
+        onThumbnailChanged?.();
+        setSceneSettingsOpen(true);
+        setNotice(
+          `「${asset.name}」をサムネイルに設定しました。シーン設定で現在の画像を確認できます`,
+        );
+      } catch (error) {
+        setNotice(`サムネイルを設定できませんでした: ${error}`);
+      } finally {
+        projectThumbnailBusyRef.current = false;
+      }
+    },
+    [onThumbnailChanged, projectPath],
   );
 
   const handleAssetThumbnailGenerated = useCallback(
@@ -4744,6 +4802,7 @@ export function VisualEditorPrototype({
           <InspectorPanel
             scene={bundle.scene}
             assets={playSession?.runtimeAssets ?? bundle.assets}
+            metadata={bundle.project.metadata}
             prefabs={bundle.prefabs}
             projectPath={projectPath}
             selectedEntityId={sceneSelection?.id ?? null}
@@ -4798,6 +4857,7 @@ export function VisualEditorPrototype({
             sceneSettingsOpen={sceneSettingsOpen}
             onCloseSceneSettings={() => setSceneSettingsOpen(false)}
             onSceneSettingsChange={handleSceneSettingsChange}
+            onProjectMetadataChange={handleProjectMetadataChange}
             onThumbnailChanged={() => {
               onThumbnailChanged?.();
               setNotice("サムネイルを更新しました。変更は公開時に反映されます");
@@ -4851,6 +4911,7 @@ export function VisualEditorPrototype({
               commitRename({ ...target, requestId: Date.now() }, name)
             }
             onRequestDeleteAsset={requestDeleteAsset}
+            onSetProjectThumbnail={handleSetProjectThumbnailFromAsset}
             onRequestDeleteFolder={requestDeleteAssetFolder}
             onMoveAsset={handleMoveAsset}
             onMoveFolder={handleMoveAssetFolder}

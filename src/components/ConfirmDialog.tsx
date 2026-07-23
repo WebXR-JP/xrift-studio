@@ -7,6 +7,7 @@ type Props = {
   description?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  error?: string | null;
   destructive?: boolean;
   busy?: boolean;
   onConfirm: () => void;
@@ -19,6 +20,7 @@ export function ConfirmDialog({
   description,
   confirmLabel = "OK",
   cancelLabel = "キャンセル",
+  error,
   destructive,
   busy,
   onConfirm,
@@ -57,6 +59,14 @@ export function ConfirmDialog({
             <div className="text-base font-semibold text-zinc-900">{title}</div>
             {description && (
               <div className="mt-1 text-xs text-zinc-600 whitespace-pre-wrap">{description}</div>
+            )}
+            {error && (
+              <div
+                className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-relaxed text-rose-700 whitespace-pre-wrap"
+                role="alert"
+              >
+                {error}
+              </div>
             )}
           </div>
           <button

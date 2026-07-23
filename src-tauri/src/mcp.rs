@@ -920,7 +920,136 @@ fn client_registration(client: SupportedMcpClient, executable: &Path) -> ClientR
 }
 
 fn find_client_executable(client: SupportedMcpClient) -> Option<PathBuf> {
+    if matches!(client, SupportedMcpClient::Codex) {
+        return find_codex_executable();
+    }
     client.command_name().and_then(find_command_on_path)
+}
+
+fn find_codex_executable() -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(path) = std::env::var_os("CODEX_CLI_PATH") {
+        candidates.push(PathBuf::from(path));
+    }
+    if let Some(executable) = find_command_on_path("codex") {
+        candidates.push(executable);
+    }
+
+    #[cfg(windows)]
+    {
+        if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+            candidates.extend(windows_codex_local_app_data_candidates(&local_app_data));
+        }
+        if let Some(app_data) = std::env::var_os("APPDATA").map(PathBuf::from) {
+            candidates.extend(command_candidates(&app_data.join("npm"), "codex"));
+        }
+        if let Some(home) = dirs::home_dir() {
+            candidates.push(
+                home.join(".codex")
+                    .join("packages")
+                    .join("standalone")
+                    .join("current")
+                    .join("bin")
+                    .join("codex.exe"),
+            );
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        if let Some(home) = dirs::home_dir() {
+            candidates.extend([
+                home.join(".local").join("bin").join("codex"),
+                home.join(".codex").join("bin").join("codex"),
+                home.join(".npm-global").join("bin").join("codex"),
+                home.join(".local").join("share").join("pnpm").join("codex"),
+                home.join(".bun").join("bin").join("codex"),
+            ]);
+        }
+        candidates.extend([
+            PathBuf::from("/opt/homebrew/bin/codex"),
+            PathBuf::from("/usr/local/bin/codex"),
+            PathBuf::from("/home/linuxbrew/.linuxbrew/bin/codex"),
+        ]);
+    }
+
+    for variable in ["NPM_CONFIG_PREFIX", "PNPM_HOME", "BUN_INSTALL"] {
+        let Some(root) = std::env::var_os(variable).map(PathBuf::from) else {
+            continue;
+        };
+        #[cfg(windows)]
+        candidates.extend(command_candidates(&root, "codex"));
+        #[cfg(not(windows))]
+        {
+            candidates.push(root.join("codex"));
+            candidates.push(root.join("bin").join("codex"));
+        }
+    }
+
+    select_codex_candidate(candidates, |candidate| {
+        candidate.is_file()
+            && run_client_command_output(candidate, &["--version".into()])
+                .is_ok_and(|output| output.status.success())
+    })
+}
+
+fn select_codex_candidate(
+    candidates: impl IntoIterator<Item = PathBuf>,
+    is_usable: impl Fn(&Path) -> bool,
+) -> Option<PathBuf> {
+    candidates
+        .into_iter()
+        .find(|candidate| is_usable(candidate))
+}
+
+#[cfg(windows)]
+fn windows_codex_local_app_data_candidates(local_app_data: &Path) -> Vec<PathBuf> {
+    let mut candidates = vec![local_app_data
+        .join("Programs")
+        .join("OpenAI")
+        .join("Codex")
+        .join("bin")
+        .join("codex.exe")];
+    candidates.extend(command_candidates(&local_app_data.join("pnpm"), "codex"));
+    let winget_links = local_app_data
+        .join("Microsoft")
+        .join("WinGet")
+        .join("Links");
+    candidates.extend(command_candidates(&winget_links, "codex"));
+    candidates.extend(find_target_suffixed_codex_commands(&winget_links));
+    candidates
+}
+
+#[cfg(windows)]
+fn command_candidates(directory: &Path, command_name: &str) -> Vec<PathBuf> {
+    ["cmd", "bat", "exe"]
+        .into_iter()
+        .map(|extension| directory.join(format!("{command_name}.{extension}")))
+        .collect()
+}
+
+#[cfg(windows)]
+fn find_target_suffixed_codex_commands(directory: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return Vec::new();
+    };
+    let mut candidates: Vec<PathBuf> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            let Some(file_name) = path.file_name().and_then(OsStr::to_str) else {
+                return false;
+            };
+            let normalized = file_name.to_ascii_lowercase();
+            normalized.starts_with("codex-")
+                && (normalized.ends_with(".exe")
+                    || normalized.ends_with(".cmd")
+                    || normalized.ends_with(".bat"))
+                && path.is_file()
+        })
+        .collect();
+    candidates.sort();
+    candidates
 }
 
 fn is_managed_config_client(client: SupportedMcpClient) -> bool {
@@ -2450,6 +2579,41 @@ mod tests {
             Some(SupportedMcpClient::Cursor)
         ));
         assert!(SupportedMcpClient::parse("unknown").is_none());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn codex_candidates_cover_supported_windows_install_methods() {
+        let local_app_data = Path::new(r"C:\Users\fixture\AppData\Local");
+        let candidates = windows_codex_local_app_data_candidates(local_app_data);
+
+        assert!(candidates.contains(
+            &local_app_data
+                .join("Programs")
+                .join("OpenAI")
+                .join("Codex")
+                .join("bin")
+                .join("codex.exe")
+        ));
+        assert!(candidates.contains(&local_app_data.join("pnpm").join("codex.cmd")));
+        assert!(candidates.contains(
+            &local_app_data
+                .join("Microsoft")
+                .join("WinGet")
+                .join("Links")
+                .join("codex.exe")
+        ));
+    }
+
+    #[test]
+    fn codex_candidate_selection_skips_a_broken_install() {
+        let broken = PathBuf::from("broken-codex");
+        let working = PathBuf::from("working-codex");
+
+        assert_eq!(
+            select_codex_candidate([broken, working.clone()], |candidate| candidate == working),
+            Some(working)
+        );
     }
 
     #[test]

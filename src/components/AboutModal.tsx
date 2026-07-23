@@ -67,6 +67,7 @@ export function AboutModal({
   });
   const [resetScope, setResetScope] = useState<ResetScope | null>(null);
   const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -106,6 +107,7 @@ export function AboutModal({
 
   const runReset = async () => {
     if (!resetScope) return;
+    setResetError(null);
     setResetting(true);
     try {
       await tauri.resetAppData(resetScope);
@@ -122,10 +124,12 @@ export function AboutModal({
       toast({
         kind: "error",
         title: "リセットに失敗しました",
-        description: String(e),
+        description: "実行中のターミナルやエディターを閉じて、もう一度お試しください。",
       });
+      setResetError(
+        `実行中のターミナルやエディターを閉じて、もう一度お試しください。\n\n詳細: ${String(e)}`,
+      );
       setResetting(false);
-      setResetScope(null);
     }
   };
 
@@ -204,20 +208,34 @@ export function AboutModal({
             <div className="mt-2.5 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setResetScope("runtime")}
-                disabled={resetting}
+                onClick={() => {
+                  setResetError(null);
+                  setResetScope("runtime");
+                }}
+                disabled={resetting || v.xriftLoading}
                 className="flex items-center justify-center gap-1.5 rounded-md border border-rose-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
-                title="Node.js / @xrift/cli / ログイン状態を削除（プロジェクトは残る）"
+                title={
+                  v.xriftLoading
+                    ? "@xrift/cli の確認が終わるまでお待ちください"
+                    : "Node.js / @xrift/cli / ログイン状態を削除（プロジェクトは残る）"
+                }
               >
                 <RefreshCw size={11} strokeWidth={2.25} />
                 ランタイムのみ
               </button>
               <button
                 type="button"
-                onClick={() => setResetScope("all")}
-                disabled={resetting}
+                onClick={() => {
+                  setResetError(null);
+                  setResetScope("all");
+                }}
+                disabled={resetting || v.xriftLoading}
                 className="flex items-center justify-center gap-1.5 rounded-md bg-rose-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
-                title="プロジェクトを含めてすべて削除"
+                title={
+                  v.xriftLoading
+                    ? "@xrift/cli の確認が終わるまでお待ちください"
+                    : "プロジェクトを含めてすべて削除"
+                }
               >
                 <Trash2 size={11} strokeWidth={2.25} />
                 完全リセット
@@ -260,9 +278,14 @@ export function AboutModal({
       busy={resetting}
       title={resetScope ? RESET_META[resetScope].title : ""}
       description={resetScope ? RESET_META[resetScope].description : undefined}
+      error={resetError}
       confirmLabel={resetScope ? RESET_META[resetScope].confirm : "OK"}
       onConfirm={runReset}
-      onClose={() => !resetting && setResetScope(null)}
+      onClose={() => {
+        if (resetting) return;
+        setResetError(null);
+        setResetScope(null);
+      }}
     />
     </>
   );
