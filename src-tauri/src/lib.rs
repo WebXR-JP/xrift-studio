@@ -9,6 +9,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_opener::OpenerExt;
 
 mod external_store;
 pub mod mcp;
@@ -2220,6 +2221,86 @@ fn canonical_project_root(project_path: &str) -> Result<PathBuf, String> {
         .map_err(|e| format!("project root cannot be resolved: {}", e))
 }
 
+fn resolve_visual_asset_explorer_target(
+    project_path: &str,
+    source_relative_path: Option<&str>,
+) -> Result<(PathBuf, bool), String> {
+    let project_root = canonical_project_root(project_path)?;
+    if !project_root.join(VISUAL_PROJECT_MANIFEST).is_file() {
+        return Err("visual project manifest is missing".to_string());
+    }
+
+    if let Some(relative_path) = source_relative_path {
+        let relative = validate_visual_document_path(relative_path)?;
+        let is_asset_source = relative.components().next().is_some_and(|component| {
+            matches!(
+                component,
+                Component::Normal(root)
+                    if root.to_string_lossy().eq_ignore_ascii_case("assets")
+                        || root.to_string_lossy().eq_ignore_ascii_case("prefabs")
+            )
+        });
+        if !is_asset_source {
+            return Err("visual Asset source is outside the managed Asset folders".to_string());
+        }
+        ensure_no_symlink_ancestors(&project_root, &relative)?;
+        let target = project_root.join(relative);
+        let metadata = std::fs::symlink_metadata(&target)
+            .map_err(|_| "visual Asset source file is missing".to_string())?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err("visual Asset source is not a regular file".to_string());
+        }
+        let target = target
+            .canonicalize()
+            .map_err(|e| format!("visual Asset source cannot be resolved: {}", e))?;
+        if !target.starts_with(&project_root) {
+            return Err("visual Asset source escapes the project root".to_string());
+        }
+        return Ok((target, true));
+    }
+
+    let relative = PathBuf::from("assets");
+    ensure_no_symlink_ancestors(&project_root, &relative)?;
+    let target = project_root.join(relative);
+    match std::fs::symlink_metadata(&target) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+            return Err("visual Assets location is not a regular directory".to_string())
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            std::fs::create_dir(&target)
+                .map_err(|e| format!("visual Assets location cannot be created: {}", e))?;
+        }
+        Err(error) => return Err(error.to_string()),
+    }
+    let target = target
+        .canonicalize()
+        .map_err(|e| format!("visual Assets location cannot be resolved: {}", e))?;
+    if !target.starts_with(&project_root) {
+        return Err("visual Assets location escapes the project root".to_string());
+    }
+    Ok((target, false))
+}
+
+#[tauri::command]
+fn open_visual_asset_location(
+    app: AppHandle,
+    project_path: String,
+    source_relative_path: Option<String>,
+) -> Result<(), String> {
+    let (target, reveal_source) =
+        resolve_visual_asset_explorer_target(&project_path, source_relative_path.as_deref())?;
+    if reveal_source {
+        app.opener()
+            .reveal_item_in_dir(&target)
+            .map_err(|e| format!("visual Asset source cannot be shown: {}", e))
+    } else {
+        app.opener()
+            .open_path(target.to_string_lossy().into_owned(), None::<&str>)
+            .map_err(|e| format!("visual Assets location cannot be opened: {}", e))
+    }
+}
+
 fn validate_relative_path(rel: &str, allow_empty: bool) -> Result<PathBuf, String> {
     let normalized = rel.trim().replace('\\', "/");
     if normalized.is_empty() {
@@ -3890,6 +3971,7 @@ pub fn run() {
             clear_compiler_upload_attempt,
             persist_compiler_publication_metadata,
             commit_visual_asset_import,
+            open_visual_asset_location,
             external_store::list_external_store_assets,
             external_store::get_external_store_asset_options,
             external_store::install_external_store_asset,
@@ -3923,6 +4005,57 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn visual_asset_explorer_targets_stay_inside_the_project() {
+        let fixture_root = std::env::temp_dir().join(format!(
+            "xrift-studio-asset-explorer-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock must be after epoch")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&fixture_root).expect("fixture root must be created");
+        std::fs::write(fixture_root.join(VISUAL_PROJECT_MANIFEST), "{}")
+            .expect("visual project marker must be written");
+
+        let (assets_root, reveal_source) =
+            resolve_visual_asset_explorer_target(&fixture_root.to_string_lossy(), None)
+                .expect("Assets root must resolve");
+        assert_eq!(
+            assets_root,
+            fixture_root
+                .join("assets")
+                .canonicalize()
+                .expect("Assets root must be canonical")
+        );
+        assert!(!reveal_source);
+
+        let source_relative = "assets/imported/models/fixture/model.glb";
+        let source = fixture_root.join(source_relative);
+        std::fs::create_dir_all(source.parent().expect("source must have a parent"))
+            .expect("source parent must be created");
+        std::fs::write(&source, b"glTF").expect("source must be written");
+        let (resolved_source, reveal_source) = resolve_visual_asset_explorer_target(
+            &fixture_root.to_string_lossy(),
+            Some(source_relative),
+        )
+        .expect("project Asset source must resolve");
+        assert_eq!(
+            resolved_source,
+            source.canonicalize().expect("source must be canonical")
+        );
+        assert!(reveal_source);
+
+        let rejected = resolve_visual_asset_explorer_target(
+            &fixture_root.to_string_lossy(),
+            Some("scenes/scene.json"),
+        )
+        .expect_err("non-Asset project documents must be rejected");
+        assert!(rejected.contains("outside the managed Asset folders"));
+
+        std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
+    }
 
     #[test]
     fn derives_the_bundled_npm_entrypoint_for_this_platform() {

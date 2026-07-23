@@ -340,6 +340,14 @@ export const tauri = {
       transactionId,
       writes,
     }),
+  openVisualAssetLocation: (
+    projectPath: string,
+    sourceRelativePath?: string,
+  ) =>
+    invoke<void>("open_visual_asset_location", {
+      projectPath,
+      sourceRelativePath: sourceRelativePath ?? null,
+    }),
   listExternalStoreAssets: (providerId: string) =>
     invoke<ExternalStoreAsset[]>("list_external_store_assets", { providerId }),
   getExternalStoreAssetOptions: (providerId: string, externalId: string) =>

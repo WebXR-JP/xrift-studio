@@ -4860,6 +4860,31 @@ export function VisualEditorPrototype({
             onOpenInteractivity={(assetId) =>
               executeCommand("asset.edit-interactivity", { assetId })
             }
+            onOpenAssetLocation={async (sourceRelativePath) => {
+              if (!projectPath) {
+                setNotice(
+                  "プロジェクトを保存してからAssetsをエクスプローラーで開いてください",
+                );
+                return;
+              }
+              try {
+                await tauri.openVisualAssetLocation(
+                  projectPath,
+                  sourceRelativePath,
+                );
+                setNotice(
+                  sourceRelativePath
+                    ? "アセットの保存場所をエクスプローラーで表示しました"
+                    : "Assetsフォルダーをエクスプローラーで開きました",
+                );
+              } catch {
+                setNotice(
+                  sourceRelativePath
+                    ? "アセットの保存場所をエクスプローラーで表示できませんでした。ソースファイルを確認してください"
+                    : "Assetsフォルダーをエクスプローラーで開けませんでした。プロジェクトの保存場所を確認してください",
+                );
+              }
+            }}
             externalOperationLockReason={
               assetImportPanelAvailability.disabledReason
             }

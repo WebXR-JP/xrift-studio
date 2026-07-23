@@ -1198,6 +1198,7 @@ export function AssetsPanel({
   onPlaceSceneAsset,
   onOpenExternalStore,
   onOpenInteractivity,
+  onOpenAssetLocation,
   externalOperationLockReason = null,
 }: {
   assets: AssetManifest;
@@ -1239,6 +1240,7 @@ export function AssetsPanel({
   onPlaceSceneAsset: (assetId: string) => void;
   onOpenExternalStore: () => void;
   onOpenInteractivity: (assetId: string) => void;
+  onOpenAssetLocation: (sourceRelativePath?: string) => void | Promise<void>;
   /**
    * Reason supplied by an Asset operation owned outside this panel, such as
    * Model reimport. Selection/navigation stay available while mutations and
@@ -1461,8 +1463,8 @@ export function AssetsPanel({
       panelRef.current?.getBoundingClientRect() ??
       event.currentTarget.getBoundingClientRect();
     setContextMenu({
-      x: Math.min(event.clientX - bounds.left, Math.max(8, bounds.width - 190)),
-      y: Math.min(event.clientY - bounds.top, Math.max(8, bounds.height - 160)),
+      x: Math.min(event.clientX - bounds.left, Math.max(8, bounds.width - 232)),
+      y: Math.min(event.clientY - bounds.top, Math.max(8, bounds.height - 260)),
       ...target,
       creationFolderId: resolveAssetCreationFolderId(
         assets,
@@ -1475,7 +1477,7 @@ export function AssetsPanel({
   const openCreationMenu = () => {
     const bounds = panelRef.current?.getBoundingClientRect();
     setContextMenu({
-      x: Math.max(8, (bounds?.width ?? 240) - 200),
+      x: Math.max(8, (bounds?.width ?? 240) - 232),
       y: 42,
       creationFolderId: resolveAssetCreationFolderId(assets, activeFolderId, {}),
     });
@@ -1832,7 +1834,30 @@ export function AssetsPanel({
       />
 
       {contextMenu ? (
-        <div className="absolute z-30 w-48 rounded-md border border-slate-300 bg-white p-1 shadow-xl" style={{ left: contextMenu.x, top: contextMenu.y }} role="menu" onPointerDown={(event) => event.stopPropagation()}>
+        <div className="absolute z-30 max-h-[calc(100%-1rem)] w-56 overflow-y-auto rounded-md border border-slate-300 bg-white p-1 shadow-xl" style={{ left: contextMenu.x, top: contextMenu.y }} role="menu" onPointerDown={(event) => event.stopPropagation()}>
+          <ContextMenuItem
+            icon="folder"
+            label={
+              contextMenu.assetId &&
+              assets.assets[contextMenu.assetId]?.source.kind === "project"
+                ? "エクスプローラーで表示"
+                : "Assetsをエクスプローラーで開く"
+            }
+            command="OpenAssetLocation"
+            disabled={!projectPath}
+            disabledReason="プロジェクトを保存してからエクスプローラーで開いてください"
+            onClick={() => {
+              const asset = contextMenu.assetId
+                ? assets.assets[contextMenu.assetId]
+                : undefined;
+              const sourceRelativePath =
+                asset?.source.kind === "project"
+                  ? asset.source.relativePath
+                  : undefined;
+              setContextMenu(null);
+              void onOpenAssetLocation(sourceRelativePath);
+            }}
+          />
           {contextMenu.assetId &&
           isScenePlaceableAsset(assets.assets[contextMenu.assetId]) ? (
             <ContextMenuItem

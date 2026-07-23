@@ -44,7 +44,7 @@ F-06 アイテム検査
 | MI-25 | authoring操作を一件確定する、Undo / Redoする、またはCtrl/Cmd+Sで即時保存を要求する | 確定したrevisionを短い待機時間後に自動保存し、headerを「自動保存待ち」「自動保存中」「自動保存済み」「自動保存エラー」で更新する。連続変更は最新revisionへまとめ、保存処理は必ず直列化する。Ctrl/Cmd+Sは主導線ではなく待機中の保存を即時flushする。 | commit markerと全hash一致後だけ対象revisionを保存済みにする。保存中の追加編集は次の自動保存へ引き継ぎ、古い保存完了で新しいrevisionを保存済みにしない。失敗時はlast committed setを維持し、編集を止めず同じheaderから再試行できる。戻る操作は最新revisionの保存完了を待ち、失敗時はEditorに留まる。 |
 | MI-26 | Play、generated preview、compile または check を実行する | Editor direct Play、generated staging preview、check/build を別 label にし、input fingerprint、target、stale、progress を示す。diagnostic は provenance から元 Entity / Asset / field へ link する。 | fresh hash の結果だけ成功にする。Stop / cancel は process と resource を cleanup して Edit へ戻る。公式に未記載の CLI / hosted / XFT preview を存在するように表示しない。 |
 | MI-27 | Upload modal を開き、review から remote result まで進める | review、auth-check、saving、compiling、required thumbnail copy / SHA-256 verify、checking、uploading、processing、succeeded、failed を一つの modal 内で段階表示し、title、description、thumbnail、diagnostic、progress、cancel / retry を現在 state に合わせる。 | `public/thumbnail.png` のcopyまたはSHA一致確認に失敗した場合はremote uploadを開始しない。検証成功後は「公開用ステージングへコピー済み」を残す。閉じると Edit に戻り、結果 ID は保持する。remote commit 後を取消済みと断定しない。成功時は正式 result の ID / version / hash、正式に返る時だけ URL を示す。test / 通常検証では実 upload をしない。 |
-| MI-28 | Asset folder または Asset の context menu を開く | folder では作成 / import / 新規 folder、Asset では rename / duplicate / delete / references / reimport / thumbnail regeneration を kind と state に応じて表示する。shortcut と icon は Registry と一致させる。 | 一つの操作選択または Escape / 外側 click で閉じる。実行不可項目は理由を tooltip で示し、menu を開いただけでは document や selection を変えない。 |
+| MI-28 | Asset folder または Asset の context menu を開く | folder では作成 / import / 新規 folder / Assets をエクスプローラーで開く、Asset では rename / duplicate / delete / references / reimport / thumbnail regeneration / source をエクスプローラーで表示を kind と state に応じて表示する。project source を持たない document / builtin Asset と論理 folder は物理 Assets root を開く。shortcut と icon は Registry と一致させる。 | 一つの操作選択または Escape / 外側 click で閉じる。実行不可項目は理由を tooltip で示し、menu を開いただけでは document や selection を変えない。Explorer 起動失敗では Editor と selection を維持して Assets status に確認先を示す。 |
 | MI-29 | panel splitter を動かす、panel header を dock zone へ drag する、または layout を reset する | drag 中は resize cursor、minimum size、dock preview、最終 order を表示する。Scene / Asset data と authoring history は変更しない。 | drop で normalized size / zone / order を Editor Preferences に保存する。Escape / 領域外 drop は開始前 layout、reset は既定 layout へ戻る。保存失敗時も session layout を保ち、再試行を示す。 |
 | MI-30 | Edit 中に Hierarchy の Entity subtree を別 Entity または Scene Root へ drag する | 行の上端は「前へ」、中央は「子へ」、下端は「後へ」として挿入線または親候補の面を表示する。Root 領域はScene Root末尾への移動を示す。自分自身、子孫、実際に順序が変わらない位置はエラー色の境界と理由で実行不可を示す。 | 有効な drop は Entity ID と subtree を維持したHierarchy Move Command一件として確定し、同じ親内の順序変更と親子化のどちらでも選択を維持する。Escape、領域外 drop、実行不可 target、Play 中は SceneDocument と history を変更しない。Undo / Redo は親子 link と兄弟順を復元する。 |
 | MI-31 | Assets の XRift Prefabs から built-in recipe を Scene View へ drag する、または「配置」を実行する | Spawn Point、Mirror、Portalなどを通常のproject Assetと分けた保護付きcatalogとして表示し、project kindで利用可能項目を絞る。Scene Viewはrecipe名と配置位置を表示する。 | drop後は通常のEntityを一件作り選択する。Entity Transform、recipe identity、Component削除は保護し、URLや公開先IDなどrecipeが明示した設定fieldだけInspectorで編集できる。通常Assetのrename / delete / folder move対象にはしない。Entity自体のDeleteとUndo / Redoは利用できる。必須field未設定時はcompileをblockし、そのfieldを同じInspectorで修正できる。 |
@@ -697,6 +697,34 @@ F-06 アイテム検査
 
 - Material編集後は同じAsset Inspector、Animationからgraphを開いた後は同じInteractivity Assetへ戻れる。Scene selectionは維持し、Asset tabを閉じると元のEntity Inspectorへ戻る。
 - Material / graph変更の取消は通常のUndoを使い、MCP変更も同じhistoryとAutosaveから復元する。
+
+## F-25 AssetsとOSファイルエクスプローラーの状態設計
+
+参照: MI-11, MI-20, MI-28
+
+### 操作前
+
+- Assetsの空白、論理folder、Assetの右クリックmenuから、物理Assets rootまたはproject sourceの保存場所をエクスプローラーで確認できる。未保存projectでは操作を無効にし、先に保存する理由をtooltipで示す。
+- 外部ファイルはエクスプローラーからAssets panelへdropでき、対応形式と処理結果は通常のImport入口と同じImport Queueで扱う。
+
+### 操作中
+
+- project sourceを持つAssetは検証済みのproject-relative fileをエクスプローラーで選択表示する。document / builtin Assetと論理folderは実ファイルがないため、project管理下の物理`assets` folderを開く。
+- Explorer操作はSceneDocument、AssetManifest、selection、historyを変更しない。file dropだけがMI-20のvalidate、copy、derive、commitへ進み、drop overlayで受付状態を示す。
+
+### 成功時
+
+- Explorerを開いた後も同じEditor、Asset selection、Inspector contextを維持し、Assets statusに開いた対象を示す。
+- drop import完了時は新Assetを選択し、「アセットを表示」とImport Activityから同じ結果へ戻れる。
+
+### 失敗時
+
+- source欠落、管理外path、Explorer起動失敗ではEditorを閉じず、Asset sourceまたはproject保存場所を確認する案内をAssets statusに示す。
+- unsupported file、decode、copy、commit失敗では既存のSceneDocumentとAssetManifestを変更せず、Import Activityから原因と再試行先を確認できる。
+
+### 戻り先
+
+- Explorerを閉じる、dropを領域外で終える、Escapeでmenuを閉じる場合はいずれも、操作前のEditorと両selectionへ戻る。
 
 ## 実装制約
 
