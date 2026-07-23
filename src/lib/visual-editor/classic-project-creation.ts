@@ -4,6 +4,7 @@ import { commitAssetImportPlansToDisk } from "./asset-import-persistence";
 import {
   applyClassicProjectVisualImportEnhancements,
   augmentClassicProjectVisualImportPlan,
+  loadClassicProjectVisualImportSource,
   loadClassicProjectVisualImportSourceFromRepository,
   prepareClassicProjectVisualAssetImports,
 } from "./classic-project-import";
@@ -18,7 +19,17 @@ import {
 import type { PrototypeVisualProject } from "./prototype-project";
 import { createStarterVisualProject } from "./starter-templates";
 
-export type ClassicRepositoryProjectCreationResult = {
+export type ClassicProjectCreationSource =
+  | {
+      kind: "directory";
+      projectPath: string;
+    }
+  | {
+      kind: "repository";
+      repositoryUrl: string;
+    };
+
+export type ClassicProjectCreationResult = {
   project: Project;
   bundle: PrototypeVisualProject;
   importedEntityCount: number;
@@ -28,21 +39,27 @@ export type ClassicRepositoryProjectCreationResult = {
 };
 
 /**
- * Converts a validated XRift Classic repository into a new Visual project.
+ * Converts a validated XRift Classic folder or repository into a new Visual project.
  * Imported code is statically analyzed and is never installed or executed.
  * If any durable step fails, the newly-created project is removed so the
  * library cannot expose a partially imported project.
  */
-export async function createVisualProjectFromClassicRepository(input: {
+export async function createVisualProjectFromClassicSource(input: {
   projectsRoot: string;
   directoryName: string;
   projectKind: ProjectKind;
-  repositoryUrl: string;
-}): Promise<ClassicRepositoryProjectCreationResult> {
-  const source = await loadClassicProjectVisualImportSourceFromRepository(
-    input.repositoryUrl,
-    input.projectKind,
-  );
+  source: ClassicProjectCreationSource;
+}): Promise<ClassicProjectCreationResult> {
+  const source =
+    input.source.kind === "repository"
+      ? await loadClassicProjectVisualImportSourceFromRepository(
+          input.source.repositoryUrl,
+          input.projectKind,
+        )
+      : await loadClassicProjectVisualImportSource(
+          input.source.projectPath,
+          input.projectKind,
+        );
   const componentPlan = augmentClassicProjectVisualImportPlan(
     analyzeComponentProject({
       entryFile: source.entryFile,
@@ -162,4 +179,21 @@ export async function createVisualProjectFromClassicRepository(input: {
     }
     throw error;
   }
+}
+
+export async function createVisualProjectFromClassicRepository(input: {
+  projectsRoot: string;
+  directoryName: string;
+  projectKind: ProjectKind;
+  repositoryUrl: string;
+}): Promise<ClassicProjectCreationResult> {
+  return createVisualProjectFromClassicSource({
+    projectsRoot: input.projectsRoot,
+    directoryName: input.directoryName,
+    projectKind: input.projectKind,
+    source: {
+      kind: "repository",
+      repositoryUrl: input.repositoryUrl,
+    },
+  });
 }

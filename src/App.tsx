@@ -53,7 +53,7 @@ import {
   exportVisualProjectToClassic,
   estimateWorldVram,
   inspectClassicExportTarget,
-  createVisualProjectFromClassicRepository,
+  createVisualProjectFromClassicSource,
   createStarterVisualProject,
   createPreparedStarterVisualProjectOnDisk,
   createVisualProjectOnDisk,
@@ -71,6 +71,7 @@ import {
   type StarterVisualProjectPlan,
   type VisualPublicationRecord,
   type VisualStarterTemplateId,
+  type ClassicProjectCreationSource,
 } from "./lib/visual-editor";
 
 const VisualEditorPrototype = lazy(() =>
@@ -527,20 +528,20 @@ function App() {
     });
   };
 
-  const handleImportClassicRepository = (
+  const handleImportClassicProject = (
     kind: ProjectKind,
     name: string,
-    repositoryUrl: string,
+    source: ClassicProjectCreationSource,
   ) => {
     setVisualCompilationFresh(false);
     setVisualThumbnailReadiness(null);
     void wrap(async () => {
       try {
-        const imported = await createVisualProjectFromClassicRepository({
+        const imported = await createVisualProjectFromClassicSource({
           projectsRoot,
           directoryName: name,
           projectKind: kind,
-          repositoryUrl,
+          source,
         });
         setShowNewDialog(false);
         setVisualSession({
@@ -572,10 +573,27 @@ function App() {
           description:
             error instanceof Error
               ? error.message
-              : "Repository URLとプロジェクト種別を確認して、もう一度お試しください。",
+              : "Classicプロジェクトとプロジェクト種別を確認して、もう一度お試しください。",
         });
       }
     });
+  };
+
+  const handleSelectClassicProjectDirectory = async (
+    kind: ProjectKind,
+  ): Promise<string | null> => {
+    if (!tauri.isAvailable()) {
+      throw new Error(
+        "Classicプロジェクトのフォルダー選択はデスクトップ版で利用できます。",
+      );
+    }
+    const selected = await tauri.selectDirectory(
+      `XRift Classic ${kind === "world" ? "World" : "Item"}プロジェクトを選択`,
+    );
+    const projectPath = Array.isArray(selected) ? selected[0] : selected;
+    return typeof projectPath === "string" && projectPath.trim()
+      ? projectPath
+      : null;
   };
 
   const handleOpenProject = (project: Project) => {
@@ -1101,7 +1119,8 @@ function App() {
         onClose={() => setShowNewDialog(false)}
         onCreate={handleCreate}
         onOpenVisualEditor={handleOpenVisualEditor}
-        onImportClassicRepository={handleImportClassicRepository}
+        onImportClassicProject={handleImportClassicProject}
+        onSelectClassicProjectDirectory={handleSelectClassicProjectDirectory}
       />
       {cliUpdateDialog}
       {appUpdateDialog}

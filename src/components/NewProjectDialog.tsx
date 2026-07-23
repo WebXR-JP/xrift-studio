@@ -5,6 +5,7 @@ import {
   Check,
   CircleDot,
   Code2,
+  FolderOpen,
   Globe2,
   GitBranch,
   LayoutGrid,
@@ -23,6 +24,7 @@ import {
   type VisualStarterTemplateId,
 } from "../lib/visual-editor/starter-templates";
 import { OFFICIAL_XRIFT_WORLD_TEMPLATE_THUMBNAIL } from "../lib/visual-editor/official-world-template-import";
+import type { ClassicProjectCreationSource } from "../lib/visual-editor/classic-project-creation";
 
 type CreationMethod = "classic" | "visual";
 
@@ -36,11 +38,14 @@ type Props = {
     name?: string,
     starterTemplateId?: VisualStarterTemplateId,
   ) => void;
-  onImportClassicRepository: (
+  onImportClassicProject: (
     kind: ProjectKind,
     name: string,
-    repositoryUrl: string,
+    source: ClassicProjectCreationSource,
   ) => void;
+  onSelectClassicProjectDirectory: (
+    kind: ProjectKind,
+  ) => Promise<string | null>;
 };
 
 type CreationChoice = {
@@ -103,6 +108,7 @@ const creationChoices: CreationChoice[] = [
 ];
 
 const CLASSIC_REPOSITORY_STARTER_ID = "classic-repository";
+type ClassicImportMethod = "directory" | "repository";
 type StarterSelectionId =
   | VisualStarterTemplateId
   | typeof CLASSIC_REPOSITORY_STARTER_ID;
@@ -206,7 +212,8 @@ export function NewProjectDialog({
   onClose,
   onCreate,
   onOpenVisualEditor,
-  onImportClassicRepository,
+  onImportClassicProject,
+  onSelectClassicProjectDirectory,
 }: Props) {
   const [choiceId, setChoiceId] = useState<CreationChoice["id"] | null>(null);
   const [name, setName] = useState("");
@@ -215,6 +222,13 @@ export function NewProjectDialog({
       defaultVisualStarterTemplateId("world"),
     );
   const [repositoryUrl, setRepositoryUrl] = useState("");
+  const [classicImportMethod, setClassicImportMethod] =
+    useState<ClassicImportMethod>("directory");
+  const [classicProjectPath, setClassicProjectPath] = useState("");
+  const [classicProjectSelectBusy, setClassicProjectSelectBusy] =
+    useState(false);
+  const [classicProjectSelectError, setClassicProjectSelectError] =
+    useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -222,6 +236,10 @@ export function NewProjectDialog({
     setName("");
     setStarterTemplateId(defaultVisualStarterTemplateId("world"));
     setRepositoryUrl("");
+    setClassicImportMethod("directory");
+    setClassicProjectPath("");
+    setClassicProjectSelectBusy(false);
+    setClassicProjectSelectError(null);
   }, [open]);
 
   const choice = useMemo(
@@ -239,6 +257,11 @@ export function NewProjectDialog({
     choice?.method === "visual" &&
     starterTemplateId === CLASSIC_REPOSITORY_STARTER_ID;
   const repositoryUrlValid = isValidClassicRepositoryUrl(repositoryUrl);
+  const classicSourceValid =
+    classicImportMethod === "directory"
+      ? classicProjectPath.length > 0
+      : repositoryUrlValid;
+  const interactionBusy = busy || classicProjectSelectBusy;
   const starterSelected =
     importingClassic ||
     starterTemplates.some((template) => template.id === starterTemplateId);
@@ -246,12 +269,24 @@ export function NewProjectDialog({
   if (!open) return null;
 
   const createSelectedProject = () => {
-    if (!choice || !valid || busy) return;
+    if (!choice || !valid || interactionBusy) return;
     if (choice.method === "visual") {
       if (!starterSelected) return;
       if (importingClassic) {
-        if (!repositoryUrlValid) return;
-        onImportClassicRepository(choice.kind, name, repositoryUrl.trim());
+        if (!classicSourceValid) return;
+        onImportClassicProject(
+          choice.kind,
+          name,
+          classicImportMethod === "directory"
+            ? {
+                kind: "directory",
+                projectPath: classicProjectPath,
+              }
+            : {
+                kind: "repository",
+                repositoryUrl: repositoryUrl.trim(),
+              },
+        );
         return;
       }
       onOpenVisualEditor(
@@ -264,10 +299,35 @@ export function NewProjectDialog({
     onCreate(choice.kind, name);
   };
 
+  const selectClassicProjectDirectory = async () => {
+    if (
+      !choice ||
+      choice.method !== "visual" ||
+      classicProjectSelectBusy ||
+      busy
+    ) {
+      return;
+    }
+    setClassicProjectSelectBusy(true);
+    setClassicProjectSelectError(null);
+    try {
+      const selected = await onSelectClassicProjectDirectory(choice.kind);
+      if (selected) setClassicProjectPath(selected);
+    } catch (error) {
+      setClassicProjectSelectError(
+        error instanceof Error
+          ? error.message
+          : "Classicプロジェクトのフォルダーを選択できませんでした。",
+      );
+    } finally {
+      setClassicProjectSelectBusy(false);
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 p-4 backdrop-blur-sm animate-fade-in"
-      onClick={() => !busy && onClose()}
+      onClick={() => !interactionBusy && onClose()}
     >
       <div
         className="max-h-[calc(100vh-2rem)] w-full max-w-[980px] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-brand-lg animate-scale-in"
@@ -277,8 +337,8 @@ export function NewProjectDialog({
           <>
             <button
               type="button"
-              onClick={() => !busy && setChoiceId(null)}
-              disabled={busy}
+              onClick={() => !interactionBusy && setChoiceId(null)}
+              disabled={interactionBusy}
               className="mb-4 flex items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-900 disabled:opacity-50"
             >
               <ArrowLeft size={15} strokeWidth={2} />
@@ -333,7 +393,7 @@ export function NewProjectDialog({
                             template.id as VisualStarterTemplateId,
                           )
                         }
-                        disabled={busy}
+                        disabled={interactionBusy}
                         className={`overflow-hidden rounded-xl border text-left transition disabled:opacity-50 ${
                           selected
                             ? "border-brand-500 bg-brand-50/50 ring-2 ring-brand-100"
@@ -388,7 +448,7 @@ export function NewProjectDialog({
                     onClick={() =>
                       setStarterTemplateId(CLASSIC_REPOSITORY_STARTER_ID)
                     }
-                    disabled={busy}
+                    disabled={interactionBusy}
                     className={`overflow-hidden rounded-xl border text-left transition disabled:opacity-50 ${
                       importingClassic
                         ? "border-brand-500 bg-brand-50/50 ring-2 ring-brand-100"
@@ -409,7 +469,7 @@ export function NewProjectDialog({
                             : "border-zinc-200 text-zinc-600"
                         }`}
                       >
-                        <GitBranch size={24} aria-hidden="true" />
+                        <FolderOpen size={24} aria-hidden="true" />
                       </span>
                       {importingClassic && (
                         <span className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm">
@@ -419,13 +479,13 @@ export function NewProjectDialog({
                     </div>
                     <div className="p-3">
                       <div className="text-sm font-semibold text-zinc-900">
-                        XRift Classic URL
+                        XRift Classicからインポート
                       </div>
                       <p className="mt-1 text-xs leading-5 text-zinc-500">
-                        RepositoryのSceneと対応AssetをVisualへ変換します。
+                        プロジェクトまたはRepositoryをVisualへ変換します。
                       </p>
                       <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">
-                        <GitBranch size={12} aria-hidden="true" />
+                        <FolderOpen size={12} aria-hidden="true" />
                         コードは実行せず静的に解析
                       </div>
                     </div>
@@ -433,27 +493,125 @@ export function NewProjectDialog({
                 </div>
                 {importingClassic && (
                   <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50/50 p-4">
-                    <label className="block">
-                      <span className="text-sm font-medium text-zinc-700">
-                        Classic Repository URL
-                      </span>
-                      <input
-                        type="url"
-                        value={repositoryUrl}
-                        onChange={(event) =>
-                          setRepositoryUrl(event.currentTarget.value)
-                        }
-                        disabled={busy}
-                        placeholder="https://github.com/owner/repository.git"
-                        className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200 disabled:opacity-50"
-                      />
-                    </label>
-                    <p className="mt-2 text-xs leading-5 text-zinc-500">
-                      HTTPSまたはgit SSH URLに対応します。package.json、xrift.json、同種のentryを検査し、対応できない動的処理は変換しません。
+                    <div
+                      className="grid grid-cols-2 gap-1 rounded-lg bg-zinc-100 p-1"
+                      role="tablist"
+                      aria-label="Classicプロジェクトの読み込み元"
+                    >
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={classicImportMethod === "directory"}
+                        onClick={() => {
+                          setClassicImportMethod("directory");
+                          setClassicProjectSelectError(null);
+                        }}
+                        disabled={interactionBusy}
+                        className={`flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition disabled:opacity-50 ${
+                          classicImportMethod === "directory"
+                            ? "bg-white text-brand-700 shadow-sm"
+                            : "text-zinc-600 hover:text-zinc-900"
+                        }`}
+                      >
+                        <FolderOpen size={15} aria-hidden="true" />
+                        プロジェクトフォルダー
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={classicImportMethod === "repository"}
+                        onClick={() => {
+                          setClassicImportMethod("repository");
+                          setClassicProjectSelectError(null);
+                        }}
+                        disabled={interactionBusy}
+                        className={`flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition disabled:opacity-50 ${
+                          classicImportMethod === "repository"
+                            ? "bg-white text-brand-700 shadow-sm"
+                            : "text-zinc-600 hover:text-zinc-900"
+                        }`}
+                      >
+                        <GitBranch size={15} aria-hidden="true" />
+                        Repository URL
+                      </button>
+                    </div>
+
+                    {classicImportMethod === "directory" ? (
+                      <div className="mt-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-medium text-zinc-700">
+                              Classicプロジェクト
+                            </div>
+                            <p className="mt-1 text-xs text-zinc-500">
+                              package.json、xrift.json、srcがあるフォルダーを選択します。
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void selectClassicProjectDirectory()}
+                            disabled={interactionBusy}
+                            className="shrink-0 rounded-lg border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 hover:border-brand-300 hover:bg-white disabled:opacity-50"
+                          >
+                            {classicProjectSelectBusy
+                              ? "選択中…"
+                              : classicProjectPath
+                                ? "選び直す"
+                                : "フォルダーを選ぶ"}
+                          </button>
+                        </div>
+                        <div
+                          className={`mt-3 rounded-lg border px-3 py-2.5 text-xs ${
+                            classicProjectPath
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                              : "border-zinc-200 bg-white text-zinc-500"
+                          }`}
+                        >
+                          {classicProjectPath ? (
+                            <>
+                              <div className="font-semibold">選択済み</div>
+                              <div className="mt-1 break-all font-mono">
+                                {classicProjectPath}
+                              </div>
+                            </>
+                          ) : (
+                            "まだプロジェクトフォルダーが選択されていません。"
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-4">
+                        <label className="block">
+                          <span className="text-sm font-medium text-zinc-700">
+                            Classic Repository URL
+                          </span>
+                          <input
+                            type="url"
+                            value={repositoryUrl}
+                            onChange={(event) =>
+                              setRepositoryUrl(event.currentTarget.value)
+                            }
+                            disabled={interactionBusy}
+                            placeholder="https://github.com/owner/repository.git"
+                            className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200 disabled:opacity-50"
+                          />
+                        </label>
+                        <p className="mt-2 text-xs leading-5 text-zinc-500">
+                          HTTPSまたはgit SSH URLに対応します。
+                        </p>
+                        {repositoryUrl.length > 0 && !repositoryUrlValid && (
+                          <p className="mt-2 text-sm text-amber-700">
+                            HTTPSまたはgit SSH形式のRepository URLを入力してください。
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    <p className="mt-3 text-xs leading-5 text-zinc-500">
+                      同種のentryを検査し、対応できない動的処理は変換しません。
                     </p>
-                    {repositoryUrl.length > 0 && !repositoryUrlValid && (
-                      <p className="mt-2 text-sm text-amber-700">
-                        HTTPSまたはgit SSH形式のRepository URLを入力してください。
+                    {classicProjectSelectError && (
+                      <p className="mt-2 text-sm text-rose-700">
+                        {classicProjectSelectError}
                       </p>
                     )}
                   </div>
@@ -468,6 +626,7 @@ export function NewProjectDialog({
                 type="text"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
+                disabled={interactionBusy}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") createSelectedProject();
                 }}
@@ -485,7 +644,7 @@ export function NewProjectDialog({
               <button
                 type="button"
                 onClick={onClose}
-                disabled={busy}
+                disabled={interactionBusy}
                 className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
               >
                 キャンセル
@@ -495,10 +654,10 @@ export function NewProjectDialog({
                 onClick={createSelectedProject}
                 disabled={
                   !valid ||
-                  busy ||
+                  interactionBusy ||
                   (choice.method === "visual" &&
                     (!starterSelected ||
-                      (importingClassic && !repositoryUrlValid)))
+                      (importingClassic && !classicSourceValid)))
                 }
                 className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-500 disabled:opacity-50"
               >
@@ -534,7 +693,7 @@ export function NewProjectDialog({
                         );
                       }
                     }}
-                    disabled={busy}
+                    disabled={interactionBusy}
                     className="group rounded-xl border border-zinc-200 bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-brand-300 hover:bg-brand-50/40 hover:shadow-sm disabled:opacity-50"
                   >
                     <div className="flex items-center justify-between gap-3">
@@ -565,7 +724,7 @@ export function NewProjectDialog({
               <button
                 type="button"
                 onClick={onClose}
-                disabled={busy}
+                disabled={interactionBusy}
                 className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
               >
                 キャンセル
