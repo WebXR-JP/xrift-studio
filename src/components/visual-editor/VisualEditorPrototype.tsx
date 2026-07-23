@@ -100,6 +100,7 @@ import {
   type ColliderPatch,
   type RigidBodyPatch,
   type ComponentCodeImportPlan,
+  type ClassicProjectVisualImportPreview,
   type ClassicProjectVisualImportSource,
   type AnimationPatch,
   type AudioSourcePatch,
@@ -2066,6 +2067,7 @@ export function VisualEditorPrototype({
     async (
       plan: ComponentCodeImportPlan,
       classicSource: ClassicProjectVisualImportSource | null,
+      enterPlayAfterImport = false,
     ): Promise<boolean> => {
       if (editorMode !== "edit" || importBusy) {
         setNotice(
@@ -2083,6 +2085,7 @@ export function VisualEditorPrototype({
           ReturnType<typeof prepareClassicProjectVisualAssetImports>
         >["plans"];
         let assetWarningCount = 0;
+        let unavailableAssetCount = 0;
         if (classicSource && plan.assetDependencies.length > 0) {
           if (!projectPath) {
             setNotice(
@@ -2095,16 +2098,10 @@ export function VisualEditorPrototype({
             componentPlan: plan,
             existingManifest: bundle.assets,
           });
-          const blocking = prepared.diagnostics.find(
-            (diagnostic) => diagnostic.severity === "blocking",
-          );
-          if (blocking) {
-            setNotice(blocking.message);
-            return false;
-          }
           preparedAssets = prepared.manifest;
           assetIdBySourcePath = prepared.assetIdBySourcePath;
           assetPlans = prepared.plans;
+          unavailableAssetCount = prepared.unavailableSourcePaths.length;
           assetWarningCount = prepared.diagnostics.filter(
             (diagnostic) => diagnostic.severity === "warning",
           ).length;
@@ -2136,19 +2133,21 @@ export function VisualEditorPrototype({
           classicSource && assetPlans.length > 0 && projectPath
             ? await commitAssetImportPlansToDisk(
                 projectPath,
-                bundle.assets,
+                result.assets,
                 assetPlans,
               )
             : result.assets;
         const selectedEntityId = result.entityIds[result.entityIds.length - 1];
+        const nextBundle = touchProject({
+          ...bundle,
+          scene: result.scene,
+          assets: committedAssets,
+        });
+        bundleRef.current = nextBundle;
         setHistory((current) =>
           commitEditorHistory(current, {
             ...current.present,
-            bundle: touchProject({
-              ...current.present.bundle,
-              scene: result.scene,
-              assets: committedAssets,
-            }),
+            bundle: nextBundle,
             sceneSelection: { kind: "entity", id: selectedEntityId },
             assetSelection: null,
           }),
@@ -2158,11 +2157,21 @@ export function VisualEditorPrototype({
           ...plan.diagnostics,
           ...result.diagnostics,
         ].filter((diagnostic) => diagnostic.severity === "warning").length;
-        const assetCount = Object.keys(assetIdBySourcePath ?? {}).length;
-        setNotice(
-          warningCount > 0
+        const assetCount = assetPlans.length;
+        if (enterPlayAfterImport) {
+          setPlaySession(createPlaySession(result.scene, committedAssets));
+          setEditorMode("play");
+        }
+        const importMessage =
+          unavailableAssetCount > 0
+            ? `${result.entityIds.length}件とAsset ${assetCount}件を追加しました。読み取れなかったAsset ${unavailableAssetCount}件はスキップしました`
+            : warningCount > 0
             ? `${result.entityIds.length}件とAsset ${assetCount}件を追加しました。${warningCount}件の変換メモがあります`
-            : `${result.entityIds.length}件とAsset ${assetCount}件をSceneへ変換しました`,
+            : `${result.entityIds.length}件とAsset ${assetCount}件をSceneへ変換しました`;
+        setNotice(
+          enterPlayAfterImport
+            ? `${importMessage}。Playで実行結果を確認しています`
+            : importMessage,
         );
         return true;
       } catch (error) {
@@ -2184,6 +2193,21 @@ export function VisualEditorPrototype({
       projectKind,
       projectPath,
     ],
+  );
+
+  const handlePrepareComponentCodeImportPreview = useCallback(
+    async (
+      plan: ComponentCodeImportPlan,
+      classicSource: ClassicProjectVisualImportSource,
+    ): Promise<ClassicProjectVisualImportPreview> => {
+      const prepared = await prepareClassicProjectVisualAssetImports({
+        source: classicSource,
+        componentPlan: plan,
+        existingManifest: bundle.assets,
+      });
+      return prepared.preview;
+    },
+    [bundle.assets],
   );
 
   const handleAddOfficialComponent = useCallback(
@@ -4702,6 +4726,7 @@ export function VisualEditorPrototype({
           open={componentImportOpen}
           projectKind={projectKind}
           onClose={() => setComponentImportOpen(false)}
+          onPreparePreview={handlePrepareComponentCodeImportPreview}
           onImport={handleComponentCodeImport}
         />
         <input

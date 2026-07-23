@@ -28,7 +28,7 @@ export type CustomMaterialPreviewSource = {
   model: ModelAsset;
   sourceRelativePath: string;
   sourceMaterialIndex: number;
-  sourceNodeIndex: number;
+  sourceNodeIndex?: number;
 };
 
 export type CustomMaterialPreviewResolution =
@@ -62,7 +62,33 @@ export function resolveCustomMaterialPreviewSource(
   asset: MaterialAsset,
   assets: AssetManifest,
 ): CustomMaterialPreviewResolution {
-  if (asset.shader?.kind !== "openbrush") {
+  const shader = asset.shader;
+  if (shader?.kind === "classic-r3f") {
+    const candidate = shader.sourceModelAssetId
+      ? assets.assets[shader.sourceModelAssetId]
+      : undefined;
+    if (
+      !candidate ||
+      candidate.kind !== "model" ||
+      candidate.source.kind !== "project"
+    ) {
+      return {
+        status: "unavailable",
+        reason: "元のClassic Model Assetが見つかりません",
+      };
+    }
+    return {
+      status: "ready",
+      source: {
+        renderer: "three-icosa",
+        model: candidate,
+        sourceRelativePath: candidate.source.relativePath,
+        sourceMaterialIndex:
+          candidate.materialSlots[0]?.sourceMaterialIndex ?? 0,
+      },
+    };
+  }
+  if (shader?.kind !== "openbrush") {
     return {
       status: "unavailable",
       reason: "このMaterialにはCustom Shader Preview Adapterがありません",
@@ -72,8 +98,8 @@ export function resolveCustomMaterialPreviewSource(
   if (!modelAssetId) {
     const entry = OPEN_BRUSH_CATALOG.find(
       (candidate) =>
-        candidate.brushGuid === asset.shader?.brushGuid ||
-        candidate.brushName === asset.shader?.brushName,
+        candidate.brushGuid === shader.brushGuid ||
+        candidate.brushName === shader.brushName,
     );
     if (entry) return { status: "standalone", entry };
     return {
@@ -94,7 +120,7 @@ export function resolveCustomMaterialPreviewSource(
       reason: "プレビュー可能なOpenBrush Modelソースがありません",
     };
   }
-  const sourceMaterialIndex = asset.shader.sourceMaterialIndex;
+  const sourceMaterialIndex = shader.sourceMaterialIndex;
   const node = candidate.importMetadata?.openBrush?.nodes?.find(
     (entry) =>
       entry.meshIndex !== undefined &&

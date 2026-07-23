@@ -3,6 +3,7 @@ import {
   updateMaterialAsset,
   type AudioAsset,
   type AssetManifest,
+  type MaterialAsset,
   type ModelAsset,
   type TextureAsset,
 } from "../asset-manifest";
@@ -1465,6 +1466,140 @@ export function runVisualCompilerFixtureAssertions(
         entry.targetRelativePath.endsWith("fixture.obj"),
     ),
     "OBJ copy plan support flag is incorrect",
+  );
+
+  const classicTexture: TextureAsset = {
+    id: "fixture-classic-texture",
+    name: "Fixture Classic Texture",
+    kind: "texture",
+    status: "ready",
+    source: {
+      kind: "project",
+      relativePath: "assets/textures/fixture-classic.png",
+    },
+    importSettings: normalizeTextureImportSettings({
+      colorSpace: "linear",
+      generateMipmaps: false,
+      sampler: {
+        wrapS: "repeat",
+        wrapT: "repeat",
+        magFilter: "nearest",
+        minFilter: "nearest",
+      },
+    }),
+  };
+  const sourceMaterial = world.assets.assets[
+    BUILTIN_ASSET_IDS.material.blue
+  ] as MaterialAsset;
+  const classicMaterial: MaterialAsset = {
+    ...sourceMaterial,
+    id: "fixture-classic-material",
+    name: "Fixture Classic Material",
+    source: { kind: "document" },
+    shader: {
+      kind: "classic-r3f",
+      sourceModulePath: "src/components/FixtureTown.tsx",
+      sourceModelAssetId: objModel.id,
+      vertexShader:
+        "varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}",
+      fragmentShader:
+        "uniform sampler2D uMap; uniform float uTime; varying vec2 vUv; void main(){gl_FragColor=texture2D(uMap,vUv+vec2(uTime*0.0));}",
+      uniforms: {
+        uMap: {
+          kind: "texture",
+          textureAssetId: classicTexture.id,
+          colorSpace: "linear",
+          generateMipmaps: false,
+          filter: "nearest",
+          wrapS: "repeat",
+          wrapT: "repeat",
+        },
+        uTime: { kind: "number", value: 0 },
+      },
+      variants: [
+        {
+          name: "water",
+          meshNameIncludes: "Water",
+          defines: { WATER: "" },
+          side: "double",
+          transparent: true,
+          depthWrite: false,
+        },
+        {
+          name: "default",
+          defines: {},
+          side: "double",
+          transparent: false,
+          depthWrite: true,
+        },
+      ],
+      animatedTimeUniform: "uTime",
+    },
+  };
+  const classicScene: SceneDocument = {
+    ...modelScene,
+    entities: {
+      ...modelScene.entities,
+      [modelEntity.id]: {
+        ...modelScene.entities[modelEntity.id],
+        components: modelScene.entities[modelEntity.id].components.map(
+          (component) =>
+            component.type === "mesh"
+              ? {
+                  ...component,
+                  geometryAssetId: objModel.id,
+                  geometry: {
+                    kind: "asset" as const,
+                    assetId: objModel.id,
+                    sourceNodeName: "House",
+                  },
+                  materialBindings: [
+                    {
+                      slot: "body",
+                      materialAssetId: classicMaterial.id,
+                    },
+                  ],
+                }
+              : component,
+        ),
+      },
+    },
+  };
+  const classicResult = compileVisualProject(
+    {
+      ...world,
+      scenes: { [classicScene.sceneId]: classicScene },
+      assets: {
+        ...world.assets,
+        assets: {
+          ...world.assets.assets,
+          [objModel.id]: objModel,
+          [classicTexture.id]: classicTexture,
+          [classicMaterial.id]: classicMaterial,
+        },
+      },
+    },
+    { generatedAt: fixedTime },
+  );
+  const classicSource =
+    classicResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(
+    classicResult.canStage,
+    `Classic custom Material should be stageable: ${JSON.stringify(classicResult.diagnostics)}`,
+  );
+  [
+    "<shaderMaterial",
+    'meshName={object.name}',
+    'object.name === "House"',
+    'material.uniforms["uTime"].value',
+    "CLASSIC_MATERIAL_VARIANTS",
+  ].forEach((fragment) =>
+    assert(
+      classicSource.includes(fragment),
+      `Classic custom Material source is missing: ${fragment}`,
+    ),
   );
 
   const interactiveEntity = modelScene.entities[modelEntity.id];

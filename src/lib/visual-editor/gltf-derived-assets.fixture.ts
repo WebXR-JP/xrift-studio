@@ -202,10 +202,14 @@ export async function runGltfDerivedAssetFixtureAssertions(): Promise<void> {
         openBrushExpanded.textureAssets[1].id,
     "OpenBrush Material did not retain standard Texture Asset slots",
   );
+  const openBrushShader =
+    openBrushMaterial.shader?.kind === "openbrush"
+      ? openBrushMaterial.shader
+      : undefined;
   assert(
-    openBrushMaterial.shader?.textureBindings?.u_MainTex?.textureAssetId ===
+    openBrushShader?.textureBindings?.u_MainTex?.textureAssetId ===
       openBrushExpanded.textureAssets[0].id &&
-      openBrushMaterial.shader.textureBindings?.u_BumpMap?.textureAssetId ===
+      openBrushShader.textureBindings?.u_BumpMap?.textureAssetId ===
         openBrushExpanded.textureAssets[1].id,
     "OpenBrush sampler uniforms were not connected to Texture Assets",
   );

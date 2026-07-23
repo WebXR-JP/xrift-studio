@@ -9,12 +9,18 @@ import {
 } from "./asset-import";
 import { assetManifestCodec } from "./serialization";
 
-/** Filesystem-free assertions for MP3 import, Manifest commit, and validation. */
+/** Filesystem-free assertions for MP3/WAV import, Manifest commit, and validation. */
 export async function runAudioImportFixtureAssertions(): Promise<void> {
   const classification = classifyAssetImport("ambient.mp3", "audio/mpeg");
   assert(
     classification?.kind === "audio" && classification.format === "mp3",
     "MP3 was not classified as Audio",
+  );
+  const wavClassification = classifyAssetImport("ocean.wav", "audio/wav");
+  assert(
+    wavClassification?.kind === "audio" &&
+      wavClassification.format === "wav",
+    "WAV was not classified as Audio",
   );
 
   const bytes = new Uint8Array([
@@ -73,6 +79,23 @@ export async function runAudioImportFixtureAssertions(): Promise<void> {
         (diagnostic) => diagnostic.code === "mp3-signature-invalid",
       ),
     "Invalid MP3 signature was accepted",
+  );
+
+  const wavBytes = new Uint8Array(44);
+  wavBytes.set(new TextEncoder().encode("RIFF"), 0);
+  new DataView(wavBytes.buffer).setUint32(4, 36, true);
+  wavBytes.set(new TextEncoder().encode("WAVEfmt "), 8);
+  const wavPlan = await createAssetImportPlan({
+    fileName: "ocean.wav",
+    mimeType: "audio/wav",
+    bytes: wavBytes,
+  });
+  assert(
+    wavPlan.canCommit &&
+      wavPlan.asset?.kind === "audio" &&
+      wavPlan.asset.importMetadata.sourceFormat === "wav" &&
+      wavPlan.writes[0]?.mediaType === "audio/wav",
+    "Valid WAV did not create a WAV Audio Asset",
   );
 }
 

@@ -120,24 +120,25 @@ F-06 アイテム検査
 
 - 公式カタログはAssetsの「外部から追加」でPoly Haven、Open Brushと同列の「XRift公式 Component」providerから開く。project kindで配置可能なComponentを全件表示し、各カードにComponent名、category、package本体を事前描画した保存済みthumbnailを置く。一覧と詳細を開くだけではWebGL Contextを作らない。`DevEnvironment`はScene Componentではなくdev entry用wrapperとして別注記する。
 - 選択中Componentには公開package version、公式source、実際に生成するnamed importとJSX sampleを表示する。
-- 右上の「Import」にはModel / 3D AssetとR3F / Classic変換を置く。R3F / Classic変換には貼り付け欄と「Classicプロジェクトを選択」を並べ、folder読込がデスクトップ機能であること、選択後のpackage名、entry、path、読み込んだmodule数を表示する。
+- 右上の「Import」にはModel / 3D AssetとR3F / Classic変換を置く。R3F / Classic変換には貼り付け欄、「Classicプロジェクトを選択」、HTTPS / git SSHのRepository URL入力を並べ、folder / repository読込がデスクトップ機能であること、選択後のpackage名、entry、pathまたはURL、読み込んだmodule数を表示する。確定前にSceneへ追加するEntity、Model、Texture、Audio、Skybox、Custom Material、Collider部位と診断をreviewする。Classic Assetはこのreviewへ入る時点で書き込みなしの通常Import transactionまで準備し、原本容量、Texture解像度とRGBA / mipmap展開量、Model原寸、Model import scale、親を含む配置Scale、配置後寸法、中心補正、反転、同Scaleで復元するnamed Colliderを表示する。この段階ではScene、AssetManifest、project fileを変更しない。
 
 ### 処理中
 
 - 公式sampleまたは貼り付けTSXをJavaScriptとして実行しない。import alias、JSX tag、string / boolean / number / array / object literal、`Math.PI`を含む有限な数式だけを解析する。
 - Drei primitiveはStudio primitiveとMaterialへ、R3F LightはLightへ、Rapier RigidBodyは親Entityの独立したRigid Body Componentへ、`Billboard`は`BillboardY`へ、`Reflector`は`Mirror`へ、`Sky` / `Environment`は`Skybox`へ変換する。RigidBodyの`fixed` / `dynamic` / `kinematicPosition` / `kinematicVelocity`、一般設定、`colliders`生成方式を保持し、親原点へ仮Box Colliderを作らない。動的callbackと未対応Componentだけを診断へ残す。
-- Classic folderは`package.json`、`xrift.json`、`src/World.tsx`または`src/Item.tsx`を検査し、`src`内のTypeScript / JavaScript moduleを上限付きで読み、entryからrelative importを再帰的に解決する。local Componentはinstance境界をEntityとして保持し、静的に見つかるreturn JSXをその子へ展開する。任意のcustom code、Hook、callback、条件分岐、動的collectionを実行せず、Asset dependency graphとruntime stateは完全移行と表示しない。
-- `group`、RigidBody、Drei / XRift wrapperを独立Entityとして残し、local Transformと親子順を維持する。RigidBody Entityは次のネストしたRigidBody境界までの子孫Mesh / Colliderを一つのBodyとして所有する。対応するleaf Geometry、Light、Collider、公式Componentはその境界の子またはComponentとして変換する。
+- Classic folderまたは浅くcloneしたRepositoryは`package.json`、`xrift.json`、`src/World.tsx`または`src/Item.tsx`を検査し、file数、総容量、symlinkをnative境界で制限する。`src`内のTypeScript / JavaScript moduleを上限付きで読み、entryからrelative importを再帰的に解決する。local Componentはinstance境界をEntityとして保持し、静的に見つかるreturn JSXをその子へ展開する。参照されるlocal Model、Texture、MP3 / WAVは`baseUrl`、先頭`/`、`public/`を同じproject-relative pathへ正規化して重複を除き、通常のAsset transactionへ接続する。Repository URLでは浅いcloneのworking tree全体から解決し、宣言pathが欠けていても`public`内で同名fileが一意なら復旧する。sphere / BackSideの背景画像は有限半径のMeshではなく無限遠projectionのScene Skybox、`new Audio`のloop音源はAudio Sourceとして復元する。任意のcustom code、Hook、callback、条件分岐、動的collectionを実行しない。
+- `THREE.ShaderMaterial`はvertex / fragment GLSL、literal uniform、Texture sampler、mesh名に対するdefine variantだけを宣言的なCustom Material Assetへ保存する。元Modelのmaterial slotへ適用し、Scene View、Play、Classic JSX compilerで同じShaderと時間uniformを使う。OBJ内で明示的に選ばれたCollider mesh名はnamed submeshとして復元し、元の非表示Collider groupをモデル全体の代替Boxへ変換しない。
+- `group`、RigidBody、Drei / XRift wrapperを独立Entityとして残し、local Transformと親子順を維持する。定数参照を含むlocal ComponentのScaleとPositionを静的に復元し、Model import scale、中心offset、X反転を同じ単位系で合成する。named OBJ Colliderはroot Model描画を通らないためModel import scaleをCollider Entity自身へ適用し、可視Model、Collider、physics形状の寸法を一致させる。RigidBody Entityは次のネストしたRigidBody境界までの子孫Mesh / Colliderを一つのBodyとして所有する。対応するleaf Geometry、Light、Collider、公式Componentはその境界の子またはComponentとして変換する。
 - Scene、AssetManifest、selectionは「追加」を確定するまで変更しない。
 
 ### 成功時
 
-- 追加Entity、必要なMaterial、Light、Collider、公式XRift Componentを一つのUndo履歴へ確定し、最後のEntityを選択してInspectorで編集できる。
+- 追加Entity、必要なModel / Texture / Audio / Material、Skybox、Light、Collider、公式XRift Componentを一つのUndo履歴へ確定し、最後のEntityを選択してInspectorで編集できる。「インポート後、そのままPlayで確認」が有効なら、確定したScene / Assetの分離コピーで直ちにPlayを開始する。
 - compilerは`@xrift/world-components`から公式名をimportする。Portalなど実行時Contextが必要なComponentはEditとPlayでも公式本体を描画し、外部通信や遷移だけをStudio Provider bridgeで止め、生成結果では公式runtimeを使用する。
 
 ### 失敗時
 
-- folder取消は入力を変えない。package / xrift manifestまたは同種entryの欠落、JSXなし、対応要素なし、project kind不一致、Entity / Material / Component作成失敗では追加を成功表示しない。
+- folder取消は入力を変えない。package / xrift manifestまたは同種entryの欠落、JSXなし、対応要素なし、project kind不一致、Entity / Material / Component作成失敗では追加を成功表示しない。個別Assetの欠落、未対応形式、変換失敗は対象pathをwarningとして残し、そのAssetだけをスキップして読み込めるSceneとAssetを一つの履歴へ確定する。
 - 入力コードとsource module path／行番号付き診断をdialogに保持し、literalへの修正、未対応要素の除去、別Componentの選択へ戻れる。
 
 ### 戻り先

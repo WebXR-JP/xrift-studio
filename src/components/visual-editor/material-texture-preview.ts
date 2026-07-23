@@ -400,7 +400,10 @@ function resolvePreviewTextureRequests(
       },
     ];
   });
-  const shaderBindings = material.shader?.textureBindings ?? {};
+  const shaderBindings =
+    material.shader?.kind === "openbrush"
+      ? (material.shader.textureBindings ?? {})
+      : {};
   for (const [uniformName, binding] of Object.entries(shaderBindings)) {
     const asset = getTextureAsset(assets, binding.textureAssetId);
     if (

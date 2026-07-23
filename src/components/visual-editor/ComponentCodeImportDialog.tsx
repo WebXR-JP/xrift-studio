@@ -13,8 +13,10 @@ import {
   analyzeComponentCode,
   analyzeComponentProject,
   augmentClassicProjectVisualImportPlan,
+  formatVramBytes,
   loadClassicProjectVisualImportSourceFromRepository,
   pickClassicProjectVisualImportSource,
+  type ClassicProjectVisualImportPreview,
   type ClassicProjectVisualImportSource,
   type ComponentCodeImportPlan,
   type VisualProjectKind,
@@ -24,9 +26,14 @@ type Props = {
   open: boolean;
   projectKind: VisualProjectKind;
   onClose: () => void;
+  onPreparePreview: (
+    plan: ComponentCodeImportPlan,
+    classicSource: ClassicProjectVisualImportSource,
+  ) => Promise<ClassicProjectVisualImportPreview>;
   onImport: (
     plan: ComponentCodeImportPlan,
     classicSource: ClassicProjectVisualImportSource | null,
+    enterPlayAfterImport: boolean,
   ) => Promise<boolean>;
 };
 
@@ -34,6 +41,7 @@ export function ComponentCodeImportDialog({
   open,
   projectKind,
   onClose,
+  onPreparePreview,
   onImport,
 }: Props) {
   const [code, setCode] = useState(DREI_R3F_IMPORT_SAMPLE);
@@ -43,6 +51,11 @@ export function ComponentCodeImportDialog({
   const [classicLoading, setClassicLoading] = useState(false);
   const [classicLoadError, setClassicLoadError] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [classicPreview, setClassicPreview] =
+    useState<ClassicProjectVisualImportPreview | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [enterPlayAfterImport, setEnterPlayAfterImport] = useState(true);
   const [importing, setImporting] = useState(false);
 
   useEffect(() => {
@@ -50,7 +63,7 @@ export function ComponentCodeImportDialog({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
-      if (classicLoading || importing) return;
+      if (classicLoading || previewLoading || importing) return;
       if (reviewing) {
         setReviewing(false);
         return;
@@ -59,7 +72,14 @@ export function ComponentCodeImportDialog({
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [classicLoading, importing, onClose, open, reviewing]);
+  }, [
+    classicLoading,
+    importing,
+    onClose,
+    open,
+    previewLoading,
+    reviewing,
+  ]);
 
   const plan = useMemo(
     () => {
@@ -91,6 +111,8 @@ export function ComponentCodeImportDialog({
       setCode(selected.source);
       setClassicSource(selected);
       setReviewing(false);
+      setClassicPreview(null);
+      setPreviewError(null);
     } catch (error) {
       setClassicLoadError(
         error instanceof Error ? error.message : String(error),
@@ -113,6 +135,8 @@ export function ComponentCodeImportDialog({
       setCode(selected.source);
       setClassicSource(selected);
       setReviewing(false);
+      setClassicPreview(null);
+      setPreviewError(null);
     } catch (error) {
       setClassicLoadError(
         error instanceof Error ? error.message : String(error),
@@ -128,9 +152,41 @@ export function ComponentCodeImportDialog({
     if (importing || hasErrors || plan.nodes.length === 0) return;
     setImporting(true);
     try {
-      if (await onImport(plan, classicSource)) onClose();
+      if (await onImport(plan, classicSource, enterPlayAfterImport)) onClose();
     } finally {
       setImporting(false);
+    }
+  };
+
+  const preparePreview = async () => {
+    if (
+      previewLoading ||
+      hasErrors ||
+      plan.nodes.length === 0
+    ) {
+      return;
+    }
+    if (!classicSource) {
+      setClassicPreview(null);
+      setPreviewError(null);
+      setReviewing(true);
+      return;
+    }
+    setPreviewLoading(true);
+    setPreviewError(null);
+    try {
+      setClassicPreview(await onPreparePreview(plan, classicSource));
+    } catch (error) {
+      // Static Scene conversion can still be reviewed when a native Asset
+      // preflight is unavailable. Final import retries the same best-effort
+      // preparation and skips only unreadable individual Assets.
+      setClassicPreview(null);
+      setPreviewError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setPreviewLoading(false);
+      setReviewing(true);
     }
   };
 
@@ -154,9 +210,10 @@ export function ComponentCodeImportDialog({
           <button
             type="button"
             onClick={onClose}
+            disabled={classicLoading || previewLoading || importing}
             aria-label="コンポーネント画面を閉じる"
             title="閉じる"
-            className="rounded-md p-2 text-slate-500 hover:bg-white hover:text-slate-900"
+            className="rounded-md p-2 text-slate-500 hover:bg-white hover:text-slate-900 disabled:cursor-wait disabled:opacity-40"
           >
             <X size={17} aria-hidden="true" />
           </button>
@@ -167,6 +224,7 @@ export function ComponentCodeImportDialog({
             <ImportPreviewHeader
               plan={plan}
               classicSource={classicSource}
+              preview={classicPreview}
               onBack={() => setReviewing(false)}
             />
           ) : (
@@ -186,18 +244,39 @@ export function ComponentCodeImportDialog({
                 setClassicSource(null);
                 setClassicLoadError(null);
                 setReviewing(false);
+                setClassicPreview(null);
+                setPreviewError(null);
               }}
               onPickClassicProject={pickClassicProject}
             />
           )}
 
-          <AnalysisResult plan={plan} />
+          <AnalysisResult
+            plan={plan}
+            preview={reviewing ? classicPreview : null}
+            previewError={reviewing ? previewError : null}
+          />
         </div>
 
         <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-slate-200 bg-slate-50 px-5 py-3">
-          <div className="text-[11px] leading-4 text-slate-500">
-            コードは実行せず、import graph、JSX構造、静的リテラルだけを変換します。
-          </div>
+          {reviewing ? (
+            <label className="inline-flex cursor-pointer items-center gap-2 text-[11px] font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={enterPlayAfterImport}
+                onChange={(event) =>
+                  setEnterPlayAfterImport(event.currentTarget.checked)
+                }
+                disabled={importing}
+                className="size-3.5 accent-violet-600"
+              />
+              インポート後、そのままPlayで確認
+            </label>
+          ) : (
+            <div className="text-[11px] leading-4 text-slate-500">
+              コードは実行せず、import graph、JSX構造、静的リテラルだけを変換します。
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -205,7 +284,7 @@ export function ComponentCodeImportDialog({
                 if (reviewing) setReviewing(false);
                 else onClose();
               }}
-              disabled={classicLoading || importing}
+            disabled={classicLoading || previewLoading || importing}
               className="rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
             >
               {reviewing ? "内容を変更" : "キャンセル"}
@@ -213,18 +292,24 @@ export function ComponentCodeImportDialog({
             <button
               type="button"
               disabled={
-                classicLoading || importing || hasErrors || plan.nodes.length === 0
+                classicLoading ||
+                previewLoading ||
+                importing ||
+                hasErrors ||
+                plan.nodes.length === 0
               }
               onClick={() => {
                 if (!reviewing) {
-                  setReviewing(true);
+                  void preparePreview();
                   return;
                 }
                 void importPlan();
               }}
               className="rounded-md bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              {importing
+              {previewLoading
+                ? "Asset寸法と容量を検査中…"
+                : importing
                 ? "AssetとSceneを変換中…"
                 : reviewing
                   ? "プレビュー内容をインポート"
@@ -349,10 +434,12 @@ function CodeConverter({
 function ImportPreviewHeader({
   plan,
   classicSource,
+  preview,
   onBack,
 }: {
   plan: ComponentCodeImportPlan;
   classicSource: ClassicProjectVisualImportSource | null;
+  preview: ClassicProjectVisualImportPreview | null;
   onBack: () => void;
 }) {
   return (
@@ -370,9 +457,68 @@ function ImportPreviewHeader({
               まだSceneやAssetには書き込まれていません。変換件数、関連Asset、警告を確認してから確定できます。
             </p>
             {classicSource ? (
-              <p className="mt-1 truncate font-mono text-[10px] text-violet-700">
-                {classicSource.packageName} · {classicSource.modules.length} modules · {plan.assetDependencies.length} assets
-              </p>
+              <>
+                <p className="mt-1 truncate font-mono text-[10px] text-violet-700">
+                  {classicSource.packageName} · {classicSource.modules.length} modules · {plan.assetDependencies.length} assets
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {classicSource.inspection.skybox ? (
+                    <PreviewChip label="Skybox" value="無限遠" />
+                  ) : null}
+                  {classicSource.inspection.audioSources.length > 0 ? (
+                    <PreviewChip
+                      label="環境音"
+                      value={String(
+                        classicSource.inspection.audioSources.length,
+                      )}
+                    />
+                  ) : null}
+                  {classicSource.inspection.customMaterials.length > 0 ? (
+                    <PreviewChip
+                      label="Custom Material"
+                      value={String(
+                        classicSource.inspection.customMaterials.length,
+                      )}
+                    />
+                  ) : null}
+                  {classicSource.inspection.customMaterials.some(
+                    (material) =>
+                      material.colliderSourceNodeNames.length > 0,
+                  ) ? (
+                    <PreviewChip
+                      label="Collider部位"
+                      value={String(
+                        classicSource.inspection.customMaterials.reduce(
+                          (count, material) =>
+                            count +
+                            material.colliderSourceNodeNames.length,
+                          0,
+                        ),
+                      )}
+                    />
+                  ) : null}
+                  {preview ? (
+                    <PreviewChip
+                      label="原本容量"
+                      value={formatPreviewBytes(preview.totalSourceBytes)}
+                    />
+                  ) : null}
+                  {preview && preview.estimatedTextureMemoryBytes > 0 ? (
+                    <PreviewChip
+                      label="Texture展開"
+                      value={formatPreviewBytes(
+                        preview.estimatedTextureMemoryBytes,
+                      )}
+                    />
+                  ) : null}
+                  {preview && preview.unavailableSourcePaths.length > 0 ? (
+                    <PreviewChip
+                      label="スキップ"
+                      value={String(preview.unavailableSourcePaths.length)}
+                    />
+                  ) : null}
+                </div>
+              </>
             ) : null}
           </div>
         </div>
@@ -388,7 +534,23 @@ function ImportPreviewHeader({
   );
 }
 
-function AnalysisResult({ plan }: { plan: ComponentCodeImportPlan }) {
+function PreviewChip({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="rounded border border-violet-200 bg-white px-2 py-1 text-[10px] font-semibold text-violet-800">
+      {label} {value}
+    </span>
+  );
+}
+
+function AnalysisResult({
+  plan,
+  preview,
+  previewError,
+}: {
+  plan: ComponentCodeImportPlan;
+  preview: ClassicProjectVisualImportPreview | null;
+  previewError: string | null;
+}) {
   return (
     <section className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
       <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -447,6 +609,20 @@ function AnalysisResult({ plan }: { plan: ComponentCodeImportPlan }) {
           </span>
         ) : null}
       </div>
+      {preview ? <ClassicAssetSizePreview preview={preview} /> : null}
+      {previewError ? (
+        <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-4 text-amber-900">
+          <AlertCircle
+            size={13}
+            className="mt-0.5 shrink-0"
+            aria-hidden="true"
+          />
+          <span>
+            Assetの寸法・容量を確定前に検査できませんでした。Sceneの静的変換結果は確認でき、確定時に再試行して読み取れないAssetだけをスキップします:{" "}
+            {previewError}
+          </span>
+        </div>
+      ) : null}
       {plan.diagnostics.length > 0 ? (
         <div className="mt-3 space-y-1.5">
           {plan.diagnostics.map((diagnostic, index) => {
@@ -490,10 +666,159 @@ function AnalysisResult({ plan }: { plan: ComponentCodeImportPlan }) {
             {plan.assetDependencies.map((dependency) => dependency.fileName).join(" / ")}
           </span>
           <span className="mt-0.5 block text-slate-500">
-            Sceneへ追加する前にStudio Asset IDへ変換し、参照元Entityへ接続します。
+            Repository全体の取得済みコピーから解決します。見つからないAssetだけをスキップし、読み込めるSceneとAssetは確定できます。
           </span>
         </div>
       ) : null}
     </section>
   );
+}
+
+function ClassicAssetSizePreview({
+  preview,
+}: {
+  preview: ClassicProjectVisualImportPreview;
+}) {
+  const preflightWarnings = preview.diagnostics.filter(
+    (diagnostic) => diagnostic.severity === "warning",
+  );
+  return (
+    <div className="mt-3 space-y-2 rounded-md border border-violet-200 bg-violet-50/60 p-3">
+      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+        <span className="font-semibold text-violet-950">
+          Asset・空間サイズ検査
+        </span>
+        <span className="rounded bg-white px-2 py-1 text-violet-800">
+          読込 {preview.availableAssetCount}
+        </span>
+        <span className="rounded bg-white px-2 py-1 text-violet-800">
+          原本 {formatPreviewBytes(preview.totalSourceBytes)}
+        </span>
+        <span className="rounded bg-white px-2 py-1 text-violet-800">
+          Texture展開 約
+          {formatPreviewBytes(preview.estimatedTextureMemoryBytes)}
+        </span>
+        <span
+          className={`rounded px-2 py-1 ${
+            preflightWarnings.length > 0
+              ? "bg-amber-100 text-amber-900"
+              : "bg-emerald-100 text-emerald-800"
+          }`}
+        >
+          {preflightWarnings.length > 0
+            ? `注意 ${preflightWarnings.length}`
+            : "サイズ注意なし"}
+        </span>
+      </div>
+
+      {preview.models.length > 0 ? (
+        <div className="space-y-1.5">
+          {preview.models.map((model) => (
+            <div
+              key={`${model.sourcePath}-${model.componentName ?? "model"}`}
+              className="rounded border border-violet-100 bg-white px-2.5 py-2 text-[10px] leading-4 text-slate-700"
+            >
+              <span className="font-semibold text-slate-900">
+                {model.componentName ?? model.fileName}
+              </span>
+              <span className="ml-2">
+                原寸 {formatDimensionVector(model.sourceSize)}
+              </span>
+              <span className="mx-1 text-slate-400">→</span>
+              <span className="font-semibold text-violet-800">
+                配置後 {formatDimensionVector(model.effectiveSize)}
+              </span>
+              <span className="ml-2 text-slate-500">
+                Model {formatScaleValue(model.modelImportScale)} × Scene{" "}
+                {formatScaleVector(model.placementScale)}
+              </span>
+              {model.colliderSourceNodeCount > 0 ? (
+                <span className="ml-2 text-sky-700">
+                  Collider {model.colliderSourceNodeCount}部位も同Scale
+                </span>
+              ) : null}
+              {model.centerModel ? (
+                <span className="ml-2 text-slate-500">中心補正あり</span>
+              ) : null}
+              {model.mirrorX ? (
+                <span className="ml-2 text-slate-500">X反転を保持</span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="grid gap-1 sm:grid-cols-2">
+        {preview.assets.map((asset) => (
+          <div
+            key={asset.sourcePath}
+            className="flex min-w-0 items-center justify-between gap-2 rounded bg-white px-2.5 py-1.5 text-[10px] text-slate-700"
+          >
+            <span className="min-w-0 truncate" title={asset.sourcePath}>
+              <span className="mr-1 font-semibold uppercase text-slate-500">
+                {asset.kind}
+              </span>
+              {asset.fileName}
+            </span>
+            <span className="shrink-0 text-slate-500">
+              {asset.width && asset.height
+                ? `${asset.width}×${asset.height}px · `
+                : ""}
+              {formatPreviewBytes(asset.byteLength)}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {preview.unavailableSourcePaths.length > 0 ? (
+        <p className="rounded bg-amber-50 px-2.5 py-2 text-[10px] leading-4 text-amber-900">
+          読み取れないためスキップ:{" "}
+          {preview.unavailableSourcePaths.join(" / ")}
+        </p>
+      ) : null}
+      {preflightWarnings.length > 0 ? (
+        <div className="space-y-1">
+          {preflightWarnings.map((diagnostic, index) => (
+            <p
+              key={`${diagnostic.code}-${diagnostic.fileName}-${index}`}
+              className="rounded bg-amber-50 px-2.5 py-2 text-[10px] leading-4 text-amber-900"
+            >
+              {diagnostic.fileName}: {diagnostic.message}
+            </p>
+          ))}
+        </div>
+      ) : null}
+      <p className="text-[10px] leading-4 text-violet-800">
+        Texture展開量はRGBAとmipmap、配置後寸法はModel boundsと親Scaleからの概算です。非uniform Scaleと回転が重なる場合は軸方向の目安になります。確定後はWorld全体のVRAM診断で既存Asset、Material参照、描画負荷も含めて確認できます。
+      </p>
+    </div>
+  );
+}
+
+function formatDimensionVector(value: readonly number[]): string {
+  return value.map(formatDimension).join(" × ");
+}
+
+function formatPreviewBytes(value: number): string {
+  return value > 0 ? formatVramBytes(value) : "算出対象なし";
+}
+
+function formatDimension(value: number): string {
+  if (value >= 1_000) return `${(value / 1_000).toFixed(2)}km`;
+  if (value >= 1) return `${value.toFixed(2)}m`;
+  return `${Math.round(value * 100)}cm`;
+}
+
+function formatScaleVector(value: readonly number[]): string {
+  if (
+    Math.abs(value[0] - value[1]) < 1e-6 &&
+    Math.abs(value[1] - value[2]) < 1e-6
+  ) {
+    return formatScaleValue(value[0]);
+  }
+  return value.map(formatScaleValue).join(" × ");
+}
+
+function formatScaleValue(value: number): string {
+  return `${Number(value.toFixed(3))}×`;
 }

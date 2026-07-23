@@ -438,6 +438,35 @@ function validateMaterialAsset(
       ),
     );
   }
+  if (isClassicR3fMaterialShader(asset.shader)) {
+    for (const [uniformName, uniform] of Object.entries(
+      asset.shader.uniforms,
+    )) {
+      if (uniform.kind !== "texture") continue;
+      const texture = assets[uniform.textureAssetId];
+      if (!isRecord(texture) || texture.kind !== "texture") {
+        issues.push(
+          issue(
+            `${path}.shader.uniforms.${uniformName}.textureAssetId`,
+            "reference",
+            "Classic shader uniform must reference a Texture Asset",
+          ),
+        );
+      }
+    }
+    if (asset.shader.sourceModelAssetId) {
+      const model = assets[asset.shader.sourceModelAssetId];
+      if (!isRecord(model) || model.kind !== "model") {
+        issues.push(
+          issue(
+            `${path}.shader.sourceModelAssetId`,
+            "reference",
+            "Classic shader preview must reference a Model Asset",
+          ),
+        );
+      }
+    }
+  }
   if (!isRecord(asset.properties)) {
     issues.push(issue(`${path}.properties`, "type", "material properties must be an object"));
     return;

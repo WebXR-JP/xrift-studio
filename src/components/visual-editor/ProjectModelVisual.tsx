@@ -106,6 +106,7 @@ type Props = {
   animation?: AnimationComponent;
   playing?: boolean;
   sourceNodeIndex?: number;
+  sourceNodeName?: string;
   /** Scene View-only material override. It never changes the imported Asset. */
   viewportMaterialStyle?: SceneViewportMaterialStyle;
   /** Centers and scales one source node for a compact Asset Inspector preview. */

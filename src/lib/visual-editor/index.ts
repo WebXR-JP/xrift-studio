@@ -14,6 +14,7 @@ export * from "./creation-catalog";
 export * from "./compiler";
 export * from "./classic-export";
 export * from "./classic-project-import";
+export * from "./classic-project-import.fixture";
 export * from "./catalog-thumbnails";
 export * from "./custom-shader-contract";
 export * from "./document-id";

@@ -186,6 +186,8 @@ export type ComponentCodeImportXriftComponent = {
 
 export type ComponentCodeImportCollider = {
   shape: "box";
+  center: Vec3;
+  halfExtents: Vec3;
   isTrigger: boolean;
   friction: number;
   restitution: number;
@@ -900,6 +902,64 @@ function convertJsxNode(
       });
     }
     return output.length - before;
+  }
+
+  if (
+    binding?.module === "@react-three/rapier" &&
+    binding.imported === "CuboidCollider"
+  ) {
+    const halfExtents = asNumberArray(attributes.args);
+    const center = asNumberArray(attributes.position);
+    if (
+      halfExtents.length !== 3 ||
+      halfExtents.some((value) => !Number.isFinite(value) || value <= 0) ||
+      (center.length !== 0 &&
+        (center.length !== 3 || center.some((value) => !Number.isFinite(value))))
+    ) {
+      diagnostics.push({
+        severity: "warning",
+        code: "rapier-cuboid-collider-dynamic",
+        message:
+          "CuboidColliderのargs/positionを静的に確定できないため、誤ったColliderを作らず構造だけ保持します。",
+        line: node.line,
+        sourcePath: context.sourcePath,
+      });
+      return preserveUnsupportedNode(
+        node,
+        context,
+        bindings,
+        projectKind,
+        output,
+        diagnostics,
+      );
+    }
+    appendImportNode(output, context, {
+      ...sourceFields,
+      name: staticNodeName(attributes, "Cuboid Collider"),
+      kind: "empty",
+      transform: cloneTransform(IDENTITY_TRANSFORM),
+      collider: {
+        shape: "box",
+        center:
+          center.length === 3
+            ? [center[0], center[1], center[2]]
+            : [0, 0, 0],
+        halfExtents: [halfExtents[0], halfExtents[1], halfExtents[2]],
+        isTrigger: attributes.sensor === true,
+        friction: nonNegativeFiniteNumber(attributes.friction) ?? 0.5,
+        restitution: unitFiniteNumber(attributes.restitution) ?? 0,
+        sourceBodyType: "fixed",
+        gravityScale: 1,
+        linearDamping: 0,
+        angularDamping: 0,
+        canSleep: true,
+        ccd: false,
+        lockTranslations: false,
+        lockRotations: false,
+      },
+      xriftComponents: [],
+    });
+    return 1;
   }
 
   const lightDefinition = R3F_LIGHTS[node.name];
@@ -1798,8 +1858,7 @@ function applyImportedCoreComponents(
           return mesh;
         }
         if (component.type === "collider" && node.collider) {
-          const collider: ColliderComponent = {
-            ...component,
+          const surface = {
             isTrigger: node.collider.isTrigger,
             friction: node.collider.friction,
             restitution: node.collider.restitution,
@@ -1811,6 +1870,20 @@ function applyImportedCoreComponents(
             ccd: node.collider.ccd,
             lockTranslations: node.collider.lockTranslations,
             lockRotations: node.collider.lockRotations,
+          };
+          if (component.shape === "box") {
+            const collider: ColliderComponent = {
+              ...component,
+              ...surface,
+              center: node.collider.center,
+              halfExtents: node.collider.halfExtents,
+              fitMode: "manual",
+            };
+            return collider;
+          }
+          const collider: ColliderComponent = {
+            ...component,
+            ...surface,
           };
           return collider;
         }
@@ -1825,6 +1898,9 @@ function applyImportedCoreComponents(
     components = [
       ...components,
       createBoxColliderComponent(createDocumentId("component-collider"), {
+        center: node.collider.center,
+        halfExtents: node.collider.halfExtents,
+        fitMode: "manual",
         isTrigger: node.collider.isTrigger,
         friction: node.collider.friction,
         restitution: node.collider.restitution,
@@ -1979,6 +2055,13 @@ function parseJsx(
   while (cursor < source.length) {
     const open = source.indexOf("<", cursor);
     if (open < 0) break;
+    // TypeScript generics such as React.FC<WorldProps> are not JSX tags.
+    // A real JSX opening tag is not directly attached to an identifier,
+    // member expression, call, or indexed expression.
+    if (open > 0 && /[\w$.)\]]/.test(source[open - 1])) {
+      cursor = open + 1;
+      continue;
+    }
     if (source.startsWith("<!--", open)) {
       cursor = Math.max(open + 4, source.indexOf("-->", open + 4) + 3);
       continue;

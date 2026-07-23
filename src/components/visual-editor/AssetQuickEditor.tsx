@@ -687,11 +687,12 @@ function MaterialFallbackThumbnail({
   assets?: AssetManifest;
   projectPath?: string;
 }) {
-  if (asset.shader?.kind === "openbrush") {
+  const shader = asset.shader;
+  if (shader?.kind === "openbrush") {
     const entry = OPEN_BRUSH_CATALOG.find(
       (candidate) =>
-        candidate.brushGuid === asset.shader?.brushGuid ||
-        candidate.brushName === asset.shader?.brushName,
+        candidate.brushGuid === shader.brushGuid ||
+        candidate.brushName === shader.brushName,
     );
     if (entry) {
       const Icon = EDITOR_ICONS.material;

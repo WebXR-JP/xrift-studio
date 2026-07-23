@@ -1889,18 +1889,18 @@ function renderModelMaterialInjection(
     .sort(([left], [right]) => left.localeCompare(right))
     .map(
       ([sourceKey, override]) =>
-        `        case ${JSON.stringify(sourceKey)}:\n          return <${override.componentName} key={key} attach={attach} />;`,
+        `        case ${JSON.stringify(sourceKey)}:\n          return <${override.componentName} key={key} attach={attach} meshName={object.name} />;`,
     )
     .join("\n");
   const globalCases = [...globalByName.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(
       ([sourceName, override]) =>
-        `        case ${JSON.stringify(sourceName)}:\n          return <${override.componentName} key={key} attach={attach} />;`,
+        `        case ${JSON.stringify(sourceName)}:\n          return <${override.componentName} key={key} attach={attach} meshName={object.name} />;`,
     )
     .join("\n");
   const resolver = wildcard
-    ? `      return <${wildcard.componentName} key={key} attach={attach} />;`
+    ? `      return <${wildcard.componentName} key={key} attach={attach} meshName={object.name} />;`
     : `${nodeCases ? `      if (typeof sourceNodeIndex === "number") {\n        switch (\`\${sourceNodeIndex}:\${materialName}\`) {\n${nodeCases}\n        }\n      }\n` : ""}      switch (materialName) {\n${globalCases}\n        default:\n          return null;\n      }`;
   return `
         inject={(object) => {
@@ -2040,6 +2040,15 @@ function renderMaterial(
   const properties = normalizeMaterialProperties(
     asset.properties as unknown as Parameters<typeof normalizeMaterialProperties>[0],
   );
+  if (asset.shader?.kind === "classic-r3f") {
+    const componentName = registerMaterialComponent(
+      entity,
+      mesh,
+      asset,
+      context,
+    );
+    return `<${componentName} />`;
+  }
   if (properties.doubleSided) context.usesDoubleSide = true;
   diagnoseMaterialExtensions(entity, mesh, asset, properties, context);
   const materialKind = getMaterialShaderModel(properties);
@@ -2064,6 +2073,16 @@ function registerMaterialComponent(
   const componentName = generatedIdentifier("CompiledMaterial", asset.id);
   const declarationKey = `material:${componentName}`;
   if (context.supportDeclarations.has(declarationKey)) return componentName;
+  if (asset.shader?.kind === "classic-r3f") {
+    return registerClassicR3fMaterialComponent(
+      entity,
+      mesh,
+      asset,
+      componentName,
+      declarationKey,
+      context,
+    );
+  }
 
   const properties = normalizeMaterialProperties(
     asset.properties as unknown as Parameters<typeof normalizeMaterialProperties>[0],
@@ -2073,7 +2092,7 @@ function registerMaterialComponent(
   const materialKind = getMaterialShaderModel(properties);
   context.supportDeclarations.set(
     "material:00-props-type",
-    "type CompiledMaterialProps = { attach?: string };",
+    "type CompiledMaterialProps = { attach?: string; meshName?: string };",
   );
 
   const textureLines: string[] = [];
@@ -2173,6 +2192,175 @@ function registerMaterialComponent(
   ];
   const source = `const ${componentName}: FC<CompiledMaterialProps> = ({ attach = "material" }) => {
 ${textureLines.length > 0 ? `${textureLines.map((line) => `  ${line}`).join("\n")}\n` : ""}  return <${materialElementName(materialKind)} ${materialProps.join(" ")} />;
+};`;
+  context.supportDeclarations.set(declarationKey, source);
+  return componentName;
+}
+
+function registerClassicR3fMaterialComponent(
+  entity: SceneEntity,
+  mesh: MeshComponent,
+  asset: MaterialAsset,
+  componentName: string,
+  declarationKey: string,
+  context: CompileContext,
+): string {
+  const shader = asset.shader;
+  if (!shader || shader.kind !== "classic-r3f") return componentName;
+  context.supportDeclarations.set(
+    "material:00-props-type",
+    "type CompiledMaterialProps = { attach?: string; meshName?: string };",
+  );
+  context.reactValueImports.add("useMemo");
+  ["BackSide", "DoubleSide", "FrontSide"].forEach((name) =>
+    context.threeValueImports.add(name),
+  );
+
+  const textureLines: string[] = [];
+  const textureDependencies: string[] = [];
+  const uniformEntries: string[] = [];
+  for (const [uniformName, uniform] of Object.entries(shader.uniforms)) {
+    if (uniform.kind === "number") {
+      uniformEntries.push(
+        `${JSON.stringify(uniformName)}: { value: ${formatNumber(uniform.value)} }`,
+      );
+      continue;
+    }
+    if (uniform.kind === "color") {
+      context.threeValueImports.add("Color");
+      uniformEntries.push(
+        `${JSON.stringify(uniformName)}: { value: new Color(${JSON.stringify(uniform.value)}) }`,
+      );
+      continue;
+    }
+    if (uniform.kind === "vector") {
+      const vectorType =
+        uniform.value.length === 2
+          ? "Vector2"
+          : uniform.value.length === 3
+            ? "Vector3"
+            : "Vector4";
+      context.threeValueImports.add(vectorType);
+      uniformEntries.push(
+        `${JSON.stringify(uniformName)}: { value: new ${vectorType}(${uniform.value.map(formatNumber).join(", ")}) }`,
+      );
+      continue;
+    }
+
+    context.referencedAssetIds.add(uniform.textureAssetId);
+    const texture = getTextureAsset(context.assets, uniform.textureAssetId);
+    const runtimeUrl = texture
+      ? context.assetRuntimeUrls.get(texture.id)
+      : undefined;
+    if (!texture || !runtimeUrl) {
+      addDiagnostic(context, {
+        severity: "blocking",
+        code: "classic-shader-texture-unavailable",
+        message: `Custom Shader uniform「${uniformName}」のTexture Assetを出力できません`,
+        sceneId: context.scene.sceneId,
+        entityId: entity.id,
+        componentId: mesh.id,
+        assetId: uniform.textureAssetId,
+        fieldPath: `material.${asset.id}.shader.uniforms.${uniformName}`,
+      });
+      uniformEntries.push(`${JSON.stringify(uniformName)}: { value: null }`);
+      continue;
+    }
+    const variableName = generatedIdentifier(
+      "classicTexture",
+      `${asset.id}:${uniformName}`,
+    );
+    const usesKtx2 = getTextureSourceFormat(texture) === "ktx2";
+    registerCompiledTextureRuntime(context, usesKtx2);
+    const urlConstant = registerAssetUrl(texture, runtimeUrl, context);
+    const optionsConstant = generatedIdentifier(
+      "CLASSIC_TEXTURE_OPTIONS",
+      `${asset.id}:${uniformName}`,
+    );
+    const settings = texture.importSettings;
+    const filter = uniform.filter ?? settings.sampler.magFilter;
+    context.supportDeclarations.set(
+      `texture-options:${optionsConstant}`,
+      `const ${optionsConstant}: CompiledTextureOptions = ${JSON.stringify({
+        channel: 0,
+        colorSpace: uniform.colorSpace ?? "linear",
+        flipY: settings.flipY,
+        generateMipmaps:
+          uniform.generateMipmaps ?? settings.generateMipmaps,
+        magFilter: filter,
+        minFilter: filter,
+        wrapS: uniform.wrapS ?? settings.sampler.wrapS,
+        wrapT: uniform.wrapT ?? settings.sampler.wrapT,
+      })};`,
+    );
+    textureLines.push(
+      `const ${variableName}Url = useCompiledAssetUrl(${urlConstant});`,
+      `const ${variableName} = useCompiledTexture(${usesKtx2 ? "useKTX2" : "useTexture"}(${variableName}Url), ${optionsConstant});`,
+    );
+    textureDependencies.push(variableName);
+    uniformEntries.push(
+      `${JSON.stringify(uniformName)}: { value: ${variableName} }`,
+    );
+  }
+
+  const variantsConstant = generatedIdentifier(
+    "CLASSIC_MATERIAL_VARIANTS",
+    asset.id,
+  );
+  context.supportDeclarations.set(
+    `material-variants:${variantsConstant}`,
+    `const ${variantsConstant} = ${JSON.stringify(
+      shader.variants.map((variant) => ({
+        ...variant,
+        meshNameIncludes: variant.meshNameIncludes ?? null,
+      })),
+    )} as const;`,
+  );
+  const animated = shader.animatedTimeUniform;
+  if (animated) {
+    context.reactValueImports.add("useRef");
+    context.fiberImports.add("useFrame");
+    context.threeTypeImports.add("ShaderMaterial");
+  }
+  const source = `const ${componentName}: FC<CompiledMaterialProps> = ({ attach = "material", meshName = "" }) => {
+${textureLines.length > 0 ? `${textureLines.map((line) => `  ${line}`).join("\n")}\n` : ""}  const uniforms = useMemo(() => ({
+    ${uniformEntries.join(",\n    ")}
+  }), [${textureDependencies.join(", ")}]);
+  const normalizedMeshName = meshName.toLocaleLowerCase();
+  const variant =
+    ${variantsConstant}.find(
+      (candidate) =>
+        candidate.meshNameIncludes &&
+        normalizedMeshName.includes(candidate.meshNameIncludes.toLocaleLowerCase()),
+    ) ??
+    ${variantsConstant}.find((candidate) => !candidate.meshNameIncludes) ??
+    ${variantsConstant}[0];
+${animated ? `  const materialRef = useRef<ShaderMaterial>(null);
+  useFrame((state) => {
+    const material = materialRef.current;
+    if (material?.uniforms[${JSON.stringify(animated)}]) {
+      material.uniforms[${JSON.stringify(animated)}].value = state.clock.getElapsedTime();
+    }
+  });
+` : ""}  const side =
+    variant.side === "back"
+      ? BackSide
+      : variant.side === "front"
+        ? FrontSide
+        : DoubleSide;
+  return (
+    <shaderMaterial
+      ${animated ? "ref={materialRef}" : ""}
+      attach={attach}
+      vertexShader={${JSON.stringify(shader.vertexShader)}}
+      fragmentShader={${JSON.stringify(shader.fragmentShader)}}
+      uniforms={uniforms}
+      defines={variant.defines}
+      side={side}
+      transparent={variant.transparent}
+      depthWrite={variant.depthWrite}
+    />
+  );
 };`;
   context.supportDeclarations.set(declarationKey, source);
   return componentName;
