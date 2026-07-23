@@ -176,9 +176,7 @@ async function optimizeTexture(
   let bytes = resized.bytes;
   let extension = "webp";
   let mimeType = "image/webp";
-  let sourceFormat: TextureAsset["importMetadata"] extends infer _Value
-    ? "webp" | "ktx2"
-    : never = "webp";
+  let sourceFormat: "webp" | "ktx2" = "webp";
 
   if (shouldEncodeKtx2) {
     const { encodeToKTX2 } = await import("ktx2-encoder");

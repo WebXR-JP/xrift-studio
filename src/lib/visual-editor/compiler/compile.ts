@@ -2311,7 +2311,7 @@ function addCompiledTexture(
     addDiagnostic(context, {
       severity: "blocking",
       code: "material-texture-source-unsupported",
-      message: "Textureはproject-relativeなPNG/JPEG/WebP sourceかつ未変換recipeである必要があります",
+      message: "Textureはproject-relativeな対応画像sourceかつ未変換recipeである必要があります",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: mesh.id,
@@ -2321,7 +2321,8 @@ function addCompiledTexture(
     return false;
   }
 
-  registerCompiledTextureRuntime(context);
+  const usesKtx2 = getTextureSourceFormat(texture) === "ktx2";
+  registerCompiledTextureRuntime(context, usesKtx2);
   const urlConstant = registerAssetUrl(texture, runtimeUrl, context);
   const optionsConstant = generatedIdentifier(
     "TEXTURE_OPTIONS",
@@ -2346,18 +2347,21 @@ function addCompiledTexture(
   );
   textureLines.push(
     `const ${variableName}Url = useCompiledAssetUrl(${urlConstant});`,
-    `const ${variableName} = useCompiledTexture(useTexture(${variableName}Url), ${optionsConstant});`,
+    `const ${variableName} = useCompiledTexture(${usesKtx2 ? "useKTX2" : "useTexture"}(${variableName}Url), ${optionsConstant});`,
   );
   textureProps.push(`${materialProp}={${variableName}}`);
   return true;
 }
 
-function registerCompiledTextureRuntime(context: CompileContext): void {
+function registerCompiledTextureRuntime(
+  context: CompileContext,
+  usesKtx2 = false,
+): void {
+  context.dreiImports.add(usesKtx2 ? "useKTX2" : "useTexture");
   const key = "texture-runtime:use-compiled-texture";
   if (context.supportDeclarations.has(key)) return;
   context.reactValueImports.add("useEffect");
   context.reactValueImports.add("useMemo");
-  context.dreiImports.add("useTexture");
   context.threeTypeImports.add("Texture");
   [
     "ClampToEdgeWrapping",
@@ -2768,14 +2772,15 @@ function renderParticleEmitter(
   let textureLine = "";
   let textureProp = "";
   if (textureUrl) {
-    context.dreiImports.add("useTexture");
     const textureAsset = getTextureAsset(
       context.assets,
       properties.renderer.textureAssetId ?? "",
     );
     if (textureAsset) {
+      const usesKtx2 = getTextureSourceFormat(textureAsset) === "ktx2";
+      context.dreiImports.add(usesKtx2 ? "useKTX2" : "useTexture");
       const urlConstant = registerAssetUrl(textureAsset, textureUrl, context);
-      textureLine = `  const particleMapUrl = useCompiledAssetUrl(${urlConstant});\n  const particleMap = useTexture(particleMapUrl);\n`;
+      textureLine = `  const particleMapUrl = useCompiledAssetUrl(${urlConstant});\n  const particleMap = ${usesKtx2 ? "useKTX2" : "useTexture"}(particleMapUrl);\n`;
       textureProp = " map={particleMap}";
     }
   }
@@ -3598,9 +3603,7 @@ function isAssetSupportedByCompiler(asset: SceneAsset): boolean {
   if (asset.kind === "audio") return true;
   if (asset.kind === "skybox") return ["hdr", "exr", "png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"].includes(fileExtension(asset.source.relativePath));
   if (asset.kind !== "texture") return false;
-  const extension = fileExtension(asset.source.relativePath);
   return (
-    extension !== "ktx2" &&
     asset.importSettings.compression.format === "source" &&
     asset.importSettings.resize.mode === "original"
   );
