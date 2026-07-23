@@ -207,7 +207,12 @@ function emitShellEvent(
 }
 
 export function installReleaseE2EMock(): void {
-  const scenario = new URLSearchParams(window.location.search).get("scenario");
+  const searchParams = new URLSearchParams(window.location.search);
+  const scenario = searchParams.get("scenario");
+  let saveFailuresRemaining = Math.max(
+    0,
+    Number.parseInt(searchParams.get("saveFailures") ?? "0", 10) || 0,
+  );
   let runtimeReady = scenario !== "setup";
   let nextPid = 4100;
 
@@ -303,6 +308,10 @@ export function installReleaseE2EMock(): void {
           } satisfies VisualProjectFiles;
         }
         case "save_visual_project": {
+          if (saveFailuresRemaining > 0) {
+            saveFailuresRemaining -= 1;
+            throw new Error("E2E transient visual save failure");
+          }
           const projectPath = stringArg(payload, "projectPath");
           visualDocuments.set(
             projectPath,
