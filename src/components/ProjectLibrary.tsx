@@ -2,13 +2,14 @@ import { useMemo, useState } from "react";
 import {
   ArrowUpDown,
   ExternalLink,
-  Info,
   RefreshCw,
   Search,
+  Settings,
   X,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Project } from "../lib/tauri";
+import type { AppUpdateState } from "../lib/app-updater";
 import type { Whoami } from "../lib/xrift-cli";
 import { NewProjectCard, ProjectCard } from "./ProjectCard";
 import { BrandMark, BrandWordmark } from "./Brand";
@@ -37,6 +38,9 @@ type Props = {
   onLogin: () => void;
   onLogout: () => void;
   onRefresh: () => void;
+  appUpdate: AppUpdateState;
+  onCheckAppUpdate: () => void;
+  onShowAppUpdate: () => void;
 };
 
 function compareProjects(sort: ProjectSort) {
@@ -72,6 +76,9 @@ export function ProjectLibrary({
   onLogin,
   onLogout,
   onRefresh,
+  appUpdate,
+  onCheckAppUpdate,
+  onShowAppUpdate,
 }: Props) {
   const [showAbout, setShowAbout] = useState(false);
   const [editingThumb, setEditingThumb] = useState<Project | null>(null);
@@ -121,11 +128,21 @@ export function ProjectLibrary({
           <button
             type="button"
             onClick={() => setShowAbout(true)}
-            className="flex items-center justify-center rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
-            title="バージョン情報"
-            aria-label="バージョン情報"
+            className="relative flex items-center justify-center rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+            title="設定"
+            aria-label={
+              appUpdate.phase === "available"
+                ? "設定、新しいアップデートがあります"
+                : "設定"
+            }
           >
-            <Info size={14} aria-hidden="true" />
+            <Settings size={14} aria-hidden="true" />
+            {appUpdate.phase === "available" && (
+              <span
+                className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-brand-500 ring-2 ring-white"
+                aria-hidden="true"
+              />
+            )}
           </button>
           <button
             type="button"
@@ -150,6 +167,9 @@ export function ProjectLibrary({
       <AboutModal
         open={showAbout}
         onClose={() => setShowAbout(false)}
+        appUpdate={appUpdate}
+        onCheckAppUpdate={onCheckAppUpdate}
+        onShowAppUpdate={onShowAppUpdate}
       />
       {editingThumb ? (
         <ThumbnailEditorModal

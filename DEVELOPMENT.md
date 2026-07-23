@@ -103,11 +103,18 @@ src-tauri/                 Rust バックエンド (Tauri v2)
 
 `.github/workflows/release.yml` で Windows / macOS / Linux のインストーラを一括ビルドします。
 
-更新署名や更新用の秘密鍵は不要です。アプリ本体の更新は GitHub Releases から利用者が手動でダウンロードしてインストールします。
+GitHub Actions のリポジトリ Secrets に次を登録してください。
+
+- `TAURI_SIGNING_PRIVATE_KEY`: `pnpm tauri signer generate` で生成した updater 秘密鍵の内容
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: 秘密鍵を生成したときのパスワード
+
+公開鍵は `src-tauri/tauri.conf.json` の updater 設定に含まれます。秘密鍵ファイルとパスワードはリポジトリへ追加しないでください。
 
 1. GitHub Actions タブ → **Release** → **Run workflow**
 2. タグ名（例: `v0.1.0`）を入力して実行
-3. 完了後、GitHub Release に全 OS のインストーラが自動添付されます
+3. 完了後、GitHub Release に全 OS のインストーラ、署名、`latest.json` が自動添付されます
+
+公開済みの通常リリースだけがアプリの `releases/latest/download/latest.json` から取得されます。ドラフトは公開するまで、プレリリースは通常リリースになるまで自動更新の対象になりません。
 
 | OS | 生成される成果物 |
 |---|---|

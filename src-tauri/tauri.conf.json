@@ -31,6 +31,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "externalBin": ["binaries/xrift-studio-mcp-sidecar"],
     "icon": [
@@ -40,5 +41,16 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY3NDgyREJDM0U1NTVCQgpSV1M3VmVYRDI0SjBEK1dIb3VMdllzNW8rZ2JQUE1UUVpieDRNSEpkeVovN205SUU4eUFlbjJQUwo=",
+      "endpoints": [
+        "https://github.com/WebXR-JP/xrift-studio/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

@@ -8,6 +8,8 @@
     "opener:default",
     "shell:default",
     "os:default",
+    "updater:default",
+    "process:allow-restart",
     "mcp-bridge:default",
     "dialog:allow-open",
     {

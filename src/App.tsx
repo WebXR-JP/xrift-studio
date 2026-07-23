@@ -12,6 +12,7 @@ import { EditorView } from "./components/EditorView";
 import { NewProjectDialog } from "./components/NewProjectDialog";
 import { SetupView } from "./components/SetupView";
 import { UpdateDialog } from "./components/UpdateDialog";
+import { AppUpdateDialog } from "./components/AppUpdateDialog";
 import {
   tauri,
   type Project,
@@ -32,6 +33,14 @@ import {
   type PublishThumbnailReadiness,
 } from "./lib/publish-readiness";
 import { useToast } from "./components/Toast";
+import {
+  checkForAppUpdate,
+  INITIAL_APP_UPDATE_STATE,
+  installAppUpdate,
+  relaunchAfterAppUpdate,
+  type AppUpdateHandle,
+  type AppUpdateState,
+} from "./lib/app-updater";
 import {
   VisualUploadDialog,
   type VisualPublishDiagnostic,
@@ -66,6 +75,8 @@ const VisualEditorPrototype = lazy(() =>
     default: module.VisualEditorPrototype,
   })),
 );
+
+const APP_UPDATE_TARGET_KEY = "xrift-studio:update-target";
 
 function withLatestPublication(
   bundle: PrototypeVisualProject,
@@ -125,6 +136,14 @@ function App() {
   } | null>(null);
   const [updating, setUpdating] = useState(false);
   const [updateChecked, setUpdateChecked] = useState(false);
+  const [appUpdate, setAppUpdate] = useState<AppUpdateState>(
+    INITIAL_APP_UPDATE_STATE,
+  );
+  const [showAppUpdate, setShowAppUpdate] = useState(false);
+  const appUpdateHandleRef = useRef<AppUpdateHandle | null>(null);
+  const appUpdateCheckRunRef = useRef(0);
+  const appUpdateInitialCheckRef = useRef(false);
+  const appUpdateVerificationRef = useRef(false);
 
   const projectsRoot = runtime?.paths.projectsRoot ?? "";
 
@@ -133,6 +152,134 @@ function App() {
   }, []);
 
   const silentLog = useCallback((_l: LogLine) => {}, []);
+
+  const checkAppUpdate = useCallback(async (showWhenAvailable = false) => {
+    const run = ++appUpdateCheckRunRef.current;
+    setAppUpdate((current) => ({
+      ...current,
+      phase: "checking",
+      downloadedBytes: 0,
+      totalBytes: null,
+      error: null,
+    }));
+
+    try {
+      const [versions, update] = await Promise.all([
+        tauri.getVersions(),
+        checkForAppUpdate(),
+      ]);
+
+      if (run !== appUpdateCheckRunRef.current) {
+        if (update) await update.close().catch(() => {});
+        return;
+      }
+
+      const previous = appUpdateHandleRef.current;
+      appUpdateHandleRef.current = update;
+      if (previous && previous !== update) {
+        void previous.close().catch(() => {});
+      }
+
+      if (!update) {
+        setAppUpdate({
+          phase: "latest",
+          currentVersion: versions.appVersion,
+          latestVersion: versions.appVersion,
+          releaseNotes: null,
+          releaseDate: null,
+          downloadedBytes: 0,
+          totalBytes: null,
+          error: null,
+        });
+        return;
+      }
+
+      setAppUpdate({
+        phase: "available",
+        currentVersion: update.currentVersion || versions.appVersion,
+        latestVersion: update.version,
+        releaseNotes: update.body ?? null,
+        releaseDate: update.date ?? null,
+        downloadedBytes: 0,
+        totalBytes: null,
+        error: null,
+      });
+      if (showWhenAvailable || !appUpdateInitialCheckRef.current) {
+        setShowAppUpdate(true);
+      }
+    } catch (error) {
+      if (run !== appUpdateCheckRunRef.current) return;
+      setAppUpdate((current) => ({
+        ...current,
+        phase: "error",
+        error: String(error),
+      }));
+    }
+  }, []);
+
+  const handleInstallAppUpdate = useCallback(async () => {
+    const update = appUpdateHandleRef.current;
+    if (!update) {
+      await checkAppUpdate(true);
+      return;
+    }
+
+    const targetVersion = update.version;
+    window.localStorage.setItem(APP_UPDATE_TARGET_KEY, targetVersion);
+    setAppUpdate((current) => ({
+      ...current,
+      phase: "downloading",
+      downloadedBytes: 0,
+      totalBytes: null,
+      error: null,
+    }));
+
+    try {
+      await installAppUpdate(update, (progress) => {
+        setAppUpdate((current) => ({ ...current, ...progress }));
+      });
+      setAppUpdate((current) => ({ ...current, phase: "restarting" }));
+      await relaunchAfterAppUpdate();
+    } catch (error) {
+      window.localStorage.removeItem(APP_UPDATE_TARGET_KEY);
+      setAppUpdate((current) => ({
+        ...current,
+        phase: "error",
+        error: String(error),
+      }));
+    }
+  }, [checkAppUpdate]);
+
+  useEffect(() => {
+    if (appUpdateVerificationRef.current) return;
+    appUpdateVerificationRef.current = true;
+    const targetVersion = window.localStorage.getItem(APP_UPDATE_TARGET_KEY);
+    if (!targetVersion) return;
+
+    tauri
+      .getVersions()
+      .then((versions) => {
+        if (
+          versions.appVersion.replace(/^v/, "") ===
+          targetVersion.replace(/^v/, "")
+        ) {
+          toast({
+            kind: "success",
+            title: "XRift Studio をアップデートしました",
+            description: `v${versions.appVersion.replace(/^v/, "")}`,
+          });
+        }
+      })
+      .finally(() => {
+        window.localStorage.removeItem(APP_UPDATE_TARGET_KEY);
+      });
+  }, [toast]);
+
+  useEffect(() => {
+    if (appUpdateInitialCheckRef.current) return;
+    appUpdateInitialCheckRef.current = true;
+    void checkAppUpdate(true);
+  }, [checkAppUpdate]);
 
   useEffect(() => {
     tauri
@@ -796,7 +943,7 @@ function App() {
     );
   }
 
-  const updateDialog = (
+  const cliUpdateDialog = (
     <UpdateDialog
       open={updateInfo !== null}
       currentVersion={updateInfo?.current ?? null}
@@ -804,6 +951,24 @@ function App() {
       busy={updating}
       onUpdate={handleUpdateXrift}
       onClose={() => !updating && setUpdateInfo(null)}
+    />
+  );
+  const appUpdateDialog = (
+    <AppUpdateDialog
+      open={showAppUpdate}
+      state={appUpdate}
+      onInstall={() => void handleInstallAppUpdate()}
+      onRetry={() => void checkAppUpdate(true)}
+      onClose={() => {
+        if (
+          appUpdate.phase !== "checking" &&
+          appUpdate.phase !== "downloading" &&
+          appUpdate.phase !== "installing" &&
+          appUpdate.phase !== "restarting"
+        ) {
+          setShowAppUpdate(false);
+        }
+      }}
     />
   );
 
@@ -821,7 +986,8 @@ function App() {
           onBack={() => setSelected(null)}
           onProjectChanged={refreshProjects}
         />
-        {updateDialog}
+        {cliUpdateDialog}
+        {appUpdateDialog}
       </>
     );
   }
@@ -841,6 +1007,9 @@ function App() {
         onLogin={handleLogin}
         onLogout={handleLogout}
         onRefresh={refreshProjects}
+        appUpdate={appUpdate}
+        onCheckAppUpdate={() => void checkAppUpdate(true)}
+        onShowAppUpdate={() => setShowAppUpdate(true)}
       />
       <NewProjectDialog
         open={showNewDialog}
@@ -849,7 +1018,8 @@ function App() {
         onCreate={handleCreate}
         onOpenVisualEditor={handleOpenVisualEditor}
       />
-      {updateDialog}
+      {cliUpdateDialog}
+      {appUpdateDialog}
     </>
   );
 }

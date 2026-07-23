@@ -128,6 +128,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ inputs.tag }}
           releaseName: 'XRift Studio ${{ inputs.tag }}'
@@ -148,4 +150,6 @@ jobs:
             本アプリは XRift 公式とは無関係の有志製ツールです。
           releaseDraft: ${{ inputs.draft }}
           prerelease: ${{ inputs.prerelease }}
+          uploadUpdaterJson: true
+          uploadUpdaterSignatures: true
           args: ${{ matrix.args }}

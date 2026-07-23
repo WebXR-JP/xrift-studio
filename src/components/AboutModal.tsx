@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   AlertTriangle,
+  CheckCircle2,
+  Download,
   ExternalLink,
   RefreshCw,
   Trash2,
@@ -12,10 +14,14 @@ import { xrift } from "../lib/xrift-cli";
 import { BrandMark } from "./Brand";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useToast } from "./Toast";
+import type { AppUpdateState } from "../lib/app-updater";
 
 type Props = {
   open: boolean;
   onClose: () => void;
+  appUpdate: AppUpdateState;
+  onCheckAppUpdate: () => void;
+  onShowAppUpdate: () => void;
 };
 
 type VersionState = {
@@ -48,6 +54,9 @@ const RESET_META: Record<
 export function AboutModal({
   open,
   onClose,
+  appUpdate,
+  onCheckAppUpdate,
+  onShowAppUpdate,
 }: Props) {
   const toast = useToast();
   const [v, setV] = useState<VersionState>({
@@ -130,6 +139,9 @@ export function AboutModal({
     >
       <div
         className="w-[460px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-brand-lg animate-scale-in"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative gradient-brand-soft px-6 pb-5 pt-6">
@@ -143,11 +155,14 @@ export function AboutModal({
           <div className="flex items-center gap-3">
             <BrandMark size={44} />
             <div>
-              <div className="text-lg font-semibold tracking-tight text-zinc-900">
+              <div
+                id="settings-title"
+                className="text-lg font-semibold tracking-tight text-zinc-900"
+              >
                 XRift Studio
               </div>
               <div className="text-xs text-zinc-500">
-                XRift の制作をひとつの画面でつなぐデスクトップアプリ
+                設定とバージョン情報
               </div>
             </div>
           </div>
@@ -172,22 +187,11 @@ export function AboutModal({
             />
           </dl>
 
-          <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50/60 px-3 py-3">
-            <div className="min-w-0">
-              <div className="text-xs font-medium text-zinc-800">アプリ本体の更新</div>
-              <div className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
-                GitHub Releases から最新版をダウンロードして手動でインストールします。
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => void openUrl("https://github.com/WebXR-JP/xrift-studio/releases/latest")}
-              className="flex shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50"
-            >
-              <ExternalLink size={10} aria-hidden="true" />
-              Releases を開く
-            </button>
-          </div>
+          <AppUpdateSettings
+            state={appUpdate}
+            onCheck={onCheckAppUpdate}
+            onShowUpdate={onShowAppUpdate}
+          />
 
           <div className="mt-5 rounded-lg border border-rose-200 bg-rose-50/50 px-3 py-3">
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-700">
@@ -261,6 +265,90 @@ export function AboutModal({
       onClose={() => !resetting && setResetScope(null)}
     />
     </>
+  );
+}
+
+function AppUpdateSettings({
+  state,
+  onCheck,
+  onShowUpdate,
+}: {
+  state: AppUpdateState;
+  onCheck: () => void;
+  onShowUpdate: () => void;
+}) {
+  const checking = state.phase === "checking";
+  const installing =
+    state.phase === "downloading" ||
+    state.phase === "installing" ||
+    state.phase === "restarting";
+  const available = state.phase === "available";
+  const latest = state.phase === "latest";
+
+  return (
+    <div
+      className={`mt-4 flex items-center justify-between gap-3 rounded-lg border px-3 py-3 ${
+        available
+          ? "border-brand-200 bg-brand-50/60"
+          : state.phase === "error"
+            ? "border-amber-200 bg-amber-50/60"
+            : "border-zinc-200 bg-zinc-50/60"
+      }`}
+      aria-live="polite"
+    >
+      <div className="min-w-0">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-800">
+          {latest && (
+            <CheckCircle2
+              size={12}
+              className="text-emerald-600"
+              aria-hidden="true"
+            />
+          )}
+          アプリ本体の更新
+        </div>
+        <div className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+          {checking
+            ? "GitHub Releases の更新情報を確認しています…"
+            : installing
+              ? "アップデートを適用しています。完了後に再起動します。"
+              : available
+                ? `v${state.latestVersion?.replace(/^v/, "")} を利用できます。`
+                : latest
+                  ? `v${state.currentVersion?.replace(/^v/, "")} は最新版です。`
+                  : state.phase === "error"
+                    ? "更新情報を確認できませんでした。現在のバージョンはそのまま利用できます。"
+                    : "GitHub Releases から署名済みの最新版を確認します。"}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={available ? onShowUpdate : onCheck}
+        disabled={checking || installing}
+        className={`flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] font-medium disabled:opacity-50 ${
+          available
+            ? "bg-brand-600 text-white hover:bg-brand-500"
+            : "border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+        }`}
+      >
+        {available ? (
+          <Download size={10} aria-hidden="true" />
+        ) : (
+          <RefreshCw
+            size={10}
+            className={checking ? "animate-spin" : ""}
+            aria-hidden="true"
+          />
+        )}
+        {available
+          ? "更新内容を見る"
+          : checking
+            ? "確認中…"
+            : state.phase === "error"
+              ? "もう一度確認"
+              : "更新を確認"}
+      </button>
+    </div>
   );
 }
 
