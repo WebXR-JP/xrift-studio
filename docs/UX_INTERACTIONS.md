@@ -84,6 +84,7 @@ F-06 アイテム検査
 | MI-65 | project thumbnailを画像選択またはTexture Assetのcontext menuから設定する | 保存中は選択操作を無効にし、成功時は画像上に「設定済み」と保存先を表示する。Visual Editorでは編集modalを閉じてScene Inspectorへ戻り、現在設定中の実画像と「設定済み」を常設する。Texture Assetはproject source、またはHDR / EXR等の生成済みpreviewをPNGへ変換して使用する。 | 成功時は`public/thumbnail.png`への保存完了後だけ通知し、compileをstaleにする。Textureからの設定後はScene Inspectorを開いて同じ画像を再取得する。未保存project、Play中、画像の欠落・decode・保存失敗では既存thumbnailを維持し、同じ入口から再試行できる。 |
 | MI-66 | AboutのDanger Zoneからランタイムまたは全データのリセットを開始する | CLI version確認中は削除操作を無効にし、確認dialogでは対象と復元不能な範囲を明示する。実行中はdialogを閉じられず、削除対象を通常pathから分離してから再読み込みする。 | 成功時は再読み込みして新しいsetupまたは空のproject一覧へ進む。物理削除をすぐ完了できない旧データは退避し、次回起動時に再回収する。退避にも失敗した場合はdialogを保ち、実行中のterminalやeditorを閉じて同じ操作を再試行できる。 |
 | MI-67 | Visual projectのUpload reviewを開く | 公開対象Sceneと展開済みPrefabから参照されるTexture / Model / Audioを解析し、Asset原本の初回ロード容量と回線別ロード時間、Asset VRAM、描画buffer等を含む実行時range、スマートフォン / デスクトップのStudio基準を表示する。詳細modalはロード容量とVRAMそれぞれを寄与量の多い順に並べ、解像度、mipmap、GPU展開形式、mesh / primitive、参照数を示し、resize、KTX2、Draco、音声再圧縮、mesh instancingを効果の大きい順に提案する。自動対応できるresize、KTX2、Dracoにはcheckboxを置き、「選択した最適化を適用」で同じAsset IDの変換済みsourceへまとめて差し替える。処理中は進捗を表示し、閉じる操作と二重実行を止める。 | 推定を実測と表示せず、ロード時間にcache / CDN / app本体 / protocol処理を含まないこと、未知の解像度、GPU / browser差、KTX2転送形式、Dracoが配信量中心の改善であることを残す。分析とcheckboxの選択だけではSceneDocument、AssetManifest、公開先を変更しない。変換fileを一transactionで保存できた後だけAssetManifestを保存し、失敗時は元Assetを維持して同じ選択から再試行できる。成功時は変換前後の容量を残し、再計算した同じ詳細modalとUpload reviewへ戻れる。 |
+| MI-68 | Visual World / Itemの新規作成で「XRift Classic URL」をStarterとして選ぶ | 通常Starterと同じカード階層で選択状態を示し、選択時だけHTTPSまたはgit SSHのRepository URL入力を表示する。実行中は「読み込み・変換中」に変えて全作成操作を無効にし、検証済みentryとlocal import graphを静的解析する。取得したproject codeやdependencyは実行しない。 | 成功時は対応Scene、Asset、Material、Light、Collider、XRift Componentを保存済みVisual projectへ確定してEditorで開く。失敗時はURLと名前を保持して同じ画面から再試行できる。作成後のAsset保存またはdocument保存が失敗した場合は新規project全体を回収し、不完全なprojectを一覧へ残さない。 |
 
 ## 機能一覧
 
@@ -91,7 +92,7 @@ F-06 アイテム検査
 | --- | --- | --- | --- |
 | F-01 | CLI 更新 | MI-03, MI-04, MI-05 | 現在と最新の差分を見て更新または延期でき、更新後の状態が再取得される。 |
 | F-02 | プロジェクトライブラリ | MI-01, MI-02, MI-03, MI-04, MI-05, MI-06, MI-09, MI-45 | 項目を成果物種別、classic / visual、更新日時、公開状態で見分けられ、検索・並び替え・絞り込み・安全な削除と、新規作成・再開の入口が常に見つかる。壊れたvisual manifestをclassicと推測して開かない。 |
-| F-03 | プロジェクト作成 | MI-03, MI-04, MI-05, MI-06, MI-13, MI-18, MI-35, MI-55 | 四カードから item / world と classic / visual の組を一度に選べる。クラシックは code project、ビジュアルは専用 document project として開く。Visual World は公式Classicテンプレートの固定revisionから対応R3F / Rapierを変換したStarterを既定にし、BlankとOpenBrushも選べる。 |
+| F-03 | プロジェクト作成 | MI-03, MI-04, MI-05, MI-06, MI-13, MI-18, MI-35, MI-55, MI-68 | 四カードから item / world と classic / visual の組を一度に選べる。クラシックは code project、ビジュアルは専用 document project として開く。Visual World は公式Classicテンプレートの固定revisionから対応R3F / Rapierを変換したStarterを既定にし、Blank、OpenBrush、XRift Classic Repository URLも選べる。Visual Itemでも基本Starterまたは同種Classic Repository URLから開始できる。 |
 | F-04 | ローカル実行 | MI-03, MI-05, MI-08 | 実行中であることと、プレビュー URL を開く操作が分かる。 |
 | F-05 | 公開準備とアップロード | MI-03, MI-04, MI-05, MI-07, MI-08, MI-09, MI-17, MI-27 | 初期値の upload を防ぎ、toolchain が不足しても authoring を失わず、review から upload result / 審査状態まで続けられる。正式 result にない公開 URL は推測しない。 |
 | F-06 | アイテム検査 | MI-03, MI-05, MI-09 | ビルドを含むセキュリティチェックを実行でき、成功時は公開、失敗時はログと編集へ進める。 |

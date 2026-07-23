@@ -53,6 +53,7 @@ import {
   exportVisualProjectToClassic,
   estimateWorldVram,
   inspectClassicExportTarget,
+  createVisualProjectFromClassicRepository,
   createStarterVisualProject,
   createPreparedStarterVisualProjectOnDisk,
   createVisualProjectOnDisk,
@@ -521,6 +522,57 @@ function App() {
                 ? "スターター素材を検証できませんでした"
                 : "スターターを準備できませんでした",
           description: describeStarterPreparationError(error),
+        });
+      }
+    });
+  };
+
+  const handleImportClassicRepository = (
+    kind: ProjectKind,
+    name: string,
+    repositoryUrl: string,
+  ) => {
+    setVisualCompilationFresh(false);
+    setVisualThumbnailReadiness(null);
+    void wrap(async () => {
+      try {
+        const imported = await createVisualProjectFromClassicRepository({
+          projectsRoot,
+          directoryName: name,
+          projectKind: kind,
+          repositoryUrl,
+        });
+        setShowNewDialog(false);
+        setVisualSession({
+          bundle: imported.bundle,
+          project: imported.project,
+        });
+        await refreshProjects();
+
+        const detailParts = [
+          `${imported.importedEntityCount}件のScene要素`,
+          `${imported.importedAssetCount}件のAsset`,
+        ];
+        if (imported.unavailableAssetCount > 0) {
+          detailParts.push(
+            `${imported.unavailableAssetCount}件の未対応Assetをスキップ`,
+          );
+        } else if (imported.warningCount > 0) {
+          detailParts.push(`${imported.warningCount}件の変換メモ`);
+        }
+        toast({
+          kind: "success",
+          title: "XRift Classicからインポートしました",
+          description: detailParts.join(" / "),
+        });
+      } catch (error) {
+        toast({
+          kind: "error",
+          title: "XRift Classicをインポートできませんでした",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Repository URLとプロジェクト種別を確認して、もう一度お試しください。",
         });
       }
     });
@@ -1049,6 +1101,7 @@ function App() {
         onClose={() => setShowNewDialog(false)}
         onCreate={handleCreate}
         onOpenVisualEditor={handleOpenVisualEditor}
+        onImportClassicRepository={handleImportClassicRepository}
       />
       {cliUpdateDialog}
       {appUpdateDialog}

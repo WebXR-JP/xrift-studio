@@ -6,6 +6,7 @@ import {
   CircleDot,
   Code2,
   Globe2,
+  GitBranch,
   LayoutGrid,
   Lightbulb,
   Package,
@@ -34,6 +35,11 @@ type Props = {
     kind: ProjectKind,
     name?: string,
     starterTemplateId?: VisualStarterTemplateId,
+  ) => void;
+  onImportClassicRepository: (
+    kind: ProjectKind,
+    name: string,
+    repositoryUrl: string,
   ) => void;
 };
 
@@ -95,6 +101,20 @@ const creationChoices: CreationChoice[] = [
     MethodIcon: PanelsTopLeft,
   },
 ];
+
+const CLASSIC_REPOSITORY_STARTER_ID = "classic-repository";
+type StarterSelectionId =
+  | VisualStarterTemplateId
+  | typeof CLASSIC_REPOSITORY_STARTER_ID;
+
+function isValidClassicRepositoryUrl(value: string): boolean {
+  const url = value.trim();
+  return (
+    url.startsWith("https://") ||
+    url.startsWith("ssh://git@") ||
+    /^git@[^:\s]+:.+/.test(url)
+  );
+}
 
 function StarterScenePreview({
   templateId,
@@ -186,19 +206,22 @@ export function NewProjectDialog({
   onClose,
   onCreate,
   onOpenVisualEditor,
+  onImportClassicRepository,
 }: Props) {
   const [choiceId, setChoiceId] = useState<CreationChoice["id"] | null>(null);
   const [name, setName] = useState("");
   const [starterTemplateId, setStarterTemplateId] =
-    useState<VisualStarterTemplateId>(
+    useState<StarterSelectionId>(
       defaultVisualStarterTemplateId("world"),
     );
+  const [repositoryUrl, setRepositoryUrl] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setChoiceId(null);
     setName("");
     setStarterTemplateId(defaultVisualStarterTemplateId("world"));
+    setRepositoryUrl("");
   }, [open]);
 
   const choice = useMemo(
@@ -212,9 +235,13 @@ export function NewProjectDialog({
         ? STARTER_WORLD_TEMPLATES
         : STARTER_ITEM_TEMPLATES
       : [];
-  const starterSelected = starterTemplates.some(
-    (template) => template.id === starterTemplateId,
-  );
+  const importingClassic =
+    choice?.method === "visual" &&
+    starterTemplateId === CLASSIC_REPOSITORY_STARTER_ID;
+  const repositoryUrlValid = isValidClassicRepositoryUrl(repositoryUrl);
+  const starterSelected =
+    importingClassic ||
+    starterTemplates.some((template) => template.id === starterTemplateId);
 
   if (!open) return null;
 
@@ -222,7 +249,16 @@ export function NewProjectDialog({
     if (!choice || !valid || busy) return;
     if (choice.method === "visual") {
       if (!starterSelected) return;
-      onOpenVisualEditor(choice.kind, name, starterTemplateId);
+      if (importingClassic) {
+        if (!repositoryUrlValid) return;
+        onImportClassicRepository(choice.kind, name, repositoryUrl.trim());
+        return;
+      }
+      onOpenVisualEditor(
+        choice.kind,
+        name,
+        starterTemplateId as VisualStarterTemplateId,
+      );
       return;
     }
     onCreate(choice.kind, name);
@@ -274,7 +310,9 @@ export function NewProjectDialog({
                 </p>
                 <div
                   className={`mt-3 grid gap-3 ${
-                    choice.kind === "world" ? "sm:grid-cols-3" : "max-w-sm"
+                    choice.kind === "world"
+                      ? "sm:grid-cols-2 lg:grid-cols-4"
+                      : "sm:grid-cols-2"
                   }`}
                   role="radiogroup"
                   aria-label={`${choice.kind === "world" ? "ワールド" : "アイテム"}のスターター`}
@@ -343,7 +381,83 @@ export function NewProjectDialog({
                       </button>
                     );
                   })}
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={importingClassic}
+                    onClick={() =>
+                      setStarterTemplateId(CLASSIC_REPOSITORY_STARTER_ID)
+                    }
+                    disabled={busy}
+                    className={`overflow-hidden rounded-xl border text-left transition disabled:opacity-50 ${
+                      importingClassic
+                        ? "border-brand-500 bg-brand-50/50 ring-2 ring-brand-100"
+                        : "border-zinc-200 bg-white hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-sm"
+                    }`}
+                  >
+                    <div
+                      className={`relative flex aspect-[16/9] items-center justify-center overflow-hidden border-b ${
+                        importingClassic
+                          ? "border-brand-200 bg-brand-100/70"
+                          : "border-zinc-200 bg-zinc-50"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-12 w-12 items-center justify-center rounded-xl border bg-white ${
+                          importingClassic
+                            ? "border-brand-300 text-brand-700"
+                            : "border-zinc-200 text-zinc-600"
+                        }`}
+                      >
+                        <GitBranch size={24} aria-hidden="true" />
+                      </span>
+                      {importingClassic && (
+                        <span className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm">
+                          <Check size={14} strokeWidth={2.5} aria-hidden="true" />
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-3">
+                      <div className="text-sm font-semibold text-zinc-900">
+                        XRift Classic URL
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-zinc-500">
+                        RepositoryのSceneと対応AssetをVisualへ変換します。
+                      </p>
+                      <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">
+                        <GitBranch size={12} aria-hidden="true" />
+                        コードは実行せず静的に解析
+                      </div>
+                    </div>
+                  </button>
                 </div>
+                {importingClassic && (
+                  <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50/50 p-4">
+                    <label className="block">
+                      <span className="text-sm font-medium text-zinc-700">
+                        Classic Repository URL
+                      </span>
+                      <input
+                        type="url"
+                        value={repositoryUrl}
+                        onChange={(event) =>
+                          setRepositoryUrl(event.currentTarget.value)
+                        }
+                        disabled={busy}
+                        placeholder="https://github.com/owner/repository.git"
+                        className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200 disabled:opacity-50"
+                      />
+                    </label>
+                    <p className="mt-2 text-xs leading-5 text-zinc-500">
+                      HTTPSまたはgit SSH URLに対応します。package.json、xrift.json、同種のentryを検査し、対応できない動的処理は変換しません。
+                    </p>
+                    {repositoryUrl.length > 0 && !repositoryUrlValid && (
+                      <p className="mt-2 text-sm text-amber-700">
+                        HTTPSまたはgit SSH形式のRepository URLを入力してください。
+                      </p>
+                    )}
+                  </div>
+                )}
               </fieldset>
             )}
 
@@ -379,10 +493,22 @@ export function NewProjectDialog({
               <button
                 type="button"
                 onClick={createSelectedProject}
-                disabled={!valid || busy || (choice.method === "visual" && !starterSelected)}
+                disabled={
+                  !valid ||
+                  busy ||
+                  (choice.method === "visual" &&
+                    (!starterSelected ||
+                      (importingClassic && !repositoryUrlValid)))
+                }
                 className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-500 disabled:opacity-50"
               >
-                {busy ? "作成中…" : "作成して開く"}
+                {busy
+                  ? importingClassic
+                    ? "読み込み・変換中…"
+                    : "作成中…"
+                  : importingClassic
+                    ? "インポートして開く"
+                    : "作成して開く"}
               </button>
             </div>
           </>
