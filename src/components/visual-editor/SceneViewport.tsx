@@ -882,18 +882,6 @@ function ComponentVisual({
             opacity={selected ? 0.9 : 0.62}
             depthTest={false}
           />
-          {selected ? (
-            <Html
-              center
-              distanceFactor={8}
-              zIndexRange={[3, 0]}
-              style={{ pointerEvents: "none" }}
-            >
-              <span className="rounded border border-slate-300 bg-white/95 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 shadow-sm">
-                {component.isTrigger ? "Trigger" : "Box Collider"}
-              </span>
-            </Html>
-          ) : null}
         </mesh>
       );
     case "rigid-body":
