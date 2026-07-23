@@ -52,6 +52,8 @@ pnpm tauri:dev
 
 日常の検証は AGENT.md の「高速フィードバックループ」に従います。`pnpm typecheck`、`cargo check`、ブラウザプレビュー（`.claude/launch.json` の `web` サーバーで `http://localhost:1420/preview.html`）、検証目的の `pnpm tauri:dev` と Tauri MCP による読み取りは、そのまま実行して構いません。`pnpm tauri:build`、インストーラ生成、実機での書き込みを伴う UI 操作は、成果物・アプリデータ・外部公開先に影響するため、実行前にユーザーへ目的と副作用を示して許可を得ます。Markdown の追加・編集時には絵文字を使いません。
 
+主要導線のE2Eは日常の検証やPull Requestでは実行せず、手動のRelease workflowでOS別ビルドの前に1回だけ実行します。テスト範囲、アップロード禁止境界、失敗時の確認方法は [リリース前 E2E](./docs/RELEASE_E2E.md) を参照してください。
+
 ## 配布ビルド
 
 ```bash

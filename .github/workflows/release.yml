@@ -29,9 +29,63 @@ permissions:
   contents: write
 
 jobs:
+  release-e2e:
+    name: Release E2E
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Setup Takumi Guard
+        uses: flatt-security/setup-takumi-guard-npm@v1
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: >-
+          node -e 'const fs = require("node:fs");
+          const config = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json", "utf8"));
+          const expected = "v" + config.version;
+          if (process.env.RELEASE_TAG !== expected) {
+            throw new Error("Release tag must match app version: " + expected);
+          }'
+
+      - name: Install Chromium for release E2E
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run release E2E before upload
+        run: pnpm e2e:release
+
+      - name: Upload E2E failure report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-e2e-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
   build:
     name: Build ${{ matrix.label }}
     runs-on: ${{ matrix.platform }}
+    needs: release-e2e
 
     strategy:
       fail-fast: false
@@ -97,17 +151,6 @@ jobs:
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Validate release tag
-        env:
-          RELEASE_TAG: ${{ inputs.tag }}
-        run: >-
-          node -e 'const fs = require("node:fs");
-          const config = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json", "utf8"));
-          const expected = "v" + config.version;
-          if (process.env.RELEASE_TAG !== expected) {
-            throw new Error("Release tag must match app version: " + expected);
-          }'
 
       - name: Prepare universal macOS MCP sidecar
         if: matrix.platform == 'macos-latest'

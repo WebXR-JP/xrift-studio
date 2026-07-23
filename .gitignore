@@ -11,6 +11,9 @@ node_modules
 dist
 dist-ssr
 preview-dist
+playwright-report
+test-results
+blob-report
 *.local
 src-tauri/binaries/
 src-tauri/updater.key

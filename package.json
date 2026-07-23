@@ -26,6 +26,8 @@
     "mcp:sidecar:prepare:release": "node scripts/prepare-mcp-sidecar.mjs --release",
     "mcp:server": "pnpm dlx @hypothesi/tauri-mcp-server",
     "mcp:cli": "pnpm --package=@hypothesi/tauri-mcp-cli dlx tauri-mcp",
+    "e2e:typecheck": "tsc --noEmit -p tsconfig.e2e.json",
+    "e2e:release": "pnpm typecheck && pnpm e2e:typecheck && playwright test --config playwright.config.ts",
     "cli:build": "vite build --config vite.cli.config.mjs",
     "cli:test": "pnpm cli:build && node dist/cli/fixture.mjs",
     "runtime:build": "pnpm --filter xrift-studio-runtime build",
@@ -65,8 +67,10 @@
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/vite": "4.3.3",
     "@tauri-apps/cli": "^2.11.4",
+    "@types/node": "^26.1.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@types/three": "0.185.1",

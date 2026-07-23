@@ -199,6 +199,24 @@ const AUTOSAVE_DELAY_MS = 250;
 
 type SceneSelection = Extract<EditorSelection, { kind: "entity" }> | null;
 
+function sceneEntityIdsInHierarchyOrder(
+  scene: PrototypeVisualProject["scene"],
+): string[] {
+  const entityIds: string[] = [];
+  const visited = new Set<string>();
+  const visit = (entityId: string) => {
+    if (visited.has(entityId)) return;
+    const entity = scene.entities[entityId];
+    if (!entity) return;
+    visited.add(entityId);
+    entityIds.push(entityId);
+    entity.children.forEach(visit);
+  };
+  scene.rootEntityIds.forEach(visit);
+  Object.keys(scene.entities).forEach(visit);
+  return entityIds;
+}
+
 type EditorSessionSnapshot = {
   bundle: PrototypeVisualProject;
   sceneSelection: SceneSelection;
@@ -4346,6 +4364,17 @@ export function VisualEditorPrototype({
           }
           handleDelete(payload.entityId);
           return editorMode === "edit" && Boolean(payload.entityId ?? sceneSelection?.id);
+        case "selection.select-all": {
+          if (assetSelection) return false;
+          const entityIds = sceneEntityIdsInHierarchyOrder(bundle.scene);
+          if (entityIds.length === 0) return false;
+          const primaryEntityId =
+            sceneSelection?.id && entityIds.includes(sceneSelection.id)
+              ? sceneSelection.id
+              : entityIds[0]!;
+          handleEntitySelectionChange(entityIds, primaryEntityId);
+          return true;
+        }
         case "selection.rename": {
           if (editorMode !== "edit") return false;
           if (payload.entityId) requestRename("entity", payload.entityId);
@@ -4468,6 +4497,7 @@ export function VisualEditorPrototype({
       handleCreateEmpty,
       handleDelete,
       handleDuplicate,
+      handleEntitySelectionChange,
       handlePaste,
       handlePlacePrimitive,
       handleReparentEntity,
@@ -4483,6 +4513,7 @@ export function VisualEditorPrototype({
       runSave,
       runUpload,
       saveStatus,
+      bundle.scene,
       sceneSelection?.id,
       stopPlayMode,
     ],

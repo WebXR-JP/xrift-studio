@@ -7,6 +7,7 @@ export type EditorCommandId =
   | "edit.paste"
   | "edit.duplicate"
   | "edit.delete"
+  | "selection.select-all"
   | "selection.rename"
   | "entity.create-empty"
   | "entity.create-primitive"
@@ -106,6 +107,12 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
     label: "削除",
     category: "edit",
     bindings: [{ key: "delete" }, { key: "backspace" }],
+  },
+  {
+    id: "selection.select-all",
+    label: "SceneのEntityをすべて選択",
+    category: "edit",
+    bindings: [{ key: "a", primary: true }],
   },
   {
     id: "selection.rename",

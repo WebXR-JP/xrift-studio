@@ -2,7 +2,6 @@ import {
   Canvas,
   useFrame,
   useThree,
-  type ThreeEvent,
 } from "@react-three/fiber";
 import {
   Edges,
@@ -154,7 +153,7 @@ const PLAY_KEYS = new Set([
   "arrowleft",
   "arrowright",
 ]);
-const SCENE_VIEW_SELECTION_DRAG_THRESHOLD_PX = 6;
+const SCENE_VIEW_ENTITY_ORIGIN_HIT_RADIUS_PX = 18;
 const EDIT_CAMERA_TARGET: [number, number, number] = [0, 0.7, 0];
 const EDITOR_SELECTION_COLOR = "#7c3aed";
 const MUTED_GIZMO_COLOR = new Color("#64748b");
@@ -228,23 +227,6 @@ function muteTransformGizmo(controls: Object3D | null): void {
       material.needsUpdate = true;
     }
   });
-}
-
-function isTransformControlsObject(object: Object3D): boolean {
-  let current: Object3D | null = object;
-  while (current) {
-    if ((current as Object3D & { isTransformControls?: boolean }).isTransformControls) {
-      return true;
-    }
-    current = current.parent;
-  }
-  return false;
-}
-
-function isTransformControlsPointerEvent(
-  intersections: readonly { object: Object3D }[],
-): boolean {
-  return intersections.some(({ object }) => isTransformControlsObject(object));
 }
 
 function colorFactorToHex(value: [number, number, number] | undefined): string {
@@ -1087,7 +1069,6 @@ function EntityObject({
   selected,
   primary,
   editable,
-  selectable,
   playing,
   physicsEnabled,
   ownRigidBody,
@@ -1096,7 +1077,6 @@ function EntityObject({
   transformSpace,
   gizmo,
   projectPath,
-  onSelect,
   onTransformCommit,
   onDraggingChange,
   transformDraggingRef,
@@ -1112,7 +1092,6 @@ function EntityObject({
   selected: boolean;
   primary: boolean;
   editable: boolean;
-  selectable: boolean;
   playing: boolean;
   physicsEnabled: boolean;
   ownRigidBody?: RigidBodyComponent;
@@ -1121,10 +1100,6 @@ function EntityObject({
   transformSpace: TransformSpace;
   gizmo: SceneSettings["editor"]["gizmo"];
   projectPath?: string;
-  onSelect: (
-    entityId: string,
-    modifiers: SceneViewportSelectionModifiers,
-  ) => void;
   onTransformCommit: (entityId: string, patch: TransformPatch) => void;
   onDraggingChange: (dragging: boolean) => void;
   transformDraggingRef: { current: boolean };
@@ -1229,31 +1204,6 @@ function EntityObject({
         rotation={transform?.rotation ?? [0, 0, 0]}
         scale={transform?.scale ?? [1, 1, 1]}
         userData={{ authoringEntityId, renderedEntityId: entity.id }}
-        onPointerDown={
-          selectable
-            ? (event: ThreeEvent<PointerEvent>) => {
-                event.stopPropagation();
-              }
-            : undefined
-        }
-        onClick={
-          selectable
-            ? (event: ThreeEvent<MouseEvent>) => {
-                event.stopPropagation();
-                if (
-                  event.button !== 0 ||
-                  event.delta > SCENE_VIEW_SELECTION_DRAG_THRESHOLD_PX ||
-                  transformDraggingRef.current ||
-                  isTransformControlsPointerEvent(event.intersections)
-                ) {
-                  return;
-                }
-                onSelect(authoringEntityId, {
-                  additive: event.shiftKey || event.ctrlKey || event.metaKey,
-                });
-              }
-            : undefined
-        }
       >
         <OfficialXriftEntityWrappers components={xriftWrapperComponents}>
           {physicsEnabled ? (
@@ -1320,12 +1270,16 @@ type SceneDropHit = {
   meshComponentId: string | null;
 };
 
-type SceneDropResolver = (clientX: number, clientY: number) => SceneDropHit;
+type SceneDropResolver = (
+  clientX: number,
+  clientY: number,
+  options?: { includeEntityOriginFallback?: boolean },
+) => SceneDropHit;
 
-function entityDropMetadata(object: Object3D): {
+function entityPointerMetadata(object: Object3D): {
   authoringEntityId: string;
   renderedEntityId: string;
-  meshComponentId: string;
+  meshComponentId: string | null;
 } | null {
   let current: Object3D | null = object;
   let meshComponentId: string | null = null;
@@ -1340,7 +1294,6 @@ function entityDropMetadata(object: Object3D): {
     const authoringEntityId = current.userData.authoringEntityId;
     const renderedEntityId = current.userData.renderedEntityId;
     if (
-      meshComponentId !== null &&
       typeof authoringEntityId === "string" &&
       typeof renderedEntityId === "string"
     ) {
@@ -1349,6 +1302,15 @@ function entityDropMetadata(object: Object3D): {
     current = current.parent;
   }
   return null;
+}
+
+function isObjectVisibleInHierarchy(object: Object3D): boolean {
+  let current: Object3D | null = object;
+  while (current) {
+    if (!current.visible) return false;
+    current = current.parent;
+  }
+  return true;
 }
 
 type MaterialDropReadyTarget = {
@@ -1453,9 +1415,11 @@ function SceneDropProjectionBridge({
     [],
   );
   const groundHit = useMemo(() => new Vector3(), []);
+  const entityWorldPosition = useMemo(() => new Vector3(), []);
+  const entityNdcPosition = useMemo(() => new Vector3(), []);
 
   useLayoutEffect(() => {
-    resolverRef.current = (clientX, clientY) => {
+    resolverRef.current = (clientX, clientY, options) => {
       const bounds = gl.domElement.getBoundingClientRect();
       if (bounds.width <= 0 || bounds.height <= 0) {
         return {
@@ -1475,12 +1439,64 @@ function SceneDropProjectionBridge({
       let renderedEntityId: string | null = null;
       let meshComponentId: string | null = null;
       for (const intersection of raycaster.intersectObjects(scene.children, true)) {
-        const metadata = entityDropMetadata(intersection.object);
-        if (!metadata) continue;
+        if (!isObjectVisibleInHierarchy(intersection.object)) continue;
+        const metadata = entityPointerMetadata(intersection.object);
+        if (
+          !metadata ||
+          (!options?.includeEntityOriginFallback && !metadata.meshComponentId)
+        ) {
+          continue;
+        }
         authoringEntityId = metadata.authoringEntityId;
         renderedEntityId = metadata.renderedEntityId;
         meshComponentId = metadata.meshComponentId;
         break;
+      }
+      if (!authoringEntityId && options?.includeEntityOriginFallback) {
+        const maximumDistanceSquared =
+          SCENE_VIEW_ENTITY_ORIGIN_HIT_RADIUS_PX *
+          SCENE_VIEW_ENTITY_ORIGIN_HIT_RADIUS_PX;
+        let bestDistanceSquared = maximumDistanceSquared;
+        let bestDepth = Number.POSITIVE_INFINITY;
+        scene.traverse((object) => {
+          const candidateAuthoringEntityId = object.userData.authoringEntityId;
+          const candidateRenderedEntityId = object.userData.renderedEntityId;
+          if (
+            typeof candidateAuthoringEntityId !== "string" ||
+            typeof candidateRenderedEntityId !== "string"
+          ) {
+            return;
+          }
+          if (!isObjectVisibleInHierarchy(object)) return;
+          object.getWorldPosition(entityWorldPosition);
+          entityNdcPosition.copy(entityWorldPosition).project(camera);
+          if (
+            !Number.isFinite(entityNdcPosition.x) ||
+            !Number.isFinite(entityNdcPosition.y) ||
+            entityNdcPosition.z < -1 ||
+            entityNdcPosition.z > 1
+          ) {
+            return;
+          }
+          const candidateX =
+            bounds.left + ((entityNdcPosition.x + 1) / 2) * bounds.width;
+          const candidateY =
+            bounds.top + ((1 - entityNdcPosition.y) / 2) * bounds.height;
+          const deltaX = clientX - candidateX;
+          const deltaY = clientY - candidateY;
+          const distanceSquared = deltaX * deltaX + deltaY * deltaY;
+          if (
+            distanceSquared > bestDistanceSquared ||
+            (distanceSquared === bestDistanceSquared &&
+              entityNdcPosition.z >= bestDepth)
+          ) {
+            return;
+          }
+          bestDistanceSquared = distanceSquared;
+          bestDepth = entityNdcPosition.z;
+          authoringEntityId = candidateAuthoringEntityId;
+          renderedEntityId = candidateRenderedEntityId;
+        });
       }
       const position = raycaster.ray.intersectPlane(groundPlane, groundHit);
       return {
@@ -1495,7 +1511,18 @@ function SceneDropProjectionBridge({
     return () => {
       resolverRef.current = null;
     };
-  }, [camera, gl, groundHit, groundPlane, pointer, raycaster, resolverRef, scene]);
+  }, [
+    camera,
+    entityNdcPosition,
+    entityWorldPosition,
+    gl,
+    groundHit,
+    groundPlane,
+    pointer,
+    raycaster,
+    resolverRef,
+    scene,
+  ]);
 
   return null;
 }
@@ -1508,7 +1535,6 @@ function SceneEntityHierarchy({
   selectedEntityIds,
   primaryEntityId,
   editable,
-  selectable,
   playing,
   physicsEnabled,
   runtimeEntityRevisions,
@@ -1516,7 +1542,6 @@ function SceneEntityHierarchy({
   transformSpace,
   gizmo,
   projectPath,
-  onSelect,
   onTransformCommit,
   onDraggingChange,
   transformDraggingRef,
@@ -1534,7 +1559,6 @@ function SceneEntityHierarchy({
   selectedEntityIds: ReadonlySet<string>;
   primaryEntityId: string | null;
   editable: boolean;
-  selectable: boolean;
   playing: boolean;
   physicsEnabled: boolean;
   runtimeEntityRevisions?: Readonly<Record<string, number>>;
@@ -1542,10 +1566,6 @@ function SceneEntityHierarchy({
   transformSpace: TransformSpace;
   gizmo: SceneSettings["editor"]["gizmo"];
   projectPath?: string;
-  onSelect: (
-    entityId: string,
-    modifiers: SceneViewportSelectionModifiers,
-  ) => void;
   onTransformCommit: (entityId: string, patch: TransformPatch) => void;
   onDraggingChange: (dragging: boolean) => void;
   transformDraggingRef: { current: boolean };
@@ -1577,7 +1597,6 @@ function SceneEntityHierarchy({
       selected={selectedEntityIds.has(authoringEntityId)}
       primary={primaryEntityId === authoringEntityId}
       editable={editable}
-      selectable={selectable}
       playing={playing}
       physicsEnabled={physicsEnabled}
       ownRigidBody={ownRigidBody}
@@ -1585,7 +1604,6 @@ function SceneEntityHierarchy({
       transformMode={transformMode}
       transformSpace={transformSpace}
       gizmo={gizmo}
-      onSelect={onSelect}
       onTransformCommit={onTransformCommit}
       onDraggingChange={onDraggingChange}
       transformDraggingRef={transformDraggingRef}
@@ -1608,7 +1626,6 @@ function SceneEntityHierarchy({
           selectedEntityIds={selectedEntityIds}
           primaryEntityId={primaryEntityId}
           editable={editable}
-          selectable={selectable}
           playing={playing}
           physicsEnabled={physicsEnabled}
           runtimeEntityRevisions={runtimeEntityRevisions}
@@ -1616,7 +1633,6 @@ function SceneEntityHierarchy({
           transformSpace={transformSpace}
           gizmo={gizmo}
           projectPath={projectPath}
-          onSelect={onSelect}
           onTransformCommit={onTransformCommit}
           onDraggingChange={onDraggingChange}
           transformDraggingRef={transformDraggingRef}
@@ -2413,6 +2429,7 @@ export function SceneViewport({
     startY: number;
     moved: boolean;
     additive: boolean;
+    pressedEntityId: string | null;
   } | null>(null);
   const preview = useMemo(
     () => createSceneViewportPreview(scene, assets, prefabs),
@@ -2559,16 +2576,25 @@ export function SceneViewport({
   const handleViewportPointerDown = (
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
-    if (event.button === 0 && editorMode === "edit") {
+    const isCanvasPointer = event.target instanceof HTMLCanvasElement;
+    if (
+      isCanvasPointer &&
+      event.button === 0 &&
+      !transformDraggingRef.current
+    ) {
       leftPointerGestureRef.current = {
         pointerId: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
         moved: false,
         additive: event.shiftKey || event.ctrlKey || event.metaKey,
+        pressedEntityId:
+          dropResolverRef.current?.(event.clientX, event.clientY, {
+            includeEntityOriginFallback: true,
+          }).authoringEntityId ?? null,
       };
     }
-    if (event.button === 2) {
+    if (isCanvasPointer && event.button === 2) {
       rightPointerGestureRef.current = {
         pointerId: event.pointerId,
         startX: event.clientX,
@@ -2632,11 +2658,22 @@ export function SceneViewport({
       ) {
         leftGesture.moved = true;
       }
-      window.requestAnimationFrame(() => {
-        if (leftPointerGestureRef.current === leftGesture) {
-          leftPointerGestureRef.current = null;
+      if (!leftGesture.moved && !transformDraggingRef.current) {
+        const releasedEntityId =
+          dropResolverRef.current?.(event.clientX, event.clientY, {
+            includeEntityOriginFallback: true,
+          }).authoringEntityId ?? null;
+        const entityId = releasedEntityId ?? leftGesture.pressedEntityId;
+        if (entityId) {
+          onSelect(
+            { kind: "entity", id: entityId },
+            { additive: leftGesture.additive },
+          );
+        } else if (editorMode === "edit") {
+          onSelect(null, { additive: leftGesture.additive });
         }
-      });
+      }
+      leftPointerGestureRef.current = null;
     }
     const gesture = rightPointerGestureRef.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
@@ -2981,20 +3018,6 @@ export function SceneViewport({
             near: sceneSettings.camera.near,
             far: sceneSettings.camera.far,
           }}
-          onPointerMissed={(event) => {
-            const gesture = leftPointerGestureRef.current;
-            if (
-              editorMode === "edit" &&
-              !transformDraggingRef.current &&
-              !gesture?.moved
-            ) {
-              onSelect(null, {
-                additive:
-                  gesture?.additive ??
-                  (event.shiftKey || event.ctrlKey || event.metaKey),
-              });
-            }
-          }}
         >
           <color
             attach="background"
@@ -3075,16 +3098,12 @@ export function SceneViewport({
                 selectedEntityIds={selectedEntityIdSet}
                 primaryEntityId={selectedEntityId}
                 editable={editorMode === "edit"}
-                selectable
                 playing={editorMode === "play"}
                 physicsEnabled={editorMode === "play" && projectKind === "world"}
                 runtimeEntityRevisions={runtimeEntityRevisions}
                 transformMode={transformMode}
                 transformSpace={transformSpace}
                 gizmo={sceneSettings.editor.gizmo}
-                onSelect={(entityId, modifiers) =>
-                  onSelect({ kind: "entity", id: entityId }, modifiers)
-                }
                 onTransformCommit={onTransformCommit}
                 onDraggingChange={(dragging) => {
                   transformDraggingRef.current = dragging;
