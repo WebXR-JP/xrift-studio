@@ -150,6 +150,8 @@ export function getEditorComponentIcon(
       return EDITOR_ICONS.model;
     case "collider":
       return EDITOR_ICONS.primitive;
+    case "rigid-body":
+      return EDITOR_ICONS.axis;
     case "light":
       return EDITOR_ICONS.light;
     case "spawn-point":

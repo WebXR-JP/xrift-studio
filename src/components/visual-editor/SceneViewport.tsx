@@ -14,6 +14,7 @@ import {
 import {
   CapsuleCollider,
   CuboidCollider,
+  MeshCollider,
   RigidBody,
   type RapierRigidBody,
 } from "@react-three/rapier";
@@ -87,6 +88,7 @@ import {
   type ModelAsset,
   type PrefabDocument,
   type PrimitiveGeometry,
+  type RigidBodyComponent,
   type SceneComponent,
   type SceneDocument,
   type SceneEntity,
@@ -894,6 +896,8 @@ function ComponentVisual({
           ) : null}
         </mesh>
       );
+    case "rigid-body":
+      return null;
     case "light":
       return showHelpers ? (
         <LightVisual
@@ -995,6 +999,94 @@ function RuntimePhysicsEntity({
   );
 }
 
+function RuntimeOwnedColliderContent({
+  entity,
+  bodyType,
+  autoColliders,
+  children,
+}: {
+  entity: SceneEntity;
+  bodyType: RigidBodyComponent["bodyType"];
+  autoColliders: RigidBodyComponent["autoColliders"];
+  children: ReactNode;
+}) {
+  const colliders = entity.components.filter(
+    (component): component is ColliderComponent =>
+      component.type === "collider" && component.enabled,
+  );
+  const meshCollider = colliders.find(
+    (component) => component.shape === "mesh",
+  );
+  let renderedChildren = children;
+  if (meshCollider) {
+    renderedChildren = (
+      <MeshCollider
+        type={
+          meshCollider.meshMode === "convex" || bodyType !== "fixed"
+            ? "hull"
+            : "trimesh"
+        }
+      >
+        {renderedChildren}
+      </MeshCollider>
+    );
+  }
+  if (autoColliders !== "none") {
+    const autoColliderType =
+      autoColliders === "trimesh" && bodyType !== "fixed"
+        ? "hull"
+        : autoColliders;
+    renderedChildren = (
+      <MeshCollider type={autoColliderType}>{renderedChildren}</MeshCollider>
+    );
+  }
+
+  return (
+    <>
+      {renderedChildren}
+      {colliders.map((collider) =>
+        collider.shape === "box" ? (
+          <CuboidCollider
+            key={collider.id}
+            args={collider.halfExtents}
+            position={collider.center}
+            friction={collider.friction}
+            restitution={collider.restitution}
+            sensor={collider.isTrigger}
+          />
+        ) : null,
+      )}
+    </>
+  );
+}
+
+function RuntimeOwnedRigidBody({
+  component,
+  children,
+}: {
+  component: RigidBodyComponent;
+  children: ReactNode;
+}) {
+  return (
+    <RigidBody
+      type={component.bodyType}
+      colliders={false}
+      sensor={component.isTrigger}
+      friction={component.friction}
+      restitution={component.restitution}
+      gravityScale={component.gravityScale}
+      linearDamping={component.linearDamping}
+      angularDamping={component.angularDamping}
+      canSleep={component.canSleep}
+      ccd={component.ccd}
+      lockTranslations={component.lockTranslations}
+      lockRotations={component.lockRotations}
+    >
+      {children}
+    </RigidBody>
+  );
+}
+
 function EntityObject({
   entity,
   authoringEntityId,
@@ -1005,6 +1097,8 @@ function EntityObject({
   selectable,
   playing,
   physicsEnabled,
+  ownRigidBody,
+  rigidBodyOwner,
   transformMode,
   transformSpace,
   gizmo,
@@ -1028,6 +1122,8 @@ function EntityObject({
   selectable: boolean;
   playing: boolean;
   physicsEnabled: boolean;
+  ownRigidBody?: RigidBodyComponent;
+  rigidBodyOwner?: RigidBodyComponent;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
   gizmo: SceneSettings["editor"]["gizmo"];
@@ -1095,6 +1191,17 @@ function EntityObject({
       )}
     </>
   );
+  const ownedColliderVisuals = rigidBodyOwner ? (
+    <RuntimeOwnedColliderContent
+      entity={entity}
+      bodyType={rigidBodyOwner.bodyType}
+      autoColliders={rigidBodyOwner.autoColliders}
+    >
+      {entityVisuals}
+    </RuntimeOwnedColliderContent>
+  ) : (
+    entityVisuals
+  );
 
   const setTransformControlsRef = useCallback(
     (controls: ElementRef<typeof TransformControls> | null) => {
@@ -1157,10 +1264,22 @@ function EntityObject({
       >
         <OfficialXriftEntityWrappers components={xriftWrapperComponents}>
           {physicsEnabled ? (
-            <RuntimePhysicsEntity entity={entity}>
-              {entityVisuals}
-              {children}
-            </RuntimePhysicsEntity>
+            ownRigidBody ? (
+              <RuntimeOwnedRigidBody component={ownRigidBody}>
+                {ownedColliderVisuals}
+                {children}
+              </RuntimeOwnedRigidBody>
+            ) : rigidBodyOwner ? (
+              <>
+                {ownedColliderVisuals}
+                {children}
+              </>
+            ) : (
+              <RuntimePhysicsEntity entity={entity}>
+                {entityVisuals}
+                {children}
+              </RuntimePhysicsEntity>
+            )
           ) : (
             <>
               {entityVisuals}
@@ -1412,6 +1531,7 @@ function SceneEntityHierarchy({
   materialDropTarget,
   displayMode,
   displayProfile,
+  inheritedRigidBody,
   ancestors = new Set<string>(),
 }: {
   entityId: string;
@@ -1440,6 +1560,7 @@ function SceneEntityHierarchy({
   materialDropTarget: MaterialDropReadyTarget | null;
   displayMode: SceneViewportDisplayMode;
   displayProfile: SceneViewportDisplayProfile;
+  inheritedRigidBody?: RigidBodyComponent;
   ancestors?: ReadonlySet<string>;
 }) {
   const entity = scene.entities[entityId];
@@ -1448,6 +1569,11 @@ function SceneEntityHierarchy({
     authoringEntityIdByEntityId[entityId] ?? entityId;
   const nextAncestors = new Set(ancestors);
   nextAncestors.add(entityId);
+  const ownRigidBody = entity.components.find(
+    (component): component is RigidBodyComponent =>
+      component.type === "rigid-body" && component.enabled,
+  );
+  const rigidBodyOwner = ownRigidBody ?? inheritedRigidBody;
 
   return (
     <EntityObject
@@ -1461,6 +1587,8 @@ function SceneEntityHierarchy({
       selectable={selectable}
       playing={playing}
       physicsEnabled={physicsEnabled}
+      ownRigidBody={ownRigidBody}
+      rigidBodyOwner={rigidBodyOwner}
       transformMode={transformMode}
       transformSpace={transformSpace}
       gizmo={gizmo}
@@ -1503,6 +1631,7 @@ function SceneEntityHierarchy({
           materialDropTarget={materialDropTarget}
           displayMode={displayMode}
           displayProfile={displayProfile}
+          inheritedRigidBody={rigidBodyOwner}
           ancestors={nextAncestors}
         />
       ))}

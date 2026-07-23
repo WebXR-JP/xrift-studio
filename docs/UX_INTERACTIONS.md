@@ -68,10 +68,10 @@ F-06 アイテム検査
 | MI-49 | OpenBrush / Tilt Brush glTFをimportする、OpenBrush Starterを作成する、または対象Model / Materialを表示・変換する | `GOOGLE_tilt_brush_material`、exporter、brush名から形式を判定し、Model InspectorへOpenBrush badge、brush数、three-icosa rendererを表示する。Material InspectorはCustom Material Preview Adapterで元Modelの該当nodeを分離し、埋め込みbrush libraryから実ストローク形状、実GLSL、uniform、brush textureをリアルタイム描画する。 | 各source brushをbrush名、GUID、renderer version、source material indexを持つOpenBrush Material Assetへ展開して対応slotへ初期設定する。対応presetは専用shader、未対応presetまたはshader resource失敗時はGLB内のglTF PBR Materialを保持し、previewとInspectorへfallback理由を示す。明示的に割り当てた通常のXRift Materialだけがslot単位で上書きする。import時の古い外部画像URLは取得せず、安全な解析用画像へ置換する。 |
 | MI-50 | Visual Editorの「Classicへ書き出す」を開き、既存XRift Classic projectを選択する | OSのfolder picker後に`package.json`、`xrift.json`、World／Item entry、package managerを検査し、コンポーネント追加またはバックアップ付きentry切替、Runtime package installの結果を一つのdialogでreviewする。処理中は保存、compile、file追加、installのstageとprogressを表示し、閉じる操作と二重実行を止める。 | 成功時はRuntime JSON、Asset、接続componentをVisual Project IDごとの管理領域へ置き、folder、VS Code、terminal、接続snippetへ到達できる。既存entryは既定で変更せず、entry切替は確認後にbackupを残す。失敗時はVisual projectと既存手書きentryを維持し、folder再選択、再実行、package managerでのinstallへ戻れる。 |
 | MI-51 | アプリ起動後またはAboutの「更新を確認」でXRift Studio本体の更新を検知する | 確認中は制作を妨げず、更新がある時だけ現在版、最新版、リリースノートをdialogに表示する。「後で」を選ぶとライブラリheaderとAboutに更新導線を残す。download中はbytesと割合、install中は再起動準備を示し、閉じる操作と二重実行を止める。 | 署名検証済み更新のinstall後にアプリを再起動し、新しい現在版と完了通知を表示する。確認またはinstall失敗時は現在のアプリを維持し、Aboutまたは同じdialogから再試行できる。 |
-| MI-52 | Assetsの「外部から追加」を開く、provider sidebarでリソース集を選ぶ、HDR / EXRをimportする、外部Assetをinstallする、公式XRift Componentを追加する、または環境Texture AssetをScene Viewへdragする | 左sidebarにPoly Haven、Open Brush、XRift公式Componentを同じ階層で表示し、中央に選択中providerの検索、種別またはカテゴリ、一覧、右に作者、license、配布ページとprovider固有optionを表示する。Open Brushは固定catalogの選択中代表stroke nodeを一つのWebGL rendererで描画し、汎用sphereの疑似previewへ置換しない。XRift公式Componentは公開package本体を一つの共有Canvasと複数Viewで実描画する。provider切替ではSceneとAssetを変更せずcatalogだけを切り替える。ローカルHDR / EXRはシグネチャ検証後にTextureとしてqueueへ表示する。downloadまたは追加処理中はprovider切替と主操作を無効にし、providerが返した固定domainまたは固定catalog revisionだけを扱う。環境Texture drag中はScene全体へ設定されることを表示する。 | 成功時はMaterialと参照Texture、形式とequirectangular用途を保持したTexture Asset、GUIDとrenderer versionを保持したOpenBrush Material Asset、または公式XRift Componentを持つEntityを選択する。環境TextureはFlip Yなどを編集でき、任意ならSkyboxへ直ちに設定する。Open BrushはSceneへ自動割当せず、同じGUIDとrenderer versionの再追加では既存Materialを選択する。公式Componentは一件のScene historyとして追加しInspectorを開く。catalog取得失敗では同じproviderから再試行でき、install失敗時はmanifestとSceneを変更せず同じAssetとoptionから再試行できる。provider creditとlicenseはAssetに保持し、一覧とInspectorから確認できる。 |
+| MI-52 | Assetsの「外部から追加」を開く、provider sidebarでリソース集を選ぶ、HDR / EXRをimportする、外部Assetをinstallする、公式XRift Componentを追加する、または環境Texture AssetをScene Viewへdragする | 左sidebarにPoly Haven、Open Brush、XRift公式Componentを同じ階層で表示し、中央に選択中providerの検索、種別またはカテゴリ、一覧、右に作者、license、配布ページとprovider固有optionを表示する。Open Brushは固定catalogの代表stroke nodeをthree-icosaで事前描画した保存済みthumbnailを全48件に表示し、汎用sphereの疑似previewへ置換しない。XRift公式Componentは公開package本体と公式sampleを事前描画したversion付き保存済みthumbnailを表示する。一覧と詳細を開くだけではWebGL contextを作らない。provider切替ではSceneとAssetを変更せずcatalogだけを切り替える。ローカルHDR / EXRはシグネチャ検証後にTextureとしてqueueへ表示する。downloadまたは追加処理中はprovider切替と主操作を無効にし、providerが返した固定domainまたは固定catalog revisionだけを扱う。環境Texture drag中はScene全体へ設定されることを表示する。 | 成功時はMaterialと参照Texture、形式とequirectangular用途を保持したTexture Asset、GUIDとrenderer versionを保持したOpenBrush Material Asset、または公式XRift Componentを持つEntityを選択する。環境TextureはFlip Yなどを編集でき、任意ならSkyboxへ直ちに設定する。Open BrushはSceneへ自動割当せず、同じGUIDとrenderer versionの再追加では既存Materialを選択する。公式Componentは一件のScene historyとして追加しInspectorを開く。保存済みthumbnailが欠落した場合は項目名と種類iconを表示し、「準備中」のままにしない。catalog取得失敗では同じproviderから再試行でき、install失敗時はmanifestとSceneを変更せず同じAssetとoptionから再試行できる。provider creditとlicenseはAssetに保持し、一覧とInspectorから確認できる。 |
 | MI-53 | Hierarchy、Scene View、または Assets で Shift / Ctrl・Cmd を使って複数選択する | 選択行・カード・Scene上のoutlineを同じ選択状態として示し、Inspector見出しに件数を表示する。Hierarchy / AssetsのShiftは表示順の範囲、Scene ViewのShiftと全surfaceのCtrl・Cmdは追加／解除とする。Scene Viewでは最後に選んだEntityだけをprimaryとしてgizmoを表示し、camera dragを選択clickとして確定しない。Entityは共通するMesh Renderer / Light、Materialは共通PBR値だけを表示する。 | 選択だけではdocumentとhistoryを変更しない。一括変更は一件のhistoryとして確定し、Undoで全対象を戻す。HierarchyのDeleteと右クリックの削除は選択済みEntity全体を一回で削除し、選択解除または単体選択で通常Inspectorへ戻る。Play中は選択を維持して編集操作を無効にする。 |
 | MI-54 | Animation clipを含み`importAnimations`が有効なGLB / glTF ModelをSceneへ配置し、Playを開始する | 配置EntityへAnimation Componentを自動追加し、Inspectorに先頭clip名、長さ、track数、Autoplay、Loopを表示する。Edit中は静止し、Play開始時だけ有効なAutoplayで先頭clipを再生する。 | Loop有効時はPlay中と生成結果で繰り返す。Loop無効時は一度で停止する。Play中にEnabled、Autoplay、Loopまたは同じEntityのTransform / Colliderを変更した時は、そのEntityのmixerとphysics bodyだけを破棄して先頭から再実行する。Stop、Component無効化、Entity破棄ではmixerを停止してEdit時の姿勢へ戻す。clip欠落時はScene View全体を止めず同じInspectorに理由を示す。 |
-| MI-55 | 外部リソースの「XRift公式 Component」で公式Componentを選ぶ | 公開中の`@xrift/world-components`検証version、公式source、利用可能な全Componentをgridへ表示する。thumbnailは一つの共有WebGL Canvasでpackage本体と公式sample childを直接描画し、SVG／CSSの識別用イラストへ置換しない。選択中Componentにはdescription、category、named import、versionを表示し、`DevEnvironment`はScene用でない理由を示す。 | 追加成功時は公式XRift Componentを一件のhistory transactionへ確定し、追加Entityを選択してScene ViewとInspectorへ到達する。Play、別Import中、project kind不一致、変換診断errorではSceneを変更せず理由を同じ詳細欄に残す。 |
+| MI-55 | 外部リソースの「XRift公式 Component」で公式Componentを選ぶ | 公開中の`@xrift/world-components`検証version、公式source、利用可能な全Componentをgridへ表示する。thumbnailはpackage本体と公式sample childを固定generatorで事前描画し、Component名と公式badgeを焼き込んだ保存済みWebPを使う。versionが変わる時は保存先revisionを更新して全件を再生成し、SVG／CSSだけの識別用イラストへ置換しない。選択中Componentにはdescription、category、named import、versionを表示し、`DevEnvironment`はScene用でない理由を示す。 | 追加成功時は公式XRift Componentを一件のhistory transactionへ確定し、追加Entityを選択してScene ViewとInspectorへ到達する。Play、別Import中、project kind不一致、変換診断errorではSceneを変更せず理由を同じ詳細欄に残す。 |
 | MI-56 | GLB / VRM ModelをSceneへ配置し、展開されたNode、Bone、MeshをHierarchyで選択する | sourceの親子順を保つEntity treeをModel Entityの下へ表示し、行末をNode / Bone / Mesh / Skinで区別する。SkinまたはAnimationを含むModelは一つの共有Rendererを維持し、選択NodeのInspectorへsource node番号、共有Model、編集対象を表示する。Bone / Node TransformはScene Viewと共有Model poseへ即時同期し、Mesh / Skin行にはそのnodeが使うMaterial slotだけを表示する。 | Transformとnode別Material変更を一件のhistoryへ保存し、Undo / Redo、再表示、Classic JSX、Runtime manifestで同じ結果を復元する。同じsource materialを使う別nodeへnode別上書きを漏らさない。parse失敗時は単一Entityへ偽装せずImport Queueへ戻し、last-good Asset / Sceneを維持する。 |
 | MI-57 | Hierarchyの親Entityを折り畳む、展開する、検索で絞り込む、またはEntityのEnabledを変更する | 子を持つ行だけに展開状態と件数が分かる矢印を表示し、折り畳み中は子孫行だけを隠す。検索は名前、Entity種類、Component種類、Enabledの語を空白区切りで絞り込み、一致したEntityと祖先だけを自動展開する。折り畳みと検索はSceneDocumentとUndo履歴を変更しない。単一Entity Inspectorの先頭はUnityと同じ順序でEnabledチェックと名前を一行に置き、Prefab sourceはアイコン、名前、更新アイコンだけを続ける。説明は常設せずtooltipと読み上げ名に移す。親が無効な子は継承された非表示状態をHierarchyの濃淡とInspectorの状態アイコンで示す。 | 検索を消すと検索前の折り畳み状態と同じ順序へ戻る。Scene Viewなどから折り畳まれた子孫を選択した時は祖先を自動展開して選択行とInspectorへ到達させる。Enabled変更は一件のauthoring historyとしてScene View、Play、生成結果へ反映し、子Entity自身のEnabled値は保持する。一致なしでは検索語とクリア操作を表示する。 |
 | MI-58 | Entity InspectorでMesh Rendererを有効・無効にする、Material slotを確認する、またはMaterialを選択する | Mesh RendererのEnabledはComponent見出しの先頭へ置く。Material slotは入れ子のカード枠を使わず区切り線で並べ、Base Color、透明度、Texture有無を示すスウォッチ、選択欄、詳細を開くアイコンを一行にする。Material名だけに識別を依存せず、説明はtooltipと読み上げ名へ移す。 | EnabledとMaterial割当はそれぞれ一件のhistoryとしてScene View、Play、生成結果へ反映する。Materialを開いてもEntity選択を保持し、戻ると同じslotへ復帰できる。参照切れはスウォッチを未設定表示にし、既存bindingを暗黙に別Materialへ置換しない。 |
@@ -113,16 +113,16 @@ F-06 アイテム検査
 
 ### 操作前
 
-- 公式カタログはAssetsの「外部から追加」でPoly Haven、Open Brushと同列の「XRift公式 Component」providerから開く。project kindで配置可能なComponentを全件表示し、各カードにComponent名、category、package本体を描画したWebGL thumbnailを置く。一覧ではWebGL Contextをカードごとに作らず、一つのCanvasと複数Viewを共有する。`DevEnvironment`はScene Componentではなくdev entry用wrapperとして別注記する。
+- 公式カタログはAssetsの「外部から追加」でPoly Haven、Open Brushと同列の「XRift公式 Component」providerから開く。project kindで配置可能なComponentを全件表示し、各カードにComponent名、category、package本体を事前描画した保存済みthumbnailを置く。一覧と詳細を開くだけではWebGL Contextを作らない。`DevEnvironment`はScene Componentではなくdev entry用wrapperとして別注記する。
 - 選択中Componentには公開package version、公式source、実際に生成するnamed importとJSX sampleを表示する。
 - 右上の「Import」にはModel / 3D AssetとR3F / Classic変換を置く。R3F / Classic変換には貼り付け欄と「Classicプロジェクトを選択」を並べ、folder読込がデスクトップ機能であること、選択後のpackage名、entry、path、読み込んだmodule数を表示する。
 
 ### 処理中
 
 - 公式sampleまたは貼り付けTSXをJavaScriptとして実行しない。import alias、JSX tag、string / boolean / number / array / object literal、`Math.PI`を含む有限な数式だけを解析する。
-- Drei primitiveはStudio primitiveとMaterialへ、R3F LightはLightへ、Rapier RigidBodyはColliderへ、`Billboard`は`BillboardY`へ、`Reflector`は`Mirror`へ、`Sky` / `Environment`は`Skybox`へ変換する。RigidBodyの`fixed` / `dynamic` / `kinematicPosition` / `kinematicVelocity`と一般設定を保持し、動的callbackと未対応Componentだけを診断へ残す。
+- Drei primitiveはStudio primitiveとMaterialへ、R3F LightはLightへ、Rapier RigidBodyは親Entityの独立したRigid Body Componentへ、`Billboard`は`BillboardY`へ、`Reflector`は`Mirror`へ、`Sky` / `Environment`は`Skybox`へ変換する。RigidBodyの`fixed` / `dynamic` / `kinematicPosition` / `kinematicVelocity`、一般設定、`colliders`生成方式を保持し、親原点へ仮Box Colliderを作らない。動的callbackと未対応Componentだけを診断へ残す。
 - Classic folderは`package.json`、`xrift.json`、`src/World.tsx`または`src/Item.tsx`を検査し、`src`内のTypeScript / JavaScript moduleを上限付きで読み、entryからrelative importを再帰的に解決する。local Componentはinstance境界をEntityとして保持し、静的に見つかるreturn JSXをその子へ展開する。任意のcustom code、Hook、callback、条件分岐、動的collectionを実行せず、Asset dependency graphとruntime stateは完全移行と表示しない。
-- `group`、RigidBody、Drei / XRift wrapperを独立Entityとして残し、local Transformと親子順を維持する。対応するleaf Geometry、Light、Collider、公式Componentはその境界の子またはComponentとして変換する。
+- `group`、RigidBody、Drei / XRift wrapperを独立Entityとして残し、local Transformと親子順を維持する。RigidBody Entityは次のネストしたRigidBody境界までの子孫Mesh / Colliderを一つのBodyとして所有する。対応するleaf Geometry、Light、Collider、公式Componentはその境界の子またはComponentとして変換する。
 - Scene、AssetManifest、selectionは「追加」を確定するまで変更しない。
 
 ### 成功時
@@ -312,26 +312,30 @@ F-06 アイテム検査
 
 - 新規 import した Model は `generateColliders` を既定で有効にし、Sceneへ初回配置した時に同じ Entityへ既定`Static (Fixed)`の`Mesh Collider`を追加する。既存 Asset で明示的に無効化された設定は移行で上書きしない。
 - built-in primitive は `Box Collider` を同時作成する。Floor / Plane は薄い local bounds、その他は primitive bounds を初期 Half Extents とし、Entity Scale は値へ焼き込まずTransformで追従させる。
+- PhysicsのAdd Componentに`Rigid Body`を一Entity一件で表示する。追加した親Entityは自身と子孫のCollider / Meshを一つの物理Bodyへまとめ、ネストした別Rigid Body Entityから先は別Bodyとして扱う。
 
 ### 操作中
 
 - Inspector は Box の Center、Half Extents、自動フィット、Mesh の Trimesh / Convex Hull、共通の Enabled、Trigger、Friction、Restitutionを同じ Component cardで編集する。
-- 同じcardのRigid Body欄で`Static (Fixed)` / `Dynamic` / `Kinematic Position` / `Kinematic Velocity`、Gravity Scale、Linear / Angular Damping、Can Sleep、CCD、Position / Rotation Lockを編集する。設定がない旧documentは`Static (Fixed)`として読む。
+- Rigid Body cardで`Static (Fixed)` / `Dynamic` / `Kinematic Position` / `Kinematic Velocity`、Gravity Scale、Linear / Angular Damping、Can Sleep、CCD、Position / Rotation Lockを編集する。Collider生成は`子孫のCollider Component`、`Auto Cuboid`、`Auto Ball`、`Auto Convex Hull`、`Auto Trimesh`から選び、対象となる子孫Collider / Mesh件数を同じcardに表示する。
+- Rigid Body Componentがない旧documentではCollider内のBody設定を互換読み込みし、`Static (Fixed)`を既定にする。旧Classic importerが子を持つ空Entityの原点へ作った既定サイズBoxは、名前またはBody / surface設定のimport signatureを確認できる場合だけ親Rigid Body Componentへ読み込みmigrationし、原点Boxを残さない。親または自身にRigid Body ComponentがあるColliderは、Body設定の編集先をその親Entity名で示し、Collider cardでは形状と接触設定だけを編集する。
 - Boxの再フィットは同じ Entity の Mesh boundsだけを使用する。Modelはimport metadataのboundsとimport scaleを用い、absolute pathや生のglTFデータをScene documentへ保存しない。
 
 ### 成功時
 
 - Box / Mesh Colliderの変更、追加、削除は一つのScene history transactionになり、選択を維持する。選択中のBox ColliderはScene Viewにwireframeで表示する。
-- Playとcompilerは一EntityのColliderを一つのRapier `RigidBody`へまとめ、保存したBody typeと一般設定を反映する。BoxはHalf Extentsを`CuboidCollider.args`へそのまま渡し、Static MeshはTrimeshを`trimesh`、Convexを`hull`へ変換する。Dynamic / KinematicのTrimeshはRapier互換のConvex Hullへ自動変換し、compiler診断にも残す。
+- PlayとcompilerはRigid Body Entityのlocal TransformをBody原点にし、そのsubtreeを一つのRapier `RigidBody`で包む。子孫のBoxは各Entityのlocal階層を保った`CuboidCollider`、Mesh Colliderは`MeshCollider`として同じBodyへ含める。親原点へ代替Boxを追加しない。ネストしたRigid Bodyは新しいBody ownershipを開始する。
+- Auto Colliderを選んだ場合はRapierの自動生成をsubtree Meshへ適用する。Dynamic / Kinematicの明示TrimeshはRapier互換のConvex Hullへ自動変換し、compiler診断にも残す。
 
 ### 失敗時
 
 - MeshのないEntityへMesh Colliderを追加せず、必要なMesh Rendererを示す。自動フィットboundsがない時は既存値とSceneを変更しない。
 - 非有限Center、0以下のHalf Extents、負のFriction、`0..1`外のRestitutionは確定せず、upload前validationでもblocking diagnosticにする。
+- Rigid Bodyのsubtreeに明示Colliderがなく、Auto Collider対象のMeshもない場合はBodyを消さずInspectorとcompiler診断へ「物理形状がありません」と示す。
 
 ### 戻り先
 
-- Collider削除後もMesh、Material、Transform、Entity selectionを維持する。Undoで同じComponent IDと設定を復元する。
+- ColliderまたはRigid Body削除後もMesh、Material、Transform、Entity selectionを維持する。Undoで同じComponent ID、Body ownership、設定を復元する。
 
 ## F-12 Scene environment settings の状態設計
 
@@ -377,7 +381,7 @@ F-06 アイテム検査
 ### 成功時
 
 - Portal、TagBoard、EntryLogBoard、Mirror、Video系を含む全公式Componentはpackage versionに含まれる実装どおりに表示する。Studio独自の旧ポータルshader、HTML board、簡易screenへ分岐しない。
-- カタログthumbnailも同じProvider bridgeと公式Rendererを使い、Componentの外観にSVG、CSS図形、DOMの疑似サムネイルを使わない。
+- カタログthumbnailは同じProvider bridgeと公式Rendererを固定generatorで描画し、保存済みWebPとして一覧と詳細で共有する。Component名と公式badgeは識別情報として画像へ焼き込み、Component本体の代わりにSVG、CSS図形、DOMの疑似サムネイルを使わない。
 
 ### 失敗時
 
@@ -606,8 +610,8 @@ F-06 アイテム検査
 
 - Assets headerの「外部から追加」から開始し、左sidebarに登録済みproviderを表示する。providerを選ぶと中央のcatalogと提供元creditを切り替え、選択中providerと対応種別が最初から分かるようにする。Poly HavenではSkybox / HDRI、Material / Texture、Modelをinstall可能にする。Open BrushはPoly Havenの下位filterにせずsidebarの同じ階層へ置き、XRift Studioで検証済みの48 Materialを名前、カテゴリ、tagから選べるようにする。
 - 各Assetにはthumbnail、説明、作者、license、配布ページ、解像度、HDR / EXR形式、download容量を表示する。project未保存、Play中、別Asset処理中は理由を示してinstallを無効にする。ローカルの`.hdr` / `.exr`も通常のImport入口から選べることをfile pickerに示す。
-- Open Brushの一覧はCanvasを増やさない軽量な名前・カテゴリ表示にし、右previewだけが固定`all_brushes.glb`の選択中代表stroke nodeをthree-icosaで実描画する。右詳細にはbrush GUID、renderer version、catalog revisionと、stroke向けMaterialである互換性説明を置く。解像度、file形式、download容量は表示しない。
-- XRift公式Componentは同じprovider sidebarに置き、公開package version、公式source、Component名、categoryを表示する。thumbnailは一つの共有Canvasと複数Viewでpackage本体を描画し、選択中Componentだけを一件のScene historyとして追加する。
+- Open Brushの一覧と右詳細は、固定`all_brushes.glb`の各代表stroke nodeをthree-icosaで事前描画した保存済みWebPを共有する。全48件をGUID単位で保存し、Storeを開くだけではCanvasを作らない。右詳細にはbrush GUID、renderer version、catalog revisionと、stroke向けMaterialである互換性説明を置く。解像度、file形式、download容量は表示しない。
+- XRift公式Componentは同じprovider sidebarに置き、公開package version、公式source、Component名、categoryを表示する。全配置可能Componentはpackage本体を事前描画したversion付き保存済みWebPを一覧と詳細で共有し、選択中Componentだけを一件のScene historyとして追加する。
 
 ### 操作中
 
@@ -626,7 +630,7 @@ F-06 アイテム検査
 
 - catalog取得の失敗では選択中providerと検索条件を保ち、同じsidebarと一覧領域から再試行できる。file情報、download、保存、Asset作成の失敗では既存AssetManifestとSceneを変更しない。同じprovider、Asset、解像度、HDR / EXR形式を保持し、原因を見て再試行できる。
 - providerが未対応、file domainが許可外、保存先に異なる内容がある、HDRI、必須base color、glTF本体、またはglTF依存fileがない場合はinstallを完了扱いにしない。
-- Open Brush preview失敗はinstall失敗と分け、preview内にfallback理由と再試行を表示する。GUID不一致、未対応preset、renderer version不一致では追加を完了扱いにせず、同じMaterial選択から再試行できる。
+- Open Brushの保存済みthumbnailが欠落または破損している場合はinstall失敗と分け、同じカード内にbrush iconと「Preview unavailable」を即時表示する。「準備中」を継続表示せず、Material追加自体は固定catalogのGUID検証で判定する。GUID不一致、未対応preset、renderer version不一致では追加を完了扱いにせず、同じMaterial選択から再試行できる。
 
 ### 戻り先
 

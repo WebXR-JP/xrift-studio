@@ -123,6 +123,36 @@ export const Room = () => {
     "Named and default local TSX modules must expand beneath their invocation boundary without flattening",
   );
 
+  const rigidBodyPlan = analyzeComponentCode(
+    `import { RigidBody } from '@react-three/rapier'
+export function PhysicsTree() {
+  return (
+    <RigidBody name="Physics Root" type="dynamic" colliders={false} ccd>
+      <group name="Collider Offset" position={[2, 0, 0]}>
+        <mesh name="Visible Box"><boxGeometry args={[1, 2, 3]} /></mesh>
+      </group>
+    </RigidBody>
+  )
+}`,
+    "world",
+  );
+  const rigidBodyNode = rigidBodyPlan.nodes.find(
+    (node) => node.name === "Physics Root",
+  );
+  assert(
+    rigidBodyPlan.summary.rigidBodyCount === 1 &&
+      rigidBodyPlan.summary.colliderCount === 0 &&
+      rigidBodyNode?.rigidBody?.sourceBodyType === "dynamic" &&
+      rigidBodyNode.rigidBody.autoColliders === "none" &&
+      rigidBodyNode.rigidBody.ccd &&
+      rigidBodyPlan.nodes.some(
+        (node) =>
+          node.name === "Collider Offset" &&
+          node.parentPlanNodeId === rigidBodyNode.planNodeId,
+      ),
+    "RigidBody must remain a parent component and preserve its descendant transform hierarchy",
+  );
+
   const project = createPrototypeProject("world", "component-import-fixture");
   const entityCountBefore = Object.keys(project.scene.entities).length;
   const applied = applyComponentCodeImportPlan({
@@ -151,6 +181,28 @@ export const Room = () => {
   assert(
     !applied.diagnostics.some((diagnostic) => diagnostic.severity === "error"),
     "Applying the bundled conversion must not produce errors",
+  );
+
+  const appliedRigidBody = applyComponentCodeImportPlan({
+    scene: project.scene,
+    assets: project.assets,
+    projectKind: "world",
+    plan: rigidBodyPlan,
+  });
+  const appliedBodyEntity = appliedRigidBody.entityIds
+    .map((entityId) => appliedRigidBody.scene.entities[entityId])
+    .find((entity) => entity.name === "Physics Root");
+  assert(
+    appliedBodyEntity?.components.some(
+      (component) =>
+        component.type === "rigid-body" &&
+        component.bodyType === "dynamic" &&
+        component.autoColliders === "none",
+    ) &&
+      !appliedBodyEntity.components.some(
+        (component) => component.type === "collider",
+      ),
+    "Applying a RigidBody import must not synthesize an origin Box Collider",
   );
 
   const rejected = applyComponentCodeImportPlan({
@@ -188,7 +240,8 @@ export const Room = () => {
       officialPlan.summary.primitiveCount === 26 &&
       officialPlan.summary.lightCount === 5 &&
       officialPlan.summary.textCount === 6 &&
-      officialPlan.summary.colliderCount === 23 &&
+      officialPlan.summary.rigidBodyCount === 23 &&
+      officialPlan.summary.colliderCount === 0 &&
       officialPlan.summary.modelAssetCount === 2 &&
       officialPlan.summary.textureAssetCount === 1 &&
       officialPlan.summary.unsupportedAssetCount === 0 &&
@@ -235,15 +288,15 @@ export const Room = () => {
   );
   assert(
     officialEntities.filter((entity) =>
-      entity.components.some((component) => component.type === "collider"),
+      entity.components.some((component) => component.type === "rigid-body"),
     ).length === 23,
-    "Rapier bodies were not materialized as Visual Colliders",
+    "Rapier bodies were not materialized as parent Rigid Body components",
   );
   assert(
     officialEntities.filter((entity) =>
       entity.components.some(
         (component) =>
-          component.type === "collider" && component.bodyType === "dynamic",
+          component.type === "rigid-body" && component.bodyType === "dynamic",
       ),
     ).length >= 2,
     "Dynamic Rapier body types were not retained by the Visual conversion",

@@ -13,6 +13,7 @@ export * from "./creation-catalog";
 export * from "./compiler";
 export * from "./classic-export";
 export * from "./classic-project-import";
+export * from "./catalog-thumbnails";
 export * from "./custom-shader-contract";
 export * from "./document-id";
 export * from "./draco-import";

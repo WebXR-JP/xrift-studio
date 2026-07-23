@@ -20,6 +20,7 @@ import { addDefaultParticleAsset } from "../particle-system";
 import {
   createBoxColliderComponent,
   createMeshColliderComponent,
+  createRigidBodyComponent,
   createTransformComponent,
   type ColliderComponent,
   type MeshComponent,
@@ -428,6 +429,144 @@ export function runVisualCompilerFixtureAssertions(
       dynamicColliderSource,
     ),
     "Dynamic RigidBody settings were not generated",
+  );
+
+  const bodyParentId = "fixture-rigid-body-parent";
+  const bodyChildId = "entity-world-object";
+  const bodyChild = world.scenes[world.project.entrySceneId].entities[bodyChildId]!;
+  const parentOwnedScene: SceneDocument = {
+    ...world.scenes[world.project.entrySceneId],
+    rootEntityIds: [
+      bodyParentId,
+      ...world.scenes[world.project.entrySceneId].rootEntityIds.filter(
+        (id) => id !== bodyChildId,
+      ),
+    ],
+    entities: {
+      ...world.scenes[world.project.entrySceneId].entities,
+      [bodyParentId]: {
+        id: bodyParentId,
+        name: "Parent Rigid Body",
+        parentId: null,
+        children: [bodyChildId],
+        enabled: true,
+        components: [
+          createTransformComponent("fixture-rigid-parent-transform"),
+          createRigidBodyComponent("fixture-parent-rigid-body", {
+            bodyType: "dynamic",
+            autoColliders: "none",
+          }),
+        ],
+      },
+      [bodyChildId]: {
+        ...bodyChild,
+        parentId: bodyParentId,
+        components: [
+          ...bodyChild.components.filter(
+            (component) => component.type !== "collider",
+          ),
+          createBoxColliderComponent("fixture-owned-child-collider", {
+            center: [0, 0.5, 0],
+            halfExtents: [0.5, 0.5, 0.5],
+          }),
+        ],
+      },
+    },
+  };
+  const parentOwnedSource =
+    compileVisualProject(
+      {
+        ...world,
+        scenes: { [parentOwnedScene.sceneId]: parentOwnedScene },
+      },
+      { generatedAt: fixedTime },
+    ).overlayFiles.find((file) => file.relativePath === "src/World.tsx")
+      ?.content ?? "";
+  const parentBodySource = extractNamedEntitySource(
+    parentOwnedSource,
+    "Parent Rigid Body",
+  );
+  assert(
+    (parentBodySource.match(/<RigidBody\b/g) ?? []).length === 1 &&
+      (parentBodySource.match(/<CuboidCollider\b/g) ?? []).length === 1 &&
+      parentBodySource.includes('type="dynamic"') &&
+      parentBodySource.includes('name="立方体"'),
+    "Parent Rigid Body must own descendant Collider geometry without creating an origin Box",
+  );
+  const autoBodyScene: SceneDocument = {
+    ...parentOwnedScene,
+    entities: {
+      ...parentOwnedScene.entities,
+      [bodyParentId]: {
+        ...parentOwnedScene.entities[bodyParentId]!,
+        components: [
+          createTransformComponent("fixture-auto-parent-transform"),
+          createRigidBodyComponent("fixture-auto-parent-rigid-body", {
+            bodyType: "fixed",
+            autoColliders: "cuboid",
+          }),
+        ],
+      },
+      [bodyChildId]: {
+        ...parentOwnedScene.entities[bodyChildId]!,
+        components: parentOwnedScene.entities[bodyChildId]!.components.filter(
+          (component) => component.type !== "collider",
+        ),
+      },
+    },
+  };
+  const autoBodySource =
+    compileVisualProject(
+      {
+        ...world,
+        scenes: { [autoBodyScene.sceneId]: autoBodyScene },
+      },
+      { generatedAt: fixedTime },
+    ).overlayFiles.find((file) => file.relativePath === "src/World.tsx")
+      ?.content ?? "";
+  const autoParentSource = extractNamedEntitySource(
+    autoBodySource,
+    "Parent Rigid Body",
+  );
+  assert(
+    autoParentSource.includes('<MeshCollider type="cuboid">') &&
+      !autoParentSource.includes("<CuboidCollider"),
+    "Parent auto-collider mode must generate descendant mesh colliders without a fake origin Box",
+  );
+  const nestedBodyScene: SceneDocument = {
+    ...autoBodyScene,
+    entities: {
+      ...autoBodyScene.entities,
+      [bodyChildId]: {
+        ...autoBodyScene.entities[bodyChildId]!,
+        components: [
+          ...autoBodyScene.entities[bodyChildId]!.components,
+          createRigidBodyComponent("fixture-nested-rigid-body", {
+            bodyType: "dynamic",
+            autoColliders: "hull",
+          }),
+        ],
+      },
+    },
+  };
+  const nestedBodySource =
+    compileVisualProject(
+      {
+        ...world,
+        scenes: { [nestedBodyScene.sceneId]: nestedBodyScene },
+      },
+      { generatedAt: fixedTime },
+    ).overlayFiles.find((file) => file.relativePath === "src/World.tsx")
+      ?.content ?? "";
+  const nestedParentSource = extractNamedEntitySource(
+    nestedBodySource,
+    "Parent Rigid Body",
+  );
+  assert(
+    (nestedParentSource.match(/<RigidBody\b/g) ?? []).length === 2 &&
+      nestedParentSource.includes('<MeshCollider type="hull">') &&
+      !nestedParentSource.includes('<MeshCollider type="cuboid">'),
+    "A nested Rigid Body must start a new collider ownership boundary",
   );
 
   const meshColliderScene = withFixtureColliders(

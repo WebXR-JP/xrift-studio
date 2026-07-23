@@ -24,6 +24,7 @@ import {
   addBuiltinPrimitiveEntity,
   createBoxColliderComponent,
   createMeshComponent,
+  createRigidBodyComponent,
   createTextComponent,
   renameEntity,
   updateEntityTransform,
@@ -32,6 +33,7 @@ import {
   type JsonValue,
   type LightComponent,
   type MeshComponent,
+  type RigidBodyAutoColliders,
   type SceneDocument,
   type Vec3,
 } from "./scene-document";
@@ -195,6 +197,21 @@ export type ComponentCodeImportCollider = {
   lockRotations: boolean;
 };
 
+export type ComponentCodeImportRigidBody = {
+  sourceBodyType: "fixed" | "dynamic" | "kinematicPosition" | "kinematicVelocity";
+  autoColliders: RigidBodyAutoColliders;
+  isTrigger: boolean;
+  friction: number;
+  restitution: number;
+  gravityScale: number;
+  linearDamping: number;
+  angularDamping: number;
+  canSleep: boolean;
+  ccd: boolean;
+  lockTranslations: boolean;
+  lockRotations: boolean;
+};
+
 export type ComponentCodeImportLight = {
   lightType: LightComponent["lightType"];
   color: string;
@@ -219,6 +236,7 @@ export type ComponentCodeImportNode = {
   material?: ComponentCodeImportMaterial;
   model?: ComponentCodeImportModel;
   text?: ComponentCodeImportText;
+  rigidBody?: ComponentCodeImportRigidBody;
   collider?: ComponentCodeImportCollider;
   light?: ComponentCodeImportLight;
   castShadow?: boolean;
@@ -250,6 +268,7 @@ export type ComponentCodeImportPlan = {
     primitiveCount: number;
     lightCount: number;
     textCount: number;
+    rigidBodyCount: number;
     colliderCount: number;
     modelAssetCount: number;
     textureAssetCount: number;
@@ -438,6 +457,7 @@ function analyzeComponentSources(input: {
       primitiveCount: nodes.filter((node) => node.kind === "primitive").length,
       lightCount: nodes.filter((node) => node.kind === "light").length,
       textCount: nodes.filter((node) => node.kind === "text").length,
+      rigidBodyCount: nodes.filter((node) => node.rigidBody !== undefined).length,
       colliderCount: nodes.filter((node) => node.collider !== undefined).length,
       modelAssetCount: assetDependencies.filter(
         (dependency) => dependency.kind === "model",
@@ -471,6 +491,7 @@ function emptyImportPlan(
       primitiveCount: 0,
       lightCount: 0,
       textCount: 0,
+      rigidBodyCount: 0,
       colliderCount: 0,
       modelAssetCount: 0,
       textureAssetCount: 0,
@@ -845,13 +866,13 @@ function convertJsxNode(
     binding?.module === "@react-three/rapier" &&
     binding.imported === "RigidBody"
   ) {
-    const rigidBody = colliderFromRigidBody(attributes, node, diagnostics);
+    const rigidBody = rigidBodyFromJsx(attributes, node, diagnostics);
     const body = appendImportNode(output, context, {
       ...sourceFields,
       name: staticNodeName(attributes, "RigidBody"),
       kind: "empty",
       transform: transformFromProps(attributes),
-      ...(rigidBody ? { collider: rigidBody } : {}),
+      rigidBody,
       xriftComponents: [],
     });
     const added = visitChildren(
@@ -1643,34 +1664,45 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function colliderFromRigidBody(
+function rigidBodyFromJsx(
   values: JsonObject,
   node: ParsedJsxNode,
   diagnostics: ComponentCodeImportDiagnostic[],
-): ComponentCodeImportCollider | null {
-  if (values.colliders === false) return null;
+): ComponentCodeImportRigidBody {
   const sourceBodyType =
     values.type === "dynamic" ||
     values.type === "kinematicPosition" ||
     values.type === "kinematicVelocity"
       ? values.type
       : "fixed";
-  const colliderName =
-    typeof values.colliders === "string" ? values.colliders : "cuboid";
-  if (colliderName !== "cuboid") {
+  const sourceAutoColliders =
+    values.colliders === false
+      ? "none"
+      : typeof values.colliders === "string"
+        ? values.colliders
+        : "cuboid";
+  const autoColliders: RigidBodyAutoColliders =
+    sourceAutoColliders === "none" ||
+    sourceAutoColliders === "ball" ||
+    sourceAutoColliders === "cuboid" ||
+    sourceAutoColliders === "hull" ||
+    sourceAutoColliders === "trimesh"
+      ? sourceAutoColliders
+      : "cuboid";
+  if (autoColliders !== sourceAutoColliders) {
     diagnostics.push({
       severity: "warning",
-      code: "rapier-collider-box-approximation",
-      message: `Rapier colliders=${colliderName}は編集可能なBox Colliderへ近似します。`,
+      code: "rapier-auto-collider-unsupported",
+      message: `Rapier colliders=${sourceAutoColliders}は未対応のためcuboidとして保持します。`,
       line: node.line,
     });
   }
   return {
-    shape: "box",
+    sourceBodyType,
+    autoColliders,
     isTrigger: values.sensor === true,
     friction: nonNegativeFiniteNumber(values.friction) ?? 0.5,
     restitution: unitFiniteNumber(values.restitution) ?? 0,
-    sourceBodyType,
     gravityScale: finiteNumber(values.gravityScale) ?? 1,
     linearDamping: nonNegativeFiniteNumber(values.linearDamping) ?? 0,
     angularDamping: nonNegativeFiniteNumber(values.angularDamping) ?? 0,
@@ -1712,6 +1744,28 @@ function applyImportedCoreComponents(
   const entity = scene.entities[entityId];
   if (!entity) return scene;
   let components = entity.components;
+  if (
+    node.rigidBody &&
+    !components.some((component) => component.type === "rigid-body")
+  ) {
+    components = [
+      ...components,
+      createRigidBodyComponent(createDocumentId("component-rigid-body"), {
+        bodyType: node.rigidBody.sourceBodyType,
+        autoColliders: node.rigidBody.autoColliders,
+        isTrigger: node.rigidBody.isTrigger,
+        friction: node.rigidBody.friction,
+        restitution: node.rigidBody.restitution,
+        gravityScale: node.rigidBody.gravityScale,
+        linearDamping: node.rigidBody.linearDamping,
+        angularDamping: node.rigidBody.angularDamping,
+        canSleep: node.rigidBody.canSleep,
+        ccd: node.rigidBody.ccd,
+        lockTranslations: node.rigidBody.lockTranslations,
+        lockRotations: node.rigidBody.lockRotations,
+      }),
+    ];
+  }
   if (node.kind === "primitive") {
     components = components
       .filter((component) => component.type !== "collider" || node.collider)

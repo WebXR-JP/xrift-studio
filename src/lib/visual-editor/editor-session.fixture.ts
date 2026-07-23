@@ -1,13 +1,17 @@
 import {
+  addEditorComponent,
   getEntityReparentDecision,
   reparentEntityHierarchy,
   updateEntityEnabled,
 } from "./editor-session";
 import {
   SCENE_DOCUMENT_SCHEMA_VERSION,
+  createBoxColliderComponent,
+  migrateLegacyParentRigidBodies,
   type SceneDocument,
   type SceneEntity,
 } from "./scene-document";
+import { createPrototypeProject } from "./prototype-project";
 
 /** Pure assertions for sibling ordering, reparenting, and Entity Enabled state. */
 export function runEditorSessionHierarchyFixtureAssertions(): void {
@@ -87,6 +91,96 @@ export function runEditorSessionHierarchyFixtureAssertions(): void {
   assert(
     disabled.entities["entity-c"]?.enabled === true,
     "disabling a parent must preserve each child's own Enabled value",
+  );
+
+  const project = createPrototypeProject("world", "rigid-body-editor-fixture");
+  const physicsEntityId = "entity-world-object";
+  const physicsEntity = project.scene.entities[physicsEntityId]!;
+  const physicsScene: SceneDocument = {
+    ...project.scene,
+    entities: {
+      ...project.scene.entities,
+      [physicsEntityId]: {
+        ...physicsEntity,
+        components: [
+          ...physicsEntity.components.filter(
+            (component) => component.type !== "collider",
+          ),
+          createBoxColliderComponent("legacy-dynamic-collider", {
+            bodyType: "dynamic",
+            gravityScale: 0.5,
+            ccd: true,
+          }),
+        ],
+      },
+    },
+  };
+  const addedBody = addEditorComponent(
+    physicsScene,
+    project.assets,
+    physicsEntityId,
+    "physics.rigid-body",
+    "world",
+  );
+  const body = addedBody.scene.entities[physicsEntityId]?.components.find(
+    (component) => component.type === "rigid-body",
+  );
+  assert(
+    addedBody.added &&
+      body?.bodyType === "dynamic" &&
+      body.autoColliders === "none" &&
+      body.gravityScale === 0.5 &&
+      body.ccd,
+    "adding a parent Rigid Body must migrate legacy Collider body settings",
+  );
+  assert(
+    !addEditorComponent(
+      addedBody.scene,
+      project.assets,
+      physicsEntityId,
+      "physics.rigid-body",
+      "world",
+    ).added,
+    "an Entity must not receive duplicate Rigid Body components",
+  );
+
+  const legacyParentScene: SceneDocument = {
+    ...physicsScene,
+    entities: {
+      ...physicsScene.entities,
+      [physicsEntityId]: {
+        ...physicsScene.entities[physicsEntityId]!,
+        name: "Duck RigidBody",
+        children: ["legacy-body-child"],
+        components: [
+          createBoxColliderComponent("legacy-imported-body-carrier", {
+            bodyType: "dynamic",
+            friction: 0,
+            ccd: true,
+          }),
+        ],
+      },
+      "legacy-body-child": entity(
+        "legacy-body-child",
+        physicsEntityId,
+      ),
+    },
+  };
+  const migrated = migrateLegacyParentRigidBodies(legacyParentScene);
+  const migratedParent = migrated.entities[physicsEntityId]!;
+  assert(
+    migratedParent.components.some(
+      (component) =>
+        component.type === "rigid-body" &&
+        component.bodyType === "dynamic" &&
+        component.autoColliders === "cuboid" &&
+        component.friction === 0 &&
+        component.ccd,
+    ) &&
+      !migratedParent.components.some(
+        (component) => component.type === "collider",
+      ),
+    "legacy imported origin carriers must migrate to parent Rigid Body components",
   );
 }
 

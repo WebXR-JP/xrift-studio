@@ -56,6 +56,7 @@ type HierarchyFilterResult = {
 type HierarchyKindFilter =
   | "mesh"
   | "light"
+  | "rigid-body"
   | "collider"
   | "audio-source"
   | "particle-emitter"
@@ -211,6 +212,7 @@ function entityMatchesKindFilters(
           entity.components.some((component) => component.type === "mesh")
         );
       case "light":
+      case "rigid-body":
       case "collider":
       case "audio-source":
       case "particle-emitter":
@@ -284,6 +286,9 @@ function getEntityTypeLabel(entity: SceneEntity): string {
   if (entity.components.some((component) => component.type === "light")) {
     return "ライト";
   }
+  if (entity.components.some((component) => component.type === "rigid-body")) {
+    return "Rigid Body";
+  }
   if (entity.components.some((component) => component.type === "audio-source")) {
     return "オーディオ";
   }
@@ -315,6 +320,9 @@ function getEntityIcon(entity: SceneEntity) {
   if (entity.components.some((component) => component.type === "light")) {
     return EDITOR_ICONS.light;
   }
+  if (entity.components.some((component) => component.type === "rigid-body")) {
+    return EDITOR_ICONS.axis;
+  }
   if (entity.components.some((component) => component.type === "audio-source")) {
     return EDITOR_ICONS.audio;
   }
@@ -336,6 +344,7 @@ function getEntityIcon(entity: SceneEntity) {
 const HIERARCHY_KIND_FILTERS = [
   { id: "mesh", label: "メッシュ", icon: EDITOR_ICONS.model },
   { id: "light", label: "ライト", icon: EDITOR_ICONS.light },
+  { id: "rigid-body", label: "Rigid Body", icon: EDITOR_ICONS.axis },
   { id: "collider", label: "コライダー", icon: EDITOR_ICONS.primitive },
   { id: "audio-source", label: "オーディオ", icon: EDITOR_ICONS.audio },
   { id: "particle-emitter", label: "パーティクル", icon: EDITOR_ICONS.particle },

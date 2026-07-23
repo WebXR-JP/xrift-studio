@@ -1,4 +1,4 @@
-import { PerspectiveCamera, View } from "@react-three/drei";
+import { PerspectiveCamera } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import {
   useLayoutEffect,
@@ -13,47 +13,35 @@ import {
   OfficialXriftPreviewProvider,
 } from "./OfficialXriftComponentRenderer";
 
-export function OfficialXriftPreviewCanvas({
-  children,
-  className = "",
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`relative isolate ${className}`}>
-      {children}
-      <Canvas
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-20"
-        dpr={[1, 1.5]}
-        gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
-        onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
-      >
-        <View.Port />
-      </Canvas>
-    </div>
-  );
-}
-
-export function OfficialXriftComponentThumbnail({
+export function OfficialXriftComponentStaticPreview({
   definition,
-  featured = false,
+  className = "h-[180px] w-[320px]",
 }: {
   definition: XriftComponentDefinition;
-  featured?: boolean;
+  className?: string;
 }) {
-  const Icon = EDITOR_ICONS[definition.icon];
   const portal = definition.importName === "Portal";
+  const Icon = EDITOR_ICONS[definition.icon];
   return (
-    <div className="relative h-28 w-full overflow-hidden rounded-md border border-slate-200 bg-slate-50">
-      <View className="absolute inset-0" frames={Infinity}>
+    <div
+      className={`relative overflow-hidden bg-slate-50 ${className}`}
+      data-official-xrift-static-preview={definition.importName}
+    >
+      <Canvas
+        frameloop="always"
+        dpr={1}
+        gl={{ alpha: false, antialias: true, powerPreference: "high-performance" }}
+      >
         <OfficialXriftPreviewProvider withPhysics={portal}>
           <color attach="background" args={["#f8fafc"]} />
-          <PreviewCamera definition={definition} featured={featured} />
+          <PreviewCamera definition={definition} featured />
           <ambientLight intensity={1.4} />
           <directionalLight position={[3, 5, 4]} intensity={2.1} />
-          <directionalLight position={[-3, 2, 1]} intensity={0.65} color="#c4b5fd" />
+          <directionalLight
+            position={[-3, 2, 1]}
+            intensity={0.65}
+            color="#c4b5fd"
+          />
           <PreviewPosition definition={definition}>
             <OfficialXriftComponentSample definition={definition} />
           </PreviewPosition>
@@ -65,10 +53,15 @@ export function OfficialXriftComponentThumbnail({
             </mesh>
           ) : null}
         </OfficialXriftPreviewProvider>
-      </View>
-      <div className="pointer-events-none absolute left-2 top-2 z-30 inline-flex items-center gap-1 rounded bg-white/90 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600 shadow-sm backdrop-blur">
-        <Icon size={10} aria-hidden="true" />
-        Official WebGL
+      </Canvas>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-slate-950/80 via-slate-950/35 to-transparent px-3 pb-2.5 pt-8 text-white">
+        <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold">
+          <Icon size={13} className="shrink-0" aria-hidden="true" />
+          <span className="truncate">{definition.label}</span>
+        </span>
+        <span className="ml-2 shrink-0 text-[9px] font-medium tracking-wide text-slate-200">
+          XRift Official
+        </span>
       </div>
     </div>
   );

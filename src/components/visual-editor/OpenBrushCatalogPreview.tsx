@@ -12,6 +12,7 @@ import {
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   OPEN_BRUSH_CATALOG_GALLERY_URL,
+  bindCustomShaderGeometryAttributes,
   prepareOpenBrushGltfSource,
   type OpenBrushCatalogEntry,
 } from "../../lib/visual-editor";
@@ -53,6 +54,7 @@ export function OpenBrushCatalogPreview({
     <div
       className={`relative overflow-hidden bg-slate-950 ${className}`}
       data-open-brush-catalog-preview={entry.brushGuid}
+      data-open-brush-preview-state={loadState.status}
     >
       <Canvas
         frameloop={compact ? "demand" : "always"}
@@ -164,7 +166,14 @@ function OpenBrushStroke({
         const material = sourceMaterial.clone();
         ownedMaterials = [material];
         stroke.traverse((object) => {
-          if (object instanceof Mesh) object.material = material;
+          if (object instanceof Mesh) {
+            bindCustomShaderGeometryAttributes(
+              object.geometry,
+              material,
+              entry.shader.attributeBindings,
+            );
+            object.material = material;
+          }
         });
         const fitted = fitStroke(stroke);
         previewRef.current = fitted;

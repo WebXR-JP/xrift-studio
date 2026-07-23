@@ -35,6 +35,7 @@ import {
   type MeshComponent,
   type ParticleEmitterComponent,
   type RegisteredSceneComponent,
+  type RigidBodyComponent,
   type SceneDocument,
   type SceneEntity,
   type TextComponent,
@@ -920,6 +921,7 @@ function renderEntity(
   entityId: string,
   context: CompileContext,
   depth: number,
+  inheritedRigidBody?: RigidBodyComponent,
 ): string | null {
   const entity = context.scene.entities[entityId];
   if (!entity) {
@@ -971,6 +973,23 @@ function renderEntity(
     (component): component is AnimationComponent =>
       component.type === "animation" && component.enabled,
   );
+  const rigidBodies = entity.components.filter(
+    (component): component is RigidBodyComponent =>
+      component.type === "rigid-body" && component.enabled,
+  );
+  if (rigidBodies.length > 1) {
+    addDiagnostic(
+      context,
+      entityDiagnostic(
+        entity,
+        "multiple-rigid-bodies",
+        "複数のRigid Bodyのうち先頭だけを使用します",
+        "warning",
+      ),
+    );
+  }
+  const ownRigidBody = rigidBodies[0];
+  const rigidBodyOwner = ownRigidBody ?? inheritedRigidBody;
   if (animationComponents.length > 1) {
     addDiagnostic(
       context,
@@ -987,7 +1006,7 @@ function renderEntity(
   const wrappers: RenderedXriftWrapper[] = [];
   for (const component of entity.components as RegisteredSceneComponent[]) {
     if (!component.enabled || component.type === "transform") continue;
-    if (component.type === "collider") {
+    if (component.type === "collider" || component.type === "rigid-body") {
       // Collider components are combined into one RigidBody after all visual
       // content is rendered, avoiding nested or duplicate physics bodies.
       continue;
@@ -1031,6 +1050,18 @@ function renderEntity(
       addDiagnostic(context, componentDiagnostic(entity, unknownComponent.id, "component-unsupported", `未対応の component type: ${unknownComponent.type}`));
     }
   }
+  if (rigidBodyOwner) {
+    const ownedContent = renderOwnedColliderContent(
+      entity,
+      colliders,
+      localContent.join("\n"),
+      rigidBodyOwner.bodyType,
+      rigidBodyOwner.autoColliders,
+      context,
+    );
+    localContent.length = 0;
+    if (ownedContent) localContent.push(ownedContent);
+  }
   for (const childId of entity.children) {
     const child = context.scene.entities[childId];
     if (child && child.parentId !== entity.id) {
@@ -1042,7 +1073,12 @@ function renderEntity(
         entityId: childId,
       });
     }
-    const rendered = renderEntity(childId, context, depth + 1);
+    const rendered = renderEntity(
+      childId,
+      context,
+      depth + 1,
+      rigidBodyOwner,
+    );
     if (rendered) localContent.push(rendered);
   }
 
@@ -1063,7 +1099,11 @@ function renderEntity(
       `\n${indent(children, 1)}\n`,
     );
   }
-  children = renderColliderBody(entity, colliders, children, context);
+  children = ownRigidBody
+    ? renderOwnedRigidBody(entity, ownRigidBody, children, context)
+    : inheritedRigidBody
+      ? children
+      : renderColliderBody(entity, colliders, children, context);
   context.activeEntityIds.delete(entityId);
   const position = vectorProp(transform?.position ?? [0, 0, 0]);
   const rotation = vectorProp(transform?.rotation ?? [0, 0, 0]);
@@ -1073,6 +1113,127 @@ function renderEntity(
     return `<group name=${name} position={${position}} rotation={${rotation}} scale={${scale}} />`;
   }
   return `<group name=${name} position={${position}} rotation={${rotation}} scale={${scale}}>\n${indent(children, 1)}\n</group>`;
+}
+
+function renderOwnedRigidBody(
+  entity: SceneEntity,
+  component: RigidBodyComponent,
+  children: string,
+  context: CompileContext,
+): string {
+  context.rapierImports.add("RigidBody");
+  const props = [
+    `type=${JSON.stringify(component.bodyType)}`,
+    "colliders={false}",
+    `sensor={${component.isTrigger}}`,
+    `friction={${formatNumber(component.friction)}}`,
+    `restitution={${formatNumber(component.restitution)}}`,
+    `gravityScale={${formatNumber(component.gravityScale)}}`,
+    `linearDamping={${formatNumber(component.linearDamping)}}`,
+    `angularDamping={${formatNumber(component.angularDamping)}}`,
+    `canSleep={${component.canSleep}}`,
+    `ccd={${component.ccd}}`,
+    `lockTranslations={${component.lockTranslations}}`,
+    `lockRotations={${component.lockRotations}}`,
+  ];
+  if (!children.trim()) {
+    addDiagnostic(context, {
+      ...componentDiagnostic(
+        entity,
+        component.id,
+        "rigid-body-shape-missing",
+        "Rigid Bodyの範囲に描画MeshまたはColliderがありません",
+      ),
+      sceneId: context.scene.sceneId,
+    });
+  }
+  return `<RigidBody ${props.join(" ")}>\n${indent(children, 1)}\n</RigidBody>`;
+}
+
+function renderOwnedColliderContent(
+  entity: SceneEntity,
+  colliders: readonly ColliderComponent[],
+  children: string,
+  bodyType: RigidBodyComponent["bodyType"],
+  autoColliders: RigidBodyComponent["autoColliders"],
+  context: CompileContext,
+): string {
+  const boxes = colliders.filter(
+    (collider): collider is BoxColliderComponent =>
+      collider.shape === "box" &&
+      isColliderSurfaceValid(collider) &&
+      isFiniteVector(collider.center) &&
+      isPositiveVector(collider.halfExtents),
+  );
+  const meshCollider = colliders.find(
+    (collider): collider is MeshColliderComponent =>
+      collider.shape === "mesh" && isColliderSurfaceValid(collider),
+  );
+  for (const collider of colliders) {
+    const accepted =
+      boxes.some((candidate) => candidate.id === collider.id) ||
+      meshCollider?.id === collider.id;
+    if (!accepted) {
+      addDiagnostic(context, {
+        ...componentDiagnostic(
+          entity,
+          collider.id,
+          "owned-collider-invalid-or-duplicate",
+          "親Rigid Bodyへ含められないCollider設定です",
+        ),
+        sceneId: context.scene.sceneId,
+      });
+    }
+  }
+
+  let renderedChildren = children;
+  if (meshCollider) {
+    context.rapierImports.add("MeshCollider");
+    const type =
+      meshCollider.meshMode === "convex" || bodyType !== "fixed"
+        ? "hull"
+        : "trimesh";
+    if (bodyType !== "fixed" && meshCollider.meshMode === "trimesh") {
+      addDiagnostic(context, {
+        severity: "warning",
+        code: "dynamic-trimesh-collider-converted-to-hull",
+        message:
+          "Dynamic/KinematicのTrimesh ColliderはRapier互換のConvex Hullとして出力します",
+        sceneId: context.scene.sceneId,
+        entityId: entity.id,
+        componentId: meshCollider.id,
+      });
+    }
+    renderedChildren = `<MeshCollider type=${JSON.stringify(type)}>\n${indent(renderedChildren, 1)}\n</MeshCollider>`;
+  }
+  if (autoColliders !== "none" && renderedChildren) {
+    context.rapierImports.add("MeshCollider");
+    const autoColliderType =
+      autoColliders === "trimesh" && bodyType !== "fixed"
+        ? "hull"
+        : autoColliders;
+    if (autoColliderType !== autoColliders) {
+      addDiagnostic(context, {
+        severity: "warning",
+        code: "dynamic-auto-trimesh-converted-to-hull",
+        message:
+          "Dynamic/Kinematicの自動TrimeshはRapier互換のConvex Hullとして出力します",
+        sceneId: context.scene.sceneId,
+        entityId: entity.id,
+      });
+    }
+    renderedChildren = `<MeshCollider type=${JSON.stringify(autoColliderType)}>\n${indent(renderedChildren, 1)}\n</MeshCollider>`;
+  }
+  if (boxes.length > 0) context.rapierImports.add("CuboidCollider");
+  return [
+    renderedChildren,
+    ...boxes.map(
+      (collider) =>
+        `<CuboidCollider args={${vectorProp(collider.halfExtents)}} position={${vectorProp(collider.center)}} sensor={${collider.isTrigger}} friction={${formatNumber(collider.friction)}} restitution={${formatNumber(collider.restitution)}} />`,
+    ),
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function renderColliderBody(

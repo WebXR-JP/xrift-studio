@@ -386,7 +386,11 @@ export class XriftThreeLoader {
       text.userData.xriftStudioComponentId = component.id;
       return text;
     }
-    if (component.type === "spawn-point" || component.type === "collider") {
+    if (
+      component.type === "spawn-point" ||
+      component.type === "collider" ||
+      component.type === "rigid-body"
+    ) {
       const marker = new Group();
       marker.userData.xriftStudioComponent = component;
       return marker;

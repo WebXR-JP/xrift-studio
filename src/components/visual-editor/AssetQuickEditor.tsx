@@ -10,6 +10,7 @@ import { Color, DoubleSide, type Material } from "three";
 import { tauri } from "../../lib/tauri";
 import {
   TEXTURE_COLOR_SPACES,
+  OPEN_BRUSH_CATALOG,
   TEXTURE_COMPRESSION_FORMATS,
   TEXTURE_MAG_FILTERS,
   TEXTURE_MIN_FILTERS,
@@ -37,6 +38,7 @@ import {
   type TextureAssetPatch,
 } from "../../lib/visual-editor";
 import { EDITOR_ICONS } from "./editor-icons";
+import { CatalogThumbnailImage } from "./CatalogThumbnailImage";
 import { formatFileSize } from "./editor-utils";
 import { ParticleAssetInspector } from "./ParticleAssetInspector";
 import { CustomMaterialPreview } from "./CustomMaterialPreview";
@@ -685,6 +687,23 @@ function MaterialFallbackThumbnail({
   assets?: AssetManifest;
   projectPath?: string;
 }) {
+  if (asset.shader?.kind === "openbrush") {
+    const entry = OPEN_BRUSH_CATALOG.find(
+      (candidate) =>
+        candidate.brushGuid === asset.shader?.brushGuid ||
+        candidate.brushName === asset.shader?.brushName,
+    );
+    if (entry) {
+      const Icon = EDITOR_ICONS.material;
+      return (
+        <CatalogThumbnailImage
+          src={entry.thumbnailUrl}
+          alt={`${asset.name}のOpen Brushプレビュー`}
+          fallback={<Icon size={22} aria-hidden="true" />}
+        />
+      );
+    }
+  }
   const textureAssetId =
     asset.properties.pbrMetallicRoughness?.baseColorTexture?.textureAssetId;
   const texture = textureAssetId ? assets?.assets[textureAssetId] : undefined;

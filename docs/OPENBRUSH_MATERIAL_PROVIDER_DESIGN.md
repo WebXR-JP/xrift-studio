@@ -61,17 +61,17 @@ provider の表示順は、既存の Poly Haven、その直下に Open Brush と
 
 Open Brush shader は通常の球体や平面に貼るだけでは、元ストロークが持つ attribute を再現できない場合がある。カタログでは CSS 図形、色見本、汎用 sphere を Material の見た目として使わない。
 
-- 一覧 thumbnail は、固定した `all_brushes.glb` から entry の代表 node だけを分離し、同梱 brush library と three-icosa で実描画して生成する。
-- 一覧カードごとに WebGL Canvas を持たず、一つの thumbnail queue / renderer で表示中の項目を順に生成して cache する。
-- 右詳細は同じ代表 node を一つの live preview で表示し、回転と zoom を許可する。
-- shader resource 不足、compile error、attribute 不一致では PBR fallback を成功表示にせず、理由と「再試行」を preview 内に示す。
-- thumbnail がまだない間は Material 名と「Preview を生成中」を表示し、架空のサムネイルを置かない。
+- 一覧 thumbnail は、固定した `all_brushes.glb` から entry の代表 node だけを分離し、同梱 brush library と three-icosa で実描画して全48件の保存済みWebPを生成する。
+- 一覧と右詳細はGUIDをキーに同じ保存画像を表示し、Storeを開くだけではWebGL Canvasを作らない。
+- renderer、catalog revision、代表nodeの対応を変更した時だけ固定generatorで全件を再生成する。
+- shader resource 不足、compile error、attribute 不一致では PBR fallback を成功表示にせず、生成工程を失敗させる。
+- 保存済みthumbnailが欠落または破損している場合はMaterial名、brush icon、「Preview unavailable」を即時表示し、「Previewを生成中」のままにしない。
 
 ## 選択した Material の詳細
 
 右詳細には次を表示する。
 
-1. 実ストローク preview
+1. 保存済み実ストローク thumbnail
 2. Material 名
 3. 分類 tag。例: 描画、発光、半透明、粒子表現、形状
 4. provider、作者、Apache-2.0、配布元への link
@@ -150,7 +150,7 @@ type OpenBrushCatalogEntry = {
 flowchart LR
   A["External Asset Store UI"] --> B["Open Brush provider adapter"]
   B --> C["Pinned 48-brush catalog"]
-  C --> D["Shared WebGL preview renderer"]
+  C --> D["Saved three-icosa thumbnails"]
   B --> E["Validated install result"]
   E --> F["OpenBrush Material Asset"]
   F --> G["Asset Inspector"]
@@ -168,7 +168,7 @@ flowchart LR
 1. provider metadata と共通 contract に `material` / Open Brush preview descriptor を追加する。
 2. 固定 48-brush catalog と GUID 検証を provider adapter に追加する。
 3. provider sidebar へ Open Brush を Poly Haven と同列で追加する。
-4. 代表 node を使う共有 preview / thumbnail queue を追加する。
+4. 代表 node を使う固定thumbnail generatorとGUID単位の保存画像を追加する。
 5. standalone Open Brush Material の install と重複検出を追加する。
 6. 成功後の `assetSelection`、Inspector、Undo / Redo、save / reopen を確認する。
 7. compiler と runtime で同じ brush name、GUID、renderer version が使われることを確認する。

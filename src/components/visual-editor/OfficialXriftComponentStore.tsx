@@ -4,13 +4,12 @@ import {
   XRIFT_COMPONENT_API_SOURCE,
   XRIFT_COMPONENT_API_VERSION,
   listXriftComponentDefinitions,
+  xriftComponentCatalogThumbnailUrl,
   type VisualProjectKind,
   type XriftComponentDefinition,
 } from "../../lib/visual-editor";
-import {
-  OfficialXriftComponentThumbnail,
-  OfficialXriftPreviewCanvas,
-} from "./OfficialXriftComponentThumbnail";
+import { CatalogThumbnailImage } from "./CatalogThumbnailImage";
+import { EDITOR_ICONS } from "./editor-icons";
 
 export function OfficialXriftComponentStore({
   projectKind,
@@ -54,8 +53,7 @@ export function OfficialXriftComponentStore({
   };
 
   return (
-    <OfficialXriftPreviewCanvas className="min-w-0 flex-1">
-      <div className="flex h-full min-h-0">
+      <div className="flex h-full min-h-0 min-w-0 flex-1">
         <section
           className="flex min-w-0 flex-1 flex-col border-r border-slate-200"
           aria-label="XRift公式Component一覧"
@@ -67,7 +65,7 @@ export function OfficialXriftComponentStore({
                   XRift公式Component一覧
                 </h3>
                 <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                  @xrift/world-components {XRIFT_COMPONENT_API_VERSION} を公式rendererで実描画しています
+                  @xrift/world-components {XRIFT_COMPONENT_API_VERSION} の公式rendererから作成した保存済み画像です
                 </p>
               </div>
               <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-semibold text-violet-700">
@@ -79,6 +77,7 @@ export function OfficialXriftComponentStore({
             <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
               {definitions.map((definition) => {
                 const active = definition.schemaId === selected?.schemaId;
+                const Icon = EDITOR_ICONS[definition.icon];
                 return (
                   <button
                     key={definition.schemaId}
@@ -95,7 +94,14 @@ export function OfficialXriftComponentStore({
                         : "border-slate-200 bg-white hover:border-violet-300 hover:bg-slate-50"
                     }`}
                   >
-                    <OfficialXriftComponentThumbnail definition={definition} />
+                    <CatalogThumbnailImage
+                      src={xriftComponentCatalogThumbnailUrl(
+                        definition.importName,
+                      )}
+                      alt={`${definition.label}の公式プレビュー`}
+                      className="h-28 w-full rounded-md"
+                      fallback={<Icon size={22} aria-hidden="true" />}
+                    />
                     <span className="mt-2 block truncate text-xs font-semibold text-slate-800">
                       {definition.label}
                     </span>
@@ -108,7 +114,7 @@ export function OfficialXriftComponentStore({
             </div>
           </div>
           <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
-            公開package本体を一つの共有WebGL Canvasで描画しています。
+            公開package本体から作成した保存済みプレビューを表示しています。
           </footer>
         </section>
 
@@ -118,7 +124,19 @@ export function OfficialXriftComponentStore({
         >
           {selected ? (
             <div className="space-y-4">
-              <OfficialXriftComponentThumbnail definition={selected} featured />
+              {(() => {
+                const Icon = EDITOR_ICONS[selected.icon];
+                return (
+                  <CatalogThumbnailImage
+                    src={xriftComponentCatalogThumbnailUrl(
+                      selected.importName,
+                    )}
+                    alt={`${selected.label}の公式プレビュー`}
+                    className="h-44 w-full rounded-lg"
+                    fallback={<Icon size={28} aria-hidden="true" />}
+                  />
+                );
+              })()}
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -200,7 +218,6 @@ export function OfficialXriftComponentStore({
           ) : null}
         </aside>
       </div>
-    </OfficialXriftPreviewCanvas>
   );
 }
 

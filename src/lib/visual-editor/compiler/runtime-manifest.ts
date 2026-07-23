@@ -164,7 +164,11 @@ function compileRuntimeEntity(
         component.id,
         "missing",
       );
-    } else if (component.type === "collider" || component.type === "spawn-point") {
+    } else if (
+      component.type === "collider" ||
+      component.type === "rigid-body" ||
+      component.type === "spawn-point"
+    ) {
       appendRuntimeAdapterDiagnostic(
         diagnostics,
         component.type,

@@ -3,6 +3,7 @@ import {
   OPEN_BRUSH_RENDERER,
   type OpenBrushMaterialShader,
 } from "./open-brush";
+import { openBrushCatalogThumbnailUrl } from "./catalog-thumbnails";
 
 export type OpenBrushCatalogCategory =
   | "paint"
@@ -19,6 +20,7 @@ export type OpenBrushCatalogEntry = {
   sourceNodeName: string;
   category: OpenBrushCatalogCategory;
   description: string;
+  thumbnailUrl: string;
   shader: OpenBrushMaterialShader;
 };
 
@@ -94,6 +96,7 @@ export const OPEN_BRUSH_CATALOG: readonly OpenBrushCatalogEntry[] = BRUSHES.map(
       sourceNodeName: `brush_${brushName}_g0_b0`,
       category,
       description: `${openBrushCategoryLabel(category)}向けのOpen Brush公式ブラシです。専用shaderと実ストローク形状を保持します。`,
+      thumbnailUrl: openBrushCatalogThumbnailUrl(brushGuid),
       shader: {
         kind: "openbrush",
         renderer: "three-icosa",

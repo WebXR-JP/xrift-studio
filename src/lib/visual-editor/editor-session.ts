@@ -15,10 +15,12 @@ import {
   createMeshColliderComponent,
   createMeshComponent,
   createParticleEmitterComponent,
+  createRigidBodyComponent,
   createTextComponent,
   createTransformComponent,
   fitBoxColliderToMesh,
   getMesh,
+  type ColliderComponent,
   type LightComponent,
   type RegisteredSceneComponent,
   type SceneComponent,
@@ -53,6 +55,13 @@ const BOTH_PROJECT_KINDS = ["world", "item"] as const;
 export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
   definition("core.transform", "Transform", "core", false, "transform"),
   definition("core.mesh", "Mesh Renderer", "rendering", true, "builtin-mesh"),
+  definition(
+    "physics.rigid-body",
+    "Rigid Body",
+    "physics",
+    false,
+    "rigid-body",
+  ),
   definition(
     "physics.box-collider",
     "Box Collider",
@@ -658,6 +667,23 @@ function createRegisteredComponent(
   }
   if (definition.id === "physics.mesh-collider") {
     return getMesh(entity) ? createMeshColliderComponent(id) : null;
+  }
+  if (definition.componentType === "rigid-body") {
+    const legacyCollider = entity.components.find(
+      (component): component is ColliderComponent =>
+        component.type === "collider" && component.enabled,
+    );
+    return createRigidBodyComponent(id, {
+      autoColliders: "none",
+      bodyType: legacyCollider?.bodyType ?? "fixed",
+      gravityScale: legacyCollider?.gravityScale ?? 1,
+      linearDamping: legacyCollider?.linearDamping ?? 0,
+      angularDamping: legacyCollider?.angularDamping ?? 0,
+      canSleep: legacyCollider?.canSleep ?? true,
+      ccd: legacyCollider?.ccd ?? false,
+      lockTranslations: legacyCollider?.lockTranslations ?? false,
+      lockRotations: legacyCollider?.lockRotations ?? false,
+    });
   }
   if (definition.componentType === "light") {
     const lightType = definition.lightType ?? "point";

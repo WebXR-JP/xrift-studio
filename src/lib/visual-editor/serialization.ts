@@ -25,8 +25,10 @@ import {
 import {
   COLLIDER_FIT_MODES,
   COLLIDER_MESH_MODES,
+  RIGID_BODY_AUTO_COLLIDERS,
   RIGID_BODY_TYPES,
   SCENE_DOCUMENT_SCHEMA_VERSION,
+  migrateLegacyParentRigidBodies,
   type ComponentAuthoringMetadata,
   type SceneDocument,
 } from "./scene-document";
@@ -53,7 +55,19 @@ export const assetManifestCodec: VisualDocumentCodec<AssetManifest> = {
 
 export const sceneDocumentCodec: VisualDocumentCodec<SceneDocument> = {
   serialize: stableSerializeJson,
-  parse: (json) => parseTypedDocument(json, validateSceneDocument),
+  parse: (json) => {
+    const parsed = parseTypedDocument<SceneDocument>(
+      json,
+      validateSceneDocument,
+    );
+    return parsed.ok
+      ? {
+          ok: true,
+          document: migrateLegacyParentRigidBodies(parsed.document),
+          issues: [],
+        }
+      : parsed;
+  },
 };
 
 export const prefabDocumentCodec: VisualDocumentCodec<PrefabDocument> = {
@@ -1534,6 +1548,8 @@ function validatePrefabComponentShape(
     }
   } else if (component.type === "collider") {
     validateColliderComponentShape(component, path, issues);
+  } else if (component.type === "rigid-body") {
+    validateRigidBodyComponentShape(component, path, issues);
   } else if (component.type === "audio-source") {
     validateAudioSourceComponentShape(component, path, issues);
   } else if (component.type === "animation") {
@@ -1604,6 +1620,99 @@ function validatePrefabComponentShape(
           }
         }
       }
+    }
+  }
+}
+
+function validateRigidBodyComponentShape(
+  component: Record<string, unknown>,
+  path: string,
+  issues: DocumentValidationIssue[],
+): void {
+  if (typeof component.enabled !== "boolean") {
+    issues.push(
+      issue(`${path}.enabled`, "type", "Rigid Body enabled must be a boolean"),
+    );
+  }
+  if (!isStringEnumValue(component.bodyType, RIGID_BODY_TYPES)) {
+    issues.push(
+      issue(
+        `${path}.bodyType`,
+        "enum",
+        "Rigid Body type must be fixed, dynamic, kinematicPosition, or kinematicVelocity",
+      ),
+    );
+  }
+  if (
+    !isStringEnumValue(component.autoColliders, RIGID_BODY_AUTO_COLLIDERS)
+  ) {
+    issues.push(
+      issue(
+        `${path}.autoColliders`,
+        "enum",
+        "Rigid Body autoColliders must be none, ball, cuboid, hull, or trimesh",
+      ),
+    );
+  }
+  if (typeof component.isTrigger !== "boolean") {
+    issues.push(
+      issue(`${path}.isTrigger`, "type", "Rigid Body trigger must be a boolean"),
+    );
+  }
+  if (
+    typeof component.friction !== "number" ||
+    !Number.isFinite(component.friction) ||
+    component.friction < 0
+  ) {
+    issues.push(
+      issue(
+        `${path}.friction`,
+        "range",
+        "Rigid Body friction must be a finite non-negative number",
+      ),
+    );
+  }
+  if (
+    typeof component.restitution !== "number" ||
+    !Number.isFinite(component.restitution) ||
+    component.restitution < 0 ||
+    component.restitution > 1
+  ) {
+    issues.push(
+      issue(
+        `${path}.restitution`,
+        "range",
+        "Rigid Body restitution must be a finite number from 0 to 1",
+      ),
+    );
+  }
+  if (
+    typeof component.gravityScale !== "number" ||
+    !Number.isFinite(component.gravityScale) ||
+    Math.abs(component.gravityScale) > 100
+  ) {
+    issues.push(
+      issue(`${path}.gravityScale`, "range", "Rigid Body gravityScale is invalid"),
+    );
+  }
+  for (const field of ["linearDamping", "angularDamping"] as const) {
+    const value = component[field];
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+      issues.push(
+        issue(`${path}.${field}`, "range", `Rigid Body ${field} is invalid`),
+      );
+    }
+  }
+  for (const field of [
+    "canSleep",
+    "ccd",
+    "lockTranslations",
+    "lockRotations",
+  ] as const) {
+    if (typeof component[field] !== "boolean") {
+      issues.push(
+        issue(`${path}.${field}`, "type", `Rigid Body ${field} must be boolean`),
+      );
     }
   }
 }

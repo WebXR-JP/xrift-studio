@@ -263,6 +263,9 @@ function AnalysisResult({ plan }: { plan: ComponentCodeImportPlan }) {
         <span className="rounded bg-amber-50 px-2 py-1 text-amber-700">
           Light {plan.summary.lightCount}
         </span>
+        <span className="rounded bg-indigo-50 px-2 py-1 text-indigo-700">
+          Rigid Body {plan.summary.rigidBodyCount}
+        </span>
         <span className="rounded bg-sky-50 px-2 py-1 text-sky-700">
           Collider {plan.summary.colliderCount}
         </span>

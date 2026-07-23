@@ -84,6 +84,7 @@ import {
   updateAnimationComponent,
   updateAudioSourceComponent,
   updateColliderComponent,
+  updateRigidBodyComponent,
   updateLightComponent,
   updateTextComponent,
   updateMeshShadowSettings,
@@ -96,6 +97,7 @@ import {
   updateInteractivityAsset,
   updateXriftComponent,
   type ColliderPatch,
+  type RigidBodyPatch,
   type ComponentCodeImportPlan,
   type ClassicProjectVisualImportSource,
   type AnimationPatch,
@@ -2412,6 +2414,21 @@ export function VisualEditorPrototype({
     [editorMode, playSession, updateScene],
   );
 
+  const handleRigidBodyChange = useCallback(
+    (entityId: string, componentId: string, patch: RigidBodyPatch) => {
+      if (editorMode !== "edit" && !playSession) return;
+      updateScene((scene) =>
+        updateRigidBodyComponent(scene, entityId, patch, componentId),
+      );
+      setNotice(
+        editorMode === "play"
+          ? "Rigid Body設定を保存し、このBodyを先頭から再実行しました"
+          : "Rigid Body設定をSceneへ反映しました",
+      );
+    },
+    [editorMode, playSession, updateScene],
+  );
+
   const handleExternalStoreInstalled = useCallback(
     (
       result: Parameters<typeof applyExternalStoreInstall>[1],
@@ -3283,6 +3300,30 @@ export function VisualEditorPrototype({
       });
     },
     [editorMode],
+  );
+
+  const handleRemoveRigidBody = useCallback(
+    (entityId: string, componentId: string) => {
+      if (editorMode !== "edit" && !playSession) return;
+      updateScene((scene) => {
+        const entity = scene.entities[entityId];
+        if (!entity) return scene;
+        const components = entity.components.filter(
+          (component) =>
+            component.id !== componentId || component.type !== "rigid-body",
+        );
+        if (components.length === entity.components.length) return scene;
+        return {
+          ...scene,
+          entities: {
+            ...scene.entities,
+            [entityId]: { ...entity, components },
+          },
+        };
+      });
+      setNotice("Rigid Bodyを削除しました。子孫のColliderは保持されています");
+    },
+    [editorMode, playSession, updateScene],
   );
 
   const handleSaveInteractivityAsset = useCallback(
@@ -4720,8 +4761,10 @@ export function VisualEditorPrototype({
             onTransformScrubCancel={handleTransformScrubCancel}
             onMeshChange={handleMeshChange}
             onColliderChange={handleColliderChange}
+            onRigidBodyChange={handleRigidBodyChange}
             onAutoFitCollider={handleAutoFitCollider}
             onRemoveCollider={handleRemoveCollider}
+            onRemoveRigidBody={handleRemoveRigidBody}
             onLightChange={handleLightChange}
             onTextChange={handleTextChange}
             onAnimationChange={handleAnimationChange}

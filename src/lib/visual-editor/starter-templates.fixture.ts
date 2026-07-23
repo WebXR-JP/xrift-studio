@@ -179,15 +179,15 @@ export function runStarterTemplateFixtureAssertions(): void {
       );
       assert(
         sceneEntities.filter((entity) =>
-          entity.components.some((component) => component.type === "collider"),
+          entity.components.some((component) => component.type === "rigid-body"),
         ).length === 23,
-        "Official XRift starter must preserve supported Rapier collider coverage",
+        "Official XRift starter must preserve Rapier parent-body coverage",
       );
       assert(
         sceneEntities.filter((entity) =>
           entity.components.some(
             (component) =>
-              component.type === "collider" && component.bodyType === "dynamic",
+              component.type === "rigid-body" && component.bodyType === "dynamic",
           ),
         ).length >= 2,
         "Official XRift starter must preserve dynamic Rapier rigid bodies",

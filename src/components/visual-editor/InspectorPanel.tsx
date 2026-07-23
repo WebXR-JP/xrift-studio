@@ -51,6 +51,8 @@ import {
   type Vec3,
   type VisualProjectKind,
   type RegisteredSceneComponent,
+  type RigidBodyComponent,
+  type RigidBodyPatch,
 } from "../../lib/visual-editor";
 import { AssetQuickEditor } from "./AssetQuickEditor";
 import { tauri } from "../../lib/tauri";
@@ -1315,6 +1317,7 @@ function ColliderNumberField({
 function ColliderInspector({
   component,
   entityScale,
+  bodyOwner,
   readOnly,
   onChange,
   onAutoFit,
@@ -1322,6 +1325,7 @@ function ColliderInspector({
 }: {
   component: ColliderComponent;
   entityScale: Vec3;
+  bodyOwner?: SceneEntity;
   readOnly: boolean;
   onChange: (patch: ColliderPatch) => void;
   onAutoFit: () => void;
@@ -1347,6 +1351,11 @@ function ColliderInspector({
         onChange={(enabled) => onChange({ enabled })}
       />
 
+      {bodyOwner ? (
+        <p className="rounded border border-indigo-100 bg-indigo-50 px-2 py-1.5 text-xs leading-5 text-indigo-800">
+          Rigid Body: {bodyOwner.name}。このColliderは親Bodyの形状として使われます。
+        </p>
+      ) : (
       <div className="space-y-2.5 border-t border-slate-100 pt-2.5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
           Rigid Body · Entity共通
@@ -1421,6 +1430,7 @@ function ColliderInspector({
           onChange={(lockRotations) => onChange({ lockRotations })}
         />
       </div>
+      )}
 
       {component.shape === "box" ? (
         <div className="space-y-2.5 border-t border-slate-100 pt-2.5">
@@ -1522,6 +1532,177 @@ function ColliderInspector({
       >
         Colliderを削除
       </button>
+    </ComponentCard>
+  );
+}
+
+function RigidBodyInspector({
+  component,
+  descendantColliderCount,
+  descendantMeshCount,
+  readOnly,
+  onChange,
+  onRemove,
+}: {
+  component: RigidBodyComponent;
+  descendantColliderCount: number;
+  descendantMeshCount: number;
+  readOnly: boolean;
+  onChange: (patch: RigidBodyPatch) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <ComponentCard
+      title="Rigid Body"
+      subtitle="Physics · 子孫を所有"
+      enabled={{
+        checked: component.enabled,
+        disabled: readOnly,
+        label: "Rigid Bodyを有効化",
+        onChange: (enabled) => onChange({ enabled }),
+      }}
+      actions={
+        <button
+          type="button"
+          disabled={readOnly}
+          onClick={onRemove}
+          aria-label="Rigid Bodyを削除"
+          title="Rigid Bodyを削除"
+          className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-40"
+        >
+          <EDITOR_ICONS.delete size={13} aria-hidden="true" />
+        </button>
+      }
+    >
+      <p className="rounded bg-indigo-50 px-2 py-1.5 text-xs leading-5 text-indigo-800">
+        このEntityを原点に、入れ子のRigid Bodyまでの子孫をまとめます。
+        Collider {descendantColliderCount} / Mesh {descendantMeshCount}
+      </p>
+      {(component.autoColliders === "none" &&
+        descendantColliderCount === 0) ||
+      (component.autoColliders !== "none" && descendantMeshCount === 0) ? (
+        <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-5 text-amber-800">
+          {component.autoColliders === "none"
+            ? "このBody範囲に有効なColliderがありません。子EntityへColliderを追加してください。"
+            : "自動Colliderを作成できるMeshがこのBody範囲にありません。"}
+        </p>
+      ) : null}
+      {component.autoColliders === "trimesh" &&
+      component.bodyType !== "fixed" ? (
+        <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-5 text-amber-800">
+          Dynamic / Kinematicでは安全なConvex Hullとして実行・出力します。
+        </p>
+      ) : null}
+      <label className="grid grid-cols-[minmax(0,1fr)_150px] items-center gap-3 text-xs text-slate-700">
+        Type
+        <select
+          value={component.bodyType}
+          disabled={readOnly}
+          onChange={(event) =>
+            onChange({
+              bodyType: event.currentTarget.value as RigidBodyComponent["bodyType"],
+            })
+          }
+          className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
+        >
+          <option value="fixed">Static（Fixed）</option>
+          <option value="dynamic">Dynamic</option>
+          <option value="kinematicPosition">Kinematic Position</option>
+          <option value="kinematicVelocity">Kinematic Velocity</option>
+        </select>
+      </label>
+      <label className="grid grid-cols-[minmax(0,1fr)_150px] items-center gap-3 text-xs text-slate-700">
+        Auto Colliders
+        <select
+          value={component.autoColliders}
+          disabled={readOnly}
+          onChange={(event) =>
+            onChange({
+              autoColliders:
+                event.currentTarget.value as RigidBodyComponent["autoColliders"],
+            })
+          }
+          className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
+        >
+          <option value="none">Off（明示Colliderのみ）</option>
+          <option value="cuboid">Cuboid</option>
+          <option value="ball">Ball</option>
+          <option value="hull">Convex Hull</option>
+          <option value="trimesh">Trimesh</option>
+        </select>
+      </label>
+      <ToggleRow
+        label="Auto Collider Trigger"
+        checked={component.isTrigger}
+        disabled={readOnly}
+        onChange={(isTrigger) => onChange({ isTrigger })}
+      />
+      <ColliderNumberField
+        label="Auto Friction"
+        value={component.friction}
+        min={0}
+        step={0.05}
+        disabled={readOnly}
+        onChange={(friction) => onChange({ friction })}
+      />
+      <ColliderNumberField
+        label="Auto Restitution"
+        value={component.restitution}
+        min={0}
+        max={1}
+        step={0.05}
+        disabled={readOnly}
+        onChange={(restitution) => onChange({ restitution })}
+      />
+      <ColliderNumberField
+        label="Gravity Scale"
+        value={component.gravityScale}
+        min={-100}
+        max={100}
+        step={0.1}
+        disabled={readOnly}
+        onChange={(gravityScale) => onChange({ gravityScale })}
+      />
+      <ColliderNumberField
+        label="Linear Damping"
+        value={component.linearDamping}
+        min={0}
+        step={0.05}
+        disabled={readOnly}
+        onChange={(linearDamping) => onChange({ linearDamping })}
+      />
+      <ColliderNumberField
+        label="Angular Damping"
+        value={component.angularDamping}
+        min={0}
+        step={0.05}
+        disabled={readOnly}
+        onChange={(angularDamping) => onChange({ angularDamping })}
+      />
+      <ToggleRow
+        label="Can Sleep"
+        checked={component.canSleep}
+        disabled={readOnly}
+        onChange={(canSleep) => onChange({ canSleep })}
+      />
+      <ToggleRow
+        label="CCD"
+        checked={component.ccd}
+        disabled={readOnly}
+        onChange={(ccd) => onChange({ ccd })}
+      />
+      <ToggleRow
+        label="Lock Position"
+        checked={component.lockTranslations}
+        disabled={readOnly}
+        onChange={(lockTranslations) => onChange({ lockTranslations })}
+      />
+      <ToggleRow
+        label="Lock Rotation"
+        checked={component.lockRotations}
+        disabled={readOnly}
+        onChange={(lockRotations) => onChange({ lockRotations })}
+      />
     </ComponentCard>
   );
 }
@@ -2083,6 +2264,57 @@ function ParticleEmitterInspector({
   );
 }
 
+function findEnabledRigidBodyOwner(
+  scene: SceneDocument,
+  entity: SceneEntity,
+): SceneEntity | undefined {
+  const visited = new Set<string>();
+  let current: SceneEntity | undefined = entity;
+  while (current && !visited.has(current.id)) {
+    visited.add(current.id);
+    if (
+      current.components.some(
+        (component) => component.type === "rigid-body" && component.enabled,
+      )
+    ) {
+      return current;
+    }
+    current = current.parentId ? scene.entities[current.parentId] : undefined;
+  }
+  return undefined;
+}
+
+function countRigidBodyDescendants(
+  scene: SceneDocument,
+  rootEntityId: string,
+): { colliderCount: number; meshCount: number } {
+  let colliderCount = 0;
+  let meshCount = 0;
+  const pending = [rootEntityId];
+  const visited = new Set<string>();
+  while (pending.length > 0) {
+    const entityId = pending.pop()!;
+    if (visited.has(entityId)) continue;
+    visited.add(entityId);
+    const current = scene.entities[entityId];
+    if (!current) continue;
+    const nestedBoundary =
+      entityId !== rootEntityId &&
+      current.components.some(
+        (component) => component.type === "rigid-body" && component.enabled,
+      );
+    if (nestedBoundary) continue;
+    colliderCount += current.components.filter(
+      (component) => component.type === "collider" && component.enabled,
+    ).length;
+    meshCount += current.components.filter(
+      (component) => component.type === "mesh" && component.enabled,
+    ).length;
+    pending.push(...current.children);
+  }
+  return { colliderCount, meshCount };
+}
+
 function EntityInspector({
   entity,
   scene,
@@ -2100,8 +2332,10 @@ function EntityInspector({
   onMeshChange,
   onModelNodeMeshChange,
   onColliderChange,
+  onRigidBodyChange,
   onAutoFitCollider,
   onRemoveCollider,
+  onRemoveRigidBody,
   onLightChange,
   onTextChange,
   onAnimationChange,
@@ -2137,8 +2371,10 @@ function EntityInspector({
     patch: MeshInspectorPatch,
   ) => void;
   onColliderChange: (componentId: string, patch: ColliderPatch) => void;
+  onRigidBodyChange: (componentId: string, patch: RigidBodyPatch) => void;
   onAutoFitCollider: (componentId: string) => void;
   onRemoveCollider: (componentId: string) => void;
+  onRemoveRigidBody: (componentId: string) => void;
   onLightChange: (componentId: string, patch: LightPatch) => void;
   onTextChange: (componentId: string, patch: TextPatch) => void;
   onAnimationChange: (componentId: string, patch: AnimationPatch) => void;
@@ -2178,6 +2414,8 @@ function EntityInspector({
     return undefined;
   })();
   const effectivelyEnabled = entity.enabled && !disabledAncestor;
+  const rigidBodyOwner = findEnabledRigidBodyOwner(scene, entity);
+  const rigidBodyDescendants = countRigidBodyDescendants(scene, entity.id);
 
   return (
     <div className="space-y-3">
@@ -2316,12 +2554,26 @@ function EntityInspector({
             />
           );
         }
+        if (component.type === "rigid-body") {
+          return (
+            <RigidBodyInspector
+              key={component.id}
+              component={component}
+              descendantColliderCount={rigidBodyDescendants.colliderCount}
+              descendantMeshCount={rigidBodyDescendants.meshCount}
+              readOnly={readOnly && !liveRuntimeTuning}
+              onChange={(patch) => onRigidBodyChange(component.id, patch)}
+              onRemove={() => onRemoveRigidBody(component.id)}
+            />
+          );
+        }
         if (component.type === "collider") {
           return (
             <ColliderInspector
               key={component.id}
               component={component}
               entityScale={transform?.scale ?? [1, 1, 1]}
+              bodyOwner={rigidBodyOwner}
               readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) => onColliderChange(component.id, patch)}
               onAutoFit={() => onAutoFitCollider(component.id)}
@@ -2566,8 +2818,10 @@ export function InspectorPanel({
   onTransformScrubCancel,
   onMeshChange,
   onColliderChange,
+  onRigidBodyChange,
   onAutoFitCollider,
   onRemoveCollider,
+  onRemoveRigidBody,
   onLightChange,
   onTextChange,
   onAnimationChange,
@@ -2618,8 +2872,14 @@ export function InspectorPanel({
   onTransformScrubCancel: (entityId: string) => void;
   onMeshChange: (entityId: string, componentId: string, patch: MeshInspectorPatch) => void;
   onColliderChange: (entityId: string, componentId: string, patch: ColliderPatch) => void;
+  onRigidBodyChange: (
+    entityId: string,
+    componentId: string,
+    patch: RigidBodyPatch,
+  ) => void;
   onAutoFitCollider: (entityId: string, componentId: string) => void;
   onRemoveCollider: (entityId: string, componentId: string) => void;
+  onRemoveRigidBody: (entityId: string, componentId: string) => void;
   onLightChange: (entityId: string, componentId: string, patch: LightPatch) => void;
   onTextChange: (entityId: string, componentId: string, patch: TextPatch) => void;
   onAnimationChange: (entityId: string, componentId: string, patch: AnimationPatch) => void;
@@ -2733,7 +2993,7 @@ export function InspectorPanel({
       {readOnly ? (
         <div className="border-b border-violet-200 bg-violet-50 px-3 py-2 text-xs leading-4 text-violet-800">
           {playMode
-            ? "Play Windowは分離された実行コピーです。EntityのTransform、Collider、Animationだけ実行中に調整できます。"
+            ? "Play Windowは分離された実行コピーです。EntityのTransform、Rigid Body、Collider、Animationだけ実行中に調整できます。"
             : "シーンとアセット設定は閲覧のみです。"}
         </div>
       ) : null}
@@ -2820,11 +3080,17 @@ export function InspectorPanel({
             onColliderChange={(componentId, patch) =>
               onColliderChange(entity.id, componentId, patch)
             }
+            onRigidBodyChange={(componentId, patch) =>
+              onRigidBodyChange(entity.id, componentId, patch)
+            }
             onAutoFitCollider={(componentId) =>
               onAutoFitCollider(entity.id, componentId)
             }
             onRemoveCollider={(componentId) =>
               onRemoveCollider(entity.id, componentId)
+            }
+            onRemoveRigidBody={(componentId) =>
+              onRemoveRigidBody(entity.id, componentId)
             }
             onLightChange={(componentId, patch) =>
               onLightChange(entity.id, componentId, patch)

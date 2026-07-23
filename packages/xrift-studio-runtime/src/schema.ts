@@ -95,6 +95,27 @@ export type XriftRuntimeComponent =
     }
   | {
       id: string;
+      type: "rigid-body";
+      enabled: boolean;
+      bodyType:
+        | "fixed"
+        | "dynamic"
+        | "kinematicPosition"
+        | "kinematicVelocity";
+      autoColliders: "none" | "ball" | "cuboid" | "hull" | "trimesh";
+      isTrigger: boolean;
+      friction: number;
+      restitution: number;
+      gravityScale: number;
+      linearDamping: number;
+      angularDamping: number;
+      canSleep: boolean;
+      ccd: boolean;
+      lockTranslations: boolean;
+      lockRotations: boolean;
+    }
+  | {
+      id: string;
       type: "animation";
       enabled: boolean;
       autoplay: boolean;

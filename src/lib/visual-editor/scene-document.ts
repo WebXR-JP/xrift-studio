@@ -95,6 +95,37 @@ export const RIGID_BODY_TYPES = [
 ] as const;
 export type RigidBodyType = (typeof RIGID_BODY_TYPES)[number];
 
+export const RIGID_BODY_AUTO_COLLIDERS = [
+  "none",
+  "ball",
+  "cuboid",
+  "hull",
+  "trimesh",
+] as const;
+export type RigidBodyAutoColliders =
+  (typeof RIGID_BODY_AUTO_COLLIDERS)[number];
+
+export type RigidBodyComponent = ComponentBase & {
+  type: "rigid-body";
+  bodyType: RigidBodyType;
+  /**
+   * Rapier auto-collider generation for descendant meshes. "none" means that
+   * only explicit Collider components in this body boundary are used.
+   */
+  autoColliders: RigidBodyAutoColliders;
+  /** Surface settings applied to Rapier-generated colliders. */
+  isTrigger: boolean;
+  friction: number;
+  restitution: number;
+  gravityScale: number;
+  linearDamping: number;
+  angularDamping: number;
+  canSleep: boolean;
+  ccd: boolean;
+  lockTranslations: boolean;
+  lockRotations: boolean;
+};
+
 type ColliderComponentBase = ComponentBase & {
   type: "collider";
   isTrigger: boolean;
@@ -294,6 +325,7 @@ export type XRiftComponent = ComponentBase & {
 export interface SceneComponentSchemaRegistry {
   transform: TransformComponent;
   mesh: MeshComponent;
+  "rigid-body": RigidBodyComponent;
   collider: ColliderComponent;
   light: LightComponent;
   text: TextComponent;
@@ -406,8 +438,14 @@ function isRigidBodyType(value: string): value is RigidBodyType {
   return (RIGID_BODY_TYPES as readonly string[]).includes(value);
 }
 
+function isRigidBodyAutoColliders(
+  value: string,
+): value is RigidBodyAutoColliders {
+  return (RIGID_BODY_AUTO_COLLIDERS as readonly string[]).includes(value);
+}
+
 function normalizeRigidBodyOptions(
-  options: ColliderSurfaceOptions,
+  options: RigidBodyOptions,
 ): Required<
   Pick<
     ColliderComponentBase,
@@ -449,6 +487,148 @@ function normalizeRigidBodyOptions(
     lockTranslations: options.lockTranslations ?? false,
     lockRotations: options.lockRotations ?? false,
   };
+}
+
+export type RigidBodyOptions = {
+  enabled?: boolean;
+  bodyType?: RigidBodyType;
+  autoColliders?: RigidBodyAutoColliders;
+  isTrigger?: boolean;
+  friction?: number;
+  restitution?: number;
+  gravityScale?: number;
+  linearDamping?: number;
+  angularDamping?: number;
+  canSleep?: boolean;
+  ccd?: boolean;
+  lockTranslations?: boolean;
+  lockRotations?: boolean;
+};
+
+export type RigidBodyPatch = RigidBodyOptions;
+
+export function createRigidBodyComponent(
+  id: string,
+  options: RigidBodyOptions = {},
+): RigidBodyComponent {
+  return {
+    id,
+    type: "rigid-body",
+    enabled: typeof options.enabled === "boolean" ? options.enabled : true,
+    autoColliders:
+      options.autoColliders &&
+      isRigidBodyAutoColliders(options.autoColliders)
+        ? options.autoColliders
+        : "none",
+    isTrigger:
+      typeof options.isTrigger === "boolean" ? options.isTrigger : false,
+    friction:
+      options.friction !== undefined && isValidFriction(options.friction)
+        ? options.friction
+        : 0.5,
+    restitution:
+      options.restitution !== undefined &&
+      isValidRestitution(options.restitution)
+        ? options.restitution
+        : 0,
+    ...normalizeRigidBodyOptions(options),
+  };
+}
+
+/**
+ * Upgrades the first Classic importer representation where a parent
+ * `<RigidBody>` was stored as a default-size Box Collider at local origin.
+ * The conservative signature avoids changing ordinary authored colliders.
+ */
+export function migrateLegacyParentRigidBodies(
+  scene: SceneDocument,
+): SceneDocument {
+  let changed = false;
+  const entities = Object.fromEntries(
+    Object.entries(scene.entities).map(([entityId, entity]) => {
+      if (
+        entity.children.length === 0 ||
+        entity.components.some((component) => component.type === "rigid-body")
+      ) {
+        return [entityId, entity];
+      }
+      const colliders = entity.components.filter(
+        (component): component is ColliderComponent =>
+          component.type === "collider",
+      );
+      const carrier = colliders.length === 1 ? colliders[0] : undefined;
+      const hasLocalContent = entity.components.some((component) =>
+        [
+          "mesh",
+          "light",
+          "text",
+          "audio-source",
+          "particle-emitter",
+          "spawn-point",
+          "xrift-component",
+        ].includes(component.type),
+      );
+      if (
+        !carrier ||
+        carrier.shape !== "box" ||
+        carrier.fitMode !== "manual" ||
+        hasLocalContent ||
+        !vectorsEqual(carrier.center, [0, 0, 0]) ||
+        !vectorsEqual(carrier.halfExtents, [0.5, 0.5, 0.5])
+      ) {
+        return [entityId, entity];
+      }
+      const hasImporterSignature =
+        /rigid\s*body/i.test(entity.name) ||
+        (carrier.bodyType ?? "fixed") !== "fixed" ||
+        (carrier.gravityScale ?? 1) !== 1 ||
+        (carrier.linearDamping ?? 0) !== 0 ||
+        (carrier.angularDamping ?? 0) !== 0 ||
+        (carrier.canSleep ?? true) !== true ||
+        (carrier.ccd ?? false) !== false ||
+        (carrier.lockTranslations ?? false) !== false ||
+        (carrier.lockRotations ?? false) !== false ||
+        carrier.isTrigger ||
+        carrier.friction !== 0.5 ||
+        carrier.restitution !== 0;
+      if (!hasImporterSignature) return [entityId, entity];
+
+      const usedIds = new Set(entity.components.map((component) => component.id));
+      let rigidBodyId = `${carrier.id}-rigid-body`;
+      let suffix = 2;
+      while (usedIds.has(rigidBodyId)) {
+        rigidBodyId = `${carrier.id}-rigid-body-${suffix}`;
+        suffix += 1;
+      }
+      changed = true;
+      return [
+        entityId,
+        {
+          ...entity,
+          components: [
+            ...entity.components.filter(
+              (component) => component.id !== carrier.id,
+            ),
+            createRigidBodyComponent(rigidBodyId, {
+              bodyType: carrier.bodyType ?? "fixed",
+              autoColliders: "cuboid",
+              isTrigger: carrier.isTrigger,
+              friction: carrier.friction,
+              restitution: carrier.restitution,
+              gravityScale: carrier.gravityScale ?? 1,
+              linearDamping: carrier.linearDamping ?? 0,
+              angularDamping: carrier.angularDamping ?? 0,
+              canSleep: carrier.canSleep ?? true,
+              ccd: carrier.ccd ?? false,
+              lockTranslations: carrier.lockTranslations ?? false,
+              lockRotations: carrier.lockRotations ?? false,
+            }),
+          ],
+        },
+      ];
+    }),
+  );
+  return changed ? { ...scene, entities } : scene;
 }
 
 export function createTransformComponent(
@@ -794,6 +974,35 @@ export function getCollider(
   );
 }
 
+export function getRigidBody(
+  entity: SceneEntity,
+  componentId?: string,
+): RigidBodyComponent | undefined;
+export function getRigidBody(
+  scene: SceneDocument,
+  entityId: string,
+  componentId?: string,
+): RigidBodyComponent | undefined;
+export function getRigidBody(
+  entityOrScene: SceneEntity | SceneDocument,
+  entityIdOrComponentId?: string,
+  componentId?: string,
+): RigidBodyComponent | undefined {
+  const isScene = "entities" in entityOrScene;
+  const entity = isScene
+    ? entityIdOrComponentId === undefined
+      ? undefined
+      : entityOrScene.entities[entityIdOrComponentId]
+    : entityOrScene;
+  const targetComponentId = isScene ? componentId : entityIdOrComponentId;
+
+  return entity?.components.find(
+    (candidate): candidate is RigidBodyComponent =>
+      candidate.type === "rigid-body" &&
+      (targetComponentId === undefined || candidate.id === targetComponentId),
+  );
+}
+
 export type ColliderAutoFitBounds = {
   center: Vec3;
   halfExtents: Vec3;
@@ -891,6 +1100,87 @@ export type ColliderPatch = {
   lockTranslations?: boolean;
   lockRotations?: boolean;
 };
+
+/** Applies a parent Rigid Body edit atomically. */
+export function updateRigidBodyComponent(
+  scene: SceneDocument,
+  entityId: string,
+  patch: RigidBodyPatch,
+  componentId?: string,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  const current = entity ? getRigidBody(entity, componentId) : undefined;
+  if (!entity || !current) return scene;
+  if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") {
+    return scene;
+  }
+  if (patch.bodyType !== undefined && !isRigidBodyType(patch.bodyType)) {
+    return scene;
+  }
+  if (
+    patch.autoColliders !== undefined &&
+    !isRigidBodyAutoColliders(patch.autoColliders)
+  ) {
+    return scene;
+  }
+  if (patch.isTrigger !== undefined && typeof patch.isTrigger !== "boolean") {
+    return scene;
+  }
+  if (patch.friction !== undefined && !isValidFriction(patch.friction)) {
+    return scene;
+  }
+  if (
+    patch.restitution !== undefined &&
+    !isValidRestitution(patch.restitution)
+  ) {
+    return scene;
+  }
+  if (
+    patch.gravityScale !== undefined &&
+    (!Number.isFinite(patch.gravityScale) || Math.abs(patch.gravityScale) > 100)
+  ) {
+    return scene;
+  }
+  for (const damping of [patch.linearDamping, patch.angularDamping]) {
+    if (damping !== undefined && (!Number.isFinite(damping) || damping < 0)) {
+      return scene;
+    }
+  }
+  for (const value of [
+    patch.canSleep,
+    patch.ccd,
+    patch.lockTranslations,
+    patch.lockRotations,
+  ]) {
+    if (value !== undefined && typeof value !== "boolean") return scene;
+  }
+
+  const next: RigidBodyComponent = {
+    ...current,
+    ...patch,
+  };
+  if (
+    !Object.keys(patch).some(
+      (key) =>
+        next[key as keyof RigidBodyComponent] !==
+        current[key as keyof RigidBodyComponent],
+    )
+  ) {
+    return scene;
+  }
+  return {
+    ...scene,
+    entities: {
+      ...scene.entities,
+      [entityId]: {
+        ...entity,
+        components: entity.components.map((component) =>
+          component.id === current.id ? next : component,
+        ),
+      },
+    },
+  };
+}
 
 /** Applies a Collider edit atomically; an invalid field rejects the whole patch. */
 export function updateColliderComponent(
