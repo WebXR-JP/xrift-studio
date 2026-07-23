@@ -1,15 +1,18 @@
 import { useEffect, type ReactNode } from "react";
 import {
   Box,
+  Download,
   Gauge,
   Info,
   Lightbulb,
   Monitor,
+  Music,
   Smartphone,
   X,
 } from "lucide-react";
 import {
   formatVramBytes,
+  formatLoadSeconds,
   type VramDeviceRating,
   type WorldVramEstimate,
 } from "../../lib/visual-editor/vram-estimate";
@@ -79,10 +82,10 @@ export function VramEstimateDialog({
               id="vram-estimate-title"
               className="mt-1 text-xl font-semibold text-slate-950"
             >
-              {subjectLabel}のVRAM使用量目安
+              {subjectLabel}の容量・パフォーマンス目安
             </h2>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              公開対象のTextureとModelを解析し、GPU上へ展開した場合を概算しています。
+              公開対象のTexture・Model・Audioから、ロード容量とGPU使用量を概算しています。
             </p>
           </div>
           <button
@@ -97,12 +100,18 @@ export function VramEstimateDialog({
         </header>
 
         <div className="overflow-y-auto px-6 py-5">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <SummaryCard
               label="Asset VRAM"
               value={formatVramBytes(estimate.assetBytes)}
               detail={`${estimate.textureCount} Texture / ${estimate.modelCount} Model`}
               icon={<Box size={16} aria-hidden="true" />}
+            />
+            <SummaryCard
+              label="初回Assetロード"
+              value={formatVramBytes(estimate.loadBytes)}
+              detail={`10 Mbpsで約${formatLoadSeconds(estimate.mobileLoadSeconds)}`}
+              icon={<Download size={16} aria-hidden="true" />}
             />
             <SummaryCard
               label="実行時の全体目安"
@@ -116,12 +125,28 @@ export function VramEstimateDialog({
                 スマートフォン目安
               </div>
               <span
-                className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-sm font-semibold ${RATING_CLASSES[estimate.smartphoneRating]}`}
+                className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-sm font-semibold ${RATING_CLASSES[
+                  estimate.smartphoneRating === "high" ||
+                  estimate.smartphoneLoadRating === "high"
+                    ? "high"
+                    : estimate.smartphoneRating === "watch" ||
+                        estimate.smartphoneLoadRating === "watch"
+                      ? "watch"
+                      : "comfortable"
+                ]}`}
               >
-                {RATING_LABELS[estimate.smartphoneRating]}
+                {RATING_LABELS[
+                  estimate.smartphoneRating === "high" ||
+                  estimate.smartphoneLoadRating === "high"
+                    ? "high"
+                    : estimate.smartphoneRating === "watch" ||
+                        estimate.smartphoneLoadRating === "watch"
+                      ? "watch"
+                      : "comfortable"
+                ]}
               </span>
               <div className="mt-2 text-xs leading-5 text-slate-500">
-                256 MB以下を余裕あり、384 MB超を高負荷とするStudio基準
+                VRAM 256 MB、初回Asset 20 MB以下を余裕ありとするStudio基準
               </div>
             </div>
           </div>
@@ -134,6 +159,10 @@ export function VramEstimateDialog({
             <span className="rounded-full bg-slate-100 px-2.5 py-1.5 text-slate-700">
               メッシュ配置: {estimate.meshPlacementCount}
             </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1.5 text-slate-700">
+              <Download size={13} aria-hidden="true" />
+              高速回線50 Mbps: 約{formatLoadSeconds(estimate.fastLoadSeconds)}
+            </span>
             {estimate.unknownDimensionTextureCount > 0 ? (
               <span className="rounded-full bg-amber-100 px-2.5 py-1.5 text-amber-800">
                 解像度不明: {estimate.unknownDimensionTextureCount} Texture
@@ -145,7 +174,7 @@ export function VramEstimateDialog({
             <div className="flex items-end justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">
-                  使用量が多い順
+                  VRAM使用量が多い順
                 </h3>
                 <p className="mt-0.5 text-xs text-slate-500">
                   同じAssetの複数配置はGPUリソースを共有する前提です。
@@ -209,6 +238,82 @@ export function VramEstimateDialog({
           </section>
 
           <section className="mt-6">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  <Download size={16} className="text-sky-600" aria-hidden="true" />
+                  ロード容量が多い順
+                </h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  公開時にコピーされるAsset原本の合計です。アプリ本体と通信オーバーヘッドは含みません。
+                </p>
+              </div>
+              <span className="text-xs text-slate-400">
+                {estimate.loadContributions.length} Assets
+              </span>
+            </div>
+            <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
+              {estimate.loadContributions.length > 0 ? (
+                estimate.loadContributions.map((contribution, index) => {
+                  const share =
+                    estimate.loadBytes > 0
+                      ? (contribution.estimatedBytes / estimate.loadBytes) * 100
+                      : 0;
+                  return (
+                    <div
+                      key={`load:${contribution.assetId}`}
+                      className="border-b border-slate-100 px-4 py-3 last:border-b-0"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 w-5 shrink-0 text-right text-xs tabular-nums text-slate-400">
+                          {index + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0 truncate text-sm font-semibold text-slate-800">
+                              {contribution.kind === "audio" ? (
+                                <Music
+                                  size={13}
+                                  className="mr-1.5 inline text-slate-400"
+                                  aria-hidden="true"
+                                />
+                              ) : null}
+                              {contribution.name}
+                              <span className="ml-2 text-xs font-normal text-slate-400">
+                                {contribution.kind === "texture"
+                                  ? "Texture"
+                                  : contribution.kind === "model"
+                                    ? "Model"
+                                    : "Audio"}
+                              </span>
+                            </div>
+                            <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">
+                              {formatVramBytes(contribution.estimatedBytes)}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-xs leading-5 text-slate-500">
+                            {contribution.detail}
+                          </div>
+                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                            <div
+                              className="h-full rounded-full bg-sky-500"
+                              style={{ width: `${Math.max(1, share)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="px-4 py-8 text-center text-sm text-slate-500">
+                  ロード容量を概算できる公開対象Assetはありません。
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="mt-6">
             <div className="flex items-center gap-2">
               <Lightbulb size={16} className="text-amber-600" aria-hidden="true" />
               <h3 className="text-sm font-semibold text-slate-900">改善候補</h3>
@@ -224,13 +329,31 @@ export function VramEstimateDialog({
                       <div className="text-sm font-semibold text-slate-800">
                         {recommendation.title}
                       </div>
-                      {recommendation.estimatedSavingBytes &&
-                      recommendation.estimatedSavingBytes > 0 ? (
-                        <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">
-                          最大 約
-                          {formatVramBytes(recommendation.estimatedSavingBytes)}削減
-                        </span>
-                      ) : null}
+                      <div className="flex flex-wrap gap-1.5">
+                        {recommendation.estimatedLoadSavingBytes &&
+                        recommendation.estimatedLoadSavingBytes > 0 ? (
+                          <span className="rounded-full bg-sky-100 px-2 py-1 text-xs font-semibold text-sky-800">
+                            ロード 最大 約
+                            {formatVramBytes(
+                              recommendation.estimatedLoadSavingBytes,
+                            )}削減
+                          </span>
+                        ) : null}
+                        {recommendation.estimatedVramSavingBytes &&
+                        recommendation.estimatedVramSavingBytes > 0 ? (
+                          <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">
+                            VRAM 最大 約
+                            {formatVramBytes(
+                              recommendation.estimatedVramSavingBytes,
+                            )}削減
+                          </span>
+                        ) : null}
+                        {recommendation.impact === "render" ? (
+                          <span className="rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-800">
+                            描画負荷を改善
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                     <p className="mt-1 text-xs leading-5 text-slate-600">
                       {recommendation.detail}
@@ -248,8 +371,9 @@ export function VramEstimateDialog({
           <div className="mt-6 flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <Info size={15} className="mt-0.5 shrink-0 text-slate-500" aria-hidden="true" />
             <p className="text-xs leading-5 text-slate-600">
-              これは実測値ではありません。ブラウザ、GPU、画面解像度、影、ポストエフェクト、KTX2の転送先形式で変動します。
-              PNG・JPEG・WebPはファイルサイズではなくGPU上のRGBA展開を基準にし、mipmap有効時は約33%を加算しています。
+              これは実測値ではありません。ロード時間はAsset原本と回線速度からの単純計算で、キャッシュ、CDN、アプリ本体、HTTP処理を含みません。
+              VRAMはブラウザ、GPU、画面解像度、影、ポストエフェクト、KTX2の転送先形式で変動します。
+              PNG・JPEG・WebPはGPU上のRGBA展開を基準にし、mipmap有効時は約33%を加算しています。
             </p>
           </div>
         </div>

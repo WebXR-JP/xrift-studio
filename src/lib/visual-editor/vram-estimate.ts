@@ -1,5 +1,6 @@
 import type { PrototypeVisualProject } from "./prototype-project";
 import type {
+  AudioAsset,
   MaterialAsset,
   ModelAsset,
   SceneAsset,
@@ -29,7 +30,18 @@ export type VramRecommendation = {
   title: string;
   detail: string;
   assetId?: string;
-  estimatedSavingBytes?: number;
+  impact: "vram" | "load" | "both" | "render";
+  estimatedVramSavingBytes?: number;
+  estimatedLoadSavingBytes?: number;
+};
+
+export type LoadContribution = {
+  assetId: string;
+  name: string;
+  kind: "texture" | "model" | "audio";
+  estimatedBytes: number;
+  referenceCount: number;
+  detail: string;
 };
 
 export type WorldVramEstimate = {
@@ -38,10 +50,17 @@ export type WorldVramEstimate = {
   runtimeHighBytes: number;
   smartphoneRating: VramDeviceRating;
   desktopRating: VramDeviceRating;
+  loadBytes: number;
+  smartphoneLoadRating: VramDeviceRating;
+  desktopLoadRating: VramDeviceRating;
+  mobileLoadSeconds: number;
+  fastLoadSeconds: number;
   contributions: VramContribution[];
+  loadContributions: LoadContribution[];
   recommendations: VramRecommendation[];
   textureCount: number;
   modelCount: number;
+  audioCount: number;
   meshPlacementCount: number;
   unknownDimensionTextureCount: number;
 };
@@ -88,9 +107,11 @@ export function estimateWorldVram(
   }
 
   const contributions: VramContribution[] = [];
+  const loadContributions: LoadContribution[] = [];
   const recommendations: VramRecommendation[] = [];
   let textureCount = 0;
   let modelCount = 0;
+  let audioCount = 0;
   let unknownDimensionTextureCount = 0;
 
   for (const assetId of visited) {
@@ -109,7 +130,18 @@ export function estimateWorldVram(
         referenceCount,
         detail: estimate.detail,
       });
-      recommendations.push(...textureRecommendations(asset, estimate.bytes));
+      const loadEstimate = estimateTextureLoadBytes(asset);
+      loadContributions.push({
+        assetId,
+        name: asset.name,
+        kind: "texture",
+        estimatedBytes: loadEstimate.bytes,
+        referenceCount,
+        detail: loadEstimate.detail,
+      });
+      recommendations.push(
+        ...textureRecommendations(asset, estimate.bytes, loadEstimate.bytes),
+      );
     } else if (asset.kind === "model") {
       modelCount += 1;
       const estimate = estimateModelBytes(asset);
@@ -121,19 +153,52 @@ export function estimateWorldVram(
         referenceCount,
         detail: estimate.detail,
       });
+      loadContributions.push({
+        assetId,
+        name: asset.name,
+        kind: "model",
+        estimatedBytes: asset.importMetadata?.byteLength ?? 512 * 1024,
+        referenceCount,
+        detail: asset.importMetadata
+          ? `${asset.importMetadata.sourceFormat.toUpperCase()}原本 / ${
+              asset.importMetadata.extensionsUsed.includes(
+                "KHR_draco_mesh_compression",
+              )
+                ? "Draco圧縮済み"
+                : "メッシュ圧縮なし"
+            }`
+          : "ファイル容量不明 / 0.5 MBの仮値",
+      });
       recommendations.push(
         ...modelRecommendations(
           asset,
           meshPlacements.get(assetId) ?? referenceCount,
         ),
       );
+    } else if (asset.kind === "audio") {
+      audioCount += 1;
+      loadContributions.push({
+        assetId,
+        name: asset.name,
+        kind: "audio",
+        estimatedBytes: asset.importMetadata.byteLength,
+        referenceCount,
+        detail: "MP3原本 / 再生開始前後に通信が発生します",
+      });
+      recommendations.push(...audioRecommendations(asset));
     }
   }
 
   contributions.sort((left, right) => right.estimatedBytes - left.estimatedBytes);
+  loadContributions.sort(
+    (left, right) => right.estimatedBytes - left.estimatedBytes,
+  );
   recommendations.sort(
     (left, right) =>
-      (right.estimatedSavingBytes ?? 0) - (left.estimatedSavingBytes ?? 0),
+      (right.estimatedLoadSavingBytes ?? 0) +
+      (right.estimatedVramSavingBytes ?? 0) -
+      ((left.estimatedLoadSavingBytes ?? 0) +
+        (left.estimatedVramSavingBytes ?? 0)),
   );
   const assetBytes = contributions.reduce(
     (total, contribution) => total + contribution.estimatedBytes,
@@ -141,6 +206,10 @@ export function estimateWorldVram(
   );
   const runtimeLowBytes = assetBytes + RUNTIME_LOW_BYTES;
   const runtimeHighBytes = assetBytes + RUNTIME_HIGH_BYTES;
+  const loadBytes = loadContributions.reduce(
+    (total, contribution) => total + contribution.estimatedBytes,
+    0,
+  );
 
   return {
     assetBytes,
@@ -148,10 +217,17 @@ export function estimateWorldVram(
     runtimeHighBytes,
     smartphoneRating: rateBytes(runtimeHighBytes, 256 * MIB, 384 * MIB),
     desktopRating: rateBytes(runtimeHighBytes, 768 * MIB, 1536 * MIB),
+    loadBytes,
+    smartphoneLoadRating: rateBytes(loadBytes, 20 * MIB, 50 * MIB),
+    desktopLoadRating: rateBytes(loadBytes, 50 * MIB, 150 * MIB),
+    mobileLoadSeconds: estimateTransferSeconds(loadBytes, 10),
+    fastLoadSeconds: estimateTransferSeconds(loadBytes, 50),
     contributions,
+    loadContributions,
     recommendations,
     textureCount,
     modelCount,
+    audioCount,
     meshPlacementCount: [...meshPlacements.values()].reduce(
       (total, count) => total + count,
       0,
@@ -272,7 +348,8 @@ function estimateTextureBytes(asset: TextureAsset): TextureByteEstimate {
 
 function textureRecommendations(
   asset: TextureAsset,
-  currentBytes: number,
+  currentVramBytes: number,
+  currentLoadBytes: number,
 ): VramRecommendation[] {
   const recommendations: VramRecommendation[] = [];
   const width = asset.importMetadata?.width;
@@ -281,14 +358,25 @@ function textureRecommendations(
   if (maxDimension > 2048) {
     const resized = fitWithin(width ?? maxDimension, height ?? maxDimension, 2048);
     const mipFactor = asset.importSettings.generateMipmaps ? 4 / 3 : 1;
-    const resizedBytes = resized.width * resized.height * 4 * mipFactor;
+    const resizedVramBytes = resized.width * resized.height * 4 * mipFactor;
+    const sourcePixels = Math.max(1, (width ?? 1) * (height ?? 1));
+    const resizedLoadBytes =
+      currentLoadBytes * ((resized.width * resized.height) / sourcePixels);
     recommendations.push({
       id: `resize:${asset.id}`,
       severity: maxDimension > 4096 ? "recommended" : "consider",
       title: `${asset.name}を最大2048pxへ縮小`,
       detail: `${width} × ${height}です。スマートフォン向けでは、見た目を確認しながら最大サイズを下げられます。`,
       assetId: asset.id,
-      estimatedSavingBytes: Math.max(0, currentBytes - resizedBytes),
+      impact: "both",
+      estimatedVramSavingBytes: Math.max(
+        0,
+        currentVramBytes - resizedVramBytes,
+      ),
+      estimatedLoadSavingBytes: Math.max(
+        0,
+        currentLoadBytes - resizedLoadBytes,
+      ),
     });
   }
   const isKtx2 =
@@ -308,12 +396,14 @@ function textureRecommendations(
       (asset.importSettings.generateMipmaps ? 4 / 3 : 1);
     recommendations.push({
       id: `ktx2:${asset.id}`,
-      severity: currentBytes >= 16 * MIB ? "recommended" : "consider",
+      severity: currentVramBytes >= 16 * MIB ? "recommended" : "consider",
       title: `${asset.name}をKTX2へ変換`,
       detail:
         "PNG・JPEG・WebPもGPU上では通常RGBAへ展開されます。KTX2は対応GPU形式の目安で、端末により結果が変わります。",
       assetId: asset.id,
-      estimatedSavingBytes: Math.max(0, currentBytes - ktx2Bytes),
+      impact: "both",
+      estimatedVramSavingBytes: Math.max(0, currentVramBytes - ktx2Bytes),
+      estimatedLoadSavingBytes: Math.max(0, currentLoadBytes - ktx2Bytes),
     });
   }
   return recommendations;
@@ -363,6 +453,8 @@ function modelRecommendations(
       detail:
         "Dracoは配信サイズを減らしますが、描画時は頂点へ展開されるためVRAM自体は大きく減りません。",
       assetId: asset.id,
+      impact: "load",
+      estimatedLoadSavingBytes: Math.round(metadata.byteLength * 0.6),
     });
   }
   if (placementCount >= 5) {
@@ -373,9 +465,47 @@ function modelRecommendations(
       detail:
         "同じメッシュの大量配置です。インスタンス描画にまとめると、主にドローコールとCPU負荷を減らせます。",
       assetId: asset.id,
+      impact: "render",
     });
   }
   return recommendations;
+}
+
+function estimateTextureLoadBytes(asset: TextureAsset): {
+  bytes: number;
+  detail: string;
+} {
+  const metadata = asset.importMetadata;
+  if (!metadata) {
+    return { bytes: 256 * 1024, detail: "ファイル容量不明 / 256 KBの仮値" };
+  }
+  const recipe =
+    asset.importSettings.resize.mode !== "original" ||
+    asset.importSettings.compression.format !== "source";
+  return {
+    bytes: metadata.byteLength,
+    detail: `${metadata.sourceFormat.toUpperCase()}原本${
+      recipe ? " / 変換設定は原本容量へ未反映" : ""
+    }`,
+  };
+}
+
+function audioRecommendations(asset: AudioAsset): VramRecommendation[] {
+  if (asset.importMetadata.byteLength < 10 * MIB) return [];
+  return [
+    {
+      id: `audio:${asset.id}`,
+      severity:
+        asset.importMetadata.byteLength >= 30 * MIB
+          ? "recommended"
+          : "consider",
+      title: `${asset.name}の音声容量を見直す`,
+      detail:
+        "長いBGMや高ビットレート音声は初回通信を増やします。再エンコード、尺の短縮、必要時ロードを検討できます。",
+      assetId: asset.id,
+      impact: "load",
+    },
+  ];
 }
 
 function fitWithin(
@@ -406,4 +536,13 @@ function rateBytes(
 export function formatVramBytes(bytes: number): string {
   if (bytes < MIB) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${Math.round(bytes / MIB)} MB`;
+}
+
+function estimateTransferSeconds(bytes: number, megabitsPerSecond: number): number {
+  return Math.max(0.1, (bytes * 8) / (megabitsPerSecond * 1_000_000));
+}
+
+export function formatLoadSeconds(seconds: number): string {
+  if (seconds < 10) return `${seconds.toFixed(1)}秒`;
+  return `${Math.round(seconds)}秒`;
 }

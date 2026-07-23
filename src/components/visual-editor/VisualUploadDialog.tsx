@@ -433,10 +433,13 @@ export function VisualUploadDialog({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-semibold text-slate-900">
-                      VRAM使用量の目安
+                      ロード容量・VRAMの目安
                     </span>
                     <span className="mt-0.5 block text-xs leading-5 text-slate-600">
-                      実行時 約
+                      ロード 約
+                      {formatVramBytes(review.vramEstimate.loadBytes)}
+                      {" / "}
+                      VRAM 約
                       {formatVramBytes(review.vramEstimate.runtimeLowBytes)}〜
                       {formatVramBytes(review.vramEstimate.runtimeHighBytes)}
                       {" / "}
