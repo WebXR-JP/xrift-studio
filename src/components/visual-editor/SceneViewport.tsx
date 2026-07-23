@@ -78,6 +78,7 @@ import {
   isEnvironmentTextureAsset,
   normalizeProjectRelativePath,
   resolveOpenBrushEditorBrushBaseUrl,
+  resolveRuntimeSpawnPosition,
   resolveSceneSettings,
   type AssetManifest,
   type AnimationComponent,
@@ -1925,17 +1926,6 @@ function WorldPlayController({
   );
 }
 
-function findRuntimeSpawn(scene: SceneDocument): Vec3 {
-  for (const entity of Object.values(scene.entities)) {
-    if (!entity.components.some((component) => component.type === "spawn-point")) {
-      continue;
-    }
-    const transform = getTransform(entity);
-    if (transform) return [...transform.position];
-  }
-  return [0, 0, 2.5];
-}
-
 function resolveProjectModelSource(
   asset: ModelAsset,
   projectPath: string | undefined,
@@ -2445,7 +2435,7 @@ export function SceneViewport({
     [effectiveDisplayMode],
   );
   const runtimeSpawn = useMemo(
-    () => findRuntimeSpawn(preview.scene),
+    () => resolveRuntimeSpawnPosition(preview.scene),
     [preview.scene],
   );
   const modelProxyVisible = useMemo(

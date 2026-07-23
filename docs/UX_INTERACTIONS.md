@@ -175,7 +175,7 @@ F-06 アイテム検査
 - panel resize / dock 中は drop preview と minimum size を示し、authoring Command や selection を変更しない。
 - Material Asset の color、metalness、roughness、texture 参照は Edit 中だけ変更でき、同じ Asset ID を参照する全 Entity の preview と同期する。Entity 固有 Material 値へ複製しない。
 - 外部 GLB / GLTF の drop は Import Queue で validate、source copy、derive、dynamic thumbnail、manifest commit まで処理する。Assets への drop は Scene 配置へ進めず、Scene への明示 drop だけが import 成功後の配置を同じ transaction intent で続ける。
-- Play 準備中は二重開始を防ぎ、成功するまでauthoring documentを変更しない。Play開始後は実行コピーを`Play Window`へ表示し、HierarchyとInspectorは編集データへ接続したままにする。単一EntityのTransform、Collider、Animationだけ通常の履歴と自動保存で変更でき、構造変更、Asset変更、ギズモ、Asset dropは停止まで無効にする。
+- Play 準備中は二重開始を防ぎ、成功するまでauthoring documentを変更しない。Worldでは有効なSpawnPointをHierarchy順に解決し、親子TransformとSpawnPoint自身のPositionを合成した位置からキャラクターを開始する。Play開始後は実行コピーを`Play Window`へ表示し、HierarchyとInspectorは編集データへ接続したままにする。単一EntityのTransform、Collider、Animationだけ通常の履歴と自動保存で変更でき、構造変更、Asset変更、ギズモ、Asset dropは停止まで無効にする。
 - World Preview は有効な input と controller 操作方法を示し、Item Preview には World 用 avatar / controller を出さない。
 - Play 中の input、controller、camera、physics などは PlaySession にだけ保持する。
 - Play 中は Stop を常に見える位置に置き、別画面や別ブラウザへ移動させない。
@@ -190,7 +190,7 @@ F-06 アイテム検査
 - layout 操作成功では normalized size、dock zone、order を Editor Preferences に保存し、再起動後も復元する。
 - Material 操作成功では有効値が AssetManifest の一つの Material Asset に残り、共有する全 Entity の表示を更新する。SceneDocument と Entity 固有値は変更しない。
 - 複数Entityの削除と共通プロパティ変更、複数MaterialのPBR変更は、対象全体を一件のhistoryとして確定する。
-- Play開始成功では中央のPlay Windowでproject kindに対応するprofileを確認でき、runtimeの位置、速度、animation時刻はPlaySessionにだけ残る。
+- Play開始成功では中央のPlay Windowでproject kindに対応するprofileを確認でき、Worldのキャラクターは有効なSpawnPointのworld位置から開始する。runtimeの位置、速度、animation時刻はPlaySessionにだけ残る。
 - Play中の許可されたEntity変更は編集データへ残り、そのEntityだけruntime revisionを進めてAnimationとphysicsを先頭から再実行する。他Entityとcontrollerのruntime stateは維持する。
 - Stop成功ではPlaySessionを破棄し、Play中に許可された調整を含む最新SceneDocument、Play開始前と同じAssetManifest、selection、Edit cameraへ戻る。runtimeの位置や速度をauthoring変更として扱わない。
 - GLB / GLTF の import 成功は source / derived / thumbnail / manifest commit の完了と新 Asset card を表示する。Scene 配置は Scene drop または後続の「配置」が成功した時だけ別結果として示す。

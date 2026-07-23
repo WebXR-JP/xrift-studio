@@ -53,6 +53,8 @@ export * from "./publish-cancellation";
 export * from "./publish.fixture";
 export * from "./project-document";
 export * from "./prototype-project";
+export * from "./runtime-spawn";
+export * from "./runtime-spawn.fixture";
 export * from "./scene-document";
 export * from "./scene-settings";
 export * from "./skybox-import.fixture";
