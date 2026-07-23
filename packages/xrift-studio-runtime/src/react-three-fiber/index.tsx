@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useFrame, type ThreeElements } from "@react-three/fiber";
+import { useFrame, useThree, type ThreeElements } from "@react-three/fiber";
 import { AnimationMixer, LoopOnce, LoopRepeat } from "three";
 
 import type {
@@ -38,9 +38,10 @@ function XriftRuntimeScene({
   onError,
   expectedKind,
 }: XriftRuntimeSceneProps & { expectedKind: "world" | "item" }) {
+  const renderer = useThree((state) => state.gl);
   const loader = useMemo(
-    () => new XriftThreeLoader({ assetBaseUrl }),
-    [assetBaseUrl],
+    () => new XriftThreeLoader({ assetBaseUrl, renderer }),
+    [assetBaseUrl, renderer],
   );
   const [result, setResult] = useState<XriftLoadResult | null>(null);
 

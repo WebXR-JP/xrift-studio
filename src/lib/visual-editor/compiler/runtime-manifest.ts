@@ -323,6 +323,8 @@ function compileRuntimeAsset(
       kind: "texture",
       name: asset.name,
       url,
+      sourceFormat:
+        getTextureSourceFormat(asset) === "ktx2" ? "ktx2" : "image",
       colorSpace: asset.importSettings.colorSpace,
       flipY: asset.importSettings.flipY,
       sampler: {

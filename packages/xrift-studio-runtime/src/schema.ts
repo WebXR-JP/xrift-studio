@@ -200,6 +200,7 @@ export type XriftRuntimeAsset =
       kind: "texture";
       name: string;
       url: string;
+      sourceFormat?: "image" | "ktx2";
       colorSpace: "auto" | "srgb" | "linear";
       flipY: boolean;
       sampler: {

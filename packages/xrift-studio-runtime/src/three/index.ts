@@ -27,12 +27,15 @@ import {
   SRGBColorSpace,
   Texture,
   TextureLoader,
+  WebGLRenderer,
 } from "three";
 import {
   GLTFLoader,
   type GLTF,
 } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { Text } from "troika-three-text";
 
@@ -57,7 +60,15 @@ export type XriftLoadResult = {
 export type XriftThreeLoaderOptions = {
   assetBaseUrl?: string;
   manager?: LoadingManager;
+  renderer?: WebGLRenderer;
+  ktx2TranscoderPath?: string;
+  dracoDecoderPath?: string;
 };
+
+const DEFAULT_KTX2_TRANSCODER_PATH =
+  "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/basis/";
+const DEFAULT_DRACO_DECODER_PATH =
+  "https://www.gstatic.com/draco/versioned/decoders/1.5.7/";
 
 type LoadedModel = {
   root: Object3D;
@@ -68,10 +79,18 @@ type LoadedModel = {
 export class XriftThreeLoader {
   readonly assetBaseUrl?: string;
   readonly manager: LoadingManager;
+  readonly renderer?: WebGLRenderer;
+  readonly ktx2TranscoderPath: string;
+  readonly dracoDecoderPath: string;
 
   constructor(options: XriftThreeLoaderOptions = {}) {
     this.assetBaseUrl = options.assetBaseUrl;
     this.manager = options.manager ?? new LoadingManager();
+    this.renderer = options.renderer;
+    this.ktx2TranscoderPath =
+      options.ktx2TranscoderPath ?? DEFAULT_KTX2_TRANSCODER_PATH;
+    this.dracoDecoderPath =
+      options.dracoDecoderPath ?? DEFAULT_DRACO_DECODER_PATH;
   }
 
   async load(input: string | URL | XriftRuntimeManifest): Promise<XriftLoadResult> {
@@ -200,6 +219,10 @@ export class XriftThreeLoader {
       return { root, animations: [], sourceMaterials: new Map() };
     }
     const loader = new GLTFLoader(this.manager);
+    const dracoLoader = new DRACOLoader(this.manager).setDecoderPath(
+      this.dracoDecoderPath,
+    );
+    loader.setDRACOLoader(dracoLoader);
     if (asset.openBrush?.renderer === "three-icosa") {
       const { GLTFGoogleTiltBrushMaterialExtension } = await import(
         "three-icosa/dist/three-icosa.module.js"
@@ -212,7 +235,12 @@ export class XriftThreeLoader {
           ),
       );
     }
-    const gltf = await loader.loadAsync(url);
+    let gltf: GLTF;
+    try {
+      gltf = await loader.loadAsync(url);
+    } finally {
+      dracoLoader.dispose();
+    }
     tagSourceMaterialIndices(gltf);
     gltf.scene.scale.multiplyScalar(asset.scale);
     return {
@@ -226,14 +254,28 @@ export class XriftThreeLoader {
     asset: Extract<XriftRuntimeAsset, { kind: "texture" }>,
     assetBase: URL,
   ): Promise<Texture> {
-    const texture = await new TextureLoader(this.manager).loadAsync(
-      new URL(asset.url, assetBase).toString(),
-    );
+    const url = new URL(asset.url, assetBase).toString();
+    const texture =
+      asset.sourceFormat === "ktx2"
+        ? await this.loadKtx2Texture(url)
+        : await new TextureLoader(this.manager).loadAsync(url);
     texture.flipY = asset.flipY;
     if (asset.colorSpace === "srgb") texture.colorSpace = SRGBColorSpace;
     texture.wrapS = runtimeTextureWrapping(asset.sampler.wrapS);
     texture.wrapT = runtimeTextureWrapping(asset.sampler.wrapT);
     return texture;
+  }
+
+  private async loadKtx2Texture(url: string): Promise<Texture> {
+    if (!this.renderer) {
+      throw new Error(
+        "KTX2 texture loading requires XriftThreeLoaderOptions.renderer",
+      );
+    }
+    return new KTX2Loader(this.manager)
+      .setTranscoderPath(this.ktx2TranscoderPath)
+      .detectSupport(this.renderer)
+      .loadAsync(url);
   }
 
   private createMaterials(
