@@ -2086,8 +2086,10 @@ fn save_visual_documents_transaction_with_owner(
         };
     }
 
-    std::fs::remove_dir_all(&transaction_root)
-        .map_err(|e| format!("committed save journal cannot be cleaned up: {}", e))?;
+    // Once the committed marker exists, every project document is already in
+    // place. Cache cleanup can be retried on a later read/save and must not turn
+    // a successful document commit into a user-visible save failure.
+    let _ = std::fs::remove_dir_all(&transaction_root);
     Ok(())
 }
 
@@ -2123,8 +2125,9 @@ fn recover_visual_save_transactions(project_root: &Path) -> Result<(), String> {
             continue;
         }
         if transaction_root.join("committed").exists() {
-            std::fs::remove_dir_all(&transaction_root)
-                .map_err(|e| format!("committed save journal cannot be cleaned up: {}", e))?;
+            // A committed journal is inert cache. Best-effort cleanup keeps a
+            // transient Windows file lock from blocking project reads/saves.
+            let _ = std::fs::remove_dir_all(&transaction_root);
             continue;
         }
         let journal_content = std::fs::read_to_string(&journal_path)

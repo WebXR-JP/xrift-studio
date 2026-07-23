@@ -196,6 +196,8 @@ type XriftMcpExternalStoreTool = (typeof XRIFT_MCP_EXTERNAL_STORE_TOOLS)[number]
 const SUPPORTED_AUDIO_FILE = /\.(?:mp3|wav)$/i;
 const SUPPORTED_UNITY_FILE = /\.(unitypackage|unity|prefab)$/i;
 const AUTOSAVE_DELAY_MS = 250;
+const AUTOSAVE_MAX_ATTEMPTS = 4;
+const AUTOSAVE_RETRY_DELAYS_MS = [300, 900, 1_800] as const;
 
 type SceneSelection = Extract<EditorSelection, { kind: "entity" }> | null;
 
@@ -658,6 +660,13 @@ export function VisualEditorPrototype({
           throw new Error("Desktop shellから自動保存callbackを指定してください");
         }
         return await save(savingBundle);
+      },
+      {
+        maxAttempts: AUTOSAVE_MAX_ATTEMPTS,
+        retryDelayMs: (failedAttempt) =>
+          AUTOSAVE_RETRY_DELAYS_MS[
+            Math.min(failedAttempt - 1, AUTOSAVE_RETRY_DELAYS_MS.length - 1)
+          ],
       },
     );
   }

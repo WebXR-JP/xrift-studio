@@ -45,6 +45,52 @@ export async function runAutosaveCoordinatorFixtureAssertions(): Promise<void> {
   assert((await failed) === "rejected", "failed autosave did not reject");
   assert((await recovered) === "recovered", "newer autosave did not recover");
   assert(attempts.join(",") === "failed,recovered", "recovery order changed");
+
+  let retryAttempts = 0;
+  const retrying = createSerializedAutosaveCoordinator(
+    async (value: string) => {
+      retryAttempts += 1;
+      if (retryAttempts < 3) throw new Error("transient failure");
+      return value;
+    },
+    {
+      maxAttempts: 4,
+      retryDelayMs: () => 0,
+    },
+  );
+  assert(
+    (await retrying.request("retried")) === "retried",
+    "latest autosave did not recover after a transient failure",
+  );
+  assert(retryAttempts === 3, "autosave retry count changed");
+
+  const supersededAttempts: string[] = [];
+  const firstFailure = { reject: null as (() => void) | null };
+  const superseding = createSerializedAutosaveCoordinator(
+    async (value: string) => {
+      supersededAttempts.push(value);
+      if (value === "old") {
+        await new Promise<void>((_, reject) => {
+          firstFailure.reject = () => reject(new Error("superseded failure"));
+        });
+      }
+      return value;
+    },
+    {
+      maxAttempts: 4,
+      retryDelayMs: () => 0,
+    },
+  );
+  const superseded = superseding.request("old").catch(() => "superseded");
+  await waitFor(() => firstFailure.reject !== null);
+  const latest = superseding.request("latest");
+  firstFailure.reject?.();
+  assert((await superseded) === "superseded", "superseded save did not reject");
+  assert((await latest) === "latest", "latest save did not run after superseding");
+  assert(
+    supersededAttempts.join(",") === "old,latest",
+    "superseded snapshot was retried before the latest save",
+  );
 }
 
 function nextMicrotask(): Promise<void> {
