@@ -20,6 +20,7 @@ import type { ProjectKind } from "../lib/tauri";
 import {
   STARTER_ITEM_TEMPLATES,
   STARTER_WORLD_TEMPLATES,
+  STUDIO_GUIDE_TEMPLATE_THUMBNAIL,
   defaultVisualStarterTemplateId,
   type VisualStarterTemplateId,
 } from "../lib/visual-editor/starter-templates";
@@ -134,6 +135,22 @@ function StarterScenePreview({
     ? "border-brand-200 bg-brand-100/70"
     : "border-zinc-200 bg-white/90";
 
+  if (templateId === "studio-guide") {
+    return (
+      <div className="relative h-full overflow-hidden bg-zinc-950" aria-hidden="true">
+        <img
+          src={STUDIO_GUIDE_TEMPLATE_THUMBNAIL}
+          alt=""
+          loading="eager"
+          className="h-full w-full object-cover"
+        />
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-zinc-950/90 to-transparent px-3 pb-2.5 pt-8 text-[10px] font-semibold tracking-wide text-white">
+          画面教材と実習サンプルを収録
+        </div>
+      </div>
+    );
+  }
+
   if (templateId === "xrift-official") {
     return (
       <div className="relative h-full overflow-hidden bg-zinc-950" aria-hidden="true">
@@ -165,7 +182,7 @@ function StarterScenePreview({
           </span>
         </div>
         <span className="text-[10px] font-medium tracking-wide text-zinc-500">
-          床・ライト・スポーン
+          床・メインライト1灯・スポーン
         </span>
       </div>
     );
@@ -371,7 +388,7 @@ export function NewProjectDialog({
                 <div
                   className={`mt-3 grid gap-3 ${
                     choice.kind === "world"
-                      ? "sm:grid-cols-2 lg:grid-cols-4"
+                      ? "sm:grid-cols-2 lg:grid-cols-3"
                       : "sm:grid-cols-2"
                   }`}
                   role="radiogroup"
@@ -426,12 +443,23 @@ export function NewProjectDialog({
                           <div className="text-sm font-semibold text-zinc-900">
                             {template.name}
                           </div>
+                          {choice.kind === "world" && (
+                            <div className="mt-1 text-[10px] font-semibold tracking-wide text-brand-700">
+                              {template.id === "studio-guide"
+                                ? "学習用"
+                                : template.id === "blank"
+                                  ? "最小構成"
+                                  : "作例"}
+                            </div>
+                          )}
                           <p className="mt-1 text-xs leading-5 text-zinc-500">
                             {template.description}
                           </p>
                           <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">
                             <Package size={12} aria-hidden="true" />
-                            {template.id === "xrift-official"
+                            {template.id === "studio-guide"
+                              ? "実画面6枚・実習Asset・公式Component"
+                              : template.id === "xrift-official"
                               ? "公式R3F / Rapierから変換"
                               : template.bundledAssetIds.length > 0
                               ? `${template.bundledAssetIds.length}個の素材をAssetsへ追加`
@@ -482,7 +510,7 @@ export function NewProjectDialog({
                         XRift Classicからインポート
                       </div>
                       <p className="mt-1 text-xs leading-5 text-zinc-500">
-                        プロジェクトまたはRepositoryをVisualへ変換します。
+                        読み込み元のシーンだけをVisualへ変換します。
                       </p>
                       <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">
                         <FolderOpen size={12} aria-hidden="true" />
@@ -607,7 +635,7 @@ export function NewProjectDialog({
                       </div>
                     )}
                     <p className="mt-3 text-xs leading-5 text-zinc-500">
-                      同種のentryを検査し、対応できない動的処理は変換しません。
+                      同種のentryを検査し、対応できない動的処理は変換しません。読み込み元にない床、ライト、SpawnPointは追加しません。
                     </p>
                     {classicProjectSelectError && (
                       <p className="mt-2 text-sm text-rose-700">

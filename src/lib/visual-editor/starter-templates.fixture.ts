@@ -17,11 +17,12 @@ import {
 /** Deterministic, filesystem-free assertions for the bundled world starters. */
 export function runStarterTemplateFixtureAssertions(): void {
   assert(
-    defaultVisualStarterTemplateId("world") === "xrift-official",
-    "The official XRift conversion must be the default World starter",
+    defaultVisualStarterTemplateId("world") === "studio-guide",
+    "The Studio learning world must be the default World starter",
   );
 
   for (const templateId of [
+    "studio-guide",
     "xrift-official",
     "blank",
     "openbrush",
@@ -41,7 +42,13 @@ export function runStarterTemplateFixtureAssertions(): void {
 
     assert(
       plan.bundledAssetCopies.length ===
-        (templateId === "openbrush" ? 2 : templateId === "xrift-official" ? 5 : 0),
+        (templateId === "studio-guide"
+          ? 12
+          : templateId === "openbrush"
+            ? 2
+            : templateId === "xrift-official"
+              ? 5
+              : 0),
       `${templateId}: bundled source copy plan is incorrect`,
     );
     if (templateId === "openbrush") {
@@ -78,16 +85,30 @@ export function runStarterTemplateFixtureAssertions(): void {
         "xrift-official: source and MIT license must retain strict verification",
       );
     }
-    assert(modelAssets.length === (templateId === "openbrush" ? 1 : templateId === "xrift-official" ? 2 : 0),
+    assert(modelAssets.length ===
+      (templateId === "studio-guide"
+        ? 4
+        : templateId === "openbrush"
+          ? 1
+          : templateId === "xrift-official"
+            ? 2
+            : 0),
       `${templateId}: Model library is incorrect`);
     assert(
-      textureAssets.length === (templateId === "xrift-official" ? 1 : 0),
+      textureAssets.length ===
+        (templateId === "studio-guide"
+          ? 8
+          : templateId === "xrift-official"
+            ? 1
+            : 0),
       `${templateId}: Texture library is incorrect`,
     );
     assert(
-      templateId === "xrift-official"
-        ? materialAssets.length >= 7
-        : materialAssets.length === 1,
+      templateId === "studio-guide"
+        ? materialAssets.length === 10
+        : templateId === "xrift-official"
+          ? materialAssets.length >= 7
+          : materialAssets.length === 1,
       `${templateId}: converted Material library is incorrect`,
     );
     assert(prefabAssets.length > 0, `${templateId}: Prefab library is empty`);
@@ -168,6 +189,47 @@ export function runStarterTemplateFixtureAssertions(): void {
         "OpenBrush starter must describe its runtime renderer");
       assert(runtimeManifest.includes("three-icosa-template/brushes/"),
         "OpenBrush starter must preserve the hosted brush library path");
+    }
+    if (templateId !== "xrift-official") {
+      assert(
+        Object.values(plan.scene.entities).filter((entity) =>
+          entity.components.some((component) => component.type === "light"),
+        ).length === 1,
+        `${templateId}: Starter World must use one main light`,
+      );
+    }
+    if (templateId === "studio-guide") {
+      const sceneEntities = Object.values(plan.scene.entities);
+      assert(
+        sceneEntities.filter((entity) =>
+          entity.name.endsWith("スクリーンショット"),
+        ).length === 6,
+        "Studio guide must include six visual learning screens",
+      );
+      assert(
+        sceneEntities.filter((entity) =>
+          entity.components.some(
+            (component) =>
+              component.type === "xrift-component" &&
+              component.schemaId !== "xrift.spawn-point",
+          ),
+        ).length >= 3,
+        "Studio guide must include editable official XRift Component samples",
+      );
+      assert(
+        textureAssets.filter((asset) =>
+          asset.name.startsWith("Studio Guide:"),
+        ).length === 6 &&
+          textureAssets
+            .filter((asset) => asset.name.startsWith("Studio Guide:"))
+            .every(
+              (asset) =>
+                asset.kind === "texture" &&
+                asset.importMetadata?.width === 1024 &&
+                asset.importMetadata.height === 576,
+            ),
+        "Studio guide screenshots must retain their learning-panel dimensions",
+      );
     }
     if (templateId === "xrift-official") {
       const sceneEntities = Object.values(plan.scene.entities);

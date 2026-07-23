@@ -16,8 +16,10 @@ import {
   createVisualProjectOnDisk,
   saveVisualProjectToDisk,
 } from "./persistence";
-import type { PrototypeVisualProject } from "./prototype-project";
-import { createStarterVisualProject } from "./starter-templates";
+import {
+  createClassicImportBaseProject,
+  type PrototypeVisualProject,
+} from "./prototype-project";
 
 export type ClassicProjectCreationSource =
   | {
@@ -78,9 +80,8 @@ export async function createVisualProjectFromClassicSource(input: {
     );
   }
 
-  const starter = createStarterVisualProject(
+  const starter = createClassicImportBaseProject(
     input.projectKind,
-    "blank",
     input.directoryName,
   );
   const preparedAssets = await prepareClassicProjectVisualAssetImports({

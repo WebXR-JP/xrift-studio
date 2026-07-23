@@ -15,11 +15,35 @@ import {
   type ModelAsset,
   type TextureAsset,
 } from "./asset-manifest";
-import { createPrototypeProject } from "./prototype-project";
+import {
+  createClassicImportBaseProject,
+  createPrototypeProject,
+} from "./prototype-project";
 import { getTransform } from "./scene-document";
 
 /** Static Townscape-like source coverage without cloning or executing a project. */
 export function runClassicProjectImportFixtureAssertions(): void {
+  for (const kind of ["world", "item"] as const) {
+    const base = createClassicImportBaseProject(kind, `classic-${kind}`);
+    assert(
+      base.scene.rootEntityIds.length === 0 &&
+        Object.keys(base.scene.entities).length === 0,
+      `Classic ${kind} conversion must start from a completely empty Scene`,
+    );
+    assert(
+      !Object.values(base.scene.entities).some((entity) =>
+        entity.components.some(
+          (component) =>
+            component.type === "spawn-point" ||
+            component.type === "light" ||
+            (component.type === "xrift-component" &&
+              component.schemaId === "xrift.spawn-point"),
+        ),
+      ),
+      `Classic ${kind} conversion must not inject a light or SpawnPoint`,
+    );
+  }
+
   const townSource = [
     "import * as THREE from 'three'",
     "const DEEP_COLOR = new THREE.Color(0x3f7280)",

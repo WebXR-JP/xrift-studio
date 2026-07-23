@@ -463,3 +463,24 @@ export function createPrototypeProject(
     prefabs: {},
   };
 }
+
+/**
+ * Classic conversion starts from an empty authoring scene. The imported
+ * source remains the only authority for floors, lights, SpawnPoint, and other
+ * scene content; starter objects must never leak into a conversion.
+ */
+export function createClassicImportBaseProject(
+  projectKind: VisualProjectKind,
+  projectName: string,
+): PrototypeVisualProject {
+  const prototype = createPrototypeProject(projectKind, projectName);
+  return {
+    ...prototype,
+    scene: {
+      ...prototype.scene,
+      name: "インポートしたシーン",
+      rootEntityIds: [],
+      entities: {},
+    },
+  };
+}
