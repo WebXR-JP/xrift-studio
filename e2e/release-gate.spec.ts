@@ -114,7 +114,9 @@ for (const creationCase of creationCases) {
       await expect(
         page.getByRole("button", { name: "実行", exact: true }),
       ).toBeVisible();
-      await expect(page.getByText(creationCase.name, { exact: true })).toBeVisible();
+      await expect(
+        page.getByRole("banner").getByText(creationCase.name, { exact: true }),
+      ).toBeVisible();
     }
   });
 }
@@ -147,7 +149,9 @@ test("クラシックワールドを編集・保存・実行し、公開前確�
   await expect(
     page.getByRole("button", { name: "停止", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("http://localhost:4173/")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "http://localhost:4173/" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "停止", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "実行", exact: true }),
@@ -234,7 +238,7 @@ test("ビジュアルワールドを編集・Playし、公開確認で送信前�
   ).toBeVisible();
   const publishDialog = page.getByRole("dialog", { name: "ワールドを公開" });
   await expect(
-    publishDialog.getByText("公開用サムネイル", { exact: true }),
+    publishDialog.getByText("サムネイル", { exact: true }),
   ).toBeVisible();
   await expect(
     publishDialog.getByRole("button", { name: "XRiftへ公開", exact: true }),

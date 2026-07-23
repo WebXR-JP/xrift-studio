@@ -12,6 +12,9 @@ export default defineConfig(async () => ({
   // Serving that module directly avoids a missing optimized dependency when
   // the lazily loaded Visual Editor first enables Open Brush rendering.
   optimizeDeps: {
+    // The Visual Editor is loaded lazily, so make its official renderer part
+    // of the initial optimizer pass instead of discovering it on first open.
+    include: ["@xrift/world-components"],
     exclude: ["three-icosa"],
   },
 
