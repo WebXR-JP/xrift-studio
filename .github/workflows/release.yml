@@ -1,7 +1,7 @@
 name: Release
 
-# 手動実行でタグを打ち、各 OS 向けインストーラを GitHub Release に
-# 添付するワークフロー（Windows / macOS / Linux 対応）。
+# 手動実行でタグを打ち、各 OS 向けの通常版とデバッグ協力用 Debug 版を
+# GitHub Release に添付するワークフロー（Windows / macOS / Linux 対応）。
 #
 # 使い方:
 #   Actions タブ → "Release" → "Run workflow" で
@@ -124,7 +124,7 @@ jobs:
             src-tauri/target-mcp-sidecar/x86_64-apple-darwin/release/xrift-studio-mcp \
             -output src-tauri/target/universal-apple-darwin/release/xrift-studio-mcp
 
-      - name: Build & upload to Release
+      - name: Build & upload Release and Debug bundles
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -147,9 +147,17 @@ jobs:
             | macOS | `.dmg` (universal — Apple Silicon + Intel) |
             | Linux | `.deb` / `.rpm` / `.AppImage` |
 
+            各 OS について、通常利用向けの `release` 版と、初期利用者から
+            不具合調査に必要な情報を得るための `debug` 版を添付しています。
+            Debug 版は開発用機能を含み、サイズや動作速度も通常版と異なります。
+            普段使いには `release` 版を利用し、Debug 版は不具合の再現確認や
+            デバッグ協力を依頼された場合に利用してください。
+
             本アプリは XRift 公式とは無関係の有志製ツールです。
           releaseDraft: ${{ inputs.draft }}
           prerelease: ${{ inputs.prerelease }}
-          uploadUpdaterJson: true
-          uploadUpdaterSignatures: true
+          includeRelease: true
+          includeDebug: true
+          includeUpdaterJson: true
+          assetNamePattern: '[name]_[version]_[platform]_[arch]_[mode][setup][ext]'
           args: ${{ matrix.args }}
