@@ -16,6 +16,8 @@ export type EditorCommandId =
   | "asset.create-folder"
   | "asset.create-material"
   | "asset.create-particle"
+  | "asset.create-interactivity"
+  | "asset.edit-interactivity"
   | "asset.import"
   | "view.frame-selection"
   | "view.exit-focus"
@@ -156,6 +158,18 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   {
     id: "asset.create-particle",
     label: "Particleを作成",
+    category: "edit",
+    bindings: [],
+  },
+  {
+    id: "asset.create-interactivity",
+    label: "Interactivity Graphを作成",
+    category: "edit",
+    bindings: [],
+  },
+  {
+    id: "asset.edit-interactivity",
+    label: "Interactivity Graphを編集",
     category: "edit",
     bindings: [],
   },

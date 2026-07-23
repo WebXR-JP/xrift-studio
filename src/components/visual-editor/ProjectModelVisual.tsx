@@ -20,11 +20,13 @@ import {
 import {
   Box3,
   AnimationMixer,
+  Color,
   DoubleSide,
   FrontSide,
   Group,
   LoopOnce,
   LoopRepeat,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   Vector4,
   Vector3,
@@ -62,6 +64,7 @@ import {
   type OpenBrushPbrFallbackInfo,
 } from "../../lib/visual-editor/open-brush-preview-loader";
 import { repairImportedObject3DHierarchy } from "../../lib/visual-editor/object3d-hierarchy";
+import type { SceneViewportMaterialStyle } from "./scene-viewport-display";
 
 export type ProjectModelMaterialAssignment = {
   slot: string;
@@ -89,6 +92,8 @@ type Props = {
   animation?: AnimationComponent;
   playing?: boolean;
   sourceNodeIndex?: number;
+  /** Scene View-only material override. It never changes the imported Asset. */
+  viewportMaterialStyle?: SceneViewportMaterialStyle;
   /** Centers and scales one source node for a compact Asset Inspector preview. */
   fitPreview?: boolean;
   loadRevision?: number;
@@ -139,6 +144,7 @@ export function ProjectModelVisual({
   animation,
   playing = false,
   sourceNodeIndex,
+  viewportMaterialStyle = "scene",
   fitPreview = false,
   loadRevision = 0,
   onLoadStateChange,
@@ -205,6 +211,7 @@ export function ProjectModelVisual({
           animation={animation}
           playing={playing}
           sourceNodeIndex={sourceNodeIndex}
+          viewportMaterialStyle={viewportMaterialStyle}
           fitPreview={fitPreview}
           onMaterialRuntimeInfoChange={onMaterialRuntimeInfoChange}
         />
@@ -293,6 +300,7 @@ function ProjectModelRender({
   animation,
   playing,
   sourceNodeIndex,
+  viewportMaterialStyle,
   fitPreview,
   onMaterialRuntimeInfoChange,
 }: {
@@ -306,6 +314,7 @@ function ProjectModelRender({
   animation?: AnimationComponent;
   playing: boolean;
   sourceNodeIndex?: number;
+  viewportMaterialStyle: SceneViewportMaterialStyle;
   fitPreview: boolean;
   onMaterialRuntimeInfoChange?: (
     materials: readonly ProjectModelMaterialRuntimeInfo[],
@@ -328,8 +337,17 @@ function ProjectModelRender({
       assignedMaterials,
       sourceMaterials,
     );
+    ownedMaterials.push(
+      ...applySceneViewportMaterialStyle(object, viewportMaterialStyle),
+    );
     return { object, ownedMaterials, selectionBounds };
-  }, [assignedMaterials, pose, readyObject, sourceNodeIndex]);
+  }, [
+    assignedMaterials,
+    pose,
+    readyObject,
+    sourceNodeIndex,
+    viewportMaterialStyle,
+  ]);
   const renderedObject = renderedModel?.object ?? null;
   const mixer = useMemo(
     () => (renderedObject ? new AnimationMixer(renderedObject) : null),
@@ -639,6 +657,80 @@ export function applyAssignedMaterialPreviews(
       : createPreview(mesh.material);
   });
   return ownedMaterials;
+}
+
+/**
+ * Creates per-preview materials for Scene View diagnostics. Imported and
+ * assigned materials remain untouched so changing a display mode never leaks
+ * into another preview, the Asset manifest, or generated output.
+ */
+export function applySceneViewportMaterialStyle(
+  object: Object3D,
+  style: SceneViewportMaterialStyle,
+): Material[] {
+  if (style === "scene") return [];
+
+  const ownedMaterials: Material[] = [];
+  object.traverse((child) => {
+    const mesh = child as Object3D & {
+      isMesh?: boolean;
+      material?: Material | Material[];
+    };
+    if (!mesh.isMesh || !mesh.material) return;
+    const replace = (source: Material) => {
+      const material = createSceneViewportMaterial(source, style);
+      ownedMaterials.push(material);
+      return material;
+    };
+    mesh.material = Array.isArray(mesh.material)
+      ? mesh.material.map(replace)
+      : replace(mesh.material);
+  });
+  return ownedMaterials;
+}
+
+function createSceneViewportMaterial(
+  source: Material,
+  style: Exclude<SceneViewportMaterialStyle, "scene">,
+): MeshBasicMaterial {
+  const sourceWithSurface = source as Material & {
+    color?: Color;
+    map?: MeshBasicMaterial["map"];
+    alphaMap?: MeshBasicMaterial["alphaMap"];
+    vertexColors?: boolean;
+  };
+  const material = new MeshBasicMaterial();
+  material.name = `scene_view_${style}_${source.name || source.uuid}`;
+  material.side = source.side;
+
+  if (style === "unlit") {
+    material.color.copy(sourceWithSurface.color ?? new Color("#94a3b8"));
+    material.map = sourceWithSurface.map ?? null;
+    material.alphaMap = sourceWithSurface.alphaMap ?? null;
+    material.opacity = source.opacity;
+    material.transparent = source.transparent;
+    material.alphaTest = source.alphaTest;
+    material.depthWrite = source.depthWrite;
+    material.vertexColors = Boolean(sourceWithSurface.vertexColors);
+  } else if (style === "wireframe") {
+    material.color.set("#52606d");
+    material.wireframe = true;
+  } else if (style === "ghost") {
+    material.color.set("#64748b");
+    material.transparent = true;
+    material.opacity = 0.16;
+    material.depthWrite = false;
+  } else {
+    material.color.set("#0f766e");
+    material.wireframe = true;
+    material.transparent = true;
+    material.opacity = 0.88;
+    material.depthTest = false;
+    material.depthWrite = false;
+  }
+
+  material.needsUpdate = true;
+  return material;
 }
 
 /** Applies the saved per-Entity static pose without mutating the cached Model. */

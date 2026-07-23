@@ -87,6 +87,14 @@ export type ColliderFitMode = (typeof COLLIDER_FIT_MODES)[number];
 export const COLLIDER_MESH_MODES = ["convex", "trimesh"] as const;
 export type ColliderMeshMode = (typeof COLLIDER_MESH_MODES)[number];
 
+export const RIGID_BODY_TYPES = [
+  "fixed",
+  "dynamic",
+  "kinematicPosition",
+  "kinematicVelocity",
+] as const;
+export type RigidBodyType = (typeof RIGID_BODY_TYPES)[number];
+
 type ColliderComponentBase = ComponentBase & {
   type: "collider";
   isTrigger: boolean;
@@ -94,6 +102,15 @@ type ColliderComponentBase = ComponentBase & {
   friction: number;
   /** Bounciness in the inclusive 0..1 range. */
   restitution: number;
+  /** Legacy documents omit these fields and are interpreted as fixed bodies. */
+  bodyType?: RigidBodyType;
+  gravityScale?: number;
+  linearDamping?: number;
+  angularDamping?: number;
+  canSleep?: boolean;
+  ccd?: boolean;
+  lockTranslations?: boolean;
+  lockRotations?: boolean;
 };
 
 export type BoxColliderComponent = ColliderComponentBase & {
@@ -155,6 +172,33 @@ export type LightPatch = Partial<
     | "penumbra"
     | "width"
     | "height"
+  >
+>;
+
+export type TextComponent = ComponentBase & {
+  type: "text";
+  text: string;
+  color: string;
+  fontSize: number;
+  maxWidth?: number;
+  anchorX: "left" | "center" | "right";
+  anchorY: "top" | "middle" | "bottom";
+  outlineWidth: number;
+  outlineColor: string;
+};
+
+export type TextPatch = Partial<
+  Pick<
+    TextComponent,
+    | "enabled"
+    | "text"
+    | "color"
+    | "fontSize"
+    | "maxWidth"
+    | "anchorX"
+    | "anchorY"
+    | "outlineWidth"
+    | "outlineColor"
   >
 >;
 
@@ -252,6 +296,7 @@ export interface SceneComponentSchemaRegistry {
   mesh: MeshComponent;
   collider: ColliderComponent;
   light: LightComponent;
+  text: TextComponent;
   animation: AnimationComponent;
   "audio-source": AudioSourceComponent;
   "spawn-point": SpawnPointComponent;
@@ -357,6 +402,55 @@ function isColliderMeshMode(value: string): value is ColliderMeshMode {
   return (COLLIDER_MESH_MODES as readonly string[]).includes(value);
 }
 
+function isRigidBodyType(value: string): value is RigidBodyType {
+  return (RIGID_BODY_TYPES as readonly string[]).includes(value);
+}
+
+function normalizeRigidBodyOptions(
+  options: ColliderSurfaceOptions,
+): Required<
+  Pick<
+    ColliderComponentBase,
+    | "bodyType"
+    | "gravityScale"
+    | "linearDamping"
+    | "angularDamping"
+    | "canSleep"
+    | "ccd"
+    | "lockTranslations"
+    | "lockRotations"
+  >
+> {
+  return {
+    bodyType:
+      options.bodyType && isRigidBodyType(options.bodyType)
+        ? options.bodyType
+        : "fixed",
+    gravityScale:
+      options.gravityScale !== undefined &&
+      Number.isFinite(options.gravityScale) &&
+      Math.abs(options.gravityScale) <= 100
+        ? options.gravityScale
+        : 1,
+    linearDamping:
+      options.linearDamping !== undefined &&
+      Number.isFinite(options.linearDamping) &&
+      options.linearDamping >= 0
+        ? options.linearDamping
+        : 0,
+    angularDamping:
+      options.angularDamping !== undefined &&
+      Number.isFinite(options.angularDamping) &&
+      options.angularDamping >= 0
+        ? options.angularDamping
+        : 0,
+    canSleep: options.canSleep ?? true,
+    ccd: options.ccd ?? false,
+    lockTranslations: options.lockTranslations ?? false,
+    lockRotations: options.lockRotations ?? false,
+  };
+}
+
 export function createTransformComponent(
   id: string,
   position: Vec3 = [0, 0, 0],
@@ -421,6 +515,50 @@ export function createAnimationComponent(id: string): AnimationComponent | null 
   };
 }
 
+export function createTextComponent(
+  id: string,
+  input: Partial<Omit<TextComponent, "id" | "type">> = {},
+): TextComponent | null {
+  const normalizedId = id.trim();
+  if (!normalizedId) return null;
+  const fontSize =
+    typeof input.fontSize === "number" && Number.isFinite(input.fontSize)
+      ? Math.max(0.001, input.fontSize)
+      : 0.2;
+  const maxWidth =
+    typeof input.maxWidth === "number" &&
+    Number.isFinite(input.maxWidth) &&
+    input.maxWidth > 0
+      ? input.maxWidth
+      : undefined;
+  return {
+    id: normalizedId,
+    type: "text",
+    enabled: input.enabled ?? true,
+    text: typeof input.text === "string" ? input.text : "Text",
+    color: typeof input.color === "string" ? input.color : "#ffffff",
+    fontSize,
+    ...(maxWidth !== undefined ? { maxWidth } : {}),
+    anchorX:
+      input.anchorX === "left" || input.anchorX === "right"
+        ? input.anchorX
+        : "center",
+    anchorY:
+      input.anchorY === "top" || input.anchorY === "bottom"
+        ? input.anchorY
+        : "middle",
+    outlineWidth:
+      typeof input.outlineWidth === "number" &&
+      Number.isFinite(input.outlineWidth)
+        ? Math.max(0, input.outlineWidth)
+        : 0,
+    outlineColor:
+      typeof input.outlineColor === "string"
+        ? input.outlineColor
+        : "#000000",
+  };
+}
+
 export function createMeshComponent(
   id: string,
   geometryAssetId: string,
@@ -476,6 +614,14 @@ export type ColliderSurfaceOptions = {
   isTrigger?: boolean;
   friction?: number;
   restitution?: number;
+  bodyType?: RigidBodyType;
+  gravityScale?: number;
+  linearDamping?: number;
+  angularDamping?: number;
+  canSleep?: boolean;
+  ccd?: boolean;
+  lockTranslations?: boolean;
+  lockRotations?: boolean;
 };
 
 export type BoxColliderOptions = ColliderSurfaceOptions & {
@@ -519,6 +665,7 @@ export function createBoxColliderComponent(
       isValidRestitution(options.restitution)
         ? options.restitution
         : 0,
+    ...normalizeRigidBodyOptions(options),
   };
 }
 
@@ -547,6 +694,7 @@ export function createMeshColliderComponent(
       isValidRestitution(options.restitution)
         ? options.restitution
         : 0,
+    ...normalizeRigidBodyOptions(options),
   };
 }
 
@@ -734,6 +882,14 @@ export type ColliderPatch = {
   halfExtents?: Vec3;
   fitMode?: ColliderFitMode;
   meshMode?: ColliderMeshMode;
+  bodyType?: RigidBodyType;
+  gravityScale?: number;
+  linearDamping?: number;
+  angularDamping?: number;
+  canSleep?: boolean;
+  ccd?: boolean;
+  lockTranslations?: boolean;
+  lockRotations?: boolean;
 };
 
 /** Applies a Collider edit atomically; an invalid field rejects the whole patch. */
@@ -751,6 +907,35 @@ export function updateColliderComponent(
   }
   if (patch.isTrigger !== undefined && typeof patch.isTrigger !== "boolean") {
     return scene;
+  }
+  if (patch.bodyType !== undefined && !isRigidBodyType(patch.bodyType)) {
+    return scene;
+  }
+  if (
+    patch.gravityScale !== undefined &&
+    (!Number.isFinite(patch.gravityScale) || Math.abs(patch.gravityScale) > 100)
+  ) {
+    return scene;
+  }
+  if (
+    patch.linearDamping !== undefined &&
+    (!Number.isFinite(patch.linearDamping) || patch.linearDamping < 0)
+  ) {
+    return scene;
+  }
+  if (
+    patch.angularDamping !== undefined &&
+    (!Number.isFinite(patch.angularDamping) || patch.angularDamping < 0)
+  ) {
+    return scene;
+  }
+  for (const value of [
+    patch.canSleep,
+    patch.ccd,
+    patch.lockTranslations,
+    patch.lockRotations,
+  ]) {
+    if (value !== undefined && typeof value !== "boolean") return scene;
   }
   if (patch.friction !== undefined && !isValidFriction(patch.friction)) {
     return scene;
@@ -779,6 +964,15 @@ export function updateColliderComponent(
     isTrigger: patch.isTrigger ?? current.isTrigger,
     friction: patch.friction ?? current.friction,
     restitution: patch.restitution ?? current.restitution,
+    bodyType: patch.bodyType ?? current.bodyType ?? "fixed",
+    gravityScale: patch.gravityScale ?? current.gravityScale ?? 1,
+    linearDamping: patch.linearDamping ?? current.linearDamping ?? 0,
+    angularDamping: patch.angularDamping ?? current.angularDamping ?? 0,
+    canSleep: patch.canSleep ?? current.canSleep ?? true,
+    ccd: patch.ccd ?? current.ccd ?? false,
+    lockTranslations:
+      patch.lockTranslations ?? current.lockTranslations ?? false,
+    lockRotations: patch.lockRotations ?? current.lockRotations ?? false,
   };
   let next: ColliderComponent;
   if (current.shape === "box") {
@@ -897,6 +1091,84 @@ export function updateLightComponent(
     (key) => next[key as keyof LightComponent] !== current[key as keyof LightComponent],
   );
   if (!changed) return scene;
+  return {
+    ...scene,
+    entities: {
+      ...scene.entities,
+      [entityId]: {
+        ...entity,
+        components: entity.components.map((component) =>
+          component.id === current.id ? next : component,
+        ),
+      },
+    },
+  };
+}
+
+/** Applies editable SDF Text properties atomically. */
+export function updateTextComponent(
+  scene: SceneDocument,
+  entityId: string,
+  patch: TextPatch,
+  componentId?: string,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  const current = entity?.components.find(
+    (component): component is TextComponent =>
+      component.type === "text" &&
+      (componentId === undefined || component.id === componentId),
+  );
+  if (!entity || !current) return scene;
+  if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") return scene;
+  if (
+    patch.text !== undefined &&
+    (typeof patch.text !== "string" || patch.text.length > 10_000)
+  ) {
+    return scene;
+  }
+  for (const color of [patch.color, patch.outlineColor]) {
+    if (color !== undefined && (typeof color !== "string" || !color.trim())) {
+      return scene;
+    }
+  }
+  if (
+    patch.fontSize !== undefined &&
+    (!Number.isFinite(patch.fontSize) || patch.fontSize <= 0)
+  ) {
+    return scene;
+  }
+  if (
+    patch.maxWidth !== undefined &&
+    (!Number.isFinite(patch.maxWidth) || patch.maxWidth <= 0)
+  ) {
+    return scene;
+  }
+  if (
+    patch.outlineWidth !== undefined &&
+    (!Number.isFinite(patch.outlineWidth) || patch.outlineWidth < 0)
+  ) {
+    return scene;
+  }
+  if (
+    patch.anchorX !== undefined &&
+    !["left", "center", "right"].includes(patch.anchorX)
+  ) {
+    return scene;
+  }
+  if (
+    patch.anchorY !== undefined &&
+    !["top", "middle", "bottom"].includes(patch.anchorY)
+  ) {
+    return scene;
+  }
+  const next: TextComponent = { ...current, ...patch };
+  if (
+    !Object.keys(patch).some(
+      (key) => next[key as keyof TextComponent] !== current[key as keyof TextComponent],
+    )
+  ) {
+    return scene;
+  }
   return {
     ...scene,
     entities: {
@@ -1747,6 +2019,15 @@ function collidersEqual(
     left.isTrigger !== right.isTrigger ||
     left.friction !== right.friction ||
     left.restitution !== right.restitution ||
+    (left.bodyType ?? "fixed") !== (right.bodyType ?? "fixed") ||
+    (left.gravityScale ?? 1) !== (right.gravityScale ?? 1) ||
+    (left.linearDamping ?? 0) !== (right.linearDamping ?? 0) ||
+    (left.angularDamping ?? 0) !== (right.angularDamping ?? 0) ||
+    (left.canSleep ?? true) !== (right.canSleep ?? true) ||
+    (left.ccd ?? false) !== (right.ccd ?? false) ||
+    (left.lockTranslations ?? false) !==
+      (right.lockTranslations ?? false) ||
+    (left.lockRotations ?? false) !== (right.lockRotations ?? false) ||
     left.fitMode !== right.fitMode
   ) {
     return false;

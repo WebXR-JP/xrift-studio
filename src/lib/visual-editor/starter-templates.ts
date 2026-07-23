@@ -21,6 +21,8 @@ import {
   createPrototypeProject,
   type PrototypeVisualProject,
 } from "./prototype-project";
+import { applyComponentCodeImportPlan } from "./component-code-import";
+import { analyzeOfficialXriftWorldTemplate } from "./official-world-template-import";
 import {
   createPrefabAsset,
   createPrefabDocument,
@@ -32,6 +34,7 @@ import {
   createMeshComponent,
   createMeshColliderComponent,
   createTransformComponent,
+  renameEntity,
   type LightComponent,
   type SceneDocument,
   type SceneEntity,
@@ -39,13 +42,15 @@ import {
 } from "./scene-document";
 import { OPEN_BRUSH_RENDERER } from "./open-brush";
 
-export type StarterWorldTemplateId = "blank" | "openbrush";
+export type StarterWorldTemplateId = "xrift-official" | "blank" | "openbrush";
 export type StarterItemTemplateId = "basic-item";
 export type VisualStarterTemplateId =
   | StarterWorldTemplateId
   | StarterItemTemplateId;
 
 export type BundledStarterModelId =
+  | "xrift-official-duck"
+  | "xrift-official-bunny"
   | "log-bench"
   | "torii-gate"
   | "mug"
@@ -53,6 +58,7 @@ export type BundledStarterModelId =
   | "openbrush-all-brushes";
 
 export type BundledStarterTextureId =
+  | "xrift-official-tokyo-station"
   | "wood-planks-clean"
   | "polished-concrete";
 
@@ -70,7 +76,7 @@ export type StarterAssetProvenance =
       ownership: "third-party";
       sourceName: string;
       sourceUrl: string;
-      license: "Apache-2.0";
+      license: "Apache-2.0" | "MIT";
     };
 
 export type BundledStarterAssetDefinition = {
@@ -80,7 +86,7 @@ export type BundledStarterAssetDefinition = {
   projectRelativePath: string;
   byteLength: number;
   sha256: string;
-  mediaType: "model/gltf-binary" | "image/png";
+  mediaType: "model/gltf-binary" | "image/png" | "image/jpeg";
   provenance: StarterAssetProvenance;
 };
 
@@ -127,6 +133,55 @@ export type StarterItemTemplateDefinition = {
 };
 
 export const BUNDLED_STARTER_ASSETS = {
+  "xrift-official-duck": {
+    id: "xrift-official-duck",
+    kind: "model",
+    publicPath: "/visual-editor/starter-assets/xrift-world-template-duck.glb",
+    projectRelativePath: "assets/starter/xrift-official/duck.glb",
+    byteLength: 119808,
+    sha256:
+      "154d3d5f025f9a0a614b5ea27b5e816120e0d286077b05ba67281e4b2823684d",
+    mediaType: "model/gltf-binary",
+    provenance: {
+      ownership: "third-party",
+      sourceName: "WebXR-JP/xrift-world-template public/duck.glb",
+      sourceUrl: "https://github.com/WebXR-JP/xrift-world-template",
+      license: "MIT",
+    },
+  },
+  "xrift-official-bunny": {
+    id: "xrift-official-bunny",
+    kind: "model",
+    publicPath: "/visual-editor/starter-assets/xrift-world-template-bunny.glb",
+    projectRelativePath: "assets/starter/xrift-official/bunny.glb",
+    byteLength: 1670664,
+    sha256:
+      "7f903e35e249f399e440a3bce6bf694e72dc80ce9dfd33df7f4fd83d4e960fff",
+    mediaType: "model/gltf-binary",
+    provenance: {
+      ownership: "third-party",
+      sourceName: "WebXR-JP/xrift-world-template public/bunny.drc (Studio GLB conversion)",
+      sourceUrl: "https://github.com/WebXR-JP/xrift-world-template",
+      license: "MIT",
+    },
+  },
+  "xrift-official-tokyo-station": {
+    id: "xrift-official-tokyo-station",
+    kind: "texture",
+    publicPath:
+      "/visual-editor/starter-assets/xrift-world-template-tokyo-station.png",
+    projectRelativePath: "assets/starter/xrift-official/tokyo-station.png",
+    byteLength: 904831,
+    sha256:
+      "613c5e5af594cf273bc14076cc86761a74826e9c57fbcec1e45c42a988fd3265",
+    mediaType: "image/png",
+    provenance: {
+      ownership: "third-party",
+      sourceName: "WebXR-JP/xrift-world-template public/tokyo-station.jpg",
+      sourceUrl: "https://github.com/WebXR-JP/xrift-world-template",
+      license: "MIT",
+    },
+  },
   "openbrush-all-brushes": {
     id: "openbrush-all-brushes",
     kind: "model",
@@ -236,6 +291,9 @@ export const BUNDLED_STARTER_ASSETS = {
 } as const satisfies Record<string, BundledStarterAssetDefinition>;
 
 export const BUNDLED_STARTER_ASSET_IDS = [
+  "xrift-official-duck",
+  "xrift-official-bunny",
+  "xrift-official-tokyo-station",
   "openbrush-all-brushes",
   "log-bench",
   "torii-gate",
@@ -256,6 +314,30 @@ const OPEN_BRUSH_LICENSE_COPY: StarterAssetCopyPlanEntry = {
   integrity: "license-text",
 };
 
+const XRIFT_OFFICIAL_SOURCE_COPY: StarterAssetCopyPlanEntry = {
+  assetId: "xrift-world-template-source",
+  bundledPublicPath:
+    "/visual-editor/starter-assets/xrift-world-template-World.tsx.txt",
+  targetRelativePath: "assets/starter/xrift-world-template-World.tsx.txt",
+  expectedByteLength: 8791,
+  expectedSha256:
+    "7269c522aa105b5f22a066d0c0b7818589149788a639d9b14b0c0d9c58070522",
+  mediaType: "text/plain",
+  integrity: "strict",
+};
+
+const XRIFT_OFFICIAL_LICENSE_COPY: StarterAssetCopyPlanEntry = {
+  assetId: "xrift-world-template-license",
+  bundledPublicPath:
+    "/visual-editor/starter-assets/xrift-world-template-LICENSE.txt",
+  targetRelativePath: "assets/starter/xrift-world-template-LICENSE.txt",
+  expectedByteLength: 1086,
+  expectedSha256:
+    "ab63a7a7e02339cd5547c0fbd3ed89e8ab740c72a7d1696719bbaa67ee11a2f8",
+  mediaType: "text/plain",
+  integrity: "strict",
+};
+
 export const STARTER_ASSET_FOLDER_IDS = {
   root: "starter-library",
   models: "starter-library-models",
@@ -265,6 +347,16 @@ export const STARTER_ASSET_FOLDER_IDS = {
 } as const;
 
 export const STARTER_WORLD_TEMPLATES = [
+  {
+    id: "xrift-official",
+    name: "XRift公式ワールド",
+    description: "公式ClassicテンプレートのR3F / JSXをVisualへ変換したシーン",
+    bundledAssetIds: [
+      "xrift-official-duck",
+      "xrift-official-bunny",
+      "xrift-official-tokyo-station",
+    ],
+  },
   {
     id: "blank",
     name: "Blank",
@@ -311,7 +403,7 @@ export function getStarterItemTemplate(
 export function defaultVisualStarterTemplateId(
   kind: "world" | "item",
 ): VisualStarterTemplateId {
-  return kind === "world" ? "openbrush" : "basic-item";
+  return kind === "world" ? "xrift-official" : "basic-item";
 }
 
 export function isStarterTemplateForKind(
@@ -385,24 +477,33 @@ export function createStarterWorldProject(
       ...Object.fromEntries(textures.map((asset) => [asset.id, asset])),
     },
   };
-  const entities = createTemplateEntities(templateId);
-  const scene: SceneDocument = {
-    ...prototype.scene,
-    name: definition.name,
-    rootEntityIds: entities
-      .filter((entity) => entity.parentId === null)
-      .map((entity) => entity.id),
-    entities: Object.fromEntries(entities.map((entity) => [entity.id, entity])),
-  };
+  const imported =
+    templateId === "xrift-official"
+      ? createOfficialTemplateDocuments(prototype.scene, baseAssets)
+      : null;
+  const entities = imported ? [] : createTemplateEntities(templateId);
+  const scene: SceneDocument = imported
+    ? { ...imported.scene, name: definition.name }
+    : {
+        ...prototype.scene,
+        name: definition.name,
+        rootEntityIds: entities
+          .filter((entity) => entity.parentId === null)
+          .map((entity) => entity.id),
+        entities: Object.fromEntries(
+          entities.map((entity) => [entity.id, entity]),
+        ),
+      };
+  const resolvedBaseAssets = imported?.assets ?? baseAssets;
   const prefabLibrary = createStarterPrefabLibrary(
     templateId,
     scene,
-    baseAssets,
+    resolvedBaseAssets,
   );
   const assets: AssetManifest = {
-    ...baseAssets,
+    ...resolvedBaseAssets,
     assets: {
-      ...baseAssets.assets,
+      ...resolvedBaseAssets.assets,
       ...Object.fromEntries(
         prefabLibrary.assets.map((asset) => [asset.id, asset]),
       ),
@@ -434,7 +535,89 @@ export function createStarterWorldProject(
         integrity: "strict" as const,
       })),
       ...(templateId === "openbrush" ? [OPEN_BRUSH_LICENSE_COPY] : []),
+      ...(templateId === "xrift-official"
+        ? [XRIFT_OFFICIAL_SOURCE_COPY, XRIFT_OFFICIAL_LICENSE_COPY]
+        : []),
     ],
+  };
+}
+
+function createOfficialTemplateDocuments(
+  prototypeScene: SceneDocument,
+  baseAssets: AssetManifest,
+): { scene: SceneDocument; assets: AssetManifest } {
+  const plan = analyzeOfficialXriftWorldTemplate();
+  const errors = plan.diagnostics.filter(
+    (diagnostic) => diagnostic.severity === "error",
+  );
+  if (errors.length > 0) {
+    throw new Error(
+      `Official XRift template conversion failed: ${errors
+        .map((diagnostic) => diagnostic.code)
+        .join(", ")}`,
+    );
+  }
+  const emptyScene: SceneDocument = {
+    ...prototypeScene,
+    rootEntityIds: [],
+    entities: {},
+  };
+  const applied = applyComponentCodeImportPlan({
+    scene: emptyScene,
+    assets: baseAssets,
+    projectKind: "world",
+    plan,
+    assetIdBySourcePath: {
+      "public/duck.glb": STARTER_MODEL_IDS.xriftDuck,
+      "public/bunny.drc": STARTER_MODEL_IDS.xriftBunny,
+      "public/tokyo-station.jpg": STARTER_TEXTURE_IDS.xriftTokyoStation,
+    },
+  });
+  const applyErrors = applied.diagnostics.filter(
+    (diagnostic) => diagnostic.severity === "error",
+  );
+  if (applyErrors.length > 0 || applied.entityIds.length !== plan.nodes.length) {
+    throw new Error(
+      `Official XRift template application failed: ${applyErrors
+        .map((diagnostic) => diagnostic.code)
+        .join(", ") || "entity-count"}`,
+    );
+  }
+  return {
+    scene: applied.scene.rootEntityIds[0]
+      ? renameEntity(applied.scene, applied.scene.rootEntityIds[0], "World")
+      : applied.scene,
+    assets: rehomeOfficialImportedMaterials(applied.assets),
+  };
+}
+
+function rehomeOfficialImportedMaterials(
+  manifest: AssetManifest,
+): AssetManifest {
+  let nextOrder = 0;
+  return {
+    ...manifest,
+    assets: Object.fromEntries(
+      Object.entries(manifest.assets).map(([assetId, asset]) => {
+        if (
+          asset.kind !== "material" ||
+          asset.source.kind !== "document" ||
+          asset.folderId !== null
+        ) {
+          return [assetId, asset];
+        }
+        const order = nextOrder;
+        nextOrder += 1;
+        return [
+          assetId,
+          {
+            ...asset,
+            folderId: STARTER_ASSET_FOLDER_IDS.materials,
+            order,
+          },
+        ];
+      }),
+    ),
   };
 }
 
@@ -487,7 +670,7 @@ function createStarterPrefabLibrary(
 ): { assets: PrefabAsset[]; documents: Record<string, PrefabDocument> } {
   const prefabAssets: PrefabAsset[] = [];
   const documents: Record<string, PrefabDocument> = {};
-  const seeds = starterPrefabSeeds(templateId);
+  const seeds = starterPrefabSeeds(templateId, scene);
 
   seeds.forEach((seed, order) => {
     const result = createPrefabDocument(scene, assets, {
@@ -515,7 +698,23 @@ function createStarterPrefabLibrary(
 
 function starterPrefabSeeds(
   templateId: StarterWorldTemplateId,
+  scene: SceneDocument,
 ): StarterPrefabSeed[] {
+  if (templateId === "xrift-official") {
+    const ground = Object.values(scene.entities).find(
+      (entity) => entity.name === "Ground",
+    );
+    return ground
+      ? [
+          {
+            prefabId: "starter-xrift-official-ground",
+            assetId: "starter-prefab-xrift-official-ground",
+            name: "XRift Official Ground",
+            sourceEntityId: ground.id,
+          },
+        ]
+      : [];
+  }
   const ground: StarterPrefabSeed = {
     prefabId: "starter-ground",
     assetId: "starter-prefab-ground",
@@ -600,6 +799,8 @@ function organizeStarterHierarchy(entities: SceneEntity[]): SceneEntity[] {
 }
 
 const STARTER_MODEL_IDS = {
+  xriftDuck: "starter-model-xrift-official-duck",
+  xriftBunny: "starter-model-xrift-official-bunny",
   logBench: "starter-model-log-bench",
   toriiGate: "starter-model-torii-gate",
   mug: "starter-model-mug",
@@ -608,6 +809,8 @@ const STARTER_MODEL_IDS = {
 } as const;
 
 const STARTER_MODEL_ORDER: Record<BundledStarterModelId, number> = {
+  "xrift-official-duck": 0,
+  "xrift-official-bunny": 1,
   "log-bench": 0,
   "torii-gate": 1,
   mug: 2,
@@ -616,6 +819,7 @@ const STARTER_MODEL_ORDER: Record<BundledStarterModelId, number> = {
 };
 
 const STARTER_TEXTURE_IDS = {
+  xriftTokyoStation: "starter-texture-xrift-official-tokyo-station",
   woodPlanks: "starter-texture-wood-planks-clean",
   polishedConcrete: "starter-texture-polished-concrete",
 } as const;
@@ -625,8 +829,9 @@ const STARTER_MATERIAL_IDS = {
 } as const;
 
 function createStarterMaterials(
-  _templateId: StarterWorldTemplateId,
+  templateId: StarterWorldTemplateId,
 ): MaterialAsset[] {
+  if (templateId === "xrift-official") return [];
   return [
     createMaterial(
       STARTER_MATERIAL_IDS.ground,
@@ -675,6 +880,30 @@ type StarterModelMetadata = {
 };
 
 const STARTER_MODEL_METADATA = {
+  "xrift-official-duck": {
+    assetId: STARTER_MODEL_IDS.xriftDuck,
+    name: "Duck",
+    materialName: "Duck Material",
+    importMetadata: modelMetadata(2, 1, 1, {
+      min: [-0.692985, 0.099294, -0.613282],
+      max: [0.961799, 1.6397, 0.539252],
+      center: [0.134407, 0.869497, -0.037015],
+      size: [1.654784, 1.540406, 1.152534],
+      boundingSphereRadius: 1.268,
+    }),
+  },
+  "xrift-official-bunny": {
+    assetId: STARTER_MODEL_IDS.xriftBunny,
+    name: "Draco Bunny",
+    materialName: "Draco Material",
+    importMetadata: modelMetadata(2, 1, 1, {
+      min: [-0.09469, 0.032987, -0.061874],
+      max: [0.061009, 0.187317, 0.058836],
+      center: [-0.016841, 0.110152, -0.001519],
+      size: [0.155699, 0.15433, 0.12071],
+      boundingSphereRadius: 0.125,
+    }),
+  },
   "openbrush-all-brushes": {
     assetId: STARTER_MODEL_IDS.openBrush,
     name: "OpenBrush Brush Gallery",
@@ -816,6 +1045,8 @@ function isBundledStarterModelId(
   id: BundledStarterAssetId,
 ): id is BundledStarterModelId {
   return (
+    id === "xrift-official-duck" ||
+    id === "xrift-official-bunny" ||
     id === "log-bench" ||
     id === "torii-gate" ||
     id === "mug" ||
@@ -825,31 +1056,42 @@ function isBundledStarterModelId(
 }
 
 function createStarterTextureAsset(bundledId: BundledStarterAssetId): TextureAsset {
-  if (bundledId !== "wood-planks-clean" && bundledId !== "polished-concrete") {
+  if (
+    bundledId !== "xrift-official-tokyo-station" &&
+    bundledId !== "wood-planks-clean" &&
+    bundledId !== "polished-concrete"
+  ) {
     throw new Error(`Starter asset is not a Texture: ${bundledId}`);
   }
   const bundled = BUNDLED_STARTER_ASSETS[bundledId];
+  const isTokyoStation = bundledId === "xrift-official-tokyo-station";
   const isWood = bundledId === "wood-planks-clean";
   return {
-    id: isWood
+    id: isTokyoStation
+      ? STARTER_TEXTURE_IDS.xriftTokyoStation
+      : isWood
       ? STARTER_TEXTURE_IDS.woodPlanks
       : STARTER_TEXTURE_IDS.polishedConcrete,
-    name: isWood ? "Wood Planks" : "Polished Concrete",
+    name: isTokyoStation
+      ? "Tokyo Station Panorama"
+      : isWood
+        ? "Wood Planks"
+        : "Polished Concrete",
     kind: "texture",
     status: "ready",
     source: { kind: "project", relativePath: bundled.projectRelativePath },
     sourceHash: bundled.sha256,
     thumbnail: { status: "missing" },
     folderId: STARTER_ASSET_FOLDER_IDS.textures,
-    order: isWood ? 0 : 1,
+    order: isTokyoStation ? 0 : isWood ? 0 : 1,
     importSettings: normalizeTextureImportSettings({
       colorSpace: "srgb",
       generateMipmaps: true,
       flipY: false,
       resize: { mode: "original" },
       sampler: {
-        wrapS: "repeat",
-        wrapT: "repeat",
+        wrapS: isTokyoStation ? "clamp-to-edge" : "repeat",
+        wrapT: isTokyoStation ? "clamp-to-edge" : "repeat",
         magFilter: "linear",
         minFilter: "linear-mipmap-linear",
       },
@@ -859,8 +1101,8 @@ function createStarterTextureAsset(bundledId: BundledStarterAssetId): TextureAss
       sourceFormat: "png",
       mimeType: "image/png",
       byteLength: bundled.byteLength,
-      width: isWood ? 1024 : 1254,
-      height: isWood ? 1024 : 1254,
+      width: isTokyoStation ? 1024 : isWood ? 1024 : 1254,
+      height: isTokyoStation ? 512 : isWood ? 1024 : 1254,
     },
   };
 }

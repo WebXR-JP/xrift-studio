@@ -18,16 +18,19 @@ const MCP_SERVER_NAME: &str = "xrift-studio";
 const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
 const MCP_RENDEZVOUS_SCHEMA_VERSION: u32 = 1;
 const MCP_EVENT_NAME: &str = "xrift-mcp-editor-request";
-const MCP_REQUEST_TIMEOUT_SECONDS: u64 = 30;
+const MCP_REQUEST_TIMEOUT_SECONDS: u64 = 180;
 const MCP_INITIAL_MESSAGE_TIMEOUT_SECONDS: u64 = 5;
 const MCP_EDITOR_QUEUE_TIMEOUT_MILLISECONDS: u64 = 2_000;
 const MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS: u64 = 15_000;
 const MCP_MAX_CONCURRENT_CONNECTIONS: usize = 32;
 const MCP_MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 const MCP_MAX_CLIENT_NAME_CHARS: usize = 128;
-const MCP_TOOL_NAMES: [&str; 14] = [
+const MCP_TOOL_NAMES: [&str; 31] = [
     "get_editor_context",
     "list_assets",
+    "search_external_assets",
+    "get_external_asset_options",
+    "install_external_asset",
     "update_scene_settings",
     "place_asset",
     "list_entities",
@@ -36,10 +39,24 @@ const MCP_TOOL_NAMES: [&str; 14] = [
     "add_component",
     "update_transform",
     "set_material",
+    "get_material_asset",
+    "update_material_asset",
+    "set_material_texture_transform",
     "rename_entity",
     "duplicate_entity",
     "delete_entity",
     "create_empty_entity",
+    "list_interactivity_operations",
+    "get_interactivity_asset",
+    "create_interactivity_asset",
+    "add_interactivity_node",
+    "connect_interactivity_nodes",
+    "set_interactivity_value",
+    "set_interactivity_configuration",
+    "configure_interactivity_material_pointer",
+    "disconnect_interactivity_socket",
+    "delete_interactivity_node",
+    "validate_interactivity_asset",
 ];
 static MCP_MONOTONIC_START: OnceLock<Instant> = OnceLock::new();
 
@@ -1621,7 +1638,7 @@ pub fn run_stdio_server() -> Result<(), String> {
                     "protocolVersion": MCP_PROTOCOL_VERSION,
                     "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": { "name": MCP_SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each write, then verify the result. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. XRift Studio must be open with a visual project."
+                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each write, then verify the result. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. XRift Studio must be open with a visual project."
                 }),
             )?,
             "ping" => write_json_rpc_result(&mut stdout, id, json!({}))?,
@@ -1864,6 +1881,52 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "search_external_assets",
+            "description": "Search the Poly Haven catalog for CC0 HDRIs, textures/materials, and models. Returns external IDs that can be passed to the option and install tools.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "providerId": { "type": "string", "enum": ["poly-haven"] },
+                    "query": { "type": "string" },
+                    "kind": { "type": "string", "enum": ["hdri", "texture", "model"] },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 120 }
+                },
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "get_external_asset_options",
+            "description": "List installable resolutions and formats for a Poly Haven external asset.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "providerId": { "type": "string", "enum": ["poly-haven"] },
+                    "externalId": { "type": "string" }
+                },
+                "required": ["externalId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "install_external_asset",
+            "description": "Download a Poly Haven HDRI, PBR texture bundle, or model into the open project and create XRift Studio assets. Models are validated and saved as self-contained glTF.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "providerId": { "type": "string", "enum": ["poly-haven"] },
+                    "externalId": { "type": "string" },
+                    "resolution": { "type": "string", "enum": ["1k", "2k", "4k", "8k", "16k", "24k"] },
+                    "format": { "type": "string", "enum": ["hdr", "exr"] },
+                    "applySkybox": { "type": "boolean" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "externalId", "resolution"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "update_scene_settings",
             "description": "Update Fog settings in the current XRift Studio scene through the editor history and autosave pipeline.",
             "inputSchema": {
@@ -2053,6 +2116,53 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "get_material_asset",
+            "description": "Read a Material Asset with canonical glTF material properties and KHR_texture_transform values.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "materialAssetId": { "type": "string" } },
+                "required": ["materialAssetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "update_material_asset",
+            "description": "Update canonical glTF Material Asset properties, including PBR factors, texture slots, alpha settings, and supported KHR_materials extensions.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "materialAssetId": { "type": "string" },
+                    "patch": { "type": "object" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "materialAssetId", "patch"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "set_material_texture_transform",
+            "description": "Set glTF KHR_texture_transform tiling (scale), offset, rotation, and TEXCOORD set for a Material texture slot. The slot must already contain a Texture Asset.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "materialAssetId": { "type": "string" },
+                    "slot": { "type": "string", "enum": ["baseColor", "metallicRoughness", "normal", "occlusion", "emissive"] },
+                    "offset": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+                    "scale": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+                    "rotationDegrees": { "type": "number" },
+                    "texCoord": { "type": "integer", "minimum": 0 },
+                    "reset": { "type": "boolean" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "materialAssetId", "slot"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "rename_entity",
             "description": "Rename an existing entity.",
             "inputSchema": {
@@ -2113,6 +2223,191 @@ fn tool_definitions() -> Value {
                     "parentEntityId": { "type": ["string", "null"] }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "list_interactivity_operations",
+            "description": "List KHR_interactivity operation templates and their flow/value sockets supported by XRift Studio. Unknown extension operations can still be preserved generically.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "get_interactivity_asset",
+            "description": "Read a reusable Interactivity Asset as canonical KHR_interactivity JSON, including validation diagnostics.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "assetId": { "type": "string" } },
+                "required": ["assetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "create_interactivity_asset",
+            "description": "Create a reusable KHR_interactivity Asset. Use animation-on-start for a spec-shaped event/onStart to animation/start sample, or empty to build a graph incrementally.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "name": { "type": "string", "minLength": 1 },
+                    "folderId": { "type": ["string", "null"] },
+                    "template": { "type": "string", "enum": ["animation-on-start", "empty"] }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "add_interactivity_node",
+            "description": "Add any KHR_interactivity operation node to a graph. Known operations receive XRift socket templates; unknown operations remain canonical generic nodes, with an optional defining extension name.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string" },
+                    "graphIndex": { "type": "integer", "minimum": 0 },
+                    "op": { "type": "string", "minLength": 1 },
+                    "extension": { "type": "string", "minLength": 1 },
+                    "position": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "op"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "connect_interactivity_nodes",
+            "description": "Connect two KHR_interactivity nodes through a named flow or value socket. Invalid references and flow cycles are rejected atomically.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string" },
+                    "graphIndex": { "type": "integer", "minimum": 0 },
+                    "kind": { "type": "string", "enum": ["flow", "value"] },
+                    "sourceNode": { "type": "integer", "minimum": 0 },
+                    "sourceSocket": { "type": "string", "minLength": 1 },
+                    "targetNode": { "type": "integer", "minimum": 0 },
+                    "targetSocket": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "kind", "sourceNode", "sourceSocket", "targetNode", "targetSocket"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "set_interactivity_value",
+            "description": "Set a canonical inline value on a KHR_interactivity node input socket using a glTF type signature such as bool, int, float, float3, or ref.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string" },
+                    "graphIndex": { "type": "integer", "minimum": 0 },
+                    "nodeIndex": { "type": "integer", "minimum": 0 },
+                    "socket": { "type": "string", "minLength": 1 },
+                    "signature": { "type": "string", "minLength": 1 },
+                    "value": { "type": "array", "minItems": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "nodeIndex", "socket", "signature", "value"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "set_interactivity_configuration",
+            "description": "Set a canonical operation configuration array, such as a pointer, event, variable, or type reference, on a KHR_interactivity node.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string" },
+                    "graphIndex": { "type": "integer", "minimum": 0 },
+                    "nodeIndex": { "type": "integer", "minimum": 0 },
+                    "key": { "type": "string", "minLength": 1 },
+                    "value": { "type": "array", "minItems": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "nodeIndex", "key", "value"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "configure_interactivity_material_pointer",
+            "description": "Configure a pointer/get, pointer/set, or pointer/interpolate node to target a supported glTF Material property, including KHR_texture_transform tiling properties.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string" },
+                    "graphIndex": { "type": "integer", "minimum": 0 },
+                    "nodeIndex": { "type": "integer", "minimum": 0 },
+                    "materialAssetId": { "type": "string" },
+                    "presetId": {
+                        "type": "string",
+                        "enum": [
+                            "base-color", "metallic", "roughness", "emissive",
+                            "normal-scale", "occlusion-strength", "double-sided",
+                            "base-color-tiling", "base-color-offset", "base-color-rotation",
+                            "metallic-roughness-tiling", "normal-tiling", "occlusion-tiling",
+                            "emissive-tiling"
+                        ]
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "nodeIndex", "materialAssetId", "presetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "disconnect_interactivity_socket",
+            "description": "Remove a named flow output or value input connection from a KHR_interactivity node.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string" },
+                    "graphIndex": { "type": "integer", "minimum": 0 },
+                    "kind": { "type": "string", "enum": ["flow", "value"] },
+                    "nodeIndex": { "type": "integer", "minimum": 0 },
+                    "socket": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "kind", "nodeIndex", "socket"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "delete_interactivity_node",
+            "description": "Delete a KHR_interactivity node and atomically reindex or remove every flow/value reference to it.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string" },
+                    "graphIndex": { "type": "integer", "minimum": 0 },
+                    "nodeIndex": { "type": "integer", "minimum": 0 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "nodeIndex"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "validate_interactivity_asset",
+            "description": "Validate node declarations, references, inline types, graph indexes, and acyclic flow for a reusable KHR_interactivity Asset without changing the project.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "assetId": { "type": "string" } },
+                "required": ["assetId"],
                 "additionalProperties": false
             }
         }

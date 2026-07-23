@@ -1,9 +1,12 @@
 import {
   getGeometryAsset,
+  getTextureSourceFormat,
+  isEnvironmentTextureAsset,
   type AssetManifest,
   type SceneAsset,
 } from "../asset-manifest";
 import type { SceneDocument, SceneEntity } from "../scene-document";
+import { resolveSceneSettings } from "../scene-settings";
 import type {
   XriftRuntimeAsset,
   XriftRuntimeComponent,
@@ -70,7 +73,9 @@ function compileRuntimeScene(
         ]),
     ),
     settings: scene.settings
-      ? (JSON.parse(JSON.stringify(scene.settings)) as Record<string, unknown>)
+      ? (JSON.parse(
+          JSON.stringify(resolveSceneSettings(scene.settings)),
+        ) as Record<string, unknown>)
       : undefined,
   };
 }
@@ -293,6 +298,21 @@ function compileRuntimeAsset(
       })),
     };
   }
+  if (isEnvironmentTextureAsset(asset) && url) {
+    const sourceFormat = getTextureSourceFormat(asset);
+    return {
+      id: asset.id,
+      kind: "skybox",
+      name: asset.name,
+      url,
+      sourceFormat:
+        sourceFormat === "hdr" || sourceFormat === "exr"
+          ? sourceFormat
+          : "image",
+      projection: asset.projection ?? "equirectangular",
+      flipY: asset.importSettings.flipY,
+    };
+  }
   if (asset.kind === "texture" && url) {
     return {
       id: asset.id,
@@ -301,6 +321,10 @@ function compileRuntimeAsset(
       url,
       colorSpace: asset.importSettings.colorSpace,
       flipY: asset.importSettings.flipY,
+      sampler: {
+        wrapS: asset.importSettings.sampler.wrapS,
+        wrapT: asset.importSettings.sampler.wrapT,
+      },
     };
   }
   if (asset.kind === "skybox" && url) {
@@ -311,6 +335,7 @@ function compileRuntimeAsset(
       url,
       sourceFormat: asset.sourceFormat,
       projection: asset.projection,
+      flipY: false,
     };
   }
   if (asset.kind === "audio" && url) {
@@ -333,6 +358,16 @@ function compileRuntimeAsset(
       kind: "particle",
       name: asset.name,
       properties: JSON.parse(JSON.stringify(asset.properties)),
+    };
+  }
+  if (asset.kind === "interactivity") {
+    return {
+      id: asset.id,
+      kind: "interactivity",
+      name: asset.name,
+      extensionName: asset.extensionName,
+      specStatus: asset.specStatus,
+      extension: JSON.parse(JSON.stringify(asset.extension)) as Record<string, unknown>,
     };
   }
   return null;

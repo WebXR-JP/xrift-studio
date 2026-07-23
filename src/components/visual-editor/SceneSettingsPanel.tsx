@@ -2,6 +2,7 @@ import { useEffect, useState, type DragEvent, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { ThumbnailEditor } from "../ThumbnailEditor";
 import {
+  isEnvironmentTextureAsset,
   resolveSceneSettings,
   type AssetManifest,
   type SceneDocument,
@@ -50,18 +51,23 @@ function Section({
 function Toggle({
   label,
   description,
+  title,
   checked,
   disabled,
   onChange,
 }: {
   label: string;
   description?: string;
+  title?: string;
   checked: boolean;
   disabled: boolean;
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-3">
+    <label
+      title={title}
+      className="flex cursor-pointer items-start justify-between gap-3"
+    >
       <span>
         <span className="block text-xs font-medium text-slate-700">{label}</span>
         {description ? <span className="block text-[11px] leading-4 text-slate-500">{description}</span> : null}
@@ -162,6 +168,143 @@ function NumberField({
   );
 }
 
+function SkyboxProjectionField({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: SceneSettings["skybox"]["projection"];
+  disabled: boolean;
+  onChange: (value: SceneSettings["skybox"]["projection"]) => void;
+}) {
+  const descriptions: Record<SceneSettings["skybox"]["projection"], string> = {
+    infinite: "カメラから常に無限遠に見える標準の空です。",
+    box: "室内や街区を囲む箱へ投影します。底面は位置Yを基準にします。",
+    dome: "下側を平らにしたドームへ投影し、地面との境界を合わせます。",
+  };
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-slate-700">投影方式</span>
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(event) =>
+          onChange(
+            event.currentTarget.value as SceneSettings["skybox"]["projection"],
+          )
+        }
+        className="h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+      >
+        <option value="infinite">無限遠</option>
+        <option value="box">ボックス</option>
+        <option value="dome">ドーム（地面付き）</option>
+      </select>
+      <span className="mt-1 block text-[11px] leading-4 text-slate-500">
+        {descriptions[value]}
+      </span>
+    </label>
+  );
+}
+
+function VectorAxisInput({
+  axis,
+  value,
+  min,
+  step,
+  disabled,
+  onChange,
+}: {
+  axis: "X" | "Y" | "Z";
+  value: number;
+  min?: number;
+  step: number;
+  disabled: boolean;
+  onChange: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+  const commit = () => {
+    const parsed = Number(draft);
+    if (!Number.isFinite(parsed)) {
+      setDraft(String(value));
+      return;
+    }
+    const next = Math.max(min ?? -Infinity, parsed);
+    setDraft(String(next));
+    if (next !== value) onChange(next);
+  };
+  return (
+    <label className="min-w-0">
+      <span className="mb-0.5 block text-[10px] font-semibold text-slate-500">
+        {axis}
+      </span>
+      <input
+        type="number"
+        aria-label={`${axis}軸`}
+        value={draft}
+        min={min}
+        step={step}
+        disabled={disabled}
+        onChange={(event) => setDraft(event.currentTarget.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+          if (event.key === "Escape") {
+            setDraft(String(value));
+            event.currentTarget.blur();
+          }
+        }}
+        className="h-7 w-full rounded border border-slate-300 bg-white px-1.5 text-right text-[11px] text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+      />
+    </label>
+  );
+}
+
+function Vector3Field({
+  label,
+  description,
+  value,
+  min,
+  step = 0.1,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  description?: string;
+  title?: string;
+  value: [number, number, number];
+  min?: number;
+  step?: number;
+  disabled: boolean;
+  onChange: (value: [number, number, number]) => void;
+}) {
+  return (
+    <fieldset>
+      <legend className="text-xs font-medium text-slate-700">{label}</legend>
+      {description ? (
+        <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{description}</p>
+      ) : null}
+      <div className="mt-1 grid grid-cols-3 gap-1.5">
+        {(["X", "Y", "Z"] as const).map((axis, index) => (
+          <VectorAxisInput
+            key={axis}
+            axis={axis}
+            value={value[index]}
+            min={min}
+            step={step}
+            disabled={disabled}
+            onChange={(next) => {
+              const updated: [number, number, number] = [...value];
+              updated[index] = next;
+              onChange(updated);
+            }}
+          />
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 function ThumbnailDialog({
   projectPath,
   projectKind,
@@ -246,7 +389,10 @@ function SkyboxImageField({
         >
           <option value="">グラデーションを使用</option>
           {skyboxes.map((skybox) => (
-            <option key={skybox.id} value={skybox.id}>{skybox.name}{skybox.kind === "texture" ? "（従来Texture）" : ""}</option>
+            <option key={skybox.id} value={skybox.id}>
+              {skybox.name}
+              {isEnvironmentTextureAsset(skybox) ? "（HDRI Texture）" : "（画像Texture）"}
+            </option>
           ))}
         </select>
       </label>
@@ -276,10 +422,10 @@ function SkyboxImageField({
         }}
       >
         {(assigned?.kind === "skybox" || assigned?.kind === "texture") && assigned.source.kind === "project"
-          ? `設定中: ${assigned.name}。Assetsから別のSkyboxをここへドロップできます。`
+          ? `設定中: ${assigned.name}。Assetsから別のTextureをここへドロップできます。`
           : imageAssetId
             ? "設定済みの画像がAssetsに見つかりません。別のTextureを選択してください。"
-            : "Skybox AssetをAssetsからここへドロップできます。"}
+            : "Texture AssetをAssetsからここへドロップできます。"}
       </div>
     </div>
   );
@@ -301,8 +447,10 @@ export function SceneSettingsInspector({
   const disabledHint = readOnly
     ? "Play中は停止してから設定を変更できます"
     : undefined;
-  const imageControlsDisabled =
-    readOnly || !settings.skybox.enabled || !settings.skybox.imageAssetId;
+  const imageControlsDisabled = readOnly || !settings.skybox.imageAssetId;
+  const skyboxControlsDisabled = readOnly || !settings.skybox.enabled;
+  const exposureControlsDisabled =
+    readOnly || (!settings.skybox.enabled && !settings.skybox.iblEnabled);
 
   return (
     <>
@@ -319,34 +467,107 @@ export function SceneSettingsInspector({
           </button>
         </Section>
 
-        <Section title="スカイボックス" description="グラデーションまたはequirectangular画像を、Scene Viewと生成Worldに適用します。">
+        <Section title="スカイボックス">
           <Toggle
-            label="スカイボックスを有効にする"
+            label="背景に表示"
+            title="SkyboxをSceneの背景として表示します"
             checked={settings.skybox.enabled}
             disabled={readOnly}
             onChange={(enabled) => update({ ...settings, skybox: { ...settings.skybox, enabled } })}
           />
+          <Toggle
+            label="IBLライティングに使用"
+            title="Skybox画像をImage-Based Lightingとしてマテリアルの反射と照明に使用します"
+            checked={settings.skybox.iblEnabled}
+            disabled={readOnly || !settings.skybox.imageAssetId}
+            onChange={(iblEnabled) =>
+              update({ ...settings, skybox: { ...settings.skybox, iblEnabled } })
+            }
+          />
+          <SkyboxProjectionField
+            value={settings.skybox.projection}
+            disabled={skyboxControlsDisabled}
+            onChange={(projection) =>
+              update({ ...settings, skybox: { ...settings.skybox, projection } })
+            }
+          />
           <SkyboxImageField
             assets={assets}
             imageAssetId={settings.skybox.imageAssetId}
-            disabled={readOnly || !settings.skybox.enabled}
-            onChange={(imageAssetId) =>
-              update({ ...settings, skybox: { ...settings.skybox, imageAssetId } })
-            }
+            disabled={readOnly}
+            onChange={(imageAssetId) => {
+              const hadImage = Boolean(settings.skybox.imageAssetId);
+              update({
+                ...settings,
+                skybox: {
+                  ...settings.skybox,
+                  imageAssetId,
+                  iblEnabled: imageAssetId
+                    ? hadImage
+                      ? settings.skybox.iblEnabled
+                      : true
+                    : false,
+                },
+              });
+            }}
           />
-          <NumberField label="画像の回転 (度)" value={settings.skybox.rotationDegrees} step={1} disabled={imageControlsDisabled} onChange={(rotationDegrees) => update({ ...settings, skybox: { ...settings.skybox, rotationDegrees } })} />
+          <NumberField label="環境画像の水平回転 (度)" value={settings.skybox.rotationDegrees} step={1} disabled={imageControlsDisabled} onChange={(rotationDegrees) => update({ ...settings, skybox: { ...settings.skybox, rotationDegrees } })} />
           <Toggle
-            label="画像を上下反転"
-            description="HDRIが上下逆に見える場合に有効にします。"
+            label="シーンで追加反転"
+            title="Texture InspectorのFlip Yに加えて、このSceneだけ上下を反転します"
             checked={settings.skybox.flipY}
             disabled={imageControlsDisabled}
             onChange={(flipY) => update({ ...settings, skybox: { ...settings.skybox, flipY } })}
           />
-          <NumberField label="画像の露出" value={settings.skybox.exposure} min={0} step={0.05} disabled={imageControlsDisabled} onChange={(exposure) => update({ ...settings, skybox: { ...settings.skybox, exposure } })} />
+          <NumberField label="明るさ" value={settings.skybox.exposure} min={0} step={0.05} disabled={exposureControlsDisabled} onChange={(exposure) => update({ ...settings, skybox: { ...settings.skybox, exposure } })} />
           <ColorField label="上空の色" value={settings.skybox.topColor} disabled={readOnly || !settings.skybox.enabled || Boolean(settings.skybox.imageAssetId)} onChange={(topColor) => update({ ...settings, skybox: { ...settings.skybox, topColor } })} />
           <ColorField label="地平線の色" value={settings.skybox.bottomColor} disabled={readOnly || !settings.skybox.enabled || Boolean(settings.skybox.imageAssetId)} onChange={(bottomColor) => update({ ...settings, skybox: { ...settings.skybox, bottomColor } })} />
           <NumberField label="オフセット" value={settings.skybox.offset} step={0.05} disabled={readOnly || !settings.skybox.enabled || Boolean(settings.skybox.imageAssetId)} onChange={(offset) => update({ ...settings, skybox: { ...settings.skybox, offset } })} />
           <NumberField label="グラデーション" value={settings.skybox.exponent} min={0.01} step={0.01} disabled={readOnly || !settings.skybox.enabled || Boolean(settings.skybox.imageAssetId)} onChange={(exponent) => update({ ...settings, skybox: { ...settings.skybox, exponent } })} />
+          {settings.skybox.projection !== "infinite" ? (
+            <div className="space-y-2.5 rounded border border-slate-200 bg-slate-50 p-2.5">
+              <p className="text-[11px] leading-4 text-slate-600">
+                有限Skyメッシュの位置と大きさです。位置Yを床面の基準にし、Scene Viewへ即時反映します。
+              </p>
+              <Vector3Field
+                label="メッシュ位置"
+                value={settings.skybox.meshPosition}
+                disabled={skyboxControlsDisabled}
+                onChange={(meshPosition) =>
+                  update({ ...settings, skybox: { ...settings.skybox, meshPosition } })
+                }
+              />
+              <Vector3Field
+                label="メッシュ回転 (度)"
+                value={settings.skybox.meshRotationDegrees}
+                step={1}
+                disabled={skyboxControlsDisabled}
+                onChange={(meshRotationDegrees) =>
+                  update({ ...settings, skybox: { ...settings.skybox, meshRotationDegrees } })
+                }
+              />
+              <Vector3Field
+                label="メッシュスケール"
+                value={settings.skybox.meshScale}
+                min={0.001}
+                step={1}
+                disabled={skyboxControlsDisabled}
+                onChange={(meshScale) =>
+                  update({ ...settings, skybox: { ...settings.skybox, meshScale } })
+                }
+              />
+              <Vector3Field
+                label="投影中心"
+                description="撮影位置をメッシュ内の比率で指定します。スケール100でY 0.01は高さ1に相当します。"
+                value={settings.skybox.center}
+                step={0.01}
+                disabled={skyboxControlsDisabled}
+                onChange={(center) =>
+                  update({ ...settings, skybox: { ...settings.skybox, center } })
+                }
+              />
+            </div>
+          ) : null}
         </Section>
 
         <Section title="フォグ" description="Scene Viewと生成されたWorldに同じ距離フォグを適用します。">

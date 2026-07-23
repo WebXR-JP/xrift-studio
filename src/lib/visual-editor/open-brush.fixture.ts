@@ -5,6 +5,9 @@ import {
   isOpenBrushMaterialShader,
   prepareOpenBrushGltfSource,
 } from "./open-brush";
+import { OPEN_BRUSH_CATALOG } from "./open-brush-catalog";
+import { applyOpenBrushCatalogInstall } from "./external-store";
+import type { AssetManifest } from "./asset-manifest";
 
 export function runOpenBrushFixtureAssertions(): void {
   const document = {
@@ -74,6 +77,31 @@ export function runOpenBrushFixtureAssertions(): void {
   const json = new TextDecoder().decode(preparedBytes.subarray(20, 20 + jsonLength));
   assert(!json.includes("example.invalid"),
     "Sanitized GLB still contains the legacy image URL");
+
+  const emptyManifest: AssetManifest = {
+    schemaVersion: "0.1.0",
+    assets: {},
+  };
+  const catalogEntry = OPEN_BRUSH_CATALOG[0];
+  assert(catalogEntry !== undefined, "OpenBrush catalog is empty");
+  const installed = applyOpenBrushCatalogInstall(emptyManifest, catalogEntry);
+  const material = installed.manifest.assets[installed.primaryAssetId];
+  assert(material?.kind === "material",
+    "OpenBrush catalog did not create a Material Asset");
+  assert(material.shader?.kind === "openbrush",
+    "OpenBrush catalog did not retain its custom shader descriptor");
+  assert(material.shader.brushGuid === catalogEntry.brushGuid,
+    "OpenBrush catalog did not retain the brush GUID");
+  assert(material.attribution?.providerId === "open-brush",
+    "OpenBrush catalog attribution is missing");
+  const duplicate = applyOpenBrushCatalogInstall(
+    installed.manifest,
+    catalogEntry,
+  );
+  assert(duplicate.alreadyInstalled,
+    "OpenBrush catalog did not deduplicate the same brush GUID");
+  assert(Object.keys(duplicate.manifest.assets).length === 1,
+    "OpenBrush catalog duplicated an installed Material");
 }
 
 function createFixtureGlb(document: unknown): Uint8Array {

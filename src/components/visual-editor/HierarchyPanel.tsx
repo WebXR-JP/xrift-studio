@@ -42,7 +42,26 @@ type HierarchyRow = {
   entity: SceneEntity;
   depth: number;
   effectiveEnabled: boolean;
+  childCount: number;
+  collapsed: boolean;
+  canCollapse: boolean;
+  matchesFilter: boolean;
 };
+
+type HierarchyFilterResult = {
+  matchingEntityIds: ReadonlySet<string>;
+  includedEntityIds: ReadonlySet<string>;
+};
+
+type HierarchyKindFilter =
+  | "mesh"
+  | "light"
+  | "collider"
+  | "audio-source"
+  | "particle-emitter"
+  | "animation"
+  | "spawn-point"
+  | "xrift-component";
 
 type HierarchyDropPlacement = "before" | "inside" | "after";
 
@@ -64,13 +83,18 @@ type HierarchyDropTarget =
       message: string;
     };
 
-function flattenHierarchy(scene: SceneDocument): HierarchyRow[] {
+function flattenHierarchy(
+  scene: SceneDocument,
+  collapsedEntityIds: ReadonlySet<string>,
+  filterResult: HierarchyFilterResult | null,
+): HierarchyRow[] {
   const rows: HierarchyRow[] = [];
   const visited = new Set<string>();
   const pending: Array<{
     entityId: string;
     depth: number;
     ancestorsEnabled: boolean;
+    visible: boolean;
   }> = [];
   const candidates = [...scene.rootEntityIds, ...Object.keys(scene.entities)];
   for (let index = candidates.length - 1; index >= 0; index -= 1) {
@@ -78,26 +102,138 @@ function flattenHierarchy(scene: SceneDocument): HierarchyRow[] {
       entityId: candidates[index],
       depth: 0,
       ancestorsEnabled: true,
+      visible: true,
     });
   }
 
   while (pending.length > 0) {
-    const { entityId, depth, ancestorsEnabled } = pending.pop()!;
+    const { entityId, depth, ancestorsEnabled, visible } = pending.pop()!;
     if (visited.has(entityId)) continue;
     const entity = scene.entities[entityId];
     if (!entity) continue;
     visited.add(entityId);
     const effectiveEnabled = ancestorsEnabled && entity.enabled;
-    rows.push({ entity, depth, effectiveEnabled });
+    const childCount = entity.children.filter(
+      (childId) =>
+        Boolean(scene.entities[childId]) &&
+        (!filterResult || filterResult.includedEntityIds.has(childId)),
+    ).length;
+    const matchesFilter =
+      filterResult?.matchingEntityIds.has(entityId) ?? false;
+    const includedByFilter =
+      !filterResult || filterResult.includedEntityIds.has(entityId);
+    const canCollapse = filterResult === null && childCount > 0;
+    const collapsed =
+      canCollapse && collapsedEntityIds.has(entityId);
+    if (visible && includedByFilter) {
+      rows.push({
+        entity,
+        depth,
+        effectiveEnabled,
+        childCount,
+        collapsed,
+        canCollapse,
+        matchesFilter,
+      });
+    }
     for (let index = entity.children.length - 1; index >= 0; index -= 1) {
       pending.push({
         entityId: entity.children[index],
         depth: depth + 1,
         ancestorsEnabled: effectiveEnabled,
+        visible: visible && !collapsed,
       });
     }
   }
   return rows;
+}
+
+function getHierarchyFilterResult(
+  scene: SceneDocument,
+  query: string,
+  kindFilters: ReadonlySet<HierarchyKindFilter>,
+): HierarchyFilterResult | null {
+  const tokens = query
+    .trim()
+    .toLocaleLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (tokens.length === 0 && kindFilters.size === 0) return null;
+
+  const matchingEntityIds = new Set<string>();
+  for (const entity of Object.values(scene.entities)) {
+    if (!entityMatchesKindFilters(entity, kindFilters)) continue;
+    const effectivelyEnabled = isEntityEffectivelyEnabled(scene, entity);
+    const statusTerms = effectivelyEnabled
+      ? "enabled visible 有効 表示"
+      : "disabled hidden 無効 非表示";
+    const haystack = [
+      entity.name,
+      getEntityTypeLabel(entity),
+      ...entity.components.flatMap((component) =>
+        component.type === "xrift-component"
+          ? [component.type, component.schemaId]
+          : [component.type],
+      ),
+      statusTerms,
+    ]
+      .join(" ")
+      .toLocaleLowerCase();
+    if (tokens.every((token) => haystack.includes(token))) {
+      matchingEntityIds.add(entity.id);
+    }
+  }
+
+  const includedEntityIds = new Set(matchingEntityIds);
+  for (const entityId of matchingEntityIds) {
+    const visited = new Set<string>([entityId]);
+    let parentId = scene.entities[entityId]?.parentId ?? null;
+    while (parentId && !visited.has(parentId)) {
+      visited.add(parentId);
+      includedEntityIds.add(parentId);
+      parentId = scene.entities[parentId]?.parentId ?? null;
+    }
+  }
+  return { matchingEntityIds, includedEntityIds };
+}
+
+function entityMatchesKindFilters(
+  entity: SceneEntity,
+  kindFilters: ReadonlySet<HierarchyKindFilter>,
+): boolean {
+  if (kindFilters.size === 0) return true;
+  return [...kindFilters].some((kind) => {
+    switch (kind) {
+      case "mesh":
+        return (
+          entity.modelNode?.nodeType === "mesh" ||
+          entity.modelNode?.nodeType === "skinned-mesh" ||
+          entity.components.some((component) => component.type === "mesh")
+        );
+      case "light":
+      case "collider":
+      case "audio-source":
+      case "particle-emitter":
+      case "animation":
+      case "spawn-point":
+      case "xrift-component":
+        return entity.components.some((component) => component.type === kind);
+    }
+  });
+}
+
+function isEntityEffectivelyEnabled(
+  scene: SceneDocument,
+  entity: SceneEntity,
+): boolean {
+  const visited = new Set<string>();
+  let current: SceneEntity | undefined = entity;
+  while (current && !visited.has(current.id)) {
+    visited.add(current.id);
+    if (!current.enabled) return false;
+    current = current.parentId ? scene.entities[current.parentId] : undefined;
+  }
+  return true;
 }
 
 function sameDropTarget(
@@ -138,26 +274,26 @@ function sameAssetDropTarget(
 }
 
 function getEntityTypeLabel(entity: SceneEntity): string {
-  if (entity.modelNode?.nodeType === "bone") return "Bone";
-  if (entity.modelNode?.nodeType === "skinned-mesh") return "Skin";
-  if (entity.modelNode?.nodeType === "mesh") return "Mesh";
-  if (entity.modelNode) return "Node";
+  if (entity.modelNode?.nodeType === "bone") return "ボーン";
+  if (entity.modelNode?.nodeType === "skinned-mesh") return "スキン";
+  if (entity.modelNode?.nodeType === "mesh") return "メッシュ";
+  if (entity.modelNode) return "ノード";
   if (entity.components.some((component) => component.type === "mesh")) {
-    return "Mesh";
+    return "メッシュ";
   }
   if (entity.components.some((component) => component.type === "light")) {
-    return "Light";
+    return "ライト";
   }
   if (entity.components.some((component) => component.type === "audio-source")) {
-    return "Audio";
+    return "オーディオ";
   }
   if (
     entity.components.some((component) => component.type === "particle-emitter")
   ) {
-    return "Particle";
+    return "パーティクル";
   }
   if (entity.components.some((component) => component.type === "spawn-point")) {
-    return "Spawn";
+    return "スポーン";
   }
   const xriftComponent = entity.components.find(
     (component) => component.type === "xrift-component",
@@ -168,11 +304,14 @@ function getEntityTypeLabel(entity: SceneEntity): string {
       "XRift Component"
     );
   }
-  return "Entity";
+  return "エンティティ";
 }
 
 function getEntityIcon(entity: SceneEntity) {
   if (entity.modelNode) return EDITOR_ICONS.model;
+  if (entity.components.some((component) => component.type === "mesh")) {
+    return EDITOR_ICONS.model;
+  }
   if (entity.components.some((component) => component.type === "light")) {
     return EDITOR_ICONS.light;
   }
@@ -193,6 +332,21 @@ function getEntityIcon(entity: SceneEntity) {
   }
   return EDITOR_ICONS.sceneEntity;
 }
+
+const HIERARCHY_KIND_FILTERS = [
+  { id: "mesh", label: "メッシュ", icon: EDITOR_ICONS.model },
+  { id: "light", label: "ライト", icon: EDITOR_ICONS.light },
+  { id: "collider", label: "コライダー", icon: EDITOR_ICONS.primitive },
+  { id: "audio-source", label: "オーディオ", icon: EDITOR_ICONS.audio },
+  { id: "particle-emitter", label: "パーティクル", icon: EDITOR_ICONS.particle },
+  { id: "animation", label: "アニメーション", icon: EDITOR_ICONS.animation },
+  { id: "spawn-point", label: "スポーン", icon: EDITOR_ICONS.spawn },
+  { id: "xrift-component", label: "XRift Component", icon: EDITOR_ICONS.component },
+] as const satisfies ReadonlyArray<{
+  id: HierarchyKindFilter;
+  label: string;
+  icon: (typeof EDITOR_ICONS)[keyof typeof EDITOR_ICONS];
+}>;
 
 function reparentBlockedMessage(
   reason: EntityReparentBlockReason,
@@ -261,7 +415,21 @@ export function HierarchyPanel({
   renameRequest: { id: string; requestId: number } | null;
   onRename: (entityId: string, name: string) => void;
 }) {
-  const rows = useMemo(() => flattenHierarchy(scene), [scene]);
+  const [collapsedEntityIds, setCollapsedEntityIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [filterQuery, setFilterQuery] = useState("");
+  const [kindFilters, setKindFilters] = useState<Set<HierarchyKindFilter>>(
+    () => new Set(),
+  );
+  const filterResult = useMemo(
+    () => getHierarchyFilterResult(scene, filterQuery, kindFilters),
+    [filterQuery, kindFilters, scene],
+  );
+  const rows = useMemo(
+    () => flattenHierarchy(scene, collapsedEntityIds, filterResult),
+    [collapsedEntityIds, filterResult, scene],
+  );
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -300,6 +468,59 @@ export function HierarchyPanel({
       ? selection.id
       : null;
   const selectionAnchorRef = useRef<string | null>(selectedEntityId);
+
+  useEffect(() => {
+    setCollapsedEntityIds((current) => {
+      const existing = [...current].filter((entityId) =>
+        Boolean(scene.entities[entityId]),
+      );
+      return existing.length === current.size ? current : new Set(existing);
+    });
+  }, [scene.entities]);
+
+  useEffect(() => {
+    if (!selectedEntityId) return;
+    const ancestorIds = new Set<string>();
+    const visited = new Set<string>([selectedEntityId]);
+    let parentId = scene.entities[selectedEntityId]?.parentId ?? null;
+    while (parentId && !visited.has(parentId)) {
+      visited.add(parentId);
+      ancestorIds.add(parentId);
+      parentId = scene.entities[parentId]?.parentId ?? null;
+    }
+    if (ancestorIds.size === 0) return;
+    setCollapsedEntityIds((current) => {
+      if (![...ancestorIds].some((entityId) => current.has(entityId))) {
+        return current;
+      }
+      const next = new Set(current);
+      ancestorIds.forEach((entityId) => next.delete(entityId));
+      return next;
+    });
+  }, [scene.sceneId, selectedEntityId]);
+
+  const toggleEntityCollapsed = (entityId: string) => {
+    setCollapsedEntityIds((current) => {
+      const next = new Set(current);
+      if (next.has(entityId)) next.delete(entityId);
+      else next.add(entityId);
+      return next;
+    });
+  };
+
+  const toggleKindFilter = (kind: HierarchyKindFilter) => {
+    setKindFilters((current) => {
+      const next = new Set(current);
+      if (next.has(kind)) next.delete(kind);
+      else next.add(kind);
+      return next;
+    });
+  };
+
+  const clearHierarchyFilters = () => {
+    setFilterQuery("");
+    setKindFilters(new Set());
+  };
 
   const selectEntity = (entityId: string, event?: MouseEvent<HTMLElement>) => {
     const currentIds = selectedEntityIds.filter((id) => Boolean(scene.entities[id]));
@@ -608,13 +829,76 @@ export function HierarchyPanel({
             </button>
           ) : null}
           <span className="rounded bg-editor-subtle px-1.5 py-0.5 text-xs tabular-nums text-editor-muted">
-            {rows.length}
+            {filterResult
+              ? `${filterResult.matchingEntityIds.size}/${Object.keys(scene.entities).length}`
+              : Object.keys(scene.entities).length}
           </span>
         </div>
       </div>
+      <div className="shrink-0 border-b border-editor-border bg-editor-surface px-2 py-1.5">
+        <div className="relative">
+          <EDITOR_ICONS.search
+            size={13}
+            className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-editor-muted"
+            aria-hidden="true"
+          />
+          <input
+            type="search"
+            value={filterQuery}
+            onChange={(event) => setFilterQuery(event.currentTarget.value)}
+            aria-label="Hierarchyを検索"
+            placeholder="名前・種類・状態で検索"
+            className="h-7 w-full rounded border border-editor-border bg-white pl-7 pr-7 text-xs text-editor-text outline-none placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+          />
+          {filterQuery ? (
+            <button
+              type="button"
+              onClick={() => setFilterQuery("")}
+              aria-label="Hierarchyの検索をクリア"
+              title="検索をクリア"
+              className="absolute right-1 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-editor-muted hover:bg-editor-subtle hover:text-editor-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+            >
+              <EDITOR_ICONS.close size={12} aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+        <div
+          className="mt-1 flex items-center gap-0.5"
+          role="group"
+          aria-label="Entityの種類で絞り込み"
+        >
+          {HIERARCHY_KIND_FILTERS.map((filter) => {
+            const active = kindFilters.has(filter.id);
+            const FilterIcon = filter.icon;
+            return (
+              <button
+                key={filter.id}
+                type="button"
+                data-hierarchy-kind-filter={filter.id}
+                aria-pressed={active}
+                aria-label={`${filter.label}で絞り込み`}
+                title={`${filter.label}だけ表示${active ? "（選択解除）" : ""}`}
+                onClick={() => toggleKindFilter(filter.id)}
+                className={`flex h-6 min-w-0 flex-1 items-center justify-center rounded border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
+                  active
+                    ? "border-violet-500 bg-violet-100 text-violet-800"
+                    : "border-transparent text-editor-muted hover:border-editor-border hover:bg-editor-subtle hover:text-editor-text"
+                }`}
+              >
+                <FilterIcon size={13} aria-hidden="true" />
+              </button>
+            );
+          })}
+        </div>
+        {filterResult ? (
+          <span className="sr-only" role="status">
+            {filterResult.matchingEntityIds.size}件に一致
+          </span>
+        ) : null}
+      </div>
       {readOnly ? (
         <div className="border-b border-violet-200 bg-violet-50 px-3 py-2 text-xs leading-4 text-violet-800">
-          Play中は閲覧のみです。選択は停止後も維持されます。
+          Play中は構造を変更できません。Entityを選ぶと、対応する編集データをInspectorで調整できます。
         </div>
       ) : null}
       {dragEntityId || assetDropTarget ? (
@@ -714,7 +998,34 @@ export function HierarchyPanel({
             {assetDropTarget ? "Scene Rootへ配置" : "Scene Rootへ移動"}
           </div>
         ) : null}
-        {rows.map(({ entity, depth, effectiveEnabled }) => {
+        {filterResult && filterResult.matchingEntityIds.size === 0 ? (
+          <div className="mx-2 rounded border border-dashed border-slate-300 bg-white px-3 py-4 text-center text-xs leading-5 text-slate-500">
+            <p>
+              {filterQuery.trim()
+                ? kindFilters.size > 0
+                  ? `「${filterQuery.trim()}」と選択した種類に一致するEntityはありません。`
+                  : `「${filterQuery.trim()}」に一致するEntityはありません。`
+                : "選択した種類のEntityはありません。"}
+            </p>
+            <button
+              type="button"
+              onClick={clearHierarchyFilters}
+              className="mt-2 rounded border border-slate-300 bg-white px-2 py-1 font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              条件をクリア
+            </button>
+          </div>
+        ) : null}
+        {rows.map(
+          ({
+            entity,
+            depth,
+            effectiveEnabled,
+            childCount,
+            collapsed,
+            canCollapse,
+            matchesFilter,
+          }) => {
           const selected = selectedEntityIdSet.has(entity.id);
           const EntityIcon = getEntityIcon(entity);
           const renaming = renameRequest?.id === entity.id;
@@ -730,9 +1041,35 @@ export function HierarchyPanel({
                 role="treeitem"
                 aria-level={depth + 1}
                 aria-selected={selected}
-                className="flex w-full items-center gap-2 border-l-2 border-violet-600 bg-violet-50 py-1.5 pr-2"
-                style={{ paddingLeft: `${9 + depth * 13}px` }}
+                aria-expanded={childCount > 0 ? !collapsed : undefined}
+                className="flex w-full items-center gap-1.5 border-l-2 border-violet-700 bg-violet-100 py-1 pr-1.5 shadow-[inset_0_0_0_1px_#c4b5fd]"
+                style={{ paddingLeft: `${4 + depth * 11}px` }}
               >
+                {canCollapse ? (
+                  <button
+                    type="button"
+                    aria-label={`${entity.name}を${collapsed ? "展開" : "折り畳む"}`}
+                    aria-expanded={!collapsed}
+                    title={`${entity.name}の子Entity ${childCount}件を${collapsed ? "展開" : "折り畳む"}`}
+                    onClick={() => toggleEntityCollapsed(entity.id)}
+                    className="flex h-5 w-4 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+                  >
+                    {collapsed ? (
+                      <EDITOR_ICONS.collapsed size={14} aria-hidden="true" />
+                    ) : (
+                      <EDITOR_ICONS.expanded size={14} aria-hidden="true" />
+                    )}
+                  </button>
+                ) : childCount > 0 ? (
+                  <span
+                    className="flex h-5 w-4 shrink-0 items-center justify-center text-slate-400"
+                    title="検索中は一致する階層を自動展開します"
+                  >
+                    <EDITOR_ICONS.expanded size={14} aria-hidden="true" />
+                  </span>
+                ) : (
+                  <span className="h-5 w-4 shrink-0" aria-hidden="true" />
+                )}
                 <EntityIcon size={14} className="text-violet-700" aria-hidden="true" />
                 <input
                   ref={renameInputRef}
@@ -757,6 +1094,7 @@ export function HierarchyPanel({
               role="treeitem"
               aria-level={depth + 1}
               aria-selected={selected}
+              aria-expanded={childCount > 0 ? !collapsed : undefined}
               data-hierarchy-entity-id={entity.id}
               onContextMenu={(event) => {
                 event.stopPropagation();
@@ -846,10 +1184,40 @@ export function HierarchyPanel({
                         : "border-violet-600 bg-violet-100 text-violet-900 ring-1 ring-inset ring-violet-400"
                     : "border-rose-500 bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-300"
                   : selected
-                    ? "border-violet-600 bg-violet-100 text-violet-900"
+                    ? "border-violet-700 bg-violet-100 text-violet-950 shadow-[inset_0_0_0_1px_#c4b5fd]"
                     : "border-transparent text-slate-700 hover:bg-white hover:text-slate-900"
-              } ${effectiveEnabled ? "opacity-100" : "opacity-50"}`}
+              } ${effectiveEnabled || selected ? "opacity-100" : "opacity-50"}`}
+              style={{ paddingLeft: `${3 + depth * 11}px` }}
             >
+              {canCollapse ? (
+                <button
+                  type="button"
+                  data-no-entity-drag="true"
+                  aria-label={`${entity.name}を${collapsed ? "展開" : "折り畳む"}`}
+                  aria-expanded={!collapsed}
+                  title={`${entity.name}の子Entity ${childCount}件を${collapsed ? "展開" : "折り畳む"}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    toggleEntityCollapsed(entity.id);
+                  }}
+                  className="flex w-4 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+                >
+                  {collapsed ? (
+                    <EDITOR_ICONS.collapsed size={14} aria-hidden="true" />
+                  ) : (
+                    <EDITOR_ICONS.expanded size={14} aria-hidden="true" />
+                  )}
+                </button>
+              ) : childCount > 0 ? (
+                <span
+                  className="flex w-4 shrink-0 items-center justify-center text-slate-400"
+                  title="検索中は一致する階層を自動展開します"
+                >
+                  <EDITOR_ICONS.expanded size={14} aria-hidden="true" />
+                </span>
+              ) : (
+                <span className="w-4 shrink-0" aria-hidden="true" />
+              )}
               <button
                 type="button"
                 draggable={!readOnly}
@@ -879,17 +1247,26 @@ export function HierarchyPanel({
                   setDragEntityId(null);
                   setDropTarget(null);
                 }}
-                className="flex min-w-0 flex-1 cursor-grab select-none items-center gap-2 py-2 pr-1 text-left active:cursor-grabbing disabled:cursor-default"
-                style={{ paddingLeft: `${9 + depth * 13}px` }}
+                className="flex min-w-0 flex-1 cursor-grab select-none items-center gap-1.5 py-1 pr-1 text-left active:cursor-grabbing disabled:cursor-default"
               >
-                <EntityIcon
-                  size={14}
-                  className={selected ? "text-violet-700" : "text-slate-400"}
-                  aria-hidden="true"
-                />
-                <span className="min-w-0 flex-1 truncate">{entity.name}</span>
-                <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  {getEntityTypeLabel(entity)}
+                <span
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${
+                    selected
+                      ? "bg-violet-700 text-white"
+                      : "text-slate-500"
+                  }`}
+                  title={getEntityTypeLabel(entity)}
+                >
+                  <EntityIcon size={13} aria-hidden="true" />
+                </span>
+                <span
+                  className={`min-w-0 flex-1 truncate ${
+                    filterResult && matchesFilter
+                      ? "font-semibold text-violet-800"
+                      : ""
+                  }`}
+                >
+                  {entity.name}
                 </span>
               </button>
               <button
@@ -909,7 +1286,7 @@ export function HierarchyPanel({
                   event.stopPropagation();
                   onEntityEnabledChange(entity.id, !entity.enabled);
                 }}
-                className="m-1 mr-0 flex w-7 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 disabled:cursor-not-allowed disabled:opacity-30"
+                className="my-0.5 flex w-6 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 disabled:cursor-not-allowed disabled:opacity-30"
               >
                 {entity.enabled ? (
                   <EDITOR_ICONS.visible size={14} aria-hidden="true" />
@@ -934,7 +1311,7 @@ export function HierarchyPanel({
                     ? "Playを停止するとEntityを削除できます"
                     : commandTitle(`${entity.name}を削除`, "edit.delete")
                 }
-                className={`m-1 flex w-7 shrink-0 items-center justify-center rounded text-slate-500 transition-opacity hover:bg-rose-100 hover:text-rose-700 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-30 ${
+                className={`my-0.5 flex w-6 shrink-0 items-center justify-center rounded text-slate-500 transition-opacity hover:bg-rose-100 hover:text-rose-700 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-30 ${
                   selected
                     ? "opacity-100"
                     : "opacity-0 group-hover:opacity-100"
@@ -945,7 +1322,8 @@ export function HierarchyPanel({
               </button>
             </div>
           );
-        })}
+        },
+        )}
       </div>
       {contextMenu ? (
         <div

@@ -27,7 +27,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "three-icosa": "0.4.2-alpha.18"
+    "three-icosa": "0.4.2-alpha.18",
+    "troika-three-text": "0.52.4"
   },
   "peerDependencies": {
     "@react-three/fiber": ">=9.0.0",

@@ -2,10 +2,15 @@ import {
   ASSET_MANIFEST_SCHEMA_VERSION,
   isValidAssetFolderName,
   normalizeMaterialProperties,
+  normalizeTextureImportSettings,
   type AssetManifest,
+  type SkyboxAsset,
+  type TextureAsset,
+  type TextureSourceFormat,
 } from "./asset-manifest";
 import { getBuiltinPrefabRecipe } from "./builtin-prefab-catalog";
 import { validateModelAssetContract } from "./model-import-contract";
+import { validateKhrInteractivityExtension } from "./interactivity-graph";
 import { isOpenBrushMaterialShader } from "./open-brush";
 import { normalizeParticleProperties } from "./particle-system";
 import {
@@ -20,6 +25,7 @@ import {
 import {
   COLLIDER_FIT_MODES,
   COLLIDER_MESH_MODES,
+  RIGID_BODY_TYPES,
   SCENE_DOCUMENT_SCHEMA_VERSION,
   type ComponentAuthoringMetadata,
   type SceneDocument,
@@ -85,15 +91,66 @@ export function parseAssetManifestJson(
               >[0],
             ),
           }
-        : asset.kind === "particle"
+        : asset.kind === "texture"
           ? {
               ...asset,
-              properties: normalizeParticleProperties(asset.properties),
+              importSettings: normalizeTextureImportSettings(
+                asset.importSettings,
+              ),
             }
-          : asset,
+          : asset.kind === "skybox"
+            ? migrateLegacySkyboxAsset(asset)
+            : asset.kind === "particle"
+              ? {
+                  ...asset,
+                  properties: normalizeParticleProperties(asset.properties),
+                }
+              : asset,
     ]),
   );
   return { ok: true, document: { ...manifest, assets }, issues: [] };
+}
+
+function migrateLegacySkyboxAsset(asset: SkyboxAsset): TextureAsset {
+  const sourceFormat = legacySkyboxSourceFormat(asset);
+  const legacy = { ...asset };
+  delete (legacy as Partial<SkyboxAsset>).sourceFormat;
+  delete (legacy as Partial<SkyboxAsset>).byteLength;
+  return {
+    ...legacy,
+    kind: "texture",
+    usage: "environment",
+    projection: asset.projection,
+    importSettings: normalizeTextureImportSettings({
+      colorSpace: "linear",
+      generateMipmaps: true,
+      flipY: false,
+      resize: { mode: "original" },
+      compression: { format: "source", quality: 80 },
+    }),
+    importMetadata: {
+      sourceFormat,
+      mimeType:
+        sourceFormat === "hdr"
+          ? "image/vnd.radiance"
+          : sourceFormat === "exr"
+            ? "image/x-exr"
+            : "image/png",
+      byteLength: asset.byteLength ?? 0,
+    },
+  };
+}
+
+function legacySkyboxSourceFormat(asset: SkyboxAsset): TextureSourceFormat {
+  if (asset.sourceFormat === "hdr" || asset.sourceFormat === "exr") {
+    return asset.sourceFormat;
+  }
+  if (asset.source.kind === "project") {
+    const extension = asset.source.relativePath.split(".").pop()?.toLowerCase();
+    if (extension === "jpg" || extension === "jpeg") return "jpeg";
+    if (extension === "webp") return "webp";
+  }
+  return "png";
 }
 
 export function validateAssetManifest(value: unknown): DocumentValidationIssue[] {
@@ -142,6 +199,7 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
     "texture",
     "skybox",
     "particle",
+    "interactivity",
     "audio",
     "template",
   ]);
@@ -178,6 +236,31 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
     }
     if (candidate.kind === "model") {
       issues.push(...validateModelAssetContract(candidate, value.assets, path));
+    }
+    if (candidate.kind === "interactivity") {
+      if (
+        candidate.extensionName !== "KHR_interactivity" ||
+        candidate.specStatus !== "release-candidate-2026-07-16"
+      ) {
+        issues.push(
+          issue(
+            path,
+            "interactivity-version",
+            "Interactivity Asset must declare the supported KHR_interactivity release candidate",
+          ),
+        );
+      }
+      for (const diagnostic of validateKhrInteractivityExtension(candidate.extension)) {
+        if (diagnostic.severity === "error") {
+          issues.push(
+            issue(
+              `${path}.extension${diagnostic.path === "$" ? "" : diagnostic.path.slice(1)}`,
+              "interactivity-graph",
+              diagnostic.message,
+            ),
+          );
+        }
+      }
     }
     if (candidate.kind === "audio") {
       if (
@@ -736,6 +819,19 @@ function validateMaterialTextureInfo(
       issues.push(
         issue(`${path}.textureAssetId`, "reference", "referenced texture asset is missing"),
       );
+    } else if (
+      referenced.usage === "environment" ||
+      (isRecord(referenced.importMetadata) &&
+        (referenced.importMetadata.sourceFormat === "hdr" ||
+          referenced.importMetadata.sourceFormat === "exr"))
+    ) {
+      issues.push(
+        issue(
+          `${path}.textureAssetId`,
+          "texture-usage",
+          "environment texture cannot be used as a surface material texture",
+        ),
+      );
     }
   }
   if (!Number.isInteger(value.texCoord) || Number(value.texCoord) < 0) {
@@ -837,6 +933,8 @@ function validateSceneSettings(
     value.skybox,
     [
       "enabled",
+      "iblEnabled",
+      "projection",
       "imageAssetId",
       "topColor",
       "bottomColor",
@@ -845,15 +943,36 @@ function validateSceneSettings(
       "rotationDegrees",
       "flipY",
       "exposure",
+      "meshPosition",
+      "meshRotationDegrees",
+      "meshScale",
+      "center",
     ],
     `${path}.skybox`,
     issues,
     (entry) => {
       validateBoolean(entry, "enabled", `${path}.skybox`, issues);
+      if (entry.iblEnabled !== undefined) {
+        validateBoolean(entry, "iblEnabled", `${path}.skybox`, issues);
+      }
       validateColor(entry, "topColor", `${path}.skybox`, issues);
       validateColor(entry, "bottomColor", `${path}.skybox`, issues);
       validateFinite(entry, "offset", `${path}.skybox`, issues);
       validateFinite(entry, "exponent", `${path}.skybox`, issues, 0.01);
+      if (
+        entry.projection !== undefined &&
+        entry.projection !== "infinite" &&
+        entry.projection !== "box" &&
+        entry.projection !== "dome"
+      ) {
+        issues.push(
+          issue(
+            `${path}.skybox.projection`,
+            "enum",
+            "projection must be infinite, box, or dome",
+          ),
+        );
+      }
       if (
         entry.imageAssetId !== undefined &&
         (typeof entry.imageAssetId !== "string" || !entry.imageAssetId.trim())
@@ -871,6 +990,21 @@ function validateSceneSettings(
       if (entry.exposure !== undefined) {
         validateFinite(entry, "exposure", `${path}.skybox`, issues, 0);
       }
+      validateOptionalVec3(entry, "meshPosition", `${path}.skybox`, issues);
+      validateOptionalVec3(
+        entry,
+        "meshRotationDegrees",
+        `${path}.skybox`,
+        issues,
+      );
+      validateOptionalVec3(
+        entry,
+        "meshScale",
+        `${path}.skybox`,
+        issues,
+        0.001,
+      );
+      validateOptionalVec3(entry, "center", `${path}.skybox`, issues);
     },
   );
   validateSceneSettingsObject(
@@ -1564,6 +1698,51 @@ function validateColliderComponentShape(
       ),
     );
   }
+  if (
+    component.bodyType !== undefined &&
+    !isStringEnumValue(component.bodyType, RIGID_BODY_TYPES)
+  ) {
+    issues.push(
+      issue(
+        `${path}.bodyType`,
+        "enum",
+        "Rigid Body type must be fixed, dynamic, kinematicPosition, or kinematicVelocity",
+      ),
+    );
+  }
+  if (
+    component.gravityScale !== undefined &&
+    (typeof component.gravityScale !== "number" ||
+      !Number.isFinite(component.gravityScale) ||
+      Math.abs(component.gravityScale) > 100)
+  ) {
+    issues.push(
+      issue(`${path}.gravityScale`, "range", "Rigid Body gravityScale is invalid"),
+    );
+  }
+  for (const field of ["linearDamping", "angularDamping"] as const) {
+    const value = component[field];
+    if (
+      value !== undefined &&
+      (typeof value !== "number" || !Number.isFinite(value) || value < 0)
+    ) {
+      issues.push(
+        issue(`${path}.${field}`, "range", `Rigid Body ${field} is invalid`),
+      );
+    }
+  }
+  for (const field of [
+    "canSleep",
+    "ccd",
+    "lockTranslations",
+    "lockRotations",
+  ] as const) {
+    if (component[field] !== undefined && typeof component[field] !== "boolean") {
+      issues.push(
+        issue(`${path}.${field}`, "type", `Rigid Body ${field} must be boolean`),
+      );
+    }
+  }
 
   if (component.shape === "box") {
     if (!isFiniteNumberVec3(component.center)) {
@@ -1683,6 +1862,36 @@ function validateModelPoseShape(
         }
       }
     }
+  }
+}
+
+function validateOptionalVec3(
+  value: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: DocumentValidationIssue[],
+  min?: number,
+): void {
+  const candidate = value[key];
+  if (candidate === undefined) return;
+  if (
+    !Array.isArray(candidate) ||
+    candidate.length !== 3 ||
+    candidate.some(
+      (entry) =>
+        !isFiniteNumber(entry) ||
+        (min !== undefined && entry < min),
+    )
+  ) {
+    issues.push(
+      issue(
+        `${path}.${key}`,
+        "range",
+        `${key} must contain three finite numbers${
+          min === undefined ? "" : ` greater than or equal to ${min}`
+        }`,
+      ),
+    );
   }
 }
 

@@ -1,4 +1,5 @@
 import {
+  isEnvironmentTextureAsset,
   type AssetManifest,
   type Color4,
   type ParticleAsset,
@@ -28,7 +29,8 @@ export function ParticleAssetInspector({
     (candidate) => candidate.kind === "material",
   );
   const textures = Object.values(assets.assets).filter(
-    (candidate) => candidate.kind === "texture",
+    (candidate) =>
+      candidate.kind === "texture" && !isEnvironmentTextureAsset(candidate),
   );
 
   return (

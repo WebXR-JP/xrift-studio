@@ -1,5 +1,6 @@
 import { createDefaultParticleAsset } from "./particle-system";
 import { BUILTIN_ASSET_IDS, createPrototypeProject } from "./prototype-project";
+import { createTextureAsset } from "./asset-manifest";
 import {
   executeXriftMcpEditorTool,
   XriftMcpEditorToolError,
@@ -13,11 +14,22 @@ export function runXriftMcpEditorToolFixtures(): void {
     name: "MCP Fireflies",
   });
   assert(particle, "Particle fixture could not be created");
+  const texture = createTextureAsset({
+    id: "asset-mcp-texture",
+    name: "MCP Grid",
+    source: { kind: "document" },
+    importSettings: {},
+  });
+  assert(texture, "Texture fixture could not be created");
   const bundle = {
     ...initial,
     assets: {
       ...initial.assets,
-      assets: { ...initial.assets.assets, [particle.id]: particle },
+      assets: {
+        ...initial.assets.assets,
+        [particle.id]: particle,
+        [texture.id]: texture,
+      },
     },
   };
   const context: XriftMcpEditorContext = {
@@ -189,6 +201,58 @@ export function runXriftMcpEditorToolFixtures(): void {
   assert(materialSet.changed, "set_material should change the bundle");
   current = { ...current, bundle: materialSet.bundle, revision: current.revision + 1 };
 
+  const materialUpdated = executeXriftMcpEditorTool(current, {
+    id: "fixture-update-material",
+    tool: "update_material_asset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      materialAssetId: BUILTIN_ASSET_IDS.material.orange,
+      patch: {
+        pbrMetallicRoughness: {
+          roughnessFactor: 0.4,
+          baseColorTexture: { textureAssetId: texture.id, texCoord: 0 },
+        },
+      },
+    },
+  });
+  assert(materialUpdated.changed, "update_material_asset should change the Material");
+  current = {
+    ...current,
+    bundle: materialUpdated.bundle,
+    revision: current.revision + 1,
+  };
+
+  const textureTransformUpdated = executeXriftMcpEditorTool(current, {
+    id: "fixture-material-tiling",
+    tool: "set_material_texture_transform",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      materialAssetId: BUILTIN_ASSET_IDS.material.orange,
+      slot: "baseColor",
+      scale: [3, 2],
+      offset: [0.25, 0],
+    },
+  });
+  assert(
+    JSON.stringify(
+      (
+        textureTransformUpdated.result.texture as {
+          transform?: { scale?: number[] };
+        }
+      ).transform?.scale,
+    ) === JSON.stringify([3, 2]),
+    "Material tiling should be authored as KHR_texture_transform scale",
+  );
+  current = {
+    ...current,
+    bundle: textureTransformUpdated.bundle,
+    revision: current.revision + 1,
+  };
+
   const renamed = executeXriftMcpEditorTool(current, {
     id: "fixture-rename",
     tool: "rename_entity",
@@ -268,6 +332,161 @@ export function runXriftMcpEditorToolFixtures(): void {
     "Deleted Entity should be removed from the Scene",
   );
   current = { ...current, bundle: deleted.bundle, revision: current.revision + 1 };
+
+  const interactivityCreated = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-create",
+    tool: "create_interactivity_asset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      name: "MCP Animation Graph",
+      template: "empty",
+    },
+  });
+  const interactivityAssetId = interactivityCreated.result.assetId as string;
+  assert(interactivityCreated.changed, "create_interactivity_asset should create an Asset");
+  current = {
+    ...current,
+    bundle: interactivityCreated.bundle,
+    revision: current.revision + 1,
+  };
+
+  const onStartAdded = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-on-start",
+    tool: "add_interactivity_node",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      op: "event/onStart",
+      position: [80, 120],
+    },
+  });
+  assert(onStartAdded.result.nodeIndex === 0, "onStart should be the first graph node");
+  current = { ...current, bundle: onStartAdded.bundle, revision: current.revision + 1 };
+
+  const animationAdded = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-animation",
+    tool: "add_interactivity_node",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      op: "animation/start",
+      position: [420, 120],
+    },
+  });
+  assert(animationAdded.result.nodeIndex === 1, "animation/start should be the second graph node");
+  current = { ...current, bundle: animationAdded.bundle, revision: current.revision + 1 };
+
+  const pointerAdded = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-pointer",
+    tool: "add_interactivity_node",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      op: "pointer/interpolate",
+      position: [420, 360],
+    },
+  });
+  assert(pointerAdded.result.nodeIndex === 2, "pointer/interpolate should be the third node");
+  current = { ...current, bundle: pointerAdded.bundle, revision: current.revision + 1 };
+
+  const pointerConfigured = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-material-pointer",
+    tool: "configure_interactivity_material_pointer",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      nodeIndex: 2,
+      materialAssetId: BUILTIN_ASSET_IDS.material.orange,
+      presetId: "base-color-tiling",
+    },
+  });
+  assert(
+    (pointerConfigured.result.preset as { pointer?: string }).pointer?.includes(
+      "KHR_texture_transform/scale",
+    ),
+    "Interactivity material target should use the official texture transform pointer",
+  );
+  current = {
+    ...current,
+    bundle: pointerConfigured.bundle,
+    revision: current.revision + 1,
+  };
+
+  const graphConnected = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-connect",
+    tool: "connect_interactivity_nodes",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      kind: "flow",
+      sourceNode: 0,
+      sourceSocket: "out",
+      targetNode: 1,
+      targetSocket: "in",
+    },
+  });
+  current = { ...current, bundle: graphConnected.bundle, revision: current.revision + 1 };
+
+  const speedUpdated = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-value",
+    tool: "set_interactivity_value",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      nodeIndex: 1,
+      socket: "speed",
+      signature: "float",
+      value: [1.5],
+    },
+  });
+  current = { ...current, bundle: speedUpdated.bundle, revision: current.revision + 1 };
+
+  const graphValidation = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-validate",
+    tool: "validate_interactivity_asset",
+    arguments: { assetId: interactivityAssetId },
+  });
+  assert(graphValidation.result.valid === true, "MCP-authored KHR graph should validate");
+  assert(graphValidation.result.nodeCount === 3, "MCP graph should retain all nodes");
+
+  let cycleCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(current, {
+      id: "fixture-interactivity-cycle",
+      tool: "connect_interactivity_nodes",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        assetId: interactivityAssetId,
+        kind: "flow",
+        sourceNode: 1,
+        sourceSocket: "done",
+        targetNode: 0,
+        targetSocket: "in",
+      },
+    });
+  } catch (error) {
+    cycleCode = error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    cycleCode === "INTERACTIVITY_VALIDATION_FAILED",
+    "MCP graph writes should reject flow cycles atomically",
+  );
 
   let missingEntityCode: string | undefined;
   try {

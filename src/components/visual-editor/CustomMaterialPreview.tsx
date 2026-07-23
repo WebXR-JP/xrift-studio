@@ -14,6 +14,8 @@ import type {
   MaterialAsset,
   ModelAsset,
 } from "../../lib/visual-editor";
+import { OPEN_BRUSH_CATALOG } from "../../lib/visual-editor";
+import { OpenBrushCatalogPreview } from "./OpenBrushCatalogPreview";
 import {
   ProjectModelVisual,
   type ProjectModelLoadState,
@@ -31,6 +33,10 @@ export type CustomMaterialPreviewSource = {
 
 export type CustomMaterialPreviewResolution =
   | { status: "ready"; source: CustomMaterialPreviewSource }
+  | {
+      status: "standalone";
+      entry: (typeof OPEN_BRUSH_CATALOG)[number];
+    }
   | { status: "unavailable"; reason: string };
 
 type Props = {
@@ -64,6 +70,12 @@ export function resolveCustomMaterialPreviewSource(
   }
   const modelAssetId = asset.importedFromModel?.modelAssetId;
   if (!modelAssetId) {
+    const entry = OPEN_BRUSH_CATALOG.find(
+      (candidate) =>
+        candidate.brushGuid === asset.shader?.brushGuid ||
+        candidate.brushName === asset.shader?.brushName,
+    );
+    if (entry) return { status: "standalone", entry };
     return {
       status: "unavailable",
       reason: "元のOpenBrush Model参照がMaterialに保存されていません",
@@ -184,6 +196,19 @@ export function CustomMaterialPreview({
     loadState,
     onCaptureError,
   ]);
+
+  if (resolution.status === "standalone") {
+    return (
+      <OpenBrushCatalogPreview
+        entry={resolution.entry}
+        className={className}
+        compact={compact}
+        captureKey={captureKey}
+        onCapture={onCapture}
+        onCaptureError={onCaptureError}
+      />
+    );
+  }
 
   if (!projectPath || resolution.status === "unavailable") {
     const reason = projectPath

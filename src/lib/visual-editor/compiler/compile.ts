@@ -4,6 +4,8 @@ import {
   getGeometryMaterialSlots,
   getMaterialAsset,
   getTextureAsset,
+  getTextureSourceFormat,
+  isEnvironmentTextureAsset,
   normalizeMaterialProperties,
   type AssetManifest,
   type MaterialAsset,
@@ -35,6 +37,7 @@ import {
   type RegisteredSceneComponent,
   type SceneDocument,
   type SceneEntity,
+  type TextComponent,
   type TransformComponent,
   type Vec3,
   type XRiftComponent,
@@ -579,6 +582,167 @@ function generateComponentSource(
   return `${imports.join("\n")}\n\nexport interface ItemProps {\n  position?: [number, number, number];\n  scale?: number;\n}\n\nexport const Item: FC<ItemProps> = ({ position = [0, 0, 0], scale = 1 }) => (\n  <group position={position} scale={scale}>\n${body}\n  </group>\n);\n\nexport default Item;\n`;
 }
 
+const PROJECTED_SKYBOX_VERTEX_SHADER = `
+varying vec3 vDirection;
+uniform vec3 uCenter;
+void main() {
+  vec3 worldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+  vec3 worldCenter = (modelMatrix * vec4(uCenter, 1.0)).xyz;
+  vDirection = worldPosition - worldCenter;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const PROJECTED_SKYBOX_FRAGMENT_SHADER = `
+uniform sampler2D uTexture;
+uniform bool uHasTexture;
+uniform vec3 uTopColor;
+uniform vec3 uBottomColor;
+uniform float uOffset;
+uniform float uExponent;
+uniform float uExposure;
+uniform float uRotation;
+varying vec3 vDirection;
+void main() {
+  vec3 direction = normalize(vDirection);
+  vec3 color;
+  if (uHasTexture) {
+    vec2 uv = vec2(
+      atan(direction.z, direction.x) * 0.15915494309189535 + 0.5,
+      asin(clamp(direction.y, -1.0, 1.0)) * 0.3183098861837907 + 0.5
+    );
+    uv.x = fract(uv.x + uRotation * 0.15915494309189535);
+    color = texture2D(uTexture, uv).rgb;
+  } else {
+    float t = clamp(direction.y * 0.5 + 0.5 + uOffset, 0.0, 1.0);
+    t = pow(t, max(uExponent, 0.01));
+    color = mix(uBottomColor, uTopColor, t);
+  }
+  gl_FragColor = vec4(color * uExposure, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}
+`;
+
+function registerProjectedSkyboxSupport(
+  settings: SceneSettings,
+  context: CompileContext,
+): void {
+  const skybox = settings.skybox;
+  context.reactValueImports.add("useEffect");
+  context.reactValueImports.add("useMemo");
+  if (skybox.projection === "infinite") {
+    context.reactValueImports.add("useRef");
+    context.fiberImports.add("useFrame");
+    context.threeTypeImports.add("Mesh");
+  }
+  if (skybox.iblEnabled) context.fiberImports.add("useThree");
+  ["BackSide", "Color", "Vector3"].forEach((name) =>
+    context.threeValueImports.add(name),
+  );
+  context.threeTypeImports.add("Texture");
+  const geometryFactory =
+    skybox.projection === "box"
+      ? `const next = new BoxGeometry(1, 1, 1);
+    next.translate(0, 0.5, 0);
+    return next;`
+      : skybox.projection === "dome"
+        ? `const next = new SphereGeometry(0.5, 50, 50);
+    const position = next.attributes.position;
+    const radius = 0.5;
+    const bottomLimit = 0.1;
+    const curvatureRadiusSquared = 0.95 * 0.95;
+    for (let index = 0; index < position.count; index += 1) {
+      const x = position.getX(index) / radius;
+      let y = position.getY(index) / radius;
+      const z = position.getZ(index) / radius;
+      if (y < 0) {
+        y *= 0.3;
+        if (x * x + z * z < curvatureRadiusSquared) y = -bottomLimit;
+      }
+      position.setY(index, (y + bottomLimit) * radius);
+    }
+    position.needsUpdate = true;
+    next.computeVertexNormals();
+    next.computeBoundingBox();
+    next.computeBoundingSphere();
+    return next;`
+        : "return new SphereGeometry(1, 32, 20);";
+  context.threeValueImports.add(
+    skybox.projection === "box" ? "BoxGeometry" : "SphereGeometry",
+  );
+  const meshRotation = skybox.meshRotationDegrees
+    .map((value) => formatNumber((value * Math.PI) / 180))
+    .join(", ");
+  const center = (skybox.projection === "infinite" ? [0, 0, 0] : skybox.center)
+    .map(formatNumber)
+    .join(", ");
+  const position = skybox.meshPosition.map(formatNumber).join(", ");
+  const scale = skybox.meshScale.map(formatNumber).join(", ");
+  context.supportDeclarations.set(
+    "scene-environment:projected-skybox",
+    `const XRiftStudioProjectedSkybox: FC<{ texture: Texture | null }> = ({ texture }) => {
+${skybox.iblEnabled ? "  const scene = useThree((state) => state.scene);" : ""}
+${skybox.projection === "infinite" ? "  const meshRef = useRef<Mesh>(null);" : ""}
+  const geometry = useMemo(() => {
+    ${geometryFactory}
+  }, []);
+  const uniforms = useMemo(() => ({
+    uTexture: { value: texture },
+    uHasTexture: { value: Boolean(texture) },
+    uTopColor: { value: new Color(${JSON.stringify(skybox.topColor)}) },
+    uBottomColor: { value: new Color(${JSON.stringify(skybox.bottomColor)}) },
+    uOffset: { value: ${formatNumber(skybox.offset)} },
+    uExponent: { value: ${formatNumber(skybox.exponent)} },
+    uExposure: { value: ${formatNumber(skybox.exposure)} },
+    uRotation: { value: ${formatNumber((skybox.rotationDegrees * Math.PI) / 180)} },
+    uCenter: { value: new Vector3(${center}) },
+  }), [texture]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+${skybox.projection === "infinite" ? `  useFrame(({ camera }) => {
+    if (meshRef.current) meshRef.current.position.copy(camera.position);
+  });
+` : ""}
+${skybox.iblEnabled ? `
+  useEffect(() => {
+    if (!texture) return;
+    const previousEnvironment = scene.environment;
+    const previousEnvironmentIntensity = scene.environmentIntensity;
+    const previousEnvironmentRotation = scene.environmentRotation.clone();
+    scene.environment = texture;
+    scene.environmentIntensity = ${formatNumber(skybox.exposure)};
+    scene.environmentRotation.set(0, ${formatNumber((skybox.rotationDegrees * Math.PI) / 180)}, 0);
+    return () => {
+      scene.environment = previousEnvironment;
+      scene.environmentIntensity = previousEnvironmentIntensity;
+      scene.environmentRotation.copy(previousEnvironmentRotation);
+    };
+  }, [scene, texture]);
+` : ""}
+  return (
+    <mesh
+      ${skybox.projection === "infinite" ? "ref={meshRef}" : ""}
+      geometry={geometry}
+      ${skybox.projection === "infinite" ? "scale={100}" : `position={[${position}]}
+      rotation={[${meshRotation}]}
+      scale={[${scale}]}`}
+      frustumCulled={false}
+      renderOrder={-1}
+    >
+      <shaderMaterial
+        side={BackSide}
+        depthTest={false}
+        depthWrite={false}
+        vertexShader={${JSON.stringify(PROJECTED_SKYBOX_VERTEX_SHADER)}}
+        fragmentShader={${JSON.stringify(PROJECTED_SKYBOX_FRAGMENT_SHADER)}}
+        uniforms={uniforms}
+      />
+    </mesh>
+  );
+};`,
+  );
+}
+
 function renderSceneEnvironment(
   settings: SceneSettings,
   context: CompileContext,
@@ -587,7 +751,10 @@ function renderSceneEnvironment(
     `<ambientLight color={${JSON.stringify(settings.ambient.color)}} intensity={${formatNumber(settings.ambient.intensity)}} />`,
   ];
 
-  if (settings.skybox.enabled) {
+  if (settings.skybox.enabled || settings.skybox.iblEnabled) {
+    const projectedSkybox =
+      settings.skybox.enabled && settings.skybox.projection !== "infinite";
+    if (projectedSkybox) registerProjectedSkyboxSupport(settings, context);
     const imageAssetId = settings.skybox.imageAssetId;
     const imageAsset = imageAssetId ? context.assets.assets[imageAssetId] : undefined;
     const imageUrl = imageAssetId ? context.assetRuntimeUrls.get(imageAssetId) : undefined;
@@ -598,16 +765,60 @@ function renderSceneEnvironment(
     ) {
       context.referencedAssetIds.add(imageAssetId);
       const imageAssetPath = registerAssetUrl(imageAsset, imageUrl, context);
-      context.reactValueImports.add("useEffect");
-      ["useLoader", "useThree"].forEach((name) => context.fiberImports.add(name));
+      if (!projectedSkybox) context.reactValueImports.add("useEffect");
+      if (projectedSkybox) context.reactValueImports.add("useMemo");
+      context.fiberImports.add("useLoader");
+      if (!projectedSkybox) context.fiberImports.add("useThree");
       context.threeValueImports.add("EquirectangularReflectionMapping");
-      const hdrSkybox = imageAsset.kind === "skybox" && imageAsset.sourceFormat === "hdr";
-      const exrSkybox = imageAsset.kind === "skybox" && imageAsset.sourceFormat === "exr";
+      const textureSourceFormat =
+        imageAsset.kind === "texture"
+          ? getTextureSourceFormat(imageAsset)
+          : undefined;
+      const hdrSkybox =
+        (imageAsset.kind === "skybox" && imageAsset.sourceFormat === "hdr") ||
+        textureSourceFormat === "hdr";
+      const exrSkybox =
+        (imageAsset.kind === "skybox" && imageAsset.sourceFormat === "exr") ||
+        textureSourceFormat === "exr";
+      const resolvedFlipY =
+        imageAsset.kind === "texture"
+          ? imageAsset.importSettings.flipY !== settings.skybox.flipY
+          : settings.skybox.flipY;
       const loaderName = hdrSkybox
         ? "HDRLoader"
         : exrSkybox
           ? "EXRLoader"
           : "TextureLoader";
+      const imageBackgroundSnapshot = settings.skybox.enabled
+        ? `    const previousBackground = scene.background;
+    const previousBackgroundIntensity = scene.backgroundIntensity;
+    const previousBackgroundRotation = scene.backgroundRotation.clone();`
+        : "";
+      const imageIblSnapshot = settings.skybox.iblEnabled
+        ? `    const previousEnvironment = scene.environment;
+    const previousEnvironmentIntensity = scene.environmentIntensity;
+    const previousEnvironmentRotation = scene.environmentRotation.clone();`
+        : "";
+      const imageBackgroundApply = settings.skybox.enabled
+        ? `    scene.background = texture;
+    scene.backgroundIntensity = exposure;
+    scene.backgroundRotation.set(0, rotation, 0);`
+        : "";
+      const imageIblApply = settings.skybox.iblEnabled
+        ? `    scene.environment = texture;
+    scene.environmentIntensity = exposure;
+    scene.environmentRotation.set(0, rotation, 0);`
+        : "";
+      const imageBackgroundRestore = settings.skybox.enabled
+        ? `      scene.background = previousBackground;
+      scene.backgroundIntensity = previousBackgroundIntensity;
+      scene.backgroundRotation.copy(previousBackgroundRotation);`
+        : "";
+      const imageIblRestore = settings.skybox.iblEnabled
+        ? `      scene.environment = previousEnvironment;
+      scene.environmentIntensity = previousEnvironmentIntensity;
+      scene.environmentRotation.copy(previousEnvironmentRotation);`
+        : "";
       if (hdrSkybox) {
         context.extraImports.add(
           'import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";',
@@ -622,57 +833,62 @@ function renderSceneEnvironment(
       }
       context.supportDeclarations.set(
         "scene-environment:image-skybox",
-        `const XRiftStudioImageSkybox: FC<{ assetPath: string; rotation: number; flipY: boolean; exposure: number }> = ({ assetPath, rotation, flipY, exposure }) => {
-  const scene = useThree((state) => state.scene);
+        projectedSkybox
+          ? `const XRiftStudioImageSkybox: FC<{ assetPath: string; flipY: boolean }> = ({ assetPath, flipY }) => {
   const src = useCompiledAssetUrl(assetPath);
   const texture = useLoader(${loaderName}, src);
-  useEffect(() => {
-    const previousBackground = scene.background;
-    const previousEnvironment = scene.environment;
-    const previousBackgroundIntensity = scene.backgroundIntensity;
-    const previousEnvironmentIntensity = scene.environmentIntensity;
-    const previousBackgroundRotation = scene.backgroundRotation.clone();
-    const previousEnvironmentRotation = scene.environmentRotation.clone();
+  const configuredTexture = useMemo(() => {
     ${hdrSkybox ? "" : exrSkybox ? "" : "texture.colorSpace = SRGBColorSpace;"}
     texture.flipY = flipY;
     texture.mapping = EquirectangularReflectionMapping;
     texture.needsUpdate = true;
-    scene.background = texture;
-    scene.environment = texture;
-    scene.backgroundIntensity = exposure;
-    scene.environmentIntensity = exposure;
-    scene.backgroundRotation.set(0, rotation, 0);
-    scene.environmentRotation.set(0, rotation, 0);
+    return texture;
+  }, [flipY, texture]);
+  return <XRiftStudioProjectedSkybox texture={configuredTexture} />;
+};`
+          : `const XRiftStudioImageSkybox: FC<{ assetPath: string; rotation: number; flipY: boolean; exposure: number }> = ({ assetPath, rotation, flipY, exposure }) => {
+  const scene = useThree((state) => state.scene);
+  const src = useCompiledAssetUrl(assetPath);
+  const texture = useLoader(${loaderName}, src);
+  useEffect(() => {
+${imageBackgroundSnapshot}
+${imageIblSnapshot}
+    ${hdrSkybox ? "" : exrSkybox ? "" : "texture.colorSpace = SRGBColorSpace;"}
+    texture.flipY = flipY;
+    texture.mapping = EquirectangularReflectionMapping;
+    texture.needsUpdate = true;
+${imageBackgroundApply}
+${imageIblApply}
     return () => {
-      scene.background = previousBackground;
-      scene.environment = previousEnvironment;
-      scene.backgroundIntensity = previousBackgroundIntensity;
-      scene.environmentIntensity = previousEnvironmentIntensity;
-      scene.backgroundRotation.copy(previousBackgroundRotation);
-      scene.environmentRotation.copy(previousEnvironmentRotation);
+${imageBackgroundRestore}
+${imageIblRestore}
     };
   }, [exposure, flipY, rotation, scene, texture]);
   return null;
 };`,
       );
       content.push(
-        `<XRiftStudioImageSkybox assetPath={${imageAssetPath}} rotation={${formatNumber((settings.skybox.rotationDegrees * Math.PI) / 180)}} flipY={${settings.skybox.flipY}} exposure={${formatNumber(settings.skybox.exposure)}} />`,
+        projectedSkybox
+          ? `<XRiftStudioImageSkybox assetPath={${imageAssetPath}} flipY={${resolvedFlipY}} />`
+          : `<XRiftStudioImageSkybox assetPath={${imageAssetPath}} rotation={${formatNumber((settings.skybox.rotationDegrees * Math.PI) / 180)}} flipY={${resolvedFlipY}} exposure={${formatNumber(settings.skybox.exposure)}} />`,
       );
     } else {
       if (imageAssetId) {
         addDiagnostic(context, {
           severity: "warning",
           code: "skybox-image-unavailable",
-          message: "Skybox画像を生成Worldに含められないため、グラデーションにフォールバックしました",
+          message: settings.skybox.enabled
+            ? "Skybox画像を背景またはIBLに使用できないため、背景をグラデーションにフォールバックしました"
+            : "Skybox画像を生成WorldのIBLに使用できません",
           sceneId: context.scene.sceneId,
           assetId: imageAssetId,
           fieldPath: "settings.skybox.imageAssetId",
         });
       }
-      context.imports.add("Skybox");
-      content.push(
-        `<Skybox topColor={${sceneColorNumber(settings.skybox.topColor)}} bottomColor={${sceneColorNumber(settings.skybox.bottomColor)}} offset={${formatNumber(settings.skybox.offset)}} exponent={${formatNumber(settings.skybox.exponent)}} />`,
-      );
+      if (settings.skybox.enabled) {
+        registerProjectedSkyboxSupport(settings, context);
+        content.push(`<XRiftStudioProjectedSkybox texture={null} />`);
+      }
     }
   }
 
@@ -698,10 +914,6 @@ function renderSceneEnvironment(
   }
 
   return content;
-}
-
-function sceneColorNumber(value: string): number {
-  return Number.parseInt(value.slice(1), 16);
 }
 
 function renderEntity(
@@ -788,6 +1000,9 @@ function renderEntity(
       continue;
     } else if (component.type === "light") {
       localContent.push(renderLight(component));
+    } else if (component.type === "text") {
+      context.dreiImports.add("Text");
+      localContent.push(renderText(component));
     } else if (component.type === "audio-source") {
       const rendered = renderAudioSource(entity, component, context);
       if (rendered) localContent.push(rendered);
@@ -936,17 +1151,46 @@ function renderColliderBody(
 
   context.rapierImports.add("RigidBody");
   if (boxes.length > 0) context.rapierImports.add("CuboidCollider");
+  const primaryCollider = meshCollider ?? boxes[0]!;
+  const bodyType = primaryCollider.bodyType ?? "fixed";
+  if (
+    meshCollider &&
+    bodyType !== "fixed" &&
+    meshCollider.meshMode === "trimesh"
+  ) {
+    addDiagnostic(context, {
+      severity: "warning",
+      code: "dynamic-trimesh-collider-converted-to-hull",
+      message:
+        "Dynamic/KinematicのTrimesh ColliderはRapier互換のConvex Hullとして出力します",
+      sceneId: context.scene.sceneId,
+      entityId: entity.id,
+      componentId: meshCollider.id,
+    });
+  }
+  const rigidBodySettings = [
+    `type=${JSON.stringify(bodyType)}`,
+    `gravityScale={${formatNumber(primaryCollider.gravityScale ?? 1)}}`,
+    `linearDamping={${formatNumber(primaryCollider.linearDamping ?? 0)}}`,
+    `angularDamping={${formatNumber(primaryCollider.angularDamping ?? 0)}}`,
+    `canSleep={${primaryCollider.canSleep ?? true}}`,
+    `ccd={${primaryCollider.ccd ?? false}}`,
+    `lockTranslations={${primaryCollider.lockTranslations ?? false}}`,
+    `lockRotations={${primaryCollider.lockRotations ?? false}}`,
+  ];
   const rigidBodyProps = meshCollider
     ? [
-        'type="fixed"',
+        ...rigidBodySettings,
         `colliders=${JSON.stringify(
-          meshCollider.meshMode === "convex" ? "hull" : "trimesh",
+          meshCollider.meshMode === "convex" || bodyType !== "fixed"
+            ? "hull"
+            : "trimesh",
         )}`,
         `sensor={${meshCollider.isTrigger}}`,
         `friction={${formatNumber(meshCollider.friction)}}`,
         `restitution={${formatNumber(meshCollider.restitution)}}`,
       ]
-    : ['type="fixed"', "colliders={false}"];
+    : [...rigidBodySettings, "colliders={false}"];
   const content = [
     ...boxes.map(
       (collider) =>
@@ -1419,7 +1663,7 @@ function resolveModelMaterialOverrides(
         fieldPath: "materialBindings",
       });
     } else {
-      bySourceName.set(override.slot.name, override.material.id);
+      bySourceName.set(sourceKey, override.material.id);
     }
   }
   return overrides;
@@ -2669,6 +2913,24 @@ function renderLight(light: LightComponent): string {
   }
 }
 
+function renderText(text: TextComponent): string {
+  return `<Text color=${JSON.stringify(text.color)} fontSize={${formatNumber(
+    text.fontSize,
+  )}}${
+    text.maxWidth !== undefined
+      ? ` maxWidth={${formatNumber(text.maxWidth)}}`
+      : ""
+  } anchorX=${JSON.stringify(text.anchorX)} anchorY=${JSON.stringify(
+    text.anchorY,
+  )} outlineWidth={${formatNumber(text.outlineWidth)}} outlineColor=${JSON.stringify(
+    text.outlineColor,
+  )}>${escapeJsxText(text.text)}</Text>`;
+}
+
+function escapeJsxText(value: string): string {
+  return `{${JSON.stringify(value)}}`;
+}
+
 function renderAudioSource(
   entity: SceneEntity,
   audio: AudioSourceComponent,
@@ -3127,9 +3389,11 @@ function isAllowedStaticAssetSource(asset: SceneAsset): boolean {
     return ["glb", "gltf", "obj", "vrm"].includes(extension);
   }
   if (asset.kind === "texture") {
-    return ["png", "jpg", "jpeg", "webp", "ktx2"].includes(extension);
+    return isEnvironmentTextureAsset(asset)
+      ? ["hdr", "exr", "png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"].includes(extension)
+      : ["png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg", "ktx2"].includes(extension);
   }
-  if (asset.kind === "skybox") return ["hdr", "exr", "png", "jpg", "jpeg", "webp"].includes(extension);
+  if (asset.kind === "skybox") return ["hdr", "exr", "png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"].includes(extension);
   if (asset.kind === "audio") return extension === "mp3";
   return false;
 }
@@ -3145,7 +3409,7 @@ function isAssetSupportedByCompiler(asset: SceneAsset): boolean {
   }
   if (asset.kind === "model") return true;
   if (asset.kind === "audio") return true;
-  if (asset.kind === "skybox") return ["hdr", "exr", "png", "jpg", "jpeg", "webp"].includes(fileExtension(asset.source.relativePath));
+  if (asset.kind === "skybox") return ["hdr", "exr", "png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"].includes(fileExtension(asset.source.relativePath));
   if (asset.kind !== "texture") return false;
   const extension = fileExtension(asset.source.relativePath);
   return (
@@ -3162,6 +3426,7 @@ function fileExtension(relativePath: string): string {
 }
 
 function assetPurpose(asset: SceneAsset): AssetCopyPlanEntry["purpose"] {
+  if (isEnvironmentTextureAsset(asset)) return "skybox";
   if (
     asset.kind === "texture" ||
     asset.kind === "skybox" ||

@@ -25,6 +25,27 @@ import {
   type Vec3,
 } from "./scene-document";
 import { resolveSceneSettings, type SceneFogSettings } from "./scene-settings";
+import {
+  KHR_INTERACTIVITY_OPERATION_TEMPLATES,
+  KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS,
+  addDefaultInteractivityAsset,
+  cloneKhrInteractivityExtension,
+  configureInteractivityMaterialPointer,
+  getInteractivityOperationTemplate,
+  validateKhrInteractivityExtension,
+  writeInteractivityNodePosition,
+  type KhrInteractivityGraph,
+  type KhrInteractivityJsonValue,
+} from "./interactivity-graph";
+import {
+  getMaterialAsset,
+  updateMaterialAsset,
+  type InteractivityAsset,
+  type MaterialAssetPatch,
+  type MaterialProperties,
+  type MaterialTextureInfo,
+  type MaterialTextureInfoPatch,
+} from "./asset-manifest";
 
 export const XRIFT_MCP_EDITOR_TOOLS = [
   "get_editor_context",
@@ -37,10 +58,24 @@ export const XRIFT_MCP_EDITOR_TOOLS = [
   "add_component",
   "update_transform",
   "set_material",
+  "get_material_asset",
+  "update_material_asset",
+  "set_material_texture_transform",
   "rename_entity",
   "duplicate_entity",
   "delete_entity",
   "create_empty_entity",
+  "list_interactivity_operations",
+  "get_interactivity_asset",
+  "create_interactivity_asset",
+  "add_interactivity_node",
+  "connect_interactivity_nodes",
+  "set_interactivity_value",
+  "set_interactivity_configuration",
+  "configure_interactivity_material_pointer",
+  "disconnect_interactivity_socket",
+  "delete_interactivity_node",
+  "validate_interactivity_asset",
 ] as const;
 
 export type XriftMcpEditorToolName = (typeof XRIFT_MCP_EDITOR_TOOLS)[number];
@@ -117,6 +152,12 @@ export function executeXriftMcpEditorTool(
       return updateTransform(context, request.arguments);
     case "set_material":
       return setMaterial(context, request.arguments);
+    case "get_material_asset":
+      return getMaterial(context, request.arguments);
+    case "update_material_asset":
+      return updateMaterial(context, request.arguments);
+    case "set_material_texture_transform":
+      return setMaterialTextureTransform(context, request.arguments);
     case "rename_entity":
       return renameEntity(context, request.arguments);
     case "duplicate_entity":
@@ -125,6 +166,28 @@ export function executeXriftMcpEditorTool(
       return deleteEntity(context, request.arguments);
     case "create_empty_entity":
       return createEmptyEntity(context, request.arguments);
+    case "list_interactivity_operations":
+      return listInteractivityOperations(context);
+    case "get_interactivity_asset":
+      return getInteractivityAsset(context, request.arguments);
+    case "create_interactivity_asset":
+      return createInteractivityAsset(context, request.arguments);
+    case "add_interactivity_node":
+      return addInteractivityNode(context, request.arguments);
+    case "connect_interactivity_nodes":
+      return connectInteractivityNodes(context, request.arguments);
+    case "set_interactivity_value":
+      return setInteractivityValue(context, request.arguments);
+    case "set_interactivity_configuration":
+      return setInteractivityConfiguration(context, request.arguments);
+    case "configure_interactivity_material_pointer":
+      return configureInteractivityMaterial(context, request.arguments);
+    case "disconnect_interactivity_socket":
+      return disconnectInteractivitySocket(context, request.arguments);
+    case "delete_interactivity_node":
+      return deleteInteractivityNode(context, request.arguments);
+    case "validate_interactivity_asset":
+      return validateInteractivityAsset(context, request.arguments);
   }
 }
 
@@ -554,6 +617,193 @@ function setMaterial(
   };
 }
 
+function getMaterial(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const materialAssetId = requiredString(
+    argumentsValue.materialAssetId,
+    "materialAssetId",
+  );
+  const material = getMaterialAsset(context.bundle.assets, materialAssetId);
+  if (!material) {
+    throw new XriftMcpEditorToolError(
+      "MATERIAL_NOT_FOUND",
+      "指定されたMaterial Assetが見つかりません",
+      { materialAssetId },
+    );
+  }
+  return unchanged(
+    context,
+    { material: JSON.parse(JSON.stringify(material)) as Record<string, unknown> },
+    `Material「${material.name}」を取得しました`,
+  );
+}
+
+function updateMaterial(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const materialAssetId = requiredString(
+    argumentsValue.materialAssetId,
+    "materialAssetId",
+  );
+  const material = getMaterialAsset(context.bundle.assets, materialAssetId);
+  if (!material) {
+    throw new XriftMcpEditorToolError(
+      "MATERIAL_NOT_FOUND",
+      "指定されたMaterial Assetが見つかりません",
+      { materialAssetId },
+    );
+  }
+  const patch = materialPatchValue(argumentsValue.patch);
+  const assets = updateMaterialAsset(context.bundle.assets, materialAssetId, patch);
+  if (assets === context.bundle.assets) {
+    return unchanged(
+      context,
+      { materialAssetId, revision: context.revision },
+      "Materialはすでに指定された状態です",
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, assets });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: materialAssetId,
+    result: {
+      materialAssetId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      properties: getMaterialAsset(assets, materialAssetId)?.properties,
+    },
+    activity: `AIがMaterial「${material.name}」を更新しました`,
+  };
+}
+
+type CoreMaterialTextureSlot =
+  | "baseColor"
+  | "metallicRoughness"
+  | "normal"
+  | "occlusion"
+  | "emissive";
+
+function setMaterialTextureTransform(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const materialAssetId = requiredString(
+    argumentsValue.materialAssetId,
+    "materialAssetId",
+  );
+  const slot = requiredEnum(
+    argumentsValue.slot,
+    "slot",
+    ["baseColor", "metallicRoughness", "normal", "occlusion", "emissive"] as const,
+  );
+  const material = getMaterialAsset(context.bundle.assets, materialAssetId);
+  if (!material) {
+    throw new XriftMcpEditorToolError(
+      "MATERIAL_NOT_FOUND",
+      "指定されたMaterial Assetが見つかりません",
+      { materialAssetId },
+    );
+  }
+  const current = coreMaterialTextureInfo(material.properties, slot);
+  if (!current) {
+    throw new XriftMcpEditorToolError(
+      "TEXTURE_SLOT_EMPTY",
+      "指定されたMaterial texture slotにTextureがありません",
+      { materialAssetId, slot },
+    );
+  }
+  const reset = optionalBoolean(argumentsValue.reset, "reset") ?? false;
+  const offset = optionalNumberTuple(argumentsValue.offset, "offset", 2);
+  const scale = optionalNumberTuple(argumentsValue.scale, "scale", 2);
+  const rotationDegrees = optionalFiniteNumber(
+    argumentsValue.rotationDegrees,
+    "rotationDegrees",
+  );
+  const texCoord = optionalNonNegativeInteger(argumentsValue.texCoord, "texCoord");
+  if (!reset && !offset && !scale && rotationDegrees === undefined && texCoord === undefined) {
+    invalidArgument(
+      "texture transform",
+      "offset, scale, rotationDegrees, texCoord, resetのいずれか",
+    );
+  }
+  const next = {
+    ...current,
+    ...(texCoord === undefined ? {} : { texCoord }),
+    transform: reset
+      ? null
+      : {
+          offset: offset ?? current.transform?.offset ?? [0, 0],
+          rotation:
+            rotationDegrees === undefined
+              ? current.transform?.rotation ?? 0
+              : (rotationDegrees * Math.PI) / 180,
+          scale: scale ?? current.transform?.scale ?? [1, 1],
+        },
+  };
+  const patch = coreMaterialTexturePatch(slot, next);
+  const assets = updateMaterialAsset(context.bundle.assets, materialAssetId, patch);
+  if (assets === context.bundle.assets) {
+    return unchanged(
+      context,
+      { materialAssetId, slot, revision: context.revision },
+      "Texture transformはすでに指定された状態です",
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, assets });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: materialAssetId,
+    result: {
+      materialAssetId,
+      slot,
+      texture: coreMaterialTextureInfo(
+        getMaterialAsset(assets, materialAssetId)!.properties,
+        slot,
+      ),
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+    },
+    activity: `AIがMaterial「${material.name}」のタイリングを更新しました`,
+  };
+}
+
+function coreMaterialTextureInfo(
+  properties: MaterialProperties,
+  slot: CoreMaterialTextureSlot,
+): MaterialTextureInfo | undefined {
+  if (slot === "baseColor") return properties.pbrMetallicRoughness.baseColorTexture;
+  if (slot === "metallicRoughness") {
+    return properties.pbrMetallicRoughness.metallicRoughnessTexture;
+  }
+  if (slot === "normal") return properties.normalTexture;
+  if (slot === "occlusion") return properties.occlusionTexture;
+  return properties.emissiveTexture;
+}
+
+function coreMaterialTexturePatch(
+  slot: CoreMaterialTextureSlot,
+  value: MaterialTextureInfoPatch,
+): MaterialAssetPatch {
+  if (slot === "baseColor") {
+    return { pbrMetallicRoughness: { baseColorTexture: value } };
+  }
+  if (slot === "metallicRoughness") {
+    return { pbrMetallicRoughness: { metallicRoughnessTexture: value } };
+  }
+  if (slot === "normal") return { normalTexture: value };
+  if (slot === "occlusion") return { occlusionTexture: value };
+  return { emissiveTexture: value };
+}
+
 function renameEntity(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
@@ -710,6 +960,593 @@ function createEmptyEntity(
     },
     activity: "AIが空のEntityを作成しました",
   };
+}
+
+function listInteractivityOperations(
+  context: XriftMcpEditorContext,
+): XriftMcpEditorToolOutcome {
+  return unchanged(
+    context,
+    {
+      extension: "KHR_interactivity",
+      status: "release-candidate-2026-07-16",
+      operations: KHR_INTERACTIVITY_OPERATION_TEMPLATES.map((template) => ({
+        op: template.op,
+        label: template.label,
+        category: template.category,
+        flowInputs: template.flowInputs,
+        flowOutputs: template.flowOutputs,
+        valueInputs: template.valueInputs,
+        valueOutputs: template.valueOutputs,
+      })),
+    },
+    "KHR_interactivity operation一覧を取得しました",
+  );
+}
+
+function getInteractivityAsset(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  return unchanged(
+    context,
+    {
+      assetId: asset.id,
+      name: asset.name,
+      extensionName: asset.extensionName,
+      specStatus: asset.specStatus,
+      extension: cloneKhrInteractivityExtension(asset.extension),
+      diagnostics: validateKhrInteractivityExtension(asset.extension),
+    },
+    `Interactivity Asset「${asset.name}」を取得しました`,
+  );
+}
+
+function createInteractivityAsset(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const name = optionalString(argumentsValue.name) ?? "Interactivity Graph";
+  const folderId = optionalNullableString(argumentsValue.folderId, "folderId");
+  const template = requiredEnum(
+    argumentsValue.template ?? "animation-on-start",
+    "template",
+    ["animation-on-start", "empty"] as const,
+  );
+  if (folderId && !context.bundle.assets.folders?.[folderId]) {
+    throw new XriftMcpEditorToolError("FOLDER_NOT_FOUND", "指定されたAsset Folderが見つかりません", {
+      folderId,
+    });
+  }
+  const assetId = createDocumentId("interactivity");
+  const added = addDefaultInteractivityAsset(context.bundle.assets, {
+    id: assetId,
+    name,
+    folderId,
+  });
+  if (!added.added) {
+    throw new XriftMcpEditorToolError("ASSET_NOT_CREATED", "Interactivity Assetを作成できませんでした");
+  }
+  let assets = added.manifest;
+  if (template === "empty") {
+    const asset = assets.assets[assetId] as InteractivityAsset;
+    assets = {
+      ...assets,
+      assets: {
+        ...assets.assets,
+        [assetId]: {
+          ...asset,
+          extension: { graph: 0, graphs: [{ name: "Behavior Graph" }] },
+        },
+      },
+    };
+  }
+  const bundle = touchProject(context, { ...context.bundle, assets });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: assetId,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      assetId,
+      name,
+      template,
+      extension: (assets.assets[assetId] as InteractivityAsset).extension,
+    },
+    activity: `AIがInteractivity Asset「${name}」を作成しました`,
+  };
+}
+
+function addInteractivityNode(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const graphIndex = optionalNonNegativeInteger(argumentsValue.graphIndex, "graphIndex") ?? asset.extension.graph ?? 0;
+  const op = requiredString(argumentsValue.op, "op");
+  const definingExtension = optionalString(argumentsValue.extension);
+  const position = optionalVec2(argumentsValue.position, "position");
+  const extension = cloneKhrInteractivityExtension(asset.extension);
+  const graph = requireInteractivityGraph(extension.graphs, graphIndex);
+  const template = getInteractivityOperationTemplate(op);
+  graph.declarations ??= [];
+  graph.nodes ??= [];
+  let declaration = graph.declarations.findIndex(
+    (candidate) => candidate.op === op && candidate.extension === definingExtension,
+  );
+  if (declaration < 0) {
+    graph.declarations.push({ op, ...(definingExtension ? { extension: definingExtension } : {}) });
+    declaration = graph.declarations.length - 1;
+  }
+  const types = ensureMcpGraphTypes(graph);
+  let node = {
+    declaration,
+    ...(template?.createNode?.(types) ?? {}),
+  };
+  node = writeInteractivityNodePosition(
+    node,
+    position ?? {
+      x: 120 + (graph.nodes.length % 3) * 280,
+      y: 120 + Math.floor(graph.nodes.length / 3) * 200,
+    },
+  );
+  graph.nodes.push(node);
+  const nodeIndex = graph.nodes.length - 1;
+  return commitInteractivityMutation(
+    context,
+    asset,
+    extension,
+    {
+      assetId: asset.id,
+      graphIndex,
+      nodeIndex,
+      declaration,
+      op,
+    },
+    `AIが${op} nodeを追加しました`,
+  );
+}
+
+function connectInteractivityNodes(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const graphIndex = optionalNonNegativeInteger(argumentsValue.graphIndex, "graphIndex") ?? asset.extension.graph ?? 0;
+  const kind = requiredEnum(argumentsValue.kind, "kind", ["flow", "value"] as const);
+  const sourceNode = requiredInteger(argumentsValue.sourceNode, "sourceNode");
+  const targetNode = requiredInteger(argumentsValue.targetNode, "targetNode");
+  const sourceSocket = requiredString(argumentsValue.sourceSocket, "sourceSocket");
+  const targetSocket = requiredString(argumentsValue.targetSocket, "targetSocket");
+  if (sourceNode === targetNode) invalidArgument("targetNode", "a different node index");
+  const extension = cloneKhrInteractivityExtension(asset.extension);
+  const graph = requireInteractivityGraph(extension.graphs, graphIndex);
+  const source = graph.nodes?.[sourceNode];
+  const target = graph.nodes?.[targetNode];
+  if (!source || !target) {
+    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "接続元または接続先nodeが見つかりません", {
+      sourceNode,
+      targetNode,
+    });
+  }
+  if (kind === "flow") {
+    source.flows = {
+      ...(source.flows ?? {}),
+      [sourceSocket]: {
+        node: targetNode,
+        ...(targetSocket === "in" ? {} : { socket: targetSocket }),
+      },
+    };
+  } else {
+    target.values = {
+      ...(target.values ?? {}),
+      [targetSocket]: {
+        node: sourceNode,
+        ...(sourceSocket === "value" ? {} : { socket: sourceSocket }),
+      },
+    };
+  }
+  return commitInteractivityMutation(
+    context,
+    asset,
+    extension,
+    { assetId: asset.id, graphIndex, kind, sourceNode, sourceSocket, targetNode, targetSocket },
+    `AIがInteractivity ${kind} socketを接続しました`,
+  );
+}
+
+function setInteractivityValue(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const graphIndex = optionalNonNegativeInteger(argumentsValue.graphIndex, "graphIndex") ?? asset.extension.graph ?? 0;
+  const nodeIndex = requiredInteger(argumentsValue.nodeIndex, "nodeIndex");
+  const socket = requiredString(argumentsValue.socket, "socket");
+  const signature = requiredString(argumentsValue.signature, "signature");
+  const value = argumentsValue.value;
+  if (!Array.isArray(value) || value.length === 0 || !isJsonValue(value)) {
+    invalidArgument("value", "a non-empty JSON array matching the type signature");
+  }
+  const extension = cloneKhrInteractivityExtension(asset.extension);
+  const graph = requireInteractivityGraph(extension.graphs, graphIndex);
+  const node = graph.nodes?.[nodeIndex];
+  if (!node) {
+    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたnodeが見つかりません", {
+      nodeIndex,
+    });
+  }
+  graph.types ??= [];
+  let type = graph.types.findIndex((candidate) => candidate.signature === signature);
+  if (type < 0) {
+    graph.types.push({ signature });
+    type = graph.types.length - 1;
+  }
+  node.values = {
+    ...(node.values ?? {}),
+    [socket]: { type, value: value as KhrInteractivityJsonValue[] },
+  };
+  return commitInteractivityMutation(
+    context,
+    asset,
+    extension,
+    { assetId: asset.id, graphIndex, nodeIndex, socket, signature, value },
+    `AIが${socket}のinline valueを設定しました`,
+  );
+}
+
+function setInteractivityConfiguration(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const graphIndex = optionalNonNegativeInteger(argumentsValue.graphIndex, "graphIndex") ?? asset.extension.graph ?? 0;
+  const nodeIndex = requiredInteger(argumentsValue.nodeIndex, "nodeIndex");
+  const key = requiredString(argumentsValue.key, "key");
+  const value = argumentsValue.value;
+  if (!Array.isArray(value) || value.length === 0 || !isJsonValue(value)) {
+    invalidArgument("value", "a non-empty JSON array");
+  }
+  const extension = cloneKhrInteractivityExtension(asset.extension);
+  const graph = requireInteractivityGraph(extension.graphs, graphIndex);
+  const node = graph.nodes?.[nodeIndex];
+  if (!node) {
+    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたnodeが見つかりません", {
+      nodeIndex,
+    });
+  }
+  node.configuration = {
+    ...(node.configuration ?? {}),
+    [key]: { value: value as KhrInteractivityJsonValue[] },
+  };
+  return commitInteractivityMutation(
+    context,
+    asset,
+    extension,
+    { assetId: asset.id, graphIndex, nodeIndex, key, value },
+    `AIが${key} configurationを設定しました`,
+  );
+}
+
+function configureInteractivityMaterial(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const graphIndex =
+    optionalNonNegativeInteger(argumentsValue.graphIndex, "graphIndex") ??
+    asset.extension.graph ??
+    0;
+  const nodeIndex = requiredInteger(argumentsValue.nodeIndex, "nodeIndex");
+  const materialAssetId = requiredString(
+    argumentsValue.materialAssetId,
+    "materialAssetId",
+  );
+  const presetId = requiredString(argumentsValue.presetId, "presetId");
+  const preset = KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS.find(
+    (candidate) => candidate.id === presetId,
+  );
+  if (!preset) {
+    throw new XriftMcpEditorToolError(
+      "MATERIAL_POINTER_PRESET_NOT_FOUND",
+      "指定されたMaterial pointer presetが見つかりません",
+      {
+        presetId,
+        supportedPresetIds: KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS.map(
+          (candidate) => candidate.id,
+        ),
+      },
+    );
+  }
+  const materials = Object.values(context.bundle.assets.assets)
+    .filter((candidate) => candidate.kind === "material")
+    .sort((left, right) => left.id.localeCompare(right.id));
+  const materialIndex = materials.findIndex(
+    (candidate) => candidate.id === materialAssetId,
+  );
+  if (materialIndex < 0) {
+    throw new XriftMcpEditorToolError(
+      "MATERIAL_NOT_FOUND",
+      "指定されたMaterial Assetが見つかりません",
+      { materialAssetId },
+    );
+  }
+  const extension = cloneKhrInteractivityExtension(asset.extension);
+  const graph = requireInteractivityGraph(extension.graphs, graphIndex);
+  if (
+    !configureInteractivityMaterialPointer(
+      graph,
+      nodeIndex,
+      preset.id,
+      materialIndex,
+    )
+  ) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_POINTER_NODE",
+      "指定されたnodeはMaterialを設定できるpointer operationではありません",
+      { nodeIndex, graphIndex },
+    );
+  }
+  return commitInteractivityMutation(
+    context,
+    asset,
+    extension,
+    {
+      assetId: asset.id,
+      graphIndex,
+      nodeIndex,
+      materialAssetId,
+      materialIndex,
+      preset,
+    },
+    `AIがInteractivity nodeのMaterial targetを「${preset.label}」に設定しました`,
+  );
+}
+
+function disconnectInteractivitySocket(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const graphIndex = optionalNonNegativeInteger(argumentsValue.graphIndex, "graphIndex") ?? asset.extension.graph ?? 0;
+  const kind = requiredEnum(argumentsValue.kind, "kind", ["flow", "value"] as const);
+  const nodeIndex = requiredInteger(argumentsValue.nodeIndex, "nodeIndex");
+  const socket = requiredString(argumentsValue.socket, "socket");
+  const extension = cloneKhrInteractivityExtension(asset.extension);
+  const graph = requireInteractivityGraph(extension.graphs, graphIndex);
+  const node = graph.nodes?.[nodeIndex];
+  if (!node) {
+    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたnodeが見つかりません", {
+      nodeIndex,
+    });
+  }
+  const sockets = kind === "flow" ? node.flows : node.values;
+  if (!sockets?.[socket]) {
+    throw new XriftMcpEditorToolError("SOCKET_NOT_CONNECTED", "指定されたsocketに接続はありません", {
+      nodeIndex,
+      socket,
+      kind,
+    });
+  }
+  delete sockets[socket];
+  if (Object.keys(sockets).length === 0) {
+    if (kind === "flow") delete node.flows;
+    else delete node.values;
+  }
+  return commitInteractivityMutation(
+    context,
+    asset,
+    extension,
+    { assetId: asset.id, graphIndex, nodeIndex, socket, kind },
+    `AIがInteractivity ${kind} socketの接続を解除しました`,
+  );
+}
+
+function deleteInteractivityNode(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const graphIndex = optionalNonNegativeInteger(argumentsValue.graphIndex, "graphIndex") ?? asset.extension.graph ?? 0;
+  const nodeIndex = requiredInteger(argumentsValue.nodeIndex, "nodeIndex");
+  const extension = cloneKhrInteractivityExtension(asset.extension);
+  const graph = requireInteractivityGraph(extension.graphs, graphIndex);
+  if (!graph.nodes?.[nodeIndex]) {
+    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたnodeが見つかりません", {
+      nodeIndex,
+    });
+  }
+  graph.nodes = graph.nodes.filter((_, index) => index !== nodeIndex);
+  for (const node of graph.nodes) {
+    if (node.flows) {
+      node.flows = Object.fromEntries(
+        Object.entries(node.flows)
+          .filter(([, target]) => target.node !== nodeIndex)
+          .map(([socket, target]) => [
+            socket,
+            { ...target, node: target.node > nodeIndex ? target.node - 1 : target.node },
+          ]),
+      );
+      if (Object.keys(node.flows).length === 0) delete node.flows;
+    }
+    if (node.values) {
+      node.values = Object.fromEntries(
+        Object.entries(node.values)
+          .filter(([, input]) => input.node !== nodeIndex)
+          .map(([socket, input]) => [
+            socket,
+            input.node !== undefined && input.node > nodeIndex
+              ? { ...input, node: input.node - 1 }
+              : input,
+          ]),
+      );
+      if (Object.keys(node.values).length === 0) delete node.values;
+    }
+  }
+  if (graph.nodes.length === 0) delete graph.nodes;
+  return commitInteractivityMutation(
+    context,
+    asset,
+    extension,
+    { assetId: asset.id, graphIndex, deletedNodeIndex: nodeIndex },
+    "AIがInteractivity nodeを削除しました",
+  );
+}
+
+function validateInteractivityAsset(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const diagnostics = validateKhrInteractivityExtension(asset.extension);
+  return unchanged(
+    context,
+    {
+      assetId: asset.id,
+      valid: !diagnostics.some((diagnostic) => diagnostic.severity === "error"),
+      diagnostics,
+      graphCount: asset.extension.graphs.length,
+      nodeCount: asset.extension.graphs.reduce(
+        (count, graph) => count + (graph.nodes?.length ?? 0),
+        0,
+      ),
+    },
+    diagnostics.length === 0
+      ? "KHR_interactivity validationに成功しました"
+      : "KHR_interactivity diagnosticsを取得しました",
+  );
+}
+
+function commitInteractivityMutation(
+  context: XriftMcpEditorContext,
+  asset: InteractivityAsset,
+  extension: InteractivityAsset["extension"],
+  result: Record<string, unknown>,
+  activity: string,
+): XriftMcpEditorToolOutcome {
+  const diagnostics = validateKhrInteractivityExtension(extension);
+  const errors = diagnostics.filter((diagnostic) => diagnostic.severity === "error");
+  if (errors.length > 0) {
+    throw new XriftMcpEditorToolError(
+      "INTERACTIVITY_VALIDATION_FAILED",
+      "変更するとKHR_interactivity graphが不正になるため適用しませんでした",
+      { diagnostics: errors },
+    );
+  }
+  const assets = {
+    ...context.bundle.assets,
+    assets: {
+      ...context.bundle.assets.assets,
+      [asset.id]: { ...asset, extension },
+    },
+  };
+  const bundle = touchProject(context, { ...context.bundle, assets });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: asset.id,
+    result: {
+      ...result,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      diagnostics,
+    },
+    activity,
+  };
+}
+
+function requireInteractivityAsset(
+  context: XriftMcpEditorContext,
+  assetId: string,
+): InteractivityAsset {
+  const asset = context.bundle.assets.assets[assetId];
+  if (asset?.kind !== "interactivity") {
+    throw new XriftMcpEditorToolError(
+      asset ? "ASSET_KIND_MISMATCH" : "ASSET_NOT_FOUND",
+      asset ? "指定されたAssetはInteractivity Graphではありません" : "指定されたAssetが見つかりません",
+      { assetId },
+    );
+  }
+  return asset;
+}
+
+function requireInteractivityGraph(
+  graphs: KhrInteractivityGraph[],
+  graphIndex: number,
+): KhrInteractivityGraph {
+  const graph = graphs[graphIndex];
+  if (!graph) {
+    throw new XriftMcpEditorToolError("GRAPH_NOT_FOUND", "指定されたbehavior graphが見つかりません", {
+      graphIndex,
+    });
+  }
+  return graph;
+}
+
+function ensureMcpGraphTypes(graph: KhrInteractivityGraph): Record<string, number> {
+  graph.types ??= [];
+  const ensure = (signature: string) => {
+    const index = graph.types!.findIndex((type) => type.signature === signature);
+    if (index >= 0) return index;
+    graph.types!.push({ signature });
+    return graph.types!.length - 1;
+  };
+  return { float: ensure("float"), int: ensure("int"), bool: ensure("bool") };
+}
+
+function isJsonValue(value: unknown): value is KhrInteractivityJsonValue {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  if (value && typeof value === "object") {
+    return Object.values(value).every(isJsonValue);
+  }
+  return false;
 }
 
 function assertWritableContext(
@@ -928,6 +1765,40 @@ function recordValue(value: unknown, name: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function materialPatchValue(value: unknown): MaterialAssetPatch {
+  const patch = recordValue(value, "patch");
+  if (!isJsonValue(patch)) invalidArgument("patch", "JSON object");
+  const allowed = new Set([
+    "pbrMetallicRoughness",
+    "normalTexture",
+    "occlusionTexture",
+    "emissiveFactor",
+    "emissiveTexture",
+    "alphaMode",
+    "alphaCutoff",
+    "doubleSided",
+    "extensions",
+    "color",
+    "opacity",
+    "metalness",
+    "roughness",
+    "baseColorTextureId",
+    "normalTextureId",
+    "occlusionTextureId",
+    "metallicRoughnessTextureId",
+    "emissiveTextureId",
+  ]);
+  const unsupported = Object.keys(patch).find((key) => !allowed.has(key));
+  if (unsupported) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      `patch.${unsupported}は変更できません`,
+    );
+  }
+  if (Object.keys(patch).length === 0) invalidArgument("patch", "non-empty object");
+  return JSON.parse(JSON.stringify(patch)) as MaterialAssetPatch;
+}
+
 function requiredString(value: unknown, name: string): string {
   if (typeof value !== "string" || !value.trim()) invalidArgument(name, "non-empty string");
   return value.trim();
@@ -935,6 +1806,36 @@ function requiredString(value: unknown, name: string): string {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function optionalBoolean(value: unknown, name: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "boolean") invalidArgument(name, "boolean");
+  return value;
+}
+
+function optionalFiniteNumber(value: unknown, name: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    invalidArgument(name, "finite number");
+  }
+  return value;
+}
+
+function optionalNumberTuple<N extends number>(
+  value: unknown,
+  name: string,
+  length: N,
+): [number, number] | undefined {
+  if (value === undefined) return undefined;
+  if (
+    !Array.isArray(value) ||
+    value.length !== length ||
+    value.some((entry) => typeof entry !== "number" || !Number.isFinite(entry))
+  ) {
+    invalidArgument(name, `[${Array.from({ length }, (_, index) => `n${index + 1}`).join(", ")}]`);
+  }
+  return [value[0] as number, value[1] as number];
 }
 
 function requiredEnum<T extends string>(
@@ -958,6 +1859,25 @@ function requiredInteger(value: unknown, name: string): number {
     invalidArgument(name, "non-negative integer");
   }
   return value;
+}
+
+function optionalNonNegativeInteger(value: unknown, name: string): number | undefined {
+  return value === undefined ? undefined : requiredInteger(value, name);
+}
+
+function optionalVec2(
+  value: unknown,
+  name: string,
+): { x: number; y: number } | undefined {
+  if (value === undefined) return undefined;
+  if (
+    !Array.isArray(value) ||
+    value.length !== 2 ||
+    value.some((entry) => typeof entry !== "number" || !Number.isFinite(entry))
+  ) {
+    invalidArgument(name, "[x, y]");
+  }
+  return { x: value[0] as number, y: value[1] as number };
 }
 
 function optionalVec3(value: unknown, name: string): Vec3 | undefined {

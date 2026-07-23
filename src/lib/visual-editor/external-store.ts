@@ -1,20 +1,31 @@
 import type { ExternalStoreInstallResult } from "../tauri";
 import {
+  DEFAULT_MODEL_IMPORT_SETTINGS,
   createDefaultMaterialAsset,
   createTextureAsset,
   type AssetAttribution,
   type AssetFolder,
   type AssetManifest,
+  type ModelAsset,
   type SceneAsset,
-  type SkyboxAsset,
   type TextureAsset,
 } from "./asset-manifest";
+import {
+  OPEN_BRUSH_CATALOG_LICENSE_URL,
+  OPEN_BRUSH_CATALOG_REVISION,
+  OPEN_BRUSH_CATALOG_SOURCE_URL,
+  type OpenBrushCatalogEntry,
+} from "./open-brush-catalog";
 
 export type AppliedExternalStoreInstall = {
   manifest: AssetManifest;
   primaryAssetId: string;
   installedAssetIds: string[];
-  kind: "skybox" | "material";
+  kind: "skybox" | "material" | "model";
+};
+
+export type AppliedOpenBrushCatalogInstall = AppliedExternalStoreInstall & {
+  alreadyInstalled: boolean;
 };
 
 function safeId(value: string): string {
@@ -82,25 +93,37 @@ export function applyExternalStoreInstall(
 
   if (result.assetKind === "hdri") {
     const file = result.files.find((entry) => entry.role === "environment");
-    if (!file) throw new Error("Skybox用のHDRIファイルがありません");
+    if (!file) throw new Error("環境Texture用のHDRIファイルがありません");
     if (file.format !== "hdr" && file.format !== "exr") {
-      throw new Error("Skybox用のHDRまたはEXRファイルを確認できません");
+      throw new Error("環境Texture用のHDRまたはEXRファイルを確認できません");
     }
     const id = `${baseId}-skybox`;
-    const asset: SkyboxAsset = {
+    const texture = createTextureAsset({
       id,
       name: result.name,
-      kind: "skybox",
-      status: "ready",
       source: { kind: "project", relativePath: file.relativePath },
+      folderId: folder.id,
+      importSettings: {
+        colorSpace: "linear",
+        flipY: false,
+        resize: { mode: "original" },
+        compression: { format: "source", quality: 80 },
+      },
+    });
+    if (!texture) throw new Error("環境Texture Assetを作成できませんでした");
+    const asset: TextureAsset = {
+      ...texture,
       sourceHash: file.sha256,
       thumbnail: { status: "missing" },
-      folderId: folder.id,
       order,
       attribution: credit,
+      usage: "environment",
       projection: "equirectangular",
-      sourceFormat: file.format,
-      byteLength: file.byteLength,
+      importMetadata: {
+        sourceFormat: file.format,
+        mimeType: file.format === "hdr" ? "image/vnd.radiance" : "image/x-exr",
+        byteLength: file.byteLength,
+      },
     };
     assets[id] = asset;
     return {
@@ -108,6 +131,35 @@ export function applyExternalStoreInstall(
       primaryAssetId: id,
       installedAssetIds: [id],
       kind: "skybox",
+    };
+  }
+
+  if (result.assetKind === "model") {
+    const file = result.files.find((entry) => entry.role === "model");
+    if (!file || file.format !== "gltf") {
+      throw new Error("Model用の自己完結glTFファイルがありません");
+    }
+    const id = `${baseId}-model`;
+    const model: ModelAsset = {
+      id,
+      name: result.name,
+      kind: "model",
+      status: "ready",
+      source: { kind: "project", relativePath: file.relativePath },
+      sourceHash: file.sha256,
+      thumbnail: { status: "missing" },
+      folderId: folder.id,
+      order,
+      attribution: credit,
+      importSettings: { ...DEFAULT_MODEL_IMPORT_SETTINGS },
+      materialSlots: [],
+    };
+    assets[id] = model;
+    return {
+      manifest: { ...manifest, folders, assets },
+      primaryAssetId: id,
+      installedAssetIds: [id],
+      kind: "model",
     };
   }
 
@@ -180,5 +232,55 @@ export function applyExternalStoreInstall(
     primaryAssetId: materialId,
     installedAssetIds,
     kind: "material",
+  };
+}
+
+export function applyOpenBrushCatalogInstall(
+  manifest: AssetManifest,
+  entry: OpenBrushCatalogEntry,
+): AppliedOpenBrushCatalogInstall {
+  const folder = externalFolder(manifest, "Open Brush");
+  const folders = { ...(manifest.folders ?? {}), [folder.id]: folder };
+  const materialId = `external-open-brush-${safeId(entry.brushGuid)}-material`;
+  if (manifest.assets[materialId]?.kind === "material") {
+    return {
+      manifest: { ...manifest, folders },
+      primaryAssetId: materialId,
+      installedAssetIds: [materialId],
+      kind: "material",
+      alreadyInstalled: true,
+    };
+  }
+  const material = createDefaultMaterialAsset({
+    id: materialId,
+    name: `Open Brush · ${entry.label}`,
+    folderId: folder.id,
+  });
+  if (!material) throw new Error("Open Brush Material Assetを作成できませんでした");
+  const order = nextOrder({ ...manifest, folders }, folder.id);
+  const assets: Record<string, SceneAsset> = {
+    ...manifest.assets,
+    [materialId]: {
+      ...material,
+      order,
+      shader: { ...entry.shader },
+      attribution: {
+        providerId: "open-brush",
+        providerName: "Open Brush",
+        externalId: entry.brushGuid,
+        assetUrl: OPEN_BRUSH_CATALOG_SOURCE_URL,
+        licenseName: "Apache-2.0",
+        licenseUrl: OPEN_BRUSH_CATALOG_LICENSE_URL,
+        authors: ["Icosa Foundation contributors"],
+      },
+      sourceHash: `${OPEN_BRUSH_CATALOG_REVISION}:${entry.brushGuid}`,
+    },
+  };
+  return {
+    manifest: { ...manifest, folders, assets },
+    primaryAssetId: materialId,
+    installedAssetIds: [materialId],
+    kind: "material",
+    alreadyInstalled: false,
   };
 }

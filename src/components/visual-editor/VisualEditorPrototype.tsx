@@ -8,10 +8,14 @@ import {
   type SetStateAction,
 } from "react";
 import {
+  ASSET_IMPORT_ACCEPT,
   BUILTIN_ASSET_IDS,
   addDefaultDocumentAsset,
   applyExternalStoreInstall,
+  applyOpenBrushCatalogInstall,
   applyComponentCodeImportPlan,
+  analyzeComponentCode,
+  prepareClassicProjectVisualAssetImports,
   addDefaultParticleAsset,
   analyzeAssetDeletion,
   analyzeAssetFolderDeletion,
@@ -28,8 +32,10 @@ import {
   commitEditorHistory,
   createEditorHistory,
   createDocumentId,
+  createOfficialXriftComponentSample,
   createEmptyEntity,
   createPrefabDocument,
+  createPlaySession,
   createPrototypeProject,
   getBuiltinPrimitiveCreation,
   getColliderAutoFitBounds,
@@ -48,6 +54,7 @@ import {
   getEntityReparentDecision,
   instantiateBuiltinPrefab,
   instantiateSceneAsset,
+  isEnvironmentTextureAsset,
   isUnityImportFileName,
   listBuiltinPrefabRecipes,
   moveLibraryAsset,
@@ -62,8 +69,11 @@ import {
   resolveEditorCommands,
   executeXriftMcpEditorTool,
   XRIFT_MCP_EDITOR_TOOLS,
+  STUDIO_IMAGE_EXTENSION_PATTERN,
+  THREE_EDITOR_MODEL_EXTENSION_PATTERN,
   XriftMcpEditorToolError,
   shortcutForCommand,
+  synchronizePlaySession,
   redoEditorHistory,
   replaceEditorHistoryPresent,
   reparentEntityHierarchy,
@@ -75,6 +85,7 @@ import {
   updateAudioSourceComponent,
   updateColliderComponent,
   updateLightComponent,
+  updateTextComponent,
   updateMeshShadowSettings,
   updateMaterialAsset,
   updateAssetThumbnail,
@@ -82,9 +93,11 @@ import {
   updateParticleAsset,
   updatePrefabDocumentFromSource,
   updateTextureAsset,
+  updateInteractivityAsset,
   updateXriftComponent,
   type ColliderPatch,
   type ComponentCodeImportPlan,
+  type ClassicProjectVisualImportSource,
   type AnimationPatch,
   type AudioSourcePatch,
   type LightPatch,
@@ -92,17 +105,22 @@ import {
   type AssetThumbnailDescriptor,
   type ModelAssetPatch,
   type ModelReimportProgress,
+  type OpenBrushCatalogEntry,
   type EditorCommandId,
   type EntityClipboard,
   type ParticlePropertiesPatch,
+  type PlaySession,
   type PrototypeVisualProject,
   type SceneSettings,
   type TextureAssetPatch,
+  type TextPatch,
   type TransformPatch,
   type UpdateXriftComponentPatch,
   type Vec3,
   type VisualProjectKind,
+  type KhrInteractivityExtension,
   type XriftMcpEditorToolName,
+  type XriftComponentDefinition,
 } from "../../lib/visual-editor";
 import {
   tauri,
@@ -114,6 +132,7 @@ import {
   type XriftOllamaStatus,
 } from "../../lib/tauri";
 import { AssetsPanel } from "./AssetsPanel";
+import { EnvironmentTextureThumbnailGenerationQueue } from "./EnvironmentTextureThumbnailGenerationQueue";
 import { MaterialThumbnailGenerationQueue } from "./MaterialThumbnailGenerationQueue";
 import { ExternalAssetStoreDialog } from "./ExternalAssetStoreDialog";
 import {
@@ -129,7 +148,9 @@ import {
   type AssetDeleteDialogTarget,
 } from "./AssetDeleteDialog";
 import { EditorCreateMenu } from "./EditorCreateMenu";
+import { EditorImportMenu } from "./EditorImportMenu";
 import { ComponentCodeImportDialog } from "./ComponentCodeImportDialog";
+import { InteractivityGraphEditor } from "./InteractivityGraphEditor";
 import { EditorUtilityRail } from "./EditorUtilityRail";
 import type { XriftMcpActivity } from "./AiConnectionPanel";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
@@ -158,9 +179,15 @@ import type {
   TransformSpace,
 } from "./types";
 
-const SUPPORTED_MODEL_FILE = /\.(glb|gltf|obj|vrm)$/i;
-const SUPPORTED_TEXTURE_FILE = /\.(png|jpe?g|webp|ktx2)$/i;
+const SUPPORTED_MODEL_FILE = THREE_EDITOR_MODEL_EXTENSION_PATTERN;
+const SUPPORTED_TEXTURE_FILE = STUDIO_IMAGE_EXTENSION_PATTERN;
 const SUPPORTED_HDRI_FILE = /\.(hdr|exr)$/i;
+const XRIFT_MCP_EXTERNAL_STORE_TOOLS = [
+  "search_external_assets",
+  "get_external_asset_options",
+  "install_external_asset",
+] as const;
+type XriftMcpExternalStoreTool = (typeof XRIFT_MCP_EXTERNAL_STORE_TOOLS)[number];
 const SUPPORTED_AUDIO_FILE = /\.mp3$/i;
 const SUPPORTED_UNITY_FILE = /\.(unitypackage|unity|prefab)$/i;
 const AUTOSAVE_DELAY_MS = 250;
@@ -220,7 +247,7 @@ function assignSkyboxToScene(
   assetId: string,
 ): PrototypeVisualProject["scene"] {
   const settings = resolveSceneSettings(scene.settings);
-  if (settings.skybox.enabled && settings.skybox.imageAssetId === assetId) {
+  if (settings.skybox.imageAssetId === assetId) {
     return scene;
   }
   return {
@@ -230,6 +257,7 @@ function assignSkyboxToScene(
       skybox: {
         ...settings.skybox,
         enabled: true,
+        iblEnabled: true,
         imageAssetId: assetId,
       },
     },
@@ -368,6 +396,88 @@ function touchProject(bundle: PrototypeVisualProject): PrototypeVisualProject {
       },
     },
   };
+}
+
+function mcpRequiredString(value: unknown, name: string): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      `${name}は空でない文字列で指定してください`,
+    );
+  }
+  return value.trim();
+}
+
+function mcpOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function mcpOptionalInteger(value: unknown, name: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      `${name}は0以上の整数で指定してください`,
+    );
+  }
+  return value;
+}
+
+function assertMcpExternalStoreWrite(
+  argumentsValue: Record<string, unknown>,
+  context: {
+    bundle: PrototypeVisualProject;
+    editorMode: EditorMode;
+    importBusy: boolean;
+    revision: number;
+  },
+): void {
+  if (context.editorMode !== "edit") {
+    throw new XriftMcpEditorToolError(
+      "EDITOR_READ_ONLY",
+      "Playを停止してから外部アセットを追加してください",
+    );
+  }
+  if (context.importBusy) {
+    throw new XriftMcpEditorToolError(
+      "EDITOR_BUSY",
+      "Asset Importの完了後に再試行してください",
+    );
+  }
+  const projectId = mcpRequiredString(argumentsValue.projectId, "projectId");
+  const sceneId = mcpRequiredString(argumentsValue.sceneId, "sceneId");
+  const expectedRevision = mcpOptionalInteger(
+    argumentsValue.expectedRevision,
+    "expectedRevision",
+  );
+  if (expectedRevision === undefined) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      "expectedRevisionを指定してください",
+    );
+  }
+  if (projectId !== context.bundle.project.projectId) {
+    throw new XriftMcpEditorToolError("PROJECT_MISMATCH", "現在のProjectと一致しません");
+  }
+  if (sceneId !== context.bundle.scene.sceneId) {
+    throw new XriftMcpEditorToolError("SCENE_MISMATCH", "現在のSceneと一致しません");
+  }
+  if (expectedRevision !== context.revision) {
+    throw new XriftMcpEditorToolError(
+      "STALE_REVISION",
+      "Sceneが更新されています。最新のEditor contextを取得してください",
+      { expectedRevision, currentRevision: context.revision },
+    );
+  }
+  if (
+    argumentsValue.applySkybox !== undefined &&
+    typeof argumentsValue.applySkybox !== "boolean"
+  ) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      "applySkyboxはbooleanで指定してください",
+    );
+  }
 }
 
 function preparePrototypeProject(
@@ -558,16 +668,21 @@ export function VisualEditorPrototype({
     useState<SceneFocusState | null>(null);
   const resolvedCommands = useMemo(() => resolveEditorCommands(), []);
   const mainRef = useRef<HTMLElement>(null);
+  const globalModelImportInputRef = useRef<HTMLInputElement>(null);
   const [layout, setLayout] = useState<VisualEditorLayout>({
     ...loadEditorLayout(initialLayout),
   });
   const [transformMode, setTransformMode] = useState<TransformMode>("translate");
   const [transformSpace, setTransformSpace] = useState<TransformSpace>("world");
   const [editorMode, setEditorMode] = useState<EditorMode>("edit");
+  const [playSession, setPlaySession] = useState<PlaySession | null>(null);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [componentImportOpen, setComponentImportOpen] = useState(false);
+  const [componentImportBusy, setComponentImportBusy] = useState(false);
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
   const [externalStoreOpen, setExternalStoreOpen] = useState(false);
+  const [interactivityEditorAssetId, setInteractivityEditorAssetId] =
+    useState<string | null>(null);
   const [pendingImports, setPendingImports] = useState<QueuedAssetImport[]>([]);
   const importQueueRef = useRef<QueuedAssetImport[]>([]);
   const importRunningRef = useRef(false);
@@ -814,6 +929,34 @@ export function VisualEditorPrototype({
     );
   }, [setAssetSelection]);
 
+  const handleSceneViewportSelection = useCallback(
+    (selection: SceneSelection, modifiers: { additive: boolean }) => {
+      if (!selection?.id) {
+        if (!modifiers.additive) handleEntitySelectionChange([], null);
+        return;
+      }
+
+      const entityId = selection.id;
+      if (!modifiers.additive) {
+        handleEntitySelectionChange([entityId], entityId);
+        return;
+      }
+
+      const currentIds = selectedEntityIds.filter((id) =>
+        Boolean(bundleRef.current.scene.entities[id]),
+      );
+      const alreadySelected = currentIds.includes(entityId);
+      const nextIds = alreadySelected
+        ? currentIds.filter((id) => id !== entityId)
+        : [...currentIds, entityId];
+      handleEntitySelectionChange(
+        nextIds,
+        alreadySelected ? nextIds[nextIds.length - 1] ?? null : entityId,
+      );
+    },
+    [handleEntitySelectionChange, selectedEntityIds],
+  );
+
   const handleAssetSelectionChange = useCallback((assetIds: string[], primaryAssetId: string | null) => {
     const validIds = [...new Set(assetIds)].filter((id) => Boolean(bundleRef.current.assets.assets[id]));
     setSceneSettingsOpen(false);
@@ -838,6 +981,7 @@ export function VisualEditorPrototype({
       autosaveTimerRef.current = null;
     }
     setEditorMode("edit");
+    setPlaySession(null);
     clipboardRef.current = null;
     transformScrubRef.current = null;
     setRenameTarget(null);
@@ -943,6 +1087,7 @@ export function VisualEditorPrototype({
         modelReimportFeedback.state.phase === "committing"),
   );
   const importBusy =
+    componentImportBusy ||
     modelReimportBusy ||
     pendingImports.some((entry) => importIsActive(entry.status));
   const editorModeRef = useRef(editorMode);
@@ -951,6 +1096,15 @@ export function VisualEditorPrototype({
   importBusyRef.current = importBusy;
   const saveStatusRef = useRef(saveStatus);
   saveStatusRef.current = saveStatus;
+
+  useEffect(() => {
+    if (editorMode !== "play") return;
+    setPlaySession((current) =>
+      current
+        ? synchronizePlaySession(current, bundle.scene, bundle.assets)
+        : createPlaySession(bundle.scene, bundle.assets),
+    );
+  }, [bundle.assets, bundle.scene, editorMode]);
 
   useEffect(() => {
     if (!mcpNativeAvailable) return;
@@ -962,7 +1116,11 @@ export function VisualEditorPrototype({
       request: XriftMcpEditorRequestEvent,
     ): Promise<void> => {
       try {
+        const externalStoreTool = XRIFT_MCP_EXTERNAL_STORE_TOOLS.includes(
+          request.tool as XriftMcpExternalStoreTool,
+        );
         if (
+          !externalStoreTool &&
           !XRIFT_MCP_EDITOR_TOOLS.includes(
             request.tool as XriftMcpEditorToolName,
           )
@@ -971,6 +1129,127 @@ export function VisualEditorPrototype({
             "TOOL_NOT_FOUND",
             "対応していないAI editor toolです",
           );
+        }
+        if (externalStoreTool) {
+          const args = request.arguments;
+          const providerId = mcpOptionalString(args.providerId) ?? "poly-haven";
+          if (request.tool === "search_external_assets") {
+            const query = (mcpOptionalString(args.query) ?? "").toLocaleLowerCase();
+            const kind = mcpOptionalString(args.kind);
+            const limit = Math.min(
+              120,
+              Math.max(1, mcpOptionalInteger(args.limit, "limit") ?? 40),
+            );
+            const assets = (await tauri.listExternalStoreAssets(providerId))
+              .filter((asset) => !kind || asset.assetKind === kind)
+              .filter((asset) => {
+                if (!query) return true;
+                return [asset.name, asset.description, asset.category, ...asset.tags]
+                  .join(" ")
+                  .toLocaleLowerCase()
+                  .includes(query);
+              })
+              .slice(0, limit);
+            await tauri.completeXriftMcpRequest({
+              id: request.id,
+              ok: true,
+              result: { providerId, assets, count: assets.length },
+            });
+            return;
+          }
+          const externalId = mcpRequiredString(args.externalId, "externalId");
+          if (request.tool === "get_external_asset_options") {
+            const options = await tauri.getExternalStoreAssetOptions(
+              providerId,
+              externalId,
+            );
+            await tauri.completeXriftMcpRequest({
+              id: request.id,
+              ok: true,
+              result: { options },
+            });
+            return;
+          }
+          assertMcpExternalStoreWrite(args, {
+            bundle: bundleRef.current,
+            editorMode: editorModeRef.current,
+            importBusy: importBusyRef.current,
+            revision: mcpRevisionRef.current,
+          });
+          const currentProjectPath = projectPathRef.current;
+          if (!currentProjectPath) {
+            throw new XriftMcpEditorToolError(
+              "PROJECT_NOT_SAVED",
+              "外部アセットを追加する前にProjectを保存してください",
+            );
+          }
+          const resolution = mcpRequiredString(args.resolution, "resolution");
+          const format = mcpOptionalString(args.format);
+          if (format !== undefined && format !== "hdr" && format !== "exr") {
+            throw new XriftMcpEditorToolError(
+              "INVALID_ARGUMENT",
+              "formatはhdrまたはexrで指定してください",
+            );
+          }
+          const installed = await tauri.installExternalStoreAsset(
+            currentProjectPath,
+            {
+              providerId,
+              externalId,
+              resolution,
+              ...(format ? { format } : {}),
+            },
+          );
+          const sourceBundle = bundleRef.current;
+          const applied = applyExternalStoreInstall(sourceBundle.assets, installed);
+          const applySkybox = args.applySkybox === true && applied.kind === "skybox";
+          const nextBundle = touchProject({
+            ...sourceBundle,
+            assets: applied.manifest,
+            scene: applySkybox
+              ? assignSkyboxToScene(sourceBundle.scene, applied.primaryAssetId)
+              : sourceBundle.scene,
+          });
+          mcpRevisionRef.current += 1;
+          mcpRevisionBundleRef.current = nextBundle;
+          bundleRef.current = nextBundle;
+          sceneSelectionRef.current = null;
+          assetSelectionRef.current = applied.primaryAssetId;
+          saveStatusRef.current = "dirty";
+          setHistory((current) =>
+            commitEditorHistory(current, {
+              bundle: nextBundle,
+              sceneSelection: null,
+              assetSelection: applied.primaryAssetId,
+            }),
+          );
+          setSaveStatus("dirty");
+          const activity = `AIがPoly Havenから「${installed.name}」をインストールしました`;
+          setNotice(`${activity}。変更を自動保存します`);
+          setMcpLastActivity({
+            clientName: request.clientName || "AI client",
+            message: activity,
+            at: new Intl.DateTimeFormat("ja-JP", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            }).format(new Date()),
+            revision: mcpRevisionRef.current,
+          });
+          await tauri.completeXriftMcpRequest({
+            id: request.id,
+            ok: true,
+            result: {
+              providerId,
+              externalId,
+              assetKind: installed.assetKind,
+              primaryAssetId: applied.primaryAssetId,
+              installedAssetIds: applied.installedAssetIds,
+              revisionBefore: mcpRevisionRef.current - 1,
+              revisionAfter: mcpRevisionRef.current,
+            },
+          });
+          return;
         }
         const sourceBundle = bundleRef.current;
         const outcome = executeXriftMcpEditorTool(
@@ -1753,7 +2032,10 @@ export function VisualEditorPrototype({
   );
 
   const handleComponentCodeImport = useCallback(
-    (plan: ComponentCodeImportPlan): boolean => {
+    async (
+      plan: ComponentCodeImportPlan,
+      classicSource: ClassicProjectVisualImportSource | null,
+    ): Promise<boolean> => {
       if (editorMode !== "edit" || importBusy) {
         setNotice(
           editorMode !== "edit"
@@ -1762,74 +2044,148 @@ export function VisualEditorPrototype({
         );
         return false;
       }
-      const result = applyComponentCodeImportPlan({
-        scene: bundle.scene,
-        assets: bundle.assets,
-        projectKind,
-        plan,
-      });
-      if (result.entityIds.length === 0) {
+      setComponentImportBusy(true);
+      try {
+        let preparedAssets = bundle.assets;
+        let assetIdBySourcePath: Record<string, string> | undefined;
+        let assetPlans = [] as Awaited<
+          ReturnType<typeof prepareClassicProjectVisualAssetImports>
+        >["plans"];
+        let assetWarningCount = 0;
+        if (classicSource && plan.assetDependencies.length > 0) {
+          if (!projectPath) {
+            setNotice(
+              "Classic Assetの保存先が必要です。先にVisualプロジェクトを保存してから変換してください",
+            );
+            return false;
+          }
+          const prepared = await prepareClassicProjectVisualAssetImports({
+            source: classicSource,
+            componentPlan: plan,
+            existingManifest: bundle.assets,
+          });
+          const blocking = prepared.diagnostics.find(
+            (diagnostic) => diagnostic.severity === "blocking",
+          );
+          if (blocking) {
+            setNotice(blocking.message);
+            return false;
+          }
+          preparedAssets = prepared.manifest;
+          assetIdBySourcePath = prepared.assetIdBySourcePath;
+          assetPlans = prepared.plans;
+          assetWarningCount = prepared.diagnostics.filter(
+            (diagnostic) => diagnostic.severity === "warning",
+          ).length;
+        }
+
+        const result = applyComponentCodeImportPlan({
+          scene: bundle.scene,
+          assets: preparedAssets,
+          projectKind,
+          plan,
+          assetIdBySourcePath,
+        });
+        if (result.entityIds.length === 0) {
+          setNotice(
+            result.diagnostics[0]?.message ??
+              "変換したComponentをSceneへ追加できませんでした",
+          );
+          return false;
+        }
+        const committedAssets =
+          classicSource && assetPlans.length > 0 && projectPath
+            ? await commitAssetImportPlansToDisk(
+                projectPath,
+                bundle.assets,
+                assetPlans,
+              )
+            : result.assets;
+        const selectedEntityId = result.entityIds[result.entityIds.length - 1];
+        setHistory((current) =>
+          commitEditorHistory(current, {
+            ...current.present,
+            bundle: touchProject({
+              ...current.present.bundle,
+              scene: result.scene,
+              assets: committedAssets,
+            }),
+            sceneSelection: { kind: "entity", id: selectedEntityId },
+            assetSelection: null,
+          }),
+        );
+        setSaveStatus("dirty");
+        const warningCount = assetWarningCount + [
+          ...plan.diagnostics,
+          ...result.diagnostics,
+        ].filter((diagnostic) => diagnostic.severity === "warning").length;
+        const assetCount = Object.keys(assetIdBySourcePath ?? {}).length;
         setNotice(
-          result.diagnostics[0]?.message ??
-            "変換したComponentをSceneへ追加できませんでした",
+          warningCount > 0
+            ? `${result.entityIds.length}件とAsset ${assetCount}件を追加しました。${warningCount}件の変換メモがあります`
+            : `${result.entityIds.length}件とAsset ${assetCount}件をSceneへ変換しました`,
+        );
+        return true;
+      } catch (error) {
+        setNotice(
+          error instanceof Error
+            ? error.message
+            : "Classicプロジェクトを変換できませんでした",
         );
         return false;
+      } finally {
+        setComponentImportBusy(false);
       }
-      const selectedEntityId = result.entityIds[result.entityIds.length - 1];
-      setHistory((current) =>
-        commitEditorHistory(current, {
-          ...current.present,
-          bundle: touchProject({
-            ...current.present.bundle,
-            scene: result.scene,
-            assets: result.assets,
-          }),
-          sceneSelection: { kind: "entity", id: selectedEntityId },
-          assetSelection: null,
-        }),
-      );
-      setSaveStatus("dirty");
-      const warningCount = [
-        ...plan.diagnostics,
-        ...result.diagnostics,
-      ].filter((diagnostic) => diagnostic.severity === "warning").length;
-      setNotice(
-        warningCount > 0
-          ? `${result.entityIds.length}件をSceneへ追加しました。${warningCount}件の変換メモがあります`
-          : `${result.entityIds.length}件を公式XRift ComponentとしてSceneへ追加しました`,
-      );
-      return true;
     },
-    [bundle.assets, bundle.scene, editorMode, importBusy, projectKind],
+    [
+      bundle.assets,
+      bundle.scene,
+      editorMode,
+      importBusy,
+      projectKind,
+      projectPath,
+    ],
+  );
+
+  const handleAddOfficialComponent = useCallback(
+    async (definition: XriftComponentDefinition): Promise<boolean> =>
+      handleComponentCodeImport(
+        analyzeComponentCode(
+          createOfficialXriftComponentSample(definition.importName),
+          projectKind,
+        ),
+        null,
+      ),
+    [handleComponentCodeImport, projectKind],
   );
 
   const handleTransformChange = useCallback(
     (entityId: string, patch: TransformPatch) => {
-      if (editorMode !== "edit") return;
+      if (editorMode !== "edit" && !playSession) return;
       updateScene((scene) =>
         updateModelNodeEntityTransform(scene, entityId, patch),
       );
     },
-    [editorMode, updateScene],
+    [editorMode, playSession, updateScene],
   );
 
   const handleTransformScrubStart = useCallback(
     (entityId: string) => {
-      if (editorMode !== "edit" || transformScrubRef.current) return;
+      if ((editorMode !== "edit" && !playSession) || transformScrubRef.current) return;
       transformScrubRef.current = {
         entityId,
         before: history.present,
         saveStatus,
       };
     },
-    [editorMode, history.present, saveStatus],
+    [editorMode, history.present, playSession, saveStatus],
   );
 
   const handleTransformScrubChange = useCallback(
     (entityId: string, patch: TransformPatch) => {
       const transaction = transformScrubRef.current;
       if (
-        editorMode !== "edit" ||
+        (editorMode !== "edit" && !playSession) ||
         !transaction ||
         transaction.entityId !== entityId
       ) {
@@ -1851,7 +2207,7 @@ export function VisualEditorPrototype({
         });
       });
     },
-    [editorMode],
+    [editorMode, playSession],
   );
 
   const handleTransformScrubEnd = useCallback((entityId: string) => {
@@ -1957,6 +2313,7 @@ export function VisualEditorPrototype({
           if (component.id !== componentId || component.type !== "mesh") return component;
           const next = {
             ...component,
+            ...(typeof patch.enabled === "boolean" ? { enabled: patch.enabled } : {}),
             ...(patch.materialBindings
               ? { materialBindings: patch.materialBindings.map((binding) => ({ ...binding })) }
               : {}),
@@ -2002,7 +2359,9 @@ export function VisualEditorPrototype({
         };
       });
       setNotice(
-        patch.modelPose
+        typeof patch.enabled === "boolean"
+          ? `Mesh Rendererを${patch.enabled ? "有効" : "無効"}にしました`
+          : patch.modelPose
           ? "モデルポーズをこの配置へ保存しました"
           : "Mesh Rendererのマテリアルスロットと影設定をシーンへ反映しました",
       );
@@ -2012,13 +2371,45 @@ export function VisualEditorPrototype({
 
   const handleColliderChange = useCallback(
     (entityId: string, componentId: string, patch: ColliderPatch) => {
-      if (editorMode !== "edit") return;
-      updateScene((scene) =>
-        updateColliderComponent(scene, entityId, patch, componentId),
+      if (editorMode !== "edit" && !playSession) return;
+      updateScene((scene) => {
+        let next = updateColliderComponent(scene, entityId, patch, componentId);
+        const bodyPatch: ColliderPatch = {};
+        for (const key of [
+          "bodyType",
+          "gravityScale",
+          "linearDamping",
+          "angularDamping",
+          "canSleep",
+          "ccd",
+          "lockTranslations",
+          "lockRotations",
+        ] as const) {
+          if (Object.prototype.hasOwnProperty.call(patch, key)) {
+            Object.assign(bodyPatch, { [key]: patch[key] });
+          }
+        }
+        if (Object.keys(bodyPatch).length === 0) return next;
+        for (const component of next.entities[entityId]?.components ?? []) {
+          if (component.type !== "collider" || component.id === componentId) {
+            continue;
+          }
+          next = updateColliderComponent(
+            next,
+            entityId,
+            bodyPatch,
+            component.id,
+          );
+        }
+        return next;
+      });
+      setNotice(
+        editorMode === "play"
+          ? "Collider設定を保存し、このEntityのPlayを先頭から再実行しました"
+          : "Collider設定をSceneへ反映しました",
       );
-      setNotice("Collider設定をSceneへ反映しました");
     },
-    [editorMode, updateScene],
+    [editorMode, playSession, updateScene],
   );
 
   const handleExternalStoreInstalled = useCallback(
@@ -2032,17 +2423,10 @@ export function VisualEditorPrototype({
           result,
         );
         const scene = applySkybox
-          ? {
-              ...current.present.bundle.scene,
-              settings: {
-                ...resolveSceneSettings(current.present.bundle.scene.settings),
-                skybox: {
-                  ...resolveSceneSettings(current.present.bundle.scene.settings).skybox,
-                  enabled: true,
-                  imageAssetId: applied.primaryAssetId,
-                },
-              },
-            }
+          ? assignSkyboxToScene(
+              current.present.bundle.scene,
+              applied.primaryAssetId,
+            )
           : current.present.bundle.scene;
         const primary = applied.manifest.assets[applied.primaryAssetId];
         setActiveAssetFolderId(primary?.folderId ?? null);
@@ -2067,28 +2451,58 @@ export function VisualEditorPrototype({
     [],
   );
 
+  const handleAddOpenBrushMaterial = useCallback(
+    async (
+      entry: OpenBrushCatalogEntry,
+    ): Promise<{ alreadyInstalled: boolean }> => {
+      const preview = applyOpenBrushCatalogInstall(bundle.assets, entry);
+      setHistory((current) => {
+        const applied = applyOpenBrushCatalogInstall(
+          current.present.bundle.assets,
+          entry,
+        );
+        const primary = applied.manifest.assets[applied.primaryAssetId];
+        setActiveAssetFolderId(primary?.folderId ?? null);
+        setNotice(
+          applied.alreadyInstalled
+            ? `「${entry.label}」は追加済みです。Assetsで選択しました`
+            : `「${entry.label}」をOpen Brush Materialとして追加しました`,
+        );
+        if (applied.alreadyInstalled) {
+          return {
+            ...current,
+            present: {
+              ...current.present,
+              sceneSelection: null,
+              assetSelection: applied.primaryAssetId,
+            },
+          };
+        }
+        setSaveStatus("dirty");
+        return commitEditorHistory(current, {
+          bundle: touchProject({
+            ...current.present.bundle,
+            assets: applied.manifest,
+          }),
+          sceneSelection: null,
+          assetSelection: applied.primaryAssetId,
+        });
+      });
+      setSceneSettingsOpen(false);
+      return { alreadyInstalled: preview.alreadyInstalled };
+    },
+    [bundle.assets],
+  );
+
   const handleAssignSkybox = useCallback(
     (assetId: string) => {
       if (editorMode !== "edit") return;
       const asset = bundle.assets.assets[assetId];
-      if (asset?.kind !== "skybox") {
-        setNotice("Skybox Assetを読み取れませんでした");
+      if (!isEnvironmentTextureAsset(asset) && asset?.kind !== "skybox") {
+        setNotice("Skyboxに使えるTexture Assetを読み取れませんでした");
         return;
       }
-      updateScene((scene) => {
-        const settings = resolveSceneSettings(scene.settings);
-        return {
-          ...scene,
-          settings: {
-            ...settings,
-            skybox: {
-              ...settings.skybox,
-              enabled: true,
-              imageAssetId: assetId,
-            },
-          },
-        };
-      });
+      updateScene((scene) => assignSkyboxToScene(scene, assetId));
       setNotice(`「${asset.name}」をSkyboxへ設定しました`);
     },
     [bundle.assets.assets, editorMode, updateScene],
@@ -2174,6 +2588,17 @@ export function VisualEditorPrototype({
     [editorMode, updateScene],
   );
 
+  const handleTextChange = useCallback(
+    (entityId: string, componentId: string, patch: TextPatch) => {
+      if (editorMode !== "edit") return;
+      updateScene((scene) =>
+        updateTextComponent(scene, entityId, patch, componentId),
+      );
+      setNotice("Text設定をSceneへ反映しました");
+    },
+    [editorMode, updateScene],
+  );
+
   const handleSetSelectedEntitiesEnabled = useCallback(
     (enabled: boolean) => {
       if (editorMode !== "edit" || selectedEntityIds.length < 2) return;
@@ -2255,18 +2680,22 @@ export function VisualEditorPrototype({
 
   const handleAnimationChange = useCallback(
     (entityId: string, componentId: string, patch: AnimationPatch) => {
-      if (editorMode !== "edit") return;
+      if (editorMode !== "edit" && !playSession) return;
       updateScene((scene) =>
         updateAnimationComponent(scene, entityId, patch, componentId),
       );
-      setNotice("Animation設定をSceneへ反映しました");
+      setNotice(
+        editorMode === "play"
+          ? "Animation設定を保存し、このEntityのPlayを先頭から再実行しました"
+          : "Animation設定をSceneへ反映しました",
+      );
     },
-    [editorMode, updateScene],
+    [editorMode, playSession, updateScene],
   );
 
   const handleAutoFitCollider = useCallback(
     (entityId: string, componentId: string) => {
-      if (editorMode !== "edit") return;
+      if (editorMode !== "edit" && !playSession) return;
       const entity = bundle.scene.entities[entityId];
       const mesh = entity ? getMesh(entity) : undefined;
       if (!mesh || !getColliderAutoFitBounds(mesh, bundle.assets)) {
@@ -2286,12 +2715,12 @@ export function VisualEditorPrototype({
       updateScene(() => fitted);
       setNotice("Box Colliderを現在のMesh boundsへ合わせました");
     },
-    [bundle.assets, bundle.scene, editorMode, updateScene],
+    [bundle.assets, bundle.scene, editorMode, playSession, updateScene],
   );
 
   const handleRemoveCollider = useCallback(
     (entityId: string, componentId: string) => {
-      if (editorMode !== "edit") return;
+      if (editorMode !== "edit" && !playSession) return;
       updateScene((scene) => {
         const entity = scene.entities[entityId];
         if (!entity) return scene;
@@ -2310,7 +2739,7 @@ export function VisualEditorPrototype({
       });
       setNotice("Colliderを削除しました");
     },
-    [editorMode, updateScene],
+    [editorMode, playSession, updateScene],
   );
 
   const handleParticleEmitterChange = useCallback(
@@ -2729,7 +3158,7 @@ export function VisualEditorPrototype({
 
   const handleCreateDocumentAsset = useCallback(
     (
-      kind: "material" | "particle",
+      kind: "material" | "particle" | "interactivity",
       requestedFolderId?: string | null,
     ) => {
       if (editorMode !== "edit" || importBusy) {
@@ -2771,8 +3200,13 @@ export function VisualEditorPrototype({
         setNotice(
           kind === "material"
             ? `標準glTFマテリアルを${destination}に作成し、Asset Inspectorで開きました`
-            : `Particleを${destination}に作成し、Asset Inspectorで開きました`,
+            : kind === "particle"
+              ? `Particleを${destination}に作成し、Asset Inspectorで開きました`
+              : `KHR_interactivity Graphを${destination}に作成し、専用Editorで開きました`,
         );
+        if (kind === "interactivity") {
+          setInteractivityEditorAssetId(added.assetId);
+        }
         return commitEditorHistory(current, {
           ...current.present,
           bundle: touchProject({
@@ -2851,7 +3285,23 @@ export function VisualEditorPrototype({
     [editorMode],
   );
 
-  const handleMaterialThumbnailGenerated = useCallback(
+  const handleSaveInteractivityAsset = useCallback(
+    (assetId: string, extension: KhrInteractivityExtension) => {
+      if (editorMode !== "edit") return;
+      setBundle((current) => {
+        const assets = updateInteractivityAsset(current.assets, assetId, extension);
+        if (assets === current.assets) {
+          setNotice("KHR_interactivity Graphに検証エラーがあるため保存しませんでした");
+          return current;
+        }
+        setNotice("KHR_interactivity GraphをAssetへ保存しました。別Sceneでも再利用できます");
+        return touchProject({ ...current, assets });
+      });
+    },
+    [editorMode, setBundle],
+  );
+
+  const handleAssetThumbnailGenerated = useCallback(
     (assetId: string, thumbnail: AssetThumbnailDescriptor) => {
       if (editorModeRef.current !== "edit" || importBusyRef.current) return;
       setHistory((current) => {
@@ -2880,6 +3330,18 @@ export function VisualEditorPrototype({
         asset?.kind === "material"
           ? `「${asset.name}」のサムネイルを更新できませんでした。プロジェクトを開き直すかMaterialを変更すると再試行します`
           : "Materialサムネイルの準備に失敗しました。プロジェクトを開き直すと再試行します",
+      );
+    },
+    [],
+  );
+
+  const handleEnvironmentTextureThumbnailFailure = useCallback(
+    (assetId: string, _message: string) => {
+      const asset = bundleRef.current.assets.assets[assetId];
+      setNotice(
+        asset?.kind === "texture"
+          ? `「${asset.name}」のHDRIプレビューを生成できませんでした。ソースを確認してプロジェクトを開き直すと再試行します`
+          : "HDRIプレビューの自動生成に失敗しました。プロジェクトを開き直すと再試行します",
       );
     },
     [],
@@ -3283,6 +3745,11 @@ export function VisualEditorPrototype({
               mimeType: sourceFile.type,
               folderId,
               existingManifest: workingManifest,
+              preferredKind:
+                queued.resourceKind === "model" ||
+                queued.resourceKind === "texture"
+                  ? queued.resourceKind
+                  : undefined,
             });
             const diagnostics = plan.diagnostics.map(
               ({ severity, code, message }) => ({ severity, code, message }),
@@ -3343,7 +3810,7 @@ export function VisualEditorPrototype({
               !plan.replacesAssetId
             ) {
               setHistory((current) => {
-                if (duplicate.kind !== "skybox") {
+                if (!isEnvironmentTextureAsset(duplicate)) {
                   return replaceEditorHistoryPresent(current, {
                     ...current.present,
                     assetSelection: duplicate.id,
@@ -3394,7 +3861,7 @@ export function VisualEditorPrototype({
                 ),
               );
               setNotice(
-                duplicate.kind === "skybox"
+                isEnvironmentTextureAsset(duplicate)
                   ? `登録済みの「${duplicate.name}」をSkyboxへ設定しました`
                   : `同じ内容のアセット「${duplicate.name}」は登録済みです`,
               );
@@ -3420,7 +3887,7 @@ export function VisualEditorPrototype({
             workingManifest = committedManifest;
             knownByHash.set(plan.sourceHash, importedAsset);
             setHistory((current) => {
-              const scene = importedAsset.kind === "skybox"
+              const scene = isEnvironmentTextureAsset(importedAsset)
                 ? assignSkyboxToScene(
                     current.present.bundle.scene,
                     importedAsset.id,
@@ -3464,7 +3931,7 @@ export function VisualEditorPrototype({
               ),
             );
             setNotice(
-              importedAsset.kind === "skybox"
+              isEnvironmentTextureAsset(importedAsset)
                 ? `「${importedAsset.name}」をインポートし、Skyboxへ設定しました`
                 : plan.replacesAssetId
                   ? `「${importedAsset.name}」を更新し、MaterialとTextureの参照を維持しました`
@@ -3524,10 +3991,10 @@ export function VisualEditorPrototype({
     for (const file of files) {
       if (SUPPORTED_UNITY_FILE.test(file.name)) {
         accepted.push({ file, resourceKind: "unity-package" });
-      } else if (SUPPORTED_MODEL_FILE.test(file.name)) {
-        accepted.push({ file, resourceKind: "model" });
       } else if (SUPPORTED_TEXTURE_FILE.test(file.name)) {
         accepted.push({ file, resourceKind: "texture" });
+      } else if (SUPPORTED_MODEL_FILE.test(file.name)) {
+        accepted.push({ file, resourceKind: "model" });
       } else if (SUPPORTED_HDRI_FILE.test(file.name)) {
         accepted.push({ file, resourceKind: "skybox" });
       } else if (SUPPORTED_AUDIO_FILE.test(file.name)) {
@@ -3546,7 +4013,7 @@ export function VisualEditorPrototype({
     if (unsupported.length > 0) {
       const names = unsupported.slice(0, 3).map((file) => file.name).join("、");
       setImportError(
-        `${names}${unsupported.length > 3 ? " ほか" : ""} は対象外です。UnityPackage / Unity Scene / Prefab / GLB / GLTF / OBJ / VRM / PNG / JPG / WebP / KTX2 / HDR / EXR / MP3に対応します。`,
+        `${names}${unsupported.length > 3 ? " ほか" : ""} は対象外です。Unity、Three.js Editor対応モデル、PNG / JPG / WebP / AVIF / GIF / BMP / SVG / KTX2、HDR / EXR、MP3に対応します。`,
       );
     } else {
       setImportError(null);
@@ -3590,6 +4057,9 @@ export function VisualEditorPrototype({
     }
     setCreateMenuOpen(false);
     setRenameTarget(null);
+    setPlaySession(
+      createPlaySession(bundleRef.current.scene, bundleRef.current.assets),
+    );
     setEditorMode("play");
     setNotice(
       projectKind === "world"
@@ -3599,6 +4069,7 @@ export function VisualEditorPrototype({
   }, [importBusy, projectKind]);
 
   const stopPlayMode = useCallback(() => {
+    setPlaySession(null);
     setEditorMode("edit");
     setNotice("Playを停止しました。Play中の状態を破棄し、編集カメラへ戻りました");
   }, []);
@@ -3837,6 +4308,16 @@ export function VisualEditorPrototype({
         case "asset.create-particle":
           handleCreateDocumentAsset("particle", payload.folderId);
           return editorMode === "edit" && !importBusy;
+        case "asset.create-interactivity":
+          handleCreateDocumentAsset("interactivity", payload.folderId);
+          return editorMode === "edit" && !importBusy;
+        case "asset.edit-interactivity": {
+          if (!payload.assetId || bundle.assets.assets[payload.assetId]?.kind !== "interactivity") {
+            return false;
+          }
+          setInteractivityEditorAssetId(payload.assetId);
+          return true;
+        }
         case "asset.import":
           return editorMode === "edit";
       }
@@ -3895,6 +4376,8 @@ export function VisualEditorPrototype({
 
   const handleBack = useCallback(async () => {
     if (leaving) return;
+    setPlaySession(null);
+    setEditorMode("edit");
     if (!onSaveRef.current) {
       onBack();
       return;
@@ -4002,6 +4485,15 @@ export function VisualEditorPrototype({
               </button>
             ) : null}
             <span className="h-5 w-px bg-editor-border" aria-hidden="true" />
+            <EditorImportMenu
+              disabledReason={
+                readOnly
+                  ? "Playを停止してからImportしてください"
+                  : assetImportPanelAvailability.disabledReason
+              }
+              onImportModel={() => globalModelImportInputRef.current?.click()}
+              onImportR3f={() => setComponentImportOpen(true)}
+            />
             <button
               type="button"
               onClick={() => void runClassicExport()}
@@ -4091,16 +4583,6 @@ export function VisualEditorPrototype({
                 }
               />
             </div>
-            <button
-              type="button"
-              disabled={readOnly || importBusy || editorMode !== "edit"}
-              onClick={() => setComponentImportOpen(true)}
-              title="公式XRift Component一覧とDrei / React Three Fiber変換を開く"
-              className="flex h-7 items-center gap-1.5 rounded border border-violet-200 bg-violet-50 px-2 text-xs font-semibold text-violet-700 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              <EDITOR_ICONS.world size={13} aria-hidden="true" />
-              XRift Component
-            </button>
           </div>
 
         </div>
@@ -4110,6 +4592,18 @@ export function VisualEditorPrototype({
           projectKind={projectKind}
           onClose={() => setComponentImportOpen(false)}
           onImport={handleComponentCodeImport}
+        />
+        <input
+          ref={globalModelImportInputRef}
+          type="file"
+          accept={ASSET_IMPORT_ACCEPT}
+          multiple
+          className="hidden"
+          aria-label="Modelまたは3DアセットをImport"
+          onChange={(event) => {
+            handleQueueFiles(Array.from(event.currentTarget.files ?? []));
+            event.currentTarget.value = "";
+          }}
         />
 
         <main
@@ -4152,13 +4646,23 @@ export function VisualEditorPrototype({
             }
           />
           <SceneViewport
-            scene={bundle.scene}
+            scene={playSession?.runtimeScene ?? bundle.scene}
             assets={bundle.assets}
             prefabs={bundle.prefabs}
             projectPath={projectPath}
             projectKind={projectKind}
             selection={sceneSelection}
+            selectedEntityIds={selectedEntityIds}
             editorMode={editorMode}
+            runtimeEntityRevisions={playSession?.entityRevisions}
+            runtimeRevision={playSession?.revision ?? 0}
+            lastReloadedEntityName={
+              playSession?.lastReloads.length === 1
+                ? bundle.scene.entities[playSession.lastReloads[0]!.entityId]?.name ?? null
+                : playSession?.lastReloads.length
+                  ? `${playSession.lastReloads.length} Entities`
+                  : null
+            }
             transformMode={transformMode}
             transformSpace={transformSpace}
             playDisabled={editorMode === "edit" && importBusy}
@@ -4171,13 +4675,7 @@ export function VisualEditorPrototype({
               if (!readOnly) executeCommand("transform.toggle-space");
             }}
             notice={null}
-            onSelect={(selection) => {
-              if (selection?.kind === "entity") {
-                setSceneSettingsOpen(false);
-                setSceneSelection(selection);
-                setAssetSelection(null);
-              }
-            }}
+            onSelect={handleSceneViewportSelection}
             onTransformCommit={handleGizmoCommit}
             onDropPrimitive={(creationId, position) =>
               handlePlacePrimitive(creationId, position)
@@ -4204,7 +4702,7 @@ export function VisualEditorPrototype({
           />
           <InspectorPanel
             scene={bundle.scene}
-            assets={bundle.assets}
+            assets={playSession?.runtimeAssets ?? bundle.assets}
             prefabs={bundle.prefabs}
             projectPath={projectPath}
             selectedEntityId={sceneSelection?.id ?? null}
@@ -4212,7 +4710,9 @@ export function VisualEditorPrototype({
             selectedEntityIds={selectedEntityIds}
             selectedAssetIds={selectedAssetIds}
             readOnly={readOnly}
+            playMode={editorMode === "play"}
             onRenameEntity={handleRenameEntity}
+            onEntityEnabledChange={handleEntityEnabledChange}
             onTransformChange={handleTransformChange}
             onTransformScrubStart={handleTransformScrubStart}
             onTransformScrubChange={handleTransformScrubChange}
@@ -4223,9 +4723,13 @@ export function VisualEditorPrototype({
             onAutoFitCollider={handleAutoFitCollider}
             onRemoveCollider={handleRemoveCollider}
             onLightChange={handleLightChange}
+            onTextChange={handleTextChange}
             onAnimationChange={handleAnimationChange}
             onAudioSourceChange={handleAudioSourceChange}
             onSelectAsset={handleSelectAsset}
+            onOpenInteractivity={(assetId) =>
+              executeCommand("asset.edit-interactivity", { assetId })
+            }
             onCloseAsset={() => setAssetSelection(null)}
             onMaterialChange={handleMaterialChange}
             onModelChange={handleModelChange}
@@ -4310,6 +4814,9 @@ export function VisualEditorPrototype({
             onPlaceBuiltinPrefab={handlePlaceBuiltinPrefab}
             onPlaceSceneAsset={(assetId) => handlePlaceSceneAsset(assetId)}
             onOpenExternalStore={() => setExternalStoreOpen(true)}
+            onOpenInteractivity={(assetId) =>
+              executeCommand("asset.edit-interactivity", { assetId })
+            }
             externalOperationLockReason={
               assetImportPanelAvailability.disabledReason
             }
@@ -4318,8 +4825,15 @@ export function VisualEditorPrototype({
             assets={bundle.assets}
             projectPath={projectPath}
             enabled={editorMode === "edit" && !importBusy}
-            onGenerated={handleMaterialThumbnailGenerated}
+            onGenerated={handleAssetThumbnailGenerated}
             onFailed={handleMaterialThumbnailFailure}
+          />
+          <EnvironmentTextureThumbnailGenerationQueue
+            assets={bundle.assets}
+            projectPath={projectPath}
+            enabled={editorMode === "edit" && !importBusy}
+            onGenerated={handleAssetThumbnailGenerated}
+            onFailed={handleEnvironmentTextureThumbnailFailure}
           />
           <EditorUtilityRail
             commands={resolvedCommands}
@@ -4362,6 +4876,7 @@ export function VisualEditorPrototype({
           <ExternalAssetStoreDialog
             open={externalStoreOpen}
             projectPath={projectPath}
+            projectKind={projectKind}
             disabledReason={
               readOnly
                 ? "Playを停止してから外部アセットを追加してください"
@@ -4369,7 +4884,22 @@ export function VisualEditorPrototype({
             }
             onClose={() => setExternalStoreOpen(false)}
             onInstalled={handleExternalStoreInstalled}
+            onAddOpenBrush={handleAddOpenBrushMaterial}
+            onAddOfficialComponent={handleAddOfficialComponent}
           />
+          {interactivityEditorAssetId &&
+          bundle.assets.assets[interactivityEditorAssetId]?.kind === "interactivity" ? (
+            <InteractivityGraphEditor
+              key={interactivityEditorAssetId}
+              asset={bundle.assets.assets[interactivityEditorAssetId]}
+              materials={Object.values(bundle.assets.assets).filter(
+                (asset) => asset.kind === "material",
+              )}
+              readOnly={readOnly}
+              onSave={handleSaveInteractivityAsset}
+              onClose={() => setInteractivityEditorAssetId(null)}
+            />
+          ) : null}
           <button
             type="button"
             aria-label="Hierarchy panelの幅を変更"

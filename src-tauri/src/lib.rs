@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -1585,6 +1587,20 @@ fn decode_starter_asset_data_url(data_url: &str, relative_path: &str) -> Result<
         return Ok(bytes);
     }
 
+    if (relative_path.ends_with(".jpg") || relative_path.ends_with(".jpeg"))
+        && media_type == "image/jpeg"
+    {
+        if bytes.len() < 4 || !bytes.starts_with(&[0xff, 0xd8]) || !bytes.ends_with(&[0xff, 0xd9]) {
+            return Err("starter Texture is not a complete JPEG file".to_string());
+        }
+        let (width, height) = jpeg_dimensions(&bytes)
+            .ok_or_else(|| "starter Texture JPEG dimensions are invalid".to_string())?;
+        if width == 0 || height == 0 || width > 4096 || height > 4096 {
+            return Err("starter Texture dimensions must be between 1 and 4096".to_string());
+        }
+        return Ok(bytes);
+    }
+
     if relative_path.ends_with(".txt") && media_type == "text/plain" {
         let text = std::str::from_utf8(&bytes)
             .map_err(|_| "starter text asset must be valid UTF-8".to_string())?;
@@ -1595,6 +1611,64 @@ fn decode_starter_asset_data_url(data_url: &str, relative_path: &str) -> Result<
     }
 
     Err("starter asset media type does not match its file extension".to_string())
+}
+
+fn jpeg_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    if bytes.len() < 4 || !bytes.starts_with(&[0xff, 0xd8]) {
+        return None;
+    }
+    let mut offset = 2usize;
+    while offset + 1 < bytes.len() {
+        while offset < bytes.len() && bytes[offset] != 0xff {
+            offset += 1;
+        }
+        while offset < bytes.len() && bytes[offset] == 0xff {
+            offset += 1;
+        }
+        if offset >= bytes.len() {
+            return None;
+        }
+        let marker = bytes[offset];
+        offset += 1;
+        if marker == 0xd9 || marker == 0xda {
+            return None;
+        }
+        if marker == 0x01 || (0xd0..=0xd8).contains(&marker) {
+            continue;
+        }
+        if offset + 2 > bytes.len() {
+            return None;
+        }
+        let segment_length = u16::from_be_bytes([bytes[offset], bytes[offset + 1]]) as usize;
+        if segment_length < 2 || offset + segment_length > bytes.len() {
+            return None;
+        }
+        let is_start_of_frame = matches!(
+            marker,
+            0xc0 | 0xc1
+                | 0xc2
+                | 0xc3
+                | 0xc5
+                | 0xc6
+                | 0xc7
+                | 0xc9
+                | 0xca
+                | 0xcb
+                | 0xcd
+                | 0xce
+                | 0xcf
+        );
+        if is_start_of_frame {
+            if segment_length < 7 {
+                return None;
+            }
+            let height = u16::from_be_bytes([bytes[offset + 3], bytes[offset + 4]]) as u32;
+            let width = u16::from_be_bytes([bytes[offset + 5], bytes[offset + 6]]) as u32;
+            return Some((width, height));
+        }
+        offset += segment_length;
+    }
+    None
 }
 
 fn project_from_visual_manifest(path: &Path, manifest: &VisualProjectManifest) -> Project {
@@ -3426,7 +3500,11 @@ fn read_image_data_url(project_path: String, rel: String) -> Result<String, Stri
         Some("jpg") | Some("jpeg") => "image/jpeg",
         Some("gif") => "image/gif",
         Some("webp") => "image/webp",
+        Some("avif") => "image/avif",
+        Some("bmp") => "image/bmp",
         Some("svg") => "image/svg+xml",
+        Some("tga") => "image/x-tga",
+        Some("tif") | Some("tiff") => "image/tiff",
         Some("glb") => "model/gltf-binary",
         Some("gltf") => "model/gltf+json",
         Some("ktx2") => "image/ktx2",
@@ -4061,6 +4139,65 @@ mod tests {
         )
         .expect_err("text containing a NUL byte must be rejected")
         .contains("must not contain NUL"));
+    }
+
+    #[test]
+    fn validates_jpeg_starter_assets() {
+        use base64::Engine;
+
+        let data_url = |media_type: &str, bytes: &[u8]| {
+            format!(
+                "data:{media_type};base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(bytes)
+            )
+        };
+        let jpeg = [
+            0xff, 0xd8, // SOI
+            0xff, 0xe0, 0x00, 0x02, // empty APP0 segment
+            0xff, 0xc0, 0x00, 0x0b, 0x08, 0x00, 0x02, 0x00, 0x03, 0x01, 0x01, 0x11,
+            0x00, // SOF0: 3 x 2
+            0xff, 0xd9, // EOI
+        ];
+
+        assert_eq!(
+            decode_starter_asset_data_url(
+                &data_url("image/jpeg", &jpeg),
+                "assets/starter/xrift-official/tokyo-station.jpg",
+            )
+            .expect("a complete JPEG starter asset must be accepted"),
+            jpeg
+        );
+        assert!(decode_starter_asset_data_url(
+            &data_url("image/png", &jpeg),
+            "assets/starter/xrift-official/tokyo-station.jpg",
+        )
+        .expect_err("a mismatched JPEG media type must be rejected")
+        .contains("media type does not match"));
+        assert!(decode_starter_asset_data_url(
+            &data_url("image/jpeg", &[0xff, 0xd8, 0xff, 0xd9]),
+            "assets/starter/xrift-official/tokyo-station.jpg",
+        )
+        .expect_err("a JPEG without dimensions must be rejected")
+        .contains("dimensions are invalid"));
+    }
+
+    #[test]
+    fn validates_the_bundled_xrift_station_texture_as_png() {
+        use base64::Engine;
+
+        let png = include_bytes!(
+            "../../public/visual-editor/starter-assets/xrift-world-template-tokyo-station.png"
+        );
+        let data_url = format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(png)
+        );
+        let decoded = decode_starter_asset_data_url(
+            &data_url,
+            "assets/starter/xrift-official/tokyo-station.png",
+        )
+        .expect("the bundled station texture must pass the starter boundary");
+        assert_eq!(decoded.as_slice(), png);
     }
 
     #[test]

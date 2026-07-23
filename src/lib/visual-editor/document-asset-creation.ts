@@ -3,8 +3,9 @@ import {
   type AssetManifest,
 } from "./asset-manifest";
 import { addDefaultParticleAsset } from "./particle-system";
+import { addDefaultInteractivityAsset } from "./interactivity-graph";
 
-export type DocumentAssetKind = "material" | "particle";
+export type DocumentAssetKind = "material" | "particle" | "interactivity";
 
 export type AddDefaultDocumentAssetResult = {
   manifest: AssetManifest;
@@ -39,7 +40,7 @@ export function resolveAssetCreationFolderId(
     : null;
 }
 
-/** Adds an authored Material or Particle with folder membership and stable order. */
+/** Adds an authored reusable Asset with folder membership and stable order. */
 export function addDefaultDocumentAsset(
   manifest: AssetManifest,
   input: {
@@ -54,7 +55,9 @@ export function addDefaultDocumentAsset(
   const assetName =
     input.kind === "material"
       ? `新規マテリアル ${count + 1}`
-      : `新規Particle ${count + 1}`;
+      : input.kind === "particle"
+        ? `新規Particle ${count + 1}`
+        : `Interactivity Graph ${count + 1}`;
   const result =
     input.kind === "material"
       ? addDefaultMaterialAsset(manifest, {
@@ -69,11 +72,17 @@ export function addDefaultDocumentAsset(
             },
           },
         })
-      : addDefaultParticleAsset(manifest, {
-          id: input.id,
-          name: assetName,
-          folderId: input.folderId,
-        });
+      : input.kind === "particle"
+        ? addDefaultParticleAsset(manifest, {
+            id: input.id,
+            name: assetName,
+            folderId: input.folderId,
+          })
+        : addDefaultInteractivityAsset(manifest, {
+            id: input.id,
+            name: assetName,
+            folderId: input.folderId,
+          });
   return {
     manifest: result.manifest,
     assetId: result.assetId,

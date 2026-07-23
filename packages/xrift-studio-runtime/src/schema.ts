@@ -75,6 +75,19 @@ export type XriftRuntimeComponent =
     }
   | {
       id: string;
+      type: "text";
+      enabled: boolean;
+      text: string;
+      color: string;
+      fontSize: number;
+      maxWidth?: number;
+      anchorX: "left" | "center" | "right";
+      anchorY: "top" | "middle" | "bottom";
+      outlineWidth: number;
+      outlineColor: string;
+    }
+  | {
+      id: string;
       type: "collider";
       enabled: boolean;
       shape: "box" | "mesh";
@@ -168,6 +181,10 @@ export type XriftRuntimeAsset =
       url: string;
       colorSpace: "auto" | "srgb" | "linear";
       flipY: boolean;
+      sampler: {
+        wrapS: "repeat" | "clamp-to-edge" | "mirrored-repeat";
+        wrapT: "repeat" | "clamp-to-edge" | "mirrored-repeat";
+      };
     }
   | {
       id: string;
@@ -176,6 +193,7 @@ export type XriftRuntimeAsset =
       url: string;
       sourceFormat: "hdr" | "exr" | "image";
       projection: "equirectangular";
+      flipY: boolean;
     }
   | {
       id: string;
@@ -211,6 +229,14 @@ export type XriftRuntimeAsset =
       kind: "particle";
       name: string;
       properties: Record<string, unknown>;
+    }
+  | {
+      id: string;
+      kind: "interactivity";
+      name: string;
+      extensionName: "KHR_interactivity";
+      specStatus: "release-candidate-2026-07-16";
+      extension: Record<string, unknown>;
     };
 
 export type XriftRuntimeManifest = {

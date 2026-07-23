@@ -3,6 +3,7 @@ import {
   AnimationClip,
   BoxGeometry,
   BufferGeometry,
+  ClampToEdgeWrapping,
   Color,
   ConeGeometry,
   CylinderGeometry,
@@ -15,10 +16,12 @@ import {
   Material,
   Mesh,
   MeshStandardMaterial,
+  MirroredRepeatWrapping,
   Object3D,
   PlaneGeometry,
   PointLight,
   RectAreaLight,
+  RepeatWrapping,
   SphereGeometry,
   SpotLight,
   SRGBColorSpace,
@@ -31,6 +34,7 @@ import {
 } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
+import { Text } from "troika-three-text";
 
 import {
   isXriftRuntimeManifest,
@@ -227,6 +231,8 @@ export class XriftThreeLoader {
     );
     texture.flipY = asset.flipY;
     if (asset.colorSpace === "srgb") texture.colorSpace = SRGBColorSpace;
+    texture.wrapS = runtimeTextureWrapping(asset.sampler.wrapS);
+    texture.wrapT = runtimeTextureWrapping(asset.sampler.wrapT);
     return texture;
   }
 
@@ -255,10 +261,16 @@ export class XriftThreeLoader {
         ...(properties.doubleSided === true ? { side: DoubleSide } : {}),
       });
       const baseColorTexture = asRecord(pbr?.baseColorTexture);
-      const textureId = baseColorTexture?.textureAssetId;
-      if (typeof textureId === "string") {
-        material.map = textures.get(textureId) ?? null;
-        if (!material.map) {
+      const resolveTexture = (
+        textureInfo: Record<string, unknown> | undefined,
+      ): Texture | null => {
+        const textureId = textureInfo?.textureAssetId;
+        if (typeof textureId !== "string" || !textureInfo) return null;
+        const sourceTexture = textures.get(textureId);
+        const resolved = sourceTexture
+          ? configureMaterialTexture(sourceTexture, textureInfo)
+          : null;
+        if (!resolved) {
           diagnostics.push({
             severity: "warning",
             code: "texture-not-loaded",
@@ -266,7 +278,24 @@ export class XriftThreeLoader {
             assetId: asset.id,
           });
         }
+        return resolved;
+      };
+      material.map = resolveTexture(baseColorTexture);
+      const metallicRoughnessTexture = asRecord(pbr?.metallicRoughnessTexture);
+      const resolvedMetallicRoughness = resolveTexture(metallicRoughnessTexture);
+      material.metalnessMap = resolvedMetallicRoughness;
+      material.roughnessMap = resolvedMetallicRoughness;
+      const normalTexture = asRecord(properties.normalTexture);
+      material.normalMap = resolveTexture(normalTexture);
+      if (typeof normalTexture?.scale === "number") {
+        material.normalScale.set(normalTexture.scale, normalTexture.scale);
       }
+      const occlusionTexture = asRecord(properties.occlusionTexture);
+      material.aoMap = resolveTexture(occlusionTexture);
+      if (typeof occlusionTexture?.strength === "number") {
+        material.aoMapIntensity = occlusionTexture.strength;
+      }
+      material.emissiveMap = resolveTexture(asRecord(properties.emissiveTexture));
       const emissive = asNumberArray(properties.emissiveFactor, 3);
       if (emissive) {
         const [red = 0, green = 0, blue = 0] = emissive;
@@ -343,6 +372,20 @@ export class XriftThreeLoader {
     }
     if (component.type === "animation") return null;
     if (component.type === "light") return createLight(component);
+    if (component.type === "text") {
+      const text = new Text();
+      text.text = component.text;
+      text.color = component.color;
+      text.fontSize = component.fontSize;
+      text.maxWidth = component.maxWidth ?? Infinity;
+      text.anchorX = component.anchorX;
+      text.anchorY = component.anchorY;
+      text.outlineWidth = component.outlineWidth;
+      text.outlineColor = component.outlineColor;
+      text.sync();
+      text.userData.xriftStudioComponentId = component.id;
+      return text;
+    }
     if (component.type === "spawn-point" || component.type === "collider") {
       const marker = new Group();
       marker.userData.xriftStudioComponent = component;
@@ -357,6 +400,35 @@ export class XriftThreeLoader {
     });
     return null;
   }
+}
+
+function runtimeTextureWrapping(
+  value: "repeat" | "clamp-to-edge" | "mirrored-repeat",
+) {
+  if (value === "repeat") return RepeatWrapping;
+  if (value === "mirrored-repeat") return MirroredRepeatWrapping;
+  return ClampToEdgeWrapping;
+}
+
+function configureMaterialTexture(
+  source: Texture,
+  textureInfo: Record<string, unknown>,
+): Texture {
+  const texture = source.clone();
+  const texCoord = textureInfo.texCoord;
+  if (typeof texCoord === "number" && Number.isInteger(texCoord) && texCoord >= 0) {
+    texture.channel = texCoord;
+  }
+  const transform = asRecord(textureInfo.transform);
+  const offset = asNumberArray(transform?.offset, 2);
+  const scale = asNumberArray(transform?.scale, 2);
+  if (offset) texture.offset.set(offset[0] ?? 0, offset[1] ?? 0);
+  if (scale) texture.repeat.set(scale[0] ?? 1, scale[1] ?? 1);
+  if (typeof transform?.rotation === "number") {
+    texture.rotation = transform.rotation;
+  }
+  texture.needsUpdate = true;
+  return texture;
 }
 
 export async function loadXriftRuntime(

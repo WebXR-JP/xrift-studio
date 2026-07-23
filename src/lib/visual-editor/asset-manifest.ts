@@ -1,5 +1,11 @@
 export const ASSET_MANIFEST_SCHEMA_VERSION = "0.1.0" as const;
 
+import type {
+  KhrInteractivityExtension,
+  KHR_INTERACTIVITY_EXTENSION_NAME,
+  KHR_INTERACTIVITY_SPEC_STATUS,
+} from "./interactivity-graph";
+
 export type AssetStatus = "ready" | "missing" | "invalid";
 
 export type AssetSource =
@@ -421,8 +427,20 @@ export type TextureImportSettings = {
   compression: TextureCompressionSettings;
 };
 
+export type TextureSourceFormat =
+  | "png"
+  | "jpeg"
+  | "webp"
+  | "avif"
+  | "gif"
+  | "bmp"
+  | "svg"
+  | "ktx2"
+  | "hdr"
+  | "exr";
+
 export type TextureImportMetadata = {
-  sourceFormat: "png" | "jpeg" | "webp" | "ktx2";
+  sourceFormat: TextureSourceFormat;
   mimeType: string;
   byteLength: number;
   width?: number;
@@ -432,9 +450,22 @@ export type TextureImportMetadata = {
 export type TextureAsset = AssetBase<"texture"> & {
   importSettings: TextureImportSettings;
   importMetadata?: TextureImportMetadata;
+  /** Environment textures are equirectangular images used by Scene Skybox. */
+  usage?: "surface" | "environment";
+  projection?: "equirectangular";
   /** Present only for an image expanded from an imported glTF/GLB. */
   importedFromModel?: ImportedTextureProvenance;
 };
+
+export type EnvironmentTextureAsset = TextureAsset &
+  (
+    | { usage: "environment" }
+    | {
+        importMetadata: TextureImportMetadata & {
+          sourceFormat: "hdr" | "exr";
+        };
+      }
+  );
 
 export type ImportedTextureProvenance = {
   modelAssetId: string;
@@ -504,7 +535,17 @@ export type ParticleAsset = AssetBase<"particle"> & {
   properties: ParticleProperties;
 };
 
-/** Equirectangular environment image kept distinct from a surface Texture. */
+/** Reusable canonical glTF KHR_interactivity behavior graph. */
+export type InteractivityAsset = AssetBase<"interactivity"> & {
+  extensionName: typeof KHR_INTERACTIVITY_EXTENSION_NAME;
+  specStatus: typeof KHR_INTERACTIVITY_SPEC_STATUS;
+  extension: KhrInteractivityExtension;
+};
+
+/**
+ * Legacy authoring shape. AssetManifest parsing migrates it to a TextureAsset
+ * with `usage: "environment"`; new imports must not create this kind.
+ */
 export type SkyboxAsset = AssetBase<"skybox"> & {
   projection: "equirectangular";
   sourceFormat: "hdr" | "exr" | "image";
@@ -543,6 +584,7 @@ export type SceneAsset =
   | TextureAsset
   | SkyboxAsset
   | ParticleAsset
+  | InteractivityAsset
   | AudioAsset
   | TemplateAsset;
 
@@ -596,6 +638,42 @@ export function getTextureAsset(
 ): TextureAsset | undefined {
   const asset = manifest.assets[assetId];
   return asset?.kind === "texture" ? asset : undefined;
+}
+
+export function isEnvironmentTextureAsset(
+  asset: SceneAsset | undefined,
+): asset is EnvironmentTextureAsset {
+  return (
+    asset?.kind === "texture" &&
+    (asset.usage === "environment" ||
+      asset.importMetadata?.sourceFormat === "hdr" ||
+      asset.importMetadata?.sourceFormat === "exr")
+  );
+}
+
+export function getTextureSourceFormat(
+  asset: TextureAsset,
+): TextureSourceFormat | undefined {
+  if (asset.importMetadata?.sourceFormat) return asset.importMetadata.sourceFormat;
+  if (asset.source.kind !== "project") return undefined;
+  const extension = asset.source.relativePath.split(".").pop()?.toLowerCase();
+  if (extension === "jpg") return "jpeg";
+  return [
+    "png",
+    "jpeg",
+    "webp",
+    "avif",
+    "gif",
+    "bmp",
+    "svg",
+    "ktx2",
+    "hdr",
+    "exr",
+  ].includes(
+    extension ?? "",
+  )
+    ? (extension as TextureSourceFormat)
+    : undefined;
 }
 
 export function getAudioAsset(
@@ -2149,6 +2227,15 @@ export function updateTextureAsset(
         ...asset,
         source,
         importSettings,
+        ...(isEnvironmentTextureAsset(asset) &&
+        asset.thumbnail?.status === "generated"
+          ? {
+              thumbnail: {
+                ...asset.thumbnail,
+                status: "stale" as const,
+              },
+            }
+          : {}),
         ...(asset.importedFromModel
           ? {
               importedFromModel: {

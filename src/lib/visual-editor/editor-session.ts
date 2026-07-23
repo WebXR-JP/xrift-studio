@@ -15,6 +15,7 @@ import {
   createMeshColliderComponent,
   createMeshComponent,
   createParticleEmitterComponent,
+  createTextComponent,
   createTransformComponent,
   fitBoxColliderToMesh,
   getMesh,
@@ -88,6 +89,7 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
   definition("core.particle", "Particle Emitter", "rendering", true, "particle-emitter"),
   definition("core.animation", "Animation", "rendering", false, "animation"),
   definition("core.audio-source", "Audio Source", "media", true, "audio-source"),
+  definition("core.text", "Text", "rendering", true, "text"),
   ...XRIFT_COMPONENT_REGISTRY.map(
     (component): EditorComponentDefinition => ({
       id: component.schemaId,
@@ -699,6 +701,9 @@ function createRegisteredComponent(
       (asset) => asset.kind === "audio",
     );
     return createAudioSourceComponent(id, audio?.id ?? "");
+  }
+  if (definition.componentType === "text") {
+    return createTextComponent(id);
   }
   return null;
 }

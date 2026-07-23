@@ -1,26 +1,30 @@
-import { AlertCircle, CheckCircle2, Code2, Library, X } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  FolderOpen,
+  LoaderCircle,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   DREI_R3F_IMPORT_SAMPLE,
-  XRIFT_COMPONENT_API_SOURCE,
-  XRIFT_COMPONENT_API_VERSION,
   analyzeComponentCode,
-  createOfficialXriftComponentSample,
-  listXriftComponentDefinitions,
+  analyzeComponentProject,
+  pickClassicProjectVisualImportSource,
+  type ClassicProjectVisualImportSource,
   type ComponentCodeImportPlan,
   type VisualProjectKind,
-  type XriftComponentDefinition,
 } from "../../lib/visual-editor";
-import { OfficialXriftComponentThumbnail } from "./OfficialXriftComponentThumbnail";
 
 type Props = {
   open: boolean;
   projectKind: VisualProjectKind;
   onClose: () => void;
-  onImport: (plan: ComponentCodeImportPlan) => boolean;
+  onImport: (
+    plan: ComponentCodeImportPlan,
+    classicSource: ClassicProjectVisualImportSource | null,
+  ) => Promise<boolean>;
 };
-
-type DialogTab = "official" | "code";
 
 export function ComponentCodeImportDialog({
   open,
@@ -28,18 +32,12 @@ export function ComponentCodeImportDialog({
   onClose,
   onImport,
 }: Props) {
-  const definitions = useMemo(
-    () => listXriftComponentDefinitions(projectKind),
-    [projectKind],
-  );
-  const initialDefinition =
-    definitions.find((definition) => definition.importName === "Portal") ??
-    definitions[0];
-  const [tab, setTab] = useState<DialogTab>("official");
-  const [selectedSchemaId, setSelectedSchemaId] = useState(
-    initialDefinition?.schemaId ?? "",
-  );
   const [code, setCode] = useState(DREI_R3F_IMPORT_SAMPLE);
+  const [classicSource, setClassicSource] =
+    useState<ClassicProjectVisualImportSource | null>(null);
+  const [classicLoading, setClassicLoading] = useState(false);
+  const [classicLoadError, setClassicLoadError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -52,35 +50,49 @@ export function ComponentCodeImportDialog({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose, open]);
 
-  useEffect(() => {
-    if (
-      definitions.length > 0 &&
-      !definitions.some((definition) => definition.schemaId === selectedSchemaId)
-    ) {
-      setSelectedSchemaId(initialDefinition?.schemaId ?? definitions[0].schemaId);
-    }
-  }, [definitions, initialDefinition?.schemaId, selectedSchemaId]);
-
-  const selectedDefinition = definitions.find(
-    (definition) => definition.schemaId === selectedSchemaId,
-  );
-  const officialCode = selectedDefinition
-    ? createOfficialXriftComponentSample(selectedDefinition.importName)
-    : "";
-  const activeCode = tab === "official" ? officialCode : code;
   const plan = useMemo(
-    () => analyzeComponentCode(activeCode, projectKind),
-    [activeCode, projectKind],
+    () =>
+      classicSource && code === classicSource.source
+        ? analyzeComponentProject({
+            entryFile: classicSource.entryFile,
+            modules: classicSource.modules,
+            projectKind,
+          })
+        : analyzeComponentCode(code, projectKind),
+    [classicSource, code, projectKind],
   );
   const hasErrors = plan.diagnostics.some(
     (diagnostic) => diagnostic.severity === "error",
   );
 
+  const pickClassicProject = async () => {
+    if (classicLoading) return;
+    setClassicLoading(true);
+    setClassicLoadError(null);
+    try {
+      const selected = await pickClassicProjectVisualImportSource(projectKind);
+      if (!selected) return;
+      setCode(selected.source);
+      setClassicSource(selected);
+    } catch (error) {
+      setClassicLoadError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setClassicLoading(false);
+    }
+  };
+
   if (!open) return null;
 
-  const importPlan = () => {
-    if (hasErrors || plan.nodes.length === 0) return;
-    if (onImport(plan)) onClose();
+  const importPlan = async () => {
+    if (importing || hasErrors || plan.nodes.length === 0) return;
+    setImporting(true);
+    try {
+      if (await onImport(plan, classicSource)) onClose();
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
@@ -94,10 +106,10 @@ export function ComponentCodeImportDialog({
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4">
           <div>
             <h2 id="component-import-title" className="text-base font-semibold text-slate-950">
-              XRift公式コンポーネント
+              R3F / Classicからインポート
             </h2>
             <p className="mt-1 text-xs leading-5 text-slate-600">
-              公開パッケージ {XRIFT_COMPONENT_API_VERSION} のComponentを追加するか、Drei / React Three FiberのTSXを安全に変換します。
+              Drei / React Three FiberのTSX、または既存XRift Classic projectを安全なScene dataへ変換します。
             </p>
           </div>
           <button
@@ -111,47 +123,26 @@ export function ComponentCodeImportDialog({
           </button>
         </header>
 
-        <div className="flex shrink-0 items-center gap-1 border-b border-slate-200 px-5 pt-3">
-          <TabButton
-            active={tab === "official"}
-            icon={Library}
-            label="公式カタログ"
-            onClick={() => setTab("official")}
-          />
-          <TabButton
-            active={tab === "code"}
-            icon={Code2}
-            label="Drei / R3F 変換"
-            onClick={() => setTab("code")}
-          />
-        </div>
-
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
-          {tab === "official" ? (
-            <OfficialCatalog
-              definitions={definitions}
-              selected={selectedDefinition}
-              code={officialCode}
-              onSelect={(definition) => setSelectedSchemaId(definition.schemaId)}
-            />
-          ) : (
-            <CodeConverter code={code} onCodeChange={setCode} />
-          )}
+          <CodeConverter
+            code={code}
+            classicSource={classicSource}
+            loading={classicLoading}
+            error={classicLoadError}
+            onCodeChange={(nextCode) => {
+              setCode(nextCode);
+              setClassicSource(null);
+              setClassicLoadError(null);
+            }}
+            onPickClassicProject={pickClassicProject}
+          />
 
           <AnalysisResult plan={plan} />
         </div>
 
         <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-slate-200 bg-slate-50 px-5 py-3">
           <div className="text-[11px] leading-4 text-slate-500">
-            <a
-              href={XRIFT_COMPONENT_API_SOURCE}
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-violet-700 underline decoration-violet-200 underline-offset-2"
-            >
-              WebXR-JP 公式ソース
-            </a>
-            <span className="ml-2">コードは実行せず、リテラル値だけを変換します。</span>
+            コードは実行せず、import graph、JSX構造、静的リテラルだけを変換します。
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -163,12 +154,14 @@ export function ComponentCodeImportDialog({
             </button>
             <button
               type="button"
-              disabled={hasErrors || plan.nodes.length === 0}
-              onClick={importPlan}
+              disabled={
+                classicLoading || importing || hasErrors || plan.nodes.length === 0
+              }
+              onClick={() => void importPlan()}
               className="rounded-md bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              {tab === "official"
-                ? `${selectedDefinition?.label ?? "Component"}を追加`
+              {importing
+                ? "AssetとSceneを変換中…"
                 : `${plan.summary.entityCount}件を変換して追加`}
             </button>
           </div>
@@ -178,89 +171,20 @@ export function ComponentCodeImportDialog({
   );
 }
 
-function OfficialCatalog({
-  definitions,
-  selected,
-  code,
-  onSelect,
-}: {
-  definitions: readonly XriftComponentDefinition[];
-  selected?: XriftComponentDefinition;
-  code: string;
-  onSelect: (definition: XriftComponentDefinition) => void;
-}) {
-  return (
-    <div>
-      {selected ? (
-        <section className="grid gap-4 rounded-lg border border-violet-200 bg-violet-50/45 p-4 md:grid-cols-[220px_minmax(0,1fr)]">
-          <OfficialXriftComponentThumbnail definition={selected} />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-semibold text-slate-950">{selected.label}</h3>
-              <span className="rounded-full border border-violet-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-violet-700">
-                @{XRIFT_COMPONENT_API_VERSION}
-              </span>
-            </div>
-            <p className="mt-1 text-xs leading-5 text-slate-600">{selected.description}</p>
-            <pre className="mt-3 max-h-32 overflow-auto rounded-md border border-slate-800 bg-slate-950 p-3 text-[10px] leading-4 text-slate-200">
-              <code>{code}</code>
-            </pre>
-          </div>
-        </section>
-      ) : null}
-
-      <section className="mt-5">
-        <div className="mb-2 flex items-end justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">公式Component一覧</h3>
-            <p className="mt-0.5 text-[11px] text-slate-500">
-              ワールド／アイテム内へ配置できる公式Componentを全件表示しています。
-            </p>
-          </div>
-          <span className="text-xs font-medium tabular-nums text-slate-500">
-            {definitions.length} components
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {definitions.map((definition) => {
-            const active = definition.schemaId === selected?.schemaId;
-            return (
-              <button
-                key={definition.schemaId}
-                type="button"
-                aria-pressed={active}
-                onClick={() => onSelect(definition)}
-                className={`rounded-lg border p-2 text-left transition-colors ${
-                  active
-                    ? "border-violet-500 bg-violet-50 ring-2 ring-violet-100"
-                    : "border-slate-200 bg-white hover:border-violet-300 hover:bg-slate-50"
-                }`}
-              >
-                <OfficialXriftComponentThumbnail definition={definition} />
-                <span className="mt-2 block truncate text-xs font-semibold text-slate-800">
-                  {definition.label}
-                </span>
-                <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-wide text-slate-400">
-                  {definition.category}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-600">
-          `DevEnvironment` は公式のローカル開発用wrapperです。Sceneへ配置せず、XRiftのdev entryでStudioが管理します。
-        </div>
-      </section>
-    </div>
-  );
-}
-
 function CodeConverter({
   code,
+  classicSource,
+  loading,
+  error,
   onCodeChange,
+  onPickClassicProject,
 }: {
   code: string;
+  classicSource: ClassicProjectVisualImportSource | null;
+  loading: boolean;
+  error: string | null;
   onCodeChange: (code: string) => void;
+  onPickClassicProject: () => void;
 }) {
   return (
     <section>
@@ -268,17 +192,49 @@ function CodeConverter({
         <div>
           <h3 className="text-sm font-semibold text-slate-900">TSXを変換</h3>
           <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-            Box / Sphere / Cylinder / Cone / Plane、Billboard、Reflector、Skyと公式XRift Componentに対応します。
+            標準Geometry、R3F Light、Rapier RigidBody、Billboard、Reflector、Skyと公式XRift Componentに対応します。
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => onCodeChange(DREI_R3F_IMPORT_SAMPLE)}
-          className="shrink-0 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
-        >
-          変換サンプルに戻す
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={onPickClassicProject}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded border border-violet-300 bg-violet-50 px-2.5 py-1.5 text-[11px] font-semibold text-violet-700 hover:bg-violet-100 disabled:cursor-wait disabled:opacity-60"
+          >
+            {loading ? (
+              <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <FolderOpen size={13} aria-hidden="true" />
+            )}
+            {loading ? "読み込み中" : "Classicプロジェクトを選択"}
+          </button>
+          <button
+            type="button"
+            onClick={() => onCodeChange(DREI_R3F_IMPORT_SAMPLE)}
+            disabled={loading}
+            className="rounded border border-slate-300 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            変換サンプルに戻す
+          </button>
+        </div>
       </div>
+      {classicSource ? (
+        <div className="mb-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] leading-4 text-sky-900">
+          <span className="font-semibold">{classicSource.packageName}</span>
+          <span className="ml-2">{classicSource.entryFile}</span>
+          <span className="ml-2">{classicSource.modules.length} modules</span>
+          <span className="mt-0.5 block break-all text-sky-700">
+            {classicSource.path}
+          </span>
+        </div>
+      ) : null}
+      {error ? (
+        <div className="mb-2 flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] leading-4 text-rose-800">
+          <AlertCircle size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <span>{error}</span>
+        </div>
+      ) : null}
       <textarea
         value={code}
         onChange={(event) => onCodeChange(event.currentTarget.value)}
@@ -286,6 +242,9 @@ function CodeConverter({
         aria-label="変換するTSXコード"
         className="min-h-72 w-full resize-y rounded-lg border border-slate-300 bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
       />
+      <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-4 text-amber-900">
+        Classicでは検証済みentryからsrc内のlocal importを再帰的に読み、group、wrapper、Component境界をHierarchyへ保持します。hookやruntime stateは実行せず、動的な分岐・繰り返し・外部Assetは診断に残します。
+      </p>
     </section>
   );
 }
@@ -301,9 +260,45 @@ function AnalysisResult({ plan }: { plan: ComponentCodeImportPlan }) {
         <span className="rounded bg-slate-100 px-2 py-1 text-slate-600">
           Primitive {plan.summary.primitiveCount}
         </span>
+        <span className="rounded bg-amber-50 px-2 py-1 text-amber-700">
+          Light {plan.summary.lightCount}
+        </span>
+        <span className="rounded bg-sky-50 px-2 py-1 text-sky-700">
+          Collider {plan.summary.colliderCount}
+        </span>
+        {plan.summary.textCount > 0 ? (
+          <span className="rounded bg-fuchsia-50 px-2 py-1 text-fuchsia-700">
+            Text / UI {plan.summary.textCount}
+          </span>
+        ) : null}
+        {plan.summary.modelAssetCount > 0 ? (
+          <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-700">
+            Model {plan.summary.modelAssetCount}
+          </span>
+        ) : null}
+        {plan.summary.textureAssetCount > 0 ? (
+          <span className="rounded bg-cyan-50 px-2 py-1 text-cyan-700">
+            Texture {plan.summary.textureAssetCount}
+          </span>
+        ) : null}
+        {plan.summary.unsupportedAssetCount > 0 ? (
+          <span className="rounded bg-amber-50 px-2 py-1 text-amber-800">
+            変換Asset {plan.summary.unsupportedAssetCount}
+          </span>
+        ) : null}
         <span className="rounded bg-violet-50 px-2 py-1 text-violet-700">
           XRift {plan.summary.xriftComponentCount}
         </span>
+        {plan.summary.moduleCount > 1 ? (
+          <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-700">
+            Modules {plan.summary.moduleCount}
+          </span>
+        ) : null}
+        {plan.summary.localComponentCount > 0 ? (
+          <span className="rounded bg-indigo-50 px-2 py-1 text-indigo-700">
+            Local {plan.summary.localComponentCount}
+          </span>
+        ) : null}
       </div>
       {plan.diagnostics.length > 0 ? (
         <div className="mt-3 space-y-1.5">
@@ -326,7 +321,9 @@ function AnalysisResult({ plan }: { plan: ComponentCodeImportPlan }) {
                   <CheckCircle2 size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
                 )}
                 <span>
-                  {diagnostic.line ? `L${diagnostic.line}: ` : ""}
+                  {diagnostic.sourcePath ? `${diagnostic.sourcePath}` : ""}
+                  {diagnostic.sourcePath && diagnostic.line ? ":" : ""}
+                  {diagnostic.line ? `L${diagnostic.line}: ` : diagnostic.sourcePath ? ": " : ""}
                   {diagnostic.message}
                 </span>
               </div>
@@ -339,34 +336,17 @@ function AnalysisResult({ plan }: { plan: ComponentCodeImportPlan }) {
           公式Componentとしてシーンへ追加できます。
         </p>
       )}
+      {plan.assetDependencies.length > 0 ? (
+        <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-700">
+          <span className="font-semibold">同時に取り込むAsset</span>
+          <span className="ml-2">
+            {plan.assetDependencies.map((dependency) => dependency.fileName).join(" / ")}
+          </span>
+          <span className="mt-0.5 block text-slate-500">
+            Sceneへ追加する前にStudio Asset IDへ変換し、参照元Entityへ接続します。
+          </span>
+        </div>
+      ) : null}
     </section>
-  );
-}
-
-function TabButton({
-  active,
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  icon: typeof Library;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-semibold ${
-        active
-          ? "border-violet-600 text-violet-700"
-          : "border-transparent text-slate-500 hover:text-slate-800"
-      }`}
-    >
-      <Icon size={14} aria-hidden="true" />
-      {label}
-    </button>
   );
 }

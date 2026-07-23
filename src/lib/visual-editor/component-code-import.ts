@@ -16,19 +16,30 @@ import { createDocumentId } from "./document-id";
 import {
   addEditorComponent,
   createEmptyEntity,
+  reparentEntityHierarchy,
 } from "./editor-session";
 import { BUILTIN_ASSET_IDS } from "./prototype-project";
 import type { VisualProjectKind } from "./project-document";
 import {
   addBuiltinPrimitiveEntity,
+  createBoxColliderComponent,
+  createMeshComponent,
+  createTextComponent,
   renameEntity,
   updateEntityTransform,
+  type ColliderComponent,
   type JsonObject,
   type JsonValue,
+  type LightComponent,
+  type MeshComponent,
   type SceneDocument,
   type Vec3,
 } from "./scene-document";
 import { updateXriftComponent } from "./component-registry";
+import {
+  STUDIO_IMAGE_EXTENSION_PATTERN,
+  THREE_EDITOR_MODEL_EXTENSION_PATTERN,
+} from "./asset-format-registry";
 
 export const XRIFT_PORTAL_SAMPLE = `import { Portal } from '@xrift/world-components'
 
@@ -123,12 +134,38 @@ export type ComponentCodeImportDiagnostic = {
   code: string;
   message: string;
   line?: number;
+  sourcePath?: string;
 };
 
 export type ComponentCodeImportMaterial = {
   color: string;
   metalness?: number;
   roughness?: number;
+  baseColorTextureSourcePath?: string;
+  doubleSided?: boolean;
+};
+
+export type ComponentCodeImportModel = {
+  sourcePath: string;
+};
+
+export type ComponentCodeImportText = {
+  text: string;
+  color: string;
+  fontSize: number;
+  maxWidth?: number;
+  anchorX: "left" | "center" | "right";
+  anchorY: "top" | "middle" | "bottom";
+  outlineWidth: number;
+  outlineColor: string;
+};
+
+export type ComponentCodeImportAssetDependency = {
+  sourcePath: string;
+  fileName: string;
+  kind: "model" | "texture" | "unsupported";
+  requiredByPlanNodeIds: string[];
+  sourceModulePaths: string[];
 };
 
 export type ComponentCodeImportTransform = {
@@ -143,28 +180,83 @@ export type ComponentCodeImportXriftComponent = {
   sourceName: string;
 };
 
+export type ComponentCodeImportCollider = {
+  shape: "box";
+  isTrigger: boolean;
+  friction: number;
+  restitution: number;
+  sourceBodyType: "fixed" | "dynamic" | "kinematicPosition" | "kinematicVelocity";
+  gravityScale: number;
+  linearDamping: number;
+  angularDamping: number;
+  canSleep: boolean;
+  ccd: boolean;
+  lockTranslations: boolean;
+  lockRotations: boolean;
+};
+
+export type ComponentCodeImportLight = {
+  lightType: LightComponent["lightType"];
+  color: string;
+  intensity: number;
+  castShadow: boolean;
+  distance?: number;
+  decay?: number;
+  angle?: number;
+  penumbra?: number;
+  width?: number;
+  height?: number;
+  groundColor?: string;
+};
+
 export type ComponentCodeImportNode = {
+  planNodeId: string;
+  parentPlanNodeId: string | null;
   name: string;
-  kind: "empty" | "primitive";
+  kind: "empty" | "primitive" | "model" | "light" | "text";
   creationId?: BuiltinPrimitiveCreationDefinition["creationId"];
   transform: ComponentCodeImportTransform;
   material?: ComponentCodeImportMaterial;
+  model?: ComponentCodeImportModel;
+  text?: ComponentCodeImportText;
+  collider?: ComponentCodeImportCollider;
+  light?: ComponentCodeImportLight;
+  castShadow?: boolean;
+  receiveShadow?: boolean;
   xriftComponents: ComponentCodeImportXriftComponent[];
   sourceLine: number;
+  sourcePath?: string;
+  sourceTag?: string;
+  localComponent?: boolean;
+};
+
+export type ComponentCodeImportSourceModule = {
+  path: string;
+  source: string;
 };
 
 export type ComponentCodeImportPlan = {
   nodes: ComponentCodeImportNode[];
   diagnostics: ComponentCodeImportDiagnostic[];
+  assetDependencies: ComponentCodeImportAssetDependency[];
   imports: {
     xrift: string[];
     drei: string[];
     fiber: string[];
+    rapier: string[];
   };
   summary: {
     entityCount: number;
     primitiveCount: number;
+    lightCount: number;
+    textCount: number;
+    colliderCount: number;
+    modelAssetCount: number;
+    textureAssetCount: number;
+    unsupportedAssetCount: number;
     xriftComponentCount: number;
+    moduleCount: number;
+    localComponentCount: number;
   };
 };
 
@@ -179,6 +271,7 @@ type ParsedAttribute = {
   name: string;
   value?: JsonValue;
   dynamic: boolean;
+  rawExpression?: string;
 };
 
 type ParsedJsxNode = {
@@ -186,6 +279,8 @@ type ParsedJsxNode = {
   attributes: ParsedAttribute[];
   children: ParsedJsxNode[];
   line: number;
+  rawContent?: string;
+  contentStart: number;
 };
 
 type ImportBinding = {
@@ -195,8 +290,14 @@ type ImportBinding = {
 };
 
 type ConvertContext = {
-  transform: ComponentCodeImportTransform;
-  wrappers: ComponentCodeImportXriftComponent[];
+  parentPlanNodeId: string | null;
+  rigidBody?: ComponentCodeImportCollider | null;
+  sourcePath?: string;
+  moduleSources?: ReadonlyMap<string, string>;
+  fallbackModelSourcePath?: string;
+  fallbackTextureSourcePath?: string;
+  fallbackUnsupportedSourcePath?: string;
+  expansionStack: readonly string[];
 };
 
 const IDENTITY_TRANSFORM: ComponentCodeImportTransform = {
@@ -221,6 +322,17 @@ const GEOMETRY_PRIMITIVES: Readonly<Record<string, string>> = {
   planeGeometry: BUILTIN_PRIMITIVE_CREATION_IDS.plane,
 };
 
+const R3F_LIGHTS: Readonly<
+  Record<string, { label: string; lightType: LightComponent["lightType"] }>
+> = {
+  ambientLight: { label: "Ambient Light", lightType: "ambient" },
+  directionalLight: { label: "Directional Light", lightType: "directional" },
+  hemisphereLight: { label: "Hemisphere Light", lightType: "hemisphere" },
+  pointLight: { label: "Point Light", lightType: "point" },
+  spotLight: { label: "Spot Light", lightType: "spot" },
+  rectAreaLight: { label: "Rect Area Light", lightType: "rectArea" },
+};
+
 const FALLBACK_MATERIALS: Readonly<Record<string, string>> = {
   [BUILTIN_PRIMITIVE_CREATION_IDS.box]: BUILTIN_ASSET_IDS.material.blue,
   [BUILTIN_PRIMITIVE_CREATION_IDS.sphere]: BUILTIN_ASSET_IDS.material.violet,
@@ -233,14 +345,49 @@ export function analyzeComponentCode(
   source: string,
   projectKind: VisualProjectKind,
 ): ComponentCodeImportPlan {
+  return analyzeComponentSources({
+    entryFile: "<pasted>.tsx",
+    modules: [{ path: "<pasted>.tsx", source }],
+    projectKind,
+  });
+}
+
+export function analyzeComponentProject(input: {
+  entryFile: string;
+  modules: readonly ComponentCodeImportSourceModule[];
+  projectKind: VisualProjectKind;
+}): ComponentCodeImportPlan {
+  return analyzeComponentSources(input);
+}
+
+function analyzeComponentSources(input: {
+  entryFile: string;
+  modules: readonly ComponentCodeImportSourceModule[];
+  projectKind: VisualProjectKind;
+}): ComponentCodeImportPlan {
   const diagnostics: ComponentCodeImportDiagnostic[] = [];
+  const normalizedEntryFile = normalizeModulePath(input.entryFile);
+  const moduleSources = new Map(
+    input.modules.map((module) => [normalizeModulePath(module.path), module.source]),
+  );
+  const source = moduleSources.get(normalizedEntryFile);
+  if (source === undefined) {
+    return emptyImportPlan({
+      severity: "error",
+      code: "entry-module-missing",
+      message: `${normalizedEntryFile}をsource module一覧から読み取れませんでした。`,
+      sourcePath: normalizedEntryFile,
+    });
+  }
   const bindings = parseImports(source);
   const bindingByLocal = new Map(bindings.map((binding) => [binding.local, binding]));
   const roots = parseJsx(source, diagnostics);
   const nodes: ComponentCodeImportNode[] = [];
   const initialContext: ConvertContext = {
-    transform: cloneTransform(IDENTITY_TRANSFORM),
-    wrappers: [],
+    parentPlanNodeId: null,
+    sourcePath: normalizedEntryFile,
+    moduleSources,
+    expansionStack: [`${normalizedEntryFile}#<entry>`],
   };
 
   for (const root of roots) {
@@ -248,7 +395,7 @@ export function analyzeComponentCode(
       root,
       initialContext,
       bindingByLocal,
-      projectKind,
+      input.projectKind,
       nodes,
       diagnostics,
     );
@@ -268,28 +415,226 @@ export function analyzeComponentCode(
     });
   }
 
+  const allBindings = [...moduleSources.values()].flatMap(parseImports);
   const importsFor = (module: string) =>
-    bindings
+    allBindings
       .filter((binding) => binding.module === module)
       .map((binding) => binding.imported)
       .filter((value, index, values) => values.indexOf(value) === index)
       .sort();
+  const assetDependencies = collectPlanAssetDependencies(nodes);
   return {
     nodes,
     diagnostics,
+    assetDependencies,
     imports: {
       xrift: importsFor(XRIFT_COMPONENT_MODULE),
       drei: importsFor("@react-three/drei"),
       fiber: importsFor("@react-three/fiber"),
+      rapier: importsFor("@react-three/rapier"),
     },
     summary: {
       entityCount: nodes.length,
       primitiveCount: nodes.filter((node) => node.kind === "primitive").length,
+      lightCount: nodes.filter((node) => node.kind === "light").length,
+      textCount: nodes.filter((node) => node.kind === "text").length,
+      colliderCount: nodes.filter((node) => node.collider !== undefined).length,
+      modelAssetCount: assetDependencies.filter(
+        (dependency) => dependency.kind === "model",
+      ).length,
+      textureAssetCount: assetDependencies.filter(
+        (dependency) => dependency.kind === "texture",
+      ).length,
+      unsupportedAssetCount: assetDependencies.filter(
+        (dependency) => dependency.kind === "unsupported",
+      ).length,
       xriftComponentCount: nodes.reduce(
         (count, node) => count + node.xriftComponents.length,
         0,
       ),
+      moduleCount: moduleSources.size,
+      localComponentCount: nodes.filter((node) => node.localComponent).length,
     },
+  };
+}
+
+function emptyImportPlan(
+  diagnostic: ComponentCodeImportDiagnostic,
+): ComponentCodeImportPlan {
+  return {
+    nodes: [],
+    diagnostics: [diagnostic],
+    assetDependencies: [],
+    imports: { xrift: [], drei: [], fiber: [], rapier: [] },
+    summary: {
+      entityCount: 0,
+      primitiveCount: 0,
+      lightCount: 0,
+      textCount: 0,
+      colliderCount: 0,
+      modelAssetCount: 0,
+      textureAssetCount: 0,
+      unsupportedAssetCount: 0,
+      xriftComponentCount: 0,
+      moduleCount: 0,
+      localComponentCount: 0,
+    },
+  };
+}
+
+function collectPlanAssetDependencies(
+  nodes: readonly ComponentCodeImportNode[],
+): ComponentCodeImportAssetDependency[] {
+  const dependencies = new Map<
+    string,
+    ComponentCodeImportAssetDependency
+  >();
+  const register = (
+    sourcePath: string | undefined,
+    node: ComponentCodeImportNode,
+    expectedKind: "model" | "texture",
+  ) => {
+    if (!sourcePath) return;
+    const normalized = normalizeModulePath(sourcePath);
+    const current = dependencies.get(normalized) ?? {
+      sourcePath: normalized,
+      fileName: normalized.split("/").pop() ?? normalized,
+      kind: importedAssetKind(normalized, expectedKind),
+      requiredByPlanNodeIds: [],
+      sourceModulePaths: [],
+    };
+    if (!current.requiredByPlanNodeIds.includes(node.planNodeId)) {
+      current.requiredByPlanNodeIds.push(node.planNodeId);
+    }
+    if (node.sourcePath && !current.sourceModulePaths.includes(node.sourcePath)) {
+      current.sourceModulePaths.push(node.sourcePath);
+    }
+    dependencies.set(normalized, current);
+  };
+  for (const node of nodes) {
+    register(node.model?.sourcePath, node, "model");
+    register(node.material?.baseColorTextureSourcePath, node, "texture");
+  }
+  return [...dependencies.values()].sort((left, right) =>
+    left.sourcePath.localeCompare(right.sourcePath),
+  );
+}
+
+function importedAssetKind(
+  sourcePath: string,
+  preferredKind?: "model" | "texture",
+): ComponentCodeImportAssetDependency["kind"] {
+  if (
+    preferredKind === "model" &&
+    THREE_EDITOR_MODEL_EXTENSION_PATTERN.test(sourcePath)
+  ) {
+    return "model";
+  }
+  if (STUDIO_IMAGE_EXTENSION_PATTERN.test(sourcePath)) return "texture";
+  if (THREE_EDITOR_MODEL_EXTENSION_PATTERN.test(sourcePath)) return "model";
+  if (/\.(?:hdr|exr)$/i.test(sourcePath)) return "texture";
+  return "unsupported";
+}
+
+function assetSourcePathFromJsx(
+  node: ParsedJsxNode,
+  attributeNames: readonly string[],
+  sourceModulePath: string | undefined,
+): string | undefined {
+  for (const attributeName of attributeNames) {
+    const attribute = node.attributes.find((entry) => entry.name === attributeName);
+    if (!attribute) continue;
+    const candidate =
+      typeof attribute.value === "string"
+        ? attribute.value
+        : attribute.rawExpression;
+    const resolved = resolveAssetReference(candidate, sourceModulePath);
+    if (resolved) return resolved;
+  }
+  return undefined;
+}
+
+function scanModuleAssetReferences(
+  source: string,
+  sourceModulePath: string,
+): Array<{
+  sourcePath: string;
+  kind: ComponentCodeImportAssetDependency["kind"];
+}> {
+  const references = new Map<
+    string,
+    ComponentCodeImportAssetDependency["kind"]
+  >();
+  const stringPattern = /["'`]([^"'`\r\n]*?\.(?:glb|gltf|obj|vrm|png|jpe?g|webp|ktx2|hdr|exr|drc)(?:[?#][^"'`\r\n]*)?)["'`]/gi;
+  for (const match of source.matchAll(stringPattern)) {
+    const sourcePath = resolveAssetReference(match[1], sourceModulePath);
+    if (sourcePath) references.set(sourcePath, importedAssetKind(sourcePath));
+  }
+  return [...references].map(([sourcePath, kind]) => ({ sourcePath, kind }));
+}
+
+function resolveAssetReference(
+  value: string | undefined,
+  sourceModulePath: string | undefined,
+): string | undefined {
+  if (!value) return undefined;
+  let candidate = value.trim();
+  if (!candidate || /^(?:data:|https?:|blob:)/i.test(candidate)) return undefined;
+  const embedded = candidate.match(
+    /([^${}\s"'`]+\.(?:glb|gltf|obj|vrm|png|jpe?g|webp|ktx2|hdr|exr|drc)(?:[?#][^\s"'`]*)?)/i,
+  );
+  if (!embedded) return undefined;
+  candidate = embedded[1].replace(/[?#].*$/, "").replace(/\\/g, "/");
+  if (
+    !THREE_EDITOR_MODEL_EXTENSION_PATTERN.test(candidate) &&
+    !STUDIO_IMAGE_EXTENSION_PATTERN.test(candidate) &&
+    !/\.(?:hdr|exr)(?:[?#].*)?$/i.test(candidate)
+  ) {
+    return undefined;
+  }
+  if (candidate.startsWith("/")) return normalizeModulePath(`public/${candidate}`);
+  if (candidate.startsWith("public/")) return normalizeModulePath(candidate);
+  if (candidate.startsWith("./") || candidate.startsWith("../")) {
+    const slash = sourceModulePath?.lastIndexOf("/") ?? -1;
+    const parent = slash >= 0 ? sourceModulePath!.slice(0, slash) : "";
+    return normalizeModulePath(`${parent}/${candidate}`);
+  }
+  // Classic XRift templates resolve bare public files through baseUrl.
+  return normalizeModulePath(`public/${candidate}`);
+}
+
+function textFromJsx(
+  node: ParsedJsxNode,
+  attributes: JsonObject,
+): ComponentCodeImportText {
+  const literalContent = (node.rawContent ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const text =
+    typeof attributes.text === "string"
+      ? attributes.text
+      : literalContent && !/[{}<>]/.test(literalContent)
+        ? literalContent
+        : staticNodeName(attributes, "Text");
+  const anchorX =
+    attributes.anchorX === "left" || attributes.anchorX === "right"
+      ? attributes.anchorX
+      : "center";
+  const anchorY =
+    attributes.anchorY === "top" || attributes.anchorY === "bottom"
+      ? attributes.anchorY
+      : "middle";
+  return {
+    text,
+    color: normalizeColor(attributes.color) ?? "#ffffff",
+    fontSize: positiveFiniteNumber(attributes.fontSize) ?? 0.2,
+    ...(positiveFiniteNumber(attributes.maxWidth) !== undefined
+      ? { maxWidth: positiveFiniteNumber(attributes.maxWidth) }
+      : {}),
+    anchorX,
+    anchorY,
+    outlineWidth: nonNegativeFiniteNumber(attributes.outlineWidth) ?? 0,
+    outlineColor: normalizeColor(attributes.outlineColor) ?? "#000000",
   };
 }
 
@@ -298,6 +643,7 @@ export function applyComponentCodeImportPlan(input: {
   assets: AssetManifest;
   projectKind: VisualProjectKind;
   plan: ComponentCodeImportPlan;
+  assetIdBySourcePath?: Readonly<Record<string, string>>;
 }): ApplyComponentCodeImportResult {
   const planErrors = input.plan.diagnostics.filter(
     (diagnostic) => diagnostic.severity === "error",
@@ -315,11 +661,30 @@ export function applyComponentCodeImportPlan(input: {
   let assets = input.assets;
   const entityIds: string[] = [];
   const diagnostics: ComponentCodeImportDiagnostic[] = [];
+  const entityIdByPlanNodeId = new Map<string, string>();
 
   for (const node of input.plan.nodes) {
+    const parentEntityId = node.parentPlanNodeId
+      ? entityIdByPlanNodeId.get(node.parentPlanNodeId)
+      : null;
+    if (node.parentPlanNodeId && !parentEntityId) {
+      diagnostics.push({
+        severity: "error",
+        code: "import-parent-missing",
+        message: `${node.name}の親Entityを復元できませんでした。`,
+        line: node.sourceLine,
+        sourcePath: node.sourcePath,
+      });
+      continue;
+    }
     let entityId: string | undefined;
     if (node.kind === "primitive" && node.creationId) {
-      const material = resolveImportedMaterial(assets, node.material, node.name);
+      const material = resolveImportedMaterial(
+        assets,
+        node.material,
+        node.name,
+        input.assetIdBySourcePath,
+      );
       assets = material.assets;
       const fallbackMaterialId =
         FALLBACK_MATERIALS[node.creationId] ?? BUILTIN_ASSET_IDS.material.slate;
@@ -337,9 +702,12 @@ export function applyComponentCodeImportPlan(input: {
       if (created) {
         scene = created.scene;
         entityId = created.entityId;
+        if (parentEntityId) {
+          scene = reparentEntityHierarchy(scene, entityId, parentEntityId);
+        }
       }
     } else {
-      const created = createEmptyEntity(scene, null, node.name);
+      const created = createEmptyEntity(scene, parentEntityId, node.name);
       if (created) {
         scene = created.scene;
         entityId = created.entityId;
@@ -352,12 +720,20 @@ export function applyComponentCodeImportPlan(input: {
         code: "entity-create-failed",
         message: `${node.name}をSceneへ作成できませんでした。`,
         line: node.sourceLine,
+        sourcePath: node.sourcePath,
       });
       continue;
     }
 
     scene = renameEntity(scene, entityId, node.name);
     scene = updateEntityTransform(scene, entityId, node.transform);
+    scene = applyImportedCoreComponents(
+      scene,
+      assets,
+      entityId,
+      node,
+      input.assetIdBySourcePath,
+    );
     for (const component of node.xriftComponents) {
       const added = addEditorComponent(
         scene,
@@ -391,10 +767,12 @@ export function applyComponentCodeImportPlan(input: {
             code: diagnostic.code,
             message: diagnostic.message,
             line: node.sourceLine,
+            sourcePath: node.sourcePath,
           }),
         ),
       );
     }
+    entityIdByPlanNodeId.set(node.planNodeId, entityId);
     entityIds.push(entityId);
   }
 
@@ -409,6 +787,24 @@ export function applyComponentCodeImportPlan(input: {
   return { scene, assets, entityIds, diagnostics };
 }
 
+function appendImportNode(
+  output: ComponentCodeImportNode[],
+  context: ConvertContext,
+  node: Omit<
+    ComponentCodeImportNode,
+    "planNodeId" | "parentPlanNodeId" | "sourcePath"
+  >,
+): ComponentCodeImportNode {
+  const created: ComponentCodeImportNode = {
+    ...node,
+    planNodeId: `import-node-${output.length + 1}`,
+    parentPlanNodeId: context.parentPlanNodeId,
+    ...(context.sourcePath ? { sourcePath: context.sourcePath } : {}),
+  };
+  output.push(created);
+  return created;
+}
+
 function convertJsxNode(
   node: ParsedJsxNode,
   context: ConvertContext,
@@ -417,22 +813,88 @@ function convertJsxNode(
   output: ComponentCodeImportNode[],
   diagnostics: ComponentCodeImportDiagnostic[],
 ): number {
+  const before = output.length;
   const binding = bindings.get(node.name);
   const attributes = attributesToObject(node, diagnostics);
+  const sourceFields = { sourceLine: node.line, sourceTag: node.name };
 
   if (node.name === "Fragment" || node.name === "React.Fragment") {
     return visitChildren(node, context, bindings, projectKind, output, diagnostics);
   }
 
   if (node.name === "group") {
-    const nextContext = {
-      ...context,
-      transform: combineTransforms(
-        context.transform,
-        transformFromProps(attributes),
-      ),
-    };
-    return visitChildren(node, nextContext, bindings, projectKind, output, diagnostics);
+    const group = appendImportNode(output, context, {
+      ...sourceFields,
+      name: staticNodeName(attributes, "Group"),
+      kind: "empty",
+      transform: transformFromProps(attributes),
+      xriftComponents: [],
+    });
+    visitChildren(
+      node,
+      { ...context, parentPlanNodeId: group.planNodeId },
+      bindings,
+      projectKind,
+      output,
+      diagnostics,
+    );
+    return output.length - before;
+  }
+
+  if (
+    binding?.module === "@react-three/rapier" &&
+    binding.imported === "RigidBody"
+  ) {
+    const rigidBody = colliderFromRigidBody(attributes, node, diagnostics);
+    const body = appendImportNode(output, context, {
+      ...sourceFields,
+      name: staticNodeName(attributes, "RigidBody"),
+      kind: "empty",
+      transform: transformFromProps(attributes),
+      ...(rigidBody ? { collider: rigidBody } : {}),
+      xriftComponents: [],
+    });
+    const added = visitChildren(
+      node,
+      { ...context, parentPlanNodeId: body.planNodeId, rigidBody: null },
+      bindings,
+      projectKind,
+      output,
+      diagnostics,
+    );
+    if (added === 0) {
+      diagnostics.push({
+        severity: "warning",
+        code: "rigid-body-children-missing",
+        message: "RigidBodyに変換可能な子要素がありません。構造だけを保持します。",
+        line: node.line,
+        sourcePath: context.sourcePath,
+      });
+    }
+    return output.length - before;
+  }
+
+  const lightDefinition = R3F_LIGHTS[node.name];
+  if (lightDefinition) {
+    const color = normalizeColor(attributes.color) ?? "#ffffff";
+    const groundColor = normalizeColor(attributes.groundColor);
+    appendImportNode(output, context, {
+      ...sourceFields,
+      name: staticNodeName(attributes, lightDefinition.label),
+      kind: "light",
+      transform: transformFromProps(attributes),
+      light: {
+        lightType: lightDefinition.lightType,
+        color,
+        intensity: finiteNumber(attributes.intensity) ?? 1,
+        castShadow: attributes.castShadow === true,
+        ...(groundColor ? { groundColor } : {}),
+        ...optionalFiniteLightProperties(attributes),
+      },
+      ...(context.rigidBody ? { collider: context.rigidBody } : {}),
+      xriftComponents: [],
+    });
+    return 1;
   }
 
   if (binding?.module === XRIFT_COMPONENT_MODULE) {
@@ -443,8 +905,16 @@ function convertJsxNode(
         code: "unknown-xrift-export",
         message: `${binding.imported}はStudioの公式Component Registryに未登録です。`,
         line: node.line,
+        sourcePath: context.sourcePath,
       });
-      return visitChildren(node, context, bindings, projectKind, output, diagnostics);
+      return preserveUnsupportedNode(
+        node,
+        context,
+        bindings,
+        projectKind,
+        output,
+        diagnostics,
+      );
     }
     if (!definition.allowedProjectKinds.includes(projectKind)) {
       diagnostics.push({
@@ -452,82 +922,139 @@ function convertJsxNode(
         code: "xrift-project-kind",
         message: `${definition.importName}は${projectKind}プロジェクトへ追加できません。`,
         line: node.line,
+        sourcePath: context.sourcePath,
       });
       return 0;
     }
-    const properties = filterXriftProperties(
-      definition.schemaId,
-      attributes,
-      node,
-      diagnostics,
-    );
     const component: ComponentCodeImportXriftComponent = {
       schemaId: definition.schemaId,
-      properties,
+      properties: filterXriftProperties(
+        definition.schemaId,
+        attributes,
+        node,
+        diagnostics,
+      ),
       sourceName: definition.importName,
     };
-    if (definition.attachBehavior.kind === "wrapper") {
-      const before = output.length;
-      const added = visitChildren(
-        node,
-        { ...context, wrappers: [...context.wrappers, component] },
-        bindings,
-        projectKind,
-        output,
-        diagnostics,
-      );
-      if (added === 0) {
-        output.push({
-          name: definition.label,
-          kind: "empty",
-          transform: cloneTransform(context.transform),
-          xriftComponents: [...context.wrappers, component],
-          sourceLine: node.line,
-        });
-        if (definition.attachBehavior.childrenRequired) {
-          diagnostics.push({
-            severity: "warning",
-            code: "wrapper-children-missing",
-            message: `${definition.importName}の子要素を変換できなかったため、空のEntityとして追加します。`,
-            line: node.line,
-          });
-        }
-      }
-      return output.length - before;
-    }
-    output.push({
-      name: definition.label,
+    const componentNode = appendImportNode(output, context, {
+      ...sourceFields,
+      name: staticNodeName(attributes, definition.label),
       kind: "empty",
-      transform: cloneTransform(context.transform),
-      xriftComponents: [...context.wrappers, component],
-      sourceLine: node.line,
+      transform: cloneTransform(IDENTITY_TRANSFORM),
+      ...(context.rigidBody ? { collider: context.rigidBody } : {}),
+      xriftComponents: [component],
     });
-    return 1;
+    const added = visitChildren(
+      node,
+      {
+        ...context,
+        parentPlanNodeId: componentNode.planNodeId,
+        rigidBody: undefined,
+      },
+      bindings,
+      projectKind,
+      output,
+      diagnostics,
+    );
+    if (definition.attachBehavior.childrenRequired && added === 0) {
+      diagnostics.push({
+        severity: "warning",
+        code: "wrapper-children-missing",
+        message: `${definition.importName}の子要素を変換できなかったため、Component Entityだけを保持します。`,
+        line: node.line,
+        sourcePath: context.sourcePath,
+      });
+    }
+    return output.length - before;
   }
 
   if (binding?.module === "@react-three/drei") {
+    if (binding.imported === "Gltf") {
+      const sourcePath = assetSourcePathFromJsx(
+        node,
+        ["src", "url", "path"],
+        context.sourcePath,
+      ) ?? context.fallbackModelSourcePath;
+      if (!sourcePath) {
+        diagnostics.push({
+          severity: "warning",
+          code: "gltf-source-missing",
+          message: "Drei Gltfの参照先を静的に特定できないため、Component境界だけを保持します。",
+          line: node.line,
+          sourcePath: context.sourcePath,
+        });
+        return preserveUnsupportedNode(
+          node,
+          context,
+          bindings,
+          projectKind,
+          output,
+          diagnostics,
+        );
+      }
+      appendImportNode(output, context, {
+        ...sourceFields,
+        name: staticNodeName(
+          attributes,
+          sourcePath.split("/").pop()?.replace(/\.[^.]+$/, "") || "Model",
+        ),
+        kind: "model",
+        transform: transformFromProps(attributes),
+        model: { sourcePath },
+        ...(context.rigidBody ? { collider: context.rigidBody } : {}),
+        ...(typeof attributes.castShadow === "boolean"
+          ? { castShadow: attributes.castShadow }
+          : {}),
+        ...(typeof attributes.receiveShadow === "boolean"
+          ? { receiveShadow: attributes.receiveShadow }
+          : {}),
+        xriftComponents: [],
+      });
+      return 1;
+    }
+    if (binding.imported === "Text") {
+      const text = textFromJsx(node, attributes);
+      appendImportNode(output, context, {
+        ...sourceFields,
+        name: staticNodeName(attributes, text.text.slice(0, 40) || "Text"),
+        kind: "text",
+        transform: transformFromProps(attributes),
+        text,
+        ...(context.rigidBody ? { collider: context.rigidBody } : {}),
+        xriftComponents: [],
+      });
+      return 1;
+    }
     if (binding.imported === "Billboard") {
       const definition = getXriftComponentDefinition("BillboardY");
       if (!definition) return 0;
-      const component: ComponentCodeImportXriftComponent = {
-        schemaId: definition.schemaId,
-        properties: pickProperties(attributes, ["position", "rotation", "scale"]),
-        sourceName: "BillboardY",
-      };
+      const billboard = appendImportNode(output, context, {
+        ...sourceFields,
+        name: staticNodeName(attributes, "BillboardY"),
+        kind: "empty",
+        transform: cloneTransform(IDENTITY_TRANSFORM),
+        xriftComponents: [{
+          schemaId: definition.schemaId,
+          properties: pickProperties(attributes, ["position", "rotation", "scale"]),
+          sourceName: "BillboardY",
+        }],
+      });
       diagnostics.push({
         severity: "info",
         code: "drei-billboard-converted",
         message: "Drei BillboardをXRiftのBillboardYへ変換します。",
         line: node.line,
+        sourcePath: context.sourcePath,
       });
-      return visitChildren(
+      visitChildren(
         node,
-        { ...context, wrappers: [...context.wrappers, component] },
+        { ...context, parentPlanNodeId: billboard.planNodeId },
         bindings,
         projectKind,
         output,
         diagnostics,
       );
+      return output.length - before;
     }
     if (binding.imported === "Reflector") {
       const definition = getXriftComponentDefinition("Mirror");
@@ -540,36 +1067,37 @@ function convertJsxNode(
           ? { color: toColorNumber(attributes.color)! }
           : {}),
       };
-      output.push({
+      appendImportNode(output, context, {
+        ...sourceFields,
         name: "Mirror",
         kind: "empty",
-        transform: cloneTransform(context.transform),
+        transform: cloneTransform(IDENTITY_TRANSFORM),
+        ...(context.rigidBody ? { collider: context.rigidBody } : {}),
         xriftComponents: [
-          ...context.wrappers,
           { schemaId: definition.schemaId, properties, sourceName: "Mirror" },
         ],
-        sourceLine: node.line,
       });
       diagnostics.push({
         severity: "info",
         code: "drei-reflector-converted",
         message: "Drei Reflectorを公式XRift Mirrorへ変換します。",
         line: node.line,
+        sourcePath: context.sourcePath,
       });
       return 1;
     }
     if (binding.imported === "Sky" || binding.imported === "Environment") {
       const definition = getXriftComponentDefinition("Skybox");
       if (!definition) return 0;
-      output.push({
+      appendImportNode(output, context, {
+        ...sourceFields,
         name: "Skybox",
         kind: "empty",
-        transform: cloneTransform(context.transform),
+        transform: cloneTransform(IDENTITY_TRANSFORM),
+        ...(context.rigidBody ? { collider: context.rigidBody } : {}),
         xriftComponents: [
-          ...context.wrappers,
           { schemaId: definition.schemaId, properties: {}, sourceName: "Skybox" },
         ],
-        sourceLine: node.line,
       });
       diagnostics.push({
         severity: binding.imported === "Environment" ? "warning" : "info",
@@ -579,44 +1107,83 @@ function convertJsxNode(
             ? "Drei EnvironmentをXRift Skyboxへ変換します。HDRI参照は別途Assetsへインポートしてください。"
             : "Drei SkyをXRift Skyboxへ変換します。",
         line: node.line,
+        sourcePath: context.sourcePath,
       });
       return 1;
     }
     const creationId = DREI_PRIMITIVES[binding.imported];
     if (creationId) {
-      output.push(
-        primitiveNodeFromJsx(
-          node,
-          creationId,
-          binding.imported,
-          attributes,
-          context,
-        ),
+      appendImportNode(
+        output,
+        context,
+        primitiveNodeFromJsx(node, creationId, binding.imported, attributes, context),
       );
       return 1;
     }
     diagnostics.push({
       severity: "warning",
       code: "unsupported-drei-component",
-      message: `Drei ${binding.imported}は自動変換せず、変換できる子要素だけを取り込みます。`,
+      message: `Drei ${binding.imported}は見た目を変換できないため、Component境界と変換できる子要素を保持します。`,
       line: node.line,
+      sourcePath: context.sourcePath,
     });
-    return visitChildren(node, context, bindings, projectKind, output, diagnostics);
+    return preserveUnsupportedNode(
+      node,
+      context,
+      bindings,
+      projectKind,
+      output,
+      diagnostics,
+    );
   }
 
   if (node.name === "mesh") {
     const geometry = node.children.find((child) => GEOMETRY_PRIMITIVES[child.name]);
     if (!geometry) {
+      const sourcePath =
+        context.fallbackModelSourcePath ??
+        context.fallbackUnsupportedSourcePath;
+      if (sourcePath) {
+        appendImportNode(output, context, {
+          ...sourceFields,
+          name: staticNodeName(
+            attributes,
+            sourcePath.split("/").pop()?.replace(/\.[^.]+$/, "") || "Model",
+          ),
+          kind: "model",
+          transform: transformFromProps(attributes),
+          model: { sourcePath },
+          ...(context.rigidBody ? { collider: context.rigidBody } : {}),
+          ...(typeof attributes.castShadow === "boolean"
+            ? { castShadow: attributes.castShadow }
+            : {}),
+          ...(typeof attributes.receiveShadow === "boolean"
+            ? { receiveShadow: attributes.receiveShadow }
+            : {}),
+          xriftComponents: [],
+        });
+        return 1;
+      }
       diagnostics.push({
         severity: "warning",
         code: "unsupported-mesh-geometry",
-        message: "mesh内に対応する標準Geometryがないため、このmeshはスキップします。",
+        message: "mesh内に対応する標準Geometryがないため、Mesh Entityと子構造だけを保持します。",
         line: node.line,
+        sourcePath: context.sourcePath,
       });
-      return visitChildren(node, context, bindings, projectKind, output, diagnostics);
+      return preserveUnsupportedNode(
+        node,
+        context,
+        bindings,
+        projectKind,
+        output,
+        diagnostics,
+      );
     }
     const geometryAttributes = attributesToObject(geometry, diagnostics);
-    output.push(
+    appendImportNode(
+      output,
+      context,
       primitiveNodeFromJsx(
         node,
         GEOMETRY_PRIMITIVES[geometry.name],
@@ -628,15 +1195,91 @@ function convertJsxNode(
     return 1;
   }
 
-  if (binding || /^[A-Z]/.test(node.name)) {
+  if (isLocalComponentBinding(binding, node.name, context)) {
+    return convertLocalComponent(
+      node,
+      binding,
+      attributes,
+      context,
+      bindings,
+      projectKind,
+      output,
+      diagnostics,
+    );
+  }
+
+  if (binding || /^[A-Z]/.test(node.name) || node.name === "primitive") {
+    if (node.name === "primitive") {
+      const sourcePath =
+        context.fallbackModelSourcePath ??
+        context.fallbackUnsupportedSourcePath;
+      if (sourcePath) {
+        appendImportNode(output, context, {
+          ...sourceFields,
+          name: staticNodeName(
+            attributes,
+            sourcePath.split("/").pop()?.replace(/\.[^.]+$/, "") || "Model",
+          ),
+          kind: "model",
+          transform: transformFromProps(attributes),
+          model: { sourcePath },
+          ...(context.rigidBody ? { collider: context.rigidBody } : {}),
+          xriftComponents: [],
+        });
+        return 1;
+      }
+    }
     diagnostics.push({
       severity: "warning",
       code: "unsupported-react-component",
-      message: `${node.name}は自動変換せず、変換できる子要素だけを取り込みます。`,
+      message: `${node.name}の実装は変換できないため、Component境界と変換できる子要素を保持します。`,
       line: node.line,
+      sourcePath: context.sourcePath,
     });
+    return preserveUnsupportedNode(
+      node,
+      context,
+      bindings,
+      projectKind,
+      output,
+      diagnostics,
+    );
   }
   return visitChildren(node, context, bindings, projectKind, output, diagnostics);
+}
+
+function preserveUnsupportedNode(
+  node: ParsedJsxNode,
+  context: ConvertContext,
+  bindings: ReadonlyMap<string, ImportBinding>,
+  projectKind: VisualProjectKind,
+  output: ComponentCodeImportNode[],
+  diagnostics: ComponentCodeImportDiagnostic[],
+): number {
+  const before = output.length;
+  const attributes = attributesToObject(node, diagnostics);
+  const preserved = appendImportNode(output, context, {
+    name: staticNodeName(attributes, node.name),
+    kind: "empty",
+    transform: transformFromProps(attributes),
+    ...(context.rigidBody ? { collider: context.rigidBody } : {}),
+    xriftComponents: [],
+    sourceLine: node.line,
+    sourceTag: node.name,
+  });
+  visitChildren(
+    node,
+    {
+      ...context,
+      parentPlanNodeId: preserved.planNodeId,
+      rigidBody: undefined,
+    },
+    bindings,
+    projectKind,
+    output,
+    diagnostics,
+  );
+  return output.length - before;
 }
 
 function visitChildren(
@@ -650,14 +1293,7 @@ function visitChildren(
   const before = output.length;
   for (const child of node.children) {
     if (GEOMETRY_PRIMITIVES[child.name] || /Material$/.test(child.name)) continue;
-    convertJsxNode(
-      child,
-      context,
-      bindings,
-      projectKind,
-      output,
-      diagnostics,
-    );
+    convertJsxNode(child, context, bindings, projectKind, output, diagnostics);
   }
   return output.length - before;
 }
@@ -668,7 +1304,10 @@ function primitiveNodeFromJsx(
   name: string,
   attributes: JsonObject,
   context: ConvertContext,
-): ComponentCodeImportNode {
+): Omit<
+  ComponentCodeImportNode,
+  "planNodeId" | "parentPlanNodeId" | "sourcePath"
+> {
   const localTransform = transformFromProps(attributes);
   localTransform.scale = multiplyVec3(
     localTransform.scale,
@@ -681,22 +1320,513 @@ function primitiveNodeFromJsx(
   const color = normalizeColor(materialProps.color);
   const metalness = finiteNumber(materialProps.metalness);
   const roughness = finiteNumber(materialProps.roughness);
+  const textureSourcePath =
+    assetSourcePathFromJsx(
+      materialNode ?? node,
+      ["map", "src", "url", "texture"],
+      context.sourcePath,
+    ) ?? context.fallbackTextureSourcePath;
+  const doubleSided =
+    materialProps.side === "BackSide" ||
+    materialProps.side === "DoubleSide" ||
+    (creationId === BUILTIN_PRIMITIVE_CREATION_IDS.sphere &&
+      textureSourcePath !== undefined);
   return {
-    name,
+    name: staticNodeName(attributes, name),
     kind: "primitive",
     creationId,
-    transform: combineTransforms(context.transform, localTransform),
-    ...(color
+    transform: localTransform,
+    ...(color || textureSourcePath
       ? {
           material: {
-            color,
+            color: color ?? "#ffffff",
             ...(metalness !== undefined ? { metalness } : {}),
             ...(roughness !== undefined ? { roughness } : {}),
+            ...(textureSourcePath
+              ? { baseColorTextureSourcePath: textureSourcePath }
+              : {}),
+            ...(doubleSided ? { doubleSided: true } : {}),
           },
         }
       : {}),
-    xriftComponents: [...context.wrappers],
+    ...(context.rigidBody ? { collider: context.rigidBody } : {}),
+    ...(typeof attributes.castShadow === "boolean"
+      ? { castShadow: attributes.castShadow }
+      : {}),
+    ...(typeof attributes.receiveShadow === "boolean"
+      ? { receiveShadow: attributes.receiveShadow }
+      : {}),
+    xriftComponents: [],
     sourceLine: node.line,
+    sourceTag: node.name,
+  };
+}
+
+function isLocalComponentBinding(
+  binding: ImportBinding | undefined,
+  nodeName: string,
+  context: ConvertContext,
+): boolean {
+  if (binding?.module.startsWith(".")) return true;
+  if (!context.sourcePath || !context.moduleSources) return false;
+  const source = context.moduleSources.get(context.sourcePath);
+  return source !== undefined && hasComponentDeclaration(source, nodeName);
+}
+
+function convertLocalComponent(
+  node: ParsedJsxNode,
+  binding: ImportBinding | undefined,
+  attributes: JsonObject,
+  context: ConvertContext,
+  bindings: ReadonlyMap<string, ImportBinding>,
+  projectKind: VisualProjectKind,
+  output: ComponentCodeImportNode[],
+  diagnostics: ComponentCodeImportDiagnostic[],
+): number {
+  const before = output.length;
+  const targetPath = binding?.module.startsWith(".")
+    ? resolveLocalModulePath(
+        context.sourcePath,
+        binding.module,
+        context.moduleSources,
+      )
+    : context.sourcePath;
+  const exportName = binding?.imported ?? node.name;
+  const boundary = appendImportNode(output, context, {
+    name: staticNodeName(attributes, node.name),
+    kind: "empty",
+    transform: transformFromProps(attributes),
+    ...(context.rigidBody ? { collider: context.rigidBody } : {}),
+    xriftComponents: [],
+    sourceLine: node.line,
+    sourceTag: node.name,
+    localComponent: true,
+  });
+  if (!targetPath || !context.moduleSources) {
+    diagnostics.push({
+      severity: "warning",
+      code: "local-module-missing",
+      message: `${node.name}のlocal moduleを読み取れないため、Component境界だけを保持します。`,
+      line: node.line,
+      sourcePath: context.sourcePath,
+    });
+  } else {
+    const expansionKey = `${targetPath}#${exportName}`;
+    if (context.expansionStack.includes(expansionKey)) {
+      diagnostics.push({
+        severity: "warning",
+        code: "local-component-cycle",
+        message: `${node.name}の循環参照を検出したため、Component境界で展開を止めました。`,
+        line: node.line,
+        sourcePath: context.sourcePath,
+      });
+    } else if (context.expansionStack.length >= 24) {
+      diagnostics.push({
+        severity: "warning",
+        code: "local-component-depth",
+        message: `${node.name}の展開が深すぎるため、Component境界で停止しました。`,
+        line: node.line,
+        sourcePath: context.sourcePath,
+      });
+    } else {
+      const targetSource = context.moduleSources.get(targetPath);
+      const roots = targetSource
+        ? extractComponentJsxRoots(
+            targetSource,
+            exportName,
+            node.name,
+            targetPath,
+            diagnostics,
+          )
+        : [];
+      if (roots.length === 0) {
+        diagnostics.push({
+          severity: "warning",
+          code: "local-component-jsx-missing",
+          message: `${node.name}のreturn JSXを静的に見つけられないため、Component境界だけを保持します。`,
+          line: node.line,
+          sourcePath: targetPath,
+        });
+      } else if (targetSource) {
+        const targetBindings = new Map(
+          parseImports(targetSource).map((entry) => [entry.local, entry]),
+        );
+        const assetReferences = scanModuleAssetReferences(targetSource, targetPath);
+        const targetContext: ConvertContext = {
+          ...context,
+          parentPlanNodeId: boundary.planNodeId,
+          rigidBody: undefined,
+          sourcePath: targetPath,
+          fallbackModelSourcePath: assetReferences.find(
+            (reference) => reference.kind === "model",
+          )?.sourcePath,
+          fallbackTextureSourcePath: assetReferences.find(
+            (reference) => reference.kind === "texture",
+          )?.sourcePath,
+          fallbackUnsupportedSourcePath: assetReferences.find(
+            (reference) => reference.kind === "unsupported",
+          )?.sourcePath,
+          expansionStack: [...context.expansionStack, expansionKey],
+        };
+        for (const root of roots) {
+          convertJsxNode(
+            root,
+            targetContext,
+            targetBindings,
+            projectKind,
+            output,
+            diagnostics,
+          );
+        }
+      }
+    }
+  }
+  visitChildren(
+    node,
+    {
+      ...context,
+      parentPlanNodeId: boundary.planNodeId,
+      rigidBody: undefined,
+    },
+    bindings,
+    projectKind,
+    output,
+    diagnostics,
+  );
+  return output.length - before;
+}
+
+function resolveLocalModulePath(
+  fromPath: string | undefined,
+  specifier: string,
+  moduleSources: ReadonlyMap<string, string> | undefined,
+): string | undefined {
+  if (!fromPath || !moduleSources || !specifier.startsWith(".")) return undefined;
+  const slash = fromPath.lastIndexOf("/");
+  const parent = slash >= 0 ? fromPath.slice(0, slash) : "";
+  const base = normalizeModulePath(`${parent}/${specifier}`);
+  const candidates = [
+    base,
+    `${base}.tsx`,
+    `${base}.ts`,
+    `${base}.jsx`,
+    `${base}.js`,
+    `${base}/index.tsx`,
+    `${base}/index.ts`,
+    `${base}/index.jsx`,
+    `${base}/index.js`,
+  ];
+  return candidates.find((candidate) => moduleSources.has(candidate));
+}
+
+function normalizeModulePath(value: string): string {
+  if (value.startsWith("<") && value.endsWith(".tsx")) return value;
+  const normalized: string[] = [];
+  for (const segment of value.replace(/\\/g, "/").split("/")) {
+    if (!segment || segment === ".") continue;
+    if (segment === "..") {
+      normalized.pop();
+      continue;
+    }
+    normalized.push(segment);
+  }
+  return normalized.join("/");
+}
+
+function hasComponentDeclaration(source: string, componentName: string): boolean {
+  const escaped = escapeRegExp(componentName);
+  return new RegExp(
+    `(?:function|const)\\s+${escaped}\\b`,
+  ).test(source);
+}
+
+function extractComponentJsxRoots(
+  source: string,
+  exportName: string,
+  localName: string,
+  sourcePath: string,
+  diagnostics: ComponentCodeImportDiagnostic[],
+): ParsedJsxNode[] {
+  const componentName = exportName === "default" ? localName : exportName;
+  const range = findComponentBodyRange(source, componentName, exportName === "default");
+  if (!range) return [];
+  const body = source.slice(range.start, range.end);
+  if (/\.map\s*\(/.test(body)) {
+    diagnostics.push({
+      severity: "warning",
+      code: "local-component-dynamic-collection",
+      message: `${localName}内のmapによる動的な繰り返しは件数を確定できません。静的に読めるtemplate構造だけを保持します。`,
+      sourcePath,
+      line: lineNumber(source, range.start),
+    });
+  }
+  const returned = findReturnedJsxRange(body);
+  if (!returned) return [];
+  const absoluteStart = range.start + returned.start;
+  const prefix = "\n".repeat(Math.max(0, lineNumber(source, absoluteStart) - 1));
+  const before = diagnostics.length;
+  const roots = parseJsx(`${prefix}${body.slice(returned.start, returned.end)}`, diagnostics);
+  for (const diagnostic of diagnostics.slice(before)) {
+    diagnostic.sourcePath ??= sourcePath;
+  }
+  return roots;
+}
+
+function findComponentBodyRange(
+  source: string,
+  componentName: string,
+  allowDefault: boolean,
+): { start: number; end: number } | null {
+  const escaped = escapeRegExp(componentName);
+  const functionPatterns = [
+    new RegExp(`(?:export\\s+)?(?:default\\s+)?function\\s+${escaped}\\s*\\(`),
+    ...(allowDefault
+      ? [new RegExp("export\\s+default\\s+function(?:\\s+[A-Za-z_$][\\w$]*)?\\s*\\(")]
+      : []),
+  ];
+  for (const pattern of functionPatterns) {
+    const match = pattern.exec(source);
+    if (!match) continue;
+    const open = source.indexOf("{", match.index + match[0].length);
+    if (open < 0) continue;
+    const end = scanBalanced(source, open, "{", "}");
+    if (end > open) return { start: open + 1, end: end - 1 };
+  }
+
+  const declarationPatterns = [
+    new RegExp(`(?:export\\s+)?const\\s+${escaped}\\b`),
+    ...(allowDefault ? [new RegExp("export\\s+default\\s+")] : []),
+  ];
+  for (const pattern of declarationPatterns) {
+    const match = pattern.exec(source);
+    if (!match) continue;
+    const arrow = source.indexOf("=>", match.index + match[0].length);
+    if (arrow < 0) continue;
+    let start = arrow + 2;
+    while (/\s/.test(source[start] ?? "")) start += 1;
+    if (source[start] === "{") {
+      const end = scanBalanced(source, start, "{", "}");
+      if (end > start) return { start: start + 1, end: end - 1 };
+    }
+    if (source[start] === "(") {
+      const end = scanBalanced(source, start, "(", ")");
+      if (end > start) return { start, end };
+    }
+  }
+  return null;
+}
+
+function findReturnedJsxRange(
+  body: string,
+): { start: number; end: number } | null {
+  const returned = /\breturn\s*(?=[(<])/.exec(body);
+  if (!returned) {
+    const trimmed = body.trimStart();
+    if (trimmed.startsWith("(")) {
+      const start = body.length - trimmed.length;
+      const end = scanBalanced(body, start, "(", ")");
+      return end > start ? { start, end } : null;
+    }
+    return null;
+  }
+  let start = returned.index + returned[0].length;
+  while (/\s/.test(body[start] ?? "")) start += 1;
+  if (body[start] === "(") {
+    const end = scanBalanced(body, start, "(", ")");
+    return end > start ? { start, end } : null;
+  }
+  if (body[start] === "<") return { start, end: body.length };
+  return null;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function colliderFromRigidBody(
+  values: JsonObject,
+  node: ParsedJsxNode,
+  diagnostics: ComponentCodeImportDiagnostic[],
+): ComponentCodeImportCollider | null {
+  if (values.colliders === false) return null;
+  const sourceBodyType =
+    values.type === "dynamic" ||
+    values.type === "kinematicPosition" ||
+    values.type === "kinematicVelocity"
+      ? values.type
+      : "fixed";
+  const colliderName =
+    typeof values.colliders === "string" ? values.colliders : "cuboid";
+  if (colliderName !== "cuboid") {
+    diagnostics.push({
+      severity: "warning",
+      code: "rapier-collider-box-approximation",
+      message: `Rapier colliders=${colliderName}は編集可能なBox Colliderへ近似します。`,
+      line: node.line,
+    });
+  }
+  return {
+    shape: "box",
+    isTrigger: values.sensor === true,
+    friction: nonNegativeFiniteNumber(values.friction) ?? 0.5,
+    restitution: unitFiniteNumber(values.restitution) ?? 0,
+    sourceBodyType,
+    gravityScale: finiteNumber(values.gravityScale) ?? 1,
+    linearDamping: nonNegativeFiniteNumber(values.linearDamping) ?? 0,
+    angularDamping: nonNegativeFiniteNumber(values.angularDamping) ?? 0,
+    canSleep: values.canSleep !== false,
+    ccd: values.ccd === true,
+    lockTranslations: values.lockTranslations === true,
+    lockRotations: values.lockRotations === true,
+  };
+}
+
+function optionalFiniteLightProperties(
+  values: JsonObject,
+): Pick<
+  ComponentCodeImportLight,
+  "distance" | "decay" | "angle" | "penumbra" | "width" | "height"
+> {
+  return Object.fromEntries(
+    (["distance", "decay", "angle", "penumbra", "width", "height"] as const)
+      .map((name) => [name, finiteNumber(values[name])] as const)
+      .filter((entry): entry is readonly [typeof entry[0], number] =>
+        entry[1] !== undefined,
+      ),
+  );
+}
+
+function staticNodeName(values: JsonObject, fallback: string): string {
+  return typeof values.name === "string" && values.name.trim()
+    ? values.name.trim().slice(0, 80)
+    : fallback;
+}
+
+function applyImportedCoreComponents(
+  scene: SceneDocument,
+  assets: AssetManifest,
+  entityId: string,
+  node: ComponentCodeImportNode,
+  assetIdBySourcePath?: Readonly<Record<string, string>>,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  if (!entity) return scene;
+  let components = entity.components;
+  if (node.kind === "primitive") {
+    components = components
+      .filter((component) => component.type !== "collider" || node.collider)
+      .map((component) => {
+        if (component.type === "mesh") {
+          const mesh: MeshComponent = {
+            ...component,
+            ...(node.castShadow !== undefined
+              ? { castShadow: node.castShadow }
+              : {}),
+            ...(node.receiveShadow !== undefined
+              ? { receiveShadow: node.receiveShadow }
+              : {}),
+          };
+          return mesh;
+        }
+        if (component.type === "collider" && node.collider) {
+          const collider: ColliderComponent = {
+            ...component,
+            isTrigger: node.collider.isTrigger,
+            friction: node.collider.friction,
+            restitution: node.collider.restitution,
+            bodyType: node.collider.sourceBodyType,
+            gravityScale: node.collider.gravityScale,
+            linearDamping: node.collider.linearDamping,
+            angularDamping: node.collider.angularDamping,
+            canSleep: node.collider.canSleep,
+            ccd: node.collider.ccd,
+            lockTranslations: node.collider.lockTranslations,
+            lockRotations: node.collider.lockRotations,
+          };
+          return collider;
+        }
+        return component;
+      });
+  }
+  if (
+    node.kind !== "primitive" &&
+    node.collider &&
+    !components.some((component) => component.type === "collider")
+  ) {
+    components = [
+      ...components,
+      createBoxColliderComponent(createDocumentId("component-collider"), {
+        isTrigger: node.collider.isTrigger,
+        friction: node.collider.friction,
+        restitution: node.collider.restitution,
+        bodyType: node.collider.sourceBodyType,
+        gravityScale: node.collider.gravityScale,
+        linearDamping: node.collider.linearDamping,
+        angularDamping: node.collider.angularDamping,
+        canSleep: node.collider.canSleep,
+        ccd: node.collider.ccd,
+        lockTranslations: node.collider.lockTranslations,
+        lockRotations: node.collider.lockRotations,
+      }),
+    ];
+  }
+  if (node.kind === "light" && node.light) {
+    components = [
+      ...components,
+      {
+        id: createDocumentId("component-light"),
+        type: "light",
+        enabled: true,
+        ...node.light,
+      },
+    ];
+  }
+  if (node.kind === "model" && node.model) {
+    const modelAssetId = resolveImportedAssetId(
+      assets,
+      node.model.sourcePath,
+      "model",
+      assetIdBySourcePath,
+    );
+    const model = modelAssetId ? assets.assets[modelAssetId] : undefined;
+    if (model?.kind === "model") {
+      components = [
+        ...components,
+        createMeshComponent(
+          createDocumentId("component-mesh"),
+          model.id,
+          model.materialSlots.flatMap((slot) =>
+            slot.defaultMaterialAssetId
+              ? [
+                  {
+                    slot: slot.slot,
+                    materialAssetId: slot.defaultMaterialAssetId,
+                  },
+                ]
+              : [],
+          ),
+          {
+            castShadow: node.castShadow,
+            receiveShadow: node.receiveShadow,
+          },
+        ),
+      ];
+    }
+  }
+  if (node.kind === "text" && node.text) {
+    const text = createTextComponent(
+      createDocumentId("component-text"),
+      node.text,
+    );
+    if (text) components = [...components, text];
+  }
+  if (components === entity.components) return scene;
+  return {
+    ...scene,
+    entities: {
+      ...scene.entities,
+      [entityId]: { ...entity, components },
+    },
   };
 }
 
@@ -750,6 +1880,11 @@ function attributesToObject(
 
 function parseImports(source: string): ImportBinding[] {
   const bindings: ImportBinding[] = [];
+  const defaultPattern =
+    /import\s+(?!type\b)([A-Za-z_$][\w$]*)\s*(?:,\s*\{[\s\S]*?\})?\s+from\s+["']([^"']+)["']/g;
+  for (const match of source.matchAll(defaultPattern)) {
+    bindings.push({ imported: "default", local: match[1], module: match[2] });
+  }
   const pattern = /import\s+(?:type\s+)?\{([\s\S]*?)\}\s+from\s+["']([^"']+)["']/g;
   for (const match of source.matchAll(pattern)) {
     const module = match[2];
@@ -787,12 +1922,18 @@ function parseJsx(
     cursor = scanned.end;
     if (scanned.kind === "close") {
       const matching = findLastNodeIndex(stack, scanned.name);
-      if (matching >= 0) stack.splice(matching);
+      if (matching >= 0) {
+        stack[matching].rawContent = source.slice(stack[matching].contentStart, open);
+        stack.splice(matching);
+      }
       continue;
     }
     if (scanned.kind === "fragment-close") {
       const matching = findLastNodeIndex(stack, "Fragment");
-      if (matching >= 0) stack.splice(matching);
+      if (matching >= 0) {
+        stack[matching].rawContent = source.slice(stack[matching].contentStart, open);
+        stack.splice(matching);
+      }
       continue;
     }
     const node: ParsedJsxNode = {
@@ -800,6 +1941,7 @@ function parseJsx(
       attributes: parseAttributes(scanned.attributes),
       children: [],
       line: lineNumber(source, open),
+      contentStart: scanned.end,
     };
     const parent = stack[stack.length - 1];
     if (parent) parent.children.push(node);
@@ -895,7 +2037,11 @@ function parseAttributes(source: string): ParsedAttribute[] {
     if (index >= source.length) break;
     if (source.startsWith("{...", index)) {
       const end = scanBalanced(source, index, "{", "}");
-      attributes.push({ name: "spread", dynamic: true });
+      attributes.push({
+        name: "spread",
+        dynamic: true,
+        rawExpression: source.slice(index + 1, Math.max(index + 1, end - 1)),
+      });
       index = end > index ? end : source.length;
       continue;
     }
@@ -932,6 +2078,7 @@ function parseAttributes(source: string): ParsedAttribute[] {
         name,
         ...(parsed.ok ? { value: parsed.value } : {}),
         dynamic: !parsed.ok,
+        rawExpression: expression,
       });
       index = end;
       continue;
@@ -1041,25 +2188,6 @@ function transformFromProps(values: JsonObject): ComponentCodeImportTransform {
   };
 }
 
-function combineTransforms(
-  parent: ComponentCodeImportTransform,
-  child: ComponentCodeImportTransform,
-): ComponentCodeImportTransform {
-  return {
-    position: [
-      parent.position[0] + child.position[0] * parent.scale[0],
-      parent.position[1] + child.position[1] * parent.scale[1],
-      parent.position[2] + child.position[2] * parent.scale[2],
-    ],
-    rotation: [
-      parent.rotation[0] + child.rotation[0],
-      parent.rotation[1] + child.rotation[1],
-      parent.rotation[2] + child.rotation[2],
-    ],
-    scale: multiplyVec3(parent.scale, child.scale),
-  };
-}
-
 function geometryScale(creationId: string, args: number[]): Vec3 {
   switch (creationId) {
     case BUILTIN_PRIMITIVE_CREATION_IDS.box:
@@ -1087,8 +2215,17 @@ function resolveImportedMaterial(
   assets: AssetManifest,
   material: ComponentCodeImportMaterial | undefined,
   nodeName: string,
+  assetIdBySourcePath?: Readonly<Record<string, string>>,
 ): { assets: AssetManifest; materialId?: string } {
   if (!material) return { assets };
+  const textureAssetId = material.baseColorTextureSourcePath
+    ? resolveImportedAssetId(
+        assets,
+        material.baseColorTextureSourcePath,
+        "texture",
+        assetIdBySourcePath,
+      )
+    : undefined;
   const existing = Object.values(assets.assets).find(
     (asset): asset is MaterialAsset =>
       asset.kind === "material" &&
@@ -1096,7 +2233,11 @@ function resolveImportedMaterial(
       (material.metalness === undefined ||
         asset.properties.metalness === material.metalness) &&
       (material.roughness === undefined ||
-        asset.properties.roughness === material.roughness),
+        asset.properties.roughness === material.roughness) &&
+      (textureAssetId === undefined ||
+        asset.properties.baseColorTextureId === textureAssetId) &&
+      (material.doubleSided === undefined ||
+        asset.properties.doubleSided === material.doubleSided),
   );
   if (existing) return { assets, materialId: existing.id };
   const materialId = createDocumentId("asset-material");
@@ -1109,11 +2250,41 @@ function resolveImportedMaterial(
       color: material.color,
       metalness: material.metalness ?? 0,
       roughness: material.roughness ?? 0.65,
+      ...(textureAssetId ? { baseColorTextureId: textureAssetId } : {}),
+      ...(material.doubleSided !== undefined
+        ? { doubleSided: material.doubleSided }
+        : {}),
     },
   });
   return added.added
     ? { assets: added.manifest, materialId: added.assetId }
     : { assets };
+}
+
+function resolveImportedAssetId(
+  assets: AssetManifest,
+  sourcePath: string,
+  expectedKind: "model" | "texture",
+  assetIdBySourcePath?: Readonly<Record<string, string>>,
+): string | undefined {
+  const normalized = normalizeModulePath(sourcePath);
+  const mapped = assetIdBySourcePath?.[normalized];
+  if (mapped && assets.assets[mapped]?.kind === expectedKind) return mapped;
+  const fileName = normalized.split("/").pop()?.toLowerCase();
+  return Object.values(assets.assets).find((asset) => {
+    if (asset.kind !== expectedKind) return false;
+    if (
+      asset.source.kind === "project" &&
+      normalizeModulePath(asset.source.relativePath) === normalized
+    ) {
+      return true;
+    }
+    return (
+      expectedKind === "model" &&
+      asset.kind === "model" &&
+      asset.importMetadata?.sourceFileName?.toLowerCase() === fileName
+    );
+  })?.id;
 }
 
 function normalizeColor(value: JsonValue | undefined): string | undefined {
@@ -1171,6 +2342,25 @@ function asScale(value: JsonValue | undefined): Vec3 {
 
 function finiteNumber(value: JsonValue | undefined): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function positiveFiniteNumber(value: JsonValue | undefined): number | undefined {
+  const parsed = finiteNumber(value);
+  return parsed !== undefined && parsed > 0 ? parsed : undefined;
+}
+
+function nonNegativeFiniteNumber(
+  value: JsonValue | undefined,
+): number | undefined {
+  const parsed = finiteNumber(value);
+  return parsed !== undefined && parsed >= 0 ? parsed : undefined;
+}
+
+function unitFiniteNumber(value: JsonValue | undefined): number | undefined {
+  const parsed = finiteNumber(value);
+  return parsed !== undefined && parsed >= 0 && parsed <= 1
+    ? parsed
+    : undefined;
 }
 
 function multiplyVec3(left: Vec3, right: Vec3): Vec3 {

@@ -17,11 +17,12 @@ import {
 /** Deterministic, filesystem-free assertions for the bundled world starters. */
 export function runStarterTemplateFixtureAssertions(): void {
   assert(
-    defaultVisualStarterTemplateId("world") === "openbrush",
-    "A useful sample must be the default World starter",
+    defaultVisualStarterTemplateId("world") === "xrift-official",
+    "The official XRift conversion must be the default World starter",
   );
 
   for (const templateId of [
+    "xrift-official",
     "blank",
     "openbrush",
   ] as const satisfies readonly StarterWorldTemplateId[]) {
@@ -38,8 +39,11 @@ export function runStarterTemplateFixtureAssertions(): void {
       (asset) => asset.kind === "template" && asset.templateType === "prefab",
     );
 
-    assert(plan.bundledAssetCopies.length === (templateId === "openbrush" ? 2 : 0),
-      `${templateId}: bundled model and license copy plan is incorrect`);
+    assert(
+      plan.bundledAssetCopies.length ===
+        (templateId === "openbrush" ? 2 : templateId === "xrift-official" ? 5 : 0),
+      `${templateId}: bundled source copy plan is incorrect`,
+    );
     if (templateId === "openbrush") {
       const licenseCopy = plan.bundledAssetCopies.find(
         (copy) => copy.assetId === "openbrush-apache-license",
@@ -59,15 +63,44 @@ export function runStarterTemplateFixtureAssertions(): void {
         "openbrush: model must retain strict integrity verification",
       );
     }
-    assert(modelAssets.length === (templateId === "openbrush" ? 1 : 0),
+    if (templateId === "xrift-official") {
+      assert(
+        plan.bundledAssetCopies.some(
+          (copy) =>
+            copy.assetId === "xrift-world-template-source" &&
+            copy.integrity === "strict",
+        ) &&
+          plan.bundledAssetCopies.some(
+            (copy) =>
+              copy.assetId === "xrift-world-template-license" &&
+              copy.integrity === "strict",
+          ),
+        "xrift-official: source and MIT license must retain strict verification",
+      );
+    }
+    assert(modelAssets.length === (templateId === "openbrush" ? 1 : templateId === "xrift-official" ? 2 : 0),
       `${templateId}: Model library is incorrect`);
-    assert(textureAssets.length === 0, `${templateId}: Texture library must stay empty`);
-    assert(materialAssets.length === 1, `${templateId}: Ground Material is missing`);
+    assert(
+      textureAssets.length === (templateId === "xrift-official" ? 1 : 0),
+      `${templateId}: Texture library is incorrect`,
+    );
+    assert(
+      templateId === "xrift-official"
+        ? materialAssets.length >= 7
+        : materialAssets.length === 1,
+      `${templateId}: converted Material library is incorrect`,
+    );
     assert(prefabAssets.length > 0, `${templateId}: Prefab library is empty`);
     assert(starterWorldContainsNoPrimitiveAssets(plan),
       `${templateId}: primitives must stay in the Create catalog`);
 
-    const spawn = plan.scene.entities["starter-spawn"];
+    const spawn = Object.values(plan.scene.entities).find((entity) =>
+      entity.components.some(
+        (component) =>
+          component.type === "xrift-component" &&
+          component.schemaId === "xrift.spawn-point",
+      ),
+    );
     const spawnComponent = spawn?.components.find(
       (component) => component.type === "xrift-component",
     );
@@ -75,9 +108,11 @@ export function runStarterTemplateFixtureAssertions(): void {
       `${templateId}: Spawn Point must use the XRift component registry`);
     assert(spawnComponent?.schemaId === "xrift.spawn-point",
       `${templateId}: Spawn Point schema is incorrect`);
-    assert(spawnComponent?.authoring?.source === "builtin-prefab" &&
-      spawnComponent.authoring.readOnly,
-      `${templateId}: Spawn Point source must stay read-only`);
+    if (templateId !== "xrift-official") {
+      assert(spawnComponent?.authoring?.source === "builtin-prefab" &&
+        spawnComponent.authoring.readOnly,
+        `${templateId}: Spawn Point source must stay read-only`);
+    }
     assert(!spawn?.components.some((component) => component.type === "spawn-point"),
       `${templateId}: legacy SpawnPoint component must not be emitted`);
 
@@ -133,6 +168,78 @@ export function runStarterTemplateFixtureAssertions(): void {
         "OpenBrush starter must describe its runtime renderer");
       assert(runtimeManifest.includes("three-icosa-template/brushes/"),
         "OpenBrush starter must preserve the hosted brush library path");
+    }
+    if (templateId === "xrift-official") {
+      const sceneEntities = Object.values(plan.scene.entities);
+      assert(
+        sceneEntities.filter((entity) =>
+          entity.components.some((component) => component.type === "light"),
+        ).length === 5,
+        "Official XRift starter must preserve lights across the source module graph",
+      );
+      assert(
+        sceneEntities.filter((entity) =>
+          entity.components.some((component) => component.type === "collider"),
+        ).length === 23,
+        "Official XRift starter must preserve supported Rapier collider coverage",
+      );
+      assert(
+        sceneEntities.filter((entity) =>
+          entity.components.some(
+            (component) =>
+              component.type === "collider" && component.bodyType === "dynamic",
+          ),
+        ).length >= 2,
+        "Official XRift starter must preserve dynamic Rapier rigid bodies",
+      );
+      const worldRootId = plan.scene.rootEntityIds[0];
+      const worldRoot = worldRootId ? plan.scene.entities[worldRootId] : undefined;
+      assert(
+        plan.scene.rootEntityIds.length === 1 &&
+          worldRoot?.name === "World" &&
+          spawn?.parentId !== null,
+        "Official XRift starter must retain the JSX World hierarchy instead of flattening roots",
+      );
+      const duckAsset = modelAssets.find((asset) => asset.name === "Duck");
+      const bunnyAsset = modelAssets.find((asset) => asset.name === "Draco Bunny");
+      const panoramaAsset = textureAssets.find(
+        (asset) => asset.name === "Tokyo Station Panorama",
+      );
+      const duckEntity = sceneEntities.find((entity) => entity.name === "Duck Model");
+      const bunnyEntity = sceneEntities.find((entity) => entity.name === "Draco Sample");
+      const modelReference = (entity: (typeof sceneEntities)[number] | undefined) =>
+        entity?.components.find(
+          (component) =>
+            component.type === "mesh" && component.geometry?.kind === "asset",
+        );
+      const duckMesh = modelReference(duckEntity);
+      const bunnyMesh = modelReference(bunnyEntity);
+      assert(
+        duckAsset?.kind === "model" &&
+          bunnyAsset?.kind === "model" &&
+          panoramaAsset?.kind === "texture" &&
+          duckMesh?.type === "mesh" &&
+          duckMesh.geometry?.kind === "asset" &&
+          duckMesh.geometry.assetId === duckAsset.id &&
+          bunnyMesh?.type === "mesh" &&
+          bunnyMesh.geometry?.kind === "asset" &&
+          bunnyMesh.geometry.assetId === bunnyAsset.id,
+        "Official XRift starter Models must be registered as Assets and linked by Studio ID",
+      );
+      assert(
+        sceneEntities.filter((entity) =>
+          entity.components.some((component) => component.type === "text"),
+        ).length === 6,
+        "Official XRift Text/UI elements must be materialized as editable Text components",
+      );
+      assert(
+        Object.values(plan.assets.assets).some(
+          (asset) =>
+            asset.kind === "material" &&
+            asset.properties.baseColorTextureId === panoramaAsset?.id,
+        ),
+        "Official panorama must be linked from the converted sky material by Texture Asset ID",
+      );
     }
 
     const serialized = serializeVisualProjectDocuments({

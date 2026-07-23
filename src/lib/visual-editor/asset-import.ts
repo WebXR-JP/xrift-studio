@@ -26,6 +26,7 @@ import {
   normalizeModelImportSettings,
   normalizeProjectRelativePath,
   normalizeTextureImportSettings,
+  isEnvironmentTextureAsset,
   type AudioAsset,
   type AssetFolder,
   type AssetManifest,
@@ -36,7 +37,6 @@ import {
   type ModelImportMetadata,
   type ModelMorphTargetMetadata,
   type SceneAsset,
-  type SkyboxAsset,
   type TextureAsset,
   type TextureImportSettingsPatch,
 } from "./asset-manifest";
@@ -55,6 +55,18 @@ import {
 } from "./open-brush";
 import { repairImportedObject3DHierarchy } from "./object3d-hierarchy";
 import { extractGltfModelNodeHierarchy } from "./model-hierarchy";
+import {
+  STUDIO_IMAGE_FORMATS,
+  STUDIO_NATIVE_MODEL_FORMATS,
+  isThreeEditorModelFormat,
+  studioImageFormatForExtension,
+  type StudioImageFormat,
+  type ThreeEditorModelFormat,
+} from "./asset-format-registry";
+import {
+  convertThreeEditorModelToGlb,
+  type ThreeModelCompanionFile,
+} from "./three-model-converter";
 
 export const ASSET_IMPORT_THUMBNAIL_RENDERER_VERSION = "three-white-v1";
 export const ASSET_IMPORT_MAX_BYTES = 128 * 1024 * 1024;
@@ -63,14 +75,8 @@ export const ASSET_IMPORT_MAX_MODEL_NODES = 10_000;
 export const ASSET_IMPORT_MAX_MODEL_HIERARCHY_DEPTH = 256;
 
 export type SupportedAssetImportFormat =
-  | "glb"
-  | "gltf"
-  | "obj"
-  | "vrm"
-  | "png"
-  | "jpeg"
-  | "webp"
-  | "ktx2"
+  | ThreeEditorModelFormat
+  | StudioImageFormat
   | "hdr"
   | "exr"
   | "mp3";
@@ -78,19 +84,15 @@ export type SupportedAssetImportFormat =
 export type ClassifiedAssetImport =
   | {
       kind: "model";
-      format: "glb" | "gltf" | "obj" | "vrm";
-      mimeType:
-        | "model/gltf-binary"
-        | "model/gltf+json"
-        | "model/obj"
-        | "model/vrm";
-      extension: "glb" | "gltf" | "obj" | "vrm";
+      format: ThreeEditorModelFormat;
+      mimeType: string;
+      extension: ThreeEditorModelFormat;
     }
   | {
       kind: "texture";
-      format: "png" | "jpeg" | "webp" | "ktx2";
-      mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/ktx2";
-      extension: "png" | "jpg" | "jpeg" | "webp" | "ktx2";
+      format: StudioImageFormat;
+      mimeType: string;
+      extension: "png" | "jpg" | "jpeg" | "webp" | "avif" | "gif" | "bmp" | "svg" | "ktx2";
     }
   | {
       kind: "skybox";
@@ -104,6 +106,22 @@ export type ClassifiedAssetImport =
       mimeType: "audio/mpeg";
       extension: "mp3";
     };
+
+type NativeGltfModelClassification = Extract<
+  ClassifiedAssetImport,
+  { kind: "model" }
+> & {
+  format: "glb" | "gltf" | "vrm";
+  extension: "glb" | "gltf" | "vrm";
+};
+
+type ObjModelClassification = Extract<
+  ClassifiedAssetImport,
+  { kind: "model" }
+> & {
+  format: "obj";
+  extension: "obj";
+};
 
 export type AssetImportDiagnostic = {
   severity: "blocking" | "warning";
@@ -133,8 +151,8 @@ export type AssetImportPlan = {
   /** Existing Asset replaced by a reimport. Omitted for a new import. */
   replacesAssetId?: string;
   classification?: ClassifiedAssetImport;
-  /** Primary Model, standalone Texture/Skybox, or Audio selected after the transaction. */
-  asset?: ModelAsset | TextureAsset | SkyboxAsset | AudioAsset;
+  /** Primary Model, standalone Texture (including HDRI), or Audio selected after the transaction. */
+  asset?: ModelAsset | TextureAsset | AudioAsset;
   /** Material/Texture Assets expanded from an imported Model. */
   derivedAssets?: Array<MaterialAsset | TextureAsset>;
   /** Logical Asset folders created with the Model import. */
@@ -151,6 +169,10 @@ export type CreateAssetImportPlanInput = {
   displayName?: string;
   folderId?: string | null;
   textureImportSettings?: TextureImportSettingsPatch;
+  /** Resolves SVG's texture/model ambiguity and Classic JSX usage. */
+  preferredKind?: "model" | "texture";
+  /** Sidecar buffers, MTL files and textures referenced by the selected model. */
+  companionFiles?: readonly ThreeModelCompanionFile[];
   /** Enables same-folder update matching and derived Asset reuse. */
   existingManifest?: AssetManifest;
 };
@@ -182,68 +204,38 @@ type ThumbnailResult = {
 export function classifyAssetImport(
   fileName: string,
   mimeType = "",
+  preferredKind?: "model" | "texture",
 ): ClassifiedAssetImport | undefined {
   const extension = extensionOf(fileName);
   const normalizedMime = mimeType.trim().toLowerCase().split(";")[0];
 
-  if (extension === "glb" || normalizedMime === "model/gltf-binary") {
+  const modelFormat = modelFormatFromSource(extension, normalizedMime);
+  if (modelFormat && (modelFormat !== "svg" || preferredKind === "model")) {
     return {
       kind: "model",
-      format: "glb",
-      mimeType: "model/gltf-binary",
-      extension: "glb",
+      format: modelFormat,
+      mimeType: modelMimeType(modelFormat),
+      extension: modelFormat,
     };
   }
-  if (extension === "gltf" || normalizedMime === "model/gltf+json") {
-    return {
-      kind: "model",
-      format: "gltf",
-      mimeType: "model/gltf+json",
-      extension: "gltf",
-    };
-  }
-  if (extension === "vrm" || normalizedMime === "model/vrm") {
-    return {
-      kind: "model",
-      format: "vrm",
-      mimeType: "model/vrm",
-      extension: "vrm",
-    };
-  }
-  if (extension === "obj" || normalizedMime === "model/obj") {
-    return {
-      kind: "model",
-      format: "obj",
-      mimeType: "model/obj",
-      extension: "obj",
-    };
-  }
-  if (extension === "png" || normalizedMime === "image/png") {
+  const imageFormat =
+    studioImageFormatForExtension(extension) ??
+    studioImageFormatFromMimeType(normalizedMime);
+  if (imageFormat && preferredKind !== "model") {
+    const definition = STUDIO_IMAGE_FORMATS[imageFormat];
+    const sourceExtension = definition.extensions.includes(
+      extension as never,
+    )
+      ? extension
+      : definition.extensions[0];
     return {
       kind: "texture",
-      format: "png",
-      mimeType: "image/png",
-      extension: "png",
-    };
-  }
-  if (
-    extension === "jpg" ||
-    extension === "jpeg" ||
-    normalizedMime === "image/jpeg"
-  ) {
-    return {
-      kind: "texture",
-      format: "jpeg",
-      mimeType: "image/jpeg",
-      extension: extension === "jpeg" ? "jpeg" : "jpg",
-    };
-  }
-  if (extension === "webp" || normalizedMime === "image/webp") {
-    return {
-      kind: "texture",
-      format: "webp",
-      mimeType: "image/webp",
-      extension: "webp",
+      format: imageFormat,
+      mimeType: definition.mimeType,
+      extension: sourceExtension as Extract<
+        ClassifiedAssetImport,
+        { kind: "texture" }
+      >["extension"],
     };
   }
   if (
@@ -308,6 +300,78 @@ export function classifyAssetImport(
   return undefined;
 }
 
+function modelFormatFromSource(
+  extension: string,
+  mimeType: string,
+): ThreeEditorModelFormat | undefined {
+  if (isThreeEditorModelFormat(extension)) return extension;
+  if (mimeType === "model/gltf-binary") return "glb";
+  if (mimeType === "model/gltf+json") return "gltf";
+  if (mimeType === "model/vrm") return "vrm";
+  if (mimeType === "model/obj" || mimeType === "text/obj") return "obj";
+  if (mimeType === "model/fbx") return "fbx";
+  if (mimeType === "model/stl") return "stl";
+  return undefined;
+}
+
+function modelMimeType(format: ThreeEditorModelFormat): string {
+  if (format === "glb") return "model/gltf-binary";
+  if (format === "gltf") return "model/gltf+json";
+  if (format === "vrm") return "model/vrm";
+  if (format === "obj") return "model/obj";
+  if (format === "svg") return "image/svg+xml";
+  return `model/${format}`;
+}
+
+function studioImageFormatFromMimeType(
+  mimeType: string,
+): StudioImageFormat | undefined {
+  return (Object.entries(STUDIO_IMAGE_FORMATS) as Array<
+    [StudioImageFormat, (typeof STUDIO_IMAGE_FORMATS)[StudioImageFormat]]
+  >).find(([, definition]) => definition.mimeType === mimeType)?.[0];
+}
+
+function isStudioNativeModelFormat(
+  format: ThreeEditorModelFormat,
+): format is (typeof STUDIO_NATIVE_MODEL_FORMATS)[number] {
+  return (STUDIO_NATIVE_MODEL_FORMATS as readonly string[]).includes(format);
+}
+
+function replaceFileExtension(fileName: string, extension: string): string {
+  const base = fileName.replace(/\.[^.]+$/, "") || "model";
+  return `${base}.${extension}`;
+}
+
+function normalizeImageInputBySignature(
+  input: CreateAssetImportPlanInput,
+): CreateAssetImportPlanInput {
+  if (input.preferredKind === "model") return input;
+  const bytes = cloneBytes(input.bytes);
+  const detected = (
+    ["png", "jpeg", "webp", "avif", "gif", "bmp"] as const
+  ).find((format) => hasTextureSignature(bytes, format));
+  if (!detected) return input;
+  const definition = STUDIO_IMAGE_FORMATS[detected];
+  const expectedExtension = definition.extensions[0];
+  const currentExtension = extensionOf(input.fileName);
+  const normalizedMime = input.mimeType
+    ?.split(";", 1)[0]
+    ?.trim()
+    .toLowerCase();
+  if (
+    (definition.extensions as readonly string[]).includes(currentExtension) &&
+    normalizedMime === definition.mimeType
+  ) {
+    return input;
+  }
+  return {
+    ...input,
+    fileName: replaceFileExtension(input.fileName, expectedExtension),
+    mimeType: definition.mimeType,
+    preferredKind: "texture",
+  };
+}
+
 /**
  * Builds a self-contained plan. It never writes files and GLTFLoader is not
  * invoked until external URI references have been rejected.
@@ -338,9 +402,10 @@ export async function createModelReimportPlan(
 }
 
 async function createAssetImportPlanInternal(
-  input: CreateAssetImportPlanInput,
+  sourceInput: CreateAssetImportPlanInput,
   reimportAsset?: ModelAsset,
 ): Promise<AssetImportPlan> {
+  const input = normalizeImageInputBySignature(sourceInput);
   const fileName = leafFileName(input.fileName);
   const bytes = cloneBytes(input.bytes);
   let sourceHash: string;
@@ -366,13 +431,17 @@ async function createAssetImportPlanInternal(
   }
   const transactionId = `asset-import-${sourceHash.slice(0, 20)}`;
   const diagnostics: AssetImportDiagnostic[] = [];
-  const classification = classifyAssetImport(fileName, input.mimeType);
+  const classification = classifyAssetImport(
+    fileName,
+    input.mimeType,
+    input.preferredKind,
+  );
 
   if (!classification) {
     diagnostics.push({
       severity: "blocking",
       code: "unsupported-asset-format",
-      message: "GLB、glTF、OBJ、VRM、PNG、JPG、WebP、KTX2、HDR、EXR、MP3 のみ取り込めます",
+      message: "Three.js Editor対応モデル、PNG・JPG・WebP・AVIF・GIF・BMP・SVG・KTX2、HDR・EXR、MP3を取り込めます",
       fileName,
       fieldPath: "fileName",
     });
@@ -432,6 +501,51 @@ async function createAssetImportPlanInternal(
       : undefined;
 
   if (classification.kind === "model") {
+    const normalizeNativeCompanionModel =
+      (classification.format === "gltf" || classification.format === "obj") &&
+      (input.companionFiles?.length ?? 0) > 0;
+    if (
+      (!isStudioNativeModelFormat(classification.format) ||
+        normalizeNativeCompanionModel) &&
+      classification.format !== "glb" &&
+      classification.format !== "vrm"
+    ) {
+      try {
+        const converted = await convertThreeEditorModelToGlb({
+          fileName,
+          bytes,
+          format: classification.format,
+          companionFiles: input.companionFiles,
+        });
+        return createAssetImportPlanInternal(
+          {
+            ...input,
+            fileName: replaceFileExtension(fileName, "glb"),
+            bytes: converted,
+            mimeType: "model/gltf-binary",
+            displayName:
+              input.displayName ?? fileName.replace(/\.[^.]+$/, ""),
+            preferredKind: "model",
+          },
+          reimportAsset ?? matchedModel,
+        );
+      } catch (error) {
+        diagnostics.push({
+          severity: "blocking",
+          code: "three-model-conversion-failed",
+          message: `${classification.format.toUpperCase()}をGLBへ変換できませんでした: ${errorMessage(error)}`,
+          fileName,
+          assetId: reimportAsset?.id,
+        });
+        return blockedPlan(
+          transactionId,
+          sourceHash,
+          diagnostics,
+          classification,
+          reimportAsset?.id,
+        );
+      }
+    }
     return classification.format === "obj"
       ? createObjModelImportPlan(
           input,
@@ -439,7 +553,7 @@ async function createAssetImportPlanInternal(
           bytes,
           sourceHash,
           transactionId,
-          classification,
+          classification as ObjModelClassification,
           reimportAsset ?? matchedModel,
         )
       : createModelImportPlan(
@@ -448,7 +562,7 @@ async function createAssetImportPlanInternal(
           bytes,
           sourceHash,
           transactionId,
-          classification,
+          classification as NativeGltfModelClassification,
           reimportAsset ?? matchedModel,
         );
   }
@@ -595,7 +709,7 @@ export async function commitAssetImportPlan(
     }
   }
 
-  if (plan.asset.kind === "audio" || plan.asset.kind === "skybox") {
+  if (plan.asset.kind === "audio" || isEnvironmentTextureAsset(plan.asset)) {
     if (
       plan.asset.sourceHash !== plan.sourceHash ||
       plan.asset.source.kind !== "project"
@@ -667,12 +781,9 @@ async function createModelImportPlan(
   bytes: Uint8Array,
   sourceHash: string,
   transactionId: string,
-  classification: Extract<ClassifiedAssetImport, { kind: "model" }>,
+  classification: NativeGltfModelClassification,
   reimportAsset?: ModelAsset,
 ): Promise<AssetImportPlan> {
-  if (classification.format === "obj") {
-    throw new Error("OBJ import must use the OBJ import plan");
-  }
   const diagnostics: AssetImportDiagnostic[] = [];
   const parsedJson = parseGltfJson(bytes, classification.format);
   if (!parsedJson.ok) {
@@ -995,7 +1106,7 @@ async function createObjModelImportPlan(
   bytes: Uint8Array,
   sourceHash: string,
   transactionId: string,
-  classification: Extract<ClassifiedAssetImport, { kind: "model" }>,
+  classification: ObjModelClassification,
   reimportAsset?: ModelAsset,
 ): Promise<AssetImportPlan> {
   const diagnostics: AssetImportDiagnostic[] = [];
@@ -1338,25 +1449,36 @@ function createSkyboxImportPlan(
       classification,
     );
   }
-  const assetId = createImportedAssetId("skybox", fileName, sourceHash);
+  const assetId = createImportedAssetId("texture", fileName, sourceHash);
   const sourceRelativePath = createSourceDestination(
-    "skyboxes",
+    "textures",
     fileName,
     sourceHash,
     classification.extension,
   );
-  const asset: SkyboxAsset = {
+  const asset: TextureAsset = {
     id: assetId,
     name: normalizedDisplayName(input.displayName, fileName),
-    kind: "skybox",
+    kind: "texture",
     status: "ready",
     source: { kind: "project", relativePath: sourceRelativePath },
     sourceHash,
     thumbnail: { status: "missing" },
     folderId: normalizeFolderId(input.folderId),
+    usage: "environment",
     projection: "equirectangular",
-    sourceFormat: classification.format,
-    byteLength: bytes.byteLength,
+    importSettings: normalizeTextureImportSettings({
+      colorSpace: "linear",
+      generateMipmaps: true,
+      flipY: false,
+      resize: { mode: "original" },
+      compression: { format: "source", quality: 80 },
+    }),
+    importMetadata: {
+      sourceFormat: classification.format,
+      mimeType: classification.mimeType,
+      byteLength: bytes.byteLength,
+    },
   };
   return finishPlan(
     transactionId,
@@ -2105,7 +2227,6 @@ async function renderModelThumbnail(object: Object3D): Promise<ThumbnailResult> 
     preview.remove(object);
     if (originalParent) originalParent.add(object);
     renderer.dispose();
-    renderer.forceContextLoss();
   }
 }
 
@@ -2178,7 +2299,7 @@ function readKtx2Dimensions(
 
 function hasTextureSignature(
   bytes: Uint8Array,
-  format: "png" | "jpeg" | "webp" | "ktx2",
+  format: StudioImageFormat,
 ): boolean {
   if (format === "png") {
     const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -2189,6 +2310,42 @@ function hasTextureSignature(
     return (
       asciiAt(bytes, 0, "RIFF") &&
       asciiAt(bytes, 8, "WEBP")
+    );
+  }
+  if (format === "avif") {
+    if (bytes.byteLength < 16 || !asciiAt(bytes, 4, "ftyp")) return false;
+    const declaredSize = new DataView(
+      bytes.buffer,
+      bytes.byteOffset,
+      bytes.byteLength,
+    ).getUint32(0, false);
+    const boxEnd = Math.min(
+      bytes.byteLength,
+      declaredSize >= 16 ? declaredSize : bytes.byteLength,
+    );
+    if (asciiAt(bytes, 8, "avif") || asciiAt(bytes, 8, "avis")) return true;
+    for (let offset = 16; offset + 4 <= boxEnd; offset += 4) {
+      if (asciiAt(bytes, offset, "avif") || asciiAt(bytes, offset, "avis")) {
+        return true;
+      }
+    }
+    return false;
+  }
+  if (format === "gif") {
+    return asciiAt(bytes, 0, "GIF87a") || asciiAt(bytes, 0, "GIF89a");
+  }
+  if (format === "bmp") {
+    return bytes.byteLength >= 26 && asciiAt(bytes, 0, "BM");
+  }
+  if (format === "svg") {
+    const source = new TextDecoder().decode(bytes.subarray(0, 1024 * 1024));
+    if (!/<svg(?:\s|>)/i.test(source)) return false;
+    if (/<(?:script|foreignObject|iframe|object|embed)(?:\s|>)/i.test(source)) {
+      return false;
+    }
+    if (/\son[a-z]+\s*=/i.test(source)) return false;
+    return !/(?:href|src)\s*=\s*["']\s*(?:https?:|\/\/|file:|javascript:)/i.test(
+      source,
     );
   }
   const signature = [0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -2447,7 +2604,7 @@ function finishPlan(
   transactionId: string,
   sourceHash: string,
   classification: ClassifiedAssetImport,
-  asset: ModelAsset | TextureAsset | SkyboxAsset | AudioAsset,
+  asset: ModelAsset | TextureAsset | AudioAsset,
   writes: AssetImportWrite[],
   diagnostics: AssetImportDiagnostic[],
   replacesAssetId?: string,

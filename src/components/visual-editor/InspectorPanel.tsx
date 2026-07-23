@@ -29,6 +29,7 @@ import {
   type LightComponent,
   type LightPatch,
   type MaterialBinding,
+  type MaterialAsset,
   type MaterialAssetPatch,
   type ModelAssetPatch,
   type ModelBoneMetadata,
@@ -43,6 +44,8 @@ import {
   type SceneSettings,
   type SceneEntity,
   type TextureAssetPatch,
+  type TextComponent,
+  type TextPatch,
   type TransformPatch,
   type UpdateXriftComponentPatch,
   type Vec3,
@@ -73,7 +76,7 @@ import { MATERIAL_DRAG_MIME } from "./types";
 export type MeshInspectorPatch = Partial<
   Pick<
     MeshComponent,
-    "materialBindings" | "castShadow" | "receiveShadow" | "modelPose"
+    "enabled" | "materialBindings" | "castShadow" | "receiveShadow" | "modelPose"
   >
 >;
 
@@ -129,24 +132,44 @@ function findPrefabSourceContext(
 function ComponentCard({
   title,
   subtitle,
+  enabled,
   actions,
   children,
 }: {
   title: string;
   subtitle?: string;
+  enabled?: {
+    checked: boolean;
+    disabled: boolean;
+    label: string;
+    onChange: (checked: boolean) => void;
+  };
   actions?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-md border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
-        <h3 className="text-[13px] font-semibold text-slate-800">{title}</h3>
+    <section className="overflow-hidden rounded border border-slate-200 bg-white">
+      <div className="flex min-h-8 items-center justify-between bg-slate-50/80 px-2.5 py-1.5">
+        <span className="flex min-w-0 items-center gap-2">
+          {enabled ? (
+            <input
+              type="checkbox"
+              checked={enabled.checked}
+              disabled={enabled.disabled}
+              onChange={(event) => enabled.onChange(event.currentTarget.checked)}
+              aria-label={enabled.label}
+              title={enabled.label}
+              className="h-3.5 w-3.5 shrink-0 accent-violet-600 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          ) : null}
+          <h3 className="truncate text-[13px] font-semibold text-slate-800">{title}</h3>
+        </span>
         <span className="flex items-center gap-1.5">
           {subtitle ? <span className="text-xs text-slate-400">{subtitle}</span> : null}
           {actions}
         </span>
       </div>
-      <div className="space-y-2.5 p-3">{children}</div>
+      <div className="space-y-2 p-2.5">{children}</div>
     </section>
   );
 }
@@ -154,10 +177,12 @@ function ComponentCard({
 function EntityNameField({
   entity,
   disabled,
+  compact = false,
   onRename,
 }: {
   entity: SceneEntity;
   disabled: boolean;
+  compact?: boolean;
   onRename: (name: string) => void;
 }) {
   const [draftName, setDraftName] = useState(entity.name);
@@ -182,18 +207,30 @@ function EntityNameField({
   };
 
   return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+    <label
+      className={compact ? "min-w-0 flex-1" : "block"}
+      title="Entity名。Enterまたはフォーカス移動で確定します"
+    >
+      <span
+        className={
+          compact
+            ? "sr-only"
+            : "mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+        }
+      >
         Entity name
       </span>
       <input
         type="text"
+        aria-label="Entity名"
         value={draftName}
         disabled={disabled}
         onChange={(event) => setDraftName(event.currentTarget.value)}
         onBlur={commitName}
         onKeyDown={handleKeyDown}
-        className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[12px] text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+        className={`w-full rounded border border-slate-300 bg-white text-[12px] text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${
+          compact ? "h-7 px-2" : "h-8 px-2.5"
+        }`}
       />
     </label>
   );
@@ -530,9 +567,111 @@ function draggedMaterialId(event: DragEvent<HTMLElement>): string | null {
   return value || null;
 }
 
+const MATERIAL_SWATCH_THUMBNAIL_CACHE = new Map<string, Promise<string>>();
+
+function MaterialSwatch({
+  material,
+  projectPath,
+}: {
+  material?: MaterialAsset;
+  projectPath?: string;
+}) {
+  const derivedPath =
+    material?.thumbnail && material.thumbnail.status !== "missing"
+      ? material.thumbnail.derivedPath
+      : undefined;
+  const thumbnailKey = projectPath && derivedPath
+    ? `${projectPath}\n${derivedPath}`
+    : undefined;
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    setThumbnailUrl(null);
+    if (!thumbnailKey || !projectPath || !derivedPath) {
+      return () => {
+        active = false;
+      };
+    }
+    const pending =
+      MATERIAL_SWATCH_THUMBNAIL_CACHE.get(thumbnailKey) ??
+      tauri.readImageDataUrl(projectPath, derivedPath);
+    MATERIAL_SWATCH_THUMBNAIL_CACHE.set(thumbnailKey, pending);
+    void pending
+      .then((dataUrl) => {
+        if (active) setThumbnailUrl(dataUrl);
+      })
+      .catch(() => {
+        MATERIAL_SWATCH_THUMBNAIL_CACHE.delete(thumbnailKey);
+      });
+    return () => {
+      active = false;
+    };
+  }, [derivedPath, projectPath, thumbnailKey]);
+
+  if (!material) {
+    return (
+      <span
+        className="relative h-7 w-7 shrink-0 overflow-hidden rounded-sm border border-slate-300 bg-slate-100"
+        title="Material未設定"
+        aria-hidden="true"
+      >
+        <span className="absolute left-1/2 top-1/2 h-px w-8 -translate-x-1/2 -translate-y-1/2 -rotate-45 bg-slate-400" />
+      </span>
+    );
+  }
+
+  const properties = normalizeMaterialProperties(material.properties);
+  const [red, green, blue, alpha] =
+    properties.pbrMetallicRoughness.baseColorFactor;
+  const hasBaseColorTexture = Boolean(
+    properties.pbrMetallicRoughness.baseColorTexture ??
+      properties.baseColorTextureId,
+  );
+  const color = `rgba(${Math.round(red * 255)}, ${Math.round(green * 255)}, ${Math.round(blue * 255)}, ${alpha})`;
+
+  if (thumbnailUrl) {
+    return (
+      <span
+        className="h-7 w-7 shrink-0 overflow-hidden rounded-sm border border-slate-300 bg-white"
+        title={`${material.name}のプレビュー`}
+        aria-hidden="true"
+      >
+        <img
+          src={thumbnailUrl}
+          alt=""
+          draggable={false}
+          className="h-full w-full object-cover"
+        />
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="relative h-7 w-7 shrink-0 overflow-hidden rounded-sm border border-slate-300"
+      title={`${material.name}・${properties.color}`}
+      aria-hidden="true"
+      style={{
+        backgroundImage:
+          "conic-gradient(#e2e8f0 25%, #ffffff 0 50%, #e2e8f0 0 75%, #ffffff 0)",
+        backgroundPosition: "0 0",
+        backgroundSize: "8px 8px",
+      }}
+    >
+      <span className="absolute inset-0" style={{ backgroundColor: color }} />
+      {hasBaseColorTexture ? (
+        <span className="absolute bottom-0 right-0 grid h-3.5 w-3.5 place-items-center rounded-tl bg-slate-950/70 text-white">
+          <EDITOR_ICONS.texture size={9} />
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 function MeshInspector({
   component,
   assets,
+  projectPath,
   readOnly,
   onChange,
   onOpenMaterial,
@@ -541,6 +680,7 @@ function MeshInspector({
 }: {
   component: MeshComponent;
   assets: AssetManifest;
+  projectPath?: string;
   readOnly: boolean;
   onChange: (patch: MeshInspectorPatch) => void;
   onOpenMaterial: (assetId: string) => void;
@@ -578,7 +718,17 @@ function MeshInspector({
   }, [bones, selectedBoneKey]);
 
   return (
-    <ComponentCard title="Mesh Renderer" subtitle="シーン">
+    <ComponentCard
+      title="Mesh Renderer"
+      enabled={{
+        checked: component.enabled,
+        disabled: readOnly,
+        label: component.enabled
+          ? "Mesh Rendererを無効にする"
+          : "Mesh Rendererを有効にする",
+        onChange: (enabled) => onChange({ enabled }),
+      }}
+    >
       <dl className="grid grid-cols-[62px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
         <dt className="text-slate-500">形状</dt>
         <dd className="truncate text-right font-medium text-slate-700">
@@ -588,8 +738,8 @@ function MeshInspector({
         <dd className="text-right text-slate-700">{slots.length}</dd>
       </dl>
 
-      <div className="space-y-2 border-t border-slate-100 pt-2">
-        <h4 className="text-[13px] font-semibold uppercase tracking-wide text-slate-600">
+      <div className="border-t border-slate-100 pt-2">
+        <h4 className="pb-1 text-[11px] font-medium text-slate-500">
           マテリアル
         </h4>
         {slots.map((slot) => {
@@ -600,10 +750,18 @@ function MeshInspector({
           );
           const assignedId = binding?.materialAssetId ?? slot.defaultMaterialAssetId ?? "";
           const assigned = assignedId ? getMaterialAsset(assets, assignedId) : undefined;
+          const materialStatusTitle = assigned?.shader?.kind === "openbrush"
+            ? `${assigned.shader.brushName}をthree-icosa専用Materialとして設定済み。Materialをドロップして変更できます`
+            : openBrush && !assigned
+              ? "source brushを使用中。MaterialをドロップするとXRift Materialで上書きします"
+              : openBrush
+                ? "XRift MaterialでOpenBrush shaderを上書き中。Materialをドロップして変更できます"
+                : "Materialをドロップして割り当てできます";
           return (
             <div
               key={slot.slot}
-              className="rounded border border-slate-200 bg-slate-50 p-2 transition-colors hover:border-violet-300"
+              title={materialStatusTitle}
+              className="border-t border-slate-100 py-1.5 first:border-t-0"
               onDragOverCapture={(event) => {
                 if (
                   readOnly ||
@@ -635,7 +793,7 @@ function MeshInspector({
                 });
               }}
             >
-              <div className="mb-1 flex items-center justify-between gap-2">
+              <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
                 <span className="truncate text-xs font-medium text-slate-600" title={slot.slot}>
                   {slot.name}
                 </span>
@@ -643,7 +801,8 @@ function MeshInspector({
                   <span className="text-xs text-slate-400">glTF #{slot.sourceMaterialIndex}</span>
                 ) : null}
               </div>
-              <div className="grid grid-cols-[minmax(0,1fr)_58px] gap-1.5">
+              <div className="grid grid-cols-[28px_minmax(0,1fr)_28px] items-center gap-1.5">
+                <MaterialSwatch material={assigned} projectPath={projectPath} />
                 <select
                   value={assignedId}
                   disabled={readOnly || materials.length === 0}
@@ -657,7 +816,9 @@ function MeshInspector({
                       ),
                     })
                   }
-                  className="h-7 min-w-0 rounded border border-slate-300 bg-white px-1.5 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                  aria-label={`${slot.name}のMaterial`}
+                  title={`${slot.name}のMaterialを選択`}
+                  className="h-7 min-w-0 rounded-sm border border-slate-300 bg-white px-1.5 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                 >
                   <option value="">
                     {openBrush ? "OpenBrush Brush Shader" : "未設定"}
@@ -670,21 +831,13 @@ function MeshInspector({
                   type="button"
                   disabled={!assigned}
                   onClick={() => assigned && onOpenMaterial(assigned.id)}
+                  aria-label="割り当て中のMaterialをInspectorで開く"
                   title={commandTitle("マテリアルをインスペクターで開く", "EditAssignedMaterial")}
-                  className="h-7 rounded border border-violet-300 bg-violet-50 px-1.5 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex h-7 items-center justify-center rounded-sm text-slate-500 hover:bg-violet-100 hover:text-violet-700 disabled:cursor-not-allowed disabled:opacity-35"
                 >
-                  編集
+                  <EDITOR_ICONS.asset size={13} aria-hidden="true" />
                 </button>
               </div>
-              <p className="mt-1 text-xs text-slate-500">
-                {assigned?.shader?.kind === "openbrush"
-                  ? `${assigned.shader.brushName}をthree-icosa専用Materialとして設定済み`
-                  : openBrush && !assigned
-                    ? "source brushを使用中。ドロップするとXRift Materialで上書きします"
-                    : openBrush
-                      ? "通常のXRift MaterialでOpenBrush shaderを上書き中"
-                      : "マテリアルをここへドロップ"}
-              </p>
             </div>
           );
         })}
@@ -729,6 +882,7 @@ function ModelNodeInspector({
   entity,
   scene,
   assets,
+  projectPath,
   readOnly,
   onMeshChange,
   onOpenMaterial,
@@ -736,6 +890,7 @@ function ModelNodeInspector({
   entity: SceneEntity;
   scene: SceneDocument;
   assets: AssetManifest;
+  projectPath?: string;
   readOnly: boolean;
   onMeshChange: (
     entityId: string,
@@ -820,6 +975,7 @@ function ModelNodeInspector({
         <MeshInspector
           component={nodeMesh}
           assets={assets}
+          projectPath={projectPath}
           readOnly={readOnly}
           showModelPose={false}
           materialBindingSourceNodeIndex={node.sourceNodeIndex}
@@ -1191,6 +1347,81 @@ function ColliderInspector({
         onChange={(enabled) => onChange({ enabled })}
       />
 
+      <div className="space-y-2.5 border-t border-slate-100 pt-2.5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+          Rigid Body · Entity共通
+        </p>
+        <label className="grid grid-cols-[minmax(0,1fr)_150px] items-center gap-3 text-xs text-slate-700">
+          Rigid Body
+          <select
+            value={component.bodyType ?? "fixed"}
+            disabled={readOnly}
+            onChange={(event) =>
+              onChange({
+                bodyType: event.currentTarget.value as NonNullable<
+                  ColliderComponent["bodyType"]
+                >,
+              })
+            }
+            className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
+          >
+            <option value="fixed">Static（Fixed）</option>
+            <option value="dynamic">Dynamic</option>
+            <option value="kinematicPosition">Kinematic Position</option>
+            <option value="kinematicVelocity">Kinematic Velocity</option>
+          </select>
+        </label>
+        <ColliderNumberField
+          label="Gravity Scale"
+          value={component.gravityScale ?? 1}
+          min={-100}
+          max={100}
+          step={0.1}
+          disabled={readOnly}
+          onChange={(gravityScale) => onChange({ gravityScale })}
+        />
+        <ColliderNumberField
+          label="Linear Damping"
+          value={component.linearDamping ?? 0}
+          min={0}
+          step={0.05}
+          disabled={readOnly}
+          onChange={(linearDamping) => onChange({ linearDamping })}
+        />
+        <ColliderNumberField
+          label="Angular Damping"
+          value={component.angularDamping ?? 0}
+          min={0}
+          step={0.05}
+          disabled={readOnly}
+          onChange={(angularDamping) => onChange({ angularDamping })}
+        />
+        <ToggleRow
+          label="Can Sleep"
+          checked={component.canSleep ?? true}
+          disabled={readOnly}
+          onChange={(canSleep) => onChange({ canSleep })}
+        />
+        <ToggleRow
+          label="CCD"
+          checked={component.ccd ?? false}
+          disabled={readOnly}
+          onChange={(ccd) => onChange({ ccd })}
+        />
+        <ToggleRow
+          label="Lock Position"
+          checked={component.lockTranslations ?? false}
+          disabled={readOnly}
+          onChange={(lockTranslations) => onChange({ lockTranslations })}
+        />
+        <ToggleRow
+          label="Lock Rotation"
+          checked={component.lockRotations ?? false}
+          disabled={readOnly}
+          onChange={(lockRotations) => onChange({ lockRotations })}
+        />
+      </div>
+
       {component.shape === "box" ? (
         <div className="space-y-2.5 border-t border-slate-100 pt-2.5">
           <div className="flex items-center justify-between gap-2">
@@ -1440,6 +1671,111 @@ function LightInspector({
   );
 }
 
+function TextInspector({
+  component,
+  readOnly,
+  onChange,
+}: {
+  component: TextComponent;
+  readOnly: boolean;
+  onChange: (patch: TextPatch) => void;
+}) {
+  return (
+    <ComponentCard title="Text" subtitle="SDF">
+      <ToggleRow
+        label="Enabled"
+        checked={component.enabled}
+        disabled={readOnly}
+        onChange={(enabled) => onChange({ enabled })}
+      />
+      <label className="block text-xs font-medium text-slate-600">
+        Content
+        <textarea
+          value={component.text}
+          disabled={readOnly}
+          rows={3}
+          onChange={(event) => onChange({ text: event.currentTarget.value })}
+          className="mt-1 w-full resize-y rounded border border-slate-300 bg-white px-2 py-1.5 text-xs leading-5 text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100"
+        />
+      </label>
+      <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+        <span>Color</span>
+        <input
+          type="color"
+          value={component.color}
+          disabled={readOnly}
+          onChange={(event) => onChange({ color: event.currentTarget.value })}
+          className="h-8 w-full cursor-pointer rounded border border-slate-300 bg-white p-1 disabled:opacity-50"
+        />
+      </div>
+      <ColliderNumberField
+        label="Font Size"
+        value={component.fontSize}
+        min={0.001}
+        step={0.01}
+        disabled={readOnly}
+        onChange={(fontSize) => onChange({ fontSize })}
+      />
+      <ColliderNumberField
+        label="Max Width"
+        value={component.maxWidth ?? 10}
+        min={0.01}
+        step={0.1}
+        disabled={readOnly}
+        onChange={(maxWidth) => onChange({ maxWidth })}
+      />
+      <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+        Anchor X
+        <select
+          value={component.anchorX}
+          disabled={readOnly}
+          onChange={(event) =>
+            onChange({ anchorX: event.currentTarget.value as TextComponent["anchorX"] })
+          }
+          className="h-8 rounded border border-slate-300 bg-white px-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-100"
+        >
+          <option value="left">Left</option>
+          <option value="center">Center</option>
+          <option value="right">Right</option>
+        </select>
+      </label>
+      <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+        Anchor Y
+        <select
+          value={component.anchorY}
+          disabled={readOnly}
+          onChange={(event) =>
+            onChange({ anchorY: event.currentTarget.value as TextComponent["anchorY"] })
+          }
+          className="h-8 rounded border border-slate-300 bg-white px-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-100"
+        >
+          <option value="top">Top</option>
+          <option value="middle">Middle</option>
+          <option value="bottom">Bottom</option>
+        </select>
+      </label>
+      <ColliderNumberField
+        label="Outline"
+        value={component.outlineWidth}
+        min={0}
+        step={0.005}
+        disabled={readOnly}
+        onChange={(outlineWidth) => onChange({ outlineWidth })}
+      />
+      <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+        <span>Outline Color</span>
+        <input
+          type="color"
+          value={component.outlineColor}
+          disabled={readOnly}
+          onChange={(event) => onChange({ outlineColor: event.currentTarget.value })}
+          className="h-8 w-full cursor-pointer rounded border border-slate-300 bg-white p-1 disabled:opacity-50"
+        />
+      </div>
+    </ComponentCard>
+  );
+}
+
 function AudioSourceInspector({
   component,
   assets,
@@ -1571,12 +1907,14 @@ function AnimationInspector({
   assets,
   readOnly,
   onChange,
+  onOpenInteractivity,
 }: {
   component: AnimationComponent;
   entity: SceneEntity;
   assets: AssetManifest;
   readOnly: boolean;
   onChange: (patch: AnimationPatch) => void;
+  onOpenInteractivity: (assetId: string) => void;
 }) {
   const model = entity.components
     .filter((candidate) => candidate.type === "mesh")
@@ -1590,6 +1928,9 @@ function AnimationInspector({
     })
     .find((asset) => Boolean(asset?.importMetadata?.animations.length));
   const clip = model?.importMetadata?.animations[0];
+  const interactivityAssets = Object.values(assets.assets)
+    .filter((asset) => asset.kind === "interactivity")
+    .sort((left, right) => left.name.localeCompare(right.name));
 
   return (
     <ComponentCard title="Animation" subtitle="GLB / glTF">
@@ -1628,6 +1969,30 @@ function AnimationInspector({
           Animationを含むModelが同じEntityにありません。
         </p>
       )}
+      <section className="space-y-2 border-t border-slate-100 pt-2">
+        <div>
+          <p className="text-xs font-semibold text-slate-700">Material Animation</p>
+          <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
+            KHR_interactivityの「glTFプロパティを補間」で、色・Metallic・タイリングなどのMaterial項目をアニメーションできます。
+          </p>
+        </div>
+        {interactivityAssets.map((asset) => (
+          <button
+            key={asset.id}
+            type="button"
+            onClick={() => onOpenInteractivity(asset.id)}
+            className="flex w-full items-center justify-between rounded border border-cyan-200 bg-cyan-50 px-2 py-1.5 text-left text-xs font-semibold text-cyan-800 hover:bg-cyan-100"
+          >
+            <span className="truncate">{asset.name}</span>
+            <span className="shrink-0 text-[10px]">Graphを開く</span>
+          </button>
+        ))}
+        {interactivityAssets.length === 0 ? (
+          <p className="rounded border border-dashed border-slate-300 bg-slate-50 px-2 py-1.5 text-[11px] leading-4 text-slate-500">
+            AssetsでInteractivity Assetを作成すると、Material Animationを設定できます。
+          </p>
+        ) : null}
+      </section>
     </ComponentCard>
   );
 }
@@ -1722,7 +2087,10 @@ function EntityInspector({
   entity,
   scene,
   assets,
+  projectPath,
   readOnly,
+  playMode,
+  onEnabledChange,
   onRename,
   onTransformChange,
   onTransformScrubStart,
@@ -1735,11 +2103,13 @@ function EntityInspector({
   onAutoFitCollider,
   onRemoveCollider,
   onLightChange,
+  onTextChange,
   onAnimationChange,
   onAudioSourceChange,
   onParticleEmitterChange,
   onRemoveParticleEmitter,
   onOpenMaterial,
+  onOpenInteractivity,
   projectKind,
   onAddComponent,
   onUpdateXriftComponent,
@@ -1750,7 +2120,10 @@ function EntityInspector({
   entity: SceneEntity;
   scene: SceneDocument;
   assets: AssetManifest;
+  projectPath?: string;
   readOnly: boolean;
+  playMode: boolean;
+  onEnabledChange: (enabled: boolean) => void;
   onRename: (name: string) => void;
   onTransformChange: (patch: TransformPatch) => void;
   onTransformScrubStart: () => void;
@@ -1767,6 +2140,7 @@ function EntityInspector({
   onAutoFitCollider: (componentId: string) => void;
   onRemoveCollider: (componentId: string) => void;
   onLightChange: (componentId: string, patch: LightPatch) => void;
+  onTextChange: (componentId: string, patch: TextPatch) => void;
   onAnimationChange: (componentId: string, patch: AnimationPatch) => void;
   onAudioSourceChange: (componentId: string, patch: AudioSourcePatch) => void;
   onParticleEmitterChange: (
@@ -1775,6 +2149,7 @@ function EntityInspector({
   ) => void;
   onRemoveParticleEmitter: (componentId: string) => void;
   onOpenMaterial: (assetId: string) => void;
+  onOpenInteractivity: (assetId: string) => void;
   projectKind: VisualProjectKind;
   onAddComponent: (definitionId: string) => void;
   onUpdateXriftComponent: (
@@ -1789,25 +2164,89 @@ function EntityInspector({
   const [addComponentOpen, setAddComponentOpen] = useState(false);
   const [scaleLinked, setScaleLinked] = useState(true);
   const registeredComponents = entity.components as RegisteredSceneComponent[];
+  const liveRuntimeTuning = readOnly && playMode;
+  const disabledAncestor = (() => {
+    const visited = new Set<string>([entity.id]);
+    let parentId = entity.parentId;
+    while (parentId && !visited.has(parentId)) {
+      visited.add(parentId);
+      const parent = scene.entities[parentId];
+      if (!parent) return undefined;
+      if (!parent.enabled) return parent;
+      parentId = parent.parentId;
+    }
+    return undefined;
+  })();
+  const effectivelyEnabled = entity.enabled && !disabledAncestor;
 
   return (
     <div className="space-y-3">
-      <EntityNameField entity={entity} disabled={readOnly} onRename={onRename} />
+      <section className="flex items-center gap-2 rounded border border-slate-200 bg-white p-2">
+        <input
+          type="checkbox"
+          checked={entity.enabled}
+          disabled={readOnly}
+          onChange={(event) => onEnabledChange(event.currentTarget.checked)}
+          aria-label={`${entity.name}のEnabled`}
+          title={
+            disabledAncestor && entity.enabled
+              ? `自身はEnabledですが、親Entity「${disabledAncestor.name}」が無効なため表示されません`
+              : entity.enabled
+                ? "Entityと子Entityを無効にする"
+                : "Entityを有効にする。親が無効な場合は親の状態を継承します"
+          }
+          className="h-4 w-4 shrink-0 accent-violet-600 disabled:cursor-not-allowed disabled:opacity-50"
+        />
+        <EntityNameField
+          entity={entity}
+          disabled={readOnly}
+          compact
+          onRename={onRename}
+        />
+        {!effectivelyEnabled && entity.enabled && disabledAncestor ? (
+          <span
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-amber-600"
+            title={`親Entity「${disabledAncestor.name}」が無効なため非表示です`}
+            aria-label={`親Entity「${disabledAncestor.name}」が無効なため非表示`}
+          >
+            <EDITOR_ICONS.hidden size={14} aria-hidden="true" />
+          </span>
+        ) : null}
+        {liveRuntimeTuning ? (
+          <span
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-violet-600"
+            title="Play中の変更は保存され、このEntityだけ先頭から再実行されます"
+            aria-label="Play中のEntity調整"
+          >
+            <EDITOR_ICONS.play size={13} aria-hidden="true" />
+          </span>
+        ) : null}
+      </section>
 
       {prefabSource ? (
-        <ComponentCard title="Prefab Source" subtitle={prefabSource.name}>
-          <p className="text-xs leading-4 text-slate-600">
-            このEntityを含むHierarchyがPrefabの編集元です。構造や値を変更した後、UpdateでPrefab documentへ反映します。
-          </p>
+        <section
+          className="flex h-9 items-center gap-2 rounded border border-slate-200 bg-slate-50 px-2"
+          title={`編集元Prefab: ${prefabSource.name}`}
+        >
+          <EDITOR_ICONS.prefab
+            size={14}
+            className="shrink-0 text-violet-600"
+            aria-hidden="true"
+          />
+          <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-700">
+            {prefabSource.name}
+          </span>
           <button
             type="button"
             disabled={readOnly}
             onClick={() => onUpdatePrefab(prefabSource.prefabId)}
-            className="w-full rounded border border-violet-300 bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-40"
+            aria-label={`${prefabSource.name}へ変更を反映`}
+            title="現在のHierarchyと設定をPrefabへ反映"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-violet-100 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            PrefabをUpdate
+            <EDITOR_ICONS.refresh size={13} aria-hidden="true" />
           </button>
-        </ComponentCard>
+        </section>
       ) : null}
 
       {transform ? (
@@ -1816,7 +2255,7 @@ function EntityInspector({
             label="Position"
             value={transform.position}
             valueKind="position"
-            disabled={readOnly}
+            disabled={readOnly && !liveRuntimeTuning}
             onChange={(position) => onTransformChange({ position })}
             onScrubStart={onTransformScrubStart}
             onScrubChange={(position) => onTransformScrubChange({ position })}
@@ -1827,7 +2266,7 @@ function EntityInspector({
             label="Rotation"
             value={transform.rotation}
             valueKind="rotation"
-            disabled={readOnly}
+            disabled={readOnly && !liveRuntimeTuning}
             onChange={(rotation) => onTransformChange({ rotation })}
             onScrubStart={onTransformScrubStart}
             onScrubChange={(rotation) => onTransformScrubChange({ rotation })}
@@ -1838,7 +2277,7 @@ function EntityInspector({
             label="Scale"
             value={transform.scale}
             valueKind="scale"
-            disabled={readOnly}
+            disabled={readOnly && !liveRuntimeTuning}
             scaleLinked={scaleLinked}
             onScaleLinkedChange={setScaleLinked}
             onChange={(scale) => onTransformChange({ scale })}
@@ -1847,9 +2286,6 @@ function EntityInspector({
             onScrubEnd={onTransformScrubEnd}
             onScrubCancel={onTransformScrubCancel}
           />
-          <p className="text-xs leading-4 text-slate-500">
-            軸ラベルを左右にドラッグできます。Shiftで微調整、CtrlまたはAltで大きく調整します。回転は度単位です。
-          </p>
         </ComponentCard>
       ) : null}
 
@@ -1858,6 +2294,7 @@ function EntityInspector({
           entity={entity}
           scene={scene}
           assets={assets}
+          projectPath={projectPath}
           readOnly={readOnly}
           onMeshChange={onModelNodeMeshChange}
           onOpenMaterial={onOpenMaterial}
@@ -1872,6 +2309,7 @@ function EntityInspector({
               key={component.id}
               component={component}
               assets={assets}
+              projectPath={projectPath}
               readOnly={readOnly}
               onChange={(patch) => onMeshChange(component.id, patch)}
               onOpenMaterial={onOpenMaterial}
@@ -1884,7 +2322,7 @@ function EntityInspector({
               key={component.id}
               component={component}
               entityScale={transform?.scale ?? [1, 1, 1]}
-              readOnly={readOnly}
+              readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) => onColliderChange(component.id, patch)}
               onAutoFit={() => onAutoFitCollider(component.id)}
               onRemove={() => onRemoveCollider(component.id)}
@@ -1898,6 +2336,16 @@ function EntityInspector({
               component={component}
               readOnly={readOnly}
               onChange={(patch) => onLightChange(component.id, patch)}
+            />
+          );
+        }
+        if (component.type === "text") {
+          return (
+            <TextInspector
+              key={component.id}
+              component={component}
+              readOnly={readOnly}
+              onChange={(patch) => onTextChange(component.id, patch)}
             />
           );
         }
@@ -1920,8 +2368,9 @@ function EntityInspector({
               component={component}
               entity={entity}
               assets={assets}
-              readOnly={readOnly}
+              readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) => onAnimationChange(component.id, patch)}
+              onOpenInteractivity={onOpenInteractivity}
             />
           );
         }
@@ -2107,7 +2556,9 @@ export function InspectorPanel({
   selectedEntityIds,
   selectedAssetIds,
   readOnly,
+  playMode = false,
   onRenameEntity,
+  onEntityEnabledChange,
   onTransformChange,
   onTransformScrubStart,
   onTransformScrubChange,
@@ -2118,9 +2569,11 @@ export function InspectorPanel({
   onAutoFitCollider,
   onRemoveCollider,
   onLightChange,
+  onTextChange,
   onAnimationChange,
   onAudioSourceChange,
   onSelectAsset,
+  onOpenInteractivity,
   onCloseAsset,
   onMaterialChange,
   onModelChange,
@@ -2155,7 +2608,9 @@ export function InspectorPanel({
   selectedEntityIds: readonly string[];
   selectedAssetIds: readonly string[];
   readOnly: boolean;
+  playMode?: boolean;
   onRenameEntity: (entityId: string, name: string) => void;
+  onEntityEnabledChange: (entityId: string, enabled: boolean) => void;
   onTransformChange: (entityId: string, patch: TransformPatch) => void;
   onTransformScrubStart: (entityId: string) => void;
   onTransformScrubChange: (entityId: string, patch: TransformPatch) => void;
@@ -2166,9 +2621,11 @@ export function InspectorPanel({
   onAutoFitCollider: (entityId: string, componentId: string) => void;
   onRemoveCollider: (entityId: string, componentId: string) => void;
   onLightChange: (entityId: string, componentId: string, patch: LightPatch) => void;
+  onTextChange: (entityId: string, componentId: string, patch: TextPatch) => void;
   onAnimationChange: (entityId: string, componentId: string, patch: AnimationPatch) => void;
   onAudioSourceChange: (entityId: string, componentId: string, patch: AudioSourcePatch) => void;
   onSelectAsset: (assetId: string) => void;
+  onOpenInteractivity: (assetId: string) => void;
   onCloseAsset: () => void;
   onMaterialChange: (assetId: string, patch: MaterialAssetPatch) => void;
   onModelChange: (assetId: string, patch: ModelAssetPatch) => void;
@@ -2229,6 +2686,11 @@ export function InspectorPanel({
   const InspectorIcon = sceneSettingsOpen ? EDITOR_ICONS.settings : EntityIcon;
   const multiSelectionActive =
     !sceneSettingsOpen && (selectedEntityIds.length > 1 || selectedAssetIds.length > 1);
+  const inspectorContextLabel = sceneSettingsOpen
+    ? scene.name
+    : multiSelectionActive
+      ? `${Math.max(selectedEntityIds.length, selectedAssetIds.length)}件を選択`
+      : asset?.name ?? (entity ? null : "未選択");
 
   return (
     <aside className="row-span-2 flex min-h-0 flex-col border-l border-editor-border bg-editor-canvas" aria-labelledby="inspector-heading">
@@ -2236,13 +2698,7 @@ export function InspectorPanel({
         <div className="flex items-center gap-2">
           <InspectorIcon size={14} className="text-editor-muted" aria-hidden="true" />
           <h2 id="inspector-heading" className="text-[13px] font-semibold text-editor-text">
-            {sceneSettingsOpen
-              ? "Scene Inspector"
-              : multiSelectionActive
-                ? "Multi Inspector"
-              : asset
-                ? "Asset Inspector"
-                : "Entity Inspector"}
+            Inspector
           </h2>
         </div>
         <div className="flex items-center gap-1">
@@ -2250,33 +2706,35 @@ export function InspectorPanel({
             <button
               type="button"
               onClick={onCloseSceneSettings}
+              aria-label="前のInspectorへ戻る"
               title="前のInspectorへ戻る"
-              className="rounded border border-slate-300 bg-white px-1.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+              className="flex h-6 w-6 items-center justify-center rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
             >
-              戻る
+              <EDITOR_ICONS.back size={13} aria-hidden="true" />
             </button>
           ) : asset && entity ? (
             <button
               type="button"
               onClick={onCloseAsset}
+              aria-label={`${entity.name}のInspectorへ戻る`}
               title={commandTitle(`${entity.name}のEntity Inspectorへ戻る`, "ShowEntityInspector")}
-              className="rounded border border-slate-300 bg-white px-1.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+              className="flex h-6 w-6 items-center justify-center rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
             >
-              Entity
+              <EDITOR_ICONS.sceneEntity size={13} aria-hidden="true" />
             </button>
           ) : null}
-          <span className="max-w-28 truncate text-xs text-slate-500">
-            {sceneSettingsOpen
-              ? scene.name
-              : multiSelectionActive
-                ? `${Math.max(selectedEntityIds.length, selectedAssetIds.length)}件を選択`
-                : asset?.name ?? entity?.name ?? "未選択"}
-          </span>
+          {inspectorContextLabel ? (
+            <span className="max-w-28 truncate text-xs text-slate-500">
+              {inspectorContextLabel}
+            </span>
+          ) : null}
         </div>
       </div>
       {readOnly ? (
         <div className="border-b border-violet-200 bg-violet-50 px-3 py-2 text-xs leading-4 text-violet-800">
-          Play中はシーンを変更できません。アセット設定も閲覧のみです。
+          {playMode
+            ? "Play Windowは分離された実行コピーです。EntityのTransform、Collider、Animationだけ実行中に調整できます。"
+            : "シーンとアセット設定は閲覧のみです。"}
         </div>
       ) : null}
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-3">
@@ -2343,7 +2801,12 @@ export function InspectorPanel({
             entity={entity}
             scene={scene}
             assets={assets}
+            projectPath={projectPath}
             readOnly={readOnly}
+            playMode={playMode}
+            onEnabledChange={(enabled) =>
+              onEntityEnabledChange(entity.id, enabled)
+            }
             onRename={(name) => onRenameEntity(entity.id, name)}
             onTransformChange={(patch) => onTransformChange(entity.id, patch)}
             onTransformScrubStart={() => onTransformScrubStart(entity.id)}
@@ -2366,6 +2829,9 @@ export function InspectorPanel({
             onLightChange={(componentId, patch) =>
               onLightChange(entity.id, componentId, patch)
             }
+            onTextChange={(componentId, patch) =>
+              onTextChange(entity.id, componentId, patch)
+            }
             onAnimationChange={(componentId, patch) =>
               onAnimationChange(entity.id, componentId, patch)
             }
@@ -2379,6 +2845,7 @@ export function InspectorPanel({
               onRemoveParticleEmitter(entity.id, componentId)
             }
             onOpenMaterial={onSelectAsset}
+            onOpenInteractivity={onOpenInteractivity}
             projectKind={projectKind}
             onAddComponent={(definitionId) =>
               onAddComponent(entity.id, definitionId)

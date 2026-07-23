@@ -1,5 +1,23 @@
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Billboard, Edges, Html, OrbitControls, TransformControls } from "@react-three/drei";
+import {
+  Canvas,
+  useFrame,
+  useThree,
+  type ThreeEvent,
+} from "@react-three/fiber";
+import {
+  Edges,
+  Html,
+  OrbitControls,
+  Text as DreiText,
+  TransformControls,
+} from "@react-three/drei";
+import {
+  CapsuleCollider,
+  CuboidCollider,
+  RigidBody,
+  type RapierRigidBody,
+} from "@react-three/rapier";
+import { SpawnPoint } from "@xrift/world-components";
 import {
   useCallback,
   useEffect,
@@ -15,9 +33,9 @@ import {
   type ReactNode,
 } from "react";
 import {
-  AdditiveBlending,
   BackSide,
   Box3,
+  BoxGeometry,
   Color,
   DoubleSide,
   EquirectangularReflectionMapping,
@@ -30,6 +48,7 @@ import {
   Raycaster,
   SRGBColorSpace,
   Sphere,
+  SphereGeometry,
   TextureLoader,
   Vector2,
   Vector3,
@@ -40,14 +59,12 @@ import {
   type MeshStandardMaterial,
   type Object3D,
   type SpotLight,
-  type ShaderMaterial,
   type Texture,
 } from "three";
 import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
 import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
 import {
   BUILTIN_PRIMITIVE_CREATION_CATALOG,
-  XRIFT_COMPONENT_SCHEMA_IDS,
   getBuiltinPrefabRecipe,
   getBuiltinPrimitiveCreation,
   applyCustomShaderSourceOverrides,
@@ -56,12 +73,15 @@ import {
   getMaterialAssignmentTarget,
   getMaterialAsset,
   getPrimaryMaterialAssetId,
+  getTextureSourceFormat,
   getTransform,
+  isEnvironmentTextureAsset,
   normalizeProjectRelativePath,
   resolveOpenBrushEditorBrushBaseUrl,
   resolveSceneSettings,
   type AssetManifest,
   type AnimationComponent,
+  type ColliderComponent,
   type MaterialAsset,
   type MeshComponent,
   type ModelAsset,
@@ -102,15 +122,25 @@ import {
 } from "./scene-viewport-drag";
 import { createSceneViewportPreview } from "./scene-viewport-preview";
 import {
-  resolvePortalPreview,
-  resolveTagBoardPreview,
-} from "./xrift-component-preview";
-import {
   type EditorMode,
   type EditorSelection,
   type TransformMode,
   type TransformSpace,
 } from "./types";
+import {
+  OfficialXriftComponentRenderer,
+  OfficialXriftEntityWrappers,
+  OfficialXriftPreviewProvider,
+  isOfficialXriftWrapperComponent,
+} from "./OfficialXriftComponentRenderer";
+import {
+  SCENE_VIEWPORT_DISPLAY_OPTIONS,
+  getEntityMeshMaterialStyle,
+  getSceneViewportDisplayProfile,
+  type SceneViewportDisplayProfile,
+  type SceneViewportDisplayMode,
+  type SceneViewportMaterialStyle,
+} from "./scene-viewport-display";
 
 const PLAY_KEYS = new Set([
   "w",
@@ -122,11 +152,20 @@ const PLAY_KEYS = new Set([
   "arrowleft",
   "arrowright",
 ]);
+const SCENE_VIEW_SELECTION_DRAG_THRESHOLD_PX = 6;
 const EDIT_CAMERA_TARGET: [number, number, number] = [0, 0.7, 0];
-const EDITOR_SELECTION_COLOR = "#cbd5e1";
+const EDITOR_SELECTION_COLOR = "#7c3aed";
 const MUTED_GIZMO_COLOR = new Color("#64748b");
 
 type ViewProjection = "perspective" | "orthographic";
+
+type SceneViewportSelectionModifiers = {
+  additive: boolean;
+};
+
+type SceneViewportEntitySelection =
+  | Extract<EditorSelection, { kind: "entity" }>
+  | null;
 
 export type SceneFocusState = {
   entityId: string;
@@ -239,6 +278,7 @@ function MeshVisual({
   assets,
   selected,
   materialDropHighlighted,
+  viewportMaterialStyle,
   projectPath,
 }: {
   component: MeshComponent;
@@ -247,6 +287,7 @@ function MeshVisual({
   assets: AssetManifest;
   selected: boolean;
   materialDropHighlighted: boolean;
+  viewportMaterialStyle: SceneViewportMaterialStyle;
   projectPath?: string;
 }) {
   const geometryAssetId =
@@ -335,6 +376,7 @@ function MeshVisual({
             ? component.geometry.sourceNodeIndex
             : undefined
         }
+        viewportMaterialStyle={viewportMaterialStyle}
       />
     );
   }
@@ -353,6 +395,7 @@ function MeshVisual({
         projectPath={projectPath}
         selected={selected}
         materialDropHighlighted={materialDropHighlighted}
+        viewportMaterialStyle={viewportMaterialStyle}
       />
     );
   }
@@ -382,6 +425,7 @@ function PrimitiveMeshVisual({
   projectPath,
   selected,
   materialDropHighlighted,
+  viewportMaterialStyle,
 }: {
   component: MeshComponent;
   primitive: PrimitiveGeometry;
@@ -390,6 +434,7 @@ function PrimitiveMeshVisual({
   projectPath?: string;
   selected: boolean;
   materialDropHighlighted: boolean;
+  viewportMaterialStyle: SceneViewportMaterialStyle;
 }) {
   const materialTextures = useCoreMaterialPreviewTextures(
     material,
@@ -450,7 +495,45 @@ function PrimitiveMeshVisual({
       receiveShadow={component.receiveShadow}
     >
       <PrimitiveGeometryView primitive={primitive} />
-      {customShaderInstance ? (
+      {viewportMaterialStyle === "unlit" ? (
+        <meshBasicMaterial
+          color={material?.properties.color ?? "#f43f5e"}
+          map={materialTextures.baseColorMap}
+          opacity={opacity}
+          transparent={alphaMode === "BLEND"}
+          depthWrite={alphaMode !== "BLEND"}
+          alphaTest={
+            alphaMode === "MASK"
+              ? (material?.properties.alphaCutoff ?? 0.5)
+              : 0
+          }
+          side={
+            primitive === "plane" || material?.properties.doubleSided
+              ? DoubleSide
+              : undefined
+          }
+        />
+      ) : viewportMaterialStyle === "wireframe" ? (
+        <meshBasicMaterial color="#52606d" wireframe />
+      ) : viewportMaterialStyle === "ghost" ? (
+        <meshBasicMaterial
+          color="#64748b"
+          transparent
+          opacity={0.16}
+          depthWrite={false}
+          side={DoubleSide}
+        />
+      ) : viewportMaterialStyle === "collider-wireframe" ? (
+        <meshBasicMaterial
+          color="#0f766e"
+          wireframe
+          transparent
+          opacity={0.88}
+          depthTest={false}
+          depthWrite={false}
+          side={DoubleSide}
+        />
+      ) : customShaderInstance ? (
         <primitive object={customShaderInstance} attach="material" />
       ) : (
       <meshStandardMaterial
@@ -500,9 +583,11 @@ function PrimitiveMeshVisual({
 function LightVisual({
   component,
   selected,
+  showSceneLighting,
 }: {
   component: Extract<SceneComponent, { type: "light" }>;
   selected: boolean;
+  showSceneLighting: boolean;
 }) {
   const directionalLightRef = useRef<DirectionalLight | null>(null);
   const spotLightRef = useRef<SpotLight | null>(null);
@@ -520,15 +605,15 @@ function LightVisual({
 
   return (
     <>
-      {component.lightType === "ambient" ? (
+      {showSceneLighting && component.lightType === "ambient" ? (
         <ambientLight color={component.color} intensity={component.intensity} />
-      ) : component.lightType === "hemisphere" ? (
+      ) : showSceneLighting && component.lightType === "hemisphere" ? (
         <hemisphereLight
           color={component.color}
           groundColor={component.groundColor ?? "#334155"}
           intensity={component.intensity}
         />
-      ) : component.lightType === "point" ? (
+      ) : showSceneLighting && component.lightType === "point" ? (
         <pointLight
           color={component.color}
           intensity={component.intensity}
@@ -536,7 +621,7 @@ function LightVisual({
           decay={component.decay ?? 2}
           castShadow={component.castShadow}
         />
-      ) : component.lightType === "spot" ? (
+      ) : showSceneLighting && component.lightType === "spot" ? (
         <>
           <spotLight
             ref={spotLightRef}
@@ -550,14 +635,14 @@ function LightVisual({
           />
           <object3D ref={directionalTargetRef} position={[0, 0, -1]} />
         </>
-      ) : component.lightType === "rectArea" ? (
+      ) : showSceneLighting && component.lightType === "rectArea" ? (
         <rectAreaLight
           color={component.color}
           intensity={component.intensity}
           width={component.width ?? 1}
           height={component.height ?? 1}
         />
-      ) : (
+      ) : showSceneLighting ? (
         <>
           <directionalLight
             ref={directionalLightRef}
@@ -567,7 +652,7 @@ function LightVisual({
           />
           <object3D ref={directionalTargetRef} position={[0, 0, -1]} />
         </>
-      )}
+      ) : null}
       <EditorLightIcon color={component.color} selected={selected} />
       {component.lightType === "directional" || component.lightType === "spot" ? (
         <DirectionArrow
@@ -724,713 +809,6 @@ function DirectionArrow({
   );
 }
 
-function SpawnPointVisual({ selected }: { selected: boolean }) {
-  return (
-    <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.45, 0.055, 8, 32]} />
-        <meshBasicMaterial color={selected ? "#c4b5fd" : "#22d3ee"} />
-      </mesh>
-      <mesh position={[0, 0.45, 0]}>
-        <coneGeometry args={[0.18, 0.5, 16]} />
-        <meshBasicMaterial color={selected ? "#8b5cf6" : "#06b6d4"} />
-      </mesh>
-    </group>
-  );
-}
-
-function MirrorComponentVisual({
-  size,
-  color,
-  selected,
-}: {
-  size: readonly [number, number];
-  color?: string;
-  selected: boolean;
-}) {
-  return (
-    <mesh>
-      <planeGeometry args={[size[0], size[1]]} />
-      <meshStandardMaterial
-        color={selected ? "#a78bfa" : color ?? "#bae6fd"}
-        metalness={0.7}
-        roughness={0.18}
-        transparent
-        opacity={0.72}
-        side={DoubleSide}
-      />
-      <Edges color={selected ? "#8b5cf6" : "#38bdf8"} />
-    </mesh>
-  );
-}
-
-const PORTAL_VERTEX_SHADER = `
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-
-const PORTAL_FRAGMENT_SHADER = `
-  uniform float uTime;
-  uniform vec3 uPrimary;
-  uniform vec3 uGlow;
-  uniform float uOpacity;
-  varying vec2 vUv;
-
-  void main() {
-    vec2 point = vUv - 0.5;
-    float radius = length(point) * 2.0;
-    float angle = atan(point.y, point.x);
-    float spiral = sin(angle * 6.0 - radius * 24.0 + uTime * 1.7);
-    float veins = smoothstep(0.18, 0.96, spiral);
-    float centerGlow = 1.0 - smoothstep(0.0, 1.0, radius);
-    float edge = 1.0 - smoothstep(0.88, 1.0, radius);
-    vec3 color = mix(uPrimary * 0.16, uGlow, veins * 0.58 + centerGlow * 0.28);
-    gl_FragColor = vec4(color, edge * uOpacity * (0.58 + veins * 0.3));
-  }
-`;
-
-const PORTAL_PARTICLE_POSITIONS: readonly Vec3[] = Array.from(
-  { length: 30 },
-  (_, index): Vec3 => {
-    const phase = index * 2.399963229728653;
-    const radius = 0.55 + (index % 6) * 0.105;
-    return [
-      Math.cos(phase) * radius,
-      0.28 + ((index * 7) % 13) * 0.055,
-      Math.sin(phase) * radius,
-    ];
-  },
-);
-
-function usePrefersReducedMotion(): boolean {
-  const [reducedMotion, setReducedMotion] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => setReducedMotion(media.matches);
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, []);
-  return reducedMotion;
-}
-
-function PortalSurface({
-  primary,
-  glow,
-  disabled,
-  reducedMotion,
-}: {
-  primary: string;
-  glow: string;
-  disabled: boolean;
-  reducedMotion: boolean;
-}) {
-  const materialRef = useRef<ShaderMaterial | null>(null);
-  const uniforms = useMemo(
-    () => ({
-      uTime: { value: 0 },
-      uPrimary: { value: new Color(primary) },
-      uGlow: { value: new Color(glow) },
-      uOpacity: { value: disabled ? 0.25 : 0.82 },
-    }),
-    [disabled, glow, primary],
-  );
-
-  useFrame((_state, delta) => {
-    if (reducedMotion || disabled || !materialRef.current) return;
-    materialRef.current.uniforms.uTime.value += delta;
-  });
-
-  return (
-    <mesh rotation={[Math.PI, 0, 0]} position={[0, 0.2175, 0]}>
-      <coneGeometry args={[0.9, 0.135, 24, 12, true]} />
-      <shaderMaterial
-        ref={materialRef}
-        uniforms={uniforms}
-        vertexShader={PORTAL_VERTEX_SHADER}
-        fragmentShader={PORTAL_FRAGMENT_SHADER}
-        transparent
-        depthWrite={false}
-        side={DoubleSide}
-      />
-    </mesh>
-  );
-}
-
-function PortalParticles({
-  color,
-  disabled,
-  reducedMotion,
-}: {
-  color: string;
-  disabled: boolean;
-  reducedMotion: boolean;
-}) {
-  const particlesRef = useRef<Group | null>(null);
-  useFrame((_state, delta) => {
-    if (reducedMotion || disabled || !particlesRef.current) return;
-    particlesRef.current.rotation.y += delta * 0.18;
-  });
-  return (
-    <group ref={particlesRef}>
-      {PORTAL_PARTICLE_POSITIONS.map((position, index) => (
-        <mesh key={index} position={position}>
-          <sphereGeometry args={[index % 3 === 0 ? 0.035 : 0.024, 8, 6]} />
-          <meshBasicMaterial
-            color={color}
-            transparent
-            opacity={disabled ? 0.2 : 0.72}
-            blending={AdditiveBlending}
-            depthWrite={false}
-          />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function PortalComponentVisual({
-  component,
-  selected,
-}: {
-  component: Extract<SceneComponent, { type: "xrift-component" }>;
-  selected: boolean;
-}) {
-  const preview = useMemo(
-    () => resolvePortalPreview(component.properties),
-    [component.properties],
-  );
-  const reducedMotion = usePrefersReducedMotion();
-  const primary = "#9955ff";
-  const glow = "#bb88ff";
-  return (
-    <group>
-      <mesh position={[0, 0.075, 0]} rotation={[0, Math.PI / 4, 0]}>
-        <cylinderGeometry args={[1.25, 1.4, 0.15, 4]} />
-        <meshStandardMaterial
-          color={preview.disabled ? "#475569" : "#333333"}
-          roughness={0.86}
-          metalness={0.08}
-        />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.155, 0]}>
-        <circleGeometry args={[1.02, 48]} />
-        <meshBasicMaterial
-          color={glow}
-          transparent
-          opacity={preview.disabled ? 0.08 : 0.2}
-          blending={AdditiveBlending}
-          depthWrite={false}
-        />
-      </mesh>
-      <PortalSurface
-        primary={primary}
-        glow={glow}
-        disabled={preview.disabled}
-        reducedMotion={reducedMotion}
-      />
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.17, 0]}>
-        <torusGeometry args={[0.9, 0.025, 10, 48]} />
-        <meshBasicMaterial
-          color={glow}
-          transparent
-          opacity={preview.disabled ? 0.18 : 0.62}
-          blending={AdditiveBlending}
-          depthWrite={false}
-        />
-      </mesh>
-      {selected ? (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.18, 0]}>
-          <torusGeometry args={[1.5, 0.018, 8, 48]} />
-          <meshBasicMaterial color={EDITOR_SELECTION_COLOR} depthTest={false} />
-        </mesh>
-      ) : null}
-      <PortalParticles
-        color={glow}
-        disabled={preview.disabled}
-        reducedMotion={reducedMotion}
-      />
-      <Billboard follow lockX={false} lockY={false} lockZ={false} position={[0, 0.92, 0]}>
-        <mesh>
-          <circleGeometry args={[0.6, 64]} />
-          <meshStandardMaterial
-            color={preview.instanceId ? "#17112b" : "#050505"}
-            emissive={preview.instanceId ? primary : "#000000"}
-            emissiveIntensity={preview.disabled ? 0.05 : 0.24}
-            roughness={0.5}
-          />
-        </mesh>
-        <mesh position={[0, 0, 0.012]}>
-          <torusGeometry args={[0.6, 0.018, 8, 64]} />
-          <meshBasicMaterial
-            color={preview.disabled ? "#64748b" : glow}
-            transparent
-            opacity={preview.disabled ? 0.35 : 0.82}
-          />
-        </mesh>
-      </Billboard>
-      <Html
-        transform
-        position={[0, 1.72, 0]}
-        distanceFactor={6}
-        zIndexRange={[3, 0]}
-        style={{ pointerEvents: "none" }}
-      >
-        <div
-          style={{
-            background: preview.instanceId && !preview.disabled
-              ? "rgba(15,23,42,0.9)"
-              : "rgba(69,26,3,0.92)",
-            border: `1px solid ${preview.instanceId && !preview.disabled ? glow : "#f59e0b"}`,
-            borderRadius: 999,
-            color: "#f8fafc",
-            fontFamily: "system-ui, sans-serif",
-            fontSize: 12,
-            fontWeight: 700,
-            letterSpacing: "0.02em",
-            padding: "5px 10px",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {preview.statusLabel}
-        </div>
-      </Html>
-    </group>
-  );
-}
-
-function ScreenComponentVisual({
-  width,
-  selected,
-}: {
-  width: number;
-  selected: boolean;
-}) {
-  const height = Math.max(0.4, width * 9 / 16);
-  return (
-    <group>
-      <mesh>
-        <boxGeometry args={[width, height, 0.08]} />
-        <meshStandardMaterial
-          color={selected ? "#ddd6fe" : "#0f172a"}
-          emissive={selected ? "#7c3aed" : "#0284c7"}
-          emissiveIntensity={selected ? 0.22 : 0.12}
-          roughness={0.38}
-        />
-        <Edges color={selected ? "#8b5cf6" : "#64748b"} />
-      </mesh>
-    </group>
-  );
-}
-
-function BoardComponentVisual({
-  component,
-  selected,
-}: {
-  component: Extract<SceneComponent, { type: "xrift-component" }>;
-  selected: boolean;
-}) {
-  const preview = useMemo(
-    () => resolveTagBoardPreview(component.properties),
-    [component.properties],
-  );
-  const visibleColumns = Math.min(
-    preview.columns,
-    Math.max(1, preview.tags.length),
-  );
-  const rowCount = Math.max(1, Math.ceil(preview.tags.length / visibleColumns));
-  const boardHeight = Math.max(1.45, 0.82 + rowCount * 0.31);
-  const boardCenterY = 0.5 + boardHeight / 2;
-  return (
-    <group scale={preview.scale}>
-      <mesh position={[0, boardCenterY, 0]}>
-        <boxGeometry args={[2.7, boardHeight, 0.1]} />
-        <meshStandardMaterial
-          color={selected ? "#f8fafc" : "#e2e8f0"}
-          roughness={0.76}
-        />
-        <Edges color={selected ? EDITOR_SELECTION_COLOR : "#64748b"} />
-      </mesh>
-      <mesh position={[0, 0.2, 0]}>
-        <cylinderGeometry args={[0.08, 0.1, 0.7, 12]} />
-        <meshStandardMaterial color="#64748b" roughness={0.68} />
-      </mesh>
-      <mesh position={[0, -0.14, 0]}>
-        <cylinderGeometry args={[0.34, 0.42, 0.12, 20]} />
-        <meshStandardMaterial color="#475569" roughness={0.74} />
-      </mesh>
-      <Html
-        transform
-        position={[0, boardCenterY, 0.065]}
-        distanceFactor={5.6}
-        zIndexRange={[3, 0]}
-        style={{ pointerEvents: "none" }}
-      >
-        <div
-          style={{
-            background: "rgba(248,250,252,0.97)",
-            border: "1px solid rgba(148,163,184,0.8)",
-            borderRadius: 12,
-            boxShadow: "0 10px 30px rgba(15,23,42,0.18)",
-            boxSizing: "border-box",
-            color: "#0f172a",
-            fontFamily: "system-ui, sans-serif",
-            padding: "13px 14px 11px",
-            width: 318,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 17,
-              fontWeight: 750,
-              lineHeight: 1.25,
-              marginBottom: 10,
-              textAlign: "center",
-            }}
-          >
-            {preview.title}
-          </div>
-          {preview.tags.length > 0 ? (
-            <div
-              style={{
-                display: "grid",
-                gap: 6,
-                gridTemplateColumns: `repeat(${visibleColumns}, minmax(0, 1fr))`,
-              }}
-            >
-              {preview.tags.map((tag) => (
-                <div
-                  key={tag.id}
-                  style={{
-                    background: `linear-gradient(rgba(15,23,42,0.14), rgba(15,23,42,0.14)), ${tag.color}`,
-                    border: "1px solid rgba(255,255,255,0.55)",
-                    borderRadius: 7,
-                    boxShadow: "inset 0 0 0 1px rgba(15,23,42,0.08)",
-                    color: "#ffffff",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    lineHeight: 1.15,
-                    minWidth: 0,
-                    overflow: "hidden",
-                    padding: "7px 5px",
-                    textAlign: "center",
-                    textOverflow: "ellipsis",
-                    textShadow: "0 1px 2px rgba(15,23,42,0.58)",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {tag.label}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div
-              style={{
-                border: "1px dashed #94a3b8",
-                borderRadius: 8,
-                color: "#64748b",
-                fontSize: 12,
-                padding: "12px 8px",
-                textAlign: "center",
-              }}
-            >
-              タグがありません
-            </div>
-          )}
-          <div
-            style={{
-              color: "#64748b",
-              fontSize: 9,
-              fontWeight: 650,
-              letterSpacing: "0.08em",
-              marginTop: 8,
-              textAlign: "right",
-              textTransform: "uppercase",
-            }}
-          >
-            Editor Preview
-          </div>
-        </div>
-      </Html>
-    </group>
-  );
-}
-
-function EntryLogBoardComponentVisual({
-  component,
-  selected,
-}: {
-  component: Extract<SceneComponent, { type: "xrift-component" }>;
-  selected: boolean;
-}) {
-  const maxEntries = Math.max(
-    1,
-    Math.round(xriftNumber(component, "maxEntries", 10)),
-  );
-  const scale = Math.max(0.1, xriftNumber(component, "scale", 1));
-  const colors = component.properties.colors;
-  const colorObject =
-    colors && typeof colors === "object" && !Array.isArray(colors)
-      ? colors
-      : {};
-  const background =
-    typeof colorObject.background === "string"
-      ? colorObject.background
-      : "#1a1a2e";
-  const textColor =
-    typeof colorObject.text === "string" ? colorObject.text : "#ffffff";
-  const joinColor =
-    typeof colorObject.join === "string" ? colorObject.join : "#4CAF50";
-  const leaveColor =
-    typeof colorObject.leave === "string" ? colorObject.leave : "#F44336";
-  const visibleRows = Math.min(maxEntries, 5);
-  const boardHeight = 0.72 + visibleRows * 0.28;
-  return (
-    <group scale={scale}>
-      <mesh position={[0, boardHeight / 2, 0]}>
-        <boxGeometry args={[2.2, boardHeight, 0.08]} />
-        <meshStandardMaterial color={background} roughness={0.78} />
-        <Edges color={selected ? EDITOR_SELECTION_COLOR : "#64748b"} />
-      </mesh>
-      <Html
-        transform
-        position={[0, boardHeight / 2, 0.05]}
-        distanceFactor={5.6}
-        zIndexRange={[3, 0]}
-        style={{ pointerEvents: "none" }}
-      >
-        <div
-          style={{
-            background,
-            border: `1px solid ${selected ? "#cbd5e1" : "#475569"}`,
-            borderRadius: 8,
-            boxSizing: "border-box",
-            color: textColor,
-            fontFamily: "system-ui, sans-serif",
-            padding: "12px 14px",
-            width: 286,
-          }}
-        >
-          <div style={{ fontSize: 16, fontWeight: 750, marginBottom: 8 }}>
-            入退室ログ
-          </div>
-          {Array.from({ length: visibleRows }, (_, index) => {
-            const joined = index % 2 === 0;
-            return (
-              <div
-                key={index}
-                style={{
-                  alignItems: "center",
-                  borderTop: "1px solid rgba(148,163,184,0.2)",
-                  display: "grid",
-                  fontSize: 10,
-                  gap: 7,
-                  gridTemplateColumns: "8px 1fr auto",
-                  padding: "6px 0",
-                }}
-              >
-                <span
-                  style={{
-                    background: joined ? joinColor : leaveColor,
-                    borderRadius: 999,
-                    height: 7,
-                    width: 7,
-                  }}
-                />
-                <span style={{ opacity: 0.78 }}>Preview user {index + 1}</span>
-                <span style={{ color: joined ? joinColor : leaveColor }}>
-                  {joined ? "入室" : "退室"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </Html>
-    </group>
-  );
-}
-
-function VideoSphereComponentVisual({
-  radius,
-  selected,
-}: {
-  radius: number;
-  selected: boolean;
-}) {
-  return (
-    <mesh>
-      <sphereGeometry args={[Math.max(radius, 0.5), 36, 20, 0, Math.PI]} />
-      <meshStandardMaterial
-        color={selected ? "#c4b5fd" : "#0f172a"}
-        emissive={selected ? "#7c3aed" : "#0369a1"}
-        emissiveIntensity={0.16}
-        transparent
-        opacity={0.28}
-        wireframe={!selected}
-        side={DoubleSide}
-      />
-    </mesh>
-  );
-}
-
-function xriftVec(
-  component: Extract<SceneComponent, { type: "xrift-component" }>,
-  property: string,
-  size: 2 | 3,
-  fallback: number[],
-): number[] {
-  const value = component.properties[property];
-  return Array.isArray(value) &&
-    value.length === size &&
-    value.every((entry) => typeof entry === "number" && Number.isFinite(entry))
-    ? (value as number[])
-    : fallback;
-}
-
-function xriftNumber(
-  component: Extract<SceneComponent, { type: "xrift-component" }>,
-  property: string,
-  fallback: number,
-): number {
-  const value = component.properties[property];
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function xriftColor(
-  component: Extract<SceneComponent, { type: "xrift-component" }>,
-  property: string,
-  fallback: number,
-): string {
-  const value = Math.max(
-    0,
-    Math.min(0xffffff, Math.round(xriftNumber(component, property, fallback))),
-  );
-  return `#${value.toString(16).padStart(6, "0")}`;
-}
-
-function BuiltinPrefabComponentVisual({
-  component,
-  selected,
-}: {
-  component: Extract<SceneComponent, { type: "xrift-component" }>;
-  selected: boolean;
-}) {
-  if (!component.enabled || component.authoring?.source !== "builtin-prefab") {
-    return null;
-  }
-  const recipe = getBuiltinPrefabRecipe(component.authoring.recipeId);
-  if (!recipe) return null;
-  switch (recipe.visual.kind) {
-    case "spawn-point":
-      return <SpawnPointVisual selected={selected} />;
-    case "mirror":
-      return (
-        <MirrorComponentVisual
-          size={recipe.visual.size}
-          color={xriftColor(component, "color", 0xb5b5b5)}
-          selected={selected}
-        />
-      );
-    case "portal":
-      return <PortalComponentVisual component={component} selected={selected} />;
-    case "tag-board":
-      return <BoardComponentVisual component={component} selected={selected} />;
-    case "entry-log-board":
-      return <EntryLogBoardComponentVisual component={component} selected={selected} />;
-    case "screen":
-      return (
-        <ScreenComponentVisual
-          width={recipe.visual.width}
-          selected={selected}
-        />
-      );
-  }
-}
-
-function XriftComponentVisual({
-  component,
-  selected,
-}: {
-  component: Extract<SceneComponent, { type: "xrift-component" }>;
-  selected: boolean;
-}) {
-  if (!component.enabled) return null;
-  if (component.authoring?.source === "builtin-prefab") {
-    return (
-      <BuiltinPrefabComponentVisual component={component} selected={selected} />
-    );
-  }
-
-  const position = xriftVec(component, "position", 3, [0, 0, 0]) as Vec3;
-  const rotation = xriftVec(component, "rotation", 3, [0, 0, 0]) as Vec3;
-  let visual: ReactNode = null;
-
-  switch (component.schemaId) {
-    case XRIFT_COMPONENT_SCHEMA_IDS.spawnPoint:
-      visual = <SpawnPointVisual selected={selected} />;
-      break;
-    case XRIFT_COMPONENT_SCHEMA_IDS.mirror: {
-      const size = xriftVec(component, "size", 2, [3, 2]) as [number, number];
-      visual = (
-        <MirrorComponentVisual
-          size={size}
-          color={xriftColor(component, "color", 0xb5b5b5)}
-          selected={selected}
-        />
-      );
-      break;
-    }
-    case XRIFT_COMPONENT_SCHEMA_IDS.portal:
-      visual = <PortalComponentVisual component={component} selected={selected} />;
-      break;
-    case XRIFT_COMPONENT_SCHEMA_IDS.videoScreen: {
-      const scale = xriftVec(component, "scale", 2, [16 / 9 * 3, 3]);
-      visual = (
-        <ScreenComponentVisual width={Math.max(scale[0] ?? 4, 0.4)} selected={selected} />
-      );
-      break;
-    }
-    case XRIFT_COMPONENT_SCHEMA_IDS.videoPlayer:
-    case XRIFT_COMPONENT_SCHEMA_IDS.liveVideoPlayer:
-    case XRIFT_COMPONENT_SCHEMA_IDS.screenShareDisplay:
-      visual = (
-        <ScreenComponentVisual
-          width={Math.max(xriftNumber(component, "width", 4), 0.4)}
-          selected={selected}
-        />
-      );
-      break;
-    case XRIFT_COMPONENT_SCHEMA_IDS.tagBoard:
-      visual = <BoardComponentVisual component={component} selected={selected} />;
-      break;
-    case XRIFT_COMPONENT_SCHEMA_IDS.entryLogBoard:
-      visual = (
-        <EntryLogBoardComponentVisual component={component} selected={selected} />
-      );
-      break;
-    case XRIFT_COMPONENT_SCHEMA_IDS.video180Sphere:
-      visual = (
-        <VideoSphereComponentVisual
-          radius={xriftNumber(component, "radius", 5)}
-          selected={selected}
-        />
-      );
-      break;
-    default:
-      return null;
-  }
-
-  return (
-    <group position={position} rotation={rotation}>
-      {visual}
-    </group>
-  );
-}
-
 function ComponentVisual({
   component,
   animation,
@@ -1439,6 +817,10 @@ function ComponentVisual({
   selected,
   materialDragActive,
   materialDropHighlighted,
+  viewportMaterialStyle,
+  showHelpers,
+  showSceneLighting,
+  showAllColliders,
   projectPath,
 }: {
   component: SceneComponent;
@@ -1448,12 +830,17 @@ function ComponentVisual({
   selected: boolean;
   materialDragActive: boolean;
   materialDropHighlighted: boolean;
+  viewportMaterialStyle: SceneViewportMaterialStyle | null;
+  showHelpers: boolean;
+  showSceneLighting: boolean;
+  showAllColliders: boolean;
   projectPath?: string;
 }) {
   switch (component.type) {
     case "transform":
       return null;
     case "mesh":
+      if (!viewportMaterialStyle) return null;
       return (
         <group userData={{ meshComponentId: component.id }}>
           <MeshVisual
@@ -1463,12 +850,18 @@ function ComponentVisual({
             assets={assets}
             selected={materialDragActive ? materialDropHighlighted : selected}
             materialDropHighlighted={materialDropHighlighted}
+            viewportMaterialStyle={viewportMaterialStyle}
             projectPath={projectPath}
           />
         </group>
       );
     case "collider":
-      if (!component.enabled || !selected || component.shape !== "box") {
+      if (
+        playing ||
+        !component.enabled ||
+        (!selected && !showAllColliders) ||
+        component.shape !== "box"
+      ) {
         return null;
       }
       return (
@@ -1481,38 +874,125 @@ function ComponentVisual({
             ]}
           />
           <meshBasicMaterial
-            color={EDITOR_SELECTION_COLOR}
+            color={component.isTrigger ? "#d97706" : "#0f766e"}
             wireframe
             transparent
-            opacity={0.45}
+            opacity={selected ? 0.9 : 0.62}
             depthTest={false}
           />
+          {selected ? (
+            <Html
+              center
+              distanceFactor={8}
+              zIndexRange={[3, 0]}
+              style={{ pointerEvents: "none" }}
+            >
+              <span className="rounded border border-slate-300 bg-white/95 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 shadow-sm">
+                {component.isTrigger ? "Trigger" : "Box Collider"}
+              </span>
+            </Html>
+          ) : null}
         </mesh>
       );
     case "light":
-      return <LightVisual component={component} selected={selected} />;
+      return showHelpers ? (
+        <LightVisual
+          component={component}
+          selected={selected}
+          showSceneLighting={showSceneLighting}
+        />
+      ) : null;
+    case "text":
+      return showHelpers && component.enabled ? (
+        <DreiText
+          color={component.color}
+          fontSize={component.fontSize}
+          maxWidth={component.maxWidth}
+          anchorX={component.anchorX}
+          anchorY={component.anchorY}
+          outlineWidth={component.outlineWidth}
+          outlineColor={component.outlineColor}
+        >
+          {component.text}
+        </DreiText>
+      ) : null;
     case "audio-source":
-      return component.enabled ? <AudioSourceVisual selected={selected} /> : null;
+      return showHelpers && component.enabled ? (
+        <AudioSourceVisual selected={selected} />
+      ) : null;
     case "animation":
       return null;
     case "spawn-point":
-      return component.enabled ? (
-        <SpawnPointVisual selected={selected} />
+      return showHelpers && component.enabled ? (
+        <SpawnPoint position={[0, 0, 0]} yaw={0} />
       ) : null;
     case "particle-emitter": {
       const asset = assets.assets[component.particleAssetId];
-      return component.enabled && asset?.kind === "particle" ? (
+      return showHelpers && component.enabled && asset?.kind === "particle" ? (
         <ParticleEmitterVisual asset={asset} selected={selected} />
       ) : null;
     }
     case "xrift-component":
-      return (
-        <XriftComponentVisual
-          component={component}
-          selected={selected}
-        />
-      );
+      return showHelpers ? (
+        <OfficialXriftComponentRenderer component={component} />
+      ) : null;
   }
+}
+
+function RuntimePhysicsEntity({
+  entity,
+  children,
+}: {
+  entity: SceneEntity;
+  children: ReactNode;
+}) {
+  const colliders = entity.components.filter(
+    (component) => component.type === "collider" && component.enabled,
+  ) as ColliderComponent[];
+  if (colliders.length === 0) return children;
+
+  const meshCollider = colliders.find(
+    (component) => component.shape === "mesh",
+  );
+  const primaryCollider = meshCollider ?? colliders[0]!;
+  const bodyType = primaryCollider.bodyType ?? "fixed";
+
+  return (
+    <RigidBody
+      type={bodyType}
+      colliders={
+        meshCollider
+          ? meshCollider.meshMode === "convex" || bodyType !== "fixed"
+            ? "hull"
+            : "trimesh"
+          : false
+      }
+      gravityScale={primaryCollider.gravityScale ?? 1}
+      linearDamping={primaryCollider.linearDamping ?? 0}
+      angularDamping={primaryCollider.angularDamping ?? 0}
+      canSleep={primaryCollider.canSleep ?? true}
+      ccd={primaryCollider.ccd ?? false}
+      lockTranslations={primaryCollider.lockTranslations ?? false}
+      lockRotations={primaryCollider.lockRotations ?? false}
+      friction={primaryCollider.friction}
+      restitution={primaryCollider.restitution}
+      sensor={primaryCollider.isTrigger}
+    >
+      {children}
+      {colliders.map((collider) =>
+        collider.shape === "box" ? (
+          <CuboidCollider
+            key={collider.id}
+            args={collider.halfExtents}
+            position={collider.center}
+            friction={collider.friction}
+            restitution={collider.restitution}
+            sensor={collider.isTrigger}
+          />
+        ) : null,
+      )}
+    </RigidBody>
+  );
 }
 
 function EntityObject({
@@ -1520,8 +1000,11 @@ function EntityObject({
   authoringEntityId,
   assets,
   selected,
+  primary,
   editable,
+  selectable,
   playing,
+  physicsEnabled,
   transformMode,
   transformSpace,
   gizmo,
@@ -1532,24 +1015,34 @@ function EntityObject({
   transformDraggingRef,
   materialDragActive,
   materialDropTarget,
+  displayMode,
+  displayProfile,
   children,
 }: {
   entity: SceneEntity;
   authoringEntityId: string;
   assets: AssetManifest;
   selected: boolean;
+  primary: boolean;
   editable: boolean;
+  selectable: boolean;
   playing: boolean;
+  physicsEnabled: boolean;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
   gizmo: SceneSettings["editor"]["gizmo"];
   projectPath?: string;
-  onSelect: (entityId: string) => void;
+  onSelect: (
+    entityId: string,
+    modifiers: SceneViewportSelectionModifiers,
+  ) => void;
   onTransformCommit: (entityId: string, patch: TransformPatch) => void;
   onDraggingChange: (dragging: boolean) => void;
   transformDraggingRef: { current: boolean };
   materialDragActive: boolean;
   materialDropTarget: MaterialDropReadyTarget | null;
+  displayMode: SceneViewportDisplayMode;
+  displayProfile: SceneViewportDisplayProfile;
   children?: ReactNode;
 }) {
   const objectRef = useRef<Group>(null!);
@@ -1558,6 +1051,49 @@ function EntityObject({
   const animation = entity.components.find(
     (component): component is AnimationComponent =>
       component.type === "animation" && component.enabled,
+  );
+  const enabledColliders = entity.components.filter(
+    (component): component is ColliderComponent =>
+      component.type === "collider" && component.enabled,
+  );
+  const viewportMaterialStyle = getEntityMeshMaterialStyle(
+    displayMode,
+    enabledColliders.some((component) => component.shape === "box"),
+    enabledColliders.some((component) => component.shape === "mesh"),
+  );
+  const xriftWrapperComponents = entity.components.filter(
+    (
+      component,
+    ): component is Extract<SceneComponent, { type: "xrift-component" }> =>
+      component.type === "xrift-component" &&
+      isOfficialXriftWrapperComponent(component),
+  );
+  const entityVisuals = (
+    <>
+      {entity.components.map((component) =>
+        component.type === "xrift-component" &&
+        isOfficialXriftWrapperComponent(component) ? null : (
+          <ComponentVisual
+            key={component.id}
+            component={component}
+            animation={animation}
+            playing={playing}
+            assets={assets}
+            selected={selected}
+            materialDragActive={materialDragActive}
+            materialDropHighlighted={
+              materialDropTarget?.entityId === authoringEntityId &&
+              materialDropTarget.meshComponentId === component.id
+            }
+            viewportMaterialStyle={viewportMaterialStyle}
+            showHelpers={displayProfile.showHelpers}
+            showSceneLighting={displayProfile.showSceneLighting}
+            showAllColliders={displayProfile.showAllColliders}
+            projectPath={projectPath}
+          />
+        ),
+      )}
+    </>
   );
 
   const setTransformControlsRef = useCallback(
@@ -1569,9 +1105,9 @@ function EntityObject({
   );
 
   useLayoutEffect(() => {
-    if (!selected || !editable || !transform) return;
+    if (!primary || !editable || !transform) return;
     muteTransformGizmo(transformControlsRef.current);
-  }, [editable, selected, transform]);
+  }, [editable, primary, transform]);
 
   const commitTransform = () => {
     const object = objectRef.current;
@@ -1594,39 +1130,46 @@ function EntityObject({
         scale={transform?.scale ?? [1, 1, 1]}
         userData={{ authoringEntityId, renderedEntityId: entity.id }}
         onPointerDown={
-          editable
-            ? (event) => {
+          selectable
+            ? (event: ThreeEvent<PointerEvent>) => {
+                event.stopPropagation();
+              }
+            : undefined
+        }
+        onClick={
+          selectable
+            ? (event: ThreeEvent<MouseEvent>) => {
                 event.stopPropagation();
                 if (
+                  event.button !== 0 ||
+                  event.delta > SCENE_VIEW_SELECTION_DRAG_THRESHOLD_PX ||
                   transformDraggingRef.current ||
                   isTransformControlsPointerEvent(event.intersections)
                 ) {
                   return;
                 }
-                onSelect(authoringEntityId);
+                onSelect(authoringEntityId, {
+                  additive: event.shiftKey || event.ctrlKey || event.metaKey,
+                });
               }
             : undefined
         }
       >
-        {entity.components.map((component) => (
-          <ComponentVisual
-            key={component.id}
-            component={component}
-            animation={animation}
-            playing={playing}
-            assets={assets}
-            selected={selected}
-            materialDragActive={materialDragActive}
-            materialDropHighlighted={
-              materialDropTarget?.entityId === authoringEntityId &&
-              materialDropTarget.meshComponentId === component.id
-            }
-            projectPath={projectPath}
-          />
-        ))}
-        {children}
+        <OfficialXriftEntityWrappers components={xriftWrapperComponents}>
+          {physicsEnabled ? (
+            <RuntimePhysicsEntity entity={entity}>
+              {entityVisuals}
+              {children}
+            </RuntimePhysicsEntity>
+          ) : (
+            <>
+              {entityVisuals}
+              {children}
+            </>
+          )}
+        </OfficialXriftEntityWrappers>
       </group>
-      {selected &&
+      {primary &&
       editable &&
       transform &&
       entity.id === authoringEntityId ? (
@@ -1850,9 +1393,13 @@ function SceneEntityHierarchy({
   scene,
   authoringEntityIdByEntityId,
   assets,
-  selectedEntityId,
+  selectedEntityIds,
+  primaryEntityId,
   editable,
+  selectable,
   playing,
+  physicsEnabled,
+  runtimeEntityRevisions,
   transformMode,
   transformSpace,
   gizmo,
@@ -1863,25 +1410,36 @@ function SceneEntityHierarchy({
   transformDraggingRef,
   materialDragActive,
   materialDropTarget,
+  displayMode,
+  displayProfile,
   ancestors = new Set<string>(),
 }: {
   entityId: string;
   scene: SceneDocument;
   authoringEntityIdByEntityId: Readonly<Record<string, string>>;
   assets: AssetManifest;
-  selectedEntityId: string | null;
+  selectedEntityIds: ReadonlySet<string>;
+  primaryEntityId: string | null;
   editable: boolean;
+  selectable: boolean;
   playing: boolean;
+  physicsEnabled: boolean;
+  runtimeEntityRevisions?: Readonly<Record<string, number>>;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
   gizmo: SceneSettings["editor"]["gizmo"];
   projectPath?: string;
-  onSelect: (entityId: string) => void;
+  onSelect: (
+    entityId: string,
+    modifiers: SceneViewportSelectionModifiers,
+  ) => void;
   onTransformCommit: (entityId: string, patch: TransformPatch) => void;
   onDraggingChange: (dragging: boolean) => void;
   transformDraggingRef: { current: boolean };
   materialDragActive: boolean;
   materialDropTarget: MaterialDropReadyTarget | null;
+  displayMode: SceneViewportDisplayMode;
+  displayProfile: SceneViewportDisplayProfile;
   ancestors?: ReadonlySet<string>;
 }) {
   const entity = scene.entities[entityId];
@@ -1897,9 +1455,12 @@ function SceneEntityHierarchy({
       authoringEntityId={authoringEntityId}
       assets={assets}
       projectPath={projectPath}
-      selected={selectedEntityId === authoringEntityId}
+      selected={selectedEntityIds.has(authoringEntityId)}
+      primary={primaryEntityId === authoringEntityId}
       editable={editable}
+      selectable={selectable}
       playing={playing}
+      physicsEnabled={physicsEnabled}
       transformMode={transformMode}
       transformSpace={transformSpace}
       gizmo={gizmo}
@@ -1909,17 +1470,27 @@ function SceneEntityHierarchy({
       transformDraggingRef={transformDraggingRef}
       materialDragActive={materialDragActive}
       materialDropTarget={materialDropTarget}
+      displayMode={displayMode}
+      displayProfile={displayProfile}
     >
       {entity.children.map((childId) => (
         <SceneEntityHierarchy
-          key={childId}
+          key={`${childId}:${
+            runtimeEntityRevisions?.[
+              authoringEntityIdByEntityId[childId] ?? childId
+            ] ?? 0
+          }`}
           entityId={childId}
           scene={scene}
           authoringEntityIdByEntityId={authoringEntityIdByEntityId}
           assets={assets}
-          selectedEntityId={selectedEntityId}
+          selectedEntityIds={selectedEntityIds}
+          primaryEntityId={primaryEntityId}
           editable={editable}
+          selectable={selectable}
           playing={playing}
+          physicsEnabled={physicsEnabled}
+          runtimeEntityRevisions={runtimeEntityRevisions}
           transformMode={transformMode}
           transformSpace={transformSpace}
           gizmo={gizmo}
@@ -1930,6 +1501,8 @@ function SceneEntityHierarchy({
           transformDraggingRef={transformDraggingRef}
           materialDragActive={materialDragActive}
           materialDropTarget={materialDropTarget}
+          displayMode={displayMode}
+          displayProfile={displayProfile}
           ancestors={nextAncestors}
         />
       ))}
@@ -2145,10 +1718,13 @@ function WorldPlayController({
   initialPosition: Vec3;
   isPressed: (key: string) => boolean;
 }) {
-  const playerRef = useRef<Group>(null);
+  const bodyRef = useRef<RapierRigidBody>(null);
   const playerPosition = useMemo(
     () => new Vector3(initialPosition[0], initialPosition[1], initialPosition[2]),
-    [initialPosition],
+    // The controller is a PlaySession resource. Authoring hot reloads must not
+    // reset it unless the controller itself is remounted by starting Play.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   );
   const movement = useMemo(() => new Vector3(), []);
   const desiredCameraPosition = useMemo(() => new Vector3(), []);
@@ -2160,11 +1736,17 @@ function WorldPlayController({
     if (isPressed("a") || isPressed("arrowleft")) movement.x -= 1;
     if (isPressed("d") || isPressed("arrowright")) movement.x += 1;
 
-    if (movement.lengthSq() > 0) {
-      movement.normalize().multiplyScalar(3.2 * Math.min(delta, 0.05));
-      playerPosition.add(movement);
+    const body = bodyRef.current;
+    if (body) {
+      const velocity = body.linvel();
+      if (movement.lengthSq() > 0) movement.normalize().multiplyScalar(3.2);
+      body.setLinvel(
+        { x: movement.x, y: velocity.y, z: movement.z },
+        true,
+      );
+      const translation = body.translation();
+      playerPosition.set(translation.x, translation.y, translation.z);
     }
-    if (playerRef.current) playerRef.current.position.copy(playerPosition);
 
     desiredCameraPosition.set(
       playerPosition.x + 4.5,
@@ -2179,7 +1761,16 @@ function WorldPlayController({
   });
 
   return (
-    <group ref={playerRef} position={initialPosition}>
+    <RigidBody
+      ref={bodyRef}
+      type="dynamic"
+      position={initialPosition}
+      colliders={false}
+      enabledRotations={[false, false, false]}
+      linearDamping={5}
+      canSleep={false}
+    >
+      <CapsuleCollider args={[0.45, 0.28]} position={[0, 0.73, 0]} friction={0.8} />
       <mesh position={[0, 0.72, 0]} castShadow>
         <cylinderGeometry args={[0.28, 0.28, 0.9, 18]} />
         <meshStandardMaterial color="#8b5cf6" roughness={0.55} />
@@ -2192,7 +1783,7 @@ function WorldPlayController({
         <ringGeometry args={[0.35, 0.46, 28]} />
         <meshBasicMaterial color="#a78bfa" side={DoubleSide} />
       </mesh>
-    </group>
+    </RigidBody>
   );
 }
 
@@ -2245,25 +1836,80 @@ function hasModelProxy(
 
 const SKYBOX_VERTEX_SHADER = `
   varying vec3 vDirection;
+  uniform vec3 uCenter;
   void main() {
-    vDirection = normalize(position);
+    vec3 worldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+    vec3 worldCenter = (modelMatrix * vec4(uCenter, 1.0)).xyz;
+    vDirection = worldPosition - worldCenter;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
 
 const SKYBOX_FRAGMENT_SHADER = `
+  uniform sampler2D uTexture;
+  uniform bool uHasTexture;
   uniform vec3 uTopColor;
   uniform vec3 uBottomColor;
   uniform float uOffset;
   uniform float uExponent;
   uniform float uExposure;
+  uniform float uRotation;
   varying vec3 vDirection;
   void main() {
-    float t = clamp(vDirection.y * 0.5 + 0.5 + uOffset, 0.0, 1.0);
-    t = pow(t, max(uExponent, 0.01));
-    gl_FragColor = vec4(mix(uBottomColor, uTopColor, t) * uExposure, 1.0);
+    vec3 direction = normalize(vDirection);
+    vec3 color;
+    if (uHasTexture) {
+      vec2 uv = vec2(
+        atan(direction.z, direction.x) * 0.15915494309189535 + 0.5,
+        asin(clamp(direction.y, -1.0, 1.0)) * 0.3183098861837907 + 0.5
+      );
+      uv.x = fract(uv.x + uRotation * 0.15915494309189535);
+      color = texture2D(uTexture, uv).rgb;
+    } else {
+      float t = clamp(direction.y * 0.5 + 0.5 + uOffset, 0.0, 1.0);
+      t = pow(t, max(uExponent, 0.01));
+      color = mix(uBottomColor, uTopColor, t);
+    }
+    gl_FragColor = vec4(color * uExposure, 1.0);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
   }
 `;
+
+function createDomeSkyGeometry(): SphereGeometry {
+  const geometry = new SphereGeometry(0.5, 50, 50);
+  const position = geometry.attributes.position;
+  const radius = 0.5;
+  const bottomLimit = 0.1;
+  const curvatureRadiusSquared = 0.95 * 0.95;
+  for (let index = 0; index < position.count; index += 1) {
+    const x = position.getX(index) / radius;
+    let y = position.getY(index) / radius;
+    const z = position.getZ(index) / radius;
+    if (y < 0) {
+      y *= 0.3;
+      if (x * x + z * z < curvatureRadiusSquared) y = -bottomLimit;
+    }
+    position.setY(index, (y + bottomLimit) * radius);
+  }
+  position.needsUpdate = true;
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function createSkyGeometry(
+  projection: SceneSettings["skybox"]["projection"],
+): BoxGeometry | SphereGeometry {
+  if (projection === "box") {
+    const geometry = new BoxGeometry(1, 1, 1);
+    geometry.translate(0, 0.5, 0);
+    return geometry;
+  }
+  if (projection === "dome") return createDomeSkyGeometry();
+  return new SphereGeometry(1, 32, 20);
+}
 
 function useSceneSkyboxTexture(
   assets: AssetManifest,
@@ -2285,13 +1931,19 @@ function useSceneSkyboxTexture(
         })
       : undefined;
   const sourceAsset = skyboxAsset ?? textureAsset;
+  const textureSourceFormat = textureAsset
+    ? getTextureSourceFormat(textureAsset)
+    : undefined;
+  const sourceFormat = skyboxAsset?.sourceFormat ?? textureSourceFormat;
+  const assetFlipY = textureAsset?.importSettings.flipY ?? false;
+  const resolvedFlipY = assetFlipY !== flipY;
   const textureKey = sourceAsset
     ? [
         projectPath ?? "",
         sourceAsset.id,
         sourceAsset.sourceHash ?? "",
         sourceAsset.source.relativePath,
-        flipY,
+        resolvedFlipY,
       ].join("\\n")
     : "";
   const [texture, setTexture] = useState<Texture | null>(null);
@@ -2306,23 +1958,26 @@ function useSceneSkyboxTexture(
       };
     }
 
-    const readSource = skyboxAsset
-      ? tauri.readProjectFileDataUrl(projectPath, skyboxAsset.source.relativePath)
+    const readSource =
+      skyboxAsset || isEnvironmentTextureAsset(textureAsset)
+      ? tauri.readProjectFileDataUrl(projectPath, sourceAsset.source.relativePath)
       : readProjectTextureDataUrl(projectPath, textureAsset!);
     void readSource
       .then(async (dataUrl): Promise<Texture> => {
-        if (skyboxAsset?.sourceFormat === "hdr") {
+        if (sourceFormat === "hdr") {
           return await new HDRLoader().loadAsync(dataUrl);
         }
-        if (skyboxAsset?.sourceFormat === "exr") {
+        if (sourceFormat === "exr") {
           return await new EXRLoader().loadAsync(dataUrl);
         }
         return await new TextureLoader().loadAsync(dataUrl);
       })
       .then((nextTexture) => {
         nextTexture.name = `${sourceAsset.name} (skybox)`;
-        if (!skyboxAsset) nextTexture.colorSpace = SRGBColorSpace;
-        nextTexture.flipY = flipY;
+        if (sourceFormat !== "hdr" && sourceFormat !== "exr") {
+          nextTexture.colorSpace = SRGBColorSpace;
+        }
+        nextTexture.flipY = resolvedFlipY;
         nextTexture.mapping = EquirectangularReflectionMapping;
         nextTexture.needsUpdate = true;
         if (!active) {
@@ -2341,12 +1996,20 @@ function useSceneSkyboxTexture(
       ownedTexture?.dispose();
       ownedTexture = null;
     };
-  }, [flipY, projectPath, skyboxAsset, sourceAsset, textureAsset, textureKey]);
+  }, [
+    projectPath,
+    resolvedFlipY,
+    skyboxAsset,
+    sourceAsset,
+    sourceFormat,
+    textureAsset,
+    textureKey,
+  ]);
 
   return texture;
 }
 
-function ImageSkyboxPreview({
+function ImageSkyboxEnvironment({
   texture,
   settings,
 }: {
@@ -2364,12 +2027,16 @@ function ImageSkyboxPreview({
     const rotation = (settings.rotationDegrees * Math.PI) / 180;
 
     texture.mapping = EquirectangularReflectionMapping;
-    scene.background = texture;
-    scene.environment = texture;
-    scene.backgroundIntensity = settings.exposure;
-    scene.environmentIntensity = settings.exposure;
-    scene.backgroundRotation.set(0, rotation, 0);
-    scene.environmentRotation.set(0, rotation, 0);
+    if (settings.iblEnabled) {
+      scene.environment = texture;
+      scene.environmentIntensity = settings.exposure;
+      scene.environmentRotation.set(0, rotation, 0);
+    }
+    if (settings.enabled && settings.projection === "infinite") {
+      scene.background = texture;
+      scene.backgroundIntensity = settings.exposure;
+      scene.backgroundRotation.set(0, rotation, 0);
+    }
 
     return () => {
       scene.background = previousBackground;
@@ -2379,8 +2046,102 @@ function ImageSkyboxPreview({
       scene.backgroundRotation.copy(previousBackgroundRotation);
       scene.environmentRotation.copy(previousEnvironmentRotation);
     };
-  }, [scene, settings.exposure, settings.rotationDegrees, texture]);
+  }, [
+    scene,
+    settings.enabled,
+    settings.exposure,
+    settings.iblEnabled,
+    settings.projection,
+    settings.rotationDegrees,
+    texture,
+  ]);
   return null;
+}
+
+function ProjectedSkyboxPreview({
+  texture,
+  settings,
+}: {
+  texture: Texture | null;
+  settings: SceneSettings["skybox"];
+}) {
+  const meshRef = useRef<Mesh>(null);
+  const geometry = useMemo(
+    () => createSkyGeometry(settings.projection),
+    [settings.projection],
+  );
+  const rotation = useMemo(
+    () =>
+      settings.meshRotationDegrees.map((value) => MathUtils.degToRad(value)) as [
+        number,
+        number,
+        number,
+      ],
+    [settings.meshRotationDegrees],
+  );
+  const center = settings.projection === "infinite" ? [0, 0, 0] : settings.center;
+  const uniforms = useMemo(
+    () => ({
+      uTexture: { value: texture },
+      uHasTexture: { value: Boolean(texture) },
+      uTopColor: { value: new Color(settings.topColor) },
+      uBottomColor: { value: new Color(settings.bottomColor) },
+      uOffset: { value: settings.offset },
+      uExponent: { value: settings.exponent },
+      uExposure: { value: settings.exposure },
+      uRotation: { value: MathUtils.degToRad(settings.rotationDegrees) },
+      uCenter: { value: new Vector3(center[0], center[1], center[2]) },
+    }),
+    [
+      center,
+      settings.bottomColor,
+      settings.exponent,
+      settings.exposure,
+      settings.offset,
+      settings.rotationDegrees,
+      settings.topColor,
+      texture,
+    ],
+  );
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  useFrame(({ camera }) => {
+    if (settings.projection === "infinite" && meshRef.current) {
+      meshRef.current.position.copy(camera.position);
+    }
+  });
+
+  return (
+    <>
+      {texture &&
+      (settings.iblEnabled ||
+        (settings.enabled && settings.projection === "infinite")) ? (
+        <ImageSkyboxEnvironment texture={texture} settings={settings} />
+      ) : null}
+      {settings.enabled &&
+      !(settings.projection === "infinite" && texture) ? (
+        <mesh
+          ref={meshRef}
+          geometry={geometry}
+          position={
+            settings.projection === "infinite" ? undefined : settings.meshPosition
+          }
+          rotation={settings.projection === "infinite" ? undefined : rotation}
+          scale={settings.projection === "infinite" ? 100 : settings.meshScale}
+          frustumCulled={false}
+          renderOrder={-1}
+        >
+          <shaderMaterial
+            side={BackSide}
+            depthTest={false}
+            depthWrite={false}
+            vertexShader={SKYBOX_VERTEX_SHADER}
+            fragmentShader={SKYBOX_FRAGMENT_SHADER}
+            uniforms={uniforms}
+          />
+        </mesh>
+      ) : null}
+    </>
+  );
 }
 
 function SceneSkyboxPreview({
@@ -2394,40 +2155,12 @@ function SceneSkyboxPreview({
 }) {
   const imageTexture = useSceneSkyboxTexture(
     assets,
-    settings.enabled ? settings.imageAssetId : undefined,
+    settings.enabled || settings.iblEnabled ? settings.imageAssetId : undefined,
     projectPath,
     settings.flipY,
   );
-  if (!settings.enabled) return null;
-  if (imageTexture) {
-    return <ImageSkyboxPreview texture={imageTexture} settings={settings} />;
-  }
-  const materialKey = [
-    settings.topColor,
-    settings.bottomColor,
-    settings.offset,
-    settings.exponent,
-    settings.exposure,
-  ].join(":");
-  return (
-    <mesh scale={100} frustumCulled={false} renderOrder={-1}>
-      <sphereGeometry args={[1, 32, 20]} />
-      <shaderMaterial
-        key={materialKey}
-        side={BackSide}
-        depthWrite={false}
-        vertexShader={SKYBOX_VERTEX_SHADER}
-        fragmentShader={SKYBOX_FRAGMENT_SHADER}
-        uniforms={{
-          uTopColor: { value: new Color(settings.topColor) },
-          uBottomColor: { value: new Color(settings.bottomColor) },
-          uOffset: { value: settings.offset },
-          uExponent: { value: settings.exponent },
-          uExposure: { value: settings.exposure },
-        }}
-      />
-    </mesh>
-  );
+  if (!settings.enabled && !settings.iblEnabled) return null;
+  return <ProjectedSkyboxPreview texture={imageTexture} settings={settings} />;
 }
 
 function EditorCameraSettings({
@@ -2456,7 +2189,11 @@ export function SceneViewport({
   projectPath,
   projectKind,
   selection,
+  selectedEntityIds,
   editorMode,
+  runtimeEntityRevisions,
+  runtimeRevision = 0,
+  lastReloadedEntityName,
   transformMode,
   transformSpace,
   playDisabled,
@@ -2489,7 +2226,11 @@ export function SceneViewport({
   projectPath?: string;
   projectKind: VisualProjectKind;
   selection: EditorSelection;
+  selectedEntityIds: readonly string[];
   editorMode: EditorMode;
+  runtimeEntityRevisions?: Readonly<Record<string, number>>;
+  runtimeRevision?: number;
+  lastReloadedEntityName?: string | null;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
   playDisabled: boolean;
@@ -2498,7 +2239,10 @@ export function SceneViewport({
   onTransformModeChange: (mode: TransformMode) => void;
   onToggleTransformSpace: () => void;
   notice: string | null;
-  onSelect: (selection: EditorSelection) => void;
+  onSelect: (
+    selection: SceneViewportEntitySelection,
+    modifiers: SceneViewportSelectionModifiers,
+  ) => void;
   onTransformCommit: (entityId: string, patch: TransformPatch) => void;
   onDropPrimitive: (creationId: string, position: Vec3) => void;
   onDropMaterial: (
@@ -2529,6 +2273,8 @@ export function SceneViewport({
   const [materialDropTarget, setMaterialDropTarget] =
     useState<MaterialDropTarget | null>(null);
   const [projection, setProjection] = useState<ViewProjection>("perspective");
+  const [displayMode, setDisplayMode] =
+    useState<SceneViewportDisplayMode>("scene");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [transformDragging, setTransformDragging] = useState(false);
   const transformDraggingRef = useRef(false);
@@ -2539,6 +2285,13 @@ export function SceneViewport({
     moved: boolean;
     suppressContextMenu: boolean;
   } | null>(null);
+  const leftPointerGestureRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    moved: boolean;
+    additive: boolean;
+  } | null>(null);
   const preview = useMemo(
     () => createSceneViewportPreview(scene, assets, prefabs),
     [assets, prefabs, scene],
@@ -2546,6 +2299,11 @@ export function SceneViewport({
   const sceneSettings = useMemo(
     () => resolveSceneSettings(scene.settings),
     [scene.settings],
+  );
+  const effectiveDisplayMode = editorMode === "play" ? "scene" : displayMode;
+  const displayProfile = useMemo(
+    () => getSceneViewportDisplayProfile(effectiveDisplayMode),
+    [effectiveDisplayMode],
   );
   const runtimeSpawn = useMemo(
     () => findRuntimeSpawn(preview.scene),
@@ -2561,6 +2319,10 @@ export function SceneViewport({
   );
   const selectedEntityId =
     selection?.kind === "entity" ? selection.id : null;
+  const selectedEntityIdSet = useMemo(
+    () => new Set(selectedEntityIds),
+    [selectedEntityIds],
+  );
   const selectedTransform = selectedEntityId
     ? getTransform(scene, selectedEntityId)
     : undefined;
@@ -2675,6 +2437,15 @@ export function SceneViewport({
   const handleViewportPointerDown = (
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
+    if (event.button === 0 && editorMode === "edit") {
+      leftPointerGestureRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        moved: false,
+        additive: event.shiftKey || event.ctrlKey || event.metaKey,
+      };
+    }
     if (event.button === 2) {
       rightPointerGestureRef.current = {
         pointerId: event.pointerId,
@@ -2693,6 +2464,20 @@ export function SceneViewport({
   const handleViewportPointerMove = (
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
+    const leftGesture = leftPointerGestureRef.current;
+    if (
+      leftGesture &&
+      leftGesture.pointerId === event.pointerId &&
+      !leftGesture.moved &&
+      hasPointerMovedBeyondThreshold(
+        leftGesture.startX,
+        leftGesture.startY,
+        event.clientX,
+        event.clientY,
+      )
+    ) {
+      leftGesture.moved = true;
+    }
     const gesture = rightPointerGestureRef.current;
     if (!gesture || gesture.pointerId !== event.pointerId || gesture.moved) {
       return;
@@ -2712,6 +2497,25 @@ export function SceneViewport({
   const handleViewportPointerUp = (
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
+    const leftGesture = leftPointerGestureRef.current;
+    if (leftGesture?.pointerId === event.pointerId) {
+      if (
+        !leftGesture.moved &&
+        hasPointerMovedBeyondThreshold(
+          leftGesture.startX,
+          leftGesture.startY,
+          event.clientX,
+          event.clientY,
+        )
+      ) {
+        leftGesture.moved = true;
+      }
+      window.requestAnimationFrame(() => {
+        if (leftPointerGestureRef.current === leftGesture) {
+          leftPointerGestureRef.current = null;
+        }
+      });
+    }
     const gesture = rightPointerGestureRef.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     if (
@@ -2755,7 +2559,11 @@ export function SceneViewport({
     }
 
     if (intent.kind === "skybox") {
-      if (intent.id && assets.assets[intent.id]?.kind === "skybox") {
+      if (
+        intent.id &&
+        (isEnvironmentTextureAsset(assets.assets[intent.id]) ||
+          assets.assets[intent.id]?.kind === "skybox")
+      ) {
         onDropSkybox(intent.id);
       } else {
         onDropRejected("Skyboxのドラッグ情報を読み取れませんでした。もう一度ドラッグしてください");
@@ -2853,17 +2661,46 @@ export function SceneViewport({
 
   return (
     <section
-      className="relative flex min-h-0 flex-col overflow-hidden bg-zinc-950"
+      className={`relative flex min-h-0 flex-col overflow-hidden transition-shadow duration-200 ${
+        editorMode === "play"
+          ? "z-10 bg-zinc-950 ring-4 ring-inset ring-violet-400/90 shadow-[0_0_0_1px_rgba(139,92,246,0.9),0_0_28px_rgba(124,58,237,0.28)]"
+          : "bg-slate-100"
+      }`}
       aria-labelledby="scene-view-heading"
     >
-      <div className="relative flex h-9 shrink-0 items-center justify-between gap-2 border-b border-zinc-700 bg-zinc-900 px-2.5">
+      <div
+        className={`relative flex h-9 shrink-0 items-center justify-between gap-2 border-b px-2.5 ${
+          editorMode === "play"
+            ? "border-violet-400/70 bg-violet-950"
+            : "border-slate-200 bg-slate-50"
+        }`}
+      >
         <div className="flex min-w-0 items-center gap-2">
           <h2
             id="scene-view-heading"
-            className="text-[12px] font-semibold text-zinc-100"
+            className={`text-[12px] font-semibold ${
+              editorMode === "play" ? "text-zinc-100" : "text-slate-800"
+            }`}
           >
-            Scene View
+            {editorMode === "play" ? "Play Window" : "Scene View"}
           </h2>
+          {editorMode === "play" ? (
+            <span
+              className="hidden rounded border border-violet-300/50 bg-violet-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-100 lg:inline"
+              role="status"
+              aria-live="polite"
+            >
+              分離された実行コピー · 更新 {runtimeRevision}
+            </span>
+          ) : selectedEntityIds.length > 1 ? (
+            <span
+              className="hidden rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 lg:inline"
+              role="status"
+              aria-live="polite"
+            >
+              {selectedEntityIds.length}件を選択
+            </span>
+          ) : null}
         </div>
         <div className="pointer-events-none absolute inset-y-0 left-1/2 z-10 flex -translate-x-1/2 items-center">
           <button
@@ -2883,7 +2720,7 @@ export function SceneViewport({
             className={`pointer-events-auto flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition-colors disabled:cursor-wait disabled:opacity-45 ${
               editorMode === "play"
                 ? "border-rose-400/70 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25"
-                : "border-brand-400/70 bg-brand-500/15 text-brand-100 hover:bg-brand-500/25"
+                : "border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100"
             }`}
           >
             <PlayIcon size={13} aria-hidden="true" />
@@ -2903,10 +2740,14 @@ export function SceneViewport({
                 disabled={editorMode !== "edit"}
                 onClick={() => onTransformModeChange(mode)}
                 title={commandTitle(`${label}ギズモ`, `transform.${mode}`)}
-                className={`flex size-7 items-center justify-center rounded border text-zinc-300 transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
+                className={`flex size-7 items-center justify-center rounded border transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
                   transformMode === mode
-                    ? "border-violet-400 bg-violet-500/80 text-white"
-                    : "border-zinc-700 bg-zinc-800 hover:border-zinc-500 hover:bg-zinc-700"
+                    ? editorMode === "play"
+                      ? "border-violet-400 bg-violet-500/80 text-white"
+                      : "border-violet-500 bg-violet-600 text-white"
+                    : editorMode === "play"
+                      ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
+                      : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
                 }`}
               >
                 <Icon size={14} aria-hidden="true" />
@@ -2919,7 +2760,11 @@ export function SceneViewport({
             disabled={editorMode !== "edit"}
             onClick={onToggleTransformSpace}
             title={commandTitle("ギズモ座標系を切り替える", "transform.toggle-space")}
-            className="flex size-7 items-center justify-center rounded border border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-35"
+            className={`flex size-7 items-center justify-center rounded border disabled:cursor-not-allowed disabled:opacity-35 ${
+              editorMode === "play"
+                ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
+                : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
+            }`}
           >
             {transformSpace === "world" ? (
               <EDITOR_ICONS.world size={14} aria-hidden="true" />
@@ -2933,14 +2778,46 @@ export function SceneViewport({
             onChange={(event) => setProjection(event.currentTarget.value as ViewProjection)}
             aria-label="カメラ投影方式"
             title="Perspective / Ortho"
-            className="h-7 rounded border border-zinc-700 bg-zinc-800 px-1.5 text-[11px] font-medium text-zinc-300 outline-none hover:border-zinc-500 focus:border-violet-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className={`h-7 rounded border px-1.5 text-[11px] font-medium outline-none focus:border-violet-400 disabled:cursor-not-allowed disabled:opacity-50 ${
+              editorMode === "play"
+                ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500"
+                : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+            }`}
           >
             <option value="perspective">Perspective</option>
             <option value="orthographic">Ortho</option>
           </select>
-          <span className="hidden truncate text-xs text-zinc-400 xl:inline">
-            {editorMode === "edit" ? "編集" : profileLabel}
-          </span>
+          <select
+            value={effectiveDisplayMode}
+            disabled={editorMode !== "edit"}
+            onChange={(event) =>
+              setDisplayMode(event.currentTarget.value as SceneViewportDisplayMode)
+            }
+            aria-label="Scene View表示モード"
+            title={
+              SCENE_VIEWPORT_DISPLAY_OPTIONS.find(
+                (option) => option.value === effectiveDisplayMode,
+              )?.description
+            }
+            className={`h-7 rounded border px-1.5 text-[11px] font-semibold outline-none focus:border-violet-400 disabled:cursor-not-allowed disabled:opacity-50 ${
+              editorMode === "play"
+                ? "border-zinc-700 bg-zinc-800 text-zinc-300"
+                : displayMode === "scene"
+                  ? "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                  : "border-violet-300 bg-violet-50 text-violet-700 hover:border-violet-400"
+            }`}
+          >
+            {SCENE_VIEWPORT_DISPLAY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          {editorMode === "play" ? (
+            <span className="hidden truncate text-xs text-zinc-400 xl:inline">
+              {profileLabel}
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -2960,6 +2837,7 @@ export function SceneViewport({
         onPointerMove={handleViewportPointerMove}
         onPointerUp={handleViewportPointerUp}
         onPointerCancel={() => {
+          leftPointerGestureRef.current = null;
           rightPointerGestureRef.current = null;
         }}
         onDragEnterCapture={handleDragEnter}
@@ -2981,14 +2859,29 @@ export function SceneViewport({
             near: sceneSettings.camera.near,
             far: sceneSettings.camera.far,
           }}
-          onPointerMissed={() => {
-            if (editorMode === "edit" && !transformDraggingRef.current) {
-              onSelect(null);
+          onPointerMissed={(event) => {
+            const gesture = leftPointerGestureRef.current;
+            if (
+              editorMode === "edit" &&
+              !transformDraggingRef.current &&
+              !gesture?.moved
+            ) {
+              onSelect(null, {
+                additive:
+                  gesture?.additive ??
+                  (event.shiftKey || event.ctrlKey || event.metaKey),
+              });
             }
           }}
         >
-          <color attach="background" args={[sceneSettings.editor.backgroundColor]} />
-          {sceneSettings.fog.enabled ? (
+          <color
+            attach="background"
+            args={[
+              displayProfile.backgroundColor ??
+                sceneSettings.editor.backgroundColor,
+            ]}
+          />
+          {displayProfile.showFog && sceneSettings.fog.enabled ? (
             <fog
               attach="fog"
               args={[
@@ -2998,23 +2891,29 @@ export function SceneViewport({
               ]}
             />
           ) : null}
-          <SceneSkyboxPreview
-            settings={sceneSettings.skybox}
-            assets={assets}
-            projectPath={projectPath}
-          />
+          {displayProfile.showSkybox ? (
+            <SceneSkyboxPreview
+              settings={sceneSettings.skybox}
+              assets={assets}
+              projectPath={projectPath}
+            />
+          ) : null}
           <EditorCameraSettings settings={sceneSettings.camera} />
-          <ambientLight
-            color={sceneSettings.ambient.color}
-            intensity={sceneSettings.ambient.intensity}
-          />
-          <directionalLight
-            position={[7, 10, 6]}
-            intensity={1.35}
-            castShadow
-            shadow-mapSize-width={1024}
-            shadow-mapSize-height={1024}
-          />
+          {displayProfile.showSceneLighting ? (
+            <ambientLight
+              color={sceneSettings.ambient.color}
+              intensity={sceneSettings.ambient.intensity}
+            />
+          ) : null}
+          {displayProfile.showEditorLighting ? (
+            <directionalLight
+              position={[7, 10, 6]}
+              intensity={1.35}
+              castShadow
+              shadow-mapSize-width={1024}
+              shadow-mapSize-height={1024}
+            />
+          ) : null}
           {sceneSettings.editor.gizmo.gridVisible ? (
             <gridHelper
               args={[
@@ -3029,35 +2928,60 @@ export function SceneViewport({
 
           <SceneDropProjectionBridge resolverRef={dropResolverRef} />
 
-          {preview.scene.rootEntityIds.map((entityId) => (
-            <SceneEntityHierarchy
-              key={entityId}
-              entityId={entityId}
-              scene={preview.scene}
-              authoringEntityIdByEntityId={
-                preview.authoringEntityIdByEntityId
-              }
-              assets={assets}
-              projectPath={projectPath}
-              selectedEntityId={selectedEntityId}
-              editable={editorMode === "edit"}
-              playing={editorMode === "play"}
-              transformMode={transformMode}
-              transformSpace={transformSpace}
-              gizmo={sceneSettings.editor.gizmo}
-              onSelect={(entityId) =>
-                onSelect({ kind: "entity", id: entityId })
-              }
-              onTransformCommit={onTransformCommit}
-              onDraggingChange={(dragging) => {
-                transformDraggingRef.current = dragging;
-                setTransformDragging(dragging);
-              }}
-              transformDraggingRef={transformDraggingRef}
-              materialDragActive={dragOverKind === "material"}
-              materialDropTarget={readyMaterialDropTarget}
-            />
-          ))}
+          <OfficialXriftPreviewProvider
+            withPhysics
+            gravity={
+              editorMode === "play" && projectKind === "world"
+                ? [0, -9.81, 0]
+                : [0, 0, 0]
+            }
+          >
+            {preview.scene.rootEntityIds.map((entityId) => (
+              <SceneEntityHierarchy
+                key={`${entityId}:${
+                  runtimeEntityRevisions?.[
+                    preview.authoringEntityIdByEntityId[entityId] ?? entityId
+                  ] ?? 0
+                }`}
+                entityId={entityId}
+                scene={preview.scene}
+                authoringEntityIdByEntityId={
+                  preview.authoringEntityIdByEntityId
+                }
+                assets={assets}
+                projectPath={projectPath}
+                selectedEntityIds={selectedEntityIdSet}
+                primaryEntityId={selectedEntityId}
+                editable={editorMode === "edit"}
+                selectable
+                playing={editorMode === "play"}
+                physicsEnabled={editorMode === "play" && projectKind === "world"}
+                runtimeEntityRevisions={runtimeEntityRevisions}
+                transformMode={transformMode}
+                transformSpace={transformSpace}
+                gizmo={sceneSettings.editor.gizmo}
+                onSelect={(entityId, modifiers) =>
+                  onSelect({ kind: "entity", id: entityId }, modifiers)
+                }
+                onTransformCommit={onTransformCommit}
+                onDraggingChange={(dragging) => {
+                  transformDraggingRef.current = dragging;
+                  setTransformDragging(dragging);
+                }}
+                transformDraggingRef={transformDraggingRef}
+                materialDragActive={dragOverKind === "material"}
+                materialDropTarget={readyMaterialDropTarget}
+                displayMode={effectiveDisplayMode}
+                displayProfile={displayProfile}
+              />
+            ))}
+            {editorMode === "play" && projectKind === "world" ? (
+              <WorldPlayController
+                initialPosition={runtimeSpawn}
+                isPressed={isPressed}
+              />
+            ) : null}
+          </OfficialXriftPreviewProvider>
 
           <CameraControls
             editorMode={editorMode}
@@ -3074,12 +2998,6 @@ export function SceneViewport({
             frameTarget={selectedTransform?.position}
             onFocusChange={onFocusChange}
           />
-          {editorMode === "play" && projectKind === "world" ? (
-            <WorldPlayController
-              initialPosition={runtimeSpawn}
-              isPressed={isPressed}
-            />
-          ) : null}
         </Canvas>
 
         {dragOverKind ? (
@@ -3098,8 +3016,14 @@ export function SceneViewport({
         ) : null}
 
         {editorMode === "play" ? (
-          <div className="pointer-events-none absolute left-2.5 top-2.5 z-10 max-w-[80%] rounded-md border border-zinc-700/80 bg-zinc-950/85 px-2.5 py-1.5 text-xs leading-4 text-zinc-200 shadow-lg backdrop-blur">
-            {profileGuide}
+          <div className="pointer-events-none absolute left-2.5 top-2.5 z-10 max-w-[80%] rounded-md border border-violet-400/60 bg-violet-950/90 px-2.5 py-1.5 text-xs leading-4 text-violet-50 shadow-lg backdrop-blur">
+            <p className="font-semibold">実行コピー · 編集データとは分離</p>
+            <p className="text-violet-200">{profileGuide}</p>
+            {lastReloadedEntityName ? (
+              <p className="mt-1 border-t border-violet-300/20 pt-1 text-violet-100">
+                {lastReloadedEntityName} を先頭から再実行
+              </p>
+            ) : null}
           </div>
         ) : null}
 

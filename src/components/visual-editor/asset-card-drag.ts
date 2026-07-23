@@ -1,4 +1,5 @@
 import {
+  isEnvironmentTextureAsset,
   isScenePlaceableAsset,
   type SceneAsset,
 } from "../../lib/visual-editor";
@@ -24,7 +25,9 @@ export function writeAssetCardDragData(
   };
   if (asset.kind === "material") entries[MATERIAL_DRAG_MIME] = asset.id;
   if (asset.kind === "texture") entries[TEXTURE_DRAG_MIME] = asset.id;
-  if (asset.kind === "skybox") entries[SKYBOX_DRAG_MIME] = asset.id;
+  if (isEnvironmentTextureAsset(asset) || asset.kind === "skybox") {
+    entries[SKYBOX_DRAG_MIME] = asset.id;
+  }
   if (isScenePlaceableAsset(asset)) entries[SCENE_ASSET_DRAG_MIME] = asset.id;
   writeEditorDragData(dataTransfer, entries);
 }

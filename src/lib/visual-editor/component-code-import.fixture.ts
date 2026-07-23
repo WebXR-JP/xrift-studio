@@ -2,10 +2,12 @@ import { listXriftComponentDefinitions } from "./component-registry";
 import {
   DREI_R3F_IMPORT_SAMPLE,
   analyzeComponentCode,
+  analyzeComponentProject,
   applyComponentCodeImportPlan,
   createOfficialXriftComponentSample,
 } from "./component-code-import";
 import { createPrototypeProject } from "./prototype-project";
+import { analyzeOfficialXriftWorldTemplate } from "./official-world-template-import";
 
 /** Pure assertions for official XRift samples and the safe Drei/R3F adapter. */
 export function runComponentCodeImportFixtureAssertions(): void {
@@ -22,11 +24,26 @@ export function runComponentCodeImportFixtureAssertions(): void {
       `${definition.importName} sample must be importable`,
     );
     assert(
-      plan.summary.entityCount === 1 &&
+      plan.summary.entityCount >= 1 &&
         plan.summary.xriftComponentCount === 1 &&
-        plan.nodes[0]?.xriftComponents[0]?.schemaId === definition.schemaId,
+        plan.nodes.some(
+          (node) =>
+            node.xriftComponents[0]?.schemaId === definition.schemaId,
+        ),
       `${definition.importName} sample must preserve its official schema`,
     );
+    const componentNode = plan.nodes.find(
+      (node) => node.xriftComponents[0]?.schemaId === definition.schemaId,
+    );
+    if (definition.attachBehavior.kind === "wrapper") {
+      assert(
+        componentNode !== undefined &&
+          plan.nodes.some(
+            (node) => node.parentPlanNodeId === componentNode.planNodeId,
+          ),
+        `${definition.importName} wrapper must remain the parent of its JSX child`,
+      );
+    }
   }
 
   const dreiPlan = analyzeComponentCode(DREI_R3F_IMPORT_SAMPLE, "world");
@@ -35,10 +52,75 @@ export function runComponentCodeImportFixtureAssertions(): void {
     "The bundled Drei/R3F sample must convert without errors",
   );
   assert(
-    dreiPlan.summary.entityCount === 3 &&
+    dreiPlan.summary.entityCount === 5 &&
       dreiPlan.summary.primitiveCount === 1 &&
       dreiPlan.summary.xriftComponentCount === 3,
-    "Drei Sky, Billboard/Box, and Reflector must map to the expected scene nodes",
+    "Drei root group, Sky, Billboard/Box, and Reflector must map to the expected scene nodes",
+  );
+  const billboardNode = dreiPlan.nodes.find((node) => node.name === "BillboardY");
+  const billboardBoxNode = dreiPlan.nodes.find((node) => node.kind === "primitive");
+  assert(
+    billboardNode !== undefined &&
+      billboardBoxNode?.parentPlanNodeId === billboardNode.planNodeId,
+    "Drei wrapper hierarchy must be represented in the import plan",
+  );
+
+  const modulePlan = analyzeComponentProject({
+    entryFile: "src/World.tsx",
+    projectKind: "world",
+    modules: [
+      {
+        path: "src/World.tsx",
+        source: `import { Room } from './components/Room'
+import Decor from './components/Decor'
+export function World() {
+  return <group name="World"><Room position={[2, 0, 0]} /><Decor /></group>
+}`,
+      },
+      {
+        path: "src/components/Room.tsx",
+        source: `import { Interactable } from '@xrift/world-components'
+export const Room = () => {
+  return (
+    <group name="Room Group">
+      <Interactable id="room-button" interactionText="押す">
+        <mesh name="Button"><boxGeometry args={[1, 0.25, 0.5]} /></mesh>
+      </Interactable>
+    </group>
+  )
+}`,
+      },
+      {
+        path: "src/components/Decor/index.tsx",
+        source: `export default function Decor() {
+  return <mesh name="Decor Mesh"><sphereGeometry args={[0.5, 16, 8]} /></mesh>
+}`,
+      },
+    ],
+  });
+  const roomBoundary = modulePlan.nodes.find(
+    (node) => node.localComponent && node.name === "Room",
+  );
+  const roomGroup = modulePlan.nodes.find((node) => node.name === "Room Group");
+  const interactable = modulePlan.nodes.find(
+    (node) => node.xriftComponents[0]?.sourceName === "Interactable",
+  );
+  const roomButton = modulePlan.nodes.find((node) => node.name === "Button");
+  const decorBoundary = modulePlan.nodes.find(
+    (node) => node.localComponent && node.name === "Decor",
+  );
+  const decorMesh = modulePlan.nodes.find((node) => node.name === "Decor Mesh");
+  assert(
+    modulePlan.summary.moduleCount === 3 &&
+      modulePlan.summary.localComponentCount === 2 &&
+      roomBoundary !== undefined &&
+      roomGroup?.parentPlanNodeId === roomBoundary.planNodeId &&
+      interactable?.parentPlanNodeId === roomGroup.planNodeId &&
+      roomButton?.parentPlanNodeId === interactable.planNodeId &&
+      roomButton?.sourcePath === "src/components/Room.tsx" &&
+      decorBoundary !== undefined &&
+      decorMesh?.parentPlanNodeId === decorBoundary.planNodeId,
+    "Named and default local TSX modules must expand beneath their invocation boundary without flattening",
   );
 
   const project = createPrototypeProject("world", "component-import-fixture");
@@ -50,9 +132,21 @@ export function runComponentCodeImportFixtureAssertions(): void {
     plan: dreiPlan,
   });
   assert(
-    applied.entityIds.length === 3 &&
-      Object.keys(applied.scene.entities).length === entityCountBefore + 3,
+    applied.entityIds.length === 5 &&
+      Object.keys(applied.scene.entities).length === entityCountBefore + 5,
     "Applying a valid plan must create every converted entity atomically",
+  );
+  const appliedBillboard = applied.entityIds
+    .map((entityId) => applied.scene.entities[entityId])
+    .find((entity) => entity.name === "BillboardY");
+  assert(
+    appliedBillboard !== undefined &&
+      appliedBillboard.children.some(
+        (childId) => applied.scene.entities[childId]?.components.some(
+          (component) => component.type === "mesh",
+        ),
+      ),
+    "Applying a plan must preserve wrapper-child Scene hierarchy",
   );
   assert(
     !applied.diagnostics.some((diagnostic) => diagnostic.severity === "error"),
@@ -80,6 +174,79 @@ export function runComponentCodeImportFixtureAssertions(): void {
       rejected.assets === project.assets &&
       rejected.entityIds.length === 0,
     "A plan with errors must leave the scene and asset manifest unchanged",
+  );
+
+  const officialPlan = analyzeOfficialXriftWorldTemplate();
+  assert(
+    !officialPlan.diagnostics.some(
+      (diagnostic) => diagnostic.severity === "error",
+    ),
+    "The official XRift World snapshot must convert without errors",
+  );
+  assert(
+    officialPlan.summary.entityCount === 97 &&
+      officialPlan.summary.primitiveCount === 26 &&
+      officialPlan.summary.lightCount === 5 &&
+      officialPlan.summary.textCount === 6 &&
+      officialPlan.summary.colliderCount === 23 &&
+      officialPlan.summary.modelAssetCount === 2 &&
+      officialPlan.summary.textureAssetCount === 1 &&
+      officialPlan.summary.unsupportedAssetCount === 0 &&
+      officialPlan.summary.xriftComponentCount === 9 &&
+      officialPlan.summary.moduleCount === 9 &&
+      officialPlan.summary.localComponentCount === 10,
+    `The official World conversion coverage changed unexpectedly: ${JSON.stringify(officialPlan.summary)}`,
+  );
+  const officialRoot = officialPlan.nodes.find(
+    (node) => node.parentPlanNodeId === null,
+  );
+  assert(
+    officialRoot?.name === "World" &&
+      officialPlan.nodes
+        .filter((node) => node !== officialRoot)
+        .every((node) => node.parentPlanNodeId !== null),
+    "The official World plan must retain its JSX root and nested hierarchy",
+  );
+  assert(
+    officialPlan.assetDependencies.map((dependency) => dependency.sourcePath).join(",") ===
+      "public/bunny.drc,public/duck.glb,public/tokyo-station.jpg" &&
+      officialPlan.nodes.some(
+        (node) => node.kind === "model" && node.model?.sourcePath === "public/duck.glb",
+      ) &&
+      officialPlan.nodes.filter((node) => node.kind === "text").every(
+        (node) => node.text?.text.trim(),
+      ),
+    "Multi-module official Model, panorama, Draco, and Text dependencies must remain attached to their Scene nodes",
+  );
+  const officialApplied = applyComponentCodeImportPlan({
+    scene: project.scene,
+    assets: project.assets,
+    projectKind: "world",
+    plan: officialPlan,
+  });
+  const officialEntities = officialApplied.entityIds.map(
+    (entityId) => officialApplied.scene.entities[entityId],
+  );
+  assert(
+    officialEntities.filter((entity) =>
+      entity.components.some((component) => component.type === "light"),
+    ).length === 5,
+    "R3F lights were not materialized as Visual Light components",
+  );
+  assert(
+    officialEntities.filter((entity) =>
+      entity.components.some((component) => component.type === "collider"),
+    ).length === 23,
+    "Rapier bodies were not materialized as Visual Colliders",
+  );
+  assert(
+    officialEntities.filter((entity) =>
+      entity.components.some(
+        (component) =>
+          component.type === "collider" && component.bodyType === "dynamic",
+      ),
+    ).length >= 2,
+    "Dynamic Rapier body types were not retained by the Visual conversion",
   );
 }
 

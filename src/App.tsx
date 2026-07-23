@@ -366,10 +366,10 @@ function App() {
         toast({
           kind: "error",
           title:
-            starterCopyError?.copy.integrity === "license-text"
-              ? "OpenBrush ライセンスをコピーできませんでした"
+            starterCopyError?.copy.assetId.includes("license")
+              ? "スターターのライセンスをコピーできませんでした"
               : starterCopyError
-                ? "OpenBrush モデルを検証できませんでした"
+                ? "スターター素材を検証できませんでした"
                 : "スターターを準備できませんでした",
           description: describeStarterPreparationError(error),
         });
@@ -858,10 +858,11 @@ function describeStarterPreparationError(error: unknown): string {
   if (!(error instanceof StarterAssetCopyError)) return String(error);
 
   const { copy, details, reason } = error;
-  const label =
-    copy.integrity === "license-text"
-      ? "OpenBrush ライセンス"
-      : "OpenBrush モデル";
+  const label = copy.assetId.includes("license")
+    ? "スターターのライセンス"
+    : copy.mediaType.startsWith("text/")
+      ? "スターターの由来ファイル"
+      : "スターター素材";
   const receivedSize = details.actualByteLength;
   const formatBytes = (value: number) => `${value.toLocaleString("ja-JP")} bytes`;
 

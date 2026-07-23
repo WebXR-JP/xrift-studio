@@ -165,7 +165,7 @@ export type ExternalStoreInstallRequest = {
 };
 
 export type ExternalStoreInstalledFile = {
-  role: "environment" | "base-color" | "normal" | "arm";
+  role: "environment" | "base-color" | "normal" | "arm" | "model";
   relativePath: string;
   byteLength: number;
   sha256: string;
@@ -177,7 +177,7 @@ export type ExternalStoreInstallResult = {
   providerName: string;
   externalId: string;
   name: string;
-  assetKind: "hdri" | "texture";
+  assetKind: "hdri" | "texture" | "model";
   resolution: string;
   files: ExternalStoreInstalledFile[];
   authors: string[];

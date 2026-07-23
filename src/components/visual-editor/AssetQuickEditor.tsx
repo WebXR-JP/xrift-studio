@@ -14,7 +14,9 @@ import {
   TEXTURE_MAG_FILTERS,
   TEXTURE_MIN_FILTERS,
   TEXTURE_WRAP_MODES,
+  getTextureSourceFormat,
   getPrefabAssetDocumentReference,
+  isEnvironmentTextureAsset,
   resolveOpenBrushBuiltinTextureUrl,
   type AudioAsset,
   type AssetManifest,
@@ -388,7 +390,11 @@ function AssetThumbnailFallback({ asset }: { asset: SceneAsset }) {
         ? "ソース未検出・再取込"
         : asset.kind === "audio"
           ? "MP3"
-        : "プレビュー準備中";
+          : isEnvironmentTextureAsset(asset)
+            ? "HDRIプレビューを生成中"
+            : asset.kind === "material"
+              ? "Material"
+              : "プレビュー準備中";
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-slate-100 px-2 text-center text-slate-500">
       <Icon size={24} aria-hidden="true" />
@@ -598,6 +604,7 @@ function ProjectAssetThumbnail({
 
 export function AssetThumbnail({
   asset,
+  assets,
   projectPath,
 }: {
   asset: SceneAsset;
@@ -615,7 +622,11 @@ export function AssetThumbnail({
         stale={asset.thumbnail.status === "stale"}
       />
     ) : (
-      <AssetThumbnailFallback asset={asset} />
+      <MaterialFallbackThumbnail
+        asset={asset}
+        assets={assets}
+        projectPath={projectPath}
+      />
     );
   }
   if (
@@ -663,6 +674,54 @@ export function AssetThumbnail({
     }
   }
   return <AssetThumbnailFallback asset={asset} />;
+}
+
+function MaterialFallbackThumbnail({
+  asset,
+  assets,
+  projectPath,
+}: {
+  asset: MaterialAsset;
+  assets?: AssetManifest;
+  projectPath?: string;
+}) {
+  const textureAssetId =
+    asset.properties.pbrMetallicRoughness?.baseColorTexture?.textureAssetId;
+  const texture = textureAssetId ? assets?.assets[textureAssetId] : undefined;
+  if (texture?.kind === "texture") {
+    return (
+      <div className="relative h-full w-full overflow-hidden bg-white">
+        <AssetThumbnail
+          asset={texture}
+          assets={assets}
+          projectPath={projectPath}
+        />
+        <span className="absolute bottom-1 right-1 rounded bg-slate-950/75 px-1.5 py-0.5 text-[9px] font-semibold text-white backdrop-blur">
+          Material
+        </span>
+      </div>
+    );
+  }
+  const color = colorToHex(
+    asset.properties.pbrMetallicRoughness?.baseColorFactor,
+    asset.properties.color ?? "#ffffff",
+  );
+  const Icon = EDITOR_ICONS.material;
+  return (
+    <div
+      className="flex h-full w-full flex-col items-center justify-center gap-1 text-slate-700"
+      style={{
+        background: `radial-gradient(circle at 35% 25%, #ffffff 0%, ${color} 42%, #cbd5e1 140%)`,
+      }}
+    >
+      <span className="flex size-9 items-center justify-center rounded-full border border-white/70 bg-white/75 shadow-sm backdrop-blur">
+        <Icon size={20} aria-hidden="true" />
+      </span>
+      <span className="rounded bg-white/75 px-1.5 py-0.5 text-[10px] font-semibold backdrop-blur">
+        Material
+      </span>
+    </div>
+  );
 }
 
 function EditorSection({
@@ -980,7 +1039,7 @@ function TextureSlot({
   onOpenTexture: (assetId: string) => void;
 }) {
   const [dropActive, setDropActive] = useState(false);
-  const [showTransform, setShowTransform] = useState(Boolean(value?.transform));
+  const [showTransform, setShowTransform] = useState(true);
   const selectedTexture = value
     ? textures.find((texture) => texture.id === value.textureAssetId)
     : undefined;
@@ -1055,7 +1114,7 @@ function TextureSlot({
         </div>
         {value?.transform ? (
           <span className="shrink-0 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800">
-            UV変換
+            タイリング {transform.scale[0]} × {transform.scale[1]}
           </span>
         ) : null}
       </div>
@@ -1167,7 +1226,7 @@ function TextureSlot({
               onClick={() => setShowTransform((current) => !current)}
               className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
             >
-              {showTransform ? "UV Transformを閉じる" : "UV Transformを設定"}
+              {showTransform ? "タイリング設定を閉じる" : "タイリング / UV変換"}
             </button>
             <button
               type="button"
@@ -1191,7 +1250,7 @@ function TextureSlot({
             <div className="space-y-2 rounded border border-sky-200 bg-white p-2">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-[11px] leading-4 text-slate-500">
-                  glTF KHR_texture_transform互換。未設定時はOffset 0、Rotation 0°、Scale 1です。
+                  glTF KHR_texture_transform互換。タイリングを2にするとTextureが2回繰り返されます。
                 </p>
                 <button
                   type="button"
@@ -1210,7 +1269,7 @@ function TextureSlot({
                   onChange={(offset) => updateTransform({ offset })}
                 />
                 <TextureVectorControl
-                  label="Scale"
+                  label="タイリング"
                   value={transform.scale}
                   disabled={disabled}
                   onChange={(scale) => updateTransform({ scale })}
@@ -1232,6 +1291,14 @@ function TextureSlot({
                   className={INPUT_CLASS}
                 />
               </label>
+              {selectedTexture &&
+              (transform.scale[0] !== 1 || transform.scale[1] !== 1) &&
+              (selectedTexture.importSettings.sampler.wrapS !== "repeat" ||
+                selectedTexture.importSettings.sampler.wrapT !== "repeat") ? (
+                <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-800">
+                  繰り返し表示にはTexture設定のWrap S / TをRepeatにしてください。
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -1663,7 +1730,8 @@ function StandardMaterialQuickEditor({
   const pbr = asset.properties.pbrMetallicRoughness;
   const openBrush = asset.shader?.kind === "openbrush" ? asset.shader : undefined;
   const textures = Object.values(assets.assets).filter(
-    (candidate): candidate is TextureAsset => candidate.kind === "texture",
+    (candidate): candidate is TextureAsset =>
+      candidate.kind === "texture" && !isEnvironmentTextureAsset(candidate),
   );
   const [previewTextureState, setPreviewTextureState] = useState<{
     assetId: string;
@@ -2706,6 +2774,8 @@ export function TextureQuickEditor({
 }) {
   const settings = asset.importSettings;
   const resizeValue = settings.resize.mode === "original" ? "original" : String(settings.resize.maxSize);
+  const sourceFormat = getTextureSourceFormat(asset);
+  const environmentTexture = isEnvironmentTextureAsset(asset);
 
   return (
     <div className="space-y-3">
@@ -2715,6 +2785,11 @@ export function TextureQuickEditor({
         </div>
         <div className="min-w-0 self-center">
           <h3 className="truncate text-[13px] font-semibold text-slate-900">{asset.name}</h3>
+          {environmentTexture ? (
+            <p className="mt-1 text-[11px] font-semibold text-sky-700">
+              {(sourceFormat ?? "HDRI").toUpperCase()}・環境テクスチャ
+            </p>
+          ) : null}
           <p className="break-all text-xs leading-4 text-slate-500">{sourceLabel(asset)}</p>
           {asset.importedFromModel ? (
             <p className={`mt-1 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${asset.importedFromModel.isUserOverridden ? "border-amber-200 bg-amber-50 text-amber-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>

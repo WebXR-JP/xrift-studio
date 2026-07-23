@@ -1,3 +1,4 @@
+use base64::Engine;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -96,7 +97,7 @@ pub struct ExternalStoreInstallResult {
 
 #[derive(Clone)]
 struct DownloadSpec {
-    role: &'static str,
+    role: String,
     url: String,
     size: u64,
     extension: String,
@@ -267,7 +268,7 @@ fn download_leaf(
         let url = leaf.get("url")?.as_str()?.to_string();
         let size = leaf.get("size").and_then(Value::as_u64).unwrap_or_default();
         Some(DownloadSpec {
-            role: "",
+            role: String::new(),
             url,
             size,
             extension: (*format).to_string(),
@@ -281,7 +282,7 @@ fn hdri_specs(root: &Value, resolution: &str, format: &str) -> Vec<DownloadSpec>
     }
     download_leaf(root, "hdri", resolution, &[format])
         .map(|mut spec| {
-            spec.role = "environment";
+            spec.role = "environment".to_string();
             vec![spec]
         })
         .unwrap_or_default()
@@ -314,11 +315,66 @@ fn texture_specs(root: &Value, resolution: &str) -> Vec<DownloadSpec> {
     .into_iter()
     .filter_map(|(channel, role)| {
         download_leaf(root, channel, resolution, &["jpg", "png"]).map(|mut spec| {
-            spec.role = role;
+            spec.role = role.to_string();
             spec
         })
     })
     .collect()
+}
+
+fn model_bundle_path(value: &str) -> Result<String, String> {
+    if value.is_empty() || value.len() > 512 || value.contains('\\') {
+        return Err("Model bundleのファイル名が不正です".to_string());
+    }
+    let path = Path::new(value);
+    if path.is_absolute()
+        || path
+            .components()
+            .any(|component| !matches!(component, std::path::Component::Normal(_)))
+    {
+        return Err("Model bundleが安全でないパスを参照しています".to_string());
+    }
+    Ok(value.to_string())
+}
+
+fn model_specs(root: &Value, resolution: &str) -> Vec<DownloadSpec> {
+    let Some(leaf) = file_leaf(root, &["gltf", resolution, "gltf"]) else {
+        return Vec::new();
+    };
+    let Some(url) = leaf.get("url").and_then(Value::as_str) else {
+        return Vec::new();
+    };
+    let mut specs = vec![DownloadSpec {
+        role: "model".to_string(),
+        url: url.to_string(),
+        size: leaf.get("size").and_then(Value::as_u64).unwrap_or_default(),
+        extension: "gltf".to_string(),
+    }];
+    if let Some(includes) = leaf.get("include").and_then(Value::as_object) {
+        for (bundle_path, entry) in includes {
+            let Ok(bundle_path) = model_bundle_path(bundle_path) else {
+                return Vec::new();
+            };
+            let Some(url) = entry.get("url").and_then(Value::as_str) else {
+                return Vec::new();
+            };
+            let extension = Path::new(&bundle_path)
+                .extension()
+                .and_then(|value| value.to_str())
+                .unwrap_or("bin")
+                .to_ascii_lowercase();
+            specs.push(DownloadSpec {
+                role: format!("dependency:{}", bundle_path),
+                url: url.to_string(),
+                size: entry
+                    .get("size")
+                    .and_then(Value::as_u64)
+                    .unwrap_or_default(),
+                extension,
+            });
+        }
+    }
+    specs
 }
 
 fn available_resolutions(root: &Value, kind: &str) -> Vec<ExternalStoreResolution> {
@@ -333,11 +389,14 @@ fn available_resolutions(root: &Value, kind: &str) -> Vec<ExternalStoreResolutio
                     .map(|format| hdri_specs(root, resolution, &format.id))
                     .unwrap_or_default();
                 (specs, formats)
+            } else if kind == "model" {
+                (model_specs(root, resolution), Vec::new())
             } else {
                 (texture_specs(root, resolution), Vec::new())
             };
             if specs.is_empty()
                 || (kind == "texture" && !specs.iter().any(|entry| entry.role == "base-color"))
+                || (kind == "model" && !specs.iter().any(|entry| entry.role == "model"))
             {
                 return None;
             }
@@ -361,7 +420,7 @@ pub async fn get_external_store_asset_options(
     let id = validate_external_id(&external_id)?;
     let catalog = fetch_poly_haven_json("/assets").await?;
     let kind = asset_kind(catalog.get(id).and_then(|entry| entry.get("type")));
-    if !matches!(kind, "hdri" | "texture") {
+    if !matches!(kind, "hdri" | "texture" | "model") {
         return Err("この種類はまだXRift Studioへインストールできません".to_string());
     }
     let files = fetch_poly_haven_json(&format!("/files/{}", id)).await?;
@@ -444,6 +503,95 @@ fn file_sha256(path: &Path) -> Result<String, String> {
     Ok(format!("{:x}", digest.finalize()))
 }
 
+type StagedDownload = (PathBuf, PathBuf, u64, String, String);
+
+fn model_dependency_mime(path: &str) -> &'static str {
+    match Path::new(path)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "webp" => "image/webp",
+        "ktx2" => "image/ktx2",
+        _ => "application/octet-stream",
+    }
+}
+
+fn embed_model_uri(
+    uri: &mut Value,
+    dependencies: &BTreeMap<String, PathBuf>,
+) -> Result<(), String> {
+    let Some(value) = uri.as_str() else {
+        return Err("glTFの外部参照URIが不正です".to_string());
+    };
+    if value.starts_with("data:") {
+        return Ok(());
+    }
+    let normalized = value.strip_prefix("./").unwrap_or(value);
+    let safe = model_bundle_path(normalized)?;
+    let path = dependencies
+        .get(&safe)
+        .ok_or_else(|| format!("glTFの依存ファイルが見つかりません: {}", safe))?;
+    let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+    *uri = Value::String(format!(
+        "data:{};base64,{}",
+        model_dependency_mime(&safe),
+        encoded
+    ));
+    Ok(())
+}
+
+fn make_model_self_contained(staged: &mut BTreeMap<String, StagedDownload>) -> Result<(), String> {
+    let main_path = staged
+        .get("model")
+        .map(|entry| entry.1.clone())
+        .ok_or_else(|| "glTF本体が見つかりません".to_string())?;
+    let mut document: Value =
+        serde_json::from_slice(&std::fs::read(&main_path).map_err(|error| error.to_string())?)
+            .map_err(|_| "ダウンロードしたglTF JSONが不正です".to_string())?;
+    let version = document
+        .get("asset")
+        .and_then(|asset| asset.get("version"))
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if !version.starts_with("2.") {
+        return Err("Poly Haven modelがglTF 2.xではありません".to_string());
+    }
+    let dependencies = staged
+        .iter()
+        .filter_map(|(role, entry)| {
+            role.strip_prefix("dependency:")
+                .map(|path| (path.to_string(), entry.1.clone()))
+        })
+        .collect::<BTreeMap<_, _>>();
+    for collection in ["buffers", "images"] {
+        if let Some(entries) = document.get_mut(collection).and_then(Value::as_array_mut) {
+            for entry in entries {
+                if let Some(uri) = entry.get_mut("uri") {
+                    embed_model_uri(uri, &dependencies)?;
+                }
+            }
+        }
+    }
+    let bytes = serde_json::to_vec(&document).map_err(|error| error.to_string())?;
+    if bytes.len() > 768 * 1024 * 1024 {
+        return Err("自己完結glTFが許可サイズを超えています".to_string());
+    }
+    std::fs::write(&main_path, &bytes).map_err(|error| error.to_string())?;
+    let main = staged
+        .get_mut("model")
+        .ok_or_else(|| "glTF本体が見つかりません".to_string())?;
+    main.2 = bytes.len() as u64;
+    main.3 = file_sha256(&main_path)?;
+    staged.retain(|role, _| role == "model");
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn install_external_store_asset(
     project_path: String,
@@ -464,7 +612,7 @@ pub async fn install_external_store_asset(
         .get(&id)
         .ok_or_else(|| "Poly Havenにアセットが見つかりません".to_string())?;
     let kind = asset_kind(metadata.get("type"));
-    if !matches!(kind, "hdri" | "texture") {
+    if !matches!(kind, "hdri" | "texture" | "model") {
         return Err("この種類はまだXRift Studioへインストールできません".to_string());
     }
     let files = fetch_poly_haven_json(&format!("/files/{}", id)).await?;
@@ -480,7 +628,7 @@ pub async fn install_external_store_asset(
             return Err("Skyboxのファイル形式が不正です".to_string());
         }
         hdri_specs(&files, &resolution, &format)
-    } else {
+    } else if kind == "texture" {
         if request
             .format
             .as_deref()
@@ -490,9 +638,20 @@ pub async fn install_external_store_asset(
             return Err("MaterialではSkyboxのファイル形式を指定できません".to_string());
         }
         texture_specs(&files, &resolution)
+    } else {
+        if request
+            .format
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|value| !value.is_empty())
+        {
+            return Err("Modelではファイル形式を指定できません".to_string());
+        }
+        model_specs(&files, &resolution)
     };
     if specs.is_empty()
         || (kind == "texture" && !specs.iter().any(|entry| entry.role == "base-color"))
+        || (kind == "model" && !specs.iter().any(|entry| entry.role == "model"))
     {
         return Err("選択した解像度のファイルがありません".to_string());
     }
@@ -511,9 +670,15 @@ pub async fn install_external_store_asset(
 
     let result = async {
         let mut installed = Vec::new();
-        let mut staged = BTreeMap::<String, (PathBuf, PathBuf, u64, String, String)>::new();
-        for spec in &specs {
-            let file_name = format!("{}_{}_{}.{}", id, spec.role, resolution, spec.extension);
+        let mut staged = BTreeMap::<String, StagedDownload>::new();
+        for (index, spec) in specs.iter().enumerate() {
+            let file_name = if kind == "model" && spec.role == "model" {
+                format!("{}_model_{}.gltf", id, resolution)
+            } else if kind == "model" {
+                format!("{}_dependency_{}.{}", id, index, spec.extension)
+            } else {
+                format!("{}_{}_{}.{}", id, spec.role, resolution, spec.extension)
+            };
             let relative = PathBuf::from("assets")
                 .join("imported")
                 .join("external")
@@ -521,7 +686,7 @@ pub async fn install_external_store_asset(
                 .join(&id)
                 .join(&file_name);
             super::ensure_no_symlink_ancestors(&project_root, &relative)?;
-            let temporary = staging_root.join(&file_name);
+            let temporary = staging_root.join(format!("download_{}.{}", index, spec.extension));
             let (byte_length, sha256) = download_to(&temporary, spec).await?;
             staged.insert(
                 spec.role.to_string(),
@@ -533,6 +698,9 @@ pub async fn install_external_store_asset(
                     spec.extension.clone(),
                 ),
             );
+        }
+        if kind == "model" {
+            make_model_self_contained(&mut staged)?;
         }
 
         // Reject collisions before moving any staged file into the project.
@@ -606,7 +774,10 @@ mod tests {
         });
         let specs = texture_specs(&files, "1k");
         assert_eq!(
-            specs.iter().map(|entry| entry.role).collect::<Vec<_>>(),
+            specs
+                .iter()
+                .map(|entry| entry.role.as_str())
+                .collect::<Vec<_>>(),
             vec!["base-color", "normal", "arm"]
         );
         let resolutions = available_resolutions(&files, "texture");
@@ -652,5 +823,116 @@ mod tests {
         assert!(validate_download_url("https://dl.polyhaven.org/file.hdr").is_ok());
         assert!(validate_download_url("http://dl.polyhaven.org/file.hdr").is_err());
         assert!(validate_download_url("https://example.com/file.hdr").is_err());
+    }
+
+    #[test]
+    fn model_bundle_selects_gltf_and_dependencies() {
+        let files: Value = serde_json::json!({
+            "gltf": {
+                "2k": {
+                    "gltf": {
+                        "url": "https://dl.polyhaven.org/model.gltf",
+                        "size": 10,
+                        "include": {
+                            "model.bin": { "url": "https://dl.polyhaven.org/model.bin", "size": 20 },
+                            "textures/base.jpg": { "url": "https://dl.polyhaven.org/base.jpg", "size": 30 }
+                        }
+                    }
+                }
+            }
+        });
+        let specs = model_specs(&files, "2k");
+        assert_eq!(specs.len(), 3);
+        assert_eq!(specs[0].role, "model");
+        assert!(specs
+            .iter()
+            .any(|entry| entry.role == "dependency:model.bin"));
+        assert!(specs
+            .iter()
+            .any(|entry| entry.role == "dependency:textures/base.jpg"));
+        let resolutions = available_resolutions(&files, "model");
+        assert_eq!(resolutions.len(), 1);
+        assert_eq!(resolutions[0].byte_length, 60);
+        assert_eq!(resolutions[0].file_count, 3);
+    }
+
+    #[test]
+    fn model_bundle_rejects_parent_and_absolute_paths() {
+        assert!(model_bundle_path("textures/base.jpg").is_ok());
+        assert!(model_bundle_path("../secret.bin").is_err());
+        assert!(model_bundle_path("/absolute.bin").is_err());
+        assert!(model_bundle_path("textures\\base.jpg").is_err());
+    }
+
+    #[test]
+    fn model_bundle_is_rewritten_as_self_contained_gltf() {
+        let root = std::env::temp_dir().join(format!(
+            "xrift-external-model-test-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create fixture directory");
+        let main = root.join("model.gltf");
+        let buffer = root.join("model.bin");
+        let image = root.join("base.jpg");
+        std::fs::write(
+            &main,
+            br#"{"asset":{"version":"2.0"},"buffers":[{"uri":"model.bin","byteLength":3}],"images":[{"uri":"textures/base.jpg"}]}"#,
+        )
+        .expect("write glTF");
+        std::fs::write(&buffer, [1, 2, 3]).expect("write buffer");
+        std::fs::write(&image, [0xff, 0xd8, 0xff]).expect("write image");
+        let mut staged = BTreeMap::from([
+            (
+                "model".to_string(),
+                (
+                    PathBuf::new(),
+                    main.clone(),
+                    0,
+                    String::new(),
+                    "gltf".to_string(),
+                ),
+            ),
+            (
+                "dependency:model.bin".to_string(),
+                (PathBuf::new(), buffer, 3, String::new(), "bin".to_string()),
+            ),
+            (
+                "dependency:textures/base.jpg".to_string(),
+                (PathBuf::new(), image, 3, String::new(), "jpg".to_string()),
+            ),
+        ]);
+        make_model_self_contained(&mut staged).expect("embed dependencies");
+        let rewritten = std::fs::read_to_string(&main).expect("read rewritten glTF");
+        assert!(rewritten.contains("data:application/octet-stream;base64,"));
+        assert!(rewritten.contains("data:image/jpeg;base64,"));
+        assert_eq!(staged.len(), 1);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn model_bundle_rejects_missing_referenced_dependency() {
+        let root = std::env::temp_dir().join(format!(
+            "xrift-external-model-missing-test-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create fixture directory");
+        let main = root.join("model.gltf");
+        std::fs::write(
+            &main,
+            br#"{"asset":{"version":"2.0"},"buffers":[{"uri":"missing.bin","byteLength":3}]}"#,
+        )
+        .expect("write glTF");
+        let mut staged = BTreeMap::from([(
+            "model".to_string(),
+            (PathBuf::new(), main, 0, String::new(), "gltf".to_string()),
+        )]);
+        assert!(make_model_self_contained(&mut staged).is_err());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

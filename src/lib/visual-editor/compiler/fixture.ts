@@ -4,7 +4,6 @@ import {
   type AudioAsset,
   type AssetManifest,
   type ModelAsset,
-  type SkyboxAsset,
   type TextureAsset,
 } from "../asset-manifest";
 import { instantiateSceneAsset } from "../asset-placement";
@@ -56,6 +55,26 @@ export function runVisualCompilerFixtureAssertions(
       "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
     "SHA-256 fixture failed",
   );
+  const legacySkyboxSettings = resolveSceneSettings({
+    skybox: {
+      enabled: true,
+      imageAssetId: "legacy-environment",
+      topColor: "#87ceeb",
+      bottomColor: "#ffffff",
+      offset: 0,
+      exponent: 1,
+      rotationDegrees: 0,
+      flipY: false,
+      exposure: 1,
+    },
+  }).skybox;
+  assert(
+    legacySkyboxSettings.projection === "infinite" &&
+      legacySkyboxSettings.iblEnabled &&
+      legacySkyboxSettings.meshScale.join(",") === "100,100,100" &&
+      legacySkyboxSettings.center.join(",") === "0,0.01,0",
+    "Legacy Skybox settings must resolve to the compatible infinite projection",
+  );
 
   const world = toCompilerDocuments(createPrototypeProject("world", "fixture-world"));
   const fixedTime = "2026-01-01T00:00:00.000Z";
@@ -63,6 +82,20 @@ export function runVisualCompilerFixtureAssertions(
   const second = compileVisualProject(world, { generatedAt: fixedTime });
   assert(JSON.stringify(first) === JSON.stringify(second), "Compiler output is not deterministic");
   assert(first.canStage, "Default world fixture should be stageable");
+  const defaultWorldSource =
+    first.overlayFiles.find((file) => file.relativePath === "src/World.tsx")
+      ?.content ?? "";
+  [
+    "XRiftStudioProjectedSkybox",
+    "new SphereGeometry(1, 32, 20)",
+    "useFrame(({ camera })",
+    "uExposure: { value: 1 }",
+  ].forEach((fragment) =>
+    assert(
+      defaultWorldSource.includes(fragment),
+      `Infinite gradient Skybox source is missing: ${fragment}`,
+    ),
+  );
   assert(
     JSON.stringify(first.stagingPlan.requiredPublicationFiles) ===
       JSON.stringify([
@@ -353,7 +386,7 @@ export function runVisualCompilerFixtureAssertions(
     "Rapier import was not generated",
   );
   assert(
-    colliderSource.includes('<RigidBody type="fixed" colliders={false}>'),
+    /<RigidBody type="fixed"[^>]*colliders=\{false\}>/.test(colliderSource),
     "Fixed RigidBody with disabled auto colliders was not generated",
   );
   assert(
@@ -366,6 +399,35 @@ export function runVisualCompilerFixtureAssertions(
     (colliderEntitySource.match(/<RigidBody\b/g) ?? []).length === 1 &&
       (colliderEntitySource.match(/<CuboidCollider\b/g) ?? []).length === 2,
     "Multiple Box Colliders must share one RigidBody",
+  );
+
+  const dynamicColliderScene = withFixtureColliders(
+    world.scenes[world.project.entrySceneId],
+    "entity-world-object",
+    [
+      createBoxColliderComponent("fixture-dynamic-collider", {
+        bodyType: "dynamic",
+        gravityScale: 0.75,
+        linearDamping: 0.2,
+        angularDamping: 0.3,
+        ccd: true,
+      }),
+    ],
+  );
+  const dynamicColliderSource =
+    compileVisualProject(
+      {
+        ...world,
+        scenes: { [dynamicColliderScene.sceneId]: dynamicColliderScene },
+      },
+      { generatedAt: fixedTime },
+    ).overlayFiles.find((file) => file.relativePath === "src/World.tsx")
+      ?.content ?? "";
+  assert(
+    /<RigidBody type="dynamic"[^>]*gravityScale=\{0\.75\}[^>]*linearDamping=\{0\.2\}[^>]*angularDamping=\{0\.3\}[^>]*ccd=\{true\}/.test(
+      dynamicColliderSource,
+    ),
+    "Dynamic RigidBody settings were not generated",
   );
 
   const meshColliderScene = withFixtureColliders(
@@ -389,8 +451,8 @@ export function runVisualCompilerFixtureAssertions(
     )?.content ?? "";
   assert(meshColliderResult.canStage, "Mesh Collider fixture should be stageable");
   assert(
-    meshColliderSource.includes(
-      '<RigidBody type="fixed" colliders="trimesh" sensor={false} friction={0.8} restitution={0.1}>',
+    /<RigidBody type="fixed"[^>]*colliders="trimesh" sensor=\{false\} friction=\{0\.8\} restitution=\{0\.1\}>/.test(
+      meshColliderSource,
     ),
     "Mesh Collider did not generate one fixed trimesh RigidBody",
   );
@@ -545,6 +607,7 @@ export function runVisualCompilerFixtureAssertions(
       ...sourceSceneSettings,
       skybox: {
         ...sourceSceneSettings.skybox,
+        iblEnabled: true,
         imageAssetId: projectTexture.id,
         rotationDegrees: 45,
         flipY: true,
@@ -581,11 +644,162 @@ export function runVisualCompilerFixtureAssertions(
       `Image Skybox source is missing: ${fragment}`,
     ),
   );
+  assert(
+    imageSkyboxSource.includes("scene.background = texture;") &&
+      imageSkyboxSource.includes("scene.environment = texture;"),
+    "Image Skybox should drive both the background and IBL when both are enabled",
+  );
+  const resolvedImageSkyboxSettings = resolveSceneSettings(
+    imageSkyboxScene.settings,
+  );
 
-  const projectHdrSkybox: SkyboxAsset = {
+  const iblOnlySkyboxScene: SceneDocument = {
+    ...imageSkyboxScene,
+    settings: {
+      ...resolvedImageSkyboxSettings,
+      skybox: {
+        ...resolvedImageSkyboxSettings.skybox,
+        enabled: false,
+        iblEnabled: true,
+      },
+    },
+  };
+  const iblOnlySkyboxResult = compileVisualProject(
+    {
+      ...world,
+      assets: projectTextureAssets,
+      scenes: { [iblOnlySkyboxScene.sceneId]: iblOnlySkyboxScene },
+    },
+    { generatedAt: fixedTime },
+  );
+  const iblOnlySkyboxSource =
+    iblOnlySkyboxResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(
+    iblOnlySkyboxSource.includes("scene.environment = texture;") &&
+      !iblOnlySkyboxSource.includes("scene.background = texture;"),
+    "IBL-only Skybox should light the scene without rendering the background",
+  );
+
+  const backgroundOnlySkyboxScene: SceneDocument = {
+    ...imageSkyboxScene,
+    settings: {
+      ...resolvedImageSkyboxSettings,
+      skybox: {
+        ...resolvedImageSkyboxSettings.skybox,
+        enabled: true,
+        iblEnabled: false,
+      },
+    },
+  };
+  const backgroundOnlySkyboxResult = compileVisualProject(
+    {
+      ...world,
+      assets: projectTextureAssets,
+      scenes: { [backgroundOnlySkyboxScene.sceneId]: backgroundOnlySkyboxScene },
+    },
+    { generatedAt: fixedTime },
+  );
+  const backgroundOnlySkyboxSource =
+    backgroundOnlySkyboxResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(
+    backgroundOnlySkyboxSource.includes("scene.background = texture;") &&
+      !backgroundOnlySkyboxSource.includes("scene.environment = texture;"),
+    "Background-only Skybox should render without contributing IBL",
+  );
+
+  const boxSkyboxScene: SceneDocument = {
+    ...sourceScene,
+    settings: {
+      ...sourceSceneSettings,
+      skybox: {
+        ...sourceSceneSettings.skybox,
+        iblEnabled: true,
+        projection: "box",
+        imageAssetId: projectTexture.id,
+        rotationDegrees: 30,
+        meshPosition: [1, 2, 3],
+        meshRotationDegrees: [0, 90, 0],
+        meshScale: [40, 12, 30],
+        center: [0, 0.1, 0],
+      },
+    },
+  };
+  const boxSkyboxResult = compileVisualProject(
+    {
+      ...world,
+      assets: projectTextureAssets,
+      scenes: { [boxSkyboxScene.sceneId]: boxSkyboxScene },
+    },
+    { generatedAt: fixedTime },
+  );
+  const boxSkyboxSource =
+    boxSkyboxResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(boxSkyboxResult.canStage, "Box Skybox fixture should be stageable");
+  [
+    "XRiftStudioProjectedSkybox",
+    "new BoxGeometry(1, 1, 1)",
+    "next.translate(0, 0.5, 0)",
+    "position={[1, 2, 3]}",
+    "rotation={[0, 1.57079633, 0]}",
+    "scale={[40, 12, 30]}",
+    "new Vector3(0, 0.1, 0)",
+    "uRotation: { value: 0.52359878 }",
+    "<XRiftStudioImageSkybox assetPath={",
+    "flipY={false} />",
+  ].forEach((fragment) =>
+    assert(
+      boxSkyboxSource.includes(fragment),
+      `Box Skybox source is missing: ${fragment}`,
+    ),
+  );
+
+  const domeSkyboxScene: SceneDocument = {
+    ...sourceScene,
+    settings: {
+      ...sourceSceneSettings,
+      skybox: {
+        ...sourceSceneSettings.skybox,
+        projection: "dome",
+        meshScale: [80, 30, 80],
+        center: [0, 0.02, 0],
+      },
+    },
+  };
+  const domeSkyboxResult = compileVisualProject(
+    {
+      ...world,
+      scenes: { [domeSkyboxScene.sceneId]: domeSkyboxScene },
+    },
+    { generatedAt: fixedTime },
+  );
+  const domeSkyboxSource =
+    domeSkyboxResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(domeSkyboxResult.canStage, "Dome Skybox fixture should be stageable");
+  [
+    "new SphereGeometry(0.5, 50, 50)",
+    "const curvatureRadiusSquared = 0.95 * 0.95",
+    "scale={[80, 30, 80]}",
+    "new Vector3(0, 0.02, 0)",
+    "<XRiftStudioProjectedSkybox texture={null} />",
+  ].forEach((fragment) =>
+    assert(
+      domeSkyboxSource.includes(fragment),
+      `Dome Skybox source is missing: ${fragment}`,
+    ),
+  );
+
+  const projectHdrSkybox: TextureAsset = {
     id: "external-poly-haven-noon_grass-skybox",
     name: "Noon Grass",
-    kind: "skybox",
+    kind: "texture",
     status: "ready",
     source: {
       kind: "project",
@@ -593,8 +807,17 @@ export function runVisualCompilerFixtureAssertions(
         "assets/imported/external/poly-haven/noon_grass/noon_grass_environment_1k.hdr",
     },
     sourceHash: "fixture-noon-grass-sha256",
+    usage: "environment",
     projection: "equirectangular",
-    sourceFormat: "hdr",
+    importSettings: normalizeTextureImportSettings({
+      colorSpace: "linear",
+      flipY: true,
+    }),
+    importMetadata: {
+      sourceFormat: "hdr",
+      mimeType: "image/vnd.radiance",
+      byteLength: 1024,
+    },
     thumbnail: { status: "missing" },
   };
   const hdrSkyboxScene: SceneDocument = {
@@ -603,6 +826,7 @@ export function runVisualCompilerFixtureAssertions(
       ...sourceSceneSettings,
       skybox: {
         ...sourceSceneSettings.skybox,
+        iblEnabled: true,
         imageAssetId: projectHdrSkybox.id,
       },
     },
@@ -631,6 +855,7 @@ export function runVisualCompilerFixtureAssertions(
     '"xrift-studio-external-poly-haven-noon_grass-skybox-noon_grass_environment_1k.hdr" as const',
     "const src = useCompiledAssetUrl(assetPath);",
     "useLoader(HDRLoader, src)",
+    "flipY={true}",
   ].forEach((fragment) =>
     assert(
       hdrSkyboxSource.includes(fragment),
@@ -648,7 +873,7 @@ export function runVisualCompilerFixtureAssertions(
     "HDR Skybox copy plan support flag is incorrect",
   );
 
-  const projectExrSkybox: SkyboxAsset = {
+  const projectExrSkybox: TextureAsset = {
     ...projectHdrSkybox,
     id: "external-poly-haven-noon_grass-exr-skybox",
     source: {
@@ -657,7 +882,11 @@ export function runVisualCompilerFixtureAssertions(
         "assets/imported/external/poly-haven/noon_grass/noon_grass_environment_1k.exr",
     },
     sourceHash: "fixture-noon-grass-exr-sha256",
-    sourceFormat: "exr",
+    importMetadata: {
+      sourceFormat: "exr",
+      mimeType: "image/x-exr",
+      byteLength: 1024,
+    },
   };
   const exrSkyboxSceneSettings = resolveSceneSettings(
     hdrSkyboxScene.settings,

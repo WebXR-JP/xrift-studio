@@ -25,7 +25,9 @@ import type {
 } from "../../lib/visual-editor";
 import {
   BUILTIN_PREFAB_DRAG_MIME,
+  ASSET_IMPORT_ACCEPT,
   getXriftComponentDefinition,
+  isEnvironmentTextureAsset,
   isScenePlaceableAsset,
   listBuiltinPrefabRecipes,
   resolveAssetCreationFolderId,
@@ -93,9 +95,9 @@ const KIND_FOLDERS: BrowserFolder[] = [
   { id: "folder-models", name: "Models", icon: "model", kind: "model" },
   { id: "folder-materials", name: "Materials", icon: "material", kind: "material" },
   { id: "folder-textures", name: "Textures", icon: "texture", kind: "texture" },
-  { id: "folder-skyboxes", name: "Skyboxes", icon: "skybox", kind: "skybox" },
   { id: "folder-audio", name: "Audio", icon: "audio", kind: "audio" },
   { id: "folder-particles", name: "Particles", icon: "particle", kind: "particle" },
+  { id: "folder-interactivity", name: "Interactivity", icon: "asset", kind: "interactivity" },
   { id: "folder-prefabs", name: "Prefabs", icon: "prefab", kind: "template" },
 ];
 
@@ -108,11 +110,13 @@ function assetKindLabel(asset: SceneAsset): string {
     case "material":
       return "Material";
     case "texture":
-      return "Texture";
+      return isEnvironmentTextureAsset(asset) ? "Texture / HDRI" : "Texture";
     case "skybox":
-      return "Skybox";
+      return "Texture / HDRI";
     case "particle":
       return "Particle";
+    case "interactivity":
+      return "KHR Interactivity";
     case "audio":
       return "Audio";
     case "template":
@@ -129,9 +133,11 @@ function assetIconName(asset: SceneAsset): EditorIconName {
     case "texture":
       return "texture";
     case "skybox":
-      return "skybox";
+      return "texture";
     case "particle":
       return "particle";
+    case "interactivity":
+      return "asset";
     case "audio":
       return "audio";
     case "template":
@@ -487,6 +493,7 @@ function AssetCard({
   readOnly,
   onSelect,
   onPlace,
+  onOpen,
   onDelete,
   onOpenContext,
   folderPath,
@@ -499,6 +506,7 @@ function AssetCard({
   readOnly: boolean;
   onSelect: (assetId: string, event: MouseEvent<HTMLButtonElement>) => void;
   onPlace: () => void;
+  onOpen: () => void;
   onDelete: () => void;
   onOpenContext: (event: MouseEvent<HTMLElement>) => void;
   folderPath?: string;
@@ -542,6 +550,7 @@ function AssetCard({
           onDragEnd={clearAssetCardDragData}
           aria-pressed={selected}
           onClick={(event) => onSelect(asset.id, event)}
+          onDoubleClick={() => onOpen()}
           title={commandTitle(`${asset.name}を選択／${dragDescription}`, "SelectAsset")}
           className="col-span-4 grid cursor-grab grid-cols-[46px_minmax(110px,1fr)_90px_70px] items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing"
         >
@@ -619,6 +628,7 @@ function AssetCard({
         onDragEnd={clearAssetCardDragData}
         aria-pressed={selected}
         onClick={(event) => onSelect(asset.id, event)}
+        onDoubleClick={() => onOpen()}
         title={commandTitle(`${asset.name}を選択／${dragDescription}`, "SelectAsset")}
         className="flex min-w-0 flex-1 cursor-grab flex-col text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 active:cursor-grabbing"
       >
@@ -994,7 +1004,7 @@ function ImportQueueEntry({
     entry.resourceKind === "texture"
       ? EDITOR_ICONS.texture
       : entry.resourceKind === "skybox"
-        ? EDITOR_ICONS.skybox
+        ? EDITOR_ICONS.texture
         : entry.resourceKind === "audio"
           ? EDITOR_ICONS.audio
           : entry.resourceKind === "unity-package"
@@ -1045,7 +1055,7 @@ function ImportQueueEntry({
           {entry.resourceKind === "unity-package"
             ? `Prefab ${entry.result.prefabCount ?? 0}件・Entity ${entry.result.entityCount ?? 0}件・Asset ${entry.result.assetCount ?? 0}件${entry.result.warningCount ? `・要確認 ${entry.result.warningCount}件` : ""}`
             : entry.resourceKind === "skybox"
-              ? "Skybox Asset 1件・Sceneへ設定済み"
+              ? "HDRI Texture 1件・Skyboxへ設定済み"
               : entry.resourceKind === "audio"
                 ? "Audio Asset 1件"
                 : `Material ${entry.result.materialCount}件・Texture ${entry.result.textureCount}件`}
@@ -1187,6 +1197,7 @@ export function AssetsPanel({
   onPlaceBuiltinPrefab,
   onPlaceSceneAsset,
   onOpenExternalStore,
+  onOpenInteractivity,
   externalOperationLockReason = null,
 }: {
   assets: AssetManifest;
@@ -1227,6 +1238,7 @@ export function AssetsPanel({
   onPlaceBuiltinPrefab: (recipeId: string) => void;
   onPlaceSceneAsset: (assetId: string) => void;
   onOpenExternalStore: () => void;
+  onOpenInteractivity: (assetId: string) => void;
   /**
    * Reason supplied by an Asset operation owned outside this panel, such as
    * Model reimport. Selection/navigation stay available while mutations and
@@ -1575,7 +1587,7 @@ export function AssetsPanel({
         type="file"
         multiple
         disabled={importLocked}
-        accept=".unitypackage,.unity,.prefab,.glb,.gltf,.obj,.vrm,.png,.jpg,.jpeg,.webp,.ktx2,.hdr,.exr,.mp3,model/obj,model/vrm,image/png,image/jpeg,image/webp,image/vnd.radiance,image/x-hdr,image/x-exr,audio/mpeg"
+        accept={ASSET_IMPORT_ACCEPT}
         onChange={handleFileInput}
         className="sr-only"
       />
@@ -1656,7 +1668,7 @@ export function AssetsPanel({
           <button type="button" onClick={() => setViewMode("grid")} aria-label="グリッド表示" aria-pressed={viewMode === "grid"} title={commandTitle("グリッド表示", "SetAssetView.Grid")} className={`rounded p-1 ${viewMode === "grid" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><GridIcon size={14} aria-hidden="true" /></button>
           <button type="button" onClick={() => setViewMode("list")} aria-label="リスト表示" aria-pressed={viewMode === "list"} title={commandTitle("リスト表示", "SetAssetView.List")} className={`rounded p-1 ${viewMode === "list" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><ListIcon size={14} aria-hidden="true" /></button>
           <button type="button" disabled={assetMutationLocked} onClick={openCreationMenu} aria-label="新規アセットまたはフォルダー" title={assetMutationDisabledReason ?? "新規アセットまたはフォルダー"} className="ml-1 rounded border border-slate-300 bg-white p-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"><CreateIcon size={14} aria-hidden="true" /></button>
-          <button type="button" disabled={assetMutationLocked} onClick={onOpenExternalStore} title={assetMutationDisabledReason ?? "外部ストアからアセットを追加"} className="flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45"><Store size={12} aria-hidden="true" />外部から追加</button>
+          <button type="button" disabled={assetMutationLocked} onClick={onOpenExternalStore} title={assetMutationDisabledReason ?? "外部リソースからAssetまたは公式Componentを追加"} className="flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45"><Store size={12} aria-hidden="true" />外部から追加</button>
           <button type="button" disabled={importLocked} onClick={() => { if (onCommand("asset.import")) fileInputRef.current?.click(); }} title={importDisabledReason ?? commandTitle("アセットをインポート", "asset.import")} className="flex items-center gap-1 rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45"><ImportIcon size={12} aria-hidden="true" />インポート</button>
         </div>
       </div>
@@ -1757,6 +1769,9 @@ export function AssetsPanel({
               readOnly={assetMutationLocked}
               onSelect={handleAssetSelect}
               onPlace={() => onPlaceSceneAsset(asset.id)}
+              onOpen={() => {
+                if (asset.kind === "interactivity") onOpenInteractivity(asset.id);
+              }}
               onDelete={() => onRequestDeleteAsset(asset.id)}
               onOpenContext={(event) => openContextMenu(event, { assetId: asset.id })}
               folderPath={searching ? assetFolderPath(assets, asset) : undefined}
@@ -1846,6 +1861,18 @@ export function AssetsPanel({
               }}
             />
           ) : null}
+          {contextMenu.assetId && assets.assets[contextMenu.assetId]?.kind === "interactivity" ? (
+            <ContextMenuItem
+              icon="settings"
+              label="Interactivity Graphを編集"
+              command="asset.edit-interactivity"
+              onClick={() => {
+                const assetId = contextMenu.assetId;
+                setContextMenu(null);
+                if (assetId) onOpenInteractivity(assetId);
+              }}
+            />
+          ) : null}
           {contextMenu.assetId || assets.folders?.[contextMenu.folderId ?? ""] ? (
             <ContextMenuItem
               icon="delete"
@@ -1864,6 +1891,7 @@ export function AssetsPanel({
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="folder" label="新規フォルダー" command="asset.create-folder" onClick={() => { setContextMenu(null); onCommand("asset.create-folder"); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="material" label="新規マテリアル" command="asset.create-material" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-material", { folderId }); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="particle" label="新規Particle" command="asset.create-particle" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-particle", { folderId }); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="asset" label="新規Interactivity Graph" command="asset.create-interactivity" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-interactivity", { folderId }); }} />
           <ContextMenuItem disabled={importLocked} disabledReason={importDisabledReason} icon="texture" label="ファイルをインポート…" command="asset.import" onClick={() => { setContextMenu(null); if (onCommand("asset.import")) fileInputRef.current?.click(); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="prefab" label="EntityからPrefabを作成" command="prefab.create" onClick={() => { setContextMenu(null); onPhaseNotice("HierarchyのEntityをAssetsへドラッグしてください"); }} />
         </div>

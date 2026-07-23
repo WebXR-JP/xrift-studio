@@ -10,6 +10,8 @@ import {
   undoEditorHistory,
 } from "./editor-history";
 import { createPrototypeProject } from "./prototype-project";
+import { validateKhrInteractivityExtension } from "./interactivity-graph";
+import { assetManifestCodec } from "./serialization";
 
 export function runDocumentAssetCreationFixtureAssertions(): void {
   const project = createPrototypeProject("world", "document-asset-creation");
@@ -42,6 +44,28 @@ export function runDocumentAssetCreationFixtureAssertions(): void {
     particle.manifest.assets[particle.assetId]?.folderId === folder.folderId &&
       particle.manifest.assets[particle.assetId]?.order === 1,
     "Particle did not follow the existing sibling order",
+  );
+
+  const interactivity = addDefaultDocumentAsset(particle.manifest, {
+    kind: "interactivity",
+    id: "fixture-interactivity",
+    folderId: folder.folderId,
+  });
+  const interactivityAsset = interactivity.manifest.assets[interactivity.assetId];
+  assert(interactivity.added, "Interactivity Graph could not be created");
+  assert(
+    interactivityAsset?.kind === "interactivity" && interactivityAsset.order === 2,
+    "Interactivity Graph did not retain folder order",
+  );
+  assert(
+    validateKhrInteractivityExtension(
+      interactivityAsset.kind === "interactivity" ? interactivityAsset.extension : null,
+    ).every((diagnostic) => diagnostic.severity !== "error"),
+    "Default KHR_interactivity graph must validate",
+  );
+  assert(
+    assetManifestCodec.parse(assetManifestCodec.serialize(interactivity.manifest)).ok,
+    "Interactivity Asset did not round-trip through the AssetManifest codec",
   );
 
   assert(

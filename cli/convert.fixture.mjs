@@ -18,8 +18,11 @@ import {
 } from "../src/lib/visual-editor/serialization.ts";
 import { XriftThreeLoader } from "../packages/xrift-studio-runtime/src/three/index.ts";
 import { runStarterTemplateFixtureAssertions } from "../src/lib/visual-editor/starter-templates.fixture.ts";
+import { createStarterWorldProject } from "../src/lib/visual-editor/starter-templates.ts";
+import { prepareStarterVisualProject } from "../src/lib/visual-editor/persistence.ts";
 import { runVisualCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/fixture.ts";
 import { runClassicExportFixtureAssertions } from "../src/lib/visual-editor/classic-export.fixture.ts";
+import { runComponentCodeImportFixtureAssertions } from "../src/lib/visual-editor/component-code-import.fixture.ts";
 
 const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "xrift-studio-convert-"));
 const previousXriftBin = process.env.XRIFT_STUDIO_XRIFT_BIN;
@@ -112,6 +115,8 @@ try {
   assert(modifiedRejected, "--update must reject a modified Classic export");
   runVisualCompilerFixtureAssertions();
   runStarterTemplateFixtureAssertions();
+  await verifyPreparedOfficialStarter();
+  runComponentCodeImportFixtureAssertions();
   await runClassicExportFixtureAssertions();
   process.stdout.write("convert/runtime fixture passed\n");
 } finally {
@@ -121,6 +126,46 @@ try {
     process.env.XRIFT_STUDIO_XRIFT_BIN = previousXriftBin;
   }
   await rm(fixtureRoot, { recursive: true, force: true });
+}
+
+async function verifyPreparedOfficialStarter() {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input), "http://starter.fixture");
+    if (!url.pathname.startsWith("/visual-editor/starter-assets/")) {
+      return new Response(null, { status: 404 });
+    }
+    const relativePath = url.pathname.replace(/^\//, "");
+    const bytes = await readFile(path.resolve("public", relativePath));
+    return new Response(bytes, { status: 200 });
+  };
+  try {
+    const prepared = await prepareStarterVisualProject(
+      createStarterWorldProject("xrift-official", "official-starter-fixture"),
+    );
+    const assets = Object.values(prepared.plan.assets.assets);
+    const models = assets.filter((asset) => asset.kind === "model");
+    const textures = assets.filter((asset) => asset.kind === "texture");
+    assert(models.length === 2, "prepared official starter must retain both Model Assets");
+    assert(
+      textures.length >= 2,
+      "prepared official starter must contain the panorama and Duck embedded Texture",
+    );
+    assert(
+      prepared.binaryDocuments.some((document) =>
+        document.relativePath.endsWith("xrift-official/duck.glb"),
+      ) &&
+        prepared.binaryDocuments.some((document) =>
+          document.relativePath.endsWith("xrift-official/bunny.glb"),
+        ) &&
+        prepared.binaryDocuments.some((document) =>
+          document.relativePath.endsWith("xrift-official/tokyo-station.jpg"),
+        ),
+      "prepared official starter must persist every referenced official binary",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 }
 
 async function createFakeXrift(root) {

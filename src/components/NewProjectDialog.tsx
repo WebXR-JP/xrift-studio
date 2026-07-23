@@ -21,6 +21,7 @@ import {
   defaultVisualStarterTemplateId,
   type VisualStarterTemplateId,
 } from "../lib/visual-editor/starter-templates";
+import { OFFICIAL_XRIFT_WORLD_TEMPLATE_THUMBNAIL } from "../lib/visual-editor/official-world-template-import";
 
 type CreationMethod = "classic" | "visual";
 
@@ -106,6 +107,22 @@ function StarterScenePreview({
   const surfaceClass = selected
     ? "border-brand-200 bg-brand-100/70"
     : "border-zinc-200 bg-white/90";
+
+  if (templateId === "xrift-official") {
+    return (
+      <div className="relative h-full overflow-hidden bg-zinc-950" aria-hidden="true">
+        <img
+          src={OFFICIAL_XRIFT_WORLD_TEMPLATE_THUMBNAIL}
+          alt=""
+          loading="eager"
+          className="h-full w-full object-cover"
+        />
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-zinc-950/80 to-transparent px-3 pb-2.5 pt-8 text-[10px] font-semibold tracking-wide text-white">
+          公式Classic JSXから変換
+        </div>
+      </div>
+    );
+  }
 
   if (templateId === "blank") {
     return (
@@ -257,7 +274,7 @@ export function NewProjectDialog({
                 </p>
                 <div
                   className={`mt-3 grid gap-3 ${
-                    choice.kind === "world" ? "sm:grid-cols-2" : "max-w-sm"
+                    choice.kind === "world" ? "sm:grid-cols-3" : "max-w-sm"
                   }`}
                   role="radiogroup"
                   aria-label={`${choice.kind === "world" ? "ワールド" : "アイテム"}のスターター`}
@@ -316,7 +333,9 @@ export function NewProjectDialog({
                           </p>
                           <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">
                             <Package size={12} aria-hidden="true" />
-                            {template.bundledAssetIds.length > 0
+                            {template.id === "xrift-official"
+                              ? "公式R3F / Rapierから変換"
+                              : template.bundledAssetIds.length > 0
                               ? `${template.bundledAssetIds.length}個の素材をAssetsへ追加`
                               : "基本オブジェクトのみ"}
                           </div>

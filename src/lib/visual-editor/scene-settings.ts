@@ -4,7 +4,12 @@
  * than becoming an object that can be accidentally parented or duplicated.
  */
 export type SceneSkyboxSettings = {
+  /** Show the skybox as the visible scene background. */
   enabled: boolean;
+  /** Use the skybox image for image-based lighting and reflections. */
+  iblEnabled: boolean;
+  /** Projection used to place the sky around the scene. */
+  projection: "infinite" | "box" | "dome";
   /** Optional equirectangular texture Asset used instead of the gradient. */
   imageAssetId?: string;
   topColor: string;
@@ -15,8 +20,14 @@ export type SceneSkyboxSettings = {
   rotationDegrees: number;
   /** Flip the image vertically when the source orientation is upside down. */
   flipY: boolean;
-  /** Background and environment intensity for an image skybox. */
+  /** Background and IBL intensity for an image skybox. */
   exposure: number;
+  /** Transform of the finite Box or Dome sky mesh, in scene units/degrees. */
+  meshPosition: [number, number, number];
+  meshRotationDegrees: [number, number, number];
+  meshScale: [number, number, number];
+  /** Capture/tripod center in normalized sky-mesh coordinates. */
+  center: [number, number, number];
 };
 
 export type SceneFogSettings = {
@@ -62,6 +73,8 @@ export type SceneSettings = {
 export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
   skybox: {
     enabled: true,
+    iblEnabled: false,
+    projection: "infinite",
     imageAssetId: undefined,
     topColor: "#87ceeb",
     bottomColor: "#ffffff",
@@ -70,6 +83,10 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
     rotationDegrees: 0,
     flipY: false,
     exposure: 1,
+    meshPosition: [0, 0, 0],
+    meshRotationDegrees: [0, 0, 0],
+    meshScale: [100, 100, 100],
+    center: [0, 0.01, 0],
   },
   fog: {
     enabled: true,
@@ -123,6 +140,35 @@ function booleanOr(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
+function skyboxProjectionOr(
+  value: unknown,
+  fallback: SceneSkyboxSettings["projection"],
+): SceneSkyboxSettings["projection"] {
+  return value === "infinite" || value === "box" || value === "dome"
+    ? value
+    : fallback;
+}
+
+function vec3Or(
+  value: unknown,
+  fallback: [number, number, number],
+  min?: number,
+): [number, number, number] {
+  if (
+    Array.isArray(value) &&
+    value.length === 3 &&
+    value.every(
+      (entry) =>
+        typeof entry === "number" &&
+        Number.isFinite(entry) &&
+        (min === undefined || entry >= min),
+    )
+  ) {
+    return [value[0], value[1], value[2]];
+  }
+  return [...fallback];
+}
+
 /**
  * Reads old documents safely as well as newly-authored scenes. The returned
  * object is always complete, so UI and compiler callers do not need migration
@@ -136,6 +182,14 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
   const camera = isRecord(settings.camera) ? settings.camera : {};
   const editor = isRecord(settings.editor) ? settings.editor : {};
   const gizmo = isRecord(editor.gizmo) ? editor.gizmo : {};
+  const resolvedSkyboxImageAssetId =
+    typeof skybox.imageAssetId === "string" && skybox.imageAssetId.trim()
+      ? skybox.imageAssetId
+      : undefined;
+  const resolvedSkyboxEnabled = booleanOr(
+    skybox.enabled,
+    DEFAULT_SCENE_SETTINGS.skybox.enabled,
+  );
 
   const normalizedFogNear = finiteOr(fog.near, DEFAULT_SCENE_SETTINGS.fog.near, 0);
   const normalizedFogFar = finiteOr(fog.far, DEFAULT_SCENE_SETTINGS.fog.far, 0);
@@ -157,11 +211,21 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
 
   return {
     skybox: {
-      enabled: booleanOr(skybox.enabled, DEFAULT_SCENE_SETTINGS.skybox.enabled),
-      imageAssetId:
-        typeof skybox.imageAssetId === "string" && skybox.imageAssetId.trim()
-          ? skybox.imageAssetId
-          : undefined,
+      enabled: resolvedSkyboxEnabled,
+      // Image skyboxes authored before this option existed drove both the
+      // background and environment. Preserve that behavior while new gradient
+      // scenes keep IBL off until an image is assigned.
+      iblEnabled: booleanOr(
+        skybox.iblEnabled,
+        resolvedSkyboxImageAssetId
+          ? resolvedSkyboxEnabled
+          : DEFAULT_SCENE_SETTINGS.skybox.iblEnabled,
+      ),
+      projection: skyboxProjectionOr(
+        skybox.projection,
+        DEFAULT_SCENE_SETTINGS.skybox.projection,
+      ),
+      imageAssetId: resolvedSkyboxImageAssetId,
       topColor: colorOr(skybox.topColor, DEFAULT_SCENE_SETTINGS.skybox.topColor),
       bottomColor: colorOr(
         skybox.bottomColor,
@@ -182,6 +246,23 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
         skybox.exposure,
         DEFAULT_SCENE_SETTINGS.skybox.exposure,
         0,
+      ),
+      meshPosition: vec3Or(
+        skybox.meshPosition,
+        DEFAULT_SCENE_SETTINGS.skybox.meshPosition,
+      ),
+      meshRotationDegrees: vec3Or(
+        skybox.meshRotationDegrees,
+        DEFAULT_SCENE_SETTINGS.skybox.meshRotationDegrees,
+      ),
+      meshScale: vec3Or(
+        skybox.meshScale,
+        DEFAULT_SCENE_SETTINGS.skybox.meshScale,
+        0.001,
+      ),
+      center: vec3Or(
+        skybox.center,
+        DEFAULT_SCENE_SETTINGS.skybox.center,
       ),
     },
     fog: {
