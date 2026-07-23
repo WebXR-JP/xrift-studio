@@ -3,6 +3,169 @@ import {
   type BufferGeometry,
   type Material,
 } from "three";
+import type { OpenBrushMaterialShader } from "./open-brush";
+
+export type ClassicR3fShaderUniform =
+  | {
+      kind: "texture";
+      textureAssetId: string;
+      colorSpace?: "srgb" | "linear";
+      generateMipmaps?: boolean;
+      filter?: "nearest" | "linear";
+      wrapS?: "repeat" | "clamp-to-edge";
+      wrapT?: "repeat" | "clamp-to-edge";
+    }
+  | { kind: "number"; value: number }
+  | { kind: "color"; value: string }
+  | { kind: "vector"; value: number[] };
+
+export type ClassicR3fShaderVariant = {
+  name: string;
+  /** Case-insensitive Object3D.name substring. Omitted for the fallback variant. */
+  meshNameIncludes?: string;
+  defines: Record<string, string>;
+  side: "front" | "back" | "double";
+  transparent: boolean;
+  depthWrite: boolean;
+};
+
+/**
+ * A non-evaluating snapshot of a Classic R3F ShaderMaterial. Studio stores
+ * literal GLSL, literal uniforms, and declarative mesh-name variants only.
+ */
+export type ClassicR3fMaterialShader = {
+  kind: "classic-r3f";
+  sourceModulePath: string;
+  vertexShader: string;
+  fragmentShader: string;
+  uniforms: Record<string, ClassicR3fShaderUniform>;
+  variants: ClassicR3fShaderVariant[];
+  animatedTimeUniform?: string;
+  sourceModelAssetId?: string;
+};
+
+export type MaterialShader =
+  | OpenBrushMaterialShader
+  | ClassicR3fMaterialShader;
+
+export function isClassicR3fMaterialShader(
+  value: unknown,
+): value is ClassicR3fMaterialShader {
+  if (!value || typeof value !== "object") return false;
+  const shader = value as Partial<ClassicR3fMaterialShader>;
+  if (
+    shader.kind !== "classic-r3f" ||
+    typeof shader.sourceModulePath !== "string" ||
+    !shader.sourceModulePath.trim() ||
+    typeof shader.vertexShader !== "string" ||
+    shader.vertexShader.length > 512 * 1024 ||
+    !/\bvoid\s+main\s*\(/.test(shader.vertexShader) ||
+    typeof shader.fragmentShader !== "string" ||
+    shader.fragmentShader.length > 512 * 1024 ||
+    !/\bvoid\s+main\s*\(/.test(shader.fragmentShader) ||
+    !shader.uniforms ||
+    typeof shader.uniforms !== "object" ||
+    Array.isArray(shader.uniforms) ||
+    !Array.isArray(shader.variants) ||
+    shader.variants.length === 0 ||
+    shader.variants.length > 32
+  ) {
+    return false;
+  }
+  if (
+    Object.entries(shader.uniforms).length > 128 ||
+    !Object.entries(shader.uniforms).every(
+      ([name, uniform]) =>
+        /^[A-Za-z_]\w{0,79}$/.test(name) &&
+        isClassicR3fShaderUniform(uniform),
+    )
+  ) {
+    return false;
+  }
+  if (!shader.variants.every(isClassicR3fShaderVariant)) return false;
+  return (
+    (shader.animatedTimeUniform === undefined ||
+      (typeof shader.animatedTimeUniform === "string" &&
+        /^[A-Za-z_]\w{0,79}$/.test(shader.animatedTimeUniform))) &&
+    (shader.sourceModelAssetId === undefined ||
+      (typeof shader.sourceModelAssetId === "string" &&
+        shader.sourceModelAssetId.trim().length > 0))
+  );
+}
+
+function isClassicR3fShaderUniform(
+  value: unknown,
+): value is ClassicR3fShaderUniform {
+  if (!value || typeof value !== "object") return false;
+  const uniform = value as Partial<ClassicR3fShaderUniform>;
+  if (uniform.kind === "texture") {
+    return (
+      typeof uniform.textureAssetId === "string" &&
+      uniform.textureAssetId.trim().length > 0 &&
+      (uniform.colorSpace === undefined ||
+        uniform.colorSpace === "srgb" ||
+        uniform.colorSpace === "linear") &&
+      (uniform.generateMipmaps === undefined ||
+        typeof uniform.generateMipmaps === "boolean") &&
+      (uniform.filter === undefined ||
+        uniform.filter === "nearest" ||
+        uniform.filter === "linear") &&
+      (uniform.wrapS === undefined ||
+        uniform.wrapS === "repeat" ||
+        uniform.wrapS === "clamp-to-edge") &&
+      (uniform.wrapT === undefined ||
+        uniform.wrapT === "repeat" ||
+        uniform.wrapT === "clamp-to-edge")
+    );
+  }
+  if (uniform.kind === "number") {
+    return typeof uniform.value === "number" && Number.isFinite(uniform.value);
+  }
+  if (uniform.kind === "color") {
+    return (
+      typeof uniform.value === "string" &&
+      /^#[0-9a-f]{6}$/i.test(uniform.value)
+    );
+  }
+  return (
+    uniform.kind === "vector" &&
+    Array.isArray(uniform.value) &&
+    uniform.value.length >= 2 &&
+    uniform.value.length <= 4 &&
+    uniform.value.every(
+      (entry) => typeof entry === "number" && Number.isFinite(entry),
+    )
+  );
+}
+
+function isClassicR3fShaderVariant(
+  value: unknown,
+): value is ClassicR3fShaderVariant {
+  if (!value || typeof value !== "object") return false;
+  const variant = value as Partial<ClassicR3fShaderVariant>;
+  return (
+    typeof variant.name === "string" &&
+    variant.name.trim().length > 0 &&
+    variant.name.length <= 80 &&
+    (variant.meshNameIncludes === undefined ||
+      (typeof variant.meshNameIncludes === "string" &&
+        variant.meshNameIncludes.length > 0 &&
+        variant.meshNameIncludes.length <= 80)) &&
+    Boolean(variant.defines) &&
+    typeof variant.defines === "object" &&
+    !Array.isArray(variant.defines) &&
+    Object.entries(variant.defines).length <= 32 &&
+    Object.entries(variant.defines).every(
+      ([name, define]) =>
+        /^[A-Za-z_]\w{0,79}$/.test(name) && typeof define === "string",
+    ) &&
+    (variant.side === "front" ||
+      variant.side === "back" ||
+      variant.side === "double") &&
+    typeof variant.transparent === "boolean" &&
+    typeof variant.depthWrite === "boolean"
+  );
+}
 
 export type CustomShaderAttributeBinding = {
   shaderName: string;

@@ -49,6 +49,7 @@ import { VisualEditorErrorBoundary } from "./components/visual-editor/VisualEdit
 import { ClassicExportDialog } from "./components/visual-editor/ClassicExportDialog";
 import {
   compilePrototypeVisualProject,
+  applyAssetOptimizations,
   exportVisualProjectToClassic,
   estimateWorldVram,
   inspectClassicExportTarget,
@@ -780,6 +781,33 @@ function App() {
               description:
                 diagnostic.entityId ?? diagnostic.assetId ?? diagnostic.fieldPath,
             });
+          }}
+          onApplyOptimizations={async (recommendationIds, report) => {
+            if (!publishBundle) {
+              throw new Error("最適化する制作データがありません。");
+            }
+            const projectPath = await handleSaveVisualProject(
+              publishBundle,
+              false,
+              false,
+            );
+            const recommendations =
+              estimateWorldVram(publishBundle).recommendations;
+            const result = await applyAssetOptimizations(
+              projectPath,
+              publishBundle,
+              recommendations,
+              recommendationIds,
+              report,
+            );
+            await handleSaveVisualProject(result.bundle, false, false);
+            setVisualPublishBundle(result.bundle);
+            setVisualCompilationFresh(false);
+            return {
+              optimizedAssetCount: result.optimizedAssetCount,
+              beforeBytes: result.beforeBytes,
+              afterBytes: result.afterBytes,
+            };
           }}
           onPublish={async (report, signal) => {
             if (!publishBundle) throw new Error("公開する制作データがありません。");

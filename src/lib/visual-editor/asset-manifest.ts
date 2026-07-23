@@ -359,7 +359,7 @@ export type MaterialProperties = {
 export type MaterialAsset = AssetBase<"material"> & {
   properties: MaterialProperties;
   /** Custom renderer preset retained without flattening it into glTF PBR. */
-  shader?: import("./open-brush").OpenBrushMaterialShader;
+  shader?: import("./custom-shader-contract").MaterialShader;
   /** Present only for a Material expanded from an imported glTF/GLB. */
   importedFromModel?: ImportedMaterialProvenance;
 };
@@ -553,8 +553,8 @@ export type SkyboxAsset = AssetBase<"skybox"> & {
 };
 
 export type AudioImportMetadata = {
-  sourceFormat: "mp3";
-  mimeType: "audio/mpeg";
+  sourceFormat: "mp3" | "wav";
+  mimeType: "audio/mpeg" | "audio/wav";
   byteLength: number;
 };
 
@@ -957,7 +957,7 @@ export type MaterialExtensionsPatch = Partial<{
 }>;
 
 export type MaterialAssetPatch = {
-  shader?: import("./open-brush").OpenBrushMaterialShader;
+  shader?: import("./custom-shader-contract").MaterialShader;
   pbrMetallicRoughness?: PbrMetallicRoughnessPatch;
   normalTexture?: NormalTextureInfoPatch;
   occlusionTexture?: OcclusionTextureInfoPatch;

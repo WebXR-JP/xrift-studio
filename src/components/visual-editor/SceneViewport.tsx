@@ -378,6 +378,11 @@ function MeshVisual({
             ? component.geometry.sourceNodeIndex
             : undefined
         }
+        sourceNodeName={
+          component.geometry?.kind === "asset"
+            ? component.geometry.sourceNodeName
+            : undefined
+        }
         viewportMaterialStyle={viewportMaterialStyle}
       />
     );

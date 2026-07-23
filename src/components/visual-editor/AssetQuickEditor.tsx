@@ -391,7 +391,7 @@ function AssetThumbnailFallback({ asset }: { asset: SceneAsset }) {
       : asset.status === "missing"
         ? "ソース未検出・再取込"
         : asset.kind === "audio"
-          ? "MP3"
+          ? asset.importMetadata.sourceFormat.toUpperCase()
           : isEnvironmentTextureAsset(asset)
             ? "HDRIプレビューを生成中"
             : asset.kind === "material"
@@ -511,7 +511,7 @@ function AudioAssetInspector({ asset }: { asset: AudioAsset }) {
             {asset.name}
           </h3>
           <p className="mt-0.5 text-xs text-slate-500">
-            MP3・{formatFileSize(asset.importMetadata.byteLength)}
+            {asset.importMetadata.sourceFormat.toUpperCase()}・{formatFileSize(asset.importMetadata.byteLength)}
           </p>
         </div>
       </div>

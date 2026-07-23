@@ -67,6 +67,7 @@ export const ASSET_IMPORT_ACCEPT = [
   ".hdr",
   ".exr",
   ".mp3",
+  ".wav",
   "model/gltf-binary",
   "model/gltf+json",
   "model/obj",
@@ -82,6 +83,8 @@ export const ASSET_IMPORT_ACCEPT = [
   "image/x-hdr",
   "image/x-exr",
   "audio/mpeg",
+  "audio/wav",
+  "audio/x-wav",
 ].join(",");
 
 export const THREE_EDITOR_MODEL_EXTENSION_PATTERN = new RegExp(

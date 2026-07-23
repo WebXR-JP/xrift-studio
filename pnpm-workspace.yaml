@@ -3,6 +3,7 @@ packages:
 
 allowBuilds:
   esbuild: true
+  sharp: false
 
 minimumReleaseAgeExclude:
   - '@xrift/world-components@0.43.0'

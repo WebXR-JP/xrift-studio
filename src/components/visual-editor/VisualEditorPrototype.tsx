@@ -14,6 +14,7 @@ import {
   applyExternalStoreInstall,
   applyOpenBrushCatalogInstall,
   applyComponentCodeImportPlan,
+  applyClassicProjectVisualImportEnhancements,
   analyzeComponentCode,
   prepareClassicProjectVisualAssetImports,
   addDefaultParticleAsset,
@@ -191,7 +192,7 @@ const XRIFT_MCP_EXTERNAL_STORE_TOOLS = [
   "install_external_asset",
 ] as const;
 type XriftMcpExternalStoreTool = (typeof XRIFT_MCP_EXTERNAL_STORE_TOOLS)[number];
-const SUPPORTED_AUDIO_FILE = /\.mp3$/i;
+const SUPPORTED_AUDIO_FILE = /\.(?:mp3|wav)$/i;
 const SUPPORTED_UNITY_FILE = /\.(unitypackage|unity|prefab)$/i;
 const AUTOSAVE_DELAY_MS = 250;
 
@@ -2109,7 +2110,7 @@ export function VisualEditorPrototype({
           ).length;
         }
 
-        const result = applyComponentCodeImportPlan({
+        let result = applyComponentCodeImportPlan({
           scene: bundle.scene,
           assets: preparedAssets,
           projectKind,
@@ -2122,6 +2123,14 @@ export function VisualEditorPrototype({
               "変換したComponentをSceneへ追加できませんでした",
           );
           return false;
+        }
+        if (classicSource) {
+          result = applyClassicProjectVisualImportEnhancements({
+            source: classicSource,
+            componentPlan: plan,
+            result,
+            assetIdBySourcePath: assetIdBySourcePath ?? {},
+          });
         }
         const committedAssets =
           classicSource && assetPlans.length > 0 && projectPath
@@ -4112,7 +4121,7 @@ export function VisualEditorPrototype({
     if (unsupported.length > 0) {
       const names = unsupported.slice(0, 3).map((file) => file.name).join("、");
       setImportError(
-        `${names}${unsupported.length > 3 ? " ほか" : ""} は対象外です。Unity、Three.js Editor対応モデル、PNG / JPG / WebP / AVIF / GIF / BMP / SVG / KTX2、HDR / EXR、MP3に対応します。`,
+        `${names}${unsupported.length > 3 ? " ほか" : ""} は対象外です。Unity、Three.js Editor対応モデル、PNG / JPG / WebP / AVIF / GIF / BMP / SVG / KTX2、HDR / EXR、MP3 / WAVに対応します。`,
       );
     } else {
       setImportError(null);
@@ -4529,10 +4538,13 @@ export function VisualEditorPrototype({
         : saveStatus === "error"
           ? EDITOR_ICONS.warning
           : EDITOR_ICONS.save;
+  const hierarchyTrack = `min(${layout.hierarchyWidth}px, 22%)`;
+  const inspectorTrack = `min(${layout.inspectorWidth}px, 36%)`;
+  const assetsTrack = `min(${layout.assetsHeight}px, calc(100% - 240px))`;
 
   return (
-    <div className="h-screen overflow-auto bg-editor-canvas">
-      <div className="flex h-full min-h-[640px] min-w-[1024px] flex-col bg-editor-canvas text-editor-text">
+    <div className="h-screen overflow-hidden bg-editor-canvas">
+      <div className="flex h-full min-h-0 min-w-0 flex-col bg-editor-canvas text-editor-text">
         <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-editor-border bg-editor-surface px-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <button
@@ -4707,10 +4719,10 @@ export function VisualEditorPrototype({
 
         <main
           ref={mainRef}
-          className="relative grid min-h-0 flex-1"
+          className="relative grid min-h-0 flex-1 overflow-hidden"
           style={{
-            gridTemplateColumns: `${layout.hierarchyWidth}px minmax(360px, 1fr) ${layout.inspectorWidth}px`,
-            gridTemplateRows: `minmax(240px, 1fr) ${layout.assetsHeight}px`,
+            gridTemplateColumns: `${hierarchyTrack} minmax(360px, 1fr) ${inspectorTrack}`,
+            gridTemplateRows: `minmax(240px, 1fr) ${assetsTrack}`,
           }}
         >
           <HierarchyPanel
@@ -5035,7 +5047,7 @@ export function VisualEditorPrototype({
             title={commandTitle("Hierarchy幅を変更", "ResizePanel.Hierarchy")}
             onPointerDown={(event) => beginResize("hierarchy", event)}
             className="absolute bottom-0 top-0 z-40 w-1 cursor-col-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70"
-            style={{ left: layout.hierarchyWidth - 2 }}
+            style={{ left: `calc(${hierarchyTrack} - 2px)` }}
           />
           {deleteDialog ? (
             <AssetDeleteDialog
@@ -5073,7 +5085,7 @@ export function VisualEditorPrototype({
             title={commandTitle("Inspector幅を変更", "ResizePanel.Inspector")}
             onPointerDown={(event) => beginResize("inspector", event)}
             className="absolute bottom-0 top-0 z-40 w-1 cursor-col-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70"
-            style={{ right: layout.inspectorWidth - 2 }}
+            style={{ right: `calc(${inspectorTrack} - 2px)` }}
           />
           <button
             type="button"
@@ -5082,9 +5094,9 @@ export function VisualEditorPrototype({
             onPointerDown={(event) => beginResize("assets", event)}
             className="absolute z-40 h-1 cursor-row-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70"
             style={{
-              bottom: layout.assetsHeight - 2,
-              left: layout.hierarchyWidth,
-              right: layout.inspectorWidth,
+              bottom: `calc(${assetsTrack} - 2px)`,
+              left: hierarchyTrack,
+              right: inspectorTrack,
             }}
           />
         </main>

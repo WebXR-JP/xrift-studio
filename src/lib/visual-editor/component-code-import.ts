@@ -149,6 +149,8 @@ export type ComponentCodeImportMaterial = {
 
 export type ComponentCodeImportModel = {
   sourcePath: string;
+  /** Static identifier passed to an R3F primitive object prop. */
+  sourceObjectExpression?: string;
 };
 
 export type ComponentCodeImportText = {
@@ -165,7 +167,7 @@ export type ComponentCodeImportText = {
 export type ComponentCodeImportAssetDependency = {
   sourcePath: string;
   fileName: string;
-  kind: "model" | "texture" | "unsupported";
+  kind: "model" | "texture" | "audio" | "unsupported";
   requiredByPlanNodeIds: string[];
   sourceModulePaths: string[];
 };
@@ -272,6 +274,7 @@ export type ComponentCodeImportPlan = {
     colliderCount: number;
     modelAssetCount: number;
     textureAssetCount: number;
+    audioAssetCount: number;
     unsupportedAssetCount: number;
     xriftComponentCount: number;
     moduleCount: number;
@@ -465,6 +468,9 @@ function analyzeComponentSources(input: {
       textureAssetCount: assetDependencies.filter(
         (dependency) => dependency.kind === "texture",
       ).length,
+      audioAssetCount: assetDependencies.filter(
+        (dependency) => dependency.kind === "audio",
+      ).length,
       unsupportedAssetCount: assetDependencies.filter(
         (dependency) => dependency.kind === "unsupported",
       ).length,
@@ -495,6 +501,7 @@ function emptyImportPlan(
       colliderCount: 0,
       modelAssetCount: 0,
       textureAssetCount: 0,
+      audioAssetCount: 0,
       unsupportedAssetCount: 0,
       xriftComponentCount: 0,
       moduleCount: 0,
@@ -1235,6 +1242,9 @@ function convertJsxNode(
         context.fallbackModelSourcePath ??
         context.fallbackUnsupportedSourcePath;
       if (sourcePath) {
+        const objectExpression = node.attributes.find(
+          (attribute) => attribute.name === "object",
+        )?.rawExpression;
         appendImportNode(output, context, {
           ...sourceFields,
           name: staticNodeName(
@@ -1243,7 +1253,12 @@ function convertJsxNode(
           ),
           kind: "model",
           transform: transformFromProps(attributes),
-          model: { sourcePath },
+          model: {
+            sourcePath,
+            ...(objectExpression
+              ? { sourceObjectExpression: objectExpression.trim() }
+              : {}),
+          },
           ...(context.rigidBody ? { collider: context.rigidBody } : {}),
           xriftComponents: [],
         });

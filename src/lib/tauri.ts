@@ -367,6 +367,8 @@ export const tauri = {
     invoke<string>("read_world_file", { projectPath }),
   writeWorldFile: (projectPath: string, content: string) =>
     invoke<void>("write_world_file", { projectPath, content }),
+  cloneClassicProjectRepository: (repositoryUrl: string) =>
+    invoke<string>("clone_classic_project_repository", { repositoryUrl }),
   readTextFile: (projectPath: string, rel: string) =>
     invoke<string>("read_text_file", { projectPath, rel }),
   writeTextFile: (projectPath: string, rel: string, content: string) =>

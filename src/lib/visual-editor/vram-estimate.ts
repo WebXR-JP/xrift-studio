@@ -30,6 +30,7 @@ export type VramRecommendation = {
   title: string;
   detail: string;
   assetId?: string;
+  operation?: "resize-texture" | "ktx2-texture" | "draco-model";
   impact: "vram" | "load" | "both" | "render";
   estimatedVramSavingBytes?: number;
   estimatedLoadSavingBytes?: number;
@@ -364,6 +365,14 @@ function textureRecommendations(
       currentLoadBytes * ((resized.width * resized.height) / sourcePixels);
     recommendations.push({
       id: `resize:${asset.id}`,
+      operation:
+        asset.source.kind === "project" &&
+        asset.usage !== "environment" &&
+        ["png", "jpeg", "webp", "avif"].includes(
+          asset.importMetadata?.sourceFormat ?? "",
+        )
+          ? "resize-texture"
+          : undefined,
       severity: maxDimension > 4096 ? "recommended" : "consider",
       title: `${asset.name}を最大2048pxへ縮小`,
       detail: `${width} × ${height}です。スマートフォン向けでは、見た目を確認しながら最大サイズを下げられます。`,
@@ -396,6 +405,14 @@ function textureRecommendations(
       (asset.importSettings.generateMipmaps ? 4 / 3 : 1);
     recommendations.push({
       id: `ktx2:${asset.id}`,
+      operation:
+        asset.source.kind === "project" &&
+        asset.usage !== "environment" &&
+        ["png", "jpeg", "webp", "avif"].includes(
+          asset.importMetadata?.sourceFormat ?? "",
+        )
+          ? "ktx2-texture"
+          : undefined,
       severity: currentVramBytes >= 16 * MIB ? "recommended" : "consider",
       title: `${asset.name}をKTX2へ変換`,
       detail:
@@ -445,9 +462,15 @@ function modelRecommendations(
   const usesDraco =
     metadata?.extensionsUsed.includes("KHR_draco_mesh_compression") ||
     metadata?.extensionsRequired.includes("KHR_draco_mesh_compression");
+  const canEncodeDraco =
+    asset.source.kind === "project" &&
+    metadata?.sourceFormat === "glb" &&
+    ![...(metadata.extensionsUsed ?? []), ...(metadata.extensionsRequired ?? [])]
+      .some((extension) => /^(?:VRM|VRMC_)/.test(extension));
   if (metadata && metadata.byteLength >= 1024 * 1024 && !usesDraco) {
     recommendations.push({
       id: `draco:${asset.id}`,
+      operation: canEncodeDraco ? "draco-model" : undefined,
       severity: metadata.byteLength >= 8 * MIB ? "recommended" : "consider",
       title: `${asset.name}にDraco圧縮を検討`,
       detail:

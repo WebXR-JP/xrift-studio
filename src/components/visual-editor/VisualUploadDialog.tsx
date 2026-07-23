@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import type { ProjectKind } from "../../lib/tauri";
+import type { AssetOptimizationProgress } from "../../lib/visual-editor/asset-optimization";
 import { VisualPublishCancellationController } from "../../lib/visual-editor/publish-cancellation";
 import {
   formatVramBytes,
@@ -96,6 +97,14 @@ type Props = {
   onEditThumbnail: () => void;
   onLogin: () => void;
   onLocateDiagnostic?: (diagnostic: VisualPublishDiagnostic) => void;
+  onApplyOptimizations?: (
+    recommendationIds: string[],
+    report: (progress: AssetOptimizationProgress) => void,
+  ) => Promise<{
+    optimizedAssetCount: number;
+    beforeBytes: number;
+    afterBytes: number;
+  }>;
   onPublish: (
     report: (progress: VisualPublishProgress) => void,
     signal: AbortSignal,
@@ -129,6 +138,7 @@ export function VisualUploadDialog({
   onEditThumbnail,
   onLogin,
   onLocateDiagnostic,
+  onApplyOptimizations,
   onPublish,
 }: Props) {
   const [stage, setStage] = useState<VisualPublishStage>("review");
@@ -684,6 +694,7 @@ export function VisualUploadDialog({
           estimate={review.vramEstimate}
           subjectLabel={projectLabel}
           onClose={() => setVramDetailsOpen(false)}
+          onApplyOptimizations={onApplyOptimizations}
         />
       ) : null}
     </div>

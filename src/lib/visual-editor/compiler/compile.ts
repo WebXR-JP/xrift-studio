@@ -1531,6 +1531,10 @@ function renderModelMesh(
     mesh.geometry?.kind === "asset"
       ? mesh.geometry.sourceNodeIndex
       : undefined;
+  const sourceNodeName =
+    mesh.geometry?.kind === "asset"
+      ? mesh.geometry.sourceNodeName
+      : undefined;
   const needsParser =
     sourceNodeIndex !== undefined ||
     Boolean(mesh.modelPose?.nodes && Object.keys(mesh.modelPose.nodes).length) ||
@@ -1538,7 +1542,9 @@ function renderModelMesh(
       (binding) => binding.sourceNodeIndex !== undefined,
     );
   const modelScale =
-    sourceNodeIndex === undefined && Number.isFinite(model.importSettings.scale)
+    sourceNodeIndex === undefined &&
+    sourceNodeName === undefined &&
+    Number.isFinite(model.importSettings.scale)
       ? model.importSettings.scale
       : 1;
   const poseSource = renderCompiledModelPose(mesh, context);
@@ -1600,6 +1606,10 @@ function renderCompiledModelPose(
     mesh.geometry?.kind === "asset"
       ? mesh.geometry.sourceNodeIndex
       : undefined;
+  const sourceNodeName =
+    mesh.geometry?.kind === "asset"
+      ? mesh.geometry.sourceNodeName
+      : undefined;
   const needsSourceNodeTags =
     sourceNodeIndex !== undefined ||
     Boolean(pose?.nodes && Object.keys(pose.nodes).length) ||
@@ -1608,6 +1618,7 @@ function renderCompiledModelPose(
     );
   if (
     !needsSourceNodeTags &&
+    sourceNodeName === undefined &&
     (!pose ||
       (Object.keys(pose.bones).length === 0 &&
         Object.keys(pose.morphTargets).length === 0))
@@ -1621,22 +1632,22 @@ function renderCompiledModelPose(
   const boneRotations = JSON.stringify(pose?.bones ?? {});
   const morphTargets = JSON.stringify(pose?.morphTargets ?? {});
   const nodeTransforms = JSON.stringify(pose?.nodes ?? {});
-  const tagSourceNodes = needsSourceNodeTags
+  const collectSourceNodes = needsSourceNodeTags || sourceNodeName !== undefined;
+  const tagSourceNodes = collectSourceNodes
     ? `    const originals: typeof scene.children = [];
     const copies: typeof scene.children = [];
     scene.traverse((object) => originals.push(object));
     cloned.traverse((object) => copies.push(object));
-    originals.forEach((original, index) => {
+${needsSourceNodeTags ? `    originals.forEach((original, index) => {
       const nodeIndex = parser.associations.get(original)?.nodes;
       if (typeof nodeIndex === "number" && copies[index]) {
         copies[index].userData.xriftSourceNodeIndex = nodeIndex;
       }
     });
-`
+` : ""}`
     : "";
-  const selectSourceNode = sourceNodeIndex === undefined
-    ? ""
-    : `    let selected = copies.find(
+  const selectSourceNode = sourceNodeIndex !== undefined
+    ? `    let selected = copies.find(
       (object) => object.userData.xriftSourceNodeIndex === ${sourceNodeIndex},
     );
     if (selected) {
@@ -1651,12 +1662,27 @@ function renderCompiledModelPose(
       cloned.clear();
       selected = cloned;
     }
-`;
+`
+    : sourceNodeName
+      ? `    let selected = copies.find(
+      (object) => object.name === ${JSON.stringify(sourceNodeName)},
+    );
+    if (selected) {
+      selected.removeFromParent();
+      selected.position.set(0, 0, 0);
+      selected.quaternion.identity();
+      selected.scale.set(1, 1, 1);
+    } else {
+      cloned.clear();
+      selected = cloned;
+    }
+`
+      : "";
   return {
     objectName: "compiledScene",
     declaration: `  const compiledScene = useMemo(() => {
     const cloned = cloneSkeleton(scene);
-${tagSourceNodes}${selectSourceNode}    const output = ${sourceNodeIndex === undefined ? "cloned" : "selected"};
+${tagSourceNodes}${selectSourceNode}    const output = ${sourceNodeIndex === undefined && sourceNodeName === undefined ? "cloned" : "selected"};
     const boneRotations = ${boneRotations} as Record<string, [number, number, number]>;
     const morphTargetWeights = ${morphTargets} as Record<string, number>;
     const nodeTransforms = ${nodeTransforms} as Record<string, { position: [number, number, number]; rotation: [number, number, number]; scale: [number, number, number] }>;
@@ -3103,7 +3129,7 @@ function renderAudioSource(
       severity: "warning",
       code: "audio-source-asset-missing",
       message: audio.sourceUrl?.trim()
-        ? "直接URLのAudio Sourceは出力されません。MP3をAudio Assetとして取り込んでください"
+        ? "直接URLのAudio Sourceは出力されません。MP3またはWAVをAudio Assetとして取り込んでください"
         : "Audio Assetが未設定のため、音声を出力しません",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
@@ -3132,7 +3158,7 @@ function renderAudioSource(
     addDiagnostic(context, {
       severity: "blocking",
       code: "audio-asset-source-unsupported",
-      message: "Audio Assetはproject-relativeなMP3 sourceである必要があります",
+      message: "Audio Assetはproject-relativeなMP3またはWAV sourceである必要があります",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: audio.id,
@@ -3555,7 +3581,7 @@ function isAllowedStaticAssetSource(asset: SceneAsset): boolean {
       : ["png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg", "ktx2"].includes(extension);
   }
   if (asset.kind === "skybox") return ["hdr", "exr", "png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"].includes(extension);
-  if (asset.kind === "audio") return extension === "mp3";
+  if (asset.kind === "audio") return extension === "mp3" || extension === "wav";
   return false;
 }
 

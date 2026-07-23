@@ -3562,6 +3562,118 @@ fn read_text_file(project_path: String, rel: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
+fn validate_classic_repository_url(repository_url: &str) -> Result<String, String> {
+    let repository_url = repository_url.trim();
+    if repository_url.is_empty()
+        || repository_url.len() > 2048
+        || repository_url
+            .chars()
+            .any(|character| character.is_control() || character.is_whitespace())
+    {
+        return Err("repository URL is invalid".to_string());
+    }
+    let https = repository_url.starts_with("https://");
+    let ssh = repository_url.starts_with("ssh://git@")
+        || (repository_url.starts_with("git@")
+            && repository_url
+                .split_once(':')
+                .is_some_and(|(host, path)| host.len() > 4 && !path.is_empty()));
+    if !https && !ssh {
+        return Err(
+            "Classic repository URL must use HTTPS or a git SSH URL".to_string(),
+        );
+    }
+    Ok(repository_url.to_string())
+}
+
+fn inspect_cloned_classic_repository(repository_root: &Path) -> Result<(), String> {
+    const MAX_REPOSITORY_FILES: usize = 20_000;
+    const MAX_REPOSITORY_BYTES: u64 = 768 * 1024 * 1024;
+
+    let mut pending = vec![repository_root.to_path_buf()];
+    let mut file_count = 0usize;
+    let mut total_bytes = 0u64;
+    while let Some(directory) = pending.pop() {
+        for entry in std::fs::read_dir(&directory).map_err(|error| error.to_string())? {
+            let entry = entry.map_err(|error| error.to_string())?;
+            if entry.file_name().to_string_lossy().eq_ignore_ascii_case(".git") {
+                continue;
+            }
+            let metadata =
+                std::fs::symlink_metadata(entry.path()).map_err(|error| error.to_string())?;
+            if metadata.file_type().is_symlink() {
+                return Err("repository contains a symbolic link".to_string());
+            }
+            if metadata.is_dir() {
+                pending.push(entry.path());
+                continue;
+            }
+            if !metadata.is_file() {
+                return Err("repository contains an unsupported filesystem entry".to_string());
+            }
+            file_count = file_count.saturating_add(1);
+            total_bytes = total_bytes.saturating_add(metadata.len());
+            if file_count > MAX_REPOSITORY_FILES || total_bytes > MAX_REPOSITORY_BYTES {
+                return Err("repository is too large to import safely".to_string());
+            }
+        }
+    }
+    if !repository_root.join("package.json").is_file()
+        || !repository_root.join("xrift.json").is_file()
+        || !repository_root.join("src").is_dir()
+    {
+        return Err(
+            "repository is not an XRift Classic project (package.json, xrift.json, or src is missing)"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn clone_classic_project_repository(repository_url: String) -> Result<String, String> {
+    let repository_url = validate_classic_repository_url(&repository_url)?;
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_nanos();
+    let repository_root = std::env::temp_dir()
+        .join("xrift-studio")
+        .join("classic-import")
+        .join(format!("{}-{}", std::process::id(), nonce));
+    let parent = repository_root
+        .parent()
+        .ok_or_else(|| "repository cache path is invalid".to_string())?;
+    std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+
+    let output = tokio::process::Command::new("git")
+        .args([
+            "clone",
+            "--depth",
+            "1",
+            "--single-branch",
+            "--no-tags",
+            "--",
+            &repository_url,
+        ])
+        .arg(&repository_root)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()
+        .await
+        .map_err(|error| format!("gitを起動できませんでした: {}", error))?;
+    if !output.status.success() {
+        let _ = std::fs::remove_dir_all(&repository_root);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let message = stderr.lines().last().unwrap_or("git clone failed").trim();
+        return Err(format!("repositoryを取得できませんでした: {}", message));
+    }
+    if let Err(error) = inspect_cloned_classic_repository(&repository_root) {
+        let _ = std::fs::remove_dir_all(&repository_root);
+        return Err(error);
+    }
+    Ok(repository_root.to_string_lossy().to_string())
+}
+
 #[tauri::command]
 fn write_text_file(project_path: String, rel: String, content: String) -> Result<(), String> {
     if is_reserved_project_path(&rel)? {
@@ -4045,6 +4157,7 @@ pub fn run() {
             external_store::install_external_store_asset,
             read_world_file,
             write_world_file,
+            clone_classic_project_repository,
             read_text_file,
             write_text_file,
             read_thumbnail,

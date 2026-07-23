@@ -2014,7 +2014,7 @@ function AudioSourceInspector({
       ) : null}
       {audioAssets.length === 0 ? (
         <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
-          AssetsのインポートからMP3を追加してください。
+          AssetsのインポートからMP3またはWAVを追加してください。
         </p>
       ) : null}
       <ColliderNumberField

@@ -1,27 +1,29 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import {
-  ArrowLeft,
   ArrowRight,
+  AudioLines,
+  Blend,
+  Blocks,
+  Bot,
   Box,
-  Camera,
-  CircleHelp,
+  Check,
+  ChevronDown,
+  CirclePlay,
   Code2,
   Download,
   ExternalLink,
-  FileCode2,
-  FileImage,
-  FileJson,
-  FileText,
-  Folder,
-  FolderOpen,
+  FileBox,
   GitBranch,
   Globe2,
-  Package,
-  PanelsTopLeft,
+  Image,
+  Layers3,
+  MonitorPlay,
+  MousePointer2,
+  PackageOpen,
   Play,
-  RefreshCw,
-  Square,
-  TerminalSquare,
+  ScanSearch,
+  Shapes,
+  Sparkles,
   Upload,
   WandSparkles,
 } from "lucide-react";
@@ -33,1047 +35,518 @@ const VisualEditorPrototype = lazy(() =>
   })),
 );
 
-// ---- 実アプリ (EditorView) を再現するサンプルデータ ----
+type ProjectKind = "world" | "item";
 
-type SampleKind = "world" | "item";
-type SampleFileId = "src/World.tsx" | "src/Item.tsx" | "xrift.json" | "README.md";
+const releaseUrl = "https://github.com/WebXR-JP/xrift-studio/releases/latest";
+const repositoryUrl = "https://github.com/WebXR-JP/xrift-studio";
 
-type TreeRow = {
-  rel: string;
-  label: string;
-  depth: number;
-  icon: "dir" | "dirOpen" | "code" | "json" | "image" | "text" | "package";
-  openas?: SampleFileId;
-};
-
-// xrift create world が生成するワールドテンプレートのファイル構成
-const worldTree: TreeRow[] = [
-  { rel: "public", label: "public", depth: 0, icon: "dir" },
-  { rel: "public/thumbnail.png", label: "thumbnail.png", depth: 1, icon: "image" },
-  { rel: "src", label: "src", depth: 0, icon: "dirOpen" },
-  { rel: "src/components", label: "components", depth: 1, icon: "dir" },
-  { rel: "src/World.tsx", label: "World.tsx", depth: 1, icon: "code", openas: "src/World.tsx" },
-  { rel: "src/constants.ts", label: "constants.ts", depth: 1, icon: "code" },
-  { rel: "src/index.tsx", label: "index.tsx", depth: 1, icon: "code" },
-  { rel: "index.html", label: "index.html", depth: 0, icon: "code" },
-  { rel: "package.json", label: "package.json", depth: 0, icon: "package" },
-  { rel: "README.md", label: "README.md", depth: 0, icon: "text", openas: "README.md" },
-  { rel: "xrift.json", label: "xrift.json", depth: 0, icon: "json", openas: "xrift.json" },
-];
-
-// xrift create item が生成するアイテムテンプレートのファイル構成
-const itemTree: TreeRow[] = [
-  { rel: "public", label: "public", depth: 0, icon: "dir" },
-  { rel: "public/thumbnail.png", label: "thumbnail.png", depth: 1, icon: "image" },
-  { rel: "src", label: "src", depth: 0, icon: "dirOpen" },
-  { rel: "src/Item.tsx", label: "Item.tsx", depth: 1, icon: "code", openas: "src/Item.tsx" },
-  { rel: "src/dev.tsx", label: "dev.tsx", depth: 1, icon: "code" },
-  { rel: "src/index.tsx", label: "index.tsx", depth: 1, icon: "code" },
-  { rel: "index.html", label: "index.html", depth: 0, icon: "code" },
-  { rel: "vite.config.ts", label: "vite.config.ts", depth: 0, icon: "code" },
-  { rel: "package.json", label: "package.json", depth: 0, icon: "package" },
-  { rel: "README.md", label: "README.md", depth: 0, icon: "text", openas: "README.md" },
-  { rel: "xrift.json", label: "xrift.json", depth: 0, icon: "json", openas: "xrift.json" },
-];
-
-function TreeIcon({ icon, selected }: { icon: TreeRow["icon"]; selected: boolean }) {
-  const cls = selected
-    ? "text-violet-600"
-    : icon === "dir" || icon === "dirOpen"
-      ? "text-zinc-500"
-      : "text-zinc-400";
-  const p = { size: 14, strokeWidth: 1.75, className: cls } as const;
-  switch (icon) {
-    case "dir":
-      return <Folder {...p} />;
-    case "dirOpen":
-      return <FolderOpen {...p} />;
-    case "json":
-      return <FileJson {...p} />;
-    case "image":
-      return <FileImage {...p} />;
-    case "text":
-      return <FileText {...p} />;
-    case "package":
-      return <Package {...p} />;
-    default:
-      return <FileCode2 {...p} />;
-  }
-}
-
-// World.tsx テンプレートの抜粋 (トークン: [テキスト, 色クラス])
-type Tok = [string] | [string, string];
-const K = "text-violet-600"; // キーワード
-const S = "text-amber-700"; // 文字列
-const T = "text-sky-700"; // コンポーネント / タグ
-const A = "text-violet-500"; // 属性
-const C = "text-emerald-600"; // コメント
-const N = "text-teal-700"; // 数値・式
-const P = "text-zinc-400"; // 記号
-
-const worldCode: Tok[][] = [
-  [["import", K], [" { "], ["SpawnPoint", T], [" } "], ["from", K], [" "], ["'@xrift/world-components'", S]],
-  [["import", K], [" { "], ["RigidBody", T], [" } "], ["from", K], [" "], ["'@react-three/rapier'", S]],
-  [[""]],
-  [["export", K], [" "], ["const", K], [" World "], ["=", P], [" () "], ["=>", K], [" ("]],
-  [["  <", P], ["group", T], [">", P]],
-  [["    "], ["{/* プレイヤーのスポーン地点 */}", C]],
-  [["    <", P], ["SpawnPoint", T], [" />", P]],
-  [[""]],
-  [["    <", P], ["ambientLight", T], [" intensity", A], ["=", P], ["{0.3}", N], [" />", P]],
-  [["    <", P], ["directionalLight", T], [" position", A], ["=", P], ["{[5, 10, 5]}", N], [" castShadow", A], [" />", P]],
-  [[""]],
-  [["    "], ["{/* 地面 */}", C]],
-  [["    <", P], ["RigidBody", T], [" type", A], ["=", P], ['"fixed"', S], [" colliders", A], ["=", P], ['"cuboid"', S], [">", P]],
-  [["      <", P], ["mesh", T], [" rotation", A], ["=", P], ["{[-Math.PI / 2, 0, 0]}", N], [" receiveShadow", A], [">", P]],
-  [["        <", P], ["planeGeometry", T], [" args", A], ["=", P], ["{[30, 30]}", N], [" />", P]],
-  [["        <", P], ["meshLambertMaterial", T], [" color", A], ["=", P], ['"#7fb069"', S], [" />", P]],
-  [["      </", P], ["mesh", T], [">", P]],
-  [["    </", P], ["RigidBody", T], [">", P]],
-  [["  </", P], ["group", T], [">", P]],
-  [[")"]],
-];
-
-const itemCode: Tok[][] = [
-  [["import", K], [" { "], ["useRef", T], [" } "], ["from", K], [" "], ["'react'", S]],
-  [["import", K], [" { "], ["useFrame", T], [" } "], ["from", K], [" "], ["'@react-three/fiber'", S]],
-  [["import", K], [" { "], ["RigidBody", T], [" } "], ["from", K], [" "], ["'@react-three/rapier'", S]],
-  [["import", K], [" "], ["type", K], [" { "], ["Mesh", T], [" } "], ["from", K], [" "], ["'three'", S]],
-  [[""]],
-  [["export", K], [" "], ["interface", K], [" ItemProps "], ["{"]],
-  [["  position", A], ["?: "], ["[number, number, number]", T], [";"]],
-  [["  scale", A], ["?: "], ["number", T], [";"]],
-  [["}"]],
-  [[""]],
-  [["export", K], [" "], ["const", K], [" Item "], ["=", P], [" ({ position = [0, 0, 0], scale = 1 }) "], ["=>", K], [" {"]],
-  [["  "], ["const", K], [" meshRef "], ["=", P], [" useRef<Mesh>(null)"]],
-  [["  useFrame((_state, delta) "], ["=>", K], [" {"]],
-  [["    "], ["if", K], [" (meshRef.current) meshRef.current.rotation.y += delta"]],
-  [["  }"]],
-  [["  "], ["return", K], [" ("]],
-  [["    <", P], ["group", T], [" position", A], ["=", P], ["{position}", N], [" scale", A], ["=", P], ["{scale}", N], [">", P]],
-  [["      <", P], ["RigidBody", T], [" type", A], ["=", P], ['"fixed"', S], [" colliders", A], ["=", P], ['"cuboid"', S], [">", P]],
-  [["        <", P], ["mesh", T], [" ref", A], ["=", P], ["{meshRef}", N], [" castShadow", A], [">", P]],
-  [["          <", P], ["boxGeometry", T], [" args", A], ["=", P], ["{[0.5, 0.5, 0.5]}", N], [" />", P]],
-  [["          <", P], ["meshStandardMaterial", T], [" color", A], ["=", P], ['"orange"', S], [" />", P]],
-  [["        </", P], ["mesh", T], [">", P]],
-  [["      </", P], ["RigidBody", T], [">", P]],
-  [["    </", P], ["group", T], [">", P]],
-  [["  )"]],
-  [["}"]],
-];
-
-const worldReadmeLines = [
-  "# my-world",
-  "",
-  "React Three Fiber と Rapier で作られたサンプルワールドです。",
-  "",
-  "## 開発",
-  "",
-  "- 「実行」を押す (またはターミナルで npm run dev)",
-  "- ブラウザで 3D プレビューを確認",
-  "- src/World.tsx を編集して保存すると即反映",
-];
-
-const itemReadmeLines = [
-  "# my-first-item",
-  "",
-  "React Three Fiber で作られた再利用可能な XRift アイテムです。",
-  "",
-  "## 開発",
-  "",
-  "- 「実行」を押す (またはターミナルで npm run dev)",
-  "- ブラウザで単体の 3D プレビューを確認",
-  "- src/Item.tsx を編集して保存すると即反映",
-  "- 公開前に表示内容を最終チェックして公開を進める",
-];
-
-const devLogs = [
-  { text: "$ npm run dev", cls: "text-zinc-700" },
-  { text: "  VITE v7.3.1  ready in 432 ms", cls: "text-zinc-700" },
-  { text: "  ➜  Local:   http://localhost:5173/", cls: "text-zinc-700" },
-  { text: "ブラウザでプレビューを開きました", cls: "text-violet-700 font-medium" },
-];
-
-const steps = [
+const creationFlow = [
   {
-    icon: Download,
-    eyebrow: "準備する",
-    title: "アプリを入れる",
-    text: "GitHub Releasesからデスクトップ版を入れます。初回に必要な制作環境は、アプリが専用フォルダへ準備します。",
-    accent: "from-violet-500 to-indigo-500",
+    number: "01",
+    icon: PackageOpen,
+    title: "素材を持ち込む",
+    text: "モデル、アバター、画像、音をドロップ。使いたいものが、そのまま制作の入口になります。",
   },
   {
-    icon: FolderOpen,
-    eyebrow: "素材を選ぶ",
-    title: "見つけて、配置する",
-    text: "左のフォルダーツリーからモデルや見た目の素材を見つけ、シーンへ配置します。",
-    accent: "from-cyan-500 to-blue-500",
+    number: "02",
+    icon: MousePointer2,
+    title: "シーンを組む",
+    text: "画面を見ながら配置し、光、質感、動き、当たり判定を整えます。",
   },
   {
-    icon: Play,
-    eyebrow: "整える",
-    title: "見え方を確かめる",
-    text: "位置、光、マテリアルを調整し、保存した内容をその場でプレビューします。",
-    accent: "from-emerald-500 to-teal-500",
+    number: "03",
+    icon: CirclePlay,
+    title: "中を歩いて確かめる",
+    text: "エディターを閉じずにPlay。ワールドの操作感も、アイテムの見え方もすぐ確認できます。",
   },
   {
+    number: "04",
     icon: Upload,
-    eyebrow: "公開する",
-    title: "見せ方を整えて届ける",
-    text: "タイトル、説明、サムネイルを確認してからXRiftへアップロード。公開ページまでそのまま開けます。",
-    accent: "from-fuchsia-500 to-pink-500",
+    title: "XRiftへ届ける",
+    text: "タイトルやサムネイル、容量の目安を確認したら、そのままアップロードへ進めます。",
   },
-];
+] as const;
 
-const capabilityFlow = [
+const importGroups = [
   {
-    icon: Package,
-    status: "いま使える",
-    title: "手元の素材を持ち込む",
-    text: "GLB、glTF、OBJ、VRM、UnityPackage、画像、MP3を、プロジェクトの素材として受け取ります。",
-    tone: "border-violet-200 bg-violet-50 text-violet-700",
+    icon: Box,
+    label: "モデルとアバター",
+    formats: "GLB / glTF / OBJ / VRM",
+    tone: "preview-import-violet",
   },
   {
-    icon: PanelsTopLeft,
-    status: "いま使える",
-    title: "シーンと見た目を整える",
-    text: "配置、親子関係、マテリアル、当たり判定、音、ボーン、シェイプキーの状態を保存できます。",
-    tone: "border-cyan-200 bg-cyan-50 text-cyan-700",
+    icon: Image,
+    label: "見た目と空気",
+    formats: "PNG / JPG / WebP / KTX2 / HDR / EXR",
+    tone: "preview-import-cyan",
   },
   {
-    icon: Play,
-    status: "いま使える",
-    title: "歩いて確かめ、届ける",
-    text: "Playで見え方を確かめ、保存・検査・XRift向け変換からアップロードまで進められます。",
-    tone: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    icon: AudioLines,
+    label: "空間の音",
+    formats: "MP3 / 3D Audio",
+    tone: "preview-import-amber",
   },
-  {
-    icon: Code2,
-    status: "開発版あり",
-    title: "いつものコード開発へ渡す",
-    text: "Visual projectをRuntime JSON付きの新しいClassic projectへ一方向に書き出します。Three.jsから同じデータを読み込めます。",
-    tone: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700",
-  },
-];
+] as const;
 
-type AssetPreviewKind = "models" | "materials" | "textures";
-
-const assetPreviewContents: Record<AssetPreviewKind, Array<{ name: string; detail: string; tone: string }>> = {
-  models: [
-    { name: "Avocado.glb", detail: "Model · 7.9 MB", tone: "from-emerald-200 to-lime-100" },
-    { name: "WineGlass.glb", detail: "Model · 2.4 MB", tone: "from-sky-200 to-indigo-100" },
-  ],
-  materials: [
-    { name: "Avocado Material", detail: "Material · shared", tone: "from-lime-200 to-emerald-100" },
-    { name: "Glass Surface", detail: "Material · transparent", tone: "from-cyan-200 to-sky-100" },
-  ],
-  textures: [
-    { name: "Avocado Base Color", detail: "Texture · sRGB", tone: "from-emerald-300 to-lime-100" },
-    { name: "Glass Normal", detail: "Texture · Linear", tone: "from-violet-200 to-sky-100" },
-  ],
-};
-
-const assetTourSteps: Array<{
-  kind: AssetPreviewKind;
-  label: string;
-  detail: string;
-  path: string;
-  scenePlaced?: boolean;
-}> = [
+const authoringFeatures = [
   {
-    kind: "models",
-    label: "モデルを選ぶ",
-    detail: "Avocado.glbを見つける",
-    path: "Assets / Models",
+    icon: Shapes,
+    title: "置いた瞬間から、編集できる",
+    text: "モデルの階層を開き、位置や回転を調整。マテリアル、ライト、パーティクル、Prefabも同じ画面で扱えます。",
   },
   {
-    kind: "materials",
-    label: "Materialを開く",
-    detail: "展開された見た目を選ぶ",
-    path: "Assets / Avocado / Materials",
+    icon: Blend,
+    title: "見た目を、その場で追い込める",
+    text: "色、質感、テクスチャ、Skybox、Fogを触るとシーンへ反映。VRMのボーンやシェイプキーも配置ごとに残せます。",
   },
   {
-    kind: "textures",
-    label: "Textureを確認する",
-    detail: "色や質感の素材を調整する",
-    path: "Assets / Avocado / Textures",
+    icon: MonitorPlay,
+    title: "編集とPlayが離れない",
+    text: "WorldはWASDと物理挙動、Itemは単体の見え方を確認。Stopすれば、同じ選択とカメラへ戻れます。",
+  },
+] as const;
+
+const experimentalFeatures = [
+  {
+    icon: FileBox,
+    title: "Unity素材を引き継ぐ",
+    text: "UnityPackage、Scene、Prefabを読み取り、対応する階層や素材をXRift Studioへ。",
   },
   {
-    kind: "materials",
-    label: "Sceneへ配置する",
-    detail: "見た目を確かめて配置する",
-    path: "Assets / Avocado / Materials",
-    scenePlaced: true,
+    icon: WandSparkles,
+    title: "Open Brushを持ち込む",
+    text: "Open Brush／Tilt Brushのストロークを、専用の描画経路でシーンへ。",
   },
-];
+  {
+    icon: Bot,
+    title: "AIと一緒にシーンを触る",
+    text: "CodexやClaudeなどをつなぎ、いま開いているシーンを安全な操作の範囲で編集。",
+  },
+] as const;
 
-function AssetLibraryPreview() {
-  const [tourStep, setTourStep] = useState(0);
-  const [playing, setPlaying] = useState(true);
-  const currentStep = assetTourSteps[tourStep];
-  const activeKind = currentStep.kind;
+const faqs = [
+  {
+    question: "コードが書けなくても使えますか？",
+    answer:
+      "はい。ビジュアル制作なら、素材の取り込み、配置、調整、Play、公開まで画面上で進められます。コードで作りたい人向けのクラシック制作も同じアプリにあります。",
+  },
+  {
+    question: "ワールドとアイテム、どちらも作れますか？",
+    answer:
+      "どちらも作れます。新規作成時にWorld／Itemと、ビジュアル／コードの組み合わせを選べます。",
+  },
+  {
+    question: "料金はかかりますか？",
+    answer:
+      "XRift Studioは無料で使えるオープンソースソフトウェアです。ソースコードはMIT Licenseで公開しています。",
+  },
+  {
+    question: "このページのデモで公開までできますか？",
+    answer:
+      "このページでは画面と操作感を試せます。ファイルの保存、AIクライアント接続、XRiftへのアップロードはデスクトップ版で行います。",
+  },
+] as const;
 
+function RevealObserver() {
   useEffect(() => {
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      setPlaying(false);
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      nodes.forEach((node) => node.dataset.revealed = "true");
       return;
     }
-    if (!playing) return;
-    const timer = window.setInterval(() => {
-      setTourStep((current) => (current + 1) % assetTourSteps.length);
-    }, 2200);
-    return () => window.clearInterval(timer);
-  }, [playing]);
 
-  const selectKind = (kind: AssetPreviewKind) => {
-    const step = assetTourSteps.findIndex((candidate) => candidate.kind === kind);
-    setTourStep(step >= 0 ? step : 0);
-    setPlaying(false);
-  };
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            (entry.target as HTMLElement).dataset.revealed = "true";
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { rootMargin: "0px 0px -8% 0px", threshold: 0.12 },
+    );
 
+    nodes.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, []);
+
+  return null;
+}
+
+function BrandMark() {
   return (
-    <div
-      className="overflow-hidden rounded-xl border border-violet-200 bg-white shadow-xl shadow-violet-950/10"
+    <span className="flex items-center gap-2.5">
+      <span className="preview-brand-mark grid h-9 w-9 place-items-center rounded-xl text-white">
+        <Box size={18} strokeWidth={2.2} />
+      </span>
+      <span className="text-sm font-black tracking-[-0.025em] text-zinc-950">XRift Studio</span>
+    </span>
+  );
+}
+
+function ProductScreenshot({ compact = false }: { compact?: boolean }) {
+  return (
+    <figure
+      className={`preview-product-frame relative overflow-hidden rounded-[1.6rem] border border-white/80 bg-white shadow-2xl shadow-violet-950/15 ${
+        compact ? "preview-product-frame-compact" : ""
+      }`}
     >
-      <div className="flex items-center gap-1.5 border-b border-zinc-200 bg-zinc-50 px-3 py-2">
-        <span className="h-2 w-2 rounded-full bg-rose-300" />
-        <span className="h-2 w-2 rounded-full bg-amber-300" />
-        <span className="h-2 w-2 rounded-full bg-emerald-300" />
-        <span className="ml-2 text-[10px] font-semibold text-zinc-500">XRift Studio · Assets</span>
-        <button
-          type="button"
-          onClick={() => setPlaying((current) => !current)}
-          aria-pressed={playing}
-          title={playing ? "デモを停止" : "デモを再生"}
-          className="ml-auto inline-flex items-center gap-1 rounded border border-zinc-200 bg-white px-2 py-1 text-[9px] font-semibold text-zinc-600 transition-colors hover:border-violet-300 hover:text-violet-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 motion-reduce:transition-none"
-        >
-          {playing ? <Square size={9} fill="currentColor" aria-hidden="true" /> : <Play size={9} fill="currentColor" aria-hidden="true" />}
-          {playing ? "停止" : "再生"}
-        </button>
+      <div className="flex h-9 items-center border-b border-zinc-200/80 bg-zinc-100/90 px-4">
+        <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
+        <span className="ml-1.5 h-2.5 w-2.5 rounded-full bg-amber-300" />
+        <span className="ml-1.5 h-2.5 w-2.5 rounded-full bg-emerald-400" />
+        <span className="flex-1 text-center text-[10px] font-semibold text-zinc-500">XRift Studio</span>
+        <span className="w-12" />
       </div>
-      <div className="grid min-h-[270px] grid-cols-[132px_minmax(0,1fr)]">
-        <aside className="border-r border-zinc-200 bg-zinc-50/80 p-2.5 text-[10px] text-zinc-600">
-          <div className="flex items-center gap-1.5 rounded-md bg-zinc-200 px-2 py-1.5 font-semibold text-zinc-900">
-            <Folder size={13} className="text-zinc-500" />
-            Assets
-            <span className="ml-auto text-[9px] text-zinc-400">12</span>
-          </div>
-          <p className="mb-1 mt-4 px-2 text-[8px] font-bold uppercase tracking-[0.14em] text-zinc-400">種類</p>
-          <div className="space-y-0.5">
-            {(["models", "materials", "textures"] as AssetPreviewKind[]).map((kind) => {
-              const label = kind === "models" ? "Models" : kind === "materials" ? "Materials" : "Textures";
-              const Icon = kind === "models" ? Box : kind === "materials" ? WandSparkles : FileImage;
-              return (
-                <button
-                  key={kind}
-                  type="button"
-                  onClick={() => selectKind(kind)}
-                  className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 motion-reduce:transition-none ${activeKind === kind ? "bg-violet-100 font-semibold text-violet-900" : ""}`}
-                >
-                  <Icon size={12} />
-                  <span>{label}</span>
-                  <span className="ml-auto text-[9px] text-zinc-400">2</span>
-                </button>
-              );
-            })}
-          </div>
-          <p className="mb-1 mt-4 px-2 text-[8px] font-bold uppercase tracking-[0.14em] text-zinc-400">フォルダー</p>
-          <div className="space-y-1 px-2 text-[10px]">
-            <div className="flex items-center gap-1.5 font-medium text-zinc-700"><FolderOpen size={12} className="text-violet-500" />Avocado</div>
-            <div className="ml-4 flex items-center gap-1.5 text-violet-800"><Folder size={11} />Materials</div>
-            <div className="ml-4 flex items-center gap-1.5 text-zinc-500"><Folder size={11} />Textures</div>
-          </div>
-        </aside>
-        <div className="min-w-0 bg-white p-3">
-            <div className="flex items-center justify-between gap-2 border-b border-zinc-100 pb-2">
-              <div className="min-w-0">
-              <p className="truncate text-[10px] font-semibold text-zinc-800">{currentStep.path}</p>
-              <p className="mt-0.5 text-[9px] text-zinc-400">{currentStep.detail}</p>
-            </div>
-            <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-semibold text-emerald-700">LPデモ</span>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2" aria-live="polite">
-            {assetPreviewContents[activeKind].map((asset) => (
-              <div key={asset.name} className="overflow-hidden rounded-md border border-zinc-200 bg-white transition-[border-color,transform,box-shadow] duration-300 motion-reduce:transition-none">
-                <div className={`flex h-20 items-center justify-center bg-gradient-to-br ${asset.tone}`}>
-                  {activeKind === "materials" ? <WandSparkles size={24} className="text-white/80" /> : activeKind === "textures" ? <FileImage size={24} className="text-white/80" /> : <Box size={24} className="text-white/80" />}
-                </div>
-                <div className="p-2">
-                  <p className="truncate text-[10px] font-semibold text-zinc-800">{asset.name}</p>
-                  <p className="mt-0.5 truncate text-[9px] text-zinc-400">{asset.detail}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          {currentStep.scenePlaced ? (
-            <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[9px] text-emerald-800">
-              <span className="font-semibold">Scene View</span>
-              <span>Avocado.glb · Material適用済み</span>
-            </div>
-          ) : null}
-          <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-zinc-100 pt-2">
-            {assetTourSteps.map((step, index) => (
-              <button
-                key={step.label}
-                type="button"
-                onClick={() => {
-                  setTourStep(index);
-                  setPlaying(false);
-                }}
-                aria-label={`${index + 1}. ${step.label}`}
-                aria-pressed={tourStep === index}
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 motion-reduce:transition-none ${tourStep === index ? "bg-violet-100 text-violet-800" : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"}`}
-              >
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                {step.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+      <img
+        src="./visual-editor-screenshot.png"
+        alt="XRift Studioのビジュアルエディター。Hierarchy、3Dシーン、Assets、Inspectorを一つの画面に表示している"
+        className="block h-auto w-full"
+      />
+    </figure>
+  );
+}
+
+function DemoFallback() {
+  return (
+    <div className="flex h-screen items-center justify-center bg-zinc-50 px-6 text-center text-sm font-medium text-zinc-600">
+      ビジュアルエディターを準備しています…
     </div>
   );
 }
 
-function scrollToWorkspace() {
-  document.getElementById("workspace-preview")?.scrollIntoView({
-    behavior: "smooth",
-    block: "start",
-  });
-}
-
 export default function PreviewApp() {
-  const [sampleKind, setSampleKind] = useState<SampleKind>("world");
-  const [activeFile, setActiveFile] = useState<SampleFileId>("src/World.tsx");
-  const [running, setRunning] = useState(false);
-  const [logsOpen, setLogsOpen] = useState(false);
-  const [visualEditorKind, setVisualEditorKind] = useState<SampleKind | null>(null);
-  const closeVisualEditor = () => setVisualEditorKind(null);
+  const [visualEditorKind, setVisualEditorKind] = useState<ProjectKind | null>(null);
 
   if (visualEditorKind) {
+    const closeDemo = () => setVisualEditorKind(null);
     return (
       <VisualEditorErrorBoundary
         key={visualEditorKind}
         featureName="ビジュアルエディターのデモ"
         projectName={`visual-${visualEditorKind}-demo`}
         backLabel="紹介ページへ戻る"
-        onBack={closeVisualEditor}
+        onBack={closeDemo}
       >
-        <Suspense
-          fallback={
-            <div className="flex h-screen items-center justify-center bg-zinc-50 text-sm text-zinc-600">
-              ビジュアルエディターを準備しています…
-            </div>
-          }
-        >
+        <Suspense fallback={<DemoFallback />}>
           <VisualEditorPrototype
             projectKind={visualEditorKind}
             projectName={`visual-${visualEditorKind}-demo`}
-            onBack={closeVisualEditor}
+            onBack={closeDemo}
           />
         </Suspense>
       </VisualEditorErrorBoundary>
     );
   }
 
-  const isItem = sampleKind === "item";
-  const projectName = isItem ? "my-first-item" : "my-world";
-  const projectLabel = isItem ? "アイテム" : "ワールド";
-  const sourceFile: SampleFileId = isItem ? "src/Item.tsx" : "src/World.tsx";
-  const tree = isItem ? itemTree : worldTree;
-  const sourceCode = isItem ? itemCode : worldCode;
-  const readmeLines = isItem ? itemReadmeLines : worldReadmeLines;
-  const templateTitle = isItem ? "Sample Item" : "サンプルワールド";
-  const templateDescription = isItem
-    ? "A sample item created with XRift item template"
-    : "React Three FiberとRapierで作られたサンプルワールドです";
-
-  const selectSample = (kind: SampleKind, scroll = false) => {
-    setSampleKind(kind);
-    setActiveFile(kind === "item" ? "src/Item.tsx" : "src/World.tsx");
-    if (scroll) {
-      requestAnimationFrame(scrollToWorkspace);
-    }
-  };
-
-  const startDev = () => {
-    setRunning(true);
-    setLogsOpen(true);
-  };
-  const stopDev = () => {
-    setRunning(false);
-  };
-
-  const headerButton =
-    "hidden items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 md:flex";
-
   return (
-    <main className="preview-shell overflow-hidden">
-      <nav className="preview-nav mx-auto flex max-w-6xl items-center justify-between px-5 py-5 lg:px-8">
-        <a href="#top" className="flex items-center gap-2.5" aria-label="XRift Studio home">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-950 text-white shadow-lg shadow-violet-500/20">
-            <Box size={18} strokeWidth={2.2} />
-          </span>
-          <span className="text-sm font-bold tracking-tight text-zinc-950">XRift Studio</span>
-        </a>
-        <div className="flex items-center gap-2">
-          <a href="#workspace-preview" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
-            コードで作る
+    <main className="preview-shell">
+      <RevealObserver />
+
+      <nav className="preview-nav sticky top-0 z-40 border-b border-white/70 bg-white/75 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 lg:px-8">
+          <a href="#top" aria-label="XRift Studioのトップへ">
+            <BrandMark />
           </a>
-          <a href="#visual-editor" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
-            ビジュアルで作る
-          </a>
-          <a href="#roadmap" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 lg:inline-flex">
-            現在地
-          </a>
-          <a href="#action" className="hidden px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-950 sm:inline-flex">
-            ダウンロード
-          </a>
-          <a
-            href="https://github.com/WebXR-JP/xrift-studio"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white/80 px-3.5 py-2 text-xs font-semibold text-zinc-700 shadow-sm transition hover:-translate-y-0.5 hover:border-zinc-300 hover:text-zinc-950"
-          >
-            <GitBranch size={14} />
-            ソースコード
-            <ExternalLink size={11} className="text-zinc-400" />
-          </a>
+          <div className="flex items-center gap-1">
+            <a href="#create" className="preview-nav-link hidden sm:inline-flex">
+              できること
+            </a>
+            <a href="#try" className="preview-nav-link hidden md:inline-flex">
+              画面を試す
+            </a>
+            <a href="#faq" className="preview-nav-link hidden lg:inline-flex">
+              よくある質問
+            </a>
+            <a
+              href={releaseUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="preview-button preview-button-dark ml-2"
+            >
+              <Download size={15} />
+              <span className="hidden sm:inline">無料でダウンロード</span>
+              <span className="sm:hidden">ダウンロード</span>
+            </a>
+          </div>
         </div>
       </nav>
 
-      <section id="top" className="preview-hero relative mx-auto max-w-6xl px-5 pb-20 pt-16 lg:px-8 lg:pb-28 lg:pt-24">
-        <div className="preview-orb preview-orb-one" />
-        <div className="preview-orb preview-orb-two" />
-        <div className="relative max-w-3xl">
-          <h1 className="max-w-3xl text-4xl font-black leading-[1.04] tracking-[-0.055em] text-zinc-950 sm:text-6xl lg:text-7xl">
-            思いついた景色を、
-            <span className="text-gradient-brand">その日のうちに歩ける形へ。</span>
-          </h1>
-          <p className="mt-6 max-w-2xl text-base leading-8 text-zinc-600 sm:text-lg">
-            モデルやアバター、Unityの素材、音を持ち込み、配置して、その場で確かめる。XRift Studioは、準備から公開までをひとつにつなぎます。コードでも、ビジュアル編集でも始められます。
-          </p>
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            <a
-              href="https://github.com/WebXR-JP/xrift-studio/releases/latest"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-full bg-zinc-950 px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-violet-500/20 transition hover:-translate-y-0.5 hover:bg-violet-700"
-            >
-              <Download size={16} />
-              最新リリースをダウンロード
-            </a>
-            <button
-              type="button"
-              onClick={scrollToWorkspace}
-              className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white/70 px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:-translate-y-0.5 hover:border-zinc-300 hover:text-zinc-950"
-            >
-              コード編集画面を見る
-              <ArrowRight size={15} />
-            </button>
+      <section id="top" className="preview-hero relative overflow-hidden px-5 pb-20 pt-16 sm:pt-20 lg:px-8 lg:pb-28 lg:pt-24">
+        <div className="preview-hero-grid" aria-hidden="true" />
+        <div className="preview-hero-glow preview-hero-glow-one" aria-hidden="true" />
+        <div className="preview-hero-glow preview-hero-glow-two" aria-hidden="true" />
+
+        <div className="relative mx-auto max-w-7xl">
+          <div className="mx-auto max-w-4xl text-center">
+            <div className="preview-kicker mx-auto" data-reveal>
+              <Sparkles size={14} />
+              Worldも、Itemも。コードでも、画面でも。
+            </div>
+            <h1 className="mt-6 text-balance text-5xl font-black leading-[0.98] tracking-[-0.065em] text-zinc-950 sm:text-7xl lg:text-[5.75rem]" data-reveal>
+              置いて、動かして、
+              <span className="preview-gradient-text block">そのままXRiftへ。</span>
+            </h1>
+            <p className="mx-auto mt-7 max-w-2xl text-pretty text-base leading-8 text-zinc-600 sm:text-lg" data-reveal>
+              モデルも、アバターも、Unity素材も。持ち込んだら、シーンを組んで、その場でPlay。
+              XRift Studioなら、ひらめきから公開までが一つの制作時間になります。
+            </p>
+            <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row" data-reveal>
+              <a
+                href={releaseUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="preview-button preview-button-primary preview-button-large"
+              >
+                <Download size={17} />
+                無料でダウンロード
+              </a>
+              <button
+                type="button"
+                onClick={() => setVisualEditorKind("world")}
+                className="preview-button preview-button-light preview-button-large"
+              >
+                <Play size={16} fill="currentColor" />
+                画面を試す
+              </button>
+            </div>
+            <p className="mt-4 text-xs font-medium text-zinc-500" data-reveal>
+              Windows・macOS・Linux / 無料・オープンソース
+            </p>
           </div>
-          <div className="mt-8 flex flex-wrap items-center gap-3 text-xs text-zinc-500">
-            <span className="font-medium text-zinc-600">デスクトップアプリ</span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white/70 px-3 py-1.5 font-medium text-zinc-700"><span aria-hidden="true" className="grid grid-cols-2 gap-px"><i className="h-1.5 w-1.5 bg-sky-500" /><i className="h-1.5 w-1.5 bg-sky-500" /><i className="h-1.5 w-1.5 bg-sky-500" /><i className="h-1.5 w-1.5 bg-sky-500" /></span>Windows</span>
-            <span className="rounded-full border border-zinc-200 bg-white/70 px-3 py-1.5 font-medium text-zinc-700">macOS</span>
-            <span className="rounded-full border border-zinc-200 bg-white/70 px-3 py-1.5 font-medium text-zinc-700">Linux</span>
+
+          <div className="preview-hero-stage relative mx-auto mt-14 max-w-6xl lg:mt-18" data-reveal>
+            <div className="preview-stage-label preview-stage-label-left">
+              <Layers3 size={14} />
+              Sceneを見ながら編集
+            </div>
+            <div className="preview-stage-label preview-stage-label-right">
+              <Play size={13} fill="currentColor" />
+              その場でPlay
+            </div>
+            <ProductScreenshot />
+            <div className="preview-stage-status">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              自動保存済み
+              <span className="mx-1 h-4 w-px bg-zinc-200" />
+              World
+            </div>
           </div>
-          <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-zinc-500" aria-label="取り込める素材の例">
-            <span>OBJ／VRM</span>
-            <span>UnityPackage</span>
-            <span>Texture／MP3</span>
-            <span>ボーン／シェイプキー保存</span>
+
+          <div className="mx-auto mt-8 grid max-w-5xl grid-cols-2 gap-x-6 gap-y-4 border-y border-zinc-200/80 py-5 text-center sm:grid-cols-4" data-reveal>
+            {["ビジュアル制作", "コード制作", "Editor Play", "XRiftへ公開"].map((item) => (
+              <span key={item} className="flex items-center justify-center gap-2 text-xs font-bold text-zinc-600 sm:text-sm">
+                <Check size={14} className="text-violet-600" strokeWidth={2.5} />
+                {item}
+              </span>
+            ))}
           </div>
         </div>
       </section>
 
-      <section id="workspace-preview" className="mx-auto max-w-6xl scroll-mt-8 px-5 py-20 lg:px-8 lg:py-24">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">コードで作る</p>
-            <h2 className="mt-2 text-2xl font-bold tracking-tight text-zinc-950 sm:text-3xl">いつものXRift開発を、そのまま速く。</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">ファイルを切り替え、編集して保存し、「実行」でローカルプレビューを開く。慣れたコード制作の流れを、一つの画面で進められます。</p>
-          </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
-            <div className="w-full sm:w-auto">
-              <div className="mb-1.5 text-[10px] font-semibold tracking-wide text-zinc-500 sm:text-right">表示するサンプル</div>
-              <div className="grid grid-cols-2 gap-1 rounded-xl border border-zinc-200 bg-white/80 p-1 shadow-sm" role="group" aria-label="表示するプロジェクト種別">
-                <button
-                  type="button"
-                  onClick={() => selectSample("world")}
-                  aria-pressed={sampleKind === "world"}
-                  className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                    sampleKind === "world"
-                      ? "bg-violet-100 text-violet-800 shadow-sm"
-                      : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
-                  }`}
-                >
-                  <Globe2 size={13} />
-                  World
-                </button>
-                <button
-                  type="button"
-                  onClick={() => selectSample("item")}
-                  aria-pressed={sampleKind === "item"}
-                  className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                    sampleKind === "item"
-                      ? "bg-cyan-100 text-cyan-800 shadow-sm"
-                      : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
-                  }`}
-                >
-                  <Box size={13} />
-                  Item
-                </button>
-              </div>
-            </div>
-            <div className="inline-flex self-end items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              デモ表示
-            </div>
-          </div>
-        </div>
-
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-          {/* ---- アプリ本体のウィンドウ (EditorView の再現) ---- */}
-          <div className="preview-window overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-violet-950/10">
-            <div className="flex h-9 items-center border-b border-zinc-200 bg-zinc-100 px-4">
-              <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-              </div>
-              <div className="flex-1 text-center text-[10px] font-medium text-zinc-500">XRift Studio</div>
-              <div className="w-12" />
-            </div>
-
-            {/* ヘッダー (実アプリと同じ並び) */}
-            <div className="flex items-center justify-between gap-2 border-b border-zinc-200 bg-white px-3 py-2">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-[11px] text-zinc-600">
-                  <ArrowLeft size={11} strokeWidth={2} />
-                  <span className="hidden sm:inline">ライブラリ</span>
-                </span>
-                <span className="hidden text-zinc-300 sm:inline">/</span>
-                <span className="max-w-[72px] truncate text-[11px] font-semibold text-zinc-900 sm:max-w-none sm:text-xs">{projectName}</span>
-                <span
-                  className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
-                    isItem ? "bg-cyan-100 text-cyan-800" : "bg-violet-100 text-violet-800"
-                  }`}
-                >
-                  {isItem ? <Box size={9} strokeWidth={2} /> : <Globe2 size={9} strokeWidth={2} />}
-                  {isItem ? "Item" : "World"}
-                </span>
-                {running && (
-                  <span className="hidden items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 sm:flex">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                    http://localhost:5173
-                    <ExternalLink size={9} strokeWidth={2} />
-                  </span>
-                )}
-              </div>
-              <div className="flex shrink-0 items-center gap-1.5">
-                {running ? (
-                  <button
-                    type="button"
-                    onClick={stopDev}
-                    className="flex items-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-100"
-                  >
-                    <Square size={9} fill="currentColor" strokeWidth={0} />
-                    停止
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={startDev}
-                    className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                    title="ローカルで起動してブラウザでプレビュー"
-                  >
-                    <Play size={10} fill="currentColor" strokeWidth={0} />
-                    実行
-                  </button>
-                )}
-                <span className={headerButton}>
-                  <Camera size={11} strokeWidth={2} />
-                  サムネイル
-                </span>
-                <span className={headerButton}>
-                  <TerminalSquare size={11} strokeWidth={2} />
-                  ターミナル
-                </span>
-                <span className={headerButton}>
-                  <Code2 size={11} strokeWidth={2} />
-                  VS Code
-                </span>
-                <span className="flex items-center gap-1.5 rounded-md bg-violet-600 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-sm">
-                  <Upload size={11} strokeWidth={2} />
-                  アップロード
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-[200px_minmax(0,1fr)]">
-              {/* ファイルツリー */}
-              <aside className="hidden flex-col border-r border-zinc-200 bg-white sm:flex">
-                <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Files</span>
-                  <RefreshCw size={11} strokeWidth={2} className="text-zinc-400" />
-                </div>
-                <div className="flex-1 overflow-y-auto py-1">
-                  {tree.map((row) => {
-                    const selected = row.openas === activeFile;
-                    const openable = row.openas !== undefined;
-                    return (
-                      <button
-                        type="button"
-                        key={row.rel}
-                        onClick={openable ? () => setActiveFile(row.openas as SampleFileId) : undefined}
-                        className={`flex w-full items-center gap-1.5 px-3 py-1 text-left text-[11px] ${
-                          selected
-                            ? "bg-violet-50 font-medium text-violet-700"
-                            : openable
-                              ? "text-zinc-600 hover:bg-zinc-50"
-                              : "cursor-default text-zinc-500"
-                        }`}
-                        style={{ paddingLeft: `${12 + row.depth * 14}px` }}
-                      >
-                        <TreeIcon icon={row.icon} selected={selected} />
-                        {row.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="border-t border-zinc-200 px-3 py-1.5 text-[9px] text-zinc-400">
-                  projects/{projectName}
-                </div>
-              </aside>
-
-              {/* エディタ領域 */}
-              <div className="flex min-w-0 flex-col">
-                <div className="flex gap-1 overflow-x-auto border-b border-zinc-200 bg-zinc-50 p-2 sm:hidden">
-                  {tree.filter((row) => row.openas).map((row) => {
-                    const selected = row.openas === activeFile;
-                    return (
-                      <button
-                        type="button"
-                        key={`mobile-${row.rel}`}
-                        onClick={() => setActiveFile(row.openas as SampleFileId)}
-                        className={`shrink-0 rounded-md px-2.5 py-1.5 text-[10px] font-medium ${
-                          selected
-                            ? "bg-violet-100 text-violet-700"
-                            : "bg-white text-zinc-600"
-                        }`}
-                      >
-                        {row.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-2">
-                  <div className="flex min-w-0 items-center gap-2 text-[11px] text-zinc-700">
-                    {activeFile === "xrift.json" ? (
-                      <FileJson size={13} className="text-violet-500" />
-                    ) : activeFile === "README.md" ? (
-                      <FileText size={13} className="text-violet-500" />
-                    ) : (
-                      <FileCode2 size={13} className="text-violet-500" />
-                    )}
-                    <span className="truncate">{activeFile}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[10px] text-emerald-600">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    保存済み
-                  </div>
-                </div>
-
-                <div className="h-[300px] overflow-auto bg-white sm:h-[340px]">
-                  {activeFile === sourceFile && (
-                    <div className="preview-code p-4 font-mono text-[10.5px] leading-5 sm:text-[11px]">
-                      {sourceCode.map((line, i) => (
-                        <div key={i} className="flex min-w-max">
-                          <span className="mr-4 w-5 select-none text-right text-zinc-300">{i + 1}</span>
-                          <code>
-                            {line.map((tok, j) => (
-                              <span key={j} className={tok[1] ?? "text-zinc-700"}>{tok[0]}</span>
-                            ))}
-                          </code>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {activeFile === "xrift.json" && (
-                    <div className="p-4">
-                      <div className="mb-3">
-                        <div className="text-xs font-semibold text-zinc-900">公開情報</div>
-                        <div className="mt-0.5 text-[10px] text-zinc-500">
-                          XRift の{projectLabel}一覧で表示されるタイトルと説明文です。
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        <div>
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-[11px] font-medium text-zinc-700">{projectLabel}タイトル</div>
-                            <code className="text-[9px] text-zinc-400">{sampleKind}.title</code>
-                          </div>
-                          <div className="mt-1 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] text-zinc-900">{templateTitle}</div>
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-medium text-zinc-700">{projectLabel}の説明</span>
-                            <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">テンプレートのまま</span>
-                          </div>
-                          <div className="mt-1 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] leading-5 text-zinc-500">
-                            {templateDescription}
-                          </div>
-                          <div className="mt-1 text-[10px] text-amber-700">アップロード前に編集を求められます。</div>
-                        </div>
-                        <div>
-                          <div className="text-[11px] font-medium text-zinc-700">サムネイル</div>
-                          <div className="mt-1 flex items-center gap-3">
-                            <div
-                              className={`flex h-12 w-20 items-center justify-center rounded-md border border-zinc-200 bg-gradient-to-br ${
-                                isItem
-                                  ? "from-amber-100 via-orange-100 to-cyan-100"
-                                  : "from-indigo-100 via-violet-100 to-fuchsia-100"
-                              }`}
-                            >
-                              {isItem ? <Box size={15} className="text-orange-500" /> : <FileImage size={14} className="text-violet-400" />}
-                            </div>
-                            <div className="text-[10px] leading-4 text-zinc-500">
-                              public/thumbnail.png
-                              <br />{isItem ? "アイテムカードとインベントリ" : "ワールドカード"}に表示されます
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {activeFile === "README.md" && (
-                    <div className="p-4 font-mono text-[11px] leading-6 text-zinc-700">
-                      {readmeLines.map((line, i) => (
-                        <div key={i} className={line.startsWith("#") ? "font-semibold text-zinc-900" : ""}>
-                          {line || " "}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* ログペイン (実アプリの LogsPane) */}
-                {logsOpen ? (
-                  <div className="border-t border-zinc-200">
-                    <div className="flex items-center justify-between border-b border-zinc-200 bg-zinc-50 px-4 py-1.5">
-                      <div className="flex items-center gap-2 text-[11px] text-zinc-500">
-                        <span className="font-medium">Logs</span>
-                        {running && (
-                          <span className="flex items-center gap-1 text-violet-600">
-                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500" />
-                            実行中
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setLogsOpen(false)}
-                        className="rounded px-1.5 py-0.5 text-[10px] text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
-                      >
-                        たたむ
-                      </button>
-                    </div>
-                    <div className="h-24 overflow-y-auto bg-white px-4 py-2 font-mono text-[10px] leading-5">
-                      {running ? (
-                        devLogs.map((l, i) => (
-                          <div key={i} className={l.cls}>{l.text}</div>
-                        ))
-                      ) : (
-                        <div className="text-zinc-400">コマンドを実行するとここにログが流れます。</div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex h-8 items-center justify-between border-t border-zinc-200 bg-zinc-50 px-4">
-                    <button
-                      type="button"
-                      onClick={() => setLogsOpen(true)}
-                      className="flex items-center gap-2 text-[11px] text-zinc-500 hover:text-zinc-800"
-                    >
-                      <span className="font-medium">Logs</span>
-                      {running && (
-                        <span className="flex items-center gap-1 text-[10px] text-violet-600">
-                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500" />
-                          実行中
-                        </span>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLogsOpen(true)}
-                      className="text-[10px] text-zinc-400 hover:text-zinc-700"
-                    >
-                      展開
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-              <div className="border-t border-zinc-200 bg-zinc-50 px-4 py-2.5 text-[10px] text-zinc-500">
-                これは画面を試すためのWebプレビューです。ファイル保存、CLI実行、XRiftへの公開はデスクトップ版で行います。
-              </div>
-          </div>
-
-          {/* ---- ブラウザプレビューのウィンドウ ---- */}
-          <div className="flex flex-col gap-3">
-            <div className={`overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl shadow-violet-950/10 ${running ? "" : "opacity-90"}`}>
-              <div className="flex h-9 items-center gap-2 border-b border-zinc-200 bg-zinc-100 px-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-zinc-300" />
-                  <span className="h-2 w-2 rounded-full bg-zinc-300" />
-                </div>
-                <div className="flex flex-1 items-center gap-1.5 rounded-md bg-white px-2.5 py-1 text-[10px] text-zinc-500">
-                  <Globe2 size={11} className={running ? "text-emerald-500" : "text-zinc-400"} />
-                  localhost:5173
-                </div>
-                <RefreshCw size={11} className="text-zinc-400" />
-              </div>
-              {running ? (
-                isItem ? (
-                  <div className="preview-world preview-world-running relative h-64 overflow-hidden bg-[#101827]">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(34,211,238,0.22),transparent_42%)]" />
-                    <div className="preview-grid absolute inset-x-[-20%] bottom-[-18%] h-1/2 rotate-[-6deg] opacity-50" />
-                    <div className="absolute bottom-[70px] left-1/2 h-20 w-14 -translate-x-1/2 rotate-45 rounded-xl bg-gradient-to-br from-amber-200 via-orange-400 to-fuchsia-700 shadow-[0_0_42px_rgba(251,146,60,0.72)]">
-                      <div className="absolute inset-2 rounded-lg border border-white/35 bg-gradient-to-br from-white/50 to-transparent" />
-                    </div>
-                    <div className="absolute bottom-10 left-1/2 h-7 w-28 -translate-x-1/2 rounded-[50%] border border-cyan-200/40 bg-gradient-to-b from-slate-400 to-slate-700 shadow-[0_10px_22px_rgba(0,0,0,0.45)]" />
-                    <div className="absolute bottom-6 left-1/2 h-8 w-24 -translate-x-1/2 rounded-b-xl bg-gradient-to-b from-slate-600 to-slate-900" />
-                    <div className="absolute left-3 top-3 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 text-[9px] font-medium text-cyan-100">
-                      Item 単体確認
-                    </div>
-                    <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[9px] text-white/60">
-                      <span>{projectName}</span>
-                      <span>アイテム 3D プレビュー</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="preview-world preview-world-running relative h-64 overflow-hidden bg-[#0d1025]">
-                    <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-indigo-900/60 to-transparent" />
-                    <div className="preview-moon absolute right-6 top-6 h-8 w-8 rounded-full bg-gradient-to-br from-white to-violet-300 shadow-[0_0_25px_rgba(196,181,253,0.7)]" />
-                    <div className="preview-grid absolute inset-x-[-20%] bottom-[-15%] h-1/2 rotate-[-10deg]" />
-                    <div className="preview-planet absolute bottom-12 left-1/2 h-24 w-24 -translate-x-1/2 rounded-full bg-gradient-to-br from-fuchsia-400 via-violet-500 to-indigo-950 shadow-[0_0_40px_rgba(139,92,246,0.65)]" />
-                    <div className="preview-ring absolute bottom-20 left-1/2 h-10 w-40 -translate-x-1/2 rotate-[-14deg] rounded-[50%] border-2 border-cyan-300/70" />
-                    <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[9px] text-white/60">
-                      <span>{projectName}</span>
-                      <span>ワールド 3D プレビュー</span>
-                    </div>
-                  </div>
-                )
-              ) : (
-                <div className="flex h-64 flex-col items-center justify-center gap-2 bg-zinc-50 px-6 text-center">
-                  {isItem ? <Box size={18} className="text-cyan-400" /> : <Play size={18} className="text-zinc-300" />}
-                  <p className="text-[11px] leading-5 text-zinc-500">
-                    「実行」を押すとローカルサーバーが起動し、{projectLabel}の 3D プレビューが開きます。
-                  </p>
-                </div>
-              )}
-            </div>
-            <p className="px-1 text-[11px] leading-5 text-zinc-500">
-              デスクトップ版では、保存した変更をそのままプレビューへ反映できます。アプリとプレビューを並べたまま制作を続けられます。
+      <section id="create" className="preview-section bg-white px-5 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="max-w-3xl" data-reveal>
+            <p className="preview-eyebrow">MAKE THE WHOLE THING</p>
+            <h2 className="preview-section-title mt-4">もう、制作の途中で迷子にならない。</h2>
+            <p className="preview-section-copy mt-5 max-w-2xl">
+              素材を探して、別のツールで調整して、コードへ戻って、また確認する。そんな往復を短くして、作ることに集中できます。
             </p>
           </div>
-        </div>
-      </section>
 
-      <section id="how-to-use" className="bg-white/60 px-5 py-20 lg:px-8 lg:py-24">
-        <div className="mx-auto max-w-6xl">
-          <div className="max-w-xl">
-            <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">制作の流れ</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">作り始めて、確かめて、XRiftへ届ける。</h2>
-            <p className="mt-4 text-sm leading-7 text-zinc-600">
-              ワールドかアイテムを選び、素材を集めて配置したら、保存とプレビューを繰り返します。準備ができたら、公開情報を確認してXRiftへ届けます。
-            </p>
-          </div>
-          <div className="relative mt-12">
-            <div className="absolute left-5 right-5 top-5 hidden h-px bg-gradient-to-r from-violet-200 via-cyan-200 to-fuchsia-200 lg:block" />
-            <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
-            {steps.map((step) => {
+          <div className="preview-flow mt-14 grid gap-0 lg:grid-cols-4" data-reveal>
+            {creationFlow.map((step, index) => {
               const Icon = step.icon;
               return (
-                <article key={step.title} className="relative pl-16 lg:pl-0">
-                  <div className={`absolute left-0 top-0 z-10 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${step.accent} text-white shadow-lg lg:relative`}><Icon size={20} /></div>
-                  <p className="text-[10px] font-bold tracking-[0.16em] text-zinc-400 lg:mt-6">{step.eyebrow}</p>
-                  <h3 className="mt-2 text-base font-bold text-zinc-950">{step.title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-zinc-600">{step.text}</p>
+                <article key={step.number} className="preview-flow-step relative">
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-11 w-11 place-items-center rounded-2xl bg-zinc-950 text-white">
+                      <Icon size={19} />
+                    </span>
+                    <span className="text-xs font-black tracking-[0.16em] text-violet-600">{step.number}</span>
+                  </div>
+                  <h3 className="mt-6 text-xl font-black tracking-[-0.035em] text-zinc-950">{step.title}</h3>
+                  <p className="mt-3 text-sm leading-7 text-zinc-600">{step.text}</p>
+                  {index < creationFlow.length - 1 ? <ArrowRight className="preview-flow-arrow" size={18} /> : null}
                 </article>
               );
             })}
-            </div>
           </div>
         </div>
       </section>
 
-      <section id="visual-editor" className="bg-white/80 px-5 py-20 lg:px-8 lg:py-24">
-        <div className="mx-auto grid max-w-6xl gap-8 rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-7 sm:p-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-center">
-          <div className="max-w-2xl">
-            <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">ビジュアルで作る</p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">持っている素材から、そのままシーンを始める。</h2>
-            <p className="mt-4 text-sm leading-7 text-zinc-600">OBJやVRM、Unityの素材、画像、音を取り込み、見つけて配置。アバターのボーンやシェイプキーも、その見た目のまま保存しておけます。</p>
-            <button
-              type="button"
-              onClick={() => setVisualEditorKind(sampleKind)}
-              className="mt-7 inline-flex items-center gap-2 rounded-full bg-zinc-950 px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-violet-500/20 transition hover:-translate-y-0.5 hover:bg-violet-700"
-            >
-              <PanelsTopLeft size={16} />
-              ビジュアルエディターを試す
-            </button>
-          </div>
-          <AssetLibraryPreview />
-        </div>
-      </section>
-
-      <section id="roadmap" className="scroll-mt-8 px-5 py-20 lg:px-8 lg:py-24">
-        <div className="mx-auto max-w-6xl">
-          <div className="grid gap-10 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-start">
-            <div className="max-w-xl lg:sticky lg:top-10">
-              <p className="text-[11px] font-bold tracking-[0.18em] text-violet-600">XRift Studioの現在地</p>
-              <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 sm:text-4xl">持ち込むところから、コードへ渡すところまで。</h2>
-              <p className="mt-5 text-sm leading-7 text-zinc-600">
-                ビジュアル編集からXRiftへの公開に加え、Editorの「Classicへ書き出す」またはCLIから、同じ制作データをRuntime JSONとして通常のコード開発へ引き渡せます。
+      <section className="preview-section preview-section-soft px-5 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid gap-12 lg:grid-cols-[0.78fr_1.22fr] lg:items-end">
+            <div data-reveal>
+              <p className="preview-eyebrow">BRING WHAT YOU HAVE</p>
+              <h2 className="preview-section-title mt-4">いつもの素材から、すぐ始める。</h2>
+              <p className="preview-section-copy mt-5">
+                新しく作り直さなくて大丈夫。手元の3Dモデル、テクスチャ、音をプロジェクトへ入れたら、Assetsからシーンへ置けます。
               </p>
-              <a
-                href="https://github.com/WebXR-JP/xrift-studio/blob/main/docs/VISUAL_EDITOR_ROADMAP.md"
-                target="_blank"
-                rel="noreferrer"
-                className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-violet-700 transition-colors hover:text-violet-900"
-              >
-                詳しいロードマップを見る
-                <ExternalLink size={14} />
-              </a>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3" data-reveal>
+              {importGroups.map((group) => {
+                const Icon = group.icon;
+                return (
+                  <article key={group.label} className={`preview-import-card ${group.tone}`}>
+                    <Icon size={22} />
+                    <h3 className="mt-8 text-base font-black tracking-tight text-zinc-950">{group.label}</h3>
+                    <p className="mt-2 text-xs font-bold leading-6 text-zinc-600">{group.formats}</p>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="preview-source-strip mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4" data-reveal>
+            <div>
+              <span className="preview-source-mark">P</span>
+              <p className="mt-4 text-sm font-black text-zinc-950">Poly Haven</p>
+              <p className="mt-1 text-xs leading-5 text-zinc-500">HDRI、Material、Modelを探して追加</p>
+            </div>
+            <div>
+              <span className="preview-source-mark">X</span>
+              <p className="mt-4 text-sm font-black text-zinc-950">XRift Components</p>
+              <p className="mt-1 text-xs leading-5 text-zinc-500">Portal、Mirror、Spawn Pointなど</p>
+            </div>
+            <div>
+              <span className="preview-source-mark">O</span>
+              <p className="mt-4 text-sm font-black text-zinc-950">Open Brush</p>
+              <p className="mt-1 text-xs leading-5 text-zinc-500">検証済みブラシとストローク素材</p>
+            </div>
+            <div>
+              <span className="preview-source-mark">U</span>
+              <p className="mt-4 text-sm font-black text-zinc-950">Unity</p>
+              <p className="mt-1 text-xs leading-5 text-zinc-500">Package、Scene、Prefabを変換</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="preview-section px-5 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid gap-12 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+            <div className="relative" data-reveal>
+              <div className="preview-screenshot-backdrop" aria-hidden="true" />
+              <ProductScreenshot compact />
+            </div>
+            <div data-reveal>
+              <p className="preview-eyebrow">BUILD BY LOOKING</p>
+              <h2 className="preview-section-title mt-4">画面を見れば、次に触る場所がわかる。</h2>
+              <div className="mt-8 divide-y divide-zinc-200">
+                {authoringFeatures.map((feature) => {
+                  const Icon = feature.icon;
+                  return (
+                    <article key={feature.title} className="grid grid-cols-[2.75rem_1fr] gap-4 py-6 first:pt-0">
+                      <span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-50 text-violet-700">
+                        <Icon size={19} />
+                      </span>
+                      <div>
+                        <h3 className="text-base font-black tracking-tight text-zinc-950">{feature.title}</h3>
+                        <p className="mt-2 text-sm leading-7 text-zinc-600">{feature.text}</p>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="preview-section preview-dark-section px-5 text-white lg:px-8">
+        <div className="preview-dark-grid" aria-hidden="true" />
+        <div className="relative mx-auto max-w-7xl">
+          <div className="grid gap-12 lg:grid-cols-[0.82fr_1.18fr] lg:items-center">
+            <div data-reveal>
+              <span className="preview-dark-kicker">
+                <ScanSearch size={14} />
+                公開前まで、ちゃんと見える
+              </span>
+              <h2 className="mt-6 text-balance text-4xl font-black leading-[1.05] tracking-[-0.055em] sm:text-5xl">
+                「たぶん大丈夫」を、
+                <span className="block text-violet-300">公開前に終わらせる。</span>
+              </h2>
+              <p className="mt-6 max-w-xl text-sm leading-7 text-zinc-400 sm:text-base">
+                タイトル、説明、サムネイルの見落としをチェック。ロード容量やVRAMの目安も見ながら、届く形に整えてXRiftへ送れます。
+              </p>
             </div>
 
-            <div className="preview-capability-flow relative">
-              {capabilityFlow.map((capability, index) => {
-                const Icon = capability.icon;
-                return (
-                  <article key={capability.title} className="preview-capability-step relative grid gap-4 pb-10 pl-16 last:pb-0 sm:grid-cols-[10rem_minmax(0,1fr)] sm:pl-20">
-                    <div className={`absolute left-0 top-0 z-10 flex h-11 w-11 items-center justify-center rounded-2xl border ${capability.tone} shadow-sm`}>
-                      <Icon size={19} />
-                    </div>
-                    <div>
-                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-[0.12em] ${capability.tone}`}>
-                        {capability.status}
+            <div className="preview-publish-panel" data-reveal>
+              <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+                <div>
+                  <p className="text-xs font-black text-white">公開前の最終チェック</p>
+                  <p className="mt-1 text-[11px] text-zinc-500">Night gallery / World</p>
+                </div>
+                <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[10px] font-bold text-emerald-300">
+                  準備できました
+                </span>
+              </div>
+              <div className="grid gap-4 p-5 sm:grid-cols-[1.15fr_0.85fr]">
+                <div className="space-y-3">
+                  {[
+                    "タイトルと説明を編集済み",
+                    "サムネイルを設定済み",
+                    "シーンの検査が完了",
+                  ].map((item) => (
+                    <div key={item} className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/4 px-4 py-3 text-xs font-semibold text-zinc-200">
+                      <span className="grid h-5 w-5 place-items-center rounded-full bg-emerald-400/15 text-emerald-300">
+                        <Check size={12} strokeWidth={3} />
                       </span>
-                      <p className="mt-2 text-[11px] font-semibold text-zinc-400">0{index + 1}</p>
+                      {item}
                     </div>
+                  ))}
+                </div>
+                <div className="rounded-2xl border border-violet-400/20 bg-violet-400/8 p-4">
+                  <p className="text-[10px] font-bold tracking-[0.14em] text-violet-300">LOAD ESTIMATE</p>
+                  <p className="mt-4 text-3xl font-black tracking-[-0.04em] text-white">18.4 MB</p>
+                  <p className="mt-1 text-[11px] text-zinc-400">初回ロードの目安</p>
+                  <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/10">
+                    <div className="h-full w-[62%] rounded-full bg-gradient-to-r from-violet-400 to-cyan-300" />
+                  </div>
+                  <p className="mt-3 text-[10px] leading-5 text-zinc-500">容量の大きい素材と最適化候補も確認できます</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between border-t border-white/10 px-5 py-4">
+                <span className="text-[11px] text-zinc-500">アップロード後も結果を同じ画面に表示</span>
+                <span className="preview-button preview-button-white">
+                  <Upload size={14} />
+                  XRiftへアップロード
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="preview-section px-5 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid gap-10 lg:grid-cols-[0.7fr_1.3fr]">
+            <div data-reveal>
+              <p className="preview-eyebrow">EXPERIMENTAL, AVAILABLE NOW</p>
+              <h2 className="preview-section-title mt-4">少し先の作り方も、もう試せる。</h2>
+              <p className="preview-section-copy mt-5">
+                Unity素材の変換、Open Brushの描画、AIとの共同編集。まだ検証中の機能も、デスクトップ版から触れます。
+              </p>
+              <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-[11px] font-bold text-amber-800">
+                <Sparkles size={13} />
+                検証中のため、対応範囲は順次更新しています
+              </p>
+            </div>
+            <div className="preview-experiment-list" data-reveal>
+              {experimentalFeatures.map((feature, index) => {
+                const Icon = feature.icon;
+                return (
+                  <article key={feature.title} className="preview-experiment-row">
+                    <span className="text-xs font-black text-zinc-300">0{index + 1}</span>
+                    <span className="grid h-11 w-11 place-items-center rounded-2xl bg-zinc-100 text-zinc-700">
+                      <Icon size={19} />
+                    </span>
                     <div>
-                      <h3 className="text-lg font-bold tracking-tight text-zinc-950">{capability.title}</h3>
-                      <p className="mt-2 text-sm leading-7 text-zinc-600">{capability.text}</p>
-                      {index === capabilityFlow.length - 1 ? (
-                        <code className="mt-4 block overflow-x-auto rounded-xl border border-fuchsia-100 bg-zinc-950 px-4 py-3 text-[11px] leading-5 text-fuchsia-100">
-                          npx xrift-studio convert ./visual-project --to classic --out ./my-world
-                        </code>
-                      ) : null}
+                      <h3 className="text-base font-black tracking-tight text-zinc-950">{feature.title}</h3>
+                      <p className="mt-1.5 text-sm leading-6 text-zinc-600">{feature.text}</p>
                     </div>
                   </article>
                 );
@@ -1083,27 +556,145 @@ export default function PreviewApp() {
         </div>
       </section>
 
-      <section id="action" className="mx-auto max-w-6xl px-5 py-20 lg:px-8 lg:py-24">
-        <div className="relative overflow-hidden rounded-3xl bg-zinc-950 px-6 py-10 text-white shadow-2xl shadow-violet-950/20 sm:px-10 sm:py-14">
-          <div className="preview-cta-glow" />
-          <div className="relative max-w-2xl">
-            <div className="flex items-center gap-2 text-xs font-semibold text-violet-300"><CircleHelp size={15} /> デスクトップ版</div>
-            <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">素材を持ち込んだら、歩いて確かめるところまで。</h2>
-            <p className="mt-4 text-sm leading-7 text-zinc-400">XRift Studioをダウンロードして、いま持っているモデルやアイデアからワールド／アイテム制作を始めましょう。</p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <a href="https://github.com/WebXR-JP/xrift-studio/releases/latest" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:-translate-y-0.5 hover:bg-violet-100"><Download size={15} /> 最新リリースをダウンロード</a>
-              <a href="https://github.com/WebXR-JP/xrift-studio" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/5"><GitBranch size={15} /> GitHubで見る</a>
+      <section id="try" className="preview-section preview-section-soft px-5 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="preview-demo-callout relative overflow-hidden rounded-[2rem] border border-violet-200 bg-white p-7 shadow-xl shadow-violet-950/5 sm:p-10 lg:p-14" data-reveal>
+            <div className="preview-demo-glow" aria-hidden="true" />
+            <div className="relative grid gap-10 lg:grid-cols-[1fr_auto] lg:items-end">
+              <div className="max-w-3xl">
+                <p className="preview-eyebrow">TRY THE WORKSPACE</p>
+                <h2 className="preview-section-title mt-4">読むより、触ったほうが早い。</h2>
+                <p className="preview-section-copy mt-5 max-w-2xl">
+                  ビジュアルエディターのサンプルを、このページから開けます。Hierarchy、Scene、Assets、Inspectorを実際に触ってみてください。
+                </p>
+                <p className="mt-4 text-xs font-medium leading-6 text-zinc-500">
+                  これはWeb上のサンプルです。ファイル保存、外部ツール接続、アップロードは行いません。
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
+                <button
+                  type="button"
+                  onClick={() => setVisualEditorKind("world")}
+                  className="preview-button preview-button-primary preview-button-large"
+                >
+                  <Globe2 size={17} />
+                  Worldを試す
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVisualEditorKind("item")}
+                  className="preview-button preview-button-light preview-button-large"
+                >
+                  <Box size={17} />
+                  Itemを試す
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <footer className="border-t border-zinc-200/70 px-5 py-8 lg:px-8">
-        <div className="mx-auto flex max-w-6xl justify-end text-xs text-zinc-500">
-          <div className="flex flex-wrap gap-x-4 gap-y-2">
-            <a href="https://xrift.net/" target="_blank" rel="noreferrer" className="hover:text-violet-700">XRift 公式サイト</a>
-            <a href="https://github.com/WebXR-JP/xrift-studio" target="_blank" rel="noreferrer" className="hover:text-violet-700">GitHub</a>
-            <a href="https://github.com/WebXR-JP/xrift-studio/blob/main/LICENSE" target="_blank" rel="noreferrer" className="hover:text-violet-700">MIT License</a>
+      <section className="preview-section px-5 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid gap-10 rounded-[2rem] bg-zinc-950 p-7 text-white sm:p-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-center lg:p-14" data-reveal>
+            <div>
+              <span className="inline-flex items-center gap-2 text-xs font-black text-cyan-300">
+                <Code2 size={15} />
+                コードで続けたいときも
+              </span>
+              <h2 className="mt-5 text-3xl font-black leading-tight tracking-[-0.045em] sm:text-4xl">作ったシーンを、コードの世界へ渡せる。</h2>
+              <p className="mt-5 text-sm leading-7 text-zinc-400">
+                ビジュアル制作を新しいClassicプロジェクトへ書き出したり、既存の静的なR3F／XRiftコードをシーンへ取り込んだり。入口を選んでも、出口は閉じません。
+              </p>
+              <p className="mt-4 text-[11px] font-semibold text-zinc-500">Classic変換は開発版として提供中です</p>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30 font-mono text-xs shadow-inner">
+              <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-zinc-500">
+                <span className="h-2 w-2 rounded-full bg-violet-400" />
+                World.tsx
+              </div>
+              <div className="overflow-x-auto p-5 leading-7 text-zinc-300">
+                <p><span className="text-violet-300">import</span> {"{ XRiftStudioScene }"} <span className="text-violet-300">from</span> <span className="text-amber-200">'./xrift-studio/night-gallery'</span></p>
+                <p className="mt-3"><span className="text-violet-300">export const</span> World = () =&gt; {"("}</p>
+                <p className="pl-5 text-cyan-200">&lt;XRiftStudioScene /&gt;</p>
+                <p>{")"}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="faq" className="preview-section preview-section-soft px-5 lg:px-8">
+        <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.6fr_1.4fr]">
+          <div data-reveal>
+            <p className="preview-eyebrow">FAQ</p>
+            <h2 className="preview-section-title mt-4">始める前に、気になること。</h2>
+          </div>
+          <div className="divide-y divide-zinc-200 border-y border-zinc-200" data-reveal>
+            {faqs.map((faq) => (
+              <details key={faq.question} className="preview-faq group">
+                <summary>
+                  <span>{faq.question}</span>
+                  <ChevronDown size={18} className="shrink-0 text-zinc-400 transition-transform duration-200 group-open:rotate-180" />
+                </summary>
+                <p>{faq.answer}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="px-5 py-20 lg:px-8 lg:py-28">
+        <div className="preview-final-cta relative mx-auto max-w-7xl overflow-hidden rounded-[2.25rem] px-7 py-14 text-center text-white sm:px-12 sm:py-20" data-reveal>
+          <div className="preview-final-grid" aria-hidden="true" />
+          <div className="relative mx-auto max-w-3xl">
+            <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white/10 text-violet-200 ring-1 ring-white/15">
+              <Blocks size={22} />
+            </div>
+            <h2 className="mt-7 text-balance text-4xl font-black leading-[1.05] tracking-[-0.055em] sm:text-5xl">
+              次のワールドは、ここから始まる。
+            </h2>
+            <p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-zinc-300 sm:text-base">
+              いま持っている素材と、つくりたい景色を持ってきてください。XRiftへ届けるところまで、一緒に進めます。
+            </p>
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <a
+                href={releaseUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="preview-button preview-button-white preview-button-large"
+              >
+                <Download size={17} />
+                無料でダウンロード
+              </a>
+              <a
+                href={repositoryUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="preview-button preview-button-ghost preview-button-large"
+              >
+                <GitBranch size={17} />
+                GitHubで見る
+                <ExternalLink size={13} />
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-zinc-200/80 px-5 py-8 lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <BrandMark />
+          <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-zinc-500">
+            <a href="https://xrift.net/" target="_blank" rel="noreferrer" className="transition-colors duration-200 hover:text-violet-700">
+              XRift公式サイト
+            </a>
+            <a href={repositoryUrl} target="_blank" rel="noreferrer" className="transition-colors duration-200 hover:text-violet-700">
+              GitHub
+            </a>
+            <a href={`${repositoryUrl}/blob/main/LICENSE`} target="_blank" rel="noreferrer" className="transition-colors duration-200 hover:text-violet-700">
+              MIT License
+            </a>
           </div>
         </div>
       </footer>

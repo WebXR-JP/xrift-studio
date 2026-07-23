@@ -35,6 +35,9 @@
     "dompurify": "3.4.12"
   },
   "dependencies": {
+    "@gltf-transform/core": "4.4.1",
+    "@gltf-transform/extensions": "4.4.1",
+    "@gltf-transform/functions": "4.4.1",
     "@monaco-editor/react": "4.7.0",
     "@pixiv/three-vrm": "3.5.5",
     "@react-three/drei": "10.7.7",
@@ -50,7 +53,9 @@
     "@tauri-apps/plugin-updater": "^2.10.1",
     "@xrift/world-components": "0.43.0",
     "@xyflow/react": "12.11.2",
+    "draco3dgltf": "1.5.7",
     "hls.js": "1.6.13",
+    "ktx2-encoder": "0.6.0",
     "lucide-react": "1.25.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

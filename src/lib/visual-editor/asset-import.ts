@@ -79,7 +79,8 @@ export type SupportedAssetImportFormat =
   | StudioImageFormat
   | "hdr"
   | "exr"
-  | "mp3";
+  | "mp3"
+  | "wav";
 
 export type ClassifiedAssetImport =
   | {
@@ -102,9 +103,9 @@ export type ClassifiedAssetImport =
     }
   | {
       kind: "audio";
-      format: "mp3";
-      mimeType: "audio/mpeg";
-      extension: "mp3";
+      format: "mp3" | "wav";
+      mimeType: "audio/mpeg" | "audio/wav";
+      extension: "mp3" | "wav";
     };
 
 type NativeGltfModelClassification = Extract<
@@ -297,6 +298,19 @@ export function classifyAssetImport(
       extension: "mp3",
     };
   }
+  if (
+    extension === "wav" ||
+    normalizedMime === "audio/wav" ||
+    normalizedMime === "audio/x-wav" ||
+    normalizedMime === "audio/wave"
+  ) {
+    return {
+      kind: "audio",
+      format: "wav",
+      mimeType: "audio/wav",
+      extension: "wav",
+    };
+  }
   return undefined;
 }
 
@@ -441,7 +455,7 @@ async function createAssetImportPlanInternal(
     diagnostics.push({
       severity: "blocking",
       code: "unsupported-asset-format",
-      message: "Three.js Editor対応モデル、PNG・JPG・WebP・AVIF・GIF・BMP・SVG・KTX2、HDR・EXR、MP3を取り込めます",
+      message: "Three.js Editor対応モデル、PNG・JPG・WebP・AVIF・GIF・BMP・SVG・KTX2、HDR・EXR、MP3・WAVを取り込めます",
       fileName,
       fieldPath: "fileName",
     });
@@ -1883,11 +1897,15 @@ function createAudioImportPlan(
   classification: Extract<ClassifiedAssetImport, { kind: "audio" }>,
 ): AssetImportPlan {
   const diagnostics: AssetImportDiagnostic[] = [];
-  if (!hasMp3Signature(bytes)) {
+  const validSignature =
+    classification.format === "mp3"
+      ? hasMp3Signature(bytes)
+      : hasWavSignature(bytes);
+  if (!validSignature) {
     diagnostics.push({
       severity: "blocking",
-      code: "mp3-signature-invalid",
-      message: "MP3のファイルシグネチャを確認できませんでした",
+      code: `${classification.format}-signature-invalid`,
+      message: `${classification.format.toUpperCase()}のファイルシグネチャを確認できませんでした`,
       fileName,
       fieldPath: "bytes",
     });
@@ -1916,7 +1934,7 @@ function createAudioImportPlan(
     thumbnail: { status: "missing" },
     folderId: normalizeFolderId(input.folderId),
     importMetadata: {
-      sourceFormat: "mp3",
+      sourceFormat: classification.format,
       mimeType: classification.mimeType,
       byteLength: bytes.byteLength,
     },
@@ -2414,6 +2432,19 @@ function hasMp3Signature(bytes: Uint8Array): boolean {
     }
   }
   return false;
+}
+
+function hasWavSignature(bytes: Uint8Array): boolean {
+  return (
+    bytes.byteLength >= 44 &&
+    asciiAt(bytes, 0, "RIFF") &&
+    asciiAt(bytes, 8, "WAVE") &&
+    asciiAt(bytes, 12, "fmt ") &&
+    new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(
+      4,
+      true,
+    ) + 8 <= bytes.byteLength
+  );
 }
 
 function asciiAt(bytes: Uint8Array, offset: number, expected: string): boolean {

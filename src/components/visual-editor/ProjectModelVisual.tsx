@@ -20,19 +20,30 @@ import {
 import {
   Box3,
   AnimationMixer,
+  BackSide,
+  ClampToEdgeWrapping,
   Color,
   DoubleSide,
   FrontSide,
   Group,
+  LinearFilter,
   LoopOnce,
   LoopRepeat,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  NearestFilter,
+  NoColorSpace,
+  RepeatWrapping,
+  ShaderMaterial,
+  SRGBColorSpace,
+  TextureLoader,
+  Vector2,
   Vector4,
   Vector3,
   type Material,
   type AnimationClip,
   type Object3D,
+  type Texture,
 } from "three";
 import { tauri } from "../../lib/tauri";
 import {
@@ -47,6 +58,7 @@ import {
   validateGltfNodeHierarchy,
   type AssetManifest,
   type AnimationComponent,
+  type ClassicR3fMaterialShader,
   type MaterialAsset,
   type ModelPoseState,
 } from "../../lib/visual-editor";
@@ -70,12 +82,14 @@ export type ProjectModelMaterialAssignment = {
   slot: string;
   sourceMaterialIndex: number;
   sourceNodeIndex?: number;
+  sourceNodeName?: string;
   material: MaterialAsset;
 };
 
 type ResolvedProjectModelMaterialAssignment =
   ProjectModelMaterialAssignment & {
     textures: CoreMaterialPreviewTextures;
+    classicShaderTextures: Readonly<Record<string, Texture>>;
   };
 
 type Props = {
@@ -144,6 +158,7 @@ export function ProjectModelVisual({
   animation,
   playing = false,
   sourceNodeIndex,
+  sourceNodeName,
   viewportMaterialStyle = "scene",
   fitPreview = false,
   loadRevision = 0,
@@ -211,6 +226,7 @@ export function ProjectModelVisual({
           animation={animation}
           playing={playing}
           sourceNodeIndex={sourceNodeIndex}
+          sourceNodeName={sourceNodeName}
           viewportMaterialStyle={viewportMaterialStyle}
           fitPreview={fitPreview}
           onMaterialRuntimeInfoChange={onMaterialRuntimeInfoChange}
@@ -273,9 +289,17 @@ function ProjectModelMaterialTextureSlot({
     assets,
     projectPath,
   );
+  const classicShaderTextures = useClassicShaderTextures(
+    assignment.material,
+    assets,
+    projectPath,
+  );
   const nextResolved = useMemo(
-    () => [...resolved, { ...assignment, textures }],
-    [assignment, resolved, textures],
+    () => [
+      ...resolved,
+      { ...assignment, textures, classicShaderTextures },
+    ],
+    [assignment, classicShaderTextures, resolved, textures],
   );
   return (
     <ProjectModelMaterialTextureResolver
@@ -300,6 +324,7 @@ function ProjectModelRender({
   animation,
   playing,
   sourceNodeIndex,
+  sourceNodeName,
   viewportMaterialStyle,
   fitPreview,
   onMaterialRuntimeInfoChange,
@@ -314,6 +339,7 @@ function ProjectModelRender({
   animation?: AnimationComponent;
   playing: boolean;
   sourceNodeIndex?: number;
+  sourceNodeName?: string;
   viewportMaterialStyle: SceneViewportMaterialStyle;
   fitPreview: boolean;
   onMaterialRuntimeInfoChange?: (
@@ -329,7 +355,11 @@ function ProjectModelRender({
     const source = clone(readyObject);
     repairImportedObject3DHierarchy(source);
     const sourceMaterials = collectSourceMaterials(source);
-    const object = selectSourceModelNode(source, sourceNodeIndex);
+    const object = selectSourceModelNode(
+      source,
+      sourceNodeIndex,
+      sourceNodeName,
+    );
     applyStaticModelPose(object, pose);
     const selectionBounds = getModelSelectionBounds(object);
     const ownedMaterials = applyAssignedMaterialPreviews(
@@ -346,6 +376,7 @@ function ProjectModelRender({
     pose,
     readyObject,
     sourceNodeIndex,
+    sourceNodeName,
     viewportMaterialStyle,
   ]);
   const renderedObject = renderedModel?.object ?? null;
@@ -419,13 +450,26 @@ function ProjectModelRender({
     };
   }, [animation, animations, invalidate, mixer, playbackActive, renderedObject]);
 
-  useFrame((_, delta) => {
+  useFrame((frame, delta) => {
     if (playbackActive) mixer?.update(Math.min(delta, 0.1));
+    renderedModel?.ownedMaterials.forEach((material) => {
+      const shader = material as ShaderMaterial;
+      const uniformName = material.userData.xriftAnimatedTimeUniform;
+      if (
+        typeof uniformName === "string" &&
+        shader.uniforms?.[uniformName]
+      ) {
+        shader.uniforms[uniformName].value = frame.clock.getElapsedTime();
+      }
+    });
   });
 
   // Expanded node Entities already carry the source Model scale on their
   // generated glTF roots so child translations and geometry scale together.
-  const modelScale = sourceNodeIndex === undefined && Number.isFinite(importScale)
+  const modelScale =
+    sourceNodeIndex === undefined &&
+    sourceNodeName === undefined &&
+    Number.isFinite(importScale)
     ? importScale
     : 1;
 
@@ -565,6 +609,7 @@ export function applyAssignedMaterialPreviews(
     sourceNodeIndex?: number;
     material: MaterialAsset;
     textures?: CoreMaterialPreviewTextures;
+    classicShaderTextures?: Readonly<Record<string, Texture>>;
     customShaderMaterial?: Material;
   }[],
   sourceMaterials: ReadonlyMap<number, Material> = collectSourceMaterials(object),
@@ -609,6 +654,8 @@ export function applyAssignedMaterialPreviews(
         assignment.textures,
         sourceMaterials,
         assignment.customShaderMaterial,
+        assignment.classicShaderTextures,
+        child.name,
       );
       if (assignment.material.shader?.kind === "openbrush") {
         const geometry = (mesh as typeof mesh & { geometry?: import("three").BufferGeometry }).geometry;
@@ -854,6 +901,8 @@ export function createAssignedMaterialPreviewMaterial(
   assignedTextures: CoreMaterialPreviewTextures = {},
   sourceMaterials: ReadonlyMap<number, Material> = new Map(),
   customShaderMaterial?: Material,
+  classicShaderTextures: Readonly<Record<string, Texture>> = {},
+  meshName = "",
 ): Material {
   if (assignedMaterial.shader?.kind === "openbrush") {
     const preset = sourceMaterials.get(
@@ -891,6 +940,13 @@ export function createAssignedMaterialPreviewMaterial(
     preview.needsUpdate = true;
     return preview;
   }
+  if (assignedMaterial.shader?.kind === "classic-r3f") {
+    return createClassicR3fMaterial(
+      assignedMaterial.shader,
+      classicShaderTextures,
+      meshName,
+    );
+  }
   const preview = isMeshStandardMaterial(source)
     ? source.clone()
     : new MeshStandardMaterial({ name: source.name });
@@ -926,6 +982,155 @@ export function createAssignedMaterialPreviewMaterial(
   resetSourcePhysicalEffects(preview);
   preview.needsUpdate = true;
   return preview;
+}
+
+export function createClassicR3fMaterial(
+  shader: ClassicR3fMaterialShader,
+  textures: Readonly<Record<string, Texture>>,
+  meshName: string,
+): ShaderMaterial {
+  const normalizedMeshName = meshName.toLocaleLowerCase();
+  const variant =
+    shader.variants.find(
+      (candidate) =>
+        candidate.meshNameIncludes &&
+        normalizedMeshName.includes(
+          candidate.meshNameIncludes.toLocaleLowerCase(),
+        ),
+    ) ??
+    shader.variants.find((candidate) => !candidate.meshNameIncludes) ??
+    shader.variants[0];
+  const uniforms = Object.fromEntries(
+    Object.entries(shader.uniforms).map(([name, uniform]) => {
+      if (uniform.kind === "texture") {
+        return [name, { value: textures[name] ?? null }];
+      }
+      if (uniform.kind === "color") {
+        return [name, { value: new Color(uniform.value) }];
+      }
+      if (uniform.kind === "vector") {
+        const value =
+          uniform.value.length === 2
+            ? new Vector2(uniform.value[0], uniform.value[1])
+            : uniform.value.length === 3
+              ? new Vector3(
+                  uniform.value[0],
+                  uniform.value[1],
+                  uniform.value[2],
+                )
+              : new Vector4(
+                  uniform.value[0],
+                  uniform.value[1],
+                  uniform.value[2],
+                  uniform.value[3],
+                );
+        return [name, { value }];
+      }
+      return [name, { value: uniform.value }];
+    }),
+  );
+  const material = new ShaderMaterial({
+    name: `${shader.sourceModulePath}:${variant.name}`,
+    vertexShader: shader.vertexShader,
+    fragmentShader: shader.fragmentShader,
+    uniforms,
+    defines: { ...variant.defines },
+    side:
+      variant.side === "back"
+        ? BackSide
+        : variant.side === "double"
+          ? DoubleSide
+          : FrontSide,
+    transparent: variant.transparent,
+    depthWrite: variant.depthWrite,
+  });
+  if (shader.animatedTimeUniform) {
+    material.userData.xriftAnimatedTimeUniform = shader.animatedTimeUniform;
+  }
+  material.needsUpdate = true;
+  return material;
+}
+
+function useClassicShaderTextures(
+  material: MaterialAsset,
+  assets: AssetManifest,
+  projectPath: string,
+): Readonly<Record<string, Texture>> {
+  const shader =
+    material.shader?.kind === "classic-r3f" ? material.shader : undefined;
+  const [textures, setTextures] = useState<Readonly<Record<string, Texture>>>(
+    {},
+  );
+  const signature = shader
+    ? Object.entries(shader.uniforms)
+        .flatMap(([name, uniform]) =>
+          uniform.kind === "texture"
+            ? [`${name}:${uniform.textureAssetId}`]
+            : [],
+        )
+        .sort()
+        .join("|")
+    : "";
+
+  useEffect(() => {
+    if (!shader || !signature) {
+      setTextures({});
+      return;
+    }
+    let active = true;
+    const loaded: Texture[] = [];
+    void Promise.all(
+      Object.entries(shader.uniforms).flatMap(([uniformName, uniform]) => {
+        if (uniform.kind !== "texture") return [];
+        const asset = assets.assets[uniform.textureAssetId];
+        if (
+          asset?.kind !== "texture" ||
+          asset.source.kind !== "project"
+        ) {
+          return [];
+        }
+        return [
+          tauri
+            .readProjectFileDataUrl(projectPath, asset.source.relativePath)
+            .then((dataUrl) => new TextureLoader().loadAsync(dataUrl))
+            .then((texture) => {
+              loaded.push(texture);
+              texture.colorSpace =
+                uniform.colorSpace === "srgb"
+                  ? SRGBColorSpace
+                  : NoColorSpace;
+              texture.generateMipmaps = uniform.generateMipmaps ?? false;
+              texture.magFilter =
+                uniform.filter === "nearest" ? NearestFilter : LinearFilter;
+              texture.minFilter =
+                uniform.filter === "nearest" ? NearestFilter : LinearFilter;
+              texture.wrapS =
+                uniform.wrapS === "clamp-to-edge"
+                  ? ClampToEdgeWrapping
+                  : RepeatWrapping;
+              texture.wrapT =
+                uniform.wrapT === "clamp-to-edge"
+                  ? ClampToEdgeWrapping
+                  : RepeatWrapping;
+              texture.needsUpdate = true;
+              return [uniformName, texture] as const;
+            }),
+        ];
+      }),
+    )
+      .then((entries) => {
+        if (active) setTextures(Object.fromEntries(entries));
+      })
+      .catch(() => {
+        if (active) setTextures({});
+      });
+    return () => {
+      active = false;
+      loaded.forEach((texture) => texture.dispose());
+    };
+  }, [assets, projectPath, shader, signature]);
+
+  return textures;
 }
 
 /**
@@ -1161,22 +1366,30 @@ function tagSourceMaterialIndices(
 export function selectSourceModelNode(
   root: Object3D,
   sourceNodeIndex: number | undefined,
+  sourceNodeName?: string,
 ): Object3D {
-  if (sourceNodeIndex === undefined) return root;
+  if (sourceNodeIndex === undefined && !sourceNodeName) return root;
   let selected: Object3D | undefined;
   root.traverse((candidate) => {
     if (
       selected === undefined &&
-      candidate.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] ===
-        sourceNodeIndex
+      (sourceNodeIndex !== undefined
+        ? candidate.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] ===
+          sourceNodeIndex
+        : candidate.name === sourceNodeName)
     ) {
       selected = candidate;
     }
   });
   if (!selected) {
     const missing = new Group();
-    missing.name = `Missing glTF node ${sourceNodeIndex}`;
-    missing.userData.xriftMissingSourceNodeIndex = sourceNodeIndex;
+    missing.name =
+      sourceNodeIndex !== undefined
+        ? `Missing glTF node ${sourceNodeIndex}`
+        : `Missing OBJ node ${sourceNodeName}`;
+    if (sourceNodeIndex !== undefined) {
+      missing.userData.xriftMissingSourceNodeIndex = sourceNodeIndex;
+    }
     return missing;
   }
   for (const child of [...selected.children]) {

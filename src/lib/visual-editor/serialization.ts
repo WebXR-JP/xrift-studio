@@ -12,6 +12,7 @@ import { getBuiltinPrefabRecipe } from "./builtin-prefab-catalog";
 import { validateModelAssetContract } from "./model-import-contract";
 import { validateKhrInteractivityExtension } from "./interactivity-graph";
 import { isOpenBrushMaterialShader } from "./open-brush";
+import { isClassicR3fMaterialShader } from "./custom-shader-contract";
 import { normalizeParticleProperties } from "./particle-system";
 import {
   PREFAB_DOCUMENT_SCHEMA_VERSION,
@@ -279,8 +280,12 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
     if (candidate.kind === "audio") {
       if (
         !isRecord(candidate.importMetadata) ||
-        candidate.importMetadata.sourceFormat !== "mp3" ||
-        candidate.importMetadata.mimeType !== "audio/mpeg" ||
+        !(
+          (candidate.importMetadata.sourceFormat === "mp3" &&
+            candidate.importMetadata.mimeType === "audio/mpeg") ||
+          (candidate.importMetadata.sourceFormat === "wav" &&
+            candidate.importMetadata.mimeType === "audio/wav")
+        ) ||
         !Number.isInteger(candidate.importMetadata.byteLength) ||
         Number(candidate.importMetadata.byteLength) <= 0
       ) {
@@ -288,7 +293,7 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
           issue(
             `${path}.importMetadata`,
             "audio-metadata",
-            "Audio Asset metadata must describe a non-empty MP3 source",
+            "Audio Asset metadata must describe a non-empty MP3 or WAV source",
           ),
         );
       }
@@ -420,12 +425,16 @@ function validateMaterialAsset(
   assets: Record<string, unknown>,
   issues: DocumentValidationIssue[],
 ): void {
-  if (asset.shader !== undefined && !isOpenBrushMaterialShader(asset.shader)) {
+  if (
+    asset.shader !== undefined &&
+    !isOpenBrushMaterialShader(asset.shader) &&
+    !isClassicR3fMaterialShader(asset.shader)
+  ) {
     issues.push(
       issue(
         `${path}.shader`,
         "custom-material",
-        "OpenBrush Material shader descriptor is invalid",
+        "Custom Material shader descriptor is invalid",
       ),
     );
   }
@@ -1700,6 +1709,22 @@ function validateRigidBodyComponentShape(
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
       issues.push(
         issue(`${path}.${field}`, "range", `Rigid Body ${field} is invalid`),
+      );
+    }
+    if (
+      isRecord(component.geometry) &&
+      component.geometry.kind === "asset" &&
+      component.geometry.sourceNodeName !== undefined &&
+      (typeof component.geometry.sourceNodeName !== "string" ||
+        !component.geometry.sourceNodeName.trim() ||
+        component.geometry.sourceNodeName.length > 160)
+    ) {
+      issues.push(
+        issue(
+          `${path}.geometry.sourceNodeName`,
+          "range",
+          "sourceNodeName must be a non-empty bounded string",
+        ),
       );
     }
   }

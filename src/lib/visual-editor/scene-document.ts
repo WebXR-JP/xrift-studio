@@ -67,6 +67,8 @@ export type MeshGeometryReference =
       assetId: string;
       /** Selects one glTF node while sharing the original Model source. */
       sourceNodeIndex?: number;
+      /** Selects one named OBJ child while sharing the original Model source. */
+      sourceNodeName?: string;
     }
   | {
       kind: "builtin-primitive";
@@ -747,6 +749,7 @@ export function createMeshComponent(
     castShadow?: boolean;
     receiveShadow?: boolean;
     sourceNodeIndex?: number;
+    sourceNodeName?: string;
   } = {},
 ): MeshComponent {
   return {
@@ -759,6 +762,9 @@ export function createMeshComponent(
       assetId: geometryAssetId,
       ...(options.sourceNodeIndex !== undefined
         ? { sourceNodeIndex: options.sourceNodeIndex }
+        : {}),
+      ...(options.sourceNodeName?.trim()
+        ? { sourceNodeName: options.sourceNodeName.trim() }
         : {}),
     },
     materialBindings: normalizeMaterialBindings(materialBindings),

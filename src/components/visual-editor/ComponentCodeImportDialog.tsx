@@ -1,7 +1,9 @@
 import {
   AlertCircle,
   CheckCircle2,
+  Eye,
   FolderOpen,
+  GitBranch,
   LoaderCircle,
   X,
 } from "lucide-react";
@@ -10,6 +12,8 @@ import {
   DREI_R3F_IMPORT_SAMPLE,
   analyzeComponentCode,
   analyzeComponentProject,
+  augmentClassicProjectVisualImportPlan,
+  loadClassicProjectVisualImportSourceFromRepository,
   pickClassicProjectVisualImportSource,
   type ClassicProjectVisualImportSource,
   type ComponentCodeImportPlan,
@@ -35,8 +39,10 @@ export function ComponentCodeImportDialog({
   const [code, setCode] = useState(DREI_R3F_IMPORT_SAMPLE);
   const [classicSource, setClassicSource] =
     useState<ClassicProjectVisualImportSource | null>(null);
+  const [repositoryUrl, setRepositoryUrl] = useState("");
   const [classicLoading, setClassicLoading] = useState(false);
   const [classicLoadError, setClassicLoadError] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState(false);
   const [importing, setImporting] = useState(false);
 
   useEffect(() => {
@@ -44,21 +50,31 @@ export function ComponentCodeImportDialog({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
+      if (classicLoading || importing) return;
+      if (reviewing) {
+        setReviewing(false);
+        return;
+      }
       onClose();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, open]);
+  }, [classicLoading, importing, onClose, open, reviewing]);
 
   const plan = useMemo(
-    () =>
-      classicSource && code === classicSource.source
-        ? analyzeComponentProject({
+    () => {
+      if (classicSource && code === classicSource.source) {
+        return augmentClassicProjectVisualImportPlan(
+          analyzeComponentProject({
             entryFile: classicSource.entryFile,
             modules: classicSource.modules,
             projectKind,
-          })
-        : analyzeComponentCode(code, projectKind),
+          }),
+          classicSource,
+        );
+      }
+      return analyzeComponentCode(code, projectKind);
+    },
     [classicSource, code, projectKind],
   );
   const hasErrors = plan.diagnostics.some(
@@ -74,6 +90,29 @@ export function ComponentCodeImportDialog({
       if (!selected) return;
       setCode(selected.source);
       setClassicSource(selected);
+      setReviewing(false);
+    } catch (error) {
+      setClassicLoadError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setClassicLoading(false);
+    }
+  };
+
+  const loadClassicRepository = async () => {
+    if (classicLoading || !repositoryUrl.trim()) return;
+    setClassicLoading(true);
+    setClassicLoadError(null);
+    try {
+      const selected =
+        await loadClassicProjectVisualImportSourceFromRepository(
+          repositoryUrl,
+          projectKind,
+        );
+      setCode(selected.source);
+      setClassicSource(selected);
+      setReviewing(false);
     } catch (error) {
       setClassicLoadError(
         error instanceof Error ? error.message : String(error),
@@ -124,18 +163,33 @@ export function ComponentCodeImportDialog({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
-          <CodeConverter
-            code={code}
-            classicSource={classicSource}
-            loading={classicLoading}
-            error={classicLoadError}
-            onCodeChange={(nextCode) => {
-              setCode(nextCode);
-              setClassicSource(null);
-              setClassicLoadError(null);
-            }}
-            onPickClassicProject={pickClassicProject}
-          />
+          {reviewing ? (
+            <ImportPreviewHeader
+              plan={plan}
+              classicSource={classicSource}
+              onBack={() => setReviewing(false)}
+            />
+          ) : (
+            <CodeConverter
+              code={code}
+              classicSource={classicSource}
+              repositoryUrl={repositoryUrl}
+              loading={classicLoading}
+              error={classicLoadError}
+              onRepositoryUrlChange={(value) => {
+                setRepositoryUrl(value);
+                setClassicLoadError(null);
+              }}
+              onLoadRepository={loadClassicRepository}
+              onCodeChange={(nextCode) => {
+                setCode(nextCode);
+                setClassicSource(null);
+                setClassicLoadError(null);
+                setReviewing(false);
+              }}
+              onPickClassicProject={pickClassicProject}
+            />
+          )}
 
           <AnalysisResult plan={plan} />
         </div>
@@ -147,22 +201,34 @@ export function ComponentCodeImportDialog({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                if (reviewing) setReviewing(false);
+                else onClose();
+              }}
+              disabled={classicLoading || importing}
               className="rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
             >
-              キャンセル
+              {reviewing ? "内容を変更" : "キャンセル"}
             </button>
             <button
               type="button"
               disabled={
                 classicLoading || importing || hasErrors || plan.nodes.length === 0
               }
-              onClick={() => void importPlan()}
+              onClick={() => {
+                if (!reviewing) {
+                  setReviewing(true);
+                  return;
+                }
+                void importPlan();
+              }}
               className="rounded-md bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {importing
                 ? "AssetとSceneを変換中…"
-                : `${plan.summary.entityCount}件を変換して追加`}
+                : reviewing
+                  ? "プレビュー内容をインポート"
+                  : "インポート内容をプレビュー"}
             </button>
           </div>
         </footer>
@@ -174,15 +240,21 @@ export function ComponentCodeImportDialog({
 function CodeConverter({
   code,
   classicSource,
+  repositoryUrl,
   loading,
   error,
+  onRepositoryUrlChange,
+  onLoadRepository,
   onCodeChange,
   onPickClassicProject,
 }: {
   code: string;
   classicSource: ClassicProjectVisualImportSource | null;
+  repositoryUrl: string;
   loading: boolean;
   error: string | null;
+  onRepositoryUrlChange: (value: string) => void;
+  onLoadRepository: () => void;
   onCodeChange: (code: string) => void;
   onPickClassicProject: () => void;
 }) {
@@ -225,10 +297,35 @@ function CodeConverter({
           <span className="ml-2">{classicSource.entryFile}</span>
           <span className="ml-2">{classicSource.modules.length} modules</span>
           <span className="mt-0.5 block break-all text-sky-700">
-            {classicSource.path}
+            {classicSource.repositoryUrl ?? classicSource.path}
           </span>
         </div>
       ) : null}
+      <div className="mb-2 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+        <GitBranch size={14} className="shrink-0 text-slate-500" aria-hidden="true" />
+        <input
+          value={repositoryUrl}
+          onChange={(event) => onRepositoryUrlChange(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onLoadRepository();
+            }
+          }}
+          disabled={loading}
+          aria-label="Classic repository URL"
+          placeholder="https://github.com/owner/repository.git または git@github.com:owner/repository.git"
+          className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2.5 py-1.5 font-mono text-[11px] text-slate-700 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+        />
+        <button
+          type="button"
+          onClick={onLoadRepository}
+          disabled={loading || !repositoryUrl.trim()}
+          className="shrink-0 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          URLから解析
+        </button>
+      </div>
       {error ? (
         <div className="mb-2 flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] leading-4 text-rose-800">
           <AlertCircle size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
@@ -245,6 +342,48 @@ function CodeConverter({
       <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-4 text-amber-900">
         Classicでは検証済みentryからsrc内のlocal importを再帰的に読み、group、wrapper、Component境界をHierarchyへ保持します。hookやruntime stateは実行せず、動的な分岐・繰り返し・外部Assetは診断に残します。
       </p>
+    </section>
+  );
+}
+
+function ImportPreviewHeader({
+  plan,
+  classicSource,
+  onBack,
+}: {
+  plan: ComponentCodeImportPlan;
+  classicSource: ClassicProjectVisualImportSource | null;
+  onBack: () => void;
+}) {
+  return (
+    <section className="rounded-lg border border-violet-200 bg-violet-50 p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white">
+            <Eye size={17} aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-violet-950">
+              確定前プレビュー
+            </h3>
+            <p className="mt-1 text-[11px] leading-5 text-violet-900">
+              まだSceneやAssetには書き込まれていません。変換件数、関連Asset、警告を確認してから確定できます。
+            </p>
+            {classicSource ? (
+              <p className="mt-1 truncate font-mono text-[10px] text-violet-700">
+                {classicSource.packageName} · {classicSource.modules.length} modules · {plan.assetDependencies.length} assets
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onBack}
+          className="shrink-0 rounded border border-violet-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-violet-700 hover:bg-violet-100"
+        >
+          入力へ戻る
+        </button>
+      </div>
     </section>
   );
 }
@@ -282,6 +421,11 @@ function AnalysisResult({ plan }: { plan: ComponentCodeImportPlan }) {
         {plan.summary.textureAssetCount > 0 ? (
           <span className="rounded bg-cyan-50 px-2 py-1 text-cyan-700">
             Texture {plan.summary.textureAssetCount}
+          </span>
+        ) : null}
+        {plan.summary.audioAssetCount > 0 ? (
+          <span className="rounded bg-rose-50 px-2 py-1 text-rose-700">
+            Audio {plan.summary.audioAssetCount}
           </span>
         ) : null}
         {plan.summary.unsupportedAssetCount > 0 ? (

@@ -1,15 +1,19 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Box,
+  CheckCircle2,
   Download,
   Gauge,
   Info,
   Lightbulb,
+  Loader2,
   Monitor,
   Music,
+  Sparkles,
   Smartphone,
   X,
 } from "lucide-react";
+import type { AssetOptimizationProgress } from "../../lib/visual-editor/asset-optimization";
 import {
   formatVramBytes,
   formatLoadSeconds,
@@ -22,6 +26,14 @@ type Props = {
   estimate: WorldVramEstimate;
   subjectLabel: string;
   onClose: () => void;
+  onApplyOptimizations?: (
+    recommendationIds: string[],
+    report: (progress: AssetOptimizationProgress) => void,
+  ) => Promise<{
+    optimizedAssetCount: number;
+    beforeBytes: number;
+    afterBytes: number;
+  }>;
 };
 
 const RATING_LABELS: Record<VramDeviceRating, string> = {
@@ -41,17 +53,45 @@ export function VramEstimateDialog({
   estimate,
   subjectLabel,
   onClose,
+  onApplyOptimizations,
 }: Props) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [applying, setApplying] = useState(false);
+  const [progress, setProgress] = useState<AssetOptimizationProgress | null>(null);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const [applyResult, setApplyResult] = useState<{
+    optimizedAssetCount: number;
+    beforeBytes: number;
+    afterBytes: number;
+  } | null>(null);
+  const actionableRecommendations = useMemo(
+    () =>
+      estimate.recommendations.filter(
+        (recommendation) => Boolean(recommendation.operation),
+      ),
+    [estimate.recommendations],
+  );
+
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.stopImmediatePropagation();
+      if (applying) return;
       onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, open]);
+  }, [applying, onClose, open]);
+
+  useEffect(() => {
+    if (!open) {
+      setSelectedIds(new Set());
+      setProgress(null);
+      setApplyError(null);
+      setApplyResult(null);
+    }
+  }, [open]);
 
   if (!open) return null;
 
@@ -60,7 +100,7 @@ export function VramEstimateDialog({
       className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm"
       onPointerDown={(event) => {
         event.stopPropagation();
-        onClose();
+        if (!applying) onClose();
       }}
     >
       <section
@@ -91,9 +131,10 @@ export function VramEstimateDialog({
           <button
             type="button"
             onClick={onClose}
+            disabled={applying}
             aria-label="VRAM使用量の詳細を閉じる"
             title="VRAM使用量の詳細を閉じる"
-            className="rounded-md p-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+            className="rounded-md p-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <X size={17} aria-hidden="true" />
           </button>
@@ -314,17 +355,74 @@ export function VramEstimateDialog({
           </section>
 
           <section className="mt-6">
-            <div className="flex items-center gap-2">
-              <Lightbulb size={16} className="text-amber-600" aria-hidden="true" />
-              <h3 className="text-sm font-semibold text-slate-900">改善候補</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Lightbulb size={16} className="text-amber-600" aria-hidden="true" />
+                <h3 className="text-sm font-semibold text-slate-900">改善候補</h3>
+              </div>
+              {onApplyOptimizations && actionableRecommendations.length > 0 ? (
+                <button
+                  type="button"
+                  disabled={applying}
+                  onClick={() =>
+                    setSelectedIds((current) =>
+                      current.size === actionableRecommendations.length
+                        ? new Set()
+                        : new Set(
+                            actionableRecommendations.map(
+                              (recommendation) => recommendation.id,
+                            ),
+                          ),
+                    )
+                  }
+                  className="text-xs font-semibold text-violet-700 hover:text-violet-900 disabled:opacity-40"
+                >
+                  {selectedIds.size === actionableRecommendations.length
+                    ? "選択を解除"
+                    : "自動対応をすべて選択"}
+                </button>
+              ) : null}
             </div>
             {estimate.recommendations.length > 0 ? (
               <div className="mt-3 grid gap-2">
-                {estimate.recommendations.map((recommendation) => (
-                  <div
+                {estimate.recommendations.map((recommendation) => {
+                  const actionable = Boolean(
+                    onApplyOptimizations && recommendation.operation,
+                  );
+                  const checked = selectedIds.has(recommendation.id);
+                  return (
+                  <label
                     key={recommendation.id}
-                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+                    className={`rounded-xl border px-4 py-3 ${
+                      checked
+                        ? "border-violet-300 bg-violet-50"
+                        : "border-slate-200 bg-slate-50"
+                    } ${actionable ? "cursor-pointer" : ""}`}
                   >
+                    <div className="flex items-start gap-3">
+                      {actionable ? (
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={applying}
+                          onChange={(event) => {
+                            setApplyError(null);
+                            setApplyResult(null);
+                            setSelectedIds((current) => {
+                              const next = new Set(current);
+                              if (event.target.checked) next.add(recommendation.id);
+                              else next.delete(recommendation.id);
+                              return next;
+                            });
+                          }}
+                          className="mt-1 size-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                        />
+                      ) : (
+                        <span className="mt-0.5 rounded-full bg-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600">
+                          個別対応
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="text-sm font-semibold text-slate-800">
                         {recommendation.title}
@@ -358,8 +456,16 @@ export function VramEstimateDialog({
                     <p className="mt-1 text-xs leading-5 text-slate-600">
                       {recommendation.detail}
                     </p>
-                  </div>
-                ))}
+                    {actionable ? (
+                      <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-violet-700">
+                        <Sparkles size={13} aria-hidden="true" />
+                        選択するとStudio内で変換して同じAssetへ反映します
+                      </p>
+                    ) : null}
+                      </div>
+                    </div>
+                  </label>
+                )})}
               </div>
             ) : (
               <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
@@ -367,6 +473,48 @@ export function VramEstimateDialog({
               </div>
             )}
           </section>
+
+          {progress ? (
+            <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-violet-900">
+                <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+                {progress.label}
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-violet-100">
+                <div
+                  className="h-full rounded-full bg-violet-600 transition-[width]"
+                  style={{
+                    width: `${Math.max(
+                      4,
+                      (progress.completed / Math.max(1, progress.total)) * 100,
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
+          {applyResult ? (
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              <CheckCircle2 size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+              <div>
+                <div className="font-semibold">
+                  {applyResult.optimizedAssetCount}件のAssetを最適化しました
+                </div>
+                <div className="mt-0.5 text-xs">
+                  原本 {formatVramBytes(applyResult.beforeBytes)} → 変換後{" "}
+                  {formatVramBytes(applyResult.afterBytes)}
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {applyError ? (
+            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+              {applyError}
+              <div className="mt-1 text-xs">
+                元のAssetは変更されていません。選択内容を確認して再試行できます。
+              </div>
+            </div>
+          ) : null}
 
           <div className="mt-6 flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <Info size={15} className="mt-0.5 shrink-0 text-slate-500" aria-hidden="true" />
@@ -378,14 +526,58 @@ export function VramEstimateDialog({
           </div>
         </div>
 
-        <footer className="flex justify-end border-t border-slate-200 bg-slate-50 px-6 py-4">
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+          <div className="text-xs text-slate-500">
+            {selectedIds.size > 0
+              ? `${selectedIds.size}件の改善を選択中`
+              : "チェックした改善だけをAssetへ反映します"}
+          </div>
+          <div className="flex items-center gap-2">
+          {onApplyOptimizations && actionableRecommendations.length > 0 ? (
+            <button
+              type="button"
+              disabled={applying || selectedIds.size === 0}
+              onClick={() => {
+                setApplying(true);
+                setApplyError(null);
+                setApplyResult(null);
+                setProgress(null);
+                void onApplyOptimizations([...selectedIds], setProgress)
+                  .then((result) => {
+                    setApplyResult(result);
+                    setSelectedIds(new Set());
+                  })
+                  .catch((error) =>
+                    setApplyError(
+                      error instanceof Error
+                        ? error.message
+                        : "Assetを最適化できませんでした。",
+                    ),
+                  )
+                  .finally(() => {
+                    setApplying(false);
+                    setProgress(null);
+                  });
+              }}
+              className="inline-flex items-center gap-1.5 rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {applying ? (
+                <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Sparkles size={15} aria-hidden="true" />
+              )}
+              {applying ? "最適化しています" : "選択した最適化を適用"}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onClose}
+            disabled={applying}
             className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
           >
             公開前の確認へ戻る
           </button>
+          </div>
         </footer>
       </section>
     </div>

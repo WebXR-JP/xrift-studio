@@ -10,17 +10,98 @@ import {
   type AssetImportDiagnostic,
   type AssetImportPlan,
 } from "./asset-import";
-import type { AssetManifest } from "./asset-manifest";
+import {
+  addDefaultMaterialAsset,
+  getModelAsset,
+  updateMaterialAsset,
+  type AssetManifest,
+} from "./asset-manifest";
 import type {
+  ApplyComponentCodeImportResult,
   ComponentCodeImportAssetDependency,
   ComponentCodeImportPlan,
 } from "./component-code-import";
 import { convertDracoGeometryToGlb } from "./draco-import";
+import { createDocumentId } from "./document-id";
+import {
+  createEmptyEntity,
+  deleteEntityHierarchy,
+} from "./editor-session";
+import {
+  createAudioSourceComponent,
+  createMeshColliderComponent,
+  createMeshComponent,
+  getMesh,
+  getTransform,
+  updateEntityTransform,
+} from "./scene-document";
+import { resolveSceneSettings } from "./scene-settings";
 import type { ThreeModelCompanionFile } from "./three-model-converter";
+
+export type ClassicProjectVisualResource = {
+  sourcePath: string;
+  fileName: string;
+  kind: "model" | "texture" | "audio" | "unsupported";
+  sourceModulePath: string;
+};
+
+export type ClassicProjectVisualInspection = {
+  resources: ClassicProjectVisualResource[];
+  skybox?: {
+    sourcePath: string;
+    sourceModulePath: string;
+    componentName: string;
+  };
+  audioSources: Array<{
+    sourcePath: string;
+    sourceModulePath: string;
+    componentName: string;
+    volume: number;
+    loop: boolean;
+    autoplay: boolean;
+    spatial: boolean;
+  }>;
+  customShaderModulePaths: string[];
+  customMaterials: ClassicProjectCustomMaterialInspection[];
+};
+
+export type ClassicProjectCustomShaderUniform =
+  | {
+      kind: "texture";
+      sourcePath: string;
+      filter: "nearest" | "linear";
+    }
+  | { kind: "number"; value: number }
+  | { kind: "color"; value: string };
+
+export type ClassicProjectCustomMaterialInspection = {
+  name: string;
+  sourceModulePath: string;
+  componentName: string;
+  modelSourcePath: string;
+  vertexShader: string;
+  fragmentShader: string;
+  uniforms: Record<string, ClassicProjectCustomShaderUniform>;
+  variants: Array<{
+    name: string;
+    meshNameIncludes?: string;
+    defines: Record<string, string>;
+    side: "front" | "back" | "double";
+    transparent: boolean;
+    depthWrite: boolean;
+  }>;
+  animatedTimeUniform?: string;
+  centerModel: boolean;
+  componentPosition: [number, number, number];
+  componentScale: number;
+  colliderSourceNodeNames: string[];
+};
 
 export type ClassicProjectVisualImportSource = ClassicExportTarget & {
   source: string;
   modules: ComponentCodeImportSourceModule[];
+  inspection: ClassicProjectVisualInspection;
+  repositoryUrl?: string;
 };
 
 export type ClassicProjectVisualAssetImportPreparation = {
@@ -56,7 +137,12 @@ export async function loadClassicProjectVisualImportSource(
   if (!modules.some((module) => module.path === target.entryFile)) {
     modules.unshift({ path: target.entryFile, source });
   }
-  return { ...target, source, modules };
+  return {
+    ...target,
+    source,
+    modules,
+    inspection: inspectClassicProjectVisualSource(modules),
+  };
 }
 
 export async function pickClassicProjectVisualImportSource(
@@ -75,6 +161,27 @@ export async function pickClassicProjectVisualImportSource(
   return loadClassicProjectVisualImportSource(projectPath, expectedKind);
 }
 
+export async function loadClassicProjectVisualImportSourceFromRepository(
+  repositoryUrl: string,
+  expectedKind: ProjectKind,
+): Promise<ClassicProjectVisualImportSource> {
+  if (!tauri.isAvailable()) {
+    throw new Error(
+      "Repository URLからの読み込みはデスクトップ版で利用できます。",
+    );
+  }
+  const normalizedUrl = repositoryUrl.trim();
+  if (!normalizedUrl) {
+    throw new Error("HTTPSまたはgit SSHのRepository URLを入力してください。");
+  }
+  const projectPath = await tauri.cloneClassicProjectRepository(normalizedUrl);
+  const source = await loadClassicProjectVisualImportSource(
+    projectPath,
+    expectedKind,
+  );
+  return { ...source, repositoryUrl: normalizedUrl };
+}
+
 /**
  * Reads only asset dependencies discovered by the static TSX analysis and
  * prepares normal Studio import transactions. No target project files are
@@ -90,7 +197,11 @@ export async function prepareClassicProjectVisualAssetImports(input: {
   const diagnostics: AssetImportDiagnostic[] = [];
   let workingManifest = input.existingManifest;
 
-  for (const dependency of input.componentPlan.assetDependencies) {
+  const dependencies = mergeClassicImportDependencies(
+    input.componentPlan.assetDependencies,
+    input.source.inspection.resources,
+  );
+  for (const dependency of dependencies) {
     const prepared = await prepareClassicDependency(
       input.source,
       dependency,
@@ -113,6 +224,340 @@ export async function prepareClassicProjectVisualAssetImports(input: {
     assetIdBySourcePath,
     diagnostics,
   };
+}
+
+export function augmentClassicProjectVisualImportPlan(
+  plan: ComponentCodeImportPlan,
+  source: ClassicProjectVisualImportSource,
+): ComponentCodeImportPlan {
+  const assetDependencies = mergeClassicImportDependencies(
+    plan.assetDependencies,
+    source.inspection.resources,
+  );
+  const discoveredCount = assetDependencies.length - plan.assetDependencies.length;
+  const diagnostics =
+    discoveredCount > 0 || source.inspection.customShaderModulePaths.length > 0
+      ? [
+          ...plan.diagnostics,
+          ...(discoveredCount > 0
+            ? [{
+                severity: "info" as const,
+                code: "classic-project-assets-discovered",
+                message: `Component内部で参照される関連Asset ${discoveredCount}件をインポート計画へ追加しました。`,
+              }]
+            : []),
+          ...(source.inspection.customShaderModulePaths.length > 0
+            ? [{
+                severity: "info" as const,
+                code: "classic-project-custom-shader-discovered",
+                message: `カスタムShaderを${source.inspection.customShaderModulePaths.length} moduleで検出しました。Materialとして再構築します。`,
+              }]
+            : []),
+        ]
+      : plan.diagnostics;
+  return {
+    ...plan,
+    diagnostics,
+    assetDependencies,
+    summary: {
+      ...plan.summary,
+      modelAssetCount: assetDependencies.filter(
+        (dependency) => dependency.kind === "model",
+      ).length,
+      textureAssetCount: assetDependencies.filter(
+        (dependency) => dependency.kind === "texture",
+      ).length,
+      audioAssetCount: assetDependencies.filter(
+        (dependency) => dependency.kind === "audio",
+      ).length,
+      unsupportedAssetCount: assetDependencies.filter(
+        (dependency) => dependency.kind === "unsupported",
+      ).length,
+    },
+  };
+}
+
+export function applyClassicProjectVisualImportEnhancements(input: {
+  source: ClassicProjectVisualImportSource;
+  componentPlan: ComponentCodeImportPlan;
+  result: ApplyComponentCodeImportResult;
+  assetIdBySourcePath: Readonly<Record<string, string>>;
+}): ApplyComponentCodeImportResult {
+  let scene = input.result.scene;
+  const diagnostics = [...input.result.diagnostics];
+  const entityIdByPlanNodeId = new Map(
+    input.componentPlan.nodes.map((node, index) => [
+      node.planNodeId,
+      input.result.entityIds[index],
+    ]),
+  );
+
+  const skybox = input.source.inspection.skybox;
+  const skyboxAssetId = skybox
+    ? input.assetIdBySourcePath[skybox.sourcePath]
+    : undefined;
+  if (
+    skybox &&
+    skyboxAssetId &&
+    input.result.assets.assets[skyboxAssetId]?.kind === "texture"
+  ) {
+    const settings = resolveSceneSettings(scene.settings);
+    scene = {
+      ...scene,
+      settings: {
+        ...settings,
+        skybox: {
+          ...settings.skybox,
+          enabled: true,
+          iblEnabled: false,
+          projection: "infinite",
+          imageAssetId: skyboxAssetId,
+          flipY: false,
+          exposure: 1,
+        },
+      },
+    };
+    for (const node of input.componentPlan.nodes) {
+      if (
+        node.sourcePath !== skybox.sourceModulePath ||
+        (node.kind !== "primitive" && node.kind !== "model")
+      ) {
+        continue;
+      }
+      const entityId = entityIdByPlanNodeId.get(node.planNodeId);
+      if (entityId && scene.entities[entityId]) {
+        scene = deleteEntityHierarchy(scene, [entityId]);
+      }
+    }
+    diagnostics.push({
+      severity: "info",
+      code: "classic-skybox-materialized",
+      message: `${skybox.sourcePath}をScene Skyboxへ設定しました。`,
+      sourcePath: skybox.sourceModulePath,
+    });
+  }
+
+  for (const audio of input.source.inspection.audioSources) {
+    const audioAssetId = input.assetIdBySourcePath[audio.sourcePath];
+    if (
+      !audioAssetId ||
+      input.result.assets.assets[audioAssetId]?.kind !== "audio"
+    ) {
+      continue;
+    }
+    const boundary = input.componentPlan.nodes.find(
+      (node) =>
+        node.localComponent &&
+        node.sourceTag === audio.componentName,
+    );
+    const entityId = boundary
+      ? entityIdByPlanNodeId.get(boundary.planNodeId)
+      : undefined;
+    const entity = entityId ? scene.entities[entityId] : undefined;
+    const component = createAudioSourceComponent(
+      `component-audio-${audioAssetId.slice(-16)}`,
+      audioAssetId,
+    );
+    if (!entity || !component) continue;
+    scene = {
+      ...scene,
+      entities: {
+        ...scene.entities,
+        [entity.id]: {
+          ...entity,
+          components: [
+            ...entity.components.filter(
+              (candidate) => candidate.type !== "audio-source",
+            ),
+            {
+              ...component,
+              volume: audio.volume,
+              loop: audio.loop,
+              autoplay: audio.autoplay,
+              spatial: audio.spatial,
+            },
+          ],
+        },
+      },
+    };
+    diagnostics.push({
+      severity: "info",
+      code: "classic-audio-materialized",
+      message: `${audio.sourcePath}をAudio Sourceへ接続しました。`,
+      sourcePath: audio.sourceModulePath,
+    });
+  }
+
+  return {
+    ...input.result,
+    scene,
+    entityIds: input.result.entityIds.filter((entityId) =>
+      Boolean(scene.entities[entityId]),
+    ),
+    diagnostics,
+  };
+}
+
+export function inspectClassicProjectVisualSource(
+  modules: readonly ComponentCodeImportSourceModule[],
+): ClassicProjectVisualInspection {
+  const resources = new Map<string, ClassicProjectVisualResource>();
+  const customShaderModulePaths: string[] = [];
+  let skybox: ClassicProjectVisualInspection["skybox"];
+  const audioSources: ClassicProjectVisualInspection["audioSources"] = [];
+
+  for (const module of modules) {
+    const moduleResources = scanClassicModuleResources(module);
+    for (const resource of moduleResources) {
+      if (!resources.has(resource.sourcePath)) {
+        resources.set(resource.sourcePath, resource);
+      }
+    }
+    if (/\b(?:THREE\.)?ShaderMaterial\s*\(/.test(module.source)) {
+      customShaderModulePaths.push(module.path);
+    }
+    const image = moduleResources.find(
+      (resource) => resource.kind === "texture",
+    );
+    if (
+      !skybox &&
+      image &&
+      /sphereGeometry/.test(module.source) &&
+      /\bBackSide\b/.test(module.source)
+    ) {
+      skybox = {
+        sourcePath: image.sourcePath,
+        sourceModulePath: module.path,
+        componentName: exportedComponentName(module.source) ?? "SkyDome",
+      };
+    }
+    const audio = moduleResources.find(
+      (resource) => resource.kind === "audio",
+    );
+    if (audio && /\bnew\s+Audio\s*\(/.test(module.source)) {
+      audioSources.push({
+        sourcePath: audio.sourcePath,
+        sourceModulePath: module.path,
+        componentName: exportedComponentName(module.source) ?? "AmbientAudio",
+        volume: numericDefault(module.source, "volume") ?? 1,
+        loop: !/\.loop\s*=\s*false\b/.test(module.source),
+        autoplay: /\.play\s*\(/.test(module.source),
+        spatial: false,
+      });
+    }
+  }
+  return {
+    resources: [...resources.values()].sort((left, right) =>
+      left.sourcePath.localeCompare(right.sourcePath),
+    ),
+    ...(skybox ? { skybox } : {}),
+    audioSources,
+    customShaderModulePaths,
+  };
+}
+
+function mergeClassicImportDependencies(
+  dependencies: readonly ComponentCodeImportAssetDependency[],
+  resources: readonly ClassicProjectVisualResource[],
+): ComponentCodeImportAssetDependency[] {
+  const merged = new Map(
+    dependencies.map((dependency) => [
+      dependency.sourcePath,
+      {
+        ...dependency,
+        requiredByPlanNodeIds: [...dependency.requiredByPlanNodeIds],
+        sourceModulePaths: [...dependency.sourceModulePaths],
+      },
+    ]),
+  );
+  for (const resource of resources) {
+    const current = merged.get(resource.sourcePath);
+    if (current) {
+      if (!current.sourceModulePaths.includes(resource.sourceModulePath)) {
+        current.sourceModulePaths.push(resource.sourceModulePath);
+      }
+      continue;
+    }
+    merged.set(resource.sourcePath, {
+      sourcePath: resource.sourcePath,
+      fileName: resource.fileName,
+      kind: resource.kind,
+      requiredByPlanNodeIds: [],
+      sourceModulePaths: [resource.sourceModulePath],
+    });
+  }
+  return [...merged.values()].sort((left, right) =>
+    left.sourcePath.localeCompare(right.sourcePath),
+  );
+}
+
+function scanClassicModuleResources(
+  module: ComponentCodeImportSourceModule,
+): ClassicProjectVisualResource[] {
+  const resources = new Map<string, ClassicProjectVisualResource>();
+  const pattern =
+    /["'`]([^"'`\r\n]*?\.(?:glb|gltf|obj|vrm|png|jpe?g|webp|avif|gif|bmp|svg|ktx2|hdr|exr|drc|mp3|wav)(?:[?#][^"'`\r\n]*)?)["'`]/gi;
+  for (const match of module.source.matchAll(pattern)) {
+    const sourcePath = resolveClassicResourcePath(match[1], module.path);
+    if (!sourcePath) continue;
+    const fileName = sourcePath.split("/").pop() ?? sourcePath;
+    resources.set(sourcePath, {
+      sourcePath,
+      fileName,
+      kind: classicResourceKind(sourcePath),
+      sourceModulePath: module.path,
+    });
+  }
+  return [...resources.values()];
+}
+
+function resolveClassicResourcePath(
+  value: string,
+  sourceModulePath: string,
+): string | undefined {
+  let candidate = value.trim().replace(/[?#].*$/, "").replace(/\\/g, "/");
+  if (!candidate || /^(?:data:|https?:|blob:)/i.test(candidate)) return undefined;
+  if (candidate.startsWith("/")) candidate = `public/${candidate.replace(/^\/+/, "")}`;
+  else if (!candidate.startsWith("public/") && !candidate.startsWith(".")) {
+    candidate = `public/${candidate}`;
+  } else if (candidate.startsWith(".")) {
+    const parent = sourceModulePath.replace(/\\/g, "/").split("/").slice(0, -1);
+    candidate = [...parent, ...candidate.split("/")].join("/");
+  }
+  const normalized: string[] = [];
+  for (const segment of candidate.split("/")) {
+    if (!segment || segment === ".") continue;
+    if (segment === "..") normalized.pop();
+    else normalized.push(segment);
+  }
+  const result = normalized.join("/");
+  return result.startsWith("public/") ? result : undefined;
+}
+
+function classicResourceKind(
+  sourcePath: string,
+): ClassicProjectVisualResource["kind"] {
+  if (/\.(?:glb|gltf|obj|vrm|drc)$/i.test(sourcePath)) return "model";
+  if (/\.(?:png|jpe?g|webp|avif|gif|bmp|svg|ktx2|hdr|exr)$/i.test(sourcePath)) {
+    return "texture";
+  }
+  if (/\.(?:mp3|wav)$/i.test(sourcePath)) return "audio";
+  return "unsupported";
+}
+
+function exportedComponentName(source: string): string | undefined {
+  return (
+    /export\s+const\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=/.exec(source)?.[1] ??
+    /export\s+function\s+([A-Za-z_$][\w$]*)\s*\(/.exec(source)?.[1]
+  );
+}
+
+function numericDefault(source: string, property: string): number | undefined {
+  const match = new RegExp(
+    `${property}\\s*=\\s*(-?(?:\\d+(?:\\.\\d+)?|\\.\\d+))`,
+  ).exec(source);
+  const value = match ? Number(match[1]) : Number.NaN;
+  return Number.isFinite(value) ? value : undefined;
 }
 
 async function prepareClassicDependency(
@@ -175,7 +620,9 @@ async function prepareClassicDependency(
       displayName: dependency.fileName.replace(/\.[^.]+$/, ""),
       existingManifest,
       preferredKind:
-        dependency.kind === "unsupported" ? undefined : dependency.kind,
+        dependency.kind === "model" || dependency.kind === "texture"
+          ? dependency.kind
+          : undefined,
       companionFiles,
     });
     return { plan, diagnostics: plan.diagnostics };
