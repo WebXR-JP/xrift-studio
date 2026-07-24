@@ -1,5 +1,6 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
+  ArrowLeft,
   ArrowRight,
   AudioLines,
   Blend,
@@ -216,27 +217,153 @@ function DemoFallback() {
   );
 }
 
+function useCompactViewport() {
+  const [compact, setCompact] = useState(() =>
+    typeof window === "undefined"
+      ? false
+      : window.matchMedia("(max-width: 767px)").matches,
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const update = () => setCompact(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  return compact;
+}
+
+function CompactEditorGate({
+  projectKind,
+  onBack,
+  onContinue,
+}: {
+  projectKind: ProjectKind;
+  onBack: () => void;
+  onContinue: () => void;
+}) {
+  const kindLabel = projectKind === "world" ? "World" : "Item";
+
+  return (
+    <main className="preview-compact-editor-gate min-h-screen overflow-x-hidden px-5 py-5">
+      <div className="mx-auto flex max-w-xl items-center justify-between">
+        <button
+          type="button"
+          onClick={onBack}
+          className="preview-button preview-button-light"
+        >
+          <ArrowLeft size={15} />
+          紹介ページ
+        </button>
+        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-700">
+          最新{kindLabel} Editor
+        </span>
+      </div>
+
+      <div className="mx-auto max-w-xl pb-10 pt-12 text-center">
+        <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-violet-100 text-violet-700">
+          <MonitorPlay size={22} />
+        </span>
+        <h1 className="mt-6 text-balance text-3xl font-black leading-tight tracking-[-0.045em] text-zinc-950">
+          エディターは、広い画面でいちばん使いやすく。
+        </h1>
+        <p className="mt-4 text-sm leading-7 text-zinc-600">
+          最新版はHierarchy、Scene、Assets、Inspectorを同時に使う制作画面です。スマホでは横向きにするか、タブレット・PCでの操作をおすすめします。
+        </p>
+
+        <div className="mx-auto mt-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl shadow-violet-950/10">
+          <ProductScreenshot compact />
+        </div>
+
+        <div className="mt-8 grid gap-3">
+          <button
+            type="button"
+            onClick={onContinue}
+            className="preview-button preview-button-primary preview-button-large w-full"
+          >
+            <Play size={16} fill="currentColor" />
+            このまま最新エディターを開く
+          </button>
+          <a
+            href={releaseUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="preview-button preview-button-light preview-button-large w-full"
+          >
+            <Download size={16} />
+            デスクトップ版をダウンロード
+          </a>
+        </div>
+      </div>
+    </main>
+  );
+}
+
 export default function PreviewApp() {
   const [visualEditorKind, setVisualEditorKind] = useState<ProjectKind | null>(null);
+  const [compactEditorConfirmed, setCompactEditorConfirmed] = useState(false);
+  const compactViewport = useCompactViewport();
+  const landingScrollPosition = useRef(0);
+
+  const openDemo = (projectKind: ProjectKind) => {
+    landingScrollPosition.current = window.scrollY;
+    setVisualEditorKind(projectKind);
+    requestAnimationFrame(() => window.scrollTo({ top: 0 }));
+  };
 
   if (visualEditorKind) {
-    const closeDemo = () => setVisualEditorKind(null);
+    const closeDemo = () => {
+      setVisualEditorKind(null);
+      setCompactEditorConfirmed(false);
+      requestAnimationFrame(() =>
+        window.scrollTo({ top: landingScrollPosition.current }),
+      );
+    };
+
+    if (compactViewport && !compactEditorConfirmed) {
+      return (
+        <CompactEditorGate
+          projectKind={visualEditorKind}
+          onBack={closeDemo}
+          onContinue={() => {
+            setCompactEditorConfirmed(true);
+            requestAnimationFrame(() => window.scrollTo({ top: 0 }));
+          }}
+        />
+      );
+    }
+
     return (
-      <VisualEditorErrorBoundary
-        key={visualEditorKind}
-        featureName="ビジュアルエディターのデモ"
-        projectName={`visual-${visualEditorKind}-demo`}
-        backLabel="紹介ページへ戻る"
-        onBack={closeDemo}
-      >
-        <Suspense fallback={<DemoFallback />}>
-          <VisualEditorPrototype
-            projectKind={visualEditorKind}
-            projectName={`visual-${visualEditorKind}-demo`}
-            onBack={closeDemo}
-          />
-        </Suspense>
-      </VisualEditorErrorBoundary>
+      <div className="relative h-[100dvh] overflow-hidden">
+        {compactViewport ? (
+          <button
+            type="button"
+            onClick={closeDemo}
+            className="preview-mobile-editor-exit preview-button preview-button-light"
+          >
+            <ArrowLeft size={15} />
+            紹介ページへ戻る
+          </button>
+        ) : null}
+        <VisualEditorErrorBoundary
+          key={visualEditorKind}
+          featureName="ビジュアルエディターのデモ"
+          projectName={`visual-${visualEditorKind}-demo`}
+          backLabel="紹介ページへ戻る"
+          onBack={closeDemo}
+        >
+          <Suspense fallback={<DemoFallback />}>
+            <VisualEditorPrototype
+              projectKind={visualEditorKind}
+              projectName={`visual-${visualEditorKind}-demo`}
+              backLabel="紹介ページ"
+              onBack={closeDemo}
+            />
+          </Suspense>
+        </VisualEditorErrorBoundary>
+      </div>
     );
   }
 
@@ -254,7 +381,7 @@ export default function PreviewApp() {
               できること
             </a>
             <a href="#try" className="preview-nav-link hidden md:inline-flex">
-              画面を試す
+              最新エディター
             </a>
             <a href="#faq" className="preview-nav-link hidden lg:inline-flex">
               よくある質問
@@ -284,7 +411,7 @@ export default function PreviewApp() {
               <Sparkles size={14} />
               Worldも、Itemも。コードでも、画面でも。
             </div>
-            <h1 className="mt-6 text-balance text-5xl font-black leading-[0.98] tracking-[-0.065em] text-zinc-950 sm:text-7xl lg:text-[5.75rem]" data-reveal>
+            <h1 className="preview-hero-title mt-6 text-balance font-black leading-[0.98] tracking-[-0.065em] text-zinc-950" data-reveal>
               置いて、動かして、
               <span className="preview-gradient-text block">そのままXRiftへ。</span>
             </h1>
@@ -297,18 +424,18 @@ export default function PreviewApp() {
                 href={releaseUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="preview-button preview-button-primary preview-button-large"
+                className="preview-button preview-button-primary preview-button-large w-full max-w-xs sm:w-auto"
               >
                 <Download size={17} />
                 無料でダウンロード
               </a>
               <button
                 type="button"
-                onClick={() => setVisualEditorKind("world")}
-                className="preview-button preview-button-light preview-button-large"
+                onClick={() => openDemo("world")}
+                className="preview-button preview-button-light preview-button-large w-full max-w-xs sm:w-auto"
               >
                 <Play size={16} fill="currentColor" />
-                画面を試す
+                最新エディターを試す
               </button>
             </div>
             <p className="mt-4 text-xs font-medium text-zinc-500" data-reveal>
@@ -355,7 +482,7 @@ export default function PreviewApp() {
             </p>
           </div>
 
-          <div className="preview-flow mt-14 grid gap-0 lg:grid-cols-4" data-reveal>
+          <div className="preview-flow mt-14 grid gap-0 md:grid-cols-2 lg:grid-cols-4" data-reveal>
             {creationFlow.map((step, index) => {
               const Icon = step.icon;
               return (
@@ -509,7 +636,7 @@ export default function PreviewApp() {
                   <p className="mt-3 text-[10px] leading-5 text-zinc-500">容量の大きい素材と最適化候補も確認できます</p>
                 </div>
               </div>
-              <div className="flex items-center justify-between border-t border-white/10 px-5 py-4">
+              <div className="flex flex-col items-start gap-3 border-t border-white/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-[11px] text-zinc-500">アップロード後も結果を同じ画面に表示</span>
                 <span className="preview-button preview-button-white">
                   <Upload size={14} />
@@ -562,31 +689,35 @@ export default function PreviewApp() {
             <div className="preview-demo-glow" aria-hidden="true" />
             <div className="relative grid gap-10 lg:grid-cols-[1fr_auto] lg:items-end">
               <div className="max-w-3xl">
-                <p className="preview-eyebrow">TRY THE WORKSPACE</p>
-                <h2 className="preview-section-title mt-4">読むより、触ったほうが早い。</h2>
+                <p className="preview-eyebrow">LATEST VISUAL EDITOR</p>
+                <h2 className="preview-section-title mt-4">最新のエディターを、ここで試せる。</h2>
                 <p className="preview-section-copy mt-5 max-w-2xl">
-                  ビジュアルエディターのサンプルを、このページから開けます。Hierarchy、Scene、Assets、Inspectorを実際に触ってみてください。
+                  現在のXRift Studioと同じビジュアルエディターを、このページから開けます。シーンを選び、素材を置き、見た目を調整する流れを実際に触ってみてください。
                 </p>
+                <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-bold">
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-emerald-700">現在のエディター本体を使用</span>
+                  <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-zinc-600">World / Item対応</span>
+                </div>
                 <p className="mt-4 text-xs font-medium leading-6 text-zinc-500">
-                  これはWeb上のサンプルです。ファイル保存、外部ツール接続、アップロードは行いません。
+                  Webでは操作感を試せます。ファイル保存、AI接続、XRiftへのアップロードはデスクトップ版で行います。
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
                 <button
                   type="button"
-                  onClick={() => setVisualEditorKind("world")}
-                  className="preview-button preview-button-primary preview-button-large"
+                  onClick={() => openDemo("world")}
+                  className="preview-button preview-button-primary preview-button-large w-full sm:w-auto"
                 >
                   <Globe2 size={17} />
-                  Worldを試す
+                  最新World Editorを開く
                 </button>
                 <button
                   type="button"
-                  onClick={() => setVisualEditorKind("item")}
-                  className="preview-button preview-button-light preview-button-large"
+                  onClick={() => openDemo("item")}
+                  className="preview-button preview-button-light preview-button-large w-full sm:w-auto"
                 >
                   <Box size={17} />
-                  Itemを試す
+                  最新Item Editorを開く
                 </button>
               </div>
             </div>
@@ -662,7 +793,7 @@ export default function PreviewApp() {
                 href={releaseUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="preview-button preview-button-white preview-button-large"
+                className="preview-button preview-button-white preview-button-large w-full max-w-xs sm:w-auto"
               >
                 <Download size={17} />
                 無料でダウンロード
@@ -671,7 +802,7 @@ export default function PreviewApp() {
                 href={repositoryUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="preview-button preview-button-ghost preview-button-large"
+                className="preview-button preview-button-ghost preview-button-large w-full max-w-xs sm:w-auto"
               >
                 <GitBranch size={17} />
                 GitHubで見る

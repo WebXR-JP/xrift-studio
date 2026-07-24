@@ -388,6 +388,8 @@ function loadEditorLayout(
 export type VisualEditorPrototypeProps = {
   projectKind: VisualProjectKind;
   onBack: () => void;
+  /** Lets embedded surfaces name the actual destination instead of always saying Library. */
+  backLabel?: string;
   projectName?: string;
   /** Desktop-only root used to resolve project-relative Asset sources. */
   projectPath?: string;
@@ -597,6 +599,7 @@ function sanitizedImportMessage(error: unknown, projectPath: string): string {
 export function VisualEditorPrototype({
   projectKind,
   onBack,
+  backLabel = "ライブラリ",
   projectName,
   projectPath,
   initialBundle: providedInitialBundle,
@@ -4615,11 +4618,11 @@ export function VisualEditorPrototype({
               type="button"
               disabled={leaving}
               onClick={() => void handleBack()}
-              title={commandTitle("プロジェクト一覧へ戻る", "CloseVisualEditor")}
+              title={commandTitle(`${backLabel}へ戻る`, "CloseVisualEditor")}
               className="flex shrink-0 items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-2.5 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-wait disabled:opacity-50"
             >
               <BackIcon size={13} aria-hidden="true" />
-              {leaving ? "保存して戻っています" : "ライブラリ"}
+              {leaving ? "保存して戻っています" : backLabel}
             </button>
             <div className="min-w-0 border-l border-editor-border pl-2.5">
               <p className="truncate text-sm font-semibold text-editor-text">
