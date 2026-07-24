@@ -308,14 +308,17 @@ export const xrift = {
   checkItem: (projectPath: string, onLog: (l: LogLine) => void) =>
     run({
       bin: "xrift",
-      args: ["check", "item", "--build"],
+      // XRift CLI 0.24.2 defines --build on both the parent and subcommands.
+      // Supplying a subcommand leaves the action's build option unset, so let
+      // the CLI detect the single project kind from xrift.json instead.
+      args: ["check", "--build"],
       cwd: projectPath,
       onLog,
     }),
   checkWorld: (projectPath: string, onLog: (l: LogLine) => void) =>
     run({
       bin: "xrift",
-      args: ["check", "world", "--build"],
+      args: ["check", "--build"],
       cwd: projectPath,
       onLog,
     }),
