@@ -89,8 +89,7 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
     return Object.values(scene.entities).flatMap((entity) => {
       const target = result.entities.get(entity.id);
       const clips = result.animationClipsByEntity.get(entity.id) ?? [];
-      const clip = clips[0];
-      if (!target || !clip) return [];
+      if (!target || clips.length === 0) return [];
       const component = entity.components.find(
         (
           candidate,
@@ -101,9 +100,24 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
           candidate.type === "animation" &&
           candidate.enabled,
       );
-      return component?.autoplay
-        ? [{ component, clip, mixer: new AnimationMixer(target) }]
-        : [];
+      const indices = new Set<number>();
+      if (component?.autoplay) indices.add(0);
+      for (const index of
+        result.interactionAnimationIndicesByEntity.get(entity.id) ?? []) {
+        indices.add(index);
+      }
+      return [...indices].flatMap((index) => {
+        const clip = clips[index];
+        return clip
+          ? [
+              {
+                clip,
+                loop: component?.loop ?? false,
+                mixer: new AnimationMixer(target),
+              },
+            ]
+          : [];
+      });
     });
   }, [result]);
 
@@ -111,10 +125,10 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
     for (const playback of playbacks) {
       const action = playback.mixer.clipAction(playback.clip);
       action.reset();
-      action.clampWhenFinished = !playback.component.loop;
+      action.clampWhenFinished = !playback.loop;
       action.setLoop(
-        playback.component.loop ? LoopRepeat : LoopOnce,
-        playback.component.loop ? Infinity : 1,
+        playback.loop ? LoopRepeat : LoopOnce,
+        playback.loop ? Infinity : 1,
       );
       action.play();
     }

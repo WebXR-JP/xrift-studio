@@ -80,6 +80,7 @@ import {
   resolveOpenBrushEditorBrushBaseUrl,
   resolveRuntimeSpawnPosition,
   resolveSceneSettings,
+  STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID,
   type AssetManifest,
   type AnimationComponent,
   type ColliderComponent,
@@ -256,6 +257,8 @@ function PrimitiveGeometryView({ primitive }: { primitive: PrimitiveGeometry }) 
   }
 }
 
+const KHR_INTERACTIVITY_ON_START_ANIMATION_INDICES = [0] as const;
+
 function MeshVisual({
   component,
   animation,
@@ -356,6 +359,12 @@ function MeshVisual({
         pose={component.modelPose}
         animation={animation}
         playing={playing}
+        declaredInteractionAnimationIndices={
+          geometry.id === STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID &&
+          geometry.importMetadata?.extensionsUsed.includes("KHR_interactivity")
+            ? KHR_INTERACTIVITY_ON_START_ANIMATION_INDICES
+            : undefined
+        }
         sourceNodeIndex={
           component.geometry?.kind === "asset"
             ? component.geometry.sourceNodeIndex

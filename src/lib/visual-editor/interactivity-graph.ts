@@ -551,6 +551,49 @@ export function createDefaultKhrInteractivityExtension(): KhrInteractivityExtens
   };
 }
 
+/**
+ * Resolves animation indices started by the selected graph's event/onStart
+ * flow. This is the intentionally small runtime bridge used by the Studio
+ * guide: the graph remains canonical KHR_interactivity data while Play can
+ * demonstrate its direct animation/start behavior.
+ */
+export function getKhrInteractivityOnStartAnimationIndices(
+  value: unknown,
+): number[] {
+  const extension = parseKhrInteractivityExtension(value);
+  if (!extension) return [];
+  const graph = extension.graphs[extension.graph ?? 0];
+  const declarations = graph?.declarations ?? [];
+  const nodes = graph?.nodes ?? [];
+  const startNodes = nodes.flatMap((node, nodeIndex) =>
+    declarations[node.declaration]?.op === "event/onStart" ? [nodeIndex] : [],
+  );
+  const pending = [...startNodes];
+  const visited = new Set<number>();
+  const animationIndices = new Set<number>();
+  while (pending.length > 0) {
+    const nodeIndex = pending.shift();
+    if (nodeIndex === undefined || visited.has(nodeIndex)) continue;
+    visited.add(nodeIndex);
+    const node = nodes[nodeIndex];
+    if (!node) continue;
+    if (declarations[node.declaration]?.op === "animation/start") {
+      const animationIndex = node.values?.animation?.value?.[0];
+      if (
+        typeof animationIndex === "number" &&
+        Number.isInteger(animationIndex) &&
+        animationIndex >= 0
+      ) {
+        animationIndices.add(animationIndex);
+      }
+    }
+    for (const flow of Object.values(node.flows ?? {})) {
+      if (!visited.has(flow.node)) pending.push(flow.node);
+    }
+  }
+  return [...animationIndices].sort((left, right) => left - right);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }

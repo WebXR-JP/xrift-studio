@@ -50,6 +50,7 @@ import {
   normalizeMaterialProperties,
   applyCustomShaderSourceOverrides,
   bindCustomShaderGeometryAttributes,
+  getKhrInteractivityOnStartAnimationIndices,
   hasCustomShaderEntrypoints,
   inspectCustomShaderUniforms,
   readCustomShaderAttributeBindings,
@@ -105,6 +106,7 @@ type Props = {
   pose?: ModelPoseState;
   animation?: AnimationComponent;
   playing?: boolean;
+  declaredInteractionAnimationIndices?: readonly number[];
   sourceNodeIndex?: number;
   sourceNodeName?: string;
   /** Scene View-only material override. It never changes the imported Asset. */
@@ -120,7 +122,12 @@ type Props = {
 
 export type ProjectModelLoadState =
   | { status: "loading" }
-  | { status: "ready"; object: Object3D; animations: AnimationClip[] }
+  | {
+      status: "ready";
+      object: Object3D;
+      animations: AnimationClip[];
+      interactionAnimationIndices: number[];
+    }
   | { status: "error"; message: string };
 
 export type ProjectModelMaterialRuntimeInfo = {
@@ -139,11 +146,16 @@ export type ProjectModelMaterialRuntimeInfo = {
 };
 
 const MODEL_DATA_CACHE = new Map<string, Promise<string>>();
-type ProjectModelData = { object: Object3D; animations: AnimationClip[] };
+type ProjectModelData = {
+  object: Object3D;
+  animations: AnimationClip[];
+  interactionAnimationIndices: number[];
+};
 
 const MODEL_OBJECT_CACHE = new Map<string, Promise<ProjectModelData>>();
 const EMPTY_RESOLVED_MATERIALS: readonly ResolvedProjectModelMaterialAssignment[] =
   [];
+const EMPTY_ANIMATION_INDICES: readonly number[] = [];
 
 export function ProjectModelVisual({
   projectPath,
@@ -158,6 +170,7 @@ export function ProjectModelVisual({
   pose,
   animation,
   playing = false,
+  declaredInteractionAnimationIndices = EMPTY_ANIMATION_INDICES,
   sourceNodeIndex,
   sourceNodeName,
   viewportMaterialStyle = "scene",
@@ -226,6 +239,9 @@ export function ProjectModelVisual({
           pose={pose}
           animation={animation}
           playing={playing}
+          declaredInteractionAnimationIndices={
+            declaredInteractionAnimationIndices
+          }
           sourceNodeIndex={sourceNodeIndex}
           sourceNodeName={sourceNodeName}
           viewportMaterialStyle={viewportMaterialStyle}
@@ -324,6 +340,7 @@ function ProjectModelRender({
   pose,
   animation,
   playing,
+  declaredInteractionAnimationIndices,
   sourceNodeIndex,
   sourceNodeName,
   viewportMaterialStyle,
@@ -339,6 +356,7 @@ function ProjectModelRender({
   pose?: ModelPoseState;
   animation?: AnimationComponent;
   playing: boolean;
+  declaredInteractionAnimationIndices: readonly number[];
   sourceNodeIndex?: number;
   sourceNodeName?: string;
   viewportMaterialStyle: SceneViewportMaterialStyle;
@@ -349,6 +367,10 @@ function ProjectModelRender({
 }) {
   const readyObject = state.status === "ready" ? state.object : null;
   const animations = state.status === "ready" ? state.animations : [];
+  const interactionAnimationIndices =
+    state.status === "ready"
+      ? (state.interactionAnimationIndices ?? EMPTY_ANIMATION_INDICES)
+      : EMPTY_ANIMATION_INDICES;
   const renderedModel = useMemo(() => {
     if (!readyObject) return null;
     // Sanitize the cached source before SkeletonUtils.clone recurses through it.
@@ -385,12 +407,26 @@ function ProjectModelRender({
     () => (renderedObject ? new AnimationMixer(renderedObject) : null),
     [renderedObject],
   );
+  const playbackClips = useMemo(() => {
+    if (!playing) return [];
+    const indices = new Set<number>();
+    if (animation?.enabled && animation.autoplay && animations[0]) indices.add(0);
+    interactionAnimationIndices.forEach((index) => indices.add(index));
+    declaredInteractionAnimationIndices.forEach((index) => indices.add(index));
+    return [...indices].flatMap((index) =>
+      animations[index] ? [animations[index]] : [],
+    );
+  }, [
+    animation?.autoplay,
+    animation?.enabled,
+    animations,
+    declaredInteractionAnimationIndices,
+    interactionAnimationIndices,
+    playing,
+  ]);
   const playbackActive = Boolean(
     mixer &&
-      playing &&
-      animation?.enabled &&
-      animation.autoplay &&
-      animations[0],
+      playbackClips.length > 0,
   );
   const invalidate = useThree((canvasState) => canvasState.invalidate);
   const materialRuntimeInfo = useMemo(
@@ -432,24 +468,34 @@ function ProjectModelRender({
   }, [castShadow, receiveShadow, renderedObject]);
 
   useEffect(() => {
-    const clip = animations[0];
-    if (!mixer || !renderedObject || !playbackActive || !clip || !animation) {
+    if (!mixer || !renderedObject || !playbackActive) {
       return;
     }
-    const action = mixer.clipAction(clip);
-    action.reset();
-    action.clampWhenFinished = !animation.loop;
-    action.setLoop(animation.loop ? LoopRepeat : LoopOnce, animation.loop ? Infinity : 1);
-    action.play();
+    const loop = animation?.loop ?? false;
+    const actions = playbackClips.map((clip) => {
+      const action = mixer.clipAction(clip);
+      action.reset();
+      action.clampWhenFinished = !loop;
+      action.setLoop(loop ? LoopRepeat : LoopOnce, loop ? Infinity : 1);
+      action.play();
+      return action;
+    });
     invalidate();
     return () => {
-      action.stop();
+      actions.forEach((action) => action.stop());
       mixer.stopAllAction();
-      mixer.uncacheClip(clip);
+      playbackClips.forEach((clip) => mixer.uncacheClip(clip));
       renderedObject.updateMatrixWorld(true);
       invalidate();
     };
-  }, [animation, animations, invalidate, mixer, playbackActive, renderedObject]);
+  }, [
+    animation?.loop,
+    invalidate,
+    mixer,
+    playbackActive,
+    playbackClips,
+    renderedObject,
+  ]);
 
   useFrame((frame, delta) => {
     if (playbackActive) mixer?.update(Math.min(delta, 0.1));
@@ -1303,6 +1349,7 @@ type GltfResourceDocument = {
   buffers?: Array<{ uri?: unknown }>;
   images?: Array<{ uri?: unknown }>;
   nodes?: unknown[];
+  extensions?: Record<string, unknown>;
   meshes?: Array<{
     primitives?: Array<{ material?: unknown }>;
   }>;
@@ -1451,7 +1498,7 @@ async function parseSelfContainedModel(
   if (format === "obj") {
     const object = new OBJLoader().parse(new TextDecoder().decode(bytes));
     tagObjMaterialIndices(object);
-    return { object, animations: [] };
+    return { object, animations: [], interactionAnimationIndices: [] };
   }
 
   const source = format === "gltf" ? new TextDecoder().decode(bytes) : buffer;
@@ -1489,7 +1536,14 @@ async function parseSelfContainedModel(
         if (vrm) VRMUtils.rotateVRM0(vrm);
         repairImportedObject3DHierarchy(gltf.scene);
         tagSourceMaterialIndices(gltf, document);
-        resolve({ object: gltf.scene, animations: gltf.animations });
+        resolve({
+          object: gltf.scene,
+          animations: gltf.animations,
+          interactionAnimationIndices:
+            getKhrInteractivityOnStartAnimationIndices(
+              document.extensions?.KHR_interactivity,
+            ),
+        });
       },
       (error) => reject(error),
     );

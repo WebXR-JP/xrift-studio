@@ -3,11 +3,16 @@ import { compileVisualProject } from "./compiler/compile";
 import { serializeVisualProjectDocuments } from "./persistence";
 import { updatePrefabDocumentFromSource } from "./prefab-document";
 import {
+  getKhrInteractivityOnStartAnimationIndices,
+  validateKhrInteractivityExtension,
+} from "./interactivity-graph";
+import {
   createTransformComponent,
   type RegisteredSceneComponent,
 } from "./scene-document";
 import {
   STARTER_ASSET_FOLDER_IDS,
+  STUDIO_GUIDE_DOOR_INTERACTIVITY_ASSET_ID,
   createStarterWorldProject,
   defaultVisualStarterTemplateId,
   starterWorldContainsNoPrimitiveAssets,
@@ -43,7 +48,7 @@ export function runStarterTemplateFixtureAssertions(): void {
     assert(
       plan.bundledAssetCopies.length ===
         (templateId === "studio-guide"
-          ? 12
+          ? 14
           : templateId === "openbrush"
             ? 2
             : templateId === "xrift-official"
@@ -87,7 +92,7 @@ export function runStarterTemplateFixtureAssertions(): void {
     }
     assert(modelAssets.length ===
       (templateId === "studio-guide"
-        ? 3
+        ? 5
         : templateId === "openbrush"
           ? 1
           : templateId === "xrift-official"
@@ -200,6 +205,63 @@ export function runStarterTemplateFixtureAssertions(): void {
     }
     if (templateId === "studio-guide") {
       const sceneEntities = Object.values(plan.scene.entities);
+      const gltfDoor = plan.scene.entities["guide-gltf-door"];
+      const interactionDoor = plan.scene.entities["guide-interaction-door"];
+      const gltfDoorAnimation = gltfDoor?.components.find(
+        (component) => component.type === "animation",
+      );
+      const interactionDoorAnimation = interactionDoor?.components.find(
+        (component) => component.type === "animation",
+      );
+      assert(
+        gltfDoorAnimation?.type === "animation" &&
+          gltfDoorAnimation.autoplay &&
+          !gltfDoorAnimation.loop &&
+          interactionDoorAnimation?.type === "animation" &&
+          !interactionDoorAnimation.autoplay &&
+          !interactionDoorAnimation.loop,
+        "Studio guide doors must compare glTF Autoplay with Interaction playback",
+      );
+      assert(
+        !gltfDoor?.components.some(
+          (component) => component.type === "collider",
+        ) &&
+          !interactionDoor?.components.some(
+            (component) => component.type === "collider",
+          ),
+        "Animated guide doors must not leave a static collider in the route",
+      );
+      const interactionAsset =
+        plan.assets.assets[STUDIO_GUIDE_DOOR_INTERACTIVITY_ASSET_ID];
+      assert(
+        interactionAsset?.kind === "interactivity" &&
+          interactionAsset.folderId ===
+            STARTER_ASSET_FOLDER_IDS.behaviors &&
+          !validateKhrInteractivityExtension(
+            interactionAsset.extension,
+          ).some((diagnostic) => diagnostic.severity === "error") &&
+          JSON.stringify(
+            getKhrInteractivityOnStartAnimationIndices(
+              interactionAsset.extension,
+            ),
+          ) === "[0]",
+        "Studio guide must include an editable onStart to animation/start graph",
+      );
+      assert(
+        modelAssets.filter((asset) =>
+          asset.name.startsWith("Demo Door:"),
+        ).length === 2 &&
+          modelAssets
+            .filter((asset) => asset.name.startsWith("Demo Door:"))
+            .every(
+              (asset) =>
+                asset.kind === "model" &&
+                asset.importSettings.importAnimations &&
+                asset.importMetadata?.animations.length === 1 &&
+                asset.materialSlots.length === 3,
+            ),
+        "Studio guide must register both animated door Models and materials",
+      );
       assert(
         sceneEntities.filter((entity) =>
           entity.name.endsWith("スクリーンショット"),

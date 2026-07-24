@@ -52,6 +52,7 @@ export type XriftLoadResult = {
   root: Group;
   animations: AnimationClip[];
   animationClipsByEntity: Map<string, AnimationClip[]>;
+  interactionAnimationIndicesByEntity: Map<string, number[]>;
   entities: Map<string, Object3D>;
   diagnostics: XriftRuntimeDiagnostic[];
   manifest: XriftRuntimeManifest;
@@ -73,6 +74,7 @@ const DEFAULT_DRACO_DECODER_PATH =
 type LoadedModel = {
   root: Object3D;
   animations: AnimationClip[];
+  interactionAnimationIndices: number[];
   sourceMaterials: ReadonlyMap<number, Material>;
 };
 
@@ -149,6 +151,7 @@ export class XriftThreeLoader {
     const entities = new Map<string, Object3D>();
     const animations: AnimationClip[] = [];
     const animationClipsByEntity = new Map<string, AnimationClip[]>();
+    const interactionAnimationIndicesByEntity = new Map<string, number[]>();
 
     for (const entity of Object.values(entryScene.entities)) {
       const group = new Group();
@@ -187,6 +190,7 @@ export class XriftThreeLoader {
           materials,
           animations,
           animationClipsByEntity,
+          interactionAnimationIndicesByEntity,
           diagnostics,
         });
         if (object) group.add(object);
@@ -196,6 +200,7 @@ export class XriftThreeLoader {
       root,
       animations,
       animationClipsByEntity,
+      interactionAnimationIndicesByEntity,
       entities,
       diagnostics,
       manifest,
@@ -216,7 +221,12 @@ export class XriftThreeLoader {
     if (asset.sourceFormat === "obj") {
       const root = await new OBJLoader(this.manager).loadAsync(url);
       root.scale.multiplyScalar(asset.scale);
-      return { root, animations: [], sourceMaterials: new Map() };
+      return {
+        root,
+        animations: [],
+        interactionAnimationIndices: [],
+        sourceMaterials: new Map(),
+      };
     }
     const loader = new GLTFLoader(this.manager);
     const dracoLoader = new DRACOLoader(this.manager).setDecoderPath(
@@ -246,6 +256,14 @@ export class XriftThreeLoader {
     return {
       root: gltf.scene,
       animations: gltf.animations,
+      interactionAnimationIndices:
+        getKhrInteractivityOnStartAnimationIndices(
+          (
+            gltf.parser as unknown as {
+              json?: RuntimeGltfDocument;
+            }
+          ).json?.extensions?.KHR_interactivity,
+        ),
       sourceMaterials: collectSourceMaterials(gltf.scene),
     };
   }
@@ -357,6 +375,7 @@ export class XriftThreeLoader {
     materials: ReadonlyMap<string, Material>;
     animations: AnimationClip[];
     animationClipsByEntity: Map<string, AnimationClip[]>;
+    interactionAnimationIndicesByEntity: Map<string, number[]>;
     diagnostics: XriftRuntimeDiagnostic[];
   }): Object3D | null {
     const { component } = input;
@@ -408,6 +427,12 @@ export class XriftThreeLoader {
           ...(input.animationClipsByEntity.get(input.entity.id) ?? []),
           ...loaded.animations,
         ]);
+      }
+      if (loaded.interactionAnimationIndices.length > 0) {
+        input.interactionAnimationIndicesByEntity.set(
+          input.entity.id,
+          loaded.interactionAnimationIndices,
+        );
       }
       instance.userData.xriftStudioComponentId = component.id;
       return instance;
@@ -603,7 +628,74 @@ function collectSourceMaterials(root: Object3D): Map<number, Material> {
 
 type RuntimeGltfDocument = {
   meshes?: Array<{ primitives?: Array<{ material?: unknown }> }>;
+  extensions?: Record<string, unknown>;
 };
+
+function getKhrInteractivityOnStartAnimationIndices(
+  value: unknown,
+): number[] {
+  const extension = asRecord(value);
+  const graphs = Array.isArray(extension?.graphs) ? extension.graphs : [];
+  const graphIndex =
+    typeof extension?.graph === "number" &&
+    Number.isInteger(extension.graph) &&
+    extension.graph >= 0
+      ? extension.graph
+      : 0;
+  const graph = asRecord(graphs[graphIndex]);
+  const declarations = Array.isArray(graph?.declarations)
+    ? graph.declarations
+    : [];
+  const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+  const operationFor = (node: Record<string, unknown> | undefined) => {
+    const declarationIndex = node?.declaration;
+    if (
+      typeof declarationIndex !== "number" ||
+      !Number.isInteger(declarationIndex) ||
+      declarationIndex < 0
+    ) {
+      return undefined;
+    }
+    return asRecord(declarations[declarationIndex])?.op;
+  };
+  const pending = nodes.flatMap((candidate, nodeIndex) =>
+    operationFor(asRecord(candidate)) === "event/onStart" ? [nodeIndex] : [],
+  );
+  const visited = new Set<number>();
+  const animationIndices = new Set<number>();
+  while (pending.length > 0) {
+    const nodeIndex = pending.shift();
+    if (nodeIndex === undefined || visited.has(nodeIndex)) continue;
+    visited.add(nodeIndex);
+    const node = asRecord(nodes[nodeIndex]);
+    if (!node) continue;
+    if (operationFor(node) === "animation/start") {
+      const animationValue = asRecord(asRecord(node.values)?.animation)?.value;
+      const animationIndex =
+        Array.isArray(animationValue) ? animationValue[0] : undefined;
+      if (
+        typeof animationIndex === "number" &&
+        Number.isInteger(animationIndex) &&
+        animationIndex >= 0
+      ) {
+        animationIndices.add(animationIndex);
+      }
+    }
+    const flows = asRecord(node.flows);
+    for (const candidate of Object.values(flows ?? {})) {
+      const targetIndex = asRecord(candidate)?.node;
+      if (
+        typeof targetIndex === "number" &&
+        Number.isInteger(targetIndex) &&
+        targetIndex >= 0 &&
+        !visited.has(targetIndex)
+      ) {
+        pending.push(targetIndex);
+      }
+    }
+  }
+  return [...animationIndices].sort((left, right) => left - right);
+}
 
 function tagSourceMaterialIndices(gltf: GLTF): void {
   const parser = gltf.parser as unknown as {

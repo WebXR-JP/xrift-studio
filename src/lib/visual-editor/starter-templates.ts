@@ -30,6 +30,7 @@ import {
 } from "./prefab-document";
 import {
   createBuiltinPrimitiveMeshComponent,
+  createAnimationComponent,
   createBoxColliderComponent,
   createMeshComponent,
   createMeshColliderComponent,
@@ -41,6 +42,7 @@ import {
   type SceneEntity,
   type Vec3,
 } from "./scene-document";
+import { addDefaultInteractivityAsset } from "./interactivity-graph";
 import { OPEN_BRUSH_RENDERER } from "./open-brush";
 
 export type StarterWorldTemplateId =
@@ -60,6 +62,8 @@ export type BundledStarterModelId =
   | "torii-gate"
   | "mug"
   | "wine-glass"
+  | "studio-guide-gltf-door"
+  | "studio-guide-interaction-door"
   | "openbrush-all-brushes";
 
 export type BundledStarterTextureId =
@@ -270,6 +274,39 @@ export const BUNDLED_STARTER_ASSETS = {
       permissionBasis: "provided-for-xrift-studio",
     },
   },
+  "studio-guide-gltf-door": {
+    id: "studio-guide-gltf-door",
+    kind: "model",
+    publicPath:
+      "/visual-editor/starter-assets/studio-guide-gltf-door.glb",
+    projectRelativePath: "assets/starter/studio-guide/gltf-door.glb",
+    byteLength: 54064,
+    sha256:
+      "8cd1a0ac5da59422bc39ee56152bc8b897e0cfd9041c6d3ae099e35f041d2d98",
+    mediaType: "model/gltf-binary",
+    provenance: {
+      ownership: "project-owned",
+      sourceName: "XRift Studio guide glTF animation door",
+      permissionBasis: "provided-for-xrift-studio",
+    },
+  },
+  "studio-guide-interaction-door": {
+    id: "studio-guide-interaction-door",
+    kind: "model",
+    publicPath:
+      "/visual-editor/starter-assets/studio-guide-interaction-door.glb",
+    projectRelativePath:
+      "assets/starter/studio-guide/interaction-door.glb",
+    byteLength: 54820,
+    sha256:
+      "a2fe8d86c3715ced02536cdf426fb56da0615a7600ef87f10107fb7a29766c32",
+    mediaType: "model/gltf-binary",
+    provenance: {
+      ownership: "project-owned",
+      sourceName: "XRift Studio guide KHR_interactivity animation door",
+      permissionBasis: "provided-for-xrift-studio",
+    },
+  },
   "wood-planks-clean": {
     id: "wood-planks-clean",
     kind: "texture",
@@ -418,6 +455,8 @@ export const BUNDLED_STARTER_ASSET_IDS = [
   "torii-gate",
   "mug",
   "wine-glass",
+  "studio-guide-gltf-door",
+  "studio-guide-interaction-door",
   "wood-planks-clean",
   "polished-concrete",
   "studio-guide-overview",
@@ -470,7 +509,13 @@ export const STARTER_ASSET_FOLDER_IDS = {
   materials: "starter-library-materials",
   textures: "starter-library-textures",
   prefabs: "starter-library-prefabs",
+  behaviors: "starter-library-behaviors",
 } as const;
+
+export const STUDIO_GUIDE_DOOR_INTERACTIVITY_ASSET_ID =
+  "starter-interactivity-studio-guide-door-open";
+export const STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID =
+  "starter-model-studio-guide-interaction-door";
 
 export const STUDIO_GUIDE_TEMPLATE_THUMBNAIL =
   "/visual-editor/starter-assets/studio-guide-museum-thumbnail.png";
@@ -480,7 +525,7 @@ export const STARTER_WORLD_TEMPLATES = [
     id: "studio-guide",
     name: "XRift Studio ガイド",
     description:
-      "1階建てのミュージアムを巡り、インストールから制作・公開まで実画面で学べるワールド",
+      "1階建てのミュージアムを巡り、2種類のAnimation扉と実画面でインストールから公開まで学べるワールド",
     bundledAssetIds: [
       "studio-guide-overview",
       "studio-guide-hierarchy-create",
@@ -492,6 +537,8 @@ export const STARTER_WORLD_TEMPLATES = [
       "log-bench",
       "mug",
       "wine-glass",
+      "studio-guide-gltf-door",
+      "studio-guide-interaction-door",
       "wood-planks-clean",
       "polished-concrete",
     ],
@@ -596,6 +643,12 @@ function createStarterAssetFolders(): Record<string, AssetFolder> {
       parentId: STARTER_ASSET_FOLDER_IDS.root,
       order: 3,
     },
+    [STARTER_ASSET_FOLDER_IDS.behaviors]: {
+      id: STARTER_ASSET_FOLDER_IDS.behaviors,
+      name: "Behaviors",
+      parentId: STARTER_ASSET_FOLDER_IDS.root,
+      order: 4,
+    },
   };
 }
 
@@ -616,7 +669,7 @@ export function createStarterWorldProject(
   const textures = bundledDefinitions
     .filter((definition) => definition.kind === "texture")
     .map((definition) => createStarterTextureAsset(definition.id));
-  const baseAssets: AssetManifest = {
+  const bundledBaseAssets: AssetManifest = {
     ...prototype.assets,
     folders: createStarterAssetFolders(),
     assets: {
@@ -626,6 +679,14 @@ export function createStarterWorldProject(
       ...Object.fromEntries(textures.map((asset) => [asset.id, asset])),
     },
   };
+  const baseAssets =
+    templateId === "studio-guide"
+      ? addDefaultInteractivityAsset(bundledBaseAssets, {
+          id: STUDIO_GUIDE_DOOR_INTERACTIVITY_ASSET_ID,
+          name: "Interaction Door: Open on Start",
+          folderId: STARTER_ASSET_FOLDER_IDS.behaviors,
+        }).manifest
+      : bundledBaseAssets;
   const imported =
     templateId === "xrift-official"
       ? createOfficialTemplateDocuments(prototype.scene, baseAssets)
@@ -952,6 +1013,7 @@ function createStudioGuideEntities(): SceneEntity[] {
   const welcomeId = "guide-section-welcome";
   const editId = "guide-section-edit";
   const assetsId = "guide-section-assets";
+  const animationId = "guide-section-animation";
   const playId = "guide-section-play";
 
   const floor = createFloorEntity("studio-guide");
@@ -1169,7 +1231,7 @@ function createStudioGuideEntities(): SceneEntity[] {
   const welcomeSubheading = createGuideTextEntity(
     "guide-welcome-subheading",
     "入口サブタイトル",
-    "START HERE  /  1 FLOOR  /  6 EXHIBITS",
+    "START HERE  /  1 FLOOR  /  7 EXHIBITS",
     welcomeId,
     [0, 5.55, 15.12],
     0.22,
@@ -1339,6 +1401,116 @@ function createStudioGuideEntities(): SceneEntity[] {
     practiceLabel.id,
   ]);
 
+  const gltfDoorAnimation = createAnimationComponent(
+    "guide-gltf-door-animation",
+  );
+  const interactionDoorAnimation = createAnimationComponent(
+    "guide-interaction-door-animation",
+  );
+  if (!gltfDoorAnimation || !interactionDoorAnimation) {
+    throw new Error("Studio guide door Animation components are unavailable");
+  }
+  const gltfDoorSource = createModelEntity(
+    "guide-gltf-door",
+    "左扉 glTF Animation",
+    STARTER_MODEL_IDS.guideGltfDoor,
+    [-2.2, 0, -9],
+    [0, 0, 0],
+    [1, 1, 1],
+  );
+  const gltfDoor: SceneEntity = {
+    ...gltfDoorSource,
+    parentId: animationId,
+    components: [
+      ...gltfDoorSource.components.filter(
+        (component) => component.type !== "collider",
+      ),
+      { ...gltfDoorAnimation, autoplay: true, loop: false },
+    ],
+  };
+  const interactionDoorSource = createModelEntity(
+    "guide-interaction-door",
+    "右扉 Interaction Animation",
+    STARTER_MODEL_IDS.guideInteractionDoor,
+    [2.2, 0, -9],
+    [0, 0, 0],
+    [1, 1, 1],
+  );
+  const interactionDoor: SceneEntity = {
+    ...interactionDoorSource,
+    parentId: animationId,
+    components: [
+      ...interactionDoorSource.components.filter(
+        (component) => component.type !== "collider",
+      ),
+      { ...interactionDoorAnimation, autoplay: false, loop: false },
+    ],
+  };
+  const animationBackdrop = createGuidePrimitiveEntity(
+    "guide-animation-backdrop",
+    "Animation比較展示プレート",
+    animationId,
+    BUILTIN_PRIMITIVE_CREATION_IDS.box,
+    STARTER_MATERIAL_IDS.guideDark,
+    [0, 5.02, -9.12],
+    [0, 0, 0],
+    [10.5, 1.8, 0.12],
+  );
+  const animationHeading = createGuideTextEntity(
+    "guide-animation-heading",
+    "Animation比較展示 見出し",
+    "ANIMATION GATE  /  Playで2つの扉を開く",
+    animationId,
+    [0, 5.52, -9.02],
+    0.34,
+    10,
+    "#ffffff",
+  );
+  const gltfDoorLabel = createGuideTextEntity(
+    "guide-gltf-door-label",
+    "glTF Animation扉 説明",
+    "LEFT  /  glTF Animation\nAnimation Component: Autoplay ON",
+    animationId,
+    [-2.65, 4.78, -9.02],
+    0.17,
+    4.7,
+    "#bae6fd",
+  );
+  const interactionDoorLabel = createGuideTextEntity(
+    "guide-interaction-door-label",
+    "Interaction Animation扉 説明",
+    "RIGHT  /  Interaction Animation\nevent/onStart → animation/start",
+    animationId,
+    [2.65, 4.78, -9.02],
+    0.17,
+    4.7,
+    "#ddd6fe",
+  );
+  const interactionAssetHint = createGuideTextEntity(
+    "guide-interaction-asset-hint",
+    "Interaction Asset確認案内",
+    "Assets > Behaviors の「Interaction Door: Open on Start」で同じグラフを編集できます",
+    animationId,
+    [0, 0.42, -8.76],
+    0.16,
+    9.5,
+    "#f4f4f5",
+  );
+  const animation = createGuideGroup(
+    animationId,
+    "04 2つのAnimationで扉を開く",
+    null,
+    [
+      gltfDoor.id,
+      interactionDoor.id,
+      animationBackdrop.id,
+      animationHeading.id,
+      gltfDoorLabel.id,
+      interactionDoorLabel.id,
+      interactionAssetHint.id,
+    ],
+  );
+
   const playStation = createGuideStation({
     id: "guide-station-play-publish",
     parentId: playId,
@@ -1347,7 +1519,7 @@ function createStudioGuideEntities(): SceneEntity[] {
     body:
       "Playは編集データのコピーを実行します。問題がなければ保存し、タイトル・説明・サムネイルを整えてアップロードします。",
     materialAssetId: STARTER_MATERIAL_IDS.guidePlayPublish,
-    position: [0, 3, -12.5],
+    position: [0, 3, -14],
     screenScale: [7.2, 4.05],
   });
   const mirror = createGuideXriftEntity(
@@ -1401,7 +1573,7 @@ function createStudioGuideEntities(): SceneEntity[] {
     [0, 0, 0],
     [12.5, 1.65, 0.12],
   );
-  const play = createGuideGroup(playId, "04 Play・公開・Component", null, [
+  const play = createGuideGroup(playId, "05 Play・公開・Component", null, [
     playStation[0].id,
     mirror.id,
     tagBoard.id,
@@ -1416,6 +1588,7 @@ function createStudioGuideEntities(): SceneEntity[] {
     welcome,
     edit,
     assets,
+    animation,
     play,
     createLightEntity(
       "starter-sun",
@@ -1450,6 +1623,13 @@ function createStudioGuideEntities(): SceneEntity[] {
     practiceLabelBackdrop,
     samplesLabel,
     practiceLabel,
+    gltfDoor,
+    interactionDoor,
+    animationBackdrop,
+    animationHeading,
+    gltfDoorLabel,
+    interactionDoorLabel,
+    interactionAssetHint,
     ...playStation,
     mirror,
     tagBoard,
@@ -1631,6 +1811,8 @@ const STARTER_MODEL_IDS = {
   toriiGate: "starter-model-torii-gate",
   mug: "starter-model-mug",
   wineGlass: "starter-model-wine-glass",
+  guideGltfDoor: "starter-model-studio-guide-gltf-door",
+  guideInteractionDoor: STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID,
   openBrush: "starter-model-openbrush-all-brushes",
 } as const;
 
@@ -1641,6 +1823,8 @@ const STARTER_MODEL_ORDER: Record<BundledStarterModelId, number> = {
   "torii-gate": 1,
   mug: 2,
   "wine-glass": 3,
+  "studio-guide-gltf-door": 4,
+  "studio-guide-interaction-door": 5,
   "openbrush-all-brushes": 0,
 };
 
@@ -1854,6 +2038,7 @@ type StarterModelMetadata = {
   assetId: string;
   name: string;
   materialName: string;
+  materialNames?: readonly string[];
   importMetadata: NonNullable<ModelAsset["importMetadata"]>;
 };
 
@@ -1959,6 +2144,57 @@ const STARTER_MODEL_METADATA = {
       boundingSphereRadius: 0.121969,
     }),
   },
+  "studio-guide-gltf-door": {
+    assetId: STARTER_MODEL_IDS.guideGltfDoor,
+    name: "Demo Door: glTF Animation",
+    materialName: "GLTF_Frame",
+    materialNames: ["GLTF_Frame", "GLTF_Trim", "GLTF_Panel"],
+    importMetadata: {
+      ...modelMetadata(11, 9, 9, {
+        min: [-1.62, 0, -0.2],
+        max: [1.62, 4.25, 0.2],
+        center: [0, 2.125, 0],
+        size: [3.24, 4.25, 0.4],
+        boundingSphereRadius: 2.681,
+      }),
+      animations: [
+        {
+          name: "Open_GLTF_Door",
+          duration: 2.166667,
+          trackCount: 1,
+          sourceAnimationIndex: 0,
+        },
+      ],
+    },
+  },
+  "studio-guide-interaction-door": {
+    assetId: STARTER_MODEL_IDS.guideInteractionDoor,
+    name: "Demo Door: KHR_interactivity",
+    materialName: "Interaction_Frame",
+    materialNames: [
+      "Interaction_Frame",
+      "Interaction_Trim",
+      "Interaction_Panel",
+    ],
+    importMetadata: {
+      ...modelMetadata(11, 9, 9, {
+        min: [-1.62, 0, -0.2],
+        max: [1.62, 4.25, 0.2],
+        center: [0, 2.125, 0],
+        size: [3.24, 4.25, 0.4],
+        boundingSphereRadius: 2.681,
+      }),
+      animations: [
+        {
+          name: "Open_Interaction_Door",
+          duration: 2.166667,
+          trackCount: 1,
+          sourceAnimationIndex: 0,
+        },
+      ],
+      extensionsUsed: ["KHR_interactivity"],
+    },
+  },
 } satisfies Record<BundledStarterModelId, StarterModelMetadata>;
 
 function modelMetadata(
@@ -1985,7 +2221,7 @@ function createStarterModelAsset(bundledId: BundledStarterAssetId): ModelAsset {
     throw new Error(`Starter asset is not a Model: ${bundledId}`);
   }
   const bundled = BUNDLED_STARTER_ASSETS[bundledId];
-  const metadata = STARTER_MODEL_METADATA[bundledId];
+  const metadata: StarterModelMetadata = STARTER_MODEL_METADATA[bundledId];
   return {
     id: metadata.assetId,
     name: metadata.name,
@@ -1997,7 +2233,10 @@ function createStarterModelAsset(bundledId: BundledStarterAssetId): ModelAsset {
     folderId: STARTER_ASSET_FOLDER_IDS.models,
     order: STARTER_MODEL_ORDER[bundledId],
     importSettings: {
-      ...defaultModelImportSettings(false),
+      ...defaultModelImportSettings(
+        bundledId === "studio-guide-gltf-door" ||
+          bundledId === "studio-guide-interaction-door",
+      ),
       ...(bundledId === "openbrush-all-brushes"
         ? { generateColliders: false }
         : {}),
@@ -2005,13 +2244,13 @@ function createStarterModelAsset(bundledId: BundledStarterAssetId): ModelAsset {
     materialSlots:
       bundledId === "openbrush-all-brushes"
         ? []
-        : [
-            {
-              slot: "material-0",
-              name: metadata.materialName,
-              sourceMaterialIndex: 0,
-            },
-          ],
+        : (metadata.materialNames ?? [metadata.materialName]).map(
+            (name, sourceMaterialIndex) => ({
+              slot: `material-${sourceMaterialIndex}`,
+              name,
+              sourceMaterialIndex,
+            }),
+          ),
     importMetadata: {
       ...metadata.importMetadata,
       byteLength: bundled.byteLength,
@@ -2029,6 +2268,8 @@ function isBundledStarterModelId(
     id === "torii-gate" ||
     id === "mug" ||
     id === "wine-glass" ||
+    id === "studio-guide-gltf-door" ||
+    id === "studio-guide-interaction-door" ||
     id === "openbrush-all-brushes"
   );
 }
