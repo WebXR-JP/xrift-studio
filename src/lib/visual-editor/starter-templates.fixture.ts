@@ -297,6 +297,60 @@ export function runStarterTemplateFixtureAssertions(): void {
           }),
         "Studio guide furnishings must add visual density without trimesh colliders",
       );
+      const entityPosition = (entityId: string) => {
+        const transform = plan.scene.entities[entityId]?.components.find(
+          (component) => component.type === "transform",
+        );
+        return transform?.type === "transform"
+          ? transform.position
+          : undefined;
+      };
+      const entityScale = (entityId: string) => {
+        const transform = plan.scene.entities[entityId]?.components.find(
+          (component) => component.type === "transform",
+        );
+        return transform?.type === "transform"
+          ? transform.scale
+          : undefined;
+      };
+      assert(
+        JSON.stringify(entityPosition("starter-floor")) === "[0,0,-2.5]" &&
+          JSON.stringify(entityScale("starter-floor")) === "[26,40,1]" &&
+          JSON.stringify(entityPosition("guide-museum-wall-left")) ===
+            "[-11,2.6,-2.5]" &&
+          JSON.stringify(entityPosition("guide-museum-wall-right")) ===
+            "[11,2.6,-2.5]" &&
+          JSON.stringify(entityPosition("guide-museum-wall-back")) ===
+            "[0,2.6,-20]",
+        "Studio guide museum must retain its compact 22 m by 35 m layout",
+      );
+      assert(
+        [
+          "guide-sample-plinth",
+          "guide-laptop-plinth",
+          "guide-vr-plinth",
+        ].every((entityId) => {
+          const position = entityPosition(entityId);
+          return position && Math.abs(position[0]) >= 6;
+        }) &&
+          ["guide-museum-route-1", "guide-museum-route-2"].every(
+            (entityId) => {
+              const position = entityPosition(entityId);
+              return position && Math.abs(position[0]) === 2.25;
+            },
+          ) &&
+          JSON.stringify(entityPosition("guide-station-overview")) ===
+            "[5.25,2.55,10.2]" &&
+          JSON.stringify(entityScale("guide-station-overview-frame")) ===
+            "[5.95,4.84,0.12]" &&
+          Math.abs(
+            entityPosition("guide-practice-label-backdrop")?.[0] ?? 0,
+          ) >= 10 &&
+          Math.abs(
+            entityPosition("guide-components-backdrop")?.[0] ?? 0,
+          ) >= 10,
+        "Studio guide must keep the 4.5 m central promenade clear of plinths and large wall signs",
+      );
       const gltfDoor = plan.scene.entities["guide-gltf-door"];
       const interactionDoor = plan.scene.entities["guide-interaction-door"];
       const gltfDoorAnimation = gltfDoor?.components.find(

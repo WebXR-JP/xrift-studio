@@ -768,7 +768,7 @@ export const STARTER_WORLD_TEMPLATES = [
     id: "studio-guide",
     name: "XRift Studio ガイド",
     description:
-      "Poly Havenの庭Skybox、低ポリ展示物、10種の再利用可能なParticleを備えた1階建てミュージアムで制作を学べるワールド",
+      "中央4.5mの見通しを保ち、Poly Havenの庭Skybox、低ポリ展示物、10種の再利用可能なParticleから制作を学べる1階建てミュージアム",
     bundledAssetIds: [
       "studio-guide-overview",
       "studio-guide-hierarchy-create",
@@ -1313,6 +1313,14 @@ function createStudioGuideEntities(): SceneEntity[] {
   const animationId = "guide-section-animation";
   const particleId = "guide-section-particles";
   const playId = "guide-section-play";
+  const museumHalfWidth = 11;
+  const museumFrontZ = 15;
+  const museumBackZ = -20;
+  const museumCenterZ = (museumFrontZ + museumBackZ) / 2;
+  const museumDepth = museumFrontZ - museumBackZ;
+  const wallPanelX = museumHalfWidth - 0.28;
+  const particleEmitterX = museumHalfWidth - 1.6;
+  const particleShelfX = museumHalfWidth - 1.25;
 
   const floor = createFloorEntity("studio-guide");
   const museumPrimitive = (
@@ -1367,36 +1375,36 @@ function createStudioGuideEntities(): SceneEntity[] {
       "guide-museum-wall-left",
       "美術館 外壁 左",
       STARTER_MATERIAL_IDS.guideWall,
-      [-12, 2.6, -4],
-      [0.35, 5.2, 39],
+      [-museumHalfWidth, 2.6, museumCenterZ],
+      [0.35, 5.2, museumDepth],
     ),
     museumPrimitive(
       "guide-museum-wall-right",
       "美術館 外壁 右",
       STARTER_MATERIAL_IDS.guideWall,
-      [12, 2.6, -4],
-      [0.35, 5.2, 39],
+      [museumHalfWidth, 2.6, museumCenterZ],
+      [0.35, 5.2, museumDepth],
     ),
     museumPrimitive(
       "guide-museum-wall-back",
       "美術館 外壁 奥",
       STARTER_MATERIAL_IDS.guideWall,
-      [0, 2.6, -23.5],
-      [24.35, 5.2, 0.35],
+      [0, 2.6, museumBackZ],
+      [museumHalfWidth * 2 + 0.35, 5.2, 0.35],
     ),
     museumPrimitive(
       "guide-museum-wall-front-left",
       "美術館 正面壁 左",
       STARTER_MATERIAL_IDS.guideWall,
-      [-8.25, 2.6, 15.5],
-      [7.5, 5.2, 0.35],
+      [-7.63, 2.6, museumFrontZ],
+      [6.75, 5.2, 0.35],
     ),
     museumPrimitive(
       "guide-museum-wall-front-right",
       "美術館 正面壁 右",
       STARTER_MATERIAL_IDS.guideWall,
-      [8.25, 2.6, 15.5],
-      [7.5, 5.2, 0.35],
+      [7.63, 2.6, museumFrontZ],
+      [6.75, 5.2, 0.35],
     ),
   ];
   const entrance = [
@@ -1404,28 +1412,28 @@ function createStudioGuideEntities(): SceneEntity[] {
       "guide-museum-entrance-column-left",
       "エントランス柱 左",
       STARTER_MATERIAL_IDS.guideDark,
-      [-4.25, 2.7, 15.45],
+      [-4.25, 2.7, museumFrontZ - 0.05],
       [0.5, 5.4, 0.7],
     ),
     museumPrimitive(
       "guide-museum-entrance-column-right",
       "エントランス柱 右",
       STARTER_MATERIAL_IDS.guideDark,
-      [4.25, 2.7, 15.45],
+      [4.25, 2.7, museumFrontZ - 0.05],
       [0.5, 5.4, 0.7],
     ),
     museumPrimitive(
       "guide-museum-entrance-lintel",
       "エントランス上部",
       STARTER_MATERIAL_IDS.guideDark,
-      [0, 5.15, 15.45],
+      [0, 5.15, museumFrontZ - 0.05],
       [9, 0.5, 0.7],
     ),
     museumPrimitive(
       "guide-museum-entrance-step",
       "エントランス床",
       STARTER_MATERIAL_IDS.guideDark,
-      [0, 0.08, 16.4],
+      [0, 0.08, museumFrontZ + 0.9],
       [9, 0.16, 2.2],
       false,
     ),
@@ -1435,24 +1443,24 @@ function createStudioGuideEntities(): SceneEntity[] {
       "guide-museum-trim-left",
       "外壁巾木 左",
       STARTER_MATERIAL_IDS.guideDark,
-      [-11.78, 0.25, -4],
-      [0.2, 0.5, 38.6],
+      [-museumHalfWidth + 0.22, 0.25, museumCenterZ],
+      [0.2, 0.5, museumDepth - 0.4],
       false,
     ),
     museumPrimitive(
       "guide-museum-trim-right",
       "外壁巾木 右",
       STARTER_MATERIAL_IDS.guideDark,
-      [11.78, 0.25, -4],
-      [0.2, 0.5, 38.6],
+      [museumHalfWidth - 0.22, 0.25, museumCenterZ],
+      [0.2, 0.5, museumDepth - 0.4],
       false,
     ),
     museumPrimitive(
       "guide-museum-trim-back",
       "外壁巾木 奥",
       STARTER_MATERIAL_IDS.guideDark,
-      [0, 0.25, -23.28],
-      [23.5, 0.5, 0.2],
+      [0, 0.25, museumBackZ + 0.22],
+      [museumHalfWidth * 2 - 0.5, 0.5, 0.2],
       false,
     ),
   ];
@@ -1460,19 +1468,19 @@ function createStudioGuideEntities(): SceneEntity[] {
     museumPrimitive(
       `guide-museum-beam-${index + 1}`,
       `天井梁 ${index + 1}`,
-      STARTER_MATERIAL_IDS.guideDark,
+      STARTER_MATERIAL_IDS.guideWall,
       [0, 5.05, z],
-      [23.4, 0.2, 0.28],
+      [museumHalfWidth * 2 - 0.6, 0.16, 0.24],
       false,
     ),
   );
-  const routeGuides = [-2.15, 2.15].map((x, index) =>
+  const routeGuides = [-2.25, 2.25].map((x, index) =>
     museumPrimitive(
       `guide-museum-route-${index + 1}`,
       `順路ライン ${index + 1}`,
       STARTER_MATERIAL_IDS.guideAccent,
-      [x, 0.018, -3],
-      [0.08, 40, 1],
+      [x, 0.018, museumCenterZ],
+      [0.07, museumDepth + 1, 1],
       false,
       [-Math.PI / 2, 0, 0],
       BUILTIN_PRIMITIVE_CREATION_IDS.plane,
@@ -1495,7 +1503,7 @@ function createStudioGuideEntities(): SceneEntity[] {
         "guide-bench-right",
         "休憩用ベンチ 右",
         STARTER_MODEL_IDS.logBench,
-        [8.2, 0, -8.5],
+        [7.5, 0, -7.2],
         [0, -Math.PI / 2, 0],
         [1.2, 1.2, 1.2],
       ),
@@ -1503,10 +1511,10 @@ function createStudioGuideEntities(): SceneEntity[] {
     },
   ];
   const planters = [
-    [-10.4, 0, 13.2],
-    [10.4, 0, 13.2],
-    [-10.4, 0, -17.2],
-    [10.4, 0, -17.2],
+    [-9.4, 0, 12.8],
+    [9.4, 0, 12.8],
+    [-9.4, 0, -8.5],
+    [9.4, 0, -8.5],
   ].map((position, index) =>
     decorativeModel(
       `guide-planter-${index + 1}`,
@@ -1523,7 +1531,7 @@ function createStudioGuideEntities(): SceneEntity[] {
     "エントランス案内板",
     furnishingsId,
     STARTER_MODEL_IDS.guideInformationBoard,
-    [-8.8, 0, 13.2],
+    [-7.1, 0, 12],
     [0, 0.12, 0],
     [1, 1, 1],
   );
@@ -1532,7 +1540,7 @@ function createStudioGuideEntities(): SceneEntity[] {
     "ギャラリーベンチ",
     furnishingsId,
     STARTER_MODEL_IDS.guideBench,
-    [-9.2, 0, -12.5],
+    [-6.8, 0, -13.8],
     [0, Math.PI / 2, 0],
     [1.1, 1.1, 1.1],
   );
@@ -1541,7 +1549,7 @@ function createStudioGuideEntities(): SceneEntity[] {
     "XR体験を見渡す望遠鏡",
     furnishingsId,
     STARTER_MODEL_IDS.guideTelescope,
-    [9.1, 0, -14.8],
+    [6.8, 0, -14.2],
     [0, -0.85, 0],
     [1.08, 1.08, 1.08],
   );
@@ -1582,8 +1590,8 @@ function createStudioGuideEntities(): SceneEntity[] {
     body:
       "左のHierarchyで選ぶ。中央のScene Viewで配置する。右のInspectorで調整する。\n下のAssetsから素材を使い、Playで体験してから保存・アップロードします。",
     materialAssetId: STARTER_MATERIAL_IDS.guideOverview,
-    position: [3.8, 2.9, 10.4],
-    screenScale: [6.5, 3.65],
+    position: [5.25, 2.55, 10.2],
+    screenScale: [5.4, 3.04],
   });
   const installStation = createGuideStation({
     id: "guide-station-install",
@@ -1593,17 +1601,17 @@ function createStudioGuideEntities(): SceneEntity[] {
     body:
       "QRを読み取るか、次のURLを開きます。\ngithub.com/WebXR-JP/xrift-studio/releases/latest\nWindows・macOS・Linuxの最新版を選びます。",
     materialAssetId: STARTER_MATERIAL_IDS.guideInstallQr,
-    position: [-6.7, 2.55, 10.8],
-    screenScale: [2.8, 2.8],
+    position: [-6.2, 2.45, 10.4],
+    screenScale: [2.6, 2.6],
   });
   const welcomeHeading = createGuideTextEntity(
     "guide-welcome-heading",
     "入口タイトル",
     "XRift Studio Museum",
     welcomeId,
-    [0, 6.05, 15.15],
-    0.58,
-    10,
+    [0, 5.52, museumFrontZ - 0.35],
+    0.46,
+    8.5,
     "#ffffff",
   );
   const welcomeSubheading = createGuideTextEntity(
@@ -1611,9 +1619,9 @@ function createStudioGuideEntities(): SceneEntity[] {
     "入口サブタイトル",
     "START HERE  /  1 FLOOR  /  8 EXHIBITS",
     welcomeId,
-    [0, 5.55, 15.12],
-    0.22,
-    9,
+    [0, 5.14, museumFrontZ - 0.38],
+    0.19,
+    8,
     "#ddd6fe",
   );
   const lobbyLabel = createGuideTextEntity(
@@ -1621,9 +1629,9 @@ function createStudioGuideEntities(): SceneEntity[] {
     "ロビー案内",
     "LOBBY  /  まずここから",
     welcomeId,
-    [0, 4.75, 12.12],
-    0.27,
-    8,
+    [0, 4.62, 11.88],
+    0.24,
+    6,
     "#ffffff",
   );
   const entranceSign = createGuidePrimitiveEntity(
@@ -1632,9 +1640,9 @@ function createStudioGuideEntities(): SceneEntity[] {
     welcomeId,
     BUILTIN_PRIMITIVE_CREATION_IDS.box,
     STARTER_MATERIAL_IDS.guideDark,
-    [0, 5.8, 15.02],
+    [0, 5.34, museumFrontZ - 0.48],
     [0, 0, 0],
-    [12, 1.55, 0.16],
+    [9.2, 1.05, 0.16],
   );
   const lobbyLabelBackdrop = createGuidePrimitiveEntity(
     "guide-lobby-label-backdrop",
@@ -1642,9 +1650,9 @@ function createStudioGuideEntities(): SceneEntity[] {
     welcomeId,
     BUILTIN_PRIMITIVE_CREATION_IDS.box,
     STARTER_MATERIAL_IDS.guideDark,
-    [0, 4.75, 12.04],
+    [0, 4.62, 11.8],
     [0, 0, 0],
-    [7, 0.82, 0.12],
+    [5.4, 0.68, 0.12],
   );
   const welcome = createGuideGroup(welcomeId, "01 はじめに・インストール", null, [
     entranceSign.id,
@@ -1664,7 +1672,7 @@ function createStudioGuideEntities(): SceneEntity[] {
     body:
       "Hierarchyはシーンの構造です。CreateからEmpty、Primitive、XRift Componentを追加し、親子関係を整理します。",
     materialAssetId: STARTER_MATERIAL_IDS.guideHierarchyCreate,
-    position: [-11.72, 2.95, 5],
+    position: [-wallPanelX, 2.65, 5],
     rotationY: Math.PI / 2,
   });
   const sceneStation = createGuideStation({
@@ -1675,7 +1683,7 @@ function createStudioGuideEntities(): SceneEntity[] {
     body:
       "Scene ViewでEntityを選び、移動・回転・拡縮を使います。ギズモとInspectorの数値は同じTransformを編集します。",
     materialAssetId: STARTER_MATERIAL_IDS.guideSceneTools,
-    position: [-11.72, 2.95, -2.3],
+    position: [-wallPanelX, 2.65, -2.3],
     rotationY: Math.PI / 2,
   });
   const edit = createGuideGroup(editId, "02 シーンを編集する", null, [
@@ -1691,7 +1699,7 @@ function createStudioGuideEntities(): SceneEntity[] {
     body:
       "Model、Texture、Material、PrefabをAssetsで管理します。Scene Viewへドラッグし、再利用できる素材として育てます。",
     materialAssetId: STARTER_MATERIAL_IDS.guideAssets,
-    position: [11.72, 2.95, 5],
+    position: [wallPanelX, 2.65, 5],
     rotationY: -Math.PI / 2,
   });
   const inspectorStation = createGuideStation({
@@ -1702,7 +1710,7 @@ function createStudioGuideEntities(): SceneEntity[] {
     body:
       "Entity、Asset、SceneでInspectorが切り替わります。Transform、Material、Collider、Componentの設定はここに集まります。",
     materialAssetId: STARTER_MATERIAL_IDS.guideInspector,
-    position: [11.72, 2.95, -2.3],
+    position: [wallPanelX, 2.65, -2.3],
     rotationY: -Math.PI / 2,
   });
   const samplePlinth = createGuidePrimitiveEntity(
@@ -1711,9 +1719,9 @@ function createStudioGuideEntities(): SceneEntity[] {
     assetsId,
     BUILTIN_PRIMITIVE_CREATION_IDS.box,
     STARTER_MATERIAL_IDS.guidePlinth,
-    [0, 0.55, -5],
+    [6.45, 0.45, -5.3],
     [0, 0, 0],
-    [2.8, 1.1, 1.5],
+    [2.4, 0.9, 1.35],
     true,
   );
   const laptopPlinth = createGuidePrimitiveEntity(
@@ -1722,9 +1730,9 @@ function createStudioGuideEntities(): SceneEntity[] {
     assetsId,
     BUILTIN_PRIMITIVE_CREATION_IDS.box,
     STARTER_MATERIAL_IDS.guidePlinth,
-    [-5.6, 0.55, -5],
+    [-6.45, 0.45, -3.6],
     [0, 0, 0],
-    [3.1, 1.1, 1.6],
+    [2.7, 0.9, 1.45],
     true,
   );
   const vrPlinth = createGuidePrimitiveEntity(
@@ -1733,9 +1741,9 @@ function createStudioGuideEntities(): SceneEntity[] {
     assetsId,
     BUILTIN_PRIMITIVE_CREATION_IDS.box,
     STARTER_MATERIAL_IDS.guidePlinth,
-    [5.6, 0.55, -5],
+    [-6.45, 0.45, -7],
     [0, 0, 0],
-    [3.1, 1.1, 1.6],
+    [2.5, 0.9, 1.35],
     true,
   );
   const mug = {
@@ -1743,9 +1751,9 @@ function createStudioGuideEntities(): SceneEntity[] {
       "guide-sample-mug",
       "編集できるマグカップ",
       STARTER_MODEL_IDS.mug,
-      [-0.7, 1.15, -5],
+      [5.9, 0.98, -5.3],
       [0, 0.3, 0],
-      [3, 3, 3],
+      [2.2, 2.2, 2.2],
     ),
     parentId: assetsId,
   };
@@ -1754,9 +1762,9 @@ function createStudioGuideEntities(): SceneEntity[] {
       "guide-sample-wine-glass",
       "編集できるワイングラス",
       STARTER_MODEL_IDS.wineGlass,
-      [0.8, 1.15, -5],
+      [6.95, 0.98, -5.3],
       [0, -0.3, 0],
-      [3, 3, 3],
+      [2.2, 2.2, 2.2],
     ),
     parentId: assetsId,
   };
@@ -1765,34 +1773,34 @@ function createStudioGuideEntities(): SceneEntity[] {
     "制作サンプル ノートPC",
     assetsId,
     STARTER_MODEL_IDS.guideLaptop,
-    [-6.1, 1.15, -5],
+    [-6.85, 0.98, -3.6],
     [0, 0.18, 0],
-    [3, 3, 3],
+    [2.4, 2.4, 2.4],
   );
   const globe = decorativeModel(
     "guide-sample-globe",
     "制作サンプル 地球儀",
     assetsId,
     STARTER_MODEL_IDS.guideGlobe,
-    [-5, 1.15, -5],
+    [-5.95, 0.98, -3.6],
     [0, -0.22, 0],
-    [3.3, 3.3, 3.3],
+    [2.6, 2.6, 2.6],
   );
   const vrHeadset = decorativeModel(
     "guide-sample-vr-headset",
     "制作サンプル VRヘッドセット",
     assetsId,
     STARTER_MODEL_IDS.guideVrHeadset,
-    [5.6, 1.15, -5],
+    [-6.45, 0.98, -7],
     [0, -0.25, 0],
-    [4.2, 4.2, 4.2],
+    [3.2, 3.2, 3.2],
   );
   const laptopLabel = createGuideTextEntity(
     "guide-laptop-label",
     "制作デスク展示ラベル",
     "MODEL ASSETS  /  Laptop + Globe",
     assetsId,
-    [-5.6, 2.15, -4.94],
+    [-6.45, 1.82, -3.53],
     0.18,
     4.5,
     "#bae6fd",
@@ -1802,7 +1810,7 @@ function createStudioGuideEntities(): SceneEntity[] {
     "XRデバイス展示ラベル",
     "XR ASSET  /  VR Headset",
     assetsId,
-    [5.6, 2.15, -4.94],
+    [-6.45, 1.82, -6.93],
     0.18,
     4.5,
     "#ddd6fe",
@@ -1812,20 +1820,22 @@ function createStudioGuideEntities(): SceneEntity[] {
     "Assetサンプル説明",
     "実習: GLBを選び、移動・複製・Material変更を試してください",
     assetsId,
-    [0, 2.28, -4.93],
+    [wallPanelX - 0.1, 2.77, -7.45],
     0.16,
-    6.5,
+    3.9,
     "#e4e4e7",
+    [0, -Math.PI / 2, 0],
   );
   const practiceLabel = createGuideTextEntity(
     "guide-practice-label",
     "実習エリア見出し",
     "HANDS-ON  /  編集してみる",
     assetsId,
-    [0, 3.15, -4.93],
-    0.28,
-    8,
+    [wallPanelX - 0.1, 3.28, -7.45],
+    0.25,
+    3.9,
     "#ffffff",
+    [0, -Math.PI / 2, 0],
   );
   const practiceLabelBackdrop = createGuidePrimitiveEntity(
     "guide-practice-label-backdrop",
@@ -1833,9 +1843,9 @@ function createStudioGuideEntities(): SceneEntity[] {
     assetsId,
     BUILTIN_PRIMITIVE_CREATION_IDS.box,
     STARTER_MATERIAL_IDS.guideDark,
-    [0, 2.7, -5.04],
-    [0, 0, 0],
-    [7.6, 1.65, 0.12],
+    [wallPanelX, 3.02, -7.45],
+    [0, -Math.PI / 2, 0],
+    [4.2, 1.25, 0.12],
   );
   const assets = createGuideGroup(assetsId, "03 AssetsとInspector", null, [
     assetsStation[0].id,
@@ -1906,18 +1916,18 @@ function createStudioGuideEntities(): SceneEntity[] {
     animationId,
     BUILTIN_PRIMITIVE_CREATION_IDS.box,
     STARTER_MATERIAL_IDS.guideDark,
-    [0, 5.02, -9.12],
+    [0, 4.43, -9.12],
     [0, 0, 0],
-    [10.5, 1.8, 0.12],
+    [8.4, 1.3, 0.12],
   );
   const animationHeading = createGuideTextEntity(
     "guide-animation-heading",
     "Animation比較展示 見出し",
     "ANIMATION GATE  /  Playで2つの扉を開く",
     animationId,
-    [0, 5.52, -9.02],
-    0.34,
-    10,
+    [0, 4.78, -9.02],
+    0.29,
+    8,
     "#ffffff",
   );
   const gltfDoorLabel = createGuideTextEntity(
@@ -1925,9 +1935,9 @@ function createStudioGuideEntities(): SceneEntity[] {
     "glTF Animation扉 説明",
     "LEFT  /  glTF Animation\nAnimation Component: Autoplay ON",
     animationId,
-    [-2.65, 4.78, -9.02],
-    0.17,
-    4.7,
+    [-2.25, 4.16, -9.02],
+    0.15,
+    3.8,
     "#bae6fd",
   );
   const interactionDoorLabel = createGuideTextEntity(
@@ -1935,9 +1945,9 @@ function createStudioGuideEntities(): SceneEntity[] {
     "Interaction Animation扉 説明",
     "RIGHT  /  Interaction Animation\nevent/onStart → animation/start",
     animationId,
-    [2.65, 4.78, -9.02],
-    0.17,
-    4.7,
+    [2.25, 4.16, -9.02],
+    0.15,
+    3.8,
     "#ddd6fe",
   );
   const interactionAssetHint = createGuideTextEntity(
@@ -2021,8 +2031,8 @@ function createStudioGuideEntities(): SceneEntity[] {
     (definition, index): SceneEntity[] => {
       const left = index < 5;
       const row = left ? index : index - 5;
-      const x = left ? -10.35 : 10.35;
-      const z = -11.4 - row * 2.55;
+      const x = left ? -particleEmitterX : particleEmitterX;
+      const z = -10.8 - row * 2;
       const emitter = createGuideParticleEntity(
         `guide-particle-${definition.slug}`,
         `Particle Sample: ${definition.name}`,
@@ -2036,7 +2046,7 @@ function createStudioGuideEntities(): SceneEntity[] {
         particleId,
         BUILTIN_PRIMITIVE_CREATION_IDS.box,
         STARTER_MATERIAL_IDS.guidePlinth,
-        [left ? -10.75 : 10.75, 0.18, z],
+        [left ? -particleShelfX : particleShelfX, 0.18, z],
         [0, 0, 0],
         [1.65, 0.22, 1.5],
       );
@@ -2045,7 +2055,7 @@ function createStudioGuideEntities(): SceneEntity[] {
         `${definition.name} ラベル`,
         `${String(index + 1).padStart(2, "0")}  ${definition.name}\nAssets > Particles から複製`,
         particleId,
-        [left ? -10.72 : 10.72, 0.62, z],
+        [left ? -particleShelfX + 0.03 : particleShelfX - 0.03, 0.62, z],
         0.15,
         2.35,
         index % 2 === 0 ? "#bae6fd" : "#ddd6fe",
@@ -2060,18 +2070,18 @@ function createStudioGuideEntities(): SceneEntity[] {
     particleId,
     BUILTIN_PRIMITIVE_CREATION_IDS.box,
     STARTER_MATERIAL_IDS.guideDark,
-    [0, 4.55, -12.15],
+    [0, 4.28, -11.8],
     [0, 0, 0],
-    [9.8, 1.55, 0.12],
+    [7.2, 1.1, 0.12],
   );
   const particleHeading = createGuideTextEntity(
     "guide-particle-lab-heading",
     "Particle Lab見出し",
     "PARTICLE LAB  /  10 reusable samples",
     particleId,
-    [0, 4.88, -12.06],
-    0.36,
-    9.2,
+    [0, 4.52, -11.71],
+    0.28,
+    6.8,
     "#ffffff",
   );
   const particleBody = createGuideTextEntity(
@@ -2079,9 +2089,9 @@ function createStudioGuideEntities(): SceneEntity[] {
     "Particle Lab説明",
     "Emitterを選択 → Particle Assetを開く → Texture・Shape・Emission・色を調整。4枚の透過Textureは他のParticleにも再利用できます。",
     particleId,
-    [0, 4.25, -12.05],
-    0.16,
-    9.2,
+    [0, 4.06, -11.7],
+    0.14,
+    6.7,
     "#e4e4e7",
   );
   const particles = createGuideGroup(
@@ -2104,49 +2114,51 @@ function createStudioGuideEntities(): SceneEntity[] {
     body:
       "Playは編集データのコピーを実行します。問題がなければ保存し、タイトル・説明・サムネイルを整えてアップロードします。",
     materialAssetId: STARTER_MATERIAL_IDS.guidePlayPublish,
-    position: [0, 3, -14],
-    screenScale: [7.2, 4.05],
+    position: [0, 2.55, museumBackZ + 0.45],
+    screenScale: [6.2, 3.49],
   });
   const mirror = createGuideXriftEntity(
     "guide-xrift-mirror",
     "XRift Mirror サンプル",
     playId,
     BUILTIN_PREFAB_RECIPE_IDS.mirror,
-    [-5.5, 1.5, -20],
+    [-6.1, 1.5, -16.2],
   );
   const tagBoard = createGuideXriftEntity(
     "guide-xrift-tag-board",
     "XRift TagBoard サンプル",
     playId,
     BUILTIN_PREFAB_RECIPE_IDS.tagBoard,
-    [0, 0, -20],
+    [6.1, 0, -16.2],
   );
   const entryLog = createGuideXriftEntity(
     "guide-xrift-entry-log",
     "XRift EntryLogBoard サンプル",
     playId,
     BUILTIN_PREFAB_RECIPE_IDS.entryLogBoard,
-    [5.5, 1.5, -20],
+    [-6.1, 1.5, -18.2],
   );
   const componentHeading = createGuideTextEntity(
     "guide-components-heading",
     "XRift Component説明",
     "FINAL GALLERY  /  XRift Components",
     playId,
-    [0, 4.85, -19.8],
-    0.42,
-    8,
+    [-wallPanelX + 0.1, 4.62, -16.8],
+    0.3,
+    4.4,
     "#ffffff",
+    [0, Math.PI / 2, 0],
   );
   const componentBody = createGuideTextEntity(
     "guide-components-body",
     "XRift Component実習説明",
     "Mirror・TagBoard・EntryLogBoardは公式Componentです。選択してInspectorを確認し、Playで実際の動作を試してください。",
     playId,
-    [0, 4.15, -19.91],
-    0.18,
-    10,
+    [-wallPanelX + 0.1, 4.06, -16.8],
+    0.15,
+    4.4,
     "#ddd6fe",
+    [0, Math.PI / 2, 0],
   );
   const componentBackdrop = createGuidePrimitiveEntity(
     "guide-components-backdrop",
@@ -2154,9 +2166,9 @@ function createStudioGuideEntities(): SceneEntity[] {
     playId,
     BUILTIN_PRIMITIVE_CREATION_IDS.box,
     STARTER_MATERIAL_IDS.guideDark,
-    [0, 4.48, -20.02],
-    [0, 0, 0],
-    [12.5, 1.65, 0.12],
+    [-wallPanelX, 4.34, -16.8],
+    [0, Math.PI / 2, 0],
+    [4.8, 1.3, 0.12],
   );
   const play = createGuideGroup(playId, "06 Play・公開・Component", null, [
     playStation[0].id,
@@ -2185,7 +2197,7 @@ function createStudioGuideEntities(): SceneEntity[] {
       1.65,
       true,
     ),
-    createSpawnEntity([0, 0.05, 18]),
+    createSpawnEntity([0, 0.05, museumFrontZ + 2]),
     guideFloor,
     ...walls,
     ...entrance,
@@ -3535,12 +3547,12 @@ function createFloorEntity(templateId: StarterWorldTemplateId): SceneEntity {
   if (!definition) throw new Error("Builtin plane is unavailable");
   const floorScale: Vec3 =
     templateId === "studio-guide"
-      ? [28, 46, 1]
+      ? [26, 40, 1]
       : templateId === "openbrush"
         ? [10, 10, 10]
         : [8, 8, 8];
   const floorPosition: Vec3 =
-    templateId === "studio-guide" ? [0, 0, -3] : [0, 0, 0];
+    templateId === "studio-guide" ? [0, 0, -2.5] : [0, 0, 0];
   const floorMaterialAssetId = STARTER_MATERIAL_IDS.ground;
   return {
     id: "starter-floor",
