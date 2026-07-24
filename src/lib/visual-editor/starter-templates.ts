@@ -768,7 +768,7 @@ export const STARTER_WORLD_TEMPLATES = [
     id: "studio-guide",
     name: "XRift Studio ガイド",
     description:
-      "中央4.5mの見通しを保ち、Poly Havenの庭Skybox、低ポリ展示物、10種の再利用可能なParticleから制作を学べる1階建てミュージアム",
+      "中央4.5mの見通しを保ち、Poly Havenの庭Skybox、低ポリ展示物、Particle、Codex・MCPによるAI編集まで学べる1階建てミュージアム",
     bundledAssetIds: [
       "studio-guide-overview",
       "studio-guide-hierarchy-create",
@@ -1588,7 +1588,7 @@ function createStudioGuideEntities(): SceneEntity[] {
     name: "Studio全体を知る",
     title: "XRift Studioへようこそ",
     body:
-      "左のHierarchyで選ぶ。中央のScene Viewで配置する。右のInspectorで調整する。\n下のAssetsから素材を使い、Playで体験してから保存・アップロードします。",
+      "左のHierarchyで選ぶ。中央のScene Viewで配置する。右のInspectorで調整する。\n下のAssetsから素材を使い、Playで体験してから保存・アップロードします。\n左下の「AI接続」からCodexを登録し、MCPで会話しながら編集できます。",
     materialAssetId: STARTER_MATERIAL_IDS.guideOverview,
     position: [5.25, 2.55, 10.2],
     screenScale: [5.4, 3.04],
@@ -2173,7 +2173,50 @@ function createStudioGuideEntities(): SceneEntity[] {
     [0, Math.PI / 2, 0],
     [4.8, 1.3, 0.12],
   );
-  const play = createGuideGroup(playId, "06 Play・公開・Component", null, [
+  const aiBackdrop = createGuidePrimitiveEntity(
+    "guide-ai-workflow-backdrop",
+    "AI・Codex・MCP案内プレート",
+    playId,
+    BUILTIN_PRIMITIVE_CREATION_IDS.box,
+    STARTER_MATERIAL_IDS.guideDark,
+    [wallPanelX, 4.15, -16.8],
+    [0, -Math.PI / 2, 0],
+    [5.2, 2, 0.12],
+  );
+  const aiHeading = createGuideTextEntity(
+    "guide-ai-workflow-heading",
+    "AI・Codex・MCP見出し",
+    "AI WORKFLOW  /  Codex + MCP",
+    playId,
+    [wallPanelX - 0.1, 4.78, -16.8],
+    0.28,
+    4.8,
+    "#ffffff",
+    [0, -Math.PI / 2, 0],
+  );
+  const aiBody = createGuideTextEntity(
+    "guide-ai-workflow-body",
+    "AI・Codex・MCP説明",
+    "左下の「AI接続」からCodexをワンクリック登録。XRift Studio MCPなら、開いているSceneを会話から読み取り、Entity・Transform・Material・Component・Interactivityを編集できます。",
+    playId,
+    [wallPanelX - 0.1, 4.14, -16.8],
+    0.145,
+    4.8,
+    "#ddd6fe",
+    [0, -Math.PI / 2, 0],
+  );
+  const aiSafety = createGuideTextEntity(
+    "guide-ai-workflow-safety",
+    "AI編集の安全性説明",
+    "AIの変更も通常のUndo・自動保存に統合。Edit中の現在Sceneだけを安全に操作します。",
+    playId,
+    [wallPanelX - 0.1, 3.48, -16.8],
+    0.13,
+    4.8,
+    "#e4e4e7",
+    [0, -Math.PI / 2, 0],
+  );
+  const play = createGuideGroup(playId, "06 AI・Play・公開・Component", null, [
     playStation[0].id,
     mirror.id,
     tagBoard.id,
@@ -2181,6 +2224,10 @@ function createStudioGuideEntities(): SceneEntity[] {
     componentBackdrop.id,
     componentHeading.id,
     componentBody.id,
+    aiBackdrop.id,
+    aiHeading.id,
+    aiBody.id,
+    aiSafety.id,
   ]);
 
   return [
@@ -2254,6 +2301,10 @@ function createStudioGuideEntities(): SceneEntity[] {
     componentBackdrop,
     componentHeading,
     componentBody,
+    aiBackdrop,
+    aiHeading,
+    aiBody,
+    aiSafety,
   ];
 }
 

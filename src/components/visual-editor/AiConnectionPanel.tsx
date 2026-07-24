@@ -107,7 +107,7 @@ export function AiConnectionPanel({
           </p>
         </div>
         <p>
-          Codex、Claude Code、Claude Desktop / Cowork、OpenCode、Cursorから、開いているSceneの設定変更とAsset配置を操作できます。
+          CodexなどのAI clientをXRift Studio MCPへ登録すると、開いているSceneを会話から読み取り・編集できます。AIの変更も通常のUndoと自動保存へ統合されます。
         </p>
       </div>
     );
@@ -137,6 +137,9 @@ export function AiConnectionPanel({
           };
   return (
     <div className="scrollbar-thin max-h-[min(32rem,calc(100vh-10rem))] space-y-3 overflow-y-auto p-3.5 text-xs text-slate-600">
+      <p className="rounded-md border border-violet-100 bg-violet-50/70 p-3 leading-5 text-slate-700">
+        CodexなどのAI clientをXRift Studio MCPへワンクリック登録できます。開いているSceneを会話から読み取り・編集し、変更は通常のUndoと自動保存へ統合されます。
+      </p>
       <div className="flex items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
         <div>
           <div className="flex items-center gap-2 font-semibold text-slate-800">

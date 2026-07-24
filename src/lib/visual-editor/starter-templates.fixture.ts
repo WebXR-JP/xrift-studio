@@ -15,6 +15,7 @@ import {
   STUDIO_GUIDE_DOOR_INTERACTIVITY_ASSET_ID,
   STUDIO_GUIDE_PARTICLE_ASSET_IDS,
   STUDIO_GUIDE_SKYBOX_TEXTURE_ASSET_ID,
+  STARTER_WORLD_TEMPLATES,
   createStarterWorldProject,
   defaultVisualStarterTemplateId,
   starterWorldContainsNoPrimitiveAssets,
@@ -219,6 +220,9 @@ export function runStarterTemplateFixtureAssertions(): void {
     }
     if (templateId === "studio-guide") {
       const sceneEntities = Object.values(plan.scene.entities);
+      const studioTemplate = STARTER_WORLD_TEMPLATES.find(
+        (template) => template.id === "studio-guide",
+      );
       const skyboxAsset =
         plan.assets.assets[STUDIO_GUIDE_SKYBOX_TEXTURE_ASSET_ID];
       const worldSource =
@@ -228,6 +232,11 @@ export function runStarterTemplateFixtureAssertions(): void {
         }).overlayFiles.find(
           (file) => file.relativePath === "src/World.tsx",
         )?.content ?? "";
+      assert(
+        studioTemplate?.description.includes("Codex") &&
+          studioTemplate.description.includes("MCP"),
+        "Studio guide card must introduce its Codex and MCP learning exhibit",
+      );
       assert(
         skyboxAsset?.kind === "texture" &&
           skyboxAsset.usage === "environment" &&
@@ -313,6 +322,12 @@ export function runStarterTemplateFixtureAssertions(): void {
           ? transform.scale
           : undefined;
       };
+      const entityText = (entityId: string) => {
+        const component = plan.scene.entities[entityId]?.components.find(
+          (candidate) => candidate.type === "text",
+        );
+        return component?.type === "text" ? component.text : undefined;
+      };
       assert(
         JSON.stringify(entityPosition("starter-floor")) === "[0,0,-2.5]" &&
           JSON.stringify(entityScale("starter-floor")) === "[26,40,1]" &&
@@ -348,8 +363,18 @@ export function runStarterTemplateFixtureAssertions(): void {
           ) >= 10 &&
           Math.abs(
             entityPosition("guide-components-backdrop")?.[0] ?? 0,
+          ) >= 10 &&
+          Math.abs(
+            entityPosition("guide-ai-workflow-backdrop")?.[0] ?? 0,
           ) >= 10,
         "Studio guide must keep the 4.5 m central promenade clear of plinths and large wall signs",
+      );
+      assert(
+        entityText("guide-ai-workflow-heading")?.includes("Codex + MCP") &&
+          entityText("guide-ai-workflow-body")?.includes("ワンクリック登録") &&
+          entityText("guide-ai-workflow-body")?.includes("Interactivity") &&
+          entityText("guide-ai-workflow-safety")?.includes("Undo・自動保存"),
+        "Studio guide must explain the Codex and MCP workflow, editable scope, and recovery path",
       );
       const tagBoardPosition = entityPosition("guide-xrift-tag-board");
       const entryLogPosition = entityPosition("guide-xrift-entry-log");

@@ -458,7 +458,7 @@ export function NewProjectDialog({
                           <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">
                             <Package size={12} aria-hidden="true" />
                             {template.id === "studio-guide"
-                              ? "実画面6枚・インストールQR・公式Component"
+                              ? "実画面6枚・Codex / MCP・公式Component"
                               : template.id === "xrift-official"
                               ? "公式R3F / Rapierから変換"
                               : template.bundledAssetIds.length > 0

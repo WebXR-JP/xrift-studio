@@ -490,6 +490,7 @@ F-06 アイテム検査
 
 ### 操作前
 
+- 新規Visual WorldのXRift Studioガイドは、入口と最終展示で「AI接続」からCodexをXRift Studio MCPへワンクリック登録できること、現在Sceneを会話から読み取り・編集できること、AI変更も通常のUndoと自動保存へ統合されることを説明する。展示は中央歩行帯を塞がない壁面へ置く。
 - EditorのAI連携panelはCodex、Claude Code、Claude Desktop / Cowork、OpenCode、Cursorの検出結果、登録scope、XRift Studio MCP serverの状態を表示する。Codexは現在の`PATH`に加えて、公式installer、Codex app同梱CLI、npm、pnpm、WinGet、Homebrew、standalone installerの標準配置を確認し、起動時の環境変数が古い場合も再起動なしで検出する。OllamaはMCP client一覧へ混在させず、ローカルmodel providerとしてinstall状態、version、model一覧、構成先clientを別sectionに表示する。native APIがないブラウザでは登録済みに見せず「デスクトップ版で利用できます」と示す。Claude Desktop / Coworkはローカルsessionだけを対象にし、remote CoworkではローカルMCPを起動できないことを登録前に示す。
 - MCPは現在開いているvisual projectだけを候補にし、project ID、Scene ID、session revisionを接続clientへ返す。接続しただけではSceneDocument、AssetManifest、selection、historyを変更しない。
 - AI書き込みは既定でEdit中の認可済みprojectだけに許可し、Play、Import、project切替中は理由付きで読み取り専用にする。Upload、削除、任意file、任意shell操作は初期tool setへ含めない。
