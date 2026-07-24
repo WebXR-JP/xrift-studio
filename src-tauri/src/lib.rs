@@ -1543,8 +1543,8 @@ fn validate_visual_write_request(
         total_binary_bytes = total_binary_bytes
             .checked_add(bytes.len())
             .ok_or_else(|| "starter asset size overflow".to_string())?;
-        if total_binary_bytes > 32 * 1024 * 1024 {
-            return Err("starter assets exceed the 32 MB creation limit".to_string());
+        if total_binary_bytes > 64 * 1024 * 1024 {
+            return Err("starter assets exceed the 64 MB creation limit".to_string());
         }
         binary_files.push((normalized, bytes));
     }
@@ -1608,6 +1608,51 @@ fn decode_starter_asset_data_url(data_url: &str, relative_path: &str) -> Result<
             .ok_or_else(|| "starter Texture JPEG dimensions are invalid".to_string())?;
         if width == 0 || height == 0 || width > 4096 || height > 4096 {
             return Err("starter Texture dimensions must be between 1 and 4096".to_string());
+        }
+        return Ok(bytes);
+    }
+
+    if relative_path.ends_with(".hdr") && media_type == "image/vnd.radiance" {
+        let header_end = bytes
+            .windows(2)
+            .take(4096)
+            .position(|window| window == b"\n\n")
+            .ok_or_else(|| "starter HDR header is invalid".to_string())?;
+        let resolution_start = header_end + 2;
+        let resolution_end = bytes[resolution_start..]
+            .iter()
+            .take(128)
+            .position(|byte| *byte == b'\n')
+            .map(|offset| resolution_start + offset)
+            .ok_or_else(|| "starter HDR resolution is invalid".to_string())?;
+        let header = std::str::from_utf8(&bytes[..header_end])
+            .map_err(|_| "starter HDR header is invalid".to_string())?;
+        let resolution = std::str::from_utf8(&bytes[resolution_start..resolution_end])
+            .map_err(|_| "starter HDR resolution is invalid".to_string())?;
+        let signature_valid = header.starts_with("#?RADIANCE") || header.starts_with("#?RGBE");
+        let format_valid = header
+            .lines()
+            .any(|line| line.trim() == "FORMAT=32-bit_rle_rgbe");
+        let resolution_parts = resolution.split_whitespace().collect::<Vec<_>>();
+        let dimensions_valid = resolution_parts.len() == 4
+            && resolution_parts[0]
+                .trim_start_matches(['+', '-'])
+                .eq_ignore_ascii_case("Y")
+            && resolution_parts[2]
+                .trim_start_matches(['+', '-'])
+                .eq_ignore_ascii_case("X")
+            && resolution_parts[1]
+                .parse::<u32>()
+                .is_ok_and(|height| (1..=8192).contains(&height))
+            && resolution_parts[3]
+                .parse::<u32>()
+                .is_ok_and(|width| (1..=8192).contains(&width));
+        if !signature_valid
+            || !format_valid
+            || !dimensions_valid
+            || resolution_end + 1 >= bytes.len()
+        {
+            return Err("starter HDR file is invalid".to_string());
         }
         return Ok(bytes);
     }
@@ -4600,6 +4645,43 @@ mod tests {
         )
         .expect_err("a JPEG without dimensions must be rejected")
         .contains("dimensions are invalid"));
+    }
+
+    #[test]
+    fn validates_radiance_hdr_starter_assets() {
+        use base64::Engine;
+
+        let data_url = |media_type: &str, bytes: &[u8]| {
+            format!(
+                "data:{media_type};base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(bytes)
+            )
+        };
+        let hdr = include_bytes!("../../public/visual-editor/starter-assets/studio-garden-2k.hdr");
+
+        assert_eq!(
+            decode_starter_asset_data_url(
+                &data_url("image/vnd.radiance", hdr),
+                "assets/starter/studio-guide/environment/studio-garden-2k.hdr",
+            )
+            .expect("the bundled Radiance HDR starter asset must be accepted"),
+            hdr
+        );
+        assert!(decode_starter_asset_data_url(
+            &data_url("application/octet-stream", hdr),
+            "assets/starter/studio-guide/environment/studio-garden-2k.hdr",
+        )
+        .expect_err("a mismatched HDR media type must be rejected")
+        .contains("media type does not match"));
+        assert!(decode_starter_asset_data_url(
+            &data_url(
+                "image/vnd.radiance",
+                b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 1024 +X 2048\n",
+            ),
+            "assets/starter/studio-guide/environment/studio-garden-2k.hdr",
+        )
+        .expect_err("an HDR without pixel data must be rejected")
+        .contains("HDR file is invalid"));
     }
 
     #[test]

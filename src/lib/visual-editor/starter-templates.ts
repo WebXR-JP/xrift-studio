@@ -44,6 +44,7 @@ import {
 } from "./scene-document";
 import { addDefaultInteractivityAsset } from "./interactivity-graph";
 import { OPEN_BRUSH_RENDERER } from "./open-brush";
+import { DEFAULT_SCENE_SETTINGS } from "./scene-settings";
 
 export type StarterWorldTemplateId =
   | "studio-guide"
@@ -64,6 +65,13 @@ export type BundledStarterModelId =
   | "wine-glass"
   | "studio-guide-gltf-door"
   | "studio-guide-interaction-door"
+  | "studio-guide-laptop"
+  | "studio-guide-globe"
+  | "studio-guide-vr-headset"
+  | "studio-guide-telescope"
+  | "studio-guide-information-board"
+  | "studio-guide-bench"
+  | "studio-guide-planter"
   | "openbrush-all-brushes";
 
 export type BundledStarterTextureId =
@@ -76,7 +84,8 @@ export type BundledStarterTextureId =
   | "studio-guide-inspector"
   | "studio-guide-assets"
   | "studio-guide-play-publish"
-  | "studio-guide-install-qr";
+  | "studio-guide-install-qr"
+  | "studio-guide-studio-garden";
 
 export type BundledStarterAssetId =
   | BundledStarterModelId
@@ -92,7 +101,7 @@ export type StarterAssetProvenance =
       ownership: "third-party";
       sourceName: string;
       sourceUrl: string;
-      license: "Apache-2.0" | "MIT";
+      license: "Apache-2.0" | "MIT" | "CC0-1.0";
     };
 
 export type BundledStarterAssetDefinition = {
@@ -102,7 +111,11 @@ export type BundledStarterAssetDefinition = {
   projectRelativePath: string;
   byteLength: number;
   sha256: string;
-  mediaType: "model/gltf-binary" | "image/png" | "image/jpeg";
+  mediaType:
+    | "model/gltf-binary"
+    | "image/png"
+    | "image/jpeg"
+    | "image/vnd.radiance";
   provenance: StarterAssetProvenance;
 };
 
@@ -307,6 +320,135 @@ export const BUNDLED_STARTER_ASSETS = {
       permissionBasis: "provided-for-xrift-studio",
     },
   },
+  "studio-guide-laptop": {
+    id: "studio-guide-laptop",
+    kind: "model",
+    publicPath: "/visual-editor/starter-assets/studio-guide-laptop.glb",
+    projectRelativePath: "assets/starter/studio-guide/props/laptop.glb",
+    byteLength: 1670056,
+    sha256:
+      "06208c61854ef5b2ffff5026629e38914a60fb20f3e726a251c94e981465d4a3",
+    mediaType: "model/gltf-binary",
+    provenance: {
+      ownership: "project-owned",
+      sourceName: "小物プロップ_06_ノートPC.glb",
+      permissionBasis: "provided-for-xrift-studio",
+    },
+  },
+  "studio-guide-globe": {
+    id: "studio-guide-globe",
+    kind: "model",
+    publicPath: "/visual-editor/starter-assets/studio-guide-globe.glb",
+    projectRelativePath: "assets/starter/studio-guide/props/globe.glb",
+    byteLength: 1339428,
+    sha256:
+      "eea065fcf32841957192315b43a5aeae7eda2b3087a5411cb76fd6993d67aaec",
+    mediaType: "model/gltf-binary",
+    provenance: {
+      ownership: "project-owned",
+      sourceName: "小物プロップ_55_地球儀.glb",
+      permissionBasis: "provided-for-xrift-studio",
+    },
+  },
+  "studio-guide-vr-headset": {
+    id: "studio-guide-vr-headset",
+    kind: "model",
+    publicPath:
+      "/visual-editor/starter-assets/studio-guide-vr-headset.glb",
+    projectRelativePath:
+      "assets/starter/studio-guide/props/vr-headset.glb",
+    byteLength: 1442964,
+    sha256:
+      "0410fa1276c4c4a6538d201ca46918aa1cbb6d8a6e413cb14bd0d05830880f82",
+    mediaType: "model/gltf-binary",
+    provenance: {
+      ownership: "project-owned",
+      sourceName: "小物プロップ_71_VRヘッドセット.glb",
+      permissionBasis: "provided-for-xrift-studio",
+    },
+  },
+  "studio-guide-telescope": {
+    id: "studio-guide-telescope",
+    kind: "model",
+    publicPath:
+      "/visual-editor/starter-assets/studio-guide-telescope.glb",
+    projectRelativePath:
+      "assets/starter/studio-guide/props/telescope.glb",
+    byteLength: 1464676,
+    sha256:
+      "998dcdade2bf64f5fa10b3117514b6c8dfcc6acb605028b37c75b642f65c7448",
+    mediaType: "model/gltf-binary",
+    provenance: {
+      ownership: "project-owned",
+      sourceName: "屋外プロップ_01_望遠鏡.glb",
+      permissionBasis: "provided-for-xrift-studio",
+    },
+  },
+  "studio-guide-information-board": {
+    id: "studio-guide-information-board",
+    kind: "model",
+    publicPath:
+      "/visual-editor/starter-assets/studio-guide-information-board.glb",
+    projectRelativePath:
+      "assets/starter/studio-guide/props/information-board.glb",
+    byteLength: 1256684,
+    sha256:
+      "67791c6a5991afbd05df52f90ff37c620448174920b8d518eac45177cb448023",
+    mediaType: "model/gltf-binary",
+    provenance: {
+      ownership: "project-owned",
+      sourceName: "屋外プロップ_04_案内板.glb",
+      permissionBasis: "provided-for-xrift-studio",
+    },
+  },
+  "studio-guide-bench": {
+    id: "studio-guide-bench",
+    kind: "model",
+    publicPath: "/visual-editor/starter-assets/studio-guide-bench.glb",
+    projectRelativePath: "assets/starter/studio-guide/props/bench.glb",
+    byteLength: 919516,
+    sha256:
+      "30b76705d5061fc99be86d1d98ca19c49e7acbd6bea8ad629d9e385a4e470a51",
+    mediaType: "model/gltf-binary",
+    provenance: {
+      ownership: "project-owned",
+      sourceName: "屋外プロップ_07_ベンチ.glb",
+      permissionBasis: "provided-for-xrift-studio",
+    },
+  },
+  "studio-guide-planter": {
+    id: "studio-guide-planter",
+    kind: "model",
+    publicPath:
+      "/visual-editor/starter-assets/studio-guide-planter.glb",
+    projectRelativePath: "assets/starter/studio-guide/props/planter.glb",
+    byteLength: 1591216,
+    sha256:
+      "3dd276e60538def3c32984d69e57cbc93f3654a75444cb0b5f4431c1ba7d501c",
+    mediaType: "model/gltf-binary",
+    provenance: {
+      ownership: "project-owned",
+      sourceName: "屋外プロップ_22_プランター.glb",
+      permissionBasis: "provided-for-xrift-studio",
+    },
+  },
+  "studio-guide-studio-garden": {
+    id: "studio-guide-studio-garden",
+    kind: "texture",
+    publicPath: "/visual-editor/starter-assets/studio-garden-2k.hdr",
+    projectRelativePath:
+      "assets/starter/studio-guide/environment/studio-garden-2k.hdr",
+    byteLength: 7260196,
+    sha256:
+      "058ff245fecac3e72abf51fe66dd540e213117854ebb6141b708c6561a13ec99",
+    mediaType: "image/vnd.radiance",
+    provenance: {
+      ownership: "third-party",
+      sourceName: "Poly Haven: Studio Garden 2K HDR",
+      sourceUrl: "https://polyhaven.com/a/studio_garden",
+      license: "CC0-1.0",
+    },
+  },
   "wood-planks-clean": {
     id: "wood-planks-clean",
     kind: "texture",
@@ -457,6 +599,14 @@ export const BUNDLED_STARTER_ASSET_IDS = [
   "wine-glass",
   "studio-guide-gltf-door",
   "studio-guide-interaction-door",
+  "studio-guide-laptop",
+  "studio-guide-globe",
+  "studio-guide-vr-headset",
+  "studio-guide-telescope",
+  "studio-guide-information-board",
+  "studio-guide-bench",
+  "studio-guide-planter",
+  "studio-guide-studio-garden",
   "wood-planks-clean",
   "polished-concrete",
   "studio-guide-overview",
@@ -516,6 +666,8 @@ export const STUDIO_GUIDE_DOOR_INTERACTIVITY_ASSET_ID =
   "starter-interactivity-studio-guide-door-open";
 export const STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID =
   "starter-model-studio-guide-interaction-door";
+export const STUDIO_GUIDE_SKYBOX_TEXTURE_ASSET_ID =
+  "starter-texture-studio-guide-studio-garden";
 
 export const STUDIO_GUIDE_TEMPLATE_THUMBNAIL =
   "/visual-editor/starter-assets/studio-guide-museum-thumbnail.png";
@@ -525,7 +677,7 @@ export const STARTER_WORLD_TEMPLATES = [
     id: "studio-guide",
     name: "XRift Studio ガイド",
     description:
-      "1階建てのミュージアムを巡り、2種類のAnimation扉と実画面でインストールから公開まで学べるワールド",
+      "Poly Havenの庭Skyboxと低ポリ展示物を備えた1階建てミュージアムで、2種類のAnimation扉と実画面から制作を学べるワールド",
     bundledAssetIds: [
       "studio-guide-overview",
       "studio-guide-hierarchy-create",
@@ -539,6 +691,14 @@ export const STARTER_WORLD_TEMPLATES = [
       "wine-glass",
       "studio-guide-gltf-door",
       "studio-guide-interaction-door",
+      "studio-guide-laptop",
+      "studio-guide-globe",
+      "studio-guide-vr-headset",
+      "studio-guide-telescope",
+      "studio-guide-information-board",
+      "studio-guide-bench",
+      "studio-guide-planter",
+      "studio-guide-studio-garden",
       "wood-planks-clean",
       "polished-concrete",
     ],
@@ -692,7 +852,7 @@ export function createStarterWorldProject(
       ? createOfficialTemplateDocuments(prototype.scene, baseAssets)
       : null;
   const entities = imported ? [] : createTemplateEntities(templateId);
-  const scene: SceneDocument = imported
+  const baseScene: SceneDocument = imported
     ? { ...imported.scene, name: definition.name }
     : {
         ...prototype.scene,
@@ -704,6 +864,38 @@ export function createStarterWorldProject(
           entities.map((entity) => [entity.id, entity]),
         ),
       };
+  const scene: SceneDocument =
+    templateId === "studio-guide"
+      ? {
+          ...baseScene,
+          settings: {
+            ...(baseScene.settings ?? DEFAULT_SCENE_SETTINGS),
+            skybox: {
+              ...(baseScene.settings?.skybox ??
+                DEFAULT_SCENE_SETTINGS.skybox),
+              enabled: true,
+              iblEnabled: true,
+              projection: "infinite",
+              imageAssetId: STUDIO_GUIDE_SKYBOX_TEXTURE_ASSET_ID,
+              rotationDegrees: 18,
+              exposure: 0.72,
+            },
+            fog: {
+              ...(baseScene.settings?.fog ?? DEFAULT_SCENE_SETTINGS.fog),
+              enabled: false,
+              color: "#d6d3d1",
+              near: 36,
+              far: 110,
+            },
+            ambient: {
+              ...(baseScene.settings?.ambient ??
+                DEFAULT_SCENE_SETTINGS.ambient),
+              color: "#fff7ed",
+              intensity: 0.38,
+            },
+          },
+        }
+      : baseScene;
   const resolvedBaseAssets = imported?.assets ?? baseAssets;
   const prefabLibrary = createStarterPrefabLibrary(
     templateId,
@@ -1010,6 +1202,7 @@ type GuideStationInput = {
 
 function createStudioGuideEntities(): SceneEntity[] {
   const museumId = "guide-museum";
+  const furnishingsId = "guide-museum-furnishings";
   const welcomeId = "guide-section-welcome";
   const editId = "guide-section-edit";
   const assetsId = "guide-section-assets";
@@ -1038,6 +1231,31 @@ function createStudioGuideEntities(): SceneEntity[] {
       scale,
       collider,
     );
+  const decorativeModel = (
+    id: string,
+    name: string,
+    parentId: string,
+    modelAssetId: string,
+    position: Vec3,
+    rotation: Vec3,
+    scale: Vec3,
+  ): SceneEntity => {
+    const source = createModelEntity(
+      id,
+      name,
+      modelAssetId,
+      position,
+      rotation,
+      scale,
+    );
+    return {
+      ...source,
+      parentId,
+      components: source.components.filter(
+        (component) => component.type !== "collider",
+      ),
+    };
+  };
 
   const walls = [
     museumPrimitive(
@@ -1179,6 +1397,60 @@ function createStudioGuideEntities(): SceneEntity[] {
       parentId: museumId,
     },
   ];
+  const planters = [
+    [-10.4, 0, 13.2],
+    [10.4, 0, 13.2],
+    [-10.4, 0, -17.2],
+    [10.4, 0, -17.2],
+  ].map((position, index) =>
+    decorativeModel(
+      `guide-planter-${index + 1}`,
+      `ガーデンプランター ${index + 1}`,
+      furnishingsId,
+      STARTER_MODEL_IDS.guidePlanter,
+      position as Vec3,
+      [0, index % 2 === 0 ? 0.18 : -0.18, 0],
+      [1.45, 1.45, 1.45],
+    ),
+  );
+  const informationBoard = decorativeModel(
+    "guide-information-board",
+    "エントランス案内板",
+    furnishingsId,
+    STARTER_MODEL_IDS.guideInformationBoard,
+    [-8.8, 0, 13.2],
+    [0, 0.12, 0],
+    [1, 1, 1],
+  );
+  const galleryBench = decorativeModel(
+    "guide-gallery-bench",
+    "ギャラリーベンチ",
+    furnishingsId,
+    STARTER_MODEL_IDS.guideBench,
+    [-9.2, 0, -12.5],
+    [0, Math.PI / 2, 0],
+    [1.1, 1.1, 1.1],
+  );
+  const telescope = decorativeModel(
+    "guide-telescope",
+    "XR体験を見渡す望遠鏡",
+    furnishingsId,
+    STARTER_MODEL_IDS.guideTelescope,
+    [9.1, 0, -14.8],
+    [0, -0.85, 0],
+    [1.08, 1.08, 1.08],
+  );
+  const furnishings = createGuideGroup(
+    furnishingsId,
+    "Museum Furnishings",
+    museumId,
+    [
+      ...planters.map((entity) => entity.id),
+      informationBoard.id,
+      galleryBench.id,
+      telescope.id,
+    ],
+  );
   const museumChildren = [
     floor.id,
     ...walls.map((entity) => entity.id),
@@ -1187,6 +1459,7 @@ function createStudioGuideEntities(): SceneEntity[] {
     ...ceilingBeams.map((entity) => entity.id),
     ...routeGuides.map((entity) => entity.id),
     ...benches.map((entity) => entity.id),
+    furnishings.id,
   ];
   const museum = createGuideGroup(
     museumId,
@@ -1338,6 +1611,28 @@ function createStudioGuideEntities(): SceneEntity[] {
     [2.8, 1.1, 1.5],
     true,
   );
+  const laptopPlinth = createGuidePrimitiveEntity(
+    "guide-laptop-plinth",
+    "制作デスク展示台",
+    assetsId,
+    BUILTIN_PRIMITIVE_CREATION_IDS.box,
+    STARTER_MATERIAL_IDS.guidePlinth,
+    [-5.6, 0.55, -5],
+    [0, 0, 0],
+    [3.1, 1.1, 1.6],
+    true,
+  );
+  const vrPlinth = createGuidePrimitiveEntity(
+    "guide-vr-plinth",
+    "XRデバイス展示台",
+    assetsId,
+    BUILTIN_PRIMITIVE_CREATION_IDS.box,
+    STARTER_MATERIAL_IDS.guidePlinth,
+    [5.6, 0.55, -5],
+    [0, 0, 0],
+    [3.1, 1.1, 1.6],
+    true,
+  );
   const mug = {
     ...createModelEntity(
       "guide-sample-mug",
@@ -1360,10 +1655,57 @@ function createStudioGuideEntities(): SceneEntity[] {
     ),
     parentId: assetsId,
   };
+  const laptop = decorativeModel(
+    "guide-sample-laptop",
+    "制作サンプル ノートPC",
+    assetsId,
+    STARTER_MODEL_IDS.guideLaptop,
+    [-6.1, 1.15, -5],
+    [0, 0.18, 0],
+    [3, 3, 3],
+  );
+  const globe = decorativeModel(
+    "guide-sample-globe",
+    "制作サンプル 地球儀",
+    assetsId,
+    STARTER_MODEL_IDS.guideGlobe,
+    [-5, 1.15, -5],
+    [0, -0.22, 0],
+    [3.3, 3.3, 3.3],
+  );
+  const vrHeadset = decorativeModel(
+    "guide-sample-vr-headset",
+    "制作サンプル VRヘッドセット",
+    assetsId,
+    STARTER_MODEL_IDS.guideVrHeadset,
+    [5.6, 1.15, -5],
+    [0, -0.25, 0],
+    [4.2, 4.2, 4.2],
+  );
+  const laptopLabel = createGuideTextEntity(
+    "guide-laptop-label",
+    "制作デスク展示ラベル",
+    "MODEL ASSETS  /  Laptop + Globe",
+    assetsId,
+    [-5.6, 2.15, -4.94],
+    0.18,
+    4.5,
+    "#bae6fd",
+  );
+  const vrLabel = createGuideTextEntity(
+    "guide-vr-label",
+    "XRデバイス展示ラベル",
+    "XR ASSET  /  VR Headset",
+    assetsId,
+    [5.6, 2.15, -4.94],
+    0.18,
+    4.5,
+    "#ddd6fe",
+  );
   const samplesLabel = createGuideTextEntity(
     "guide-samples-label",
     "Assetサンプル説明",
-    "実習: この2つを選び、移動・複製・Material変更を試してください",
+    "実習: GLBを選び、移動・複製・Material変更を試してください",
     assetsId,
     [0, 2.28, -4.93],
     0.16,
@@ -1394,8 +1736,15 @@ function createStudioGuideEntities(): SceneEntity[] {
     assetsStation[0].id,
     inspectorStation[0].id,
     samplePlinth.id,
+    laptopPlinth.id,
+    vrPlinth.id,
     mug.id,
     wineGlass.id,
+    laptop.id,
+    globe.id,
+    vrHeadset.id,
+    laptopLabel.id,
+    vrLabel.id,
     practiceLabelBackdrop.id,
     samplesLabel.id,
     practiceLabel.id,
@@ -1585,6 +1934,7 @@ function createStudioGuideEntities(): SceneEntity[] {
 
   return [
     museum,
+    furnishings,
     welcome,
     edit,
     assets,
@@ -1595,7 +1945,7 @@ function createStudioGuideEntities(): SceneEntity[] {
       "メインライト",
       "directional",
       [8, 12, 10],
-      3,
+      1.65,
       true,
     ),
     createSpawnEntity([0, 0.05, 18]),
@@ -1606,6 +1956,10 @@ function createStudioGuideEntities(): SceneEntity[] {
     ...ceilingBeams,
     ...routeGuides,
     ...benches,
+    ...planters,
+    informationBoard,
+    galleryBench,
+    telescope,
     welcomeHeading,
     welcomeSubheading,
     entranceSign,
@@ -1618,8 +1972,15 @@ function createStudioGuideEntities(): SceneEntity[] {
     ...assetsStation,
     ...inspectorStation,
     samplePlinth,
+    laptopPlinth,
+    vrPlinth,
     mug,
     wineGlass,
+    laptop,
+    globe,
+    vrHeadset,
+    laptopLabel,
+    vrLabel,
     practiceLabelBackdrop,
     samplesLabel,
     practiceLabel,
@@ -1813,6 +2174,14 @@ const STARTER_MODEL_IDS = {
   wineGlass: "starter-model-wine-glass",
   guideGltfDoor: "starter-model-studio-guide-gltf-door",
   guideInteractionDoor: STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID,
+  guideLaptop: "starter-model-studio-guide-laptop",
+  guideGlobe: "starter-model-studio-guide-globe",
+  guideVrHeadset: "starter-model-studio-guide-vr-headset",
+  guideTelescope: "starter-model-studio-guide-telescope",
+  guideInformationBoard:
+    "starter-model-studio-guide-information-board",
+  guideBench: "starter-model-studio-guide-bench",
+  guidePlanter: "starter-model-studio-guide-planter",
   openBrush: "starter-model-openbrush-all-brushes",
 } as const;
 
@@ -1825,6 +2194,13 @@ const STARTER_MODEL_ORDER: Record<BundledStarterModelId, number> = {
   "wine-glass": 3,
   "studio-guide-gltf-door": 4,
   "studio-guide-interaction-door": 5,
+  "studio-guide-laptop": 6,
+  "studio-guide-globe": 7,
+  "studio-guide-vr-headset": 8,
+  "studio-guide-telescope": 9,
+  "studio-guide-information-board": 10,
+  "studio-guide-bench": 11,
+  "studio-guide-planter": 12,
   "openbrush-all-brushes": 0,
 };
 
@@ -1839,6 +2215,7 @@ const STARTER_TEXTURE_IDS = {
   guideAssets: "starter-texture-studio-guide-assets",
   guidePlayPublish: "starter-texture-studio-guide-play-publish",
   guideInstallQr: "starter-texture-studio-guide-install-qr",
+  guideStudioGarden: STUDIO_GUIDE_SKYBOX_TEXTURE_ASSET_ID,
 } as const;
 
 const STARTER_MATERIAL_IDS = {
@@ -2195,6 +2572,107 @@ const STARTER_MODEL_METADATA = {
       extensionsUsed: ["KHR_interactivity"],
     },
   },
+  "studio-guide-laptop": {
+    assetId: STARTER_MODEL_IDS.guideLaptop,
+    name: "Museum Prop: Laptop",
+    materialName: "metal_brushed",
+    materialNames: [
+      "metal_brushed",
+      "metal_dark",
+      "screen_dark",
+      "plastic_dark",
+    ],
+    importMetadata: modelMetadata(55, 55, 55, {
+      min: [-0.156, 0, -0.12821614],
+      max: [0.156, 0.18584755, 0.12821616],
+      center: [0, 0.09292378, 0.00000001],
+      size: [0.31200001, 0.18584755, 0.2564323],
+      boundingSphereRadius: 0.22228408,
+    }),
+  },
+  "studio-guide-globe": {
+    assetId: STARTER_MODEL_IDS.guideGlobe,
+    name: "Museum Prop: Globe",
+    materialName: "wood_dark",
+    materialNames: ["wood_dark", "metal_brass", "plastic_blue"],
+    importMetadata: modelMetadata(16, 16, 16, {
+      min: [-0.08752499, 0, -0.068],
+      max: [0.08752499, 0.2259854, 0.068],
+      center: [0, 0.1129927, 0],
+      size: [0.17504999, 0.2259854, 0.13600001],
+      boundingSphereRadius: 0.15827816,
+    }),
+  },
+  "studio-guide-vr-headset": {
+    assetId: STARTER_MODEL_IDS.guideVrHeadset,
+    name: "Museum Prop: VR Headset",
+    materialName: "plastic_dark",
+    materialNames: ["plastic_dark", "rubber_black", "fabric_grey"],
+    importMetadata: modelMetadata(11, 11, 11, {
+      min: [-0.098, 0, -0.078],
+      max: [0.098, 0.092, 0.078],
+      center: [0, 0.046, 0],
+      size: [0.196, 0.092, 0.156],
+      boundingSphereRadius: 0.13343163,
+    }),
+  },
+  "studio-guide-telescope": {
+    assetId: STARTER_MODEL_IDS.guideTelescope,
+    name: "Museum Prop: Telescope",
+    materialName: "metal_dark",
+    materialNames: [
+      "metal_dark",
+      "metal_steel",
+      "plastic_yellow",
+      "glass_clear",
+    ],
+    importMetadata: modelMetadata(28, 28, 28, {
+      min: [-0.1835, 0, -0.24775],
+      max: [0.18349999, 1.31999999, 0.24775002],
+      center: [0, 0.65999999, 0.00000001],
+      size: [0.36699999, 1.31999999, 0.49550001],
+      boundingSphereRadius: 0.72845886,
+    }),
+  },
+  "studio-guide-information-board": {
+    assetId: STARTER_MODEL_IDS.guideInformationBoard,
+    name: "Museum Prop: Information Board",
+    materialName: "wood_dark",
+    materialNames: ["wood_dark", "paper_white", "metal_steel"],
+    importMetadata: modelMetadata(13, 13, 13, {
+      min: [-0.69999999, 0, -0.20704002],
+      max: [0.69999999, 1.62640223, 0.20704003],
+      center: [0, 0.81320112, 0],
+      size: [1.39999998, 1.62640223, 0.41408005],
+      boundingSphereRadius: 1.09277702,
+    }),
+  },
+  "studio-guide-bench": {
+    assetId: STARTER_MODEL_IDS.guideBench,
+    name: "Museum Prop: Gallery Bench",
+    materialName: "wood_light",
+    materialNames: ["wood_light", "metal_dark"],
+    importMetadata: modelMetadata(9, 9, 9, {
+      min: [-0.71622354, 0, -0.24272893],
+      max: [0.71622354, 0.83633253, 0.24272893],
+      center: [0, 0.41816627, 0],
+      size: [1.43244708, 0.83633253, 0.48545786],
+      boundingSphereRadius: 0.86415075,
+    }),
+  },
+  "studio-guide-planter": {
+    assetId: STARTER_MODEL_IDS.guidePlanter,
+    name: "Museum Prop: Planter",
+    materialName: "concrete_pale",
+    materialNames: ["concrete_pale", "soil_dark", "foliage_green"],
+    importMetadata: modelMetadata(22, 22, 22, {
+      min: [-0.40894306, 0, -0.23661151],
+      max: [0.40894306, 0.70490775, 0.23661151],
+      center: [0, 0.35245387, 0],
+      size: [0.81788611, 0.70490775, 0.47322302],
+      boundingSphereRadius: 0.58944309,
+    }),
+  },
 } satisfies Record<BundledStarterModelId, StarterModelMetadata>;
 
 function modelMetadata(
@@ -2237,7 +2715,8 @@ function createStarterModelAsset(bundledId: BundledStarterAssetId): ModelAsset {
         bundledId === "studio-guide-gltf-door" ||
           bundledId === "studio-guide-interaction-door",
       ),
-      ...(bundledId === "openbrush-all-brushes"
+      ...(bundledId === "openbrush-all-brushes" ||
+      isStudioGuideDecorationModelId(bundledId)
         ? { generateColliders: false }
         : {}),
     },
@@ -2270,7 +2749,28 @@ function isBundledStarterModelId(
     id === "wine-glass" ||
     id === "studio-guide-gltf-door" ||
     id === "studio-guide-interaction-door" ||
+    id === "studio-guide-laptop" ||
+    id === "studio-guide-globe" ||
+    id === "studio-guide-vr-headset" ||
+    id === "studio-guide-telescope" ||
+    id === "studio-guide-information-board" ||
+    id === "studio-guide-bench" ||
+    id === "studio-guide-planter" ||
     id === "openbrush-all-brushes"
+  );
+}
+
+function isStudioGuideDecorationModelId(
+  id: BundledStarterModelId,
+): boolean {
+  return (
+    id === "studio-guide-laptop" ||
+    id === "studio-guide-globe" ||
+    id === "studio-guide-vr-headset" ||
+    id === "studio-guide-telescope" ||
+    id === "studio-guide-information-board" ||
+    id === "studio-guide-bench" ||
+    id === "studio-guide-planter"
   );
 }
 
@@ -2355,6 +2855,14 @@ const STARTER_TEXTURE_METADATA = {
     height: 1024,
     wrap: "clamp-to-edge",
   },
+  "studio-guide-studio-garden": {
+    assetId: STARTER_TEXTURE_IDS.guideStudioGarden,
+    name: "Studio Garden",
+    order: 9,
+    width: 2048,
+    height: 1024,
+    wrap: "repeat",
+  },
 } as const satisfies Record<
   BundledStarterTextureId,
   {
@@ -2373,6 +2881,7 @@ function createStarterTextureAsset(bundledId: BundledStarterAssetId): TextureAss
   }
   const bundled = BUNDLED_STARTER_ASSETS[bundledId];
   const metadata = STARTER_TEXTURE_METADATA[bundledId];
+  const isStudioGarden = bundledId === "studio-guide-studio-garden";
   return {
     id: metadata.assetId,
     name: metadata.name,
@@ -2383,8 +2892,24 @@ function createStarterTextureAsset(bundledId: BundledStarterAssetId): TextureAss
     thumbnail: { status: "missing" },
     folderId: STARTER_ASSET_FOLDER_IDS.textures,
     order: metadata.order,
+    ...(isStudioGarden
+      ? {
+          attribution: {
+            providerId: "poly-haven",
+            providerName: "Poly Haven",
+            externalId: "studio_garden",
+            assetUrl: "https://polyhaven.com/a/studio_garden",
+            licenseName: "CC0 1.0",
+            licenseUrl:
+              "https://creativecommons.org/publicdomain/zero/1.0/",
+            authors: ["Sergej Majboroda"],
+          },
+          usage: "environment" as const,
+          projection: "equirectangular" as const,
+        }
+      : {}),
     importSettings: normalizeTextureImportSettings({
-      colorSpace: "srgb",
+      colorSpace: isStudioGarden ? "linear" : "srgb",
       generateMipmaps: true,
       flipY: false,
       resize: { mode: "original" },
@@ -2397,8 +2922,8 @@ function createStarterTextureAsset(bundledId: BundledStarterAssetId): TextureAss
       compression: { format: "source", quality: 80 },
     }),
     importMetadata: {
-      sourceFormat: "png",
-      mimeType: "image/png",
+      sourceFormat: isStudioGarden ? "hdr" : "png",
+      mimeType: bundled.mediaType,
       byteLength: bundled.byteLength,
       width: metadata.width,
       height: metadata.height,

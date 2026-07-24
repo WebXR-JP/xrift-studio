@@ -13,6 +13,7 @@ import {
 import {
   STARTER_ASSET_FOLDER_IDS,
   STUDIO_GUIDE_DOOR_INTERACTIVITY_ASSET_ID,
+  STUDIO_GUIDE_SKYBOX_TEXTURE_ASSET_ID,
   createStarterWorldProject,
   defaultVisualStarterTemplateId,
   starterWorldContainsNoPrimitiveAssets,
@@ -48,7 +49,7 @@ export function runStarterTemplateFixtureAssertions(): void {
     assert(
       plan.bundledAssetCopies.length ===
         (templateId === "studio-guide"
-          ? 14
+          ? 22
           : templateId === "openbrush"
             ? 2
             : templateId === "xrift-official"
@@ -92,7 +93,7 @@ export function runStarterTemplateFixtureAssertions(): void {
     }
     assert(modelAssets.length ===
       (templateId === "studio-guide"
-        ? 5
+        ? 12
         : templateId === "openbrush"
           ? 1
           : templateId === "xrift-official"
@@ -102,7 +103,7 @@ export function runStarterTemplateFixtureAssertions(): void {
     assert(
       textureAssets.length ===
         (templateId === "studio-guide"
-          ? 9
+          ? 10
           : templateId === "xrift-official"
             ? 1
             : 0),
@@ -205,6 +206,63 @@ export function runStarterTemplateFixtureAssertions(): void {
     }
     if (templateId === "studio-guide") {
       const sceneEntities = Object.values(plan.scene.entities);
+      const skyboxAsset =
+        plan.assets.assets[STUDIO_GUIDE_SKYBOX_TEXTURE_ASSET_ID];
+      assert(
+        skyboxAsset?.kind === "texture" &&
+          skyboxAsset.usage === "environment" &&
+          skyboxAsset.projection === "equirectangular" &&
+          skyboxAsset.importMetadata?.sourceFormat === "hdr" &&
+          skyboxAsset.attribution?.providerId === "poly-haven" &&
+          skyboxAsset.attribution.licenseName === "CC0 1.0" &&
+          plan.scene.settings?.skybox.imageAssetId === skyboxAsset.id &&
+          plan.scene.settings.skybox.enabled &&
+          plan.scene.settings.skybox.iblEnabled,
+        "Studio guide must use the attributed Poly Haven HDRI as Skybox and IBL",
+      );
+      assert(
+        plan.bundledAssetCopies.every(
+          (copy) =>
+            !copy.targetRelativePath.includes(":") &&
+            !copy.targetRelativePath.includes("\\"),
+        ),
+        "Studio guide bundled assets must never retain a Google Drive path",
+      );
+      const museumPropAssets = modelAssets.filter((asset) =>
+        asset.name.startsWith("Museum Prop:"),
+      );
+      assert(
+        museumPropAssets.length === 7 &&
+          museumPropAssets.every(
+            (asset) =>
+              asset.kind === "model" &&
+              !asset.importSettings.generateColliders &&
+              asset.materialSlots.length >= 2,
+          ),
+        "Studio guide must register the optimized Drive prop library",
+      );
+      assert(
+        sceneEntities.filter((entity) =>
+          entity.id.startsWith("guide-planter-"),
+        ).length === 4 &&
+          [
+            "guide-information-board",
+            "guide-gallery-bench",
+            "guide-telescope",
+            "guide-sample-laptop",
+            "guide-sample-globe",
+            "guide-sample-vr-headset",
+          ].every((entityId) => {
+            const entity = plan.scene.entities[entityId];
+            return (
+              entity &&
+              !entity.components.some(
+                (component) => component.type === "collider",
+              )
+            );
+          }),
+        "Studio guide furnishings must add visual density without trimesh colliders",
+      );
       const gltfDoor = plan.scene.entities["guide-gltf-door"];
       const interactionDoor = plan.scene.entities["guide-interaction-door"];
       const gltfDoorAnimation = gltfDoor?.components.find(
