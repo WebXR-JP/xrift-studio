@@ -25,6 +25,13 @@ type ProjectSort =
   | "name-asc";
 type PublishFilter = "all" | "published" | "unpublished";
 
+const PROJECT_SORT_LABELS: Record<ProjectSort, string> = {
+  "updated-desc": "最近更新した順",
+  "updated-asc": "更新が古い順",
+  "uploaded-desc": "最近公開した順",
+  "name-asc": "名前順",
+};
+
 type Props = {
   projects: Project[];
   loading: boolean;
@@ -194,7 +201,7 @@ export function ProjectLibrary({
       />
 
       <main className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-        <div className="mx-auto max-w-[1600px] px-4 py-4">
+        <div className="mx-auto max-w-[1120px] px-5 py-5">
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-baseline gap-2">
@@ -254,9 +261,9 @@ export function ProjectLibrary({
                   onChange={(event) => setSort(event.currentTarget.value as ProjectSort)}
                   className="h-8 rounded-md border border-zinc-200 bg-white pl-7 pr-7 text-xs text-zinc-700 focus-visible:outline-none focus-visible:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-100"
                 >
-                  <option value="updated-desc">更新日時・新しい順</option>
-                  <option value="updated-asc">更新日時・古い順</option>
-                  <option value="uploaded-desc">公開日時・新しい順</option>
+                  <option value="updated-desc">最近更新した順</option>
+                  <option value="updated-asc">更新が古い順</option>
+                  <option value="uploaded-desc">最近公開した順</option>
                   <option value="name-asc">名前順</option>
                 </select>
               </label>
@@ -275,8 +282,18 @@ export function ProjectLibrary({
             </div>
           </div>
 
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-2.5">
-            <NewProjectCard busy={busy} onClick={onNew} />
+          <NewProjectCard busy={busy} onClick={onNew} />
+
+          <div className="mb-2 mt-4 flex items-center justify-between gap-3 border-t border-zinc-200 pt-3">
+            <h2 className="text-xs font-semibold text-zinc-700">
+              {PROJECT_SORT_LABELS[sort]}
+            </h2>
+            <span className="text-[10px] text-zinc-400">
+              上から順に表示
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-2.5">
             {visibleProjects.map((project) => (
               <ProjectCard
                 key={project.path}

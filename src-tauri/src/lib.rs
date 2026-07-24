@@ -118,6 +118,7 @@ struct SetupProgress {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct Project {
     name: String,
     path: String,
@@ -4382,6 +4383,43 @@ mod tests {
             asset_manifest_path: "assets/manifest.json".to_string(),
             last_publication: publication,
         }
+    }
+
+    #[test]
+    fn serializes_project_library_metadata_for_the_frontend() {
+        let project = Project {
+            name: "sample".to_string(),
+            path: "C:\\projects\\sample".to_string(),
+            kind: "world".to_string(),
+            format: "visual".to_string(),
+            title: Some("Sample".to_string()),
+            description: None,
+            modified_at_ms: Some(1_784_866_000_000),
+            uploaded_at: Some("2026-07-24T00:00:00.000Z".to_string()),
+            publication_id: Some("world-01".to_string()),
+        };
+
+        let serialized = serde_json::to_value(project).expect("project must serialize");
+
+        assert_eq!(
+            serialized
+                .get("modifiedAtMs")
+                .and_then(|value| value.as_u64()),
+            Some(1_784_866_000_000)
+        );
+        assert_eq!(
+            serialized
+                .get("uploadedAt")
+                .and_then(|value| value.as_str()),
+            Some("2026-07-24T00:00:00.000Z")
+        );
+        assert_eq!(
+            serialized
+                .get("publicationId")
+                .and_then(|value| value.as_str()),
+            Some("world-01")
+        );
+        assert!(serialized.get("modified_at_ms").is_none());
     }
 
     #[test]

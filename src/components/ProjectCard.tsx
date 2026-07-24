@@ -64,7 +64,7 @@ export function ProjectCard({
   }, [project.path, refreshKey]);
 
   return (
-    <article className="group flex min-h-28 overflow-hidden rounded-lg border border-zinc-200 bg-white transition-colors hover:border-zinc-300 hover:bg-zinc-50/60">
+    <article className="group flex min-h-24 overflow-hidden rounded-lg border border-zinc-200 bg-white transition-colors hover:border-zinc-300 hover:bg-zinc-50/60">
       <button
         type="button"
         disabled={busy}
@@ -72,7 +72,7 @@ export function ProjectCard({
         className="flex min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 disabled:cursor-wait"
         title={`${project.title || project.name}を開く`}
       >
-        <span className="relative w-28 shrink-0 overflow-hidden border-r border-zinc-200 bg-zinc-100">
+        <span className="relative w-36 shrink-0 overflow-hidden border-r border-zinc-200 bg-zinc-100">
           {thumb ? (
             <img
               src={thumb}
@@ -183,7 +183,7 @@ export function NewProjectCard({
       type="button"
       disabled={busy}
       onClick={onClick}
-      className="flex min-h-28 items-center gap-3 rounded-lg border border-dashed border-zinc-300 bg-white/70 px-4 text-left text-zinc-600 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50"
+      className="flex min-h-20 w-full items-center gap-3 rounded-lg border border-dashed border-zinc-300 bg-white/70 px-4 text-left text-zinc-600 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50"
     >
       <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-current">
         <Plus size={16} aria-hidden="true" />
