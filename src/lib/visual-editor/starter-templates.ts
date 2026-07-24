@@ -3214,7 +3214,10 @@ function createStarterTextureAsset(bundledId: BundledStarterAssetId): TextureAss
     importSettings: normalizeTextureImportSettings({
       colorSpace: isStudioGarden ? "linear" : "srgb",
       generateMipmaps: true,
-      flipY: false,
+      // Starter images are loaded directly by Three rather than through
+      // GLTFLoader. Preserve Three's image orientation so screenshots,
+      // material maps, panoramas, and the HDR skybox render upright.
+      flipY: true,
       resize: { mode: "original" },
       sampler: {
         wrapS: metadata.wrap,

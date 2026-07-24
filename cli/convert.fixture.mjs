@@ -159,7 +159,7 @@ async function verifyPreparedOfficialStarter() {
           document.relativePath.endsWith("xrift-official/bunny.glb"),
         ) &&
         prepared.binaryDocuments.some((document) =>
-          document.relativePath.endsWith("xrift-official/tokyo-station.jpg"),
+          document.relativePath.endsWith("xrift-official/tokyo-station.png"),
         ),
       "prepared official starter must persist every referenced official binary",
     );

@@ -112,6 +112,12 @@ export function runStarterTemplateFixtureAssertions(): void {
       `${templateId}: Texture library is incorrect`,
     );
     assert(
+      textureAssets.every(
+        (asset) => asset.kind === "texture" && asset.importSettings.flipY,
+      ),
+      `${templateId}: bundled direct-load Textures must render upright`,
+    );
+    assert(
       particleAssets.length === (templateId === "studio-guide" ? 10 : 0),
       `${templateId}: Particle library is incorrect`,
     );
@@ -166,13 +172,14 @@ export function runStarterTemplateFixtureAssertions(): void {
       );
     }
 
+    const documents = {
+      project: plan.project,
+      scenes: { [plan.scene.sceneId]: plan.scene },
+      assets: plan.assets,
+      prefabs: plan.prefabs,
+    };
     const result = compileVisualProject(
-      {
-        project: plan.project,
-        scenes: { [plan.scene.sceneId]: plan.scene },
-        assets: plan.assets,
-        prefabs: plan.prefabs,
-      },
+      documents,
       {
         generatedAt: "2026-01-01T00:00:00.000Z",
         outputMode: "classic-runtime",
@@ -214,6 +221,13 @@ export function runStarterTemplateFixtureAssertions(): void {
       const sceneEntities = Object.values(plan.scene.entities);
       const skyboxAsset =
         plan.assets.assets[STUDIO_GUIDE_SKYBOX_TEXTURE_ASSET_ID];
+      const worldSource =
+        compileVisualProject(documents, {
+          generatedAt: "2026-01-01T00:00:00.000Z",
+          outputMode: "classic-jsx",
+        }).overlayFiles.find(
+          (file) => file.relativePath === "src/World.tsx",
+        )?.content ?? "";
       assert(
         skyboxAsset?.kind === "texture" &&
           skyboxAsset.usage === "environment" &&
@@ -225,6 +239,11 @@ export function runStarterTemplateFixtureAssertions(): void {
           plan.scene.settings.skybox.enabled &&
           plan.scene.settings.skybox.iblEnabled,
         "Studio guide must use the attributed Poly Haven HDRI as Skybox and IBL",
+      );
+      assert(
+        worldSource.includes("<XRiftStudioImageSkybox") &&
+          worldSource.includes("flipY={true}"),
+        "Studio guide must compile its HDR Skybox with the upright orientation",
       );
       assert(
         plan.bundledAssetCopies.every(
