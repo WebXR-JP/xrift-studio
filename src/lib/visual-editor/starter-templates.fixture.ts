@@ -87,7 +87,7 @@ export function runStarterTemplateFixtureAssertions(): void {
     }
     assert(modelAssets.length ===
       (templateId === "studio-guide"
-        ? 4
+        ? 3
         : templateId === "openbrush"
           ? 1
           : templateId === "xrift-official"
@@ -97,7 +97,7 @@ export function runStarterTemplateFixtureAssertions(): void {
     assert(
       textureAssets.length ===
         (templateId === "studio-guide"
-          ? 8
+          ? 9
           : templateId === "xrift-official"
             ? 1
             : 0),
@@ -105,7 +105,7 @@ export function runStarterTemplateFixtureAssertions(): void {
     );
     assert(
       templateId === "studio-guide"
-        ? materialAssets.length === 10
+        ? materialAssets.length === 13
         : templateId === "xrift-official"
           ? materialAssets.length >= 7
           : materialAssets.length === 1,
@@ -203,8 +203,8 @@ export function runStarterTemplateFixtureAssertions(): void {
       assert(
         sceneEntities.filter((entity) =>
           entity.name.endsWith("スクリーンショット"),
-        ).length === 6,
-        "Studio guide must include six visual learning screens",
+        ).length === 7,
+        "Studio guide must include six visual learning screens and one install QR",
       );
       assert(
         sceneEntities.filter((entity) =>
@@ -219,9 +219,13 @@ export function runStarterTemplateFixtureAssertions(): void {
       assert(
         textureAssets.filter((asset) =>
           asset.name.startsWith("Studio Guide:"),
-        ).length === 6 &&
+        ).length === 7 &&
           textureAssets
-            .filter((asset) => asset.name.startsWith("Studio Guide:"))
+            .filter(
+              (asset) =>
+                asset.name.startsWith("Studio Guide:") &&
+                asset.name !== "Studio Guide: Install QR",
+            )
             .every(
               (asset) =>
                 asset.kind === "texture" &&
@@ -229,6 +233,21 @@ export function runStarterTemplateFixtureAssertions(): void {
                 asset.importMetadata.height === 576,
             ),
         "Studio guide screenshots must retain their learning-panel dimensions",
+      );
+      const installQr = textureAssets.find(
+        (asset) => asset.name === "Studio Guide: Install QR",
+      );
+      assert(
+        installQr?.kind === "texture" &&
+          installQr.importMetadata?.width === 1024 &&
+          installQr.importMetadata.height === 1024,
+        "Studio guide install QR must retain its square dimensions",
+      );
+      assert(
+        sceneEntities.filter((entity) =>
+          entity.id.startsWith("guide-museum-wall-"),
+        ).length === 5,
+        "Studio guide must provide an editable one-floor museum shell",
       );
     }
     if (templateId === "xrift-official") {

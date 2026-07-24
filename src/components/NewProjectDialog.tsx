@@ -145,7 +145,7 @@ function StarterScenePreview({
           className="h-full w-full object-cover"
         />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-zinc-950/90 to-transparent px-3 pb-2.5 pt-8 text-[10px] font-semibold tracking-wide text-white">
-          画面教材と実習サンプルを収録
+          1階建ての学習ミュージアム
         </div>
       </div>
     );
@@ -458,7 +458,7 @@ export function NewProjectDialog({
                           <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">
                             <Package size={12} aria-hidden="true" />
                             {template.id === "studio-guide"
-                              ? "実画面6枚・実習Asset・公式Component"
+                              ? "実画面6枚・インストールQR・公式Component"
                               : template.id === "xrift-official"
                               ? "公式R3F / Rapierから変換"
                               : template.bundledAssetIds.length > 0
