@@ -351,6 +351,17 @@ export function runStarterTemplateFixtureAssertions(): void {
           ) >= 10,
         "Studio guide must keep the 4.5 m central promenade clear of plinths and large wall signs",
       );
+      const tagBoardPosition = entityPosition("guide-xrift-tag-board");
+      const entryLogPosition = entityPosition("guide-xrift-entry-log");
+      assert(
+        tagBoardPosition?.[1] === 1.25 &&
+          tagBoardPosition[1] - 2.08 / 2 >= 0.2 &&
+          Math.abs(tagBoardPosition[0]) >= 6 &&
+          entryLogPosition?.[1] === 1.8 &&
+          entryLogPosition[1] - 3.15 / 2 >= 0.2 &&
+          Math.abs(entryLogPosition[0]) >= 6,
+        "Studio guide XRift boards must clear the floor using their official package bounds and stay outside the promenade",
+      );
       const gltfDoor = plan.scene.entities["guide-gltf-door"];
       const interactionDoor = plan.scene.entities["guide-interaction-door"];
       const gltfDoorAnimation = gltfDoor?.components.find(

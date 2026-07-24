@@ -2124,19 +2124,22 @@ function createStudioGuideEntities(): SceneEntity[] {
     BUILTIN_PREFAB_RECIPE_IDS.mirror,
     [-6.1, 1.5, -16.2],
   );
+  // Official boards use their visual center as the local origin. Their
+  // package-default bounds therefore need an explicit lift above the floor:
+  // TagBoard is 2.08 m tall and EntryLogBoard is 3.15 m tall.
   const tagBoard = createGuideXriftEntity(
     "guide-xrift-tag-board",
     "XRift TagBoard サンプル",
     playId,
     BUILTIN_PREFAB_RECIPE_IDS.tagBoard,
-    [6.1, 0, -16.2],
+    [6.1, 1.25, -16.2],
   );
   const entryLog = createGuideXriftEntity(
     "guide-xrift-entry-log",
     "XRift EntryLogBoard サンプル",
     playId,
     BUILTIN_PREFAB_RECIPE_IDS.entryLogBoard,
-    [-6.1, 1.5, -18.2],
+    [-6.1, 1.8, -18.2],
   );
   const componentHeading = createGuideTextEntity(
     "guide-components-heading",
