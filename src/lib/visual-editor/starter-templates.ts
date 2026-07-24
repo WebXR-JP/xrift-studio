@@ -5,6 +5,7 @@ import {
   type AssetManifest,
   type MaterialAsset,
   type ModelAsset,
+  type ParticleAsset,
   type PrefabAsset,
   type TextureAsset,
 } from "./asset-manifest";
@@ -34,6 +35,7 @@ import {
   createBoxColliderComponent,
   createMeshComponent,
   createMeshColliderComponent,
+  createParticleEmitterComponent,
   createTextComponent,
   createTransformComponent,
   renameEntity,
@@ -44,6 +46,10 @@ import {
 } from "./scene-document";
 import { addDefaultInteractivityAsset } from "./interactivity-graph";
 import { OPEN_BRUSH_RENDERER } from "./open-brush";
+import {
+  createDefaultParticleAsset,
+  type ParticlePropertiesPatch,
+} from "./particle-system";
 import { DEFAULT_SCENE_SETTINGS } from "./scene-settings";
 
 export type StarterWorldTemplateId =
@@ -85,7 +91,11 @@ export type BundledStarterTextureId =
   | "studio-guide-assets"
   | "studio-guide-play-publish"
   | "studio-guide-install-qr"
-  | "studio-guide-studio-garden";
+  | "studio-guide-studio-garden"
+  | "studio-guide-particle-glow"
+  | "studio-guide-particle-spark"
+  | "studio-guide-particle-smoke"
+  | "studio-guide-particle-confetti";
 
 export type BundledStarterAssetId =
   | BundledStarterModelId
@@ -586,6 +596,70 @@ export const BUNDLED_STARTER_ASSETS = {
       permissionBasis: "provided-for-xrift-studio",
     },
   },
+  "studio-guide-particle-glow": {
+    id: "studio-guide-particle-glow",
+    kind: "texture",
+    publicPath: "/visual-editor/starter-assets/particle-glow.png",
+    projectRelativePath:
+      "assets/starter/studio-guide/particles/particle-glow.png",
+    byteLength: 39316,
+    sha256:
+      "b25398a82e884125087de919b59d9c35454968e61aeab5f1d37c1237ca933689",
+    mediaType: "image/png",
+    provenance: {
+      ownership: "project-owned",
+      sourceName: "Codex Image generated soft glow particle sprite",
+      permissionBasis: "provided-for-xrift-studio",
+    },
+  },
+  "studio-guide-particle-spark": {
+    id: "studio-guide-particle-spark",
+    kind: "texture",
+    publicPath: "/visual-editor/starter-assets/particle-spark.png",
+    projectRelativePath:
+      "assets/starter/studio-guide/particles/particle-spark.png",
+    byteLength: 16322,
+    sha256:
+      "7b2dc2c85948f8c553e31685cac25b66e1fc58d2ddbc48a615484df708ee08c6",
+    mediaType: "image/png",
+    provenance: {
+      ownership: "project-owned",
+      sourceName: "Codex Image generated sparkle particle sprite",
+      permissionBasis: "provided-for-xrift-studio",
+    },
+  },
+  "studio-guide-particle-smoke": {
+    id: "studio-guide-particle-smoke",
+    kind: "texture",
+    publicPath: "/visual-editor/starter-assets/particle-smoke.png",
+    projectRelativePath:
+      "assets/starter/studio-guide/particles/particle-smoke.png",
+    byteLength: 32490,
+    sha256:
+      "4c49ef5484baab36e6af007614ad5d702fb6a53780defd2e90ed074dc9ad3b57",
+    mediaType: "image/png",
+    provenance: {
+      ownership: "project-owned",
+      sourceName: "Codex Image generated smoke particle sprite",
+      permissionBasis: "provided-for-xrift-studio",
+    },
+  },
+  "studio-guide-particle-confetti": {
+    id: "studio-guide-particle-confetti",
+    kind: "texture",
+    publicPath: "/visual-editor/starter-assets/particle-confetti.png",
+    projectRelativePath:
+      "assets/starter/studio-guide/particles/particle-confetti.png",
+    byteLength: 16506,
+    sha256:
+      "3359c4d016c2598af4f6313d47320218b7ff94fdfd517e07ea513d435208ae8d",
+    mediaType: "image/png",
+    provenance: {
+      ownership: "project-owned",
+      sourceName: "Codex Image generated confetti particle sprite",
+      permissionBasis: "provided-for-xrift-studio",
+    },
+  },
 } as const satisfies Record<string, BundledStarterAssetDefinition>;
 
 export const BUNDLED_STARTER_ASSET_IDS = [
@@ -616,6 +690,10 @@ export const BUNDLED_STARTER_ASSET_IDS = [
   "studio-guide-assets",
   "studio-guide-play-publish",
   "studio-guide-install-qr",
+  "studio-guide-particle-glow",
+  "studio-guide-particle-spark",
+  "studio-guide-particle-smoke",
+  "studio-guide-particle-confetti",
 ] as const satisfies readonly BundledStarterAssetId[];
 
 const OPEN_BRUSH_LICENSE_COPY: StarterAssetCopyPlanEntry = {
@@ -658,6 +736,7 @@ export const STARTER_ASSET_FOLDER_IDS = {
   models: "starter-library-models",
   materials: "starter-library-materials",
   textures: "starter-library-textures",
+  particles: "starter-library-particles",
   prefabs: "starter-library-prefabs",
   behaviors: "starter-library-behaviors",
 } as const;
@@ -668,6 +747,18 @@ export const STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID =
   "starter-model-studio-guide-interaction-door";
 export const STUDIO_GUIDE_SKYBOX_TEXTURE_ASSET_ID =
   "starter-texture-studio-guide-studio-garden";
+export const STUDIO_GUIDE_PARTICLE_ASSET_IDS = [
+  "starter-particle-firefly-glow",
+  "starter-particle-magic-sparks",
+  "starter-particle-portal-orbit",
+  "starter-particle-ember-drift",
+  "starter-particle-soft-smoke",
+  "starter-particle-cloud-puffs",
+  "starter-particle-confetti-burst",
+  "starter-particle-snowfall",
+  "starter-particle-bubble-drift",
+  "starter-particle-stardust-trail",
+] as const;
 
 export const STUDIO_GUIDE_TEMPLATE_THUMBNAIL =
   "/visual-editor/starter-assets/studio-guide-museum-thumbnail.png";
@@ -677,7 +768,7 @@ export const STARTER_WORLD_TEMPLATES = [
     id: "studio-guide",
     name: "XRift Studio ガイド",
     description:
-      "Poly Havenの庭Skyboxと低ポリ展示物を備えた1階建てミュージアムで、2種類のAnimation扉と実画面から制作を学べるワールド",
+      "Poly Havenの庭Skybox、低ポリ展示物、10種の再利用可能なParticleを備えた1階建てミュージアムで制作を学べるワールド",
     bundledAssetIds: [
       "studio-guide-overview",
       "studio-guide-hierarchy-create",
@@ -686,6 +777,10 @@ export const STARTER_WORLD_TEMPLATES = [
       "studio-guide-assets",
       "studio-guide-play-publish",
       "studio-guide-install-qr",
+      "studio-guide-particle-glow",
+      "studio-guide-particle-spark",
+      "studio-guide-particle-smoke",
+      "studio-guide-particle-confetti",
       "log-bench",
       "mug",
       "wine-glass",
@@ -797,17 +892,23 @@ function createStarterAssetFolders(): Record<string, AssetFolder> {
       parentId: STARTER_ASSET_FOLDER_IDS.root,
       order: 2,
     },
+    [STARTER_ASSET_FOLDER_IDS.particles]: {
+      id: STARTER_ASSET_FOLDER_IDS.particles,
+      name: "Particles",
+      parentId: STARTER_ASSET_FOLDER_IDS.root,
+      order: 3,
+    },
     [STARTER_ASSET_FOLDER_IDS.prefabs]: {
       id: STARTER_ASSET_FOLDER_IDS.prefabs,
       name: "Prefabs",
       parentId: STARTER_ASSET_FOLDER_IDS.root,
-      order: 3,
+      order: 4,
     },
     [STARTER_ASSET_FOLDER_IDS.behaviors]: {
       id: STARTER_ASSET_FOLDER_IDS.behaviors,
       name: "Behaviors",
       parentId: STARTER_ASSET_FOLDER_IDS.root,
-      order: 4,
+      order: 5,
     },
   };
 }
@@ -829,6 +930,8 @@ export function createStarterWorldProject(
   const textures = bundledDefinitions
     .filter((definition) => definition.kind === "texture")
     .map((definition) => createStarterTextureAsset(definition.id));
+  const particles =
+    templateId === "studio-guide" ? createStudioGuideParticleAssets() : [];
   const bundledBaseAssets: AssetManifest = {
     ...prototype.assets,
     folders: createStarterAssetFolders(),
@@ -837,6 +940,7 @@ export function createStarterWorldProject(
       ...Object.fromEntries(customMaterials.map((asset) => [asset.id, asset])),
       ...Object.fromEntries(models.map((asset) => [asset.id, asset])),
       ...Object.fromEntries(textures.map((asset) => [asset.id, asset])),
+      ...Object.fromEntries(particles.map((asset) => [asset.id, asset])),
     },
   };
   const baseAssets =
@@ -1207,6 +1311,7 @@ function createStudioGuideEntities(): SceneEntity[] {
   const editId = "guide-section-edit";
   const assetsId = "guide-section-assets";
   const animationId = "guide-section-animation";
+  const particleId = "guide-section-particles";
   const playId = "guide-section-play";
 
   const floor = createFloorEntity("studio-guide");
@@ -1504,7 +1609,7 @@ function createStudioGuideEntities(): SceneEntity[] {
   const welcomeSubheading = createGuideTextEntity(
     "guide-welcome-subheading",
     "入口サブタイトル",
-    "START HERE  /  1 FLOOR  /  7 EXHIBITS",
+    "START HERE  /  1 FLOOR  /  8 EXHIBITS",
     welcomeId,
     [0, 5.55, 15.12],
     0.22,
@@ -1860,11 +1965,142 @@ function createStudioGuideEntities(): SceneEntity[] {
     ],
   );
 
+  const particleDefinitions = [
+    {
+      slug: "firefly",
+      name: "Firefly Glow",
+      assetId: STUDIO_GUIDE_PARTICLE_ASSET_IDS[0],
+    },
+    {
+      slug: "magic-sparks",
+      name: "Magic Sparks",
+      assetId: STUDIO_GUIDE_PARTICLE_ASSET_IDS[1],
+    },
+    {
+      slug: "portal-orbit",
+      name: "Portal Orbit",
+      assetId: STUDIO_GUIDE_PARTICLE_ASSET_IDS[2],
+    },
+    {
+      slug: "embers",
+      name: "Ember Drift",
+      assetId: STUDIO_GUIDE_PARTICLE_ASSET_IDS[3],
+    },
+    {
+      slug: "smoke",
+      name: "Soft Smoke",
+      assetId: STUDIO_GUIDE_PARTICLE_ASSET_IDS[4],
+    },
+    {
+      slug: "cloud-puff",
+      name: "Cloud Puff Drift",
+      assetId: STUDIO_GUIDE_PARTICLE_ASSET_IDS[5],
+    },
+    {
+      slug: "confetti",
+      name: "Confetti Shower",
+      assetId: STUDIO_GUIDE_PARTICLE_ASSET_IDS[6],
+    },
+    {
+      slug: "snow",
+      name: "Snowfall",
+      assetId: STUDIO_GUIDE_PARTICLE_ASSET_IDS[7],
+    },
+    {
+      slug: "bubbles",
+      name: "Bubble Drift",
+      assetId: STUDIO_GUIDE_PARTICLE_ASSET_IDS[8],
+    },
+    {
+      slug: "stardust",
+      name: "Stardust Trail",
+      assetId: STUDIO_GUIDE_PARTICLE_ASSET_IDS[9],
+    },
+  ] as const;
+  const particleDisplays = particleDefinitions.flatMap(
+    (definition, index): SceneEntity[] => {
+      const left = index < 5;
+      const row = left ? index : index - 5;
+      const x = left ? -10.35 : 10.35;
+      const z = -11.4 - row * 2.55;
+      const emitter = createGuideParticleEntity(
+        `guide-particle-${definition.slug}`,
+        `Particle Sample: ${definition.name}`,
+        particleId,
+        definition.assetId,
+        [x, 1.45, z],
+      );
+      const shelf = createGuidePrimitiveEntity(
+        `guide-particle-${definition.slug}-shelf`,
+        `${definition.name} 展示棚`,
+        particleId,
+        BUILTIN_PRIMITIVE_CREATION_IDS.box,
+        STARTER_MATERIAL_IDS.guidePlinth,
+        [left ? -10.75 : 10.75, 0.18, z],
+        [0, 0, 0],
+        [1.65, 0.22, 1.5],
+      );
+      const label = createGuideTextEntity(
+        `guide-particle-${definition.slug}-label`,
+        `${definition.name} ラベル`,
+        `${String(index + 1).padStart(2, "0")}  ${definition.name}\nAssets > Particles から複製`,
+        particleId,
+        [left ? -10.72 : 10.72, 0.62, z],
+        0.15,
+        2.35,
+        index % 2 === 0 ? "#bae6fd" : "#ddd6fe",
+        [0, left ? Math.PI / 2 : -Math.PI / 2, 0],
+      );
+      return [emitter, shelf, label];
+    },
+  );
+  const particleBackdrop = createGuidePrimitiveEntity(
+    "guide-particle-lab-backdrop",
+    "Particle Lab案内プレート",
+    particleId,
+    BUILTIN_PRIMITIVE_CREATION_IDS.box,
+    STARTER_MATERIAL_IDS.guideDark,
+    [0, 4.55, -12.15],
+    [0, 0, 0],
+    [9.8, 1.55, 0.12],
+  );
+  const particleHeading = createGuideTextEntity(
+    "guide-particle-lab-heading",
+    "Particle Lab見出し",
+    "PARTICLE LAB  /  10 reusable samples",
+    particleId,
+    [0, 4.88, -12.06],
+    0.36,
+    9.2,
+    "#ffffff",
+  );
+  const particleBody = createGuideTextEntity(
+    "guide-particle-lab-body",
+    "Particle Lab説明",
+    "Emitterを選択 → Particle Assetを開く → Texture・Shape・Emission・色を調整。4枚の透過Textureは他のParticleにも再利用できます。",
+    particleId,
+    [0, 4.25, -12.05],
+    0.16,
+    9.2,
+    "#e4e4e7",
+  );
+  const particles = createGuideGroup(
+    particleId,
+    "05 Particle Lab・Texture",
+    null,
+    [
+      particleBackdrop.id,
+      particleHeading.id,
+      particleBody.id,
+      ...particleDisplays.map((entity) => entity.id),
+    ],
+  );
+
   const playStation = createGuideStation({
     id: "guide-station-play-publish",
     parentId: playId,
     name: "Play・保存・アップロード",
-    title: "5. Playして、保存して、公開する",
+    title: "6. Playして、保存して、公開する",
     body:
       "Playは編集データのコピーを実行します。問題がなければ保存し、タイトル・説明・サムネイルを整えてアップロードします。",
     materialAssetId: STARTER_MATERIAL_IDS.guidePlayPublish,
@@ -1922,7 +2158,7 @@ function createStudioGuideEntities(): SceneEntity[] {
     [0, 0, 0],
     [12.5, 1.65, 0.12],
   );
-  const play = createGuideGroup(playId, "05 Play・公開・Component", null, [
+  const play = createGuideGroup(playId, "06 Play・公開・Component", null, [
     playStation[0].id,
     mirror.id,
     tagBoard.id,
@@ -1939,6 +2175,7 @@ function createStudioGuideEntities(): SceneEntity[] {
     edit,
     assets,
     animation,
+    particles,
     play,
     createLightEntity(
       "starter-sun",
@@ -1991,6 +2228,10 @@ function createStudioGuideEntities(): SceneEntity[] {
     gltfDoorLabel,
     interactionDoorLabel,
     interactionAssetHint,
+    particleBackdrop,
+    particleHeading,
+    particleBody,
+    ...particleDisplays,
     ...playStation,
     mirror,
     tagBoard,
@@ -2122,6 +2363,7 @@ function createGuideTextEntity(
   fontSize: number,
   maxWidth: number,
   color: string,
+  rotation: Vec3 = [0, 0, 0],
 ): SceneEntity {
   const component = createTextComponent(`${id}-text`, {
     text,
@@ -2141,8 +2383,33 @@ function createGuideTextEntity(
     children: [],
     enabled: true,
     components: [
-      createTransformComponent(`${id}-transform`, position),
+      createTransformComponent(`${id}-transform`, position, rotation),
       component,
+    ],
+  };
+}
+
+function createGuideParticleEntity(
+  id: string,
+  name: string,
+  parentId: string,
+  particleAssetId: string,
+  position: Vec3,
+): SceneEntity {
+  const emitter = createParticleEmitterComponent(
+    `${id}-particle-emitter`,
+    particleAssetId,
+  );
+  if (!emitter) throw new Error(`Guide Particle Emitter could not be created: ${id}`);
+  return {
+    id,
+    name,
+    parentId,
+    children: [],
+    enabled: true,
+    components: [
+      createTransformComponent(`${id}-transform`, position),
+      emitter,
     ],
   };
 }
@@ -2216,6 +2483,10 @@ const STARTER_TEXTURE_IDS = {
   guidePlayPublish: "starter-texture-studio-guide-play-publish",
   guideInstallQr: "starter-texture-studio-guide-install-qr",
   guideStudioGarden: STUDIO_GUIDE_SKYBOX_TEXTURE_ASSET_ID,
+  guideParticleGlow: "starter-texture-studio-guide-particle-glow",
+  guideParticleSpark: "starter-texture-studio-guide-particle-spark",
+  guideParticleSmoke: "starter-texture-studio-guide-particle-smoke",
+  guideParticleConfetti: "starter-texture-studio-guide-particle-confetti",
 } as const;
 
 const STARTER_MATERIAL_IDS = {
@@ -2863,6 +3134,38 @@ const STARTER_TEXTURE_METADATA = {
     height: 1024,
     wrap: "repeat",
   },
+  "studio-guide-particle-glow": {
+    assetId: STARTER_TEXTURE_IDS.guideParticleGlow,
+    name: "Particle Texture: Soft Glow",
+    order: 10,
+    width: 256,
+    height: 256,
+    wrap: "clamp-to-edge",
+  },
+  "studio-guide-particle-spark": {
+    assetId: STARTER_TEXTURE_IDS.guideParticleSpark,
+    name: "Particle Texture: Four Point Spark",
+    order: 11,
+    width: 256,
+    height: 256,
+    wrap: "clamp-to-edge",
+  },
+  "studio-guide-particle-smoke": {
+    assetId: STARTER_TEXTURE_IDS.guideParticleSmoke,
+    name: "Particle Texture: Soft Smoke",
+    order: 12,
+    width: 256,
+    height: 256,
+    wrap: "clamp-to-edge",
+  },
+  "studio-guide-particle-confetti": {
+    assetId: STARTER_TEXTURE_IDS.guideParticleConfetti,
+    name: "Particle Texture: Confetti Shard",
+    order: 13,
+    width: 256,
+    height: 256,
+    wrap: "clamp-to-edge",
+  },
 } as const satisfies Record<
   BundledStarterTextureId,
   {
@@ -2929,6 +3232,288 @@ function createStarterTextureAsset(bundledId: BundledStarterAssetId): TextureAss
       height: metadata.height,
     },
   };
+}
+
+function createStudioGuideParticleAssets(): ParticleAsset[] {
+  const definitions: ReadonlyArray<{
+    id: (typeof STUDIO_GUIDE_PARTICLE_ASSET_IDS)[number];
+    name: string;
+    properties: ParticlePropertiesPatch;
+  }> = [
+    {
+      id: STUDIO_GUIDE_PARTICLE_ASSET_IDS[0],
+      name: "Particle Sample: Firefly Glow",
+      properties: {
+        maxParticles: 180,
+        duration: 6,
+        prewarm: true,
+        startLifetime: { min: 3, max: 5 },
+        startSpeed: { min: 0.03, max: 0.12 },
+        startSize: { min: 0.05, max: 0.12 },
+        gravity: [0, 0.02, 0],
+        emission: { rateOverTime: 22, bursts: [] },
+        shape: { type: "sphere", radius: 1.2 },
+        colorOverLifetime: {
+          start: [1, 0.92, 0.34, 1],
+          end: [0.22, 0.72, 1, 0],
+        },
+        sizeOverLifetime: { min: 0.8, max: 0.15 },
+        velocityOverLifetime: {
+          linear: [0, 0.06, 0],
+          orbital: [0, 0.8, 0],
+        },
+        renderer: {
+          textureAssetId: STARTER_TEXTURE_IDS.guideParticleGlow,
+          blending: "additive",
+        },
+      },
+    },
+    {
+      id: STUDIO_GUIDE_PARTICLE_ASSET_IDS[1],
+      name: "Particle Sample: Magic Spark Fountain",
+      properties: {
+        maxParticles: 260,
+        duration: 5,
+        startLifetime: { min: 0.6, max: 1.1 },
+        startSpeed: { min: 1.4, max: 2.6 },
+        startSize: { min: 0.08, max: 0.18 },
+        gravity: [0, -1.4, 0],
+        emission: { rateOverTime: 45, bursts: [] },
+        shape: { type: "cone", radius: 0.25, angle: 18 },
+        colorOverLifetime: {
+          start: [0.72, 0.42, 1, 1],
+          end: [0.18, 0.9, 1, 0],
+        },
+        sizeOverLifetime: { min: 1, max: 0.05 },
+        renderer: {
+          textureAssetId: STARTER_TEXTURE_IDS.guideParticleSpark,
+          blending: "additive",
+        },
+      },
+    },
+    {
+      id: STUDIO_GUIDE_PARTICLE_ASSET_IDS[2],
+      name: "Particle Sample: Portal Orbit",
+      properties: {
+        maxParticles: 240,
+        duration: 6,
+        prewarm: true,
+        startLifetime: { min: 2, max: 3.2 },
+        startSpeed: { min: 0.02, max: 0.08 },
+        startSize: { min: 0.06, max: 0.14 },
+        gravity: [0, 0, 0],
+        emission: { rateOverTime: 36, bursts: [] },
+        shape: { type: "sphere", radius: 0.9 },
+        colorOverLifetime: {
+          start: [0.28, 0.95, 1, 1],
+          end: [0.6, 0.22, 1, 0],
+        },
+        velocityOverLifetime: {
+          linear: [0, 0.05, 0],
+          orbital: [0, 2.2, 0],
+        },
+        renderer: {
+          textureAssetId: STARTER_TEXTURE_IDS.guideParticleSpark,
+          blending: "additive",
+        },
+      },
+    },
+    {
+      id: STUDIO_GUIDE_PARTICLE_ASSET_IDS[3],
+      name: "Particle Sample: Ember Drift",
+      properties: {
+        maxParticles: 220,
+        duration: 5,
+        prewarm: true,
+        startLifetime: { min: 2, max: 3.4 },
+        startSpeed: { min: 0.35, max: 0.9 },
+        startSize: { min: 0.05, max: 0.13 },
+        gravity: [0, 0.12, 0],
+        emission: { rateOverTime: 28, bursts: [] },
+        shape: { type: "cone", radius: 0.45, angle: 12 },
+        colorOverLifetime: {
+          start: [1, 0.68, 0.14, 1],
+          end: [1, 0.08, 0.01, 0],
+        },
+        velocityOverLifetime: {
+          linear: [0.08, 0.45, 0],
+          orbital: [0, 0.55, 0],
+        },
+        renderer: {
+          textureAssetId: STARTER_TEXTURE_IDS.guideParticleGlow,
+          blending: "additive",
+        },
+      },
+    },
+    {
+      id: STUDIO_GUIDE_PARTICLE_ASSET_IDS[4],
+      name: "Particle Sample: Soft Smoke Column",
+      properties: {
+        maxParticles: 120,
+        duration: 6,
+        prewarm: true,
+        startLifetime: { min: 2.8, max: 4.5 },
+        startSpeed: { min: 0.15, max: 0.35 },
+        startSize: { min: 0.35, max: 0.7 },
+        gravity: [0, 0.08, 0],
+        emission: { rateOverTime: 8, bursts: [] },
+        shape: { type: "cone", radius: 0.35, angle: 18 },
+        colorOverLifetime: {
+          start: [0.82, 0.85, 0.9, 0.58],
+          end: [0.35, 0.4, 0.48, 0],
+        },
+        sizeOverLifetime: { min: 0.75, max: 1.8 },
+        velocityOverLifetime: {
+          linear: [0.08, 0.32, 0],
+          orbital: [0, 0.2, 0],
+        },
+        renderer: {
+          textureAssetId: STARTER_TEXTURE_IDS.guideParticleSmoke,
+          blending: "normal",
+        },
+      },
+    },
+    {
+      id: STUDIO_GUIDE_PARTICLE_ASSET_IDS[5],
+      name: "Particle Sample: Cloud Puff Drift",
+      properties: {
+        maxParticles: 100,
+        duration: 5,
+        startLifetime: { min: 1.4, max: 2.4 },
+        startSpeed: { min: 0.3, max: 0.8 },
+        startSize: { min: 0.28, max: 0.55 },
+        gravity: [0, 0.06, 0],
+        emission: { rateOverTime: 6, bursts: [] },
+        shape: { type: "sphere", radius: 0.35 },
+        colorOverLifetime: {
+          start: [1, 1, 1, 0.78],
+          end: [0.55, 0.62, 0.72, 0],
+        },
+        sizeOverLifetime: { min: 0.65, max: 1.55 },
+        renderer: {
+          textureAssetId: STARTER_TEXTURE_IDS.guideParticleSmoke,
+          blending: "normal",
+        },
+      },
+    },
+    {
+      id: STUDIO_GUIDE_PARTICLE_ASSET_IDS[6],
+      name: "Particle Sample: Confetti Shower",
+      properties: {
+        maxParticles: 260,
+        duration: 6,
+        startLifetime: { min: 2, max: 3.5 },
+        startSpeed: { min: 2, max: 4 },
+        startSize: { min: 0.08, max: 0.16 },
+        gravity: [0, -3, 0],
+        emission: { rateOverTime: 18, bursts: [] },
+        shape: { type: "cone", radius: 0.35, angle: 42 },
+        colorOverLifetime: {
+          start: [1, 0.28, 0.65, 1],
+          end: [0.18, 0.82, 1, 0],
+        },
+        sizeOverLifetime: { min: 1, max: 0.6 },
+        renderer: {
+          textureAssetId: STARTER_TEXTURE_IDS.guideParticleConfetti,
+          blending: "normal",
+          sortMode: "youngest",
+        },
+      },
+    },
+    {
+      id: STUDIO_GUIDE_PARTICLE_ASSET_IDS[7],
+      name: "Particle Sample: Snowfall",
+      properties: {
+        maxParticles: 420,
+        duration: 8,
+        prewarm: true,
+        startLifetime: { min: 5, max: 8 },
+        startSpeed: { min: 0, max: 0.15 },
+        startSize: { min: 0.05, max: 0.13 },
+        gravity: [0, -0.4, 0],
+        emission: { rateOverTime: 35, bursts: [] },
+        shape: { type: "box", size: [2.2, 0.1, 2.2] },
+        colorOverLifetime: {
+          start: [0.92, 0.98, 1, 0.95],
+          end: [0.7, 0.86, 1, 0],
+        },
+        velocityOverLifetime: {
+          linear: [0.12, -0.15, 0],
+          orbital: [0, 0.2, 0],
+        },
+        renderer: {
+          textureAssetId: STARTER_TEXTURE_IDS.guideParticleGlow,
+          blending: "normal",
+        },
+      },
+    },
+    {
+      id: STUDIO_GUIDE_PARTICLE_ASSET_IDS[8],
+      name: "Particle Sample: Bubble Drift",
+      properties: {
+        maxParticles: 160,
+        duration: 6,
+        prewarm: true,
+        startLifetime: { min: 3, max: 5 },
+        startSpeed: { min: 0.1, max: 0.3 },
+        startSize: { min: 0.12, max: 0.28 },
+        gravity: [0, 0.2, 0],
+        emission: { rateOverTime: 12, bursts: [] },
+        shape: { type: "sphere", radius: 0.6 },
+        colorOverLifetime: {
+          start: [0.55, 0.92, 1, 0.72],
+          end: [0.68, 0.42, 1, 0],
+        },
+        velocityOverLifetime: {
+          linear: [0.05, 0.22, 0],
+          orbital: [0, 0.55, 0],
+        },
+        renderer: {
+          textureAssetId: STARTER_TEXTURE_IDS.guideParticleGlow,
+          blending: "normal",
+        },
+      },
+    },
+    {
+      id: STUDIO_GUIDE_PARTICLE_ASSET_IDS[9],
+      name: "Particle Sample: Stardust Trail",
+      properties: {
+        maxParticles: 220,
+        duration: 5,
+        prewarm: true,
+        startLifetime: { min: 1.2, max: 2 },
+        startSpeed: { min: 0.5, max: 1 },
+        startSize: { min: 0.05, max: 0.14 },
+        gravity: [0, 0, 0],
+        emission: { rateOverTime: 32, bursts: [] },
+        shape: { type: "point" },
+        colorOverLifetime: {
+          start: [1, 0.92, 0.55, 1],
+          end: [0.45, 0.3, 1, 0],
+        },
+        velocityOverLifetime: {
+          linear: [0.7, 0.15, 0],
+          orbital: [0, 1.5, 0],
+        },
+        renderer: {
+          textureAssetId: STARTER_TEXTURE_IDS.guideParticleSpark,
+          blending: "additive",
+          sortMode: "youngest",
+        },
+      },
+    },
+  ];
+
+  return definitions.map((definition, order) => {
+    const asset = createDefaultParticleAsset({
+      ...definition,
+      folderId: STARTER_ASSET_FOLDER_IDS.particles,
+    });
+    if (!asset) {
+      throw new Error(`Studio guide Particle could not be created: ${definition.id}`);
+    }
+    return { ...asset, order };
+  });
 }
 
 function defaultModelImportSettings(importAnimations: boolean) {

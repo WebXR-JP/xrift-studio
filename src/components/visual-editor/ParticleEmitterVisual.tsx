@@ -1,5 +1,5 @@
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AdditiveBlending,
   BufferAttribute,
@@ -7,22 +7,32 @@ import {
   Color,
   DynamicDrawUsage,
   NormalBlending,
+  NoColorSpace,
   Points,
   PointsMaterial,
+  SRGBColorSpace,
+  TextureLoader,
   Vector3,
+  type Texture,
 } from "three";
 import {
   normalizeParticleProperties,
   type ParticleAsset,
+  type TextureAsset,
 } from "../../lib/visual-editor";
+import { readProjectTextureDataUrl } from "./material-texture-preview";
 
 const MAX_EDITOR_PARTICLES = 512;
 
 export function ParticleEmitterVisual({
   asset,
+  textureAsset,
+  projectPath,
   selected,
 }: {
   asset: ParticleAsset;
+  textureAsset?: TextureAsset;
+  projectPath?: string;
   selected: boolean;
 }) {
   const properties = useMemo(
@@ -43,6 +53,7 @@ export function ParticleEmitterVisual({
   const pointsRef = useRef<Points>(null);
   const elapsedRef = useRef(0);
   const geometry = useMemo(() => createGeometry(count), [count]);
+  const particleMap = useParticleTexture(textureAsset, projectPath);
   const material = useMemo(
     () =>
       new PointsMaterial({
@@ -53,6 +64,8 @@ export function ParticleEmitterVisual({
         sizeAttenuation: true,
         transparent: true,
         opacity: selected ? 1 : 0.9,
+        map: particleMap,
+        alphaTest: particleMap ? 0.01 : 0,
         vertexColors: true,
         depthWrite: properties.renderer.blending !== "additive",
         blending:
@@ -64,6 +77,7 @@ export function ParticleEmitterVisual({
       properties.renderer.blending,
       properties.startSize.max,
       properties.startSize.min,
+      particleMap,
       selected,
     ],
   );
@@ -149,6 +163,75 @@ export function ParticleEmitterVisual({
   });
 
   return <points ref={pointsRef} geometry={geometry} material={material} />;
+}
+
+function useParticleTexture(
+  textureAsset: TextureAsset | undefined,
+  projectPath: string | undefined,
+): Texture | null {
+  const [texture, setTexture] = useState<Texture | null>(null);
+  const textureKey = textureAsset
+    ? [
+        projectPath ?? "",
+        textureAsset.id,
+        textureAsset.sourceHash ?? "",
+        textureAsset.source.kind === "project"
+          ? textureAsset.source.relativePath
+          : textureAsset.source.kind === "builtin"
+            ? textureAsset.source.key
+            : "document",
+      ].join("\n")
+    : "";
+
+  useEffect(() => {
+    let active = true;
+    let ownedTexture: Texture | null = null;
+    setTexture(null);
+    if (
+      !textureAsset ||
+      !projectPath ||
+      textureAsset.source.kind === "document"
+    ) {
+      return () => {
+        active = false;
+      };
+    }
+
+    const readableTexture = textureAsset as TextureAsset & {
+      source:
+        | { kind: "project"; relativePath: string }
+        | { kind: "builtin"; key: string };
+    };
+    void readProjectTextureDataUrl(projectPath, readableTexture)
+      .then((dataUrl) => new TextureLoader().loadAsync(dataUrl))
+      .then((loaded) => {
+        loaded.name = `${textureAsset.name} (particle)`;
+        loaded.colorSpace =
+          textureAsset.importSettings.colorSpace === "srgb"
+            ? SRGBColorSpace
+            : NoColorSpace;
+        loaded.flipY = textureAsset.importSettings.flipY;
+        loaded.generateMipmaps = textureAsset.importSettings.generateMipmaps;
+        loaded.needsUpdate = true;
+        if (!active) {
+          loaded.dispose();
+          return;
+        }
+        ownedTexture = loaded;
+        setTexture(loaded);
+      })
+      .catch(() => {
+        if (active) setTexture(null);
+      });
+
+    return () => {
+      active = false;
+      ownedTexture?.dispose();
+      ownedTexture = null;
+    };
+  }, [projectPath, textureAsset, textureKey]);
+
+  return texture;
 }
 
 type ParticleSeed = {

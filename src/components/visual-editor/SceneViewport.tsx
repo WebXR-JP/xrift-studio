@@ -917,8 +917,19 @@ function ComponentVisual({
       ) : null;
     case "particle-emitter": {
       const asset = assets.assets[component.particleAssetId];
+      const textureAsset =
+        asset?.kind === "particle" && asset.properties.renderer.textureAssetId
+          ? assets.assets[asset.properties.renderer.textureAssetId]
+          : undefined;
       return showHelpers && component.enabled && asset?.kind === "particle" ? (
-        <ParticleEmitterVisual asset={asset} selected={selected} />
+        <ParticleEmitterVisual
+          asset={asset}
+          textureAsset={
+            textureAsset?.kind === "texture" ? textureAsset : undefined
+          }
+          projectPath={projectPath}
+          selected={selected}
+        />
       ) : null;
     }
     case "xrift-component":

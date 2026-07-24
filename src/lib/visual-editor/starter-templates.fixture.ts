@@ -13,6 +13,7 @@ import {
 import {
   STARTER_ASSET_FOLDER_IDS,
   STUDIO_GUIDE_DOOR_INTERACTIVITY_ASSET_ID,
+  STUDIO_GUIDE_PARTICLE_ASSET_IDS,
   STUDIO_GUIDE_SKYBOX_TEXTURE_ASSET_ID,
   createStarterWorldProject,
   defaultVisualStarterTemplateId,
@@ -37,6 +38,7 @@ export function runStarterTemplateFixtureAssertions(): void {
     const assets = Object.values(plan.assets.assets);
     const modelAssets = assets.filter((asset) => asset.kind === "model");
     const textureAssets = assets.filter((asset) => asset.kind === "texture");
+    const particleAssets = assets.filter((asset) => asset.kind === "particle");
     const materialAssets = assets.filter(
       (asset) =>
         asset.kind === "material" &&
@@ -49,7 +51,7 @@ export function runStarterTemplateFixtureAssertions(): void {
     assert(
       plan.bundledAssetCopies.length ===
         (templateId === "studio-guide"
-          ? 22
+          ? 26
           : templateId === "openbrush"
             ? 2
             : templateId === "xrift-official"
@@ -103,11 +105,15 @@ export function runStarterTemplateFixtureAssertions(): void {
     assert(
       textureAssets.length ===
         (templateId === "studio-guide"
-          ? 10
+          ? 14
           : templateId === "xrift-official"
             ? 1
             : 0),
       `${templateId}: Texture library is incorrect`,
+    );
+    assert(
+      particleAssets.length === (templateId === "studio-guide" ? 10 : 0),
+      `${templateId}: Particle library is incorrect`,
     );
     assert(
       templateId === "studio-guide"
@@ -362,6 +368,60 @@ export function runStarterTemplateFixtureAssertions(): void {
           installQr.importMetadata?.width === 1024 &&
           installQr.importMetadata.height === 1024,
         "Studio guide install QR must retain its square dimensions",
+      );
+      const reusableParticleAssets = STUDIO_GUIDE_PARTICLE_ASSET_IDS.map(
+        (assetId) => plan.assets.assets[assetId],
+      );
+      assert(
+        reusableParticleAssets.every(
+          (asset) =>
+            asset?.kind === "particle" &&
+            asset.folderId === STARTER_ASSET_FOLDER_IDS.particles &&
+            typeof asset.properties.renderer.textureAssetId === "string" &&
+            plan.assets.assets[asset.properties.renderer.textureAssetId]
+              ?.kind === "texture",
+        ),
+        "Studio guide Particle samples must be reusable Assets with valid Texture references",
+      );
+      const particleTextureAssets = textureAssets.filter((asset) =>
+        asset.name.startsWith("Particle Texture:"),
+      );
+      assert(
+        particleTextureAssets.length === 4 &&
+          particleTextureAssets.every(
+            (asset) =>
+              asset.kind === "texture" &&
+              asset.importMetadata?.sourceFormat === "png" &&
+              asset.importMetadata.width === 256 &&
+              asset.importMetadata.height === 256 &&
+              asset.importSettings.sampler.wrapS === "clamp-to-edge" &&
+              asset.importSettings.sampler.wrapT === "clamp-to-edge",
+          ),
+        "Studio guide must bundle four optimized reusable Particle textures",
+      );
+      const particleEntities = sceneEntities.filter((entity) =>
+        entity.components.some(
+          (component) => component.type === "particle-emitter",
+        ),
+      );
+      assert(
+        particleEntities.length === STUDIO_GUIDE_PARTICLE_ASSET_IDS.length &&
+          particleEntities.every(
+            (entity) =>
+              !entity.components.some(
+                (component) => component.type === "collider",
+              ),
+          ) &&
+          STUDIO_GUIDE_PARTICLE_ASSET_IDS.every((assetId) =>
+            particleEntities.some((entity) =>
+              entity.components.some(
+                (component) =>
+                  component.type === "particle-emitter" &&
+                  component.particleAssetId === assetId,
+              ),
+            ),
+          ),
+        "Studio guide Particle Lab must place every sample without route colliders",
       );
       assert(
         sceneEntities.filter((entity) =>
