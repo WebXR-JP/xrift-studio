@@ -83,6 +83,12 @@ export function runVisualPublishFixtureAssertions(): void {
     "Explicit pre-remote empty output was not recognized",
   );
   assert(
+    didXriftUploadStopBeforeRemoteTransfer(
+      "Build failed\nCommand failed: npm run build",
+    ),
+    "Explicit pre-remote build failure was not recognized",
+  );
+  assert(
     !didXriftUploadStopBeforeRemoteTransfer("📤 Uploading files..."),
     "Remote transfer output was mistaken for a safe pre-remote stop",
   );

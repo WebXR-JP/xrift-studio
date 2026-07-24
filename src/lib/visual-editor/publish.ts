@@ -337,21 +337,20 @@ export async function publishVisualProject({
     throwIfAborted(signal);
     report({
       stage: "checking",
-      label:
-        kind === "item"
-          ? "XRiftの検査を実行しています"
-          : "アップロード内容を確認しています",
-      detail:
-        kind === "item"
-          ? "公式CLIでItemをビルドし、問題がないか確認します。"
-          : "変換済みWorldとAssetの配置を確認しました。",
+      label: "XRiftの検査を実行しています",
+      detail: `公式CLIで${kind === "world" ? "World" : "Item"}をビルドし、問題がないか確認します。`,
       percent: 66,
-      cancelSafe: kind !== "item",
+      cancelSafe: false,
     });
-    if (kind === "item") {
-      const checked = await xrift.checkItem(stagingPath, safeLog);
-      assertSucceeded(checked, "Itemの検査", privatePaths);
-    }
+    const checked =
+      kind === "world"
+        ? await xrift.checkWorld(stagingPath, safeLog)
+        : await xrift.checkItem(stagingPath, safeLog);
+    assertSucceeded(
+      checked,
+      `${kind === "world" ? "World" : "Item"}の検査`,
+      privatePaths,
+    );
 
     throwIfAborted(signal);
     report({
@@ -451,7 +450,10 @@ export async function publishVisualProject({
 
 export function didXriftUploadStopBeforeRemoteTransfer(output: string): boolean {
   const clean = output.replace(/\u001b\[[0-9;]*m/g, "");
-  return /no\s+files\s+found\s+to\s+upload/i.test(clean);
+  return (
+    /no\s+files\s+found\s+to\s+upload/i.test(clean) ||
+    /build\s+failed[\s\S]*command\s+failed:\s*npm\s+run\s+build/i.test(clean)
+  );
 }
 
 export function parseXriftUploadResult(output: string): XriftUploadResult {

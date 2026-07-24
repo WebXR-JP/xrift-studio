@@ -312,6 +312,13 @@ export const xrift = {
       cwd: projectPath,
       onLog,
     }),
+  checkWorld: (projectPath: string, onLog: (l: LogLine) => void) =>
+    run({
+      bin: "xrift",
+      args: ["check", "world", "--build"],
+      cwd: projectPath,
+      onLog,
+    }),
   upload: (
     projectPath: string,
     kind: ProjectKind,

@@ -246,6 +246,15 @@ export function runStarterTemplateFixtureAssertions(): void {
         "Studio guide must compile its HDR Skybox with the upright orientation",
       );
       assert(
+        !worldSource.includes(
+          "let sourceNodeIndex: number | undefined;",
+        ) &&
+          worldSource.includes(
+            "return () => {\n      action.stop();\n    };",
+          ),
+        "Studio guide must not generate unused Model resolver locals or an invalid Animation cleanup",
+      );
+      assert(
         plan.bundledAssetCopies.every(
           (copy) =>
             !copy.targetRelativePath.includes(":") &&

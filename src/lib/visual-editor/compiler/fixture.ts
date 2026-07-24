@@ -1225,6 +1225,68 @@ export function runVisualCompilerFixtureAssertions(
       modelSource.includes('"0":{"position":[0.1,0,0]'),
     "Expanded Model node pose and Material override were not generated",
   );
+  const wildcardModel: ModelAsset = {
+    ...projectModel,
+    id: "fixture-model-wildcard",
+    name: "Fixture Wildcard Model",
+    materialSlots: [projectModel.materialSlots[0]],
+  };
+  const wildcardScene = {
+    ...modelScene,
+    entities: {
+      ...modelScene.entities,
+      [modelEntity.id]: {
+        ...modelScene.entities[modelEntity.id],
+        components: modelScene.entities[modelEntity.id].components.map(
+          (component) =>
+            component.type === "mesh"
+              ? {
+                  ...component,
+                  geometryAssetId: wildcardModel.id,
+                  geometry: {
+                    kind: "asset" as const,
+                    assetId: wildcardModel.id,
+                  },
+                  materialBindings: [
+                    {
+                      slot: "body",
+                      materialAssetId: BUILTIN_ASSET_IDS.material.blue,
+                    },
+                  ],
+                  modelPose: undefined,
+                }
+              : component,
+        ),
+      },
+    },
+  };
+  const wildcardResult = compileVisualProject(
+    {
+      ...world,
+      scenes: { [wildcardScene.sceneId]: wildcardScene },
+      assets: {
+        ...world.assets,
+        assets: {
+          ...world.assets.assets,
+          [wildcardModel.id]: wildcardModel,
+        },
+      },
+    },
+    { generatedAt: fixedTime },
+  );
+  const wildcardSource =
+    wildcardResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(wildcardResult.canStage, "Wildcard Model should be stageable");
+  assert(
+    wildcardSource.includes(
+      "const renderOverride = (_material: unknown, attach: string, key: string)",
+    ) &&
+      !wildcardSource.includes("let sourceNodeObject:") &&
+      !wildcardSource.includes("const materialName ="),
+    "Wildcard Model generated unused Material resolver locals",
+  );
   const animationPlacement = instantiateSceneAsset(
     sourceScene,
     modelProject.assets,
@@ -1274,6 +1336,7 @@ export function runVisualCompilerFixtureAssertions(
       "const animationRoot = useRef<Group>(null);",
       "const firstAnimationName = names[0];",
       "action.setLoop(LoopRepeat, Infinity);",
+      "return () => {\n      action.stop();\n    };",
       "ref={animationRoot}",
     ].forEach((fragment) =>
       assert(

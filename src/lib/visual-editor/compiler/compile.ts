@@ -1575,7 +1575,9 @@ function renderModelMesh(
     action.clampWhenFinished = ${!animation?.loop};
     action.setLoop(${animation?.loop ? "LoopRepeat, Infinity" : "LoopOnce, 1"});
     action.play();
-    return () => action.stop();
+    return () => {
+      action.stop();
+    };
   }, [actions, names]);`
     : "";
   const source = `const ${componentName}: FC = () => {
@@ -1902,9 +1904,8 @@ function renderModelMaterialInjection(
   const resolver = wildcard
     ? `      return <${wildcard.componentName} key={key} attach={attach} meshName={object.name} />;`
     : `${nodeCases ? `      if (typeof sourceNodeIndex === "number") {\n        switch (\`\${sourceNodeIndex}:\${materialName}\`) {\n${nodeCases}\n        }\n      }\n` : ""}      switch (materialName) {\n${globalCases}\n        default:\n          return null;\n      }`;
-  return `
-        inject={(object) => {
-          let sourceNodeObject: typeof object | null = object;
+  const sourceNodeLookup = nodeCases
+    ? `          let sourceNodeObject: typeof object | null = object;
           let sourceNodeIndex: number | undefined;
           while (sourceNodeObject) {
             const candidate = sourceNodeObject.userData?.xriftSourceNodeIndex;
@@ -1914,12 +1915,21 @@ function renderModelMaterialInjection(
             }
             sourceNodeObject = sourceNodeObject.parent;
           }
-          if (!("material" in object)) return null;
-          const renderOverride = (material: unknown, attach: string, key: string) => {
-            const materialName =
+`
+    : "";
+  const materialNameLookup = wildcard
+    ? ""
+    : `            const materialName =
               typeof material === "object" && material !== null && "name" in material
                 ? String(material.name)
                 : "";
+`;
+  return `
+        inject={(object) => {
+${sourceNodeLookup}
+          if (!("material" in object)) return null;
+          const renderOverride = (${wildcard ? "_material" : "material"}: unknown, attach: string, key: string) => {
+${materialNameLookup}
 ${resolver}
           };
           const sourceMaterial = object.material;
