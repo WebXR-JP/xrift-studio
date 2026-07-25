@@ -167,7 +167,7 @@ function parsePropEntry(
   const name = entry.slice(0, separator).trim().replace(/^["']|["']$/g, "");
   if (!/^[A-Za-z_$][\w$]*$/.test(name)) return null;
   const value = entry.slice(separator + 1).trim();
-  const kindMatch = /^prop\s*\.\s*([A-Za-z]+)\s*\(/.exec(value);
+  const kindMatch = /^prop\s*\.\s*([A-Za-z][A-Za-z0-9]*)\s*\(/.exec(value);
   if (!kindMatch) {
     issues.push({
       code: "unreadable-props",
@@ -186,8 +186,13 @@ function parsePropEntry(
     return null;
   }
 
-  const optionsBody =
+  const callBody =
     sliceBalanced(value, value.indexOf("(", kindMatch[0].length - 1)) ?? "";
+  const objectStart = callBody.search(/\S/);
+  const optionsBody =
+    objectStart >= 0 && callBody[objectStart] === "{"
+      ? (sliceBalanced(callBody, objectStart) ?? callBody)
+      : callBody;
   const descriptor: ScriptPropDescriptor = { name, kind };
   const label = readStringField(optionsBody, "label");
   if (label) descriptor.label = label;
@@ -332,10 +337,12 @@ function splitTopLevel(source: string, separator: string): string[] {
 }
 
 /** Blanks comments and string bodies so keyword scans cannot match inside them. */
-function stripCommentsAndStrings(source: string): string {
+export function stripCommentsAndStrings(source: string): string {
   let output = "";
   let quote: string | null = null;
   let comment: "line" | "block" | null = null;
+  let regex = false;
+  let regexClass = false;
   for (let index = 0; index < source.length; index += 1) {
     const char = source[index]!;
     const next = source[index + 1];
@@ -352,6 +359,26 @@ function stripCommentsAndStrings(source: string): string {
         output += "  ";
         index += 1;
       } else output += char === "\n" ? char : " ";
+      continue;
+    }
+    if (regex) {
+      if (char === "\\") {
+        output += "  ";
+        index += 1;
+        continue;
+      }
+      if (char === "[") regexClass = true;
+      else if (char === "]") regexClass = false;
+      else if (char === "/" && !regexClass) {
+        regex = false;
+        output += " ";
+        while (/[A-Za-z]/.test(source[index + 1] ?? "")) {
+          output += " ";
+          index += 1;
+        }
+        continue;
+      }
+      output += char === "\n" ? char : " ";
       continue;
     }
     if (quote) {
@@ -376,6 +403,12 @@ function stripCommentsAndStrings(source: string): string {
       index += 1;
       continue;
     }
+    if (char === "/" && isRegexLiteralStart(source, index)) {
+      regex = true;
+      regexClass = false;
+      output += " ";
+      continue;
+    }
     if (char === '"' || char === "'" || char === "`") {
       quote = char;
       output += char;
@@ -384,4 +417,29 @@ function stripCommentsAndStrings(source: string): string {
     output += char;
   }
   return output;
+}
+
+function isRegexLiteralStart(source: string, slashIndex: number): boolean {
+  const prefix = source.slice(0, slashIndex);
+  const previousIndex = prefix.search(/\S(?=\s*$)/);
+  if (previousIndex < 0) return true;
+  const previous = prefix[previousIndex]!;
+  if ("([{,:;=!?&|+-*%^~<>".includes(previous)) return true;
+  const word = prefix.slice(0, previousIndex + 1).match(/[A-Za-z_$][\w$]*$/)?.[0];
+  return Boolean(
+    word &&
+      [
+        "await",
+        "case",
+        "delete",
+        "in",
+        "instanceof",
+        "of",
+        "return",
+        "throw",
+        "typeof",
+        "void",
+        "yield",
+      ].includes(word),
+  );
 }

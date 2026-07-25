@@ -40,16 +40,15 @@ export function isRelativeScriptSpecifier(specifier: string): boolean {
 }
 
 /**
- * Matches the specifier of a static import/export, or a dynamic `import(...)`
- * with a literal argument.
+ * Matches the specifier of a static import/export.
  *
  * Only ever applied to TypeScript's own emit, which normalises every module
  * binding into these forms, so a hand-rolled scan is enough and avoids
- * shipping a parser. Template literals and computed specifiers do not appear
- * in the emit and are deliberately left alone.
+ * shipping a parser. Dynamic import is rejected separately, including
+ * computed and template-literal arguments.
  */
 const SPECIFIER_PATTERN =
-  /(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\bexport\s*\*\s*from\s*)(["'])([^"']+)\2/g;
+  /(\bfrom\s*|\bimport\s+|\bexport\s*\*\s*from\s*)(["'])([^"']+)\2/g;
 
 export type ScriptSpecifierUse = {
   specifier: string;
@@ -65,6 +64,59 @@ export function collectScriptSpecifiers(source: string): ScriptSpecifierUse[] {
     uses.push({ specifier, index: match.index + match[1]!.length + 1 });
   }
   return uses;
+}
+
+/** Dynamic import is never portable to the generated static module graph. */
+export function collectDynamicScriptImports(source: string): number[] {
+  const stripped = stripCommentsAndStrings(source);
+  const indexes: number[] = [];
+  const pattern = /(^|[^\w$.])import\s*\(/gm;
+  for (const match of stripped.matchAll(pattern)) {
+    if (match.index === undefined) continue;
+    indexes.push(match.index + (match[1]?.length ?? 0));
+  }
+  return indexes;
+}
+
+/**
+ * R3F frame callbacks run outside React error boundaries. Per-frame Script
+ * behavior must use the host-managed update(delta) lifecycle instead.
+ */
+export function collectUnsupportedUseFrameImports(source: string): number[] {
+  const indexes: number[] = [];
+  const unsafeNames = new Set([
+    "useFrame",
+    "addEffect",
+    "addAfterEffect",
+    "addTail",
+  ]);
+  const namedImport =
+    /\bimport\s*\{([^}]*)\}\s*from\s*(["'])@react-three\/fiber\2/g;
+  for (const match of source.matchAll(namedImport)) {
+    if (match.index === undefined) continue;
+    const entries = (match[1] ?? "")
+      .replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g, "")
+      .split(",");
+    if (
+      entries.some((entry) => {
+        const importedName = entry.trim().split(/\s+as\s+/)[0];
+        return importedName ? unsafeNames.has(importedName) : false;
+      })
+    ) {
+      indexes.push(match.index);
+    }
+  }
+  const namespaceImport =
+    /\bimport\s+(?:[A-Za-z_$][\w$]*\s*,\s*)?\*\s*as\s*([A-Za-z_$][\w$]*)\s*from\s*(["'])@react-three\/fiber\2/g;
+  for (const match of source.matchAll(namespaceImport)) {
+    if (match.index !== undefined) indexes.push(match.index);
+  }
+  const defaultImport =
+    /\bimport\s+(?!type\b)[A-Za-z_$][\w$]*(?:\s*,\s*(?:\{[^}]*\}|\*\s*as\s*[A-Za-z_$][\w$]*))?\s*from\s*(["'])@react-three\/fiber\1/g;
+  for (const match of source.matchAll(defaultImport)) {
+    if (match.index !== undefined) indexes.push(match.index);
+  }
+  return [...new Set(indexes)].sort((left, right) => left - right);
 }
 
 export type ScriptSpecifierResolution =
@@ -122,3 +174,4 @@ export function describeScriptSpecifierRejection(
   }
   return `${specifier} は使用できないmoduleです。使えるのは ${SCRIPT_MODULE_SPECIFIERS.join(", ")} です。`;
 }
+import { stripCommentsAndStrings } from "./script-contract";

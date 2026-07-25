@@ -44,6 +44,52 @@ export function runPlaySessionFixtureAssertions(): void {
     "Unchanged authoring input must not advance the Play session",
   );
 
+  const scriptPropertySource = fixtureScene();
+  scriptPropertySource.entities["entity-a"]?.components.push({
+    id: "script-entity-a",
+    type: "script",
+    enabled: true,
+    scriptAssetId: "asset-script",
+    contractVersion: "1.0.0",
+    properties: { speed: 1 },
+    assetReferences: [],
+    entityReferences: [],
+    runIn: "play",
+  });
+  const scriptPropertySession = createPlaySession(
+    scriptPropertySource,
+    assets,
+  );
+  const scriptPropertyChanged = fixtureScene();
+  scriptPropertyChanged.entities["entity-a"]?.components.push({
+    id: "script-entity-a",
+    type: "script",
+    enabled: true,
+    scriptAssetId: "asset-script",
+    contractVersion: "1.0.0",
+    properties: { speed: 8 },
+    assetReferences: [],
+    entityReferences: [],
+    runIn: "play",
+  });
+  const livePropertyUpdate = synchronizePlaySession(
+    scriptPropertySession,
+    scriptPropertyChanged,
+    assets,
+  );
+  assert(
+    livePropertyUpdate.entityRevisions["entity-a"] === 0 &&
+      livePropertyUpdate.lastReloads.length === 0,
+    "Script property-only edits must preserve the running Entity instance",
+  );
+  assert(
+    livePropertyUpdate.runtimeScene.entities["entity-a"]?.components.some(
+      (component) =>
+        component.type === "script" && component.properties.speed === 8,
+    ),
+    "Script property-only edits must reach the runtime Scene on the next frame",
+  );
+
   const structurallyChanged = fixtureScene();
   structurallyChanged.entities["entity-c"] = entity("entity-c");
   structurallyChanged.rootEntityIds.push("entity-c");

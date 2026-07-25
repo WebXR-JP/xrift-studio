@@ -1,5 +1,5 @@
 import type { AssetManifest } from "./asset-manifest";
-import type { SceneDocument } from "./scene-document";
+import type { SceneDocument, SceneEntity } from "./scene-document";
 
 export type PlayEntityReloadKind = "added" | "updated" | "removed";
 
@@ -64,6 +64,20 @@ export function synchronizePlaySession(
     const previous = session.sourceScene.entities[entityId];
     const next = scene.entities[entityId];
     if (serializedEqual(previous, next)) continue;
+    // Script property values are live inputs. Keep the Entity and Script
+    // instance mounted so XriftScriptHost can expose them on the next frame.
+    // References, component order, Transform, hierarchy, and every other
+    // structural change still take the targeted restart path below.
+    if (
+      previous &&
+      next &&
+      serializedEqual(
+        withoutScriptPropertyValues(previous),
+        withoutScriptPropertyValues(next),
+      )
+    ) {
+      continue;
+    }
 
     const revision = (entityRevisions[entityId] ?? 0) + 1;
     if (!next) delete entityRevisions[entityId];
@@ -109,6 +123,15 @@ function cloneSceneDocument(scene: SceneDocument): SceneDocument {
 
 function cloneAssetManifest(assets: AssetManifest): AssetManifest {
   return JSON.parse(JSON.stringify(assets)) as AssetManifest;
+}
+
+function withoutScriptPropertyValues(entity: SceneEntity): SceneEntity {
+  return {
+    ...entity,
+    components: entity.components.map((component) =>
+      component.type === "script" ? { ...component, properties: {} } : component,
+    ),
+  };
 }
 
 function serializedEqual(left: unknown, right: unknown): boolean {

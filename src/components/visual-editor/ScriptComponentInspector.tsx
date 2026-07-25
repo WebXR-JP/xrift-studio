@@ -44,13 +44,14 @@ export function ScriptComponentInspector({
   assets: AssetManifest;
   entities: readonly ScriptEntityOption[];
   readOnly: boolean;
-  /** Play keeps declared property values editable and restarts this Entity. */
+  /** Play keeps values editable; plain properties reach the next frame. */
   liveTuning?: boolean;
   onPatch: (patch: ScriptComponentPatch) => void;
   onOpenScript: (scriptAssetId: string) => void;
 }) {
   const scripts = listScriptAssets(assets);
-  const configurationDisabled = readOnly || !component.enabled;
+  const configurationDisabled =
+    (readOnly && !liveTuning) || !component.enabled;
   const propertyDisabled =
     (readOnly && !liveTuning) || !component.enabled;
 
@@ -65,7 +66,12 @@ export function ScriptComponentInspector({
             value={component.scriptAssetId}
             disabled={configurationDisabled}
             onChange={(event) =>
-              onPatch({ scriptAssetId: event.target.value, properties: {} })
+              onPatch({
+                scriptAssetId: event.target.value,
+                properties: {},
+                assetReferences: [],
+                entityReferences: [],
+              })
             }
             className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs disabled:opacity-45"
           >
@@ -100,7 +106,9 @@ export function ScriptComponentInspector({
           className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs disabled:opacity-45"
         >
           <option value="play">Playのみ</option>
-          <option value="play-and-edit">Playと編集中</option>
+          <option value="play-and-edit" disabled>
+            Playと編集中（予約済み・未対応）
+          </option>
         </select>
       </label>
 
@@ -130,6 +138,7 @@ export function ScriptComponentInspector({
               key={descriptor.name}
               descriptor={descriptor}
               component={component}
+              descriptors={contract.props}
               assets={assets}
               entities={entities}
               disabled={propertyDisabled}
@@ -146,6 +155,7 @@ export function ScriptComponentInspector({
 function ScriptPropField({
   descriptor,
   component,
+  descriptors,
   assets,
   entities,
   disabled,
@@ -154,6 +164,7 @@ function ScriptPropField({
 }: {
   descriptor: ScriptPropDescriptor;
   component: ScriptComponent;
+  descriptors: readonly ScriptPropDescriptor[];
   assets: AssetManifest;
   entities: readonly ScriptEntityOption[];
   disabled: boolean;
@@ -168,12 +179,28 @@ function ScriptPropField({
 
   const setReference = (kind: "asset" | "entity", next: string) => {
     const key = kind === "asset" ? "assetReferences" : "entityReferences";
-    const others = component[key].filter(
-      (id) => id !== value || typeof value !== "string",
+    const nextProperties = {
+      ...component.properties,
+      [descriptor.name]: next,
+    };
+    const previousPropertyReferences = new Set(
+      descriptors
+        .filter((candidate) => candidate.kind === kind)
+        .map((candidate) => component.properties[candidate.name])
+        .filter((entry): entry is string => typeof entry === "string" && Boolean(entry)),
     );
-    const references = next ? [...new Set([...others, next])] : others;
+    const explicitReferences = component[key].filter(
+      (id) => !previousPropertyReferences.has(id),
+    );
+    const nextPropertyReferences = descriptors
+      .filter((candidate) => candidate.kind === kind)
+      .map((candidate) => nextProperties[candidate.name])
+      .filter((entry): entry is string => typeof entry === "string" && Boolean(entry));
+    const references = [
+      ...new Set([...explicitReferences, ...nextPropertyReferences]),
+    ];
     onPatch({
-      properties: { ...component.properties, [descriptor.name]: next },
+      properties: nextProperties,
       [key]: references,
     });
   };

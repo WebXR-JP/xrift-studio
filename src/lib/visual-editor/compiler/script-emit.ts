@@ -3,11 +3,15 @@ import scriptHostSource from "../../../../packages/xrift-studio-runtime/src/scri
 
 import type { AssetManifest, ScriptAsset } from "../asset-manifest";
 import type { JsonObject, ScriptComponent } from "../scene-document";
+import { stripCommentsAndStrings } from "../scripting/script-contract";
 import {
+  collectDynamicScriptImports,
   collectScriptSpecifiers,
+  collectUnsupportedUseFrameImports,
   isAllowedScriptSpecifier,
   isRelativeScriptSpecifier,
   isRemoteScriptSpecifier,
+  rewriteScriptSpecifiers,
 } from "../scripting/specifiers";
 import { sha256Utf8 } from "./hash";
 import type { CompilerDiagnostic, CompilerOverlayFile } from "./types";
@@ -32,6 +36,8 @@ export type EmittedScriptModule = {
   assetId: string;
   /** Identifier used in the generated entry file. */
   importName: string;
+  /** Identifier for an optional named `Render` export. */
+  renderImportName?: string;
   /** Path relative to the staging project root. */
   relativePath: string;
   /** Import specifier used from the generated entry file. */
@@ -91,11 +97,19 @@ export function planScriptEmission(
           code:
             entry.reason === "remote"
               ? "script-remote-import-unsupported"
-              : "script-import-unsupported",
+              : entry.reason === "dynamic"
+                ? "script-dynamic-import-unsupported"
+                : entry.reason === "frame-hook"
+                  ? "script-use-frame-unsupported"
+                  : "script-import-unsupported",
           message:
             entry.reason === "remote"
               ? `${entry.specifier} はネットワークからのmoduleです。公開ワールドへは出力できません。`
-              : `${entry.specifier} は公開ワールドで解決できないmoduleです。`,
+              : entry.reason === "dynamic"
+                ? "動的 import(...) はPlayと公開で使用できません。許可されたmoduleを静的importしてください。"
+                : entry.reason === "frame-hook"
+                  ? "useFrameなどR3F frame callback APIはScript単位で例外を隔離できません。defineScript(...).start()が返すupdate(delta)を使用し、@react-three/fiberはnamed importしてください。"
+                  : `${entry.specifier} は公開ワールドで解決できないmoduleです。`,
           assetId,
         });
       }
@@ -103,12 +117,16 @@ export function planScriptEmission(
     }
 
     const importName = uniqueImportName(asset, usedNames);
+    const renderImportName = exportsScriptRender(source)
+      ? uniqueIdentifier(`${importName}Render`, asset.id, usedNames)
+      : undefined;
     const fileStem = importName;
     const extension = asset.language === "tsx" ? "tsx" : "ts";
     const relativePath = `${SCRIPT_MODULE_DIRECTORY}/${fileStem}.${extension}`;
     modules.set(assetId, {
       assetId,
       importName,
+      ...(renderImportName ? { renderImportName } : {}),
       relativePath,
       importSpecifier: `./scripts/${fileStem}`,
     });
@@ -142,11 +160,17 @@ export function planScriptEmission(
 
 type RejectedSpecifier = {
   specifier: string;
-  reason: "remote" | "unsupported";
+  reason: "remote" | "dynamic" | "frame-hook" | "unsupported";
 };
 
 function collectRejectedSpecifiers(source: string): RejectedSpecifier[] {
   const rejected: RejectedSpecifier[] = [];
+  if (collectUnsupportedUseFrameImports(source).length > 0) {
+    rejected.push({ specifier: "useFrame", reason: "frame-hook" });
+  }
+  if (collectDynamicScriptImports(source).length > 0) {
+    rejected.push({ specifier: "import(...)", reason: "dynamic" });
+  }
   const seen = new Set<string>();
   for (const use of collectScriptSpecifiers(source)) {
     if (seen.has(use.specifier)) continue;
@@ -167,11 +191,13 @@ function collectRejectedSpecifiers(source: string): RejectedSpecifier[] {
 
 /** `xrift:script` only exists inside Studio; the staging build needs a path. */
 function rewriteScriptApiImports(source: string): string {
-  return source.replace(
-    /(\bfrom\s*|\bimport\s*\(\s*)(["'])xrift:script\2/g,
-    (_whole, prefix: string, quote: string) =>
-      `${prefix}${quote}../xrift-studio/script-api${quote}`,
-  );
+  return rewriteScriptSpecifiers(source, (specifier) => ({
+    kind: "resolved",
+    url:
+      specifier === "xrift:script"
+        ? "../xrift-studio/script-api"
+        : specifier,
+  })).source;
 }
 
 /** The host imports the API by package-relative path inside the monorepo. */
@@ -185,14 +211,40 @@ function rewriteHostApiImport(source: string): string {
 
 function uniqueImportName(asset: ScriptAsset, used: Set<string>): string {
   const base = toIdentifier(asset.name) || "Script";
+  return uniqueIdentifier(base, asset.id, used);
+}
+
+function uniqueIdentifier(base: string, seed: string, used: Set<string>): string {
   let candidate = base;
   if (used.has(candidate)) {
     // Hash-derived rather than a counter so the name does not depend on the
     // order assets happen to be enumerated in.
-    candidate = `${base}_${sha256Utf8(asset.id).slice(0, 8)}`;
+    candidate = `${base}_${sha256Utf8(seed).slice(0, 8)}`;
   }
   used.add(candidate);
   return candidate;
+}
+
+function exportsScriptRender(source: string): boolean {
+  const stripped = stripCommentsAndStrings(source);
+  if (
+    /\bexport\s+(?:(?:const|let|var|class)\s+Render\b|(?:async\s+)?function\s*\*?\s*Render\b)/.test(
+      stripped,
+    )
+  ) {
+    return true;
+  }
+  for (const match of stripped.matchAll(/\bexport\s*\{([^}]*)\}/gs)) {
+    const entries = (match[1] ?? "").split(",").map((entry) => entry.trim());
+    if (
+      entries.some(
+        (entry) => entry === "Render" || /\bas\s+Render$/.test(entry),
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function toIdentifier(name: string): string {
@@ -212,15 +264,23 @@ export function renderScriptComponent(
   entityId: string,
   entityName: string,
   order: number,
+  assetRuntimeUrls: Readonly<Record<string, string>> = {},
 ): string {
+  const assetUrls = serializeStringRecord(assetRuntimeUrls);
   return [
     `<XriftScriptHost`,
     `  script={${module.importName}}`,
+    ...(module.renderImportName
+      ? [`  render={${module.renderImportName}}`]
+      : []),
     `  properties={${serializeProperties(component.properties)}}`,
     `  entityId=${JSON.stringify(entityId)}`,
     `  entityName=${JSON.stringify(entityName)}`,
     `  componentId=${JSON.stringify(component.id)}`,
     `  order={${order}}`,
+    `  assetReferences={${JSON.stringify([...component.assetReferences].sort())}}`,
+    `  entityReferences={${JSON.stringify([...component.entityReferences].sort())}}`,
+    `  resolveAssetUrl={(assetId) => (${assetUrls} as Record<string, string>)[assetId] ?? null}`,
     `/>`,
   ].join("\n");
 }
@@ -228,6 +288,16 @@ export function renderScriptComponent(
 /** Stable key order so two compiles of the same document are byte-identical. */
 function serializeProperties(properties: JsonObject): string {
   return JSON.stringify(sortJson(properties));
+}
+
+function serializeStringRecord(value: Readonly<Record<string, string>>): string {
+  return JSON.stringify(
+    Object.fromEntries(
+      Object.entries(value).sort(([left], [right]) =>
+        left.localeCompare(right),
+      ),
+    ),
+  );
 }
 
 function sortJson(value: unknown): unknown {

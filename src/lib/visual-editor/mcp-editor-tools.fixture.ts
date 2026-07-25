@@ -66,10 +66,31 @@ export function runXriftMcpEditorToolFixtures(): void {
     tool: "get_editor_context",
     arguments: {},
   });
+  const scriptingCapabilities = executeXriftMcpEditorTool(context, {
+    id: "fixture-scripting-capabilities",
+    tool: "get_scripting_capabilities",
+    arguments: {},
+  });
   assert(
     typeof (editorContext.result.sceneSettings as { fog?: unknown })?.fog ===
       "object",
     "Editor context should expose current Fog settings",
+  );
+  assert(
+    (
+      scriptingCapabilities.result.runtime as {
+        assets?: { methods?: string[] };
+      }
+    )?.assets?.methods?.some((method) => method.includes("loadTexture")),
+    "Scripting capabilities should expose runtime Texture loading",
+  );
+  assert(
+    (
+      scriptingCapabilities.result.persistentAuthoring as {
+        tools?: string[];
+      }
+    )?.tools?.includes("update_material_asset"),
+    "Scripting capabilities should distinguish persistent Material authoring",
   );
   assert(fogResult.changed, "Fog edit should change the bundle");
   assert(
@@ -211,6 +232,29 @@ export function runXriftMcpEditorToolFixtures(): void {
     revision: current.revision + 1,
   };
 
+  let missingReferenceCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(current, {
+      id: "fixture-missing-script-reference",
+      tool: "update_script_component",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        entityId: primitiveId,
+        componentId: scriptComponent?.id,
+        assetReferences: ["asset-does-not-exist"],
+      },
+    });
+  } catch (error) {
+    missingReferenceCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    missingReferenceCode === "ASSET_NOT_FOUND",
+    "MCP should reject missing Asset IDs before changing Script references",
+  );
+
   const scriptPropertyUpdated = executeXriftMcpEditorTool(
     { ...current, editorMode: "play" },
     {
@@ -223,6 +267,8 @@ export function runXriftMcpEditorToolFixtures(): void {
         entityId: primitiveId,
         componentId: scriptComponent?.id,
         properties: { speed: 4.5 },
+        assetReferences: [texture.id],
+        entityReferences: [primitiveId],
       },
     },
   );
@@ -240,9 +286,46 @@ export function runXriftMcpEditorToolFixtures(): void {
     ),
     "Play-time Script property edits should update authoring data",
   );
+  assert(
+    scriptPropertyUpdated.bundle.scene.entities[
+      primitiveId as string
+    ]?.components.some(
+      (component) =>
+        component.type === "script" &&
+        component.assetReferences.includes(texture.id) &&
+        component.entityReferences.includes(primitiveId as string),
+    ),
+    "MCP should declare the Asset and Entity references used by Script APIs",
+  );
   current = {
     ...current,
     bundle: scriptPropertyUpdated.bundle,
+    revision: current.revision + 1,
+  };
+
+  const liveScriptPropertyUpdated = executeXriftMcpEditorTool(
+    { ...current, editorMode: "play" },
+    {
+      id: "fixture-update-live-script-property",
+      tool: "update_script_component",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        entityId: primitiveId,
+        componentId: scriptComponent?.id,
+        properties: { speed: 6 },
+      },
+    },
+  );
+  assert(
+    liveScriptPropertyUpdated.result.restartedDuringPlay === false &&
+      liveScriptPropertyUpdated.result.appliedOnNextFrame === true,
+    "Property-only MCP edits should preserve the running Script instance",
+  );
+  current = {
+    ...current,
+    bundle: liveScriptPropertyUpdated.bundle,
     revision: current.revision + 1,
   };
 

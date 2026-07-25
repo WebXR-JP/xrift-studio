@@ -8,6 +8,7 @@ import type { SceneDocument } from "../../lib/visual-editor/scene-document";
 import {
   collectRequiredScriptAssetIds,
   collectScriptReferencedAssetIds,
+  collectScheduledScripts,
 } from "../../lib/visual-editor/scripting/script-schedule";
 import {
   loadScriptModule,
@@ -29,6 +30,8 @@ export type CompiledScriptEntry = {
   script: CompiledScript;
   render?: React.ComponentType;
   objectUrl: string;
+  /** Reuses the same module identity when another Script was the only edit. */
+  cacheKey: string;
 };
 
 export type ScriptCompileError = {
@@ -43,13 +46,18 @@ export type ScriptRuntimeState = {
   scripts: ReadonlyMap<string, CompiledScriptEntry>;
   /** Pre-resolved so `ctx.getAssetUrl` can be synchronous. */
   assetUrls: ReadonlyMap<string, string>;
+  /** Short per-Asset revisions used to restart only affected Script hosts. */
+  assetUrlVersions: ReadonlyMap<string, number>;
   errors: readonly ScriptCompileError[];
   failures: readonly ScriptFailure[];
+  /** Monotonic within one compiled runtime, even after the bounded list fills. */
+  failureRevision: number;
   logs: readonly ScriptLogEntry[];
 };
 
 const EMPTY_SCRIPTS = new Map<string, CompiledScriptEntry>();
 const EMPTY_ASSET_URLS = new Map<string, string>();
+const EMPTY_ASSET_URL_VERSIONS = new Map<string, number>();
 /** Keeps the console from growing without bound during a long Play run. */
 const MAX_LOG_ENTRIES = 200;
 
@@ -70,8 +78,10 @@ export function useScriptRuntime({
     status: "idle",
     scripts: EMPTY_SCRIPTS,
     assetUrls: EMPTY_ASSET_URLS,
+    assetUrlVersions: EMPTY_ASSET_URL_VERSIONS,
     errors: [],
     failures: [],
+    failureRevision: 0,
     logs: [],
   });
   const sceneRef = useRef(scene);
@@ -80,15 +90,21 @@ export function useScriptRuntime({
   assetsRef.current = assets;
   const stateRef = useRef(state);
   stateRef.current = state;
+  const compileGenerationRef = useRef(0);
+  const componentRuntimeKeysRef = useRef(new Map<string, string>());
 
   const reset = useCallback(() => {
+    compileGenerationRef.current += 1;
+    componentRuntimeKeysRef.current.clear();
     releaseAllScriptModules();
     setState({
       status: "idle",
       scripts: EMPTY_SCRIPTS,
       assetUrls: EMPTY_ASSET_URLS,
+      assetUrlVersions: EMPTY_ASSET_URL_VERSIONS,
       errors: [],
       failures: [],
+      failureRevision: 0,
       logs: [],
     });
   }, []);
@@ -96,21 +112,31 @@ export function useScriptRuntime({
   /**
    * Reads and compiles every referenced Script Asset. Returns the errors so
    * the caller can refuse to start Play instead of inspecting state later.
-   */
-  const compile = useCallback(async (): Promise<ScriptCompileError[]> => {
-    const currentScene = sceneRef.current;
-    const currentAssets = assetsRef.current;
+  */
+  const compile = useCallback(async (
+    input: { scene?: SceneDocument; assets?: AssetManifest } = {},
+  ): Promise<ScriptCompileError[]> => {
+    const generation = compileGenerationRef.current + 1;
+    compileGenerationRef.current = generation;
+    const currentScene = input.scene ?? sceneRef.current;
+    const currentAssets = input.assets ?? assetsRef.current;
+    const previousState = stateRef.current;
+    const previousScripts = previousState.scripts;
     const assetIds = collectRequiredScriptAssetIds(currentScene);
     if (assetIds.length === 0) {
-      for (const entry of stateRef.current.scripts.values()) {
+      if (compileGenerationRef.current !== generation) return [];
+      for (const entry of previousScripts.values()) {
         releaseScriptModuleUrl(entry.objectUrl);
       }
+      componentRuntimeKeysRef.current.clear();
       setState({
         status: "ready",
         scripts: EMPTY_SCRIPTS,
         assetUrls: EMPTY_ASSET_URLS,
+        assetUrlVersions: EMPTY_ASSET_URL_VERSIONS,
         errors: [],
         failures: [],
+        failureRevision: 0,
         logs: [],
       });
       return [];
@@ -122,7 +148,9 @@ export function useScriptRuntime({
         relativePath: "",
         message: "プロジェクトのpathが未確定のためScriptを読み込めません",
       }));
-      setState((previous) => ({ ...previous, status: "error", errors }));
+      if (compileGenerationRef.current === generation) {
+        setState((previous) => ({ ...previous, status: "error", errors }));
+      }
       return errors;
     }
 
@@ -157,6 +185,16 @@ export function useScriptRuntime({
         });
         continue;
       }
+      const cacheKey = JSON.stringify([
+        relativePath,
+        Boolean(allowRemoteModules),
+        source,
+      ]);
+      const previousEntry = previousScripts.get(assetId);
+      if (previousEntry?.cacheKey === cacheKey) {
+        compiled.set(assetId, previousEntry);
+        continue;
+      }
       const result = await loadScriptModule(source, relativePath, {
         allowRemoteModules,
       });
@@ -171,6 +209,7 @@ export function useScriptRuntime({
       }
       const exported = result.module.default;
       if (!isCompiledScript(exported)) {
+        releaseScriptModuleUrl(result.objectUrl);
         errors.push({
           assetId,
           assetName: asset.name,
@@ -188,22 +227,30 @@ export function useScriptRuntime({
           ? { render: render as React.ComponentType }
           : {}),
         objectUrl: result.objectUrl,
+        cacheKey,
       });
     }
 
     // Asset props are resolved up front: the read is asynchronous IPC but
     // ctx.getAssetUrl must answer synchronously inside a frame.
     const assetUrls = new Map<string, string>();
+    const assetUrlVersions = new Map<string, number>();
     for (const assetId of collectScriptReferencedAssetIds(currentScene)) {
       const asset = currentAssets.assets[assetId];
       if (!asset || asset.source.kind !== "project") continue;
       try {
-        assetUrls.set(
+        const url = await tauri.readProjectFileDataUrl(
+          projectPath,
+          asset.source.relativePath,
+        );
+        assetUrls.set(assetId, url);
+        const previousVersion =
+          previousState.assetUrlVersions.get(assetId) ?? 0;
+        assetUrlVersions.set(
           assetId,
-          await tauri.readProjectFileDataUrl(
-            projectPath,
-            asset.source.relativePath,
-          ),
+          previousState.assetUrls.get(assetId) === url
+            ? Math.max(1, previousVersion)
+            : previousVersion + 1,
         );
       } catch {
         // A missing Asset URL is reported by the script when it reads null,
@@ -211,9 +258,20 @@ export function useScriptRuntime({
       }
     }
 
+    if (compileGenerationRef.current !== generation) {
+      for (const entry of compiled.values()) {
+        if (previousScripts.get(entry.assetId) !== entry) {
+          releaseScriptModuleUrl(entry.objectUrl);
+        }
+      }
+      return errors;
+    }
+
     if (errors.length > 0) {
       for (const entry of compiled.values()) {
-        releaseScriptModuleUrl(entry.objectUrl);
+        if (previousScripts.get(entry.assetId) !== entry) {
+          releaseScriptModuleUrl(entry.objectUrl);
+        }
       }
       setState((previous) => ({
         ...previous,
@@ -221,17 +279,38 @@ export function useScriptRuntime({
         errors,
       }));
     } else {
-      for (const entry of stateRef.current.scripts.values()) {
-        releaseScriptModuleUrl(entry.objectUrl);
+      const nextComponentRuntimeKeys = createComponentRuntimeKeys(
+        currentScene,
+        compiled,
+        assetUrlVersions,
+      );
+      const unchangedComponentIds = new Set(
+        [...nextComponentRuntimeKeys].flatMap(([componentId, key]) =>
+          componentRuntimeKeysRef.current.get(componentId) === key
+            ? [componentId]
+            : [],
+        ),
+      );
+      componentRuntimeKeysRef.current = nextComponentRuntimeKeys;
+      for (const entry of previousScripts.values()) {
+        if (compiled.get(entry.assetId) !== entry) {
+          releaseScriptModuleUrl(entry.objectUrl);
+        }
       }
-      setState({
+      setState((previous) => ({
         status: "ready",
         scripts: compiled,
         assetUrls,
+        assetUrlVersions,
         errors: [],
-        failures: [],
-        logs: [],
-      });
+        failures: previous.failures.filter((entry) =>
+          unchangedComponentIds.has(entry.componentId),
+        ),
+        failureRevision: previous.failureRevision,
+        logs: previous.logs.filter((entry) =>
+          unchangedComponentIds.has(entry.componentId),
+        ),
+      }));
     }
     return errors;
   }, [allowRemoteModules, projectPath]);
@@ -240,6 +319,7 @@ export function useScriptRuntime({
     setState((previous) => ({
       ...previous,
       failures: [...previous.failures, failure].slice(-MAX_LOG_ENTRIES),
+      failureRevision: previous.failureRevision + 1,
     }));
   }, []);
 
@@ -250,7 +330,14 @@ export function useScriptRuntime({
     }));
   }, []);
 
-  useEffect(() => () => releaseAllScriptModules(), []);
+  useEffect(
+    () => () => {
+      compileGenerationRef.current += 1;
+      componentRuntimeKeysRef.current.clear();
+      releaseAllScriptModules();
+    },
+    [],
+  );
 
   return useMemo(
     () => ({ state, compile, reset, handleFailure, handleLog }),
@@ -259,3 +346,41 @@ export function useScriptRuntime({
 }
 
 export type ScriptRuntime = ReturnType<typeof useScriptRuntime>;
+
+function createComponentRuntimeKeys(
+  scene: SceneDocument,
+  scripts: ReadonlyMap<string, CompiledScriptEntry>,
+  assetUrlVersions: ReadonlyMap<string, number>,
+): Map<string, string> {
+  const keys = new Map<string, string>();
+  for (const scheduled of collectScheduledScripts(scene)) {
+    const entity = scene.entities[scheduled.entityId];
+    const component = entity?.components.find(
+      (candidate) =>
+        candidate.id === scheduled.componentId &&
+        candidate.type === "script",
+    );
+    const entry = scripts.get(scheduled.scriptAssetId);
+    if (!entity || !component || component.type !== "script" || !entry) {
+      continue;
+    }
+    keys.set(
+      component.id,
+      JSON.stringify([
+        entity.id,
+        entity.name,
+        scheduled.order,
+        entry.cacheKey,
+        component.assetReferences,
+        component.entityReferences,
+        [...component.assetReferences]
+          .sort()
+          .map((assetId) => [
+            assetId,
+            assetUrlVersions.get(assetId) ?? null,
+          ]),
+      ]),
+    );
+  }
+  return keys;
+}

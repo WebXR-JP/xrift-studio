@@ -2482,7 +2482,7 @@ function EntityInspector({
         {liveRuntimeTuning ? (
           <span
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-violet-600"
-            title="Play中の変更は保存され、このEntityだけ先頭から再実行されます"
+            title="Play中も保存されます。Script propertyは次のフレーム、構造変更は対象Entityだけへ反映します"
             aria-label="Play中のEntity調整"
           >
             <EDITOR_ICONS.play size={13} aria-hidden="true" />

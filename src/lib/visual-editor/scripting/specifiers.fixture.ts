@@ -1,5 +1,7 @@
 import {
+  collectDynamicScriptImports,
   collectScriptSpecifiers,
+  collectUnsupportedUseFrameImports,
   describeScriptSpecifierRejection,
   isAllowedScriptSpecifier,
   isRemoteScriptSpecifier,
@@ -13,6 +15,31 @@ export function runScriptSpecifierFixtureAssertions(): void {
   assertRewrite();
   assertRejections();
   assertStringsUntouched();
+  assertUnsafeFrameImports();
+}
+
+function assertUnsafeFrameImports(): void {
+  const unsafe = [
+    `import { useFrame /* reason */ as frame } from "@react-three/fiber";`,
+    `import { addEffect } from "@react-three/fiber";`,
+    `import * as Fiber from "@react-three/fiber";`,
+    `import Fiber from "@react-three/fiber";`,
+    `import FiberDefault, * as Fiber from "@react-three/fiber";`,
+  ];
+  for (const source of unsafe) {
+    assertEqual(
+      collectUnsupportedUseFrameImports(source).length,
+      1,
+      `unsafe frame registration import was not rejected: ${source}`,
+    );
+  }
+  assertEqual(
+    collectUnsupportedUseFrameImports(
+      `import { useThree } from "@react-three/fiber";`,
+    ).length,
+    0,
+    "safe named R3F imports must remain available to declarative Render code",
+  );
 }
 
 function assertCollection(): void {
@@ -26,8 +53,20 @@ function assertCollection(): void {
   const found = collectScriptSpecifiers(source).map((use) => use.specifier);
   assertEqual(
     found.join(","),
-    "xrift:script,three,@react-three/fiber,./helpers,https://esm.sh/canvas-confetti",
+    "xrift:script,three,@react-three/fiber,./helpers",
     "specifier collection missed or reordered a module",
+  );
+  const dynamicSource = [
+    `const literal = import("three");`,
+    "const computed = import(moduleUrl);",
+    "const template = import(`https://example.com/${name}`);",
+    `const harmless = object.import("three");`,
+    `const text = "import('three')";`,
+  ].join("\n");
+  assertEqual(
+    collectDynamicScriptImports(dynamicSource).length,
+    3,
+    "dynamic import detection missed computed forms or matched ordinary text",
   );
   assert(
     isAllowedScriptSpecifier("three") &&
@@ -44,6 +83,7 @@ function assertCollection(): void {
 function assertRewrite(): void {
   const source = [
     `import { defineScript } from "xrift:script";`,
+    `import "xrift:script";`,
     `import * as THREE from 'three';`,
     `export { Vector3 } from "three";`,
   ].join("\n");
@@ -56,6 +96,10 @@ function assertRewrite(): void {
   assert(
     result.source.includes(`from "blob:fake/xrift:script"`),
     "double-quoted specifier was not rewritten",
+  );
+  assert(
+    result.source.includes(`import "blob:fake/xrift:script"`),
+    "side-effect import was not rewritten",
   );
   assert(
     result.source.includes(`from 'blob:fake/three'`),

@@ -25,6 +25,7 @@ import {
   type ScriptViewportRuntime,
 } from "./EntityScriptVisual";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -1111,6 +1112,8 @@ function EntityObject({
   physicsEnabled,
   ownRigidBody,
   rigidBodyOwner,
+  effectivelyEnabled,
+  runtimeRevision,
   transformMode,
   transformSpace,
   gizmo,
@@ -1134,6 +1137,10 @@ function EntityObject({
   physicsEnabled: boolean;
   ownRigidBody?: RigidBodyComponent;
   rigidBodyOwner?: RigidBodyComponent;
+  /** False when this Entity or one of its ancestors is disabled. */
+  effectivelyEnabled: boolean;
+  /** Restarts this Entity's local runtime content without remounting children. */
+  runtimeRevision: number;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
   gizmo: SceneSettings["editor"]["gizmo"];
@@ -1170,17 +1177,19 @@ function EntityObject({
       component.type === "xrift-component" &&
       isOfficialXriftWrapperComponent(component),
   );
-  const scriptComponents = entity.components.filter(
-    (component): component is Extract<SceneComponent, { type: "script" }> =>
-      component.type === "script" && component.enabled,
-  );
+  const scriptComponents = effectivelyEnabled
+    ? entity.components.filter(
+        (component): component is Extract<SceneComponent, { type: "script" }> =>
+          component.type === "script" && component.enabled,
+      )
+    : [];
   const entityVisuals = (
-    <>
+    <Fragment key={runtimeRevision}>
       {scriptComponents.map((component) => (
         <EntityScriptVisual
           key={component.id}
           component={component}
-          entityId={authoringEntityId}
+          entityId={entity.id}
           entityName={entity.name}
         />
       ))}
@@ -1207,7 +1216,7 @@ function EntityObject({
           />
         ),
       )}
-    </>
+    </Fragment>
   );
   const ownedColliderVisuals = rigidBodyOwner ? (
     <RuntimeOwnedColliderContent
@@ -1249,7 +1258,7 @@ function EntityObject({
       <group
         ref={objectRef}
         name={entity.name}
-        visible={entity.enabled}
+        visible={effectivelyEnabled}
         position={transform?.position ?? [0, 0, 0]}
         rotation={transform?.rotation ?? [0, 0, 0]}
         scale={transform?.scale ?? [1, 1, 1]}
@@ -1601,6 +1610,7 @@ function SceneEntityHierarchy({
   displayProfile,
   inheritedRigidBody,
   ancestors = new Set<string>(),
+  ancestorEnabled = true,
 }: {
   entityId: string;
   scene: SceneDocument;
@@ -1625,6 +1635,7 @@ function SceneEntityHierarchy({
   displayProfile: SceneViewportDisplayProfile;
   inheritedRigidBody?: RigidBodyComponent;
   ancestors?: ReadonlySet<string>;
+  ancestorEnabled?: boolean;
 }) {
   const entity = scene.entities[entityId];
   if (!entity || ancestors.has(entityId)) return null;
@@ -1637,6 +1648,7 @@ function SceneEntityHierarchy({
       component.type === "rigid-body" && component.enabled,
   );
   const rigidBodyOwner = ownRigidBody ?? inheritedRigidBody;
+  const effectivelyEnabled = ancestorEnabled && entity.enabled;
 
   return (
     <EntityObject
@@ -1648,9 +1660,11 @@ function SceneEntityHierarchy({
       primary={primaryEntityId === authoringEntityId}
       editable={editable}
       playing={playing}
-      physicsEnabled={physicsEnabled}
+      physicsEnabled={physicsEnabled && effectivelyEnabled}
       ownRigidBody={ownRigidBody}
       rigidBodyOwner={rigidBodyOwner}
+      effectivelyEnabled={effectivelyEnabled}
+      runtimeRevision={runtimeEntityRevisions?.[authoringEntityId] ?? 0}
       transformMode={transformMode}
       transformSpace={transformSpace}
       gizmo={gizmo}
@@ -1664,11 +1678,7 @@ function SceneEntityHierarchy({
     >
       {entity.children.map((childId) => (
         <SceneEntityHierarchy
-          key={`${childId}:${
-            runtimeEntityRevisions?.[
-              authoringEntityIdByEntityId[childId] ?? childId
-            ] ?? 0
-          }`}
+          key={childId}
           entityId={childId}
           scene={scene}
           authoringEntityIdByEntityId={authoringEntityIdByEntityId}
@@ -1692,6 +1702,7 @@ function SceneEntityHierarchy({
           displayProfile={displayProfile}
           inheritedRigidBody={rigidBodyOwner}
           ancestors={nextAncestors}
+          ancestorEnabled={effectivelyEnabled}
         />
       ))}
     </EntityObject>
@@ -3134,47 +3145,47 @@ export function SceneViewport({
           >
             <ScriptViewportProvider value={scriptRuntime ?? null}>
             <XriftScriptRoot pressedKeys={pressedKeysRef.current}>
-            {preview.scene.rootEntityIds.map((entityId) => (
-              <SceneEntityHierarchy
-                key={`${entityId}:${
-                  runtimeEntityRevisions?.[
-                    preview.authoringEntityIdByEntityId[entityId] ?? entityId
-                  ] ?? 0
-                }`}
-                entityId={entityId}
-                scene={preview.scene}
-                authoringEntityIdByEntityId={
-                  preview.authoringEntityIdByEntityId
-                }
-                assets={assets}
-                projectPath={projectPath}
-                selectedEntityIds={selectedEntityIdSet}
-                primaryEntityId={selectedEntityId}
-                editable={editorMode === "edit"}
-                playing={editorMode === "play"}
-                physicsEnabled={editorMode === "play" && projectKind === "world"}
-                runtimeEntityRevisions={runtimeEntityRevisions}
-                transformMode={transformMode}
-                transformSpace={transformSpace}
-                gizmo={sceneSettings.editor.gizmo}
-                onTransformCommit={onTransformCommit}
-                onDraggingChange={(dragging) => {
-                  transformDraggingRef.current = dragging;
-                  setTransformDragging(dragging);
-                }}
-                transformDraggingRef={transformDraggingRef}
-                materialDragActive={dragOverKind === "material"}
-                materialDropTarget={readyMaterialDropTarget}
-                displayMode={effectiveDisplayMode}
-                displayProfile={displayProfile}
-              />
-            ))}
-            {editorMode === "play" && projectKind === "world" ? (
-              <WorldPlayController
-                initialPosition={runtimeSpawn}
-                isPressed={isPressed}
-              />
-            ) : null}
+            <Fragment key={editorMode}>
+              {preview.scene.rootEntityIds.map((entityId) => (
+                <SceneEntityHierarchy
+                  key={entityId}
+                  entityId={entityId}
+                  scene={preview.scene}
+                  authoringEntityIdByEntityId={
+                    preview.authoringEntityIdByEntityId
+                  }
+                  assets={assets}
+                  projectPath={projectPath}
+                  selectedEntityIds={selectedEntityIdSet}
+                  primaryEntityId={selectedEntityId}
+                  editable={editorMode === "edit"}
+                  playing={editorMode === "play"}
+                  physicsEnabled={
+                    editorMode === "play" && projectKind === "world"
+                  }
+                  runtimeEntityRevisions={runtimeEntityRevisions}
+                  transformMode={transformMode}
+                  transformSpace={transformSpace}
+                  gizmo={sceneSettings.editor.gizmo}
+                  onTransformCommit={onTransformCommit}
+                  onDraggingChange={(dragging) => {
+                    transformDraggingRef.current = dragging;
+                    setTransformDragging(dragging);
+                  }}
+                  transformDraggingRef={transformDraggingRef}
+                  materialDragActive={dragOverKind === "material"}
+                  materialDropTarget={readyMaterialDropTarget}
+                  displayMode={effectiveDisplayMode}
+                  displayProfile={displayProfile}
+                />
+              ))}
+              {editorMode === "play" && projectKind === "world" ? (
+                <WorldPlayController
+                  initialPosition={runtimeSpawn}
+                  isPressed={isPressed}
+                />
+              ) : null}
+            </Fragment>
             </XriftScriptRoot>
             </ScriptViewportProvider>
           </OfficialXriftPreviewProvider>

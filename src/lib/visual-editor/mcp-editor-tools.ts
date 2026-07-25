@@ -24,9 +24,15 @@ import {
   updateEntityTransform,
   type SceneDocument,
   type SceneEntity,
+  type ScriptComponent,
   type Vec3,
 } from "./scene-document";
 import { resolveSceneSettings, type SceneFogSettings } from "./scene-settings";
+import type {
+  ScriptContract,
+  ScriptPropDescriptor,
+} from "./scripting/script-contract";
+import type { ScriptRuntimeReport } from "./scripting/runtime-report";
 import {
   KHR_INTERACTIVITY_OPERATION_TEMPLATES,
   KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS,
@@ -51,6 +57,7 @@ import {
 
 export const XRIFT_MCP_EDITOR_TOOLS = [
   "get_editor_context",
+  "get_scripting_capabilities",
   "list_assets",
   "update_scene_settings",
   "place_asset",
@@ -113,6 +120,10 @@ export type XriftMcpEditorContext = {
   importBusy: boolean;
   revision: number;
   saveStatus: "dirty" | "saving" | "saved" | "error" | "unavailable";
+  /** Derived from source; supplied by the live editor for typed MCP writes. */
+  scriptContracts?: Readonly<Record<string, ScriptContract>>;
+  /** JSON-safe live diagnostics supplied by the running Script host. */
+  scriptRuntime?: ScriptRuntimeReport;
   now?: () => string;
 };
 
@@ -148,6 +159,8 @@ export function executeXriftMcpEditorTool(
   switch (request.tool) {
     case "get_editor_context":
       return readEditorContext(context);
+    case "get_scripting_capabilities":
+      return readScriptingCapabilities(context);
     case "list_assets":
       return listAssets(context, request.arguments);
     case "update_scene_settings":
@@ -209,6 +222,141 @@ export function executeXriftMcpEditorTool(
   }
 }
 
+function readScriptingCapabilities(
+  context: XriftMcpEditorContext,
+): XriftMcpEditorToolOutcome {
+  return unchanged(
+    context,
+    {
+      contractVersion: "1.0.0",
+      workflow: [
+        {
+          step: 1,
+          tools: ["get_editor_context", "list_assets", "list_entities"],
+          purpose: "Read the current revision and resolve Asset and Entity IDs.",
+        },
+        {
+          step: 2,
+          tools: ["create_script_asset", "update_script_asset", "get_script_asset"],
+          purpose: "Create, edit, and verify TypeScript source.",
+        },
+        {
+          step: 3,
+          tools: ["add_component", "update_script_component"],
+          purpose:
+            "Attach the Script and declare its property, Asset, and Entity references.",
+        },
+        {
+          step: 4,
+          tools: ["set_play_mode"],
+          purpose: "Compile and run the Script in Play.",
+        },
+      ],
+      runtime: {
+        import: "xrift:script",
+        mode: "play",
+        frameUpdates:
+          "Return update(delta) from start(ctx). R3F useFrame is rejected in Play and publish because its callback cannot be isolated per Script.",
+        diagnostics:
+          "Call get_editor_context and inspect scriptRuntime for compile errors, lifecycle/event/Render failures, and bounded JSON-safe ctx.log output.",
+        assets: {
+          scope:
+            "Only Asset IDs declared in the Script Component assetReferences are accessible.",
+          methods: [
+            "ctx.assets.url(assetId): string | null",
+            "ctx.assets.loadTexture(assetId, { colorSpace?, wrapS?, wrapT?, flipY? }): Promise<ScriptTexture | null>",
+          ],
+          textureOptions: {
+            colorSpace: ["auto", "srgb", "linear"],
+            wrapS: ["repeat", "clamp-to-edge", "mirrored-repeat"],
+            wrapT: ["repeat", "clamp-to-edge", "mirrored-repeat"],
+          },
+          lifetime:
+            "Loaded textures are cached per Script instance and disposed automatically on restart or Stop.",
+        },
+        materials: {
+          scope:
+            "Applies to Mesh materials owned by the attached Entity and excludes child Entities.",
+          methods: [
+            "ctx.materials.count(): number",
+            "ctx.materials.setColor(value): number",
+            "ctx.materials.setOpacity(value): number",
+            "ctx.materials.setEmissive(value, intensity?): number",
+            "ctx.materials.setMetalness(value): number",
+            "ctx.materials.setRoughness(value): number",
+            "ctx.materials.setTexture(slot, textureOrNull): number",
+            "ctx.materials.reset(): void",
+          ],
+          textureSlots: [
+            "baseColor",
+            "normal",
+            "emissive",
+            "metallicRoughness",
+            "occlusion",
+          ],
+          persistence:
+            "Runtime-only isolated overrides. They are restored on Script restart or Stop and do not modify Material Assets.",
+        },
+        entities: {
+          scope:
+            "ctx.find(entityId) only resolves IDs declared in the Script Component entityReferences.",
+        },
+      },
+      unsupported: [
+        "dynamic import(...)",
+        "R3F useFrame (use start(ctx) { return { update(delta) {} }; } instead)",
+        "undeclared Asset or Entity access",
+        "KTX2/HDR/EXR typed loading",
+        "persistent Material Asset mutation through ctx.materials",
+      ],
+      persistentAuthoring: {
+        mode: "edit",
+        tools: [
+          "set_material",
+          "get_material_asset",
+          "update_material_asset",
+          "set_material_texture_transform",
+        ],
+        semantics:
+          "These editor tools persist Material Asset or Mesh binding changes. Use them instead of ctx.materials when the edit must remain after Stop or be saved.",
+      },
+      example: [
+        'import { defineScript, prop } from "xrift:script";',
+        "",
+        "const props = { texture: prop.asset({ kind: \"texture\" }) };",
+        "",
+        "export default defineScript({",
+        '  name: "Texture pulse",',
+        "  props,",
+        "  start(ctx) {",
+        "    ctx.materials.setColor(\"#ffffff\");",
+        "    void ctx.assets.loadTexture(ctx.props.texture, {",
+        '      colorSpace: "srgb",',
+        '      wrapS: "repeat",',
+        '      wrapT: "repeat",',
+        "    }).then((texture) => {",
+        '      if (texture) ctx.materials.setTexture("baseColor", texture);',
+        "    });",
+        "  },",
+        "});",
+      ].join("\n"),
+      referenceUpdateExample: {
+        tool: "update_script_component",
+        arguments: {
+          entityId: "<entity-id>",
+          componentId: "<script-component-id>",
+          properties: { texture: "<texture-asset-id>" },
+          assetReferences: ["<texture-asset-id>"],
+          entityReferences: [],
+        },
+        note:
+          "Also send projectId, sceneId, and expectedRevision from get_editor_context.",
+      },
+    },
+    "Scripting capabilityを取得しました",
+  );
+}
+
 function readEditorContext(
   context: XriftMcpEditorContext,
 ): XriftMcpEditorToolOutcome {
@@ -229,6 +377,7 @@ function readEditorContext(
     editorMode: context.editorMode,
     importBusy: context.importBusy,
     saveStatus: context.saveStatus,
+    scriptRuntime: context.scriptRuntime ?? null,
     sceneSettings: {
       fog: sceneSettings.fog,
     },
@@ -535,9 +684,30 @@ function updateScriptComponent(
     argumentsValue.componentId,
     "componentId",
   );
-  const properties = recordValue(argumentsValue.properties, "properties");
+  const properties =
+    argumentsValue.properties === undefined
+      ? {}
+      : recordValue(argumentsValue.properties, "properties");
   if (!isJsonValue(properties)) {
     invalidArgument("properties", "finite JSON object");
+  }
+  const assetReferences = optionalUniqueStringArray(
+    argumentsValue.assetReferences,
+    "assetReferences",
+  );
+  const entityReferences = optionalUniqueStringArray(
+    argumentsValue.entityReferences,
+    "entityReferences",
+  );
+  if (
+    argumentsValue.properties === undefined &&
+    assetReferences === undefined &&
+    entityReferences === undefined
+  ) {
+    invalidArgument(
+      "properties, assetReferences, entityReferences",
+      "at least one update",
+    );
   }
   const entity = context.bundle.scene.entities[entityId];
   if (!entity) {
@@ -547,27 +717,74 @@ function updateScriptComponent(
       { entityId },
     );
   }
-  let found = false;
-  const components = entity.components.map((component) => {
-    if (component.id !== componentId || component.type !== "script") {
-      return component;
-    }
-    found = true;
-    return {
-      ...component,
-      properties: {
-        ...component.properties,
-        ...(properties as typeof component.properties),
-      },
-    };
-  });
-  if (!found) {
+  const targetComponent = entity.components.find(
+    (component) =>
+      component.id === componentId && component.type === "script",
+  );
+  if (!targetComponent || targetComponent.type !== "script") {
     throw new XriftMcpEditorToolError(
       "SCRIPT_COMPONENT_NOT_FOUND",
       "指定されたScript Componentが見つかりません",
       { entityId, componentId },
     );
   }
+  for (const assetId of assetReferences ?? []) {
+    if (!context.bundle.assets.assets[assetId]) {
+      throw new XriftMcpEditorToolError(
+        "ASSET_NOT_FOUND",
+        "assetReferencesに指定されたAssetが見つかりません",
+        { assetId },
+      );
+    }
+  }
+  for (const referencedEntityId of entityReferences ?? []) {
+    if (!context.bundle.scene.entities[referencedEntityId]) {
+      throw new XriftMcpEditorToolError(
+        "ENTITY_NOT_FOUND",
+        "entityReferencesに指定されたEntityが見つかりません",
+        { entityId: referencedEntityId },
+      );
+    }
+  }
+  const contract = context.scriptContracts?.[targetComponent.scriptAssetId];
+  if (contract && argumentsValue.properties !== undefined) {
+    validateScriptPropertyPatch({
+      contract,
+      properties,
+      component: targetComponent,
+      assets: context.bundle.assets.assets,
+      scene: context.bundle.scene,
+      assetReferences,
+      entityReferences,
+    });
+  }
+  let found = false;
+  let referencesChanged = false;
+  const components = entity.components.map((component) => {
+    if (component.id !== componentId || component.type !== "script") {
+      return component;
+    }
+    found = true;
+    referencesChanged =
+      (assetReferences !== undefined &&
+        !sameStringSet(component.assetReferences, assetReferences)) ||
+      (entityReferences !== undefined &&
+        !sameStringSet(component.entityReferences, entityReferences));
+    return {
+      ...component,
+      properties: {
+        ...component.properties,
+        ...(properties as typeof component.properties),
+      },
+      ...(assetReferences !== undefined
+        ? { assetReferences: [...assetReferences] }
+        : {}),
+      ...(entityReferences !== undefined
+        ? { entityReferences: [...entityReferences] }
+        : {}),
+    };
+  });
+  if (!found) throw new Error("validated Script Component disappeared");
   const bundle = touchProject(context, {
     ...context.bundle,
     scene: {
@@ -591,11 +808,18 @@ function updateScriptComponent(
       entityId,
       componentId,
       properties,
-      restartedDuringPlay: context.editorMode === "play",
+      assetReferences,
+      entityReferences,
+      restartedDuringPlay:
+        context.editorMode === "play" && referencesChanged,
+      appliedOnNextFrame:
+        context.editorMode === "play" && !referencesChanged,
     },
     activity:
       context.editorMode === "play"
-        ? `AIがScript propertyを更新し「${entity.name}」だけ再起動しました`
+        ? referencesChanged
+          ? `AIがScript参照を更新し「${entity.name}」だけ再起動しました`
+          : `AIが「${entity.name}」のScript propertyを次のフレームへ反映しました`
         : `AIが「${entity.name}」のScript propertyを更新しました`,
   };
 }
@@ -1962,6 +2186,152 @@ function requiredString(value: unknown, name: string): string {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function optionalUniqueStringArray(
+  value: unknown,
+  name: string,
+): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) invalidArgument(name, "unique string array");
+  const result = value.map((entry, index) =>
+    requiredString(entry, `${name}[${index}]`),
+  );
+  if (new Set(result).size !== result.length) {
+    invalidArgument(name, "unique string array");
+  }
+  return result;
+}
+
+function validateScriptPropertyPatch({
+  contract,
+  properties,
+  component,
+  assets,
+  scene,
+  assetReferences,
+  entityReferences,
+}: {
+  contract: ScriptContract;
+  properties: Record<string, unknown>;
+  component: ScriptComponent;
+  assets: PrototypeVisualProject["assets"]["assets"];
+  scene: SceneDocument;
+  assetReferences?: readonly string[];
+  entityReferences?: readonly string[];
+}): void {
+  const descriptors = new Map(
+    contract.props.map((descriptor) => [descriptor.name, descriptor]),
+  );
+  const allowedAssets = new Set(
+    assetReferences ?? component.assetReferences,
+  );
+  const allowedEntities = new Set(
+    entityReferences ?? component.entityReferences,
+  );
+  for (const [name, value] of Object.entries(properties)) {
+    const descriptor = descriptors.get(name);
+    if (!descriptor) {
+      throw new XriftMcpEditorToolError(
+        "SCRIPT_PROPERTY_UNKNOWN",
+        `Scriptに宣言されていないpropertyです: ${name}`,
+        { property: name, scriptName: contract.name },
+      );
+    }
+    if (!scriptPropertyValueMatches(descriptor, value)) {
+      throw new XriftMcpEditorToolError(
+        "SCRIPT_PROPERTY_TYPE_MISMATCH",
+        `${name} は ${descriptor.kind} の値で指定してください`,
+        { property: name, expectedKind: descriptor.kind },
+      );
+    }
+    if (descriptor.kind === "asset" && value) {
+      const asset = assets[value as string];
+      if (!asset) {
+        throw new XriftMcpEditorToolError(
+          "ASSET_NOT_FOUND",
+          `${name} が参照するAssetが見つかりません`,
+          { property: name, assetId: value },
+        );
+      }
+      if (descriptor.assetKind && asset.kind !== descriptor.assetKind) {
+        throw new XriftMcpEditorToolError(
+          "SCRIPT_PROPERTY_TYPE_MISMATCH",
+          `${name} は ${descriptor.assetKind} Assetを参照してください`,
+          {
+            property: name,
+            assetId: value,
+            expectedAssetKind: descriptor.assetKind,
+            actualAssetKind: asset.kind,
+          },
+        );
+      }
+      if (!allowedAssets.has(value as string)) {
+        throw new XriftMcpEditorToolError(
+          "SCRIPT_REFERENCE_NOT_DECLARED",
+          `${name} のAsset IDをassetReferencesにも指定してください`,
+          { property: name, assetId: value },
+        );
+      }
+    }
+    if (descriptor.kind === "entity" && value) {
+      if (!scene.entities[value as string]) {
+        throw new XriftMcpEditorToolError(
+          "ENTITY_NOT_FOUND",
+          `${name} が参照するEntityが見つかりません`,
+          { property: name, entityId: value },
+        );
+      }
+      if (!allowedEntities.has(value as string)) {
+        throw new XriftMcpEditorToolError(
+          "SCRIPT_REFERENCE_NOT_DECLARED",
+          `${name} のEntity IDをentityReferencesにも指定してください`,
+          { property: name, entityId: value },
+        );
+      }
+    }
+  }
+}
+
+function scriptPropertyValueMatches(
+  descriptor: ScriptPropDescriptor,
+  value: unknown,
+): boolean {
+  if (
+    descriptor.kind === "string" ||
+    descriptor.kind === "color" ||
+    descriptor.kind === "asset" ||
+    descriptor.kind === "entity"
+  ) {
+    return typeof value === "string";
+  }
+  if (descriptor.kind === "enum") {
+    return (
+      typeof value === "string" &&
+      (!descriptor.options || descriptor.options.includes(value))
+    );
+  }
+  if (descriptor.kind === "number") {
+    return typeof value === "number" && Number.isFinite(value);
+  }
+  if (descriptor.kind === "boolean") return typeof value === "boolean";
+  const length = descriptor.kind === "vec2" ? 2 : 3;
+  return (
+    Array.isArray(value) &&
+    value.length === length &&
+    value.every(
+      (entry) => typeof entry === "number" && Number.isFinite(entry),
+    )
+  );
+}
+
+function sameStringSet(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  if (left.length !== right.length) return false;
+  const expected = new Set(left);
+  return right.every((entry) => expected.has(entry));
 }
 
 function optionalBoolean(value: unknown, name: string): boolean | undefined {

@@ -1,15 +1,24 @@
 import {
   ASSET_MANIFEST_SCHEMA_VERSION,
   SCRIPT_ASSET_CONTRACT_VERSION,
+  normalizeTextureImportSettings,
   type AssetManifest,
 } from "../asset-manifest";
+import {
+  createPrefabAsset,
+  PREFAB_DOCUMENT_SCHEMA_VERSION,
+  type PrefabDocument,
+} from "../prefab-document";
 import {
   SCENE_DOCUMENT_SCHEMA_VERSION,
   SCRIPT_CONTRACT_VERSION,
   type SceneDocument,
+  type ScriptComponent,
 } from "../scene-document";
 import { VISUAL_PROJECT_SCHEMA_VERSION } from "../project-document";
+import { extractScriptContract } from "../scripting/script-contract";
 import { compileVisualProject } from "./compile";
+import { resolvePrefabInstances } from "./prefab-resolver";
 import {
   SCRIPT_API_OVERLAY_PATH,
   SCRIPT_HOST_OVERLAY_PATH,
@@ -18,14 +27,126 @@ import {
 /** Filesystem-free assertions for Script emission into the staging project. */
 export function runScriptEmitFixtureAssertions(): void {
   assertEmitsStaticImports();
+  assertVectorPropertiesAreExtracted();
+  assertRenderDetectionIgnoresComments();
   assertDeterministic();
   assertRemoteImportBlocks();
+  assertDynamicImportBlocks();
+  assertUseFrameBlocks();
+  assertPrefabScriptReferencesAreRemapped();
   assertRuntimeOutputBlocks();
   assertMissingSourceBlocks();
 }
 
+function assertPrefabScriptReferencesAreRemapped(): void {
+  const documents = buildDocuments(SPINNER_SOURCE);
+  const prefabId = "prefab_script_fixture";
+  const prefabAssetId = "asset_prefab_script_fixture";
+  const sourceRootId = "prefab_source_root";
+  const sourceTargetId = "prefab_source_target";
+  const prefabAsset = createPrefabAsset(
+    prefabAssetId,
+    "Script Prefab",
+    `prefabs/${prefabId}.prefab.json`,
+  );
+  assert(Boolean(prefabAsset), "Script Prefab Asset could not be created");
+  const scriptComponent: ScriptComponent = {
+    id: "prefab_script_component",
+    type: "script",
+    enabled: true,
+    scriptAssetId: "asset_script_spinner",
+    contractVersion: SCRIPT_CONTRACT_VERSION,
+    properties: {
+      target: sourceTargetId,
+      nested: { target: sourceTargetId },
+    },
+    assetReferences: [],
+    entityReferences: [sourceTargetId],
+    runIn: "play",
+  };
+  const prefab: PrefabDocument = {
+    schemaVersion: PREFAB_DOCUMENT_SCHEMA_VERSION,
+    prefabId,
+    name: "Script Prefab",
+    source: { sceneId: "scene_main", rootEntityIds: ["entity_a"] },
+    rootEntityIds: [sourceRootId],
+    entities: {
+      [sourceRootId]: {
+        id: sourceRootId,
+        name: "Prefab Script Root",
+        parentId: null,
+        children: [sourceTargetId],
+        enabled: true,
+        components: [scriptComponent],
+      },
+      [sourceTargetId]: {
+        id: sourceTargetId,
+        name: "Prefab Target",
+        parentId: sourceRootId,
+        children: [],
+        enabled: true,
+        components: [],
+      },
+    },
+  };
+  const scene: SceneDocument = {
+    ...documents.scenes.scene_main,
+    rootEntityIds: ["prefab_host"],
+    entities: {
+      prefab_host: {
+        id: "prefab_host",
+        name: "Prefab Host",
+        parentId: null,
+        children: [],
+        enabled: true,
+        components: [
+          {
+            id: "prefab_instance_component",
+            type: "prefab-instance",
+            enabled: true,
+            prefabAssetId,
+            sourceEntityId: sourceRootId,
+          },
+        ],
+      },
+    },
+  };
+  const resolved = resolvePrefabInstances(
+    scene,
+    {
+      ...documents.assets,
+      assets: {
+        ...documents.assets.assets,
+        [prefabAssetId]: prefabAsset!,
+      },
+    },
+    { [prefabId]: prefab },
+  ).scene;
+  const expandedScript = Object.values(resolved.entities)
+    .flatMap((entity) => entity.components)
+    .find(
+      (component): component is ScriptComponent =>
+        component.type === "script",
+    );
+  assert(Boolean(expandedScript), "Prefab Script was not expanded");
+  const generatedTargetId = expandedScript!.entityReferences[0];
+  assert(
+    Boolean(generatedTargetId) &&
+      generatedTargetId !== sourceTargetId &&
+      expandedScript!.properties.target === generatedTargetId &&
+      (
+        expandedScript!.properties.nested as {
+          target?: unknown;
+        }
+      ).target === generatedTargetId,
+    "Prefab Script Entity references and property values did not share the generated ID",
+  );
+}
+
 const SPINNER_SOURCE = `import { defineScript, prop } from "xrift:script";
 import { Vector3 } from "three";
+
+export const Render = () => null;
 
 export default defineScript({
   name: "Spinner",
@@ -39,6 +160,7 @@ export default defineScript({
 
 function buildDocuments(source: string, options: { assetId?: string } = {}) {
   const assetId = options.assetId ?? "asset_script_spinner";
+  const textureAssetId = "asset_texture_grid";
   const assets: AssetManifest = {
     schemaVersion: ASSET_MANIFEST_SCHEMA_VERSION,
     assets: {
@@ -50,6 +172,21 @@ function buildDocuments(source: string, options: { assetId?: string } = {}) {
         contractVersion: SCRIPT_ASSET_CONTRACT_VERSION,
         language: "ts",
         source: { kind: "project", relativePath: "scripts/spinner.ts" },
+      },
+      [textureAssetId]: {
+        id: textureAssetId,
+        name: "Grid",
+        kind: "texture",
+        status: "ready",
+        source: {
+          kind: "project",
+          relativePath: "assets/textures/grid.png",
+        },
+        thumbnail: { status: "missing" },
+        importSettings: normalizeTextureImportSettings({
+          colorSpace: "srgb",
+          sampler: { wrapS: "repeat", wrapT: "repeat" },
+        }),
       },
     },
   };
@@ -81,8 +218,8 @@ function buildDocuments(source: string, options: { assetId?: string } = {}) {
             scriptAssetId: assetId,
             contractVersion: SCRIPT_CONTRACT_VERSION,
             properties: { speed: 3, axis: [0, 1, 0] },
-            assetReferences: [],
-            entityReferences: [],
+            assetReferences: [textureAssetId],
+            entityReferences: ["entity_a"],
             runIn: "play",
           },
         ],
@@ -110,6 +247,73 @@ function buildDocuments(source: string, options: { assetId?: string } = {}) {
     prefabs: {},
     scriptSources: { [assetId]: source },
   };
+}
+
+function assertVectorPropertiesAreExtracted(): void {
+  const contract = extractScriptContract(`
+import { defineScript, prop } from "xrift:script";
+
+export default defineScript({
+  name: "Vector properties",
+  props: {
+    offset: prop.vec2({ default: [2, 4] }),
+    axis: prop.vec3({ default: [0, 1, 0] }),
+  },
+  start() {},
+});
+`);
+  assert(
+    contract.issues.length === 0 &&
+      contract.props.some(
+        (property) =>
+          property.name === "offset" &&
+          property.kind === "vec2" &&
+          JSON.stringify(property.defaultValue) === "[2,4]",
+      ) &&
+      contract.props.some(
+        (property) =>
+          property.name === "axis" &&
+          property.kind === "vec3" &&
+          JSON.stringify(property.defaultValue) === "[0,1,0]",
+      ),
+    "vec2/vec3 property declarations were not extracted",
+  );
+}
+
+function assertRenderDetectionIgnoresComments(): void {
+  const sourceWithComment = SPINNER_SOURCE.replace(
+    "export const Render = () => null;",
+    [
+      "// export const Render = () => null;",
+      'const renderPattern = /export const Render = "not an export"/;',
+    ].join("\n"),
+  );
+  const result = compileVisualProject(buildDocuments(sourceWithComment), {
+    generatedAt: "2026-07-25T00:00:00.000Z",
+  });
+  const world = result.overlayFiles.find(
+    (file) => file.relativePath === "src/World.tsx",
+  )?.content;
+  assert(Boolean(world), "World.tsx was not emitted for Render comment fixture");
+  assert(
+    !world!.includes("{ Render as"),
+    "a commented or regex Render declaration produced a named import",
+  );
+
+  const sourceWithAsyncRender = SPINNER_SOURCE.replace(
+    "export const Render = () => null;",
+    "export async function Render() { return null; }",
+  );
+  const asyncResult = compileVisualProject(buildDocuments(sourceWithAsyncRender), {
+    generatedAt: "2026-07-25T00:00:00.000Z",
+  });
+  const asyncWorld = asyncResult.overlayFiles.find(
+    (file) => file.relativePath === "src/World.tsx",
+  )?.content;
+  assert(
+    Boolean(asyncWorld?.includes("{ Render as")),
+    "an async named Render export was not statically imported",
+  );
 }
 
 function assertEmitsStaticImports(): void {
@@ -140,22 +344,46 @@ function assertEmitsStaticImports(): void {
   assert(Boolean(world), "World.tsx was not emitted");
   const source = world!.content;
   assert(
-    source.includes(`import Spinner from "./scripts/Spinner";`),
-    "the entry file does not statically import the Script module",
+    source.includes(
+      `import Spinner, { Render as SpinnerRender } from "./scripts/Spinner";`,
+    ),
+    "the entry file does not statically import the Script module and Render export",
   );
   assert(
     source.includes(
-      `import { XriftScriptHost } from "./xrift-studio/script-host";`,
+      `import { XriftScriptHost, XriftScriptRoot } from "./xrift-studio/script-host";`,
     ),
-    "the entry file does not import the Script host",
+    "the entry file does not import the Script host and root",
   );
   assert(
-    source.includes("<XriftScriptHost") && source.includes("script={Spinner}"),
-    "the Script host was not mounted on the Entity",
+    source.includes("<XriftPublishedScriptRoot>") &&
+      source.includes("<XriftScriptHost") &&
+      source.includes("script={Spinner}") &&
+      source.includes("render={SpinnerRender}"),
+    "the Script root, host, or Render export was not mounted",
+  );
+  assert(
+    source.includes("assetBaseUrl={baseUrl}") &&
+      source.includes("userData={{ xriftScriptScope: true }}"),
+    "published Script Assets or Entity lookup are not scoped to the World/Item base",
+  );
+  assert(
+    source.includes('assetReferences={["asset_texture_grid"]}') &&
+      source.includes('entityReferences={["entity_a"]}') &&
+      source.includes('"asset_texture_grid"') &&
+      source.includes("grid.png"),
+    "declared Asset and Entity references were not emitted with a runtime URL",
+  );
+  assert(
+    source.includes('userData={{ xriftEntityId: "entity_a" }}'),
+    "the generated Entity cannot be resolved by Script find()",
   );
   // The whole point of the exception carved out in ARCHITECTURE.md 4.8.
   assert(
-    !/\beval\s*\(|\bnew\s+Function\s*\(|\bimport\s*\(/.test(source),
+    result.overlayFiles.every(
+      (file) =>
+        !/\beval\s*\(|\bnew\s+Function\s*\(|\bimport\s*\(/.test(file.content),
+    ),
     "generated output must not contain eval, Function, or dynamic import",
   );
 
@@ -197,6 +425,50 @@ function assertRemoteImportBlocks(): void {
     "a remote import did not block publication",
   );
   assert(!result.canStage, "a remote import must stop staging");
+}
+
+function assertDynamicImportBlocks(): void {
+  const source = [
+    "const moduleUrl = `https://example.com/${name}`;",
+    "const dependency = import(moduleUrl);",
+    SPINNER_SOURCE,
+  ].join("\n");
+  const result = compileVisualProject(buildDocuments(source), {
+    generatedAt: "2026-07-25T00:00:00.000Z",
+  });
+  assert(
+    result.diagnostics.some(
+      (entry) =>
+        entry.severity === "blocking" &&
+        entry.code === "script-dynamic-import-unsupported",
+    ),
+    "a computed dynamic import did not block publication",
+  );
+  assert(!result.canStage, "a dynamic import must stop staging");
+}
+
+function assertUseFrameBlocks(): void {
+  const unsafeImports = [
+    'import { useFrame as frame } from "@react-three/fiber";',
+    'import { addAfterEffect } from "@react-three/fiber";',
+    'import * as Fiber from "@react-three/fiber";',
+    'import Fiber from "@react-three/fiber";',
+    'import FiberDefault, * as Fiber from "@react-three/fiber";',
+  ];
+  for (const unsafeImport of unsafeImports) {
+    const result = compileVisualProject(
+      buildDocuments(`${unsafeImport}\n${SPINNER_SOURCE}`),
+      { generatedAt: "2026-07-25T00:00:00.000Z" },
+    );
+    assert(
+      result.diagnostics.some(
+        (entry) =>
+          entry.severity === "blocking" &&
+          entry.code === "script-use-frame-unsupported",
+      ),
+      `${unsafeImport} was not blocked before publishing an unisolated frame callback`,
+    );
+  }
 }
 
 function assertRuntimeOutputBlocks(): void {

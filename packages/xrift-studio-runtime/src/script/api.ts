@@ -77,7 +77,7 @@ export const prop = {
   color(options: PropBuilderOptions & { default?: string } = {}) {
     return { kind: "color", ...options } as const satisfies ScriptPropDefinition;
   },
-  /** Resolved through `ctx.getAssetUrl`. */
+  /** Declares an Asset reference resolved through `ctx.assets`. */
   asset(options: PropBuilderOptions & { kind?: ScriptAssetKind } = {}) {
     const { kind: assetKind, ...rest } = options;
     return {
@@ -130,6 +130,67 @@ export type ScriptInput = {
   pressedKeys(): readonly string[];
 };
 
+export type ScriptTextureColorSpace = "auto" | "srgb" | "linear";
+export type ScriptTextureWrap = "repeat" | "clamp-to-edge" | "mirrored-repeat";
+
+/**
+ * Texture loading options kept independent from three.js types so Script
+ * declarations remain portable between Studio Play and a published world.
+ */
+export type ScriptTextureLoadOptions = {
+  colorSpace?: ScriptTextureColorSpace;
+  wrapS?: ScriptTextureWrap;
+  wrapT?: ScriptTextureWrap;
+  flipY?: boolean;
+};
+
+/** A real three.js Texture is supplied by the host through this shape. */
+export type ScriptTexture = {
+  readonly isTexture?: true;
+  offset: { x: number; y: number; set(x: number, y: number): unknown };
+  repeat: { x: number; y: number; set(x: number, y: number): unknown };
+  center: { x: number; y: number; set(x: number, y: number): unknown };
+  rotation: number;
+  needsUpdate: boolean;
+  [key: string]: unknown;
+};
+
+export type ScriptAssets = {
+  /** Returns null unless the Asset is declared by this Script Component. */
+  url(assetId: string): string | null;
+  /**
+   * Loads a declared Texture Asset. The host caches it for this Script
+   * instance and disposes it automatically on restart or Stop.
+   */
+  loadTexture(
+    assetId: string,
+    options?: ScriptTextureLoadOptions,
+  ): Promise<ScriptTexture | null>;
+};
+
+export type ScriptMaterialTextureSlot =
+  | "baseColor"
+  | "normal"
+  | "emissive"
+  | "metallicRoughness"
+  | "occlusion";
+
+export type ScriptMaterials = {
+  /** Number of Materials owned by this Entity, excluding child Entities. */
+  count(): number;
+  setColor(value: string | number): number;
+  setOpacity(value: number): number;
+  setEmissive(value: string | number, intensity?: number): number;
+  setMetalness(value: number): number;
+  setRoughness(value: number): number;
+  setTexture(
+    slot: ScriptMaterialTextureSlot,
+    texture: ScriptTexture | null,
+  ): number;
+  /** Removes this Script instance's overrides while preserving other Scripts. */
+  reset(): void;
+};
+
 /**
  * Minimal structural stand-ins so this module stays dependency-free. The host
  * passes real three.js objects; scripts import three themselves for types.
@@ -153,8 +214,15 @@ export type ScriptContext<
   props: ScriptProps<Declaration>;
   time: ScriptTime;
   input: ScriptInput;
+  assets: ScriptAssets;
+  /**
+   * Runtime-only Material overrides for this Entity. Changes are isolated
+   * from shared Asset instances and are restored on restart or Stop.
+   */
+  materials: ScriptMaterials;
   /** Only Entities declared through an `entity` prop are reachable. */
   find(entityId: string): ScriptObject3D | null;
+  /** @deprecated Prefer `assets.url(assetId)`. */
   getAssetUrl(assetId: string): string | null;
   on(event: string, handler: (payload?: unknown) => void): () => void;
   emit(event: string, payload?: unknown): void;

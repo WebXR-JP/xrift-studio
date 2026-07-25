@@ -9,6 +9,8 @@ import * as XriftScript from "../../packages/xrift-studio-runtime/src/script/api
 
 import { transpileTypeScriptModule } from "./monaco";
 import {
+  collectDynamicScriptImports,
+  collectUnsupportedUseFrameImports,
   isAllowedScriptSpecifier,
   isRelativeScriptSpecifier,
   isRemoteScriptSpecifier,
@@ -120,8 +122,22 @@ export async function loadScriptModule(
   fileName: string,
   options: ScriptModuleLoadOptions = {},
 ): Promise<ScriptModuleLoadResult> {
+  if (collectUnsupportedUseFrameImports(source).length > 0) {
+    return {
+      ok: false,
+      message:
+        "ScriptではuseFrameなどR3F frame callback APIを使用できません。フレーム更新はdefineScript(...).start()が返すupdate(delta)へ記述してください。@react-three/fiberはnamed importを使用してください。",
+    };
+  }
   const transpiled = await transpileTypeScriptModule(source, fileName);
   if (!transpiled.ok) return { ok: false, message: transpiled.message };
+  if (collectDynamicScriptImports(transpiled.javaScript).length > 0) {
+    return {
+      ok: false,
+      message:
+        "動的 import(...) は使用できません。許可されたmoduleを静的importしてください。",
+    };
+  }
 
   const { source: rewritten, rejected } = rewriteScriptSpecifiers(
     transpiled.javaScript,

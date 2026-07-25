@@ -21,6 +21,8 @@ import type { CompiledScriptEntry } from "./useScriptRuntime";
 
 export type ScriptViewportRuntime = {
   scripts: ReadonlyMap<string, CompiledScriptEntry>;
+  assetUrls: ReadonlyMap<string, string>;
+  assetUrlVersions: ReadonlyMap<string, number>;
   /** Component id to scheduling order, precomputed from the scene. */
   orderByComponentId: ReadonlyMap<string, number>;
   resolveAssetUrl: (assetId: string) => string | null;
@@ -48,6 +50,14 @@ export function EntityScriptVisual({
     () => ({ ...component.properties }),
     [component.properties],
   );
+  const assetResolutionKey = JSON.stringify(
+    [...component.assetReferences]
+      .sort()
+      .map((assetId) => [
+        assetId,
+        runtime?.assetUrlVersions.get(assetId) ?? null,
+      ]),
+  );
   // Entity groups are tagged with `authoringEntityId` in their userData; there
   // is no id-to-Object3D index in the viewport, so this walks the graph.
   const resolveEntity = useCallback(
@@ -57,13 +67,9 @@ export function EntityScriptVisual({
       scene.traverse((object) => {
         if (found) return;
         const data = object.userData as {
-          authoringEntityId?: string;
           renderedEntityId?: string;
         };
-        if (
-          data.authoringEntityId === targetId &&
-          data.renderedEntityId === targetId
-        ) {
+        if (data.renderedEntityId === targetId) {
           found = object;
         }
       });
@@ -81,7 +87,10 @@ export function EntityScriptVisual({
       entityName={entityName}
       componentId={component.id}
       order={runtime.orderByComponentId.get(component.id) ?? 0}
+      assetReferences={component.assetReferences}
+      entityReferences={component.entityReferences}
       resolveAssetUrl={runtime.resolveAssetUrl}
+      assetResolutionKey={assetResolutionKey}
       resolveEntity={resolveEntity}
       onLog={runtime.onLog}
       onFailure={runtime.onFailure}

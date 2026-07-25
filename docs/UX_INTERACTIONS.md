@@ -119,7 +119,7 @@ F-06 アイテム検査
 | F-24 | glTF Material制御とBehavior連携 | MI-15, MI-16, MI-25, MI-60 | Material Textureのタイリング、Offset、Rotation、UV SetをglTF互換値として編集し、MCP、Animation導線、KHR_interactivity pointer nodeから同じMaterial設定へ到達できる。Runtime manifestでもTexture transformとRepeat samplerを維持する。 |
 | F-26 | アプリデータのリセット | MI-03, MI-04, MI-05, MI-09, MI-66 | 実行中CLIとの競合や一時的なfile lockで部分的な状態を残さず、ランタイムのみまたは全データを確実に新しい起動から分離する。失敗時は対象と再試行方法を確認したまま復帰できる。 |
 | F-27 | 公開前パフォーマンス概算とAsset最適化 | MI-04, MI-07, MI-27, MI-67 | World / Itemの更新前に初回ロード容量と回線別時間、Assetと実行時VRAMのrange、端末別Studio基準、容量・負荷順の内訳と最適化候補を確認できる。対応候補は個別選択してresize、KTX2、DracoをAssetへ適用し、変換結果と再計算値を確認した上で同じUpload reviewへ戻れる。 |
-| F-28 | Script AssetとScript Component | MI-03, MI-05, MI-09, MI-14, MI-69, MI-70, MI-71, MI-72, MI-73 | Script AssetをTypeScriptで書き、EntityへScript Componentとして複数付けられる。宣言したpropertyがInspectorへ自動で並び、Asset参照とEntity参照を選べる。Playで実行し、Play中にsourceを直すと該当Entityだけが作り直される。実行時例外は該当Scriptだけを止め、Scene Viewを落とさない。同じScriptが公開ワールドへも静的importとして出力され、Playと公開の挙動が一致する。公開できない依存はupload前にblockingとして示す。 |
+| F-28 | Script AssetとScript Component | MI-03, MI-05, MI-09, MI-14, MI-69, MI-70, MI-71, MI-72, MI-73 | Script AssetをTypeScriptで書き、EntityへScript Componentとして複数付けられる。宣言したpropertyがInspectorへ自動で並び、Asset参照とEntity参照を選べる。Play中のpropertyは再起動なしで次のframeへ反映し、明示参照した基本TextureとEntity自身のruntime Materialを操作できる。sourceを直すと該当Entityだけが作り直される。実行時例外は該当Scriptだけを止め、Scene Viewを落とさない。同じhost、root、参照resolverを公開ワールドへ静的importとして出力し、Playと公開の挙動を一致させる。MCPは同じ参照契約とrevision検査でScriptを作成・編集・実行でき、公開できない依存はupload前にblockingとして示す。 |
 
 ## F-23 公式XRift ComponentカタログとClassic / TSX変換の状態設計
 
@@ -775,29 +775,35 @@ F-06 アイテム検査
 
 - Assets headerの常設Createから「新規Script」を選べる。作成後は新しいScriptをAssetsで選択してScript Editorを開き、続けて選択EntityのInspectorからScript Componentを追加できる。選択中のScriptがある場合、Add ComponentはそのScript Assetを参照する。
 - Script AssetはAssetsでコードアイコンとTypeScriptラベルを表示する。AI editor bridgeはScript sourceの取得、作成、更新、Script Componentへの明示参照、Play / Stopを同じEditor revision契約で提供する。
+- Script EditorのAPIガイドから、property、Texture読み込み、Material override、runtime-onlyの復帰契約を確認できる。
 - Script Componentは1つのEntityへ複数付けられ、実行順がEntity階層順とComponent並び順で決まることをInspectorに示す。
-- Script Assetを選ぶと、宣言したpropertyがInspectorへ型どおりに並ぶ。宣言を読み取れないScriptは値を推測せず「propertyを読み取れません」と理由を示す。
+- Script Assetを選ぶと、宣言したpropertyがInspectorへ型どおりに並ぶ。TextureなどのAsset propertyとEntity propertyは選択結果を`assetReferences` / `entityReferences`へも入れる。宣言を読み取れないScriptは値を推測せず「propertyを読み取れません」と理由を示す。
+- MCP clientは`get_scripting_capabilities`で利用可能な`ctx.assets` / `ctx.materials`、Texture slot、参照制限、作成からPlayまでのtool順序を取得してからsourceとScript Componentを更新できる。
 - Item projectでは重力とRigidBodyが動かないため、物理に触るAPIが未対応であることをScriptのdocumentとInspectorで示す。
 
 ### 操作中
 
 - Playの開始時にSceneが使うScriptをまとめて変換する。変換中はPlayボタンを「準備中」にして無効化し、Edit表示のまま待たせる。
-- Play中もEntityの追加・削除・複製・親変更・Component追加をauthoring dataへ保存して実行中のSceneへ差分同期する。回転速度などの宣言済みproperty変更は、そのScript Componentを持つEntityだけを再起動する。Script Asset参照、Asset / Entity参照property、Material、Scene settingsは無効のままにする。
+- Play中もEntityの追加・削除・複製・親変更・Component追加をauthoring dataへ保存して実行中のSceneへ差分同期する。回転速度、色などの宣言済みproperty値はScriptを再起動せず、同じinstanceの`ctx.props`へ次のframeから反映する。sourceの保存、Script Asset参照、Asset / Entity参照allowlist、Component構成の変更は、変換に成功した対象Entityだけを再起動する。永続Material AssetとScene settingsの編集は無効のままにする。
+- Texture読み込みはScript Componentで明示したAssetだけを対象にし、Script instance単位でcacheする。Material操作はEntity自身のMeshにruntime cloneを割り当て、子Entityや共有Material Assetを暗黙に変更しない。
 - 取り込み由来のScriptを含むprojectの初回Playでは、実行前に対象file一覧と、実行環境がアプリと同一で完全な分離ではないことを示して許可を求める。
 - editorでの連続入力はhistoryへ積み増さず現在の項目を置き換える。保存はScript source fileだけを書く。
 
 ### 成功時
 
-- 全Scriptを変換できた時だけPlayへ入り、Script Consoleを開いて実行中のScript数を示す。
+- 全Scriptを変換できた時だけPlayへ入る。Script EditorのConsoleから実行結果を確認でき、新しいruntime failureでは自動的にConsoleを開く。
 - Play中の保存では、そのScriptを使うEntityだけが作り直される。反映したEntity数を短く示し、player位置、camera、physicsは保持する。
-- 公開ではstagingへScript sourceと adapter を出力し、生成した`src/World.tsx`から静的importとして参照する。出力先pathをcompile結果に残す。
+- property値の変更は回転速度などの実行状態を維持したまま即時に見た目へ反映する。`ctx.materials`による色、透明度、発光、metalness、roughness、Texture slotの変更はPlay中に確認でき、Material Asset自体は変更しない。
+- 公開ではstagingへScript sourceと adapterを出力し、生成した`src/World.tsx`または`src/Item.tsx`から静的importする。Scene subtreeをPlayと同じ`XriftScriptRoot`で包み、同じ`XriftScriptHost`へproperty、実行順、Asset / Entity参照resolver、任意の`Render` exportを渡す。出力先pathをcompile結果に残す。
 
 ### 失敗時
 
 - 変換に失敗したらPlayへ入らず、file名、行、列、原因を一覧で示して該当行へ移動できるようにする。壊れたSceneを再生しない。
-- 実行時例外はそのScriptだけを停止し、Entity名、Script名、行、例外文をScript Consoleへ残す。Scene Viewとほかの Entity は動かし続ける。同じ例外の連続は件数へまとめる。
+- host管理下のlifecycle、event、React renderで起きた実行時例外はそのScriptだけを停止し、Entity ID、Script名、phase、例外文をScript Consoleへ残す。Scene Viewとほかの Entity は動かし続ける。ユーザーが直接開始したPromise / timer / pointer callbackの例外帰属、source mapによる行・列、同一例外の件数集約は未対応として扱う。
 - Play中の保存で変換に失敗した場合は、直前に動いていたScriptを走らせ続け、失敗をConsoleへ残す。
-- MCPはScript Assetの作成・読取・更新、Script Component追加、Play切替、property更新に加え、Play中のEntity作成・複製・親変更・Component追加・Transform更新・削除を同じrevision検査と差分同期経路で実行する。
+- 未宣言または存在しないAsset IDでは`ctx.assets.url`が`null`になり、`loadTexture`も`null`を返す。URLを解決できても通常画像としてdecodeできないTextureでは`loadTexture`だけが`null`になる。Scriptは処理を続けるか`ctx.log`で理由を残し、Scene全体を停止しない。
+- KTX2、HDR、EXR、Material Assetの直接適用をAPIガイド上で対応済みと見せない。現在の代替であるAsset / Scene Inspectorまたは永続Material MCP toolsと、今後のtyped loaderが必要であることを示す。
+- MCPはScript Assetの作成・読取・更新、Script Component追加、Play切替、propertyと明示参照の更新に加え、Play中のEntity作成・複製・親変更・Component追加・Transform更新・削除を同じrevision検査と差分同期経路で実行する。`get_editor_context.scriptRuntime`はcompile error、runtime failure、JSON-safeな直近logを返す。永続Material編集は`set_material`、`update_material_asset`、`set_material_texture_transform`へ分離する。
 - `https://`から始まるmoduleを読むScriptと、runtime JSON出力を選んだ場合はupload前にblockingとして示し、対象Scriptと理由を挙げる。
 - 許可しなかった取り込み由来のScriptは実行せずPlayへ入り、無効であることをConsoleへ残す。
 
@@ -805,7 +811,7 @@ F-06 アイテム検査
 
 - 変換失敗時はEditのままScript editorの該当行へ戻る。修正して同じPlay操作から再試行できる。
 - 実行時例外では該当行への移動、そのScriptの再開、Stopのいずれかへ到達できる。
-- Stopは生成したmoduleとblob URL、timer、listenerを破棄し、Play中の状態を残さずEditの選択とcameraへ戻る。
+- Stopは生成したmoduleとblob URL、timer、listener、読み込んだTextureを破棄し、runtime Material overrideを元へ戻す。Play中の状態を残さずEditの選択とcameraへ戻る。
 - 公開のblockingでは該当Script、またはUpload reviewへ戻り、修正後に同じreviewを再確認できる。
 
 ## 実装制約

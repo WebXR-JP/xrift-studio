@@ -25,8 +25,9 @@ const MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS: u64 = 15_000;
 const MCP_MAX_CONCURRENT_CONNECTIONS: usize = 32;
 const MCP_MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 const MCP_MAX_CLIENT_NAME_CHARS: usize = 128;
-const MCP_TOOL_NAMES: [&str; 37] = [
+const MCP_TOOL_NAMES: [&str; 38] = [
     "get_editor_context",
+    "get_scripting_capabilities",
     "list_assets",
     "get_script_asset",
     "create_script_asset",
@@ -1773,7 +1774,7 @@ pub fn run_stdio_server() -> Result<(), String> {
                     "protocolVersion": MCP_PROTOCOL_VERSION,
                     "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": { "name": MCP_SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Script workflows use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, then set_play_mode. While Play is active, Script properties and scene structure tools (create, duplicate, reparent, add component, transform, and delete) synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. XRift Studio must be open with a visual project."
+                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Call get_scripting_capabilities before authoring a Script that accesses Assets, Materials, or other Entities. Script workflows use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. ctx.materials changes are runtime-only; use the Material Asset editor tools for persistent authoring. While Play is active, Script properties and scene structure tools (create, duplicate, reparent, add component, transform, and delete) synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. XRift Studio must be open with a visual project."
                 }),
             )?,
             "ping" => write_json_rpc_result(&mut stdout, id, json!({}))?,
@@ -2000,7 +2001,12 @@ fn tool_definitions() -> Value {
     json!([
         {
             "name": "get_editor_context",
-            "description": "Read the currently open XRift Studio project, scene, selection, mode, save state, and revision. Call this before a write.",
+            "description": "Read the currently open XRift Studio project, scene, selection, mode, save state, revision, and JSON-safe Script runtime diagnostics. Call this before a write and after Play changes.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "get_scripting_capabilities",
+            "description": "Read the Script authoring workflow, xrift:script Asset and Material runtime APIs, reference rules, examples, and the boundary between temporary Play overrides and persistent Material Asset tools. Call this before writing a Script that uses Assets, Materials, or other Entities.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         },
         {
@@ -2029,7 +2035,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "create_script_asset",
-            "description": "Create a TypeScript Script Asset in the open visual project, select it in Assets, and open it in the Script Editor. Omit source to use the runnable rotation sample.",
+            "description": "Create a TypeScript Script Asset in the open visual project, select it in Assets, and open it in the Script Editor. Omit source to use the runnable rotation sample. Call get_scripting_capabilities for the supported xrift:script context APIs.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2046,7 +2052,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "update_script_asset",
-            "description": "Replace a Script Asset's TypeScript source. This remains available during Play and restarts only entities that reference the updated Script.",
+            "description": "Replace a Script Asset's TypeScript source. This remains available during Play, awaits recompilation, and returns sourceSaved, runtimeUpdated, and compileErrors. A failed live compile keeps the previous running module. Declare every Asset or Entity used by the source through update_script_component.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2274,7 +2280,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "update_script_component",
-            "description": "Update declared Script Component property values such as rotation speed. Available during Play; the editor restarts only the affected Entity.",
+            "description": "Update Script Component property values and replace the declared Asset or Entity reference allowlists used by ctx.assets and ctx.find. During Play, property-only changes reach the same Script instance on the next frame; reference changes restart only the affected Entity.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2283,9 +2289,26 @@ fn tool_definitions() -> Value {
                     "expectedRevision": { "type": "integer", "minimum": 0 },
                     "entityId": { "type": "string" },
                     "componentId": { "type": "string" },
-                    "properties": { "type": "object" }
+                    "properties": { "type": "object" },
+                    "assetReferences": {
+                        "type": "array",
+                        "items": { "type": "string", "minLength": 1 },
+                        "uniqueItems": true,
+                        "description": "Complete allowlist of project Asset IDs reachable through ctx.assets. Send [] to clear it."
+                    },
+                    "entityReferences": {
+                        "type": "array",
+                        "items": { "type": "string", "minLength": 1 },
+                        "uniqueItems": true,
+                        "description": "Complete allowlist of Entity IDs reachable through ctx.find. Send [] to clear it."
+                    }
                 },
-                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "componentId", "properties"],
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "componentId"],
+                "anyOf": [
+                    { "required": ["properties"] },
+                    { "required": ["assetReferences"] },
+                    { "required": ["entityReferences"] }
+                ],
                 "additionalProperties": false
             }
         },
@@ -2310,7 +2333,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "set_material",
-            "description": "Assign a material asset to a mesh slot on an existing entity.",
+            "description": "Persist a Material Asset assignment to a mesh slot on an existing entity in Edit mode. For temporary Play-only changes, use Script ctx.materials.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2328,7 +2351,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "get_material_asset",
-            "description": "Read a Material Asset with canonical glTF material properties and KHR_texture_transform values.",
+            "description": "Read a persistent Material Asset with canonical glTF material properties and KHR_texture_transform values. For temporary Play-only changes on one Entity, author a Script with ctx.materials instead.",
             "inputSchema": {
                 "type": "object",
                 "properties": { "materialAssetId": { "type": "string" } },
@@ -2338,7 +2361,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "update_material_asset",
-            "description": "Update canonical glTF Material Asset properties, including PBR factors, texture slots, alpha settings, and supported KHR_materials extensions.",
+            "description": "Persist canonical glTF Material Asset properties in Edit mode, including PBR factors, texture slots, alpha settings, and supported KHR_materials extensions. Unlike Script ctx.materials overrides, this changes saved authoring data.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2354,7 +2377,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "set_material_texture_transform",
-            "description": "Set glTF KHR_texture_transform tiling (scale), offset, rotation, and TEXCOORD set for a Material texture slot. The slot must already contain a Texture Asset.",
+            "description": "Persist glTF KHR_texture_transform tiling (scale), offset, rotation, and TEXCOORD set for a Material texture slot in Edit mode. The slot must already contain a Texture Asset. Script-loaded Texture transforms remain runtime-only.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

@@ -610,6 +610,7 @@ Particle と同じ関係を採る。再利用可能な定義は Asset 側に置�
 
 - 実行は `RuntimePlugin` の `start` / `update` / `stop` / `dispose` lifecycle に従い（4.6）、Play の開始と停止、および `entityRevisions` による Entity 単位の作り直しに従属する。
 - update 順序は Entity 階層順、次に Entity 内の Component 並び順で確定する。個別の `useFrame` を並べず、単一の scheduler が確定順で呼ぶ。system query や優先度指定は導入しない。
+- named `Render` は宣言的な追加描画だけを担う。R3F の `useFrame` は callback 例外を Script 単位に隔離できないため、Play と公開の診断で拒否し、フレーム処理は `start().update(delta)` へ統一する。
 - Stop は生成した module、blob URL、timer、listener を明示的に破棄する。React の unmount に依存しない。
 - Item project は重力と RigidBody を持たないため、物理へ触る API は未対応として degrade し、動くふりをしない。
 
@@ -624,9 +625,9 @@ Particle と同じ関係を採る。再利用可能な定義は Asset 側に置�
 
 Play は iframe や Worker を挟まないアプリと同一 realm で動き、`withGlobalTauri` により IPC bridge が `window` に露出している。したがって Script は原理的にアプリと同じ権限を持つ。
 
-- module scope で `window`、`globalThis`、`__TAURI__`、`fetch`、`document`、`eval`、`Function` を遮蔽する。同一 realm である以上これは完全な sandbox ではなく、事故と素朴な悪用を止める緩和である。この限界を `docs/SCRIPTING.md` に明記し、隔離済みと表示しない。
+- module scope で `window`、`globalThis`、`__TAURI__`、`fetch`、`document`、`Function` などを遮蔽する。ES module は常に strict mode であり `eval` を lexical binding として宣言すると構文エラーになるため、`eval` は遮蔽一覧へ入れない。同一 realm である以上これは完全な sandbox ではなく、事故と素朴な悪用を止める緩和である。この限界を `docs/SCRIPTING.md` に明記し、隔離済みと表示しない。
 - 取り込み、Prefab、Starter、外部 Store 由来の Script は、初回 Play の前に対象 file を示して実行許可を求める。許可は project 単位で記録する。
-- 完全な隔離、および 10 章が求める CSP の適用は今後の課題とする。現状 CSP を導入するとコードエディターの CDN 読み込みが壊れるため、Monaco の local 同梱がその前提条件になる。
+- 完全な隔離、および 10 章が求める CSP の適用は今後の課題とする。Monaco は local 同梱済みだが、Play の blob module と共有 module bridge を許可しながら権限を狭める CSP 設計が残っている。
 
 #### 公開
 

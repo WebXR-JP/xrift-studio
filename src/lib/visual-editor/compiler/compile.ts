@@ -113,6 +113,7 @@ type CompileContext = {
   scriptModules: ReadonlyMap<string, EmittedScriptModule>;
   /** Running scheduling order, matching Play's Entity-then-Component walk. */
   scriptOrder: { next: number };
+  usesScriptRuntime: boolean;
 };
 
 type RenderedXriftWrapper = {
@@ -554,11 +555,32 @@ function renderScript(
   for (const assetId of component.assetReferences) {
     context.referencedAssetIds.add(assetId);
   }
+  context.usesScriptRuntime = true;
   context.extraImports.add(
-    `import { XriftScriptHost } from "./xrift-studio/script-host";`,
+    `import { XriftScriptHost, XriftScriptRoot } from "./xrift-studio/script-host";`,
   );
+  context.imports.add("useXRift");
+  context.reactTypeImports.add("PropsWithChildren");
+  context.supportDeclarations.set(
+    "script-runtime:published-root",
+    `const XriftPublishedScriptRoot: FC<PropsWithChildren> = ({ children }) => {
+  const { baseUrl } = useXRift();
+  return <XriftScriptRoot assetBaseUrl={baseUrl}>{children}</XriftScriptRoot>;
+};`,
+  );
+  const renderImport = module.renderImportName
+    ? `, { Render as ${module.renderImportName} }`
+    : "";
   context.extraImports.add(
-    `import ${module.importName} from "${module.importSpecifier}";`,
+    `import ${module.importName}${renderImport} from "${module.importSpecifier}";`,
+  );
+  const assetRuntimeUrls = Object.fromEntries(
+    [...component.assetReferences]
+      .sort()
+      .flatMap((assetId) => {
+        const url = context.assetRuntimeUrls.get(assetId);
+        return url ? [[assetId, url] as const] : [];
+      }),
   );
   return renderScriptComponent(
     component,
@@ -566,6 +588,7 @@ function renderScript(
     entity.id,
     entity.name,
     order,
+    assetRuntimeUrls,
   );
 }
 
@@ -604,6 +627,7 @@ function generateComponentSource(
     usesDoubleSide: false,
     scriptModules,
     scriptOrder: { next: 0 },
+    usesScriptRuntime: false,
   };
   const sceneSettings = resolveSceneSettings(scene.settings);
   const sceneEnvironment = renderSceneEnvironment(sceneSettings, context);
@@ -658,13 +682,23 @@ function generateComponentSource(
     .join("\n\n");
   if (declarations) imports.push("", declarations);
   const renderedScene = [...sceneEnvironment, ...roots];
-  const body = renderedScene.length > 0
-    ? renderedScene.map((entry) => indent(entry, 3)).join("\n")
-    : "      {null}";
+  const sceneBody = renderedScene.length > 0
+    ? renderedScene
+        .map((entry) => indent(entry, context.usesScriptRuntime ? 4 : 3))
+        .join("\n")
+    : context.usesScriptRuntime
+      ? "        {null}"
+      : "      {null}";
+  const body = context.usesScriptRuntime
+    ? `      <XriftPublishedScriptRoot>\n${sceneBody}\n      </XriftPublishedScriptRoot>`
+    : sceneBody;
+  const scriptScopeProperty = context.usesScriptRuntime
+    ? " userData={{ xriftScriptScope: true }}"
+    : "";
   if (projectKind === "world") {
-    return `${imports.join("\n")}\n\nexport interface WorldProps {\n  position?: [number, number, number];\n  scale?: number;\n}\n\nexport const World: FC<WorldProps> = ({ position = [0, 0, 0], scale = 1 }) => (\n  <group position={position} scale={scale}>\n${body}\n  </group>\n);\n`;
+    return `${imports.join("\n")}\n\nexport interface WorldProps {\n  position?: [number, number, number];\n  scale?: number;\n}\n\nexport const World: FC<WorldProps> = ({ position = [0, 0, 0], scale = 1 }) => (\n  <group position={position} scale={scale}${scriptScopeProperty}>\n${body}\n  </group>\n);\n`;
   }
-  return `${imports.join("\n")}\n\nexport interface ItemProps {\n  position?: [number, number, number];\n  scale?: number;\n}\n\nexport const Item: FC<ItemProps> = ({ position = [0, 0, 0], scale = 1 }) => (\n  <group position={position} scale={scale}>\n${body}\n  </group>\n);\n\nexport default Item;\n`;
+  return `${imports.join("\n")}\n\nexport interface ItemProps {\n  position?: [number, number, number];\n  scale?: number;\n}\n\nexport const Item: FC<ItemProps> = ({ position = [0, 0, 0], scale = 1 }) => (\n  <group position={position} scale={scale}${scriptScopeProperty}>\n${body}\n  </group>\n);\n\nexport default Item;\n`;
 }
 
 const PROJECTED_SKYBOX_VERTEX_SHADER = `
@@ -1196,10 +1230,11 @@ function renderEntity(
   const rotation = vectorProp(transform?.rotation ?? [0, 0, 0]);
   const scale = vectorProp(transform?.scale ?? [1, 1, 1]);
   const name = JSON.stringify(entity.name);
+  const userData = `{ xriftEntityId: ${JSON.stringify(entity.id)} }`;
   if (!children) {
-    return `<group name=${name} position={${position}} rotation={${rotation}} scale={${scale}} />`;
+    return `<group name=${name} position={${position}} rotation={${rotation}} scale={${scale}} userData={${userData}} />`;
   }
-  return `<group name=${name} position={${position}} rotation={${rotation}} scale={${scale}}>\n${indent(children, 1)}\n</group>`;
+  return `<group name=${name} position={${position}} rotation={${rotation}} scale={${scale}} userData={${userData}}>\n${indent(children, 1)}\n</group>`;
 }
 
 function renderOwnedRigidBody(
