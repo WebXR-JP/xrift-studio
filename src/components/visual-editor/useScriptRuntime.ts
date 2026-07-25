@@ -12,6 +12,7 @@ import {
 import {
   loadScriptModule,
   releaseAllScriptModules,
+  releaseScriptModuleUrl,
 } from "../../lib/script-modules";
 import { tauri } from "../../lib/tauri";
 
@@ -77,6 +78,8 @@ export function useScriptRuntime({
   sceneRef.current = scene;
   const assetsRef = useRef(assets);
   assetsRef.current = assets;
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   const reset = useCallback(() => {
     releaseAllScriptModules();
@@ -99,6 +102,9 @@ export function useScriptRuntime({
     const currentAssets = assetsRef.current;
     const assetIds = collectRequiredScriptAssetIds(currentScene);
     if (assetIds.length === 0) {
+      for (const entry of stateRef.current.scripts.values()) {
+        releaseScriptModuleUrl(entry.objectUrl);
+      }
       setState({
         status: "ready",
         scripts: EMPTY_SCRIPTS,
@@ -121,8 +127,6 @@ export function useScriptRuntime({
     }
 
     setState((previous) => ({ ...previous, status: "compiling", errors: [] }));
-    releaseAllScriptModules();
-
     const compiled = new Map<string, CompiledScriptEntry>();
     const errors: ScriptCompileError[] = [];
 
@@ -207,14 +211,28 @@ export function useScriptRuntime({
       }
     }
 
-    setState({
-      status: errors.length > 0 ? "error" : "ready",
-      scripts: compiled,
-      assetUrls,
-      errors,
-      failures: [],
-      logs: [],
-    });
+    if (errors.length > 0) {
+      for (const entry of compiled.values()) {
+        releaseScriptModuleUrl(entry.objectUrl);
+      }
+      setState((previous) => ({
+        ...previous,
+        status: "error",
+        errors,
+      }));
+    } else {
+      for (const entry of stateRef.current.scripts.values()) {
+        releaseScriptModuleUrl(entry.objectUrl);
+      }
+      setState({
+        status: "ready",
+        scripts: compiled,
+        assetUrls,
+        errors: [],
+        failures: [],
+        logs: [],
+      });
+    }
     return errors;
   }, [allowRemoteModules, projectPath]);
 

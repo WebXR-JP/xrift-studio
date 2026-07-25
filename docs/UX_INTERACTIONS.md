@@ -73,7 +73,7 @@ F-06 アイテム検査
 | MI-54 | Animation clipを含み`importAnimations`が有効なGLB / glTF ModelをSceneへ配置し、Playを開始する | 配置EntityへAnimation Componentを自動追加し、Inspectorに先頭clip名、長さ、track数、Autoplay、Loopを表示する。Edit中は静止し、Play開始時だけ有効なAutoplayで先頭clipを再生する。 | Loop有効時はPlay中と生成結果で繰り返す。Loop無効時は一度で停止する。Play中にEnabled、Autoplay、Loopまたは同じEntityのTransform / Colliderを変更した時は、そのEntityのmixerとphysics bodyだけを破棄して先頭から再実行する。Stop、Component無効化、Entity破棄ではmixerを停止してEdit時の姿勢へ戻す。clip欠落時はScene View全体を止めず同じInspectorに理由を示す。 |
 | MI-55 | 外部リソースの「XRift公式 Component」で公式Componentを選ぶ | 公開中の`@xrift/world-components`検証version、公式source、利用可能な全Componentをgridへ表示する。thumbnailはpackage本体と公式sample childを固定generatorで事前描画し、Component名と公式badgeを焼き込んだ保存済みWebPを使う。versionが変わる時は保存先revisionを更新して全件を再生成し、SVG／CSSだけの識別用イラストへ置換しない。選択中Componentにはdescription、category、named import、versionを表示し、`DevEnvironment`はScene用でない理由を示す。 | 追加成功時は公式XRift Componentを一件のhistory transactionへ確定し、追加Entityを選択してScene ViewとInspectorへ到達する。Play、別Import中、project kind不一致、変換診断errorではSceneを変更せず理由を同じ詳細欄に残す。 |
 | MI-56 | GLB / VRM ModelをSceneへ配置し、展開されたNode、Bone、MeshをHierarchyで選択する | sourceの親子順を保つEntity treeをModel Entityの下へ表示し、行末をNode / Bone / Mesh / Skinで区別する。SkinまたはAnimationを含むModelは一つの共有Rendererを維持し、選択NodeのInspectorへsource node番号、共有Model、編集対象を表示する。Bone / Node TransformはScene Viewと共有Model poseへ即時同期し、Mesh / Skin行にはそのnodeが使うMaterial slotだけを表示する。 | Transformとnode別Material変更を一件のhistoryへ保存し、Undo / Redo、再表示、Classic JSX、Runtime manifestで同じ結果を復元する。同じsource materialを使う別nodeへnode別上書きを漏らさない。parse失敗時は単一Entityへ偽装せずImport Queueへ戻し、last-good Asset / Sceneを維持する。 |
-| MI-57 | Hierarchyの親Entityを折り畳む、展開する、検索で絞り込む、矢印キーで移動する、またはEntityのEnabledを変更する | 子を持つ行だけに展開状態と件数が分かる矢印を表示し、折り畳み中は子孫行だけを隠す。上下キーは表示中の前後、右キーは展開または最初の子、左キーは折り畳みまたは親、Home / Endは先頭 / 末尾へ選択を移し、選択行を表示範囲へ追従させる。Shift+上下は表示順の範囲選択とし、文字入力・IME変換中はHierarchy操作を抑止する。検索は名前、Entity種類、Component種類、Enabledの語を空白区切りで絞り込み、一致したEntityと祖先だけを自動展開する。折り畳み、検索、キー選択はSceneDocumentとUndo履歴を変更しない。単一Entity Inspectorの先頭はUnityと同じ順序でEnabledチェックと名前を一行に置き、Prefab sourceはアイコン、名前、更新アイコンだけを続ける。説明は常設せずtooltipと読み上げ名に移す。親が無効な子は継承された非表示状態をHierarchyの濃淡とInspectorの状態アイコンで示す。 | 検索を消すと検索前の折り畳み状態と同じ順序へ戻る。Scene Viewなどから折り畳まれた子孫を選択した時は祖先を自動展開して選択行とInspectorへ到達させる。Play中も選択移動と開閉は利用できるがScene構造とhistoryは変更しない。Enabled変更は一件のauthoring historyとしてScene View、Play、生成結果へ反映し、子Entity自身のEnabled値は保持する。一致なしでは検索語とクリア操作を表示する。 |
+| MI-57 | Hierarchyの親Entityを折り畳む、展開する、検索で絞り込む、矢印キーで移動する、またはEntityのEnabledを変更する | 子を持つ行だけに展開状態と件数が分かる矢印を表示し、折り畳み中は子孫行だけを隠す。上下キーは表示中の前後、右キーは展開または最初の子、左キーは折り畳みまたは親、Home / Endは先頭 / 末尾へ選択を移し、選択行を表示範囲へ追従させる。Shift+上下は表示順の範囲選択とし、文字入力・IME変換中はHierarchy操作を抑止する。検索は名前、Entity種類、Component種類、Enabledの語を空白区切りで絞り込み、一致したEntityと祖先だけを自動展開する。折り畳み、検索、キー選択はSceneDocumentとUndo履歴を変更しない。単一Entity Inspectorの先頭はUnityと同じ順序でEnabledチェックと名前を一行に置き、Prefab sourceはアイコン、名前、更新アイコンだけを続ける。説明は常設せずtooltipと読み上げ名に移す。親が無効な子は継承された非表示状態をHierarchyの濃淡とInspectorの状態アイコンで示す。 | 検索を消すと検索前の折り畳み状態と同じ順序へ戻る。Scene Viewなどから折り畳まれた子孫を選択した時は祖先を自動展開して選択行とInspectorへ到達させる。Play中の選択移動と開閉は履歴を変更せず、Enabledや親子構造の変更は一件のauthoring historyとして実行中のScene、生成結果へ反映する。子Entity自身のEnabled値は保持する。一致なしでは検索語とクリア操作を表示する。 |
 | MI-58 | Entity InspectorでMesh Rendererを有効・無効にする、Material slotを確認する、またはMaterialを選択する | Mesh RendererのEnabledはComponent見出しの先頭へ置く。Material slotは入れ子のカード枠を使わず区切り線で並べ、Base Color、透明度、Texture有無を示すスウォッチ、選択欄、詳細を開くアイコンを一行にする。Material名だけに識別を依存せず、説明はtooltipと読み上げ名へ移す。 | EnabledとMaterial割当はそれぞれ一件のhistoryとしてScene View、Play、生成結果へ反映する。Materialを開いてもEntity選択を保持し、戻ると同じslotへ復帰できる。参照切れはスウォッチを未設定表示にし、既存bindingを暗黙に別Materialへ置換しない。 |
 | MI-59 | Scene InspectorでSkyboxの投影方式を変更する | 無限遠、ボックス、地面付きドームを用途の説明とともに同じ選択欄へ表示する。ボックスとドームでは有限Skyメッシュの位置、回転、スケール、投影中心だけを続けて表示し、数値確定時にScene Viewへ同期する。ボックス底面とドームの平坦部は位置Yを床面の基準とし、環境Textureは有限メッシュ表示でもIBLへ利用する。 | 変更は一件のSceneDocument履歴として保存対象にし、Undo / Redo、再表示、Play、生成Worldで同じ投影を復元する。Play中は読み取り専用にし、旧Sceneでは無限遠と既定メッシュ値を補完する。不正値は確定せず現在の投影と選択を保つ。 |
 | MI-60 | Material InspectorでTextureを設定する、AnimationからMaterial graphを開く、またはInteractivityのpointer nodeを選ぶ | 各Texture slotでUV Setと「タイリング / UV変換」を隠さず表示し、Offset、X/Yタイリング、Rotationを`KHR_texture_transform`として編集する。1以外のタイリングでSamplerがRepeatでない時はTexture設定への修正案を同じslotへ出す。Animation InspectorはMaterial Animation用graphを列挙し、pointer/interpolateへ移動できる。Interactivity Node InspectorはMaterial Assetと色、PBR factor、Texture offset / scale / rotationのpresetを選ぶとcanonical pointer、型、Material indexを同時設定する。 | Material変更はAsset history、graph変更はInteractivity Asset historyとして確定し、Scene selectionを失わない。MCPもMaterial読取・更新・Texture transform・Material pointer設定を同じvalidationとrevision境界で実行する。Play、Import、stale revision、不正slotではlast-goodを維持する。 |
@@ -88,7 +88,7 @@ F-06 アイテム検査
 | MI-69 | Script Assetを作成し、docked editorで編集して保存する | Assetsの作成入口とEntityのScript Componentの両方から同じeditorを開く。editorは中央から右へのdocked overlayとし、Scene Viewの左側を隠さずPlayの挙動を見ながら直せるようにする。未保存は`isDirty`点で示し、保存は明示操作と`⌘/Ctrl+S`の両方を受ける。keystrokeごとにhistoryへ積まず、連続入力は現在のhistory項目を置き換える。 | 保存はScript source fileだけを書き、Entity配置とAssetManifestのentryを変更しない。閉じる操作は未保存があるとき破棄・保存・取消を選ばせる。構文が壊れていても保存は許し、実行できない理由をeditor内に残す。 |
 | MI-70 | Playを開始し、Sceneが使うScriptを変換して起動する | 変換中はPlayボタンを「準備中」に変えて無効化し、Edit表示のまま待たせる。Scriptを持たないSceneでは待ち表示を出さない。変換の失敗はfile名、行、列、原因を一覧で示し、該当行へ移動できる。 | 全Scriptが変換できた時だけPlayへ入る。失敗時はEditのまま留まり、壊れたSceneを再生しない。修正して同じPlay操作から再試行でき、Playを諦めてeditorへ戻ることもできる。 |
 | MI-71 | Play中にScriptが実行時例外を投げる | 例外を投げたScriptだけを停止し、Entity名、Script名、行、例外文をScript Consoleへ残す。Scene View全体とほかのEntity、camera、physicsは動き続ける。Inspectorの該当Script Componentにも停止状態を示す。 | 1つのScriptの失敗でPlay全体を落とさない。同じ例外の連続出力は件数へまとめる。該当行への移動、Scriptの再開、Stopのいずれかへ到達できる。 |
-| MI-72 | Play中にScript sourceを保存して反映する | 保存したScriptを使うEntityだけをruntime世代を進めて作り直す。ほかのEntity、player位置、camera、physicsの状態は保持する。反映対象のEntity数を短く示す。 | Play中に変更できるのは選択EntityのTransform、Collider、AnimationとScript sourceだけとし、Hierarchy構造、Entity追加・削除、Asset、Material、Scene settingsは無効のままにする。変換に失敗した場合は直前に動いていたScriptを走らせ続け、失敗をConsoleへ残す。 |
+| MI-72 | Play中にScript sourceまたはScene構造を保存して反映する | 保存したScriptを使うEntity、または構成を変更したEntityだけをruntime世代を進めて作り直す。Entityの追加・削除・親変更・Component追加は実行中のSceneへ即時同期し、ほかのEntity、player位置、camera、physicsの状態は保持する。反映対象を短く示す。 | Asset、Material、Scene settingsは無効のままにする。Script変換に失敗した場合は直前に動いていたScriptを走らせ続け、失敗をConsoleへ残す。 |
 | MI-73 | 自分で作成していないScriptを含むprojectを初めてPlayする | 取り込み、Prefab、Starter、外部Store由来のScriptを実行前に一覧で示し、件数とfile名を確認できるようにする。実行せずに中身を読む導線を同じ面へ置く。 | 明示的に許可した時だけ実行し、許可はproject単位で記録して次回以降は確認しない。許可しない場合はScriptを実行しないままPlayへ入り、無効であることをScript Consoleに残す。実行環境はアプリと同一で完全な分離ではないことを面の中で明示する。 |
 
 ## 機能一覧
@@ -773,7 +773,8 @@ F-06 アイテム検査
 
 ### 操作前
 
-- AssetsのCreateとInspectorのAdd Componentの両方からScriptへ到達でき、どちらも同じScript Assetを指す。
+- Assets headerの常設Createから「新規Script」を選べる。作成後は新しいScriptをAssetsで選択してScript Editorを開き、続けて選択EntityのInspectorからScript Componentを追加できる。選択中のScriptがある場合、Add ComponentはそのScript Assetを参照する。
+- Script AssetはAssetsでコードアイコンとTypeScriptラベルを表示する。AI editor bridgeはScript sourceの取得、作成、更新、Script Componentへの明示参照、Play / Stopを同じEditor revision契約で提供する。
 - Script Componentは1つのEntityへ複数付けられ、実行順がEntity階層順とComponent並び順で決まることをInspectorに示す。
 - Script Assetを選ぶと、宣言したpropertyがInspectorへ型どおりに並ぶ。宣言を読み取れないScriptは値を推測せず「propertyを読み取れません」と理由を示す。
 - Item projectでは重力とRigidBodyが動かないため、物理に触るAPIが未対応であることをScriptのdocumentとInspectorで示す。
@@ -781,7 +782,7 @@ F-06 アイテム検査
 ### 操作中
 
 - Playの開始時にSceneが使うScriptをまとめて変換する。変換中はPlayボタンを「準備中」にして無効化し、Edit表示のまま待たせる。
-- Play中の編集は選択EntityのTransform、Collider、AnimationとScript sourceだけに限る。Hierarchy構造、Entity追加・削除、Asset、Material、Scene settingsは無効のままにする。
+- Play中もEntityの追加・削除・複製・親変更・Component追加をauthoring dataへ保存して実行中のSceneへ差分同期する。回転速度などの宣言済みproperty変更は、そのScript Componentを持つEntityだけを再起動する。Script Asset参照、Asset / Entity参照property、Material、Scene settingsは無効のままにする。
 - 取り込み由来のScriptを含むprojectの初回Playでは、実行前に対象file一覧と、実行環境がアプリと同一で完全な分離ではないことを示して許可を求める。
 - editorでの連続入力はhistoryへ積み増さず現在の項目を置き換える。保存はScript source fileだけを書く。
 
@@ -796,6 +797,7 @@ F-06 アイテム検査
 - 変換に失敗したらPlayへ入らず、file名、行、列、原因を一覧で示して該当行へ移動できるようにする。壊れたSceneを再生しない。
 - 実行時例外はそのScriptだけを停止し、Entity名、Script名、行、例外文をScript Consoleへ残す。Scene Viewとほかの Entity は動かし続ける。同じ例外の連続は件数へまとめる。
 - Play中の保存で変換に失敗した場合は、直前に動いていたScriptを走らせ続け、失敗をConsoleへ残す。
+- MCPはScript Assetの作成・読取・更新、Script Component追加、Play切替、property更新に加え、Play中のEntity作成・複製・親変更・Component追加・Transform更新・削除を同じrevision検査と差分同期経路で実行する。
 - `https://`から始まるmoduleを読むScriptと、runtime JSON出力を選んだ場合はupload前にblockingとして示し、対象Scriptと理由を挙げる。
 - 許可しなかった取り込み由来のScriptは実行せずPlayへ入り、無効であることをConsoleへ残す。
 

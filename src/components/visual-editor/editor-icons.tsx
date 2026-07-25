@@ -164,6 +164,8 @@ export function getEditorComponentIcon(
       return EDITOR_ICONS.animation;
     case "audio-source":
       return EDITOR_ICONS.audio;
+    case "script":
+      return EDITOR_ICONS.script;
     default:
       return EDITOR_ICONS.component;
   }

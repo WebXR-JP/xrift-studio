@@ -2693,6 +2693,7 @@ function EntityInspector({
                 assets={assets}
                 entities={scriptEntityOptions ?? []}
                 readOnly={readOnly}
+                liveTuning={liveRuntimeTuning}
                 onPatch={(patch) =>
                   onUpdateScriptComponent?.(entity.id, component.id, patch)
                 }

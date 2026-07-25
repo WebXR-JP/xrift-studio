@@ -175,6 +175,7 @@ test("クラシックアイテムのセキュリティチェックを完了で�
   await openProjectLibrary(page);
   await page.getByTitle("E2E Classic Itemを開く").click();
 
+  await expect(page.getByPlaceholder("My XR Item")).toHaveValue("Sample Item");
   await page.getByRole("button", { name: "チェック", exact: true }).click();
   await expect(
     page.getByText("アイテムのセキュリティチェックに通過しました"),
@@ -182,9 +183,7 @@ test("クラシックアイテムのセキュリティチェックを完了で�
 
   const state = await releaseE2EState(page);
   expect(
-    state?.shellCommands.some(
-      (command) => command.includes("check") && command.includes("item"),
-    ),
+    state?.shellCommands.some((command) => command.includes("check --build")),
   ).toBe(true);
 });
 

@@ -396,6 +396,7 @@ export function HierarchyPanel({
   selection,
   selectedEntityIds,
   readOnly,
+  playMode = false,
   projectKind,
   onSelectionChange,
   onAssignMaterial,
@@ -413,6 +414,7 @@ export function HierarchyPanel({
   selection: EditorSelection;
   selectedEntityIds: readonly string[];
   readOnly: boolean;
+  playMode?: boolean;
   projectKind: VisualProjectKind;
   onSelectionChange: (entityIds: string[], primaryEntityId: string | null) => void;
   onAssignMaterial: (entityId: string, materialAssetId: string) => void;
@@ -1042,9 +1044,9 @@ export function HierarchyPanel({
           </span>
         ) : null}
       </div>
-      {readOnly ? (
+      {playMode ? (
         <div className="border-b border-violet-200 bg-violet-50 px-3 py-2 text-xs leading-4 text-violet-800">
-          Play中は構造を変更できません。Entityを選ぶと、対応する編集データをInspectorで調整できます。
+          Live編集: Entityの追加・削除・並べ替えとComponent構成を実行中のSceneへ即時反映します。
         </div>
       ) : null}
       {dragEntityId || assetDropTarget ? (

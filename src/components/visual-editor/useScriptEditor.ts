@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 
-import type { AssetManifest } from "../../lib/visual-editor/asset-manifest";
+import type {
+  AssetManifest,
+  ScriptAsset,
+} from "../../lib/visual-editor/asset-manifest";
 import type { ScriptContract } from "../../lib/visual-editor/scripting/script-contract";
 import { extractScriptContract } from "../../lib/visual-editor/scripting/script-contract";
 import { listScriptAssets } from "../../lib/visual-editor/scripting/script-files";
@@ -68,8 +71,8 @@ export function useScriptEditor({
   }, [assets, projectPath]);
 
   const open = useCallback(
-    async (assetId: string) => {
-      const asset = assets.assets[assetId];
+    async (assetId: string, createdAsset?: ScriptAsset) => {
+      const asset = createdAsset ?? assets.assets[assetId];
       if (!asset || asset.kind !== "script") return;
       setState({ openAssetId: assetId, source: "", loading: true, error: null });
       if (!projectPath) {

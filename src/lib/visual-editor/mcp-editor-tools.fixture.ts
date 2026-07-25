@@ -1,6 +1,7 @@
 import { createDefaultParticleAsset } from "./particle-system";
 import { BUILTIN_ASSET_IDS, createPrototypeProject } from "./prototype-project";
 import { createTextureAsset } from "./asset-manifest";
+import { createScriptAsset } from "./scripting/script-files";
 import {
   executeXriftMcpEditorTool,
   XriftMcpEditorToolError,
@@ -21,6 +22,11 @@ export function runXriftMcpEditorToolFixtures(): void {
     importSettings: {},
   });
   assert(texture, "Texture fixture could not be created");
+  const script = createScriptAsset(
+    "asset-mcp-script",
+    "MCP Script",
+    "scripts/mcp-script.ts",
+  );
   const bundle = {
     ...initial,
     assets: {
@@ -29,6 +35,7 @@ export function runXriftMcpEditorToolFixtures(): void {
         ...initial.assets.assets,
         [particle.id]: particle,
         [texture.id]: texture,
+        [script.id]: script,
       },
     },
   };
@@ -173,6 +180,72 @@ export function runXriftMcpEditorToolFixtures(): void {
   );
   current = { ...current, bundle: componentAdded.bundle, revision: current.revision + 1 };
 
+  const scriptAdded = executeXriftMcpEditorTool(current, {
+    id: "fixture-add-script",
+    tool: "add_component",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityId: primitiveId,
+      definitionId: "scripting.script",
+      scriptAssetId: script.id,
+    },
+  });
+  assert(scriptAdded.changed, "add_component should add a Script Component");
+  assert(
+    scriptAdded.bundle.scene.entities[primitiveId as string]?.components.some(
+      (component) =>
+        component.type === "script" &&
+        component.scriptAssetId === script.id,
+    ),
+    "Script Component should reference the explicitly requested Script Asset",
+  );
+  const scriptComponent = scriptAdded.bundle.scene.entities[
+    primitiveId as string
+  ]?.components.find((component) => component.type === "script");
+  assert(scriptComponent, "Added Script Component should be readable");
+  current = {
+    ...current,
+    bundle: scriptAdded.bundle,
+    revision: current.revision + 1,
+  };
+
+  const scriptPropertyUpdated = executeXriftMcpEditorTool(
+    { ...current, editorMode: "play" },
+    {
+      id: "fixture-update-script-property",
+      tool: "update_script_component",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        entityId: primitiveId,
+        componentId: scriptComponent?.id,
+        properties: { speed: 4.5 },
+      },
+    },
+  );
+  assert(
+    scriptPropertyUpdated.result.restartedDuringPlay === true,
+    "Play-time Script property edits should report an Entity restart",
+  );
+  assert(
+    scriptPropertyUpdated.bundle.scene.entities[
+      primitiveId as string
+    ]?.components.some(
+      (component) =>
+        component.type === "script" &&
+        component.properties.speed === 4.5,
+    ),
+    "Play-time Script property edits should update authoring data",
+  );
+  current = {
+    ...current,
+    bundle: scriptPropertyUpdated.bundle,
+    revision: current.revision + 1,
+  };
+
   const transformUpdated = executeXriftMcpEditorTool(current, {
     id: "fixture-update-transform",
     tool: "update_transform",
@@ -303,7 +376,9 @@ export function runXriftMcpEditorToolFixtures(): void {
   assert(prefabPlaced.changed, "place_builtin_prefab should change the bundle");
   current = { ...current, bundle: prefabPlaced.bundle, revision: current.revision + 1 };
 
-  const emptyCreated = executeXriftMcpEditorTool(current, {
+  const emptyCreated = executeXriftMcpEditorTool(
+    { ...current, editorMode: "play" },
+    {
     id: "fixture-empty",
     tool: "create_empty_entity",
     arguments: {
@@ -312,11 +387,41 @@ export function runXriftMcpEditorToolFixtures(): void {
       expectedRevision: current.revision,
       name: "MCP Group",
     },
-  });
+    },
+  );
   assert(emptyCreated.changed, "create_empty_entity should change the bundle");
+  const emptyId = emptyCreated.sceneSelection?.id;
   current = { ...current, bundle: emptyCreated.bundle, revision: current.revision + 1 };
 
-  const deleted = executeXriftMcpEditorTool(current, {
+  const reparented = executeXriftMcpEditorTool(
+    { ...current, editorMode: "play" },
+    {
+      id: "fixture-reparent",
+      tool: "reparent_entity",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        entityId: duplicateId,
+        parentEntityId: emptyId,
+      },
+    },
+  );
+  assert(
+    reparented.result.synchronizedDuringPlay === true &&
+      reparented.bundle.scene.entities[duplicateId as string]?.parentId ===
+        emptyId,
+    "reparent_entity should synchronize Hierarchy changes during Play",
+  );
+  current = {
+    ...current,
+    bundle: reparented.bundle,
+    revision: current.revision + 1,
+  };
+
+  const deleted = executeXriftMcpEditorTool(
+    { ...current, editorMode: "play" },
+    {
     id: "fixture-delete",
     tool: "delete_entity",
     arguments: {
@@ -325,7 +430,8 @@ export function runXriftMcpEditorToolFixtures(): void {
       expectedRevision: current.revision,
       entityId: duplicateId,
     },
-  });
+    },
+  );
   assert(deleted.changed, "delete_entity should change the bundle");
   assert(
     !deleted.bundle.scene.entities[duplicateId as string],

@@ -132,7 +132,7 @@ visual manifest が存在するが壊れている場合、classic として推�
 - Assets から Texture を Material Inspector の対応 slot へ drag できる。用途が base color / emissive なら sRGB、metallic-roughness / normal / occlusion なら linear の recipe を提案し、既存 recipe と衝突する場合は確定前に選択肢を示す。
 - Entity 固有の Material override を追加する場合は、共有 Material Asset の編集とは別の明示的 Component / Command にし、現在どちらを編集しているか header と field group で区別する。
 - Entity の値は SceneDocument、Asset の値は AssetManifest に反映する。Inspector context を切り替えても `sceneSelection` と `assetSelection` は維持する。
-- Play 中はすべて読み取り専用にし、runtime の値を SceneDocument や AssetManifest へ書き戻さない。任意の JSX、スクリプト、式を評価して properties を生成しない。Script Component の property 値も同じ規則に従い、実行中の値を document へ書き戻さない。Play 中に編集できるのは 4.6 が許可する範囲と Script source file だけとする。
+- Play 中も runtime が生成した値を SceneDocument や AssetManifest へ書き戻さない。任意の JSX、スクリプト、式を評価して properties を生成しない。作者がInspectorまたはMCPから明示的に変更したScene構造と宣言済みScript propertyだけはauthoring Commandとして保存し、追加・削除・更新されたEntityのruntime revisionへ差分同期する。Play 中に編集できるのは 4.6 が許可する範囲、Script source file、宣言済みScript propertyとする。
 - Component Registry により Mesh、Light、Collider、Particle、Spawn Point と typed XRift component を追加する。
 
 ### Assets
@@ -495,7 +495,7 @@ Play の実行中だけ存在する値は `PlaySession` の Editor Runtime State
 
 World Preview の keyboard / gamepad / XR action は `InputAdapter`、移動と physics は登録済み `ControllerPlugin` / `PhysicsRuntimePlugin` で処理する。controller 固有の一時 runtime state を project document へ保存せず、Item Preview Profile には world navigation を適用しない。
 
-Play中もEntity選択と、選択EntityのTransform、Collider、Animationに限ってauthoring Commandを許可する。これらは通常どおりUndo履歴と自動保存へ入り、PlaySessionは更新後のruntime inputをコピーして対象Entityのrevisionだけを増やす。Hierarchy構造、Entity追加・削除、Asset、Material、Scene settings、ギズモ、drop、AI書き込みは無効にする。Stopはinput listener、animation frame、controller、physics、XRSessionをdisposeし、runtimeの位置や速度をdocumentへ書き戻さず、最新のauthoring SceneDocument / AssetManifestとEditの選択・カメラへ戻す。
+Play中もEntity選択、Transform、Collider、Animation、Hierarchy構造、Entity追加・削除・複製・親変更・Component追加のauthoring Commandを許可する。これらは通常どおり履歴と自動保存へ入り、PlaySessionは更新後のruntime inputをコピーして追加・削除・更新されたEntityだけを差分同期する。MCP書き込みも同じrevision検査と同期経路を使う。Asset、Material、Scene settingsとruntime生成値の書き戻しは無効にする。Stopはinput listener、animation frame、controller、physics、XRSessionをdisposeし、runtimeの位置や速度をdocumentへ書き戻さず、最新のauthoring SceneDocument / AssetManifestとEditの選択・カメラへ戻す。
 
 ### 4.7 Component / Asset Registry
 
@@ -1154,7 +1154,7 @@ SDK API reference の upload result は ID、version、content hash を定義す
 - [ ] toolbar と Assets は中央 semantic Icon Registry の Lucide icon、label、tooltip を使い、他製品の icon asset や custom SVG を含まない。
 - [ ] ギズモまたは Inspector から position、rotation、scale を変更すると両方の表示が一致する。
 - [ ] Playは同じエディター中央のPlay Windowで始まり、境界、header、実行コピーlabelでScene Viewと区別できる。Vite、CLI、ポート、別ブラウザを操作する必要がない。
-- [ ] Play中は単一EntityのTransform、Collider、Animationだけを通常の履歴と自動保存で変更でき、対象Entityだけ先頭から再実行する。Hierarchy構造、Asset、Material、Scene settings、ギズモ、Asset dropは変更できない。
+- [ ] Play中はEntityのTransform、Collider、Animation、追加・削除・複製・親変更・Component追加を通常の履歴と自動保存で変更でき、追加・削除・更新されたEntityだけをruntimeへ差分同期する。Asset、Material、Scene settingsは変更できない。
 - [ ] World Preview の controller / physics は登録済み runtime adapter を使い、Item Preview に World 用 controller を適用しない。
 - [ ] Stop後はPlaySessionが破棄され、Play中の許可された調整を含む最新SceneDocument、Play前と同じAssetManifest、selection、Edit cameraへ戻る。runtime位置や速度は書き戻さない。
 - [ ] Material / Texture は右 Inspector の product schema で編集し、Assets 下部に別 property form を作らない。

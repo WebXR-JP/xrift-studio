@@ -25,9 +25,13 @@ const MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS: u64 = 15_000;
 const MCP_MAX_CONCURRENT_CONNECTIONS: usize = 32;
 const MCP_MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 const MCP_MAX_CLIENT_NAME_CHARS: usize = 128;
-const MCP_TOOL_NAMES: [&str; 31] = [
+const MCP_TOOL_NAMES: [&str; 37] = [
     "get_editor_context",
     "list_assets",
+    "get_script_asset",
+    "create_script_asset",
+    "update_script_asset",
+    "set_play_mode",
     "search_external_assets",
     "get_external_asset_options",
     "install_external_asset",
@@ -37,6 +41,7 @@ const MCP_TOOL_NAMES: [&str; 31] = [
     "create_primitive",
     "place_builtin_prefab",
     "add_component",
+    "update_script_component",
     "update_transform",
     "set_material",
     "get_material_asset",
@@ -44,6 +49,7 @@ const MCP_TOOL_NAMES: [&str; 31] = [
     "set_material_texture_transform",
     "rename_entity",
     "duplicate_entity",
+    "reparent_entity",
     "delete_entity",
     "create_empty_entity",
     "list_interactivity_operations",
@@ -1767,7 +1773,7 @@ pub fn run_stdio_server() -> Result<(), String> {
                     "protocolVersion": MCP_PROTOCOL_VERSION,
                     "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": { "name": MCP_SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each write, then verify the result. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. XRift Studio must be open with a visual project."
+                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Script workflows use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, then set_play_mode. While Play is active, Script properties and scene structure tools (create, duplicate, reparent, add component, transform, and delete) synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. XRift Studio must be open with a visual project."
                 }),
             )?,
             "ping" => write_json_rpc_result(&mut stdout, id, json!({}))?,
@@ -2010,6 +2016,63 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "get_script_asset",
+            "description": "Read the TypeScript source and project-relative path of a Script Asset.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "scriptAssetId": { "type": "string" }
+                },
+                "required": ["scriptAssetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "create_script_asset",
+            "description": "Create a TypeScript Script Asset in the open visual project, select it in Assets, and open it in the Script Editor. Omit source to use the runnable rotation sample.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "name": { "type": "string", "minLength": 1 },
+                    "folderId": { "type": "string" },
+                    "source": { "type": "string" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "update_script_asset",
+            "description": "Replace a Script Asset's TypeScript source. This remains available during Play and restarts only entities that reference the updated Script.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "scriptAssetId": { "type": "string" },
+                    "source": { "type": "string" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "scriptAssetId", "source"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "set_play_mode",
+            "description": "Start or stop the visual editor Play session. Starting Play compiles every referenced Script first and leaves the editor in Edit mode if compilation fails.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "mode": { "type": "string", "enum": ["play", "edit"] }
+                },
+                "required": ["mode"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "search_external_assets",
             "description": "Search the Poly Haven catalog for CC0 HDRIs, textures/materials, and models. Returns external IDs that can be passed to the option and install tools.",
             "inputSchema": {
@@ -2163,7 +2226,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "add_component",
-            "description": "Add a component (light, collider, mesh renderer, particle emitter, audio source, spawn point, or an XRift component such as Interactable, Grabbable, Mirror, Skybox, VideoScreen, VideoPlayer, LiveVideoPlayer, Video180Sphere, ScreenShareDisplay, SpawnPoint, TextInput, TagBoard, Portal, or BillboardY) to an existing entity.",
+            "description": "Add a component (including Script) to an existing entity. For scripting.script, pass the Script Asset ID returned by list_assets as scriptAssetId.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2171,6 +2234,7 @@ fn tool_definitions() -> Value {
                     "sceneId": { "type": "string" },
                     "expectedRevision": { "type": "integer", "minimum": 0 },
                     "entityId": { "type": "string" },
+                    "scriptAssetId": { "type": "string" },
                     "definitionId": {
                         "type": "string",
                         "enum": [
@@ -2186,6 +2250,7 @@ fn tool_definitions() -> Value {
                             "core.spawn",
                             "core.particle",
                             "core.audio-source",
+                            "scripting.script",
                             "xrift.interactable",
                             "xrift.grabbable",
                             "xrift.mirror",
@@ -2204,6 +2269,23 @@ fn tool_definitions() -> Value {
                     }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "entityId", "definitionId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "update_script_component",
+            "description": "Update declared Script Component property values such as rotation speed. Available during Play; the editor restarts only the affected Entity.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string" },
+                    "componentId": { "type": "string" },
+                    "properties": { "type": "object" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "componentId", "properties"],
                 "additionalProperties": false
             }
         },
@@ -2321,6 +2403,23 @@ fn tool_definitions() -> Value {
                     "position": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "entityId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "reparent_entity",
+            "description": "Move an entity hierarchy under another entity or Scene Root. During Play, the authoring and running scenes are synchronized immediately.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string" },
+                    "parentEntityId": { "type": ["string", "null"] },
+                    "siblingIndex": { "type": "integer", "minimum": 0 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "parentEntityId"],
                 "additionalProperties": false
             }
         },

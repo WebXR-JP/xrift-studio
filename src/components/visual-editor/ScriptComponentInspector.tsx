@@ -34,6 +34,7 @@ export function ScriptComponentInspector({
   assets,
   entities,
   readOnly,
+  liveTuning = false,
   onPatch,
   onOpenScript,
 }: {
@@ -43,11 +44,15 @@ export function ScriptComponentInspector({
   assets: AssetManifest;
   entities: readonly ScriptEntityOption[];
   readOnly: boolean;
+  /** Play keeps declared property values editable and restarts this Entity. */
+  liveTuning?: boolean;
   onPatch: (patch: ScriptComponentPatch) => void;
   onOpenScript: (scriptAssetId: string) => void;
 }) {
   const scripts = listScriptAssets(assets);
-  const disabled = readOnly || !component.enabled;
+  const configurationDisabled = readOnly || !component.enabled;
+  const propertyDisabled =
+    (readOnly && !liveTuning) || !component.enabled;
 
   return (
     <div className="space-y-2">
@@ -58,7 +63,7 @@ export function ScriptComponentInspector({
         <div className="flex items-center gap-1.5">
           <select
             value={component.scriptAssetId}
-            disabled={disabled}
+            disabled={configurationDisabled}
             onChange={(event) =>
               onPatch({ scriptAssetId: event.target.value, properties: {} })
             }
@@ -88,7 +93,7 @@ export function ScriptComponentInspector({
         </span>
         <select
           value={component.runIn}
-          disabled={disabled}
+          disabled={configurationDisabled}
           onChange={(event) =>
             onPatch({ runIn: event.target.value as ScriptComponent["runIn"] })
           }
@@ -127,7 +132,8 @@ export function ScriptComponentInspector({
               component={component}
               assets={assets}
               entities={entities}
-              disabled={disabled}
+              disabled={propertyDisabled}
+              referencesDisabled={configurationDisabled}
               onPatch={onPatch}
             />
           ))}
@@ -143,6 +149,7 @@ function ScriptPropField({
   assets,
   entities,
   disabled,
+  referencesDisabled,
   onPatch,
 }: {
   descriptor: ScriptPropDescriptor;
@@ -150,6 +157,7 @@ function ScriptPropField({
   assets: AssetManifest;
   entities: readonly ScriptEntityOption[];
   disabled: boolean;
+  referencesDisabled: boolean;
   onPatch: (patch: ScriptComponentPatch) => void;
 }) {
   const value = component.properties[descriptor.name];
@@ -170,6 +178,11 @@ function ScriptPropField({
     });
   };
 
+  const fieldDisabled =
+    descriptor.kind === "asset" || descriptor.kind === "entity"
+      ? referencesDisabled
+      : disabled;
+
   return (
     <label className="block">
       <span className="mb-1 block text-[11px] font-medium text-slate-600">
@@ -179,7 +192,7 @@ function ScriptPropField({
         <input
           type="checkbox"
           checked={value === true}
-          disabled={disabled}
+          disabled={fieldDisabled}
           onChange={(event) => setValue(event.target.checked)}
           className="h-3.5 w-3.5"
         />
@@ -187,7 +200,7 @@ function ScriptPropField({
         <input
           type="number"
           value={typeof value === "number" ? value : 0}
-          disabled={disabled}
+          disabled={fieldDisabled}
           {...(descriptor.min !== undefined ? { min: descriptor.min } : {})}
           {...(descriptor.max !== undefined ? { max: descriptor.max } : {})}
           {...(descriptor.step !== undefined ? { step: descriptor.step } : {})}
@@ -197,7 +210,7 @@ function ScriptPropField({
       ) : descriptor.kind === "enum" ? (
         <select
           value={typeof value === "string" ? value : ""}
-          disabled={disabled}
+          disabled={fieldDisabled}
           onChange={(event) => setValue(event.target.value)}
           className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs disabled:opacity-45"
         >
@@ -211,7 +224,7 @@ function ScriptPropField({
         <input
           type="color"
           value={typeof value === "string" ? value : "#ffffff"}
-          disabled={disabled}
+          disabled={fieldDisabled}
           onChange={(event) => setValue(event.target.value)}
           className="h-7 w-full rounded border border-slate-300 disabled:opacity-45"
         />
@@ -219,13 +232,13 @@ function ScriptPropField({
         <VectorField
           length={descriptor.kind === "vec2" ? 2 : 3}
           value={Array.isArray(value) ? (value as number[]) : []}
-          disabled={disabled}
+          disabled={fieldDisabled}
           onChange={setValue}
         />
       ) : descriptor.kind === "asset" ? (
         <select
           value={typeof value === "string" ? value : ""}
-          disabled={disabled}
+          disabled={referencesDisabled}
           onChange={(event) => setReference("asset", event.target.value)}
           className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs disabled:opacity-45"
         >
@@ -244,7 +257,7 @@ function ScriptPropField({
       ) : descriptor.kind === "entity" ? (
         <select
           value={typeof value === "string" ? value : ""}
-          disabled={disabled}
+          disabled={referencesDisabled}
           onChange={(event) => setReference("entity", event.target.value)}
           className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs disabled:opacity-45"
         >
@@ -259,7 +272,7 @@ function ScriptPropField({
         <input
           type="text"
           value={typeof value === "string" ? value : ""}
-          disabled={disabled}
+          disabled={fieldDisabled}
           onChange={(event) => setValue(event.target.value)}
           className="w-full rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-45"
         />

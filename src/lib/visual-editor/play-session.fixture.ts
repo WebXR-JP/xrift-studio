@@ -43,6 +43,36 @@ export function runPlaySessionFixtureAssertions(): void {
     synchronizePlaySession(synchronized, changed, assets) === synchronized,
     "Unchanged authoring input must not advance the Play session",
   );
+
+  const structurallyChanged = fixtureScene();
+  structurallyChanged.entities["entity-c"] = entity("entity-c");
+  structurallyChanged.rootEntityIds.push("entity-c");
+  delete structurallyChanged.entities["entity-b"];
+  structurallyChanged.rootEntityIds = structurallyChanged.rootEntityIds.filter(
+    (entityId) => entityId !== "entity-b",
+  );
+  const structureSynchronized = synchronizePlaySession(
+    started,
+    structurallyChanged,
+    assets,
+  );
+  assert(
+    structureSynchronized.lastReloads.some(
+      (reload) => reload.entityId === "entity-c" && reload.kind === "added",
+    ),
+    "An Entity added during Play must be mounted in the runtime Scene",
+  );
+  assert(
+    structureSynchronized.lastReloads.some(
+      (reload) => reload.entityId === "entity-b" && reload.kind === "removed",
+    ),
+    "An Entity deleted during Play must be removed from the runtime Scene",
+  );
+  assert(
+    Boolean(structureSynchronized.runtimeScene.entities["entity-c"]) &&
+      !structureSynchronized.runtimeScene.entities["entity-b"],
+    "Runtime Scene structure must match the latest authoring Scene",
+  );
 }
 
 function fixtureAssets(): AssetManifest {

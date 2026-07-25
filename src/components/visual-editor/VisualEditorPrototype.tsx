@@ -70,9 +70,11 @@ import {
   resolveEditorCommands,
   executeXriftMcpEditorTool,
   XRIFT_MCP_EDITOR_TOOLS,
+  XRIFT_MCP_SCRIPT_TOOLS,
   STUDIO_IMAGE_EXTENSION_PATTERN,
   THREE_EDITOR_MODEL_EXTENSION_PATTERN,
   XriftMcpEditorToolError,
+  type XriftMcpScriptToolName,
   shortcutForCommand,
   synchronizePlaySession,
   redoEditorHistory,
@@ -116,6 +118,7 @@ import {
   type PlaySession,
   type PrototypeVisualProject,
   type SceneSettings,
+  type ScriptAsset,
   type TextureAssetPatch,
   type TextPatch,
   type TransformPatch,
@@ -473,8 +476,9 @@ function assertMcpExternalStoreWrite(
     importBusy: boolean;
     revision: number;
   },
+  options: { allowPlay?: boolean } = {},
 ): void {
-  if (context.editorMode !== "edit") {
+  if (context.editorMode !== "edit" && !options.allowPlay) {
     throw new XriftMcpEditorToolError(
       "EDITOR_READ_ONLY",
       "Playを停止してから外部アセットを追加してください",
@@ -1224,8 +1228,12 @@ export function VisualEditorPrototype({
         const externalStoreTool = XRIFT_MCP_EXTERNAL_STORE_TOOLS.includes(
           request.tool as XriftMcpExternalStoreTool,
         );
+        const scriptTool = XRIFT_MCP_SCRIPT_TOOLS.includes(
+          request.tool as XriftMcpScriptToolName,
+        );
         if (
           !externalStoreTool &&
+          !scriptTool &&
           !XRIFT_MCP_EDITOR_TOOLS.includes(
             request.tool as XriftMcpEditorToolName,
           )
@@ -1234,6 +1242,190 @@ export function VisualEditorPrototype({
             "TOOL_NOT_FOUND",
             "対応していないAI editor toolです",
           );
+        }
+        if (scriptTool) {
+          const args = request.arguments;
+          const sourceBundle = bundleRef.current;
+          const currentProjectPath = projectPathRef.current;
+          if (!currentProjectPath) {
+            throw new XriftMcpEditorToolError(
+              "PROJECT_NOT_SAVED",
+              "Scriptを操作する前にProjectを保存してください",
+            );
+          }
+          if (request.tool === "get_script_asset") {
+            const assetId = mcpRequiredString(args.scriptAssetId, "scriptAssetId");
+            const asset = sourceBundle.assets.assets[assetId];
+            if (!asset || asset.kind !== "script") {
+              throw new XriftMcpEditorToolError(
+                "SCRIPT_NOT_FOUND",
+                "指定されたScript Assetが見つかりません",
+                { scriptAssetId: assetId },
+              );
+            }
+            const source = await tauri.readTextFile(
+              currentProjectPath,
+              asset.source.relativePath,
+            );
+            await tauri.completeXriftMcpRequest({
+              id: request.id,
+              ok: true,
+              result: {
+                scriptAssetId: asset.id,
+                name: asset.name,
+                relativePath: asset.source.relativePath,
+                source,
+              },
+            });
+            return;
+          }
+          if (request.tool === "set_play_mode") {
+            const mode = mcpRequiredString(args.mode, "mode");
+            if (mode !== "play" && mode !== "edit") {
+              throw new XriftMcpEditorToolError(
+                "INVALID_ARGUMENT",
+                "modeはplayまたはeditで指定してください",
+              );
+            }
+            if (mode === "play") await enterPlayMode();
+            else stopPlayMode();
+            await new Promise<void>((resolve) => {
+              window.requestAnimationFrame(() => resolve());
+            });
+            if (editorModeRef.current !== mode) {
+              throw new XriftMcpEditorToolError(
+                "PLAY_MODE_CHANGE_FAILED",
+                mode === "play"
+                  ? "Scriptの変換またはPlay初期化に失敗しました。Editorの通知を確認してください"
+                  : "Playを停止できませんでした。もう一度実行してください",
+                { requestedMode: mode, currentMode: editorModeRef.current },
+              );
+            }
+            await tauri.completeXriftMcpRequest({
+              id: request.id,
+              ok: true,
+              result: { mode },
+            });
+            return;
+          }
+
+          assertMcpExternalStoreWrite(args, {
+            bundle: sourceBundle,
+            editorMode: editorModeRef.current,
+            importBusy: importBusyRef.current,
+            revision: mcpRevisionRef.current,
+          }, {
+            allowPlay: request.tool === "update_script_asset",
+          });
+
+          let asset: ScriptAsset;
+          let activity: string;
+          if (request.tool === "create_script_asset") {
+            const scriptCount = Object.values(sourceBundle.assets.assets).filter(
+              (candidate) => candidate.kind === "script",
+            ).length;
+            const name =
+              mcpOptionalString(args.name) ?? `Script ${scriptCount + 1}`;
+            const folderId = mcpOptionalString(args.folderId) ?? null;
+            if (folderId && !sourceBundle.assets.folders?.[folderId]) {
+              throw new XriftMcpEditorToolError(
+                "FOLDER_NOT_FOUND",
+                "作成先のFolderが見つかりません",
+                { folderId },
+              );
+            }
+            const relativePath = createScriptRelativePath(
+              name,
+              sourceBundle.assets,
+            );
+            const source =
+              typeof args.source === "string"
+                ? args.source
+                : createScriptSampleSource(name);
+            asset = createScriptAsset(
+              createDocumentId("asset"),
+              name,
+              relativePath,
+              folderId,
+            );
+            await tauri.writeTextFile(
+              currentProjectPath,
+              relativePath,
+              source,
+            );
+            activity = `AIが「${name}」をScript Assetとして作成しました`;
+          } else {
+            const assetId = mcpRequiredString(args.scriptAssetId, "scriptAssetId");
+            const candidate = sourceBundle.assets.assets[assetId];
+            if (!candidate || candidate.kind !== "script") {
+              throw new XriftMcpEditorToolError(
+                "SCRIPT_NOT_FOUND",
+                "指定されたScript Assetが見つかりません",
+                { scriptAssetId: assetId },
+              );
+            }
+            const source =
+              typeof args.source === "string"
+                ? args.source
+                : (() => {
+                    throw new XriftMcpEditorToolError(
+                      "INVALID_ARGUMENT",
+                      "sourceは文字列で指定してください",
+                    );
+                  })();
+            await tauri.writeTextFile(
+              currentProjectPath,
+              candidate.source.relativePath,
+              source,
+            );
+            asset = candidate;
+            activity = `AIが「${candidate.name}」のScript sourceを更新しました`;
+          }
+
+          const nextAssets =
+            request.tool === "create_script_asset"
+              ? addScriptAsset(sourceBundle.assets, asset)
+              : {
+                  ...sourceBundle.assets,
+                  assets: { ...sourceBundle.assets.assets },
+                };
+          const nextBundle = touchProject({
+            ...sourceBundle,
+            assets: nextAssets,
+          });
+          mcpRevisionRef.current += 1;
+          mcpRevisionBundleRef.current = nextBundle;
+          bundleRef.current = nextBundle;
+          assetSelectionRef.current = asset.id;
+          saveStatusRef.current = "dirty";
+          setHistory((current) =>
+            commitEditorHistory(current, {
+              bundle: nextBundle,
+              sceneSelection: sceneSelectionRef.current,
+              assetSelection: asset.id,
+            }),
+          );
+          setSaveStatus("dirty");
+          setNotice(`${activity}。変更を自動保存します`);
+          void scriptEditor.open(asset.id, asset);
+          if (
+            request.tool === "update_script_asset" &&
+            editorModeRef.current === "play"
+          ) {
+            void scriptRuntime.compile();
+          }
+          await tauri.completeXriftMcpRequest({
+            id: request.id,
+            ok: true,
+            result: {
+              scriptAssetId: asset.id,
+              name: asset.name,
+              relativePath: asset.source.relativePath,
+              revisionBefore: mcpRevisionRef.current - 1,
+              revisionAfter: mcpRevisionRef.current,
+            },
+          });
+          return;
         }
         if (externalStoreTool) {
           const args = request.arguments;
@@ -1544,7 +1736,7 @@ export function VisualEditorPrototype({
   }, [bundle.scene, sceneSelection?.id]);
 
   const handlePaste = useCallback(() => {
-    if (editorMode !== "edit" || !clipboardRef.current) return;
+    if (!clipboardRef.current) return;
     const selected = sceneSelection?.id
       ? bundle.scene.entities[sceneSelection.id]
       : undefined;
@@ -1563,7 +1755,7 @@ export function VisualEditorPrototype({
 
   const handleDuplicate = useCallback((requestedEntityId?: string) => {
     const entityId = requestedEntityId ?? sceneSelection?.id;
-    if (editorMode !== "edit" || !entityId) return;
+    if (!entityId) return;
     const source = bundle.scene.entities[entityId];
     if (!source) return;
     const result = duplicateEntityHierarchy(
@@ -1587,7 +1779,7 @@ export function VisualEditorPrototype({
         : sceneSelection?.id
           ? [sceneSelection.id]
           : [];
-    if (editorMode !== "edit" || entityIds.length === 0) return;
+    if (entityIds.length === 0) return;
     const sourceNames = entityIds
       .map((entityId) => bundle.scene.entities[entityId]?.name)
       .filter((name): name is string => Boolean(name));
@@ -1824,12 +2016,8 @@ export function VisualEditorPrototype({
       position?: Vec3,
       parentEntityId: string | null = null,
     ) => {
-      if (editorMode !== "edit" || importBusy) {
-        setNotice(
-          editorMode !== "edit"
-            ? "Playを停止してからXRift Componentを配置してください"
-            : "アセットのインポート完了後にXRift Componentを配置してください",
-        );
+      if (importBusy) {
+        setNotice("アセットのインポート完了後にXRift Componentを配置してください");
         return;
       }
       setHistory((current) => {
@@ -1888,12 +2076,8 @@ export function VisualEditorPrototype({
       parentEntityId: string | null,
       siblingIndex?: number,
     ) => {
-      if (editorMode !== "edit" || importBusy) {
-        setNotice(
-          editorMode !== "edit"
-            ? "Playを停止してからHierarchyを移動してください"
-            : "アセットのインポート完了後にHierarchyを移動してください",
-        );
+      if (importBusy) {
+        setNotice("アセットのインポート完了後にHierarchyを移動してください");
         return;
       }
       setHistory((current) => {
@@ -1950,12 +2134,8 @@ export function VisualEditorPrototype({
       assetId: string,
       options: { position?: Vec3; parentEntityId?: string | null } = {},
     ) => {
-      if (editorMode !== "edit" || importBusy) {
-        setNotice(
-          editorMode !== "edit"
-            ? "Playを停止してからアセットを配置してください"
-            : "アセットのインポート完了後に配置してください",
-        );
+      if (importBusy) {
+        setNotice("アセットのインポート完了後に配置してください");
         return;
       }
       setHistory((current) => {
@@ -2000,10 +2180,6 @@ export function VisualEditorPrototype({
 
   const handlePlacePrimitive = useCallback(
     (creationId: string, position?: Vec3) => {
-      if (editorMode !== "edit") {
-        setNotice("Playを停止してからPrimitiveを配置してください");
-        return;
-      }
       const definition = getBuiltinPrimitiveCreation(creationId);
       if (!definition) return;
 
@@ -2052,12 +2228,8 @@ export function VisualEditorPrototype({
 
   const handleCreateEmpty = useCallback(
     (parentEntityId: string | null = null) => {
-      if (editorMode !== "edit" || importBusy) {
-        setNotice(
-          editorMode !== "edit"
-            ? "Playを停止してからEntityを作成してください"
-            : "アセットのインポート完了後にEntityを作成してください",
-        );
+      if (importBusy) {
+        setNotice("アセットのインポート完了後にEntityを作成してください");
         return;
       }
       setHistory((current) => {
@@ -2094,7 +2266,7 @@ export function VisualEditorPrototype({
 
   const handleCreateXriftObject = useCallback(
     (componentDefinitionId: string) => {
-      if (editorMode !== "edit" || importBusy) return;
+      if (importBusy) return;
       const definition = getXriftComponentDefinition(componentDefinitionId);
       if (!definition || definition.attachBehavior.kind !== "leaf") {
         setNotice("このXRift Componentは既存Entityへ追加してください");
@@ -2441,7 +2613,6 @@ export function VisualEditorPrototype({
 
   const handleRenameEntity = useCallback(
     (entityId: string, name: string) => {
-      if (editorMode !== "edit") return;
       updateScene((scene) => renameEntity(scene, entityId, name));
     },
     [editorMode, updateScene],
@@ -2449,7 +2620,6 @@ export function VisualEditorPrototype({
 
   const handleEntityEnabledChange = useCallback(
     (entityId: string, enabled: boolean) => {
-      if (editorMode !== "edit") return;
       updateScene((scene) => {
         const entity = scene.entities[entityId];
         const next = updateEntityEnabled(scene, entityId, enabled);
@@ -2687,7 +2857,7 @@ export function VisualEditorPrototype({
 
   const handleCreateComponentObject = useCallback(
     (componentDefinitionId: string) => {
-      if (editorMode !== "edit" || importBusy) return;
+      if (importBusy) return;
       const definition = getEditorComponentMenuDefinitions(projectKind).find(
         (candidate) => candidate.id === componentDefinitionId,
       );
@@ -3498,7 +3668,18 @@ export function VisualEditorPrototype({
       componentId: string,
       patch: ScriptComponentPatch,
     ) => {
-      if (editorMode !== "edit") return;
+      if (
+        editorMode === "play" &&
+        (patch.scriptAssetId !== undefined ||
+          patch.assetReferences !== undefined ||
+          patch.entityReferences !== undefined ||
+          patch.runIn !== undefined)
+      ) {
+        setNotice(
+          "Play中はScript propertyだけ変更できます。参照や実行条件はStop後に変更してください",
+        );
+        return;
+      }
       setBundle((current) => {
         const entity = current.scene.entities[entityId];
         if (!entity) return current;
@@ -3526,6 +3707,11 @@ export function VisualEditorPrototype({
           };
         });
         if (!changed) return current;
+        setNotice(
+          editorMode === "play"
+            ? `「${entity.name}」のScript propertyを反映し、このEntityだけ再起動しました`
+            : "Script Componentを更新しました",
+        );
         return touchProject({
           ...current,
           scene: {
@@ -3541,19 +3727,34 @@ export function VisualEditorPrototype({
     [editorMode, setBundle],
   );
 
-  const handleCreateScript = useCallback(async () => {
+  const handleCreateScript = useCallback(async (
+    requestedFolderId?: string | null,
+  ) => {
     if (editorMode !== "edit") return;
     if (!projectPathRef.current) {
       setNotice("プロジェクトを保存するとScriptを作成できます");
       return;
     }
-    const existing = Object.values(bundleRef.current.assets.assets).filter(
+    const currentAssets = bundleRef.current.assets;
+    if (
+      requestedFolderId !== undefined &&
+      requestedFolderId !== null &&
+      !currentAssets.folders?.[requestedFolderId]
+    ) {
+      setNotice("作成先のFolderが見つかりません。Folderを開き直してください");
+      return;
+    }
+    const folderId =
+      requestedFolderId === undefined
+        ? resolveAssetCreationFolderId(currentAssets, activeAssetFolderId)
+        : requestedFolderId;
+    const existing = Object.values(currentAssets.assets).filter(
       (asset) => asset.kind === "script",
     ).length;
     const name = `Script ${existing + 1}`;
     const relativePath = createScriptRelativePath(
       name,
-      bundleRef.current.assets,
+      currentAssets,
     );
     try {
       await tauri.writeTextFile(
@@ -3573,16 +3774,27 @@ export function VisualEditorPrototype({
       createDocumentId("asset"),
       name,
       relativePath,
+      folderId,
     );
-    setBundle((current) =>
-      touchProject({
-        ...current,
-        assets: addScriptAsset(current.assets, asset),
+    setHistory((current) =>
+      commitEditorHistory(current, {
+        ...current.present,
+        bundle: touchProject({
+          ...current.present.bundle,
+          assets: addScriptAsset(current.present.bundle.assets, asset),
+        }),
+        assetSelection: asset.id,
       }),
     );
-    setNotice(`${name} を作成しました`);
-    void scriptEditor.open(asset.id);
-  }, [editorMode, scriptEditor, setBundle]);
+    const destination = folderId
+      ? `「${currentAssets.folders?.[folderId]?.name ?? "Folder"}」`
+      : "Assets直下";
+    setSaveStatus("dirty");
+    setNotice(
+      `${name} を${destination}に作成し、Script Editorで開きました`,
+    );
+    void scriptEditor.open(asset.id, asset);
+  }, [activeAssetFolderId, editorMode, scriptEditor]);
 
   const handleSaveInteractivityAsset = useCallback(
     (assetId: string, extension: KhrInteractivityExtension) => {
@@ -3720,7 +3932,6 @@ export function VisualEditorPrototype({
 
   const handleAddComponent = useCallback(
     (entityId: string, componentDefinitionId: string) => {
-      if (editorMode !== "edit") return;
       const fallbackParticleId = createDocumentId("particle");
       setBundle((current) => {
         let assets = current.assets;
@@ -3744,6 +3955,9 @@ export function VisualEditorPrototype({
           entityId,
           componentDefinitionId,
           projectKind,
+          componentDefinitionId === "scripting.script"
+            ? assetSelection ?? undefined
+            : undefined,
         );
         if (!result.added) {
           const reason =
@@ -3767,7 +3981,7 @@ export function VisualEditorPrototype({
         return touchProject({ ...current, assets, scene: result.scene });
       });
     },
-    [editorMode, projectKind, setBundle],
+    [assetSelection, editorMode, projectKind, setBundle],
   );
 
   const handleUpdateXriftComponent = useCallback(
@@ -4563,18 +4777,18 @@ export function VisualEditorPrototype({
         case "edit.paste":
           if (assetSelection) return false;
           handlePaste();
-          return editorMode === "edit" && Boolean(clipboardRef.current);
+          return Boolean(clipboardRef.current);
         case "edit.duplicate":
           if (!payload.entityId && assetSelection) return false;
           handleDuplicate(payload.entityId);
-          return editorMode === "edit" && Boolean(payload.entityId ?? sceneSelection?.id);
+          return Boolean(payload.entityId ?? sceneSelection?.id);
         case "edit.delete":
           if (!payload.entityId && (payload.assetId ?? assetSelection)) {
             requestDeleteAsset(payload.assetId ?? assetSelection ?? "");
             return editorMode === "edit";
           }
           handleDelete(payload.entityId);
-          return editorMode === "edit" && Boolean(payload.entityId ?? sceneSelection?.id);
+          return Boolean(payload.entityId ?? sceneSelection?.id);
         case "selection.select-all": {
           if (assetSelection) return false;
           const entityIds = sceneEntityIdsInHierarchyOrder(bundle.scene);
@@ -4650,15 +4864,15 @@ export function VisualEditorPrototype({
           return true;
         case "entity.create-empty":
           handleCreateEmpty(payload.parentEntityId ?? null);
-          return editorMode === "edit" && !importBusy;
+          return !importBusy;
         case "entity.create-primitive":
           if (!payload.creationId) return false;
           handlePlacePrimitive(payload.creationId);
-          return editorMode === "edit";
+          return true;
         case "entity.add-component":
           if (!payload.entityId || !payload.componentDefinitionId) return false;
           handleAddComponent(payload.entityId, payload.componentDefinitionId);
-          return editorMode === "edit";
+          return true;
         case "entity.reparent":
           if (!payload.entityId) return false;
           handleReparentEntity(
@@ -4666,7 +4880,7 @@ export function VisualEditorPrototype({
             payload.parentEntityId ?? null,
             payload.siblingIndex,
           );
-          return editorMode === "edit" && !importBusy;
+          return !importBusy;
         case "prefab.create":
           if (!payload.entityId) return false;
           handleCreatePrefab(payload.entityId);
@@ -4684,7 +4898,7 @@ export function VisualEditorPrototype({
           handleCreateDocumentAsset("interactivity", payload.folderId);
           return editorMode === "edit" && !importBusy;
         case "asset.create-script":
-          void handleCreateScript();
+          void handleCreateScript(payload.folderId);
           return editorMode === "edit" && !importBusy;
         case "asset.edit-script": {
           if (
@@ -4938,7 +5152,7 @@ export function VisualEditorPrototype({
             <div className="relative">
               <button
                 type="button"
-                disabled={readOnly || importBusy}
+                disabled={importBusy}
                 aria-haspopup="menu"
                 aria-expanded={createMenuOpen}
                 onClick={() => setCreateMenuOpen((open) => !open)}
@@ -4950,7 +5164,7 @@ export function VisualEditorPrototype({
               </button>
               <EditorCreateMenu
                 open={createMenuOpen}
-                readOnly={readOnly}
+                readOnly={false}
                 importBusy={importBusy}
                 projectKind={projectKind}
                 selectedEntity={
@@ -5011,7 +5225,8 @@ export function VisualEditorPrototype({
             scene={bundle.scene}
             selection={sceneSelection}
             selectedEntityIds={selectedEntityIds}
-            readOnly={readOnly}
+            readOnly={false}
+            playMode={editorMode === "play"}
             projectKind={projectKind}
             onSelectionChange={handleEntitySelectionChange}
             onAssignMaterial={handleAssignMaterial}
@@ -5092,7 +5307,7 @@ export function VisualEditorPrototype({
             onFocusChange={setFocusedEntity}
             onExitFocus={() => executeCommand("view.exit-focus")}
             onViewportFileDrop={() => setNotice("外部Assetは下のAssets Browserへドロップしてください")}
-            onPlayDropAttempt={() => setNotice("Playを停止してからPrimitiveを配置してください")}
+            onPlayDropAttempt={() => setNotice("Play中もHierarchyまたは追加メニューからEntityを配置できます")}
             onDropRejected={setNotice}
           />
           <InspectorPanel

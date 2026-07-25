@@ -9,6 +9,8 @@ import {
   addEditorComponent,
   createEmptyEntity as createEmptySceneEntity,
   deleteEntityHierarchy,
+  getEntityReparentDecision,
+  reparentEntityHierarchy,
 } from "./editor-session";
 import {
   assignMaterialToMeshSlots,
@@ -56,6 +58,7 @@ export const XRIFT_MCP_EDITOR_TOOLS = [
   "create_primitive",
   "place_builtin_prefab",
   "add_component",
+  "update_script_component",
   "update_transform",
   "set_material",
   "get_material_asset",
@@ -63,6 +66,7 @@ export const XRIFT_MCP_EDITOR_TOOLS = [
   "set_material_texture_transform",
   "rename_entity",
   "duplicate_entity",
+  "reparent_entity",
   "delete_entity",
   "create_empty_entity",
   "list_interactivity_operations",
@@ -79,6 +83,16 @@ export const XRIFT_MCP_EDITOR_TOOLS = [
 ] as const;
 
 export type XriftMcpEditorToolName = (typeof XRIFT_MCP_EDITOR_TOOLS)[number];
+
+/** Script tools perform project file I/O or change Play mode in the React host. */
+export const XRIFT_MCP_SCRIPT_TOOLS = [
+  "get_script_asset",
+  "create_script_asset",
+  "update_script_asset",
+  "set_play_mode",
+] as const;
+
+export type XriftMcpScriptToolName = (typeof XRIFT_MCP_SCRIPT_TOOLS)[number];
 
 export type XriftMcpEditorRequest = {
   id: string;
@@ -148,6 +162,8 @@ export function executeXriftMcpEditorTool(
       return placeBuiltinPrefab(context, request.arguments);
     case "add_component":
       return addComponent(context, request.arguments);
+    case "update_script_component":
+      return updateScriptComponent(context, request.arguments);
     case "update_transform":
       return updateTransform(context, request.arguments);
     case "set_material":
@@ -162,6 +178,8 @@ export function executeXriftMcpEditorTool(
       return renameEntity(context, request.arguments);
     case "duplicate_entity":
       return duplicateEntity(context, request.arguments);
+    case "reparent_entity":
+      return reparentEntity(context, request.arguments);
     case "delete_entity":
       return deleteEntity(context, request.arguments);
     case "create_empty_entity":
@@ -291,7 +309,7 @@ function placeAsset(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
-  assertWritableContext(context, argumentsValue);
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
   const assetId = requiredString(argumentsValue.assetId, "assetId");
   const position = optionalVec3(argumentsValue.position, "position") ?? [0, 0, 0];
   const parentEntityId = optionalNullableString(
@@ -354,7 +372,7 @@ function createPrimitive(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
-  assertWritableContext(context, argumentsValue);
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
   const shape = requiredEnum(
     argumentsValue.shape,
     "shape",
@@ -409,7 +427,7 @@ function placeBuiltinPrefab(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
-  assertWritableContext(context, argumentsValue);
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
   const recipeId = requiredString(argumentsValue.recipeId, "recipeId");
   const position = optionalVec3(argumentsValue.position, "position");
   const recipe = getBuiltinPrefabRecipe(recipeId);
@@ -465,21 +483,23 @@ function addComponent(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
-  assertWritableContext(context, argumentsValue);
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
   const entityId = requiredString(argumentsValue.entityId, "entityId");
   const definitionId = requiredString(argumentsValue.definitionId, "definitionId");
+  const scriptAssetId = optionalString(argumentsValue.scriptAssetId);
   const result = addEditorComponent(
     context.bundle.scene,
     context.bundle.assets,
     entityId,
     definitionId,
     context.bundle.project.projectKind,
+    scriptAssetId,
   );
   if (!result.added) {
     throw new XriftMcpEditorToolError(
       addComponentFailureCode(result.reason),
       addComponentFailureMessage(result.reason),
-      { entityId, definitionId, reason: result.reason },
+      { entityId, definitionId, scriptAssetId, reason: result.reason },
     );
   }
   const bundle = touchProject(context, { ...context.bundle, scene: result.scene });
@@ -487,7 +507,10 @@ function addComponent(
     changed: true,
     bundle,
     sceneSelection: { kind: "entity", id: entityId },
-    assetSelection: null,
+    assetSelection:
+      definitionId === "scripting.script" && scriptAssetId
+        ? scriptAssetId
+        : null,
     result: {
       projectId: bundle.project.projectId,
       sceneId: bundle.scene.sceneId,
@@ -495,9 +518,85 @@ function addComponent(
       revisionAfter: context.revision + 1,
       entityId,
       definitionId,
+      scriptAssetId,
       componentId: result.componentId,
     },
     activity: `AIが${definitionId}をEntityへ追加しました`,
+  };
+}
+
+function updateScriptComponent(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const componentId = requiredString(
+    argumentsValue.componentId,
+    "componentId",
+  );
+  const properties = recordValue(argumentsValue.properties, "properties");
+  if (!isJsonValue(properties)) {
+    invalidArgument("properties", "finite JSON object");
+  }
+  const entity = context.bundle.scene.entities[entityId];
+  if (!entity) {
+    throw new XriftMcpEditorToolError(
+      "ENTITY_NOT_FOUND",
+      "指定されたEntityが見つかりません",
+      { entityId },
+    );
+  }
+  let found = false;
+  const components = entity.components.map((component) => {
+    if (component.id !== componentId || component.type !== "script") {
+      return component;
+    }
+    found = true;
+    return {
+      ...component,
+      properties: {
+        ...component.properties,
+        ...(properties as typeof component.properties),
+      },
+    };
+  });
+  if (!found) {
+    throw new XriftMcpEditorToolError(
+      "SCRIPT_COMPONENT_NOT_FOUND",
+      "指定されたScript Componentが見つかりません",
+      { entityId, componentId },
+    );
+  }
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    scene: {
+      ...context.bundle.scene,
+      entities: {
+        ...context.bundle.scene.entities,
+        [entityId]: { ...entity, components },
+      },
+    },
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: entityId },
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId,
+      componentId,
+      properties,
+      restartedDuringPlay: context.editorMode === "play",
+    },
+    activity:
+      context.editorMode === "play"
+        ? `AIがScript propertyを更新し「${entity.name}」だけ再起動しました`
+        : `AIが「${entity.name}」のScript propertyを更新しました`,
   };
 }
 
@@ -505,7 +604,7 @@ function updateTransform(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
-  assertWritableContext(context, argumentsValue);
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
   const entityId = requiredString(argumentsValue.entityId, "entityId");
   requireEntity(context.bundle.scene, entityId);
   const position = optionalVec3(argumentsValue.position, "position");
@@ -808,7 +907,7 @@ function renameEntity(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
-  assertWritableContext(context, argumentsValue);
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
   const entityId = requiredString(argumentsValue.entityId, "entityId");
   const name = requiredString(argumentsValue.name, "name");
   requireEntity(context.bundle.scene, entityId);
@@ -848,7 +947,7 @@ function duplicateEntity(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
-  assertWritableContext(context, argumentsValue);
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
   const entityId = requiredString(argumentsValue.entityId, "entityId");
   const parentEntityId = optionalNullableString(argumentsValue.parentEntityId, "parentEntityId");
   const position = optionalVec3(argumentsValue.position, "position");
@@ -893,11 +992,67 @@ function duplicateEntity(
   };
 }
 
+function reparentEntity(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const parentEntityId = optionalNullableString(
+    argumentsValue.parentEntityId,
+    "parentEntityId",
+  );
+  const siblingIndex = optionalNonNegativeInteger(
+    argumentsValue.siblingIndex,
+    "siblingIndex",
+  );
+  const decision = getEntityReparentDecision(
+    context.bundle.scene,
+    entityId,
+    parentEntityId,
+    siblingIndex,
+  );
+  if (!decision.allowed) {
+    throw new XriftMcpEditorToolError(
+      "REPARENT_REJECTED",
+      "指定された場所へEntityを移動できません",
+      { entityId, parentEntityId, siblingIndex, reason: decision.reason },
+    );
+  }
+  const scene = reparentEntityHierarchy(
+    context.bundle.scene,
+    entityId,
+    parentEntityId,
+    siblingIndex,
+  );
+  const bundle = touchProject(context, { ...context.bundle, scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: entityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId,
+      parentEntityId,
+      siblingIndex,
+      synchronizedDuringPlay: context.editorMode === "play",
+    },
+    activity:
+      context.editorMode === "play"
+        ? "AIがHierarchyを変更し実行中のSceneへ同期しました"
+        : "AIがHierarchyを変更しました",
+  };
+}
+
 function deleteEntity(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
-  assertWritableContext(context, argumentsValue);
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
   const entityId = requiredString(argumentsValue.entityId, "entityId");
   const scene = deleteEntityHierarchy(context.bundle.scene, [entityId]);
   if (scene === context.bundle.scene) {
@@ -929,7 +1084,7 @@ function createEmptyEntity(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
-  assertWritableContext(context, argumentsValue);
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
   const name = optionalString(argumentsValue.name) ?? "Empty Entity";
   const parentEntityId = optionalNullableString(argumentsValue.parentEntityId, "parentEntityId");
   if (parentEntityId !== null) {
@@ -1552,8 +1707,9 @@ function isJsonValue(value: unknown): value is KhrInteractivityJsonValue {
 function assertWritableContext(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
+  options: { allowPlay?: boolean } = {},
 ): void {
-  if (context.editorMode !== "edit") {
+  if (context.editorMode !== "edit" && !options.allowPlay) {
     throw new XriftMcpEditorToolError(
       "EDITOR_READ_ONLY",
       "Playを停止してからAI編集を実行してください",

@@ -93,7 +93,6 @@ const SHADOWED_GLOBALS = [
   "document",
   "fetch",
   "XMLHttpRequest",
-  "eval",
   "Function",
   "importScripts",
   "__TAURI__",
@@ -101,6 +100,10 @@ const SHADOWED_GLOBALS = [
 ];
 
 function shadowPrelude(): string {
+  // ECMAScript modules are always strict mode, where binding `eval` is a
+  // syntax error. It cannot be shadowed with a lexical declaration; the
+  // same-realm limitation is documented and this prelude only blocks
+  // accidental ambient access.
   return `const {${SHADOWED_GLOBALS.join(", ")}} = {};\n`;
 }
 

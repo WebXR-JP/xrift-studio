@@ -68,12 +68,14 @@ export function createScriptAsset(
   id: string,
   name: string,
   relativePath: string,
+  folderId: string | null = null,
 ): ScriptAsset {
   return {
     id,
     name,
     kind: "script",
     status: "ready",
+    folderId,
     contractVersion: SCRIPT_ASSET_CONTRACT_VERSION,
     language: "ts",
     source: { kind: "project", relativePath },

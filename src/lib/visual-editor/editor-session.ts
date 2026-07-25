@@ -154,6 +154,7 @@ export function addEditorComponent(
   entityId: string,
   definitionId: string,
   projectKind: VisualProjectKind,
+  preferredAssetId?: string,
 ): AddEditorComponentResult {
   const entity = scene.entities[entityId];
   if (!entity) return { scene, added: false, reason: "entity-missing" };
@@ -197,6 +198,7 @@ export function addEditorComponent(
     assets,
     projectKind,
     entity,
+    preferredAssetId,
   );
   if (!component) return { scene, added: false, reason: "dependency-missing" };
   const components = [
@@ -656,6 +658,7 @@ function createRegisteredComponent(
   assets: AssetManifest,
   projectKind: VisualProjectKind,
   entity: SceneEntity,
+  preferredAssetId?: string,
 ): RegisteredSceneComponent | null {
   if (definition.componentType === "transform") return createTransformComponent(id);
   if (definition.componentType === "builtin-mesh") {
@@ -750,11 +753,17 @@ function createRegisteredComponent(
     return createTextComponent(id);
   }
   if (definition.componentType === "script") {
-    // Requires an existing Script Asset, like particle-emitter requires a
-    // Particle Asset. The Assets panel is where a new script is authored.
-    const script = Object.values(assets.assets).find(
-      (asset) => asset.kind === "script",
-    );
+    // Prefer the Script selected in Assets so Create -> Add Component always
+    // attaches the asset the user just authored.
+    const preferred = preferredAssetId
+      ? assets.assets[preferredAssetId]
+      : undefined;
+    const script =
+      preferred?.kind === "script"
+        ? preferred
+        : Object.values(assets.assets).find(
+            (asset) => asset.kind === "script",
+          );
     return script ? createScriptComponent(id, script.id) : null;
   }
   return null;
