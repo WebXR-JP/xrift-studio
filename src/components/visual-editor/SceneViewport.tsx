@@ -23,6 +23,7 @@ import {
   XriftAudioSource,
   type XriftAudioSourceSourceStatus,
 } from "../../../packages/xrift-studio-runtime/src/script/audio-source";
+import { XriftScriptLight } from "../../../packages/xrift-studio-runtime/src/script/light";
 import {
   EntityScriptVisual,
   ScriptViewportProvider,
@@ -66,10 +67,8 @@ import {
   type Group,
   type Material,
   type Mesh,
-  type DirectionalLight,
   type MeshStandardMaterial,
   type Object3D,
-  type SpotLight,
   type Texture,
 } from "three";
 import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
@@ -600,77 +599,37 @@ function LightVisual({
   selected: boolean;
   showSceneLighting: boolean;
 }) {
-  const directionalLightRef = useRef<DirectionalLight | null>(null);
-  const spotLightRef = useRef<SpotLight | null>(null);
-  const directionalTargetRef = useRef<Object3D | null>(null);
-
-  useLayoutEffect(() => {
-    const light = directionalLightRef.current ?? spotLightRef.current;
-    const target = directionalTargetRef.current;
-    if (!light || !target) return;
-    light.target = target;
-    target.updateMatrixWorld();
-  }, [component.lightType]);
-
-  if (!component.enabled) return null;
-
   return (
     <>
-      {showSceneLighting && component.lightType === "ambient" ? (
-        <ambientLight color={component.color} intensity={component.intensity} />
-      ) : showSceneLighting && component.lightType === "hemisphere" ? (
-        <hemisphereLight
+      {showSceneLighting ? (
+        <XriftScriptLight
+          componentId={component.id}
+          lightType={component.lightType}
+          enabled={component.enabled}
           color={component.color}
+          intensity={component.intensity}
+          castShadow={component.castShadow}
           groundColor={component.groundColor ?? "#334155"}
-          intensity={component.intensity}
-        />
-      ) : showSceneLighting && component.lightType === "point" ? (
-        <pointLight
-          color={component.color}
-          intensity={component.intensity}
           distance={component.distance ?? 0}
           decay={component.decay ?? 2}
-          castShadow={component.castShadow}
-        />
-      ) : showSceneLighting && component.lightType === "spot" ? (
-        <>
-          <spotLight
-            ref={spotLightRef}
-            color={component.color}
-            intensity={component.intensity}
-            distance={component.distance ?? 0}
-            angle={component.angle ?? Math.PI / 3}
-            penumbra={component.penumbra ?? 0.5}
-            decay={component.decay ?? 2}
-            castShadow={component.castShadow}
-          />
-          <object3D ref={directionalTargetRef} position={[0, 0, -1]} />
-        </>
-      ) : showSceneLighting && component.lightType === "rectArea" ? (
-        <rectAreaLight
-          color={component.color}
-          intensity={component.intensity}
+          angle={component.angle ?? Math.PI / 3}
+          penumbra={component.penumbra ?? 0.5}
           width={component.width ?? 1}
           height={component.height ?? 1}
         />
-      ) : showSceneLighting ? (
-        <>
-          <directionalLight
-            ref={directionalLightRef}
-            color={component.color}
-            intensity={component.intensity}
-            castShadow={component.castShadow}
-          />
-          <object3D ref={directionalTargetRef} position={[0, 0, -1]} />
-        </>
       ) : null}
-      <EditorLightIcon color={component.color} selected={selected} />
-      {component.lightType === "directional" || component.lightType === "spot" ? (
-        <DirectionArrow
-          direction={-1}
-          color={selected ? EDITOR_SELECTION_COLOR : component.color}
-          position={[0, -0.18, 0]}
-        />
+      {component.enabled ? (
+        <>
+          <EditorLightIcon color={component.color} selected={selected} />
+          {component.lightType === "directional" ||
+          component.lightType === "spot" ? (
+            <DirectionArrow
+              direction={-1}
+              color={selected ? EDITOR_SELECTION_COLOR : component.color}
+              position={[0, -0.18, 0]}
+            />
+          ) : null}
+        </>
       ) : null}
     </>
   );

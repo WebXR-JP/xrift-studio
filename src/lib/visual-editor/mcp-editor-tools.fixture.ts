@@ -226,6 +226,84 @@ export function runXriftMcpEditorToolFixtures(): void {
       audioSourceCapabilities.persistence.includes("Runtime-only"),
     "Scripting capabilities should expose owner-scoped Audio Source controls",
   );
+  const lightCapabilities = (
+    scriptingCapabilities.result.runtime as {
+      lights?: {
+        methods?: string[];
+        selection?: {
+          fields?: string[];
+          lightTypes?: string[];
+          distance?: unknown;
+        };
+        persistence?: unknown;
+      };
+      events?: {
+        methods?: string[];
+        scope?: unknown;
+        proximityConvention?: unknown;
+      };
+      entities?: {
+        worldPosition?: unknown;
+        playerBoundary?: unknown;
+      };
+    }
+  );
+  assert(
+    lightCapabilities.lights?.methods?.some((method) =>
+      method.includes("lights.select"),
+    ) &&
+      lightCapabilities.lights.methods.some((method) =>
+        method.includes("lights.setIntensity"),
+      ) &&
+      lightCapabilities.lights.methods.some((method) =>
+        method.includes("lights.setDistance"),
+      ) &&
+      lightCapabilities.lights.selection?.fields?.includes("lightType") &&
+      lightCapabilities.lights.selection.lightTypes?.includes("spot") &&
+      typeof lightCapabilities.lights.selection.distance === "string" &&
+      typeof lightCapabilities.lights.persistence === "string" &&
+      lightCapabilities.lights.persistence.includes("Runtime-only"),
+    "Scripting capabilities should expose owner-scoped Light controls",
+  );
+  assert(
+    lightCapabilities.events?.methods?.some((method) =>
+      method.includes("ctx.emit"),
+    ) &&
+      typeof lightCapabilities.events.scope === "string" &&
+      lightCapabilities.events.scope.includes("not KHR_interactivity") &&
+      typeof lightCapabilities.events.proximityConvention === "string" &&
+      lightCapabilities.events.proximityConvention.includes(
+        "xrift:proximity-state",
+      ) &&
+      lightCapabilities.events.proximityConvention.includes(
+        "sourceEntityId",
+      ) &&
+      lightCapabilities.events.proximityConvention.includes(
+        'kind: "enter" | "exit" | "sync"',
+      ) &&
+      typeof lightCapabilities.entities?.worldPosition === "string" &&
+      lightCapabilities.entities.worldPosition.includes("getWorldPosition") &&
+      typeof lightCapabilities.entities.playerBoundary === "string" &&
+      lightCapabilities.entities.playerBoundary.includes("player/avatar"),
+    "Scripting capabilities should document proximity event and Entity boundaries",
+  );
+  const proximityRecipe = (
+    scriptingCapabilities.result.recipes as {
+      proximityLight?: {
+        templates?: string[];
+        steps?: string[];
+        boundary?: unknown;
+      };
+    }
+  )?.proximityLight;
+  assert(
+    proximityRecipe?.templates?.includes("proximity-event") &&
+      proximityRecipe.templates.includes("event-light") &&
+      proximityRecipe.steps?.some((step) => step.includes("core.light")) &&
+      typeof proximityRecipe.boundary === "string" &&
+      proximityRecipe.boundary.includes("player/avatar"),
+    "Scripting capabilities should expose the MCP proximity-to-Light recipe",
+  );
   const textureCapabilities = (
     scriptingCapabilities.result.runtime as {
       assets?: {
@@ -341,6 +419,7 @@ export function runXriftMcpEditorToolFixtures(): void {
     scriptingCapabilities.result.persistentAuthoring as {
       groups?: {
         audio?: string[];
+        lights?: string[];
         materials?: string[];
         textures?: string[];
       };
@@ -354,6 +433,14 @@ export function runXriftMcpEditorToolFixtures(): void {
           updateComponent?: unknown;
           removeComponent?: unknown;
           componentFields?: string[];
+        };
+        lights?: {
+          componentDefinitionIds?: string[];
+          addComponent?: unknown;
+          updateComponent?: unknown;
+          removeComponent?: unknown;
+          liveFields?: string[];
+          structuralFields?: string[];
         };
         textures?: {
           read?: unknown;
@@ -392,6 +479,17 @@ export function runXriftMcpEditorToolFixtures(): void {
         "remove_component" &&
       persistentAssetOperations.assetOperations.audio.componentFields?.includes(
         "spatial",
+      ) &&
+      persistentAssetOperations.groups?.lights?.includes("add_component") &&
+      persistentAssetOperations.assetOperations?.lights
+        ?.componentDefinitionIds?.includes("core.light.point") &&
+      persistentAssetOperations.assetOperations.lights.updateComponent ===
+        "update_component" &&
+      persistentAssetOperations.assetOperations.lights.liveFields?.includes(
+        "intensity",
+      ) &&
+      persistentAssetOperations.assetOperations.lights.structuralFields?.includes(
+        "lightType",
       ) &&
       persistentAssetOperations.groups?.materials?.includes(
         "update_material_asset",

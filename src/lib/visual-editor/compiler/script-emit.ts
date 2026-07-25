@@ -1,6 +1,7 @@
 import scriptApiSource from "../../../../packages/xrift-studio-runtime/src/script/api.ts?raw";
 import scriptAudioSource from "../../../../packages/xrift-studio-runtime/src/script/audio-source.tsx?raw";
 import scriptHostSource from "../../../../packages/xrift-studio-runtime/src/script/host.tsx?raw";
+import scriptLightSource from "../../../../packages/xrift-studio-runtime/src/script/light.tsx?raw";
 import scriptLifecycleSource from "../../../../packages/xrift-studio-runtime/src/script/lifecycle.ts?raw";
 import scriptParticleSource from "../../../../packages/xrift-studio-runtime/src/script/particle.tsx?raw";
 
@@ -36,6 +37,7 @@ export const SCRIPT_MODULE_DIRECTORY = "src/scripts";
 export const SCRIPT_API_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/script-api.ts`;
 export const SCRIPT_AUDIO_SOURCE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/audio-source-runtime.tsx`;
 export const SCRIPT_HOST_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/script-host.tsx`;
+export const SCRIPT_LIGHT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/light-runtime.tsx`;
 export const SCRIPT_LIFECYCLE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/script-lifecycle.ts`;
 export const SCRIPT_PARTICLE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/particle-runtime.tsx`;
 
@@ -163,6 +165,9 @@ export function planScriptEmission(
         ...createScriptAudioSourceOverlayFile(),
       },
       {
+        ...createScriptLightOverlayFile(),
+      },
+      {
         ...createScriptParticleOverlayFile(),
       },
       {
@@ -190,6 +195,15 @@ export function createScriptAudioSourceOverlayFile(): CompilerOverlayFile {
   return {
     relativePath: SCRIPT_AUDIO_SOURCE_OVERLAY_PATH,
     content: scriptAudioSource,
+    kind: "source",
+    owner: "xrift-studio-compiler",
+  };
+}
+
+export function createScriptLightOverlayFile(): CompilerOverlayFile {
+  return {
+    relativePath: SCRIPT_LIGHT_OVERLAY_PATH,
+    content: scriptLightSource,
     kind: "source",
     owner: "xrift-studio-compiler",
   };
@@ -240,16 +254,18 @@ function rewriteScriptApiImports(source: string): string {
 /** Runtime overlays import sibling package modules by package-relative paths. */
 function rewriteRuntimeLocalImports(source: string): string {
   return source.replace(
-    /(\bfrom\s*)(["'])\.\/(api|audio-source|lifecycle|particle)\.js\2/g,
+    /(\bfrom\s*)(["'])\.\/(api|audio-source|light|lifecycle|particle)\.js\2/g,
     (_whole, prefix: string, quote: string, moduleName: string) =>
       `${prefix}${quote}./${
         moduleName === "api"
           ? "script-api"
           : moduleName === "audio-source"
             ? "audio-source-runtime"
-          : moduleName === "lifecycle"
-            ? "script-lifecycle"
-            : "particle-runtime"
+            : moduleName === "light"
+              ? "light-runtime"
+              : moduleName === "lifecycle"
+                ? "script-lifecycle"
+                : "particle-runtime"
       }${quote}`,
   );
 }

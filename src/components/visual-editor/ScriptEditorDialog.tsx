@@ -498,12 +498,51 @@ ctx.particles.setColor(ctx.props.color);
 ctx.particles.setOpacity(0.75);`}</GuideCode>
         </section>
 
+        <section>
+          <h4 className="text-[11px] font-bold text-slate-700">
+            Lightを動かす
+          </h4>
+          <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+            同じEntityのLightだけを選び、点灯、色、強度、Point / Spotの距離を
+            Play中に変えられます。
+          </p>
+          <GuideCode>{`const lights = ctx.lights.select({ lightType: "point" });
+lights.setEnabled(true);
+lights.setColor(ctx.props.color);
+lights.setIntensity(ctx.props.intensity);
+lights.setDistance(12);
+
+ctx.log(ctx.lights.list());`}</GuideCode>
+        </section>
+
+        <section>
+          <h4 className="text-[11px] font-bold text-slate-700">
+            近接イベントをつなぐ
+          </h4>
+          <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+            「範囲に入ったらイベント」と「イベントでLightを切替」で同じ
+            channelを指定します。距離判定はScript Componentで明示参照した
+            Entity同士のworld座標だけが対象です。
+          </p>
+          <GuideCode>{`ctx.emit("xrift:proximity-state", {
+  channel: "lamp-zone-1",
+  inside: true,
+  kind: "enter",
+  sourceEntityId: ctx.entity.id,
+});
+
+const unsubscribe = ctx.on(
+  "xrift:proximity-state",
+  (payload) => ctx.log(payload),
+);`}</GuideCode>
+        </section>
+
         <section className="rounded-lg border border-sky-200 bg-sky-50 p-2.5">
           <h4 className="text-[10px] font-bold text-sky-800">
             変更はruntime-only
           </h4>
           <p className="mt-1 text-[10px] leading-relaxed text-sky-700">
-            Material / Texture / Particle Assetと、別Entityが使う共有Textureは上書きしません。
+            Light / Material / Texture / Particle Assetと、別Entityが使う共有Textureは上書きしません。
             Scriptの再起動・Stop時にcloneとoverrideを元へ戻し、読み込んだTextureも自動で破棄します。
             保存したい変更はInspectorまたは永続編集用MCP toolでAssetへ反映します。
           </p>

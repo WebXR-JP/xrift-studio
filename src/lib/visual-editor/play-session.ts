@@ -152,6 +152,22 @@ function withoutLiveRuntimeValues(entity: SceneEntity): SceneEntity {
           maxDistance: 0,
         };
       }
+      if (component.type === "light") {
+        return {
+          ...component,
+          enabled: false,
+          color: "",
+          intensity: 0,
+          castShadow: false,
+          groundColor: "",
+          distance: 0,
+          decay: 0,
+          angle: 0,
+          penumbra: 0,
+          width: 0,
+          height: 0,
+        };
+      }
       return component;
     }),
   };

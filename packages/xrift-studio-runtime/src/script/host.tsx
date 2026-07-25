@@ -51,6 +51,7 @@ import {
   type ScriptMaterials,
   type ScriptMaterialTextureSlot,
   type ScriptMaterialTextureTransform,
+  type ScriptLights,
   type ScriptParticles,
   type ScriptPropDefinition,
   type ScriptPropsDeclaration,
@@ -64,6 +65,7 @@ import {
   type XriftAudioSourceRuntimeOverrides,
   type XriftAudioSourceRuntimeState,
 } from "./audio-source.js";
+import { createXriftLightRuntimeResources } from "./light.js";
 import { createScriptLifecycle } from "./lifecycle.js";
 import {
   XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY,
@@ -391,8 +393,9 @@ export function XriftScriptHost<
     let consecutiveErrors = 0;
     let stopped = false;
     let active = true;
+    let disposing = false;
     let shutdown: (() => void) | undefined;
-    const unsubscribes: (() => void)[] = [];
+    const unsubscribes = new Set<() => void>();
     const allowedAssetIds = new Set(
       JSON.parse(assetReferenceKey) as readonly string[],
     );
@@ -462,6 +465,7 @@ export function XriftScriptHost<
       assets: resources.assets,
       audioSources: resources.audioSources,
       materials: resources.materials,
+      lights: resources.lights,
       particles: resources.particles,
       find: (targetId) =>
         (active && allowedEntityIds.has(targetId)
@@ -474,18 +478,25 @@ export function XriftScriptHost<
       getAssetUrl: (assetId) => resources.assets.url(assetId),
       on: (event, handler) => {
         if (!active) return () => {};
-        const unsubscribe = root.subscribe(
+        const unsubscribeRoot = root.subscribe(
           event,
           handler,
           (error) => {
             if (active) fail("event", error);
           },
         );
-        unsubscribes.push(unsubscribe);
+        let subscribed = true;
+        const unsubscribe = () => {
+          if (!subscribed) return;
+          subscribed = false;
+          unsubscribeRoot();
+          unsubscribes.delete(unsubscribe);
+        };
+        unsubscribes.add(unsubscribe);
         return unsubscribe;
       },
       emit: (event, payload) => {
-        if (active) root.emit(event, payload);
+        if (active || disposing) root.emit(event, payload);
       },
       log: (...values) => {
         if (!active) return;
@@ -504,14 +515,17 @@ export function XriftScriptHost<
     } catch (error) {
       fail("start", error);
       active = false;
-      for (const unsubscribe of unsubscribes) unsubscribe();
+      for (const unsubscribe of [...unsubscribes]) unsubscribe();
+      disposing = true;
       lifecycle.dispose();
+      disposing = false;
       resources.dispose();
       return;
     }
     if (stopped) {
       active = false;
-      for (const unsubscribe of unsubscribes) unsubscribe();
+      for (const unsubscribe of [...unsubscribes]) unsubscribe();
+      disposing = true;
       lifecycle.dispose();
       try {
         instance?.stop?.();
@@ -523,6 +537,7 @@ export function XriftScriptHost<
       } catch {
         // Disposal failures must not block failed-start cleanup.
       }
+      disposing = false;
       resources.dispose();
       return;
     }
@@ -535,7 +550,8 @@ export function XriftScriptHost<
       lifecycleDisposed = true;
       active = false;
       unregister?.();
-      for (const unsubscribe of unsubscribes) unsubscribe();
+      for (const unsubscribe of [...unsubscribes]) unsubscribe();
+      disposing = true;
       lifecycle.dispose();
       try {
         instance?.stop?.();
@@ -547,6 +563,7 @@ export function XriftScriptHost<
       } catch {
         // Disposal failures must not block teardown of the Play session.
       }
+      disposing = false;
       resources.dispose();
       setRenderContext(null);
     };
@@ -657,6 +674,7 @@ export type ScriptResources = {
   assets: ScriptAssets;
   audioSources: ScriptAudioSources;
   materials: ScriptMaterials;
+  lights: ScriptLights;
   particles: ScriptParticles;
   /** Detects Meshes that arrive after start, such as asynchronously loaded Models. */
   update(): void;
@@ -818,6 +836,12 @@ export function createScriptResources({
   ]);
   const materialHandles = new Map<string, ScriptMaterialHandle>();
   const particleOverrides: XriftParticleRuntimeOverrides = {};
+  const lightResources = createXriftLightRuntimeResources({
+    object3d,
+    entityId,
+    componentId,
+    order,
+  });
 
   const assets: ScriptAssets = {
     url: (assetId) =>
@@ -1493,16 +1517,19 @@ export function createScriptResources({
     assets,
     audioSources,
     materials,
+    lights: lightResources.lights,
     particles,
     update() {
       synchronizeAudioSources(false);
       synchronizeMaterials(false);
+      lightResources.update();
       synchronizeParticles(false);
     },
     dispose() {
       if (disposed) return;
       resetAudioSources();
       resetMaterials();
+      lightResources.dispose();
       resetParticles();
       disposed = true;
       for (const texture of textures) texture.dispose();

@@ -88,7 +88,7 @@ F-06 アイテム検査
 | MI-69 | Script Assetを作成し、docked editorで編集して保存する | Assetsの作成入口とEntityのScript Componentの両方から同じeditorを開く。editorは中央から右へのdocked overlayとし、Scene Viewの左側を隠さずPlayの挙動を見ながら直せるようにする。未保存は`isDirty`点で示し、保存は明示操作と`⌘/Ctrl+S`の両方を受ける。keystrokeごとにhistoryへ積まず、連続入力は現在のhistory項目を置き換える。 | 保存はScript source fileだけを書き、Entity配置とAssetManifestのentryを変更しない。閉じる操作は未保存があるとき破棄・保存・取消を選ばせる。構文が壊れていても保存は許し、実行できない理由をeditor内に残す。 |
 | MI-70 | Playを開始し、Sceneが使うScriptを変換して起動する | 変換中はPlayボタンを「準備中」に変えて無効化し、Edit表示のまま待たせる。Scriptを持たないSceneでは待ち表示を出さない。変換の失敗はfile名、行、列、原因を一覧で示し、該当行へ移動できる。 | 全Scriptが変換できた時だけPlayへ入る。失敗時はEditのまま留まり、壊れたSceneを再生しない。修正して同じPlay操作から再試行でき、Playを諦めてeditorへ戻ることもできる。 |
 | MI-71 | Play中にScriptが実行時例外を投げる | 例外を投げたScriptだけを停止し、Entity名、Script名、行、例外文をScript Consoleへ残す。Scene View全体とほかのEntity、camera、physicsは動き続ける。Inspectorの該当Script Componentにも停止状態を示す。 | 1つのScriptの失敗でPlay全体を落とさない。同じ例外の連続出力は件数へまとめる。該当行への移動、Scriptの再開、Stopのいずれかへ到達できる。 |
-| MI-72 | Play中にScript source、Scene構造、Scene settings、Material / Texture / Particle設定を保存して反映する | 保存したScriptを使うEntity、構成を変更したEntity、または変更Assetを参照するEntityだけのruntime世代を進めて作り直す。Entityの追加・削除・親変更・Component追加・更新・削除、既存Material / Particle Asset property、MCP経由のTexture Asset設定とScene settingsは実行中のSceneへ即時同期し、ほかのEntity、player位置、camera、physicsの状態は保持する。反映対象を短く示す。 | InspectorのTexture / Model Asset設定、InspectorのMaterial割り当てと新規document Asset作成は無効のままにする。対応するTexture / Material MCP toolは永続変更として明示し、`ctx.materials`のruntime-only overrideと混同しない。Script変換に失敗した場合は直前に動いていたScriptを走らせ続け、失敗をConsoleへ残す。 |
+| MI-72 | Play中にScript source、Scene構造、Scene settings、Light / Audio Source / Material / Texture / Particle設定を保存して反映する | 保存したScriptを使うEntity、構成を変更したEntity、または変更Assetを参照するEntityだけを差分同期する。Lightのenabled、色、強度、影、距離、減衰、角度、半影、Area sizeとAudio Sourceの再生設定は既存runtimeへ更新し、Light種別、Audio Asset / spatial、Component追加・削除などの構造変更だけ対象Entityのruntime世代を進める。ほかのEntity、player位置、camera、physicsの状態は保持し、反映対象を短く示す。 | InspectorのTexture / Model Asset設定、InspectorのMaterial割り当てと新規document Asset作成は無効のままにする。対応するLight / Audio / Texture / Material MCP toolは永続変更として明示し、`ctx.lights` / `ctx.audioSources` / `ctx.materials`のruntime-only overrideと混同しない。Script変換に失敗した場合は直前に動いていたScriptを走らせ続け、失敗をConsoleへ残す。 |
 | MI-73 | 未承認の内容hashを持つScriptを含むprojectをPlayする | 実行前に対象file、来歴、言語、完全なSHA-256、読み取り専用sourceを一覧で示す。来歴は表示専用で承認判定に使わず、同一realmで完全な分離ではないことを警告する。初期focusはキャンセルに置く。 | 「許可してPlay」ではcanonical project path、project ID、source hash、言語、contract / module policyに一致する内容だけをproject外app dataへ承認する。「Scriptを無効にしてPlay」は未承認ScriptをConsoleへ残して起動し、キャンセルはEditを維持する。確認中に内容が変われば最新sourceを再確認する。XRift Studio stdio MCP editor tools / serverは承認できない。 |
 
 ## 機能一覧
@@ -119,7 +119,7 @@ F-06 アイテム検査
 | F-24 | glTF Material制御とBehavior連携 | MI-15, MI-16, MI-25, MI-60 | Material Textureのタイリング、Offset、Rotation、UV SetをglTF互換値として編集し、MCP、Animation導線、KHR_interactivity pointer nodeから同じMaterial設定へ到達できる。Runtime manifestでもTexture transformとRepeat samplerを維持する。 |
 | F-26 | アプリデータのリセット | MI-03, MI-04, MI-05, MI-09, MI-66 | 実行中CLIとの競合や一時的なfile lockで部分的な状態を残さず、ランタイムのみまたは全データを確実に新しい起動から分離する。失敗時は対象と再試行方法を確認したまま復帰できる。 |
 | F-27 | 公開前パフォーマンス概算とAsset最適化 | MI-04, MI-07, MI-27, MI-67 | World / Itemの更新前に初回ロード容量と回線別時間、Assetと実行時VRAMのrange、端末別Studio基準、容量・負荷順の内訳と最適化候補を確認できる。対応候補は個別選択してresize、KTX2、DracoをAssetへ適用し、変換結果と再計算値を確認した上で同じUpload reviewへ戻れる。 |
-| F-28 | Script AssetとScript Component | MI-03, MI-05, MI-09, MI-14, MI-69, MI-70, MI-71, MI-72, MI-73 | Script AssetをTypeScriptで書き、共通Template catalogからsource preview付きで作成し、EntityへScript Componentとして複数付けられる。宣言したpropertyがInspectorへ自動で並び、Asset参照とEntity参照を選べる。Play中のpropertyは再起動なしで次のframeへ反映し、明示参照した基本Texture、対象を選べるruntime Material、Entity自身のParticle Emitterを操作できる。Entity / Component構成と既存Material / Particle Asset propertyは永続化し、影響Entityだけを再起動する。sourceを直すと該当Entityだけが作り直される。実行時例外は該当Scriptだけを止め、Scene Viewを落とさない。同じhost、root、Particle runtime、参照resolverを公開ワールドへ静的importとして出力し、Playと公開の挙動を一致させる。MCPは同じTemplate、参照契約、revision検査でScriptを作成・編集・適用・実行でき、公開できない依存はupload前にblockingとして示す。 |
+| F-28 | Script AssetとScript Component | MI-03, MI-05, MI-09, MI-14, MI-69, MI-70, MI-71, MI-72, MI-73 | Script AssetをTypeScriptで書き、共通Template catalogからsource preview付きで作成し、EntityへScript Componentとして複数付けられる。宣言したpropertyがInspectorへ自動で並び、Asset参照とEntity参照を選べる。Play中のpropertyは再起動なしで次のframeへ反映し、明示参照した基本Texture / Audio、Entity自身のAudio Source / Light / Material / Particleをowner単位で操作できる。明示参照Entityのworld座標近接をruntime eventへつなぎ、Light等の視覚効果をchannelで接続できる。Entity / Component構成と対応するauthoring propertyは永続化し、Light scalarは既存runtime、それ以外は影響Entityだけを再同期する。実行時例外は該当Scriptだけを止める。同じhost、root、Audio / Light / Particle runtime、参照resolverを公開ワールドへ静的importとして出力し、MCPも同じTemplate、参照契約、revision検査で作成・編集・適用・実行できる。 |
 
 ## F-23 公式XRift ComponentカタログとClassic / TSX変換の状態設計
 
@@ -776,19 +776,20 @@ F-06 アイテム検査
 
 ### 操作前
 
-- Assets headerの常設Createから「新規Script」を選べる。回転、移動、追従、Material、Texture、Particle、Model表示、Audio Source制御、Audio hotkey、eventなどの組み込みTemplateを用途別アイコンとsource preview付きで同じdialogから確認し、選択Entityがある場合はScript Asset作成とScript Component追加を一度に確定できる。作成だけを選んだ場合も新しいScriptをAssetsで選択してScript Editorを開く。選択中のScriptがある場合、Add ComponentはそのScript Assetを参照する。
+- Assets headerの常設Createから「新規Script」を選べる。回転、追従、Material、Texture、Particle、Model表示、Audio Source制御、Light点滅、近接event送信、eventによるLight切替などの組み込みTemplateを用途別アイコンとsource preview付きで同じdialogから確認し、選択Entityがある場合はScript Asset作成とScript Component追加を一度に確定できる。XRift公式shortcutと競合するkeyboard操作は組み込みTemplateへ含めない。作成だけを選んだ場合も新しいScriptをAssetsで選択してScript Editorを開く。選択中のScriptがある場合、Add ComponentはそのScript Assetを参照する。
 - Script AssetはAssetsでコードアイコンとTypeScript / TSXラベルを表示する。AI editor bridgeはScript sourceの取得、作成、更新、Script Componentへの明示参照、Play / Stopを同じEditor revision契約で提供する。
-- Script EditorのAPIガイドから、property、通常Texture / Audio読み込み、保存済みAudio Source制御、Texture Assetから継承するSampler / Mipmap設定、`Render`でのModel表示、Material Texture transform / Particle override、runtime-onlyと永続編集の違い、KTX2 previewとScript typed loaderの境界を確認できる。
+- Script EditorのAPIガイドから、property、通常Texture / Audio読み込み、保存済みAudio Source / Light制御、world座標の近接event、Texture Assetから継承するSampler / Mipmap設定、`Render`でのModel表示、Material Texture transform / Particle override、runtime-onlyと永続編集の違い、KTX2 previewとScript typed loaderの境界を確認できる。
 - Script Componentは1つのEntityへ複数付けられ、実行順がEntity階層順とComponent並び順で決まることをInspectorに示す。
 - Script Assetを選ぶと、宣言したpropertyがInspectorへ型どおりに並ぶ。TextureなどのAsset propertyとEntity propertyは選択結果を`assetReferences` / `entityReferences`へも入れる。宣言を読み取れないScriptは値を推測せず「propertyを読み取れません」と理由を示す。
-- MCP clientは`get_scripting_capabilities`で利用可能な`ctx.assets` / `ctx.audioSources` / `ctx.materials` / `ctx.particles`、Texture / Audio loader、Audio Source selector、自動再生制約、Texture Assetの既定値と明示optionの優先順位、filter / mipmap、Material Texture cloneの隔離、`Render` context、参照制限、runtime一時操作と永続Audio / Texture / Material toolの区別、作成からPlayまでのtool順序を取得する。`list_script_templates`、`create_script_asset(templateId)`、`apply_script_template`はUIと同じversion 4 catalogを使用する。
+- MCP clientは`get_scripting_capabilities`で利用可能な`ctx.assets` / `ctx.audioSources` / `ctx.lights` / `ctx.materials` / `ctx.particles`、runtime event、world座標とauthored Entity参照の境界、Texture / Audio loader、各selector、runtime一時操作と永続Light / Audio / Texture / Material toolの区別、近接送信からLight受信までのrecipeを取得する。`list_script_templates`、`create_script_asset(templateId)`、`apply_script_template`はUIと同じversion 5 catalogを使用する。
 - Item projectでは重力とRigidBodyが動かないため、物理に触るAPIが未対応であることをScriptのdocumentとInspectorで示す。
 
 ### 操作中
 
 - Playの開始時にSceneが使うScriptをまとめて変換する。変換中はPlayボタンを「準備中」にして無効化し、Edit表示のまま待たせる。
 - Play中もEntityの追加・削除・複製・親変更・Component追加をauthoring dataへ保存して実行中のSceneへ差分同期する。回転速度、色などの宣言済みproperty値はScriptを再起動せず、同じinstanceの`ctx.props`へ次のframeから反映する。sourceの保存、Script Asset参照、Asset / Entity参照allowlist、Component構成の変更は、変換に成功した対象Entityだけを再起動する。既存Material / Particle AssetのpropertyはInspectorとMCPから保存し、参照Entityだけへ再反映する。MCPのScene settings変更は共有Scene viewへ即時反映し、`update_texture_asset`はTextureを直接またはMaterial / Particle経由で参照するEntityだけを再起動する。Texture sourceの新規import、InspectorからのTexture設定、InspectorでのMaterial割り当ては停止まで無効にする。
-- Texture / Audio読み込みはScript Componentで明示したAssetだけを対象にし、Script instance単位でcacheする。`loadTexture`で省略した色空間、wrap、filter、Flip Y、MipmapはTexture AssetのImport設定を継承し、明示optionだけをその読み込みへ優先する。named `Render` exportには`start`と同じliveな`ctx`を渡し、TSXからModelなどのReact subtreeをEntity配下へ描画できる。`ctx.audioSources`はEntity自身のAudio SourceだけをcomponentId / audioAssetIdで選び、再生、seek、volume、loopをowner単位で合成する。Material操作はEntity自身のMeshにruntime cloneを割り当て、`setTextureTransform`はMaterial slotごとのTexture cloneだけへoffset / repeat / center / rotationを適用する。子Entity、別slot、別Entity、共有Audio / Texture / Material Assetを暗黙に変更しない。Audio Source / Material slot selectorとParticle overrideはScript owner単位で合成し、非同期に追加されたSource / Mesh / Emitterにも同じ対象規則を適用する。
+- Texture / Audio読み込みはScript Componentで明示したAssetだけを対象にし、Script instance単位でcacheする。`loadTexture`で省略した色空間、wrap、filter、Flip Y、MipmapはTexture Assetから継承する。`ctx.audioSources`と`ctx.lights`はEntity自身のComponentだけをselectorで選び、Audio再生とLightの点灯・色・強度・Point / Spot距離をowner単位で合成する。Material操作はEntity自身のMesh clone、Particle操作はEntity自身のEmitterへ限定する。子Entity、別slot、別Entity、共有Assetを暗黙に変更しない。late mountされたSource / Light / Mesh / Emitterにも同じ対象規則を適用する。
+- `proximity-event`は明示したauthored Entityを`getWorldPosition`で判定し、`xrift:proximity-state`のpayloadへchannel、inside状態、source Entity、`enter | exit | sync`を送る。edgeは境界遷移時だけ一度送り、syncはlive channelと後から起動したreceiverの状態同期に分ける。`event-light`はchannelごとのactive sourceを追跡する。runtime player / avatarは`ctx.find`へ公開せず、Script eventは同じroot内だけでKHR_interactivityやdocumentへ暗黙接続しない。
 - 未承認fingerprintを含むprojectのPlayでは、実行前に対象file、来歴、言語、完全なhash、読み取り専用sourceと、実行環境がアプリと同一で完全な分離ではないことを示して許可を求める。承認はproject外のapp dataへ保存し、project documentが自己承認できないようにする。
 - editorでの連続入力はhistoryへ積み増さず現在の項目を置き換える。保存はScript source fileだけを書く。
 
@@ -796,7 +797,7 @@ F-06 アイテム検査
 
 - 全Scriptを変換できた時だけPlayへ入る。Script EditorのConsoleから実行結果を確認でき、新しいruntime failureでは自動的にConsoleを開く。
 - Play中の保存では、そのScriptを使うEntityだけが作り直される。反映したEntity数を短く示し、player位置、camera、physicsは保持する。
-- property値の変更は回転速度などの実行状態を維持したまま即時に見た目へ反映し、`Render`も同じ更新済み`ctx.props`を受け取る。`ctx.audioSources`による再生、seek、volume、loop、`ctx.materials`による色、透明度、発光、metalness、roughness、Texture slotとUV transform、および`ctx.particles`による再生、Emission、速度、サイズ、色の変更はPlay中に確認でき、Audio Source ComponentやAudio / Material / Texture / Particle Asset自体は変更しない。永続編集は通常のInspector / MCP toolへ明示し、そのComponentまたはAssetを参照するEntityだけを再同期する。
+- property値の変更は回転速度、Light点滅速度、近接半径、channelなどの実行状態を維持したまま即時に見た目へ反映する。`ctx.audioSources`、`ctx.lights`、`ctx.materials`、`ctx.particles`の変更はPlay中に確認でき、authoring data自体は変更しない。Lightの永続scalar変更は既存runtimeへ反映し、Light種別やComponent構造だけ対象Entityを再起動する。
 - 公開ではstagingへScript sourceと adapterを出力し、生成した`src/World.tsx`または`src/Item.tsx`から静的importする。Scene subtreeをPlayと同じ`XriftScriptRoot`で包み、同じ`XriftScriptHost`へproperty、実行順、Asset / Entity参照resolver、任意の`Render` exportを渡す。出力先pathをcompile結果に残す。
 
 ### 失敗時
@@ -806,7 +807,7 @@ F-06 アイテム検査
 - Play中の保存で変換に失敗した場合は、直前に動いていたScriptを走らせ続け、失敗をConsoleへ残す。
 - 未宣言または存在しないAsset IDでは`ctx.assets.url`が`null`になり、`loadTexture`も`null`を返す。URLを解決できても通常画像としてdecodeできないTextureでは`loadTexture`だけが`null`になる。Scriptは処理を続けるか`ctx.log`で理由を残し、Scene全体を停止しない。
 - `ctx.assets.loadTexture`でKTX2、HDR、EXR、Material Assetを直接読み込めるようには見せない。Material / Particle previewのproject KTX2はlocal Basis transcoder、OpenBrush builtin Textureは同梱URLを使う別経路であり、Script用typed loaderは今後必要であることを示す。
-- XRift Studio stdio MCP editor tools / serverはScript Assetの作成・読取・更新、Script Component追加、Play切替、propertyと明示参照の更新に加え、Play中のEntity作成・複製・親変更・Component追加・更新・削除・有効化を同じrevision検査と差分同期経路で実行する。このserverはScriptを承認できず、未承認時は`SCRIPT_APPROVAL_REQUIRED`を受ける。`unapprovedPolicy: "skip"`を明示した場合だけ未承認Scriptを無効にしてPlayする。`get_editor_context.scriptRuntime`はtrustのpending / disabled / running fingerprint、compile error、runtime failure、JSON-safeな直近logを返す。永続Audio編集はEdit中の`import_audio_asset`、`get_audio_asset`、`place_asset`、`core.audio-source`のadd / update / removeへ、Material編集は`set_material`、`get_material_asset`、`update_material_asset`、`set_material_texture_transform`へ、Texture編集は`import_texture_asset`、`get_texture_asset`、`update_texture_asset`へ、Particle編集は`create_document_asset`、`get_particle_asset`、`update_particle_asset`へ分離する。
+- XRift Studio stdio MCP editor tools / serverはScript Assetの作成・読取・更新、Script Component追加、Play切替、propertyと明示参照の更新に加え、Play中のEntity / Component変更を同じrevision検査と差分同期経路で実行する。近接Light recipeはsensor / target / receiverを解決し、`proximity-event`へtarget参照、receiverへ`core.light.*`と`event-light`、両Scriptへ同じchannelを設定する。このserverはScriptを承認できず、未承認時は`SCRIPT_APPROVAL_REQUIRED`を返す。永続Light編集は`core.light.*`のadd / update / remove、Audio編集は`import_audio_asset`、`place_asset`、`core.audio-source`のadd / update / remove、ほかのAsset編集も専用toolへ分離する。
 - `pnpm tauri:dev`のdebug buildだけに登録するprivileged Tauri MCP bridgeは、webview JavaScript実行とTauri commandの`invoke`を許す開発者向けautomationであり、上記stdio editor toolのtrust boundary外とする。release buildには同bridgeを登録・搭載せず、公開された承認経路として扱わない。
 - `https://`から始まるmoduleを読むScriptと、runtime JSON出力を選んだ場合はupload前にblockingとして示し、対象Scriptと理由を挙げる。
 - 許可しなかった取り込み由来のScriptは実行せずPlayへ入り、無効であることをConsoleへ残す。
@@ -815,7 +816,7 @@ F-06 アイテム検査
 
 - 変換失敗時はEditのままScript editorの該当行へ戻る。修正して同じPlay操作から再試行できる。
 - 実行時例外では該当行への移動、そのScriptの再開、Stopのいずれかへ到達できる。
-- Stopは生成したmoduleとblob URL、timer、listener、読み込んだTexture、Material slot所有のTexture clone、独立Audio playerを破棄し、runtime Audio Source / Material / Particle overrideを元へ戻す。Play中にInspector / MCPで保存したScene、Audio Source、Material、Texture、Particleのauthoring dataは残し、Editの選択とcameraへ戻る。
+- Stopは生成したmoduleとblob URL、timer、listener、読み込んだTexture、Material slot所有のTexture clone、独立Audio playerを破棄し、runtime Audio Source / Light / Material / Particle overrideを元へ戻す。Play中にInspector / MCPで保存したauthoring dataは残し、Editの選択とcameraへ戻る。
 - 公開のblockingでは該当Script、またはUpload reviewへ戻り、修正後に同じreviewを再確認できる。
 
 ## 実装制約

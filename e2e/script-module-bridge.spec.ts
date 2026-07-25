@@ -238,6 +238,324 @@ test("外部ModelテンプレートをTSX moduleとして変換できる", async
   });
 });
 
+test("組み込みScriptテンプレートをすべてPlay用moduleへ変換できる", async ({
+  page,
+}) => {
+  await page.goto("/e2e.html?scenario=ready");
+
+  const result = await page.evaluate(async ({ runtimeUrl, templatesUrl }) => {
+    const runtime = (await import(runtimeUrl)) as {
+      loadScriptModule(
+        source: string,
+        fileName: string,
+      ): Promise<
+        | {
+            ok: true;
+            module: Record<string, unknown>;
+            objectUrl: string;
+          }
+        | { ok: false; message: string }
+      >;
+      releaseAllScriptModules(): void;
+    };
+    const templates = (await import(templatesUrl)) as {
+      SCRIPT_TEMPLATE_CATALOG: readonly {
+        id: string;
+        language: "ts" | "tsx";
+      }[];
+      createScriptTemplateSource(
+        templateId: string,
+        scriptName: string,
+      ): string | null;
+    };
+    const failures: { id: string; message: string }[] = [];
+    const loadedNames: string[] = [];
+
+    try {
+      for (const template of templates.SCRIPT_TEMPLATE_CATALOG) {
+        const name = `Fixture ${template.id}`;
+        const source = templates.createScriptTemplateSource(
+          template.id,
+          name,
+        );
+        if (!source) {
+          failures.push({ id: template.id, message: "template missing" });
+          continue;
+        }
+        const loaded = await runtime.loadScriptModule(
+          source,
+          `${template.id}.${template.language}`,
+        );
+        if (!loaded.ok) {
+          failures.push({ id: template.id, message: loaded.message });
+          continue;
+        }
+        const loadedName = (
+          loaded.module.default as { name?: unknown } | undefined
+        )?.name;
+        if (loadedName !== name) {
+          failures.push({
+            id: template.id,
+            message: `unexpected Script name: ${String(loadedName)}`,
+          });
+          continue;
+        }
+        loadedNames.push(name);
+      }
+    } finally {
+      runtime.releaseAllScriptModules();
+    }
+
+    return {
+      failures,
+      loadedNames,
+      catalogSize: templates.SCRIPT_TEMPLATE_CATALOG.length,
+    };
+  }, {
+    runtimeUrl: "/src/lib/script-modules.ts",
+    templatesUrl:
+      "/src/lib/visual-editor/scripting/script-templates.ts",
+  });
+
+  expect(result.failures).toEqual([]);
+  expect(result.loadedNames).toHaveLength(result.catalogSize);
+  expect(result.catalogSize).toBeGreaterThanOrEqual(10);
+});
+
+test("近接イベントはlive channel・複数sensor・破棄を整合させる", async ({
+  page,
+}) => {
+  await page.goto("/e2e.html?scenario=ready");
+
+  const result = await page.evaluate(async ({ runtimeUrl, templatesUrl }) => {
+    type RuntimeInstance = {
+      update?(delta: number): void;
+      dispose?(): void;
+    };
+    type RuntimeDefinition = {
+      start?(context: unknown): RuntimeInstance | void;
+    };
+    const runtime = (await import(runtimeUrl)) as {
+      loadScriptModule(
+        source: string,
+        fileName: string,
+      ): Promise<
+        | {
+            ok: true;
+            module: Record<string, unknown>;
+            objectUrl: string;
+          }
+        | { ok: false; message: string }
+      >;
+      releaseAllScriptModules(): void;
+    };
+    const templates = (await import(templatesUrl)) as {
+      createScriptTemplateSource(
+        templateId: string,
+        scriptName: string,
+      ): string | null;
+    };
+    const loadTemplate = async (templateId: string) => {
+      const source = templates.createScriptTemplateSource(
+        templateId,
+        `Fixture ${templateId}`,
+      );
+      if (!source) throw new Error(`${templateId} template missing`);
+      const loaded = await runtime.loadScriptModule(
+        source,
+        `${templateId}.ts`,
+      );
+      if (!loaded.ok) throw new Error(loaded.message);
+      return loaded.module.default as RuntimeDefinition;
+    };
+
+    try {
+      const proximity = await loadTemplate("proximity-event");
+      const proximityProps = {
+        target: "target-a",
+        channel: "channel-a",
+        radius: 2,
+        exitMargin: 0.25,
+      };
+      const emitted: {
+        channel?: unknown;
+        inside?: unknown;
+        kind?: unknown;
+        sourceEntityId?: unknown;
+      }[] = [];
+      const setPosition = (
+        target: { set(x: number, y: number, z: number): unknown },
+        x: number,
+      ) => target.set(x, 0, 0);
+      const proximityInstance = proximity.start?.({
+        props: proximityProps,
+        entity: { id: "sensor-a" },
+        object3d: {
+          getWorldPosition: (target: {
+            set(x: number, y: number, z: number): unknown;
+          }) => setPosition(target, 0),
+        },
+        find: (entityId: string) =>
+          entityId === proximityProps.target
+            ? {
+                getWorldPosition: (target: {
+                  set(x: number, y: number, z: number): unknown;
+                }) => setPosition(target, 1),
+              }
+            : null,
+        emit: (_event: string, payload: unknown) => {
+          emitted.push(
+            payload as {
+              channel?: unknown;
+              inside?: unknown;
+              kind?: unknown;
+              sourceEntityId?: unknown;
+            },
+          );
+        },
+      }) as RuntimeInstance;
+      proximityInstance.update?.(1 / 60);
+      proximityInstance.update?.(0.5);
+      proximityProps.channel = "channel-b";
+      proximityInstance.update?.(1 / 60);
+      proximityInstance.dispose?.();
+
+      const eventLight = await loadTemplate("event-light");
+      const lightProps = {
+        channel: "channel-a",
+        idleColor: "#000000",
+        activeColor: "#ffffff",
+        idleIntensity: 0.15,
+        activeIntensity: 4,
+        fadeSpeed: 0,
+      };
+      let eventHandler: ((payload: unknown) => void) | undefined;
+      let unsubscribed = false;
+      let reset = false;
+      const intensities: number[] = [];
+      const lightInstance = eventLight.start?.({
+        props: lightProps,
+        on: (_event: string, handler: (payload: unknown) => void) => {
+          eventHandler = handler;
+          return () => {
+            unsubscribed = true;
+          };
+        },
+        lights: {
+          setEnabled: () => 1,
+          setColor: () => 1,
+          setIntensity: (value: number) => {
+            intensities.push(value);
+            return 1;
+          },
+          reset: () => {
+            reset = true;
+          },
+        },
+      }) as RuntimeInstance;
+      eventHandler?.({
+        channel: "channel-a",
+        inside: true,
+        kind: "enter",
+        sourceEntityId: "sensor-a",
+      });
+      eventHandler?.({
+        channel: "channel-a",
+        inside: true,
+        kind: "enter",
+        sourceEntityId: "sensor-b",
+      });
+      lightInstance.update?.(1 / 60);
+      eventHandler?.({
+        channel: "channel-a",
+        inside: false,
+        kind: "exit",
+        sourceEntityId: "sensor-a",
+      });
+      lightInstance.update?.(1 / 60);
+      eventHandler?.({
+        channel: "channel-a",
+        inside: false,
+        kind: "exit",
+        sourceEntityId: "sensor-b",
+      });
+      lightInstance.update?.(1 / 60);
+      eventHandler?.({
+        channel: "channel-a",
+        inside: true,
+        kind: "enter",
+        sourceEntityId: "sensor-a",
+      });
+      lightProps.channel = "channel-b";
+      lightInstance.update?.(1 / 60);
+      eventHandler?.({
+        channel: "channel-b",
+        inside: true,
+        kind: "sync",
+        sourceEntityId: "sensor-c",
+      });
+      lightInstance.update?.(1 / 60);
+      lightInstance.dispose?.();
+
+      return {
+        emitted,
+        intensities: intensities.map(
+          (value) => Math.round(value * 1_000) / 1_000,
+        ),
+        unsubscribed,
+        reset,
+      };
+    } finally {
+      runtime.releaseAllScriptModules();
+    }
+  }, {
+    runtimeUrl: "/src/lib/script-modules.ts",
+    templatesUrl:
+      "/src/lib/visual-editor/scripting/script-templates.ts",
+  });
+
+  expect(result.emitted).toEqual([
+    {
+      channel: "channel-a",
+      inside: true,
+      kind: "enter",
+      sourceEntityId: "sensor-a",
+      targetEntityId: "target-a",
+    },
+    {
+      channel: "channel-a",
+      inside: true,
+      kind: "sync",
+      sourceEntityId: "sensor-a",
+      targetEntityId: "target-a",
+    },
+    {
+      channel: "channel-a",
+      inside: false,
+      kind: "exit",
+      sourceEntityId: "sensor-a",
+      targetEntityId: "target-a",
+    },
+    {
+      channel: "channel-b",
+      inside: true,
+      kind: "sync",
+      sourceEntityId: "sensor-a",
+      targetEntityId: "target-a",
+    },
+    {
+      channel: "channel-b",
+      inside: false,
+      kind: "exit",
+      sourceEntityId: "sensor-a",
+      targetEntityId: "target-a",
+    },
+  ]);
+  expect(result.intensities).toEqual([4, 4, 0.15, 0.15, 4]);
+  expect(result.unsubscribed).toBe(true);
+  expect(result.reset).toBe(true);
+});
+
 test("bridgeはdefaultとstrict mode予約語をnamed exportへ重複出力しない", async ({
   page,
 }) => {

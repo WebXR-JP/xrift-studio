@@ -62,10 +62,12 @@ import { collectRequiredScriptAssetIds } from "../scripting/script-schedule";
 import { createScriptAssetRuntimeDescriptorMap } from "../scripting/asset-runtime";
 import {
   createScriptAudioSourceOverlayFile,
+  createScriptLightOverlayFile,
   createScriptParticleOverlayFile,
   planScriptEmission,
   renderScriptComponent,
   SCRIPT_AUDIO_SOURCE_OVERLAY_PATH,
+  SCRIPT_LIGHT_OVERLAY_PATH,
   SCRIPT_PARTICLE_OVERLAY_PATH,
   type EmittedScriptModule,
 } from "./script-emit";
@@ -266,6 +268,16 @@ export function compileVisualProject(
   ) {
     overlayFiles.push(createScriptAudioSourceOverlayFile());
   }
+  if (
+    outputMode === "classic-jsx" &&
+    resolvedEntryScene &&
+    sceneUsesLightRuntime(resolvedEntryScene.scene) &&
+    !overlayFiles.some(
+      (file) => file.relativePath === SCRIPT_LIGHT_OVERLAY_PATH,
+    )
+  ) {
+    overlayFiles.push(createScriptLightOverlayFile());
+  }
   diagnoseUnsupportedAssets(documents.assets, diagnostics);
   const uniqueDiagnostics = deduplicateDiagnostics(diagnostics);
   const provenanceFile = compilerFile(
@@ -344,6 +356,12 @@ function sceneUsesParticleRuntime(scene: SceneDocument): boolean {
 function sceneUsesAudioSourceRuntime(scene: SceneDocument): boolean {
   return Object.values(scene.entities).some((entity) =>
     entity.components.some((component) => component.type === "audio-source"),
+  );
+}
+
+function sceneUsesLightRuntime(scene: SceneDocument): boolean {
+  return Object.values(scene.entities).some((entity) =>
+    entity.components.some((component) => component.type === "light"),
   );
 }
 
@@ -1181,7 +1199,9 @@ function renderEntity(
   const wrappers: RenderedXriftWrapper[] = [];
   for (const component of entity.components as RegisteredSceneComponent[]) {
     if (
-      (!component.enabled && component.type !== "audio-source") ||
+      (!component.enabled &&
+        component.type !== "audio-source" &&
+        component.type !== "light") ||
       component.type === "transform"
     ) {
       continue;
@@ -1198,7 +1218,7 @@ function renderEntity(
       // Playback is applied by the sibling Model renderer.
       continue;
     } else if (component.type === "light") {
-      localContent.push(renderLight(component));
+      localContent.push(renderLight(component, context));
     } else if (component.type === "text") {
       context.dreiImports.add("Text");
       localContent.push(renderText(component));
@@ -3327,23 +3347,14 @@ function registerCompiledParticleRuntime(context: CompileContext): void {
   );
 }
 
-function renderLight(light: LightComponent): string {
-  const intensity = formatNumber(light.intensity);
-  const color = JSON.stringify(light.color);
-  switch (light.lightType) {
-    case "ambient":
-      return `<ambientLight color=${color} intensity={${intensity}} />`;
-    case "directional":
-      return `<directionalLight color=${color} intensity={${intensity}} castShadow={${light.castShadow}} />`;
-    case "hemisphere":
-      return `<hemisphereLight color=${color} groundColor=${JSON.stringify(light.groundColor ?? "#334155")} intensity={${intensity}} />`;
-    case "point":
-      return `<pointLight color=${color} intensity={${intensity}} distance={${formatNumber(light.distance ?? 0)}} decay={${formatNumber(light.decay ?? 2)}} castShadow={${light.castShadow}} />`;
-    case "spot":
-      return `<spotLight color=${color} intensity={${intensity}} distance={${formatNumber(light.distance ?? 0)}} angle={${formatNumber(light.angle ?? Math.PI / 3)}} penumbra={${formatNumber(light.penumbra ?? 0.5)}} decay={${formatNumber(light.decay ?? 2)}} castShadow={${light.castShadow}} />`;
-    case "rectArea":
-      return `<rectAreaLight color=${color} intensity={${intensity}} width={${formatNumber(light.width ?? 1)}} height={${formatNumber(light.height ?? 1)}} />`;
-  }
+function renderLight(
+  light: LightComponent,
+  context: CompileContext,
+): string {
+  context.extraImports.add(
+    'import { XriftScriptLight } from "./xrift-studio/light-runtime";',
+  );
+  return `<XriftScriptLight componentId=${JSON.stringify(light.id)} lightType=${JSON.stringify(light.lightType)} enabled={${light.enabled}} color=${JSON.stringify(light.color)} intensity={${formatNumber(light.intensity)}} castShadow={${light.castShadow}} groundColor=${JSON.stringify(light.groundColor ?? "#334155")} distance={${formatNumber(light.distance ?? 0)}} decay={${formatNumber(light.decay ?? 2)}} angle={${formatNumber(light.angle ?? Math.PI / 3)}} penumbra={${formatNumber(light.penumbra ?? 0.5)}} width={${formatNumber(light.width ?? 1)}} height={${formatNumber(light.height ?? 1)}} />`;
 }
 
 function renderText(text: TextComponent): string {

@@ -27,7 +27,7 @@ export type ScriptTemplateDefinition = {
 };
 
 const NAME_TOKEN = "__XRIFT_SCRIPT_NAME__";
-export const SCRIPT_TEMPLATE_CATALOG_VERSION = 4 as const;
+export const SCRIPT_TEMPLATE_CATALOG_VERSION = 5 as const;
 
 /**
  * Built-in Script examples shared by the Assets creation flow and MCP.
@@ -128,45 +128,6 @@ export default defineScript({
 `,
   },
   {
-    id: "keyboard-move",
-    name: "キーボード移動",
-    description: "WASDまたは矢印キーでEntityを移動します。",
-    category: "movement",
-    suggestedName: "Keyboard Mover",
-    language: "ts",
-    requiredAssetKinds: [],
-    requiredComponents: [],
-    entityReferenceCount: 0,
-    source: `import { defineScript, prop } from "xrift:script";
-
-export default defineScript({
-  name: "${NAME_TOKEN}",
-  props: {
-    speed: prop.number({ label: "移動速度", default: 2, min: 0, max: 50 }),
-  },
-  start(ctx) {
-    return {
-      update(delta) {
-        const step = ctx.props.speed * delta;
-        if (ctx.input.isKeyDown("KeyW") || ctx.input.isKeyDown("ArrowUp")) {
-          ctx.object3d.position.z -= step;
-        }
-        if (ctx.input.isKeyDown("KeyS") || ctx.input.isKeyDown("ArrowDown")) {
-          ctx.object3d.position.z += step;
-        }
-        if (ctx.input.isKeyDown("KeyA") || ctx.input.isKeyDown("ArrowLeft")) {
-          ctx.object3d.position.x -= step;
-        }
-        if (ctx.input.isKeyDown("KeyD") || ctx.input.isKeyDown("ArrowRight")) {
-          ctx.object3d.position.x += step;
-        }
-      },
-    };
-  },
-});
-`,
-  },
-  {
     id: "follow-entity",
     name: "Entityを追従",
     description: "明示参照したEntityの位置へ滑らかに追従します。",
@@ -237,6 +198,66 @@ export default defineScript({
       },
       dispose() {
         ctx.materials.reset();
+      },
+    };
+  },
+});
+`,
+  },
+  {
+    id: "light-flicker",
+    name: "Lightの点滅",
+    description:
+      "同じEntityのLightを、Inspectorで変えられる強度・色・速度で自然に点滅させます。",
+    category: "appearance",
+    suggestedName: "Light Flicker",
+    language: "ts",
+    requiredAssetKinds: [],
+    requiredComponents: ["Light"],
+    entityReferenceCount: 0,
+    source: `import { defineScript, prop } from "xrift:script";
+
+export default defineScript({
+  name: "${NAME_TOKEN}",
+  props: {
+    enabled: prop.boolean({ label: "点灯", default: true }),
+    color: prop.color({ label: "色", default: "#ffd08a" }),
+    baseIntensity: prop.number({
+      label: "基本の明るさ",
+      default: 2,
+      min: 0,
+      max: 100,
+    }),
+    flickerAmount: prop.number({
+      label: "揺らぎ",
+      default: 0.35,
+      min: 0,
+      max: 1,
+    }),
+    speed: prop.number({
+      label: "点滅速度",
+      default: 8,
+      min: 0,
+      max: 50,
+    }),
+  },
+  start(ctx) {
+    return {
+      update() {
+        const time = ctx.time.elapsed * ctx.props.speed;
+        const flicker =
+          Math.sin(time * 1.0) * 0.55 +
+          Math.sin(time * 2.17 + 1.3) * 0.3 +
+          Math.sin(time * 5.73 + 0.4) * 0.15;
+        const intensity =
+          ctx.props.baseIntensity *
+          Math.max(0, 1 + flicker * ctx.props.flickerAmount);
+        ctx.lights.setEnabled(ctx.props.enabled);
+        ctx.lights.setColor(ctx.props.color);
+        ctx.lights.setIntensity(intensity);
+      },
+      dispose() {
+        ctx.lights.reset();
       },
     };
   },
@@ -469,79 +490,231 @@ export default defineScript({
 `,
   },
   {
-    id: "audio-hotkey",
-    name: "キーでAudio再生",
+    id: "proximity-event",
+    name: "範囲に入ったらイベント",
     description:
-      "明示参照したAudioを読み込み、指定キーで再生と停止を切り替えます。",
-    category: "media",
-    suggestedName: "Audio Hotkey",
+      "明示参照したEntityがこのEntityの範囲へ入った／出た状態をchannel付きイベントで送ります。",
+    category: "interaction",
+    suggestedName: "Proximity Event",
     language: "ts",
-    requiredAssetKinds: ["audio"],
+    requiredAssetKinds: [],
     requiredComponents: [],
-    entityReferenceCount: 0,
-    source: `import {
-  defineScript,
-  prop,
-  type ScriptAudio,
-} from "xrift:script";
+    entityReferenceCount: 1,
+    source: `import { defineScript, prop } from "xrift:script";
+import { Vector3 } from "three";
+
+const PROXIMITY_EVENT = "xrift:proximity-state";
+const SYNC_INTERVAL_SECONDS = 0.5;
 
 export default defineScript({
   name: "${NAME_TOKEN}",
   props: {
-    audio: prop.asset({ label: "Audio", kind: "audio" }),
-    keyCode: prop.string({ label: "再生キー", default: "Space" }),
-    volume: prop.number({ label: "音量", default: 1, min: 0, max: 1 }),
-    playbackRate: prop.number({
-      label: "再生速度",
-      default: 1,
-      min: 0.1,
-      max: 4,
+    target: prop.entity({ label: "検知するEntity" }),
+    channel: prop.string({ label: "接続channel", default: "lamp-zone-1" }),
+    radius: prop.number({ label: "入る距離", default: 2, min: 0, max: 1000 }),
+    exitMargin: prop.number({
+      label: "出る時の余白",
+      default: 0.25,
+      min: 0,
+      max: 100,
     }),
-    loop: prop.boolean({ label: "ループ", default: false }),
   },
   start(ctx) {
-    let audio: ScriptAudio | null = null;
-    let keyWasDown = false;
+    const origin = new Vector3();
+    const targetPosition = new Vector3();
+    let inside = false;
+    let initialized = false;
+    let routingSync = false;
+    let syncElapsed = 0;
+    let publishedChannel = ctx.props.channel;
+    let trackedTargetId = ctx.props.target;
 
-    void ctx.lifecycle.task(async (signal) => {
-      const loaded = await ctx.assets.loadAudio(ctx.props.audio, {
-        volume: ctx.props.volume,
-        playbackRate: ctx.props.playbackRate,
-        loop: ctx.props.loop,
+    const publish = (
+      next: boolean,
+      kind: "enter" | "exit" | "sync",
+    ) => {
+      ctx.emit(PROXIMITY_EVENT, {
+        channel: publishedChannel,
+        inside: next,
+        kind,
+        sourceEntityId: ctx.entity.id,
+        targetEntityId: trackedTargetId,
       });
-      if (signal.aborted) {
-        loaded?.stop();
-        return;
+    };
+
+    return {
+      update(delta) {
+        if (
+          publishedChannel !== ctx.props.channel ||
+          trackedTargetId !== ctx.props.target
+        ) {
+          if (initialized && inside) publish(false, "exit");
+          publishedChannel = ctx.props.channel;
+          trackedTargetId = ctx.props.target;
+          inside = false;
+          initialized = false;
+          routingSync = true;
+          syncElapsed = 0;
+        }
+        const target = ctx.find(trackedTargetId);
+        if (!target) {
+          if (!initialized) {
+            initialized = true;
+            inside = false;
+            publish(false, "sync");
+          } else if (inside) {
+            inside = false;
+            publish(false, "exit");
+          }
+          return;
+        }
+        ctx.object3d.getWorldPosition(origin);
+        target.getWorldPosition(targetPosition);
+        const threshold =
+          Math.max(0, ctx.props.radius) +
+          (inside ? Math.max(0, ctx.props.exitMargin) : 0);
+        const next =
+          origin.distanceToSquared(targetPosition) <= threshold * threshold;
+        if (!initialized) {
+          initialized = true;
+          inside = next;
+          publish(
+            next,
+            routingSync ? "sync" : next ? "enter" : "sync",
+          );
+          routingSync = false;
+          syncElapsed = 0;
+        } else if (next !== inside) {
+          inside = next;
+          publish(next, next ? "enter" : "exit");
+          syncElapsed = 0;
+        } else if (next) {
+          syncElapsed += Number.isFinite(delta) ? Math.max(0, delta) : 0;
+          if (syncElapsed >= SYNC_INTERVAL_SECONDS) {
+            syncElapsed = 0;
+            publish(true, "sync");
+          }
+        }
+      },
+      dispose() {
+        if (initialized && inside) publish(false, "exit");
+      },
+    };
+  },
+});
+`,
+  },
+  {
+    id: "event-light",
+    name: "イベントでLightを切替",
+    description:
+      "同じchannelの近接イベントを受け、同じEntityのLightの色と強度を滑らかに変えます。",
+    category: "interaction",
+    suggestedName: "Event Light",
+    language: "ts",
+    requiredAssetKinds: [],
+    requiredComponents: ["Light"],
+    entityReferenceCount: 0,
+    source: `import { defineScript, prop } from "xrift:script";
+import { Color } from "three";
+
+const PROXIMITY_EVENT = "xrift:proximity-state";
+
+function readProximityEvent(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as {
+    channel?: unknown;
+    inside?: unknown;
+    kind?: unknown;
+    sourceEntityId?: unknown;
+  };
+  return typeof candidate.channel === "string" &&
+    typeof candidate.inside === "boolean" &&
+    (candidate.kind === "enter" ||
+      candidate.kind === "exit" ||
+      candidate.kind === "sync") &&
+    typeof candidate.sourceEntityId === "string"
+    ? {
+        channel: candidate.channel,
+        inside: candidate.inside,
+        kind: candidate.kind,
+        sourceEntityId: candidate.sourceEntityId,
       }
-      audio = loaded;
-      if (!audio) ctx.log("Audio Assetを読み込めませんでした");
+    : null;
+}
+
+export default defineScript({
+  name: "${NAME_TOKEN}",
+  props: {
+    channel: prop.string({ label: "接続channel", default: "lamp-zone-1" }),
+    idleColor: prop.color({ label: "待機中の色", default: "#334155" }),
+    activeColor: prop.color({ label: "反応中の色", default: "#fbbf24" }),
+    idleIntensity: prop.number({
+      label: "待機中の明るさ",
+      default: 0.15,
+      min: 0,
+      max: 100,
+    }),
+    activeIntensity: prop.number({
+      label: "反応中の明るさ",
+      default: 4,
+      min: 0,
+      max: 100,
+    }),
+    fadeSpeed: prop.number({
+      label: "切替速度",
+      default: 6,
+      min: 0,
+      max: 50,
+    }),
+  },
+  start(ctx) {
+    const sourcesByChannel = new Map<string, Set<string>>();
+    let currentIntensity = ctx.props.idleIntensity;
+    const currentColor = new Color(ctx.props.idleColor);
+    const targetColor = new Color();
+    const unsubscribe = ctx.on(PROXIMITY_EVENT, (payload) => {
+      const event = readProximityEvent(payload);
+      if (!event) return;
+      let activeSources = sourcesByChannel.get(event.channel);
+      if (event.inside) {
+        if (!activeSources) {
+          activeSources = new Set();
+          sourcesByChannel.set(event.channel, activeSources);
+        }
+        activeSources.add(event.sourceEntityId);
+      } else if (activeSources) {
+        activeSources.delete(event.sourceEntityId);
+        if (activeSources.size === 0) {
+          sourcesByChannel.delete(event.channel);
+        }
+      }
     });
 
     return {
-      update() {
-        audio?.setVolume(ctx.props.volume);
-        audio?.setPlaybackRate(ctx.props.playbackRate);
-        audio?.setLoop(ctx.props.loop);
-        const keyIsDown = ctx.input.isKeyDown(ctx.props.keyCode);
-        if (keyIsDown && !keyWasDown && audio) {
-          if (audio.playing) {
-            audio.stop();
-          } else {
-            void ctx.lifecycle.task(async (signal) => {
-              try {
-                await audio?.play();
-              } catch (error) {
-                if (!signal.aborted) {
-                  ctx.log("Audioを再生できませんでした", String(error));
-                }
-              }
-            });
-          }
-        }
-        keyWasDown = keyIsDown;
+      update(delta) {
+        const active =
+          (sourcesByChannel.get(ctx.props.channel)?.size ?? 0) > 0;
+        const targetIntensity = active
+          ? ctx.props.activeIntensity
+          : ctx.props.idleIntensity;
+        const amount =
+          ctx.props.fadeSpeed <= 0
+            ? 1
+            : 1 - Math.exp(-ctx.props.fadeSpeed * delta);
+        currentIntensity +=
+          (targetIntensity - currentIntensity) * amount;
+        targetColor.set(active ? ctx.props.activeColor : ctx.props.idleColor);
+        currentColor.lerp(targetColor, amount);
+        ctx.lights.setEnabled(
+          targetIntensity > 0 || currentIntensity > 0.001,
+        );
+        ctx.lights.setColor(currentColor.getHex());
+        ctx.lights.setIntensity(currentIntensity);
       },
       dispose() {
-        audio?.stop();
+        unsubscribe();
+        ctx.lights.reset();
       },
     };
   },
@@ -568,10 +741,21 @@ export default defineScript({
   },
   start(ctx) {
     ctx.object3d.visible = ctx.props.visibleAtStart;
-    const unsubscribe = ctx.on(ctx.props.eventName, () => {
-      ctx.object3d.visible = !ctx.object3d.visible;
-    });
+    let subscribedEventName = "";
+    let unsubscribe = () => {};
+    const subscribe = () => {
+      if (subscribedEventName === ctx.props.eventName) return;
+      unsubscribe();
+      subscribedEventName = ctx.props.eventName;
+      unsubscribe = ctx.on(subscribedEventName, () => {
+        ctx.object3d.visible = !ctx.object3d.visible;
+      });
+    };
+    subscribe();
     return {
+      update() {
+        subscribe();
+      },
       dispose() {
         unsubscribe();
       },

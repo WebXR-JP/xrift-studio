@@ -624,6 +624,15 @@ Particle と同じ関係を採る。再利用可能な定義は Asset 側に置�
 - `import_audio_asset`はEdit mode限定で、trustedな絶対pathをnative側の通常file、no-link、128 MiB、extension + signature、read前後size検査へ通し、content-addressed copy、atomic commit、history、autosaveを一件で確定する。`get_audio_asset`とimport結果は管理下relative pathとmetadataだけを返し、外部path、data URL、binary bytesをMCPへ返さない。
 - `ctx.audioSources`はruntime-onlyでSceneDocument revisionを変えない。保存するAudio Source設定は`place_asset`、`add_component`、`update_component`、`remove_component`を使い、runtime状態を暗黙に永続化しない。
 
+#### Light と runtime event の所有境界
+
+- Studio Playと`classic-jsx`生成物は同じ`XriftScriptLight`とLight bridgeを使う。disabledのLightもbridgeをmountしたまま描画だけを止め、ScriptからPlay中に一時点灯できるようにする。Directional / Spotのtargetもこの共通runtimeで構成し、Editorと公開ワールドで向きを別実装にしない。
+- `ctx.lights`はattached Entity自身のLightだけを`componentId` / `lightType`で選び、enabled、color、intensity、Point / Spotのdistanceをowner単位で上書きする。子Entity、別Entity、Scene環境Light、共有設定を暗黙に変更しない。late mountまたは置換されたLightにも同じ選択規則を適用する。
+- 同じEntityの複数ScriptはComponent順でLight overrideを合成する。同一Script内ではfieldごとの最後の変更を優先し、Script再起動、runtime failure、Stopではそのownerだけを外してLight Componentの保存値へ戻す。`reset()`は呼び出したScript ownerのoverrideだけを外す。
+- Inspector / MCPによるenabled、color、intensity、shadow、distance、decay、angle、penumbra、Area sizeの永続変更は既存Light runtimeへ即時反映する。Light種別とComponent追加・削除は構造変更として対象Entityだけを再同期する。`ctx.lights`はruntime-onlyでSceneDocument revisionを変えず、永続化には`core.light.*`の`add_component` / `update_component` / `remove_component`を使う。
+- Script event busは同じ`XriftScriptRoot`内だけにあり、payloadをSceneDocumentへ保存せず、KHR_interactivityへ暗黙に接続しない。近接判定はScript Componentで明示参照したauthored Entityの`getWorldPosition`を使う。runtime player / avatarは`ctx.find`へ公開しないため、player近接を実装済みと表示しない。
+- 組み込み`proximity-event`は固定event名`xrift:proximity-state`へ`channel`、inside状態、`sourceEntityId`、`kind: enter | exit | sync`を送る。enter / exitは境界遷移時だけ一度送り、syncはlive channel変更と後から起動したreceiverの状態同期に限定する。停止・削除時は同sourceのexitを送る。`event-light`はchannelごとのactive sourceをSetで追跡するため複数sensorの一つが退出しても残りを維持する。event名の動的変更でlistenerを残留させず、Scriptの停止・再起動時に購読を確実に解除する。
+
 #### Texture / Material の所有境界
 
 - `ctx.assets.loadTexture` は Script Component の `assetReferences` にある Texture Asset だけを受け付ける。runtime resolver は URL だけでなく、Asset ID、`colorSpace`、Sampler の wrap / mag / min filter、`flipY`、`generateMipmaps` を descriptor として Play host と公開 adapter の両方へ渡す。

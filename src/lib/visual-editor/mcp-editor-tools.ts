@@ -373,6 +373,7 @@ function readScriptingCapabilities(
           tools: [
             "list_component_definitions",
             "get_entity_components",
+            "add_component",
             "update_component",
             "remove_component",
             "set_entity_enabled",
@@ -391,9 +392,25 @@ function readScriptingCapabilities(
             "update_particle_asset",
           ],
           purpose:
-            "Persist reusable Audio, Texture, Material, and Particle Assets plus Entity Component settings independently from runtime-only Script overrides.",
+            "Persist reusable Light, Audio, Texture, Material, and Particle settings independently from runtime-only Script overrides.",
         },
       ],
+      recipes: {
+        proximityLight: {
+          purpose:
+            "Emit a runtime event when one authored Entity enters another authored Entity's radius, then fade a Light on a receiver Entity.",
+          templates: ["proximity-event", "event-light"],
+          steps: [
+            "Resolve the sensor, target, and Light receiver Entity IDs with list_entities.",
+            "Create/apply proximity-event on the sensor and set properties.target plus entityReferences to the target ID.",
+            "If needed, add a core.light.* Component to the receiver with add_component.",
+            "Create/apply event-light on the receiver and give both Scripts the same channel property.",
+            "Enter Play with set_play_mode; change radius, colors, intensities, and fadeSpeed with update_script_component for live feedback.",
+          ],
+          boundary:
+            "The target must be an authored Entity explicitly declared in entityReferences. The player/avatar is not currently exposed through ctx.find.",
+        },
+      },
       runtime: {
         import: "xrift:script",
         mode: "play",
@@ -481,6 +498,35 @@ function readScriptingCapabilities(
           persistence:
             "Runtime-only owner-scoped overrides. They are removed on Script restart or Stop and do not modify Audio Assets or Audio Source Components.",
         },
+        lights: {
+          scope:
+            "Controls Light Components owned by the attached Entity and excludes child Entities.",
+          methods: [
+            "ctx.lights.list(): readonly ScriptLightInfo[]",
+            "ctx.lights.select({ componentId?, lightType? }): ScriptLightHandle",
+            "ctx.lights.count(): number",
+            "ctx.lights.setEnabled(enabled): number",
+            "ctx.lights.setColor(value): number",
+            "ctx.lights.setIntensity(intensity): number",
+            "ctx.lights.setDistance(distance): number",
+            "ctx.lights.reset(): void",
+          ],
+          selection: {
+            fields: ["componentId", "lightType"],
+            lightTypes: [
+              "ambient",
+              "directional",
+              "hemisphere",
+              "point",
+              "spot",
+              "rectArea",
+            ],
+            distance:
+              "setDistance applies only to Point and Spot lights and reports only those supported matches.",
+          },
+          persistence:
+            "Runtime-only owner-scoped overrides. They are removed on Script restart, failure, or Stop and do not modify Light Components.",
+        },
         materials: {
           scope:
             "Applies to Mesh materials owned by the attached Entity and excludes child Entities.",
@@ -555,6 +601,20 @@ function readScriptingCapabilities(
         entities: {
           scope:
             "ctx.find(entityId) only resolves IDs declared in the Script Component entityReferences.",
+          worldPosition:
+            "Use ctx.object3d.getWorldPosition(Vector3) and target.getWorldPosition(Vector3) for proximity; position is parent-local.",
+          playerBoundary:
+            "ctx.find resolves authored Entity IDs only. It does not expose the runtime player/avatar.",
+        },
+        events: {
+          methods: [
+            "ctx.on(eventName, handler): () => void",
+            "ctx.emit(eventName, payload?): void",
+          ],
+          scope:
+            "Runtime-only named bus inside the current XriftScriptRoot. It is not KHR_interactivity and payloads are not cloned or persisted.",
+          proximityConvention:
+            'Templates proximity-event and event-light share event "xrift:proximity-state", filter by a live channel, and track each sensor by sourceEntityId. Payload kind: "enter" | "exit" | "sync"; enter/exit are edge-only and sync updates late receivers without repeating edge actions.',
         },
       },
       unsupported: [
@@ -564,11 +624,12 @@ function readScriptingCapabilities(
         "KTX2/HDR/EXR typed loading",
         "persistent Material Asset mutation through ctx.materials",
         "persistent Audio Source mutation through ctx.audioSources",
+        "runtime player/avatar lookup through ctx.find",
       ],
       persistentAuthoring: {
         modes: ["edit", "play"],
         playSemantics:
-          "Supported writes persist immediately. Scene settings update the shared Scene view; Component and Entity changes restart only the affected Entity; Material, Texture, and Particle Asset edits restart only consuming Entities.",
+          "Supported writes persist immediately. Scene settings update the shared Scene view. Light scalar fields update their existing runtime without restart; Light type and other structural Component/Entity changes restart only the affected Entity. Material, Texture, and Particle Asset edits restart only consuming Entities.",
         tools: [
           "set_material",
           "get_material_asset",
@@ -619,6 +680,13 @@ function readScriptingCapabilities(
             "update_component",
             "remove_component",
           ],
+          lights: [
+            "list_component_definitions",
+            "get_entity_components",
+            "add_component",
+            "update_component",
+            "remove_component",
+          ],
           sceneSettings: ["update_scene_settings"],
         },
         assetOperations: {
@@ -658,6 +726,33 @@ function readScriptingCapabilities(
               "maxDistance",
             ],
           },
+          lights: {
+            componentDefinitionIds: [
+              "core.light.ambient",
+              "core.light.directional",
+              "core.light.hemisphere",
+              "core.light.point",
+              "core.light.spot",
+              "core.light.area",
+            ],
+            addComponent: "add_component",
+            updateComponent: "update_component",
+            removeComponent: "remove_component",
+            liveFields: [
+              "enabled",
+              "color",
+              "intensity",
+              "castShadow",
+              "groundColor",
+              "distance",
+              "decay",
+              "angle",
+              "penumbra",
+              "width",
+              "height",
+            ],
+            structuralFields: ["lightType"],
+          },
           materials: {
             assign: "set_material",
             create: 'create_document_asset(kind: "material")',
@@ -679,7 +774,7 @@ function readScriptingCapabilities(
           },
         },
         semantics:
-          "These editor tools persist Asset, Entity, and Scene settings document changes. Use Audio Source Component tools or the Texture/Material tools instead of ctx.audioSources, loadTexture options, or ctx.materials when an edit must remain after Stop or be saved.",
+          "These editor tools persist Asset, Entity, and Scene settings document changes. Use Light/Audio Source Component tools or the Texture/Material tools instead of ctx.lights, ctx.audioSources, loadTexture options, or ctx.materials when an edit must remain after Stop or be saved.",
       },
       editOnlyAuthoring: {
         modes: ["edit"],

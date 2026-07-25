@@ -4529,7 +4529,9 @@ export function VisualEditorPrototype({
       );
       setNotice(
         editorMode === "play"
-          ? "Light設定を保存し、このEntityのPlayを先頭から再実行しました"
+          ? Object.prototype.hasOwnProperty.call(patch, "lightType")
+            ? "Light種別を保存し、このEntityのPlayを先頭から再実行しました"
+            : "Light設定を保存し、実行状態を保ったままPlayへ即時反映しました"
           : "Light設定をSceneへ反映しました",
       );
     },
@@ -4625,9 +4627,15 @@ export function VisualEditorPrototype({
       updateScene((scene) =>
         updateAudioSourceComponent(scene, entityId, patch, componentId),
       );
+      const restartsEntity =
+        Object.prototype.hasOwnProperty.call(patch, "enabled") ||
+        Object.prototype.hasOwnProperty.call(patch, "audioAssetId") ||
+        Object.prototype.hasOwnProperty.call(patch, "spatial");
       setNotice(
         editorMode === "play"
-          ? "Audio Source設定を保存し、このEntityのPlayを先頭から再実行しました"
+          ? restartsEntity
+            ? "Audio Source構成を保存し、このEntityのPlayを先頭から再実行しました"
+            : "Audio Source設定を保存し、実行状態を保ったままPlayへ即時反映しました"
           : "Audio Source設定をSceneへ反映しました",
       );
     },

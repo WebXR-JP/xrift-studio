@@ -9,6 +9,7 @@ import {
   SCENE_DOCUMENT_SCHEMA_VERSION,
   createTransformComponent,
   type AudioSourceComponent,
+  type LightComponent,
   type MeshComponent,
   type ParticleEmitterComponent,
   type SceneDocument,
@@ -177,6 +178,59 @@ export function runPlaySessionFixtureAssertions(): void {
       structuralAudioSourceUpdate.lastReloads.length === 1 &&
       structuralAudioSourceUpdate.lastReloads[0]?.entityId === "entity-a",
     "Audio Asset or spatial mode changes must restart only the owning Entity",
+  );
+
+  const lightScene = fixtureScene();
+  lightScene.entities["entity-a"]?.components.push(
+    light("light-a", "point"),
+  );
+  const lightSession = createPlaySession(lightScene, assets);
+  const liveLightScene = fixtureScene();
+  liveLightScene.entities["entity-a"]?.components.push({
+    ...light("light-a", "point"),
+    enabled: false,
+    color: "#ff8800",
+    intensity: 3,
+    castShadow: true,
+    distance: 12,
+    decay: 1,
+  });
+  const liveLightUpdate = synchronizePlaySession(
+    lightSession,
+    liveLightScene,
+    assets,
+  );
+  assert(
+    liveLightUpdate.entityRevisions["entity-a"] === 0 &&
+      liveLightUpdate.lastReloads.length === 0,
+    "Light scalar edits must update without restarting its Entity",
+  );
+  assert(
+    liveLightUpdate.runtimeScene.entities["entity-a"]?.components.some(
+      (component) =>
+        component.type === "light" &&
+        !component.enabled &&
+        component.color === "#ff8800" &&
+        component.intensity === 3 &&
+        component.distance === 12,
+    ),
+    "Live Light settings must reach the runtime Scene",
+  );
+
+  const structuralLightScene = fixtureScene();
+  structuralLightScene.entities["entity-a"]?.components.push(
+    light("light-a", "spot"),
+  );
+  const structuralLightUpdate = synchronizePlaySession(
+    liveLightUpdate,
+    structuralLightScene,
+    assets,
+  );
+  assert(
+    structuralLightUpdate.entityRevisions["entity-a"] === 1 &&
+      structuralLightUpdate.lastReloads.length === 1 &&
+      structuralLightUpdate.lastReloads[0]?.entityId === "entity-a",
+    "Changing Light type must restart only the owning Entity",
   );
 
   const structurallyChanged = fixtureScene();
@@ -415,6 +469,29 @@ function audioSource(
     refDistance: 1,
     rolloffFactor: 1,
     maxDistance: 100,
+  };
+}
+
+function light(
+  id: string,
+  lightType: LightComponent["lightType"],
+): LightComponent {
+  return {
+    id,
+    type: "light",
+    enabled: true,
+    lightType,
+    color: "#ffffff",
+    intensity: 1,
+    castShadow: false,
+    ...(lightType === "hemisphere" ? { groundColor: "#334155" } : {}),
+    ...(lightType === "point" || lightType === "spot"
+      ? { distance: 0, decay: 2 }
+      : {}),
+    ...(lightType === "spot"
+      ? { angle: Math.PI / 3, penumbra: 0.5 }
+      : {}),
+    ...(lightType === "rectArea" ? { width: 1, height: 1 } : {}),
   };
 }
 

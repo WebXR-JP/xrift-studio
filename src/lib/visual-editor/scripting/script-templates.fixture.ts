@@ -30,6 +30,8 @@ export function runScriptTemplateFixtureAssertions(): void {
   assertCatalogEntries();
   assertSourceGeneration();
   assertParticleTemplate();
+  assertLightAndEventTemplates();
+  assertNoShortcutTemplates();
   assertTextureTransformTemplate();
   assertExternalAssetTemplates();
   assertTemplateLanguagePersistence();
@@ -67,7 +69,7 @@ function assertTemplateLanguagePersistence(): void {
 
 function assertCatalogEntries(): void {
   assert(
-    SCRIPT_TEMPLATE_CATALOG_VERSION === 4,
+    SCRIPT_TEMPLATE_CATALOG_VERSION === 5,
     "template catalog version changed without a fixture update",
   );
   assert(SCRIPT_TEMPLATE_CATALOG.length > 0, "template catalog is empty");
@@ -125,21 +127,6 @@ function assertExternalAssetTemplates(): void {
     );
   }
 
-  const audio = getScriptTemplate("audio-hotkey");
-  assert(Boolean(audio), "audio-hotkey template is missing");
-  if (audio) {
-    assert(
-      audio.requiredAssetKinds.includes("audio"),
-      "audio-hotkey does not declare its Audio Asset requirement",
-    );
-    assert(
-      audio.source.includes("ctx.assets.loadAudio(") &&
-        audio.source.includes("ctx.lifecycle.task(") &&
-        audio.source.includes("audio?.setVolume("),
-      "audio-hotkey does not exercise the lifecycle-owned Audio API",
-    );
-  }
-
   const audioSource = getScriptTemplate("audio-source-control");
   assert(Boolean(audioSource), "audio-source-control template is missing");
   if (audioSource) {
@@ -169,6 +156,74 @@ function assertExternalAssetTemplates(): void {
       "audio-source-control should use the non-throwing Audio Source play status contract",
     );
   }
+}
+
+function assertNoShortcutTemplates(): void {
+  assert(
+    !getScriptTemplate("keyboard-move") &&
+      !getScriptTemplate("audio-hotkey"),
+    "built-in keyboard templates must not compete with XRift shortcuts",
+  );
+  assert(
+    SCRIPT_TEMPLATE_CATALOG.every(
+      (template) => !template.source.includes("ctx.input"),
+    ),
+    "a built-in Script template still consumes keyboard input",
+  );
+}
+
+function assertLightAndEventTemplates(): void {
+  const flicker = getScriptTemplate("light-flicker");
+  assert(Boolean(flicker), "light-flicker template is missing");
+  assert(
+    flicker?.requiredComponents.includes("Light") &&
+      flicker.source.includes("ctx.lights.setEnabled(") &&
+      flicker.source.includes("ctx.lights.setColor(") &&
+      flicker.source.includes("ctx.lights.setIntensity(") &&
+      flicker.source.includes("ctx.lights.reset()"),
+    "light-flicker does not exercise owner-scoped Light controls",
+  );
+
+  const proximity = getScriptTemplate("proximity-event");
+  assert(Boolean(proximity), "proximity-event template is missing");
+  assert(
+    proximity?.entityReferenceCount === 1 &&
+      proximity.source.includes("ctx.find(trackedTargetId)") &&
+      proximity.source.includes("getWorldPosition(") &&
+      proximity.source.includes('ctx.emit(PROXIMITY_EVENT') &&
+      proximity.source.includes("exitMargin") &&
+      proximity.source.includes("publishedChannel") &&
+      proximity.source.includes("sourceEntityId: ctx.entity.id") &&
+      proximity.source.includes("SYNC_INTERVAL_SECONDS") &&
+      proximity.source.includes('"enter" | "exit" | "sync"'),
+    "proximity-event does not use an explicit Entity and world-space hysteresis",
+  );
+
+  const eventLight = getScriptTemplate("event-light");
+  assert(Boolean(eventLight), "event-light template is missing");
+  assert(
+    eventLight?.requiredComponents.includes("Light") &&
+      eventLight.source.includes('ctx.on(PROXIMITY_EVENT') &&
+      eventLight.source.includes("sourcesByChannel") &&
+      eventLight.source.includes("activeSources.add(") &&
+      eventLight.source.includes("activeSources.delete(") &&
+      eventLight.source.includes("sourcesByChannel.delete(") &&
+      eventLight.source.includes('candidate.kind === "sync"') &&
+      eventLight.source.includes("ctx.lights.setColor(") &&
+      eventLight.source.includes("ctx.lights.setIntensity(") &&
+      eventLight.source.includes("ctx.lights.reset()"),
+    "event-light does not connect a channel-filtered event to Light controls",
+  );
+
+  const visibility = getScriptTemplate("event-visibility");
+  assert(
+    Boolean(
+      visibility?.source.includes("subscribedEventName") &&
+        visibility.source.includes("unsubscribe();") &&
+        visibility.source.includes("subscribe();"),
+    ),
+    "event-visibility does not rebind after a live eventName edit",
+  );
 }
 
 function assertSourceGeneration(): void {

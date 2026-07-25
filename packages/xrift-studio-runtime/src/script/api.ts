@@ -392,6 +392,53 @@ export type ScriptMaterials = ScriptMaterialHandle & {
   reset(): void;
 };
 
+export type ScriptLightType =
+  | "ambient"
+  | "directional"
+  | "hemisphere"
+  | "point"
+  | "spot"
+  | "rectArea";
+
+/** Selects authored Light Components on this Script's own Entity. */
+export type ScriptLightSelector = {
+  componentId?: string;
+  lightType?: ScriptLightType;
+};
+
+/** Live, effective state of one authored Light Component. */
+export type ScriptLightInfo = {
+  readonly componentId: string;
+  readonly lightType: ScriptLightType;
+  readonly enabled: boolean;
+  readonly color: string | number;
+  readonly intensity: number;
+  readonly distance?: number;
+};
+
+export type ScriptLightHandle = {
+  count(): number;
+  setEnabled(enabled: boolean): number;
+  setColor(value: string | number): number;
+  setIntensity(intensity: number): number;
+  /** Effective only for Point and Spot lights. */
+  setDistance(distance: number): number;
+  /** Removes this handle's overrides while preserving other Script owners. */
+  reset(): void;
+};
+
+/**
+ * Runtime-only controls for authored Light Components owned by this Entity.
+ *
+ * Overrides are composed in Script Component order and restored on restart,
+ * failure, or Play Stop. Persistent Light edits stay in Inspector/MCP tools.
+ */
+export type ScriptLights = ScriptLightHandle & {
+  list(): readonly ScriptLightInfo[];
+  select(selector: ScriptLightSelector): ScriptLightHandle;
+  reset(): void;
+};
+
 /**
  * Runtime-only controls for Particle Emitter components owned by this Entity.
  *
@@ -428,6 +475,7 @@ export type ScriptObject3D = {
   rotateY(angle: number): unknown;
   rotateZ(angle: number): unknown;
   lookAt(target: unknown): void;
+  getWorldPosition(target: unknown): unknown;
   [key: string]: unknown;
 };
 
@@ -455,6 +503,11 @@ export type ScriptContext<
    * from shared Asset instances and are restored on restart or Stop.
    */
   materials: ScriptMaterials;
+  /**
+   * Runtime-only Light overrides for this Entity. Changes are restored
+   * automatically on restart, failure, or Play Stop.
+   */
+  lights: ScriptLights;
   /**
    * Runtime-only Particle Emitter controls for this Entity. Overrides are
    * restored automatically on restart or Stop.

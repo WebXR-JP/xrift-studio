@@ -101,12 +101,13 @@ Script Asset の `language: "tsx"` と `.tsx` path を持つ。組み込み `mod
 | `scene` / `camera` / `renderer` | 実行中の Three.js オブジェクト |
 | `props` | 宣言した property の値。Play 中の Inspector / MCP 変更は再起動せず次の frame から反映される |
 | `time` | `elapsed` と `delta`。`delta` は 0.1 秒で上限を切る |
-| `input` | キーボードのみ |
+| `input` | 既存Script互換用の低レベルキーボード状態。XRift公式shortcutと競合しうるため組み込みTemplateでは使わない |
 | `lifecycle` | Script instance が所有する AbortSignal、timer、async task、cleanup |
-| `find(entityId)` | `entityReferences` に宣言した Entity だけを引ける |
+| `find(entityId)` | `entityReferences` に宣言した authored Entity だけを引ける。player / avatar は対象外 |
 | `assets` | `assetReferences` に宣言した Asset の URL 解決、基本 Texture 読み込み、Audio再生 |
 | `audioSources` | この Entity が所有する Audio Source を Play 中だけ再生・調整する |
 | `materials` | この Entity が所有する Mesh の Material を Play 中だけ変更する |
+| `lights` | この Entity が所有する Light の点灯、色、強度、距離を Play 中だけ変更する |
 | `particles` | この Entity が所有する Particle Emitter を Play 中だけ再生・調整する |
 | `getAssetUrl(ref)` | `assets.url(ref)` の非推奨 alias |
 | `on` / `emit` | Script 間のイベント |
@@ -258,6 +259,39 @@ Component 実行順で override を合成し、後の Script が同じ field を
 Script の再起動、runtime failure、Stop では、その owner の再生要求、seek、volume、loop overrideを外し、
 Audio Source Component に保存した値へ戻す。Audio Asset と Scene document は変更しない。
 
+### Light と近接イベントの実行時操作
+
+`ctx.lights` は Script Component を付けた Entity 自身の Light だけを対象にし、子 Entity は含めない。
+disabled の Light にも Play 中の bridge を残すため、Script から一時的に点灯できる。
+
+| API | 操作 |
+| --- | --- |
+| `count()` / `list()` | 対象 Light 数と `componentId`、`lightType`、有効状態、色、強度、距離を返す |
+| `select({ componentId?, lightType? })` | 条件をすべて満たす Light の live handle を返す |
+| `setEnabled(value)` | Play 中の点灯状態を変更する |
+| `setColor(value)` | Play 中の色を変更する |
+| `setIntensity(value)` | 0 以上へ正規化した強度を変更する |
+| `setDistance(value)` | Point / Spot Light の距離を変更し、対応した件数だけを返す |
+| `reset()` | この Script または選択 handle の override を外す |
+
+同一 Script では最後に変更した field、複数 Script では Component 実行順が後の owner を優先する。
+Script の再起動、runtime failure、Stop ではその owner だけを外し、Inspector / MCP で保存した Light 値へ戻す。
+Studio Play と `classic-jsx` は同じ `XriftScriptLight` と bridge を使う。Play 中に Light の
+enabled、color、intensity、shadow、距離、減衰、角度、半影、Area sizeを保存しても既存 runtime へ反映し、
+`lightType` の変更、Component追加・削除だけ対象 Entity を再起動する。
+
+`ctx.on` / `ctx.emit` は同じ `XriftScriptRoot` 内だけの runtime event bus であり、
+KHR_interactivity と Scene document には接続しない。payload は cloneも永続化もしない。
+組み込み `proximity-event` は Script Component の `entityReferences` に明示した authored Entity を
+`getWorldPosition` で判定し、`xrift:proximity-state`へ`channel`、inside状態、`kind`を送る。
+`event-light`は同じeventを受け、liveな`channel` propertyが一致した時だけLightを変える。
+各sensorは`sourceEntityId`で別々に追跡するため、同じchannelの複数sensorのうち一つが範囲を出ても、
+ほかが範囲内ならLightを維持する。`kind: "enter" | "exit"`は境界をまたいだ時だけ一度送り、
+`kind: "sync"`はlive channel変更や後から起動したreceiverを同期する状態通知として分ける。
+sensorの停止・削除時はそのsourceの`exit`を送るため、edge eventを滞在中に繰り返さない。
+`object3d.position`は親local座標なので、近接判定へ直接使わない。現時点でruntime player / avatarを
+`ctx.find`するAPIはない。
+
 `materials` は Script Component を付けた Entity 自身が所有する Mesh だけを対象にする。子 Entity の Mesh は含めない。
 共有 Material Asset を直接変更せず runtime 用 clone へ次の override を重ねる。
 
@@ -323,12 +357,13 @@ Script を再起動する。
 
 | 変更経路 | 保存 | Play 中の反映 | Stop / 再起動 |
 | --- | --- | --- | --- |
-| `ctx.audioSources`、`ctx.materials`、`ctx.particles`、`setTextureTransform` | runtime-only。document revision は変えない | setter を呼んだ時点から対象 Entity の所有 player / clone に反映 | その Script の再生要求、clone、overrideを外し、元の Component / Asset 値へ戻る |
+| `ctx.audioSources`、`ctx.lights`、`ctx.materials`、`ctx.particles`、`setTextureTransform` | runtime-only。document revision は変えない | setter を呼んだ時点から対象 Entity の所有 player / Light / clone に反映 | その Script の再生要求、clone、overrideを外し、元の Component / Asset 値へ戻る |
 | Script Component の宣言済み property | Scene document | 同じ Script instance の `ctx.props` へ次の frame から反映 | 保存値として残る |
 | Script source、Script / Asset / Entity 参照、Component 構成 | source / Scene document | 承認済みの正確な内容だけをcompileし、成功後に影響する Entity だけを再起動。未承認または失敗時は last-good module を継続 | 保存値として残る |
 | 既存 Material / Particle Asset の property | AssetManifest | Inspector または MCP から保存し、その Asset を参照する Entity / Emitter だけを再反映 | 保存値として残る |
 | 既存 Texture Asset の import settings | AssetManifest | MCP から保存し、直接参照または Material / Particle 経由で参照する Entity だけを再起動 | 保存値として残る |
-| Entity / Component の追加・更新・削除・有効化 | Scene document | Inspector または MCP から保存し、影響する Entity だけを再起動 | 保存値として残る |
+| Light Component の scalar property | Scene document | Inspector または MCP から保存し、既存 Light runtimeへ再起動なしで反映 | 保存値として残る |
+| Entity / Component の追加・削除、Light種別、その他の構造変更 | Scene document | Inspector または MCP から保存し、影響する Entity だけを再起動 | 保存値として残る |
 | Scene settings | Scene document | MCP の `update_scene_settings` から共有 Scene view へ即時反映 | 保存値として残る |
 
 Play 中の Inspector で永続編集できる Asset property は、現時点では既存の Material / Particle Asset に限る。
@@ -342,7 +377,7 @@ runtime 演出を保存したい場合は値を `ctx.*` から読み戻す仕組
 MCP client は最初に `get_scripting_capabilities` を呼ぶと、利用可能な Script API、Texture slot、参照制限、
 作成から Play までの tool 順序と、Play 中に永続化できる操作を機械可読な形で取得できる。
 
-Audio / Texture / Material 操作は目的で入口を分ける。
+Light / Audio / Texture / Material 操作は目的で入口を分ける。
 
 | 目的 | Script runtime | 永続 MCP authoring |
 | --- | --- | --- |
@@ -350,6 +385,8 @@ Audio / Texture / Material 操作は目的で入口を分ける。
 | 保存済みAudio SourceをPlay中だけ操作する | `ctx.audioSources`。同じEntityのComponentだけをowner単位で上書き | 対象外 |
 | Audio Assetを追加・確認する | 対象外 | Edit中の`import_audio_asset` / `get_audio_asset` |
 | Audio Source Entityを保存して配置する | 対象外 | `place_asset`。既存Entityへは`add_component(definitionId: "core.audio-source")`後に`update_component` |
+| Play 中だけLightを点灯・点滅・調整する | `ctx.lights`。同じEntityのLightだけをowner単位で上書き | 対象外 |
+| Light Componentを追加・保存する | 対象外 | `add_component(definitionId: "core.light.*")`後に`update_component` |
 | Texture を一時的に読み込む | `ctx.assets.loadTexture`。Asset の色空間、Sampler、Flip Y、Mipmapを既定値にする | 対象外 |
 | Play 中だけ Material の見た目や UV を変える | `ctx.materials.set*` / `setTextureTransform`。Entity 所有 clone だけを変更 | 対象外 |
 | Texture Asset の Import / Sampler 設定を保存する | 対象外 | `get_texture_asset` / `update_texture_asset`。新規画像は Edit 中の `import_texture_asset` |
@@ -369,6 +406,7 @@ Script runtime の再生要求、option、transform は Stop で消え、MCP aut
 | Audio Assetの管理下source情報を取得する | `get_audio_asset` |
 | Audio Source Entityを配置する | `place_asset`へAudio Asset IDを渡す |
 | 既存EntityへAudio Sourceを追加・設定・削除する | `add_component(definitionId: "core.audio-source")`、`update_component`、`remove_component` |
+| 既存EntityへLightを追加・設定・削除する | `add_component(definitionId: "core.light.point")`など、`update_component`、`remove_component` |
 | ローカル画像を Texture Asset として追加する | `import_texture_asset` |
 | Texture Asset の設定を取得・更新する | `get_texture_asset`、`update_texture_asset` |
 | Material を Mesh slot へ割り当てる | `set_material` |
@@ -427,7 +465,8 @@ Script 側で option を明示した項目だけは、その Script instance の
 `scriptRuntime` を取り直す。Play 中の対応済み write は直ちに authoring data へ保存され、
 Scene settingsは共有Scene viewへ即時反映し、Component / Entity 変更はその Entity、
 Material / Texture / Particle Asset 変更は参照 Entity だけを再起動する。Audio Source Componentの変更も
-そのEntityだけへ反映し、`ctx.audioSources`のruntime-only状態をAssetManifestへ暗黙に書き戻さない。
+そのEntityだけへ反映する。Lightのscalar変更は既存runtimeへ即時反映し、Light種別だけ対象Entityを再起動する。
+`ctx.audioSources` / `ctx.lights`のruntime-only状態をAssetManifestやSceneDocumentへ暗黙に書き戻さない。
 
 MCP から生成・更新した Script も別の安全領域では動かない。`get_scripting_capabilities` は
 `sandboxed: false`、`trustGate: true` を返す。ここで承認権限を持たない「MCP」とは、
@@ -444,22 +483,25 @@ release build には同 bridge を登録・搭載しない。したがって deb
 
 ## 組み込み Template
 
-Assets の Create > Script と MCP は同じ version 4 catalog を使う。作成画面では source preview を確認でき、
+Assets の Create > Script と MCP は同じ version 5 catalog を使う。作成画面では source preview を確認でき、
 Entity を選択している場合は Script Asset と Script Component を 1 回の履歴操作で作成できる。
+XRift公式shortcutと競合するため、version 5では`keyboard-move`と`audio-hotkey`を組み込み一覧から外した。
+既存Script sourceと低レベル`ctx.input`の互換性は維持するが、新しい標準例はevent / propertyで接続する。
 
 | ID | 用途 | 追加設定 |
 | --- | --- | --- |
 | `blank` | 最小 lifecycle | なし |
 | `rotate` | 軸と速度を Inspector からリアルタイム変更 | なし |
 | `float` | 上下移動 | なし |
-| `keyboard-move` | WASD / 矢印キー移動 | なし |
 | `follow-entity` | 明示参照した Entity を追従 | Entity 参照 |
 | `material-pulse` | 色、発光、粗さの animation | Mesh Renderer |
+| `light-flicker` | Lightの色・強度・点灯をリアルタイムに点滅 | Light |
 | `texture-scroll` | Texture Asset設定を継承した読み込みと、所有clone上のUV scroll | Texture Asset と Mesh Renderer |
 | `particle-control` | 再生、Emission、速度、サイズ、色 | Particle Emitter |
 | `model-display` | 宣言済みGLBをTSX `Render`へ読み込み、速度をリアルタイム変更 | Model Asset |
 | `audio-source-control` | 同じEntityのAudio Sourceの再生、音量、loop、再生位置をリアルタイム変更 | Audio AssetとAudio Source |
-| `audio-hotkey` | 宣言済みAudioを指定キーで再生／停止し、音量・速度・loopを変更 | Audio Asset |
+| `proximity-event` | 明示参照Entityがworld座標の範囲へ入った／出た状態をchannelで送信 | Entity参照 |
+| `event-light` | 同じchannelの近接eventでLightの色と強度をfade | Light |
 | `event-visibility` | Script event で表示切替 | なし |
 
 `create_script_asset` は `templateId` または任意 `source` のどちらかを受け取る。Templateはcatalogの
@@ -500,6 +542,8 @@ Inspector のフィールドは宣言から自動生成する。種別は既存�
 | PNG / JPEG / WebP など基本 Texture の読み込み | 対応。Assetの色空間 / Sampler / Flip Y / Mipmapを継承し、明示optionを優先 | 対応 | なし | `ctx.assets.loadTexture` |
 | MP3 / WAV Audio の再生・停止・seek・音量・loop・再生速度 | 対応 | 対応 | runtime-only | `ctx.assets.loadAudio` |
 | Entity自身のAudio Sourceの再生・停止・seek・音量・loop | 対応。owner単位override | 対応。同じruntime実装 | runtime-only | `ctx.audioSources` |
+| Entity自身のLightの点灯・色・強度・Point / Spot距離 | 対応。owner単位override | 対応。同じruntime実装 | runtime-only | `ctx.lights` |
+| 明示参照Entityのworld座標近接とScript event接続 | 対応 | 対応 | runtime-only | `ctx.find` + `getWorldPosition` + `on` / `emit` |
 | 宣言済みGLBをTSX `Render`で表示 | 対応 | 対応 | source | `ctx.assets.url` + `useGLTF` / `Clone` |
 | Material Texture の repeat / offset / center / rotation | 対応。Entity / Material slot所有cloneだけを変更 | 対応 | runtime-only | `ctx.materials.setTextureTransform` |
 | Entity 自身の Material の color / opacity / emissive / metalness / roughness | 対応 | 対応 | runtime-only | `ctx.materials` |
@@ -527,13 +571,14 @@ Inspector のフィールドは宣言から自動生成する。種別は既存�
 - 公開ワールドへの静的 import としての出力
 - host が管理する `start` / `update` / `ctx.on` と React の `Render` render error を Script 単位で隔離
 - Inspector / MCP で変更した宣言済み property の frame 単位の反映
-- 明示参照した基本 Texture / Audio、TSX RenderのModel表示、Entity 単位のruntime Audio Source / Material / Particle override
+- 明示参照した基本 Texture / Audio、TSX RenderのModel表示、Entity 単位のruntime Audio Source / Light / Material / Particle override
 - local / builtin Texture の Material / Particle preview と、local Basis transcoder を使う KTX2 preview / 公開描画
 
 対応しない。
 
 - 物理 API は World project だけ。Item project は重力と RigidBody を持たないため未対応として degrade する
-- 入力はキーボードのみ。pointer lock、マウス移動、gamepad の配線は存在しない
+- 低レベル`ctx.input`は既存Script互換用のkeyboard状態だけを持つ。公式shortcut競合を避けるため組み込みTemplateでは使わず、pointer lock、マウス移動、gamepadの配線も提供しない
+- `ctx.find`からruntime player / avatarを取得するAPIはない。近接Templateは明示参照したauthored Entity同士だけを扱う
 - runtime JSON 出力では Script を表現できないため blocking 診断とする
 - 任意 npm package の import。staging へ install できる package は固定の許可リストに限る
 - Script から公式 XRift Component を imperative に操作する API は初版では提供しない
@@ -598,7 +643,7 @@ release buildには登録されない。
 - Script Console は Script Editor 内で compile / lifecycle / event / Render の失敗と `ctx.log` を表示し、
   MCP の `get_editor_context.scriptRuntime` からも JSON-safe な直近結果を取得できる。現時点ではsource mapによる行・列、
   同一例外の集約、個別Scriptの再開操作は未対応
-- `play-and-edit`、pointer / mouse / gamepad は未対応
+- pointer / mouse / gamepad とruntime player / avatar参照は未対応
 - `ctx.lifecycle` を使わない `Promise.then`、global timer、Render の pointer / physics callback など、host の所有外で
   開始した非同期 callback の例外帰属と自動停止は未対応
 - 公開先プラットフォームが upload された bundle を審査または sandbox するかは未確認。Studioの内容hash承認はlocal Playの同意であり、公開runtimeの隔離や審査を代替しない

@@ -28,6 +28,7 @@ import { resolvePrefabInstances } from "./prefab-resolver";
 import {
   SCRIPT_API_OVERLAY_PATH,
   SCRIPT_HOST_OVERLAY_PATH,
+  SCRIPT_LIGHT_OVERLAY_PATH,
   SCRIPT_LIFECYCLE_OVERLAY_PATH,
   SCRIPT_PARTICLE_OVERLAY_PATH,
 } from "./script-emit";
@@ -352,8 +353,9 @@ function assertEmitsStaticImports(): void {
     paths.includes(SCRIPT_API_OVERLAY_PATH) &&
       paths.includes(SCRIPT_HOST_OVERLAY_PATH) &&
       paths.includes(SCRIPT_LIFECYCLE_OVERLAY_PATH) &&
+      paths.includes(SCRIPT_LIGHT_OVERLAY_PATH) &&
       paths.includes(SCRIPT_PARTICLE_OVERLAY_PATH),
-    "Script API, lifecycle, Particle runtime, and host were not emitted alongside the module",
+    "Script API, lifecycle, Light/Particle runtimes, and host were not emitted alongside the module",
   );
   const host = result.overlayFiles.find(
     (file) => file.relativePath === SCRIPT_HOST_OVERLAY_PATH,
@@ -368,6 +370,7 @@ function assertEmitsStaticImports(): void {
     Boolean(
       host?.content.includes('from "./script-api"') &&
         host.content.includes('from "./script-lifecycle"') &&
+        host.content.includes('from "./light-runtime"') &&
         host.content.includes('from "./particle-runtime"'),
     ),
     "Script host sibling imports were not rewritten to emitted runtime files",

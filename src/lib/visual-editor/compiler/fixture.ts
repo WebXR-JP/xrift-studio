@@ -190,8 +190,21 @@ export function runVisualCompilerFixtureAssertions(
     "Different projectIds must not share a compiler staging identity",
   );
   const worldSource = first.overlayFiles.find((file) => file.relativePath === "src/World.tsx")?.content ?? "";
+  const lightRuntime =
+    first.overlayFiles.find(
+      (file) => file.relativePath === "src/xrift-studio/light-runtime.tsx",
+    )?.content ?? "";
   assert(worldSource.includes("<SpawnPoint"), "World SpawnPoint was not generated");
   assert(worldSource.includes("castShadow={true}"), "Mesh shadow settings were not generated");
+  assert(
+    worldSource.includes(
+      'import { XriftScriptLight } from "./xrift-studio/light-runtime";',
+    ) &&
+      worldSource.includes("<XriftScriptLight") &&
+      lightRuntime.includes("export function XriftScriptLight") &&
+      lightRuntime.includes("xriftLightRuntime"),
+    "Script-free Light output did not use the shared Light runtime",
+  );
 
   const audioEntity = world.scenes[world.project.entrySceneId].entities["entity-world-object"];
   const audioAsset: AudioAsset = {
