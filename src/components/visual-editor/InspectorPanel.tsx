@@ -15,6 +15,7 @@ import {
   normalizeMaterialProperties,
   getMeshMaterialSlots,
   getTransform,
+  EDITOR_COMPONENT_CATEGORY_ORDER,
   getEditorComponentMenuDefinitions,
   getXriftComponentDefinition,
   getXriftComponentMenuGroups,
@@ -2701,7 +2702,7 @@ function EntityInspector({
         </button>
         {addComponentOpen ? (
           <div className="mt-2 max-h-80 space-y-1 overflow-y-auto rounded-md border border-slate-300 bg-white p-1 shadow-lg">
-            {(["core", "rendering", "physics", "interaction", "media", "world"] as const).map(
+            {EDITOR_COMPONENT_CATEGORY_ORDER.map(
               (category) => {
                 const definitions = getEditorComponentMenuDefinitions(
                   projectKind,

@@ -54,6 +54,7 @@ export type AssetReferenceCollection = {
   audioAssetIds: string[];
   prefabAssetIds: string[];
   xriftAssetIds: string[];
+  scriptAssetIds: string[];
 };
 
 export type CreatePrefabDocumentInput = {
@@ -230,6 +231,7 @@ export function collectSceneAssetReferences(
   const audio = new Set<string>();
   const prefabs = new Set<string>();
   const xrift = new Set<string>();
+  const scripts = new Set<string>();
   const visited = new Set<string>();
 
   const visit = (entityId: string) => {
@@ -257,6 +259,9 @@ export function collectSceneAssetReferences(
         prefabs.add(component.prefabAssetId);
       } else if (component.type === "xrift-component") {
         component.assetReferences.forEach((assetId) => xrift.add(assetId));
+      } else if (component.type === "script") {
+        scripts.add(component.scriptAssetId);
+        component.assetReferences.forEach((assetId) => scripts.add(assetId));
       }
     }
     entity.children.forEach(visit);
@@ -284,6 +289,7 @@ export function collectSceneAssetReferences(
     audioAssetIds: [...audio].sort(),
     prefabAssetIds: [...prefabs].sort(),
     xriftAssetIds: [...xrift].sort(),
+    scriptAssetIds: [...scripts].sort(),
   };
 }
 

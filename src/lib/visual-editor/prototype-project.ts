@@ -246,6 +246,12 @@ function cloneBuiltinAsset(asset: SceneAsset): SceneAsset {
     };
   }
 
+  // Script sources are project files by contract, so the narrowed `source`
+  // has to be cloned in its own branch to survive the union widening below.
+  if (asset.kind === "script") {
+    return { ...asset, source: { ...asset.source } };
+  }
+
   return { ...asset, source: { ...asset.source } };
 }
 

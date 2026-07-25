@@ -3,7 +3,10 @@ import {
   isValidAssetFolderName,
   normalizeMaterialProperties,
   normalizeTextureImportSettings,
+  SCRIPT_ASSET_CONTRACT_VERSION,
+  SCRIPT_ASSET_LANGUAGES,
   type AssetManifest,
+  type ScriptAssetLanguage,
   type SkyboxAsset,
   type TextureAsset,
   type TextureSourceFormat,
@@ -14,6 +17,7 @@ import { validateKhrInteractivityExtension } from "./interactivity-graph";
 import { isOpenBrushMaterialShader } from "./open-brush";
 import { isClassicR3fMaterialShader } from "./custom-shader-contract";
 import { normalizeParticleProperties } from "./particle-system";
+import { isSerializableJsonValue } from "./component-registry";
 import {
   PREFAB_DOCUMENT_SCHEMA_VERSION,
   type PrefabDocument,
@@ -29,9 +33,12 @@ import {
   RIGID_BODY_AUTO_COLLIDERS,
   RIGID_BODY_TYPES,
   SCENE_DOCUMENT_SCHEMA_VERSION,
+  SCRIPT_CONTRACT_VERSION,
+  SCRIPT_RUN_MODES,
   migrateLegacyParentRigidBodies,
   type ComponentAuthoringMetadata,
   type SceneDocument,
+  type ScriptRunMode,
 } from "./scene-document";
 
 export type DocumentValidationIssue = {
@@ -216,6 +223,7 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
     "particle",
     "interactivity",
     "audio",
+    "script",
     "template",
   ]);
   const prefabPaths = new Map<string, string>();
@@ -275,6 +283,37 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
             ),
           );
         }
+      }
+    }
+    if (candidate.kind === "script") {
+      if (candidate.contractVersion !== SCRIPT_ASSET_CONTRACT_VERSION) {
+        issues.push(
+          issue(
+            `${path}.contractVersion`,
+            "script-version",
+            "Script Asset must declare the supported scripting contract version",
+          ),
+        );
+      }
+      if (
+        !SCRIPT_ASSET_LANGUAGES.includes(
+          candidate.language as ScriptAssetLanguage,
+        )
+      ) {
+        issues.push(
+          issue(`${path}.language`, "enum", "Script language must be ts or tsx"),
+        );
+      }
+      // Source text is a project file by contract; a document-backed Script
+      // would put executable code inside the manifest. See docs/SCRIPTING.md.
+      if (!isRecord(candidate.source) || candidate.source.kind !== "project") {
+        issues.push(
+          issue(
+            `${path}.source`,
+            "script-source",
+            "Script Asset source must be a project file",
+          ),
+        );
       }
     }
     if (candidate.kind === "audio") {
@@ -1603,6 +1642,32 @@ function validatePrefabComponentShape(
     }
     if (typeof component.sourceEntityId !== "string" || !component.sourceEntityId) {
       issues.push(issue(`${path}.sourceEntityId`, "reference", "Prefab source entity is invalid"));
+    }
+  } else if (component.type === "script") {
+    if (typeof component.scriptAssetId !== "string" || !component.scriptAssetId) {
+      issues.push(issue(`${path}.scriptAssetId`, "reference", "Script asset is invalid"));
+    }
+    if (component.contractVersion !== SCRIPT_CONTRACT_VERSION) {
+      issues.push(
+        issue(
+          `${path}.contractVersion`,
+          "script-version",
+          "Script component must declare the supported scripting contract version",
+        ),
+      );
+    }
+    // Values only. Executable code never reaches a document; see docs/SCRIPTING.md.
+    if (!isRecord(component.properties) || !isSerializableJsonValue(component.properties)) {
+      issues.push(issue(`${path}.properties`, "type", "script properties must be plain JSON"));
+    }
+    if (!isUniqueStringArray(component.assetReferences, true)) {
+      issues.push(issue(`${path}.assetReferences`, "reference", "assetReferences are invalid"));
+    }
+    if (!isUniqueStringArray(component.entityReferences, true)) {
+      issues.push(issue(`${path}.entityReferences`, "reference", "entityReferences are invalid"));
+    }
+    if (!SCRIPT_RUN_MODES.includes(component.runIn as ScriptRunMode)) {
+      issues.push(issue(`${path}.runIn`, "enum", "script runIn is invalid"));
     }
   } else if (component.type === "xrift-component") {
     if (!isUniqueStringArray(component.assetReferences, true)) {

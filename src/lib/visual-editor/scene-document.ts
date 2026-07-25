@@ -311,6 +311,31 @@ export type ComponentAuthoringMetadata = {
   editablePropertyNames?: string[];
 };
 
+/** Contract version of the Script authoring API. Validated on load. */
+export const SCRIPT_CONTRACT_VERSION = "1.0.0" as const;
+
+export const SCRIPT_RUN_MODES = ["play", "play-and-edit"] as const;
+export type ScriptRunMode = (typeof SCRIPT_RUN_MODES)[number];
+
+/**
+ * Attaches a Script Asset to an Entity.
+ *
+ * Mirrors the Particle split: the reusable definition lives in the Asset and
+ * only the reference plus Entity-specific values live here. `properties` is
+ * plain JSON by contract; executable code is never stored in a document.
+ * See docs/SCRIPTING.md.
+ */
+export type ScriptComponent = ComponentBase & {
+  type: "script";
+  scriptAssetId: string;
+  contractVersion: typeof SCRIPT_CONTRACT_VERSION;
+  /** Values for the properties the script declares. Never code. */
+  properties: JsonObject;
+  assetReferences: string[];
+  entityReferences: string[];
+  runIn: ScriptRunMode;
+};
+
 /** Typed boundary for XRift-specific component schemas registered later. */
 export type XRiftComponent = ComponentBase & {
   type: "xrift-component";
@@ -341,6 +366,7 @@ export interface SceneComponentExtensionSchemaRegistry {
   "particle-emitter": ParticleEmitterComponent;
   "prefab-instance": PrefabInstanceComponent;
   "xrift-component": XRiftComponent;
+  script: ScriptComponent;
 }
 
 export type CoreSceneComponent =
@@ -661,6 +687,26 @@ export function createParticleEmitterComponent(
     type: "particle-emitter",
     enabled: true,
     particleAssetId: normalizedAssetId,
+  };
+}
+
+export function createScriptComponent(
+  id: string,
+  scriptAssetId: string,
+): ScriptComponent | null {
+  const normalizedId = id.trim();
+  const normalizedAssetId = scriptAssetId.trim();
+  if (!normalizedId || !normalizedAssetId) return null;
+  return {
+    id: normalizedId,
+    type: "script",
+    enabled: true,
+    scriptAssetId: normalizedAssetId,
+    contractVersion: SCRIPT_CONTRACT_VERSION,
+    properties: {},
+    assetReferences: [],
+    entityReferences: [],
+    runIn: "play",
   };
 }
 
@@ -2240,6 +2286,17 @@ function cloneSceneComponent(
             },
           }
         : {}),
+    };
+  }
+  if (component.type === "script") {
+    return {
+      ...component,
+      id,
+      properties: cloneJsonObject(component.properties),
+      assetReferences: [...component.assetReferences],
+      entityReferences: component.entityReferences.map(
+        (entityId) => entityIdMap[entityId] ?? entityId,
+      ),
     };
   }
   return { ...component, id };

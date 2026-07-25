@@ -11,6 +11,7 @@ import {
   BUILTIN_PRIMITIVE_CREATION_CATALOG,
   BUILTIN_PREFAB_DRAG_MIME,
   getEntityReparentDecision,
+  EDITOR_COMPONENT_CATEGORY_ORDER,
   getEditorComponentMenuDefinitions,
   getXriftComponentDefinition,
   getXriftComponentMenuGroups,
@@ -1525,7 +1526,7 @@ export function HierarchyPanel({
                   Add Component ({getEditorComponentMenuDefinitions(projectKind).length})
                 </summary>
                 <div className="space-y-1 border-t border-slate-100 p-1">
-                  {(["core", "rendering", "physics", "media", "world"] as const).map(
+                  {EDITOR_COMPONENT_CATEGORY_ORDER.map(
                     (category) => {
                       const definitions = getEditorComponentMenuDefinitions(
                         projectKind,
@@ -1589,7 +1590,7 @@ export function HierarchyPanel({
                 Add Component ({getEditorComponentMenuDefinitions(projectKind).length})
               </summary>
               <div className="space-y-1 border-t border-slate-100 p-1">
-                {(["core", "rendering", "physics", "media", "world"] as const).map(
+                {EDITOR_COMPONENT_CATEGORY_ORDER.map(
                   (category) => {
                     const definitions = getEditorComponentMenuDefinitions(
                       projectKind,

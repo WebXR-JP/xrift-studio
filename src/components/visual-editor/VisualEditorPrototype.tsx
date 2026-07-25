@@ -3585,7 +3585,9 @@ export function VisualEditorPrototype({
               : result.reason === "project-kind"
                 ? "このProject種別では追加できません"
                 : result.reason === "dependency-missing"
-                  ? "必要なMeshまたはAssetがありません"
+                  ? componentDefinitionId === "scripting.script"
+                    ? "先にAssetsでScriptを作成してください"
+                    : "必要なMeshまたはAssetがありません"
                   : "Componentを追加できませんでした";
           setNotice(reason);
           return current;

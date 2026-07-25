@@ -101,6 +101,7 @@ const KIND_FOLDERS: BrowserFolder[] = [
   { id: "folder-audio", name: "Audio", icon: "audio", kind: "audio" },
   { id: "folder-particles", name: "Particles", icon: "particle", kind: "particle" },
   { id: "folder-interactivity", name: "Interactivity", icon: "asset", kind: "interactivity" },
+  { id: "folder-scripts", name: "Scripts", icon: "script", kind: "script" },
   { id: "folder-prefabs", name: "Prefabs", icon: "prefab", kind: "template" },
 ];
 
@@ -122,6 +123,8 @@ function assetKindLabel(asset: SceneAsset): string {
       return "KHR Interactivity";
     case "audio":
       return "Audio";
+    case "script":
+      return "Script";
     case "template":
       return "Prefab";
   }
@@ -143,6 +146,8 @@ function assetIconName(asset: SceneAsset): EditorIconName {
       return "asset";
     case "audio":
       return "audio";
+    case "script":
+      return "script";
     case "template":
       return "prefab";
     case "primitive":

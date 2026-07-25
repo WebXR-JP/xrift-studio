@@ -16,6 +16,7 @@ import {
   createMeshComponent,
   createParticleEmitterComponent,
   createRigidBodyComponent,
+  createScriptComponent,
   createTextComponent,
   createTransformComponent,
   fitBoxColliderToMesh,
@@ -34,7 +35,23 @@ export type EditorComponentCategory =
   | "physics"
   | "interaction"
   | "media"
-  | "world";
+  | "world"
+  | "scripting";
+
+/**
+ * Display order shared by every Add Component surface. Kept in one place
+ * because the Inspector and Hierarchy menus previously drifted apart and
+ * "interaction" was unreachable from the Hierarchy context menu.
+ */
+export const EDITOR_COMPONENT_CATEGORY_ORDER = [
+  "core",
+  "rendering",
+  "physics",
+  "interaction",
+  "media",
+  "world",
+  "scripting",
+] as const satisfies readonly EditorComponentCategory[];
 
 export type EditorComponentDefinition = {
   id: string;
@@ -99,6 +116,7 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
   definition("core.animation", "Animation", "rendering", false, "animation"),
   definition("core.audio-source", "Audio Source", "media", true, "audio-source"),
   definition("core.text", "Text", "rendering", true, "text"),
+  definition("scripting.script", "Script", "scripting", true, "script"),
   ...XRIFT_COMPONENT_REGISTRY.map(
     (component): EditorComponentDefinition => ({
       id: component.schemaId,
@@ -730,6 +748,14 @@ function createRegisteredComponent(
   }
   if (definition.componentType === "text") {
     return createTextComponent(id);
+  }
+  if (definition.componentType === "script") {
+    // Requires an existing Script Asset, like particle-emitter requires a
+    // Particle Asset. The Assets panel is where a new script is authored.
+    const script = Object.values(assets.assets).find(
+      (asset) => asset.kind === "script",
+    );
+    return script ? createScriptComponent(id, script.id) : null;
   }
   return null;
 }
