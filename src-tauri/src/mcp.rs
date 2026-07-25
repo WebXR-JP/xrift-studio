@@ -28,10 +28,12 @@ const MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS: u64 = 120_000;
 const MCP_MAX_CONCURRENT_CONNECTIONS: usize = 32;
 const MCP_MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 const MCP_MAX_CLIENT_NAME_CHARS: usize = 128;
-const MCP_TOOL_NAMES: [&str; 51] = [
+const MCP_TOOL_NAMES: [&str; 53] = [
     "get_editor_context",
     "get_scripting_capabilities",
     "list_assets",
+    "get_audio_asset",
+    "import_audio_asset",
     "get_texture_asset",
     "import_texture_asset",
     "update_texture_asset",
@@ -1790,7 +1792,7 @@ pub fn run_stdio_server() -> Result<(), String> {
                     "protocolVersion": MCP_PROTOCOL_VERSION,
                     "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": { "name": MCP_SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Script execution is not sandboxed. XRift Studio enforces a project-scoped content-hash approval gate before evaluating Script source. XRift Studio's stdio MCP editor tools cannot grant approval. The debug-only privileged Tauri MCP bridge can execute webview JavaScript and is outside this trust boundary. set_play_mode returns SCRIPT_APPROVAL_REQUIRED when referenced source is not approved; the user must review and approve it in the Studio UI, or the client may explicitly request unapprovedPolicy:'skip' to start without those Scripts. Call get_scripting_capabilities and list_script_templates before authoring a Script. Use create_script_asset with templateId to create a built-in example, or apply_script_template to create it and attach its Script Component to an Entity in one editor revision. For custom source, use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. Use import_texture_asset only for a trusted absolute local image path while Edit is active; the Editor validates the format and copies it into managed project storage without returning file bytes. Use get_texture_asset/update_texture_asset for persistent sampler and import settings; updates are supported during Play and restart only consuming Entities. Runtime ctx.materials and ctx.particles changes reset on Stop; use persistent Material tools or create_document_asset/get_particle_asset/update_particle_asset to save authoring data. Call list_component_definitions and get_entity_components before add_component, update_component, or remove_component. While Play is active, Entity enabled state and supported component/scene structure tools synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. XRift Studio must be open with a visual project."
+                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Script execution is not sandboxed. XRift Studio enforces a project-scoped content-hash approval gate before evaluating Script source. XRift Studio's stdio MCP editor tools cannot grant approval. The debug-only privileged Tauri MCP bridge can execute webview JavaScript and is outside this trust boundary. set_play_mode returns SCRIPT_APPROVAL_REQUIRED when referenced source is not approved; the user must review and approve it in the Studio UI, or the client may explicitly request unapprovedPolicy:'skip' to start without those Scripts. Call get_scripting_capabilities and list_script_templates before authoring a Script. Use create_script_asset with templateId to create a built-in example, or apply_script_template to create it and attach its Script Component to an Entity in one editor revision. For custom source, use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. Use import_audio_asset or import_texture_asset only for a trusted absolute local path while Edit is active; the Editor validates extension, signature, regular-file/no-link status, and the 128 MB limit, then copies it into managed project storage without returning file bytes or the external path. Use get_audio_asset plus place_asset, or add_component with core.audio-source and update_component, for persistent Audio Source authoring. Use get_texture_asset/update_texture_asset for persistent sampler and import settings; updates are supported during Play and restart only consuming Entities. Runtime ctx.audioSources, ctx.materials, and ctx.particles changes reset on Stop; use persistent Audio Source, Material, or Particle tools to save authoring data. Call list_component_definitions and get_entity_components before add_component, update_component, or remove_component. While Play is active, Entity enabled state and supported component/scene structure tools synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. XRift Studio must be open with a visual project."
                 }),
             )?,
             "ping" => write_json_rpc_result(&mut stdout, id, json!({}))?,
@@ -2127,6 +2129,43 @@ fn tool_definitions() -> Value {
                     "query": { "type": "string" },
                     "kind": { "type": "string" }
                 },
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "get_audio_asset",
+            "description": "Read one managed Audio Asset and its project-relative source format, MIME type, and byte length. File bytes, data URLs, and external source paths are never returned.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "audioAssetId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["audioAssetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "import_audio_asset",
+            "description": "Validate and import one trusted local MP3 or WAV file into managed project storage while Edit is active. sourcePath must be an absolute path to a regular non-symlink/non-reparse file no larger than 128 MB. Extension and file signature must agree. The result returns the Audio Asset and project-relative destination, never file bytes, a data URL, or the external source path.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "sourcePath": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096
+                    },
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "folderId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "sourcePath"],
                 "additionalProperties": false
             }
         },
@@ -3059,6 +3098,7 @@ mod tests {
         let tools = tool_definitions();
         let tools = tools.as_array().expect("tool list");
         for name in [
+            "import_audio_asset",
             "import_texture_asset",
             "update_texture_asset",
             "create_document_asset",
@@ -3136,6 +3176,42 @@ mod tests {
                 .pointer("/inputSchema/properties/sourcePath/maxLength")
                 .and_then(Value::as_u64),
             Some(4096)
+        );
+        let import_audio = tools
+            .iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("import_audio_asset"))
+            .expect("import_audio_asset");
+        assert_eq!(
+            import_audio
+                .pointer("/inputSchema/properties/sourcePath/maxLength")
+                .and_then(Value::as_u64),
+            Some(4096)
+        );
+        assert!(
+            import_audio
+                .get("description")
+                .and_then(Value::as_str)
+                .is_some_and(|description| {
+                    description.contains("MP3")
+                        && description.contains("WAV")
+                        && description.contains("signature")
+                        && description.contains("never")
+                }),
+            "Audio import should disclose validation and response privacy"
+        );
+        let get_audio = tools
+            .iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("get_audio_asset"))
+            .expect("get_audio_asset");
+        assert!(
+            get_audio
+                .get("description")
+                .and_then(Value::as_str)
+                .is_some_and(|description| {
+                    description.contains("project-relative")
+                        && description.contains("never returned")
+                }),
+            "Audio reads should disclose managed metadata and response privacy"
         );
         let update_texture = tools
             .iter()

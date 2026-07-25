@@ -127,6 +127,13 @@ export type LocalTextureImportSource = {
   dataUrl: string;
 };
 
+export type LocalAudioImportSource = {
+  fileName: string;
+  mimeType: string;
+  byteLength: number;
+  dataUrl: string;
+};
+
 export type ExternalStoreAssetKind = "hdri" | "texture" | "model";
 export type ExternalStoreFileFormat = "hdr" | "exr";
 
@@ -398,6 +405,10 @@ export const tauri = {
     invoke<LocalTextureImportSource>("read_local_texture_import_source", {
       sourcePath,
     }),
+  readLocalAudioImportSource: (sourcePath: string) =>
+    invoke<LocalAudioImportSource>("read_local_audio_import_source", {
+      sourcePath,
+    }),
   openVisualAssetLocation: (
     projectPath: string,
     sourceRelativePath?: string,
@@ -464,6 +475,8 @@ export const tauri = {
     invoke<void>("write_thumbnail", { projectPath, dataUrl }),
   readImageDataUrl: (projectPath: string, rel: string) =>
     invoke<string>("read_image_data_url", { projectPath, rel }),
+  readAudioDataUrl: (projectPath: string, rel: string) =>
+    invoke<string>("read_audio_data_url", { projectPath, rel }),
   /** Reads a validated project-relative binary as a data URL (models included). */
   readProjectFileDataUrl: (projectPath: string, rel: string) =>
     invoke<string>("read_image_data_url", { projectPath, rel }),

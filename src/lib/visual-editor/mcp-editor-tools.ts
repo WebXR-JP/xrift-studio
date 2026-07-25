@@ -70,6 +70,7 @@ import {
   type KhrInteractivityJsonValue,
 } from "./interactivity-graph";
 import {
+  getAudioAsset,
   getMaterialAsset,
   getTextureAsset,
   updateMaterialAsset,
@@ -101,6 +102,7 @@ export const XRIFT_MCP_EDITOR_TOOLS = [
   "get_editor_context",
   "get_scripting_capabilities",
   "list_assets",
+  "get_audio_asset",
   "get_texture_asset",
   "update_texture_asset",
   "create_document_asset",
@@ -144,7 +146,10 @@ export const XRIFT_MCP_EDITOR_TOOLS = [
 export type XriftMcpEditorToolName = (typeof XRIFT_MCP_EDITOR_TOOLS)[number];
 
 /** Local Asset tools perform native file I/O in the React host. */
-export const XRIFT_MCP_LOCAL_ASSET_TOOLS = ["import_texture_asset"] as const;
+export const XRIFT_MCP_LOCAL_ASSET_TOOLS = [
+  "import_audio_asset",
+  "import_texture_asset",
+] as const;
 
 export type XriftMcpLocalAssetToolName =
   (typeof XRIFT_MCP_LOCAL_ASSET_TOOLS)[number];
@@ -223,6 +228,8 @@ export function executeXriftMcpEditorTool(
       return readScriptingCapabilities(context);
     case "list_assets":
       return listAssets(context, request.arguments);
+    case "get_audio_asset":
+      return getAudio(context, request.arguments);
     case "get_texture_asset":
       return getTexture(context, request.arguments);
     case "update_texture_asset":
@@ -369,6 +376,9 @@ function readScriptingCapabilities(
             "update_component",
             "remove_component",
             "set_entity_enabled",
+            "import_audio_asset",
+            "get_audio_asset",
+            "place_asset",
             "import_texture_asset",
             "get_texture_asset",
             "update_texture_asset",
@@ -381,7 +391,7 @@ function readScriptingCapabilities(
             "update_particle_asset",
           ],
           purpose:
-            "Persist reusable Texture, Material, and Particle Assets plus Entity Component settings independently from runtime-only Script overrides.",
+            "Persist reusable Audio, Texture, Material, and Particle Assets plus Entity Component settings independently from runtime-only Script overrides.",
         },
       ],
       runtime: {
@@ -445,6 +455,31 @@ function readScriptingCapabilities(
           },
           lifetime:
             "Loaded textures are disposed and Audio players are stopped/released automatically on restart or Stop.",
+        },
+        audioSources: {
+          scope:
+            "Controls Audio Source Components owned by the attached Entity and excludes child Entities.",
+          methods: [
+            "ctx.audioSources.list(): readonly ScriptAudioSourceInfo[]",
+            "ctx.audioSources.select({ componentId?, audioAssetId? }): ScriptAudioSourceHandle",
+            "ctx.audioSources.count(): number",
+            "ctx.audioSources.play(): Promise<number>",
+            "ctx.audioSources.pause(): number",
+            "ctx.audioSources.stop(): number",
+            "ctx.audioSources.seek(seconds): number",
+            "ctx.audioSources.setVolume(volume): number",
+            "ctx.audioSources.setLoop(loop): number",
+            "ctx.audioSources.reset(): void",
+          ],
+          selection: {
+            fields: ["componentId", "audioAssetId"],
+            semantics:
+              "Fields are combined with AND and selection stays inside the attached Entity. A selector may match multiple Audio Source Components.",
+          },
+          autoplay:
+            "play() always resolves to the number of sources that actually started. Browser or webview autoplay refusal resolves as 0 and is reported by list().status as autoplay-blocked; it is not thrown into the Script.",
+          persistence:
+            "Runtime-only owner-scoped overrides. They are removed on Script restart or Stop and do not modify Audio Assets or Audio Source Components.",
         },
         materials: {
           scope:
@@ -528,6 +563,7 @@ function readScriptingCapabilities(
         "undeclared Asset or Entity access",
         "KTX2/HDR/EXR typed loading",
         "persistent Material Asset mutation through ctx.materials",
+        "persistent Audio Source mutation through ctx.audioSources",
       ],
       persistentAuthoring: {
         modes: ["edit", "play"],
@@ -540,6 +576,8 @@ function readScriptingCapabilities(
           "set_material_texture_transform",
           "get_texture_asset",
           "update_texture_asset",
+          "get_audio_asset",
+          "place_asset",
           "list_component_definitions",
           "get_entity_components",
           "add_component",
@@ -572,6 +610,15 @@ function readScriptingCapabilities(
             "update_particle_asset",
           ],
           textures: ["get_texture_asset", "update_texture_asset"],
+          audio: [
+            "get_audio_asset",
+            "place_asset",
+            "list_component_definitions",
+            "get_entity_components",
+            "add_component",
+            "update_component",
+            "remove_component",
+          ],
           sceneSettings: ["update_scene_settings"],
         },
         assetOperations: {
@@ -589,6 +636,26 @@ function readScriptingCapabilities(
               "sampler.minFilter",
               "resize",
               "compression",
+            ],
+          },
+          audio: {
+            read: "get_audio_asset",
+            createInEdit: "import_audio_asset",
+            placeAsSource: "place_asset",
+            componentDefinitionId: "core.audio-source",
+            addComponent: "add_component",
+            updateComponent: "update_component",
+            removeComponent: "remove_component",
+            componentFields: [
+              "enabled",
+              "audioAssetId",
+              "volume",
+              "loop",
+              "autoplay",
+              "spatial",
+              "refDistance",
+              "rolloffFactor",
+              "maxDistance",
             ],
           },
           materials: {
@@ -612,13 +679,13 @@ function readScriptingCapabilities(
           },
         },
         semantics:
-          "These editor tools persist Asset, Entity, and Scene settings document changes. Use the Texture/Material tools instead of loadTexture options or ctx.materials when an edit must remain after Stop or be saved.",
+          "These editor tools persist Asset, Entity, and Scene settings document changes. Use Audio Source Component tools or the Texture/Material tools instead of ctx.audioSources, loadTexture options, or ctx.materials when an edit must remain after Stop or be saved.",
       },
       editOnlyAuthoring: {
         modes: ["edit"],
-        tools: ["import_texture_asset"],
+        tools: ["import_audio_asset", "import_texture_asset"],
         semantics:
-          "Local Texture source import persists through the Editor history and autosave pipeline, but cannot run while Play is active.",
+          "Local Audio and Texture source imports persist through the Editor history and autosave pipeline, but cannot run while Play is active.",
       },
       example: [
         'import { defineScript, prop } from "xrift:script";',
@@ -712,6 +779,31 @@ function listAssets(
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
   return unchanged(context, { assets, count: assets.length }, "Asset一覧を取得しました");
+}
+
+function getAudio(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const audioAssetId = requiredString(
+    argumentsValue.audioAssetId,
+    "audioAssetId",
+  );
+  const audio = getAudioAsset(context.bundle.assets, audioAssetId);
+  if (!audio) {
+    throw new XriftMcpEditorToolError(
+      "AUDIO_NOT_FOUND",
+      "指定されたAudio Assetが見つかりません",
+      { audioAssetId },
+    );
+  }
+  return unchanged(
+    context,
+    {
+      audio: JSON.parse(JSON.stringify(audio)) as Record<string, unknown>,
+    },
+    `Audio「${audio.name}」を取得しました`,
+  );
 }
 
 function getTexture(

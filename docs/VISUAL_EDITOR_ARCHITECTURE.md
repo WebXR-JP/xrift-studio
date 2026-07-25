@@ -614,6 +614,16 @@ Particle と同じ関係を採る。再利用可能な定義は Asset 側に置�
 - Stop は生成した module、blob URL、timer、listener を明示的に破棄する。React の unmount に依存しない。
 - Item project は重力と RigidBody を持たないため、物理へ触る API は未対応として degrade し、動くふりをしない。
 
+#### Audio / Audio Source の所有境界
+
+- Audio Assetはproject管理下のMP3 / WAV原本とformat、MIME、byte lengthを持ち、外部絶対pathやbytesをAssetManifestへ保存しない。EditのScene ViewはAudio Sourceをiconで示すだけでsourceを取得・再生せず、Playと`classic-jsx`生成物は同じAudio Source runtimeを使う。
+- Studio Playがmanaged Audioを読むnative境界は`assets/`配下のproject-relative pathだけを受け付ける。path traversal、通常file以外、symlink / reparse point、128 MiB超過、拡張子とMP3 / WAV signatureの不一致、read中のsize変化を拒否してからdata URLをruntimeへ渡す。
+- `ctx.assets.loadAudio`はScript ownerが独立playerを作るAPIであり、保存済みAudio Source Componentを操作しない。`ctx.audioSources`はattached Entity自身のAudio Sourceだけを`componentId` / `audioAssetId`で選び、play / pause / stop / seek / volume / loopをowner単位で上書きする。子Entity、別Entity、共有Audio Assetを変更しない。
+- 同じEntityの複数ScriptはComponent順でAudio Source overrideを合成する。Script再起動、runtime failure、Stopではそのownerの再生要求とoverrideを外し、Audio Source Componentの保存値へ戻す。browser / webviewのautoplay policyで拒否されても`play()`は例外を外へ出さず開始件数0をresolveし、`list().status`を`autoplay-blocked`にする。Scene全体を止めず、ユーザー操作後の再試行を許す。
+- Audio Sourceのvolume / loop / autoplay /距離propertyは既存runtimeへ更新し、Audio Asset参照、spatial、enabled、Component追加・削除は対象Entityだけを再同期する。Edit時にAudio Assetを`place_asset`すると参照設定済みAudio Source Entityを作り、既存Entityには`core.audio-source`のadd / update / removeを使う。
+- `import_audio_asset`はEdit mode限定で、trustedな絶対pathをnative側の通常file、no-link、128 MiB、extension + signature、read前後size検査へ通し、content-addressed copy、atomic commit、history、autosaveを一件で確定する。`get_audio_asset`とimport結果は管理下relative pathとmetadataだけを返し、外部path、data URL、binary bytesをMCPへ返さない。
+- `ctx.audioSources`はruntime-onlyでSceneDocument revisionを変えない。保存するAudio Source設定は`place_asset`、`add_component`、`update_component`、`remove_component`を使い、runtime状態を暗黙に永続化しない。
+
 #### Texture / Material の所有境界
 
 - `ctx.assets.loadTexture` は Script Component の `assetReferences` にある Texture Asset だけを受け付ける。runtime resolver は URL だけでなく、Asset ID、`colorSpace`、Sampler の wrap / mag / min filter、`flipY`、`generateMipmaps` を descriptor として Play host と公開 adapter の両方へ渡す。

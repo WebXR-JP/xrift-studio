@@ -8,6 +8,7 @@ import {
 import {
   SCENE_DOCUMENT_SCHEMA_VERSION,
   createTransformComponent,
+  type AudioSourceComponent,
   type MeshComponent,
   type ParticleEmitterComponent,
   type SceneDocument,
@@ -123,6 +124,59 @@ export function runPlaySessionFixtureAssertions(): void {
         component.type === "script" && component.properties.speed === 8,
     ),
     "Script property-only edits must reach the runtime Scene on the next frame",
+  );
+
+  const audioSourceScene = fixtureScene();
+  audioSourceScene.entities["entity-a"]?.components.push(
+    audioSource("audio-source-a", "audio-ambient"),
+  );
+  const audioSourceSession = createPlaySession(audioSourceScene, assets);
+  const liveAudioSourceScene = fixtureScene();
+  liveAudioSourceScene.entities["entity-a"]?.components.push({
+    ...audioSource("audio-source-a", "audio-ambient"),
+    volume: 0.25,
+    loop: true,
+    autoplay: true,
+    refDistance: 2,
+    rolloffFactor: 0.5,
+    maxDistance: 24,
+  });
+  const liveAudioSourceUpdate = synchronizePlaySession(
+    audioSourceSession,
+    liveAudioSourceScene,
+    assets,
+  );
+  assert(
+    liveAudioSourceUpdate.entityRevisions["entity-a"] === 0 &&
+      liveAudioSourceUpdate.lastReloads.length === 0,
+    "Audio Source playback settings must update without restarting its Entity",
+  );
+  assert(
+    liveAudioSourceUpdate.runtimeScene.entities["entity-a"]?.components.some(
+      (component) =>
+        component.type === "audio-source" &&
+        component.volume === 0.25 &&
+        component.loop &&
+        component.maxDistance === 24,
+    ),
+    "Live Audio Source settings must reach the runtime Scene",
+  );
+
+  const structuralAudioSourceScene = fixtureScene();
+  structuralAudioSourceScene.entities["entity-a"]?.components.push({
+    ...audioSource("audio-source-a", "audio-next"),
+    spatial: false,
+  });
+  const structuralAudioSourceUpdate = synchronizePlaySession(
+    liveAudioSourceUpdate,
+    structuralAudioSourceScene,
+    assets,
+  );
+  assert(
+    structuralAudioSourceUpdate.entityRevisions["entity-a"] === 1 &&
+      structuralAudioSourceUpdate.lastReloads.length === 1 &&
+      structuralAudioSourceUpdate.lastReloads[0]?.entityId === "entity-a",
+    "Audio Asset or spatial mode changes must restart only the owning Entity",
   );
 
   const structurallyChanged = fixtureScene();
@@ -342,6 +396,25 @@ function particleEmitter(
     type: "particle-emitter",
     enabled: true,
     particleAssetId,
+  };
+}
+
+function audioSource(
+  id: string,
+  audioAssetId: string,
+): AudioSourceComponent {
+  return {
+    id,
+    type: "audio-source",
+    enabled: true,
+    audioAssetId,
+    volume: 1,
+    loop: false,
+    autoplay: false,
+    spatial: true,
+    refDistance: 1,
+    rolloffFactor: 1,
+    maxDistance: 100,
   };
 }
 

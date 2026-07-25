@@ -238,7 +238,7 @@ F-06 アイテム検査
 ### 操作中
 
 - Material 作成は dialog 内の validation、Texture / Model / HDRI import は Import Queue の validate、copy、decode、derive、thumbnail、commit を表示し、cancel を処理中 stage に合わせる。
-- MCP の `import_texture_asset` も Edit 中だけ同じ Texture validation、content-addressed copy、thumbnail、atomic commit を通す。絶対 source path は trusted client input として native 側で通常 file、非 symlink、対応拡張子、128 MB 上限を検査し、応答には外部 path と bytes を返さない。
+- MCP の `import_audio_asset` / `import_texture_asset` も Edit 中だけ通常Importと同じcontent-addressed copy、atomic commit、history、autosaveを通す。絶対 source path は trusted client input としてnative側で通常file、symlink / reparse pointなし、対応拡張子、128 MB上限、read前後size、AudioではMP3 / WAV signatureも検査し、応答には外部path、data URL、bytesを返さない。
 - Particle は Assets の作成操作から追加し、右 Inspector で emission、shape、velocity、lifetime、size、color、texture、blend を編集する。Particle Asset は Scene View または Hierarchy へ drag して Particle Emitter Entity として配置できる。
 - 右 Inspector の Asset context は source と derived、slot の色空間、recipe、stale / diagnostic を分ける。Entity context の Mesh shadow や選択 Entity を Asset field で上書きしない。
 - context menu は現在 kind / state で実行できる項目だけを有効にし、menu open だけでは selection や document を変えない。
@@ -247,7 +247,7 @@ F-06 アイテム検査
 ### 成功時
 
 - Import / Material 作成は AssetManifest と folder membership を一度だけ確定し、新 Asset を `assetSelection` にする。HDR / EXR importだけは同じ履歴でScene settingsのSkybox参照も確定し、それ以外は`sceneSelection`とSceneDocumentを維持する。
-- MCP Texture import は新 Texture を `assetSelection` にし、同一 source hash が登録済みなら複製せず既存 Texture を選択する。
+- MCP Audio / Texture import は新Assetを`assetSelection`にし、同じkindとsource hashが登録済みなら複製せず既存Assetを選択する。結果には管理下のproject-relative pathと形式metadataだけを残し、外部sourceを表示しない。
 - Particle Asset の作成は新 Asset を `assetSelection` にし、Entity への配置または Particle Emitter の追加は参照する Asset ID を SceneDocument に保持する。
 - thumbnail / derived は source / recipe / processor / target hash と一致した時だけ ready にし、同じ source を再 import しても Asset ID と参照を保つ。Material一覧は保存済み画像だけを表示し、変更時の生成queue以外ではWebGL contextを増やさない。
 - Material の変更は共有 Asset に一度だけ保存され、同じ ID を参照する全 preview に反映する。
@@ -417,16 +417,16 @@ F-06 アイテム検査
 ### 操作中
 
 - sectionの開閉はSceneDocumentと履歴を変更しない。項目を選んだ時だけComponent追加を一件確定し、メニューを閉じて追加したComponentのInspectorを表示する。
-- Audio SourceはEnabled、Audio Asset、Volume、Loop、Autoplay、Spatial、Reference Distance、Rolloff、Max Distanceを型と範囲を保って編集する。Audio Assetがない時は同じInspectorからMP3 Importの入口を理解でき、Editor Previewでは音声取得を開始しない。
+- Audio SourceはEnabled、Audio Asset、Volume、Loop、Autoplay、Spatial、Reference Distance、Rolloff、Max Distanceを型と範囲を保って編集する。Audio Assetがない時は同じInspectorからMP3 / WAV Importの入口を理解でき、Edit表示では音声取得を開始しない。Play中はvolume / loop /距離propertyを既存playerへ更新し、Asset、spatial、enabled、構成変更は対象Entityだけを再同期する。
 
 ### 成功時
 
-- compilerは参照されたAudio AssetのMP3をstagingの公開用アセットへコピーし、そのURLをThree.js Audio / PositionalAudioへ変換してcameraへAudioListenerを接続する。Componentを無効化した時とEntityを破棄した時は再生、listener、buffer参照をcleanupする。
+- Playとcompilerは参照されたMP3 / WAVを管理下sourceから読み、同じAudio Source runtimeで通常Audio / PositionalAudioへ変換してcameraへAudioListenerを接続する。Componentを無効化した時とEntityを破棄した時は再生、listener、buffer参照をcleanupする。
 - ライト、Particle、Audio SourceはCreate、Hierarchy、Inspectorのどの入口から追加しても同じComponent ID、初期値、重複規則、生成結果になる。
 
 ### 失敗時
 
-- 未設定Audio Assetやload失敗でScene View全体を停止させない。未設定はcompile warningとして出力を省略し、参照切れ・MP3以外のsourceはcompileをblockする。runtime load失敗は生成側Component内で音声だけを停止する。
+- 未設定Audio Assetやload失敗でScene View全体を停止させない。未設定はcompile warningとして出力を省略し、参照切れ・MP3 / WAV以外のsourceはcompileをblockする。runtime load失敗は該当Componentの音声だけを停止する。自動再生policyで拒否された時はblocked状態を保持し、ユーザー操作後のScriptまたは通常操作から再試行できる。
 - 非有限値、範囲外のVolume、0以下の距離、負のRolloffは確定せず、直前のSceneDocumentとselectionを維持する。
 
 ### 戻り先
@@ -501,13 +501,13 @@ F-06 アイテム検査
 
 - EditorのAI連携panelはCodex、Claude Code、Claude Desktop / Cowork、OpenCode、Cursorの検出結果、登録scope、XRift Studio MCP serverの状態を表示する。Codexは現在の`PATH`に加えて、公式installer、Codex app同梱CLI、npm、pnpm、WinGet、Homebrew、standalone installerの標準配置を確認し、起動時の環境変数が古い場合も再起動なしで検出する。OllamaはMCP client一覧へ混在させず、ローカルmodel providerとしてinstall状態、version、model一覧、構成先clientを別sectionに表示する。native APIがないブラウザでは登録済みに見せず「デスクトップ版で利用できます」と示す。Claude Desktop / Coworkはローカルsessionだけを対象にし、remote CoworkではローカルMCPを起動できないことを登録前に示す。
 - MCPは現在開いているvisual projectだけを候補にし、project ID、Scene ID、session revisionを接続clientへ返す。接続しただけではSceneDocument、AssetManifest、selection、historyを変更しない。
-- AI書き込みは認可済みprojectのEditと、差分同期に対応したPlay中のtoolだけに許可する。Import、project切替中、または非対応のPlay操作は理由付きで読み取り専用にする。World / ItemのUpload、project / Asset削除、形式を限定しない任意file read / write、任意shell操作は初期tool setへ含めない。例外となるlocal Texture importは対応画像、通常file、非symlink、容量上限、signatureを検査してmanaged project storageへcopyするだけとし、Entity削除はScene構造の永続操作として扱う。
+- AI書き込みは認可済みprojectのEditと、差分同期に対応したPlay中のtoolだけに許可する。Import、project切替中、または非対応のPlay操作は理由付きで読み取り専用にする。World / ItemのUpload、project / Asset削除、形式を限定しない任意file read / write、任意shell操作は初期tool setへ含めない。例外となるlocal Audio / Texture importは対応形式、通常file、symlink / reparse pointなし、容量上限、signatureを検査してmanaged project storageへcopyするだけとし、Entity削除はScene構造の永続操作として扱う。
 
 ### 操作中
 
 - CodexとClaude Codeのclient登録は検出した実行ファイルを直接起動し、client種別ごとに固定した`mcp add`引数だけを渡す。Claude Desktop / CoworkとCursorは既存設定をbackupし、`mcpServers.xrift-studio`だけをmergeする。OpenCodeは既存設定をbackupし、`mcp.xrift-studio`へ公式のlocal server形式をmergeする。登録するMCP serverは内容hash付きでapp dataへcopyし、Cargoの開発出力をclientから直接起動しない。shell文字列連結、任意command、project documentへのtoken保存は行わない。
 - Ollama構成はinstall済みmodelの完全一致を再確認し、tool calling非対応modelは設定を変更せず拒否する。構成先はCodex、Claude Code、OpenCodeのallowlistに限定し、固定引数の`ollama launch <client> --model <model> --config --yes`をshell経由ではなく直接実行する。同じ操作内でXRift MCPが未登録または更新対象なら先に既存登録処理を完了する。model download、任意command実行、Ollama APIの外部hostへの接続は行わない。
-- MCP書き込みはtool inputのproject ID、Scene ID、expected revisionを現在sessionと照合し、純粋なEditor toolで全入力を検証してから一件のhistoryへ確定する。`update_scene_settings`はSkybox、Fog、環境光、Camera、Editor背景、grid / gizmo / snap設定を部分更新し、Skybox画像は既存のproject sourceを持つTexture Assetだけを受け付ける。Play中もScene settingsを共有Scene viewへ即時反映する。`import_texture_asset`はEdit限定で検証済みlocal imageをmanaged storageへ追加し、`update_texture_asset`はPlay中も既存Texture設定を保存する。Component / Entity変更は影響Entity、Material / Texture / Particle Asset変更は参照Entityだけをruntimeへ再同期する。
+- MCP書き込みはtool inputのproject ID、Scene ID、expected revisionを現在sessionと照合し、純粋なEditor toolで全入力を検証してから一件のhistoryへ確定する。`update_scene_settings`はSkybox、Fog、環境光、Camera、Editor背景、grid / gizmo / snap設定を部分更新し、Skybox画像は既存のproject sourceを持つTexture Assetだけを受け付ける。Play中もScene settingsを共有Scene viewへ即時反映する。`import_audio_asset` / `import_texture_asset`はEdit限定で検証済みlocal mediaをmanaged storageへ追加し、`get_audio_asset`は外部pathやbytesを含まない管理下metadataだけを返す。Audio Assetの`place_asset`はAudio Source Entityを作り、`core.audio-source`のadd / update / removeは既存Entityへ永続化する。`update_texture_asset`はPlay中も既存Texture設定を保存する。Component / Entity変更は影響Entity、Material / Texture / Particle Asset変更は参照Entityだけをruntimeへ再同期する。
 - 書き込み中は同じMCP brokerの変更を直列化する。複数のAI clientが同時に操作した場合、短いqueue timeoutを超えたrequestは`EDITOR_BUSY`で終了し、最新contextの再取得と再試行を促す。Editorの準備状態は定期heartbeatで更新し、WebViewの再読み込みやcrash後には自動失効させる。接続数、最初のmessage読込時間、message sizeを制限し、停止したclientが他clientを長時間塞がないようにする。成功結果には変更前後revision、対象Entity / Asset、Command概要、Autosave状態を含める。
 
 ### 成功時
@@ -515,7 +515,7 @@ F-06 アイテム検査
 - 登録成功後は「登録済み」、clientの再読み込み方法、接続待ちをpanelに残す。登録先の実行fileが現在のapp-data版と異なる場合は「更新」を表示し、明示操作で内容hash付きの最新版へ移行する。Claude Desktop / CoworkではDesktop appの再起動が必要なことを表示する。接続するとclient名、対象project / Scene、最終Activityを表示する。
 - Ollama構成中はmodelとclientのselect、再検出、MCP登録を含む他の構成操作を無効にする。成功時はmodel名とclient名を残し、clientの起動または再起動を促す。Ollama未起動、modelなし、`launch`非対応version、tool非対応model、client未検出、構成timeoutでは既存のclient設定とproject documentを追加変更せず、Ollama起動、model追加、更新、client install、再試行のうち該当する復帰先を示す。
 - Scene settings変更は全sectionを一件更新してScene ViewとScene Inspectorへ同期する。Play中のMCP変更も永続化し、Stop後に残す。Asset配置は新Entityを作成し、Hierarchy、Scene View、Entity Inspectorで同じEntityを選択する。どちらも通常のUndo / RedoとAutosaveを使う。
-- AI変更の結果はトーストだけにせず、対象Entity、Scene Inspector、または追加・更新したTexture Assetへ移動でき、panelから通常のUndoを実行できる。
+- AI変更の結果はトーストだけにせず、対象Entity、Scene Inspector、または追加・更新したAudio / Texture Assetへ移動でき、panelから通常のUndoを実行できる。
 
 ### 失敗時
 
@@ -776,19 +776,19 @@ F-06 アイテム検査
 
 ### 操作前
 
-- Assets headerの常設Createから「新規Script」を選べる。回転、移動、追従、Material、Texture、Particle、Model表示、Audio hotkey、eventなどの組み込みTemplateを用途別アイコンとsource preview付きで同じdialogから確認し、選択Entityがある場合はScript Asset作成とScript Component追加を一度に確定できる。作成だけを選んだ場合も新しいScriptをAssetsで選択してScript Editorを開く。選択中のScriptがある場合、Add ComponentはそのScript Assetを参照する。
+- Assets headerの常設Createから「新規Script」を選べる。回転、移動、追従、Material、Texture、Particle、Model表示、Audio Source制御、Audio hotkey、eventなどの組み込みTemplateを用途別アイコンとsource preview付きで同じdialogから確認し、選択Entityがある場合はScript Asset作成とScript Component追加を一度に確定できる。作成だけを選んだ場合も新しいScriptをAssetsで選択してScript Editorを開く。選択中のScriptがある場合、Add ComponentはそのScript Assetを参照する。
 - Script AssetはAssetsでコードアイコンとTypeScript / TSXラベルを表示する。AI editor bridgeはScript sourceの取得、作成、更新、Script Componentへの明示参照、Play / Stopを同じEditor revision契約で提供する。
-- Script EditorのAPIガイドから、property、通常Texture / Audio読み込み、Texture Assetから継承するSampler / Mipmap設定、`Render`でのModel表示、Material Texture transform / Particle override、runtime-onlyと永続編集の違い、KTX2 previewとScript typed loaderの境界を確認できる。
+- Script EditorのAPIガイドから、property、通常Texture / Audio読み込み、保存済みAudio Source制御、Texture Assetから継承するSampler / Mipmap設定、`Render`でのModel表示、Material Texture transform / Particle override、runtime-onlyと永続編集の違い、KTX2 previewとScript typed loaderの境界を確認できる。
 - Script Componentは1つのEntityへ複数付けられ、実行順がEntity階層順とComponent並び順で決まることをInspectorに示す。
 - Script Assetを選ぶと、宣言したpropertyがInspectorへ型どおりに並ぶ。TextureなどのAsset propertyとEntity propertyは選択結果を`assetReferences` / `entityReferences`へも入れる。宣言を読み取れないScriptは値を推測せず「propertyを読み取れません」と理由を示す。
-- MCP clientは`get_scripting_capabilities`で利用可能な`ctx.assets` / `ctx.materials` / `ctx.particles`、Texture / Audio loader、Texture Assetの既定値と明示optionの優先順位、filter / mipmap、Material Texture cloneの隔離、`Render` context、Texture slot、参照制限、runtime一時操作と永続Texture / Material toolの区別、作成からPlayまでのtool順序を取得する。`list_script_templates`、`create_script_asset(templateId)`、`apply_script_template`はUIと同じversion 3 catalogを使用する。
+- MCP clientは`get_scripting_capabilities`で利用可能な`ctx.assets` / `ctx.audioSources` / `ctx.materials` / `ctx.particles`、Texture / Audio loader、Audio Source selector、自動再生制約、Texture Assetの既定値と明示optionの優先順位、filter / mipmap、Material Texture cloneの隔離、`Render` context、参照制限、runtime一時操作と永続Audio / Texture / Material toolの区別、作成からPlayまでのtool順序を取得する。`list_script_templates`、`create_script_asset(templateId)`、`apply_script_template`はUIと同じversion 4 catalogを使用する。
 - Item projectでは重力とRigidBodyが動かないため、物理に触るAPIが未対応であることをScriptのdocumentとInspectorで示す。
 
 ### 操作中
 
 - Playの開始時にSceneが使うScriptをまとめて変換する。変換中はPlayボタンを「準備中」にして無効化し、Edit表示のまま待たせる。
 - Play中もEntityの追加・削除・複製・親変更・Component追加をauthoring dataへ保存して実行中のSceneへ差分同期する。回転速度、色などの宣言済みproperty値はScriptを再起動せず、同じinstanceの`ctx.props`へ次のframeから反映する。sourceの保存、Script Asset参照、Asset / Entity参照allowlist、Component構成の変更は、変換に成功した対象Entityだけを再起動する。既存Material / Particle AssetのpropertyはInspectorとMCPから保存し、参照Entityだけへ再反映する。MCPのScene settings変更は共有Scene viewへ即時反映し、`update_texture_asset`はTextureを直接またはMaterial / Particle経由で参照するEntityだけを再起動する。Texture sourceの新規import、InspectorからのTexture設定、InspectorでのMaterial割り当ては停止まで無効にする。
-- Texture / Audio読み込みはScript Componentで明示したAssetだけを対象にし、Script instance単位でcacheする。`loadTexture`で省略した色空間、wrap、filter、Flip Y、MipmapはTexture AssetのImport設定を継承し、明示optionだけをその読み込みへ優先する。named `Render` exportには`start`と同じliveな`ctx`を渡し、TSXからModelなどのReact subtreeをEntity配下へ描画できる。Material操作はEntity自身のMeshにruntime cloneを割り当て、`setTextureTransform`はMaterial slotごとのTexture cloneだけへoffset / repeat / center / rotationを適用する。子Entity、別slot、別Entity、共有Texture / Material Assetを暗黙に変更しない。Material slot selectorとParticle overrideはScript owner単位で合成し、非同期に追加されたMesh / Emitterにも同じ対象規則を適用する。
+- Texture / Audio読み込みはScript Componentで明示したAssetだけを対象にし、Script instance単位でcacheする。`loadTexture`で省略した色空間、wrap、filter、Flip Y、MipmapはTexture AssetのImport設定を継承し、明示optionだけをその読み込みへ優先する。named `Render` exportには`start`と同じliveな`ctx`を渡し、TSXからModelなどのReact subtreeをEntity配下へ描画できる。`ctx.audioSources`はEntity自身のAudio SourceだけをcomponentId / audioAssetIdで選び、再生、seek、volume、loopをowner単位で合成する。Material操作はEntity自身のMeshにruntime cloneを割り当て、`setTextureTransform`はMaterial slotごとのTexture cloneだけへoffset / repeat / center / rotationを適用する。子Entity、別slot、別Entity、共有Audio / Texture / Material Assetを暗黙に変更しない。Audio Source / Material slot selectorとParticle overrideはScript owner単位で合成し、非同期に追加されたSource / Mesh / Emitterにも同じ対象規則を適用する。
 - 未承認fingerprintを含むprojectのPlayでは、実行前に対象file、来歴、言語、完全なhash、読み取り専用sourceと、実行環境がアプリと同一で完全な分離ではないことを示して許可を求める。承認はproject外のapp dataへ保存し、project documentが自己承認できないようにする。
 - editorでの連続入力はhistoryへ積み増さず現在の項目を置き換える。保存はScript source fileだけを書く。
 
@@ -796,7 +796,7 @@ F-06 アイテム検査
 
 - 全Scriptを変換できた時だけPlayへ入る。Script EditorのConsoleから実行結果を確認でき、新しいruntime failureでは自動的にConsoleを開く。
 - Play中の保存では、そのScriptを使うEntityだけが作り直される。反映したEntity数を短く示し、player位置、camera、physicsは保持する。
-- property値の変更は回転速度などの実行状態を維持したまま即時に見た目へ反映し、`Render`も同じ更新済み`ctx.props`を受け取る。`ctx.materials`による色、透明度、発光、metalness、roughness、Texture slotとUV transformの変更、および`ctx.particles`による再生、Emission、速度、サイズ、色の変更はPlay中に確認でき、Material / Texture / Particle Asset自体は変更しない。Material / Texture / Particle Assetを永続編集した場合は保存値を更新し、そのAssetを直接または依存経由で参照するEntityだけを再起動する。
+- property値の変更は回転速度などの実行状態を維持したまま即時に見た目へ反映し、`Render`も同じ更新済み`ctx.props`を受け取る。`ctx.audioSources`による再生、seek、volume、loop、`ctx.materials`による色、透明度、発光、metalness、roughness、Texture slotとUV transform、および`ctx.particles`による再生、Emission、速度、サイズ、色の変更はPlay中に確認でき、Audio Source ComponentやAudio / Material / Texture / Particle Asset自体は変更しない。永続編集は通常のInspector / MCP toolへ明示し、そのComponentまたはAssetを参照するEntityだけを再同期する。
 - 公開ではstagingへScript sourceと adapterを出力し、生成した`src/World.tsx`または`src/Item.tsx`から静的importする。Scene subtreeをPlayと同じ`XriftScriptRoot`で包み、同じ`XriftScriptHost`へproperty、実行順、Asset / Entity参照resolver、任意の`Render` exportを渡す。出力先pathをcompile結果に残す。
 
 ### 失敗時
@@ -806,7 +806,7 @@ F-06 アイテム検査
 - Play中の保存で変換に失敗した場合は、直前に動いていたScriptを走らせ続け、失敗をConsoleへ残す。
 - 未宣言または存在しないAsset IDでは`ctx.assets.url`が`null`になり、`loadTexture`も`null`を返す。URLを解決できても通常画像としてdecodeできないTextureでは`loadTexture`だけが`null`になる。Scriptは処理を続けるか`ctx.log`で理由を残し、Scene全体を停止しない。
 - `ctx.assets.loadTexture`でKTX2、HDR、EXR、Material Assetを直接読み込めるようには見せない。Material / Particle previewのproject KTX2はlocal Basis transcoder、OpenBrush builtin Textureは同梱URLを使う別経路であり、Script用typed loaderは今後必要であることを示す。
-- XRift Studio stdio MCP editor tools / serverはScript Assetの作成・読取・更新、Script Component追加、Play切替、propertyと明示参照の更新に加え、Play中のEntity作成・複製・親変更・Component追加・更新・削除・有効化を同じrevision検査と差分同期経路で実行する。このserverはScriptを承認できず、未承認時は`SCRIPT_APPROVAL_REQUIRED`を受ける。`unapprovedPolicy: "skip"`を明示した場合だけ未承認Scriptを無効にしてPlayする。`get_editor_context.scriptRuntime`はtrustのpending / disabled / running fingerprint、compile error、runtime failure、JSON-safeな直近logを返す。永続Material編集は`set_material`、`get_material_asset`、`update_material_asset`、`set_material_texture_transform`、Texture編集は`import_texture_asset`、`get_texture_asset`、`update_texture_asset`、Particle編集は`create_document_asset`、`get_particle_asset`、`update_particle_asset`へ分離し、Asset変更時は参照Entityだけを再起動する。
+- XRift Studio stdio MCP editor tools / serverはScript Assetの作成・読取・更新、Script Component追加、Play切替、propertyと明示参照の更新に加え、Play中のEntity作成・複製・親変更・Component追加・更新・削除・有効化を同じrevision検査と差分同期経路で実行する。このserverはScriptを承認できず、未承認時は`SCRIPT_APPROVAL_REQUIRED`を受ける。`unapprovedPolicy: "skip"`を明示した場合だけ未承認Scriptを無効にしてPlayする。`get_editor_context.scriptRuntime`はtrustのpending / disabled / running fingerprint、compile error、runtime failure、JSON-safeな直近logを返す。永続Audio編集はEdit中の`import_audio_asset`、`get_audio_asset`、`place_asset`、`core.audio-source`のadd / update / removeへ、Material編集は`set_material`、`get_material_asset`、`update_material_asset`、`set_material_texture_transform`へ、Texture編集は`import_texture_asset`、`get_texture_asset`、`update_texture_asset`へ、Particle編集は`create_document_asset`、`get_particle_asset`、`update_particle_asset`へ分離する。
 - `pnpm tauri:dev`のdebug buildだけに登録するprivileged Tauri MCP bridgeは、webview JavaScript実行とTauri commandの`invoke`を許す開発者向けautomationであり、上記stdio editor toolのtrust boundary外とする。release buildには同bridgeを登録・搭載せず、公開された承認経路として扱わない。
 - `https://`から始まるmoduleを読むScriptと、runtime JSON出力を選んだ場合はupload前にblockingとして示し、対象Scriptと理由を挙げる。
 - 許可しなかった取り込み由来のScriptは実行せずPlayへ入り、無効であることをConsoleへ残す。
@@ -815,7 +815,7 @@ F-06 アイテム検査
 
 - 変換失敗時はEditのままScript editorの該当行へ戻る。修正して同じPlay操作から再試行できる。
 - 実行時例外では該当行への移動、そのScriptの再開、Stopのいずれかへ到達できる。
-- Stopは生成したmoduleとblob URL、timer、listener、読み込んだTexture、Material slot所有のTexture clone、Audio playerとそのsourceを破棄し、runtime Material / Particle overrideを元へ戻す。Play中にInspector / MCPで保存したScene、Material、Texture、Particleのauthoring dataは残し、Editの選択とcameraへ戻る。
+- Stopは生成したmoduleとblob URL、timer、listener、読み込んだTexture、Material slot所有のTexture clone、独立Audio playerを破棄し、runtime Audio Source / Material / Particle overrideを元へ戻す。Play中にInspector / MCPで保存したScene、Audio Source、Material、Texture、Particleのauthoring dataは残し、Editの選択とcameraへ戻る。
 - 公開のblockingでは該当Script、またはUpload reviewへ戻り、修正後に同じreviewを再確認できる。
 
 ## 実装制約

@@ -36,6 +36,11 @@ import {
   type ScriptAssetRuntimeDescriptor,
   type ScriptAudio,
   type ScriptAudioLoadOptions,
+  type ScriptAudioSourceHandle,
+  type ScriptAudioSourceInfo,
+  type ScriptAudioSourceSelector,
+  type ScriptAudioSourceStatus,
+  type ScriptAudioSources,
   type ScriptAssets,
   type ScriptContext,
   type ScriptInput,
@@ -53,6 +58,12 @@ import {
   type ScriptTexture,
   type ScriptTextureLoadOptions,
 } from "./api.js";
+import {
+  XRIFT_AUDIO_SOURCE_RUNTIME_USER_DATA_KEY,
+  type XriftAudioSourceRuntimeBridge,
+  type XriftAudioSourceRuntimeOverrides,
+  type XriftAudioSourceRuntimeState,
+} from "./audio-source.js";
 import { createScriptLifecycle } from "./lifecycle.js";
 import {
   XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY,
@@ -449,6 +460,7 @@ export function XriftScriptHost<
       input: root.input,
       lifecycle,
       assets: resources.assets,
+      audioSources: resources.audioSources,
       materials: resources.materials,
       particles: resources.particles,
       find: (targetId) =>
@@ -641,13 +653,42 @@ export function invokeScriptEventHandler(
   }
 }
 
-type ScriptResources = {
+export type ScriptResources = {
   assets: ScriptAssets;
+  audioSources: ScriptAudioSources;
   materials: ScriptMaterials;
   particles: ScriptParticles;
   /** Detects Meshes that arrive after start, such as asynchronously loaded Models. */
   update(): void;
   dispose(): void;
+};
+
+type AudioSourceOverrideLayer = {
+  id: number;
+  selector: ScriptAudioSourceSelector;
+  overrides: XriftAudioSourceRuntimeOverrides;
+  playback?: "play" | "pause" | "stop";
+  seekTime?: number;
+  revisions: {
+    volume?: number;
+    loop?: number;
+    playback?: number;
+    seek?: number;
+  };
+};
+
+type MergedAudioSourceRuntimeState = {
+  overrides: XriftAudioSourceRuntimeOverrides;
+  playback?: "play" | "pause" | "stop";
+  playbackRevision?: number;
+  seekTime?: number;
+  seekRevision?: number;
+};
+
+type AppliedAudioSourceRuntimeState = {
+  scalarKey: string;
+  playbackRevision?: number;
+  seekRevision?: number;
 };
 
 type MaterialOverrides = {
@@ -730,7 +771,7 @@ const materialStates = new WeakMap<Mesh, MaterialState>();
  * ownership lives here so hot reload and Stop have one deterministic cleanup
  * boundary in both Studio and published worlds.
  */
-function createScriptResources({
+export function createScriptResources({
   object3d,
   entityId,
   componentId,
@@ -751,10 +792,24 @@ function createScriptResources({
   const textures = new Set<Texture>();
   const audioPromises = new Map<string, Promise<ScriptAudio | null>>();
   const audioElements = new Set<HTMLAudioElement>();
+  const audioSourceOwnerToken = {};
   const materialOwnerToken = {};
   const particleOwnerToken = {};
+  const ownedAudioSourceBridges = new Set<XriftAudioSourceRuntimeBridge>();
+  const audioSourceAppliedStates = new Map<
+    XriftAudioSourceRuntimeBridge,
+    AppliedAudioSourceRuntimeState
+  >();
   const ownedMeshes = new Set<Mesh>();
   const ownedParticleBridges = new Set<XriftParticleRuntimeBridge>();
+  let nextAudioSourceLayerId = 1;
+  let nextAudioSourceWriteRevision = 0;
+  let nextAudioSourceCommandRevision = 0;
+  const rootAudioSourceLayer = createAudioSourceOverrideLayer(0, {});
+  const audioSourceLayers = new Map<string, AudioSourceOverrideLayer>([
+    [audioSourceSelectorKey(rootAudioSourceLayer.selector), rootAudioSourceLayer],
+  ]);
+  const audioSourceHandles = new Map<string, ScriptAudioSourceHandle>();
   let nextMaterialLayerId = 1;
   let nextMaterialWriteRevision = 0;
   const rootMaterialLayer = createMaterialOverrideLayer(0, {});
@@ -830,6 +885,280 @@ function createScriptResources({
       audioPromises.set(key, loaded);
       return loaded;
     },
+  };
+
+  const listMatchingAudioSourceBridges = (
+    selector: ScriptAudioSourceSelector,
+  ): XriftAudioSourceRuntimeBridge[] => {
+    if (disposed) return [];
+    const matches: XriftAudioSourceRuntimeBridge[] = [];
+    const seen = new Set<XriftAudioSourceRuntimeBridge>();
+    forEachOwnedAudioSourceBridge(object3d, entityId, (bridge) => {
+      if (seen.has(bridge)) return;
+      seen.add(bridge);
+      if (audioSourceSelectorMatches(selector, bridge.read())) {
+        matches.push(bridge);
+      }
+    });
+    return matches;
+  };
+
+  const countAudioSources = (
+    selector: ScriptAudioSourceSelector,
+  ): number => listMatchingAudioSourceBridges(selector).length;
+
+  const listAudioSources = (): readonly ScriptAudioSourceInfo[] =>
+    listMatchingAudioSourceBridges({}).map((bridge) =>
+      scriptAudioSourceInfo(bridge.read()),
+    );
+
+  const removeAudioSourceOwner = (
+    bridge: XriftAudioSourceRuntimeBridge,
+  ) => {
+    bridge.removeOwner(audioSourceOwnerToken);
+    ownedAudioSourceBridges.delete(bridge);
+    audioSourceAppliedStates.delete(bridge);
+  };
+
+  const invokeAudioSourceCommand = (
+    bridge: XriftAudioSourceRuntimeBridge,
+    command:
+      | { type: "play" | "pause" | "stop"; revision: number }
+      | { type: "seek"; time: number; revision: number },
+  ): Promise<boolean> => {
+    try {
+      return Promise.resolve(
+        bridge.command(
+          audioSourceOwnerToken,
+          order,
+          componentId,
+          command,
+        ),
+      ).catch(() => false);
+    } catch {
+      return Promise.resolve(false);
+    }
+  };
+
+  const synchronizeAudioSources = (
+    forceScalar = false,
+    rebuildCommands = false,
+  ): Map<XriftAudioSourceRuntimeBridge, Promise<boolean>> => {
+    const playbackResults = new Map<
+      XriftAudioSourceRuntimeBridge,
+      Promise<boolean>
+    >();
+    if (disposed) return playbackResults;
+    const currentBridges = new Set<XriftAudioSourceRuntimeBridge>();
+    forEachOwnedAudioSourceBridge(object3d, entityId, (bridge) => {
+      if (currentBridges.has(bridge)) return;
+      currentBridges.add(bridge);
+      const state = bridge.read();
+      const merged = mergeAudioSourceRuntimeState(
+        [...audioSourceLayers.values()],
+        state,
+      );
+      if (!hasAudioSourceRuntimeState(merged)) {
+        if (ownedAudioSourceBridges.has(bridge)) {
+          removeAudioSourceOwner(bridge);
+        }
+        return;
+      }
+      const scalarKey = JSON.stringify([
+        state.componentId,
+        state.audioAssetId,
+        merged.overrides.volume ?? null,
+        merged.overrides.loop ?? null,
+      ]);
+      const previous = audioSourceAppliedStates.get(bridge);
+      const newlyOwned = !ownedAudioSourceBridges.has(bridge);
+      const commandsChanged =
+        rebuildCommands ||
+        previous?.playbackRevision !== merged.playbackRevision ||
+        previous?.seekRevision !== merged.seekRevision;
+      if (!newlyOwned && commandsChanged) {
+        bridge.removeOwner(audioSourceOwnerToken);
+      }
+      ownedAudioSourceBridges.add(bridge);
+      if (
+        hasAudioSourceOverrides(merged.overrides) &&
+        (forceScalar ||
+          newlyOwned ||
+          commandsChanged ||
+          previous?.scalarKey !== scalarKey)
+      ) {
+        bridge.setOwner(
+          audioSourceOwnerToken,
+          order,
+          componentId,
+          merged.overrides,
+        );
+      } else if (
+        !hasAudioSourceOverrides(merged.overrides) &&
+        !commandsChanged &&
+        previous?.scalarKey !== scalarKey
+      ) {
+        // setOwner with an empty scalar layer clears a previous volume/loop
+        // override while preserving this owner's effective command.
+        bridge.setOwner(
+          audioSourceOwnerToken,
+          order,
+          componentId,
+          {},
+        );
+      }
+      if (newlyOwned || commandsChanged) {
+        if (
+          merged.seekTime !== undefined &&
+          merged.seekRevision !== undefined
+        ) {
+          void invokeAudioSourceCommand(bridge, {
+            type: "seek",
+            time: merged.seekTime,
+            revision: merged.seekRevision,
+          });
+        }
+        if (
+          merged.playback !== undefined &&
+          merged.playbackRevision !== undefined
+        ) {
+          playbackResults.set(
+            bridge,
+            invokeAudioSourceCommand(bridge, {
+              type: merged.playback,
+              revision: merged.playbackRevision,
+            }),
+          );
+        }
+      }
+      audioSourceAppliedStates.set(bridge, {
+        scalarKey,
+        ...(merged.playbackRevision !== undefined
+          ? { playbackRevision: merged.playbackRevision }
+          : {}),
+        ...(merged.seekRevision !== undefined
+          ? { seekRevision: merged.seekRevision }
+          : {}),
+      });
+    });
+    for (const bridge of [...ownedAudioSourceBridges]) {
+      if (currentBridges.has(bridge)) continue;
+      removeAudioSourceOwner(bridge);
+    }
+    return playbackResults;
+  };
+
+  const resetAudioSources = () => {
+    for (const layer of audioSourceLayers.values()) {
+      clearAudioSourceOverrideLayer(layer);
+    }
+    for (const bridge of [...ownedAudioSourceBridges]) {
+      removeAudioSourceOwner(bridge);
+    }
+  };
+
+  const resetAudioSourceLayer = (layer: AudioSourceOverrideLayer) => {
+    clearAudioSourceOverrideLayer(layer);
+    synchronizeAudioSources(true, true);
+  };
+
+  const commandAudioSources = (
+    layer: AudioSourceOverrideLayer,
+    type: "pause" | "stop" | "seek",
+    time?: number,
+  ): number => {
+    if (disposed) return 0;
+    if (type === "seek") {
+      layer.seekTime = Math.max(0, time ?? 0);
+      layer.revisions.seek = ++nextAudioSourceCommandRevision;
+    } else {
+      layer.playback = type;
+      layer.revisions.playback = ++nextAudioSourceCommandRevision;
+    }
+    synchronizeAudioSources();
+    return countAudioSources(layer.selector);
+  };
+
+  const createAudioSourceHandle = (
+    layer: AudioSourceOverrideLayer,
+    reset: () => void,
+  ): ScriptAudioSourceHandle => ({
+    count: () => countAudioSources(layer.selector),
+    async play() {
+      if (disposed) return 0;
+      const bridges = listMatchingAudioSourceBridges(layer.selector);
+      layer.playback = "play";
+      layer.revisions.playback = ++nextAudioSourceCommandRevision;
+      const playbackResults = synchronizeAudioSources();
+      const results = await Promise.all(
+        bridges.map(
+          (bridge) =>
+            playbackResults.get(bridge) ?? Promise.resolve(false),
+        ),
+      );
+      return results.filter(Boolean).length;
+    },
+    pause: () => commandAudioSources(layer, "pause"),
+    stop: () => commandAudioSources(layer, "stop"),
+    seek(seconds) {
+      if (!Number.isFinite(seconds)) {
+        return countAudioSources(layer.selector);
+      }
+      return commandAudioSources(
+        layer,
+        "seek",
+        Math.max(0, seconds),
+      );
+    },
+    setVolume(volume) {
+      if (disposed) return 0;
+      if (Number.isFinite(volume)) {
+        layer.overrides.volume = clampUnit(volume);
+        layer.revisions.volume = ++nextAudioSourceWriteRevision;
+        synchronizeAudioSources();
+      }
+      return countAudioSources(layer.selector);
+    },
+    setLoop(loop) {
+      if (disposed) return 0;
+      layer.overrides.loop = Boolean(loop);
+      layer.revisions.loop = ++nextAudioSourceWriteRevision;
+      synchronizeAudioSources();
+      return countAudioSources(layer.selector);
+    },
+    reset,
+  });
+
+  const rootAudioSourceHandle = createAudioSourceHandle(
+    rootAudioSourceLayer,
+    resetAudioSources,
+  );
+  const audioSources: ScriptAudioSources = {
+    ...rootAudioSourceHandle,
+    list: listAudioSources,
+    select(selector) {
+      const normalized = normalizeAudioSourceSelector(selector);
+      const key = audioSourceSelectorKey(normalized);
+      if (key === audioSourceSelectorKey(rootAudioSourceLayer.selector)) {
+        return audioSources;
+      }
+      const existing = audioSourceHandles.get(key);
+      if (existing) return existing;
+      const layer =
+        audioSourceLayers.get(key) ??
+        createAudioSourceOverrideLayer(
+          nextAudioSourceLayerId++,
+          normalized,
+        );
+      audioSourceLayers.set(key, layer);
+      const handle = createAudioSourceHandle(layer, () => {
+        if (disposed) return;
+        resetAudioSourceLayer(layer);
+      });
+      audioSourceHandles.set(key, handle);
+      return handle;
+    },
+    reset: resetAudioSources,
   };
 
   const synchronizeMaterials = (force: boolean) => {
@@ -1162,14 +1491,17 @@ function createScriptResources({
 
   return {
     assets,
+    audioSources,
     materials,
     particles,
     update() {
+      synchronizeAudioSources(false);
       synchronizeMaterials(false);
       synchronizeParticles(false);
     },
     dispose() {
       if (disposed) return;
+      resetAudioSources();
       resetMaterials();
       resetParticles();
       disposed = true;
@@ -1367,6 +1699,157 @@ export function releaseScriptAudioElement(element: HTMLAudioElement): void {
   setScriptAudioCurrentTime(element, 0);
   element.removeAttribute("src");
   element.load();
+}
+
+function createAudioSourceOverrideLayer(
+  id: number,
+  selector: ScriptAudioSourceSelector,
+): AudioSourceOverrideLayer {
+  return {
+    id,
+    selector,
+    overrides: {},
+    revisions: {},
+  };
+}
+
+function clearAudioSourceOverrideLayer(
+  layer: AudioSourceOverrideLayer,
+): void {
+  delete layer.overrides.volume;
+  delete layer.overrides.loop;
+  delete layer.playback;
+  delete layer.seekTime;
+  delete layer.revisions.volume;
+  delete layer.revisions.loop;
+  delete layer.revisions.playback;
+  delete layer.revisions.seek;
+}
+
+function normalizeAudioSourceSelector(
+  selector: ScriptAudioSourceSelector,
+): ScriptAudioSourceSelector {
+  const normalized: ScriptAudioSourceSelector = {};
+  if (typeof selector?.componentId === "string") {
+    normalized.componentId = selector.componentId;
+  }
+  if (typeof selector?.audioAssetId === "string") {
+    normalized.audioAssetId = selector.audioAssetId;
+  }
+  return normalized;
+}
+
+function audioSourceSelectorKey(
+  selector: ScriptAudioSourceSelector,
+): string {
+  return JSON.stringify([
+    selector.componentId ?? null,
+    selector.audioAssetId ?? null,
+  ]);
+}
+
+function audioSourceSelectorMatches(
+  selector: ScriptAudioSourceSelector,
+  state: Readonly<XriftAudioSourceRuntimeState>,
+): boolean {
+  return (
+    (selector.componentId === undefined ||
+      selector.componentId === state.componentId) &&
+    (selector.audioAssetId === undefined ||
+      selector.audioAssetId === state.audioAssetId)
+  );
+}
+
+function mergeAudioSourceRuntimeState(
+  layers: readonly AudioSourceOverrideLayer[],
+  state: Readonly<XriftAudioSourceRuntimeState>,
+): MergedAudioSourceRuntimeState {
+  const merged: MergedAudioSourceRuntimeState = { overrides: {} };
+  let volumeRevision: number | undefined;
+  let loopRevision: number | undefined;
+  for (const layer of layers) {
+    if (!audioSourceSelectorMatches(layer.selector, state)) continue;
+    if (
+      layer.overrides.volume !== undefined &&
+      layer.revisions.volume !== undefined &&
+      (volumeRevision === undefined ||
+        layer.revisions.volume > volumeRevision)
+    ) {
+      merged.overrides.volume = layer.overrides.volume;
+      volumeRevision = layer.revisions.volume;
+    }
+    if (
+      layer.overrides.loop !== undefined &&
+      layer.revisions.loop !== undefined &&
+      (loopRevision === undefined || layer.revisions.loop > loopRevision)
+    ) {
+      merged.overrides.loop = layer.overrides.loop;
+      loopRevision = layer.revisions.loop;
+    }
+    if (
+      layer.playback !== undefined &&
+      layer.revisions.playback !== undefined &&
+      (merged.playbackRevision === undefined ||
+        layer.revisions.playback > merged.playbackRevision)
+    ) {
+      merged.playback = layer.playback;
+      merged.playbackRevision = layer.revisions.playback;
+    }
+    if (
+      layer.seekTime !== undefined &&
+      layer.revisions.seek !== undefined &&
+      (merged.seekRevision === undefined ||
+        layer.revisions.seek > merged.seekRevision)
+    ) {
+      merged.seekTime = layer.seekTime;
+      merged.seekRevision = layer.revisions.seek;
+    }
+  }
+  return merged;
+}
+
+function hasAudioSourceOverrides(
+  overrides: XriftAudioSourceRuntimeOverrides,
+): boolean {
+  return overrides.volume !== undefined || overrides.loop !== undefined;
+}
+
+function hasAudioSourceRuntimeState(
+  state: MergedAudioSourceRuntimeState,
+): boolean {
+  return (
+    hasAudioSourceOverrides(state.overrides) ||
+    state.playback !== undefined ||
+    state.seekTime !== undefined
+  );
+}
+
+function scriptAudioSourceInfo(
+  state: Readonly<XriftAudioSourceRuntimeState>,
+): ScriptAudioSourceInfo {
+  return {
+    componentId: state.componentId,
+    audioAssetId: state.audioAssetId,
+    spatial: state.spatial,
+    status: scriptAudioSourceStatus(state.status),
+    playing: state.playing,
+    currentTime:
+      Number.isFinite(state.currentTime) && state.currentTime >= 0
+        ? state.currentTime
+        : 0,
+    duration:
+      Number.isFinite(state.duration) && state.duration >= 0
+        ? state.duration
+        : 0,
+    volume: clampUnit(state.volume),
+    loop: state.loop,
+  };
+}
+
+function scriptAudioSourceStatus(
+  status: XriftAudioSourceRuntimeState["status"],
+): ScriptAudioSourceStatus {
+  return status;
 }
 
 function createMaterialOverrideLayer(
@@ -2110,6 +2593,39 @@ function forEachOwnedParticleBridge(
     for (const child of object.children) visit(child);
   };
   visit(root);
+}
+
+function forEachOwnedAudioSourceBridge(
+  root: Object3D,
+  entityId: string,
+  callback: (bridge: XriftAudioSourceRuntimeBridge) => void,
+): void {
+  const visit = (object: Object3D) => {
+    if (object !== root) {
+      const marker = entityMarker(object);
+      if (marker && marker !== entityId) return;
+    }
+    const candidate = (
+      object.userData as Record<string, unknown>
+    )[XRIFT_AUDIO_SOURCE_RUNTIME_USER_DATA_KEY];
+    if (isAudioSourceRuntimeBridge(candidate)) callback(candidate);
+    for (const child of object.children) visit(child);
+  };
+  visit(root);
+}
+
+function isAudioSourceRuntimeBridge(
+  value: unknown,
+): value is XriftAudioSourceRuntimeBridge {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as XriftAudioSourceRuntimeBridge).setOwner === "function" &&
+    typeof (value as XriftAudioSourceRuntimeBridge).removeOwner ===
+      "function" &&
+    typeof (value as XriftAudioSourceRuntimeBridge).command === "function" &&
+    typeof (value as XriftAudioSourceRuntimeBridge).read === "function"
+  );
 }
 
 function isParticleRuntimeBridge(

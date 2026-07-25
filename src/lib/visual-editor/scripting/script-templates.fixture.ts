@@ -67,7 +67,7 @@ function assertTemplateLanguagePersistence(): void {
 
 function assertCatalogEntries(): void {
   assert(
-    SCRIPT_TEMPLATE_CATALOG_VERSION === 3,
+    SCRIPT_TEMPLATE_CATALOG_VERSION === 4,
     "template catalog version changed without a fixture update",
   );
   assert(SCRIPT_TEMPLATE_CATALOG.length > 0, "template catalog is empty");
@@ -137,6 +137,36 @@ function assertExternalAssetTemplates(): void {
         audio.source.includes("ctx.lifecycle.task(") &&
         audio.source.includes("audio?.setVolume("),
       "audio-hotkey does not exercise the lifecycle-owned Audio API",
+    );
+  }
+
+  const audioSource = getScriptTemplate("audio-source-control");
+  assert(Boolean(audioSource), "audio-source-control template is missing");
+  if (audioSource) {
+    assert(
+      audioSource.requiredAssetKinds.includes("audio") &&
+        audioSource.requiredComponents.includes("Audio Source"),
+      "audio-source-control does not declare its Audio Asset and Component requirements",
+    );
+    assert(
+      audioSource.source.includes("ctx.audioSources.select(") &&
+        audioSource.source.includes("sources.play()") &&
+        audioSource.source.includes("sources.setVolume(") &&
+        audioSource.source.includes("sources.setLoop(") &&
+        audioSource.source.includes("sources.seek(") &&
+        audioSource.source.includes("sources.reset()") &&
+        audioSource.source.includes('source.status === "autoplay-blocked"') &&
+        audioSource.source.includes("started > 0") &&
+        audioSource.source.includes("ctx.lifecycle.task("),
+      "audio-source-control does not exercise owner-scoped Audio Source controls",
+    );
+    assert(
+      !audioSource.source.includes("ctx.assets.loadAudio("),
+      "audio-source-control should control the declared Audio Source instead of creating a separate player",
+    );
+    assert(
+      !audioSource.source.includes("catch ("),
+      "audio-source-control should use the non-throwing Audio Source play status contract",
     );
   }
 }

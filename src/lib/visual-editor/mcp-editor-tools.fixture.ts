@@ -1,10 +1,14 @@
 import { createDefaultParticleAsset } from "./particle-system";
 import { BUILTIN_ASSET_IDS, createPrototypeProject } from "./prototype-project";
-import { createTextureAsset } from "./asset-manifest";
+import {
+  createTextureAsset,
+  type AudioAsset,
+} from "./asset-manifest";
 import { createScriptAsset } from "./scripting/script-files";
 import { extractScriptContract } from "./scripting/script-contract";
 import {
   executeXriftMcpEditorTool,
+  XRIFT_MCP_LOCAL_ASSET_TOOLS,
   XriftMcpEditorToolError,
   type XriftMcpEditorContext,
 } from "./mcp-editor-tools";
@@ -23,6 +27,24 @@ export function runXriftMcpEditorToolFixtures(): void {
     importSettings: {},
   });
   assert(texture, "Texture fixture could not be created");
+  const audio: AudioAsset = {
+    id: "asset-mcp-audio",
+    name: "MCP Tone",
+    kind: "audio",
+    status: "ready",
+    source: {
+      kind: "project",
+      relativePath: "assets/audio/mcp-tone.wav",
+    },
+    sourceHash:
+      "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+    thumbnail: { status: "missing" },
+    importMetadata: {
+      sourceFormat: "wav",
+      mimeType: "audio/wav",
+      byteLength: 44,
+    },
+  };
   const skyboxTexture = createTextureAsset({
     id: "asset-mcp-skybox-texture",
     name: "MCP Skybox",
@@ -46,6 +68,7 @@ export function runXriftMcpEditorToolFixtures(): void {
         ...initial.assets.assets,
         [particle.id]: particle,
         [texture.id]: texture,
+        [audio.id]: audio,
         [skyboxTexture.id]: skyboxTexture,
         [script.id]: script,
       },
@@ -174,6 +197,35 @@ export function runXriftMcpEditorToolFixtures(): void {
       )?.render?.props?.includes("ScriptRenderProps"),
     "Scripting capabilities should expose Texture, Audio, and Render context APIs",
   );
+  const audioSourceCapabilities = (
+    scriptingCapabilities.result.runtime as {
+      audioSources?: {
+        methods?: string[];
+        selection?: { fields?: string[]; semantics?: unknown };
+        autoplay?: unknown;
+        persistence?: unknown;
+      };
+    }
+  )?.audioSources;
+  assert(
+    audioSourceCapabilities?.methods?.some((method) =>
+      method.includes("audioSources.select"),
+    ) &&
+      audioSourceCapabilities.methods.some((method) =>
+        method.includes("audioSources.play"),
+      ) &&
+      audioSourceCapabilities.methods.some((method) =>
+        method.includes("audioSources.setVolume"),
+      ) &&
+      audioSourceCapabilities.selection?.fields?.includes("audioAssetId") &&
+      typeof audioSourceCapabilities.selection.semantics === "string" &&
+      typeof audioSourceCapabilities.autoplay === "string" &&
+      audioSourceCapabilities.autoplay.includes("always resolves") &&
+      audioSourceCapabilities.autoplay.includes("autoplay-blocked") &&
+      typeof audioSourceCapabilities.persistence === "string" &&
+      audioSourceCapabilities.persistence.includes("Runtime-only"),
+    "Scripting capabilities should expose owner-scoped Audio Source controls",
+  );
   const textureCapabilities = (
     scriptingCapabilities.result.runtime as {
       assets?: {
@@ -240,6 +292,15 @@ export function runXriftMcpEditorToolFixtures(): void {
     "Scripting capabilities should distinguish Play-safe Texture settings from Edit-only import",
   );
   assert(
+    XRIFT_MCP_LOCAL_ASSET_TOOLS.includes("import_audio_asset") &&
+      (
+        scriptingCapabilities.result.editOnlyAuthoring as {
+          tools?: string[];
+        }
+      )?.tools?.includes("import_audio_asset"),
+    "Scripting capabilities should expose Audio import as Edit-only native authoring",
+  );
+  assert(
     (
       scriptingCapabilities.result.runtime as {
         materials?: { methods?: string[] };
@@ -278,8 +339,22 @@ export function runXriftMcpEditorToolFixtures(): void {
   );
   const persistentAssetOperations =
     scriptingCapabilities.result.persistentAuthoring as {
-      groups?: { materials?: string[]; textures?: string[] };
+      groups?: {
+        audio?: string[];
+        materials?: string[];
+        textures?: string[];
+      };
       assetOperations?: {
+        audio?: {
+          read?: unknown;
+          createInEdit?: unknown;
+          placeAsSource?: unknown;
+          componentDefinitionId?: unknown;
+          addComponent?: unknown;
+          updateComponent?: unknown;
+          removeComponent?: unknown;
+          componentFields?: string[];
+        };
         textures?: {
           read?: unknown;
           update?: unknown;
@@ -300,6 +375,24 @@ export function runXriftMcpEditorToolFixtures(): void {
     persistentAssetOperations.groups?.textures?.includes(
       "update_texture_asset",
     ) &&
+      persistentAssetOperations.groups?.audio?.includes("get_audio_asset") &&
+      persistentAssetOperations.assetOperations?.audio?.read ===
+        "get_audio_asset" &&
+      persistentAssetOperations.assetOperations.audio.createInEdit ===
+        "import_audio_asset" &&
+      persistentAssetOperations.assetOperations.audio.placeAsSource ===
+        "place_asset" &&
+      persistentAssetOperations.assetOperations.audio.componentDefinitionId ===
+        "core.audio-source" &&
+      persistentAssetOperations.assetOperations.audio.addComponent ===
+        "add_component" &&
+      persistentAssetOperations.assetOperations.audio.updateComponent ===
+        "update_component" &&
+      persistentAssetOperations.assetOperations.audio.removeComponent ===
+        "remove_component" &&
+      persistentAssetOperations.assetOperations.audio.componentFields?.includes(
+        "spatial",
+      ) &&
       persistentAssetOperations.groups?.materials?.includes(
         "update_material_asset",
       ) &&
@@ -447,6 +540,45 @@ export function runXriftMcpEditorToolFixtures(): void {
   assert(
     (textureRead.result.texture as { id?: string }).id === texture.id,
     "get_texture_asset should return the requested Texture",
+  );
+
+  const audioRead = executeXriftMcpEditorTool(context, {
+    id: "fixture-get-audio",
+    tool: "get_audio_asset",
+    arguments: { audioAssetId: audio.id },
+  });
+  const audioResult = audioRead.result.audio as {
+    id?: string;
+    source?: { kind?: string; relativePath?: string };
+    importMetadata?: { sourceFormat?: string; byteLength?: number };
+  };
+  const serializedAudioResult = JSON.stringify(audioRead.result);
+  assert(
+    audioResult.id === audio.id &&
+      audioResult.source?.kind === "project" &&
+      audioResult.source.relativePath === "assets/audio/mcp-tone.wav" &&
+      audioResult.importMetadata?.sourceFormat === "wav" &&
+      audioResult.importMetadata.byteLength === 44 &&
+      !serializedAudioResult.includes("data:audio/") &&
+      !serializedAudioResult.includes("sourcePath") &&
+      !serializedAudioResult.includes('"bytes"'),
+    "get_audio_asset should return managed metadata without binary bytes or an external source path",
+  );
+
+  let missingAudioCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(context, {
+      id: "fixture-get-audio-kind-mismatch",
+      tool: "get_audio_asset",
+      arguments: { audioAssetId: texture.id },
+    });
+  } catch (error) {
+    missingAudioCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    missingAudioCode === "AUDIO_NOT_FOUND",
+    "get_audio_asset should reject non-Audio Assets",
   );
 
   const textureUpdated = executeXriftMcpEditorTool(

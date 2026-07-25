@@ -68,16 +68,17 @@ export function synchronizePlaySession(
     const previous = session.sourceScene.entities[entityId];
     const next = scene.entities[entityId];
     if (serializedEqual(previous, next)) continue;
-    // Script property values are live inputs. Keep the Entity and Script
-    // instance mounted so XriftScriptHost can expose them on the next frame.
-    // References, component order, Transform, hierarchy, and every other
-    // structural change still take the targeted restart path below.
+    // Script property values and Audio Source playback settings are live
+    // inputs. Keep the Entity mounted so the runtime bridge can apply them on
+    // the next render. References, source identity, spatial mode, component
+    // order, Transform, hierarchy, and every other structural change still
+    // take the targeted restart path below.
     if (
       previous &&
       next &&
       serializedEqual(
-        withoutScriptPropertyValues(previous),
-        withoutScriptPropertyValues(next),
+        withoutLiveRuntimeValues(previous),
+        withoutLiveRuntimeValues(next),
       )
     ) {
       continue;
@@ -133,12 +134,26 @@ function cloneAssetManifest(assets: AssetManifest): AssetManifest {
   return JSON.parse(JSON.stringify(assets)) as AssetManifest;
 }
 
-function withoutScriptPropertyValues(entity: SceneEntity): SceneEntity {
+function withoutLiveRuntimeValues(entity: SceneEntity): SceneEntity {
   return {
     ...entity,
-    components: entity.components.map((component) =>
-      component.type === "script" ? { ...component, properties: {} } : component,
-    ),
+    components: entity.components.map((component) => {
+      if (component.type === "script") {
+        return { ...component, properties: {} };
+      }
+      if (component.type === "audio-source") {
+        return {
+          ...component,
+          volume: 0,
+          loop: false,
+          autoplay: false,
+          refDistance: 0,
+          rolloffFactor: 0,
+          maxDistance: 0,
+        };
+      }
+      return component;
+    }),
   };
 }
 

@@ -61,9 +61,11 @@ import { sha256Utf8 } from "./hash";
 import { collectRequiredScriptAssetIds } from "../scripting/script-schedule";
 import { createScriptAssetRuntimeDescriptorMap } from "../scripting/asset-runtime";
 import {
+  createScriptAudioSourceOverlayFile,
   createScriptParticleOverlayFile,
   planScriptEmission,
   renderScriptComponent,
+  SCRIPT_AUDIO_SOURCE_OVERLAY_PATH,
   SCRIPT_PARTICLE_OVERLAY_PATH,
   type EmittedScriptModule,
 } from "./script-emit";
@@ -254,6 +256,16 @@ export function compileVisualProject(
   ) {
     overlayFiles.push(createScriptParticleOverlayFile());
   }
+  if (
+    outputMode === "classic-jsx" &&
+    resolvedEntryScene &&
+    sceneUsesAudioSourceRuntime(resolvedEntryScene.scene) &&
+    !overlayFiles.some(
+      (file) => file.relativePath === SCRIPT_AUDIO_SOURCE_OVERLAY_PATH,
+    )
+  ) {
+    overlayFiles.push(createScriptAudioSourceOverlayFile());
+  }
   diagnoseUnsupportedAssets(documents.assets, diagnostics);
   const uniqueDiagnostics = deduplicateDiagnostics(diagnostics);
   const provenanceFile = compilerFile(
@@ -326,6 +338,12 @@ function sceneUsesParticleRuntime(scene: SceneDocument): boolean {
     entity.components.some(
       (component) => component.enabled && component.type === "particle-emitter",
     ),
+  );
+}
+
+function sceneUsesAudioSourceRuntime(scene: SceneDocument): boolean {
+  return Object.values(scene.entities).some((entity) =>
+    entity.components.some((component) => component.type === "audio-source"),
   );
 }
 
@@ -1162,7 +1180,12 @@ function renderEntity(
   const localContent: string[] = [];
   const wrappers: RenderedXriftWrapper[] = [];
   for (const component of entity.components as RegisteredSceneComponent[]) {
-    if (!component.enabled || component.type === "transform") continue;
+    if (
+      (!component.enabled && component.type !== "audio-source") ||
+      component.type === "transform"
+    ) {
+      continue;
+    }
     if (component.type === "collider" || component.type === "rigid-body") {
       // Collider components are combined into one RigidBody after all visual
       // content is rendered, avoiding nested or duplicate physics bodies.
@@ -3347,6 +3370,10 @@ function renderAudioSource(
   context: CompileContext,
 ): string | null {
   const audioAssetId = audio.audioAssetId?.trim() ?? "";
+  registerCompiledAudioRuntime(context);
+  if (!audio.enabled) {
+    return `<XriftAudioSource componentId=${JSON.stringify(audio.id)} audioAssetId=${JSON.stringify(audioAssetId)} assetUrl={null} sourceStatus="missing" enabled={false} volume={${formatNumber(audio.volume)}} loop={${audio.loop}} autoplay={${audio.autoplay}} spatial={${audio.spatial}} refDistance={${formatNumber(audio.refDistance)}} rolloffFactor={${formatNumber(audio.rolloffFactor)}} maxDistance={${formatNumber(audio.maxDistance)}} />`;
+  }
   if (!audioAssetId) {
     addDiagnostic(context, {
       severity: "warning",
@@ -3392,18 +3419,11 @@ function renderAudioSource(
   }
   const assetPath = registerAssetUrl(asset, runtimeUrl, context);
 
-  context.reactValueImports.add("useEffect");
-  context.reactValueImports.add("useMemo");
-  context.fiberImports.add("useThree");
-  ["Audio", "AudioListener", "AudioLoader", "PositionalAudio"].forEach(
-    (name) => context.threeValueImports.add(name),
-  );
   context.supportDeclarations.set(
     "audio-source",
-    `const xriftStudioAudioListener = new AudioListener();
-let xriftStudioAudioListenerUsers = 0;
-
-const XRiftStudioAudioSource: FC<{
+    `const XRiftStudioCompiledAudioSource: FC<{
+  componentId: string;
+  audioAssetId: string;
   assetPath: string;
   volume: number;
   loop: boolean;
@@ -3412,54 +3432,19 @@ const XRiftStudioAudioSource: FC<{
   refDistance: number;
   rolloffFactor: number;
   maxDistance: number;
-}> = ({ assetPath, volume, loop, autoplay, spatial, refDistance, rolloffFactor, maxDistance }) => {
-  const camera = useThree((state) => state.camera);
-  const url = useCompiledAssetUrl(assetPath);
-  const sound = useMemo(
-    () => spatial ? new PositionalAudio(xriftStudioAudioListener) : new Audio(xriftStudioAudioListener),
-    [spatial],
-  );
-  useEffect(() => () => {
-    if (sound.isPlaying) sound.stop();
-    sound.disconnect();
-  }, [sound]);
-  useEffect(() => {
-    if (xriftStudioAudioListener.parent !== camera) camera.add(xriftStudioAudioListener);
-    xriftStudioAudioListenerUsers += 1;
-    return () => {
-      xriftStudioAudioListenerUsers = Math.max(0, xriftStudioAudioListenerUsers - 1);
-      if (xriftStudioAudioListenerUsers === 0) camera.remove(xriftStudioAudioListener);
-    };
-  }, [camera]);
-  useEffect(() => {
-    let active = true;
-    sound.setVolume(volume);
-    sound.setLoop(loop);
-    if (sound instanceof PositionalAudio) {
-      sound.setRefDistance(refDistance);
-      sound.setRolloffFactor(rolloffFactor);
-      sound.setMaxDistance(maxDistance);
-    }
-    new AudioLoader().load(
-      url,
-      (buffer) => {
-        if (!active) return;
-        sound.setBuffer(buffer);
-        if (autoplay && !sound.isPlaying) sound.play();
-      },
-      undefined,
-      () => undefined,
-    );
-    return () => {
-      active = false;
-      if (sound.isPlaying) sound.stop();
-    };
-  }, [autoplay, loop, maxDistance, refDistance, rolloffFactor, sound, url, volume]);
-  return <primitive object={sound} />;
+}> = ({ componentId, audioAssetId, assetPath, ...props }) => {
+  const assetUrl = useCompiledAssetUrl(assetPath);
+  return <XriftAudioSource componentId={componentId} audioAssetId={audioAssetId} assetUrl={assetUrl} sourceStatus="available" enabled {...props} />;
 };`,
   );
 
-  return `<XRiftStudioAudioSource assetPath={${assetPath}} volume={${formatNumber(audio.volume)}} loop={${audio.loop}} autoplay={${audio.autoplay}} spatial={${audio.spatial}} refDistance={${formatNumber(audio.refDistance)}} rolloffFactor={${formatNumber(audio.rolloffFactor)}} maxDistance={${formatNumber(audio.maxDistance)}} />`;
+  return `<XRiftStudioCompiledAudioSource componentId=${JSON.stringify(audio.id)} audioAssetId=${JSON.stringify(audioAssetId)} assetPath={${assetPath}} volume={${formatNumber(audio.volume)}} loop={${audio.loop}} autoplay={${audio.autoplay}} spatial={${audio.spatial}} refDistance={${formatNumber(audio.refDistance)}} rolloffFactor={${formatNumber(audio.rolloffFactor)}} maxDistance={${formatNumber(audio.maxDistance)}} />`;
+}
+
+function registerCompiledAudioRuntime(context: CompileContext): void {
+  context.extraImports.add(
+    'import { XriftAudioSource } from "./xrift-studio/audio-source-runtime";',
+  );
 }
 
 function renderSpawnPoint(

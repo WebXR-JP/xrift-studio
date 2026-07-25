@@ -225,6 +225,70 @@ export type ScriptAudio = {
   readonly duration: number;
 };
 
+export type ScriptAudioSourceStatus =
+  | "loading"
+  | "ready"
+  | "playing"
+  | "paused"
+  | "stopped"
+  | "disabled"
+  | "missing"
+  | "unavailable"
+  | "autoplay-blocked";
+
+/** Selects authored Audio Source Components on this Script's own Entity. */
+export type ScriptAudioSourceSelector = {
+  componentId?: string;
+  audioAssetId?: string;
+};
+
+/** Live, effective state of one authored Audio Source Component. */
+export type ScriptAudioSourceInfo = {
+  readonly componentId: string;
+  readonly audioAssetId: string;
+  readonly spatial: boolean;
+  readonly status: ScriptAudioSourceStatus;
+  readonly playing: boolean;
+  readonly currentTime: number;
+  readonly duration: number;
+  readonly volume: number;
+  readonly loop: boolean;
+};
+
+export type ScriptAudioSourceHandle = {
+  /** Number of Audio Source Components currently matched by this handle. */
+  count(): number;
+  /**
+   * Requests playback without exposing autoplay-policy failures as rejected
+   * Script promises. The result is the number of sources that actually began
+   * playback.
+   */
+  play(): Promise<number>;
+  pause(): number;
+  /** Pauses and seeks every matched source back to its beginning. */
+  stop(): number;
+  seek(seconds: number): number;
+  setVolume(volume: number): number;
+  setLoop(loop: boolean): number;
+  /** Removes this handle's runtime overrides and pending command state. */
+  reset(): void;
+};
+
+export type ScriptAudioSources = ScriptAudioSourceHandle & {
+  /**
+   * Lists Audio Source Components owned by this Entity. Child Entity sources
+   * are intentionally excluded.
+   */
+  list(): readonly ScriptAudioSourceInfo[];
+  /** Creates a live AND-selector for authored Audio Source Components. */
+  select(selector: ScriptAudioSourceSelector): ScriptAudioSourceHandle;
+  /**
+   * Removes every Audio Source override owned by this Script instance while
+   * preserving overrides from other Scripts.
+   */
+  reset(): void;
+};
+
 export type ScriptAssets = {
   /** Returns null unless the Asset is declared by this Script Component. */
   url(assetId: string): string | null;
@@ -381,6 +445,11 @@ export type ScriptContext<
   input: ScriptInput;
   lifecycle: ScriptLifecycle;
   assets: ScriptAssets;
+  /**
+   * Runtime-only controls for authored Audio Source Components on this Entity.
+   * Overrides are restored automatically on restart, failure, or Play Stop.
+   */
+  audioSources: ScriptAudioSources;
   /**
    * Runtime-only Material overrides for this Entity. Changes are isolated
    * from shared Asset instances and are restored on restart or Stop.

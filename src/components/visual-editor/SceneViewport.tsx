@@ -20,6 +20,10 @@ import {
 import { SpawnPoint } from "@xrift/world-components";
 import { XriftScriptRoot } from "../../../packages/xrift-studio-runtime/src/script/host";
 import {
+  XriftAudioSource,
+  type XriftAudioSourceSourceStatus,
+} from "../../../packages/xrift-studio-runtime/src/script/audio-source";
+import {
   EntityScriptVisual,
   ScriptViewportProvider,
   type ScriptViewportRuntime,
@@ -90,6 +94,7 @@ import {
   STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID,
   type AssetManifest,
   type AnimationComponent,
+  type AudioSourceComponent,
   type ColliderComponent,
   type MaterialAsset,
   type MeshComponent,
@@ -773,6 +778,141 @@ function AudioSourceVisual({ selected }: { selected: boolean }) {
   );
 }
 
+type StudioAudioSourceResolution = {
+  key: string;
+  status: XriftAudioSourceSourceStatus;
+  url: string | null;
+};
+
+function StudioAudioSourceRuntime({
+  component,
+  assets,
+  projectPath,
+  effectivelyEnabled,
+}: {
+  component: AudioSourceComponent;
+  assets: AssetManifest;
+  projectPath?: string;
+  effectivelyEnabled: boolean;
+}) {
+  const audioAssetId = component.audioAssetId?.trim() ?? "";
+  const candidate = audioAssetId ? assets.assets[audioAssetId] : undefined;
+  const audioAsset =
+    candidate?.kind === "audio" &&
+    candidate.status === "ready" &&
+    candidate.source.kind === "project"
+      ? candidate
+      : undefined;
+  const audioRelativePath =
+    audioAsset?.source.kind === "project"
+      ? audioAsset.source.relativePath
+      : "";
+  const resolutionKey = [
+    projectPath ?? "",
+    audioAsset?.id ?? audioAssetId,
+    audioAsset?.sourceHash ?? "",
+    audioRelativePath,
+  ].join("\n");
+  const [resolution, setResolution] = useState<StudioAudioSourceResolution>({
+    key: "",
+    status: "loading",
+    url: null,
+  });
+
+  useEffect(() => {
+    let active = true;
+    if (!audioAssetId || !audioAsset || !audioRelativePath) {
+      setResolution({
+        key: resolutionKey,
+        status: "missing",
+        url: null,
+      });
+      return () => {
+        active = false;
+      };
+    }
+    if (!projectPath?.trim()) {
+      setResolution({
+        key: resolutionKey,
+        status: "unavailable",
+        url: null,
+      });
+      return () => {
+        active = false;
+      };
+    }
+    if (!effectivelyEnabled || !component.enabled) {
+      setResolution({
+        key: resolutionKey,
+        status: "loading",
+        url: null,
+      });
+      return () => {
+        active = false;
+      };
+    }
+    setResolution({
+      key: resolutionKey,
+      status: "loading",
+      url: null,
+    });
+    void tauri
+      .readAudioDataUrl(projectPath, audioRelativePath)
+      .then((url) => {
+        if (!active) return;
+        setResolution({
+          key: resolutionKey,
+          status: "available",
+          url,
+        });
+      })
+      .catch(() => {
+        if (!active) return;
+        setResolution({
+          key: resolutionKey,
+          status: "unavailable",
+          url: null,
+        });
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    audioRelativePath,
+    audioAssetId,
+    component.enabled,
+    effectivelyEnabled,
+    projectPath,
+    resolutionKey,
+  ]);
+
+  const current =
+    resolution.key === resolutionKey
+      ? resolution
+      : ({
+          key: resolutionKey,
+          status: audioAsset ? "loading" : "missing",
+          url: null,
+        } satisfies StudioAudioSourceResolution);
+
+  return (
+    <XriftAudioSource
+      componentId={component.id}
+      audioAssetId={audioAssetId}
+      assetUrl={current.url}
+      sourceStatus={current.status}
+      enabled={effectivelyEnabled && component.enabled}
+      volume={component.volume}
+      loop={component.loop}
+      autoplay={component.autoplay}
+      spatial={component.spatial}
+      refDistance={component.refDistance}
+      rolloffFactor={component.rolloffFactor}
+      maxDistance={component.maxDistance}
+    />
+  );
+}
+
 function DirectionArrow({
   direction,
   color,
@@ -827,6 +967,7 @@ function ComponentVisual({
   showHelpers,
   showSceneLighting,
   showAllColliders,
+  effectivelyEnabled,
   projectPath,
 }: {
   component: SceneComponent;
@@ -840,6 +981,7 @@ function ComponentVisual({
   showHelpers: boolean;
   showSceneLighting: boolean;
   showAllColliders: boolean;
+  effectivelyEnabled: boolean;
   projectPath?: string;
 }) {
   switch (component.type) {
@@ -913,7 +1055,14 @@ function ComponentVisual({
         </DreiText>
       ) : null;
     case "audio-source":
-      return showHelpers && component.enabled ? (
+      return playing ? (
+        <StudioAudioSourceRuntime
+          component={component}
+          assets={assets}
+          projectPath={projectPath}
+          effectivelyEnabled={effectivelyEnabled}
+        />
+      ) : showHelpers && component.enabled ? (
         <AudioSourceVisual selected={selected} />
       ) : null;
     case "animation":
@@ -1212,6 +1361,7 @@ function EntityObject({
             showHelpers={displayProfile.showHelpers}
             showSceneLighting={displayProfile.showSceneLighting}
             showAllColliders={displayProfile.showAllColliders}
+            effectivelyEnabled={effectivelyEnabled}
             projectPath={projectPath}
           />
         ),

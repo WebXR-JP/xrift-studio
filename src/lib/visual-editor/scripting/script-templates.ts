@@ -27,7 +27,7 @@ export type ScriptTemplateDefinition = {
 };
 
 const NAME_TOKEN = "__XRIFT_SCRIPT_NAME__";
-export const SCRIPT_TEMPLATE_CATALOG_VERSION = 3 as const;
+export const SCRIPT_TEMPLATE_CATALOG_VERSION = 4 as const;
 
 /**
  * Built-in Script examples shared by the Assets creation flow and MCP.
@@ -394,6 +394,78 @@ export function Render({ ctx }: ScriptRenderProps<ModelDisplayProps>) {
   const url = ctx.assets.url(ctx.props.model);
   return url ? <DeclaredModel url={url} scale={ctx.props.scale} /> : null;
 }
+`,
+  },
+  {
+    id: "audio-source-control",
+    name: "Audio Sourceコントローラー",
+    description:
+      "同じEntityのAudio Sourceを選び、再生、音量、ループ、再生位置をPlay中に制御します。",
+    category: "media",
+    suggestedName: "Audio Source Controller",
+    language: "ts",
+    requiredAssetKinds: ["audio"],
+    requiredComponents: ["Audio Source"],
+    entityReferenceCount: 0,
+    source: `import { defineScript, prop } from "xrift:script";
+
+export default defineScript({
+  name: "${NAME_TOKEN}",
+  props: {
+    audio: prop.asset({ label: "Audio", kind: "audio" }),
+    playing: prop.boolean({ label: "再生", default: false }),
+    volume: prop.number({ label: "音量", default: 1, min: 0, max: 1 }),
+    loop: prop.boolean({ label: "ループ", default: false }),
+    seekSeconds: prop.number({
+      label: "再生位置（秒）",
+      default: 0,
+      min: 0,
+      max: 86400,
+    }),
+  },
+  start(ctx) {
+    const sources = ctx.audioSources.select({
+      audioAssetId: ctx.props.audio,
+    });
+    let playing = !ctx.props.playing;
+    let seekSeconds = ctx.props.seekSeconds;
+
+    return {
+      update() {
+        sources.setVolume(ctx.props.volume);
+        sources.setLoop(ctx.props.loop);
+
+        if (ctx.props.seekSeconds !== seekSeconds) {
+          seekSeconds = ctx.props.seekSeconds;
+          sources.seek(seekSeconds);
+        }
+        if (ctx.props.playing === playing) return;
+        playing = ctx.props.playing;
+        if (!playing) {
+          sources.pause();
+          return;
+        }
+        void ctx.lifecycle.task(async (signal) => {
+          const started = await sources.play();
+          if (signal.aborted || started > 0) return;
+          const selected = ctx.audioSources.list().filter(
+            (source) => source.audioAssetId === ctx.props.audio,
+          );
+          if (selected.some((source) => source.status === "autoplay-blocked")) {
+            ctx.log(
+              "Audio Sourceの自動再生がブロックされました。画面を操作してから再試行してください",
+            );
+          } else {
+            ctx.log("再生できるAudio Sourceがありません");
+          }
+        });
+      },
+      dispose() {
+        sources.reset();
+      },
+    };
+  },
+});
 `,
   },
   {

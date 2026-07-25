@@ -267,15 +267,26 @@ export function runVisualCompilerFixtureAssertions(
   const audioSource =
     audioResult.overlayFiles.find((file) => file.relativePath === "src/World.tsx")
       ?.content ?? "";
+  const audioRuntime =
+    audioResult.overlayFiles.find(
+      (file) =>
+        file.relativePath ===
+        "src/xrift-studio/audio-source-runtime.tsx",
+    )?.content ?? "";
   assert(audioResult.canStage, "Configured Audio Source should be stageable");
   assert(
-    audioSource.includes("const XRiftStudioAudioSource") &&
+    audioSource.includes("const XRiftStudioCompiledAudioSource") &&
       audioSource.includes("useCompiledAssetUrl(assetPath)") &&
+      audioSource.includes(
+        'import { XriftAudioSource } from "./xrift-studio/audio-source-runtime";',
+      ) &&
       audioSource.includes(
         '"xrift-studio-fixture-audio-ambient-ambient.mp3" as const',
       ) &&
-      audioSource.includes("new PositionalAudio"),
-    "Three.js Audio Source runtime was not generated",
+      !audioSource.includes("new PositionalAudio") &&
+      audioRuntime.includes("export function XriftAudioSource") &&
+      audioRuntime.includes("new PositionalAudio"),
+    "The shared Audio Source runtime was not emitted for a Script-free Scene",
   );
   assert(
     audioResult.stagingPlan.assetCopyPlan.some(
