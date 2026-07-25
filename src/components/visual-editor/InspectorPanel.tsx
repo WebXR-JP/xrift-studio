@@ -9,6 +9,12 @@ import {
 } from "react";
 import { Link2 } from "lucide-react";
 import {
+  ScriptComponentInspector,
+  type ScriptComponentPatch,
+  type ScriptEntityOption,
+} from "./ScriptComponentInspector";
+import type { ScriptContract } from "../../lib/visual-editor/scripting/script-contract";
+import {
   getGeometryAsset,
   getBuiltinPrimitiveCreation,
   getMaterialAsset,
@@ -2098,6 +2104,14 @@ function AnimationInspector({
   readOnly: boolean;
   onChange: (patch: AnimationPatch) => void;
   onOpenInteractivity: (assetId: string) => void;
+  scriptContracts?: Readonly<Record<string, ScriptContract>>;
+  scriptEntityOptions?: readonly ScriptEntityOption[];
+  onUpdateScriptComponent?: (
+    entityId: string,
+    componentId: string,
+    patch: ScriptComponentPatch,
+  ) => void;
+  onOpenScript?: (scriptAssetId: string) => void;
 }) {
   const model = entity.components
     .filter((candidate) => candidate.type === "mesh")
@@ -2352,6 +2366,10 @@ function EntityInspector({
   onRemoveXriftComponent,
   prefabSource,
   onUpdatePrefab,
+  scriptContracts,
+  scriptEntityOptions,
+  onUpdateScriptComponent,
+  onOpenScript,
 }: {
   entity: SceneEntity;
   scene: SceneDocument;
@@ -2397,6 +2415,15 @@ function EntityInspector({
   onRemoveXriftComponent: (componentId: string) => void;
   prefabSource?: PrefabSourceContext;
   onUpdatePrefab: (prefabId: string) => void;
+  /** Declarations read from each Script Asset's source. */
+  scriptContracts?: Readonly<Record<string, ScriptContract>>;
+  scriptEntityOptions?: readonly ScriptEntityOption[];
+  onUpdateScriptComponent?: (
+    entityId: string,
+    componentId: string,
+    patch: ScriptComponentPatch,
+  ) => void;
+  onOpenScript?: (scriptAssetId: string) => void;
 }) {
   const transform = getTransform(entity);
   const [addComponentOpen, setAddComponentOpen] = useState(false);
@@ -2652,6 +2679,28 @@ function EntityInspector({
             </ComponentCard>
           );
         }
+        if (component.type === "script") {
+          const scriptAsset = assets.assets[component.scriptAssetId];
+          return (
+            <ComponentCard
+              key={component.id}
+              title="Script"
+              subtitle={scriptAsset?.name ?? "未設定"}
+            >
+              <ScriptComponentInspector
+                component={component}
+                contract={scriptContracts?.[component.scriptAssetId] ?? null}
+                assets={assets}
+                entities={scriptEntityOptions ?? []}
+                readOnly={readOnly}
+                onPatch={(patch) =>
+                  onUpdateScriptComponent?.(entity.id, component.id, patch)
+                }
+                onOpenScript={(assetId) => onOpenScript?.(assetId)}
+              />
+            </ComponentCard>
+          );
+        }
         return null;
       })}
 
@@ -2831,6 +2880,10 @@ export function InspectorPanel({
   onAudioSourceChange,
   onSelectAsset,
   onOpenInteractivity,
+  scriptContracts,
+  scriptEntityOptions,
+  onUpdateScriptComponent,
+  onOpenScript,
   onCloseAsset,
   onMaterialChange,
   onModelChange,
@@ -2891,6 +2944,14 @@ export function InspectorPanel({
   onAudioSourceChange: (entityId: string, componentId: string, patch: AudioSourcePatch) => void;
   onSelectAsset: (assetId: string) => void;
   onOpenInteractivity: (assetId: string) => void;
+  scriptContracts?: Readonly<Record<string, ScriptContract>>;
+  scriptEntityOptions?: readonly ScriptEntityOption[];
+  onUpdateScriptComponent?: (
+    entityId: string,
+    componentId: string,
+    patch: ScriptComponentPatch,
+  ) => void;
+  onOpenScript?: (scriptAssetId: string) => void;
   onCloseAsset: () => void;
   onMaterialChange: (assetId: string, patch: MaterialAssetPatch) => void;
   onModelChange: (assetId: string, patch: ModelAssetPatch) => void;
@@ -3122,6 +3183,10 @@ export function InspectorPanel({
             }
             onOpenMaterial={onSelectAsset}
             onOpenInteractivity={onOpenInteractivity}
+            {...(scriptContracts ? { scriptContracts } : {})}
+            {...(scriptEntityOptions ? { scriptEntityOptions } : {})}
+            {...(onUpdateScriptComponent ? { onUpdateScriptComponent } : {})}
+            {...(onOpenScript ? { onOpenScript } : {})}
             projectKind={projectKind}
             onAddComponent={(definitionId) =>
               onAddComponent(entity.id, definitionId)

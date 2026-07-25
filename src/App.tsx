@@ -64,6 +64,8 @@ import {
   sanitizePublishFailure,
   saveVisualProjectToDisk,
   StarterAssetCopyError,
+  listScriptAssets,
+  type AssetManifest,
   type PrototypeVisualProject,
   type ClassicExportIntegration,
   type ClassicExportProgress,
@@ -81,6 +83,31 @@ const VisualEditorPrototype = lazy(() =>
 );
 
 const APP_UPDATE_TARGET_KEY = "xrift-studio:update-target";
+
+/**
+ * Reads every Script Asset's source for the compiler.
+ *
+ * A missing file is omitted so the compiler reports it as a blocking
+ * diagnostic naming the Asset, instead of failing here without context.
+ */
+async function readScriptSources(
+  projectPath: string | undefined,
+  assets: AssetManifest,
+): Promise<Record<string, string>> {
+  if (!projectPath) return {};
+  const sources: Record<string, string> = {};
+  for (const asset of listScriptAssets(assets)) {
+    try {
+      sources[asset.id] = await tauri.readTextFile(
+        projectPath,
+        asset.source.relativePath,
+      );
+    } catch {
+      // Surfaces as script-source-unreadable during compile.
+    }
+  }
+  return sources;
+}
 
 function withLatestPublication(
   bundle: PrototypeVisualProject,
@@ -892,6 +919,12 @@ function App() {
                   scenes: { [publishBundle.scene.sceneId]: publishBundle.scene },
                   assets: publishBundle.assets,
                   prefabs: publishBundle.prefabs,
+                  // The compiler stays synchronous, so Script sources are read
+                  // here and handed over with the rest of the documents.
+                  scriptSources: await readScriptSources(
+                    visualSession.project?.path,
+                    publishBundle.assets,
+                  ),
                 },
                 save: async () => {
                   savedProjectPath = await handleSaveVisualProject(

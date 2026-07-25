@@ -176,7 +176,16 @@ import {
   type SceneFocusState,
 } from "./SceneViewport";
 import type { ScriptViewportRuntime } from "./EntityScriptVisual";
+import type { ScriptComponentPatch } from "./ScriptComponentInspector";
 import { useScriptRuntime } from "./useScriptRuntime";
+import { useScriptEditor } from "./useScriptEditor";
+import { ScriptEditorDialog } from "./ScriptEditorDialog";
+import {
+  addScriptAsset,
+  createScriptAsset,
+  createScriptRelativePath,
+  createScriptSampleSource,
+} from "../../lib/visual-editor/scripting/script-files";
 import {
   collectRequiredScriptAssetIds,
   collectScheduledScripts,
@@ -655,6 +664,31 @@ export function VisualEditorPrototype({
     assets: bundle.assets,
     ...(projectPath ? { projectPath } : {}),
   });
+  const playingRef = useRef(false);
+  const scriptEditor = useScriptEditor({
+    assets: bundle.assets,
+    ...(projectPath ? { projectPath } : {}),
+    // Recompiling swaps the module object, and the host restarts on identity
+    // change, so only Entities using this Script restart. Player position,
+    // camera and physics keep running. See MI-72.
+    onSaved: () => {
+      if (playingRef.current) void scriptRuntime.compile();
+    },
+  });
+  const scriptEntityOptions = useMemo(
+    () =>
+      Object.values(bundle.scene.entities)
+        .map((entity) => ({ id: entity.id, name: entity.name }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    [bundle.scene.entities],
+  );
+  const scriptEditorAsset = scriptEditor.state.openAssetId
+    ? (() => {
+        const candidate =
+          bundle.assets.assets[scriptEditor.state.openAssetId];
+        return candidate?.kind === "script" ? candidate : null;
+      })()
+    : null;
   const scriptViewportRuntime = useMemo<ScriptViewportRuntime>(() => {
     const orderByComponentId = new Map(
       collectScheduledScripts(bundle.scene).map((entry) => [
@@ -3452,6 +3486,104 @@ export function VisualEditorPrototype({
     [editorMode, playSession, updateScene],
   );
 
+  /**
+   * Creates a Script Asset and its source file, then opens the editor.
+   *
+   * The file write happens before the manifest entry is committed so a failed
+   * write never leaves a Script Asset pointing at nothing.
+   */
+  const handleUpdateScriptComponent = useCallback(
+    (
+      entityId: string,
+      componentId: string,
+      patch: ScriptComponentPatch,
+    ) => {
+      if (editorMode !== "edit") return;
+      setBundle((current) => {
+        const entity = current.scene.entities[entityId];
+        if (!entity) return current;
+        let changed = false;
+        const components = entity.components.map((component) => {
+          if (component.id !== componentId || component.type !== "script") {
+            return component;
+          }
+          changed = true;
+          return {
+            ...component,
+            ...(patch.scriptAssetId !== undefined
+              ? { scriptAssetId: patch.scriptAssetId }
+              : {}),
+            ...(patch.properties !== undefined
+              ? { properties: patch.properties }
+              : {}),
+            ...(patch.assetReferences !== undefined
+              ? { assetReferences: patch.assetReferences }
+              : {}),
+            ...(patch.entityReferences !== undefined
+              ? { entityReferences: patch.entityReferences }
+              : {}),
+            ...(patch.runIn !== undefined ? { runIn: patch.runIn } : {}),
+          };
+        });
+        if (!changed) return current;
+        return touchProject({
+          ...current,
+          scene: {
+            ...current.scene,
+            entities: {
+              ...current.scene.entities,
+              [entityId]: { ...entity, components },
+            },
+          },
+        });
+      });
+    },
+    [editorMode, setBundle],
+  );
+
+  const handleCreateScript = useCallback(async () => {
+    if (editorMode !== "edit") return;
+    if (!projectPathRef.current) {
+      setNotice("プロジェクトを保存するとScriptを作成できます");
+      return;
+    }
+    const existing = Object.values(bundleRef.current.assets.assets).filter(
+      (asset) => asset.kind === "script",
+    ).length;
+    const name = `Script ${existing + 1}`;
+    const relativePath = createScriptRelativePath(
+      name,
+      bundleRef.current.assets,
+    );
+    try {
+      await tauri.writeTextFile(
+        projectPathRef.current,
+        relativePath,
+        createScriptSampleSource(name),
+      );
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? `Scriptを作成できませんでした: ${error.message}`
+          : "Scriptを作成できませんでした",
+      );
+      return;
+    }
+    const asset = createScriptAsset(
+      createDocumentId("asset"),
+      name,
+      relativePath,
+    );
+    setBundle((current) =>
+      touchProject({
+        ...current,
+        assets: addScriptAsset(current.assets, asset),
+      }),
+    );
+    setNotice(`${name} を作成しました`);
+    void scriptEditor.open(asset.id);
+  }, [editorMode, scriptEditor, setBundle]);
+
   const handleSaveInteractivityAsset = useCallback(
     (assetId: string, extension: KhrInteractivityExtension) => {
       if (editorMode !== "edit") return;
@@ -4301,6 +4433,8 @@ export function VisualEditorPrototype({
     setNotice("Playを停止しました。Play中の状態を破棄し、編集カメラへ戻りました");
   }, [scriptRuntime]);
 
+  playingRef.current = editorMode === "play";
+
   const runSave = useCallback(async (): Promise<string | undefined> => {
     if (autosaveTimerRef.current !== null) {
       window.clearTimeout(autosaveTimerRef.current);
@@ -4549,6 +4683,19 @@ export function VisualEditorPrototype({
         case "asset.create-interactivity":
           handleCreateDocumentAsset("interactivity", payload.folderId);
           return editorMode === "edit" && !importBusy;
+        case "asset.create-script":
+          void handleCreateScript();
+          return editorMode === "edit" && !importBusy;
+        case "asset.edit-script": {
+          if (
+            !payload.assetId ||
+            bundle.assets.assets[payload.assetId]?.kind !== "script"
+          ) {
+            return false;
+          }
+          void scriptEditor.open(payload.assetId);
+          return true;
+        }
         case "asset.edit-interactivity": {
           if (!payload.assetId || bundle.assets.assets[payload.assetId]?.kind !== "interactivity") {
             return false;
@@ -4570,6 +4717,8 @@ export function VisualEditorPrototype({
       handleCopy,
       handleCreateAssetFolder,
       handleCreateDocumentAsset,
+      handleCreateScript,
+      scriptEditor,
       handleCreatePrefab,
       handleCreateEmpty,
       handleDelete,
@@ -4979,6 +5128,12 @@ export function VisualEditorPrototype({
             onOpenInteractivity={(assetId) =>
               executeCommand("asset.edit-interactivity", { assetId })
             }
+            scriptContracts={scriptEditor.contracts}
+            scriptEntityOptions={scriptEntityOptions}
+            onUpdateScriptComponent={handleUpdateScriptComponent}
+            onOpenScript={(assetId) =>
+              executeCommand("asset.edit-script", { assetId })
+            }
             onCloseAsset={() => setAssetSelection(null)}
             onMaterialChange={handleMaterialChange}
             onModelChange={handleModelChange}
@@ -5174,6 +5329,18 @@ export function VisualEditorPrototype({
               readOnly={readOnly}
               onSave={handleSaveInteractivityAsset}
               onClose={() => setInteractivityEditorAssetId(null)}
+            />
+          ) : null}
+          {scriptEditorAsset ? (
+            <ScriptEditorDialog
+              key={scriptEditorAsset.id}
+              asset={scriptEditorAsset}
+              source={scriptEditor.state.source}
+              loading={scriptEditor.state.loading}
+              error={scriptEditor.state.error}
+              playing={editorMode === "play"}
+              onSave={scriptEditor.save}
+              onClose={scriptEditor.close}
             />
           ) : null}
           <button

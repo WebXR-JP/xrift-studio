@@ -18,6 +18,8 @@ export type EditorCommandId =
   | "asset.create-material"
   | "asset.create-particle"
   | "asset.create-interactivity"
+  | "asset.create-script"
+  | "asset.edit-script"
   | "asset.edit-interactivity"
   | "asset.import"
   | "view.frame-selection"
@@ -177,6 +179,18 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   {
     id: "asset.edit-interactivity",
     label: "Interactivity Graphを編集",
+    category: "edit",
+    bindings: [],
+  },
+  {
+    id: "asset.create-script",
+    label: "Scriptを作成",
+    category: "edit",
+    bindings: [],
+  },
+  {
+    id: "asset.edit-script",
+    label: "Scriptを編集",
     category: "edit",
     bindings: [],
   },
