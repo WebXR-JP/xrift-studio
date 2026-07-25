@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { CompiledScript } from "../../../packages/xrift-studio-runtime/src/script/api";
+import type {
+  CompiledScript,
+  ScriptRenderProps,
+} from "../../../packages/xrift-studio-runtime/src/script/api";
 import { isCompiledScript } from "../../../packages/xrift-studio-runtime/src/script/api";
 import type { ScriptFailure, ScriptLogEntry } from "../../../packages/xrift-studio-runtime/src/script/host";
 import type { AssetManifest } from "../../lib/visual-editor/asset-manifest";
@@ -28,7 +31,7 @@ import { tauri } from "../../lib/tauri";
 export type CompiledScriptEntry = {
   assetId: string;
   script: CompiledScript;
-  render?: React.ComponentType;
+  render?: React.ComponentType<ScriptRenderProps>;
   objectUrl: string;
   /** Reuses the same module identity when another Script was the only edit. */
   cacheKey: string;
@@ -224,7 +227,9 @@ export function useScriptRuntime({
         assetId,
         script: exported,
         ...(typeof render === "function"
-          ? { render: render as React.ComponentType }
+          ? {
+              render: render as React.ComponentType<ScriptRenderProps>,
+            }
           : {}),
         objectUrl: result.objectUrl,
         cacheKey,

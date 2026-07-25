@@ -23,6 +23,16 @@ export function runXriftMcpEditorToolFixtures(): void {
     importSettings: {},
   });
   assert(texture, "Texture fixture could not be created");
+  const skyboxTexture = createTextureAsset({
+    id: "asset-mcp-skybox-texture",
+    name: "MCP Skybox",
+    source: {
+      kind: "project",
+      relativePath: "assets/environment/mcp-skybox.hdr",
+    },
+    importSettings: {},
+  });
+  assert(skyboxTexture, "Skybox Texture fixture could not be created");
   const script = createScriptAsset(
     "asset-mcp-script",
     "MCP Script",
@@ -36,6 +46,7 @@ export function runXriftMcpEditorToolFixtures(): void {
         ...initial.assets.assets,
         [particle.id]: particle,
         [texture.id]: texture,
+        [skyboxTexture.id]: skyboxTexture,
         [script.id]: script,
       },
     },
@@ -64,47 +75,128 @@ export function runXriftMcpEditorToolFixtures(): void {
     },
   };
 
-  const fogResult = executeXriftMcpEditorTool(context, {
-    id: "fixture-fog",
-    tool: "update_scene_settings",
-    arguments: {
-      projectId: bundle.project.projectId,
-      sceneId: bundle.scene.sceneId,
-      expectedRevision: 4,
-      fog: { enabled: false },
+  const sceneSettingsResult = executeXriftMcpEditorTool(
+    { ...context, editorMode: "play" },
+    {
+      id: "fixture-scene-settings",
+      tool: "update_scene_settings",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: 4,
+        skybox: {
+          enabled: true,
+          projection: "dome",
+          imageAssetId: skyboxTexture.id,
+          topColor: "#336699",
+          bottomColor: "#ddeeff",
+          offset: 0.2,
+          exponent: 1.5,
+          rotationDegrees: 45,
+          flipY: true,
+          exposure: 1.25,
+          meshPosition: [1, 2, 3],
+          meshRotationDegrees: [0, 90, 0],
+          meshScale: [80, 90, 100],
+          center: [0, 0.02, 0],
+        },
+        fog: { enabled: false, color: "#102030", near: 12, far: 96 },
+        ambient: { color: "#abcdef", intensity: 0.8 },
+        camera: { near: 0.05, far: 500, fov: 60 },
+        editor: {
+          backgroundColor: "#111827",
+          gizmo: {
+            size: 1.1,
+            gridVisible: false,
+            gridSize: 64,
+            gridDivisions: 32,
+            snapEnabled: true,
+            translateSnap: 0.25,
+            rotateSnapDegrees: 30,
+            scaleSnap: 0.05,
+          },
+        },
+      },
     },
-  });
+  );
 
-  const editorContext = executeXriftMcpEditorTool(context, {
-    id: "fixture-context",
-    tool: "get_editor_context",
-    arguments: {},
-  });
+  const editorContext = executeXriftMcpEditorTool(
+    {
+      ...context,
+      bundle: sceneSettingsResult.bundle,
+      revision: 5,
+    },
+    {
+      id: "fixture-context",
+      tool: "get_editor_context",
+      arguments: {},
+    },
+  );
   const scriptingCapabilities = executeXriftMcpEditorTool(context, {
     id: "fixture-scripting-capabilities",
     tool: "get_scripting_capabilities",
     arguments: {},
   });
   assert(
-    typeof (editorContext.result.sceneSettings as { fog?: unknown })?.fog ===
-      "object",
-    "Editor context should expose current Fog settings",
+    ["skybox", "fog", "ambient", "camera", "editor"].every(
+      (section) =>
+        typeof (
+          editorContext.result.sceneSettings as Record<string, unknown>
+        )?.[section] === "object",
+    ),
+    "Editor context should expose every persisted Scene settings section",
   );
   assert(
     (
       scriptingCapabilities.result.runtime as {
         assets?: { methods?: string[] };
+        render?: { props?: string };
       }
-    )?.assets?.methods?.some((method) => method.includes("loadTexture")),
-    "Scripting capabilities should expose runtime Texture loading",
+    )?.assets?.methods?.some((method) => method.includes("loadTexture")) &&
+      (
+        scriptingCapabilities.result.runtime as {
+          assets?: { methods?: string[] };
+        }
+      )?.assets?.methods?.some((method) => method.includes("loadAudio")) &&
+      (
+        scriptingCapabilities.result.runtime as {
+          render?: { props?: string };
+        }
+      )?.render?.props?.includes("ScriptRenderProps"),
+    "Scripting capabilities should expose Texture, Audio, and Render context APIs",
+  );
+  assert(
+    (
+      scriptingCapabilities.result.persistentAuthoring as {
+        modes?: string[];
+        tools?: string[];
+      }
+    )?.tools?.includes("update_material_asset") &&
+      (
+        scriptingCapabilities.result.persistentAuthoring as {
+          modes?: string[];
+          tools?: string[];
+        }
+      )?.tools?.includes("update_scene_settings") &&
+      (
+        scriptingCapabilities.result.persistentAuthoring as {
+          modes?: string[];
+        }
+      )?.modes?.includes("play"),
+    "Scripting capabilities should expose Play-safe Scene settings authoring",
   );
   assert(
     (
       scriptingCapabilities.result.persistentAuthoring as {
         tools?: string[];
       }
-    )?.tools?.includes("update_material_asset"),
-    "Scripting capabilities should distinguish persistent Material authoring",
+    )?.tools?.includes("update_texture_asset") &&
+      (
+        scriptingCapabilities.result.editOnlyAuthoring as {
+          tools?: string[];
+        }
+      )?.tools?.includes("import_texture_asset"),
+    "Scripting capabilities should distinguish Play-safe Texture settings from Edit-only import",
   );
   assert(
     (
@@ -140,18 +232,169 @@ export function runXriftMcpEditorToolFixtures(): void {
       )?.clientRule === "string",
     "Scripting capabilities must not claim a sandbox or trust gate",
   );
-  assert(fogResult.changed, "Fog edit should change the bundle");
   assert(
-    fogResult.bundle.scene.settings?.fog.enabled === false,
-    "Fog edit should disable Fog",
+    sceneSettingsResult.changed &&
+      sceneSettingsResult.result.synchronizedDuringPlay === true,
+    "Scene settings edit should change the bundle during Play",
   );
   assert(
-    context.bundle.scene.settings?.fog.enabled !== false,
-    "Fog edit must not mutate the input bundle",
+    sceneSettingsResult.bundle.scene.settings?.skybox.imageAssetId ===
+      skyboxTexture.id &&
+      sceneSettingsResult.bundle.scene.settings.skybox.iblEnabled &&
+      sceneSettingsResult.bundle.scene.settings.skybox.projection === "dome" &&
+      sceneSettingsResult.bundle.scene.settings.fog.enabled === false &&
+      sceneSettingsResult.bundle.scene.settings.ambient.intensity === 0.8 &&
+      sceneSettingsResult.bundle.scene.settings.camera.fov === 60 &&
+      sceneSettingsResult.bundle.scene.settings.editor.gizmo.snapEnabled &&
+      sceneSettingsResult.bundle.scene.settings.editor.backgroundColor ===
+        "#111827",
+    "Scene settings edit should persist Skybox, Fog, Ambient, Camera, and Editor values",
+  );
+  assert(
+    context.bundle.scene.settings?.skybox.imageAssetId === undefined &&
+      context.bundle.scene.settings?.fog.enabled !== false,
+    "Scene settings edit must not mutate the input bundle",
+  );
+
+  const clearedSkybox = executeXriftMcpEditorTool(
+    { ...context, bundle: sceneSettingsResult.bundle, revision: 5 },
+    {
+      id: "fixture-clear-skybox",
+      tool: "update_scene_settings",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: 5,
+        skybox: { imageAssetId: null },
+      },
+    },
+  );
+  assert(
+    clearedSkybox.bundle.scene.settings?.skybox.imageAssetId === undefined &&
+      clearedSkybox.bundle.scene.settings?.skybox.iblEnabled === false,
+    "Clearing the Skybox image should also disable unavailable IBL",
+  );
+  let invalidSceneSettingsCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(context, {
+      id: "fixture-invalid-skybox-asset",
+      tool: "update_scene_settings",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: context.revision,
+        skybox: { imageAssetId: particle.id },
+      },
+    });
+  } catch (error) {
+    invalidSceneSettingsCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    invalidSceneSettingsCode === "ASSET_KIND_MISMATCH",
+    "Skybox settings should reject non-Texture Asset references",
+  );
+  let invalidSkyboxSourceCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(context, {
+      id: "fixture-invalid-skybox-source",
+      tool: "update_scene_settings",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: context.revision,
+        skybox: { imageAssetId: texture.id },
+      },
+    });
+  } catch (error) {
+    invalidSkyboxSourceCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    invalidSkyboxSourceCode === "INVALID_ARGUMENT",
+    "Skybox settings should reject Texture Assets without a project source",
+  );
+
+  const textureRead = executeXriftMcpEditorTool(context, {
+    id: "fixture-get-texture",
+    tool: "get_texture_asset",
+    arguments: { textureAssetId: texture.id },
+  });
+  assert(
+    (textureRead.result.texture as { id?: string }).id === texture.id,
+    "get_texture_asset should return the requested Texture",
+  );
+
+  const textureUpdated = executeXriftMcpEditorTool(
+    { ...context, editorMode: "play" },
+    {
+      id: "fixture-update-texture",
+      tool: "update_texture_asset",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: context.revision,
+        textureAssetId: texture.id,
+        patch: {
+          colorSpace: "linear",
+          generateMipmaps: false,
+          flipY: true,
+          resize: { mode: "max-size", maxSize: 2048 },
+          sampler: {
+            wrapS: "mirrored-repeat",
+            wrapT: "clamp-to-edge",
+            magFilter: "nearest",
+            minFilter: "linear-mipmap-linear",
+          },
+          compression: { format: "webp", quality: 72 },
+        },
+      },
+    },
+  );
+  const updatedTexture = textureUpdated.bundle.assets.assets[texture.id];
+  assert(
+    textureUpdated.result.synchronizedDuringPlay === true &&
+      updatedTexture?.kind === "texture" &&
+      updatedTexture.importSettings.colorSpace === "linear" &&
+      updatedTexture.importSettings.flipY === true &&
+      updatedTexture.importSettings.sampler.wrapS === "mirrored-repeat" &&
+      updatedTexture.importSettings.sampler.minFilter === "linear" &&
+      updatedTexture.importSettings.compression.quality === 72,
+    "update_texture_asset should persist normalized settings during Play",
+  );
+  assert(
+    (
+      context.bundle.assets.assets[texture.id] as {
+        importSettings?: { flipY?: boolean };
+      }
+    ).importSettings?.flipY === false,
+    "Texture settings update must not mutate the input bundle",
+  );
+
+  let invalidTextureCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(context, {
+      id: "fixture-invalid-texture",
+      tool: "update_texture_asset",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: context.revision,
+        textureAssetId: texture.id,
+        patch: { sampler: { wrapS: "unsafe-wrap" } },
+      },
+    });
+  } catch (error) {
+    invalidTextureCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    invalidTextureCode === "INVALID_ARGUMENT",
+    "Texture settings should reject unknown enum values",
   );
 
   const placed = executeXriftMcpEditorTool(
-    { ...context, bundle: fogResult.bundle, revision: 5 },
+    { ...context, bundle: sceneSettingsResult.bundle, revision: 5 },
     {
       id: "fixture-place",
       tool: "place_asset",

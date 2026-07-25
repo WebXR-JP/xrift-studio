@@ -3,6 +3,7 @@ export type ScriptTemplateCategory =
   | "movement"
   | "appearance"
   | "particle"
+  | "media"
   | "interaction";
 
 export type ScriptTemplateDefinition = {
@@ -11,6 +12,8 @@ export type ScriptTemplateDefinition = {
   description: string;
   category: ScriptTemplateCategory;
   suggestedName: string;
+  /** Determines both Monaco language mode and the project source extension. */
+  language: "ts" | "tsx";
   requiredAssetKinds: readonly (
     | "model"
     | "material"
@@ -24,7 +27,7 @@ export type ScriptTemplateDefinition = {
 };
 
 const NAME_TOKEN = "__XRIFT_SCRIPT_NAME__";
-export const SCRIPT_TEMPLATE_CATALOG_VERSION = 1 as const;
+export const SCRIPT_TEMPLATE_CATALOG_VERSION = 2 as const;
 
 /**
  * Built-in Script examples shared by the Assets creation flow and MCP.
@@ -39,6 +42,7 @@ export const SCRIPT_TEMPLATE_CATALOG: readonly ScriptTemplateDefinition[] = [
     description: "最小のlifecycleから自由に実装します。",
     category: "basic",
     suggestedName: "New Script",
+    language: "ts",
     requiredAssetKinds: [],
     requiredComponents: [],
     entityReferenceCount: 0,
@@ -63,6 +67,7 @@ export default defineScript({
     description: "指定した軸と速度でEntityを回転します。",
     category: "movement",
     suggestedName: "Spinner",
+    language: "ts",
     requiredAssetKinds: [],
     requiredComponents: [],
     entityReferenceCount: 0,
@@ -95,6 +100,7 @@ export default defineScript({
     description: "開始位置を中心に、滑らかに上下移動します。",
     category: "movement",
     suggestedName: "Floating Object",
+    language: "ts",
     requiredAssetKinds: [],
     requiredComponents: [],
     entityReferenceCount: 0,
@@ -127,6 +133,7 @@ export default defineScript({
     description: "WASDまたは矢印キーでEntityを移動します。",
     category: "movement",
     suggestedName: "Keyboard Mover",
+    language: "ts",
     requiredAssetKinds: [],
     requiredComponents: [],
     entityReferenceCount: 0,
@@ -165,6 +172,7 @@ export default defineScript({
     description: "明示参照したEntityの位置へ滑らかに追従します。",
     category: "movement",
     suggestedName: "Entity Follower",
+    language: "ts",
     requiredAssetKinds: [],
     requiredComponents: [],
     entityReferenceCount: 1,
@@ -201,6 +209,7 @@ export default defineScript({
     description: "色、発光、粗さをPlay中にアニメーションします。",
     category: "appearance",
     suggestedName: "Material Pulse",
+    language: "ts",
     requiredAssetKinds: [],
     requiredComponents: ["Mesh Renderer"],
     entityReferenceCount: 0,
@@ -240,6 +249,7 @@ export default defineScript({
     description: "明示参照したTextureを読み込み、UVをスクロールします。",
     category: "appearance",
     suggestedName: "Texture Scroller",
+    language: "ts",
     requiredAssetKinds: ["texture"],
     requiredComponents: ["Mesh Renderer"],
     entityReferenceCount: 0,
@@ -287,6 +297,7 @@ export default defineScript({
     description: "Particle Emitterの再生、Emission、速度、サイズ、色を制御します。",
     category: "particle",
     suggestedName: "Particle Controller",
+    language: "ts",
     requiredAssetKinds: ["particle"],
     requiredComponents: ["Particle Emitter"],
     entityReferenceCount: 0,
@@ -322,11 +333,148 @@ export default defineScript({
 `,
   },
   {
+    id: "model-display",
+    name: "外部Modelを表示",
+    description:
+      "明示参照したGLBまたは自己完結したglTFをRenderへ読み込み、速度を変えながら回転します。",
+    category: "media",
+    suggestedName: "Model Display",
+    language: "tsx",
+    requiredAssetKinds: ["model"],
+    requiredComponents: [],
+    entityReferenceCount: 0,
+    source: `import {
+  defineScript,
+  prop,
+  type ScriptRenderProps,
+} from "xrift:script";
+import { Clone, useGLTF } from "@react-three/drei";
+
+type ModelDisplayProps = {
+  model: { kind: "asset"; assetKind: "model" };
+  scale: { kind: "number" };
+  rotationSpeed: { kind: "number" };
+};
+
+export default defineScript({
+  name: "${NAME_TOKEN}",
+  props: {
+    model: prop.asset({ label: "Model", kind: "model" }),
+    scale: prop.number({ label: "表示倍率", default: 1, min: 0.01, max: 100 }),
+    rotationSpeed: prop.number({
+      label: "回転速度",
+      default: 0.5,
+      min: -20,
+      max: 20,
+    }),
+  },
+  start(ctx) {
+    return {
+      update(delta) {
+        ctx.object3d.rotation.y += ctx.props.rotationSpeed * delta;
+      },
+    };
+  },
+});
+
+function DeclaredModel({ url, scale }: { url: string; scale: number }) {
+  const model = useGLTF(url);
+  return <Clone object={model.scene} scale={scale} />;
+}
+
+export function Render({ ctx }: ScriptRenderProps<ModelDisplayProps>) {
+  const url = ctx.assets.url(ctx.props.model);
+  return url ? <DeclaredModel url={url} scale={ctx.props.scale} /> : null;
+}
+`,
+  },
+  {
+    id: "audio-hotkey",
+    name: "キーでAudio再生",
+    description:
+      "明示参照したAudioを読み込み、指定キーで再生と停止を切り替えます。",
+    category: "media",
+    suggestedName: "Audio Hotkey",
+    language: "ts",
+    requiredAssetKinds: ["audio"],
+    requiredComponents: [],
+    entityReferenceCount: 0,
+    source: `import {
+  defineScript,
+  prop,
+  type ScriptAudio,
+} from "xrift:script";
+
+export default defineScript({
+  name: "${NAME_TOKEN}",
+  props: {
+    audio: prop.asset({ label: "Audio", kind: "audio" }),
+    keyCode: prop.string({ label: "再生キー", default: "Space" }),
+    volume: prop.number({ label: "音量", default: 1, min: 0, max: 1 }),
+    playbackRate: prop.number({
+      label: "再生速度",
+      default: 1,
+      min: 0.1,
+      max: 4,
+    }),
+    loop: prop.boolean({ label: "ループ", default: false }),
+  },
+  start(ctx) {
+    let audio: ScriptAudio | null = null;
+    let keyWasDown = false;
+
+    void ctx.lifecycle.task(async (signal) => {
+      const loaded = await ctx.assets.loadAudio(ctx.props.audio, {
+        volume: ctx.props.volume,
+        playbackRate: ctx.props.playbackRate,
+        loop: ctx.props.loop,
+      });
+      if (signal.aborted) {
+        loaded?.stop();
+        return;
+      }
+      audio = loaded;
+      if (!audio) ctx.log("Audio Assetを読み込めませんでした");
+    });
+
+    return {
+      update() {
+        audio?.setVolume(ctx.props.volume);
+        audio?.setPlaybackRate(ctx.props.playbackRate);
+        audio?.setLoop(ctx.props.loop);
+        const keyIsDown = ctx.input.isKeyDown(ctx.props.keyCode);
+        if (keyIsDown && !keyWasDown && audio) {
+          if (audio.playing) {
+            audio.stop();
+          } else {
+            void ctx.lifecycle.task(async (signal) => {
+              try {
+                await audio?.play();
+              } catch (error) {
+                if (!signal.aborted) {
+                  ctx.log("Audioを再生できませんでした", String(error));
+                }
+              }
+            });
+          }
+        }
+        keyWasDown = keyIsDown;
+      },
+      dispose() {
+        audio?.stop();
+      },
+    };
+  },
+});
+`,
+  },
+  {
     id: "event-visibility",
     name: "イベントで表示切替",
     description: "Scriptイベントを受け取り、Entityの表示状態を切り替えます。",
     category: "interaction",
     suggestedName: "Visibility Event",
+    language: "ts",
     requiredAssetKinds: [],
     requiredComponents: [],
     entityReferenceCount: 0,

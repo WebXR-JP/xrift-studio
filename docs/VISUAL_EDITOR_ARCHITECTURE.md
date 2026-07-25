@@ -616,7 +616,7 @@ Particle と同じ関係を採る。再利用可能な定義は Asset 側に置�
 
 #### 動的評価の限定
 
-- Editor の Play では、source を local な TypeScript worker で変換し、生成した module を評価する。これが本節で認める唯一の動的評価であり、対象は project 内の Script source file に限る。visual document 内の文字列を評価しない。
+- Editor の Play では、source を Monaco と同梱した TypeScript service の `transpileModule` で変換し、生成した module を評価する。言語サービス worker はEditor補完と診断に限定し、Play開始時のmodel同期を挟まない。これが本節で認める唯一の動的評価であり、対象は project 内の Script source file に限る。visual document 内の文字列を評価しない。
 - 許可した bare specifier は Studio が既に読み込んでいる同一 module インスタンスへ解決する。`three` を二重ロードしない。
 - `https://` から始まる module は Play でだけ opt-in で許し、**公開時は blocking 診断**とする。
 - 生成コードは静的 import だけを出力する。`eval`、`Function`、動的 import を生成物へ出さない（9.4）。

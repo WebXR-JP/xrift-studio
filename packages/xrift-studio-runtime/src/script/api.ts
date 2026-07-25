@@ -162,6 +162,15 @@ export type ScriptTextureLoadOptions = {
   flipY?: boolean;
 };
 
+export type ScriptAudioLoadOptions = {
+  /** Initial volume in the inclusive 0..1 range. */
+  volume?: number;
+  loop?: boolean;
+  /** Initial playback speed. Values at or below zero fall back to 1. */
+  playbackRate?: number;
+  preload?: "none" | "metadata" | "auto";
+};
+
 /** A real three.js Texture is supplied by the host through this shape. */
 export type ScriptTexture = {
   readonly isTexture?: true;
@@ -171,6 +180,26 @@ export type ScriptTexture = {
   rotation: number;
   needsUpdate: boolean;
   [key: string]: unknown;
+};
+
+/**
+ * Lifecycle-owned audio playback without exposing the ambient DOM element.
+ *
+ * Browser playback policy can reject `play()`. Await it through
+ * `ctx.lifecycle.task` when the Script should own and report that failure.
+ */
+export type ScriptAudio = {
+  play(): Promise<void>;
+  pause(): void;
+  /** Pauses and seeks back to the beginning. */
+  stop(): void;
+  seek(seconds: number): void;
+  setVolume(volume: number): void;
+  setLoop(loop: boolean): void;
+  setPlaybackRate(playbackRate: number): void;
+  readonly playing: boolean;
+  readonly currentTime: number;
+  readonly duration: number;
 };
 
 export type ScriptAssets = {
@@ -184,6 +213,14 @@ export type ScriptAssets = {
     assetId: string,
     options?: ScriptTextureLoadOptions,
   ): Promise<ScriptTexture | null>;
+  /**
+   * Creates a declared Audio Asset player owned by this Script instance.
+   * It is stopped and released automatically on restart or Stop.
+   */
+  loadAudio(
+    assetId: string,
+    options?: ScriptAudioLoadOptions,
+  ): Promise<ScriptAudio | null>;
 };
 
 export type ScriptMaterialTextureSlot =
@@ -320,6 +357,19 @@ export type ScriptContext<
   ): () => void;
   emit(event: string, payload?: unknown): void;
   log(...values: unknown[]): void;
+};
+
+/**
+ * Props supplied to an optional named `Render` export.
+ *
+ * The same live context used by `start(ctx)` is passed after the Script starts.
+ * This lets declarative R3F content resolve only explicitly declared Assets
+ * and observe Inspector/MCP property edits.
+ */
+export type ScriptRenderProps<
+  Declaration extends ScriptPropsDeclaration = ScriptPropsDeclaration,
+> = {
+  ctx: ScriptContext<Declaration>;
 };
 
 /** Returned by `start`. Every member is optional. */

@@ -28,10 +28,13 @@ const MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS: u64 = 120_000;
 const MCP_MAX_CONCURRENT_CONNECTIONS: usize = 32;
 const MCP_MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 const MCP_MAX_CLIENT_NAME_CHARS: usize = 128;
-const MCP_TOOL_NAMES: [&str; 48] = [
+const MCP_TOOL_NAMES: [&str; 51] = [
     "get_editor_context",
     "get_scripting_capabilities",
     "list_assets",
+    "get_texture_asset",
+    "import_texture_asset",
+    "update_texture_asset",
     "create_document_asset",
     "get_particle_asset",
     "update_particle_asset",
@@ -1787,7 +1790,7 @@ pub fn run_stdio_server() -> Result<(), String> {
                     "protocolVersion": MCP_PROTOCOL_VERSION,
                     "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": { "name": MCP_SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Script execution is not sandboxed and no provenance trust gate is implemented; get_scripting_capabilities returns sandboxed:false, trustGate:false, and the full trust boundary. Never run untrusted Script source without showing it to the user and obtaining explicit approval. Call get_scripting_capabilities and list_script_templates before authoring a Script. Use create_script_asset with templateId to create a built-in example, or apply_script_template to create it and attach its Script Component to an Entity in one editor revision. For custom source, use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. Runtime ctx.materials and ctx.particles changes reset on Stop; use persistent Material tools or create_document_asset/get_particle_asset/update_particle_asset to save authoring data. Call list_component_definitions and get_entity_components before add_component, update_component, or remove_component. While Play is active, Entity enabled state and supported component/scene structure tools synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. XRift Studio must be open with a visual project."
+                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Script execution is not sandboxed and no provenance trust gate is implemented; get_scripting_capabilities returns sandboxed:false, trustGate:false, and the full trust boundary. Never run untrusted Script source without showing it to the user and obtaining explicit approval. Call get_scripting_capabilities and list_script_templates before authoring a Script. Use create_script_asset with templateId to create a built-in example, or apply_script_template to create it and attach its Script Component to an Entity in one editor revision. For custom source, use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. Use import_texture_asset only for a trusted absolute local image path while Edit is active; the Editor validates the format and copies it into managed project storage without returning file bytes. Use get_texture_asset/update_texture_asset for persistent sampler and import settings; updates are supported during Play and restart only consuming Entities. Runtime ctx.materials and ctx.particles changes reset on Stop; use persistent Material tools or create_document_asset/get_particle_asset/update_particle_asset to save authoring data. Call list_component_definitions and get_entity_components before add_component, update_component, or remove_component. While Play is active, Entity enabled state and supported component/scene structure tools synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. XRift Studio must be open with a visual project."
                 }),
             )?,
             "ping" => write_json_rpc_result(&mut stdout, id, json!({}))?,
@@ -2010,6 +2013,99 @@ fn write_json_rpc_error(
     writer.flush().map_err(|error| error.to_string())
 }
 
+fn texture_import_settings_schema(require_non_empty: bool) -> Value {
+    let mut schema = json!({
+        "type": "object",
+        "properties": {
+            "colorSpace": {
+                "type": "string",
+                "enum": ["auto", "srgb", "linear"]
+            },
+            "generateMipmaps": { "type": "boolean" },
+            "flipY": { "type": "boolean" },
+            "resize": {
+                "oneOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "mode": { "const": "original" }
+                        },
+                        "required": ["mode"],
+                        "additionalProperties": false
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "mode": { "const": "max-size" },
+                            "maxSize": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 16384
+                            }
+                        },
+                        "required": ["mode", "maxSize"],
+                        "additionalProperties": false
+                    }
+                ]
+            },
+            "sampler": {
+                "type": "object",
+                "properties": {
+                    "wrapS": {
+                        "type": "string",
+                        "enum": ["repeat", "clamp-to-edge", "mirrored-repeat"]
+                    },
+                    "wrapT": {
+                        "type": "string",
+                        "enum": ["repeat", "clamp-to-edge", "mirrored-repeat"]
+                    },
+                    "magFilter": {
+                        "type": "string",
+                        "enum": ["nearest", "linear"]
+                    },
+                    "minFilter": {
+                        "type": "string",
+                        "enum": [
+                            "nearest",
+                            "linear",
+                            "nearest-mipmap-nearest",
+                            "linear-mipmap-nearest",
+                            "nearest-mipmap-linear",
+                            "linear-mipmap-linear"
+                        ]
+                    }
+                },
+                "minProperties": 1,
+                "additionalProperties": false
+            },
+            "compression": {
+                "type": "object",
+                "properties": {
+                    "format": {
+                        "type": "string",
+                        "enum": ["source", "webp", "ktx2"]
+                    },
+                    "quality": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100
+                    }
+                },
+                "minProperties": 1,
+                "additionalProperties": false
+            }
+        },
+        "additionalProperties": false
+    });
+    if require_non_empty {
+        schema
+            .as_object_mut()
+            .expect("Texture settings schema must be an object")
+            .insert("minProperties".to_string(), Value::from(1));
+    }
+    schema
+}
+
 fn tool_definitions() -> Value {
     json!([
         {
@@ -2031,6 +2127,60 @@ fn tool_definitions() -> Value {
                     "query": { "type": "string" },
                     "kind": { "type": "string" }
                 },
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "get_texture_asset",
+            "description": "Read a persistent Texture Asset, its managed project-relative source metadata, and all normalized color-space, resize, mipmap, sampler, and compression settings. Source file bytes and external paths are never returned.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "textureAssetId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["textureAssetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "import_texture_asset",
+            "description": "Validate and import one trusted local PNG, JPEG, WebP, AVIF, GIF, BMP, SVG, or KTX2 file into managed project storage while Edit is active. sourcePath must be an absolute path to a regular non-symlink file no larger than 128 MB. The result returns the Texture Asset and project-relative destination, never file bytes or the external source path.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "sourcePath": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096
+                    },
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "folderId": { "type": "string", "minLength": 1 },
+                    "importSettings": texture_import_settings_schema(false)
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "sourcePath"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "update_texture_asset",
+            "description": "Persist Texture color space, mipmaps, flip Y, resize, wrap, filter, and compression authoring settings in Edit or Play mode. During Play the dependency graph restarts only Entities that consume this Texture directly or through Material and Particle Assets.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "textureAssetId": { "type": "string", "minLength": 1 },
+                    "patch": texture_import_settings_schema(true)
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "textureAssetId", "patch"],
                 "additionalProperties": false
             }
         },
@@ -2102,7 +2252,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "create_script_asset",
-            "description": "Create a TypeScript Script Asset in the open visual project and select it in Assets. Set templateId to an ID from list_script_templates, or set source for custom code; do not send both. Omitting both keeps the runnable default template. The currently open Script Editor buffer is preserved.",
+            "description": "Create a TypeScript or TSX Script Asset in the open visual project and select it in Assets. Set templateId to an ID from list_script_templates, or set source for custom code; do not send both. Built-in templates choose their declared language automatically. For custom JSX source set language to tsx. Omitting both keeps the runnable default template. The currently open Script Editor buffer is preserved.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2112,6 +2262,7 @@ fn tool_definitions() -> Value {
                     "name": { "type": "string", "minLength": 1 },
                     "folderId": { "type": "string" },
                     "templateId": { "type": "string", "minLength": 1 },
+                    "language": { "type": "string", "enum": ["ts", "tsx"] },
                     "source": { "type": "string" }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision"],
@@ -2215,25 +2366,117 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "update_scene_settings",
-            "description": "Update Fog settings in the current XRift Studio scene through the editor history and autosave pipeline.",
+            "description": "Update persisted Skybox, Fog, ambient light, camera, and editor viewport settings through XRift Studio history and autosave. This is supported during Edit and Play; Play reflects the shared Scene settings immediately.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "projectId": { "type": "string" },
                     "sceneId": { "type": "string" },
                     "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "skybox": {
+                        "type": "object",
+                        "properties": {
+                            "enabled": { "type": "boolean" },
+                            "iblEnabled": { "type": "boolean" },
+                            "projection": { "type": "string", "enum": ["infinite", "box", "dome"] },
+                            "imageAssetId": { "type": ["string", "null"], "minLength": 1 },
+                            "topColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+                            "bottomColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+                            "offset": { "type": "number" },
+                            "exponent": { "type": "number", "minimum": 0.01 },
+                            "rotationDegrees": { "type": "number" },
+                            "flipY": { "type": "boolean" },
+                            "exposure": { "type": "number", "minimum": 0 },
+                            "meshPosition": {
+                                "type": "array",
+                                "items": { "type": "number" },
+                                "minItems": 3,
+                                "maxItems": 3
+                            },
+                            "meshRotationDegrees": {
+                                "type": "array",
+                                "items": { "type": "number" },
+                                "minItems": 3,
+                                "maxItems": 3
+                            },
+                            "meshScale": {
+                                "type": "array",
+                                "items": { "type": "number", "minimum": 0.001 },
+                                "minItems": 3,
+                                "maxItems": 3
+                            },
+                            "center": {
+                                "type": "array",
+                                "items": { "type": "number" },
+                                "minItems": 3,
+                                "maxItems": 3
+                            }
+                        },
+                        "minProperties": 1,
+                        "additionalProperties": false
+                    },
                     "fog": {
                         "type": "object",
                         "properties": {
                             "enabled": { "type": "boolean" },
                             "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
                             "near": { "type": "number", "minimum": 0 },
-                            "far": { "type": "number", "exclusiveMinimum": 0 }
+                            "far": { "type": "number", "minimum": 0.001 }
                         },
+                        "minProperties": 1,
+                        "additionalProperties": false
+                    },
+                    "ambient": {
+                        "type": "object",
+                        "properties": {
+                            "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+                            "intensity": { "type": "number", "minimum": 0 }
+                        },
+                        "minProperties": 1,
+                        "additionalProperties": false
+                    },
+                    "camera": {
+                        "type": "object",
+                        "properties": {
+                            "near": { "type": "number", "minimum": 0.01 },
+                            "far": { "type": "number", "minimum": 1 },
+                            "fov": { "type": "number", "minimum": 1, "maximum": 179 }
+                        },
+                        "minProperties": 1,
+                        "additionalProperties": false
+                    },
+                    "editor": {
+                        "type": "object",
+                        "properties": {
+                            "backgroundColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+                            "gizmo": {
+                                "type": "object",
+                                "properties": {
+                                    "size": { "type": "number", "minimum": 0.1 },
+                                    "gridVisible": { "type": "boolean" },
+                                    "gridSize": { "type": "number", "minimum": 1 },
+                                    "gridDivisions": { "type": "integer", "minimum": 1 },
+                                    "snapEnabled": { "type": "boolean" },
+                                    "translateSnap": { "type": "number", "minimum": 0.001 },
+                                    "rotateSnapDegrees": { "type": "number", "minimum": 0.1 },
+                                    "scaleSnap": { "type": "number", "minimum": 0.001 }
+                                },
+                                "minProperties": 1,
+                                "additionalProperties": false
+                            }
+                        },
+                        "minProperties": 1,
                         "additionalProperties": false
                     }
                 },
-                "required": ["projectId", "sceneId", "expectedRevision", "fog"],
+                "required": ["projectId", "sceneId", "expectedRevision"],
+                "anyOf": [
+                    { "required": ["skybox"] },
+                    { "required": ["fog"] },
+                    { "required": ["ambient"] },
+                    { "required": ["camera"] },
+                    { "required": ["editor"] }
+                ],
                 "additionalProperties": false
             }
         },
@@ -2811,11 +3054,14 @@ mod tests {
         let tools = tool_definitions();
         let tools = tools.as_array().expect("tool list");
         for name in [
+            "import_texture_asset",
+            "update_texture_asset",
             "create_document_asset",
             "update_particle_asset",
             "update_component",
             "remove_component",
             "set_entity_enabled",
+            "update_scene_settings",
         ] {
             let tool = tools
                 .iter()
@@ -2841,6 +3087,57 @@ mod tests {
             .expect("update_component");
         assert_eq!(
             update_component
+                .pointer("/inputSchema/properties/patch/minProperties")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+
+        let update_scene_settings = tools
+            .iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("update_scene_settings"))
+            .expect("update_scene_settings");
+        for section in ["skybox", "fog", "ambient", "camera", "editor"] {
+            assert_eq!(
+                update_scene_settings
+                    .pointer(&format!("/inputSchema/properties/{section}/minProperties"))
+                    .and_then(Value::as_u64),
+                Some(1),
+                "{section} should reject an empty patch"
+            );
+        }
+        assert_eq!(
+            update_scene_settings
+                .pointer("/inputSchema/anyOf")
+                .and_then(Value::as_array)
+                .map(Vec::len),
+            Some(5)
+        );
+        assert!(
+            update_scene_settings
+                .get("description")
+                .and_then(Value::as_str)
+                .is_some_and(|description| {
+                    description.contains("Edit") && description.contains("Play")
+                }),
+            "Scene settings should disclose Edit and Play support"
+        );
+
+        let import_texture = tools
+            .iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("import_texture_asset"))
+            .expect("import_texture_asset");
+        assert_eq!(
+            import_texture
+                .pointer("/inputSchema/properties/sourcePath/maxLength")
+                .and_then(Value::as_u64),
+            Some(4096)
+        );
+        let update_texture = tools
+            .iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("update_texture_asset"))
+            .expect("update_texture_asset");
+        assert_eq!(
+            update_texture
                 .pointer("/inputSchema/properties/patch/minProperties")
                 .and_then(Value::as_u64),
             Some(1)

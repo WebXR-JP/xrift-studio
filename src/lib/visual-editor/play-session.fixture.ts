@@ -1,16 +1,21 @@
 import {
   ASSET_MANIFEST_SCHEMA_VERSION,
+  createDefaultMaterialAsset,
+  createTextureAsset,
+  updateTextureAsset,
   type AssetManifest,
 } from "./asset-manifest";
 import {
   SCENE_DOCUMENT_SCHEMA_VERSION,
   createTransformComponent,
+  type MeshComponent,
   type ParticleEmitterComponent,
   type SceneDocument,
   type SceneEntity,
 } from "./scene-document";
 import { createDefaultParticleAsset } from "./particle-system";
 import { createPlaySession, synchronizePlaySession } from "./play-session";
+import { resolveSceneSettings } from "./scene-settings";
 
 export function runPlaySessionFixtureAssertions(): void {
   const source = fixtureScene();
@@ -44,6 +49,34 @@ export function runPlaySessionFixtureAssertions(): void {
   assert(
     synchronizePlaySession(synchronized, changed, assets) === synchronized,
     "Unchanged authoring input must not advance the Play session",
+  );
+
+  const settingsChanged = fixtureScene();
+  const settings = resolveSceneSettings(settingsChanged.settings);
+  settingsChanged.settings = {
+    ...settings,
+    ambient: { ...settings.ambient, color: "#abcdef", intensity: 0.9 },
+    editor: {
+      ...settings.editor,
+      backgroundColor: "#111827",
+    },
+  };
+  const settingsSynchronized = synchronizePlaySession(
+    started,
+    settingsChanged,
+    assets,
+  );
+  assert(
+    settingsSynchronized.runtimeScene.settings?.ambient.intensity === 0.9 &&
+      settingsSynchronized.runtimeScene.settings.editor.backgroundColor ===
+        "#111827",
+    "Scene settings edits must reach the running Scene",
+  );
+  assert(
+    settingsSynchronized.lastReloads.length === 0 &&
+      settingsSynchronized.entityRevisions["entity-a"] === 0 &&
+      settingsSynchronized.entityRevisions["entity-b"] === 0,
+    "Scene settings edits must not restart unrelated Entity instances",
   );
 
   const scriptPropertySource = fixtureScene();
@@ -193,6 +226,80 @@ export function runPlaySessionFixtureAssertions(): void {
     unreferencedSynchronized.lastReloads.length === 0,
     "Adding an unreferenced Asset must not restart every running Entity",
   );
+
+  const textureA = createTextureAsset({
+    id: "texture-a",
+    name: "Texture A",
+    source: { kind: "project", relativePath: "assets/texture-a.png" },
+    importSettings: {},
+  });
+  const textureB = createTextureAsset({
+    id: "texture-b",
+    name: "Texture B",
+    source: { kind: "project", relativePath: "assets/texture-b.png" },
+    importSettings: {},
+  });
+  const materialA = createDefaultMaterialAsset({
+    id: "material-a",
+    name: "Material A",
+    properties: { baseColorTextureId: textureA?.id },
+  });
+  const materialB = createDefaultMaterialAsset({
+    id: "material-b",
+    name: "Material B",
+    properties: { baseColorTextureId: textureB?.id },
+  });
+  if (!textureA || !textureB || !materialA || !materialB) {
+    throw new Error("Play session fixture could not create Texture Assets");
+  }
+  const textureScene = fixtureScene();
+  textureScene.entities["entity-a"]?.components.push(
+    mesh("mesh-a", materialA.id),
+  );
+  textureScene.entities["entity-b"]?.components.push(
+    mesh("mesh-b", materialB.id),
+  );
+  const textureAssets: AssetManifest = {
+    schemaVersion: ASSET_MANIFEST_SCHEMA_VERSION,
+    assets: {
+      [textureA.id]: textureA,
+      [textureB.id]: textureB,
+      [materialA.id]: materialA,
+      [materialB.id]: materialB,
+    },
+  };
+  const textureSession = createPlaySession(textureScene, textureAssets);
+  const changedTextureAssets = updateTextureAsset(
+    textureAssets,
+    textureA.id,
+    {
+      importSettings: {
+        colorSpace: "linear",
+        sampler: { wrapS: "clamp-to-edge" },
+      },
+    },
+  );
+  const textureSynchronized = synchronizePlaySession(
+    textureSession,
+    textureScene,
+    changedTextureAssets,
+  );
+  const runtimeTexture = textureSynchronized.runtimeAssets.assets[textureA.id];
+  assert(
+    runtimeTexture?.kind === "texture" &&
+      runtimeTexture.importSettings.colorSpace === "linear" &&
+      runtimeTexture.importSettings.sampler.wrapS === "clamp-to-edge",
+    "Texture settings edits must reach the isolated runtime Asset snapshot",
+  );
+  assert(
+    textureSynchronized.lastReloads.length === 1 &&
+      textureSynchronized.lastReloads[0]?.entityId === "entity-a",
+    "A Texture edit must restart only Entities consuming it through a Material",
+  );
+  assert(
+    textureSynchronized.entityRevisions["entity-b"] === 0,
+    "Entities using an unrelated Texture must preserve their runtime instance",
+  );
 }
 
 function fixtureAssets(): AssetManifest {
@@ -235,6 +342,18 @@ function particleEmitter(
     type: "particle-emitter",
     enabled: true,
     particleAssetId,
+  };
+}
+
+function mesh(id: string, materialAssetId: string): MeshComponent {
+  return {
+    id,
+    type: "mesh",
+    enabled: true,
+    geometryAssetId: "builtin.cube",
+    materialBindings: [{ slot: "default", materialAssetId }],
+    castShadow: true,
+    receiveShadow: true,
   };
 }
 

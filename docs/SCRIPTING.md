@@ -74,15 +74,23 @@ Entity の group の子として mount され、`start` と併用できる。フ
 R3F の `useFrame` callback は React の Error Boundary 外で動いて Script 単位に隔離できないため、Play と公開の両方で blocking にする。
 
 ```tsx
-export const Render = () => {
+import type { ScriptRenderProps } from "xrift:script";
+
+export const Render = ({ ctx }: ScriptRenderProps) => {
   return (
-    <mesh position={[0, 1, 0]}>
+    <mesh name={`script-${ctx.entity.id}`} position={[0, 1, 0]}>
       <sphereGeometry args={[0.15]} />
       <meshStandardMaterial color="#38bdf8" />
     </mesh>
   );
 };
 ```
+
+`Render` は `start(ctx)` の成功後に mount され、同じ live `ctx` を `{ ctx }` として受け取る。
+宣言固有の property 型が必要な場合は `ScriptRenderProps<MyPropDeclaration>` を使う。
+Inspector / MCP の property 変更時は `Render` も新しい `ctx.props` で再描画される。TSX source は
+Script Asset の `language: "tsx"` と `.tsx` path を持つ。組み込み `model-display` はこの入口から
+宣言済み Model URL を `useGLTF` / `Clone` へ渡す例であり、依存fileを内包した GLB を推奨する。
 
 ### ScriptContext
 
@@ -96,7 +104,7 @@ export const Render = () => {
 | `input` | キーボードのみ |
 | `lifecycle` | Script instance が所有する AbortSignal、timer、async task、cleanup |
 | `find(entityId)` | `entityReferences` に宣言した Entity だけを引ける |
-| `assets` | `assetReferences` に宣言した Asset の URL 解決と基本 Texture 読み込み |
+| `assets` | `assetReferences` に宣言した Asset の URL 解決、基本 Texture 読み込み、Audio再生 |
 | `materials` | この Entity が所有する Mesh の Material を Play 中だけ変更する |
 | `particles` | この Entity が所有する Particle Emitter を Play 中だけ再生・調整する |
 | `getAssetUrl(ref)` | `assets.url(ref)` の非推奨 alias |
@@ -180,6 +188,7 @@ MCP から設定する場合も `update_script_component` へ property 値と完
 | --- | --- |
 | `url(assetId)` | 明示参照した project Asset の実行時 URL。解決できない場合は `null` |
 | `loadTexture(assetId, options?)` | PNG、JPEG、WebP などブラウザが通常の画像として decode できる Texture を読み込む |
+| `loadAudio(assetId, options?)` | 明示参照した MP3 / WAV の lifecycle-owned player を返す |
 
 `loadTexture` の options は `colorSpace: "auto" | "srgb" | "linear"`、
 `wrapS` / `wrapT: "repeat" | "clamp-to-edge" | "mirrored-repeat"`、`flipY: boolean` である。
@@ -194,6 +203,17 @@ CDN を必要としない。`classic-jsx` の生成物も KTX2 を使う場合�
 
 この対応は Material / Particle の preview と生成物の描画経路に限る。Script の `ctx.assets.loadTexture` は引き続き
 Three.js の標準 `TextureLoader` を使うため、KTX2 / HDR / EXR を typed Texture として返さない。
+
+### Audio の実行時操作
+
+`loadAudio` は `prop.asset({ kind: "audio" })` と `assetReferences` に入れた Audio だけを開く。
+options は `volume`（0..1）、`loop`、正の `playbackRate`、`preload: "none" | "metadata" | "auto"` である。
+返す `ScriptAudio` は `play()`、`pause()`、`stop()`、`seek()`、`setVolume()`、`setLoop()`、
+`setPlaybackRate()` と、read-only の `playing`、`currentTime`、`duration` を持つ。
+
+ブラウザの自動再生規則により `play()` は reject しうる。ユーザー入力後に呼び、必要なら
+`ctx.lifecycle.task` 内で await して Script Console へ理由を残す。Script の再起動、失敗、Stop、
+unmount では host が全playerを停止し、sourceを解放する。Studio Playと公開生成物は同じ実装を使う。
 
 `materials` は Script Component を付けた Entity 自身が所有する Mesh だけを対象にする。子 Entity の Mesh は含めない。
 共有 Material Asset を直接変更せず runtime 用 clone へ次の override を重ねる。
@@ -259,11 +279,16 @@ Script を再起動する。
 | Script Component の宣言済み property | Scene document | 同じ Script instance の `ctx.props` へ次の frame から反映 | 保存値として残る |
 | Script source、Script / Asset / Entity 参照、Component 構成 | source / Scene document | compile 成功後、影響する Entity だけを再起動。失敗時は last-good module を継続 | 保存値として残る |
 | 既存 Material / Particle Asset の property | AssetManifest | Inspector または MCP から保存し、その Asset を参照する Entity / Emitter だけを再反映 | 保存値として残る |
+| 既存 Texture Asset の import settings | AssetManifest | MCP から保存し、直接参照または Material / Particle 経由で参照する Entity だけを再起動 | 保存値として残る |
 | Entity / Component の追加・更新・削除・有効化 | Scene document | Inspector または MCP から保存し、影響する Entity だけを再起動 | 保存値として残る |
+| Scene settings | Scene document | MCP の `update_scene_settings` から共有 Scene view へ即時反映 | 保存値として残る |
 
 Play 中の Inspector で永続編集できる Asset property は、現時点では既存の Material / Particle Asset に限る。
-Texture Asset の import settings、Scene settings、Inspector からの Material 割り当て、UI からの新規 document Asset 作成は
-Edit に戻って行う。MCP は同じ Play session 中でも `set_material` と `create_document_asset` を含む対応済み write を実行できる。
+Texture source の新規 import と Inspector からの Texture import settings 変更は Edit に戻って行う。
+MCP の `update_texture_asset` は同じ Play session 中でも永続化でき、Texture を直接参照する Entity と
+Material / Particle 経由で参照する Entity だけを再起動する。`import_texture_asset` は atomic import と
+thumbnail 生成を伴うため Edit 限定である。Scene settings の Inspector は Play 中 read-only のままだが、MCP の `update_scene_settings` は
+同じ Play session 中でも永続化と即時反映に対応する。MCP は `set_material` と `create_document_asset` を含むほかの対応済み write も実行できる。
 runtime 演出を保存したい場合は値を `ctx.*` から読み戻す仕組みはないため、Inspector または次の永続 MCP tool へ同じ値を明示する。
 
 MCP client は最初に `get_scripting_capabilities` を呼ぶと、利用可能な Script API、Texture slot、参照制限、
@@ -275,11 +300,14 @@ MCP client は最初に `get_scripting_capabilities` を呼ぶと、利用可能
 | Script API と trust / persistence capability を読む | `get_scripting_capabilities` |
 | Script を作成・適用・更新する | `list_script_templates`、`create_script_asset`、`apply_script_template`、`get_script_asset`、`update_script_asset` |
 | Script の property / 明示参照を更新する | `update_script_component` |
+| ローカル画像を Texture Asset として追加する | `import_texture_asset` |
+| Texture Asset の設定を取得・更新する | `get_texture_asset`、`update_texture_asset` |
 | Material を Mesh slot へ割り当てる | `set_material` |
 | Material Asset を作成する | `create_document_asset(kind: "material")` |
 | Material Asset を読み、PBR / Texture binding を保存する | `get_material_asset`、`update_material_asset` |
 | Material Texture の offset / scale / rotation / UV set を保存する | `set_material_texture_transform` |
 | Particle Asset を作成・取得・更新する | `create_document_asset(kind: "particle")`、`get_particle_asset`、`update_particle_asset` |
+| Scene settings を取得・部分更新する | `get_editor_context.sceneSettings`、`update_scene_settings` |
 | Component 構成を取得・変更する | `list_component_definitions`、`get_entity_components`、`add_component`、`update_component`、`remove_component`、`set_entity_enabled` |
 
 `update_material_asset.patch` は `pbrMetallicRoughness`、normal / occlusion / emissive Texture、
@@ -291,14 +319,33 @@ MCP client は最初に `get_scripting_capabilities` を呼ぶと、利用可能
 `update_particle_asset.patch` は `maxParticles`、`duration`、`looping`、`prewarm`、`simulationSpace`、
 start delay / lifetime / speed / size / rotation、gravity、emission、shape、color / size / velocity over lifetime、
 renderer を受ける。renderer の `materialAssetId` / `textureAssetId` は存在する正しい kind の Asset だけを受け付ける。
-MCP は現時点で Texture file の import や Texture Asset の import settings 更新を提供しない。既存 Texture ID を
-Material / Particle へ binding することと、Material 側の Texture transform 保存が対応範囲である。
+
+`update_scene_settings` は `skybox`、`fog`、`ambient`、`camera`、`editor` を任意に組み合わせた
+non-empty patchとして受ける。Skyboxは表示、IBL、projection、既存Texture参照、gradient、回転、反転、露出、
+有限mesh transformを、Editor sectionは背景、grid、gizmo size、snapを更新できる。
+`skybox.imageAssetId` はAssetManifestに存在し、project sourceを持つTexture（または移行前のSkybox）だけを受け付け、
+`null`で参照とIBLを解除する。色、有限値、範囲、Fog / Cameraのnear-far関係は確定前に検証する。
+
+同じScene settings Inspectorに表示される公開title / descriptionはProject metadata、thumbnailはnative binary fileであり、
+SceneDocument.settingsではないためこのtoolへ混在させない。Directional / Point / Spot LightもEntity Componentであり、
+`get_entity_components` / `update_component`の対象である。これらをScene settingsとして暗黙に変更しない。
+`import_texture_asset` は信頼できる絶対 `sourcePath` と現在の revision を受け、PNG、JPEG、WebP、AVIF、GIF、
+BMP、SVG、KTX2 の通常 file だけを 128 MB 上限で読み込む。最終 entry の symlink、相対 path、未対応拡張子を拒否し、
+既存 import と同じ signature / SVG external-reference 検査、content-addressed destination、atomic commit、
+thumbnail 生成を通す。MCP 応答には外部 path と file bytes を返さず、管理下の project-relative path と Asset ID だけを返す。
+同一 source hash が存在する場合は複製せず既存 Texture を返す。
+
+`update_texture_asset.patch` は `colorSpace`、`generateMipmaps`、`flipY`、`resize`、
+`sampler.wrapS / wrapT / magFilter / minFilter`、`compression.format / quality` を受ける。
+未知 field、enum 外の値、非有限値、範囲外の max size / quality は document を変えず拒否する。
+Mipmaps を無効にした時の mipmap filter は既存モデルと同じく `linear` へ正規化する。
 
 基本手順は `get_editor_context`、`list_script_templates`、`create_script_asset` または `apply_script_template`、
 `add_component`、`update_script_component`、`set_play_mode` の順である。すべての write へ
 `projectId`、`sceneId`、`expectedRevision` を渡し、write 後は `get_editor_context` で最新 revision と
 `scriptRuntime` を取り直す。Play 中の対応済み write は直ちに authoring data へ保存され、
-Component / Entity 変更はその Entity、Material / Particle Asset 変更は参照 Entity だけを再起動する。
+Scene settingsは共有Scene viewへ即時反映し、Component / Entity 変更はその Entity、
+Material / Texture / Particle Asset 変更は参照 Entity だけを再起動する。
 
 MCP から生成・更新した Script も別の安全領域では動かない。`get_scripting_capabilities` の
 `sandboxed: false`、`trustGate: false` を前提に、信頼していない source はユーザーへ file 内容を示して明示許可を得るまで
@@ -319,9 +366,12 @@ Entity を選択している場合は Script Asset と Script Component を 1 �
 | `material-pulse` | 色、発光、粗さの animation | Mesh Renderer |
 | `texture-scroll` | Texture 読み込みと UV scroll | Texture Asset と Mesh Renderer |
 | `particle-control` | 再生、Emission、速度、サイズ、色 | Particle Emitter |
+| `model-display` | 宣言済みGLBをTSX `Render`へ読み込み、速度をリアルタイム変更 | Model Asset |
+| `audio-hotkey` | 宣言済みAudioを指定キーで再生／停止し、音量・速度・loopを変更 | Audio Asset |
 | `event-visibility` | Script event で表示切替 | なし |
 
-`create_script_asset` は `templateId` または任意 `source` のどちらかを受け取る。
+`create_script_asset` は `templateId` または任意 `source` のどちらかを受け取る。Templateはcatalogの
+`language`に従って`.ts` / `.tsx`を選び、任意のJSX sourceでは`language: "tsx"`を明示する。
 `apply_script_template` は Script Asset の作成と指定 Entity への Component 追加を 1 revision で行う。
 未知の template ID、存在しない Entity / Folder、古い revision では document を変更しない。
 
@@ -356,6 +406,8 @@ Inspector のフィールドは宣言から自動生成する。種別は既存�
 | number / color / vector などの property 変更 | 対応。次の frame から同じ instance へ反映 | 対応。compile 時の値を初期値として使用 | Scene document | Inspector / MCP |
 | 明示参照した Asset の URL 解決 | 対応 | 対応 | なし | `ctx.assets.url` |
 | PNG / JPEG / WebP など基本 Texture の読み込み | 対応 | 対応 | なし | `ctx.assets.loadTexture` |
+| MP3 / WAV Audio の再生・停止・seek・音量・loop・再生速度 | 対応 | 対応 | runtime-only | `ctx.assets.loadAudio` |
+| 宣言済みGLBをTSX `Render`で表示 | 対応 | 対応 | source | `ctx.assets.url` + `useGLTF` / `Clone` |
 | Texture の repeat / offset / rotation | 対応 | 対応 | runtime-only | 読み込んだ Texture |
 | Entity 自身の Material の color / opacity / emissive / metalness / roughness | 対応 | 対応 | runtime-only | `ctx.materials` |
 | Entity 自身の Material への Texture 設定 | 対応 | 対応 | runtime-only | `ctx.materials.setTexture` |
@@ -363,23 +415,26 @@ Inspector のフィールドは宣言から自動生成する。種別は既存�
 | Particle Asset の burst-only / loop / non-loop duration | 対応。上限 10,000 particles | 対応。同じ runtime 実装 | AssetManifest | Inspector / `update_particle_asset` |
 | project KTX2 を使う Material / Particle の描画 | 対応。local Basis transcoder | 対応。Basis file を生成物へ同梱 | AssetManifest | Asset / Material / Particle Inspector |
 | Material / Particle Asset property の Play 中の永続編集 | 対応。参照 Entity だけ再反映 | 次回の生成へ反映 | AssetManifest | Inspector / MCP |
+| Texture Asset import settings の Play 中の永続編集 | 対応。依存する Entity だけ再起動 | 次回の生成へ反映 | AssetManifest | `update_texture_asset` |
 | Entity / Component 構成の Play 中の永続編集 | 対応。影響 Entity だけ再起動 | 次回の生成へ反映 | Scene document | Inspector / MCP |
 | 明示参照した別 Entity の取得 | 対応 | 対応 | なし | `ctx.find` |
 | React Three Fiber の宣言的な描画追加 | 対応 | 対応 | source | named export `Render`。`useFrame` は不可 |
 | Material Asset 自体の編集 | Script API では未対応 | Script API では未対応 | 対応 | Inspector / Material MCP tools |
 | Material Asset ID をそのまま runtime Material として適用 | 未対応 | 未対応 | なし | 今後の typed loader / recipe |
 | KTX2、HDR、EXR の Script 専用読み込み | 未対応 | 未対応 | なし | 現在は Asset / Scene Inspector。専用 loader は今後 |
-| Model / Audio の typed load と再生 | URL 解決のみ | URL 解決のみ | なし | 今後の Asset 種別別 facade |
+| Model のimperative typed loader | 未対応。TSX `Render`は対応 | 未対応。TSX `Render`は対応 | なし | 今後のAsset種別別facade |
 
 対応する。
 
 - Play での実行と、Play 中の source 編集による該当 Entity だけのホットリロード
-- Play 中の Entity / Component 構成と Material / Particle Asset property の永続変更、および参照 Entity だけへの差分反映
+- Stop では実行中の blob module とresourceを破棄し、同一sourceのTypeScript変換結果だけを
+  128件のbounded cacheへ残す。次のPlayはtop-level codeと`start`を必ず新しいmoduleとして実行し直す
+- Play 中の Entity / Component 構成と Material / Texture / Particle Asset property の永続変更、および参照 Entity だけへの差分反映
 - 1 Entity へ複数 Script
 - 公開ワールドへの静的 import としての出力
 - host が管理する `start` / `update` / `ctx.on` と React の `Render` render error を Script 単位で隔離
 - Inspector / MCP で変更した宣言済み property の frame 単位の反映
-- 明示参照した基本 Texture、Entity 単位の runtime Material / Particle override
+- 明示参照した基本 Texture / Audio、TSX RenderのModel表示、Entity 単位のruntime Material / Particle override
 - local / builtin Texture の Material / Particle preview と、local Basis transcoder を使う KTX2 preview / 公開描画
 
 対応しない。
@@ -420,7 +475,8 @@ Play は iframe や Worker を挟まないアプリと同一 realm で動き、`
 ## 既知の課題
 
 - 完全な隔離は未対応。実現するには realm を分ける必要があり、Three.js インスタンス共有と両立しない
-- Monaco と TypeScript worker は local 同梱済みで offline でも動く。Architecture 10 章が求める CSP は未適用で、
+- Monaco と TypeScript service は local 同梱済みで offline でも動く。Play変換は軽量な`transpileModule`、
+  Editor補完と診断はlanguage-service workerへ分離している。Architecture 10 章が求める CSP は未適用で、
   Play の blob module と共有 module bridge を許可しながら権限を狭める方針が残っている
 - Script の `ctx.assets.loadTexture` は Three.js の標準 `TextureLoader` を使う。Material / Particle preview と
   `classic-jsx` の KTX2 描画は local Basis transcoder に対応済みだが、KTX2、HDR、EXR、動画 Texture、cube Texture、
@@ -458,7 +514,7 @@ Script source と host adapter を staging の overlay file として出力し�
   `public/xrift-studio/vendor/three-basis/` へ copy し、`useKTX2` の transcoder path を XRift の `baseUrl` で解決する
 - Entity group へ安定 ID を付け、`entityReferences` に宣言した ID だけを `ctx.find` で解決する
 - World / Item instance ごとの scope marker 内だけを探索し、同じ Item を複数配置しても別 instance の Entity を返さない
-- Texture cache / dispose、Material clone / restore、frame 更新と event bus は host の lifecycle に属し、
+- Texture cache / dispose、Audio停止・解放、Material clone / restore、frame 更新と event bus は host の lifecycle に属し、
   Play の Stop と公開 world の unmount で同じ cleanup を行う
 - 出力は staging の build で型検査される。Script の型エラーは公開を止めるため、upload 前に Studio 側で提示する
 - 同じ入力から同じ出力を得る決定性を維持する。識別子は hash 由来とし、挿入順や時刻に依存させない

@@ -13,6 +13,11 @@ import {
   SCRIPT_TEMPLATE_CATALOG_VERSION,
 } from "./script-templates";
 import {
+  createScriptAsset,
+  createScriptRelativePath,
+} from "./script-files";
+import { ASSET_MANIFEST_SCHEMA_VERSION } from "../asset-manifest";
+import {
   collectDynamicScriptImports,
   collectScriptSpecifiers,
   collectUnsupportedUseFrameImports,
@@ -25,13 +30,43 @@ export function runScriptTemplateFixtureAssertions(): void {
   assertCatalogEntries();
   assertSourceGeneration();
   assertParticleTemplate();
+  assertExternalAssetTemplates();
+  assertTemplateLanguagePersistence();
   assertSummaries();
   assertEnumDefaults();
 }
 
+function assertTemplateLanguagePersistence(): void {
+  const manifest = {
+    schemaVersion: ASSET_MANIFEST_SCHEMA_VERSION,
+    assets: {},
+  };
+  const relativePath = createScriptRelativePath(
+    "Model Display",
+    manifest,
+    [],
+    "tsx",
+  );
+  const asset = createScriptAsset(
+    "fixture-script",
+    "Model Display",
+    relativePath,
+    null,
+    "tsx",
+  );
+  assert(
+    relativePath === "scripts/model-display.tsx",
+    "TSX template source did not receive a .tsx path",
+  );
+  assert(
+    asset.language === "tsx",
+    "TSX template language was not persisted on the Script Asset",
+  );
+}
+
 function assertCatalogEntries(): void {
   assert(
-    SCRIPT_TEMPLATE_CATALOG_VERSION === 1,
+    SCRIPT_TEMPLATE_CATALOG_VERSION === 2,
     "template catalog version changed without a fixture update",
   );
   assert(SCRIPT_TEMPLATE_CATALOG.length > 0, "template catalog is empty");
@@ -45,6 +80,10 @@ function assertCatalogEntries(): void {
     assert(
       Boolean(template.suggestedName.trim()),
       `${template.id}: suggested name is empty`,
+    );
+    assert(
+      template.language === "ts" || template.language === "tsx",
+      `${template.id}: language is invalid`,
     );
 
     assertContract(template.id, template.source);
@@ -65,6 +104,39 @@ function assertCatalogEntries(): void {
       `${template.id}: generated source has an invalid contract`,
     );
     assertPortableSource(template.id, generated);
+  }
+}
+
+function assertExternalAssetTemplates(): void {
+  const model = getScriptTemplate("model-display");
+  assert(Boolean(model), "model-display template is missing");
+  if (model) {
+    assert(model.language === "tsx", "model-display must create a TSX source");
+    assert(
+      model.requiredAssetKinds.includes("model"),
+      "model-display does not declare its Model Asset requirement",
+    );
+    assert(
+      model.source.includes("ScriptRenderProps") &&
+        model.source.includes("ctx.assets.url(") &&
+        model.source.includes("useGLTF("),
+      "model-display does not exercise the declared-Asset Render context",
+    );
+  }
+
+  const audio = getScriptTemplate("audio-hotkey");
+  assert(Boolean(audio), "audio-hotkey template is missing");
+  if (audio) {
+    assert(
+      audio.requiredAssetKinds.includes("audio"),
+      "audio-hotkey does not declare its Audio Asset requirement",
+    );
+    assert(
+      audio.source.includes("ctx.assets.loadAudio(") &&
+        audio.source.includes("ctx.lifecycle.task(") &&
+        audio.source.includes("audio?.setVolume("),
+      "audio-hotkey does not exercise the lifecycle-owned Audio API",
+    );
   }
 }
 

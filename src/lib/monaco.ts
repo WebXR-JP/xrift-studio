@@ -9,11 +9,11 @@ import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker"
 /**
  * Monaco is bundled with the app instead of loaded from jsdelivr.
  *
- * Two reasons: the editor has to work offline, and the TypeScript worker is
- * what transpiles Script Assets for Play. A cross-origin worker cannot be
- * constructed, so a CDN-loaded Monaco has no reachable `getEmitOutput`.
- * Self-hosting is also a prerequisite for ever setting a CSP, because a
- * `script-src` without jsdelivr would otherwise break the editor.
+ * Two reasons: the editor has to work offline, and both the editing worker and
+ * the Play-time `transpileModule` compiler must use one bundled TypeScript
+ * version. A cross-origin worker cannot be constructed reliably. Self-hosting
+ * is also a prerequisite for ever setting a CSP, because a `script-src`
+ * without jsdelivr would otherwise break the editor.
  */
 
 declare global {
@@ -46,10 +46,9 @@ function configureMonacoEnvironment(): void {
  * Compiler options shared by every Monaco surface.
  *
  * `noEmit` stays false and `jsx` produces a real transform because the same
- * TypeScript worker both powers the Classic editor's language features and
- * emits JavaScript for Script Assets. Neither setting changes what the Classic
- * editor displays: it only reads and writes text, and its semantic diagnostics
- * are disabled separately.
+ * options feed Monaco language features and the direct Play-time compiler.
+ * Neither setting changes what the Classic editor displays: it only reads and
+ * writes text, and its semantic diagnostics are disabled separately.
  */
 export const MONACO_TYPESCRIPT_COMPILER_OPTIONS: monaco.typescript.CompilerOptions =
   {
@@ -108,85 +107,84 @@ export type MonacoTranspileResult =
   | { ok: true; javaScript: string }
   | { ok: false; message: string };
 
+type TypeScriptServicesModule = typeof import(
+  "monaco-editor/esm/vs/language/typescript/lib/typescriptServices.js"
+);
+
+let typeScriptServicesPromise: Promise<TypeScriptServicesModule> | undefined;
+
+function loadTypeScriptServices(): Promise<TypeScriptServicesModule> {
+  typeScriptServicesPromise ??= import(
+    "monaco-editor/esm/vs/language/typescript/lib/typescriptServices.js"
+  );
+  return typeScriptServicesPromise;
+}
+
 /**
- * Emits JavaScript for one in-memory module using Monaco's TypeScript worker.
+ * Emits JavaScript for one in-memory module using Monaco's bundled TypeScript.
  *
- * Syntactic diagnostics are reported instead of returning broken output, so a
- * malformed Script never reaches the module loader. Semantic diagnostics are
- * deliberately ignored here: a Script that references editor-provided globals
- * would otherwise fail to run before its type declarations are registered.
+ * The language-service worker remains dedicated to Monaco editing. Starting
+ * that worker and synchronizing a disposable model for every Script made cold
+ * Play take tens of seconds in the desktop app. `transpileModule` uses the same
+ * bundled compiler and syntactic diagnostics without a worker round trip.
+ * Semantic diagnostics stay in the Script editor, where host declarations are
+ * registered.
  */
 export async function transpileTypeScriptModule(
   source: string,
   fileName: string,
 ): Promise<MonacoTranspileResult> {
-  setupMonaco();
-  const uri = monaco.Uri.parse(`inmemory://scripts/${fileName}`);
-  const existing = monaco.editor.getModel(uri);
-  const model =
-    existing ?? monaco.editor.createModel(source, "typescript", uri);
-  if (existing && existing.getValue() !== source) existing.setValue(source);
   try {
-    const worker = await getTypeScriptWorkerForModel(uri);
-    const syntactic = await worker.getSyntacticDiagnostics(uri.toString());
-    const blocking = syntactic.find((diagnostic) => diagnostic.category === 1);
+    const { typescript } = await loadTypeScriptServices();
+    const output = typescript.transpileModule(source, {
+      compilerOptions: MONACO_TYPESCRIPT_COMPILER_OPTIONS,
+      fileName,
+      reportDiagnostics: true,
+    });
+    const blocking = output.diagnostics?.find(
+      (diagnostic) => diagnostic.category === 1,
+    );
     if (blocking) {
       return {
         ok: false,
-        message: formatDiagnostic(blocking, model),
+        message: formatTranspileDiagnostic(typescript, blocking),
       };
     }
-    const output = await worker.getEmitOutput(uri.toString());
-    const emitted = output.outputFiles.find((file) =>
-      file.name.endsWith(".js"),
-    );
-    if (!emitted) {
+    if (!output.outputText) {
       return { ok: false, message: "TypeScriptがJavaScriptを出力しませんでした" };
     }
-    return { ok: true, javaScript: emitted.text };
-  } finally {
-    if (!existing) model.dispose();
+    return { ok: true, javaScript: output.outputText };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "TypeScript compilerを読み込めませんでした",
+    };
   }
 }
 
-/**
- * Creating the first TypeScript model activates Monaco's language contribution
- * asynchronously. The public worker accessor can briefly reject before that
- * contribution has registered, especially when Play is started without ever
- * opening Monaco. Wait for that one known bootstrap race; surface every other
- * worker failure immediately.
- */
-async function getTypeScriptWorkerForModel(uri: monaco.Uri) {
-  const attempts = 100;
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try {
-      const getWorker = await monaco.typescript.getTypeScriptWorker();
-      return await getWorker(uri);
-    } catch (error) {
-      const registrationPending = String(error).includes(
-        "TypeScript not registered",
-      );
-      if (!registrationPending || attempt === attempts - 1) throw error;
-      await new Promise<void>((resolve) => {
-        window.setTimeout(resolve, 10);
-      });
-    }
-  }
-  throw new Error("TypeScript workerを初期化できませんでした");
-}
-
-function formatDiagnostic(
-  diagnostic: { start?: number; messageText: unknown },
-  model: monaco.editor.ITextModel,
+function formatTranspileDiagnostic(
+  typescript: TypeScriptServicesModule["typescript"],
+  diagnostic: {
+    start?: number;
+    messageText: unknown;
+    file?: {
+      getLineAndCharacterOfPosition(position: number): {
+        line: number;
+        character: number;
+      };
+    };
+  },
 ): string {
-  const message =
-    typeof diagnostic.messageText === "string"
-      ? diagnostic.messageText
-      : String(
-          (diagnostic.messageText as { messageText?: unknown })?.messageText ??
-            diagnostic.messageText,
-        );
-  if (diagnostic.start === undefined) return message;
-  const position = model.getPositionAt(diagnostic.start);
-  return `${position.lineNumber}:${position.column} ${message}`;
+  const message = typescript.flattenDiagnosticMessageText(
+    diagnostic.messageText,
+    "\n",
+  );
+  if (diagnostic.start === undefined || !diagnostic.file) return message;
+  const position = diagnostic.file.getLineAndCharacterOfPosition(
+    diagnostic.start,
+  );
+  return `${position.line + 1}:${position.character + 1} ${message}`;
 }

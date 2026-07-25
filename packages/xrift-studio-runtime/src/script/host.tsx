@@ -27,6 +27,8 @@ import {
 
 import {
   type CompiledScript,
+  type ScriptAudio,
+  type ScriptAudioLoadOptions,
   type ScriptAssets,
   type ScriptContext,
   type ScriptInput,
@@ -39,6 +41,7 @@ import {
   type ScriptParticles,
   type ScriptPropDefinition,
   type ScriptPropsDeclaration,
+  type ScriptRenderProps,
   type ScriptTexture,
   type ScriptTextureLoadOptions,
 } from "./api.js";
@@ -244,8 +247,10 @@ class ScriptRenderBoundary extends Component<
   }
 }
 
-export type XriftScriptHostProps = {
-  script: CompiledScript;
+export type XriftScriptHostProps<
+  Declaration extends ScriptPropsDeclaration = ScriptPropsDeclaration,
+> = {
+  script: CompiledScript<Declaration>;
   /** Authored values, already validated against the declaration. */
   properties: Record<string, unknown>;
   entityId: string;
@@ -261,13 +266,18 @@ export type XriftScriptHostProps = {
   /** Restarts only hosts whose declared Asset URL set changed asynchronously. */
   assetResolutionKey?: string;
   resolveEntity?: (entityId: string) => Object3D | null;
-  /** Optional `Render` export, mounted as a child of the Entity group. */
-  render?: ComponentType;
+  /**
+   * Optional `Render` export, mounted as a child of the Entity group after
+   * `start(ctx)` succeeds and supplied with that same live context.
+   */
+  render?: ComponentType<ScriptRenderProps<Declaration>>;
   onLog?: (entry: ScriptLogEntry) => void;
   onFailure?: (failure: ScriptFailure) => void;
 };
 
-export function XriftScriptHost({
+export function XriftScriptHost<
+  Declaration extends ScriptPropsDeclaration = ScriptPropsDeclaration,
+>({
   script,
   properties,
   entityId,
@@ -282,13 +292,18 @@ export function XriftScriptHost({
   render: Render,
   onLog,
   onFailure,
-}: XriftScriptHostProps) {
+}: XriftScriptHostProps<Declaration>) {
   const root = useContext(ScriptRootContext);
   const anchorRef = useRef<Object3D>(null);
   const [ready, setReady] = useState(false);
   const [renderStopped, setRenderStopped] = useState(false);
+  const [renderContext, setRenderContext] =
+    useState<ScriptContext<Declaration> | null>(null);
   const lifecycleShutdownRef = useRef<(() => void) | undefined>(undefined);
-  const failedRenderRef = useRef<ComponentType | undefined>(undefined);
+  const failedRenderRef =
+    useRef<ComponentType<ScriptRenderProps<Declaration>> | undefined>(
+      undefined,
+    );
   const propertiesRef = useRef(properties);
   propertiesRef.current = properties;
   const resolveAssetUrlRef = useRef(resolveAssetUrl);
@@ -335,6 +350,7 @@ export function XriftScriptHost({
     if (Render && failedRenderRef.current === Render) return;
     lifecycleShutdownRef.current = undefined;
     setRenderStopped(false);
+    setRenderContext(null);
     const anchor = anchorRef.current;
     const object3d = anchor?.parent;
     if (!object3d) return;
@@ -390,7 +406,7 @@ export function XriftScriptHost({
       (error) => fail("async", error),
     );
 
-    const context: ScriptContext<ScriptPropsDeclaration> = {
+    const context: ScriptContext<Declaration> = {
       entity: { id: entityId, name: entityName, enabled: true },
       object3d: object3d as unknown as ScriptContext["object3d"],
       scene,
@@ -401,7 +417,7 @@ export function XriftScriptHost({
       props: resolveProps(
         script.props,
         propertiesRef.current,
-      ) as ScriptContext<ScriptPropsDeclaration>["props"],
+      ) as ScriptContext<Declaration>["props"],
       time,
       input: root.input,
       lifecycle,
@@ -472,6 +488,7 @@ export function XriftScriptHost({
       return;
     }
 
+    setRenderContext(context);
     let lifecycleDisposed = false;
     let unregister: (() => void) | undefined;
     shutdown = () => {
@@ -492,6 +509,7 @@ export function XriftScriptHost({
         // Disposal failures must not block teardown of the Play session.
       }
       resources.dispose();
+      setRenderContext(null);
     };
     lifecycleShutdownRef.current = shutdown;
 
@@ -541,15 +559,25 @@ export function XriftScriptHost({
     renderer,
   ]);
 
+  if (renderContext) {
+    // EntityScriptVisual re-renders when Inspector/MCP properties change.
+    // Refresh synchronously as well as in the frame callback so declarative
+    // Render output observes that edit in the same React commit.
+    (renderContext as { props: unknown }).props = resolveProps(
+      script.props,
+      properties,
+    );
+  }
+
   return (
     <>
       <object3D ref={anchorRef} visible={false} />
-      {Render && !renderStopped ? (
+      {Render && renderContext && !renderStopped ? (
         <ScriptRenderBoundary
           resetKey={Render}
           onError={handleRenderError}
         >
-          <Render />
+          <Render ctx={renderContext} />
         </ScriptRenderBoundary>
       ) : null}
     </>
@@ -673,6 +701,8 @@ function createScriptResources({
   const textureLoader = new TextureLoader();
   const texturePromises = new Map<string, Promise<Texture | null>>();
   const textures = new Set<Texture>();
+  const audioPromises = new Map<string, Promise<ScriptAudio | null>>();
+  const audioElements = new Set<HTMLAudioElement>();
   const materialOwnerToken = {};
   const particleOwnerToken = {};
   const ownedMeshes = new Set<Mesh>();
@@ -717,6 +747,36 @@ function createScriptResources({
         .catch(() => null);
       texturePromises.set(key, loading);
       return loading as Promise<ScriptTexture | null>;
+    },
+    loadAudio(assetId, options = {}) {
+      if (disposed) return Promise.resolve(null);
+      const url = resolveAssetUrl(assetId);
+      if (!url || typeof globalThis.Audio !== "function") {
+        return Promise.resolve(null);
+      }
+      const normalized = normalizeScriptAudioOptions(options);
+      const key = [
+        assetId,
+        normalized.volume,
+        normalized.loop,
+        normalized.playbackRate,
+        normalized.preload,
+      ].join(":");
+      const cached = audioPromises.get(key);
+      if (cached) return cached;
+      const element = new globalThis.Audio(url);
+      element.volume = normalized.volume;
+      element.loop = normalized.loop;
+      element.playbackRate = normalized.playbackRate;
+      element.preload = normalized.preload;
+      audioElements.add(element);
+      const player = createScriptAudioPlayer(
+        element,
+        () => disposed || !audioElements.has(element),
+      );
+      const loaded = Promise.resolve(player);
+      audioPromises.set(key, loaded);
+      return loaded;
     },
   };
 
@@ -1027,8 +1087,120 @@ function createScriptResources({
       for (const texture of textures) texture.dispose();
       textures.clear();
       texturePromises.clear();
+      for (const element of audioElements) {
+        releaseScriptAudioElement(element);
+      }
+      audioElements.clear();
+      audioPromises.clear();
     },
   };
+}
+
+/** @internal Exported for the shared runtime contract fixture. */
+export function normalizeScriptAudioOptions(
+  options: ScriptAudioLoadOptions,
+): Required<ScriptAudioLoadOptions> {
+  return {
+    volume:
+      typeof options.volume === "number" && Number.isFinite(options.volume)
+        ? clampUnit(options.volume)
+        : 1,
+    loop: options.loop === true,
+    playbackRate:
+      typeof options.playbackRate === "number" &&
+      Number.isFinite(options.playbackRate) &&
+      options.playbackRate > 0
+        ? options.playbackRate
+        : 1,
+    preload:
+      options.preload === "none" ||
+      options.preload === "metadata" ||
+      options.preload === "auto"
+        ? options.preload
+        : "auto",
+  };
+}
+
+/** @internal Exported for the shared runtime contract fixture. */
+export function createScriptAudioPlayer(
+  element: HTMLAudioElement,
+  unavailable: () => boolean,
+): ScriptAudio {
+  return {
+    async play() {
+      if (unavailable()) return;
+      await element.play();
+    },
+    pause() {
+      if (!unavailable()) element.pause();
+    },
+    stop() {
+      if (unavailable()) return;
+      element.pause();
+      setScriptAudioCurrentTime(element, 0);
+    },
+    seek(seconds) {
+      if (unavailable() || !Number.isFinite(seconds)) return;
+      const maximum =
+        Number.isFinite(element.duration) && element.duration > 0
+          ? element.duration
+          : Number.POSITIVE_INFINITY;
+      setScriptAudioCurrentTime(
+        element,
+        Math.min(maximum, Math.max(0, seconds)),
+      );
+    },
+    setVolume(volume) {
+      if (!unavailable() && Number.isFinite(volume)) {
+        element.volume = clampUnit(volume);
+      }
+    },
+    setLoop(loop) {
+      if (!unavailable()) element.loop = Boolean(loop);
+    },
+    setPlaybackRate(playbackRate) {
+      if (
+        !unavailable() &&
+        Number.isFinite(playbackRate) &&
+        playbackRate > 0
+      ) {
+        element.playbackRate = playbackRate;
+      }
+    },
+    get playing() {
+      return !unavailable() && !element.paused && !element.ended;
+    },
+    get currentTime() {
+      return unavailable() || !Number.isFinite(element.currentTime)
+        ? 0
+        : element.currentTime;
+    },
+    get duration() {
+      return unavailable() || !Number.isFinite(element.duration)
+        ? 0
+        : element.duration;
+    },
+  };
+}
+
+function setScriptAudioCurrentTime(
+  element: HTMLAudioElement,
+  seconds: number,
+): void {
+  try {
+    element.currentTime = seconds;
+  } catch {
+    // Some browsers reject seeks before metadata is available. The player
+    // remains usable and a later explicit seek can succeed.
+  }
+}
+
+/** @internal Exported for the shared runtime contract fixture. */
+export function releaseScriptAudioElement(element: HTMLAudioElement): void {
+  element.pause();
+  setScriptAudioCurrentTime(element, 0);
+  element.removeAttribute("src");
+  element.load();
 }
 
 function createMaterialOverrideLayer(

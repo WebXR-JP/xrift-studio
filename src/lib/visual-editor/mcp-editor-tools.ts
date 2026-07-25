@@ -43,7 +43,15 @@ import {
   type TextPatch,
   type Vec3,
 } from "./scene-document";
-import { resolveSceneSettings, type SceneFogSettings } from "./scene-settings";
+import {
+  resolveSceneSettings,
+  type SceneAmbientSettings,
+  type SceneCameraSettings,
+  type SceneFogSettings,
+  type SceneGizmoSettings,
+  type SceneSettings,
+  type SceneSkyboxSettings,
+} from "./scene-settings";
 import {
   getScriptPropValueValidationError,
   type ScriptContract,
@@ -63,12 +71,20 @@ import {
 } from "./interactivity-graph";
 import {
   getMaterialAsset,
+  getTextureAsset,
   updateMaterialAsset,
+  updateTextureAsset,
+  TEXTURE_COLOR_SPACES,
+  TEXTURE_COMPRESSION_FORMATS,
+  TEXTURE_MAG_FILTERS,
+  TEXTURE_MIN_FILTERS,
+  TEXTURE_WRAP_MODES,
   type InteractivityAsset,
   type MaterialAssetPatch,
   type MaterialProperties,
   type MaterialTextureInfo,
   type MaterialTextureInfoPatch,
+  type TextureImportSettingsPatch,
 } from "./asset-manifest";
 import {
   removeXriftComponent,
@@ -85,6 +101,8 @@ export const XRIFT_MCP_EDITOR_TOOLS = [
   "get_editor_context",
   "get_scripting_capabilities",
   "list_assets",
+  "get_texture_asset",
+  "update_texture_asset",
   "create_document_asset",
   "get_particle_asset",
   "update_particle_asset",
@@ -124,6 +142,12 @@ export const XRIFT_MCP_EDITOR_TOOLS = [
 ] as const;
 
 export type XriftMcpEditorToolName = (typeof XRIFT_MCP_EDITOR_TOOLS)[number];
+
+/** Local Asset tools perform native file I/O in the React host. */
+export const XRIFT_MCP_LOCAL_ASSET_TOOLS = ["import_texture_asset"] as const;
+
+export type XriftMcpLocalAssetToolName =
+  (typeof XRIFT_MCP_LOCAL_ASSET_TOOLS)[number];
 
 /** Script tools perform project file I/O or change Play mode in the React host. */
 export const XRIFT_MCP_SCRIPT_TOOLS = [
@@ -199,6 +223,10 @@ export function executeXriftMcpEditorTool(
       return readScriptingCapabilities(context);
     case "list_assets":
       return listAssets(context, request.arguments);
+    case "get_texture_asset":
+      return getTexture(context, request.arguments);
+    case "update_texture_asset":
+      return updateTexture(context, request.arguments);
     case "create_document_asset":
       return createDocumentAsset(context, request.arguments);
     case "get_particle_asset":
@@ -330,6 +358,9 @@ function readScriptingCapabilities(
             "update_component",
             "remove_component",
             "set_entity_enabled",
+            "import_texture_asset",
+            "get_texture_asset",
+            "update_texture_asset",
             "create_document_asset",
             "get_particle_asset",
             "update_particle_asset",
@@ -345,6 +376,15 @@ function readScriptingCapabilities(
           "Return update(delta) from start(ctx). R3F useFrame is rejected in Play and publish because its callback cannot be isolated per Script.",
         diagnostics:
           "Call get_editor_context and inspect scriptRuntime for compile errors, lifecycle/event/Render failures, and bounded JSON-safe ctx.log output.",
+        render: {
+          export: "Named export Render",
+          props:
+            "Render receives { ctx } as ScriptRenderProps after start(ctx) succeeds. It shares the same live context, declared Asset allowlist, and Inspector/MCP property values.",
+          portableModelPattern:
+            "Use a TSX Script, ctx.assets.url(declaredModelId), and @react-three/drei useGLTF/Clone. Self-contained GLB is recommended.",
+          restriction:
+            "R3F useFrame remains unsupported; return update(delta) from start(ctx) for isolated frame work.",
+        },
         lifecycle: {
           methods: [
             "ctx.lifecycle.signal: AbortSignal",
@@ -365,14 +405,21 @@ function readScriptingCapabilities(
           methods: [
             "ctx.assets.url(assetId): string | null",
             "ctx.assets.loadTexture(assetId, { colorSpace?, wrapS?, wrapT?, flipY? }): Promise<ScriptTexture | null>",
+            "ctx.assets.loadAudio(assetId, { volume?, loop?, playbackRate?, preload? }): Promise<ScriptAudio | null>",
           ],
           textureOptions: {
             colorSpace: ["auto", "srgb", "linear"],
             wrapS: ["repeat", "clamp-to-edge", "mirrored-repeat"],
             wrapT: ["repeat", "clamp-to-edge", "mirrored-repeat"],
           },
+          audioOptions: {
+            volume: "0..1",
+            loop: "boolean",
+            playbackRate: "positive finite number",
+            preload: ["none", "metadata", "auto"],
+          },
           lifetime:
-            "Loaded textures are cached per Script instance and disposed automatically on restart or Stop.",
+            "Loaded textures are disposed and Audio players are stopped/released automatically on restart or Stop.",
         },
         materials: {
           scope:
@@ -444,12 +491,14 @@ function readScriptingCapabilities(
       persistentAuthoring: {
         modes: ["edit", "play"],
         playSemantics:
-          "Supported writes persist immediately. Component and Entity changes restart only the affected Entity; Material and Particle Asset edits restart only consuming Entities.",
+          "Supported writes persist immediately. Scene settings update the shared Scene view; Component and Entity changes restart only the affected Entity; Material, Texture, and Particle Asset edits restart only consuming Entities.",
         tools: [
           "set_material",
           "get_material_asset",
           "update_material_asset",
           "set_material_texture_transform",
+          "get_texture_asset",
+          "update_texture_asset",
           "list_component_definitions",
           "get_entity_components",
           "add_component",
@@ -459,6 +508,7 @@ function readScriptingCapabilities(
           "create_document_asset",
           "get_particle_asset",
           "update_particle_asset",
+          "update_scene_settings",
         ],
         groups: {
           materials: [
@@ -480,18 +530,26 @@ function readScriptingCapabilities(
             "get_particle_asset",
             "update_particle_asset",
           ],
+          textures: ["get_texture_asset", "update_texture_asset"],
+          sceneSettings: ["update_scene_settings"],
         },
         semantics:
-          "These editor tools persist Asset and Entity document changes. Use them instead of ctx.materials or ctx.particles when the edit must remain after Stop or be saved.",
+          "These editor tools persist Asset, Entity, and Scene settings document changes. Use them instead of ctx.materials or ctx.particles when the edit must remain after Stop or be saved.",
+      },
+      editOnlyAuthoring: {
+        modes: ["edit"],
+        tools: ["import_texture_asset"],
+        semantics:
+          "Local Texture source import persists through the Editor history and autosave pipeline, but cannot run while Play is active.",
       },
       example: [
         'import { defineScript, prop } from "xrift:script";',
         "",
-        "const props = { texture: prop.asset({ kind: \"texture\" }) };",
-        "",
         "export default defineScript({",
         '  name: "Texture pulse",',
-        "  props,",
+        "  props: {",
+        '    texture: prop.asset({ label: "Texture", kind: "texture" }),',
+        "  },",
         "  start(ctx) {",
         "    ctx.materials.setColor(\"#ffffff\");",
         "    void ctx.lifecycle.task(async (signal) => {",
@@ -544,9 +602,7 @@ function readEditorContext(
     importBusy: context.importBusy,
     saveStatus: context.saveStatus,
     scriptRuntime: context.scriptRuntime ?? null,
-    sceneSettings: {
-      fog: sceneSettings.fog,
-    },
+    sceneSettings,
     selectedEntity: selectedEntity
       ? { id: selectedEntity.id, name: selectedEntity.name }
       : null,
@@ -574,6 +630,88 @@ function listAssets(
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
   return unchanged(context, { assets, count: assets.length }, "Asset一覧を取得しました");
+}
+
+function getTexture(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const textureAssetId = requiredString(
+    argumentsValue.textureAssetId,
+    "textureAssetId",
+  );
+  const texture = getTextureAsset(context.bundle.assets, textureAssetId);
+  if (!texture) {
+    throw new XriftMcpEditorToolError(
+      "TEXTURE_NOT_FOUND",
+      "指定されたTexture Assetが見つかりません",
+      { textureAssetId },
+    );
+  }
+  return unchanged(
+    context,
+    {
+      texture: JSON.parse(JSON.stringify(texture)) as Record<string, unknown>,
+    },
+    `Texture「${texture.name}」を取得しました`,
+  );
+}
+
+function updateTexture(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
+  const textureAssetId = requiredString(
+    argumentsValue.textureAssetId,
+    "textureAssetId",
+  );
+  const texture = getTextureAsset(context.bundle.assets, textureAssetId);
+  if (!texture) {
+    throw new XriftMcpEditorToolError(
+      "TEXTURE_NOT_FOUND",
+      "指定されたTexture Assetが見つかりません",
+      { textureAssetId },
+    );
+  }
+  const importSettings = mcpTextureImportSettingsPatch(
+    argumentsValue.patch,
+    "patch",
+  );
+  const assets = updateTextureAsset(context.bundle.assets, textureAssetId, {
+    importSettings,
+  });
+  if (assets === context.bundle.assets) {
+    return unchanged(
+      context,
+      {
+        projectId: context.bundle.project.projectId,
+        sceneId: context.bundle.scene.sceneId,
+        revision: context.revision,
+        textureAssetId,
+        importSettings: texture.importSettings,
+      },
+      "Textureはすでに指定された状態です",
+    );
+  }
+  const updated = getTextureAsset(assets, textureAssetId);
+  const bundle = touchProject(context, { ...context.bundle, assets });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: textureAssetId,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      textureAssetId,
+      importSettings: updated?.importSettings,
+      synchronizedDuringPlay: context.editorMode === "play",
+    },
+    activity: `AIがTexture「${texture.name}」のImport設定を更新しました`,
+  };
 }
 
 function createDocumentAsset(
@@ -762,20 +900,101 @@ function updateSceneSettings(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
-  assertWritableContext(context, argumentsValue);
-  const fogPatch = recordValue(argumentsValue.fog, "fog");
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
   const currentSettings = resolveSceneSettings(context.bundle.scene.settings);
-  const fog = applyFogPatch(currentSettings.fog, fogPatch);
-  if (sameFog(currentSettings.fog, fog)) {
+  const sections = [
+    "skybox",
+    "fog",
+    "ambient",
+    "camera",
+    "editor",
+  ] as const;
+  if (!sections.some((section) => argumentsValue[section] !== undefined)) {
+    invalidArgument(
+      "Scene settings",
+      "skybox、fog、ambient、camera、editorのいずれかを含むobject",
+    );
+  }
+  const settings: SceneSettings = {
+    skybox:
+      argumentsValue.skybox === undefined
+        ? currentSettings.skybox
+        : applySkyboxPatch(
+            currentSettings.skybox,
+            sceneSettingsPatch(argumentsValue.skybox, "skybox", [
+              "enabled",
+              "iblEnabled",
+              "projection",
+              "imageAssetId",
+              "topColor",
+              "bottomColor",
+              "offset",
+              "exponent",
+              "rotationDegrees",
+              "flipY",
+              "exposure",
+              "meshPosition",
+              "meshRotationDegrees",
+              "meshScale",
+              "center",
+            ]),
+            context,
+          ),
+    fog:
+      argumentsValue.fog === undefined
+        ? currentSettings.fog
+        : applyFogPatch(
+            currentSettings.fog,
+            sceneSettingsPatch(argumentsValue.fog, "fog", [
+              "enabled",
+              "color",
+              "near",
+              "far",
+            ]),
+          ),
+    ambient:
+      argumentsValue.ambient === undefined
+        ? currentSettings.ambient
+        : applyAmbientPatch(
+            currentSettings.ambient,
+            sceneSettingsPatch(argumentsValue.ambient, "ambient", [
+              "color",
+              "intensity",
+            ]),
+          ),
+    camera:
+      argumentsValue.camera === undefined
+        ? currentSettings.camera
+        : applyCameraPatch(
+            currentSettings.camera,
+            sceneSettingsPatch(argumentsValue.camera, "camera", [
+              "near",
+              "far",
+              "fov",
+            ]),
+          ),
+    editor:
+      argumentsValue.editor === undefined
+        ? currentSettings.editor
+        : applySceneEditorPatch(
+            currentSettings.editor,
+            sceneSettingsPatch(argumentsValue.editor, "editor", [
+              "backgroundColor",
+              "gizmo",
+            ]),
+          ),
+  };
+  if (sameSceneSettings(currentSettings, settings)) {
     return unchanged(
       context,
       {
         projectId: context.bundle.project.projectId,
         sceneId: context.bundle.scene.sceneId,
         revision: context.revision,
-        fog,
+        sceneSettings: settings,
+        synchronizedDuringPlay: context.editorMode === "play",
       },
-      "Fog設定はすでに指定された状態です",
+      "Scene設定はすでに指定された状態です",
     );
   }
 
@@ -783,7 +1002,7 @@ function updateSceneSettings(
     ...context.bundle,
     scene: {
       ...context.bundle.scene,
-      settings: { ...currentSettings, fog },
+      settings,
     },
   });
   return {
@@ -796,9 +1015,10 @@ function updateSceneSettings(
       sceneId: bundle.scene.sceneId,
       revisionBefore: context.revision,
       revisionAfter: context.revision + 1,
-      fog,
+      sceneSettings: settings,
+      synchronizedDuringPlay: context.editorMode === "play",
     },
-    activity: fog.enabled ? "AIがFogを更新しました" : "AIがFogを無効にしました",
+    activity: "AIがScene設定を更新しました",
   };
 }
 
@@ -2926,6 +3146,134 @@ function assertWritableContext(
   }
 }
 
+function sceneSettingsPatch(
+  value: unknown,
+  name: string,
+  allowedKeys: readonly string[],
+): Record<string, unknown> {
+  const patch = recordValue(value, name);
+  const allowed = new Set(allowedKeys);
+  const unsupported = Object.keys(patch).find((key) => !allowed.has(key));
+  if (unsupported) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      `${name}.${unsupported}はScene設定で変更できません`,
+      { section: name, unsupportedField: unsupported },
+    );
+  }
+  if (Object.keys(patch).length === 0) {
+    invalidArgument(name, "non-empty object");
+  }
+  return patch;
+}
+
+function applySkyboxPatch(
+  current: SceneSkyboxSettings,
+  patch: Record<string, unknown>,
+  context: XriftMcpEditorContext,
+): SceneSkyboxSettings {
+  const next: SceneSkyboxSettings = {
+    ...current,
+    meshPosition: [...current.meshPosition],
+    meshRotationDegrees: [...current.meshRotationDegrees],
+    meshScale: [...current.meshScale],
+    center: [...current.center],
+  };
+  const enabled = optionalBoolean(patch.enabled, "skybox.enabled");
+  if (enabled !== undefined) next.enabled = enabled;
+  if (patch.projection !== undefined) {
+    next.projection = requiredEnum(
+      patch.projection,
+      "skybox.projection",
+      ["infinite", "box", "dome"] as const,
+    );
+  }
+  if (patch.imageAssetId !== undefined) {
+    if (patch.imageAssetId === null) {
+      delete next.imageAssetId;
+      if (patch.iblEnabled === undefined) next.iblEnabled = false;
+    } else {
+      const imageAssetId = requiredString(
+        patch.imageAssetId,
+        "skybox.imageAssetId",
+      );
+      assertSkyboxImageAsset(context, imageAssetId);
+      const hadImage = Boolean(next.imageAssetId);
+      next.imageAssetId = imageAssetId;
+      if (!hadImage && patch.iblEnabled === undefined) next.iblEnabled = true;
+    }
+  }
+  const iblEnabled = optionalBoolean(
+    patch.iblEnabled,
+    "skybox.iblEnabled",
+  );
+  if (iblEnabled !== undefined) {
+    if (iblEnabled && !next.imageAssetId) {
+      throw new XriftMcpEditorToolError(
+        "INVALID_ARGUMENT",
+        "skybox.iblEnabledを有効にするにはimageAssetIdが必要です",
+      );
+    }
+    next.iblEnabled = iblEnabled;
+  }
+  for (const field of ["topColor", "bottomColor"] as const) {
+    if (patch[field] !== undefined) {
+      next[field] = sceneColor(patch[field], `skybox.${field}`);
+    }
+  }
+  for (const [field, minimum] of [
+    ["offset", undefined],
+    ["exponent", 0.01],
+    ["rotationDegrees", undefined],
+    ["exposure", 0],
+  ] as const) {
+    if (patch[field] !== undefined) {
+      next[field] = sceneNumber(patch[field], `skybox.${field}`, minimum);
+    }
+  }
+  const flipY = optionalBoolean(patch.flipY, "skybox.flipY");
+  if (flipY !== undefined) next.flipY = flipY;
+  for (const [field, minimum] of [
+    ["meshPosition", undefined],
+    ["meshRotationDegrees", undefined],
+    ["meshScale", 0.001],
+    ["center", undefined],
+  ] as const) {
+    if (patch[field] !== undefined) {
+      next[field] = sceneVec3(patch[field], `skybox.${field}`, minimum);
+    }
+  }
+  return next;
+}
+
+function assertSkyboxImageAsset(
+  context: XriftMcpEditorContext,
+  imageAssetId: string,
+): void {
+  const asset = context.bundle.assets.assets[imageAssetId];
+  if (!asset) {
+    throw new XriftMcpEditorToolError(
+      "ASSET_NOT_FOUND",
+      "skybox.imageAssetIdに指定されたAssetが見つかりません",
+      { imageAssetId },
+    );
+  }
+  if (asset.kind !== "texture" && asset.kind !== "skybox") {
+    throw new XriftMcpEditorToolError(
+      "ASSET_KIND_MISMATCH",
+      "skybox.imageAssetIdにはTexture Assetを指定してください",
+      { imageAssetId, actualKind: asset.kind },
+    );
+  }
+  if (asset.source.kind !== "project") {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      "skybox.imageAssetIdにはproject sourceを持つTexture Assetを指定してください",
+      { imageAssetId, sourceKind: asset.source.kind },
+    );
+  }
+}
+
 function applyFogPatch(
   current: SceneFogSettings,
   patch: Record<string, unknown>,
@@ -2960,6 +3308,165 @@ function applyFogPatch(
   return next;
 }
 
+function applyAmbientPatch(
+  current: SceneAmbientSettings,
+  patch: Record<string, unknown>,
+): SceneAmbientSettings {
+  const next = { ...current };
+  if (patch.color !== undefined) {
+    next.color = sceneColor(patch.color, "ambient.color");
+  }
+  if (patch.intensity !== undefined) {
+    next.intensity = sceneNumber(
+      patch.intensity,
+      "ambient.intensity",
+      0,
+    );
+  }
+  return next;
+}
+
+function applyCameraPatch(
+  current: SceneCameraSettings,
+  patch: Record<string, unknown>,
+): SceneCameraSettings {
+  const next = { ...current };
+  if (patch.near !== undefined) {
+    next.near = sceneNumber(patch.near, "camera.near", 0.01);
+  }
+  if (patch.far !== undefined) {
+    next.far = sceneNumber(patch.far, "camera.far", 1);
+  }
+  if (patch.fov !== undefined) {
+    next.fov = sceneNumber(patch.fov, "camera.fov", 1, 179);
+  }
+  if (next.far <= next.near) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      "camera.farはcamera.nearより大きい値にしてください",
+    );
+  }
+  return next;
+}
+
+function applySceneEditorPatch(
+  current: SceneSettings["editor"],
+  patch: Record<string, unknown>,
+): SceneSettings["editor"] {
+  const next: SceneSettings["editor"] = {
+    ...current,
+    gizmo: { ...current.gizmo },
+  };
+  if (patch.backgroundColor !== undefined) {
+    next.backgroundColor = sceneColor(
+      patch.backgroundColor,
+      "editor.backgroundColor",
+    );
+  }
+  if (patch.gizmo !== undefined) {
+    next.gizmo = applyGizmoPatch(
+      current.gizmo,
+      sceneSettingsPatch(patch.gizmo, "editor.gizmo", [
+        "size",
+        "gridVisible",
+        "gridSize",
+        "gridDivisions",
+        "snapEnabled",
+        "translateSnap",
+        "rotateSnapDegrees",
+        "scaleSnap",
+      ]),
+    );
+  }
+  return next;
+}
+
+function applyGizmoPatch(
+  current: SceneGizmoSettings,
+  patch: Record<string, unknown>,
+): SceneGizmoSettings {
+  const next = { ...current };
+  for (const field of ["gridVisible", "snapEnabled"] as const) {
+    const value = optionalBoolean(patch[field], `editor.gizmo.${field}`);
+    if (value !== undefined) next[field] = value;
+  }
+  for (const [field, minimum] of [
+    ["size", 0.1],
+    ["gridSize", 1],
+    ["translateSnap", 0.001],
+    ["rotateSnapDegrees", 0.1],
+    ["scaleSnap", 0.001],
+  ] as const) {
+    if (patch[field] !== undefined) {
+      next[field] = sceneNumber(
+        patch[field],
+        `editor.gizmo.${field}`,
+        minimum,
+      );
+    }
+  }
+  if (patch.gridDivisions !== undefined) {
+    if (
+      typeof patch.gridDivisions !== "number" ||
+      !Number.isSafeInteger(patch.gridDivisions) ||
+      patch.gridDivisions < 1
+    ) {
+      invalidArgument("editor.gizmo.gridDivisions", "integer >= 1");
+    }
+    next.gridDivisions = patch.gridDivisions;
+  }
+  return next;
+}
+
+function sceneColor(value: unknown, name: string): string {
+  if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) {
+    invalidArgument(name, "#rrggbb");
+  }
+  return value.toLowerCase();
+}
+
+function sceneNumber(
+  value: unknown,
+  name: string,
+  minimum?: number,
+  maximum?: number,
+): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    (minimum !== undefined && value < minimum) ||
+    (maximum !== undefined && value > maximum)
+  ) {
+    invalidArgument(
+      name,
+      minimum === undefined
+        ? "finite number"
+        : maximum === undefined
+          ? `number >= ${minimum}`
+          : `number between ${minimum} and ${maximum}`,
+    );
+  }
+  return value;
+}
+
+function sceneVec3(
+  value: unknown,
+  name: string,
+  minimum?: number,
+): Vec3 {
+  const vector = optionalVec3(value, name);
+  if (
+    !vector ||
+    (minimum !== undefined && vector.some((entry) => entry < minimum))
+  ) {
+    invalidArgument(
+      name,
+      minimum === undefined ? "[x, y, z]" : `[x, y, z] (each >= ${minimum})`,
+    );
+  }
+  return vector;
+}
+
 function unchanged(
   context: XriftMcpEditorContext,
   result: Record<string, unknown>,
@@ -2991,13 +3498,11 @@ function touchProject(
   };
 }
 
-function sameFog(left: SceneFogSettings, right: SceneFogSettings): boolean {
-  return (
-    left.enabled === right.enabled &&
-    left.color === right.color &&
-    left.near === right.near &&
-    left.far === right.far
-  );
+function sameSceneSettings(
+  left: SceneSettings,
+  right: SceneSettings,
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function placementFailureMessage(reason: string): string {
@@ -3134,6 +3639,154 @@ function componentPatchRecord(value: unknown): Record<string, unknown> {
   return JSON.parse(JSON.stringify(patch)) as Record<string, unknown>;
 }
 
+export function mcpTextureImportSettingsPatch(
+  value: unknown,
+  name = "patch",
+  options: { allowEmpty?: boolean } = {},
+): TextureImportSettingsPatch {
+  const patch = recordValue(value, name);
+  if (!isJsonValue(patch)) invalidArgument(name, "finite JSON object");
+  assertObjectKeys(patch, name, [
+    "colorSpace",
+    "generateMipmaps",
+    "flipY",
+    "resize",
+    "sampler",
+    "compression",
+  ]);
+  if (!options.allowEmpty && Object.keys(patch).length === 0) {
+    invalidArgument(name, "non-empty object");
+  }
+
+  const result: TextureImportSettingsPatch = {};
+  if (patch.colorSpace !== undefined) {
+    result.colorSpace = requiredEnum(
+      patch.colorSpace,
+      `${name}.colorSpace`,
+      TEXTURE_COLOR_SPACES,
+    );
+  }
+  if (patch.generateMipmaps !== undefined) {
+    result.generateMipmaps = requiredBoolean(
+      patch.generateMipmaps,
+      `${name}.generateMipmaps`,
+    );
+  }
+  if (patch.flipY !== undefined) {
+    result.flipY = requiredBoolean(patch.flipY, `${name}.flipY`);
+  }
+  if (patch.resize !== undefined) {
+    const resize = recordValue(patch.resize, `${name}.resize`);
+    assertObjectKeys(resize, `${name}.resize`, ["mode", "maxSize"]);
+    const mode = requiredEnum(
+      resize.mode,
+      `${name}.resize.mode`,
+      ["original", "max-size"] as const,
+    );
+    if (mode === "original") {
+      if (resize.maxSize !== undefined) {
+        invalidArgument(`${name}.resize.maxSize`, "omitted for original mode");
+      }
+      result.resize = { mode };
+    } else {
+      const maxSize = requiredInteger(
+        resize.maxSize,
+        `${name}.resize.maxSize`,
+      );
+      if (maxSize < 1 || maxSize > 16_384) {
+        invalidArgument(`${name}.resize.maxSize`, "integer from 1 to 16384");
+      }
+      result.resize = { mode, maxSize };
+    }
+  }
+  if (patch.sampler !== undefined) {
+    const sampler = recordValue(patch.sampler, `${name}.sampler`);
+    assertObjectKeys(sampler, `${name}.sampler`, [
+      "wrapS",
+      "wrapT",
+      "magFilter",
+      "minFilter",
+    ]);
+    if (Object.keys(sampler).length === 0) {
+      invalidArgument(`${name}.sampler`, "non-empty object");
+    }
+    result.sampler = {
+      ...(sampler.wrapS === undefined
+        ? {}
+        : {
+            wrapS: requiredEnum(
+              sampler.wrapS,
+              `${name}.sampler.wrapS`,
+              TEXTURE_WRAP_MODES,
+            ),
+          }),
+      ...(sampler.wrapT === undefined
+        ? {}
+        : {
+            wrapT: requiredEnum(
+              sampler.wrapT,
+              `${name}.sampler.wrapT`,
+              TEXTURE_WRAP_MODES,
+            ),
+          }),
+      ...(sampler.magFilter === undefined
+        ? {}
+        : {
+            magFilter: requiredEnum(
+              sampler.magFilter,
+              `${name}.sampler.magFilter`,
+              TEXTURE_MAG_FILTERS,
+            ),
+          }),
+      ...(sampler.minFilter === undefined
+        ? {}
+        : {
+            minFilter: requiredEnum(
+              sampler.minFilter,
+              `${name}.sampler.minFilter`,
+              TEXTURE_MIN_FILTERS,
+            ),
+          }),
+    };
+  }
+  if (patch.compression !== undefined) {
+    const compression = recordValue(
+      patch.compression,
+      `${name}.compression`,
+    );
+    assertObjectKeys(compression, `${name}.compression`, [
+      "format",
+      "quality",
+    ]);
+    if (Object.keys(compression).length === 0) {
+      invalidArgument(`${name}.compression`, "non-empty object");
+    }
+    const quality =
+      compression.quality === undefined
+        ? undefined
+        : optionalFiniteNumber(
+            compression.quality,
+            `${name}.compression.quality`,
+          );
+    if (quality !== undefined && (quality < 0 || quality > 100)) {
+      invalidArgument(`${name}.compression.quality`, "number from 0 to 100");
+    }
+    result.compression = {
+      ...(compression.format === undefined
+        ? {}
+        : {
+            format: requiredEnum(
+              compression.format,
+              `${name}.compression.format`,
+              TEXTURE_COMPRESSION_FORMATS,
+            ),
+          }),
+      ...(quality === undefined ? {} : { quality }),
+    };
+  }
+  return result;
+}
+
 function particlePatchValue(value: unknown): ParticlePropertiesPatch {
   const patch = recordValue(value, "patch");
   if (!isJsonValue(patch)) invalidArgument("patch", "finite JSON object");
@@ -3251,6 +3904,22 @@ function recordValue(value: unknown, name: string): Record<string, unknown> {
     invalidArgument(name, "object");
   }
   return value as Record<string, unknown>;
+}
+
+function assertObjectKeys(
+  value: Record<string, unknown>,
+  name: string,
+  allowedKeys: readonly string[],
+): void {
+  const allowed = new Set(allowedKeys);
+  const unsupported = Object.keys(value).find((key) => !allowed.has(key));
+  if (unsupported) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      `${name}.${unsupported}は変更できません`,
+      { field: `${name}.${unsupported}` },
+    );
+  }
 }
 
 function materialPatchValue(value: unknown): MaterialAssetPatch {
@@ -3422,6 +4091,12 @@ function optionalBoolean(value: unknown, name: string): boolean | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== "boolean") invalidArgument(name, "boolean");
   return value;
+}
+
+function requiredBoolean(value: unknown, name: string): boolean {
+  const result = optionalBoolean(value, name);
+  if (result === undefined) invalidArgument(name, "boolean");
+  return result;
 }
 
 function optionalFiniteNumber(value: unknown, name: string): number | undefined {

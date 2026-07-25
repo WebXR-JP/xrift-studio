@@ -291,6 +291,15 @@ struct VisualAssetImportWrite {
     data_url: String,
 }
 
+#[derive(Serialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct LocalTextureImportSource {
+    file_name: String,
+    mime_type: String,
+    byte_length: u64,
+    data_url: String,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct VisualSaveJournal {
@@ -3520,6 +3529,94 @@ fn decode_data_url_bytes(data_url: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("asset payload cannot be decoded: {}", e))
 }
 
+fn local_texture_mime_type(path: &Path) -> Option<&'static str> {
+    match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("png") => Some("image/png"),
+        Some("jpg") | Some("jpeg") => Some("image/jpeg"),
+        Some("webp") => Some("image/webp"),
+        Some("avif") => Some("image/avif"),
+        Some("gif") => Some("image/gif"),
+        Some("bmp") => Some("image/bmp"),
+        Some("svg") => Some("image/svg+xml"),
+        Some("ktx2") => Some("image/ktx2"),
+        _ => None,
+    }
+}
+
+fn read_local_texture_import_source_path(
+    source_path: &Path,
+) -> Result<LocalTextureImportSource, String> {
+    const MAX_LOCAL_TEXTURE_BYTES: u64 = 128 * 1024 * 1024;
+
+    if !source_path.is_absolute() {
+        return Err("local Texture source must use an absolute path".to_string());
+    }
+    let source_metadata = std::fs::symlink_metadata(source_path)
+        .map_err(|_| "local Texture source cannot be inspected".to_string())?;
+    if source_metadata.file_type().is_symlink() || !source_metadata.is_file() {
+        return Err("local Texture source must be a regular non-symlink file".to_string());
+    }
+    if source_metadata.len() == 0 || source_metadata.len() > MAX_LOCAL_TEXTURE_BYTES {
+        return Err("local Texture source exceeds the supported size".to_string());
+    }
+    let resolved = source_path
+        .canonicalize()
+        .map_err(|_| "local Texture source cannot be resolved".to_string())?;
+    let resolved_metadata = std::fs::symlink_metadata(&resolved)
+        .map_err(|_| "local Texture source cannot be inspected".to_string())?;
+    if resolved_metadata.file_type().is_symlink()
+        || !resolved_metadata.is_file()
+        || resolved_metadata.len() != source_metadata.len()
+    {
+        return Err("local Texture source changed while it was inspected".to_string());
+    }
+    let mime_type = local_texture_mime_type(&resolved)
+        .ok_or_else(|| "local Texture source format is not supported".to_string())?;
+    let file_name = resolved
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| "local Texture source file name is invalid".to_string())?;
+    let mut file = std::fs::File::open(&resolved)
+        .map_err(|_| "local Texture source cannot be opened".to_string())?;
+    let mut bytes = Vec::with_capacity(source_metadata.len() as usize);
+    std::io::Read::by_ref(&mut file)
+        .take(MAX_LOCAL_TEXTURE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "local Texture source cannot be read".to_string())?;
+    if bytes.len() as u64 != source_metadata.len() || bytes.len() as u64 > MAX_LOCAL_TEXTURE_BYTES {
+        return Err("local Texture source changed while it was read".to_string());
+    }
+
+    use base64::Engine;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Ok(LocalTextureImportSource {
+        file_name: file_name.to_string(),
+        mime_type: mime_type.to_string(),
+        byte_length: source_metadata.len(),
+        data_url: format!("data:{};base64,{}", mime_type, encoded),
+    })
+}
+
+#[tauri::command]
+fn read_local_texture_import_source(
+    source_path: String,
+) -> Result<LocalTextureImportSource, String> {
+    let source_path = source_path.trim();
+    if source_path.is_empty()
+        || source_path.len() > 4096
+        || source_path.chars().any(char::is_control)
+    {
+        return Err("local Texture source path is invalid".to_string());
+    }
+    read_local_texture_import_source_path(Path::new(source_path))
+}
+
 /// Publishes imported sources and derived thumbnails as a single operation.
 /// Import destinations are content-addressed. An existing byte-identical file
 /// is reused, while a different payload at the same path is never overwritten.
@@ -4236,6 +4333,7 @@ pub fn run() {
             clear_compiler_upload_attempt,
             persist_compiler_publication_metadata,
             commit_visual_asset_import,
+            read_local_texture_import_source,
             open_visual_asset_location,
             external_store::list_external_store_assets,
             external_store::get_external_store_asset_options,
@@ -4319,6 +4417,50 @@ mod tests {
             projects.exists(),
             "canonical project data must be preserved"
         );
+        std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
+    }
+
+    #[test]
+    fn local_texture_import_source_accepts_only_safe_supported_files() {
+        let fixture_root = reset_fixture_root("local-texture");
+        std::fs::create_dir_all(&fixture_root).expect("fixture root must be created");
+        let texture_path = fixture_root.join("grid.png");
+        let texture_bytes = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+        std::fs::write(&texture_path, texture_bytes).expect("Texture fixture must be written");
+
+        let source = read_local_texture_import_source_path(&texture_path)
+            .expect("supported regular Texture should be readable");
+        assert_eq!(source.file_name, "grid.png");
+        assert_eq!(source.mime_type, "image/png");
+        assert_eq!(source.byte_length, texture_bytes.len() as u64);
+        assert!(source.data_url.starts_with("data:image/png;base64,"));
+        assert!(
+            !source
+                .data_url
+                .contains(&fixture_root.to_string_lossy().to_string()),
+            "external source paths must not be returned"
+        );
+
+        let unsupported = fixture_root.join("secret.txt");
+        std::fs::write(&unsupported, b"not a Texture")
+            .expect("unsupported fixture must be written");
+        assert!(read_local_texture_import_source_path(&unsupported).is_err());
+        assert!(
+            read_local_texture_import_source_path(Path::new("relative.png")).is_err(),
+            "relative MCP paths must be rejected"
+        );
+
+        #[cfg(unix)]
+        {
+            let linked = fixture_root.join("linked.png");
+            std::os::unix::fs::symlink(&texture_path, &linked)
+                .expect("symlink fixture must be created");
+            assert!(
+                read_local_texture_import_source_path(&linked).is_err(),
+                "final symlink sources must be rejected"
+            );
+        }
+
         std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
     }
 

@@ -1,5 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { Code2, X } from "lucide-react";
+import {
+  Box,
+  Code2,
+  Eye,
+  Image as ImageIcon,
+  LocateFixed,
+  Move3d,
+  Palette,
+  RotateCw,
+  Sparkles,
+  Volume2,
+  Waves,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import {
   createScriptTemplateSource,
   DEFAULT_SCRIPT_TEMPLATE_ID,
@@ -18,8 +32,23 @@ const CATEGORY_LABELS = {
   movement: "移動",
   appearance: "見た目",
   particle: "Particle",
+  media: "Asset",
   interaction: "イベント",
 } as const;
+
+const TEMPLATE_ICONS: Readonly<Record<string, LucideIcon>> = {
+  blank: Code2,
+  rotate: RotateCw,
+  float: Waves,
+  "keyboard-move": Move3d,
+  "follow-entity": LocateFixed,
+  "material-pulse": Palette,
+  "texture-scroll": ImageIcon,
+  "particle-control": Sparkles,
+  "model-display": Box,
+  "audio-hotkey": Volume2,
+  "event-visibility": Eye,
+};
 
 export function ScriptTemplateDialog({
   open,
@@ -145,6 +174,7 @@ export function ScriptTemplateDialog({
             <div className="space-y-1.5">
               {SCRIPT_TEMPLATE_CATALOG.map((candidate) => {
                 const selected = candidate.id === template.id;
+                const TemplateIcon = TEMPLATE_ICONS[candidate.id] ?? Code2;
                 return (
                   <button
                     key={candidate.id}
@@ -168,7 +198,7 @@ export function ScriptTemplateDialog({
                           : "bg-slate-100 text-slate-600"
                       }`}
                     >
-                      <Code2 size={16} aria-hidden="true" />
+                      <TemplateIcon size={16} aria-hidden="true" />
                     </span>
                     <span className="min-w-0">
                       <span className="flex items-center gap-2">
@@ -260,7 +290,9 @@ export function ScriptTemplateDialog({
             <div className="min-h-0 flex-1 bg-slate-950 p-4">
               <div className="mb-2 flex items-center justify-between text-[11px]">
                 <span className="font-semibold text-slate-200">Source preview</span>
-                <span className="text-slate-400">TypeScript</span>
+                <span className="text-slate-400">
+                  {template.language === "tsx" ? "TypeScript JSX" : "TypeScript"}
+                </span>
               </div>
               <pre className="scrollbar-thin h-[calc(100%-26px)] overflow-auto whitespace-pre-wrap rounded-lg border border-slate-800 bg-slate-900 p-4 font-mono text-[12px] leading-5 text-slate-200">
                 {sourcePreview}

@@ -344,6 +344,9 @@ function assertEmitsStaticImports(): void {
   const host = result.overlayFiles.find(
     (file) => file.relativePath === SCRIPT_HOST_OVERLAY_PATH,
   );
+  const api = result.overlayFiles.find(
+    (file) => file.relativePath === SCRIPT_API_OVERLAY_PATH,
+  );
   const lifecycle = result.overlayFiles.find(
     (file) => file.relativePath === SCRIPT_LIFECYCLE_OVERLAY_PATH,
   );
@@ -354,6 +357,15 @@ function assertEmitsStaticImports(): void {
         host.content.includes('from "./particle-runtime"'),
     ),
     "Script host sibling imports were not rewritten to emitted runtime files",
+  );
+  assert(
+    Boolean(
+      host?.content.includes("<Render ctx={renderContext} />") &&
+        host.content.includes("loadAudio(assetId, options = {})") &&
+        api?.content.includes("export type ScriptRenderProps") &&
+        api.content.includes("loadAudio("),
+    ),
+    "published Script runtime is missing Render context or lifecycle-owned Audio",
   );
   assert(
     Boolean(lifecycle?.content.includes('from "./script-api"')),

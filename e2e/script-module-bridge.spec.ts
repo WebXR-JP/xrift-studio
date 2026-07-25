@@ -65,6 +65,179 @@ export default defineScript({
   });
 });
 
+test("Stop後はblob moduleだけを破棄しTypeScript変換結果を再利用する", async ({
+  page,
+}) => {
+  await page.goto("/e2e.html?scenario=ready");
+
+  const result = await page.evaluate(async (moduleUrl) => {
+    const runtime = (await import(moduleUrl)) as {
+      loadScriptModule(
+        source: string,
+        fileName: string,
+      ): Promise<
+        | {
+            ok: true;
+            module: Record<string, unknown>;
+            objectUrl: string;
+          }
+        | { ok: false; message: string }
+      >;
+      releaseAllScriptModules(): void;
+      clearScriptTranspileCache(): void;
+      getScriptTranspileCacheStats(): {
+        hits: number;
+        misses: number;
+        size: number;
+      };
+    };
+    const source = `import { defineScript } from "xrift:script";
+
+export default defineScript({
+  name: "Replay Cache Fixture",
+});
+`;
+    runtime.clearScriptTranspileCache();
+    const first = await runtime.loadScriptModule(
+      source,
+      "replay-cache-fixture.ts",
+    );
+    if (!first.ok) return first;
+    const firstStats = runtime.getScriptTranspileCacheStats();
+    const firstUrl = first.objectUrl;
+    runtime.releaseAllScriptModules();
+
+    const second = await runtime.loadScriptModule(
+      source,
+      "replay-cache-fixture.ts",
+    );
+    if (!second.ok) return second;
+    const secondStats = runtime.getScriptTranspileCacheStats();
+    const secondUrl = second.objectUrl;
+    runtime.releaseAllScriptModules();
+
+    return {
+      ok: true as const,
+      firstStats,
+      secondStats,
+      freshModuleUrl: firstUrl !== secondUrl,
+    };
+  }, "/src/lib/script-modules.ts");
+
+  expect(result).toEqual({
+    ok: true,
+    firstStats: { hits: 0, misses: 1, size: 1 },
+    secondStats: { hits: 1, misses: 1, size: 1 },
+    freshModuleUrl: true,
+  });
+});
+
+test("Play変換は構文エラーの行と列を返す", async ({ page }) => {
+  await page.goto("/e2e.html?scenario=ready");
+
+  const result = await page.evaluate(async (moduleUrl) => {
+    const runtime = (await import(moduleUrl)) as {
+      loadScriptModule(
+        source: string,
+        fileName: string,
+      ): Promise<
+        | {
+            ok: true;
+            module: Record<string, unknown>;
+            objectUrl: string;
+          }
+        | { ok: false; message: string }
+      >;
+      releaseAllScriptModules(): void;
+    };
+    const loaded = await runtime.loadScriptModule(
+      `import { defineScript } from "xrift:script";
+
+export default defineScript({
+  name: "Broken Diagnostic",
+  start( {
+});
+`,
+      "broken-diagnostic.ts",
+    );
+    runtime.releaseAllScriptModules();
+    return loaded.ok
+      ? { ok: true as const }
+      : { ok: false as const, message: loaded.message };
+  }, "/src/lib/script-modules.ts");
+
+  expect(result.ok).toBe(false);
+  if (!result.ok) {
+    expect(result.message).toMatch(/^\d+:\d+ /);
+  }
+});
+
+test("外部ModelテンプレートをTSX moduleとして変換できる", async ({
+  page,
+}) => {
+  await page.goto("/e2e.html?scenario=ready");
+
+  const result = await page.evaluate(async ({ runtimeUrl, templatesUrl }) => {
+    const runtime = (await import(runtimeUrl)) as {
+      loadScriptModule(
+        source: string,
+        fileName: string,
+      ): Promise<
+        | {
+            ok: true;
+            module: Record<string, unknown>;
+            objectUrl: string;
+          }
+        | { ok: false; message: string }
+      >;
+      releaseAllScriptModules(): void;
+    };
+    const templates = (await import(templatesUrl)) as {
+      createScriptTemplateSource(
+        templateId: string,
+        scriptName: string,
+      ): string | null;
+      getScriptTemplate(
+        templateId: string,
+      ): { language?: unknown } | undefined;
+    };
+    const source = templates.createScriptTemplateSource(
+      "model-display",
+      "Model Fixture",
+    );
+    if (!source) return { ok: false as const, message: "template missing" };
+    const loaded = await runtime.loadScriptModule(
+      source,
+      "model-fixture.tsx",
+    );
+    if (!loaded.ok) return loaded;
+
+    try {
+      return {
+        ok: true as const,
+        language: templates.getScriptTemplate("model-display")?.language,
+        scriptName: (
+          loaded.module.default as { name?: unknown } | undefined
+        )?.name,
+        hasRender: typeof loaded.module.Render === "function",
+      };
+    } finally {
+      runtime.releaseAllScriptModules();
+    }
+  }, {
+    runtimeUrl: "/src/lib/script-modules.ts",
+    templatesUrl:
+      "/src/lib/visual-editor/scripting/script-templates.ts",
+  });
+
+  expect(result).toEqual({
+    ok: true,
+    language: "tsx",
+    scriptName: "Model Fixture",
+    hasRender: true,
+  });
+});
+
 test("bridgeはdefaultとstrict mode予約語をnamed exportへ重複出力しない", async ({
   page,
 }) => {

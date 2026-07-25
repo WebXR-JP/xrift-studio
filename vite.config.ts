@@ -13,9 +13,13 @@ export default defineConfig(async () => ({
   // Serving that module directly avoids a missing optimized dependency when
   // the lazily loaded Visual Editor first enables Open Brush rendering.
   optimizeDeps: {
-    // The Visual Editor is loaded lazily, so make its official renderer part
-    // of the initial optimizer pass instead of discovering it on first open.
-    include: ["@xrift/world-components"],
+    // The Visual Editor and Play compiler are loaded lazily. Include both in
+    // the initial pass so first Play never triggers a dependency re-optimization
+    // and full page reload in the middle of Script preparation.
+    include: [
+      "@xrift/world-components",
+      "monaco-editor/esm/vs/language/typescript/lib/typescriptServices.js",
+    ],
     exclude: ["three-icosa"],
   },
 

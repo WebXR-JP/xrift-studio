@@ -74,6 +74,7 @@ import {
   executeXriftMcpEditorTool,
   extractScriptContract,
   XRIFT_MCP_EDITOR_TOOLS,
+  XRIFT_MCP_LOCAL_ASSET_TOOLS,
   XRIFT_MCP_SCRIPT_TOOLS,
   STUDIO_IMAGE_EXTENSION_PATTERN,
   THREE_EDITOR_MODEL_EXTENSION_PATTERN,
@@ -134,7 +135,9 @@ import {
   type VisualProjectKind,
   type KhrInteractivityExtension,
   type XriftMcpEditorToolName,
+  type XriftMcpLocalAssetToolName,
   type XriftComponentDefinition,
+  mcpTextureImportSettingsPatch,
 } from "../../lib/visual-editor";
 import {
   tauri,
@@ -474,6 +477,17 @@ function mcpRequiredString(value: unknown, name: string): string {
 
 function mcpOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function mcpOptionalScriptLanguage(
+  value: unknown,
+): "ts" | "tsx" | undefined {
+  if (value === undefined) return undefined;
+  if (value === "ts" || value === "tsx") return value;
+  throw new XriftMcpEditorToolError(
+    "INVALID_ARGUMENT",
+    "languageはtsまたはtsxで指定してください",
+  );
 }
 
 function mcpOptionalInteger(value: unknown, name: string): number | undefined {
@@ -948,6 +962,7 @@ export function VisualEditorPrototype({
   >(undefined);
   const [componentImportOpen, setComponentImportOpen] = useState(false);
   const [componentImportBusy, setComponentImportBusy] = useState(false);
+  const [mcpLocalAssetImportBusy, setMcpLocalAssetImportBusy] = useState(false);
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
   const [externalStoreOpen, setExternalStoreOpen] = useState(false);
   const [interactivityEditorAssetId, setInteractivityEditorAssetId] =
@@ -1401,6 +1416,7 @@ export function VisualEditorPrototype({
   );
   const importBusy =
     componentImportBusy ||
+    mcpLocalAssetImportBusy ||
     modelReimportBusy ||
     pendingImports.some((entry) => importIsActive(entry.status));
   const editorModeRef = useRef(editorMode);
@@ -1430,6 +1446,9 @@ export function VisualEditorPrototype({
       request: XriftMcpEditorRequestEvent,
     ): Promise<void> => {
       try {
+        const localAssetTool = XRIFT_MCP_LOCAL_ASSET_TOOLS.includes(
+          request.tool as XriftMcpLocalAssetToolName,
+        );
         const externalStoreTool = XRIFT_MCP_EXTERNAL_STORE_TOOLS.includes(
           request.tool as XriftMcpExternalStoreTool,
         );
@@ -1437,6 +1456,7 @@ export function VisualEditorPrototype({
           request.tool as XriftMcpScriptToolName,
         );
         if (
+          !localAssetTool &&
           !externalStoreTool &&
           !scriptTool &&
           !XRIFT_MCP_EDITOR_TOOLS.includes(
@@ -1447,6 +1467,285 @@ export function VisualEditorPrototype({
             "TOOL_NOT_FOUND",
             "対応していないAI editor toolです",
           );
+        }
+        if (localAssetTool) {
+          const args = request.arguments;
+          const sourceBundle = bundleRef.current;
+          assertMcpExternalStoreWrite(args, {
+            bundle: sourceBundle,
+            editorMode: editorModeRef.current,
+            importBusy: importBusyRef.current,
+            revision: mcpRevisionRef.current,
+          });
+          if (
+            importRunningRef.current ||
+            assetOperationRef.current !== null
+          ) {
+            throw new XriftMcpEditorToolError(
+              "EDITOR_BUSY",
+              "別のAsset操作の完了後にTexture Importを再試行してください",
+            );
+          }
+          const currentProjectPath = projectPathRef.current;
+          if (!currentProjectPath) {
+            throw new XriftMcpEditorToolError(
+              "PROJECT_NOT_SAVED",
+              "Textureを追加する前にProjectを保存してください",
+            );
+          }
+          const sourcePath = mcpRequiredString(args.sourcePath, "sourcePath");
+          const name = mcpOptionalString(args.name);
+          if (name && name.length > 100) {
+            throw new XriftMcpEditorToolError(
+              "INVALID_ARGUMENT",
+              "nameは100文字以内で指定してください",
+            );
+          }
+          const folderId = mcpOptionalString(args.folderId) ?? null;
+          if (folderId && !sourceBundle.assets.folders?.[folderId]) {
+            throw new XriftMcpEditorToolError(
+              "FOLDER_NOT_FOUND",
+              "作成先のFolderが見つかりません",
+              { folderId },
+            );
+          }
+          const importSettings = mcpTextureImportSettingsPatch(
+            args.importSettings ?? {},
+            "importSettings",
+            { allowEmpty: true },
+          );
+          const operationToken = Symbol("mcp-local-texture-import");
+          importRunningRef.current = true;
+          assetOperationRef.current = {
+            kind: "asset-import",
+            token: operationToken,
+          };
+          setMcpLocalAssetImportBusy(true);
+          try {
+            let source: Awaited<
+              ReturnType<typeof tauri.readLocalTextureImportSource>
+            >;
+            try {
+              source =
+                await tauri.readLocalTextureImportSource(sourcePath);
+            } catch {
+              throw new XriftMcpEditorToolError(
+                "TEXTURE_SOURCE_REJECTED",
+                "ローカルTextureを読み取れませんでした。絶対パス、対応形式、通常ファイル、128MB上限を確認してください",
+              );
+            }
+            let bytes: ArrayBuffer;
+            try {
+              const response = await fetch(source.dataUrl);
+              if (!response.ok) throw new Error("decode failed");
+              bytes = await response.arrayBuffer();
+            } catch {
+              throw new XriftMcpEditorToolError(
+                "TEXTURE_SOURCE_REJECTED",
+                "ローカルTextureの内容を安全に読み取れませんでした",
+              );
+            }
+            if (
+              bytes.byteLength === 0 ||
+              bytes.byteLength !== source.byteLength
+            ) {
+              throw new XriftMcpEditorToolError(
+                "TEXTURE_SOURCE_REJECTED",
+                "ローカルTextureのサイズが読み取り中に変わりました。ファイルを閉じて再試行してください",
+              );
+            }
+            const plan = await createAssetImportPlan({
+              fileName: source.fileName,
+              bytes,
+              mimeType: source.mimeType,
+              ...(name ? { displayName: name } : {}),
+              folderId,
+              textureImportSettings: importSettings,
+              preferredKind: "texture",
+              existingManifest: sourceBundle.assets,
+            });
+            if (
+              !plan.canCommit ||
+              !plan.asset ||
+              plan.asset.kind !== "texture" ||
+              plan.classification?.kind !== "texture"
+            ) {
+              const diagnostics = plan.diagnostics.map(
+                ({ severity, code, message, fieldPath }) => ({
+                  severity,
+                  code,
+                  message,
+                  ...(fieldPath ? { fieldPath } : {}),
+                }),
+              );
+              throw new XriftMcpEditorToolError(
+                "TEXTURE_IMPORT_REJECTED",
+                diagnostics.find(
+                  (diagnostic) => diagnostic.severity === "blocking",
+                )?.message ?? "対応するTextureとして検証できませんでした",
+                { diagnostics },
+              );
+            }
+
+            const latestBundle = bundleRef.current;
+            assertMcpExternalStoreWrite(
+              args,
+              {
+                bundle: latestBundle,
+                editorMode: editorModeRef.current,
+                // This operation owns the import lock at this point.
+                importBusy: false,
+                revision: mcpRevisionRef.current,
+              },
+            );
+            if (folderId && !latestBundle.assets.folders?.[folderId]) {
+              throw new XriftMcpEditorToolError(
+                "STALE_REVISION",
+                "Texture検証中に作成先Folderが更新されました。最新のEditor contextで再試行してください",
+                { folderId },
+              );
+            }
+            const duplicate = Object.values(latestBundle.assets.assets).find(
+              (asset) =>
+                asset.kind === "texture" &&
+                asset.sourceHash === plan.sourceHash,
+            );
+            if (duplicate?.kind === "texture") {
+              assetSelectionRef.current = duplicate.id;
+              setHistory((current) =>
+                replaceEditorHistoryPresent(current, {
+                  ...current.present,
+                  assetSelection: duplicate.id,
+                }),
+              );
+              setActiveAssetFolderId(duplicate.folderId ?? null);
+              const activity = `AIが登録済みTexture「${duplicate.name}」を選択しました`;
+              setNotice(activity);
+              setMcpLastActivity({
+                clientName: request.clientName || "AI client",
+                message: activity,
+                at: new Intl.DateTimeFormat("ja-JP", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                }).format(new Date()),
+                revision: mcpRevisionRef.current,
+              });
+              await tauri.completeXriftMcpRequest({
+                id: request.id,
+                ok: true,
+                result: {
+                  projectId: latestBundle.project.projectId,
+                  sceneId: latestBundle.scene.sceneId,
+                  textureAssetId: duplicate.id,
+                  name: duplicate.name,
+                  duplicate: true,
+                  revisionBefore: mcpRevisionRef.current,
+                  revisionAfter: mcpRevisionRef.current,
+                  relativePath:
+                    duplicate.source.kind === "project"
+                      ? duplicate.source.relativePath
+                      : null,
+                  importSettings: duplicate.importSettings,
+                },
+              });
+              return;
+            }
+
+            let committedAssets: AssetManifest;
+            try {
+              committedAssets = await commitAssetImportPlanToDisk(
+                currentProjectPath,
+                latestBundle.assets,
+                plan,
+              );
+            } catch (error) {
+              throw new XriftMcpEditorToolError(
+                "TEXTURE_IMPORT_FAILED",
+                sanitizedImportMessage(error, currentProjectPath),
+              );
+            }
+            assertMcpExternalStoreWrite(
+              args,
+              {
+                bundle: bundleRef.current,
+                editorMode: editorModeRef.current,
+                importBusy: false,
+                revision: mcpRevisionRef.current,
+              },
+            );
+            const imported = committedAssets.assets[plan.asset.id];
+            if (!imported || imported.kind !== "texture") {
+              throw new XriftMcpEditorToolError(
+                "TEXTURE_IMPORT_FAILED",
+                "保存したTextureをAssetManifestへ反映できませんでした",
+              );
+            }
+            const revisionBefore = mcpRevisionRef.current;
+            const nextBundle = touchProject({
+              ...bundleRef.current,
+              assets: committedAssets,
+            });
+            mcpRevisionRef.current += 1;
+            mcpRevisionBundleRef.current = nextBundle;
+            bundleRef.current = nextBundle;
+            assetSelectionRef.current = imported.id;
+            saveStatusRef.current = "dirty";
+            setHistory((current) =>
+              commitEditorHistory(current, {
+                ...current.present,
+                bundle: nextBundle,
+                assetSelection: imported.id,
+              }),
+            );
+            setActiveAssetFolderId(imported.folderId ?? null);
+            setSaveStatus("dirty");
+            const activity = `AIがローカルTexture「${imported.name}」をインポートしました`;
+            setNotice(`${activity}。変更を自動保存します`);
+            setMcpLastActivity({
+              clientName: request.clientName || "AI client",
+              message: activity,
+              at: new Intl.DateTimeFormat("ja-JP", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              }).format(new Date()),
+              revision: mcpRevisionRef.current,
+            });
+            await tauri.completeXriftMcpRequest({
+              id: request.id,
+              ok: true,
+              result: {
+                projectId: nextBundle.project.projectId,
+                sceneId: nextBundle.scene.sceneId,
+                textureAssetId: imported.id,
+                name: imported.name,
+                duplicate: false,
+                revisionBefore,
+                revisionAfter: mcpRevisionRef.current,
+                relativePath:
+                  imported.source.kind === "project"
+                    ? imported.source.relativePath
+                    : null,
+                importSettings: imported.importSettings,
+                diagnostics: plan.diagnostics.map(
+                  ({ severity, code, message, fieldPath }) => ({
+                    severity,
+                    code,
+                    message,
+                    ...(fieldPath ? { fieldPath } : {}),
+                  }),
+                ),
+              },
+            });
+            return;
+          } finally {
+            importRunningRef.current = false;
+            if (assetOperationRef.current?.token === operationToken) {
+              assetOperationRef.current = null;
+            }
+            setMcpLocalAssetImportBusy(false);
+          }
         }
         if (scriptTool) {
           const args = request.arguments;
@@ -1491,6 +1790,7 @@ export function VisualEditorPrototype({
                 scriptAssetId: asset.id,
                 name: asset.name,
                 relativePath: asset.source.relativePath,
+                language: asset.language,
                 source,
               },
             });
@@ -1579,6 +1879,7 @@ export function VisualEditorPrototype({
               name,
               sourceBundle.assets,
               pendingScriptPathsRef.current,
+              template.language,
             );
             const source = createScriptTemplateSource(template.id, name);
             if (source === null) {
@@ -1593,6 +1894,7 @@ export function VisualEditorPrototype({
               name,
               relativePath,
               folderId,
+              template.language,
             );
             const nextAssets = addScriptAsset(sourceBundle.assets, asset);
             const scriptContract = extractScriptContract(source);
@@ -1712,6 +2014,7 @@ export function VisualEditorPrototype({
                 entityId,
                 name: asset.name,
                 relativePath: asset.source.relativePath,
+                language: asset.language,
                 requiredAssetKinds: template.requiredAssetKinds,
                 requiredComponents: template.requiredComponents,
                 entityReferenceCount: template.entityReferenceCount,
@@ -1766,6 +2069,24 @@ export function VisualEditorPrototype({
                 { templateId },
               );
             }
+            const requestedLanguage = mcpOptionalScriptLanguage(args.language);
+            if (
+              template &&
+              requestedLanguage !== undefined &&
+              requestedLanguage !== template.language
+            ) {
+              throw new XriftMcpEditorToolError(
+                "INVALID_ARGUMENT",
+                `Template ${template.id} は${template.language} Scriptです`,
+                {
+                  templateId: template.id,
+                  requestedLanguage,
+                  templateLanguage: template.language,
+                },
+              );
+            }
+            const language =
+              template?.language ?? requestedLanguage ?? "ts";
             const name =
               mcpOptionalString(args.name) ??
               (requestedTemplateId
@@ -1785,6 +2106,7 @@ export function VisualEditorPrototype({
               name,
               sourceBundle.assets,
               pendingScriptPathsRef.current,
+              language,
             );
             const source =
               typeof args.source === "string"
@@ -1797,6 +2119,7 @@ export function VisualEditorPrototype({
               name,
               relativePath,
               folderId,
+              language,
             );
             createdRelativePath = relativePath;
             pendingScriptPathsRef.current.add(relativePath);
@@ -2004,6 +2327,7 @@ export function VisualEditorPrototype({
                   : null,
               name: asset.name,
               relativePath: asset.source.relativePath,
+              language: asset.language,
               revisionBefore,
               revisionAfter: mcpRevisionRef.current,
               sourceSaved: true,
@@ -4455,12 +4779,14 @@ export function VisualEditorPrototype({
       name,
       currentAssets,
       pendingScriptPathsRef.current,
+      template.language,
     );
     const asset = createScriptAsset(
       createDocumentId("asset"),
       name,
       relativePath,
       folderId,
+      template.language,
     );
     const previewAssets = addScriptAsset(currentAssets, asset);
     const scriptContract = extractScriptContract(source);

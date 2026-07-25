@@ -120,6 +120,13 @@ export type VisualAssetImportWrite = {
   dataUrl: string;
 };
 
+export type LocalTextureImportSource = {
+  fileName: string;
+  mimeType: string;
+  byteLength: number;
+  dataUrl: string;
+};
+
 export type ExternalStoreAssetKind = "hdri" | "texture" | "model";
 export type ExternalStoreFileFormat = "hdr" | "exr";
 
@@ -346,6 +353,10 @@ export const tauri = {
       projectPath,
       transactionId,
       writes,
+    }),
+  readLocalTextureImportSource: (sourcePath: string) =>
+    invoke<LocalTextureImportSource>("read_local_texture_import_source", {
+      sourcePath,
     }),
   openVisualAssetLocation: (
     projectPath: string,

@@ -1,4 +1,8 @@
-import type { AssetManifest, ScriptAsset } from "../asset-manifest";
+import type {
+  AssetManifest,
+  ScriptAsset,
+  ScriptAssetLanguage,
+} from "../asset-manifest";
 import {
   ASSET_MANIFEST_SCHEMA_VERSION,
   SCRIPT_ASSET_CONTRACT_VERSION,
@@ -27,6 +31,7 @@ export function createScriptRelativePath(
   name: string,
   assets: AssetManifest,
   reservedPaths: Iterable<string> = [],
+  language: ScriptAssetLanguage = "ts",
 ): string {
   const stem = toFileStem(name);
   const taken = new Set(
@@ -37,10 +42,10 @@ export function createScriptRelativePath(
       ...reservedPaths,
     ],
   );
-  let candidate = `${SCRIPT_DIRECTORY}/${stem}.ts`;
+  let candidate = `${SCRIPT_DIRECTORY}/${stem}.${language}`;
   let counter = 2;
   while (taken.has(candidate)) {
-    candidate = `${SCRIPT_DIRECTORY}/${stem}-${counter}.ts`;
+    candidate = `${SCRIPT_DIRECTORY}/${stem}-${counter}.${language}`;
     counter += 1;
   }
   return candidate;
@@ -60,6 +65,7 @@ export function createScriptAsset(
   name: string,
   relativePath: string,
   folderId: string | null = null,
+  language: ScriptAssetLanguage = "ts",
 ): ScriptAsset {
   return {
     id,
@@ -68,7 +74,7 @@ export function createScriptAsset(
     status: "ready",
     folderId,
     contractVersion: SCRIPT_ASSET_CONTRACT_VERSION,
-    language: "ts",
+    language,
     source: { kind: "project", relativePath },
   };
 }

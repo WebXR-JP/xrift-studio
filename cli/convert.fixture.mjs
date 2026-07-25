@@ -24,11 +24,13 @@ import { runVisualCompilerFixtureAssertions } from "../src/lib/visual-editor/com
 import { runClassicExportFixtureAssertions } from "../src/lib/visual-editor/classic-export.fixture.ts";
 import { runComponentCodeImportFixtureAssertions } from "../src/lib/visual-editor/component-code-import.fixture.ts";
 import { runXriftMcpEditorToolFixtures } from "../src/lib/visual-editor/mcp-editor-tools.fixture.ts";
+import { runPlaySessionFixtureAssertions } from "../src/lib/visual-editor/play-session.fixture.ts";
 import { runScriptSpecifierFixtureAssertions } from "../src/lib/visual-editor/scripting/specifiers.fixture.ts";
 import { runScriptTemplateFixtureAssertions } from "../src/lib/visual-editor/scripting/script-templates.fixture.ts";
 import { runScriptPropsFixtureAssertions } from "../src/lib/visual-editor/scripting/script-props.fixture.ts";
 import { runParticleRuntimeFixtureAssertions } from "../src/lib/visual-editor/scripting/particle-runtime.fixture.ts";
 import { runScriptLifecycleFixtureAssertions } from "../src/lib/visual-editor/scripting/lifecycle.fixture.ts";
+import { runScriptAudioFixtureAssertions } from "../src/lib/visual-editor/scripting/audio-runtime.fixture.ts";
 import { runScriptEmitFixtureAssertions } from "../src/lib/visual-editor/compiler/script-emit.fixture.ts";
 import { runBasisTranscoderFixtureAssertions } from "../src/lib/visual-editor/basis-transcoder.fixture.ts";
 
@@ -123,11 +125,13 @@ try {
   assert(modifiedRejected, "--update must reject a modified Classic export");
   runVisualCompilerFixtureAssertions();
   runXriftMcpEditorToolFixtures();
+  runPlaySessionFixtureAssertions();
   runScriptSpecifierFixtureAssertions();
   runScriptTemplateFixtureAssertions();
   runScriptPropsFixtureAssertions();
   runParticleRuntimeFixtureAssertions();
   await runScriptLifecycleFixtureAssertions();
+  await runScriptAudioFixtureAssertions();
   runScriptEmitFixtureAssertions();
   runBasisTranscoderFixtureAssertions();
   runStarterTemplateFixtureAssertions();

@@ -47,6 +47,11 @@ const REGISTRY_GLOBAL = "__xriftScriptModules__";
 
 const bridgeUrls = new Map<string, string>();
 const createdUrls = new Set<string>();
+const MAX_TRANSPILED_SCRIPT_CACHE_ENTRIES = 128;
+const TRANSPILED_SCRIPT_CACHE_VERSION = 1;
+const transpiledScriptCache = new Map<string, string>();
+let transpiledScriptCacheHits = 0;
+let transpiledScriptCacheMisses = 0;
 
 function ensureRegistry(): Record<string, Record<string, unknown>> {
   const scope = globalThis as unknown as Record<string, unknown>;
@@ -111,6 +116,12 @@ export type ScriptModuleLoadResult =
   | { ok: true; module: Record<string, unknown>; objectUrl: string }
   | { ok: false; message: string };
 
+export type ScriptTranspileCacheStats = {
+  hits: number;
+  misses: number;
+  size: number;
+};
+
 export async function loadScriptModule(
   source: string,
   fileName: string,
@@ -123,8 +134,8 @@ export async function loadScriptModule(
         "ScriptではuseFrameなどR3F frame callback APIを使用できません。フレーム更新はdefineScript(...).start()が返すupdate(delta)へ記述してください。@react-three/fiberはnamed importを使用してください。",
     };
   }
-  const transpiled = await transpileTypeScriptModule(source, fileName);
-  if (!transpiled.ok) return { ok: false, message: transpiled.message };
+  const transpiled = await transpileScriptModuleCached(source, fileName);
+  if (!transpiled.ok) return transpiled;
   if (collectDynamicScriptImports(transpiled.javaScript).length > 0) {
     return {
       ok: false,
@@ -163,6 +174,56 @@ export async function loadScriptModule(
       message: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+async function transpileScriptModuleCached(
+  source: string,
+  fileName: string,
+): Promise<
+  { ok: true; javaScript: string } | { ok: false; message: string }
+> {
+  const cacheKey = JSON.stringify([
+    TRANSPILED_SCRIPT_CACHE_VERSION,
+    fileName,
+    source,
+  ]);
+  const cached = transpiledScriptCache.get(cacheKey);
+  if (cached !== undefined) {
+    transpiledScriptCacheHits += 1;
+    // Refresh insertion order so frequently reused Scripts survive the bound.
+    transpiledScriptCache.delete(cacheKey);
+    transpiledScriptCache.set(cacheKey, cached);
+    return { ok: true, javaScript: cached };
+  }
+
+  transpiledScriptCacheMisses += 1;
+  const transpiled = await transpileTypeScriptModule(source, fileName);
+  if (!transpiled.ok) return transpiled;
+  transpiledScriptCache.set(cacheKey, transpiled.javaScript);
+  while (
+    transpiledScriptCache.size > MAX_TRANSPILED_SCRIPT_CACHE_ENTRIES
+  ) {
+    const oldestKey = transpiledScriptCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    transpiledScriptCache.delete(oldestKey);
+  }
+  return transpiled;
+}
+
+/** @internal Exposed for the browser contract fixture. */
+export function getScriptTranspileCacheStats(): ScriptTranspileCacheStats {
+  return {
+    hits: transpiledScriptCacheHits,
+    misses: transpiledScriptCacheMisses,
+    size: transpiledScriptCache.size,
+  };
+}
+
+/** @internal Exposed for the browser contract fixture. */
+export function clearScriptTranspileCache(): void {
+  transpiledScriptCache.clear();
+  transpiledScriptCacheHits = 0;
+  transpiledScriptCacheMisses = 0;
 }
 
 function resolveSpecifier(
@@ -213,4 +274,7 @@ export function releaseAllScriptModules(): void {
   for (const url of createdUrls) URL.revokeObjectURL(url);
   createdUrls.clear();
   bridgeUrls.clear();
+  // Keep the bounded TypeScript emit cache. Stop must dispose executable blob
+  // modules and runtime resources, but unchanged source should not pay the
+  // Monaco worker cost again on the next Play.
 }
