@@ -60,7 +60,7 @@ F-06 アイテム検査
 | MI-41 | GLB / glTFをimportまたは再importする | Model名の論理folderとMaterials / Texturesを自動生成し、埋め込みPBR Materialと画像を独立Assetとして一覧へ追加する。選択Sceneのnode名、親子関係、local Transform、Mesh参照も保持する。同じfolder・source file名は既存Modelの更新、同一SHAの実ファイルは検証後の再利用として表示する。 | 成功時はModelを選択して専用folderを開き、Material slotから展開済みMaterialを開ける。ModelをSceneへ配置すると共有Model Assetを参照するEntity treeとしてHierarchyへ展開する。再importはModel / slot / 派生Asset IDとScene参照を維持し、ユーザー編集済みMaterialを上書きしない。失敗時はlast-good Manifestと実ファイルを保持し、同じ履歴の前回結果と今回結果を重複表示しない。 |
 | MI-42 | Entity Inspector の Transform 軸ラベルを左右へドラッグする、または Scale の比率固定を切り替える | 軸ラベルは `ew-resize` cursor と開始値から現在値への小さな表示でスクラブ可能と伝える。Shift は微調整、Ctrl / Alt は大きな調整にし、Scene View、Inspector、ギズモを同じ local Transform へ即時同期する。Scale の比率固定中は操作軸の倍率を他軸へ適用し、不均等比率を保つ。 | pointer up で一件の Transform history として確定する。Escape / pointer cancel は開始前の値と保存状態へ戻し、履歴を追加しない。ラベルのダブルクリックは数値入力へfocusし、入力中のEditor shortcutを抑止する。 |
 | MI-43 | Edit 中に Entity を選択して F を押す | 選択 Entity の描画 bounds と子 Entity を含む中心・距離へカメラと Orbit 中心を移し、Scene View端に対象名と解除操作を表示する。boundsが空の場合だけEntityのworld位置を使う。別Entityの選択だけではカメラを移動せず、Fで対象を切り替える。 | 同じEntityで再度F、Escape、または表示中の「解除」で、開始前に保存したカメラ位置、向き、Orbit中心、ズームへ戻る。Play開始時も解除してEdit cameraを保存する。Play中、text / 数値入力、IME composition中、Entity未選択時は開始しない。 |
-| MI-44 | Create、Hierarchy右クリック、またはInspectorのAdd Componentを開く | Core、Rendering、Physics、Media、XRiftを件数付きの折りたたみsectionで表示し、同じ中央Registryから候補を取得する。現在のEntityへ追加できない項目は理由と「追加済み」を示す。 | 項目を選ぶとComponentを一件追加して同じEntityを選択したままInspectorへ到達する。Audio Sourceは音を自動再生せず、source URL、音量、loop、spatial設定をInspectorで確定できる。Escape、外側click、section開閉だけではdocumentを変更しない。 |
+| MI-44 | Create、Hierarchy右クリック、またはInspectorのAdd Componentを開く | Core、Rendering、Physics、Interaction、Media、World、ScriptingとXRift公式Componentを件数付きの折りたたみsectionで表示し、同じ中央Registryから候補を取得する。現在のEntityへ追加できない項目は理由と「追加済み」を示す。 | 項目を選ぶとComponentを一件追加して同じEntityを選択したままInspectorへ到達する。Audio Sourceは音を自動再生せず、source URL、音量、loop、spatial設定をInspectorで確定できる。Escape、外側click、section開閉だけではdocumentを変更しない。 |
 | MI-45 | プロジェクトライブラリを開く、検索・並び替え・公開状態の絞り込みを行う、またはプロジェクトを削除する | 新規作成を先頭に保ち、既存projectは表紙、識別情報、更新日時、公開済み / 未公開を持つ一列のlistとして上から下へ並べる。選択中の並び順をlist見出しにも表示する。検索、更新日時、公開日時、名前順と公開状態filterはproject documentを変更せず即時反映する。削除は対象名と絶対保存先、元に戻せないことを確認dialogに表示し、処理中は重複操作を無効にする。 | 並び替え・絞り込みの解除で同じ一覧へ戻る。削除成功後は一覧を再取得して対象を除き、新規作成と他projectを開く導線を保つ。失敗時は対象を残して原因を通知する。native側はprojects root直下の認識済みXRift project以外を拒否する。 |
 | MI-46 | OBJ / VRMをimportする、または配置済みModelのボーン回転・シェイプキーを編集する | Import QueueはGLB / glTFと同じvalidate、copy、parse、thumbnail、commitを使い、Model Inspectorに形式、bone、shape key件数を残す。Entity Inspectorの「モデルポーズ」は選択したboneのXYZ回転とshape keyのweightをScene Viewへ即時反映し、編集対象がAsset共通値ではなく現在のEntityであることを示す。 | 有効値だけをMesh componentの静的poseへ一件のhistoryとして保存する。同じModelの別Entityには波及しない。リセットはposeだけを初期状態へ戻し、Transform、Material、Assetを維持する。失敗時はlast-good Asset / Entity poseを保ち、対応形式または修正対象を同じImport Queue / Inspectorに示す。 |
 | MI-47 | `.unitypackage`、Unity Scene、Unity PrefabをAssetsへdropまたはImportする | Import Queueでgzip / tar展開、pathname復元、Unity YAML解析、Asset変換、Hierarchy再構築、Prefab作成、commitの順に進捗を示す。対応Model / Texture / MaterialとGameObject、Transform、Light、Audio Source、Collider、Scene環境設定を変換し、未対応class IDと件数を診断へ残す。C# / MonoBehaviourはJavaScriptへ変換しない。 | 全Asset sourceのatomic commit後だけScene、AssetManifest、Prefab documentを一件のhistoryへ反映する。成功時はPrefab / Entity / Asset件数と要確認件数、「アセットを表示」を残し、生成Prefabを`assetSelection`、再構築したrootを`sceneSelection`にする。失敗時はlast-good document setを維持して同じActivity drawerから原因を確認できる。 |
@@ -85,6 +85,11 @@ F-06 アイテム検査
 | MI-66 | AboutのDanger Zoneからランタイムまたは全データのリセットを開始する | CLI version確認中は削除操作を無効にし、確認dialogでは対象と復元不能な範囲を明示する。実行中はdialogを閉じられず、削除対象を通常pathから分離してから再読み込みする。 | 成功時は再読み込みして新しいsetupまたは空のproject一覧へ進む。物理削除をすぐ完了できない旧データは退避し、次回起動時に再回収する。退避にも失敗した場合はdialogを保ち、実行中のterminalやeditorを閉じて同じ操作を再試行できる。 |
 | MI-67 | Visual projectのUpload reviewを開く | 公開対象Sceneと展開済みPrefabから参照されるTexture / Model / Audioを解析し、Asset原本の初回ロード容量と回線別ロード時間、Asset VRAM、描画buffer等を含む実行時range、スマートフォン / デスクトップのStudio基準を表示する。詳細modalはロード容量とVRAMそれぞれを寄与量の多い順に並べ、解像度、mipmap、GPU展開形式、mesh / primitive、参照数を示し、resize、KTX2、Draco、音声再圧縮、mesh instancingを効果の大きい順に提案する。自動対応できるresize、KTX2、Dracoにはcheckboxを置き、「選択した最適化を適用」で同じAsset IDの変換済みsourceへまとめて差し替える。処理中は進捗を表示し、閉じる操作と二重実行を止める。 | 推定を実測と表示せず、ロード時間にcache / CDN / app本体 / protocol処理を含まないこと、未知の解像度、GPU / browser差、KTX2転送形式、Dracoが配信量中心の改善であることを残す。分析とcheckboxの選択だけではSceneDocument、AssetManifest、公開先を変更しない。変換fileを一transactionで保存できた後だけAssetManifestを保存し、失敗時は元Assetを維持して同じ選択から再試行できる。成功時は変換前後の容量を残し、再計算した同じ詳細modalとUpload reviewへ戻れる。 |
 | MI-68 | Visual World / Itemの新規作成で「XRift Classicからインポート」をStarterとして選ぶ | 通常Starterと同じカード階層で選択状態を示し、選択時はローカルのproject folderまたはHTTPS / git SSHのRepository URLを同じ面で切り替えられる。folderは選択済み絶対path、URLは入力値を表示する。実行中は「読み込み・変換中」に変えて全作成操作を無効にし、検証済みentryとlocal import graphを静的解析する。取得したproject codeやdependencyは実行しない。 | 成功時は完全に空のVisual Sceneへ、読み込み元で検出したScene、Asset、Material、Light、Collider、XRift Componentだけを確定してEditorで開く。Starter由来の床、Light、SpawnPointを追加しない。失敗時は選択pathまたはURLと名前を保持して同じ画面から再試行できる。作成後のAsset保存またはdocument保存が失敗した場合は新規project全体を回収し、不完全なprojectを一覧へ残さない。 |
+| MI-69 | Script Assetを作成し、docked editorで編集して保存する | Assetsの作成入口とEntityのScript Componentの両方から同じeditorを開く。editorは中央から右へのdocked overlayとし、Scene Viewの左側を隠さずPlayの挙動を見ながら直せるようにする。未保存は`isDirty`点で示し、保存は明示操作と`⌘/Ctrl+S`の両方を受ける。keystrokeごとにhistoryへ積まず、連続入力は現在のhistory項目を置き換える。 | 保存はScript source fileだけを書き、Entity配置とAssetManifestのentryを変更しない。閉じる操作は未保存があるとき破棄・保存・取消を選ばせる。構文が壊れていても保存は許し、実行できない理由をeditor内に残す。 |
+| MI-70 | Playを開始し、Sceneが使うScriptを変換して起動する | 変換中はPlayボタンを「準備中」に変えて無効化し、Edit表示のまま待たせる。Scriptを持たないSceneでは待ち表示を出さない。変換の失敗はfile名、行、列、原因を一覧で示し、該当行へ移動できる。 | 全Scriptが変換できた時だけPlayへ入る。失敗時はEditのまま留まり、壊れたSceneを再生しない。修正して同じPlay操作から再試行でき、Playを諦めてeditorへ戻ることもできる。 |
+| MI-71 | Play中にScriptが実行時例外を投げる | 例外を投げたScriptだけを停止し、Entity名、Script名、行、例外文をScript Consoleへ残す。Scene View全体とほかのEntity、camera、physicsは動き続ける。Inspectorの該当Script Componentにも停止状態を示す。 | 1つのScriptの失敗でPlay全体を落とさない。同じ例外の連続出力は件数へまとめる。該当行への移動、Scriptの再開、Stopのいずれかへ到達できる。 |
+| MI-72 | Play中にScript sourceを保存して反映する | 保存したScriptを使うEntityだけをruntime世代を進めて作り直す。ほかのEntity、player位置、camera、physicsの状態は保持する。反映対象のEntity数を短く示す。 | Play中に変更できるのは選択EntityのTransform、Collider、AnimationとScript sourceだけとし、Hierarchy構造、Entity追加・削除、Asset、Material、Scene settingsは無効のままにする。変換に失敗した場合は直前に動いていたScriptを走らせ続け、失敗をConsoleへ残す。 |
+| MI-73 | 自分で作成していないScriptを含むprojectを初めてPlayする | 取り込み、Prefab、Starter、外部Store由来のScriptを実行前に一覧で示し、件数とfile名を確認できるようにする。実行せずに中身を読む導線を同じ面へ置く。 | 明示的に許可した時だけ実行し、許可はproject単位で記録して次回以降は確認しない。許可しない場合はScriptを実行しないままPlayへ入り、無効であることをScript Consoleに残す。実行環境はアプリと同一で完全な分離ではないことを面の中で明示する。 |
 
 ## 機能一覧
 
@@ -114,6 +119,7 @@ F-06 アイテム検査
 | F-24 | glTF Material制御とBehavior連携 | MI-15, MI-16, MI-25, MI-60 | Material Textureのタイリング、Offset、Rotation、UV SetをglTF互換値として編集し、MCP、Animation導線、KHR_interactivity pointer nodeから同じMaterial設定へ到達できる。Runtime manifestでもTexture transformとRepeat samplerを維持する。 |
 | F-26 | アプリデータのリセット | MI-03, MI-04, MI-05, MI-09, MI-66 | 実行中CLIとの競合や一時的なfile lockで部分的な状態を残さず、ランタイムのみまたは全データを確実に新しい起動から分離する。失敗時は対象と再試行方法を確認したまま復帰できる。 |
 | F-27 | 公開前パフォーマンス概算とAsset最適化 | MI-04, MI-07, MI-27, MI-67 | World / Itemの更新前に初回ロード容量と回線別時間、Assetと実行時VRAMのrange、端末別Studio基準、容量・負荷順の内訳と最適化候補を確認できる。対応候補は個別選択してresize、KTX2、DracoをAssetへ適用し、変換結果と再計算値を確認した上で同じUpload reviewへ戻れる。 |
+| F-28 | Script AssetとScript Component | MI-03, MI-05, MI-09, MI-14, MI-69, MI-70, MI-71, MI-72, MI-73 | Script AssetをTypeScriptで書き、EntityへScript Componentとして複数付けられる。宣言したpropertyがInspectorへ自動で並び、Asset参照とEntity参照を選べる。Playで実行し、Play中にsourceを直すと該当Entityだけが作り直される。実行時例外は該当Scriptだけを止め、Scene Viewを落とさない。同じScriptが公開ワールドへも静的importとして出力され、Playと公開の挙動が一致する。公開できない依存はupload前にblockingとして示す。 |
 
 ## F-23 公式XRift ComponentカタログとClassic / TSX変換の状態設計
 
@@ -402,7 +408,7 @@ F-06 アイテム検査
 
 ### 操作前
 
-- Create、Hierarchy右クリック、InspectorのAdd Componentは同じ基本Component Registryを使い、Core、Rendering、Physics、Media、Worldを折りたたみsectionとして表示する。ライト種別、Particle Emitter、Audio SourceはRendering / Mediaの意味が分かる名前とiconを共有する。
+- Create、Hierarchy右クリック、InspectorのAdd Componentは同じ基本Component Registryを使い、Core、Rendering、Physics、Interaction、Media、World、Scriptingを折りたたみsectionとして表示する。三つの入口は同じcategory一覧を表示し、いずれかだけが特定categoryを省略しない。ライト種別、Particle Emitter、Audio SourceはRendering / Mediaの意味が分かる名前とiconを共有する。
 - Audio Sourceは追加直後も既存Entity selectionを維持し、InspectorでImport済みAudio Assetを選択できる。直接URLは新規設定に使わず、既定では自動再生せず、編集画面を開いただけで音を鳴らさない。
 
 ### 操作中
@@ -760,6 +766,45 @@ F-06 アイテム検査
 ### 戻り先
 
 - 成功時は再読み込み後のsetupまたはproject一覧、失敗・取消時はAboutのDanger Zoneへ戻る。
+
+## F-28 Script AssetとScript Componentの状態設計
+
+参照: MI-03, MI-05, MI-09, MI-14, MI-69, MI-70, MI-71, MI-72, MI-73
+
+### 操作前
+
+- AssetsのCreateとInspectorのAdd Componentの両方からScriptへ到達でき、どちらも同じScript Assetを指す。
+- Script Componentは1つのEntityへ複数付けられ、実行順がEntity階層順とComponent並び順で決まることをInspectorに示す。
+- Script Assetを選ぶと、宣言したpropertyがInspectorへ型どおりに並ぶ。宣言を読み取れないScriptは値を推測せず「propertyを読み取れません」と理由を示す。
+- Item projectでは重力とRigidBodyが動かないため、物理に触るAPIが未対応であることをScriptのdocumentとInspectorで示す。
+
+### 操作中
+
+- Playの開始時にSceneが使うScriptをまとめて変換する。変換中はPlayボタンを「準備中」にして無効化し、Edit表示のまま待たせる。
+- Play中の編集は選択EntityのTransform、Collider、AnimationとScript sourceだけに限る。Hierarchy構造、Entity追加・削除、Asset、Material、Scene settingsは無効のままにする。
+- 取り込み由来のScriptを含むprojectの初回Playでは、実行前に対象file一覧と、実行環境がアプリと同一で完全な分離ではないことを示して許可を求める。
+- editorでの連続入力はhistoryへ積み増さず現在の項目を置き換える。保存はScript source fileだけを書く。
+
+### 成功時
+
+- 全Scriptを変換できた時だけPlayへ入り、Script Consoleを開いて実行中のScript数を示す。
+- Play中の保存では、そのScriptを使うEntityだけが作り直される。反映したEntity数を短く示し、player位置、camera、physicsは保持する。
+- 公開ではstagingへScript sourceと adapter を出力し、生成した`src/World.tsx`から静的importとして参照する。出力先pathをcompile結果に残す。
+
+### 失敗時
+
+- 変換に失敗したらPlayへ入らず、file名、行、列、原因を一覧で示して該当行へ移動できるようにする。壊れたSceneを再生しない。
+- 実行時例外はそのScriptだけを停止し、Entity名、Script名、行、例外文をScript Consoleへ残す。Scene Viewとほかの Entity は動かし続ける。同じ例外の連続は件数へまとめる。
+- Play中の保存で変換に失敗した場合は、直前に動いていたScriptを走らせ続け、失敗をConsoleへ残す。
+- `https://`から始まるmoduleを読むScriptと、runtime JSON出力を選んだ場合はupload前にblockingとして示し、対象Scriptと理由を挙げる。
+- 許可しなかった取り込み由来のScriptは実行せずPlayへ入り、無効であることをConsoleへ残す。
+
+### 戻り先
+
+- 変換失敗時はEditのままScript editorの該当行へ戻る。修正して同じPlay操作から再試行できる。
+- 実行時例外では該当行への移動、そのScriptの再開、Stopのいずれかへ到達できる。
+- Stopは生成したmoduleとblob URL、timer、listenerを破棄し、Play中の状態を残さずEditの選択とcameraへ戻る。
+- 公開のblockingでは該当Script、またはUpload reviewへ戻り、修正後に同じreviewを再確認できる。
 
 ## 実装制約
 
