@@ -927,11 +927,18 @@ function ComponentVisual({
         asset?.kind === "particle" && asset.properties.renderer.textureAssetId
           ? assets.assets[asset.properties.renderer.textureAssetId]
           : undefined;
+      const materialAsset =
+        asset?.kind === "particle" && asset.properties.renderer.materialAssetId
+          ? assets.assets[asset.properties.renderer.materialAssetId]
+          : undefined;
       return showHelpers && component.enabled && asset?.kind === "particle" ? (
         <ParticleEmitterVisual
           asset={asset}
           textureAsset={
             textureAsset?.kind === "texture" ? textureAsset : undefined
+          }
+          materialAsset={
+            materialAsset?.kind === "material" ? materialAsset : undefined
           }
           projectPath={projectPath}
           selected={selected}

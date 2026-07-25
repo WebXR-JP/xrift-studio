@@ -1,4 +1,4 @@
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AdditiveBlending,
@@ -7,7 +7,6 @@ import {
   Color,
   DynamicDrawUsage,
   NormalBlending,
-  NoColorSpace,
   Points,
   PointsMaterial,
   SRGBColorSpace,
@@ -15,23 +14,33 @@ import {
   Vector3,
   type Texture,
 } from "three";
+import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 import {
   normalizeParticleProperties,
+  normalizeMaterialProperties,
+  type MaterialAsset,
   type ParticleAsset,
   type TextureAsset,
 } from "../../lib/visual-editor";
-import { readProjectTextureDataUrl } from "./material-texture-preview";
+import {
+  configureMaterialPreviewTexture,
+  readProjectTextureDataUrl,
+} from "./material-texture-preview";
 
 const MAX_EDITOR_PARTICLES = 512;
+const KTX2_TRANSCODER_PATH =
+  "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/basis/";
 
 export function ParticleEmitterVisual({
   asset,
   textureAsset,
+  materialAsset,
   projectPath,
   selected,
 }: {
   asset: ParticleAsset;
   textureAsset?: TextureAsset;
+  materialAsset?: MaterialAsset;
   projectPath?: string;
   selected: boolean;
 }) {
@@ -54,16 +63,35 @@ export function ParticleEmitterVisual({
   const elapsedRef = useRef(0);
   const geometry = useMemo(() => createGeometry(count), [count]);
   const particleMap = useParticleTexture(textureAsset, projectPath);
+  const materialBaseColor = useMemo(() => {
+    if (!materialAsset) return [1, 1, 1, 1] as const;
+    return normalizeMaterialProperties(
+      materialAsset.properties as unknown as Parameters<
+        typeof normalizeMaterialProperties
+      >[0],
+    ).pbrMetallicRoughness.baseColorFactor;
+  }, [materialAsset]);
+  const materialColor = useMemo(
+    () =>
+      new Color().setRGB(
+        materialBaseColor[0],
+        materialBaseColor[1],
+        materialBaseColor[2],
+        SRGBColorSpace,
+      ),
+    [materialBaseColor],
+  );
   const material = useMemo(
     () =>
       new PointsMaterial({
+        color: materialColor,
         size: Math.max(
           0.01,
           (properties.startSize.min + properties.startSize.max) / 2,
         ),
         sizeAttenuation: true,
         transparent: true,
-        opacity: selected ? 1 : 0.9,
+        opacity: materialBaseColor[3] * (selected ? 1 : 0.9),
         map: particleMap,
         alphaTest: particleMap ? 0.01 : 0,
         vertexColors: true,
@@ -74,6 +102,8 @@ export function ParticleEmitterVisual({
             : NormalBlending,
       }),
     [
+      materialBaseColor,
+      materialColor,
       properties.renderer.blending,
       properties.startSize.max,
       properties.startSize.min,
@@ -120,6 +150,7 @@ export function ParticleEmitterVisual({
       const rawAge = elapsed - bornAt;
       if (rawAge < 0 && !properties.prewarm) {
         position.setXYZ(index, 0, -10_000, 0);
+        colors.setXYZW(index, 0, 0, 0, 0);
         continue;
       }
       const age = properties.looping
@@ -127,6 +158,7 @@ export function ParticleEmitterVisual({
         : rawAge;
       if (!properties.looping && (age < 0 || age > lifetime)) {
         position.setXYZ(index, 0, -10_000, 0);
+        colors.setXYZW(index, 0, 0, 0, 0);
         continue;
       }
       const normalizedAge = Math.max(0, Math.min(1, age / lifetime));
@@ -153,8 +185,15 @@ export function ParticleEmitterVisual({
         mix(startColor[0], endColor[0], normalizedAge),
         mix(startColor[1], endColor[1], normalizedAge),
         mix(startColor[2], endColor[2], normalizedAge),
+        SRGBColorSpace,
       );
-      colors.setXYZ(index, color.r, color.g, color.b);
+      colors.setXYZW(
+        index,
+        color.r,
+        color.g,
+        color.b,
+        mix(startColor[3], endColor[3], normalizedAge),
+      );
     }
     position.needsUpdate = true;
     colors.needsUpdate = true;
@@ -169,6 +208,7 @@ function useParticleTexture(
   textureAsset: TextureAsset | undefined,
   projectPath: string | undefined,
 ): Texture | null {
+  const gl = useThree((state) => state.gl);
   const [texture, setTexture] = useState<Texture | null>(null);
   const textureKey = textureAsset
     ? [
@@ -189,7 +229,7 @@ function useParticleTexture(
     setTexture(null);
     if (
       !textureAsset ||
-      !projectPath ||
+      (!projectPath && textureAsset.source.kind !== "builtin") ||
       textureAsset.source.kind === "document"
     ) {
       return () => {
@@ -202,17 +242,28 @@ function useParticleTexture(
         | { kind: "project"; relativePath: string }
         | { kind: "builtin"; key: string };
     };
-    void readProjectTextureDataUrl(projectPath, readableTexture)
-      .then((dataUrl) => new TextureLoader().loadAsync(dataUrl))
+    void readProjectTextureDataUrl(projectPath ?? "", readableTexture)
+      .then(async (dataUrl): Promise<Texture> => {
+        if (textureAsset.importMetadata?.sourceFormat === "ktx2") {
+          return new KTX2Loader()
+            .setTranscoderPath(KTX2_TRANSCODER_PATH)
+            .detectSupport(gl)
+            .loadAsync(dataUrl);
+        }
+        return new TextureLoader().loadAsync(dataUrl);
+      })
       .then((loaded) => {
-        loaded.name = `${textureAsset.name} (particle)`;
-        loaded.colorSpace =
+        configureMaterialPreviewTexture(
+          loaded,
+          textureAsset,
+          { textureAssetId: textureAsset.id, texCoord: 0 },
           textureAsset.importSettings.colorSpace === "srgb"
-            ? SRGBColorSpace
-            : NoColorSpace;
-        loaded.flipY = textureAsset.importSettings.flipY;
-        loaded.generateMipmaps = textureAsset.importSettings.generateMipmaps;
-        loaded.needsUpdate = true;
+            ? "srgb"
+            : textureAsset.importSettings.colorSpace === "linear"
+              ? "linear"
+              : "srgb",
+          "particle",
+        );
         if (!active) {
           loaded.dispose();
           return;
@@ -229,7 +280,7 @@ function useParticleTexture(
       ownedTexture?.dispose();
       ownedTexture = null;
     };
-  }, [projectPath, textureAsset, textureKey]);
+  }, [gl, projectPath, textureAsset, textureKey]);
 
   return texture;
 }
@@ -244,7 +295,7 @@ type ParticleSeed = {
 function createGeometry(count: number): BufferGeometry {
   const geometry = new BufferGeometry();
   const positions = new BufferAttribute(new Float32Array(count * 3), 3);
-  const colors = new BufferAttribute(new Float32Array(count * 3), 3);
+  const colors = new BufferAttribute(new Float32Array(count * 4), 4);
   positions.setUsage(DynamicDrawUsage);
   colors.setUsage(DynamicDrawUsage);
   geometry.setAttribute("position", positions);

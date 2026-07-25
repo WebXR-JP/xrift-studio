@@ -3065,7 +3065,54 @@ function renderParticleEmitter(
       const usesKtx2 = getTextureSourceFormat(textureAsset) === "ktx2";
       context.dreiImports.add(usesKtx2 ? "useKTX2" : "useTexture");
       const urlConstant = registerAssetUrl(textureAsset, textureUrl, context);
-      textureLine = `  const particleMapUrl = useCompiledAssetUrl(${urlConstant});\n  const particleMap = ${usesKtx2 ? "useKTX2" : "useTexture"}(particleMapUrl);\n`;
+      const settings = textureAsset.importSettings;
+      const colorSpace =
+        settings.colorSpace === "linear" ? "NoColorSpace" : "SRGBColorSpace";
+      const wrapS = {
+        "clamp-to-edge": "ClampToEdgeWrapping",
+        "mirrored-repeat": "MirroredRepeatWrapping",
+        repeat: "RepeatWrapping",
+      }[settings.sampler.wrapS];
+      const wrapT = {
+        "clamp-to-edge": "ClampToEdgeWrapping",
+        "mirrored-repeat": "MirroredRepeatWrapping",
+        repeat: "RepeatWrapping",
+      }[settings.sampler.wrapT];
+      const magFilter = {
+        linear: "LinearFilter",
+        nearest: "NearestFilter",
+      }[settings.sampler.magFilter];
+      const minFilter = {
+        linear: "LinearFilter",
+        "linear-mipmap-linear": "LinearMipmapLinearFilter",
+        "linear-mipmap-nearest": "LinearMipmapNearestFilter",
+        nearest: "NearestFilter",
+        "nearest-mipmap-linear": "NearestMipmapLinearFilter",
+        "nearest-mipmap-nearest": "NearestMipmapNearestFilter",
+      }[settings.sampler.minFilter];
+      [
+        colorSpace,
+        wrapS,
+        wrapT,
+        magFilter,
+        minFilter,
+      ].forEach((name) => context.threeValueImports.add(name));
+      textureLine = `  const particleMapUrl = useCompiledAssetUrl(${urlConstant});
+  const particleMapSource = ${usesKtx2 ? "useKTX2" : "useTexture"}(particleMapUrl);
+  const particleMap = useMemo(() => {
+    const value = particleMapSource.clone();
+    value.colorSpace = ${colorSpace};
+    value.flipY = ${settings.flipY};
+    value.generateMipmaps = ${settings.generateMipmaps};
+    value.wrapS = ${wrapS};
+    value.wrapT = ${wrapT};
+    value.magFilter = ${magFilter};
+    value.minFilter = ${minFilter};
+    value.needsUpdate = true;
+    return value;
+  }, [particleMapSource]);
+  useEffect(() => () => particleMap.dispose(), [particleMap]);
+`;
       textureProp = " map={particleMap}";
     }
   }
@@ -3169,6 +3216,7 @@ function registerCompiledParticleRuntime(context: CompileContext): void {
     "DynamicDrawUsage",
     "NormalBlending",
     "PointsMaterial",
+    "SRGBColorSpace",
     "Vector3",
   ].forEach((name) => context.threeValueImports.add(name));
   context.threeTypeImports.add("Points");
@@ -3271,7 +3319,7 @@ const CompiledParticleEmitter: FC<{
   const geometry = useMemo(() => {
     const value = new BufferGeometry();
     const positions = new BufferAttribute(new Float32Array(count * 3), 3);
-    const colors = new BufferAttribute(new Float32Array(count * 3), 3);
+    const colors = new BufferAttribute(new Float32Array(count * 4), 4);
     positions.setUsage(DynamicDrawUsage);
     colors.setUsage(DynamicDrawUsage);
     value.setAttribute("position", positions);
@@ -3290,7 +3338,7 @@ const CompiledParticleEmitter: FC<{
         ),
         sizeAttenuation: true,
         transparent: true,
-        opacity: Math.max(0, Math.min(1, opacity * Math.max(config.colorOverLifetime.start[3], config.colorOverLifetime.end[3]))),
+        opacity: Math.max(0, Math.min(1, opacity)),
         vertexColors: true,
         alphaTest: map ? 0.01 : 0,
         depthWrite: config.renderer.blending !== "additive",
@@ -3325,11 +3373,13 @@ const CompiledParticleEmitter: FC<{
       const rawAge = elapsed - bornAt;
       if (rawAge < 0 && !config.prewarm) {
         position.setXYZ(index, 0, -10000, 0);
+        colors.setXYZW(index, 0, 0, 0, 0);
         continue;
       }
       const age = config.looping ? ((rawAge % lifetime) + lifetime) % lifetime : rawAge;
       if (!config.looping && (age < 0 || age > lifetime)) {
         position.setXYZ(index, 0, -10000, 0);
+        colors.setXYZW(index, 0, 0, 0, 0);
         continue;
       }
       const normalizedAge = Math.max(0, Math.min(1, age / lifetime));
@@ -3349,8 +3399,15 @@ const CompiledParticleEmitter: FC<{
         compiledParticleMix(startColor[0], endColor[0], normalizedAge),
         compiledParticleMix(startColor[1], endColor[1], normalizedAge),
         compiledParticleMix(startColor[2], endColor[2], normalizedAge),
+        SRGBColorSpace,
       );
-      colors.setXYZ(index, currentColor.r, currentColor.g, currentColor.b);
+      colors.setXYZW(
+        index,
+        currentColor.r,
+        currentColor.g,
+        currentColor.b,
+        compiledParticleMix(startColor[3], endColor[3], normalizedAge),
+      );
     }
     position.needsUpdate = true;
     colors.needsUpdate = true;

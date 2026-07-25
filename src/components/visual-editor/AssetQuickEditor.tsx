@@ -3051,6 +3051,7 @@ export function AssetQuickEditor({
         assets={assets}
         readOnly={readOnly}
         onChange={(patch) => onParticleChange(asset.id, patch)}
+        onOpenTexture={onSelectAsset}
       />
     );
   }

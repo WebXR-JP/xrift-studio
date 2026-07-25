@@ -17,7 +17,12 @@ import {
   PREFAB_DOCUMENT_SCHEMA_VERSION,
   type PrefabDocument,
 } from "../prefab-document";
-import { addDefaultParticleAsset } from "../particle-system";
+import {
+  PARTICLE_AUTHORING_PRESETS,
+  addDefaultParticleAsset,
+  scaleParticleEmission,
+  updateParticleAsset,
+} from "../particle-system";
 import {
   createBoxColliderComponent,
   createMeshColliderComponent,
@@ -307,13 +312,57 @@ export function runVisualCompilerFixtureAssertions(
   assert(materialSource.includes("transparent={true}"), "Material opacity was not generated");
   assert(materialSource.includes("side={DoubleSide}"), "Double-sided material was not generated");
 
-  const particleAssetResult = addDefaultParticleAsset(world.assets, {
+  const particleTexture: TextureAsset = {
+    id: "fixture-particle-texture",
+    name: "Fixture Particle Texture",
+    kind: "texture",
+    status: "ready",
+    source: {
+      kind: "project",
+      relativePath: "assets/textures/fixture-particle.png",
+    },
+    thumbnail: { status: "missing" },
+    importSettings: normalizeTextureImportSettings({
+      colorSpace: "srgb",
+      flipY: true,
+      generateMipmaps: false,
+      sampler: {
+        wrapS: "mirrored-repeat",
+        wrapT: "clamp-to-edge",
+        magFilter: "nearest",
+        minFilter: "linear",
+      },
+    }),
+    importMetadata: {
+      sourceFormat: "png",
+      mimeType: "image/png",
+      byteLength: 128,
+      width: 32,
+      height: 32,
+    },
+  };
+  const particleManifest: AssetManifest = {
+    ...world.assets,
+    assets: {
+      ...world.assets.assets,
+      [particleTexture.id]: particleTexture,
+    },
+  };
+  const particleAssetResult = addDefaultParticleAsset(particleManifest, {
     id: "fixture-particle-fireflies",
     name: "Fixture Fireflies",
     properties: {
       maxParticles: 128,
       emission: { rateOverTime: 12, bursts: [] },
       shape: { type: "sphere", radius: 0.75 },
+      colorOverLifetime: {
+        start: [1, 0.25, 0.1, 0.8],
+        end: [0.1, 0.4, 1, 0],
+      },
+      renderer: {
+        materialAssetId: BUILTIN_ASSET_IDS.material.blue,
+        textureAssetId: particleTexture.id,
+      },
     },
   });
   assert(particleAssetResult.added, "Particle Asset fixture could not be created");
@@ -355,6 +404,89 @@ export function runVisualCompilerFixtureAssertions(
     particleSource.includes("<CompiledParticleEmitter config="),
     "Particle Asset was not wired to its Scene emitter",
   );
+  [
+    "const particleMapSource = useTexture(particleMapUrl)",
+    "const value = particleMapSource.clone()",
+    "value.colorSpace = SRGBColorSpace",
+    "value.flipY = true",
+    "value.generateMipmaps = false",
+    "value.wrapS = MirroredRepeatWrapping",
+    "value.wrapT = ClampToEdgeWrapping",
+    "value.magFilter = NearestFilter",
+    "value.minFilter = LinearFilter",
+  ].forEach((fragment) =>
+    assert(
+      particleSource.includes(fragment),
+      `Particle Texture setting was not generated: ${fragment}`,
+    ),
+  );
+  [
+    "new Float32Array(count * 4), 4",
+    "colors.setXYZW(",
+    "compiledParticleMix(startColor[3], endColor[3], normalizedAge)",
+    "SRGBColorSpace,",
+    'color="#',
+    "opacity={",
+  ].forEach((fragment) =>
+    assert(
+      particleSource.includes(fragment),
+      `Particle Color/Alpha setting was not generated: ${fragment}`,
+    ),
+  );
+  assert(
+    particleResult.stagingPlan.assetCopyPlan.some(
+      (entry) =>
+        entry.assetId === particleTexture.id &&
+        entry.sourceRelativePath ===
+          "assets/textures/fixture-particle.png" &&
+        entry.supportedByCompiler,
+    ),
+    "Particle Texture was not added to the final staging copy plan",
+  );
+  const particleWithoutTexture = updateParticleAsset(
+    particleAssetResult.manifest,
+    particleAssetResult.assetId,
+    { renderer: { textureAssetId: undefined } },
+  ).assets[particleAssetResult.assetId];
+  assert(
+    particleWithoutTexture?.kind === "particle" &&
+      particleWithoutTexture.properties.renderer.textureAssetId === undefined,
+    "Particle Texture reference could not be cleared",
+  );
+  const particleAsset =
+    particleAssetResult.manifest.assets[particleAssetResult.assetId];
+  assert(particleAsset?.kind === "particle", "Particle fixture Asset is missing");
+  if (particleAsset?.kind === "particle") {
+    const denser = updateParticleAsset(
+      particleAssetResult.manifest,
+      particleAsset.id,
+      scaleParticleEmission(particleAsset.properties, 2),
+    ).assets[particleAsset.id];
+    assert(
+      denser?.kind === "particle" &&
+        denser.properties.maxParticles ===
+          particleAsset.properties.maxParticles * 2 &&
+        denser.properties.emission.rateOverTime ===
+          particleAsset.properties.emission.rateOverTime * 2 &&
+        denser.properties.renderer.textureAssetId === particleTexture.id,
+      "Particle density tool must scale rate and capacity without clearing Texture",
+    );
+    for (const preset of PARTICLE_AUTHORING_PRESETS) {
+      const presetAsset = updateParticleAsset(
+        particleAssetResult.manifest,
+        particleAsset.id,
+        preset.properties,
+      ).assets[particleAsset.id];
+      assert(
+        presetAsset?.kind === "particle" &&
+          presetAsset.properties.renderer.textureAssetId ===
+            particleTexture.id &&
+          presetAsset.properties.renderer.materialAssetId ===
+            BUILTIN_ASSET_IDS.material.blue,
+        `Particle preset must retain renderer Asset references: ${preset.id}`,
+      );
+    }
+  }
 
   const colliderScene = withFixtureColliders(
     world.scenes[world.project.entrySceneId],

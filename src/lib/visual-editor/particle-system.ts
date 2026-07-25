@@ -69,6 +69,244 @@ export const DEFAULT_PARTICLE_PROPERTIES: ParticleProperties = {
   },
 };
 
+export const PARTICLE_AUTHORING_PRESETS = [
+  {
+    id: "fire",
+    name: "炎",
+    description: "上昇しながら赤く消える炎",
+    properties: {
+      maxParticles: 320,
+      duration: 4,
+      looping: true,
+      prewarm: true,
+      startDelay: { min: 0, max: 0 },
+      startLifetime: { min: 0.6, max: 1.25 },
+      startSpeed: { min: 0.45, max: 1.15 },
+      startSize: { min: 0.12, max: 0.32 },
+      startRotation: { min: 0, max: Math.PI * 2 },
+      gravity: [0, 0.45, 0],
+      emission: { rateOverTime: 48, bursts: [] },
+      shape: { type: "cone", radius: 0.28, angle: 15 },
+      colorOverLifetime: {
+        start: [1, 0.72, 0.12, 0.95],
+        end: [0.85, 0.03, 0.01, 0],
+      },
+      sizeOverLifetime: { min: 1, max: 0.08 },
+      velocityOverLifetime: {
+        linear: [0, 0.35, 0],
+        orbital: [0, 0.35, 0],
+      },
+      renderer: {
+        mode: "billboard",
+        blending: "additive",
+        sortMode: "distance",
+        castShadow: false,
+        receiveShadow: false,
+      },
+    },
+  },
+  {
+    id: "smoke",
+    name: "煙",
+    description: "ゆっくり広がって薄くなる煙",
+    properties: {
+      maxParticles: 180,
+      duration: 6,
+      looping: true,
+      prewarm: true,
+      startDelay: { min: 0, max: 0 },
+      startLifetime: { min: 2.8, max: 4.8 },
+      startSpeed: { min: 0.08, max: 0.28 },
+      startSize: { min: 0.32, max: 0.7 },
+      startRotation: { min: 0, max: Math.PI * 2 },
+      gravity: [0, 0.08, 0],
+      emission: { rateOverTime: 10, bursts: [] },
+      shape: { type: "cone", radius: 0.35, angle: 22 },
+      colorOverLifetime: {
+        start: [0.76, 0.8, 0.86, 0.56],
+        end: [0.24, 0.28, 0.36, 0],
+      },
+      sizeOverLifetime: { min: 0.7, max: 1.9 },
+      velocityOverLifetime: {
+        linear: [0.08, 0.28, 0],
+        orbital: [0, 0.18, 0],
+      },
+      renderer: {
+        mode: "billboard",
+        blending: "normal",
+        sortMode: "distance",
+        castShadow: false,
+        receiveShadow: false,
+      },
+    },
+  },
+  {
+    id: "magic",
+    name: "魔法",
+    description: "青紫にきらめく浮遊光",
+    properties: {
+      maxParticles: 280,
+      duration: 5,
+      looping: true,
+      prewarm: true,
+      startDelay: { min: 0, max: 0 },
+      startLifetime: { min: 1.4, max: 2.8 },
+      startSpeed: { min: 0.04, max: 0.22 },
+      startSize: { min: 0.05, max: 0.16 },
+      startRotation: { min: 0, max: Math.PI * 2 },
+      gravity: [0, 0.02, 0],
+      emission: { rateOverTime: 38, bursts: [] },
+      shape: { type: "sphere", radius: 0.85 },
+      colorOverLifetime: {
+        start: [0.28, 0.96, 1, 1],
+        end: [0.66, 0.18, 1, 0],
+      },
+      sizeOverLifetime: { min: 0.9, max: 0.12 },
+      velocityOverLifetime: {
+        linear: [0, 0.08, 0],
+        orbital: [0, 1.4, 0],
+      },
+      renderer: {
+        mode: "billboard",
+        blending: "additive",
+        sortMode: "youngest",
+        castShadow: false,
+        receiveShadow: false,
+      },
+    },
+  },
+  {
+    id: "snow",
+    name: "雪",
+    description: "広い範囲へ静かに降る雪",
+    properties: {
+      maxParticles: 720,
+      duration: 8,
+      looping: true,
+      prewarm: true,
+      startDelay: { min: 0, max: 0 },
+      startLifetime: { min: 5, max: 8 },
+      startSpeed: { min: 0, max: 0.12 },
+      startSize: { min: 0.04, max: 0.12 },
+      startRotation: { min: 0, max: Math.PI * 2 },
+      gravity: [0, -0.42, 0],
+      emission: { rateOverTime: 52, bursts: [] },
+      shape: { type: "box", size: [4, 0.1, 4] },
+      colorOverLifetime: {
+        start: [0.92, 0.98, 1, 0.95],
+        end: [0.68, 0.84, 1, 0],
+      },
+      sizeOverLifetime: { min: 1, max: 0.65 },
+      velocityOverLifetime: {
+        linear: [0.12, -0.08, 0],
+        orbital: [0, 0.16, 0],
+      },
+      renderer: {
+        mode: "billboard",
+        blending: "normal",
+        sortMode: "distance",
+        castShadow: false,
+        receiveShadow: false,
+      },
+    },
+  },
+  {
+    id: "confetti",
+    name: "紙吹雪",
+    description: "勢いよく広がって落下する紙片",
+    properties: {
+      maxParticles: 460,
+      duration: 5,
+      looping: true,
+      prewarm: false,
+      startDelay: { min: 0, max: 0.2 },
+      startLifetime: { min: 2.2, max: 4.2 },
+      startSpeed: { min: 2, max: 4.5 },
+      startSize: { min: 0.08, max: 0.2 },
+      startRotation: { min: 0, max: Math.PI * 2 },
+      gravity: [0, -3.2, 0],
+      emission: { rateOverTime: 28, bursts: [] },
+      shape: { type: "cone", radius: 0.4, angle: 48 },
+      colorOverLifetime: {
+        start: [1, 0.2, 0.64, 1],
+        end: [0.12, 0.82, 1, 0.18],
+      },
+      sizeOverLifetime: { min: 1, max: 0.7 },
+      velocityOverLifetime: {
+        linear: [0.18, 0, 0],
+        orbital: [0, 1.2, 0],
+      },
+      renderer: {
+        mode: "billboard",
+        blending: "normal",
+        sortMode: "youngest",
+        castShadow: false,
+        receiveShadow: false,
+      },
+    },
+  },
+  {
+    id: "fountain",
+    name: "噴水",
+    description: "重力で弧を描く細かな飛沫",
+    properties: {
+      maxParticles: 520,
+      duration: 5,
+      looping: true,
+      prewarm: true,
+      startDelay: { min: 0, max: 0 },
+      startLifetime: { min: 1.4, max: 2.4 },
+      startSpeed: { min: 2.4, max: 3.8 },
+      startSize: { min: 0.035, max: 0.09 },
+      startRotation: { min: 0, max: Math.PI * 2 },
+      gravity: [0, -2.8, 0],
+      emission: { rateOverTime: 72, bursts: [] },
+      shape: { type: "cone", radius: 0.18, angle: 22 },
+      colorOverLifetime: {
+        start: [0.72, 0.94, 1, 0.9],
+        end: [0.18, 0.58, 1, 0],
+      },
+      sizeOverLifetime: { min: 1, max: 0.35 },
+      velocityOverLifetime: {
+        linear: [0, 0, 0],
+        orbital: [0, 0.15, 0],
+      },
+      renderer: {
+        mode: "billboard",
+        blending: "additive",
+        sortMode: "distance",
+        castShadow: false,
+        receiveShadow: false,
+      },
+    },
+  },
+] satisfies ReadonlyArray<{
+  id: string;
+  name: string;
+  description: string;
+  properties: ParticlePropertiesPatch;
+}>;
+
+export function scaleParticleEmission(
+  properties: ParticleProperties,
+  multiplier: number,
+): ParticlePropertiesPatch {
+  const safeMultiplier =
+    Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
+  return {
+    maxParticles: Math.max(
+      1,
+      Math.min(100_000, Math.round(properties.maxParticles * safeMultiplier)),
+    ),
+    emission: {
+      rateOverTime: Math.max(
+        0,
+        Math.min(100_000, properties.emission.rateOverTime * safeMultiplier),
+      ),
+    },
+  };
+}
+
 export function createDefaultParticleAsset(input: {
   id: string;
   name: string;
