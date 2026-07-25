@@ -31,13 +31,23 @@ import {
   type ScriptContext,
   type ScriptInput,
   type ScriptInstance,
+  type ScriptMaterialHandle,
+  type ScriptMaterialInfo,
+  type ScriptMaterialSelector,
   type ScriptMaterials,
   type ScriptMaterialTextureSlot,
+  type ScriptParticles,
   type ScriptPropDefinition,
   type ScriptPropsDeclaration,
   type ScriptTexture,
   type ScriptTextureLoadOptions,
 } from "./api.js";
+import { createScriptLifecycle } from "./lifecycle.js";
+import {
+  XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY,
+  type XriftParticleRuntimeBridge,
+  type XriftParticleRuntimeOverrides,
+} from "./particle.js";
 
 /**
  * Runs Script Assets on Entities.
@@ -56,7 +66,7 @@ export type ScriptFailure = {
   entityId: string;
   componentId: string;
   scriptName: string;
-  phase: "start" | "update" | "event" | "render" | "stop";
+  phase: "start" | "update" | "event" | "render" | "async" | "stop";
   message: string;
   stopped: boolean;
 };
@@ -76,7 +86,7 @@ type Registration = {
 };
 
 type ScriptListener = {
-  handler: (payload?: unknown) => void;
+  handler: (payload?: unknown) => void | PromiseLike<void>;
   onError?: (error: unknown) => void;
 };
 
@@ -85,7 +95,7 @@ type ScriptRootValue = {
   emit(event: string, payload?: unknown): void;
   subscribe(
     event: string,
-    handler: (payload?: unknown) => void,
+    handler: (payload?: unknown) => void | PromiseLike<void>,
     onError?: (error: unknown) => void,
   ): () => void;
   input: ScriptInput;
@@ -147,11 +157,11 @@ export function XriftScriptRoot({
       },
       emit(event, payload) {
         for (const listener of listeners.current.get(event) ?? []) {
-          try {
-            listener.handler(payload);
-          } catch (error) {
-            listener.onError?.(error);
-          }
+          invokeScriptEventHandler(
+            listener.handler,
+            payload,
+            listener.onError,
+          );
         }
       },
       subscribe(event, handler, onError) {
@@ -291,7 +301,12 @@ export function XriftScriptHost({
   onFailureRef.current = onFailure;
   const assetReferenceKey = JSON.stringify(assetReferences);
   const entityReferenceKey = JSON.stringify(entityReferences);
-  const three = useThree();
+  // Select stable renderer objects individually. Subscribing to the complete
+  // R3F store would restart every Script when viewport size or unrelated
+  // Canvas state changes.
+  const scene = useThree((state) => state.scene);
+  const camera = useThree((state) => state.camera);
+  const renderer = useThree((state) => state.gl);
   const handleRenderError = useCallback(
     (error: unknown) => {
       failedRenderRef.current = Render;
@@ -370,13 +385,17 @@ export function XriftScriptHost({
         shutdown?.();
       }
     };
+    const lifecycle = createScriptLifecycle(
+      () => active,
+      (error) => fail("async", error),
+    );
 
     const context: ScriptContext<ScriptPropsDeclaration> = {
       entity: { id: entityId, name: entityName, enabled: true },
       object3d: object3d as unknown as ScriptContext["object3d"],
-      scene: three.scene,
-      camera: three.camera,
-      renderer: three.gl,
+      scene,
+      camera,
+      renderer,
       // The host is generic over every declaration, so the precise mapped type
       // only exists from the authoring side. Values are validated before here.
       props: resolveProps(
@@ -385,13 +404,15 @@ export function XriftScriptHost({
       ) as ScriptContext<ScriptPropsDeclaration>["props"],
       time,
       input: root.input,
+      lifecycle,
       assets: resources.assets,
       materials: resources.materials,
+      particles: resources.particles,
       find: (targetId) =>
         (active && allowedEntityIds.has(targetId)
           ? resolveEntityRef.current?.(targetId) ??
             findEntityObject(
-              findScriptScope(object3d, three.scene),
+              findScriptScope(object3d, scene),
               targetId,
             )
           : null) as unknown as ScriptContext["object3d"] | null,
@@ -401,7 +422,9 @@ export function XriftScriptHost({
         const unsubscribe = root.subscribe(
           event,
           handler,
-          (error) => fail("event", error),
+          (error) => {
+            if (active) fail("event", error);
+          },
         );
         unsubscribes.push(unsubscribe);
         return unsubscribe;
@@ -427,12 +450,14 @@ export function XriftScriptHost({
       fail("start", error);
       active = false;
       for (const unsubscribe of unsubscribes) unsubscribe();
+      lifecycle.dispose();
       resources.dispose();
       return;
     }
     if (stopped) {
       active = false;
       for (const unsubscribe of unsubscribes) unsubscribe();
+      lifecycle.dispose();
       try {
         instance?.stop?.();
       } catch {
@@ -455,6 +480,7 @@ export function XriftScriptHost({
       active = false;
       unregister?.();
       for (const unsubscribe of unsubscribes) unsubscribe();
+      lifecycle.dispose();
       try {
         instance?.stop?.();
       } catch (error) {
@@ -510,7 +536,9 @@ export function XriftScriptHost({
     assetReferenceKey,
     assetResolutionKey,
     entityReferenceKey,
-    three,
+    scene,
+    camera,
+    renderer,
   ]);
 
   return (
@@ -528,9 +556,40 @@ export function XriftScriptHost({
   );
 }
 
+/**
+ * Invokes one event listener without letting either a synchronous throw or an
+ * asynchronous rejection escape the owning Script host.
+ *
+ * @internal Exported so the shared Studio/publish behavior can be fixture-tested
+ * without mounting a React Three Fiber renderer.
+ */
+export function invokeScriptEventHandler(
+  handler: (payload?: unknown) => void | PromiseLike<void>,
+  payload: unknown,
+  onError?: (error: unknown) => void,
+): void {
+  const reportError = (error: unknown): void => {
+    try {
+      onError?.(error);
+    } catch {
+      // Error reporting must not create another unhandled rejection.
+    }
+  };
+
+  try {
+    const result = handler(payload);
+    if (result !== undefined) {
+      void Promise.resolve(result).then(undefined, reportError);
+    }
+  } catch (error) {
+    reportError(error);
+  }
+}
+
 type ScriptResources = {
   assets: ScriptAssets;
   materials: ScriptMaterials;
+  particles: ScriptParticles;
   /** Detects Meshes that arrive after start, such as asynchronously loaded Models. */
   update(): void;
   dispose(): void;
@@ -543,6 +602,22 @@ type MaterialOverrides = {
   metalness?: number;
   roughness?: number;
   textures: Partial<Record<ScriptMaterialTextureSlot, Texture | null>>;
+};
+
+type MaterialOverrideRevisions = {
+  color?: number;
+  opacity?: number;
+  emissive?: number;
+  metalness?: number;
+  roughness?: number;
+  textures: Partial<Record<ScriptMaterialTextureSlot, number>>;
+};
+
+type MaterialOverrideLayer = {
+  id: number;
+  selector: ScriptMaterialSelector;
+  overrides: MaterialOverrides;
+  revisions: MaterialOverrideRevisions;
 };
 
 type RuntimeMaterial = Material & {
@@ -563,7 +638,8 @@ type MaterialOwner = {
   token: object;
   order: number;
   key: string;
-  overrides: MaterialOverrides;
+  layerKey: string;
+  layers: readonly MaterialOverrideLayer[];
 };
 
 type MaterialState = {
@@ -598,8 +674,17 @@ function createScriptResources({
   const texturePromises = new Map<string, Promise<Texture | null>>();
   const textures = new Set<Texture>();
   const materialOwnerToken = {};
+  const particleOwnerToken = {};
   const ownedMeshes = new Set<Mesh>();
-  const materialOverrides: MaterialOverrides = { textures: {} };
+  const ownedParticleBridges = new Set<XriftParticleRuntimeBridge>();
+  let nextMaterialLayerId = 1;
+  let nextMaterialWriteRevision = 0;
+  const rootMaterialLayer = createMaterialOverrideLayer(0, {});
+  const materialLayers = new Map<string, MaterialOverrideLayer>([
+    [materialSelectorKey(rootMaterialLayer.selector), rootMaterialLayer],
+  ]);
+  const materialHandles = new Map<string, ScriptMaterialHandle>();
+  const particleOverrides: XriftParticleRuntimeOverrides = {};
 
   const assets: ScriptAssets = {
     url: (assetId) => (disposed ? null : resolveAssetUrl(assetId)),
@@ -635,40 +720,35 @@ function createScriptResources({
     },
   };
 
-  const countMaterials = (): number => {
-    if (disposed) return 0;
-    let count = 0;
-    forEachOwnedMesh(object3d, entityId, (mesh) => {
-      count += Array.isArray(mesh.material) ? mesh.material.length : 1;
-    });
-    return count;
-  };
-
-  const resetMaterials = () => {
-    for (const mesh of ownedMeshes) {
-      removeMaterialOwner(mesh, materialOwnerToken);
-    }
-    ownedMeshes.clear();
-    delete materialOverrides.color;
-    delete materialOverrides.opacity;
-    delete materialOverrides.emissive;
-    delete materialOverrides.metalness;
-    delete materialOverrides.roughness;
-    materialOverrides.textures = {};
-  };
-
   const synchronizeMaterials = (force: boolean) => {
-    if (disposed || !hasMaterialOverrides(materialOverrides)) return;
+    if (disposed) return;
+    const activeLayers = [...materialLayers.values()].filter((layer) =>
+      hasMaterialOverrides(layer.overrides),
+    );
     const currentMeshes = new Set<Mesh>();
-    forEachOwnedMesh(object3d, entityId, (mesh) => {
+    forEachOwnedMesh(object3d, entityId, (mesh, meshIndex) => {
+      const materialCount = materialArray(mesh.material).length;
+      const matchingLayers = activeLayers.filter((layer) =>
+        materialLayerMatchesMesh(
+          layer,
+          mesh.name,
+          meshIndex,
+          materialCount,
+        ),
+      );
+      if (matchingLayers.length === 0) return;
       currentMeshes.add(mesh);
       const previousState = materialStates.get(mesh);
+      const nextLayerKey = matchingLayers
+        .map((layer) => layer.id)
+        .join(":");
+      const previousOwner = previousState?.owners.find(
+        (owner) => owner.token === materialOwnerToken,
+      );
       const ownerWasCurrent = Boolean(
         previousState &&
           sameMaterialAssignment(mesh.material, previousState.assigned) &&
-          previousState.owners.some(
-            (owner) => owner.token === materialOwnerToken,
-          ),
+          previousOwner?.layerKey === nextLayerKey,
       );
       const { owner, state } = ensureMaterialOwner(
         mesh,
@@ -677,7 +757,8 @@ function createScriptResources({
         componentId,
       );
       ownedMeshes.add(mesh);
-      owner.overrides = materialOverrides;
+      owner.layers = matchingLayers;
+      owner.layerKey = nextLayerKey;
       if (force || !ownerWasCurrent) applyMaterialState(state);
     });
     for (const mesh of [...ownedMeshes]) {
@@ -687,97 +768,358 @@ function createScriptResources({
     }
   };
 
-  const updateMaterialOverride = (
-    changed: boolean,
-    supports: (material: Material) => boolean,
+  const listMaterials = (): readonly ScriptMaterialInfo[] => {
+    if (disposed) return [];
+    const entries: ScriptMaterialInfo[] = [];
+    forEachOwnedMesh(object3d, entityId, (mesh, meshIndex) => {
+      materialArray(mesh.material).forEach((material, materialIndex) => {
+        entries.push({
+          meshName: mesh.name,
+          meshIndex,
+          materialIndex,
+          materialName: material.name,
+        });
+      });
+    });
+    return entries;
+  };
+
+  const countMaterials = (
+    selector: ScriptMaterialSelector,
+    supports: (material: Material) => boolean = () => true,
   ): number => {
     if (disposed) return 0;
-    synchronizeMaterials(changed);
     let supported = 0;
-    forEachOwnedMesh(object3d, entityId, (mesh) => {
-      supported += materialArray(mesh.material).filter(supports).length;
+    forEachOwnedMesh(object3d, entityId, (mesh, meshIndex) => {
+      if (!materialSelectorMatchesMesh(selector, mesh.name, meshIndex)) return;
+      materialArray(mesh.material).forEach((material, materialIndex) => {
+        if (
+          materialSelectorMatchesSlot(selector, materialIndex) &&
+          supports(material)
+        ) {
+          supported += 1;
+        }
+      });
     });
     return supported;
   };
 
+  const resetMaterials = () => {
+    for (const layer of materialLayers.values()) {
+      clearMaterialOverrideLayer(layer);
+    }
+    for (const mesh of ownedMeshes) {
+      removeMaterialOwner(mesh, materialOwnerToken);
+    }
+    ownedMeshes.clear();
+  };
+
+  const createMaterialHandle = (
+    layer: MaterialOverrideLayer,
+    reset: () => void,
+  ): ScriptMaterialHandle => {
+    const commit = (
+      supports: (material: Material) => boolean,
+    ): number => {
+      if (disposed) return 0;
+      synchronizeMaterials(true);
+      return countMaterials(layer.selector, supports);
+    };
+    return {
+      count: () => countMaterials(layer.selector),
+      setColor(value) {
+        if (disposed) return 0;
+        layer.overrides.color = value;
+        layer.revisions.color = ++nextMaterialWriteRevision;
+        return commit(
+          (material) => Boolean(scriptMaterial(material).color),
+        );
+      },
+      setOpacity(value) {
+        if (disposed) return 0;
+        layer.overrides.opacity = clampUnit(value);
+        layer.revisions.opacity = ++nextMaterialWriteRevision;
+        return commit(() => true);
+      },
+      setEmissive(value, intensity) {
+        if (disposed) return 0;
+        const resolvedIntensity =
+          intensity !== undefined && Number.isFinite(intensity)
+            ? Math.max(0, intensity)
+            : undefined;
+        layer.overrides.emissive = {
+          value,
+          intensity: resolvedIntensity,
+        };
+        layer.revisions.emissive = ++nextMaterialWriteRevision;
+        return commit(
+          (material) => Boolean(scriptMaterial(material).emissive),
+        );
+      },
+      setMetalness(value) {
+        if (disposed) return 0;
+        layer.overrides.metalness = clampUnit(value);
+        layer.revisions.metalness = ++nextMaterialWriteRevision;
+        return commit(
+          (material) =>
+            typeof scriptMaterial(material).metalness === "number",
+        );
+      },
+      setRoughness(value) {
+        if (disposed) return 0;
+        layer.overrides.roughness = clampUnit(value);
+        layer.revisions.roughness = ++nextMaterialWriteRevision;
+        return commit(
+          (material) =>
+            typeof scriptMaterial(material).roughness === "number",
+        );
+      },
+      setTexture(slot, texture) {
+        if (disposed) return 0;
+        const resolved =
+          texture instanceof Texture || texture?.isTexture === true
+            ? (texture as unknown as Texture)
+            : null;
+        layer.overrides.textures[slot] = resolved;
+        layer.revisions.textures[slot] = ++nextMaterialWriteRevision;
+        return commit((material) =>
+          supportsMaterialTexture(material, slot),
+        );
+      },
+      reset,
+    };
+  };
+
+  const rootMaterialHandle = createMaterialHandle(
+    rootMaterialLayer,
+    resetMaterials,
+  );
   const materials: ScriptMaterials = {
-    count: countMaterials,
-    setColor(value) {
-      const changed = !Object.is(materialOverrides.color, value);
-      materialOverrides.color = value;
-      return updateMaterialOverride(
-        changed,
-        (material) => Boolean(scriptMaterial(material).color),
-      );
-    },
-    setOpacity(value) {
-      const opacity = clampUnit(value);
-      const changed = !Object.is(materialOverrides.opacity, opacity);
-      materialOverrides.opacity = opacity;
-      return updateMaterialOverride(changed, () => true);
-    },
-    setEmissive(value, intensity) {
-      const resolvedIntensity =
-        intensity !== undefined && Number.isFinite(intensity)
-          ? Math.max(0, intensity)
-          : undefined;
-      const changed =
-        !Object.is(materialOverrides.emissive?.value, value) ||
-        !Object.is(materialOverrides.emissive?.intensity, resolvedIntensity);
-      materialOverrides.emissive = { value, intensity: resolvedIntensity };
-      return updateMaterialOverride(
-        changed,
-        (material) => Boolean(scriptMaterial(material).emissive),
-      );
-    },
-    setMetalness(value) {
-      const metalness = clampUnit(value);
-      const changed = !Object.is(materialOverrides.metalness, metalness);
-      materialOverrides.metalness = metalness;
-      return updateMaterialOverride(
-        changed,
-        (material) => typeof scriptMaterial(material).metalness === "number",
-      );
-    },
-    setRoughness(value) {
-      const roughness = clampUnit(value);
-      const changed = !Object.is(materialOverrides.roughness, roughness);
-      materialOverrides.roughness = roughness;
-      return updateMaterialOverride(
-        changed,
-        (material) => typeof scriptMaterial(material).roughness === "number",
-      );
-    },
-    setTexture(slot, texture) {
-      const resolved =
-        texture instanceof Texture || texture?.isTexture === true
-          ? (texture as unknown as Texture)
-          : null;
-      const changed = materialOverrides.textures[slot] !== resolved;
-      materialOverrides.textures[slot] = resolved;
-      return updateMaterialOverride(
-        changed,
-        (material) => supportsMaterialTexture(material, slot),
-      );
+    ...rootMaterialHandle,
+    list: listMaterials,
+    select(selector) {
+      const normalized = normalizeMaterialSelector(selector);
+      const key = materialSelectorKey(normalized);
+      if (key === materialSelectorKey(rootMaterialLayer.selector)) {
+        return materials;
+      }
+      const existing = materialHandles.get(key);
+      if (existing) return existing;
+      const layer =
+        materialLayers.get(key) ??
+        createMaterialOverrideLayer(nextMaterialLayerId++, normalized);
+      materialLayers.set(key, layer);
+      const handle = createMaterialHandle(layer, () => {
+        if (disposed) return;
+        clearMaterialOverrideLayer(layer);
+        synchronizeMaterials(true);
+      });
+      materialHandles.set(key, handle);
+      return handle;
     },
     reset: resetMaterials,
+  };
+
+  const countParticles = (): number => {
+    if (disposed) return 0;
+    const bridges = new Set<XriftParticleRuntimeBridge>();
+    forEachOwnedParticleBridge(object3d, entityId, (bridge) => {
+      bridges.add(bridge);
+    });
+    return bridges.size;
+  };
+
+  const resetParticles = () => {
+    for (const bridge of ownedParticleBridges) {
+      bridge.removeOwner(particleOwnerToken);
+    }
+    ownedParticleBridges.clear();
+    for (const key of Object.keys(
+      particleOverrides,
+    ) as Array<keyof XriftParticleRuntimeOverrides>) {
+      delete particleOverrides[key];
+    }
+  };
+
+  const synchronizeParticles = (force: boolean) => {
+    if (disposed || Object.keys(particleOverrides).length === 0) return;
+    const current = new Set<XriftParticleRuntimeBridge>();
+    forEachOwnedParticleBridge(object3d, entityId, (bridge) => {
+      current.add(bridge);
+      const newlyOwned = !ownedParticleBridges.has(bridge);
+      ownedParticleBridges.add(bridge);
+      if (force || newlyOwned) {
+        bridge.setOwner(
+          particleOwnerToken,
+          order,
+          componentId,
+          particleOverrides,
+        );
+      }
+    });
+    for (const bridge of [...ownedParticleBridges]) {
+      if (current.has(bridge)) continue;
+      bridge.removeOwner(particleOwnerToken);
+      ownedParticleBridges.delete(bridge);
+    }
+  };
+
+  const setParticleOverride = <Key extends keyof XriftParticleRuntimeOverrides>(
+    key: Key,
+    value: XriftParticleRuntimeOverrides[Key],
+  ): number => {
+    if (disposed || Object.is(particleOverrides[key], value)) {
+      return countParticles();
+    }
+    particleOverrides[key] = value;
+    synchronizeParticles(true);
+    return countParticles();
+  };
+
+  let particleRestartRevision = 0;
+  const particles: ScriptParticles = {
+    count: countParticles,
+    play() {
+      particleOverrides.stopped = false;
+      return setParticleOverride("playing", true);
+    },
+    pause() {
+      particleOverrides.stopped = false;
+      return setParticleOverride("playing", false);
+    },
+    stop() {
+      particleOverrides.playing = false;
+      return setParticleOverride("stopped", true);
+    },
+    restart() {
+      particleOverrides.playing = true;
+      particleOverrides.stopped = false;
+      particleRestartRevision += 1;
+      return setParticleOverride("restartRevision", particleRestartRevision);
+    },
+    setEmissionRate(value) {
+      return setParticleOverride("emissionRate", clampNonNegative(value));
+    },
+    setSpeedMultiplier(value) {
+      return setParticleOverride("speedMultiplier", clampNonNegative(value));
+    },
+    setSizeMultiplier(value) {
+      return setParticleOverride("sizeMultiplier", clampNonNegative(value));
+    },
+    setColor: (value) => setParticleOverride("color", value),
+    setOpacity: (value) => setParticleOverride("opacity", clampUnit(value)),
+    reset: resetParticles,
   };
 
   return {
     assets,
     materials,
+    particles,
     update() {
       synchronizeMaterials(false);
+      synchronizeParticles(false);
     },
     dispose() {
       if (disposed) return;
-      disposed = true;
       resetMaterials();
+      resetParticles();
+      disposed = true;
       for (const texture of textures) texture.dispose();
       textures.clear();
       texturePromises.clear();
     },
   };
+}
+
+function createMaterialOverrideLayer(
+  id: number,
+  selector: ScriptMaterialSelector,
+): MaterialOverrideLayer {
+  return {
+    id,
+    selector,
+    overrides: { textures: {} },
+    revisions: { textures: {} },
+  };
+}
+
+function clearMaterialOverrideLayer(layer: MaterialOverrideLayer): void {
+  delete layer.overrides.color;
+  delete layer.overrides.opacity;
+  delete layer.overrides.emissive;
+  delete layer.overrides.metalness;
+  delete layer.overrides.roughness;
+  layer.overrides.textures = {};
+  delete layer.revisions.color;
+  delete layer.revisions.opacity;
+  delete layer.revisions.emissive;
+  delete layer.revisions.metalness;
+  delete layer.revisions.roughness;
+  layer.revisions.textures = {};
+}
+
+function normalizeMaterialSelector(
+  selector: ScriptMaterialSelector,
+): ScriptMaterialSelector {
+  const normalized: ScriptMaterialSelector = {};
+  if (typeof selector.meshName === "string") {
+    normalized.meshName = selector.meshName;
+  }
+  if (selector.meshIndex !== undefined) {
+    normalized.meshIndex =
+      Number.isInteger(selector.meshIndex) && selector.meshIndex >= 0
+        ? selector.meshIndex
+        : -1;
+  }
+  if (selector.materialIndex !== undefined) {
+    normalized.materialIndex =
+      Number.isInteger(selector.materialIndex) && selector.materialIndex >= 0
+        ? selector.materialIndex
+        : -1;
+  }
+  return normalized;
+}
+
+function materialSelectorKey(selector: ScriptMaterialSelector): string {
+  return JSON.stringify([
+    selector.meshName ?? null,
+    selector.meshIndex ?? null,
+    selector.materialIndex ?? null,
+  ]);
+}
+
+function materialSelectorMatchesMesh(
+  selector: ScriptMaterialSelector,
+  meshName: string,
+  meshIndex: number,
+): boolean {
+  return (
+    (selector.meshName === undefined || selector.meshName === meshName) &&
+    (selector.meshIndex === undefined || selector.meshIndex === meshIndex)
+  );
+}
+
+function materialSelectorMatchesSlot(
+  selector: ScriptMaterialSelector,
+  materialIndex: number,
+): boolean {
+  return (
+    selector.materialIndex === undefined ||
+    selector.materialIndex === materialIndex
+  );
+}
+
+function materialLayerMatchesMesh(
+  layer: MaterialOverrideLayer,
+  meshName: string,
+  meshIndex: number,
+  materialCount: number,
+): boolean {
+  return (
+    materialSelectorMatchesMesh(layer.selector, meshName, meshIndex) &&
+    (layer.selector.materialIndex === undefined ||
+      layer.selector.materialIndex < materialCount)
+  );
 }
 
 function ensureMaterialOwner(
@@ -803,7 +1145,13 @@ function ensureMaterialOwner(
   }
   let owner = state.owners.find((candidate) => candidate.token === token);
   if (!owner) {
-    owner = { token, order, key, overrides: { textures: {} } };
+    owner = {
+      token,
+      order,
+      key,
+      layerKey: "",
+      layers: [],
+    };
     state.owners.push(owner);
     state.owners.sort(
       (left, right) =>
@@ -835,11 +1183,11 @@ function applyMaterialState(state: MaterialState): void {
   const previousTextureUsage = state.clones.map(materialTextureUsage);
   state.clones.forEach((clone, index) => {
     clone.copy(originals[index] ?? originals[0]!);
+    applyMaterialOverrides(
+      clone,
+      mergeMaterialOverrides(state.owners, index),
+    );
   });
-  const merged = mergeMaterialOverrides(state.owners);
-  for (const material of state.clones) {
-    applyMaterialOverrides(material, merged);
-  }
   state.clones.forEach((clone, index) => {
     if (materialTextureUsage(clone) !== previousTextureUsage[index]) {
       clone.needsUpdate = true;
@@ -849,10 +1197,11 @@ function applyMaterialState(state: MaterialState): void {
 
 function mergeMaterialOverrides(
   owners: readonly MaterialOwner[],
+  materialIndex: number,
 ): MaterialOverrides {
   const merged: MaterialOverrides = { textures: {} };
   for (const owner of owners) {
-    const overrides = owner.overrides;
+    const overrides = mergeMaterialOwnerLayers(owner.layers, materialIndex);
     if (overrides.color !== undefined) merged.color = overrides.color;
     if (overrides.opacity !== undefined) merged.opacity = overrides.opacity;
     if (overrides.emissive !== undefined) {
@@ -867,6 +1216,72 @@ function mergeMaterialOverrides(
     Object.assign(merged.textures, overrides.textures);
   }
   return merged;
+}
+
+function mergeMaterialOwnerLayers(
+  layers: readonly MaterialOverrideLayer[],
+  materialIndex: number,
+): MaterialOverrides {
+  const merged: MaterialOverrides = { textures: {} };
+  const revisions: MaterialOverrideRevisions = { textures: {} };
+  for (const layer of layers) {
+    if (!materialSelectorMatchesSlot(layer.selector, materialIndex)) continue;
+    if (
+      layer.overrides.color !== undefined &&
+      newerMaterialRevision(layer.revisions.color, revisions.color)
+    ) {
+      merged.color = layer.overrides.color;
+      revisions.color = layer.revisions.color;
+    }
+    if (
+      layer.overrides.opacity !== undefined &&
+      newerMaterialRevision(layer.revisions.opacity, revisions.opacity)
+    ) {
+      merged.opacity = layer.overrides.opacity;
+      revisions.opacity = layer.revisions.opacity;
+    }
+    if (
+      layer.overrides.emissive !== undefined &&
+      newerMaterialRevision(layer.revisions.emissive, revisions.emissive)
+    ) {
+      merged.emissive = { ...layer.overrides.emissive };
+      revisions.emissive = layer.revisions.emissive;
+    }
+    if (
+      layer.overrides.metalness !== undefined &&
+      newerMaterialRevision(layer.revisions.metalness, revisions.metalness)
+    ) {
+      merged.metalness = layer.overrides.metalness;
+      revisions.metalness = layer.revisions.metalness;
+    }
+    if (
+      layer.overrides.roughness !== undefined &&
+      newerMaterialRevision(layer.revisions.roughness, revisions.roughness)
+    ) {
+      merged.roughness = layer.overrides.roughness;
+      revisions.roughness = layer.revisions.roughness;
+    }
+    for (const slot of Object.keys(
+      layer.revisions.textures,
+    ) as ScriptMaterialTextureSlot[]) {
+      const revision = layer.revisions.textures[slot];
+      if (
+        revision !== undefined &&
+        newerMaterialRevision(revision, revisions.textures[slot])
+      ) {
+        merged.textures[slot] = layer.overrides.textures[slot] ?? null;
+        revisions.textures[slot] = revision;
+      }
+    }
+  }
+  return merged;
+}
+
+function newerMaterialRevision(
+  candidate: number | undefined,
+  current: number | undefined,
+): boolean {
+  return candidate !== undefined && (current === undefined || candidate > current);
 }
 
 function applyMaterialOverrides(
@@ -1019,6 +1434,10 @@ function clampUnit(value: number): number {
   return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
 }
 
+function clampNonNegative(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
 function sameMaterialAssignment(
   current: Material | Material[],
   assigned: Material | Material[],
@@ -1039,17 +1458,52 @@ function sameMaterialAssignment(
 function forEachOwnedMesh(
   root: Object3D,
   entityId: string,
-  callback: (mesh: Mesh) => void,
+  callback: (mesh: Mesh, meshIndex: number) => void,
+): void {
+  let meshIndex = 0;
+  const visit = (object: Object3D) => {
+    if (object !== root) {
+      const marker = entityMarker(object);
+      if (marker && marker !== entityId) return;
+    }
+    if (object instanceof Mesh) {
+      callback(object, meshIndex);
+      meshIndex += 1;
+    }
+    for (const child of object.children) visit(child);
+  };
+  visit(root);
+}
+
+function forEachOwnedParticleBridge(
+  root: Object3D,
+  entityId: string,
+  callback: (bridge: XriftParticleRuntimeBridge) => void,
 ): void {
   const visit = (object: Object3D) => {
     if (object !== root) {
       const marker = entityMarker(object);
       if (marker && marker !== entityId) return;
     }
-    if (object instanceof Mesh) callback(object);
+    const candidate = (
+      object.userData as Record<string, unknown>
+    )[XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY];
+    if (isParticleRuntimeBridge(candidate)) callback(candidate);
     for (const child of object.children) visit(child);
   };
   visit(root);
+}
+
+function isParticleRuntimeBridge(
+  value: unknown,
+): value is XriftParticleRuntimeBridge {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as XriftParticleRuntimeBridge).setOwner === "function" &&
+    typeof (value as XriftParticleRuntimeBridge).removeOwner === "function" &&
+    typeof (value as XriftParticleRuntimeBridge).read === "function"
+  );
 }
 
 function entityMarker(object: Object3D): string | undefined {
@@ -1110,27 +1564,72 @@ export function resolveProps(
   const resolved: Record<string, unknown> = {};
   for (const [name, definition] of Object.entries(declaration)) {
     const value = values[name];
-    resolved[name] = value === undefined ? defaultFor(definition) : value;
+    resolved[name] = isValidPropValue(definition, value)
+      ? value
+      : defaultFor(definition);
   }
   return resolved;
 }
 
 function defaultFor(definition: ScriptPropDefinition): unknown {
-  if (definition.default !== undefined) return definition.default;
+  if (isValidPropValue(definition, definition.default)) {
+    return definition.default;
+  }
+  const numericFallback = Math.min(
+    definition.max ?? Number.POSITIVE_INFINITY,
+    Math.max(definition.min ?? Number.NEGATIVE_INFINITY, 0),
+  );
   switch (definition.kind) {
     case "number":
-      return 0;
+      return numericFallback;
     case "boolean":
       return false;
     case "vec2":
-      return [0, 0];
+      return [numericFallback, numericFallback];
     case "vec3":
-      return [0, 0, 0];
+      return [numericFallback, numericFallback, numericFallback];
     case "color":
       return "#ffffff";
     case "enum":
       return definition.options?.[0] ?? "";
     default:
       return "";
+  }
+}
+
+function isValidPropValue(
+  definition: ScriptPropDefinition,
+  value: unknown,
+): boolean {
+  const validNumber = (entry: unknown) =>
+    typeof entry === "number" &&
+    Number.isFinite(entry) &&
+    (definition.min === undefined || entry >= definition.min) &&
+    (definition.max === undefined || entry <= definition.max);
+  switch (definition.kind) {
+    case "string":
+    case "asset":
+    case "entity":
+      return typeof value === "string";
+    case "color":
+      return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+    case "enum":
+      return (
+        typeof value === "string" &&
+        (!definition.options || definition.options.includes(value))
+      );
+    case "number":
+      return validNumber(value);
+    case "boolean":
+      return typeof value === "boolean";
+    case "vec2":
+    case "vec3": {
+      const length = definition.kind === "vec2" ? 2 : 3;
+      return (
+        Array.isArray(value) &&
+        value.length === length &&
+        value.every(validNumber)
+      );
+    }
   }
 }

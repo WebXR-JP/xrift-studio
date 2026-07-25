@@ -66,7 +66,7 @@ export function ParticleAssetInspector({
       />
 
       <Section title="System">
-        <NumberField label="Max Particles" value={properties.maxParticles} min={1} max={100000} step={1} disabled={readOnly} onChange={(maxParticles) => onChange({ maxParticles })} />
+        <NumberField label="Max Particles" value={properties.maxParticles} min={1} max={10000} step={1} disabled={readOnly} onChange={(maxParticles) => onChange({ maxParticles })} />
         <NumberField label="Duration" value={properties.duration} min={0.01} max={600} step={0.1} suffix="sec" disabled={readOnly} onChange={(duration) => onChange({ duration })} />
         <SelectField label="Simulation Space" value={properties.simulationSpace} values={["local", "world"]} disabled={readOnly} onChange={(simulationSpace) => onChange({ simulationSpace: simulationSpace as "local" | "world" })} />
         <Toggle label="Looping" checked={properties.looping} disabled={readOnly} onChange={(looping) => onChange({ looping })} />

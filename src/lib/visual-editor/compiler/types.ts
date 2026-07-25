@@ -1,10 +1,11 @@
 import type { AssetManifest } from "../asset-manifest";
+import type { LocalBasisTranscoderFileName } from "../basis-transcoder";
 import type { PrefabDocument } from "../prefab-document";
 import type { VisualProjectDocument, VisualProjectKind } from "../project-document";
 import type { SceneDocument } from "../scene-document";
 import type { CompilationProvenance } from "../serialization";
 
-export const VISUAL_COMPILER_VERSION = "0.5.10" as const;
+export const VISUAL_COMPILER_VERSION = "0.5.11" as const;
 
 export type VisualCompilerDocuments = {
   project: VisualProjectDocument;
@@ -60,6 +61,12 @@ export type RequiredPublicationFileCopy = {
   targetRelativePath: "public/thumbnail.png";
 };
 
+export type CompilerBundledAssetCopy = {
+  source: "three-basis";
+  sourceFileName: LocalBasisTranscoderFileName;
+  targetRelativePath: string;
+};
+
 export type CompilerStagingPlan = {
   owner: "xrift-studio-compiler";
   /** Passed to `xrift create`; never points at the visual authoring project. */
@@ -67,6 +74,8 @@ export type CompilerStagingPlan = {
   stagingDirectoryName: string;
   overlayFiles: CompilerOverlayFile[];
   assetCopyPlan: AssetCopyPlanEntry[];
+  /** Static files owned by the Studio bundle rather than the author project. */
+  bundledAssetCopyPlan: CompilerBundledAssetCopy[];
   /** Exact packages installed only in the compiler-owned staging project. */
   runtimePackageSpecs: string[];
   /** Required XRift publication files are verified separately from user Assets. */

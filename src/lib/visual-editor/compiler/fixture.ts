@@ -390,18 +390,29 @@ export function runVisualCompilerFixtureAssertions(
     particleResult.overlayFiles.find(
       (file) => file.relativePath === "src/World.tsx",
     )?.content ?? "";
+  const particleRuntimeSource =
+    particleResult.overlayFiles.find(
+      (file) =>
+        file.relativePath === "src/xrift-studio/particle-runtime.tsx",
+    )?.content ?? "";
   assert(
-    /import \{[^}]*\buseFrame\b[^}]*\} from "@react-three\/fiber";/.test(
-      particleSource,
+    particleSource.includes(
+      'import { XriftScriptParticleEmitter, type XriftParticleConfig } from "./xrift-studio/particle-runtime";',
     ),
-    "Particle runtime frame loop was not generated",
+    "Shared Particle runtime import was not generated",
   );
   assert(
-    particleSource.includes("const CompiledParticleEmitter"),
-    "Particle runtime component was not generated",
+    particleRuntimeSource.includes(
+      "export const XriftScriptParticleEmitter",
+    ) &&
+      particleRuntimeSource.includes(
+        "XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY",
+      ) &&
+      particleRuntimeSource.includes("useFrame("),
+    "Shared Particle runtime overlay was not emitted",
   );
   assert(
-    particleSource.includes("<CompiledParticleEmitter config="),
+    particleSource.includes("<XriftScriptParticleEmitter config="),
     "Particle Asset was not wired to its Scene emitter",
   );
   [
@@ -421,16 +432,23 @@ export function runVisualCompilerFixtureAssertions(
     ),
   );
   [
-    "new Float32Array(count * 4), 4",
-    "colors.setXYZW(",
-    "compiledParticleMix(startColor[3], endColor[3], normalizedAge)",
-    "SRGBColorSpace,",
     'color="#',
     "opacity={",
   ].forEach((fragment) =>
     assert(
       particleSource.includes(fragment),
       `Particle Color/Alpha setting was not generated: ${fragment}`,
+    ),
+  );
+  [
+    "new Float32Array(count * 4)",
+    "colors.setXYZW(",
+    "mix(startColor[3], endColor[3], normalizedAge)",
+    "SRGBColorSpace,",
+  ].forEach((fragment) =>
+    assert(
+      particleRuntimeSource.includes(fragment),
+      `Shared Particle Color/Alpha behavior is missing: ${fragment}`,
     ),
   );
   assert(
@@ -442,6 +460,132 @@ export function runVisualCompilerFixtureAssertions(
         entry.supportedByCompiler,
     ),
     "Particle Texture was not added to the final staging copy plan",
+  );
+  assert(
+    particleResult.stagingPlan.bundledAssetCopyPlan.length === 0,
+    "Non-KTX2 Particle output must not stage the Basis transcoder",
+  );
+  const particleEntity =
+    particlePlacement.scene.entities[particlePlacement.entityId];
+  assert(Boolean(particleEntity), "Placed Particle Entity is missing");
+  const particleOnlyResult = compileVisualProject(
+    {
+      ...world,
+      assets: particleAssetResult.manifest,
+      scenes: {
+        [world.project.entrySceneId]: {
+          ...world.scenes[world.project.entrySceneId],
+          rootEntityIds: [particlePlacement.entityId],
+          entities: {
+            [particlePlacement.entityId]: particleEntity!,
+          },
+        },
+      },
+    },
+    { generatedAt: fixedTime },
+  );
+  const particleOnlySource =
+    particleOnlyResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(
+    /import \{[^}]*\buseEffect\b[^}]*\buseMemo\b[^}]*\} from "react";/.test(
+      particleOnlySource,
+    ),
+    "A standalone textured Particle did not import its React hooks",
+  );
+
+  const ktx2ParticleTexture: TextureAsset = {
+    ...particleTexture,
+    source: {
+      kind: "project",
+      relativePath: "assets/textures/fixture-particle.ktx2",
+    },
+    importMetadata: {
+      ...particleTexture.importMetadata!,
+      sourceFormat: "ktx2",
+      mimeType: "image/ktx2",
+    },
+  };
+  const ktx2ParticleResult = compileVisualProject(
+    {
+      ...world,
+      assets: {
+        ...particleAssetResult.manifest,
+        assets: {
+          ...particleAssetResult.manifest.assets,
+          [ktx2ParticleTexture.id]: ktx2ParticleTexture,
+        },
+      },
+      scenes: {
+        ...world.scenes,
+        [world.project.entrySceneId]: particlePlacement.scene,
+      },
+    },
+    { generatedAt: fixedTime },
+  );
+  const ktx2ParticleSource =
+    ktx2ParticleResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(ktx2ParticleResult.canStage, "KTX2 Particle fixture should be stageable");
+  assert(
+    ktx2ParticleSource.includes(
+      'const COMPILED_KTX2_TRANSCODER_DIRECTORY = "xrift-studio/vendor/three-basis/" as const;',
+    ) &&
+      ktx2ParticleSource.includes(
+        "return useKTX2(assetUrl, `${baseUrl}${COMPILED_KTX2_TRANSCODER_DIRECTORY}`);",
+      ) &&
+      ktx2ParticleSource.includes(
+        "const particleMapSource = useCompiledKtx2(particleMapUrl);",
+      ) &&
+      !ktx2ParticleSource.includes("cdn.jsdelivr.net"),
+    "KTX2 Particle output must pass an XRift baseUrl-local Basis path to useKTX2",
+  );
+  assert(
+    JSON.stringify(ktx2ParticleResult.stagingPlan.bundledAssetCopyPlan) ===
+      JSON.stringify([
+        {
+          source: "three-basis",
+          sourceFileName: "basis_transcoder.js",
+          targetRelativePath:
+            "public/xrift-studio/vendor/three-basis/basis_transcoder.js",
+        },
+        {
+          source: "three-basis",
+          sourceFileName: "basis_transcoder.wasm",
+          targetRelativePath:
+            "public/xrift-studio/vendor/three-basis/basis_transcoder.wasm",
+        },
+        {
+          source: "three-basis",
+          sourceFileName: "README.md",
+          targetRelativePath:
+            "public/xrift-studio/vendor/three-basis/README.md",
+        },
+      ]),
+    "KTX2 Particle output must stage the pinned Basis JS, WASM, and license",
+  );
+
+  const runtimeParticleResult = compileVisualProject(
+    {
+      ...world,
+      assets: particleAssetResult.manifest,
+      scenes: {
+        ...world.scenes,
+        [world.project.entrySceneId]: particlePlacement.scene,
+      },
+    },
+    { generatedAt: fixedTime, outputMode: "classic-runtime" },
+  );
+  assert(
+    !runtimeParticleResult.canStage &&
+      runtimeParticleResult.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.severity === "blocking" &&
+          diagnostic.code === "runtime-particle-adapter-missing",
+      ),
+    "Classic runtime Particle output must block instead of succeeding invisibly",
   );
   const particleWithoutTexture = updateParticleAsset(
     particleAssetResult.manifest,

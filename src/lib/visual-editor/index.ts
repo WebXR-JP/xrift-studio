@@ -63,6 +63,7 @@ export * from "./starter-templates";
 export * from "./starter-templates.fixture";
 export * from "./scripting/script-contract";
 export * from "./scripting/script-files";
+export * from "./scripting/script-templates";
 export * from "./scripting/script-schedule";
 export * from "./scripting/runtime-report";
 export * from "./scripting/specifiers";

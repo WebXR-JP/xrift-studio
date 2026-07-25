@@ -11,6 +11,7 @@ import type {
   VisualCompilerDocuments,
 } from "./compiler";
 import { compileVisualProject } from "./compiler";
+import { resolveLocalBasisTranscoderPath } from "./basis-transcoder";
 
 export type VisualPublishPipelineStage =
   | "saving"
@@ -160,6 +161,52 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () =>
+      typeof reader.result === "string"
+        ? resolve(reader.result)
+        : reject(new Error("Bundled compiler asset encoding returned no data")),
+    );
+    reader.addEventListener("error", () =>
+      reject(
+        reader.error ??
+          new Error("Bundled compiler asset encoding failed"),
+      ),
+    );
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function loadCompilerBundledAssetOverlays(
+  compilation: VisualCompileResult,
+  signal: AbortSignal,
+) {
+  return Promise.all(
+    compilation.stagingPlan.bundledAssetCopyPlan.map(async (entry) => {
+      throwIfAborted(signal);
+      const sourceDirectory =
+        entry.source === "three-basis"
+          ? resolveLocalBasisTranscoderPath()
+          : "";
+      const response = await fetch(
+        `${sourceDirectory}${encodeURIComponent(entry.sourceFileName)}`,
+        { signal },
+      );
+      if (!response.ok) {
+        throw new Error(
+          `公開用KTX2変換ファイルを読み込めませんでした (${response.status})`,
+        );
+      }
+      return {
+        targetRelativePath: entry.targetRelativePath,
+        dataUrl: await blobToDataUrl(await response.blob()),
+      };
+    }),
+  );
+}
+
 export async function materializeVisualCompilation(
   authoringProjectPath: string,
   compilation: VisualCompileResult,
@@ -211,6 +258,10 @@ export async function materializeVisualCompilation(
     paths.rootPath,
   ]);
 
+  const binaryOverlayFiles = await loadCompilerBundledAssetOverlays(
+    compilation,
+    signal,
+  );
   let staged: Awaited<ReturnType<typeof tauri.applyCompilerStaging>>;
   try {
     staged = await tauri.applyCompilerStaging(
@@ -220,6 +271,7 @@ export async function materializeVisualCompilation(
         relativePath: file.relativePath,
         content: file.content,
       })),
+      binaryOverlayFiles,
       compilation.stagingPlan.assetCopyPlan.map((entry) => ({
         sourceRelativePath: entry.sourceRelativePath,
         targetRelativePath: entry.targetRelativePath,

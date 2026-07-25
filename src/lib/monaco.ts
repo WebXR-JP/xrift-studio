@@ -127,9 +127,7 @@ export async function transpileTypeScriptModule(
     existing ?? monaco.editor.createModel(source, "typescript", uri);
   if (existing && existing.getValue() !== source) existing.setValue(source);
   try {
-    const getWorker =
-      await monaco.typescript.getTypeScriptWorker();
-    const worker = await getWorker(uri);
+    const worker = await getTypeScriptWorkerForModel(uri);
     const syntactic = await worker.getSyntacticDiagnostics(uri.toString());
     const blocking = syntactic.find((diagnostic) => diagnostic.category === 1);
     if (blocking) {
@@ -149,6 +147,32 @@ export async function transpileTypeScriptModule(
   } finally {
     if (!existing) model.dispose();
   }
+}
+
+/**
+ * Creating the first TypeScript model activates Monaco's language contribution
+ * asynchronously. The public worker accessor can briefly reject before that
+ * contribution has registered, especially when Play is started without ever
+ * opening Monaco. Wait for that one known bootstrap race; surface every other
+ * worker failure immediately.
+ */
+async function getTypeScriptWorkerForModel(uri: monaco.Uri) {
+  const attempts = 100;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const getWorker = await monaco.typescript.getTypeScriptWorker();
+      return await getWorker(uri);
+    } catch (error) {
+      const registrationPending = String(error).includes(
+        "TypeScript not registered",
+      );
+      if (!registrationPending || attempt === attempts - 1) throw error;
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 10);
+      });
+    }
+  }
+  throw new Error("TypeScript workerを初期化できませんでした");
 }
 
 function formatDiagnostic(

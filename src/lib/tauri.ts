@@ -90,6 +90,11 @@ export type CompilerAssetCopy = {
   targetRelativePath: string;
 };
 
+export type CompilerBinaryOverlayWrite = {
+  targetRelativePath: string;
+  dataUrl: string;
+};
+
 export type CompilerRequiredPublicationFileCopy = CompilerAssetCopy & {
   purpose: "thumbnail";
 };
@@ -296,6 +301,7 @@ export const tauri = {
     authoringProjectPath: string,
     directoryName: string,
     overlayFiles: CompilerOverlayWrite[],
+    binaryOverlayFiles: CompilerBinaryOverlayWrite[],
     assetCopies: CompilerAssetCopy[],
     requiredPublicationFiles: CompilerRequiredPublicationFileCopy[],
   ) =>
@@ -303,6 +309,7 @@ export const tauri = {
       authoringProjectPath,
       directoryName,
       overlayFiles,
+      binaryOverlayFiles,
       assetCopies,
       requiredPublicationFiles,
     }),

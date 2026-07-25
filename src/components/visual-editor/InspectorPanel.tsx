@@ -2452,7 +2452,7 @@ function EntityInspector({
         <input
           type="checkbox"
           checked={entity.enabled}
-          disabled={readOnly}
+          disabled={readOnly && !liveRuntimeTuning}
           onChange={(event) => onEnabledChange(event.currentTarget.checked)}
           aria-label={`${entity.name}のEnabled`}
           title={
@@ -2466,7 +2466,7 @@ function EntityInspector({
         />
         <EntityNameField
           entity={entity}
-          disabled={readOnly}
+          disabled={readOnly && !liveRuntimeTuning}
           compact
           onRename={onRename}
         />
@@ -2615,7 +2615,7 @@ function EntityInspector({
             <LightInspector
               key={component.id}
               component={component}
-              readOnly={readOnly}
+              readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) => onLightChange(component.id, patch)}
             />
           );
@@ -2625,7 +2625,7 @@ function EntityInspector({
             <TextInspector
               key={component.id}
               component={component}
-              readOnly={readOnly}
+              readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) => onTextChange(component.id, patch)}
             />
           );
@@ -2636,7 +2636,7 @@ function EntityInspector({
               key={component.id}
               component={component}
               assets={assets}
-              readOnly={readOnly}
+              readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) => onAudioSourceChange(component.id, patch)}
               onOpenAsset={onOpenMaterial}
             />
@@ -2661,7 +2661,7 @@ function EntityInspector({
               key={component.id}
               component={component}
               assets={assets}
-              readOnly={readOnly}
+              readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) =>
                 onParticleEmitterChange(component.id, patch)
               }
@@ -2727,7 +2727,7 @@ function EntityInspector({
           <XRiftComponentInspector
             key={component.id}
             component={component}
-            readOnly={readOnly}
+            readOnly={readOnly && !liveRuntimeTuning}
             onPropertyChange={(name: string, value: JsonValue | undefined) =>
               onUpdateXriftComponent(component.id, {
                 properties: { [name]: value },
@@ -3114,7 +3114,10 @@ export function InspectorPanel({
               assets={assets}
               projectPath={projectPath}
               referenceSummary={materialReferenceSummary}
-              readOnly={readOnly}
+              readOnly={
+                readOnly &&
+                !(playMode && (asset.kind === "material" || asset.kind === "particle"))
+              }
               onSelectAsset={onSelectAsset}
               onMaterialChange={onMaterialChange}
               onModelChange={onModelChange}

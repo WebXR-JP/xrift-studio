@@ -22,6 +22,8 @@ import { resolvePrefabInstances } from "./prefab-resolver";
 import {
   SCRIPT_API_OVERLAY_PATH,
   SCRIPT_HOST_OVERLAY_PATH,
+  SCRIPT_LIFECYCLE_OVERLAY_PATH,
+  SCRIPT_PARTICLE_OVERLAY_PATH,
 } from "./script-emit";
 
 /** Filesystem-free assertions for Script emission into the staging project. */
@@ -334,8 +336,28 @@ function assertEmitsStaticImports(): void {
   );
   assert(
     paths.includes(SCRIPT_API_OVERLAY_PATH) &&
-      paths.includes(SCRIPT_HOST_OVERLAY_PATH),
-    "Script API and host were not emitted alongside the module",
+      paths.includes(SCRIPT_HOST_OVERLAY_PATH) &&
+      paths.includes(SCRIPT_LIFECYCLE_OVERLAY_PATH) &&
+      paths.includes(SCRIPT_PARTICLE_OVERLAY_PATH),
+    "Script API, lifecycle, Particle runtime, and host were not emitted alongside the module",
+  );
+  const host = result.overlayFiles.find(
+    (file) => file.relativePath === SCRIPT_HOST_OVERLAY_PATH,
+  );
+  const lifecycle = result.overlayFiles.find(
+    (file) => file.relativePath === SCRIPT_LIFECYCLE_OVERLAY_PATH,
+  );
+  assert(
+    Boolean(
+      host?.content.includes('from "./script-api"') &&
+        host.content.includes('from "./script-lifecycle"') &&
+        host.content.includes('from "./particle-runtime"'),
+    ),
+    "Script host sibling imports were not rewritten to emitted runtime files",
+  );
+  assert(
+    Boolean(lifecycle?.content.includes('from "./script-api"')),
+    "Script lifecycle API import was not rewritten to the emitted runtime file",
   );
 
   const world = result.overlayFiles.find(

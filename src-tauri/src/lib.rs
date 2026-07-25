@@ -248,6 +248,13 @@ struct CompilerOverlayWrite {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct CompilerBinaryOverlayWrite {
+    target_relative_path: String,
+    data_url: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct CompilerAssetCopy {
     source_relative_path: String,
     target_relative_path: String,
@@ -3186,6 +3193,7 @@ fn apply_compiler_staging(
     authoring_project_path: String,
     directory_name: String,
     overlay_files: Vec<CompilerOverlayWrite>,
+    binary_overlay_files: Vec<CompilerBinaryOverlayWrite>,
     asset_copies: Vec<CompilerAssetCopy>,
     required_publication_files: Vec<CompilerRequiredPublicationFileCopy>,
 ) -> Result<CompilerStagingResult, String> {
@@ -3229,6 +3237,26 @@ fn apply_compiler_staging(
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
         write_file_synced(&target, overlay.content.as_bytes())?;
+    }
+
+    for overlay in binary_overlay_files {
+        if is_reserved_project_path(&overlay.target_relative_path)? {
+            return Err(
+                "compiler binary output cannot write XRift publication metadata".to_string(),
+            );
+        }
+        let target = safe_join(
+            &resolved_project.to_string_lossy(),
+            &overlay.target_relative_path,
+        )?;
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let bytes = decode_base64_data_url(
+            &overlay.data_url,
+            "compiler binary output has an invalid data URL",
+        )?;
+        write_file_synced(&target, &bytes)?;
     }
 
     for copy in asset_copies {
@@ -3628,9 +3656,7 @@ fn validate_classic_repository_url(repository_url: &str) -> Result<String, Strin
                 .split_once(':')
                 .is_some_and(|(host, path)| host.len() > 4 && !path.is_empty()));
     if !https && !ssh {
-        return Err(
-            "Classic repository URL must use HTTPS or a git SSH URL".to_string(),
-        );
+        return Err("Classic repository URL must use HTTPS or a git SSH URL".to_string());
     }
     Ok(repository_url.to_string())
 }
@@ -3645,7 +3671,11 @@ fn inspect_cloned_classic_repository(repository_root: &Path) -> Result<(), Strin
     while let Some(directory) = pending.pop() {
         for entry in std::fs::read_dir(&directory).map_err(|error| error.to_string())? {
             let entry = entry.map_err(|error| error.to_string())?;
-            if entry.file_name().to_string_lossy().eq_ignore_ascii_case(".git") {
+            if entry
+                .file_name()
+                .to_string_lossy()
+                .eq_ignore_ascii_case(".git")
+            {
                 continue;
             }
             let metadata =
@@ -3918,14 +3948,20 @@ fn write_binary_file(project_path: String, rel: String, data_url: String) -> Res
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let comma = data_url.find(',').ok_or("invalid data url")?;
-    let b64 = &data_url[comma + 1..];
-    use base64::Engine;
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(b64)
-        .map_err(|e| e.to_string())?;
+    let bytes = decode_base64_data_url(&data_url, "invalid data url")?;
     std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+fn decode_base64_data_url(data_url: &str, error_message: &str) -> Result<Vec<u8>, String> {
+    let (metadata, encoded) = data_url.split_once(',').ok_or(error_message)?;
+    if !metadata.starts_with("data:") || !metadata.ends_with(";base64") {
+        return Err(error_message.to_string());
+    }
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .map_err(|_| error_message.to_string())
 }
 
 #[derive(Serialize)]

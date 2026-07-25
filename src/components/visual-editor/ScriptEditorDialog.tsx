@@ -28,6 +28,7 @@ export type ScriptEditorDialogProps = {
   playing: boolean;
   runtime: ScriptRuntimeReport;
   onSave: (source: string) => Promise<void> | void;
+  onDirtyChange?: (dirty: boolean) => void;
   onClose: () => void;
 };
 
@@ -39,6 +40,7 @@ export function ScriptEditorDialog({
   playing,
   runtime,
   onSave,
+  onDirtyChange,
   onClose,
 }: ScriptEditorDialogProps) {
   const [draft, setDraft] = useState(source);
@@ -79,6 +81,11 @@ export function ScriptEditorDialog({
 
   const isDirty = draft !== loadedSourceRef.current;
   const contract = useMemo(() => extractScriptContract(draft), [draft]);
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+    return () => onDirtyChange?.(false);
+  }, [isDirty, onDirtyChange]);
 
   const save = useCallback(async () => {
     if (!isDirty || saving) return;
@@ -327,7 +334,7 @@ function ScriptApiGuide() {
           </span>
         </div>
         <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-          Inspectorの値、Texture、Entity内のMaterialをPlay中に操作できます。
+          Inspectorの値、Texture、Entity内のMaterialとParticleをPlay中に操作できます。
         </p>
       </div>
 
@@ -357,21 +364,43 @@ start(ctx) {
             Textureを読み込む
           </h4>
           <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-            Asset propertyで選んだTextureだけを安全に読み込めます。
+            許可したTexture参照だけを
+            <code className="mx-0.5 text-slate-700">ctx.assets</code>
+            経由で読み込めます。Script自体はsandboxではありません。
           </p>
-          <GuideCode>{`void ctx.assets
-  .loadTexture(ctx.props.texture, {
+          <GuideCode>{`void ctx.lifecycle.task(async (signal) => {
+  const texture = await ctx.assets.loadTexture(
+    ctx.props.texture,
+    {
     colorSpace: "srgb",
     wrapS: "repeat",
     wrapT: "repeat",
-  })
-  .then((texture) => {
-    if (texture) {
-      texture.repeat.set(2, 2);
-      ctx.materials.setTexture("baseColor", texture);
-    }
-  })
-  .catch((error) => ctx.log("Texture error", error));`}</GuideCode>
+    },
+  );
+  if (signal.aborted || !texture) return;
+  texture.repeat.set(2, 2);
+  ctx.materials.setTexture("baseColor", texture);
+});`}</GuideCode>
+        </section>
+
+        <section>
+          <h4 className="text-[11px] font-bold text-slate-700">
+            非同期処理を所有する
+          </h4>
+          <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+            hot reloadとStopでsignal、timer、taskを自動的に解除します。
+          </p>
+          <GuideCode>{`ctx.lifecycle.timeout(() => {
+  ctx.emit("ready");
+}, 500);
+
+ctx.lifecycle.interval(() => {
+  ctx.log("tick");
+}, 1000);
+
+ctx.lifecycle.onDispose(() => {
+  ctx.log("cleanup");
+});`}</GuideCode>
         </section>
 
         <section>
@@ -386,6 +415,8 @@ start(ctx) {
               "setMetalness",
               "setRoughness",
               "setTexture",
+              "list",
+              "select",
             ].map((method) => (
               <code
                 key={method}
@@ -395,11 +426,32 @@ start(ctx) {
               </code>
             ))}
           </div>
-          <GuideCode>{`ctx.materials.setColor(ctx.props.tint);
-ctx.materials.setOpacity(0.8);
-ctx.materials.setEmissive("#ff6600", 2);
-ctx.materials.setMetalness(0.2);
-ctx.materials.setRoughness(0.7);`}</GuideCode>
+          <GuideCode>{`const body = ctx.materials.select({
+  meshName: "Body",
+  materialIndex: 0,
+});
+body.setColor(ctx.props.tint);
+body.setOpacity(0.8);
+body.setEmissive("#ff6600", 2);
+body.setMetalness(0.2);
+body.setRoughness(0.7);
+
+ctx.log(ctx.materials.list());`}</GuideCode>
+        </section>
+
+        <section>
+          <h4 className="text-[11px] font-bold text-slate-700">
+            Particleを動かす
+          </h4>
+          <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+            同じEntityのParticle Emitterへ、再起動時に戻る一時設定を重ねます。
+          </p>
+          <GuideCode>{`ctx.particles.play();
+ctx.particles.setEmissionRate(ctx.props.rate);
+ctx.particles.setSpeedMultiplier(1.5);
+ctx.particles.setSizeMultiplier(0.8);
+ctx.particles.setColor(ctx.props.color);
+ctx.particles.setOpacity(0.75);`}</GuideCode>
         </section>
 
         <section className="rounded-lg border border-sky-200 bg-sky-50 p-2.5">
@@ -407,7 +459,7 @@ ctx.materials.setRoughness(0.7);`}</GuideCode>
             変更はruntime-only
           </h4>
           <p className="mt-1 text-[10px] leading-relaxed text-sky-700">
-            Material Asset自体は上書きしません。Scriptの再起動・Stop時に元へ戻り、
+            Material / Particle Asset自体は上書きしません。Scriptの再起動・Stop時に元へ戻り、
             読み込んだTextureも自動で破棄されます。
           </p>
         </section>

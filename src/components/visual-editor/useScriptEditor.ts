@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
   AssetManifest,
@@ -29,11 +29,18 @@ export function useScriptEditor({
   assets,
   projectPath,
   onSaved,
+  writeSource,
 }: {
   assets: AssetManifest;
   projectPath?: string;
   /** Called after a successful write so Play can restart affected Entities. */
   onSaved?: (assetId: string) => void;
+  /** Optional app-level serialization boundary shared with MCP writes. */
+  writeSource?: (
+    projectPath: string,
+    asset: ScriptAsset,
+    source: string,
+  ) => Promise<void>;
 }) {
   const [state, setState] = useState<ScriptEditorState>({
     openAssetId: null,
@@ -41,15 +48,47 @@ export function useScriptEditor({
     loading: false,
     error: null,
   });
+  const openAssetIdRef = useRef<string | null>(null);
   const [contracts, setContracts] = useState<
     Readonly<Record<string, ScriptContract>>
   >({});
+  const contractVersionsRef = useRef(new Map<string, number>());
+  const setContract = useCallback(
+    (assetId: string, contract: ScriptContract) => {
+      contractVersionsRef.current.set(
+        assetId,
+        (contractVersionsRef.current.get(assetId) ?? 0) + 1,
+      );
+      setContracts((previous) => ({
+        ...previous,
+        [assetId]: contract,
+      }));
+    },
+    [],
+  );
 
   /** Declarations for every Script Asset, so the Inspector can render fields. */
   useEffect(() => {
-    if (!projectPath) return;
+    if (!projectPath) {
+      setContracts({});
+      return;
+    }
     let active = true;
     const scripts = listScriptAssets(assets);
+    const scriptIds = new Set(scripts.map((asset) => asset.id));
+    const versions = new Map(
+      scripts.map((asset) => [
+        asset.id,
+        contractVersionsRef.current.get(asset.id) ?? 0,
+      ]),
+    );
+    setContracts((previous) =>
+      Object.fromEntries(
+        Object.entries(previous).filter(([assetId]) =>
+          scriptIds.has(assetId),
+        ),
+      ),
+    );
     void (async () => {
       const next: Record<string, ScriptContract> = {};
       for (const asset of scripts) {
@@ -63,7 +102,19 @@ export function useScriptEditor({
           // A missing file surfaces in the editor and at compile time.
         }
       }
-      if (active) setContracts(next);
+      if (!active) return;
+      setContracts((previous) => {
+        const merged: Record<string, ScriptContract> = {};
+        for (const asset of scripts) {
+          const loaded = next[asset.id];
+          const unchangedSinceRead =
+            (contractVersionsRef.current.get(asset.id) ?? 0) ===
+            versions.get(asset.id);
+          if (loaded && unchangedSinceRead) merged[asset.id] = loaded;
+          else if (previous[asset.id]) merged[asset.id] = previous[asset.id];
+        }
+        return merged;
+      });
     })();
     return () => {
       active = false;
@@ -74,6 +125,7 @@ export function useScriptEditor({
     async (assetId: string, createdAsset?: ScriptAsset) => {
       const asset = createdAsset ?? assets.assets[assetId];
       if (!asset || asset.kind !== "script") return;
+      openAssetIdRef.current = assetId;
       setState({ openAssetId: assetId, source: "", loading: true, error: null });
       if (!projectPath) {
         setState({
@@ -85,10 +137,18 @@ export function useScriptEditor({
         return;
       }
       try {
+        const contractVersion =
+          contractVersionsRef.current.get(assetId) ?? 0;
         const source = await tauri.readTextFile(
           projectPath,
           asset.source.relativePath,
         );
+        if (
+          (contractVersionsRef.current.get(assetId) ?? 0) ===
+          contractVersion
+        ) {
+          setContract(assetId, extractScriptContract(source));
+        }
         setState({
           openAssetId: assetId,
           source,
@@ -107,12 +167,27 @@ export function useScriptEditor({
         });
       }
     },
-    [assets, projectPath],
+    [assets, projectPath, setContract],
   );
 
   const close = useCallback(() => {
+    openAssetIdRef.current = null;
     setState({ openAssetId: null, source: "", loading: false, error: null });
   }, []);
+
+  const acceptExternalSource = useCallback(
+    (assetId: string, source: string): boolean => {
+      if (openAssetIdRef.current !== assetId) return false;
+      setState((previous) =>
+        previous.openAssetId === assetId
+          ? { ...previous, source, loading: false, error: null }
+          : previous,
+      );
+      setContract(assetId, extractScriptContract(source));
+      return true;
+    },
+    [setContract],
+  );
 
   const save = useCallback(
     async (source: string) => {
@@ -124,22 +199,38 @@ export function useScriptEditor({
       if (!asset || asset.kind !== "script") {
         throw new Error("Script Assetが見つかりません");
       }
-      await tauri.writeTextFile(
-        projectPath,
-        asset.source.relativePath,
-        source,
-      );
+      if (writeSource) {
+        await writeSource(projectPath, asset, source);
+      } else {
+        await tauri.writeTextFile(
+          projectPath,
+          asset.source.relativePath,
+          source,
+        );
+      }
       setState((previous) => ({ ...previous, source, error: null }));
-      setContracts((previous) => ({
-        ...previous,
-        [assetId]: extractScriptContract(source),
-      }));
+      setContract(assetId, extractScriptContract(source));
       onSaved?.(assetId);
     },
-    [assets, onSaved, projectPath, state.openAssetId],
+    [
+      assets,
+      onSaved,
+      projectPath,
+      setContract,
+      state.openAssetId,
+      writeSource,
+    ],
   );
 
-  return { state, contracts, open, close, save };
+  return {
+    state,
+    contracts,
+    setContract,
+    acceptExternalSource,
+    open,
+    close,
+    save,
+  };
 }
 
 export type ScriptEditor = ReturnType<typeof useScriptEditor>;

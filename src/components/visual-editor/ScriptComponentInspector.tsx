@@ -3,9 +3,10 @@ import type {
   JsonValue,
   ScriptComponent,
 } from "../../lib/visual-editor/scene-document";
-import type {
-  ScriptContract,
-  ScriptPropDescriptor,
+import {
+  resolveScriptPropValue,
+  type ScriptContract,
+  type ScriptPropDescriptor,
 } from "../../lib/visual-editor/scripting/script-contract";
 import { listScriptAssets } from "../../lib/visual-editor/scripting/script-files";
 
@@ -68,9 +69,6 @@ export function ScriptComponentInspector({
             onChange={(event) =>
               onPatch({
                 scriptAssetId: event.target.value,
-                properties: {},
-                assetReferences: [],
-                entityReferences: [],
               })
             }
             className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs disabled:opacity-45"
@@ -171,7 +169,10 @@ function ScriptPropField({
   referencesDisabled: boolean;
   onPatch: (patch: ScriptComponentPatch) => void;
 }) {
-  const value = component.properties[descriptor.name];
+  const value = resolveScriptPropValue(
+    descriptor,
+    component.properties[descriptor.name],
+  );
   const label = descriptor.label ?? descriptor.name;
 
   const setValue = (next: JsonValue) =>
@@ -231,7 +232,19 @@ function ScriptPropField({
           {...(descriptor.min !== undefined ? { min: descriptor.min } : {})}
           {...(descriptor.max !== undefined ? { max: descriptor.max } : {})}
           {...(descriptor.step !== undefined ? { step: descriptor.step } : {})}
-          onChange={(event) => setValue(Number(event.target.value))}
+          onChange={(event) => {
+            const raw = Number(event.target.value);
+            if (!Number.isFinite(raw)) return;
+            setValue(
+              Math.min(
+                descriptor.max ?? Number.POSITIVE_INFINITY,
+                Math.max(
+                  descriptor.min ?? Number.NEGATIVE_INFINITY,
+                  raw,
+                ),
+              ),
+            );
+          }}
           className="w-full rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-45"
         />
       ) : descriptor.kind === "enum" ? (
@@ -260,7 +273,19 @@ function ScriptPropField({
           length={descriptor.kind === "vec2" ? 2 : 3}
           value={Array.isArray(value) ? (value as number[]) : []}
           disabled={fieldDisabled}
-          onChange={setValue}
+          onChange={(next) =>
+            setValue(
+              next.map((entry) =>
+                Math.min(
+                  descriptor.max ?? Number.POSITIVE_INFINITY,
+                  Math.max(
+                    descriptor.min ?? Number.NEGATIVE_INFINITY,
+                    entry,
+                  ),
+                ),
+              ),
+            )
+          }
         />
       ) : descriptor.kind === "asset" ? (
         <select
@@ -322,7 +347,7 @@ function VectorField({
   length: number;
   value: number[];
   disabled: boolean;
-  onChange: (next: JsonValue) => void;
+  onChange: (next: number[]) => void;
 }) {
   const current = Array.from(
     { length },

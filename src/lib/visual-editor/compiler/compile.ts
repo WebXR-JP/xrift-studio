@@ -60,8 +60,10 @@ import {
 import { sha256Utf8 } from "./hash";
 import { collectRequiredScriptAssetIds } from "../scripting/script-schedule";
 import {
+  createScriptParticleOverlayFile,
   planScriptEmission,
   renderScriptComponent,
+  SCRIPT_PARTICLE_OVERLAY_PATH,
   type EmittedScriptModule,
 } from "./script-emit";
 import {
@@ -77,6 +79,7 @@ import {
 import {
   VISUAL_COMPILER_VERSION,
   type AssetCopyPlanEntry,
+  type CompilerBundledAssetCopy,
   type CompilerDiagnostic,
   type CompilerOverlayFile,
   type VisualCompileResult,
@@ -85,6 +88,10 @@ import {
 } from "./types";
 import { compileXriftComponent } from "./xrift-component-registry";
 import { compileRuntimeManifest } from "./runtime-manifest";
+import {
+  LOCAL_BASIS_TRANSCODER_FILES,
+  PUBLISHED_BASIS_TRANSCODER_DIRECTORY,
+} from "../basis-transcoder";
 
 const XRIFT_STUDIO_RUNTIME_PACKAGE = "xrift-studio-runtime@0.1.0" as const;
 
@@ -236,6 +243,16 @@ export function compileVisualProject(
   ];
   if (runtimeManifestFile) overlayFiles.push(runtimeManifestFile);
   overlayFiles.push(...scriptPlan.overlayFiles);
+  if (
+    outputMode === "classic-jsx" &&
+    resolvedEntryScene &&
+    sceneUsesParticleRuntime(resolvedEntryScene.scene) &&
+    !overlayFiles.some(
+      (file) => file.relativePath === SCRIPT_PARTICLE_OVERLAY_PATH,
+    )
+  ) {
+    overlayFiles.push(createScriptParticleOverlayFile());
+  }
   diagnoseUnsupportedAssets(documents.assets, diagnostics);
   const uniqueDiagnostics = deduplicateDiagnostics(diagnostics);
   const provenanceFile = compilerFile(
@@ -267,6 +284,11 @@ export function compileVisualProject(
       asset.kind === "model" &&
       isOpenBrushModelMetadata(asset.importMetadata?.openBrush),
   )) runtimePackageSpecs.push(OPEN_BRUSH_RUNTIME_PACKAGE);
+  const bundledAssetCopyPlan =
+    outputMode === "classic-jsx" &&
+    generated.includes("function useCompiledKtx2(")
+      ? createPublishedBasisAssetCopyPlan()
+      : [];
 
   return {
     targetKind: documents.project.projectKind,
@@ -283,10 +305,27 @@ export function compileVisualProject(
       stagingDirectoryName,
       overlayFiles: [...overlayFiles, provenanceFile],
       assetCopyPlan,
+      bundledAssetCopyPlan,
       runtimePackageSpecs,
       requiredPublicationFiles,
     },
   };
+}
+
+function createPublishedBasisAssetCopyPlan(): CompilerBundledAssetCopy[] {
+  return LOCAL_BASIS_TRANSCODER_FILES.map((sourceFileName) => ({
+    source: "three-basis" as const,
+    sourceFileName,
+    targetRelativePath: `public/${PUBLISHED_BASIS_TRANSCODER_DIRECTORY}/${sourceFileName}`,
+  }));
+}
+
+function sceneUsesParticleRuntime(scene: SceneDocument): boolean {
+  return Object.values(scene.entities).some((entity) =>
+    entity.components.some(
+      (component) => component.enabled && component.type === "particle-emitter",
+    ),
+  );
 }
 
 /**
@@ -2427,7 +2466,7 @@ function registerClassicR3fMaterialComponent(
     );
     textureLines.push(
       `const ${variableName}Url = useCompiledAssetUrl(${urlConstant});`,
-      `const ${variableName} = useCompiledTexture(${usesKtx2 ? "useKTX2" : "useTexture"}(${variableName}Url), ${optionsConstant});`,
+      `const ${variableName} = useCompiledTexture(${usesKtx2 ? "useCompiledKtx2" : "useTexture"}(${variableName}Url), ${optionsConstant});`,
     );
     textureDependencies.push(variableName);
     uniformEntries.push(
@@ -2667,7 +2706,7 @@ function addCompiledTexture(
   );
   textureLines.push(
     `const ${variableName}Url = useCompiledAssetUrl(${urlConstant});`,
-    `const ${variableName} = useCompiledTexture(${usesKtx2 ? "useKTX2" : "useTexture"}(${variableName}Url), ${optionsConstant});`,
+    `const ${variableName} = useCompiledTexture(${usesKtx2 ? "useCompiledKtx2" : "useTexture"}(${variableName}Url), ${optionsConstant});`,
   );
   textureProps.push(`${materialProp}={${variableName}}`);
   return true;
@@ -2677,7 +2716,8 @@ function registerCompiledTextureRuntime(
   context: CompileContext,
   usesKtx2 = false,
 ): void {
-  context.dreiImports.add(usesKtx2 ? "useKTX2" : "useTexture");
+  if (usesKtx2) registerCompiledKtx2Runtime(context);
+  else context.dreiImports.add("useTexture");
   const key = "texture-runtime:use-compiled-texture";
   if (context.supportDeclarations.has(key)) return;
   context.reactValueImports.add("useEffect");
@@ -2761,6 +2801,25 @@ function useCompiledTexture(source: Texture, options: CompiledTextureOptions): T
   }, [source, options]);
   useEffect(() => () => texture.dispose(), [texture]);
   return texture;
+}`,
+  );
+}
+
+function registerCompiledKtx2Runtime(context: CompileContext): void {
+  const key = "texture-runtime:use-compiled-ktx2";
+  if (context.supportDeclarations.has(key)) return;
+  context.dreiImports.add("useKTX2");
+  context.imports.add("useXRift");
+  context.threeTypeImports.add("Texture");
+  context.supportDeclarations.set(
+    key,
+    `const COMPILED_KTX2_TRANSCODER_DIRECTORY = ${JSON.stringify(
+      `${PUBLISHED_BASIS_TRANSCODER_DIRECTORY}/`,
+    )} as const;
+
+function useCompiledKtx2(assetUrl: string): Texture {
+  const { baseUrl } = useXRift();
+  return useKTX2(assetUrl, \`\${baseUrl}\${COMPILED_KTX2_TRANSCODER_DIRECTORY}\`);
 }`,
   );
 }
@@ -3086,7 +3145,7 @@ function renderParticleEmitter(
   );
   context.supportDeclarations.set(
     `particle-config:${configName}`,
-    `const ${configName}: CompiledParticleConfig = ${JSON.stringify(properties)};`,
+    `const ${configName}: XriftParticleConfig = ${JSON.stringify(properties)};`,
   );
 
   let textureLine = "";
@@ -3097,8 +3156,11 @@ function renderParticleEmitter(
       properties.renderer.textureAssetId ?? "",
     );
     if (textureAsset) {
+      context.reactValueImports.add("useEffect");
+      context.reactValueImports.add("useMemo");
       const usesKtx2 = getTextureSourceFormat(textureAsset) === "ktx2";
-      context.dreiImports.add(usesKtx2 ? "useKTX2" : "useTexture");
+      if (usesKtx2) registerCompiledKtx2Runtime(context);
+      else context.dreiImports.add("useTexture");
       const urlConstant = registerAssetUrl(textureAsset, textureUrl, context);
       const settings = textureAsset.importSettings;
       const colorSpace =
@@ -3133,7 +3195,7 @@ function renderParticleEmitter(
         minFilter,
       ].forEach((name) => context.threeValueImports.add(name));
       textureLine = `  const particleMapUrl = useCompiledAssetUrl(${urlConstant});
-  const particleMapSource = ${usesKtx2 ? "useKTX2" : "useTexture"}(particleMapUrl);
+  const particleMapSource = ${usesKtx2 ? "useCompiledKtx2" : "useTexture"}(particleMapUrl);
   const particleMap = useMemo(() => {
     const value = particleMapSource.clone();
     value.colorSpace = ${colorSpace};
@@ -3166,7 +3228,7 @@ function renderParticleEmitter(
     ? materialProperties.pbrMetallicRoughness.baseColorFactor[3]
     : 1;
   const source = `const ${componentName}: FC = () => {
-${textureLine}  return <CompiledParticleEmitter config={${configName}} color=${JSON.stringify(color)} opacity={${formatNumber(opacity)}}${textureProp} />;
+${textureLine}  return <XriftScriptParticleEmitter config={${configName}} color=${JSON.stringify(color)} opacity={${formatNumber(opacity)}}${textureProp} />;
 };`;
   context.supportDeclarations.set(`particle:${componentName}`, source);
   return `<${componentName} />`;
@@ -3237,229 +3299,8 @@ function resolveParticleTextureUrl(
 }
 
 function registerCompiledParticleRuntime(context: CompileContext): void {
-  const key = "particle-runtime:compiled-particle-emitter";
-  if (context.supportDeclarations.has(key)) return;
-  context.fiberImports.add("useFrame");
-  context.reactValueImports.add("useEffect");
-  context.reactValueImports.add("useMemo");
-  context.reactValueImports.add("useRef");
-  [
-    "AdditiveBlending",
-    "BufferAttribute",
-    "BufferGeometry",
-    "Color",
-    "DynamicDrawUsage",
-    "NormalBlending",
-    "PointsMaterial",
-    "SRGBColorSpace",
-    "Vector3",
-  ].forEach((name) => context.threeValueImports.add(name));
-  context.threeTypeImports.add("Points");
-  context.threeTypeImports.add("Texture");
-  context.supportDeclarations.set(
-    key,
-    `type CompiledParticleRange = { min: number; max: number };
-type CompiledParticleConfig = {
-  maxParticles: number;
-  duration: number;
-  looping: boolean;
-  prewarm: boolean;
-  simulationSpace: "local" | "world";
-  startDelay: CompiledParticleRange;
-  startLifetime: CompiledParticleRange;
-  startSpeed: CompiledParticleRange;
-  startSize: CompiledParticleRange;
-  startRotation: CompiledParticleRange;
-  gravity: [number, number, number];
-  emission: { rateOverTime: number; bursts: Array<{ time: number; count: number; cycles: number; interval: number }> };
-  shape:
-    | { type: "point" }
-    | { type: "sphere"; radius: number }
-    | { type: "cone"; radius: number; angle: number }
-    | { type: "box"; size: [number, number, number] };
-  colorOverLifetime: { start: [number, number, number, number]; end: [number, number, number, number] };
-  sizeOverLifetime: CompiledParticleRange;
-  velocityOverLifetime: { linear: [number, number, number]; orbital: [number, number, number] };
-  renderer: {
-    mode: "billboard" | "stretched-billboard";
-    blending: "normal" | "additive";
-    sortMode: "none" | "distance" | "youngest" | "oldest";
-    materialAssetId?: string;
-    textureAssetId?: string;
-    castShadow: boolean;
-    receiveShadow: boolean;
-  };
-};
-type CompiledParticleSeed = { a: number; b: number; c: number; speed: number };
-
-const compiledParticleHash = (value: number) => {
-  const result = Math.sin(value * 12.9898 + 78.233) * 43758.5453;
-  return result - Math.floor(result);
-};
-const compiledParticleMix = (start: number, end: number, amount: number) =>
-  start + (end - start) * amount;
-const compiledParticleSeed = (index: number): CompiledParticleSeed => ({
-  a: compiledParticleHash(index * 4 + 1),
-  b: compiledParticleHash(index * 4 + 2),
-  c: compiledParticleHash(index * 4 + 3),
-  speed: compiledParticleHash(index * 4 + 4),
-});
-const compiledParticleInitial = (
-  shape: CompiledParticleConfig["shape"],
-  seed: CompiledParticleSeed,
-  start: Vector3,
-  direction: Vector3,
-) => {
-  start.set(0, 0, 0);
-  if (shape.type === "sphere") {
-    const theta = seed.a * Math.PI * 2;
-    const phi = Math.acos(seed.b * 2 - 1);
-    const radius = shape.radius * Math.cbrt(seed.c);
-    direction.set(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta));
-    start.copy(direction).multiplyScalar(radius);
-    return;
-  }
-  if (shape.type === "box") {
-    start.set((seed.a - 0.5) * shape.size[0], (seed.b - 0.5) * shape.size[1], (seed.c - 0.5) * shape.size[2]);
-    direction.set(0, 1, 0);
-    return;
-  }
-  if (shape.type === "cone") {
-    const theta = seed.a * Math.PI * 2;
-    const radial = Math.sqrt(seed.b) * shape.radius;
-    start.set(Math.cos(theta) * radial, 0, Math.sin(theta) * radial);
-    const slope = Math.tan((shape.angle * Math.PI) / 180);
-    direction.set(Math.cos(theta) * slope, 1, Math.sin(theta) * slope).normalize();
-    return;
-  }
-  direction.set(0, 1, 0);
-};
-
-const CompiledParticleEmitter: FC<{
-  config: CompiledParticleConfig;
-  color: string;
-  opacity: number;
-  map?: Texture;
-}> = ({ config, color, opacity, map }) => {
-  const continuousCount = Math.ceil(
-    config.emission.rateOverTime * Math.max(config.startLifetime.min, config.startLifetime.max),
-  );
-  const burstCount = config.emission.bursts.reduce(
-    (total, burst) => total + burst.count * Math.max(1, burst.cycles),
-    0,
-  );
-  const count = Math.max(1, Math.min(10000, config.maxParticles, continuousCount + burstCount));
-  const pointsRef = useRef<Points>(null);
-  const elapsedRef = useRef(0);
-  const geometry = useMemo(() => {
-    const value = new BufferGeometry();
-    const positions = new BufferAttribute(new Float32Array(count * 3), 3);
-    const colors = new BufferAttribute(new Float32Array(count * 4), 4);
-    positions.setUsage(DynamicDrawUsage);
-    colors.setUsage(DynamicDrawUsage);
-    value.setAttribute("position", positions);
-    value.setAttribute("color", colors);
-    return value;
-  }, [count]);
-  const material = useMemo(
-    () =>
-      new PointsMaterial({
-        color,
-        map,
-        size: Math.max(
-          0.001,
-          ((config.startSize.min + config.startSize.max) / 2) *
-            ((config.sizeOverLifetime.min + config.sizeOverLifetime.max) / 2),
-        ),
-        sizeAttenuation: true,
-        transparent: true,
-        opacity: Math.max(0, Math.min(1, opacity)),
-        vertexColors: true,
-        alphaTest: map ? 0.01 : 0,
-        depthWrite: config.renderer.blending !== "additive",
-        blending: config.renderer.blending === "additive" ? AdditiveBlending : NormalBlending,
-      }),
-    [color, config, map, opacity],
-  );
-  const seeds = useMemo(
-    () => Array.from({ length: count }, (_, index) => compiledParticleSeed(index)),
-    [count],
-  );
-  const velocity = useMemo(() => new Vector3(), []);
-  const start = useMemo(() => new Vector3(), []);
-  const currentColor = useMemo(() => new Color(), []);
-  useEffect(
-    () => () => {
-      geometry.dispose();
-      material.dispose();
-    },
-    [geometry, material],
-  );
-  useFrame((_state, delta) => {
-    elapsedRef.current += Math.min(delta, 0.1);
-    const elapsed = elapsedRef.current;
-    const position = geometry.getAttribute("position") as BufferAttribute;
-    const colors = geometry.getAttribute("color") as BufferAttribute;
-    const lifetime = Math.max(0.01, (config.startLifetime.min + config.startLifetime.max) / 2);
-    const rate = Math.max(0.01, config.emission.rateOverTime);
-    for (let index = 0; index < count; index += 1) {
-      const seed = seeds[index];
-      const bornAt = index / rate + config.startDelay.min;
-      const rawAge = elapsed - bornAt;
-      if (rawAge < 0 && !config.prewarm) {
-        position.setXYZ(index, 0, -10000, 0);
-        colors.setXYZW(index, 0, 0, 0, 0);
-        continue;
-      }
-      const age = config.looping ? ((rawAge % lifetime) + lifetime) % lifetime : rawAge;
-      if (!config.looping && (age < 0 || age > lifetime)) {
-        position.setXYZ(index, 0, -10000, 0);
-        colors.setXYZW(index, 0, 0, 0, 0);
-        continue;
-      }
-      const normalizedAge = Math.max(0, Math.min(1, age / lifetime));
-      const speed = compiledParticleMix(config.startSpeed.min, config.startSpeed.max, seed.speed);
-      compiledParticleInitial(config.shape, seed, start, velocity);
-      velocity.multiplyScalar(speed);
-      const x = start.x + (velocity.x + config.velocityOverLifetime.linear[0]) * age + config.gravity[0] * age * age * 0.5;
-      const y = start.y + (velocity.y + config.velocityOverLifetime.linear[1]) * age + config.gravity[1] * age * age * 0.5;
-      const z = start.z + (velocity.z + config.velocityOverLifetime.linear[2]) * age + config.gravity[2] * age * age * 0.5;
-      const orbit = config.velocityOverLifetime.orbital[1] * age;
-      const cosine = Math.cos(orbit);
-      const sine = Math.sin(orbit);
-      position.setXYZ(index, x * cosine - z * sine, y, x * sine + z * cosine);
-      const startColor = config.colorOverLifetime.start;
-      const endColor = config.colorOverLifetime.end;
-      currentColor.setRGB(
-        compiledParticleMix(startColor[0], endColor[0], normalizedAge),
-        compiledParticleMix(startColor[1], endColor[1], normalizedAge),
-        compiledParticleMix(startColor[2], endColor[2], normalizedAge),
-        SRGBColorSpace,
-      );
-      colors.setXYZW(
-        index,
-        currentColor.r,
-        currentColor.g,
-        currentColor.b,
-        compiledParticleMix(startColor[3], endColor[3], normalizedAge),
-      );
-    }
-    position.needsUpdate = true;
-    colors.needsUpdate = true;
-    if (pointsRef.current) {
-      pointsRef.current.visible = config.looping || elapsed <= config.duration;
-    }
-  });
-  return (
-    <points
-      ref={pointsRef}
-      geometry={geometry}
-      material={material}
-      castShadow={config.renderer.castShadow}
-      receiveShadow={config.renderer.receiveShadow}
-    />
-  );
-};`,
+  context.extraImports.add(
+    "import { XriftScriptParticleEmitter, type XriftParticleConfig } from \"./xrift-studio/particle-runtime\";",
   );
 }
 

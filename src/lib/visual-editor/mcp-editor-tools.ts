@@ -6,11 +6,14 @@ import {
 import { BUILTIN_PRIMITIVE_CREATION_IDS } from "./creation-catalog";
 import { createDocumentId } from "./document-id";
 import {
+  EDITOR_COMPONENT_REGISTRY,
   addEditorComponent,
   createEmptyEntity as createEmptySceneEntity,
   deleteEntityHierarchy,
   getEntityReparentDecision,
+  renameAsset,
   reparentEntityHierarchy,
+  updateEntityEnabled,
 } from "./editor-session";
 import {
   assignMaterialToMeshSlots,
@@ -21,16 +24,29 @@ import {
   addBuiltinPrimitiveEntity,
   duplicateEntityHierarchy,
   renameEntity as renameEntityInScene,
+  updateAnimationComponent,
+  updateAudioSourceComponent,
+  updateColliderComponent,
   updateEntityTransform,
+  updateLightComponent,
+  updateRigidBodyComponent,
+  updateTextComponent,
+  type AnimationPatch,
+  type AudioSourcePatch,
+  type ColliderPatch,
+  type LightPatch,
+  type RigidBodyPatch,
+  type SceneComponent,
   type SceneDocument,
   type SceneEntity,
   type ScriptComponent,
+  type TextPatch,
   type Vec3,
 } from "./scene-document";
 import { resolveSceneSettings, type SceneFogSettings } from "./scene-settings";
-import type {
-  ScriptContract,
-  ScriptPropDescriptor,
+import {
+  getScriptPropValueValidationError,
+  type ScriptContract,
 } from "./scripting/script-contract";
 import type { ScriptRuntimeReport } from "./scripting/runtime-report";
 import {
@@ -54,17 +70,35 @@ import {
   type MaterialTextureInfo,
   type MaterialTextureInfoPatch,
 } from "./asset-manifest";
+import {
+  removeXriftComponent,
+  updateXriftComponent,
+  type UpdateXriftComponentPatch,
+} from "./component-registry";
+import { addDefaultDocumentAsset } from "./document-asset-creation";
+import {
+  updateParticleAsset,
+  type ParticlePropertiesPatch,
+} from "./particle-system";
 
 export const XRIFT_MCP_EDITOR_TOOLS = [
   "get_editor_context",
   "get_scripting_capabilities",
   "list_assets",
+  "create_document_asset",
+  "get_particle_asset",
+  "update_particle_asset",
   "update_scene_settings",
   "place_asset",
   "list_entities",
+  "list_component_definitions",
+  "get_entity_components",
   "create_primitive",
   "place_builtin_prefab",
   "add_component",
+  "update_component",
+  "remove_component",
+  "set_entity_enabled",
   "update_script_component",
   "update_transform",
   "set_material",
@@ -93,8 +127,10 @@ export type XriftMcpEditorToolName = (typeof XRIFT_MCP_EDITOR_TOOLS)[number];
 
 /** Script tools perform project file I/O or change Play mode in the React host. */
 export const XRIFT_MCP_SCRIPT_TOOLS = [
+  "list_script_templates",
   "get_script_asset",
   "create_script_asset",
+  "apply_script_template",
   "update_script_asset",
   "set_play_mode",
 ] as const;
@@ -163,18 +199,34 @@ export function executeXriftMcpEditorTool(
       return readScriptingCapabilities(context);
     case "list_assets":
       return listAssets(context, request.arguments);
+    case "create_document_asset":
+      return createDocumentAsset(context, request.arguments);
+    case "get_particle_asset":
+      return getParticleAsset(context, request.arguments);
+    case "update_particle_asset":
+      return updateParticleAssetTool(context, request.arguments);
     case "update_scene_settings":
       return updateSceneSettings(context, request.arguments);
     case "place_asset":
       return placeAsset(context, request.arguments);
     case "list_entities":
       return listEntities(context);
+    case "list_component_definitions":
+      return listComponentDefinitions(context);
+    case "get_entity_components":
+      return getEntityComponents(context, request.arguments);
     case "create_primitive":
       return createPrimitive(context, request.arguments);
     case "place_builtin_prefab":
       return placeBuiltinPrefab(context, request.arguments);
     case "add_component":
       return addComponent(context, request.arguments);
+    case "update_component":
+      return updateComponent(context, request.arguments);
+    case "remove_component":
+      return removeComponent(context, request.arguments);
+    case "set_entity_enabled":
+      return setEntityEnabled(context, request.arguments);
     case "update_script_component":
       return updateScriptComponent(context, request.arguments);
     case "update_transform":
@@ -229,6 +281,18 @@ function readScriptingCapabilities(
     context,
     {
       contractVersion: "1.0.0",
+      sandboxed: false,
+      trustGate: false,
+      trustBoundary: {
+        executionRealm:
+          "Studio Play runs Script modules in the application realm, not an iframe or Worker.",
+        hostAccess:
+          "Module-scope shadowing reduces accidental access but is not a security boundary; application globals and the Tauri bridge may be reachable.",
+        provenance:
+          "No first-Play trust prompt or persisted approval currently distinguishes user-authored, imported, Starter, Prefab, external Store, or MCP-authored Script source.",
+        clientRule:
+          "Do not run Script source from an untrusted project, Prefab, Starter, Store, or MCP response without showing the source files to the user and obtaining explicit approval.",
+      },
       workflow: [
         {
           step: 1,
@@ -237,8 +301,15 @@ function readScriptingCapabilities(
         },
         {
           step: 2,
-          tools: ["create_script_asset", "update_script_asset", "get_script_asset"],
-          purpose: "Create, edit, and verify TypeScript source.",
+          tools: [
+            "list_script_templates",
+            "create_script_asset",
+            "apply_script_template",
+            "update_script_asset",
+            "get_script_asset",
+          ],
+          purpose:
+            "Choose a built-in template, create or attach it, then edit and verify TypeScript source.",
         },
         {
           step: 3,
@@ -251,6 +322,21 @@ function readScriptingCapabilities(
           tools: ["set_play_mode"],
           purpose: "Compile and run the Script in Play.",
         },
+        {
+          step: 5,
+          tools: [
+            "list_component_definitions",
+            "get_entity_components",
+            "update_component",
+            "remove_component",
+            "set_entity_enabled",
+            "create_document_asset",
+            "get_particle_asset",
+            "update_particle_asset",
+          ],
+          purpose:
+            "Persist reusable Particle Assets and Entity Component settings independently from runtime-only Script overrides.",
+        },
       ],
       runtime: {
         import: "xrift:script",
@@ -259,6 +345,20 @@ function readScriptingCapabilities(
           "Return update(delta) from start(ctx). R3F useFrame is rejected in Play and publish because its callback cannot be isolated per Script.",
         diagnostics:
           "Call get_editor_context and inspect scriptRuntime for compile errors, lifecycle/event/Render failures, and bounded JSON-safe ctx.log output.",
+        lifecycle: {
+          methods: [
+            "ctx.lifecycle.signal: AbortSignal",
+            "ctx.lifecycle.onDispose(callback): () => void",
+            "ctx.lifecycle.timeout(callback, milliseconds): () => void",
+            "ctx.lifecycle.interval(callback, milliseconds): () => void",
+            "ctx.lifecycle.task(runWithSignal): Promise<T | undefined>",
+          ],
+          callbackReturns: "void | PromiseLike<void>",
+          errorAttribution:
+            "Synchronous throws and Promise rejections from managed callbacks are reported as phase=async failures for the owning Entity, Component, and Script.",
+          cleanup:
+            "The host aborts the signal, clears registered timeout/interval work, runs dispose callbacks, and cancels managed task results on Script hot reload, runtime failure, Play Stop, or unmount.",
+        },
         assets: {
           scope:
             "Only Asset IDs declared in the Script Component assetReferences are accessible.",
@@ -278,6 +378,8 @@ function readScriptingCapabilities(
           scope:
             "Applies to Mesh materials owned by the attached Entity and excludes child Entities.",
           methods: [
+            "ctx.materials.list(): readonly ScriptMaterialInfo[]",
+            "ctx.materials.select({ meshName?, meshIndex?, materialIndex? }): ScriptMaterialHandle",
             "ctx.materials.count(): number",
             "ctx.materials.setColor(value): number",
             "ctx.materials.setOpacity(value): number",
@@ -287,6 +389,17 @@ function readScriptingCapabilities(
             "ctx.materials.setTexture(slot, textureOrNull): number",
             "ctx.materials.reset(): void",
           ],
+          selection: {
+            fields: ["meshName", "meshIndex", "materialIndex"],
+            semantics:
+              "Fields are combined with AND. Names can match multiple slots; indexes select exact entries from the current list() traversal.",
+            resultFields: [
+              "meshName",
+              "meshIndex",
+              "materialIndex",
+              "materialName",
+            ],
+          },
           textureSlots: [
             "baseColor",
             "normal",
@@ -296,6 +409,25 @@ function readScriptingCapabilities(
           ],
           persistence:
             "Runtime-only isolated overrides. They are restored on Script restart or Stop and do not modify Material Assets.",
+        },
+        particles: {
+          scope:
+            "Controls Particle Emitter Components owned by the attached Entity and excludes child Entities.",
+          methods: [
+            "ctx.particles.count(): number",
+            "ctx.particles.play(): number",
+            "ctx.particles.pause(): number",
+            "ctx.particles.stop(): number",
+            "ctx.particles.restart(): number",
+            "ctx.particles.setEmissionRate(particlesPerSecond): number",
+            "ctx.particles.setSpeedMultiplier(multiplier): number",
+            "ctx.particles.setSizeMultiplier(multiplier): number",
+            "ctx.particles.setColor(value): number",
+            "ctx.particles.setOpacity(value): number",
+            "ctx.particles.reset(): void",
+          ],
+          persistence:
+            "Runtime-only composed overrides. They are removed on Script restart or Stop and do not modify Particle Assets.",
         },
         entities: {
           scope:
@@ -310,15 +442,47 @@ function readScriptingCapabilities(
         "persistent Material Asset mutation through ctx.materials",
       ],
       persistentAuthoring: {
-        mode: "edit",
+        modes: ["edit", "play"],
+        playSemantics:
+          "Supported writes persist immediately. Component and Entity changes restart only the affected Entity; Material and Particle Asset edits restart only consuming Entities.",
         tools: [
           "set_material",
           "get_material_asset",
           "update_material_asset",
           "set_material_texture_transform",
+          "list_component_definitions",
+          "get_entity_components",
+          "add_component",
+          "update_component",
+          "remove_component",
+          "set_entity_enabled",
+          "create_document_asset",
+          "get_particle_asset",
+          "update_particle_asset",
         ],
+        groups: {
+          materials: [
+            "set_material",
+            "get_material_asset",
+            "update_material_asset",
+            "set_material_texture_transform",
+          ],
+          components: [
+            "list_component_definitions",
+            "get_entity_components",
+            "add_component",
+            "update_component",
+            "remove_component",
+            "set_entity_enabled",
+          ],
+          particles: [
+            "create_document_asset",
+            "get_particle_asset",
+            "update_particle_asset",
+          ],
+        },
         semantics:
-          "These editor tools persist Material Asset or Mesh binding changes. Use them instead of ctx.materials when the edit must remain after Stop or be saved.",
+          "These editor tools persist Asset and Entity document changes. Use them instead of ctx.materials or ctx.particles when the edit must remain after Stop or be saved.",
       },
       example: [
         'import { defineScript, prop } from "xrift:script";',
@@ -330,12 +494,14 @@ function readScriptingCapabilities(
         "  props,",
         "  start(ctx) {",
         "    ctx.materials.setColor(\"#ffffff\");",
-        "    void ctx.assets.loadTexture(ctx.props.texture, {",
-        '      colorSpace: "srgb",',
-        '      wrapS: "repeat",',
-        '      wrapT: "repeat",',
-        "    }).then((texture) => {",
-        '      if (texture) ctx.materials.setTexture("baseColor", texture);',
+        "    void ctx.lifecycle.task(async (signal) => {",
+        "      const texture = await ctx.assets.loadTexture(ctx.props.texture, {",
+        '        colorSpace: "srgb",',
+        '        wrapS: "repeat",',
+        '        wrapT: "repeat",',
+        "      });",
+        "      if (signal.aborted || !texture) return;",
+        '      ctx.materials.setTexture("baseColor", texture);',
         "    });",
         "  },",
         "});",
@@ -408,6 +574,188 @@ function listAssets(
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
   return unchanged(context, { assets, count: assets.length }, "Asset一覧を取得しました");
+}
+
+function createDocumentAsset(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
+  const kind = requiredEnum(
+    argumentsValue.kind,
+    "kind",
+    ["material", "particle"] as const,
+  );
+  const folderId =
+    argumentsValue.folderId === undefined
+      ? null
+      : requiredString(argumentsValue.folderId, "folderId");
+  if (folderId && !context.bundle.assets.folders?.[folderId]) {
+    throw new XriftMcpEditorToolError(
+      "FOLDER_NOT_FOUND",
+      "作成先のFolderが見つかりません",
+      { folderId },
+    );
+  }
+  const requestedName =
+    argumentsValue.name === undefined
+      ? undefined
+      : requiredString(argumentsValue.name, "name");
+  if (requestedName && requestedName.length > 100) {
+    invalidArgument("name", "100文字以内の文字列");
+  }
+  const created = addDefaultDocumentAsset(context.bundle.assets, {
+    kind,
+    id: createDocumentId("asset"),
+    folderId,
+  });
+  if (!created.added) {
+    throw new XriftMcpEditorToolError(
+      "ASSET_CREATE_FAILED",
+      `${kind} Assetを作成できませんでした`,
+      { kind, folderId },
+    );
+  }
+  const assets = requestedName
+    ? renameAsset(created.manifest, created.assetId, requestedName)
+    : created.manifest;
+  const asset = assets.assets[created.assetId];
+  if (!asset) {
+    throw new XriftMcpEditorToolError(
+      "ASSET_CREATE_FAILED",
+      "作成したAssetを取得できませんでした",
+      { assetId: created.assetId },
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, assets });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: asset.id,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      asset: JSON.parse(JSON.stringify(asset)) as Record<string, unknown>,
+    },
+    activity: `AIが「${asset.name}」を${kind} Assetとして作成しました`,
+  };
+}
+
+function getParticleAsset(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const particleAssetId = requiredString(
+    argumentsValue.particleAssetId,
+    "particleAssetId",
+  );
+  const asset = context.bundle.assets.assets[particleAssetId];
+  if (!asset || asset.kind !== "particle") {
+    throw new XriftMcpEditorToolError(
+      "PARTICLE_ASSET_NOT_FOUND",
+      "指定されたParticle Assetが見つかりません",
+      { particleAssetId },
+    );
+  }
+  return unchanged(
+    context,
+    {
+      particleAsset: JSON.parse(JSON.stringify(asset)) as Record<
+        string,
+        unknown
+      >,
+    },
+    `Particle Asset「${asset.name}」を取得しました`,
+  );
+}
+
+function updateParticleAssetTool(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
+  const particleAssetId = requiredString(
+    argumentsValue.particleAssetId,
+    "particleAssetId",
+  );
+  const current = context.bundle.assets.assets[particleAssetId];
+  if (!current || current.kind !== "particle") {
+    throw new XriftMcpEditorToolError(
+      "PARTICLE_ASSET_NOT_FOUND",
+      "指定されたParticle Assetが見つかりません",
+      { particleAssetId },
+    );
+  }
+  const patch = particlePatchValue(argumentsValue.patch);
+  const renderer = patch.renderer;
+  for (const [field, expectedKind] of [
+    ["materialAssetId", "material"],
+    ["textureAssetId", "texture"],
+  ] as const) {
+    const referencedAssetId = renderer?.[field];
+    if (!referencedAssetId) continue;
+    const referencedAsset = context.bundle.assets.assets[referencedAssetId];
+    if (!referencedAsset) {
+      throw new XriftMcpEditorToolError(
+        "ASSET_NOT_FOUND",
+        `patch.renderer.${field}に指定されたAssetが見つかりません`,
+        { particleAssetId, referencedAssetId, field },
+      );
+    }
+    if (referencedAsset.kind !== expectedKind) {
+      throw new XriftMcpEditorToolError(
+        "ASSET_KIND_MISMATCH",
+        `patch.renderer.${field}には${expectedKind} Assetを指定してください`,
+        {
+          particleAssetId,
+          referencedAssetId,
+          expectedKind,
+          actualKind: referencedAsset.kind,
+        },
+      );
+    }
+  }
+  const assets = updateParticleAsset(
+    context.bundle.assets,
+    particleAssetId,
+    patch,
+  );
+  if (assets === context.bundle.assets) {
+    return unchanged(
+      context,
+      {
+        projectId: context.bundle.project.projectId,
+        sceneId: context.bundle.scene.sceneId,
+        revision: context.revision,
+        particleAssetId,
+        properties: current.properties,
+      },
+      "Particle Assetはすでに指定された状態です",
+    );
+  }
+  const asset = assets.assets[particleAssetId];
+  const bundle = touchProject(context, { ...context.bundle, assets });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: particleAssetId,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      particleAssetId,
+      properties:
+        asset?.kind === "particle"
+          ? JSON.parse(JSON.stringify(asset.properties))
+          : null,
+    },
+    activity: `AIがParticle Asset「${current.name}」を更新しました`,
+  };
 }
 
 function updateSceneSettings(
@@ -515,6 +863,66 @@ function listEntities(context: XriftMcpEditorContext): XriftMcpEditorToolOutcome
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
   return unchanged(context, { entities, count: entities.length }, "Entity一覧を取得しました");
+}
+
+function listComponentDefinitions(
+  context: XriftMcpEditorContext,
+): XriftMcpEditorToolOutcome {
+  const projectKind = context.bundle.project.projectKind;
+  const definitions = EDITOR_COMPONENT_REGISTRY.map((definition) => ({
+    id: definition.id,
+    label: definition.label,
+    category: definition.category,
+    projectKinds: [...definition.projectKinds],
+    supportedInProject: definition.projectKinds.includes(projectKind),
+    allowMultiple: definition.allowMultiple,
+    componentType: definition.componentType,
+    schemaId: definition.schemaId ?? null,
+    lightType: definition.lightType ?? null,
+    requiredAssetKind:
+      definition.componentType === "particle-emitter"
+        ? "particle"
+        : definition.componentType === "audio-source"
+          ? "audio"
+          : definition.componentType === "script"
+            ? "script"
+            : null,
+  }));
+  return unchanged(
+    context,
+    { projectKind, definitions, count: definitions.length },
+    "Component定義一覧を取得しました",
+  );
+}
+
+function getEntityComponents(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const entity = context.bundle.scene.entities[entityId];
+  if (!entity) {
+    throw new XriftMcpEditorToolError(
+      "ENTITY_NOT_FOUND",
+      "指定されたEntityが見つかりません",
+      { entityId },
+    );
+  }
+  const components = entity.components.map((component) => ({
+    definitionId: componentDefinitionId(component),
+    ...JSON.parse(JSON.stringify(component)) as Record<string, unknown>,
+  }));
+  return unchanged(
+    context,
+    {
+      entityId,
+      entityName: entity.name,
+      entityEnabled: entity.enabled,
+      components,
+      count: components.length,
+    },
+    `Entity「${entity.name}」のComponentを取得しました`,
+  );
 }
 
 function createPrimitive(
@@ -636,6 +1044,26 @@ function addComponent(
   const entityId = requiredString(argumentsValue.entityId, "entityId");
   const definitionId = requiredString(argumentsValue.definitionId, "definitionId");
   const scriptAssetId = optionalString(argumentsValue.scriptAssetId);
+  if (definitionId === "scripting.script") {
+    const scriptAsset = scriptAssetId
+      ? context.bundle.assets.assets[scriptAssetId]
+      : Object.values(context.bundle.assets.assets).find(
+          (asset) => asset.kind === "script",
+        );
+    if (scriptAsset?.kind === "script") {
+      const contract = context.scriptContracts?.[scriptAsset.id];
+      if (!contract?.complete) {
+        throw new XriftMcpEditorToolError(
+          "SCRIPT_CONTRACT_UNAVAILABLE",
+          "Scriptのproperty契約を完全に読み取れません。sourceのdefineScript、props、default、enum optionsを静的リテラルで宣言してから再試行してください",
+          {
+            scriptAssetId: scriptAsset.id,
+            issues: contract?.issues ?? [],
+          },
+        );
+      }
+    }
+  }
   const result = addEditorComponent(
     context.bundle.scene,
     context.bundle.assets,
@@ -643,6 +1071,7 @@ function addComponent(
     definitionId,
     context.bundle.project.projectKind,
     scriptAssetId,
+    context.scriptContracts,
   );
   if (!result.added) {
     throw new XriftMcpEditorToolError(
@@ -671,6 +1100,519 @@ function addComponent(
       componentId: result.componentId,
     },
     activity: `AIが${definitionId}をEntityへ追加しました`,
+  };
+}
+
+function updateComponent(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const componentId = requiredString(argumentsValue.componentId, "componentId");
+  const entity = context.bundle.scene.entities[entityId];
+  if (!entity) {
+    throw new XriftMcpEditorToolError(
+      "ENTITY_NOT_FOUND",
+      "指定されたEntityが見つかりません",
+      { entityId },
+    );
+  }
+  const component = entity.components.find(
+    (candidate) => candidate.id === componentId,
+  );
+  if (!component) {
+    throw new XriftMcpEditorToolError(
+      "COMPONENT_NOT_FOUND",
+      "指定されたComponentが見つかりません",
+      { entityId, componentId },
+    );
+  }
+  const patch = componentPatchRecord(argumentsValue.patch);
+  let scene: SceneDocument;
+  let diagnostics: unknown[] = [];
+
+  switch (component.type) {
+    case "rigid-body":
+      assertPatchKeys(
+        patch,
+        [
+          "enabled",
+          "bodyType",
+          "autoColliders",
+          "isTrigger",
+          "friction",
+          "restitution",
+          "gravityScale",
+          "linearDamping",
+          "angularDamping",
+          "canSleep",
+          "ccd",
+          "lockTranslations",
+          "lockRotations",
+        ],
+        component.type,
+      );
+      scene = updateRigidBodyComponent(
+        context.bundle.scene,
+        entityId,
+        patch as RigidBodyPatch,
+        componentId,
+      );
+      break;
+    case "collider":
+      assertPatchKeys(
+        patch,
+        [
+          "enabled",
+          "isTrigger",
+          "friction",
+          "restitution",
+          "center",
+          "halfExtents",
+          "fitMode",
+          "meshMode",
+          "bodyType",
+          "gravityScale",
+          "linearDamping",
+          "angularDamping",
+          "canSleep",
+          "ccd",
+          "lockTranslations",
+          "lockRotations",
+        ],
+        component.type,
+      );
+      scene = updateColliderComponent(
+        context.bundle.scene,
+        entityId,
+        patch as ColliderPatch,
+        componentId,
+      );
+      break;
+    case "light":
+      assertPatchKeys(
+        patch,
+        [
+          "enabled",
+          "lightType",
+          "color",
+          "intensity",
+          "castShadow",
+          "groundColor",
+          "distance",
+          "decay",
+          "angle",
+          "penumbra",
+          "width",
+          "height",
+        ],
+        component.type,
+      );
+      scene = updateLightComponent(
+        context.bundle.scene,
+        entityId,
+        patch as LightPatch,
+        componentId,
+      );
+      break;
+    case "text":
+      assertPatchKeys(
+        patch,
+        [
+          "enabled",
+          "text",
+          "color",
+          "fontSize",
+          "maxWidth",
+          "anchorX",
+          "anchorY",
+          "outlineWidth",
+          "outlineColor",
+        ],
+        component.type,
+      );
+      scene = updateTextComponent(
+        context.bundle.scene,
+        entityId,
+        patch as TextPatch,
+        componentId,
+      );
+      break;
+    case "audio-source": {
+      assertPatchKeys(
+        patch,
+        [
+          "enabled",
+          "audioAssetId",
+          "volume",
+          "loop",
+          "autoplay",
+          "spatial",
+          "refDistance",
+          "rolloffFactor",
+          "maxDistance",
+        ],
+        component.type,
+      );
+      const audioAssetId = patch.audioAssetId;
+      if (audioAssetId !== undefined) {
+        if (typeof audioAssetId !== "string") {
+          invalidArgument("patch.audioAssetId", "string");
+        }
+        const audioAsset = audioAssetId
+          ? context.bundle.assets.assets[audioAssetId]
+          : undefined;
+        if (audioAssetId && audioAsset?.kind !== "audio") {
+          throw new XriftMcpEditorToolError(
+            audioAsset
+              ? "ASSET_KIND_MISMATCH"
+              : "ASSET_NOT_FOUND",
+            "patch.audioAssetIdには存在するAudio Assetを指定してください",
+            { audioAssetId, actualKind: audioAsset?.kind },
+          );
+        }
+      }
+      scene = updateAudioSourceComponent(
+        context.bundle.scene,
+        entityId,
+        patch as AudioSourcePatch,
+        componentId,
+      );
+      break;
+    }
+    case "animation":
+      assertPatchKeys(patch, ["enabled", "autoplay", "loop"], component.type);
+      scene = updateAnimationComponent(
+        context.bundle.scene,
+        entityId,
+        patch as AnimationPatch,
+        componentId,
+      );
+      break;
+    case "particle-emitter": {
+      assertPatchKeys(
+        patch,
+        ["enabled", "particleAssetId"],
+        component.type,
+      );
+      const enabled = optionalBoolean(patch.enabled, "patch.enabled");
+      const particleAssetId =
+        patch.particleAssetId === undefined
+          ? undefined
+          : requiredString(patch.particleAssetId, "patch.particleAssetId");
+      if (
+        particleAssetId &&
+        context.bundle.assets.assets[particleAssetId]?.kind !== "particle"
+      ) {
+        throw new XriftMcpEditorToolError(
+          context.bundle.assets.assets[particleAssetId]
+            ? "ASSET_KIND_MISMATCH"
+            : "ASSET_NOT_FOUND",
+          "patch.particleAssetIdには存在するParticle Assetを指定してください",
+          { particleAssetId },
+        );
+      }
+      const next = {
+        ...component,
+        ...(enabled !== undefined ? { enabled } : {}),
+        ...(particleAssetId !== undefined ? { particleAssetId } : {}),
+      };
+      scene =
+        next.enabled === component.enabled &&
+        next.particleAssetId === component.particleAssetId
+          ? context.bundle.scene
+          : replaceSceneComponent(
+              context.bundle.scene,
+              entityId,
+              componentId,
+              next,
+            );
+      break;
+    }
+    case "xrift-component": {
+      assertPatchKeys(
+        patch,
+        ["enabled", "properties", "assetReferences", "entityReferences"],
+        component.type,
+      );
+      const enabled = optionalBoolean(patch.enabled, "patch.enabled");
+      const properties =
+        patch.properties === undefined
+          ? undefined
+          : recordValue(patch.properties, "patch.properties");
+      if (properties && !isJsonValue(properties)) {
+        invalidArgument("patch.properties", "finite JSON object");
+      }
+      const assetReferences = optionalUniqueStringArray(
+        patch.assetReferences,
+        "patch.assetReferences",
+      );
+      const entityReferences = optionalUniqueStringArray(
+        patch.entityReferences,
+        "patch.entityReferences",
+      );
+      for (const assetId of assetReferences ?? []) {
+        if (!context.bundle.assets.assets[assetId]) {
+          throw new XriftMcpEditorToolError(
+            "ASSET_NOT_FOUND",
+            "patch.assetReferencesに指定されたAssetが見つかりません",
+            { assetId },
+          );
+        }
+      }
+      for (const referencedEntityId of entityReferences ?? []) {
+        if (!context.bundle.scene.entities[referencedEntityId]) {
+          throw new XriftMcpEditorToolError(
+            "ENTITY_NOT_FOUND",
+            "patch.entityReferencesに指定されたEntityが見つかりません",
+            { entityId: referencedEntityId },
+          );
+        }
+      }
+      const xriftPatch: UpdateXriftComponentPatch = {
+        ...(enabled !== undefined ? { enabled } : {}),
+        ...(properties ? { properties } : {}),
+        ...(assetReferences ? { assetReferences } : {}),
+        ...(entityReferences ? { entityReferences } : {}),
+      };
+      const result = updateXriftComponent(
+        context.bundle.scene,
+        entityId,
+        componentId,
+        xriftPatch,
+        context.bundle.project.projectKind,
+      );
+      if (!result.changed) {
+        throw new XriftMcpEditorToolError(
+          "COMPONENT_UPDATE_REJECTED",
+          result.diagnostics[0]?.message ??
+            "XRift Componentを更新できませんでした",
+          {
+            entityId,
+            componentId,
+            diagnostics: result.diagnostics,
+          },
+        );
+      }
+      scene = result.scene;
+      diagnostics = result.diagnostics;
+      break;
+    }
+    case "script":
+      assertPatchKeys(patch, ["enabled"], component.type, {
+        guidance:
+          "Scriptのproperties、assetReferences、entityReferencesはupdate_script_componentを使用してください",
+      });
+      scene = updateSceneComponentEnabled(
+        context.bundle.scene,
+        entityId,
+        componentId,
+        requiredPatchEnabled(patch),
+      );
+      break;
+    case "transform":
+      assertPatchKeys(patch, ["enabled"], component.type, {
+        guidance:
+          "Transform値はupdate_transformを使用してください",
+      });
+      scene = updateSceneComponentEnabled(
+        context.bundle.scene,
+        entityId,
+        componentId,
+        requiredPatchEnabled(patch),
+      );
+      break;
+    case "mesh":
+    case "spawn-point":
+    case "prefab-instance":
+      assertPatchKeys(patch, ["enabled"], component.type);
+      scene = updateSceneComponentEnabled(
+        context.bundle.scene,
+        entityId,
+        componentId,
+        requiredPatchEnabled(patch),
+      );
+      break;
+  }
+
+  if (scene === context.bundle.scene) {
+    if (!patchMatchesComponent(component, patch)) {
+      throw new XriftMcpEditorToolError(
+        "INVALID_COMPONENT_PATCH",
+        `${component.type} Componentへpatchを適用できませんでした`,
+        { entityId, componentId, componentType: component.type, patch },
+      );
+    }
+    return unchanged(
+      context,
+      {
+        projectId: context.bundle.project.projectId,
+        sceneId: context.bundle.scene.sceneId,
+        revision: context.revision,
+        entityId,
+        componentId,
+        component: JSON.parse(JSON.stringify(component)) as Record<
+          string,
+          unknown
+        >,
+      },
+      "Componentはすでに指定された状態です",
+    );
+  }
+  const updated = scene.entities[entityId]?.components.find(
+    (candidate) => candidate.id === componentId,
+  );
+  const bundle = touchProject(context, { ...context.bundle, scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: entityId },
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId,
+      componentId,
+      component: updated
+        ? JSON.parse(JSON.stringify(updated)) as Record<string, unknown>
+        : null,
+      diagnostics,
+      synchronizedDuringPlay: context.editorMode === "play",
+    },
+    activity: `AIが「${entity.name}」の${component.type} Componentを更新しました`,
+  };
+}
+
+function removeComponent(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const componentId = requiredString(argumentsValue.componentId, "componentId");
+  const entity = context.bundle.scene.entities[entityId];
+  if (!entity) {
+    throw new XriftMcpEditorToolError(
+      "ENTITY_NOT_FOUND",
+      "指定されたEntityが見つかりません",
+      { entityId },
+    );
+  }
+  const component = entity.components.find(
+    (candidate) => candidate.id === componentId,
+  );
+  if (!component) {
+    throw new XriftMcpEditorToolError(
+      "COMPONENT_NOT_FOUND",
+      "指定されたComponentが見つかりません",
+      { entityId, componentId },
+    );
+  }
+  if (component.type === "transform") {
+    throw new XriftMcpEditorToolError(
+      "TRANSFORM_COMPONENT_REQUIRED",
+      "Transform ComponentはEntityに必須のため削除できません",
+      { entityId, componentId },
+    );
+  }
+  let scene: SceneDocument;
+  if (component.type === "xrift-component") {
+    const result = removeXriftComponent(
+      context.bundle.scene,
+      entityId,
+      componentId,
+    );
+    if (!result.changed) {
+      throw new XriftMcpEditorToolError(
+        "COMPONENT_REMOVE_REJECTED",
+        result.diagnostics[0]?.message ?? "XRift Componentを削除できません",
+        { entityId, componentId, diagnostics: result.diagnostics },
+      );
+    }
+    scene = result.scene;
+  } else {
+    scene = {
+      ...context.bundle.scene,
+      entities: {
+        ...context.bundle.scene.entities,
+        [entityId]: {
+          ...entity,
+          components: entity.components.filter(
+            (candidate) => candidate.id !== componentId,
+          ),
+        },
+      },
+    };
+  }
+  const bundle = touchProject(context, { ...context.bundle, scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: entityId },
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId,
+      componentId,
+      componentType: component.type,
+      synchronizedDuringPlay: context.editorMode === "play",
+    },
+    activity: `AIが「${entity.name}」から${component.type} Componentを削除しました`,
+  };
+}
+
+function setEntityEnabled(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const enabled = optionalBoolean(argumentsValue.enabled, "enabled");
+  if (enabled === undefined) invalidArgument("enabled", "boolean");
+  const entity = context.bundle.scene.entities[entityId];
+  if (!entity) {
+    throw new XriftMcpEditorToolError(
+      "ENTITY_NOT_FOUND",
+      "指定されたEntityが見つかりません",
+      { entityId },
+    );
+  }
+  const scene = updateEntityEnabled(context.bundle.scene, entityId, enabled);
+  if (scene === context.bundle.scene) {
+    return unchanged(
+      context,
+      {
+        projectId: context.bundle.project.projectId,
+        sceneId: context.bundle.scene.sceneId,
+        revision: context.revision,
+        entityId,
+        enabled,
+      },
+      "Entityはすでに指定された状態です",
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: entityId },
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId,
+      enabled,
+      synchronizedDuringPlay: context.editorMode === "play",
+    },
+    activity: `AIが「${entity.name}」を${enabled ? "有効" : "無効"}にしました`,
   };
 }
 
@@ -747,6 +1689,16 @@ function updateScriptComponent(
     }
   }
   const contract = context.scriptContracts?.[targetComponent.scriptAssetId];
+  if (argumentsValue.properties !== undefined && !contract?.complete) {
+    throw new XriftMcpEditorToolError(
+      "SCRIPT_CONTRACT_UNAVAILABLE",
+      "Scriptのproperty契約を完全に読み取れないためpropertiesを更新できません。sourceの静的宣言を修正してから再試行してください",
+      {
+        scriptAssetId: targetComponent.scriptAssetId,
+        issues: contract?.issues ?? [],
+      },
+    );
+  }
   if (contract && argumentsValue.properties !== undefined) {
     validateScriptPropertyPatch({
       contract,
@@ -880,7 +1832,7 @@ function setMaterial(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
-  assertWritableContext(context, argumentsValue);
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
   const entityId = requiredString(argumentsValue.entityId, "entityId");
   const materialAssetId = requiredString(argumentsValue.materialAssetId, "materialAssetId");
   const slot = optionalString(argumentsValue.slot);
@@ -967,7 +1919,7 @@ function updateMaterial(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
-  assertWritableContext(context, argumentsValue);
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
   const materialAssetId = requiredString(
     argumentsValue.materialAssetId,
     "materialAssetId",
@@ -1016,7 +1968,7 @@ function setMaterialTextureTransform(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
-  assertWritableContext(context, argumentsValue);
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
   const materialAssetId = requiredString(
     argumentsValue.materialAssetId,
     "materialAssetId",
@@ -2138,6 +3090,162 @@ function setMaterialFailureMessage(reason: string): string {
   }
 }
 
+function componentDefinitionId(component: SceneComponent): string | null {
+  switch (component.type) {
+    case "transform":
+      return "core.transform";
+    case "mesh":
+      return "core.mesh";
+    case "rigid-body":
+      return "physics.rigid-body";
+    case "collider":
+      return component.shape === "box"
+        ? "physics.box-collider"
+        : "physics.mesh-collider";
+    case "light":
+      return `core.light.${
+        component.lightType === "rectArea" ? "area" : component.lightType
+      }`;
+    case "spawn-point":
+      return "core.spawn";
+    case "particle-emitter":
+      return "core.particle";
+    case "animation":
+      return "core.animation";
+    case "audio-source":
+      return "core.audio-source";
+    case "text":
+      return "core.text";
+    case "script":
+      return "scripting.script";
+    case "xrift-component":
+      return component.schemaId;
+    case "prefab-instance":
+      return null;
+  }
+}
+
+function componentPatchRecord(value: unknown): Record<string, unknown> {
+  const patch = recordValue(value, "patch");
+  if (!isJsonValue(patch)) invalidArgument("patch", "finite JSON object");
+  if (Object.keys(patch).length === 0) {
+    invalidArgument("patch", "non-empty object");
+  }
+  return JSON.parse(JSON.stringify(patch)) as Record<string, unknown>;
+}
+
+function particlePatchValue(value: unknown): ParticlePropertiesPatch {
+  const patch = recordValue(value, "patch");
+  if (!isJsonValue(patch)) invalidArgument("patch", "finite JSON object");
+  const allowed = new Set([
+    "maxParticles",
+    "duration",
+    "looping",
+    "prewarm",
+    "simulationSpace",
+    "startDelay",
+    "startLifetime",
+    "startSpeed",
+    "startSize",
+    "startRotation",
+    "gravity",
+    "emission",
+    "shape",
+    "colorOverLifetime",
+    "sizeOverLifetime",
+    "velocityOverLifetime",
+    "renderer",
+  ]);
+  const unsupported = Object.keys(patch).find((key) => !allowed.has(key));
+  if (unsupported) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      `patch.${unsupported}はParticle Assetで変更できません`,
+    );
+  }
+  if (Object.keys(patch).length === 0) {
+    invalidArgument("patch", "non-empty object");
+  }
+  return JSON.parse(JSON.stringify(patch)) as ParticlePropertiesPatch;
+}
+
+function assertPatchKeys(
+  patch: Record<string, unknown>,
+  allowedKeys: readonly string[],
+  componentType: SceneComponent["type"],
+  options: { guidance?: string } = {},
+): void {
+  const allowed = new Set(allowedKeys);
+  const unsupported = Object.keys(patch).find((key) => !allowed.has(key));
+  if (!unsupported) return;
+  throw new XriftMcpEditorToolError(
+    componentType === "script"
+      ? "USE_UPDATE_SCRIPT_COMPONENT"
+      : componentType === "transform"
+        ? "USE_UPDATE_TRANSFORM"
+        : "INVALID_ARGUMENT",
+    options.guidance ??
+      `patch.${unsupported}は${componentType} Componentで変更できません`,
+    { componentType, unsupportedField: unsupported },
+  );
+}
+
+function requiredPatchEnabled(patch: Record<string, unknown>): boolean {
+  const enabled = optionalBoolean(patch.enabled, "patch.enabled");
+  if (enabled === undefined) invalidArgument("patch.enabled", "boolean");
+  return enabled;
+}
+
+function updateSceneComponentEnabled(
+  scene: SceneDocument,
+  entityId: string,
+  componentId: string,
+  enabled: boolean,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  const component = entity?.components.find(
+    (candidate) => candidate.id === componentId,
+  );
+  if (!entity || !component || component.enabled === enabled) return scene;
+  return replaceSceneComponent(scene, entityId, componentId, {
+    ...component,
+    enabled,
+  });
+}
+
+function replaceSceneComponent(
+  scene: SceneDocument,
+  entityId: string,
+  componentId: string,
+  component: SceneComponent,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  if (!entity) return scene;
+  return {
+    ...scene,
+    entities: {
+      ...scene.entities,
+      [entityId]: {
+        ...entity,
+        components: entity.components.map((candidate) =>
+          candidate.id === componentId ? component : candidate,
+        ),
+      },
+    },
+  };
+}
+
+function patchMatchesComponent(
+  component: SceneComponent,
+  patch: Record<string, unknown>,
+): boolean {
+  return Object.entries(patch).every(
+    ([key, value]) =>
+      JSON.stringify(component[key as keyof SceneComponent]) ===
+      JSON.stringify(value),
+  );
+}
+
 function recordValue(value: unknown, name: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     invalidArgument(name, "object");
@@ -2238,11 +3346,19 @@ function validateScriptPropertyPatch({
         { property: name, scriptName: contract.name },
       );
     }
-    if (!scriptPropertyValueMatches(descriptor, value)) {
+    const validationError = getScriptPropValueValidationError(
+      descriptor,
+      value,
+    );
+    if (validationError) {
       throw new XriftMcpEditorToolError(
         "SCRIPT_PROPERTY_TYPE_MISMATCH",
-        `${name} は ${descriptor.kind} の値で指定してください`,
-        { property: name, expectedKind: descriptor.kind },
+        `${name}: ${validationError}`,
+        {
+          property: name,
+          expectedKind: descriptor.kind,
+          validationError,
+        },
       );
     }
     if (descriptor.kind === "asset" && value) {
@@ -2291,38 +3407,6 @@ function validateScriptPropertyPatch({
       }
     }
   }
-}
-
-function scriptPropertyValueMatches(
-  descriptor: ScriptPropDescriptor,
-  value: unknown,
-): boolean {
-  if (
-    descriptor.kind === "string" ||
-    descriptor.kind === "color" ||
-    descriptor.kind === "asset" ||
-    descriptor.kind === "entity"
-  ) {
-    return typeof value === "string";
-  }
-  if (descriptor.kind === "enum") {
-    return (
-      typeof value === "string" &&
-      (!descriptor.options || descriptor.options.includes(value))
-    );
-  }
-  if (descriptor.kind === "number") {
-    return typeof value === "number" && Number.isFinite(value);
-  }
-  if (descriptor.kind === "boolean") return typeof value === "boolean";
-  const length = descriptor.kind === "vec2" ? 2 : 3;
-  return (
-    Array.isArray(value) &&
-    value.length === length &&
-    value.every(
-      (entry) => typeof entry === "number" && Number.isFinite(entry),
-    )
-  );
 }
 
 function sameStringSet(

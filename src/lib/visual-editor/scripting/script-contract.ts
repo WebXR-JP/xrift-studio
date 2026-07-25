@@ -51,6 +51,8 @@ export type ScriptContractIssue = {
     | "missing-define-script"
     | "missing-name"
     | "unreadable-props"
+    | "unreadable-prop-default"
+    | "unreadable-prop-options"
     | "unknown-prop-kind"
     | "duplicate-prop";
   message: string;
@@ -109,6 +111,13 @@ export function extractScriptContract(source: string): ScriptContract {
 
   const propsBody = readObjectField(body, "props");
   if (propsBody === null) {
+    if (readRawField(body, "props") !== null) {
+      issues.push({
+        code: "unreadable-props",
+        message:
+          "props は prop.<kind>(...) を並べたObject literalで宣言してください。",
+      });
+    }
     return { name, props: [], complete: issues.length === 0, issues };
   }
 
@@ -143,18 +152,131 @@ export function createDefaultScriptProperties(
 ): JsonObject {
   const properties: JsonObject = {};
   for (const descriptor of contract.props) {
-    properties[descriptor.name] =
-      descriptor.defaultValue ?? fallbackDefault(descriptor.kind);
+    properties[descriptor.name] = getScriptPropDefaultValue(descriptor);
   }
   return properties;
 }
 
-function fallbackDefault(kind: ScriptPropKind): JsonValue {
-  if (kind === "number") return 0;
-  if (kind === "boolean") return false;
-  if (kind === "vec2") return [0, 0];
-  if (kind === "vec3") return [0, 0, 0];
-  if (kind === "color") return "#ffffff";
+/** Runtime and Inspector fallback for a missing or invalid persisted value. */
+export function getScriptPropDefaultValue(
+  descriptor: ScriptPropDescriptor,
+): JsonValue {
+  if (
+    descriptor.defaultValue !== undefined &&
+    getScriptPropValueValidationError(
+      descriptor,
+      descriptor.defaultValue,
+    ) === null
+  ) {
+    return descriptor.defaultValue;
+  }
+  return fallbackDefault(descriptor);
+}
+
+export function resolveScriptPropValue(
+  descriptor: ScriptPropDescriptor,
+  value: unknown,
+): JsonValue {
+  return getScriptPropValueValidationError(descriptor, value) === null
+    ? (value as JsonValue)
+    : getScriptPropDefaultValue(descriptor);
+}
+
+/**
+ * Shared write-boundary validation for Inspector and MCP.
+ *
+ * `null` means valid. Number limits and the canonical #RRGGBB color format
+ * are part of the declared contract rather than browser-only hints.
+ */
+export function getScriptPropValueValidationError(
+  descriptor: ScriptPropDescriptor,
+  value: unknown,
+): string | null {
+  if (
+    descriptor.kind === "string" ||
+    descriptor.kind === "asset" ||
+    descriptor.kind === "entity"
+  ) {
+    return typeof value === "string" ? null : "文字列で指定してください";
+  }
+  if (descriptor.kind === "color") {
+    return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)
+      ? null
+      : "#RRGGBB形式の色で指定してください";
+  }
+  if (descriptor.kind === "enum") {
+    if (typeof value !== "string") return "選択肢の文字列で指定してください";
+    return !descriptor.options || descriptor.options.includes(value)
+      ? null
+      : `次の選択肢から指定してください: ${descriptor.options.join(", ")}`;
+  }
+  if (descriptor.kind === "boolean") {
+    return typeof value === "boolean" ? null : "booleanで指定してください";
+  }
+  const validateNumber = (entry: unknown): string | null => {
+    if (typeof entry !== "number" || !Number.isFinite(entry)) {
+      return "有限の数値で指定してください";
+    }
+    if (descriptor.min !== undefined && entry < descriptor.min) {
+      return `${descriptor.min}以上で指定してください`;
+    }
+    if (descriptor.max !== undefined && entry > descriptor.max) {
+      return `${descriptor.max}以下で指定してください`;
+    }
+    return null;
+  };
+  if (descriptor.kind === "number") return validateNumber(value);
+  const length = descriptor.kind === "vec2" ? 2 : 3;
+  if (!Array.isArray(value) || value.length !== length) {
+    return `${length}要素の数値配列で指定してください`;
+  }
+  for (const entry of value) {
+    const error = validateNumber(entry);
+    if (error) return error;
+  }
+  return null;
+}
+
+/** Initial persisted values and explicit reference gates for a new component. */
+export function createDefaultScriptComponentState(
+  contract: ScriptContract,
+): {
+  properties: JsonObject;
+  assetReferences: string[];
+  entityReferences: string[];
+} {
+  const properties = createDefaultScriptProperties(contract);
+  const references = (kind: "asset" | "entity") => [
+    ...new Set(
+      contract.props
+        .filter((descriptor) => descriptor.kind === kind)
+        .map((descriptor) => properties[descriptor.name])
+        .filter(
+          (value): value is string =>
+            typeof value === "string" && value.length > 0,
+        ),
+    ),
+  ];
+  return {
+    properties,
+    assetReferences: references("asset"),
+    entityReferences: references("entity"),
+  };
+}
+
+function fallbackDefault(descriptor: ScriptPropDescriptor): JsonValue {
+  const numericFallback = Math.min(
+    descriptor.max ?? Number.POSITIVE_INFINITY,
+    Math.max(descriptor.min ?? Number.NEGATIVE_INFINITY, 0),
+  );
+  if (descriptor.kind === "number") return numericFallback;
+  if (descriptor.kind === "boolean") return false;
+  if (descriptor.kind === "enum") return descriptor.options?.[0] ?? "";
+  if (descriptor.kind === "vec2") return [numericFallback, numericFallback];
+  if (descriptor.kind === "vec3") {
+    return [numericFallback, numericFallback, numericFallback];
+  }
+  if (descriptor.kind === "color") return "#ffffff";
   return "";
 }
 
@@ -205,16 +327,34 @@ function parsePropEntry(
     if (value !== null) descriptor[numeric] = value;
   }
   const options = readStringArrayField(optionsBody, "options");
+  if (kind === "enum" && (!options || options.length === 0)) {
+    issues.push({
+      code: "unreadable-prop-options",
+      message: `${name} の options は空でない文字列リテラル配列で指定してください。`,
+      propName: name,
+    });
+    return null;
+  }
   if (options) descriptor.options = options;
-  const defaultValue = readDefaultField(optionsBody);
-  if (defaultValue !== undefined) descriptor.defaultValue = defaultValue;
+  const rawDefault = readRawField(optionsBody, "default");
+  if (rawDefault !== null) {
+    const defaultValue = parseLiteral(rawDefault);
+    if (
+      defaultValue === undefined ||
+      getScriptPropValueValidationError(descriptor, defaultValue) !== null
+    ) {
+      issues.push({
+        code: "unreadable-prop-default",
+        message: `${name} の default は ${kind} の静的なリテラルで指定してください。`,
+        propName: name,
+      });
+      // Do not persist a guessed fallback. Leaving the property undeclared in
+      // the static contract lets the executed Script use its actual default.
+      return null;
+    }
+    descriptor.defaultValue = defaultValue;
+  }
   return descriptor;
-}
-
-function readDefaultField(body: string): JsonValue | undefined {
-  const raw = readRawField(body, "default");
-  if (raw === null) return undefined;
-  return parseLiteral(raw);
 }
 
 function parseLiteral(raw: string): JsonValue | undefined {

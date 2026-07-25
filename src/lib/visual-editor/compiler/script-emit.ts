@@ -1,5 +1,7 @@
 import scriptApiSource from "../../../../packages/xrift-studio-runtime/src/script/api.ts?raw";
 import scriptHostSource from "../../../../packages/xrift-studio-runtime/src/script/host.tsx?raw";
+import scriptLifecycleSource from "../../../../packages/xrift-studio-runtime/src/script/lifecycle.ts?raw";
+import scriptParticleSource from "../../../../packages/xrift-studio-runtime/src/script/particle.tsx?raw";
 
 import type { AssetManifest, ScriptAsset } from "../asset-manifest";
 import type { JsonObject, ScriptComponent } from "../scene-document";
@@ -31,6 +33,8 @@ export const SCRIPT_MODULE_DIRECTORY = "src/scripts";
 
 export const SCRIPT_API_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/script-api.ts`;
 export const SCRIPT_HOST_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/script-host.tsx`;
+export const SCRIPT_LIFECYCLE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/script-lifecycle.ts`;
+export const SCRIPT_PARTICLE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/particle-runtime.tsx`;
 
 export type EmittedScriptModule = {
   assetId: string;
@@ -147,8 +151,17 @@ export function planScriptEmission(
         owner: "xrift-studio-compiler",
       },
       {
+        relativePath: SCRIPT_LIFECYCLE_OVERLAY_PATH,
+        content: rewriteRuntimeLocalImports(scriptLifecycleSource),
+        kind: "source",
+        owner: "xrift-studio-compiler",
+      },
+      {
+        ...createScriptParticleOverlayFile(),
+      },
+      {
         relativePath: SCRIPT_HOST_OVERLAY_PATH,
-        content: rewriteHostApiImport(scriptHostSource),
+        content: rewriteRuntimeLocalImports(scriptHostSource),
         kind: "source",
         owner: "xrift-studio-compiler",
       },
@@ -156,6 +169,15 @@ export function planScriptEmission(
   }
 
   return { modules, overlayFiles };
+}
+
+export function createScriptParticleOverlayFile(): CompilerOverlayFile {
+  return {
+    relativePath: SCRIPT_PARTICLE_OVERLAY_PATH,
+    content: scriptParticleSource,
+    kind: "source",
+    owner: "xrift-studio-compiler",
+  };
 }
 
 type RejectedSpecifier = {
@@ -200,12 +222,18 @@ function rewriteScriptApiImports(source: string): string {
   })).source;
 }
 
-/** The host imports the API by package-relative path inside the monorepo. */
-function rewriteHostApiImport(source: string): string {
+/** Runtime overlays import sibling package modules by package-relative paths. */
+function rewriteRuntimeLocalImports(source: string): string {
   return source.replace(
-    /(\bfrom\s*)(["'])\.\/api\.js\2/g,
-    (_whole, prefix: string, quote: string) =>
-      `${prefix}${quote}./script-api${quote}`,
+    /(\bfrom\s*)(["'])\.\/(api|lifecycle|particle)\.js\2/g,
+    (_whole, prefix: string, quote: string, moduleName: string) =>
+      `${prefix}${quote}./${
+        moduleName === "api"
+          ? "script-api"
+          : moduleName === "lifecycle"
+            ? "script-lifecycle"
+            : "particle-runtime"
+      }${quote}`,
   );
 }
 

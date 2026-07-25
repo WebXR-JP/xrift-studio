@@ -21,16 +21,24 @@ const MCP_EVENT_NAME: &str = "xrift-mcp-editor-request";
 const MCP_REQUEST_TIMEOUT_SECONDS: u64 = 180;
 const MCP_INITIAL_MESSAGE_TIMEOUT_SECONDS: u64 = 5;
 const MCP_EDITOR_QUEUE_TIMEOUT_MILLISECONDS: u64 = 2_000;
-const MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS: u64 = 15_000;
+// WebKit can throttle a background window's JavaScript timers to roughly one
+// minute while the user's MCP client is in the foreground. Keep the lease
+// comfortably beyond that interval; navigating away still clears it eagerly.
+const MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS: u64 = 120_000;
 const MCP_MAX_CONCURRENT_CONNECTIONS: usize = 32;
 const MCP_MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 const MCP_MAX_CLIENT_NAME_CHARS: usize = 128;
-const MCP_TOOL_NAMES: [&str; 38] = [
+const MCP_TOOL_NAMES: [&str; 48] = [
     "get_editor_context",
     "get_scripting_capabilities",
     "list_assets",
+    "create_document_asset",
+    "get_particle_asset",
+    "update_particle_asset",
+    "list_script_templates",
     "get_script_asset",
     "create_script_asset",
+    "apply_script_template",
     "update_script_asset",
     "set_play_mode",
     "search_external_assets",
@@ -39,9 +47,14 @@ const MCP_TOOL_NAMES: [&str; 38] = [
     "update_scene_settings",
     "place_asset",
     "list_entities",
+    "list_component_definitions",
+    "get_entity_components",
     "create_primitive",
     "place_builtin_prefab",
     "add_component",
+    "update_component",
+    "remove_component",
+    "set_entity_enabled",
     "update_script_component",
     "update_transform",
     "set_material",
@@ -1774,7 +1787,7 @@ pub fn run_stdio_server() -> Result<(), String> {
                     "protocolVersion": MCP_PROTOCOL_VERSION,
                     "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": { "name": MCP_SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Call get_scripting_capabilities before authoring a Script that accesses Assets, Materials, or other Entities. Script workflows use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. ctx.materials changes are runtime-only; use the Material Asset editor tools for persistent authoring. While Play is active, Script properties and scene structure tools (create, duplicate, reparent, add component, transform, and delete) synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. XRift Studio must be open with a visual project."
+                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Script execution is not sandboxed and no provenance trust gate is implemented; get_scripting_capabilities returns sandboxed:false, trustGate:false, and the full trust boundary. Never run untrusted Script source without showing it to the user and obtaining explicit approval. Call get_scripting_capabilities and list_script_templates before authoring a Script. Use create_script_asset with templateId to create a built-in example, or apply_script_template to create it and attach its Script Component to an Entity in one editor revision. For custom source, use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. Runtime ctx.materials and ctx.particles changes reset on Stop; use persistent Material tools or create_document_asset/get_particle_asset/update_particle_asset to save authoring data. Call list_component_definitions and get_entity_components before add_component, update_component, or remove_component. While Play is active, Entity enabled state and supported component/scene structure tools synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. XRift Studio must be open with a visual project."
                 }),
             )?,
             "ping" => write_json_rpc_result(&mut stdout, id, json!({}))?,
@@ -2006,7 +2019,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "get_scripting_capabilities",
-            "description": "Read the Script authoring workflow, xrift:script Asset and Material runtime APIs, reference rules, examples, and the boundary between temporary Play overrides and persistent Material Asset tools. Call this before writing a Script that uses Assets, Materials, or other Entities.",
+            "description": "Read the Script authoring workflow; xrift:script lifecycle, Asset, targeted Material, and Particle runtime APIs; persistent authoring tools; and the explicit sandboxed:false/trustGate:false security boundary.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         },
         {
@@ -2018,6 +2031,60 @@ fn tool_definitions() -> Value {
                     "query": { "type": "string" },
                     "kind": { "type": "string" }
                 },
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "create_document_asset",
+            "description": "Create a persistent authored Material or Particle Asset, optionally inside an Asset folder, through the same revision and history boundary as the Editor.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "kind": { "type": "string", "enum": ["material", "particle"] },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+                    "folderId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "kind"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "get_particle_asset",
+            "description": "Read a persistent Particle Asset and all normalized authoring properties.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "particleAssetId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["particleAssetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "update_particle_asset",
+            "description": "Persist Particle Asset simulation, emission, shape, lifetime, velocity, color, size, and renderer settings. Runtime ctx.particles overrides remain Play-only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "particleAssetId": { "type": "string", "minLength": 1 },
+                    "patch": { "type": "object", "minProperties": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "particleAssetId", "patch"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "list_script_templates",
+            "description": "List the built-in, offline Script templates available to create_script_asset and apply_script_template, including their category and required Asset, Component, and Entity bindings.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
                 "additionalProperties": false
             }
         },
@@ -2035,7 +2102,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "create_script_asset",
-            "description": "Create a TypeScript Script Asset in the open visual project, select it in Assets, and open it in the Script Editor. Omit source to use the runnable rotation sample. Call get_scripting_capabilities for the supported xrift:script context APIs.",
+            "description": "Create a TypeScript Script Asset in the open visual project and select it in Assets. Set templateId to an ID from list_script_templates, or set source for custom code; do not send both. Omitting both keeps the runnable default template. The currently open Script Editor buffer is preserved.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2044,9 +2111,28 @@ fn tool_definitions() -> Value {
                     "expectedRevision": { "type": "integer", "minimum": 0 },
                     "name": { "type": "string", "minLength": 1 },
                     "folderId": { "type": "string" },
+                    "templateId": { "type": "string", "minLength": 1 },
                     "source": { "type": "string" }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "apply_script_template",
+            "description": "Create a built-in Script template and attach a Script Component referencing it to one existing Entity. The Asset and Component are committed as one editor revision and one Undo history entry. Configure any required Asset or Entity properties afterward with update_script_component.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "templateId": { "type": "string", "minLength": 1 },
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "name": { "type": "string", "minLength": 1 },
+                    "folderId": { "type": "string" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "templateId", "entityId"],
                 "additionalProperties": false
             }
         },
@@ -2072,9 +2158,12 @@ fn tool_definitions() -> Value {
             "inputSchema": {
                 "type": "object",
                 "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
                     "mode": { "type": "string", "enum": ["play", "edit"] }
                 },
-                "required": ["mode"],
+                "required": ["projectId", "sceneId", "expectedRevision", "mode"],
                 "additionalProperties": false
             }
         },
@@ -2176,6 +2265,23 @@ fn tool_definitions() -> Value {
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         },
         {
+            "name": "list_component_definitions",
+            "description": "List the central Editor Component registry with stable definition IDs, categories, project-kind availability, multiplicity, and required Asset kinds. Call this instead of guessing add_component definitionId values.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "get_entity_components",
+            "description": "Read one Entity's enabled state and complete serialized Component list, including the stable definitionId for each registered Component.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "entityId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["entityId"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "create_primitive",
             "description": "Create a builtin primitive shape (box, sphere, cylinder, cone, or plane) as a new scene entity.",
             "inputSchema": {
@@ -2232,7 +2338,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "add_component",
-            "description": "Add a component (including Script) to an existing entity. For scripting.script, pass the Script Asset ID returned by list_assets as scriptAssetId.",
+            "description": "Add a Component from the central Editor registry to an existing Entity. Call list_component_definitions for valid definitionId values. For scripting.script, also pass the Script Asset ID returned by list_assets.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2241,40 +2347,58 @@ fn tool_definitions() -> Value {
                     "expectedRevision": { "type": "integer", "minimum": 0 },
                     "entityId": { "type": "string" },
                     "scriptAssetId": { "type": "string" },
-                    "definitionId": {
-                        "type": "string",
-                        "enum": [
-                            "core.mesh",
-                            "physics.box-collider",
-                            "physics.mesh-collider",
-                            "core.light.ambient",
-                            "core.light.directional",
-                            "core.light.hemisphere",
-                            "core.light.point",
-                            "core.light.spot",
-                            "core.light.area",
-                            "core.spawn",
-                            "core.particle",
-                            "core.audio-source",
-                            "scripting.script",
-                            "xrift.interactable",
-                            "xrift.grabbable",
-                            "xrift.mirror",
-                            "xrift.skybox",
-                            "xrift.video-screen",
-                            "xrift.video-player",
-                            "xrift.live-video-player",
-                            "xrift.video-180-sphere",
-                            "xrift.screen-share-display",
-                            "xrift.spawn-point",
-                            "xrift.text-input",
-                            "xrift.tag-board",
-                            "xrift.portal",
-                            "xrift.billboard-y"
-                        ]
-                    }
+                    "definitionId": { "type": "string", "minLength": 1 }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "entityId", "definitionId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "update_component",
+            "description": "Persist supported Component fields and enabled state through Editor history. Built-in Rigid Body, Collider, Light, Text, Audio Source, Animation, and Particle Emitter patches use the same validators as Inspector. Use update_transform for Transform values and update_script_component for Script properties/references.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "componentId": { "type": "string", "minLength": 1 },
+                    "patch": { "type": "object", "minProperties": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "componentId", "patch"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "remove_component",
+            "description": "Remove a Component from an Entity through Editor history. Transform is required and cannot be removed; protected built-in XRift Components preserve their authoring lock.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "componentId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "componentId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "set_entity_enabled",
+            "description": "Persist an Entity's enabled state. During Play the authoring and running scenes synchronize immediately.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "enabled": { "type": "boolean" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "enabled"],
                 "additionalProperties": false
             }
         },
@@ -2333,7 +2457,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "set_material",
-            "description": "Persist a Material Asset assignment to a mesh slot on an existing entity in Edit mode. For temporary Play-only changes, use Script ctx.materials.",
+            "description": "Persist a Material Asset assignment to a mesh slot on an existing entity in Edit or Play mode. During Play only the affected Entity restarts. For temporary Play-only changes, use Script ctx.materials.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2361,7 +2485,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "update_material_asset",
-            "description": "Persist canonical glTF Material Asset properties in Edit mode, including PBR factors, texture slots, alpha settings, and supported KHR_materials extensions. Unlike Script ctx.materials overrides, this changes saved authoring data.",
+            "description": "Persist canonical glTF Material Asset properties in Edit or Play mode, including PBR factors, texture slots, alpha settings, and supported KHR_materials extensions. During Play only consuming Entities restart. Unlike Script ctx.materials overrides, this changes saved authoring data.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2377,7 +2501,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "set_material_texture_transform",
-            "description": "Persist glTF KHR_texture_transform tiling (scale), offset, rotation, and TEXCOORD set for a Material texture slot in Edit mode. The slot must already contain a Texture Asset. Script-loaded Texture transforms remain runtime-only.",
+            "description": "Persist glTF KHR_texture_transform tiling (scale), offset, rotation, and TEXCOORD set for a Material texture slot in Edit or Play mode. During Play only consuming Entities restart. The slot must already contain a Texture Asset. Script-loaded Texture transforms remain runtime-only.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2680,6 +2804,47 @@ mod tests {
             .filter_map(|tool| tool.get("name").and_then(Value::as_str))
             .collect();
         assert_eq!(names, MCP_TOOL_NAMES);
+    }
+
+    #[test]
+    fn persistent_editor_writes_expose_revision_contracts() {
+        let tools = tool_definitions();
+        let tools = tools.as_array().expect("tool list");
+        for name in [
+            "create_document_asset",
+            "update_particle_asset",
+            "update_component",
+            "remove_component",
+            "set_entity_enabled",
+        ] {
+            let tool = tools
+                .iter()
+                .find(|tool| tool.get("name").and_then(Value::as_str) == Some(name))
+                .unwrap_or_else(|| panic!("missing tool: {name}"));
+            let required = tool
+                .pointer("/inputSchema/required")
+                .and_then(Value::as_array)
+                .expect("required fields");
+            for field in ["projectId", "sceneId", "expectedRevision"] {
+                assert!(
+                    required
+                        .iter()
+                        .any(|candidate| candidate.as_str() == Some(field)),
+                    "{name} should require {field}"
+                );
+            }
+        }
+
+        let update_component = tools
+            .iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("update_component"))
+            .expect("update_component");
+        assert_eq!(
+            update_component
+                .pointer("/inputSchema/properties/patch/minProperties")
+                .and_then(Value::as_u64),
+            Some(1)
+        );
     }
 
     #[test]

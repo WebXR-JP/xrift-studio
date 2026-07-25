@@ -23,8 +23,14 @@ import { prepareStarterVisualProject } from "../src/lib/visual-editor/persistenc
 import { runVisualCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/fixture.ts";
 import { runClassicExportFixtureAssertions } from "../src/lib/visual-editor/classic-export.fixture.ts";
 import { runComponentCodeImportFixtureAssertions } from "../src/lib/visual-editor/component-code-import.fixture.ts";
+import { runXriftMcpEditorToolFixtures } from "../src/lib/visual-editor/mcp-editor-tools.fixture.ts";
 import { runScriptSpecifierFixtureAssertions } from "../src/lib/visual-editor/scripting/specifiers.fixture.ts";
+import { runScriptTemplateFixtureAssertions } from "../src/lib/visual-editor/scripting/script-templates.fixture.ts";
+import { runScriptPropsFixtureAssertions } from "../src/lib/visual-editor/scripting/script-props.fixture.ts";
+import { runParticleRuntimeFixtureAssertions } from "../src/lib/visual-editor/scripting/particle-runtime.fixture.ts";
+import { runScriptLifecycleFixtureAssertions } from "../src/lib/visual-editor/scripting/lifecycle.fixture.ts";
 import { runScriptEmitFixtureAssertions } from "../src/lib/visual-editor/compiler/script-emit.fixture.ts";
+import { runBasisTranscoderFixtureAssertions } from "../src/lib/visual-editor/basis-transcoder.fixture.ts";
 
 const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "xrift-studio-convert-"));
 const previousXriftBin = process.env.XRIFT_STUDIO_XRIFT_BIN;
@@ -116,8 +122,14 @@ try {
   }
   assert(modifiedRejected, "--update must reject a modified Classic export");
   runVisualCompilerFixtureAssertions();
+  runXriftMcpEditorToolFixtures();
   runScriptSpecifierFixtureAssertions();
+  runScriptTemplateFixtureAssertions();
+  runScriptPropsFixtureAssertions();
+  runParticleRuntimeFixtureAssertions();
+  await runScriptLifecycleFixtureAssertions();
   runScriptEmitFixtureAssertions();
+  runBasisTranscoderFixtureAssertions();
   runStarterTemplateFixtureAssertions();
   await verifyPreparedOfficialStarter();
   runComponentCodeImportFixtureAssertions();

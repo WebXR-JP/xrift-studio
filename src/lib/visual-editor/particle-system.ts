@@ -296,7 +296,7 @@ export function scaleParticleEmission(
   return {
     maxParticles: Math.max(
       1,
-      Math.min(100_000, Math.round(properties.maxParticles * safeMultiplier)),
+      Math.min(10_000, Math.round(properties.maxParticles * safeMultiplier)),
     ),
     emission: {
       rateOverTime: Math.max(
@@ -407,7 +407,7 @@ function applyParticlePropertiesPatch(
   }
 
   return {
-    maxParticles: integer(patch.maxParticles, current.maxParticles, 1, 100_000),
+    maxParticles: integer(patch.maxParticles, current.maxParticles, 1, 10_000),
     duration: finite(patch.duration, current.duration, 0.01, 600),
     looping: booleanValue(patch.looping, current.looping),
     prewarm: booleanValue(patch.prewarm, current.prewarm),

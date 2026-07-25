@@ -5,9 +5,11 @@ import {
 import {
   SCENE_DOCUMENT_SCHEMA_VERSION,
   createTransformComponent,
+  type ParticleEmitterComponent,
   type SceneDocument,
   type SceneEntity,
 } from "./scene-document";
+import { createDefaultParticleAsset } from "./particle-system";
 import { createPlaySession, synchronizePlaySession } from "./play-session";
 
 export function runPlaySessionFixtureAssertions(): void {
@@ -119,6 +121,78 @@ export function runPlaySessionFixtureAssertions(): void {
       !structureSynchronized.runtimeScene.entities["entity-b"],
     "Runtime Scene structure must match the latest authoring Scene",
   );
+
+  const particleA = createDefaultParticleAsset({
+    id: "particle-a",
+    name: "Particle A",
+  });
+  const particleB = createDefaultParticleAsset({
+    id: "particle-b",
+    name: "Particle B",
+  });
+  if (!particleA || !particleB) {
+    throw new Error("Play session fixture could not create Particle Assets");
+  }
+  const particleScene = fixtureScene();
+  particleScene.entities["entity-a"]?.components.push(
+    particleEmitter("emitter-a", particleA.id),
+  );
+  particleScene.entities["entity-b"]?.components.push(
+    particleEmitter("emitter-b", particleB.id),
+  );
+  const particleAssets: AssetManifest = {
+    schemaVersion: ASSET_MANIFEST_SCHEMA_VERSION,
+    assets: {
+      [particleA.id]: particleA,
+      [particleB.id]: particleB,
+    },
+  };
+  const particleSession = createPlaySession(particleScene, particleAssets);
+  const changedParticleAssets: AssetManifest = JSON.parse(
+    JSON.stringify(particleAssets),
+  ) as AssetManifest;
+  const changedParticle = changedParticleAssets.assets[particleA.id];
+  if (changedParticle?.kind === "particle") {
+    changedParticle.properties.emission.rateOverTime = 42;
+  }
+  const particleSynchronized = synchronizePlaySession(
+    particleSession,
+    particleScene,
+    changedParticleAssets,
+  );
+  assert(
+    particleSynchronized.lastReloads.length === 1 &&
+      particleSynchronized.lastReloads[0]?.entityId === "entity-a",
+    "An Asset edit must restart only Entities that consume the changed Asset",
+  );
+  assert(
+    particleSynchronized.entityRevisions["entity-b"] === 0,
+    "Unrelated Asset consumers must keep their runtime instance",
+  );
+
+  const unusedParticle = createDefaultParticleAsset({
+    id: "particle-unused",
+    name: "Unused Particle",
+  });
+  if (!unusedParticle) {
+    throw new Error("Play session fixture could not create an unused Particle");
+  }
+  const withUnreferencedAsset: AssetManifest = {
+    ...changedParticleAssets,
+    assets: {
+      ...changedParticleAssets.assets,
+      [unusedParticle.id]: unusedParticle,
+    },
+  };
+  const unreferencedSynchronized = synchronizePlaySession(
+    particleSynchronized,
+    particleScene,
+    withUnreferencedAsset,
+  );
+  assert(
+    unreferencedSynchronized.lastReloads.length === 0,
+    "Adding an unreferenced Asset must not restart every running Entity",
+  );
 }
 
 function fixtureAssets(): AssetManifest {
@@ -149,6 +223,18 @@ function entity(id: string): SceneEntity {
     children: [],
     enabled: true,
     components: [createTransformComponent(`transform-${id}`)],
+  };
+}
+
+function particleEmitter(
+  id: string,
+  particleAssetId: string,
+): ParticleEmitterComponent {
+  return {
+    id,
+    type: "particle-emitter",
+    enabled: true,
+    particleAssetId,
   };
 }
 

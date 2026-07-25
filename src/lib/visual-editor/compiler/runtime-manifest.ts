@@ -155,7 +155,17 @@ function compileRuntimeEntity(
       });
       continue;
     }
-    if (component.type === "audio-source" || component.type === "particle-emitter") {
+    if (component.type === "particle-emitter") {
+      diagnostics.push({
+        severity: "blocking",
+        code: "runtime-particle-adapter-missing",
+        message:
+          "xrift-studio-runtimeはparticle-emitterをまだ描画できないため、Classic runtime出力を停止しました",
+        sceneId,
+        entityId: entity.id,
+        componentId: component.id,
+      });
+    } else if (component.type === "audio-source") {
       appendRuntimeAdapterDiagnostic(
         diagnostics,
         component.type,

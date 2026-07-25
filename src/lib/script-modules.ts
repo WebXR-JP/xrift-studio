@@ -8,6 +8,7 @@ import * as XriftWorldComponents from "@xrift/world-components";
 import * as XriftScript from "../../packages/xrift-studio-runtime/src/script/api";
 
 import { transpileTypeScriptModule } from "./monaco";
+import { createScriptModuleBridgeSource } from "./script-module-bridge";
 import {
   collectDynamicScriptImports,
   collectUnsupportedUseFrameImports,
@@ -63,18 +64,11 @@ function bridgeUrlFor(specifier: string): string | null {
   if (cached) return cached;
   const namespace = ensureRegistry()[specifier];
   if (!namespace) return null;
-  const names = Object.keys(namespace).filter((name) =>
-    /^[A-Za-z_$][\w$]*$/.test(name),
-  );
-  const lines = [
-    `const ns = globalThis[${JSON.stringify(REGISTRY_GLOBAL)}][${JSON.stringify(specifier)}];`,
-    ...names.map(
-      (name) => `export const ${name} = ns[${JSON.stringify(name)}];`,
-    ),
-    "export default ns.default ?? ns;",
-  ];
   const url = URL.createObjectURL(
-    new Blob([lines.join("\n")], { type: "text/javascript" }),
+    new Blob(
+      [createScriptModuleBridgeSource(REGISTRY_GLOBAL, specifier, namespace)],
+      { type: "text/javascript" },
+    ),
   );
   bridgeUrls.set(specifier, url);
   createdUrls.add(url);

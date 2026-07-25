@@ -2,6 +2,7 @@ import { createDefaultParticleAsset } from "./particle-system";
 import { BUILTIN_ASSET_IDS, createPrototypeProject } from "./prototype-project";
 import { createTextureAsset } from "./asset-manifest";
 import { createScriptAsset } from "./scripting/script-files";
+import { extractScriptContract } from "./scripting/script-contract";
 import {
   executeXriftMcpEditorTool,
   XriftMcpEditorToolError,
@@ -48,6 +49,19 @@ export function runXriftMcpEditorToolFixtures(): void {
     revision: 4,
     saveStatus: "saved",
     now: () => "2026-07-21T00:00:00.000Z",
+    scriptContracts: {
+      [script.id]: extractScriptContract(`
+        import { defineScript, prop } from "xrift:script";
+        export default defineScript({
+          name: "MCP Script",
+          props: {
+            speed: prop.number({ default: 2, min: 0, max: 10 }),
+            axis: prop.vec3({ default: [0, 1, 0] }),
+            tint: prop.color({ default: "#ffffff" }),
+          },
+        });
+      `),
+    },
   };
 
   const fogResult = executeXriftMcpEditorTool(context, {
@@ -91,6 +105,40 @@ export function runXriftMcpEditorToolFixtures(): void {
       }
     )?.tools?.includes("update_material_asset"),
     "Scripting capabilities should distinguish persistent Material authoring",
+  );
+  assert(
+    (
+      scriptingCapabilities.result.runtime as {
+        materials?: { methods?: string[] };
+      }
+    )?.materials?.methods?.some((method) => method.includes("materials.select")),
+    "Scripting capabilities should expose Material slot selection",
+  );
+  assert(
+    (
+      scriptingCapabilities.result.runtime as {
+        particles?: { methods?: string[] };
+      }
+    )?.particles?.methods?.some((method) => method.includes("particles.restart")),
+    "Scripting capabilities should expose runtime Particle controls",
+  );
+  assert(
+    (
+      scriptingCapabilities.result.runtime as {
+        lifecycle?: { methods?: string[] };
+      }
+    )?.lifecycle?.methods?.some((method) => method.includes("lifecycle.task")),
+    "Scripting capabilities should expose managed lifecycle tasks",
+  );
+  assert(
+    scriptingCapabilities.result.sandboxed === false &&
+      scriptingCapabilities.result.trustGate === false &&
+      typeof (
+        scriptingCapabilities.result.trustBoundary as {
+          clientRule?: unknown;
+        }
+      )?.clientRule === "string",
+    "Scripting capabilities must not claim a sandbox or trust gate",
   );
   assert(fogResult.changed, "Fog edit should change the bundle");
   assert(
@@ -145,6 +193,189 @@ export function runXriftMcpEditorToolFixtures(): void {
   assert(staleCode === "STALE_REVISION", "Stale write should be rejected");
 
   let current: XriftMcpEditorContext = { ...context, bundle: placed.bundle, revision: 6 };
+  const placedEntityId = placed.sceneSelection?.id;
+  assert(
+    typeof placedEntityId === "string",
+    "Placed Particle Asset should expose its Entity ID",
+  );
+
+  const componentDefinitions = executeXriftMcpEditorTool(current, {
+    id: "fixture-component-definitions",
+    tool: "list_component_definitions",
+    arguments: {},
+  });
+  assert(
+    (
+      componentDefinitions.result.definitions as Array<{
+        id: string;
+        supportedInProject: boolean;
+      }>
+    ).some(
+      (definition) =>
+        definition.id === "physics.rigid-body" &&
+        definition.supportedInProject,
+    ),
+    "Component definitions should be generated from the central registry",
+  );
+
+  const materialCreated = executeXriftMcpEditorTool(current, {
+    id: "fixture-create-document-material",
+    tool: "create_document_asset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      kind: "material",
+      name: "MCP Authored Material",
+    },
+  });
+  assert(
+    (materialCreated.result.asset as { kind?: string }).kind === "material",
+    "create_document_asset should create a Material",
+  );
+  current = {
+    ...current,
+    bundle: materialCreated.bundle,
+    revision: current.revision + 1,
+  };
+
+  const particleCreated = executeXriftMcpEditorTool(current, {
+    id: "fixture-create-document-particle",
+    tool: "create_document_asset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      kind: "particle",
+      name: "MCP Authored Particle",
+    },
+  });
+  const authoredParticleId = (
+    particleCreated.result.asset as { id?: string }
+  ).id;
+  assert(
+    typeof authoredParticleId === "string",
+    "create_document_asset should return the Particle Asset ID",
+  );
+  current = {
+    ...current,
+    bundle: particleCreated.bundle,
+    revision: current.revision + 1,
+  };
+
+  const particleRead = executeXriftMcpEditorTool(current, {
+    id: "fixture-get-particle",
+    tool: "get_particle_asset",
+    arguments: { particleAssetId: authoredParticleId },
+  });
+  assert(
+    (
+      particleRead.result.particleAsset as {
+        properties?: { emission?: { rateOverTime?: number } };
+      }
+    ).properties?.emission?.rateOverTime === 28,
+    "get_particle_asset should expose normalized authoring properties",
+  );
+
+  const particleUpdated = executeXriftMcpEditorTool(current, {
+    id: "fixture-update-particle",
+    tool: "update_particle_asset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      particleAssetId: authoredParticleId,
+      patch: {
+        emission: { rateOverTime: 64 },
+        startSize: { min: 0.2, max: 0.4 },
+      },
+    },
+  });
+  assert(
+    (
+      particleUpdated.result.properties as {
+        emission?: { rateOverTime?: number };
+      }
+    ).emission?.rateOverTime === 64,
+    "update_particle_asset should persist Particle properties",
+  );
+  current = {
+    ...current,
+    bundle: particleUpdated.bundle,
+    revision: current.revision + 1,
+  };
+
+  const placedComponents = executeXriftMcpEditorTool(current, {
+    id: "fixture-get-placed-components",
+    tool: "get_entity_components",
+    arguments: { entityId: placedEntityId },
+  });
+  const placedParticleComponent = (
+    placedComponents.result.components as Array<{
+      id: string;
+      type: string;
+      definitionId: string | null;
+    }>
+  ).find((component) => component.type === "particle-emitter");
+  assert(
+    placedParticleComponent?.definitionId === "core.particle",
+    "get_entity_components should include stable definition IDs",
+  );
+
+  const particleEmitterUpdated = executeXriftMcpEditorTool(
+    { ...current, editorMode: "play" },
+    {
+      id: "fixture-update-particle-emitter",
+      tool: "update_component",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        entityId: placedEntityId,
+        componentId: placedParticleComponent?.id,
+        patch: { particleAssetId: authoredParticleId },
+      },
+    },
+  );
+  assert(
+    particleEmitterUpdated.result.synchronizedDuringPlay === true &&
+      (
+        particleEmitterUpdated.result.component as {
+          particleAssetId?: string;
+        }
+      ).particleAssetId === authoredParticleId,
+    "update_component should synchronize Particle Emitter references during Play",
+  );
+  current = {
+    ...current,
+    bundle: particleEmitterUpdated.bundle,
+    revision: current.revision + 1,
+  };
+
+  const entityDisabled = executeXriftMcpEditorTool(
+    { ...current, editorMode: "play" },
+    {
+      id: "fixture-disable-entity",
+      tool: "set_entity_enabled",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        entityId: placedEntityId,
+        enabled: false,
+      },
+    },
+  );
+  assert(
+    entityDisabled.result.synchronizedDuringPlay === true &&
+      entityDisabled.bundle.scene.entities[placedEntityId]?.enabled === false,
+    "set_entity_enabled should persist and synchronize during Play",
+  );
+  current = {
+    ...current,
+    bundle: entityDisabled.bundle,
+    revision: current.revision + 1,
+  };
 
   const entityList = executeXriftMcpEditorTool(current, {
     id: "fixture-list-entities",
@@ -179,6 +410,128 @@ export function runXriftMcpEditorToolFixtures(): void {
     "Created primitive should have a Mesh component",
   );
   current = { ...current, bundle: primitiveCreated.bundle, revision: current.revision + 1 };
+
+  const rigidBodyAdded = executeXriftMcpEditorTool(current, {
+    id: "fixture-add-rigid-body",
+    tool: "add_component",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityId: primitiveId,
+      definitionId: "physics.rigid-body",
+    },
+  });
+  const rigidBodyComponentId = rigidBodyAdded.result.componentId as string;
+  assert(
+    typeof rigidBodyComponentId === "string",
+    "add_component should return the Rigid Body Component ID",
+  );
+  current = {
+    ...current,
+    bundle: rigidBodyAdded.bundle,
+    revision: current.revision + 1,
+  };
+
+  const rigidBodyUpdated = executeXriftMcpEditorTool(
+    { ...current, editorMode: "play" },
+    {
+      id: "fixture-update-rigid-body",
+      tool: "update_component",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        entityId: primitiveId,
+        componentId: rigidBodyComponentId,
+        patch: {
+          bodyType: "kinematicPosition",
+          gravityScale: 0,
+          ccd: true,
+        },
+      },
+    },
+  );
+  assert(
+    rigidBodyUpdated.result.synchronizedDuringPlay === true &&
+      (
+        rigidBodyUpdated.result.component as {
+          bodyType?: string;
+          ccd?: boolean;
+        }
+      ).bodyType === "kinematicPosition" &&
+      (
+        rigidBodyUpdated.result.component as {
+          ccd?: boolean;
+        }
+      ).ccd === true,
+    "update_component should dispatch to the Rigid Body patch helper",
+  );
+  current = {
+    ...current,
+    bundle: rigidBodyUpdated.bundle,
+    revision: current.revision + 1,
+  };
+
+  const rigidBodyRemoved = executeXriftMcpEditorTool(
+    { ...current, editorMode: "play" },
+    {
+      id: "fixture-remove-rigid-body",
+      tool: "remove_component",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        entityId: primitiveId,
+        componentId: rigidBodyComponentId,
+      },
+    },
+  );
+  assert(
+    rigidBodyRemoved.result.synchronizedDuringPlay === true &&
+      !rigidBodyRemoved.bundle.scene.entities[
+        primitiveId as string
+      ]?.components.some((component) => component.id === rigidBodyComponentId),
+    "remove_component should remove non-Transform Components during Play",
+  );
+  current = {
+    ...current,
+    bundle: rigidBodyRemoved.bundle,
+    revision: current.revision + 1,
+  };
+
+  const primitiveComponents = executeXriftMcpEditorTool(current, {
+    id: "fixture-get-primitive-components",
+    tool: "get_entity_components",
+    arguments: { entityId: primitiveId },
+  });
+  const transformComponentId = (
+    primitiveComponents.result.components as Array<{
+      id: string;
+      type: string;
+    }>
+  ).find((component) => component.type === "transform")?.id;
+  let transformRemoveCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(current, {
+      id: "fixture-remove-transform",
+      tool: "remove_component",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        entityId: primitiveId,
+        componentId: transformComponentId,
+      },
+    });
+  } catch (error) {
+    transformRemoveCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    transformRemoveCode === "TRANSFORM_COMPONENT_REQUIRED",
+    "remove_component should protect the required Transform",
+  );
 
   const componentAdded = executeXriftMcpEditorTool(current, {
     id: "fixture-add-component",
@@ -218,9 +571,11 @@ export function runXriftMcpEditorToolFixtures(): void {
     scriptAdded.bundle.scene.entities[primitiveId as string]?.components.some(
       (component) =>
         component.type === "script" &&
-        component.scriptAssetId === script.id,
+        component.scriptAssetId === script.id &&
+        component.properties.speed === 2 &&
+        JSON.stringify(component.properties.axis) === "[0,1,0]",
     ),
-    "Script Component should reference the explicitly requested Script Asset",
+    "Script Component should reference the requested Script and persist its declared defaults",
   );
   const scriptComponent = scriptAdded.bundle.scene.entities[
     primitiveId as string
@@ -231,6 +586,29 @@ export function runXriftMcpEditorToolFixtures(): void {
     bundle: scriptAdded.bundle,
     revision: current.revision + 1,
   };
+
+  let genericScriptUpdateCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(current, {
+      id: "fixture-generic-script-update",
+      tool: "update_component",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        entityId: primitiveId,
+        componentId: scriptComponent?.id,
+        patch: { properties: { speed: 2 } },
+      },
+    });
+  } catch (error) {
+    genericScriptUpdateCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    genericScriptUpdateCode === "USE_UPDATE_SCRIPT_COMPONENT",
+    "Generic Script property edits should direct MCP clients to update_script_component",
+  );
 
   let missingReferenceCode: string | undefined;
   try {
@@ -254,6 +632,34 @@ export function runXriftMcpEditorToolFixtures(): void {
     missingReferenceCode === "ASSET_NOT_FOUND",
     "MCP should reject missing Asset IDs before changing Script references",
   );
+
+  for (const [properties, label] of [
+    [{ speed: 99 }, "number range"],
+    [{ tint: "red" }, "color format"],
+  ] as const) {
+    let invalidPropertyCode: string | undefined;
+    try {
+      executeXriftMcpEditorTool(current, {
+        id: `fixture-invalid-script-${label}`,
+        tool: "update_script_component",
+        arguments: {
+          projectId: bundle.project.projectId,
+          sceneId: bundle.scene.sceneId,
+          expectedRevision: current.revision,
+          entityId: primitiveId,
+          componentId: scriptComponent?.id,
+          properties,
+        },
+      });
+    } catch (error) {
+      invalidPropertyCode =
+        error instanceof XriftMcpEditorToolError ? error.code : undefined;
+    }
+    assert(
+      invalidPropertyCode === "SCRIPT_PROPERTY_TYPE_MISMATCH",
+      `MCP should reject an invalid Script ${label}`,
+    );
+  }
 
   const scriptPropertyUpdated = executeXriftMcpEditorTool(
     { ...current, editorMode: "play" },

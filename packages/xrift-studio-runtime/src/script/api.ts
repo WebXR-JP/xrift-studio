@@ -130,6 +130,24 @@ export type ScriptInput = {
   pressedKeys(): readonly string[];
 };
 
+/**
+ * Async work owned by one Script instance.
+ *
+ * The host aborts and clears every registered operation on hot reload, runtime
+ * failure, Play Stop, or unmount.
+ */
+export type ScriptLifecycle = {
+  readonly signal: AbortSignal;
+  onDispose(callback: ScriptLifecycleCallback): () => void;
+  timeout(callback: ScriptLifecycleCallback, milliseconds: number): () => void;
+  interval(callback: ScriptLifecycleCallback, milliseconds: number): () => void;
+  task<T>(
+    run: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T | undefined>;
+};
+
+export type ScriptLifecycleCallback = () => void | PromiseLike<void>;
+
 export type ScriptTextureColorSpace = "auto" | "srgb" | "linear";
 export type ScriptTextureWrap = "repeat" | "clamp-to-edge" | "mirrored-repeat";
 
@@ -175,8 +193,31 @@ export type ScriptMaterialTextureSlot =
   | "metallicRoughness"
   | "occlusion";
 
-export type ScriptMaterials = {
-  /** Number of Materials owned by this Entity, excluding child Entities. */
+/** One Material slot discovered under this Entity's owned Meshes. */
+export type ScriptMaterialInfo = {
+  /** Mesh name from Three.js. Empty when the source did not provide one. */
+  readonly meshName: string;
+  /** Zero-based index in the owned Mesh traversal returned by `list()`. */
+  readonly meshIndex: number;
+  /** Zero-based Material slot index on the Mesh. */
+  readonly materialIndex: number;
+  /** Material name from Three.js. Empty when the source did not provide one. */
+  readonly materialName: string;
+};
+
+/**
+ * Selects Material slots by their current owned-Mesh traversal metadata.
+ * Supplied fields are combined with AND; duplicate names can match more than
+ * one Mesh, while indexes provide an exact target for the current traversal.
+ */
+export type ScriptMaterialSelector = {
+  meshName?: string;
+  meshIndex?: number;
+  materialIndex?: number;
+};
+
+export type ScriptMaterialHandle = {
+  /** Number of Material slots currently matched by this handle. */
   count(): number;
   setColor(value: string | number): number;
   setOpacity(value: number): number;
@@ -187,7 +228,44 @@ export type ScriptMaterials = {
     slot: ScriptMaterialTextureSlot,
     texture: ScriptTexture | null,
   ): number;
-  /** Removes this Script instance's overrides while preserving other Scripts. */
+  /** Removes this handle's overrides while preserving other Script owners. */
+  reset(): void;
+};
+
+export type ScriptMaterials = ScriptMaterialHandle & {
+  /** Lists Material slots owned by this Entity, excluding child Entities. */
+  list(): readonly ScriptMaterialInfo[];
+  /**
+   * Creates a live handle for the matching Material slots. The selector is
+   * resolved again when asynchronous Meshes are added or removed.
+   */
+  select(selector: ScriptMaterialSelector): ScriptMaterialHandle;
+  /**
+   * Removes every Material override owned by this Script instance while
+   * preserving overrides from other Scripts.
+   */
+  reset(): void;
+};
+
+/**
+ * Runtime-only controls for Particle Emitter components owned by this Entity.
+ *
+ * Overrides are composed in Script Component order and are removed when the
+ * Script restarts or Play stops. Particle Asset authoring stays in the Editor
+ * and MCP asset tools.
+ */
+export type ScriptParticles = {
+  count(): number;
+  play(): number;
+  pause(): number;
+  /** Stops and clears the current simulation until play or restart is called. */
+  stop(): number;
+  restart(): number;
+  setEmissionRate(particlesPerSecond: number): number;
+  setSpeedMultiplier(multiplier: number): number;
+  setSizeMultiplier(multiplier: number): number;
+  setColor(value: string | number): number;
+  setOpacity(value: number): number;
   reset(): void;
 };
 
@@ -196,9 +274,15 @@ export type ScriptMaterials = {
  * passes real three.js objects; scripts import three themselves for types.
  */
 export type ScriptObject3D = {
+  visible: boolean;
   position: { x: number; y: number; z: number; set(x: number, y: number, z: number): void };
   rotation: { x: number; y: number; z: number };
   scale: { x: number; y: number; z: number };
+  rotateOnAxis(axis: unknown, angle: number): unknown;
+  rotateX(angle: number): unknown;
+  rotateY(angle: number): unknown;
+  rotateZ(angle: number): unknown;
+  lookAt(target: unknown): void;
   [key: string]: unknown;
 };
 
@@ -214,17 +298,26 @@ export type ScriptContext<
   props: ScriptProps<Declaration>;
   time: ScriptTime;
   input: ScriptInput;
+  lifecycle: ScriptLifecycle;
   assets: ScriptAssets;
   /**
    * Runtime-only Material overrides for this Entity. Changes are isolated
    * from shared Asset instances and are restored on restart or Stop.
    */
   materials: ScriptMaterials;
+  /**
+   * Runtime-only Particle Emitter controls for this Entity. Overrides are
+   * restored automatically on restart or Stop.
+   */
+  particles: ScriptParticles;
   /** Only Entities declared through an `entity` prop are reachable. */
   find(entityId: string): ScriptObject3D | null;
   /** @deprecated Prefer `assets.url(assetId)`. */
   getAssetUrl(assetId: string): string | null;
-  on(event: string, handler: (payload?: unknown) => void): () => void;
+  on(
+    event: string,
+    handler: (payload?: unknown) => void | PromiseLike<void>,
+  ): () => void;
   emit(event: string, payload?: unknown): void;
   log(...values: unknown[]): void;
 };

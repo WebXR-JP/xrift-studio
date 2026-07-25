@@ -7,6 +7,10 @@ import { getBuiltinPrimitiveCreation } from "./creation-catalog";
 import { createDocumentId } from "./document-id";
 import type { VisualProjectKind } from "./project-document";
 import {
+  createDefaultScriptComponentState,
+  type ScriptContract,
+} from "./scripting/script-contract";
+import {
   cloneEntityHierarchy,
   createAnimationComponent,
   createAudioSourceComponent,
@@ -155,6 +159,7 @@ export function addEditorComponent(
   definitionId: string,
   projectKind: VisualProjectKind,
   preferredAssetId?: string,
+  scriptContracts?: Readonly<Record<string, ScriptContract>>,
 ): AddEditorComponentResult {
   const entity = scene.entities[entityId];
   if (!entity) return { scene, added: false, reason: "entity-missing" };
@@ -199,6 +204,7 @@ export function addEditorComponent(
     projectKind,
     entity,
     preferredAssetId,
+    scriptContracts,
   );
   if (!component) return { scene, added: false, reason: "dependency-missing" };
   const components = [
@@ -659,6 +665,7 @@ function createRegisteredComponent(
   projectKind: VisualProjectKind,
   entity: SceneEntity,
   preferredAssetId?: string,
+  scriptContracts?: Readonly<Record<string, ScriptContract>>,
 ): RegisteredSceneComponent | null {
   if (definition.componentType === "transform") return createTransformComponent(id);
   if (definition.componentType === "builtin-mesh") {
@@ -764,7 +771,14 @@ function createRegisteredComponent(
         : Object.values(assets.assets).find(
             (asset) => asset.kind === "script",
           );
-    return script ? createScriptComponent(id, script.id) : null;
+    const component = script ? createScriptComponent(id, script.id) : null;
+    if (!component) return null;
+    const contract = scriptContracts?.[component.scriptAssetId];
+    if (!contract) return component;
+    return {
+      ...component,
+      ...createDefaultScriptComponentState(contract),
+    };
   }
   return null;
 }

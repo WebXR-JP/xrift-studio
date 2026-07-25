@@ -3,6 +3,10 @@ import {
   ASSET_MANIFEST_SCHEMA_VERSION,
   SCRIPT_ASSET_CONTRACT_VERSION,
 } from "../asset-manifest";
+import {
+  createScriptTemplateSource,
+  DEFAULT_SCRIPT_TEMPLATE_ID,
+} from "./script-templates";
 
 /**
  * Where Script sources live inside a visual project, and how a new one is
@@ -11,40 +15,27 @@ import {
 
 export const SCRIPT_DIRECTORY = "scripts";
 
-const SAMPLE_SOURCE = `import { defineScript, prop } from "xrift:script";
-import { Vector3 } from "three";
-
-export default defineScript({
-  name: "NAME",
-  props: {
-    speed: prop.number({ label: "回転速度", default: 1, min: 0, max: 20 }),
-    axis: prop.vec3({ label: "回転軸", default: [0, 1, 0] }),
-  },
-  start(ctx) {
-    const axis = new Vector3(...ctx.props.axis).normalize();
-    return {
-      update(delta) {
-        ctx.object3d.rotateOnAxis(axis, ctx.props.speed * delta);
-      },
-    };
-  },
-});
-`;
-
 export function createScriptSampleSource(name: string): string {
-  return SAMPLE_SOURCE.replace("NAME", name.replace(/["\\]/g, ""));
+  return (
+    createScriptTemplateSource(DEFAULT_SCRIPT_TEMPLATE_ID, name) ??
+    'import { defineScript } from "xrift:script";\nexport default defineScript({ name: "Script" });\n'
+  );
 }
 
 /** Project-relative path for a new Script, avoiding collisions by suffixing. */
 export function createScriptRelativePath(
   name: string,
   assets: AssetManifest,
+  reservedPaths: Iterable<string> = [],
 ): string {
   const stem = toFileStem(name);
   const taken = new Set(
-    Object.values(assets.assets)
-      .filter((asset): asset is ScriptAsset => asset.kind === "script")
-      .map((asset) => asset.source.relativePath),
+    [
+      ...Object.values(assets.assets)
+        .filter((asset): asset is ScriptAsset => asset.kind === "script")
+        .map((asset) => asset.source.relativePath),
+      ...reservedPaths,
+    ],
   );
   let candidate = `${SCRIPT_DIRECTORY}/${stem}.ts`;
   let counter = 2;
