@@ -14,9 +14,15 @@ import {
 import { useFrame, useThree } from "@react-three/fiber";
 import {
   ClampToEdgeWrapping,
+  LinearFilter,
+  LinearMipmapLinearFilter,
+  LinearMipmapNearestFilter,
   LinearSRGBColorSpace,
   Mesh,
   MirroredRepeatWrapping,
+  NearestFilter,
+  NearestMipmapLinearFilter,
+  NearestMipmapNearestFilter,
   RepeatWrapping,
   SRGBColorSpace,
   Texture,
@@ -27,6 +33,7 @@ import {
 
 import {
   type CompiledScript,
+  type ScriptAssetRuntimeDescriptor,
   type ScriptAudio,
   type ScriptAudioLoadOptions,
   type ScriptAssets,
@@ -38,6 +45,7 @@ import {
   type ScriptMaterialSelector,
   type ScriptMaterials,
   type ScriptMaterialTextureSlot,
+  type ScriptMaterialTextureTransform,
   type ScriptParticles,
   type ScriptPropDefinition,
   type ScriptPropsDeclaration,
@@ -262,8 +270,19 @@ export type XriftScriptHostProps<
   assetReferences?: readonly string[];
   /** Entity IDs explicitly declared by this Script Component. */
   entityReferences?: readonly string[];
+  /**
+   * Resolves an explicitly referenced Asset together with its runtime defaults.
+   * Preferred over `resolveAssetUrl` when both are supplied.
+   */
+  resolveAsset?: (
+    assetId: string,
+  ) => ScriptAssetRuntimeDescriptor | null;
+  /** @deprecated Prefer `resolveAsset` so Texture import settings are retained. */
   resolveAssetUrl?: (assetId: string) => string | null;
-  /** Restarts only hosts whose declared Asset URL set changed asynchronously. */
+  /**
+   * Restarts only hosts whose declared Asset descriptor set changed
+   * asynchronously, including Texture import defaults.
+   */
   assetResolutionKey?: string;
   resolveEntity?: (entityId: string) => Object3D | null;
   /**
@@ -286,6 +305,7 @@ export function XriftScriptHost<
   order,
   assetReferences = [],
   entityReferences = [],
+  resolveAsset,
   resolveAssetUrl,
   assetResolutionKey = "",
   resolveEntity,
@@ -306,10 +326,12 @@ export function XriftScriptHost<
     );
   const propertiesRef = useRef(properties);
   propertiesRef.current = properties;
+  const resolveAssetRef = useRef(resolveAsset);
   const resolveAssetUrlRef = useRef(resolveAssetUrl);
   const resolveEntityRef = useRef(resolveEntity);
   const onLogRef = useRef(onLog);
   const onFailureRef = useRef(onFailure);
+  resolveAssetRef.current = resolveAsset;
   resolveAssetUrlRef.current = resolveAssetUrl;
   resolveEntityRef.current = resolveEntity;
   onLogRef.current = onLog;
@@ -371,13 +393,18 @@ export function XriftScriptHost<
       entityId,
       componentId,
       order,
-      resolveAssetUrl: (assetId) =>
-        allowedAssetIds.has(assetId)
-          ? resolveScriptAssetUrl(
-              resolveAssetUrlRef.current?.(assetId) ?? null,
-              root.assetBaseUrl,
-            )
-          : null,
+      resolveAsset: (assetId) => {
+        if (!allowedAssetIds.has(assetId)) return null;
+        const descriptor =
+          resolveAssetRef.current?.(assetId) ??
+          scriptAssetDescriptorFromUrl(
+            resolveAssetUrlRef.current?.(assetId) ?? null,
+          );
+        return resolveScriptAssetDescriptor(
+          descriptor,
+          root.assetBaseUrl,
+        );
+      },
     });
     const elapsedStart = performance.now();
     const time = { elapsed: 0, delta: 0 };
@@ -630,7 +657,24 @@ type MaterialOverrides = {
   metalness?: number;
   roughness?: number;
   textures: Partial<Record<ScriptMaterialTextureSlot, Texture | null>>;
+  textureTransforms: Partial<
+    Record<ScriptMaterialTextureSlot, ScriptMaterialTextureTransform>
+  >;
 };
+
+type MaterialTextureTransformRevisions = Partial<
+  Record<
+    ScriptMaterialTextureSlot,
+    Partial<Record<keyof ScriptMaterialTextureTransform, number>>
+  >
+>;
+
+const MATERIAL_TEXTURE_TRANSFORM_FIELDS = [
+  "offset",
+  "repeat",
+  "center",
+  "rotation",
+] as const satisfies readonly (keyof ScriptMaterialTextureTransform)[];
 
 type MaterialOverrideRevisions = {
   color?: number;
@@ -639,6 +683,7 @@ type MaterialOverrideRevisions = {
   metalness?: number;
   roughness?: number;
   textures: Partial<Record<ScriptMaterialTextureSlot, number>>;
+  textureTransforms: MaterialTextureTransformRevisions;
 };
 
 type MaterialOverrideLayer = {
@@ -675,6 +720,7 @@ type MaterialState = {
   clones: Material[];
   assigned: Material | Material[];
   owners: MaterialOwner[];
+  textureClones: ScriptMaterialTextureClonePool;
 };
 
 const materialStates = new WeakMap<Mesh, MaterialState>();
@@ -689,13 +735,15 @@ function createScriptResources({
   entityId,
   componentId,
   order,
-  resolveAssetUrl,
+  resolveAsset,
 }: {
   object3d: Object3D;
   entityId: string;
   componentId: string;
   order: number;
-  resolveAssetUrl: (assetId: string) => string | null;
+  resolveAsset: (
+    assetId: string,
+  ) => ScriptAssetRuntimeDescriptor | null;
 }): ScriptResources {
   let disposed = false;
   const textureLoader = new TextureLoader();
@@ -717,30 +765,33 @@ function createScriptResources({
   const particleOverrides: XriftParticleRuntimeOverrides = {};
 
   const assets: ScriptAssets = {
-    url: (assetId) => (disposed ? null : resolveAssetUrl(assetId)),
+    url: (assetId) =>
+      disposed ? null : resolveAsset(assetId)?.url ?? null,
     loadTexture(assetId, options = {}) {
       if (disposed) return Promise.resolve(null);
-      const url = resolveAssetUrl(assetId);
-      if (!url) return Promise.resolve(null);
-      const key = [
+      const descriptor = resolveAsset(assetId);
+      if (!descriptor?.url) return Promise.resolve(null);
+      const normalized = normalizeScriptTextureOptions(
+        descriptor.textureDefaults,
+        options,
+      );
+      const key = JSON.stringify([
         assetId,
-        options.colorSpace ?? "auto",
-        options.wrapS ?? "clamp-to-edge",
-        options.wrapT ?? "clamp-to-edge",
-        options.flipY === undefined ? "default" : String(options.flipY),
-      ].join(":");
+        descriptor.url,
+        normalized,
+      ]);
       const cached = texturePromises.get(key);
       if (cached) {
         return cached as Promise<ScriptTexture | null>;
       }
       const loading = textureLoader
-        .loadAsync(url)
+        .loadAsync(descriptor.url)
         .then((texture) => {
           if (disposed) {
             texture.dispose();
             return null;
           }
-          configureScriptTexture(texture, options);
+          configureScriptTexture(texture, normalized);
           textures.add(texture);
           return texture;
         })
@@ -750,13 +801,14 @@ function createScriptResources({
     },
     loadAudio(assetId, options = {}) {
       if (disposed) return Promise.resolve(null);
-      const url = resolveAssetUrl(assetId);
+      const url = resolveAsset(assetId)?.url ?? null;
       if (!url || typeof globalThis.Audio !== "function") {
         return Promise.resolve(null);
       }
       const normalized = normalizeScriptAudioOptions(options);
       const key = [
         assetId,
+        url,
         normalized.volume,
         normalized.loop,
         normalized.playbackRate,
@@ -946,6 +998,43 @@ function createScriptResources({
           supportsMaterialTexture(material, slot),
         );
       },
+      setTextureTransform(slot, transform) {
+        if (disposed) return 0;
+        const normalized = normalizeMaterialTextureTransform(transform);
+        const fields = Object.keys(
+          normalized,
+        ) as Array<keyof ScriptMaterialTextureTransform>;
+        if (fields.length > 0) {
+          const current = {
+            ...layer.overrides.textureTransforms[slot],
+          };
+          const revisions = {
+            ...layer.revisions.textureTransforms[slot],
+          };
+          for (const field of fields) {
+            assignMaterialTextureTransformField(
+              current,
+              field,
+              normalized[field],
+            );
+            revisions[field] = ++nextMaterialWriteRevision;
+          }
+          layer.overrides.textureTransforms[slot] = current;
+          layer.revisions.textureTransforms[slot] = revisions;
+        }
+        return commit((material) =>
+          supportsMaterialTexture(material, slot),
+        );
+      },
+      resetTextureTransform(slot) {
+        if (disposed) return 0;
+        delete layer.overrides.textureTransforms[slot];
+        delete layer.revisions.textureTransforms[slot];
+        synchronizeMaterials(true);
+        return countMaterials(layer.selector, (material) =>
+          supportsMaterialTexture(material, slot),
+        );
+      },
       reset,
     };
   };
@@ -1096,6 +1185,83 @@ function createScriptResources({
   };
 }
 
+const SAFE_SCRIPT_TEXTURE_OPTIONS: Required<ScriptTextureLoadOptions> = {
+  colorSpace: "auto",
+  wrapS: "clamp-to-edge",
+  wrapT: "clamp-to-edge",
+  magFilter: "linear",
+  minFilter: "linear-mipmap-linear",
+  generateMipmaps: true,
+  flipY: true,
+};
+
+/**
+ * Merges Three-compatible defaults, Texture Asset import settings, and the
+ * Script call's explicit options in that order.
+ *
+ * @internal Exported for the shared Studio/publish contract fixture.
+ */
+export function normalizeScriptTextureOptions(
+  assetDefaults: ScriptTextureLoadOptions | undefined,
+  options: ScriptTextureLoadOptions = {},
+): Required<ScriptTextureLoadOptions> {
+  const normalized = { ...SAFE_SCRIPT_TEXTURE_OPTIONS };
+  mergeValidScriptTextureOptions(normalized, assetDefaults);
+  mergeValidScriptTextureOptions(normalized, options);
+  if (
+    !normalized.generateMipmaps &&
+    normalized.minFilter.includes("-mipmap-")
+  ) {
+    normalized.minFilter = "linear";
+  }
+  return normalized;
+}
+
+function mergeValidScriptTextureOptions(
+  target: Required<ScriptTextureLoadOptions>,
+  source: ScriptTextureLoadOptions | undefined,
+): void {
+  if (!source) return;
+  if (
+    source.colorSpace === "auto" ||
+    source.colorSpace === "srgb" ||
+    source.colorSpace === "linear"
+  ) {
+    target.colorSpace = source.colorSpace;
+  }
+  if (
+    source.wrapS === "repeat" ||
+    source.wrapS === "clamp-to-edge" ||
+    source.wrapS === "mirrored-repeat"
+  ) {
+    target.wrapS = source.wrapS;
+  }
+  if (
+    source.wrapT === "repeat" ||
+    source.wrapT === "clamp-to-edge" ||
+    source.wrapT === "mirrored-repeat"
+  ) {
+    target.wrapT = source.wrapT;
+  }
+  if (source.magFilter === "nearest" || source.magFilter === "linear") {
+    target.magFilter = source.magFilter;
+  }
+  if (
+    source.minFilter === "nearest" ||
+    source.minFilter === "linear" ||
+    source.minFilter === "nearest-mipmap-nearest" ||
+    source.minFilter === "linear-mipmap-nearest" ||
+    source.minFilter === "nearest-mipmap-linear" ||
+    source.minFilter === "linear-mipmap-linear"
+  ) {
+    target.minFilter = source.minFilter;
+  }
+  if (typeof source.generateMipmaps === "boolean") {
+    target.generateMipmaps = source.generateMipmaps;
+  }
+  if (typeof source.flipY === "boolean") target.flipY = source.flipY;
+}
+
 /** @internal Exported for the shared runtime contract fixture. */
 export function normalizeScriptAudioOptions(
   options: ScriptAudioLoadOptions,
@@ -1210,8 +1376,8 @@ function createMaterialOverrideLayer(
   return {
     id,
     selector,
-    overrides: { textures: {} },
-    revisions: { textures: {} },
+    overrides: { textures: {}, textureTransforms: {} },
+    revisions: { textures: {}, textureTransforms: {} },
   };
 }
 
@@ -1222,12 +1388,14 @@ function clearMaterialOverrideLayer(layer: MaterialOverrideLayer): void {
   delete layer.overrides.metalness;
   delete layer.overrides.roughness;
   layer.overrides.textures = {};
+  layer.overrides.textureTransforms = {};
   delete layer.revisions.color;
   delete layer.revisions.opacity;
   delete layer.revisions.emissive;
   delete layer.revisions.metalness;
   delete layer.revisions.roughness;
   layer.revisions.textures = {};
+  layer.revisions.textureTransforms = {};
 }
 
 function normalizeMaterialSelector(
@@ -1302,7 +1470,7 @@ function ensureMaterialOwner(
 ): { owner: MaterialOwner; state: MaterialState } {
   let state = materialStates.get(mesh);
   if (state && !sameMaterialAssignment(mesh.material, state.assigned)) {
-    for (const clone of state.clones) clone.dispose();
+    disposeMaterialState(state);
     materialStates.delete(mesh);
     state = undefined;
   }
@@ -1311,7 +1479,13 @@ function ensureMaterialOwner(
     const originals = materialArray(original);
     const clones = originals.map((material) => material.clone());
     const assigned = Array.isArray(original) ? clones : clones[0]!;
-    state = { original, clones, assigned, owners: [] };
+    state = {
+      original,
+      clones,
+      assigned,
+      owners: [],
+      textureClones: new ScriptMaterialTextureClonePool(),
+    };
     materialStates.set(mesh, state);
     mesh.material = assigned;
   }
@@ -1346,20 +1520,27 @@ function removeMaterialOwner(mesh: Mesh, token: object): void {
   if (sameMaterialAssignment(mesh.material, state.assigned)) {
     mesh.material = state.original;
   }
-  for (const clone of state.clones) clone.dispose();
+  disposeMaterialState(state);
   materialStates.delete(mesh);
 }
 
 function applyMaterialState(state: MaterialState): void {
   const originals = materialArray(state.original);
   const previousTextureUsage = state.clones.map(materialTextureUsage);
+  const activeTextureCloneKeys = new Set<string>();
   state.clones.forEach((clone, index) => {
     clone.copy(originals[index] ?? originals[0]!);
-    applyMaterialOverrides(
+    const overrides = mergeMaterialOverrides(state.owners, index);
+    applyMaterialOverrides(clone, overrides);
+    applyMaterialTextureTransforms(
+      state,
+      index,
       clone,
-      mergeMaterialOverrides(state.owners, index),
+      overrides.textureTransforms,
+      activeTextureCloneKeys,
     );
   });
+  state.textureClones.releaseUnused(activeTextureCloneKeys);
   state.clones.forEach((clone, index) => {
     if (materialTextureUsage(clone) !== previousTextureUsage[index]) {
       clone.needsUpdate = true;
@@ -1371,7 +1552,10 @@ function mergeMaterialOverrides(
   owners: readonly MaterialOwner[],
   materialIndex: number,
 ): MaterialOverrides {
-  const merged: MaterialOverrides = { textures: {} };
+  const merged: MaterialOverrides = {
+    textures: {},
+    textureTransforms: {},
+  };
   for (const owner of owners) {
     const overrides = mergeMaterialOwnerLayers(owner.layers, materialIndex);
     if (overrides.color !== undefined) merged.color = overrides.color;
@@ -1386,6 +1570,10 @@ function mergeMaterialOverrides(
       merged.roughness = overrides.roughness;
     }
     Object.assign(merged.textures, overrides.textures);
+    mergeMaterialTextureTransforms(
+      merged.textureTransforms,
+      overrides.textureTransforms,
+    );
   }
   return merged;
 }
@@ -1394,8 +1582,14 @@ function mergeMaterialOwnerLayers(
   layers: readonly MaterialOverrideLayer[],
   materialIndex: number,
 ): MaterialOverrides {
-  const merged: MaterialOverrides = { textures: {} };
-  const revisions: MaterialOverrideRevisions = { textures: {} };
+  const merged: MaterialOverrides = {
+    textures: {},
+    textureTransforms: {},
+  };
+  const revisions: MaterialOverrideRevisions = {
+    textures: {},
+    textureTransforms: {},
+  };
   for (const layer of layers) {
     if (!materialSelectorMatchesSlot(layer.selector, materialIndex)) continue;
     if (
@@ -1445,6 +1639,39 @@ function mergeMaterialOwnerLayers(
         revisions.textures[slot] = revision;
       }
     }
+    for (const slot of Object.keys(
+      layer.revisions.textureTransforms,
+    ) as ScriptMaterialTextureSlot[]) {
+      const fieldRevisions =
+        layer.revisions.textureTransforms[slot];
+      if (!fieldRevisions) continue;
+      for (const field of MATERIAL_TEXTURE_TRANSFORM_FIELDS) {
+        const revision = fieldRevisions[field];
+        const currentRevision =
+          revisions.textureTransforms[slot]?.[field];
+        if (
+          revision === undefined ||
+          !newerMaterialRevision(revision, currentRevision)
+        ) {
+          continue;
+        }
+        const value =
+          layer.overrides.textureTransforms[slot]?.[field];
+        if (value === undefined) continue;
+        const transform =
+          merged.textureTransforms[slot] ?? {};
+        assignMaterialTextureTransformField(
+          transform,
+          field,
+          value,
+        );
+        merged.textureTransforms[slot] = transform;
+        const mergedRevisions =
+          revisions.textureTransforms[slot] ?? {};
+        mergedRevisions[field] = revision;
+        revisions.textureTransforms[slot] = mergedRevisions;
+      }
+    }
   }
   return merged;
 }
@@ -1454,6 +1681,78 @@ function newerMaterialRevision(
   current: number | undefined,
 ): boolean {
   return candidate !== undefined && (current === undefined || candidate > current);
+}
+
+function mergeMaterialTextureTransforms(
+  target: MaterialOverrides["textureTransforms"],
+  source: MaterialOverrides["textureTransforms"],
+): void {
+  for (const slot of Object.keys(
+    source,
+  ) as ScriptMaterialTextureSlot[]) {
+    const sourceTransform = source[slot];
+    if (!sourceTransform) continue;
+    const targetTransform = target[slot] ?? {};
+    for (const field of MATERIAL_TEXTURE_TRANSFORM_FIELDS) {
+      const value = sourceTransform[field];
+      if (value === undefined) continue;
+      assignMaterialTextureTransformField(
+        targetTransform,
+        field,
+        value,
+      );
+    }
+    target[slot] = targetTransform;
+  }
+}
+
+function normalizeMaterialTextureTransform(
+  transform: ScriptMaterialTextureTransform,
+): ScriptMaterialTextureTransform {
+  const normalized: ScriptMaterialTextureTransform = {};
+  if (isFiniteScriptVec2(transform?.offset)) {
+    normalized.offset = [...transform.offset];
+  }
+  if (isFiniteScriptVec2(transform?.repeat)) {
+    normalized.repeat = [...transform.repeat];
+  }
+  if (isFiniteScriptVec2(transform?.center)) {
+    normalized.center = [...transform.center];
+  }
+  if (
+    typeof transform?.rotation === "number" &&
+    Number.isFinite(transform.rotation)
+  ) {
+    normalized.rotation = transform.rotation;
+  }
+  return normalized;
+}
+
+function assignMaterialTextureTransformField(
+  target: ScriptMaterialTextureTransform,
+  field: keyof ScriptMaterialTextureTransform,
+  value: ScriptMaterialTextureTransform[keyof ScriptMaterialTextureTransform],
+): void {
+  if (field === "rotation") {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      target.rotation = value;
+    }
+    return;
+  }
+  if (!isFiniteScriptVec2(value)) return;
+  if (field === "offset") target.offset = [...value];
+  else if (field === "repeat") target.repeat = [...value];
+  else target.center = [...value];
+}
+
+function isFiniteScriptVec2(value: unknown): value is [number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length === 2 &&
+    value.every(
+      (entry) => typeof entry === "number" && Number.isFinite(entry),
+    )
+  );
 }
 
 function applyMaterialOverrides(
@@ -1498,6 +1797,110 @@ function applyMaterialOverrides(
   }
 }
 
+/**
+ * Owns per-Material-slot Texture clones used by runtime transform overrides.
+ *
+ * @internal Exported for the shared Studio/publish contract fixture.
+ */
+export class ScriptMaterialTextureClonePool {
+  readonly #entries = new Map<
+    string,
+    {
+      source: Texture;
+      clone: Texture;
+    }
+  >();
+
+  get size(): number {
+    return this.#entries.size;
+  }
+
+  resolve(
+    key: string,
+    source: Texture,
+    transform: ScriptMaterialTextureTransform,
+  ): Texture {
+    let entry = this.#entries.get(key);
+    if (!entry || entry.source !== source) {
+      entry?.clone.dispose();
+      entry = {
+        source,
+        clone: source.clone(),
+      };
+      this.#entries.set(key, entry);
+    }
+    resetTextureTransformFromSource(entry.clone, source);
+    applyMaterialTextureTransform(entry.clone, transform);
+    return entry.clone;
+  }
+
+  releaseUnused(activeKeys: ReadonlySet<string>): void {
+    for (const [key, entry] of this.#entries) {
+      if (activeKeys.has(key)) continue;
+      entry.clone.dispose();
+      this.#entries.delete(key);
+    }
+  }
+
+  dispose(): void {
+    for (const entry of this.#entries.values()) {
+      entry.clone.dispose();
+    }
+    this.#entries.clear();
+  }
+}
+
+function applyMaterialTextureTransforms(
+  state: MaterialState,
+  materialIndex: number,
+  material: Material,
+  transforms: MaterialOverrides["textureTransforms"],
+  activeTextureCloneKeys: Set<string>,
+): void {
+  for (const slot of Object.keys(
+    transforms,
+  ) as ScriptMaterialTextureSlot[]) {
+    const transform = transforms[slot];
+    if (!transform || Object.keys(transform).length === 0) continue;
+    const source = readMaterialTexture(material, slot);
+    if (!source) continue;
+    const key = `${materialIndex}:${slot}`;
+    const clone = state.textureClones.resolve(key, source, transform);
+    assignMaterialTexture(material, slot, clone);
+    activeTextureCloneKeys.add(key);
+  }
+}
+
+function resetTextureTransformFromSource(
+  clone: Texture,
+  source: Texture,
+): void {
+  clone.offset.copy(source.offset);
+  clone.repeat.copy(source.repeat);
+  clone.center.copy(source.center);
+  clone.rotation = source.rotation;
+  clone.matrixAutoUpdate = source.matrixAutoUpdate;
+}
+
+function applyMaterialTextureTransform(
+  texture: Texture,
+  transform: ScriptMaterialTextureTransform,
+): void {
+  if (transform.offset) {
+    texture.offset.set(transform.offset[0], transform.offset[1]);
+  }
+  if (transform.repeat) {
+    texture.repeat.set(transform.repeat[0], transform.repeat[1]);
+  }
+  if (transform.center) {
+    texture.center.set(transform.center[0], transform.center[1]);
+  }
+  if (transform.rotation !== undefined) {
+    texture.rotation = transform.rotation;
+  }
+  texture.updateMatrix();
+}
+
 function hasMaterialOverrides(overrides: MaterialOverrides): boolean {
   return (
     overrides.color !== undefined ||
@@ -1505,8 +1908,14 @@ function hasMaterialOverrides(overrides: MaterialOverrides): boolean {
     overrides.emissive !== undefined ||
     overrides.metalness !== undefined ||
     overrides.roughness !== undefined ||
-    Object.keys(overrides.textures).length > 0
+    Object.keys(overrides.textures).length > 0 ||
+    Object.keys(overrides.textureTransforms).length > 0
   );
+}
+
+function disposeMaterialState(state: MaterialState): void {
+  state.textureClones.dispose();
+  for (const clone of state.clones) clone.dispose();
 }
 
 function materialTextureUsage(material: Material): string {
@@ -1531,15 +1940,19 @@ function scriptMaterial(material: Material): RuntimeMaterial {
 
 function configureScriptTexture(
   texture: Texture,
-  options: ScriptTextureLoadOptions,
+  options: Required<ScriptTextureLoadOptions>,
 ): void {
   if (options.colorSpace === "srgb") texture.colorSpace = SRGBColorSpace;
   else if (options.colorSpace === "linear") {
     texture.colorSpace = LinearSRGBColorSpace;
   }
-  if (options.wrapS) texture.wrapS = scriptTextureWrap(options.wrapS);
-  if (options.wrapT) texture.wrapT = scriptTextureWrap(options.wrapT);
-  if (options.flipY !== undefined) texture.flipY = options.flipY;
+  texture.wrapS = scriptTextureWrap(options.wrapS);
+  texture.wrapT = scriptTextureWrap(options.wrapT);
+  texture.magFilter =
+    options.magFilter === "nearest" ? NearestFilter : LinearFilter;
+  texture.minFilter = scriptTextureMinFilter(options.minFilter);
+  texture.generateMipmaps = options.generateMipmaps;
+  texture.flipY = options.flipY;
   texture.needsUpdate = true;
 }
 
@@ -1549,6 +1962,23 @@ function scriptTextureWrap(
   if (wrap === "repeat") return RepeatWrapping;
   if (wrap === "mirrored-repeat") return MirroredRepeatWrapping;
   return ClampToEdgeWrapping;
+}
+
+function scriptTextureMinFilter(
+  filter: NonNullable<ScriptTextureLoadOptions["minFilter"]>,
+): Texture["minFilter"] {
+  if (filter === "nearest") return NearestFilter;
+  if (filter === "linear") return LinearFilter;
+  if (filter === "nearest-mipmap-nearest") {
+    return NearestMipmapNearestFilter;
+  }
+  if (filter === "linear-mipmap-nearest") {
+    return LinearMipmapNearestFilter;
+  }
+  if (filter === "nearest-mipmap-linear") {
+    return NearestMipmapLinearFilter;
+  }
+  return LinearMipmapLinearFilter;
 }
 
 function assignMaterialTexture(
@@ -1588,16 +2018,32 @@ function assignMaterialTexture(
   return false;
 }
 
+function readMaterialTexture(
+  material: Material,
+  slot: ScriptMaterialTextureSlot,
+): Texture | null {
+  const target = scriptMaterial(material);
+  if (slot === "baseColor") return target.map ?? null;
+  if (slot === "normal") return target.normalMap ?? null;
+  if (slot === "emissive") return target.emissiveMap ?? null;
+  if (slot === "metallicRoughness") {
+    return target.metalnessMap ?? target.roughnessMap ?? null;
+  }
+  return target.aoMap ?? null;
+}
+
 function supportsMaterialTexture(
   material: Material,
   slot: ScriptMaterialTextureSlot,
 ): boolean {
   const target = scriptMaterial(material);
+  if (slot === "metallicRoughness") {
+    return "metalnessMap" in target || "roughnessMap" in target;
+  }
   return {
     baseColor: "map",
     normal: "normalMap",
     emissive: "emissiveMap",
-    metallicRoughness: "metalnessMap",
     occlusion: "aoMap",
   }[slot] in target;
 }
@@ -1711,6 +2157,27 @@ function findScriptScope(object: Object3D, scene: Object3D): Object3D {
     current = current.parent;
   }
   return sceneChild;
+}
+
+function scriptAssetDescriptorFromUrl(
+  value: string | null,
+): ScriptAssetRuntimeDescriptor | null {
+  return value ? { url: value } : null;
+}
+
+function resolveScriptAssetDescriptor(
+  descriptor: ScriptAssetRuntimeDescriptor | null,
+  assetBaseUrl?: string,
+): ScriptAssetRuntimeDescriptor | null {
+  if (!descriptor) return null;
+  const url = resolveScriptAssetUrl(descriptor.url, assetBaseUrl);
+  if (!url) return null;
+  return {
+    url,
+    ...(descriptor.textureDefaults
+      ? { textureDefaults: { ...descriptor.textureDefaults } }
+      : {}),
+  };
 }
 
 function resolveScriptAssetUrl(

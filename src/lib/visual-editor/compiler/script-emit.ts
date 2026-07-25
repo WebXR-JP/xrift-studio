@@ -5,6 +5,7 @@ import scriptParticleSource from "../../../../packages/xrift-studio-runtime/src/
 
 import type { AssetManifest, ScriptAsset } from "../asset-manifest";
 import type { JsonObject, ScriptComponent } from "../scene-document";
+import type { ScriptAssetRuntimeDescriptor } from "../scripting/asset-runtime";
 import { stripCommentsAndStrings } from "../scripting/script-contract";
 import {
   collectDynamicScriptImports,
@@ -292,9 +293,13 @@ export function renderScriptComponent(
   entityId: string,
   entityName: string,
   order: number,
-  assetRuntimeUrls: Readonly<Record<string, string>> = {},
+  assetRuntimeDescriptors: Readonly<
+    Record<string, ScriptAssetRuntimeDescriptor>
+  > = {},
 ): string {
-  const assetUrls = serializeStringRecord(assetRuntimeUrls);
+  const assetDescriptors = serializeAssetDescriptorRecord(
+    assetRuntimeDescriptors,
+  );
   return [
     `<XriftScriptHost`,
     `  script={${module.importName}}`,
@@ -308,7 +313,8 @@ export function renderScriptComponent(
     `  order={${order}}`,
     `  assetReferences={${JSON.stringify([...component.assetReferences].sort())}}`,
     `  entityReferences={${JSON.stringify([...component.entityReferences].sort())}}`,
-    `  resolveAssetUrl={(assetId) => (${assetUrls} as Record<string, string>)[assetId] ?? null}`,
+    `  resolveAsset={(assetId) => (${assetDescriptors} as Record<string, { url: string }>)[assetId] ?? null}`,
+    `  resolveAssetUrl={(assetId) => (${assetDescriptors} as Record<string, { url: string }>)[assetId]?.url ?? null}`,
     `/>`,
   ].join("\n");
 }
@@ -318,12 +324,59 @@ function serializeProperties(properties: JsonObject): string {
   return JSON.stringify(sortJson(properties));
 }
 
-function serializeStringRecord(value: Readonly<Record<string, string>>): string {
+function serializeAssetDescriptorRecord(
+  value: Readonly<Record<string, ScriptAssetRuntimeDescriptor>>,
+): string {
   return JSON.stringify(
     Object.fromEntries(
-      Object.entries(value).sort(([left], [right]) =>
-        left.localeCompare(right),
-      ),
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([assetId, descriptor]) => [
+          assetId,
+          {
+            url: descriptor.url,
+            ...(descriptor.textureDefaults
+              ? {
+                  textureDefaults: {
+                    ...(descriptor.textureDefaults.colorSpace !== undefined
+                      ? {
+                          colorSpace:
+                            descriptor.textureDefaults.colorSpace,
+                        }
+                      : {}),
+                    ...(descriptor.textureDefaults.wrapS !== undefined
+                      ? { wrapS: descriptor.textureDefaults.wrapS }
+                      : {}),
+                    ...(descriptor.textureDefaults.wrapT !== undefined
+                      ? { wrapT: descriptor.textureDefaults.wrapT }
+                      : {}),
+                    ...(descriptor.textureDefaults.magFilter !== undefined
+                      ? {
+                          magFilter:
+                            descriptor.textureDefaults.magFilter,
+                        }
+                      : {}),
+                    ...(descriptor.textureDefaults.minFilter !== undefined
+                      ? {
+                          minFilter:
+                            descriptor.textureDefaults.minFilter,
+                        }
+                      : {}),
+                    ...(descriptor.textureDefaults.flipY !== undefined
+                      ? { flipY: descriptor.textureDefaults.flipY }
+                      : {}),
+                    ...(descriptor.textureDefaults.generateMipmaps !==
+                    undefined
+                      ? {
+                          generateMipmaps:
+                            descriptor.textureDefaults.generateMipmaps,
+                        }
+                      : {}),
+                  },
+                }
+              : {}),
+          },
+        ]),
     ),
   );
 }

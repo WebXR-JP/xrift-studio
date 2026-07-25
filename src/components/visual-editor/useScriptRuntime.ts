@@ -8,6 +8,12 @@ import { isCompiledScript } from "../../../packages/xrift-studio-runtime/src/scr
 import type { ScriptFailure, ScriptLogEntry } from "../../../packages/xrift-studio-runtime/src/script/host";
 import type { AssetManifest } from "../../lib/visual-editor/asset-manifest";
 import type { SceneDocument } from "../../lib/visual-editor/scene-document";
+import {
+  advanceScriptAssetRuntimeDescriptorVersions,
+  createScriptAssetResolutionKey,
+  createScriptAssetRuntimeDescriptorMap,
+  type ScriptAssetRuntimeDescriptor,
+} from "../../lib/visual-editor/scripting/asset-runtime";
 import { filterScriptTrustRunningByAssetIds } from "../../lib/visual-editor/scripting/runtime-report";
 import {
   readScriptSourceSnapshot,
@@ -80,9 +86,13 @@ export type ScriptTrustRuntimeState = Readonly<{
 export type ScriptRuntimeState = {
   status: "idle" | "compiling" | "ready" | "error" | "approval-required";
   scripts: ReadonlyMap<string, CompiledScriptEntry>;
+  /** URL plus Asset-authored runtime defaults, resolved before Script start. */
+  assetDescriptors: ReadonlyMap<string, ScriptAssetRuntimeDescriptor>;
+  /** Short per-Asset revisions used to restart only affected Script hosts. */
+  assetDescriptorVersions: ReadonlyMap<string, number>;
   /** Pre-resolved so `ctx.getAssetUrl` can be synchronous. */
   assetUrls: ReadonlyMap<string, string>;
-  /** Short per-Asset revisions used to restart only affected Script hosts. */
+  /** @deprecated Use assetDescriptorVersions; retained for host compatibility. */
   assetUrlVersions: ReadonlyMap<string, number>;
   errors: readonly ScriptCompileError[];
   failures: readonly ScriptFailure[];
@@ -93,6 +103,11 @@ export type ScriptRuntimeState = {
 };
 
 const EMPTY_SCRIPTS = new Map<string, CompiledScriptEntry>();
+const EMPTY_ASSET_DESCRIPTORS = new Map<
+  string,
+  ScriptAssetRuntimeDescriptor
+>();
+const EMPTY_ASSET_DESCRIPTOR_VERSIONS = new Map<string, number>();
 const EMPTY_ASSET_URLS = new Map<string, string>();
 const EMPTY_ASSET_URL_VERSIONS = new Map<string, number>();
 const EMPTY_SCRIPT_TRUST: ScriptTrustRuntimeState = {
@@ -133,6 +148,8 @@ export function useScriptRuntime({
   const [state, setState] = useState<ScriptRuntimeState>({
     status: "idle",
     scripts: EMPTY_SCRIPTS,
+    assetDescriptors: EMPTY_ASSET_DESCRIPTORS,
+    assetDescriptorVersions: EMPTY_ASSET_DESCRIPTOR_VERSIONS,
     assetUrls: EMPTY_ASSET_URLS,
     assetUrlVersions: EMPTY_ASSET_URL_VERSIONS,
     errors: [],
@@ -157,6 +174,8 @@ export function useScriptRuntime({
     setState({
       status: "idle",
       scripts: EMPTY_SCRIPTS,
+      assetDescriptors: EMPTY_ASSET_DESCRIPTORS,
+      assetDescriptorVersions: EMPTY_ASSET_DESCRIPTOR_VERSIONS,
       assetUrls: EMPTY_ASSET_URLS,
       assetUrlVersions: EMPTY_ASSET_URL_VERSIONS,
       errors: [],
@@ -194,6 +213,8 @@ export function useScriptRuntime({
       setState({
         status: "ready",
         scripts: EMPTY_SCRIPTS,
+        assetDescriptors: EMPTY_ASSET_DESCRIPTORS,
+        assetDescriptorVersions: EMPTY_ASSET_DESCRIPTOR_VERSIONS,
         assetUrls: EMPTY_ASSET_URLS,
         assetUrlVersions: EMPTY_ASSET_URL_VERSIONS,
         errors: [],
@@ -376,7 +397,6 @@ export function useScriptRuntime({
     // Asset props are resolved up front: the read is asynchronous IPC but
     // ctx.getAssetUrl must answer synchronously inside a frame.
     const assetUrls = new Map<string, string>();
-    const assetUrlVersions = new Map<string, number>();
     for (const assetId of collectScriptReferencedAssetIds(currentScene)) {
       const asset = currentAssets.assets[assetId];
       if (!asset || asset.source.kind !== "project") continue;
@@ -386,19 +406,27 @@ export function useScriptRuntime({
           asset.source.relativePath,
         );
         assetUrls.set(assetId, url);
-        const previousVersion =
-          previousState.assetUrlVersions.get(assetId) ?? 0;
-        assetUrlVersions.set(
-          assetId,
-          previousState.assetUrls.get(assetId) === url
-            ? Math.max(1, previousVersion)
-            : previousVersion + 1,
-        );
       } catch {
         // A missing Asset URL is reported by the script when it reads null,
         // not by refusing to start the whole scene.
       }
     }
+    const assetDescriptors = createScriptAssetRuntimeDescriptorMap(
+      currentAssets,
+      assetUrls.keys(),
+      (assetId) => assetUrls.get(assetId),
+    );
+    const assetDescriptorVersions =
+      advanceScriptAssetRuntimeDescriptorVersions(
+        previousState.assetDescriptors,
+        previousState.assetDescriptorVersions.size > 0
+          ? previousState.assetDescriptorVersions
+          : previousState.assetUrlVersions,
+        assetDescriptors,
+      );
+    // Older viewports only know URL revisions. Advancing these on descriptor
+    // changes is conservative and preserves their restart behavior.
+    const assetUrlVersions = assetDescriptorVersions;
 
     if (compileGenerationRef.current !== generation) {
       for (const entry of compiled.values()) {
@@ -431,7 +459,7 @@ export function useScriptRuntime({
       const nextComponentRuntimeKeys = createComponentRuntimeKeys(
         currentScene,
         compiled,
-        assetUrlVersions,
+        assetDescriptorVersions,
       );
       const unchangedComponentIds = new Set(
         [...nextComponentRuntimeKeys].flatMap(([componentId, key]) =>
@@ -449,6 +477,8 @@ export function useScriptRuntime({
       setState((previous) => ({
         status: "ready",
         scripts: compiled,
+        assetDescriptors,
+        assetDescriptorVersions,
         assetUrls,
         assetUrlVersions,
         errors: [],
@@ -543,7 +573,7 @@ function runningSnapshotsFor(
 function createComponentRuntimeKeys(
   scene: SceneDocument,
   scripts: ReadonlyMap<string, CompiledScriptEntry>,
-  assetUrlVersions: ReadonlyMap<string, number>,
+  assetDescriptorVersions: ReadonlyMap<string, number>,
 ): Map<string, string> {
   const keys = new Map<string, string>();
   for (const scheduled of collectScheduledScripts(scene)) {
@@ -566,12 +596,10 @@ function createComponentRuntimeKeys(
         entry.cacheKey,
         component.assetReferences,
         component.entityReferences,
-        [...component.assetReferences]
-          .sort()
-          .map((assetId) => [
-            assetId,
-            assetUrlVersions.get(assetId) ?? null,
-          ]),
+        createScriptAssetResolutionKey(
+          component.assetReferences,
+          assetDescriptorVersions,
+        ),
       ]),
     );
   }

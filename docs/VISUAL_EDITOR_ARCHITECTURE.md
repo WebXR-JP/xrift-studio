@@ -614,6 +614,15 @@ Particle と同じ関係を採る。再利用可能な定義は Asset 側に置�
 - Stop は生成した module、blob URL、timer、listener を明示的に破棄する。React の unmount に依存しない。
 - Item project は重力と RigidBody を持たないため、物理へ触る API は未対応として degrade し、動くふりをしない。
 
+#### Texture / Material の所有境界
+
+- `ctx.assets.loadTexture` は Script Component の `assetReferences` にある Texture Asset だけを受け付ける。runtime resolver は URL だけでなく、Asset ID、`colorSpace`、Sampler の wrap / mag / min filter、`flipY`、`generateMipmaps` を descriptor として Play host と公開 adapter の両方へ渡す。
+- Script が省略した load option は Texture Asset の Import 設定を継承し、明示した field だけを Script instance の読み込みへ優先する。`generateMipmaps: false` と mipmap filter の組み合わせは `linear` へ正規化する。Studio Play と生成物で別の暗黙 default を持たない。
+- `ctx.materials` は attached Entity 自身の owned Mesh だけへ runtime override を重ねる。`setTextureTransform` は Material slot ごとの Texture clone に `offset`、`repeat`、`center`、`rotation` を適用し、読み込んだ source Texture、共有 Texture Asset、別 slot、子 Entity、別 Entityを変更しない。
+- Script の再起動、runtime failure、Stop では、その Script owner の Material clone、Texture clone、override、読み込み cache を破棄する。`resetTextureTransform(slot)` は実行中に指定 slot の transform だけを戻し、他 Script owner の override を外さない。
+- `ctx.assets` / `ctx.materials` は runtime-only で、AssetManifest revision を変更しない。保存する Texture の Import / Sampler 設定は `get_texture_asset` / `update_texture_asset`、Material の PBR / Texture binding は `get_material_asset` / `update_material_asset` / `set_material_texture_transform`、Mesh slotへの割当は`set_material`を使う。新規 local Texture import は Edit mode の `import_texture_asset` に限定する。
+- `get_scripting_capabilities` は上記の Asset default、明示 option の優先順位、filter / mipmap、clone 隔離と、runtime 一時操作 / MCP 永続操作の tool 対応を機械可読に返す。MCP client が Script API から永続化を推測しないようにする。
+
 #### 動的評価の限定
 
 - Editor の Play では、source を Monaco と同梱した TypeScript service の `transpileModule` で変換し、生成した module を評価する。言語サービス worker はEditor補完と診断に限定し、Play開始時のmodel同期を挟まない。これが本節で認める唯一の動的評価であり、対象は project 内の Script source file に限る。visual document 内の文字列を評価しない。

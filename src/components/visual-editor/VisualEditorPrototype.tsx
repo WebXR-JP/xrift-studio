@@ -208,6 +208,7 @@ import {
   createScriptRelativePath,
   createScriptSampleSource,
 } from "../../lib/visual-editor/scripting/script-files";
+import { createScriptAssetRuntimeInputKey } from "../../lib/visual-editor/scripting/asset-runtime";
 import {
   createScriptTemplateSource,
   DEFAULT_SCRIPT_TEMPLATE_ID,
@@ -660,13 +661,7 @@ function createScriptRuntimeInputKey(
         asset?.kind === "script" ? asset.source.relativePath : null,
       ];
     }),
-    assets: referencedAssetIds.map((assetId) => {
-      const asset = assets.assets[assetId];
-      return [
-        assetId,
-        asset?.source.kind === "project" ? asset.source.relativePath : null,
-      ];
-    }),
+    assets: createScriptAssetRuntimeInputKey(assets, referencedAssetIds),
   });
 }
 
@@ -1227,9 +1222,12 @@ export function VisualEditorPrototype({
     if (!scriptExecutionScopeRenderCurrent) {
       return {
         scripts: new Map(),
+        assetDescriptors: new Map(),
+        assetDescriptorVersions: new Map(),
         assetUrls: new Map(),
         assetUrlVersions: new Map(),
         orderByComponentId: new Map(),
+        resolveAsset: () => null,
         resolveAssetUrl: () => null,
         onLog: scriptRuntime.handleLog,
         onFailure: scriptRuntime.handleFailure,
@@ -1243,9 +1241,14 @@ export function VisualEditorPrototype({
     );
     return {
       scripts: scriptRuntime.state.scripts,
+      assetDescriptors: scriptRuntime.state.assetDescriptors,
+      assetDescriptorVersions:
+        scriptRuntime.state.assetDescriptorVersions,
       assetUrls: scriptRuntime.state.assetUrls,
       assetUrlVersions: scriptRuntime.state.assetUrlVersions,
       orderByComponentId,
+      resolveAsset: (assetId) =>
+        scriptRuntime.state.assetDescriptors.get(assetId) ?? null,
       resolveAssetUrl: (assetId) =>
         scriptRuntime.state.assetUrls.get(assetId) ?? null,
       onLog: scriptRuntime.handleLog,
@@ -1255,6 +1258,8 @@ export function VisualEditorPrototype({
     resolvedScriptScene,
     scriptExecutionScopeRenderCurrent,
     scriptRuntime.state.scripts,
+    scriptRuntime.state.assetDescriptors,
+    scriptRuntime.state.assetDescriptorVersions,
     scriptRuntime.state.assetUrls,
     scriptRuntime.state.assetUrlVersions,
     scriptRuntime.handleLog,

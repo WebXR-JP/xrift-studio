@@ -8,6 +8,10 @@ import type {
   ScriptLogEntry,
 } from "../../../packages/xrift-studio-runtime/src/script/host";
 import type { ScriptComponent } from "../../lib/visual-editor/scene-document";
+import {
+  createScriptAssetResolutionKey,
+  type ScriptAssetRuntimeDescriptor,
+} from "../../lib/visual-editor/scripting/asset-runtime";
 import type { CompiledScriptEntry } from "./useScriptRuntime";
 
 /**
@@ -21,10 +25,14 @@ import type { CompiledScriptEntry } from "./useScriptRuntime";
 
 export type ScriptViewportRuntime = {
   scripts: ReadonlyMap<string, CompiledScriptEntry>;
+  assetDescriptors: ReadonlyMap<string, ScriptAssetRuntimeDescriptor>;
+  assetDescriptorVersions: ReadonlyMap<string, number>;
   assetUrls: ReadonlyMap<string, string>;
+  /** @deprecated Retained for callers that only provide URL resolution. */
   assetUrlVersions: ReadonlyMap<string, number>;
   /** Component id to scheduling order, precomputed from the scene. */
   orderByComponentId: ReadonlyMap<string, number>;
+  resolveAsset: (assetId: string) => ScriptAssetRuntimeDescriptor | null;
   resolveAssetUrl: (assetId: string) => string | null;
   onLog: (entry: ScriptLogEntry) => void;
   onFailure: (failure: ScriptFailure) => void;
@@ -50,13 +58,11 @@ export function EntityScriptVisual({
     () => ({ ...component.properties }),
     [component.properties],
   );
-  const assetResolutionKey = JSON.stringify(
-    [...component.assetReferences]
-      .sort()
-      .map((assetId) => [
-        assetId,
-        runtime?.assetUrlVersions.get(assetId) ?? null,
-      ]),
+  const assetResolutionKey = createScriptAssetResolutionKey(
+    component.assetReferences,
+    runtime?.assetDescriptorVersions.size
+      ? runtime.assetDescriptorVersions
+      : runtime?.assetUrlVersions ?? new Map(),
   );
   // Entity groups are tagged with `authoringEntityId` in their userData; there
   // is no id-to-Object3D index in the viewport, so this walks the graph.
@@ -89,6 +95,7 @@ export function EntityScriptVisual({
       order={runtime.orderByComponentId.get(component.id) ?? 0}
       assetReferences={component.assetReferences}
       entityReferences={component.entityReferences}
+      resolveAsset={runtime.resolveAsset}
       resolveAssetUrl={runtime.resolveAssetUrl}
       assetResolutionKey={assetResolutionKey}
       resolveEntity={resolveEntity}

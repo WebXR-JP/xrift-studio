@@ -354,6 +354,7 @@ function ScriptApiGuide() {
         </div>
         <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
           Inspectorの値、Texture、Entity内のMaterialとParticleをPlay中に操作できます。
+          Assetへ保存する編集とは分離されています。
         </p>
       </div>
 
@@ -385,20 +386,29 @@ start(ctx) {
           <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
             許可したTexture参照だけを
             <code className="mx-0.5 text-slate-700">ctx.assets</code>
-            経由で読み込めます。Script自体はsandboxではありません。
+            経由で読み込めます。未指定のSampler、色空間、Flip Y、Mipmap設定は
+            Texture Assetから継承し、明示した項目だけを上書きします。
+            Script自体はsandboxではありません。
           </p>
           <GuideCode>{`void ctx.lifecycle.task(async (signal) => {
   const texture = await ctx.assets.loadTexture(
     ctx.props.texture,
     {
-    colorSpace: "srgb",
-    wrapS: "repeat",
-    wrapT: "repeat",
+      colorSpace: "srgb",
+      wrapS: "repeat",
+      wrapT: "repeat",
+      magFilter: "linear",
+      minFilter: "linear-mipmap-linear",
+      flipY: false,
+      generateMipmaps: true,
     },
   );
   if (signal.aborted || !texture) return;
-  texture.repeat.set(2, 2);
   ctx.materials.setTexture("baseColor", texture);
+  ctx.materials.setTextureTransform("baseColor", {
+    repeat: [2, 2],
+    offset: [0, 0],
+  });
 });`}</GuideCode>
         </section>
 
@@ -434,6 +444,8 @@ ctx.lifecycle.onDispose(() => {
               "setMetalness",
               "setRoughness",
               "setTexture",
+              "setTextureTransform",
+              "resetTextureTransform",
               "list",
               "select",
             ].map((method) => (
@@ -454,8 +466,21 @@ body.setOpacity(0.8);
 body.setEmissive("#ff6600", 2);
 body.setMetalness(0.2);
 body.setRoughness(0.7);
+body.setTextureTransform("baseColor", {
+  offset: [0.25, 0],
+  repeat: [2, 2],
+  center: [0.5, 0.5],
+  rotation: Math.PI / 4,
+});
 
 ctx.log(ctx.materials.list());`}</GuideCode>
+          <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
+            UV変換は対象Material専用のTexture cloneへ適用されます。
+            <code className="mx-0.5 text-slate-700">
+              resetTextureTransform(slot)
+            </code>
+            で、そのslotだけ元へ戻せます。
+          </p>
         </section>
 
         <section>
@@ -478,8 +503,9 @@ ctx.particles.setOpacity(0.75);`}</GuideCode>
             変更はruntime-only
           </h4>
           <p className="mt-1 text-[10px] leading-relaxed text-sky-700">
-            Material / Particle Asset自体は上書きしません。Scriptの再起動・Stop時に元へ戻り、
-            読み込んだTextureも自動で破棄されます。
+            Material / Texture / Particle Assetと、別Entityが使う共有Textureは上書きしません。
+            Scriptの再起動・Stop時にcloneとoverrideを元へ戻し、読み込んだTextureも自動で破棄します。
+            保存したい変更はInspectorまたは永続編集用MCP toolでAssetへ反映します。
           </p>
         </section>
       </div>

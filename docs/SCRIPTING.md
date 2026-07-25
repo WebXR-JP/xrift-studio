@@ -162,10 +162,16 @@ export default defineScript({
         colorSpace: "srgb",
         wrapS: "repeat",
         wrapT: "repeat",
+        magFilter: "linear",
+        minFilter: "linear-mipmap-linear",
+        generateMipmaps: true,
       });
       if (signal.aborted || !texture) return;
-      texture.repeat.set(2, 2);
       ctx.materials.setTexture("baseColor", texture);
+      ctx.materials.setTextureTransform("baseColor", {
+        repeat: [2, 2],
+        offset: [0, 0],
+      });
     });
 
     return {
@@ -190,10 +196,24 @@ MCP から設定する場合も `update_script_component` へ property 値と完
 | `loadTexture(assetId, options?)` | PNG、JPEG、WebP などブラウザが通常の画像として decode できる Texture を読み込む |
 | `loadAudio(assetId, options?)` | 明示参照した MP3 / WAV の lifecycle-owned player を返す |
 
-`loadTexture` の options は `colorSpace: "auto" | "srgb" | "linear"`、
-`wrapS` / `wrapT: "repeat" | "clamp-to-edge" | "mirrored-repeat"`、`flipY: boolean` である。
-返した Texture は `offset`、`repeat`、`center`、`rotation` を Three.js と同じ形で調整できる。同一 Script instance 内では
-Asset ID と options ごとに cache し、Script の再起動または Stop で自動的に dispose する。
+`loadTexture` は参照先 Texture Asset の `importSettings` を実行時の既定値にする。
+option を省略した項目は Asset の値を継承し、Script で明示した項目だけをその読み込みに対して上書きする。
+
+| option | 値 |
+| --- | --- |
+| `colorSpace` | `"auto"`、`"srgb"`、`"linear"` |
+| `wrapS` / `wrapT` | `"repeat"`、`"clamp-to-edge"`、`"mirrored-repeat"` |
+| `magFilter` | `"nearest"`、`"linear"` |
+| `minFilter` | `"nearest"`、`"linear"`、4 種の mipmap filter |
+| `flipY` / `generateMipmaps` | `boolean` |
+
+`generateMipmaps: false` と mipmap を必要とする `minFilter` を組み合わせた場合は、実行時に
+`minFilter: "linear"` へ正規化する。同一 Script instance 内では Asset ID と解決後の option ごとに cache し、
+Script の再起動または Stop で自動的に dispose する。
+
+返した `ScriptTexture` は Three.js Texture と互換の transform field を持つが、Material 上の UV 演出には
+`ctx.materials.setTextureTransform` を使う。この API は Material slot ごとの所有 clone を作るため、
+同じ Texture を使う別 slot、別 Entity、共有 Texture Asset を変更しない。
 
 Material / Particle の preview と `ctx.assets.loadTexture` は別の読み込み経路である。Studio の preview は project source を
 Tauri IPC で読み、`importMetadata.sourceFormat` または拡張子が KTX2 なら、Studio に同梱した Basis JS / WASM で変換する。
@@ -229,13 +249,18 @@ unmount では host が全playerを停止し、sourceを解放する。Studio Pl
 | `setMetalness(value)` | metalness を 0 から 1 の範囲で変更する |
 | `setRoughness(value)` | roughness を 0 から 1 の範囲で変更する |
 | `setTexture(slot, textureOrNull)` | `baseColor`、`normal`、`emissive`、`metallicRoughness`、`occlusion` の slot を変更する。`null` で外す |
+| `setTextureTransform(slot, transform)` | slot の Texture に `offset`、`repeat`、`center`、radian の `rotation` を部分上書きする |
+| `resetTextureTransform(slot)` | 指定 slot にこの handle が付けた Texture transform だけを取り除く |
 | `reset()` | `ctx.materials`ではこのScript全体、選択handleではそのhandleのMaterial overrideを取り除く |
 
 setter の返り値は対応して変更した Material 数である。未対応の Material property は無視する。
 `select`の名前条件は同名Meshすべてに一致し、index条件は現在のowned Mesh traversalを対象にする。
 handleは非同期に追加されたMeshにも追従するため、Modelの読み込み完了を待って作り直す必要はない。
 同じ Entity に複数 Script がある場合は Component の実行順で override を合成し、後の Script が同じ property を変更した値を採用する。
-Script の再起動または Stop では、その Script の override だけを外し、最後の Script が終了した時点で元の Material へ戻す。
+`setTextureTransform` は root の `ctx.materials` と `select(...)` が返す handle の両方にあり、値を省略した field は
+現在の slot 値を保つ。host は対象 Material slot ごとに Texture clone を所有し、source Texture と共有 Asset を直接変更しない。
+`resetTextureTransform(slot)` はその slot だけを元の transform へ戻す。
+Script の再起動または Stop では、その Script の clone と override だけを外し、最後の Script が終了した時点で元の Material へ戻す。
 
 ### Particle の実行時操作
 
@@ -275,7 +300,7 @@ Script を再起動する。
 
 | 変更経路 | 保存 | Play 中の反映 | Stop / 再起動 |
 | --- | --- | --- | --- |
-| `ctx.materials`、`ctx.particles`、読み込んだ Texture の transform | runtime-only。document revision は変えない | setter を呼んだ時点から対象 Entity に反映 | その Script の override を外し、元の Asset 値へ戻る |
+| `ctx.materials`、`ctx.particles`、`setTextureTransform` | runtime-only。document revision は変えない | setter を呼んだ時点から対象 Entity の所有 clone に反映 | その Script の clone / override を外し、元の Asset 値へ戻る |
 | Script Component の宣言済み property | Scene document | 同じ Script instance の `ctx.props` へ次の frame から反映 | 保存値として残る |
 | Script source、Script / Asset / Entity 参照、Component 構成 | source / Scene document | 承認済みの正確な内容だけをcompileし、成功後に影響する Entity だけを再起動。未承認または失敗時は last-good module を継続 | 保存値として残る |
 | 既存 Material / Particle Asset の property | AssetManifest | Inspector または MCP から保存し、その Asset を参照する Entity / Emitter だけを再反映 | 保存値として残る |
@@ -293,6 +318,19 @@ runtime 演出を保存したい場合は値を `ctx.*` から読み戻す仕組
 
 MCP client は最初に `get_scripting_capabilities` を呼ぶと、利用可能な Script API、Texture slot、参照制限、
 作成から Play までの tool 順序と、Play 中に永続化できる操作を機械可読な形で取得できる。
+
+Texture / Material 操作は目的で入口を分ける。
+
+| 目的 | Script runtime | 永続 MCP authoring |
+| --- | --- | --- |
+| Texture を一時的に読み込む | `ctx.assets.loadTexture`。Asset の色空間、Sampler、Flip Y、Mipmapを既定値にする | 対象外 |
+| Play 中だけ Material の見た目や UV を変える | `ctx.materials.set*` / `setTextureTransform`。Entity 所有 clone だけを変更 | 対象外 |
+| Texture Asset の Import / Sampler 設定を保存する | 対象外 | `get_texture_asset` / `update_texture_asset`。新規画像は Edit 中の `import_texture_asset` |
+| Material Asset の PBR値やTexture bindingを保存する | 対象外 | `get_material_asset` / `update_material_asset` / `set_material_texture_transform` |
+| Material を Mesh slot へ保存して割り当てる | 対象外 | `set_material` |
+
+Script runtime の option と transform は Stop で消え、MCP authoring は AssetManifest と通常の履歴へ残る。
+同じ見た目を両方へ暗黙に書き戻さず、保存したい値は永続 tool へ明示する。
 
 | 目的 | MCP tool |
 | --- | --- |
@@ -339,6 +377,8 @@ thumbnail 生成を通す。MCP 応答には外部 path と file bytes を返さ
 `sampler.wrapS / wrapT / magFilter / minFilter`、`compression.format / quality` を受ける。
 未知 field、enum 外の値、非有限値、範囲外の max size / quality は document を変えず拒否する。
 Mipmaps を無効にした時の mipmap filter は既存モデルと同じく `linear` へ正規化する。
+この保存値は、次に `ctx.assets.loadTexture` が同じ Texture Asset を読む時の既定値になる。
+Script 側で option を明示した項目だけは、その Script instance の読み込みで保存値より優先する。
 
 基本手順は `get_editor_context`、`list_script_templates`、`create_script_asset` または `apply_script_template`、
 `add_component`、`update_script_component`、`set_play_mode` の順である。すべての write へ
@@ -362,7 +402,7 @@ release build には同 bridge を登録・搭載しない。したがって deb
 
 ## 組み込み Template
 
-Assets の Create > Script と MCP は同じ versioned catalog を使う。作成画面では source preview を確認でき、
+Assets の Create > Script と MCP は同じ version 3 catalog を使う。作成画面では source preview を確認でき、
 Entity を選択している場合は Script Asset と Script Component を 1 回の履歴操作で作成できる。
 
 | ID | 用途 | 追加設定 |
@@ -373,7 +413,7 @@ Entity を選択している場合は Script Asset と Script Component を 1 �
 | `keyboard-move` | WASD / 矢印キー移動 | なし |
 | `follow-entity` | 明示参照した Entity を追従 | Entity 参照 |
 | `material-pulse` | 色、発光、粗さの animation | Mesh Renderer |
-| `texture-scroll` | Texture 読み込みと UV scroll | Texture Asset と Mesh Renderer |
+| `texture-scroll` | Texture Asset設定を継承した読み込みと、所有clone上のUV scroll | Texture Asset と Mesh Renderer |
 | `particle-control` | 再生、Emission、速度、サイズ、色 | Particle Emitter |
 | `model-display` | 宣言済みGLBをTSX `Render`へ読み込み、速度をリアルタイム変更 | Model Asset |
 | `audio-hotkey` | 宣言済みAudioを指定キーで再生／停止し、音量・速度・loopを変更 | Audio Asset |
@@ -414,10 +454,10 @@ Inspector のフィールドは宣言から自動生成する。種別は既存�
 | --- | --- | --- | --- | --- |
 | number / color / vector などの property 変更 | 対応。次の frame から同じ instance へ反映 | 対応。compile 時の値を初期値として使用 | Scene document | Inspector / MCP |
 | 明示参照した Asset の URL 解決 | 対応 | 対応 | なし | `ctx.assets.url` |
-| PNG / JPEG / WebP など基本 Texture の読み込み | 対応 | 対応 | なし | `ctx.assets.loadTexture` |
+| PNG / JPEG / WebP など基本 Texture の読み込み | 対応。Assetの色空間 / Sampler / Flip Y / Mipmapを継承し、明示optionを優先 | 対応 | なし | `ctx.assets.loadTexture` |
 | MP3 / WAV Audio の再生・停止・seek・音量・loop・再生速度 | 対応 | 対応 | runtime-only | `ctx.assets.loadAudio` |
 | 宣言済みGLBをTSX `Render`で表示 | 対応 | 対応 | source | `ctx.assets.url` + `useGLTF` / `Clone` |
-| Texture の repeat / offset / rotation | 対応 | 対応 | runtime-only | 読み込んだ Texture |
+| Material Texture の repeat / offset / center / rotation | 対応。Entity / Material slot所有cloneだけを変更 | 対応 | runtime-only | `ctx.materials.setTextureTransform` |
 | Entity 自身の Material の color / opacity / emissive / metalness / roughness | 対応 | 対応 | runtime-only | `ctx.materials` |
 | Entity 自身の Material への Texture 設定 | 対応 | 対応 | runtime-only | `ctx.materials.setTexture` |
 | Entity 自身の Particle の再生 / Emission / 速度 / サイズ / 色 | 対応 | 対応 | runtime-only | `ctx.particles` |

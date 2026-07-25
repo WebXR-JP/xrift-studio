@@ -150,6 +150,14 @@ export type ScriptLifecycleCallback = () => void | PromiseLike<void>;
 
 export type ScriptTextureColorSpace = "auto" | "srgb" | "linear";
 export type ScriptTextureWrap = "repeat" | "clamp-to-edge" | "mirrored-repeat";
+export type ScriptTextureMagFilter = "nearest" | "linear";
+export type ScriptTextureMinFilter =
+  | "nearest"
+  | "linear"
+  | "nearest-mipmap-nearest"
+  | "linear-mipmap-nearest"
+  | "nearest-mipmap-linear"
+  | "linear-mipmap-linear";
 
 /**
  * Texture loading options kept independent from three.js types so Script
@@ -159,7 +167,22 @@ export type ScriptTextureLoadOptions = {
   colorSpace?: ScriptTextureColorSpace;
   wrapS?: ScriptTextureWrap;
   wrapT?: ScriptTextureWrap;
+  magFilter?: ScriptTextureMagFilter;
+  minFilter?: ScriptTextureMinFilter;
+  generateMipmaps?: boolean;
   flipY?: boolean;
+};
+
+/**
+ * Runtime information for an explicitly referenced Asset.
+ *
+ * `textureDefaults` mirrors the Texture Asset's import settings. Script load
+ * options override these values without exposing the complete editor manifest
+ * to a running Script.
+ */
+export type ScriptAssetRuntimeDescriptor = {
+  url: string;
+  textureDefaults?: ScriptTextureLoadOptions;
 };
 
 export type ScriptAudioLoadOptions = {
@@ -230,6 +253,17 @@ export type ScriptMaterialTextureSlot =
   | "metallicRoughness"
   | "occlusion";
 
+/**
+ * Runtime transform layered over a Material texture without mutating the
+ * Texture Asset or a Texture returned by `ctx.assets.loadTexture`.
+ */
+export type ScriptMaterialTextureTransform = {
+  offset?: ScriptVec2;
+  repeat?: ScriptVec2;
+  center?: ScriptVec2;
+  rotation?: number;
+};
+
 /** One Material slot discovered under this Entity's owned Meshes. */
 export type ScriptMaterialInfo = {
   /** Mesh name from Three.js. Empty when the source did not provide one. */
@@ -265,6 +299,16 @@ export type ScriptMaterialHandle = {
     slot: ScriptMaterialTextureSlot,
     texture: ScriptTexture | null,
   ): number;
+  /**
+   * Applies the supplied transform fields over the effective texture in this
+   * slot. The host uses an owned Texture clone for every matched Material.
+   */
+  setTextureTransform(
+    slot: ScriptMaterialTextureSlot,
+    transform: ScriptMaterialTextureTransform,
+  ): number;
+  /** Removes this handle's transform override for one texture slot. */
+  resetTextureTransform(slot: ScriptMaterialTextureSlot): number;
   /** Removes this handle's overrides while preserving other Script owners. */
   reset(): void;
 };

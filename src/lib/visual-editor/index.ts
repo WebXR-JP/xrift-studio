@@ -62,6 +62,7 @@ export * from "./serialization";
 export * from "./starter-templates";
 export * from "./starter-templates.fixture";
 export * from "./scripting/script-contract";
+export * from "./scripting/asset-runtime";
 export * from "./scripting/script-files";
 export * from "./scripting/script-templates";
 export * from "./scripting/script-schedule";

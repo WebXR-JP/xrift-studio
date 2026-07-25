@@ -174,6 +174,38 @@ export function runXriftMcpEditorToolFixtures(): void {
       )?.render?.props?.includes("ScriptRenderProps"),
     "Scripting capabilities should expose Texture, Audio, and Render context APIs",
   );
+  const textureCapabilities = (
+    scriptingCapabilities.result.runtime as {
+      assets?: {
+        methods?: string[];
+        textureOptions?: {
+          magFilter?: string[];
+          minFilter?: string[];
+          flipY?: unknown;
+          generateMipmaps?: unknown;
+          assetDefaults?: unknown;
+          precedence?: unknown;
+        };
+      };
+    }
+  )?.assets;
+  assert(
+    textureCapabilities?.methods?.some(
+      (method) =>
+        method.includes("magFilter?") &&
+        method.includes("minFilter?") &&
+        method.includes("generateMipmaps?"),
+    ) &&
+      textureCapabilities.textureOptions?.magFilter?.includes("linear") &&
+      textureCapabilities.textureOptions?.minFilter?.includes(
+        "linear-mipmap-linear",
+      ) &&
+      textureCapabilities.textureOptions.flipY === "boolean" &&
+      textureCapabilities.textureOptions.generateMipmaps === "boolean" &&
+      typeof textureCapabilities.textureOptions.assetDefaults === "string" &&
+      typeof textureCapabilities.textureOptions.precedence === "string",
+    "Scripting capabilities should expose Texture Asset defaults, filters, and mipmaps",
+  );
   assert(
     (
       scriptingCapabilities.result.persistentAuthoring as {
@@ -214,6 +246,82 @@ export function runXriftMcpEditorToolFixtures(): void {
       }
     )?.materials?.methods?.some((method) => method.includes("materials.select")),
     "Scripting capabilities should expose Material slot selection",
+  );
+  const materialCapabilities = (
+    scriptingCapabilities.result.runtime as {
+      materials?: {
+        methods?: string[];
+        textureTransforms?: {
+          isolation?: unknown;
+          cleanup?: unknown;
+        };
+      };
+    }
+  )?.materials;
+  assert(
+    materialCapabilities?.methods?.some((method) =>
+      method.includes("setTextureTransform"),
+    ) &&
+      materialCapabilities.methods.some((method) =>
+        method.includes("resetTextureTransform"),
+      ) &&
+      typeof materialCapabilities.textureTransforms?.isolation === "string" &&
+      materialCapabilities.textureTransforms.isolation.includes(
+        "Entity-owned",
+      ) &&
+      materialCapabilities.textureTransforms.isolation.includes(
+        "shared Texture Asset",
+      ) &&
+      typeof materialCapabilities.textureTransforms.cleanup === "string" &&
+      materialCapabilities.textureTransforms.cleanup.includes("Stop"),
+    "Scripting capabilities should expose isolated Material Texture transforms",
+  );
+  const persistentAssetOperations =
+    scriptingCapabilities.result.persistentAuthoring as {
+      groups?: { materials?: string[]; textures?: string[] };
+      assetOperations?: {
+        textures?: {
+          read?: unknown;
+          update?: unknown;
+          createInEdit?: unknown;
+          fields?: string[];
+        };
+        materials?: {
+          assign?: unknown;
+          create?: unknown;
+          read?: unknown;
+          update?: unknown;
+          updateTextureTransform?: unknown;
+          fields?: string[];
+        };
+      };
+    };
+  assert(
+    persistentAssetOperations.groups?.textures?.includes(
+      "update_texture_asset",
+    ) &&
+      persistentAssetOperations.groups?.materials?.includes(
+        "update_material_asset",
+      ) &&
+      persistentAssetOperations.assetOperations?.textures?.read ===
+        "get_texture_asset" &&
+      persistentAssetOperations.assetOperations.textures.update ===
+        "update_texture_asset" &&
+      persistentAssetOperations.assetOperations.textures.createInEdit ===
+        "import_texture_asset" &&
+      persistentAssetOperations.assetOperations.textures.fields?.includes(
+        "sampler.minFilter",
+      ) &&
+      persistentAssetOperations.assetOperations?.materials?.assign ===
+        "set_material" &&
+      persistentAssetOperations.assetOperations.materials.update ===
+        "update_material_asset" &&
+      persistentAssetOperations.assetOperations.materials
+        .updateTextureTransform === "set_material_texture_transform" &&
+      persistentAssetOperations.assetOperations.materials.fields?.includes(
+        "pbrMetallicRoughness",
+      ),
+    "Scripting capabilities should organize persistent Texture and Material authoring tools",
   );
   assert(
     (

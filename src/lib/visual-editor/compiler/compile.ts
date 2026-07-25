@@ -59,6 +59,7 @@ import {
 } from "../serialization";
 import { sha256Utf8 } from "./hash";
 import { collectRequiredScriptAssetIds } from "../scripting/script-schedule";
+import { createScriptAssetRuntimeDescriptorMap } from "../scripting/asset-runtime";
 import {
   createScriptParticleOverlayFile,
   planScriptEmission,
@@ -613,13 +614,12 @@ function renderScript(
   context.extraImports.add(
     `import ${module.importName}${renderImport} from "${module.importSpecifier}";`,
   );
-  const assetRuntimeUrls = Object.fromEntries(
-    [...component.assetReferences]
-      .sort()
-      .flatMap((assetId) => {
-        const url = context.assetRuntimeUrls.get(assetId);
-        return url ? [[assetId, url] as const] : [];
-      }),
+  const assetRuntimeDescriptors = Object.fromEntries(
+    createScriptAssetRuntimeDescriptorMap(
+      context.assets,
+      component.assetReferences,
+      (assetId) => context.assetRuntimeUrls.get(assetId),
+    ),
   );
   return renderScriptComponent(
     component,
@@ -627,7 +627,7 @@ function renderScript(
     entity.id,
     entity.name,
     order,
-    assetRuntimeUrls,
+    assetRuntimeDescriptors,
   );
 }
 

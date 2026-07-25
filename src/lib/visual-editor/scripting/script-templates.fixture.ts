@@ -30,6 +30,7 @@ export function runScriptTemplateFixtureAssertions(): void {
   assertCatalogEntries();
   assertSourceGeneration();
   assertParticleTemplate();
+  assertTextureTransformTemplate();
   assertExternalAssetTemplates();
   assertTemplateLanguagePersistence();
   assertSummaries();
@@ -66,7 +67,7 @@ function assertTemplateLanguagePersistence(): void {
 
 function assertCatalogEntries(): void {
   assert(
-    SCRIPT_TEMPLATE_CATALOG_VERSION === 2,
+    SCRIPT_TEMPLATE_CATALOG_VERSION === 3,
     "template catalog version changed without a fixture update",
   );
   assert(SCRIPT_TEMPLATE_CATALOG.length > 0, "template catalog is empty");
@@ -167,6 +168,32 @@ function assertSourceGeneration(): void {
   assert(
     extractScriptContract(fallback).name === defaultTemplate.suggestedName,
     "an empty sanitized name did not use the suggested name",
+  );
+}
+
+function assertTextureTransformTemplate(): void {
+  const texture = getScriptTemplate("texture-scroll");
+  assert(Boolean(texture), "texture-scroll template is missing");
+  if (!texture) return;
+
+  assert(
+    texture.requiredAssetKinds.includes("texture") &&
+      texture.requiredComponents.includes("Mesh Renderer"),
+    "texture-scroll does not declare its Texture and Mesh requirements",
+  );
+  assert(
+    texture.source.includes("ctx.assets.loadTexture(") &&
+      texture.source.includes("ctx.materials.setTexture(") &&
+      texture.source.includes("ctx.materials.setTextureTransform(") &&
+      texture.source.includes("ctx.materials.resetTextureTransform("),
+    "texture-scroll does not exercise isolated Material Texture transforms",
+  );
+  assert(
+    !texture.source.includes("texture.offset") &&
+      !texture.source.includes("texture.repeat") &&
+      !texture.source.includes("loaded.offset") &&
+      !texture.source.includes("loaded.repeat"),
+    "texture-scroll mutates the loaded Texture instead of its Material-owned transform",
   );
 }
 

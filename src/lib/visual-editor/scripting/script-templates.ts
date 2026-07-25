@@ -27,7 +27,7 @@ export type ScriptTemplateDefinition = {
 };
 
 const NAME_TOKEN = "__XRIFT_SCRIPT_NAME__";
-export const SCRIPT_TEMPLATE_CATALOG_VERSION = 2 as const;
+export const SCRIPT_TEMPLATE_CATALOG_VERSION = 3 as const;
 
 /**
  * Built-in Script examples shared by the Assets creation flow and MCP.
@@ -246,7 +246,8 @@ export default defineScript({
   {
     id: "texture-scroll",
     name: "Textureスクロール",
-    description: "明示参照したTextureを読み込み、UVをスクロールします。",
+    description:
+      "Texture Assetの設定を継承して読み込み、共有Textureを変えずにUVをスクロールします。",
     category: "appearance",
     suggestedName: "Texture Scroller",
     language: "ts",
@@ -263,27 +264,34 @@ export default defineScript({
     tiling: prop.vec2({ label: "タイリング", default: [1, 1] }),
   },
   start(ctx) {
-    let loaded = null;
+    let ready = false;
+    let offsetX = 0;
+    let offsetY = 0;
     void ctx.lifecycle.task(async (signal) => {
       const texture = await ctx.assets.loadTexture(ctx.props.texture, {
-        colorSpace: "srgb",
         wrapS: "repeat",
         wrapT: "repeat",
       });
       if (signal.aborted || !texture) return;
-      loaded = texture;
-      texture.repeat.set(ctx.props.tiling[0], ctx.props.tiling[1]);
       ctx.materials.setTexture("baseColor", texture);
+      ctx.materials.setTextureTransform("baseColor", {
+        repeat: ctx.props.tiling,
+        offset: [offsetX, offsetY],
+      });
+      ready = true;
     });
     return {
       update(delta) {
-        if (!loaded) return;
-        loaded.offset.x += ctx.props.speed[0] * delta;
-        loaded.offset.y += ctx.props.speed[1] * delta;
-        loaded.repeat.set(ctx.props.tiling[0], ctx.props.tiling[1]);
-        loaded.needsUpdate = true;
+        if (!ready) return;
+        offsetX += ctx.props.speed[0] * delta;
+        offsetY += ctx.props.speed[1] * delta;
+        ctx.materials.setTextureTransform("baseColor", {
+          repeat: ctx.props.tiling,
+          offset: [offsetX, offsetY],
+        });
       },
       dispose() {
+        ctx.materials.resetTextureTransform("baseColor");
         ctx.materials.reset();
       },
     };

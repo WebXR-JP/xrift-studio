@@ -31,6 +31,7 @@ import { runScriptPropsFixtureAssertions } from "../src/lib/visual-editor/script
 import { runParticleRuntimeFixtureAssertions } from "../src/lib/visual-editor/scripting/particle-runtime.fixture.ts";
 import { runScriptLifecycleFixtureAssertions } from "../src/lib/visual-editor/scripting/lifecycle.fixture.ts";
 import { runScriptAudioFixtureAssertions } from "../src/lib/visual-editor/scripting/audio-runtime.fixture.ts";
+import { runScriptMaterialTextureFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/material-texture.fixture.ts";
 import { runScriptTrustFixtureAssertions } from "../src/lib/visual-editor/scripting/script-trust.fixture.ts";
 import { runScriptRuntimeReportFixtureAssertions } from "../src/lib/visual-editor/scripting/runtime-report.fixture.ts";
 import { runScriptEmitFixtureAssertions } from "../src/lib/visual-editor/compiler/script-emit.fixture.ts";
@@ -134,6 +135,7 @@ try {
   runParticleRuntimeFixtureAssertions();
   await runScriptLifecycleFixtureAssertions();
   await runScriptAudioFixtureAssertions();
+  runScriptMaterialTextureFixtureAssertions();
   await runScriptTrustFixtureAssertions();
   runScriptRuntimeReportFixtureAssertions();
   runScriptEmitFixtureAssertions();

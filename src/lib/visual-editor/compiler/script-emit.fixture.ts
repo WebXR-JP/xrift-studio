@@ -17,6 +17,12 @@ import {
 } from "../scene-document";
 import { VISUAL_PROJECT_SCHEMA_VERSION } from "../project-document";
 import { extractScriptContract } from "../scripting/script-contract";
+import {
+  advanceScriptAssetRuntimeDescriptorVersions,
+  createScriptAssetResolutionKey,
+  createScriptAssetRuntimeDescriptor,
+  createScriptAssetRuntimeInputKey,
+} from "../scripting/asset-runtime";
 import { compileVisualProject } from "./compile";
 import { resolvePrefabInstances } from "./prefab-resolver";
 import {
@@ -29,6 +35,7 @@ import {
 /** Filesystem-free assertions for Script emission into the staging project. */
 export function runScriptEmitFixtureAssertions(): void {
   assertEmitsStaticImports();
+  assertAssetRuntimeDescriptors();
   assertVectorPropertiesAreExtracted();
   assertRenderDetectionIgnoresComments();
   assertDeterministic();
@@ -186,8 +193,15 @@ function buildDocuments(source: string, options: { assetId?: string } = {}) {
         },
         thumbnail: { status: "missing" },
         importSettings: normalizeTextureImportSettings({
-          colorSpace: "srgb",
-          sampler: { wrapS: "repeat", wrapT: "repeat" },
+          colorSpace: "linear",
+          flipY: true,
+          generateMipmaps: false,
+          sampler: {
+            wrapS: "mirrored-repeat",
+            wrapT: "clamp-to-edge",
+            magFilter: "nearest",
+            minFilter: "nearest",
+          },
         }),
       },
     },
@@ -405,8 +419,18 @@ function assertEmitsStaticImports(): void {
     source.includes('assetReferences={["asset_texture_grid"]}') &&
       source.includes('entityReferences={["entity_a"]}') &&
       source.includes('"asset_texture_grid"') &&
-      source.includes("grid.png"),
+      source.includes("grid.png") &&
+      source.includes("resolveAsset={(assetId)") &&
+      source.includes("resolveAssetUrl={(assetId)"),
     "declared Asset and Entity references were not emitted with a runtime URL",
+  );
+  assert(
+    source.includes(
+      '"textureDefaults":{"colorSpace":"linear","wrapS":"mirrored-repeat","wrapT":"clamp-to-edge","magFilter":"nearest","minFilter":"nearest","flipY":true,"generateMipmaps":false}',
+    ) &&
+      !source.includes('"resize":{"mode":"max-size"') &&
+      !source.includes('"compression":{"format":"webp"'),
+    "published Script Asset descriptor did not preserve runtime Texture defaults or leaked import-only settings",
   );
   assert(
     source.includes('userData={{ xriftEntityId: "entity_a" }}'),
@@ -431,6 +455,124 @@ function assertEmitsStaticImports(): void {
   assert(
     !emitted!.content.includes("xrift:script"),
     "the Studio-only specifier survived into the emitted module",
+  );
+}
+
+function assertAssetRuntimeDescriptors(): void {
+  const documents = buildDocuments(SPINNER_SOURCE);
+  const textureAssetId = "asset_texture_grid";
+  const descriptor = createScriptAssetRuntimeDescriptor(
+    documents.assets,
+    textureAssetId,
+    "data:image/png;base64,fixture",
+  );
+  assert(
+    descriptor?.url === "data:image/png;base64,fixture" &&
+      descriptor.textureDefaults?.colorSpace === "linear" &&
+      descriptor.textureDefaults.wrapS === "mirrored-repeat" &&
+      descriptor.textureDefaults.wrapT === "clamp-to-edge" &&
+      descriptor.textureDefaults.magFilter === "nearest" &&
+      descriptor.textureDefaults.minFilter === "nearest" &&
+      descriptor.textureDefaults.flipY === true &&
+      descriptor.textureDefaults.generateMipmaps === false &&
+      !("resize" in descriptor.textureDefaults) &&
+      !("compression" in descriptor.textureDefaults),
+    "Texture Asset import settings were not reduced to portable Script runtime defaults",
+  );
+
+  const firstKey = createScriptAssetRuntimeInputKey(documents.assets, [
+    textureAssetId,
+  ]);
+  const texture = documents.assets.assets[textureAssetId];
+  if (!texture || texture.kind !== "texture") {
+    throw new Error("Script emit fixture failed: Texture fixture is missing");
+  }
+  const runtimeChanged: AssetManifest = {
+    ...documents.assets,
+    assets: {
+      ...documents.assets.assets,
+      [textureAssetId]: {
+        ...texture,
+        importSettings: {
+          ...texture.importSettings,
+          flipY: false,
+        },
+      },
+    },
+  };
+  const importOnlyChanged: AssetManifest = {
+    ...documents.assets,
+    assets: {
+      ...documents.assets.assets,
+      [textureAssetId]: {
+        ...texture,
+        importSettings: {
+          ...texture.importSettings,
+          resize: { mode: "max-size", maxSize: 512 },
+          compression: { format: "ktx2", quality: 25 },
+        },
+      },
+    },
+  };
+  assert(
+    firstKey !==
+      createScriptAssetRuntimeInputKey(runtimeChanged, [textureAssetId]) &&
+      firstKey !==
+        createScriptAssetRuntimeInputKey(importOnlyChanged, [textureAssetId]),
+    "Script runtime input key did not schedule URL re-resolution after Texture import settings changed",
+  );
+
+  const audioDescriptor = { url: "data:audio/mpeg;base64,fixture" };
+  const previousDescriptors = new Map([
+    [textureAssetId, descriptor!],
+    ["asset_audio", audioDescriptor],
+  ]);
+  const previousVersions = new Map([
+    [textureAssetId, 4],
+    ["asset_audio", 7],
+  ]);
+  const changedTextureDescriptor = createScriptAssetRuntimeDescriptor(
+    runtimeChanged,
+    textureAssetId,
+    descriptor!.url,
+  );
+  assert(
+    Boolean(changedTextureDescriptor),
+    "Changed Texture descriptor could not be created",
+  );
+  const nextVersions = advanceScriptAssetRuntimeDescriptorVersions(
+    previousDescriptors,
+    previousVersions,
+    new Map([
+      [textureAssetId, changedTextureDescriptor!],
+      ["asset_audio", audioDescriptor],
+    ]),
+  );
+  assert(
+    nextVersions.get(textureAssetId) === 5 &&
+      nextVersions.get("asset_audio") === 7 &&
+      createScriptAssetResolutionKey(["asset_audio"], previousVersions) ===
+        createScriptAssetResolutionKey(["asset_audio"], nextVersions) &&
+      createScriptAssetResolutionKey([textureAssetId], previousVersions) !==
+        createScriptAssetResolutionKey([textureAssetId], nextVersions),
+    "a Texture descriptor change did not restart only hosts that reference that Asset",
+  );
+  const importOnlyDescriptor = createScriptAssetRuntimeDescriptor(
+    importOnlyChanged,
+    textureAssetId,
+    descriptor!.url,
+  );
+  const importOnlyVersions = advanceScriptAssetRuntimeDescriptorVersions(
+    previousDescriptors,
+    previousVersions,
+    new Map([
+      [textureAssetId, importOnlyDescriptor!],
+      ["asset_audio", audioDescriptor],
+    ]),
+  );
+  assert(
+    importOnlyVersions.get(textureAssetId) === 4,
+    "import-only Texture settings restarted a host when the resolved URL was unchanged",
   );
 }
 

@@ -372,12 +372,16 @@ function readScriptingCapabilities(
             "import_texture_asset",
             "get_texture_asset",
             "update_texture_asset",
+            "set_material",
             "create_document_asset",
+            "get_material_asset",
+            "update_material_asset",
+            "set_material_texture_transform",
             "get_particle_asset",
             "update_particle_asset",
           ],
           purpose:
-            "Persist reusable Particle Assets and Entity Component settings independently from runtime-only Script overrides.",
+            "Persist reusable Texture, Material, and Particle Assets plus Entity Component settings independently from runtime-only Script overrides.",
         },
       ],
       runtime: {
@@ -415,13 +419,23 @@ function readScriptingCapabilities(
             "Only Asset IDs declared in the Script Component assetReferences are accessible.",
           methods: [
             "ctx.assets.url(assetId): string | null",
-            "ctx.assets.loadTexture(assetId, { colorSpace?, wrapS?, wrapT?, flipY? }): Promise<ScriptTexture | null>",
+            "ctx.assets.loadTexture(assetId, { colorSpace?, wrapS?, wrapT?, magFilter?, minFilter?, flipY?, generateMipmaps? }): Promise<ScriptTexture | null>",
             "ctx.assets.loadAudio(assetId, { volume?, loop?, playbackRate?, preload? }): Promise<ScriptAudio | null>",
           ],
           textureOptions: {
-            colorSpace: ["auto", "srgb", "linear"],
-            wrapS: ["repeat", "clamp-to-edge", "mirrored-repeat"],
-            wrapT: ["repeat", "clamp-to-edge", "mirrored-repeat"],
+            colorSpace: [...TEXTURE_COLOR_SPACES],
+            wrapS: [...TEXTURE_WRAP_MODES],
+            wrapT: [...TEXTURE_WRAP_MODES],
+            magFilter: [...TEXTURE_MAG_FILTERS],
+            minFilter: [...TEXTURE_MIN_FILTERS],
+            flipY: "boolean",
+            generateMipmaps: "boolean",
+            assetDefaults:
+              "Omitted fields inherit the referenced Texture Asset importSettings (colorSpace, sampler, flipY, and generateMipmaps).",
+            precedence:
+              "Each explicit loadTexture option overrides only the corresponding Texture Asset default for this Script-owned load.",
+            mipmapNormalization:
+              "When generateMipmaps is false, a mipmap minFilter is normalized to linear.",
           },
           audioOptions: {
             volume: "0..1",
@@ -445,6 +459,8 @@ function readScriptingCapabilities(
             "ctx.materials.setMetalness(value): number",
             "ctx.materials.setRoughness(value): number",
             "ctx.materials.setTexture(slot, textureOrNull): number",
+            "ctx.materials.setTextureTransform(slot, { offset?, repeat?, center?, rotation? }): number",
+            "ctx.materials.resetTextureTransform(slot): number",
             "ctx.materials.reset(): void",
           ],
           selection: {
@@ -465,8 +481,22 @@ function readScriptingCapabilities(
             "metallicRoughness",
             "occlusion",
           ],
+          textureTransforms: {
+            fields: {
+              offset: "[number, number]",
+              repeat: "[number, number]",
+              center: "[number, number]",
+              rotation: "finite radians",
+            },
+            availability:
+              "setTextureTransform and resetTextureTransform are available on ctx.materials and handles returned by select(...).",
+            isolation:
+              "Transforms are applied to Entity-owned, Material-slot Texture clones. They never mutate the loaded source Texture, a shared Texture Asset, another Material slot, or another Entity.",
+            cleanup:
+              "resetTextureTransform(slot) removes that slot transform. Script restart, failure, and Stop remove every owned clone and override automatically.",
+          },
           persistence:
-            "Runtime-only isolated overrides. They are restored on Script restart or Stop and do not modify Material Assets.",
+            "Runtime-only isolated overrides. They are restored on Script restart or Stop and do not modify Material or Texture Assets.",
         },
         particles: {
           scope:
@@ -544,8 +574,45 @@ function readScriptingCapabilities(
           textures: ["get_texture_asset", "update_texture_asset"],
           sceneSettings: ["update_scene_settings"],
         },
+        assetOperations: {
+          textures: {
+            read: "get_texture_asset",
+            update: "update_texture_asset",
+            createInEdit: "import_texture_asset",
+            fields: [
+              "colorSpace",
+              "generateMipmaps",
+              "flipY",
+              "sampler.wrapS",
+              "sampler.wrapT",
+              "sampler.magFilter",
+              "sampler.minFilter",
+              "resize",
+              "compression",
+            ],
+          },
+          materials: {
+            assign: "set_material",
+            create: 'create_document_asset(kind: "material")',
+            read: "get_material_asset",
+            update: "update_material_asset",
+            updateTextureTransform: "set_material_texture_transform",
+            fields: [
+              "pbrMetallicRoughness",
+              "normalTexture",
+              "occlusionTexture",
+              "emissiveTexture",
+              "emissiveFactor",
+              "alphaMode",
+              "alphaCutoff",
+              "doubleSided",
+              "extensions",
+              "texture offset/scale/rotation/texCoord",
+            ],
+          },
+        },
         semantics:
-          "These editor tools persist Asset, Entity, and Scene settings document changes. Use them instead of ctx.materials or ctx.particles when the edit must remain after Stop or be saved.",
+          "These editor tools persist Asset, Entity, and Scene settings document changes. Use the Texture/Material tools instead of loadTexture options or ctx.materials when an edit must remain after Stop or be saved.",
       },
       editOnlyAuthoring: {
         modes: ["edit"],
@@ -571,6 +638,10 @@ function readScriptingCapabilities(
         "      });",
         "      if (signal.aborted || !texture) return;",
         '      ctx.materials.setTexture("baseColor", texture);',
+        '      ctx.materials.setTextureTransform("baseColor", {',
+        "        repeat: [2, 2],",
+        "        offset: [0, 0],",
+        "      });",
         "    });",
         "  },",
         "});",
