@@ -2743,7 +2743,7 @@ function EntityInspector({
       <div className="relative">
         <button
           type="button"
-          disabled={readOnly}
+          disabled={readOnly && !playMode}
           aria-expanded={addComponentOpen}
           onClick={() => setAddComponentOpen((open) => !open)}
           className="w-full rounded-md border border-violet-300 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-45"
@@ -3063,7 +3063,7 @@ export function InspectorPanel({
       {readOnly ? (
         <div className="border-b border-violet-200 bg-violet-50 px-3 py-2 text-xs leading-4 text-violet-800">
           {playMode
-            ? "Play Windowは分離された実行コピーです。EntityのTransform、Rigid Body、Collider、Animationだけ実行中に調整できます。"
+            ? "Play Windowは分離された実行コピーです。Entityの構成と許可された設定は実行中のSceneへ即時反映されます。"
             : "シーンとアセット設定は閲覧のみです。"}
         </div>
       ) : null}
