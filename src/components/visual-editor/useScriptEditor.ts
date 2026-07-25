@@ -33,8 +33,12 @@ export function useScriptEditor({
 }: {
   assets: AssetManifest;
   projectPath?: string;
-  /** Called after a successful write so Play can restart affected Entities. */
-  onSaved?: (assetId: string) => void;
+  /**
+   * Called after a successful user-initiated write. The exact source is
+   * included so the trust layer can approve the bytes the user just saved
+   * before Play hot-reloads them.
+   */
+  onSaved?: (assetId: string, source: string) => void | Promise<void>;
   /** Optional app-level serialization boundary shared with MCP writes. */
   writeSource?: (
     projectPath: string,
@@ -210,7 +214,7 @@ export function useScriptEditor({
       }
       setState((previous) => ({ ...previous, source, error: null }));
       setContract(assetId, extractScriptContract(source));
-      onSaved?.(assetId);
+      await onSaved?.(assetId, source);
     },
     [
       assets,

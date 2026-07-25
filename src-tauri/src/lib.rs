@@ -13,6 +13,7 @@ use tauri_plugin_opener::OpenerExt;
 
 mod external_store;
 pub mod mcp;
+mod script_trust;
 
 const NODE_VERSION: &str = "v24.15.0";
 const VISUAL_PROJECT_MANIFEST: &str = "xrift-studio.project.json";
@@ -27,6 +28,7 @@ const COMPILER_STAGING_DIRECTORY: &str = "xrift-studio-staging";
 const COMPILER_STAGING_OWNER_PATH: &str = ".xrift-studio/staging-owner.json";
 const COMPILER_STAGING_OWNER_SCHEMA_VERSION: &str = "1";
 const XRIFT_PUBLICATION_METADATA_MAX_BYTES: u64 = 16 * 1024;
+const SCRIPT_SOURCE_MAX_BYTES: u64 = 8 * 1024 * 1024;
 static VISUAL_PROJECT_IO_LOCK: Mutex<()> = Mutex::new(());
 static COMPILER_STAGING_IO_LOCK: Mutex<()> = Mutex::new(());
 static VISUAL_ASSET_IMPORT_IO_LOCK: Mutex<()> = Mutex::new(());
@@ -3736,6 +3738,182 @@ fn read_text_file(project_path: String, rel: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
+#[cfg(unix)]
+fn open_unix_path_segment(
+    directory: &std::fs::File,
+    segment: &std::ffi::OsStr,
+    expect_directory: bool,
+) -> Result<std::fs::File, String> {
+    use std::ffi::CString;
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::ffi::OsStrExt;
+
+    let segment = CString::new(segment.as_bytes())
+        .map_err(|_| "Script source path contains an invalid byte".to_string())?;
+    let flags = libc::O_RDONLY
+        | libc::O_CLOEXEC
+        | libc::O_NOFOLLOW
+        | if expect_directory {
+            libc::O_DIRECTORY
+        } else {
+            0
+        };
+    // SAFETY: `directory` owns a valid descriptor, `segment` is
+    // NUL-terminated, and the returned descriptor is immediately wrapped in
+    // an owned `File`.
+    let descriptor = unsafe { libc::openat(directory.as_raw_fd(), segment.as_ptr(), flags) };
+    if descriptor < 0 {
+        return Err(format!(
+            "Script source cannot be opened without symbolic links: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    // SAFETY: `openat` returned a new owned descriptor on success.
+    Ok(unsafe { std::fs::File::from_raw_fd(descriptor) })
+}
+
+#[cfg(unix)]
+fn open_script_source_file(
+    canonical_project: &Path,
+    relative: &Path,
+) -> Result<std::fs::File, String> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let mut root_options = std::fs::OpenOptions::new();
+    root_options
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_DIRECTORY | libc::O_NOFOLLOW);
+    let mut directory = root_options.open(Path::new("/")).map_err(|error| {
+        format!(
+            "Filesystem root cannot be opened for Script source: {}",
+            error
+        )
+    })?;
+
+    // Anchor the canonical project directory from `/`, refusing a symlink at
+    // every absolute-path segment. This closes the canonicalize/open race for
+    // ancestors of the project root as well as for the relative Script path.
+    for component in canonical_project.components() {
+        match component {
+            Component::RootDir => {}
+            Component::Normal(segment) => {
+                directory = open_unix_path_segment(&directory, segment, true)?;
+            }
+            _ => return Err("Canonical project path is invalid".to_string()),
+        }
+    }
+
+    let mut components = relative.components().peekable();
+    while let Some(component) = components.next() {
+        let Component::Normal(segment) = component else {
+            return Err("Script source path is invalid".to_string());
+        };
+        let is_file = components.peek().is_none();
+        let opened = open_unix_path_segment(&directory, segment, !is_file)?;
+        if is_file {
+            return Ok(opened);
+        }
+        let metadata = opened.metadata().map_err(|error| {
+            format!("Script source directory metadata cannot be read: {}", error)
+        })?;
+        if !metadata.is_dir() {
+            return Err("Script source path contains a non-directory segment".to_string());
+        }
+        directory = opened;
+    }
+
+    Err("Script source path is empty".to_string())
+}
+
+#[cfg(windows)]
+fn open_script_source_file(
+    canonical_project: &Path,
+    relative: &Path,
+) -> Result<std::fs::File, String> {
+    use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+
+    ensure_no_symlink_ancestors(canonical_project, relative)?;
+    let path = canonical_project.join(relative);
+    let mut options = std::fs::OpenOptions::new();
+    options
+        .read(true)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    let file = options.open(&path).map_err(|error| {
+        format!(
+            "Script source cannot be opened without reparse points: {}",
+            error
+        )
+    })?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| format!("Script source metadata cannot be read: {}", error))?;
+    if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+        return Err("Script source reparse points are not allowed".to_string());
+    }
+    let canonical_source = path
+        .canonicalize()
+        .map_err(|error| format!("Script source cannot be resolved: {}", error))?;
+    if !canonical_source.starts_with(canonical_project) {
+        return Err("Script source escapes the project root".to_string());
+    }
+    let opened_handle = same_file::Handle::from_file(
+        file.try_clone()
+            .map_err(|error| format!("Script source handle cannot be cloned: {}", error))?,
+    )
+    .map_err(|error| format!("Script source handle cannot be inspected: {}", error))?;
+    let path_handle = same_file::Handle::from_path(&canonical_source)
+        .map_err(|error| format!("Script source path cannot be inspected: {}", error))?;
+    if opened_handle != path_handle {
+        return Err("Script source changed while it was being opened".to_string());
+    }
+    Ok(file)
+}
+
+fn read_script_source_path(project_path: &str, rel: &str) -> Result<String, String> {
+    let relative = validate_relative_path(rel, false)?;
+    let supported_extension = relative
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            extension.eq_ignore_ascii_case("ts") || extension.eq_ignore_ascii_case("tsx")
+        });
+    if !supported_extension {
+        return Err("Script source must use a .ts or .tsx extension".to_string());
+    }
+
+    let canonical_project = canonical_project_root(project_path)?;
+    let mut file = open_script_source_file(&canonical_project, &relative)?;
+    let opened_metadata = file
+        .metadata()
+        .map_err(|error| format!("Script source metadata cannot be read: {}", error))?;
+    if !opened_metadata.is_file() {
+        return Err(
+            "Script source must be a regular file and symbolic links are not allowed".to_string(),
+        );
+    }
+    if opened_metadata.len() > SCRIPT_SOURCE_MAX_BYTES {
+        return Err("Script source exceeds the 8 MiB limit".to_string());
+    }
+
+    let mut bytes = Vec::with_capacity(opened_metadata.len() as usize);
+    std::io::Read::by_ref(&mut file)
+        .take(SCRIPT_SOURCE_MAX_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("Script source cannot be read: {}", error))?;
+    if bytes.len() as u64 > SCRIPT_SOURCE_MAX_BYTES {
+        return Err("Script source exceeds the 8 MiB limit".to_string());
+    }
+    String::from_utf8(bytes).map_err(|_| "Script source must be valid UTF-8".to_string())
+}
+
+#[tauri::command]
+fn read_script_source(project_path: String, rel: String) -> Result<String, String> {
+    read_script_source_path(&project_path, &rel)
+}
+
 fn validate_classic_repository_url(repository_url: &str) -> Result<String, String> {
     let repository_url = repository_url.trim();
     if repository_url.is_empty()
@@ -4231,6 +4409,12 @@ fn reset_app_data(app: AppHandle, scope: String) -> Result<(), String> {
         }
         other => return Err(format!("unknown reset scope: {}", other)),
     }
+    drop(try_remove);
+    if scope == "all" {
+        if let Err(error) = script_trust::reset_script_trust_store_for_app_reset(&root) {
+            failures.push(error);
+        }
+    }
 
     if failures.is_empty() {
         Ok(())
@@ -4342,6 +4526,7 @@ pub fn run() {
             write_world_file,
             clone_classic_project_repository,
             read_text_file,
+            read_script_source,
             write_text_file,
             read_thumbnail,
             write_thumbnail,
@@ -4353,6 +4538,12 @@ pub fn run() {
             get_versions,
             kill_pid_tree,
             reset_app_data,
+            script_trust::get_script_trust_status,
+            script_trust::list_script_trust_approvals,
+            script_trust::check_script_trust_approval,
+            script_trust::approve_script_trust_fingerprint_for_ui,
+            script_trust::revoke_script_trust_fingerprints,
+            script_trust::reset_script_trust_approvals,
             check_xrift_latest,
             update_xrift,
             mcp::complete_xrift_mcp_request,
@@ -4417,6 +4608,82 @@ mod tests {
             projects.exists(),
             "canonical project data must be preserved"
         );
+        std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
+    }
+
+    #[test]
+    fn script_source_reader_accepts_only_bounded_regular_typescript_files() {
+        let fixture_root = reset_fixture_root("script-source");
+        let scripts = fixture_root.join("assets").join("scripts");
+        std::fs::create_dir_all(&scripts).expect("Script fixture directory must be created");
+        std::fs::write(
+            scripts.join("motion.ts"),
+            b"export default { start() {} };\n",
+        )
+        .expect("TypeScript fixture must be written");
+        std::fs::write(
+            scripts.join("render.tsx"),
+            b"export function Render() { return null; }\n",
+        )
+        .expect("TSX fixture must be written");
+        std::fs::write(scripts.join("notes.txt"), b"not a Script")
+            .expect("unsupported fixture must be written");
+        std::fs::create_dir(scripts.join("directory.ts"))
+            .expect("directory fixture must be created");
+        let oversized = std::fs::File::create(scripts.join("oversized.ts"))
+            .expect("oversized fixture must be created");
+        oversized
+            .set_len(SCRIPT_SOURCE_MAX_BYTES + 1)
+            .expect("oversized fixture length must be set");
+
+        let project_path = fixture_root.to_string_lossy().to_string();
+        assert!(
+            read_script_source_path(&project_path, "assets/scripts/motion.ts")
+                .expect("regular TypeScript must be readable")
+                .contains("start")
+        );
+        assert!(
+            read_script_source_path(&project_path, "assets/scripts/render.tsx")
+                .expect("regular TSX must be readable")
+                .contains("Render")
+        );
+        assert!(
+            read_script_source_path(&project_path, "assets/scripts/notes.txt")
+                .expect_err("non-Script extension must be rejected")
+                .contains(".ts or .tsx")
+        );
+        assert!(
+            read_script_source_path(&project_path, "assets/scripts/directory.ts")
+                .expect_err("directory must be rejected")
+                .contains("regular file")
+        );
+        assert!(
+            read_script_source_path(&project_path, "assets/scripts/oversized.ts")
+                .expect_err("oversized Script must be rejected")
+                .contains("8 MiB")
+        );
+
+        #[cfg(unix)]
+        {
+            let linked = scripts.join("linked.ts");
+            std::os::unix::fs::symlink(scripts.join("motion.ts"), &linked)
+                .expect("symlink fixture must be created");
+            assert!(
+                read_script_source_path(&project_path, "assets/scripts/linked.ts")
+                    .expect_err("Script symlink must be rejected")
+                    .contains("symbolic links")
+            );
+
+            let linked_directory = fixture_root.join("linked-scripts");
+            std::os::unix::fs::symlink(&scripts, &linked_directory)
+                .expect("directory symlink fixture must be created");
+            assert!(
+                read_script_source_path(&project_path, "linked-scripts/motion.ts")
+                    .expect_err("Script ancestor symlink must be rejected")
+                    .contains("symbolic links")
+            );
+        }
+
         std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
     }
 

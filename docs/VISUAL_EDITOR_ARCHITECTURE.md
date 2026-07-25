@@ -626,7 +626,9 @@ Particle と同じ関係を採る。再利用可能な定義は Asset 側に置�
 Play は iframe や Worker を挟まないアプリと同一 realm で動き、`withGlobalTauri` により IPC bridge が `window` に露出している。したがって Script は原理的にアプリと同じ権限を持つ。
 
 - module scope で `window`、`globalThis`、`__TAURI__`、`fetch`、`document`、`Function` などを遮蔽する。ES module は常に strict mode であり `eval` を lexical binding として宣言すると構文エラーになるため、`eval` は遮蔽一覧へ入れない。同一 realm である以上これは完全な sandbox ではなく、事故と素朴な悪用を止める緩和である。この限界を `docs/SCRIPTING.md` に明記し、隔離済みと表示しない。
-- 取り込み、Prefab、Starter、外部 Store 由来の Script は、初回 Play の前に対象 file を示して実行許可を求める。許可は project 単位で記録する。
+- Script sourceは一度だけ読み、SHA-256、言語、contract version、module policy version、remote module禁止をfingerprintにする。canonical project pathとproject IDを合わせた承認をproject外のapp dataへ保存し、正確に一致したread-once snapshotだけを評価する。確認面はfile、来歴、完全なhash、source、同一realm警告を示す。来歴は表示専用で自己承認には使わない。
+- XRift Studio stdio MCP editor tools / serverは承認toolと承認権限を持たない。未承認時の`set_play_mode`は`SCRIPT_APPROVAL_REQUIRED`を返し、明示した`unapprovedPolicy: "skip"`だけがScriptを無効化したPlayを許す。Play中に同serverまたはfilesystemからsourceが変わった場合はlast-good moduleを維持する。
+- debug buildだけに登録するprivileged Tauri MCP bridgeは、webview JavaScript実行とTauri commandの`invoke`を許す開発者向けautomationであり、stdio MCP editor tools / serverのtrust boundaryには含めない。release buildには同bridgeを登録・搭載せず、Script承認の公開APIとして扱わない。
 - 完全な隔離、および 10 章が求める CSP の適用は今後の課題とする。Monaco は local 同梱済みだが、Play の blob module と共有 module bridge を許可しながら権限を狭める CSP 設計が残っている。
 
 #### 公開

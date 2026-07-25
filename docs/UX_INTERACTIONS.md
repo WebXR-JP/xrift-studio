@@ -89,7 +89,7 @@ F-06 アイテム検査
 | MI-70 | Playを開始し、Sceneが使うScriptを変換して起動する | 変換中はPlayボタンを「準備中」に変えて無効化し、Edit表示のまま待たせる。Scriptを持たないSceneでは待ち表示を出さない。変換の失敗はfile名、行、列、原因を一覧で示し、該当行へ移動できる。 | 全Scriptが変換できた時だけPlayへ入る。失敗時はEditのまま留まり、壊れたSceneを再生しない。修正して同じPlay操作から再試行でき、Playを諦めてeditorへ戻ることもできる。 |
 | MI-71 | Play中にScriptが実行時例外を投げる | 例外を投げたScriptだけを停止し、Entity名、Script名、行、例外文をScript Consoleへ残す。Scene View全体とほかのEntity、camera、physicsは動き続ける。Inspectorの該当Script Componentにも停止状態を示す。 | 1つのScriptの失敗でPlay全体を落とさない。同じ例外の連続出力は件数へまとめる。該当行への移動、Scriptの再開、Stopのいずれかへ到達できる。 |
 | MI-72 | Play中にScript source、Scene構造、Scene settings、Material / Particle設定を保存して反映する | 保存したScriptを使うEntity、構成を変更したEntity、または変更Assetを参照するEntityだけのruntime世代を進めて作り直す。Entityの追加・削除・親変更・Component追加・更新・削除、既存Material / Particle Asset property、MCP経由のScene settingsは実行中のSceneへ即時同期し、ほかのEntity、player位置、camera、physicsの状態は保持する。反映対象を短く示す。 | Texture / Model Asset設定、InspectorのMaterial割り当てと新規document Asset作成は無効のままにする。Script変換に失敗した場合は直前に動いていたScriptを走らせ続け、失敗をConsoleへ残す。 |
-| MI-73 | 自分で作成していないScriptを含むprojectを初めてPlayする | 取り込み、Prefab、Starter、外部Store由来のScriptを実行前に一覧で示し、件数とfile名を確認できるようにする。実行せずに中身を読む導線を同じ面へ置く。 | 明示的に許可した時だけ実行し、許可はproject単位で記録して次回以降は確認しない。許可しない場合はScriptを実行しないままPlayへ入り、無効であることをScript Consoleに残す。実行環境はアプリと同一で完全な分離ではないことを面の中で明示する。 |
+| MI-73 | 未承認の内容hashを持つScriptを含むprojectをPlayする | 実行前に対象file、来歴、言語、完全なSHA-256、読み取り専用sourceを一覧で示す。来歴は表示専用で承認判定に使わず、同一realmで完全な分離ではないことを警告する。初期focusはキャンセルに置く。 | 「許可してPlay」ではcanonical project path、project ID、source hash、言語、contract / module policyに一致する内容だけをproject外app dataへ承認する。「Scriptを無効にしてPlay」は未承認ScriptをConsoleへ残して起動し、キャンセルはEditを維持する。確認中に内容が変われば最新sourceを再確認する。XRift Studio stdio MCP editor tools / serverは承認できない。 |
 
 ## 機能一覧
 
@@ -789,7 +789,7 @@ F-06 アイテム検査
 - Playの開始時にSceneが使うScriptをまとめて変換する。変換中はPlayボタンを「準備中」にして無効化し、Edit表示のまま待たせる。
 - Play中もEntityの追加・削除・複製・親変更・Component追加をauthoring dataへ保存して実行中のSceneへ差分同期する。回転速度、色などの宣言済みproperty値はScriptを再起動せず、同じinstanceの`ctx.props`へ次のframeから反映する。sourceの保存、Script Asset参照、Asset / Entity参照allowlist、Component構成の変更は、変換に成功した対象Entityだけを再起動する。既存Material / Particle AssetのpropertyはInspectorとMCPから保存し、参照Entityだけへ再反映する。MCPのScene settings変更は共有Scene viewへ即時反映し、`update_texture_asset`はTextureを直接またはMaterial / Particle経由で参照するEntityだけを再起動する。Texture sourceの新規import、InspectorからのTexture設定、InspectorでのMaterial割り当ては停止まで無効にする。
 - Texture / Audio読み込みはScript Componentで明示したAssetだけを対象にし、Script instance単位でcacheする。named `Render` exportには`start`と同じliveな`ctx`を渡し、TSXからModelなどのReact subtreeをEntity配下へ描画できる。Material操作はEntity自身のMeshにruntime cloneを割り当て、子Entityや共有Material Assetを暗黙に変更しない。Material slot selectorとParticle overrideはScript owner単位で合成し、非同期に追加されたMesh / Emitterにも同じ対象規則を適用する。
-- 取り込み由来のScriptを含むprojectの初回Playでは、実行前に対象file一覧と、実行環境がアプリと同一で完全な分離ではないことを示して許可を求める。
+- 未承認fingerprintを含むprojectのPlayでは、実行前に対象file、来歴、言語、完全なhash、読み取り専用sourceと、実行環境がアプリと同一で完全な分離ではないことを示して許可を求める。承認はproject外のapp dataへ保存し、project documentが自己承認できないようにする。
 - editorでの連続入力はhistoryへ積み増さず現在の項目を置き換える。保存はScript source fileだけを書く。
 
 ### 成功時
@@ -806,7 +806,8 @@ F-06 アイテム検査
 - Play中の保存で変換に失敗した場合は、直前に動いていたScriptを走らせ続け、失敗をConsoleへ残す。
 - 未宣言または存在しないAsset IDでは`ctx.assets.url`が`null`になり、`loadTexture`も`null`を返す。URLを解決できても通常画像としてdecodeできないTextureでは`loadTexture`だけが`null`になる。Scriptは処理を続けるか`ctx.log`で理由を残し、Scene全体を停止しない。
 - `ctx.assets.loadTexture`でKTX2、HDR、EXR、Material Assetを直接読み込めるようには見せない。Material / Particle previewのproject KTX2はlocal Basis transcoder、OpenBrush builtin Textureは同梱URLを使う別経路であり、Script用typed loaderは今後必要であることを示す。
-- MCPはScript Assetの作成・読取・更新、Script Component追加、Play切替、propertyと明示参照の更新に加え、Play中のEntity作成・複製・親変更・Component追加・更新・削除・有効化を同じrevision検査と差分同期経路で実行する。`get_editor_context.scriptRuntime`はcompile error、runtime failure、JSON-safeな直近logを返す。永続Material編集は`set_material`、`get_material_asset`、`update_material_asset`、`set_material_texture_transform`、Texture編集は`import_texture_asset`、`get_texture_asset`、`update_texture_asset`、Particle編集は`create_document_asset`、`get_particle_asset`、`update_particle_asset`へ分離し、Asset変更時は参照Entityだけを再起動する。
+- XRift Studio stdio MCP editor tools / serverはScript Assetの作成・読取・更新、Script Component追加、Play切替、propertyと明示参照の更新に加え、Play中のEntity作成・複製・親変更・Component追加・更新・削除・有効化を同じrevision検査と差分同期経路で実行する。このserverはScriptを承認できず、未承認時は`SCRIPT_APPROVAL_REQUIRED`を受ける。`unapprovedPolicy: "skip"`を明示した場合だけ未承認Scriptを無効にしてPlayする。`get_editor_context.scriptRuntime`はtrustのpending / disabled / running fingerprint、compile error、runtime failure、JSON-safeな直近logを返す。永続Material編集は`set_material`、`get_material_asset`、`update_material_asset`、`set_material_texture_transform`、Texture編集は`import_texture_asset`、`get_texture_asset`、`update_texture_asset`、Particle編集は`create_document_asset`、`get_particle_asset`、`update_particle_asset`へ分離し、Asset変更時は参照Entityだけを再起動する。
+- `pnpm tauri:dev`のdebug buildだけに登録するprivileged Tauri MCP bridgeは、webview JavaScript実行とTauri commandの`invoke`を許す開発者向けautomationであり、上記stdio editor toolのtrust boundary外とする。release buildには同bridgeを登録・搭載せず、公開された承認経路として扱わない。
 - `https://`から始まるmoduleを読むScriptと、runtime JSON出力を選んだ場合はupload前にblockingとして示し、対象Scriptと理由を挙げる。
 - 許可しなかった取り込み由来のScriptは実行せずPlayへ入り、無効であることをConsoleへ残す。
 

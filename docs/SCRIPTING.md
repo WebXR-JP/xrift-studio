@@ -277,7 +277,7 @@ Script を再起動する。
 | --- | --- | --- | --- |
 | `ctx.materials`、`ctx.particles`、読み込んだ Texture の transform | runtime-only。document revision は変えない | setter を呼んだ時点から対象 Entity に反映 | その Script の override を外し、元の Asset 値へ戻る |
 | Script Component の宣言済み property | Scene document | 同じ Script instance の `ctx.props` へ次の frame から反映 | 保存値として残る |
-| Script source、Script / Asset / Entity 参照、Component 構成 | source / Scene document | compile 成功後、影響する Entity だけを再起動。失敗時は last-good module を継続 | 保存値として残る |
+| Script source、Script / Asset / Entity 参照、Component 構成 | source / Scene document | 承認済みの正確な内容だけをcompileし、成功後に影響する Entity だけを再起動。未承認または失敗時は last-good module を継続 | 保存値として残る |
 | 既存 Material / Particle Asset の property | AssetManifest | Inspector または MCP から保存し、その Asset を参照する Entity / Emitter だけを再反映 | 保存値として残る |
 | 既存 Texture Asset の import settings | AssetManifest | MCP から保存し、直接参照または Material / Particle 経由で参照する Entity だけを再起動 | 保存値として残る |
 | Entity / Component の追加・更新・削除・有効化 | Scene document | Inspector または MCP から保存し、影響する Entity だけを再起動 | 保存値として残る |
@@ -347,9 +347,18 @@ Mipmaps を無効にした時の mipmap filter は既存モデルと同じく `l
 Scene settingsは共有Scene viewへ即時反映し、Component / Entity 変更はその Entity、
 Material / Texture / Particle Asset 変更は参照 Entity だけを再起動する。
 
-MCP から生成・更新した Script も別の安全領域では動かない。`get_scripting_capabilities` の
-`sandboxed: false`、`trustGate: false` を前提に、信頼していない source はユーザーへ file 内容を示して明示許可を得るまで
-Play しない。
+MCP から生成・更新した Script も別の安全領域では動かない。`get_scripting_capabilities` は
+`sandboxed: false`、`trustGate: true` を返す。ここで承認権限を持たない「MCP」とは、
+XRift Studio が配布する stdio MCP editor tools / server を指す。未承認の source があれば、
+その server の `set_play_mode` は `SCRIPT_APPROVAL_REQUIRED` と対象 Asset、path、言語、SHA-256 を返す。
+ユーザーが Studio の確認面で許可するまで評価しない。Script なしでも Scene を確認したい場合だけ、
+MCP は `unapprovedPolicy: "skip"` を明示して未承認 Script を無効化したまま Play できる。
+現在の状態は `get_editor_context.scriptRuntime.trust` の `pending`、`disabled`、`running` で確認する。
+
+`pnpm tauri:dev` の debug build だけに登録する privileged Tauri MCP bridge は、webview JavaScript の実行や
+Tauri command の `invoke` を行える開発者向け automation であり、この stdio editor tool の trust boundary には含めない。
+release build には同 bridge を登録・搭載しない。したがって debug bridge からの操作を、
+公開された承認 API や trust gate に保護された MCP 操作として扱ってはならない。
 
 ## 組み込み Template
 
@@ -456,18 +465,30 @@ Inspector のフィールドは宣言から自動生成する。種別は既存�
 Play は iframe や Worker を挟まないアプリと同一 realm で動き、`withGlobalTauri` により IPC bridge が `window` に露出している。
 したがって Script は原理的にアプリと同じ権限、すなわちファイルシステムとシェルへの到達手段を持ちうる。
 
-緩和は二段構えを完成条件とする。
+緩和は二段構えで実装する。
 
 1. module scope で `window`、`globalThis`、`self`、`document`、`fetch`、`XMLHttpRequest`、`Function`、
    `importScripts`、`__TAURI__`、`__TAURI_INTERNALS__` を遮蔽する。ES module は strict mode のため
    `eval` を lexical binding として遮蔽できず、隔離境界にはならない。同一 realm である以上、ほかの遮蔽も回避可能であり、
    事故と素朴な悪用を止める緩和にすぎない。
-2. 取り込み、Prefab、Starter、外部 Store 由来の Script は、初回 Play の前に対象 file を示して実行許可を求める。
-   許可は project 単位で記録する。許可しなければ実行せずに Play へ入る。
+2. 評価前に source を一度だけ読み、その UTF-8 SHA-256、`language`、`contractVersion`、
+   module policy version、`allowRemoteModules: false` を実行fingerprintにする。native側でcanonical化したproject pathと
+   project IDを合わせ、app data内のproject外承認storeで正確に一致した時だけ、その同じread-once source snapshotを変換・評価する。
+   承認面はfile、来歴、完全なhash、読み取り専用source、同一realmの警告を示し、
+   「許可してPlay」「Scriptを無効にしてPlay」「キャンセル」を選べる。来歴は表示専用で、project自身が
+   `studio-template`などを名乗っても承認を迂回できない。
 
-現時点で実装済みなのは 1 の accidental-access mitigation だけであり、2 の来歴・信頼ゲート（MI-73）は未実装である。
-したがって外部から受け取った project / Prefab の Script を、内容を確認せず Play してはならない。
-来歴ゲートが入るまで「安全な sandbox」「外部 Script を安全に実行できる」と UI や MCP capability で表現しない。
+Studio Editorでユーザーが直接保存した正確な新しい内容と、StudioのTemplate作成はUI操作の延長としてそのhashを承認し、
+Play中も対象Entityだけを即時hot reloadする。MCPまたは外部file変更は自動承認せず、Play中はlast-good moduleを維持する。
+承認確認中にsource、言語、契約、対象一覧が変わった場合はstaleとして最新内容を再表示する。
+承認storeの破損・読取失敗はfail closedであり、project documentやprovenanceから復旧・自己承認しない。
+
+この段落のMCP制限もXRift Studio stdio MCP editor tools / serverに対する契約である。
+debug build限定のprivileged Tauri MCP bridgeはwebview JavaScript / Tauri invokeを行える境界外の開発機能で、
+release buildには登録されない。
+
+これは実行への**同意ゲート**であってsandboxではない。承認済みScriptの無限loop、同一realmからの権限到達、
+悪意ある処理を隔離または停止する保証はないため、「安全な sandbox」「外部 Script を安全に実行できる」とは表現しない。
 
 自分で書いた Script を自分の環境で動かす限りは、これは通常のローカル開発と同じ危険度である。
 危険なのは他人の project や Prefab を開いた場合であり、来歴ゲートはそこを守るために置く。
@@ -496,7 +517,7 @@ Play は iframe や Worker を挟まないアプリと同一 realm で動き、`
 - `play-and-edit`、pointer / mouse / gamepad は未対応
 - `ctx.lifecycle` を使わない `Promise.then`、global timer、Render の pointer / physics callback など、host の所有外で
   開始した非同期 callback の例外帰属と自動停止は未対応
-- 公開先プラットフォームが upload された bundle を審査または sandbox するかは未確認。Studio 側の検査は存在しない
+- 公開先プラットフォームが upload された bundle を審査または sandbox するかは未確認。Studioの内容hash承認はlocal Playの同意であり、公開runtimeの隔離や審査を代替しない
 
 ## 公開
 

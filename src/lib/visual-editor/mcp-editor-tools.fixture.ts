@@ -137,6 +137,15 @@ export function runXriftMcpEditorToolFixtures(): void {
     tool: "get_scripting_capabilities",
     arguments: {},
   });
+  const trustBoundary = scriptingCapabilities.result.trustBoundary as {
+    clientRule?: unknown;
+    mcpAuthority?: unknown;
+    approvalRequiredError?: {
+      code?: unknown;
+      description?: unknown;
+    };
+    debugAutomationBridge?: unknown;
+  };
   assert(
     ["skybox", "fog", "ambient", "camera", "editor"].every(
       (section) =>
@@ -224,13 +233,20 @@ export function runXriftMcpEditorToolFixtures(): void {
   );
   assert(
     scriptingCapabilities.result.sandboxed === false &&
-      scriptingCapabilities.result.trustGate === false &&
-      typeof (
-        scriptingCapabilities.result.trustBoundary as {
-          clientRule?: unknown;
-        }
-      )?.clientRule === "string",
-    "Scripting capabilities must not claim a sandbox or trust gate",
+      scriptingCapabilities.result.trustGate === true &&
+      typeof trustBoundary?.clientRule === "string" &&
+      typeof trustBoundary?.mcpAuthority === "string" &&
+      trustBoundary.mcpAuthority.includes("stdio MCP editor tools/server") &&
+      trustBoundary.approvalRequiredError?.code ===
+        "SCRIPT_APPROVAL_REQUIRED" &&
+      typeof trustBoundary.approvalRequiredError.description === "string" &&
+      trustBoundary.approvalRequiredError.description.includes(
+        "skip never grants approval",
+      ) &&
+      typeof trustBoundary.debugAutomationBridge === "string" &&
+      trustBoundary.debugAutomationBridge.includes("webview JavaScript") &&
+      trustBoundary.debugAutomationBridge.includes("release builds"),
+    "Scripting capabilities must expose the non-sandboxed MCP trust gate",
   );
   assert(
     sceneSettingsResult.changed &&

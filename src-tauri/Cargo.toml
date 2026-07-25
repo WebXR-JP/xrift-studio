@@ -44,6 +44,12 @@ tauri-plugin-process = "2"
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = "2"
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+same-file = "1"
+
 [profile.release]
 opt-level = "s"
 panic = "abort"

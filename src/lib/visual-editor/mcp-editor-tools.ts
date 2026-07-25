@@ -310,16 +310,27 @@ function readScriptingCapabilities(
     {
       contractVersion: "1.0.0",
       sandboxed: false,
-      trustGate: false,
+      trustGate: true,
       trustBoundary: {
         executionRealm:
           "Studio Play runs Script modules in the application realm, not an iframe or Worker.",
         hostAccess:
-          "Module-scope shadowing reduces accidental access but is not a security boundary; application globals and the Tauri bridge may be reachable.",
+          "Module-scope shadowing reduces accidental access but is not a security boundary; application globals and the application's Tauri IPC bridge may be reachable.",
+        approval:
+          "Before evaluation, Studio checks the exact source SHA-256, language, contract version, module policy version, project ID, and canonical project path against an approval store outside the project.",
         provenance:
-          "No first-Play trust prompt or persisted approval currently distinguishes user-authored, imported, Starter, Prefab, external Store, or MCP-authored Script source.",
+          "Source provenance is shown to the user but never grants trust. A project manifest cannot approve itself.",
+        mcpAuthority:
+          "The XRift Studio stdio MCP editor tools/server expose no Script approval tool or authority.",
+        approvalRequiredError: {
+          code: "SCRIPT_APPROVAL_REQUIRED",
+          description:
+            "set_play_mode returns this error for unapproved Script source. The user can review and approve the exact fingerprint in Studio, or the stdio client can request unapprovedPolicy:'skip' to enter Play with those Scripts disabled; skip never grants approval.",
+        },
+        debugAutomationBridge:
+          "Debug builds may register a privileged Tauri MCP bridge for webview JavaScript and Tauri invoke automation. That developer bridge is outside this stdio editor-tool trust boundary and is not registered or shipped in release builds.",
         clientRule:
-          "Do not run Script source from an untrusted project, Prefab, Starter, Store, or MCP response without showing the source files to the user and obtaining explicit approval.",
+          "After SCRIPT_APPROVAL_REQUIRED from the XRift Studio stdio MCP server, ask the user to review in Studio. Use unapprovedPolicy:'skip' only when Play without those Scripts is acceptable.",
       },
       workflow: [
         {
@@ -375,7 +386,7 @@ function readScriptingCapabilities(
         frameUpdates:
           "Return update(delta) from start(ctx). R3F useFrame is rejected in Play and publish because its callback cannot be isolated per Script.",
         diagnostics:
-          "Call get_editor_context and inspect scriptRuntime for compile errors, lifecycle/event/Render failures, and bounded JSON-safe ctx.log output.",
+          "Call get_editor_context and inspect scriptRuntime plus scriptRuntime.trust for approval-required, disabled, and running fingerprints; compile errors; lifecycle/event/Render failures; and bounded JSON-safe ctx.log output.",
         render: {
           export: "Named export Render",
           props:

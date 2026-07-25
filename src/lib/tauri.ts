@@ -258,6 +258,46 @@ export type XriftMcpEditorResponse = {
   error?: XriftMcpEditorErrorResponse;
 };
 
+export type ScriptTrustProjectInput = {
+  projectPath: string;
+  projectId: string;
+};
+
+export type NativeScriptTrustFingerprint = {
+  sourceSha256: string;
+  language: "ts" | "tsx";
+  contractVersion: string;
+  modulePolicyVersion: string;
+  allowRemoteModules: false;
+};
+
+export type ScriptTrustProjectScope = {
+  canonicalProjectPath: string;
+  projectId: string;
+};
+
+export type ScriptTrustApprovalCheck = {
+  fingerprint: NativeScriptTrustFingerprint;
+  approved: boolean;
+  approvedAtUnixMs: number | null;
+};
+
+export type ScriptTrustStatusResult = {
+  project: ScriptTrustProjectScope;
+  checks: ScriptTrustApprovalCheck[];
+  approvedCount: number;
+  pendingCount: number;
+  storedApprovalCount: number;
+  allApproved: boolean;
+  storeSchemaVersion: number;
+};
+
+export type ScriptTrustMutationResult = {
+  project: ScriptTrustProjectScope;
+  checks: ScriptTrustApprovalCheck[];
+  changedCount: number;
+};
+
 export const tauri = {
   isAvailable: () => isTauri(),
   selectDirectory: (title: string, defaultPath?: string) =>
@@ -389,8 +429,35 @@ export const tauri = {
     invoke<string>("clone_classic_project_repository", { repositoryUrl }),
   readTextFile: (projectPath: string, rel: string) =>
     invoke<string>("read_text_file", { projectPath, rel }),
+  /** Reads a regular UTF-8 .ts/.tsx file with the native 8 MiB limit. */
+  readScriptSource: (projectPath: string, rel: string) =>
+    invoke<string>("read_script_source", { projectPath, rel }),
   writeTextFile: (projectPath: string, rel: string, content: string) =>
     invoke<void>("write_text_file", { projectPath, rel, content }),
+  getScriptTrustStatus: (
+    project: ScriptTrustProjectInput,
+    fingerprints: readonly NativeScriptTrustFingerprint[],
+  ) =>
+    invoke<ScriptTrustStatusResult>("get_script_trust_status", {
+      project,
+      fingerprints,
+    }),
+  approveScriptTrustFingerprintsForUi: (
+    project: ScriptTrustProjectInput,
+    fingerprints: readonly NativeScriptTrustFingerprint[],
+  ) =>
+    invoke<ScriptTrustMutationResult>(
+      "approve_script_trust_fingerprint_for_ui",
+      { project, fingerprints },
+    ),
+  revokeScriptTrustFingerprints: (
+    project: ScriptTrustProjectInput,
+    fingerprints: readonly NativeScriptTrustFingerprint[],
+  ) =>
+    invoke<ScriptTrustMutationResult>("revoke_script_trust_fingerprints", {
+      project,
+      fingerprints,
+    }),
   readThumbnail: (projectPath: string) =>
     invoke<string | null>("read_thumbnail", { projectPath }),
   writeThumbnail: (projectPath: string, dataUrl: string) =>

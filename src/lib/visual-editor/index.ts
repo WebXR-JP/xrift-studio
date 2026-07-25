@@ -66,6 +66,7 @@ export * from "./scripting/script-files";
 export * from "./scripting/script-templates";
 export * from "./scripting/script-schedule";
 export * from "./scripting/runtime-report";
+export * from "./scripting/script-trust";
 export * from "./scripting/specifiers";
 export * from "./shortcuts";
 export * from "./unity-package-import";

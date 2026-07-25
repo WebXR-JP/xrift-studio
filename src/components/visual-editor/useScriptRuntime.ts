@@ -8,6 +8,12 @@ import { isCompiledScript } from "../../../packages/xrift-studio-runtime/src/scr
 import type { ScriptFailure, ScriptLogEntry } from "../../../packages/xrift-studio-runtime/src/script/host";
 import type { AssetManifest } from "../../lib/visual-editor/asset-manifest";
 import type { SceneDocument } from "../../lib/visual-editor/scene-document";
+import { filterScriptTrustRunningByAssetIds } from "../../lib/visual-editor/scripting/runtime-report";
+import {
+  readScriptSourceSnapshot,
+  type ScriptProvenanceDto,
+  type ScriptSourceSnapshot,
+} from "../../lib/visual-editor/scripting/script-trust";
 import {
   collectRequiredScriptAssetIds,
   collectScriptReferencedAssetIds,
@@ -35,6 +41,11 @@ export type CompiledScriptEntry = {
   objectUrl: string;
   /** Reuses the same module identity when another Script was the only edit. */
   cacheKey: string;
+  /**
+   * Fingerprint of the exact module represented by this entry. It may differ
+   * from the latest skipped source while Play keeps a last-good module alive.
+   */
+  trustSnapshot: ScriptRunningTrustSnapshot;
 };
 
 export type ScriptCompileError = {
@@ -42,10 +53,32 @@ export type ScriptCompileError = {
   assetName: string;
   relativePath: string;
   message: string;
+  code?: "SCRIPT_APPROVAL_REQUIRED";
+  /** Exact read-once source that was rejected before module evaluation. */
+  trustSnapshot?: ScriptSourceSnapshot;
 };
 
+export type ScriptTrustCheckResult = Readonly<{
+  /** Snapshot keys whose exact fingerprints are approved for this project. */
+  approvedSnapshotKeys: ReadonlySet<string>;
+}>;
+
+export type ScriptRunningTrustSnapshot = Readonly<
+  Pick<
+    ScriptSourceSnapshot,
+    "assetId" | "name" | "path" | "language" | "fingerprint" | "provenance"
+  >
+>;
+
+export type ScriptTrustRuntimeState = Readonly<{
+  status: "not-required" | "approved" | "approval-required" | "skipped";
+  pending: readonly ScriptSourceSnapshot[];
+  skipped: readonly ScriptSourceSnapshot[];
+  running: readonly ScriptRunningTrustSnapshot[];
+}>;
+
 export type ScriptRuntimeState = {
-  status: "idle" | "compiling" | "ready" | "error";
+  status: "idle" | "compiling" | "ready" | "error" | "approval-required";
   scripts: ReadonlyMap<string, CompiledScriptEntry>;
   /** Pre-resolved so `ctx.getAssetUrl` can be synchronous. */
   assetUrls: ReadonlyMap<string, string>;
@@ -56,11 +89,18 @@ export type ScriptRuntimeState = {
   /** Monotonic within one compiled runtime, even after the bounded list fills. */
   failureRevision: number;
   logs: readonly ScriptLogEntry[];
+  trust: ScriptTrustRuntimeState;
 };
 
 const EMPTY_SCRIPTS = new Map<string, CompiledScriptEntry>();
 const EMPTY_ASSET_URLS = new Map<string, string>();
 const EMPTY_ASSET_URL_VERSIONS = new Map<string, number>();
+const EMPTY_SCRIPT_TRUST: ScriptTrustRuntimeState = {
+  status: "not-required",
+  pending: [],
+  skipped: [],
+  running: [],
+};
 /** Keeps the console from growing without bound during a long Play run. */
 const MAX_LOG_ENTRIES = 200;
 
@@ -69,6 +109,17 @@ export type UseScriptRuntimeOptions = {
   assets: AssetManifest;
   projectPath?: string;
   allowRemoteModules?: boolean;
+  /**
+   * Native app-data approval lookup. Omission fails closed: a caller may only
+   * proceed by explicitly compiling with unapprovedPolicy="skip".
+   */
+  checkScriptTrust?: (
+    snapshots: readonly ScriptSourceSnapshot[],
+  ) => Promise<ScriptTrustCheckResult>;
+  /** Display-only provenance. It can never affect approval lookup. */
+  resolveScriptProvenance?: (
+    assetId: string,
+  ) => Partial<ScriptProvenanceDto> | null | undefined;
 };
 
 export function useScriptRuntime({
@@ -76,6 +127,8 @@ export function useScriptRuntime({
   assets,
   projectPath,
   allowRemoteModules,
+  checkScriptTrust,
+  resolveScriptProvenance,
 }: UseScriptRuntimeOptions) {
   const [state, setState] = useState<ScriptRuntimeState>({
     status: "idle",
@@ -86,6 +139,7 @@ export function useScriptRuntime({
     failures: [],
     failureRevision: 0,
     logs: [],
+    trust: EMPTY_SCRIPT_TRUST,
   });
   const sceneRef = useRef(scene);
   sceneRef.current = scene;
@@ -109,15 +163,20 @@ export function useScriptRuntime({
       failures: [],
       failureRevision: 0,
       logs: [],
+      trust: EMPTY_SCRIPT_TRUST,
     });
   }, []);
 
   /**
-   * Reads and compiles every referenced Script Asset. Returns the errors so
-   * the caller can refuse to start Play instead of inspecting state later.
-  */
+   * Reads every referenced Script exactly once, checks the native app-data
+   * approval store, and only then evaluates the approved snapshots.
+   */
   const compile = useCallback(async (
-    input: { scene?: SceneDocument; assets?: AssetManifest } = {},
+    input: {
+      scene?: SceneDocument;
+      assets?: AssetManifest;
+      unapprovedPolicy?: "block" | "skip";
+    } = {},
   ): Promise<ScriptCompileError[]> => {
     const generation = compileGenerationRef.current + 1;
     compileGenerationRef.current = generation;
@@ -141,6 +200,7 @@ export function useScriptRuntime({
         failures: [],
         failureRevision: 0,
         logs: [],
+        trust: EMPTY_SCRIPT_TRUST,
       });
       return [];
     }
@@ -158,9 +218,12 @@ export function useScriptRuntime({
     }
 
     setState((previous) => ({ ...previous, status: "compiling", errors: [] }));
-    const compiled = new Map<string, CompiledScriptEntry>();
     const errors: ScriptCompileError[] = [];
+    const snapshots: ScriptSourceSnapshot[] = [];
 
+    // Source is read only here. Hashing, approval lookup, transpilation, and
+    // evaluation all use this immutable value, closing the read/check/read
+    // race that would otherwise permit a filesystem swap.
     for (const assetId of assetIds) {
       const asset = currentAssets.assets[assetId];
       if (!asset || asset.kind !== "script") {
@@ -172,40 +235,114 @@ export function useScriptRuntime({
         });
         continue;
       }
-      const relativePath = asset.source.relativePath;
-      let source: string;
       try {
-        source = await tauri.readTextFile(projectPath, relativePath);
+        snapshots.push(
+          await readScriptSourceSnapshot({
+            assetId: asset.id,
+            name: asset.name,
+            path: asset.source.relativePath,
+            language: asset.language,
+            contractVersion: asset.contractVersion,
+            provenance: resolveScriptProvenance?.(asset.id),
+            allowRemoteModules: Boolean(allowRemoteModules),
+            readSource: () =>
+              tauri.readScriptSource(projectPath, asset.source.relativePath),
+          }),
+        );
       } catch (error) {
         errors.push({
           assetId,
           assetName: asset.name,
-          relativePath,
+          relativePath: asset.source.relativePath,
           message:
             error instanceof Error
               ? error.message
               : "Script fileを読み込めませんでした",
         });
-        continue;
       }
+    }
+
+    let approvedSnapshotKeys = new Set<string>();
+    if (snapshots.length > 0 && checkScriptTrust) {
+      try {
+        const trust = await checkScriptTrust(snapshots);
+        approvedSnapshotKeys = new Set(trust.approvedSnapshotKeys);
+      } catch {
+        // Corrupt or inaccessible app data fails closed. The caller can still
+        // explicitly choose skip, but the source is never evaluated.
+      }
+    }
+    const pendingTrust = snapshots.filter(
+      (snapshot) => !approvedSnapshotKeys.has(snapshot.snapshotKey),
+    );
+    const trustErrors: ScriptCompileError[] = pendingTrust.map((snapshot) => ({
+      assetId: snapshot.assetId,
+      assetName: snapshot.name,
+      relativePath: snapshot.path,
+      code: "SCRIPT_APPROVAL_REQUIRED",
+      message:
+        "内容がまだ承認されていないため実行しません。Studioでソースを確認して許可してください",
+      trustSnapshot: snapshot,
+    }));
+    if (
+      pendingTrust.length > 0 &&
+      (input.unapprovedPolicy ?? "block") === "block"
+    ) {
+      const blockedErrors = [...trustErrors, ...errors];
+      const running = runningSnapshotsFor(previousScripts, assetIds);
+      if (compileGenerationRef.current === generation) {
+        setState((previous) => ({
+          ...previous,
+          status: "approval-required",
+          errors: blockedErrors,
+          trust: {
+            status: "approval-required",
+            pending: pendingTrust,
+            skipped: [],
+            running,
+          },
+        }));
+      }
+      return blockedErrors;
+    }
+
+    const skippedTrust =
+      input.unapprovedPolicy === "skip" ? pendingTrust : [];
+    const executableSnapshots = snapshots.filter((snapshot) =>
+      approvedSnapshotKeys.has(snapshot.snapshotKey),
+    );
+    const compiled = new Map<string, CompiledScriptEntry>();
+
+    // An explicitly skipped replacement must not tear down an Entity that is
+    // already running an approved version. Preserve that exact module as
+    // last-good; a newly introduced unapproved Script has no previous entry
+    // and therefore remains disabled.
+    for (const snapshot of skippedTrust) {
+      const previousEntry = previousScripts.get(snapshot.assetId);
+      if (previousEntry) {
+        compiled.set(snapshot.assetId, previousEntry);
+      }
+    }
+
+    for (const snapshot of executableSnapshots) {
       const cacheKey = JSON.stringify([
-        relativePath,
-        Boolean(allowRemoteModules),
-        source,
+        snapshot.path,
+        snapshot.fingerprint,
+        snapshot.source,
       ]);
-      const previousEntry = previousScripts.get(assetId);
+      const previousEntry = previousScripts.get(snapshot.assetId);
       if (previousEntry?.cacheKey === cacheKey) {
-        compiled.set(assetId, previousEntry);
+        compiled.set(snapshot.assetId, previousEntry);
         continue;
       }
-      const result = await loadScriptModule(source, relativePath, {
-        allowRemoteModules,
+      const result = await loadScriptModule(snapshot.source, snapshot.path, {
+        allowRemoteModules: false,
       });
       if (!result.ok) {
         errors.push({
-          assetId,
-          assetName: asset.name,
-          relativePath,
+          assetId: snapshot.assetId,
+          assetName: snapshot.name,
+          relativePath: snapshot.path,
           message: result.message,
         });
         continue;
@@ -214,17 +351,16 @@ export function useScriptRuntime({
       if (!isCompiledScript(exported)) {
         releaseScriptModuleUrl(result.objectUrl);
         errors.push({
-          assetId,
-          assetName: asset.name,
-          relativePath,
-          message:
-            "default export が defineScript(...) ではありません",
+          assetId: snapshot.assetId,
+          assetName: snapshot.name,
+          relativePath: snapshot.path,
+          message: "default export が defineScript(...) ではありません",
         });
         continue;
       }
       const render = result.module.Render;
-      compiled.set(assetId, {
-        assetId,
+      compiled.set(snapshot.assetId, {
+        assetId: snapshot.assetId,
         script: exported,
         ...(typeof render === "function"
           ? {
@@ -233,6 +369,7 @@ export function useScriptRuntime({
           : {}),
         objectUrl: result.objectUrl,
         cacheKey,
+        trustSnapshot: toRunningTrustSnapshot(snapshot),
       });
     }
 
@@ -278,10 +415,17 @@ export function useScriptRuntime({
           releaseScriptModuleUrl(entry.objectUrl);
         }
       }
+      const running = runningSnapshotsFor(previousScripts, assetIds);
       setState((previous) => ({
         ...previous,
         status: "error",
         errors,
+        trust: {
+          status: skippedTrust.length > 0 ? "skipped" : "approved",
+          pending: [],
+          skipped: skippedTrust,
+          running,
+        },
       }));
     } else {
       const nextComponentRuntimeKeys = createComponentRuntimeKeys(
@@ -315,10 +459,23 @@ export function useScriptRuntime({
         logs: previous.logs.filter((entry) =>
           unchangedComponentIds.has(entry.componentId),
         ),
+        trust: {
+          status: skippedTrust.length > 0 ? "skipped" : "approved",
+          pending: [],
+          skipped: skippedTrust,
+          running: runningSnapshotsFor(compiled),
+        },
       }));
     }
-    return errors;
-  }, [allowRemoteModules, projectPath]);
+    return input.unapprovedPolicy === "skip"
+      ? [...trustErrors, ...errors]
+      : errors;
+  }, [
+    allowRemoteModules,
+    checkScriptTrust,
+    projectPath,
+    resolveScriptProvenance,
+  ]);
 
   const handleFailure = useCallback((failure: ScriptFailure) => {
     setState((previous) => ({
@@ -351,6 +508,37 @@ export function useScriptRuntime({
 }
 
 export type ScriptRuntime = ReturnType<typeof useScriptRuntime>;
+
+function toRunningTrustSnapshot(
+  snapshot: ScriptSourceSnapshot,
+): ScriptRunningTrustSnapshot {
+  const {
+    assetId,
+    name,
+    path,
+    language,
+    fingerprint,
+    provenance,
+  } = snapshot;
+  return {
+    assetId,
+    name,
+    path,
+    language,
+    fingerprint,
+    provenance,
+  };
+}
+
+function runningSnapshotsFor(
+  scripts: ReadonlyMap<string, CompiledScriptEntry>,
+  requiredAssetIds?: readonly string[],
+): ScriptRunningTrustSnapshot[] {
+  const running = [...scripts.values()].map((entry) => entry.trustSnapshot);
+  return requiredAssetIds
+    ? filterScriptTrustRunningByAssetIds(running, requiredAssetIds)
+    : running;
+}
 
 function createComponentRuntimeKeys(
   scene: SceneDocument,

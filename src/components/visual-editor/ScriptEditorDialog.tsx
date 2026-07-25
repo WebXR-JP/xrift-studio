@@ -274,7 +274,9 @@ function ScriptRuntimeConsole({ runtime }: { runtime: ScriptRuntimeReport }) {
   const empty =
     runtime.compileErrors.length === 0 &&
     runtime.failures.length === 0 &&
-    runtime.logs.length === 0;
+    runtime.logs.length === 0 &&
+    runtime.trust.pending.length === 0 &&
+    runtime.trust.disabled.length === 0;
   return (
     <section
       id="script-runtime-console"
@@ -283,6 +285,7 @@ function ScriptRuntimeConsole({ runtime }: { runtime: ScriptRuntimeReport }) {
     >
       <div className="mb-1 flex items-center gap-2 text-slate-400">
         <span>runtime: {runtime.status}</span>
+        <span>trust: {runtime.trust.status}</span>
         <span>logs: {runtime.logs.length}</span>
       </div>
       {empty ? (
@@ -296,6 +299,22 @@ function ScriptRuntimeConsole({ runtime }: { runtime: ScriptRuntimeReport }) {
           className="whitespace-pre-wrap text-amber-300"
         >
           [compile] {entry.assetName}: {entry.message}
+        </p>
+      ))}
+      {runtime.trust.pending.map((entry) => (
+        <p
+          key={`trust-pending:${entry.assetId}:${entry.sourceSha256}`}
+          className="whitespace-pre-wrap text-amber-300"
+        >
+          [approval-required] {entry.name}: {entry.sourceSha256}
+        </p>
+      ))}
+      {runtime.trust.disabled.map((entry) => (
+        <p
+          key={`trust-skipped:${entry.assetId}:${entry.sourceSha256}`}
+          className="whitespace-pre-wrap text-slate-400"
+        >
+          [skipped] {entry.name}: Play中は実行しません
         </p>
       ))}
       {runtime.failures.map((entry, index) => (
