@@ -16,6 +16,13 @@ export type VisualCompilerDocuments = {
    * new callers should always pass the complete record.
    */
   prefabs?: Record<string, PrefabDocument>;
+  /**
+   * Script Asset source text keyed by Asset id.
+   *
+   * Passed in rather than read here so compilation stays synchronous and
+   * fixture-testable; the caller owns the file reads.
+   */
+  scriptSources?: Readonly<Record<string, string>>;
 };
 
 export type CompilerDiagnosticSeverity = "blocking" | "warning";

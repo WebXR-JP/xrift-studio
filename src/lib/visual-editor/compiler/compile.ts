@@ -58,6 +58,12 @@ import {
   type SourceDocumentHash,
 } from "../serialization";
 import { sha256Utf8 } from "./hash";
+import { collectRequiredScriptAssetIds } from "../scripting/script-schedule";
+import {
+  planScriptEmission,
+  renderScriptComponent,
+  type EmittedScriptModule,
+} from "./script-emit";
 import {
   isOpenBrushModelMetadata,
   OPEN_BRUSH_BRUSH_BASE_URL,
@@ -103,6 +109,10 @@ type CompileContext = {
   visitedEntityIds: Set<string>;
   activeEntityIds: Set<string>;
   usesDoubleSide: boolean;
+  /** Emitted Script modules keyed by Script Asset id. */
+  scriptModules: ReadonlyMap<string, EmittedScriptModule>;
+  /** Running scheduling order, matching Play's Entity-then-Component walk. */
+  scriptOrder: { next: number };
 };
 
 type RenderedXriftWrapper = {
@@ -149,6 +159,29 @@ export function compileVisualProject(
       resolvedEntryScene.scene.sceneId,
     );
   }
+  // Scripts are planned before code generation so the entry file can import
+  // each emitted module statically. Published output never evaluates source
+  // dynamically; see VISUAL_EDITOR_ARCHITECTURE.md 4.8.
+  const scriptAssetIds = resolvedEntryScene
+    ? collectRequiredScriptAssetIds(resolvedEntryScene.scene)
+    : [];
+  const scriptPlan = planScriptEmission(
+    scriptAssetIds,
+    documents.assets,
+    (asset) => documents.scriptSources?.[asset.id] ?? null,
+    diagnostics,
+  );
+  if (scriptAssetIds.length > 0 && outputMode === "classic-runtime") {
+    // runtime.json is data; an unhandled component would otherwise be passed
+    // straight through and produce a silently broken manifest.
+    diagnostics.push({
+      severity: "blocking",
+      code: "script-unsupported-runtime-output",
+      message:
+        "Runtime JSON出力ではScriptを表現できません。Classic JSX出力を選んでください。",
+    });
+  }
+
   let runtimeManifestFile: CompilerOverlayFile | undefined;
   let generated: string;
   if (outputMode === "classic-runtime") {
@@ -161,6 +194,7 @@ export function compileVisualProject(
         documents.assets,
         assetCopyPlan,
         diagnostics,
+        scriptPlan.modules,
       );
     }
     const runtimeManifest = compileRuntimeManifest(
@@ -184,6 +218,7 @@ export function compileVisualProject(
           documents.assets,
           assetCopyPlan,
           diagnostics,
+          scriptPlan.modules,
         )
       : emptySource(documents.project.projectKind);
   }
@@ -199,6 +234,7 @@ export function compileVisualProject(
     compilerFile("xrift.json", xriftJson, "metadata"),
   ];
   if (runtimeManifestFile) overlayFiles.push(runtimeManifestFile);
+  overlayFiles.push(...scriptPlan.overlayFiles);
   diagnoseUnsupportedAssets(documents.assets, diagnostics);
   const uniqueDiagnostics = deduplicateDiagnostics(diagnostics);
   const provenanceFile = compilerFile(
@@ -488,12 +524,58 @@ function appendXriftComponentDiagnostics(
   );
 }
 
+/**
+ * Emits one Script Component mount.
+ *
+ * Order is a running counter over the same Entity-then-Component walk Play
+ * uses, so relative update order matches between the editor and the world.
+ */
+function renderScript(
+  entity: SceneEntity,
+  component: Extract<RegisteredSceneComponent, { type: "script" }>,
+  context: CompileContext,
+): string | null {
+  const order = context.scriptOrder.next;
+  context.scriptOrder.next += 1;
+  const module = context.scriptModules.get(component.scriptAssetId);
+  if (!module) {
+    addDiagnostic(
+      context,
+      componentDiagnostic(
+        entity,
+        component.id,
+        "script-module-missing",
+        "Script Assetを出力できなかったためScriptを配置しません",
+        component.scriptAssetId,
+      ),
+    );
+    return null;
+  }
+  for (const assetId of component.assetReferences) {
+    context.referencedAssetIds.add(assetId);
+  }
+  context.extraImports.add(
+    `import { XriftScriptHost } from "./xrift-studio/script-host";`,
+  );
+  context.extraImports.add(
+    `import ${module.importName} from "${module.importSpecifier}";`,
+  );
+  return renderScriptComponent(
+    component,
+    module,
+    entity.id,
+    entity.name,
+    order,
+  );
+}
+
 function generateComponentSource(
   projectKind: VisualProjectKind,
   scene: SceneDocument,
   assets: AssetManifest,
   assetCopyPlan: readonly AssetCopyPlanEntry[],
   diagnostics: CompilerDiagnostic[],
+  scriptModules: ReadonlyMap<string, EmittedScriptModule> = new Map(),
 ): string {
   const context: CompileContext = {
     projectKind,
@@ -520,6 +602,8 @@ function generateComponentSource(
     visitedEntityIds: new Set(),
     activeEntityIds: new Set(),
     usesDoubleSide: false,
+    scriptModules,
+    scriptOrder: { next: 0 },
   };
   const sceneSettings = resolveSceneSettings(scene.settings);
   const sceneEnvironment = renderSceneEnvironment(sceneSettings, context);
@@ -1043,6 +1127,9 @@ function renderEntity(
           component.prefabAssetId,
         ),
       );
+    } else if (component.type === "script") {
+      const rendered = renderScript(entity, component, context);
+      if (rendered) localContent.push(rendered);
     } else if (component.type === "xrift-component") {
       renderRegisteredXriftComponent(entity, component, context, localContent, wrappers);
     } else {
@@ -3562,6 +3649,9 @@ function createAssetCopyPlan(
     // Prefab JSON is an authoring document hashed into provenance and expanded
     // into generated source. It must never be copied into public runtime assets.
     if (isPrefabAsset(asset)) continue;
+    // Script sources are emitted as staging overlay modules and imported
+    // statically, never copied into public runtime assets. See script-emit.ts.
+    if (asset.kind === "script") continue;
     if (asset.source.kind !== "project") continue;
     if (!isSafeRelativePath(asset.source.relativePath)) {
       diagnostics.push({
