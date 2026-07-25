@@ -71,6 +71,7 @@ Visual projectはコードを隠すだけの画面ではなく、Scene、Asset�
 | 8 | Animation authoring | 計画中 | timeline上でbone／shape key keyframeを編集・再生し、clipとして保存できる。 |
 | 9 | Classic export UI／CLI／Runtime | 開発版あり | Editorからの既存Classic追加、Runtime JSON、Three.js／R3F adapter、dependency plan、dry-run、衝突検知、Asset copy、provenanceを実装済み。未対応Runtime Componentとnpm公開を完了する。 |
 | 10 | Production readiness | 計画中 | 大規模Scene性能、accessibility、失敗回復、security、release checklistを満たす。 |
+| 11 | Scripting | 計画中 | Script AssetをTypeScriptで書き、EntityへScript Componentとして付け、Playで実行できる。Play中のsource編集が該当Entityだけを作り直し、実行時例外がScene Viewを落とさない。同じScriptが公開ワールドへ静的importとして出力され、Playと公開の挙動が一致する。契約と対応範囲は[Scripting Contract](./SCRIPTING.md)にまとめる。 |
 
 ## 通常のXRift開発へ渡すCLI
 

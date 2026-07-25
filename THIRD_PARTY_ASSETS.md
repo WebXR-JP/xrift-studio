@@ -5,7 +5,7 @@
 | Bundled file | Upstream source | Revision | License | SHA-256 |
 | --- | --- | --- | --- | --- |
 | `openbrush-all-brushes.glb` | [`icosa-foundation/three-icosa/examples/all_brushes.glb`](https://github.com/icosa-foundation/three-icosa/blob/18682538402ecf8470c4eee91f817ca6093acfa2/examples/all_brushes.glb) | `18682538402ecf8470c4eee91f817ca6093acfa2` | Apache-2.0 | `587fc0c477a8028a6acac21291868dbf4402f5aebd1fca71661e1ba83dd0a380` |
-| `openbrush-LICENSE.txt` | [`icosa-foundation/three-icosa/LICENSE`](https://github.com/icosa-foundation/three-icosa/blob/18682538402ecf8470c4eee91f817ca6093acfa2/LICENSE) | `18682538402ecf8470c4eee91f817ca6093acfa2` | Apache-2.0 license text | `3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5` |
+| `openbrush-LICENSE.txt` | [`icosa-foundation/three-icosa/LICENSE`](https://github.com/icosa-foundation/three-icosa/blob/18682538402ecf8470c4eee91f817ca6093acfa2/LICENSE) | `18682538402ecf8470c4eee91f817ca6093acfa2` | Apache-2.0 license text | `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 
 The OpenBrush Starter copies both files into the created project. Brush shader textures are loaded at runtime from the three-icosa template host and are not bundled here.
 
@@ -30,8 +30,8 @@ loading state.
 | `xrift-world-template-duck.glb` | [`WebXR-JP/xrift-world-template/public/duck.glb`](https://github.com/WebXR-JP/xrift-world-template/blob/abbce026ea1f1066726f385089d5f28b2ef5a890/public/duck.glb) | `abbce026ea1f1066726f385089d5f28b2ef5a890` | MIT | `154d3d5f025f9a0a614b5ea27b5e816120e0d286077b05ba67281e4b2823684d` |
 | `xrift-world-template-tokyo-station.png` (upstream is named `.jpg`, but its pinned bytes are PNG) | [`WebXR-JP/xrift-world-template/public/tokyo-station.jpg`](https://github.com/WebXR-JP/xrift-world-template/blob/abbce026ea1f1066726f385089d5f28b2ef5a890/public/tokyo-station.jpg) | `abbce026ea1f1066726f385089d5f28b2ef5a890` | MIT | `613c5e5af594cf273bc14076cc86761a74826e9c57fbcec1e45c42a988fd3265` |
 | `xrift-world-template-bunny.glb` | Generated from [`WebXR-JP/xrift-world-template/public/bunny.drc`](https://github.com/WebXR-JP/xrift-world-template/blob/abbce026ea1f1066726f385089d5f28b2ef5a890/public/bunny.drc) (`3bb08f257d873f69ded447e07c2dd4e9d7a264d58a686c88978c38430c5f6eb4`) by `pnpm starter:sync:xrift-official` | `abbce026ea1f1066726f385089d5f28b2ef5a890` | MIT | `7f903e35e249f399e440a3bce6bf694e72dc80ce9dfd33df7f4fd83d4e960fff` |
-| `xrift-world-template-World.tsx.txt` | [`WebXR-JP/xrift-world-template/src/World.tsx`](https://github.com/WebXR-JP/xrift-world-template/blob/abbce026ea1f1066726f385089d5f28b2ef5a890/src/World.tsx) | `abbce026ea1f1066726f385089d5f28b2ef5a890` | MIT | `7269c522aa105b5f22a066d0c0b7818589149788a639d9b14b0c0d9c58070522` |
-| `xrift-world-template-LICENSE.txt` | [`WebXR-JP/xrift-world-template/LICENSE`](https://github.com/WebXR-JP/xrift-world-template/blob/abbce026ea1f1066726f385089d5f28b2ef5a890/LICENSE) | `abbce026ea1f1066726f385089d5f28b2ef5a890` | MIT license text | `ab63a7a7e02339cd5547c0fbd3ed89e8ab740c72a7d1696719bbaa67ee11a2f8` |
+| `xrift-world-template-World.tsx.txt` | [`WebXR-JP/xrift-world-template/src/World.tsx`](https://github.com/WebXR-JP/xrift-world-template/blob/abbce026ea1f1066726f385089d5f28b2ef5a890/src/World.tsx) | `abbce026ea1f1066726f385089d5f28b2ef5a890` | MIT | `2e2c82ebf840c954c8a0ce049357106b4162b14996b8de47a5d5647fd984b46a` |
+| `xrift-world-template-LICENSE.txt` | [`WebXR-JP/xrift-world-template/LICENSE`](https://github.com/WebXR-JP/xrift-world-template/blob/abbce026ea1f1066726f385089d5f28b2ef5a890/LICENSE) | `abbce026ea1f1066726f385089d5f28b2ef5a890` | MIT license text | `73dec738d6d49a07e506b0d4014ec6a6247c1b50ca6bf8aee62763e81f65f176` |
 
 The Starter scene is produced from the static R3F/Rapier subset of this fixed
 source graph. XRift Studio copies the Duck, a Studio-generated GLB conversion
