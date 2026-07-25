@@ -23,6 +23,7 @@ import { prepareStarterVisualProject } from "../src/lib/visual-editor/persistenc
 import { runVisualCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/fixture.ts";
 import { runClassicExportFixtureAssertions } from "../src/lib/visual-editor/classic-export.fixture.ts";
 import { runComponentCodeImportFixtureAssertions } from "../src/lib/visual-editor/component-code-import.fixture.ts";
+import { runScriptSpecifierFixtureAssertions } from "../src/lib/visual-editor/scripting/specifiers.fixture.ts";
 
 const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "xrift-studio-convert-"));
 const previousXriftBin = process.env.XRIFT_STUDIO_XRIFT_BIN;
@@ -114,6 +115,7 @@ try {
   }
   assert(modifiedRejected, "--update must reject a modified Classic export");
   runVisualCompilerFixtureAssertions();
+  runScriptSpecifierFixtureAssertions();
   runStarterTemplateFixtureAssertions();
   await verifyPreparedOfficialStarter();
   runComponentCodeImportFixtureAssertions();
