@@ -18,6 +18,12 @@ import {
   type RapierRigidBody,
 } from "@react-three/rapier";
 import { SpawnPoint } from "@xrift/world-components";
+import { XriftScriptRoot } from "../../../packages/xrift-studio-runtime/src/script/host";
+import {
+  EntityScriptVisual,
+  ScriptViewportProvider,
+  type ScriptViewportRuntime,
+} from "./EntityScriptVisual";
 import {
   useCallback,
   useEffect,
@@ -936,6 +942,10 @@ function ComponentVisual({
       return showHelpers ? (
         <OfficialXriftComponentRenderer component={component} />
       ) : null;
+    case "script":
+      // Mounted by EntityObject, which has the Entity identity the host needs,
+      // in the same way official wrapper components are handled there.
+      return null;
   }
 }
 
@@ -1153,8 +1163,20 @@ function EntityObject({
       component.type === "xrift-component" &&
       isOfficialXriftWrapperComponent(component),
   );
+  const scriptComponents = entity.components.filter(
+    (component): component is Extract<SceneComponent, { type: "script" }> =>
+      component.type === "script" && component.enabled,
+  );
   const entityVisuals = (
     <>
+      {scriptComponents.map((component) => (
+        <EntityScriptVisual
+          key={component.id}
+          component={component}
+          entityId={authoringEntityId}
+          entityName={entity.name}
+        />
+      ))}
       {entity.components.map((component) =>
         component.type === "xrift-component" &&
         isOfficialXriftWrapperComponent(component) ? null : (
@@ -2345,6 +2367,7 @@ export function SceneViewport({
   transformMode,
   transformSpace,
   playDisabled,
+  playPreparing,
   playShortcut,
   onTogglePlay,
   onTransformModeChange,
@@ -2366,6 +2389,7 @@ export function SceneViewport({
   onViewportFileDrop,
   onPlayDropAttempt,
   onDropRejected,
+  scriptRuntime,
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
@@ -2382,6 +2406,8 @@ export function SceneViewport({
   transformMode: TransformMode;
   transformSpace: TransformSpace;
   playDisabled: boolean;
+  /** Script compilation runs before Play starts; the button shows it. */
+  playPreparing?: boolean;
   playShortcut?: string;
   onTogglePlay: () => void;
   onTransformModeChange: (mode: TransformMode) => void;
@@ -2410,6 +2436,8 @@ export function SceneViewport({
   onViewportFileDrop: () => void;
   onPlayDropAttempt: () => void;
   onDropRejected: (message: string) => void;
+  /** Compiled Script Assets plus the callbacks their hosts need. */
+  scriptRuntime?: ScriptViewportRuntime;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const dropResolverRef = useRef<SceneDropResolver | null>(null);
@@ -2874,15 +2902,17 @@ export function SceneViewport({
         <div className="pointer-events-none absolute inset-y-0 left-1/2 z-10 flex -translate-x-1/2 items-center">
           <button
             type="button"
-            disabled={playDisabled}
+            disabled={playDisabled || playPreparing}
             aria-pressed={editorMode === "play"}
             onClick={onTogglePlay}
             title={commandTitle(
               editorMode === "play"
                 ? "Playを停止"
-                : playDisabled
-                  ? "アセットの読み込みが終わるとPlayできます"
-                  : "Playを開始",
+                : playPreparing
+                  ? "Scriptを変換しています"
+                  : playDisabled
+                    ? "アセットの読み込みが終わるとPlayできます"
+                    : "Playを開始",
               "play.toggle",
               playShortcut,
             )}
@@ -2893,7 +2923,11 @@ export function SceneViewport({
             }`}
           >
             <PlayIcon size={13} aria-hidden="true" />
-            {editorMode === "play" ? "停止" : "Play"}
+            {editorMode === "play"
+              ? "停止"
+              : playPreparing
+                ? "準備中"
+                : "Play"}
           </button>
         </div>
         <div className="flex min-w-0 items-center gap-1.5" role="toolbar" aria-label="Scene Viewの操作">
@@ -3091,6 +3125,8 @@ export function SceneViewport({
                 : [0, 0, 0]
             }
           >
+            <ScriptViewportProvider value={scriptRuntime ?? null}>
+            <XriftScriptRoot pressedKeys={pressedKeysRef.current}>
             {preview.scene.rootEntityIds.map((entityId) => (
               <SceneEntityHierarchy
                 key={`${entityId}:${
@@ -3132,6 +3168,8 @@ export function SceneViewport({
                 isPressed={isPressed}
               />
             ) : null}
+            </XriftScriptRoot>
+            </ScriptViewportProvider>
           </OfficialXriftPreviewProvider>
 
           <CameraControls

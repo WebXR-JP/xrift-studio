@@ -20,6 +20,10 @@
     "./react-three-fiber": {
       "types": "./dist/react-three-fiber/index.d.ts",
       "import": "./dist/react-three-fiber/index.js"
+    },
+    "./script": {
+      "types": "./dist/script/index.d.ts",
+      "import": "./dist/script/index.js"
     }
   },
   "scripts": {

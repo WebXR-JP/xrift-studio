@@ -175,6 +175,12 @@ import {
   SceneViewport,
   type SceneFocusState,
 } from "./SceneViewport";
+import type { ScriptViewportRuntime } from "./EntityScriptVisual";
+import { useScriptRuntime } from "./useScriptRuntime";
+import {
+  collectRequiredScriptAssetIds,
+  collectScheduledScripts,
+} from "../../lib/visual-editor/scripting/script-schedule";
 import { roundTo } from "./editor-utils";
 import type {
   EditorMode,
@@ -644,6 +650,33 @@ export function VisualEditorPrototype({
   }
   const projectPathRef = useRef(projectPath);
   projectPathRef.current = projectPath;
+  const scriptRuntime = useScriptRuntime({
+    scene: bundle.scene,
+    assets: bundle.assets,
+    ...(projectPath ? { projectPath } : {}),
+  });
+  const scriptViewportRuntime = useMemo<ScriptViewportRuntime>(() => {
+    const orderByComponentId = new Map(
+      collectScheduledScripts(bundle.scene).map((entry) => [
+        entry.componentId,
+        entry.order,
+      ]),
+    );
+    return {
+      scripts: scriptRuntime.state.scripts,
+      orderByComponentId,
+      resolveAssetUrl: (assetId) =>
+        scriptRuntime.state.assetUrls.get(assetId) ?? null,
+      onLog: scriptRuntime.handleLog,
+      onFailure: scriptRuntime.handleFailure,
+    };
+  }, [
+    bundle.scene,
+    scriptRuntime.state.scripts,
+    scriptRuntime.state.assetUrls,
+    scriptRuntime.handleLog,
+    scriptRuntime.handleFailure,
+  ]);
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
   const lastSavedBundleRef = useRef<PrototypeVisualProject | null>(
@@ -711,6 +744,8 @@ export function VisualEditorPrototype({
   const [transformSpace, setTransformSpace] = useState<TransformSpace>("world");
   const [editorMode, setEditorMode] = useState<EditorMode>("edit");
   const [playSession, setPlaySession] = useState<PlaySession | null>(null);
+  /** Play waits for Script compilation; the button reflects it. */
+  const [playPreparing, setPlayPreparing] = useState(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [componentImportOpen, setComponentImportOpen] = useState(false);
   const [componentImportBusy, setComponentImportBusy] = useState(false);
@@ -4214,13 +4249,38 @@ export function VisualEditorPrototype({
     updateImportQueue,
   ]);
 
-  const enterPlayMode = useCallback(() => {
+  /**
+   * Play now has an awaited preparation step: Script Assets are compiled
+   * first, and a scene whose scripts do not compile stays in Edit instead of
+   * starting broken. See MI-70.
+   */
+  const enterPlayMode = useCallback(async () => {
     if (importBusy) {
       setNotice("アセットのインポート完了後にPlayを開始できます");
       return;
     }
+    if (playPreparing) return;
     setCreateMenuOpen(false);
     setRenameTarget(null);
+
+    const scriptCount = collectRequiredScriptAssetIds(
+      bundleRef.current.scene,
+    ).length;
+    if (scriptCount > 0) {
+      setPlayPreparing(true);
+      try {
+        const errors = await scriptRuntime.compile();
+        if (errors.length > 0) {
+          setNotice(
+            `Scriptを変換できないためPlayを開始しません: ${errors[0]?.assetName ?? ""} ${errors[0]?.message ?? ""}`,
+          );
+          return;
+        }
+      } finally {
+        setPlayPreparing(false);
+      }
+    }
+
     setPlaySession(
       createPlaySession(bundleRef.current.scene, bundleRef.current.assets),
     );
@@ -4230,13 +4290,16 @@ export function VisualEditorPrototype({
         ? "World Play Modeを開始しました"
         : "Item Play Modeを開始しました",
     );
-  }, [importBusy, projectKind]);
+  }, [importBusy, playPreparing, projectKind, scriptRuntime]);
 
   const stopPlayMode = useCallback(() => {
     setPlaySession(null);
     setEditorMode("edit");
+    // Script modules own blob URLs and event subscriptions that React unmount
+    // does not release, so Stop disposes them explicitly.
+    scriptRuntime.reset();
     setNotice("Playを停止しました。Play中の状態を破棄し、編集カメラへ戻りました");
-  }, []);
+  }, [scriptRuntime]);
 
   const runSave = useCallback(async (): Promise<string | undefined> => {
     if (autosaveTimerRef.current !== null) {
@@ -4438,9 +4501,9 @@ export function VisualEditorPrototype({
         case "play.toggle":
           if (editorMode === "play") stopPlayMode();
           else if (importBusy) {
-            enterPlayMode();
+            void enterPlayMode();
             return false;
-          } else enterPlayMode();
+          } else void enterPlayMode();
           return true;
         case "layout.reset":
           setLayout(DEFAULT_EDITOR_LAYOUT);
@@ -4847,6 +4910,7 @@ export function VisualEditorPrototype({
             transformMode={transformMode}
             transformSpace={transformSpace}
             playDisabled={editorMode === "edit" && importBusy}
+            playPreparing={playPreparing}
             playShortcut={shortcutLabel("play.toggle")}
             onTogglePlay={() => executeCommand("play.toggle")}
             onTransformModeChange={(mode) => {
@@ -4872,6 +4936,7 @@ export function VisualEditorPrototype({
                 creationId,
               })
             }
+            scriptRuntime={scriptViewportRuntime}
             frameSelectionRequest={frameSelectionRequest}
             exitFocusRequest={exitFocusRequest}
             focusedEntity={focusedEntity}

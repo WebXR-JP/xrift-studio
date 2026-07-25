@@ -1,0 +1,203 @@
+import * as THREE from "three";
+import * as React from "react";
+import * as ReactJsxRuntime from "react/jsx-runtime";
+import * as Fiber from "@react-three/fiber";
+import * as Drei from "@react-three/drei";
+import * as Rapier from "@react-three/rapier";
+import * as XriftWorldComponents from "@xrift/world-components";
+import * as XriftScript from "../../packages/xrift-studio-runtime/src/script/api";
+
+import { transpileTypeScriptModule } from "./monaco";
+import {
+  isAllowedScriptSpecifier,
+  isRelativeScriptSpecifier,
+  isRemoteScriptSpecifier,
+  rewriteScriptSpecifiers,
+  type ScriptSpecifierRejection,
+  type ScriptSpecifierResolution,
+} from "./visual-editor/scripting/specifiers";
+
+/**
+ * Evaluates Script Assets inside Play.
+ *
+ * Bare specifiers are rewritten to blob modules that re-export the instances
+ * this app already holds, so a script shares one three.js with the viewport.
+ * Pulling a second copy would break `instanceof` and R3F reconciliation.
+ *
+ * This is the one place the architecture permits dynamic evaluation, and only
+ * of project script files. See docs/SCRIPTING.md.
+ */
+
+const LIVE_MODULES: Record<string, Record<string, unknown>> = {
+  "xrift:script": XriftScript as unknown as Record<string, unknown>,
+  three: THREE as unknown as Record<string, unknown>,
+  react: React as unknown as Record<string, unknown>,
+  "react/jsx-runtime": ReactJsxRuntime as unknown as Record<string, unknown>,
+  "@react-three/fiber": Fiber as unknown as Record<string, unknown>,
+  "@react-three/drei": Drei as unknown as Record<string, unknown>,
+  "@react-three/rapier": Rapier as unknown as Record<string, unknown>,
+  "@xrift/world-components":
+    XriftWorldComponents as unknown as Record<string, unknown>,
+};
+
+const REGISTRY_GLOBAL = "__xriftScriptModules__";
+
+const bridgeUrls = new Map<string, string>();
+const createdUrls = new Set<string>();
+
+function ensureRegistry(): Record<string, Record<string, unknown>> {
+  const scope = globalThis as unknown as Record<string, unknown>;
+  if (!scope[REGISTRY_GLOBAL]) scope[REGISTRY_GLOBAL] = LIVE_MODULES;
+  return scope[REGISTRY_GLOBAL] as Record<string, Record<string, unknown>>;
+}
+
+/**
+ * Builds one blob module per allowed specifier that re-exports the live
+ * namespace by name, so `import { Vector3 } from "three"` binds to the same
+ * class the viewport uses.
+ */
+function bridgeUrlFor(specifier: string): string | null {
+  const cached = bridgeUrls.get(specifier);
+  if (cached) return cached;
+  const namespace = ensureRegistry()[specifier];
+  if (!namespace) return null;
+  const names = Object.keys(namespace).filter((name) =>
+    /^[A-Za-z_$][\w$]*$/.test(name),
+  );
+  const lines = [
+    `const ns = globalThis[${JSON.stringify(REGISTRY_GLOBAL)}][${JSON.stringify(specifier)}];`,
+    ...names.map(
+      (name) => `export const ${name} = ns[${JSON.stringify(name)}];`,
+    ),
+    "export default ns.default ?? ns;",
+  ];
+  const url = URL.createObjectURL(
+    new Blob([lines.join("\n")], { type: "text/javascript" }),
+  );
+  bridgeUrls.set(specifier, url);
+  createdUrls.add(url);
+  return url;
+}
+
+/**
+ * Shadows ambient authority inside the module scope.
+ *
+ * Same-realm execution means a determined script can still reach these, so
+ * this stops accidents and naive misuse, not an attacker. The limit is stated
+ * in docs/SCRIPTING.md and must not be described as a sandbox.
+ */
+const SHADOWED_GLOBALS = [
+  "window",
+  "globalThis",
+  "self",
+  "document",
+  "fetch",
+  "XMLHttpRequest",
+  "eval",
+  "Function",
+  "importScripts",
+  "__TAURI__",
+  "__TAURI_INTERNALS__",
+];
+
+function shadowPrelude(): string {
+  return `const {${SHADOWED_GLOBALS.join(", ")}} = {};\n`;
+}
+
+export type ScriptModuleLoadOptions = {
+  allowRemoteModules?: boolean;
+};
+
+export type ScriptModuleLoadResult =
+  | { ok: true; module: Record<string, unknown>; objectUrl: string }
+  | { ok: false; message: string };
+
+export async function loadScriptModule(
+  source: string,
+  fileName: string,
+  options: ScriptModuleLoadOptions = {},
+): Promise<ScriptModuleLoadResult> {
+  const transpiled = await transpileTypeScriptModule(source, fileName);
+  if (!transpiled.ok) return { ok: false, message: transpiled.message };
+
+  const { source: rewritten, rejected } = rewriteScriptSpecifiers(
+    transpiled.javaScript,
+    (specifier) => resolveSpecifier(specifier, options),
+  );
+  if (rejected.length > 0) {
+    return {
+      ok: false,
+      message: rejected
+        .map((entry) => describeRejection(entry.specifier, entry.reason))
+        .join("\n"),
+    };
+  }
+
+  const objectUrl = URL.createObjectURL(
+    new Blob([shadowPrelude(), rewritten], { type: "text/javascript" }),
+  );
+  createdUrls.add(objectUrl);
+  try {
+    const module = (await import(/* @vite-ignore */ objectUrl)) as Record<
+      string,
+      unknown
+    >;
+    return { ok: true, module, objectUrl };
+  } catch (error) {
+    releaseScriptModuleUrl(objectUrl);
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function resolveSpecifier(
+  specifier: string,
+  options: ScriptModuleLoadOptions,
+): ScriptSpecifierResolution {
+  if (isAllowedScriptSpecifier(specifier)) {
+    const url = bridgeUrlFor(specifier);
+    return url
+      ? { kind: "resolved", url }
+      : { kind: "rejected", reason: "unknown-module" };
+  }
+  if (isRemoteScriptSpecifier(specifier)) {
+    return options.allowRemoteModules
+      ? { kind: "resolved", url: specifier }
+      : { kind: "rejected", reason: "remote-not-allowed" };
+  }
+  if (isRelativeScriptSpecifier(specifier)) {
+    return { kind: "rejected", reason: "relative-not-supported" };
+  }
+  return { kind: "rejected", reason: "unknown-module" };
+}
+
+function describeRejection(
+  specifier: string,
+  reason: ScriptSpecifierRejection,
+): string {
+  if (reason === "remote-not-allowed") {
+    return `${specifier} を読み込むにはリモートimportの許可が必要です。`;
+  }
+  if (reason === "relative-not-supported") {
+    return `${specifier} はScript間のimportです。まだ対応していません。`;
+  }
+  return `${specifier} は使用できないmoduleです。`;
+}
+
+export function releaseScriptModuleUrl(objectUrl: string): void {
+  if (!createdUrls.has(objectUrl)) return;
+  URL.revokeObjectURL(objectUrl);
+  createdUrls.delete(objectUrl);
+}
+
+/**
+ * Called on Stop. The editor previously relied on React unmount alone, which
+ * left blob URLs alive across Play/Stop cycles.
+ */
+export function releaseAllScriptModules(): void {
+  for (const url of createdUrls) URL.revokeObjectURL(url);
+  createdUrls.clear();
+  bridgeUrls.clear();
+}
