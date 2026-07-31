@@ -7,6 +7,10 @@ import { getBuiltinPrimitiveCreation } from "./creation-catalog";
 import { createDocumentId } from "./document-id";
 import type { VisualProjectKind } from "./project-document";
 import {
+  createDefaultScriptComponentState,
+  type ScriptContract,
+} from "./scripting/script-contract";
+import {
   cloneEntityHierarchy,
   createAnimationComponent,
   createAudioSourceComponent,
@@ -16,6 +20,7 @@ import {
   createMeshComponent,
   createParticleEmitterComponent,
   createRigidBodyComponent,
+  createScriptComponent,
   createTextComponent,
   createTransformComponent,
   fitBoxColliderToMesh,
@@ -34,7 +39,23 @@ export type EditorComponentCategory =
   | "physics"
   | "interaction"
   | "media"
-  | "world";
+  | "world"
+  | "scripting";
+
+/**
+ * Display order shared by every Add Component surface. Kept in one place
+ * because the Inspector and Hierarchy menus previously drifted apart and
+ * "interaction" was unreachable from the Hierarchy context menu.
+ */
+export const EDITOR_COMPONENT_CATEGORY_ORDER = [
+  "core",
+  "rendering",
+  "physics",
+  "interaction",
+  "media",
+  "world",
+  "scripting",
+] as const satisfies readonly EditorComponentCategory[];
 
 export type EditorComponentDefinition = {
   id: string;
@@ -99,6 +120,7 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
   definition("core.animation", "Animation", "rendering", false, "animation"),
   definition("core.audio-source", "Audio Source", "media", true, "audio-source"),
   definition("core.text", "Text", "rendering", true, "text"),
+  definition("scripting.script", "Script", "scripting", true, "script"),
   ...XRIFT_COMPONENT_REGISTRY.map(
     (component): EditorComponentDefinition => ({
       id: component.schemaId,
@@ -136,6 +158,8 @@ export function addEditorComponent(
   entityId: string,
   definitionId: string,
   projectKind: VisualProjectKind,
+  preferredAssetId?: string,
+  scriptContracts?: Readonly<Record<string, ScriptContract>>,
 ): AddEditorComponentResult {
   const entity = scene.entities[entityId];
   if (!entity) return { scene, added: false, reason: "entity-missing" };
@@ -179,6 +203,8 @@ export function addEditorComponent(
     assets,
     projectKind,
     entity,
+    preferredAssetId,
+    scriptContracts,
   );
   if (!component) return { scene, added: false, reason: "dependency-missing" };
   const components = [
@@ -638,6 +664,8 @@ function createRegisteredComponent(
   assets: AssetManifest,
   projectKind: VisualProjectKind,
   entity: SceneEntity,
+  preferredAssetId?: string,
+  scriptContracts?: Readonly<Record<string, ScriptContract>>,
 ): RegisteredSceneComponent | null {
   if (definition.componentType === "transform") return createTransformComponent(id);
   if (definition.componentType === "builtin-mesh") {
@@ -730,6 +758,27 @@ function createRegisteredComponent(
   }
   if (definition.componentType === "text") {
     return createTextComponent(id);
+  }
+  if (definition.componentType === "script") {
+    // Prefer the Script selected in Assets so Create -> Add Component always
+    // attaches the asset the user just authored.
+    const preferred = preferredAssetId
+      ? assets.assets[preferredAssetId]
+      : undefined;
+    const script =
+      preferred?.kind === "script"
+        ? preferred
+        : Object.values(assets.assets).find(
+            (asset) => asset.kind === "script",
+          );
+    const component = script ? createScriptComponent(id, script.id) : null;
+    if (!component) return null;
+    const contract = scriptContracts?.[component.scriptAssetId];
+    if (!contract) return component;
+    return {
+      ...component,
+      ...createDefaultScriptComponentState(contract),
+    };
   }
   return null;
 }

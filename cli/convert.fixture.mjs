@@ -23,6 +23,22 @@ import { prepareStarterVisualProject } from "../src/lib/visual-editor/persistenc
 import { runVisualCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/fixture.ts";
 import { runClassicExportFixtureAssertions } from "../src/lib/visual-editor/classic-export.fixture.ts";
 import { runComponentCodeImportFixtureAssertions } from "../src/lib/visual-editor/component-code-import.fixture.ts";
+import { runXriftMcpEditorToolFixtures } from "../src/lib/visual-editor/mcp-editor-tools.fixture.ts";
+import { runPlaySessionFixtureAssertions } from "../src/lib/visual-editor/play-session.fixture.ts";
+import { runScriptSpecifierFixtureAssertions } from "../src/lib/visual-editor/scripting/specifiers.fixture.ts";
+import { runScriptTemplateFixtureAssertions } from "../src/lib/visual-editor/scripting/script-templates.fixture.ts";
+import { runScriptPropsFixtureAssertions } from "../src/lib/visual-editor/scripting/script-props.fixture.ts";
+import { runParticleRuntimeFixtureAssertions } from "../src/lib/visual-editor/scripting/particle-runtime.fixture.ts";
+import { runScriptLifecycleFixtureAssertions } from "../src/lib/visual-editor/scripting/lifecycle.fixture.ts";
+import { runScriptAudioFixtureAssertions } from "../src/lib/visual-editor/scripting/audio-runtime.fixture.ts";
+import { runAudioSourceRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source.fixture.ts";
+import { runScriptAudioSourceHostFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source-host.fixture.ts";
+import { runLightRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/light.fixture.ts";
+import { runScriptMaterialTextureFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/material-texture.fixture.ts";
+import { runScriptTrustFixtureAssertions } from "../src/lib/visual-editor/scripting/script-trust.fixture.ts";
+import { runScriptRuntimeReportFixtureAssertions } from "../src/lib/visual-editor/scripting/runtime-report.fixture.ts";
+import { runScriptEmitFixtureAssertions } from "../src/lib/visual-editor/compiler/script-emit.fixture.ts";
+import { runBasisTranscoderFixtureAssertions } from "../src/lib/visual-editor/basis-transcoder.fixture.ts";
 
 const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "xrift-studio-convert-"));
 const previousXriftBin = process.env.XRIFT_STUDIO_XRIFT_BIN;
@@ -114,6 +130,22 @@ try {
   }
   assert(modifiedRejected, "--update must reject a modified Classic export");
   runVisualCompilerFixtureAssertions();
+  runXriftMcpEditorToolFixtures();
+  runPlaySessionFixtureAssertions();
+  runScriptSpecifierFixtureAssertions();
+  runScriptTemplateFixtureAssertions();
+  runScriptPropsFixtureAssertions();
+  runParticleRuntimeFixtureAssertions();
+  await runScriptLifecycleFixtureAssertions();
+  await runScriptAudioFixtureAssertions();
+  await runAudioSourceRuntimeFixtureAssertions();
+  await runScriptAudioSourceHostFixtureAssertions();
+  runLightRuntimeFixtureAssertions();
+  runScriptMaterialTextureFixtureAssertions();
+  await runScriptTrustFixtureAssertions();
+  runScriptRuntimeReportFixtureAssertions();
+  runScriptEmitFixtureAssertions();
+  runBasisTranscoderFixtureAssertions();
   runStarterTemplateFixtureAssertions();
   await verifyPreparedOfficialStarter();
   runComponentCodeImportFixtureAssertions();

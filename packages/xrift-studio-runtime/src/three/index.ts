@@ -290,10 +290,14 @@ export class XriftThreeLoader {
         "KTX2 texture loading requires XriftThreeLoaderOptions.renderer",
       );
     }
-    return new KTX2Loader(this.manager)
+    const loader = new KTX2Loader(this.manager)
       .setTranscoderPath(this.ktx2TranscoderPath)
-      .detectSupport(this.renderer)
-      .loadAsync(url);
+      .detectSupport(this.renderer);
+    try {
+      return await loader.loadAsync(url);
+    } finally {
+      loader.dispose();
+    }
   }
 
   private createMaterials(

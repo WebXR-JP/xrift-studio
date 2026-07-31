@@ -700,9 +700,9 @@ const OPEN_BRUSH_LICENSE_COPY: StarterAssetCopyPlanEntry = {
   assetId: "openbrush-apache-license",
   bundledPublicPath: "/visual-editor/starter-assets/openbrush-LICENSE.txt",
   targetRelativePath: "assets/starter/openbrush-LICENSE.txt",
-  expectedByteLength: 11560,
+  expectedByteLength: 11358,
   expectedSha256:
-    "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5",
+    "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
   mediaType: "text/plain",
   integrity: "license-text",
 };
@@ -712,9 +712,9 @@ const XRIFT_OFFICIAL_SOURCE_COPY: StarterAssetCopyPlanEntry = {
   bundledPublicPath:
     "/visual-editor/starter-assets/xrift-world-template-World.tsx.txt",
   targetRelativePath: "assets/starter/xrift-world-template-World.tsx.txt",
-  expectedByteLength: 8791,
+  expectedByteLength: 8567,
   expectedSha256:
-    "7269c522aa105b5f22a066d0c0b7818589149788a639d9b14b0c0d9c58070522",
+    "2e2c82ebf840c954c8a0ce049357106b4162b14996b8de47a5d5647fd984b46a",
   mediaType: "text/plain",
   integrity: "strict",
 };
@@ -724,9 +724,9 @@ const XRIFT_OFFICIAL_LICENSE_COPY: StarterAssetCopyPlanEntry = {
   bundledPublicPath:
     "/visual-editor/starter-assets/xrift-world-template-LICENSE.txt",
   targetRelativePath: "assets/starter/xrift-world-template-LICENSE.txt",
-  expectedByteLength: 1086,
+  expectedByteLength: 1065,
   expectedSha256:
-    "ab63a7a7e02339cd5547c0fbd3ed89e8ab740c72a7d1696719bbaa67ee11a2f8",
+    "73dec738d6d49a07e506b0d4014ec6a6247c1b50ca6bf8aee62763e81f65f176",
   mediaType: "text/plain",
   integrity: "strict",
 };

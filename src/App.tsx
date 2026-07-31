@@ -48,7 +48,7 @@ import {
 import { VisualEditorErrorBoundary } from "./components/visual-editor/VisualEditorErrorBoundary";
 import { ClassicExportDialog } from "./components/visual-editor/ClassicExportDialog";
 import {
-  compilePrototypeVisualProject,
+  compileVisualProject,
   applyAssetOptimizations,
   exportVisualProjectToClassic,
   estimateWorldVram,
@@ -64,6 +64,8 @@ import {
   sanitizePublishFailure,
   saveVisualProjectToDisk,
   StarterAssetCopyError,
+  listScriptAssets,
+  type AssetManifest,
   type PrototypeVisualProject,
   type ClassicExportIntegration,
   type ClassicExportProgress,
@@ -81,6 +83,31 @@ const VisualEditorPrototype = lazy(() =>
 );
 
 const APP_UPDATE_TARGET_KEY = "xrift-studio:update-target";
+
+/**
+ * Reads every Script Asset's source for the compiler.
+ *
+ * A missing file is omitted so the compiler reports it as a blocking
+ * diagnostic naming the Asset, instead of failing here without context.
+ */
+async function readScriptSources(
+  projectPath: string | undefined,
+  assets: AssetManifest,
+): Promise<Record<string, string>> {
+  if (!projectPath) return {};
+  const sources: Record<string, string> = {};
+  for (const asset of listScriptAssets(assets)) {
+    try {
+      sources[asset.id] = await tauri.readTextFile(
+        projectPath,
+        asset.source.relativePath,
+      );
+    } catch {
+      // Surfaces as script-source-unreadable during compile.
+    }
+  }
+  return sources;
+}
 
 function withLatestPublication(
   bundle: PrototypeVisualProject,
@@ -133,6 +160,15 @@ function App() {
   const [visualThumbnailReadiness, setVisualThumbnailReadiness] =
     useState<PublishThumbnailReadiness | null>(null);
   const [visualCompilationFresh, setVisualCompilationFresh] = useState(false);
+  const [visualPublishScriptSources, setVisualPublishScriptSources] = useState<{
+    requestKey: string | null;
+    loading: boolean;
+    sources: Record<string, string>;
+  }>({
+    requestKey: null,
+    loading: false,
+    sources: {},
+  });
 
   const [updateInfo, setUpdateInfo] = useState<{
     current: string | null;
@@ -690,31 +726,106 @@ function App() {
     }
   };
 
-  const visualPublishDiagnostics = useMemo<VisualPublishDiagnostic[]>(
-    () => {
-      if (!visualPublishBundle) return [];
-      try {
-        return compilePrototypeVisualProject(visualPublishBundle).diagnostics;
-      } catch (error) {
-        return [
-          {
-            severity: "blocking",
-            code: "visual-compiler-unavailable",
-            message:
-              error instanceof Error
-                ? `XRift向け変換を開始できません: ${sanitizePublishFailure(
-                    error.message,
-                    visualSession?.project?.path
-                      ? [visualSession.project.path]
-                      : [],
-                  )}`
-                : "XRift向け変換を開始できません。Editorを再読み込みしてください。",
-          },
-        ];
-      }
-    },
-    [visualPublishBundle, visualSession?.project?.path],
+  const visualPublishScriptSourceRequestKey = useMemo(
+    () =>
+      visualPublishBundle
+        ? JSON.stringify([
+            visualSession?.project?.path ?? "",
+            listScriptAssets(visualPublishBundle.assets).map((asset) => [
+              asset.id,
+              asset.source.relativePath,
+            ]),
+          ])
+        : null,
+    [
+      visualPublishBundle?.assets,
+      visualSession?.project?.path,
+    ],
   );
+  useEffect(() => {
+    const assets = visualPublishBundle?.assets;
+    const requestKey = visualPublishScriptSourceRequestKey;
+    if (!assets || requestKey === null) {
+      setVisualPublishScriptSources({
+        requestKey: null,
+        loading: false,
+        sources: {},
+      });
+      return;
+    }
+    let active = true;
+    setVisualPublishScriptSources({
+      requestKey,
+      loading: true,
+      sources: {},
+    });
+    void readScriptSources(
+      visualSession?.project?.path,
+      assets,
+    ).then((sources) => {
+      if (!active) return;
+      setVisualPublishScriptSources({
+        requestKey,
+        loading: false,
+        sources,
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, [
+    visualPublishBundle?.assets,
+    visualPublishScriptSourceRequestKey,
+    visualSession?.project?.path,
+  ]);
+  const visualPublishDiagnostics = useMemo<VisualPublishDiagnostic[]>(() => {
+    if (!visualPublishBundle) return [];
+    if (
+      visualPublishScriptSources.requestKey !==
+        visualPublishScriptSourceRequestKey ||
+      visualPublishScriptSources.loading
+    ) {
+      return [
+        {
+          severity: "blocking",
+          code: "visual-script-source-checking",
+          message: "Scriptを含む公開データを確認しています。",
+        },
+      ];
+    }
+    try {
+      return compileVisualProject({
+        project: visualPublishBundle.project,
+        scenes: {
+          [visualPublishBundle.scene.sceneId]: visualPublishBundle.scene,
+        },
+        assets: visualPublishBundle.assets,
+        prefabs: visualPublishBundle.prefabs,
+        scriptSources: visualPublishScriptSources.sources,
+      }).diagnostics;
+    } catch (error) {
+      return [
+        {
+          severity: "blocking",
+          code: "visual-compiler-unavailable",
+          message:
+            error instanceof Error
+              ? `XRift向け変換を開始できません: ${sanitizePublishFailure(
+                  error.message,
+                  visualSession?.project?.path
+                    ? [visualSession.project.path]
+                    : [],
+                )}`
+              : "XRift向け変換を開始できません。Editorを再読み込みしてください。",
+        },
+      ];
+    }
+  }, [
+    visualPublishBundle,
+    visualPublishScriptSourceRequestKey,
+    visualPublishScriptSources,
+    visualSession?.project?.path,
+  ]);
 
   if (visualSession) {
     const publishBundle = visualPublishBundle;
@@ -892,6 +1003,12 @@ function App() {
                   scenes: { [publishBundle.scene.sceneId]: publishBundle.scene },
                   assets: publishBundle.assets,
                   prefabs: publishBundle.prefabs,
+                  // The compiler stays synchronous, so Script sources are read
+                  // here and handed over with the rest of the documents.
+                  scriptSources: await readScriptSources(
+                    visualSession.project?.path,
+                    publishBundle.assets,
+                  ),
                 },
                 save: async () => {
                   savedProjectPath = await handleSaveVisualProject(

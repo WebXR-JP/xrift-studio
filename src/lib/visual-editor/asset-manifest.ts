@@ -577,6 +577,26 @@ export type PrefabAsset = AssetBase<"template"> & {
   source: AssetSource & { kind: "project" };
 };
 
+export const SCRIPT_ASSET_CONTRACT_VERSION = "1.0.0" as const;
+
+export const SCRIPT_ASSET_LANGUAGES = ["ts", "tsx"] as const;
+export type ScriptAssetLanguage = (typeof SCRIPT_ASSET_LANGUAGES)[number];
+
+/**
+ * Author-written behaviour attached through a `script` SceneComponent.
+ *
+ * The source text is a project file, never manifest content: keeping the
+ * manifest entry stable across body edits is what stops a script save from
+ * bumping every Entity revision in `synchronizePlaySession`. The declared
+ * property schema is derived from the source and lives in Editor State.
+ * See docs/SCRIPTING.md.
+ */
+export type ScriptAsset = AssetBase<"script"> & {
+  contractVersion: typeof SCRIPT_ASSET_CONTRACT_VERSION;
+  language: ScriptAssetLanguage;
+  source: AssetSource & { kind: "project" };
+};
+
 export type SceneAsset =
   | PrimitiveAsset
   | ModelAsset
@@ -586,6 +606,7 @@ export type SceneAsset =
   | ParticleAsset
   | InteractivityAsset
   | AudioAsset
+  | ScriptAsset
   | TemplateAsset;
 
 export type AssetManifest = {

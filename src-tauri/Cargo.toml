@@ -1,6 +1,6 @@
 [package]
 name = "xrift-studio"
-version = "0.5.10"
+version = "0.5.11"
 description = "Community-built desktop app for creating XRift worlds and items"
 authors = ["xrift-studio contributors"]
 license = "MIT"
@@ -43,6 +43,12 @@ tauri-plugin-process = "2"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = "2"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+same-file = "1"
 
 [profile.release]
 opt-level = "s"

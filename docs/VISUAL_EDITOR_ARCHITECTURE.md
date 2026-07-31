@@ -16,7 +16,7 @@
 4. SceneDocument、AssetManifest と、選択、カメラ、開いているパネルなどの Editor State を分離する。
 5. エンティティ、コンポーネント、アセットには表示名とは別の安定 ID を持たせる。
 6. Inspector とコンパイラは同じ明示的な Component / Asset Schema を参照する。
-7. 初期段階では ECS ランタイムを導入せず、ECS に着想を得た正規化データとして実装する。
+7. 初期段階では ECS ランタイムを導入せず、ECS に着想を得た正規化データとして実装する。例外は Script Component だけとし、その scheduling は [4.8 Scripting](#48-scripting-script-asset--script-component) の `RuntimePlugin` lifecycle に限定する。汎用の system scheduler と query は引き続き導入しない。
 8. 未保存、未変換、未公開を区別し、実行していない処理の成功表示を出さない。
 9. XRift の認証情報とファイル操作はブラウザ UI から分離し、将来も authoring document や生成バンドルへ含めない。
 10. ビジュアルモードでは Vite、CLI、開発サーバー、別ブラウザの起動を制作手順として意識させず、Edit から Play、Stop まで同じエディター内で完結させる。
@@ -132,7 +132,7 @@ visual manifest が存在するが壊れている場合、classic として推�
 - Assets から Texture を Material Inspector の対応 slot へ drag できる。用途が base color / emissive なら sRGB、metallic-roughness / normal / occlusion なら linear の recipe を提案し、既存 recipe と衝突する場合は確定前に選択肢を示す。
 - Entity 固有の Material override を追加する場合は、共有 Material Asset の編集とは別の明示的 Component / Command にし、現在どちらを編集しているか header と field group で区別する。
 - Entity の値は SceneDocument、Asset の値は AssetManifest に反映する。Inspector context を切り替えても `sceneSelection` と `assetSelection` は維持する。
-- Play 中はすべて読み取り専用にし、runtime の値を SceneDocument や AssetManifest へ書き戻さない。任意の JSX、スクリプト、式を評価して properties を生成しない。
+- Play 中も runtime が生成した値を SceneDocument や AssetManifest へ書き戻さない。任意の JSX、スクリプト、式を評価して properties を生成しない。作者がInspectorまたはMCPから明示的に変更したScene構造と宣言済みScript propertyだけはauthoring Commandとして保存し、追加・削除・更新されたEntityのruntime revisionへ差分同期する。Play 中に編集できるのは 4.6 が許可する範囲、Script source file、宣言済みScript propertyとする。
 - Component Registry により Mesh、Light、Collider、Particle、Spawn Point と typed XRift component を追加する。
 
 ### Assets
@@ -259,7 +259,7 @@ visual の判定は root の manifest filename と schema で行い、classic pr
 
 ### 4.3 SceneDocument
 
-SceneDocument は ECS に着想を得た正規化 Entity graph である。初期段階では system scheduler、query、独自 runtime ECS を持たない。
+SceneDocument は ECS に着想を得た正規化 Entity graph である。初期段階では system scheduler、query、独自 runtime ECS を持たない。Script Component は例外として per-entity の update 順序を必要とするが、その順序は Entity 階層順と Component 並び順から決まる固定規則であり、SceneDocument に scheduler や query を追加しない（[4.8 Scripting](#48-scripting-script-asset--script-component)）。
 
 ```json
 {
@@ -410,12 +410,21 @@ AssetManifest は SceneDocument から独立し、右 Inspector の Asset contex
       "status": "ready",
       "source": { "kind": "document" },
       "templatePath": "scenes/templates/garden-lamp.scene.json"
+    },
+    "asset_script_spinner": {
+      "id": "asset_script_spinner",
+      "name": "Spinner",
+      "kind": "script",
+      "status": "ready",
+      "contractVersion": "1.0.0",
+      "language": "ts",
+      "source": { "kind": "project", "relativePath": "scripts/spinner.ts" }
     }
   }
 }
 ```
 
-0.1 schema の `primitive | model | material | texture | particle | template` discriminated union は migration input である。読み込み時に `template` を user-facing 名と一致する `prefab` へ migration し、組み込み primitive は Create Registry reference へ移す。旧 `templatePath` は `prefabDocumentPath` として検証し、未知 kind へ推測変換しない。製品 schema の `source.kind = "project"` にある `relativePath` は project root 相対の `/` 区切りへ正規化し、OS の絶対パス、Blob URL、token を保存しない。
+0.1 schema の `primitive | model | material | texture | particle | template` discriminated union は migration input である。読み込み時に `template` を user-facing 名と一致する `prefab` へ migration し、組み込み primitive は Create Registry reference へ移す。旧 `templatePath` は `prefabDocumentPath` として検証し、未知 kind へ推測変換しない。製品 schema の `source.kind = "project"` にある `relativePath` は project root 相対の `/` 区切りへ正規化し、OS の絶対パス、Blob URL、token を保存しない。`script` kind は [4.8 Scripting](#48-scripting-script-asset--script-component) の contract に従い、`source.kind = "project"` だけを許してコード本文と派生 schema を manifest へ保存しない。新しい kind の追加は Asset kind の閉じた検証集合と Inspector、compiler adapter を同じ変更で揃え、既存 project を読めなくする schema version の引き上げを伴わない。
 
 製品 schema の Model / Texture Asset は次の metadata を持つ。0.1 JSON を読み込む場合は migration 後に追加し、旧 document へ field を無秩序に混在させない。
 
@@ -486,7 +495,7 @@ Play の実行中だけ存在する値は `PlaySession` の Editor Runtime State
 
 World Preview の keyboard / gamepad / XR action は `InputAdapter`、移動と physics は登録済み `ControllerPlugin` / `PhysicsRuntimePlugin` で処理する。controller 固有の一時 runtime state を project document へ保存せず、Item Preview Profile には world navigation を適用しない。
 
-Play中もEntity選択と、選択EntityのTransform、Collider、Animationに限ってauthoring Commandを許可する。これらは通常どおりUndo履歴と自動保存へ入り、PlaySessionは更新後のruntime inputをコピーして対象Entityのrevisionだけを増やす。Hierarchy構造、Entity追加・削除、Asset、Material、Scene settings、ギズモ、drop、AI書き込みは無効にする。Stopはinput listener、animation frame、controller、physics、XRSessionをdisposeし、runtimeの位置や速度をdocumentへ書き戻さず、最新のauthoring SceneDocument / AssetManifestとEditの選択・カメラへ戻す。
+Play中もEntity選択、Transform、Collider、Animation、Hierarchy構造、Entity追加・削除・複製・親変更・Component追加のauthoring Commandを許可する。これらは通常どおり履歴と自動保存へ入り、PlaySessionは更新後のruntime inputをコピーして追加・削除・更新されたEntityだけを差分同期する。MCP書き込みも同じrevision検査と同期経路を使う。Asset、Material、Scene settingsとruntime生成値の書き戻しは無効にする。Stopはinput listener、animation frame、controller、physics、XRSessionをdisposeし、runtimeの位置や速度をdocumentへ書き戻さず、最新のauthoring SceneDocument / AssetManifestとEditの選択・カメラへ戻す。
 
 ### 4.7 Component / Asset Registry
 
@@ -578,11 +587,85 @@ ComponentDefinition
 
 基礎 component は Transform、Mesh、Light、Collider、Spawn Point とする。Particle は Particle Asset に emitter、shape、lifetime、rate、size / color curve、Material / Texture 参照などの再利用可能な effect definition を持たせ、Entity の `ParticleRendererComponent` は Particle Asset ID と Entity 固有の play / loop / seed 設定だけを参照する。Particle の値を Mesh や Entity へ inline copy しない。
 
-XRift 固有 component は `xrift.*` namespace と明示的な world / item profile を持たせる。Registry に schema、Inspector、preview、対象 compiler adapter がすべて揃った component だけを作成可能にし、任意の JavaScript component や文字列で指定された module を visual document からロードしない。preview adapter がないが compiler adapter はある場合は「Preview 未対応」を表示し、偽の見た目で代用しない。target に対応しない component は保存時 warning、compile 前 error とし、別 project kind 向けに黙って削除しない。
+XRift 固有 component は `xrift.*` namespace と明示的な world / item profile を持たせる。Registry に schema、Inspector、preview、対象 compiler adapter がすべて揃った component だけを作成可能にし、任意の JavaScript component や文字列で指定された module を visual document からロードしない。Script Component だけは例外で、visual document ではなく project 内の Script source file を asset ID で参照する。document 側が持つのは参照と宣言済み property 値だけで、コード文字列は持たない（[4.8 Scripting](#48-scripting-script-asset--script-component)）。preview adapter がないが compiler adapter はある場合は「Preview 未対応」を表示し、偽の見た目で代用しない。target に対応しない component は保存時 warning、compile 前 error とし、別 project kind 向けに黙って削除しない。
 
 2026 年 7 月の [公式 API リファレンス](https://docs.xrift.net/world-components/components/) と [`@xrift/world-components` 0.43.0 の公開 export](https://github.com/WebXR-JP/xrift-world-components/blob/main/src/index.ts) を照合し、authoring Registry は `Interactable`、`Grabbable`、`Mirror`、`Skybox`、`VideoScreen`、`VideoPlayer`、`LiveVideoPlayer`、`Video180Sphere`、`ScreenShareDisplay`、`SpawnPoint`、`TextInput`、`TagBoard`、`EntryLogBoard`、`Portal`、`BillboardY` を型付きで扱う。生成コードは実際にインストールされる package の公開 Props を優先し、例えば現行 `VideoScreen` は `src` ではなく必須の `id` と任意の `url` を出力し、`sync` は `VideoPlayer` ではなく `LiveVideoPlayer` にだけ出力する。
 
 `EntryLogBoard` の nested partial object は JSON object として schema 検証し、関数型の `formatTimestamp` / `onJoin` / `onLeave` は visual document にコードを保存せず package 既定動作へ委ねる。`Interactable` の必須 `onInteract` は固定の no-op adapter を生成し、任意コードを document から注入しない。`DevEnvironment` はローカル起動 wrapper であり Scene authoring component にはしない。Box / Mesh Collider は `@xrift/world-components` の export ではなく Rapier の物理 component として、汎用 Collider Registry と compiler adapter で扱う。
+
+### 4.8 Scripting (Script Asset / Script Component)
+
+制作者が Entity へ振る舞いを与えるための、versioned contract として明示的に設計した例外である。
+本節は設計原則 7、4.3、4.7、9.4、10 章、Extension policy の各規定に対する唯一の例外範囲を定める。
+ここに書かれていない形の任意コード実行は引き続き禁止する。
+
+#### 分離の原則
+
+Particle と同じ関係を採る。再利用可能な定義は Asset 側に置き、Entity 側は参照と Entity 固有の値だけを持つ。
+
+- **Script Asset** は `kind: "script"`、`source.kind = "project"` の Asset とし、実体は project 内の `scripts/` 以下の TypeScript source file とする。AssetManifest に持つのは参照と language、contract version だけで、**コード本文と派生した property schema を manifest へ保存しない**。property schema は source から導出して Editor State に置く。これにより source の編集が AssetManifest を変えず、Play 中の保存が全 Entity の runtime 世代を上げない。
+- **Script Component** は `scriptAssetId`、宣言済み property 値、`assetReferences`、`entityReferences` を持つ。値は純 JSON かつ有限数に限り、コード、関数、式を持たない。1 Entity へ複数付けられる。
+
+#### 実行境界
+
+- 実行は `RuntimePlugin` の `start` / `update` / `stop` / `dispose` lifecycle に従い（4.6）、Play の開始と停止、および `entityRevisions` による Entity 単位の作り直しに従属する。
+- update 順序は Entity 階層順、次に Entity 内の Component 並び順で確定する。個別の `useFrame` を並べず、単一の scheduler が確定順で呼ぶ。system query や優先度指定は導入しない。
+- named `Render` は宣言的な追加描画だけを担う。R3F の `useFrame` は callback 例外を Script 単位に隔離できないため、Play と公開の診断で拒否し、フレーム処理は `start().update(delta)` へ統一する。
+- Stop は生成した module、blob URL、timer、listener を明示的に破棄する。React の unmount に依存しない。
+- Item project は重力と RigidBody を持たないため、物理へ触る API は未対応として degrade し、動くふりをしない。
+
+#### Audio / Audio Source の所有境界
+
+- Audio Assetはproject管理下のMP3 / WAV原本とformat、MIME、byte lengthを持ち、外部絶対pathやbytesをAssetManifestへ保存しない。EditのScene ViewはAudio Sourceをiconで示すだけでsourceを取得・再生せず、Playと`classic-jsx`生成物は同じAudio Source runtimeを使う。
+- Studio Playがmanaged Audioを読むnative境界は`assets/`配下のproject-relative pathだけを受け付ける。path traversal、通常file以外、symlink / reparse point、128 MiB超過、拡張子とMP3 / WAV signatureの不一致、read中のsize変化を拒否してからdata URLをruntimeへ渡す。
+- `ctx.assets.loadAudio`はScript ownerが独立playerを作るAPIであり、保存済みAudio Source Componentを操作しない。`ctx.audioSources`はattached Entity自身のAudio Sourceだけを`componentId` / `audioAssetId`で選び、play / pause / stop / seek / volume / loopをowner単位で上書きする。子Entity、別Entity、共有Audio Assetを変更しない。
+- 同じEntityの複数ScriptはComponent順でAudio Source overrideを合成する。Script再起動、runtime failure、Stopではそのownerの再生要求とoverrideを外し、Audio Source Componentの保存値へ戻す。browser / webviewのautoplay policyで拒否されても`play()`は例外を外へ出さず開始件数0をresolveし、`list().status`を`autoplay-blocked`にする。Scene全体を止めず、ユーザー操作後の再試行を許す。
+- Audio Sourceのvolume / loop / autoplay /距離propertyは既存runtimeへ更新し、Audio Asset参照、spatial、enabled、Component追加・削除は対象Entityだけを再同期する。Edit時にAudio Assetを`place_asset`すると参照設定済みAudio Source Entityを作り、既存Entityには`core.audio-source`のadd / update / removeを使う。
+- `import_audio_asset`はEdit mode限定で、trustedな絶対pathをnative側の通常file、no-link、128 MiB、extension + signature、read前後size検査へ通し、content-addressed copy、atomic commit、history、autosaveを一件で確定する。`get_audio_asset`とimport結果は管理下relative pathとmetadataだけを返し、外部path、data URL、binary bytesをMCPへ返さない。
+- `ctx.audioSources`はruntime-onlyでSceneDocument revisionを変えない。保存するAudio Source設定は`place_asset`、`add_component`、`update_component`、`remove_component`を使い、runtime状態を暗黙に永続化しない。
+
+#### Light と runtime event の所有境界
+
+- Studio Playと`classic-jsx`生成物は同じ`XriftScriptLight`とLight bridgeを使う。disabledのLightもbridgeをmountしたまま描画だけを止め、ScriptからPlay中に一時点灯できるようにする。Directional / Spotのtargetもこの共通runtimeで構成し、Editorと公開ワールドで向きを別実装にしない。
+- `ctx.lights`はattached Entity自身のLightだけを`componentId` / `lightType`で選び、enabled、color、intensity、Point / Spotのdistanceをowner単位で上書きする。子Entity、別Entity、Scene環境Light、共有設定を暗黙に変更しない。late mountまたは置換されたLightにも同じ選択規則を適用する。
+- 同じEntityの複数ScriptはComponent順でLight overrideを合成する。同一Script内ではfieldごとの最後の変更を優先し、Script再起動、runtime failure、Stopではそのownerだけを外してLight Componentの保存値へ戻す。`reset()`は呼び出したScript ownerのoverrideだけを外す。
+- Inspector / MCPによるenabled、color、intensity、shadow、distance、decay、angle、penumbra、Area sizeの永続変更は既存Light runtimeへ即時反映する。Light種別とComponent追加・削除は構造変更として対象Entityだけを再同期する。`ctx.lights`はruntime-onlyでSceneDocument revisionを変えず、永続化には`core.light.*`の`add_component` / `update_component` / `remove_component`を使う。
+- Script event busは同じ`XriftScriptRoot`内だけにあり、payloadをSceneDocumentへ保存せず、KHR_interactivityへ暗黙に接続しない。近接判定はScript Componentで明示参照したauthored Entityの`getWorldPosition`を使う。runtime player / avatarは`ctx.find`へ公開しないため、player近接を実装済みと表示しない。
+- 組み込み`proximity-event`は固定event名`xrift:proximity-state`へ`channel`、inside状態、`sourceEntityId`、`kind: enter | exit | sync`を送る。enter / exitは境界遷移時だけ一度送り、syncはlive channel変更と後から起動したreceiverの状態同期に限定する。停止・削除時は同sourceのexitを送る。`event-light`はchannelごとのactive sourceをSetで追跡するため複数sensorの一つが退出しても残りを維持する。event名の動的変更でlistenerを残留させず、Scriptの停止・再起動時に購読を確実に解除する。
+
+#### Texture / Material の所有境界
+
+- `ctx.assets.loadTexture` は Script Component の `assetReferences` にある Texture Asset だけを受け付ける。runtime resolver は URL だけでなく、Asset ID、`colorSpace`、Sampler の wrap / mag / min filter、`flipY`、`generateMipmaps` を descriptor として Play host と公開 adapter の両方へ渡す。
+- Script が省略した load option は Texture Asset の Import 設定を継承し、明示した field だけを Script instance の読み込みへ優先する。`generateMipmaps: false` と mipmap filter の組み合わせは `linear` へ正規化する。Studio Play と生成物で別の暗黙 default を持たない。
+- `ctx.materials` は attached Entity 自身の owned Mesh だけへ runtime override を重ねる。`setTextureTransform` は Material slot ごとの Texture clone に `offset`、`repeat`、`center`、`rotation` を適用し、読み込んだ source Texture、共有 Texture Asset、別 slot、子 Entity、別 Entityを変更しない。
+- Script の再起動、runtime failure、Stop では、その Script owner の Material clone、Texture clone、override、読み込み cache を破棄する。`resetTextureTransform(slot)` は実行中に指定 slot の transform だけを戻し、他 Script owner の override を外さない。
+- `ctx.assets` / `ctx.materials` は runtime-only で、AssetManifest revision を変更しない。保存する Texture の Import / Sampler 設定は `get_texture_asset` / `update_texture_asset`、Material の PBR / Texture binding は `get_material_asset` / `update_material_asset` / `set_material_texture_transform`、Mesh slotへの割当は`set_material`を使う。新規 local Texture import は Edit mode の `import_texture_asset` に限定する。
+- `get_scripting_capabilities` は上記の Asset default、明示 option の優先順位、filter / mipmap、clone 隔離と、runtime 一時操作 / MCP 永続操作の tool 対応を機械可読に返す。MCP client が Script API から永続化を推測しないようにする。
+
+#### 動的評価の限定
+
+- Editor の Play では、source を Monaco と同梱した TypeScript service の `transpileModule` で変換し、生成した module を評価する。言語サービス worker はEditor補完と診断に限定し、Play開始時のmodel同期を挟まない。これが本節で認める唯一の動的評価であり、対象は project 内の Script source file に限る。visual document 内の文字列を評価しない。
+- 許可した bare specifier は Studio が既に読み込んでいる同一 module インスタンスへ解決する。`three` を二重ロードしない。
+- `https://` から始まる module は Play でだけ opt-in で許し、**公開時は blocking 診断**とする。
+- 生成コードは静的 import だけを出力する。`eval`、`Function`、動的 import を生成物へ出さない（9.4）。
+
+#### 権限と残存リスク
+
+Play は iframe や Worker を挟まないアプリと同一 realm で動き、`withGlobalTauri` により IPC bridge が `window` に露出している。したがって Script は原理的にアプリと同じ権限を持つ。
+
+- module scope で `window`、`globalThis`、`__TAURI__`、`fetch`、`document`、`Function` などを遮蔽する。ES module は常に strict mode であり `eval` を lexical binding として宣言すると構文エラーになるため、`eval` は遮蔽一覧へ入れない。同一 realm である以上これは完全な sandbox ではなく、事故と素朴な悪用を止める緩和である。この限界を `docs/SCRIPTING.md` に明記し、隔離済みと表示しない。
+- Script sourceは一度だけ読み、SHA-256、言語、contract version、module policy version、remote module禁止をfingerprintにする。canonical project pathとproject IDを合わせた承認をproject外のapp dataへ保存し、正確に一致したread-once snapshotだけを評価する。確認面はfile、来歴、完全なhash、source、同一realm警告を示す。来歴は表示専用で自己承認には使わない。
+- XRift Studio stdio MCP editor tools / serverは承認toolと承認権限を持たない。未承認時の`set_play_mode`は`SCRIPT_APPROVAL_REQUIRED`を返し、明示した`unapprovedPolicy: "skip"`だけがScriptを無効化したPlayを許す。Play中に同serverまたはfilesystemからsourceが変わった場合はlast-good moduleを維持する。
+- debug buildだけに登録するprivileged Tauri MCP bridgeは、webview JavaScript実行とTauri commandの`invoke`を許す開発者向けautomationであり、stdio MCP editor tools / serverのtrust boundaryには含めない。release buildには同bridgeを登録・搭載せず、Script承認の公開APIとして扱わない。
+- 完全な隔離、および 10 章が求める CSP の適用は今後の課題とする。Monaco は local 同梱済みだが、Play の blob module と共有 module bridge を許可しながら権限を狭める CSP 設計が残っている。
+
+#### 公開
+
+- Script source と host adapter を staging の overlay file として出力し、生成した `src/World.tsx` から静的 import で参照する。`.ts` / `.js` は静的 Asset として許可しないため、必ず overlay file として出す。
+- staging へ install できる npm package は既存の allow-list に限る。Script が任意 package を要求する形は取らない。
+- host adapter と authoring API は単一の実装を正本とし、Editor と生成物で二重管理しない。
+- runtime JSON 出力は Script を表現できないため、選択された場合は blocking 診断とする。未処理のまま manifest へ素通しさせない。
+- 同じ入力から同じ出力を得る決定性を維持する。生成する識別子は hash 由来とし、挿入順や時刻に依存させない。
 
 ## 5. XRift Studio のコード境界
 
@@ -979,7 +1062,7 @@ XRiftStudioProvenance
 - 素のThree.js利用者は`xrift-studio-runtime/three`だけをimportでき、React／Tauri／CLIをbundleへ含めない。ModelとTextureは並列にloadし、形式固有rendererは対象Assetがある場合だけ遅延loadする。
 - Entity、Asset、プロパティの出力順を安定させ、同じ canonical input set と compiler / adapter version から同じ staging project を生成する。
 - Component / Asset Registry は target-neutral な schema、reference、validation 層と、Three preview、R3F、XRift world、XRift item の target adapter 層に分ける。
-- Mesh、Light などは allow-list 済み adapter だけで変換する。document 内の文字列を `eval`、`Function`、任意の動的 import として実行しない。
+- Mesh、Light などは allow-list 済み adapter だけで変換する。document 内の文字列を `eval`、`Function`、任意の動的 import として実行しない。この禁止は生成コードに対して無条件に維持する。Script Asset は document 内の文字列ではなく独立した source file であり、生成コードへは**静的 import** としてだけ出力する。生成物に `eval`、`Function`、動的 import を出さない（[4.8 Scripting](#48-scripting-script-asset--script-component)）。
 
 World Adapter はワールドのルート、物理、スポーンなどの compiler profile を接続する。Item Adapter は XRift から渡される位置やスケールなどの Item props をルートへ適用し、アイテム用 profile にない機能を生成しない。これら compiler adapter と、Editor 内の World Play Profile / Item Preview Profile は責務が異なる。
 
@@ -1034,7 +1117,7 @@ SDK API reference の upload result は ID、version、content hash を定義す
 
 ## 10. セキュリティと認証境界
 
-- visual documents は宣言データだけを受け入れ、任意スクリプト、HTML、シェルコマンドを保持・実行しない。
+- visual documents は宣言データだけを受け入れ、任意スクリプト、HTML、シェルコマンドを保持・実行しない。Script Asset を導入した後もこの規則は document に対して維持する。Script の実体は project 内の source file であり、visual document が持つのは asset 参照と宣言済み property 値だけとする。Script の評価は Editor の Play 内部に限り、その実行境界と残存リスクは [4.8 Scripting](#48-scripting-script-asset--script-component) と `docs/SCRIPTING.md` に明記する。
 - 外部アセットは拡張子だけで信用せず、サイズ、MIME、実体、展開後サイズをネイティブ境界で検証する。
 - パスはプロジェクトルート内へ正規化し、`..`、絶対パス、シンボリックリンク越しの脱出を拒否する。
 - Importer と生成器は既知の Asset / Component 型だけを処理する。
@@ -1076,8 +1159,8 @@ SDK API reference の upload result は ID、version、content hash を定義す
 ### Extension policy
 
 - 後続 `KHR_materials_*` は一つずつ typed Registry adapter、validation、Inspector、preview、compiler を揃えて追加する。
-- Component / Asset Plugin は任意 script 実行ではなく versioned declarative schema と allow-listed target adapter に限定する。
-- ECS runtime は正規化 document と Command / Registry で表現できない scheduling requirement が確認された時だけ評価する。
+- Component / Asset Plugin は任意 script 実行ではなく versioned declarative schema と allow-listed target adapter に限定する。ここでいう Plugin は third-party が Studio 本体を拡張する機構を指す。制作者が自分の World / Item のために書く Script Asset は [4.8 Scripting](#48-scripting-script-asset--script-component) の versioned contract として別に扱い、Plugin 機構としては開放しない。
+- ECS runtime は正規化 document と Command / Registry で表現できない scheduling requirement が確認された時だけ評価する。Script Component の per-frame update がその確認された要件であり、対応は固定順序の `RuntimePlugin` lifecycle にとどめる。汎用 ECS runtime は引き続き導入しない。
 
 ## 12. 検証と受け入れ条件
 
@@ -1102,7 +1185,7 @@ SDK API reference の upload result は ID、version、content hash を定義す
 - [ ] toolbar と Assets は中央 semantic Icon Registry の Lucide icon、label、tooltip を使い、他製品の icon asset や custom SVG を含まない。
 - [ ] ギズモまたは Inspector から position、rotation、scale を変更すると両方の表示が一致する。
 - [ ] Playは同じエディター中央のPlay Windowで始まり、境界、header、実行コピーlabelでScene Viewと区別できる。Vite、CLI、ポート、別ブラウザを操作する必要がない。
-- [ ] Play中は単一EntityのTransform、Collider、Animationだけを通常の履歴と自動保存で変更でき、対象Entityだけ先頭から再実行する。Hierarchy構造、Asset、Material、Scene settings、ギズモ、Asset dropは変更できない。
+- [ ] Play中はEntityのTransform、Collider、Animation、追加・削除・複製・親変更・Component追加を通常の履歴と自動保存で変更でき、追加・削除・更新されたEntityだけをruntimeへ差分同期する。Asset、Material、Scene settingsは変更できない。
 - [ ] World Preview の controller / physics は登録済み runtime adapter を使い、Item Preview に World 用 controller を適用しない。
 - [ ] Stop後はPlaySessionが破棄され、Play中の許可された調整を含む最新SceneDocument、Play前と同じAssetManifest、selection、Edit cameraへ戻る。runtime位置や速度は書き戻さない。
 - [ ] Material / Texture は右 Inspector の product schema で編集し、Assets 下部に別 property form を作らない。

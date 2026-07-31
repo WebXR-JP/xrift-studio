@@ -58,6 +58,19 @@ import {
   type SourceDocumentHash,
 } from "../serialization";
 import { sha256Utf8 } from "./hash";
+import { collectRequiredScriptAssetIds } from "../scripting/script-schedule";
+import { createScriptAssetRuntimeDescriptorMap } from "../scripting/asset-runtime";
+import {
+  createScriptAudioSourceOverlayFile,
+  createScriptLightOverlayFile,
+  createScriptParticleOverlayFile,
+  planScriptEmission,
+  renderScriptComponent,
+  SCRIPT_AUDIO_SOURCE_OVERLAY_PATH,
+  SCRIPT_LIGHT_OVERLAY_PATH,
+  SCRIPT_PARTICLE_OVERLAY_PATH,
+  type EmittedScriptModule,
+} from "./script-emit";
 import {
   isOpenBrushModelMetadata,
   OPEN_BRUSH_BRUSH_BASE_URL,
@@ -71,6 +84,7 @@ import {
 import {
   VISUAL_COMPILER_VERSION,
   type AssetCopyPlanEntry,
+  type CompilerBundledAssetCopy,
   type CompilerDiagnostic,
   type CompilerOverlayFile,
   type VisualCompileResult,
@@ -79,6 +93,10 @@ import {
 } from "./types";
 import { compileXriftComponent } from "./xrift-component-registry";
 import { compileRuntimeManifest } from "./runtime-manifest";
+import {
+  LOCAL_BASIS_TRANSCODER_FILES,
+  PUBLISHED_BASIS_TRANSCODER_DIRECTORY,
+} from "../basis-transcoder";
 
 const XRIFT_STUDIO_RUNTIME_PACKAGE = "xrift-studio-runtime@0.1.0" as const;
 
@@ -103,6 +121,11 @@ type CompileContext = {
   visitedEntityIds: Set<string>;
   activeEntityIds: Set<string>;
   usesDoubleSide: boolean;
+  /** Emitted Script modules keyed by Script Asset id. */
+  scriptModules: ReadonlyMap<string, EmittedScriptModule>;
+  /** Running scheduling order, matching Play's Entity-then-Component walk. */
+  scriptOrder: { next: number };
+  usesScriptRuntime: boolean;
 };
 
 type RenderedXriftWrapper = {
@@ -149,6 +172,29 @@ export function compileVisualProject(
       resolvedEntryScene.scene.sceneId,
     );
   }
+  // Scripts are planned before code generation so the entry file can import
+  // each emitted module statically. Published output never evaluates source
+  // dynamically; see VISUAL_EDITOR_ARCHITECTURE.md 4.8.
+  const scriptAssetIds = resolvedEntryScene
+    ? collectRequiredScriptAssetIds(resolvedEntryScene.scene)
+    : [];
+  const scriptPlan = planScriptEmission(
+    scriptAssetIds,
+    documents.assets,
+    (asset) => documents.scriptSources?.[asset.id] ?? null,
+    diagnostics,
+  );
+  if (scriptAssetIds.length > 0 && outputMode === "classic-runtime") {
+    // runtime.json is data; an unhandled component would otherwise be passed
+    // straight through and produce a silently broken manifest.
+    diagnostics.push({
+      severity: "blocking",
+      code: "script-unsupported-runtime-output",
+      message:
+        "Runtime JSON出力ではScriptを表現できません。Classic JSX出力を選んでください。",
+    });
+  }
+
   let runtimeManifestFile: CompilerOverlayFile | undefined;
   let generated: string;
   if (outputMode === "classic-runtime") {
@@ -161,6 +207,7 @@ export function compileVisualProject(
         documents.assets,
         assetCopyPlan,
         diagnostics,
+        scriptPlan.modules,
       );
     }
     const runtimeManifest = compileRuntimeManifest(
@@ -184,6 +231,7 @@ export function compileVisualProject(
           documents.assets,
           assetCopyPlan,
           diagnostics,
+          scriptPlan.modules,
         )
       : emptySource(documents.project.projectKind);
   }
@@ -199,6 +247,37 @@ export function compileVisualProject(
     compilerFile("xrift.json", xriftJson, "metadata"),
   ];
   if (runtimeManifestFile) overlayFiles.push(runtimeManifestFile);
+  overlayFiles.push(...scriptPlan.overlayFiles);
+  if (
+    outputMode === "classic-jsx" &&
+    resolvedEntryScene &&
+    sceneUsesParticleRuntime(resolvedEntryScene.scene) &&
+    !overlayFiles.some(
+      (file) => file.relativePath === SCRIPT_PARTICLE_OVERLAY_PATH,
+    )
+  ) {
+    overlayFiles.push(createScriptParticleOverlayFile());
+  }
+  if (
+    outputMode === "classic-jsx" &&
+    resolvedEntryScene &&
+    sceneUsesAudioSourceRuntime(resolvedEntryScene.scene) &&
+    !overlayFiles.some(
+      (file) => file.relativePath === SCRIPT_AUDIO_SOURCE_OVERLAY_PATH,
+    )
+  ) {
+    overlayFiles.push(createScriptAudioSourceOverlayFile());
+  }
+  if (
+    outputMode === "classic-jsx" &&
+    resolvedEntryScene &&
+    sceneUsesLightRuntime(resolvedEntryScene.scene) &&
+    !overlayFiles.some(
+      (file) => file.relativePath === SCRIPT_LIGHT_OVERLAY_PATH,
+    )
+  ) {
+    overlayFiles.push(createScriptLightOverlayFile());
+  }
   diagnoseUnsupportedAssets(documents.assets, diagnostics);
   const uniqueDiagnostics = deduplicateDiagnostics(diagnostics);
   const provenanceFile = compilerFile(
@@ -230,6 +309,11 @@ export function compileVisualProject(
       asset.kind === "model" &&
       isOpenBrushModelMetadata(asset.importMetadata?.openBrush),
   )) runtimePackageSpecs.push(OPEN_BRUSH_RUNTIME_PACKAGE);
+  const bundledAssetCopyPlan =
+    outputMode === "classic-jsx" &&
+    generated.includes("function useCompiledKtx2(")
+      ? createPublishedBasisAssetCopyPlan()
+      : [];
 
   return {
     targetKind: documents.project.projectKind,
@@ -246,10 +330,39 @@ export function compileVisualProject(
       stagingDirectoryName,
       overlayFiles: [...overlayFiles, provenanceFile],
       assetCopyPlan,
+      bundledAssetCopyPlan,
       runtimePackageSpecs,
       requiredPublicationFiles,
     },
   };
+}
+
+function createPublishedBasisAssetCopyPlan(): CompilerBundledAssetCopy[] {
+  return LOCAL_BASIS_TRANSCODER_FILES.map((sourceFileName) => ({
+    source: "three-basis" as const,
+    sourceFileName,
+    targetRelativePath: `public/${PUBLISHED_BASIS_TRANSCODER_DIRECTORY}/${sourceFileName}`,
+  }));
+}
+
+function sceneUsesParticleRuntime(scene: SceneDocument): boolean {
+  return Object.values(scene.entities).some((entity) =>
+    entity.components.some(
+      (component) => component.enabled && component.type === "particle-emitter",
+    ),
+  );
+}
+
+function sceneUsesAudioSourceRuntime(scene: SceneDocument): boolean {
+  return Object.values(scene.entities).some((entity) =>
+    entity.components.some((component) => component.type === "audio-source"),
+  );
+}
+
+function sceneUsesLightRuntime(scene: SceneDocument): boolean {
+  return Object.values(scene.entities).some((entity) =>
+    entity.components.some((component) => component.type === "light"),
+  );
 }
 
 /**
@@ -488,12 +601,79 @@ function appendXriftComponentDiagnostics(
   );
 }
 
+/**
+ * Emits one Script Component mount.
+ *
+ * Order is a running counter over the same Entity-then-Component walk Play
+ * uses, so relative update order matches between the editor and the world.
+ */
+function renderScript(
+  entity: SceneEntity,
+  component: Extract<RegisteredSceneComponent, { type: "script" }>,
+  context: CompileContext,
+): string | null {
+  const order = context.scriptOrder.next;
+  context.scriptOrder.next += 1;
+  const module = context.scriptModules.get(component.scriptAssetId);
+  if (!module) {
+    addDiagnostic(
+      context,
+      componentDiagnostic(
+        entity,
+        component.id,
+        "script-module-missing",
+        "Script Assetを出力できなかったためScriptを配置しません",
+        component.scriptAssetId,
+      ),
+    );
+    return null;
+  }
+  for (const assetId of component.assetReferences) {
+    context.referencedAssetIds.add(assetId);
+  }
+  context.usesScriptRuntime = true;
+  context.extraImports.add(
+    `import { XriftScriptHost, XriftScriptRoot } from "./xrift-studio/script-host";`,
+  );
+  context.imports.add("useXRift");
+  context.reactTypeImports.add("PropsWithChildren");
+  context.supportDeclarations.set(
+    "script-runtime:published-root",
+    `const XriftPublishedScriptRoot: FC<PropsWithChildren> = ({ children }) => {
+  const { baseUrl } = useXRift();
+  return <XriftScriptRoot assetBaseUrl={baseUrl}>{children}</XriftScriptRoot>;
+};`,
+  );
+  const renderImport = module.renderImportName
+    ? `, { Render as ${module.renderImportName} }`
+    : "";
+  context.extraImports.add(
+    `import ${module.importName}${renderImport} from "${module.importSpecifier}";`,
+  );
+  const assetRuntimeDescriptors = Object.fromEntries(
+    createScriptAssetRuntimeDescriptorMap(
+      context.assets,
+      component.assetReferences,
+      (assetId) => context.assetRuntimeUrls.get(assetId),
+    ),
+  );
+  return renderScriptComponent(
+    component,
+    module,
+    entity.id,
+    entity.name,
+    order,
+    assetRuntimeDescriptors,
+  );
+}
+
 function generateComponentSource(
   projectKind: VisualProjectKind,
   scene: SceneDocument,
   assets: AssetManifest,
   assetCopyPlan: readonly AssetCopyPlanEntry[],
   diagnostics: CompilerDiagnostic[],
+  scriptModules: ReadonlyMap<string, EmittedScriptModule> = new Map(),
 ): string {
   const context: CompileContext = {
     projectKind,
@@ -520,6 +700,9 @@ function generateComponentSource(
     visitedEntityIds: new Set(),
     activeEntityIds: new Set(),
     usesDoubleSide: false,
+    scriptModules,
+    scriptOrder: { next: 0 },
+    usesScriptRuntime: false,
   };
   const sceneSettings = resolveSceneSettings(scene.settings);
   const sceneEnvironment = renderSceneEnvironment(sceneSettings, context);
@@ -574,13 +757,23 @@ function generateComponentSource(
     .join("\n\n");
   if (declarations) imports.push("", declarations);
   const renderedScene = [...sceneEnvironment, ...roots];
-  const body = renderedScene.length > 0
-    ? renderedScene.map((entry) => indent(entry, 3)).join("\n")
-    : "      {null}";
+  const sceneBody = renderedScene.length > 0
+    ? renderedScene
+        .map((entry) => indent(entry, context.usesScriptRuntime ? 4 : 3))
+        .join("\n")
+    : context.usesScriptRuntime
+      ? "        {null}"
+      : "      {null}";
+  const body = context.usesScriptRuntime
+    ? `      <XriftPublishedScriptRoot>\n${sceneBody}\n      </XriftPublishedScriptRoot>`
+    : sceneBody;
+  const scriptScopeProperty = context.usesScriptRuntime
+    ? " userData={{ xriftScriptScope: true }}"
+    : "";
   if (projectKind === "world") {
-    return `${imports.join("\n")}\n\nexport interface WorldProps {\n  position?: [number, number, number];\n  scale?: number;\n}\n\nexport const World: FC<WorldProps> = ({ position = [0, 0, 0], scale = 1 }) => (\n  <group position={position} scale={scale}>\n${body}\n  </group>\n);\n`;
+    return `${imports.join("\n")}\n\nexport interface WorldProps {\n  position?: [number, number, number];\n  scale?: number;\n}\n\nexport const World: FC<WorldProps> = ({ position = [0, 0, 0], scale = 1 }) => (\n  <group position={position} scale={scale}${scriptScopeProperty}>\n${body}\n  </group>\n);\n`;
   }
-  return `${imports.join("\n")}\n\nexport interface ItemProps {\n  position?: [number, number, number];\n  scale?: number;\n}\n\nexport const Item: FC<ItemProps> = ({ position = [0, 0, 0], scale = 1 }) => (\n  <group position={position} scale={scale}>\n${body}\n  </group>\n);\n\nexport default Item;\n`;
+  return `${imports.join("\n")}\n\nexport interface ItemProps {\n  position?: [number, number, number];\n  scale?: number;\n}\n\nexport const Item: FC<ItemProps> = ({ position = [0, 0, 0], scale = 1 }) => (\n  <group position={position} scale={scale}${scriptScopeProperty}>\n${body}\n  </group>\n);\n\nexport default Item;\n`;
 }
 
 const PROJECTED_SKYBOX_VERTEX_SHADER = `
@@ -1005,7 +1198,14 @@ function renderEntity(
   const localContent: string[] = [];
   const wrappers: RenderedXriftWrapper[] = [];
   for (const component of entity.components as RegisteredSceneComponent[]) {
-    if (!component.enabled || component.type === "transform") continue;
+    if (
+      (!component.enabled &&
+        component.type !== "audio-source" &&
+        component.type !== "light") ||
+      component.type === "transform"
+    ) {
+      continue;
+    }
     if (component.type === "collider" || component.type === "rigid-body") {
       // Collider components are combined into one RigidBody after all visual
       // content is rendered, avoiding nested or duplicate physics bodies.
@@ -1018,7 +1218,7 @@ function renderEntity(
       // Playback is applied by the sibling Model renderer.
       continue;
     } else if (component.type === "light") {
-      localContent.push(renderLight(component));
+      localContent.push(renderLight(component, context));
     } else if (component.type === "text") {
       context.dreiImports.add("Text");
       localContent.push(renderText(component));
@@ -1043,6 +1243,9 @@ function renderEntity(
           component.prefabAssetId,
         ),
       );
+    } else if (component.type === "script") {
+      const rendered = renderScript(entity, component, context);
+      if (rendered) localContent.push(rendered);
     } else if (component.type === "xrift-component") {
       renderRegisteredXriftComponent(entity, component, context, localContent, wrappers);
     } else {
@@ -1109,10 +1312,11 @@ function renderEntity(
   const rotation = vectorProp(transform?.rotation ?? [0, 0, 0]);
   const scale = vectorProp(transform?.scale ?? [1, 1, 1]);
   const name = JSON.stringify(entity.name);
+  const userData = `{ xriftEntityId: ${JSON.stringify(entity.id)} }`;
   if (!children) {
-    return `<group name=${name} position={${position}} rotation={${rotation}} scale={${scale}} />`;
+    return `<group name=${name} position={${position}} rotation={${rotation}} scale={${scale}} userData={${userData}} />`;
   }
-  return `<group name=${name} position={${position}} rotation={${rotation}} scale={${scale}}>\n${indent(children, 1)}\n</group>`;
+  return `<group name=${name} position={${position}} rotation={${rotation}} scale={${scale}} userData={${userData}}>\n${indent(children, 1)}\n</group>`;
 }
 
 function renderOwnedRigidBody(
@@ -2305,7 +2509,7 @@ function registerClassicR3fMaterialComponent(
     );
     textureLines.push(
       `const ${variableName}Url = useCompiledAssetUrl(${urlConstant});`,
-      `const ${variableName} = useCompiledTexture(${usesKtx2 ? "useKTX2" : "useTexture"}(${variableName}Url), ${optionsConstant});`,
+      `const ${variableName} = useCompiledTexture(${usesKtx2 ? "useCompiledKtx2" : "useTexture"}(${variableName}Url), ${optionsConstant});`,
     );
     textureDependencies.push(variableName);
     uniformEntries.push(
@@ -2545,7 +2749,7 @@ function addCompiledTexture(
   );
   textureLines.push(
     `const ${variableName}Url = useCompiledAssetUrl(${urlConstant});`,
-    `const ${variableName} = useCompiledTexture(${usesKtx2 ? "useKTX2" : "useTexture"}(${variableName}Url), ${optionsConstant});`,
+    `const ${variableName} = useCompiledTexture(${usesKtx2 ? "useCompiledKtx2" : "useTexture"}(${variableName}Url), ${optionsConstant});`,
   );
   textureProps.push(`${materialProp}={${variableName}}`);
   return true;
@@ -2555,7 +2759,8 @@ function registerCompiledTextureRuntime(
   context: CompileContext,
   usesKtx2 = false,
 ): void {
-  context.dreiImports.add(usesKtx2 ? "useKTX2" : "useTexture");
+  if (usesKtx2) registerCompiledKtx2Runtime(context);
+  else context.dreiImports.add("useTexture");
   const key = "texture-runtime:use-compiled-texture";
   if (context.supportDeclarations.has(key)) return;
   context.reactValueImports.add("useEffect");
@@ -2639,6 +2844,25 @@ function useCompiledTexture(source: Texture, options: CompiledTextureOptions): T
   }, [source, options]);
   useEffect(() => () => texture.dispose(), [texture]);
   return texture;
+}`,
+  );
+}
+
+function registerCompiledKtx2Runtime(context: CompileContext): void {
+  const key = "texture-runtime:use-compiled-ktx2";
+  if (context.supportDeclarations.has(key)) return;
+  context.dreiImports.add("useKTX2");
+  context.imports.add("useXRift");
+  context.threeTypeImports.add("Texture");
+  context.supportDeclarations.set(
+    key,
+    `const COMPILED_KTX2_TRANSCODER_DIRECTORY = ${JSON.stringify(
+      `${PUBLISHED_BASIS_TRANSCODER_DIRECTORY}/`,
+    )} as const;
+
+function useCompiledKtx2(assetUrl: string): Texture {
+  const { baseUrl } = useXRift();
+  return useKTX2(assetUrl, \`\${baseUrl}\${COMPILED_KTX2_TRANSCODER_DIRECTORY}\`);
 }`,
   );
 }
@@ -2964,7 +3188,7 @@ function renderParticleEmitter(
   );
   context.supportDeclarations.set(
     `particle-config:${configName}`,
-    `const ${configName}: CompiledParticleConfig = ${JSON.stringify(properties)};`,
+    `const ${configName}: XriftParticleConfig = ${JSON.stringify(properties)};`,
   );
 
   let textureLine = "";
@@ -2975,10 +3199,60 @@ function renderParticleEmitter(
       properties.renderer.textureAssetId ?? "",
     );
     if (textureAsset) {
+      context.reactValueImports.add("useEffect");
+      context.reactValueImports.add("useMemo");
       const usesKtx2 = getTextureSourceFormat(textureAsset) === "ktx2";
-      context.dreiImports.add(usesKtx2 ? "useKTX2" : "useTexture");
+      if (usesKtx2) registerCompiledKtx2Runtime(context);
+      else context.dreiImports.add("useTexture");
       const urlConstant = registerAssetUrl(textureAsset, textureUrl, context);
-      textureLine = `  const particleMapUrl = useCompiledAssetUrl(${urlConstant});\n  const particleMap = ${usesKtx2 ? "useKTX2" : "useTexture"}(particleMapUrl);\n`;
+      const settings = textureAsset.importSettings;
+      const colorSpace =
+        settings.colorSpace === "linear" ? "NoColorSpace" : "SRGBColorSpace";
+      const wrapS = {
+        "clamp-to-edge": "ClampToEdgeWrapping",
+        "mirrored-repeat": "MirroredRepeatWrapping",
+        repeat: "RepeatWrapping",
+      }[settings.sampler.wrapS];
+      const wrapT = {
+        "clamp-to-edge": "ClampToEdgeWrapping",
+        "mirrored-repeat": "MirroredRepeatWrapping",
+        repeat: "RepeatWrapping",
+      }[settings.sampler.wrapT];
+      const magFilter = {
+        linear: "LinearFilter",
+        nearest: "NearestFilter",
+      }[settings.sampler.magFilter];
+      const minFilter = {
+        linear: "LinearFilter",
+        "linear-mipmap-linear": "LinearMipmapLinearFilter",
+        "linear-mipmap-nearest": "LinearMipmapNearestFilter",
+        nearest: "NearestFilter",
+        "nearest-mipmap-linear": "NearestMipmapLinearFilter",
+        "nearest-mipmap-nearest": "NearestMipmapNearestFilter",
+      }[settings.sampler.minFilter];
+      [
+        colorSpace,
+        wrapS,
+        wrapT,
+        magFilter,
+        minFilter,
+      ].forEach((name) => context.threeValueImports.add(name));
+      textureLine = `  const particleMapUrl = useCompiledAssetUrl(${urlConstant});
+  const particleMapSource = ${usesKtx2 ? "useCompiledKtx2" : "useTexture"}(particleMapUrl);
+  const particleMap = useMemo(() => {
+    const value = particleMapSource.clone();
+    value.colorSpace = ${colorSpace};
+    value.flipY = ${settings.flipY};
+    value.generateMipmaps = ${settings.generateMipmaps};
+    value.wrapS = ${wrapS};
+    value.wrapT = ${wrapT};
+    value.magFilter = ${magFilter};
+    value.minFilter = ${minFilter};
+    value.needsUpdate = true;
+    return value;
+  }, [particleMapSource]);
+  useEffect(() => () => particleMap.dispose(), [particleMap]);
+`;
       textureProp = " map={particleMap}";
     }
   }
@@ -2997,7 +3271,7 @@ function renderParticleEmitter(
     ? materialProperties.pbrMetallicRoughness.baseColorFactor[3]
     : 1;
   const source = `const ${componentName}: FC = () => {
-${textureLine}  return <CompiledParticleEmitter config={${configName}} color=${JSON.stringify(color)} opacity={${formatNumber(opacity)}}${textureProp} />;
+${textureLine}  return <XriftScriptParticleEmitter config={${configName}} color=${JSON.stringify(color)} opacity={${formatNumber(opacity)}}${textureProp} />;
 };`;
   context.supportDeclarations.set(`particle:${componentName}`, source);
   return `<${componentName} />`;
@@ -3068,239 +3342,19 @@ function resolveParticleTextureUrl(
 }
 
 function registerCompiledParticleRuntime(context: CompileContext): void {
-  const key = "particle-runtime:compiled-particle-emitter";
-  if (context.supportDeclarations.has(key)) return;
-  context.fiberImports.add("useFrame");
-  context.reactValueImports.add("useEffect");
-  context.reactValueImports.add("useMemo");
-  context.reactValueImports.add("useRef");
-  [
-    "AdditiveBlending",
-    "BufferAttribute",
-    "BufferGeometry",
-    "Color",
-    "DynamicDrawUsage",
-    "NormalBlending",
-    "PointsMaterial",
-    "Vector3",
-  ].forEach((name) => context.threeValueImports.add(name));
-  context.threeTypeImports.add("Points");
-  context.threeTypeImports.add("Texture");
-  context.supportDeclarations.set(
-    key,
-    `type CompiledParticleRange = { min: number; max: number };
-type CompiledParticleConfig = {
-  maxParticles: number;
-  duration: number;
-  looping: boolean;
-  prewarm: boolean;
-  simulationSpace: "local" | "world";
-  startDelay: CompiledParticleRange;
-  startLifetime: CompiledParticleRange;
-  startSpeed: CompiledParticleRange;
-  startSize: CompiledParticleRange;
-  startRotation: CompiledParticleRange;
-  gravity: [number, number, number];
-  emission: { rateOverTime: number; bursts: Array<{ time: number; count: number; cycles: number; interval: number }> };
-  shape:
-    | { type: "point" }
-    | { type: "sphere"; radius: number }
-    | { type: "cone"; radius: number; angle: number }
-    | { type: "box"; size: [number, number, number] };
-  colorOverLifetime: { start: [number, number, number, number]; end: [number, number, number, number] };
-  sizeOverLifetime: CompiledParticleRange;
-  velocityOverLifetime: { linear: [number, number, number]; orbital: [number, number, number] };
-  renderer: {
-    mode: "billboard" | "stretched-billboard";
-    blending: "normal" | "additive";
-    sortMode: "none" | "distance" | "youngest" | "oldest";
-    materialAssetId?: string;
-    textureAssetId?: string;
-    castShadow: boolean;
-    receiveShadow: boolean;
-  };
-};
-type CompiledParticleSeed = { a: number; b: number; c: number; speed: number };
-
-const compiledParticleHash = (value: number) => {
-  const result = Math.sin(value * 12.9898 + 78.233) * 43758.5453;
-  return result - Math.floor(result);
-};
-const compiledParticleMix = (start: number, end: number, amount: number) =>
-  start + (end - start) * amount;
-const compiledParticleSeed = (index: number): CompiledParticleSeed => ({
-  a: compiledParticleHash(index * 4 + 1),
-  b: compiledParticleHash(index * 4 + 2),
-  c: compiledParticleHash(index * 4 + 3),
-  speed: compiledParticleHash(index * 4 + 4),
-});
-const compiledParticleInitial = (
-  shape: CompiledParticleConfig["shape"],
-  seed: CompiledParticleSeed,
-  start: Vector3,
-  direction: Vector3,
-) => {
-  start.set(0, 0, 0);
-  if (shape.type === "sphere") {
-    const theta = seed.a * Math.PI * 2;
-    const phi = Math.acos(seed.b * 2 - 1);
-    const radius = shape.radius * Math.cbrt(seed.c);
-    direction.set(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta));
-    start.copy(direction).multiplyScalar(radius);
-    return;
-  }
-  if (shape.type === "box") {
-    start.set((seed.a - 0.5) * shape.size[0], (seed.b - 0.5) * shape.size[1], (seed.c - 0.5) * shape.size[2]);
-    direction.set(0, 1, 0);
-    return;
-  }
-  if (shape.type === "cone") {
-    const theta = seed.a * Math.PI * 2;
-    const radial = Math.sqrt(seed.b) * shape.radius;
-    start.set(Math.cos(theta) * radial, 0, Math.sin(theta) * radial);
-    const slope = Math.tan((shape.angle * Math.PI) / 180);
-    direction.set(Math.cos(theta) * slope, 1, Math.sin(theta) * slope).normalize();
-    return;
-  }
-  direction.set(0, 1, 0);
-};
-
-const CompiledParticleEmitter: FC<{
-  config: CompiledParticleConfig;
-  color: string;
-  opacity: number;
-  map?: Texture;
-}> = ({ config, color, opacity, map }) => {
-  const continuousCount = Math.ceil(
-    config.emission.rateOverTime * Math.max(config.startLifetime.min, config.startLifetime.max),
-  );
-  const burstCount = config.emission.bursts.reduce(
-    (total, burst) => total + burst.count * Math.max(1, burst.cycles),
-    0,
-  );
-  const count = Math.max(1, Math.min(10000, config.maxParticles, continuousCount + burstCount));
-  const pointsRef = useRef<Points>(null);
-  const elapsedRef = useRef(0);
-  const geometry = useMemo(() => {
-    const value = new BufferGeometry();
-    const positions = new BufferAttribute(new Float32Array(count * 3), 3);
-    const colors = new BufferAttribute(new Float32Array(count * 3), 3);
-    positions.setUsage(DynamicDrawUsage);
-    colors.setUsage(DynamicDrawUsage);
-    value.setAttribute("position", positions);
-    value.setAttribute("color", colors);
-    return value;
-  }, [count]);
-  const material = useMemo(
-    () =>
-      new PointsMaterial({
-        color,
-        map,
-        size: Math.max(
-          0.001,
-          ((config.startSize.min + config.startSize.max) / 2) *
-            ((config.sizeOverLifetime.min + config.sizeOverLifetime.max) / 2),
-        ),
-        sizeAttenuation: true,
-        transparent: true,
-        opacity: Math.max(0, Math.min(1, opacity * Math.max(config.colorOverLifetime.start[3], config.colorOverLifetime.end[3]))),
-        vertexColors: true,
-        alphaTest: map ? 0.01 : 0,
-        depthWrite: config.renderer.blending !== "additive",
-        blending: config.renderer.blending === "additive" ? AdditiveBlending : NormalBlending,
-      }),
-    [color, config, map, opacity],
-  );
-  const seeds = useMemo(
-    () => Array.from({ length: count }, (_, index) => compiledParticleSeed(index)),
-    [count],
-  );
-  const velocity = useMemo(() => new Vector3(), []);
-  const start = useMemo(() => new Vector3(), []);
-  const currentColor = useMemo(() => new Color(), []);
-  useEffect(
-    () => () => {
-      geometry.dispose();
-      material.dispose();
-    },
-    [geometry, material],
-  );
-  useFrame((_state, delta) => {
-    elapsedRef.current += Math.min(delta, 0.1);
-    const elapsed = elapsedRef.current;
-    const position = geometry.getAttribute("position") as BufferAttribute;
-    const colors = geometry.getAttribute("color") as BufferAttribute;
-    const lifetime = Math.max(0.01, (config.startLifetime.min + config.startLifetime.max) / 2);
-    const rate = Math.max(0.01, config.emission.rateOverTime);
-    for (let index = 0; index < count; index += 1) {
-      const seed = seeds[index];
-      const bornAt = index / rate + config.startDelay.min;
-      const rawAge = elapsed - bornAt;
-      if (rawAge < 0 && !config.prewarm) {
-        position.setXYZ(index, 0, -10000, 0);
-        continue;
-      }
-      const age = config.looping ? ((rawAge % lifetime) + lifetime) % lifetime : rawAge;
-      if (!config.looping && (age < 0 || age > lifetime)) {
-        position.setXYZ(index, 0, -10000, 0);
-        continue;
-      }
-      const normalizedAge = Math.max(0, Math.min(1, age / lifetime));
-      const speed = compiledParticleMix(config.startSpeed.min, config.startSpeed.max, seed.speed);
-      compiledParticleInitial(config.shape, seed, start, velocity);
-      velocity.multiplyScalar(speed);
-      const x = start.x + (velocity.x + config.velocityOverLifetime.linear[0]) * age + config.gravity[0] * age * age * 0.5;
-      const y = start.y + (velocity.y + config.velocityOverLifetime.linear[1]) * age + config.gravity[1] * age * age * 0.5;
-      const z = start.z + (velocity.z + config.velocityOverLifetime.linear[2]) * age + config.gravity[2] * age * age * 0.5;
-      const orbit = config.velocityOverLifetime.orbital[1] * age;
-      const cosine = Math.cos(orbit);
-      const sine = Math.sin(orbit);
-      position.setXYZ(index, x * cosine - z * sine, y, x * sine + z * cosine);
-      const startColor = config.colorOverLifetime.start;
-      const endColor = config.colorOverLifetime.end;
-      currentColor.setRGB(
-        compiledParticleMix(startColor[0], endColor[0], normalizedAge),
-        compiledParticleMix(startColor[1], endColor[1], normalizedAge),
-        compiledParticleMix(startColor[2], endColor[2], normalizedAge),
-      );
-      colors.setXYZ(index, currentColor.r, currentColor.g, currentColor.b);
-    }
-    position.needsUpdate = true;
-    colors.needsUpdate = true;
-    if (pointsRef.current) {
-      pointsRef.current.visible = config.looping || elapsed <= config.duration;
-    }
-  });
-  return (
-    <points
-      ref={pointsRef}
-      geometry={geometry}
-      material={material}
-      castShadow={config.renderer.castShadow}
-      receiveShadow={config.renderer.receiveShadow}
-    />
-  );
-};`,
+  context.extraImports.add(
+    "import { XriftScriptParticleEmitter, type XriftParticleConfig } from \"./xrift-studio/particle-runtime\";",
   );
 }
 
-function renderLight(light: LightComponent): string {
-  const intensity = formatNumber(light.intensity);
-  const color = JSON.stringify(light.color);
-  switch (light.lightType) {
-    case "ambient":
-      return `<ambientLight color=${color} intensity={${intensity}} />`;
-    case "directional":
-      return `<directionalLight color=${color} intensity={${intensity}} castShadow={${light.castShadow}} />`;
-    case "hemisphere":
-      return `<hemisphereLight color=${color} groundColor=${JSON.stringify(light.groundColor ?? "#334155")} intensity={${intensity}} />`;
-    case "point":
-      return `<pointLight color=${color} intensity={${intensity}} distance={${formatNumber(light.distance ?? 0)}} decay={${formatNumber(light.decay ?? 2)}} castShadow={${light.castShadow}} />`;
-    case "spot":
-      return `<spotLight color=${color} intensity={${intensity}} distance={${formatNumber(light.distance ?? 0)}} angle={${formatNumber(light.angle ?? Math.PI / 3)}} penumbra={${formatNumber(light.penumbra ?? 0.5)}} decay={${formatNumber(light.decay ?? 2)}} castShadow={${light.castShadow}} />`;
-    case "rectArea":
-      return `<rectAreaLight color=${color} intensity={${intensity}} width={${formatNumber(light.width ?? 1)}} height={${formatNumber(light.height ?? 1)}} />`;
-  }
+function renderLight(
+  light: LightComponent,
+  context: CompileContext,
+): string {
+  context.extraImports.add(
+    'import { XriftScriptLight } from "./xrift-studio/light-runtime";',
+  );
+  return `<XriftScriptLight componentId=${JSON.stringify(light.id)} lightType=${JSON.stringify(light.lightType)} enabled={${light.enabled}} color=${JSON.stringify(light.color)} intensity={${formatNumber(light.intensity)}} castShadow={${light.castShadow}} groundColor=${JSON.stringify(light.groundColor ?? "#334155")} distance={${formatNumber(light.distance ?? 0)}} decay={${formatNumber(light.decay ?? 2)}} angle={${formatNumber(light.angle ?? Math.PI / 3)}} penumbra={${formatNumber(light.penumbra ?? 0.5)}} width={${formatNumber(light.width ?? 1)}} height={${formatNumber(light.height ?? 1)}} />`;
 }
 
 function renderText(text: TextComponent): string {
@@ -3327,6 +3381,10 @@ function renderAudioSource(
   context: CompileContext,
 ): string | null {
   const audioAssetId = audio.audioAssetId?.trim() ?? "";
+  registerCompiledAudioRuntime(context);
+  if (!audio.enabled) {
+    return `<XriftAudioSource componentId=${JSON.stringify(audio.id)} audioAssetId=${JSON.stringify(audioAssetId)} assetUrl={null} sourceStatus="missing" enabled={false} volume={${formatNumber(audio.volume)}} loop={${audio.loop}} autoplay={${audio.autoplay}} spatial={${audio.spatial}} refDistance={${formatNumber(audio.refDistance)}} rolloffFactor={${formatNumber(audio.rolloffFactor)}} maxDistance={${formatNumber(audio.maxDistance)}} />`;
+  }
   if (!audioAssetId) {
     addDiagnostic(context, {
       severity: "warning",
@@ -3372,18 +3430,11 @@ function renderAudioSource(
   }
   const assetPath = registerAssetUrl(asset, runtimeUrl, context);
 
-  context.reactValueImports.add("useEffect");
-  context.reactValueImports.add("useMemo");
-  context.fiberImports.add("useThree");
-  ["Audio", "AudioListener", "AudioLoader", "PositionalAudio"].forEach(
-    (name) => context.threeValueImports.add(name),
-  );
   context.supportDeclarations.set(
     "audio-source",
-    `const xriftStudioAudioListener = new AudioListener();
-let xriftStudioAudioListenerUsers = 0;
-
-const XRiftStudioAudioSource: FC<{
+    `const XRiftStudioCompiledAudioSource: FC<{
+  componentId: string;
+  audioAssetId: string;
   assetPath: string;
   volume: number;
   loop: boolean;
@@ -3392,54 +3443,19 @@ const XRiftStudioAudioSource: FC<{
   refDistance: number;
   rolloffFactor: number;
   maxDistance: number;
-}> = ({ assetPath, volume, loop, autoplay, spatial, refDistance, rolloffFactor, maxDistance }) => {
-  const camera = useThree((state) => state.camera);
-  const url = useCompiledAssetUrl(assetPath);
-  const sound = useMemo(
-    () => spatial ? new PositionalAudio(xriftStudioAudioListener) : new Audio(xriftStudioAudioListener),
-    [spatial],
-  );
-  useEffect(() => () => {
-    if (sound.isPlaying) sound.stop();
-    sound.disconnect();
-  }, [sound]);
-  useEffect(() => {
-    if (xriftStudioAudioListener.parent !== camera) camera.add(xriftStudioAudioListener);
-    xriftStudioAudioListenerUsers += 1;
-    return () => {
-      xriftStudioAudioListenerUsers = Math.max(0, xriftStudioAudioListenerUsers - 1);
-      if (xriftStudioAudioListenerUsers === 0) camera.remove(xriftStudioAudioListener);
-    };
-  }, [camera]);
-  useEffect(() => {
-    let active = true;
-    sound.setVolume(volume);
-    sound.setLoop(loop);
-    if (sound instanceof PositionalAudio) {
-      sound.setRefDistance(refDistance);
-      sound.setRolloffFactor(rolloffFactor);
-      sound.setMaxDistance(maxDistance);
-    }
-    new AudioLoader().load(
-      url,
-      (buffer) => {
-        if (!active) return;
-        sound.setBuffer(buffer);
-        if (autoplay && !sound.isPlaying) sound.play();
-      },
-      undefined,
-      () => undefined,
-    );
-    return () => {
-      active = false;
-      if (sound.isPlaying) sound.stop();
-    };
-  }, [autoplay, loop, maxDistance, refDistance, rolloffFactor, sound, url, volume]);
-  return <primitive object={sound} />;
+}> = ({ componentId, audioAssetId, assetPath, ...props }) => {
+  const assetUrl = useCompiledAssetUrl(assetPath);
+  return <XriftAudioSource componentId={componentId} audioAssetId={audioAssetId} assetUrl={assetUrl} sourceStatus="available" enabled {...props} />;
 };`,
   );
 
-  return `<XRiftStudioAudioSource assetPath={${assetPath}} volume={${formatNumber(audio.volume)}} loop={${audio.loop}} autoplay={${audio.autoplay}} spatial={${audio.spatial}} refDistance={${formatNumber(audio.refDistance)}} rolloffFactor={${formatNumber(audio.rolloffFactor)}} maxDistance={${formatNumber(audio.maxDistance)}} />`;
+  return `<XRiftStudioCompiledAudioSource componentId=${JSON.stringify(audio.id)} audioAssetId=${JSON.stringify(audioAssetId)} assetPath={${assetPath}} volume={${formatNumber(audio.volume)}} loop={${audio.loop}} autoplay={${audio.autoplay}} spatial={${audio.spatial}} refDistance={${formatNumber(audio.refDistance)}} rolloffFactor={${formatNumber(audio.rolloffFactor)}} maxDistance={${formatNumber(audio.maxDistance)}} />`;
+}
+
+function registerCompiledAudioRuntime(context: CompileContext): void {
+  context.extraImports.add(
+    'import { XriftAudioSource } from "./xrift-studio/audio-source-runtime";',
+  );
 }
 
 function renderSpawnPoint(
@@ -3562,6 +3578,9 @@ function createAssetCopyPlan(
     // Prefab JSON is an authoring document hashed into provenance and expanded
     // into generated source. It must never be copied into public runtime assets.
     if (isPrefabAsset(asset)) continue;
+    // Script sources are emitted as staging overlay modules and imported
+    // statically, never copied into public runtime assets. See script-emit.ts.
+    if (asset.kind === "script") continue;
     if (asset.source.kind !== "project") continue;
     if (!isSafeRelativePath(asset.source.relativePath)) {
       diagnostics.push({

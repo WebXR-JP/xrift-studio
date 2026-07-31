@@ -13,6 +13,7 @@ use tauri_plugin_opener::OpenerExt;
 
 mod external_store;
 pub mod mcp;
+mod script_trust;
 
 const NODE_VERSION: &str = "v24.15.0";
 const VISUAL_PROJECT_MANIFEST: &str = "xrift-studio.project.json";
@@ -27,6 +28,7 @@ const COMPILER_STAGING_DIRECTORY: &str = "xrift-studio-staging";
 const COMPILER_STAGING_OWNER_PATH: &str = ".xrift-studio/staging-owner.json";
 const COMPILER_STAGING_OWNER_SCHEMA_VERSION: &str = "1";
 const XRIFT_PUBLICATION_METADATA_MAX_BYTES: u64 = 16 * 1024;
+const SCRIPT_SOURCE_MAX_BYTES: u64 = 8 * 1024 * 1024;
 static VISUAL_PROJECT_IO_LOCK: Mutex<()> = Mutex::new(());
 static COMPILER_STAGING_IO_LOCK: Mutex<()> = Mutex::new(());
 static VISUAL_ASSET_IMPORT_IO_LOCK: Mutex<()> = Mutex::new(());
@@ -248,6 +250,13 @@ struct CompilerOverlayWrite {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct CompilerBinaryOverlayWrite {
+    target_relative_path: String,
+    data_url: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct CompilerAssetCopy {
     source_relative_path: String,
     target_relative_path: String,
@@ -281,6 +290,24 @@ struct CompilerStagingResult {
 #[serde(rename_all = "camelCase")]
 struct VisualAssetImportWrite {
     relative_path: String,
+    data_url: String,
+}
+
+#[derive(Serialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct LocalTextureImportSource {
+    file_name: String,
+    mime_type: String,
+    byte_length: u64,
+    data_url: String,
+}
+
+#[derive(Serialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct LocalAudioImportSource {
+    file_name: String,
+    mime_type: String,
+    byte_length: u64,
     data_url: String,
 }
 
@@ -3186,6 +3213,7 @@ fn apply_compiler_staging(
     authoring_project_path: String,
     directory_name: String,
     overlay_files: Vec<CompilerOverlayWrite>,
+    binary_overlay_files: Vec<CompilerBinaryOverlayWrite>,
     asset_copies: Vec<CompilerAssetCopy>,
     required_publication_files: Vec<CompilerRequiredPublicationFileCopy>,
 ) -> Result<CompilerStagingResult, String> {
@@ -3229,6 +3257,26 @@ fn apply_compiler_staging(
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
         write_file_synced(&target, overlay.content.as_bytes())?;
+    }
+
+    for overlay in binary_overlay_files {
+        if is_reserved_project_path(&overlay.target_relative_path)? {
+            return Err(
+                "compiler binary output cannot write XRift publication metadata".to_string(),
+            );
+        }
+        let target = safe_join(
+            &resolved_project.to_string_lossy(),
+            &overlay.target_relative_path,
+        )?;
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let bytes = decode_base64_data_url(
+            &overlay.data_url,
+            "compiler binary output has an invalid data URL",
+        )?;
+        write_file_synced(&target, &bytes)?;
     }
 
     for copy in asset_copies {
@@ -3492,6 +3540,322 @@ fn decode_data_url_bytes(data_url: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("asset payload cannot be decoded: {}", e))
 }
 
+fn local_texture_mime_type(path: &Path) -> Option<&'static str> {
+    match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("png") => Some("image/png"),
+        Some("jpg") | Some("jpeg") => Some("image/jpeg"),
+        Some("webp") => Some("image/webp"),
+        Some("avif") => Some("image/avif"),
+        Some("gif") => Some("image/gif"),
+        Some("bmp") => Some("image/bmp"),
+        Some("svg") => Some("image/svg+xml"),
+        Some("ktx2") => Some("image/ktx2"),
+        _ => None,
+    }
+}
+
+const MAX_LOCAL_AUDIO_BYTES: u64 = 128 * 1024 * 1024;
+
+fn local_audio_mime_type(path: &Path) -> Option<&'static str> {
+    match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("mp3") => Some("audio/mpeg"),
+        Some("wav") => Some("audio/wav"),
+        _ => None,
+    }
+}
+
+fn has_mp3_signature(bytes: &[u8]) -> bool {
+    if bytes.starts_with(b"ID3") {
+        return true;
+    }
+    let scan_length = bytes.len().saturating_sub(2).min(4096);
+    for index in 0..scan_length {
+        let first = bytes[index];
+        let second = bytes[index + 1];
+        let third = bytes[index + 2];
+        if first != 0xff || second & 0xe0 != 0xe0 {
+            continue;
+        }
+        let layer = (second >> 1) & 0x03;
+        let bitrate_index = (third >> 4) & 0x0f;
+        let sample_rate_index = (third >> 2) & 0x03;
+        if layer != 0 && bitrate_index != 0 && bitrate_index != 0x0f && sample_rate_index != 0x03 {
+            return true;
+        }
+    }
+    false
+}
+
+fn has_wav_signature(bytes: &[u8]) -> bool {
+    if bytes.len() < 44
+        || bytes.get(0..4) != Some(b"RIFF")
+        || bytes.get(8..12) != Some(b"WAVE")
+        || bytes.get(12..16) != Some(b"fmt ")
+    {
+        return false;
+    }
+    let declared_size = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]) as usize;
+    declared_size
+        .checked_add(8)
+        .is_some_and(|total_size| total_size <= bytes.len())
+}
+
+fn has_audio_signature(bytes: &[u8], mime_type: &str) -> bool {
+    match mime_type {
+        "audio/mpeg" => has_mp3_signature(bytes),
+        "audio/wav" => has_wav_signature(bytes),
+        _ => false,
+    }
+}
+
+#[cfg(unix)]
+fn open_absolute_file_without_links(source_path: &Path) -> Result<std::fs::File, String> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let mut root_options = std::fs::OpenOptions::new();
+    root_options
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_DIRECTORY | libc::O_NOFOLLOW);
+    let mut directory = root_options
+        .open(Path::new("/"))
+        .map_err(|error| format!("filesystem root cannot be opened: {}", error))?;
+    let mut components = source_path.components().peekable();
+    while let Some(component) = components.next() {
+        match component {
+            Component::RootDir => {}
+            Component::Normal(segment) => {
+                let is_file = components.peek().is_none();
+                let opened = open_unix_path_segment(&directory, segment, !is_file)?;
+                if is_file {
+                    return Ok(opened);
+                }
+                if !opened
+                    .metadata()
+                    .map_err(|error| format!("source directory cannot be inspected: {}", error))?
+                    .is_dir()
+                {
+                    return Err("source path contains a non-directory segment".to_string());
+                }
+                directory = opened;
+            }
+            _ => return Err("absolute source path is invalid".to_string()),
+        }
+    }
+    Err("absolute source path is empty".to_string())
+}
+
+#[cfg(windows)]
+fn open_absolute_file_without_links(source_path: &Path) -> Result<std::fs::File, String> {
+    use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+
+    for ancestor in source_path.ancestors() {
+        let metadata = std::fs::symlink_metadata(ancestor)
+            .map_err(|_| "local source cannot be inspected".to_string())?;
+        if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err("local source reparse points are not allowed".to_string());
+        }
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options
+        .read(true)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    let file = options
+        .open(source_path)
+        .map_err(|_| "local source cannot be opened".to_string())?;
+    let metadata = file
+        .metadata()
+        .map_err(|_| "local source cannot be inspected".to_string())?;
+    if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+        return Err("local source reparse points are not allowed".to_string());
+    }
+    let canonical_source = source_path
+        .canonicalize()
+        .map_err(|_| "local source cannot be resolved".to_string())?;
+    let opened_handle = same_file::Handle::from_file(
+        file.try_clone()
+            .map_err(|_| "local source handle cannot be cloned".to_string())?,
+    )
+    .map_err(|_| "local source handle cannot be inspected".to_string())?;
+    let path_handle = same_file::Handle::from_path(&canonical_source)
+        .map_err(|_| "local source path cannot be inspected".to_string())?;
+    if opened_handle != path_handle {
+        return Err("local source changed while it was being opened".to_string());
+    }
+    Ok(file)
+}
+
+fn read_audio_bytes(file: &mut std::fs::File, expected_length: u64) -> Result<Vec<u8>, String> {
+    if expected_length == 0 || expected_length > MAX_LOCAL_AUDIO_BYTES {
+        return Err("local Audio source exceeds the supported size".to_string());
+    }
+    let mut bytes = Vec::with_capacity(expected_length as usize);
+    std::io::Read::by_ref(file)
+        .take(MAX_LOCAL_AUDIO_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "local Audio source cannot be read".to_string())?;
+    let final_length = file
+        .metadata()
+        .map_err(|_| "local Audio source cannot be inspected after reading".to_string())?
+        .len();
+    if bytes.len() as u64 != expected_length
+        || final_length != expected_length
+        || bytes.len() as u64 > MAX_LOCAL_AUDIO_BYTES
+    {
+        return Err("local Audio source changed while it was read".to_string());
+    }
+    Ok(bytes)
+}
+
+fn read_local_audio_import_source_path(
+    source_path: &Path,
+) -> Result<LocalAudioImportSource, String> {
+    if !source_path.is_absolute() {
+        return Err("local Audio source must use an absolute path".to_string());
+    }
+    let source_metadata = std::fs::symlink_metadata(source_path)
+        .map_err(|_| "local Audio source cannot be inspected".to_string())?;
+    if source_metadata.file_type().is_symlink() || !source_metadata.is_file() {
+        return Err("local Audio source must be a regular non-symlink file".to_string());
+    }
+    let mime_type = local_audio_mime_type(source_path)
+        .ok_or_else(|| "local Audio source format is not supported".to_string())?;
+    // Resolve existing ancestor aliases (for example macOS `/var`) once, then
+    // open every component of that resolved path with O_NOFOLLOW. The final
+    // user-selected path was checked above, so a selected symlink is still
+    // rejected while a stable system alias does not make a regular file
+    // unreadable.
+    let canonical_source = source_path
+        .canonicalize()
+        .map_err(|_| "local Audio source cannot be resolved".to_string())?;
+    let canonical_metadata = std::fs::symlink_metadata(&canonical_source)
+        .map_err(|_| "local Audio source cannot be inspected".to_string())?;
+    if canonical_metadata.file_type().is_symlink()
+        || !canonical_metadata.is_file()
+        || canonical_metadata.len() != source_metadata.len()
+    {
+        return Err("local Audio source changed while it was inspected".to_string());
+    }
+    let mut file = open_absolute_file_without_links(&canonical_source)?;
+    let opened_metadata = file
+        .metadata()
+        .map_err(|_| "local Audio source cannot be inspected".to_string())?;
+    if !opened_metadata.is_file() || opened_metadata.len() != source_metadata.len() {
+        return Err("local Audio source changed while it was inspected".to_string());
+    }
+    let bytes = read_audio_bytes(&mut file, opened_metadata.len())?;
+    if !has_audio_signature(&bytes, mime_type) {
+        return Err("local Audio source signature is invalid".to_string());
+    }
+    let file_name = canonical_source
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| "local Audio source file name is invalid".to_string())?;
+
+    use base64::Engine;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Ok(LocalAudioImportSource {
+        file_name: file_name.to_string(),
+        mime_type: mime_type.to_string(),
+        byte_length: opened_metadata.len(),
+        data_url: format!("data:{};base64,{}", mime_type, encoded),
+    })
+}
+
+#[tauri::command]
+fn read_local_audio_import_source(source_path: String) -> Result<LocalAudioImportSource, String> {
+    let source_path = source_path.trim();
+    if source_path.is_empty()
+        || source_path.len() > 4096
+        || source_path.chars().any(char::is_control)
+    {
+        return Err("local Audio source path is invalid".to_string());
+    }
+    read_local_audio_import_source_path(Path::new(source_path))
+}
+
+fn read_local_texture_import_source_path(
+    source_path: &Path,
+) -> Result<LocalTextureImportSource, String> {
+    const MAX_LOCAL_TEXTURE_BYTES: u64 = 128 * 1024 * 1024;
+
+    if !source_path.is_absolute() {
+        return Err("local Texture source must use an absolute path".to_string());
+    }
+    let source_metadata = std::fs::symlink_metadata(source_path)
+        .map_err(|_| "local Texture source cannot be inspected".to_string())?;
+    if source_metadata.file_type().is_symlink() || !source_metadata.is_file() {
+        return Err("local Texture source must be a regular non-symlink file".to_string());
+    }
+    if source_metadata.len() == 0 || source_metadata.len() > MAX_LOCAL_TEXTURE_BYTES {
+        return Err("local Texture source exceeds the supported size".to_string());
+    }
+    let resolved = source_path
+        .canonicalize()
+        .map_err(|_| "local Texture source cannot be resolved".to_string())?;
+    let resolved_metadata = std::fs::symlink_metadata(&resolved)
+        .map_err(|_| "local Texture source cannot be inspected".to_string())?;
+    if resolved_metadata.file_type().is_symlink()
+        || !resolved_metadata.is_file()
+        || resolved_metadata.len() != source_metadata.len()
+    {
+        return Err("local Texture source changed while it was inspected".to_string());
+    }
+    let mime_type = local_texture_mime_type(&resolved)
+        .ok_or_else(|| "local Texture source format is not supported".to_string())?;
+    let file_name = resolved
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| "local Texture source file name is invalid".to_string())?;
+    let mut file = std::fs::File::open(&resolved)
+        .map_err(|_| "local Texture source cannot be opened".to_string())?;
+    let mut bytes = Vec::with_capacity(source_metadata.len() as usize);
+    std::io::Read::by_ref(&mut file)
+        .take(MAX_LOCAL_TEXTURE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "local Texture source cannot be read".to_string())?;
+    if bytes.len() as u64 != source_metadata.len() || bytes.len() as u64 > MAX_LOCAL_TEXTURE_BYTES {
+        return Err("local Texture source changed while it was read".to_string());
+    }
+
+    use base64::Engine;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Ok(LocalTextureImportSource {
+        file_name: file_name.to_string(),
+        mime_type: mime_type.to_string(),
+        byte_length: source_metadata.len(),
+        data_url: format!("data:{};base64,{}", mime_type, encoded),
+    })
+}
+
+#[tauri::command]
+fn read_local_texture_import_source(
+    source_path: String,
+) -> Result<LocalTextureImportSource, String> {
+    let source_path = source_path.trim();
+    if source_path.is_empty()
+        || source_path.len() > 4096
+        || source_path.chars().any(char::is_control)
+    {
+        return Err("local Texture source path is invalid".to_string());
+    }
+    read_local_texture_import_source_path(Path::new(source_path))
+}
+
 /// Publishes imported sources and derived thumbnails as a single operation.
 /// Import destinations are content-addressed. An existing byte-identical file
 /// is reused, while a different payload at the same path is never overwritten.
@@ -3611,6 +3975,182 @@ fn read_text_file(project_path: String, rel: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
+#[cfg(unix)]
+fn open_unix_path_segment(
+    directory: &std::fs::File,
+    segment: &std::ffi::OsStr,
+    expect_directory: bool,
+) -> Result<std::fs::File, String> {
+    use std::ffi::CString;
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::ffi::OsStrExt;
+
+    let segment = CString::new(segment.as_bytes())
+        .map_err(|_| "Script source path contains an invalid byte".to_string())?;
+    let flags = libc::O_RDONLY
+        | libc::O_CLOEXEC
+        | libc::O_NOFOLLOW
+        | if expect_directory {
+            libc::O_DIRECTORY
+        } else {
+            0
+        };
+    // SAFETY: `directory` owns a valid descriptor, `segment` is
+    // NUL-terminated, and the returned descriptor is immediately wrapped in
+    // an owned `File`.
+    let descriptor = unsafe { libc::openat(directory.as_raw_fd(), segment.as_ptr(), flags) };
+    if descriptor < 0 {
+        return Err(format!(
+            "Script source cannot be opened without symbolic links: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    // SAFETY: `openat` returned a new owned descriptor on success.
+    Ok(unsafe { std::fs::File::from_raw_fd(descriptor) })
+}
+
+#[cfg(unix)]
+fn open_script_source_file(
+    canonical_project: &Path,
+    relative: &Path,
+) -> Result<std::fs::File, String> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let mut root_options = std::fs::OpenOptions::new();
+    root_options
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_DIRECTORY | libc::O_NOFOLLOW);
+    let mut directory = root_options.open(Path::new("/")).map_err(|error| {
+        format!(
+            "Filesystem root cannot be opened for Script source: {}",
+            error
+        )
+    })?;
+
+    // Anchor the canonical project directory from `/`, refusing a symlink at
+    // every absolute-path segment. This closes the canonicalize/open race for
+    // ancestors of the project root as well as for the relative Script path.
+    for component in canonical_project.components() {
+        match component {
+            Component::RootDir => {}
+            Component::Normal(segment) => {
+                directory = open_unix_path_segment(&directory, segment, true)?;
+            }
+            _ => return Err("Canonical project path is invalid".to_string()),
+        }
+    }
+
+    let mut components = relative.components().peekable();
+    while let Some(component) = components.next() {
+        let Component::Normal(segment) = component else {
+            return Err("Script source path is invalid".to_string());
+        };
+        let is_file = components.peek().is_none();
+        let opened = open_unix_path_segment(&directory, segment, !is_file)?;
+        if is_file {
+            return Ok(opened);
+        }
+        let metadata = opened.metadata().map_err(|error| {
+            format!("Script source directory metadata cannot be read: {}", error)
+        })?;
+        if !metadata.is_dir() {
+            return Err("Script source path contains a non-directory segment".to_string());
+        }
+        directory = opened;
+    }
+
+    Err("Script source path is empty".to_string())
+}
+
+#[cfg(windows)]
+fn open_script_source_file(
+    canonical_project: &Path,
+    relative: &Path,
+) -> Result<std::fs::File, String> {
+    use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+
+    ensure_no_symlink_ancestors(canonical_project, relative)?;
+    let path = canonical_project.join(relative);
+    let mut options = std::fs::OpenOptions::new();
+    options
+        .read(true)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    let file = options.open(&path).map_err(|error| {
+        format!(
+            "Script source cannot be opened without reparse points: {}",
+            error
+        )
+    })?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| format!("Script source metadata cannot be read: {}", error))?;
+    if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+        return Err("Script source reparse points are not allowed".to_string());
+    }
+    let canonical_source = path
+        .canonicalize()
+        .map_err(|error| format!("Script source cannot be resolved: {}", error))?;
+    if !canonical_source.starts_with(canonical_project) {
+        return Err("Script source escapes the project root".to_string());
+    }
+    let opened_handle = same_file::Handle::from_file(
+        file.try_clone()
+            .map_err(|error| format!("Script source handle cannot be cloned: {}", error))?,
+    )
+    .map_err(|error| format!("Script source handle cannot be inspected: {}", error))?;
+    let path_handle = same_file::Handle::from_path(&canonical_source)
+        .map_err(|error| format!("Script source path cannot be inspected: {}", error))?;
+    if opened_handle != path_handle {
+        return Err("Script source changed while it was being opened".to_string());
+    }
+    Ok(file)
+}
+
+fn read_script_source_path(project_path: &str, rel: &str) -> Result<String, String> {
+    let relative = validate_relative_path(rel, false)?;
+    let supported_extension = relative
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            extension.eq_ignore_ascii_case("ts") || extension.eq_ignore_ascii_case("tsx")
+        });
+    if !supported_extension {
+        return Err("Script source must use a .ts or .tsx extension".to_string());
+    }
+
+    let canonical_project = canonical_project_root(project_path)?;
+    let mut file = open_script_source_file(&canonical_project, &relative)?;
+    let opened_metadata = file
+        .metadata()
+        .map_err(|error| format!("Script source metadata cannot be read: {}", error))?;
+    if !opened_metadata.is_file() {
+        return Err(
+            "Script source must be a regular file and symbolic links are not allowed".to_string(),
+        );
+    }
+    if opened_metadata.len() > SCRIPT_SOURCE_MAX_BYTES {
+        return Err("Script source exceeds the 8 MiB limit".to_string());
+    }
+
+    let mut bytes = Vec::with_capacity(opened_metadata.len() as usize);
+    std::io::Read::by_ref(&mut file)
+        .take(SCRIPT_SOURCE_MAX_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("Script source cannot be read: {}", error))?;
+    if bytes.len() as u64 > SCRIPT_SOURCE_MAX_BYTES {
+        return Err("Script source exceeds the 8 MiB limit".to_string());
+    }
+    String::from_utf8(bytes).map_err(|_| "Script source must be valid UTF-8".to_string())
+}
+
+#[tauri::command]
+fn read_script_source(project_path: String, rel: String) -> Result<String, String> {
+    read_script_source_path(&project_path, &rel)
+}
+
 fn validate_classic_repository_url(repository_url: &str) -> Result<String, String> {
     let repository_url = repository_url.trim();
     if repository_url.is_empty()
@@ -3628,9 +4168,7 @@ fn validate_classic_repository_url(repository_url: &str) -> Result<String, Strin
                 .split_once(':')
                 .is_some_and(|(host, path)| host.len() > 4 && !path.is_empty()));
     if !https && !ssh {
-        return Err(
-            "Classic repository URL must use HTTPS or a git SSH URL".to_string(),
-        );
+        return Err("Classic repository URL must use HTTPS or a git SSH URL".to_string());
     }
     Ok(repository_url.to_string())
 }
@@ -3645,7 +4183,11 @@ fn inspect_cloned_classic_repository(repository_root: &Path) -> Result<(), Strin
     while let Some(directory) = pending.pop() {
         for entry in std::fs::read_dir(&directory).map_err(|error| error.to_string())? {
             let entry = entry.map_err(|error| error.to_string())?;
-            if entry.file_name().to_string_lossy().eq_ignore_ascii_case(".git") {
+            if entry
+                .file_name()
+                .to_string_lossy()
+                .eq_ignore_ascii_case(".git")
+            {
                 continue;
             }
             let metadata =
@@ -3733,6 +4275,39 @@ fn write_text_file(project_path: String, rel: String, content: String) -> Result
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
+fn read_audio_data_url_path(project_path: &str, rel: &str) -> Result<String, String> {
+    let relative = validate_relative_path(rel, false)?;
+    if !matches!(
+        relative.components().next(),
+        Some(Component::Normal(root))
+            if root.to_string_lossy().eq_ignore_ascii_case("assets")
+    ) {
+        return Err("Audio source must be inside the managed assets directory".to_string());
+    }
+    let mime_type = local_audio_mime_type(&relative)
+        .ok_or_else(|| "project Audio source format is not supported".to_string())?;
+    let canonical_project = canonical_project_root(project_path)?;
+    let mut file = open_script_source_file(&canonical_project, &relative)?;
+    let metadata = file
+        .metadata()
+        .map_err(|_| "project Audio source cannot be inspected".to_string())?;
+    if !metadata.is_file() {
+        return Err("project Audio source must be a regular non-symlink file".to_string());
+    }
+    let bytes = read_audio_bytes(&mut file, metadata.len())?;
+    if !has_audio_signature(&bytes, mime_type) {
+        return Err("project Audio source signature is invalid".to_string());
+    }
+    use base64::Engine;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Ok(format!("data:{};base64,{}", mime_type, encoded))
+}
+
+#[tauri::command]
+fn read_audio_data_url(project_path: String, rel: String) -> Result<String, String> {
+    read_audio_data_url_path(&project_path, &rel)
 }
 
 #[tauri::command]
@@ -3918,14 +4493,20 @@ fn write_binary_file(project_path: String, rel: String, data_url: String) -> Res
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let comma = data_url.find(',').ok_or("invalid data url")?;
-    let b64 = &data_url[comma + 1..];
-    use base64::Engine;
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(b64)
-        .map_err(|e| e.to_string())?;
+    let bytes = decode_base64_data_url(&data_url, "invalid data url")?;
     std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+fn decode_base64_data_url(data_url: &str, error_message: &str) -> Result<Vec<u8>, String> {
+    let (metadata, encoded) = data_url.split_once(',').ok_or(error_message)?;
+    if !metadata.starts_with("data:") || !metadata.ends_with(";base64") {
+        return Err(error_message.to_string());
+    }
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .map_err(|_| error_message.to_string())
 }
 
 #[derive(Serialize)]
@@ -4098,6 +4679,12 @@ fn reset_app_data(app: AppHandle, scope: String) -> Result<(), String> {
         }
         other => return Err(format!("unknown reset scope: {}", other)),
     }
+    drop(try_remove);
+    if scope == "all" {
+        if let Err(error) = script_trust::reset_script_trust_store_for_app_reset(&root) {
+            failures.push(error);
+        }
+    }
 
     if failures.is_empty() {
         Ok(())
@@ -4200,6 +4787,8 @@ pub fn run() {
             clear_compiler_upload_attempt,
             persist_compiler_publication_metadata,
             commit_visual_asset_import,
+            read_local_audio_import_source,
+            read_local_texture_import_source,
             open_visual_asset_location,
             external_store::list_external_store_assets,
             external_store::get_external_store_asset_options,
@@ -4208,9 +4797,11 @@ pub fn run() {
             write_world_file,
             clone_classic_project_repository,
             read_text_file,
+            read_script_source,
             write_text_file,
             read_thumbnail,
             write_thumbnail,
+            read_audio_data_url,
             read_image_data_url,
             list_files,
             write_binary_file,
@@ -4219,6 +4810,12 @@ pub fn run() {
             get_versions,
             kill_pid_tree,
             reset_app_data,
+            script_trust::get_script_trust_status,
+            script_trust::list_script_trust_approvals,
+            script_trust::check_script_trust_approval,
+            script_trust::approve_script_trust_fingerprint_for_ui,
+            script_trust::revoke_script_trust_fingerprints,
+            script_trust::reset_script_trust_approvals,
             check_xrift_latest,
             update_xrift,
             mcp::complete_xrift_mcp_request,
@@ -4283,6 +4880,239 @@ mod tests {
             projects.exists(),
             "canonical project data must be preserved"
         );
+        std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
+    }
+
+    #[test]
+    fn script_source_reader_accepts_only_bounded_regular_typescript_files() {
+        let fixture_root = reset_fixture_root("script-source");
+        let scripts = fixture_root.join("assets").join("scripts");
+        std::fs::create_dir_all(&scripts).expect("Script fixture directory must be created");
+        std::fs::write(
+            scripts.join("motion.ts"),
+            b"export default { start() {} };\n",
+        )
+        .expect("TypeScript fixture must be written");
+        std::fs::write(
+            scripts.join("render.tsx"),
+            b"export function Render() { return null; }\n",
+        )
+        .expect("TSX fixture must be written");
+        std::fs::write(scripts.join("notes.txt"), b"not a Script")
+            .expect("unsupported fixture must be written");
+        std::fs::create_dir(scripts.join("directory.ts"))
+            .expect("directory fixture must be created");
+        let oversized = std::fs::File::create(scripts.join("oversized.ts"))
+            .expect("oversized fixture must be created");
+        oversized
+            .set_len(SCRIPT_SOURCE_MAX_BYTES + 1)
+            .expect("oversized fixture length must be set");
+
+        let project_path = fixture_root.to_string_lossy().to_string();
+        assert!(
+            read_script_source_path(&project_path, "assets/scripts/motion.ts")
+                .expect("regular TypeScript must be readable")
+                .contains("start")
+        );
+        assert!(
+            read_script_source_path(&project_path, "assets/scripts/render.tsx")
+                .expect("regular TSX must be readable")
+                .contains("Render")
+        );
+        assert!(
+            read_script_source_path(&project_path, "assets/scripts/notes.txt")
+                .expect_err("non-Script extension must be rejected")
+                .contains(".ts or .tsx")
+        );
+        assert!(
+            read_script_source_path(&project_path, "assets/scripts/directory.ts")
+                .expect_err("directory must be rejected")
+                .contains("regular file")
+        );
+        assert!(
+            read_script_source_path(&project_path, "assets/scripts/oversized.ts")
+                .expect_err("oversized Script must be rejected")
+                .contains("8 MiB")
+        );
+
+        #[cfg(unix)]
+        {
+            let linked = scripts.join("linked.ts");
+            std::os::unix::fs::symlink(scripts.join("motion.ts"), &linked)
+                .expect("symlink fixture must be created");
+            assert!(
+                read_script_source_path(&project_path, "assets/scripts/linked.ts")
+                    .expect_err("Script symlink must be rejected")
+                    .contains("symbolic links")
+            );
+
+            let linked_directory = fixture_root.join("linked-scripts");
+            std::os::unix::fs::symlink(&scripts, &linked_directory)
+                .expect("directory symlink fixture must be created");
+            assert!(
+                read_script_source_path(&project_path, "linked-scripts/motion.ts")
+                    .expect_err("Script ancestor symlink must be rejected")
+                    .contains("symbolic links")
+            );
+        }
+
+        std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
+    }
+
+    #[test]
+    fn local_texture_import_source_accepts_only_safe_supported_files() {
+        let fixture_root = reset_fixture_root("local-texture");
+        std::fs::create_dir_all(&fixture_root).expect("fixture root must be created");
+        let texture_path = fixture_root.join("grid.png");
+        let texture_bytes = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+        std::fs::write(&texture_path, texture_bytes).expect("Texture fixture must be written");
+
+        let source = read_local_texture_import_source_path(&texture_path)
+            .expect("supported regular Texture should be readable");
+        assert_eq!(source.file_name, "grid.png");
+        assert_eq!(source.mime_type, "image/png");
+        assert_eq!(source.byte_length, texture_bytes.len() as u64);
+        assert!(source.data_url.starts_with("data:image/png;base64,"));
+        assert!(
+            !source
+                .data_url
+                .contains(&fixture_root.to_string_lossy().to_string()),
+            "external source paths must not be returned"
+        );
+
+        let unsupported = fixture_root.join("secret.txt");
+        std::fs::write(&unsupported, b"not a Texture")
+            .expect("unsupported fixture must be written");
+        assert!(read_local_texture_import_source_path(&unsupported).is_err());
+        assert!(
+            read_local_texture_import_source_path(Path::new("relative.png")).is_err(),
+            "relative MCP paths must be rejected"
+        );
+
+        #[cfg(unix)]
+        {
+            let linked = fixture_root.join("linked.png");
+            std::os::unix::fs::symlink(&texture_path, &linked)
+                .expect("symlink fixture must be created");
+            assert!(
+                read_local_texture_import_source_path(&linked).is_err(),
+                "final symlink sources must be rejected"
+            );
+        }
+
+        std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
+    }
+
+    fn fixture_wav_bytes() -> Vec<u8> {
+        let mut bytes = vec![0_u8; 44];
+        bytes[0..4].copy_from_slice(b"RIFF");
+        bytes[4..8].copy_from_slice(&36_u32.to_le_bytes());
+        bytes[8..12].copy_from_slice(b"WAVE");
+        bytes[12..16].copy_from_slice(b"fmt ");
+        bytes[16..20].copy_from_slice(&16_u32.to_le_bytes());
+        bytes[20..22].copy_from_slice(&1_u16.to_le_bytes());
+        bytes[22..24].copy_from_slice(&1_u16.to_le_bytes());
+        bytes[24..28].copy_from_slice(&44_100_u32.to_le_bytes());
+        bytes[28..32].copy_from_slice(&88_200_u32.to_le_bytes());
+        bytes[32..34].copy_from_slice(&2_u16.to_le_bytes());
+        bytes[34..36].copy_from_slice(&16_u16.to_le_bytes());
+        bytes[36..40].copy_from_slice(b"data");
+        bytes
+    }
+
+    #[test]
+    fn local_audio_import_source_accepts_only_safe_supported_files() {
+        let fixture_root = reset_fixture_root("local-audio");
+        std::fs::create_dir_all(&fixture_root).expect("fixture root must be created");
+        let audio_path = fixture_root.join("tone.wav");
+        let audio_bytes = fixture_wav_bytes();
+        std::fs::write(&audio_path, &audio_bytes).expect("Audio fixture must be written");
+
+        let source = read_local_audio_import_source_path(&audio_path)
+            .expect("supported regular Audio should be readable");
+        assert_eq!(source.file_name, "tone.wav");
+        assert_eq!(source.mime_type, "audio/wav");
+        assert_eq!(source.byte_length, audio_bytes.len() as u64);
+        assert!(source.data_url.starts_with("data:audio/wav;base64,"));
+        assert!(
+            !source
+                .data_url
+                .contains(&fixture_root.to_string_lossy().to_string()),
+            "external source paths must not be returned"
+        );
+
+        let mp3_path = fixture_root.join("tone.mp3");
+        std::fs::write(&mp3_path, b"ID3\x04\x00\x00\x00\x00\x00\x00")
+            .expect("MP3 fixture must be written");
+        let mp3 =
+            read_local_audio_import_source_path(&mp3_path).expect("ID3 MP3 should be readable");
+        assert_eq!(mp3.mime_type, "audio/mpeg");
+
+        let invalid = fixture_root.join("invalid.wav");
+        std::fs::write(&invalid, b"not a WAV").expect("invalid fixture must be written");
+        assert!(read_local_audio_import_source_path(&invalid).is_err());
+        assert!(
+            read_local_audio_import_source_path(Path::new("relative.wav")).is_err(),
+            "relative MCP paths must be rejected"
+        );
+
+        #[cfg(unix)]
+        {
+            let linked = fixture_root.join("linked.wav");
+            std::os::unix::fs::symlink(&audio_path, &linked)
+                .expect("symlink fixture must be created");
+            assert!(
+                read_local_audio_import_source_path(&linked).is_err(),
+                "final symlink sources must be rejected"
+            );
+        }
+
+        std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
+    }
+
+    #[test]
+    fn project_audio_data_url_stays_inside_managed_assets() {
+        let fixture_root = reset_fixture_root("project-audio");
+        let audio_directory = fixture_root.join("assets/audio");
+        std::fs::create_dir_all(&audio_directory).expect("Audio directory must be created");
+        let audio_path = audio_directory.join("tone.wav");
+        std::fs::write(&audio_path, fixture_wav_bytes()).expect("Audio fixture must be written");
+        let project_path = fixture_root.to_string_lossy().to_string();
+
+        let data_url = read_audio_data_url_path(&project_path, "assets/audio/tone.wav")
+            .expect("managed project Audio should be readable");
+        assert!(data_url.starts_with("data:audio/wav;base64,"));
+        assert!(
+            read_audio_data_url_path(&project_path, "../outside.wav").is_err(),
+            "project Audio traversal must be rejected"
+        );
+
+        let outside_assets = fixture_root.join("private.wav");
+        std::fs::write(&outside_assets, fixture_wav_bytes())
+            .expect("outside Audio fixture must be written");
+        assert!(
+            read_audio_data_url_path(&project_path, "private.wav").is_err(),
+            "project Audio reads must stay inside managed assets"
+        );
+
+        let invalid = audio_directory.join("invalid.wav");
+        std::fs::write(&invalid, b"not a WAV").expect("invalid fixture must be written");
+        assert!(
+            read_audio_data_url_path(&project_path, "assets/audio/invalid.wav").is_err(),
+            "project Audio signature must be validated"
+        );
+
+        #[cfg(unix)]
+        {
+            let linked = audio_directory.join("linked.wav");
+            std::os::unix::fs::symlink(&audio_path, &linked)
+                .expect("project symlink fixture must be created");
+            assert!(
+                read_audio_data_url_path(&project_path, "assets/audio/linked.wav").is_err(),
+                "project Audio symlinks must be rejected"
+            );
+        }
+
         std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
     }
 

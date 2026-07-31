@@ -186,9 +186,27 @@ export function runStarterTemplateFixtureAssertions(): void {
         outputMode: "classic-runtime",
       },
     );
-    assert(result.canStage, `${templateId}: Starter World must compile for staging`);
-    assert(!result.diagnostics.some((diagnostic) => diagnostic.severity === "blocking"),
-      `${templateId}: Starter World has a blocking diagnostic`);
+    const expectsParticleAdapterBlock = templateId === "studio-guide";
+    assert(
+      result.canStage === !expectsParticleAdapterBlock,
+      expectsParticleAdapterBlock
+        ? `${templateId}: Classic runtime must block unsupported Particle output`
+        : `${templateId}: Starter World must compile for staging`,
+    );
+    assert(
+      expectsParticleAdapterBlock
+        ? result.diagnostics.some(
+            (diagnostic) =>
+              diagnostic.severity === "blocking" &&
+              diagnostic.code === "runtime-particle-adapter-missing",
+          )
+        : !result.diagnostics.some(
+            (diagnostic) => diagnostic.severity === "blocking",
+          ),
+      expectsParticleAdapterBlock
+        ? `${templateId}: missing Particle adapter blocking diagnostic`
+        : `${templateId}: Starter World has a blocking diagnostic`,
+    );
     assert(
       JSON.stringify(result.stagingPlan.runtimePackageSpecs) ===
         JSON.stringify(

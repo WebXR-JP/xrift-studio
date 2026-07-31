@@ -5,6 +5,7 @@ import {
 } from "../asset-manifest";
 import type { PrefabDocument } from "../prefab-document";
 import {
+  type JsonValue,
   type PrefabInstanceComponent,
   type RegisteredSceneComponent,
   type SceneDocument,
@@ -503,6 +504,41 @@ function clonePrefabComponent(
       })),
     };
   }
+  if (component.type === "script") {
+    const declaredEntityReferences = new Set(component.entityReferences);
+    const entityReferences = component.entityReferences.map((entityReference) => {
+      const generatedReference = entityIdMap.get(entityReference);
+      if (generatedReference) return generatedReference;
+      addResolverDiagnostic(state, {
+        ...instanceDiagnostic(
+          state.sceneId,
+          hostEntityId,
+          ownerInstance,
+          prefab.entities[entityReference]
+            ? "prefab-entity-reference-outside-subtree"
+            : "prefab-entity-reference-missing",
+          prefab.entities[entityReference]
+            ? `Script Entity参照が配置対象subtreeの外にあります: ${entityReference}`
+            : `Script Entity参照がPrefab内にありません: ${entityReference}`,
+        ),
+        prefabId: prefab.prefabId,
+        componentId: generatedId,
+        fieldPath: `entities.${sourceEntityId}.components.${component.id}.entityReferences`,
+      });
+      return entityReference;
+    });
+    return {
+      ...component,
+      id: generatedId,
+      properties: remapScriptPropertyEntityReferences(
+        component.properties,
+        declaredEntityReferences,
+        entityIdMap,
+      ) as typeof component.properties,
+      assetReferences: [...component.assetReferences],
+      entityReferences,
+    };
+  }
   if (component.type === "xrift-component") {
     const entityReferences = component.entityReferences.map((entityReference) => {
       const generatedReference = entityIdMap.get(entityReference);
@@ -548,6 +584,38 @@ function clonePrefabComponent(
     };
   }
   return { ...component, id: generatedId };
+}
+
+function remapScriptPropertyEntityReferences(
+  value: JsonValue,
+  declaredReferences: ReadonlySet<string>,
+  entityIdMap: ReadonlyMap<string, string>,
+): JsonValue {
+  if (typeof value === "string" && declaredReferences.has(value)) {
+    return entityIdMap.get(value) ?? value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) =>
+      remapScriptPropertyEntityReferences(
+        entry,
+        declaredReferences,
+        entityIdMap,
+      ),
+    );
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [
+        key,
+        remapScriptPropertyEntityReferences(
+          entry,
+          declaredReferences,
+          entityIdMap,
+        ),
+      ]),
+    );
+  }
+  return value;
 }
 
 function cloneExpansionEntity(entity: SceneEntity): SceneEntity {

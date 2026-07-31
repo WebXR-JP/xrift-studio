@@ -1,4 +1,10 @@
-import Editor, { type BeforeMount } from "@monaco-editor/react";
+import Editor from "@monaco-editor/react";
+
+import { setupMonaco } from "../lib/monaco";
+
+// Must run before the first <Editor> renders: @monaco-editor/react resolves its
+// loader source once, and the default source is a CDN.
+setupMonaco();
 
 type Language = "typescript" | "json" | "markdown" | "plaintext" | "css" | "html";
 
@@ -11,34 +17,6 @@ type Props = {
   error: string | null;
   onChange: (value: string) => void;
   onSave: () => void;
-};
-
-const beforeMount: BeforeMount = (monaco) => {
-  monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-    target: monaco.languages.typescript.ScriptTarget.Latest,
-    allowNonTsExtensions: true,
-    moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-    module: monaco.languages.typescript.ModuleKind.ESNext,
-    jsx: monaco.languages.typescript.JsxEmit.Preserve,
-    jsxImportSource: "react",
-    esModuleInterop: true,
-    allowSyntheticDefaultImports: true,
-    isolatedModules: true,
-    noEmit: true,
-    skipLibCheck: true,
-    allowJs: true,
-    typeRoots: ["node_modules/@types"],
-  });
-  monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-    noSemanticValidation: true,
-    noSyntacticValidation: false,
-    noSuggestionDiagnostics: true,
-  });
-  monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
-    noSemanticValidation: true,
-    noSyntacticValidation: false,
-    noSuggestionDiagnostics: true,
-  });
 };
 
 export function EditorPane({
@@ -85,7 +63,6 @@ export function EditorPane({
             theme="vs"
             value={content}
             onChange={(v) => onChange(v ?? "")}
-            beforeMount={beforeMount}
             options={{
               fontSize: 13,
               minimap: { enabled: false },

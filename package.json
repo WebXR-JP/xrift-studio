@@ -1,7 +1,7 @@
 {
   "name": "xrift-studio",
   "private": true,
-  "version": "0.5.10",
+  "version": "0.5.11",
   "description": "Community-built desktop app for creating XRift worlds and items",
   "type": "module",
   "license": "MIT",
@@ -59,6 +59,7 @@
     "hls.js": "1.6.13",
     "ktx2-encoder": "0.6.0",
     "lucide-react": "1.25.0",
+    "monaco-editor": "0.55.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "rhino3dm": "8.17.0",

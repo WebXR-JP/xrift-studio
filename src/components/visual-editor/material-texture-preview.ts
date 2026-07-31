@@ -25,8 +25,10 @@ import {
 } from "three";
 import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 import { tauri } from "../../lib/tauri";
+import { resolveLocalBasisTranscoderPath } from "../../lib/visual-editor/basis-transcoder";
 import {
   getTextureAsset,
+  getTextureSourceFormat,
   normalizeMaterialProperties,
   resolveOpenBrushBuiltinTextureUrl,
   type AssetManifest,
@@ -106,8 +108,7 @@ type PreviewTextureRequest = {
 };
 
 const IMAGE_DATA_URL_CACHE = new Map<string, Promise<string>>();
-const KTX2_TRANSCODER_PATH =
-  "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/basis/";
+const KTX2_TRANSCODER_PATH = resolveLocalBasisTranscoderPath();
 
 export function useMaterialPreviewTextureState(
   material: MaterialAsset | undefined,
@@ -151,18 +152,27 @@ export function useMaterialPreviewTextureState(
         active = false;
       };
     }
-    const initialStatus: MaterialPreviewTextureLoadStatus = projectPath
-      ? "loading"
-      : "error";
     setState({
       textures: {},
       statuses: Object.fromEntries(
         requests.flatMap((request) =>
-          request.role ? [[request.role, initialStatus] as const] : [],
+          request.role
+            ? [
+                [
+                  request.role,
+                  projectPath || request.asset.source.kind === "builtin"
+                    ? "loading"
+                    : "error",
+                ] as const,
+              ]
+            : [],
         ),
       ) as MaterialPreviewTextureStatuses,
     });
-    if (!projectPath) {
+    const readableRequests = requests.filter(
+      (request) => projectPath || request.asset.source.kind === "builtin",
+    );
+    if (readableRequests.length === 0) {
       return () => {
         active = false;
       };
@@ -170,15 +180,27 @@ export function useMaterialPreviewTextureState(
 
     void Promise.all(
       requests.map(async (request) => {
+        if (!projectPath && request.asset.source.kind !== "builtin") {
+          return { ...request, status: "error" as const };
+        }
         try {
-          const dataUrl = await readMaterialPreviewTextureUrl(projectPath, request.asset);
-          const texture =
-            request.asset.importMetadata?.sourceFormat === "ktx2"
-              ? await new KTX2Loader()
-                  .setTranscoderPath(KTX2_TRANSCODER_PATH)
-                  .detectSupport(gl)
-                  .loadAsync(dataUrl)
-              : await new TextureLoader().loadAsync(dataUrl);
+          const dataUrl = await readMaterialPreviewTextureUrl(
+            projectPath ?? "",
+            request.asset,
+          );
+          let texture: Texture;
+          if (getTextureSourceFormat(request.asset) === "ktx2") {
+            const loader = new KTX2Loader()
+              .setTranscoderPath(KTX2_TRANSCODER_PATH)
+              .detectSupport(gl);
+            try {
+              texture = await loader.loadAsync(dataUrl);
+            } finally {
+              loader.dispose();
+            }
+          } else {
+            texture = await new TextureLoader().loadAsync(dataUrl);
+          }
           configureMaterialPreviewTexture(
             texture,
             request.asset,

@@ -90,6 +90,11 @@ export type CompilerAssetCopy = {
   targetRelativePath: string;
 };
 
+export type CompilerBinaryOverlayWrite = {
+  targetRelativePath: string;
+  dataUrl: string;
+};
+
 export type CompilerRequiredPublicationFileCopy = CompilerAssetCopy & {
   purpose: "thumbnail";
 };
@@ -112,6 +117,20 @@ export type CompilerPublicationMetadata = {
 
 export type VisualAssetImportWrite = {
   relativePath: string;
+  dataUrl: string;
+};
+
+export type LocalTextureImportSource = {
+  fileName: string;
+  mimeType: string;
+  byteLength: number;
+  dataUrl: string;
+};
+
+export type LocalAudioImportSource = {
+  fileName: string;
+  mimeType: string;
+  byteLength: number;
   dataUrl: string;
 };
 
@@ -246,6 +265,46 @@ export type XriftMcpEditorResponse = {
   error?: XriftMcpEditorErrorResponse;
 };
 
+export type ScriptTrustProjectInput = {
+  projectPath: string;
+  projectId: string;
+};
+
+export type NativeScriptTrustFingerprint = {
+  sourceSha256: string;
+  language: "ts" | "tsx";
+  contractVersion: string;
+  modulePolicyVersion: string;
+  allowRemoteModules: false;
+};
+
+export type ScriptTrustProjectScope = {
+  canonicalProjectPath: string;
+  projectId: string;
+};
+
+export type ScriptTrustApprovalCheck = {
+  fingerprint: NativeScriptTrustFingerprint;
+  approved: boolean;
+  approvedAtUnixMs: number | null;
+};
+
+export type ScriptTrustStatusResult = {
+  project: ScriptTrustProjectScope;
+  checks: ScriptTrustApprovalCheck[];
+  approvedCount: number;
+  pendingCount: number;
+  storedApprovalCount: number;
+  allApproved: boolean;
+  storeSchemaVersion: number;
+};
+
+export type ScriptTrustMutationResult = {
+  project: ScriptTrustProjectScope;
+  checks: ScriptTrustApprovalCheck[];
+  changedCount: number;
+};
+
 export const tauri = {
   isAvailable: () => isTauri(),
   selectDirectory: (title: string, defaultPath?: string) =>
@@ -296,6 +355,7 @@ export const tauri = {
     authoringProjectPath: string,
     directoryName: string,
     overlayFiles: CompilerOverlayWrite[],
+    binaryOverlayFiles: CompilerBinaryOverlayWrite[],
     assetCopies: CompilerAssetCopy[],
     requiredPublicationFiles: CompilerRequiredPublicationFileCopy[],
   ) =>
@@ -303,6 +363,7 @@ export const tauri = {
       authoringProjectPath,
       directoryName,
       overlayFiles,
+      binaryOverlayFiles,
       assetCopies,
       requiredPublicationFiles,
     }),
@@ -340,6 +401,14 @@ export const tauri = {
       transactionId,
       writes,
     }),
+  readLocalTextureImportSource: (sourcePath: string) =>
+    invoke<LocalTextureImportSource>("read_local_texture_import_source", {
+      sourcePath,
+    }),
+  readLocalAudioImportSource: (sourcePath: string) =>
+    invoke<LocalAudioImportSource>("read_local_audio_import_source", {
+      sourcePath,
+    }),
   openVisualAssetLocation: (
     projectPath: string,
     sourceRelativePath?: string,
@@ -371,14 +440,43 @@ export const tauri = {
     invoke<string>("clone_classic_project_repository", { repositoryUrl }),
   readTextFile: (projectPath: string, rel: string) =>
     invoke<string>("read_text_file", { projectPath, rel }),
+  /** Reads a regular UTF-8 .ts/.tsx file with the native 8 MiB limit. */
+  readScriptSource: (projectPath: string, rel: string) =>
+    invoke<string>("read_script_source", { projectPath, rel }),
   writeTextFile: (projectPath: string, rel: string, content: string) =>
     invoke<void>("write_text_file", { projectPath, rel, content }),
+  getScriptTrustStatus: (
+    project: ScriptTrustProjectInput,
+    fingerprints: readonly NativeScriptTrustFingerprint[],
+  ) =>
+    invoke<ScriptTrustStatusResult>("get_script_trust_status", {
+      project,
+      fingerprints,
+    }),
+  approveScriptTrustFingerprintsForUi: (
+    project: ScriptTrustProjectInput,
+    fingerprints: readonly NativeScriptTrustFingerprint[],
+  ) =>
+    invoke<ScriptTrustMutationResult>(
+      "approve_script_trust_fingerprint_for_ui",
+      { project, fingerprints },
+    ),
+  revokeScriptTrustFingerprints: (
+    project: ScriptTrustProjectInput,
+    fingerprints: readonly NativeScriptTrustFingerprint[],
+  ) =>
+    invoke<ScriptTrustMutationResult>("revoke_script_trust_fingerprints", {
+      project,
+      fingerprints,
+    }),
   readThumbnail: (projectPath: string) =>
     invoke<string | null>("read_thumbnail", { projectPath }),
   writeThumbnail: (projectPath: string, dataUrl: string) =>
     invoke<void>("write_thumbnail", { projectPath, dataUrl }),
   readImageDataUrl: (projectPath: string, rel: string) =>
     invoke<string>("read_image_data_url", { projectPath, rel }),
+  readAudioDataUrl: (projectPath: string, rel: string) =>
+    invoke<string>("read_audio_data_url", { projectPath, rel }),
   /** Reads a validated project-relative binary as a data URL (models included). */
   readProjectFileDataUrl: (projectPath: string, rel: string) =>
     invoke<string>("read_image_data_url", { projectPath, rel }),

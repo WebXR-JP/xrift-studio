@@ -374,6 +374,8 @@ function AssetThumbnailFallback({ asset }: { asset: SceneAsset }) {
       ? EDITOR_ICONS.particle
       : asset.kind === "audio"
         ? EDITOR_ICONS.audio
+      : asset.kind === "script"
+        ? EDITOR_ICONS.script
       : asset.kind === "template"
         ? EDITOR_ICONS.prefab
         : asset.kind === "texture"
@@ -392,6 +394,8 @@ function AssetThumbnailFallback({ asset }: { asset: SceneAsset }) {
         ? "ソース未検出・再取込"
         : asset.kind === "audio"
           ? asset.importMetadata.sourceFormat.toUpperCase()
+          : asset.kind === "script"
+            ? "TypeScript"
           : isEnvironmentTextureAsset(asset)
             ? "HDRIプレビューを生成中"
             : asset.kind === "material"
@@ -3051,6 +3055,7 @@ export function AssetQuickEditor({
         assets={assets}
         readOnly={readOnly}
         onChange={(patch) => onParticleChange(asset.id, patch)}
+        onOpenTexture={onSelectAsset}
       />
     );
   }

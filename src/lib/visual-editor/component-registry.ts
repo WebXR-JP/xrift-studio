@@ -1737,7 +1737,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-function isSerializableJsonValue(
+/** Rejects cycles, non-finite numbers, and non-plain objects. */
+export function isSerializableJsonValue(
   value: unknown,
   ancestors = new Set<object>(),
 ): value is JsonValue {

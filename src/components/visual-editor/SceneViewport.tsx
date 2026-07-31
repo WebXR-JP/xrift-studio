@@ -18,7 +18,19 @@ import {
   type RapierRigidBody,
 } from "@react-three/rapier";
 import { SpawnPoint } from "@xrift/world-components";
+import { XriftScriptRoot } from "../../../packages/xrift-studio-runtime/src/script/host";
 import {
+  XriftAudioSource,
+  type XriftAudioSourceSourceStatus,
+} from "../../../packages/xrift-studio-runtime/src/script/audio-source";
+import { XriftScriptLight } from "../../../packages/xrift-studio-runtime/src/script/light";
+import {
+  EntityScriptVisual,
+  ScriptViewportProvider,
+  type ScriptViewportRuntime,
+} from "./EntityScriptVisual";
+import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -55,10 +67,8 @@ import {
   type Group,
   type Material,
   type Mesh,
-  type DirectionalLight,
   type MeshStandardMaterial,
   type Object3D,
-  type SpotLight,
   type Texture,
 } from "three";
 import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
@@ -83,6 +93,7 @@ import {
   STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID,
   type AssetManifest,
   type AnimationComponent,
+  type AudioSourceComponent,
   type ColliderComponent,
   type MaterialAsset,
   type MeshComponent,
@@ -588,77 +599,37 @@ function LightVisual({
   selected: boolean;
   showSceneLighting: boolean;
 }) {
-  const directionalLightRef = useRef<DirectionalLight | null>(null);
-  const spotLightRef = useRef<SpotLight | null>(null);
-  const directionalTargetRef = useRef<Object3D | null>(null);
-
-  useLayoutEffect(() => {
-    const light = directionalLightRef.current ?? spotLightRef.current;
-    const target = directionalTargetRef.current;
-    if (!light || !target) return;
-    light.target = target;
-    target.updateMatrixWorld();
-  }, [component.lightType]);
-
-  if (!component.enabled) return null;
-
   return (
     <>
-      {showSceneLighting && component.lightType === "ambient" ? (
-        <ambientLight color={component.color} intensity={component.intensity} />
-      ) : showSceneLighting && component.lightType === "hemisphere" ? (
-        <hemisphereLight
+      {showSceneLighting ? (
+        <XriftScriptLight
+          componentId={component.id}
+          lightType={component.lightType}
+          enabled={component.enabled}
           color={component.color}
+          intensity={component.intensity}
+          castShadow={component.castShadow}
           groundColor={component.groundColor ?? "#334155"}
-          intensity={component.intensity}
-        />
-      ) : showSceneLighting && component.lightType === "point" ? (
-        <pointLight
-          color={component.color}
-          intensity={component.intensity}
           distance={component.distance ?? 0}
           decay={component.decay ?? 2}
-          castShadow={component.castShadow}
-        />
-      ) : showSceneLighting && component.lightType === "spot" ? (
-        <>
-          <spotLight
-            ref={spotLightRef}
-            color={component.color}
-            intensity={component.intensity}
-            distance={component.distance ?? 0}
-            angle={component.angle ?? Math.PI / 3}
-            penumbra={component.penumbra ?? 0.5}
-            decay={component.decay ?? 2}
-            castShadow={component.castShadow}
-          />
-          <object3D ref={directionalTargetRef} position={[0, 0, -1]} />
-        </>
-      ) : showSceneLighting && component.lightType === "rectArea" ? (
-        <rectAreaLight
-          color={component.color}
-          intensity={component.intensity}
+          angle={component.angle ?? Math.PI / 3}
+          penumbra={component.penumbra ?? 0.5}
           width={component.width ?? 1}
           height={component.height ?? 1}
         />
-      ) : showSceneLighting ? (
-        <>
-          <directionalLight
-            ref={directionalLightRef}
-            color={component.color}
-            intensity={component.intensity}
-            castShadow={component.castShadow}
-          />
-          <object3D ref={directionalTargetRef} position={[0, 0, -1]} />
-        </>
       ) : null}
-      <EditorLightIcon color={component.color} selected={selected} />
-      {component.lightType === "directional" || component.lightType === "spot" ? (
-        <DirectionArrow
-          direction={-1}
-          color={selected ? EDITOR_SELECTION_COLOR : component.color}
-          position={[0, -0.18, 0]}
-        />
+      {component.enabled ? (
+        <>
+          <EditorLightIcon color={component.color} selected={selected} />
+          {component.lightType === "directional" ||
+          component.lightType === "spot" ? (
+            <DirectionArrow
+              direction={-1}
+              color={selected ? EDITOR_SELECTION_COLOR : component.color}
+              position={[0, -0.18, 0]}
+            />
+          ) : null}
+        </>
       ) : null}
     </>
   );
@@ -766,6 +737,141 @@ function AudioSourceVisual({ selected }: { selected: boolean }) {
   );
 }
 
+type StudioAudioSourceResolution = {
+  key: string;
+  status: XriftAudioSourceSourceStatus;
+  url: string | null;
+};
+
+function StudioAudioSourceRuntime({
+  component,
+  assets,
+  projectPath,
+  effectivelyEnabled,
+}: {
+  component: AudioSourceComponent;
+  assets: AssetManifest;
+  projectPath?: string;
+  effectivelyEnabled: boolean;
+}) {
+  const audioAssetId = component.audioAssetId?.trim() ?? "";
+  const candidate = audioAssetId ? assets.assets[audioAssetId] : undefined;
+  const audioAsset =
+    candidate?.kind === "audio" &&
+    candidate.status === "ready" &&
+    candidate.source.kind === "project"
+      ? candidate
+      : undefined;
+  const audioRelativePath =
+    audioAsset?.source.kind === "project"
+      ? audioAsset.source.relativePath
+      : "";
+  const resolutionKey = [
+    projectPath ?? "",
+    audioAsset?.id ?? audioAssetId,
+    audioAsset?.sourceHash ?? "",
+    audioRelativePath,
+  ].join("\n");
+  const [resolution, setResolution] = useState<StudioAudioSourceResolution>({
+    key: "",
+    status: "loading",
+    url: null,
+  });
+
+  useEffect(() => {
+    let active = true;
+    if (!audioAssetId || !audioAsset || !audioRelativePath) {
+      setResolution({
+        key: resolutionKey,
+        status: "missing",
+        url: null,
+      });
+      return () => {
+        active = false;
+      };
+    }
+    if (!projectPath?.trim()) {
+      setResolution({
+        key: resolutionKey,
+        status: "unavailable",
+        url: null,
+      });
+      return () => {
+        active = false;
+      };
+    }
+    if (!effectivelyEnabled || !component.enabled) {
+      setResolution({
+        key: resolutionKey,
+        status: "loading",
+        url: null,
+      });
+      return () => {
+        active = false;
+      };
+    }
+    setResolution({
+      key: resolutionKey,
+      status: "loading",
+      url: null,
+    });
+    void tauri
+      .readAudioDataUrl(projectPath, audioRelativePath)
+      .then((url) => {
+        if (!active) return;
+        setResolution({
+          key: resolutionKey,
+          status: "available",
+          url,
+        });
+      })
+      .catch(() => {
+        if (!active) return;
+        setResolution({
+          key: resolutionKey,
+          status: "unavailable",
+          url: null,
+        });
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    audioRelativePath,
+    audioAssetId,
+    component.enabled,
+    effectivelyEnabled,
+    projectPath,
+    resolutionKey,
+  ]);
+
+  const current =
+    resolution.key === resolutionKey
+      ? resolution
+      : ({
+          key: resolutionKey,
+          status: audioAsset ? "loading" : "missing",
+          url: null,
+        } satisfies StudioAudioSourceResolution);
+
+  return (
+    <XriftAudioSource
+      componentId={component.id}
+      audioAssetId={audioAssetId}
+      assetUrl={current.url}
+      sourceStatus={current.status}
+      enabled={effectivelyEnabled && component.enabled}
+      volume={component.volume}
+      loop={component.loop}
+      autoplay={component.autoplay}
+      spatial={component.spatial}
+      refDistance={component.refDistance}
+      rolloffFactor={component.rolloffFactor}
+      maxDistance={component.maxDistance}
+    />
+  );
+}
+
 function DirectionArrow({
   direction,
   color,
@@ -820,6 +926,7 @@ function ComponentVisual({
   showHelpers,
   showSceneLighting,
   showAllColliders,
+  effectivelyEnabled,
   projectPath,
 }: {
   component: SceneComponent;
@@ -833,6 +940,7 @@ function ComponentVisual({
   showHelpers: boolean;
   showSceneLighting: boolean;
   showAllColliders: boolean;
+  effectivelyEnabled: boolean;
   projectPath?: string;
 }) {
   switch (component.type) {
@@ -906,7 +1014,14 @@ function ComponentVisual({
         </DreiText>
       ) : null;
     case "audio-source":
-      return showHelpers && component.enabled ? (
+      return playing ? (
+        <StudioAudioSourceRuntime
+          component={component}
+          assets={assets}
+          projectPath={projectPath}
+          effectivelyEnabled={effectivelyEnabled}
+        />
+      ) : showHelpers && component.enabled ? (
         <AudioSourceVisual selected={selected} />
       ) : null;
     case "animation":
@@ -921,11 +1036,18 @@ function ComponentVisual({
         asset?.kind === "particle" && asset.properties.renderer.textureAssetId
           ? assets.assets[asset.properties.renderer.textureAssetId]
           : undefined;
+      const materialAsset =
+        asset?.kind === "particle" && asset.properties.renderer.materialAssetId
+          ? assets.assets[asset.properties.renderer.materialAssetId]
+          : undefined;
       return showHelpers && component.enabled && asset?.kind === "particle" ? (
         <ParticleEmitterVisual
           asset={asset}
           textureAsset={
             textureAsset?.kind === "texture" ? textureAsset : undefined
+          }
+          materialAsset={
+            materialAsset?.kind === "material" ? materialAsset : undefined
           }
           projectPath={projectPath}
           selected={selected}
@@ -936,6 +1058,10 @@ function ComponentVisual({
       return showHelpers ? (
         <OfficialXriftComponentRenderer component={component} />
       ) : null;
+    case "script":
+      // Mounted by EntityObject, which has the Entity identity the host needs,
+      // in the same way official wrapper components are handled there.
+      return null;
   }
 }
 
@@ -1094,6 +1220,8 @@ function EntityObject({
   physicsEnabled,
   ownRigidBody,
   rigidBodyOwner,
+  effectivelyEnabled,
+  runtimeRevision,
   transformMode,
   transformSpace,
   gizmo,
@@ -1117,6 +1245,10 @@ function EntityObject({
   physicsEnabled: boolean;
   ownRigidBody?: RigidBodyComponent;
   rigidBodyOwner?: RigidBodyComponent;
+  /** False when this Entity or one of its ancestors is disabled. */
+  effectivelyEnabled: boolean;
+  /** Restarts this Entity's local runtime content without remounting children. */
+  runtimeRevision: number;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
   gizmo: SceneSettings["editor"]["gizmo"];
@@ -1153,8 +1285,22 @@ function EntityObject({
       component.type === "xrift-component" &&
       isOfficialXriftWrapperComponent(component),
   );
+  const scriptComponents = effectivelyEnabled
+    ? entity.components.filter(
+        (component): component is Extract<SceneComponent, { type: "script" }> =>
+          component.type === "script" && component.enabled,
+      )
+    : [];
   const entityVisuals = (
-    <>
+    <Fragment key={runtimeRevision}>
+      {scriptComponents.map((component) => (
+        <EntityScriptVisual
+          key={component.id}
+          component={component}
+          entityId={entity.id}
+          entityName={entity.name}
+        />
+      ))}
       {entity.components.map((component) =>
         component.type === "xrift-component" &&
         isOfficialXriftWrapperComponent(component) ? null : (
@@ -1174,11 +1320,12 @@ function EntityObject({
             showHelpers={displayProfile.showHelpers}
             showSceneLighting={displayProfile.showSceneLighting}
             showAllColliders={displayProfile.showAllColliders}
+            effectivelyEnabled={effectivelyEnabled}
             projectPath={projectPath}
           />
         ),
       )}
-    </>
+    </Fragment>
   );
   const ownedColliderVisuals = rigidBodyOwner ? (
     <RuntimeOwnedColliderContent
@@ -1220,7 +1367,7 @@ function EntityObject({
       <group
         ref={objectRef}
         name={entity.name}
-        visible={entity.enabled}
+        visible={effectivelyEnabled}
         position={transform?.position ?? [0, 0, 0]}
         rotation={transform?.rotation ?? [0, 0, 0]}
         scale={transform?.scale ?? [1, 1, 1]}
@@ -1572,6 +1719,7 @@ function SceneEntityHierarchy({
   displayProfile,
   inheritedRigidBody,
   ancestors = new Set<string>(),
+  ancestorEnabled = true,
 }: {
   entityId: string;
   scene: SceneDocument;
@@ -1596,6 +1744,7 @@ function SceneEntityHierarchy({
   displayProfile: SceneViewportDisplayProfile;
   inheritedRigidBody?: RigidBodyComponent;
   ancestors?: ReadonlySet<string>;
+  ancestorEnabled?: boolean;
 }) {
   const entity = scene.entities[entityId];
   if (!entity || ancestors.has(entityId)) return null;
@@ -1608,6 +1757,7 @@ function SceneEntityHierarchy({
       component.type === "rigid-body" && component.enabled,
   );
   const rigidBodyOwner = ownRigidBody ?? inheritedRigidBody;
+  const effectivelyEnabled = ancestorEnabled && entity.enabled;
 
   return (
     <EntityObject
@@ -1619,9 +1769,11 @@ function SceneEntityHierarchy({
       primary={primaryEntityId === authoringEntityId}
       editable={editable}
       playing={playing}
-      physicsEnabled={physicsEnabled}
+      physicsEnabled={physicsEnabled && effectivelyEnabled}
       ownRigidBody={ownRigidBody}
       rigidBodyOwner={rigidBodyOwner}
+      effectivelyEnabled={effectivelyEnabled}
+      runtimeRevision={runtimeEntityRevisions?.[authoringEntityId] ?? 0}
       transformMode={transformMode}
       transformSpace={transformSpace}
       gizmo={gizmo}
@@ -1635,11 +1787,7 @@ function SceneEntityHierarchy({
     >
       {entity.children.map((childId) => (
         <SceneEntityHierarchy
-          key={`${childId}:${
-            runtimeEntityRevisions?.[
-              authoringEntityIdByEntityId[childId] ?? childId
-            ] ?? 0
-          }`}
+          key={childId}
           entityId={childId}
           scene={scene}
           authoringEntityIdByEntityId={authoringEntityIdByEntityId}
@@ -1663,6 +1811,7 @@ function SceneEntityHierarchy({
           displayProfile={displayProfile}
           inheritedRigidBody={rigidBodyOwner}
           ancestors={nextAncestors}
+          ancestorEnabled={effectivelyEnabled}
         />
       ))}
     </EntityObject>
@@ -2345,6 +2494,7 @@ export function SceneViewport({
   transformMode,
   transformSpace,
   playDisabled,
+  playPreparing,
   playShortcut,
   onTogglePlay,
   onTransformModeChange,
@@ -2366,6 +2516,7 @@ export function SceneViewport({
   onViewportFileDrop,
   onPlayDropAttempt,
   onDropRejected,
+  scriptRuntime,
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
@@ -2382,6 +2533,8 @@ export function SceneViewport({
   transformMode: TransformMode;
   transformSpace: TransformSpace;
   playDisabled: boolean;
+  /** Script compilation runs before Play starts; the button shows it. */
+  playPreparing?: boolean;
   playShortcut?: string;
   onTogglePlay: () => void;
   onTransformModeChange: (mode: TransformMode) => void;
@@ -2410,6 +2563,8 @@ export function SceneViewport({
   onViewportFileDrop: () => void;
   onPlayDropAttempt: () => void;
   onDropRejected: (message: string) => void;
+  /** Compiled Script Assets plus the callbacks their hosts need. */
+  scriptRuntime?: ScriptViewportRuntime;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const dropResolverRef = useRef<SceneDropResolver | null>(null);
@@ -2874,15 +3029,17 @@ export function SceneViewport({
         <div className="pointer-events-none absolute inset-y-0 left-1/2 z-10 flex -translate-x-1/2 items-center">
           <button
             type="button"
-            disabled={playDisabled}
+            disabled={playDisabled || playPreparing}
             aria-pressed={editorMode === "play"}
             onClick={onTogglePlay}
             title={commandTitle(
               editorMode === "play"
                 ? "Playを停止"
-                : playDisabled
-                  ? "アセットの読み込みが終わるとPlayできます"
-                  : "Playを開始",
+                : playPreparing
+                  ? "Scriptを変換しています"
+                  : playDisabled
+                    ? "アセットの読み込みが終わるとPlayできます"
+                    : "Playを開始",
               "play.toggle",
               playShortcut,
             )}
@@ -2893,7 +3050,11 @@ export function SceneViewport({
             }`}
           >
             <PlayIcon size={13} aria-hidden="true" />
-            {editorMode === "play" ? "停止" : "Play"}
+            {editorMode === "play"
+              ? "停止"
+              : playPreparing
+                ? "準備中"
+                : "Play"}
           </button>
         </div>
         <div className="flex min-w-0 items-center gap-1.5" role="toolbar" aria-label="Scene Viewの操作">
@@ -3091,47 +3252,51 @@ export function SceneViewport({
                 : [0, 0, 0]
             }
           >
-            {preview.scene.rootEntityIds.map((entityId) => (
-              <SceneEntityHierarchy
-                key={`${entityId}:${
-                  runtimeEntityRevisions?.[
-                    preview.authoringEntityIdByEntityId[entityId] ?? entityId
-                  ] ?? 0
-                }`}
-                entityId={entityId}
-                scene={preview.scene}
-                authoringEntityIdByEntityId={
-                  preview.authoringEntityIdByEntityId
-                }
-                assets={assets}
-                projectPath={projectPath}
-                selectedEntityIds={selectedEntityIdSet}
-                primaryEntityId={selectedEntityId}
-                editable={editorMode === "edit"}
-                playing={editorMode === "play"}
-                physicsEnabled={editorMode === "play" && projectKind === "world"}
-                runtimeEntityRevisions={runtimeEntityRevisions}
-                transformMode={transformMode}
-                transformSpace={transformSpace}
-                gizmo={sceneSettings.editor.gizmo}
-                onTransformCommit={onTransformCommit}
-                onDraggingChange={(dragging) => {
-                  transformDraggingRef.current = dragging;
-                  setTransformDragging(dragging);
-                }}
-                transformDraggingRef={transformDraggingRef}
-                materialDragActive={dragOverKind === "material"}
-                materialDropTarget={readyMaterialDropTarget}
-                displayMode={effectiveDisplayMode}
-                displayProfile={displayProfile}
-              />
-            ))}
-            {editorMode === "play" && projectKind === "world" ? (
-              <WorldPlayController
-                initialPosition={runtimeSpawn}
-                isPressed={isPressed}
-              />
-            ) : null}
+            <ScriptViewportProvider value={scriptRuntime ?? null}>
+            <XriftScriptRoot pressedKeys={pressedKeysRef.current}>
+            <Fragment key={editorMode}>
+              {preview.scene.rootEntityIds.map((entityId) => (
+                <SceneEntityHierarchy
+                  key={entityId}
+                  entityId={entityId}
+                  scene={preview.scene}
+                  authoringEntityIdByEntityId={
+                    preview.authoringEntityIdByEntityId
+                  }
+                  assets={assets}
+                  projectPath={projectPath}
+                  selectedEntityIds={selectedEntityIdSet}
+                  primaryEntityId={selectedEntityId}
+                  editable={editorMode === "edit"}
+                  playing={editorMode === "play"}
+                  physicsEnabled={
+                    editorMode === "play" && projectKind === "world"
+                  }
+                  runtimeEntityRevisions={runtimeEntityRevisions}
+                  transformMode={transformMode}
+                  transformSpace={transformSpace}
+                  gizmo={sceneSettings.editor.gizmo}
+                  onTransformCommit={onTransformCommit}
+                  onDraggingChange={(dragging) => {
+                    transformDraggingRef.current = dragging;
+                    setTransformDragging(dragging);
+                  }}
+                  transformDraggingRef={transformDraggingRef}
+                  materialDragActive={dragOverKind === "material"}
+                  materialDropTarget={readyMaterialDropTarget}
+                  displayMode={effectiveDisplayMode}
+                  displayProfile={displayProfile}
+                />
+              ))}
+              {editorMode === "play" && projectKind === "world" ? (
+                <WorldPlayController
+                  initialPosition={runtimeSpawn}
+                  isPressed={isPressed}
+                />
+              ) : null}
+            </Fragment>
+            </XriftScriptRoot>
+            </ScriptViewportProvider>
           </OfficialXriftPreviewProvider>
 
           <CameraControls

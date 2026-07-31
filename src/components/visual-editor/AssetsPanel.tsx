@@ -101,6 +101,7 @@ const KIND_FOLDERS: BrowserFolder[] = [
   { id: "folder-audio", name: "Audio", icon: "audio", kind: "audio" },
   { id: "folder-particles", name: "Particles", icon: "particle", kind: "particle" },
   { id: "folder-interactivity", name: "Interactivity", icon: "asset", kind: "interactivity" },
+  { id: "folder-scripts", name: "Scripts", icon: "script", kind: "script" },
   { id: "folder-prefabs", name: "Prefabs", icon: "prefab", kind: "template" },
 ];
 
@@ -122,6 +123,8 @@ function assetKindLabel(asset: SceneAsset): string {
       return "KHR Interactivity";
     case "audio":
       return "Audio";
+    case "script":
+      return "Script";
     case "template":
       return "Prefab";
   }
@@ -143,6 +146,8 @@ function assetIconName(asset: SceneAsset): EditorIconName {
       return "asset";
     case "audio":
       return "audio";
+    case "script":
+      return "script";
     case "template":
       return "prefab";
     case "primitive":
@@ -1802,6 +1807,9 @@ export function AssetsPanel({
               onPlace={() => onPlaceSceneAsset(asset.id)}
               onOpen={() => {
                 if (asset.kind === "interactivity") onOpenInteractivity(asset.id);
+                if (asset.kind === "script") {
+                  onCommand("asset.edit-script", { assetId: asset.id });
+                }
               }}
               onDelete={() => onRequestDeleteAsset(asset.id)}
               onOpenContext={(event) => openContextMenu(event, { assetId: asset.id })}
@@ -1974,6 +1982,7 @@ export function AssetsPanel({
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="material" label="新規マテリアル" command="asset.create-material" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-material", { folderId }); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="particle" label="新規Particle" command="asset.create-particle" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-particle", { folderId }); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="asset" label="新規Interactivity Graph" command="asset.create-interactivity" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-interactivity", { folderId }); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="script" label="新規Script" command="asset.create-script" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-script", { folderId }); }} />
           <ContextMenuItem disabled={importLocked} disabledReason={importDisabledReason} icon="texture" label="ファイルをインポート…" command="asset.import" onClick={() => { setContextMenu(null); if (onCommand("asset.import")) fileInputRef.current?.click(); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="prefab" label="EntityからPrefabを作成" command="prefab.create" onClick={() => { setContextMenu(null); onPhaseNotice("HierarchyのEntityをAssetsへドラッグしてください"); }} />
         </div>

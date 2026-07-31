@@ -9,12 +9,19 @@ import {
 } from "react";
 import { Link2 } from "lucide-react";
 import {
+  ScriptComponentInspector,
+  type ScriptComponentPatch,
+  type ScriptEntityOption,
+} from "./ScriptComponentInspector";
+import type { ScriptContract } from "../../lib/visual-editor/scripting/script-contract";
+import {
   getGeometryAsset,
   getBuiltinPrimitiveCreation,
   getMaterialAsset,
   normalizeMaterialProperties,
   getMeshMaterialSlots,
   getTransform,
+  EDITOR_COMPONENT_CATEGORY_ORDER,
   getEditorComponentMenuDefinitions,
   getXriftComponentDefinition,
   getXriftComponentMenuGroups,
@@ -2097,6 +2104,14 @@ function AnimationInspector({
   readOnly: boolean;
   onChange: (patch: AnimationPatch) => void;
   onOpenInteractivity: (assetId: string) => void;
+  scriptContracts?: Readonly<Record<string, ScriptContract>>;
+  scriptEntityOptions?: readonly ScriptEntityOption[];
+  onUpdateScriptComponent?: (
+    entityId: string,
+    componentId: string,
+    patch: ScriptComponentPatch,
+  ) => void;
+  onOpenScript?: (scriptAssetId: string) => void;
 }) {
   const model = entity.components
     .filter((candidate) => candidate.type === "mesh")
@@ -2351,6 +2366,10 @@ function EntityInspector({
   onRemoveXriftComponent,
   prefabSource,
   onUpdatePrefab,
+  scriptContracts,
+  scriptEntityOptions,
+  onUpdateScriptComponent,
+  onOpenScript,
 }: {
   entity: SceneEntity;
   scene: SceneDocument;
@@ -2396,6 +2415,15 @@ function EntityInspector({
   onRemoveXriftComponent: (componentId: string) => void;
   prefabSource?: PrefabSourceContext;
   onUpdatePrefab: (prefabId: string) => void;
+  /** Declarations read from each Script Asset's source. */
+  scriptContracts?: Readonly<Record<string, ScriptContract>>;
+  scriptEntityOptions?: readonly ScriptEntityOption[];
+  onUpdateScriptComponent?: (
+    entityId: string,
+    componentId: string,
+    patch: ScriptComponentPatch,
+  ) => void;
+  onOpenScript?: (scriptAssetId: string) => void;
 }) {
   const transform = getTransform(entity);
   const [addComponentOpen, setAddComponentOpen] = useState(false);
@@ -2424,7 +2452,7 @@ function EntityInspector({
         <input
           type="checkbox"
           checked={entity.enabled}
-          disabled={readOnly}
+          disabled={readOnly && !liveRuntimeTuning}
           onChange={(event) => onEnabledChange(event.currentTarget.checked)}
           aria-label={`${entity.name}のEnabled`}
           title={
@@ -2438,7 +2466,7 @@ function EntityInspector({
         />
         <EntityNameField
           entity={entity}
-          disabled={readOnly}
+          disabled={readOnly && !liveRuntimeTuning}
           compact
           onRename={onRename}
         />
@@ -2454,7 +2482,7 @@ function EntityInspector({
         {liveRuntimeTuning ? (
           <span
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-violet-600"
-            title="Play中の変更は保存され、このEntityだけ先頭から再実行されます"
+            title="Play中も保存されます。Script propertyは次のフレーム、構造変更は対象Entityだけへ反映します"
             aria-label="Play中のEntity調整"
           >
             <EDITOR_ICONS.play size={13} aria-hidden="true" />
@@ -2587,7 +2615,7 @@ function EntityInspector({
             <LightInspector
               key={component.id}
               component={component}
-              readOnly={readOnly}
+              readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) => onLightChange(component.id, patch)}
             />
           );
@@ -2597,7 +2625,7 @@ function EntityInspector({
             <TextInspector
               key={component.id}
               component={component}
-              readOnly={readOnly}
+              readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) => onTextChange(component.id, patch)}
             />
           );
@@ -2608,7 +2636,7 @@ function EntityInspector({
               key={component.id}
               component={component}
               assets={assets}
-              readOnly={readOnly}
+              readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) => onAudioSourceChange(component.id, patch)}
               onOpenAsset={onOpenMaterial}
             />
@@ -2633,7 +2661,7 @@ function EntityInspector({
               key={component.id}
               component={component}
               assets={assets}
-              readOnly={readOnly}
+              readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) =>
                 onParticleEmitterChange(component.id, patch)
               }
@@ -2648,6 +2676,29 @@ function EntityInspector({
               <p className="text-xs leading-4 text-slate-600">
                 Play開始位置の基準点です。Play中の移動結果はシーンに保存されません。
               </p>
+            </ComponentCard>
+          );
+        }
+        if (component.type === "script") {
+          const scriptAsset = assets.assets[component.scriptAssetId];
+          return (
+            <ComponentCard
+              key={component.id}
+              title="Script"
+              subtitle={scriptAsset?.name ?? "未設定"}
+            >
+              <ScriptComponentInspector
+                component={component}
+                contract={scriptContracts?.[component.scriptAssetId] ?? null}
+                assets={assets}
+                entities={scriptEntityOptions ?? []}
+                readOnly={readOnly}
+                liveTuning={liveRuntimeTuning}
+                onPatch={(patch) =>
+                  onUpdateScriptComponent?.(entity.id, component.id, patch)
+                }
+                onOpenScript={(assetId) => onOpenScript?.(assetId)}
+              />
             </ComponentCard>
           );
         }
@@ -2676,7 +2727,7 @@ function EntityInspector({
           <XRiftComponentInspector
             key={component.id}
             component={component}
-            readOnly={readOnly}
+            readOnly={readOnly && !liveRuntimeTuning}
             onPropertyChange={(name: string, value: JsonValue | undefined) =>
               onUpdateXriftComponent(component.id, {
                 properties: { [name]: value },
@@ -2692,7 +2743,7 @@ function EntityInspector({
       <div className="relative">
         <button
           type="button"
-          disabled={readOnly}
+          disabled={readOnly && !playMode}
           aria-expanded={addComponentOpen}
           onClick={() => setAddComponentOpen((open) => !open)}
           className="w-full rounded-md border border-violet-300 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-45"
@@ -2701,7 +2752,7 @@ function EntityInspector({
         </button>
         {addComponentOpen ? (
           <div className="mt-2 max-h-80 space-y-1 overflow-y-auto rounded-md border border-slate-300 bg-white p-1 shadow-lg">
-            {(["core", "rendering", "physics", "interaction", "media", "world"] as const).map(
+            {EDITOR_COMPONENT_CATEGORY_ORDER.map(
               (category) => {
                 const definitions = getEditorComponentMenuDefinitions(
                   projectKind,
@@ -2830,6 +2881,10 @@ export function InspectorPanel({
   onAudioSourceChange,
   onSelectAsset,
   onOpenInteractivity,
+  scriptContracts,
+  scriptEntityOptions,
+  onUpdateScriptComponent,
+  onOpenScript,
   onCloseAsset,
   onMaterialChange,
   onModelChange,
@@ -2890,6 +2945,14 @@ export function InspectorPanel({
   onAudioSourceChange: (entityId: string, componentId: string, patch: AudioSourcePatch) => void;
   onSelectAsset: (assetId: string) => void;
   onOpenInteractivity: (assetId: string) => void;
+  scriptContracts?: Readonly<Record<string, ScriptContract>>;
+  scriptEntityOptions?: readonly ScriptEntityOption[];
+  onUpdateScriptComponent?: (
+    entityId: string,
+    componentId: string,
+    patch: ScriptComponentPatch,
+  ) => void;
+  onOpenScript?: (scriptAssetId: string) => void;
   onCloseAsset: () => void;
   onMaterialChange: (assetId: string, patch: MaterialAssetPatch) => void;
   onModelChange: (assetId: string, patch: ModelAssetPatch) => void;
@@ -3000,7 +3063,7 @@ export function InspectorPanel({
       {readOnly ? (
         <div className="border-b border-violet-200 bg-violet-50 px-3 py-2 text-xs leading-4 text-violet-800">
           {playMode
-            ? "Play Windowは分離された実行コピーです。EntityのTransform、Rigid Body、Collider、Animationだけ実行中に調整できます。"
+            ? "Play Windowは分離された実行コピーです。Entityの構成と許可された設定は実行中のSceneへ即時反映されます。"
             : "シーンとアセット設定は閲覧のみです。"}
         </div>
       ) : null}
@@ -3051,7 +3114,10 @@ export function InspectorPanel({
               assets={assets}
               projectPath={projectPath}
               referenceSummary={materialReferenceSummary}
-              readOnly={readOnly}
+              readOnly={
+                readOnly &&
+                !(playMode && (asset.kind === "material" || asset.kind === "particle"))
+              }
               onSelectAsset={onSelectAsset}
               onMaterialChange={onMaterialChange}
               onModelChange={onModelChange}
@@ -3121,6 +3187,10 @@ export function InspectorPanel({
             }
             onOpenMaterial={onSelectAsset}
             onOpenInteractivity={onOpenInteractivity}
+            {...(scriptContracts ? { scriptContracts } : {})}
+            {...(scriptEntityOptions ? { scriptEntityOptions } : {})}
+            {...(onUpdateScriptComponent ? { onUpdateScriptComponent } : {})}
+            {...(onOpenScript ? { onOpenScript } : {})}
             projectKind={projectKind}
             onAddComponent={(definitionId) =>
               onAddComponent(entity.id, definitionId)

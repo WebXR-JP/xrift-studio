@@ -6,6 +6,7 @@ import {
   Camera,
   Check,
   ChevronDown,
+  Code,
   ChevronRight,
   CircleDot,
   CirclePlay,
@@ -76,6 +77,7 @@ export const EDITOR_ICONS = {
   sceneEntity: FileBox,
   light: Lightbulb,
   audio: Volume2,
+  script: Code,
   animation: CirclePlay,
   camera: Camera,
   save: Save,
@@ -162,6 +164,8 @@ export function getEditorComponentIcon(
       return EDITOR_ICONS.animation;
     case "audio-source":
       return EDITOR_ICONS.audio;
+    case "script":
+      return EDITOR_ICONS.script;
     default:
       return EDITOR_ICONS.component;
   }

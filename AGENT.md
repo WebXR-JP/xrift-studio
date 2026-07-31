@@ -83,6 +83,7 @@ pnpm build:preview       # GitHub Pages 用プレビューのビルド
 - Web プレビュー: `src/PreviewApp.tsx`
 - UX 原則: `docs/UX_PRINCIPLES.md`
 - マイクロインタラクション Wiki: `docs/UX_INTERACTIONS.md`
+- Scripting の契約: `docs/SCRIPTING.md`
 - UX スキル: `.agents/skills/xrift-studio-ux/SKILL.md`
 - 機能追加の方針スキル: `.agents/skills/xrift-studio-feature/SKILL.md`
 - 検証ループスキル: `.agents/skills/xrift-studio-verify/SKILL.md`

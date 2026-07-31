@@ -12,6 +12,8 @@ import {
   type SceneEntity,
 } from "./scene-document";
 import { createPrototypeProject } from "./prototype-project";
+import { extractScriptContract } from "./scripting/script-contract";
+import { createScriptAsset } from "./scripting/script-files";
 
 /** Pure assertions for sibling ordering, reparenting, and Entity Enabled state. */
 export function runEditorSessionHierarchyFixtureAssertions(): void {
@@ -142,6 +144,47 @@ export function runEditorSessionHierarchyFixtureAssertions(): void {
       "world",
     ).added,
     "an Entity must not receive duplicate Rigid Body components",
+  );
+
+  const scriptAsset = createScriptAsset(
+    "asset-script-defaults",
+    "Fixture Spinner",
+    "scripts/fixture-spinner.ts",
+  );
+  const assetsWithScript = {
+    ...project.assets,
+    assets: {
+      ...project.assets.assets,
+      [scriptAsset.id]: scriptAsset,
+    },
+  };
+  const scriptContract = extractScriptContract(`
+    import { defineScript, prop } from "xrift:script";
+    export default defineScript({
+      name: "Fixture Spinner",
+      props: {
+        speed: prop.number({ default: 1 }),
+        axis: prop.vec3({ default: [0, 1, 0] }),
+      },
+    });
+  `);
+  const addedScript = addEditorComponent(
+    project.scene,
+    assetsWithScript,
+    physicsEntityId,
+    "scripting.script",
+    "world",
+    scriptAsset.id,
+    { [scriptAsset.id]: scriptContract },
+  );
+  const scriptComponent = addedScript.scene.entities[
+    physicsEntityId
+  ]?.components.find((component) => component.type === "script");
+  assert(
+    addedScript.added &&
+      scriptComponent?.properties.speed === 1 &&
+      JSON.stringify(scriptComponent.properties.axis) === "[0,1,0]",
+    "adding a Script Component must persist the declared default properties",
   );
 
   const legacyParentScene: SceneDocument = {
