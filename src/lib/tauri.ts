@@ -1,6 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 
 export type ProjectKind = "world" | "item";
@@ -317,6 +317,17 @@ export const tauri = {
     }),
   openPath: (path: string) => openPath(path),
   openUrl: (url: string) => openUrl(url),
+  saveScreenshot: async (dataUrl: string) => {
+    if (!isTauri()) return null;
+    const path = await saveDialog({
+      title: "XRift Studioの画面を保存",
+      defaultPath: "xrift-studio-support.png",
+      filters: [{ name: "PNG画像", extensions: ["png"] }],
+    });
+    if (!path) return null;
+    await invoke<void>("save_screenshot", { path, dataUrl });
+    return path;
+  },
   getVersions: () => invoke<Versions>("get_versions"),
   runtimePaths: () => invoke<RuntimePaths>("runtime_paths"),
   runtimeStatus: () => invoke<RuntimeStatus>("runtime_status"),

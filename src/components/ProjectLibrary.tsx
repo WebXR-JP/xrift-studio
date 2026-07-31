@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowUpDown,
   ExternalLink,
+  LifeBuoy,
   RefreshCw,
   Search,
   Settings,
@@ -17,6 +18,7 @@ import { AboutModal } from "./AboutModal";
 import { UserMenu } from "./UserMenu";
 import { ThumbnailEditorModal } from "./ThumbnailEditorModal";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { SupportReportModal } from "./SupportReportModal";
 
 type ProjectSort =
   | "updated-desc"
@@ -31,6 +33,8 @@ const PROJECT_SORT_LABELS: Record<ProjectSort, string> = {
   "uploaded-desc": "最近公開した順",
   "name-asc": "名前順",
 };
+
+const SUPPORT_PROMPT_DISMISSED_KEY = "xrift-studio:support-prompt-dismissed:v1";
 
 type Props = {
   projects: Project[];
@@ -88,6 +92,7 @@ export function ProjectLibrary({
   onShowAppUpdate,
 }: Props) {
   const [showAbout, setShowAbout] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
   const [editingThumb, setEditingThumb] = useState<Project | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -95,6 +100,26 @@ export function ProjectLibrary({
   const [sort, setSort] = useState<ProjectSort>("updated-desc");
   const [publishFilter, setPublishFilter] = useState<PublishFilter>("all");
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (loading || !projectsRoot) return;
+    try {
+      if (window.localStorage.getItem(SUPPORT_PROMPT_DISMISSED_KEY) !== "1") {
+        setShowSupport(true);
+      }
+    } catch {
+      setShowSupport(true);
+    }
+  }, [loading, projectsRoot]);
+
+  const closeSupport = () => {
+    try {
+      window.localStorage.setItem(SUPPORT_PROMPT_DISMISSED_KEY, "1");
+    } catch {
+      // The help entry remains available from the header if storage is blocked.
+    }
+    setShowSupport(false);
+  };
 
   const visibleProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("ja");
@@ -132,6 +157,15 @@ export function ProjectLibrary({
         </div>
 
         <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setShowSupport(true)}
+            className="flex items-center justify-center rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+            title="ヘルプと報告"
+            aria-label="ヘルプと報告"
+          >
+            <LifeBuoy size={14} aria-hidden="true" />
+          </button>
           <button
             type="button"
             onClick={() => setShowAbout(true)}
@@ -177,6 +211,11 @@ export function ProjectLibrary({
         appUpdate={appUpdate}
         onCheckAppUpdate={onCheckAppUpdate}
         onShowAppUpdate={onShowAppUpdate}
+      />
+      <SupportReportModal
+        open={showSupport}
+        projectCount={projects.length}
+        onClose={closeSupport}
       />
       {editingThumb ? (
         <ThumbnailEditorModal

@@ -7,5 +7,7 @@ export const XRIFT_STUDIO_ISSUES_URL =
 export const XRIFT_STUDIO_NEW_ISSUE_URL =
   `${XRIFT_STUDIO_ISSUES_URL}/new`;
 
-// Publish the custom GPT, then replace this value with its shared URL.
-export const XRIFT_STUDIO_ISSUE_ASSISTANT_GPT_URL = "";
+export const XRIFT_STUDIO_HELP_GPT_URL =
+  "https://chatgpt.com/g/g-6a6d32ac1de881919670c649f51b52a7-heruhusenta";
+
+export const XRIFT_STUDIO_ISSUE_ASSISTANT_GPT_URL = XRIFT_STUDIO_HELP_GPT_URL;

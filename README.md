@@ -199,7 +199,7 @@ docs/VISUAL_PROJECT_MIGRATION_CLI.md Visual project移植CLIの仕様と段階�
 
 ### Issueを相談する
 
-[Issue相談GPTの設定と使い方](./docs/BUG_REPORT_GPT.md)では、バグ報告と機能要望を相談しながら、Issueの下書きを作る流れをまとめています。公開済みのGPTリンクは、GPTを作成したあとにアプリとこの案内へ追加します。
+[Issue相談GPTの設定と使い方](./docs/BUG_REPORT_GPT.md)では、バグ報告と機能要望を相談しながら、Issueの下書きを作る流れをまとめています。[ヘルプセンターGPTを開く](https://chatgpt.com/g/g-6a6d32ac1de881919670c649f51b52a7-heruhusenta)こともできます。デスクトップ版のプロジェクト一覧には「ヘルプと報告」があり、環境情報のコピーと現在の画面の保存を行ってからGitHub / ChatGPTへ進めます。
 
 [GitHubで新しいIssueを作成する](https://github.com/WebXR-JP/xrift-studio/issues/new)こともできます。アカウント情報やアクセストークンは貼り付けないでください。
 

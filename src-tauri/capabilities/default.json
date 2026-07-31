@@ -12,6 +12,7 @@
     "process:allow-restart",
     "mcp-bridge:default",
     "dialog:allow-open",
+    "dialog:allow-save",
     {
       "identifier": "shell:allow-spawn",
       "allow": [

@@ -4734,6 +4734,37 @@ fn write_thumbnail(project_path: String, data_url: String) -> Result<(), String>
     Ok(())
 }
 
+#[tauri::command]
+fn save_screenshot(path: String, data_url: String) -> Result<(), String> {
+    let target = PathBuf::from(&path);
+    let is_png = target
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.eq_ignore_ascii_case("png"))
+        .unwrap_or(false);
+    if !is_png {
+        return Err("スクリーンショットはPNG形式で保存してください。".to_string());
+    }
+    if let Ok(metadata) = std::fs::symlink_metadata(&target) {
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err("保存先が通常のファイルではありません。".to_string());
+        }
+    }
+    if !data_url.starts_with("data:image/png;base64,") {
+        return Err("PNG画像データを確認できません。".to_string());
+    }
+    let bytes = decode_base64_data_url(&data_url, "PNG画像データが不正です。")?;
+    if bytes.is_empty() || bytes.len() > 32 * 1024 * 1024 {
+        return Err("スクリーンショットのサイズが不正です。".to_string());
+    }
+    if let Some(parent) = target.parent() {
+        if !parent.is_dir() {
+            return Err("保存先フォルダーが見つかりません。".to_string());
+        }
+    }
+    std::fs::write(&target, bytes).map_err(|error| format!("保存に失敗しました: {}", error))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
@@ -4801,6 +4832,7 @@ pub fn run() {
             write_text_file,
             read_thumbnail,
             write_thumbnail,
+            save_screenshot,
             read_audio_data_url,
             read_image_data_url,
             list_files,

@@ -191,6 +191,10 @@ Knowledgeは現在の実装を保証するものではない。実装や公開Is
 
 GPTを作成・テストしたら、ChatGPTのGPTsエリアで `Share` を開き、「Anyone with the link」など適切な共有範囲を選び、発行されたURLをコピーします。公開にはアカウントやワークスペースの権限が必要です。
 
-発行されたURLを `src/lib/support-links.ts` の `XRIFT_STUDIO_ISSUE_ASSISTANT_GPT_URL` に設定してください。値が空の間は、アプリとWebプレビューにはGitHubの新規Issue導線だけが表示されます。
+発行されたURLを `src/lib/support-links.ts` の `XRIFT_STUDIO_ISSUE_ASSISTANT_GPT_URL` に設定してください。現在のヘルプセンターGPTは次のURLです。
+
+https://chatgpt.com/g/g-6a6d32ac1de881919670c649f51b52a7-heruhusenta
+
+ChatGPTのURLだけで入力欄へ環境情報を自動入力することはできないため、デスクトップ版では先に安全な環境情報をクリップボードへコピーしてからGPTを開きます。プロジェクト一覧の「ヘルプと報告」から、GitHub Issue作成、ChatGPTでの文章作成、環境情報のコピー、現在画面のPNG保存を選べます。環境情報にはアクセストークン、Cookie、パスワード、絶対パスを含めません。
 
 READMEの案内にも発行URLを追加し、GPTのInstructionsやKnowledgeを更新した場合は、この設計書を正として同期します。
