@@ -199,7 +199,9 @@ docs/VISUAL_PROJECT_MIGRATION_CLI.md Visual project移植CLIの仕様と段階�
 
 ### 問題を報告する
 
-[GitHub Issues](https://github.com/WebXR-JP/xrift-studio/issues) に、OS、アプリのバージョン、再現手順、ログを添えて報告してください。アカウント情報やアクセストークンは貼り付けないでください。
+[バグ報告GPTの設定と使い方](./docs/BUG_REPORT_GPT.md)では、症状を相談しながら、OS、アプリのバージョン、再現手順、ログを含むIssueの下書きを作る流れをまとめています。公開済みのGPTリンクは、GPTを作成したあとにアプリとこの案内へ追加します。
+
+[GitHubで新しいIssueを作成する](https://github.com/WebXR-JP/xrift-studio/issues/new)こともできます。アカウント情報やアクセストークンは貼り付けないでください。
 
 ## 開発状況
 

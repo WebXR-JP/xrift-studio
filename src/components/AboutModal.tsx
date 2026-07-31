@@ -15,6 +15,11 @@ import { BrandMark } from "./Brand";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useToast } from "./Toast";
 import type { AppUpdateState } from "../lib/app-updater";
+import {
+  XRIFT_STUDIO_BUG_REPORT_GPT_URL,
+  XRIFT_STUDIO_NEW_ISSUE_URL,
+  XRIFT_STUDIO_REPOSITORY_URL,
+} from "../lib/support-links";
 
 type Props = {
   open: boolean;
@@ -253,9 +258,28 @@ export function AboutModal({
             <ExternalLink size={11} strokeWidth={2} />
             XRift 公式ドキュメント
           </button>
+          {XRIFT_STUDIO_BUG_REPORT_GPT_URL ? (
+            <button
+              type="button"
+              onClick={() => openUrl(XRIFT_STUDIO_BUG_REPORT_GPT_URL).catch(() => {})}
+              className="flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-700"
+            >
+              <ExternalLink size={11} strokeWidth={2} />
+              バグ報告GPT
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => openUrl(XRIFT_STUDIO_NEW_ISSUE_URL).catch(() => {})}
+              className="flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-700"
+            >
+              <ExternalLink size={11} strokeWidth={2} />
+              バグを報告
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => openUrl("https://github.com/WebXR-JP/xrift-studio").catch(() => {})}
+            onClick={() => openUrl(XRIFT_STUDIO_REPOSITORY_URL).catch(() => {})}
             className="flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-700"
           >
             <ExternalLink size={11} strokeWidth={2} />

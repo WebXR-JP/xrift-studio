@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ArrowRight,
   AudioLines,
+  Bug,
   Blend,
   Blocks,
   Bot,
@@ -29,6 +30,11 @@ import {
   WandSparkles,
 } from "lucide-react";
 import { VisualEditorErrorBoundary } from "./components/visual-editor/VisualEditorErrorBoundary";
+import {
+  XRIFT_STUDIO_BUG_REPORT_GPT_URL,
+  XRIFT_STUDIO_ISSUES_URL,
+  XRIFT_STUDIO_REPOSITORY_URL,
+} from "./lib/support-links";
 
 const VisualEditorPrototype = lazy(() =>
   import("./components/visual-editor/VisualEditorPrototype").then((module) => ({
@@ -39,7 +45,7 @@ const VisualEditorPrototype = lazy(() =>
 type ProjectKind = "world" | "item";
 
 const releaseUrl = "https://github.com/WebXR-JP/xrift-studio/releases/latest";
-const repositoryUrl = "https://github.com/WebXR-JP/xrift-studio";
+const repositoryUrl = XRIFT_STUDIO_REPOSITORY_URL;
 
 const creationFlow = [
   {
@@ -820,6 +826,17 @@ export default function PreviewApp() {
             <a href="https://xrift.net/" target="_blank" rel="noreferrer" className="transition-colors duration-200 hover:text-violet-700">
               XRift公式サイト
             </a>
+            {XRIFT_STUDIO_BUG_REPORT_GPT_URL ? (
+              <a href={XRIFT_STUDIO_BUG_REPORT_GPT_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 transition-colors duration-200 hover:text-violet-700">
+                <Bug size={13} aria-hidden="true" />
+                バグ報告GPT
+              </a>
+            ) : (
+              <a href={`${XRIFT_STUDIO_ISSUES_URL}/new`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 transition-colors duration-200 hover:text-violet-700">
+                <Bug size={13} aria-hidden="true" />
+                バグを報告
+              </a>
+            )}
             <a href={repositoryUrl} target="_blank" rel="noreferrer" className="transition-colors duration-200 hover:text-violet-700">
               GitHub
             </a>
