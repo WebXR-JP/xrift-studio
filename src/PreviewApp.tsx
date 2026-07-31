@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import { VisualEditorErrorBoundary } from "./components/visual-editor/VisualEditorErrorBoundary";
 import {
-  XRIFT_STUDIO_BUG_REPORT_GPT_URL,
+  XRIFT_STUDIO_ISSUE_ASSISTANT_GPT_URL,
   XRIFT_STUDIO_ISSUES_URL,
   XRIFT_STUDIO_REPOSITORY_URL,
 } from "./lib/support-links";
@@ -826,15 +826,15 @@ export default function PreviewApp() {
             <a href="https://xrift.net/" target="_blank" rel="noreferrer" className="transition-colors duration-200 hover:text-violet-700">
               XRift公式サイト
             </a>
-            {XRIFT_STUDIO_BUG_REPORT_GPT_URL ? (
-              <a href={XRIFT_STUDIO_BUG_REPORT_GPT_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 transition-colors duration-200 hover:text-violet-700">
+            {XRIFT_STUDIO_ISSUE_ASSISTANT_GPT_URL ? (
+              <a href={XRIFT_STUDIO_ISSUE_ASSISTANT_GPT_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 transition-colors duration-200 hover:text-violet-700">
                 <Bug size={13} aria-hidden="true" />
-                バグ報告GPT
+                Issue相談GPT
               </a>
             ) : (
               <a href={`${XRIFT_STUDIO_ISSUES_URL}/new`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 transition-colors duration-200 hover:text-violet-700">
                 <Bug size={13} aria-hidden="true" />
-                バグを報告
+                Issueを相談
               </a>
             )}
             <a href={repositoryUrl} target="_blank" rel="noreferrer" className="transition-colors duration-200 hover:text-violet-700">
