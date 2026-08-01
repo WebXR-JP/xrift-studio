@@ -12,9 +12,7 @@ import {
   Lightbulb,
   LifeBuoy,
   Package,
-  Paintbrush,
   PanelsTopLeft,
-  Sparkles,
   TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
@@ -22,7 +20,6 @@ import type { ProjectKind } from "../lib/tauri";
 import {
   STARTER_ITEM_TEMPLATES,
   STARTER_WORLD_TEMPLATES,
-  STUDIO_GUIDE_TEMPLATE_THUMBNAIL,
   defaultVisualStarterTemplateId,
   type VisualStarterTemplateId,
 } from "../lib/visual-editor/starter-templates";
@@ -139,24 +136,6 @@ function StarterScenePreview({
     ? "border-brand-200 bg-brand-100/70"
     : "border-zinc-200 bg-white/90";
 
-  if (templateId === "studio-guide") {
-    return (
-      <div className="relative h-full overflow-hidden bg-zinc-950" aria-hidden="true">
-        <img
-          src={STUDIO_GUIDE_TEMPLATE_THUMBNAIL}
-          alt=""
-          width={640}
-          height={360}
-          loading="eager"
-          className="h-full w-full object-cover"
-        />
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-zinc-950/90 to-transparent px-3 pb-2.5 pt-8 text-[10px] font-semibold tracking-wide text-white">
-          1階建ての学習ミュージアム
-        </div>
-      </div>
-    );
-  }
-
   if (templateId === "xrift-official") {
     return (
       <div className="relative h-full overflow-hidden bg-zinc-950" aria-hidden="true">
@@ -191,26 +170,6 @@ function StarterScenePreview({
         </div>
         <span className="text-[10px] font-medium tracking-wide text-zinc-500">
           床・メインライト1灯・スポーン
-        </span>
-      </div>
-    );
-  }
-
-  if (templateId === "openbrush") {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 px-5" aria-hidden="true">
-        <div className="flex items-center gap-3">
-          <Sparkles size={16} className="text-amber-500" />
-          <span className={`relative flex h-12 w-12 items-center justify-center rounded-xl border ${surfaceClass}`}>
-            <Paintbrush size={24} className={iconClass} />
-            <span className="absolute -bottom-1 -right-1 rounded-full bg-brand-600 px-1.5 py-0.5 text-[8px] font-bold text-white">
-              48
-            </span>
-          </span>
-          <Sparkles size={16} className="text-fuchsia-500" />
-        </div>
-        <span className="text-[10px] font-medium tracking-wide text-zinc-500">
-          three-icosa ブラシシェーダー
         </span>
       </div>
     );
@@ -462,11 +421,7 @@ export function NewProjectDialog({
                           </div>
                           {choice.kind === "world" && (
                             <div className="mt-1 text-[10px] font-semibold tracking-wide text-brand-700">
-                              {template.id === "studio-guide"
-                                ? "学習用"
-                                : template.id === "blank"
-                                  ? "最小構成"
-                                  : "作例"}
+                              {template.id === "blank" ? "最小構成" : "作例"}
                             </div>
                           )}
                           <p className="mt-1 text-xs leading-5 text-zinc-500">
@@ -474,9 +429,7 @@ export function NewProjectDialog({
                           </p>
                           <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">
                             <Package size={12} aria-hidden="true" />
-                            {template.id === "studio-guide"
-                              ? "実画面6枚・Codex / MCP・公式Component"
-                              : template.id === "xrift-official"
+                            {template.id === "xrift-official"
                               ? "公式R3F / Rapierから変換"
                               : template.bundledAssetIds.length > 0
                               ? `${template.bundledAssetIds.length}個の素材をAssetsへ追加`

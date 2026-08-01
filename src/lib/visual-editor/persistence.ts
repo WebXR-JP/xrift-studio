@@ -632,7 +632,16 @@ async function loadStarterAssetCopies(
           responseStatus: response.status,
         });
       }
-      const bytes = new Uint8Array(await response.arrayBuffer());
+      const rawBytes = new Uint8Array(await response.arrayBuffer());
+      // Bundled source files are checked into the repository as text. Git can
+      // materialize those files with CRLF on Windows, while the pinned
+      // provenance hash is defined over canonical LF bytes. Normalize only
+      // strict text copies so the same starter succeeds on every platform and
+      // the project receives the verified canonical source bytes.
+      const bytes =
+        copy.integrity === "strict" && copy.mediaType.startsWith("text/")
+          ? normalizeStarterTextBytes(rawBytes)
+          : rawBytes;
       if (copy.integrity === "strict") {
         if (bytes.byteLength !== copy.expectedByteLength) {
           throw new StarterAssetCopyError(copy, "size", {
@@ -788,6 +797,11 @@ async function sha256StarterBytes(bytes: Uint8Array): Promise<string> {
   return [...new Uint8Array(digest)]
     .map((value) => value.toString(16).padStart(2, "0"))
     .join("");
+}
+
+function normalizeStarterTextBytes(bytes: Uint8Array): Uint8Array {
+  const text = new TextDecoder().decode(bytes);
+  return new TextEncoder().encode(text.replace(/\r\n?/g, "\n"));
 }
 
 function bytesToDataUrl(bytes: Uint8Array, mediaType: string): string {

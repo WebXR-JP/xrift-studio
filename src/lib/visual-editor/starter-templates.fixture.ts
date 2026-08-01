@@ -25,16 +25,22 @@ import {
 /** Deterministic, filesystem-free assertions for the bundled world starters. */
 export function runStarterTemplateFixtureAssertions(): void {
   assert(
-    defaultVisualStarterTemplateId("world") === "studio-guide",
-    "The Studio learning world must be the default World starter",
+    defaultVisualStarterTemplateId("world") === "xrift-official",
+    "The official XRift sample must be the default World starter",
   );
 
-  for (const templateId of [
-    "studio-guide",
-    "xrift-official",
-    "blank",
-    "openbrush",
-  ] as const satisfies readonly StarterWorldTemplateId[]) {
+  assert(
+    !STARTER_WORLD_TEMPLATES.some(
+      (template) =>
+        (template.id as string) === "studio-guide" ||
+        (template.id as string) === "openbrush",
+    ),
+    "Guide and OpenBrush must not be selectable World starters",
+  );
+
+  const availableStarterTemplateIds: readonly StarterWorldTemplateId[] =
+    STARTER_WORLD_TEMPLATES.map((template) => template.id);
+  for (const templateId of availableStarterTemplateIds) {
     const plan = createStarterWorldProject(templateId, "fixture-world");
     const assets = Object.values(plan.assets.assets);
     const modelAssets = assets.filter((asset) => asset.kind === "model");
@@ -236,10 +242,10 @@ export function runStarterTemplateFixtureAssertions(): void {
         `${templateId}: Starter World must use one main light`,
       );
     }
-    if (templateId === "studio-guide") {
+    if ((templateId as string) === "studio-guide") {
       const sceneEntities = Object.values(plan.scene.entities);
       const studioTemplate = STARTER_WORLD_TEMPLATES.find(
-        (template) => template.id === "studio-guide",
+        (template) => (template.id as string) === "studio-guide",
       );
       const skyboxAsset =
         plan.assets.assets[STUDIO_GUIDE_SKYBOX_TEXTURE_ASSET_ID];

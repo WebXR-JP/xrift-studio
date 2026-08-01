@@ -765,40 +765,6 @@ export const STUDIO_GUIDE_TEMPLATE_THUMBNAIL =
 
 export const STARTER_WORLD_TEMPLATES = [
   {
-    id: "studio-guide",
-    name: "XRift Studio ガイド",
-    description:
-      "中央4.5mの見通しを保ち、Poly Havenの庭Skybox、低ポリ展示物、Particle、Codex・MCPによるAI編集まで学べる1階建てミュージアム",
-    bundledAssetIds: [
-      "studio-guide-overview",
-      "studio-guide-hierarchy-create",
-      "studio-guide-scene-tools",
-      "studio-guide-inspector",
-      "studio-guide-assets",
-      "studio-guide-play-publish",
-      "studio-guide-install-qr",
-      "studio-guide-particle-glow",
-      "studio-guide-particle-spark",
-      "studio-guide-particle-smoke",
-      "studio-guide-particle-confetti",
-      "log-bench",
-      "mug",
-      "wine-glass",
-      "studio-guide-gltf-door",
-      "studio-guide-interaction-door",
-      "studio-guide-laptop",
-      "studio-guide-globe",
-      "studio-guide-vr-headset",
-      "studio-guide-telescope",
-      "studio-guide-information-board",
-      "studio-guide-bench",
-      "studio-guide-planter",
-      "studio-guide-studio-garden",
-      "wood-planks-clean",
-      "polished-concrete",
-    ],
-  },
-  {
     id: "xrift-official",
     name: "XRift公式サンプル",
     description: "公式ClassicテンプレートのR3F / JSXをVisualへ変換した作例",
@@ -813,12 +779,6 @@ export const STARTER_WORLD_TEMPLATES = [
     name: "空のワールド",
     description: "床、メインライト1灯、Spawn Pointだけの最小構成",
     bundledAssetIds: [],
-  },
-  {
-    id: "openbrush",
-    name: "OpenBrush",
-    description: "48種類のOpenBrushストロークをthree-icosaで再現するサンプル",
-    bundledAssetIds: ["openbrush-all-brushes"],
   },
 ] as const satisfies readonly StarterWorldTemplateDefinition[];
 
@@ -854,7 +814,7 @@ export function getStarterItemTemplate(
 export function defaultVisualStarterTemplateId(
   kind: "world" | "item",
 ): VisualStarterTemplateId {
-  return kind === "world" ? "studio-guide" : "basic-item";
+  return kind === "world" ? "xrift-official" : "basic-item";
 }
 
 export function isStarterTemplateForKind(
