@@ -3048,7 +3048,7 @@ export function VisualEditorPrototype({
             }),
           );
           setSaveStatus("dirty");
-          const activity = `AIがPoly Havenから「${installed.name}」をインストールしました`;
+          const activity = `AIが${installed.providerName}から「${installed.name}」をインストールしました`;
           setNotice(`${activity}。変更を自動保存します`);
           setMcpLastActivity({
             clientName: request.clientName || "AI client",

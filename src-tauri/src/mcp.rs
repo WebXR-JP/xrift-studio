@@ -2364,11 +2364,11 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "search_external_assets",
-            "description": "Search the Poly Haven catalog for CC0 HDRIs, textures/materials, and models. Returns external IDs that can be passed to the option and install tools.",
+            "description": "Search the Poly Haven or ambientCG catalog for CC0 HDRIs, textures/materials, and models. Returns external IDs that can be passed to the option and install tools.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "providerId": { "type": "string", "enum": ["poly-haven"] },
+                    "providerId": { "type": "string", "enum": ["poly-haven", "ambient-cg"] },
                     "query": { "type": "string" },
                     "kind": { "type": "string", "enum": ["hdri", "texture", "model"] },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 120 }
@@ -2378,11 +2378,11 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "get_external_asset_options",
-            "description": "List installable resolutions and formats for a Poly Haven external asset.",
+            "description": "List installable resolutions and formats for a Poly Haven or ambientCG external asset.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "providerId": { "type": "string", "enum": ["poly-haven"] },
+                    "providerId": { "type": "string", "enum": ["poly-haven", "ambient-cg"] },
                     "externalId": { "type": "string" }
                 },
                 "required": ["externalId"],
@@ -2391,16 +2391,16 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "install_external_asset",
-            "description": "Download a Poly Haven HDRI, PBR texture bundle, or model into the open project and create XRift Studio assets. Models are validated and saved as self-contained glTF.",
+            "description": "Download a Poly Haven or ambientCG HDRI or PBR texture bundle into the open project and create XRift Studio assets. Poly Haven Models are validated and saved as self-contained glTF; ambientCG Models remain catalog-only until a compatible glTF download is available.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "projectId": { "type": "string" },
                     "sceneId": { "type": "string" },
                     "expectedRevision": { "type": "integer", "minimum": 0 },
-                    "providerId": { "type": "string", "enum": ["poly-haven"] },
+                    "providerId": { "type": "string", "enum": ["poly-haven", "ambient-cg"] },
                     "externalId": { "type": "string" },
-                    "resolution": { "type": "string", "enum": ["1k", "2k", "4k", "8k", "16k", "24k"] },
+                    "resolution": { "type": "string", "enum": ["1k", "2k", "4k", "8k", "12k", "16k", "24k"] },
                     "format": { "type": "string", "enum": ["hdr", "exr"] },
                     "applySkybox": { "type": "boolean" }
                 },

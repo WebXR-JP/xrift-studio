@@ -27,6 +27,18 @@ export const EXTERNAL_STORE_PROVIDERS = [
     attributionNote: "API提供元を明示し、アセットにはCC0情報を保存します。",
   },
   {
+    id: "ambient-cg",
+    kind: "remote-assets",
+    name: "ambientCG",
+    badge: "CC0",
+    summary: "HDRI・マテリアルを追加、モデルを探す",
+    homepageUrl: "https://ambientcg.com",
+    catalogKinds: ["hdri", "texture", "model"],
+    installableKinds: ["hdri", "texture"],
+    authorFallback: "ambientCG contributors",
+    attributionNote: "API提供元を明示し、アセットにはCC0情報を保存します。ModelはglTF対応後にインストールできます。",
+  },
+  {
     id: "open-brush",
     kind: "open-brush",
     name: "Open Brush",

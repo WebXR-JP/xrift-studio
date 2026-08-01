@@ -4,12 +4,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncWriteExt;
 
 const POLY_HAVEN_API: &str = "https://api.polyhaven.com";
 const POLY_HAVEN_PROVIDER_ID: &str = "poly-haven";
+const AMBIENT_CG_API: &str = "https://ambientcg.com/api/v3";
+const AMBIENT_CG_PROVIDER_ID: &str = "ambient-cg";
 const POLY_HAVEN_USER_AGENT: &str =
     "XRiftStudio/0.5.11 (+https://github.com/xrift-studio/xrift-studio; asset-browser)";
 
@@ -103,7 +106,7 @@ struct DownloadSpec {
     extension: String,
 }
 
-fn poly_haven_client() -> Result<reqwest::Client, String> {
+fn external_store_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent(POLY_HAVEN_USER_AGENT)
         .timeout(std::time::Duration::from_secs(120))
@@ -112,7 +115,7 @@ fn poly_haven_client() -> Result<reqwest::Client, String> {
 }
 
 fn validate_provider(provider_id: &str) -> Result<(), String> {
-    if provider_id == POLY_HAVEN_PROVIDER_ID {
+    if matches!(provider_id, POLY_HAVEN_PROVIDER_ID | AMBIENT_CG_PROVIDER_ID) {
         Ok(())
     } else {
         Err("未対応の外部ストアです".to_string())
@@ -133,7 +136,7 @@ fn validate_external_id(external_id: &str) -> Result<&str, String> {
 }
 
 async fn fetch_poly_haven_json(path: &str) -> Result<Value, String> {
-    let response = poly_haven_client()?
+    let response = external_store_client()?
         .get(format!("{}{}", POLY_HAVEN_API, path))
         .send()
         .await
@@ -148,6 +151,24 @@ async fn fetch_poly_haven_json(path: &str) -> Result<Value, String> {
         .json::<Value>()
         .await
         .map_err(|error| format!("Poly Havenの応答を読み取れませんでした: {}", error))
+}
+
+async fn fetch_ambient_cg_json(query: &str) -> Result<Value, String> {
+    let response = external_store_client()?
+        .get(format!("{}/assets{}", AMBIENT_CG_API, query))
+        .send()
+        .await
+        .map_err(|error| format!("ambientCGへ接続できませんでした: {}", error))?;
+    if !response.status().is_success() {
+        return Err(format!(
+            "ambientCG APIがエラーを返しました ({})",
+            response.status()
+        ));
+    }
+    response
+        .json::<Value>()
+        .await
+        .map_err(|error| format!("ambientCGの応答を読み取れませんでした: {}", error))
 }
 
 fn string_array(value: Option<&Value>) -> Vec<String> {
@@ -191,11 +212,225 @@ fn max_resolution(value: Option<&Value>) -> Option<[u64; 2]> {
     Some([entries[0].as_u64()?, entries[1].as_u64()?])
 }
 
+fn ambient_cg_asset_kind(value: Option<&Value>) -> &'static str {
+    match value.and_then(Value::as_str) {
+        Some("hdri") => "hdri",
+        Some("material") => "texture",
+        Some("3d-model") => "model",
+        _ => "unknown",
+    }
+}
+
+fn ambient_cg_thumbnail(value: Option<&Value>) -> String {
+    value
+        .and_then(Value::as_object)
+        .and_then(|thumbnails| {
+            ["512-PNG", "512-JPG-FFFFFF", "256-PNG"]
+                .into_iter()
+                .find_map(|key| thumbnails.get(key).and_then(Value::as_str))
+                .or_else(|| thumbnails.values().find_map(Value::as_str))
+        })
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn ambient_cg_asset_to_external(value: &Value) -> Option<ExternalStoreAsset> {
+    let external_id = value.get("id").and_then(Value::as_str)?.trim();
+    let kind = ambient_cg_asset_kind(value.get("type"));
+    if !matches!(kind, "hdri" | "texture" | "model") {
+        return None;
+    }
+    let download_count = value
+        .get("downloadStatistics")
+        .and_then(|stats| stats.get("total"))
+        .and_then(Value::as_u64)
+        .unwrap_or_default();
+    let asset_url = value
+        .get("url")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("https://ambientcg.com/a/{}", external_id));
+    Some(ExternalStoreAsset {
+        provider_id: AMBIENT_CG_PROVIDER_ID.to_string(),
+        external_id: external_id.to_string(),
+        name: value
+            .get("title")
+            .and_then(Value::as_str)
+            .filter(|title| !title.trim().is_empty())
+            .unwrap_or(external_id)
+            .to_string(),
+        description: value
+            .get("longDescription")
+            .and_then(Value::as_str)
+            .filter(|description| !description.trim().is_empty())
+            .or_else(|| value.get("shortDescription").and_then(Value::as_str))
+            .unwrap_or_default()
+            .to_string(),
+        category: value
+            .get("technique")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        tags: string_array(value.get("tags")),
+        thumbnail_url: ambient_cg_thumbnail(value.get("thumbnails")),
+        asset_kind: kind.to_string(),
+        max_resolution: None,
+        download_count,
+        authors: Vec::new(),
+        asset_url,
+        license_name: "CC0 1.0".to_string(),
+        license_url: "https://creativecommons.org/publicdomain/zero/1.0/".to_string(),
+    })
+}
+
+#[derive(Clone)]
+struct AmbientCgDownload {
+    attributes: String,
+    url: String,
+    size: u64,
+}
+
+fn ambient_cg_downloads(value: &Value) -> Vec<AmbientCgDownload> {
+    value
+        .get("downloads")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|entry| entry.get("extension").and_then(Value::as_str) == Some("zip"))
+        .filter_map(|entry| {
+            Some(AmbientCgDownload {
+                attributes: entry.get("attributes")?.as_str()?.to_string(),
+                url: entry.get("url")?.as_str()?.to_string(),
+                size: entry
+                    .get("size")
+                    .and_then(Value::as_u64)
+                    .unwrap_or_default(),
+            })
+        })
+        .collect()
+}
+
+fn ambient_cg_resolution(attributes: &str) -> Option<String> {
+    attributes.split('-').find_map(|token| {
+        let normalized = token.trim().to_ascii_lowercase();
+        let digits = normalized.strip_suffix('k')?;
+        if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        Some(format!("{}k", digits))
+    })
+}
+
+fn ambient_cg_texture_download(
+    downloads: &[AmbientCgDownload],
+    resolution: &str,
+) -> Option<AmbientCgDownload> {
+    downloads
+        .iter()
+        .filter(|download| {
+            ambient_cg_resolution(&download.attributes).as_deref() == Some(resolution)
+        })
+        .filter(|download| {
+            let attributes = download.attributes.to_ascii_uppercase();
+            attributes.contains("-JPG") || attributes.contains("-PNG")
+        })
+        .min_by_key(|download| {
+            if download.attributes.to_ascii_uppercase().contains("-JPG") {
+                0
+            } else {
+                1
+            }
+        })
+        .cloned()
+}
+
+fn ambient_cg_hdri_download(
+    downloads: &[AmbientCgDownload],
+    resolution: &str,
+) -> Option<AmbientCgDownload> {
+    downloads
+        .iter()
+        .find(|download| ambient_cg_resolution(&download.attributes).as_deref() == Some(resolution))
+        .cloned()
+}
+
+fn ambient_cg_resolutions(value: &Value, kind: &str) -> Vec<ExternalStoreResolution> {
+    let downloads = ambient_cg_downloads(value);
+    let mut resolutions = BTreeMap::<String, AmbientCgDownload>::new();
+    for download in &downloads {
+        let Some(resolution) = ambient_cg_resolution(&download.attributes) else {
+            continue;
+        };
+        let selected = if kind == "texture" {
+            ambient_cg_texture_download(&downloads, &resolution)
+        } else if kind == "hdri" {
+            ambient_cg_hdri_download(&downloads, &resolution)
+        } else {
+            None
+        };
+        if let Some(selected) = selected {
+            resolutions.entry(resolution).or_insert(selected);
+        }
+    }
+    resolutions
+        .into_iter()
+        .map(|(id, download)| {
+            let file_count = if kind == "texture" {
+                let maps = value.get("maps").and_then(Value::as_array);
+                if maps.is_some_and(|maps| maps.iter().any(|map| map.as_str() == Some("normal"))) {
+                    2
+                } else {
+                    1
+                }
+            } else {
+                1
+            };
+            let formats = if kind == "hdri" {
+                vec![ExternalStoreFormatOption {
+                    id: "exr".to_string(),
+                    label: "EXR".to_string(),
+                    byte_length: download.size,
+                    file_count: 1,
+                }]
+            } else {
+                Vec::new()
+            };
+            ExternalStoreResolution {
+                label: id.to_ascii_uppercase(),
+                id,
+                byte_length: download.size,
+                file_count,
+                formats,
+            }
+        })
+        .collect()
+}
+
 #[tauri::command]
 pub async fn list_external_store_assets(
     provider_id: String,
 ) -> Result<Vec<ExternalStoreAsset>, String> {
     validate_provider(&provider_id)?;
+    if provider_id == AMBIENT_CG_PROVIDER_ID {
+        let payload = fetch_ambient_cg_json(
+            "?sort=popular&limit=500&include=type,shortDescription,longDescription,title,url,tags,downloadStatistics,technique,downloads,thumbnails",
+        )
+        .await?;
+        let mut assets = payload
+            .get("assets")
+            .and_then(Value::as_array)
+            .ok_or_else(|| "ambientCGのアセット一覧が不正です".to_string())?
+            .iter()
+            .filter_map(ambient_cg_asset_to_external)
+            .collect::<Vec<_>>();
+        assets.sort_by(|left, right| {
+            right
+                .download_count
+                .cmp(&left.download_count)
+                .then_with(|| left.name.cmp(&right.name))
+        });
+        return Ok(assets);
+    }
     let payload = fetch_poly_haven_json("/assets").await?;
     let entries = payload
         .as_object()
@@ -418,6 +653,31 @@ pub async fn get_external_store_asset_options(
 ) -> Result<ExternalStoreAssetOptions, String> {
     validate_provider(&provider_id)?;
     let id = validate_external_id(&external_id)?;
+    if provider_id == AMBIENT_CG_PROVIDER_ID {
+        let payload = fetch_ambient_cg_json(&format!(
+            "?id={}&include=type,title,url,maps,downloads,thumbnails",
+            id
+        ))
+        .await?;
+        let asset = payload
+            .get("assets")
+            .and_then(Value::as_array)
+            .and_then(|assets| assets.first())
+            .ok_or_else(|| "ambientCGにアセットが見つかりません".to_string())?;
+        let kind = ambient_cg_asset_kind(asset.get("type"));
+        if !matches!(kind, "hdri" | "texture") {
+            return Err(
+                "この種類はまだXRift Studioへインストールできません（glTF形式のModelのみ対応）"
+                    .to_string(),
+            );
+        }
+        return Ok(ExternalStoreAssetOptions {
+            provider_id,
+            external_id: id.to_string(),
+            asset_kind: kind.to_string(),
+            resolutions: ambient_cg_resolutions(asset, kind),
+        });
+    }
     let catalog = fetch_poly_haven_json("/assets").await?;
     let kind = asset_kind(catalog.get(id).and_then(|entry| entry.get("type")));
     if !matches!(kind, "hdri" | "texture" | "model") {
@@ -432,17 +692,35 @@ pub async fn get_external_store_asset_options(
     })
 }
 
-fn validate_download_url(value: &str) -> Result<reqwest::Url, String> {
+fn validate_download_url(provider_id: &str, value: &str) -> Result<reqwest::Url, String> {
     let url = reqwest::Url::parse(value).map_err(|_| "ダウンロードURLが不正です".to_string())?;
-    if url.scheme() != "https" || url.host_str() != Some("dl.polyhaven.org") {
+    let allowed = match provider_id {
+        POLY_HAVEN_PROVIDER_ID => {
+            url.scheme() == "https" && url.host_str() == Some("dl.polyhaven.org")
+        }
+        AMBIENT_CG_PROVIDER_ID => {
+            url.scheme() == "https"
+                && url.host_str() == Some("ambientcg.com")
+                && url.path() == "/get"
+                && url
+                    .query_pairs()
+                    .any(|(key, value)| key == "file" && !value.is_empty())
+        }
+        _ => false,
+    };
+    if !allowed {
         return Err("許可されていないダウンロード先です".to_string());
     }
     Ok(url)
 }
 
-async fn download_to(path: &Path, spec: &DownloadSpec) -> Result<(u64, String), String> {
-    let url = validate_download_url(&spec.url)?;
-    let response = poly_haven_client()?
+async fn download_to(
+    provider_id: &str,
+    path: &Path,
+    spec: &DownloadSpec,
+) -> Result<(u64, String), String> {
+    let url = validate_download_url(provider_id, &spec.url)?;
+    let response = external_store_client()?
         .get(url)
         .send()
         .await
@@ -453,6 +731,8 @@ async fn download_to(path: &Path, spec: &DownloadSpec) -> Result<(u64, String), 
             response.status()
         ));
     }
+    let final_url = response.url().clone();
+    validate_download_url(provider_id, final_url.as_str())?;
     let mut file = tokio::fs::File::create(path)
         .await
         .map_err(|error| error.to_string())?;
@@ -505,6 +785,132 @@ fn file_sha256(path: &Path) -> Result<String, String> {
 
 type StagedDownload = (PathBuf, PathBuf, u64, String, String);
 
+fn commit_staged_downloads(
+    project_root: &Path,
+    staged: BTreeMap<String, StagedDownload>,
+) -> Result<Vec<ExternalStoreInstalledFile>, String> {
+    // Reject collisions before moving any staged file into the project.
+    for (relative, _, _, sha256, _) in staged.values() {
+        let target = project_root.join(relative);
+        if !target.exists() {
+            continue;
+        }
+        let metadata = std::fs::symlink_metadata(&target).map_err(|error| error.to_string())?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err("外部アセットの保存先が通常ファイルではありません".to_string());
+        }
+        if file_sha256(&target)? != *sha256 {
+            return Err("同じ保存先に異なる内容のファイルがあります".to_string());
+        }
+    }
+
+    let mut installed = Vec::new();
+    for (role, (relative, temporary, byte_length, sha256, format)) in staged {
+        let target = project_root.join(&relative);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        if target.exists() {
+            std::fs::remove_file(&temporary).map_err(|error| error.to_string())?;
+        } else {
+            std::fs::rename(&temporary, &target).map_err(|error| error.to_string())?;
+        }
+        installed.push(ExternalStoreInstalledFile {
+            role,
+            relative_path: relative.to_string_lossy().replace('\\', "/"),
+            byte_length,
+            sha256,
+            format,
+        });
+    }
+    Ok(installed)
+}
+
+fn zip_member_is_safe(name: &str) -> bool {
+    let path = Path::new(name);
+    !path.is_absolute()
+        && path
+            .components()
+            .all(|component| matches!(component, std::path::Component::Normal(_)))
+}
+
+fn ambient_cg_member_match(name: &str, kind: &str, format: &str) -> Option<(String, String, u8)> {
+    if !zip_member_is_safe(name) {
+        return None;
+    }
+    let file_name = Path::new(name).file_name()?.to_str()?.to_ascii_lowercase();
+    let extension = Path::new(&file_name).extension()?.to_str()?.to_string();
+    if kind == "hdri" {
+        return (extension == format).then(|| ("environment".to_string(), extension, 0));
+    }
+    if kind != "texture" || !matches!(extension.as_str(), "jpg" | "jpeg" | "png" | "webp") {
+        return None;
+    }
+    if file_name.contains("_color.") {
+        return Some(("base-color".to_string(), extension, 0));
+    }
+    if file_name.contains("_normalgl.") {
+        return Some(("normal".to_string(), extension, 0));
+    }
+    if file_name.contains("_normaldx.") {
+        return Some(("normal".to_string(), extension, 1));
+    }
+    None
+}
+
+fn extract_ambient_cg_files(
+    archive_path: &Path,
+    staging_root: &Path,
+    kind: &str,
+    format: &str,
+) -> Result<Vec<(String, PathBuf, u64, String, String)>, String> {
+    let file = std::fs::File::open(archive_path).map_err(|error| error.to_string())?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|error| format!("ambientCGのZIPを読み取れませんでした: {}", error))?;
+    let mut matches = BTreeMap::<String, (usize, u8, String)>::new();
+    for index in 0..archive.len() {
+        let entry = archive
+            .by_index(index)
+            .map_err(|error| format!("ambientCGのZIPを検証できませんでした: {}", error))?;
+        if entry.is_dir() {
+            continue;
+        }
+        if !zip_member_is_safe(entry.name()) {
+            return Err("ambientCGのZIPに安全でないファイルパスがあります".to_string());
+        }
+        if let Some((role, extension, priority)) =
+            ambient_cg_member_match(entry.name(), kind, format)
+        {
+            let replace = matches
+                .get(&role)
+                .is_none_or(|(_, current_priority, _)| priority < *current_priority);
+            if replace {
+                matches.insert(role, (index, priority, extension));
+            }
+        }
+    }
+    if matches.is_empty() {
+        return Err("選択した解像度のZIPに対応ファイルがありません".to_string());
+    }
+    let mut extracted = Vec::new();
+    for (role, (index, _, extension)) in matches {
+        let mut entry = archive
+            .by_index(index)
+            .map_err(|error| format!("ambientCGのZIPファイルを開けませんでした: {}", error))?;
+        let temporary = staging_root.join(format!("extracted_{}.{}", role, extension));
+        let mut output = std::fs::File::create(&temporary).map_err(|error| error.to_string())?;
+        let byte_length =
+            std::io::copy(&mut entry, &mut output).map_err(|error| error.to_string())?;
+        if byte_length == 0 || byte_length > 768 * 1024 * 1024 {
+            return Err("ambientCGから展開したファイルが許可サイズ外です".to_string());
+        }
+        output.flush().map_err(|error| error.to_string())?;
+        let sha256 = file_sha256(&temporary)?;
+        extracted.push((role, temporary, byte_length, sha256, extension));
+    }
+    Ok(extracted)
+}
+
 fn model_dependency_mime(path: &str) -> &'static str {
     match Path::new(path)
         .extension()
@@ -519,6 +925,127 @@ fn model_dependency_mime(path: &str) -> &'static str {
         "ktx2" => "image/ktx2",
         _ => "application/octet-stream",
     }
+}
+
+async fn install_ambient_cg_asset(
+    project_path: String,
+    request: ExternalStoreInstallRequest,
+) -> Result<ExternalStoreInstallResult, String> {
+    let id = validate_external_id(&request.external_id)?.to_string();
+    let resolution = request.resolution.trim().to_ascii_lowercase();
+    let payload = fetch_ambient_cg_json(&format!(
+        "?id={}&include=type,title,url,maps,downloads,thumbnails",
+        id
+    ))
+    .await?;
+    let metadata = payload
+        .get("assets")
+        .and_then(Value::as_array)
+        .and_then(|assets| assets.first())
+        .ok_or_else(|| "ambientCGにアセットが見つかりません".to_string())?;
+    let kind = ambient_cg_asset_kind(metadata.get("type"));
+    if kind == "model" {
+        return Err(
+            "ambientCGのModelはOBJなどの形式のため、現在はHDRIとMaterialのみインストールできます"
+                .to_string(),
+        );
+    }
+    if !matches!(kind, "hdri" | "texture") {
+        return Err("この種類はまだXRift Studioへインストールできません".to_string());
+    }
+    let downloads = ambient_cg_downloads(metadata);
+    let download = if kind == "hdri" {
+        ambient_cg_hdri_download(&downloads, &resolution)
+    } else {
+        ambient_cg_texture_download(&downloads, &resolution)
+    }
+    .ok_or_else(|| "選択した解像度のダウンロードがありません".to_string())?;
+    let format = if kind == "hdri" {
+        let format = request
+            .format
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("exr")
+            .to_ascii_lowercase();
+        if !matches!(format.as_str(), "hdr" | "exr") {
+            return Err("Skyboxのファイル形式が不正です".to_string());
+        }
+        format
+    } else {
+        if request
+            .format
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|value| !value.is_empty())
+        {
+            return Err("MaterialではSkyboxのファイル形式を指定できません".to_string());
+        }
+        String::new()
+    };
+
+    let project_root = super::canonical_project_root(&project_path)?;
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_millis();
+    let staging_relative = PathBuf::from(".cache")
+        .join("xrift-studio-external-store")
+        .join(format!("{}-{}", id, timestamp));
+    super::ensure_no_symlink_ancestors(&project_root, &staging_relative)?;
+    let staging_root = project_root.join(&staging_relative);
+    std::fs::create_dir_all(&staging_root).map_err(|error| error.to_string())?;
+
+    let result = async {
+        let archive_path = staging_root.join("ambient-cg-download.zip");
+        let archive_spec = DownloadSpec {
+            role: "archive".to_string(),
+            url: download.url.clone(),
+            size: download.size,
+            extension: "zip".to_string(),
+        };
+        download_to(AMBIENT_CG_PROVIDER_ID, &archive_path, &archive_spec).await?;
+        let extracted = extract_ambient_cg_files(&archive_path, &staging_root, kind, &format)?;
+        let mut staged = BTreeMap::<String, StagedDownload>::new();
+        for (role, temporary, byte_length, sha256, extension) in extracted {
+            let file_name = format!("{}_{}_{}.{}", id, role, resolution, extension);
+            let relative = PathBuf::from("assets")
+                .join("imported")
+                .join("external")
+                .join(AMBIENT_CG_PROVIDER_ID)
+                .join(&id)
+                .join(&file_name);
+            super::ensure_no_symlink_ancestors(&project_root, &relative)?;
+            staged.insert(role, (relative, temporary, byte_length, sha256, extension));
+        }
+        commit_staged_downloads(&project_root, staged)
+    }
+    .await;
+    let _ = std::fs::remove_dir_all(&staging_root);
+    let installed = result?;
+    let asset_url = metadata
+        .get("url")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("https://ambientcg.com/a/{}", id));
+
+    Ok(ExternalStoreInstallResult {
+        provider_id: AMBIENT_CG_PROVIDER_ID.to_string(),
+        provider_name: "ambientCG".to_string(),
+        external_id: id.clone(),
+        name: metadata
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or(&id)
+            .to_string(),
+        asset_kind: kind.to_string(),
+        resolution,
+        files: installed,
+        authors: vec!["ambientCG contributors".to_string()],
+        asset_url,
+        license_name: "CC0 1.0".to_string(),
+        license_url: "https://creativecommons.org/publicdomain/zero/1.0/".to_string(),
+    })
 }
 
 fn embed_model_uri(
@@ -598,6 +1125,9 @@ pub async fn install_external_store_asset(
     request: ExternalStoreInstallRequest,
 ) -> Result<ExternalStoreInstallResult, String> {
     validate_provider(&request.provider_id)?;
+    if request.provider_id == AMBIENT_CG_PROVIDER_ID {
+        return install_ambient_cg_asset(project_path, request).await;
+    }
     let id = validate_external_id(&request.external_id)?.to_string();
     let resolution = request.resolution.trim().to_ascii_lowercase();
     if !matches!(
@@ -687,7 +1217,8 @@ pub async fn install_external_store_asset(
                 .join(&file_name);
             super::ensure_no_symlink_ancestors(&project_root, &relative)?;
             let temporary = staging_root.join(format!("download_{}.{}", index, spec.extension));
-            let (byte_length, sha256) = download_to(&temporary, spec).await?;
+            let (byte_length, sha256) =
+                download_to(POLY_HAVEN_PROVIDER_ID, &temporary, spec).await?;
             staged.insert(
                 spec.role.to_string(),
                 (
@@ -819,10 +1350,65 @@ mod tests {
     }
 
     #[test]
-    fn download_domain_is_restricted_to_poly_haven() {
-        assert!(validate_download_url("https://dl.polyhaven.org/file.hdr").is_ok());
-        assert!(validate_download_url("http://dl.polyhaven.org/file.hdr").is_err());
-        assert!(validate_download_url("https://example.com/file.hdr").is_err());
+    fn download_domain_is_restricted_to_provider_domains() {
+        assert!(
+            validate_download_url(POLY_HAVEN_PROVIDER_ID, "https://dl.polyhaven.org/file.hdr")
+                .is_ok()
+        );
+        assert!(
+            validate_download_url(POLY_HAVEN_PROVIDER_ID, "http://dl.polyhaven.org/file.hdr")
+                .is_err()
+        );
+        assert!(
+            validate_download_url(POLY_HAVEN_PROVIDER_ID, "https://example.com/file.hdr").is_err()
+        );
+        assert!(validate_download_url(
+            AMBIENT_CG_PROVIDER_ID,
+            "https://ambientcg.com/get?file=Ground106_1K-JPG.zip"
+        )
+        .is_ok());
+        assert!(validate_download_url(
+            AMBIENT_CG_PROVIDER_ID,
+            "https://ambientcg.com/api/v3/assets"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn ambient_cg_downloads_group_by_resolution_and_prefer_jpg() {
+        let asset: Value = serde_json::json!({
+            "type": "material",
+            "maps": ["color", "normal"],
+            "downloads": [
+                { "attributes": "1K-PNG", "extension": "zip", "url": "https://ambientcg.com/get?file=one.png.zip", "size": 20 },
+                { "attributes": "1K-JPG", "extension": "zip", "url": "https://ambientcg.com/get?file=one.jpg.zip", "size": 10 },
+                { "attributes": "2K-JPG", "extension": "zip", "url": "https://ambientcg.com/get?file=two.jpg.zip", "size": 30 }
+            ]
+        });
+        let resolutions = ambient_cg_resolutions(&asset, "texture");
+        assert_eq!(resolutions.len(), 2);
+        assert_eq!(resolutions[0].id, "1k");
+        assert_eq!(resolutions[0].byte_length, 10);
+        assert_eq!(resolutions[0].file_count, 2);
+        assert_eq!(resolutions[1].id, "2k");
+    }
+
+    #[test]
+    fn ambient_cg_member_match_prefers_normal_gl_and_rejects_unsafe_paths() {
+        assert_eq!(
+            ambient_cg_member_match("Ground106_1K-JPG_Color.jpg", "texture", ""),
+            Some(("base-color".to_string(), "jpg".to_string(), 0))
+        );
+        assert_eq!(
+            ambient_cg_member_match("Ground106_1K-JPG_NormalGL.jpg", "texture", ""),
+            Some(("normal".to_string(), "jpg".to_string(), 0))
+        );
+        assert_eq!(
+            ambient_cg_member_match("Ground106_1K-JPG_NormalDX.jpg", "texture", ""),
+            Some(("normal".to_string(), "jpg".to_string(), 1))
+        );
+        assert!(ambient_cg_member_match("../outside.jpg", "texture", "").is_none());
+        assert!(ambient_cg_member_match("DaySkyHDRI067B_1K_HDR.exr", "hdri", "exr").is_some());
     }
 
     #[test]
