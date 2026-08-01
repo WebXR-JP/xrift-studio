@@ -2885,6 +2885,9 @@ export function InspectorPanel({
   scriptEntityOptions,
   onUpdateScriptComponent,
   onOpenScript,
+  onOpenShader,
+  onOpenMaterialShader,
+  onAssignShaderAsset,
   onCloseAsset,
   onMaterialChange,
   onModelChange,
@@ -2953,6 +2956,16 @@ export function InspectorPanel({
     patch: ScriptComponentPatch,
   ) => void;
   onOpenScript?: (scriptAssetId: string) => void;
+  onOpenShader: (shaderAssetId: string) => void;
+  onOpenMaterialShader: (
+    materialAssetId: string,
+    stage: import("../../lib/visual-editor").ShaderAssetStage,
+  ) => void;
+  onAssignShaderAsset: (
+    materialAssetId: string,
+    stage: import("../../lib/visual-editor").ShaderAssetStage,
+    shaderAssetId: string | null,
+  ) => void;
   onCloseAsset: () => void;
   onMaterialChange: (assetId: string, patch: MaterialAssetPatch) => void;
   onModelChange: (assetId: string, patch: ModelAssetPatch) => void;
@@ -3120,6 +3133,9 @@ export function InspectorPanel({
               }
               onSelectAsset={onSelectAsset}
               onMaterialChange={onMaterialChange}
+              onOpenShader={onOpenShader}
+              onOpenMaterialShader={onOpenMaterialShader}
+              onAssignShaderAsset={onAssignShaderAsset}
               onModelChange={onModelChange}
               onReimportModel={onReimportModel}
               modelReimportState={modelReimportState}

@@ -33,8 +33,8 @@ export const SCENE_VIEWPORT_DISPLAY_OPTIONS: readonly {
   },
   {
     value: "colliders",
-    label: "コライダー",
-    description: "Meshを抑え、BoxとMesh Colliderを確認",
+    label: "コライダー編集",
+    description: "Meshを抑え、BoxとMesh Colliderだけを表示して編集・診断",
   },
 ] as const;
 

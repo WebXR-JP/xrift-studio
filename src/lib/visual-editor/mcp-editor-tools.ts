@@ -16,6 +16,12 @@ import {
   updateEntityEnabled,
 } from "./editor-session";
 import {
+  deleteAssetIfUnreferenced,
+  deleteEmptyAssetFolder,
+  moveLibraryAsset,
+  moveLibraryFolder,
+} from "./asset-operations";
+import {
   assignMaterialToMeshSlots,
   assignMaterialToPrimaryMeshSlot,
 } from "./material-assignment";
@@ -23,12 +29,15 @@ import type { PrototypeVisualProject } from "./prototype-project";
 import {
   addBuiltinPrimitiveEntity,
   duplicateEntityHierarchy,
+  getMeshMaterialSlots,
   renameEntity as renameEntityInScene,
   updateAnimationComponent,
   updateAudioSourceComponent,
   updateColliderComponent,
   updateEntityTransform,
   updateLightComponent,
+  setMeshMaterialBinding,
+  updateMeshShadowSettings,
   updateRigidBodyComponent,
   updateTextComponent,
   type AnimationPatch,
@@ -42,6 +51,7 @@ import {
   type ScriptComponent,
   type TextPatch,
   type Vec3,
+  type ModelPoseState,
 } from "./scene-document";
 import {
   resolveSceneSettings,
@@ -70,9 +80,14 @@ import {
   type KhrInteractivityJsonValue,
 } from "./interactivity-graph";
 import {
+  addAssetFolder,
   getAudioAsset,
   getMaterialAsset,
   getTextureAsset,
+  getModelAsset,
+  isUserLibraryAsset,
+  renameAssetFolder,
+  updateModelAsset,
   updateMaterialAsset,
   updateTextureAsset,
   TEXTURE_COLOR_SPACES,
@@ -80,13 +95,21 @@ import {
   TEXTURE_MAG_FILTERS,
   TEXTURE_MIN_FILTERS,
   TEXTURE_WRAP_MODES,
+  type AssetManifest,
   type InteractivityAsset,
   type MaterialAssetPatch,
   type MaterialProperties,
   type MaterialTextureInfo,
   type MaterialTextureInfoPatch,
+  type ModelAssetPatch,
   type TextureImportSettingsPatch,
 } from "./asset-manifest";
+import {
+  createDefaultCustomShader,
+  validateClassicR3fMaterialShader,
+  type ClassicR3fMaterialShader,
+  type ClassicR3fMaterialShaderPatch,
+} from "./custom-shader-contract";
 import {
   removeXriftComponent,
   updateXriftComponent,
@@ -94,16 +117,36 @@ import {
 } from "./component-registry";
 import { addDefaultDocumentAsset } from "./document-asset-creation";
 import {
+  addPrefabAsset,
+  createPrefabDocument,
+} from "./prefab-document";
+import {
   updateParticleAsset,
   type ParticlePropertiesPatch,
 } from "./particle-system";
+import {
+  inspectColliderConfiguration,
+  optimizeColliderConfiguration,
+} from "./collider-diagnostics";
 
 export const XRIFT_MCP_EDITOR_TOOLS = [
   "get_editor_context",
   "get_scripting_capabilities",
   "list_assets",
+  "update_project_metadata",
+  "create_asset_folder",
+  "rename_asset",
+  "rename_asset_folder",
+  "move_asset",
+  "move_asset_folder",
+  "delete_asset",
+  "delete_asset_folder",
+  "inspect_colliders",
+  "optimize_colliders",
   "get_audio_asset",
+  "get_model_asset",
   "get_texture_asset",
+  "update_model_asset",
   "update_texture_asset",
   "create_document_asset",
   "get_particle_asset",
@@ -115,6 +158,7 @@ export const XRIFT_MCP_EDITOR_TOOLS = [
   "get_entity_components",
   "create_primitive",
   "place_builtin_prefab",
+  "create_prefab",
   "add_component",
   "update_component",
   "remove_component",
@@ -124,6 +168,9 @@ export const XRIFT_MCP_EDITOR_TOOLS = [
   "set_material",
   "get_material_asset",
   "update_material_asset",
+  "create_custom_shader",
+  "get_custom_shader",
+  "update_custom_shader",
   "set_material_texture_transform",
   "rename_entity",
   "duplicate_entity",
@@ -149,6 +196,13 @@ export type XriftMcpEditorToolName = (typeof XRIFT_MCP_EDITOR_TOOLS)[number];
 export const XRIFT_MCP_LOCAL_ASSET_TOOLS = [
   "import_audio_asset",
   "import_texture_asset",
+  "import_model_asset",
+  "import_skybox_asset",
+  "import_shader_asset",
+  "reimport_model_asset",
+  "get_shader_asset",
+  "update_shader_asset",
+  "set_project_thumbnail",
 ] as const;
 
 export type XriftMcpLocalAssetToolName =
@@ -228,10 +282,34 @@ export function executeXriftMcpEditorTool(
       return readScriptingCapabilities(context);
     case "list_assets":
       return listAssets(context, request.arguments);
+    case "update_project_metadata":
+      return updateProjectMetadata(context, request.arguments);
+    case "create_asset_folder":
+      return createAssetFolder(context, request.arguments);
+    case "rename_asset":
+      return renameLibraryAsset(context, request.arguments);
+    case "rename_asset_folder":
+      return renameLibraryAssetFolder(context, request.arguments);
+    case "move_asset":
+      return moveLibraryAssetTool(context, request.arguments);
+    case "move_asset_folder":
+      return moveLibraryAssetFolderTool(context, request.arguments);
+    case "delete_asset":
+      return deleteLibraryAsset(context, request.arguments);
+    case "delete_asset_folder":
+      return deleteLibraryAssetFolder(context, request.arguments);
+    case "inspect_colliders":
+      return inspectColliders(context, request.arguments);
+    case "optimize_colliders":
+      return optimizeColliders(context, request.arguments);
     case "get_audio_asset":
       return getAudio(context, request.arguments);
+    case "get_model_asset":
+      return getModel(context, request.arguments);
     case "get_texture_asset":
       return getTexture(context, request.arguments);
+    case "update_model_asset":
+      return updateModel(context, request.arguments);
     case "update_texture_asset":
       return updateTexture(context, request.arguments);
     case "create_document_asset":
@@ -254,6 +332,8 @@ export function executeXriftMcpEditorTool(
       return createPrimitive(context, request.arguments);
     case "place_builtin_prefab":
       return placeBuiltinPrefab(context, request.arguments);
+    case "create_prefab":
+      return createPrefab(context, request.arguments);
     case "add_component":
       return addComponent(context, request.arguments);
     case "update_component":
@@ -272,6 +352,12 @@ export function executeXriftMcpEditorTool(
       return getMaterial(context, request.arguments);
     case "update_material_asset":
       return updateMaterial(context, request.arguments);
+    case "create_custom_shader":
+      return createCustomShader(context, request.arguments);
+    case "get_custom_shader":
+      return getCustomShader(context, request.arguments);
+    case "update_custom_shader":
+      return updateCustomShader(context, request.arguments);
     case "set_material_texture_transform":
       return setMaterialTextureTransform(context, request.arguments);
     case "rename_entity":
@@ -778,9 +864,21 @@ function readScriptingCapabilities(
       },
       editOnlyAuthoring: {
         modes: ["edit"],
-        tools: ["import_audio_asset", "import_texture_asset"],
+        tools: [
+          "import_audio_asset",
+          "import_texture_asset",
+          "import_model_asset",
+          "import_skybox_asset",
+          "import_shader_asset",
+          "get_shader_asset",
+          "update_shader_asset",
+          "reimport_model_asset",
+          "set_project_thumbnail",
+          "get_model_asset",
+          "update_model_asset",
+        ],
         semantics:
-          "Local Audio and Texture source imports persist through the Editor history and autosave pipeline, but cannot run while Play is active.",
+          "Local Audio, Texture, Model, Skybox, and Shader source operations persist through the Editor history and autosave pipeline, but cannot run while Play is active. Model Recipe edits must be reimported before derived geometry changes are applied.",
       },
       example: [
         'import { defineScript, prop } from "xrift:script";',
@@ -870,10 +968,465 @@ function listAssets(
       name: asset.name,
       kind: asset.kind,
       status: asset.status,
+      folderId: asset.folderId ?? null,
       placeable: isScenePlaceableAsset(asset),
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
-  return unchanged(context, { assets, count: assets.length }, "Asset一覧を取得しました");
+  const folders = Object.values(context.bundle.assets.folders ?? {})
+    .filter((folder) => !query || folder.name.toLocaleLowerCase().includes(query))
+    .map((folder) => ({
+      id: folder.id,
+      name: folder.name,
+      parentId: folder.parentId,
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+  return unchanged(
+    context,
+    { assets, folders, count: assets.length, folderCount: folders.length },
+    "Asset一覧を取得しました",
+  );
+}
+
+function updateProjectMetadata(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const patch = recordValue(argumentsValue.patch, "patch");
+  assertObjectKeys(patch, "patch", ["title", "description"]);
+  if (Object.keys(patch).length === 0) invalidArgument("patch", "non-empty object");
+  const nextMetadata = { ...context.bundle.project.metadata };
+  for (const field of ["title", "description"] as const) {
+    if (patch[field] !== undefined) {
+      if (typeof patch[field] !== "string") {
+        invalidArgument(`patch.${field}`, "string");
+      }
+      nextMetadata[field] = patch[field];
+    }
+  }
+  if (
+    nextMetadata.title === context.bundle.project.metadata.title &&
+    nextMetadata.description === context.bundle.project.metadata.description
+  ) {
+    return unchanged(
+      context,
+      {
+        projectId: context.bundle.project.projectId,
+        metadata: JSON.parse(JSON.stringify(context.bundle.project.metadata)),
+        revision: context.revision,
+      },
+      "公開情報はすでに指定された状態です",
+    );
+  }
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    project: { ...context.bundle.project, metadata: nextMetadata },
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      metadata: JSON.parse(JSON.stringify(bundle.project.metadata)),
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+    },
+    activity: "AIが公開情報を更新しました",
+  };
+}
+
+function createAssetFolder(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const name = requiredString(argumentsValue.name, "name");
+  if (name.length > 100) invalidArgument("name", "100文字以内の文字列");
+  const parentId = optionalNullableString(argumentsValue.parentId, "parentId");
+  if (parentId && !context.bundle.assets.folders?.[parentId]) {
+    throw new XriftMcpEditorToolError(
+      "FOLDER_NOT_FOUND",
+      "親Folderが見つかりません",
+      { parentId },
+    );
+  }
+  const folderId = createDocumentId("folder");
+  const added = addAssetFolder(context.bundle.assets, {
+    id: folderId,
+    name,
+    parentId,
+  });
+  if (!added.added) {
+    throw new XriftMcpEditorToolError(
+      "FOLDER_CREATE_REJECTED",
+      "同じ名前のFolderがあるか、Folder名が不正です",
+      { name, parentId },
+    );
+  }
+  const folder = added.manifest.folders?.[folderId];
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    assets: added.manifest,
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      folder: folder ? JSON.parse(JSON.stringify(folder)) : null,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+    },
+    activity: `AIがFolder「${name}」を作成しました`,
+  };
+}
+
+function renameLibraryAsset(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const assetId = requiredString(argumentsValue.assetId, "assetId");
+  const asset = context.bundle.assets.assets[assetId];
+  if (!asset || !isUserLibraryAsset(asset)) {
+    throw new XriftMcpEditorToolError(
+      "ASSET_NOT_FOUND",
+      "名前を変更できるLibrary Assetが見つかりません",
+      { assetId },
+    );
+  }
+  const name = requiredString(argumentsValue.name, "name");
+  if (name.length > 100) invalidArgument("name", "100文字以内の文字列");
+  const assets = renameAsset(context.bundle.assets, assetId, name);
+  if (assets === context.bundle.assets) {
+    return unchanged(
+      context,
+      { assetId, asset: JSON.parse(JSON.stringify(asset)), revision: context.revision },
+      `Asset「${asset.name}」はすでに指定された名前です`,
+    );
+  }
+  const updated = assets.assets[assetId];
+  const bundle = touchProject(context, { ...context.bundle, assets });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: assetId,
+    result: {
+      projectId: bundle.project.projectId,
+      asset: updated ? JSON.parse(JSON.stringify(updated)) : null,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+    },
+    activity: `AIがAsset「${asset.name}」の名前を変更しました`,
+  };
+}
+
+function renameLibraryAssetFolder(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const folderId = requiredString(argumentsValue.folderId, "folderId");
+  const folder = context.bundle.assets.folders?.[folderId];
+  if (!folder) {
+    throw new XriftMcpEditorToolError("FOLDER_NOT_FOUND", "Folderが見つかりません", { folderId });
+  }
+  const name = requiredString(argumentsValue.name, "name");
+  if (name.length > 100) invalidArgument("name", "100文字以内の文字列");
+  const assets = renameAssetFolder(context.bundle.assets, folderId, name);
+  if (assets === context.bundle.assets) {
+    return unchanged(
+      context,
+      { folderId, folder: JSON.parse(JSON.stringify(folder)), revision: context.revision },
+      `Folder「${folder.name}」はすでに指定された名前です`,
+    );
+  }
+  const updated = assets.folders?.[folderId];
+  const bundle = touchProject(context, { ...context.bundle, assets });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      folder: updated ? JSON.parse(JSON.stringify(updated)) : null,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+    },
+    activity: `AIがFolder「${folder.name}」の名前を変更しました`,
+  };
+}
+
+function moveLibraryAssetTool(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const assetId = requiredString(argumentsValue.assetId, "assetId");
+  const folderId = optionalNullableString(argumentsValue.folderId, "folderId");
+  const asset = context.bundle.assets.assets[assetId];
+  if (!asset || !isUserLibraryAsset(asset)) {
+    throw new XriftMcpEditorToolError("ASSET_NOT_FOUND", "移動できるLibrary Assetが見つかりません", { assetId });
+  }
+  const moved = moveLibraryAsset(context.bundle.assets, assetId, folderId);
+  if (!moved.changed) {
+    throw new XriftMcpEditorToolError("ASSET_MOVE_REJECTED", "Assetを指定されたFolderへ移動できません", {
+      assetId,
+      folderId,
+      reason: moved.reason,
+    });
+  }
+  const updated = moved.assets.assets[assetId];
+  const bundle = touchProject(context, { ...context.bundle, assets: moved.assets });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: assetId,
+    result: {
+      projectId: bundle.project.projectId,
+      assetId,
+      folderId: updated?.folderId ?? null,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+    },
+    activity: `AIがAsset「${asset.name}」をFolderへ移動しました`,
+  };
+}
+
+function moveLibraryAssetFolderTool(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const folderId = requiredString(argumentsValue.folderId, "folderId");
+  const parentId = optionalNullableString(argumentsValue.parentId, "parentId");
+  const folder = context.bundle.assets.folders?.[folderId];
+  if (!folder) {
+    throw new XriftMcpEditorToolError("FOLDER_NOT_FOUND", "Folderが見つかりません", { folderId });
+  }
+  const moved = moveLibraryFolder(context.bundle.assets, folderId, parentId);
+  if (!moved.changed) {
+    throw new XriftMcpEditorToolError("FOLDER_MOVE_REJECTED", "Folderを指定された親へ移動できません", {
+      folderId,
+      parentId,
+      reason: moved.reason,
+    });
+  }
+  const updated = moved.assets.folders?.[folderId];
+  const bundle = touchProject(context, { ...context.bundle, assets: moved.assets });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      folder: updated ? JSON.parse(JSON.stringify(updated)) : null,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+    },
+    activity: `AIがFolder「${folder.name}」を移動しました`,
+  };
+}
+
+function deleteLibraryAsset(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const assetId = requiredString(argumentsValue.assetId, "assetId");
+  const deleted = deleteAssetIfUnreferenced(
+    {
+      assets: context.bundle.assets,
+      scene: context.bundle.scene,
+      prefabs: context.bundle.prefabs,
+    },
+    assetId,
+  );
+  if (!deleted.changed) {
+    throw new XriftMcpEditorToolError(
+      "ASSET_DELETE_REJECTED",
+      "Assetは削除できません。参照を解除してから再試行してください",
+      { assetId, reason: deleted.reason, references: deleted.references },
+    );
+  }
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    assets: deleted.assets,
+    prefabs: deleted.prefabs,
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: context.assetSelection === assetId ? null : context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      assetId,
+      deleted: true,
+      deletedPrefabId: deleted.deletedPrefabId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+    },
+    activity: `AIがAsset「${deleted.asset?.name ?? assetId}」を削除しました`,
+  };
+}
+
+function deleteLibraryAssetFolder(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const folderId = requiredString(argumentsValue.folderId, "folderId");
+  const folder = context.bundle.assets.folders?.[folderId];
+  if (!folder) {
+    throw new XriftMcpEditorToolError("FOLDER_NOT_FOUND", "Folderが見つかりません", { folderId });
+  }
+  const deleted = deleteEmptyAssetFolder(context.bundle.assets, folderId);
+  if (!deleted.changed) {
+    throw new XriftMcpEditorToolError(
+      "FOLDER_DELETE_REJECTED",
+      "Folderが空ではないため削除できません",
+      { folderId, analysis: deleted.analysis },
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, assets: deleted.assets });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      folderId,
+      deleted: true,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+    },
+    activity: `AIがFolder「${folder.name}」を削除しました`,
+  };
+}
+
+function inspectColliders(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const entityIds = optionalEntityIds(argumentsValue.entityIds);
+  const missingEntityId = entityIds?.find(
+    (entityId) => !context.bundle.scene.entities[entityId],
+  );
+  if (missingEntityId) {
+    throw new XriftMcpEditorToolError(
+      "ENTITY_NOT_FOUND",
+      "指定されたEntityが見つかりません",
+      { entityId: missingEntityId },
+    );
+  }
+  const inspection = inspectColliderConfiguration(context.bundle.scene, {
+    entityIds,
+  });
+  return unchanged(
+    context,
+    {
+      projectId: context.bundle.project.projectId,
+      sceneId: context.bundle.scene.sceneId,
+      revision: context.revision,
+      entityIds: entityIds ?? null,
+      inspection,
+    },
+    entityIds?.length === 1
+      ? `Entity「${context.bundle.scene.entities[entityIds[0]!]?.name ?? entityIds[0]}」のColliderを診断しました`
+      : "Scene全体のColliderを診断しました",
+  );
+}
+
+function optimizeColliders(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
+  const entityIds = optionalEntityIds(argumentsValue.entityIds);
+  const missingEntityId = entityIds?.find(
+    (entityId) => !context.bundle.scene.entities[entityId],
+  );
+  if (missingEntityId) {
+    throw new XriftMcpEditorToolError(
+      "ENTITY_NOT_FOUND",
+      "指定されたEntityが見つかりません",
+      { entityId: missingEntityId },
+    );
+  }
+  const optimized = optimizeColliderConfiguration(context.bundle.scene, {
+    entityIds,
+  });
+  if (optimized.changes.length === 0) {
+    return unchanged(
+      context,
+      {
+        projectId: context.bundle.project.projectId,
+        sceneId: context.bundle.scene.sceneId,
+        revision: context.revision,
+        entityIds: entityIds ?? null,
+        inspection: optimized.after,
+        changes: [],
+      },
+      "Colliderに自動修正が必要な問題はありません",
+    );
+  }
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    scene: optimized.scene,
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityIds: entityIds ?? null,
+      inspection: optimized.after,
+      changes: optimized.changes,
+      synchronizedDuringPlay: context.editorMode === "play",
+    },
+    activity: `AIがCollider設定を${optimized.changes.length}件最適化しました`,
+  };
+}
+
+function optionalEntityIds(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      "entityIdsは文字列配列で指定してください",
+    );
+  }
+  const entityIds = value.map((candidate) => {
+    if (typeof candidate !== "string" || candidate.trim().length === 0) {
+      throw new XriftMcpEditorToolError(
+        "INVALID_ARGUMENT",
+        "entityIdsには空でない文字列だけを指定してください",
+      );
+    }
+    return candidate.trim();
+  });
+  if (new Set(entityIds).size !== entityIds.length) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      "entityIdsに重複したEntity IDは指定できません",
+    );
+  }
+  return entityIds;
 }
 
 function getAudio(
@@ -1414,6 +1967,92 @@ function getEntityComponents(
   );
 }
 
+function getModel(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const modelAssetId = requiredString(
+    argumentsValue.modelAssetId,
+    "modelAssetId",
+  );
+  const model = getModelAsset(context.bundle.assets, modelAssetId);
+  if (!model) {
+    throw new XriftMcpEditorToolError(
+      "MODEL_NOT_FOUND",
+      "指定されたModel Assetが見つかりません",
+      { modelAssetId },
+    );
+  }
+  return unchanged(
+    context,
+    { model: JSON.parse(JSON.stringify(model)) as Record<string, unknown> },
+    `Model「${model.name}」を取得しました`,
+  );
+}
+
+function updateModel(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const modelAssetId = requiredString(
+    argumentsValue.modelAssetId,
+    "modelAssetId",
+  );
+  const model = getModelAsset(context.bundle.assets, modelAssetId);
+  if (!model) {
+    throw new XriftMcpEditorToolError(
+      "MODEL_NOT_FOUND",
+      "指定されたModel Assetが見つかりません",
+      { modelAssetId },
+    );
+  }
+  const patch = modelAssetPatchValue(argumentsValue.patch, context);
+  const unknownMaterialSlots = Object.keys(patch.materialSlotBindings ?? {}).filter(
+    (slot) => !model.materialSlots.some((candidate) => candidate.slot === slot),
+  );
+  if (unknownMaterialSlots.length > 0) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      "Modelに存在しないMaterial slotは変更できません",
+      { modelAssetId, materialSlots: unknownMaterialSlots },
+    );
+  }
+  const assets = updateModelAsset(context.bundle.assets, modelAssetId, patch);
+  if (assets === context.bundle.assets) {
+    return unchanged(
+      context,
+      {
+        projectId: context.bundle.project.projectId,
+        sceneId: context.bundle.scene.sceneId,
+        revision: context.revision,
+        modelAssetId,
+        importSettings: model.importSettings,
+        materialSlots: model.materialSlots,
+      },
+      `Model「${model.name}」はすでに指定された状態です`,
+    );
+  }
+  const updated = getModelAsset(assets, modelAssetId);
+  const bundle = touchProject(context, { ...context.bundle, assets });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: modelAssetId,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      modelAssetId,
+      importSettings: updated?.importSettings,
+      materialSlots: updated?.materialSlots,
+    },
+    activity: `AIがModel「${model.name}」のImport設定を更新しました`,
+  };
+}
+
 function createPrimitive(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
@@ -1522,6 +2161,76 @@ function placeBuiltinPrefab(
       position,
     },
     activity: `AIが「${placement.recipe.name}」をSceneへ配置しました`,
+  };
+}
+
+function createPrefab(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const entity = requireEntity(context.bundle.scene, entityId);
+  const name =
+    argumentsValue.name === undefined
+      ? `${entity.name} Prefab`
+      : requiredString(argumentsValue.name, "name");
+  if (name.length > 100) invalidArgument("name", "100文字以内の文字列");
+
+  const prefabId = createDocumentId("prefab");
+  const prefabAssetId = createDocumentId("asset-prefab");
+  const prefabPath = `prefabs/${prefabId}.prefab.json`;
+  const created = createPrefabDocument(context.bundle.scene, context.bundle.assets, {
+    prefabId,
+    name,
+    sourceRootEntityIds: [entityId],
+  });
+  if (!created) {
+    throw new XriftMcpEditorToolError(
+      "PREFAB_CREATE_FAILED",
+      "指定されたEntityからPrefabを作成できませんでした",
+      { entityId },
+    );
+  }
+  const added = addPrefabAsset(context.bundle.assets, {
+    id: prefabAssetId,
+    name,
+    prefabPath,
+  });
+  if (!added.added) {
+    throw new XriftMcpEditorToolError(
+      "PREFAB_CREATE_FAILED",
+      "Prefab AssetをProjectへ追加できませんでした",
+      { prefabAssetId, reason: added.reason },
+    );
+  }
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    assets: added.manifest,
+    prefabs: {
+      ...context.bundle.prefabs,
+      [prefabId]: created.document,
+    },
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: entityId },
+    assetSelection: prefabAssetId,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId,
+      prefabId,
+      prefabAssetId,
+      name,
+      prefabPath,
+      document: created.document,
+      references: created.references,
+    },
+    activity: `AIがEntity「${entity.name}」からPrefab「${name}」を作成しました`,
   };
 }
 
@@ -1912,7 +2621,101 @@ function updateComponent(
         requiredPatchEnabled(patch),
       );
       break;
-    case "mesh":
+    case "mesh": {
+      assertPatchKeys(
+        patch,
+        ["enabled", "materialBindings", "castShadow", "receiveShadow", "modelPose"],
+        component.type,
+      );
+      const mesh = component;
+      const enabled = optionalBoolean(patch.enabled, "patch.enabled");
+      const castShadow = optionalBoolean(patch.castShadow, "patch.castShadow");
+      const receiveShadow = optionalBoolean(
+        patch.receiveShadow,
+        "patch.receiveShadow",
+      );
+      const materialBindings =
+        patch.materialBindings === undefined
+          ? undefined
+          : meshMaterialBindingsValue(
+              patch.materialBindings,
+              context,
+              mesh,
+            );
+      const hasModelPose = Object.prototype.hasOwnProperty.call(
+        patch,
+        "modelPose",
+      );
+      const modelPose = hasModelPose
+        ? meshModelPoseValue(patch.modelPose)
+        : undefined;
+
+      scene = context.bundle.scene;
+      if (enabled !== undefined) {
+        scene = updateSceneComponentEnabled(
+          scene,
+          entityId,
+          componentId,
+          enabled,
+        );
+      }
+      if (materialBindings !== undefined) {
+        for (const binding of mesh.materialBindings) {
+          scene = setMeshMaterialBinding(
+            scene,
+            context.bundle.assets,
+            entityId,
+            binding.slot,
+            null,
+            componentId,
+            binding.sourceNodeIndex,
+          );
+        }
+        for (const binding of materialBindings) {
+          scene = setMeshMaterialBinding(
+            scene,
+            context.bundle.assets,
+            entityId,
+            binding.slot,
+            binding.materialAssetId,
+            componentId,
+            binding.sourceNodeIndex,
+          );
+        }
+      }
+      if (castShadow !== undefined || receiveShadow !== undefined) {
+        scene = updateMeshShadowSettings(
+          scene,
+          entityId,
+          { castShadow, receiveShadow },
+          componentId,
+        );
+      }
+      if (hasModelPose) {
+        const currentMesh = scene.entities[entityId]?.components.find(
+          (candidate): candidate is typeof mesh =>
+            candidate.id === componentId && candidate.type === "mesh",
+        );
+        if (!currentMesh) {
+          throw new XriftMcpEditorToolError(
+            "COMPONENT_UPDATE_REJECTED",
+            "Mesh Rendererを更新できませんでした",
+            { entityId, componentId },
+          );
+        }
+        const currentPose = currentMesh.modelPose;
+        const nextPose = modelPose === null ? undefined : modelPose;
+        if (JSON.stringify(currentPose) !== JSON.stringify(nextPose)) {
+          scene = replaceSceneComponent(scene, entityId, componentId, {
+            ...currentMesh,
+            ...(nextPose === undefined
+              ? { modelPose: undefined }
+              : { modelPose: nextPose }),
+          });
+        }
+      }
+      break;
+    }
     case "spawn-point":
     case "prefab-instance":
       assertPatchKeys(patch, ["enabled"], component.type);
@@ -2443,6 +3246,213 @@ function updateMaterial(
       properties: getMaterialAsset(assets, materialAssetId)?.properties,
     },
     activity: `AIがMaterial「${material.name}」を更新しました`,
+  };
+}
+
+function createCustomShader(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
+  const requestedName = optionalString(argumentsValue.name);
+  if (requestedName && requestedName.length > 100) {
+    invalidArgument("name", "100文字以内の文字列");
+  }
+  const folderId =
+    argumentsValue.folderId === undefined
+      ? null
+      : requiredString(argumentsValue.folderId, "folderId");
+  if (folderId && !context.bundle.assets.folders?.[folderId]) {
+    throw new XriftMcpEditorToolError(
+      "FOLDER_NOT_FOUND",
+      "作成先のFolderが見つかりません",
+      { folderId },
+    );
+  }
+
+  const requestedShader =
+    argumentsValue.shader === undefined
+      ? createDefaultCustomShader()
+      : customShaderValue(argumentsValue.shader, "shader");
+  const materialAssetId = optionalString(argumentsValue.materialAssetId);
+  let assets = context.bundle.assets;
+  let selectedMaterialId: string;
+
+  if (materialAssetId) {
+    const material = getMaterialAsset(assets, materialAssetId);
+    if (!material) {
+      throw new XriftMcpEditorToolError(
+        "MATERIAL_NOT_FOUND",
+        "指定されたMaterial Assetが見つかりません",
+        { materialAssetId },
+      );
+    }
+    selectedMaterialId = material.id;
+    assets = updateMaterialAsset(assets, material.id, { shader: requestedShader });
+  } else {
+    selectedMaterialId = createDocumentId("material-custom-shader");
+    const created = addDefaultDocumentAsset(context.bundle.assets, {
+      kind: "material",
+      id: selectedMaterialId,
+      folderId,
+    });
+    if (!created.added) {
+      throw new XriftMcpEditorToolError(
+        "ASSET_CREATE_FAILED",
+        "Custom Shader用Materialを作成できませんでした",
+        { folderId },
+      );
+    }
+    assets = updateMaterialAsset(created.manifest, selectedMaterialId, {
+      shader: requestedShader,
+    });
+    if (requestedName) {
+      assets = renameAsset(assets, selectedMaterialId, requestedName);
+    }
+  }
+
+  const material = getMaterialAsset(assets, selectedMaterialId);
+  if (!material?.shader || material.shader.kind !== "classic-r3f") {
+    throw new XriftMcpEditorToolError(
+      "CUSTOM_SHADER_INVALID",
+      "Custom ShaderをMaterialへ保存できませんでした",
+      { materialAssetId: selectedMaterialId },
+    );
+  }
+  assertCustomShaderAssetReferences(assets, material.shader);
+  if (assets === context.bundle.assets) {
+    return unchanged(
+      context,
+      {
+        materialAssetId: selectedMaterialId,
+        shader: JSON.parse(JSON.stringify(material.shader)),
+        revision: context.revision,
+      },
+      `Material「${material.name}」のCustom Shaderはすでに設定済みです`,
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, assets });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: selectedMaterialId,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      materialAssetId: selectedMaterialId,
+      name: material.name,
+      shader: JSON.parse(JSON.stringify(material.shader)),
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+    },
+    activity: `AIがMaterial「${material.name}」にCustom Shaderを設定しました`,
+  };
+}
+
+function getCustomShader(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const materialAssetId = requiredString(
+    argumentsValue.materialAssetId,
+    "materialAssetId",
+  );
+  const material = getMaterialAsset(context.bundle.assets, materialAssetId);
+  if (!material) {
+    throw new XriftMcpEditorToolError(
+      "MATERIAL_NOT_FOUND",
+      "指定されたMaterial Assetが見つかりません",
+      { materialAssetId },
+    );
+  }
+  if (!material.shader || material.shader.kind !== "classic-r3f") {
+    throw new XriftMcpEditorToolError(
+      "CUSTOM_SHADER_NOT_FOUND",
+      "MaterialにCustom Shaderが設定されていません",
+      { materialAssetId },
+    );
+  }
+  return unchanged(
+    context,
+    {
+      materialAssetId,
+      materialName: material.name,
+      shader: JSON.parse(JSON.stringify(material.shader)),
+    },
+    `Material「${material.name}」のCustom Shaderを取得しました`,
+  );
+}
+
+function updateCustomShader(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue, { allowPlay: true });
+  const materialAssetId = requiredString(
+    argumentsValue.materialAssetId,
+    "materialAssetId",
+  );
+  const material = getMaterialAsset(context.bundle.assets, materialAssetId);
+  if (!material) {
+    throw new XriftMcpEditorToolError(
+      "MATERIAL_NOT_FOUND",
+      "指定されたMaterial Assetが見つかりません",
+      { materialAssetId },
+    );
+  }
+  const patch = customShaderPatchValue(argumentsValue.patch);
+  const current =
+    material.shader?.kind === "classic-r3f"
+      ? material.shader
+      : createDefaultCustomShader();
+  const shader = {
+    ...current,
+    ...patch,
+    kind: "classic-r3f" as const,
+  } satisfies ClassicR3fMaterialShader;
+  const validation = validateClassicR3fMaterialShader(shader);
+  if (validation.length > 0) {
+    throw new XriftMcpEditorToolError(
+      "CUSTOM_SHADER_INVALID",
+      "Custom Shaderの形式が不正です",
+      { materialAssetId, diagnostics: validation },
+    );
+  }
+  assertCustomShaderAssetReferences(context.bundle.assets, shader);
+  const assets = updateMaterialAsset(context.bundle.assets, materialAssetId, {
+    shader,
+  });
+  if (assets === context.bundle.assets) {
+    return unchanged(
+      context,
+      {
+        materialAssetId,
+        shader: JSON.parse(JSON.stringify(shader)),
+        revision: context.revision,
+      },
+      `Material「${material.name}」のCustom Shaderはすでに指定された状態です`,
+    );
+  }
+  const updated = getMaterialAsset(assets, materialAssetId);
+  const bundle = touchProject(context, { ...context.bundle, assets });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: materialAssetId,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      materialAssetId,
+      shader: updated?.shader
+        ? JSON.parse(JSON.stringify(updated.shader))
+        : null,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      synchronizedDuringPlay: context.editorMode === "play",
+    },
+    activity: `AIがMaterial「${material.name}」のCustom Shaderを更新しました`,
   };
 }
 
@@ -4163,9 +5173,240 @@ function patchMatchesComponent(
 ): boolean {
   return Object.entries(patch).every(
     ([key, value]) =>
-      JSON.stringify(component[key as keyof SceneComponent]) ===
-      JSON.stringify(value),
+      key === "modelPose" && value === null
+        ? component[key as keyof SceneComponent] === undefined
+        : JSON.stringify(component[key as keyof SceneComponent]) ===
+          JSON.stringify(value),
   );
+}
+
+function modelAssetPatchValue(
+  value: unknown,
+  context: XriftMcpEditorContext,
+): ModelAssetPatch {
+  const patch = recordValue(value, "patch");
+  assertObjectKeys(patch, "patch", ["importSettings", "materialSlotBindings"]);
+  if (Object.keys(patch).length === 0) invalidArgument("patch", "non-empty object");
+
+  let importSettings: Record<string, unknown> | undefined;
+  if (patch.importSettings !== undefined) {
+    importSettings = recordValue(patch.importSettings, "patch.importSettings");
+    assertObjectKeys(importSettings, "patch.importSettings", [
+      "scale",
+      "generateColliders",
+      "optimizeMeshes",
+      "importAnimations",
+    ]);
+    if (importSettings.scale !== undefined) {
+      sceneNumber(importSettings.scale, "patch.importSettings.scale", 0.000001);
+    }
+    for (const field of [
+      "generateColliders",
+      "optimizeMeshes",
+      "importAnimations",
+    ]) {
+      optionalBoolean(importSettings[field], `patch.importSettings.${field}`);
+    }
+    if (Object.keys(importSettings).length === 0) {
+      invalidArgument("patch.importSettings", "non-empty object");
+    }
+  }
+
+  let materialSlotBindings: Record<string, string | null> | undefined;
+  if (patch.materialSlotBindings !== undefined) {
+    const modelSlotBindings = recordValue(
+      patch.materialSlotBindings,
+      "patch.materialSlotBindings",
+    );
+    materialSlotBindings = {};
+    for (const [slot, value] of Object.entries(modelSlotBindings)) {
+      if (value === null) {
+        materialSlotBindings[slot] = null;
+        continue;
+      }
+      const materialAssetId = requiredString(
+        value,
+        `patch.materialSlotBindings.${slot}`,
+      );
+      const material = context.bundle.assets.assets[materialAssetId];
+      if (!material) {
+        throw new XriftMcpEditorToolError(
+          "ASSET_NOT_FOUND",
+          "ModelのMaterial slotに指定されたAssetが見つかりません",
+          { materialAssetId, slot },
+        );
+      }
+      if (material.kind !== "material") {
+        throw new XriftMcpEditorToolError(
+          "ASSET_KIND_MISMATCH",
+          "ModelのMaterial slotにはMaterial Assetを指定してください",
+          { materialAssetId, slot, actualKind: material.kind },
+        );
+      }
+      materialSlotBindings[slot] = materialAssetId;
+    }
+  }
+
+  return {
+    ...(importSettings
+      ? { importSettings: JSON.parse(JSON.stringify(importSettings)) }
+      : {}),
+    ...(materialSlotBindings ? { materialSlotBindings } : {}),
+  };
+}
+
+type McpMeshMaterialBinding = {
+  slot: string;
+  materialAssetId: string;
+  sourceNodeIndex?: number;
+};
+
+function meshMaterialBindingsValue(
+  value: unknown,
+  context: XriftMcpEditorContext,
+  mesh: Extract<SceneComponent, { type: "mesh" }>,
+): McpMeshMaterialBinding[] {
+  if (!Array.isArray(value)) {
+    invalidArgument("patch.materialBindings", "array");
+  }
+  const availableSlots = new Set(
+    getMeshMaterialSlots(mesh, context.bundle.assets).map((slot) => slot.slot),
+  );
+  const bindings: McpMeshMaterialBinding[] = [];
+  const seen = new Set<string>();
+  for (const [index, candidate] of value.entries()) {
+    const binding = recordValue(candidate, `patch.materialBindings[${index}]`);
+    assertObjectKeys(binding, `patch.materialBindings[${index}]`, [
+      "slot",
+      "materialAssetId",
+      "sourceNodeIndex",
+    ]);
+    const slot = requiredString(
+      binding.slot,
+      `patch.materialBindings[${index}].slot`,
+    );
+    if (!availableSlots.has(slot)) {
+      throw new XriftMcpEditorToolError(
+        "INVALID_COMPONENT_PATCH",
+        `指定されたMaterial slot「${slot}」はMesh Rendererにありません`,
+        { slot, availableSlots: [...availableSlots] },
+      );
+    }
+    const materialAssetId = requiredString(
+      binding.materialAssetId,
+      `patch.materialBindings[${index}].materialAssetId`,
+    );
+    const material = context.bundle.assets.assets[materialAssetId];
+    if (!material) {
+      throw new XriftMcpEditorToolError(
+        "ASSET_NOT_FOUND",
+        "Material bindingに指定されたAssetが見つかりません",
+        { materialAssetId },
+      );
+    }
+    if (material.kind !== "material") {
+      throw new XriftMcpEditorToolError(
+        "ASSET_KIND_MISMATCH",
+        "Mesh RendererのbindingにはMaterial Assetを指定してください",
+        { materialAssetId, actualKind: material.kind },
+      );
+    }
+    const sourceNodeIndex = optionalNonNegativeInteger(
+      binding.sourceNodeIndex,
+      `patch.materialBindings[${index}].sourceNodeIndex`,
+    );
+    const key = `${slot}\u0000${sourceNodeIndex ?? ""}`;
+    if (seen.has(key)) {
+      invalidArgument(
+        `patch.materialBindings[${index}]`,
+        "同じslotとsourceNodeIndexの重複がないarray",
+      );
+    }
+    seen.add(key);
+    bindings.push({
+      slot,
+      materialAssetId,
+      ...(sourceNodeIndex === undefined ? {} : { sourceNodeIndex }),
+    });
+  }
+  return bindings;
+}
+
+function meshModelPoseValue(value: unknown): ModelPoseState | null {
+  if (value === null) return null;
+  const pose = recordValue(value, "patch.modelPose");
+  assertObjectKeys(pose, "patch.modelPose", ["bones", "morphTargets", "nodes"]);
+
+  const bones: Record<string, Vec3> = {};
+  const boneValues =
+    pose.bones === undefined
+      ? {}
+      : recordValue(pose.bones, "patch.modelPose.bones");
+  for (const [name, value] of Object.entries(boneValues)) {
+    const rotation = optionalVec3(value, `patch.modelPose.bones.${name}`);
+    if (!rotation) {
+      invalidArgument(`patch.modelPose.bones.${name}`, "3要素の有限数array");
+    }
+    bones[name] = rotation;
+  }
+
+  const morphTargets: Record<string, number> = {};
+  const morphValues =
+    pose.morphTargets === undefined
+      ? {}
+      : recordValue(pose.morphTargets, "patch.modelPose.morphTargets");
+  for (const [name, value] of Object.entries(morphValues)) {
+    if (
+      typeof value !== "number" ||
+      !Number.isFinite(value) ||
+      value < 0 ||
+      value > 1
+    ) {
+      invalidArgument(
+        `patch.modelPose.morphTargets.${name}`,
+        "0から1の有限数",
+      );
+    }
+    morphTargets[name] = value;
+  }
+
+  let nodes: ModelPoseState["nodes"];
+  if (pose.nodes !== undefined) {
+    const nodeValues = recordValue(pose.nodes, "patch.modelPose.nodes");
+    nodes = {};
+    for (const [name, value] of Object.entries(nodeValues)) {
+      const node = recordValue(value, `patch.modelPose.nodes.${name}`);
+      assertObjectKeys(node, `patch.modelPose.nodes.${name}`, [
+        "position",
+        "rotation",
+        "scale",
+      ]);
+      const position = optionalVec3(
+        node.position,
+        `patch.modelPose.nodes.${name}.position`,
+      );
+      const rotation = optionalVec3(
+        node.rotation,
+        `patch.modelPose.nodes.${name}.rotation`,
+      );
+      const scale = optionalVec3(
+        node.scale,
+        `patch.modelPose.nodes.${name}.scale`,
+      );
+      if (!position || !rotation || !scale) {
+        invalidArgument(
+          `patch.modelPose.nodes.${name}`,
+          "position、rotation、scaleを持つobject",
+        );
+      }
+      nodes[name] = { position, rotation, scale };
+    }
+  }
+  return {
+    bones,
+    morphTargets,
+    ...(nodes === undefined ? {} : { nodes }),
+  };
 }
 
 function recordValue(value: unknown, name: string): Record<string, unknown> {
@@ -4188,6 +5429,77 @@ function assertObjectKeys(
       `${name}.${unsupported}は変更できません`,
       { field: `${name}.${unsupported}` },
     );
+  }
+}
+
+function customShaderValue(value: unknown, name: string): ClassicR3fMaterialShader {
+  const input = recordValue(value, name);
+  if (!isJsonValue(input)) invalidArgument(name, "JSON object");
+  const shader = {
+    ...createDefaultCustomShader(),
+    ...JSON.parse(JSON.stringify(input)),
+    kind: "classic-r3f" as const,
+  } as ClassicR3fMaterialShader;
+  const diagnostics = validateClassicR3fMaterialShader(shader);
+  if (diagnostics.length > 0) {
+    throw new XriftMcpEditorToolError(
+      "CUSTOM_SHADER_INVALID",
+      "Custom Shaderの形式が不正です",
+      { diagnostics },
+    );
+  }
+  return shader;
+}
+
+function customShaderPatchValue(value: unknown): ClassicR3fMaterialShaderPatch {
+  const patch = recordValue(value, "patch");
+  if (!isJsonValue(patch)) invalidArgument("patch", "JSON object");
+  assertObjectKeys(patch, "patch", [
+    "sourceModulePath",
+    "vertexShader",
+    "fragmentShader",
+    "uniforms",
+    "variants",
+    "animatedTimeUniform",
+    "sourceModelAssetId",
+    "vertexShaderAssetId",
+    "fragmentShaderAssetId",
+  ]);
+  if (Object.keys(patch).length === 0) {
+    invalidArgument("patch", "non-empty object");
+  }
+  return JSON.parse(JSON.stringify(patch)) as ClassicR3fMaterialShaderPatch;
+}
+
+function assertCustomShaderAssetReferences(
+  assets: AssetManifest,
+  shader: ClassicR3fMaterialShader,
+): void {
+  const references: Array<[
+    "vertexShaderAssetId" | "fragmentShaderAssetId",
+    "vertex" | "fragment",
+  ]> = [
+    ["vertexShaderAssetId", "vertex"],
+    ["fragmentShaderAssetId", "fragment"],
+  ];
+  for (const [field, stage] of references) {
+    const assetId = shader[field];
+    if (!assetId) continue;
+    const asset = assets.assets[assetId];
+    if (!asset || asset.kind !== "shader") {
+      throw new XriftMcpEditorToolError(
+        "SHADER_ASSET_NOT_FOUND",
+        `${field}で指定されたShader Assetが見つかりません`,
+        { field, assetId },
+      );
+    }
+    if (asset.stage !== stage) {
+      throw new XriftMcpEditorToolError(
+        "SHADER_STAGE_MISMATCH",
+        `${field}には${stage} Shader Assetを指定してください`,
+        { field, assetId, expectedStage: stage, actualStage: asset.stage },
+      );
+    }
   }
 }
 

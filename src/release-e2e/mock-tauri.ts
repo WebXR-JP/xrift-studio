@@ -394,6 +394,7 @@ export function installReleaseE2EMock(): void {
         case "detect_xrift_ollama":
           return {
             installed: false,
+            serverReachable: false,
             version: null,
             launchSupported: false,
             models: [],

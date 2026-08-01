@@ -109,7 +109,7 @@ const authoringFeatures = [
   {
     icon: MonitorPlay,
     title: "編集とPlayが離れない",
-    text: "WorldはWASDと物理挙動、Itemは単体の見え方を確認。Stopすれば、同じ選択とカメラへ戻れます。",
+    text: "Worldはキャラクターを生成せず、SpawnPointからフリーカメラで探索。Itemは単体の見え方を確認し、Stopすれば同じ選択とカメラへ戻れます。",
   },
 ] as const;
 

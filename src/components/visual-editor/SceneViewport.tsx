@@ -11,11 +11,9 @@ import {
   TransformControls,
 } from "@react-three/drei";
 import {
-  CapsuleCollider,
   CuboidCollider,
   MeshCollider,
   RigidBody,
-  type RapierRigidBody,
 } from "@react-three/rapier";
 import { SpawnPoint } from "@xrift/world-components";
 import { XriftScriptRoot } from "../../../packages/xrift-studio-runtime/src/script/host";
@@ -80,15 +78,17 @@ import {
   applyCustomShaderSourceOverrides,
   bindCustomShaderGeometryAttributes,
   hasCustomShaderEntrypoints,
+  validateClassicR3fMaterialShader,
   getMaterialAssignmentTarget,
   getMaterialAsset,
   getPrimaryMaterialAssetId,
   getTextureSourceFormat,
   getTransform,
+  inspectColliderConfiguration,
   isEnvironmentTextureAsset,
   normalizeProjectRelativePath,
   resolveOpenBrushEditorBrushBaseUrl,
-  resolveRuntimeSpawnPosition,
+  resolveRuntimeSpawn,
   resolveSceneSettings,
   STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID,
   type AssetManifest,
@@ -114,8 +114,11 @@ import {
 import { tauri } from "../../lib/tauri";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { ParticleEmitterVisual } from "./ParticleEmitterVisual";
+import { SceneThumbnailCapture } from "./SceneThumbnailCapture";
 import {
   applyOpenBrushMaterialAssetProperties,
+  createClassicR3fMaterial,
+  useClassicShaderTextures,
   ProjectModelVisual,
 } from "./ProjectModelVisual";
 import {
@@ -165,11 +168,26 @@ const PLAY_KEYS = new Set([
   "arrowdown",
   "arrowleft",
   "arrowright",
+  "q",
+  "e",
+  "shift",
 ]);
 const SCENE_VIEW_ENTITY_ORIGIN_HIT_RADIUS_PX = 18;
 const EDIT_CAMERA_TARGET: [number, number, number] = [0, 0.7, 0];
 const EDITOR_SELECTION_COLOR = "#7c3aed";
 const MUTED_GIZMO_COLOR = new Color("#64748b");
+const WORLD_PLAY_CAMERA_EYE_HEIGHT = 1.6;
+const WORLD_PLAY_CAMERA_SPEED = 4.5;
+const WORLD_PLAY_CAMERA_LOOK_SENSITIVITY = 0.0025;
+const WORLD_PLAY_CAMERA_MAX_PITCH = Math.PI / 2 - 0.08;
+
+type WorldPlayCameraInput = {
+  pointerId: number | null;
+  lastX: number;
+  lastY: number;
+  deltaX: number;
+  deltaY: number;
+};
 
 type ViewProjection = "perspective" | "orthographic";
 
@@ -452,9 +470,23 @@ function PrimitiveMeshVisual({
     projectPath,
   );
   const customShaderMaterial = useOpenBrushPrimitiveMaterial(material);
+  const classicShaderTextures = useClassicShaderTextures(
+    material,
+    assets,
+    projectPath,
+  );
+  const authoredShaderMaterial = useMemo(
+    () =>
+      material?.shader?.kind === "classic-r3f"
+        && validateClassicR3fMaterialShader(material.shader).length === 0
+        ? createClassicR3fMaterial(material.shader, classicShaderTextures, "")
+        : undefined,
+    [classicShaderTextures, material?.shader],
+  );
+  const resolvedCustomShaderMaterial = authoredShaderMaterial ?? customShaderMaterial;
   const meshRef = useRef<Mesh | null>(null);
   const customShaderInstance = useMemo(() => {
-    const instance = customShaderMaterial?.clone();
+    const instance = resolvedCustomShaderMaterial?.clone();
     if (!instance || material?.shader?.kind !== "openbrush") return instance;
     const overrides = material.shader.sourceOverrides;
     applyCustomShaderSourceOverrides(
@@ -472,7 +504,18 @@ function PrimitiveMeshVisual({
     );
     applyOpenBrushMaterialAssetProperties(instance, material, materialTextures);
     return hasCustomShaderEntrypoints(instance) ? instance : undefined;
-  }, [customShaderMaterial, material, materialTextures]);
+  }, [material, materialTextures, resolvedCustomShaderMaterial]);
+  useFrame((state) => {
+    if (
+      !authoredShaderMaterial ||
+      material?.shader?.kind !== "classic-r3f" ||
+      !material.shader.animatedTimeUniform
+    ) {
+      return;
+    }
+    const uniform = authoredShaderMaterial.uniforms[material.shader.animatedTimeUniform];
+    if (uniform) uniform.value = state.clock.getElapsedTime();
+  });
   const materialRef = useRef<MeshStandardMaterial | null>(null);
   useMaterialPreviewRenderSync(materialRef, materialTextures);
   useLayoutEffect(() => {
@@ -594,10 +637,12 @@ function LightVisual({
   component,
   selected,
   showSceneLighting,
+  showHelperVisual,
 }: {
   component: Extract<SceneComponent, { type: "light" }>;
   selected: boolean;
   showSceneLighting: boolean;
+  showHelperVisual: boolean;
 }) {
   return (
     <>
@@ -618,7 +663,7 @@ function LightVisual({
           height={component.height ?? 1}
         />
       ) : null}
-      {component.enabled ? (
+      {showHelperVisual && component.enabled ? (
         <>
           <EditorLightIcon color={component.color} selected={selected} />
           {component.lightType === "directional" ||
@@ -924,6 +969,7 @@ function ComponentVisual({
   materialDropHighlighted,
   viewportMaterialStyle,
   showHelpers,
+  renderThumbnail,
   showSceneLighting,
   showAllColliders,
   effectivelyEnabled,
@@ -938,6 +984,7 @@ function ComponentVisual({
   materialDropHighlighted: boolean;
   viewportMaterialStyle: SceneViewportMaterialStyle | null;
   showHelpers: boolean;
+  renderThumbnail: boolean;
   showSceneLighting: boolean;
   showAllColliders: boolean;
   effectivelyEnabled: boolean;
@@ -992,15 +1039,16 @@ function ComponentVisual({
     case "rigid-body":
       return null;
     case "light":
-      return showHelpers ? (
+      return showHelpers || renderThumbnail || showSceneLighting ? (
         <LightVisual
           component={component}
           selected={selected}
           showSceneLighting={showSceneLighting}
+          showHelperVisual={showHelpers}
         />
       ) : null;
     case "text":
-      return showHelpers && component.enabled ? (
+      return (showHelpers || renderThumbnail) && component.enabled ? (
         <DreiText
           color={component.color}
           fontSize={component.fontSize}
@@ -1040,7 +1088,7 @@ function ComponentVisual({
         asset?.kind === "particle" && asset.properties.renderer.materialAssetId
           ? assets.assets[asset.properties.renderer.materialAssetId]
           : undefined;
-      return showHelpers && component.enabled && asset?.kind === "particle" ? (
+      return (showHelpers || renderThumbnail) && component.enabled && asset?.kind === "particle" ? (
         <ParticleEmitterVisual
           asset={asset}
           textureAsset={
@@ -1055,7 +1103,7 @@ function ComponentVisual({
       ) : null;
     }
     case "xrift-component":
-      return showHelpers ? (
+      return showHelpers || renderThumbnail ? (
         <OfficialXriftComponentRenderer component={component} />
       ) : null;
     case "script":
@@ -1233,6 +1281,7 @@ function EntityObject({
   materialDropTarget,
   displayMode,
   displayProfile,
+  renderThumbnail,
   children,
 }: {
   entity: SceneEntity;
@@ -1260,6 +1309,7 @@ function EntityObject({
   materialDropTarget: MaterialDropReadyTarget | null;
   displayMode: SceneViewportDisplayMode;
   displayProfile: SceneViewportDisplayProfile;
+  renderThumbnail: boolean;
   children?: ReactNode;
 }) {
   const objectRef = useRef<Group>(null!);
@@ -1318,6 +1368,7 @@ function EntityObject({
             }
             viewportMaterialStyle={viewportMaterialStyle}
             showHelpers={displayProfile.showHelpers}
+            renderThumbnail={renderThumbnail}
             showSceneLighting={displayProfile.showSceneLighting}
             showAllColliders={displayProfile.showAllColliders}
             effectivelyEnabled={effectivelyEnabled}
@@ -1402,6 +1453,7 @@ function EntityObject({
       {primary &&
       editable &&
       transform &&
+      displayMode !== "colliders" &&
       entity.id === authoringEntityId ? (
         <TransformControls
           ref={setTransformControlsRef}
@@ -1717,6 +1769,7 @@ function SceneEntityHierarchy({
   materialDropTarget,
   displayMode,
   displayProfile,
+  renderThumbnail,
   inheritedRigidBody,
   ancestors = new Set<string>(),
   ancestorEnabled = true,
@@ -1742,6 +1795,7 @@ function SceneEntityHierarchy({
   materialDropTarget: MaterialDropReadyTarget | null;
   displayMode: SceneViewportDisplayMode;
   displayProfile: SceneViewportDisplayProfile;
+  renderThumbnail: boolean;
   inheritedRigidBody?: RigidBodyComponent;
   ancestors?: ReadonlySet<string>;
   ancestorEnabled?: boolean;
@@ -1784,6 +1838,7 @@ function SceneEntityHierarchy({
       materialDropTarget={materialDropTarget}
       displayMode={displayMode}
       displayProfile={displayProfile}
+      renderThumbnail={renderThumbnail}
     >
       {entity.children.map((childId) => (
         <SceneEntityHierarchy
@@ -1809,6 +1864,7 @@ function SceneEntityHierarchy({
           materialDropTarget={materialDropTarget}
           displayMode={displayMode}
           displayProfile={displayProfile}
+          renderThumbnail={renderThumbnail}
           inheritedRigidBody={rigidBodyOwner}
           ancestors={nextAncestors}
           ancestorEnabled={effectivelyEnabled}
@@ -2019,80 +2075,78 @@ function CameraControls({
   );
 }
 
-function WorldPlayController({
+function WorldPlayCameraController({
   initialPosition,
+  initialYaw,
   isPressed,
+  inputRef,
 }: {
   initialPosition: Vec3;
+  initialYaw: number;
   isPressed: (key: string) => boolean;
+  inputRef: { current: WorldPlayCameraInput };
 }) {
-  const bodyRef = useRef<RapierRigidBody>(null);
-  const playerPosition = useMemo(
-    () => new Vector3(initialPosition[0], initialPosition[1], initialPosition[2]),
-    // The controller is a PlaySession resource. Authoring hot reloads must not
-    // reset it unless the controller itself is remounted by starting Play.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
+  const camera = useThree((state) => state.camera);
+  const initializedRef = useRef(false);
+  const yawRef = useRef(0);
+  const pitchRef = useRef(0);
   const movement = useMemo(() => new Vector3(), []);
-  const desiredCameraPosition = useMemo(() => new Vector3(), []);
+  const forward = useMemo(() => new Vector3(), []);
+  const right = useMemo(() => new Vector3(), []);
+
+  useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    camera.position.set(
+      initialPosition[0],
+      initialPosition[1] + WORLD_PLAY_CAMERA_EYE_HEIGHT,
+      initialPosition[2],
+    );
+    yawRef.current = initialYaw;
+    pitchRef.current = 0;
+    camera.rotation.set(pitchRef.current, yawRef.current, 0, "YXZ");
+    camera.updateProjectionMatrix();
+  }, [camera, initialPosition, initialYaw]);
 
   useFrame(({ camera }, delta) => {
+    const input = inputRef.current;
+    if (input.deltaX !== 0 || input.deltaY !== 0) {
+      yawRef.current -= input.deltaX * WORLD_PLAY_CAMERA_LOOK_SENSITIVITY;
+      pitchRef.current = Math.max(
+        -WORLD_PLAY_CAMERA_MAX_PITCH,
+        Math.min(
+          WORLD_PLAY_CAMERA_MAX_PITCH,
+          pitchRef.current - input.deltaY * WORLD_PLAY_CAMERA_LOOK_SENSITIVITY,
+        ),
+      );
+      input.deltaX = 0;
+      input.deltaY = 0;
+    }
+    camera.rotation.set(pitchRef.current, yawRef.current, 0, "YXZ");
+
     movement.set(0, 0, 0);
     if (isPressed("w") || isPressed("arrowup")) movement.z -= 1;
     if (isPressed("s") || isPressed("arrowdown")) movement.z += 1;
     if (isPressed("a") || isPressed("arrowleft")) movement.x -= 1;
     if (isPressed("d") || isPressed("arrowright")) movement.x += 1;
+    if (isPressed("e")) movement.y += 1;
+    if (isPressed("q")) movement.y -= 1;
+    if (movement.lengthSq() === 0) return;
 
-    const body = bodyRef.current;
-    if (body) {
-      const velocity = body.linvel();
-      if (movement.lengthSq() > 0) movement.normalize().multiplyScalar(3.2);
-      body.setLinvel(
-        { x: movement.x, y: velocity.y, z: movement.z },
-        true,
-      );
-      const translation = body.translation();
-      playerPosition.set(translation.x, translation.y, translation.z);
-    }
-
-    desiredCameraPosition.set(
-      playerPosition.x + 4.5,
-      playerPosition.y + 3.5,
-      playerPosition.z + 5.5,
+    forward.set(0, 0, -1).applyEuler(camera.rotation);
+    right.set(1, 0, 0).applyEuler(camera.rotation);
+    movement.set(
+      right.x * movement.x + forward.x * movement.z,
+      movement.y,
+      right.z * movement.x + forward.z * movement.z,
     );
-    camera.position.lerp(
-      desiredCameraPosition,
-      1 - Math.exp(-6 * Math.min(delta, 0.05)),
-    );
-    camera.lookAt(playerPosition.x, playerPosition.y + 0.65, playerPosition.z);
+    if (movement.lengthSq() > 1) movement.normalize();
+    const speed = WORLD_PLAY_CAMERA_SPEED * (isPressed("shift") ? 2 : 1);
+    camera.position.addScaledVector(movement, speed * Math.min(delta, 0.05));
   });
 
-  return (
-    <RigidBody
-      ref={bodyRef}
-      type="dynamic"
-      position={initialPosition}
-      colliders={false}
-      enabledRotations={[false, false, false]}
-      linearDamping={5}
-      canSleep={false}
-    >
-      <CapsuleCollider args={[0.45, 0.28]} position={[0, 0.73, 0]} friction={0.8} />
-      <mesh position={[0, 0.72, 0]} castShadow>
-        <cylinderGeometry args={[0.28, 0.28, 0.9, 18]} />
-        <meshStandardMaterial color="#8b5cf6" roughness={0.55} />
-      </mesh>
-      <mesh position={[0, 1.28, 0]} castShadow>
-        <sphereGeometry args={[0.26, 20, 14]} />
-        <meshStandardMaterial color="#c4b5fd" roughness={0.5} />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-        <ringGeometry args={[0.35, 0.46, 28]} />
-        <meshBasicMaterial color="#a78bfa" side={DoubleSide} />
-      </mesh>
-    </RigidBody>
-  );
+  return null;
 }
 
 function resolveProjectModelSource(
@@ -2516,7 +2570,11 @@ export function SceneViewport({
   onViewportFileDrop,
   onPlayDropAttempt,
   onDropRejected,
+  onOptimizeColliders,
   scriptRuntime,
+  thumbnailCaptureRequest = 0,
+  onThumbnailCaptured,
+  onThumbnailCaptureError,
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
@@ -2563,12 +2621,24 @@ export function SceneViewport({
   onViewportFileDrop: () => void;
   onPlayDropAttempt: () => void;
   onDropRejected: (message: string) => void;
+  onOptimizeColliders: (entityIds?: readonly string[]) => void;
   /** Compiled Script Assets plus the callbacks their hosts need. */
   scriptRuntime?: ScriptViewportRuntime;
+  /** Requests a clean capture from the active Three.js Scene View. */
+  thumbnailCaptureRequest?: number;
+  onThumbnailCaptured?: (dataUrl: string) => void;
+  onThumbnailCaptureError?: (message: string) => void;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const dropResolverRef = useRef<SceneDropResolver | null>(null);
   const pressedKeysRef = useRef(new Set<string>());
+  const worldPlayCameraInputRef = useRef<WorldPlayCameraInput>({
+    pointerId: null,
+    lastX: 0,
+    lastY: 0,
+    deltaX: 0,
+    deltaY: 0,
+  });
   const [dragOverKind, setDragOverKind] = useState<
     SceneViewportDragIntent["kind"] | null
   >(null);
@@ -2576,6 +2646,7 @@ export function SceneViewport({
   const [materialDropTarget, setMaterialDropTarget] =
     useState<MaterialDropTarget | null>(null);
   const [projection, setProjection] = useState<ViewProjection>("perspective");
+  const [thumbnailCaptureActive, setThumbnailCaptureActive] = useState(false);
   const [displayMode, setDisplayMode] =
     useState<SceneViewportDisplayMode>("scene");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -2605,12 +2676,23 @@ export function SceneViewport({
     [scene.settings],
   );
   const effectiveDisplayMode = editorMode === "play" ? "scene" : displayMode;
+  const colliderOnlyEdit = effectiveDisplayMode === "colliders";
+  const renderDisplayMode = thumbnailCaptureActive ? "scene" : effectiveDisplayMode;
   const displayProfile = useMemo(
-    () => getSceneViewportDisplayProfile(effectiveDisplayMode),
-    [effectiveDisplayMode],
+    () => {
+      const profile = getSceneViewportDisplayProfile(renderDisplayMode);
+      return thumbnailCaptureActive
+        ? {
+            ...profile,
+            showHelpers: false,
+            showEditorLighting: false,
+          }
+        : profile;
+    },
+    [renderDisplayMode, thumbnailCaptureActive],
   );
   const runtimeSpawn = useMemo(
-    () => resolveRuntimeSpawnPosition(preview.scene),
+    () => resolveRuntimeSpawn(preview.scene),
     [preview.scene],
   );
   const modelProxyVisible = useMemo(
@@ -2630,6 +2712,42 @@ export function SceneViewport({
   const selectedTransform = selectedEntityId
     ? getTransform(scene, selectedEntityId)
     : undefined;
+  const colliderInspection = useMemo(
+    () => inspectColliderConfiguration(scene),
+    [scene],
+  );
+  const selectedColliderInspection = useMemo(
+    () =>
+      selectedEntityId
+        ? inspectColliderConfiguration(scene, { entityIds: [selectedEntityId] })
+        : null,
+    [scene, selectedEntityId],
+  );
+  const colliderPanelInspection =
+    selectedColliderInspection && selectedColliderInspection.colliderCount > 0
+      ? selectedColliderInspection
+      : colliderInspection;
+
+  useEffect(() => {
+    if (thumbnailCaptureRequest <= 0) return;
+    setThumbnailCaptureActive(true);
+  }, [thumbnailCaptureRequest]);
+
+  const handleThumbnailCaptured = useCallback(
+    (dataUrl: string) => {
+      setThumbnailCaptureActive(false);
+      onThumbnailCaptured?.(dataUrl);
+    },
+    [onThumbnailCaptured],
+  );
+
+  const handleThumbnailCaptureError = useCallback(
+    (message: string) => {
+      setThumbnailCaptureActive(false);
+      onThumbnailCaptureError?.(message);
+    },
+    [onThumbnailCaptureError],
+  );
 
   useEffect(() => {
     if (editorMode === "play") setProjection("perspective");
@@ -2744,6 +2862,20 @@ export function SceneViewport({
     const isCanvasPointer = event.target instanceof HTMLCanvasElement;
     if (
       isCanvasPointer &&
+      editorMode === "play" &&
+      projectKind === "world" &&
+      (event.button === 0 || event.button === 2)
+    ) {
+      const input = worldPlayCameraInputRef.current;
+      input.pointerId = event.pointerId;
+      input.lastX = event.clientX;
+      input.lastY = event.clientY;
+      input.deltaX = 0;
+      input.deltaY = 0;
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    if (
+      isCanvasPointer &&
       event.button === 0 &&
       !transformDraggingRef.current
     ) {
@@ -2777,6 +2909,17 @@ export function SceneViewport({
   const handleViewportPointerMove = (
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
+    const cameraInput = worldPlayCameraInputRef.current;
+    if (
+      editorMode === "play" &&
+      projectKind === "world" &&
+      cameraInput.pointerId === event.pointerId
+    ) {
+      cameraInput.deltaX += event.clientX - cameraInput.lastX;
+      cameraInput.deltaY += event.clientY - cameraInput.lastY;
+      cameraInput.lastX = event.clientX;
+      cameraInput.lastY = event.clientY;
+    }
     const leftGesture = leftPointerGestureRef.current;
     if (
       leftGesture &&
@@ -2810,6 +2953,13 @@ export function SceneViewport({
   const handleViewportPointerUp = (
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
+    const cameraInput = worldPlayCameraInputRef.current;
+    if (cameraInput.pointerId === event.pointerId) {
+      cameraInput.pointerId = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    }
     const leftGesture = leftPointerGestureRef.current;
     if (leftGesture?.pointerId === event.pointerId) {
       if (
@@ -2940,7 +3090,12 @@ export function SceneViewport({
   };
 
   const openContextMenu = (event: MouseEvent<HTMLDivElement>) => {
-    if (editorMode !== "edit") return;
+    if (editorMode !== "edit") {
+      if (editorMode === "play" && projectKind === "world") {
+        event.preventDefault();
+      }
+      return;
+    }
     const gesture = rightPointerGestureRef.current;
     event.preventDefault();
     if (gesture?.suppressContextMenu || gesture?.moved) {
@@ -2959,7 +3114,7 @@ export function SceneViewport({
     projectKind === "world" ? "World Play Mode" : "Item Play Mode";
   const profileGuide =
     projectKind === "world"
-      ? "WASD / 矢印キーでキャラクターを移動"
+      ? "WASD / 矢印キーで移動 · ドラッグで視点 · Q/Eで上下 · Shiftで加速"
       : "ドラッグでアイテムをOrbit確認";
   const readyMaterialDropTarget =
     materialDropTarget?.status === "ready" ? materialDropTarget : null;
@@ -3067,7 +3222,7 @@ export function SceneViewport({
                 type="button"
                 aria-label={label}
                 aria-pressed={transformMode === mode}
-                disabled={editorMode !== "edit"}
+                disabled={editorMode !== "edit" || colliderOnlyEdit}
                 onClick={() => onTransformModeChange(mode)}
                 title={commandTitle(`${label}ギズモ`, `transform.${mode}`)}
                 className={`flex size-7 items-center justify-center rounded border transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
@@ -3087,7 +3242,7 @@ export function SceneViewport({
           <button
             type="button"
             aria-label={`${transformSpace === "world" ? "World" : "Local"}座標。クリックで切り替え`}
-            disabled={editorMode !== "edit"}
+            disabled={editorMode !== "edit" || colliderOnlyEdit}
             onClick={onToggleTransformSpace}
             title={commandTitle("ギズモ座標系を切り替える", "transform.toggle-space")}
             className={`flex size-7 items-center justify-center rounded border disabled:cursor-not-allowed disabled:opacity-35 ${
@@ -3169,6 +3324,9 @@ export function SceneViewport({
         onPointerCancel={() => {
           leftPointerGestureRef.current = null;
           rightPointerGestureRef.current = null;
+          worldPlayCameraInputRef.current.pointerId = null;
+          worldPlayCameraInputRef.current.deltaX = 0;
+          worldPlayCameraInputRef.current.deltaY = 0;
         }}
         onDragEnterCapture={handleDragEnter}
         onDragOverCapture={handleDragOver}
@@ -3230,7 +3388,7 @@ export function SceneViewport({
               shadow-mapSize-height={1024}
             />
           ) : null}
-          {sceneSettings.editor.gizmo.gridVisible ? (
+          {sceneSettings.editor.gizmo.gridVisible && !thumbnailCaptureActive ? (
             <gridHelper
               args={[
                 sceneSettings.editor.gizmo.gridSize,
@@ -3243,6 +3401,13 @@ export function SceneViewport({
           ) : null}
 
           <SceneDropProjectionBridge resolverRef={dropResolverRef} />
+
+          <SceneThumbnailCapture
+            requestId={thumbnailCaptureRequest}
+            ready={thumbnailCaptureActive}
+            onCapture={handleThumbnailCaptured}
+            onError={handleThumbnailCaptureError}
+          />
 
           <OfficialXriftPreviewProvider
             withPhysics
@@ -3265,9 +3430,11 @@ export function SceneViewport({
                   }
                   assets={assets}
                   projectPath={projectPath}
-                  selectedEntityIds={selectedEntityIdSet}
-                  primaryEntityId={selectedEntityId}
-                  editable={editorMode === "edit"}
+                  selectedEntityIds={
+                    thumbnailCaptureActive ? new Set<string>() : selectedEntityIdSet
+                  }
+                  primaryEntityId={thumbnailCaptureActive ? null : selectedEntityId}
+                  editable={editorMode === "edit" && !thumbnailCaptureActive}
                   playing={editorMode === "play"}
                   physicsEnabled={
                     editorMode === "play" && projectKind === "world"
@@ -3284,14 +3451,17 @@ export function SceneViewport({
                   transformDraggingRef={transformDraggingRef}
                   materialDragActive={dragOverKind === "material"}
                   materialDropTarget={readyMaterialDropTarget}
-                  displayMode={effectiveDisplayMode}
+                  displayMode={renderDisplayMode}
                   displayProfile={displayProfile}
+                  renderThumbnail={thumbnailCaptureActive}
                 />
               ))}
               {editorMode === "play" && projectKind === "world" ? (
-                <WorldPlayController
-                  initialPosition={runtimeSpawn}
+                <WorldPlayCameraController
+                  initialPosition={runtimeSpawn.position}
+                  initialYaw={runtimeSpawn.yaw}
                   isPressed={isPressed}
+                  inputRef={worldPlayCameraInputRef}
                 />
               ) : null}
             </Fragment>
@@ -3315,6 +3485,54 @@ export function SceneViewport({
             onFocusChange={onFocusChange}
           />
         </Canvas>
+
+        {effectiveDisplayMode === "colliders" && !thumbnailCaptureActive ? (
+          <div
+            className="absolute right-2.5 top-12 z-20 w-[min(19rem,calc(100%-1.25rem))] rounded-md border border-teal-300/70 bg-slate-950/90 px-3 py-2.5 text-slate-100 shadow-lg backdrop-blur"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold">コライダー専用編集</p>
+              <span className="text-[11px] tabular-nums text-slate-300">
+                Box {colliderPanelInspection.boxColliderCount} · Mesh {colliderPanelInspection.meshColliderCount}
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] leading-4 text-slate-300">
+              {colliderPanelInspection.diagnostics.length === 0
+                ? "表示中の形状と実行設定に問題はありません"
+                : `${colliderPanelInspection.diagnostics.length}件の診断。${colliderPanelInspection.fixableCount}件を自動修正できます`}
+            </p>
+            {colliderPanelInspection.diagnostics.slice(0, 2).map((diagnostic) => (
+              <p
+                key={`${diagnostic.entityId}-${diagnostic.componentId ?? diagnostic.code}`}
+                className={`mt-1 text-[11px] leading-4 ${diagnostic.severity === "error" ? "text-rose-300" : "text-amber-200"}`}
+              >
+                {diagnostic.message}
+              </p>
+            ))}
+            {colliderPanelInspection.fixableCount > 0 ? (
+              <button
+                type="button"
+                onClick={() =>
+                  onOptimizeColliders(
+                    selectedColliderInspection && selectedColliderInspection.colliderCount > 0
+                      ? [selectedEntityId!]
+                      : undefined,
+                  )
+                }
+                className="mt-2 w-full rounded border border-teal-300/70 bg-teal-500/20 px-2 py-1.5 text-xs font-semibold text-teal-100 hover:bg-teal-500/30"
+              >
+                {selectedColliderInspection && selectedColliderInspection.colliderCount > 0
+                  ? "選択Entityを最適化"
+                  : "Scene全体を最適化"}
+              </button>
+            ) : null}
+            <p className="mt-2 border-t border-slate-700 pt-1.5 text-[10px] text-slate-400">
+              MCP: inspect_colliders → optimize_colliders
+            </p>
+          </div>
+        ) : null}
 
         {dragOverKind ? (
           <div

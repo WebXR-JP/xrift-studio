@@ -14,7 +14,7 @@ const POLY_HAVEN_PROVIDER_ID: &str = "poly-haven";
 const AMBIENT_CG_API: &str = "https://ambientcg.com/api/v3";
 const AMBIENT_CG_PROVIDER_ID: &str = "ambient-cg";
 const POLY_HAVEN_USER_AGENT: &str =
-    "XRiftStudio/0.5.11 (+https://github.com/xrift-studio/xrift-studio; asset-browser)";
+    "XRiftStudio/0.5.12 (+https://github.com/xrift-studio/xrift-studio; asset-browser)";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

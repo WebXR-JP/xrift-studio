@@ -169,11 +169,11 @@ export class VisualEditorErrorBoundary extends Component<
               : " Editorの表示を再試行するか、前の画面へ戻ってプロジェクトを開き直してください。"}
           </p>
 
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-7 grid min-w-0 gap-3 sm:grid-cols-2">
             <button
               type="button"
               onClick={this.resetEditor}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
+              className="inline-flex min-h-11 min-w-0 w-full items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
             >
               <RotateCcw size={17} strokeWidth={1.9} aria-hidden="true" />
               {requiresReload ? "アプリを再読み込み" : "Editorを再試行"}
@@ -181,7 +181,7 @@ export class VisualEditorErrorBoundary extends Component<
             <button
               type="button"
               onClick={onBack}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
+              className="inline-flex min-h-11 min-w-0 w-full items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-center text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
             >
               <Library size={17} strokeWidth={1.9} aria-hidden="true" />
               {backLabel}
@@ -189,10 +189,10 @@ export class VisualEditorErrorBoundary extends Component<
             <button
               type="button"
               onClick={() => this.setState({ supportOpen: true })}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
+              className="inline-flex min-h-11 min-w-0 w-full items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-center text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 sm:col-span-2 sm:justify-self-start sm:px-6"
             >
               <LifeBuoy size={17} strokeWidth={1.9} aria-hidden="true" />
-              ヘルプと報告
+              ヘルプセンターと報告
             </button>
           </div>
 

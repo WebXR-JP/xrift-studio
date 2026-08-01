@@ -228,23 +228,49 @@ export type XriftRuntimeAsset =
       kind: "material";
       name: string;
       properties: Record<string, unknown>;
-      shader?: {
-        kind: "openbrush";
-        renderer: "three-icosa";
-        rendererVersion: string;
-        brushName: string;
-        brushGuid?: string;
-        brushBaseUrl: string;
-        sourceMaterialIndex: number;
-        sourceOverrides?: {
-          vertexShader?: string;
-          fragmentShader?: string;
-        };
-        attributeBindings?: Record<
-          string,
-          { sourceAttribute?: string; defaultValue?: number[] }
-        >;
-      };
+      shader?:
+        | {
+            kind: "openbrush";
+            renderer: "three-icosa";
+            rendererVersion: string;
+            brushName: string;
+            brushGuid?: string;
+            brushBaseUrl: string;
+            sourceMaterialIndex: number;
+            sourceOverrides?: {
+              vertexShader?: string;
+              fragmentShader?: string;
+            };
+            attributeBindings?: Record<
+              string,
+              { sourceAttribute?: string; defaultValue?: number[] }
+            >;
+          }
+        | {
+            kind: "classic-r3f";
+            sourceModulePath: string;
+            vertexShader: string;
+            fragmentShader: string;
+            uniforms: Record<
+              string,
+              | { kind: "texture"; textureAssetId: string; colorSpace?: "srgb" | "linear"; generateMipmaps?: boolean; filter?: "nearest" | "linear"; wrapS?: "repeat" | "clamp-to-edge"; wrapT?: "repeat" | "clamp-to-edge" }
+              | { kind: "number"; value: number }
+              | { kind: "color"; value: string }
+              | { kind: "vector"; value: number[] }
+            >;
+            variants: Array<{
+              name: string;
+              meshNameIncludes?: string;
+              defines: Record<string, string>;
+              side: "front" | "back" | "double";
+              transparent: boolean;
+              depthWrite: boolean;
+            }>;
+            animatedTimeUniform?: string;
+            sourceModelAssetId?: string;
+            vertexShaderAssetId?: string;
+            fragmentShaderAssetId?: string;
+          };
     }
   | {
       id: string;

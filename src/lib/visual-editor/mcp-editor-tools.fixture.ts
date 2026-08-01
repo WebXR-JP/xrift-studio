@@ -3,6 +3,7 @@ import { BUILTIN_ASSET_IDS, createPrototypeProject } from "./prototype-project";
 import {
   createTextureAsset,
   type AudioAsset,
+  type ModelAsset,
 } from "./asset-manifest";
 import { createScriptAsset } from "./scripting/script-files";
 import { extractScriptContract } from "./scripting/script-contract";
@@ -55,6 +56,23 @@ export function runXriftMcpEditorToolFixtures(): void {
     importSettings: {},
   });
   assert(skyboxTexture, "Skybox Texture fixture could not be created");
+  const model: ModelAsset = {
+    id: "asset-mcp-model",
+    name: "MCP Model",
+    kind: "model",
+    status: "ready",
+    source: { kind: "project", relativePath: "assets/models/mcp.glb" },
+    sourceHash:
+      "4f8b42c22dd3729b51b5c7e6b4e2b5f3d6a9c1f4b6a4d79b9f8f3e1f6a1c8d20",
+    thumbnail: { status: "missing" },
+    importSettings: {
+      scale: 1,
+      generateColliders: true,
+      optimizeMeshes: true,
+      importAnimations: true,
+    },
+    materialSlots: [{ slot: "body", name: "Body", sourceMaterialIndex: 0 }],
+  };
   const script = createScriptAsset(
     "asset-mcp-script",
     "MCP Script",
@@ -70,6 +88,7 @@ export function runXriftMcpEditorToolFixtures(): void {
         [texture.id]: texture,
         [audio.id]: audio,
         [skyboxTexture.id]: skyboxTexture,
+        [model.id]: model,
         [script.id]: script,
       },
     },
@@ -747,6 +766,35 @@ export function runXriftMcpEditorToolFixtures(): void {
     "Texture settings should reject unknown enum values",
   );
 
+  const modelUpdated = executeXriftMcpEditorTool(context, {
+    id: "fixture-update-model",
+    tool: "update_model_asset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: context.revision,
+      modelAssetId: model.id,
+      patch: {
+        importSettings: {
+          scale: 0.5,
+          generateColliders: false,
+          importAnimations: false,
+        },
+        materialSlotBindings: { body: BUILTIN_ASSET_IDS.material.blue },
+      },
+    },
+  });
+  const updatedModel = modelUpdated.bundle.assets.assets[model.id];
+  assert(
+    modelUpdated.changed &&
+      updatedModel?.kind === "model" &&
+      updatedModel.importSettings.scale === 0.5 &&
+      updatedModel.importSettings.generateColliders === false &&
+      updatedModel.materialSlots[0]?.defaultMaterialAssetId ===
+        BUILTIN_ASSET_IDS.material.blue,
+    "update_model_asset should persist import settings and Material slot bindings",
+  );
+
   const placed = executeXriftMcpEditorTool(
     { ...context, bundle: sceneSettingsResult.bundle, revision: 5 },
     {
@@ -772,6 +820,32 @@ export function runXriftMcpEditorToolFixtures(): void {
     "Placed Entity should reference the requested Asset",
   );
 
+  const prefabCreated = executeXriftMcpEditorTool(
+    { ...context, bundle: placed.bundle, revision: 6 },
+    {
+      id: "fixture-create-prefab",
+      tool: "create_prefab",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: 6,
+        entityId: placed.sceneSelection.id,
+        name: "MCP Particle Prefab",
+      },
+    },
+  );
+  const prefabResult = prefabCreated.result as {
+    prefabId?: string;
+    prefabAssetId?: string;
+  };
+  assert(
+    prefabCreated.changed &&
+      prefabResult.prefabId &&
+      prefabResult.prefabAssetId &&
+      prefabCreated.bundle.prefabs[prefabResult.prefabId],
+    "create_prefab should persist a reusable Prefab Asset and document",
+  );
+
   let staleCode: string | undefined;
   try {
     executeXriftMcpEditorTool(context, {
@@ -789,11 +863,188 @@ export function runXriftMcpEditorToolFixtures(): void {
   }
   assert(staleCode === "STALE_REVISION", "Stale write should be rejected");
 
-  let current: XriftMcpEditorContext = { ...context, bundle: placed.bundle, revision: 6 };
+  let current: XriftMcpEditorContext = {
+    ...context,
+    bundle: prefabCreated.bundle,
+    revision: 7,
+  };
   const placedEntityId = placed.sceneSelection?.id;
   assert(
     typeof placedEntityId === "string",
     "Placed Particle Asset should expose its Entity ID",
+  );
+
+  const folderCreated = executeXriftMcpEditorTool(current, {
+    id: "fixture-create-asset-folder",
+    tool: "create_asset_folder",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      name: "MCP Folder",
+    },
+  });
+  const folderId = (folderCreated.result.folder as { id?: string }).id;
+  assert(folderCreated.changed && folderId, "create_asset_folder should create a folder");
+  current = { ...current, bundle: folderCreated.bundle, revision: current.revision + 1 };
+
+  const metadataUpdated = executeXriftMcpEditorTool(current, {
+    id: "fixture-update-project-metadata",
+    tool: "update_project_metadata",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      patch: { title: "MCP Fixture Title", description: "MCP Fixture Description" },
+    },
+  });
+  assert(
+    metadataUpdated.changed &&
+      (metadataUpdated.result.metadata as { title?: string }).title ===
+        "MCP Fixture Title",
+    "update_project_metadata should persist publish metadata",
+  );
+  current = { ...current, bundle: metadataUpdated.bundle, revision: current.revision + 1 };
+
+  const assetRenamed = executeXriftMcpEditorTool(current, {
+    id: "fixture-rename-asset",
+    tool: "rename_asset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: texture.id,
+      name: "MCP Grid Renamed",
+    },
+  });
+  assert(
+    (assetRenamed.result.asset as { name?: string }).name === "MCP Grid Renamed",
+    "rename_asset should persist an Asset name",
+  );
+  current = { ...current, bundle: assetRenamed.bundle, revision: current.revision + 1 };
+
+  const folderRenamed = executeXriftMcpEditorTool(current, {
+    id: "fixture-rename-asset-folder",
+    tool: "rename_asset_folder",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      folderId,
+      name: "MCP Folder Renamed",
+    },
+  });
+  assert(
+    (folderRenamed.result.folder as { name?: string }).name === "MCP Folder Renamed",
+    "rename_asset_folder should persist a folder name",
+  );
+  current = { ...current, bundle: folderRenamed.bundle, revision: current.revision + 1 };
+
+  const assetMoved = executeXriftMcpEditorTool(current, {
+    id: "fixture-move-asset",
+    tool: "move_asset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: texture.id,
+      folderId,
+    },
+  });
+  assert(
+    (assetMoved.result as { folderId?: string }).folderId === folderId,
+    "move_asset should persist the target folder",
+  );
+  current = { ...current, bundle: assetMoved.bundle, revision: current.revision + 1 };
+
+  const colliderInspection = executeXriftMcpEditorTool(current, {
+    id: "fixture-inspect-colliders",
+    tool: "inspect_colliders",
+    arguments: { entityIds: [placedEntityId] },
+  });
+  assert(
+    (colliderInspection.result.inspection as { colliderCount?: number }).colliderCount === 0,
+    "inspect_colliders should return diagnostics for the requested Entity",
+  );
+  const colliderOptimization = executeXriftMcpEditorTool(current, {
+    id: "fixture-optimize-colliders",
+    tool: "optimize_colliders",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityIds: [placedEntityId],
+    },
+  });
+  assert(
+    colliderOptimization.changed === false,
+    "optimize_colliders should be a no-op when no safe fix is needed",
+  );
+
+  const nestedFolderCreated = executeXriftMcpEditorTool(current, {
+    id: "fixture-create-nested-folder",
+    tool: "create_asset_folder",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      name: "MCP Nested Folder",
+      parentId: folderId,
+    },
+  });
+  const nestedFolderId = (nestedFolderCreated.result.folder as { id?: string }).id;
+  assert(nestedFolderCreated.changed && nestedFolderId, "create_asset_folder should support nesting");
+  current = { ...current, bundle: nestedFolderCreated.bundle, revision: current.revision + 1 };
+
+  const nestedFolderMoved = executeXriftMcpEditorTool(current, {
+    id: "fixture-move-asset-folder",
+    tool: "move_asset_folder",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      folderId: nestedFolderId,
+      parentId: null,
+    },
+  });
+  assert(
+    (nestedFolderMoved.result.folder as { parentId?: string | null }).parentId === null,
+    "move_asset_folder should persist the target parent",
+  );
+  current = { ...current, bundle: nestedFolderMoved.bundle, revision: current.revision + 1 };
+
+  const nestedFolderDeleted = executeXriftMcpEditorTool(current, {
+    id: "fixture-delete-asset-folder",
+    tool: "delete_asset_folder",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      folderId: nestedFolderId,
+    },
+  });
+  assert(nestedFolderDeleted.changed, "delete_asset_folder should remove an empty folder");
+  current = { ...current, bundle: nestedFolderDeleted.bundle, revision: current.revision + 1 };
+
+  let referencedAssetDeleteCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(current, {
+      id: "fixture-delete-referenced-asset",
+      tool: "delete_asset",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        assetId: particle.id,
+      },
+    });
+  } catch (error) {
+    referencedAssetDeleteCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    referencedAssetDeleteCode === "ASSET_DELETE_REJECTED",
+    "delete_asset should protect referenced Assets",
   );
 
   const componentDefinitions = executeXriftMcpEditorTool(current, {
@@ -1346,6 +1597,48 @@ export function runXriftMcpEditorToolFixtures(): void {
   assert(transformUpdated.changed, "update_transform should change the bundle");
   current = { ...current, bundle: transformUpdated.bundle, revision: current.revision + 1 };
 
+  const primitiveMesh = current.bundle.scene.entities[primitiveId as string]?.components.find(
+    (component) => component.type === "mesh",
+  );
+  assert(primitiveMesh?.type === "mesh", "Primitive should expose a Mesh Renderer");
+  const meshUpdated = executeXriftMcpEditorTool(current, {
+    id: "fixture-update-mesh",
+    tool: "update_component",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityId: primitiveId,
+      componentId: primitiveMesh.id,
+      patch: {
+        materialBindings: [
+          {
+            slot: "default",
+            materialAssetId: BUILTIN_ASSET_IDS.material.blue,
+          },
+        ],
+        castShadow: false,
+        receiveShadow: false,
+      },
+    },
+  });
+  const updatedMesh = meshUpdated.result.component as {
+    type?: string;
+    materialBindings?: Array<{ materialAssetId?: string }>;
+    castShadow?: boolean;
+    receiveShadow?: boolean;
+  };
+  assert(
+    meshUpdated.changed &&
+      updatedMesh.type === "mesh" &&
+      updatedMesh.materialBindings?.[0]?.materialAssetId ===
+        BUILTIN_ASSET_IDS.material.blue &&
+      updatedMesh.castShadow === false &&
+      updatedMesh.receiveShadow === false,
+    "update_component should persist Mesh Renderer bindings and shadow settings",
+  );
+  current = { ...current, bundle: meshUpdated.bundle, revision: current.revision + 1 };
+
   const materialSet = executeXriftMcpEditorTool(current, {
     id: "fixture-set-material",
     tool: "set_material",
@@ -1380,6 +1673,68 @@ export function runXriftMcpEditorToolFixtures(): void {
   current = {
     ...current,
     bundle: materialUpdated.bundle,
+    revision: current.revision + 1,
+  };
+
+  const customShaderCreated = executeXriftMcpEditorTool(current, {
+    id: "fixture-create-custom-shader",
+    tool: "create_custom_shader",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      name: "Fixture Custom Shader",
+    },
+  });
+  const customShaderAssetId = String(
+    customShaderCreated.result.materialAssetId,
+  );
+  assert(
+    customShaderCreated.changed &&
+      customShaderCreated.result.shader &&
+      typeof customShaderAssetId === "string",
+    "create_custom_shader should create a Material-backed shader",
+  );
+  current = {
+    ...current,
+    bundle: customShaderCreated.bundle,
+    revision: current.revision + 1,
+  };
+
+  const customShaderRead = executeXriftMcpEditorTool(current, {
+    id: "fixture-get-custom-shader",
+    tool: "get_custom_shader",
+    arguments: { materialAssetId: customShaderAssetId },
+  });
+  assert(
+    (customShaderRead.result.shader as { kind?: string }).kind === "classic-r3f",
+    "get_custom_shader should return the Material shader contract",
+  );
+
+  const customShaderUpdated = executeXriftMcpEditorTool(current, {
+    id: "fixture-update-custom-shader",
+    tool: "update_custom_shader",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      materialAssetId: customShaderAssetId,
+      patch: {
+        animatedTimeUniform: "uTime",
+        fragmentShader:
+          "uniform float uTime; void main() { gl_FragColor = vec4(abs(sin(uTime)), 0.0, 0.0, 1.0); }",
+      },
+    },
+  });
+  assert(
+    customShaderUpdated.changed &&
+      (customShaderUpdated.result.shader as { fragmentShader?: string })
+        .fragmentShader?.includes("uTime"),
+    "update_custom_shader should persist GLSL source",
+  );
+  current = {
+    ...current,
+    bundle: customShaderUpdated.bundle,
     revision: current.revision + 1,
   };
 

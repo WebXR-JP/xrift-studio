@@ -135,6 +135,19 @@ export type LocalAudioImportSource = {
   dataUrl: string;
 };
 
+export type LocalModelImportSource = {
+  fileName: string;
+  mimeType: string;
+  byteLength: number;
+  dataUrl: string;
+};
+
+export type LocalShaderImportSource = {
+  fileName: string;
+  byteLength: number;
+  source: string;
+};
+
 export type ExternalStoreAssetKind = "hdri" | "texture" | "model";
 export type ExternalStoreFileFormat = "hdr" | "exr";
 
@@ -233,6 +246,7 @@ export type XriftOllamaModelStatus = {
 
 export type XriftOllamaStatus = {
   installed: boolean;
+  serverReachable: boolean;
   version: string | null;
   launchSupported: boolean;
   models: XriftOllamaModelStatus[];
@@ -419,6 +433,14 @@ export const tauri = {
     }),
   readLocalAudioImportSource: (sourcePath: string) =>
     invoke<LocalAudioImportSource>("read_local_audio_import_source", {
+      sourcePath,
+    }),
+  readLocalModelImportSource: (sourcePath: string) =>
+    invoke<LocalModelImportSource>("read_local_model_import_source", {
+      sourcePath,
+    }),
+  readLocalShaderImportSource: (sourcePath: string) =>
+    invoke<LocalShaderImportSource>("read_local_shader_import_source", {
       sourcePath,
     }),
   openVisualAssetLocation: (

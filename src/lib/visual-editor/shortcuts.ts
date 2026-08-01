@@ -20,6 +20,7 @@ export type EditorCommandId =
   | "asset.create-interactivity"
   | "asset.create-script"
   | "asset.edit-script"
+  | "asset.edit-shader"
   | "asset.edit-interactivity"
   | "asset.import"
   | "view.frame-selection"
@@ -191,6 +192,12 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   {
     id: "asset.edit-script",
     label: "Scriptを編集",
+    category: "edit",
+    bindings: [],
+  },
+  {
+    id: "asset.edit-shader",
+    label: "GLSL Shaderを編集",
     category: "edit",
     bindings: [],
   },

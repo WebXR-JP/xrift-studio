@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
+  Camera,
   Check,
   ExternalLink,
   FileCheck2,
   Gauge,
   Image,
+  ImagePlus,
   LifeBuoy,
   Loader2,
   LogIn,
@@ -14,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import type { ProjectKind } from "../../lib/tauri";
+import { imageDataUrlToPng } from "../../lib/project-thumbnail";
 import type { AssetOptimizationProgress } from "../../lib/visual-editor/asset-optimization";
 import { VisualPublishCancellationController } from "../../lib/visual-editor/publish-cancellation";
 import {
@@ -77,6 +80,7 @@ export type VisualPublishReview = {
   description: string;
   thumbnailReady: boolean;
   thumbnailSource?: "scene" | "project" | "template";
+  thumbnailPreview?: string | null;
   signedIn: boolean;
   displayName?: string | null;
   saved: boolean;
@@ -97,6 +101,8 @@ type Props = {
   onEditMetadata?: () => void;
   onMetadataChange?: (title: string, description: string) => void;
   onEditThumbnail: () => void;
+  onGenerateThumbnail?: () => Promise<string>;
+  onSaveThumbnail?: (dataUrl: string) => Promise<void>;
   onLogin: () => void;
   onLocateDiagnostic?: (diagnostic: VisualPublishDiagnostic) => void;
   onApplyOptimizations?: (
@@ -138,6 +144,8 @@ export function VisualUploadDialog({
   onEditMetadata,
   onMetadataChange,
   onEditThumbnail,
+  onGenerateThumbnail,
+  onSaveThumbnail,
   onLogin,
   onLocateDiagnostic,
   onApplyOptimizations,
@@ -150,6 +158,11 @@ export function VisualUploadDialog({
   const [thumbnailStagingSha256, setThumbnailStagingSha256] = useState<
     string | null
   >(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(
+    review.thumbnailPreview ?? null,
+  );
+  const [thumbnailBusy, setThumbnailBusy] = useState(false);
+  const [thumbnailError, setThumbnailError] = useState<string | null>(null);
   const [vramDetailsOpen, setVramDetailsOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const cancellationRef = useRef<VisualPublishCancellationController | null>(
@@ -161,6 +174,7 @@ export function VisualUploadDialog({
   const cancellation = cancellationRef.current;
   const wasOpenRef = useRef(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const thumbnailFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const blockingDiagnostics = review.diagnostics.filter(
     (diagnostic) => diagnostic.severity === "blocking",
@@ -239,21 +253,34 @@ export function VisualUploadDialog({
       setResult(null);
       setError(null);
       setThumbnailStagingSha256(null);
+      setThumbnailPreview(review.thumbnailPreview ?? null);
+      setThumbnailBusy(false);
+      setThumbnailError(null);
       setVramDetailsOpen(false);
       setSupportOpen(false);
     }
     wasOpenRef.current = open;
-  }, [open]);
+  }, [open, review.thumbnailPreview]);
+
+  useEffect(() => {
+    setThumbnailPreview(review.thumbnailPreview ?? null);
+  }, [review.thumbnailPreview]);
 
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || busy || vramDetailsOpen || supportOpen) return;
+      if (
+        event.key !== "Escape" ||
+        busy ||
+        thumbnailBusy ||
+        vramDetailsOpen ||
+        supportOpen
+      ) return;
       onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [busy, onClose, open, supportOpen, vramDetailsOpen]);
+  }, [busy, onClose, open, supportOpen, thumbnailBusy, vramDetailsOpen]);
 
   useEffect(
     () => () => {
@@ -318,32 +345,88 @@ export function VisualUploadDialog({
     cancellation.requestCancel();
   };
 
+  const persistThumbnail = async (source: string) => {
+    if (!onSaveThumbnail) {
+      throw new Error("サムネイルを保存できるプロジェクトがありません");
+    }
+    const png = await imageDataUrlToPng(source);
+    await onSaveThumbnail(png);
+    setThumbnailPreview(png);
+    setThumbnailError(null);
+  };
+
+  const generateThumbnail = async () => {
+    if (!onGenerateThumbnail || thumbnailBusy) return;
+    setThumbnailBusy(true);
+    setThumbnailError(null);
+    try {
+      await persistThumbnail(await onGenerateThumbnail());
+    } catch (captureError) {
+      setThumbnailError(
+        captureError instanceof Error
+          ? captureError.message
+          : String(captureError),
+      );
+    } finally {
+      setThumbnailBusy(false);
+    }
+  };
+
+  const readThumbnailFile = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") resolve(reader.result);
+        else reject(new Error("画像ファイルを読み込めませんでした"));
+      };
+      reader.onerror = () => reject(new Error("画像ファイルを読み込めませんでした"));
+      reader.readAsDataURL(file);
+    });
+
+  const selectThumbnailFile = async (file: File | undefined) => {
+    if (!file || thumbnailBusy) return;
+    if (!file.type.startsWith("image/")) {
+      setThumbnailError("画像ファイルを選んでください");
+      return;
+    }
+    setThumbnailBusy(true);
+    setThumbnailError(null);
+    try {
+      await persistThumbnail(await readThumbnailFile(file));
+    } catch (fileError) {
+      setThumbnailError(
+        fileError instanceof Error ? fileError.message : String(fileError),
+      );
+    } finally {
+      setThumbnailBusy(false);
+    }
+  };
+
   const projectLabel = projectKind === "world" ? "ワールド" : "アイテム";
 
   return (
     <>
     <div
+      data-app-modal-backdrop
       className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm"
-      onPointerDown={() => !busy && onClose()}
+      onPointerDown={() => !busy && !thumbnailBusy && onClose()}
     >
       <section
+        data-app-modal-surface
         role="dialog"
         aria-modal="true"
         aria-labelledby="visual-upload-title"
-        className="w-full max-w-[620px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        className="flex w-full max-w-[620px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
         onPointerDown={(event) => event.stopPropagation()}
       >
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-6 py-5">
+        <header data-app-modal-header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:px-6 sm:py-5">
           <div>
-            <div className="flex items-center gap-2 text-violet-700">
+            <div className="flex items-center gap-2">
               <UploadCloud size={18} aria-hidden="true" />
-              <span className="text-xs font-semibold uppercase tracking-wide">
-                XRift Publish
-              </span>
+              <h2 id="visual-upload-title" className="text-xl font-semibold text-slate-950">
+                {projectLabel}を公開
+              </h2>
             </div>
-            <h2 id="visual-upload-title" className="mt-1 text-xl font-semibold text-slate-950">
-              {projectLabel}を公開
-            </h2>
             <p className="mt-1 text-sm leading-6 text-slate-600">
               最新の編集内容を保存・変換し、公開前の確認からXRiftへの送信まで進めます。
             </p>
@@ -351,16 +434,20 @@ export function VisualUploadDialog({
           <button
             type="button"
             onClick={onClose}
-            disabled={busy}
+            disabled={busy || thumbnailBusy}
             aria-label="公開画面を閉じる"
-            title={busy ? "処理が完了するまで閉じられません" : "公開画面を閉じる"}
+            title={
+              busy || thumbnailBusy
+                ? "処理が完了するまで閉じられません"
+                : "公開画面を閉じる"
+            }
             className="rounded-md p-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <X size={17} aria-hidden="true" />
           </button>
         </header>
 
-        <div className="max-h-[62vh] overflow-y-auto px-6 py-5">
+        <div data-app-modal-body className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
           {stage === "review" ? (
             <div className="space-y-3">
               {onMetadataChange ? (
@@ -395,6 +482,81 @@ export function VisualUploadDialog({
                   </label>
                 </fieldset>
               ) : null}
+              <fieldset className="rounded-xl border border-slate-200 bg-white p-3.5">
+                <legend className="px-1 text-xs font-semibold text-slate-700">
+                  サムネイル
+                </legend>
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.9fr)] sm:items-center">
+                  <div className="relative aspect-video overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                    {thumbnailPreview ? (
+                      <img
+                        src={thumbnailPreview}
+                        alt="現在設定されているサムネイル"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full flex-col items-center justify-center gap-1 text-slate-500">
+                        <ImagePlus size={24} strokeWidth={1.5} aria-hidden="true" />
+                        <span className="text-xs font-medium">サムネイル未設定</span>
+                      </div>
+                    )}
+                    {thumbnailBusy ? (
+                      <div className="absolute inset-0 flex items-center justify-center bg-slate-950/35 text-xs font-semibold text-white">
+                        サムネイルを保存中…
+                      </div>
+                    ) : null}
+                  </div>
+                  <div>
+                    <p className="text-xs leading-5 text-slate-600">
+                      現在の{projectLabel}のScene Viewをもとに、公開用画像を作成・更新できます。
+                      保存した画像は <code>public/thumbnail.png</code> に反映されます。
+                    </p>
+                    <input
+                      ref={thumbnailFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => {
+                        void selectThumbnailFile(event.currentTarget.files?.[0]);
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void generateThumbnail()}
+                        disabled={thumbnailBusy || !onGenerateThumbnail || !onSaveThumbnail}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <Camera size={14} aria-hidden="true" />
+                        {thumbnailBusy ? "作成中…" : `現在の${projectLabel}から作成`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => thumbnailFileInputRef.current?.click()}
+                        disabled={thumbnailBusy || !onSaveThumbnail}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <Image size={14} aria-hidden="true" />
+                        画像を選択
+                      </button>
+                    </div>
+                    {thumbnailError ? (
+                      <p className="mt-2 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-2 text-xs leading-5 text-rose-700">
+                        {thumbnailError}
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={onEditThumbnail}
+                      disabled={thumbnailBusy}
+                      className="mt-2 text-xs font-semibold text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Editorで詳細設定
+                    </button>
+                  </div>
+                </div>
+              </fieldset>
               {requirements.map((requirement) => (
                 <div
                   key={requirement.id}
@@ -615,8 +777,8 @@ export function VisualUploadDialog({
           ) : null}
         </div>
 
-        <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
+        <footer data-app-modal-footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 sm:px-6 sm:py-4">
+          <div className="flex min-w-0 items-center gap-2 text-xs text-slate-500">
             {review.thumbnailReady ? <Image size={13} aria-hidden="true" /> : null}
             {review.signedIn ? <LogIn size={13} aria-hidden="true" /> : null}
             {stage === "review"
@@ -629,7 +791,7 @@ export function VisualUploadDialog({
                   ? "制作データは保持されています"
                   : stage === "failed"
                     ? "原因を確認してから再試行できます"
-                    : progress?.label ?? "処理中です"}
+                    : progress?.label ?? "処理中…"}
           </div>
           <div className="flex items-center gap-2">
             {busy ? (
@@ -664,6 +826,7 @@ export function VisualUploadDialog({
                 <button
                   type="button"
                   onClick={onClose}
+                  disabled={thumbnailBusy}
                   className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
                 >
                   Editorへ戻る
@@ -685,6 +848,7 @@ export function VisualUploadDialog({
                 <button
                   type="button"
                   onClick={onClose}
+                  disabled={thumbnailBusy}
                   className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
                 >
                   戻る

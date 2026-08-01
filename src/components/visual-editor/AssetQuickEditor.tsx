@@ -15,6 +15,7 @@ import {
   TEXTURE_MAG_FILTERS,
   TEXTURE_MIN_FILTERS,
   TEXTURE_WRAP_MODES,
+  createDefaultCustomShader,
   getTextureSourceFormat,
   getPrefabAssetDocumentReference,
   isEnvironmentTextureAsset,
@@ -23,6 +24,8 @@ import {
   type AssetManifest,
   type Color3,
   type Color4,
+  type ClassicR3fMaterialShader,
+  type ClassicR3fShaderUniform,
   type MaterialAsset,
   type MaterialAssetPatch,
   type MaterialExtensionsPatch,
@@ -34,6 +37,8 @@ import {
   type PrefabDocument,
   type PrefabAsset,
   type SceneAsset,
+  type ShaderAsset,
+  type ShaderAssetStage,
   type TextureAsset,
   type TextureAssetPatch,
 } from "../../lib/visual-editor";
@@ -323,7 +328,10 @@ export function MaterialThumbnail({
       !Object.values(previewTextureState.statuses).includes("loading"),
   );
 
-  if (asset.shader?.kind === "openbrush") {
+  if (
+    asset.shader?.kind === "openbrush" ||
+    asset.shader?.kind === "classic-r3f"
+  ) {
     return (
       <CustomMaterialPreview
         asset={asset}
@@ -376,6 +384,8 @@ function AssetThumbnailFallback({ asset }: { asset: SceneAsset }) {
         ? EDITOR_ICONS.audio
       : asset.kind === "script"
         ? EDITOR_ICONS.script
+      : asset.kind === "shader"
+        ? EDITOR_ICONS.script
       : asset.kind === "template"
         ? EDITOR_ICONS.prefab
         : asset.kind === "texture"
@@ -396,6 +406,8 @@ function AssetThumbnailFallback({ asset }: { asset: SceneAsset }) {
           ? asset.importMetadata.sourceFormat.toUpperCase()
           : asset.kind === "script"
             ? "TypeScript"
+          : asset.kind === "shader"
+            ? "GLSL"
           : isEnvironmentTextureAsset(asset)
             ? "HDRIプレビューを生成中"
             : asset.kind === "material"
@@ -1360,6 +1372,13 @@ type MaterialQuickEditorProps = {
   readOnly: boolean;
   onChange: (patch: MaterialAssetPatch) => void;
   onOpenTexture: (assetId: string) => void;
+  onOpenShader: (assetId: string) => void;
+  onOpenMaterialShader: (assetId: string, stage: ShaderAssetStage) => void;
+  onAssignShaderAsset: (
+    materialAssetId: string,
+    stage: ShaderAssetStage,
+    shaderAssetId: string | null,
+  ) => void;
 };
 
 export function MaterialQuickEditor(props: MaterialQuickEditorProps) {
@@ -1742,6 +1761,333 @@ function ShaderSourceEditor({
   );
 }
 
+function CustomShaderQuickEditor({
+  asset,
+  assets,
+  projectPath,
+  readOnly,
+  onChange,
+  onOpenTexture,
+  onOpenShader,
+  onOpenMaterialShader,
+  onAssignShaderAsset,
+}: MaterialQuickEditorProps) {
+  const shader =
+    asset.shader?.kind === "classic-r3f" ? asset.shader : undefined;
+  const textures = Object.values(assets.assets).filter(
+    (candidate): candidate is TextureAsset =>
+      candidate.kind === "texture" && !isEnvironmentTextureAsset(candidate),
+  );
+  const shaderAssets = Object.values(assets.assets).filter(
+    (candidate): candidate is ShaderAsset => candidate.kind === "shader",
+  );
+
+  const enableShader = () => onChange({ shader: createDefaultCustomShader() });
+  const updateShader = (
+    patch: Partial<Omit<ClassicR3fMaterialShader, "kind">>,
+  ) => {
+    const base = shader ?? createDefaultCustomShader();
+    onChange({ shader: { ...base, ...patch, kind: "classic-r3f" } });
+  };
+  const updateUniform = (name: string, value: ClassicR3fShaderUniform) => {
+    if (!shader) return;
+    updateShader({ uniforms: { ...shader.uniforms, [name]: value } });
+  };
+
+  return (
+    <EditorSection title="Custom Shader">
+      {!shader ? (
+        <div className="space-y-2">
+          <p className="text-xs leading-4 text-slate-600">
+            GLSLをMaterialに保存し、Mesh slotへ割り当てた状態でScene View、Play、公開用コードへ同じShaderを渡します。
+          </p>
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={enableShader}
+            className="rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Custom Shaderを作成
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          <div className="h-32 overflow-hidden rounded border border-slate-300 bg-slate-950">
+            <CustomMaterialPreview
+              asset={asset}
+              assets={assets}
+              projectPath={projectPath}
+              className="h-full w-full"
+              compact
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] text-slate-600">
+            <span>GLSLはMaterialに保存され、参照中のMeshへ反映されます。</span>
+            <button
+              type="button"
+              disabled={readOnly}
+              onClick={() => onChange({ shader: null })}
+              className="shrink-0 rounded border border-slate-300 bg-white px-1.5 py-1 font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              PBRへ戻す
+            </button>
+          </div>
+          <label className="block text-[11px] text-slate-600">
+            Shader ID
+            <input
+              type="text"
+              value={shader.sourceModulePath}
+              disabled={readOnly}
+              onChange={(event) =>
+                updateShader({ sourceModulePath: event.currentTarget.value })
+              }
+              className={`${INPUT_CLASS} mt-1 font-mono text-[10px]`}
+            />
+          </label>
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold text-slate-700">Shaderコード</span>
+              <span className="text-[10px] text-slate-500">GLSL Editorで編集</span>
+            </div>
+            <div className="space-y-1.5">
+              <ShaderSourceReferenceRow
+                label="Vertex"
+                stage="vertex"
+                source={shader.vertexShader}
+                sourceAssetId={shader.vertexShaderAssetId}
+                shaderAssets={shaderAssets}
+                readOnly={readOnly}
+                onOpenShader={onOpenShader}
+                onOpenMaterialShader={() =>
+                  onOpenMaterialShader(asset.id, "vertex")
+                }
+                onAssign={(shaderAssetId) =>
+                  onAssignShaderAsset(asset.id, "vertex", shaderAssetId)
+                }
+              />
+              <ShaderSourceReferenceRow
+                label="Fragment"
+                stage="fragment"
+                source={shader.fragmentShader}
+                sourceAssetId={shader.fragmentShaderAssetId}
+                shaderAssets={shaderAssets}
+                readOnly={readOnly}
+                onOpenShader={onOpenShader}
+                onOpenMaterialShader={() =>
+                  onOpenMaterialShader(asset.id, "fragment")
+                }
+                onAssign={(shaderAssetId) =>
+                  onAssignShaderAsset(asset.id, "fragment", shaderAssetId)
+                }
+              />
+            </div>
+          </div>
+          <label className="block text-[11px] text-slate-600">
+            時間uniform（任意）
+            <input
+              type="text"
+              value={shader.animatedTimeUniform ?? ""}
+              disabled={readOnly}
+              placeholder="例: uTime"
+              onChange={(event) =>
+                updateShader({
+                  animatedTimeUniform: event.currentTarget.value.trim() || undefined,
+                })
+              }
+              className={`${INPUT_CLASS} mt-1 font-mono text-[10px]`}
+            />
+          </label>
+          <div className="rounded border border-slate-200 bg-slate-50 p-2">
+            <div className="mb-1.5 text-[11px] font-semibold text-slate-700">
+              Uniform values
+            </div>
+            <div className="space-y-2">
+              {Object.entries(shader.uniforms).map(([name, uniform]) => (
+                <div key={name} className="rounded border border-slate-200 bg-white p-1.5">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="font-mono text-[10px] text-slate-700">{name}</span>
+                    <span className="text-[10px] text-slate-400">{uniform.kind}</span>
+                  </div>
+                  {uniform.kind === "number" ? (
+                    <input
+                      type="number"
+                      value={uniform.value}
+                      disabled={readOnly}
+                      step="any"
+                      onChange={(event) => {
+                        const value = Number(event.currentTarget.value);
+                        if (Number.isFinite(value)) {
+                          updateUniform(name, { kind: "number", value });
+                        }
+                      }}
+                      className={`${INPUT_CLASS} font-mono text-[10px]`}
+                    />
+                  ) : uniform.kind === "color" ? (
+                    <input
+                      type="color"
+                      value={uniform.value}
+                      disabled={readOnly}
+                      onChange={(event) =>
+                        updateUniform(name, {
+                          kind: "color",
+                          value: event.currentTarget.value,
+                        })
+                      }
+                      className="h-7 w-10 rounded border border-slate-300 bg-white p-0.5 disabled:opacity-50"
+                    />
+                  ) : uniform.kind === "vector" ? (
+                    <input
+                      type="text"
+                      value={uniform.value.join(", ")}
+                      disabled={readOnly}
+                      onChange={(event) => {
+                        const value = event.currentTarget.value
+                          .split(",")
+                          .map((entry) => Number(entry.trim()));
+                        if (
+                          value.length >= 2 &&
+                          value.length <= 4 &&
+                          value.every(Number.isFinite)
+                        ) {
+                          updateUniform(name, { kind: "vector", value });
+                        }
+                      }}
+                      className={`${INPUT_CLASS} font-mono text-[10px]`}
+                    />
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        value={uniform.textureAssetId}
+                        disabled={readOnly || textures.length === 0}
+                        onChange={(event) =>
+                          updateUniform(name, {
+                            ...uniform,
+                            textureAssetId: event.currentTarget.value,
+                          })
+                        }
+                        className={`${INPUT_CLASS} min-w-0 font-mono text-[10px]`}
+                      >
+                        {textures.length === 0 ? (
+                          <option value={uniform.textureAssetId}>Textureなし</option>
+                        ) : (
+                          textures.map((texture) => (
+                            <option key={texture.id} value={texture.id}>
+                              {texture.name}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => onOpenTexture(uniform.textureAssetId)}
+                        className="shrink-0 rounded border border-slate-300 px-1.5 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+                      >
+                        開く
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={() => onChange({ shader: createDefaultCustomShader() })}
+            className="rounded border border-slate-300 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Starter Shaderへ戻す
+          </button>
+        </div>
+      )}
+    </EditorSection>
+  );
+}
+
+function ShaderSourceReferenceRow({
+  label,
+  stage,
+  source,
+  sourceAssetId,
+  shaderAssets,
+  readOnly,
+  onOpenShader,
+  onOpenMaterialShader,
+  onAssign,
+}: {
+  label: string;
+  stage: ShaderAssetStage;
+  source: string;
+  sourceAssetId?: string;
+  shaderAssets: ShaderAsset[];
+  readOnly: boolean;
+  onOpenShader: (assetId: string) => void;
+  onOpenMaterialShader: () => void;
+  onAssign: (assetId: string | null) => void;
+}) {
+  const selected = sourceAssetId
+    ? shaderAssets.find((asset) => asset.id === sourceAssetId)
+    : undefined;
+  const compatibleShaderAssets = shaderAssets.filter(
+    (asset) => asset.stage === stage,
+  );
+  const selectableShaderAssets = selected && selected.stage !== stage
+    ? [selected, ...compatibleShaderAssets]
+    : compatibleShaderAssets;
+  return (
+    <div className="rounded border border-slate-200 bg-white p-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold text-slate-700">{label} GLSL</p>
+          <p className="truncate font-mono text-[10px] text-slate-500">
+            {selected?.name ?? "Material内のコード"} · {source.split(/\r?\n/).length}行
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={readOnly}
+          onClick={() =>
+            selected ? onOpenShader(selected.id) : onOpenMaterialShader()
+          }
+          className="shrink-0 rounded border border-slate-300 bg-white px-2 py-1 text-[10px] font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          編集
+        </button>
+      </div>
+      <div className="mt-1.5 flex items-center gap-1.5">
+        <select
+          value={sourceAssetId ?? ""}
+          disabled={readOnly}
+          onChange={(event) => onAssign(event.currentTarget.value || null)}
+          className="h-7 min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 font-mono text-[10px] text-slate-700 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-200 disabled:bg-slate-100 disabled:text-slate-400"
+          aria-label={`${label} GLSL Asset`}
+        >
+          <option value="">Material内のコード</option>
+          {selectableShaderAssets.map((asset) => (
+            <option key={asset.id} value={asset.id}>
+              {asset.name} ({asset.stage})
+            </option>
+          ))}
+        </select>
+        {selected ? (
+          <button
+            type="button"
+            onClick={() => onOpenShader(selected.id)}
+            className="shrink-0 rounded border border-slate-300 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            Assetを開く
+          </button>
+        ) : null}
+      </div>
+      {selected && selected.stage !== stage ? (
+        <p className="mt-1 text-[10px] text-amber-700">
+          このAssetは {selected.stage} 用として登録されています。
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function StandardMaterialQuickEditor({
   asset,
   assets,
@@ -1750,9 +2096,13 @@ function StandardMaterialQuickEditor({
   readOnly,
   onChange,
   onOpenTexture,
+  onOpenShader,
+  onOpenMaterialShader,
+  onAssignShaderAsset,
 }: MaterialQuickEditorProps) {
   const pbr = asset.properties.pbrMetallicRoughness;
   const openBrush = asset.shader?.kind === "openbrush" ? asset.shader : undefined;
+  const customShader = asset.shader?.kind === "classic-r3f" ? asset.shader : undefined;
   const textures = Object.values(assets.assets).filter(
     (candidate): candidate is TextureAsset =>
       candidate.kind === "texture" && !isEnvironmentTextureAsset(candidate),
@@ -1802,7 +2152,11 @@ function StandardMaterialQuickEditor({
         <div className="min-w-0 self-center">
           <h3 className="truncate text-[13px] font-semibold text-slate-900">{asset.name}</h3>
           <p className="text-xs text-slate-500">
-            {openBrush ? `OpenBrush ブラシ · ${openBrush.brushName}` : "glTF 2.0 標準マテリアル"}
+            {openBrush
+              ? `OpenBrush ブラシ · ${openBrush.brushName}`
+              : customShader
+                ? "Custom Shader Material"
+                : "glTF 2.0 標準マテリアル"}
           </p>
           {asset.importedFromModel ? (
             <p className={`mt-1 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${asset.importedFromModel.isUserOverridden ? "border-amber-200 bg-amber-50 text-amber-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
@@ -1843,6 +2197,20 @@ function StandardMaterialQuickEditor({
             </dl>
           </details>
         </EditorSection>
+      ) : null}
+
+      {!openBrush ? (
+        <CustomShaderQuickEditor
+          asset={asset}
+          assets={assets}
+          projectPath={projectPath}
+          readOnly={readOnly}
+          onChange={onChange}
+          onOpenTexture={onOpenTexture}
+          onOpenShader={onOpenShader}
+          onOpenMaterialShader={onOpenMaterialShader}
+          onAssignShaderAsset={onAssignShaderAsset}
+        />
       ) : null}
 
       <MaterialExtensionSection
@@ -2968,6 +3336,9 @@ export function AssetQuickEditor({
   readOnly,
   onSelectAsset,
   onMaterialChange,
+  onOpenShader,
+  onOpenMaterialShader,
+  onAssignShaderAsset,
   onModelChange,
   onReimportModel,
   modelReimportState,
@@ -2985,6 +3356,13 @@ export function AssetQuickEditor({
   readOnly: boolean;
   onSelectAsset: (assetId: string) => void;
   onMaterialChange: (assetId: string, patch: MaterialAssetPatch) => void;
+  onOpenShader: (assetId: string) => void;
+  onOpenMaterialShader: (assetId: string, stage: ShaderAssetStage) => void;
+  onAssignShaderAsset: (
+    materialAssetId: string,
+    stage: ShaderAssetStage,
+    shaderAssetId: string | null,
+  ) => void;
   onModelChange: (assetId: string, patch: ModelAssetPatch) => void;
   onReimportModel: (assetId: string) => void;
   modelReimportState: ModelReimportState;
@@ -3005,6 +3383,9 @@ export function AssetQuickEditor({
         readOnly={readOnly}
         onChange={(patch) => onMaterialChange(asset.id, patch)}
         onOpenTexture={onSelectAsset}
+        onOpenShader={onOpenShader}
+        onOpenMaterialShader={onOpenMaterialShader}
+        onAssignShaderAsset={onAssignShaderAsset}
       />
     );
   }
@@ -3062,6 +3443,26 @@ export function AssetQuickEditor({
 
   if (asset.kind === "audio") {
     return <AudioAssetInspector asset={asset} />;
+  }
+
+  if (asset.kind === "shader") {
+    return (
+      <EditorSection title="GLSL Shader">
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs leading-4 text-slate-600">
+            {asset.stage} shaderとしてインポートされています。Materialから参照してScene Viewへ反映できます。
+          </p>
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={() => onOpenShader(asset.id)}
+            className="mt-2 rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            GLSLを編集
+          </button>
+        </div>
+      </EditorSection>
+    );
   }
 
   const prefabReference = getPrefabAssetDocumentReference(asset);

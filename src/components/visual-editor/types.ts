@@ -52,6 +52,7 @@ export type PendingImport = {
     | "texture"
     | "skybox"
     | "audio"
+    | "shader"
     | "unity-package";
   status: PendingImportStatus;
   progress: number;
@@ -65,6 +66,7 @@ export type PendingImport = {
     entityCount?: number;
     assetCount?: number;
     warningCount?: number;
+    shaderCount?: number;
   };
 };
 

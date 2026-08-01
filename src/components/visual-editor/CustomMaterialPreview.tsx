@@ -8,16 +8,22 @@ import {
 } from "react";
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
-import type { Group } from "three";
+import type { Group, Mesh, ShaderMaterial } from "three";
 import type {
   AssetManifest,
+  ClassicR3fMaterialShader,
   MaterialAsset,
   ModelAsset,
 } from "../../lib/visual-editor";
-import { OPEN_BRUSH_CATALOG } from "../../lib/visual-editor";
+import {
+  OPEN_BRUSH_CATALOG,
+  bindCustomShaderGeometryAttributes,
+  validateClassicR3fMaterialShader,
+} from "../../lib/visual-editor";
 import { OpenBrushCatalogPreview } from "./OpenBrushCatalogPreview";
 import {
   ProjectModelVisual,
+  createClassicR3fMaterial,
   type ProjectModelLoadState,
   type ProjectModelMaterialRuntimeInfo,
 } from "./ProjectModelVisual";
@@ -37,6 +43,7 @@ export type CustomMaterialPreviewResolution =
       status: "standalone";
       entry: (typeof OPEN_BRUSH_CATALOG)[number];
     }
+  | { status: "standalone-shader" }
   | { status: "unavailable"; reason: string };
 
 type Props = {
@@ -64,6 +71,7 @@ export function resolveCustomMaterialPreviewSource(
 ): CustomMaterialPreviewResolution {
   const shader = asset.shader;
   if (shader?.kind === "classic-r3f") {
+    if (!shader.sourceModelAssetId) return { status: "standalone-shader" };
     const candidate = shader.sourceModelAssetId
       ? assets.assets[shader.sourceModelAssetId]
       : undefined;
@@ -236,6 +244,19 @@ export function CustomMaterialPreview({
     );
   }
 
+  if (resolution.status === "standalone-shader") {
+    return (
+      <StandaloneCustomShaderPreview
+        asset={asset}
+        className={className}
+        compact={compact}
+        captureKey={captureKey}
+        onCapture={onCapture}
+        onCaptureError={onCaptureError}
+      />
+    );
+  }
+
   if (!projectPath || resolution.status === "unavailable") {
     const reason = projectPath
       ? resolution.status === "unavailable"
@@ -359,6 +380,134 @@ export function CustomMaterialPreview({
         </span>
       ) : null}
     </div>
+  );
+}
+
+function StandaloneCustomShaderPreview({
+  asset,
+  className,
+  compact,
+  captureKey,
+  onCapture,
+  onCaptureError,
+}: {
+  asset: MaterialAsset;
+  className: string;
+  compact: boolean;
+  captureKey?: string;
+  onCapture?: (dataUrl: string) => void;
+  onCaptureError?: (message: string) => void;
+}) {
+  const shader = asset.shader;
+  const shaderDiagnostics =
+    shader?.kind === "classic-r3f"
+      ? validateClassicR3fMaterialShader(shader)
+      : [];
+  const material = useMemo(
+    () => {
+      if (
+        shader?.kind !== "classic-r3f" ||
+        validateClassicR3fMaterialShader(shader).length > 0
+      ) {
+        return null;
+      }
+      return createClassicR3fMaterial(shader, {}, "");
+    },
+    [shader],
+  );
+
+  useEffect(() => () => material?.dispose(), [material]);
+
+  if (
+    !material ||
+    shader?.kind !== "classic-r3f" ||
+    shaderDiagnostics.length > 0
+  ) {
+    return (
+      <PreviewMessage className={className}>
+        <span className="font-semibold text-slate-700">Custom Shaderを表示できません</span>
+        <span className="mt-1 text-[11px] leading-4 text-slate-500">
+          {shaderDiagnostics[0] ?? "shader materialを作成できません"}
+        </span>
+      </PreviewMessage>
+    );
+  }
+
+  return (
+    <div
+      className={`relative overflow-hidden bg-slate-950 ${className}`}
+      data-custom-material-preview="classic-r3f"
+      data-custom-material-renderer="standalone-shader"
+    >
+      <Canvas
+        frameloop={compact ? "demand" : "always"}
+        dpr={[1, 1.5]}
+        camera={{ position: [0, 0.1, 2.25], fov: 36 }}
+        gl={{
+          antialias: true,
+          alpha: false,
+          preserveDrawingBuffer: Boolean(onCapture),
+        }}
+      >
+        <color attach="background" args={["#0f172a"]} />
+        <ambientLight intensity={1.2} />
+        <directionalLight position={[2, 3, 4]} intensity={2.2} />
+        <StandaloneCustomShaderScene material={material} shader={shader} />
+        {captureKey && onCapture ? (
+          <WebGlThumbnailCapture
+            captureKey={captureKey}
+            ready
+            onCapture={onCapture}
+            onError={onCaptureError}
+          />
+        ) : null}
+        {!compact ? (
+          <OrbitControls
+            makeDefault
+            enableDamping
+            dampingFactor={0.08}
+            enablePan={false}
+            minDistance={1.2}
+            maxDistance={4}
+          />
+        ) : null}
+      </Canvas>
+      {!compact ? (
+        <span className="pointer-events-none absolute left-2 top-2 rounded border border-slate-500/60 bg-slate-900/85 px-1.5 py-0.5 text-[10px] font-semibold text-slate-100">
+          Custom Shader
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function StandaloneCustomShaderScene({
+  material,
+  shader,
+}: {
+  material: ShaderMaterial;
+  shader: ClassicR3fMaterialShader;
+}) {
+  const meshRef = useRef<Mesh | null>(null);
+
+  useEffect(() => {
+    if (!meshRef.current) return;
+    bindCustomShaderGeometryAttributes(meshRef.current.geometry, material);
+    material.needsUpdate = true;
+  }, [material]);
+
+  useFrame((state) => {
+    const uniformName = shader.animatedTimeUniform;
+    if (uniformName && material.uniforms[uniformName]) {
+      material.uniforms[uniformName].value = state.clock.getElapsedTime();
+    }
+  });
+
+  return (
+    <mesh ref={meshRef}>
+      <sphereGeometry args={[0.8, 48, 32]} />
+      <primitive object={material} attach="material" />
+    </mesh>
   );
 }
 

@@ -32,6 +32,7 @@ import {
   inspectPublishThumbnail,
   type PublishThumbnailReadiness,
 } from "./lib/publish-readiness";
+import { announceProjectThumbnailChanged } from "./lib/project-thumbnail";
 import { useToast } from "./components/Toast";
 import {
   checkForAppUpdate,
@@ -163,6 +164,16 @@ function App() {
     useState<PrototypeVisualProject | null>(null);
   const [visualThumbnailReadiness, setVisualThumbnailReadiness] =
     useState<PublishThumbnailReadiness | null>(null);
+  const [visualThumbnailPreview, setVisualThumbnailPreview] = useState<
+    string | null
+  >(null);
+  const [visualThumbnailCaptureRequest, setVisualThumbnailCaptureRequest] =
+    useState(0);
+  const visualThumbnailCapturePendingRef = useRef<{
+    resolve: (dataUrl: string) => void;
+    reject: (error: Error) => void;
+  } | null>(null);
+  const visualThumbnailRefreshRunRef = useRef(0);
   const [visualCompilationFresh, setVisualCompilationFresh] = useState(false);
   const [visualPublishScriptSources, setVisualPublishScriptSources] = useState<{
     requestKey: string | null;
@@ -190,6 +201,49 @@ function App() {
   const appUpdateVerificationRef = useRef(false);
 
   const projectsRoot = runtime?.paths.projectsRoot ?? "";
+
+  const refreshVisualThumbnail = useCallback(
+    async (projectPath: string, projectKind: ProjectKind) => {
+      const run = ++visualThumbnailRefreshRunRef.current;
+      const [readiness, preview] = await Promise.all([
+        inspectPublishThumbnail(projectPath, projectKind),
+        tauri.readThumbnail(projectPath).catch(() => null),
+      ]);
+      if (run !== visualThumbnailRefreshRunRef.current) return;
+      setVisualThumbnailReadiness(readiness);
+      setVisualThumbnailPreview(preview);
+    },
+    [],
+  );
+
+  const requestVisualThumbnailCapture = useCallback(
+    () =>
+      new Promise<string>((resolve, reject) => {
+        const pending = visualThumbnailCapturePendingRef.current;
+        if (pending) {
+          reject(new Error("サムネイルの作成がすでに実行中です"));
+          return;
+        }
+        visualThumbnailCapturePendingRef.current = {
+          resolve,
+          reject: (error) => reject(error),
+        };
+        setVisualThumbnailCaptureRequest((current) => current + 1);
+      }),
+    [],
+  );
+
+  const handleVisualThumbnailCaptured = useCallback((dataUrl: string) => {
+    const pending = visualThumbnailCapturePendingRef.current;
+    visualThumbnailCapturePendingRef.current = null;
+    pending?.resolve(dataUrl);
+  }, []);
+
+  const handleVisualThumbnailCaptureError = useCallback((message: string) => {
+    const pending = visualThumbnailCapturePendingRef.current;
+    visualThumbnailCapturePendingRef.current = null;
+    pending?.reject(new Error(message));
+  }, []);
 
   const appendLog = useCallback((line: LogLine) => {
     setLogs((prev) => [...prev, line]);
@@ -876,13 +930,17 @@ function App() {
                 const path = visualSession.project?.path;
                 if (!path) {
                   setVisualThumbnailReadiness(null);
+                  setVisualThumbnailPreview(null);
                   return;
                 }
-                void inspectPublishThumbnail(
+                void refreshVisualThumbnail(
                   path,
                   visualSession.bundle.project.projectKind,
-                ).then(setVisualThumbnailReadiness);
+                );
               }}
+              thumbnailCaptureRequest={visualThumbnailCaptureRequest}
+              onThumbnailCaptured={handleVisualThumbnailCaptured}
+              onThumbnailCaptureError={handleVisualThumbnailCaptureError}
               onUpload={(bundle) => {
                 const publishBundle = withLatestPublication(
                   bundle,
@@ -890,12 +948,13 @@ function App() {
                 );
                 setVisualPublishBundle(publishBundle);
                 setVisualThumbnailReadiness(null);
+                setVisualThumbnailPreview(null);
                 const path = visualSession.project?.path;
                 if (path) {
-                  void inspectPublishThumbnail(
+                  void refreshVisualThumbnail(
                     path,
                     publishBundle.project.projectKind,
-                  ).then(setVisualThumbnailReadiness);
+                  );
                 }
               }}
               onClassicExport={(bundle) => {
@@ -918,6 +977,7 @@ function App() {
                 : visualThumbnailReadiness?.source === "template"
                   ? "template"
                   : undefined,
+            thumbnailPreview: visualThumbnailPreview,
             signedIn: user !== null,
             displayName: user?.displayName,
             saved: false,
@@ -963,6 +1023,21 @@ function App() {
               title: "シーン設定からサムネイルを編集してください",
               description: "左下の歯車を開き、「サムネイルを編集」を選択します。",
             });
+          }}
+          onGenerateThumbnail={requestVisualThumbnailCapture}
+          onSaveThumbnail={async (dataUrl) => {
+            const currentSession = visualSessionRef.current;
+            const path = currentSession?.project?.path;
+            if (!path) {
+              throw new Error("プロジェクトを保存してからサムネイルを設定してください");
+            }
+            await tauri.writeThumbnail(path, dataUrl);
+            announceProjectThumbnailChanged();
+            setVisualCompilationFresh(false);
+            await refreshVisualThumbnail(
+              path,
+              currentSession.bundle.project.projectKind,
+            );
           }}
           onLogin={() => void handleLogin()}
           onLocateDiagnostic={(diagnostic) => {

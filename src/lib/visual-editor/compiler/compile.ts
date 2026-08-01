@@ -24,6 +24,7 @@ import {
 } from "../component-registry";
 import type { PrototypeVisualProject } from "../prototype-project";
 import { normalizeParticleProperties } from "../particle-system";
+import { validateClassicR3fMaterialShader } from "../custom-shader-contract";
 import type { VisualProjectKind } from "../project-document";
 import {
   type AnimationComponent,
@@ -2255,6 +2256,20 @@ function renderMaterial(
     asset.properties as unknown as Parameters<typeof normalizeMaterialProperties>[0],
   );
   if (asset.shader?.kind === "classic-r3f") {
+    const shaderDiagnostics = validateClassicR3fMaterialShader(asset.shader);
+    if (shaderDiagnostics.length > 0) {
+      addDiagnostic(context, {
+        severity: "blocking",
+        code: "custom-shader-invalid",
+        message: `Custom Shader「${asset.name}」を検証できません: ${shaderDiagnostics.join("、")}`,
+        sceneId: context.scene.sceneId,
+        entityId: entity.id,
+        componentId: mesh.id,
+        assetId: asset.id,
+        fieldPath: `material.${asset.id}.shader`,
+      });
+      return renderMaterial(entity, mesh, { ...asset, shader: undefined }, context);
+    }
     const componentName = registerMaterialComponent(
       entity,
       mesh,
@@ -3580,7 +3595,7 @@ function createAssetCopyPlan(
     if (isPrefabAsset(asset)) continue;
     // Script sources are emitted as staging overlay modules and imported
     // statically, never copied into public runtime assets. See script-emit.ts.
-    if (asset.kind === "script") continue;
+    if (asset.kind === "script" || asset.kind === "shader") continue;
     if (asset.source.kind !== "project") continue;
     if (!isSafeRelativePath(asset.source.relativePath)) {
       diagnostics.push({

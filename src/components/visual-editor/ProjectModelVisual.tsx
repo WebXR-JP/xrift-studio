@@ -54,6 +54,7 @@ import {
   hasCustomShaderEntrypoints,
   inspectCustomShaderUniforms,
   readCustomShaderAttributeBindings,
+  validateClassicR3fMaterialShader,
   detectOpenBrushGltfDocument,
   resolveOpenBrushEditorBrushBaseUrl,
   validateGltfNodeHierarchy,
@@ -988,6 +989,12 @@ export function createAssignedMaterialPreviewMaterial(
     return preview;
   }
   if (assignedMaterial.shader?.kind === "classic-r3f") {
+    if (validateClassicR3fMaterialShader(assignedMaterial.shader).length > 0) {
+      const fallback = isMeshStandardMaterial(source)
+        ? source.clone()
+        : new MeshStandardMaterial({ name: source.name });
+      return fallback;
+    }
     return createClassicR3fMaterial(
       assignedMaterial.shader,
       classicShaderTextures,
@@ -1098,13 +1105,13 @@ export function createClassicR3fMaterial(
   return material;
 }
 
-function useClassicShaderTextures(
-  material: MaterialAsset,
+export function useClassicShaderTextures(
+  material: MaterialAsset | undefined,
   assets: AssetManifest,
-  projectPath: string,
+  projectPath?: string,
 ): Readonly<Record<string, Texture>> {
   const shader =
-    material.shader?.kind === "classic-r3f" ? material.shader : undefined;
+    material?.shader?.kind === "classic-r3f" ? material.shader : undefined;
   const [textures, setTextures] = useState<Readonly<Record<string, Texture>>>(
     {},
   );
@@ -1120,7 +1127,7 @@ function useClassicShaderTextures(
     : "";
 
   useEffect(() => {
-    if (!shader || !signature) {
+    if (!shader || !signature || !projectPath) {
       setTextures({});
       return;
     }

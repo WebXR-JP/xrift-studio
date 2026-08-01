@@ -28,14 +28,33 @@ const MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS: u64 = 120_000;
 const MCP_MAX_CONCURRENT_CONNECTIONS: usize = 32;
 const MCP_MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 const MCP_MAX_CLIENT_NAME_CHARS: usize = 128;
-const MCP_TOOL_NAMES: [&str; 53] = [
+const MCP_TOOL_NAMES: [&str; 76] = [
     "get_editor_context",
     "get_scripting_capabilities",
     "list_assets",
+    "update_project_metadata",
+    "create_asset_folder",
+    "rename_asset",
+    "rename_asset_folder",
+    "move_asset",
+    "move_asset_folder",
+    "delete_asset",
+    "delete_asset_folder",
+    "inspect_colliders",
+    "optimize_colliders",
     "get_audio_asset",
     "import_audio_asset",
+    "get_model_asset",
+    "import_model_asset",
     "get_texture_asset",
     "import_texture_asset",
+    "import_skybox_asset",
+    "import_shader_asset",
+    "get_shader_asset",
+    "update_shader_asset",
+    "reimport_model_asset",
+    "set_project_thumbnail",
+    "update_model_asset",
     "update_texture_asset",
     "create_document_asset",
     "get_particle_asset",
@@ -56,6 +75,7 @@ const MCP_TOOL_NAMES: [&str; 53] = [
     "get_entity_components",
     "create_primitive",
     "place_builtin_prefab",
+    "create_prefab",
     "add_component",
     "update_component",
     "remove_component",
@@ -65,6 +85,9 @@ const MCP_TOOL_NAMES: [&str; 53] = [
     "set_material",
     "get_material_asset",
     "update_material_asset",
+    "create_custom_shader",
+    "get_custom_shader",
+    "update_custom_shader",
     "set_material_texture_transform",
     "rename_entity",
     "duplicate_entity",
@@ -188,6 +211,7 @@ pub struct XriftOllamaModelStatus {
 #[serde(rename_all = "camelCase")]
 pub struct XriftOllamaStatus {
     pub installed: bool,
+    pub server_reachable: bool,
     pub version: Option<String>,
     pub launch_supported: bool,
     pub models: Vec<XriftOllamaModelStatus>,
@@ -1301,6 +1325,46 @@ fn merge_opencode_config(
     Ok(config)
 }
 
+fn merge_opencode_ollama_config(mut config: Value, model: &str) -> Result<Value, String> {
+    let root = config
+        .as_object_mut()
+        .ok_or_else(|| "OpenCodeの設定rootがobjectではありません".to_string())?;
+    root.insert("model".to_string(), json!(format!("ollama/{model}")));
+
+    let provider = root
+        .entry("provider")
+        .or_insert_with(|| json!({}))
+        .as_object_mut()
+        .ok_or_else(|| "OpenCodeのprovider設定がobjectではありません".to_string())?;
+    let ollama = provider
+        .entry("ollama")
+        .or_insert_with(|| json!({}))
+        .as_object_mut()
+        .ok_or_else(|| "OpenCodeのOllama provider設定がobjectではありません".to_string())?;
+
+    ollama.insert("npm".to_string(), json!("@ai-sdk/openai-compatible"));
+    ollama.insert("name".to_string(), json!("Ollama"));
+    let options = ollama
+        .entry("options")
+        .or_insert_with(|| json!({}))
+        .as_object_mut()
+        .ok_or_else(|| "OpenCodeのOllama options設定がobjectではありません".to_string())?;
+    options.insert("baseURL".to_string(), json!("http://127.0.0.1:11434/v1"));
+    let models = ollama
+        .entry("models")
+        .or_insert_with(|| json!({}))
+        .as_object_mut()
+        .ok_or_else(|| "OpenCodeのOllama models設定がobjectではありません".to_string())?;
+    let model_config = models
+        .entry(model.to_string())
+        .or_insert_with(|| json!({}))
+        .as_object_mut()
+        .ok_or_else(|| "OpenCodeのOllama model設定がobjectではありません".to_string())?;
+    model_config.insert("name".to_string(), json!(model));
+
+    Ok(config)
+}
+
 fn write_config_backup(
     config_path: &Path,
     payload: &[u8],
@@ -1385,6 +1449,7 @@ fn detect_ollama() -> XriftOllamaStatus {
     let Some(executable) = find_ollama_executable() else {
         return XriftOllamaStatus {
             installed: false,
+            server_reachable: false,
             version: None,
             launch_supported: false,
             models: Vec::new(),
@@ -1399,13 +1464,19 @@ fn detect_ollama() -> XriftOllamaStatus {
     let launch_supported =
         run_ollama_command_output(&executable, &["launch".into(), "--help".into()])
             .is_ok_and(|output| output.status.success());
-    let models = run_ollama_command_output(&executable, &["list".into()])
-        .ok()
+    let list_output = run_ollama_command_output(&executable, &["list".into()]).ok();
+    let server_reachable = list_output
+        .as_ref()
+        .is_some_and(|output| output.status.success());
+    let models = list_output
+        .as_ref()
         .filter(|output| output.status.success())
         .map(|output| parse_ollama_models(&output.stdout))
         .unwrap_or_default();
     let message = if !launch_supported {
         "更新するとAI clientを構成できます"
+    } else if !server_reachable {
+        "Ollamaはinstall済みですが起動していません"
     } else if models.is_empty() {
         "Ollamaを起動し、modelを追加してください"
     } else {
@@ -1414,6 +1485,7 @@ fn detect_ollama() -> XriftOllamaStatus {
 
     XriftOllamaStatus {
         installed: true,
+        server_reachable,
         version,
         launch_supported,
         models: models
@@ -1430,25 +1502,33 @@ fn configure_ollama_integration(
 ) -> Result<XriftOllamaConfigurationResult, String> {
     let executable = find_ollama_executable()
         .ok_or_else(|| "Ollamaが見つかりません。先にOllamaをinstallしてください".to_string())?;
-    if find_client_executable(integration.mcp_client()).is_none() {
+    if !ollama_integration_client_available(integration) {
         return Err(format!(
             "{}が見つかりません。先にclientをinstallしてください",
             integration.label()
         ));
     }
-    let list_output = run_ollama_command_output(&executable, &["list".into()])
-        .map_err(|_| "Ollamaへ接続できません。Ollamaを起動して再試行してください".to_string())?;
+    let list_output =
+        run_ollama_command_output(&executable, &["list".into()]).map_err(|error| {
+            format!("Ollamaへ接続できません。Ollamaを起動して再試行してください: {error}")
+        })?;
     if !list_output.status.success() {
-        return Err("Ollamaへ接続できません。Ollamaを起動して再試行してください".to_string());
+        return Err(command_failure_message(
+            "Ollamaへ接続できません。Ollamaを起動して再試行してください",
+            &list_output,
+        ));
     }
     let models = parse_ollama_models(&list_output.stdout);
     if model.is_empty() || !models.iter().any(|candidate| candidate == model) {
         return Err("選択したOllama modelが見つかりません。再検出してください".to_string());
     }
     let show_output = run_ollama_command_output(&executable, &["show".into(), model.into()])
-        .map_err(|_| "Ollama modelの機能を確認できませんでした".to_string())?;
+        .map_err(|error| format!("Ollama modelの機能を確認できませんでした: {error}"))?;
     if !show_output.status.success() {
-        return Err("Ollama modelの機能を確認できませんでした".to_string());
+        return Err(command_failure_message(
+            "Ollama modelの機能を確認できませんでした",
+            &show_output,
+        ));
     }
     if !ollama_model_supports_tools(&show_output.stdout) {
         return Err(
@@ -1457,13 +1537,24 @@ fn configure_ollama_integration(
         );
     }
 
+    // `ollama launch <integration> --config` enters Ollama's interactive model
+    // selector even when `--model` and `--yes` are supplied. The Tauri command
+    // has no interactive terminal, so configure OpenCode through its documented
+    // JSON provider format instead of starting the client or invoking the TUI.
+    if matches!(integration, SupportedOllamaIntegration::OpenCode) {
+        return configure_opencode_ollama(model);
+    }
+
     let arguments = ollama_configuration_arguments(integration, model);
-    let status = run_ollama_command(&executable, &arguments)
+    let output = run_ollama_command_output(&executable, &arguments)
         .map_err(|error| format!("Ollamaのclient構成を完了できません: {error}"))?;
-    if !status.success() {
-        return Err(format!(
-            "Ollamaで{}を構成できませんでした。client側のmodel設定を確認してください",
-            integration.label()
+    if !output.status.success() {
+        return Err(command_failure_message(
+            &format!(
+                "Ollamaで{}を構成できませんでした。client側のmodel設定を確認してください",
+                integration.label()
+            ),
+            &output,
         ));
     }
 
@@ -1473,6 +1564,81 @@ fn configure_ollama_integration(
         model: model.to_string(),
         message: "構成しました。clientを起動または再起動してください".to_string(),
     })
+}
+
+fn configure_opencode_ollama(model: &str) -> Result<XriftOllamaConfigurationResult, String> {
+    let config_path =
+        opencode_config_path().ok_or_else(|| "OpenCodeの設定先を取得できません".to_string())?;
+    let config_directory = config_path
+        .parent()
+        .ok_or_else(|| "OpenCodeの設定先が不正です".to_string())?;
+    std::fs::create_dir_all(config_directory)
+        .map_err(|_| "OpenCodeの設定先を作成できません".to_string())?;
+
+    let original = if config_path.is_file() {
+        let metadata = std::fs::metadata(&config_path).map_err(|error| error.to_string())?;
+        if metadata.len() > MCP_MAX_MESSAGE_BYTES as u64 {
+            return Err("OpenCodeの設定fileが大きすぎます".to_string());
+        }
+        Some(std::fs::read(&config_path).map_err(|error| error.to_string())?)
+    } else {
+        None
+    };
+    let config = read_json_file(&config_path)?.unwrap_or_else(|| json!({}));
+    let config = merge_opencode_ollama_config(config, model)?;
+
+    if let Some(bytes) = original.as_deref() {
+        write_config_backup(&config_path, bytes, "OpenCode")?;
+    }
+    let mut payload = serde_json::to_vec_pretty(&config).map_err(|error| error.to_string())?;
+    payload.push(b'\n');
+    write_private_bytes(&config_path, &payload)
+        .map_err(|_| "OpenCodeのOllama設定を保存できませんでした".to_string())?;
+
+    Ok(XriftOllamaConfigurationResult {
+        integration_id: SupportedOllamaIntegration::OpenCode.id().to_string(),
+        integration_label: SupportedOllamaIntegration::OpenCode.label().to_string(),
+        model: model.to_string(),
+        message: "構成しました。OpenCodeを再起動してください".to_string(),
+    })
+}
+
+fn ollama_integration_client_available(integration: SupportedOllamaIntegration) -> bool {
+    let client = integration.mcp_client();
+    if is_managed_config_client(client) {
+        managed_config_client_installed(client)
+    } else {
+        find_client_executable(client).is_some()
+    }
+}
+
+fn command_failure_message(prefix: &str, output: &Output) -> String {
+    match command_output_detail(output) {
+        Some(detail) => format!("{prefix}: {detail}"),
+        None => prefix.to_string(),
+    }
+}
+
+fn command_output_detail(output: &Output) -> Option<String> {
+    let mut lines = Vec::new();
+    for bytes in [output.stderr.as_slice(), output.stdout.as_slice()] {
+        for line in String::from_utf8_lossy(bytes).lines() {
+            let line = line.trim();
+            if !line.is_empty() {
+                lines.push(line.to_string());
+            }
+            if lines.len() == 2 {
+                break;
+            }
+        }
+        if lines.len() == 2 {
+            break;
+        }
+    }
+    if lines.is_empty() {
+        return None;
+    }
+    Some(lines.join(" ").chars().take(240).collect::<String>())
 }
 
 fn ollama_configuration_arguments(
@@ -1554,16 +1720,9 @@ fn find_ollama_executable() -> Option<PathBuf> {
     None
 }
 
-fn run_ollama_command(executable: &Path, arguments: &[String]) -> Result<ExitStatus, String> {
-    let mut command = ollama_command(executable, arguments);
-    command.stdout(Stdio::null()).stderr(Stdio::null());
-    let child = command.spawn().map_err(|error| error.to_string())?;
-    wait_for_client_command(child)
-}
-
 fn run_ollama_command_output(executable: &Path, arguments: &[String]) -> Result<Output, String> {
     let mut command = ollama_command(executable, arguments);
-    command.stdout(Stdio::piped()).stderr(Stdio::null());
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = command.spawn().map_err(|error| error.to_string())?;
     let status = wait_for_client_command_status(&mut child)?;
     let mut stdout = Vec::new();
@@ -1571,10 +1730,15 @@ fn run_ollama_command_output(executable: &Path, arguments: &[String]) -> Result<
         pipe.read_to_end(&mut stdout)
             .map_err(|error| error.to_string())?;
     }
+    let mut stderr = Vec::new();
+    if let Some(mut pipe) = child.stderr.take() {
+        pipe.read_to_end(&mut stderr)
+            .map_err(|error| error.to_string())?;
+    }
     Ok(Output {
         status,
         stdout,
-        stderr: Vec::new(),
+        stderr,
     })
 }
 
@@ -1662,7 +1826,7 @@ fn wait_for_client_command(mut child: Child) -> Result<ExitStatus, String> {
 }
 
 fn wait_for_client_command_status(child: &mut Child) -> Result<ExitStatus, String> {
-    let deadline = Instant::now() + Duration::from_secs(10);
+    let deadline = Instant::now() + Duration::from_secs(30);
     loop {
         match child.try_wait().map_err(|error| error.to_string())? {
             Some(status) => return Ok(status),
@@ -1792,7 +1956,7 @@ pub fn run_stdio_server() -> Result<(), String> {
                     "protocolVersion": MCP_PROTOCOL_VERSION,
                     "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": { "name": MCP_SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Script execution is not sandboxed. XRift Studio enforces a project-scoped content-hash approval gate before evaluating Script source. XRift Studio's stdio MCP editor tools cannot grant approval. The debug-only privileged Tauri MCP bridge can execute webview JavaScript and is outside this trust boundary. set_play_mode returns SCRIPT_APPROVAL_REQUIRED when referenced source is not approved; the user must review and approve it in the Studio UI, or the client may explicitly request unapprovedPolicy:'skip' to start without those Scripts. Call get_scripting_capabilities and list_script_templates before authoring a Script. Use create_script_asset with templateId to create a built-in example, or apply_script_template to create it and attach its Script Component to an Entity in one editor revision. For custom source, use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. Use import_audio_asset or import_texture_asset only for a trusted absolute local path while Edit is active; the Editor validates extension, signature, regular-file/no-link status, and the 128 MB limit, then copies it into managed project storage without returning file bytes or the external path. Use get_audio_asset plus place_asset, or add_component with core.audio-source and update_component, for persistent Audio Source authoring. Use get_texture_asset/update_texture_asset for persistent sampler and import settings; updates are supported during Play and restart only consuming Entities. Runtime ctx.audioSources, ctx.materials, and ctx.particles changes reset on Stop; use persistent Audio Source, Material, or Particle tools to save authoring data. Call list_component_definitions and get_entity_components before add_component, update_component, or remove_component. While Play is active, Entity enabled state and supported component/scene structure tools synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. XRift Studio must be open with a visual project."
+                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Script execution is not sandboxed. XRift Studio enforces a project-scoped content-hash approval gate before evaluating Script source. XRift Studio's stdio MCP editor tools cannot grant approval. The debug-only privileged Tauri MCP bridge can execute webview JavaScript and is outside this trust boundary. set_play_mode returns SCRIPT_APPROVAL_REQUIRED when referenced source is not approved; the user must review and approve it in the Studio UI, or the client may explicitly request unapprovedPolicy:'skip' to start without those Scripts. Call get_scripting_capabilities and list_script_templates before authoring a Script. Use create_script_asset with templateId to create a built-in example, or apply_script_template to create it and attach its Script Component to an Entity in one editor revision. For custom source, use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. Use import_audio_asset, import_texture_asset, import_model_asset, import_skybox_asset, or import_shader_asset only for a trusted absolute local path while Edit is active; the Editor validates extension, signature, regular-file/no-link status, and size limits, then copies it into managed project storage without returning file bytes or the external path. Use get_model_asset/update_model_asset for import settings and material slots, and reimport_model_asset to apply derived Model changes. Use get_shader_asset/update_shader_asset for project shader source. Use get_audio_asset plus place_asset, or add_component with core.audio-source and update_component, for persistent Audio Source authoring. Use get_texture_asset/update_texture_asset for persistent sampler and import settings; updates are supported during Play and restart only consuming Entities. Runtime ctx.audioSources, ctx.materials, and ctx.particles changes reset on Stop; use persistent Audio Source, Material, or Particle tools to save authoring data. Call list_component_definitions and get_entity_components before add_component, update_component, or remove_component. Use create_prefab to turn an Entity hierarchy into a reusable Prefab Asset, then place_asset to instantiate it. While Play is active, Entity enabled state and supported component/scene structure tools synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. XRift Studio must be open with a visual project."
                 }),
             )?,
             "ping" => write_json_rpc_result(&mut stdout, id, json!({}))?,
@@ -2133,6 +2297,173 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "update_project_metadata",
+            "description": "Persist the visual project's publish title and description through Editor history and autosave.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "patch": {
+                        "type": "object",
+                        "properties": {
+                            "title": { "type": "string" },
+                            "description": { "type": "string" }
+                        },
+                        "minProperties": 1,
+                        "additionalProperties": false
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "patch"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "create_asset_folder",
+            "description": "Create an empty Asset Library folder, optionally under an existing folder.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+                    "parentId": { "type": ["string", "null"], "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "name"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "rename_asset",
+            "description": "Rename a user Asset in the Asset Library.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string", "minLength": 1 },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 100 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "name"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "rename_asset_folder",
+            "description": "Rename an Asset Library folder.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "folderId": { "type": "string", "minLength": 1 },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 100 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "folderId", "name"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "move_asset",
+            "description": "Move a user Asset to an existing Asset Library folder or the project root by passing folderId:null.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string", "minLength": 1 },
+                    "folderId": { "type": ["string", "null"], "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "folderId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "move_asset_folder",
+            "description": "Move an Asset Library folder to an existing parent folder or the project root by passing parentId:null. Cycles and duplicate sibling names are rejected.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "folderId": { "type": "string", "minLength": 1 },
+                    "parentId": { "type": ["string", "null"], "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "folderId", "parentId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "delete_asset",
+            "description": "Delete an unreferenced user Asset. Built-in Assets and referenced Assets are protected; rejection returns reference details.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "delete_asset_folder",
+            "description": "Delete an empty Asset Library folder. Non-empty folders are protected and return their contents in the rejection details.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "folderId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "folderId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "inspect_colliders",
+            "description": "Inspect Collider and Rigid Body configuration, including fixable runtime and compile diagnostics. Pass entityIds to limit the read-only inspection.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "entityIds": {
+                        "type": "array",
+                        "items": { "type": "string", "minLength": 1 },
+                        "uniqueItems": true
+                    }
+                },
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "optimize_colliders",
+            "description": "Apply the safe Collider diagnostics fixes used by the Scene View: dynamic Trimesh to Convex, duplicate Mesh Collider disable, CCD enable, and surface-value normalization. Pass entityIds to limit the operation.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityIds": {
+                        "type": "array",
+                        "items": { "type": "string", "minLength": 1 },
+                        "uniqueItems": true
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "get_audio_asset",
             "description": "Read one managed Audio Asset and its project-relative source format, MIME type, and byte length. File bytes, data URLs, and external source paths are never returned.",
             "inputSchema": {
@@ -2163,6 +2494,35 @@ fn tool_definitions() -> Value {
                         "minLength": 1,
                         "maxLength": 100
                     },
+                    "folderId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "sourcePath"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "get_model_asset",
+            "description": "Read one Model Asset, its import recipe, stable material slots, source metadata, and derived model metadata without returning file bytes or external paths.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "modelAssetId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["modelAssetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "import_model_asset",
+            "description": "Validate and import one trusted local single-file GLB, VRM, glTF, or OBJ model while Edit is active. sourcePath must be an absolute regular non-symlink file no larger than 128 MB; external companion files are not read implicitly.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "sourcePath": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 100 },
                     "folderId": { "type": "string", "minLength": 1 }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "sourcePath"],
@@ -2204,6 +2564,133 @@ fn tool_definitions() -> Value {
                     "importSettings": texture_import_settings_schema(false)
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "sourcePath"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "import_skybox_asset",
+            "description": "Validate and import a trusted local HDR or EXR equirectangular environment texture, set it as the Scene skybox, and save the operation as one Editor revision.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "sourcePath": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+                    "folderId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "sourcePath"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "import_shader_asset",
+            "description": "Validate and import one trusted local UTF-8 GLSL shader file while Edit is active. The source is stored in the project and exposed as a Shader Asset without returning the external path.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "sourcePath": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+                    "folderId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "sourcePath"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "get_shader_asset",
+            "description": "Read a managed GLSL Shader Asset source and project-relative metadata. External paths are never returned.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "shaderAssetId": { "type": "string", "minLength": 1 } },
+                "required": ["shaderAssetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "update_shader_asset",
+            "description": "Replace a managed GLSL Shader Asset source through the same revision, history, and autosave boundary as the Shader Editor.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "shaderAssetId": { "type": "string", "minLength": 1 },
+                    "source": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "shaderAssetId", "source"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "reimport_model_asset",
+            "description": "Re-read a project-managed Model Asset source and atomically update its derived metadata while preserving the Model Asset ID and references. Edit mode only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "modelAssetId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "modelAssetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "set_project_thumbnail",
+            "description": "Set the saved project thumbnail from an existing browser-decodable Texture or environment Texture Asset without exposing file bytes or external paths.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "update_model_asset",
+            "description": "Persist Model import settings and authoring default Material slot bindings through Editor history and autosave. Reimport is required before source-derived geometry changes take effect.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "modelAssetId": { "type": "string", "minLength": 1 },
+                    "patch": {
+                        "type": "object",
+                        "properties": {
+                            "importSettings": {
+                                "type": "object",
+                                "properties": {
+                                    "scale": { "type": "number", "exclusiveMinimum": 0 },
+                                    "generateColliders": { "type": "boolean" },
+                                    "optimizeMeshes": { "type": "boolean" },
+                                    "importAnimations": { "type": "boolean" }
+                                },
+                                "minProperties": 1,
+                                "additionalProperties": false
+                            },
+                            "materialSlotBindings": {
+                                "type": "object",
+                                "additionalProperties": { "type": ["string", "null"] }
+                            }
+                        },
+                        "minProperties": 1,
+                        "additionalProperties": false
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "modelAssetId", "patch"],
                 "additionalProperties": false
             }
         },
@@ -2624,6 +3111,22 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "create_prefab",
+            "description": "Create a reusable project Prefab Asset and document from an Entity and its child hierarchy.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 100 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "add_component",
             "description": "Add a Component from the central Editor registry to an existing Entity. Call list_component_definitions for valid definitionId values. For scripting.script, also pass the Script Asset ID returned by list_assets.",
             "inputSchema": {
@@ -2642,7 +3145,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "update_component",
-            "description": "Persist supported Component fields and enabled state through Editor history. Built-in Rigid Body, Collider, Light, Text, Audio Source, Animation, and Particle Emitter patches use the same validators as Inspector. Use update_transform for Transform values and update_script_component for Script properties/references.",
+            "description": "Persist supported Component fields and enabled state through Editor history. Built-in Mesh Renderer, Rigid Body, Collider, Light, Text, Audio Source, Animation, and Particle Emitter patches use the same validators as Inspector. Mesh Renderer patches can update enabled, complete materialBindings, Cast/Receive Shadow, and static Model pose. Use update_transform for Transform values and update_script_component for Script properties/references.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2651,7 +3154,38 @@ fn tool_definitions() -> Value {
                     "expectedRevision": { "type": "integer", "minimum": 0 },
                     "entityId": { "type": "string", "minLength": 1 },
                     "componentId": { "type": "string", "minLength": 1 },
-                    "patch": { "type": "object", "minProperties": 1 }
+                    "patch": {
+                        "type": "object",
+                        "minProperties": 1,
+                        "properties": {
+                            "enabled": { "type": "boolean" },
+                            "materialBindings": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "slot": { "type": "string", "minLength": 1 },
+                                        "materialAssetId": { "type": "string", "minLength": 1 },
+                                        "sourceNodeIndex": { "type": "integer", "minimum": 0 }
+                                    },
+                                    "required": ["slot", "materialAssetId"],
+                                    "additionalProperties": false
+                                }
+                            },
+                            "castShadow": { "type": "boolean" },
+                            "receiveShadow": { "type": "boolean" },
+                            "modelPose": {
+                                "type": ["object", "null"],
+                                "properties": {
+                                    "bones": { "type": "object" },
+                                    "morphTargets": { "type": "object" },
+                                    "nodes": { "type": "object" }
+                                },
+                                "additionalProperties": false
+                            }
+                        },
+                        "additionalProperties": false
+                    }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "entityId", "componentId", "patch"],
                 "additionalProperties": false
@@ -2781,6 +3315,52 @@ fn tool_definitions() -> Value {
                     "expectedRevision": { "type": "integer", "minimum": 0 },
                     "materialAssetId": { "type": "string" },
                     "patch": { "type": "object" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "materialAssetId", "patch"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "create_custom_shader",
+            "description": "Create a reusable Material with an authored GLSL Custom Shader, or attach a starter/provided Custom Shader to an existing Material. The shader is saved inside the Material and is immediately available to set_material, Scene View, Play, and compile.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "materialAssetId": { "type": "string", "minLength": 1 },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+                    "folderId": { "type": "string", "minLength": 1 },
+                    "shader": { "type": "object", "description": "Optional complete or partial classic-r3f shader. Omitted fields use the starter shader." }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "get_custom_shader",
+            "description": "Read the authored GLSL, uniforms, variants, and animated time uniform stored in a Material. Returns an error when the Material is still PBR or an OpenBrush preset.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "materialAssetId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["materialAssetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "update_custom_shader",
+            "description": "Validate and persist a partial GLSL Custom Shader update inside one Material. Updates use the same project, scene, revision, history, autosave, Play dependency, and Scene View path as Material editing; invalid GLSL IR is rejected with diagnostics and does not change the document.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "materialAssetId": { "type": "string", "minLength": 1 },
+                    "patch": { "type": "object", "minProperties": 1 }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "materialAssetId", "patch"],
                 "additionalProperties": false
@@ -3317,6 +3897,53 @@ mod tests {
 
         assert!(ollama_model_supports_tools(supported));
         assert!(!ollama_model_supports_tools(unsupported));
+    }
+
+    #[test]
+    fn opencode_ollama_config_preserves_mcp_and_selects_model() {
+        let config = json!({
+            "mcp": {
+                MCP_SERVER_NAME: {
+                    "type": "local",
+                    "enabled": true
+                }
+            },
+            "permission": {
+                "bash": "ask"
+            }
+        });
+
+        let merged = merge_opencode_ollama_config(config, "gemma4:e2b").expect("merge config");
+
+        assert_eq!(
+            merged.pointer("/mcp/xrift-studio/enabled"),
+            Some(&json!(true))
+        );
+        assert_eq!(merged.pointer("/permission/bash"), Some(&json!("ask")));
+        assert_eq!(merged.pointer("/model"), Some(&json!("ollama/gemma4:e2b")));
+        assert_eq!(
+            merged.pointer("/provider/ollama/options/baseURL"),
+            Some(&json!("http://127.0.0.1:11434/v1"))
+        );
+        assert_eq!(
+            merged.pointer("/provider/ollama/models/gemma4:e2b/name"),
+            Some(&json!("gemma4:e2b"))
+        );
+    }
+
+    #[test]
+    fn command_failure_prefers_stderr_and_limits_detail() {
+        let output = Output {
+            status: ExitStatus::default(),
+            stdout: b"stdout detail".to_vec(),
+            stderr: b"Error: Ollama is not running\nsecond line\nthird line".to_vec(),
+        };
+
+        let message = command_failure_message("構成に失敗しました", &output);
+        assert_eq!(
+            message,
+            "構成に失敗しました: Error: Ollama is not running second line"
+        );
     }
 
     #[test]

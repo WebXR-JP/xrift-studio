@@ -5,6 +5,7 @@ import type {
   KHR_INTERACTIVITY_EXTENSION_NAME,
   KHR_INTERACTIVITY_SPEC_STATUS,
 } from "./interactivity-graph";
+import type { MaterialShader } from "./custom-shader-contract";
 
 export type AssetStatus = "ready" | "missing" | "invalid";
 
@@ -597,6 +598,19 @@ export type ScriptAsset = AssetBase<"script"> & {
   source: AssetSource & { kind: "project" };
 };
 
+export const SHADER_ASSET_CONTRACT_VERSION = "1.0.0" as const;
+
+export const SHADER_ASSET_STAGES = ["vertex", "fragment"] as const;
+export type ShaderAssetStage = (typeof SHADER_ASSET_STAGES)[number];
+
+/** Imported GLSL source kept as a project file and edited in the Shader Editor. */
+export type ShaderAsset = AssetBase<"shader"> & {
+  contractVersion: typeof SHADER_ASSET_CONTRACT_VERSION;
+  language: "glsl";
+  stage: ShaderAssetStage;
+  source: AssetSource & { kind: "project" };
+};
+
 export type SceneAsset =
   | PrimitiveAsset
   | ModelAsset
@@ -607,6 +621,7 @@ export type SceneAsset =
   | InteractivityAsset
   | AudioAsset
   | ScriptAsset
+  | ShaderAsset
   | TemplateAsset;
 
 export type AssetManifest = {
@@ -978,7 +993,7 @@ export type MaterialExtensionsPatch = Partial<{
 }>;
 
 export type MaterialAssetPatch = {
-  shader?: import("./custom-shader-contract").MaterialShader;
+  shader?: MaterialShader | null;
   pbrMetallicRoughness?: PbrMetallicRoughnessPatch;
   normalTexture?: NormalTextureInfoPatch;
   occlusionTexture?: OcclusionTextureInfoPatch;
@@ -1131,7 +1146,7 @@ export function updateMaterialAsset(
     asset.properties as unknown as MaterialAssetPatch,
   );
   const properties = applyMaterialPatch(current, patch, manifest);
-  const shader = patch.shader ?? asset.shader;
+  const shader = patch.shader === null ? undefined : patch.shader ?? asset.shader;
 
   if (
     jsonEqual(properties, asset.properties) &&
@@ -1140,14 +1155,19 @@ export function updateMaterialAsset(
     return manifest;
   }
 
+  const nextAsset: MaterialAsset = {
+    ...asset,
+    properties,
+  };
+  if (shader) nextAsset.shader = shader;
+  else delete nextAsset.shader;
+
   return {
     ...manifest,
     assets: {
       ...manifest.assets,
       [assetId]: {
-        ...asset,
-        properties,
-        ...(shader ? { shader } : {}),
+        ...nextAsset,
         ...(asset.thumbnail?.status === "generated"
           ? { thumbnail: { ...asset.thumbnail, status: "stale" as const } }
           : {}),

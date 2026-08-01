@@ -1,6 +1,7 @@
 import {
   AmbientLight,
   AnimationClip,
+  BackSide,
   BoxGeometry,
   BufferGeometry,
   ClampToEdgeWrapping,
@@ -9,6 +10,7 @@ import {
   CylinderGeometry,
   DirectionalLight,
   DoubleSide,
+  FrontSide,
   Group,
   HemisphereLight,
   Light,
@@ -24,7 +26,11 @@ import {
   RepeatWrapping,
   SphereGeometry,
   SpotLight,
+  ShaderMaterial,
   SRGBColorSpace,
+  Vector2,
+  Vector3,
+  Vector4,
   Texture,
   TextureLoader,
   WebGLRenderer,
@@ -308,6 +314,17 @@ export class XriftThreeLoader {
     const materials = new Map<string, Material>();
     for (const asset of Object.values(manifest.assets)) {
       if (asset.kind !== "material") continue;
+      if (asset.shader?.kind === "classic-r3f") {
+        const material = createRuntimeClassicShaderMaterial(
+          asset.shader,
+          textures,
+          diagnostics,
+          asset.id,
+        );
+        material.name = asset.name;
+        materials.set(asset.id, material);
+        continue;
+      }
       const properties = asset.properties;
       const pbr = asRecord(properties.pbrMetallicRoughness);
       const baseColor = asNumberArray(pbr?.baseColorFactor, 4) ?? [1, 1, 1, 1];
@@ -475,6 +492,74 @@ export class XriftThreeLoader {
     });
     return null;
   }
+}
+
+function createRuntimeClassicShaderMaterial(
+  shader: Extract<
+    NonNullable<Extract<XriftRuntimeAsset, { kind: "material" }>['shader']>,
+    { kind: "classic-r3f" }
+  >,
+  textures: ReadonlyMap<string, Texture>,
+  diagnostics: XriftRuntimeDiagnostic[],
+  assetId: string,
+): ShaderMaterial {
+  const variant =
+    shader.variants.find((candidate) => !candidate.meshNameIncludes) ??
+    shader.variants[0];
+  const uniforms = Object.fromEntries(
+    Object.entries(shader.uniforms).map(([name, uniform]) => {
+      if (uniform.kind === "texture") {
+        const texture = textures.get(uniform.textureAssetId)?.clone() ?? null;
+        if (!texture && uniform.textureAssetId) {
+          diagnostics.push({
+            severity: "warning",
+            code: "custom-shader-texture-not-loaded",
+            message: `Custom Shader texture could not be loaded: ${uniform.textureAssetId}`,
+            assetId,
+          });
+        }
+        return [name, { value: texture }] as const;
+      }
+      if (uniform.kind === "color") {
+        return [name, { value: new Color(uniform.value) }] as const;
+      }
+      if (uniform.kind === "vector") {
+        const value = uniform.value;
+        const vector =
+          value.length === 2
+            ? new Vector2(value[0] ?? 0, value[1] ?? 0)
+            : value.length === 3
+              ? new Vector3(value[0] ?? 0, value[1] ?? 0, value[2] ?? 0)
+              : new Vector4(
+                  value[0] ?? 0,
+                  value[1] ?? 0,
+                  value[2] ?? 0,
+                  value[3] ?? 0,
+                );
+        return [name, { value: vector }] as const;
+      }
+      return [name, { value: uniform.value }] as const;
+    }),
+  );
+  const material = new ShaderMaterial({
+    name: shader.sourceModulePath,
+    vertexShader: shader.vertexShader,
+    fragmentShader: shader.fragmentShader,
+    uniforms,
+    defines: variant?.defines ?? {},
+    side:
+      variant?.side === "back"
+        ? BackSide
+        : variant?.side === "double"
+          ? DoubleSide
+          : FrontSide,
+    transparent: variant?.transparent ?? false,
+    depthWrite: variant?.depthWrite ?? true,
+  });
+  if (shader.animatedTimeUniform) {
+    material.userData.xriftAnimatedTimeUniform = shader.animatedTimeUniform;
+  }
+  return material;
 }
 
 function runtimeTextureWrapping(

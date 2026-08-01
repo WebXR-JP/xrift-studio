@@ -263,7 +263,11 @@ export function AiConnectionPanel({
                 </span>
               </div>
 
-              {!ollama.launchSupported ? (
+              {!ollama.serverReachable ? (
+                <p className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] leading-4 text-amber-800">
+                  Ollamaはinstall済みですが起動していません。Ollamaアプリを起動してから再検出してください。
+                </p>
+              ) : !ollama.launchSupported ? (
                 <p className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] leading-4 text-amber-800">
                   このversionはワンクリック構成に未対応です。Ollamaを更新して再検出してください。
                 </p>

@@ -24,6 +24,7 @@ import {
   commitAssetImportPlanToDisk,
   commitAssetImportPlansToDisk,
   createAssetImportPlan,
+  sha256AssetBytes,
   createUnityPackageImportPlan,
   addEditorComponent,
   addAssetFolder,
@@ -95,6 +96,7 @@ import {
   updateAnimationComponent,
   updateAudioSourceComponent,
   updateColliderComponent,
+  optimizeColliderConfiguration,
   updateRigidBodyComponent,
   updateLightComponent,
   updateTextComponent,
@@ -128,6 +130,7 @@ import {
   type PrototypeVisualProject,
   type SceneSettings,
   type ScriptAsset,
+  type ShaderAssetStage,
   type SceneDocument,
   type TextureAssetPatch,
   type TextPatch,
@@ -198,6 +201,8 @@ import {
 } from "./useScriptRuntime";
 import { useScriptEditor } from "./useScriptEditor";
 import { ScriptEditorDialog } from "./ScriptEditorDialog";
+import { useShaderEditor } from "./useShaderEditor";
+import { ShaderEditorDialog } from "./ShaderEditorDialog";
 import {
   ScriptTemplateDialog,
   type ScriptTemplateCreateRequest,
@@ -208,6 +213,12 @@ import {
   createScriptRelativePath,
   createScriptSampleSource,
 } from "../../lib/visual-editor/scripting/script-files";
+import {
+  addShaderAsset,
+  createShaderAsset,
+  createShaderRelativePath,
+  shaderStageFromFileName,
+} from "../../lib/visual-editor/shader-files";
 import { createScriptAssetRuntimeInputKey } from "../../lib/visual-editor/scripting/asset-runtime";
 import {
   createScriptTemplateSource,
@@ -253,6 +264,7 @@ const XRIFT_MCP_EXTERNAL_STORE_TOOLS = [
 ] as const;
 type XriftMcpExternalStoreTool = (typeof XRIFT_MCP_EXTERNAL_STORE_TOOLS)[number];
 const SUPPORTED_AUDIO_FILE = /\.(?:mp3|wav)$/i;
+const SUPPORTED_SHADER_FILE = /\.(?:glsl|vert|vertex|vs|frag|fragment|fs)$/i;
 const SUPPORTED_UNITY_FILE = /\.(unitypackage|unity|prefab)$/i;
 const AUTOSAVE_DELAY_MS = 250;
 const AUTOSAVE_MAX_ATTEMPTS = 4;
@@ -371,6 +383,11 @@ type RenameTarget =
   | { kind: "folder"; id: string; requestId: number }
   | null;
 
+type ShaderEditorRequest =
+  | { kind: "asset"; assetId: string }
+  | { kind: "material"; assetId: string; stage: ShaderAssetStage }
+  | null;
+
 type EditorCommandPayload = {
   creationId?: string;
   entityId?: string;
@@ -466,6 +483,10 @@ export type VisualEditorPrototypeProps = {
   compilationFresh?: boolean;
   /** The thumbnail is persisted outside the authoring document set. */
   onThumbnailChanged?: () => void;
+  /** Upload review can request a clean capture from the current Scene View. */
+  thumbnailCaptureRequest?: number;
+  onThumbnailCaptured?: (dataUrl: string) => void;
+  onThumbnailCaptureError?: (message: string) => void;
   /** The shell can persist and restore this value per workspace. */
   initialLayout?: Partial<VisualEditorLayout>;
   onLayoutChange?: (layout: VisualEditorLayout) => void;
@@ -813,6 +834,9 @@ export function VisualEditorPrototype({
   onClassicExport,
   compilationFresh = false,
   onThumbnailChanged,
+  thumbnailCaptureRequest = 0,
+  onThumbnailCaptured,
+  onThumbnailCaptureError,
   initialLayout,
   onLayoutChange,
 }: VisualEditorPrototypeProps) {
@@ -1146,6 +1170,20 @@ export function VisualEditorPrototype({
       }
     },
   });
+  const shaderSourceSavedRef = useRef<
+    (assetId: string, source: string) => void | Promise<void>
+  >(() => {});
+  const shaderEditor = useShaderEditor({
+    assets: bundle.assets,
+    ...(projectPath ? { projectPath } : {}),
+    onSaved: (assetId, source) => shaderSourceSavedRef.current(assetId, source),
+  });
+  const [shaderEditorRequest, setShaderEditorRequest] =
+    useState<ShaderEditorRequest>(null);
+  const shaderEditorDirtyRef = useRef(false);
+  const handleShaderEditorDirtyChange = useCallback((dirty: boolean) => {
+    shaderEditorDirtyRef.current = dirty;
+  }, []);
   const scriptContractsRef = useRef(scriptEditor.contracts);
   scriptContractsRef.current = scriptEditor.contracts;
   const setScriptContractRef = useRef(
@@ -1218,6 +1256,39 @@ export function VisualEditorPrototype({
         return candidate?.kind === "script" ? candidate : null;
       })()
     : null;
+  const shaderEditorAsset =
+    shaderEditorRequest?.kind === "asset"
+      ? (() => {
+          const candidate = bundle.assets.assets[shaderEditorRequest.assetId];
+          return candidate?.kind === "shader" ? candidate : null;
+        })()
+      : null;
+  const shaderEditorMaterial =
+    shaderEditorRequest?.kind === "material"
+      ? (() => {
+          const candidate = bundle.assets.assets[shaderEditorRequest.assetId];
+          return candidate?.kind === "material" &&
+            candidate.shader?.kind === "classic-r3f"
+            ? candidate
+            : null;
+        })()
+      : null;
+  const shaderEditorStage: ShaderAssetStage =
+    shaderEditorRequest?.kind === "material"
+      ? shaderEditorRequest.stage
+      : shaderEditorAsset?.stage ?? "fragment";
+  const shaderEditorSource =
+    shaderEditorRequest?.kind === "material" && shaderEditorMaterial
+      ? shaderEditorMaterial.shader?.kind === "classic-r3f"
+        ? shaderEditorStage === "vertex"
+          ? shaderEditorMaterial.shader.vertexShader
+          : shaderEditorMaterial.shader.fragmentShader
+        : ""
+      : shaderEditor.state.source;
+  const shaderEditorMaterialShader =
+    shaderEditorMaterial?.shader?.kind === "classic-r3f"
+      ? shaderEditorMaterial.shader
+      : null;
   const scriptViewportRuntime = useMemo<ScriptViewportRuntime>(() => {
     if (!scriptExecutionScopeRenderCurrent) {
       return {
@@ -1643,6 +1714,110 @@ export function VisualEditorPrototype({
     [],
   );
 
+  const handleShaderSourceSaved = useCallback(
+    (shaderAssetId: string, source: string) => {
+      setBundle((current) => {
+        let changed = false;
+        const nextAssets = Object.fromEntries(
+          Object.entries(current.assets.assets).map(([assetId, asset]) => {
+            if (
+              asset.kind !== "material" ||
+              asset.shader?.kind !== "classic-r3f"
+            ) {
+              return [assetId, asset];
+            }
+            const shader = asset.shader;
+            const nextShader = {
+              ...shader,
+              ...(shader.vertexShaderAssetId === shaderAssetId
+                ? { vertexShader: source }
+                : {}),
+              ...(shader.fragmentShaderAssetId === shaderAssetId
+                ? { fragmentShader: source }
+                : {}),
+            };
+            if (
+              shader.vertexShaderAssetId === shaderAssetId ||
+              shader.fragmentShaderAssetId === shaderAssetId
+            ) {
+              changed = true;
+              return [assetId, { ...asset, shader: nextShader }];
+            }
+            return [assetId, asset];
+          }),
+        );
+        if (!changed) return current;
+        setNotice("GLSLを保存し、参照中のMaterialへ反映しました");
+        return touchProject({
+          ...current,
+          assets: { ...current.assets, assets: nextAssets },
+        });
+      });
+    },
+    [setBundle],
+  );
+  shaderSourceSavedRef.current = handleShaderSourceSaved;
+
+  const closeShaderEditor = useCallback(() => {
+    setShaderEditorRequest(null);
+    shaderEditor.close();
+    shaderEditorDirtyRef.current = false;
+  }, [shaderEditor.close]);
+
+  const confirmShaderEditorSwitch = useCallback(() => {
+    if (!shaderEditorDirtyRef.current) return true;
+    const discard = window.confirm(
+      "編集中のGLSLに保存していない変更があります。破棄して別のコードを開きますか。",
+    );
+    if (discard) shaderEditorDirtyRef.current = false;
+    return discard;
+  }, []);
+
+  const openShaderAssetEditor = useCallback(
+    async (assetId: string) => {
+      if (!confirmShaderEditorSwitch()) return false;
+      shaderEditor.close();
+      setShaderEditorRequest({ kind: "asset", assetId });
+      await shaderEditor.open(assetId);
+      return true;
+    },
+    [confirmShaderEditorSwitch, shaderEditor.close, shaderEditor.open],
+  );
+
+  const openMaterialShaderEditor = useCallback(
+    (assetId: string, stage: ShaderAssetStage) => {
+      if (!confirmShaderEditorSwitch()) return false;
+      shaderEditor.close();
+      setShaderEditorRequest({ kind: "material", assetId, stage });
+      return true;
+    },
+    [confirmShaderEditorSwitch, shaderEditor.close],
+  );
+
+  const saveMaterialShaderSource = useCallback(
+    async (assetId: string, stage: ShaderAssetStage, source: string) => {
+      setBundle((current) => {
+        const asset = current.assets.assets[assetId];
+        if (
+          asset?.kind !== "material" ||
+          asset.shader?.kind !== "classic-r3f"
+        ) {
+          return current;
+        }
+        const nextAssets = updateMaterialAsset(current.assets, assetId, {
+          shader: {
+            ...asset.shader,
+            [stage === "vertex" ? "vertexShader" : "fragmentShader"]: source,
+          },
+        });
+        return nextAssets === current.assets
+          ? current
+          : touchProject({ ...current, assets: nextAssets });
+      });
+    },
+    [setBundle],
+  );
+
   const setSceneSelection = useCallback((selection: SceneSelection) => {
     setSelectedEntityIds(selection?.id ? [selection.id] : []);
     setHistory((current) =>
@@ -1935,20 +2110,532 @@ export function VisualEditorPrototype({
             "対応していないAI editor toolです",
           );
         }
+        const currentProjectPath = projectPathRef.current;
+        if (request.tool === "import_shader_asset") {
+          const args = request.arguments;
+          const sourceBundle = bundleRef.current;
+          assertMcpExternalStoreWrite(args, {
+            bundle: sourceBundle,
+            editorMode: editorModeRef.current,
+            importBusy: importBusyRef.current,
+            revision: mcpRevisionRef.current,
+          });
+          if (!currentProjectPath) {
+            throw new XriftMcpEditorToolError(
+              "PROJECT_NOT_SAVED",
+              "Shaderを追加する前にProjectを保存してください",
+            );
+          }
+          if (importRunningRef.current || assetOperationRef.current !== null) {
+            throw new XriftMcpEditorToolError(
+              "EDITOR_BUSY",
+              "別のAsset操作の完了後にShader Importを再試行してください",
+            );
+          }
+          const sourcePath = mcpRequiredString(args.sourcePath, "sourcePath");
+          const name = mcpOptionalString(args.name);
+          if (name && name.length > 100) {
+            throw new XriftMcpEditorToolError(
+              "INVALID_ARGUMENT",
+              "nameは100文字以内で指定してください",
+            );
+          }
+          const folderId = mcpOptionalString(args.folderId) ?? null;
+          if (folderId && !sourceBundle.assets.folders?.[folderId]) {
+            throw new XriftMcpEditorToolError(
+              "FOLDER_NOT_FOUND",
+              "作成先のFolderが見つかりません",
+              { folderId },
+            );
+          }
+          const operationToken = Symbol("mcp-shader-import");
+          importRunningRef.current = true;
+          assetOperationRef.current = { kind: "asset-import", token: operationToken };
+          setMcpLocalAssetImportBusy(true);
+          try {
+            let source: Awaited<ReturnType<typeof tauri.readLocalShaderImportSource>>;
+            try {
+              source = await tauri.readLocalShaderImportSource(sourcePath);
+            } catch {
+              throw new XriftMcpEditorToolError(
+                "SHADER_SOURCE_REJECTED",
+                "ローカルShaderを読み取れませんでした。絶対パス、GLSL拡張子、通常ファイル、8MiB上限を確認してください",
+              );
+            }
+            const sourceHash = await sha256AssetBytes(
+              new TextEncoder().encode(source.source),
+            );
+            const duplicate = Object.values(sourceBundle.assets.assets).find(
+              (asset) => asset.kind === "shader" && asset.sourceHash === sourceHash,
+            );
+            if (duplicate?.kind === "shader") {
+              assetSelectionRef.current = duplicate.id;
+              setHistory((current) =>
+                replaceEditorHistoryPresent(current, {
+                  ...current.present,
+                  assetSelection: duplicate.id,
+                }),
+              );
+              setActiveAssetFolderId(duplicate.folderId ?? null);
+              await tauri.completeXriftMcpRequest({
+                id: request.id,
+                ok: true,
+                result: {
+                  projectId: sourceBundle.project.projectId,
+                  sceneId: sourceBundle.scene.sceneId,
+                  shaderAssetId: duplicate.id,
+                  name: duplicate.name,
+                  duplicate: true,
+                  revisionBefore: mcpRevisionRef.current,
+                  revisionAfter: mcpRevisionRef.current,
+                },
+              });
+              return;
+            }
+            const relativePath = createShaderRelativePath(
+              source.fileName,
+              sourceBundle.assets,
+            );
+            const shader = createShaderAsset(
+              createDocumentId("shader"),
+              name ?? (source.fileName.replace(/\.[^.]+$/, "") || "Shader"),
+              relativePath,
+              sourceHash,
+              folderId,
+              shaderStageFromFileName(source.fileName),
+            );
+            await tauri.writeTextFile(
+              currentProjectPath,
+              relativePath,
+              source.source,
+            );
+            const latestBundle = bundleRef.current;
+            assertMcpExternalStoreWrite(
+              args,
+              {
+                bundle: latestBundle,
+                editorMode: editorModeRef.current,
+                importBusy: false,
+                revision: mcpRevisionRef.current,
+              },
+            );
+            if (folderId && !latestBundle.assets.folders?.[folderId]) {
+              await tauri.deletePath(currentProjectPath, relativePath).catch(() => undefined);
+              throw new XriftMcpEditorToolError(
+                "STALE_REVISION",
+                "Shader検証中に作成先Folderが更新されました。最新のEditor contextで再試行してください",
+                { folderId },
+              );
+            }
+            const assets = addShaderAsset(latestBundle.assets, shader);
+            const nextBundle = touchProject({ ...latestBundle, assets });
+            const revisionBefore = mcpRevisionRef.current;
+            mcpRevisionRef.current += 1;
+            mcpRevisionBundleRef.current = nextBundle;
+            bundleRef.current = nextBundle;
+            assetSelectionRef.current = shader.id;
+            saveStatusRef.current = "dirty";
+            setHistory((current) =>
+              commitEditorHistory(current, {
+                ...current.present,
+                bundle: nextBundle,
+                assetSelection: shader.id,
+              }),
+            );
+            setActiveAssetFolderId(shader.folderId ?? null);
+            setSaveStatus("dirty");
+            const activity = `AIがShader「${shader.name}」をインポートしました`;
+            setNotice(`${activity}。変更を自動保存します`);
+            setMcpLastActivity({
+              clientName: request.clientName || "AI client",
+              message: activity,
+              at: new Intl.DateTimeFormat("ja-JP", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              }).format(new Date()),
+              revision: mcpRevisionRef.current,
+            });
+            await tauri.completeXriftMcpRequest({
+              id: request.id,
+              ok: true,
+              result: {
+                projectId: nextBundle.project.projectId,
+                sceneId: nextBundle.scene.sceneId,
+                shaderAssetId: shader.id,
+                name: shader.name,
+                duplicate: false,
+                relativePath,
+                stage: shader.stage,
+                revisionBefore,
+                revisionAfter: mcpRevisionRef.current,
+                sourceHash,
+              },
+            });
+            return;
+          } finally {
+            importRunningRef.current = false;
+            if (assetOperationRef.current?.token === operationToken) {
+              assetOperationRef.current = null;
+            }
+            setMcpLocalAssetImportBusy(false);
+          }
+        }
+        if (
+          request.tool === "get_shader_asset" ||
+          request.tool === "update_shader_asset" ||
+          request.tool === "reimport_model_asset" ||
+          request.tool === "set_project_thumbnail"
+        ) {
+          const args = request.arguments;
+          const sourceBundle = bundleRef.current;
+          if (request.tool === "get_shader_asset") {
+            const shaderAssetId = mcpRequiredString(
+              args.shaderAssetId,
+              "shaderAssetId",
+            );
+            const shader = sourceBundle.assets.assets[shaderAssetId];
+            if (!shader || shader.kind !== "shader") {
+              throw new XriftMcpEditorToolError(
+                "SHADER_NOT_FOUND",
+                "指定されたShader Assetが見つかりません",
+                { shaderAssetId },
+              );
+            }
+            if (!currentProjectPath) {
+              throw new XriftMcpEditorToolError(
+                "PROJECT_NOT_SAVED",
+                "Shaderを読み取る前にProjectを保存してください",
+              );
+            }
+            const source = await tauri.readTextFile(
+              currentProjectPath,
+              shader.source.relativePath,
+            );
+            await tauri.completeXriftMcpRequest({
+              id: request.id,
+              ok: true,
+              result: {
+                shaderAssetId: shader.id,
+                name: shader.name,
+                stage: shader.stage,
+                relativePath: shader.source.relativePath,
+                sourceHash: shader.sourceHash,
+                source,
+              },
+            });
+            return;
+          }
+
+          assertMcpExternalStoreWrite(
+            args,
+            {
+              bundle: sourceBundle,
+              editorMode: editorModeRef.current,
+              importBusy: importBusyRef.current,
+              revision: mcpRevisionRef.current,
+            },
+          );
+          if (!currentProjectPath) {
+            throw new XriftMcpEditorToolError(
+              "PROJECT_NOT_SAVED",
+              "このMCP操作の前にProjectを保存してください",
+            );
+          }
+          if (request.tool === "set_project_thumbnail") {
+            const assetId = mcpRequiredString(args.assetId, "assetId");
+            const asset = sourceBundle.assets.assets[assetId];
+            if (
+              !asset ||
+              (asset.kind !== "texture" && asset.kind !== "skybox")
+            ) {
+              throw new XriftMcpEditorToolError(
+                "THUMBNAIL_ASSET_INVALID",
+                "サムネイルにはTexture Assetを指定してください",
+                { assetId },
+              );
+            }
+            await setProjectThumbnailFromAsset(currentProjectPath, asset);
+            await tauri.completeXriftMcpRequest({
+              id: request.id,
+              ok: true,
+              result: {
+                projectId: sourceBundle.project.projectId,
+                sceneId: sourceBundle.scene.sceneId,
+                assetId,
+                revision: mcpRevisionRef.current,
+                changed: true,
+              },
+            });
+            return;
+          }
+          if (request.tool === "reimport_model_asset") {
+            const modelAssetId = mcpRequiredString(
+              args.modelAssetId,
+              "modelAssetId",
+            );
+            if (!currentProjectPath) {
+              throw new XriftMcpEditorToolError(
+                "PROJECT_NOT_SAVED",
+                "Modelを再インポートする前にProjectを保存してください",
+              );
+            }
+            const model = sourceBundle.assets.assets[modelAssetId];
+            if (!model || model.kind !== "model") {
+              throw new XriftMcpEditorToolError(
+                "MODEL_NOT_FOUND",
+                "指定されたModel Assetが見つかりません",
+                { modelAssetId },
+              );
+            }
+            if (
+              importRunningRef.current ||
+              assetOperationRef.current !== null
+            ) {
+              throw new XriftMcpEditorToolError(
+                "EDITOR_BUSY",
+                "別のAsset操作の完了後にModel再インポートを再試行してください",
+              );
+            }
+            const operationToken = Symbol("mcp-model-reimport");
+            const startingRevision = mcpRevisionRef.current;
+            importRunningRef.current = true;
+            assetOperationRef.current = {
+              kind: "model-reimport",
+              token: operationToken,
+            };
+            try {
+              const result = await reimportModelAssetFromDisk(
+                currentProjectPath,
+                sourceBundle.assets,
+                modelAssetId,
+                (progress) =>
+                  setModelReimportFeedback({
+                    assetId: modelAssetId,
+                    state: modelReimportStateFromProgress(progress),
+                  }),
+              );
+              if (!result.ok) {
+                setModelReimportFeedback({
+                  assetId: modelAssetId,
+                  state: { phase: "failed", message: result.message },
+                });
+                throw new XriftMcpEditorToolError(
+                  "MODEL_REIMPORT_REJECTED",
+                  result.message,
+                  { diagnostics: result.diagnostics },
+                );
+              }
+              const latestBundle = bundleRef.current;
+              if (
+                latestBundle.assets.assets[modelAssetId] !== model ||
+                mcpRevisionRef.current !== startingRevision
+              ) {
+                throw new XriftMcpEditorToolError(
+                  "STALE_REVISION",
+                  "Model再インポート中にProjectが更新されました。最新のEditor contextで再試行してください",
+                  { modelAssetId },
+                );
+              }
+              const nextBundle = touchProject({
+                ...latestBundle,
+                assets: result.manifest,
+              });
+              const revisionBefore = mcpRevisionRef.current;
+              mcpRevisionRef.current += 1;
+              mcpRevisionBundleRef.current = nextBundle;
+              bundleRef.current = nextBundle;
+              assetSelectionRef.current = modelAssetId;
+              saveStatusRef.current = "dirty";
+              setHistory((current) =>
+                commitEditorHistory(current, {
+                  ...current.present,
+                  bundle: nextBundle,
+                  assetSelection: modelAssetId,
+                }),
+              );
+              setSaveStatus("dirty");
+              setModelReimportFeedback({
+                assetId: modelAssetId,
+                state: {
+                  phase: "succeeded",
+                  message: "Modelを再インポートしました。変更を自動保存します",
+                },
+              });
+              const activity = `AIがModel「${model.name}」を再インポートしました`;
+              setNotice(`${activity}。変更を自動保存します`);
+              setMcpLastActivity({
+                clientName: request.clientName || "AI client",
+                message: activity,
+                at: new Intl.DateTimeFormat("ja-JP", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                }).format(new Date()),
+                revision: mcpRevisionRef.current,
+              });
+              await tauri.completeXriftMcpRequest({
+                id: request.id,
+                ok: true,
+                result: {
+                  projectId: nextBundle.project.projectId,
+                  sceneId: nextBundle.scene.sceneId,
+                  modelAssetId,
+                  revisionBefore,
+                  revisionAfter: mcpRevisionRef.current,
+                  diagnostics: result.diagnostics,
+                },
+              });
+              return;
+            } finally {
+              importRunningRef.current = false;
+              if (assetOperationRef.current?.token === operationToken) {
+                assetOperationRef.current = null;
+              }
+            }
+          }
+
+          const shaderAssetId = mcpRequiredString(
+            args.shaderAssetId,
+            "shaderAssetId",
+          );
+          const shader = sourceBundle.assets.assets[shaderAssetId];
+          if (!shader || shader.kind !== "shader") {
+            throw new XriftMcpEditorToolError(
+              "SHADER_NOT_FOUND",
+              "指定されたShader Assetが見つかりません",
+              { shaderAssetId },
+            );
+          }
+          if (typeof args.source !== "string" || !args.source.trim()) {
+            throw new XriftMcpEditorToolError(
+              "INVALID_ARGUMENT",
+              "sourceは空でない文字列で指定してください",
+            );
+          }
+          if (new TextEncoder().encode(args.source).byteLength > 8 * 1024 * 1024) {
+            throw new XriftMcpEditorToolError(
+              "INVALID_ARGUMENT",
+              "sourceは8MiB以内で指定してください",
+            );
+          }
+          const previousSource = await tauri.readTextFile(
+            currentProjectPath,
+            shader.source.relativePath,
+          );
+          const sourceHash = await sha256AssetBytes(
+            new TextEncoder().encode(args.source),
+          );
+          await tauri.writeTextFile(
+            currentProjectPath,
+            shader.source.relativePath,
+            args.source,
+          );
+          if (bundleRef.current.assets.assets[shaderAssetId] !== shader) {
+            await tauri.writeTextFile(
+              currentProjectPath,
+              shader.source.relativePath,
+              previousSource,
+            ).catch(() => undefined);
+            throw new XriftMcpEditorToolError(
+              "STALE_REVISION",
+              "Shader保存中にAssetが更新されました。最新のEditor contextで再試行してください",
+              { shaderAssetId },
+            );
+          }
+          const updatedShader = { ...shader, sourceHash };
+          const nextBundle = touchProject({
+            ...bundleRef.current,
+            assets: {
+              ...bundleRef.current.assets,
+              assets: {
+                ...bundleRef.current.assets.assets,
+                [shaderAssetId]: updatedShader,
+              },
+            },
+          });
+          const revisionBefore = mcpRevisionRef.current;
+          mcpRevisionRef.current += 1;
+          mcpRevisionBundleRef.current = nextBundle;
+          bundleRef.current = nextBundle;
+          assetSelectionRef.current = shaderAssetId;
+          saveStatusRef.current = "dirty";
+          setHistory((current) =>
+            commitEditorHistory(current, {
+              ...current.present,
+              bundle: nextBundle,
+              assetSelection: shaderAssetId,
+            }),
+          );
+          setSaveStatus("dirty");
+          const activity = `AIがShader「${shader.name}」を更新しました`;
+          setNotice(`${activity}。変更を自動保存します`);
+          setMcpLastActivity({
+            clientName: request.clientName || "AI client",
+            message: activity,
+            at: new Intl.DateTimeFormat("ja-JP", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            }).format(new Date()),
+            revision: mcpRevisionRef.current,
+          });
+          await tauri.completeXriftMcpRequest({
+            id: request.id,
+            ok: true,
+            result: {
+              projectId: nextBundle.project.projectId,
+              sceneId: nextBundle.scene.sceneId,
+              shaderAssetId,
+              revisionBefore,
+              revisionAfter: mcpRevisionRef.current,
+              sourceHash,
+              sourceSaved: true,
+            },
+          });
+          return;
+        }
         if (localAssetTool) {
           const args = request.arguments;
           const isAudioImport = request.tool === "import_audio_asset";
-          const importedKind = isAudioImport ? "audio" : "texture";
-          const assetLabel = isAudioImport ? "Audio" : "Texture";
+          const isModelImport = request.tool === "import_model_asset";
+          const isSkyboxImport = request.tool === "import_skybox_asset";
+          const importedKind = isAudioImport
+            ? "audio"
+            : isModelImport
+              ? "model"
+              : "texture";
+          const expectedClassificationKind = isSkyboxImport
+            ? "skybox"
+            : importedKind;
+          const assetLabel = isAudioImport
+            ? "Audio"
+            : isModelImport
+              ? "Model"
+              : isSkyboxImport
+                ? "HDRI"
+                : "Texture";
           const sourceRejectedCode = isAudioImport
             ? "AUDIO_SOURCE_REJECTED"
-            : "TEXTURE_SOURCE_REJECTED";
+            : isModelImport
+              ? "MODEL_SOURCE_REJECTED"
+              : isSkyboxImport
+                ? "SKYBOX_SOURCE_REJECTED"
+                : "TEXTURE_SOURCE_REJECTED";
           const importRejectedCode = isAudioImport
             ? "AUDIO_IMPORT_REJECTED"
-            : "TEXTURE_IMPORT_REJECTED";
+            : isModelImport
+              ? "MODEL_IMPORT_REJECTED"
+              : isSkyboxImport
+                ? "SKYBOX_IMPORT_REJECTED"
+                : "TEXTURE_IMPORT_REJECTED";
           const importFailedCode = isAudioImport
             ? "AUDIO_IMPORT_FAILED"
-            : "TEXTURE_IMPORT_FAILED";
+            : isModelImport
+              ? "MODEL_IMPORT_FAILED"
+              : isSkyboxImport
+                ? "SKYBOX_IMPORT_FAILED"
+                : "TEXTURE_IMPORT_FAILED";
           const sourceBundle = bundleRef.current;
           assertMcpExternalStoreWrite(args, {
             bundle: sourceBundle,
@@ -1988,7 +2675,7 @@ export function VisualEditorPrototype({
               { folderId },
             );
           }
-          const importSettings = isAudioImport
+          const importSettings = isAudioImport || isModelImport || isSkyboxImport
             ? undefined
             : mcpTextureImportSettingsPatch(
                 args.importSettings ?? {},
@@ -2009,7 +2696,9 @@ export function VisualEditorPrototype({
             try {
               source = isAudioImport
                 ? await tauri.readLocalAudioImportSource(sourcePath)
-                : await tauri.readLocalTextureImportSource(sourcePath);
+                : isModelImport
+                  ? await tauri.readLocalModelImportSource(sourcePath)
+                  : await tauri.readLocalTextureImportSource(sourcePath);
             } catch {
               throw new XriftMcpEditorToolError(
                 sourceRejectedCode,
@@ -2048,13 +2737,14 @@ export function VisualEditorPrototype({
                     preferredKind: "texture" as const,
                   }
                 : {}),
+              ...(isModelImport ? { preferredKind: "model" as const } : {}),
               existingManifest: sourceBundle.assets,
             });
             if (
               !plan.canCommit ||
               !plan.asset ||
               plan.asset.kind !== importedKind ||
-              plan.classification?.kind !== importedKind
+              plan.classification?.kind !== expectedClassificationKind
             ) {
               const diagnostics = plan.diagnostics.map(
                 ({ severity, code, message, fieldPath }) => ({
@@ -2099,15 +2789,41 @@ export function VisualEditorPrototype({
             );
             if (
               duplicate?.kind === "audio" ||
+              duplicate?.kind === "model" ||
               duplicate?.kind === "texture"
             ) {
+              const duplicateScene = isSkyboxImport
+                ? assignSkyboxToScene(latestBundle.scene, duplicate.id)
+                : latestBundle.scene;
+              const duplicateChanged = duplicateScene !== latestBundle.scene;
+              const duplicateRevisionBefore = mcpRevisionRef.current;
+              if (duplicateChanged) {
+                const nextBundle = touchProject({
+                  ...latestBundle,
+                  scene: duplicateScene,
+                });
+                mcpRevisionRef.current += 1;
+                mcpRevisionBundleRef.current = nextBundle;
+                bundleRef.current = nextBundle;
+                saveStatusRef.current = "dirty";
+                setHistory((current) =>
+                  commitEditorHistory(current, {
+                    ...current.present,
+                    bundle: nextBundle,
+                    assetSelection: duplicate.id,
+                  }),
+                );
+                setSaveStatus("dirty");
+              }
               assetSelectionRef.current = duplicate.id;
-              setHistory((current) =>
-                replaceEditorHistoryPresent(current, {
-                  ...current.present,
-                  assetSelection: duplicate.id,
-                }),
-              );
+              if (!duplicateChanged) {
+                setHistory((current) =>
+                  replaceEditorHistoryPresent(current, {
+                    ...current.present,
+                    assetSelection: duplicate.id,
+                  }),
+                );
+              }
               setActiveAssetFolderId(duplicate.folderId ?? null);
               const activity = `AIが登録済み${assetLabel}「${duplicate.name}」を選択しました`;
               setNotice(activity);
@@ -2127,11 +2843,16 @@ export function VisualEditorPrototype({
                 result: {
                   projectId: latestBundle.project.projectId,
                   sceneId: latestBundle.scene.sceneId,
-                  [isAudioImport ? "audioAssetId" : "textureAssetId"]:
-                    duplicate.id,
+                  [
+                    isAudioImport
+                      ? "audioAssetId"
+                      : isModelImport
+                        ? "modelAssetId"
+                        : "textureAssetId"
+                  ]: duplicate.id,
                   name: duplicate.name,
                   duplicate: true,
-                  revisionBefore: mcpRevisionRef.current,
+                  revisionBefore: duplicateRevisionBefore,
                   revisionAfter: mcpRevisionRef.current,
                   relativePath:
                     duplicate.source.kind === "project"
@@ -2170,7 +2891,9 @@ export function VisualEditorPrototype({
             const imported = committedAssets.assets[plan.asset.id];
             if (
               !imported ||
-              (imported.kind !== "audio" && imported.kind !== "texture") ||
+              (imported.kind !== "audio" &&
+                imported.kind !== "model" &&
+                imported.kind !== "texture") ||
               imported.kind !== importedKind
             ) {
               throw new XriftMcpEditorToolError(
@@ -2182,6 +2905,9 @@ export function VisualEditorPrototype({
             const nextBundle = touchProject({
               ...bundleRef.current,
               assets: committedAssets,
+              scene: isSkyboxImport
+                ? assignSkyboxToScene(bundleRef.current.scene, imported.id)
+                : bundleRef.current.scene,
             });
             mcpRevisionRef.current += 1;
             mcpRevisionBundleRef.current = nextBundle;
@@ -2215,8 +2941,13 @@ export function VisualEditorPrototype({
               result: {
                 projectId: nextBundle.project.projectId,
                 sceneId: nextBundle.scene.sceneId,
-                [isAudioImport ? "audioAssetId" : "textureAssetId"]:
-                  imported.id,
+                [
+                  isAudioImport
+                    ? "audioAssetId"
+                    : isModelImport
+                      ? "modelAssetId"
+                      : "textureAssetId"
+                ]: imported.id,
                 name: imported.name,
                 duplicate: false,
                 revisionBefore,
@@ -2225,9 +2956,12 @@ export function VisualEditorPrototype({
                   imported.source.kind === "project"
                     ? imported.source.relativePath
                     : null,
-                ...(imported.kind === "texture"
-                  ? { importSettings: imported.importSettings }
-                  : { importMetadata: imported.importMetadata }),
+                ...(imported.kind === "audio"
+                  ? { importMetadata: imported.importMetadata }
+                  : {
+                      importSettings: imported.importSettings,
+                      importMetadata: imported.importMetadata,
+                    }),
                 diagnostics: plan.diagnostics.map(
                   ({ severity, code, message, fieldPath }) => ({
                     severity,
@@ -4682,6 +5416,22 @@ export function VisualEditorPrototype({
     [bundle.assets, bundle.scene, editorMode, playSession, updateScene],
   );
 
+  const handleOptimizeColliders = useCallback(
+    (entityIds?: readonly string[]) => {
+      if (editorMode !== "edit" && !playSession) return;
+      const optimized = optimizeColliderConfiguration(bundle.scene, { entityIds });
+      if (optimized.changes.length === 0) {
+        setNotice("Colliderの設定に自動修正できる問題はありません");
+        return;
+      }
+      updateScene(() => optimized.scene);
+      setNotice(
+        `${optimized.changes.length}件のCollider設定を最適化しました。MCPのinspect_colliders / optimize_collidersでも同じ操作ができます`,
+      );
+    },
+    [bundle.scene, editorMode, playSession, updateScene],
+  );
+
   const handleRemoveCollider = useCallback(
     (entityId: string, componentId: string) => {
       if (editorMode !== "edit" && !playSession) return;
@@ -4953,6 +5703,65 @@ export function VisualEditorPrototype({
       });
     },
     [editorMode, playSession],
+  );
+
+  const handleAssignShaderAsset = useCallback(
+    async (
+      materialAssetId: string,
+      stage: ShaderAssetStage,
+      shaderAssetId: string | null,
+    ) => {
+      const material = bundleRef.current.assets.assets[materialAssetId];
+      if (material?.kind !== "material" || material.shader?.kind !== "classic-r3f") {
+        return;
+      }
+      if (!shaderAssetId) {
+        const { [stage === "vertex" ? "vertexShaderAssetId" : "fragmentShaderAssetId"]: _removed, ...shader } = material.shader;
+        handleMaterialChange(materialAssetId, { shader });
+        return;
+      }
+      const shaderAsset = bundleRef.current.assets.assets[shaderAssetId];
+      if (shaderAsset?.kind === "shader" && shaderAsset.stage !== stage) {
+        setNotice(`このShader Assetは${shaderAsset.stage}用です。${stage}用のAssetを選択してください`);
+        return;
+      }
+      if (shaderAsset?.kind !== "shader" || !projectPath) {
+        setNotice("GLSL Assetを読み込むにはプロジェクトを保存してください");
+        return;
+      }
+      try {
+        const source = await tauri.readTextFile(
+          projectPath,
+          shaderAsset.source.relativePath,
+        );
+        const sourceField =
+          stage === "vertex" ? "vertexShader" : "fragmentShader";
+        const assetField =
+          stage === "vertex" ? "vertexShaderAssetId" : "fragmentShaderAssetId";
+        const latestMaterial = bundleRef.current.assets.assets[materialAssetId];
+        if (
+          latestMaterial?.kind !== "material" ||
+          latestMaterial.shader?.kind !== "classic-r3f"
+        ) {
+          return;
+        }
+        handleMaterialChange(materialAssetId, {
+          shader: {
+            ...latestMaterial.shader,
+            [sourceField]: source,
+            [assetField]: shaderAssetId,
+          },
+        });
+        setNotice(`「${shaderAsset.name}」を${stage} GLSLとしてMaterialへ設定しました`);
+      } catch (cause) {
+        setNotice(
+          cause instanceof Error
+            ? `GLSL Assetを読み込めませんでした: ${cause.message}`
+            : "GLSL Assetを読み込めませんでした",
+        );
+      }
+    },
+    [handleMaterialChange, projectPath],
   );
 
   const handleModelChange = useCallback(
@@ -6046,6 +6855,133 @@ export function VisualEditorPrototype({
               );
               continue;
             }
+            if (queued.resourceKind === "shader") {
+              const source = await sourceFile.text();
+              const sourceHash = await sha256AssetBytes(bytes);
+              const duplicate = knownByHash.get(sourceHash);
+              if (duplicate?.kind === "shader") {
+                setHistory((current) =>
+                  replaceEditorHistoryPresent(current, {
+                    ...current.present,
+                    assetSelection: duplicate.id,
+                  }),
+                );
+                setActiveAssetFolderId(duplicate.folderId ?? null);
+                updateImportQueue((current) =>
+                  current.map((entry) =>
+                    entry.id === queued.id
+                      ? {
+                          ...entry,
+                          status: "duplicate",
+                          progress: 100,
+                          file: null,
+                          assetId: duplicate.id,
+                          sourceHash,
+                          diagnostics: [
+                            {
+                              severity: "warning",
+                              code: "duplicate-source-hash",
+                              message: `同じ内容のShader Asset「${duplicate.name}」を選択しました。`,
+                            },
+                          ],
+                        }
+                      : entry,
+                  ),
+                );
+                setNotice(`同じ内容のShader Asset「${duplicate.name}」は登録済みです`);
+                continue;
+              }
+              if (!source.trim()) {
+                updateImportQueue((current) =>
+                  current.map((entry) =>
+                    entry.id === queued.id
+                      ? {
+                          ...entry,
+                          status: "failed",
+                          progress: 100,
+                          file: null,
+                          sourceHash,
+                          diagnostics: [
+                            {
+                              severity: "blocking",
+                              code: "shader-source-empty",
+                              message: "GLSLファイルが空です",
+                            },
+                          ],
+                        }
+                      : entry,
+                  ),
+                );
+                setNotice(`${queued.name}をShader Assetにできませんでした`);
+                continue;
+              }
+              const relativePath = createShaderRelativePath(
+                sourceFile.name,
+                workingManifest,
+              );
+              const imported = createShaderAsset(
+                createDocumentId("shader"),
+                sourceFile.name.replace(/\.[^.]+$/, "") || "Shader",
+                relativePath,
+                sourceHash,
+                folderId,
+                shaderStageFromFileName(sourceFile.name),
+              );
+              updateImportQueue((current) =>
+                current.map((entry) =>
+                  entry.id === queued.id
+                    ? {
+                        ...entry,
+                        status: "committing",
+                        progress: 82,
+                        sourceHash,
+                        assetId: imported.id,
+                      }
+                    : entry,
+                ),
+              );
+              await tauri.writeTextFile(
+                targetProjectPath,
+                relativePath,
+                source,
+              );
+              workingManifest = addShaderAsset(workingManifest, imported);
+              knownByHash.set(sourceHash, imported);
+              setHistory((current) => {
+                const nextBundle = touchProject({
+                  ...current.present.bundle,
+                  assets: workingManifest,
+                });
+                bundleRef.current = nextBundle;
+                setSaveStatus("dirty");
+                return commitEditorHistory(current, {
+                  ...current.present,
+                  bundle: nextBundle,
+                  assetSelection: imported.id,
+                });
+              });
+              setActiveAssetFolderId(imported.folderId ?? null);
+              updateImportQueue((current) =>
+                current.map((entry) =>
+                  entry.id === queued.id
+                    ? {
+                        ...entry,
+                        status: "succeeded",
+                        progress: 100,
+                        file: null,
+                        assetId: imported.id,
+                        result: {
+                          materialCount: 0,
+                          textureCount: 0,
+                          shaderCount: 1,
+                        },
+                      }
+                    : entry,
+                ),
+              );
+              setNotice(`「${imported.name}」をGLSL Shader Assetとしてインポートしました`);
+              continue;
+            }
             const plan = await createAssetImportPlan({
               fileName: sourceFile.name,
               bytes,
@@ -6306,6 +7242,8 @@ export function VisualEditorPrototype({
         accepted.push({ file, resourceKind: "skybox" });
       } else if (SUPPORTED_AUDIO_FILE.test(file.name)) {
         accepted.push({ file, resourceKind: "audio" });
+      } else if (SUPPORTED_SHADER_FILE.test(file.name)) {
+        accepted.push({ file, resourceKind: "shader" });
       }
     }
     const unsupported = files.filter(
@@ -6314,13 +7252,14 @@ export function VisualEditorPrototype({
         !SUPPORTED_MODEL_FILE.test(file.name) &&
         !SUPPORTED_TEXTURE_FILE.test(file.name) &&
         !SUPPORTED_HDRI_FILE.test(file.name) &&
-        !SUPPORTED_AUDIO_FILE.test(file.name),
+        !SUPPORTED_AUDIO_FILE.test(file.name) &&
+        !SUPPORTED_SHADER_FILE.test(file.name),
     );
 
     if (unsupported.length > 0) {
       const names = unsupported.slice(0, 3).map((file) => file.name).join("、");
       setImportError(
-        `${names}${unsupported.length > 3 ? " ほか" : ""} は対象外です。Unity、Three.js Editor対応モデル、PNG / JPG / WebP / AVIF / GIF / BMP / SVG / KTX2、HDR / EXR、MP3 / WAVに対応します。`,
+        `${names}${unsupported.length > 3 ? " ほか" : ""} は対象外です。Unity、Three.js Editor対応モデル、画像、HDR / EXR、MP3 / WAV、GLSL（.glsl / .vert / .frag）に対応します。`,
       );
     } else {
       setImportError(null);
@@ -6964,6 +7903,16 @@ export function VisualEditorPrototype({
           void scriptOpenRef.current(payload.assetId);
           return true;
         }
+        case "asset.edit-shader": {
+          if (
+            !payload.assetId ||
+            bundle.assets.assets[payload.assetId]?.kind !== "shader"
+          ) {
+            return false;
+          }
+          void openShaderAssetEditor(payload.assetId);
+          return true;
+        }
         case "asset.edit-interactivity": {
           if (!payload.assetId || bundle.assets.assets[payload.assetId]?.kind !== "interactivity") {
             return false;
@@ -6999,6 +7948,7 @@ export function VisualEditorPrototype({
       history.future.length,
       history.past.length,
       importBusy,
+      openShaderAssetEditor,
       focusedEntity,
       onLayoutChange,
       requestRename,
@@ -7006,6 +7956,7 @@ export function VisualEditorPrototype({
       runSave,
       runUpload,
       saveStatus,
+      setAssetSelection,
       bundle.scene,
       sceneSelection?.id,
       stopPlayMode,
@@ -7418,6 +8369,10 @@ export function VisualEditorPrototype({
             onViewportFileDrop={() => setNotice("外部Assetは下のAssets Browserへドロップしてください")}
             onPlayDropAttempt={() => setNotice("Play中もHierarchyまたは追加メニューからEntityを配置できます")}
             onDropRejected={setNotice}
+            onOptimizeColliders={handleOptimizeColliders}
+            thumbnailCaptureRequest={thumbnailCaptureRequest}
+            onThumbnailCaptured={onThumbnailCaptured}
+            onThumbnailCaptureError={onThumbnailCaptureError}
           />
           <InspectorPanel
             scene={bundle.scene}
@@ -7458,6 +8413,11 @@ export function VisualEditorPrototype({
             onOpenScript={(assetId) =>
               executeCommand("asset.edit-script", { assetId })
             }
+            onOpenShader={(assetId) => {
+              void openShaderAssetEditor(assetId);
+            }}
+            onOpenMaterialShader={openMaterialShaderEditor}
+            onAssignShaderAsset={handleAssignShaderAsset}
             onCloseAsset={() => setAssetSelection(null)}
             onMaterialChange={handleMaterialChange}
             onModelChange={handleModelChange}
@@ -7667,6 +8627,38 @@ export function VisualEditorPrototype({
               onSave={scriptEditor.save}
               onDirtyChange={handleScriptEditorDirtyChange}
               onClose={scriptEditor.close}
+            />
+          ) : null}
+          {shaderEditorAsset && shaderEditorRequest?.kind === "asset" ? (
+            <ShaderEditorDialog
+              key={`shader:${shaderEditorAsset.id}`}
+              title={shaderEditorAsset.name}
+              stage={shaderEditorStage}
+              sourcePath={shaderEditorAsset.source.relativePath}
+              source={shaderEditorSource}
+              loading={shaderEditor.state.loading}
+              error={shaderEditor.state.error}
+              onSave={shaderEditor.save}
+              onDirtyChange={handleShaderEditorDirtyChange}
+              onClose={closeShaderEditor}
+            />
+          ) : shaderEditorMaterialShader && shaderEditorRequest?.kind === "material" ? (
+            <ShaderEditorDialog
+              key={`material-shader:${shaderEditorRequest.assetId}:${shaderEditorRequest.stage}`}
+              title={shaderEditorMaterial?.name ?? "Material Shader"}
+              stage={shaderEditorRequest.stage}
+              source={shaderEditorSource}
+              loading={false}
+              error={null}
+              onSave={(source) =>
+                saveMaterialShaderSource(
+                  shaderEditorRequest.assetId,
+                  shaderEditorRequest.stage,
+                  source,
+                )
+              }
+              onDirtyChange={handleShaderEditorDirtyChange}
+              onClose={closeShaderEditor}
             />
           ) : null}
           <button

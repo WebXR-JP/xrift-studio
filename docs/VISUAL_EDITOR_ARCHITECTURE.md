@@ -622,6 +622,9 @@ Particle と同じ関係を採る。再利用可能な定義は Asset 側に置�
 - 同じEntityの複数ScriptはComponent順でAudio Source overrideを合成する。Script再起動、runtime failure、Stopではそのownerの再生要求とoverrideを外し、Audio Source Componentの保存値へ戻す。browser / webviewのautoplay policyで拒否されても`play()`は例外を外へ出さず開始件数0をresolveし、`list().status`を`autoplay-blocked`にする。Scene全体を止めず、ユーザー操作後の再試行を許す。
 - Audio Sourceのvolume / loop / autoplay /距離propertyは既存runtimeへ更新し、Audio Asset参照、spatial、enabled、Component追加・削除は対象Entityだけを再同期する。Edit時にAudio Assetを`place_asset`すると参照設定済みAudio Source Entityを作り、既存Entityには`core.audio-source`のadd / update / removeを使う。
 - `import_audio_asset`はEdit mode限定で、trustedな絶対pathをnative側の通常file、no-link、128 MiB、extension + signature、read前後size検査へ通し、content-addressed copy、atomic commit、history、autosaveを一件で確定する。`get_audio_asset`とimport結果は管理下relative pathとmetadataだけを返し、外部path、data URL、binary bytesをMCPへ返さない。
+- `import_model_asset`は単一ファイルのGLB / glTF / VRM / OBJを同じnative file境界で検証し、`get_model_asset` / `update_model_asset`でimport設定とMaterial slot defaultを保存する。`reimport_model_asset`は管理下sourceを再解析してderived metadataをModel IDと参照を維持したままatomicに更新する。`import_skybox_asset`はHDR / EXRのequirectangular TextureをScene skyboxへ設定し、`set_project_thumbnail`は既存のTexture Assetから管理下thumbnailだけを更新する。
+- `import_shader_asset`はUTF-8 GLSL sourceを管理下Shader Assetへ追加し、`get_shader_asset` / `update_shader_asset`はsource本文とhashを同じrevision、history、autosave境界で扱う。任意の外部pathやshell操作は実行せず、Shader sourceは明示的なMCP入力またはmanaged local importだけを受け付ける。
+- `create_prefab`は選択Entityと子孫をPrefab documentへ複製し、Prefab Asset、managed document path、dependency referencesを一つのEditor revisionへ確定する。作成後はPrefab Assetを選択し、`place_asset`で再利用できる。
 - `ctx.audioSources`はruntime-onlyでSceneDocument revisionを変えない。保存するAudio Source設定は`place_asset`、`add_component`、`update_component`、`remove_component`を使い、runtime状態を暗黙に永続化しない。
 
 #### Light と runtime event の所有境界

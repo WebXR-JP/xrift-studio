@@ -288,7 +288,7 @@ test("ビジュアルワールドを編集・Playし、公開確認で送信前�
   ).toBeVisible();
   const publishDialog = page.getByRole("dialog", { name: "ワールドを公開" });
   await expect(
-    publishDialog.getByText("サムネイル", { exact: true }),
+    publishDialog.getByRole("group", { name: "サムネイル" }),
   ).toBeVisible();
   await expect(
     publishDialog.getByRole("button", { name: "XRiftへ公開", exact: true }),

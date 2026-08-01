@@ -10,6 +10,7 @@ import {
 } from "./scene-document";
 import {
   DEFAULT_RUNTIME_SPAWN_POSITION,
+  resolveRuntimeSpawn,
   resolveRuntimeSpawnPosition,
 } from "./runtime-spawn";
 
@@ -20,6 +21,12 @@ export function runRuntimeSpawnFixtureAssertions(): void {
     [12, 3, 4],
     "Official SpawnPoint position must be composed with its Entity hierarchy",
   );
+  const resolvedSpawn = resolveRuntimeSpawn(scene);
+  if (Math.abs(resolvedSpawn.yaw - Math.PI / 2) > 1e-6) {
+    throw new Error(
+      `Runtime spawn fixture failed: SpawnPoint yaw must be resolved in radians. Received ${resolvedSpawn.yaw}`,
+    );
+  }
 
   const spawn = scene.entities.spawn;
   if (!spawn) throw new Error("Runtime spawn fixture is missing SpawnPoint");
@@ -37,7 +44,7 @@ function fixtureScene(): SceneDocument {
   spawn.components.push(
     createXriftComponent(XRIFT_COMPONENT_SCHEMA_IDS.spawnPoint, {
       componentId: "spawn-component",
-      properties: { position: [0, 2, 1], yaw: 0 },
+      properties: { position: [0, 2, 1], yaw: 90 },
     })!,
   );
   return {

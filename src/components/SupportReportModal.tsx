@@ -195,7 +195,12 @@ ${sanitizedDiagnostics.length > 0 ? `\n## 関連する診断\n${sanitizedDiagnos
     setCopying(true);
     try {
       await copyText(environmentText);
-      await tauri.openUrl(url);
+      if (tauri.isAvailable()) {
+        await tauri.openUrl(url);
+      } else {
+        const opened = window.open(url, "_blank", "noopener,noreferrer");
+        if (!opened) window.location.assign(url);
+      }
       toast({
         kind: "info",
         title: `${label}を開きました`,
@@ -287,9 +292,9 @@ ${sanitizedDiagnostics.length > 0 ? `\n## 関連する診断\n${sanitizedDiagnos
               className="flex items-center gap-2 rounded-md bg-brand-600 px-3 py-2.5 text-left text-xs font-semibold text-white hover:bg-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50"
             >
               <MessageCircle size={14} className="shrink-0" aria-hidden="true" />
-              <span className="min-w-0 flex-1">
-                <span className="block">ChatGPTで文章を作成</span>
-                <span className="mt-0.5 block text-[10px] font-normal text-white/75">相談情報をコピーしてヘルプセンターGPTを開く</span>
+              <span className="min-w-0 flex-1 break-words">
+                <span className="block">ヘルプセンターGPTを開く</span>
+                <span className="mt-0.5 block text-[10px] font-normal text-white/75">相談情報をコピーしてChatGPTの相談ページを開く</span>
               </span>
               <ExternalLink size={12} className="shrink-0" aria-hidden="true" />
             </button>
@@ -300,7 +305,7 @@ ${sanitizedDiagnostics.length > 0 ? `\n## 関連する診断\n${sanitizedDiagnos
               className="flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2.5 text-left text-xs font-medium text-zinc-700 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50"
             >
               <Bug size={14} className="shrink-0 text-zinc-500" aria-hidden="true" />
-              <span className="min-w-0 flex-1">
+              <span className="min-w-0 flex-1 break-words">
                 <span className="block">GitHub Issueを作成</span>
                 <span className="mt-0.5 block text-[10px] font-normal text-zinc-400">相談情報をコピーしてIssue画面を開く</span>
               </span>

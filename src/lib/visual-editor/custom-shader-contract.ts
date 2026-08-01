@@ -42,11 +42,95 @@ export type ClassicR3fMaterialShader = {
   variants: ClassicR3fShaderVariant[];
   animatedTimeUniform?: string;
   sourceModelAssetId?: string;
+  /** Project Shader Asset used as the source of the corresponding stage. */
+  vertexShaderAssetId?: string;
+  fragmentShaderAssetId?: string;
 };
+
+/** A partial, JSON-safe update accepted by the Inspector and MCP. */
+export type ClassicR3fMaterialShaderPatch = Partial<
+  Omit<ClassicR3fMaterialShader, "kind">
+>;
 
 export type MaterialShader =
   | OpenBrushMaterialShader
   | ClassicR3fMaterialShader;
+
+export const DEFAULT_CUSTOM_SHADER_VERTEX = `varying vec2 vUv;
+
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+
+export const DEFAULT_CUSTOM_SHADER_FRAGMENT = `uniform vec3 uColor;
+uniform float uIntensity;
+uniform float uTime;
+varying vec2 vUv;
+
+void main() {
+  float pulse = 0.92 + 0.08 * sin(uTime * 2.0 + vUv.y * 6.28318);
+  vec3 color = uColor * uIntensity * pulse;
+  gl_FragColor = vec4(color, 1.0);
+}`;
+
+/** The starter shader used by the Material Inspector and MCP create tool. */
+export function createDefaultCustomShader(): ClassicR3fMaterialShader {
+  return {
+    kind: "classic-r3f",
+    sourceModulePath: "studio://custom-shader",
+    vertexShader: DEFAULT_CUSTOM_SHADER_VERTEX,
+    fragmentShader: DEFAULT_CUSTOM_SHADER_FRAGMENT,
+    uniforms: {
+      uColor: { kind: "color", value: "#8b5cf6" },
+      uIntensity: { kind: "number", value: 1 },
+      uTime: { kind: "number", value: 0 },
+    },
+    variants: [
+      {
+        name: "default",
+        defines: {},
+        side: "front",
+        transparent: false,
+        depthWrite: true,
+      },
+    ],
+    animatedTimeUniform: "uTime",
+  };
+}
+
+export function isCustomAuthoredShader(
+  value: MaterialShader | undefined,
+): value is ClassicR3fMaterialShader {
+  return value?.kind === "classic-r3f" && !value.sourceModelAssetId;
+}
+
+/** Returns a user-readable reason instead of silently accepting bad GLSL IR. */
+export function validateClassicR3fMaterialShader(
+  value: unknown,
+): string[] {
+  if (isClassicR3fMaterialShader(value)) return [];
+  if (!value || typeof value !== "object") return ["shaderはobjectで指定してください"];
+  const shader = value as Partial<ClassicR3fMaterialShader>;
+  const errors: string[] = [];
+  if (shader.kind !== "classic-r3f") errors.push('kindは"classic-r3f"で指定してください');
+  if (typeof shader.sourceModulePath !== "string" || !shader.sourceModulePath.trim()) {
+    errors.push("sourceModulePathは空にできません");
+  }
+  if (typeof shader.vertexShader !== "string" || !/\bvoid\s+main\s*\(/.test(shader.vertexShader)) {
+    errors.push("vertexShaderにvoid main()が必要です");
+  }
+  if (typeof shader.fragmentShader !== "string" || !/\bvoid\s+main\s*\(/.test(shader.fragmentShader)) {
+    errors.push("fragmentShaderにvoid main()が必要です");
+  }
+  if (!shader.uniforms || typeof shader.uniforms !== "object" || Array.isArray(shader.uniforms)) {
+    errors.push("uniformsはobjectで指定してください");
+  }
+  if (!Array.isArray(shader.variants) || shader.variants.length === 0) {
+    errors.push("variantsを1件以上指定してください");
+  }
+  return errors;
+}
 
 export function isClassicR3fMaterialShader(
   value: unknown,
@@ -89,7 +173,13 @@ export function isClassicR3fMaterialShader(
         /^[A-Za-z_]\w{0,79}$/.test(shader.animatedTimeUniform))) &&
     (shader.sourceModelAssetId === undefined ||
       (typeof shader.sourceModelAssetId === "string" &&
-        shader.sourceModelAssetId.trim().length > 0))
+        shader.sourceModelAssetId.trim().length > 0)) &&
+    (shader.vertexShaderAssetId === undefined ||
+      (typeof shader.vertexShaderAssetId === "string" &&
+        shader.vertexShaderAssetId.trim().length > 0)) &&
+    (shader.fragmentShaderAssetId === undefined ||
+      (typeof shader.fragmentShaderAssetId === "string" &&
+        shader.fragmentShaderAssetId.trim().length > 0))
   );
 }
 

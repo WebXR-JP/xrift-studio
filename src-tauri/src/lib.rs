@@ -311,6 +311,23 @@ struct LocalAudioImportSource {
     data_url: String,
 }
 
+#[derive(Serialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct LocalModelImportSource {
+    file_name: String,
+    mime_type: String,
+    byte_length: u64,
+    data_url: String,
+}
+
+#[derive(Serialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct LocalShaderImportSource {
+    file_name: String,
+    byte_length: u64,
+    source: String,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct VisualSaveJournal {
@@ -3555,6 +3572,8 @@ fn local_texture_mime_type(path: &Path) -> Option<&'static str> {
         Some("bmp") => Some("image/bmp"),
         Some("svg") => Some("image/svg+xml"),
         Some("ktx2") => Some("image/ktx2"),
+        Some("hdr") => Some("image/vnd.radiance"),
+        Some("exr") => Some("image/x-exr"),
         _ => None,
     }
 }
@@ -3856,6 +3875,185 @@ fn read_local_texture_import_source(
     read_local_texture_import_source_path(Path::new(source_path))
 }
 
+const MAX_LOCAL_MODEL_BYTES: u64 = 128 * 1024 * 1024;
+
+fn local_model_mime_type(path: &Path) -> Option<&'static str> {
+    match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("glb") => Some("model/gltf-binary"),
+        Some("gltf") => Some("model/gltf+json"),
+        Some("vrm") => Some("model/vrm"),
+        Some("obj") => Some("model/obj"),
+        _ => None,
+    }
+}
+
+fn read_local_model_import_source_path(
+    source_path: &Path,
+) -> Result<LocalModelImportSource, String> {
+    if !source_path.is_absolute() {
+        return Err("local Model source must use an absolute path".to_string());
+    }
+    let source_metadata = std::fs::symlink_metadata(source_path)
+        .map_err(|_| "local Model source cannot be inspected".to_string())?;
+    if source_metadata.file_type().is_symlink() || !source_metadata.is_file() {
+        return Err("local Model source must be a regular non-symlink file".to_string());
+    }
+    if source_metadata.len() == 0 || source_metadata.len() > MAX_LOCAL_MODEL_BYTES {
+        return Err("local Model source exceeds the supported size".to_string());
+    }
+    let mime_type = local_model_mime_type(source_path)
+        .ok_or_else(|| "local Model source format is not supported".to_string())?;
+    let resolved = source_path
+        .canonicalize()
+        .map_err(|_| "local Model source cannot be resolved".to_string())?;
+    let resolved_metadata = std::fs::symlink_metadata(&resolved)
+        .map_err(|_| "local Model source cannot be inspected".to_string())?;
+    if resolved_metadata.file_type().is_symlink()
+        || !resolved_metadata.is_file()
+        || resolved_metadata.len() != source_metadata.len()
+    {
+        return Err("local Model source changed while it was inspected".to_string());
+    }
+    let mut file = open_absolute_file_without_links(&resolved)?;
+    let opened_metadata = file
+        .metadata()
+        .map_err(|_| "local Model source cannot be inspected".to_string())?;
+    if !opened_metadata.is_file() || opened_metadata.len() != source_metadata.len() {
+        return Err("local Model source changed while it was inspected".to_string());
+    }
+    let mut bytes = Vec::with_capacity(opened_metadata.len() as usize);
+    std::io::Read::by_ref(&mut file)
+        .take(MAX_LOCAL_MODEL_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "local Model source cannot be read".to_string())?;
+    let final_length = file
+        .metadata()
+        .map_err(|_| "local Model source cannot be inspected after reading".to_string())?
+        .len();
+    if bytes.len() as u64 != source_metadata.len()
+        || final_length != source_metadata.len()
+        || bytes.len() as u64 > MAX_LOCAL_MODEL_BYTES
+    {
+        return Err("local Model source changed while it was read".to_string());
+    }
+    let file_name = resolved
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| "local Model source file name is invalid".to_string())?;
+    use base64::Engine;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Ok(LocalModelImportSource {
+        file_name: file_name.to_string(),
+        mime_type: mime_type.to_string(),
+        byte_length: source_metadata.len(),
+        data_url: format!("data:{};base64,{}", mime_type, encoded),
+    })
+}
+
+#[tauri::command]
+fn read_local_model_import_source(source_path: String) -> Result<LocalModelImportSource, String> {
+    let source_path = source_path.trim();
+    if source_path.is_empty()
+        || source_path.len() > 4096
+        || source_path.chars().any(char::is_control)
+    {
+        return Err("local Model source path is invalid".to_string());
+    }
+    read_local_model_import_source_path(Path::new(source_path))
+}
+
+const MAX_LOCAL_SHADER_BYTES: u64 = 8 * 1024 * 1024;
+
+fn local_shader_extension_supported(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .map(|extension| extension.to_ascii_lowercase())
+            .as_deref(),
+        Some("glsl" | "vert" | "vertex" | "vs" | "frag" | "fragment" | "fs")
+    )
+}
+
+fn read_local_shader_import_source_path(
+    source_path: &Path,
+) -> Result<LocalShaderImportSource, String> {
+    if !source_path.is_absolute() {
+        return Err("local Shader source must use an absolute path".to_string());
+    }
+    let source_metadata = std::fs::symlink_metadata(source_path)
+        .map_err(|_| "local Shader source cannot be inspected".to_string())?;
+    if source_metadata.file_type().is_symlink() || !source_metadata.is_file() {
+        return Err("local Shader source must be a regular non-symlink file".to_string());
+    }
+    if source_metadata.len() == 0 || source_metadata.len() > MAX_LOCAL_SHADER_BYTES {
+        return Err("local Shader source exceeds the supported size".to_string());
+    }
+    if !local_shader_extension_supported(source_path) {
+        return Err("local Shader source format is not supported".to_string());
+    }
+    let resolved = source_path
+        .canonicalize()
+        .map_err(|_| "local Shader source cannot be resolved".to_string())?;
+    let resolved_metadata = std::fs::symlink_metadata(&resolved)
+        .map_err(|_| "local Shader source cannot be inspected".to_string())?;
+    if resolved_metadata.file_type().is_symlink()
+        || !resolved_metadata.is_file()
+        || resolved_metadata.len() != source_metadata.len()
+    {
+        return Err("local Shader source changed while it was inspected".to_string());
+    }
+    let mut file = open_absolute_file_without_links(&resolved)?;
+    let opened_metadata = file
+        .metadata()
+        .map_err(|_| "local Shader source cannot be inspected".to_string())?;
+    if !opened_metadata.is_file() || opened_metadata.len() != source_metadata.len() {
+        return Err("local Shader source changed while it was inspected".to_string());
+    }
+    let mut source = String::new();
+    std::io::Read::by_ref(&mut file)
+        .take(MAX_LOCAL_SHADER_BYTES + 1)
+        .read_to_string(&mut source)
+        .map_err(|_| "local Shader source must be valid UTF-8".to_string())?;
+    let final_length = file
+        .metadata()
+        .map_err(|_| "local Shader source cannot be inspected after reading".to_string())?
+        .len();
+    if source.as_bytes().len() as u64 != source_metadata.len()
+        || final_length != source_metadata.len()
+        || source.as_bytes().len() as u64 > MAX_LOCAL_SHADER_BYTES
+    {
+        return Err("local Shader source changed while it was read".to_string());
+    }
+    let file_name = resolved
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| "local Shader source file name is invalid".to_string())?;
+    Ok(LocalShaderImportSource {
+        file_name: file_name.to_string(),
+        byte_length: source_metadata.len(),
+        source,
+    })
+}
+
+#[tauri::command]
+fn read_local_shader_import_source(source_path: String) -> Result<LocalShaderImportSource, String> {
+    let source_path = source_path.trim();
+    if source_path.is_empty()
+        || source_path.len() > 4096
+        || source_path.chars().any(char::is_control)
+    {
+        return Err("local Shader source path is invalid".to_string());
+    }
+    read_local_shader_import_source_path(Path::new(source_path))
+}
+
 /// Publishes imported sources and derived thumbnails as a single operation.
 /// Import destinations are content-addressed. An existing byte-identical file
 /// is reused, while a different payload at the same path is never overwritten.
@@ -4074,6 +4272,16 @@ fn open_script_source_file(
 
     ensure_no_symlink_ancestors(canonical_project, relative)?;
     let path = canonical_project.join(relative);
+    let path_metadata = std::fs::symlink_metadata(&path)
+        .map_err(|error| format!("Script source metadata cannot be read: {}", error))?;
+    if path_metadata.file_type().is_symlink() {
+        return Err(
+            "Script source must be a regular file and symbolic links are not allowed".to_string(),
+        );
+    }
+    if !path_metadata.is_file() {
+        return Err("Script source must be a regular file".to_string());
+    }
     let mut options = std::fs::OpenOptions::new();
     options
         .read(true)
@@ -4820,6 +5028,8 @@ pub fn run() {
             commit_visual_asset_import,
             read_local_audio_import_source,
             read_local_texture_import_source,
+            read_local_model_import_source,
+            read_local_shader_import_source,
             open_visual_asset_location,
             external_store::list_external_store_assets,
             external_store::get_external_store_asset_options,
@@ -5028,6 +5238,86 @@ mod tests {
                 .expect("symlink fixture must be created");
             assert!(
                 read_local_texture_import_source_path(&linked).is_err(),
+                "final symlink sources must be rejected"
+            );
+        }
+
+        std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
+    }
+
+    #[test]
+    fn local_model_import_source_accepts_only_safe_supported_files() {
+        let fixture_root = reset_fixture_root("local-model");
+        std::fs::create_dir_all(&fixture_root).expect("fixture root must be created");
+        let model_path = fixture_root.join("model.glb");
+        let model_bytes = b"glTF\x02\x00\x00\x00fixture";
+        std::fs::write(&model_path, model_bytes).expect("Model fixture must be written");
+
+        let source = read_local_model_import_source_path(&model_path)
+            .expect("supported regular Model should be readable");
+        assert_eq!(source.file_name, "model.glb");
+        assert_eq!(source.mime_type, "model/gltf-binary");
+        assert_eq!(source.byte_length, model_bytes.len() as u64);
+        assert!(source
+            .data_url
+            .starts_with("data:model/gltf-binary;base64,"));
+        assert!(
+            !source
+                .data_url
+                .contains(&fixture_root.to_string_lossy().to_string()),
+            "external source paths must not be returned"
+        );
+
+        let unsupported = fixture_root.join("model.fbx");
+        std::fs::write(&unsupported, b"fbx").expect("unsupported fixture must be written");
+        assert!(read_local_model_import_source_path(&unsupported).is_err());
+        assert!(
+            read_local_model_import_source_path(Path::new("relative.glb")).is_err(),
+            "relative MCP paths must be rejected"
+        );
+
+        #[cfg(unix)]
+        {
+            let linked = fixture_root.join("linked.glb");
+            std::os::unix::fs::symlink(&model_path, &linked)
+                .expect("symlink fixture must be created");
+            assert!(
+                read_local_model_import_source_path(&linked).is_err(),
+                "final symlink sources must be rejected"
+            );
+        }
+
+        std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
+    }
+
+    #[test]
+    fn local_shader_import_source_accepts_only_safe_utf8_files() {
+        let fixture_root = reset_fixture_root("local-shader");
+        std::fs::create_dir_all(&fixture_root).expect("fixture root must be created");
+        let shader_path = fixture_root.join("surface.frag");
+        let shader_source = "void main() { gl_FragColor = vec4(1.0); }";
+        std::fs::write(&shader_path, shader_source).expect("Shader fixture must be written");
+
+        let source = read_local_shader_import_source_path(&shader_path)
+            .expect("supported regular Shader should be readable");
+        assert_eq!(source.file_name, "surface.frag");
+        assert_eq!(source.byte_length, shader_source.len() as u64);
+        assert_eq!(source.source, shader_source);
+
+        let unsupported = fixture_root.join("surface.txt");
+        std::fs::write(&unsupported, shader_source).expect("unsupported fixture must be written");
+        assert!(read_local_shader_import_source_path(&unsupported).is_err());
+        let invalid_utf8 = fixture_root.join("invalid.glsl");
+        std::fs::write(&invalid_utf8, [0xff, 0xfe]).expect("invalid UTF-8 fixture must be written");
+        assert!(read_local_shader_import_source_path(&invalid_utf8).is_err());
+
+        #[cfg(unix)]
+        {
+            let linked = fixture_root.join("linked.frag");
+            std::os::unix::fs::symlink(&shader_path, &linked)
+                .expect("symlink fixture must be created");
+            assert!(
+                read_local_shader_import_source_path(&linked).is_err(),
                 "final symlink sources must be rejected"
             );
         }

@@ -252,6 +252,10 @@ function cloneBuiltinAsset(asset: SceneAsset): SceneAsset {
     return { ...asset, source: { ...asset.source } };
   }
 
+  if (asset.kind === "shader") {
+    return { ...asset, source: { ...asset.source } };
+  }
+
   return { ...asset, source: { ...asset.source } };
 }
 

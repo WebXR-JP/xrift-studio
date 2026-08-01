@@ -102,6 +102,7 @@ const KIND_FOLDERS: BrowserFolder[] = [
   { id: "folder-particles", name: "Particles", icon: "particle", kind: "particle" },
   { id: "folder-interactivity", name: "Interactivity", icon: "asset", kind: "interactivity" },
   { id: "folder-scripts", name: "Scripts", icon: "script", kind: "script" },
+  { id: "folder-shaders", name: "Shaders", icon: "script", kind: "shader" },
   { id: "folder-prefabs", name: "Prefabs", icon: "prefab", kind: "template" },
 ];
 
@@ -125,6 +126,8 @@ function assetKindLabel(asset: SceneAsset): string {
       return "Audio";
     case "script":
       return "Script";
+    case "shader":
+      return "GLSL Shader";
     case "template":
       return "Prefab";
   }
@@ -147,6 +150,8 @@ function assetIconName(asset: SceneAsset): EditorIconName {
     case "audio":
       return "audio";
     case "script":
+      return "script";
+    case "shader":
       return "script";
     case "template":
       return "prefab";
@@ -1037,10 +1042,12 @@ function ImportQueueEntry({
       ? EDITOR_ICONS.texture
       : entry.resourceKind === "skybox"
         ? EDITOR_ICONS.texture
-        : entry.resourceKind === "audio"
-          ? EDITOR_ICONS.audio
+          : entry.resourceKind === "audio"
+            ? EDITOR_ICONS.audio
           : entry.resourceKind === "unity-package"
             ? EDITOR_ICONS.prefab
+          : entry.resourceKind === "shader"
+            ? EDITOR_ICONS.script
             : EDITOR_ICONS.model;
   const diagnostic = entry.diagnostics[0];
   const removable = canRemoveImport(entry.status);
@@ -1090,6 +1097,8 @@ function ImportQueueEntry({
               ? "HDRI Texture 1件・Skyboxへ設定済み"
               : entry.resourceKind === "audio"
                 ? "Audio Asset 1件"
+              : entry.resourceKind === "shader"
+                ? "GLSL Shader Asset 1件"
                 : `Material ${entry.result.materialCount}件・Texture ${entry.result.textureCount}件`}
         </p>
       ) : null}
@@ -1810,6 +1819,9 @@ export function AssetsPanel({
                 if (asset.kind === "script") {
                   onCommand("asset.edit-script", { assetId: asset.id });
                 }
+                if (asset.kind === "shader") {
+                  onCommand("asset.edit-shader", { assetId: asset.id });
+                }
               }}
               onDelete={() => onRequestDeleteAsset(asset.id)}
               onOpenContext={(event) => openContextMenu(event, { assetId: asset.id })}
@@ -1990,7 +2002,7 @@ export function AssetsPanel({
 
       {fileDragOver ? (
         <div className="pointer-events-none absolute inset-2 z-40 flex items-center justify-center rounded-md border-2 border-dashed border-violet-500 bg-white/95 px-4 text-center text-[12px] font-semibold leading-5 text-violet-900 shadow-lg">
-          {importDisabledReason ?? "UnityPackage / Scene / Prefab / Model / Texture を解析してインポート"}
+          {importDisabledReason ?? "UnityPackage / Scene / Prefab / Model / Texture / GLSL を解析してインポート"}
         </div>
       ) : null}
     </section>

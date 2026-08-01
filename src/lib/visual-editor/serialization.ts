@@ -5,6 +5,8 @@ import {
   normalizeTextureImportSettings,
   SCRIPT_ASSET_CONTRACT_VERSION,
   SCRIPT_ASSET_LANGUAGES,
+  SHADER_ASSET_CONTRACT_VERSION,
+  SHADER_ASSET_STAGES,
   type AssetManifest,
   type ScriptAssetLanguage,
   type SkyboxAsset,
@@ -224,6 +226,7 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
     "interactivity",
     "audio",
     "script",
+    "shader",
     "template",
   ]);
   const prefabPaths = new Map<string, string>();
@@ -312,6 +315,36 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
             `${path}.source`,
             "script-source",
             "Script Asset source must be a project file",
+          ),
+        );
+      }
+    }
+    if (candidate.kind === "shader") {
+      if (candidate.contractVersion !== SHADER_ASSET_CONTRACT_VERSION) {
+        issues.push(
+          issue(
+            `${path}.contractVersion`,
+            "shader-version",
+            "Shader Asset must declare the supported shader contract version",
+          ),
+        );
+      }
+      if (candidate.language !== "glsl") {
+        issues.push(
+          issue(`${path}.language`, "enum", "Shader language must be glsl"),
+        );
+      }
+      if (!SHADER_ASSET_STAGES.includes(candidate.stage as (typeof SHADER_ASSET_STAGES)[number])) {
+        issues.push(
+          issue(`${path}.stage`, "enum", "Shader stage must be vertex or fragment"),
+        );
+      }
+      if (!isRecord(candidate.source) || candidate.source.kind !== "project") {
+        issues.push(
+          issue(
+            `${path}.source`,
+            "shader-source",
+            "Shader Asset source must be a project file",
           ),
         );
       }
