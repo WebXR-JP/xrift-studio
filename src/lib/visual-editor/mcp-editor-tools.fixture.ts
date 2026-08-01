@@ -1290,6 +1290,27 @@ export function runXriftMcpEditorToolFixtures(): void {
   );
   current = { ...current, bundle: terrainSculpted.bundle, revision: current.revision + 1 };
 
+  const terrainResampled = executeXriftMcpEditorTool(current, {
+    id: "fixture-update-terrain",
+    tool: "update_terrain",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityId: terrainId,
+      width: 20,
+      depth: 14,
+      resolution: 33,
+    },
+  });
+  assert(
+    terrainResampled.changed &&
+      terrainResampled.result.width === 20 &&
+      terrainResampled.result.resolution === 33,
+    "update_terrain should resample Terrain Settings through the MCP boundary",
+  );
+  current = { ...current, bundle: terrainResampled.bundle, revision: current.revision + 1 };
+
   const primitiveCreated = executeXriftMcpEditorTool(current, {
     id: "fixture-create-primitive",
     tool: "create_primitive",

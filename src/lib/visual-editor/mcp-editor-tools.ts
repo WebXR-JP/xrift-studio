@@ -30,6 +30,7 @@ import {
   addBuiltinPrimitiveEntity,
   addTerrainEntity,
   applyTerrainBrushToScene,
+  resampleTerrainInScene,
   duplicateEntityHierarchy,
   getTerrainGeometry,
   getMeshMaterialSlots,
@@ -173,6 +174,7 @@ export const XRIFT_MCP_EDITOR_TOOLS = [
   "get_terrain",
   "create_terrain",
   "sculpt_terrain",
+  "update_terrain",
   "place_builtin_prefab",
   "create_prefab",
   "add_component",
@@ -352,6 +354,8 @@ export function executeXriftMcpEditorTool(
       return createTerrain(context, request.arguments);
     case "sculpt_terrain":
       return sculptTerrain(context, request.arguments);
+    case "update_terrain":
+      return updateTerrain(context, request.arguments);
     case "place_builtin_prefab":
       return placeBuiltinPrefab(context, request.arguments);
     case "create_prefab":
@@ -2161,6 +2165,7 @@ function getTerrain(
       depth: terrain.depth,
       resolution: terrain.resolution,
       sampleCount: terrain.heights.length,
+      holeCellCount: terrain.holes?.filter(Boolean).length ?? 0,
       minHeight: range.min,
       maxHeight: range.max,
       materialAssetId: mesh.materialBindings[0]?.materialAssetId ?? null,
@@ -2285,16 +2290,18 @@ function sculptTerrain(
   const strength = terrainMcpNumber(
     argumentsValue.strength,
     "strength",
-    kind === "smooth" || kind === "flatten" ? 0.5 : 0.8,
+    kind === "smooth" || kind === "flatten" || kind === "stamp" ? 0.5 : 0.8,
     0.001,
-    kind === "smooth" || kind === "flatten" ? 1 : TERRAIN_HEIGHT_ABSOLUTE_MAX,
+    kind === "smooth" || kind === "flatten" || kind === "stamp"
+      ? 1
+      : TERRAIN_HEIGHT_ABSOLUTE_MAX,
   );
   const targetHeight = optionalFiniteNumber(
     argumentsValue.targetHeight,
     "targetHeight",
   );
-  if (kind === "flatten" && targetHeight === undefined) {
-    invalidArgument("targetHeight", "a finite number for flatten");
+  if ((kind === "flatten" || kind === "stamp") && targetHeight === undefined) {
+    invalidArgument("targetHeight", "a finite number for flatten or stamp");
   }
   if (
     targetHeight !== undefined &&
@@ -2305,11 +2312,13 @@ function sculptTerrain(
       `a number from -${TERRAIN_HEIGHT_ABSOLUTE_MAX} to ${TERRAIN_HEIGHT_ABSOLUTE_MAX}`,
     );
   }
+  const falloff = terrainMcpNumber(argumentsValue.falloff, "falloff", 0.5, 0, 1);
   const operation: TerrainBrushOperation = {
     kind,
     center,
     radius,
     strength,
+    falloff,
     ...(targetHeight === undefined ? {} : { targetHeight }),
   };
   const scene = applyTerrainBrushToScene(
@@ -2349,6 +2358,83 @@ function sculptTerrain(
       maxHeight: range?.max ?? null,
     },
     activity: `AIがTerrainへ${kind}ブラシを適用しました`,
+  };
+}
+
+function updateTerrain(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const componentId = optionalString(argumentsValue.componentId);
+  const entity = requireEntity(context.bundle.scene, entityId);
+  const mesh = entity.components.find(
+    (component): component is Extract<SceneComponent, { type: "mesh" }> =>
+      component.type === "mesh" &&
+      (componentId === undefined || component.id === componentId),
+  );
+  const terrain = mesh ? getTerrainGeometry(mesh) : undefined;
+  if (!mesh || !terrain) {
+    throw new XriftMcpEditorToolError(
+      "TERRAIN_NOT_FOUND",
+      "指定されたEntityにTerrainが見つかりません",
+      { entityId, ...(componentId ? { componentId } : {}) },
+    );
+  }
+  const width = terrainMcpNumber(
+    argumentsValue.width,
+    "width",
+    terrain.width,
+    TERRAIN_SIZE_MIN,
+    TERRAIN_SIZE_MAX,
+  );
+  const depth = terrainMcpNumber(
+    argumentsValue.depth,
+    "depth",
+    terrain.depth,
+    TERRAIN_SIZE_MIN,
+    TERRAIN_SIZE_MAX,
+  );
+  const resolution = terrainMcpNumber(
+    argumentsValue.resolution,
+    "resolution",
+    terrain.resolution,
+    TERRAIN_RESOLUTION_MIN,
+    TERRAIN_RESOLUTION_MAX,
+    true,
+  );
+  const scene = resampleTerrainInScene(
+    context.bundle.scene,
+    entityId,
+    { width, depth, resolution },
+    mesh.id,
+  );
+  if (scene === context.bundle.scene) {
+    return unchanged(
+      context,
+      { entityId, componentId: mesh.id, width, depth, resolution },
+      `Terrain「${entity.name}」はすでに指定の設定です`,
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: entityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId,
+      componentId: mesh.id,
+      width,
+      depth,
+      resolution,
+    },
+    activity: `AIがTerrain「${entity.name}」のサイズと解像度を更新しました`,
   };
 }
 

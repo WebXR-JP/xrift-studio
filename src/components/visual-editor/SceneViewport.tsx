@@ -93,6 +93,7 @@ import {
   resolveRuntimeSpawn,
   resolveSceneSettings,
   createTerrainMeshBuffers,
+  terrainHeightRange,
   STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID,
   type AssetManifest,
   type AnimationComponent,
@@ -109,6 +110,7 @@ import {
   type SceneEntity,
   type SceneSettings,
   type TerrainGeometry,
+  type TerrainViewportEditing,
   type SkyboxAsset,
   type TransformPatch,
   type TextureAsset,
@@ -589,12 +591,29 @@ function TerrainMeshVisual({
         />
       )}
       {selected || materialDropHighlighted ? (
-        <Edges
+        <TerrainSelectionOutline
+          terrain={terrain}
           color={materialDropHighlighted ? "#38bdf8" : EDITOR_SELECTION_COLOR}
-          scale={1.006}
-          threshold={12}
         />
       ) : null}
+    </mesh>
+  );
+}
+
+/** A Terrain selection is its bounds, never every heightmap triangle. */
+function TerrainSelectionOutline({
+  terrain,
+  color,
+}: {
+  terrain: TerrainGeometry;
+  color: string;
+}) {
+  const range = terrainHeightRange(terrain);
+  const height = Math.max(0.05, range.max - range.min);
+  return (
+    <mesh position={[0, (range.min + range.max) / 2, 0]}>
+      <boxGeometry args={[terrain.width, height, terrain.depth]} />
+      <meshBasicMaterial color={color} wireframe depthTest={false} transparent opacity={0.88} />
     </mesh>
   );
 }
@@ -1639,6 +1658,8 @@ function EntityObject({
 
 type SceneDropHit = {
   groundPosition: Vec3 | null;
+  /** Intersection transformed into the hit mesh's local coordinates. */
+  localPosition: Vec3 | null;
   authoringEntityId: string | null;
   renderedEntityId: string | null;
   meshComponentId: string | null;
@@ -1791,6 +1812,7 @@ function SceneDropProjectionBridge({
   const groundHit = useMemo(() => new Vector3(), []);
   const entityWorldPosition = useMemo(() => new Vector3(), []);
   const entityNdcPosition = useMemo(() => new Vector3(), []);
+  const localHitPosition = useMemo(() => new Vector3(), []);
 
   useLayoutEffect(() => {
     resolverRef.current = (clientX, clientY, options) => {
@@ -1798,6 +1820,7 @@ function SceneDropProjectionBridge({
       if (bounds.width <= 0 || bounds.height <= 0) {
         return {
           groundPosition: null,
+          localPosition: null,
           authoringEntityId: null,
           renderedEntityId: null,
           meshComponentId: null,
@@ -1812,6 +1835,7 @@ function SceneDropProjectionBridge({
       let authoringEntityId: string | null = null;
       let renderedEntityId: string | null = null;
       let meshComponentId: string | null = null;
+      let localPosition: Vec3 | null = null;
       for (const intersection of raycaster.intersectObjects(scene.children, true)) {
         if (!isObjectVisibleInHierarchy(intersection.object)) continue;
         const metadata = entityPointerMetadata(intersection.object);
@@ -1824,6 +1848,9 @@ function SceneDropProjectionBridge({
         authoringEntityId = metadata.authoringEntityId;
         renderedEntityId = metadata.renderedEntityId;
         meshComponentId = metadata.meshComponentId;
+        localHitPosition.copy(intersection.point);
+        intersection.object.worldToLocal(localHitPosition);
+        localPosition = [localHitPosition.x, localHitPosition.y, localHitPosition.z];
         break;
       }
       if (!authoringEntityId && options?.includeEntityOriginFallback) {
@@ -1877,6 +1904,7 @@ function SceneDropProjectionBridge({
         groundPosition: position
           ? [position.x, 0, position.z]
           : null,
+        localPosition,
         authoringEntityId,
         renderedEntityId,
         meshComponentId,
@@ -2049,6 +2077,7 @@ function CameraControls({
   editorMode,
   projectKind,
   transformDragging,
+  terrainEditing,
   frameSelectionRequest,
   exitFocusRequest,
   frameEntityId,
@@ -2059,6 +2088,7 @@ function CameraControls({
   editorMode: EditorMode;
   projectKind: VisualProjectKind;
   transformDragging: boolean;
+  terrainEditing: boolean;
   frameSelectionRequest: number;
   exitFocusRequest: number;
   frameEntityId: string | null;
@@ -2211,7 +2241,7 @@ function CameraControls({
 
   const enabled =
     editorMode === "edit"
-      ? !transformDragging
+      ? !transformDragging && !terrainEditing
       : projectKind === "item";
 
   return (
@@ -2729,6 +2759,11 @@ export function SceneViewport({
   onPlayDropAttempt,
   onDropRejected,
   onOptimizeColliders,
+  terrainEditing = null,
+  onTerrainStrokeStart,
+  onTerrainStroke,
+  onTerrainStrokeEnd,
+  onTerrainStrokeCancel,
   scriptRuntime,
   thumbnailCaptureRequest = 0,
   onThumbnailCaptured,
@@ -2780,6 +2815,16 @@ export function SceneViewport({
   onPlayDropAttempt: () => void;
   onDropRejected: (message: string) => void;
   onOptimizeColliders: (entityIds?: readonly string[]) => void;
+  /** Inspector-selected Terrain tool. A hit point supplies each stamp center. */
+  terrainEditing?: TerrainViewportEditing | null;
+  onTerrainStrokeStart?: (entityId: string, componentId: string) => boolean;
+  onTerrainStroke?: (
+    entityId: string,
+    componentId: string,
+    operation: import("../../lib/visual-editor").TerrainBrushOperation,
+  ) => void;
+  onTerrainStrokeEnd?: (entityId: string) => void;
+  onTerrainStrokeCancel?: (entityId: string) => void;
   /** Compiled Script Assets plus the callbacks their hosts need. */
   scriptRuntime?: ScriptViewportRuntime;
   /** Requests a clean capture from the active Three.js Scene View. */
@@ -2810,6 +2855,11 @@ export function SceneViewport({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [transformDragging, setTransformDragging] = useState(false);
   const transformDraggingRef = useRef(false);
+  const terrainPointerRef = useRef<{
+    pointerId: number;
+    entityId: string;
+    componentId: string;
+  } | null>(null);
   const rightPointerGestureRef = useRef<{
     pointerId: number;
     startX: number;
@@ -2919,6 +2969,13 @@ export function SceneViewport({
   }, [editorMode, projectKind]);
 
   const handlePlayKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape" && terrainPointerRef.current) {
+      const terrainPointer = terrainPointerRef.current;
+      terrainPointerRef.current = null;
+      onTerrainStrokeCancel?.(terrainPointer.entityId);
+      event.preventDefault();
+      return;
+    }
     if (editorMode !== "play" || projectKind !== "world") return;
     const key = event.key.toLowerCase();
     if (!PLAY_KEYS.has(key)) return;
@@ -3020,6 +3077,37 @@ export function SceneViewport({
     const isCanvasPointer = event.target instanceof HTMLCanvasElement;
     if (
       isCanvasPointer &&
+      event.button === 0 &&
+      editorMode === "edit" &&
+      terrainEditing &&
+      !transformDraggingRef.current
+    ) {
+      const hit = dropResolverRef.current?.(event.clientX, event.clientY);
+      if (
+        hit?.authoringEntityId === terrainEditing.entityId &&
+        hit.renderedEntityId === terrainEditing.entityId &&
+        hit.meshComponentId === terrainEditing.componentId &&
+        hit.localPosition &&
+        onTerrainStrokeStart?.(terrainEditing.entityId, terrainEditing.componentId)
+      ) {
+        terrainPointerRef.current = {
+          pointerId: event.pointerId,
+          entityId: terrainEditing.entityId,
+          componentId: terrainEditing.componentId,
+        };
+        viewportRef.current?.focus();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        onTerrainStroke?.(terrainEditing.entityId, terrainEditing.componentId, {
+          ...terrainEditing,
+          center: [hit.localPosition[0], hit.localPosition[2]],
+        });
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+    }
+    if (
+      isCanvasPointer &&
       editorMode === "play" &&
       projectKind === "world" &&
       (event.button === 0 || event.button === 2)
@@ -3067,6 +3155,21 @@ export function SceneViewport({
   const handleViewportPointerMove = (
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
+    const terrainPointer = terrainPointerRef.current;
+    if (terrainPointer?.pointerId === event.pointerId && terrainEditing) {
+      const hit = dropResolverRef.current?.(event.clientX, event.clientY);
+      if (
+        hit?.authoringEntityId === terrainPointer.entityId &&
+        hit.meshComponentId === terrainPointer.componentId &&
+        hit.localPosition
+      ) {
+        onTerrainStroke?.(terrainPointer.entityId, terrainPointer.componentId, {
+          ...terrainEditing,
+          center: [hit.localPosition[0], hit.localPosition[2]],
+        });
+      }
+      return;
+    }
     const cameraInput = worldPlayCameraInputRef.current;
     if (
       editorMode === "play" &&
@@ -3111,6 +3214,27 @@ export function SceneViewport({
   const handleViewportPointerUp = (
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
+    const terrainPointer = terrainPointerRef.current;
+    if (terrainPointer?.pointerId === event.pointerId) {
+      const hit = dropResolverRef.current?.(event.clientX, event.clientY);
+      if (
+        terrainEditing &&
+        hit?.authoringEntityId === terrainPointer.entityId &&
+        hit.meshComponentId === terrainPointer.componentId &&
+        hit.localPosition
+      ) {
+        onTerrainStroke?.(terrainPointer.entityId, terrainPointer.componentId, {
+          ...terrainEditing,
+          center: [hit.localPosition[0], hit.localPosition[2]],
+        });
+      }
+      terrainPointerRef.current = null;
+      onTerrainStrokeEnd?.(terrainPointer.entityId);
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      return;
+    }
     const cameraInput = worldPlayCameraInputRef.current;
     if (cameraInput.pointerId === event.pointerId) {
       cameraInput.pointerId = null;
@@ -3162,6 +3286,17 @@ export function SceneViewport({
       gesture.moved = true;
     }
     gesture.suppressContextMenu = gesture.moved;
+  };
+
+  const handleViewportPointerCancel = () => {
+    const terrainPointer = terrainPointerRef.current;
+    terrainPointerRef.current = null;
+    if (terrainPointer) onTerrainStrokeCancel?.(terrainPointer.entityId);
+    leftPointerGestureRef.current = null;
+    rightPointerGestureRef.current = null;
+    worldPlayCameraInputRef.current.pointerId = null;
+    worldPlayCameraInputRef.current.deltaX = 0;
+    worldPlayCameraInputRef.current.deltaY = 0;
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -3479,13 +3614,7 @@ export function SceneViewport({
         onPointerDown={handleViewportPointerDown}
         onPointerMove={handleViewportPointerMove}
         onPointerUp={handleViewportPointerUp}
-        onPointerCancel={() => {
-          leftPointerGestureRef.current = null;
-          rightPointerGestureRef.current = null;
-          worldPlayCameraInputRef.current.pointerId = null;
-          worldPlayCameraInputRef.current.deltaX = 0;
-          worldPlayCameraInputRef.current.deltaY = 0;
-        }}
+        onPointerCancel={handleViewportPointerCancel}
         onDragEnterCapture={handleDragEnter}
         onDragOverCapture={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -3631,6 +3760,7 @@ export function SceneViewport({
             editorMode={editorMode}
             projectKind={projectKind}
             transformDragging={transformDragging}
+            terrainEditing={Boolean(terrainEditing)}
             frameSelectionRequest={frameSelectionRequest}
             exitFocusRequest={exitFocusRequest}
             frameEntityId={selectedEntityId}
@@ -3716,6 +3846,19 @@ export function SceneViewport({
                 {lastReloadedEntityName} を先頭から再実行
               </p>
             ) : null}
+          </div>
+        ) : null}
+
+        {terrainEditing && !thumbnailCaptureActive ? (
+          <div
+            className="pointer-events-none absolute left-2.5 top-2.5 z-10 max-w-[80%] rounded-md border border-violet-400/70 bg-violet-950/90 px-2.5 py-1.5 text-xs leading-4 text-violet-50 shadow-lg backdrop-blur"
+            role="status"
+            aria-live="polite"
+          >
+            <p className="font-semibold">Terrain Scene 編集 · {terrainEditing.kind}</p>
+            <p className="text-violet-200">
+              左ドラッグでブラシを適用 · 半径 {terrainEditing.radius.toFixed(1)}m · Escで現在のストロークを取り消し
+            </p>
           </div>
         ) : null}
 

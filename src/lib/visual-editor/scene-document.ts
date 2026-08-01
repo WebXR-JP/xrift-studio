@@ -16,6 +16,7 @@ import type { SceneSettings } from "./scene-settings";
 import {
   applyTerrainBrush,
   createTerrainGeometry,
+  resampleTerrainGeometry,
   terrainHeightRange,
   TERRAIN_MATERIAL_SLOT,
   type TerrainBrushOperation,
@@ -896,6 +897,27 @@ export function applyTerrainBrushToScene(
   const terrain = mesh ? getTerrainGeometry(mesh) : undefined;
   if (!mesh || !terrain) return scene;
   const nextTerrain = applyTerrainBrush(terrain, operation);
+  if (nextTerrain === terrain || terrainHeightsEqual(terrain, nextTerrain)) {
+    return scene;
+  }
+  return replaceMesh(scene, entityId, mesh.id, {
+    ...mesh,
+    geometry: { kind: "terrain", terrain: nextTerrain },
+  });
+}
+
+/** Resizes or resamples an authored Terrain through the normal Scene boundary. */
+export function resampleTerrainInScene(
+  scene: SceneDocument,
+  entityId: string,
+  options: Pick<TerrainGeometryOptions, "width" | "depth" | "resolution">,
+  componentId?: string,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  const mesh = entity ? getMesh(entity, componentId) : undefined;
+  const terrain = mesh ? getTerrainGeometry(mesh) : undefined;
+  if (!mesh || !terrain) return scene;
+  const nextTerrain = resampleTerrainGeometry(terrain, options);
   if (nextTerrain === terrain || terrainHeightsEqual(terrain, nextTerrain)) {
     return scene;
   }
@@ -2181,7 +2203,20 @@ function terrainHeightsEqual(
     current.depth === next.depth &&
     current.resolution === next.resolution &&
     current.heights.length === next.heights.length &&
-    current.heights.every((height, index) => height === next.heights[index])
+    current.heights.every((height, index) => height === next.heights[index]) &&
+    terrainHolesEqual(current.holes, next.holes)
+  );
+}
+
+function terrainHolesEqual(
+  current: readonly boolean[] | undefined,
+  next: readonly boolean[] | undefined,
+): boolean {
+  const currentHoles = current ?? [];
+  const nextHoles = next ?? [];
+  return (
+    currentHoles.length === nextHoles.length &&
+    currentHoles.every((hole, index) => hole === nextHoles[index])
   );
 }
 

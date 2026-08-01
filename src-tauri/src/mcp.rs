@@ -28,7 +28,7 @@ const MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS: u64 = 120_000;
 const MCP_MAX_CONCURRENT_CONNECTIONS: usize = 32;
 const MCP_MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 const MCP_MAX_CLIENT_NAME_CHARS: usize = 128;
-const MCP_TOOL_NAMES: [&str; 79] = [
+const MCP_TOOL_NAMES: [&str; 80] = [
     "get_editor_context",
     "get_scripting_capabilities",
     "list_assets",
@@ -77,6 +77,7 @@ const MCP_TOOL_NAMES: [&str; 79] = [
     "get_terrain",
     "create_terrain",
     "sculpt_terrain",
+    "update_terrain",
     "place_builtin_prefab",
     "create_prefab",
     "add_component",
@@ -3095,7 +3096,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "create_terrain",
-            "description": "Create a static height-sampled Terrain with a fixed Trimesh Collider. It starts flat; use sculpt_terrain for deterministic Raise, Lower, Flatten, or Smooth brush stamps.",
+            "description": "Create a static height-sampled Terrain with a fixed Trimesh Collider. It starts flat; use sculpt_terrain for deterministic Raise, Lower, Set Height, Smooth, Stamp, and Paint Holes operations.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3105,7 +3106,7 @@ fn tool_definitions() -> Value {
                     "name": { "type": "string", "minLength": 1, "maxLength": 100 },
                     "width": { "type": "number", "minimum": 0.5, "maximum": 512 },
                     "depth": { "type": "number", "minimum": 0.5, "maximum": 512 },
-                    "resolution": { "type": "integer", "minimum": 9, "maximum": 65 },
+                    "resolution": { "type": "integer", "minimum": 9, "maximum": 257 },
                     "materialAssetId": { "type": "string", "minLength": 1 },
                     "position": {
                         "type": "array",
@@ -3120,7 +3121,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "sculpt_terrain",
-            "description": "Apply one deterministic Terrain brush stamp in local X/Z coordinates. Raise and Lower use height strength; Flatten requires targetHeight; Smooth uses strength as a 0..1 blend. Fetch the latest editor context after the write.",
+            "description": "Apply one deterministic Terrain brush stamp in local X/Z coordinates. Raise and Lower use height strength; Flatten and Stamp require targetHeight; Smooth uses strength as a 0..1 blend; hole-add and hole-remove change the actual runtime mesh. Fetch the latest editor context after the write.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3129,7 +3130,7 @@ fn tool_definitions() -> Value {
                     "expectedRevision": { "type": "integer", "minimum": 0 },
                     "entityId": { "type": "string", "minLength": 1 },
                     "componentId": { "type": "string", "minLength": 1 },
-                    "kind": { "type": "string", "enum": ["raise", "lower", "flatten", "smooth"] },
+                    "kind": { "type": "string", "enum": ["raise", "lower", "flatten", "smooth", "stamp", "hole-add", "hole-remove"] },
                     "center": {
                         "type": "array",
                         "items": { "type": "number" },
@@ -3138,9 +3139,29 @@ fn tool_definitions() -> Value {
                     },
                     "radius": { "type": "number", "exclusiveMinimum": 0 },
                     "strength": { "type": "number", "exclusiveMinimum": 0 },
-                    "targetHeight": { "type": "number", "minimum": -256, "maximum": 256 }
+                    "targetHeight": { "type": "number", "minimum": -256, "maximum": 256 },
+                    "falloff": { "type": "number", "minimum": 0, "maximum": 1 }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "entityId", "kind", "center", "radius", "strength"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "update_terrain",
+            "description": "Resize or resample a Terrain while preserving its sculpted heights and hole mask. Omitted values keep their current setting.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "componentId": { "type": "string", "minLength": 1 },
+                    "width": { "type": "number", "minimum": 0.5, "maximum": 512 },
+                    "depth": { "type": "number", "minimum": 0.5, "maximum": 512 },
+                    "resolution": { "type": "integer", "minimum": 9, "maximum": 257 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId"],
                 "additionalProperties": false
             }
         },

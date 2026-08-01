@@ -42,6 +42,7 @@ export function runRuntimeSchemaFixtureAssertions(): void {
                   depth: 8,
                   resolution: 9,
                   heights: Array.from({ length: 81 }, () => 0),
+                  holes: Array.from({ length: 64 }, () => false),
                 },
                 materialBindings: [],
                 castShadow: true,
@@ -75,6 +76,15 @@ export function runRuntimeSchemaFixtureAssertions(): void {
   assert(
     !isXriftRuntimeManifest(invalidHeights),
     "A Terrain with a mismatched sample array was accepted",
+  );
+
+  const invalidHoles = structuredClone(validTerrain);
+  (invalidHoles.scenes["scene-main"].entities.terrain.components[0] as {
+    geometry: { holes: boolean[] };
+  }).geometry.holes.pop();
+  assert(
+    !isXriftRuntimeManifest(invalidHoles),
+    "A Terrain with a mismatched hole mask was accepted",
   );
 }
 

@@ -27,6 +27,8 @@ export type XriftRuntimeGeometry =
       depth: number;
       resolution: number;
       heights: number[];
+      /** `true` omits the corresponding heightmap cell from the mesh. */
+      holes?: boolean[];
     }
   | { kind: "model"; assetId: string; sourceNodeIndex?: number };
 
@@ -309,7 +311,7 @@ export type XriftRuntimeManifest = {
 const RUNTIME_TERRAIN_SIZE_MIN = 0.5;
 const RUNTIME_TERRAIN_SIZE_MAX = 512;
 const RUNTIME_TERRAIN_RESOLUTION_MIN = 9;
-const RUNTIME_TERRAIN_RESOLUTION_MAX = 65;
+const RUNTIME_TERRAIN_RESOLUTION_MAX = 257;
 const RUNTIME_TERRAIN_HEIGHT_ABSOLUTE_MAX = 256;
 
 /**
@@ -408,7 +410,11 @@ function isRuntimeGeometry(value: unknown): value is XriftRuntimeGeometry {
     isRuntimeTerrainResolution(value.resolution) &&
     Array.isArray(value.heights) &&
     value.heights.length === value.resolution * value.resolution &&
-    value.heights.every(isRuntimeTerrainHeight)
+    value.heights.every(isRuntimeTerrainHeight) &&
+    (value.holes === undefined ||
+      (Array.isArray(value.holes) &&
+        value.holes.length === (value.resolution - 1) * (value.resolution - 1) &&
+        value.holes.every((hole) => typeof hole === "boolean")))
   );
 }
 
