@@ -1,0 +1,112 @@
+{
+  "id": "play-camera-controls-update",
+  "from": "HEAD",
+  "to": "working tree",
+  "releaseStatus": "published",
+  "scriptApproval": {
+    "status": "approved",
+    "approvedBy": "user"
+  },
+  "format": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "durationInFrames": 900
+  },
+  "copyReview": {
+    "audience": "XRift Studio を使っている、または使い始めた制作者",
+    "soundOffComprehension": true,
+    "status": "passed"
+  },
+  "audio": {
+    "src": "overlays/original-ambient-bed.wav",
+    "volume": 0.55,
+    "source": "Original ambient bed generated for this video"
+  },
+  "sourceNotes": [
+    "source/editor.png, source/play.png, and source/play-forward.png were captured from the XRift Studio desktop app on 2026-08-01.",
+    "The source captures contain no system cursor; the visible pointer is rendered by Remotion.",
+    "The video demonstrates only Play mode. It does not publish, save, or delete project data."
+  ],
+  "scenes": [
+    {
+      "id": "series-title",
+      "kind": "series-title",
+      "durationInFrames": 60,
+      "claim": "XRift Studioのアップデート情報を伝える",
+      "caption": "XRift Studio アップデート情報",
+      "doneWhen": "先頭2秒でアップデート動画だと分かる"
+    },
+    {
+      "id": "feature-intro",
+      "kind": "feature-intro",
+      "durationInFrames": 120,
+      "source": "source/editor.png",
+      "titleLines": ["Play中のカメラ操作を改善しました", "ワールドを確認しやすくなりました"],
+      "claim": "Play中のカメラ操作を改善した",
+      "caption": "Play中のカメラ操作を改善しました",
+      "doneWhen": "変更内容と利用者にとっての変化が2行で伝わる"
+    },
+    {
+      "id": "enter-play",
+      "kind": "screen-focus",
+      "durationInFrames": 180,
+      "source": "source/editor.png",
+      "claim": "Playを押してワールドを確認できる",
+      "caption": "Playを押して、すぐに確認できます",
+      "pointer": {
+        "from": { "x": 0.4, "y": 0.45 },
+        "to": { "x": 0.452, "y": 0.113 },
+        "moveStartFrame": 20,
+        "moveDurationInFrames": 20,
+        "clickAtFrame": 66,
+        "scale": 1.88
+      },
+      "focus": {
+        "x": 0.452,
+        "y": 0.113,
+        "scale": 1.36,
+        "startFrame": 78,
+        "durationInFrames": 28,
+        "holdInFrames": 52
+      },
+      "doneWhen": "Playボタンとクリック操作が読み取れる"
+    },
+    {
+      "id": "play-controls",
+      "kind": "play-controls",
+      "durationInFrames": 300,
+      "source": "source/play.png",
+      "claim": "WASDとドラッグでPlay中のワールドを操作できる",
+      "caption": "WASDとドラッグで操作できます",
+      "focus": {
+        "x": 0.16,
+        "y": 0.14,
+        "scale": 1.5,
+        "startFrame": 70,
+        "durationInFrames": 26,
+        "holdInFrames": 140
+      },
+      "doneWhen": "実画面の操作ヒントを読める"
+    },
+    {
+      "id": "movement-result",
+      "kind": "movement-result",
+      "durationInFrames": 150,
+      "sourceBefore": "source/play.png",
+      "sourceAfter": "source/play-forward.png",
+      "claim": "見ている方向へ移動できる",
+      "caption": "見ている方向へ、移動できます",
+      "doneWhen": "実画面の視点移動と、利用者にとっての結果が伝わる"
+    },
+    {
+      "id": "published-cta",
+      "kind": "cta",
+      "durationInFrames": 90,
+      "claim": "アップデートが公開中である",
+      "caption": "XRift Studio アップデート公開中",
+      "featureLabel": "Play中のカメラ操作を改善しました",
+      "doneWhen": "公開中であることが分かる"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "xrift-play-camera-controls-promo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render PlayCameraControls out/play-camera-controls.mp4",
+    "still": "remotion still PlayCameraControls --frame=330 out/play-camera-controls-frame.png",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.503",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "remotion": "4.0.503"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.9.3"
+  }
+}
