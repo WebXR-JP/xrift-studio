@@ -1190,7 +1190,7 @@ function TerrainInspector({
           }
           className="w-full rounded-md bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
         >
-          数値位置へ1回適用
+          地形に適用
         </button>
         <p className="text-[11px] leading-4 text-slate-500">
           {sceneEditing
