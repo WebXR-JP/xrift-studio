@@ -45,14 +45,14 @@ const RESET_META: Record<
   runtime: {
     title: "ランタイムをリセット",
     description:
-      "同梱の Node.js と @xrift/cli を削除し、ログイン状態もクリアします。\nプロジェクトは残ります。次回起動時にランタイムが再セットアップされます。",
-    confirm: "ランタイムをリセット",
+      "同梱の Node.js と @xrift/cli を削除し、ログイン状態もクリアします。\nプロジェクトは残ります。リセット後、アプリを再起動してランタイムを再セットアップします。",
+    confirm: "リセットして再起動",
   },
   all: {
     title: "完全リセット",
     description:
-      "Node.js / @xrift/cli / ログイン状態 / すべてのプロジェクトを削除します。\nこの操作は元に戻せません。本当に実行しますか？",
-    confirm: "すべて削除する",
+      "Node.js / @xrift/cli / ログイン状態 / すべてのプロジェクトを削除します。\nこの操作は元に戻せません。削除後、アプリを再起動します。本当に実行しますか？",
+    confirm: "すべて削除して再起動",
   },
 };
 
@@ -122,14 +122,15 @@ export function AboutModal({
           resetScope === "all"
             ? "完全リセットしました"
             : "ランタイムをリセットしました",
-        description: "アプリを再読み込みします",
+        description: "アプリを再起動しています",
       });
-      window.setTimeout(() => window.location.reload(), 600);
+      await tauri.relaunchApp();
     } catch (e) {
       toast({
         kind: "error",
-        title: "リセットに失敗しました",
-        description: "実行中のターミナルやエディターを閉じて、もう一度お試しください。",
+        title: "リセットまたは再起動に失敗しました",
+        description:
+          "実行中のターミナルやエディターを閉じて、もう一度お試しください。",
       });
       setResetError(
         `実行中のターミナルやエディターを閉じて、もう一度お試しください。\n\n詳細: ${String(e)}`,

@@ -82,7 +82,7 @@ F-06 アイテム検査
 | MI-63 | HierarchyでEntityの種類を絞り込む | 検索欄の直下にMesh、Light、Collider、Audio、Particle、Animation、Spawn、XRift Componentのsemantic iconを一列で置き、hover / focusで日本語名を示す。複数選択は種類同士をOR、文字検索とはANDで適用し、一致Entityとその祖先だけを自動展開する。 | 絞り込みはselection、SceneDocument、historyを変更しない。押下中のiconは背景と`aria-pressed`で示し、再押下で解除する。すべて解除すると絞り込み前の折り畳み状態へ戻り、0件時は条件を一度にクリアできる。 |
 | MI-64 | Visual Editor右上の「Import」を開き、Model / 3D Asset、R3F TSX、またはXRift Classic projectを選ぶ | 右上は外部catalogではなく変換とfile取込の入口に限定する。Model / 3D Assetは既存Import Queueへ接続し、対応拡張子を同じfile pickerで選べる。R3F / ClassicはTSX貼付とfolder選択を同じ変換dialogへ集約し、Classicはfolder選択後に`package.json`、`xrift.json`、同種entryを検査してentry source、対象path、読み込んだ`src` module数を表示する。TSXは実行せず、import graph、JSX構造、静的literalだけを解析する。 | fileは既存のvalidate、copy、parse、thumbnail、commitを通り、変換は全Entity / Material / Light / Collider / XRift Componentを一件のhistory transactionへ確定する。最後の追加EntityまたはAssetを選択し、`group`、RigidBody、公式wrapper、local Componentの親子境界をHierarchyへ残す。Playまたは別Import中は理由付きで入口を無効にする。 |
 | MI-65 | project thumbnailを画像選択またはTexture Assetのcontext menuから設定する | 保存中は選択操作を無効にし、成功時は画像上に「設定済み」と保存先を表示する。Visual Editorでは編集modalを閉じてScene Inspectorへ戻り、現在設定中の実画像と「設定済み」を常設する。Texture Assetはproject source、またはHDR / EXR等の生成済みpreviewをPNGへ変換して使用する。 | 成功時は`public/thumbnail.png`への保存完了後だけ通知し、compileをstaleにする。Textureからの設定後はScene Inspectorを開いて同じ画像を再取得する。未保存project、Play中、画像の欠落・decode・保存失敗では既存thumbnailを維持し、同じ入口から再試行できる。 |
-| MI-66 | AboutのDanger Zoneからランタイムまたは全データのリセットを開始する | CLI version確認中は削除操作を無効にし、確認dialogでは対象と復元不能な範囲を明示する。実行中はdialogを閉じられず、削除対象を通常pathから分離してから再読み込みする。 | 成功時は再読み込みして新しいsetupまたは空のproject一覧へ進む。物理削除をすぐ完了できない旧データは退避し、次回起動時に再回収する。退避にも失敗した場合はdialogを保ち、実行中のterminalやeditorを閉じて同じ操作を再試行できる。 |
+| MI-66 | AboutのDanger Zoneからランタイムまたは全データのリセットとアプリ再起動を開始する | CLI version確認中は削除操作を無効にし、確認dialogでは対象と復元不能な範囲、リセット後にアプリ本体を再起動することを明示する。実行中はdialogを閉じられず、削除対象を通常pathから分離してからアプリ本体を再起動する。 | 成功時はアプリ本体を再起動し、新しいsetupまたは空のproject一覧へ進む。物理削除をすぐ完了できない旧データは退避し、次回起動時に再回収する。退避または再起動に失敗した場合はdialogを保ち、実行中のterminalやeditorを閉じて同じ操作を再試行できる。 |
 | MI-67 | Visual projectのUpload reviewを開く | 公開対象Sceneと展開済みPrefabから参照されるTexture / Model / Audioを解析し、Asset原本の初回ロード容量と回線別ロード時間、Asset VRAM、描画buffer等を含む実行時range、スマートフォン / デスクトップのStudio基準を表示する。詳細modalはロード容量とVRAMそれぞれを寄与量の多い順に並べ、解像度、mipmap、GPU展開形式、mesh / primitive、参照数を示し、resize、KTX2、Draco、音声再圧縮、mesh instancingを効果の大きい順に提案する。自動対応できるresize、KTX2、Dracoにはcheckboxを置き、「選択した最適化を適用」で同じAsset IDの変換済みsourceへまとめて差し替える。処理中は進捗を表示し、閉じる操作と二重実行を止める。 | 推定を実測と表示せず、ロード時間にcache / CDN / app本体 / protocol処理を含まないこと、未知の解像度、GPU / browser差、KTX2転送形式、Dracoが配信量中心の改善であることを残す。分析とcheckboxの選択だけではSceneDocument、AssetManifest、公開先を変更しない。変換fileを一transactionで保存できた後だけAssetManifestを保存し、失敗時は元Assetを維持して同じ選択から再試行できる。成功時は変換前後の容量を残し、再計算した同じ詳細modalとUpload reviewへ戻れる。 |
 | MI-68 | Visual World / Itemの新規作成で「XRift Classicからインポート」をStarterとして選ぶ | 通常Starterと同じカード階層で選択状態を示し、選択時はローカルのproject folderまたはHTTPS / git SSHのRepository URLを同じ面で切り替えられる。folderは選択済み絶対path、URLは入力値を表示する。実行中は「読み込み・変換中」に変えて全作成操作を無効にし、検証済みentryとlocal import graphを静的解析する。取得したproject codeやdependencyは実行しない。 | 成功時は完全に空のVisual Sceneへ、読み込み元で検出したScene、Asset、Material、Light、Collider、XRift Componentだけを確定してEditorで開く。Starter由来の床、Light、SpawnPointを追加しない。失敗時は選択pathまたはURLと名前を保持して同じ画面から再試行できる。作成後のAsset保存またはdocument保存が失敗した場合は新規project全体を回収し、不完全なprojectを一覧へ残さない。 |
 | MI-69 | Script Assetを作成し、docked editorで編集して保存する | Assetsの作成入口とEntityのScript Componentの両方から同じeditorを開く。editorは中央から右へのdocked overlayとし、Scene Viewの左側を隠さずPlayの挙動を見ながら直せるようにする。未保存は`isDirty`点で示し、保存は明示操作と`⌘/Ctrl+S`の両方を受ける。keystrokeごとにhistoryへ積まず、連続入力は現在のhistory項目を置き換える。 | 保存はScript source fileだけを書き、Entity配置とAssetManifestのentryを変更しない。閉じる操作は未保存があるとき破棄・保存・取消を選ばせる。構文が壊れていても保存は許し、実行できない理由をeditor内に残す。 |
@@ -760,7 +760,7 @@ F-06 アイテム検査
 
 ### 成功時
 
-- 成功通知後にアプリを再読み込みし、ランタイムのみならsetup、完全リセットならsetup後の空のproject一覧へ進む。
+- データ削除の成功後にアプリ本体を再起動し、ランタイムのみならsetup、完全リセットならsetup後の空のproject一覧へ進む。確認ボタンは対象に応じて「リセットして再起動」または「すべて削除して再起動」と表示する。
 - 退避した旧データは次回起動時にバックグラウンドで再回収し、新しい制作操作を妨げない。
 
 ### 失敗時
@@ -770,7 +770,7 @@ F-06 アイテム検査
 
 ### 戻り先
 
-- 成功時は再読み込み後のsetupまたはproject一覧、失敗・取消時はAboutのDanger Zoneへ戻る。
+- 成功時は再起動後のsetupまたはproject一覧、失敗・取消時はAboutのDanger Zoneへ戻る。
 
 ## F-28 Script AssetとScript Componentの状態設計
 

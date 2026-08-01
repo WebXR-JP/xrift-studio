@@ -2,6 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
+import { relaunch } from "@tauri-apps/plugin-process";
 
 export type ProjectKind = "world" | "item";
 export type ProjectFormat = "classic" | "visual";
@@ -502,6 +503,7 @@ export const tauri = {
     invoke<void>("rename_path", { projectPath, oldRel, newRel }),
   resetAppData: (scope: "runtime" | "projects" | "all") =>
     invoke<void>("reset_app_data", { scope }),
+  relaunchApp: () => relaunch(),
   checkXriftLatest: () => invoke<string | null>("check_xrift_latest"),
   updateXrift: () => invoke<void>("update_xrift"),
   detectXriftMcpClients: () =>
