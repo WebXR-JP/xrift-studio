@@ -91,8 +91,8 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
   fog: {
     enabled: true,
     color: "#18181b",
-    near: 28,
-    far: 80,
+    near: 120,
+    far: 600,
   },
   ambient: {
     color: "#ffffff",
@@ -100,7 +100,7 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
   },
   camera: {
     near: 0.1,
-    far: 250,
+    far: 2000,
     fov: 46,
   },
   editor: {

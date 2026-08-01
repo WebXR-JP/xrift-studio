@@ -242,13 +242,18 @@ export function ExternalAssetStoreDialog({
   if (!open) return null;
   return (
     <div
+      data-app-modal-backdrop
       className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-5"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="external-store-title"
+      role="presentation"
     >
-      <div className="flex h-[min(760px,92vh)] w-[min(1320px,96vw)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-2xl">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5">
+      <div
+        data-app-modal-surface
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="external-store-title"
+        className="flex h-[min(760px,calc(100dvh-1.5rem))] w-full max-w-[1320px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-2xl"
+      >
+        <header data-app-modal-header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5">
           <div className="flex items-center gap-3">
             <span className="flex size-8 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
               <Store size={17} aria-hidden="true" />
@@ -257,9 +262,6 @@ export function ExternalAssetStoreDialog({
               <h2 id="external-store-title" className="text-sm font-semibold text-slate-900">
                 外部リソースを追加
               </h2>
-              <p className="text-[11px] text-slate-500">
-                配布元を選び、外部アセットをプロジェクトへ追加します
-              </p>
             </div>
           </div>
           <button
@@ -273,7 +275,7 @@ export function ExternalAssetStoreDialog({
           </button>
         </header>
 
-        <div className="flex min-h-0 flex-1">
+        <div data-app-modal-body className="flex min-h-0 flex-1 overflow-x-auto overscroll-contain">
           <nav
             className="flex w-52 shrink-0 flex-col border-r border-slate-200 bg-slate-50"
             aria-label="外部リソース集"
@@ -419,6 +421,8 @@ export function ExternalAssetStoreDialog({
                         <img
                           src={asset.thumbnailUrl}
                           alt=""
+                          width={320}
+                          height={320}
                           loading="lazy"
                           className="h-full w-full object-cover"
                         />
@@ -456,6 +460,9 @@ export function ExternalAssetStoreDialog({
                 <img
                   src={selected.thumbnailUrl}
                   alt={`${selected.name}のプレビュー`}
+                  width={640}
+                  height={400}
+                  loading="lazy"
                   className="aspect-[16/10] w-full rounded-lg bg-slate-100 object-cover"
                 />
                 <div>
@@ -517,7 +524,7 @@ export function ExternalAssetStoreDialog({
                         ))}
                       </select>
                       {optionsLoading ? (
-                        <p className="mt-1 text-[11px] text-slate-500">利用可能なファイルを確認中です</p>
+                        <p className="mt-1 text-[11px] text-slate-500">利用可能なファイルを確認中…</p>
                       ) : null}
                     </label>
                     {selected.assetKind === "hdri" ? (
@@ -614,7 +621,7 @@ export function ExternalAssetStoreDialog({
                     {installing ? (
                       <>
                         <LoaderCircle size={16} className="animate-spin" />
-                        ダウンロード中
+                        ダウンロード中…
                       </>
                     ) : selected.assetKind === "hdri" && applySkybox ? (
                       `${fileFormat.toUpperCase()}をインストールしてSkyboxに設定`
@@ -894,7 +901,7 @@ function OpenBrushStore({
               {adding ? (
                 <>
                   <LoaderCircle size={16} className="animate-spin" />
-                  追加中
+                  追加中…
                 </>
               ) : (
                 `${selected.label}をMaterialへ追加`

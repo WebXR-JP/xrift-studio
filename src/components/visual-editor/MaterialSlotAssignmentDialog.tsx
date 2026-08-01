@@ -48,6 +48,7 @@ export function MaterialSlotAssignmentDialog({
 
   return (
     <div
+      data-app-modal-backdrop
       className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/25 p-5"
       role="presentation"
       onMouseDown={(event) => {
@@ -55,12 +56,13 @@ export function MaterialSlotAssignmentDialog({
       }}
     >
       <section
+        data-app-modal-surface
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         className="w-full max-w-md overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl"
       >
-        <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+        <header data-app-modal-header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
           <div className="flex items-start gap-3">
             <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-violet-200 bg-violet-50 text-violet-700">
               <MaterialIcon size={17} aria-hidden="true" />
@@ -76,7 +78,7 @@ export function MaterialSlotAssignmentDialog({
           </div>
         </header>
 
-        <div className="max-h-[min(420px,60vh)] space-y-2 overflow-y-auto p-3">
+        <div data-app-modal-body className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
           {slots.map((slot) => (
             <label
               key={slot.slot}
@@ -140,10 +142,7 @@ export function MaterialSlotAssignmentDialog({
           ) : null}
         </div>
 
-        <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3">
-          <p className="text-[11px] leading-4 text-slate-500">
-            適用は1回のUndoで元へ戻せます。
-          </p>
+        <footer data-app-modal-footer className="flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3">
           <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"

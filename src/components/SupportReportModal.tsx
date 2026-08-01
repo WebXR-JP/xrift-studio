@@ -6,6 +6,7 @@ import {
   ExternalLink,
   ImageDown,
   MessageCircle,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import { arch, platform, version as osVersion } from "@tauri-apps/plugin-os";
@@ -16,11 +17,16 @@ import {
   XRIFT_STUDIO_HELP_GPT_URL,
   XRIFT_STUDIO_NEW_ISSUE_URL,
 } from "../lib/support-links";
+import {
+  sanitizeSupportErrorMessage,
+  type SupportReportContext,
+} from "../lib/support-report";
 import { useToast } from "./Toast";
 
 type Props = {
   open: boolean;
-  projectCount: number;
+  projectCount?: number;
+  context?: SupportReportContext;
   onClose: () => void;
 };
 
@@ -62,13 +68,29 @@ async function copyText(text: string) {
   if (!copied) throw new Error("クリップボードへコピーできませんでした。");
 }
 
-export function SupportReportModal({ open, projectCount, onClose }: Props) {
+export function SupportReportModal({
+  open,
+  projectCount = 0,
+  context,
+  onClose,
+}: Props) {
   const toast = useToast();
   const [environment, setEnvironment] = useState(EMPTY_ENVIRONMENT);
   const [loading, setLoading] = useState(false);
   const [copying, setCopying] = useState(false);
   const [savingScreenshot, setSavingScreenshot] = useState(false);
   const [copied, setCopied] = useState(false);
+  const sanitizedErrorMessage = useMemo(
+    () => sanitizeSupportErrorMessage(context?.errorMessage),
+    [context?.errorMessage],
+  );
+  const sanitizedDiagnostics = useMemo(
+    () =>
+      context?.diagnostics
+        ?.map((diagnostic) => sanitizeSupportErrorMessage(diagnostic))
+        .filter((diagnostic): diagnostic is string => Boolean(diagnostic)) ?? [],
+    [context?.diagnostics],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -124,7 +146,9 @@ export function SupportReportModal({ open, projectCount, onClose }: Props) {
 - Node.js: ${valueOrUnknown(environment.nodeVersion)}
 - @xrift/cli: ${valueOrUnknown(environment.cliVersion)}
 - プロジェクト数: ${projectCount}
-- 現在の画面: プロジェクト一覧
+- 現在の画面: ${context?.currentScreen ?? "プロジェクト一覧"}
+${sanitizedErrorMessage ? `\n## 発生したエラー\n${sanitizedErrorMessage}\n` : ""}
+${sanitizedDiagnostics.length > 0 ? `\n## 関連する診断\n${sanitizedDiagnostics.map((diagnostic) => `- ${diagnostic}`).join("\n")}\n` : ""}
 
 ## 相談内容
 <!-- 起きた症状または実現したい機能を書いてください。 -->
@@ -138,7 +162,13 @@ export function SupportReportModal({ open, projectCount, onClose }: Props) {
 
 ## 実際の結果・困っていること
 `,
-    [environment, projectCount],
+    [
+      context?.currentScreen,
+      environment,
+      projectCount,
+      sanitizedDiagnostics,
+      sanitizedErrorMessage,
+    ],
   );
 
   if (!open) return null;
@@ -150,7 +180,7 @@ export function SupportReportModal({ open, projectCount, onClose }: Props) {
       setCopied(true);
       toast({
         kind: "success",
-        title: "環境情報をコピーしました",
+        title: "相談情報をコピーしました",
         description: "ChatGPTまたはGitHubの入力欄へ貼り付けてください。",
       });
       window.setTimeout(() => setCopied(false), 2200);
@@ -207,18 +237,20 @@ export function SupportReportModal({ open, projectCount, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 px-4 py-4 backdrop-blur-sm animate-fade-in"
+      data-app-modal-backdrop
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/30 px-4 py-4 backdrop-blur-sm animate-fade-in"
       data-support-overlay="true"
       onClick={() => !copying && !savingScreenshot && onClose()}
     >
       <div
-        className="flex max-h-[calc(100vh-2rem)] w-full max-w-[520px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-brand-lg animate-scale-in"
+        data-app-modal-surface
+        className="flex w-full max-w-[520px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-brand-lg animate-scale-in"
         role="dialog"
         aria-modal="true"
         aria-labelledby="support-report-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="relative gradient-brand-soft px-6 pb-5 pt-6">
+        <div data-app-modal-header className="relative gradient-brand-soft px-6 pb-5 pt-6">
           <button
             type="button"
             onClick={onClose}
@@ -234,20 +266,16 @@ export function SupportReportModal({ open, projectCount, onClose }: Props) {
             </div>
             <div>
               <h2 id="support-report-title" className="text-lg font-semibold tracking-tight text-zinc-900">
-                ヘルプに相談する準備
+                ヘルプと報告
               </h2>
               <p className="text-xs text-zinc-600">
-                バグ報告や機能要望を相談する前に、環境情報をまとめて渡せます。
+                環境情報を添えて、相談内容をまとめられます。
               </p>
             </div>
           </div>
         </div>
 
-        <div className="min-h-0 overflow-y-auto overscroll-contain px-6 py-5">
-          <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
-            ChatGPTの入力欄へURLだけで自動入力することはできないため、ボタンを押すと環境情報をコピーしてページを開きます。開いた先で貼り付けてください。
-          </div>
-
+        <div data-app-modal-body className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
             相談先
           </div>
@@ -261,7 +289,7 @@ export function SupportReportModal({ open, projectCount, onClose }: Props) {
               <MessageCircle size={14} className="shrink-0" aria-hidden="true" />
               <span className="min-w-0 flex-1">
                 <span className="block">ChatGPTで文章を作成</span>
-                <span className="mt-0.5 block text-[10px] font-normal text-white/75">環境情報をコピーしてヘルプセンターGPTを開く</span>
+                <span className="mt-0.5 block text-[10px] font-normal text-white/75">相談情報をコピーしてヘルプセンターGPTを開く</span>
               </span>
               <ExternalLink size={12} className="shrink-0" aria-hidden="true" />
             </button>
@@ -274,7 +302,7 @@ export function SupportReportModal({ open, projectCount, onClose }: Props) {
               <Bug size={14} className="shrink-0 text-zinc-500" aria-hidden="true" />
               <span className="min-w-0 flex-1">
                 <span className="block">GitHub Issueを作成</span>
-                <span className="mt-0.5 block text-[10px] font-normal text-zinc-400">環境情報をコピーしてIssue画面を開く</span>
+                <span className="mt-0.5 block text-[10px] font-normal text-zinc-400">相談情報をコピーしてIssue画面を開く</span>
               </span>
               <ExternalLink size={12} className="shrink-0 text-zinc-400" aria-hidden="true" />
             </button>
@@ -291,7 +319,7 @@ export function SupportReportModal({ open, projectCount, onClose }: Props) {
               className="flex items-center justify-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50"
             >
               {copied ? <Check size={13} className="text-emerald-600" aria-hidden="true" /> : <Clipboard size={13} aria-hidden="true" />}
-              {copied ? "コピーしました" : "自分の環境をコピー"}
+              {copied ? "コピーしました" : "相談情報をコピー"}
             </button>
             <button
               type="button"
@@ -303,6 +331,28 @@ export function SupportReportModal({ open, projectCount, onClose }: Props) {
               {savingScreenshot ? "保存中…" : "今の画面を保存"}
             </button>
           </div>
+
+          {sanitizedErrorMessage || sanitizedDiagnostics.length > 0 ? (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-3">
+              <div className="flex items-center gap-2 text-[11px] font-semibold text-amber-900">
+                <TriangleAlert size={13} aria-hidden="true" />
+                自動添付されるエラーと診断
+              </div>
+              <div className="mt-2 max-h-28 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-4 text-amber-950">
+                {sanitizedErrorMessage ? <p>{sanitizedErrorMessage}</p> : null}
+                {sanitizedDiagnostics.length > 0 ? (
+                  <ul className={sanitizedErrorMessage ? "mt-2 space-y-1" : "space-y-1"}>
+                    {sanitizedDiagnostics.map((diagnostic) => (
+                      <li key={diagnostic}>- {diagnostic}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+              <p className="mt-2 text-[10px] leading-4 text-amber-800">
+                絶対パスや認証情報は伏せています。GPTsへ貼り付けた後も内容を確認できます。
+              </p>
+            </div>
+          ) : null}
 
           <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50/60 px-3 py-3">
             <div className="flex items-center justify-between gap-3" aria-live="polite">
@@ -320,15 +370,14 @@ export function SupportReportModal({ open, projectCount, onClose }: Props) {
             </p>
           </div>
         </div>
-        <div className="flex items-center justify-between gap-2 border-t border-zinc-100 bg-zinc-50/70 px-5 py-3">
-          <p className="text-[11px] leading-5 text-zinc-400">あとでヘッダーのヘルプアイコンから開き直せます。</p>
+        <div data-app-modal-footer className="flex items-center justify-end gap-2 border-t border-zinc-100 bg-zinc-50/70 px-5 py-3">
           <button
             type="button"
             onClick={onClose}
             disabled={copying || savingScreenshot}
             className="shrink-0 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50"
           >
-            後で
+            閉じる
           </button>
         </div>
       </div>

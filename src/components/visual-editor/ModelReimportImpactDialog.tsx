@@ -34,6 +34,7 @@ export function ModelReimportImpactDialog({
   const WarningIcon = EDITOR_ICONS.warning;
   return (
     <div
+      data-app-modal-backdrop
       className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/30 p-5"
       role="presentation"
       onMouseDown={(event) => {
@@ -41,12 +42,13 @@ export function ModelReimportImpactDialog({
       }}
     >
       <section
+        data-app-modal-surface
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
         className="flex max-h-[min(680px,90vh)] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-amber-300 bg-white shadow-2xl"
       >
-        <header className="border-b border-amber-200 bg-amber-50 px-4 py-3">
+        <header data-app-modal-header className="border-b border-amber-200 bg-amber-50 px-4 py-3">
           <div className="flex items-start gap-3">
             <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-300 bg-white text-amber-700">
               <WarningIcon size={17} aria-hidden="true" />
@@ -63,7 +65,7 @@ export function ModelReimportImpactDialog({
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+        <div data-app-modal-body className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
           <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
             適用すると、消えるSlotを参照するScene / PrefabのMaterial割当
             {removedBindings}件を同じUndo単位で解除します。キャンセルすると現在のModelと割当を維持します。
@@ -120,7 +122,7 @@ export function ModelReimportImpactDialog({
           ) : null}
         </div>
 
-        <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3">
+        <footer data-app-modal-footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3">
           <p className="text-[11px] leading-4 text-slate-500">
             Model置換と割当解除は1回のUndoで戻せます。
           </p>

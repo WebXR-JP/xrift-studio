@@ -40,11 +40,16 @@ export function ConfirmDialog({
 
   return (
     <div
+      data-app-modal-backdrop
       className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 backdrop-blur-sm animate-fade-in"
       onClick={() => !busy && onClose()}
     >
       <div
-        className="w-[420px] rounded-xl border border-zinc-200 bg-white p-5 shadow-2xl animate-scale-in"
+        data-app-modal-surface
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-dialog-title"
+        className="w-full max-w-[420px] overflow-y-auto rounded-xl border border-zinc-200 bg-white p-5 shadow-2xl animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-3">
@@ -56,7 +61,7 @@ export function ConfirmDialog({
             <AlertTriangle size={16} strokeWidth={2} />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-base font-semibold text-zinc-900">{title}</div>
+            <h2 id="confirm-dialog-title" className="text-base font-semibold text-zinc-900">{title}</h2>
             {description && (
               <div className="mt-1 text-xs text-zinc-600 whitespace-pre-wrap">{description}</div>
             )}
@@ -73,6 +78,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onClose}
             disabled={busy}
+            aria-label="確認画面を閉じる"
             className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50"
           >
             <X size={14} strokeWidth={2} />

@@ -51,17 +51,19 @@ export function AppUpdateDialog({
 
   return (
     <div
+      data-app-modal-backdrop
       className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 backdrop-blur-sm animate-fade-in"
       onClick={() => !busy && onClose()}
     >
       <div
-        className="w-[480px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-brand-lg animate-scale-in"
+        data-app-modal-surface
+        className="flex w-full max-w-[480px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-brand-lg animate-scale-in"
         role="dialog"
         aria-modal="true"
         aria-labelledby="app-update-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="relative gradient-brand-soft px-6 pb-5 pt-6">
+        <div data-app-modal-header className="relative gradient-brand-soft px-6 pb-5 pt-6">
           <button
             type="button"
             onClick={onClose}
@@ -89,7 +91,7 @@ export function AppUpdateDialog({
           </div>
         </div>
 
-        <div className="px-6 py-5">
+        <div data-app-modal-body className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           <div className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50/60 px-4 py-3">
             <Version label="現在" value={state.currentVersion} />
             <ArrowRight size={16} className="text-zinc-400" strokeWidth={2} />
@@ -131,7 +133,7 @@ export function AppUpdateDialog({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 bg-zinc-50/70 px-5 py-3">
+        <div data-app-modal-footer className="flex items-center justify-end gap-2 border-t border-zinc-100 bg-zinc-50/70 px-5 py-3">
           <button
             type="button"
             onClick={onClose}

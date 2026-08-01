@@ -146,6 +146,10 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [showNewDialog, setShowNewDialog] = useState(false);
+  const [newProjectError, setNewProjectError] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
   const [visualSession, setVisualSession] = useState<{
     bundle: PrototypeVisualProject;
     project: Project | null;
@@ -502,6 +506,7 @@ function App() {
     starterTemplateId: VisualStarterTemplateId =
       defaultVisualStarterTemplateId(kind),
   ) => {
+    setNewProjectError(null);
     setVisualCompilationFresh(false);
     setVisualThumbnailReadiness(null);
     let starterPlan: StarterVisualProjectPlan;
@@ -512,10 +517,13 @@ function App() {
         name,
       );
     } catch (error) {
+      const title = "スターターを選択できませんでした";
+      const message = String(error);
+      setNewProjectError({ title, message });
       toast({
         kind: "error",
-        title: "スターターを選択できませんでした",
-        description: String(error),
+        title,
+        description: message,
       });
       return;
     }
@@ -550,15 +558,17 @@ function App() {
       } catch (error) {
         const starterCopyError =
           error instanceof StarterAssetCopyError ? error : undefined;
+        const title = starterCopyError?.copy.assetId.includes("license")
+          ? "スターターのライセンスをコピーできませんでした"
+          : starterCopyError
+            ? "スターター素材を検証できませんでした"
+            : "スターターを準備できませんでした";
+        const message = describeStarterPreparationError(error);
+        setNewProjectError({ title, message });
         toast({
           kind: "error",
-          title:
-            starterCopyError?.copy.assetId.includes("license")
-              ? "スターターのライセンスをコピーできませんでした"
-              : starterCopyError
-                ? "スターター素材を検証できませんでした"
-                : "スターターを準備できませんでした",
-          description: describeStarterPreparationError(error),
+          title,
+          description: message,
         });
       }
     });
@@ -841,6 +851,7 @@ function App() {
           key={visualSession.bundle.project.projectId}
           featureName="ビジュアルエディター"
           projectName={visualSession.bundle.project.metadata.name}
+          projectCount={projects.length}
           onBack={handleVisualEditorBack}
         >
           <Suspense
@@ -1222,7 +1233,10 @@ function App() {
         projectsRoot={projectsRoot}
         onOpen={handleOpenProject}
         onDelete={handleDeleteProject}
-        onNew={() => setShowNewDialog(true)}
+        onNew={() => {
+          setNewProjectError(null);
+          setShowNewDialog(true);
+        }}
         onLogin={handleLogin}
         onLogout={handleLogout}
         onRefresh={refreshProjects}
@@ -1233,6 +1247,7 @@ function App() {
       <NewProjectDialog
         open={showNewDialog}
         busy={busy}
+        creationError={newProjectError}
         onClose={() => setShowNewDialog(false)}
         onCreate={handleCreate}
         onOpenVisualEditor={handleOpenVisualEditor}

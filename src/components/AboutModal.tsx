@@ -143,17 +143,19 @@ export function AboutModal({
   return (
     <>
     <div
+      data-app-modal-backdrop
       className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 backdrop-blur-sm animate-fade-in"
       onClick={() => !resetting && onClose()}
     >
       <div
-        className="w-[460px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-brand-lg animate-scale-in"
+        data-app-modal-surface
+        className="flex w-full max-w-[460px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-brand-lg animate-scale-in"
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="relative gradient-brand-soft px-6 pb-5 pt-6">
+        <div data-app-modal-header className="relative gradient-brand-soft px-6 pb-5 pt-6">
           <button
             type="button"
             onClick={onClose}
@@ -177,7 +179,7 @@ export function AboutModal({
           </div>
         </div>
 
-        <div className="px-6 py-5">
+        <div data-app-modal-body className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
             本アプリは XRift 公式とは無関係の有志製ツールです。ワールドやアイテムの作成、確認、公開を進めやすくすることを目的としています。
           </div>
@@ -249,7 +251,7 @@ export function AboutModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-t border-zinc-100 bg-zinc-50/70 px-5 py-3">
+        <div data-app-modal-footer className="flex items-center justify-between gap-2 border-t border-zinc-100 bg-zinc-50/70 px-5 py-3">
           <button
             type="button"
             onClick={() => openUrl("https://docs.xrift.net/").catch(() => {})}

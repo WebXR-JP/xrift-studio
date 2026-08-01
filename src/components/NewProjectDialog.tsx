@@ -10,10 +10,12 @@ import {
   GitBranch,
   LayoutGrid,
   Lightbulb,
+  LifeBuoy,
   Package,
   Paintbrush,
   PanelsTopLeft,
   Sparkles,
+  TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
 import type { ProjectKind } from "../lib/tauri";
@@ -26,12 +28,14 @@ import {
 } from "../lib/visual-editor/starter-templates";
 import { OFFICIAL_XRIFT_WORLD_TEMPLATE_THUMBNAIL } from "../lib/visual-editor/official-world-template-import";
 import type { ClassicProjectCreationSource } from "../lib/visual-editor/classic-project-creation";
+import { SupportReportModal } from "./SupportReportModal";
 
 type CreationMethod = "classic" | "visual";
 
 type Props = {
   open: boolean;
   busy: boolean;
+  creationError?: { title: string; message: string } | null;
   onClose: () => void;
   onCreate: (kind: ProjectKind, name: string) => void;
   onOpenVisualEditor: (
@@ -141,6 +145,8 @@ function StarterScenePreview({
         <img
           src={STUDIO_GUIDE_TEMPLATE_THUMBNAIL}
           alt=""
+          width={640}
+          height={360}
           loading="eager"
           className="h-full w-full object-cover"
         />
@@ -157,6 +163,8 @@ function StarterScenePreview({
         <img
           src={OFFICIAL_XRIFT_WORLD_TEMPLATE_THUMBNAIL}
           alt=""
+          width={640}
+          height={360}
           loading="eager"
           className="h-full w-full object-cover"
         />
@@ -226,6 +234,7 @@ function StarterScenePreview({
 export function NewProjectDialog({
   open,
   busy,
+  creationError,
   onClose,
   onCreate,
   onOpenVisualEditor,
@@ -246,6 +255,7 @@ export function NewProjectDialog({
     useState(false);
   const [classicProjectSelectError, setClassicProjectSelectError] =
     useState<string | null>(null);
+  const [supportOpen, setSupportOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -257,6 +267,7 @@ export function NewProjectDialog({
     setClassicProjectPath("");
     setClassicProjectSelectBusy(false);
     setClassicProjectSelectError(null);
+    setSupportOpen(false);
   }, [open]);
 
   const choice = useMemo(
@@ -342,12 +353,18 @@ export function NewProjectDialog({
   };
 
   return (
+    <>
     <div
+      data-app-modal-backdrop
       className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 p-4 backdrop-blur-sm animate-fade-in"
       onClick={() => !interactionBusy && onClose()}
     >
       <div
-        className="max-h-[calc(100vh-2rem)] w-full max-w-[980px] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-brand-lg animate-scale-in"
+        data-app-modal-surface
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-project-dialog-title"
+        className="w-full max-w-[980px] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-4 shadow-brand-lg animate-scale-in sm:p-6"
         onClick={(event) => event.stopPropagation()}
       >
         {choice ? (
@@ -359,7 +376,7 @@ export function NewProjectDialog({
               className="mb-4 flex items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-900 disabled:opacity-50"
             >
               <ArrowLeft size={15} strokeWidth={2} />
-              4つの作り方へ戻る
+              作り方を選び直す
             </button>
             <div className="flex items-start gap-3">
               <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-100 text-brand-700">
@@ -371,7 +388,7 @@ export function NewProjectDialog({
                 />
               </span>
               <div>
-                <h2 className="text-xl font-semibold text-zinc-900">{choice.title}</h2>
+                <h2 id="new-project-dialog-title" className="text-xl font-semibold text-zinc-900">{choice.title}</h2>
                 <p className="mt-1 text-sm leading-6 text-zinc-500">{choice.description}</p>
                 <p className="mt-1 text-xs text-zinc-400">{choice.detail}</p>
               </div>
@@ -668,7 +685,29 @@ export function NewProjectDialog({
               </div>
             )}
 
-            <div className="mt-6 flex justify-end gap-2">
+            {creationError ? (
+              <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-900" role="alert">
+                <div className="flex items-start gap-2.5">
+                  <TriangleAlert size={17} className="mt-0.5 shrink-0 text-rose-700" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold">{creationError.title}</div>
+                    <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-rose-800">
+                      {creationError.message}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setSupportOpen(true)}
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-800 hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                    >
+                      <LifeBuoy size={13} aria-hidden="true" />
+                      ヘルプと報告
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="sticky -bottom-4 z-10 -mx-4 -mb-4 mt-6 flex justify-end gap-2 border-t border-zinc-100 bg-white/95 px-4 pb-4 pt-3 backdrop-blur sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6 sm:pb-6">
               <button
                 type="button"
                 onClick={onClose}
@@ -701,9 +740,9 @@ export function NewProjectDialog({
           </>
         ) : (
           <>
-            <h2 className="text-xl font-semibold text-zinc-900">新しいプロジェクトを作る</h2>
+            <h2 id="new-project-dialog-title" className="text-xl font-semibold text-zinc-900">新しいプロジェクトを作る</h2>
             <p className="mt-1 text-sm text-zinc-500">
-              作るものと制作方法の組み合わせを選んでください。制作方法はプロジェクトごとに独立しています。
+              作るものと制作方法を選んでください。
             </p>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {creationChoices.map((candidate) => {
@@ -743,12 +782,11 @@ export function NewProjectDialog({
                     <p className="mt-1 text-sm leading-6 text-zinc-500">
                       {candidate.description}
                     </p>
-                    <p className="mt-3 text-xs text-zinc-400">{candidate.detail}</p>
                   </button>
                 );
               })}
             </div>
-            <div className="mt-6 flex justify-end">
+            <div className="sticky -bottom-4 z-10 -mx-4 -mb-4 mt-6 flex justify-end border-t border-zinc-100 bg-white/95 px-4 pb-4 pt-3 backdrop-blur sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6 sm:pb-6">
               <button
                 type="button"
                 onClick={onClose}
@@ -762,5 +800,16 @@ export function NewProjectDialog({
         )}
       </div>
     </div>
+    <SupportReportModal
+      open={supportOpen}
+      context={{
+        currentScreen: "新規プロジェクト作成のエラー画面",
+        errorMessage: creationError
+          ? `${creationError.title}\n${creationError.message}`
+          : null,
+      }}
+      onClose={() => setSupportOpen(false)}
+    />
+    </>
   );
 }

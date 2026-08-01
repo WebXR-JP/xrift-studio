@@ -61,31 +61,36 @@ export function PublishReadinessDialog({
 
   return (
     <div
+      data-app-modal-backdrop
       className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 p-4 backdrop-blur-sm animate-fade-in"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[460px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-brand-lg animate-scale-in"
+        data-app-modal-surface
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="publish-readiness-title"
+        className="flex w-full max-w-[460px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-brand-lg animate-scale-in"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="relative gradient-brand-soft px-6 pb-5 pt-6">
+        <div data-app-modal-header className="relative gradient-brand-soft px-6 pb-5 pt-6">
           <button
             type="button"
             onClick={onClose}
             className="absolute right-3 top-3 rounded-md p-1 text-zinc-500 hover:bg-white/60 hover:text-zinc-800"
-            title="公開準備を閉じる"
+            aria-label="公開準備を閉じる"
           >
             <X size={14} strokeWidth={2} />
           </button>
-          <div className="text-lg font-semibold tracking-tight text-zinc-900">
+          <h2 id="publish-readiness-title" className="text-lg font-semibold tracking-tight text-zinc-900">
             公開前の準備
-          </div>
+          </h2>
           <p className="mt-1 text-xs leading-relaxed text-zinc-600">
             このまま公開すると、XRift 上で初期{projectLabel}のように表示される可能性があります。公開情報を整えてからアップロードします。
           </p>
         </div>
 
-        <div className="space-y-3 px-6 py-5">
+        <div data-app-modal-body className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-5">
           <div className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50/70 p-3.5">
             <StateMark state={readiness.metadata.state} />
             <div className="min-w-0 flex-1">
@@ -123,7 +128,7 @@ export function PublishReadinessDialog({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 bg-zinc-50/70 px-5 py-3">
+        <div data-app-modal-footer className="flex items-center justify-end gap-2 border-t border-zinc-100 bg-zinc-50/70 px-5 py-3">
           <button
             type="button"
             onClick={onClose}

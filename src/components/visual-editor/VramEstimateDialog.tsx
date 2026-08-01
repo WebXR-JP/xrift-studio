@@ -97,6 +97,7 @@ export function VramEstimateDialog({
 
   return (
     <div
+      data-app-modal-backdrop
       className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm"
       onPointerDown={(event) => {
         event.stopPropagation();
@@ -104,26 +105,24 @@ export function VramEstimateDialog({
       }}
     >
       <section
+        data-app-modal-surface
         role="dialog"
         aria-modal="true"
         aria-labelledby="vram-estimate-title"
-        className="flex max-h-[86vh] w-full max-w-[780px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        className="flex w-full max-w-[780px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
         onPointerDown={(event) => event.stopPropagation()}
       >
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-6 py-5">
+        <header data-app-modal-header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:px-6 sm:py-5">
           <div>
-            <div className="flex items-center gap-2 text-violet-700">
+            <div className="flex items-center gap-2">
               <Gauge size={18} aria-hidden="true" />
-              <span className="text-xs font-semibold uppercase tracking-wide">
-                Performance estimate
-              </span>
+              <h2
+                id="vram-estimate-title"
+                className="text-xl font-semibold text-slate-950"
+              >
+                {subjectLabel}の容量・パフォーマンス目安
+              </h2>
             </div>
-            <h2
-              id="vram-estimate-title"
-              className="mt-1 text-xl font-semibold text-slate-950"
-            >
-              {subjectLabel}の容量・パフォーマンス目安
-            </h2>
             <p className="mt-1 text-sm leading-6 text-slate-600">
               公開対象のTexture・Model・Audioから、ロード容量とGPU使用量を概算しています。
             </p>
@@ -140,7 +139,7 @@ export function VramEstimateDialog({
           </button>
         </header>
 
-        <div className="overflow-y-auto px-6 py-5">
+        <div data-app-modal-body className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <SummaryCard
               label="Asset VRAM"
@@ -526,7 +525,7 @@ export function VramEstimateDialog({
           </div>
         </div>
 
-        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+        <footer data-app-modal-footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 sm:px-6 sm:py-4">
           <div className="text-xs text-slate-500">
             {selectedIds.size > 0
               ? `${selectedIds.size}件の改善を選択中`

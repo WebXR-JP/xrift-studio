@@ -390,6 +390,7 @@ function ThumbnailDialog({
 }) {
   return (
     <div
+      data-app-modal-backdrop
       className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/30 p-5 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
@@ -397,7 +398,8 @@ function ThumbnailDialog({
       onPointerDown={onClose}
     >
       <div
-        className="flex h-[min(640px,calc(100vh-40px))] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+        data-app-modal-surface
+        className="flex h-[min(640px,calc(100dvh-1.5rem))] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
         onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">

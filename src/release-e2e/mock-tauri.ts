@@ -213,7 +213,7 @@ export function installReleaseE2EMock(): void {
     0,
     Number.parseInt(searchParams.get("saveFailures") ?? "0", 10) || 0,
   );
-  let runtimeReady = scenario !== "setup";
+  let runtimeReady = scenario !== "setup" && scenario !== "setup-error";
   let nextPid = 4100;
 
   const state: ReleaseE2EState = {
@@ -263,6 +263,11 @@ export function installReleaseE2EMock(): void {
             paths: { ...runtimePaths },
           } satisfies RuntimeStatus;
         case "setup_runtime":
+          if (scenario === "setup-error") {
+            throw new Error(
+              "Runtime install failed at C:\\Users\\release-e2e\\runtime; password=do-not-copy",
+            );
+          }
           runtimeReady = true;
           return {
             ready: true,

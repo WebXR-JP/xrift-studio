@@ -203,6 +203,7 @@ export function ScriptTrustDialog({
 
   return (
     <div
+      data-app-modal-backdrop
       role="presentation"
       className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-[2px]"
       onMouseDown={(event) => {
@@ -210,6 +211,7 @@ export function ScriptTrustDialog({
       }}
     >
       <section
+        data-app-modal-surface
         ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
@@ -218,7 +220,7 @@ export function ScriptTrustDialog({
         tabIndex={-1}
         className="flex max-h-[min(800px,calc(100vh-32px))] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-amber-300 bg-white shadow-2xl"
       >
-        <header className="flex shrink-0 items-start gap-3 border-b border-amber-200 bg-amber-50 px-5 py-4">
+        <header data-app-modal-header className="flex shrink-0 items-start gap-3 border-b border-amber-200 bg-amber-50 px-5 py-4">
           <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-300 bg-white text-amber-700">
             <ShieldAlert size={19} aria-hidden="true" />
           </span>
@@ -260,7 +262,7 @@ export function ScriptTrustDialog({
           </div>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 p-5 pt-4 md:grid-cols-[280px_minmax(0,1fr)] md:gap-4">
+        <div data-app-modal-body className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto p-5 pt-4 md:grid-cols-[280px_minmax(0,1fr)] md:gap-4 md:overflow-hidden">
           <aside className="flex min-h-0 flex-col border-b border-slate-200 pb-4 md:border-b-0 md:border-r md:pb-0 md:pr-4">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-xs font-semibold text-slate-800">実行対象</h3>
@@ -401,7 +403,7 @@ export function ScriptTrustDialog({
           </main>
         </div>
 
-        <footer className="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <footer data-app-modal-footer className="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
           <p
             id={snapshotHintId}
             className="max-w-xl text-[11px] leading-4 text-slate-600"

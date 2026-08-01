@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ArrowUpDown,
   ExternalLink,
@@ -33,8 +33,6 @@ const PROJECT_SORT_LABELS: Record<ProjectSort, string> = {
   "uploaded-desc": "最近公開した順",
   "name-asc": "名前順",
 };
-
-const SUPPORT_PROMPT_DISMISSED_KEY = "xrift-studio:support-prompt-dismissed:v1";
 
 type Props = {
   projects: Project[];
@@ -100,26 +98,6 @@ export function ProjectLibrary({
   const [sort, setSort] = useState<ProjectSort>("updated-desc");
   const [publishFilter, setPublishFilter] = useState<PublishFilter>("all");
   const [query, setQuery] = useState("");
-
-  useEffect(() => {
-    if (loading || !projectsRoot) return;
-    try {
-      if (window.localStorage.getItem(SUPPORT_PROMPT_DISMISSED_KEY) !== "1") {
-        setShowSupport(true);
-      }
-    } catch {
-      setShowSupport(true);
-    }
-  }, [loading, projectsRoot]);
-
-  const closeSupport = () => {
-    try {
-      window.localStorage.setItem(SUPPORT_PROMPT_DISMISSED_KEY, "1");
-    } catch {
-      // The help entry remains available from the header if storage is blocked.
-    }
-    setShowSupport(false);
-  };
 
   const visibleProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("ja");
@@ -215,7 +193,7 @@ export function ProjectLibrary({
       <SupportReportModal
         open={showSupport}
         projectCount={projects.length}
-        onClose={closeSupport}
+        onClose={() => setShowSupport(false)}
       />
       {editingThumb ? (
         <ThumbnailEditorModal

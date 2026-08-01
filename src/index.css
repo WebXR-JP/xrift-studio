@@ -133,6 +133,52 @@ button:not(:disabled) {
   cursor: pointer;
 }
 
+/*
+ * Dialogs are rendered by several feature areas, but their viewport behavior
+ * must stay identical. Feature components own their content and state colors;
+ * these attributes own only the shared modal geometry and interaction surface.
+ */
+[data-app-modal-backdrop] {
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: clamp(0.75rem, 2vw, 1.25rem);
+  background-color: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(2px);
+}
+
+[data-app-modal-surface] {
+  max-height: calc(100dvh - clamp(1.5rem, 4vw, 2.5rem));
+  border-color: #e2e8f0;
+  border-radius: 1rem;
+  box-shadow:
+    0 24px 64px -24px rgba(15, 23, 42, 0.42),
+    0 8px 20px -12px rgba(15, 23, 42, 0.24);
+}
+
+[data-app-modal-header],
+[data-app-modal-footer] {
+  flex-shrink: 0;
+}
+
+[data-app-modal-body] {
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+:where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-scale-in {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
 /* Aurora mesh backgrounds */
 .bg-aurora {
   background:

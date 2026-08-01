@@ -4,12 +4,14 @@ import {
   Box,
   CheckCircle2,
   Globe2,
+  LifeBuoy,
   Loader2,
   PanelsTopLeft,
   Sparkles,
 } from "lucide-react";
 import { tauri, type ProjectKind, type RuntimeStatus } from "../lib/tauri";
 import { BrandMark } from "./Brand";
+import { SupportReportModal } from "./SupportReportModal";
 
 type SetupProgress = {
   step: string;
@@ -28,6 +30,7 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
   const [progress, setProgress] = useState<SetupProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<SetupProgress[]>([]);
+  const [showSupport, setShowSupport] = useState(false);
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
   useEffect(() => {
@@ -135,6 +138,14 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
             <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 animate-fade-in">
               <div className="font-semibold">エラー</div>
               <div className="mt-1 whitespace-pre-wrap font-mono text-[11px]">{error}</div>
+              <button
+                type="button"
+                onClick={() => setShowSupport(true)}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-800 hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+              >
+                <LifeBuoy size={13} aria-hidden="true" />
+                ヘルプと報告
+              </button>
             </div>
           )}
 
@@ -198,6 +209,11 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
           お使いのシステムには影響しません。すべてアプリ専用のフォルダで完結します。
         </div>
       </div>
+      <SupportReportModal
+        open={showSupport}
+        context={{ currentScreen: "初期セットアップのエラー画面", errorMessage: error }}
+        onClose={() => setShowSupport(false)}
+      />
     </div>
   );
 }

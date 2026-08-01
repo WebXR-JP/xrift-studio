@@ -31,18 +31,24 @@ export function UpdateDialog({
 
   return (
     <div
+      data-app-modal-backdrop
       className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 backdrop-blur-sm animate-fade-in"
       onClick={() => !busy && onClose()}
     >
       <div
-        className="w-[440px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-brand-lg animate-scale-in"
+        data-app-modal-surface
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cli-update-title"
+        className="flex w-full max-w-[440px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-brand-lg animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="relative gradient-brand-soft px-6 pb-5 pt-6">
+        <div data-app-modal-header className="relative gradient-brand-soft px-6 pb-5 pt-6">
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
+            aria-label="CLIアップデートを閉じる"
             className="absolute right-3 top-3 rounded-md p-1 text-zinc-500 hover:bg-white/60 hover:text-zinc-800 disabled:opacity-50"
           >
             <X size={14} strokeWidth={2} />
@@ -52,9 +58,9 @@ export function UpdateDialog({
               <Sparkles size={20} strokeWidth={2} />
             </div>
             <div>
-              <div className="text-lg font-semibold tracking-tight text-zinc-900">
+              <h2 id="cli-update-title" className="text-lg font-semibold tracking-tight text-zinc-900">
                 @xrift/cli アップデート
-              </div>
+              </h2>
               <div className="text-xs text-zinc-600">
                 新しいバージョンが公開されました
               </div>
@@ -62,7 +68,7 @@ export function UpdateDialog({
           </div>
         </div>
 
-        <div className="px-6 py-5">
+        <div data-app-modal-body className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           <div className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50/60 px-4 py-3">
             <div className="flex-1 min-w-0">
               <div className="text-[10px] uppercase tracking-wider text-zinc-400">
@@ -82,12 +88,9 @@ export function UpdateDialog({
               </div>
             </div>
           </div>
-          <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
-            アップデートには少し時間がかかることがあります。完了後、バージョンを再取得します。
-          </p>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 bg-zinc-50/70 px-5 py-3">
+        <div data-app-modal-footer className="flex items-center justify-end gap-2 border-t border-zinc-100 bg-zinc-50/70 px-5 py-3">
           <button
             type="button"
             onClick={onClose}

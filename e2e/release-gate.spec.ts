@@ -20,7 +20,7 @@ async function releaseE2EState(
 
 async function openReleaseApp(
   page: Page,
-  scenario: "ready" | "setup" = "ready",
+  scenario: "ready" | "setup" | "setup-error" = "ready",
 ): Promise<void> {
   await page.goto(`/e2e.html?scenario=${scenario}`);
 }
@@ -60,6 +60,57 @@ test("初回セットアップからプロジェクト一覧へ進める", async
   expect(state?.calls.some((call) => call.command === "setup_runtime")).toBe(
     true,
   );
+});
+
+test("セットアップエラーを伏字付きでヘルプ相談へ引き継げる", async ({
+  page,
+}) => {
+  await openReleaseApp(page, "setup-error");
+  await page.getByRole("button", { name: "セットアップを開始" }).click();
+
+  await expect(page.getByText("Runtime install failed", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "ヘルプと報告" }).click();
+
+  const supportDialog = page.getByRole("dialog", { name: "ヘルプと報告" });
+  await expect(supportDialog).toBeVisible();
+  await expect(supportDialog.getByText("自動添付されるエラーと診断")).toBeVisible();
+  await expect(supportDialog.getByText("[ローカルパス]", { exact: false })).toBeVisible();
+  await expect(supportDialog.getByText("password=[削除]", { exact: false })).toBeVisible();
+  await expect(supportDialog).not.toContainText("C:\\Users\\release-e2e");
+  await expect(supportDialog).not.toContainText("do-not-copy");
+});
+
+test("モーダルは必要な時だけ開き、狭い画面でも操作を画面内に保つ", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 520, height: 600 });
+  await openProjectLibrary(page);
+
+  const supportDialog = page.getByRole("dialog", { name: "ヘルプと報告" });
+  await expect(supportDialog).toHaveCount(0);
+
+  await page.getByRole("button", { name: "ヘルプと報告" }).click();
+  await expect(supportDialog).toBeVisible();
+  await expect(supportDialog).toHaveAttribute("data-app-modal-surface", "true");
+  let bounds = await supportDialog.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(600);
+  await supportDialog.getByRole("button", { name: "閉じる", exact: true }).click();
+
+  await page.getByRole("button", { name: /新規プロジェクト/ }).click();
+  const newProjectDialog = page.getByRole("dialog", {
+    name: "新しいプロジェクトを作る",
+  });
+  await expect(newProjectDialog).toBeVisible();
+  await expect(newProjectDialog).toHaveAttribute("data-app-modal-surface", "true");
+  await expect(
+    newProjectDialog.getByRole("button", { name: "キャンセル", exact: true }),
+  ).toBeVisible();
+  bounds = await newProjectDialog.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(600);
 });
 
 const creationCases = [

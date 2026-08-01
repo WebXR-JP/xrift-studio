@@ -160,6 +160,7 @@ export function ClassicExportDialog({
 
   return (
     <div
+      data-app-modal-backdrop
       className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/35 p-5 backdrop-blur-[2px]"
       role="presentation"
       onMouseDown={(event) => {
@@ -167,17 +168,15 @@ export function ClassicExportDialog({
       }}
     >
       <section
+        data-app-modal-surface
         role="dialog"
         aria-modal="true"
         aria-labelledby="classic-export-title"
         className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
       >
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
+        <header data-app-modal-header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6 sm:py-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-600">
-              Classic Export
-            </p>
-            <h2 id="classic-export-title" className="mt-1 text-xl font-semibold text-slate-950">
+            <h2 id="classic-export-title" className="text-xl font-semibold text-slate-950">
               XRift Classicへ書き出す
             </h2>
             <p className="mt-1.5 text-sm leading-6 text-slate-600">
@@ -195,7 +194,7 @@ export function ClassicExportDialog({
           </button>
         </header>
 
-        <div className="overflow-y-auto px-6 py-5">
+        <div data-app-modal-body className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
           {result ? (
             <div className="space-y-5">
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
@@ -323,11 +322,11 @@ export function ClassicExportDialog({
           )}
         </div>
 
-        <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+        <footer data-app-modal-footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 sm:px-6 sm:py-4">
           <p className="text-xs text-slate-500">Classic側の変更をVisual Editorへ逆変換しません。</p>
           <div className="flex items-center gap-2">
             <button type="button" disabled={busy} onClick={onClose} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-wait disabled:opacity-50">{result ? "閉じる" : "キャンセル"}</button>
-            {!result ? <button type="button" disabled={!canExport} onClick={() => void startExport()} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300">{busy ? "書き出しています" : "Classicへ書き出す"}</button> : null}
+            {!result ? <button type="button" disabled={!canExport} onClick={() => void startExport()} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300">{busy ? "書き出し中…" : "Classicへ書き出す"}</button> : null}
           </div>
         </footer>
       </section>

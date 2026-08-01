@@ -53,6 +53,7 @@ export function AssetDeleteDialog({
 
   return (
     <div
+      data-app-modal-backdrop
       className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-[1px]"
       role="presentation"
       onMouseDown={(event) => {
@@ -60,13 +61,14 @@ export function AssetDeleteDialog({
       }}
     >
       <section
+        data-app-modal-surface
         role="dialog"
         aria-modal="true"
         aria-labelledby="asset-delete-dialog-title"
         aria-describedby="asset-delete-dialog-description"
         className="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
       >
-        <header className="flex items-start gap-3 border-b border-slate-200 px-5 py-4">
+        <header data-app-modal-header className="flex items-start gap-3 border-b border-slate-200 px-5 py-4">
           <span className={`rounded-lg p-2 ${target.canDelete ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>
             <DeleteIcon size={18} aria-hidden="true" />
           </span>
@@ -76,7 +78,7 @@ export function AssetDeleteDialog({
           </div>
         </header>
 
-        <div className="px-5 py-4">
+        <div data-app-modal-body className="min-h-0 overflow-y-auto px-5 py-4">
           <p id="asset-delete-dialog-description" className="text-xs leading-5 text-slate-600">
             {target.canDelete
               ? `Assetsから削除します。この操作は「元に戻す」で復元できます。`
@@ -100,7 +102,7 @@ export function AssetDeleteDialog({
           ) : null}
         </div>
 
-        <footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
+        <footer data-app-modal-footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
           <button
             ref={cancelRef}
             type="button"

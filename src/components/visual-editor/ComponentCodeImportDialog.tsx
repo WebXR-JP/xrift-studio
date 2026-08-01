@@ -192,19 +192,24 @@ export function ComponentCodeImportDialog({
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="component-import-title"
+      data-app-modal-backdrop
+      role="presentation"
       className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-5 backdrop-blur-[2px]"
     >
-      <div className="flex max-h-[min(860px,calc(100vh-40px))] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl">
-        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4">
+      <div
+        data-app-modal-surface
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="component-import-title"
+        className="flex w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl"
+      >
+        <header data-app-modal-header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4">
           <div>
             <h2 id="component-import-title" className="text-base font-semibold text-slate-950">
               R3F / Classicからインポート
             </h2>
             <p className="mt-1 text-xs leading-5 text-slate-600">
-              Drei / React Three FiberのTSX、または既存XRift Classic projectを安全なScene dataへ変換します。
+              R3FのTSXまたはClassicプロジェクトをSceneへ変換します。
             </p>
           </div>
           <button
@@ -219,7 +224,7 @@ export function ComponentCodeImportDialog({
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+        <div data-app-modal-body className="min-h-0 flex-1 overflow-y-auto p-5">
           {reviewing ? (
             <ImportPreviewHeader
               plan={plan}
@@ -258,7 +263,7 @@ export function ComponentCodeImportDialog({
           />
         </div>
 
-        <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-slate-200 bg-slate-50 px-5 py-3">
+        <footer data-app-modal-footer className="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
           {reviewing ? (
             <label className="inline-flex cursor-pointer items-center gap-2 text-[11px] font-medium text-slate-700">
               <input
@@ -364,7 +369,7 @@ function CodeConverter({
             ) : (
               <FolderOpen size={13} aria-hidden="true" />
             )}
-            {loading ? "読み込み中" : "Classicプロジェクトを選択"}
+            {loading ? "読み込み中…" : "Classicプロジェクトを選択"}
           </button>
           <button
             type="button"

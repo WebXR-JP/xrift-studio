@@ -6,6 +6,7 @@ import {
   FileCheck2,
   Gauge,
   Image,
+  LifeBuoy,
   Loader2,
   LogIn,
   RotateCcw,
@@ -20,6 +21,7 @@ import {
   type WorldVramEstimate,
 } from "../../lib/visual-editor/vram-estimate";
 import { VramEstimateDialog } from "./VramEstimateDialog";
+import { SupportReportModal } from "../SupportReportModal";
 
 export type VisualPublishStage =
   | "review"
@@ -149,6 +151,7 @@ export function VisualUploadDialog({
     string | null
   >(null);
   const [vramDetailsOpen, setVramDetailsOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
   const cancellationRef = useRef<VisualPublishCancellationController | null>(
     null,
   );
@@ -237,6 +240,7 @@ export function VisualUploadDialog({
       setError(null);
       setThumbnailStagingSha256(null);
       setVramDetailsOpen(false);
+      setSupportOpen(false);
     }
     wasOpenRef.current = open;
   }, [open]);
@@ -244,12 +248,12 @@ export function VisualUploadDialog({
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || busy || vramDetailsOpen) return;
+      if (event.key !== "Escape" || busy || vramDetailsOpen || supportOpen) return;
       onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [busy, onClose, open, vramDetailsOpen]);
+  }, [busy, onClose, open, supportOpen, vramDetailsOpen]);
 
   useEffect(
     () => () => {
@@ -317,6 +321,7 @@ export function VisualUploadDialog({
   const projectLabel = projectKind === "world" ? "ワールド" : "アイテム";
 
   return (
+    <>
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm"
       onPointerDown={() => !busy && onClose()}
@@ -646,6 +651,16 @@ export function VisualUploadDialog({
               </button>
             ) : stage === "failed" || stage === "cancelled" ? (
               <>
+                {stage === "failed" ? (
+                  <button
+                    type="button"
+                    onClick={() => setSupportOpen(true)}
+                    className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+                  >
+                    <LifeBuoy size={14} aria-hidden="true" />
+                    ヘルプと報告
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={onClose}
@@ -698,5 +713,21 @@ export function VisualUploadDialog({
         />
       ) : null}
     </div>
+    <SupportReportModal
+      open={supportOpen}
+      context={{
+        currentScreen: `${projectLabel}公開の失敗画面`,
+        errorMessage: error,
+        diagnostics: thumbnailStagingSha256
+          ? [
+              "公開用ステージングへコピー済み",
+              "サムネイルのコピー元とコピー先のSHA-256が一致しました。",
+              `SHA-256: ${thumbnailStagingSha256}`,
+            ]
+          : [],
+      }}
+      onClose={() => setSupportOpen(false)}
+    />
+    </>
   );
 }

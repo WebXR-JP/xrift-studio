@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Camera,
   Globe,
+  LifeBuoy,
   Box,
   ShieldCheck,
 } from "lucide-react";
@@ -37,6 +38,7 @@ import {
   type PublishReadiness,
 } from "../lib/publish-readiness";
 import { PublishReadinessDialog } from "./PublishReadinessDialog";
+import { SupportReportModal } from "./SupportReportModal";
 
 type Props = {
   project: Project;
@@ -78,6 +80,7 @@ export function EditorView({
   const [content, setContent] = useState<string>("");
   const [savedContent, setSavedContent] = useState<string>("");
   const [loading, setLoading] = useState(false);
+  const [showErrorSupport, setShowErrorSupport] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logsCollapsed, setLogsCollapsed] = useState(true);
   const [fileTreeKey, setFileTreeKey] = useState(0);
@@ -572,6 +575,14 @@ export function EditorView({
                 <RefreshCw size={12} strokeWidth={2} />
                 再試行
               </button>
+              <button
+                type="button"
+                onClick={() => setShowErrorSupport(true)}
+                className="flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+              >
+                <LifeBuoy size={12} aria-hidden="true" />
+                ヘルプと報告
+              </button>
             </div>
           ) : isXriftJsonForm ? (
             <XriftJsonEditor
@@ -632,6 +643,11 @@ export function EditorView({
           setPublishReadiness(null);
           setResumePublishAfterPreparation(false);
         }}
+      />
+      <SupportReportModal
+        open={showErrorSupport}
+        context={{ currentScreen: "ファイル読込のエラー画面", errorMessage: error }}
+        onClose={() => setShowErrorSupport(false)}
       />
     </div>
   );

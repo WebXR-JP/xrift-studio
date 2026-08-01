@@ -6,10 +6,13 @@ import {
 } from "react";
 import {
   Library,
+  LifeBuoy,
   PanelsTopLeft,
   RotateCcw,
   TriangleAlert,
 } from "lucide-react";
+import { SupportReportModal } from "../SupportReportModal";
+import { sanitizeSupportErrorMessage } from "../../lib/support-report";
 
 export type VisualEditorErrorBoundaryProps = {
   children: ReactNode;
@@ -17,12 +20,15 @@ export type VisualEditorErrorBoundaryProps = {
   featureName?: string;
   projectName?: string;
   backLabel?: string;
+  projectCount?: number;
 };
 
 type VisualEditorErrorBoundaryState = {
   failed: boolean;
   requiresReload: boolean;
   resetKey: number;
+  supportOpen: boolean;
+  errorMessage: string | null;
 };
 
 const DYNAMIC_IMPORT_FAILURE_PATTERNS = [
@@ -60,6 +66,8 @@ export class VisualEditorErrorBoundary extends Component<
     failed: false,
     requiresReload: false,
     resetKey: 0,
+    supportOpen: false,
+    errorMessage: null,
   };
 
   private readonly headingRef = createRef<HTMLHeadingElement>();
@@ -70,6 +78,7 @@ export class VisualEditorErrorBoundary extends Component<
     return {
       failed: true,
       requiresReload: isDynamicImportLoadError(error),
+      errorMessage: sanitizeSupportErrorMessage(error),
     };
   }
 
@@ -96,6 +105,8 @@ export class VisualEditorErrorBoundary extends Component<
       failed: false,
       requiresReload: false,
       resetKey: current.resetKey + 1,
+      supportOpen: false,
+      errorMessage: null,
     }));
   };
 
@@ -105,6 +116,7 @@ export class VisualEditorErrorBoundary extends Component<
       children,
       featureName = "ビジュアルエディター",
       onBack,
+      projectCount = 0,
       projectName,
     } = this.props;
 
@@ -114,6 +126,7 @@ export class VisualEditorErrorBoundary extends Component<
     const { requiresReload } = this.state;
 
     return (
+      <>
       <main
         className="flex min-h-screen items-center justify-center bg-zinc-50 px-5 py-10 text-zinc-900"
         role="alert"
@@ -173,6 +186,14 @@ export class VisualEditorErrorBoundary extends Component<
               <Library size={17} strokeWidth={1.9} aria-hidden="true" />
               {backLabel}
             </button>
+            <button
+              type="button"
+              onClick={() => this.setState({ supportOpen: true })}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
+            >
+              <LifeBuoy size={17} strokeWidth={1.9} aria-hidden="true" />
+              ヘルプと報告
+            </button>
           </div>
 
           <p className="mt-6 border-t border-zinc-100 pt-5 text-xs leading-5 text-zinc-500">
@@ -182,6 +203,16 @@ export class VisualEditorErrorBoundary extends Component<
           </p>
         </section>
       </main>
+      <SupportReportModal
+        open={this.state.supportOpen}
+        projectCount={projectCount}
+        context={{
+          currentScreen: `${featureName}のエラー画面`,
+          errorMessage: this.state.errorMessage,
+        }}
+        onClose={() => this.setState({ supportOpen: false })}
+      />
+      </>
     );
   }
 }
