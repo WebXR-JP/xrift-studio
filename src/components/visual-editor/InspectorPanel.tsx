@@ -351,6 +351,10 @@ function VectorEditor({
     onScrubCancel?.();
   };
 
+  const focusAxisInput = (axisIndex: number) => {
+    inputRefs.current[axisIndex]?.focus({ preventScroll: true });
+  };
+
   const handleAxisPointerDown = (
     event: ReactPointerEvent<HTMLButtonElement>,
     axis: (typeof axes)[number],
@@ -358,7 +362,7 @@ function VectorEditor({
   ) => {
     if (!scrubEnabled || disabled || event.button !== 0 || scrubRef.current) return;
     event.preventDefault();
-    event.currentTarget.focus();
+    focusAxisInput(axisIndex);
     event.currentTarget.setPointerCapture(event.pointerId);
     const startValue: Vec3 = [value[0], value[1], value[2]];
     const nextScrub: AxisScrubState = {
@@ -380,12 +384,17 @@ function VectorEditor({
     const active = scrubRef.current;
     if (!active || active.pointerId !== event.pointerId) return;
     event.preventDefault();
+    const horizontalDelta = event.clientX - active.clientX;
+    if (horizontalDelta === 0) {
+      const nextScrub = { ...active, clientY: event.clientY };
+      scrubRef.current = nextScrub;
+      setScrub(nextScrub);
+      return;
+    }
     const modifier = event.shiftKey ? 0.1 : event.ctrlKey || event.altKey ? 10 : 1;
     const axisValue =
       active.currentValue[active.axisIndex] +
-      (event.clientX - active.clientX) *
-        axisScrubSensitivity(valueKind) *
-        modifier;
+      horizontalDelta * axisScrubSensitivity(valueKind) * modifier;
     const currentValue = updateVectorAxis(
       active.currentValue,
       active.axisIndex,
@@ -410,6 +419,7 @@ function VectorEditor({
     event.preventDefault();
     scrubRef.current = null;
     setScrub(null);
+    focusAxisInput(active.axisIndex);
     onScrubEnd?.();
   };
 
@@ -451,7 +461,7 @@ function VectorEditor({
                 onPointerCancel={(event) => cancelScrub(event.pointerId)}
                 onLostPointerCapture={(event) => cancelScrub(event.pointerId)}
                 onDoubleClick={() => {
-                  inputRefs.current[index]?.focus();
+                  focusAxisInput(index);
                   inputRefs.current[index]?.select();
                 }}
                 onKeyDown={(event) => {
@@ -480,6 +490,14 @@ function VectorEditor({
               disabled={disabled}
               step={valueKind === "rotation" ? 1 : 0.1}
               aria-label={`${label} ${axis}`}
+              onKeyDown={(event) => {
+                if (!scrubRef.current) return;
+                event.stopPropagation();
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  cancelScrub();
+                }
+              }}
               onChange={(event) => {
                 const nextValue = event.currentTarget.valueAsNumber;
                 if (!Number.isFinite(nextValue)) return;
