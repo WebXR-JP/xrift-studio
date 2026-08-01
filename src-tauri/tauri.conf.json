@@ -44,7 +44,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY3NDgyREJDM0U1NTVCQgpSV1M3VmVYRDI0SjBEK1dIb3VMdllzNW8rZ2JQUE1UUVpieDRNSEpkeVovN205SUU4eUFlbjJQUwo=",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZBQzU2NzlCM0Q4NENDMDYKUldRR3pJUTltMmZGYW9CYnRTbXFRd3MvbWYxY09rYlhnaytKTmlpRHZzaWNlOFY1R2s1TFM2Ym4K",
       "endpoints": [
         "https://github.com/WebXR-JP/xrift-studio/releases/latest/download/latest.json"
       ],

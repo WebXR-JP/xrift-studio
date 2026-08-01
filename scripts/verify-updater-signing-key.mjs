@@ -13,7 +13,14 @@ function keyId(base64Key) {
 }
 
 function signatureKeyId(signature) {
-  const encodedSignature = signature.trim().split(/\r?\n/)[1];
+  const signatureLines = signature.trim().split(/\r?\n/);
+  let encodedSignature = signatureLines[1] ?? signatureLines[0];
+  const decodedSignature = Buffer.from(encodedSignature, "base64").toString("utf8");
+
+  if (decodedSignature.startsWith("untrusted comment:")) {
+    encodedSignature = decodedSignature.trim().split(/\r?\n/)[1];
+  }
+
   const data = Buffer.from(encodedSignature, "base64");
   return data.subarray(2, 10).toString("hex").toUpperCase();
 }
@@ -21,8 +28,8 @@ function signatureKeyId(signature) {
 try {
   writeFileSync(probePath, "XRift Studio updater signing-key check\n");
 
-  const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-  const result = spawnSync(pnpm, ["tauri", "signer", "sign", probePath], {
+  const tauriCli = join(process.cwd(), "node_modules", "@tauri-apps", "cli", "tauri.js");
+  const result = spawnSync(process.execPath, [tauriCli, "signer", "sign", probePath], {
     encoding: "utf8",
     env: process.env,
   });
