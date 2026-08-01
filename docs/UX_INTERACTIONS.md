@@ -529,6 +529,32 @@ F-06 アイテム検査
 - panelを閉じても同じEditor、Scene、両selection、接続状態、直近Activityを維持する。別projectを開いた時は前projectへの書き込み認可を引き継がず、新しいcontextを取得するまで変更を拒否する。
 - AI変更の取消は通常のUndoを使い、同じCommand historyからScene、Asset、両selectionを復元する。登録解除はclient設定だけを外し、project documentとEditor historyを変更しない。
 
+### 開発画面デバッグ（標準MCP）
+
+参照: MI-03, MI-05, MI-09
+
+#### 操作前
+
+- デバッグ版Tauriを起動し、標準MCPの`tauri` serverを読み込む。Codexはリポジトリの`.mcp.json`を使い、その他のMCP hostは`pnpm mcp:debug-config`で生成した設定を使う。
+- 現在表示中のWebViewを画像で確認する目的を明示し、Scene編集用の`xrift-studio` MCPと、画面調査用の`xrift-studio-debug` MCPを区別する。
+
+#### 操作中
+
+- UI変更ごとに`webview_screenshot`、`webview_dom_snapshot`、`read_logs`を必要な順に呼び出し、Tauri commandを変更した場合は`ipc_monitor`と`ipc_get_captured`を追加する。処理中の画面ではスクリーンショットを再取得し、二重操作や状態ラベルの不一致を確認する。
+- 画面調査用MCPは表示中のWebViewの読み取りを基本とし、OSのネイティブダイアログ、連続動画、リリース版への接続を対象にしない。ログイン、アップロード、削除、リセットなどの書き込み操作は別途明示確認を必要とする。
+
+#### 成功時
+
+- 画像、DOM、console、IPCの結果を同じ変更単位の検証記録として扱い、次の修正へ戻れる。スクリーンショットはリポジトリへ保存せず、clientの一時領域またはscratchpadへ置く。
+
+#### 失敗時
+
+- Tauri app未起動、MCP server未接続、画面の読み込み失敗、スクリーンショット取得失敗、console errorは原因を分けて示し、アプリ起動、MCP再読み込み、画面再読み込み、ログ確認のいずれかへ戻す。画面調査だけでproject document、AssetManifest、historyを変更しない。
+
+#### 戻り先
+
+- MCP clientは最後に確認した画面、DOM、ログ、IPCの状態を保持し、修正後に同じ画面から再取得できる。開発用Tauri Bridgeはdebug buildだけに存在し、release buildのMCP surfaceへ追加しない。
+
 ## F-18 OpenBrush import / shader rendering の状態設計
 
 ### 操作前

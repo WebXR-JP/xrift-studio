@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "tauri": {
-      "command": "pnpm",
-      "args": ["dlx", "@hypothesi/tauri-mcp-server"]
+      "command": "node",
+      "args": ["scripts/mcp-debug-server.mjs"]
     }
   }
 }

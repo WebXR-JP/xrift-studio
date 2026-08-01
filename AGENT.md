@@ -88,3 +88,4 @@ pnpm build:preview       # GitHub Pages 用プレビューのビルド
 - UX スキル: `.agents/skills/xrift-studio-ux/SKILL.md`
 - 機能追加の方針スキル: `.agents/skills/xrift-studio-feature/SKILL.md`
 - 検証ループスキル: `.agents/skills/xrift-studio-verify/SKILL.md`
+- MCP画面デバッグ: `docs/MCP_DEBUGGING.md`
