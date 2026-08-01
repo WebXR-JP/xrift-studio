@@ -18,6 +18,7 @@ import {
   XRIFT_STUDIO_NEW_ISSUE_URL,
 } from "../lib/support-links";
 import {
+  createSupportReportDraft,
   sanitizeSupportErrorMessage,
   type SupportReportContext,
 } from "../lib/support-report";
@@ -150,20 +151,13 @@ export function SupportReportModal({
 ${sanitizedErrorMessage ? `\n## 発生したエラー\n${sanitizedErrorMessage}\n` : ""}
 ${sanitizedDiagnostics.length > 0 ? `\n## 関連する診断\n${sanitizedDiagnostics.map((diagnostic) => `- ${diagnostic}`).join("\n")}\n` : ""}
 
-## 相談内容
-<!-- 起きた症状または実現したい機能を書いてください。 -->
-
-## 再現手順または利用シーン
-1.
-2.
-3.
-
-## 期待する結果
-
-## 実際の結果・困っていること
+${createSupportReportDraft(context, sanitizedErrorMessage)}
 `,
     [
       context?.currentScreen,
+      context?.failureTiming,
+      context?.project?.description,
+      context?.project?.name,
       environment,
       projectCount,
       sanitizedDiagnostics,

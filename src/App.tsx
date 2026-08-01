@@ -914,6 +914,7 @@ function App() {
           key={visualSession.bundle.project.projectId}
           featureName="ビジュアルエディター"
           projectName={visualSession.bundle.project.metadata.name}
+          projectDescription={visualSession.bundle.project.metadata.description}
           projectCount={projects.length}
           onBack={handleVisualEditorBack}
         >

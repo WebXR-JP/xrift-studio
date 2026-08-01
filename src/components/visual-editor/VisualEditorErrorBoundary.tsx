@@ -19,6 +19,7 @@ export type VisualEditorErrorBoundaryProps = {
   onBack: () => void;
   featureName?: string;
   projectName?: string;
+  projectDescription?: string;
   backLabel?: string;
   projectCount?: number;
 };
@@ -117,6 +118,7 @@ export class VisualEditorErrorBoundary extends Component<
       featureName = "ビジュアルエディター",
       onBack,
       projectCount = 0,
+      projectDescription,
       projectName,
     } = this.props;
 
@@ -208,7 +210,11 @@ export class VisualEditorErrorBoundary extends Component<
         projectCount={projectCount}
         context={{
           currentScreen: `${featureName}のエラー画面`,
+          failureTiming: `${featureName}を開く`,
           errorMessage: this.state.errorMessage,
+          project: projectName
+            ? { name: projectName, description: projectDescription }
+            : undefined,
         }}
         onClose={() => this.setState({ supportOpen: false })}
       />
