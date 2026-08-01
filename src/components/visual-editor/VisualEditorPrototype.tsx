@@ -30,8 +30,6 @@ import {
   addAssetFolder,
   addPrefabAsset,
   addBuiltinPrimitiveEntity,
-  addTerrainEntity,
-  applyTerrainBrushToScene,
   assignMaterialToMeshSlots,
   commitEditorHistory,
   createEditorHistory,
@@ -137,7 +135,6 @@ import {
   type SceneDocument,
   type TextureAssetPatch,
   type TextureCardProfile,
-  type TerrainBrushOperation,
   type TextPatch,
   type TransformPatch,
   type UpdateXriftComponentPatch,
@@ -258,6 +255,7 @@ import type {
   TransformMode,
   TransformSpace,
 } from "./types";
+import { useTerrainAuthoring } from "./useTerrainAuthoring";
 
 const SUPPORTED_MODEL_FILE = THREE_EDITOR_MODEL_EXTENSION_PATTERN;
 const SUPPORTED_TEXTURE_FILE = STUDIO_IMAGE_EXTENSION_PATTERN;
@@ -5421,93 +5419,15 @@ export function VisualEditorPrototype({
     [bundle.assets, bundle.scene, editorMode, playSession, updateScene],
   );
 
-  const handleCreateTerrain = useCallback(() => {
-    if (editorMode !== "edit") {
-      setNotice("地形は編集モードで作成してください");
-      return;
-    }
-    if (importBusy) {
-      setNotice("アセットのインポート完了後に地形を作成してください");
-      return;
-    }
-    setHistory((current) => {
-      const preferredMaterialId = BUILTIN_ASSET_IDS.material.green;
-      const materialAssetId =
-        current.present.bundle.assets.assets[preferredMaterialId]?.kind === "material"
-          ? preferredMaterialId
-          : Object.values(current.present.bundle.assets.assets).find(
-              (asset) => asset.kind === "material",
-            )?.id;
-      if (!materialAssetId) {
-        setNotice("地形に使うマテリアルがありません");
-        return current;
-      }
-      const created = addTerrainEntity(
-        current.present.bundle.scene,
-        current.present.bundle.assets,
-        materialAssetId,
-      );
-      if (!created) {
-        setNotice("現在のSceneに地形を作成できませんでした");
-        return current;
-      }
-      setSaveStatus("dirty");
-      setNotice("地形を作成しました。インスペクターで形を整えられます");
-      return commitEditorHistory(current, {
-        ...current.present,
-        bundle: touchProject({
-          ...current.present.bundle,
-          scene: created.scene,
-        }),
-        sceneSelection: { kind: "entity", id: created.entityId },
-        assetSelection: null,
-      });
-    });
-  }, [editorMode, importBusy]);
-
-  const handleTerrainBrush = useCallback(
-    (
-      entityId: string,
-      componentId: string,
-      operation: TerrainBrushOperation,
-    ) => {
-      if (editorMode !== "edit" || importBusy) {
-        setNotice("地形ブラシは編集モードでのみ使えます");
-        return;
-      }
-      setHistory((current) => {
-        const scene = applyTerrainBrushToScene(
-          current.present.bundle.scene,
-          entityId,
-          operation,
-          componentId,
-        );
-        if (scene === current.present.bundle.scene) {
-          setNotice("地形を変更できませんでした。対象とブラシの位置を確認してください");
-          return current;
-        }
-        setSaveStatus("dirty");
-        setNotice(
-          `地形を${
-            operation.kind === "raise"
-              ? "盛り上げ"
-              : operation.kind === "lower"
-                ? "掘り"
-                : operation.kind === "flatten"
-                  ? "ならし"
-                  : "滑らかに"
-          }ました`,
-        );
-        return commitEditorHistory(current, {
-          ...current.present,
-          bundle: touchProject({ ...current.present.bundle, scene }),
-          sceneSelection: { kind: "entity", id: entityId },
-          assetSelection: null,
-        });
-      });
-    },
-    [editorMode, importBusy],
-  );
+  const markEditorDirty = useCallback(() => setSaveStatus("dirty"), []);
+  const { handleCreateTerrain, handleTerrainBrush } = useTerrainAuthoring({
+    editorMode,
+    importBusy,
+    setHistory,
+    notify: setNotice,
+    markDirty: markEditorDirty,
+    touchProject,
+  });
 
   const handleOptimizeColliders = useCallback(
     (entityIds?: readonly string[]) => {

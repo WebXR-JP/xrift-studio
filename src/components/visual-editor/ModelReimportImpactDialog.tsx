@@ -1,9 +1,10 @@
-import { useEffect, useId } from "react";
+import { useId } from "react";
 import type {
   AssetManifest,
   ModelReimportImpact,
 } from "../../lib/visual-editor";
 import { EDITOR_ICONS } from "./editor-icons";
+import { EditorDialog } from "./EditorDialog";
 
 export function ModelReimportImpactDialog({
   modelName,
@@ -21,33 +22,15 @@ export function ModelReimportImpactDialog({
   const titleId = useId();
   const removedBindings = impact.bindingReferences.length;
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      onCancel();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onCancel]);
-
   const WarningIcon = EDITOR_ICONS.warning;
   return (
-    <div
-      data-app-modal-backdrop
-      className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/30 p-5"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onCancel();
-      }}
+    <EditorDialog
+      onDismiss={onCancel}
+      role="alertdialog"
+      ariaLabelledBy={titleId}
+      backdropClassName="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/30 p-5"
+      surfaceClassName="flex max-h-[min(680px,90vh)] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-amber-300 bg-white shadow-2xl"
     >
-      <section
-        data-app-modal-surface
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="flex max-h-[min(680px,90vh)] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-amber-300 bg-white shadow-2xl"
-      >
         <header data-app-modal-header className="border-b border-amber-200 bg-amber-50 px-4 py-3">
           <div className="flex items-start gap-3">
             <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-300 bg-white text-amber-700">
@@ -144,7 +127,6 @@ export function ModelReimportImpactDialog({
             </button>
           </div>
         </footer>
-      </section>
-    </div>
+    </EditorDialog>
   );
 }

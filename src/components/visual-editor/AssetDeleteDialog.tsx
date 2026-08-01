@@ -1,10 +1,10 @@
-import { useEffect, useRef } from "react";
 import type {
   AssetFolderDeletionAnalysis,
   AssetReferenceLocation,
 } from "../../lib/visual-editor";
 import { assetReferenceKindLabel } from "../../lib/visual-editor";
 import { EDITOR_ICONS } from "./editor-icons";
+import { EditorDialog } from "./EditorDialog";
 
 export type AssetDeleteDialogTarget =
   | {
@@ -31,17 +31,7 @@ export function AssetDeleteDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  const cancelRef = useRef<HTMLButtonElement>(null);
   const DeleteIcon = EDITOR_ICONS.delete;
-
-  useEffect(() => {
-    cancelRef.current?.focus();
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onCancel();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onCancel]);
 
   const title = target.kind === "asset" ? "Assetを削除" : "Folderを削除";
   const blockedMessage =
@@ -52,22 +42,13 @@ export function AssetDeleteDialog({
         : `${target.analysis.childFolderCount}件の子Folderがあります。子Folderを移動または削除してから操作してください。`;
 
   return (
-    <div
-      data-app-modal-backdrop
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-[1px]"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onCancel();
-      }}
+    <EditorDialog
+      onDismiss={onCancel}
+      ariaLabelledBy="asset-delete-dialog-title"
+      ariaDescribedBy="asset-delete-dialog-description"
+      backdropClassName="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-[1px]"
+      surfaceClassName="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
     >
-      <section
-        data-app-modal-surface
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="asset-delete-dialog-title"
-        aria-describedby="asset-delete-dialog-description"
-        className="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
-      >
         <header data-app-modal-header className="flex items-start gap-3 border-b border-slate-200 px-5 py-4">
           <span className={`rounded-lg p-2 ${target.canDelete ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>
             <DeleteIcon size={18} aria-hidden="true" />
@@ -104,8 +85,8 @@ export function AssetDeleteDialog({
 
         <footer data-app-modal-footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
           <button
-            ref={cancelRef}
             type="button"
+            autoFocus
             onClick={onCancel}
             className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
           >
@@ -122,7 +103,6 @@ export function AssetDeleteDialog({
             </button>
           ) : null}
         </footer>
-      </section>
-    </div>
+    </EditorDialog>
   );
 }

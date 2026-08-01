@@ -4931,7 +4931,10 @@ fn kill_pid_tree(pid: u32) -> Result<(), String> {
 #[tauri::command]
 fn write_thumbnail(project_path: String, data_url: String) -> Result<(), String> {
     let path = safe_join(&project_path, "public/thumbnail.png")?;
-    std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+    let parent = path
+        .parent()
+        .ok_or("サムネイルの保存先フォルダーを確認できません。")?;
+    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     let comma = data_url.find(',').ok_or("invalid data url")?;
     let b64 = &data_url[comma + 1..];
     use base64::Engine;

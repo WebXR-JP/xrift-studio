@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import type { MaterialSlotDefinition } from "../../lib/visual-editor";
 import { EDITOR_ICONS } from "./editor-icons";
+import { EditorDialog } from "./EditorDialog";
 
 export const ALL_MATERIAL_SLOTS = "__all_material_slots__" as const;
 
@@ -34,34 +35,15 @@ export function MaterialSlotAssignmentDialog({
     setChoice(slots[0]?.slot ?? ALL_MATERIAL_SLOTS);
   }, [entityName, materialName, slots]);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      onCancel();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onCancel]);
-
   const MaterialIcon = EDITOR_ICONS.material;
 
   return (
-    <div
-      data-app-modal-backdrop
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/25 p-5"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onCancel();
-      }}
+    <EditorDialog
+      onDismiss={onCancel}
+      ariaLabelledBy={titleId}
+      backdropClassName="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/25 p-5"
+      surfaceClassName="w-full max-w-md overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl"
     >
-      <section
-        data-app-modal-surface
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="w-full max-w-md overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl"
-      >
         <header data-app-modal-header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
           <div className="flex items-start gap-3">
             <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-violet-200 bg-violet-50 text-violet-700">
@@ -161,7 +143,6 @@ export function MaterialSlotAssignmentDialog({
             </button>
           </div>
         </footer>
-      </section>
-    </div>
+    </EditorDialog>
   );
 }

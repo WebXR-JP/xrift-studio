@@ -96,16 +96,25 @@ async function readScriptSources(
   assets: AssetManifest,
 ): Promise<Record<string, string>> {
   if (!projectPath) return {};
+  const reads = await Promise.all(
+    listScriptAssets(assets).map(async (asset) => {
+      try {
+        return {
+          id: asset.id,
+          source: await tauri.readTextFile(
+            projectPath,
+            asset.source.relativePath,
+          ),
+        };
+      } catch {
+        // Surfaces as script-source-unreadable during compile.
+        return null;
+      }
+    }),
+  );
   const sources: Record<string, string> = {};
-  for (const asset of listScriptAssets(assets)) {
-    try {
-      sources[asset.id] = await tauri.readTextFile(
-        projectPath,
-        asset.source.relativePath,
-      );
-    } catch {
-      // Surfaces as script-source-unreadable during compile.
-    }
+  for (const read of reads) {
+    if (read) sources[read.id] = read.source;
   }
   return sources;
 }
