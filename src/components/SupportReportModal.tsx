@@ -5,7 +5,6 @@ import {
   Clipboard,
   ExternalLink,
   ImageDown,
-  Lightbulb,
   MessageCircle,
   X,
 } from "lucide-react";
@@ -208,99 +207,105 @@ export function SupportReportModal({ open, projectCount, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-900/35 px-4 py-4 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 px-4 py-4 backdrop-blur-sm animate-fade-in"
       data-support-overlay="true"
       onClick={() => !copying && !savingScreenshot && onClose()}
     >
       <div
-        className="w-full max-w-[620px] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-brand-lg animate-scale-in"
+        className="flex max-h-[calc(100vh-2rem)] w-full max-w-[520px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-brand-lg animate-scale-in"
         role="dialog"
         aria-modal="true"
         aria-labelledby="support-report-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="relative border-b border-zinc-100 bg-gradient-to-br from-violet-50 via-white to-cyan-50 px-6 pb-5 pt-6">
+        <div className="relative gradient-brand-soft px-6 pb-5 pt-6">
           <button
             type="button"
             onClick={onClose}
             disabled={copying || savingScreenshot}
-            className="absolute right-3 top-3 rounded-md p-1 text-zinc-500 hover:bg-white/70 hover:text-zinc-800 disabled:opacity-40"
+            className="absolute right-3 top-3 rounded-md p-1 text-zinc-500 hover:bg-white/60 hover:text-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-40"
             aria-label="ヘルプと報告を閉じる"
           >
-            <X size={15} />
+            <X size={15} aria-hidden="true" />
           </button>
-          <div className="flex items-start gap-3 pr-7">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-zinc-950 text-white">
-              <MessageCircle size={21} />
-            </span>
+          <div className="flex items-center gap-3 pr-7">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/70 text-brand-700 shadow-sm">
+              <MessageCircle size={21} aria-hidden="true" />
+            </div>
             <div>
-              <h2 id="support-report-title" className="text-lg font-semibold tracking-tight text-zinc-950">
+              <h2 id="support-report-title" className="text-lg font-semibold tracking-tight text-zinc-900">
                 ヘルプに相談する準備
               </h2>
-              <p className="mt-1 text-xs leading-5 text-zinc-600">
+              <p className="text-xs text-zinc-600">
                 バグ報告や機能要望を相談する前に、環境情報をまとめて渡せます。
               </p>
             </div>
           </div>
         </div>
 
-        <div className="max-h-[calc(100vh-12rem)] overflow-y-auto px-6 py-5">
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-relaxed text-amber-800">
+        <div className="min-h-0 overflow-y-auto overscroll-contain px-6 py-5">
+          <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
             ChatGPTの入力欄へURLだけで自動入力することはできないため、ボタンを押すと環境情報をコピーしてページを開きます。開いた先で貼り付けてください。
           </div>
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => void openWithEnvironment(XRIFT_STUDIO_NEW_ISSUE_URL, "GitHub Issue")}
-              disabled={loading || copying || savingScreenshot}
-              className="flex min-h-16 items-center gap-3 rounded-xl bg-zinc-950 px-4 py-3 text-left text-white transition hover:bg-zinc-800 disabled:opacity-50"
-            >
-              <Bug size={19} className="shrink-0 text-rose-300" />
-              <span>
-                <span className="block text-sm font-semibold">GitHub Issueを作成</span>
-                <span className="mt-0.5 block text-[11px] text-zinc-400">環境情報をコピーしてIssue画面を開く</span>
-              </span>
-              <ExternalLink size={14} className="ml-auto shrink-0 text-zinc-500" />
-            </button>
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+            相談先
+          </div>
+          <div className="mt-2 grid gap-2">
             <button
               type="button"
               onClick={() => void openWithEnvironment(XRIFT_STUDIO_HELP_GPT_URL, "ヘルプセンターGPT")}
               disabled={loading || copying || savingScreenshot}
-              className="flex min-h-16 items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-left text-violet-950 transition hover:bg-violet-100 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-md bg-brand-600 px-3 py-2.5 text-left text-xs font-semibold text-white hover:bg-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50"
             >
-              <Lightbulb size={19} className="shrink-0 text-violet-600" />
-              <span>
-                <span className="block text-sm font-semibold">ChatGPTで文章を作成</span>
-                <span className="mt-0.5 block text-[11px] text-violet-700/70">環境情報をコピーしてGPTを開く</span>
+              <MessageCircle size={14} className="shrink-0" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="block">ChatGPTで文章を作成</span>
+                <span className="mt-0.5 block text-[10px] font-normal text-white/75">環境情報をコピーしてヘルプセンターGPTを開く</span>
               </span>
-              <ExternalLink size={14} className="ml-auto shrink-0 text-violet-500" />
+              <ExternalLink size={12} className="shrink-0" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => void openWithEnvironment(XRIFT_STUDIO_NEW_ISSUE_URL, "GitHub Issue")}
+              disabled={loading || copying || savingScreenshot}
+              className="flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2.5 text-left text-xs font-medium text-zinc-700 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50"
+            >
+              <Bug size={14} className="shrink-0 text-zinc-500" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="block">GitHub Issueを作成</span>
+                <span className="mt-0.5 block text-[10px] font-normal text-zinc-400">環境情報をコピーしてIssue画面を開く</span>
+              </span>
+              <ExternalLink size={12} className="shrink-0 text-zinc-400" aria-hidden="true" />
             </button>
           </div>
 
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="mt-4 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+            相談に添付する情報
+          </div>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => void copyEnvironment()}
               disabled={copying || savingScreenshot || loading}
-              className="flex items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+              className="flex items-center justify-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50"
             >
-              {copied ? <Check size={14} className="text-emerald-600" /> : <Clipboard size={14} />}
+              {copied ? <Check size={13} className="text-emerald-600" aria-hidden="true" /> : <Clipboard size={13} aria-hidden="true" />}
               {copied ? "コピーしました" : "自分の環境をコピー"}
             </button>
             <button
               type="button"
               onClick={() => void saveScreenshot()}
               disabled={copying || savingScreenshot}
-              className="flex items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+              className="flex items-center justify-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50"
             >
-              <ImageDown size={14} />
+              <ImageDown size={13} aria-hidden="true" />
               {savingScreenshot ? "保存中…" : "今の画面を保存"}
             </button>
           </div>
 
-          <div className="mt-5 rounded-lg border border-zinc-200 bg-zinc-50/80 px-3 py-3">
-            <div className="flex items-center justify-between gap-3">
+          <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50/60 px-3 py-3">
+            <div className="flex items-center justify-between gap-3" aria-live="polite">
               <p className="text-[11px] font-semibold text-zinc-700">コピーされる環境情報</p>
               {loading ? <span className="text-[10px] text-zinc-400">取得中…</span> : null}
             </div>
@@ -314,18 +319,17 @@ export function SupportReportModal({ open, projectCount, onClose }: Props) {
               アクセストークン、Cookie、パスワード、プロジェクトの絶対パスはコピーしません。
             </p>
           </div>
-
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <p className="text-[11px] leading-5 text-zinc-400">あとでヘッダーのヘルプアイコンから開き直せます。</p>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={copying || savingScreenshot}
-              className="shrink-0 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
-            >
-              後で
-            </button>
-          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2 border-t border-zinc-100 bg-zinc-50/70 px-5 py-3">
+          <p className="text-[11px] leading-5 text-zinc-400">あとでヘッダーのヘルプアイコンから開き直せます。</p>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={copying || savingScreenshot}
+            className="shrink-0 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50"
+          >
+            後で
+          </button>
         </div>
       </div>
     </div>
