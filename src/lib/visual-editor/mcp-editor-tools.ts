@@ -28,7 +28,10 @@ import {
 import type { PrototypeVisualProject } from "./prototype-project";
 import {
   addBuiltinPrimitiveEntity,
+  addTerrainEntity,
+  applyTerrainBrushToScene,
   duplicateEntityHierarchy,
+  getTerrainGeometry,
   getMeshMaterialSlots,
   renameEntity as renameEntityInScene,
   updateAnimationComponent,
@@ -53,6 +56,16 @@ import {
   type Vec3,
   type ModelPoseState,
 } from "./scene-document";
+import {
+  terrainHeightRange,
+  TERRAIN_BRUSH_KINDS,
+  TERRAIN_HEIGHT_ABSOLUTE_MAX,
+  TERRAIN_RESOLUTION_MAX,
+  TERRAIN_RESOLUTION_MIN,
+  TERRAIN_SIZE_MAX,
+  TERRAIN_SIZE_MIN,
+  type TerrainBrushOperation,
+} from "./terrain";
 import {
   resolveSceneSettings,
   type SceneAmbientSettings,
@@ -157,6 +170,9 @@ export const XRIFT_MCP_EDITOR_TOOLS = [
   "list_component_definitions",
   "get_entity_components",
   "create_primitive",
+  "get_terrain",
+  "create_terrain",
+  "sculpt_terrain",
   "place_builtin_prefab",
   "create_prefab",
   "add_component",
@@ -330,6 +346,12 @@ export function executeXriftMcpEditorTool(
       return getEntityComponents(context, request.arguments);
     case "create_primitive":
       return createPrimitive(context, request.arguments);
+    case "get_terrain":
+      return getTerrain(context, request.arguments);
+    case "create_terrain":
+      return createTerrain(context, request.arguments);
+    case "sculpt_terrain":
+      return sculptTerrain(context, request.arguments);
     case "place_builtin_prefab":
       return placeBuiltinPrefab(context, request.arguments);
     case "create_prefab":
@@ -2106,6 +2128,250 @@ function createPrimitive(
     },
     activity: `AIが${shape}を作成しました`,
   };
+}
+
+function getTerrain(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const componentId = optionalString(argumentsValue.componentId);
+  const entity = requireEntity(context.bundle.scene, entityId);
+  const mesh = entity.components.find(
+    (component): component is Extract<SceneComponent, { type: "mesh" }> =>
+      component.type === "mesh" &&
+      (componentId === undefined || component.id === componentId),
+  );
+  const terrain = mesh ? getTerrainGeometry(mesh) : undefined;
+  if (!mesh || !terrain) {
+    throw new XriftMcpEditorToolError(
+      "TERRAIN_NOT_FOUND",
+      "指定されたEntityにTerrainが見つかりません",
+      { entityId, ...(componentId ? { componentId } : {}) },
+    );
+  }
+  const range = terrainHeightRange(terrain);
+  return unchanged(
+    context,
+    {
+      entityId,
+      componentId: mesh.id,
+      name: entity.name,
+      width: terrain.width,
+      depth: terrain.depth,
+      resolution: terrain.resolution,
+      sampleCount: terrain.heights.length,
+      minHeight: range.min,
+      maxHeight: range.max,
+      materialAssetId: mesh.materialBindings[0]?.materialAssetId ?? null,
+    },
+    `Terrain「${entity.name}」の概要を取得しました`,
+  );
+}
+
+function createTerrain(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const width = terrainMcpNumber(
+    argumentsValue.width,
+    "width",
+    16,
+    TERRAIN_SIZE_MIN,
+    TERRAIN_SIZE_MAX,
+  );
+  const depth = terrainMcpNumber(
+    argumentsValue.depth,
+    "depth",
+    16,
+    TERRAIN_SIZE_MIN,
+    TERRAIN_SIZE_MAX,
+  );
+  const resolution = terrainMcpNumber(
+    argumentsValue.resolution,
+    "resolution",
+    33,
+    TERRAIN_RESOLUTION_MIN,
+    TERRAIN_RESOLUTION_MAX,
+    true,
+  );
+  const position = optionalVec3(argumentsValue.position, "position");
+  const name = optionalString(argumentsValue.name);
+  if (name !== undefined && name.length > 100) {
+    invalidArgument("name", "a string up to 100 characters");
+  }
+  const requestedMaterialAssetId = optionalString(argumentsValue.materialAssetId);
+  const materialAssetId =
+    requestedMaterialAssetId ??
+    Object.values(context.bundle.assets.assets).find(
+      (asset) => asset.kind === "material",
+    )?.id;
+  if (!materialAssetId) {
+    throw new XriftMcpEditorToolError(
+      "NO_MATERIAL_AVAILABLE",
+      "ProjectにTerrainへ割り当てられるMaterialがありません",
+    );
+  }
+  const created = addTerrainEntity(
+    context.bundle.scene,
+    context.bundle.assets,
+    materialAssetId,
+    { width, depth, resolution, position, name },
+  );
+  if (!created) {
+    throw new XriftMcpEditorToolError(
+      "TERRAIN_CREATE_FAILED",
+      "指定されたMaterialでTerrainを作成できません",
+      { materialAssetId },
+    );
+  }
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    scene: created.scene,
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: created.entityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId: created.entityId,
+      width,
+      depth,
+      resolution,
+      materialAssetId,
+      position,
+    },
+    activity: "AIがTerrainをSceneへ作成しました",
+  };
+}
+
+function sculptTerrain(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const componentId = optionalString(argumentsValue.componentId);
+  const entity = requireEntity(context.bundle.scene, entityId);
+  const mesh = entity.components.find(
+    (component): component is Extract<SceneComponent, { type: "mesh" }> =>
+      component.type === "mesh" &&
+      (componentId === undefined || component.id === componentId),
+  );
+  const terrain = mesh ? getTerrainGeometry(mesh) : undefined;
+  if (!mesh || !terrain) {
+    throw new XriftMcpEditorToolError(
+      "TERRAIN_NOT_FOUND",
+      "指定されたEntityにTerrainが見つかりません",
+      { entityId, ...(componentId ? { componentId } : {}) },
+    );
+  }
+  const kind = requiredEnum(argumentsValue.kind, "kind", TERRAIN_BRUSH_KINDS);
+  const center = optionalNumberTuple(argumentsValue.center, "center", 2);
+  if (!center) invalidArgument("center", "[x, z]");
+  const radius = terrainMcpNumber(
+    argumentsValue.radius,
+    "radius",
+    1,
+    0.05,
+    Math.max(terrain.width, terrain.depth),
+  );
+  const strength = terrainMcpNumber(
+    argumentsValue.strength,
+    "strength",
+    kind === "smooth" || kind === "flatten" ? 0.5 : 0.8,
+    0.001,
+    kind === "smooth" || kind === "flatten" ? 1 : TERRAIN_HEIGHT_ABSOLUTE_MAX,
+  );
+  const targetHeight = optionalFiniteNumber(
+    argumentsValue.targetHeight,
+    "targetHeight",
+  );
+  if (kind === "flatten" && targetHeight === undefined) {
+    invalidArgument("targetHeight", "a finite number for flatten");
+  }
+  if (
+    targetHeight !== undefined &&
+    Math.abs(targetHeight) > TERRAIN_HEIGHT_ABSOLUTE_MAX
+  ) {
+    invalidArgument(
+      "targetHeight",
+      `a number from -${TERRAIN_HEIGHT_ABSOLUTE_MAX} to ${TERRAIN_HEIGHT_ABSOLUTE_MAX}`,
+    );
+  }
+  const operation: TerrainBrushOperation = {
+    kind,
+    center,
+    radius,
+    strength,
+    ...(targetHeight === undefined ? {} : { targetHeight }),
+  };
+  const scene = applyTerrainBrushToScene(
+    context.bundle.scene,
+    entityId,
+    operation,
+    mesh.id,
+  );
+  if (scene === context.bundle.scene) {
+    throw new XriftMcpEditorToolError(
+      "TERRAIN_BRUSH_NO_EFFECT",
+      "Terrainの範囲内に有効なブラシ操作を適用できませんでした",
+      { entityId, componentId: mesh.id, operation },
+    );
+  }
+  const updatedMesh = scene.entities[entityId]?.components.find(
+    (component): component is Extract<SceneComponent, { type: "mesh" }> =>
+      component.type === "mesh" && component.id === mesh.id,
+  );
+  const updatedTerrain = updatedMesh ? getTerrainGeometry(updatedMesh) : undefined;
+  const range = updatedTerrain ? terrainHeightRange(updatedTerrain) : null;
+  const bundle = touchProject(context, { ...context.bundle, scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: entityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId,
+      componentId: mesh.id,
+      operation,
+      minHeight: range?.min ?? null,
+      maxHeight: range?.max ?? null,
+    },
+    activity: `AIがTerrainへ${kind}ブラシを適用しました`,
+  };
+}
+
+function terrainMcpNumber(
+  value: unknown,
+  name: string,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+  integer = false,
+): number {
+  const number = optionalFiniteNumber(value, name) ?? fallback;
+  if (
+    number < minimum ||
+    number > maximum ||
+    (integer && !Number.isInteger(number))
+  ) {
+    invalidArgument(
+      name,
+      `${integer ? "integer" : "number"} from ${minimum} to ${maximum}`,
+    );
+  }
+  return number;
 }
 
 function placeBuiltinPrefab(

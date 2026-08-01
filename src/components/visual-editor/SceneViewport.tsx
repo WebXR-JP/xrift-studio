@@ -46,10 +46,12 @@ import {
   BackSide,
   Box3,
   BoxGeometry,
+  BufferGeometry,
   Color,
   DoubleSide,
   EquirectangularReflectionMapping,
   Euler,
+  Float32BufferAttribute,
   MathUtils,
   OrthographicCamera,
   Plane,
@@ -90,6 +92,7 @@ import {
   resolveOpenBrushEditorBrushBaseUrl,
   resolveRuntimeSpawn,
   resolveSceneSettings,
+  createTerrainMeshBuffers,
   STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID,
   type AssetManifest,
   type AnimationComponent,
@@ -105,6 +108,7 @@ import {
   type SceneDocument,
   type SceneEntity,
   type SceneSettings,
+  type TerrainGeometry,
   type SkyboxAsset,
   type TransformPatch,
   type TextureAsset,
@@ -322,6 +326,10 @@ function MeshVisual({
       : component.geometry?.kind === "builtin-primitive"
         ? component.geometry.primitive
         : builtinDefinition?.primitive;
+  const terrain =
+    component.geometry?.kind === "terrain"
+      ? component.geometry.terrain
+      : undefined;
   const projectModelSource =
     geometry?.kind === "model"
       ? resolveProjectModelSource(geometry, projectPath)
@@ -409,6 +417,26 @@ function MeshVisual({
     );
   }
 
+  if (terrain) {
+    const materialAssetId = getPrimaryMaterialAssetId(component);
+    return (
+      <TerrainMeshVisual
+        component={component}
+        terrain={terrain}
+        material={
+          materialAssetId
+            ? getMaterialAsset(assets, materialAssetId)
+            : undefined
+        }
+        assets={assets}
+        projectPath={projectPath}
+        selected={selected}
+        materialDropHighlighted={materialDropHighlighted}
+        viewportMaterialStyle={viewportMaterialStyle}
+      />
+    );
+  }
+
   if (primitive) {
     const materialAssetId = getPrimaryMaterialAssetId(component);
     const material = materialAssetId
@@ -439,6 +467,132 @@ function MeshVisual({
         <Edges
           color={materialDropHighlighted ? "#38bdf8" : EDITOR_SELECTION_COLOR}
           scale={1.02}
+        />
+      ) : null}
+    </mesh>
+  );
+}
+
+function TerrainGeometryView({ terrain }: { terrain: TerrainGeometry }) {
+  const geometry = useMemo(() => {
+    const buffers = createTerrainMeshBuffers(terrain);
+    const next = new BufferGeometry();
+    next.setAttribute("position", new Float32BufferAttribute(buffers.positions, 3));
+    next.setIndex([...buffers.indices]);
+    next.computeVertexNormals();
+    next.computeBoundingBox();
+    next.computeBoundingSphere();
+    return next;
+  }, [terrain]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return <primitive object={geometry} attach="geometry" />;
+}
+
+function TerrainMeshVisual({
+  component,
+  terrain,
+  material,
+  assets,
+  projectPath,
+  selected,
+  materialDropHighlighted,
+  viewportMaterialStyle,
+}: {
+  component: MeshComponent;
+  terrain: TerrainGeometry;
+  material?: MaterialAsset;
+  assets: AssetManifest;
+  projectPath?: string;
+  selected: boolean;
+  materialDropHighlighted: boolean;
+  viewportMaterialStyle: SceneViewportMaterialStyle;
+}) {
+  const materialTextures = useCoreMaterialPreviewTextures(
+    material,
+    assets,
+    projectPath,
+  );
+  const materialRef = useRef<MeshStandardMaterial | null>(null);
+  useMaterialPreviewRenderSync(materialRef, materialTextures);
+  const pbr = material?.properties.pbrMetallicRoughness;
+  const alphaMode = material?.properties.alphaMode ?? "OPAQUE";
+  const opacity =
+    alphaMode === "OPAQUE"
+      ? 1
+      : (pbr?.baseColorFactor[3] ?? material?.properties.opacity ?? 1);
+  const normalScale = material?.properties.normalTexture?.scale ?? 1;
+
+  return (
+    <mesh
+      castShadow={component.castShadow}
+      receiveShadow={component.receiveShadow}
+    >
+      <TerrainGeometryView terrain={terrain} />
+      {viewportMaterialStyle === "unlit" ? (
+        <meshBasicMaterial
+          color={material?.properties.color ?? "#6b8e4e"}
+          map={materialTextures.baseColorMap}
+          opacity={opacity}
+          transparent={alphaMode === "BLEND"}
+          depthWrite={alphaMode !== "BLEND"}
+          side={DoubleSide}
+        />
+      ) : viewportMaterialStyle === "wireframe" ||
+        viewportMaterialStyle === "collider-wireframe" ? (
+        <meshBasicMaterial
+          color={
+            viewportMaterialStyle === "collider-wireframe" ? "#0f766e" : "#52606d"
+          }
+          wireframe
+          transparent={viewportMaterialStyle === "collider-wireframe"}
+          opacity={viewportMaterialStyle === "collider-wireframe" ? 0.88 : 1}
+          depthTest={viewportMaterialStyle !== "collider-wireframe"}
+          depthWrite={viewportMaterialStyle !== "collider-wireframe"}
+          side={DoubleSide}
+        />
+      ) : viewportMaterialStyle === "ghost" ? (
+        <meshBasicMaterial
+          color="#64748b"
+          transparent
+          opacity={0.16}
+          depthWrite={false}
+          side={DoubleSide}
+        />
+      ) : (
+        <meshStandardMaterial
+          ref={materialRef}
+          color={material?.properties.color ?? "#6b8e4e"}
+          metalness={pbr?.metallicFactor ?? material?.properties.metalness ?? 0}
+          roughness={pbr?.roughnessFactor ?? material?.properties.roughness ?? 0.9}
+          emissive={colorFactorToHex(material?.properties.emissiveFactor)}
+          emissiveIntensity={
+            material?.properties.extensions.KHR_materials_emissive_strength
+              ?.emissiveStrength ?? 1
+          }
+          opacity={opacity}
+          transparent={alphaMode === "BLEND"}
+          depthWrite={alphaMode !== "BLEND"}
+          alphaTest={
+            alphaMode === "MASK"
+              ? (material?.properties.alphaCutoff ?? 0.5)
+              : 0
+          }
+          map={materialTextures.baseColorMap}
+          metalnessMap={materialTextures.metallicRoughnessMap}
+          roughnessMap={materialTextures.metallicRoughnessMap}
+          normalMap={materialTextures.normalMap}
+          normalScale={[normalScale, normalScale]}
+          aoMap={materialTextures.occlusionMap}
+          aoMapIntensity={material?.properties.occlusionTexture?.strength ?? 1}
+          emissiveMap={materialTextures.emissiveMap}
+          side={DoubleSide}
+        />
+      )}
+      {selected || materialDropHighlighted ? (
+        <Edges
+          color={materialDropHighlighted ? "#38bdf8" : EDITOR_SELECTION_COLOR}
+          scale={1.006}
+          threshold={12}
         />
       ) : null}
     </mesh>
@@ -2112,12 +2266,13 @@ function WorldPlayCameraController({
   useFrame(({ camera }, delta) => {
     const input = inputRef.current;
     if (input.deltaX !== 0 || input.deltaY !== 0) {
-      yawRef.current -= input.deltaX * WORLD_PLAY_CAMERA_LOOK_SENSITIVITY;
+      // Play uses grab-style look: the view follows the pointer movement.
+      yawRef.current += input.deltaX * WORLD_PLAY_CAMERA_LOOK_SENSITIVITY;
       pitchRef.current = Math.max(
         -WORLD_PLAY_CAMERA_MAX_PITCH,
         Math.min(
           WORLD_PLAY_CAMERA_MAX_PITCH,
-          pitchRef.current - input.deltaY * WORLD_PLAY_CAMERA_LOOK_SENSITIVITY,
+          pitchRef.current + input.deltaY * WORLD_PLAY_CAMERA_LOOK_SENSITIVITY,
         ),
       );
       input.deltaX = 0;
@@ -2126,8 +2281,11 @@ function WorldPlayCameraController({
     camera.rotation.set(pitchRef.current, yawRef.current, 0, "YXZ");
 
     movement.set(0, 0, 0);
-    if (isPressed("w") || isPressed("arrowup")) movement.z -= 1;
-    if (isPressed("s") || isPressed("arrowdown")) movement.z += 1;
+    // `forward` already points along the camera's local -Z axis, so the
+    // forward input must be positive here. The previous signs made W/S run
+    // exactly opposite to the camera-facing direction.
+    if (isPressed("w") || isPressed("arrowup")) movement.z += 1;
+    if (isPressed("s") || isPressed("arrowdown")) movement.z -= 1;
     if (isPressed("a") || isPressed("arrowleft")) movement.x -= 1;
     if (isPressed("d") || isPressed("arrowright")) movement.x += 1;
     if (isPressed("e")) movement.y += 1;

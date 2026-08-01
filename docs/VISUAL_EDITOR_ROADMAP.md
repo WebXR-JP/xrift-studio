@@ -28,6 +28,7 @@ Visual projectはコードを隠すだけの画面ではなく、Scene、Asset�
 | Audio | 利用可能 | MP3／WAVをAudio Assetとして取り込み、Audio Sourceへ割り当ててSceneと生成物へ保存する。 |
 | Model Animation再生 | 利用可能 | Animationを含むGLB／glTFの配置時にAnimation Componentを追加し、Playと生成物で先頭clipを自動ループ再生する。 |
 | 表現と再利用 | 利用可能 | Primitive、Material、Particle、Prefab、Collider、XRift Componentを作成・配置する。 |
+| Terrain authoring | 利用可能 | Createメニューから高さサンプルTerrainを追加し、InspectorまたはMCPのRaise／Lower／Flatten／Smoothブラシで編集する。static Trimesh Collider、Play、compile、runtime manifestへ同じTerrainを渡す。 |
 | Play | 利用可能 | 編集データと分離したPlay WindowでPlay／Stopし、WorldはRapierの重力・Collider・WASD controller、Itemは単体表示を確認する。Transform／Collider／Animation変更は対象Entityだけ再実行する。runtime受け入れは継続する。 |
 | Compile／Upload | 利用可能 | Visual documentの保存、検査、XRift向けTSX生成、staging、World／ItemのUpload導線。 |
 | AI connection | 検証中 | アプリ内の接続パネルからMCP serverを登録し、Scene読取・編集の限定toolを呼び出す。sidecar同梱を含む配布確認を継続する。 |
@@ -45,6 +46,7 @@ Visual projectはコードを隠すだけの画面ではなく、Scene、Asset�
 - GLB／glTFの先頭Animation clipをPlayと生成物で自動再生し、Loopを切り替えられるAnimation Componentを追加した。
 - Open Brush／Tilt Brushの判定と専用rendererへの接続を追加し、ブラシ表現の受け入れを開始した。
 - AIクライアントからEditorを扱うためのMCP broker、接続パネル、限定Editor tool、配布用sidecar準備を追加した。
+- TerrainをScene documentへ保存する高さサンプルMeshとして追加し、InspectorとMCPで同じ決定的なブラシスタンプを使えるようにした。
 - ビジュアルエディターの遅延読込失敗を識別し、アプリ再読込へ戻れる回復導線を追加した。
 
 ## 現在の制約

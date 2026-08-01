@@ -243,12 +243,13 @@ function collectComponentReferences(
   meshPlacements: Map<string, number>,
 ): void {
   if (component.type === "mesh") {
-    const geometryId =
-      component.geometry?.kind === "asset"
+    const geometryId = component.geometry?.kind === "terrain"
+      ? undefined
+      : component.geometry?.kind === "asset"
         ? component.geometry.assetId
         : component.geometryAssetId;
-    addReference(geometryId);
     if (geometryId) {
+      addReference(geometryId);
       meshPlacements.set(geometryId, (meshPlacements.get(geometryId) ?? 0) + 1);
     }
     for (const binding of component.materialBindings) {

@@ -44,6 +44,7 @@ import {
   type Vec3,
   type XRiftComponent,
 } from "../scene-document";
+import type { TerrainGeometry } from "../terrain";
 import {
   resolveSceneSettings,
   type SceneSettings,
@@ -1600,17 +1601,25 @@ function renderMesh(
   const materialJsx = material
     ? renderMaterial(entity, mesh, material, context)
     : '<meshStandardMaterial color="#ff00ff" />';
-  return `<mesh castShadow={${mesh.castShadow}} receiveShadow={${mesh.receiveShadow}}>\n  ${geometryJsx(geometry.primitive)}\n  ${materialJsx}\n</mesh>`;
+  const geometryJsxContent =
+    geometry.kind === "terrain"
+      ? renderTerrainGeometry(geometry.terrain, context)
+      : geometryJsx(geometry.primitive);
+  return `<mesh castShadow={${mesh.castShadow}} receiveShadow={${mesh.receiveShadow}}>\n  ${geometryJsxContent}\n  ${materialJsx}\n</mesh>`;
 }
 
 type ResolvedMeshGeometry =
   | { kind: "primitive"; primitive: PrimitiveGeometry }
+  | { kind: "terrain"; terrain: TerrainGeometry }
   | { kind: "model"; asset: ModelAsset };
 
 function resolveMeshGeometry(
   mesh: MeshComponent,
   context: CompileContext,
 ): ResolvedMeshGeometry | undefined {
+  if (mesh.geometry?.kind === "terrain") {
+    return { kind: "terrain", terrain: mesh.geometry.terrain };
+  }
   if (mesh.geometry?.kind === "builtin-primitive") {
     return { kind: "primitive", primitive: mesh.geometry.primitive };
   }
@@ -1635,6 +1644,47 @@ function resolveMeshGeometry(
   return asset.kind === "model"
     ? { kind: "model", asset }
     : { kind: "primitive", primitive: asset.primitive };
+}
+
+function renderTerrainGeometry(
+  terrain: TerrainGeometry,
+  context: CompileContext,
+): string {
+  context.reactValueImports.add("useEffect");
+  context.reactValueImports.add("useMemo");
+  context.threeValueImports.add("PlaneGeometry");
+  context.supportDeclarations.set(
+    "terrain:geometry",
+    `type XriftTerrainGeometryData = {
+  width: number;
+  depth: number;
+  resolution: number;
+  heights: readonly number[];
+};
+
+function XriftTerrainGeometry({ terrain }: { terrain: XriftTerrainGeometryData }) {
+  const geometry = useMemo(() => {
+    const resolution = Math.max(2, Math.floor(terrain.resolution));
+    const geometry = new PlaneGeometry(
+      terrain.width,
+      terrain.depth,
+      resolution - 1,
+      resolution - 1,
+    );
+    geometry.rotateX(-Math.PI / 2);
+    const positions = geometry.getAttribute("position");
+    for (let index = 0; index < positions.count; index += 1) {
+      positions.setY(index, terrain.heights[index] ?? 0);
+    }
+    positions.needsUpdate = true;
+    geometry.computeVertexNormals();
+    return geometry;
+  }, [terrain]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return <primitive object={geometry} attach="geometry" />;
+}`,
+  );
+  return `<XriftTerrainGeometry terrain={${JSON.stringify(terrain)}} />`;
 }
 
 type ModelMaterialOverride = {
@@ -2152,7 +2202,10 @@ function resolveMeshMaterial(
 ): MaterialAsset | undefined {
   const geometryAssetId =
     mesh.geometry?.kind === "asset" ? mesh.geometry.assetId : mesh.geometryAssetId;
-  const geometry = getGeometryAsset(context.assets, geometryAssetId);
+  const geometry =
+    mesh.geometry?.kind === "terrain"
+      ? undefined
+      : getGeometryAsset(context.assets, geometryAssetId);
   const slots = geometry ? getGeometryMaterialSlots(geometry) : [];
   const primary =
     mesh.materialBindings.find((binding) => binding.slot === "default") ??
@@ -2440,6 +2493,17 @@ function registerClassicR3fMaterialComponent(
     "material:00-props-type",
     "type CompiledMaterialProps = { attach?: string; meshName?: string };",
   );
+  context.supportDeclarations.set(
+    "material:00-classic-variant-type",
+    `type CompiledClassicShaderVariant = {
+  name: string;
+  meshNameIncludes: string | null;
+  defines: Record<string, string>;
+  side: "front" | "back" | "double";
+  transparent: boolean;
+  depthWrite: boolean;
+};`,
+  );
   context.reactValueImports.add("useMemo");
   ["BackSide", "DoubleSide", "FrontSide"].forEach((name) =>
     context.threeValueImports.add(name),
@@ -2538,7 +2602,7 @@ function registerClassicR3fMaterialComponent(
   );
   context.supportDeclarations.set(
     `material-variants:${variantsConstant}`,
-    `const ${variantsConstant} = ${JSON.stringify(
+    `const ${variantsConstant}: readonly CompiledClassicShaderVariant[] = ${JSON.stringify(
       shader.variants.map((variant) => ({
         ...variant,
         meshNameIncludes: variant.meshNameIncludes ?? null,

@@ -1236,6 +1236,60 @@ export function runXriftMcpEditorToolFixtures(): void {
     "list_entities should include the previously placed Entity",
   );
 
+  const terrainCreated = executeXriftMcpEditorTool(current, {
+    id: "fixture-create-terrain",
+    tool: "create_terrain",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      name: "MCP Terrain",
+      width: 12,
+      depth: 10,
+      resolution: 17,
+      materialAssetId: BUILTIN_ASSET_IDS.material.green,
+    },
+  });
+  const terrainId = terrainCreated.sceneSelection?.id;
+  assert(
+    terrainCreated.changed && typeof terrainId === "string",
+    "create_terrain should select its new Terrain Entity",
+  );
+  current = { ...current, bundle: terrainCreated.bundle, revision: current.revision + 1 };
+
+  const terrainSummary = executeXriftMcpEditorTool(current, {
+    id: "fixture-get-terrain",
+    tool: "get_terrain",
+    arguments: { entityId: terrainId },
+  });
+  assert(
+    terrainSummary.result.resolution === 17 &&
+      terrainSummary.result.sampleCount === 17 * 17,
+    "get_terrain should return Terrain dimensions without exposing samples",
+  );
+
+  const terrainSculpted = executeXriftMcpEditorTool(current, {
+    id: "fixture-sculpt-terrain",
+    tool: "sculpt_terrain",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityId: terrainId,
+      kind: "raise",
+      center: [0, 0],
+      radius: 2,
+      strength: 1.5,
+    },
+  });
+  assert(
+    terrainSculpted.changed &&
+      typeof terrainSculpted.result.maxHeight === "number" &&
+      terrainSculpted.result.maxHeight > 1,
+    "sculpt_terrain should persist a deterministic brush stamp",
+  );
+  current = { ...current, bundle: terrainSculpted.bundle, revision: current.revision + 1 };
+
   const primitiveCreated = executeXriftMcpEditorTool(current, {
     id: "fixture-create-primitive",
     tool: "create_primitive",

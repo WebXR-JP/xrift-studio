@@ -238,6 +238,15 @@ function resolveRuntimeGeometry(
   component: Extract<SceneEntity["components"][number], { type: "mesh" }>,
   assets: AssetManifest,
 ): XriftRuntimeGeometry | null {
+  if (component.geometry?.kind === "terrain") {
+    return {
+      kind: "terrain",
+      width: component.geometry.terrain.width,
+      depth: component.geometry.terrain.depth,
+      resolution: component.geometry.terrain.resolution,
+      heights: [...component.geometry.terrain.heights],
+    };
+  }
   if (component.geometry?.kind === "builtin-primitive") {
     return { kind: "primitive", primitive: component.geometry.primitive };
   }

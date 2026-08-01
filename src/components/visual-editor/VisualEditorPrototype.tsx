@@ -30,10 +30,13 @@ import {
   addAssetFolder,
   addPrefabAsset,
   addBuiltinPrimitiveEntity,
+  addTerrainEntity,
+  applyTerrainBrushToScene,
   assignMaterialToMeshSlots,
   commitEditorHistory,
   createEditorHistory,
   createDocumentId,
+  createTextureCard,
   createOfficialXriftComponentSample,
   createEmptyEntity,
   createPrefabDocument,
@@ -133,6 +136,8 @@ import {
   type ShaderAssetStage,
   type SceneDocument,
   type TextureAssetPatch,
+  type TextureCardProfile,
+  type TerrainBrushOperation,
   type TextPatch,
   type TransformPatch,
   type UpdateXriftComponentPatch,
@@ -5416,6 +5421,94 @@ export function VisualEditorPrototype({
     [bundle.assets, bundle.scene, editorMode, playSession, updateScene],
   );
 
+  const handleCreateTerrain = useCallback(() => {
+    if (editorMode !== "edit") {
+      setNotice("地形は編集モードで作成してください");
+      return;
+    }
+    if (importBusy) {
+      setNotice("アセットのインポート完了後に地形を作成してください");
+      return;
+    }
+    setHistory((current) => {
+      const preferredMaterialId = BUILTIN_ASSET_IDS.material.green;
+      const materialAssetId =
+        current.present.bundle.assets.assets[preferredMaterialId]?.kind === "material"
+          ? preferredMaterialId
+          : Object.values(current.present.bundle.assets.assets).find(
+              (asset) => asset.kind === "material",
+            )?.id;
+      if (!materialAssetId) {
+        setNotice("地形に使うマテリアルがありません");
+        return current;
+      }
+      const created = addTerrainEntity(
+        current.present.bundle.scene,
+        current.present.bundle.assets,
+        materialAssetId,
+      );
+      if (!created) {
+        setNotice("現在のSceneに地形を作成できませんでした");
+        return current;
+      }
+      setSaveStatus("dirty");
+      setNotice("地形を作成しました。インスペクターで形を整えられます");
+      return commitEditorHistory(current, {
+        ...current.present,
+        bundle: touchProject({
+          ...current.present.bundle,
+          scene: created.scene,
+        }),
+        sceneSelection: { kind: "entity", id: created.entityId },
+        assetSelection: null,
+      });
+    });
+  }, [editorMode, importBusy]);
+
+  const handleTerrainBrush = useCallback(
+    (
+      entityId: string,
+      componentId: string,
+      operation: TerrainBrushOperation,
+    ) => {
+      if (editorMode !== "edit" || importBusy) {
+        setNotice("地形ブラシは編集モードでのみ使えます");
+        return;
+      }
+      setHistory((current) => {
+        const scene = applyTerrainBrushToScene(
+          current.present.bundle.scene,
+          entityId,
+          operation,
+          componentId,
+        );
+        if (scene === current.present.bundle.scene) {
+          setNotice("地形を変更できませんでした。対象とブラシの位置を確認してください");
+          return current;
+        }
+        setSaveStatus("dirty");
+        setNotice(
+          `地形を${
+            operation.kind === "raise"
+              ? "盛り上げ"
+              : operation.kind === "lower"
+                ? "掘り"
+                : operation.kind === "flatten"
+                  ? "ならし"
+                  : "滑らかに"
+          }ました`,
+        );
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: touchProject({ ...current.present.bundle, scene }),
+          sceneSelection: { kind: "entity", id: entityId },
+          assetSelection: null,
+        });
+      });
+    },
+    [editorMode, importBusy],
+  );
+
   const handleOptimizeColliders = useCallback(
     (entityIds?: readonly string[]) => {
       if (editorMode !== "edit" && !playSession) return;
@@ -5926,6 +6019,52 @@ export function VisualEditorPrototype({
       });
     },
     [editorMode],
+  );
+
+  const handleCreateTextureCard = useCallback(
+    (textureAssetId: string, profile: TextureCardProfile) => {
+      if (editorMode !== "edit" || importBusy) {
+        setNotice(
+          editorMode !== "edit"
+            ? "Playを停止してからカードを作成してください"
+            : "アセットのインポート完了後にカードを作成してください",
+        );
+        return;
+      }
+      const materialId = createDocumentId("material-card");
+      setHistory((current) => {
+        const created = createTextureCard(
+          current.present.bundle.scene,
+          current.present.bundle.assets,
+          { textureAssetId, materialId, profile },
+        );
+        if (!created.created) {
+          setNotice(
+            created.reason === "environment-texture"
+              ? "環境Textureは遠景・草カードに使用できません"
+              : created.reason === "texture-missing"
+                ? "Texture Assetが見つかりません。Assetsを開き直してください"
+                : "カードを作成できませんでした。TextureとAssetの状態を確認してください",
+          );
+          return current;
+        }
+        setSaveStatus("dirty");
+        setNotice(
+          `「${created.entityName}」を配置しました。選択中のEntityを移動し、Materialから透明度を調整できます`,
+        );
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: touchProject({
+            ...current.present.bundle,
+            assets: created.assets,
+            scene: created.scene,
+          }),
+          sceneSelection: { kind: "entity", id: created.entityId },
+          assetSelection: null,
+        });
+      });
+    },
+    [editorMode, importBusy],
   );
 
   const handleParticleChange = useCallback(
@@ -8198,6 +8337,7 @@ export function VisualEditorPrototype({
                 onCreatePrimitive={(creationId) =>
                   executeCommand("entity.create-primitive", { creationId })
                 }
+                onCreateTerrain={handleCreateTerrain}
                 onPlaceBuiltinPrefab={handlePlaceBuiltinPrefab}
                 onCreateXriftObject={handleCreateXriftObject}
                 onCreateComponentObject={handleCreateComponentObject}
@@ -8394,6 +8534,7 @@ export function VisualEditorPrototype({
             onTransformScrubEnd={handleTransformScrubEnd}
             onTransformScrubCancel={handleTransformScrubCancel}
             onMeshChange={handleMeshChange}
+            onTerrainBrush={handleTerrainBrush}
             onColliderChange={handleColliderChange}
             onRigidBodyChange={handleRigidBodyChange}
             onAutoFitCollider={handleAutoFitCollider}
@@ -8429,6 +8570,7 @@ export function VisualEditorPrototype({
             }
             onParticleChange={handleParticleChange}
             onTextureChange={handleTextureChange}
+            onCreateTextureCard={handleCreateTextureCard}
             onParticleEmitterChange={handleParticleEmitterChange}
             onRemoveParticleEmitter={handleRemoveParticleEmitter}
             projectKind={projectKind}

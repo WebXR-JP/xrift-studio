@@ -248,20 +248,30 @@ export const xrift = {
     assertCompilerStagingTarget(request);
     return run({
       bin: "xrift",
-      args: ["create", request.kind, request.directoryName, "-y"],
+      // Keep the CLI's network-only template fetch separate from dependency
+      // installation. The latter is run below through the same controlled
+      // command boundary as the rest of the compiler staging pipeline.
+      args: [
+        "create",
+        request.kind,
+        request.directoryName,
+        "--skip-install",
+        "-y",
+      ],
       cwd: request.compilerOwnedRoot,
       onLog,
     });
   },
-  installCompilerRuntimePackages: (
+  installCompilerStagingDependencies: (
     projectPath: string,
     packageSpecs: readonly string[],
     onLog: (line: LogLine) => void,
   ) => {
     assertCompilerOwnedProjectPath(projectPath);
     if (
-      packageSpecs.length === 0 ||
-      packageSpecs.some((spec) => !COMPILER_RUNTIME_PACKAGE_ALLOWLIST.has(spec))
+      packageSpecs.some(
+        (spec) => !COMPILER_RUNTIME_PACKAGE_ALLOWLIST.has(spec),
+      )
     ) {
       throw new Error("Invalid compiler runtime package request");
     }
@@ -269,10 +279,9 @@ export const xrift = {
       bin: "npm",
       args: [
         "install",
-        "--save-exact",
         "--no-audit",
         "--no-fund",
-        ...packageSpecs,
+        ...(packageSpecs.length > 0 ? ["--save-exact", ...packageSpecs] : []),
       ],
       cwd: projectPath,
       onLog,

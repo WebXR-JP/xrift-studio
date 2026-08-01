@@ -41,6 +41,7 @@ import {
   type ShaderAssetStage,
   type TextureAsset,
   type TextureAssetPatch,
+  type TextureCardProfile,
 } from "../../lib/visual-editor";
 import { EDITOR_ICONS } from "./editor-icons";
 import { CatalogThumbnailImage } from "./CatalogThumbnailImage";
@@ -3158,11 +3159,13 @@ export function TextureQuickEditor({
   projectPath,
   readOnly,
   onChange,
+  onCreateCard,
 }: {
   asset: TextureAsset;
   projectPath?: string;
   readOnly: boolean;
   onChange: (patch: TextureAssetPatch) => void;
+  onCreateCard?: (profile: TextureCardProfile) => void;
 }) {
   const settings = asset.importSettings;
   const resizeValue = settings.resize.mode === "original" ? "original" : String(settings.resize.maxSize);
@@ -3222,6 +3225,73 @@ export function TextureQuickEditor({
           </select>
         </label>
       </EditorSection>
+
+      {!environmentTexture ? (
+        <EditorSection title="遠景 / 草カード">
+          <p className="text-[11px] leading-4 text-slate-500">
+            テクスチャのアルファを保持した両面Materialと、Colliderを持たないカードをまとめて作成します。
+          </p>
+          <div className="mt-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">遠景</p>
+            <div className="mt-1 grid grid-cols-3 gap-1.5">
+              <button
+                type="button"
+                disabled={readOnly || !onCreateCard}
+                onClick={() => onCreateCard?.("backdrop-flat")}
+                className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5 text-left text-[11px] font-semibold text-sky-800 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                平面
+                <span className="mt-0.5 block text-[10px] font-normal leading-3 text-sky-700">20 × 11m</span>
+              </button>
+              <button
+                type="button"
+                disabled={readOnly || !onCreateCard}
+                onClick={() => onCreateCard?.("backdrop-arc-180")}
+                className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5 text-left text-[11px] font-semibold text-sky-800 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                180°カーブ
+                <span className="mt-0.5 block text-[10px] font-normal leading-3 text-sky-700">7分割・半円</span>
+              </button>
+              <button
+                type="button"
+                disabled={readOnly || !onCreateCard}
+                onClick={() => onCreateCard?.("backdrop-arc-270")}
+                className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5 text-left text-[11px] font-semibold text-sky-800 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                270°カーブ
+                <span className="mt-0.5 block text-[10px] font-normal leading-3 text-sky-700">10分割・広角</span>
+              </button>
+            </div>
+          </div>
+          <div className="mt-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">草・花</p>
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={readOnly || !onCreateCard}
+                onClick={() => onCreateCard?.("grass-single")}
+                className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-2 text-left text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                草カード 1枚
+                <span className="mt-0.5 block text-[10px] font-normal leading-3 text-emerald-700">
+                  壁際・群生の端に
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled={readOnly || !onCreateCard}
+                onClick={() => onCreateCard?.("grass-cross")}
+                className="rounded-md border border-emerald-300 bg-emerald-100 px-2 py-2 text-left text-xs font-semibold text-emerald-900 hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                草クロス
+                <span className="mt-0.5 block text-[10px] font-normal leading-3 text-emerald-800">
+                  直交2枚・全方向向け
+                </span>
+              </button>
+            </div>
+          </div>
+        </EditorSection>
+      ) : null}
 
       <EditorSection title="Color / Mipmap">
         <label className="block text-xs text-slate-600">
@@ -3345,6 +3415,7 @@ export function AssetQuickEditor({
   modelReimportImpactNotice,
   onParticleChange,
   onTextureChange,
+  onCreateTextureCard,
   prefabs,
   onSelectPrefabSourceEntity,
   onUpdatePrefab,
@@ -3369,6 +3440,10 @@ export function AssetQuickEditor({
   modelReimportImpactNotice?: ModelReimportImpactNotice | null;
   onParticleChange: (assetId: string, patch: ParticlePropertiesPatch) => void;
   onTextureChange: (assetId: string, patch: TextureAssetPatch) => void;
+  onCreateTextureCard?: (
+    textureAssetId: string,
+    profile: TextureCardProfile,
+  ) => void;
   prefabs: Readonly<Record<string, PrefabDocument>>;
   onSelectPrefabSourceEntity: (entityId: string) => void;
   onUpdatePrefab: (prefabId: string) => void;
@@ -3425,6 +3500,7 @@ export function AssetQuickEditor({
         projectPath={projectPath}
         readOnly={readOnly}
         onChange={(patch) => onTextureChange(asset.id, patch)}
+        onCreateCard={(profile) => onCreateTextureCard?.(asset.id, profile)}
       />
     );
   }

@@ -126,6 +126,8 @@ F-06 アイテム検査
 | F-26 | アプリデータのリセット | MI-03, MI-04, MI-05, MI-09, MI-66 | 実行中CLIとの競合や一時的なfile lockで部分的な状態を残さず、ランタイムのみまたは全データを確実に新しい起動から分離する。失敗時は対象と再試行方法を確認したまま復帰できる。 |
 | F-27 | 公開前パフォーマンス概算とAsset最適化 | MI-04, MI-07, MI-27, MI-67 | World / Itemの更新前に初回ロード容量と回線別時間、Assetと実行時VRAMのrange、端末別Studio基準、容量・負荷順の内訳と最適化候補を確認できる。対応候補は個別選択してresize、KTX2、DracoをAssetへ適用し、変換結果と再計算値を確認した上で同じUpload reviewへ戻れる。 |
 | F-28 | Script AssetとScript Component | MI-03, MI-05, MI-09, MI-14, MI-69, MI-70, MI-71, MI-72, MI-73 | Script AssetをTypeScriptで書き、共通Template catalogからsource preview付きで作成し、EntityへScript Componentとして複数付けられる。宣言したpropertyがInspectorへ自動で並び、Asset参照とEntity参照を選べる。Play中のpropertyは再起動なしで次のframeへ反映し、明示参照した基本Texture / Audio、Entity自身のAudio Source / Light / Material / Particleをowner単位で操作できる。明示参照Entityのworld座標近接をruntime eventへつなぎ、Light等の視覚効果をchannelで接続できる。Entity / Component構成と対応するauthoring propertyは永続化し、Light scalarは既存runtime、それ以外は影響Entityだけを再同期する。実行時例外は該当Scriptだけを止める。同じhost、root、Audio / Light / Particle runtime、参照resolverを公開ワールドへ静的importとして出力し、MCPも同じTemplate、参照契約、revision検査で作成・編集・適用・実行できる。 |
+| F-30 | Textureから遠景 / 草カードを作成 | MI-05, MI-09, MI-11, MI-15, MI-16, MI-25 | 通常のTexture Assetから、alpha blend・両面Materialを持つ平面・180 / 270度カーブの遠景、1枚 / クロスの草カードを一件のUndo履歴で作成し、配置直後にScene ViewとEntity Inspectorで位置とMaterialを調整できる。 |
+| F-31 | Terrain authoring / MCP | MI-03, MI-05, MI-09, MI-13, MI-16, MI-76 | Createメニューからstatic Terrainを追加し、InspectorとMCPの同じRaise / Lower / Flatten / Smoothブラシで高さサンプルを編集する。各スタンプは一件のUndo履歴として保存され、Scene View、Play、生成コード、Trimesh Colliderへ同じTerrainを反映する。 |
 
 ## F-23 公式XRift ComponentカタログとClassic / TSX変換の状態設計
 
@@ -885,6 +887,59 @@ F-06 アイテム検査
 - 実行時例外では該当行への移動、そのScriptの再開、Stopのいずれかへ到達できる。
 - Stopは生成したmoduleとblob URL、timer、listener、読み込んだTexture、Material slot所有のTexture clone、独立Audio playerを破棄し、runtime Audio Source / Light / Material / Particle overrideを元へ戻す。Play中にInspector / MCPで保存したauthoring dataは残し、Editの選択とcameraへ戻る。
 - 公開のblockingでは該当Script、またはUpload reviewへ戻り、修正後に同じreviewを再確認できる。
+
+## F-30 Textureから遠景 / 草カードを作成の状態設計
+
+参照: MI-05, MI-09, MI-11, MI-15, MI-16, MI-25
+
+### 操作前
+
+- 通常の画像Texture AssetのInspectorに、遠景の平面・180度カーブ・270度カーブと、草・花の1枚・クロスを用途と分割数付きで並べる。HDR / EXRの環境Textureには表示しない。
+- 遠景の平面は遠方に置く20 × 11mの縦Plane、180度と270度は同じTextureをUV分割した7枚または10枚のPlaneでカーブ状にする。草クロスは足元の縦Planeを直交2枚にして、見る方向が変わっても薄く消えにくくする。どの形もColliderを作らず、Textureのalphaを`BLEND`、Materialを両面表示にする。
+
+### 処理中
+
+- Material Assetの作成とScene Entityの配置を同じhistory transactionへまとめる。曲面は分割ごとにUV範囲を持つMaterialを作り、Textureを重複表示しない。Textureが見つからない、環境Textureである、またはMaterial作成に失敗したときは、SceneDocumentとAssetManifestを変更しない。
+
+### 成功時
+
+- 新しいEntityを選択し、Scene View、Hierarchy、Entity Inspectorを同期する。生成Materialは元Textureと同じfolderへ置き、Mesh RendererからいつでもMaterial Inspectorを開いて透明度、alpha mode、両面表示を調整できる。
+- 同じ種類のカードは開始位置を少しずつずらし、完全に重なった状態で追加されないようにする。曲面は親Entityを選択して、全パネルをまとめて移動、回転、拡大縮小できる。
+
+### 失敗時
+
+- Inspectorの文脈を失わず、Textureの状態を確認する案内を残す。Play中またはImport中は作成せず、停止または完了後に同じTexture Inspectorから再試行できる。
+
+### 戻り先
+
+- 作成後は選択中のEntity Inspectorに留まり、Transform編集またはMaterial slotから見た目の調整へ進める。UndoでMaterialとEntityを同時に作成前の状態へ戻す。
+
+## F-31 Terrain authoring / MCP の状態設計
+
+参照: MI-03, MI-05, MI-09, MI-13, MI-16, MI-76
+
+### 操作前
+
+- Createメニューの「Terrain」から、16 × 16m・33 × 33 sample・平坦なTerrainを作成できる。Terrainには常にstatic Trimesh Colliderを付け、Material slotは一つだけにする。
+- 選択中TerrainのInspectorにはSize、Resolution、現在のHeight rangeと、Raise / Lower / Flatten / SmoothのBrushを表示する。中心X/Z、radius、strength、Flattenのtarget heightを指定して一回のスタンプを適用する。
+
+### 処理中
+
+- 作成と各ブラシスタンプはEdit中だけ有効にし、Play中またはAsset import中は無効化して理由を残す。ブラシ処理中に別のdocument操作を重ねない。
+- MCPでは`get_terrain`で対象の範囲を確認し、`create_terrain`または`sculpt_terrain`へprojectId、sceneId、expectedRevisionを渡す。UIとMCPは同じheight sample計算を使う。
+
+### 成功時
+
+- Terrainを選択したままScene View、Hierarchy、Inspectorを更新し、各スタンプを一件のUndo履歴とautosave対象として確定する。Scene View、Play、compile、runtime manifestは同じheight samplesを使う。
+- static Trimesh Colliderの範囲はTerrainの幅、奥行き、高さrangeに追従する。Material slotからTerrainの見た目を続けて調整できる。
+
+### 失敗時
+
+- 範囲外、空の対象、古いrevision、Terrain以外のEntityへの適用はdocumentとhistoryを変更しない。Inspectorの入力と選択を保ち、対象またはrevisionを確認して同じ操作からやり直せる。
+
+### 戻り先
+
+- 作成・ブラシ適用後はTerrain Inspectorに留まる。Undo / Redoで直前のTerrain samplesを戻し、必要ならMaterialまたはCollider診断へ進める。
 
 ## 実装制約
 

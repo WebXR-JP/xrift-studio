@@ -24,6 +24,7 @@ import {
   updateParticleAsset,
 } from "../particle-system";
 import {
+  addTerrainEntity,
   createBoxColliderComponent,
   createMeshColliderComponent,
   createRigidBodyComponent,
@@ -121,6 +122,30 @@ export function runVisualCompilerFixtureAssertions(
         entry.targetRelativePath === "public/thumbnail.png",
     ),
     "The publication thumbnail must not be added to the Asset copy plan",
+  );
+  const terrainAdded = addTerrainEntity(
+    world.scenes[world.project.entrySceneId],
+    world.assets,
+    BUILTIN_ASSET_IDS.material.green,
+    { width: 12, depth: 10, resolution: 17 },
+  );
+  assert(terrainAdded, "Terrain compiler fixture could not create Terrain");
+  const terrainResult = compileVisualProject(
+    {
+      ...world,
+      scenes: { [terrainAdded.scene.sceneId]: terrainAdded.scene },
+    },
+    { generatedAt: fixedTime },
+  );
+  const terrainSource =
+    terrainResult.overlayFiles.find((file) => file.relativePath === "src/World.tsx")
+      ?.content ?? "";
+  assert(
+    terrainResult.canStage &&
+      terrainSource.includes("function XriftTerrainGeometry") &&
+      terrainSource.includes("<XriftTerrainGeometry terrain={{") &&
+      terrainSource.includes('colliders="trimesh"'),
+    "Terrain must compile with its generated geometry and fixed Trimesh Collider",
   );
   const publicationOnlyWorld: VisualCompilerDocuments = {
     ...world,
@@ -1958,6 +1983,7 @@ export function runVisualCompilerFixtureAssertions(
     'object.name === "House"',
     'material.uniforms["uTime"].value',
     "CLASSIC_MATERIAL_VARIANTS",
+    "readonly CompiledClassicShaderVariant[]",
   ].forEach((fragment) =>
     assert(
       classicSource.includes(fragment),

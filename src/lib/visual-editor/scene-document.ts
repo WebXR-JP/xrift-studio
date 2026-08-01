@@ -13,6 +13,15 @@ import {
 } from "./creation-catalog";
 import { createDocumentId } from "./document-id";
 import type { SceneSettings } from "./scene-settings";
+import {
+  applyTerrainBrush,
+  createTerrainGeometry,
+  terrainHeightRange,
+  TERRAIN_MATERIAL_SLOT,
+  type TerrainBrushOperation,
+  type TerrainGeometry,
+  type TerrainGeometryOptions,
+} from "./terrain";
 
 export const SCENE_DOCUMENT_SCHEMA_VERSION = "0.1.0" as const;
 
@@ -74,6 +83,11 @@ export type MeshGeometryReference =
       kind: "builtin-primitive";
       creationId: string;
       primitive: PrimitiveGeometry;
+    }
+  | {
+      /** Persisted height samples authored by the Terrain tools. */
+      kind: "terrain";
+      terrain: TerrainGeometry;
     };
 
 export type MaterialBinding = {
@@ -841,6 +855,56 @@ export function createBuiltinPrimitiveMeshComponent(
   };
 }
 
+/** Creates a height-sampled mesh which is stored entirely in the Scene document. */
+export function createTerrainMeshComponent(
+  id: string,
+  materialAssetId: string,
+  options: TerrainGeometryOptions = {},
+): MeshComponent {
+  return {
+    id,
+    type: "mesh",
+    enabled: true,
+    // Terrain is authored data, not an Asset Library geometry. Keep this
+    // compatibility field readable for older callers which have no terrain arm.
+    geometryAssetId: "terrain",
+    geometry: {
+      kind: "terrain",
+      terrain: createTerrainGeometry(options),
+    },
+    materialBindings: [{ slot: TERRAIN_MATERIAL_SLOT, materialAssetId }],
+    castShadow: true,
+    receiveShadow: true,
+  };
+}
+
+export function getTerrainGeometry(
+  mesh: MeshComponent,
+): TerrainGeometry | undefined {
+  return mesh.geometry?.kind === "terrain" ? mesh.geometry.terrain : undefined;
+}
+
+/** Applies one terrain brush stamp through the same Scene replacement boundary as Inspector edits. */
+export function applyTerrainBrushToScene(
+  scene: SceneDocument,
+  entityId: string,
+  operation: TerrainBrushOperation,
+  componentId?: string,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  const mesh = entity ? getMesh(entity, componentId) : undefined;
+  const terrain = mesh ? getTerrainGeometry(mesh) : undefined;
+  if (!mesh || !terrain) return scene;
+  const nextTerrain = applyTerrainBrush(terrain, operation);
+  if (nextTerrain === terrain || terrainHeightsEqual(terrain, nextTerrain)) {
+    return scene;
+  }
+  return replaceMesh(scene, entityId, mesh.id, {
+    ...mesh,
+    geometry: { kind: "terrain", terrain: nextTerrain },
+  });
+}
+
 export type ColliderSurfaceOptions = {
   enabled?: boolean;
   isTrigger?: boolean;
@@ -1067,6 +1131,17 @@ export function getColliderAutoFitBounds(
   mesh: MeshComponent,
   assets: AssetManifest,
 ): ColliderAutoFitBounds | null {
+  if (mesh.geometry?.kind === "terrain") {
+    const range = terrainHeightRange(mesh.geometry.terrain);
+    return {
+      center: [0, (range.min + range.max) / 2, 0],
+      halfExtents: [
+        mesh.geometry.terrain.width / 2,
+        Math.max((range.max - range.min) / 2, MIN_COLLIDER_HALF_EXTENT),
+        mesh.geometry.terrain.depth / 2,
+      ],
+    };
+  }
   if (mesh.geometry?.kind === "builtin-primitive") {
     return getPrimitiveColliderBounds(mesh.geometry.primitive);
   }
@@ -1691,6 +1766,9 @@ export function getMeshMaterialSlots(
   mesh: MeshComponent,
   assets: AssetManifest,
 ): MaterialSlotDefinition[] {
+  if (mesh.geometry?.kind === "terrain") {
+    return [{ slot: TERRAIN_MATERIAL_SLOT, name: "Terrain" }];
+  }
   if (mesh.geometry?.kind === "builtin-primitive") {
     return (
       getBuiltinPrimitiveCreation(mesh.geometry.creationId)?.materialSlots.map(
@@ -2010,11 +2088,13 @@ export function addBuiltinPrimitiveEntity(
     definition,
     [{ slot: "default", materialAssetId: material.id }],
   );
-  const collider = fitBoxColliderToMesh(
-    createBoxColliderComponent(createDocumentId("component-collider")),
-    mesh,
-    assets,
-  );
+  const collider = definition.addCollider
+    ? fitBoxColliderToMesh(
+        createBoxColliderComponent(createDocumentId("component-collider")),
+        mesh,
+        assets,
+      )
+    : null;
   const entity: SceneEntity = {
     id: entityId,
     name: definition.name,
@@ -2029,7 +2109,7 @@ export function addBuiltinPrimitiveEntity(
         transform.scale,
       ),
       mesh,
-      collider,
+      ...(collider ? [collider] : []),
     ],
   };
 
@@ -2041,6 +2121,68 @@ export function addBuiltinPrimitiveEntity(
       entities: { ...scene.entities, [entityId]: entity },
     },
   };
+}
+
+export type TerrainEntityOptions = TerrainGeometryOptions & {
+  name?: string;
+  position?: Vec3;
+};
+
+/** Adds a static Terrain with a matching Trimesh Collider. */
+export function addTerrainEntity(
+  scene: SceneDocument,
+  assets: AssetManifest,
+  materialAssetId: string,
+  options: TerrainEntityOptions = {},
+): AddBuiltinAssetEntityResult | null {
+  const material = getMaterialAsset(assets, materialAssetId);
+  if (!material) return null;
+  const entityId = createDocumentId("entity");
+  const mesh = createTerrainMeshComponent(
+    createDocumentId("component-terrain"),
+    material.id,
+    options,
+  );
+  const entity: SceneEntity = {
+    id: entityId,
+    name: options.name?.trim() || "地形",
+    parentId: null,
+    children: [],
+    enabled: true,
+    components: [
+      createTransformComponent(
+        createDocumentId("component-transform"),
+        options.position && isFiniteVec3(options.position)
+          ? options.position
+          : [0, 0, 0],
+      ),
+      mesh,
+      createMeshColliderComponent(createDocumentId("component-collider"), {
+        meshMode: "trimesh",
+      }),
+    ],
+  };
+  return {
+    entityId,
+    scene: {
+      ...scene,
+      rootEntityIds: [...scene.rootEntityIds, entityId],
+      entities: { ...scene.entities, [entityId]: entity },
+    },
+  };
+}
+
+function terrainHeightsEqual(
+  current: TerrainGeometry,
+  next: TerrainGeometry,
+): boolean {
+  return (
+    current.width === next.width &&
+    current.depth === next.depth &&
+    current.resolution === next.resolution &&
+    current.heights.length === next.heights.length &&
+    current.heights.every((height, index) => height === next.heights[index])
+  );
 }
 
 export function renameEntity(

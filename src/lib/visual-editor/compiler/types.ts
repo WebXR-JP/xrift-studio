@@ -5,7 +5,7 @@ import type { VisualProjectDocument, VisualProjectKind } from "../project-docume
 import type { SceneDocument } from "../scene-document";
 import type { CompilationProvenance } from "../serialization";
 
-export const VISUAL_COMPILER_VERSION = "0.5.12" as const;
+export const VISUAL_COMPILER_VERSION = "0.6.0" as const;
 
 export type VisualCompilerDocuments = {
   project: VisualProjectDocument;

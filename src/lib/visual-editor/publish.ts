@@ -89,17 +89,46 @@ function assertSucceeded(
   privatePaths: string[] = [],
 ): void {
   if (result.code === 0) return;
+  throw new Error(formatPublishCommandFailure(operation, result, privatePaths));
+}
+
+/** Produces a safe, actionable error from both CLI output streams. */
+export function formatPublishCommandFailure(
+  operation: string,
+  result: Pick<RunResult, "stdout" | "stderr">,
+  privatePaths: string[] = [],
+): string {
   const detail = [result.stderr, result.stdout]
     .map((value) => value.trim())
-    .find(Boolean);
+    .filter(Boolean)
+    .join("\n");
   const safeDetail = detail
     ? sanitizePublishFailure(detail, privatePaths)
     : undefined;
-  throw new Error(
-    safeDetail
-      ? `${operation}に失敗しました: ${safeDetail}`
-      : `${operation}に失敗しました。`,
-  );
+  const recovery = publishCommandRecovery(operation, safeDetail);
+  const visibleDetail = safeDetail
+    ?.split(/\r?\n/)
+    .slice(-6)
+    .join("\n");
+  return visibleDetail
+    ? `${operation}に失敗しました: ${recovery}${visibleDetail}`
+    : `${operation}に失敗しました。`;
+}
+
+function publishCommandRecovery(operation: string, detail?: string): string {
+  if (
+    operation === "XRiftテンプレートの作成" &&
+    /downloading template|failed to download template/i.test(detail ?? "")
+  ) {
+    return "テンプレートを取得できませんでした。ネットワーク接続、GitHubへのアクセス、プロキシ設定を確認してから再試行してください。\n";
+  }
+  if (
+    /^(World|Item)の検査$/.test(operation) &&
+    /command failed:\s*npm\s+run\s+build/i.test(detail ?? "")
+  ) {
+    return "公開用ステージングのnpm run buildが失敗しました。下のビルド出力を確認し、Scene・Asset・Scriptの問題を修正してから再試行してください。\n";
+  }
+  return "";
 }
 
 /** Keeps actionable CLI diagnostics while preventing credentials and local paths from reaching the UI. */
@@ -295,33 +324,31 @@ export async function materializeVisualCompilation(
       "公開用サムネイルのステージング検証結果を確認できないため、アップロードを停止しました。",
     );
   }
-  if (compilation.stagingPlan.runtimePackageSpecs.length > 0) {
-    const includesOpenBrushRuntime =
-      compilation.stagingPlan.runtimePackageSpecs.includes(
-        "three-icosa@0.4.2-alpha.18",
-      );
-    throwIfAborted(signal);
-    report({
-      stage: "compiling",
-      label: includesOpenBrushRuntime
-        ? "OpenBrush描画ランタイムを準備しています"
-        : "XRift Studio描画ランタイムを準備しています",
-      detail: includesOpenBrushRuntime
-        ? "汎用Runtimeとthree-icosaを公開用の一時プロジェクトへ追加します。"
-        : "汎用Runtimeを公開用の一時プロジェクトへ追加します。",
-      percent: 52,
-      cancelSafe: false,
-    });
-    const installed = await xrift.installCompilerRuntimePackages(
-      staged.projectPath,
-      compilation.stagingPlan.runtimePackageSpecs,
-      onLog,
+  const includesOpenBrushRuntime =
+    compilation.stagingPlan.runtimePackageSpecs.includes(
+      "three-icosa@0.4.2-alpha.18",
     );
-    assertSucceeded(installed, "描画ランタイムの準備", [
-      authoringProjectPath,
-      staged.projectPath,
-    ]);
-  }
+  throwIfAborted(signal);
+  report({
+    stage: "compiling",
+    label: includesOpenBrushRuntime
+      ? "XRiftとOpenBrushの依存関係を準備しています"
+      : "XRiftの依存関係を準備しています",
+    detail: includesOpenBrushRuntime
+      ? "テンプレートの依存関係とOpenBrush描画ランタイムを公開用の一時プロジェクトへ追加します。"
+      : "テンプレートの依存関係を公開用の一時プロジェクトへ追加します。",
+    percent: 52,
+    cancelSafe: false,
+  });
+  const installed = await xrift.installCompilerStagingDependencies(
+    staged.projectPath,
+    compilation.stagingPlan.runtimePackageSpecs,
+    onLog,
+  );
+  assertSucceeded(installed, "XRift依存関係の準備", [
+    authoringProjectPath,
+    staged.projectPath,
+  ]);
   report({
     stage: "compiling",
     label: "サムネイルを公開用ステージングへコピー済み",

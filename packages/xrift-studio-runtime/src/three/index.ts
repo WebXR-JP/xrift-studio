@@ -412,6 +412,17 @@ export class XriftThreeLoader {
         mesh.userData.xriftStudioComponentId = component.id;
         return mesh;
       }
+      if (component.geometry.kind === "terrain") {
+        const material = materialForBinding(component, input.materials);
+        const mesh = new Mesh(
+          createTerrainGeometry(component.geometry),
+          material ?? new MeshStandardMaterial({ color: 0x6b8e4e }),
+        );
+        mesh.castShadow = component.castShadow;
+        mesh.receiveShadow = component.receiveShadow;
+        mesh.userData.xriftStudioComponentId = component.id;
+        return mesh;
+      }
       const loaded = input.models.get(component.geometry.assetId);
       if (!loaded) {
         input.diagnostics.push({
@@ -630,6 +641,29 @@ function createPrimitiveGeometry(
   if (primitive === "cylinder") return new CylinderGeometry(0.5, 0.5, 1, 32);
   if (primitive === "cone") return new ConeGeometry(0.5, 1, 32);
   return new PlaneGeometry(1, 1);
+}
+
+function createTerrainGeometry(terrain: {
+  width: number;
+  depth: number;
+  resolution: number;
+  heights: readonly number[];
+}): BufferGeometry {
+  const resolution = Math.max(2, Math.floor(terrain.resolution));
+  const geometry = new PlaneGeometry(
+    terrain.width,
+    terrain.depth,
+    resolution - 1,
+    resolution - 1,
+  );
+  geometry.rotateX(-Math.PI / 2);
+  const positions = geometry.getAttribute("position");
+  for (let index = 0; index < positions.count; index += 1) {
+    positions.setY(index, terrain.heights[index] ?? 0);
+  }
+  positions.needsUpdate = true;
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 function materialForBinding(

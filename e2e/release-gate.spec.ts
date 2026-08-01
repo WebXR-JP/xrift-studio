@@ -297,6 +297,30 @@ test("ビジュアルワールドを編集・Playし、公開確認で送信前�
   ).toBeDisabled();
 });
 
+test("ビジュアル編集で地形を作成・整形できる", async ({ page }) => {
+  await openProjectLibrary(page);
+  await page.getByRole("button", { name: /新規プロジェクト/ }).click();
+  await page
+    .getByRole("button", { name: /ワールドをビジュアルで作る/ })
+    .click();
+  await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
+  await page.getByLabel("プロジェクト名").fill("release-terrain-flow");
+  await page.getByRole("button", { name: "作成して開く" }).click();
+
+  await page.getByRole("button", { name: "追加", exact: true }).click();
+  await page.getByRole("button", { name: /地形/ }).click();
+  await expect(
+    page
+      .getByRole("tree", { name: "SceneのEntity階層" })
+      .getByText("地形", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("高さマップ・固定コライダー")).toBeVisible();
+  const sculpt = page.getByRole("button", { name: "地形に適用" });
+  await expect(sculpt).toBeVisible();
+  await sculpt.click();
+  await expect(page.getByText("地形を盛り上げました")).toBeVisible();
+});
+
 test("ビジュアル編集の一時保存失敗は自動再試行で復帰する", async ({
   page,
 }) => {

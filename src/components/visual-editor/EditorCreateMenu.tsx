@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Cuboid,
+  Mountain,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
@@ -34,6 +35,7 @@ type Props = {
   onClose: () => void;
   onCreateEmpty: () => void;
   onCreatePrimitive: (creationId: string) => void;
+  onCreateTerrain: () => void;
   onPlaceBuiltinPrefab: (recipeId: string) => void;
   onCreateXriftObject: (definitionId: string) => void;
   onCreateComponentObject: (definitionId: string) => void;
@@ -59,6 +61,7 @@ export function EditorCreateMenu({
   onClose,
   onCreateEmpty,
   onCreatePrimitive,
+  onCreateTerrain,
   onPlaceBuiltinPrefab,
   onCreateXriftObject,
   onCreateComponentObject,
@@ -194,6 +197,16 @@ export function EditorCreateMenu({
               onClick={() => setPage("primitive")}
             />
             <RootChoice
+              icon={Mountain}
+              title="地形"
+              description="ブラシで形を整えられる高さマップ"
+              disabled={disabled}
+              onClick={() => {
+                onCreateTerrain();
+                onClose();
+              }}
+            />
+            <RootChoice
               icon={Sparkles}
               title="XRift Component"
               description="XRift向けの配置済み機能とComponent"
@@ -214,7 +227,9 @@ export function EditorCreateMenu({
 
         {page === "primitive" ? (
           <MenuSection label="Scene Object">
-            {BUILTIN_PRIMITIVE_CREATION_CATALOG.map((entry) => (
+            {BUILTIN_PRIMITIVE_CREATION_CATALOG.filter(
+              (entry) => entry.showInCreateMenu,
+            ).map((entry) => (
               <MenuItem
                 key={entry.creationId}
                 icon={EDITOR_ICONS.primitive}

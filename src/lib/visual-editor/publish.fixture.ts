@@ -1,5 +1,6 @@
 import {
   didXriftUploadStopBeforeRemoteTransfer,
+  formatPublishCommandFailure,
   parseXriftUploadResult,
   sanitizePublishFailure,
   type XriftUploadResult,
@@ -118,6 +119,22 @@ export function runVisualPublishFixtureAssertions(): void {
   ]) {
     assert(!sanitized.includes(secret), `Sanitizer exposed ${secret}`);
   }
+
+  const templateFailure = formatPublishCommandFailure(
+    "XRiftテンプレートの作成",
+    {
+      stderr: "- Downloading template...",
+      stdout: "Error: GitHub returned 403 for the requested template",
+    },
+  );
+  assert(
+    templateFailure.includes("GitHub returned 403"),
+    "Command diagnostics discarded actionable stdout after stderr output",
+  );
+  assert(
+    templateFailure.includes("GitHubへのアクセス"),
+    "Template download failure did not offer a recovery action",
+  );
 }
 
 function runCancellationAssertions(): void {

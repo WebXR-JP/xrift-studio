@@ -21,6 +21,13 @@ export type XriftRuntimeGeometry =
       kind: "primitive";
       primitive: "box" | "sphere" | "cylinder" | "cone" | "plane";
     }
+  | {
+      kind: "terrain";
+      width: number;
+      depth: number;
+      resolution: number;
+      heights: number[];
+    }
   | { kind: "model"; assetId: string; sourceNodeIndex?: number };
 
 export type XriftRuntimeMaterialBinding = {
@@ -299,17 +306,184 @@ export type XriftRuntimeManifest = {
   assets: Record<string, XriftRuntimeAsset>;
 };
 
+const RUNTIME_TERRAIN_SIZE_MIN = 0.5;
+const RUNTIME_TERRAIN_SIZE_MAX = 512;
+const RUNTIME_TERRAIN_RESOLUTION_MIN = 9;
+const RUNTIME_TERRAIN_RESOLUTION_MAX = 65;
+const RUNTIME_TERRAIN_HEIGHT_ABSOLUTE_MAX = 256;
+
+/**
+ * Validates the runtime boundary before Three.js allocates geometry or reads
+ * component fields. In particular, Terrain sample arrays are untrusted when a
+ * manifest is loaded from a URL and must not be allowed to request arbitrary
+ * buffer sizes.
+ */
 export function isXriftRuntimeManifest(value: unknown): value is XriftRuntimeManifest {
   if (!isRecord(value)) return false;
+  const scenes = value.scenes;
+  const assets = value.assets;
+  const entryScene = value.entryScene;
   return (
     value.format === XRIFT_STUDIO_RUNTIME_FORMAT &&
     value.schemaVersion === XRIFT_STUDIO_RUNTIME_SCHEMA_VERSION &&
     value.generator === "xrift-studio" &&
+    typeof value.compilerVersion === "string" &&
+    typeof value.projectId === "string" &&
     (value.projectKind === "world" || value.projectKind === "item") &&
-    typeof value.entryScene === "string" &&
-    isRecord(value.scenes) &&
-    isRecord(value.assets) &&
-    isRecord(value.scenes[value.entryScene])
+    typeof entryScene === "string" &&
+    isRecord(scenes) &&
+    isRecord(assets) &&
+    Object.values(scenes).every(isRuntimeScene) &&
+    Object.values(assets).every(isRuntimeAsset) &&
+    isRuntimeScene(scenes[entryScene])
+  );
+}
+
+function isRuntimeScene(value: unknown): value is XriftRuntimeScene {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    isStringArray(value.rootEntityIds) &&
+    isRecord(value.entities) &&
+    Object.values(value.entities).every(isRuntimeEntity) &&
+    (value.settings === undefined || isRecord(value.settings))
+  );
+}
+
+function isRuntimeEntity(value: unknown): value is XriftRuntimeEntity {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    (value.parentId === null || typeof value.parentId === "string") &&
+    isStringArray(value.children) &&
+    typeof value.enabled === "boolean" &&
+    isRuntimeTransform(value.transform) &&
+    Array.isArray(value.components) &&
+    value.components.every(isRuntimeComponent)
+  );
+}
+
+function isRuntimeTransform(value: unknown): value is XriftRuntimeTransform {
+  return (
+    isRecord(value) &&
+    isFiniteTuple(value.position, 3) &&
+    isFiniteTuple(value.rotation, 3) &&
+    isFiniteTuple(value.scale, 3)
+  );
+}
+
+function isRuntimeComponent(value: unknown): value is XriftRuntimeComponent {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.type !== "string" ||
+    typeof value.enabled !== "boolean"
+  ) {
+    return false;
+  }
+  if (value.type !== "mesh") return true;
+  return (
+    isRuntimeGeometry(value.geometry) &&
+    Array.isArray(value.materialBindings) &&
+    value.materialBindings.every(isRuntimeMaterialBinding) &&
+    typeof value.castShadow === "boolean" &&
+    typeof value.receiveShadow === "boolean"
+  );
+}
+
+function isRuntimeGeometry(value: unknown): value is XriftRuntimeGeometry {
+  if (!isRecord(value) || typeof value.kind !== "string") return false;
+  if (value.kind === "primitive") {
+    return ["box", "sphere", "cylinder", "cone", "plane"].includes(
+      value.primitive as string,
+    );
+  }
+  if (value.kind === "model") return typeof value.assetId === "string";
+  if (value.kind !== "terrain") return false;
+  return (
+    isRuntimeTerrainSize(value.width) &&
+    isRuntimeTerrainSize(value.depth) &&
+    isRuntimeTerrainResolution(value.resolution) &&
+    Array.isArray(value.heights) &&
+    value.heights.length === value.resolution * value.resolution &&
+    value.heights.every(isRuntimeTerrainHeight)
+  );
+}
+
+function isRuntimeMaterialBinding(
+  value: unknown,
+): value is XriftRuntimeMaterialBinding {
+  return (
+    isRecord(value) &&
+    typeof value.slot === "string" &&
+    typeof value.materialAssetId === "string" &&
+    (value.sourceNodeIndex === undefined || Number.isInteger(value.sourceNodeIndex))
+  );
+}
+
+function isRuntimeAsset(value: unknown): value is XriftRuntimeAsset {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.name !== "string" ||
+    typeof value.kind !== "string"
+  ) {
+    return false;
+  }
+  switch (value.kind) {
+    case "model":
+      return typeof value.url === "string" && Number.isFinite(value.scale);
+    case "texture":
+    case "skybox":
+    case "audio":
+      return typeof value.url === "string";
+    case "material":
+    case "particle":
+      return isRecord(value.properties);
+    case "interactivity":
+      return isRecord(value.extension);
+    default:
+      return false;
+  }
+}
+
+function isRuntimeTerrainSize(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= RUNTIME_TERRAIN_SIZE_MIN &&
+    value <= RUNTIME_TERRAIN_SIZE_MAX
+  );
+}
+
+function isRuntimeTerrainResolution(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= RUNTIME_TERRAIN_RESOLUTION_MIN &&
+    value <= RUNTIME_TERRAIN_RESOLUTION_MAX
+  );
+}
+
+function isRuntimeTerrainHeight(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    Math.abs(value) <= RUNTIME_TERRAIN_HEIGHT_ABSOLUTE_MAX
+  );
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function isFiniteTuple(value: unknown, length: number): value is number[] {
+  return (
+    Array.isArray(value) &&
+    value.length === length &&
+    value.every((entry) => typeof entry === "number" && Number.isFinite(entry))
   );
 }
 

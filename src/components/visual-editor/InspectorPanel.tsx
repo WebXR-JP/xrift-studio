@@ -50,7 +50,12 @@ import {
   type SceneDocument,
   type SceneSettings,
   type SceneEntity,
+  terrainHeightRange,
+  type TerrainBrushKind,
+  type TerrainBrushOperation,
+  type TerrainGeometry,
   type TextureAssetPatch,
+  type TextureCardProfile,
   type TextComponent,
   type TextPatch,
   type TransformPatch,
@@ -685,6 +690,7 @@ function MeshInspector({
   readOnly,
   onChange,
   onOpenMaterial,
+  onTerrainBrush,
   showModelPose = true,
   materialBindingSourceNodeIndex,
 }: {
@@ -694,6 +700,7 @@ function MeshInspector({
   readOnly: boolean;
   onChange: (patch: MeshInspectorPatch) => void;
   onOpenMaterial: (assetId: string) => void;
+  onTerrainBrush?: (operation: TerrainBrushOperation) => void;
   showModelPose?: boolean;
   materialBindingSourceNodeIndex?: number;
 }) {
@@ -702,6 +709,10 @@ function MeshInspector({
       ? component.geometry.assetId
       : component.geometryAssetId;
   const geometry = getGeometryAsset(assets, geometryAssetId);
+  const terrain =
+    component.geometry?.kind === "terrain"
+      ? component.geometry.terrain
+      : undefined;
   const builtinDefinition =
     component.geometry?.kind === "builtin-primitive"
       ? getBuiltinPrimitiveCreation(component.geometry.creationId)
@@ -728,7 +739,8 @@ function MeshInspector({
   }, [bones, selectedBoneKey]);
 
   return (
-    <ComponentCard
+    <div className="space-y-3">
+      <ComponentCard
       title="Mesh Renderer"
       enabled={{
         checked: component.enabled,
@@ -742,7 +754,7 @@ function MeshInspector({
       <dl className="grid grid-cols-[62px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
         <dt className="text-slate-500">形状</dt>
         <dd className="truncate text-right font-medium text-slate-700">
-          {geometry?.name ?? builtinDefinition?.name ?? `Missing: ${geometryAssetId}`}
+          {terrain ? "地形" : geometry?.name ?? builtinDefinition?.name ?? `Missing: ${geometryAssetId}`}
         </dd>
         <dt className="text-slate-500">スロット</dt>
         <dd className="text-right text-slate-700">{slots.length}</dd>
@@ -884,7 +896,176 @@ function MeshInspector({
           onChange={(receiveShadow) => onChange({ receiveShadow })}
         />
       </div>
+      </ComponentCard>
+      {terrain ? (
+        <TerrainInspector
+          terrain={terrain}
+          readOnly={readOnly}
+          onBrush={onTerrainBrush}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function TerrainInspector({
+  terrain,
+  readOnly,
+  onBrush,
+}: {
+  terrain: TerrainGeometry;
+  readOnly: boolean;
+  onBrush?: (operation: TerrainBrushOperation) => void;
+}) {
+  const [kind, setKind] = useState<TerrainBrushKind>("raise");
+  const [centerX, setCenterX] = useState(0);
+  const [centerZ, setCenterZ] = useState(0);
+  const [radius, setRadius] = useState(2);
+  const [strength, setStrength] = useState(0.8);
+  const [targetHeight, setTargetHeight] = useState(0);
+  const range = terrainHeightRange(terrain);
+  const maximumRadius = Math.max(terrain.width, terrain.depth);
+  const disabled = readOnly || !onBrush;
+
+  return (
+    <ComponentCard title="地形" subtitle="高さマップ・固定コライダー">
+      <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
+        <dt className="text-slate-500">大きさ</dt>
+        <dd className="text-right font-medium text-slate-700">
+          {terrain.width} × {terrain.depth} m
+        </dd>
+        <dt className="text-slate-500">解像度</dt>
+        <dd className="text-right font-medium text-slate-700">
+          {terrain.resolution} × {terrain.resolution}
+        </dd>
+        <dt className="text-slate-500">高さの範囲</dt>
+        <dd className="text-right font-medium text-slate-700">
+          {range.min.toFixed(2)} – {range.max.toFixed(2)} m
+        </dd>
+      </dl>
+
+      <section className="space-y-2 border-t border-slate-100 pt-2" aria-label="地形ブラシ">
+        <h4 className="text-xs font-semibold text-slate-700">ブラシ</h4>
+        <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+          操作
+          <select
+            value={kind}
+            disabled={disabled}
+            onChange={(event) => setKind(event.currentTarget.value as TerrainBrushKind)}
+            className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
+          >
+            <option value="raise">盛り上げる</option>
+            <option value="lower">掘る</option>
+            <option value="flatten">ならす</option>
+            <option value="smooth">滑らかにする</option>
+          </select>
+        </label>
+        <TerrainNumberField
+          label="中心 X"
+          value={centerX}
+          min={-terrain.width / 2}
+          max={terrain.width / 2}
+          step={0.25}
+          disabled={disabled}
+          onChange={setCenterX}
+        />
+        <TerrainNumberField
+          label="中心 Z"
+          value={centerZ}
+          min={-terrain.depth / 2}
+          max={terrain.depth / 2}
+          step={0.25}
+          disabled={disabled}
+          onChange={setCenterZ}
+        />
+        <TerrainNumberField
+          label="半径"
+          value={radius}
+          min={0.1}
+          max={maximumRadius}
+          step={0.1}
+          disabled={disabled}
+          onChange={setRadius}
+        />
+        <TerrainNumberField
+          label={kind === "smooth" || kind === "flatten" ? "なじませる量" : "強さ"}
+          value={strength}
+          min={0.01}
+          max={kind === "smooth" || kind === "flatten" ? 1 : 16}
+          step={0.05}
+          disabled={disabled}
+          onChange={setStrength}
+        />
+        {kind === "flatten" ? (
+          <TerrainNumberField
+            label="目標の高さ"
+            value={targetHeight}
+            min={-256}
+            max={256}
+            step={0.1}
+            disabled={disabled}
+            onChange={setTargetHeight}
+          />
+        ) : null}
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() =>
+            onBrush?.({
+              kind,
+              center: [centerX, centerZ],
+              radius,
+              strength,
+              ...(kind === "flatten" ? { targetHeight } : {}),
+            })
+          }
+          className="w-full rounded-md bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+        >
+          地形に適用
+        </button>
+        <p className="text-[11px] leading-4 text-slate-500">
+          1回の操作は1件のUndo履歴になります。地形は固定のTrimesh Colliderとして出力されます。
+        </p>
+      </section>
     </ComponentCard>
+  );
+}
+
+function TerrainNumberField({
+  label,
+  value,
+  min,
+  max,
+  step,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  disabled: boolean;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+      {label}
+      <input
+        type="number"
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        disabled={disabled}
+        onChange={(event) => {
+          const next = Number(event.currentTarget.value);
+          if (!Number.isFinite(next)) return;
+          onChange(Math.max(min, Math.min(max, next)));
+        }}
+        className="h-8 rounded border border-slate-300 bg-white px-2 text-right text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
+      />
+    </label>
   );
 }
 
@@ -2346,6 +2527,7 @@ function EntityInspector({
   onTransformScrubEnd,
   onTransformScrubCancel,
   onMeshChange,
+  onTerrainBrush,
   onModelNodeMeshChange,
   onColliderChange,
   onRigidBodyChange,
@@ -2385,6 +2567,7 @@ function EntityInspector({
   onTransformScrubEnd: () => void;
   onTransformScrubCancel: () => void;
   onMeshChange: (componentId: string, patch: MeshInspectorPatch) => void;
+  onTerrainBrush: (componentId: string, operation: TerrainBrushOperation) => void;
   onModelNodeMeshChange: (
     entityId: string,
     componentId: string,
@@ -2579,6 +2762,9 @@ function EntityInspector({
               projectPath={projectPath}
               readOnly={readOnly}
               onChange={(patch) => onMeshChange(component.id, patch)}
+              onTerrainBrush={(operation) =>
+                onTerrainBrush(component.id, operation)
+              }
               onOpenMaterial={onOpenMaterial}
             />
           );
@@ -2870,6 +3056,7 @@ export function InspectorPanel({
   onTransformScrubEnd,
   onTransformScrubCancel,
   onMeshChange,
+  onTerrainBrush,
   onColliderChange,
   onRigidBodyChange,
   onAutoFitCollider,
@@ -2896,6 +3083,7 @@ export function InspectorPanel({
   modelReimportImpactNotice,
   onParticleChange,
   onTextureChange,
+  onCreateTextureCard,
   onParticleEmitterChange,
   onRemoveParticleEmitter,
   projectKind,
@@ -2933,6 +3121,11 @@ export function InspectorPanel({
   onTransformScrubEnd: (entityId: string) => void;
   onTransformScrubCancel: (entityId: string) => void;
   onMeshChange: (entityId: string, componentId: string, patch: MeshInspectorPatch) => void;
+  onTerrainBrush: (
+    entityId: string,
+    componentId: string,
+    operation: TerrainBrushOperation,
+  ) => void;
   onColliderChange: (entityId: string, componentId: string, patch: ColliderPatch) => void;
   onRigidBodyChange: (
     entityId: string,
@@ -2974,6 +3167,10 @@ export function InspectorPanel({
   modelReimportImpactNotice?: ModelReimportImpactNotice | null;
   onParticleChange: (assetId: string, patch: ParticlePropertiesPatch) => void;
   onTextureChange: (assetId: string, patch: TextureAssetPatch) => void;
+  onCreateTextureCard: (
+    textureAssetId: string,
+    profile: TextureCardProfile,
+  ) => void;
   onParticleEmitterChange: (
     entityId: string,
     componentId: string,
@@ -3142,6 +3339,7 @@ export function InspectorPanel({
               modelReimportImpactNotice={modelReimportImpactNotice}
               onParticleChange={onParticleChange}
               onTextureChange={onTextureChange}
+              onCreateTextureCard={onCreateTextureCard}
               prefabs={prefabs}
               onSelectPrefabSourceEntity={onSelectPrefabSourceEntity}
               onUpdatePrefab={onUpdatePrefab}
@@ -3167,6 +3365,9 @@ export function InspectorPanel({
             onTransformScrubEnd={() => onTransformScrubEnd(entity.id)}
             onTransformScrubCancel={() => onTransformScrubCancel(entity.id)}
             onMeshChange={(componentId, patch) => onMeshChange(entity.id, componentId, patch)}
+            onTerrainBrush={(componentId, operation) =>
+              onTerrainBrush(entity.id, componentId, operation)
+            }
             onModelNodeMeshChange={onMeshChange}
             onColliderChange={(componentId, patch) =>
               onColliderChange(entity.id, componentId, patch)

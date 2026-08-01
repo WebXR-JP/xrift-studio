@@ -19,6 +19,7 @@ import { validateKhrInteractivityExtension } from "./interactivity-graph";
 import { isOpenBrushMaterialShader } from "./open-brush";
 import { isClassicR3fMaterialShader } from "./custom-shader-contract";
 import { normalizeParticleProperties } from "./particle-system";
+import { isTerrainGeometry } from "./terrain";
 import { isSerializableJsonValue } from "./component-registry";
 import {
   PREFAB_DOCUMENT_SCHEMA_VERSION,
@@ -1637,6 +1638,19 @@ function validatePrefabComponentShape(
       (typeof component.geometry.assetId !== "string" || !component.geometry.assetId)
     ) {
       issues.push(issue(`${path}.geometry.assetId`, "reference", "geometry asset is invalid"));
+    }
+    if (
+      isRecord(component.geometry) &&
+      component.geometry.kind === "terrain" &&
+      !isTerrainGeometry(component.geometry.terrain)
+    ) {
+      issues.push(
+        issue(
+          `${path}.geometry.terrain`,
+          "range",
+          "terrain height samples are invalid",
+        ),
+      );
     }
     if (
       isRecord(component.geometry) &&

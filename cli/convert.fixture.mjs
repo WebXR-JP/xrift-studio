@@ -32,6 +32,7 @@ import { runParticleRuntimeFixtureAssertions } from "../src/lib/visual-editor/sc
 import { runScriptLifecycleFixtureAssertions } from "../src/lib/visual-editor/scripting/lifecycle.fixture.ts";
 import { runScriptAudioFixtureAssertions } from "../src/lib/visual-editor/scripting/audio-runtime.fixture.ts";
 import { runAudioSourceRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source.fixture.ts";
+import { runRuntimeSchemaFixtureAssertions } from "../packages/xrift-studio-runtime/src/schema.fixture.ts";
 import { runScriptAudioSourceHostFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source-host.fixture.ts";
 import { runLightRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/light.fixture.ts";
 import { runScriptMaterialTextureFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/material-texture.fixture.ts";
@@ -39,6 +40,7 @@ import { runScriptTrustFixtureAssertions } from "../src/lib/visual-editor/script
 import { runScriptRuntimeReportFixtureAssertions } from "../src/lib/visual-editor/scripting/runtime-report.fixture.ts";
 import { runScriptEmitFixtureAssertions } from "../src/lib/visual-editor/compiler/script-emit.fixture.ts";
 import { runBasisTranscoderFixtureAssertions } from "../src/lib/visual-editor/basis-transcoder.fixture.ts";
+import { runTerrainFixtureAssertions } from "../src/lib/visual-editor/terrain.fixture.ts";
 
 const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "xrift-studio-convert-"));
 const previousXriftBin = process.env.XRIFT_STUDIO_XRIFT_BIN;
@@ -130,6 +132,8 @@ try {
   }
   assert(modifiedRejected, "--update must reject a modified Classic export");
   runVisualCompilerFixtureAssertions();
+  runTerrainFixtureAssertions();
+  runRuntimeSchemaFixtureAssertions();
   runXriftMcpEditorToolFixtures();
   runPlaySessionFixtureAssertions();
   runScriptSpecifierFixtureAssertions();

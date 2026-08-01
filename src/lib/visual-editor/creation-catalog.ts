@@ -19,6 +19,10 @@ export type BuiltinPrimitiveCreationDefinition = {
   materialSlots: MaterialSlotDefinition[];
   castShadow: boolean;
   receiveShadow: boolean;
+  /** Cards and other purely visual primitives do not need a physics shape. */
+  addCollider: boolean;
+  /** Texture-card presets are created from the matching Texture Inspector. */
+  showInCreateMenu: boolean;
 };
 
 export const BUILTIN_PRIMITIVE_CREATION_IDS = {
@@ -27,6 +31,8 @@ export const BUILTIN_PRIMITIVE_CREATION_IDS = {
   cylinder: "builtin-primitive/cylinder",
   cone: "builtin-primitive/cone",
   plane: "builtin-primitive/plane",
+  backdropCard: "builtin-primitive/backdrop-card",
+  grassCard: "builtin-primitive/grass-card",
 } as const;
 
 export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
@@ -64,6 +70,42 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
     "ワールドの土台として配置できる床",
     "plane",
     "#94a3b8",
+  ),
+  createDefinition(
+    BUILTIN_PRIMITIVE_CREATION_IDS.backdropCard,
+    "遠景カード",
+    "半透明テクスチャを使う、遠景向けの両面カード",
+    "plane",
+    "#7dd3fc",
+    {
+      defaultTransform: {
+        position: [0, 5.5, -18],
+        rotation: [0, 0, 0],
+        scale: [20, 11, 1],
+      },
+      castShadow: false,
+      receiveShadow: false,
+      addCollider: false,
+      showInCreateMenu: false,
+    },
+  ),
+  createDefinition(
+    BUILTIN_PRIMITIVE_CREATION_IDS.grassCard,
+    "草カード",
+    "半透明テクスチャを使う、草や花向けの両面カード",
+    "plane",
+    "#86efac",
+    {
+      defaultTransform: {
+        position: [0, 1.2, 0],
+        rotation: [0, 0, 0],
+        scale: [1.5, 2.4, 1],
+      },
+      castShadow: false,
+      receiveShadow: false,
+      addCollider: false,
+      showInCreateMenu: false,
+    },
   ),
 ] satisfies readonly BuiltinPrimitiveCreationDefinition[];
 
@@ -105,6 +147,16 @@ function createDefinition(
   description: string,
   primitive: PrimitiveGeometry,
   previewColor: string,
+  options: Partial<
+    Pick<
+      BuiltinPrimitiveCreationDefinition,
+      | "defaultTransform"
+      | "castShadow"
+      | "receiveShadow"
+      | "addCollider"
+      | "showInCreateMenu"
+    >
+  > = {},
 ): BuiltinPrimitiveCreationDefinition {
   const isPlane = primitive === "plane";
   return {
@@ -113,19 +165,23 @@ function createDefinition(
     description,
     primitive,
     previewColor,
-    defaultTransform: isPlane
-      ? {
-          position: [0, 0, 0],
-          rotation: [-Math.PI / 2, 0, 0],
-          scale: [6, 6, 6],
-        }
-      : {
-          position: [0, 0.5, 0],
-          rotation: [0, 0, 0],
-          scale: [1, 1, 1],
-        },
+    defaultTransform:
+      options.defaultTransform ??
+      (isPlane
+        ? {
+            position: [0, 0, 0],
+            rotation: [-Math.PI / 2, 0, 0],
+            scale: [6, 6, 6],
+          }
+        : {
+            position: [0, 0.5, 0],
+            rotation: [0, 0, 0],
+            scale: [1, 1, 1],
+          }),
     materialSlots: [{ slot: "default", name: "Default" }],
-    castShadow: !isPlane,
-    receiveShadow: true,
+    castShadow: options.castShadow ?? !isPlane,
+    receiveShadow: options.receiveShadow ?? true,
+    addCollider: options.addCollider ?? true,
+    showInCreateMenu: options.showInCreateMenu ?? true,
   };
 }
