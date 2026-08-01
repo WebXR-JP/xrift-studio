@@ -457,7 +457,113 @@ export function HierarchyPanel({
     y: number;
     entityId: string | null;
   } | null>(null);
+  const [contextMenuSearchQuery, setContextMenuSearchQuery] = useState("");
+  const contextMenuSearchTerms = contextMenuSearchQuery
+    .trim()
+    .toLocaleLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  const searchingContextMenu = contextMenuSearchTerms.length > 0;
+  const matchesContextMenuSearch = (...values: Array<string | undefined>) => {
+    if (!searchingContextMenu) return true;
+    const text = values
+      .filter((value): value is string => Boolean(value))
+      .join(" ")
+      .toLocaleLowerCase();
+    return contextMenuSearchTerms.every((term) => text.includes(term));
+  };
+  const contextMenuSearchResultCount =
+    Number(
+      matchesContextMenuSearch(
+        "Empty Entity Transform scene object entity",
+      ),
+    ) +
+    BUILTIN_PRIMITIVE_CREATION_CATALOG.filter((entry) =>
+      matchesContextMenuSearch(
+        entry.name,
+        entry.description,
+        entry.creationId,
+        "primitive scene object entity",
+      ),
+    ).length +
+    getEditorComponentMenuDefinitions(projectKind).filter((definition) =>
+      matchesContextMenuSearch(
+        definition.label,
+        definition.id,
+        definition.category,
+        "component",
+      ),
+    ).length +
+    getXriftComponentMenuGroups(projectKind).flatMap((group) =>
+      group.components.filter((definition) =>
+        matchesContextMenuSearch(
+          definition.label,
+          definition.description,
+          definition.schemaId,
+          definition.importName,
+          group.label,
+          "xrift component",
+        ),
+      ),
+    ).length +
+    builtinPrefabRecipes.filter((recipe) =>
+      matchesContextMenuSearch(
+        recipe.name,
+        recipe.description,
+        recipe.id,
+        recipe.configuration?.hint,
+        "xrift prefab entity",
+      ),
+    ).length;
+  const contextMenuComponentResultCount = getEditorComponentMenuDefinitions(
+    projectKind,
+  ).filter((definition) =>
+    matchesContextMenuSearch(
+      definition.label,
+      definition.id,
+      definition.category,
+      "component",
+    ),
+  ).length;
+  const contextMenuXriftComponentResultCount = getXriftComponentMenuGroups(
+    projectKind,
+  ).flatMap((group) =>
+    group.components.filter((definition) =>
+      matchesContextMenuSearch(
+        definition.label,
+        definition.description,
+        definition.schemaId,
+        definition.importName,
+        group.label,
+        "xrift component",
+      ),
+    ),
+  ).length;
+  const contextMenuPrefabResultCount = builtinPrefabRecipes.filter((recipe) =>
+    matchesContextMenuSearch(
+      recipe.name,
+      recipe.description,
+      recipe.id,
+      recipe.configuration?.hint,
+      "xrift prefab entity",
+    ),
+  ).length;
+  const contextMenuSceneObjectResultCount =
+    Number(
+      matchesContextMenuSearch(
+        "Empty Entity Transform scene object entity",
+      ),
+    ) +
+    BUILTIN_PRIMITIVE_CREATION_CATALOG.filter((entry) =>
+      matchesContextMenuSearch(
+        entry.name,
+        entry.description,
+        entry.creationId,
+        "primitive scene object entity",
+      ),
+    ).length;
   const panelRef = useRef<HTMLElement>(null);
+  const contextMenuSearchInputRef = useRef<HTMLInputElement>(null);
   const entityButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const [renameDraft, setRenameDraft] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -725,6 +831,10 @@ export function HierarchyPanel({
     setAssetDropTarget(null);
   }, [readOnly]);
 
+  useEffect(() => {
+    if (contextMenu) contextMenuSearchInputRef.current?.focus();
+  }, [contextMenu]);
+
   const openContextMenu = (
     event: MouseEvent<HTMLElement>,
     entityId: string | null = null,
@@ -738,6 +848,7 @@ export function HierarchyPanel({
       y: Math.min(event.clientY - bounds.top, Math.max(8, bounds.height - 196)),
       entityId,
     });
+    setContextMenuSearchQuery("");
   };
 
   const handleMaterialDrop = (event: DragEvent<HTMLElement>, entityId: string) => {
@@ -1485,6 +1596,38 @@ export function HierarchyPanel({
           <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
             Entity
           </p>
+          <label className="relative mb-1 block px-1">
+            <span className="sr-only">追加するComponentやEntityを検索</span>
+            <input
+              ref={contextMenuSearchInputRef}
+              type="search"
+              value={contextMenuSearchQuery}
+              onChange={(event) => setContextMenuSearchQuery(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Escape" || !contextMenuSearchQuery) return;
+                event.preventDefault();
+                event.stopPropagation();
+                setContextMenuSearchQuery("");
+              }}
+              placeholder="Component・Entityを検索…"
+              className="h-8 w-full rounded border border-slate-300 bg-white px-2 pr-14 text-xs text-slate-800 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
+            />
+            {searchingContextMenu ? (
+              <button
+                type="button"
+                onClick={() => setContextMenuSearchQuery("")}
+                className="absolute right-2 top-1.5 rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                aria-label="追加候補の検索をクリア"
+              >
+                クリア
+              </button>
+            ) : null}
+          </label>
+          {searchingContextMenu && contextMenuSearchResultCount === 0 ? (
+            <p className="px-2 py-4 text-center text-xs leading-5 text-slate-500">
+              「{contextMenuSearchQuery.trim()}」に一致するComponentまたはEntityはありません。
+            </p>
+          ) : null}
           {contextMenu.entityId ? (
             <>
               {([
@@ -1523,6 +1666,7 @@ export function HierarchyPanel({
                 );
               })}
               <div className="my-1 border-t border-slate-200" />
+              {!searchingContextMenu || contextMenuComponentResultCount > 0 ? (
               <details open className="overflow-hidden rounded border border-slate-200">
                 <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
                   Add Component ({getEditorComponentMenuDefinitions(projectKind).length})
@@ -1532,10 +1676,22 @@ export function HierarchyPanel({
                     (category) => {
                       const definitions = getEditorComponentMenuDefinitions(
                         projectKind,
-                      ).filter((definition) => definition.category === category);
+                      ).filter(
+                        (definition) =>
+                          definition.category === category &&
+                          matchesContextMenuSearch(
+                            definition.label,
+                            definition.id,
+                            definition.category,
+                            "component",
+                          ),
+                      );
                       if (definitions.length === 0) return null;
                       return (
-                        <details key={category} open={category === "rendering"}>
+                        <details
+                          key={category}
+                          open={searchingContextMenu || category === "rendering"}
+                        >
                           <summary className="cursor-pointer select-none rounded px-1.5 py-1 text-xs font-medium capitalize text-slate-500 hover:bg-slate-50">
                             {category} ({definitions.length})
                           </summary>
@@ -1584,9 +1740,11 @@ export function HierarchyPanel({
                   )}
                 </div>
               </details>
+              ) : null}
             </>
           ) : null}
           {!contextMenu.entityId ? (
+            !searchingContextMenu || contextMenuComponentResultCount > 0 ? (
             <details open className="overflow-hidden rounded border border-slate-200">
               <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
                 Add Component ({getEditorComponentMenuDefinitions(projectKind).length})
@@ -1596,10 +1754,22 @@ export function HierarchyPanel({
                   (category) => {
                     const definitions = getEditorComponentMenuDefinitions(
                       projectKind,
-                    ).filter((definition) => definition.category === category);
+                    ).filter(
+                      (definition) =>
+                        definition.category === category &&
+                        matchesContextMenuSearch(
+                          definition.label,
+                          definition.id,
+                          definition.category,
+                          "component",
+                        ),
+                    );
                     if (definitions.length === 0) return null;
                     return (
-                      <details key={category} open={category === "rendering"}>
+                      <details
+                        key={category}
+                        open={searchingContextMenu || category === "rendering"}
+                      >
                         <summary className="cursor-pointer select-none rounded px-1.5 py-1 text-xs font-medium capitalize text-slate-500 hover:bg-slate-50">
                           {category} ({definitions.length})
                         </summary>
@@ -1638,23 +1808,39 @@ export function HierarchyPanel({
                 )}
               </div>
             </details>
+            ) : null
           ) : null}
           <div className="my-1 border-t border-slate-200" />
+          {!searchingContextMenu || contextMenuXriftComponentResultCount > 0 ? (
           <details className="overflow-hidden rounded border border-slate-200">
             <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-              XRift Component ({getXriftComponentMenuGroups(projectKind).reduce(
+              XRift Component ({searchingContextMenu
+                ? contextMenuXriftComponentResultCount
+                : getXriftComponentMenuGroups(projectKind).reduce(
                 (count, group) => count + group.components.length,
                 0,
               )})
             </summary>
             <div className="space-y-1 border-t border-slate-100 p-1">
-              {getXriftComponentMenuGroups(projectKind).map((group) => (
-                <details key={group.category}>
+              {getXriftComponentMenuGroups(projectKind).map((group) => {
+                const definitions = group.components.filter((definition) =>
+                  matchesContextMenuSearch(
+                    definition.label,
+                    definition.description,
+                    definition.schemaId,
+                    definition.importName,
+                    group.label,
+                    "xrift component",
+                  ),
+                );
+                if (definitions.length === 0) return null;
+                return (
+                <details key={group.category} open={searchingContextMenu}>
                   <summary className="cursor-pointer select-none rounded px-1.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50">
-                    {group.label} ({group.components.length})
+                    {group.label} ({definitions.length})
                   </summary>
                   <div className="space-y-0.5 pl-1">
-                    {group.components.map((definition) => {
+                    {definitions.map((definition) => {
                       const DefinitionIcon = EDITOR_ICONS[definition.icon];
                       const entity = contextMenu.entityId
                         ? scene.entities[contextMenu.entityId]
@@ -1710,16 +1896,27 @@ export function HierarchyPanel({
                     })}
                   </div>
                 </details>
-              ))}
+                );
+              })}
             </div>
           </details>
+          ) : null}
           <div className="my-1 border-t border-slate-200" />
+          {!searchingContextMenu || contextMenuPrefabResultCount > 0 ? (
           <details className="overflow-hidden rounded border border-slate-200">
             <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-              XRift Prefab ({builtinPrefabRecipes.length})
+              XRift Prefab ({searchingContextMenu ? contextMenuPrefabResultCount : builtinPrefabRecipes.length})
             </summary>
             <div className="space-y-0.5 border-t border-slate-100 p-1">
-              {builtinPrefabRecipes.map((recipe) => {
+              {builtinPrefabRecipes.filter((recipe) =>
+                matchesContextMenuSearch(
+                  recipe.name,
+                  recipe.description,
+                  recipe.id,
+                  recipe.configuration?.hint,
+                  "xrift prefab entity",
+                ),
+              ).map((recipe) => {
                 const definition = getXriftComponentDefinition(recipe.schemaId);
                 const DefinitionIcon = definition
                   ? EDITOR_ICONS[definition.icon]
@@ -1749,13 +1946,15 @@ export function HierarchyPanel({
               })}
             </div>
           </details>
+          ) : null}
           <div className="my-1 border-t border-slate-200" />
+          {!searchingContextMenu || contextMenuSceneObjectResultCount > 0 ? (
           <details open className="overflow-hidden rounded border border-slate-200">
             <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-              Scene Object ({BUILTIN_PRIMITIVE_CREATION_CATALOG.length + 1})
+              Scene Object ({searchingContextMenu ? contextMenuSceneObjectResultCount : BUILTIN_PRIMITIVE_CREATION_CATALOG.length + 1})
             </summary>
             <div className="space-y-0.5 border-t border-slate-100 p-1">
-              <button
+              {matchesContextMenuSearch("Empty Entity Transform scene object entity") ? <button
                 type="button"
                 disabled={readOnly}
                 onClick={() => {
@@ -1773,8 +1972,15 @@ export function HierarchyPanel({
               >
                 <EDITOR_ICONS.sceneEntity size={14} aria-hidden="true" />
                 Empty Entity
-              </button>
-              {BUILTIN_PRIMITIVE_CREATION_CATALOG.map((entry) => (
+              </button> : null}
+              {BUILTIN_PRIMITIVE_CREATION_CATALOG.filter((entry) =>
+                matchesContextMenuSearch(
+                  entry.name,
+                  entry.description,
+                  entry.creationId,
+                  "primitive scene object entity",
+                ),
+              ).map((entry) => (
                 <button
                   key={entry.creationId}
                   type="button"
@@ -1794,6 +2000,7 @@ export function HierarchyPanel({
               ))}
             </div>
           </details>
+          ) : null}
         </div>
       ) : null}
     </aside>

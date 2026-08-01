@@ -2610,9 +2610,49 @@ function EntityInspector({
 }) {
   const transform = getTransform(entity);
   const [addComponentOpen, setAddComponentOpen] = useState(false);
+  const [addComponentSearchQuery, setAddComponentSearchQuery] = useState("");
+  const addComponentSearchInputRef = useRef<HTMLInputElement>(null);
   const [scaleLinked, setScaleLinked] = useState(true);
   const registeredComponents = entity.components as RegisteredSceneComponent[];
   const liveRuntimeTuning = readOnly && playMode;
+  const addComponentSearchTerms = addComponentSearchQuery
+    .trim()
+    .toLocaleLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  const searchingComponents = addComponentSearchTerms.length > 0;
+  const matchesComponentSearch = (...values: Array<string | undefined>) => {
+    if (!searchingComponents) return true;
+    const text = values
+      .filter((value): value is string => Boolean(value))
+      .join(" ")
+      .toLocaleLowerCase();
+    return addComponentSearchTerms.every((term) => text.includes(term));
+  };
+  const componentSearchResultCount =
+    getEditorComponentMenuDefinitions(projectKind).filter((definition) =>
+      matchesComponentSearch(
+        definition.label,
+        definition.id,
+        definition.category,
+        "component",
+      ),
+    ).length +
+    getXriftComponentMenuGroups(projectKind).flatMap((group) =>
+      group.components.filter((definition) =>
+        matchesComponentSearch(
+          definition.label,
+          definition.description,
+          definition.schemaId,
+          definition.importName,
+          group.label,
+          "xrift component",
+        ),
+      ),
+    ).length;
+  useEffect(() => {
+    if (addComponentOpen) addComponentSearchInputRef.current?.focus();
+  }, [addComponentOpen]);
   const disabledAncestor = (() => {
     const visited = new Set<string>([entity.id]);
     let parentId = entity.parentId;
@@ -2931,25 +2971,67 @@ function EntityInspector({
           type="button"
           disabled={readOnly && !playMode}
           aria-expanded={addComponentOpen}
-          onClick={() => setAddComponentOpen((open) => !open)}
+          onClick={() => {
+            setAddComponentOpen((open) => !open);
+            if (addComponentOpen) setAddComponentSearchQuery("");
+          }}
           className="w-full rounded-md border border-violet-300 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-45"
         >
           Add Component
         </button>
         {addComponentOpen ? (
           <div className="mt-2 max-h-80 space-y-1 overflow-y-auto rounded-md border border-slate-300 bg-white p-1 shadow-lg">
+            <label className="relative block px-1 pb-1">
+              <span className="sr-only">追加するComponentを検索</span>
+              <input
+                ref={addComponentSearchInputRef}
+                type="search"
+                value={addComponentSearchQuery}
+                onChange={(event) => setAddComponentSearchQuery(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Escape" || !addComponentSearchQuery) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setAddComponentSearchQuery("");
+                }}
+                placeholder="Componentを検索…"
+                className="h-8 w-full rounded border border-slate-300 bg-white px-2 pr-14 text-xs text-slate-800 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
+              />
+              {searchingComponents ? (
+                <button
+                  type="button"
+                  onClick={() => setAddComponentSearchQuery("")}
+                  className="absolute right-2 top-1.5 rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                  aria-label="Componentの検索をクリア"
+                >
+                  クリア
+                </button>
+              ) : null}
+            </label>
+            {searchingComponents && componentSearchResultCount === 0 ? (
+              <p className="px-2 py-4 text-center text-xs leading-5 text-slate-500">
+                「{addComponentSearchQuery.trim()}」に一致するComponentはありません。
+              </p>
+            ) : null}
             {EDITOR_COMPONENT_CATEGORY_ORDER.map(
               (category) => {
                 const definitions = getEditorComponentMenuDefinitions(
                   projectKind,
                 ).filter(
-                  (definition) => definition.category === category,
+                  (definition) =>
+                    definition.category === category &&
+                    matchesComponentSearch(
+                      definition.label,
+                      definition.id,
+                      definition.category,
+                      "component",
+                    ),
                 );
                 if (definitions.length === 0) return null;
                 return (
                   <details
                     key={category}
-                    open={category === "rendering"}
+                    open={searchingComponents || category === "rendering"}
                     className="overflow-hidden rounded border border-slate-200"
                   >
                     <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold capitalize text-slate-600 hover:bg-slate-100">
@@ -2973,6 +3055,7 @@ function EntityInspector({
                           onClick={() => {
                             onAddComponent(definition.id);
                             setAddComponentOpen(false);
+                            setAddComponentSearchQuery("");
                           }}
                           className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:text-slate-400"
                         >
@@ -2989,16 +3072,29 @@ function EntityInspector({
                 );
               },
             )}
-            {getXriftComponentMenuGroups(projectKind).map((group) => (
-              <details
-                key={`xrift-${group.category}`}
-                className="overflow-hidden rounded border border-slate-200"
-              >
-                <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-                  XRift {group.label} <span className="text-slate-400">({group.components.length})</span>
-                </summary>
-                <div className="space-y-0.5 border-t border-slate-100 p-1">
-                  {group.components.map((definition) => {
+            {getXriftComponentMenuGroups(projectKind).map((group) => {
+              const definitions = group.components.filter((definition) =>
+                matchesComponentSearch(
+                  definition.label,
+                  definition.description,
+                  definition.schemaId,
+                  definition.importName,
+                  group.label,
+                  "xrift component",
+                ),
+              );
+              if (definitions.length === 0) return null;
+              return (
+                <details
+                  key={`xrift-${group.category}`}
+                  open={searchingComponents}
+                  className="overflow-hidden rounded border border-slate-200"
+                >
+                  <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                    XRift {group.label} <span className="text-slate-400">({definitions.length})</span>
+                  </summary>
+                  <div className="space-y-0.5 border-t border-slate-100 p-1">
+                  {definitions.map((definition) => {
                     const DefinitionIcon = EDITOR_ICONS[definition.icon];
                     const duplicate =
                       !definition.allowMultiplePerEntity &&
@@ -3015,6 +3111,7 @@ function EntityInspector({
                         onClick={() => {
                           onAddComponent(definition.schemaId);
                           setAddComponentOpen(false);
+                          setAddComponentSearchQuery("");
                         }}
                         className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:text-slate-400"
                       >
@@ -3026,9 +3123,10 @@ function EntityInspector({
                       </button>
                     );
                   })}
-                </div>
-              </details>
-            ))}
+                  </div>
+                </details>
+              );
+            })}
           </div>
         ) : null}
       </div>
