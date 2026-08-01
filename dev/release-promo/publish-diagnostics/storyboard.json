@@ -1,0 +1,102 @@
+{
+  "id": "publish-diagnostics-working-tree-demo",
+  "status": "review-draft",
+  "from": "HEAD",
+  "to": "working tree",
+  "format": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "durationInFrames": 540
+  },
+  "sourceNotes": [
+    "source/visual-editor-screenshot.png is an existing XRift Studio Visual Editor screenshot.",
+    "The diagnostic card is a labeled display example derived from src/lib/visual-editor/publish.ts; it is not a captured app state yet."
+  ],
+  "scenes": [
+    {
+      "id": "hook",
+      "kind": "hook",
+      "durationInFrames": 75,
+      "claim": "公開処理の失敗理由と復旧方法が、次の一手まで分かる",
+      "caption": "公開エラーの次の一手まで、見えるように",
+      "doneWhen": "冒頭だけで今回の改善内容が伝わる"
+    },
+    {
+      "id": "upload-focus",
+      "kind": "screen-focus",
+      "durationInFrames": 150,
+      "source": {
+        "type": "image",
+        "src": "source/visual-editor-screenshot.png",
+        "width": 1280,
+        "height": 720
+      },
+      "claim": "Visual Editorから公開操作へ進める",
+      "caption": "作ったワールドを、そのまま公開へ",
+      "pointer": {
+        "from": { "x": 0.61, "y": 0.49 },
+        "to": { "x": 0.94, "y": 0.02 },
+        "moveStartFrame": 28,
+        "moveDurationInFrames": 18,
+        "clickAtFrame": 64,
+        "scale": 1.9
+      },
+      "focus": {
+        "x": 0.94,
+        "y": 0.02,
+        "scale": 1.28,
+        "startFrame": 51,
+        "durationInFrames": 24,
+        "holdInFrames": 32
+      },
+      "doneWhen": "実画面の公開ボタンと、操作対象への視線誘導が読み取れる"
+    },
+    {
+      "id": "diagnostic-display-example",
+      "kind": "proof",
+      "durationInFrames": 195,
+      "claim": "stderrだけでなくstdoutも保持し、復旧方法まで案内する",
+      "caption": "原因だけでなく、直し方まで案内",
+      "displayLabel": "表示例・リリース前デモ",
+      "errorTitle": "XRiftテンプレートの作成に失敗しました",
+      "errorRecovery": "テンプレートを取得できませんでした。ネットワーク接続、GitHubへのアクセス、プロキシ設定を確認してから再試行してください。",
+      "errorDetail": "GitHub returned 403 for the requested template",
+      "pointer": {
+        "from": { "x": 0.48, "y": 0.58 },
+        "to": { "x": 0.72, "y": 0.56 },
+        "moveStartFrame": 42,
+        "moveDurationInFrames": 14,
+        "clickAtFrame": 105,
+        "scale": 1.75
+      },
+      "focus": {
+        "x": 0.72,
+        "y": 0.56,
+        "scale": 1.38,
+        "startFrame": 75,
+        "durationInFrames": 24,
+        "holdInFrames": 45
+      },
+      "doneWhen": "表示例であることと、原因・復旧案内・stdout保持の改善が同時に伝わる"
+    },
+    {
+      "id": "before-after",
+      "kind": "before-after",
+      "durationInFrames": 75,
+      "claim": "失敗時の診断情報を捨てず、対応につなげる",
+      "caption": "失敗しても、次に進める",
+      "before": "- Downloading template...",
+      "after": "403の原因と、GitHubへのアクセス確認を表示",
+      "doneWhen": "改善前後の差分が一目で分かる"
+    },
+    {
+      "id": "cta",
+      "kind": "cta",
+      "durationInFrames": 45,
+      "claim": "公開フローを止めずに再試行できる",
+      "caption": "原因を確認して、もう一度公開へ",
+      "doneWhen": "次のアクションが分かる"
+    }
+  ]
+}

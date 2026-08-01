@@ -1,0 +1,21 @@
+{
+  "name": "xrift-publish-diagnostics-promo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render PublishDiagnostics out/publish-diagnostics.mp4",
+    "still": "remotion still PublishDiagnostics --frame=230 out/publish-diagnostics-frame.png"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.503",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "remotion": "4.0.503"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.9.3"
+  }
+}
