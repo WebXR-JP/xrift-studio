@@ -245,6 +245,9 @@ function resolveRuntimeGeometry(
       depth: component.geometry.terrain.depth,
       resolution: component.geometry.terrain.resolution,
       heights: [...component.geometry.terrain.heights],
+      ...(component.geometry.terrain.holes
+        ? { holes: [...component.geometry.terrain.holes] }
+        : {}),
     };
   }
   if (component.geometry?.kind === "builtin-primitive") {

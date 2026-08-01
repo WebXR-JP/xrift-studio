@@ -10,6 +10,7 @@ import {
   applyTerrainBrush,
   createTerrainGeometry,
   createTerrainMeshBuffers,
+  resampleTerrainGeometry,
   terrainHeightRange,
 } from "./terrain";
 
@@ -73,6 +74,52 @@ export function runTerrainFixtureAssertions(): void {
   assert(
     (smoothed.heights[centerIndex] ?? 6) < (peak.heights[centerIndex] ?? 0),
     "Smooth must reduce an isolated peak",
+  );
+  const stamped = applyTerrainBrush(flat, {
+    kind: "stamp",
+    center: [0, 0],
+    radius: 2,
+    strength: 1,
+    targetHeight: 4,
+    falloff: 0,
+  });
+  assert(
+    stamped.heights[centerIndex] === 4,
+    "Stamp must set a hard brush center to the requested height",
+  );
+  const holed = applyTerrainBrush(flat, {
+    kind: "hole-add",
+    center: [0, 0],
+    radius: 1.5,
+    strength: 1,
+  });
+  const holedBuffers = createTerrainMeshBuffers(holed);
+  assert(
+    holed.holes?.some(Boolean) && holedBuffers.indices.length < buffers.indices.length,
+    "Paint Holes must remove cells from the actual Terrain mesh",
+  );
+  const filled = applyTerrainBrush(holed, {
+    kind: "hole-remove",
+    center: [0, 0],
+    radius: 1.5,
+    strength: 1,
+  });
+  assert(
+    filled.holes?.every((hole) => !hole) &&
+      createTerrainMeshBuffers(filled).indices.length === buffers.indices.length,
+    "Fill Holes must restore the Terrain cells",
+  );
+  const resampled = resampleTerrainGeometry(stamped, {
+    width: 12,
+    depth: 10,
+    resolution: 17,
+  });
+  assert(
+    resampled.width === 12 &&
+      resampled.depth === 10 &&
+      resampled.resolution === 17 &&
+      resampled.heights.length === 17 * 17,
+    "Terrain Settings must resample heights into the requested dimensions",
   );
 
   const project = createPrototypeProject("world", "terrain-fixture");

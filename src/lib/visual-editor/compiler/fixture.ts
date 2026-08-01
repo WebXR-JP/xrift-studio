@@ -141,8 +141,10 @@ export function runVisualCompilerFixtureAssertions(
     terrainResult.overlayFiles.find((file) => file.relativePath === "src/World.tsx")
       ?.content ?? "";
   assert(
-    terrainResult.canStage &&
+      terrainResult.canStage &&
       terrainSource.includes("function XriftTerrainGeometry") &&
+      terrainSource.includes("Float32BufferAttribute") &&
+      terrainSource.includes("terrain.holes?.[cell]") &&
       terrainSource.includes("<XriftTerrainGeometry terrain={{") &&
       terrainSource.includes('colliders="trimesh"'),
     "Terrain must compile with its generated geometry and fixed Trimesh Collider",

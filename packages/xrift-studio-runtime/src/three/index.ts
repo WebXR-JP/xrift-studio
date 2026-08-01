@@ -11,6 +11,7 @@ import {
   DirectionalLight,
   DoubleSide,
   FrontSide,
+  Float32BufferAttribute,
   Group,
   HemisphereLight,
   Light,
@@ -648,20 +649,36 @@ function createTerrainGeometry(terrain: {
   depth: number;
   resolution: number;
   heights: readonly number[];
+  holes?: readonly boolean[];
 }): BufferGeometry {
   const resolution = Math.max(2, Math.floor(terrain.resolution));
-  const geometry = new PlaneGeometry(
-    terrain.width,
-    terrain.depth,
-    resolution - 1,
-    resolution - 1,
-  );
-  geometry.rotateX(-Math.PI / 2);
-  const positions = geometry.getAttribute("position");
-  for (let index = 0; index < positions.count; index += 1) {
-    positions.setY(index, terrain.heights[index] ?? 0);
+  const positions = new Float32Array(resolution * resolution * 3);
+  const indices: number[] = [];
+  const xStep = terrain.width / (resolution - 1);
+  const zStep = terrain.depth / (resolution - 1);
+  for (let z = 0; z < resolution; z += 1) {
+    for (let x = 0; x < resolution; x += 1) {
+      const vertex = z * resolution + x;
+      const offset = vertex * 3;
+      positions[offset] = x * xStep - terrain.width / 2;
+      positions[offset + 1] = terrain.heights[vertex] ?? 0;
+      positions[offset + 2] = z * zStep - terrain.depth / 2;
+    }
   }
-  positions.needsUpdate = true;
+  for (let z = 0; z < resolution - 1; z += 1) {
+    for (let x = 0; x < resolution - 1; x += 1) {
+      const cell = z * (resolution - 1) + x;
+      if (terrain.holes?.[cell]) continue;
+      const topLeft = z * resolution + x;
+      const topRight = topLeft + 1;
+      const bottomLeft = topLeft + resolution;
+      const bottomRight = bottomLeft + 1;
+      indices.push(topLeft, bottomLeft, topRight, topRight, bottomLeft, bottomRight);
+    }
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
   geometry.computeVertexNormals();
   return geometry;
 }

@@ -135,6 +135,7 @@ import {
   type SceneDocument,
   type TextureAssetPatch,
   type TextureCardProfile,
+  type TerrainViewportEditing,
   type TextPatch,
   type TransformPatch,
   type UpdateXriftComponentPatch,
@@ -1759,6 +1760,8 @@ export function VisualEditorPrototype({
     },
     [setBundle],
   );
+  const [terrainEditing, setTerrainEditing] =
+    useState<TerrainViewportEditing | null>(null);
   shaderSourceSavedRef.current = handleShaderSourceSaved;
 
   const closeShaderEditor = useCallback(() => {
@@ -5420,13 +5423,26 @@ export function VisualEditorPrototype({
   );
 
   const markEditorDirty = useCallback(() => setSaveStatus("dirty"), []);
-  const { handleCreateTerrain, handleTerrainBrush } = useTerrainAuthoring({
+  const {
+    handleCreateTerrain,
+    handleTerrainBrush,
+    handleTerrainSettings,
+    handleTerrainStrokeStart,
+    handleTerrainStroke,
+    handleTerrainStrokeEnd,
+    handleTerrainStrokeCancel,
+  } = useTerrainAuthoring({
     editorMode,
     importBusy,
+    historyPresent: history.present,
     setHistory,
     notify: setNotice,
     markDirty: markEditorDirty,
     touchProject,
+    saveStatus,
+    setSaveStatus,
+    bundleRef,
+    lastSavedBundleRef,
   });
 
   const handleOptimizeColliders = useCallback(
@@ -8430,6 +8446,11 @@ export function VisualEditorPrototype({
             onPlayDropAttempt={() => setNotice("Play中もHierarchyまたは追加メニューからEntityを配置できます")}
             onDropRejected={setNotice}
             onOptimizeColliders={handleOptimizeColliders}
+            terrainEditing={terrainEditing}
+            onTerrainStrokeStart={handleTerrainStrokeStart}
+            onTerrainStroke={handleTerrainStroke}
+            onTerrainStrokeEnd={handleTerrainStrokeEnd}
+            onTerrainStrokeCancel={handleTerrainStrokeCancel}
             thumbnailCaptureRequest={thumbnailCaptureRequest}
             onThumbnailCaptured={onThumbnailCaptured}
             onThumbnailCaptureError={onThumbnailCaptureError}
@@ -8455,6 +8476,8 @@ export function VisualEditorPrototype({
             onTransformScrubCancel={handleTransformScrubCancel}
             onMeshChange={handleMeshChange}
             onTerrainBrush={handleTerrainBrush}
+            onTerrainSettings={handleTerrainSettings}
+            onTerrainEditingChange={setTerrainEditing}
             onColliderChange={handleColliderChange}
             onRigidBodyChange={handleRigidBodyChange}
             onAutoFitCollider={handleAutoFitCollider}
