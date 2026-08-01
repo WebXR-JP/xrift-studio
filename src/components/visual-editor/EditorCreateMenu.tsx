@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -68,9 +69,16 @@ export function EditorCreateMenu({
   onAddComponent,
 }: Props) {
   const [page, setPage] = useState<CreateMenuPage>("root");
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!open) setPage("root");
+    if (!open) {
+      setPage("root");
+      setSearchQuery("");
+      return;
+    }
+    searchInputRef.current?.focus();
   }, [open]);
 
   useEffect(() => {
@@ -78,11 +86,15 @@ export function EditorCreateMenu({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
+      if (searchQuery) {
+        setSearchQuery("");
+        return;
+      }
       onClose();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, open]);
+  }, [onClose, open, searchQuery]);
 
   const componentGroups = useMemo(() => {
     const definitions = getEditorComponentMenuDefinitions(projectKind);
@@ -100,6 +112,77 @@ export function EditorCreateMenu({
     () => getXriftComponentMenuGroups(projectKind),
     [projectKind],
   );
+
+  const searchTerms = searchQuery
+    .trim()
+    .toLocaleLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  const searching = searchTerms.length > 0;
+  const matchesSearch = (...values: Array<string | undefined>) => {
+    if (!searching) return true;
+    const text = values
+      .filter((value): value is string => Boolean(value))
+      .join(" ")
+      .toLocaleLowerCase();
+    return searchTerms.every((term) => text.includes(term));
+  };
+  const visiblePrimitives = BUILTIN_PRIMITIVE_CREATION_CATALOG.filter(
+    (entry) =>
+      entry.showInCreateMenu &&
+      matchesSearch(
+        entry.name,
+        entry.description,
+        entry.creationId,
+        "primitive scene object entity",
+      ),
+  );
+  const visibleBuiltinPrefabs = builtinPrefabRecipes.filter((recipe) =>
+    matchesSearch(
+      recipe.name,
+      recipe.description,
+      recipe.id,
+      recipe.configuration?.hint,
+      "xrift prefab entity",
+    ),
+  );
+  const visibleXriftComponents = xriftGroups.flatMap((group) =>
+    group.components
+      .filter((definition) =>
+        matchesSearch(
+          definition.label,
+          definition.description,
+          definition.schemaId,
+          definition.importName,
+          group.label,
+          "xrift component",
+        ),
+      )
+      .map((definition) => ({ definition, group })),
+  );
+  const visibleComponents = componentGroups.flatMap(([category, definitions]) =>
+    definitions
+      .filter((definition) =>
+        matchesSearch(
+          definition.label,
+          definition.id,
+          CATEGORY_LABELS[category],
+          "component",
+        ),
+      )
+      .map((definition) => ({ definition, category })),
+  );
+  const emptyEntityMatches = matchesSearch(
+    "Empty Entity Transform scene object entity",
+  );
+  const terrainMatches = matchesSearch("地形 Terrain heightmap scene object entity");
+  const searchResultCount =
+    Number(emptyEntityMatches) +
+    Number(terrainMatches) +
+    visiblePrimitives.length +
+    visibleBuiltinPrefabs.length +
+    visibleXriftComponents.length +
+    visibleComponents.length;
 
   if (!open) return null;
 
@@ -141,7 +224,9 @@ export function EditorCreateMenu({
         ) : null}
         <div className="min-w-0 flex-1">
           <div className="text-xs font-semibold text-slate-900">
-            {page === "root"
+            {searching
+              ? "検索結果"
+              : page === "root"
               ? "Create"
               : page === "primitive"
                 ? "Primitive"
@@ -150,7 +235,9 @@ export function EditorCreateMenu({
                   : "Component"}
           </div>
           <div className="truncate text-[11px] text-slate-500">
-            {page === "root"
+            {searching
+              ? `「${searchQuery.trim()}」に一致する追加候補`
+              : page === "root"
               ? "Sceneへ作成するものを選びます"
               : page === "xrift"
                 ? selectedEntity
@@ -165,8 +252,209 @@ export function EditorCreateMenu({
         </div>
       </header>
 
+      <div className="shrink-0 border-b border-slate-200 bg-white p-2">
+        <label className="relative block">
+          <span className="sr-only">追加するComponentやEntityを検索</span>
+          <input
+            ref={searchInputRef}
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.currentTarget.value)}
+            placeholder="Component・Entityを検索…"
+            className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 pr-14 text-xs text-slate-800 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
+          />
+          {searching ? (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-1 top-1/2 -translate-y-1/2 rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              aria-label="検索をクリア"
+            >
+              クリア
+            </button>
+          ) : null}
+        </label>
+      </div>
+
       <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
-        {page === "root" ? (
+        {searching ? (
+          <div className="space-y-2">
+            {searchResultCount === 0 ? (
+              <p className="rounded-md border border-dashed border-slate-300 px-3 py-5 text-center text-xs leading-5 text-slate-500">
+                「{searchQuery.trim()}」に一致するComponentまたはEntityはありません。
+              </p>
+            ) : null}
+            {emptyEntityMatches || terrainMatches || visiblePrimitives.length > 0 ? (
+              <MenuSection label="Scene Object">
+                {emptyEntityMatches ? (
+                  <MenuItem
+                    icon={EDITOR_ICONS.sceneEntity}
+                    label="Empty Entity"
+                    detail="Transformだけを持つ整理用のEntity"
+                    disabled={disabled}
+                    trailing="作成"
+                    onClick={() => {
+                      onCreateEmpty();
+                      onClose();
+                    }}
+                  />
+                ) : null}
+                {visiblePrimitives.map((entry) => (
+                  <MenuItem
+                    key={entry.creationId}
+                    icon={EDITOR_ICONS.primitive}
+                    label={entry.name}
+                    detail={entry.description}
+                    disabled={disabled}
+                    trailing="作成"
+                    onClick={() => {
+                      onCreatePrimitive(entry.creationId);
+                      onClose();
+                    }}
+                  />
+                ))}
+                {terrainMatches ? (
+                  <MenuItem
+                    icon={Mountain}
+                    label="地形"
+                    detail="ブラシで形を整えられる高さマップ"
+                    disabled={disabled}
+                    trailing="作成"
+                    onClick={() => {
+                      onCreateTerrain();
+                      onClose();
+                    }}
+                  />
+                ) : null}
+              </MenuSection>
+            ) : null}
+
+            {visibleBuiltinPrefabs.length > 0 ? (
+              <MenuSection label="XRift Prefab">
+                {visibleBuiltinPrefabs.map((recipe) => {
+                  const definition = xriftGroups
+                    .flatMap((group) => group.components)
+                    .find((entry) => entry.schemaId === recipe.schemaId);
+                  const Icon = definition
+                    ? EDITOR_ICONS[definition.icon]
+                    : EDITOR_ICONS.prefab;
+                  return (
+                    <MenuItem
+                      key={recipe.id}
+                      icon={Icon}
+                      label={recipe.name}
+                      detail={recipe.description}
+                      disabled={disabled}
+                      trailing={
+                        recipe.configuration?.requiredBeforeCompile
+                          ? "配置後に設定"
+                          : "配置"
+                      }
+                      onClick={() => placeRecipe(recipe.id)}
+                    />
+                  );
+                })}
+              </MenuSection>
+            ) : null}
+
+            {visibleXriftComponents.length > 0 ? (
+              <MenuSection label="XRift Component">
+                {visibleXriftComponents.map(({ definition, group }) => {
+                  const Icon = EDITOR_ICONS[definition.icon];
+                  const canCreateHost = definition.attachBehavior.kind === "leaf";
+                  const duplicate = Boolean(
+                    !definition.allowMultiplePerEntity &&
+                      selectedEntity?.components.some(
+                        (component) =>
+                          component.type === "xrift-component" &&
+                          component.schemaId === definition.schemaId,
+                      ),
+                  );
+                  return (
+                    <MenuItem
+                      key={definition.schemaId}
+                      icon={Icon}
+                      label={definition.label}
+                      detail={`${group.label} · ${definition.description}`}
+                      disabled={
+                        disabled ||
+                        duplicate ||
+                        (!selectedEntity && !canCreateHost)
+                      }
+                      trailing={
+                        duplicate
+                          ? "追加済み"
+                          : selectedEntity
+                            ? "追加"
+                            : canCreateHost
+                              ? "作成"
+                              : "Entityを選択"
+                      }
+                      onClick={() => {
+                        if (selectedEntity) addComponent(definition.schemaId);
+                        else {
+                          onCreateXriftObject(definition.schemaId);
+                          onClose();
+                        }
+                      }}
+                    />
+                  );
+                })}
+              </MenuSection>
+            ) : null}
+
+            {visibleComponents.length > 0 ? (
+              <MenuSection label="Component">
+                {visibleComponents.map(({ definition, category }) => {
+                  const Icon = getEditorComponentIcon(definition);
+                  const duplicate = Boolean(
+                    !definition.allowMultiple &&
+                      selectedEntity?.components.some((component) =>
+                        definition.componentType === "builtin-mesh"
+                          ? component.type === "mesh"
+                          : component.type === definition.componentType,
+                      ),
+                  );
+                  const canCreateHost = ![
+                    "core.transform",
+                    "physics.mesh-collider",
+                  ].includes(definition.id);
+                  return (
+                    <MenuItem
+                      key={definition.id}
+                      icon={Icon}
+                      label={definition.label}
+                      detail={CATEGORY_LABELS[category] ?? category}
+                      disabled={
+                        disabled ||
+                        duplicate ||
+                        (!selectedEntity && !canCreateHost)
+                      }
+                      trailing={
+                        duplicate
+                          ? "追加済み"
+                          : selectedEntity
+                            ? "追加"
+                            : canCreateHost
+                              ? "作成"
+                              : "Entityを選択"
+                      }
+                      onClick={() => {
+                        if (selectedEntity) addComponent(definition.id);
+                        else {
+                          onCreateComponentObject(definition.id);
+                          onClose();
+                        }
+                      }}
+                    />
+                  );
+                })}
+              </MenuSection>
+            ) : null}
+          </div>
+        ) : null}
+
+        {!searching && page === "root" ? (
           <div className="space-y-1">
             <button
               type="button"
@@ -225,7 +513,7 @@ export function EditorCreateMenu({
           </div>
         ) : null}
 
-        {page === "primitive" ? (
+        {!searching && page === "primitive" ? (
           <MenuSection label="Scene Object">
             {BUILTIN_PRIMITIVE_CREATION_CATALOG.filter(
               (entry) => entry.showInCreateMenu,
@@ -246,7 +534,7 @@ export function EditorCreateMenu({
           </MenuSection>
         ) : null}
 
-        {page === "xrift" ? (
+        {!searching && page === "xrift" ? (
           <div className="space-y-2">
             <MenuSection
               label="Sceneへ配置"
@@ -336,7 +624,7 @@ export function EditorCreateMenu({
           </div>
         ) : null}
 
-        {page === "component" ? (
+        {!searching && page === "component" ? (
           <div className="space-y-2">
             {componentGroups.map(([category, definitions]) => (
               <MenuSection
