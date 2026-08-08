@@ -6,8 +6,10 @@ import {
   createPrototypeProject,
   getMaterialAssignmentTarget,
   getMesh,
+  normalizeTextureImportSettings,
   redoEditorHistory,
   type ModelAsset,
+  type TextureAsset,
   undoEditorHistory,
 } from "../../lib/visual-editor";
 import { writeAssetCardDragData } from "./asset-card-drag";
@@ -79,10 +81,20 @@ export function runMaterialDragFixtureAssertions(): void {
   );
   clearEditorDragData();
 
-  const texture = Object.values(project.assets.assets).find(
-    (asset) => asset.kind === "texture",
-  );
-  assert(texture, "Texture fixture asset is missing");
+  // A prototype world ships Materials and geometry but no Texture, so the drag
+  // payload for a Texture card is built here instead of found in the project.
+  const texture: TextureAsset = {
+    id: "material-drag-fixture-texture",
+    name: "Material Drag Fixture Texture",
+    kind: "texture",
+    status: "ready",
+    source: {
+      kind: "project",
+      relativePath: "assets/textures/material-drag-fixture.png",
+    },
+    thumbnail: { status: "missing" },
+    importSettings: normalizeTextureImportSettings(),
+  };
   const textureTransfer = new FakeDataTransfer(true);
   writeAssetCardDragData(textureTransfer as unknown as DataTransfer, texture);
   clearEditorDragData();

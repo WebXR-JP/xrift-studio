@@ -41,6 +41,100 @@ import { runScriptRuntimeReportFixtureAssertions } from "../src/lib/visual-edito
 import { runScriptEmitFixtureAssertions } from "../src/lib/visual-editor/compiler/script-emit.fixture.ts";
 import { runBasisTranscoderFixtureAssertions } from "../src/lib/visual-editor/basis-transcoder.fixture.ts";
 import { runTerrainFixtureAssertions } from "../src/lib/visual-editor/terrain.fixture.ts";
+import { runAssetOperationLockFixtureAssertions } from "../src/components/visual-editor/asset-operation-lock.fixture.ts";
+import { runAutosaveCoordinatorFixtureAssertions } from "../src/components/visual-editor/autosave-coordinator.fixture.ts";
+import { runCustomMaterialPreviewFixtureAssertions } from "../src/components/visual-editor/CustomMaterialPreview.fixture.ts";
+import { runEditorDragDataFixture } from "../src/components/visual-editor/editor-drag-data.fixture.ts";
+import { runEditorLayoutFixtureAssertions } from "../src/components/visual-editor/editor-layout.fixture.ts";
+import { runEditorLibraryDragFixture } from "../src/components/visual-editor/editor-library-drag.fixture.ts";
+import { runMaterialDragFixtureAssertions } from "../src/components/visual-editor/material-drag.fixture.ts";
+import { runProjectModelMaterialPreviewFixtureAssertions } from "../src/components/visual-editor/ProjectModelVisual.fixture.ts";
+import { runScriptExecutionScopeFixtureAssertions } from "../src/components/visual-editor/script-execution-scope.fixture.ts";
+import { runAudioImportFixtureAssertions } from "../src/lib/visual-editor/audio-import.fixture.ts";
+import { runBuiltinPrefabCatalogFixtureAssertions } from "../src/lib/visual-editor/builtin-prefab-catalog.fixture.ts";
+import { runClassicProjectImportFixtureAssertions } from "../src/lib/visual-editor/classic-project-import.fixture.ts";
+import { runMaterialExtensionFixtureAssertions } from "../src/lib/visual-editor/compiler/material-extensions.fixture.ts";
+import { runXriftComponentRegistryFixtureAssertions } from "../src/lib/visual-editor/compiler/xrift-component-registry.fixture.ts";
+import { runDocumentAssetCreationFixtureAssertions } from "../src/lib/visual-editor/document-asset-creation.fixture.ts";
+import { runEditorSessionHierarchyFixtureAssertions } from "../src/lib/visual-editor/editor-session.fixture.ts";
+import { runGltfDerivedAssetFixtureAssertions } from "../src/lib/visual-editor/gltf-derived-assets.fixture.ts";
+import { runModelHierarchyFixtureAssertions } from "../src/lib/visual-editor/model-hierarchy.fixture.ts";
+import { runModelImportContractFixtureAssertions } from "../src/lib/visual-editor/model-import-contract.fixture.ts";
+import { runModelReimportImpactFixtureAssertions } from "../src/lib/visual-editor/model-reimport-impact.fixture.ts";
+import { runOpenBrushFixtureAssertions } from "../src/lib/visual-editor/open-brush.fixture.ts";
+import { runVisualPublishFixtureAssertions } from "../src/lib/visual-editor/publish.fixture.ts";
+import { runRuntimeSpawnFixtureAssertions } from "../src/lib/visual-editor/runtime-spawn.fixture.ts";
+import { runSkyboxImportFixtureAssertions } from "../src/lib/visual-editor/skybox-import.fixture.ts";
+import { runUnityPackageImportFixture } from "../src/lib/visual-editor/unity-package-import.fixture.ts";
+
+// Asset import runs in the Tauri webview, so it uses the browser file APIs.  Node
+// already provides Blob, fetch and URL.createObjectURL, but not these two, and
+// without them the import fixtures fail on the environment instead of the
+// contract they assert.  These shims only exist for the fixture process.
+//
+// Three.js reports FileLoader download progress with a DOM ProgressEvent fired
+// from a stream callback rather than the awaited promise, so a missing global
+// escapes as an uncaught exception that no fixture suite can attribute.
+if (typeof globalThis.ProgressEvent === "undefined") {
+  globalThis.ProgressEvent = class ProgressEvent extends Event {
+    constructor(type, init = {}) {
+      super(type, init);
+      this.lengthComputable = init.lengthComputable ?? false;
+      this.loaded = init.loaded ?? 0;
+      this.total = init.total ?? 0;
+    }
+  };
+}
+
+// GLTFExporter reads results through `onloadend`, while the Studio import code
+// listens with `addEventListener`, so both delivery styles have to work.
+if (typeof globalThis.FileReader === "undefined") {
+  globalThis.FileReader = class FileReader extends EventTarget {
+    constructor() {
+      super();
+      this.result = null;
+      this.error = null;
+      this.onload = null;
+      this.onloadend = null;
+      this.onerror = null;
+    }
+
+    readAsArrayBuffer(blob) {
+      this.#read(blob, (source) => source.arrayBuffer());
+    }
+
+    readAsText(blob) {
+      this.#read(blob, (source) => source.text());
+    }
+
+    readAsDataURL(blob) {
+      this.#read(blob, async (source) => {
+        const base64 = Buffer.from(await source.arrayBuffer()).toString("base64");
+        return `data:${source.type || "application/octet-stream"};base64,${base64}`;
+      });
+    }
+
+    #read(blob, decode) {
+      Promise.resolve()
+        .then(() => decode(blob))
+        .then((result) => {
+          this.result = result;
+          this.#emit("load");
+        })
+        .catch((cause) => {
+          this.error = cause instanceof Error ? cause : new Error(String(cause));
+          this.#emit("error");
+        })
+        .finally(() => this.#emit("loadend"));
+    }
+
+    #emit(type) {
+      const event = new Event(type);
+      this[`on${type}`]?.call(this, event);
+      this.dispatchEvent(event);
+    }
+  };
+}
 
 const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "xrift-studio-convert-"));
 const previousXriftBin = process.env.XRIFT_STUDIO_XRIFT_BIN;
@@ -131,29 +225,56 @@ try {
       error instanceof ConvertError && error.code === "update-file-modified";
   }
   assert(modifiedRejected, "--update must reject a modified Classic export");
-  runVisualCompilerFixtureAssertions();
-  runTerrainFixtureAssertions();
-  runRuntimeSchemaFixtureAssertions();
-  runXriftMcpEditorToolFixtures();
-  runPlaySessionFixtureAssertions();
-  runScriptSpecifierFixtureAssertions();
-  runScriptTemplateFixtureAssertions();
-  runScriptPropsFixtureAssertions();
-  runParticleRuntimeFixtureAssertions();
-  await runScriptLifecycleFixtureAssertions();
-  await runScriptAudioFixtureAssertions();
-  await runAudioSourceRuntimeFixtureAssertions();
-  await runScriptAudioSourceHostFixtureAssertions();
-  runLightRuntimeFixtureAssertions();
-  runScriptMaterialTextureFixtureAssertions();
-  await runScriptTrustFixtureAssertions();
-  runScriptRuntimeReportFixtureAssertions();
-  runScriptEmitFixtureAssertions();
-  runBasisTranscoderFixtureAssertions();
-  runStarterTemplateFixtureAssertions();
-  await verifyPreparedOfficialStarter();
-  runComponentCodeImportFixtureAssertions();
-  await runClassicExportFixtureAssertions();
+  await runFixtureSuites([
+    ["visual compiler", runVisualCompilerFixtureAssertions],
+    ["terrain", runTerrainFixtureAssertions],
+    ["runtime schema", runRuntimeSchemaFixtureAssertions],
+    ["mcp editor tools", runXriftMcpEditorToolFixtures],
+    ["play session", runPlaySessionFixtureAssertions],
+    ["script specifiers", runScriptSpecifierFixtureAssertions],
+    ["script templates", runScriptTemplateFixtureAssertions],
+    ["script props", runScriptPropsFixtureAssertions],
+    ["particle runtime", runParticleRuntimeFixtureAssertions],
+    ["script lifecycle", runScriptLifecycleFixtureAssertions],
+    ["script audio", runScriptAudioFixtureAssertions],
+    ["audio source runtime", runAudioSourceRuntimeFixtureAssertions],
+    ["script audio source host", runScriptAudioSourceHostFixtureAssertions],
+    ["light runtime", runLightRuntimeFixtureAssertions],
+    ["script material texture", runScriptMaterialTextureFixtureAssertions],
+    ["script trust", runScriptTrustFixtureAssertions],
+    ["script runtime report", runScriptRuntimeReportFixtureAssertions],
+    ["script emit", runScriptEmitFixtureAssertions],
+    ["basis transcoder", runBasisTranscoderFixtureAssertions],
+    ["starter templates", runStarterTemplateFixtureAssertions],
+    ["prepared official starter", verifyPreparedOfficialStarter],
+    ["component code import", runComponentCodeImportFixtureAssertions],
+    ["classic export", runClassicExportFixtureAssertions],
+    ["xrift component registry", runXriftComponentRegistryFixtureAssertions],
+    ["material extensions", runMaterialExtensionFixtureAssertions],
+    ["builtin prefab catalog", runBuiltinPrefabCatalogFixtureAssertions],
+    ["document asset creation", runDocumentAssetCreationFixtureAssertions],
+    ["editor session hierarchy", runEditorSessionHierarchyFixtureAssertions],
+    ["editor layout", runEditorLayoutFixtureAssertions],
+    ["script execution scope", runScriptExecutionScopeFixtureAssertions],
+    ["model hierarchy", runModelHierarchyFixtureAssertions],
+    ["model reimport impact", runModelReimportImpactFixtureAssertions],
+    ["open brush", runOpenBrushFixtureAssertions],
+    ["runtime spawn", runRuntimeSpawnFixtureAssertions],
+    ["visual publish", runVisualPublishFixtureAssertions],
+    ["classic project import", runClassicProjectImportFixtureAssertions],
+    ["asset operation lock", runAssetOperationLockFixtureAssertions],
+    ["audio import", runAudioImportFixtureAssertions],
+    ["autosave coordinator", runAutosaveCoordinatorFixtureAssertions],
+    ["gltf derived assets", runGltfDerivedAssetFixtureAssertions],
+    ["model import contract", runModelImportContractFixtureAssertions],
+    ["skybox import", runSkyboxImportFixtureAssertions],
+    ["unity package import", runUnityPackageImportFixture],
+    ["editor drag data", runEditorDragDataFixture],
+    ["editor library drag", runEditorLibraryDragFixture],
+    ["material drag", runMaterialDragFixtureAssertions],
+    ["custom material preview", runCustomMaterialPreviewFixtureAssertions],
+    ["project model material preview", runProjectModelMaterialPreviewFixtureAssertions],
+  ]);
   process.stdout.write("convert/runtime fixture passed\n");
 } finally {
   if (previousXriftBin === undefined) {
@@ -230,6 +351,23 @@ await writeFile(path.join(root, "README.md"), "# Fixture\\n");
   await writeFile(wrapper, `#!/bin/sh\nexec "${process.execPath}" "${scriptPath}" "$@"\n`);
   await chmod(wrapper, 0o755);
   return wrapper;
+}
+
+/**
+ * Runs every fixture suite in order and names the one that fails.  A bare stack
+ * from inside a bundled dependency does not say which suite reached it, so the
+ * failing suite name is attached before the error leaves this runner.
+ */
+async function runFixtureSuites(suites) {
+  for (const [name, suite] of suites) {
+    try {
+      await suite();
+    } catch (error) {
+      const cause = error instanceof Error ? error : new Error(String(error));
+      cause.message = `fixture suite "${name}" failed: ${cause.message}`;
+      throw cause;
+    }
+  }
 }
 
 function assert(condition, message) {

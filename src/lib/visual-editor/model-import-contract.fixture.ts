@@ -379,7 +379,9 @@ export async function runModelImportContractFixtureAssertions(): Promise<void> {
       externalGltfPlan.asset?.kind === "model" &&
       externalGltfPlan.asset.source.kind === "project" &&
       externalGltfPlan.asset.source.relativePath.endsWith(".glb"),
-    "Multi-file glTF was not normalized to a self-contained GLB",
+    `Multi-file glTF was not normalized to a self-contained GLB: ${describeDiagnostics(
+      externalGltfPlan.diagnostics,
+    )}`,
   );
 }
 
@@ -495,6 +497,16 @@ async function assertRejects(
     return;
   }
   throw new Error(message);
+}
+
+/** Renders plan diagnostics so a failed import assertion names the blocking code. */
+function describeDiagnostics(
+  diagnostics: readonly { code: string; message: string }[],
+): string {
+  if (diagnostics.length === 0) return "no diagnostics were reported";
+  return diagnostics
+    .map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`)
+    .join(" / ");
 }
 
 function assert(condition: unknown, message: string): asserts condition {

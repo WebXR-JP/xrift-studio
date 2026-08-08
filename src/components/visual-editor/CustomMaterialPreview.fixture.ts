@@ -111,12 +111,35 @@ export function runCustomMaterialPreviewFixtureAssertions(): void {
     "OpenBrush Material did not resolve its decomposed source node preview",
   );
 
-  const orphan = resolveCustomMaterialPreviewSource(
+  // Losing the Model reference does not have to lose the preview: a brush the
+  // catalog knows still renders standalone, and only an unknown brush is
+  // reported as unavailable.
+  const orphanKnownBrush = resolveCustomMaterialPreviewSource(
     { ...material, importedFromModel: undefined },
     manifest,
   );
   assert(
-    orphan.status === "unavailable" && orphan.reason.includes("元のOpenBrush"),
+    orphanKnownBrush.status === "standalone" &&
+      orphanKnownBrush.entry.brushName === "DoubleTaperedMarker",
+    "An orphan custom Material did not fall back to the Open Brush catalog",
+  );
+
+  const orphanUnknownBrush = resolveCustomMaterialPreviewSource(
+    {
+      ...material,
+      importedFromModel: undefined,
+      shader: {
+        ...material.shader,
+        kind: "openbrush",
+        brushName: "FixtureBrushMissingFromCatalog",
+        brushGuid: "fixture-guid-missing-from-catalog",
+      },
+    } as MaterialAsset,
+    manifest,
+  );
+  assert(
+    orphanUnknownBrush.status === "unavailable" &&
+      orphanUnknownBrush.reason.includes("元のOpenBrush"),
     "An orphan custom Material did not explain how to restore its preview",
   );
 }
