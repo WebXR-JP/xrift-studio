@@ -249,6 +249,32 @@ import {
   type ScriptTrustDialogResult,
 } from "./ScriptTrustDialog";
 import { roundTo } from "./editor-utils";
+import {
+  DEFAULT_EDITOR_LAYOUT,
+  EDITOR_LAYOUT_STORAGE_KEY,
+  loadEditorLayout,
+  type VisualEditorLayout,
+} from "./editor-layout";
+import {
+  XRIFT_MCP_EXTERNAL_STORE_TOOLS,
+  assertMcpExternalStoreWrite,
+  mcpOptionalInteger,
+  mcpOptionalScriptLanguage,
+  mcpOptionalString,
+  mcpRequiredString,
+  scriptCompileErrorsForMcp,
+  waitForEditorCommit,
+  type XriftMcpExternalStoreTool,
+} from "./mcp-request-guards";
+import {
+  approvalRequiredSnapshots,
+  blockingScriptCompileErrors,
+  sameResolvedScriptExecutionScope,
+  sameScriptExecutionScopeInput,
+  scriptTrustFingerprintKey,
+  type ResolvedScriptExecutionScope,
+  type ScriptExecutionScopeInput,
+} from "./script-execution-scope";
 import type {
   EditorMode,
   EditorSelection,
@@ -258,15 +284,11 @@ import type {
 } from "./types";
 import { useTerrainAuthoring } from "./useTerrainAuthoring";
 
+export type { VisualEditorLayout } from "./editor-layout";
+
 const SUPPORTED_MODEL_FILE = THREE_EDITOR_MODEL_EXTENSION_PATTERN;
 const SUPPORTED_TEXTURE_FILE = STUDIO_IMAGE_EXTENSION_PATTERN;
 const SUPPORTED_HDRI_FILE = /\.(hdr|exr)$/i;
-const XRIFT_MCP_EXTERNAL_STORE_TOOLS = [
-  "search_external_assets",
-  "get_external_asset_options",
-  "install_external_asset",
-] as const;
-type XriftMcpExternalStoreTool = (typeof XRIFT_MCP_EXTERNAL_STORE_TOOLS)[number];
 const SUPPORTED_AUDIO_FILE = /\.(?:mp3|wav)$/i;
 const SUPPORTED_SHADER_FILE = /\.(?:glsl|vert|vertex|vs|frag|fragment|fs)$/i;
 const SUPPORTED_UNITY_FILE = /\.(unitypackage|unity|prefab)$/i;
@@ -402,69 +424,6 @@ type EditorCommandPayload = {
   componentDefinitionId?: string;
 };
 
-export type VisualEditorLayout = {
-  hierarchyWidth: number;
-  inspectorWidth: number;
-  assetsHeight: number;
-};
-
-const DEFAULT_EDITOR_LAYOUT: VisualEditorLayout = {
-  hierarchyWidth: 185,
-  inspectorWidth: 320,
-  assetsHeight: 220,
-};
-
-const EDITOR_LAYOUT_STORAGE_KEY = "xrift-studio.visual-editor.layout.v1";
-
-function clampEditorLayout(
-  candidate: Partial<VisualEditorLayout>,
-): VisualEditorLayout {
-  const numeric = (
-    value: number | undefined,
-    fallback: number,
-    min: number,
-    max: number,
-  ) =>
-    typeof value === "number" && Number.isFinite(value)
-      ? Math.max(min, Math.min(max, value))
-      : fallback;
-  return {
-    hierarchyWidth: numeric(
-      candidate.hierarchyWidth,
-      DEFAULT_EDITOR_LAYOUT.hierarchyWidth,
-      150,
-      280,
-    ),
-    inspectorWidth: numeric(
-      candidate.inspectorWidth,
-      DEFAULT_EDITOR_LAYOUT.inspectorWidth,
-      280,
-      460,
-    ),
-    assetsHeight: numeric(
-      candidate.assetsHeight,
-      DEFAULT_EDITOR_LAYOUT.assetsHeight,
-      160,
-      340,
-    ),
-  };
-}
-
-function loadEditorLayout(
-  preferred?: Partial<VisualEditorLayout>,
-): VisualEditorLayout {
-  if (preferred) return clampEditorLayout(preferred);
-  if (typeof window === "undefined") return DEFAULT_EDITOR_LAYOUT;
-  try {
-    const parsed = JSON.parse(
-      window.localStorage.getItem(EDITOR_LAYOUT_STORAGE_KEY) ?? "null",
-    ) as Partial<VisualEditorLayout> | null;
-    return parsed ? clampEditorLayout(parsed) : DEFAULT_EDITOR_LAYOUT;
-  } catch {
-    return DEFAULT_EDITOR_LAYOUT;
-  }
-}
-
 export type VisualEditorPrototypeProps = {
   projectKind: VisualProjectKind;
   onBack: () => void;
@@ -507,100 +466,6 @@ function touchProject(bundle: PrototypeVisualProject): PrototypeVisualProject {
       },
     },
   };
-}
-
-function mcpRequiredString(value: unknown, name: string): string {
-  if (typeof value !== "string" || !value.trim()) {
-    throw new XriftMcpEditorToolError(
-      "INVALID_ARGUMENT",
-      `${name}は空でない文字列で指定してください`,
-    );
-  }
-  return value.trim();
-}
-
-function mcpOptionalString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function mcpOptionalScriptLanguage(
-  value: unknown,
-): "ts" | "tsx" | undefined {
-  if (value === undefined) return undefined;
-  if (value === "ts" || value === "tsx") return value;
-  throw new XriftMcpEditorToolError(
-    "INVALID_ARGUMENT",
-    "languageはtsまたはtsxで指定してください",
-  );
-}
-
-function mcpOptionalInteger(value: unknown, name: string): number | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
-    throw new XriftMcpEditorToolError(
-      "INVALID_ARGUMENT",
-      `${name}は0以上の整数で指定してください`,
-    );
-  }
-  return value;
-}
-
-function assertMcpExternalStoreWrite(
-  argumentsValue: Record<string, unknown>,
-  context: {
-    bundle: PrototypeVisualProject;
-    editorMode: EditorMode;
-    importBusy: boolean;
-    revision: number;
-  },
-  options: { allowPlay?: boolean } = {},
-): void {
-  if (context.editorMode !== "edit" && !options.allowPlay) {
-    throw new XriftMcpEditorToolError(
-      "EDITOR_READ_ONLY",
-      "Playを停止してから外部アセットを追加してください",
-    );
-  }
-  if (context.importBusy) {
-    throw new XriftMcpEditorToolError(
-      "EDITOR_BUSY",
-      "Asset Importの完了後に再試行してください",
-    );
-  }
-  const projectId = mcpRequiredString(argumentsValue.projectId, "projectId");
-  const sceneId = mcpRequiredString(argumentsValue.sceneId, "sceneId");
-  const expectedRevision = mcpOptionalInteger(
-    argumentsValue.expectedRevision,
-    "expectedRevision",
-  );
-  if (expectedRevision === undefined) {
-    throw new XriftMcpEditorToolError(
-      "INVALID_ARGUMENT",
-      "expectedRevisionを指定してください",
-    );
-  }
-  if (projectId !== context.bundle.project.projectId) {
-    throw new XriftMcpEditorToolError("PROJECT_MISMATCH", "現在のProjectと一致しません");
-  }
-  if (sceneId !== context.bundle.scene.sceneId) {
-    throw new XriftMcpEditorToolError("SCENE_MISMATCH", "現在のSceneと一致しません");
-  }
-  if (expectedRevision !== context.revision) {
-    throw new XriftMcpEditorToolError(
-      "STALE_REVISION",
-      "Sceneが更新されています。最新のEditor contextを取得してください",
-      { expectedRevision, currentRevision: context.revision },
-    );
-  }
-  if (
-    argumentsValue.applySkybox !== undefined &&
-    typeof argumentsValue.applySkybox !== "boolean"
-  ) {
-    throw new XriftMcpEditorToolError(
-      "INVALID_ARGUMENT",
-      "applySkyboxはbooleanで指定してください",
-    );
-  }
 }
 
 function preparePrototypeProject(
@@ -708,103 +573,6 @@ type EnterPlayModeResult = {
 type ScriptTrustPromptState = {
   snapshots: readonly ScriptSourceSnapshot[];
 };
-
-type ScriptExecutionScopeInput = {
-  projectId: string;
-  projectPath: string | null;
-};
-
-type ResolvedScriptExecutionScope = ScriptExecutionScopeInput & {
-  canonicalProjectPath: string;
-};
-
-function sameScriptExecutionScopeInput(
-  left: ScriptExecutionScopeInput,
-  right: ScriptExecutionScopeInput,
-): boolean {
-  return (
-    left.projectId === right.projectId &&
-    left.projectPath === right.projectPath
-  );
-}
-
-function sameResolvedScriptExecutionScope(
-  left: ResolvedScriptExecutionScope,
-  right: ResolvedScriptExecutionScope,
-): boolean {
-  return (
-    sameScriptExecutionScopeInput(left, right) &&
-    left.canonicalProjectPath === right.canonicalProjectPath
-  );
-}
-
-function scriptTrustFingerprintKey(
-  fingerprint: ScriptExecutionFingerprint,
-): string {
-  return JSON.stringify([
-    fingerprint.sourceSha256,
-    fingerprint.language,
-    fingerprint.contractVersion,
-    fingerprint.modulePolicyVersion,
-    fingerprint.allowRemoteModules,
-  ]);
-}
-
-function approvalRequiredSnapshots(
-  errors: readonly ScriptCompileError[],
-): ScriptSourceSnapshot[] {
-  const snapshots = new Map<string, ScriptSourceSnapshot>();
-  for (const error of errors) {
-    if (
-      error.code === "SCRIPT_APPROVAL_REQUIRED" &&
-      error.trustSnapshot
-    ) {
-      snapshots.set(error.trustSnapshot.snapshotKey, error.trustSnapshot);
-    }
-  }
-  return [...snapshots.values()];
-}
-
-function blockingScriptCompileErrors(
-  errors: readonly ScriptCompileError[],
-): ScriptCompileError[] {
-  return errors.filter(
-    (error) => error.code !== "SCRIPT_APPROVAL_REQUIRED",
-  );
-}
-
-function scriptCompileErrorsForMcp(
-  errors: readonly ScriptCompileError[],
-): Array<Record<string, unknown>> {
-  return errors.map((error) => ({
-    assetId: error.assetId,
-    assetName: error.assetName,
-    relativePath: error.relativePath,
-    message: error.message,
-    ...(error.code ? { code: error.code } : {}),
-    ...(error.trustSnapshot
-      ? {
-          sourceSha256:
-            error.trustSnapshot.fingerprint.sourceSha256,
-        }
-      : {}),
-  }));
-}
-
-/** requestAnimationFrame pauses in a hidden Tauri webview, but MCP must reply. */
-function waitForEditorCommit(): Promise<void> {
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(fallback);
-      resolve();
-    };
-    const fallback = window.setTimeout(finish, 100);
-    window.requestAnimationFrame(finish);
-  });
-}
 
 function sanitizedImportMessage(error: unknown, projectPath: string): string {
   let message = error instanceof Error ? error.message : String(error);
