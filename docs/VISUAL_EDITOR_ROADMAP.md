@@ -26,7 +26,7 @@ Visual projectはコードを隠すだけの画面ではなく、Scene、Asset�
 | Unity import | 検証中 | UnityPackage、`.unity`、`.prefab`を解析し、対応するScene、Prefab、Model、Textureへ変換する。Unity固有機能の完全互換ではない。 |
 | Texture／Material | 利用可能 | PNG、JPG、WebP、KTX2を取り込み、PBR Material、slot binding、thumbnailを編集する。Classic importでは静的に検査できるShaderMaterialもTexture uniformとmesh別variantを保ったCustom Materialへ変換する。 |
 | Audio | 利用可能 | MP3／WAVをAudio Assetとして取り込み、Audio Sourceへ割り当ててSceneと生成物へ保存する。 |
-| Model Animation再生 | 利用可能 | Animationを含むGLB／glTFの配置時にAnimation Componentを追加し、Playと生成物で先頭clipを自動ループ再生する。 |
+| Model Animation再生 | 利用可能 | Animationを含むGLB／glTFの配置時にAnimation Componentを追加し、選択したclipをPlayと生成物で再生する。Autoplay、Loop、再生速度をInspectorとMCPから設定する。 |
 | 表現と再利用 | 利用可能 | Primitive、Material、Particle、Prefab、Collider、XRift Componentを作成・配置する。 |
 | Terrain authoring | 利用可能 | Createメニューから高さサンプルTerrainを追加し、InspectorまたはMCPのRaise／Lower／Flatten／Smoothブラシで編集する。static Trimesh Collider、Play、compile、runtime manifestへ同じTerrainを渡す。 |
 | Play | 利用可能 | 編集データと分離したPlay WindowでPlay／Stopし、WorldはRapierの重力・Collider・WASD controller、Itemは単体表示を確認する。Transform／Collider／Animation変更は対象Entityだけ再実行する。runtime受け入れは継続する。 |
@@ -54,7 +54,7 @@ Visual projectはコードを隠すだけの画面ではなく、Scene、Asset�
 - OBJの外部MTL／Textureは自動取得しない。取り込み後にMaterial Slotへ割り当てる。
 - glTFは現時点でGLBまたは自己完結したファイルを基本とし、汎用的な複数sidecar file importは今後対応する。
 - VRMの静的ポーズは保存できるが、keyframe、clip、補間、timeline編集はまだない。
-- Model Animationは先頭clipのAutoplay／Loopのみ対応し、clip選択、開始タイミング、速度、遷移はまだない。
+- Model Animationはclip選択、Autoplay、Loop、再生速度に対応する。開始タイミングの指定、複数clipの同時再生、clip間の遷移はまだない。
 - Unity固有Component、Shader、Script、Animationを完全には移植しない。対応内容と未対応内容をimport前に示す方針とする。
 - Open Brushはbrushごとの描画差を継続検証中。通常のMaterial overrideとは扱いを分ける。
 - Webプレビューは制作体験のデモであり、ローカルファイル操作、CLI実行、Uploadはデスクトップ版だけで行う。

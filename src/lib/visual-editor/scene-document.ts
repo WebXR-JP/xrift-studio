@@ -290,16 +290,49 @@ export type AudioSourcePatch = Partial<
   >
 >;
 
-/** Plays the first animation clip embedded in the sibling Model Asset. */
+/** Plays one animation clip embedded in the sibling Model Asset. */
 export type AnimationComponent = ComponentBase & {
   type: "animation";
   autoplay: boolean;
   loop: boolean;
+  /** Clip name to play. Undefined keeps the Model's first clip. */
+  clipName?: string;
+  /** Playback rate multiplier. Undefined behaves as 1. */
+  speed?: number;
 };
 
 export type AnimationPatch = Partial<
-  Pick<AnimationComponent, "enabled" | "autoplay" | "loop">
+  Pick<AnimationComponent, "enabled" | "autoplay" | "loop" | "clipName" | "speed">
 >;
+
+export const ANIMATION_SPEED_MIN = 0.01;
+export const ANIMATION_SPEED_MAX = 10;
+export const DEFAULT_ANIMATION_SPEED = 1;
+
+/** Resolves the playback rate, falling back to 1 for legacy documents. */
+export function animationPlaybackSpeed(
+  animation: Pick<AnimationComponent, "speed">,
+): number {
+  const { speed } = animation;
+  if (typeof speed !== "number" || !Number.isFinite(speed)) {
+    return DEFAULT_ANIMATION_SPEED;
+  }
+  return Math.min(Math.max(speed, ANIMATION_SPEED_MIN), ANIMATION_SPEED_MAX);
+}
+
+/**
+ * Resolves which clip of a Model the Animation plays.
+ * Returns -1 when the Model has no clip, or when the selected name is gone,
+ * so callers can report the mismatch instead of silently playing another clip.
+ */
+export function resolveAnimationClipIndex(
+  animation: Pick<AnimationComponent, "clipName">,
+  clipNames: readonly string[],
+): number {
+  if (clipNames.length === 0) return -1;
+  if (animation.clipName === undefined) return 0;
+  return clipNames.indexOf(animation.clipName);
+}
 
 export type PrefabInstanceComponent = ComponentBase & {
   type: "prefab-instance";
@@ -1722,6 +1755,21 @@ export function updateAnimationComponent(
   if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") return scene;
   if (patch.autoplay !== undefined && typeof patch.autoplay !== "boolean") return scene;
   if (patch.loop !== undefined && typeof patch.loop !== "boolean") return scene;
+  if (
+    patch.clipName !== undefined &&
+    (typeof patch.clipName !== "string" || patch.clipName.trim() === "")
+  ) {
+    return scene;
+  }
+  if (
+    patch.speed !== undefined &&
+    (typeof patch.speed !== "number" ||
+      !Number.isFinite(patch.speed) ||
+      patch.speed < ANIMATION_SPEED_MIN ||
+      patch.speed > ANIMATION_SPEED_MAX)
+  ) {
+    return scene;
+  }
 
   const next: AnimationComponent = { ...current, ...patch };
   const changed = Object.keys(patch).some(
@@ -1730,6 +1778,9 @@ export function updateAnimationComponent(
       current[key as keyof AnimationComponent],
   );
   if (!changed) return scene;
+  // Keep cleared optional fields out of the saved document instead of storing undefined.
+  if (next.clipName === undefined) delete next.clipName;
+  if (next.speed === undefined) delete next.speed;
   return {
     ...scene,
     entities: {

@@ -131,6 +131,10 @@ function compileRuntimeEntity(
         enabled: component.enabled,
         autoplay: component.autoplay,
         loop: component.loop,
+        ...(component.clipName === undefined
+          ? {}
+          : { clipName: component.clipName }),
+        ...(component.speed === undefined ? {} : { speed: component.speed }),
       });
       continue;
     }

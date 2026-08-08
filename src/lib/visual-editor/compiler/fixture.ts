@@ -29,6 +29,7 @@ import {
   createMeshColliderComponent,
   createRigidBodyComponent,
   createTransformComponent,
+  type AnimationComponent,
   type ColliderComponent,
   type MeshComponent,
   type SceneDocument,
@@ -1661,8 +1662,11 @@ export function runVisualCompilerFixtureAssertions(
       "useAnimations",
       "const { scene, animations } = useGLTF(modelUrl);",
       "const animationRoot = useRef<Group>(null);",
-      "const firstAnimationName = names[0];",
+      "const { actions, names } = useAnimations(animations, animationRoot);",
+      "const clipName = names[0];",
+      "const action = clipName ? actions[clipName] : undefined;",
       "action.setLoop(LoopRepeat, Infinity);",
+      "action.timeScale = 1;",
       "return () => {\n      action.stop();\n    };",
       "ref={animationRoot}",
     ].forEach((fragment) =>
@@ -1670,6 +1674,11 @@ export function runVisualCompilerFixtureAssertions(
         animationSource.includes(fragment),
         `Animated GLB source is missing: ${fragment}`,
       ),
+    );
+    assertAnimationClipSelection(
+      animationDocuments,
+      projectModel.id,
+      fixedTime,
     );
     const retainedAnimationResult = compileVisualProject(
       {
@@ -2503,4 +2512,120 @@ function extractNamedEntitySource(source: string, entityName: string): string {
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
+}
+
+/**
+ * Covers Animation clip selection and playback speed: an explicit clip must be
+ * emitted by name, an unknown clip must warn instead of playing another clip,
+ * and the runtime manifest must carry both fields.
+ */
+function assertAnimationClipSelection(
+  documents: VisualCompilerDocuments,
+  modelAssetId: string,
+  generatedAt: string,
+): void {
+  const model = documents.assets.assets[modelAssetId];
+  assert(
+    model?.kind === "model" && model.importMetadata,
+    "Animation clip fixture needs the imported Model metadata",
+  );
+  const multiClipModel: ModelAsset = {
+    ...model,
+    importMetadata: {
+      ...model.importMetadata,
+      animations: [
+        ...model.importMetadata.animations,
+        { name: "Wave", duration: 1.5, trackCount: 3, sourceAnimationIndex: 1 },
+      ],
+    },
+  };
+
+  const withAnimationPatch = (
+    patch: Partial<AnimationComponent>,
+  ): VisualCompilerDocuments => ({
+    ...documents,
+    assets: {
+      ...documents.assets,
+      assets: {
+        ...documents.assets.assets,
+        [modelAssetId]: multiClipModel,
+      },
+    },
+    scenes: Object.fromEntries(
+      Object.entries(documents.scenes).map(([sceneId, scene]) => [
+        sceneId,
+        {
+          ...scene,
+          entities: Object.fromEntries(
+            Object.entries(scene.entities).map(([entityId, entity]) => [
+              entityId,
+              {
+                ...entity,
+                components: entity.components.map((component) =>
+                  component.type === "animation"
+                    ? { ...component, ...patch }
+                    : component,
+                ),
+              },
+            ]),
+          ),
+        },
+      ]),
+    ),
+  });
+
+  const selectedResult = compileVisualProject(
+    withAnimationPatch({ clipName: "Wave", speed: 2 }),
+    { generatedAt },
+  );
+  const selectedSource =
+    selectedResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(selectedResult.canStage, "A selected Animation clip should be stageable");
+  ['const clipName = "Wave";', "action.timeScale = 2;"].forEach((fragment) =>
+    assert(
+      selectedSource.includes(fragment),
+      `Selected Animation clip source is missing: ${fragment}`,
+    ),
+  );
+  assert(
+    selectedSource.includes(
+      "const { actions } = useAnimations(animations, animationRoot);",
+    ) && !selectedSource.includes("names"),
+    "A named Animation clip must not read the runtime clip name list",
+  );
+
+  const missingResult = compileVisualProject(
+    withAnimationPatch({ clipName: "Missing", speed: 1 }),
+    { generatedAt },
+  );
+  const missingSource =
+    missingResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(
+    missingResult.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === "animation-clip-missing" &&
+        diagnostic.severity === "warning" &&
+        diagnostic.message.includes("Missing"),
+    ),
+    "An Animation clip that is gone from the Model must be reported",
+  );
+  assert(
+    !missingSource.includes("useAnimations"),
+    "An Animation clip that is gone from the Model must not play another clip",
+  );
+
+  const runtimeResult = compileVisualProject(
+    withAnimationPatch({ clipName: "Wave", speed: 2 }),
+    { generatedAt, outputMode: "classic-runtime" },
+  );
+  const runtimeManifest = runtimeResult.runtimeManifestFile?.content ?? "";
+  assert(
+    runtimeManifest.includes('"clipName": "Wave"') &&
+      runtimeManifest.includes('"speed": 2'),
+    "Runtime manifest did not preserve the Animation clip and speed",
+  );
 }

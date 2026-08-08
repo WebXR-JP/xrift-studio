@@ -5,6 +5,7 @@ import {
   type AudioAsset,
   type ModelAsset,
 } from "./asset-manifest";
+import { createAnimationComponent } from "./scene-document";
 import { createScriptAsset } from "./scripting/script-files";
 import { extractScriptContract } from "./scripting/script-contract";
 import {
@@ -1393,6 +1394,96 @@ export function runXriftMcpEditorToolFixtures(): void {
   current = {
     ...current,
     bundle: rigidBodyUpdated.bundle,
+    revision: current.revision + 1,
+  };
+
+  // add_component gates Animation on a Model that carries clips, so the fixture
+  // seeds the component directly to exercise the update_component patch path.
+  const modelAnimationComponentId = "component-mcp-animation";
+  const seededAnimation = createAnimationComponent(modelAnimationComponentId);
+  assert(seededAnimation, "Animation fixture component could not be created");
+  const primitiveEntity = current.bundle.scene.entities[primitiveId];
+  assert(primitiveEntity, "Animation fixture needs the placed primitive Entity");
+  current = {
+    ...current,
+    bundle: {
+      ...current.bundle,
+      scene: {
+        ...current.bundle.scene,
+        entities: {
+          ...current.bundle.scene.entities,
+          [primitiveId]: {
+            ...primitiveEntity,
+            components: [...primitiveEntity.components, seededAnimation],
+          },
+        },
+      },
+    },
+  };
+
+  const modelAnimationUpdated = executeXriftMcpEditorTool(current, {
+    id: "fixture-update-animation",
+    tool: "update_component",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityId: primitiveId,
+      componentId: modelAnimationComponentId,
+      patch: { clipName: "Wave", speed: 1.5 },
+    },
+  });
+  const updatedModelAnimation = modelAnimationUpdated.result.component as {
+    clipName?: string;
+    speed?: number;
+  };
+  assert(
+    updatedModelAnimation.clipName === "Wave" && updatedModelAnimation.speed === 1.5,
+    "update_component should persist the Animation clip and speed",
+  );
+  current = {
+    ...current,
+    bundle: modelAnimationUpdated.bundle,
+    revision: current.revision + 1,
+  };
+
+  let invalidAnimationSpeedCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(current, {
+      id: "fixture-invalid-animation-speed",
+      tool: "update_component",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        entityId: primitiveId,
+        componentId: modelAnimationComponentId,
+        patch: { speed: 0 },
+      },
+    });
+  } catch (error) {
+    invalidAnimationSpeedCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    invalidAnimationSpeedCode === "INVALID_ARGUMENT",
+    "update_component should reject an out-of-range Animation speed",
+  );
+
+  const modelAnimationRemoved = executeXriftMcpEditorTool(current, {
+    id: "fixture-remove-animation",
+    tool: "remove_component",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityId: primitiveId,
+      componentId: modelAnimationComponentId,
+    },
+  });
+  current = {
+    ...current,
+    bundle: modelAnimationRemoved.bundle,
     revision: current.revision + 1,
   };
 

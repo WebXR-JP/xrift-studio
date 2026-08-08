@@ -70,7 +70,7 @@ F-06 アイテム検査
 | MI-51 | アプリ起動後またはAboutの「更新を確認」でXRift Studio本体の更新を検知する | 確認中は制作を妨げず、更新がある時だけ現在版、最新版、リリースノートをdialogに表示する。「後で」を選ぶとライブラリheaderとAboutに更新導線を残す。download中はbytesと割合、install中は再起動準備を示し、閉じる操作と二重実行を止める。 | 署名検証済み更新のinstall後にアプリを再起動し、新しい現在版と完了通知を表示する。確認またはinstall失敗時は現在のアプリを維持し、Aboutまたは同じdialogから再試行できる。 |
 | MI-52 | Assetsの「外部から追加」を開く、provider sidebarでリソース集を選ぶ、HDR / EXRをimportする、外部Assetをinstallする、公式XRift Componentを追加する、または環境Texture AssetをScene Viewへdragする | 左sidebarにPoly Haven、ambientCG、Open Brush、XRift公式Componentを同じ階層で表示し、中央に選択中providerの検索、種別またはカテゴリ、一覧、右に作者、license、配布ページとprovider固有optionを表示する。Open Brushは固定catalogの代表stroke nodeをthree-icosaで事前描画した保存済みthumbnailを全48件に表示し、汎用sphereの疑似previewへ置換しない。XRift公式Componentは公開package本体と公式sampleを事前描画したversion付き保存済みthumbnailを表示する。一覧と詳細を開くだけではWebGL contextを作らない。provider切替ではSceneとAssetを変更せずcatalogだけを切り替える。ambientCGは公式v3 APIのmetadata、thumbnail、CC0情報を使い、HDRIとMaterialをZIPから検証して取り込む。3D Modelは対応形式がglTFでない場合に一覧だけ表示し、インストール可能に見せない。ローカルHDR / EXRはシグネチャ検証後にTextureとしてqueueへ表示する。downloadまたは追加処理中はprovider切替と主操作を無効にし、providerが返した固定domainまたは固定catalog revisionだけを扱う。環境Texture drag中はScene全体へ設定されることを表示する。 | 成功時はMaterialと参照Texture、形式とequirectangular用途を保持したTexture Asset、GUIDとrenderer versionを保持したOpenBrush Material Asset、または公式XRift Componentを持つEntityを選択する。環境TextureはFlip Yなどを編集でき、任意ならSkyboxへ直ちに設定する。Open BrushはSceneへ自動割当せず、同じGUIDとrenderer versionの再追加では既存Materialを選択する。公式Componentは一件のScene historyとして追加しInspectorを開く。保存済みthumbnailが欠落した場合は項目名と種類iconを表示し、「準備中」のままにしない。catalog取得失敗では同じproviderから再試行でき、install失敗時はmanifestとSceneを変更せず同じAssetとoptionから再試行できる。provider creditとlicenseはAssetに保持し、一覧とInspectorから確認できる。 |
 | MI-53 | Hierarchy、Scene View、または Assets で Shift / Ctrl・Cmd を使って複数選択する | 選択行・カード・Scene上のoutlineを同じ選択状態として示し、Inspector見出しに件数を表示する。Hierarchy / AssetsのShiftは表示順の範囲、Scene ViewのShiftと全surfaceのCtrl・Cmdは追加／解除とする。Scene Viewでは最後に選んだEntityだけをprimaryとしてgizmoを表示し、camera dragを選択clickとして確定しない。Entityは共通するMesh Renderer / Light、Materialは共通PBR値だけを表示する。 | 選択だけではdocumentとhistoryを変更しない。一括変更は一件のhistoryとして確定し、Undoで全対象を戻す。HierarchyのDeleteと右クリックの削除は選択済みEntity全体を一回で削除し、選択解除または単体選択で通常Inspectorへ戻る。Play中は選択を維持して編集操作を無効にする。 |
-| MI-54 | Animation clipを含み`importAnimations`が有効なGLB / glTF ModelをSceneへ配置し、Playを開始する | 配置EntityへAnimation Componentを自動追加し、Inspectorに先頭clip名、長さ、track数、Autoplay、Loopを表示する。Edit中は静止し、Play開始時だけ有効なAutoplayで先頭clipを再生する。 | Loop有効時はPlay中と生成結果で繰り返す。Loop無効時は一度で停止する。Play中にEnabled、Autoplay、Loopまたは同じEntityのTransform / Colliderを変更した時は、そのEntityのmixerとphysics bodyだけを破棄して先頭から再実行する。Stop、Component無効化、Entity破棄ではmixerを停止してEdit時の姿勢へ戻す。clip欠落時はScene View全体を止めず同じInspectorに理由を示す。 |
+| MI-54 | Animation clipを含み`importAnimations`が有効なGLB / glTF ModelをSceneへ配置し、Playを開始する | 配置EntityへAnimation Componentを自動追加し、InspectorにClip選択、選択clipの長さとtrack数、Autoplay、Loop、Speedを表示する。Clipの既定は先頭clip名を併記した「先頭のClip」とする。Edit中は静止し、Play開始時だけ有効なAutoplayで選択clipを再生する。 | Loop有効時はPlay中と生成結果で繰り返す。Loop無効時は一度で停止する。Speedは選択clipだけへ0.01〜10倍で適用する。Play中にEnabled、Clip、Autoplay、Loop、Speedまたは同じEntityのTransform / Colliderを変更した時は、そのEntityのmixerとphysics bodyだけを破棄して先頭から再実行する。Stop、Component無効化、Entity破棄ではmixerを停止してEdit時の姿勢へ戻す。clip欠落や選択clipの消失時はScene View全体を止めず、同じInspectorに理由と選び直しを示す。 |
 | MI-55 | 外部リソースの「XRift公式 Component」で公式Componentを選ぶ | 公開中の`@xrift/world-components`検証version、公式source、利用可能な全Componentをgridへ表示する。thumbnailはpackage本体と公式sample childを固定generatorで事前描画し、Component名と公式badgeを焼き込んだ保存済みWebPを使う。versionが変わる時は保存先revisionを更新して全件を再生成し、SVG／CSSだけの識別用イラストへ置換しない。選択中Componentにはdescription、category、named import、versionを表示し、`DevEnvironment`はScene用でない理由を示す。 | 追加成功時は公式XRift Componentを一件のhistory transactionへ確定し、追加Entityを選択してScene ViewとInspectorへ到達する。Play、別Import中、project kind不一致、変換診断errorではSceneを変更せず理由を同じ詳細欄に残す。 |
 | MI-56 | GLB / VRM ModelをSceneへ配置し、展開されたNode、Bone、MeshをHierarchyで選択する | sourceの親子順を保つEntity treeをModel Entityの下へ表示し、行末をNode / Bone / Mesh / Skinで区別する。SkinまたはAnimationを含むModelは一つの共有Rendererを維持し、選択NodeのInspectorへsource node番号、共有Model、編集対象を表示する。Bone / Node TransformはScene Viewと共有Model poseへ即時同期し、Mesh / Skin行にはそのnodeが使うMaterial slotだけを表示する。 | Transformとnode別Material変更を一件のhistoryへ保存し、Undo / Redo、再表示、Classic JSX、Runtime manifestで同じ結果を復元する。同じsource materialを使う別nodeへnode別上書きを漏らさない。parse失敗時は単一Entityへ偽装せずImport Queueへ戻し、last-good Asset / Sceneを維持する。 |
 | MI-57 | Hierarchyの親Entityを折り畳む、展開する、検索で絞り込む、矢印キーで移動する、またはEntityのEnabledを変更する | 子を持つ行だけに展開状態と件数が分かる矢印を表示し、折り畳み中は子孫行だけを隠す。上下キーは表示中の前後、右キーは展開または最初の子、左キーは折り畳みまたは親、Home / Endは先頭 / 末尾へ選択を移し、選択行を表示範囲へ追従させる。Shift+上下は表示順の範囲選択とし、文字入力・IME変換中はHierarchy操作を抑止する。検索は名前、Entity種類、Component種類、Enabledの語を空白区切りで絞り込み、一致したEntityと祖先だけを自動展開する。折り畳み、検索、キー選択はSceneDocumentとUndo履歴を変更しない。単一Entity Inspectorの先頭はUnityと同じ順序でEnabledチェックと名前を一行に置き、Prefab sourceはアイコン、名前、更新アイコンだけを続ける。説明は常設せずtooltipと読み上げ名に移す。親が無効な子は継承された非表示状態をHierarchyの濃淡とInspectorの状態アイコンで示す。 | 検索を消すと検索前の折り畳み状態と同じ順序へ戻る。Scene Viewなどから折り畳まれた子孫を選択した時は祖先を自動展開して選択行とInspectorへ到達させる。Play中の選択移動と開閉は履歴を変更せず、Enabledや親子構造の変更は一件のauthoring historyとして実行中のScene、生成結果へ反映する。子Entity自身のEnabled値は保持する。一致なしでは検索語とクリア操作を表示する。 |
@@ -120,7 +120,7 @@ F-06 アイテム検査
 | F-19 | VisualからClassicへの書き出し | MI-03, MI-04, MI-05, MI-09, MI-17, MI-26, MI-50 | Visual Editorの日常導線から任意の同種Classic projectを検査し、Runtime JSON、Asset、接続component、固定dependencyを手書き領域と分離して追加できる。成功後はfolder、VS Code、terminal、接続snippetへ進める。 |
 | F-20 | XRift Studio本体の更新 | MI-03, MI-04, MI-05, MI-09, MI-51 | 起動時またはAboutから署名済み更新を確認し、現在版、最新版、更新内容を見て延期またはinstallできる。進捗を確認したまま再起動し、更新後の版または失敗時の再試行へ到達できる。 |
 | F-21 | 外部リソースStoreと環境Texture Asset | MI-03, MI-04, MI-05, MI-09, MI-11, MI-15, MI-16, MI-21, MI-39, MI-49, MI-52, MI-55, MI-61 | Assetsから提供元、作者、license、HDR / EXR形式を確認して外部Material、Texture、HDRI、Model、XRift公式Componentを追加する。Poly Haven Modelは依存fileを検証した自己完結glTF Assetとして保存し、ambientCGは公式v3 APIのdownload ZIPからColor / NormalGLまたはEXRを検証して保存する。UIとMCPのどちらからも同じinstall境界を使う。ambientCGの3D ModelはOBJなどの非glTF形式のためcatalog表示に留め、インストール可能に見せない。Open BrushはPoly Havenと同列のproviderから検証済みbrushを実stroke previewで選び、GUIDとrenderer versionを保持したMaterial Assetとして追加できる。XRift公式Componentも同列のproviderから公開package本体のpreviewを確認してSceneへ追加できる。ローカルまたは外部のHDR / EXRはequirectangular用途のTexture Assetになり、Flip Yなどを編集し、import / install直後またはScene Viewへのdragでシーン全体へ設定できる。provider境界はUIと保存形式から分離し、追加ストアへ拡張できる。 |
-| F-22 | GLB / glTF Animation自動再生 | MI-11, MI-13, MI-14, MI-35, MI-36, MI-54, MI-56, MI-60 | Animationを含むModelを配置するとAnimation Componentが付き、source NodeをHierarchyへ展開したまま先頭clipのAutoplayとLoopをInspectorで確認・変更できる。Edit中は静止し、Playと生成結果だけで再生し、Stop後は制作状態へ戻る。XRift Studioガイドでは通常のAutoplayと、埋め込みKHR_interactivityの`event/onStart → animation/start`が同じPlay開始で開く2枚扉を比較でき、右扉と同じグラフをInteractivity Asset Editorで確認・編集できる。 |
+| F-22 | GLB / glTF Animation自動再生 | MI-11, MI-13, MI-14, MI-35, MI-36, MI-54, MI-56, MI-60 | Animationを含むModelを配置するとAnimation Componentが付き、source NodeをHierarchyへ展開したまま再生clipの選択、Autoplay、Loop、SpeedをInspectorで確認・変更できる。Edit中は静止し、Playと生成結果だけで再生し、Stop後は制作状態へ戻る。XRift Studioガイドでは通常のAutoplayと、埋め込みKHR_interactivityの`event/onStart → animation/start`が同じPlay開始で開く2枚扉を比較でき、右扉と同じグラフをInteractivity Asset Editorで確認・編集できる。 |
 | F-23 | 公式XRift ComponentカタログとClassic / TSX変換 | MI-03, MI-04, MI-05, MI-09, MI-34, MI-39, MI-52, MI-55, MI-64 | 外部リソースで公開package versionと公式sourceを確認しながら、配置可能な公式Componentを全件サムネイル付きで選べる。右上ImportからDrei / React Three Fiberの標準primitiveとLight、Rapier RigidBody、公式XRift JSXを安全なScene dataへ変換する。既存Classicは検査済みentryを同じ変換器へ渡し、未対応custom codeやAssetを完全変換と誤表示せず、追加後のEntityとInspectorへ到達できる。 |
 | F-24 | glTF Material制御とBehavior連携 | MI-15, MI-16, MI-25, MI-60 | Material Textureのタイリング、Offset、Rotation、UV SetをglTF互換値として編集し、MCP、Animation導線、KHR_interactivity pointer nodeから同じMaterial設定へ到達できる。Runtime manifestでもTexture transformとRepeat samplerを維持する。 |
 | F-29 | Custom Shader authoringとMaterial適用 | MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-48 | Material InspectorまたはMCPからGLSL、uniform、variant、時間uniformを作成・編集し、同じMaterial AssetをMesh slotへ割り当ててScene View、Play、生成Worldへ反映できる。無効なshaderは診断とPBR復帰を残し、成功後は対象Materialへ戻れる。 |
@@ -696,32 +696,34 @@ F-06 アイテム検査
 
 ### 操作前
 
-- Model Inspectorはソースから検出したAnimation名、長さ、track数と、配置時にAnimationを取り込む設定を表示する。timelineやclip編集がまだ含まれないことと、今回の再生対象が先頭clipであることを区別する。
+- Model Inspectorはソースから検出したAnimation名、長さ、track数と、配置時にAnimationを取り込む設定を表示する。clipの選択と再生速度は扱えるが、keyframe編集とtimelineはまだ含まれないことを区別する。
 - Animationを含み`importAnimations`が有効なModelは、Sceneへ配置した時にMesh Rendererと同じEntityへAnimation Componentを一つ追加する。source Nodeは編集用EntityとしてHierarchyへ展開するが、描画用ModelとAnimation mixerは親Entityに一つだけ保ち、clipとSkin bindingを分断しない。
-- Edit中はModelを静止させ、InspectorでEnabled、Autoplay、Loopと対象clipを確認できる。
+- Edit中はModelを静止させ、InspectorでEnabled、Clip、Autoplay、Loop、Speedを確認できる。Clipの既定は「先頭のClip」であり、先頭clip名を併記して選択の意味を読めるようにする。
 
 ### 操作中
 
-- AutoplayとLoopの変更は一件のScene historyとして確定し、同じEntity selectionとModel Asset参照を維持する。Play中の変更は同じEntityだけを新しいruntime revisionで再実行する。
-- Play開始時にEnabledとAutoplayが有効なら先頭clipをリセットして再生する。Loop有効時は繰り返し、無効時は一度再生して最終姿勢で止める。
+- Clip、Autoplay、Loop、Speedの変更は一件のScene historyとして確定し、同じEntity selectionとModel Asset参照を維持する。Play中の変更は同じEntityだけを新しいruntime revisionで再実行する。
+- Play開始時にEnabledとAutoplayが有効なら選択clipをリセットして再生する。Loop有効時は繰り返し、無効時は一度再生して最終姿勢で止める。Speedは選択clipだけの再生倍率とし、KHR_interactivityが起動するclipへは適用しない。
+- Speedは0.01倍から10倍までとし、範囲外の値ではSceneDocumentを変更しない。
 - Animation mixerは対象Entity内のModelだけを更新し、SceneDocument、AssetManifest、Undo historyへruntime姿勢を書き戻さない。
 
 ### 成功時
 
-- Scene ViewのPlayと生成するClassic JSX、Runtime manifest adapterが同じAutoplay / Loop設定で先頭clipを再生する。
+- Scene ViewのPlayと生成するClassic JSX、Runtime manifest adapterが同じClip / Autoplay / Loop / Speed設定で同じclipを再生する。
 - Stop後はmixerとactionを破棄し、Edit中のModel姿勢、Entity Transform、selection、cameraへ戻る。
-- 保存と再表示後もAnimation ComponentのEnabled、Autoplay、Loopを復元する。
+- 保存と再表示後もAnimation ComponentのEnabled、Clip、Autoplay、Loop、Speedを復元する。既存documentにClipとSpeedがない場合は先頭clipと等倍として扱い、再保存で不要な差分を出さない。
 
 ### 失敗時
 
 - clipが欠落する、Model参照が変わる、loadに失敗する場合はAnimationだけを開始せず、Scene View全体と他Entityを継続表示する。InspectorにAnimationを含むModelが必要であることを示す。
+- 選択済みclipが再importでModelから消えた場合は別のclipへ自動で切り替えず、Inspectorに欠落したclip名と選び直しを示し、compileでも同じclip名を含む警告を出す。
 - AnimationのないEntityへAdd Componentを行った場合はSceneDocumentを変更せず、Animationを含むModelを同じEntityへ配置するよう案内する。
 - runtimeでclipを解決できない場合は無限retryを行わず、Modelのlast-good表示とEditへの復帰を維持する。
 
 ### 戻り先
 
 - Component設定後も同じEntity Inspectorへ留まり、PlayからStopすると同じAnimation設定と選択へ戻る。
-- Model Assetを選ぶと検出済みclip一覧と取り込み設定を確認でき、Entityへ戻ると再生設定を続けられる。
+- Model Assetを選ぶと検出済みclip一覧と取り込み設定を確認でき、Entityへ戻るとClipとSpeedの調整を続けられる。
 
 ## F-24 glTF Material制御とBehavior連携の状態設計
 

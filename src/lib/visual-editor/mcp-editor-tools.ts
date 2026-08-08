@@ -27,6 +27,8 @@ import {
 } from "./material-assignment";
 import type { PrototypeVisualProject } from "./prototype-project";
 import {
+  ANIMATION_SPEED_MAX,
+  ANIMATION_SPEED_MIN,
   addBuiltinPrimitiveEntity,
   addTerrainEntity,
   applyTerrainBrushToScene,
@@ -2831,8 +2833,29 @@ function updateComponent(
       );
       break;
     }
-    case "animation":
-      assertPatchKeys(patch, ["enabled", "autoplay", "loop"], component.type);
+    case "animation": {
+      assertPatchKeys(
+        patch,
+        ["enabled", "autoplay", "loop", "clipName", "speed"],
+        component.type,
+      );
+      if (patch.clipName !== undefined && typeof patch.clipName !== "string") {
+        invalidArgument("patch.clipName", "string");
+      }
+      if (patch.speed !== undefined) {
+        const speed = patch.speed;
+        if (
+          typeof speed !== "number" ||
+          !Number.isFinite(speed) ||
+          speed < ANIMATION_SPEED_MIN ||
+          speed > ANIMATION_SPEED_MAX
+        ) {
+          invalidArgument(
+            "patch.speed",
+            `number between ${ANIMATION_SPEED_MIN} and ${ANIMATION_SPEED_MAX}`,
+          );
+        }
+      }
       scene = updateAnimationComponent(
         context.bundle.scene,
         entityId,
@@ -2840,6 +2863,7 @@ function updateComponent(
         componentId,
       );
       break;
+    }
     case "particle-emitter": {
       assertPatchKeys(
         patch,

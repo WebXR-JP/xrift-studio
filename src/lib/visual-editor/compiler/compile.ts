@@ -27,6 +27,8 @@ import { normalizeParticleProperties } from "../particle-system";
 import { validateClassicR3fMaterialShader } from "../custom-shader-contract";
 import type { VisualProjectKind } from "../project-document";
 import {
+  animationPlaybackSpeed,
+  resolveAnimationClipIndex,
   type AnimationComponent,
   type BoxColliderComponent,
   type AudioSourceComponent,
@@ -1745,7 +1747,16 @@ function renderModelMesh(
   const isOpenBrush = isOpenBrushModelMetadata(
     model.importMetadata?.openBrush,
   );
-  const animationClip = model.importMetadata?.animations[0];
+  const modelClips = model.importMetadata?.animations ?? [];
+  const animationClipIndex = animation
+    ? resolveAnimationClipIndex(
+        animation,
+        modelClips.map((clip) => clip.name),
+      )
+    : -1;
+  const animationClip =
+    animationClipIndex >= 0 ? modelClips[animationClipIndex] : undefined;
+  const animationSpeed = animation ? animationPlaybackSpeed(animation) : 1;
   const autoplay = Boolean(
     animation?.autoplay &&
       animationClip &&
@@ -1755,11 +1766,15 @@ function renderModelMesh(
     addDiagnostic(context, {
       severity: "warning",
       code: "animation-clip-missing",
-      message: "Animationを再生できるclipがModelにありません",
+      message:
+        animation.clipName !== undefined && modelClips.length > 0
+          ? `Animationで選択したclip「${animation.clipName}」がModelにありません`
+          : "Animationを再生できるclipがModelにありません",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: animation.id,
       assetId: model.id,
+      ...(animation.clipName !== undefined ? { fieldPath: "clipName" } : {}),
     });
   }
   if (isObj) {
@@ -1836,21 +1851,26 @@ function renderModelMesh(
       : !needsParser
         ? `const { scene${autoplay ? ", animations" : ""} } = useGLTF(modelUrl);`
         : `const { scene, parser${autoplay ? ", animations" : ""} } = useGLTF(modelUrl);`;
+  // An explicit clip is emitted by name so the generated world plays the same
+  // clip the editor previews. Without a selection the first clip stays default.
+  const selectedClipName = animation?.clipName;
+  const usesClipNames = selectedClipName === undefined;
   const animationSource = autoplay
     ? `  const animationRoot = useRef<Group>(null);
-  const { actions, names } = useAnimations(animations, animationRoot);
+  const { actions${usesClipNames ? ", names" : ""} } = useAnimations(animations, animationRoot);
   useEffect(() => {
-    const firstAnimationName = names[0];
-    const action = firstAnimationName ? actions[firstAnimationName] : undefined;
+    const clipName = ${usesClipNames ? "names[0]" : JSON.stringify(selectedClipName)};
+    const action = clipName ? actions[clipName] : undefined;
     if (!action) return;
     action.reset();
     action.clampWhenFinished = ${!animation?.loop};
     action.setLoop(${animation?.loop ? "LoopRepeat, Infinity" : "LoopOnce, 1"});
+    action.timeScale = ${formatNumber(animationSpeed)};
     action.play();
     return () => {
       action.stop();
     };
-  }, [actions, names]);`
+  }, [actions${usesClipNames ? ", names" : ""}]);`
     : "";
   const source = `const ${componentName}: FC = () => {
   const modelUrl = useCompiledAssetUrl(${urlConstant});

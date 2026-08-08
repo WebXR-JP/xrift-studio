@@ -100,12 +100,22 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
           candidate.type === "animation" &&
           candidate.enabled,
       );
+      const selectedIndex =
+        component?.autoplay
+          ? component.clipName === undefined
+            ? 0
+            : clips.findIndex((clip) => clip.name === component.clipName)
+          : -1;
       const indices = new Set<number>();
-      if (component?.autoplay) indices.add(0);
+      if (selectedIndex >= 0) indices.add(selectedIndex);
       for (const index of
         result.interactionAnimationIndicesByEntity.get(entity.id) ?? []) {
         indices.add(index);
       }
+      const speed =
+        typeof component?.speed === "number" && Number.isFinite(component.speed)
+          ? component.speed
+          : 1;
       return [...indices].flatMap((index) => {
         const clip = clips[index];
         return clip
@@ -113,6 +123,8 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
               {
                 clip,
                 loop: component?.loop ?? false,
+                // Speed applies to the selected clip, not interactivity-driven ones.
+                timeScale: index === selectedIndex ? speed : 1,
                 mixer: new AnimationMixer(target),
               },
             ]
@@ -130,6 +142,7 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
         playback.loop ? LoopRepeat : LoopOnce,
         playback.loop ? Infinity : 1,
       );
+      action.timeScale = playback.timeScale;
       action.play();
     }
     return () => {

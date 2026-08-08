@@ -129,6 +129,10 @@ export type XriftRuntimeComponent =
       enabled: boolean;
       autoplay: boolean;
       loop: boolean;
+      /** Clip name to play. Absent keeps the Model's first clip. */
+      clipName?: string;
+      /** Playback rate multiplier. Absent behaves as 1. */
+      speed?: number;
     }
   | {
       id: string;

@@ -31,6 +31,8 @@ import {
   type VisualProjectKind,
 } from "./project-document";
 import {
+  ANIMATION_SPEED_MAX,
+  ANIMATION_SPEED_MIN,
   COLLIDER_FIT_MODES,
   COLLIDER_MESH_MODES,
   RIGID_BODY_AUTO_COLLIDERS,
@@ -2270,6 +2272,39 @@ function validateAnimationComponentShape(
           `${path}.${field}`,
           "type",
           `Animation ${field} must be a boolean`,
+        ),
+      );
+    }
+  }
+  if (
+    component.clipName !== undefined &&
+    (typeof component.clipName !== "string" || component.clipName.trim() === "")
+  ) {
+    issues.push(
+      issue(
+        `${path}.clipName`,
+        "type",
+        "Animation clipName must be a non-empty string",
+      ),
+    );
+  }
+  if (component.speed !== undefined) {
+    if (
+      typeof component.speed !== "number" ||
+      !Number.isFinite(component.speed)
+    ) {
+      issues.push(
+        issue(`${path}.speed`, "type", "Animation speed must be a finite number"),
+      );
+    } else if (
+      component.speed < ANIMATION_SPEED_MIN ||
+      component.speed > ANIMATION_SPEED_MAX
+    ) {
+      issues.push(
+        issue(
+          `${path}.speed`,
+          "range",
+          `Animation speed must be between ${ANIMATION_SPEED_MIN} and ${ANIMATION_SPEED_MAX}`,
         ),
       );
     }

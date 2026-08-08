@@ -21,6 +21,10 @@ import {
   normalizeMaterialProperties,
   getMeshMaterialSlots,
   getTransform,
+  animationPlaybackSpeed,
+  resolveAnimationClipIndex,
+  ANIMATION_SPEED_MAX,
+  ANIMATION_SPEED_MIN,
   EDITOR_COMPONENT_CATEGORY_ORDER,
   getEditorComponentMenuDefinitions,
   getXriftComponentDefinition,
@@ -2476,7 +2480,17 @@ function AnimationInspector({
       return asset?.kind === "model" ? asset : undefined;
     })
     .find((asset) => Boolean(asset?.importMetadata?.animations.length));
-  const clip = model?.importMetadata?.animations[0];
+  const clips = model?.importMetadata?.animations ?? [];
+  const clipIndex = resolveAnimationClipIndex(
+    component,
+    clips.map((entry) => entry.name),
+  );
+  const clip = clipIndex >= 0 ? clips[clipIndex] : undefined;
+  const missingClipName =
+    clipIndex < 0 && component.clipName !== undefined
+      ? component.clipName
+      : null;
+  const speed = animationPlaybackSpeed(component);
   const interactivityAssets = Object.values(assets.assets)
     .filter((asset) => asset.kind === "interactivity")
     .sort((left, right) => left.name.localeCompare(right.name));
@@ -2489,6 +2503,32 @@ function AnimationInspector({
         disabled={readOnly}
         onChange={(enabled) => onChange({ enabled })}
       />
+      <label className="block text-xs font-medium text-slate-600">
+        Clip
+        <select
+          value={component.clipName ?? ""}
+          disabled={readOnly || clips.length === 0}
+          onChange={(event) => {
+            const value = event.currentTarget.value;
+            onChange({ clipName: value === "" ? undefined : value });
+          }}
+          className="mt-1 h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100"
+        >
+          <option value="">
+            先頭のClip{clips[0] ? `（${clips[0].name}）` : ""}
+          </option>
+          {clips.map((entry) => (
+            <option key={entry.name} value={entry.name}>
+              {entry.name}
+            </option>
+          ))}
+          {missingClipName ? (
+            <option value={missingClipName}>
+              {missingClipName}（Modelにありません）
+            </option>
+          ) : null}
+        </select>
+      </label>
       <div className="space-y-2 border-t border-slate-100 pt-2">
         <ToggleRow
           label="Autoplay"
@@ -2503,14 +2543,39 @@ function AnimationInspector({
           onChange={(loop) => onChange({ loop })}
         />
       </div>
-      {clip ? (
+      <ColliderNumberField
+        label="Speed"
+        value={speed}
+        min={ANIMATION_SPEED_MIN}
+        max={ANIMATION_SPEED_MAX}
+        step={0.1}
+        disabled={readOnly}
+        onChange={(nextSpeed) =>
+          onChange({
+            speed: Math.min(
+              Math.max(nextSpeed, ANIMATION_SPEED_MIN),
+              ANIMATION_SPEED_MAX,
+            ),
+          })
+        }
+      />
+      {missingClipName ? (
+        <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
+          選択中のClip「{missingClipName}」がModelにありません。再生されないため、Clipを選び直してください。
+        </p>
+      ) : clip ? (
         <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs leading-4 text-slate-600">
           <span className="font-semibold text-slate-800">{clip.name}</span>
           <span className="ml-1 text-slate-500">
             {clip.duration.toFixed(2)}秒 · {clip.trackCount} tracks
           </span>
           <p className="mt-1">
-            Play開始時に先頭のAnimationを{component.loop ? "繰り返し" : "一度だけ"}再生します。
+            Play開始時にこのAnimationを{speed === 1 ? "" : `${speed}倍速で`}
+            {component.loop ? "繰り返し" : "一度だけ"}再生します
+            {speed === 1
+              ? ""
+              : `（実時間 ${(clip.duration / speed).toFixed(2)}秒）`}
+            。
           </p>
         </div>
       ) : (

@@ -48,6 +48,8 @@ import {
 import { tauri } from "../../lib/tauri";
 import {
   normalizeMaterialProperties,
+  animationPlaybackSpeed,
+  resolveAnimationClipIndex,
   applyCustomShaderSourceOverrides,
   bindCustomShaderGeometryAttributes,
   getKhrInteractivityOnStartAnimationIndices,
@@ -408,22 +410,28 @@ function ProjectModelRender({
     () => (renderedObject ? new AnimationMixer(renderedObject) : null),
     [renderedObject],
   );
+  const selectedClipIndex = useMemo(() => {
+    if (!animation?.enabled || !animation.autoplay) return -1;
+    return resolveAnimationClipIndex(
+      animation,
+      animations.map((clip) => clip.name),
+    );
+  }, [animation, animations]);
   const playbackClips = useMemo(() => {
     if (!playing) return [];
     const indices = new Set<number>();
-    if (animation?.enabled && animation.autoplay && animations[0]) indices.add(0);
+    if (selectedClipIndex >= 0) indices.add(selectedClipIndex);
     interactionAnimationIndices.forEach((index) => indices.add(index));
     declaredInteractionAnimationIndices.forEach((index) => indices.add(index));
     return [...indices].flatMap((index) =>
       animations[index] ? [animations[index]] : [],
     );
   }, [
-    animation?.autoplay,
-    animation?.enabled,
     animations,
     declaredInteractionAnimationIndices,
     interactionAnimationIndices,
     playing,
+    selectedClipIndex,
   ]);
   const playbackActive = Boolean(
     mixer &&
@@ -473,11 +481,16 @@ function ProjectModelRender({
       return;
     }
     const loop = animation?.loop ?? false;
+    const selectedClip =
+      selectedClipIndex >= 0 ? animations[selectedClipIndex] : undefined;
+    const speed = animation ? animationPlaybackSpeed(animation) : 1;
     const actions = playbackClips.map((clip) => {
       const action = mixer.clipAction(clip);
       action.reset();
       action.clampWhenFinished = !loop;
       action.setLoop(loop ? LoopRepeat : LoopOnce, loop ? Infinity : 1);
+      // Speed belongs to the Animation Component, not to interactivity-driven clips.
+      action.timeScale = clip === selectedClip ? speed : 1;
       action.play();
       return action;
     });
@@ -490,12 +503,14 @@ function ProjectModelRender({
       invalidate();
     };
   }, [
-    animation?.loop,
+    animation,
+    animations,
     invalidate,
     mixer,
     playbackActive,
     playbackClips,
     renderedObject,
+    selectedClipIndex,
   ]);
 
   useFrame((frame, delta) => {
