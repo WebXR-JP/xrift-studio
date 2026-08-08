@@ -1,6 +1,6 @@
 # XRift Studio Visual Editor Roadmap
 
-最終更新: 2026-07-21
+最終更新: 2026-08-09
 
 ## 目標
 
@@ -29,6 +29,7 @@ Visual projectはコードを隠すだけの画面ではなく、Scene、Asset�
 | Model Animation再生 | 利用可能 | Animationを含むGLB／glTFの配置時にAnimation Componentを追加し、選択したclipをPlayと生成物で再生する。Autoplay、Loop、再生速度をInspectorとMCPから設定する。 |
 | 表現と再利用 | 利用可能 | Primitive、Material、Particle、Prefab、Collider、XRift Componentを作成・配置する。 |
 | Terrain authoring | 利用可能 | Createメニューから高さサンプルTerrainを追加し、InspectorまたはMCPのRaise／Lower／Flatten／Smoothブラシで編集する。static Trimesh Collider、Play、compile、runtime manifestへ同じTerrainを渡す。 |
+| Scripting | 検証中 | Script AssetをTypeScriptで書き、Script ComponentとしてEntityへ付け、propertyとreferenceを宣言してPlayで実行する。未承認sourceは内容hashの確認を経てから実行し、同じScriptを公開ワールドへ静的importとして出力する。対応範囲は[Scripting Contract](./SCRIPTING.md)にまとめる。 |
 | Play | 利用可能 | 編集データと分離したPlay WindowでPlay／Stopし、WorldはRapierの重力・Collider・WASD controller、Itemは単体表示を確認する。Transform／Collider／Animation変更は対象Entityだけ再実行する。runtime受け入れは継続する。 |
 | Compile／Upload | 利用可能 | Visual documentの保存、検査、XRift向けTSX生成、staging、World／ItemのUpload導線。 |
 | AI connection | 検証中 | アプリ内の接続パネルからMCP serverを登録し、Scene読取・編集の限定toolを呼び出す。sidecar同梱を含む配布確認を継続する。 |
@@ -73,7 +74,7 @@ Visual projectはコードを隠すだけの画面ではなく、Scene、Asset�
 | 8 | Animation authoring | 計画中 | timeline上でbone／shape key keyframeを編集・再生し、clipとして保存できる。 |
 | 9 | Classic export UI／CLI／Runtime | 開発版あり | Editorからの既存Classic追加、Runtime JSON、Three.js／R3F adapter、dependency plan、dry-run、衝突検知、Asset copy、provenanceを実装済み。未対応Runtime Componentとnpm公開を完了する。 |
 | 10 | Production readiness | 計画中 | 大規模Scene性能、accessibility、失敗回復、security、release checklistを満たす。 |
-| 11 | Scripting | 計画中 | Script AssetをTypeScriptで書き、EntityへScript Componentとして付け、Playで実行できる。Play中のsource編集が該当Entityだけを作り直し、実行時例外がScene Viewを落とさない。同じScriptが公開ワールドへ静的importとして出力され、Playと公開の挙動が一致する。契約と対応範囲は[Scripting Contract](./SCRIPTING.md)にまとめる。 |
+| 11 | Scripting | 利用可能・検証中 | Script Asset、Script Component、承認gate、Play実行、静的import出力までを接続済み。実XRift runtimeでPlayと公開の挙動一致を受け入れ、[Scripting Contract](./SCRIPTING.md)が未対応とするtyped loader、pointer／player参照、非同期例外の帰属を埋める。 |
 
 ## 通常のXRift開発へ渡すCLI
 

@@ -25,6 +25,8 @@ Node.js や `@xrift/cli` の導入、コードまたはビジュアルエディ�
 | アセットと表現を作る | 対応 | 対応 | Texture、Material、Particle、PrefabをAssetsで管理し、Inspectorから編集する。PNG、JPG、WebP、KTX2に対応する。 |
 | 音を配置する | 対応 | 対応 | MP3をAudio Assetとして取り込み、Audio Sourceへ割り当てて保存・変換する。 |
 | 衝突判定を設定する | 対応 | 対応 | PrimitiveにはBox Collider、インポートModelにはMesh Colliderを初期設定し、Center／Half Extentsの編集と自動フィットを行う。 |
+| 地形をつくる | 対応 | 対応 | Createメニューから高さサンプルTerrainを追加し、盛り上げる、掘る、高さを設定、滑らかにする、穴を開けるブラシで編集する。Scene View、static Trimesh Collider、生成コードで同じ三角形を使う。 |
+| Entityに振る舞いを与える | 対応 | 対応 | Script AssetをTypeScriptで書き、Script ComponentとしてEntityへ付けてPlayで実行する。未承認のsourceは内容hashを確認してから実行し、同じScriptを公開ワールドへ静的importとして出力する。対応範囲は[Scripting Contract](./docs/SCRIPTING.md)にまとめている。 |
 | Editor内でPlay確認する | 対応 | 対応 | 編集状態を保持したままPlayへ切り替え、ワールドではWASD操作、アイテムでは周囲からの見え方を確認する。 |
 | 画像や 3D 素材を管理する | 対応 | 対応 | ファイルの追加、名前変更、削除、画像プレビュー、3D モデルプレビューを行う。 |
 | 公開情報を整える | 対応 | 対応 | タイトル、説明、ビルド設定、サムネイルを編集する。ワールドでは物理・カメラ、アイテムでは権限も設定できる。 |
