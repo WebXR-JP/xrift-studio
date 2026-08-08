@@ -410,13 +410,15 @@ function ProjectModelRender({
     () => (renderedObject ? new AnimationMixer(renderedObject) : null),
     [renderedObject],
   );
+  const animationClipName = animation?.clipName;
+  const animationSpeed = animation ? animationPlaybackSpeed(animation) : 1;
   const selectedClipIndex = useMemo(() => {
     if (!animation?.enabled || !animation.autoplay) return -1;
     return resolveAnimationClipIndex(
-      animation,
+      { clipName: animationClipName },
       animations.map((clip) => clip.name),
     );
-  }, [animation, animations]);
+  }, [animation?.autoplay, animation?.enabled, animationClipName, animations]);
   const playbackClips = useMemo(() => {
     if (!playing) return [];
     const indices = new Set<number>();
@@ -483,14 +485,13 @@ function ProjectModelRender({
     const loop = animation?.loop ?? false;
     const selectedClip =
       selectedClipIndex >= 0 ? animations[selectedClipIndex] : undefined;
-    const speed = animation ? animationPlaybackSpeed(animation) : 1;
     const actions = playbackClips.map((clip) => {
       const action = mixer.clipAction(clip);
       action.reset();
       action.clampWhenFinished = !loop;
       action.setLoop(loop ? LoopRepeat : LoopOnce, loop ? Infinity : 1);
       // Speed belongs to the Animation Component, not to interactivity-driven clips.
-      action.timeScale = clip === selectedClip ? speed : 1;
+      action.timeScale = clip === selectedClip ? animationSpeed : 1;
       action.play();
       return action;
     });
@@ -503,7 +504,8 @@ function ProjectModelRender({
       invalidate();
     };
   }, [
-    animation,
+    animation?.loop,
+    animationSpeed,
     animations,
     invalidate,
     mixer,
