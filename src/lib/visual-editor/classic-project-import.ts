@@ -36,6 +36,11 @@ import {
 } from "./scene-document";
 import { resolveSceneSettings } from "./scene-settings";
 import type { ThreeModelCompanionFile } from "./three-model-converter";
+import {
+  createQuotedReferenceScanPattern,
+  kindForPath,
+  MODEL_COMPANION_EXTENSION_PATTERN,
+} from "./asset-format-registry";
 
 export type ClassicProjectVisualResource = {
   sourcePath: string;
@@ -156,8 +161,13 @@ const MAX_SOURCE_GRAPH_BYTES = 4 * 1024 * 1024;
 const SOURCE_MODULE_PATTERN = /\.(?:[cm]?[jt]sx?)$/i;
 const MAX_COMPANION_FILES = 512;
 const MAX_COMPANION_BYTES = 128 * 1024 * 1024;
-const MODEL_COMPANION_PATTERN =
-  /\.(?:bin|mtl|png|jpe?g|webp|avif|gif|bmp|svg|tga|tif|tiff|dds|ktx2?|hdr|exr|dat|ldr|mpd)$/i;
+/** Kinds a Classic project module can reference. */
+const CLASSIC_REFERENCE_KINDS = [
+  "texture",
+  "skybox",
+  "audio",
+  "model",
+] as const;
 
 /**
  * Reads the validated XRift entry and a bounded set of source modules. Imported
@@ -1419,7 +1429,7 @@ function classicTextureVariableSources(
       .map((value) => value.trim())
       .filter(Boolean);
     const paths = [...match[2].matchAll(
-      /["'`]([^"'`\r\n]*?\.(?:png|jpe?g|webp|avif|gif|bmp|svg|ktx2?|hdr|exr))["'`]/gi,
+      createQuotedReferenceScanPattern(["texture", "skybox"]),
     )]
       .map((candidate) =>
         resolveClassicResourcePath(candidate[1], module.path),
@@ -1652,8 +1662,7 @@ function scanClassicModuleResources(
   module: ComponentCodeImportSourceModule,
 ): ClassicProjectVisualResource[] {
   const resources = new Map<string, ClassicProjectVisualResource>();
-  const pattern =
-    /["'`]([^"'`\r\n]*?\.(?:glb|gltf|obj|vrm|png|jpe?g|webp|avif|gif|bmp|svg|ktx2|hdr|exr|drc|mp3|wav)(?:[?#][^"'`\r\n]*)?)["'`]/gi;
+  const pattern = createQuotedReferenceScanPattern(CLASSIC_REFERENCE_KINDS);
   for (const match of module.source.matchAll(pattern)) {
     const sourcePath = resolveClassicResourcePath(match[1], module.path);
     if (!sourcePath) continue;
@@ -1705,11 +1714,11 @@ function resolveClassicResourcePath(
 function classicResourceKind(
   sourcePath: string,
 ): ClassicProjectVisualResource["kind"] {
-  if (/\.(?:glb|gltf|obj|vrm|drc)$/i.test(sourcePath)) return "model";
-  if (/\.(?:png|jpe?g|webp|avif|gif|bmp|svg|ktx2|hdr|exr)$/i.test(sourcePath)) {
-    return "texture";
-  }
-  if (/\.(?:mp3|wav)$/i.test(sourcePath)) return "audio";
+  const kind = kindForPath(sourcePath);
+  if (kind === "model") return "model";
+  // HDRI is stored as a Texture Asset by the Classic importer.
+  if (kind === "texture" || kind === "skybox") return "texture";
+  if (kind === "audio") return "audio";
   return "unsupported";
 }
 
@@ -1910,7 +1919,7 @@ async function readClassicModelCompanions(
         continue;
       }
       const rel = entry.rel.replace(/\\/g, "/");
-      if (rel === normalizedSource || !MODEL_COMPANION_PATTERN.test(rel)) continue;
+      if (rel === normalizedSource || !MODEL_COMPANION_EXTENSION_PATTERN.test(rel)) continue;
       const size = entry.size ?? 0;
       totalBytes += size;
       if (

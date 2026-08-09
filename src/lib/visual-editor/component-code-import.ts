@@ -39,9 +39,13 @@ import {
 } from "./scene-document";
 import { updateXriftComponent } from "./component-registry";
 import {
-  STUDIO_IMAGE_EXTENSION_PATTERN,
-  THREE_EDITOR_MODEL_EXTENSION_PATTERN,
+  createEmbeddedReferencePattern,
+  createQuotedReferenceScanPattern,
+  kindForPath,
 } from "./asset-format-registry";
+
+/** Kinds a JSX component module can reference. */
+const COMPONENT_CODE_REFERENCE_KINDS = ["texture", "skybox", "model"] as const;
 
 export const XRIFT_PORTAL_SAMPLE = `import { Portal } from '@xrift/world-components'
 
@@ -554,15 +558,12 @@ function importedAssetKind(
   sourcePath: string,
   preferredKind?: "model" | "texture",
 ): ComponentCodeImportAssetDependency["kind"] {
-  if (
-    preferredKind === "model" &&
-    THREE_EDITOR_MODEL_EXTENSION_PATTERN.test(sourcePath)
-  ) {
-    return "model";
-  }
-  if (STUDIO_IMAGE_EXTENSION_PATTERN.test(sourcePath)) return "texture";
-  if (THREE_EDITOR_MODEL_EXTENSION_PATTERN.test(sourcePath)) return "model";
-  if (/\.(?:hdr|exr)$/i.test(sourcePath)) return "texture";
+  const kind = kindForPath(sourcePath, {
+    preferModel: preferredKind === "model",
+  });
+  if (kind === "model") return "model";
+  // HDRI still becomes a Texture Asset on this import path.
+  if (kind === "texture" || kind === "skybox") return "texture";
   return "unsupported";
 }
 
@@ -595,7 +596,9 @@ function scanModuleAssetReferences(
     string,
     ComponentCodeImportAssetDependency["kind"]
   >();
-  const stringPattern = /["'`]([^"'`\r\n]*?\.(?:glb|gltf|obj|vrm|png|jpe?g|webp|ktx2|hdr|exr|drc)(?:[?#][^"'`\r\n]*)?)["'`]/gi;
+  const stringPattern = createQuotedReferenceScanPattern(
+    COMPONENT_CODE_REFERENCE_KINDS,
+  );
   for (const match of source.matchAll(stringPattern)) {
     const sourcePath = resolveAssetReference(match[1], sourceModulePath);
     if (sourcePath) references.set(sourcePath, importedAssetKind(sourcePath));
@@ -611,15 +614,12 @@ function resolveAssetReference(
   let candidate = value.trim();
   if (!candidate || /^(?:data:|https?:|blob:)/i.test(candidate)) return undefined;
   const embedded = candidate.match(
-    /([^${}\s"'`]+\.(?:glb|gltf|obj|vrm|png|jpe?g|webp|ktx2|hdr|exr|drc)(?:[?#][^\s"'`]*)?)/i,
+    createEmbeddedReferencePattern(COMPONENT_CODE_REFERENCE_KINDS),
   );
   if (!embedded) return undefined;
   candidate = embedded[1].replace(/[?#].*$/, "").replace(/\\/g, "/");
-  if (
-    !THREE_EDITOR_MODEL_EXTENSION_PATTERN.test(candidate) &&
-    !STUDIO_IMAGE_EXTENSION_PATTERN.test(candidate) &&
-    !/\.(?:hdr|exr)(?:[?#].*)?$/i.test(candidate)
-  ) {
+  const kind = kindForPath(candidate);
+  if (kind !== "model" && kind !== "texture" && kind !== "skybox") {
     return undefined;
   }
   if (candidate.startsWith("/")) return normalizeModulePath(`public/${candidate}`);

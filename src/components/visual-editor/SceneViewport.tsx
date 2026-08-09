@@ -116,6 +116,7 @@ import {
   type TextureAsset,
   type Vec3,
   type VisualProjectKind,
+  NATIVE_MODEL_EXTENSION_PATTERN,
 } from "../../lib/visual-editor";
 import { tauri } from "../../lib/tauri";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
@@ -2347,7 +2348,9 @@ function resolveProjectModelSource(
   if (!relativePath || /^[a-z][a-z0-9+.-]*:/i.test(relativePath)) {
     return undefined;
   }
-  return /\.(?:glb|gltf|obj|vrm)$/i.test(relativePath) ? relativePath : undefined;
+  return NATIVE_MODEL_EXTENSION_PATTERN.test(relativePath)
+    ? relativePath
+    : undefined;
 }
 
 function hasModelProxy(

@@ -26,6 +26,7 @@ import type {
 import {
   BUILTIN_PREFAB_DRAG_MIME,
   ASSET_IMPORT_ACCEPT,
+  ASSET_KIND_UI,
   getXriftComponentDefinition,
   isEnvironmentTextureAsset,
   isScenePlaceableAsset,
@@ -107,57 +108,15 @@ const KIND_FOLDERS: BrowserFolder[] = [
 ];
 
 function assetKindLabel(asset: SceneAsset): string {
-  switch (asset.kind) {
-    case "primitive":
-      return "Primitive";
-    case "model":
-      return "Model";
-    case "material":
-      return "Material";
-    case "texture":
-      return isEnvironmentTextureAsset(asset) ? "Texture / HDRI" : "Texture";
-    case "skybox":
-      return "Texture / HDRI";
-    case "particle":
-      return "Particle";
-    case "interactivity":
-      return "KHR Interactivity";
-    case "audio":
-      return "Audio";
-    case "script":
-      return "Script";
-    case "shader":
-      return "GLSL Shader";
-    case "template":
-      return "Prefab";
+  // HDRI Textures share the Texture kind but read as a different asset class.
+  if (asset.kind === "texture" && isEnvironmentTextureAsset(asset)) {
+    return ASSET_KIND_UI.skybox.label;
   }
+  return ASSET_KIND_UI[asset.kind].label;
 }
 
 function assetIconName(asset: SceneAsset): EditorIconName {
-  switch (asset.kind) {
-    case "model":
-      return "model";
-    case "material":
-      return "material";
-    case "texture":
-      return "texture";
-    case "skybox":
-      return "texture";
-    case "particle":
-      return "particle";
-    case "interactivity":
-      return "asset";
-    case "audio":
-      return "audio";
-    case "script":
-      return "script";
-    case "shader":
-      return "script";
-    case "template":
-      return "prefab";
-    case "primitive":
-      return "primitive";
-  }
+  return ASSET_KIND_UI[asset.kind].icon;
 }
 
 function assetSourceLabel(asset: SceneAsset): string {

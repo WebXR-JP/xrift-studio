@@ -12,6 +12,10 @@ import {
   type MaterialExtensionFieldDescriptor,
   type MaterialExtensionName,
 } from "./material-extension-registry";
+import {
+  extensionOfPath,
+  textureSourceFormatForExtension,
+} from "./asset-format-registry";
 
 export type AssetStatus = "ready" | "missing" | "invalid";
 
@@ -698,24 +702,9 @@ export function getTextureSourceFormat(
 ): TextureSourceFormat | undefined {
   if (asset.importMetadata?.sourceFormat) return asset.importMetadata.sourceFormat;
   if (asset.source.kind !== "project") return undefined;
-  const extension = asset.source.relativePath.split(".").pop()?.toLowerCase();
-  if (extension === "jpg") return "jpeg";
-  return [
-    "png",
-    "jpeg",
-    "webp",
-    "avif",
-    "gif",
-    "bmp",
-    "svg",
-    "ktx2",
-    "hdr",
-    "exr",
-  ].includes(
-    extension ?? "",
-  )
-    ? (extension as TextureSourceFormat)
-    : undefined;
+  return textureSourceFormatForExtension(
+    extensionOfPath(asset.source.relativePath),
+  ) as TextureSourceFormat | undefined;
 }
 
 export function getAudioAsset(

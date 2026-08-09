@@ -178,3 +178,10 @@ export function commandTitle(
 ): string {
   return `${label}${shortcut ? ` (${shortcut})` : ""}`;
 }
+
+import type { AssetKindIconName } from "../../lib/visual-editor/asset-format-registry";
+
+// Keeps ASSET_KIND_UI honest without inverting the lib -> components dependency.
+type AssetKindIconsExist = AssetKindIconName extends EditorIconName ? true : never;
+const ASSET_KIND_ICONS_EXIST: AssetKindIconsExist = true;
+void ASSET_KIND_ICONS_EXIST;

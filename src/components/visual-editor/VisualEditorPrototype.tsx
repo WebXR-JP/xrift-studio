@@ -82,8 +82,9 @@ import {
   XRIFT_MCP_EDITOR_TOOLS,
   XRIFT_MCP_LOCAL_ASSET_TOOLS,
   XRIFT_MCP_SCRIPT_TOOLS,
-  STUDIO_IMAGE_EXTENSION_PATTERN,
-  THREE_EDITOR_MODEL_EXTENSION_PATTERN,
+  kindForPath,
+  PROJECT_PACKAGE_EXTENSION_PATTERN,
+  type AssetFormatKind,
   XriftMcpEditorToolError,
   type ScriptContract,
   type XriftMcpScriptToolName,
@@ -288,12 +289,15 @@ import { useTerrainAuthoring } from "./useTerrainAuthoring";
 
 export type { VisualEditorLayout } from "./editor-layout";
 
-const SUPPORTED_MODEL_FILE = THREE_EDITOR_MODEL_EXTENSION_PATTERN;
-const SUPPORTED_TEXTURE_FILE = STUDIO_IMAGE_EXTENSION_PATTERN;
-const SUPPORTED_HDRI_FILE = /\.(hdr|exr)$/i;
-const SUPPORTED_AUDIO_FILE = /\.(?:mp3|wav)$/i;
-const SUPPORTED_SHADER_FILE = /\.(?:glsl|vert|vertex|vs|frag|fragment|fs)$/i;
-const SUPPORTED_UNITY_FILE = /\.(unitypackage|unity|prefab)$/i;
+const IMPORT_RESOURCE_KIND: Readonly<
+  Partial<Record<AssetFormatKind, PendingImport["resourceKind"]>>
+> = {
+  texture: "texture",
+  model: "model",
+  skybox: "skybox",
+  audio: "audio",
+  shader: "shader",
+};
 const AUTOSAVE_DELAY_MS = 250;
 const AUTOSAVE_MAX_ATTEMPTS = 4;
 const AUTOSAVE_RETRY_DELAYS_MS = [300, 900, 1_800] as const;
@@ -7113,32 +7117,18 @@ export function VisualEditorPrototype({
       file: File;
       resourceKind: PendingImport["resourceKind"];
     }> = [];
+    const unsupported: File[] = [];
     for (const file of files) {
       if (companionPaths.has(importBatchPath(file))) continue;
-      if (SUPPORTED_UNITY_FILE.test(file.name)) {
+      if (PROJECT_PACKAGE_EXTENSION_PATTERN.test(file.name)) {
         accepted.push({ file, resourceKind: "unity-package" });
-      } else if (SUPPORTED_TEXTURE_FILE.test(file.name)) {
-        accepted.push({ file, resourceKind: "texture" });
-      } else if (SUPPORTED_MODEL_FILE.test(file.name)) {
-        accepted.push({ file, resourceKind: "model" });
-      } else if (SUPPORTED_HDRI_FILE.test(file.name)) {
-        accepted.push({ file, resourceKind: "skybox" });
-      } else if (SUPPORTED_AUDIO_FILE.test(file.name)) {
-        accepted.push({ file, resourceKind: "audio" });
-      } else if (SUPPORTED_SHADER_FILE.test(file.name)) {
-        accepted.push({ file, resourceKind: "shader" });
+        continue;
       }
+      const kind = kindForPath(file.name);
+      const resourceKind = kind ? IMPORT_RESOURCE_KIND[kind] : undefined;
+      if (resourceKind) accepted.push({ file, resourceKind });
+      else unsupported.push(file);
     }
-    const unsupported = files.filter(
-      (file) =>
-        !companionPaths.has(importBatchPath(file)) &&
-        !SUPPORTED_UNITY_FILE.test(file.name) &&
-        !SUPPORTED_MODEL_FILE.test(file.name) &&
-        !SUPPORTED_TEXTURE_FILE.test(file.name) &&
-        !SUPPORTED_HDRI_FILE.test(file.name) &&
-        !SUPPORTED_AUDIO_FILE.test(file.name) &&
-        !SUPPORTED_SHADER_FILE.test(file.name),
-    );
 
     if (unsupported.length > 0) {
       const names = unsupported.slice(0, 3).map((file) => file.name).join("、");

@@ -36,6 +36,12 @@ import {
   type Vec3,
 } from "./scene-document";
 import { resolveSceneSettings, type SceneSettings } from "./scene-settings";
+import {
+  extensionPattern,
+  extensionsForKinds,
+  mimeTypeForPath,
+  STUDIO_NATIVE_MODEL_FORMATS,
+} from "./asset-format-registry";
 
 export const UNITY_PACKAGE_MAX_COMPRESSED_BYTES = 256 * 1024 * 1024;
 export const UNITY_PACKAGE_MAX_EXPANDED_BYTES = 768 * 1024 * 1024;
@@ -109,7 +115,12 @@ type ConvertedUnityDocument = {
   diagnostics: UnityImportDiagnostic[];
 };
 
-const SUPPORTED_PACKAGE_ASSET = /\.(glb|gltf|obj|vrm|png|jpe?g|webp|ktx2|hdr|exr)$/i;
+const SUPPORTED_PACKAGE_ASSET = extensionPattern([
+  ...STUDIO_NATIVE_MODEL_FORMATS,
+  ...extensionsForKinds(["texture", "skybox", "audio"], {
+    includeLegacy: false,
+  }),
+]);
 const UNITY_DOCUMENT = /\.(unity|prefab)$/i;
 const UNITY_MATERIAL = /\.mat$/i;
 const UNITY_GUID = /^[0-9a-f]{32}$/i;
@@ -1393,34 +1404,6 @@ function hierarchySize(entities: Record<string, SceneEntity>, rootId: string): n
     pending.push(...entity.children);
   }
   return visited.size;
-}
-
-function mimeTypeForPath(path: string): string {
-  switch (extensionOf(path)) {
-    case "glb":
-      return "model/gltf-binary";
-    case "gltf":
-      return "model/gltf+json";
-    case "obj":
-      return "model/obj";
-    case "vrm":
-      return "model/vrm";
-    case "png":
-      return "image/png";
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "webp":
-      return "image/webp";
-    case "ktx2":
-      return "image/ktx2";
-    case "hdr":
-      return "image/vnd.radiance";
-    case "exr":
-      return "image/x-exr";
-    default:
-      return "application/octet-stream";
-  }
 }
 
 function extensionOf(path: string): string {

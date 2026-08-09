@@ -20,6 +20,7 @@ import {
   getPrefabAssetDocumentReference,
   isEnvironmentTextureAsset,
   LIT_MATERIAL_EXTENSION_NAMES,
+  ASSET_KIND_UI,
   resolveOpenBrushBuiltinTextureUrl,
   type AudioAsset,
   type AssetManifest,
@@ -379,26 +380,7 @@ export function MaterialThumbnail({
 }
 
 function AssetThumbnailFallback({ asset }: { asset: SceneAsset }) {
-  const Icon =
-    asset.kind === "particle"
-      ? EDITOR_ICONS.particle
-      : asset.kind === "audio"
-        ? EDITOR_ICONS.audio
-      : asset.kind === "script"
-        ? EDITOR_ICONS.script
-      : asset.kind === "shader"
-        ? EDITOR_ICONS.script
-      : asset.kind === "template"
-        ? EDITOR_ICONS.prefab
-        : asset.kind === "texture"
-          ? EDITOR_ICONS.texture
-          : asset.kind === "skybox"
-            ? EDITOR_ICONS.skybox
-          : asset.kind === "model"
-            ? EDITOR_ICONS.model
-            : asset.kind === "material"
-              ? EDITOR_ICONS.material
-              : EDITOR_ICONS.asset;
+  const Icon = EDITOR_ICONS[ASSET_KIND_UI[asset.kind].icon];
   const label =
     asset.status === "invalid"
       ? "解析失敗・再生成"
@@ -603,13 +585,7 @@ function ProjectAssetThumbnail({
     );
   }
 
-  const Icon = EDITOR_ICONS[
-    asset.kind === "texture"
-      ? "texture"
-      : asset.kind === "material"
-        ? "material"
-        : "model"
-  ];
+  const Icon = EDITOR_ICONS[ASSET_KIND_UI[asset.kind].icon];
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-white text-slate-500">
       <Icon size={22} aria-hidden="true" />

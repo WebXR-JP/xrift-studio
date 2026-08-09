@@ -56,10 +56,12 @@ import {
 import { repairImportedObject3DHierarchy } from "./object3d-hierarchy";
 import { extractGltfModelNodeHierarchy } from "./model-hierarchy";
 import {
-  STUDIO_IMAGE_FORMATS,
-  STUDIO_NATIVE_MODEL_FORMATS,
-  isThreeEditorModelFormat,
+  isStudioNativeModelFormat,
+  modelFormatForSource,
+  modelMimeType,
   studioImageFormatForExtension,
+  studioImageFormatForMimeType,
+  STUDIO_IMAGE_FORMATS,
   type StudioImageFormat,
   type ThreeEditorModelFormat,
 } from "./asset-format-registry";
@@ -210,7 +212,7 @@ export function classifyAssetImport(
   const extension = extensionOf(fileName);
   const normalizedMime = mimeType.trim().toLowerCase().split(";")[0];
 
-  const modelFormat = modelFormatFromSource(extension, normalizedMime);
+  const modelFormat = modelFormatForSource(extension, normalizedMime);
   if (modelFormat && (modelFormat !== "svg" || preferredKind === "model")) {
     return {
       kind: "model",
@@ -221,14 +223,13 @@ export function classifyAssetImport(
   }
   const imageFormat =
     studioImageFormatForExtension(extension) ??
-    studioImageFormatFromMimeType(normalizedMime);
+    studioImageFormatForMimeType(normalizedMime);
   if (imageFormat && preferredKind !== "model") {
     const definition = STUDIO_IMAGE_FORMATS[imageFormat];
-    const sourceExtension = definition.extensions.includes(
-      extension as never,
-    )
+    const extensions = definition.extensions ?? [imageFormat];
+    const sourceExtension = extensions.includes(extension as never)
       ? extension
-      : definition.extensions[0];
+      : extensions[0];
     return {
       kind: "texture",
       format: imageFormat,
@@ -314,43 +315,6 @@ export function classifyAssetImport(
   return undefined;
 }
 
-function modelFormatFromSource(
-  extension: string,
-  mimeType: string,
-): ThreeEditorModelFormat | undefined {
-  if (isThreeEditorModelFormat(extension)) return extension;
-  if (mimeType === "model/gltf-binary") return "glb";
-  if (mimeType === "model/gltf+json") return "gltf";
-  if (mimeType === "model/vrm") return "vrm";
-  if (mimeType === "model/obj" || mimeType === "text/obj") return "obj";
-  if (mimeType === "model/fbx") return "fbx";
-  if (mimeType === "model/stl") return "stl";
-  return undefined;
-}
-
-function modelMimeType(format: ThreeEditorModelFormat): string {
-  if (format === "glb") return "model/gltf-binary";
-  if (format === "gltf") return "model/gltf+json";
-  if (format === "vrm") return "model/vrm";
-  if (format === "obj") return "model/obj";
-  if (format === "svg") return "image/svg+xml";
-  return `model/${format}`;
-}
-
-function studioImageFormatFromMimeType(
-  mimeType: string,
-): StudioImageFormat | undefined {
-  return (Object.entries(STUDIO_IMAGE_FORMATS) as Array<
-    [StudioImageFormat, (typeof STUDIO_IMAGE_FORMATS)[StudioImageFormat]]
-  >).find(([, definition]) => definition.mimeType === mimeType)?.[0];
-}
-
-function isStudioNativeModelFormat(
-  format: ThreeEditorModelFormat,
-): format is (typeof STUDIO_NATIVE_MODEL_FORMATS)[number] {
-  return (STUDIO_NATIVE_MODEL_FORMATS as readonly string[]).includes(format);
-}
-
 function replaceFileExtension(fileName: string, extension: string): string {
   const base = fileName.replace(/\.[^.]+$/, "") || "model";
   return `${base}.${extension}`;
@@ -366,7 +330,7 @@ function normalizeImageInputBySignature(
   ).find((format) => hasTextureSignature(bytes, format));
   if (!detected) return input;
   const definition = STUDIO_IMAGE_FORMATS[detected];
-  const expectedExtension = definition.extensions[0];
+  const expectedExtension = (definition.extensions ?? [detected])[0];
   const currentExtension = extensionOf(input.fileName);
   const normalizedMime = input.mimeType
     ?.split(";", 1)[0]
