@@ -32,6 +32,7 @@ export * from "./environment-texture-thumbnail";
 export * from "./material-assignment";
 export * from "./material-extension-registry";
 export * from "./material-thumbnail";
+export * from "./model-thumbnail";
 export * from "./interactivity-graph";
 export * from "./mcp-editor-tools";
 export * from "./mcp-editor-tools.fixture";

@@ -164,6 +164,7 @@ import { setProjectThumbnailFromAsset } from "../../lib/project-thumbnail";
 import { AssetsPanel } from "./AssetsPanel";
 import { EnvironmentTextureThumbnailGenerationQueue } from "./EnvironmentTextureThumbnailGenerationQueue";
 import { MaterialThumbnailGenerationQueue } from "./MaterialThumbnailGenerationQueue";
+import { ModelThumbnailGenerationQueue } from "./ModelThumbnailGenerationQueue";
 import { ExternalAssetStoreDialog } from "./ExternalAssetStoreDialog";
 import {
   hasActiveAssetImport,
@@ -6359,6 +6360,18 @@ export function VisualEditorPrototype({
     [],
   );
 
+  const handleModelThumbnailFailure = useCallback(
+    (assetId: string, _message: string) => {
+      const asset = bundleRef.current.assets.assets[assetId];
+      setNotice(
+        asset?.kind === "model"
+          ? `「${asset.name}」のサムネイルを生成できませんでした。ソースを確認してプロジェクトを開き直すと再試行します`
+          : "Modelサムネイルの自動生成に失敗しました。プロジェクトを開き直すと再試行します",
+      );
+    },
+    [],
+  );
+
   const handleUpdatePrefab = useCallback(
     (prefabId: string) => {
       if (editorMode !== "edit" || importBusy) {
@@ -8491,6 +8504,13 @@ export function VisualEditorPrototype({
             enabled={renderedEditorMode === "edit" && !importBusy}
             onGenerated={handleAssetThumbnailGenerated}
             onFailed={handleEnvironmentTextureThumbnailFailure}
+          />
+          <ModelThumbnailGenerationQueue
+            assets={bundle.assets}
+            projectPath={projectPath}
+            enabled={renderedEditorMode === "edit" && !importBusy}
+            onGenerated={handleAssetThumbnailGenerated}
+            onFailed={handleModelThumbnailFailure}
           />
           <EditorUtilityRail
             commands={resolvedCommands}

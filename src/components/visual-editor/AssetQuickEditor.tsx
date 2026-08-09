@@ -396,7 +396,9 @@ function AssetThumbnailFallback({ asset }: { asset: SceneAsset }) {
             ? "HDRIプレビューを生成中"
             : asset.kind === "material"
               ? "Material"
-              : "プレビュー準備中";
+              : asset.kind === "model"
+                ? "サムネイルを生成中"
+                : "プレビュー準備中";
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-slate-100 px-2 text-center text-slate-500">
       <Icon size={24} aria-hidden="true" />
