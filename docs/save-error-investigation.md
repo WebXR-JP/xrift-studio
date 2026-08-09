@@ -412,3 +412,30 @@ journal の phase 遷移、committed マーカ、孤児 staging の回収、ロ�
 
 `commit_visual_asset_import` を使う全ての Import 系（Model 再取り込み含む、Texture、Shader、
 Skybox、Unity パッケージ変換、Material/Environment サムネイル生成キュー）が同時に恩恵を受ける。
+
+### 追記2（2026-08-09）: Poly Haven / ambientCG の External Asset Install も同じ穴があった
+
+実際に Poly Haven から Model をダウンロードして「保存エラー」に遭遇し、Scene の未保存編集
+（崖・Spawn Point）が失われる実害が発生した。原因は `commit_visual_asset_import` とは別の、
+外部アセットダウンロードの確定処理 `external_store.rs` にあった。この投稿の 修正2 で名指しされて
+いた `external_store.rs:814` / `external_store.rs:1258`（証拠4・修正2 参照）が未着手のまま
+残っていたのが原因そのもの。
+
+- `commit_staged_downloads`（ambientCG 用）と、`install_external_store_asset` 内にほぼ同一の
+  コードが複製されている Poly Haven 用のコミットループの、両方に同じ無防備な
+  `std::fs::rename(&temporary, &target)` があった。Poly Haven の Model install はこの経路を
+  直接使う（`commit_visual_asset_import` は経由しない）。
+- 衝突検出の `std::fs::symlink_metadata` / `file_sha256` 内の `std::fs::read` にもリトライがなかった。
+- `make_model_self_contained` / `embed_model_uri` が、ダウンロード直後の一時ファイル（glTF 本体・
+  依存テクスチャ）を `std::fs::read` で読み直す箇所にもリトライがなかった。ダウンロード直後は
+  ファイルサイズが大きいほど AV スキャンに晒される時間も長く、Model は複数の依存ファイルを
+  連続で読むため被弾機会も多い。
+
+`lib.rs` の `retry_transient_io` は private だが、`external_store` は crate root の子 module
+なので `super::retry_transient_io` で追加の公開範囲変更なしに再利用できた。上と同じパターンを
+`file_sha256`、`commit_staged_downloads`、`install_external_store_asset` 内のコミットループ、
+`make_model_self_contained`、`embed_model_uri` に適用済み。
+
+**残課題:** `script_trust.rs:691`（Script 承認ストアの `rename`）は同じパターンだが未修正のまま。
+書き込み頻度が低く（ユーザーがScript実行を承認/失効した時のみ）、今回の報告とは無関係のため
+優先度を下げて見送った。

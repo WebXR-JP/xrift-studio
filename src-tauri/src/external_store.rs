@@ -777,7 +777,8 @@ fn has_environment_file_signature(bytes: &[u8], format: &str) -> bool {
 }
 
 fn file_sha256(path: &Path) -> Result<String, String> {
-    let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
+    let bytes =
+        super::retry_transient_io(|| std::fs::read(path)).map_err(|error| error.to_string())?;
     let mut digest = Sha256::new();
     digest.update(bytes);
     Ok(format!("{:x}", digest.finalize()))
@@ -790,14 +791,21 @@ fn commit_staged_downloads(
     staged: BTreeMap<String, StagedDownload>,
 ) -> Result<Vec<ExternalStoreInstalledFile>, String> {
     // Reject collisions before moving any staged file into the project.
+    // symlink_metadata is the single source of truth for whether the target
+    // exists; only NotFound means "doesn't exist" — other errors (e.g. a
+    // transient Windows share violation from an AV scan) are retried first.
     for (relative, _, _, sha256, _) in staged.values() {
         let target = project_root.join(relative);
-        if !target.exists() {
-            continue;
-        }
-        let metadata = std::fs::symlink_metadata(&target).map_err(|error| error.to_string())?;
-        if metadata.file_type().is_symlink() || !metadata.is_file() {
-            return Err("外部アセットの保存先が通常ファイルではありません".to_string());
+        match super::retry_transient_io(|| std::fs::symlink_metadata(&target)) {
+            Ok(metadata) => {
+                if metadata.file_type().is_symlink() || !metadata.is_file() {
+                    return Err("外部アセットの保存先が通常ファイルではありません".to_string());
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                return Err(format!("外部アセットの保存先を確認できません: {}", error));
+            }
         }
         if file_sha256(&target)? != *sha256 {
             return Err("同じ保存先に異なる内容のファイルがあります".to_string());
@@ -811,9 +819,12 @@ fn commit_staged_downloads(
             std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
         if target.exists() {
-            std::fs::remove_file(&temporary).map_err(|error| error.to_string())?;
+            // Already verified byte-identical above; the temp file is
+            // disposable .cache staging and must not fail a successful install.
+            let _ = std::fs::remove_file(&temporary);
         } else {
-            std::fs::rename(&temporary, &target).map_err(|error| error.to_string())?;
+            super::retry_transient_io(|| std::fs::rename(&temporary, &target))
+                .map_err(|error| error.to_string())?;
         }
         installed.push(ExternalStoreInstalledFile {
             role,
@@ -1063,7 +1074,8 @@ fn embed_model_uri(
     let path = dependencies
         .get(&safe)
         .ok_or_else(|| format!("glTFの依存ファイルが見つかりません: {}", safe))?;
-    let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
+    let bytes =
+        super::retry_transient_io(|| std::fs::read(path)).map_err(|error| error.to_string())?;
     let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
     *uri = Value::String(format!(
         "data:{};base64,{}",
@@ -1078,9 +1090,11 @@ fn make_model_self_contained(staged: &mut BTreeMap<String, StagedDownload>) -> R
         .get("model")
         .map(|entry| entry.1.clone())
         .ok_or_else(|| "glTF本体が見つかりません".to_string())?;
-    let mut document: Value =
-        serde_json::from_slice(&std::fs::read(&main_path).map_err(|error| error.to_string())?)
-            .map_err(|_| "ダウンロードしたglTF JSONが不正です".to_string())?;
+    let mut document: Value = serde_json::from_slice(
+        &super::retry_transient_io(|| std::fs::read(&main_path))
+            .map_err(|error| error.to_string())?,
+    )
+    .map_err(|_| "ダウンロードしたglTF JSONが不正です".to_string())?;
     let version = document
         .get("asset")
         .and_then(|asset| asset.get("version"))
@@ -1235,14 +1249,21 @@ pub async fn install_external_store_asset(
         }
 
         // Reject collisions before moving any staged file into the project.
+        // symlink_metadata is the single source of truth for whether the target
+        // exists; only NotFound means "doesn't exist" — other errors (e.g. a
+        // transient Windows share violation from an AV scan) are retried first.
         for (relative, _, _, sha256, _) in staged.values() {
             let target = project_root.join(relative);
-            if !target.exists() {
-                continue;
-            }
-            let metadata = std::fs::symlink_metadata(&target).map_err(|error| error.to_string())?;
-            if metadata.file_type().is_symlink() || !metadata.is_file() {
-                return Err("外部アセットの保存先が通常ファイルではありません".to_string());
+            match super::retry_transient_io(|| std::fs::symlink_metadata(&target)) {
+                Ok(metadata) => {
+                    if metadata.file_type().is_symlink() || !metadata.is_file() {
+                        return Err("外部アセットの保存先が通常ファイルではありません".to_string());
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => {
+                    return Err(format!("外部アセットの保存先を確認できません: {}", error));
+                }
             }
             if file_sha256(&target)? != *sha256 {
                 return Err("同じ保存先に異なる内容のファイルがあります".to_string());
@@ -1255,9 +1276,12 @@ pub async fn install_external_store_asset(
                 std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
             }
             if target.exists() {
-                std::fs::remove_file(&temporary).map_err(|error| error.to_string())?;
+                // Already verified byte-identical above; the temp file is
+                // disposable .cache staging and must not fail a successful install.
+                let _ = std::fs::remove_file(&temporary);
             } else {
-                std::fs::rename(&temporary, &target).map_err(|error| error.to_string())?;
+                super::retry_transient_io(|| std::fs::rename(&temporary, &target))
+                    .map_err(|error| error.to_string())?;
             }
             installed.push(ExternalStoreInstalledFile {
                 role,
