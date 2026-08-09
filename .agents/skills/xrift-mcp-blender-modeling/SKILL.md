@@ -30,17 +30,38 @@ XRift Studio MCP と Blender MCP を組み合わせ、コーディングエー�
 
 ### B. コード中心でシーンを組む（主軸）
 
-1. `get_editor_context` で projectId / sceneId / expectedRevision を取得。
-2. 必要な Material を `create_document_asset(kind: "material")` + `update_material_asset` で作る。
-3. `create_primitive` でプリミティブ配置、または TSX Script の Render で R3F を組む。
-4. Render を使う場合:
-   - `list_script_templates` → `create_script_asset`(language: "tsx") で作成。
-   - `Render({ ctx })` を named export する。
-   - 外部 GLB は `model-display` テンプレートの `useGLTF`/`Clone` パターンを踏襲。
-   - フレーム毎の動きは `start(ctx) { return { update(delta) {} } }` に。
-5. `update_script_component` で `assetReferences` / `entityReferences` を宣言。
-6. `set_play_mode(mode: "play")` で確認。未承認ソースは `SCRIPT_APPROVAL_REQUIRED` が返るので
+#### B-1. R3F / Three.js コードを「貼り付けて変換」する（最速）
+
+Studio には `ComponentCodeImportDialog`（「コードから作成」）があり、R3F / Three.js の JSX を
+貼り付けると Entity とコンポーネントへ変換される。コードエージェント的にはこれが一番綺麗。
+
+1. R3F ワールドの `World.tsx` 相当の JSX（`@xrift/world-components` + R3F）を用意する。
+2. これを `analyzeComponentCode` / `analyzeComponentProject`（`ComponentCodeImportDialog`）に通す。
+   - 参照されるモデル・テクスチャ・Entity 構造・Component が抽出される。
+   - `applyComponentCodeImportPlan` で Entity 群として確定する。
+3. `get_editor_context` で revision を取り、作成後の最新状態を再取得する。
+4. 変換できない構文（`useFrame` 等）はエラーとして出るので、`start(ctx).update(delta)` へ直す。
+
+> 対象は「@xrift/world-components の Component」か「R3F のプリミティブ/メッシュ」。
+> 単純な箱・球・配置・色はこれで十分に綺麗に組める。複雑ジオメトリだけ Blender に回す。
+
+#### B-2. TSX Script の Render で手続き的に描画する
+
+`analyzeComponentCode` では拾い切れない動的な手続き描画（アニメ・複雑な JSX 生成）は、
+TSX Script の `Render` で直接 R3F を書く。
+
+1. `list_script_templates` → `create_script_asset`(language: "tsx") で作成。
+2. `Render({ ctx })` を named export する。外部 GLB は `model-display` テンプレートの
+   `useGLTF`/`Clone` パターンを踏襲（prop.asset / ScriptRenderProps）。
+3. フレーム毎の動きは `start(ctx) { return { update(delta) {} } }` に（`useFrame` 不可）。
+4. `update_script_component` で `assetReferences` / `entityReferences` を宣言。
+
+#### B-3. 確定と確認（共通）
+
+1. `update_script_component` で `assetReferences` / `entityReferences` を宣言（未宣言は解決しない）。
+2. `set_play_mode(mode: "play")` で確認。未承認ソースは `SCRIPT_APPROVAL_REQUIRED` が返るので
    ユーザーに Studio で承認してもらう。`unapprovedPolicy: "skip"` はスクリプトなしで始める場合のみ。
+3. `get_editor_context` の scriptRuntime で compile error / trust 状態を確認。
 
 ### C. Blender でメッシュを作る（必要なときだけ）
 
@@ -111,4 +132,5 @@ Three.js / R3F で作ったコードを XRift に落とすときの変換ルー�
 - XRift Studio 機能追加: .agents/skills/xrift-studio-feature/SKILL.md
 - GLB 書き出し詳細: .agents/skills/xrift-mcp-blender-modeling/references/blender-export.md
 - R3F/Three.js → Script 変換: .agents/skills/xrift-mcp-blender-modeling/references/r3f-to-script.md
+- 動作例（R3F→Studio 変換と配置）: .agents/skills/xrift-mcp-blender-modeling/references/r3f-to-studio-example.md
 - 反復編集ループ: .agents/skills/xrift-mcp-blender-modeling/references/iterative-loop.md
