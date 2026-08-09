@@ -2,6 +2,7 @@ import {
   normalizeMaterialProperties,
   normalizeTextureImportSettings,
   type AssetManifest,
+  type Color3,
   type MaterialAlphaMode,
   type MaterialAsset,
   type MaterialAssetPatch,
@@ -16,6 +17,12 @@ import {
   type TextureImportMetadata,
   type TextureSamplerSettings,
 } from "./asset-manifest";
+import {
+  MATERIAL_EXTENSION_DESCRIPTORS,
+  MATERIAL_EXTENSION_NAMES,
+  pruneMaterialExtensions,
+  type MaterialExtensionName,
+} from "./material-extension-registry";
 import {
   extractOpenBrushMaterialShader,
   openBrushBuiltinTextureKey,
@@ -679,71 +686,97 @@ function materialExtensions(
   warnings: GltfDerivedAssetWarning[],
 ): MaterialExtensionsPatch {
   if (!extensions) return {};
-  const result: MaterialExtensionsPatch = {};
-  if (objectValue(extensions.KHR_materials_unlit)) {
-    result.KHR_materials_unlit = {};
+  const collected: Partial<Record<MaterialExtensionName, JsonObject>> = {};
+
+  for (const name of MATERIAL_EXTENSION_NAMES) {
+    const source = objectValue(extensions[name]);
+    if (!source) continue;
+    const basePath = `materials[${materialIndex}].extensions.${name}`;
+    const value: JsonObject = {};
+    for (const field of MATERIAL_EXTENSION_DESCRIPTORS[name].fields) {
+      const raw = source[field.name];
+      const path = `${basePath}.${field.name}`;
+      switch (field.kind) {
+        case "texture": {
+          const texture = textureInfo(raw, textureAssetIds, path, warnings);
+          if (texture) value[field.name] = texture;
+          break;
+        }
+        case "normalTexture": {
+          const texture = normalTextureInfo(
+            raw,
+            textureAssetIds,
+            path,
+            warnings,
+          );
+          if (texture) value[field.name] = texture;
+          break;
+        }
+        case "positiveOptional": {
+          const number = finiteNumber(raw, Number.NaN);
+          if (Number.isFinite(number) && number > 0) value[field.name] = number;
+          break;
+        }
+        case "unitColor3":
+          value[field.name] = colorTuple(raw, 3, field.default);
+          break;
+        case "nonNegativeColor3":
+          // The extension deliberately allows HDR values above 1, so this
+          // must not clamp the way `colorTuple` does.
+          value[field.name] = nonNegativeColorTuple(raw, field.default);
+          break;
+        case "unit":
+          value[field.name] = unitNumber(raw, field.default);
+          break;
+        case "nonNegative":
+          value[field.name] = nonNegativeNumber(raw, field.default);
+          break;
+        case "finite":
+          value[field.name] = finiteNumber(raw, field.default);
+          break;
+        case "atLeastOne": {
+          const number = finiteNumber(raw, field.default);
+          value[field.name] = number >= 1 ? number : field.default;
+          break;
+        }
+        case "ior": {
+          const number = finiteNumber(raw, field.default);
+          value[field.name] =
+            number === 0 || number >= 1 ? number : field.default;
+          break;
+        }
+      }
+    }
+    collected[name] = value;
   }
-  const emissiveStrength = objectValue(
-    extensions.KHR_materials_emissive_strength,
-  );
-  if (emissiveStrength) {
-    result.KHR_materials_emissive_strength = {
-      emissiveStrength: nonNegativeNumber(emissiveStrength.emissiveStrength, 1),
-    };
-  }
-  const ior = objectValue(extensions.KHR_materials_ior);
-  if (ior) {
-    result.KHR_materials_ior = {
-      ior: nonNegativeNumber(ior.ior, 1.5),
-    };
-  }
-  const transmission = objectValue(extensions.KHR_materials_transmission);
-  if (transmission) {
-    const transmissionTexture = textureInfo(
-      transmission.transmissionTexture,
-      textureAssetIds,
-      `materials[${materialIndex}].extensions.KHR_materials_transmission.transmissionTexture`,
-      warnings,
-    );
-    result.KHR_materials_transmission = {
-      transmissionFactor: unitNumber(transmission.transmissionFactor, 0),
-      ...(transmissionTexture ? { transmissionTexture } : {}),
-    };
-  }
-  const clearcoat = objectValue(extensions.KHR_materials_clearcoat);
-  if (clearcoat) {
-    const clearcoatTexture = textureInfo(
-      clearcoat.clearcoatTexture,
-      textureAssetIds,
-      `materials[${materialIndex}].extensions.KHR_materials_clearcoat.clearcoatTexture`,
-      warnings,
-    );
-    const roughnessTexture = textureInfo(
-      clearcoat.clearcoatRoughnessTexture,
-      textureAssetIds,
-      `materials[${materialIndex}].extensions.KHR_materials_clearcoat.clearcoatRoughnessTexture`,
-      warnings,
-    );
-    const normalTexture = normalTextureInfo(
-      clearcoat.clearcoatNormalTexture,
-      textureAssetIds,
-      `materials[${materialIndex}].extensions.KHR_materials_clearcoat.clearcoatNormalTexture`,
-      warnings,
-    );
-    result.KHR_materials_clearcoat = {
-      clearcoatFactor: unitNumber(clearcoat.clearcoatFactor, 0),
-      clearcoatRoughnessFactor: unitNumber(
-        clearcoat.clearcoatRoughnessFactor,
-        0,
-      ),
-      ...(clearcoatTexture ? { clearcoatTexture } : {}),
-      ...(roughnessTexture
-        ? { clearcoatRoughnessTexture: roughnessTexture }
-        : {}),
-      ...(normalTexture ? { clearcoatNormalTexture: normalTexture } : {}),
-    };
-  }
-  return result;
+
+  const pruned = pruneMaterialExtensions(collected, (name, reason) => {
+    warnings.push({
+      code:
+        reason === "dependency"
+          ? "gltf-material-extension-dependency-unmet"
+          : "gltf-material-extension-unlit-conflict",
+      message:
+        reason === "dependency"
+          ? `${name} が必要とする拡張が同じMaterialに存在しないため取り込みませんでした`
+          : `${name} は KHR_materials_unlit と併用できないため取り込みませんでした`,
+      fieldPath: `materials[${materialIndex}].extensions.${name}`,
+    });
+  });
+  return pruned as MaterialExtensionsPatch;
+}
+
+function nonNegativeColorTuple(
+  value: unknown,
+  fallback: Color3,
+): [number, number, number] {
+  return Array.isArray(value) &&
+    value.length === 3 &&
+    value.every(
+      (entry) => typeof entry === "number" && Number.isFinite(entry) && entry >= 0,
+    )
+    ? [Number(value[0]), Number(value[1]), Number(value[2])]
+    : [...fallback];
 }
 
 function textureInfo(

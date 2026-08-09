@@ -18,6 +18,12 @@ import { validateModelAssetContract } from "./model-import-contract";
 import { validateKhrInteractivityExtension } from "./interactivity-graph";
 import { isOpenBrushMaterialShader } from "./open-brush";
 import { isClassicR3fMaterialShader } from "./custom-shader-contract";
+import {
+  MATERIAL_EXTENSION_DESCRIPTORS,
+  materialExtensionFieldNames,
+  MATERIAL_EXTENSION_NAMES,
+  type MaterialExtensionName,
+} from "./material-extension-registry";
 import { normalizeParticleProperties } from "./particle-system";
 import { isTerrainGeometry } from "./terrain";
 import { isSerializableJsonValue } from "./component-registry";
@@ -480,19 +486,7 @@ function validateImportedAssetProvenance(
   }
 }
 
-const SUPPORTED_MATERIAL_EXTENSIONS = new Set([
-  "KHR_materials_anisotropy",
-  "KHR_materials_clearcoat",
-  "KHR_materials_dispersion",
-  "KHR_materials_emissive_strength",
-  "KHR_materials_ior",
-  "KHR_materials_iridescence",
-  "KHR_materials_sheen",
-  "KHR_materials_specular",
-  "KHR_materials_transmission",
-  "KHR_materials_unlit",
-  "KHR_materials_volume",
-]);
+const SUPPORTED_MATERIAL_EXTENSIONS = new Set<string>(MATERIAL_EXTENSION_NAMES);
 
 function validateMaterialAsset(
   asset: Record<string, unknown>,
@@ -620,41 +614,32 @@ function validateMaterialAsset(
     );
   }
 
-  if (
-    "KHR_materials_unlit" in extensions &&
-    extensionNames.some((name) => name !== "KHR_materials_unlit")
-  ) {
+  const exclusive = MATERIAL_EXTENSION_NAMES.find(
+    (name) =>
+      MATERIAL_EXTENSION_DESCRIPTORS[name].exclusive === true &&
+      name in extensions,
+  );
+  if (exclusive && extensionNames.some((name) => name !== exclusive)) {
     issues.push(
       issue(
-        `${path}.properties.extensions.KHR_materials_unlit`,
+        `${path}.properties.extensions.${exclusive}`,
         "extension-conflict",
         "KHR_materials_unlit cannot be combined with lighting material extensions",
       ),
     );
   }
-  if (
-    "KHR_materials_volume" in extensions &&
-    !("KHR_materials_transmission" in extensions)
-  ) {
-    issues.push(
-      issue(
-        `${path}.properties.extensions.KHR_materials_volume`,
-        "extension-dependency",
-        "KHR_materials_volume requires KHR_materials_transmission",
-      ),
-    );
-  }
-  if (
-    "KHR_materials_dispersion" in extensions &&
-    !("KHR_materials_volume" in extensions)
-  ) {
-    issues.push(
-      issue(
-        `${path}.properties.extensions.KHR_materials_dispersion`,
-        "extension-dependency",
-        "KHR_materials_dispersion requires KHR_materials_volume",
-      ),
-    );
+  for (const name of MATERIAL_EXTENSION_NAMES) {
+    if (!(name in extensions)) continue;
+    for (const required of MATERIAL_EXTENSION_DESCRIPTORS[name].requires ?? []) {
+      if (required in extensions) continue;
+      issues.push(
+        issue(
+          `${path}.properties.extensions.${name}`,
+          "extension-dependency",
+          `${name} requires ${required}`,
+        ),
+      );
+    }
   }
 }
 
@@ -665,204 +650,117 @@ function validateMaterialExtension(
   assets: Record<string, unknown>,
   issues: DocumentValidationIssue[],
 ): void {
-  const texture = (key: string, normal = false) =>
-    validateMaterialTextureInfo(
-      extension[key],
-      `${path}.${key}`,
-      assets,
-      issues,
-      normal ? "normal" : "core",
-    );
-  const unit = (key: string) =>
-    validateOptionalNumber(extension, key, path, issues, isUnitNumber, "from 0 to 1");
-  const nonNegative = (key: string) =>
-    validateOptionalNumber(
-      extension,
-      key,
-      path,
-      issues,
-      isNonNegativeNumber,
-      "a finite non-negative number",
-    );
-
-  switch (extensionName) {
-    case "KHR_materials_anisotropy":
-      validateKnownKeys(
-        extension,
-        ["anisotropyStrength", "anisotropyRotation", "anisotropyTexture"],
-        path,
-        issues,
-      );
-      unit("anisotropyStrength");
-      validateOptionalNumber(
-        extension,
-        "anisotropyRotation",
-        path,
-        issues,
-        isFiniteNumber,
-        "a finite number in radians",
-      );
-      texture("anisotropyTexture");
-      break;
-    case "KHR_materials_clearcoat":
-      validateKnownKeys(
-        extension,
-        [
-          "clearcoatFactor",
-          "clearcoatTexture",
-          "clearcoatRoughnessFactor",
-          "clearcoatRoughnessTexture",
-          "clearcoatNormalTexture",
-        ],
-        path,
-        issues,
-      );
-      unit("clearcoatFactor");
-      unit("clearcoatRoughnessFactor");
-      texture("clearcoatTexture");
-      texture("clearcoatRoughnessTexture");
-      texture("clearcoatNormalTexture", true);
-      break;
-    case "KHR_materials_dispersion":
-      validateKnownKeys(extension, ["dispersion"], path, issues);
-      nonNegative("dispersion");
-      break;
-    case "KHR_materials_emissive_strength":
-      validateKnownKeys(extension, ["emissiveStrength"], path, issues);
-      nonNegative("emissiveStrength");
-      break;
-    case "KHR_materials_ior":
-      validateKnownKeys(extension, ["ior"], path, issues);
-      validateOptionalNumber(
-        extension,
-        "ior",
-        path,
-        issues,
-        (value) => isFiniteNumber(value) && (value === 0 || value >= 1),
-        "0 or a finite number greater than or equal to 1",
-      );
-      break;
-    case "KHR_materials_iridescence": {
-      validateKnownKeys(
-        extension,
-        [
-          "iridescenceFactor",
-          "iridescenceTexture",
-          "iridescenceIor",
-          "iridescenceThicknessMinimum",
-          "iridescenceThicknessMaximum",
-          "iridescenceThicknessTexture",
-        ],
-        path,
-        issues,
-      );
-      unit("iridescenceFactor");
-      validateOptionalNumber(
-        extension,
-        "iridescenceIor",
-        path,
-        issues,
-        (value) => isFiniteNumber(value) && value >= 1,
-        "a finite number greater than or equal to 1",
-      );
-      nonNegative("iridescenceThicknessMinimum");
-      nonNegative("iridescenceThicknessMaximum");
-      texture("iridescenceTexture");
-      texture("iridescenceThicknessTexture");
-      break;
+  const name = extensionName as MaterialExtensionName;
+  const descriptor = MATERIAL_EXTENSION_DESCRIPTORS[name];
+  validateKnownKeys(
+    extension,
+    materialExtensionFieldNames(name),
+    path,
+    issues,
+  );
+  for (const field of descriptor.fields) {
+    const key = field.name;
+    if (!(key in extension)) continue;
+    switch (field.kind) {
+      case "texture":
+        validateMaterialTextureInfo(
+          extension[key],
+          `${path}.${key}`,
+          assets,
+          issues,
+          "core",
+        );
+        break;
+      case "normalTexture":
+        validateMaterialTextureInfo(
+          extension[key],
+          `${path}.${key}`,
+          assets,
+          issues,
+          "normal",
+        );
+        break;
+      case "unit":
+        validateOptionalNumber(
+          extension,
+          key,
+          path,
+          issues,
+          isUnitNumber,
+          "from 0 to 1",
+        );
+        break;
+      case "nonNegative":
+        validateOptionalNumber(
+          extension,
+          key,
+          path,
+          issues,
+          isNonNegativeNumber,
+          "a finite non-negative number",
+        );
+        break;
+      case "finite":
+        validateOptionalNumber(
+          extension,
+          key,
+          path,
+          issues,
+          isFiniteNumber,
+          "a finite number in radians",
+        );
+        break;
+      case "atLeastOne":
+        validateOptionalNumber(
+          extension,
+          key,
+          path,
+          issues,
+          (value) => isFiniteNumber(value) && value >= 1,
+          "a finite number greater than or equal to 1",
+        );
+        break;
+      case "ior":
+        validateOptionalNumber(
+          extension,
+          key,
+          path,
+          issues,
+          (value) => isFiniteNumber(value) && (value === 0 || value >= 1),
+          "0 or a finite number greater than or equal to 1",
+        );
+        break;
+      case "positiveOptional":
+        validateOptionalNumber(
+          extension,
+          key,
+          path,
+          issues,
+          (value) => isFiniteNumber(value) && value > 0,
+          "a finite number greater than 0, or omitted for infinity",
+        );
+        break;
+      case "unitColor3":
+        validateOptionalColor3(
+          extension,
+          key,
+          path,
+          issues,
+          isUnitColor3,
+          "three numbers from 0 to 1",
+        );
+        break;
+      case "nonNegativeColor3":
+        validateOptionalColor3(
+          extension,
+          key,
+          path,
+          issues,
+          isNonNegativeColor3,
+          "three finite non-negative numbers",
+        );
+        break;
     }
-    case "KHR_materials_sheen":
-      validateKnownKeys(
-        extension,
-        [
-          "sheenColorFactor",
-          "sheenColorTexture",
-          "sheenRoughnessFactor",
-          "sheenRoughnessTexture",
-        ],
-        path,
-        issues,
-      );
-      validateOptionalColor3(
-        extension,
-        "sheenColorFactor",
-        path,
-        issues,
-        isUnitColor3,
-        "three numbers from 0 to 1",
-      );
-      unit("sheenRoughnessFactor");
-      texture("sheenColorTexture");
-      texture("sheenRoughnessTexture");
-      break;
-    case "KHR_materials_specular":
-      validateKnownKeys(
-        extension,
-        [
-          "specularFactor",
-          "specularTexture",
-          "specularColorFactor",
-          "specularColorTexture",
-        ],
-        path,
-        issues,
-      );
-      unit("specularFactor");
-      validateOptionalColor3(
-        extension,
-        "specularColorFactor",
-        path,
-        issues,
-        isNonNegativeColor3,
-        "three finite non-negative numbers",
-      );
-      texture("specularTexture");
-      texture("specularColorTexture");
-      break;
-    case "KHR_materials_transmission":
-      validateKnownKeys(
-        extension,
-        ["transmissionFactor", "transmissionTexture"],
-        path,
-        issues,
-      );
-      unit("transmissionFactor");
-      texture("transmissionTexture");
-      break;
-    case "KHR_materials_unlit":
-      validateKnownKeys(extension, [], path, issues);
-      break;
-    case "KHR_materials_volume":
-      validateKnownKeys(
-        extension,
-        [
-          "thicknessFactor",
-          "thicknessTexture",
-          "attenuationDistance",
-          "attenuationColor",
-        ],
-        path,
-        issues,
-      );
-      nonNegative("thicknessFactor");
-      validateOptionalNumber(
-        extension,
-        "attenuationDistance",
-        path,
-        issues,
-        (value) => isFiniteNumber(value) && value > 0,
-        "a finite number greater than 0, or omitted for infinity",
-      );
-      validateOptionalColor3(
-        extension,
-        "attenuationColor",
-        path,
-        issues,
-        isUnitColor3,
-        "three numbers from 0 to 1",
-      );
-      texture("thicknessTexture");
-      break;
   }
 }
 

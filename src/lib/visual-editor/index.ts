@@ -30,6 +30,7 @@ export * from "./editor-session";
 export * from "./editor-session.fixture";
 export * from "./environment-texture-thumbnail";
 export * from "./material-assignment";
+export * from "./material-extension-registry";
 export * from "./material-thumbnail";
 export * from "./interactivity-graph";
 export * from "./mcp-editor-tools";

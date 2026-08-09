@@ -213,6 +213,128 @@ export async function runGltfDerivedAssetFixtureAssertions(): Promise<void> {
         openBrushExpanded.textureAssets[1].id,
     "OpenBrush sampler uniforms were not connected to Texture Assets",
   );
+
+  const allExtensionsJson: GltfJson = {
+    asset: { version: "2.0" },
+    materials: [
+      {
+        name: "All Extensions",
+        pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1] },
+        extensions: {
+          KHR_materials_anisotropy: {
+            anisotropyStrength: 0.4,
+            anisotropyRotation: 0.25,
+          },
+          KHR_materials_clearcoat: {
+            clearcoatFactor: 0.8,
+            clearcoatRoughnessFactor: 0.2,
+          },
+          KHR_materials_transmission: { transmissionFactor: 0.65 },
+          KHR_materials_volume: {
+            thicknessFactor: 0.4,
+            attenuationDistance: 4,
+            attenuationColor: [0.8, 0.9, 1],
+          },
+          KHR_materials_dispersion: { dispersion: 0.15 },
+          KHR_materials_emissive_strength: { emissiveStrength: 2.5 },
+          KHR_materials_ior: { ior: 1.45 },
+          KHR_materials_iridescence: {
+            iridescenceFactor: 0.7,
+            iridescenceIor: 1.35,
+          },
+          KHR_materials_sheen: {
+            sheenColorFactor: [0.3, 0.2, 0.1],
+            sheenRoughnessFactor: 0.45,
+          },
+          KHR_materials_specular: {
+            specularFactor: 0.85,
+            specularColorFactor: [1.2, 0.9, 0.7],
+          },
+        },
+      },
+    ],
+  };
+  const allExtensionsExpanded = await expandGltfAssets({
+    json: allExtensionsJson,
+    modelBytes: new Uint8Array(),
+    sourceFormat: "glb",
+    modelAssetId: "model-all-extensions",
+    modelSourceHash: "d".repeat(64),
+    materialSlots: [
+      { slot: "material-0", name: "All Extensions", sourceMaterialIndex: 0 },
+    ],
+    materialFolderId: "folder-all-extensions-materials",
+    textureFolderId: "folder-all-extensions-textures",
+    hashBytes: fixtureHash,
+  });
+  const allExtensionsMaterial = allExtensionsExpanded.materialAssets[0];
+  const importedExtensions = allExtensionsMaterial.properties.extensions;
+  assert(
+    importedExtensions.KHR_materials_anisotropy?.anisotropyStrength === 0.4 &&
+      importedExtensions.KHR_materials_clearcoat?.clearcoatFactor === 0.8 &&
+      importedExtensions.KHR_materials_transmission?.transmissionFactor ===
+        0.65 &&
+      importedExtensions.KHR_materials_volume?.thicknessFactor === 0.4 &&
+      importedExtensions.KHR_materials_volume?.attenuationDistance === 4 &&
+      importedExtensions.KHR_materials_dispersion?.dispersion === 0.15 &&
+      importedExtensions.KHR_materials_emissive_strength?.emissiveStrength ===
+        2.5 &&
+      importedExtensions.KHR_materials_ior?.ior === 1.45 &&
+      importedExtensions.KHR_materials_iridescence?.iridescenceFactor === 0.7 &&
+      importedExtensions.KHR_materials_sheen?.sheenRoughnessFactor === 0.45 &&
+      importedExtensions.KHR_materials_specular?.specularFactor === 0.85,
+    "glTF import dropped one or more KHR material extensions (B2)",
+  );
+  assert(
+    importedExtensions.KHR_materials_specular?.specularColorFactor?.[0] === 1.2,
+    "glTF import clamped specularColorFactor HDR value",
+  );
+  assert(
+    allExtensionsExpanded.warnings.length === 0,
+    "Valid all-extension material emitted a warning",
+  );
+
+  const missingDependencyJson: GltfJson = {
+    asset: { version: "2.0" },
+    materials: [
+      {
+        name: "Volume without Transmission",
+        pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1] },
+        extensions: {
+          KHR_materials_volume: { thicknessFactor: 0.4 },
+        },
+      },
+    ],
+  };
+  const missingDependencyExpanded = await expandGltfAssets({
+    json: missingDependencyJson,
+    modelBytes: new Uint8Array(),
+    sourceFormat: "glb",
+    modelAssetId: "model-missing-dependency",
+    modelSourceHash: "e".repeat(64),
+    materialSlots: [
+      {
+        slot: "material-0",
+        name: "Volume without Transmission",
+        sourceMaterialIndex: 0,
+      },
+    ],
+    materialFolderId: "folder-missing-dependency-materials",
+    textureFolderId: "folder-missing-dependency-textures",
+    hashBytes: fixtureHash,
+  });
+  assert(
+    missingDependencyExpanded.materialAssets[0].properties.extensions
+      .KHR_materials_volume === undefined,
+    "Volume without Transmission was not dropped on glTF import",
+  );
+  assert(
+    missingDependencyExpanded.warnings.some(
+      (warning) =>
+        warning.code === "gltf-material-extension-dependency-unmet",
+    ),
+    "Volume without Transmission did not emit a dependency warning",
+  );
 }
 
 function pngFixture(): Uint8Array {

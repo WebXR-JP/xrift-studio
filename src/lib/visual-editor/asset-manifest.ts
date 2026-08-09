@@ -6,6 +6,12 @@ import type {
   KHR_INTERACTIVITY_SPEC_STATUS,
 } from "./interactivity-graph";
 import type { MaterialShader } from "./custom-shader-contract";
+import {
+  MATERIAL_EXTENSION_DESCRIPTORS,
+  MATERIAL_EXTENSION_NAMES,
+  type MaterialExtensionFieldDescriptor,
+  type MaterialExtensionName,
+} from "./material-extension-registry";
 
 export type AssetStatus = "ready" | "missing" | "invalid";
 
@@ -1318,517 +1324,139 @@ function applyMaterialPatch(
   };
 }
 
+type ExtensionRecord = Record<string, unknown>;
+
+const EXTENSION_NUMBER_VALIDATORS: Readonly<
+  Record<string, (value: unknown) => value is number>
+> = {
+  unit: isUnitInterval,
+  nonNegative: isNonNegativeFinite,
+  finite: isFiniteNumber,
+  atLeastOne: ((value: unknown): value is number =>
+    isFiniteNumber(value) && value >= 1) as (value: unknown) => value is number,
+  ior: isValidMaterialIor,
+};
+
+function applyExtensionFields(
+  fields: readonly MaterialExtensionFieldDescriptor[],
+  base: ExtensionRecord | undefined,
+  requested: ExtensionRecord,
+  manifest?: AssetManifest,
+): ExtensionRecord {
+  const next: ExtensionRecord = {};
+  for (const field of fields) {
+    const current = base?.[field.name];
+    switch (field.kind) {
+      case "texture": {
+        const value = hasOwn(requested, field.name)
+          ? resolveTextureInfo(
+              requested[field.name] as MaterialTextureInfoPatch,
+              current as MaterialTextureInfo | undefined,
+              manifest,
+            )
+          : cloneTextureInfo(current as MaterialTextureInfo | undefined);
+        if (value) next[field.name] = value;
+        break;
+      }
+      case "normalTexture": {
+        const value = hasOwn(requested, field.name)
+          ? resolveNormalTextureInfo(
+              requested[field.name] as NormalTextureInfoPatch,
+              current as NormalTextureInfo | undefined,
+              manifest,
+            )
+          : cloneNormalTextureInfo(current as NormalTextureInfo | undefined);
+        if (value) next[field.name] = value;
+        break;
+      }
+      case "positiveOptional": {
+        let value = current as number | undefined;
+        if (hasOwn(requested, field.name)) {
+          const candidate = requested[field.name];
+          if (candidate === null) value = undefined;
+          else if (isPositiveFinite(candidate)) value = candidate;
+        }
+        if (value !== undefined) next[field.name] = value;
+        break;
+      }
+      case "unitColor3":
+      case "nonNegativeColor3": {
+        const isValid =
+          field.kind === "unitColor3" ? isValidColor3 : isNonNegativeColor3;
+        const candidate = requested[field.name];
+        next[field.name] = isValid(candidate)
+          ? cloneColor3(candidate)
+          : cloneColor3((current as Color3 | undefined) ?? field.default);
+        break;
+      }
+      default: {
+        const isValid = EXTENSION_NUMBER_VALIDATORS[field.kind];
+        const candidate = requested[field.name];
+        next[field.name] = isValid(candidate)
+          ? candidate
+          : ((current as number | undefined) ?? field.default);
+        break;
+      }
+    }
+  }
+  return next;
+}
+
 function applyMaterialExtensionsPatch(
   current: MaterialExtensions,
   patch: MaterialExtensionsPatch | undefined,
   manifest?: AssetManifest,
 ): MaterialExtensions {
-  const next = cloneMaterialExtensions(current);
-  if (!patch) return next;
+  const next = cloneMaterialExtensions(current) as Record<
+    MaterialExtensionName,
+    ExtensionRecord | undefined
+  >;
+  if (!patch) return next as MaterialExtensions;
 
-  if (hasOwn(patch, "KHR_materials_anisotropy")) {
-    const requested = patch.KHR_materials_anisotropy;
+  for (const name of MATERIAL_EXTENSION_NAMES) {
+    if (!hasOwn(patch, name)) continue;
+    const requested = patch[name];
     if (requested === null) {
-      delete next.KHR_materials_anisotropy;
-    } else if (requested !== undefined) {
-      const base = next.KHR_materials_anisotropy ?? {
-        anisotropyStrength: 0,
-        anisotropyRotation: 0,
-      };
-      const anisotropyTexture = hasOwn(requested, "anisotropyTexture")
-        ? resolveTextureInfo(
-            requested.anisotropyTexture,
-            base.anisotropyTexture,
-            manifest,
-          )
-        : cloneTextureInfo(base.anisotropyTexture);
-      next.KHR_materials_anisotropy = {
-        anisotropyStrength: isUnitInterval(requested.anisotropyStrength)
-          ? requested.anisotropyStrength
-          : base.anisotropyStrength,
-        anisotropyRotation: isFiniteNumber(requested.anisotropyRotation)
-          ? requested.anisotropyRotation
-          : base.anisotropyRotation,
-        ...(anisotropyTexture ? { anisotropyTexture } : {}),
-      };
+      delete next[name];
+      continue;
     }
+    if (requested === undefined) continue;
+    next[name] = applyExtensionFields(
+      MATERIAL_EXTENSION_DESCRIPTORS[name].fields,
+      next[name],
+      requested as ExtensionRecord,
+      manifest,
+    );
   }
-
-  if (hasOwn(patch, "KHR_materials_clearcoat")) {
-    const requested = patch.KHR_materials_clearcoat;
-    if (requested === null) {
-      delete next.KHR_materials_clearcoat;
-    } else if (requested !== undefined) {
-      const base = next.KHR_materials_clearcoat ?? {
-        clearcoatFactor: 0,
-        clearcoatRoughnessFactor: 0,
-      };
-      const clearcoatTexture = hasOwn(requested, "clearcoatTexture")
-        ? resolveTextureInfo(
-            requested.clearcoatTexture,
-            base.clearcoatTexture,
-            manifest,
-          )
-        : cloneTextureInfo(base.clearcoatTexture);
-      const clearcoatRoughnessTexture = hasOwn(
-        requested,
-        "clearcoatRoughnessTexture",
-      )
-        ? resolveTextureInfo(
-            requested.clearcoatRoughnessTexture,
-            base.clearcoatRoughnessTexture,
-            manifest,
-          )
-        : cloneTextureInfo(base.clearcoatRoughnessTexture);
-      const clearcoatNormalTexture = hasOwn(
-        requested,
-        "clearcoatNormalTexture",
-      )
-        ? resolveNormalTextureInfo(
-            requested.clearcoatNormalTexture,
-            base.clearcoatNormalTexture,
-            manifest,
-          )
-        : cloneNormalTextureInfo(base.clearcoatNormalTexture);
-      next.KHR_materials_clearcoat = {
-        clearcoatFactor: isUnitInterval(requested.clearcoatFactor)
-          ? requested.clearcoatFactor
-          : base.clearcoatFactor,
-        ...(clearcoatTexture ? { clearcoatTexture } : {}),
-        clearcoatRoughnessFactor: isUnitInterval(
-          requested.clearcoatRoughnessFactor,
-        )
-          ? requested.clearcoatRoughnessFactor
-          : base.clearcoatRoughnessFactor,
-        ...(clearcoatRoughnessTexture ? { clearcoatRoughnessTexture } : {}),
-        ...(clearcoatNormalTexture ? { clearcoatNormalTexture } : {}),
-      };
-    }
-  }
-
-  if (hasOwn(patch, "KHR_materials_dispersion")) {
-    const requested = patch.KHR_materials_dispersion;
-    if (requested === null) {
-      delete next.KHR_materials_dispersion;
-    } else if (requested !== undefined) {
-      const base = next.KHR_materials_dispersion ?? { dispersion: 0 };
-      next.KHR_materials_dispersion = {
-        dispersion: isNonNegativeFinite(requested.dispersion)
-          ? requested.dispersion
-          : base.dispersion,
-      };
-    }
-  }
-
-  if (hasOwn(patch, "KHR_materials_emissive_strength")) {
-    const requested = patch.KHR_materials_emissive_strength;
-    if (requested === null) {
-      delete next.KHR_materials_emissive_strength;
-    } else if (requested !== undefined) {
-      const base = next.KHR_materials_emissive_strength ?? {
-        emissiveStrength: 1,
-      };
-      next.KHR_materials_emissive_strength = {
-        emissiveStrength: isNonNegativeFinite(requested.emissiveStrength)
-          ? requested.emissiveStrength
-          : base.emissiveStrength,
-      };
-    }
-  }
-
-  if (hasOwn(patch, "KHR_materials_ior")) {
-    const requested = patch.KHR_materials_ior;
-    if (requested === null) {
-      delete next.KHR_materials_ior;
-    } else if (requested !== undefined) {
-      const base = next.KHR_materials_ior ?? { ior: 1.5 };
-      next.KHR_materials_ior = {
-        ior: isValidMaterialIor(requested.ior) ? requested.ior : base.ior,
-      };
-    }
-  }
-
-  if (hasOwn(patch, "KHR_materials_iridescence")) {
-    const requested = patch.KHR_materials_iridescence;
-    if (requested === null) {
-      delete next.KHR_materials_iridescence;
-    } else if (requested !== undefined) {
-      const base = next.KHR_materials_iridescence ?? {
-        iridescenceFactor: 0,
-        iridescenceIor: 1.3,
-        iridescenceThicknessMinimum: 100,
-        iridescenceThicknessMaximum: 400,
-      };
-      const requestedMinimum = isNonNegativeFinite(
-        requested.iridescenceThicknessMinimum,
-      )
-        ? requested.iridescenceThicknessMinimum
-        : base.iridescenceThicknessMinimum;
-      const requestedMaximum = isNonNegativeFinite(
-        requested.iridescenceThicknessMaximum,
-      )
-        ? requested.iridescenceThicknessMaximum
-        : base.iridescenceThicknessMaximum;
-      const iridescenceTexture = hasOwn(requested, "iridescenceTexture")
-        ? resolveTextureInfo(
-            requested.iridescenceTexture,
-            base.iridescenceTexture,
-            manifest,
-          )
-        : cloneTextureInfo(base.iridescenceTexture);
-      const iridescenceThicknessTexture = hasOwn(
-        requested,
-        "iridescenceThicknessTexture",
-      )
-        ? resolveTextureInfo(
-            requested.iridescenceThicknessTexture,
-            base.iridescenceThicknessTexture,
-            manifest,
-          )
-        : cloneTextureInfo(base.iridescenceThicknessTexture);
-      next.KHR_materials_iridescence = {
-        iridescenceFactor: isUnitInterval(requested.iridescenceFactor)
-          ? requested.iridescenceFactor
-          : base.iridescenceFactor,
-        ...(iridescenceTexture ? { iridescenceTexture } : {}),
-        iridescenceIor:
-          isFiniteNumber(requested.iridescenceIor) &&
-          requested.iridescenceIor >= 1
-            ? requested.iridescenceIor
-            : base.iridescenceIor,
-        // glTF explicitly permits a descending range so artists can reverse
-        // the G-channel thickness interpolation without editing the Texture.
-        iridescenceThicknessMinimum: requestedMinimum,
-        iridescenceThicknessMaximum: requestedMaximum,
-        ...(iridescenceThicknessTexture
-          ? { iridescenceThicknessTexture }
-          : {}),
-      };
-    }
-  }
-
-  if (hasOwn(patch, "KHR_materials_sheen")) {
-    const requested = patch.KHR_materials_sheen;
-    if (requested === null) {
-      delete next.KHR_materials_sheen;
-    } else if (requested !== undefined) {
-      const base = next.KHR_materials_sheen ?? {
-        sheenColorFactor: [0, 0, 0] as Color3,
-        sheenRoughnessFactor: 0,
-      };
-      const sheenColorTexture = hasOwn(requested, "sheenColorTexture")
-        ? resolveTextureInfo(
-            requested.sheenColorTexture,
-            base.sheenColorTexture,
-            manifest,
-          )
-        : cloneTextureInfo(base.sheenColorTexture);
-      const sheenRoughnessTexture = hasOwn(
-        requested,
-        "sheenRoughnessTexture",
-      )
-        ? resolveTextureInfo(
-            requested.sheenRoughnessTexture,
-            base.sheenRoughnessTexture,
-            manifest,
-          )
-        : cloneTextureInfo(base.sheenRoughnessTexture);
-      next.KHR_materials_sheen = {
-        sheenColorFactor: isValidColor3(requested.sheenColorFactor)
-          ? cloneColor3(requested.sheenColorFactor)
-          : cloneColor3(base.sheenColorFactor),
-        ...(sheenColorTexture ? { sheenColorTexture } : {}),
-        sheenRoughnessFactor: isUnitInterval(
-          requested.sheenRoughnessFactor,
-        )
-          ? requested.sheenRoughnessFactor
-          : base.sheenRoughnessFactor,
-        ...(sheenRoughnessTexture ? { sheenRoughnessTexture } : {}),
-      };
-    }
-  }
-
-  if (hasOwn(patch, "KHR_materials_specular")) {
-    const requested = patch.KHR_materials_specular;
-    if (requested === null) {
-      delete next.KHR_materials_specular;
-    } else if (requested !== undefined) {
-      const base = next.KHR_materials_specular ?? {
-        specularFactor: 1,
-        specularColorFactor: [1, 1, 1] as Color3,
-      };
-      const specularTexture = hasOwn(requested, "specularTexture")
-        ? resolveTextureInfo(
-            requested.specularTexture,
-            base.specularTexture,
-            manifest,
-          )
-        : cloneTextureInfo(base.specularTexture);
-      const specularColorTexture = hasOwn(
-        requested,
-        "specularColorTexture",
-      )
-        ? resolveTextureInfo(
-            requested.specularColorTexture,
-            base.specularColorTexture,
-            manifest,
-          )
-        : cloneTextureInfo(base.specularColorTexture);
-      next.KHR_materials_specular = {
-        specularFactor: isUnitInterval(requested.specularFactor)
-          ? requested.specularFactor
-          : base.specularFactor,
-        ...(specularTexture ? { specularTexture } : {}),
-        specularColorFactor: isNonNegativeColor3(
-          requested.specularColorFactor,
-        )
-          ? cloneColor3(requested.specularColorFactor)
-          : cloneColor3(base.specularColorFactor),
-        ...(specularColorTexture ? { specularColorTexture } : {}),
-      };
-    }
-  }
-
-  if (hasOwn(patch, "KHR_materials_transmission")) {
-    const requested = patch.KHR_materials_transmission;
-    if (requested === null) {
-      delete next.KHR_materials_transmission;
-    } else if (requested !== undefined) {
-      const base = next.KHR_materials_transmission ?? {
-        transmissionFactor: 0,
-      };
-      const transmissionTexture = hasOwn(requested, "transmissionTexture")
-        ? resolveTextureInfo(
-            requested.transmissionTexture,
-            base.transmissionTexture,
-            manifest,
-          )
-        : cloneTextureInfo(base.transmissionTexture);
-      next.KHR_materials_transmission = {
-        transmissionFactor: isUnitInterval(requested.transmissionFactor)
-          ? requested.transmissionFactor
-          : base.transmissionFactor,
-        ...(transmissionTexture ? { transmissionTexture } : {}),
-      };
-    }
-  }
-
-  if (hasOwn(patch, "KHR_materials_unlit")) {
-    const requested = patch.KHR_materials_unlit;
-    if (requested === null) {
-      delete next.KHR_materials_unlit;
-    } else if (requested !== undefined) {
-      next.KHR_materials_unlit = {};
-    }
-  }
-
-  if (hasOwn(patch, "KHR_materials_volume")) {
-    const requested = patch.KHR_materials_volume;
-    if (requested === null) {
-      delete next.KHR_materials_volume;
-    } else if (requested !== undefined) {
-      const base = next.KHR_materials_volume ?? {
-        thicknessFactor: 0,
-        attenuationColor: [1, 1, 1] as Color3,
-      };
-      const thicknessTexture = hasOwn(requested, "thicknessTexture")
-        ? resolveTextureInfo(
-            requested.thicknessTexture,
-            base.thicknessTexture,
-            manifest,
-          )
-        : cloneTextureInfo(base.thicknessTexture);
-      let attenuationDistance = base.attenuationDistance;
-      if (hasOwn(requested, "attenuationDistance")) {
-        if (requested.attenuationDistance === null) {
-          attenuationDistance = undefined;
-        } else if (isPositiveFinite(requested.attenuationDistance)) {
-          attenuationDistance = requested.attenuationDistance;
-        }
-      }
-      next.KHR_materials_volume = {
-        thicknessFactor: isNonNegativeFinite(requested.thicknessFactor)
-          ? requested.thicknessFactor
-          : base.thicknessFactor,
-        ...(thicknessTexture ? { thicknessTexture } : {}),
-        ...(attenuationDistance !== undefined ? { attenuationDistance } : {}),
-        attenuationColor: isValidColor3(requested.attenuationColor)
-          ? cloneColor3(requested.attenuationColor)
-          : cloneColor3(base.attenuationColor),
-      };
-    }
-  }
-
-  return next;
+  return next as MaterialExtensions;
 }
 
 function cloneMaterialExtensions(
   extensions: MaterialExtensions,
 ): MaterialExtensions {
-  return {
-    ...(extensions.KHR_materials_anisotropy
-      ? {
-          KHR_materials_anisotropy: {
-            ...extensions.KHR_materials_anisotropy,
-            ...(extensions.KHR_materials_anisotropy.anisotropyTexture
-              ? {
-                  anisotropyTexture: {
-                    ...extensions.KHR_materials_anisotropy.anisotropyTexture,
-                  },
-                }
-              : {}),
-          },
-        }
-      : {}),
-    ...(extensions.KHR_materials_clearcoat
-      ? {
-          KHR_materials_clearcoat: {
-            ...extensions.KHR_materials_clearcoat,
-            ...(extensions.KHR_materials_clearcoat.clearcoatTexture
-              ? {
-                  clearcoatTexture: {
-                    ...extensions.KHR_materials_clearcoat.clearcoatTexture,
-                  },
-                }
-              : {}),
-            ...(extensions.KHR_materials_clearcoat.clearcoatRoughnessTexture
-              ? {
-                  clearcoatRoughnessTexture: {
-                    ...extensions.KHR_materials_clearcoat
-                      .clearcoatRoughnessTexture,
-                  },
-                }
-              : {}),
-            ...(extensions.KHR_materials_clearcoat.clearcoatNormalTexture
-              ? {
-                  clearcoatNormalTexture: {
-                    ...extensions.KHR_materials_clearcoat.clearcoatNormalTexture,
-                  },
-                }
-              : {}),
-          },
-        }
-      : {}),
-    ...(extensions.KHR_materials_dispersion
-      ? { KHR_materials_dispersion: { ...extensions.KHR_materials_dispersion } }
-      : {}),
-    ...(extensions.KHR_materials_emissive_strength
-      ? {
-          KHR_materials_emissive_strength: {
-            ...extensions.KHR_materials_emissive_strength,
-          },
-        }
-      : {}),
-    ...(extensions.KHR_materials_ior
-      ? { KHR_materials_ior: { ...extensions.KHR_materials_ior } }
-      : {}),
-    ...(extensions.KHR_materials_iridescence
-      ? {
-          KHR_materials_iridescence: cloneIridescence(
-            extensions.KHR_materials_iridescence,
-          ),
-        }
-      : {}),
-    ...(extensions.KHR_materials_sheen
-      ? {
-          KHR_materials_sheen: {
-            ...extensions.KHR_materials_sheen,
-            sheenColorFactor: cloneColor3(
-              extensions.KHR_materials_sheen.sheenColorFactor,
-            ),
-            ...(extensions.KHR_materials_sheen.sheenColorTexture
-              ? {
-                  sheenColorTexture: {
-                    ...extensions.KHR_materials_sheen.sheenColorTexture,
-                  },
-                }
-              : {}),
-            ...(extensions.KHR_materials_sheen.sheenRoughnessTexture
-              ? {
-                  sheenRoughnessTexture: {
-                    ...extensions.KHR_materials_sheen.sheenRoughnessTexture,
-                  },
-                }
-              : {}),
-          },
-        }
-      : {}),
-    ...(extensions.KHR_materials_specular
-      ? {
-          KHR_materials_specular: {
-            ...extensions.KHR_materials_specular,
-            specularColorFactor: cloneColor3(
-              extensions.KHR_materials_specular.specularColorFactor,
-            ),
-            ...(extensions.KHR_materials_specular.specularTexture
-              ? {
-                  specularTexture: {
-                    ...extensions.KHR_materials_specular.specularTexture,
-                  },
-                }
-              : {}),
-            ...(extensions.KHR_materials_specular.specularColorTexture
-              ? {
-                  specularColorTexture: {
-                    ...extensions.KHR_materials_specular.specularColorTexture,
-                  },
-                }
-              : {}),
-          },
-        }
-      : {}),
-    ...(extensions.KHR_materials_transmission
-      ? {
-          KHR_materials_transmission: {
-            ...extensions.KHR_materials_transmission,
-            ...(extensions.KHR_materials_transmission.transmissionTexture
-              ? {
-                  transmissionTexture: {
-                    ...extensions.KHR_materials_transmission
-                      .transmissionTexture,
-                  },
-                }
-              : {}),
-          },
-        }
-      : {}),
-    ...(extensions.KHR_materials_unlit ? { KHR_materials_unlit: {} } : {}),
-    ...(extensions.KHR_materials_volume
-      ? {
-          KHR_materials_volume: {
-            ...extensions.KHR_materials_volume,
-            attenuationColor: cloneColor3(
-              extensions.KHR_materials_volume.attenuationColor,
-            ),
-            ...(extensions.KHR_materials_volume.thicknessTexture
-              ? {
-                  thicknessTexture: {
-                    ...extensions.KHR_materials_volume.thicknessTexture,
-                  },
-                }
-              : {}),
-          },
-        }
-      : {}),
-  };
-}
-
-function cloneIridescence(
-  value: KhrMaterialsIridescence,
-): KhrMaterialsIridescence {
-  return {
-    ...value,
-    ...(value.iridescenceTexture
-      ? { iridescenceTexture: { ...value.iridescenceTexture } }
-      : {}),
-    ...(value.iridescenceThicknessTexture
-      ? {
-          iridescenceThicknessTexture: {
-            ...value.iridescenceThicknessTexture,
-          },
-        }
-      : {}),
-  };
+  const result: Record<MaterialExtensionName, ExtensionRecord | undefined> =
+    {} as never;
+  for (const name of MATERIAL_EXTENSION_NAMES) {
+    const value = extensions[name] as ExtensionRecord | undefined;
+    if (!value) continue;
+    const clone: ExtensionRecord = { ...value };
+    for (const field of MATERIAL_EXTENSION_DESCRIPTORS[name].fields) {
+      if (!hasOwn(clone, field.name)) continue;
+      if (field.kind === "unitColor3" || field.kind === "nonNegativeColor3") {
+        clone[field.name] = cloneColor3(clone[field.name] as Color3);
+      } else if (field.kind === "texture") {
+        clone[field.name] = cloneTextureInfo(
+          clone[field.name] as MaterialTextureInfo,
+        );
+      } else if (field.kind === "normalTexture") {
+        clone[field.name] = cloneNormalTextureInfo(
+          clone[field.name] as NormalTextureInfo,
+        );
+      }
+    }
+    result[name] = clone;
+  }
+  return result as MaterialExtensions;
 }
 
 function isNonNegativeFinite(value: unknown): value is number {

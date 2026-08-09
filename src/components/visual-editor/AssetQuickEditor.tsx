@@ -19,6 +19,7 @@ import {
   getTextureSourceFormat,
   getPrefabAssetDocumentReference,
   isEnvironmentTextureAsset,
+  LIT_MATERIAL_EXTENSION_NAMES,
   resolveOpenBrushBuiltinTextureUrl,
   type AudioAsset,
   type AssetManifest,
@@ -1351,18 +1352,9 @@ function TextureSlot({
 }
 
 function disabledLitMaterialExtensions(): MaterialExtensionsPatch {
-  return {
-    KHR_materials_anisotropy: null,
-    KHR_materials_clearcoat: null,
-    KHR_materials_dispersion: null,
-    KHR_materials_emissive_strength: null,
-    KHR_materials_ior: null,
-    KHR_materials_iridescence: null,
-    KHR_materials_sheen: null,
-    KHR_materials_specular: null,
-    KHR_materials_transmission: null,
-    KHR_materials_volume: null,
-  };
+  return Object.fromEntries(
+    LIT_MATERIAL_EXTENSION_NAMES.map((name) => [name, null]),
+  ) as MaterialExtensionsPatch;
 }
 
 type MaterialQuickEditorProps = {
