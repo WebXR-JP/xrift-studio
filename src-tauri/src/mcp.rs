@@ -2314,6 +2314,43 @@ fn tool_definitions() -> Value {
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         },
         {
+            "name": "analyze_component_code",
+            "description": "Analyze React Three Fiber (R3F) component source and return an import plan describing the Entities, Components, and Asset dependencies it would create. Read-only; pass the returned plan to apply_component_code_import_plan to commit it to the Scene.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "source": { "type": "string", "minLength": 1 }
+                },
+                "required": ["source"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "apply_component_code_import_plan",
+            "description": "Apply a plan returned by analyze_component_code by creating the Entities and Components it describes in the current Scene. Pass assetIdBySourcePath to reuse already-imported Assets for the plan's model dependencies instead of re-importing them.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "plan": {
+                        "type": "object",
+                        "properties": {
+                            "nodes": { "type": "array" }
+                        },
+                        "required": ["nodes"]
+                    },
+                    "assetIdBySourcePath": {
+                        "type": "object",
+                        "additionalProperties": { "type": "string", "minLength": 1 }
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "plan"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "list_assets",
             "description": "List assets in the open XRift Studio project and whether each asset can be placed in the scene.",
             "inputSchema": {
