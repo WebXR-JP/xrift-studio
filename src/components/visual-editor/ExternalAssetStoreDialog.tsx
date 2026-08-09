@@ -58,7 +58,7 @@ export function ExternalAssetStoreDialog({
   onInstalled: (
     result: ExternalStoreInstallResult,
     applySkybox: boolean,
-  ) => void;
+  ) => Promise<void>;
   onAddOpenBrush: (
     entry: OpenBrushCatalogEntry,
   ) => Promise<{ alreadyInstalled: boolean }>;
@@ -225,7 +225,7 @@ export function ExternalAssetStoreDialog({
           ? { format: fileFormat as ExternalStoreFileFormat }
           : {}),
       });
-      onInstalled(result, result.assetKind === "hdri" && applySkybox);
+      await onInstalled(result, result.assetKind === "hdri" && applySkybox);
       const environmentFormat = result.files.find((entry) => entry.role === "environment")?.format;
       setInstalledName(
         environmentFormat

@@ -1,4 +1,5 @@
 import type { ExternalStoreInstallResult } from "../tauri";
+import { reimportModelAssetFromDisk } from "./asset-import-persistence";
 import {
   DEFAULT_MODEL_IMPORT_SETTINGS,
   createDefaultMaterialAsset,
@@ -233,6 +234,33 @@ export function applyExternalStoreInstall(
     installedAssetIds,
     kind: "material",
   };
+}
+
+/**
+ * Applies an external store install and, for a Model, immediately analyzes
+ * the self-contained glTF that was just written to disk. The manifest
+ * contract requires importMetadata whenever sourceHash is present, so a
+ * Model asset must never be committed with one and not the other — a caller
+ * that skipped this would leave the project permanently unable to save.
+ */
+export async function applyExternalStoreInstallAndAnalyzeModel(
+  projectPath: string,
+  manifest: AssetManifest,
+  result: ExternalStoreInstallResult,
+): Promise<AppliedExternalStoreInstall> {
+  const applied = applyExternalStoreInstall(manifest, result);
+  if (applied.kind !== "model") return applied;
+  const reimport = await reimportModelAssetFromDisk(
+    projectPath,
+    applied.manifest,
+    applied.primaryAssetId,
+  );
+  if (!reimport.ok) {
+    throw new Error(
+      `「${result.name}」の構造を解析できませんでした: ${reimport.message}`,
+    );
+  }
+  return { ...applied, manifest: reimport.manifest };
 }
 
 export function applyOpenBrushCatalogInstall(

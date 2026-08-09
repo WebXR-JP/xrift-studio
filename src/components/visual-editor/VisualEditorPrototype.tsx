@@ -12,6 +12,7 @@ import {
   BUILTIN_ASSET_IDS,
   addDefaultDocumentAsset,
   applyExternalStoreInstall,
+  applyExternalStoreInstallAndAnalyzeModel,
   applyOpenBrushCatalogInstall,
   applyComponentCodeImportPlan,
   applyClassicProjectVisualImportEnhancements,
@@ -3547,7 +3548,21 @@ export function VisualEditorPrototype({
             },
           );
           const sourceBundle = bundleRef.current;
-          const applied = applyExternalStoreInstall(sourceBundle.assets, installed);
+          let applied;
+          try {
+            applied = await applyExternalStoreInstallAndAnalyzeModel(
+              currentProjectPath,
+              sourceBundle.assets,
+              installed,
+            );
+          } catch (error) {
+            throw new XriftMcpEditorToolError(
+              "MODEL_ANALYSIS_FAILED",
+              error instanceof Error
+                ? error.message
+                : "インストールしたModelの構造を解析できませんでした",
+            );
+          }
           const installedAssets = applied.installedAssetIds.flatMap(
             (assetId) => {
               const asset = applied.manifest.assets[assetId];
@@ -4897,15 +4912,32 @@ export function VisualEditorPrototype({
   );
 
   const handleExternalStoreInstalled = useCallback(
-    (
+    async (
       result: Parameters<typeof applyExternalStoreInstall>[1],
       applySkybox: boolean,
     ) => {
+      const projectPath = projectPathRef.current;
+      if (!projectPath) {
+        throw new Error("初回の自動保存完了後に外部Assetを追加できます");
+      }
+      // A Model must never be committed with sourceHash but no importMetadata
+      // (the manifest contract requires both), so the structure analysis has
+      // to complete before this reaches history/autosave. That analysis is
+      // async, so the starting assets are re-checked after the await instead
+      // of mutating state from inside a single synchronous updater.
+      const startingAssets = bundleRef.current.assets;
+      const applied = await applyExternalStoreInstallAndAnalyzeModel(
+        projectPath,
+        startingAssets,
+        result,
+      );
       setHistory((current) => {
-        const applied = applyExternalStoreInstall(
-          current.present.bundle.assets,
-          result,
-        );
+        if (current.present.bundle.assets !== startingAssets) {
+          setNotice(
+            "処理中にAssetsが変更されたため、インストールを取り消しました。もう一度お試しください",
+          );
+          return current;
+        }
         const scene = applySkybox
           ? assignSkyboxToScene(
               current.present.bundle.scene,
@@ -4920,12 +4952,14 @@ export function VisualEditorPrototype({
             ? `「${result.name}」をインストールし、Skyboxへ設定しました`
             : `「${result.name}」をインストールしました。Assetsで選択されています`,
         );
+        const nextBundle = touchProject({
+          ...current.present.bundle,
+          assets: applied.manifest,
+          scene,
+        });
+        bundleRef.current = nextBundle;
         return commitEditorHistory(current, {
-          bundle: touchProject({
-            ...current.present.bundle,
-            assets: applied.manifest,
-            scene,
-          }),
+          bundle: nextBundle,
           sceneSelection: null,
           assetSelection: applied.primaryAssetId,
         });
