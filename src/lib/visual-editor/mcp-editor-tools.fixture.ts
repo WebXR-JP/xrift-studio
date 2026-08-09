@@ -1830,7 +1830,6 @@ export function runXriftMcpEditorToolFixtures(): void {
       patch: {
         pbrMetallicRoughness: {
           roughnessFactor: 0.4,
-          baseColorTexture: { textureAssetId: texture.id, texCoord: 0 },
         },
       },
     },
@@ -1839,6 +1838,34 @@ export function runXriftMcpEditorToolFixtures(): void {
   current = {
     ...current,
     bundle: materialUpdated.bundle,
+    revision: current.revision + 1,
+  };
+
+  const materialTextureUpdated = executeXriftMcpEditorTool(current, {
+    id: "fixture-update-material-texture-alias",
+    tool: "update_material_asset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      materialAssetId: BUILTIN_ASSET_IDS.material.orange,
+      patch: { baseColor: { textureAssetId: texture.id } },
+    },
+  });
+  assert(
+    materialTextureUpdated.changed &&
+      (
+        materialTextureUpdated.result.properties as {
+          pbrMetallicRoughness?: {
+            baseColorTexture?: { textureAssetId?: string };
+          };
+        }
+      ).pbrMetallicRoughness?.baseColorTexture?.textureAssetId === texture.id,
+    "update_material_asset should accept the MCP baseColor texture slot alias",
+  );
+  current = {
+    ...current,
+    bundle: materialTextureUpdated.bundle,
     revision: current.revision + 1,
   };
 

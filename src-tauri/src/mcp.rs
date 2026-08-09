@@ -2277,6 +2277,28 @@ fn texture_import_settings_schema(require_non_empty: bool) -> Value {
     schema
 }
 
+fn material_texture_slot_schema() -> Value {
+    json!({
+        "description": "Assign a Texture Asset by id or texture info, or use null to clear the slot.",
+        "oneOf": [
+            { "type": "string", "minLength": 1 },
+            {
+                "type": "object",
+                "properties": {
+                    "textureAssetId": { "type": "string", "minLength": 1 },
+                    "texCoord": { "type": "integer", "minimum": 0 },
+                    "transform": { "type": ["object", "null"] },
+                    "scale": { "type": "number" },
+                    "strength": { "type": "number", "minimum": 0, "maximum": 1 }
+                },
+                "required": ["textureAssetId"],
+                "additionalProperties": false
+            },
+            { "type": "null" }
+        ]
+    })
+}
+
 fn tool_definitions() -> Value {
     json!([
         {
@@ -3395,7 +3417,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "update_material_asset",
-            "description": "Persist canonical glTF Material Asset properties in Edit or Play mode, including PBR factors, texture slots, alpha settings, and supported KHR_materials extensions. During Play only consuming Entities restart. Unlike Script ctx.materials overrides, this changes saved authoring data.",
+            "description": "Persist canonical glTF Material Asset properties in Edit or Play mode, including PBR factors, texture slots, alpha settings, and supported KHR_materials extensions. Texture slots accept MCP-friendly baseColor, metallicRoughness, normal, occlusion, and emissive aliases. During Play only consuming Entities restart. Unlike Script ctx.materials overrides, this changes saved authoring data.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3403,7 +3425,39 @@ fn tool_definitions() -> Value {
                     "sceneId": { "type": "string" },
                     "expectedRevision": { "type": "integer", "minimum": 0 },
                     "materialAssetId": { "type": "string" },
-                    "patch": { "type": "object" }
+                    "patch": {
+                        "type": "object",
+                        "description": "Material properties. Canonical glTF fields are accepted; the listed aliases assign imported Texture Assets directly.",
+                        "properties": {
+                            "baseColor": material_texture_slot_schema(),
+                            "baseColorTexture": material_texture_slot_schema(),
+                            "metallicRoughness": material_texture_slot_schema(),
+                            "metallicRoughnessTexture": material_texture_slot_schema(),
+                            "normal": material_texture_slot_schema(),
+                            "occlusion": material_texture_slot_schema(),
+                            "emissive": material_texture_slot_schema(),
+                            "pbrMetallicRoughness": { "type": "object" },
+                            "normalTexture": material_texture_slot_schema(),
+                            "occlusionTexture": material_texture_slot_schema(),
+                            "emissiveTexture": material_texture_slot_schema(),
+                            "emissiveFactor": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+                            "alphaMode": { "type": "string", "enum": ["OPAQUE", "MASK", "BLEND"] },
+                            "alphaCutoff": { "type": "number", "minimum": 0 },
+                            "doubleSided": { "type": "boolean" },
+                            "extensions": { "type": "object" },
+                            "color": { "type": "string" },
+                            "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+                            "metalness": { "type": "number", "minimum": 0, "maximum": 1 },
+                            "roughness": { "type": "number", "minimum": 0, "maximum": 1 },
+                            "baseColorTextureId": { "type": ["string", "null"] },
+                            "normalTextureId": { "type": ["string", "null"] },
+                            "occlusionTextureId": { "type": ["string", "null"] },
+                            "metallicRoughnessTextureId": { "type": ["string", "null"] },
+                            "emissiveTextureId": { "type": ["string", "null"] }
+                        },
+                        "minProperties": 1,
+                        "additionalProperties": false
+                    }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "materialAssetId", "patch"],
                 "additionalProperties": false
