@@ -51,4 +51,5 @@ description: XRift Studio に機能を追加・変更するときの標準手順
 - エージェント全体ルール: AGENT.md
 - UX 設計: .agents/skills/xrift-studio-ux/SKILL.md, docs/UX_PRINCIPLES.md, docs/UX_INTERACTIONS.md
 - 検証ループ: .agents/skills/xrift-studio-verify/SKILL.md
+- Blender × Studio モデリング: .agents/skills/xrift-mcp-blender-modeling/SKILL.md
 - xrift CLI の仕様: xrift-cli スキル（ユーザーレベル）
