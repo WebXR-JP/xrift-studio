@@ -376,3 +376,39 @@ journal の phase 遷移、committed マーカ、孤児 staging の回収、ロ�
 7. **修正8**（no-op スキップ）— 効果は大きいが挙動確認が要るので最後
 
 1〜3 だけで症状はほぼ消えるはず。4 以降は再発防止と、見つかった別バグの修正。
+
+---
+
+## 追記（2026-08-09）: 調査対象外だった Asset Import 経路が主因だった
+
+修正1〜3・5・8 は `0a80151` → `60e83d5` で `save_visual_documents_transaction_with_owner` /
+`recover_visual_save_transactions` に適用済みになっていた（修正4・6・7 も同コミットで適用済み）。
+しかし **この調査は Model / Texture / Shader などの Asset Import を実際にディスクへ確定する
+`commit_visual_asset_import`（`lib.rs:4157`）を対象に含めていなかった。** ここは以下の理由で
+むしろ最も被弾しやすい経路だった。
+
+- `staged → target` の `std::fs::rename`（`lib.rs:4248` 付近）に `retry_transient_io` が一切なく、
+  1回でも共有違反に当たると Import 全体が即失敗していた。
+- Model は埋め込みテクスチャ等で 1 Import あたり最大 512 ファイルを書く（`writes.len() > 512` で拒否、
+  最大 320MB）。ファイル数が多いほど、この無防備な rename に被弾する機会が線形に増える。
+  「Texture 1枚の Import では起きないが Model の Import で起きる」という報告と整合する。
+- 既存ファイルとの重複排除に使う `std::fs::symlink_metadata` / `std::fs::read`
+  （`lib.rs:4212-4223` 付近）にもリトライがなく、`if let Ok(metadata) = ...` で
+  「メタデータ取得に失敗＝ファイルが存在しない」と誤判定していた
+  （NotFound 以外のエラーも黙って「存在しない」扱いにしてしまう、修正5と同種の問題）。
+- 同名で前回の Import が残した stale なトランザクションディレクトリの削除
+  （`lib.rs:4185` 付近）も、リトライ無しの `remove_dir_all` で Import 全体を失敗させていた。
+
+### 適用した修正
+
+`save_visual_documents_transaction_with_owner` で確立済みのパターンをそのまま横展開した。
+
+1. stale トランザクションディレクトリの削除に `force_remove_dir_all` を使用（`?` で伝播はするが、
+   まずリトライしてから失敗するようになった）。
+2. 重複排除チェックを `symlink_metadata` を単一の真実の源とする形に書き換え、
+   `retry_transient_io` でラップ。`NotFound` 以外のエラーはリトライ後も残れば
+   実際の OS エラー文言を含めて返す（修正1と同じく握り潰さない）。
+3. `staged → target` の `rename` を `retry_transient_io` でラップ。
+
+`commit_visual_asset_import` を使う全ての Import 系（Model 再取り込み含む、Texture、Shader、
+Skybox、Unity パッケージ変換、Material/Environment サムネイル生成キュー）が同時に恩恵を受ける。

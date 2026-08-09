@@ -4182,7 +4182,9 @@ fn commit_visual_asset_import(
         if metadata.file_type().is_symlink() || !metadata.is_dir() {
             return Err("asset import staging is not a regular directory".to_string());
         }
-        std::fs::remove_dir_all(&transaction_root).map_err(|e| e.to_string())?;
+        // A stale transaction directory from a prior attempt can still be held
+        // by an AV/indexer scan; retry instead of failing the whole import.
+        force_remove_dir_all(&transaction_root)?;
     }
     std::fs::create_dir_all(&transaction_root).map_err(|e| e.to_string())?;
 
@@ -4209,15 +4211,32 @@ fn commit_visual_asset_import(
             return Err("asset import transaction is too large".to_string());
         }
 
-        if let Ok(metadata) = std::fs::symlink_metadata(&target) {
-            if metadata.file_type().is_symlink() || !metadata.is_file() {
+        // symlink_metadata is the single source of truth for whether the
+        // target exists; only NotFound means "doesn't exist" — any other
+        // error (e.g. a transient Windows share violation) is retried and
+        // must not be silently treated as a missing file.
+        let target_exists = match retry_transient_io(|| std::fs::symlink_metadata(&target)) {
+            Ok(metadata) => {
+                if metadata.file_type().is_symlink() || !metadata.is_file() {
+                    let _ = std::fs::remove_dir_all(&transaction_root);
+                    return Err(format!(
+                        "asset import target is not a regular file: {}",
+                        write.relative_path
+                    ));
+                }
+                true
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+            Err(error) => {
                 let _ = std::fs::remove_dir_all(&transaction_root);
                 return Err(format!(
-                    "asset import target is not a regular file: {}",
-                    write.relative_path
+                    "asset import target cannot be inspected: {} ({})",
+                    write.relative_path, error
                 ));
             }
-            let existing = std::fs::read(&target).map_err(|error| {
+        };
+        if target_exists {
+            let existing = retry_transient_io(|| std::fs::read(&target)).map_err(|error| {
                 let _ = std::fs::remove_dir_all(&transaction_root);
                 format!("asset import target cannot be verified: {}", error)
             })?;
@@ -4245,7 +4264,7 @@ fn commit_visual_asset_import(
             if let Some(parent) = target.parent() {
                 std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
-            std::fs::rename(&staged_path, &target)
+            retry_transient_io(|| std::fs::rename(&staged_path, &target))
                 .map_err(|e| format!("asset import cannot be published: {}", e))?;
             Ok(())
         })();
