@@ -52,8 +52,8 @@ Visual projectはコードを隠すだけの画面ではなく、Scene、Asset�
 
 ## 現在の制約
 
-- OBJの外部MTL／Textureは自動取得しない。取り込み後にMaterial Slotへ割り当てる。
-- glTFは現時点でGLBまたは自己完結したファイルを基本とし、汎用的な複数sidecar file importは今後対応する。
+- OBJの外部MTL／Textureはdisk上から自動探索しない。同じimport batchへ含めた分だけ解決する。
+- sidecarを参照するglTF／OBJは、依存ファイルを同じimport batchへ含めた時だけ自己完結GLBへ正規化する。単体で選んだ場合は従来どおり不足依存として止まる。
 - VRMの静的ポーズは保存できるが、keyframe、clip、補間、timeline編集はまだない。
 - Model Animationはclip選択、Autoplay、Loop、再生速度に対応する。開始タイミングの指定、複数clipの同時再生、clip間の遷移はまだない。
 - Unity固有Component、Shader、Script、Animationを完全には移植しない。対応内容と未対応内容をimport前に示す方針とする。

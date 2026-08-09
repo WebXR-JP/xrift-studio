@@ -1,0 +1,32 @@
+# Normalize line endings in the repository.
+#
+# Without this file git had no idea the working tree was CRLF while every blob
+# in history is LF, so `git diff` reported all 126 tracked text files as fully
+# rewritten (~96k insertions / ~96k deletions) and no real change was reviewable.
+# `text=auto` makes git store LF and convert on checkout, which collapses that
+# noise without forcing anyone to touch their editor settings.
+* text=auto
+
+# Binary assets: never apply any conversion or try to diff them as text.
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.webp   binary
+*.ico    binary
+*.icns   binary
+*.glb    binary
+*.gltf   binary
+*.hdr    binary
+*.exr    binary
+*.ktx2   binary
+*.wav    binary
+*.mp3    binary
+*.drc    binary
+
+# Lockfiles are generated; keep them out of diffs by default.
+pnpm-lock.yaml   -diff
+package-lock.json -diff
+src-tauri/Cargo.lock -diff
+
+# Shell scripts must keep LF even on Windows checkouts.
+*.sh     text eol=lf

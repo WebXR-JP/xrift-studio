@@ -67,6 +67,14 @@ UIはTauri commandを直接呼ばない。`reimportModelAssetFromDisk` が次を
 - CompilerはAsset Manifest codecを通すため、同じ違反をblocking diagnosticにする。
 - `model-import-contract.fixture.ts` はslot照合、binding維持、設定更新、metadata round-trip、非有限値拒否、atomic replacementをファイルシステムなしで検証する。
 
+## Sidecarを参照するModel
+
+`.gltf`と`.obj`は依存ファイルを同じimport batchで受け取れる。`planModelCompanionBatch`がmodel sourceのURI（glTFは`buffers[].uri`と`images[].uri`、OBJは`mtllib`とMTLの`map_*`）を読み、batch内で実際に参照されているファイルだけをcompanionとして確定する。
+
+companionは`createAssetImportPlan`の`companionFiles`へ渡し、`three-model-converter`が自己完結GLBへ正規化する。Material / Textureは生成したGLBから展開するため、companionを単独Assetとして重複importしない。参照されていないファイルは従来どおり単独Assetとして扱う。
+
+`model-companion-batch.fixture.ts`はglTF sidecarのグループ化、未参照ファイルの単独維持、MTL経由のtexture解決、単一ファイルbatchの非変更、MTL option flagの除去をファイルシステムなしで検証する。
+
 ## UI境界
 
 Model Inspectorは、last-goodの構造情報、現在のimport recipe、既定Material slot bindingを分けて表示する。現在のproject-relative sourceは同じAsset IDのまま再取り込みでき、処理中の進捗、成功、失敗を同じInspectorへ残す。処理中に対象Assetが編集された場合は結果を自動適用せず、直前のAssetを保持する。
@@ -77,4 +85,4 @@ Model Inspectorは、last-goodの構造情報、現在のimport recipe、既定M
 
 - 現在sourceの再検査とは別に、別sourceを選ぶ置換操作を追加する
 - 取り込み前後のnode / mesh / Animation / bounds差分を確定前に確認できるようにする
-- sidecarを参照するglTFの複数ファイル取り込みと、未参照になったcontent-addressed fileの回収を追加する
+- 未参照になったcontent-addressed fileの回収を追加する

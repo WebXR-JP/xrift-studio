@@ -2460,14 +2460,6 @@ function AnimationInspector({
   readOnly: boolean;
   onChange: (patch: AnimationPatch) => void;
   onOpenInteractivity: (assetId: string) => void;
-  scriptContracts?: Readonly<Record<string, ScriptContract>>;
-  scriptEntityOptions?: readonly ScriptEntityOption[];
-  onUpdateScriptComponent?: (
-    entityId: string,
-    componentId: string,
-    patch: ScriptComponentPatch,
-  ) => void;
-  onOpenScript?: (scriptAssetId: string) => void;
 }) {
   const model = entity.components
     .filter((candidate) => candidate.type === "mesh")

@@ -3840,8 +3840,17 @@ fn read_local_texture_import_source_path(
         .and_then(|name| name.to_str())
         .filter(|name| !name.is_empty())
         .ok_or_else(|| "local Texture source file name is invalid".to_string())?;
-    let mut file = std::fs::File::open(&resolved)
-        .map_err(|_| "local Texture source cannot be opened".to_string())?;
+    // Open every component of the resolved path with O_NOFOLLOW (and reject
+    // Windows reparse points), matching the Audio/Model/Shader import readers.
+    // A plain `File::open` here would re-follow a symlink swapped in between
+    // `canonicalize` and the read.
+    let mut file = open_absolute_file_without_links(&resolved)?;
+    let opened_metadata = file
+        .metadata()
+        .map_err(|_| "local Texture source cannot be inspected".to_string())?;
+    if !opened_metadata.is_file() || opened_metadata.len() != source_metadata.len() {
+        return Err("local Texture source changed while it was inspected".to_string());
+    }
     let mut bytes = Vec::with_capacity(source_metadata.len() as usize);
     std::io::Read::by_ref(&mut file)
         .take(MAX_LOCAL_TEXTURE_BYTES + 1)

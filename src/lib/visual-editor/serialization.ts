@@ -1669,6 +1669,22 @@ function validatePrefabComponentShape(
         ),
       );
     }
+    if (
+      isRecord(component.geometry) &&
+      component.geometry.kind === "asset" &&
+      component.geometry.sourceNodeName !== undefined &&
+      (typeof component.geometry.sourceNodeName !== "string" ||
+        !component.geometry.sourceNodeName.trim() ||
+        component.geometry.sourceNodeName.length > 160)
+    ) {
+      issues.push(
+        issue(
+          `${path}.geometry.sourceNodeName`,
+          "range",
+          "sourceNodeName must be a non-empty bounded string",
+        ),
+      );
+    }
     if (component.modelPose !== undefined) {
       validateModelPoseShape(component.modelPose, `${path}.modelPose`, issues);
     }
@@ -1852,22 +1868,6 @@ function validateRigidBodyComponentShape(
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
       issues.push(
         issue(`${path}.${field}`, "range", `Rigid Body ${field} is invalid`),
-      );
-    }
-    if (
-      isRecord(component.geometry) &&
-      component.geometry.kind === "asset" &&
-      component.geometry.sourceNodeName !== undefined &&
-      (typeof component.geometry.sourceNodeName !== "string" ||
-        !component.geometry.sourceNodeName.trim() ||
-        component.geometry.sourceNodeName.length > 160)
-    ) {
-      issues.push(
-        issue(
-          `${path}.geometry.sourceNodeName`,
-          "range",
-          "sourceNodeName must be a non-empty bounded string",
-        ),
       );
     }
   }

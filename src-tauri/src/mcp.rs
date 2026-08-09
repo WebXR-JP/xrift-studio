@@ -343,6 +343,14 @@ impl SupportedOllamaIntegration {
 }
 
 pub fn start_broker(app: &AppHandle) -> Result<(), String> {
+    let Some(session_token) = create_session_token() else {
+        // The AI editor bridge is optional; the editor must still start.
+        eprintln!(
+            "XRift Studio MCP broker disabled: OS randomness is unavailable, \
+             so no session token could be generated."
+        );
+        return Ok(());
+    };
     let listener = std::net::TcpListener::bind(("127.0.0.1", 0))
         .map_err(|error| format!("AI editor bridgeを開始できません: {error}"))?;
     listener
@@ -357,7 +365,7 @@ pub fn start_broker(app: &AppHandle) -> Result<(), String> {
         schema_version: MCP_RENDEZVOUS_SCHEMA_VERSION,
         host: "127.0.0.1".to_string(),
         port,
-        token: create_session_token(app, port),
+        token: session_token,
         pid: std::process::id(),
     };
     write_private_json(&rendezvous_path, &rendezvous)?;
@@ -798,25 +806,18 @@ fn editor_heartbeat_is_fresh(last_heartbeat: u64, now: u64) -> bool {
         && now.saturating_sub(last_heartbeat) <= MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS
 }
 
-fn create_session_token(app: &AppHandle, port: u16) -> String {
+/// Returns `None` when OS randomness is unavailable.
+///
+/// This token is the only authentication on the loopback broker, so there is no
+/// acceptable derived fallback: pid/port/clock inputs are all observable by a
+/// local attacker. The caller skips the broker entirely instead, which leaves
+/// the editor itself fully usable.
+fn create_session_token() -> Option<String> {
     let mut random = [0_u8; 32];
     if getrandom::fill(&mut random).is_ok() {
-        return bytes_to_hex(&random);
+        return Some(bytes_to_hex(&random));
     }
-
-    // OS randomness should be available on supported desktop platforms. Keep
-    // a per-process fallback so a transient provider failure does not prevent
-    // the editor itself from starting.
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or_default();
-    let mut digest = Sha256::new();
-    digest.update(app.package_info().name.as_bytes());
-    digest.update(std::process::id().to_le_bytes());
-    digest.update(port.to_le_bytes());
-    digest.update(now.to_le_bytes());
-    format!("{:x}", digest.finalize())
+    None
 }
 
 fn bytes_to_hex(bytes: &[u8]) -> String {

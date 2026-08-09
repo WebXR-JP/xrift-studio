@@ -25,6 +25,8 @@ import {
   commitAssetImportPlansToDisk,
   createAssetImportPlan,
   sha256AssetBytes,
+  planModelCompanionBatch,
+  type ThreeModelCompanionFile,
   createUnityPackageImportPlan,
   addEditorComponent,
   addAssetFolder,
@@ -333,7 +335,19 @@ type TransformScrubTransaction = {
 type QueuedAssetImport = PendingImport & {
   file: File | null;
   folderId: string | null;
+  /** Sidecar files the model referenced inside the same import batch. */
+  companions: File[];
 };
+
+/**
+ * Identifies a dropped file inside one import batch. A folder drop carries a
+ * relative path, which keeps sidecars in nested texture folders resolvable.
+ */
+function importBatchPath(file: File): string {
+  const relative = (file as File & { webkitRelativePath?: string })
+    .webkitRelativePath;
+  return relative && relative.length > 0 ? relative : file.name;
+}
 
 type PendingMaterialAssignment = {
   entityId: string;
@@ -6825,12 +6839,23 @@ export function VisualEditorPrototype({
               setNotice(`「${imported.name}」をGLSL Shader Assetとしてインポートしました`);
               continue;
             }
+            // Sidecars stay out of the manifest as standalone Assets: the
+            // converter embeds them, and the resulting GLB derives its own
+            // Material and Texture Assets.
+            const companionFiles: ThreeModelCompanionFile[] = await Promise.all(
+              queued.companions.map(async (companion) => ({
+                relativePath: importBatchPath(companion),
+                bytes: new Uint8Array(await companion.arrayBuffer()),
+                ...(companion.type ? { mimeType: companion.type } : {}),
+              })),
+            );
             const plan = await createAssetImportPlan({
               fileName: sourceFile.name,
               bytes,
               mimeType: sourceFile.type,
               folderId,
               existingManifest: workingManifest,
+              ...(companionFiles.length > 0 ? { companionFiles } : {}),
               preferredKind:
                 queued.resourceKind === "model" ||
                 queued.resourceKind === "texture"
@@ -7058,7 +7083,7 @@ export function VisualEditorPrototype({
     [editorMode, updateImportQueue],
   );
 
-  const handleQueueFiles = useCallback((files: File[]) => {
+  const handleQueueFiles = useCallback(async (files: File[]) => {
     const availability = resolveAssetOperationAvailability("asset-import", {
       readOnly: editorMode !== "edit",
       assetImportActive:
@@ -7070,11 +7095,26 @@ export function VisualEditorPrototype({
       setNotice(availability.disabledReason);
       return;
     }
+    // A `.gltf` or `.obj` dropped together with its sidecars is normalized as
+    // one self-contained Model instead of failing on a missing dependency and
+    // importing the sidecars as unrelated Texture Assets.
+    const companionPlan = await planModelCompanionBatch(
+      files.map((file) => ({
+        path: importBatchPath(file),
+        readText: () => file.text(),
+      })),
+    );
+    const companionPaths = new Set(companionPlan.consumedPaths);
+    const filesByBatchPath = new Map(
+      files.map((file) => [importBatchPath(file), file] as const),
+    );
+
     const accepted: Array<{
       file: File;
       resourceKind: PendingImport["resourceKind"];
     }> = [];
     for (const file of files) {
+      if (companionPaths.has(importBatchPath(file))) continue;
       if (SUPPORTED_UNITY_FILE.test(file.name)) {
         accepted.push({ file, resourceKind: "unity-package" });
       } else if (SUPPORTED_TEXTURE_FILE.test(file.name)) {
@@ -7091,6 +7131,7 @@ export function VisualEditorPrototype({
     }
     const unsupported = files.filter(
       (file) =>
+        !companionPaths.has(importBatchPath(file)) &&
         !SUPPORTED_UNITY_FILE.test(file.name) &&
         !SUPPORTED_MODEL_FILE.test(file.name) &&
         !SUPPORTED_TEXTURE_FILE.test(file.name) &&
@@ -7123,10 +7164,19 @@ export function VisualEditorPrototype({
         diagnostics: [],
         file,
         folderId: targetFolderId,
+        companions: (
+          companionPlan.companionsByModelPath[importBatchPath(file)] ?? []
+        )
+          .map((path) => filesByBatchPath.get(path))
+          .filter((companion): companion is File => companion !== undefined),
       }));
     updateImportQueue((current) => [...current, ...queued]);
     if (projectPath) {
-      setNotice(`アセット${accepted.length}件のインポートを開始しました`);
+      setNotice(
+        companionPaths.size > 0
+          ? `アセット${accepted.length}件のインポートを開始しました。依存ファイル${companionPaths.size}件をModelへ同梱します`
+          : `アセット${accepted.length}件のインポートを開始しました`,
+      );
       void processImportQueue(projectPath);
     } else {
       setNotice("初回の自動保存完了後にアセットをインポートします");

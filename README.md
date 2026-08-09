@@ -19,7 +19,7 @@ Node.js や `@xrift/cli` の導入、コードまたはビジュアルエディ�
 | 新しいプロジェクトを作る | 対応 | 対応 | ワールド／アイテムと、クラシック／ビジュアルの4通りから選び、作成後のプロジェクトをそのまま開く。 |
 | コードと設定を編集する | 対応 | 対応 | 内蔵エディタでテキストファイルを編集・保存する。`xrift.json` はフォームと raw JSON の両方で編集できる。 |
 | シーンをビジュアル編集する | 対応 | 対応 | Hierarchy、Scene View、Inspector、Assetsを使い、Primitive、Model、Prefab、XRift Componentを配置してギズモで調整する。 |
-| 3D素材を取り込む | 対応 | 対応 | GLB／自己完結glTF、OBJ、VRM 0.x／1.xをModel Assetとして取り込む。Open Brush／Tilt Brush由来のglTFは専用表示を検証中。 |
+| 3D素材を取り込む | 対応 | 対応 | GLB／glTF、OBJ、VRM 0.x／1.xをModel Assetとして取り込む。sidecarを参照するglTF／OBJは、依存ファイルを一緒にdropすると自己完結GLBへ正規化する。Open Brush／Tilt Brush由来のglTFは専用表示を検証中。 |
 | Unity素材を引き継ぐ | 検証中 | 検証中 | UnityPackage、`.unity`、`.prefab`を解析し、対応するScene、Prefab、Model、Textureへ変換する。 |
 | アバターの見た目を保存する | 対応 | 対応 | ボーンのXYZ回転とshape keyの値をEntityごとに保存し、Scene ViewとXRift向け生成コードへ反映する。timeline animationは今後対応する。 |
 | アセットと表現を作る | 対応 | 対応 | Texture、Material、Particle、PrefabをAssetsで管理し、Inspectorから編集する。PNG、JPG、WebP、KTX2に対応する。 |
@@ -39,7 +39,7 @@ Node.js や `@xrift/cli` の導入、コードまたはビジュアルエディ�
 
 `対応` はデスクトップ版の主要導線で操作できること、`検証中` は実装済みの範囲を実データや配布環境で確認していることを示します。ブラウザ版は制作フローを確認するためのWebプレビューであり、ログイン、ローカルファイル操作、CLI実行、アップロードは行いません。
 
-現在の制約と次の完了条件は[Visual Editor Roadmap](./docs/VISUAL_EDITOR_ROADMAP.md)にまとめています。OBJの外部MTL／Texture自動取得、VRMのanimation timeline、Unity固有機能の完全互換は現時点では未対応です。
+現在の制約と次の完了条件は[Visual Editor Roadmap](./docs/VISUAL_EDITOR_ROADMAP.md)にまとめています。disk上のMTL／Textureの自動探索、VRMのanimation timeline、Unity固有機能の完全互換は現時点では未対応です。
 
 ## Visual projectを通常のXRift開発へ書き出す
 
