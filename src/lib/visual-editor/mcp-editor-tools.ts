@@ -5384,6 +5384,15 @@ function materialPatchValue(value: unknown): MaterialAssetPatch {
     "occlusionTextureId",
     "metallicRoughnessTextureId",
     "emissiveTextureId",
+    // MCP-friendly texture slot names. These match the slot names exposed by
+    // the texture tools while the canonical persisted shape remains glTF.
+    "baseColor",
+    "baseColorTexture",
+    "metallicRoughness",
+    "metallicRoughnessTexture",
+    "normal",
+    "occlusion",
+    "emissive",
   ]);
   const unsupported = Object.keys(patch).find((key) => !allowed.has(key));
   if (unsupported) {
@@ -5393,7 +5402,36 @@ function materialPatchValue(value: unknown): MaterialAssetPatch {
     );
   }
   if (Object.keys(patch).length === 0) invalidArgument("patch", "non-empty object");
-  return JSON.parse(JSON.stringify(patch)) as MaterialAssetPatch;
+
+  const normalized = JSON.parse(JSON.stringify(patch)) as Record<string, unknown>;
+  const pbr =
+    normalized.pbrMetallicRoughness === undefined
+      ? {}
+      : recordValue(normalized.pbrMetallicRoughness, "patch.pbrMetallicRoughness");
+  const moveTextureAlias = (
+    aliases: readonly string[],
+    target: Record<string, unknown>,
+    targetKey: string,
+  ) => {
+    const supplied = aliases.filter((alias) => normalized[alias] !== undefined);
+    if (supplied.length === 0) return;
+    if (supplied.length > 1 || target[targetKey] !== undefined) {
+      invalidArgument(`patch.${supplied[0]}`, `single value for ${targetKey}`);
+    }
+    target[targetKey] = normalized[supplied[0]];
+    supplied.forEach((alias) => delete normalized[alias]);
+  };
+  moveTextureAlias(["baseColor", "baseColorTexture"], pbr, "baseColorTexture");
+  moveTextureAlias(
+    ["metallicRoughness", "metallicRoughnessTexture"],
+    pbr,
+    "metallicRoughnessTexture",
+  );
+  moveTextureAlias(["normal"], normalized, "normalTexture");
+  moveTextureAlias(["occlusion"], normalized, "occlusionTexture");
+  moveTextureAlias(["emissive"], normalized, "emissiveTexture");
+  if (Object.keys(pbr).length > 0) normalized.pbrMetallicRoughness = pbr;
+  return normalized as MaterialAssetPatch;
 }
 
 function requiredString(value: unknown, name: string): string {
