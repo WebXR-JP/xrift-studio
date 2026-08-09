@@ -36,7 +36,7 @@ function UtilityButton({
   label: string;
   active?: boolean;
   expanded?: boolean;
-  icon: "ai" | "keyboard" | "help" | "settings";
+  icon: "ai" | "keyboard" | "help" | "report" | "settings";
   onClick: () => void;
 }) {
   const Icon = EDITOR_ICONS[icon];
@@ -80,6 +80,7 @@ export function EditorUtilityRail({
   onRegisterMcpClient,
   onConfigureOllama,
   onUndo,
+  onOpenSupport,
 }: {
   commands: readonly EditorCommandDefinition[];
   sceneSettingsOpen: boolean;
@@ -104,6 +105,7 @@ export function EditorUtilityRail({
     model: string,
   ) => void;
   onUndo: () => void;
+  onOpenSupport: () => void;
 }) {
   const [openPanel, setOpenPanel] = useState<UtilityPanel>(null);
   const railRef = useRef<HTMLElement>(null);
@@ -169,6 +171,14 @@ export function EditorUtilityRail({
         active={openPanel === "help"}
         expanded={openPanel === "help"}
         onClick={() => togglePanel("help")}
+      />
+      <UtilityButton
+        label="ヘルプと報告"
+        icon="report"
+        onClick={() => {
+          setOpenPanel(null);
+          onOpenSupport();
+        }}
       />
       <UtilityButton
         label={sceneSettingsOpen ? "シーン設定を閉じる" : "シーン設定を開く"}

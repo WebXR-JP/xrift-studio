@@ -81,6 +81,7 @@ export function EditorView({
   const [savedContent, setSavedContent] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [showErrorSupport, setShowErrorSupport] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logsCollapsed, setLogsCollapsed] = useState(true);
   const [fileTreeKey, setFileTreeKey] = useState(0);
@@ -428,6 +429,16 @@ export function EditorView({
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowSupport(true)}
+            className="flex items-center justify-center rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+            title="ヘルプと報告"
+            aria-label="ヘルプと報告"
+          >
+            <LifeBuoy size={14} aria-hidden="true" />
+          </button>
+          <span className="h-5 w-px bg-zinc-200" aria-hidden="true" />
           {devHandle ? (
             <button
               type="button"
@@ -648,6 +659,17 @@ export function EditorView({
         open={showErrorSupport}
         context={{ currentScreen: "ファイル読込のエラー画面", errorMessage: error }}
         onClose={() => setShowErrorSupport(false)}
+      />
+      <SupportReportModal
+        open={showSupport}
+        context={{
+          currentScreen: "プロジェクトエディター",
+          project: {
+            name: project.title || project.name,
+            description: project.description ?? undefined,
+          },
+        }}
+        onClose={() => setShowSupport(false)}
       />
     </div>
   );

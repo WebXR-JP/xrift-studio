@@ -184,6 +184,7 @@ import { EditorImportMenu } from "./EditorImportMenu";
 import { ComponentCodeImportDialog } from "./ComponentCodeImportDialog";
 import { InteractivityGraphEditor } from "./InteractivityGraphEditor";
 import { EditorUtilityRail } from "./EditorUtilityRail";
+import { SupportReportModal } from "../SupportReportModal";
 import type { XriftMcpActivity } from "./AiConnectionPanel";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { HierarchyPanel } from "./HierarchyPanel";
@@ -1245,6 +1246,7 @@ export function VisualEditorPrototype({
   const [mcpLocalAssetImportBusy, setMcpLocalAssetImportBusy] = useState(false);
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
   const [externalStoreOpen, setExternalStoreOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
   const [interactivityEditorAssetId, setInteractivityEditorAssetId] =
     useState<string | null>(null);
   const [pendingImports, setPendingImports] = useState<QueuedAssetImport[]>([]);
@@ -8549,6 +8551,7 @@ export function VisualEditorPrototype({
               void configureOllama(integrationId, model)
             }
             onUndo={handleUndo}
+            onOpenSupport={() => setSupportOpen(true)}
           />
           <ExternalAssetStoreDialog
             open={externalStoreOpen}
@@ -8563,6 +8566,17 @@ export function VisualEditorPrototype({
             onInstalled={handleExternalStoreInstalled}
             onAddOpenBrush={handleAddOpenBrushMaterial}
             onAddOfficialComponent={handleAddOfficialComponent}
+          />
+          <SupportReportModal
+            open={supportOpen}
+            context={{
+              currentScreen: "ビジュアルエディター",
+              project: {
+                name: bundle.project.metadata.title || bundle.project.metadata.name,
+                description: bundle.project.metadata.description || undefined,
+              },
+            }}
+            onClose={() => setSupportOpen(false)}
           />
           {interactivityEditorAssetId &&
           bundle.assets.assets[interactivityEditorAssetId]?.kind === "interactivity" ? (
