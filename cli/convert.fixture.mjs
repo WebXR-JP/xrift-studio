@@ -58,6 +58,7 @@ import { runXriftComponentRegistryFixtureAssertions } from "../src/lib/visual-ed
 import { runDocumentAssetCreationFixtureAssertions } from "../src/lib/visual-editor/document-asset-creation.fixture.ts";
 import { runEditorSessionHierarchyFixtureAssertions } from "../src/lib/visual-editor/editor-session.fixture.ts";
 import { runGltfDerivedAssetFixtureAssertions } from "../src/lib/visual-editor/gltf-derived-assets.fixture.ts";
+import { runModelCompanionBatchFixtureAssertions } from "../src/lib/visual-editor/model-companion-batch.fixture.ts";
 import { runModelHierarchyFixtureAssertions } from "../src/lib/visual-editor/model-hierarchy.fixture.ts";
 import { runModelImportContractFixtureAssertions } from "../src/lib/visual-editor/model-import-contract.fixture.ts";
 import { runModelReimportImpactFixtureAssertions } from "../src/lib/visual-editor/model-reimport-impact.fixture.ts";
@@ -266,6 +267,7 @@ try {
     ["audio import", runAudioImportFixtureAssertions],
     ["autosave coordinator", runAutosaveCoordinatorFixtureAssertions],
     ["gltf derived assets", runGltfDerivedAssetFixtureAssertions],
+    ["model companion batch", runModelCompanionBatchFixtureAssertions],
     ["model import contract", runModelImportContractFixtureAssertions],
     ["skybox import", runSkyboxImportFixtureAssertions],
     ["unity package import", runUnityPackageImportFixture],
