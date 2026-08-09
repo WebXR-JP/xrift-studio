@@ -1,5 +1,10 @@
 import { instantiateSceneAsset, isScenePlaceableAsset } from "./asset-placement";
 import {
+  analyzeComponentCode,
+  applyComponentCodeImportPlan,
+  type ComponentCodeImportPlan,
+} from "./component-code-import";
+import {
   getBuiltinPrefabRecipe,
   instantiateBuiltinPrefab,
 } from "./builtin-prefab-catalog";
@@ -149,6 +154,8 @@ import {
 export const XRIFT_MCP_EDITOR_TOOLS = [
   "get_editor_context",
   "get_scripting_capabilities",
+  "analyze_component_code",
+  "apply_component_code_import_plan",
   "list_assets",
   "update_project_metadata",
   "create_asset_folder",
@@ -301,6 +308,10 @@ export function executeXriftMcpEditorTool(
       return readEditorContext(context);
     case "get_scripting_capabilities":
       return readScriptingCapabilities(context);
+    case "analyze_component_code":
+      return analyzeComponentCodeTool(context, request.arguments);
+    case "apply_component_code_import_plan":
+      return applyComponentCodeImportPlanTool(context, request.arguments);
     case "list_assets":
       return listAssets(context, request.arguments);
     case "update_project_metadata":
@@ -432,6 +443,104 @@ function readScriptingCapabilities(
     XRIFT_SCRIPTING_CAPABILITIES,
     "Scripting capabilityを取得しました",
   );
+}
+
+function analyzeComponentCodeTool(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const source = requiredString(argumentsValue.source, "source");
+  const plan = analyzeComponentCode(source, context.bundle.project.projectKind);
+  return unchanged(
+    context,
+    {
+      plan: JSON.parse(JSON.stringify(plan)) as Record<string, unknown>,
+      summary: plan.summary,
+      diagnostics: plan.diagnostics,
+      assetDependencies: plan.assetDependencies,
+      imports: plan.imports,
+    },
+    `R3Fコードを解析しました（Entity ${plan.summary.entityCount}件）`,
+  );
+}
+
+function applyComponentCodeImportPlanTool(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const plan = requiredPlan(argumentsValue.plan, "plan");
+  const assetIdBySourcePath = optionalStringRecord(
+    argumentsValue.assetIdBySourcePath,
+    "assetIdBySourcePath",
+  );
+  const result = applyComponentCodeImportPlan({
+    scene: context.bundle.scene,
+    assets: context.bundle.assets,
+    projectKind: context.bundle.project.projectKind,
+    plan,
+    assetIdBySourcePath,
+  });
+  if (result.entityIds.length === 0) {
+    throw new XriftMcpEditorToolError(
+      "COMPONENT_IMPORT_FAILED",
+      result.diagnostics[0]?.message ?? "変換したComponentをSceneへ追加できませんでした",
+      { diagnostics: result.diagnostics },
+    );
+  }
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    scene: result.scene,
+    assets: result.assets,
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: {
+      kind: "entity",
+      id: result.entityIds[result.entityIds.length - 1]!,
+    },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityIds: result.entityIds,
+      diagnostics: result.diagnostics,
+    },
+    activity: `AIがR3FコードをEntity ${result.entityIds.length}件へ変換しました`,
+  };
+}
+
+function requiredPlan(
+  value: unknown,
+  name: string,
+): ComponentCodeImportPlan {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    invalidArgument(name, "analyze_component_codeが返したplan object");
+  }
+  const plan = value as Record<string, unknown>;
+  if (!Array.isArray(plan.nodes)) {
+    invalidArgument(name, "plan.nodes (array)");
+  }
+  return plan as unknown as ComponentCodeImportPlan;
+}
+
+function optionalStringRecord(
+  value: unknown,
+  name: string,
+): Record<string, string> | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    invalidArgument(name, "object of sourcePath -> assetId");
+  }
+  const record: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof entry !== "string") invalidArgument(name, "string values");
+    record[key] = entry;
+  }
+  return record;
 }
 
 function readEditorContext(

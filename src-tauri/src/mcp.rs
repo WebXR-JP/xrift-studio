@@ -28,9 +28,11 @@ const MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS: u64 = 120_000;
 const MCP_MAX_CONCURRENT_CONNECTIONS: usize = 32;
 const MCP_MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 const MCP_MAX_CLIENT_NAME_CHARS: usize = 128;
-const MCP_TOOL_NAMES: [&str; 80] = [
+const MCP_TOOL_NAMES: [&str; 82] = [
     "get_editor_context",
     "get_scripting_capabilities",
+    "analyze_component_code",
+    "apply_component_code_import_plan",
     "list_assets",
     "update_project_metadata",
     "create_asset_folder",

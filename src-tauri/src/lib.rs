@@ -1872,8 +1872,17 @@ fn save_visual_project(
     }
 
     let existing_manifest_path = project_root.join(VISUAL_PROJECT_MANIFEST);
-    let existing_manifest_content = std::fs::read_to_string(&existing_manifest_path)
-        .map_err(|_| "existing visual project manifest is missing".to_string())?;
+    let existing_manifest_content = retry_transient_io(|| {
+        std::fs::read_to_string(&existing_manifest_path)
+    })
+    .map_err(|error| match error.kind() {
+        std::io::ErrorKind::NotFound => "existing visual project manifest is missing".to_string(),
+        _ => format!(
+            "existing visual project manifest cannot be read: {} ({})",
+            error,
+            existing_manifest_path.display()
+        ),
+    })?;
     let existing_manifest = parse_visual_project_manifest(&existing_manifest_content)?;
     if existing_manifest.project_id != validated.manifest.project_id {
         return Err("visual project id cannot change during save".to_string());
@@ -1992,10 +2001,63 @@ fn write_project_binary(
     write_file_synced(&path, content)
 }
 
+/// Windows の AV / インデクサ / 同期クライアントは、書き込み直後のファイルに
+/// 短時間ハンドルを保持する。共有違反やアクセス拒否は恒久的な失敗ではないので、
+/// 短いバックオフで吸収する。
+fn is_transient_io_error(error: &std::io::Error) -> bool {
+    #[cfg(windows)]
+    {
+        const ERROR_ACCESS_DENIED: i32 = 5;
+        const ERROR_SHARING_VIOLATION: i32 = 32;
+        const ERROR_LOCK_VIOLATION: i32 = 33;
+        const ERROR_DIR_NOT_EMPTY: i32 = 145;
+        if matches!(
+            error.raw_os_error(),
+            Some(ERROR_ACCESS_DENIED)
+                | Some(ERROR_SHARING_VIOLATION)
+                | Some(ERROR_LOCK_VIOLATION)
+                | Some(ERROR_DIR_NOT_EMPTY)
+        ) {
+            return true;
+        }
+    }
+    matches!(
+        error.kind(),
+        std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::Interrupted
+    )
+}
+
+const TRANSIENT_IO_BACKOFF_MS: [u64; 5] = [10, 25, 60, 150, 300];
+
+/// transient な I/O エラー（共有違反・アクセス拒否など）を短いバックオフで再試行する。
+/// 恒久的なエラー（NotFound など）は即座に返す。合計待機は最大 545ms。
+fn retry_transient_io<T>(
+    mut operation: impl FnMut() -> std::io::Result<T>,
+) -> std::io::Result<T> {
+    let mut last = match operation() {
+        Ok(value) => return Ok(value),
+        Err(error) => error,
+    };
+    for delay_ms in TRANSIENT_IO_BACKOFF_MS {
+        if !is_transient_io_error(&last) {
+            return Err(last);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+        match operation() {
+            Ok(value) => return Ok(value),
+            Err(error) => last = error,
+        }
+    }
+    Err(last)
+}
+
 fn write_file_synced(path: &Path, content: &[u8]) -> Result<(), String> {
-    let mut file = std::fs::File::create(path).map_err(|e| e.to_string())?;
-    file.write_all(content).map_err(|e| e.to_string())?;
-    file.sync_all().map_err(|e| e.to_string())
+    retry_transient_io(|| {
+        let mut file = std::fs::File::create(path)?;
+        file.write_all(content)?;
+        file.sync_all()
+    })
+    .map_err(|e| e.to_string())
 }
 
 fn transaction_id() -> String {
@@ -2091,13 +2153,37 @@ fn save_visual_documents_transaction_with_owner(
                 relative_path,
                 allow_managed_publication_metadata,
             )?;
-            if target.exists() {
-                let metadata = std::fs::symlink_metadata(&target).map_err(|e| e.to_string())?;
-                if !metadata.is_file() || metadata.file_type().is_symlink() {
+            // symlink_metadata is the single source of truth for whether the
+            // target existed. Path::exists() swallows I/O errors into false,
+            // which would record original_existed=false and skip the backup.
+            let original_existed = match std::fs::symlink_metadata(&target) {
+                Ok(metadata) => {
+                    if !metadata.is_file() || metadata.file_type().is_symlink() {
+                        return Err(format!(
+                            "visual document target is not a regular file: {}",
+                            relative_path
+                        ));
+                    }
+                    true
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+                Err(error) => {
                     return Err(format!(
-                        "visual document target is not a regular file: {}",
-                        relative_path
+                        "visual document target cannot be inspected: {} ({})",
+                        relative_path,
+                        error
                     ));
+                }
+            };
+            // Skip documents whose content is unchanged. This avoids the
+            // rename/read window entirely for the common autosave case where
+            // only one or two documents actually changed.
+            if original_existed {
+                let unchanged = retry_transient_io(|| std::fs::read(&target))
+                    .map(|existing| existing == content.as_bytes())
+                    .unwrap_or(false);
+                if unchanged {
+                    continue;
                 }
             }
             let staged_name = format!("{}.json", index);
@@ -2105,7 +2191,7 @@ fn save_visual_documents_transaction_with_owner(
             write_file_synced(&staged_root.join(&staged_name), content.as_bytes())?;
             entries.push(VisualSaveJournalEntry {
                 relative_path: relative_path.clone(),
-                original_existed: target.exists(),
+                original_existed,
                 backup_name,
                 staged_name,
             });
@@ -2146,13 +2232,13 @@ fn save_visual_documents_transaction_with_owner(
             let staged = staged_root.join(&entry.staged_name);
             let backup = backup_root.join(&entry.backup_name);
             if entry.original_existed {
-                std::fs::rename(&target, &backup)
+                retry_transient_io(|| std::fs::rename(&target, &backup))
                     .map_err(|e| format!("existing visual document cannot be journaled: {}", e))?;
             }
             if let Some(parent) = target.parent() {
                 std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
-            std::fs::rename(&staged, &target)
+            retry_transient_io(|| std::fs::rename(&staged, &target))
                 .map_err(|e| format!("staged visual document cannot be committed: {}", e))?;
         }
         write_file_synced(&transaction_root.join("committed"), b"committed")
@@ -2210,8 +2296,7 @@ fn recover_visual_save_transactions(project_root: &Path) -> Result<(), String> {
         if !journal_path.exists() {
             // The journal is written before any project document is moved, so
             // a transaction without it only contains disposable staged files.
-            std::fs::remove_dir_all(&transaction_root)
-                .map_err(|e| format!("orphaned save staging cannot be cleaned up: {}", e))?;
+            let _ = force_remove_dir_all(&transaction_root);
             continue;
         }
         if transaction_root.join("committed").exists() {
@@ -2233,8 +2318,7 @@ fn recover_visual_save_transactions(project_root: &Path) -> Result<(), String> {
             &journal,
             allow_managed_publication_metadata,
         )?;
-        std::fs::remove_dir_all(&transaction_root)
-            .map_err(|e| format!("recovered save journal cannot be cleaned up: {}", e))?;
+        let _ = force_remove_dir_all(&transaction_root);
     }
     Ok(())
 }
@@ -2267,12 +2351,15 @@ fn rollback_visual_save_transaction(
                         entry.relative_path
                     ));
                 }
-                std::fs::remove_file(&target).map_err(|e| e.to_string())?;
             }
             if let Some(parent) = target.parent() {
                 std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
-            std::fs::rename(&backup, &target)
+            // std::fs::rename on Windows uses MOVEFILE_REPLACE_EXISTING, so the
+            // backup can replace the target directly. Removing the target first
+            // would create a delete-pending entry that blocks the rename while
+            // another process still holds a handle.
+            retry_transient_io(|| std::fs::rename(&backup, &target))
                 .map_err(|e| format!("backup cannot be restored: {}", e))?;
         } else if !entry.original_existed && !staged.exists() && target.exists() {
             let metadata = std::fs::symlink_metadata(&target).map_err(|e| e.to_string())?;
@@ -4172,7 +4259,9 @@ fn commit_visual_asset_import(
         committed.push(target);
     }
 
-    std::fs::remove_dir_all(&transaction_root).map_err(|e| e.to_string())?;
+    // Every staged file is already published. Cache cleanup must not turn a
+    // successful import into a user-visible failure.
+    let _ = force_remove_dir_all(&transaction_root);
     Ok(())
 }
 

@@ -169,6 +169,7 @@ import {
   resolveAssetOperationAvailability,
 } from "./asset-operation-lock";
 import {
+  AUTOSAVE_SUPERSEDED,
   createSerializedAutosaveCoordinator,
   type SerializedAutosaveCoordinator,
 } from "./autosave-coordinator";
@@ -298,7 +299,7 @@ const IMPORT_RESOURCE_KIND: Readonly<
   audio: "audio",
   shader: "shader",
 };
-const AUTOSAVE_DELAY_MS = 250;
+const AUTOSAVE_DELAY_MS = 800;
 const AUTOSAVE_MAX_ATTEMPTS = 4;
 const AUTOSAVE_RETRY_DELAYS_MS = [300, 900, 1_800] as const;
 
@@ -1444,6 +1445,11 @@ export function VisualEditorPrototype({
       setSaveStatus("saving");
       try {
         const result = await coordinator.request(savingBundle);
+        if (result === AUTOSAVE_SUPERSEDED) {
+          // A newer snapshot superseded this save; it is not a failure.
+          setSaveStatus("saving");
+          return undefined;
+        }
         lastSavedBundleRef.current = savingBundle;
         const savedPath =
           typeof result === "string" ? result : projectPathRef.current;
@@ -1767,7 +1773,15 @@ export function VisualEditorPrototype({
     }
     autosaveTimerRef.current = window.setTimeout(() => {
       autosaveTimerRef.current = null;
-      if (transformScrubRef.current) return;
+      if (transformScrubRef.current || terrainStrokeActiveRef.current) {
+        // A scrub or terrain stroke is in progress. Reschedule so the pending
+        // changes are saved once the interaction settles.
+        autosaveTimerRef.current = window.setTimeout(() => {
+          autosaveTimerRef.current = null;
+          void requestAutosave(bundle);
+        }, AUTOSAVE_DELAY_MS);
+        return;
+      }
       void requestAutosave(bundle);
     }, AUTOSAVE_DELAY_MS);
     return () => {
@@ -5217,6 +5231,7 @@ export function VisualEditorPrototype({
     handleTerrainStroke,
     handleTerrainStrokeEnd,
     handleTerrainStrokeCancel,
+    strokeActiveRef: terrainStrokeActiveRef,
   } = useTerrainAuthoring({
     editorMode,
     importBusy,

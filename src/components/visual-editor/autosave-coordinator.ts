@@ -1,5 +1,12 @@
+/**
+ * Returned by request() when a newer snapshot superseded the write before it
+ * could complete. This is not a failure: the save was simply obsolete.
+ */
+export const AUTOSAVE_SUPERSEDED = Symbol("autosave-superseded");
+export type AutosaveSuperseded = typeof AUTOSAVE_SUPERSEDED;
+
 export type SerializedAutosaveCoordinator<Value, Result> = {
-  request: (value: Value) => Promise<Result>;
+  request: (value: Value) => Promise<Result | AutosaveSuperseded>;
   latestRequested: () => Value | null;
 };
 
@@ -23,16 +30,20 @@ export function createSerializedAutosaveCoordinator<Value, Result>(
 ): SerializedAutosaveCoordinator<Value, Result> {
   let tail: Promise<void> = Promise.resolve();
   let latestValue: Value | null = null;
-  let latestJob: { value: Value; promise: Promise<Result> } | null = null;
+  let latestJob: { value: Value; promise: Promise<Result | AutosaveSuperseded> } | null =
+    null;
   const maxAttempts = Math.max(1, Math.floor(options.maxAttempts ?? 1));
 
-  const saveWithRetry = async (value: Value): Promise<Result> => {
+  const saveWithRetry = async (value: Value): Promise<Result | AutosaveSuperseded> => {
     let attempt = 1;
     while (true) {
       try {
         return await save(value);
       } catch (error) {
-        if (attempt >= maxAttempts || latestValue !== value) throw error;
+        // A newer snapshot is waiting, so this save is not a failure - it is
+        // simply obsolete. Yield immediately to the newer write.
+        if (latestValue !== value) return AUTOSAVE_SUPERSEDED;
+        if (attempt >= maxAttempts) throw error;
         const delayMs = Math.max(
           0,
           options.retryDelayMs?.(attempt, error, value) ?? 0,
@@ -42,7 +53,7 @@ export function createSerializedAutosaveCoordinator<Value, Result>(
             globalThis.setTimeout(resolve, delayMs),
           );
         }
-        if (latestValue !== value) throw error;
+        if (latestValue !== value) return AUTOSAVE_SUPERSEDED;
         attempt += 1;
       }
     }

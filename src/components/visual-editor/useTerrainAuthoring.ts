@@ -279,5 +279,6 @@ export function useTerrainAuthoring({
     handleTerrainStroke,
     handleTerrainStrokeEnd,
     handleTerrainStrokeCancel,
+    strokeActiveRef: strokeRef,
   };
 }

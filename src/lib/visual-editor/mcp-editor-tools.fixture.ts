@@ -2247,6 +2247,58 @@ export function runXriftMcpEditorToolFixtures(): void {
     missingEntityCode === "ENTITY_NOT_FOUND",
     "Deleting an unknown Entity should be rejected",
   );
+
+  const analyzed = executeXriftMcpEditorTool(current, {
+    id: "fixture-analyze-code",
+    tool: "analyze_component_code",
+    arguments: {
+      source: `import { Box } from '@react-three/drei'
+
+export function Scene() {
+  return (
+    <group position={[0, 0, 0]}>
+      <mesh position={[0, 1, 0]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color="#8b5cf6" />
+      </mesh>
+    </group>
+  )
+}`,
+    },
+  });
+  const analyzedResult = analyzed.result as {
+    summary: { entityCount: number };
+    plan: { nodes: unknown[] };
+  };
+  assert(
+    analyzedResult.summary.entityCount === 2,
+    "analyze_component_code should produce a group + primitive plan",
+  );
+  assert(
+    Array.isArray(analyzedResult.plan.nodes) &&
+      analyzedResult.plan.nodes.length === 2,
+    "analyze_component_code should return a plan with nodes",
+  );
+
+  const applied = executeXriftMcpEditorTool(current, {
+    id: "fixture-apply-code",
+    tool: "apply_component_code_import_plan",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      plan: analyzedResult.plan,
+    },
+  });
+  assert(
+    applied.changed === true,
+    "apply_component_code_import_plan should change the scene",
+  );
+  assert(
+    (applied.result.entityIds as string[]).length === 2,
+    "apply_component_code_import_plan should create two Entities",
+  );
+  current = { ...current, bundle: applied.bundle, revision: current.revision + 1 };
 }
 
 function assert(condition: unknown, message: string): asserts condition {

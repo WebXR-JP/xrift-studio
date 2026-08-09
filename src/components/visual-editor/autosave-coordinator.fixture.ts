@@ -1,4 +1,7 @@
-import { createSerializedAutosaveCoordinator } from "./autosave-coordinator";
+import {
+  AUTOSAVE_SUPERSEDED,
+  createSerializedAutosaveCoordinator,
+} from "./autosave-coordinator";
 
 /** Filesystem-free assertions for the visual editor autosave queue. */
 export async function runAutosaveCoordinatorFixtureAssertions(): Promise<void> {
@@ -40,9 +43,12 @@ export async function runAutosaveCoordinatorFixtureAssertions(): Promise<void> {
     if (value === "failed") throw new Error("expected failure");
     return value;
   });
-  const failed = recovery.request("failed").catch(() => "rejected");
+  const failed = recovery.request("failed");
   const recovered = recovery.request("recovered");
-  assert((await failed) === "rejected", "failed autosave did not reject");
+  assert(
+    (await failed) === AUTOSAVE_SUPERSEDED,
+    "superseded failed autosave did not resolve as superseded",
+  );
   assert((await recovered) === "recovered", "newer autosave did not recover");
   assert(attempts.join(",") === "failed,recovered", "recovery order changed");
 
@@ -81,11 +87,14 @@ export async function runAutosaveCoordinatorFixtureAssertions(): Promise<void> {
       retryDelayMs: () => 0,
     },
   );
-  const superseded = superseding.request("old").catch(() => "superseded");
+  const superseded = superseding.request("old");
   await waitFor(() => firstFailure.reject !== null);
   const latest = superseding.request("latest");
   firstFailure.reject?.();
-  assert((await superseded) === "superseded", "superseded save did not reject");
+  assert(
+    (await superseded) === AUTOSAVE_SUPERSEDED,
+    "superseded save did not resolve as superseded",
+  );
   assert((await latest) === "latest", "latest save did not run after superseding");
   assert(
     supersededAttempts.join(",") === "old,latest",
