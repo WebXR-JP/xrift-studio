@@ -1,6 +1,7 @@
 import type { CompilerPublicationMetadata, ProjectKind } from "../tauri";
 import { tauri } from "../tauri";
 import {
+  COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
   CommandSpawnError,
   xrift,
   type LogLine,
@@ -342,7 +343,13 @@ export async function materializeVisualCompilation(
   });
   const installed = await xrift.installCompilerStagingDependencies(
     staged.projectPath,
-    compilation.stagingPlan.runtimePackageSpecs,
+    // The official template pins its own older @xrift/world-components range.
+    // Install Studio's version over it so the published world builds and runs
+    // against the same Components and Hooks that Play used.
+    [
+      ...compilation.stagingPlan.runtimePackageSpecs,
+      COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
+    ],
     onLog,
   );
   assertSucceeded(installed, "XRift依存関係の準備", [

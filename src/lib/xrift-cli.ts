@@ -27,9 +27,27 @@ export type CompilerStagingTemplateRequest = {
   directoryName: string;
 };
 
+/**
+ * The `@xrift/world-components` version pinned into compiler-owned publish
+ * staging.
+ *
+ * The official XRift template declares its own older range, so a published
+ * world would otherwise type-check and bundle against a different version than
+ * the one Studio Play runs. That breaks the Play/publish parity contract in
+ * docs/SCRIPTING.md: a Component or Hook that exists in Play is missing at
+ * publish time. Installing this spec over the template keeps both sides on the
+ * same version.
+ *
+ * Update this together with `@xrift/world-components` in package.json. The two
+ * must always name the same version.
+ */
+export const COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC =
+  "@xrift/world-components@0.43.0";
+
 const COMPILER_RUNTIME_PACKAGE_ALLOWLIST = new Set([
   "three-icosa@0.4.2-alpha.18",
   "xrift-studio-runtime@0.1.0",
+  COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
 ]);
 
 const stamp = (kind: LogKind, text: string): LogLine => ({
