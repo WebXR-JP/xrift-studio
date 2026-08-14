@@ -224,7 +224,8 @@ export type XriftMcpClientId =
   | "claude-code"
   | "claude-desktop"
   | "opencode"
-  | "cursor";
+  | "cursor"
+  | "antigravity";
 
 export type XriftMcpClientStatus = {
   id: XriftMcpClientId;

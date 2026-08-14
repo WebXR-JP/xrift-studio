@@ -245,16 +245,18 @@ enum SupportedMcpClient {
     ClaudeDesktop,
     OpenCode,
     Cursor,
+    Antigravity,
 }
 
 impl SupportedMcpClient {
-    fn all() -> [Self; 5] {
+    fn all() -> [Self; 6] {
         [
             Self::Codex,
             Self::ClaudeCode,
             Self::ClaudeDesktop,
             Self::OpenCode,
             Self::Cursor,
+            Self::Antigravity,
         ]
     }
 
@@ -265,6 +267,7 @@ impl SupportedMcpClient {
             Self::ClaudeDesktop => "claude-desktop",
             Self::OpenCode => "opencode",
             Self::Cursor => "cursor",
+            Self::Antigravity => "antigravity",
         }
     }
 
@@ -275,6 +278,7 @@ impl SupportedMcpClient {
             Self::ClaudeDesktop => "Claude Desktop / Cowork",
             Self::OpenCode => "OpenCode",
             Self::Cursor => "Cursor",
+            Self::Antigravity => "Antigravity",
         }
     }
 
@@ -285,6 +289,7 @@ impl SupportedMcpClient {
             Self::ClaudeDesktop => None,
             Self::OpenCode => Some("opencode"),
             Self::Cursor => Some("cursor"),
+            Self::Antigravity => Some("agy"),
         }
     }
 
@@ -604,7 +609,8 @@ fn registration_arguments(
         ],
         SupportedMcpClient::ClaudeDesktop
         | SupportedMcpClient::OpenCode
-        | SupportedMcpClient::Cursor => return None,
+        | SupportedMcpClient::Cursor
+        | SupportedMcpClient::Antigravity => return None,
     };
     arguments.push(sidecar_path.to_string_lossy().into_owned());
     arguments.push("--rendezvous".into());
@@ -1114,6 +1120,7 @@ fn is_managed_config_client(client: SupportedMcpClient) -> bool {
         SupportedMcpClient::ClaudeDesktop
             | SupportedMcpClient::OpenCode
             | SupportedMcpClient::Cursor
+            | SupportedMcpClient::Antigravity
     )
 }
 
@@ -1122,6 +1129,7 @@ fn managed_config_path(client: SupportedMcpClient) -> Option<PathBuf> {
         SupportedMcpClient::ClaudeDesktop => claude_desktop_config_path(),
         SupportedMcpClient::OpenCode => opencode_config_path(),
         SupportedMcpClient::Cursor => cursor_config_path(),
+        SupportedMcpClient::Antigravity => antigravity_config_path(),
         SupportedMcpClient::Codex | SupportedMcpClient::ClaudeCode => None,
     }
 }
@@ -1132,7 +1140,9 @@ fn managed_config_client_installed(client: SupportedMcpClient) -> bool {
     };
     let config_location_exists =
         config_path.is_file() || config_path.parent().is_some_and(Path::is_dir);
-    config_location_exists || find_client_executable(client).is_some()
+    let gemini_root_exists = matches!(client, SupportedMcpClient::Antigravity)
+        && dirs::home_dir().is_some_and(|home| home.join(".gemini").is_dir());
+    config_location_exists || gemini_root_exists || find_client_executable(client).is_some()
 }
 
 fn claude_desktop_config_path() -> Option<PathBuf> {
@@ -1152,11 +1162,22 @@ fn cursor_config_path() -> Option<PathBuf> {
     dirs::home_dir().map(|directory| directory.join(".cursor").join("mcp.json"))
 }
 
+fn antigravity_config_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|directory| {
+        directory
+            .join(".gemini")
+            .join("config")
+            .join("mcp_config.json")
+    })
+}
+
 fn managed_config_registration_command(client: SupportedMcpClient) -> Option<PathBuf> {
     let config_path = managed_config_path(client)?;
     let config = read_json_file(&config_path).ok().flatten()?;
     match client {
-        SupportedMcpClient::ClaudeDesktop | SupportedMcpClient::Cursor => config
+        SupportedMcpClient::ClaudeDesktop
+        | SupportedMcpClient::Cursor
+        | SupportedMcpClient::Antigravity => config
             .get("mcpServers")
             .and_then(Value::as_object)
             .and_then(|servers| servers.get(MCP_SERVER_NAME))
@@ -1239,7 +1260,9 @@ fn register_managed_config_client(
         _ => json!({}),
     };
     let config = match client {
-        SupportedMcpClient::ClaudeDesktop | SupportedMcpClient::Cursor => {
+        SupportedMcpClient::ClaudeDesktop
+        | SupportedMcpClient::Cursor
+        | SupportedMcpClient::Antigravity => {
             merge_mcp_servers_config(config, sidecar_path, rendezvous_path, client.label())?
         }
         SupportedMcpClient::OpenCode => {
@@ -4005,6 +4028,10 @@ mod tests {
             SupportedMcpClient::parse("cursor"),
             Some(SupportedMcpClient::Cursor)
         ));
+        assert!(matches!(
+            SupportedMcpClient::parse("antigravity"),
+            Some(SupportedMcpClient::Antigravity)
+        ));
         assert!(SupportedMcpClient::parse("unknown").is_none());
     }
 
@@ -4253,6 +4280,31 @@ mod tests {
             "Cursor",
         )
         .expect("merge Cursor config");
+
+        assert_eq!(
+            merged.pointer("/mcpServers/existing-server/command"),
+            Some(&json!("existing-command"))
+        );
+        assert_eq!(
+            merged.pointer("/mcpServers/xrift-studio/command"),
+            Some(&json!("xrift-studio-mcp"))
+        );
+    }
+
+    #[test]
+    fn antigravity_registration_preserves_existing_servers() {
+        let config = json!({
+            "mcpServers": {
+                "existing-server": { "command": "existing-command" }
+            }
+        });
+        let merged = merge_mcp_servers_config(
+            config,
+            Path::new("xrift-studio-mcp"),
+            Path::new("rendezvous.json"),
+            "Antigravity",
+        )
+        .expect("merge Antigravity config");
 
         assert_eq!(
             merged.pointer("/mcpServers/existing-server/command"),
