@@ -25,6 +25,7 @@ import {
 import type { PrototypeVisualProject } from "../prototype-project";
 import { normalizeParticleProperties } from "../particle-system";
 import { validateClassicR3fMaterialShader } from "../custom-shader-contract";
+import { detectTimeUniforms } from "../../../../packages/xrift-studio-runtime/src/shader-time";
 import type { VisualProjectKind } from "../project-document";
 import {
   animationPlaybackSpeed,
@@ -2646,12 +2647,40 @@ function registerClassicR3fMaterialComponent(
       })),
     )} as const;`,
   );
-  const animated = shader.animatedTimeUniform;
-  if (animated) {
+  const timeUniforms = detectTimeUniforms(shader);
+  const hasTimeUniforms = timeUniforms.length > 0;
+  if (hasTimeUniforms) {
     context.reactValueImports.add("useRef");
     context.fiberImports.add("useFrame");
     context.threeTypeImports.add("ShaderMaterial");
   }
+  const timeUniformCode = hasTimeUniforms
+    ? `  const materialRef = useRef<ShaderMaterial>(null);
+  useFrame((state) => {
+    const material = materialRef.current;
+    if (!material) return;
+    const elapsed = state.clock.getElapsedTime();
+${timeUniforms
+  .map((spec) => {
+    if (spec.glslType === "vec4") {
+      return `    {
+      const uniform = material.uniforms[${JSON.stringify(spec.name)}];
+      if (uniform) {
+        const value = uniform.value;
+        if (value && "set" in value) {
+          value.set(elapsed / 20, elapsed, elapsed * 2, elapsed * 3);
+        } else {
+          uniform.value = [elapsed / 20, elapsed, elapsed * 2, elapsed * 3];
+        }
+      }
+    }`;
+    }
+    return `    if (material.uniforms[${JSON.stringify(spec.name)}]) { material.uniforms[${JSON.stringify(spec.name)}].value = elapsed; }`;
+  })
+  .join("\n")}
+  });
+`
+    : "";
   const source = `const ${componentName}: FC<CompiledMaterialProps> = ({ attach = "material", meshName = "" }) => {
 ${textureLines.length > 0 ? `${textureLines.map((line) => `  ${line}`).join("\n")}\n` : ""}  const uniforms = useMemo(() => ({
     ${uniformEntries.join(",\n    ")}
@@ -2665,14 +2694,7 @@ ${textureLines.length > 0 ? `${textureLines.map((line) => `  ${line}`).join("\n"
     ) ??
     ${variantsConstant}.find((candidate) => !candidate.meshNameIncludes) ??
     ${variantsConstant}[0];
-${animated ? `  const materialRef = useRef<ShaderMaterial>(null);
-  useFrame((state) => {
-    const material = materialRef.current;
-    if (material?.uniforms[${JSON.stringify(animated)}]) {
-      material.uniforms[${JSON.stringify(animated)}].value = state.clock.getElapsedTime();
-    }
-  });
-` : ""}  const side =
+${timeUniformCode}  const side =
     variant.side === "back"
       ? BackSide
       : variant.side === "front"
@@ -2680,7 +2702,7 @@ ${animated ? `  const materialRef = useRef<ShaderMaterial>(null);
         : DoubleSide;
   return (
     <shaderMaterial
-      ${animated ? "ref={materialRef}" : ""}
+      ${hasTimeUniforms ? "ref={materialRef}" : ""}
       attach={attach}
       vertexShader={${JSON.stringify(shader.vertexShader)}}
       fragmentShader={${JSON.stringify(shader.fragmentShader)}}

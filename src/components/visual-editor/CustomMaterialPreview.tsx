@@ -22,6 +22,11 @@ import {
 } from "../../lib/visual-editor";
 import { OpenBrushCatalogPreview } from "./OpenBrushCatalogPreview";
 import {
+  applyTimeUniformValue,
+  type MutableUniformValue,
+  type TimeUniformSpec,
+} from "../../../packages/xrift-studio-runtime/src/shader-time";
+import {
   ProjectModelVisual,
   createClassicR3fMaterial,
   type ProjectModelLoadState,
@@ -497,9 +502,22 @@ function StandaloneCustomShaderScene({
   }, [material]);
 
   useFrame((state) => {
+    const elapsed = state.clock.getElapsedTime();
+    const specs = material.userData.xriftTimeUniforms as
+      | TimeUniformSpec[]
+      | undefined;
+    if (Array.isArray(specs)) {
+      for (const spec of specs) {
+        const uniform = material.uniforms[spec.name];
+        if (uniform) {
+          applyTimeUniformValue(uniform as MutableUniformValue, spec, elapsed);
+        }
+      }
+      return;
+    }
     const uniformName = shader.animatedTimeUniform;
     if (uniformName && material.uniforms[uniformName]) {
-      material.uniforms[uniformName].value = state.clock.getElapsedTime();
+      material.uniforms[uniformName].value = elapsed;
     }
   });
 

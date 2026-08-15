@@ -23,6 +23,11 @@ import {
 } from "../../../packages/xrift-studio-runtime/src/script/audio-source";
 import { XriftScriptLight } from "../../../packages/xrift-studio-runtime/src/script/light";
 import {
+  applyTimeUniformValue,
+  type MutableUniformValue,
+  type TimeUniformSpec,
+} from "../../../packages/xrift-studio-runtime/src/shader-time";
+import {
   EntityScriptVisual,
   ScriptViewportProvider,
   type ScriptViewportRuntime,
@@ -122,6 +127,10 @@ import { tauri } from "../../lib/tauri";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { ParticleEmitterVisual } from "./ParticleEmitterVisual";
 import { SceneThumbnailCapture } from "./SceneThumbnailCapture";
+import {
+  SceneScreenshotCapture,
+  type SceneScreenshotRequest,
+} from "./SceneScreenshotCapture";
 import {
   applyOpenBrushMaterialAssetProperties,
   createClassicR3fMaterial,
@@ -682,13 +691,32 @@ function PrimitiveMeshVisual({
   useFrame((state) => {
     if (
       !authoredShaderMaterial ||
-      material?.shader?.kind !== "classic-r3f" ||
-      !material.shader.animatedTimeUniform
+      material?.shader?.kind !== "classic-r3f"
     ) {
       return;
     }
-    const uniform = authoredShaderMaterial.uniforms[material.shader.animatedTimeUniform];
-    if (uniform) uniform.value = state.clock.getElapsedTime();
+    const elapsed = state.clock.getElapsedTime();
+    const specs = authoredShaderMaterial.userData.xriftTimeUniforms as
+      | TimeUniformSpec[]
+      | undefined;
+    if (Array.isArray(specs)) {
+      for (const spec of specs) {
+        const uniform = authoredShaderMaterial.uniforms[spec.name];
+        if (uniform) {
+          applyTimeUniformValue(
+            uniform as MutableUniformValue,
+            spec,
+            elapsed,
+          );
+        }
+      }
+      return;
+    }
+    const uniformName = material.shader.animatedTimeUniform;
+    const uniform = uniformName
+      ? authoredShaderMaterial.uniforms[uniformName]
+      : undefined;
+    if (uniform) uniform.value = elapsed;
   });
   const materialRef = useRef<MeshStandardMaterial | null>(null);
   useMaterialPreviewRenderSync(materialRef, materialTextures);
@@ -2771,6 +2799,8 @@ export function SceneViewport({
   thumbnailCaptureRequest = 0,
   onThumbnailCaptured,
   onThumbnailCaptureError,
+  screenshotRequest = null,
+  onScreenshotComplete,
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
@@ -2834,6 +2864,9 @@ export function SceneViewport({
   thumbnailCaptureRequest?: number;
   onThumbnailCaptured?: (dataUrl: string) => void;
   onThumbnailCaptureError?: (message: string) => void;
+  /** MCP or Quick Prompt screenshot capture request. */
+  screenshotRequest?: SceneScreenshotRequest | null;
+  onScreenshotComplete?: () => void;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const dropResolverRef = useRef<SceneDropResolver | null>(null);
@@ -3697,6 +3730,11 @@ export function SceneViewport({
             ready={thumbnailCaptureActive}
             onCapture={handleThumbnailCaptured}
             onError={handleThumbnailCaptureError}
+          />
+
+          <SceneScreenshotCapture
+            request={screenshotRequest}
+            onComplete={() => onScreenshotComplete?.()}
           />
 
           <OfficialXriftPreviewProvider

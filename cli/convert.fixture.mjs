@@ -33,6 +33,7 @@ import { runScriptLifecycleFixtureAssertions } from "../src/lib/visual-editor/sc
 import { runScriptAudioFixtureAssertions } from "../src/lib/visual-editor/scripting/audio-runtime.fixture.ts";
 import { runAudioSourceRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source.fixture.ts";
 import { runRuntimeSchemaFixtureAssertions } from "../packages/xrift-studio-runtime/src/schema.fixture.ts";
+import { runShaderTimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/shader-time.fixture.ts";
 import { runScriptAudioSourceHostFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source-host.fixture.ts";
 import { runLightRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/light.fixture.ts";
 import { runScriptMaterialTextureFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/material-texture.fixture.ts";
@@ -230,6 +231,7 @@ try {
     ["visual compiler", runVisualCompilerFixtureAssertions],
     ["terrain", runTerrainFixtureAssertions],
     ["runtime schema", runRuntimeSchemaFixtureAssertions],
+    ["shader time", runShaderTimeFixtureAssertions],
     ["mcp editor tools", runXriftMcpEditorToolFixtures],
     ["play session", runPlaySessionFixtureAssertions],
     ["script specifiers", runScriptSpecifierFixtureAssertions],

@@ -46,6 +46,8 @@ import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { Text } from "troika-three-text";
 
+import { detectTimeUniforms } from "../shader-time.js";
+
 import {
   isXriftRuntimeManifest,
   type XriftRuntimeAsset,
@@ -568,8 +570,9 @@ function createRuntimeClassicShaderMaterial(
     transparent: variant?.transparent ?? false,
     depthWrite: variant?.depthWrite ?? true,
   });
-  if (shader.animatedTimeUniform) {
-    material.userData.xriftAnimatedTimeUniform = shader.animatedTimeUniform;
+  const timeUniforms = detectTimeUniforms(shader);
+  if (timeUniforms.length > 0) {
+    material.userData.xriftTimeUniforms = timeUniforms;
   }
   return material;
 }

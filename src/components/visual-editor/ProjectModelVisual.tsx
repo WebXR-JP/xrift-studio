@@ -47,6 +47,12 @@ import {
 } from "three";
 import { tauri } from "../../lib/tauri";
 import {
+  applyTimeUniformValue,
+  detectTimeUniforms,
+  type MutableUniformValue,
+  type TimeUniformSpec,
+} from "../../../packages/xrift-studio-runtime/src/shader-time";
+import {
   normalizeMaterialProperties,
   animationPlaybackSpeed,
   resolveAnimationClipIndex,
@@ -517,14 +523,31 @@ function ProjectModelRender({
 
   useFrame((frame, delta) => {
     if (playbackActive) mixer?.update(Math.min(delta, 0.1));
+    const elapsed = frame.clock.getElapsedTime();
     renderedModel?.ownedMaterials.forEach((material) => {
       const shader = material as ShaderMaterial;
+      const specs = material.userData.xriftTimeUniforms as
+        | TimeUniformSpec[]
+        | undefined;
+      if (Array.isArray(specs)) {
+        for (const spec of specs) {
+          const uniform = shader.uniforms?.[spec.name];
+          if (uniform) {
+            applyTimeUniformValue(
+              uniform as MutableUniformValue,
+              spec,
+              elapsed,
+            );
+          }
+        }
+        return;
+      }
       const uniformName = material.userData.xriftAnimatedTimeUniform;
       if (
         typeof uniformName === "string" &&
         shader.uniforms?.[uniformName]
       ) {
-        shader.uniforms[uniformName].value = frame.clock.getElapsedTime();
+        shader.uniforms[uniformName].value = elapsed;
       }
     });
   });
@@ -1117,6 +1140,10 @@ export function createClassicR3fMaterial(
   });
   if (shader.animatedTimeUniform) {
     material.userData.xriftAnimatedTimeUniform = shader.animatedTimeUniform;
+  }
+  const timeUniforms = detectTimeUniforms(shader);
+  if (timeUniforms.length > 0) {
+    material.userData.xriftTimeUniforms = timeUniforms;
   }
   material.needsUpdate = true;
   return material;

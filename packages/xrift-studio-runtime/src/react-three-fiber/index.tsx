@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useFrame, useThree, type ThreeElements } from "@react-three/fiber";
-import { AnimationMixer, LoopOnce, LoopRepeat } from "three";
+import { AnimationMixer, LoopOnce, LoopRepeat, Mesh, ShaderMaterial } from "three";
 
 import type {
   XriftRuntimeComponent,
@@ -11,6 +11,11 @@ import {
   XriftThreeLoader,
   type XriftLoadResult,
 } from "../three/index.js";
+import {
+  type MutableUniformValue,
+  type TimeUniformSpec,
+  applyTimeUniformValue,
+} from "../shader-time.js";
 
 export type XriftRuntimePrimitiveProps = ThreeElements["primitive"];
 
@@ -78,8 +83,30 @@ function XriftRuntimeScene({
     <>
       <primitive object={result.root} />
       <XriftRuntimeAnimations result={result} />
+      <XriftRuntimeTimeUniforms result={result} />
     </>
   ) : fallback;
+}
+
+function XriftRuntimeTimeUniforms({ result }: { result: XriftLoadResult }) {
+  useFrame((state) => {
+    const elapsed = state.clock.getElapsedTime();
+    result.root.traverse((object) => {
+      const mesh = object as Mesh;
+      const material = mesh.material as ShaderMaterial | undefined;
+      const specs = material?.userData?.xriftTimeUniforms as
+        | TimeUniformSpec[]
+        | undefined;
+      if (!Array.isArray(specs) || !material) return;
+      for (const spec of specs) {
+        const uniform = material.uniforms[spec.name];
+        if (uniform) {
+          applyTimeUniformValue(uniform as MutableUniformValue, spec, elapsed);
+        }
+      }
+    });
+  });
+  return null;
 }
 
 function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
