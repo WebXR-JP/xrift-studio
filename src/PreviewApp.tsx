@@ -512,15 +512,22 @@ function WebUploadDialog({
           <div className="preview-web-upload-result">
             <p className="preview-web-upload-label">アップロードが完了しました</p>
             <p className="preview-web-upload-detail">
-              バージョン {state.versionNumber} / {state.worldId}
+              ワールドID {state.worldId} / バージョン {state.versionNumber}
             </p>
+            {/*
+              Links to the app root rather than a per-world path. The SDK's
+              completion response carries no URL, and XRift's site answers 200
+              for every path, so a deep link cannot be confirmed from here —
+              guessing one risks sending the author to a page that is not
+              their world. The id above is what identifies it.
+            */}
             <a
               className="preview-button preview-button-primary"
-              href={`https://app.xrift.net/worlds/${state.worldId}`}
+              href="https://app.xrift.net"
               target="_blank"
               rel="noreferrer"
             >
-              XRiftで開く
+              XRiftを開く
               <ExternalLink size={14} />
             </a>
           </div>

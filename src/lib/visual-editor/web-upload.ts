@@ -275,9 +275,12 @@ export async function uploadVisualProjectFromWeb(
   request: WebUploadRequest,
 ): Promise<XriftUploadResult> {
   if (request.kind !== "world") {
+    // Not an XRift limitation: the SDK exposes client.items.upload(). The
+    // runtime shell is built from the world template, so an item shell would
+    // be needed before this path could carry them.
     throw new WebUploadUnsupportedError(
       "item-unsupported",
-      "ブラウザ版はワールドの公開のみ対応しています。アイテムはデスクトップ版から公開してください。",
+      "ブラウザ版はまだワールドの公開のみ対応しています。アイテムはデスクトップ版から公開してください。",
     );
   }
   assertUploadableToken(request.token);
