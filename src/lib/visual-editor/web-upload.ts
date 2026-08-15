@@ -357,50 +357,8 @@ export async function uploadVisualProjectFromWeb(
       uploadedAt: new Date().toISOString(),
     };
   } catch (error) {
-    if (error instanceof XriftNetworkError) {
-      throw new Error(await describeNetworkFailure(error));
-    }
     throw new Error(describeSdkError(error));
   }
-}
-
-export const XRIFT_API_ORIGIN = "https://api.xrift.net";
-
-/**
- * Separates "XRift did not answer" from "the browser would not let us read
- * the answer".
- *
- * `fetch` reports both as `TypeError: Failed to fetch` with no detail, but the
- * remedies are opposite. A `no-cors` request still resolves when the host
- * responds, even though the body is opaque, so a success here proves XRift is
- * reachable and that CORS is what blocked the real request.
- *
- * XRift returns `Access-Control-Allow-Origin` only for its own origins, so any
- * other page — a local dev server, GitHub Pages — is refused. That is a
- * server-side allowlist, not something this code can work around.
- */
-export async function describeNetworkFailure(
-  error: XriftNetworkError,
-): Promise<string> {
-  let hostAnswered = false;
-  try {
-    await fetch(XRIFT_API_ORIGIN, {
-      method: "GET",
-      mode: "no-cors",
-      signal: AbortSignal.timeout(8000),
-    });
-    hostAnswered = true;
-  } catch {
-    hostAnswered = false;
-  }
-
-  const origin =
-    typeof location !== "undefined" ? location.origin : "このページ";
-
-  if (hostAnswered) {
-    return `XRiftのAPIは応答しましたが、${origin} からの読み取りを許可していないため結果を受け取れませんでした。XRiftは許可済みオリジンにだけ応答を返す設定になっています。このオリジンを許可リストへ追加してもらうか、中継サーバー経由での送信が必要です。アップロード処理自体は最後まで通っているため、この点だけが残っています。`;
-  }
-  return `XRiftへ接続できませんでした: ${redactToken(error.message)}。ネットワーク接続を確認してください。`;
 }
 
 /** Turns an SDK error into a message that says what to do next. */
@@ -417,7 +375,12 @@ export function describeSdkError(error: unknown): string {
     return `XRiftがアップロードを拒否しました (${error.statusCode}): ${redactToken(error.message)}`;
   }
   if (error instanceof XriftNetworkError) {
-    return `XRiftへ接続できませんでした: ${redactToken(error.message)}`;
+    // The SDK raises this when fetch itself failed, which the browser reports
+    // as a bare "Failed to fetch" with no status, headers, or body. Nothing
+    // available to this code can tell an unreachable host from a response the
+    // browser refused to expose, so name both possibilities rather than
+    // asserting one. The devtools console does carry the real reason.
+    return `XRiftへ送信できませんでした: ${redactToken(error.message)}。ネットワーク接続、またはブラウザがレスポンスを読み取れているか (CORS) を確認してください。詳しい理由はブラウザの開発者ツールのコンソールに表示されます。`;
   }
   if (error instanceof Error) return redactToken(error.message);
   return redactToken(String(error));
