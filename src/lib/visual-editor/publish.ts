@@ -1,5 +1,7 @@
+import { XriftClient } from "@xrift/sdk";
 import type { CompilerPublicationMetadata, ProjectKind } from "../tauri";
 import { tauri } from "../tauri";
+import { collectDistUploadFiles } from "./dist-upload-files";
 import {
   COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
   CommandSpawnError,
@@ -53,6 +55,15 @@ export type XriftUploadResult = {
 export type PublishVisualProjectRequest = {
   /** Existing project path. Unsaved sessions may obtain it from `save`. */
   authoringProjectPath?: string | null;
+  /**
+   * Uploads the built `dist/` with `@xrift/sdk` instead of `xrift upload`.
+   *
+   * Optional because the CLI keeps its own credential from `xrift login`,
+   * while the SDK takes a token directly. Without one the CLI path still
+   * runs, so supplying a token is what opts a desktop publish into the same
+   * upload implementation the browser uses.
+   */
+  token?: string;
   kind: ProjectKind;
   documents: VisualCompilerDocuments;
   save: () => Promise<string | void>;
@@ -372,6 +383,7 @@ export async function materializeVisualCompilation(
 
 export async function publishVisualProject({
   authoringProjectPath,
+  token,
   kind,
   documents,
   save,
@@ -449,6 +461,21 @@ export async function publishVisualProject({
       resolvedAuthoringPath,
       compilation.stagingPlan.stagingDirectoryName,
     );
+
+    if (token) {
+      return await uploadStagedProjectWithSdk({
+        token,
+        kind,
+        stagingPath,
+        authoringProjectPath: resolvedAuthoringPath,
+        stagingDirectoryName: compilation.stagingPlan.stagingDirectoryName,
+        documents,
+        report,
+        onLog: safeLog,
+        signal,
+      });
+    }
+
     let uploaded: Awaited<ReturnType<typeof xrift.upload>>;
     try {
       uploaded = await xrift.upload(stagingPath, kind, safeLog, true);
@@ -532,6 +559,166 @@ export async function publishVisualProject({
     );
     throw new Error(detail || "XRiftへのアップロード処理に失敗しました。");
   }
+}
+
+/**
+ * Uploads a CLI-built staging project through `@xrift/sdk`.
+ *
+ * The CLI still scaffolds the template and runs `buildCommand`; only the
+ * transfer moves to the SDK, so the desktop and browser paths compute
+ * `contentHash` with one implementation instead of two.
+ *
+ * The result is recorded through `persistCompilerPublicationResult`, which
+ * repeats the owner and advancement checks the CLI path relies on. Those run
+ * after the bytes are already stored, so a failure there means "uploaded but
+ * unrecorded" — the message says so rather than inviting a retry that would
+ * publish a second time.
+ */
+async function uploadStagedProjectWithSdk(input: {
+  token: string;
+  kind: ProjectKind;
+  stagingPath: string;
+  authoringProjectPath: string;
+  stagingDirectoryName: string;
+  documents: VisualCompilerDocuments;
+  report: (progress: VisualPublishPipelineProgress) => void;
+  onLog: (line: LogLine) => void;
+  signal: AbortSignal;
+}): Promise<XriftUploadResult> {
+  if (input.kind !== "world") {
+    throw new Error(
+      "SDKでのアップロードは現在ワールドのみ対応しています。アイテムはトークンを指定せずCLI経路で公開してください。",
+    );
+  }
+
+  const config = parseStagedXriftConfig(
+    await tauri.readTextFile(input.stagingPath, "xrift.json"),
+    input.kind,
+  );
+
+  input.report({
+    stage: "uploading",
+    label: "ビルド結果を読み込んでいます",
+    detail: `${config.distDir} を収集します。`,
+    percent: 80,
+    cancelSafe: true,
+  });
+  const collected = await collectDistUploadFiles(
+    input.stagingPath,
+    config.distDir,
+    config.ignore,
+    input.signal,
+  );
+  input.onLog({
+    kind: "info",
+    text: `dist: ${collected.files.length} files, ${(collected.totalBytes / 1024 / 1024).toFixed(2)} MB (ignored ${collected.ignoredPaths.length})`,
+    ts: Date.now(),
+  });
+
+  const client = new XriftClient({ token: input.token });
+  const uploaded = await client.worlds.upload(collected.files, {
+    name: config.title,
+    description: config.description,
+    thumbnailPath: config.thumbnailPath,
+    physics: config.physics,
+    camera: config.camera,
+    onProgress: (progress) =>
+      input.report({
+        stage: "uploading",
+        label: "XRiftへワールドを送信しています",
+        detail: progress.currentFile,
+        percent:
+          84 + Math.round((progress.completed / Math.max(1, progress.total)) * 12),
+        cancelSafe: false,
+      }),
+  });
+
+  input.report({
+    stage: "processing",
+    label: "公開先IDを保存しています",
+    percent: 97,
+    cancelSafe: false,
+  });
+
+  let metadata: CompilerPublicationMetadata;
+  try {
+    metadata = await tauri.persistCompilerPublicationResult(
+      input.authoringProjectPath,
+      input.stagingDirectoryName,
+      uploaded.worldId,
+      new Date().toISOString(),
+    );
+  } catch (error) {
+    throw new Error(
+      `XRiftへの送信は完了しましたが、公開先IDをプロジェクトへ保存できませんでした。重複を避けるため再アップロードせず、XRiftのワールド一覧で状態を確認してください (worldId: ${uploaded.worldId}): ${error}`,
+    );
+  }
+
+  return compactResult({
+    worldId: uploaded.worldId,
+    contentId: uploaded.worldId,
+    versionId: uploaded.versionId,
+    versionNumber: uploaded.versionNumber,
+    contentHash: uploaded.contentHash,
+    uploadedAt: metadata.lastUploadedAt,
+  });
+}
+
+/**
+ * Reads the staged `xrift.json` the compiler wrote and the CLI template owns.
+ *
+ * The upload has to send the same name, ignore rules and physics the CLI would
+ * have sent, and those live in this file rather than in the Studio documents.
+ */
+export function parseStagedXriftConfig(
+  source: string,
+  kind: ProjectKind,
+): {
+  distDir: string;
+  title: string;
+  description?: string;
+  thumbnailPath?: string;
+  ignore: string[];
+  physics?: { gravity?: number; allowInfiniteJump?: boolean };
+  camera?: { near?: number; far?: number };
+} {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    throw new Error("公開用ステージングのxrift.jsonを解析できませんでした。");
+  }
+  const root = parsed as Record<string, unknown> | null;
+  const section = root?.[kind];
+  if (!section || typeof section !== "object") {
+    throw new Error(
+      `公開用ステージングのxrift.jsonに"${kind}"の設定がありません。`,
+    );
+  }
+  const record = section as Record<string, unknown>;
+  const rawDist = typeof record.distDir === "string" ? record.distDir : "./dist";
+  return {
+    // "./dist" and "dist/" both mean the same directory to the CLI.
+    distDir: rawDist.replace(/^\.\//, "").replace(/\/+$/, "") || "dist",
+    title: typeof record.title === "string" && record.title ? record.title : "Untitled",
+    description:
+      typeof record.description === "string" ? record.description : undefined,
+    thumbnailPath:
+      typeof record.thumbnailPath === "string" ? record.thumbnailPath : undefined,
+    ignore: Array.isArray(record.ignore)
+      ? record.ignore.filter((entry): entry is string => typeof entry === "string")
+      : [],
+    physics: isPlainRecord(record.physics)
+      ? (record.physics as { gravity?: number; allowInfiniteJump?: boolean })
+      : undefined,
+    camera: isPlainRecord(record.camera)
+      ? (record.camera as { near?: number; far?: number })
+      : undefined,
+  };
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function didXriftUploadStopBeforeRemoteTransfer(output: string): boolean {

@@ -3560,6 +3560,79 @@ fn clear_compiler_upload_attempt(
     write_compiler_staging_owner_record(&staging_root, &owner)
 }
 
+/// Records a remote identifier reported by `@xrift/sdk` rather than by the CLI.
+///
+/// The SDK returns the world id directly, so there is no file for the caller to
+/// read back. Everything that made the CLI path safe still applies and is
+/// repeated here: the staging owner must match this project, the upload attempt
+/// must have been marked before completion, and the publication must actually
+/// advance. Skipping any of those would let a failed or duplicated upload be
+/// recorded as success, which is exactly what these guards exist to prevent.
+///
+/// The staging sidecar is written too, so the CLI and SDK paths leave the
+/// staging project in the same state.
+#[tauri::command]
+fn persist_compiler_publication_result(
+    app: AppHandle,
+    authoring_project_path: String,
+    directory_name: String,
+    publication_id: String,
+    uploaded_at: String,
+) -> Result<CompilerPublicationMetadata, String> {
+    let _compiler_guard = COMPILER_STAGING_IO_LOCK
+        .lock()
+        .map_err(|_| "compiler staging I/O lock is unavailable".to_string())?;
+    let _visual_guard = VISUAL_PROJECT_IO_LOCK
+        .lock()
+        .map_err(|_| "visual project I/O lock is unavailable".to_string())?;
+
+    let authoring_root = canonical_project_root(&authoring_project_path)?;
+    recover_visual_save_transactions(&authoring_root)?;
+    let manifest_content = std::fs::read_to_string(authoring_root.join(VISUAL_PROJECT_MANIFEST))
+        .map_err(|e| format!("visual project manifest cannot be read: {}", e))?;
+    let manifest = parse_visual_project_manifest(&manifest_content)?;
+
+    let (root, project) = compiler_staging_project(&app, &directory_name)?;
+    let staging_root = project
+        .canonicalize()
+        .map_err(|e| format!("compiler staging project cannot be resolved: {}", e))?;
+    if !staging_root.starts_with(&root) {
+        return Err("compiler staging project escapes the app-owned root".to_string());
+    }
+
+    let owner = read_compiler_staging_owner(&staging_root)?
+        .ok_or_else(|| "compiler staging owner is missing after upload".to_string())?;
+    if !compiler_staging_owner_matches_manifest(&owner, &manifest) {
+        return Err("compiler staging owner does not match the visual project".to_string());
+    }
+    if owner.upload_attempt_started_unix_ms.is_none() {
+        return Err("compiler upload attempt was not marked before completion".to_string());
+    }
+
+    // A re-published world keeps its original createdAt; only the upload time
+    // moves. Reading the existing sidecar preserves that across versions.
+    let existing = read_compiler_publication_metadata(&staging_root, &manifest.project_kind)?;
+    let created_at = existing
+        .as_ref()
+        .map(|loaded| loaded.metadata.created_at.clone())
+        .unwrap_or_else(|| uploaded_at.clone());
+
+    let metadata = CompilerPublicationMetadata {
+        id: publication_id,
+        created_at,
+        last_uploaded_at: uploaded_at,
+    };
+    validate_compiler_publication_metadata(&metadata)?;
+    let raw = serde_json::to_string_pretty(&metadata)
+        .map_err(|e| format!("XRift publication metadata cannot be serialized: {}", e))?;
+    let loaded = LoadedCompilerPublicationMetadata { raw, metadata };
+
+    verify_compiler_upload_advanced(&owner, &loaded)?;
+    write_compiler_publication_metadata(&staging_root, &manifest.project_kind, &loaded)?;
+    persist_verified_authoring_publication_metadata(&authoring_root, &manifest, &loaded)?;
+    Ok(loaded.metadata)
+}
+
 /// Copies the CLI-owned remote identifier back to the visual authoring
 /// project after a successful upload. The next fresh staging project restores
 /// this sidecar before invoking the CLI, so upload remains an update.
@@ -5145,6 +5218,7 @@ pub fn run() {
             mark_compiler_upload_started,
             clear_compiler_upload_attempt,
             persist_compiler_publication_metadata,
+            persist_compiler_publication_result,
             commit_visual_asset_import,
             read_local_audio_import_source,
             read_local_texture_import_source,

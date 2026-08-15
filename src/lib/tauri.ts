@@ -518,6 +518,22 @@ export const tauri = {
   killPidTree: (pid: number) => invoke<void>("kill_pid_tree", { pid }),
   listFiles: (projectPath: string, rel: string) =>
     invoke<FsEntry[]>("list_files", { projectPath, rel }),
+  /**
+   * Records a publication id reported by `@xrift/sdk` instead of by the CLI.
+   * Applies the same owner and advancement checks as the CLI path.
+   */
+  persistCompilerPublicationResult: (
+    authoringProjectPath: string,
+    directoryName: string,
+    publicationId: string,
+    uploadedAt: string,
+  ) =>
+    invoke<CompilerPublicationMetadata>("persist_compiler_publication_result", {
+      authoringProjectPath,
+      directoryName,
+      publicationId,
+      uploadedAt,
+    }),
   writeBinaryFile: (projectPath: string, rel: string, dataUrl: string) =>
     invoke<void>("write_binary_file", { projectPath, rel, dataUrl }),
   deletePath: (projectPath: string, rel: string) =>

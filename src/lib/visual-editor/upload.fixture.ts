@@ -1,3 +1,5 @@
+import { decodeBase64DataUrl } from "./dist-upload-files";
+import { parseStagedXriftConfig } from "./publish";
 import { describeVisualUploadCapabilities } from "./upload";
 import {
   SHELL_ENTRY_PATH,
@@ -22,6 +24,70 @@ export function runVisualUploadFixtureAssertions(): void {
   assertTokenRules();
   assertSecretRedaction();
   assertShellManifestRules();
+  assertStagedConfigParsing();
+  assertDataUrlDecoding();
+}
+
+function assertStagedConfigParsing(): void {
+  const config = parseStagedXriftConfig(
+    JSON.stringify({
+      world: {
+        distDir: "./dist",
+        title: "My World",
+        description: "説明",
+        thumbnailPath: "thumbnail.png",
+        ignore: ["**/*.map", "**/index.html"],
+        physics: { gravity: 9.81, allowInfiniteJump: true },
+        camera: { near: 0.1, far: 1000 },
+      },
+    }),
+    "world",
+  );
+  // "./dist" and "dist/" name the same directory; the collector joins paths
+  // directly, so a surviving "./" would produce "./dist/index.js".
+  assert(config.distDir === "dist", "distDir must be normalized");
+  assert(config.title === "My World", "title was not read");
+  assert(config.ignore.length === 2, "ignore rules were not read");
+  assert(config.physics?.gravity === 9.81, "physics was not read");
+  assert(config.camera?.far === 1000, "camera was not read");
+
+  assert(
+    parseStagedXriftConfig(JSON.stringify({ world: {} }), "world").distDir ===
+      "dist",
+    "a missing distDir must fall back to dist",
+  );
+  assertThrows(
+    () => parseStagedXriftConfig("{ not json", "world"),
+    "invalid JSON was accepted",
+  );
+  // Publishing a world using an item's config would send the wrong metadata.
+  assertThrows(
+    () => parseStagedXriftConfig(JSON.stringify({ item: {} }), "world"),
+    "a config without the requested kind was accepted",
+  );
+}
+
+function assertDataUrlDecoding(): void {
+  // IPC returns bytes base64-encoded inside a data URL.
+  const decoded = decodeBase64DataUrl(
+    "data:application/octet-stream;base64,AAECA/8=",
+    "chunk.bin",
+  );
+  assert(
+    decoded.length === 5 &&
+      decoded[0] === 0 &&
+      decoded[3] === 3 &&
+      decoded[4] === 255,
+    "binary payload was not decoded byte-for-byte",
+  );
+  assert(
+    decodeBase64DataUrl("data:text/plain;base64,", "empty.txt").length === 0,
+    "an empty payload must decode to zero bytes",
+  );
+  assertThrows(
+    () => decodeBase64DataUrl("not-a-data-url", "x.bin"),
+    "a non data URL was accepted",
+  );
 }
 
 function assertShellManifestRules(): void {
