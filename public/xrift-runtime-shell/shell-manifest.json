@@ -1,0 +1,30 @@
+{
+  "version": "4e10989ee355",
+  "entry": "remoteEntry.js",
+  "files": [
+    "BufferGeometryUtils-CJnLKdJm.js",
+    "__federation_expose_World-F4ccySPn.js",
+    "__federation_fn_import-CVj0xDfO.js",
+    "_commonjsHelpers-BqLXS_qQ.js",
+    "hls-D02fTELl.js",
+    "index-BhT-1mE_.js",
+    "index-BobPRuvP.js",
+    "index-CZFAL8r8.js",
+    "index-CxGO-1df.js",
+    "index-D3ouKBRF.js",
+    "index-DB1oHa3H.js",
+    "index-DFK1Z5k2.js",
+    "inter-CWDahd6k.js",
+    "msdf-worker-D6HZN771.js",
+    "preload-helper-CWZBUsdZ.js",
+    "rapier-BEkZi1Ii.js",
+    "react-Dq_h2My2.js",
+    "remoteEntry.js",
+    "three-icosa.module-DhY13CNW.js",
+    "troika-three-utils.esm-trrkNKaz.js",
+    "vanilla-BBcibl5N.js",
+    "vision_bundle-DJzU6HDp.js",
+    "with-selector-CFv1P6u2.js",
+    "worker-_Lh8Vt-i.js"
+  ]
+}

@@ -1,8 +1,10 @@
 import { describeVisualUploadCapabilities } from "./upload";
 import {
+  SHELL_ENTRY_PATH,
   WebUploadUnsupportedError,
   assertUploadableToken,
   describeSdkError,
+  parseShellManifest,
   redactToken,
 } from "./web-upload";
 
@@ -19,6 +21,40 @@ export function runVisualUploadFixtureAssertions(): void {
   assertCapabilities();
   assertTokenRules();
   assertSecretRedaction();
+  assertShellManifestRules();
+}
+
+function assertShellManifestRules(): void {
+  const manifest = parseShellManifest({
+    version: "4e10989ee355",
+    entry: SHELL_ENTRY_PATH,
+    files: [SHELL_ENTRY_PATH, "index-abc.js", "../escape.js", ""],
+  });
+  assert(
+    manifest.files.join(",") === `${SHELL_ENTRY_PATH},index-abc.js`,
+    "a shell listing must drop traversal and empty entries before fetching them",
+  );
+  assert(manifest.version === "4e10989ee355", "shell version was not read");
+
+  // XRift loads the world as a Module Federation remote, so a listing without
+  // remoteEntry.js would upload cleanly and then render nothing.
+  assertThrows(
+    () => parseShellManifest({ version: "1", files: ["index-abc.js"] }),
+    `a shell listing without ${SHELL_ENTRY_PATH} was accepted`,
+  );
+  assertThrows(
+    () => parseShellManifest(null),
+    "a non-object shell listing was accepted",
+  );
+}
+
+function assertThrows(run: () => unknown, message: string): void {
+  try {
+    run();
+  } catch {
+    return;
+  }
+  throw new Error(message);
 }
 
 function assertCapabilities(): void {

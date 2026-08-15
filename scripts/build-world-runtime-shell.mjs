@@ -177,7 +177,20 @@ async function main() {
     process.stdout.write("6/6 シェル成果物を書き出しています\n");
     const distDir = path.join(projectDir, "dist");
     const built = await collectFiles(distDir);
-    const shellFiles = built.filter((file) => !EXCLUDED_FROM_SHELL.has(file));
+    // Apply the template's own ignore rules with the SDK's matcher so the
+    // shell holds exactly what an upload would send. That drops the
+    // __federation_shared_* chunks (~5 MB), which XRift's player supplies as
+    // shared singletons rather than reading from the world.
+    const { filterFiles, DEFAULT_IGNORE_PATTERNS } = await import("@xrift/sdk");
+    const templateConfig = JSON.parse(
+      await fs.readFile(path.join(projectDir, "xrift.json"), "utf8"),
+    );
+    const shellFiles = filterFiles(
+      built.filter(
+        (file) => !EXCLUDED_FROM_SHELL.has(file) && !file.endsWith(".map"),
+      ),
+      [...DEFAULT_IGNORE_PATTERNS, ...(templateConfig.world?.ignore ?? [])],
+    );
     if (!shellFiles.includes(SHELL_ENTRY)) {
       throw new Error(
         `ビルド結果に ${SHELL_ENTRY} がありません。テンプレートのfederation設定を確認してください。`,

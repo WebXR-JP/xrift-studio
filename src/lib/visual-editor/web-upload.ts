@@ -37,6 +37,9 @@ const RUNTIME_MANIFEST_PATH = "xrift/runtime.json";
 const THUMBNAIL_PATH = "thumbnail.png";
 /** Module Federation entry the XRift player loads. */
 export const SHELL_ENTRY_PATH = "remoteEntry.js";
+/** Where `build-world-runtime-shell.mjs` publishes the shell. */
+export const DEFAULT_SHELL_BASE_URL = "./xrift-runtime-shell";
+const SHELL_MANIFEST_FILE = "shell-manifest.json";
 
 /**
  * One file of the prebuilt runtime shell.
@@ -186,6 +189,73 @@ export async function assembleWebUploadFiles(
       contentType: getMimeType(remotePath),
       data,
     }));
+}
+
+export type ShellManifest = {
+  version: string;
+  entry: string;
+  files: string[];
+};
+
+/**
+ * Fetches the prebuilt shell that ships alongside the web build.
+ *
+ * Kept separate from assembly so a caller can cache it: the shell is identical
+ * for every world, so re-fetching ~6 MB per upload would be pure waste.
+ */
+export async function loadRuntimeShell(
+  baseUrl: string = DEFAULT_SHELL_BASE_URL,
+  signal?: AbortSignal,
+): Promise<RuntimeShellFile[]> {
+  const root = baseUrl.replace(/\/+$/, "");
+  const response = await fetch(`${root}/${SHELL_MANIFEST_FILE}`, { signal });
+  if (!response.ok) {
+    throw new WebUploadUnsupportedError(
+      "shell-missing",
+      `ランタイムシェルを取得できませんでした (${response.status})。node scripts/build-world-runtime-shell.mjs で生成してください。`,
+    );
+  }
+
+  const manifest = parseShellManifest(await response.json());
+  const files: RuntimeShellFile[] = [];
+  for (const path of manifest.files) {
+    if (signal?.aborted) {
+      throw new DOMException("The operation was aborted", "AbortError");
+    }
+    const file = await fetch(`${root}/${path}`, { signal });
+    if (!file.ok) {
+      throw new WebUploadUnsupportedError(
+        "shell-missing",
+        `ランタイムシェルのファイルを取得できませんでした: ${path} (${file.status})`,
+      );
+    }
+    files.push({ path, data: new Uint8Array(await file.arrayBuffer()) });
+  }
+  return files;
+}
+
+export function parseShellManifest(value: unknown): ShellManifest {
+  if (!value || typeof value !== "object") {
+    throw new Error("ランタイムシェルの一覧が正しい形式ではありません。");
+  }
+  const record = value as Record<string, unknown>;
+  const rawFiles = Array.isArray(record.files) ? record.files : [];
+  const files = rawFiles
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => entry.replace(/\\/g, "/").replace(/^\/+/, ""))
+    // A listing that escapes its own directory would fetch arbitrary paths
+    // from the hosting origin.
+    .filter((entry) => entry && !entry.split("/").includes(".."));
+  if (!files.includes(SHELL_ENTRY_PATH)) {
+    throw new Error(
+      `ランタイムシェルの一覧に ${SHELL_ENTRY_PATH} が含まれていません。`,
+    );
+  }
+  return {
+    version: typeof record.version === "string" ? record.version : "unknown",
+    entry: SHELL_ENTRY_PATH,
+    files,
+  };
 }
 
 /**
