@@ -6,11 +6,18 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   base: "./",
   plugins: [react(), tailwindcss()],
+  server: {
+    port: 4173,
+    strictPort: true,
+  },
   build: {
     outDir: "preview-dist",
     emptyOutDir: true,
     rollupOptions: {
-      input: fileURLToPath(new URL("./preview.html", import.meta.url)),
+      input: {
+        preview: fileURLToPath(new URL("./preview.html", import.meta.url)),
+        wiki: fileURLToPath(new URL("./wiki.html", import.meta.url)),
+      },
     },
   },
 });

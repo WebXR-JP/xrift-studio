@@ -8,6 +8,7 @@ import {
   Blocks,
   Bot,
   Box,
+  BookOpen,
   Check,
   ChevronDown,
   CirclePlay,
@@ -34,6 +35,7 @@ import {
   XRIFT_STUDIO_ISSUE_ASSISTANT_GPT_URL,
   XRIFT_STUDIO_ISSUES_URL,
   XRIFT_STUDIO_REPOSITORY_URL,
+  XRIFT_STUDIO_WIKI_URL,
 } from "./lib/support-links";
 
 const VisualEditorPrototype = lazy(() =>
@@ -46,6 +48,41 @@ type ProjectKind = "world" | "item";
 
 const releaseUrl = "https://github.com/WebXR-JP/xrift-studio/releases/latest";
 const repositoryUrl = XRIFT_STUDIO_REPOSITORY_URL;
+
+const productKinds = [
+  {
+    icon: Globe2,
+    title: "ワールド",
+    label: "ワールド",
+    text: "人が集まって一緒に過ごせる空間です。ロビーや美術館、遊び場を作ってXRiftに公開できます。",
+    tone: "preview-kind-violet",
+  },
+  {
+    icon: Box,
+    title: "アイテム",
+    label: "アイテム",
+    text: "手に取って持ち歩ける道具や飾りです。いろんなワールドで使えるように作って、みんなに共有できます。",
+    tone: "preview-kind-cyan",
+  },
+] as const;
+
+const reasons = [
+  {
+    icon: PackageOpen,
+    title: "持っている素材から始まる",
+    text: "3Dモデル、アバター、Unityの素材、音を、そのまま取り込めます。",
+  },
+  {
+    icon: Blend,
+    title: "変えた分は、その場で見える",
+    text: "配置、色、質感、光、パーティクルの調整が、すぐシーンに反映されます。",
+  },
+  {
+    icon: MonitorPlay,
+    title: "確かめてから、そのまま公開",
+    text: "編集とプレイを切り替えずに操作感を確認し、整えたらXRiftへ届けられます。",
+  },
+] as const;
 
 const creationFlow = [
   {
@@ -64,7 +101,7 @@ const creationFlow = [
     number: "03",
     icon: CirclePlay,
     title: "中を歩いて確かめる",
-    text: "エディターを閉じずにPlay。ワールドの操作感も、アイテムの見え方もすぐ確認できます。",
+    text: "エディターを閉じずにプレイ。ワールドの操作感も、アイテムの見え方もすぐ確認できます。",
   },
   {
     number: "04",
@@ -77,70 +114,75 @@ const creationFlow = [
 const importGroups = [
   {
     icon: Box,
-    label: "モデルとアバター",
+    label: "3Dモデル・アバター",
     formats: "GLB / glTF / OBJ / VRM",
     tone: "preview-import-violet",
   },
   {
     icon: Image,
-    label: "見た目と空気",
+    label: "テクスチャ・空気感",
     formats: "PNG / JPG / WebP / KTX2 / HDR / EXR",
     tone: "preview-import-cyan",
   },
   {
     icon: AudioLines,
-    label: "空間の音",
+    label: "BGM・効果音",
     formats: "MP3 / 3D Audio",
     tone: "preview-import-amber",
   },
 ] as const;
 
-const authoringFeatures = [
+const tourPoints = [
   {
     icon: Shapes,
-    title: "置いた瞬間から、編集できる",
-    text: "モデルの階層を開き、位置や回転を調整。マテリアル、ライト、パーティクル、Prefabも同じ画面で扱えます。",
+    title: "シーンを組む",
+    text: "左のHierarchyでオブジェクトの階層を開き、中央の3Dビューで配置。位置・回転・大きさを直感的に調整できます。",
   },
   {
-    icon: Blend,
-    title: "見た目を、その場で追い込める",
-    text: "色、質感、テクスチャ、Skybox、Fogを触るとシーンへ反映。VRMのボーンやシェイプキーも配置ごとに残せます。",
+    icon: Layers3,
+    title: "素材を取り込む",
+    text: "取り込んだモデルやテクスチャを一覧から選び、ドラッグ＆ドロップでシーンに置けます。",
   },
   {
-    icon: MonitorPlay,
-    title: "編集とPlayが離れない",
-    text: "Worldはキャラクターを生成せず、SpawnPointからフリーカメラで探索。Itemは単体の見え方を確認し、Stopすれば同じ選択とカメラへ戻れます。",
+    icon: MousePointer2,
+    title: "細部を詰める",
+    text: "選んだオブジェクトの詳細を右側で編集。マテリアル、ライト、当たり判定も同じ画面で扱えます。",
   },
 ] as const;
 
 const experimentalFeatures = [
   {
     icon: FileBox,
-    title: "Unity素材を引き継ぐ",
-    text: "UnityPackage、Scene、Prefabを読み取り、対応する階層や素材をXRift Studioへ。",
+    title: "Unityの素材を取り込む",
+    text: "UnityPackage、Scene、Prefabを読み取って、対応する階層や素材をXRift Studioへ引き継げます。",
   },
   {
     icon: WandSparkles,
-    title: "Open Brushを持ち込む",
-    text: "Open Brush／Tilt Brushのストロークを、専用の描画経路でシーンへ。",
+    title: "Open Brushの作品を持ち込む",
+    text: "Open Brush／Tilt Brushで描いた線を、専用の描画経路でシーンへ再現します。",
   },
   {
     icon: Bot,
-    title: "AIと一緒にシーンを触る",
-    text: "CodexやClaudeなどをつなぎ、いま開いているシーンを安全な操作の範囲で編集。",
+    title: "AIと一緒にシーンを編集",
+    text: "CodexやClaudeなどを接続して、いま開いているシーンを安全な範囲で共同編集できます。",
   },
 ] as const;
 
 const faqs = [
   {
-    question: "コードが書けなくても使えますか？",
+    question: "XRift Studioで、何が作れますか？",
     answer:
-      "はい。ビジュアル制作なら、素材の取り込み、配置、調整、Play、公開まで画面上で進められます。コードで作りたい人向けのクラシック制作も同じアプリにあります。",
+      "XRiftで遊べる「ワールド」と、ワールドをまたいで持ち歩ける「アイテム」の両方を作れます。新規作成時にどちらを選ぶか指定します。",
   },
   {
-    question: "ワールドとアイテム、どちらも作れますか？",
+    question: "ワールドとアイテムは、どう違いますか？",
     answer:
-      "どちらも作れます。新規作成時にWorld／Itemと、ビジュアル／コードの組み合わせを選べます。",
+      "ワールドは人が集まる空間です。アイテムはそのワールドをまたいで持ち歩ける道具や飾りです。どちらも同じアプリで作れます。",
+  },
+  {
+    question: "コードが書けなくても使えますか？",
+    answer:
+      "はい。画面での制作なら、素材の取り込み、配置、調整、プレイ、公開まで進められます。コードで作りたい人向けのクラシック制作も同じアプリにあります。",
   },
   {
     question: "料金はかかりますか？",
@@ -148,9 +190,14 @@ const faqs = [
       "XRift Studioは無料で使えるオープンソースソフトウェアです。ソースコードはMIT Licenseで公開しています。",
   },
   {
-    question: "このページのデモで公開までできますか？",
+    question: "このページのデモでは、どこまでできますか？",
     answer:
-      "このページでは画面と操作感を試せます。ファイルの保存、AIクライアント接続、XRiftへのアップロードはデスクトップ版で行います。",
+      "画面の操作感を試せます。ファイルの保存、AIクライアント接続、XRiftへのアップロードはデスクトップ版で行います。",
+  },
+  {
+    question: "WindowsやMac、Linuxで使えますか？",
+    answer:
+      "はい。Windows・macOS・Linuxに対応しています。インストーラーはGitHubのリリースページからダウンロードできます。",
   },
 ] as const;
 
@@ -192,12 +239,18 @@ function BrandMark() {
   );
 }
 
-function ProductScreenshot({ compact = false }: { compact?: boolean }) {
+function ProductScreenshot({
+  compact = false,
+  interactive = false,
+}: {
+  compact?: boolean;
+  interactive?: boolean;
+}) {
   return (
     <figure
       className={`preview-product-frame relative overflow-hidden rounded-[1.6rem] border border-white/80 bg-white shadow-2xl shadow-violet-950/15 ${
         compact ? "preview-product-frame-compact" : ""
-      }`}
+      } ${interactive ? "preview-product-frame-interactive" : ""}`}
     >
       <div className="flex h-9 items-center border-b border-zinc-200/80 bg-zinc-100/90 px-4">
         <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
@@ -211,6 +264,12 @@ function ProductScreenshot({ compact = false }: { compact?: boolean }) {
         alt="XRift Studioのビジュアルエディター。Hierarchy、3Dシーン、Assets、Inspectorを一つの画面に表示している"
         className="block h-auto w-full"
       />
+      {interactive ? (
+        <span className="preview-screenshot-cta" aria-hidden="true">
+          <Play size={14} fill="currentColor" />
+          この画面をクリックして試す
+        </span>
+      ) : null}
     </figure>
   );
 }
@@ -393,6 +452,14 @@ export default function PreviewApp() {
               よくある質問
             </a>
             <a
+              href={XRIFT_STUDIO_WIKI_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="preview-nav-link hidden lg:inline-flex"
+            >
+              使い方ガイド
+            </a>
+            <a
               href={releaseUrl}
               target="_blank"
               rel="noreferrer"
@@ -415,16 +482,31 @@ export default function PreviewApp() {
           <div className="mx-auto max-w-4xl text-center">
             <div className="preview-kicker mx-auto" data-reveal>
               <Sparkles size={14} />
-              Worldも、Itemも。コードでも、画面でも。
+              XRiftのワールド・アイテムを、無料で作れるデスクトップアプリ
             </div>
             <h1 className="preview-hero-title mt-6 text-balance font-black leading-[0.98] tracking-[-0.065em] text-zinc-950" data-reveal>
               置いて、動かして、
               <span className="preview-gradient-text block">そのままXRiftへ。</span>
             </h1>
             <p className="mx-auto mt-7 max-w-2xl text-pretty text-base leading-8 text-zinc-600 sm:text-lg" data-reveal>
-              モデルも、アバターも、Unity素材も。持ち込んだら、シーンを組んで、その場でPlay。
-              XRift Studioなら、ひらめきから公開までが一つの制作時間になります。
+              3Dモデルやアバター、Unityの素材を読み込んで、画面で配置して、その場でプレイ。
+              作ったワールドやアイテムは、XRiftへそのまま公開できます。
             </p>
+            <ul className="mx-auto mt-8 flex max-w-3xl flex-col items-stretch justify-center gap-2.5 sm:flex-row sm:flex-wrap" data-reveal>
+              {[
+                { icon: Shapes, text: "ワールド制作", tone: "preview-hero-pill-violet" },
+                { icon: PackageOpen, text: "アイテム制作", tone: "preview-hero-pill-cyan" },
+                { icon: MonitorPlay, text: "画面でも、コードでも", tone: "preview-hero-pill-amber" },
+              ].map((pill) => {
+                const Icon = pill.icon;
+                return (
+                  <li key={pill.text} className={`preview-hero-pill ${pill.tone}`}>
+                    <Icon size={15} />
+                    {pill.text}
+                  </li>
+                );
+              })}
+            </ul>
             <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row" data-reveal>
               <a
                 href={releaseUrl}
@@ -441,7 +523,7 @@ export default function PreviewApp() {
                 className="preview-button preview-button-light preview-button-large w-full max-w-xs sm:w-auto"
               >
                 <Play size={16} fill="currentColor" />
-                最新エディターを試す
+                エディターを試す（このページで）
               </button>
             </div>
             <p className="mt-4 text-xs font-medium text-zinc-500" data-reveal>
@@ -458,7 +540,14 @@ export default function PreviewApp() {
               <Play size={13} fill="currentColor" />
               その場でPlay
             </div>
-            <ProductScreenshot />
+            <button
+              type="button"
+              onClick={() => openDemo("world")}
+              className="preview-hero-stage-button block w-full text-left"
+              aria-label="ビジュアルエディターのデモを開く"
+            >
+              <ProductScreenshot interactive />
+            </button>
             <div className="preview-stage-status">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
               自動保存済み
@@ -468,7 +557,7 @@ export default function PreviewApp() {
           </div>
 
           <div className="mx-auto mt-8 grid max-w-5xl grid-cols-2 gap-x-6 gap-y-4 border-y border-zinc-200/80 py-5 text-center sm:grid-cols-4" data-reveal>
-            {["ビジュアル制作", "コード制作", "Editor Play", "XRiftへ公開"].map((item) => (
+            {["ビジュアル制作", "コード制作", "プレイで確認", "XRiftへ公開"].map((item) => (
               <span key={item} className="flex items-center justify-center gap-2 text-xs font-bold text-zinc-600 sm:text-sm">
                 <Check size={14} className="text-violet-600" strokeWidth={2.5} />
                 {item}
@@ -478,13 +567,65 @@ export default function PreviewApp() {
         </div>
       </section>
 
+      <section className="preview-section bg-white px-5 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="max-w-3xl" data-reveal>
+            <p className="preview-eyebrow">作れるもの</p>
+            <h2 className="preview-section-title mt-4">ふたつのものを作れます。</h2>
+            <p className="preview-section-copy mt-5 max-w-2xl">
+              XRiftには「人が集まる空間」と「持ち歩けるもの」があります。どちらもこのアプリで作れます。
+            </p>
+          </div>
+          <div className="mt-12 grid gap-5 md:grid-cols-2" data-reveal>
+            {productKinds.map((kind) => {
+              const Icon = kind.icon;
+              return (
+                <article key={kind.title} className={`preview-kind-card ${kind.tone}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white text-zinc-950 shadow-sm">
+                      <Icon size={22} />
+                    </span>
+                    <span className="text-[11px] font-black tracking-[0.2em] opacity-70">{kind.label}</span>
+                  </div>
+                  <h3 className="mt-7 text-2xl font-black tracking-[-0.04em]">{kind.title}</h3>
+                  <p className="mt-3 max-w-md text-sm leading-7 opacity-80">{kind.text}</p>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="preview-section preview-section-soft px-5 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="mx-auto max-w-3xl text-center" data-reveal>
+            <p className="preview-eyebrow">選ばれる理由</p>
+            <h2 className="preview-section-title mt-4">制作に必要なものが、ひとつの画面に揃っている。</h2>
+          </div>
+          <div className="mt-14 grid gap-4 md:grid-cols-3" data-reveal>
+            {reasons.map((reason) => {
+              const Icon = reason.icon;
+              return (
+                <article key={reason.title} className="preview-benefit-card">
+                  <span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-700">
+                    <Icon size={22} />
+                  </span>
+                  <h3 className="mt-6 text-lg font-black tracking-[-0.03em] text-zinc-950">{reason.title}</h3>
+                  <p className="mt-3 text-sm leading-7 text-zinc-600">{reason.text}</p>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       <section id="create" className="preview-section bg-white px-5 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="max-w-3xl" data-reveal>
-            <p className="preview-eyebrow">MAKE THE WHOLE THING</p>
-            <h2 className="preview-section-title mt-4">もう、制作の途中で迷子にならない。</h2>
+            <p className="preview-eyebrow">制作の流れ</p>
+            <h2 className="preview-section-title mt-4">持ち込んで、組んで、確かめて、公開する。</h2>
             <p className="preview-section-copy mt-5 max-w-2xl">
-              素材を探して、別のツールで調整して、コードへ戻って、また確認する。そんな往復を短くして、作ることに集中できます。
+              素材の取り込みから公開までを、ひとつのアプリで進められます。別のツールを行き来する手間を省けます。
             </p>
           </div>
 
@@ -513,10 +654,10 @@ export default function PreviewApp() {
         <div className="mx-auto max-w-7xl">
           <div className="grid gap-12 lg:grid-cols-[0.78fr_1.22fr] lg:items-end">
             <div data-reveal>
-              <p className="preview-eyebrow">BRING WHAT YOU HAVE</p>
+              <p className="preview-eyebrow">使える素材</p>
               <h2 className="preview-section-title mt-4">いつもの素材から、すぐ始める。</h2>
               <p className="preview-section-copy mt-5">
-                新しく作り直さなくて大丈夫。手元の3Dモデル、テクスチャ、音をプロジェクトへ入れたら、Assetsからシーンへ置けます。
+                手元の3Dモデル、テクスチャ、音をそのまま取り込んで、シーンへ置けます。
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-3" data-reveal>
@@ -537,17 +678,17 @@ export default function PreviewApp() {
             <div>
               <span className="preview-source-mark">P</span>
               <p className="mt-4 text-sm font-black text-zinc-950">Poly Haven</p>
-              <p className="mt-1 text-xs leading-5 text-zinc-500">HDRI、Material、Modelを探して追加</p>
+              <p className="mt-1 text-xs leading-5 text-zinc-500">HDRIや素材を検索して、そのまま追加</p>
             </div>
             <div>
               <span className="preview-source-mark">X</span>
-              <p className="mt-4 text-sm font-black text-zinc-950">XRift Components</p>
-              <p className="mt-1 text-xs leading-5 text-zinc-500">Portal、Mirror、Spawn Pointなど</p>
+              <p className="mt-4 text-sm font-black text-zinc-950">XRift公式パーツ</p>
+              <p className="mt-1 text-xs leading-5 text-zinc-500">Portal、Mirror、Spawn Pointなどを配置</p>
             </div>
             <div>
               <span className="preview-source-mark">O</span>
               <p className="mt-4 text-sm font-black text-zinc-950">Open Brush</p>
-              <p className="mt-1 text-xs leading-5 text-zinc-500">検証済みブラシとストローク素材</p>
+              <p className="mt-1 text-xs leading-5 text-zinc-500">検証済みブラシと描いた線の素材</p>
             </div>
             <div>
               <span className="preview-source-mark">U</span>
@@ -558,7 +699,7 @@ export default function PreviewApp() {
         </div>
       </section>
 
-      <section className="preview-section px-5 lg:px-8">
+      <section className="preview-section bg-white px-5 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="grid gap-12 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
             <div className="relative" data-reveal>
@@ -566,10 +707,10 @@ export default function PreviewApp() {
               <ProductScreenshot compact />
             </div>
             <div data-reveal>
-              <p className="preview-eyebrow">BUILD BY LOOKING</p>
+              <p className="preview-eyebrow">操作感</p>
               <h2 className="preview-section-title mt-4">画面を見れば、次に触る場所がわかる。</h2>
               <div className="mt-8 divide-y divide-zinc-200">
-                {authoringFeatures.map((feature) => {
+                {tourPoints.map((feature) => {
                   const Icon = feature.icon;
                   return (
                     <article key={feature.title} className="grid grid-cols-[2.75rem_1fr] gap-4 py-6 first:pt-0">
@@ -603,7 +744,7 @@ export default function PreviewApp() {
                 <span className="block text-violet-300">公開前に終わらせる。</span>
               </h2>
               <p className="mt-6 max-w-xl text-sm leading-7 text-zinc-400 sm:text-base">
-                タイトル、説明、サムネイルの見落としをチェック。ロード容量やVRAMの目安も見ながら、届く形に整えてXRiftへ送れます。
+                タイトル、説明、サムネイルの見落としをチェックし、ロード容量やVRAMの目安も確認できます。届く形に整えてXRiftへ送れます。
               </p>
             </div>
 
@@ -654,14 +795,14 @@ export default function PreviewApp() {
         </div>
       </section>
 
-      <section className="preview-section px-5 lg:px-8">
+      <section className="preview-section preview-section-soft px-5 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="grid gap-10 lg:grid-cols-[0.7fr_1.3fr]">
             <div data-reveal>
-              <p className="preview-eyebrow">EXPERIMENTAL, AVAILABLE NOW</p>
+              <p className="preview-eyebrow">挑戦中の機能</p>
               <h2 className="preview-section-title mt-4">少し先の作り方も、もう試せる。</h2>
               <p className="preview-section-copy mt-5">
-                Unity素材の変換、Open Brushの描画、AIとの共同編集。まだ検証中の機能も、デスクトップ版から触れます。
+                検証中の機能もデスクトップ版から触れられます。Unity素材の変換、Open Brushの描画、AIとの共同編集などです。
               </p>
               <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-[11px] font-bold text-amber-800">
                 <Sparkles size={13} />
@@ -689,23 +830,23 @@ export default function PreviewApp() {
         </div>
       </section>
 
-      <section id="try" className="preview-section preview-section-soft px-5 lg:px-8">
+      <section id="try" className="preview-section bg-white px-5 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="preview-demo-callout relative overflow-hidden rounded-[2rem] border border-violet-200 bg-white p-7 shadow-xl shadow-violet-950/5 sm:p-10 lg:p-14" data-reveal>
             <div className="preview-demo-glow" aria-hidden="true" />
             <div className="relative grid gap-10 lg:grid-cols-[1fr_auto] lg:items-end">
               <div className="max-w-3xl">
-                <p className="preview-eyebrow">LATEST VISUAL EDITOR</p>
-                <h2 className="preview-section-title mt-4">最新のエディターを、ここで試せる。</h2>
+                <p className="preview-eyebrow">実際に触る</p>
+                <h2 className="preview-section-title mt-4">ダウンロードしなくても、触ってみられます。</h2>
                 <p className="preview-section-copy mt-5 max-w-2xl">
-                  現在のXRift Studioと同じビジュアルエディターを、このページから開けます。シーンを選び、素材を置き、見た目を調整する流れを実際に触ってみてください。
+                  実際のXRift Studioと同じビジュアルエディターが、このページで開きます。シーンを選び、素材を置き、見た目を整える流れを、インストール前に確かめられます。
                 </p>
                 <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-bold">
                   <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-emerald-700">現在のエディター本体を使用</span>
                   <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-zinc-600">World / Item対応</span>
                 </div>
                 <p className="mt-4 text-xs font-medium leading-6 text-zinc-500">
-                  Webでは操作感を試せます。ファイル保存、AI接続、XRiftへのアップロードはデスクトップ版で行います。
+                  Webで操作感を確認できます。ファイル保存、AI接続、XRiftへのアップロードはデスクトップ版で行います。
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
@@ -715,7 +856,7 @@ export default function PreviewApp() {
                   className="preview-button preview-button-primary preview-button-large w-full sm:w-auto"
                 >
                   <Globe2 size={17} />
-                  最新World Editorを開く
+                  Worldエディターを試す
                 </button>
                 <button
                   type="button"
@@ -723,7 +864,7 @@ export default function PreviewApp() {
                   className="preview-button preview-button-light preview-button-large w-full sm:w-auto"
                 >
                   <Box size={17} />
-                  最新Item Editorを開く
+                  Itemエディターを試す
                 </button>
               </div>
             </div>
@@ -739,9 +880,9 @@ export default function PreviewApp() {
                 <Code2 size={15} />
                 コードで続けたいときも
               </span>
-              <h2 className="mt-5 text-3xl font-black leading-tight tracking-[-0.045em] sm:text-4xl">作ったシーンを、コードの世界へ渡せる。</h2>
+              <h2 className="mt-5 text-3xl font-black leading-tight tracking-[-0.045em] sm:text-4xl">作ったシーンを、コードの世界へも渡せる。</h2>
               <p className="mt-5 text-sm leading-7 text-zinc-400">
-                ビジュアル制作を新しいClassicプロジェクトへ書き出したり、既存の静的なR3F／XRiftコードをシーンへ取り込んだり。入口を選んでも、出口は閉じません。
+                画面で作ったものをClassicプロジェクトへ書き出したり、既存のR3F／XRiftコードをシーンへ取り込めます。どの作り方から始めても先へ進めます。
               </p>
               <p className="mt-4 text-[11px] font-semibold text-zinc-500">Classic変換は開発版として提供中です</p>
             </div>
@@ -764,7 +905,7 @@ export default function PreviewApp() {
       <section id="faq" className="preview-section preview-section-soft px-5 lg:px-8">
         <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.6fr_1.4fr]">
           <div data-reveal>
-            <p className="preview-eyebrow">FAQ</p>
+            <p className="preview-eyebrow">気になること</p>
             <h2 className="preview-section-title mt-4">始める前に、気になること。</h2>
           </div>
           <div className="divide-y divide-zinc-200 border-y border-zinc-200" data-reveal>
@@ -777,6 +918,30 @@ export default function PreviewApp() {
                 <p>{faq.answer}</p>
               </details>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="preview-section bg-white px-5 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="preview-wiki-callout grid gap-8 rounded-[2rem] border border-zinc-200 bg-zinc-50 p-7 sm:p-10 lg:grid-cols-[1fr_auto] lg:items-center" data-reveal>
+            <div>
+              <p className="preview-eyebrow">使い方ガイド</p>
+              <h2 className="preview-section-title mt-4">もっと詳しく、使い方を知りたい。</h2>
+              <p className="preview-section-copy mt-5 max-w-2xl">
+                インストールから、素材の取り込み、シーン編集、プレイ、公開まで。制作の流れに沿った使い方ガイドです。
+              </p>
+            </div>
+            <a
+              href={XRIFT_STUDIO_WIKI_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="preview-button preview-button-dark preview-button-large w-full sm:w-auto"
+            >
+              <BookOpen size={17} />
+              使い方ガイドを開く
+              <ExternalLink size={13} />
+            </a>
           </div>
         </div>
       </section>
@@ -839,6 +1004,9 @@ export default function PreviewApp() {
             )}
             <a href={repositoryUrl} target="_blank" rel="noreferrer" className="transition-colors duration-200 hover:text-violet-700">
               GitHub
+            </a>
+            <a href={XRIFT_STUDIO_WIKI_URL} target="_blank" rel="noreferrer" className="transition-colors duration-200 hover:text-violet-700">
+              使い方ガイド
             </a>
             <a href={`${repositoryUrl}/blob/main/LICENSE`} target="_blank" rel="noreferrer" className="transition-colors duration-200 hover:text-violet-700">
               MIT License
