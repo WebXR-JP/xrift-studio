@@ -101,25 +101,24 @@ function throwIfAborted(signal: AbortSignal): void {
 }
 
 /**
- * Only `xrf_` CLI tokens can publish.
+ * Rejects input that is not an XRift token at all.
  *
- * XRift's Public API v1 defines `read:worlds`, `read:users` and
- * `read:instances` and no write scope, so an `xrift_sk_` API key authenticates
- * but cannot upload. Checking the prefix here turns that into an immediate,
- * explicable refusal instead of a 401 after the bundle has been assembled.
+ * Both accepted forms can publish: `xrf_` is the CLI token and carries full
+ * permissions, and `xrift_sk_` is an API key, which can be issued with the
+ * `write:worlds` and `write:items` scopes.
+ *
+ * Deliberately no scope check. Scopes are chosen when the key is created and
+ * are not readable from the token, so the only authority on whether a given
+ * key may publish is the server. Guessing here once produced a refusal for
+ * keys that were perfectly able to upload; a 403 carrying the required scope
+ * is both correct and more informative.
  */
 export function assertUploadableToken(token: string): void {
   const trimmed = token.trim();
-  if (/^xrf_[A-Za-z0-9._-]{8,}$/.test(trimmed)) return;
-  if (/^xrift_sk_/.test(trimmed)) {
-    throw new WebUploadUnsupportedError(
-      "token-invalid",
-      "APIキー (xrift_sk_) では公開できません。Public API v1のスコープは読み取り専用のため、xrift login で取得したCLIトークン (xrf_) を使ってください。",
-    );
-  }
+  if (/^(?:xrf_|xrift_sk_)[A-Za-z0-9._-]{8,}$/.test(trimmed)) return;
   throw new WebUploadUnsupportedError(
     "token-invalid",
-    "トークンの形式が正しくありません。xrift login で取得した xrf_ で始まるCLIトークンを入力してください。",
+    "トークンの形式が正しくありません。xrift login で取得したCLIトークン (xrf_)、または設定ページで発行したAPIキー (xrift_sk_) を入力してください。",
   );
 }
 
@@ -361,6 +360,11 @@ export function describeSdkError(error: unknown): string {
     return "トークンが受け付けられませんでした。失効しているか、公開権限がない可能性があります。xrift login で取得し直してください。";
   }
   if (error instanceof XriftApiError) {
+    // 403 from a scoped API key means the key was issued without the write
+    // scope, which is fixed by reissuing it rather than by retrying.
+    if (error.statusCode === 403) {
+      return `このトークンにはワールドを公開する権限がありません (${redactToken(error.message)})。APIキーを使う場合は write:worlds スコープを付けて発行し直してください。`;
+    }
     return `XRiftがアップロードを拒否しました (${error.statusCode}): ${redactToken(error.message)}`;
   }
   if (error instanceof XriftNetworkError) {

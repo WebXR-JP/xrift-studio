@@ -87,40 +87,36 @@ function assertCapabilities(): void {
 }
 
 function assertTokenRules(): void {
-  // A CLI token is the only thing that can publish.
   assertDoesNotThrow(
     () => assertUploadableToken("xrf_abcdef123456"),
     "a valid CLI token was rejected",
   );
+  // An API key can be issued with write:worlds, so it must be accepted. Only
+  // the server knows which scopes a key carries; refusing it here once blocked
+  // keys that could publish perfectly well.
+  assertDoesNotThrow(
+    () => assertUploadableToken("xrift_sk_abcdef123456"),
+    "an API key was rejected, but keys can be issued with write:worlds",
+  );
   assertDoesNotThrow(
     () => assertUploadableToken("  xrf_abcdef123456  "),
-    "a padded CLI token was rejected; pasted tokens commonly carry whitespace",
+    "a padded token was rejected; pasted tokens commonly carry whitespace",
   );
 
-  const apiKey = expectThrow(
-    () => assertUploadableToken("xrift_sk_abcdef123456"),
-    "an API key was accepted despite having no write scope",
-  );
-  assert(
-    apiKey instanceof WebUploadUnsupportedError && apiKey.code === "token-invalid",
-    "an API key must be refused with the token-invalid code",
-  );
-  assert(
-    apiKey.message.includes("xrf_"),
-    "refusing an API key must name the token that does work",
-  );
-
-  expectThrow(
-    () => assertUploadableToken(""),
-    "an empty token was accepted",
-  );
-  expectThrow(
+  const malformed = expectThrow(
     () => assertUploadableToken("ghp_abcdef123456"),
     "an unrelated token format was accepted",
   );
+  assert(
+    malformed instanceof WebUploadUnsupportedError &&
+      malformed.code === "token-invalid",
+    "a malformed token must be refused with the token-invalid code",
+  );
+
+  expectThrow(() => assertUploadableToken(""), "an empty token was accepted");
   expectThrow(
     () => assertUploadableToken("xrf_short"),
-    "an implausibly short CLI token was accepted",
+    "an implausibly short token was accepted",
   );
 }
 
