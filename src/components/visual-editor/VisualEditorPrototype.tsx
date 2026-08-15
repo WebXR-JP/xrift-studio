@@ -150,6 +150,7 @@ import {
   type XriftMcpLocalAssetToolName,
   type XriftComponentDefinition,
   mcpTextureImportSettingsPatch,
+  describeVisualUploadCapabilities,
 } from "../../lib/visual-editor";
 import {
   tauri,
@@ -7608,7 +7609,15 @@ export function VisualEditorPrototype({
 
   const runUpload = useCallback(async () => {
     if (!onUpload) {
-      setNotice("Desktop shellからUploadProject callbackを指定してください");
+      // The host injects the upload path, so a missing callback means this
+      // environment has none wired rather than a programming mistake. Say
+      // which environment it is instead of naming an internal callback.
+      const capabilities = describeVisualUploadCapabilities();
+      setNotice(
+        capabilities.environment === "web"
+          ? "ブラウザ版はビルド済みランタイムシェルが必要なため、まだアップロードできません。デスクトップ版から公開してください。"
+          : "アップロード処理がこの画面に接続されていません。",
+      );
       return;
     }
     try {

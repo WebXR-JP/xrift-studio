@@ -65,6 +65,7 @@ import { runModelImportContractFixtureAssertions } from "../src/lib/visual-edito
 import { runModelReimportImpactFixtureAssertions } from "../src/lib/visual-editor/model-reimport-impact.fixture.ts";
 import { runOpenBrushFixtureAssertions } from "../src/lib/visual-editor/open-brush.fixture.ts";
 import { runVisualPublishFixtureAssertions } from "../src/lib/visual-editor/publish.fixture.ts";
+import { runVisualUploadFixtureAssertions } from "../src/lib/visual-editor/upload.fixture.ts";
 import { runRuntimeSpawnFixtureAssertions } from "../src/lib/visual-editor/runtime-spawn.fixture.ts";
 import { runSkyboxImportFixtureAssertions } from "../src/lib/visual-editor/skybox-import.fixture.ts";
 import { runUnityPackageImportFixture } from "../src/lib/visual-editor/unity-package-import.fixture.ts";
@@ -264,6 +265,7 @@ try {
     ["open brush", runOpenBrushFixtureAssertions],
     ["runtime spawn", runRuntimeSpawnFixtureAssertions],
     ["visual publish", runVisualPublishFixtureAssertions],
+    ["visual upload branch", runVisualUploadFixtureAssertions],
     ["classic project import", runClassicProjectImportFixtureAssertions],
     ["asset operation lock", runAssetOperationLockFixtureAssertions],
     ["audio import", runAudioImportFixtureAssertions],
