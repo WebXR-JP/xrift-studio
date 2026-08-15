@@ -30,9 +30,9 @@ Web 版エディターから XRift へ直接アップロードする仕組み。
 node scripts/build-world-runtime-shell.mjs --out public/xrift-runtime-shell
 ```
 
-## 未解決: CORS 許可リスト
+## 未解決: 最後の送信が CORS で止まる
 
-**現状、ブラウザからのアップロードは最後の送信で止まる。** 組み立てまでは成功し、`POST /api/public/v1/worlds` がブラウザに遮断される。
+**組み立てまでは成功し、`POST /api/public/v1/worlds` のレスポンスをブラウザが読めない。** 残っているのはこの一点だけである。
 
 `api.xrift.net` は `Access-Control-Allow-Origin` を自身のオリジンにしか返さない。実測（2026-08-15）:
 
@@ -43,33 +43,36 @@ node scripts/build-world-runtime-shell.mjs --out public/xrift-runtime-shell
 | `https://webxr-jp.github.io` | 204 | なし |
 | `http://localhost:1420` | 204 | なし |
 
-これはサーバー側の許可リストなので、フロントエンドのコードでは回避できない。
+preflight は 204 を返し、`Access-Control-Allow-Methods` と `Access-Control-Allow-Headers` も必要なものが揃っている。`Access-Control-Allow-Origin` だけが返らない。サーバー側の許可リストなので、フロントエンドのコードでは回避できない。
 
-### XRift へ依頼する内容
+### 案A: ZIP 書き出し + 別手段でアップロード
 
-`api.xrift.net` の CORS 許可オリジンに次を追加してもらう。
+ブラウザ側は既に完全なファイル一式を組み立てられている（実測 26ファイル 5.95 MB）。送信せずに ZIP としてダウンロードさせ、利用者が展開して `xrift upload world` を実行するか、別途アップローダーへ渡す。
 
-```
-https://webxr-jp.github.io
-```
+- ネットワークを使わないため CORS の影響を受けない
+- 他者の対応を待たず、このリポジトリだけで完結する
+- 手順が2段階になる
 
-ローカル開発も通したい場合は `http://localhost:1420` も追加する。
+### 案B: CORS 許可オリジンの追加を依頼
 
-現在返っているヘッダーはそのままでよい。追加の変更は不要である。
+`https://webxr-jp.github.io`（必要なら `http://localhost:1420` も）を許可リストへ追加してもらう。既存ヘッダーの変更は不要で、追加はオリジンのみ。
 
-```
-Access-Control-Allow-Methods: GET,HEAD,PUT,POST,DELETE,PATCH
-Access-Control-Allow-Headers: Content-Type,Authorization,X-CSRF-Token
-Access-Control-Allow-Credentials: true
-```
+- 実装済みのコードがそのまま動く。追加実装なし
+- 相手の対応待ちになる
 
-許可されたかどうかは、ブラウザの devtools ではなく次で確認できる（`ACAO` が返れば通っている）。
+追加されたかどうかは次で確認できる。`access-control-allow-origin` が返れば通っている。
 
 ```bash
 curl -sI -X OPTIONS "https://api.xrift.net/api/public/v1/worlds" -H "Origin: https://webxr-jp.github.io" -H "Access-Control-Request-Method: POST" | grep -i access-control-allow-origin
 ```
 
-許可リストが使えない場合は中継サーバーを立てる方法もあるが、トークンが中継を経由するため、可能なら許可リストのほうがよい。
+### 案C: 中継サーバー
+
+Cloudflare Worker などを立てて経由させる。どのオリジンからでも動くが、トークンが中継を経由するため運用の責任が増える。一度実装したが方針変更で削除済み。
+
+### 進め方
+
+案Aは自分たちだけで完結するので、まずこれを入れると Web 版が単体で使えるようになる。並行して案Bを打診し、通れば案Aは残したまま直接送信も選べるようにする。
 
 ## トークン
 
@@ -105,7 +108,7 @@ Studio 側でトークンの形式やスコープを判定しない。どの接�
 
 未確認:
 
-- **アップロードの成功系全体。** CORS が解けた時点が初回になる。
+- **アップロードの成功系全体。** 上記のいずれかの案が入った時点が初回になる。
 - 署名付き URL のホスト。実 URL をまだ見ていない。
 
 表示されない場合は、devtools の Network で `xrift/runtime.json` がどの URL へ飛んでいるかを見ると原因が分かる。シェルは `import.meta.url` 基準で解決するため、ワールド自身の保存先を指しているのが正しい。
