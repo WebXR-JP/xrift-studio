@@ -101,25 +101,32 @@ function throwIfAborted(signal: AbortSignal): void {
 }
 
 /**
- * Rejects input that is not an XRift token at all.
+ * Rejects only what cannot be sent as a bearer token at all.
  *
- * Both accepted forms can publish: `xrf_` is the CLI token and carries full
- * permissions, and `xrift_sk_` is an API key, which can be issued with the
- * `write:worlds` and `write:items` scopes.
+ * Deliberately not a format check. Which prefixes exist, which character set a
+ * key uses, and which scopes it carries are all XRift's to define and change,
+ * and none of it is knowable from the string. Two earlier attempts to be
+ * clever here — refusing API keys as read-only, then requiring a specific
+ * prefix and charset — both rejected credentials that were perfectly able to
+ * publish. A 401 or 403 from the server is authoritative; a guess here is not.
  *
- * Deliberately no scope check. Scopes are chosen when the key is created and
- * are not readable from the token, so the only authority on whether a given
- * key may publish is the server. Guessing here once produced a refusal for
- * keys that were perfectly able to upload; a 403 carrying the required scope
- * is both correct and more informative.
+ * Whitespace is still worth catching, because a token pasted with a stray
+ * newline produces a malformed header rather than a clean rejection.
  */
 export function assertUploadableToken(token: string): void {
   const trimmed = token.trim();
-  if (/^(?:xrf_|xrift_sk_)[A-Za-z0-9._-]{8,}$/.test(trimmed)) return;
-  throw new WebUploadUnsupportedError(
-    "token-invalid",
-    "トークンの形式が正しくありません。xrift login で取得したCLIトークン (xrf_)、または設定ページで発行したAPIキー (xrift_sk_) を入力してください。",
-  );
+  if (!trimmed) {
+    throw new WebUploadUnsupportedError(
+      "token-invalid",
+      "トークンを入力してください。",
+    );
+  }
+  if (/\s/.test(trimmed)) {
+    throw new WebUploadUnsupportedError(
+      "token-invalid",
+      "トークンに空白や改行が含まれています。前後の余分な文字を取り除いてください。",
+    );
+  }
 }
 
 /**
@@ -350,8 +357,50 @@ export async function uploadVisualProjectFromWeb(
       uploadedAt: new Date().toISOString(),
     };
   } catch (error) {
+    if (error instanceof XriftNetworkError) {
+      throw new Error(await describeNetworkFailure(error));
+    }
     throw new Error(describeSdkError(error));
   }
+}
+
+export const XRIFT_API_ORIGIN = "https://api.xrift.net";
+
+/**
+ * Separates "XRift did not answer" from "the browser would not let us read
+ * the answer".
+ *
+ * `fetch` reports both as `TypeError: Failed to fetch` with no detail, but the
+ * remedies are opposite. A `no-cors` request still resolves when the host
+ * responds, even though the body is opaque, so a success here proves XRift is
+ * reachable and that CORS is what blocked the real request.
+ *
+ * XRift returns `Access-Control-Allow-Origin` only for its own origins, so any
+ * other page — a local dev server, GitHub Pages — is refused. That is a
+ * server-side allowlist, not something this code can work around.
+ */
+export async function describeNetworkFailure(
+  error: XriftNetworkError,
+): Promise<string> {
+  let hostAnswered = false;
+  try {
+    await fetch(XRIFT_API_ORIGIN, {
+      method: "GET",
+      mode: "no-cors",
+      signal: AbortSignal.timeout(8000),
+    });
+    hostAnswered = true;
+  } catch {
+    hostAnswered = false;
+  }
+
+  const origin =
+    typeof location !== "undefined" ? location.origin : "このページ";
+
+  if (hostAnswered) {
+    return `XRiftのAPIは応答しましたが、${origin} からの読み取りを許可していないため結果を受け取れませんでした。XRiftは許可済みオリジンにだけ応答を返す設定になっています。このオリジンを許可リストへ追加してもらうか、中継サーバー経由での送信が必要です。アップロード処理自体は最後まで通っているため、この点だけが残っています。`;
+  }
+  return `XRiftへ接続できませんでした: ${redactToken(error.message)}。ネットワーク接続を確認してください。`;
 }
 
 /** Turns an SDK error into a message that says what to do next. */

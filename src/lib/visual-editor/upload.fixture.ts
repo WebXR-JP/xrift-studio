@@ -87,36 +87,36 @@ function assertCapabilities(): void {
 }
 
 function assertTokenRules(): void {
-  assertDoesNotThrow(
-    () => assertUploadableToken("xrf_abcdef123456"),
-    "a valid CLI token was rejected",
-  );
-  // An API key can be issued with write:worlds, so it must be accepted. Only
-  // the server knows which scopes a key carries; refusing it here once blocked
-  // keys that could publish perfectly well.
-  assertDoesNotThrow(
-    () => assertUploadableToken("xrift_sk_abcdef123456"),
-    "an API key was rejected, but keys can be issued with write:worlds",
-  );
-  assertDoesNotThrow(
-    () => assertUploadableToken("  xrf_abcdef123456  "),
-    "a padded token was rejected; pasted tokens commonly carry whitespace",
-  );
+  // Only the server can judge a token. Every shape XRift might issue — CLI
+  // tokens, API keys, and whatever it adds later — has to pass through.
+  for (const token of [
+    "xrf_abcdef123456",
+    "xrift_sk_abcdef123456",
+    "  xrf_abcdef123456  ",
+    "xrf_short",
+    "sk-live-AbCd+/=123",
+    "an-entirely-unfamiliar-token",
+  ]) {
+    assertDoesNotThrow(
+      () => assertUploadableToken(token),
+      `token "${token.trim()}" was rejected locally, but only XRift can decide that`,
+    );
+  }
 
-  const malformed = expectThrow(
-    () => assertUploadableToken("ghp_abcdef123456"),
-    "an unrelated token format was accepted",
+  const empty = expectThrow(
+    () => assertUploadableToken("   "),
+    "a blank token was accepted",
   );
   assert(
-    malformed instanceof WebUploadUnsupportedError &&
-      malformed.code === "token-invalid",
-    "a malformed token must be refused with the token-invalid code",
+    empty instanceof WebUploadUnsupportedError && empty.code === "token-invalid",
+    "a blank token must be refused with the token-invalid code",
   );
 
-  expectThrow(() => assertUploadableToken(""), "an empty token was accepted");
+  // A pasted newline would build a malformed Authorization header rather than
+  // producing a clean 401.
   expectThrow(
-    () => assertUploadableToken("xrf_short"),
-    "an implausibly short token was accepted",
+    () => assertUploadableToken("xrf_abc\n123"),
+    "a token containing a newline was accepted",
   );
 }
 
