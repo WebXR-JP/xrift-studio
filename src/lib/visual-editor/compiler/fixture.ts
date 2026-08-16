@@ -29,6 +29,7 @@ import {
   createMeshColliderComponent,
   createRigidBodyComponent,
   createTransformComponent,
+  createVegetationWindComponent,
   type AnimationComponent,
   type ColliderComponent,
   type MeshComponent,
@@ -116,11 +117,57 @@ export function runVisualCompilerFixtureAssertions(
     "HalfFloatType",
     "new SSAOPass",
     "ACESFilmicToneMapping",
+    'toneMapping: "aces" | "none"',
   ].forEach((fragment) =>
     assert(
       defaultWorldSource.includes(fragment),
       `Infinite gradient Skybox source is missing: ${fragment}`,
     ),
+  );
+  assert(
+    !defaultWorldSource.includes('FC<{ settings: {"enabled":'),
+    "Generated postprocessing props must not infer literal Scene values as their TypeScript type",
+  );
+  const windWorld = toCompilerDocuments(
+    createPrototypeProject("world", "fixture-wind-world"),
+  );
+  const windScene = windWorld.scenes[windWorld.project.entrySceneId];
+  const windEntity = Object.values(windScene.entities)[0];
+  const windComponent = createVegetationWindComponent("fixture-wind-component");
+  assert(windEntity && windComponent, "Wind compiler fixture could not create a target");
+  const windResult = compileVisualProject(
+    {
+      ...windWorld,
+      scenes: {
+        ...windWorld.scenes,
+        [windScene.sceneId]: {
+          ...windScene,
+          entities: {
+            ...windScene.entities,
+            [windEntity.id]: {
+              ...windEntity,
+              components: [...windEntity.components, windComponent],
+            },
+          },
+        },
+      },
+    },
+    { generatedAt: fixedTime },
+  );
+  const windWorldSource =
+    windResult.overlayFiles.find((file) => file.relativePath === "src/World.tsx")
+      ?.content ?? "";
+  assert(windResult.canStage, "A World with an explicit Wind component must be stageable");
+  assert(
+    !windResult.diagnostics.some(
+      (diagnostic) => diagnostic.code === "component-unsupported",
+    ),
+    "Wind must not be reported as an unsupported component",
+  );
+  assert(
+    windWorldSource.includes("XRiftStudioWind") &&
+      windWorldSource.includes(windEntity.id),
+    "Wind must compile into the scene-level runtime with its explicit Entity target",
   );
   assert(
     JSON.stringify(first.stagingPlan.requiredPublicationFiles) ===

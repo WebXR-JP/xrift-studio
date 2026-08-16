@@ -948,10 +948,7 @@ ${skybox.iblEnabled ? `
   );
 }
 
-function registerScenePostprocessingSupport(
-  settings: SceneSettings,
-  context: CompileContext,
-): void {
+function registerScenePostprocessingSupport(context: CompileContext): void {
   context.reactValueImports.add("useEffect");
   context.reactValueImports.add("useMemo");
   context.fiberImports.add("useFrame");
@@ -977,7 +974,28 @@ function registerScenePostprocessingSupport(
   );
   context.supportDeclarations.set(
     "scene-environment:postprocessing",
-    `const XRiftStudioPostprocessing: FC<{ settings: ${JSON.stringify(settings.postprocessing)} }> = ({ settings }) => {
+    `type XRiftStudioPostprocessingSettings = {
+  enabled: boolean;
+  hdr: {
+    enabled: boolean;
+    toneMapping: "aces" | "none";
+  };
+  bloom: {
+    enabled: boolean;
+    threshold: number;
+    strength: number;
+    radius: number;
+  };
+  ao: {
+    enabled: boolean;
+    radius: number;
+    minDistance: number;
+    maxDistance: number;
+  };
+  exposure: number;
+};
+
+const XRiftStudioPostprocessing: FC<{ settings: XRiftStudioPostprocessingSettings }> = ({ settings }) => {
   const { camera, gl, scene, size } = useThree();
   const hdrEnabled = settings.hdr.enabled;
   const pipeline = useMemo(() => {
@@ -1112,7 +1130,7 @@ function renderSceneEnvironment(
     `<ambientLight color={${JSON.stringify(settings.ambient.color)}} intensity={${formatNumber(settings.ambient.intensity)}} />`,
   ];
 
-  registerScenePostprocessingSupport(settings, context);
+  registerScenePostprocessingSupport(context);
   content.push(
     `<XRiftStudioPostprocessing settings={${JSON.stringify(settings.postprocessing)} } />`,
   );
@@ -1406,6 +1424,10 @@ function renderEntity(
       if (rendered) localContent.push(rendered);
     } else if (component.type === "animation") {
       // Playback is applied by the sibling Model renderer.
+      continue;
+    } else if (component.type === "vegetation-wind") {
+      // Wind is emitted once at scene level so it can update every explicitly
+      // targeted Entity after the complete scene hierarchy has mounted.
       continue;
     } else if (component.type === "light") {
       localContent.push(renderLight(component, context));
