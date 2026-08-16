@@ -413,6 +413,7 @@ Script runtime の再生要求、option、transform は Stop で消え、MCP aut
 | Material Asset を作成する | `create_document_asset(kind: "material")` |
 | Material Asset を読み、PBR / Texture binding を保存する | `get_material_asset`、`update_material_asset` |
 | Material Texture の offset / scale / rotation / UV set を保存する | `set_material_texture_transform` |
+| Mesh / 葉アセットの描画距離（Far Clip）を保存・解除する | `update_component.patch.maxDistance`。有限値 `0.1..1,000,000`、`null`でScene CameraのFarへ戻す |
 | Particle Asset を作成・取得・更新する | `create_document_asset(kind: "particle")`、`get_particle_asset`、`update_particle_asset` |
 | Scene settings を取得・部分更新する | `get_editor_context.sceneSettings`、`update_scene_settings` |
 | Component 構成を取得・変更する | `list_component_definitions`、`get_entity_components`、`add_component`、`update_component`、`remove_component`、`set_entity_enabled` |

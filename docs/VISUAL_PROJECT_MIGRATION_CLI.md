@@ -129,8 +129,10 @@ scene.add(result.root);
 ```ts
 type XriftLoadResult = {
   root: THREE.Group;
+  assetBaseUrl: URL;
   animations: THREE.AnimationClip[];
   entities: Map<string, THREE.Object3D>;
+  spawnPoints: Map<string, THREE.Object3D>;
   diagnostics: XriftRuntimeDiagnostic[];
   manifest: XriftRuntimeManifest;
 };
@@ -157,7 +159,9 @@ repository内で次が接続済みである。
 - `xrift create`を使うClassic template生成とatomic commit。
 - `--dry-run`、`--update`、text／JSON report、衝突防止。
 - `xrift-studio-runtime/three`のPrimitive、Model、Texture、Material、Light、static pose、Entity Map、animation収集。
-- `xrift-studio-runtime/react-three-fiber`の`XriftWorld`／`XriftItem` adapter。
+- `xrift-studio-runtime/react-three-fiber`の`XriftWorld`／`XriftItem` adapterと、Worldの直接Collider（box／mesh）をRapierへ接続するphysics adapter。
+- 旧来の`xrift.spawn-point`を含むSpawn Pointの公式Context接続とmarker収集（`XriftLoadResult.spawnPoints`）。
+- Audio Source（Three Audio／PositionalAudio）とParticle Emitter（bounded Points simulation）のRuntime adapter。
 - Open Brush metadataと必要時だけの`three-icosa` loader。
 - Runtime JSONからThree.js sceneを作るfixtureと、改変済みexportの更新拒否fixture。
 - Visual Editor headerの「Classicへ書き出す」とOS folder picker。
@@ -167,7 +171,7 @@ repository内で次が接続済みである。
 未完了:
 
 - npmへの`xrift-studio`／`xrift-studio-runtime`公開。
-- Audio、Particle、Collider physics、XRift固有ComponentのRuntime adapter完全対応。
+- Rigid Body／動的Collider、XRift固有ComponentのRuntime adapter完全対応。静的な直接Collider、Spawn Point、Audio、Particleは対応済みで、未対応分はcompile warningとして残す。
 - 任意の`xrift check`実行option。現行公式CLI contractを確認してから追加する。
 - `.xriftpack`のpack／import。
 

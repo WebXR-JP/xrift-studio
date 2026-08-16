@@ -3,6 +3,7 @@ import { parseStagedXriftConfig } from "./publish";
 import { describeVisualUploadCapabilities } from "./upload";
 import {
   SHELL_ENTRY_PATH,
+  REQUIRED_RUNTIME_SHELL_CONTRACT,
   WebUploadUnsupportedError,
   assertUploadableToken,
   describeSdkError,
@@ -93,6 +94,7 @@ function assertDataUrlDecoding(): void {
 function assertShellManifestRules(): void {
   const manifest = parseShellManifest({
     version: "4e10989ee355",
+    runtimeContract: REQUIRED_RUNTIME_SHELL_CONTRACT,
     entry: SHELL_ENTRY_PATH,
     files: [SHELL_ENTRY_PATH, "index-abc.js", "../escape.js", ""],
   });
@@ -101,12 +103,30 @@ function assertShellManifestRules(): void {
     "a shell listing must drop traversal and empty entries before fetching them",
   );
   assert(manifest.version === "4e10989ee355", "shell version was not read");
+  assert(
+    manifest.runtimeContract === REQUIRED_RUNTIME_SHELL_CONTRACT,
+    "shell runtime contract was not read",
+  );
 
   // XRift loads the world as a Module Federation remote, so a listing without
   // remoteEntry.js would upload cleanly and then render nothing.
   assertThrows(
-    () => parseShellManifest({ version: "1", files: ["index-abc.js"] }),
+    () =>
+      parseShellManifest({
+        version: "1",
+        runtimeContract: REQUIRED_RUNTIME_SHELL_CONTRACT,
+        files: ["index-abc.js"],
+      }),
     `a shell listing without ${SHELL_ENTRY_PATH} was accepted`,
+  );
+  assertThrows(
+    () =>
+      parseShellManifest({
+        version: "1",
+        runtimeContract: "stale",
+        files: [SHELL_ENTRY_PATH],
+      }),
+    "a stale runtime shell contract was accepted",
   );
   assertThrows(
     () => parseShellManifest(null),

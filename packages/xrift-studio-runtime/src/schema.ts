@@ -1,5 +1,12 @@
 export const XRIFT_STUDIO_RUNTIME_FORMAT = "xrift-studio.runtime" as const;
 export const XRIFT_STUDIO_RUNTIME_SCHEMA_VERSION = "1.0.0" as const;
+/**
+ * Bumped when the published runtime shell must be rebuilt to keep parity with
+ * the loader and R3F adapters. The shell build script copies this into its
+ * manifest, and the browser upload path refuses an older shell.
+ */
+export const XRIFT_RUNTIME_CONTRACT_VERSION =
+  "2026-08-16-official-components-physics-v1" as const;
 
 export type XriftRuntimeDiagnostic = {
   severity: "warning" | "error";
@@ -47,6 +54,8 @@ export type XriftRuntimeComponent =
       materialBindings: XriftRuntimeMaterialBinding[];
       castShadow: boolean;
       receiveShadow: boolean;
+      /** Optional local draw-distance cutoff; omitted uses scene camera.far. */
+      maxDistance?: number;
       modelPose?: {
         bones: Record<string, [number, number, number]>;
         morphTargets: Record<string, number>;
@@ -133,6 +142,14 @@ export type XriftRuntimeComponent =
       clipName?: string;
       /** Playback rate multiplier. Absent behaves as 1. */
       speed?: number;
+    }
+  | {
+      id: string;
+      type: "vegetation-wind";
+      enabled: boolean;
+      windStrength: number;
+      windSpeed: number;
+      gustStrength: number;
     }
   | {
       id: string;

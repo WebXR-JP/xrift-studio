@@ -113,7 +113,7 @@ visual manifest が存在するが壊れている場合、classic として推�
 - 選択中のエンティティだけに移動、回転、拡大縮小のギズモを表示する。
 - 通常clickは単体選択、Shift / Ctrl・Cmd clickは追加／解除とし、複数選択中は全対象へoutline、最後に選んだprimary Entityだけにgizmoを表示する。pointer downからupまでにcamera drag相当の移動があれば選択を確定しない。
 - ギズモ操作中はカメラ操作との競合を止め、操作終了時に一つの履歴として確定する。
-- Editの表示は一つの目的別selectorで「シーン」「ライトなし」「ワイヤー」「コライダー」を切り替える。Skybox、Fog、Lightを個別toolbar toggleとして並べず、表示モードはSceneDocument、Undo、自動保存、compile、Play結果を変更しない。
+- Editの表示は一つの目的別selectorで「シーン」「ライトなし」「ワイヤー」「コライダー」を切り替える。Skybox、Fog、Lightを個別toolbar toggleとして並べず、診断用の3モードは既定のグレーMaterialと形状を見分けられる暗いneutral背景を使う。表示モードはSceneDocument、Undo、自動保存、compile、Play結果を変更しない。
 - 空間へ Model / Prefab をドロップした場合は、配置したエンティティを直ちに選択する。Material の drop は Entity を増やさず、対象 Mesh slot の binding を変更する。
 - Scene View の空間または Entity を右クリックすると Create submenu を開き、Empty、Box、Sphere、Plane、Cylinder など Registry 登録済み primitive を click point または選択親の下へ作成する。作成位置と親を menu 内で読めるようにし、`CreatePrimitiveCommand` 一件で追加と選択を確定する。
 - Edit と Play は明示的に分け、同じ Scene View で切り替える。
@@ -127,7 +127,7 @@ visual manifest が存在するが壊れている場合、classic として推�
 - 右側は Entity と Asset の唯一の property editor とする。`sceneSelection` と `assetSelection` は独立して保持し、最後に明示操作した対象を `inspectorContext` として表示する。Asset を選んでも Entity selection 自体は消えず、Inspector header の Entity / Asset breadcrumb または pinned tab で直前の Entity properties へ一操作で戻れる。
 - Entity context は Transform、Component、geometry / model reference、material slots、`castShadow` / `receiveShadow`、XRift Studio 固有 authoring field を扱う。Material context は glTF PBR / extensions、Texture context は source、色空間、resize、mipmap / sampler、compression、derived / diagnostics を扱う。Model、Prefab、Particle も同じ右 Inspector の kind-specific section を使う。
 - Material Asset の変更は、その ID を参照するすべての Entity へ反映する。Inspector header には Asset kind、stable ID、参照数、「共有中」、dirty / stale status を表示する。
-- Mesh の Material は glTF mesh primitive に対応する slot ごとに表示し、`materialBindings[].slot` と `materialAssetId` を編集する。`castShadow` と `receiveShadow` は Material ではなく Entity の Mesh Component にある「影」section で扱う。
+- Mesh の Material は glTF mesh primitive に対応する slot ごとに表示し、`materialBindings[].slot` と `materialAssetId` を編集する。`castShadow` と `receiveShadow` は Material ではなく Entity の Mesh Component にある「影」section で扱う。アセット単位の任意の `maxDistance`（Far Clip）は同じ Mesh Component に保存し、未設定時は Scene Camera の `far` を使う。Inspector、MCP、Editor Preview、Play、Classic compiler はこの値を共有し、葉や遠景モデルだけを安全に距離制限できる。
 - Assets から Material を Entity Inspector の slot または Scene View の Mesh へ drag できる。hover 中は対象 Entity / slot と置換前後の Material 名を表示し、drop は `AssignMaterialCommand` 一件にする。複数 slot が曖昧なら drop 前に slot chooser を開き、推測適用しない。
 - Assets から Texture を Material Inspector の対応 slot へ drag できる。用途が base color / emissive なら sRGB、metallic-roughness / normal / occlusion なら linear の recipe を提案し、既存 recipe と衝突する場合は確定前に選択肢を示す。
 - Entity 固有の Material override を追加する場合は、共有 Material Asset の編集とは別の明示的 Component / Command にし、現在どちらを編集しているか header と field group で区別する。
@@ -557,7 +557,7 @@ glTF は一つの mesh に複数の mesh primitive を持ち、各 primitive が
 
 再 import で primitive 構成が変わった場合は、元 index、名前、構造 fingerprint の順に binding を照合する。自動対応できない binding は削除や別 slot への推測をせず `stale-binding` diagnostic とし、右 Inspector から置換先を選べるようにする。
 
-`castShadow` と `receiveShadow` は XRift Studio の Mesh Component / target adapter 用 authoring 設定であり、glTF 2.0 core Material field ではない。glTF import では profile の既定値を入れ、Material から推測しない。glTF へ再出力する場合も Material JSON へ追加せず、XRift compiler adapter が runtime 設定として扱う。`doubleSided` は Material、影は Entity / Mesh と、UI section と保存先を分ける。
+`castShadow` と `receiveShadow` は XRift Studio の Mesh Component / target adapter 用 authoring 設定であり、glTF 2.0 core Material field ではない。glTF import では profile の既定値を入れ、Material から推測しない。glTF へ再出力する場合も Material JSON へ追加せず、XRift compiler adapter が runtime 設定として扱う。`maxDistance` も同じく renderer adapter の設定で、`0.1..1,000,000` の有限値または未設定を受け付け、`null` 更新で Scene Camera の `far` へ戻す。`doubleSided` は Material、影と描画距離は Entity / Mesh と、UI section と保存先を分ける。
 
 #### Material extension Registry
 

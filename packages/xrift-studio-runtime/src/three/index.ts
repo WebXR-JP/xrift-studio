@@ -10,6 +10,7 @@ import {
   CylinderGeometry,
   DirectionalLight,
   DoubleSide,
+  EquirectangularReflectionMapping,
   FrontSide,
   Float32BufferAttribute,
   Group,
@@ -43,7 +44,10 @@ import {
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
+import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
+import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
+import { Reflector } from "three/examples/jsm/objects/Reflector.js";
 import { Text } from "troika-three-text";
 
 import { detectTimeUniforms } from "../shader-time.js";
@@ -59,10 +63,16 @@ import {
 
 export type XriftLoadResult = {
   root: Group;
+  /** Resolved base used for relative runtime asset URLs. */
+  assetBaseUrl: URL;
   animations: AnimationClip[];
   animationClipsByEntity: Map<string, AnimationClip[]>;
   interactionAnimationIndicesByEntity: Map<string, number[]>;
   entities: Map<string, Object3D>;
+  /** Spawn-point marker objects keyed by their component id. */
+  spawnPoints: Map<string, Object3D>;
+  /** Decoded Texture and environment assets keyed by their manifest id. */
+  textures: Map<string, Texture>;
   diagnostics: XriftRuntimeDiagnostic[];
   manifest: XriftRuntimeManifest;
 };
@@ -137,8 +147,10 @@ export class XriftThreeLoader {
         asset.kind === "model",
     );
     const textureAssets = assets.filter(
-      (asset): asset is Extract<XriftRuntimeAsset, { kind: "texture" }> =>
-        asset.kind === "texture",
+      (
+        asset,
+      ): asset is Extract<XriftRuntimeAsset, { kind: "texture" | "skybox" }> =>
+        asset.kind === "texture" || asset.kind === "skybox",
     );
     const [modelEntries, textureEntries] = await Promise.all([
       Promise.all(
@@ -161,6 +173,7 @@ export class XriftThreeLoader {
     const animations: AnimationClip[] = [];
     const animationClipsByEntity = new Map<string, AnimationClip[]>();
     const interactionAnimationIndicesByEntity = new Map<string, number[]>();
+    const spawnPoints = new Map<string, Object3D>();
 
     for (const entity of Object.values(entryScene.entities)) {
       const group = new Group();
@@ -202,15 +215,35 @@ export class XriftThreeLoader {
           interactionAnimationIndicesByEntity,
           diagnostics,
         });
-        if (object) group.add(object);
+        if (object) {
+          group.add(object);
+          if (
+            component.type === "spawn-point" ||
+            isRuntimeSpawnPointComponent(component)
+          ) {
+            spawnPoints.set(component.id, object);
+          }
+        }
+      }
+      const billboardWrapper = group.children.find(
+        (child) => child.userData.xriftRuntimeBillboardY === true,
+      );
+      if (billboardWrapper) {
+        for (const child of [...group.children]) {
+          if (child === billboardWrapper) continue;
+          billboardWrapper.add(child);
+        }
       }
     }
     return {
       root,
+      assetBaseUrl: assetBase,
       animations,
       animationClipsByEntity,
       interactionAnimationIndicesByEntity,
       entities,
+      spawnPoints,
+      textures,
       diagnostics,
       manifest,
     };
@@ -278,18 +311,26 @@ export class XriftThreeLoader {
   }
 
   private async loadTexture(
-    asset: Extract<XriftRuntimeAsset, { kind: "texture" }>,
+    asset: Extract<XriftRuntimeAsset, { kind: "texture" | "skybox" }>,
     assetBase: URL,
   ): Promise<Texture> {
     const url = new URL(asset.url, assetBase).toString();
     const texture =
-      asset.sourceFormat === "ktx2"
+      asset.kind === "texture" && asset.sourceFormat === "ktx2"
         ? await this.loadKtx2Texture(url)
-        : await new TextureLoader(this.manager).loadAsync(url);
+        : asset.kind === "skybox" && asset.sourceFormat === "hdr"
+          ? await new RGBELoader(this.manager).loadAsync(url)
+          : asset.kind === "skybox" && asset.sourceFormat === "exr"
+            ? await new EXRLoader(this.manager).loadAsync(url)
+            : await new TextureLoader(this.manager).loadAsync(url);
     texture.flipY = asset.flipY;
-    if (asset.colorSpace === "srgb") texture.colorSpace = SRGBColorSpace;
-    texture.wrapS = runtimeTextureWrapping(asset.sampler.wrapS);
-    texture.wrapT = runtimeTextureWrapping(asset.sampler.wrapT);
+    if (asset.kind === "texture") {
+      if (asset.colorSpace === "srgb") texture.colorSpace = SRGBColorSpace;
+      texture.wrapS = runtimeTextureWrapping(asset.sampler.wrapS);
+      texture.wrapT = runtimeTextureWrapping(asset.sampler.wrapT);
+    } else {
+      texture.mapping = EquirectangularReflectionMapping;
+    }
     return texture;
   }
 
@@ -413,6 +454,9 @@ export class XriftThreeLoader {
         mesh.castShadow = component.castShadow;
         mesh.receiveShadow = component.receiveShadow;
         mesh.userData.xriftStudioComponentId = component.id;
+        if (component.maxDistance !== undefined) {
+          mesh.userData.xriftRuntimeMaxDistance = component.maxDistance;
+        }
         return mesh;
       }
       if (component.geometry.kind === "terrain") {
@@ -424,6 +468,9 @@ export class XriftThreeLoader {
         mesh.castShadow = component.castShadow;
         mesh.receiveShadow = component.receiveShadow;
         mesh.userData.xriftStudioComponentId = component.id;
+        if (component.maxDistance !== undefined) {
+          mesh.userData.xriftRuntimeMaxDistance = component.maxDistance;
+        }
         return mesh;
       }
       const loaded = input.models.get(component.geometry.assetId);
@@ -470,9 +517,16 @@ export class XriftThreeLoader {
         );
       }
       instance.userData.xriftStudioComponentId = component.id;
+      if (component.maxDistance !== undefined) {
+        instance.userData.xriftRuntimeMaxDistance = component.maxDistance;
+      }
       return instance;
     }
     if (component.type === "animation") return null;
+    // Wind is consumed by the R3F frame adapter. It is an
+    // Entity-scoped behavior component and does not create a standalone
+    // Three.js object or diagnostic marker.
+    if (component.type === "vegetation-wind") return null;
     if (component.type === "light") return createLight(component);
     if (component.type === "text") {
       const text = new Text();
@@ -489,11 +543,49 @@ export class XriftThreeLoader {
       return text;
     }
     if (
+      component.type === "xrift-component" &&
+      component.schemaId !== "xrift.spawn-point"
+    ) {
+      if (
+        isRuntimeOfficialWrapperComponent(component.schemaId) ||
+        isRuntimeOfficialLeafComponent(component.schemaId)
+      ) {
+        return null;
+      }
+      if (component.schemaId === "xrift.skybox") {
+        return createRuntimeSkyboxComponent(component);
+      }
+      if (component.schemaId === "xrift.mirror") {
+        return createRuntimeMirrorComponent(component);
+      }
+      if (component.schemaId === "xrift.billboard-y") {
+        return createRuntimeBillboardComponent(component);
+      }
+    }
+    if (isRuntimeSpawnPointComponent(component)) {
+      const marker = new Group();
+      const properties = component.properties;
+      const position = asNumberArray(properties.position, 3) ?? [0, 0, 0];
+      const yaw =
+        typeof properties.yaw === "number" && Number.isFinite(properties.yaw)
+          ? properties.yaw
+          : 0;
+      marker.name = `spawn-point:${component.id}`;
+      marker.position.fromArray(position);
+      marker.rotation.y = (yaw * Math.PI) / 180;
+      marker.userData.xriftStudioComponentId = component.id;
+      marker.userData.xriftStudioComponent = component;
+      marker.userData.xriftRuntimeSpawnPoint = true;
+      return marker;
+    }
+    if (
       component.type === "spawn-point" ||
       component.type === "collider" ||
       component.type === "rigid-body"
     ) {
       const marker = new Group();
+      marker.name = `${component.type}:${component.id}`;
+      marker.userData.xriftStudioComponentId = component.id;
       marker.userData.xriftStudioComponent = component;
       return marker;
     }
@@ -506,6 +598,205 @@ export class XriftThreeLoader {
     });
     return null;
   }
+}
+
+const RUNTIME_OFFICIAL_SKYBOX_VERTEX_SHADER = `
+varying vec3 vWorldPosition;
+void main() {
+  vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+  vWorldPosition = worldPosition.xyz;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const RUNTIME_OFFICIAL_SKYBOX_FRAGMENT_SHADER = `
+uniform vec3 topColor;
+uniform vec3 bottomColor;
+uniform float offset;
+uniform float exponent;
+varying vec3 vWorldPosition;
+void main() {
+  float h = normalize(vWorldPosition + offset).y;
+  float t = max(pow(max(h, 0.0), max(exponent, 0.01)), 0.0);
+  gl_FragColor = vec4(mix(bottomColor, topColor, t), 1.0);
+}
+`;
+
+const RUNTIME_OFFICIAL_MIRROR_VERTEX_SHADER = `
+varying vec3 vWorldNormal;
+varying vec3 vWorldPosition;
+void main() {
+  vec4 worldPos = modelMatrix * vec4(position, 1.0);
+  vWorldPosition = worldPos.xyz;
+  vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const RUNTIME_OFFICIAL_MIRROR_FRAGMENT_SHADER = `
+uniform vec3 baseColor;
+uniform vec3 edgeColor;
+uniform float fresnelPower;
+varying vec3 vWorldNormal;
+varying vec3 vWorldPosition;
+void main() {
+  vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+  float fresnel = pow(1.0 - max(dot(viewDir, vWorldNormal), 0.0), fresnelPower);
+  vec3 color = mix(baseColor, edgeColor, fresnel);
+  gl_FragColor = vec4(color, 1.0);
+}
+`;
+
+function createRuntimeSkyboxComponent(
+  component: Extract<XriftRuntimeComponent, { type: "xrift-component" }>,
+): Object3D {
+  const properties = component.properties;
+  const topColor = colorNumberOr(properties.topColor, 0x87ceeb);
+  const bottomColor = colorNumberOr(properties.bottomColor, 0xffffff);
+  const offset = runtimeNumberOr(properties.offset, 0, -1000);
+  const exponent = runtimeNumberOr(properties.exponent, 1, 0.01);
+  const material = new ShaderMaterial({
+    vertexShader: RUNTIME_OFFICIAL_SKYBOX_VERTEX_SHADER,
+    fragmentShader: RUNTIME_OFFICIAL_SKYBOX_FRAGMENT_SHADER,
+    uniforms: {
+      topColor: { value: new Color(topColor) },
+      bottomColor: { value: new Color(bottomColor) },
+      offset: { value: offset },
+      exponent: { value: exponent },
+    },
+    side: BackSide,
+    depthWrite: false,
+  });
+  const mesh = new Mesh(new SphereGeometry(500, 32, 15), material);
+  mesh.name = `skybox:${component.id}`;
+  mesh.frustumCulled = false;
+  mesh.renderOrder = -1;
+  mesh.userData.xriftStudioComponentId = component.id;
+  mesh.userData.xriftRuntimeSkybox = true;
+  return mesh;
+}
+
+function createRuntimeMirrorComponent(
+  component: Extract<XriftRuntimeComponent, { type: "xrift-component" }>,
+): Object3D {
+  const properties = component.properties;
+  const size = asNumberArray(properties.size, 2) ?? [8, 5];
+  const color = colorNumberOr(properties.color, 0xcccccc);
+  const textureResolution = Math.max(
+    64,
+    Math.min(2048, Math.round(runtimeNumberOr(properties.textureResolution, 512, 1))),
+  );
+  const maxSize = Math.max(size[0] ?? 1, size[1] ?? 1, 0.001);
+  const textureWidth = Math.max(
+    1,
+    Math.round(((size[0] ?? 1) / maxSize) * textureResolution),
+  );
+  const textureHeight = Math.max(
+    1,
+    Math.round(((size[1] ?? 1) / maxSize) * textureResolution),
+  );
+  const reflector = new Reflector(new PlaneGeometry(size[0], size[1]), {
+    clipBias: 0.003,
+    textureWidth,
+    textureHeight,
+    color,
+    multisample: 0,
+  });
+  reflector.name = `mirror-reflector:${component.id}`;
+  reflector.userData.xriftStudioComponentId = component.id;
+  reflector.userData.xriftRuntimeMirror = reflector;
+  const fallback = new Mesh(
+    new PlaneGeometry(size[0], size[1]),
+    new ShaderMaterial({
+      vertexShader: RUNTIME_OFFICIAL_MIRROR_VERTEX_SHADER,
+      fragmentShader: RUNTIME_OFFICIAL_MIRROR_FRAGMENT_SHADER,
+      uniforms: {
+        baseColor: { value: new Color(color) },
+        edgeColor: { value: new Color(0xffffff) },
+        fresnelPower: { value: 3 },
+      },
+    }),
+  );
+  fallback.name = `mirror-fallback:${component.id}`;
+  fallback.visible = false;
+  fallback.userData.xriftRuntimeMirrorFallback = true;
+  const group = new Group();
+  group.name = `mirror:${component.id}`;
+  group.add(reflector, fallback);
+  group.userData.xriftStudioComponentId = component.id;
+  group.userData.xriftRuntimeMirror = reflector;
+  group.userData.xriftRuntimeMirrorFallback = fallback;
+  group.userData.xriftRuntimeMirrorLodDistance = runtimeNumberOr(
+    properties.lodDistance,
+    10,
+    0,
+  );
+  applyRuntimeComponentTransform(group, properties);
+  return group;
+}
+
+function createRuntimeBillboardComponent(
+  component: Extract<XriftRuntimeComponent, { type: "xrift-component" }>,
+): Object3D {
+  const group = new Group();
+  group.name = `billboard-y:${component.id}`;
+  group.userData.xriftStudioComponentId = component.id;
+  group.userData.xriftRuntimeBillboardY = true;
+  applyRuntimeComponentTransform(group, component.properties);
+  return group;
+}
+
+function applyRuntimeComponentTransform(
+  object: Object3D,
+  properties: Record<string, unknown>,
+): void {
+  const position = asNumberArray(properties.position, 3);
+  const rotation = asNumberArray(properties.rotation, 3);
+  if (position) object.position.fromArray(position);
+  if (rotation) object.rotation.fromArray(rotation as [number, number, number]);
+  if (typeof properties.scale === "number" && Number.isFinite(properties.scale)) {
+    object.scale.setScalar(properties.scale);
+  } else {
+    const scale = asNumberArray(properties.scale, 3);
+    if (scale) object.scale.fromArray(scale);
+  }
+}
+
+function colorNumberOr(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function runtimeNumberOr(value: unknown, fallback: number, minimum: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= minimum
+    ? value
+    : fallback;
+}
+
+function isRuntimeSpawnPointComponent(
+  component: XriftRuntimeComponent,
+): component is Extract<XriftRuntimeComponent, { type: "xrift-component" }> {
+  return component.type === "xrift-component" && component.schemaId === "xrift.spawn-point";
+}
+
+function isRuntimeOfficialWrapperComponent(schemaId: string): boolean {
+  return (
+    schemaId === "xrift.interactable" ||
+    schemaId === "xrift.grabbable" ||
+    schemaId === "xrift.text-input"
+  );
+}
+
+function isRuntimeOfficialLeafComponent(schemaId: string): boolean {
+  return (
+    schemaId === "xrift.video-screen" ||
+    schemaId === "xrift.video-player" ||
+    schemaId === "xrift.live-video-player" ||
+    schemaId === "xrift.video-180-sphere" ||
+    schemaId === "xrift.screen-share-display" ||
+    schemaId === "xrift.tag-board" ||
+    schemaId === "xrift.entry-log-board" ||
+    schemaId === "xrift.portal"
+  );
 }
 
 function createRuntimeClassicShaderMaterial(
@@ -617,7 +908,9 @@ export function disposeXriftLoadResult(result: XriftLoadResult): void {
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
   const textures = new Set<Texture>();
+  const reflectors = new Set<Reflector>();
   result.root.traverse((object) => {
+    if (object instanceof Reflector) reflectors.add(object);
     if (!(object instanceof Mesh)) return;
     geometries.add(object.geometry);
     const entries = Array.isArray(object.material) ? object.material : [object.material];
@@ -628,9 +921,11 @@ export function disposeXriftLoadResult(result: XriftLoadResult): void {
       }
     }
   });
+  for (const texture of result.textures.values()) textures.add(texture);
   for (const geometry of geometries) geometry.dispose();
   for (const material of materials) material.dispose();
   for (const texture of textures) texture.dispose();
+  for (const reflector of reflectors) reflector.dispose();
 }
 
 function createPrimitiveGeometry(

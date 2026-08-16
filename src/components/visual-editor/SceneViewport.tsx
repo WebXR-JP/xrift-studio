@@ -48,6 +48,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  ACESFilmicToneMapping,
   BackSide,
   Box3,
   BoxGeometry,
@@ -57,18 +58,22 @@ import {
   EquirectangularReflectionMapping,
   Euler,
   Float32BufferAttribute,
+  HalfFloatType,
   MathUtils,
+  NoToneMapping,
   OrthographicCamera,
   Plane,
   PerspectiveCamera,
   Quaternion,
   Raycaster,
+  RGBAFormat,
   SRGBColorSpace,
   Sphere,
   SphereGeometry,
   TextureLoader,
   Vector2,
   Vector3,
+  WebGLRenderTarget,
   type Group,
   type Material,
   type Mesh,
@@ -78,6 +83,10 @@ import {
 } from "three";
 import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
 import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { SSAOPass } from "three/examples/jsm/postprocessing/SSAOPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import {
   BUILTIN_PRIMITIVE_CREATION_CATALOG,
   getBuiltinPrefabRecipe,
@@ -114,6 +123,7 @@ import {
   type SceneDocument,
   type SceneEntity,
   type SceneSettings,
+  type VegetationWindComponent,
   type TerrainGeometry,
   type TerrainViewportEditing,
   type SkyboxAsset,
@@ -127,6 +137,14 @@ import { tauri } from "../../lib/tauri";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { ParticleEmitterVisual } from "./ParticleEmitterVisual";
 import { SceneThumbnailCapture } from "./SceneThumbnailCapture";
+import {
+  ScenePerformanceProbe,
+  SceneVideoCapture,
+  formatDebugNumber,
+  type SceneDebugCaptureRequest,
+  type SceneDebugCaptureResult,
+  type ScenePerformanceMetrics,
+} from "./SceneDebugCapture";
 import {
   SceneScreenshotCapture,
   type SceneScreenshotRequest,
@@ -196,6 +214,21 @@ const WORLD_PLAY_CAMERA_EYE_HEIGHT = 1.6;
 const WORLD_PLAY_CAMERA_SPEED = 4.5;
 const WORLD_PLAY_CAMERA_LOOK_SENSITIVITY = 0.0025;
 const WORLD_PLAY_CAMERA_MAX_PITCH = Math.PI / 2 - 0.08;
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        reject(new Error("デバッグ動画を読み込めませんでした。"));
+        return;
+      }
+      resolve(reader.result.replace(/^data:[^,]+,/, "data:video/webm;base64,"));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("デバッグ動画を読み込めませんでした。"));
+    reader.readAsDataURL(blob);
+  });
+}
 
 type WorldPlayCameraInput = {
   pointerId: number | null;
@@ -304,6 +337,29 @@ function PrimitiveGeometryView({ primitive }: { primitive: PrimitiveGeometry }) 
 
 const KHR_INTERACTIVITY_ON_START_ANIMATION_INDICES = [0] as const;
 
+/** Keeps Editor Preview in lockstep with the published Mesh maxDistance contract. */
+function RenderDistanceGate({
+  maxDistance,
+  children,
+}: {
+  maxDistance?: number;
+  children: ReactNode;
+}) {
+  const ref = useRef<Group | null>(null);
+  const worldPosition = useMemo(() => new Vector3(), []);
+  useFrame(({ camera }) => {
+    const group = ref.current;
+    if (!group) return;
+    if (maxDistance === undefined || !Number.isFinite(maxDistance)) {
+      group.visible = true;
+      return;
+    }
+    group.getWorldPosition(worldPosition);
+    group.visible = camera.position.distanceTo(worldPosition) <= maxDistance;
+  });
+  return <group ref={ref}>{children}</group>;
+}
+
 function MeshVisual({
   component,
   animation,
@@ -395,57 +451,61 @@ function MeshVisual({
 
   if (projectModelSource && projectPath && geometry?.kind === "model") {
     return (
-      <ProjectModelVisual
-        projectPath={projectPath}
-        sourceRelativePath={projectModelSource}
-        sourceHash={geometry.sourceHash}
-        importScale={geometry.importSettings.scale}
-        castShadow={component.castShadow}
-        receiveShadow={component.receiveShadow}
-        selected={selected || materialDropHighlighted}
-        assets={assets}
-        assignedMaterials={assignedModelMaterials}
-        pose={component.modelPose}
-        animation={animation}
-        playing={playing}
-        declaredInteractionAnimationIndices={
-          geometry.id === STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID &&
-          geometry.importMetadata?.extensionsUsed.includes("KHR_interactivity")
-            ? KHR_INTERACTIVITY_ON_START_ANIMATION_INDICES
-            : undefined
-        }
-        sourceNodeIndex={
-          component.geometry?.kind === "asset"
-            ? component.geometry.sourceNodeIndex
-            : undefined
-        }
-        sourceNodeName={
-          component.geometry?.kind === "asset"
-            ? component.geometry.sourceNodeName
-            : undefined
-        }
-        viewportMaterialStyle={viewportMaterialStyle}
-      />
+      <RenderDistanceGate maxDistance={component.maxDistance}>
+        <ProjectModelVisual
+          projectPath={projectPath}
+          sourceRelativePath={projectModelSource}
+          sourceHash={geometry.sourceHash}
+          importScale={geometry.importSettings.scale}
+          castShadow={component.castShadow}
+          receiveShadow={component.receiveShadow}
+          selected={selected || materialDropHighlighted}
+          assets={assets}
+          assignedMaterials={assignedModelMaterials}
+          pose={component.modelPose}
+          animation={animation}
+          playing={playing}
+          declaredInteractionAnimationIndices={
+            geometry.id === STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID &&
+            geometry.importMetadata?.extensionsUsed.includes("KHR_interactivity")
+              ? KHR_INTERACTIVITY_ON_START_ANIMATION_INDICES
+              : undefined
+          }
+          sourceNodeIndex={
+            component.geometry?.kind === "asset"
+              ? component.geometry.sourceNodeIndex
+              : undefined
+          }
+          sourceNodeName={
+            component.geometry?.kind === "asset"
+              ? component.geometry.sourceNodeName
+              : undefined
+          }
+          viewportMaterialStyle={viewportMaterialStyle}
+        />
+      </RenderDistanceGate>
     );
   }
 
   if (terrain) {
     const materialAssetId = getPrimaryMaterialAssetId(component);
     return (
-      <TerrainMeshVisual
-        component={component}
-        terrain={terrain}
-        material={
-          materialAssetId
-            ? getMaterialAsset(assets, materialAssetId)
-            : undefined
-        }
-        assets={assets}
-        projectPath={projectPath}
-        selected={selected}
-        materialDropHighlighted={materialDropHighlighted}
-        viewportMaterialStyle={viewportMaterialStyle}
-      />
+      <RenderDistanceGate maxDistance={component.maxDistance}>
+        <TerrainMeshVisual
+          component={component}
+          terrain={terrain}
+          material={
+            materialAssetId
+              ? getMaterialAsset(assets, materialAssetId)
+              : undefined
+          }
+          assets={assets}
+          projectPath={projectPath}
+          selected={selected}
+          materialDropHighlighted={materialDropHighlighted}
+          viewportMaterialStyle={viewportMaterialStyle}
+        />
+      </RenderDistanceGate>
     );
   }
 
@@ -455,33 +515,37 @@ function MeshVisual({
       ? getMaterialAsset(assets, materialAssetId)
       : undefined;
     return (
-      <PrimitiveMeshVisual
-        component={component}
-        primitive={primitive}
-        material={material}
-        assets={assets}
-        projectPath={projectPath}
-        selected={selected}
-        materialDropHighlighted={materialDropHighlighted}
-        viewportMaterialStyle={viewportMaterialStyle}
-      />
+      <RenderDistanceGate maxDistance={component.maxDistance}>
+        <PrimitiveMeshVisual
+          component={component}
+          primitive={primitive}
+          material={material}
+          assets={assets}
+          projectPath={projectPath}
+          selected={selected}
+          materialDropHighlighted={materialDropHighlighted}
+          viewportMaterialStyle={viewportMaterialStyle}
+        />
+      </RenderDistanceGate>
     );
   }
 
   return (
-    <mesh castShadow={false} receiveShadow={false}>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshBasicMaterial
-        color={geometry?.kind === "model" ? "#71717a" : "#fb7185"}
-        wireframe
-      />
-      {selected || materialDropHighlighted ? (
-        <Edges
-          color={materialDropHighlighted ? "#38bdf8" : EDITOR_SELECTION_COLOR}
-          scale={1.02}
+    <RenderDistanceGate maxDistance={component.maxDistance}>
+      <mesh castShadow={false} receiveShadow={false}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshBasicMaterial
+          color={geometry?.kind === "model" ? "#71717a" : "#fb7185"}
+          wireframe
         />
-      ) : null}
-    </mesh>
+        {selected || materialDropHighlighted ? (
+          <Edges
+            color={materialDropHighlighted ? "#38bdf8" : EDITOR_SELECTION_COLOR}
+            scale={1.02}
+          />
+        ) : null}
+      </mesh>
+    </RenderDistanceGate>
   );
 }
 
@@ -2714,6 +2778,169 @@ function ProjectedSkyboxPreview({
   );
 }
 
+function ScenePostprocessing({
+  settings,
+}: {
+  settings: SceneSettings["postprocessing"];
+}) {
+  const { camera, gl, scene, size } = useThree();
+  const hdrEnabled = settings.hdr.enabled;
+  const pipeline = useMemo(() => {
+    const renderTarget = hdrEnabled
+      ? new WebGLRenderTarget(size.width, size.height, {
+          type: HalfFloatType,
+          format: RGBAFormat,
+          depthBuffer: true,
+          stencilBuffer: false,
+        })
+      : undefined;
+    const composer = new EffectComposer(gl, renderTarget);
+    const renderPass = new RenderPass(scene, camera);
+    const aoPass = new SSAOPass(scene, camera, size.width, size.height);
+    const bloomPass = new UnrealBloomPass(
+      new Vector2(size.width, size.height),
+      settings.bloom.strength,
+      settings.bloom.radius,
+      settings.bloom.threshold,
+    );
+    composer.addPass(renderPass);
+    composer.addPass(aoPass);
+    composer.addPass(bloomPass);
+    return { composer, aoPass, bloomPass };
+  }, [camera, gl, hdrEnabled, scene]);
+
+  useEffect(() => {
+    pipeline.composer.setSize(size.width, size.height);
+  }, [pipeline, size.height, size.width]);
+
+  useEffect(() => {
+    const previousToneMapping = gl.toneMapping;
+    const previousExposure = gl.toneMappingExposure;
+    const previousOutputColorSpace = gl.outputColorSpace;
+    gl.outputColorSpace = SRGBColorSpace;
+    gl.toneMapping = settings.hdr.toneMapping === "none"
+      ? NoToneMapping
+      : ACESFilmicToneMapping;
+    gl.toneMappingExposure = settings.exposure;
+    return () => {
+      gl.toneMapping = previousToneMapping;
+      gl.toneMappingExposure = previousExposure;
+      gl.outputColorSpace = previousOutputColorSpace;
+    };
+  }, [gl, settings.exposure, settings.hdr.toneMapping]);
+
+  useEffect(() => {
+    pipeline.bloomPass.enabled = settings.enabled && settings.bloom.enabled;
+    pipeline.bloomPass.threshold = settings.bloom.threshold;
+    pipeline.bloomPass.strength = settings.bloom.strength;
+    pipeline.bloomPass.radius = settings.bloom.radius;
+    pipeline.aoPass.enabled = settings.enabled && settings.ao.enabled;
+    pipeline.aoPass.kernelRadius = settings.ao.radius;
+    pipeline.aoPass.minDistance = settings.ao.minDistance;
+    pipeline.aoPass.maxDistance = Math.max(
+      settings.ao.maxDistance,
+      settings.ao.minDistance + 0.001,
+    );
+  }, [pipeline, settings]);
+
+  useEffect(
+    () => () => {
+      pipeline.composer.dispose();
+    },
+    [pipeline],
+  );
+
+  useFrame(() => {
+    if (settings.enabled) {
+      pipeline.composer.render();
+    } else {
+      // A positive-priority frame callback takes over R3F's default render
+      // loop. Keep the viewport live when postprocessing is disabled instead
+      // of leaving the last composited frame on screen.
+      gl.render(scene, camera);
+    }
+  }, 1);
+  return null;
+}
+
+type EditorVegetationTarget = {
+  object: Object3D;
+  position: Vector3;
+  rotation: Euler;
+  phase: number;
+  componentEnabled: boolean;
+};
+
+function SceneWind({
+  sceneDocument,
+  settings,
+}: {
+  sceneDocument: SceneDocument;
+  settings: SceneSettings["vegetation"];
+}) {
+  const { scene } = useThree();
+  const [targets, setTargets] = useState<EditorVegetationTarget[]>([]);
+
+  useLayoutEffect(() => {
+    const found: EditorVegetationTarget[] = [];
+    const seen = new Set<Object3D>();
+    scene.traverse((root) => {
+      const entityId = root.userData.renderedEntityId;
+      if (typeof entityId !== "string") return;
+      const entity = sceneDocument.entities[entityId];
+      if (!entity) return;
+      const component = entity.components.find(
+        (candidate): candidate is VegetationWindComponent =>
+          candidate.type === "vegetation-wind",
+      );
+      if (!component) return;
+      root.traverse((object) => {
+        if (!(object as Mesh).isMesh || seen.has(object)) return;
+        seen.add(object);
+        const position = object.position.clone();
+        const rotation = object.rotation.clone();
+        let phase = 0;
+        for (const character of `${entity.id}:${object.uuid}`) {
+          phase = (phase * 31 + character.charCodeAt(0)) % 628;
+        }
+        found.push({
+          object,
+          position,
+          rotation,
+          phase: phase / 100,
+          componentEnabled: component.enabled,
+        });
+      });
+    });
+    // EntityHierarchy is a sibling rendered below this behavior component.
+    // Collect after commit so the initial Scene graph is already mounted.
+    setTargets(found);
+  }, [scene, sceneDocument]);
+
+  useFrame((state) => {
+    if (!settings.enabled || targets.length === 0) return;
+    const elapsed = state.clock.getElapsedTime();
+    for (const target of targets) {
+      if (!target.componentEnabled) continue;
+      const wave =
+        Math.sin(elapsed * settings.windSpeed + target.phase) * 0.7 +
+        Math.sin(
+          elapsed * settings.windSpeed * 0.37 + target.phase * 1.7,
+        ) * settings.gustStrength;
+      target.object.position.copy(target.position);
+      target.object.position.x += wave * settings.windStrength * 0.03;
+      target.object.position.y +=
+        Math.cos(elapsed * settings.windSpeed * 0.63 + target.phase) *
+        settings.windStrength *
+        0.01;
+      target.object.rotation.copy(target.rotation);
+      target.object.rotation.z += wave * settings.windStrength * 0.35;
+      target.object.rotation.x += wave * settings.windStrength * 0.16;
+    }
+  });
+  return null;
+}
+
 function SceneSkyboxPreview({
   settings,
   assets,
@@ -2801,6 +3028,8 @@ export function SceneViewport({
   onThumbnailCaptureError,
   screenshotRequest = null,
   onScreenshotComplete,
+  debugCaptureRequest = null,
+  onDebugCaptureResult,
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
@@ -2867,6 +3096,9 @@ export function SceneViewport({
   /** MCP or Quick Prompt screenshot capture request. */
   screenshotRequest?: SceneScreenshotRequest | null;
   onScreenshotComplete?: () => void;
+  /** MCP-driven metrics / bounded WebM capture request. */
+  debugCaptureRequest?: SceneDebugCaptureRequest | null;
+  onDebugCaptureResult?: (result: SceneDebugCaptureResult) => void;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const dropResolverRef = useRef<SceneDropResolver | null>(null);
@@ -2888,6 +3120,19 @@ export function SceneViewport({
   const [thumbnailCaptureActive, setThumbnailCaptureActive] = useState(false);
   const [displayMode, setDisplayMode] =
     useState<SceneViewportDisplayMode>("scene");
+  const [debugOverlayEnabled, setDebugOverlayEnabled] = useState(false);
+  const [debugMetrics, setDebugMetrics] =
+    useState<ScenePerformanceMetrics | null>(null);
+  const [videoRecording, setVideoRecording] = useState(false);
+  const [videoSaving, setVideoSaving] = useState(false);
+  const [debugNotice, setDebugNotice] = useState<string | null>(null);
+  const debugRequestIdRef = useRef(0);
+  const pendingMetricsRequestRef = useRef<number | null>(null);
+  const activeVideoRequestRef = useRef<SceneDebugCaptureRequest | null>(null);
+  const activeVideoAutoSaveRef = useRef(false);
+  const lastDebugVideoPathRef = useRef<string | null>(null);
+  const debugResultRef = useRef(onDebugCaptureResult);
+  debugResultRef.current = onDebugCaptureResult;
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [transformDragging, setTransformDragging] = useState(false);
   const transformDraggingRef = useRef(false);
@@ -2925,7 +3170,7 @@ export function SceneViewport({
   const displayProfile = useMemo(
     () => {
       const profile = getSceneViewportDisplayProfile(renderDisplayMode);
-      return thumbnailCaptureActive
+      return thumbnailCaptureActive || editorMode === "play"
         ? {
             ...profile,
             showHelpers: false,
@@ -2992,6 +3237,166 @@ export function SceneViewport({
     },
     [onThumbnailCaptureError],
   );
+
+  const handleVideoCaptured = useCallback(async (blob: Blob) => {
+    const activeRequest = activeVideoRequestRef.current;
+    activeVideoRequestRef.current = null;
+    setVideoRecording(false);
+    setVideoSaving(true);
+    try {
+      const dataUrl = await blobToDataUrl(blob);
+      if (activeRequest?.autoSave) {
+        const path = await tauri.saveDebugVideo(dataUrl, "scene-view");
+        lastDebugVideoPathRef.current = path;
+        setDebugNotice(`診断動画を保存しました: ${path}`);
+        debugResultRef.current?.({
+          requestId: activeRequest.id,
+          action: "stop",
+          status: "saved",
+          path,
+          durationMs: activeRequest.durationMs,
+        });
+      } else if (tauri.isAvailable()) {
+        const path = await tauri.saveVideo(dataUrl);
+        setDebugNotice(path ? `診断動画を保存しました: ${path}` : "診断動画の保存をキャンセルしました");
+      } else {
+        const link = document.createElement("a");
+        link.href = dataUrl;
+        link.download = "xrift-studio-debug.webm";
+        link.click();
+        setDebugNotice("診断動画をダウンロードしました");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "診断動画を保存できませんでした。";
+      setDebugNotice(message);
+      if (activeRequest) {
+        debugResultRef.current?.({
+          requestId: activeRequest.id,
+          action: "stop",
+          status: "error",
+          message,
+        });
+      }
+    } finally {
+      setVideoSaving(false);
+    }
+  }, []);
+
+  const handleVideoCaptureError = useCallback((message: string) => {
+    const activeRequest = activeVideoRequestRef.current;
+    activeVideoRequestRef.current = null;
+    setVideoRecording(false);
+    setVideoSaving(false);
+    setDebugNotice(message);
+    if (activeRequest) {
+      debugResultRef.current?.({
+        requestId: activeRequest.id,
+        action: activeRequest.action,
+        status: "error",
+        message,
+      });
+    }
+  }, []);
+
+  const toggleVideoRecording = useCallback(() => {
+    if (videoSaving) return;
+    if (videoRecording) {
+      setVideoRecording(false);
+      setDebugNotice("診断動画を保存中…");
+      return;
+    }
+    setDebugOverlayEnabled(true);
+    setVideoRecording(true);
+    setDebugNotice("診断動画を録画中… 最大15秒");
+  }, [videoRecording, videoSaving]);
+
+  const handleVideoAutoStop = useCallback(() => {
+    setVideoRecording(false);
+    setDebugNotice("15秒の診断動画を保存中…");
+  }, []);
+
+  const handleDebugMetrics = useCallback((metrics: ScenePerformanceMetrics) => {
+    setDebugMetrics(metrics);
+    const requestId = pendingMetricsRequestRef.current;
+    if (requestId === null) return;
+    pendingMetricsRequestRef.current = null;
+    debugResultRef.current?.({
+      requestId,
+      action: "metrics",
+      status: "ready",
+      metrics,
+    });
+  }, []);
+
+  const appliedDebugCaptureRequestId = debugCaptureRequest?.id ?? 0;
+  useEffect(() => {
+    const request = debugCaptureRequest;
+    if (!request || request.id <= debugRequestIdRef.current) return;
+    debugRequestIdRef.current = request.id;
+    if (request.action === "metrics") {
+      setDebugOverlayEnabled(true);
+      if (debugMetrics) {
+        debugResultRef.current?.({
+          requestId: request.id,
+          action: "metrics",
+          status: "ready",
+          metrics: debugMetrics,
+        });
+      } else {
+        pendingMetricsRequestRef.current = request.id;
+      }
+      return;
+    }
+    if (request.action === "start") {
+      if (videoRecording || videoSaving) {
+        debugResultRef.current?.({
+          requestId: request.id,
+          action: "start",
+          status: "error",
+          message: "別の診断動画を保存中です。完了後に再試行してください。",
+        });
+        return;
+      }
+      activeVideoRequestRef.current = request;
+      activeVideoAutoSaveRef.current = request.autoSave === true;
+      lastDebugVideoPathRef.current = null;
+      setDebugOverlayEnabled(true);
+      setVideoRecording(true);
+      setDebugNotice(`診断動画を録画中… 最大${Math.round((request.durationMs ?? 15_000) / 1000)}秒`);
+      debugResultRef.current?.({
+        requestId: request.id,
+        action: "start",
+        status: "recording",
+        durationMs: request.durationMs ?? 15_000,
+      });
+      return;
+    }
+    if (!videoRecording) {
+      if (lastDebugVideoPathRef.current) {
+        debugResultRef.current?.({
+          requestId: request.id,
+          action: "stop",
+          status: "saved",
+          path: lastDebugVideoPathRef.current,
+        });
+        return;
+      }
+      debugResultRef.current?.({
+        requestId: request.id,
+        action: "stop",
+        status: "error",
+        message: "録画中のScene Viewがありません。",
+      });
+      return;
+    }
+    activeVideoRequestRef.current = {
+      ...request,
+      durationMs: activeVideoRequestRef.current?.durationMs ?? 15_000,
+      autoSave: activeVideoAutoSaveRef.current,
+    };
+    setVideoRecording(false);
+    setDebugNotice("診断動画を保存中…");
+  }, [appliedDebugCaptureRequestId, debugCaptureRequest, debugMetrics, videoRecording, videoSaving]);
 
   useEffect(() => {
     if (editorMode === "play") setProjection("perspective");
@@ -3627,6 +4032,42 @@ export function SceneViewport({
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            aria-label="Scene View診断表示"
+            aria-pressed={debugOverlayEnabled}
+            onClick={() => setDebugOverlayEnabled((enabled) => !enabled)}
+            title="FPS、描画負荷、カメラ距離を表示"
+            className={`flex h-7 items-center gap-1 rounded border px-2 text-[11px] font-semibold transition-colors ${
+              debugOverlayEnabled
+                ? editorMode === "play"
+                  ? "border-cyan-300/70 bg-cyan-400/15 text-cyan-100"
+                  : "border-cyan-400 bg-cyan-50 text-cyan-700"
+                : editorMode === "play"
+                  ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
+                  : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
+            }`}
+          >
+            <EDITOR_ICONS.diagnostics size={13} aria-hidden="true" />
+            診断
+          </button>
+          <button
+            type="button"
+            aria-label={videoRecording ? "診断動画を停止" : "診断動画を録画"}
+            onClick={toggleVideoRecording}
+            disabled={videoSaving}
+            title={videoRecording ? "診断動画を停止して保存" : "Scene Viewを最大15秒録画"}
+            className={`flex h-7 items-center gap-1 rounded border px-2 text-[11px] font-semibold transition-colors disabled:cursor-wait disabled:opacity-50 ${
+              videoRecording
+                ? "border-rose-300 bg-rose-500/15 text-rose-700 hover:bg-rose-500/25"
+                : editorMode === "play"
+                  ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
+                  : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
+            }`}
+          >
+            <EDITOR_ICONS.record size={13} aria-hidden="true" />
+            {videoSaving ? "保存中" : videoRecording ? "停止" : "録画"}
+          </button>
           {editorMode === "play" ? (
             <span className="hidden truncate text-xs text-zinc-400 xl:inline">
               {profileLabel}
@@ -3711,6 +4152,11 @@ export function SceneViewport({
               shadow-mapSize-height={1024}
             />
           ) : null}
+          <ScenePostprocessing settings={sceneSettings.postprocessing} />
+          <SceneWind
+            sceneDocument={preview.scene}
+            settings={sceneSettings.vegetation}
+          />
           {sceneSettings.editor.gizmo.gridVisible && !thumbnailCaptureActive ? (
             <gridHelper
               args={[
@@ -3735,6 +4181,18 @@ export function SceneViewport({
           <SceneScreenshotCapture
             request={screenshotRequest}
             onComplete={() => onScreenshotComplete?.()}
+          />
+
+          <ScenePerformanceProbe
+            enabled={debugOverlayEnabled || videoRecording}
+            onSample={handleDebugMetrics}
+          />
+          <SceneVideoCapture
+            recording={videoRecording}
+            maxDurationMs={activeVideoRequestRef.current?.durationMs ?? 15_000}
+            onComplete={handleVideoCaptured}
+            onError={handleVideoCaptureError}
+            onAutoStop={handleVideoAutoStop}
           />
 
           <OfficialXriftPreviewProvider
@@ -3817,6 +4275,31 @@ export function SceneViewport({
             onFocusChange={onFocusChange}
           />
         </Canvas>
+
+        {debugOverlayEnabled && debugMetrics && !thumbnailCaptureActive ? (
+          <div
+            className="pointer-events-none absolute right-2.5 top-2.5 z-20 w-[min(18rem,calc(100%-1.25rem))] rounded-md border border-cyan-300/60 bg-slate-950/90 px-3 py-2.5 font-mono text-[10px] leading-4 text-cyan-50 shadow-lg backdrop-blur"
+            role="status"
+            aria-live="polite"
+            aria-label="Scene View診断メトリクス"
+          >
+            <div className="flex items-center justify-between gap-2 font-sans text-[11px] font-semibold">
+              <span>Scene View診断</span>
+              <span className="text-cyan-200">{videoRecording ? "REC" : "LIVE"}</span>
+            </div>
+            <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-cyan-100/90">
+              <span>FPS {formatDebugNumber(debugMetrics.fps, 1)}</span>
+              <span>Frame {formatDebugNumber(debugMetrics.frameTimeMs, 1)}ms</span>
+              <span>Draw {formatDebugNumber(debugMetrics.drawCalls)}</span>
+              <span>Tris {formatDebugNumber(debugMetrics.triangles)}</span>
+              <span>Mesh {formatDebugNumber(debugMetrics.visibleMeshes)} / {formatDebugNumber(debugMetrics.totalMeshes)}</span>
+              <span>Geo {formatDebugNumber(debugMetrics.geometries)} · Tex {formatDebugNumber(debugMetrics.textures)}</span>
+            </div>
+            <div className="mt-1 border-t border-cyan-200/20 pt-1 text-cyan-200/80">
+              Camera {debugMetrics.cameraPosition.map((value) => formatDebugNumber(value, 1)).join(", ")} · Far {formatDebugNumber(debugMetrics.cameraFar, 0)}m
+            </div>
+          </div>
+        ) : null}
 
         {effectiveDisplayMode === "colliders" && !thumbnailCaptureActive ? (
           <div
@@ -3973,13 +4456,13 @@ export function SceneViewport({
           </div>
         ) : null}
 
-        {notice ? (
+        {notice ?? debugNotice ? (
           <div
             className="pointer-events-none absolute bottom-2.5 left-1/2 z-10 max-w-[84%] -translate-x-1/2 rounded-md border border-zinc-700 bg-zinc-950/90 px-3 py-1.5 text-xs leading-4 text-zinc-100 shadow-lg"
             role="status"
             aria-live="polite"
           >
-            {notice}
+            {notice ?? debugNotice}
           </div>
         ) : null}
       </div>

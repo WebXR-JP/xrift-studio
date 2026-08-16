@@ -193,7 +193,9 @@ try {
   const worldSource = await readFile(path.join(classicRoot, "src", "World.tsx"), "utf8");
   assert(
     worldSource.includes("xrift-studio-runtime/react-three-fiber") &&
-      worldSource.includes('/xrift/runtime.json'),
+      worldSource.includes('/xrift/runtime.json') &&
+      worldSource.includes("export interface WorldProps") &&
+      worldSource.includes("<group position={position} scale={scale}>"),
     "Classic adapter is not using xrift-studio-runtime",
   );
   const packageJson = JSON.parse(

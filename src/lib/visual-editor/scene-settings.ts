@@ -48,6 +48,38 @@ export type SceneCameraSettings = {
   fov: number;
 };
 
+/** Scene-wide post effects shared by the editor and published output. */
+export type ScenePostprocessingSettings = {
+  enabled: boolean;
+  /** Use a half-float compositor target and ACES tone mapping for HDR values. */
+  hdr: {
+    enabled: boolean;
+    toneMapping: "aces" | "none";
+  };
+  bloom: {
+    enabled: boolean;
+    threshold: number;
+    strength: number;
+    radius: number;
+  };
+  /** Screen-space ambient occlusion, applied before bloom. */
+  ao: {
+    enabled: boolean;
+    radius: number;
+    minDistance: number;
+    maxDistance: number;
+  };
+  exposure: number;
+};
+
+/** Global wind settings applied to Entities with a Wind component. */
+export type SceneVegetationSettings = {
+  enabled: boolean;
+  windStrength: number;
+  windSpeed: number;
+  gustStrength: number;
+};
+
 /**
  * Player physics for the published world.
  *
@@ -78,6 +110,8 @@ export type SceneSettings = {
   fog: SceneFogSettings;
   ambient: SceneAmbientSettings;
   camera: SceneCameraSettings;
+  postprocessing: ScenePostprocessingSettings;
+  vegetation: SceneVegetationSettings;
   physics: ScenePhysicsSettings;
   editor: {
     backgroundColor: string;
@@ -117,6 +151,35 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
     near: 0.1,
     far: 2000,
     fov: 46,
+  },
+  postprocessing: {
+    enabled: true,
+    hdr: {
+      enabled: true,
+      toneMapping: "aces",
+    },
+    bloom: {
+      enabled: true,
+      // Imported assets can carry emissive values far above one. A
+      // conservative threshold prevents a single texture from washing out
+      // the entire frame while still giving authored lights a readable halo.
+      threshold: 8,
+      strength: 0.12,
+      radius: 0.18,
+    },
+    ao: {
+      enabled: true,
+      radius: 8,
+      minDistance: 0.005,
+      maxDistance: 0.1,
+    },
+    exposure: 0.85,
+  },
+  vegetation: {
+    enabled: true,
+    windStrength: 0.08,
+    windSpeed: 0.8,
+    gustStrength: 0.35,
   },
   // Matches the values XRift's own world template ships with, so a Studio
   // world behaves like a hand-written one until the author changes them.
@@ -202,6 +265,13 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
   const fog = isRecord(settings.fog) ? settings.fog : {};
   const ambient = isRecord(settings.ambient) ? settings.ambient : {};
   const camera = isRecord(settings.camera) ? settings.camera : {};
+  const postprocessing = isRecord(settings.postprocessing)
+    ? settings.postprocessing
+    : {};
+  const hdr = isRecord(postprocessing.hdr) ? postprocessing.hdr : {};
+  const bloom = isRecord(postprocessing.bloom) ? postprocessing.bloom : {};
+  const ao = isRecord(postprocessing.ao) ? postprocessing.ao : {};
+  const vegetation = isRecord(settings.vegetation) ? settings.vegetation : {};
   const editor = isRecord(settings.editor) ? settings.editor : {};
   const gizmo = isRecord(editor.gizmo) ? editor.gizmo : {};
   const resolvedSkyboxImageAssetId =
@@ -301,6 +371,97 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
       near: Math.min(normalizedCameraNear, resolvedCameraFar - 0.0001),
       far: resolvedCameraFar,
       fov: finiteOr(camera.fov, DEFAULT_SCENE_SETTINGS.camera.fov, 1),
+    },
+    postprocessing: {
+      enabled: booleanOr(
+        postprocessing.enabled,
+        DEFAULT_SCENE_SETTINGS.postprocessing.enabled,
+      ),
+      hdr: {
+        enabled: booleanOr(
+          hdr.enabled,
+          DEFAULT_SCENE_SETTINGS.postprocessing.hdr.enabled,
+        ),
+        toneMapping:
+          hdr.toneMapping === "none" || hdr.toneMapping === "aces"
+            ? hdr.toneMapping
+            : DEFAULT_SCENE_SETTINGS.postprocessing.hdr.toneMapping,
+      },
+      bloom: {
+        enabled: booleanOr(
+          bloom.enabled,
+          DEFAULT_SCENE_SETTINGS.postprocessing.bloom.enabled,
+        ),
+        threshold: finiteOr(
+          bloom.threshold,
+          DEFAULT_SCENE_SETTINGS.postprocessing.bloom.threshold,
+          0,
+        ),
+        strength: finiteOr(
+          bloom.strength,
+          DEFAULT_SCENE_SETTINGS.postprocessing.bloom.strength,
+          0,
+        ),
+        radius: finiteOr(
+          bloom.radius,
+          DEFAULT_SCENE_SETTINGS.postprocessing.bloom.radius,
+          0,
+        ),
+      },
+      ao: {
+        enabled: booleanOr(
+          ao.enabled,
+          DEFAULT_SCENE_SETTINGS.postprocessing.ao.enabled,
+        ),
+        radius: finiteOr(
+          ao.radius,
+          DEFAULT_SCENE_SETTINGS.postprocessing.ao.radius,
+          0.1,
+        ),
+        minDistance: finiteOr(
+          ao.minDistance,
+          DEFAULT_SCENE_SETTINGS.postprocessing.ao.minDistance,
+          0,
+        ),
+        maxDistance: Math.max(
+          finiteOr(
+            ao.maxDistance,
+            DEFAULT_SCENE_SETTINGS.postprocessing.ao.maxDistance,
+            0.001,
+          ),
+          finiteOr(
+            ao.minDistance,
+            DEFAULT_SCENE_SETTINGS.postprocessing.ao.minDistance,
+            0,
+          ) + 0.001,
+        ),
+      },
+      exposure: finiteOr(
+        postprocessing.exposure,
+        DEFAULT_SCENE_SETTINGS.postprocessing.exposure,
+        0,
+      ),
+    },
+    vegetation: {
+      enabled: booleanOr(
+        vegetation.enabled,
+        DEFAULT_SCENE_SETTINGS.vegetation.enabled,
+      ),
+      windStrength: finiteOr(
+        vegetation.windStrength,
+        DEFAULT_SCENE_SETTINGS.vegetation.windStrength,
+        0,
+      ),
+      windSpeed: finiteOr(
+        vegetation.windSpeed,
+        DEFAULT_SCENE_SETTINGS.vegetation.windSpeed,
+        0,
+      ),
+      gustStrength: finiteOr(
+        vegetation.gustStrength,
+        DEFAULT_SCENE_SETTINGS.vegetation.gustStrength,
+        0,
+      ),
     },
     physics: {
       // Clamped at 0 rather than a positive minimum: zero gravity is a valid

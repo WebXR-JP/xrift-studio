@@ -65,6 +65,8 @@ import {
   type TextComponent,
   type TextPatch,
   type TransformPatch,
+  type VegetationWindComponent,
+  type VegetationWindPatch,
   type UpdateXriftComponentPatch,
   type Vec3,
   type VisualProjectKind,
@@ -97,9 +99,13 @@ import { MATERIAL_DRAG_MIME } from "./types";
 export type MeshInspectorPatch = Partial<
   Pick<
     MeshComponent,
-    "enabled" | "materialBindings" | "castShadow" | "receiveShadow" | "modelPose"
+    | "enabled"
+    | "materialBindings"
+    | "castShadow"
+    | "receiveShadow"
+    | "modelPose"
   >
->;
+> & { maxDistance?: number | null };
 
 export type ParticleEmitterInspectorPatch = Partial<
   Pick<ParticleEmitterComponent, "enabled" | "particleAssetId">
@@ -915,6 +921,51 @@ function MeshInspector({
       ) : null}
 
       <div className="space-y-2 border-t border-slate-100 pt-2">
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <label
+              htmlFor={`mesh-max-distance-${component.id}`}
+              className="text-xs font-medium text-slate-600"
+              title="このMeshをカメラから何メートルまで描画するか。未設定ならScene CameraのFarを使用します。"
+            >
+              描画距離 (Far Clip)
+            </label>
+            {component.maxDistance !== undefined ? (
+              <button
+                type="button"
+                disabled={readOnly}
+                onClick={() => onChange({ maxDistance: null })}
+                className="rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-45"
+                title="Mesh固有の描画距離を解除してScene CameraのFarへ戻す"
+              >
+                Scene Farへ戻す
+              </button>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              id={`mesh-max-distance-${component.id}`}
+              type="number"
+              min={0.1}
+              max={1_000_000}
+              step={1}
+              value={component.maxDistance ?? ""}
+              placeholder="Scene Farを使用"
+              disabled={readOnly}
+              onChange={(event) => {
+                const raw = event.currentTarget.value;
+                onChange({
+                  maxDistance: raw === "" ? null : Number(raw),
+                });
+              }}
+              className="h-7 min-w-0 flex-1 rounded-sm border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+            />
+            <span className="text-[11px] text-slate-400">m</span>
+          </div>
+          <p className="text-[11px] leading-4 text-slate-500">
+            葉や遠景モデルの負荷を抑える任意設定です。Editor / Play / 公開先で同じ距離判定を使います。
+          </p>
+        </div>
         <ToggleRow
           label="Cast Shadows"
           checked={component.castShadow}
@@ -2603,6 +2654,33 @@ function AnimationInspector({
   );
 }
 
+function VegetationWindInspector({
+  component,
+  readOnly,
+  onChange,
+}: {
+  component: VegetationWindComponent;
+  readOnly: boolean;
+  onChange: (patch: VegetationWindPatch) => void;
+}) {
+  return (
+    <ComponentCard title="Wind" subtitle="Entity Component">
+      <p className="text-xs leading-4 text-slate-600">
+        このEntityと子Meshを風の対象にします。風の強さ・速度・突風はScene Settingsのグローバル設定を使います。Mesh名からは判定しません。
+      </p>
+      <ToggleRow
+        label="Enabled"
+        checked={component.enabled}
+        disabled={readOnly}
+        onChange={(enabled) => onChange({ enabled })}
+      />
+      <p className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] leading-4 text-slate-600">
+        Scene Settingsの「Wind（グローバル）」から、対象Entity全体の風を調整できます。
+      </p>
+    </ComponentCard>
+  );
+}
+
 function ParticleEmitterInspector({
   component,
   assets,
@@ -2767,6 +2845,7 @@ function EntityInspector({
   onLightChange,
   onTextChange,
   onAnimationChange,
+  onVegetationWindChange,
   onAudioSourceChange,
   onParticleEmitterChange,
   onRemoveParticleEmitter,
@@ -2818,6 +2897,10 @@ function EntityInspector({
   onLightChange: (componentId: string, patch: LightPatch) => void;
   onTextChange: (componentId: string, patch: TextPatch) => void;
   onAnimationChange: (componentId: string, patch: AnimationPatch) => void;
+  onVegetationWindChange: (
+    componentId: string,
+    patch: VegetationWindPatch,
+  ) => void;
   onAudioSourceChange: (componentId: string, patch: AudioSourcePatch) => void;
   onParticleEmitterChange: (
     componentId: string,
@@ -3124,6 +3207,16 @@ function EntityInspector({
             />
           );
         }
+        if (component.type === "vegetation-wind") {
+          return (
+            <VegetationWindInspector
+              key={component.id}
+              component={component}
+              readOnly={readOnly && !liveRuntimeTuning}
+              onChange={(patch) => onVegetationWindChange(component.id, patch)}
+            />
+          );
+        }
         if (component.type === "particle-emitter") {
           return (
             <ParticleEmitterInspector
@@ -3408,6 +3501,7 @@ export function InspectorPanel({
   onLightChange,
   onTextChange,
   onAnimationChange,
+  onVegetationWindChange,
   onAudioSourceChange,
   onSelectAsset,
   onOpenInteractivity,
@@ -3487,6 +3581,11 @@ export function InspectorPanel({
   onLightChange: (entityId: string, componentId: string, patch: LightPatch) => void;
   onTextChange: (entityId: string, componentId: string, patch: TextPatch) => void;
   onAnimationChange: (entityId: string, componentId: string, patch: AnimationPatch) => void;
+  onVegetationWindChange: (
+    entityId: string,
+    componentId: string,
+    patch: VegetationWindPatch,
+  ) => void;
   onAudioSourceChange: (entityId: string, componentId: string, patch: AudioSourcePatch) => void;
   onSelectAsset: (assetId: string) => void;
   onOpenInteractivity: (assetId: string) => void;
@@ -3749,6 +3848,9 @@ export function InspectorPanel({
             }
             onAnimationChange={(componentId, patch) =>
               onAnimationChange(entity.id, componentId, patch)
+            }
+            onVegetationWindChange={(componentId, patch) =>
+              onVegetationWindChange(entity.id, componentId, patch)
             }
             onAudioSourceChange={(componentId, patch) =>
               onAudioSourceChange(entity.id, componentId, patch)

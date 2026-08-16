@@ -52,6 +52,8 @@ export type MeshComponent = ComponentBase & {
   materialBindings: MaterialBinding[];
   castShadow: boolean;
   receiveShadow: boolean;
+  /** Optional local draw-distance cutoff. Omitted means scene camera.far. */
+  maxDistance?: number;
   /** Static per-Entity Model pose. Timeline authoring can keyframe this later. */
   modelPose?: ModelPoseState;
 };
@@ -334,6 +336,31 @@ export function resolveAnimationClipIndex(
   return clipNames.indexOf(animation.clipName);
 }
 
+/** Explicit per-Entity wind authoring. Mesh names are never inspected. */
+export type VegetationWindComponent = ComponentBase & {
+  type: "vegetation-wind";
+  /** Horizontal sway amplitude in local units. */
+  windStrength: number;
+  /** Oscillation speed in cycles per second-ish units. */
+  windSpeed: number;
+  /** Additional irregular gust amplitude. */
+  gustStrength: number;
+};
+
+export type VegetationWindPatch = Partial<
+  Pick<
+    VegetationWindComponent,
+    "enabled" | "windStrength" | "windSpeed" | "gustStrength"
+  >
+>;
+
+export const DEFAULT_VEGETATION_WIND = {
+  enabled: true,
+  windStrength: 0.08,
+  windSpeed: 0.8,
+  gustStrength: 0.35,
+} as const;
+
 export type PrefabInstanceComponent = ComponentBase & {
   type: "prefab-instance";
   prefabAssetId: string;
@@ -405,6 +432,7 @@ export interface SceneComponentSchemaRegistry {
   light: LightComponent;
   text: TextComponent;
   animation: AnimationComponent;
+  "vegetation-wind": VegetationWindComponent;
   "audio-source": AudioSourceComponent;
   "spawn-point": SpawnPointComponent;
 }
@@ -791,6 +819,35 @@ export function createAnimationComponent(id: string): AnimationComponent | null 
   };
 }
 
+export function createVegetationWindComponent(
+  id: string,
+  input: Partial<Omit<VegetationWindComponent, "id" | "type">> = {},
+): VegetationWindComponent | null {
+  const normalizedId = id.trim();
+  if (!normalizedId) return null;
+  const nonNegative = (value: unknown, fallback: number) =>
+    typeof value === "number" && Number.isFinite(value) && value >= 0
+      ? value
+      : fallback;
+  return {
+    id: normalizedId,
+    type: "vegetation-wind",
+    enabled:
+      typeof input.enabled === "boolean"
+        ? input.enabled
+        : DEFAULT_VEGETATION_WIND.enabled,
+    windStrength: nonNegative(
+      input.windStrength,
+      DEFAULT_VEGETATION_WIND.windStrength,
+    ),
+    windSpeed: nonNegative(input.windSpeed, DEFAULT_VEGETATION_WIND.windSpeed),
+    gustStrength: nonNegative(
+      input.gustStrength,
+      DEFAULT_VEGETATION_WIND.gustStrength,
+    ),
+  };
+}
+
 export function createTextComponent(
   id: string,
   input: Partial<Omit<TextComponent, "id" | "type">> = {},
@@ -842,6 +899,7 @@ export function createMeshComponent(
   options: {
     castShadow?: boolean;
     receiveShadow?: boolean;
+    maxDistance?: number;
     sourceNodeIndex?: number;
     sourceNodeName?: string;
   } = {},
@@ -864,6 +922,9 @@ export function createMeshComponent(
     materialBindings: normalizeMaterialBindings(materialBindings),
     castShadow: options.castShadow ?? true,
     receiveShadow: options.receiveShadow ?? true,
+    ...(options.maxDistance === undefined
+      ? {}
+      : { maxDistance: options.maxDistance }),
   };
 }
 
@@ -1795,6 +1856,53 @@ export function updateAnimationComponent(
   };
 }
 
+/** Applies an explicit Entity-scoped vegetation wind edit atomically. */
+export function updateVegetationWindComponent(
+  scene: SceneDocument,
+  entityId: string,
+  patch: VegetationWindPatch,
+  componentId?: string,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  const current = entity?.components.find(
+    (component): component is VegetationWindComponent =>
+      component.type === "vegetation-wind" &&
+      (componentId === undefined || component.id === componentId),
+  );
+  if (!entity || !current) return scene;
+  if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") {
+    return scene;
+  }
+  for (const value of [
+    patch.windStrength,
+    patch.windSpeed,
+    patch.gustStrength,
+  ]) {
+    if (value !== undefined && (!Number.isFinite(value) || value < 0)) {
+      return scene;
+    }
+  }
+  const next: VegetationWindComponent = { ...current, ...patch };
+  const changed = Object.keys(patch).some(
+    (key) =>
+      next[key as keyof VegetationWindComponent] !==
+      current[key as keyof VegetationWindComponent],
+  );
+  if (!changed) return scene;
+  return {
+    ...scene,
+    entities: {
+      ...scene.entities,
+      [entityId]: {
+        ...entity,
+        components: entity.components.map((component) =>
+          component.id === current.id ? next : component,
+        ),
+      },
+    },
+  };
+}
+
 function getPrimitiveColliderBounds(
   primitive: PrimitiveGeometry,
 ): ColliderAutoFitBounds {
@@ -1938,6 +2046,14 @@ export type MeshShadowPatch = {
   receiveShadow?: boolean;
 };
 
+export const MESH_MAX_DISTANCE_MIN = 0.1;
+export const MESH_MAX_DISTANCE_MAX = 1_000_000;
+
+export type MeshVisibilityPatch = {
+  /** `null` clears the authored cutoff and restores scene camera.far behavior. */
+  maxDistance?: number | null;
+};
+
 export function updateMeshShadowSettings(
   scene: SceneDocument,
   entityId: string,
@@ -1967,6 +2083,33 @@ export function updateMeshShadowSettings(
     castShadow,
     receiveShadow,
   });
+}
+
+export function updateMeshVisibilitySettings(
+  scene: SceneDocument,
+  entityId: string,
+  patch: MeshVisibilityPatch,
+  componentId?: string,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  const mesh = entity ? getMesh(entity, componentId) : undefined;
+  if (!entity || !mesh || patch.maxDistance === undefined) return scene;
+  if (
+    patch.maxDistance !== null &&
+    (!Number.isFinite(patch.maxDistance) ||
+      patch.maxDistance < MESH_MAX_DISTANCE_MIN ||
+      patch.maxDistance > MESH_MAX_DISTANCE_MAX)
+  ) {
+    return scene;
+  }
+  const next = { ...mesh };
+  if (patch.maxDistance === null) {
+    delete next.maxDistance;
+  } else {
+    next.maxDistance = patch.maxDistance;
+  }
+  if (next.maxDistance === mesh.maxDistance) return scene;
+  return replaceMesh(scene, entityId, mesh.id, next);
 }
 
 export function updateMeshGeometryAsset(

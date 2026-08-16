@@ -344,6 +344,19 @@ export const tauri = {
     await invoke<void>("save_screenshot", { path, dataUrl });
     return path;
   },
+  saveVideo: async (dataUrl: string) => {
+    if (!isTauri()) return null;
+    const path = await saveDialog({
+      title: "XRift Studioのデバッグ動画を保存",
+      defaultPath: "xrift-studio-debug.webm",
+      filters: [{ name: "WebM動画", extensions: ["webm"] }],
+    });
+    if (!path) return null;
+    await invoke<void>("save_video", { path, dataUrl });
+    return path;
+  },
+  saveDebugVideo: (dataUrl: string, label = "scene-view") =>
+    invoke<string>("save_debug_video", { dataUrl, label }),
   getVersions: () => invoke<Versions>("get_versions"),
   runtimePaths: () => invoke<RuntimePaths>("runtime_paths"),
   runtimeStatus: () => invoke<RuntimeStatus>("runtime_status"),

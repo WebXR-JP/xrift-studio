@@ -23,6 +23,7 @@ import {
   createScriptComponent,
   createTextComponent,
   createTransformComponent,
+  createVegetationWindComponent,
   fitBoxColliderToMesh,
   getMesh,
   type ColliderComponent,
@@ -118,6 +119,13 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
   definition("core.spawn", "Spawn Point", "world", false, "spawn-point"),
   definition("core.particle", "Particle Emitter", "rendering", true, "particle-emitter"),
   definition("core.animation", "Animation", "rendering", false, "animation"),
+  definition(
+    "core.wind",
+    "Wind",
+    "rendering",
+    false,
+    "vegetation-wind",
+  ),
   definition("core.audio-source", "Audio Source", "media", true, "audio-source"),
   definition("core.text", "Text", "rendering", true, "text"),
   definition("scripting.script", "Script", "scripting", true, "script"),
@@ -163,7 +171,11 @@ export function addEditorComponent(
 ): AddEditorComponentResult {
   const entity = scene.entities[entityId];
   if (!entity) return { scene, added: false, reason: "entity-missing" };
-  const definition = EDITOR_COMPONENT_REGISTRY.find((candidate) => candidate.id === definitionId);
+  const normalizedDefinitionId =
+    definitionId === "core.vegetation-wind" ? "core.wind" : definitionId;
+  const definition = EDITOR_COMPONENT_REGISTRY.find(
+    (candidate) => candidate.id === normalizedDefinitionId,
+  );
   if (!definition) return { scene, added: false, reason: "definition-missing" };
   if (!definition.projectKinds.includes(projectKind)) {
     return { scene, added: false, reason: "project-kind" };
@@ -205,6 +217,7 @@ export function addEditorComponent(
     entity,
     preferredAssetId,
     scriptContracts,
+    scene.settings?.vegetation,
   );
   if (!component) return { scene, added: false, reason: "dependency-missing" };
   const components = [
@@ -666,6 +679,10 @@ function createRegisteredComponent(
   entity: SceneEntity,
   preferredAssetId?: string,
   scriptContracts?: Readonly<Record<string, ScriptContract>>,
+  vegetationDefaults?: Pick<
+    NonNullable<SceneDocument["settings"]>["vegetation"],
+    "enabled" | "windStrength" | "windSpeed" | "gustStrength"
+  >,
 ): RegisteredSceneComponent | null {
   if (definition.componentType === "transform") return createTransformComponent(id);
   if (definition.componentType === "builtin-mesh") {
@@ -749,6 +766,9 @@ function createRegisteredComponent(
     return entityHasImportedAnimation(entity, assets)
       ? createAnimationComponent(id)
       : null;
+  }
+  if (definition.componentType === "vegetation-wind") {
+    return createVegetationWindComponent(id, vegetationDefaults);
   }
   if (definition.componentType === "audio-source") {
     const audio = Object.values(assets.assets).find(

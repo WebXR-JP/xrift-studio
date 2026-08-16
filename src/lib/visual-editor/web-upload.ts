@@ -41,6 +41,9 @@ export const SHELL_ENTRY_PATH = "remoteEntry.js";
 /** Where `build-world-runtime-shell.mjs` publishes the shell. */
 export const DEFAULT_SHELL_BASE_URL = "./xrift-runtime-shell";
 const SHELL_MANIFEST_FILE = "shell-manifest.json";
+/** The shell must be rebuilt when Runtime adapters change. */
+export const REQUIRED_RUNTIME_SHELL_CONTRACT =
+  "2026-08-16-official-components-physics-v1" as const;
 
 /**
  * One file of the prebuilt runtime shell.
@@ -200,6 +203,7 @@ export async function assembleWebUploadFiles(
 
 export type ShellManifest = {
   version: string;
+  runtimeContract: typeof REQUIRED_RUNTIME_SHELL_CONTRACT;
   entry: string;
   files: string[];
 };
@@ -223,7 +227,17 @@ export async function loadRuntimeShell(
     );
   }
 
-  const manifest = parseShellManifest(await response.json());
+  let manifest: ShellManifest;
+  try {
+    manifest = parseShellManifest(await response.json());
+  } catch (error) {
+    throw new WebUploadUnsupportedError(
+      "shell-missing",
+      error instanceof Error
+        ? error.message
+        : "ランタイムシェルの契約を確認できませんでした。",
+    );
+  }
   const files: RuntimeShellFile[] = [];
   for (const path of manifest.files) {
     if (signal?.aborted) {
@@ -258,8 +272,14 @@ export function parseShellManifest(value: unknown): ShellManifest {
       `ランタイムシェルの一覧に ${SHELL_ENTRY_PATH} が含まれていません。`,
     );
   }
+  if (record.runtimeContract !== REQUIRED_RUNTIME_SHELL_CONTRACT) {
+    throw new Error(
+      `ランタイムシェルが古いため公開できません。要求契約 ${REQUIRED_RUNTIME_SHELL_CONTRACT}、検出値 ${typeof record.runtimeContract === "string" ? record.runtimeContract : "なし"}。node scripts/build-world-runtime-shell.mjs で再生成してください。`,
+    );
+  }
   return {
     version: typeof record.version === "string" ? record.version : "unknown",
+    runtimeContract: REQUIRED_RUNTIME_SHELL_CONTRACT,
     entry: SHELL_ENTRY_PATH,
     files,
   };

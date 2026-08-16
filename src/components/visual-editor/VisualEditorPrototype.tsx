@@ -81,6 +81,7 @@ import {
   executeXriftMcpEditorTool,
   extractScriptContract,
   XRIFT_MCP_EDITOR_TOOLS,
+  XRIFT_MCP_DEBUG_TOOLS,
   XRIFT_MCP_LOCAL_ASSET_TOOLS,
   XRIFT_MCP_SCRIPT_TOOLS,
   kindForPath,
@@ -100,12 +101,15 @@ import {
   updateModelNodeEntityTransform,
   updateAnimationComponent,
   updateAudioSourceComponent,
+  updateVegetationWindComponent,
   updateColliderComponent,
   optimizeColliderConfiguration,
   updateRigidBodyComponent,
   updateLightComponent,
   updateTextComponent,
   updateMeshShadowSettings,
+  MESH_MAX_DISTANCE_MAX,
+  MESH_MAX_DISTANCE_MIN,
   updateMaterialAsset,
   updateAssetThumbnail,
   updateModelAsset,
@@ -122,6 +126,7 @@ import {
   type AnimationPatch,
   type AssetManifest,
   type AudioSourcePatch,
+  type VegetationWindPatch,
   type LightPatch,
   type MaterialAssetPatch,
   type AssetThumbnailDescriptor,
@@ -204,6 +209,10 @@ import {
   SceneViewport,
   type SceneFocusState,
 } from "./SceneViewport";
+import type {
+  SceneDebugCaptureRequest,
+  SceneDebugCaptureResult,
+} from "./SceneDebugCapture";
 import type { ScriptViewportRuntime } from "./EntityScriptVisual";
 import type { ScriptComponentPatch } from "./ScriptComponentInspector";
 import {
@@ -655,6 +664,28 @@ export function VisualEditorPrototype({
   const bundle = history.present.bundle;
   const bundleRef = useRef(bundle);
   bundleRef.current = bundle;
+  const [debugCaptureRequest, setDebugCaptureRequest] =
+    useState<SceneDebugCaptureRequest | null>(null);
+  const debugCaptureRequestIdRef = useRef(0);
+  const debugCaptureWaitersRef = useRef(
+    new Map<number, (result: SceneDebugCaptureResult) => void>(),
+  );
+  const requestDebugCapture = useCallback(
+    (request: Omit<SceneDebugCaptureRequest, "id">) =>
+      new Promise<SceneDebugCaptureResult>((resolve) => {
+        const id = debugCaptureRequestIdRef.current + 1;
+        debugCaptureRequestIdRef.current = id;
+        debugCaptureWaitersRef.current.set(id, resolve);
+        setDebugCaptureRequest({ ...request, id });
+      }),
+    [],
+  );
+  const resolveDebugCapture = useCallback((result: SceneDebugCaptureResult) => {
+    const waiter = debugCaptureWaitersRef.current.get(result.requestId);
+    if (!waiter) return;
+    debugCaptureWaitersRef.current.delete(result.requestId);
+    waiter(result);
+  }, []);
   const mcpRevisionRef = useRef(0);
   const mcpRevisionBundleRef = useRef(bundle);
   const mcpRevisionProjectRef = useRef(bundle.project.projectId);
@@ -1902,6 +1933,9 @@ export function VisualEditorPrototype({
         const localAssetTool = XRIFT_MCP_LOCAL_ASSET_TOOLS.includes(
           request.tool as XriftMcpLocalAssetToolName,
         );
+        const debugTool = XRIFT_MCP_DEBUG_TOOLS.includes(
+          request.tool as "capture_scene_debug",
+        );
         const externalStoreTool = XRIFT_MCP_EXTERNAL_STORE_TOOLS.includes(
           request.tool as XriftMcpExternalStoreTool,
         );
@@ -1910,6 +1944,7 @@ export function VisualEditorPrototype({
         );
         if (
           !localAssetTool &&
+          !debugTool &&
           !externalStoreTool &&
           !scriptTool &&
           !XRIFT_MCP_EDITOR_TOOLS.includes(
@@ -1920,6 +1955,62 @@ export function VisualEditorPrototype({
             "TOOL_NOT_FOUND",
             "対応していないAI editor toolです",
           );
+        }
+        if (debugTool) {
+          const args = request.arguments;
+          const projectId = mcpRequiredString(args.projectId, "projectId");
+          const sceneId = mcpRequiredString(args.sceneId, "sceneId");
+          if (
+            projectId !== bundleRef.current.project.projectId ||
+            sceneId !== bundleRef.current.scene.sceneId
+          ) {
+            throw new XriftMcpEditorToolError(
+              "STALE_REVISION",
+              "対象Sceneが現在のEditorと一致しません。get_editor_contextで再取得してください",
+              { projectId, sceneId },
+            );
+          }
+          const action = mcpRequiredString(args.action, "action");
+          if (action !== "metrics" && action !== "start" && action !== "stop") {
+            throw new XriftMcpEditorToolError(
+              "INVALID_ARGUMENT",
+              "actionはmetrics、start、stopのいずれかで指定してください",
+            );
+          }
+          const requestedDuration =
+            args.durationMs === undefined
+              ? undefined
+              : mcpOptionalInteger(args.durationMs, "durationMs");
+          if (
+            requestedDuration !== undefined &&
+            (requestedDuration < 1_000 || requestedDuration > 15_000)
+          ) {
+            throw new XriftMcpEditorToolError(
+              "INVALID_ARGUMENT",
+              "durationMsは1000〜15000の範囲で指定してください",
+            );
+          }
+          const result = await requestDebugCapture({
+            action,
+            ...(requestedDuration !== undefined
+              ? { durationMs: requestedDuration }
+              : {}),
+            autoSave: true,
+          });
+          await tauri.completeXriftMcpRequest({
+            id: request.id,
+            ok: result.status !== "error",
+            result,
+            ...(result.status === "error"
+              ? {
+                  error: {
+                    code: "DEBUG_CAPTURE_FAILED",
+                    message: result.message ?? "Scene Viewの診断取得に失敗しました",
+                  },
+                }
+              : {}),
+          });
+          return;
         }
         const currentProjectPath = projectPathRef.current;
         if (request.tool === "import_shader_asset") {
@@ -4807,6 +4898,14 @@ export function VisualEditorPrototype({
               : {}),
             ...(typeof patch.castShadow === "boolean" ? { castShadow: patch.castShadow } : {}),
             ...(typeof patch.receiveShadow === "boolean" ? { receiveShadow: patch.receiveShadow } : {}),
+            ...(patch.maxDistance === null
+              ? { maxDistance: undefined }
+              : typeof patch.maxDistance === "number" &&
+                  Number.isFinite(patch.maxDistance) &&
+                  patch.maxDistance >= MESH_MAX_DISTANCE_MIN &&
+                  patch.maxDistance <= MESH_MAX_DISTANCE_MAX
+                ? { maxDistance: patch.maxDistance }
+                : {}),
             ...(patch.modelPose
               ? {
                   modelPose: {
@@ -4851,6 +4950,10 @@ export function VisualEditorPrototype({
           ? `Mesh Rendererを${patch.enabled ? "有効" : "無効"}にしました`
           : patch.modelPose
           ? "モデルポーズをこの配置へ保存しました"
+          : patch.maxDistance !== undefined
+          ? patch.maxDistance === null
+            ? "Mesh固有の描画距離を解除しました"
+            : "Mesh固有の描画距離をシーンへ反映しました"
           : "Mesh Rendererのマテリアルスロットと影設定をシーンへ反映しました",
       );
     },
@@ -5230,6 +5333,25 @@ export function VisualEditorPrototype({
         editorMode === "play"
           ? "Animation設定を保存し、このEntityのPlayを先頭から再実行しました"
           : "Animation設定をSceneへ反映しました",
+      );
+    },
+    [editorMode, playSession, updateScene],
+  );
+
+  const handleVegetationWindChange = useCallback(
+    (
+      entityId: string,
+      componentId: string,
+      patch: VegetationWindPatch,
+    ) => {
+      if (editorMode !== "edit" && !playSession) return;
+      updateScene((scene) =>
+        updateVegetationWindComponent(scene, entityId, patch, componentId),
+      );
+      setNotice(
+        editorMode === "play"
+          ? "Wind設定を保存し、Playへ即時反映しました"
+          : "Wind設定をSceneへ反映しました",
       );
     },
     [editorMode, playSession, updateScene],
@@ -8335,6 +8457,8 @@ export function VisualEditorPrototype({
             thumbnailCaptureRequest={thumbnailCaptureRequest}
             onThumbnailCaptured={onThumbnailCaptured}
             onThumbnailCaptureError={onThumbnailCaptureError}
+            debugCaptureRequest={debugCaptureRequest}
+            onDebugCaptureResult={resolveDebugCapture}
           />
           <InspectorPanel
             scene={bundle.scene}
@@ -8367,6 +8491,7 @@ export function VisualEditorPrototype({
             onLightChange={handleLightChange}
             onTextChange={handleTextChange}
             onAnimationChange={handleAnimationChange}
+            onVegetationWindChange={handleVegetationWindChange}
             onAudioSourceChange={handleAudioSourceChange}
             onSelectAsset={handleSelectAsset}
             onOpenInteractivity={(assetId) =>

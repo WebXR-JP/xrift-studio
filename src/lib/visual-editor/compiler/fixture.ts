@@ -29,6 +29,7 @@ import {
   createMeshColliderComponent,
   createRigidBodyComponent,
   createTransformComponent,
+  createVegetationWindComponent,
   type AnimationComponent,
   type ColliderComponent,
   type MeshComponent,
@@ -84,6 +85,20 @@ export function runVisualCompilerFixtureAssertions(
       legacySkyboxSettings.center.join(",") === "0,0.01,0",
     "Legacy Skybox settings must resolve to the compatible infinite projection",
   );
+  const legacyRenderSettings = resolveSceneSettings({
+    postprocessing: {
+      enabled: true,
+      bloom: { enabled: true, threshold: 2, strength: 0.1, radius: 0.2 },
+      exposure: 0.9,
+    },
+  });
+  assert(
+    legacyRenderSettings.postprocessing.hdr.enabled &&
+      legacyRenderSettings.postprocessing.hdr.toneMapping === "aces" &&
+      legacyRenderSettings.postprocessing.ao.enabled &&
+      legacyRenderSettings.vegetation.enabled,
+    "Legacy Scene settings must resolve HDR, AO, and vegetation defaults",
+  );
 
   const world = toCompilerDocuments(createPrototypeProject("world", "fixture-world"));
   const fixedTime = "2026-01-01T00:00:00.000Z";
@@ -99,11 +114,60 @@ export function runVisualCompilerFixtureAssertions(
     "new SphereGeometry(1, 32, 20)",
     "useFrame(({ camera })",
     "uExposure: { value: 1 }",
+    "HalfFloatType",
+    "new SSAOPass",
+    "ACESFilmicToneMapping",
+    'toneMapping: "aces" | "none"',
   ].forEach((fragment) =>
     assert(
       defaultWorldSource.includes(fragment),
       `Infinite gradient Skybox source is missing: ${fragment}`,
     ),
+  );
+  assert(
+    !defaultWorldSource.includes('FC<{ settings: {"enabled":'),
+    "Generated postprocessing props must not infer literal Scene values as their TypeScript type",
+  );
+  const windWorld = toCompilerDocuments(
+    createPrototypeProject("world", "fixture-wind-world"),
+  );
+  const windScene = windWorld.scenes[windWorld.project.entrySceneId];
+  const windEntity = Object.values(windScene.entities)[0];
+  const windComponent = createVegetationWindComponent("fixture-wind-component");
+  assert(windEntity && windComponent, "Wind compiler fixture could not create a target");
+  const windResult = compileVisualProject(
+    {
+      ...windWorld,
+      scenes: {
+        ...windWorld.scenes,
+        [windScene.sceneId]: {
+          ...windScene,
+          entities: {
+            ...windScene.entities,
+            [windEntity.id]: {
+              ...windEntity,
+              components: [...windEntity.components, windComponent],
+            },
+          },
+        },
+      },
+    },
+    { generatedAt: fixedTime },
+  );
+  const windWorldSource =
+    windResult.overlayFiles.find((file) => file.relativePath === "src/World.tsx")
+      ?.content ?? "";
+  assert(windResult.canStage, "A World with an explicit Wind component must be stageable");
+  assert(
+    !windResult.diagnostics.some(
+      (diagnostic) => diagnostic.code === "component-unsupported",
+    ),
+    "Wind must not be reported as an unsupported component",
+  );
+  assert(
+    windWorldSource.includes("XRiftStudioWind") &&
+      windWorldSource.includes(windEntity.id),
+    "Wind must compile into the scene-level runtime with its explicit Entity target",
   );
   assert(
     JSON.stringify(first.stagingPlan.requiredPublicationFiles) ===
@@ -341,6 +405,21 @@ export function runVisualCompilerFixtureAssertions(
         entry.supportedByCompiler,
     ),
     "Audio Asset was not added to the final staging copy plan",
+  );
+  const audioRuntimeResult = compileVisualProject(
+    {
+      ...world,
+      assets: audioAssets,
+      scenes: { [audioScene.sceneId]: audioScene },
+    },
+    { generatedAt: fixedTime, outputMode: "classic-runtime" },
+  );
+  assert(
+    audioRuntimeResult.canStage &&
+      !audioRuntimeResult.diagnostics.some(
+        (diagnostic) => diagnostic.code === "runtime-component-adapter-missing",
+      ),
+    "Classic runtime Audio Source must be connected to the shared R3F adapter",
   );
 
   const materialWorld: VisualCompilerDocuments = {
@@ -631,13 +710,11 @@ export function runVisualCompilerFixtureAssertions(
     { generatedAt: fixedTime, outputMode: "classic-runtime" },
   );
   assert(
-    !runtimeParticleResult.canStage &&
-      runtimeParticleResult.diagnostics.some(
-        (diagnostic) =>
-          diagnostic.severity === "blocking" &&
-          diagnostic.code === "runtime-particle-adapter-missing",
+    runtimeParticleResult.canStage &&
+      !runtimeParticleResult.diagnostics.some(
+        (diagnostic) => diagnostic.code === "runtime-particle-adapter-missing",
       ),
-    "Classic runtime Particle output must block instead of succeeding invisibly",
+    "Classic runtime Particle output must be connected to the bounded R3F adapter",
   );
   const particleWithoutTexture = updateParticleAsset(
     particleAssetResult.manifest,
@@ -731,6 +808,75 @@ export function runVisualCompilerFixtureAssertions(
     "Multiple Box Colliders must share one RigidBody",
   );
 
+  const colliderEntity = colliderScene.entities["entity-world-object"]!;
+  const colliderAndSpawnScene: SceneDocument = {
+    ...colliderScene,
+    entities: {
+      ...colliderScene.entities,
+      [colliderEntity.id]: {
+        ...colliderEntity,
+        components: [
+          ...colliderEntity.components,
+          {
+            id: "fixture-spawn-point",
+            type: "spawn-point" as const,
+            enabled: true,
+            target: "player" as const,
+          },
+        ],
+      },
+    },
+  };
+  const colliderRuntimeResult = compileVisualProject(
+    {
+      ...world,
+      scenes: {
+        [colliderAndSpawnScene.sceneId]: colliderAndSpawnScene,
+      },
+    },
+    { generatedAt: fixedTime, outputMode: "classic-runtime" },
+  );
+  assert(
+    colliderRuntimeResult.canStage &&
+      !colliderRuntimeResult.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code === "runtime-component-metadata-only" ||
+          diagnostic.code === "runtime-component-adapter-missing",
+      ),
+    "Static Collider and Spawn Point must be supported by the runtime manifest adapter",
+  );
+
+  const xriftSpawnScene: SceneDocument = {
+    ...colliderScene,
+    entities: {
+      ...colliderScene.entities,
+      [colliderEntity.id]: {
+        ...colliderEntity,
+        components: [
+          ...colliderEntity.components,
+          createXriftComponent(XRIFT_COMPONENT_SCHEMA_IDS.spawnPoint, {
+            componentId: "fixture-xrift-spawn-point",
+            properties: { position: [0, 1, 2], yaw: 90 },
+          })!,
+        ],
+      },
+    },
+  };
+  const xriftSpawnRuntimeResult = compileVisualProject(
+    {
+      ...world,
+      scenes: { [xriftSpawnScene.sceneId]: xriftSpawnScene },
+    },
+    { generatedAt: fixedTime, outputMode: "classic-runtime" },
+  );
+  assert(
+    xriftSpawnRuntimeResult.canStage &&
+      !xriftSpawnRuntimeResult.diagnostics.some(
+        (diagnostic) => diagnostic.code === "runtime-component-adapter-missing",
+      ),
+    "The official xrift.spawn-point component must be connected to the runtime adapter",
+  );
+
   const dynamicColliderScene = withFixtureColliders(
     world.scenes[world.project.entrySceneId],
     "entity-world-object",
@@ -758,6 +904,59 @@ export function runVisualCompilerFixtureAssertions(
       dynamicColliderSource,
     ),
     "Dynamic RigidBody settings were not generated",
+  );
+  const dynamicColliderRuntimeResult = compileVisualProject(
+    {
+      ...world,
+      scenes: { [dynamicColliderScene.sceneId]: dynamicColliderScene },
+    },
+    { generatedAt: fixedTime, outputMode: "classic-runtime" },
+  );
+  assert(
+    dynamicColliderRuntimeResult.canStage &&
+      !dynamicColliderRuntimeResult.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code === "runtime-component-metadata-only" &&
+          diagnostic.componentId === "fixture-dynamic-collider",
+      ),
+    "Direct dynamic Collider must be connected to the runtime manifest adapter",
+  );
+
+  const directRigidBodyEntity = dynamicColliderScene.entities["entity-world-object"]!;
+  const directRigidBodyScene: SceneDocument = {
+    ...dynamicColliderScene,
+    entities: {
+      ...dynamicColliderScene.entities,
+      [directRigidBodyEntity.id]: {
+        ...directRigidBodyEntity,
+        components: [
+          ...directRigidBodyEntity.components.filter(
+            (component) => component.type !== "collider",
+          ),
+          createRigidBodyComponent("fixture-direct-rigid-body", {
+            bodyType: "dynamic",
+            autoColliders: "cuboid",
+            ccd: true,
+          }),
+        ],
+      },
+    },
+  };
+  const directRigidBodyRuntimeResult = compileVisualProject(
+    {
+      ...world,
+      scenes: { [directRigidBodyScene.sceneId]: directRigidBodyScene },
+    },
+    { generatedAt: fixedTime, outputMode: "classic-runtime" },
+  );
+  assert(
+    directRigidBodyRuntimeResult.canStage &&
+      !directRigidBodyRuntimeResult.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code === "runtime-component-metadata-only" &&
+          diagnostic.componentId === "fixture-direct-rigid-body",
+      ),
+    "Direct Rigid Body with an authored Mesh must be connected to the runtime manifest adapter",
   );
 
   const bodyParentId = "fixture-rigid-body-parent";
@@ -822,6 +1021,23 @@ export function runVisualCompilerFixtureAssertions(
       parentBodySource.includes('name="立方体"'),
     "Parent Rigid Body must own descendant Collider geometry without creating an origin Box",
   );
+  const parentOwnedRuntimeResult = compileVisualProject(
+    {
+      ...world,
+      scenes: { [parentOwnedScene.sceneId]: parentOwnedScene },
+    },
+    { generatedAt: fixedTime, outputMode: "classic-runtime" },
+  );
+  assert(
+    parentOwnedRuntimeResult.canStage &&
+      !parentOwnedRuntimeResult.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code === "runtime-component-metadata-only" &&
+          (diagnostic.componentId === "fixture-parent-rigid-body" ||
+            diagnostic.componentId === "fixture-owned-child-collider"),
+      ),
+    "Root Rigid Body must own descendant Collider components in the runtime manifest",
+  );
   const autoBodyScene: SceneDocument = {
     ...parentOwnedScene,
     entities: {
@@ -862,6 +1078,22 @@ export function runVisualCompilerFixtureAssertions(
       !autoParentSource.includes("<CuboidCollider"),
     "Parent auto-collider mode must generate descendant mesh colliders without a fake origin Box",
   );
+  const autoBodyRuntimeResult = compileVisualProject(
+    {
+      ...world,
+      scenes: { [autoBodyScene.sceneId]: autoBodyScene },
+    },
+    { generatedAt: fixedTime, outputMode: "classic-runtime" },
+  );
+  assert(
+    autoBodyRuntimeResult.canStage &&
+      !autoBodyRuntimeResult.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code === "runtime-component-metadata-only" &&
+          diagnostic.componentId === "fixture-auto-parent-rigid-body",
+      ),
+    "Root auto-collider Rigid Body must own descendant mesh geometry in the runtime manifest",
+  );
   const nestedBodyScene: SceneDocument = {
     ...autoBodyScene,
     entities: {
@@ -896,6 +1128,21 @@ export function runVisualCompilerFixtureAssertions(
       nestedParentSource.includes('<MeshCollider type="hull">') &&
       !nestedParentSource.includes('<MeshCollider type="cuboid">'),
     "A nested Rigid Body must start a new collider ownership boundary",
+  );
+  const nestedBodyRuntimeResult = compileVisualProject(
+    {
+      ...world,
+      scenes: { [nestedBodyScene.sceneId]: nestedBodyScene },
+    },
+    { generatedAt: fixedTime, outputMode: "classic-runtime" },
+  );
+  assert(
+    nestedBodyRuntimeResult.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code === "runtime-component-metadata-only" &&
+        diagnostic.componentId === "fixture-auto-parent-rigid-body",
+    ),
+    "Nested Rigid Body ownership boundaries must remain explicit in the runtime diagnostics",
   );
 
   const meshColliderScene = withFixtureColliders(
@@ -1497,6 +1744,7 @@ export function runVisualCompilerFixtureAssertions(
                     sourceNodeIndex: 0,
                   },
                 ],
+                maxDistance: 120,
                 modelPose: {
                   bones: {},
                   morphTargets: {},
@@ -1547,6 +1795,21 @@ export function runVisualCompilerFixtureAssertions(
     "Project GLB path must be relative to the XRift base URL",
   );
   assert(modelSource.includes("<Clone"), "Model clone was not generated");
+  assert(
+    modelSource.includes("XriftMeshMaxDistance") &&
+      modelSource.includes("maxDistance={120}"),
+    "Mesh maxDistance gate was not generated for Classic output",
+  );
+  const modelRuntimeResult = compileVisualProject(modelProject, {
+    generatedAt: fixedTime,
+    outputMode: "classic-runtime",
+  });
+  assert(
+    modelRuntimeResult.runtimeManifestFile?.content.includes(
+      '"maxDistance": 120',
+    ),
+    "Runtime manifest did not preserve Mesh maxDistance",
+  );
   assert(
     modelSource.includes("sourceNodeObject.parent") &&
       modelSource.includes('"0:Detail"') &&
@@ -2016,10 +2279,68 @@ export function runVisualCompilerFixtureAssertions(
     XRIFT_COMPONENT_SCHEMA_IDS.video180Sphere,
     { properties: { url: "/videos/immersive-180.mp4" } },
   );
+  const mirror = createXriftComponent(XRIFT_COMPONENT_SCHEMA_IDS.mirror, {
+    properties: {
+      position: [0, 2, -4],
+      rotation: [0, 0, 0],
+      size: [4, 2],
+      textureResolution: 256,
+      lodDistance: 12,
+    },
+  });
+  const billboardY = createXriftComponent(XRIFT_COMPONENT_SCHEMA_IDS.billboardY, {
+    properties: { position: [0, 1.5, -2], scale: 1 },
+  });
+  const interactable = createXriftComponent(XRIFT_COMPONENT_SCHEMA_IDS.interactable, {
+    properties: {
+      id: "fixture-interactable",
+      type: "button",
+      interactionText: "Inspect",
+      enabled: true,
+    },
+  });
+  const textInput = createXriftComponent(XRIFT_COMPONENT_SCHEMA_IDS.textInput, {
+    properties: {
+      id: "fixture-text-input",
+      placeholder: "Type here",
+      interactionText: "Edit text",
+      disabled: false,
+    },
+  });
+  const liveVideoPlayer = createXriftComponent(
+    XRIFT_COMPONENT_SCHEMA_IDS.liveVideoPlayer,
+    { properties: { id: "fixture-live-video", url: "https://example.com/live.m3u8" } },
+  );
+  const screenShareDisplay = createXriftComponent(
+    XRIFT_COMPONENT_SCHEMA_IDS.screenShareDisplay,
+    { properties: { id: "fixture-screen-share" } },
+  );
+  const tagBoard = createXriftComponent(XRIFT_COMPONENT_SCHEMA_IDS.tagBoard, {
+    properties: { instanceStateKey: "fixture-tags" },
+  });
+  const entryLogBoard = createXriftComponent(
+    XRIFT_COMPONENT_SCHEMA_IDS.entryLogBoard,
+    { properties: { stateNamespace: "fixture-entry-log" } },
+  );
+  const portal = createXriftComponent(XRIFT_COMPONENT_SCHEMA_IDS.portal, {
+    properties: {
+      instanceId: "00000000-0000-4000-8000-000000000043",
+      disabled: true,
+    },
+  });
   assert(skybox, "Skybox fixture component could not be created");
   assert(videoScreen, "VideoScreen fixture component could not be created");
   assert(videoPlayer, "VideoPlayer fixture component could not be created");
   assert(video180Sphere, "Video180Sphere fixture component could not be created");
+  assert(mirror, "Mirror fixture component could not be created");
+  assert(billboardY, "BillboardY fixture component could not be created");
+  assert(interactable, "Interactable fixture component could not be created");
+  assert(textInput, "TextInput fixture component could not be created");
+  assert(liveVideoPlayer, "LiveVideoPlayer fixture component could not be created");
+  assert(screenShareDisplay, "ScreenShareDisplay fixture component could not be created");
+  assert(tagBoard, "TagBoard fixture component could not be created");
+  assert(entryLogBoard, "EntryLogBoard fixture component could not be created");
+  assert(portal, "Portal fixture component could not be created");
   const interactiveScene = {
     ...modelScene,
     entities: {
@@ -2048,6 +2369,15 @@ export function runVisualCompilerFixtureAssertions(
           videoScreen,
           videoPlayer,
           video180Sphere,
+          mirror,
+          billboardY,
+          interactable,
+          textInput,
+          liveVideoPlayer,
+          screenShareDisplay,
+          tagBoard,
+          entryLogBoard,
+          portal,
         ],
       },
     },
@@ -2080,6 +2410,30 @@ export function runVisualCompilerFixtureAssertions(
   assert(
     !/<VideoPlayer[^>]*\ssync=/.test(interactiveSource),
     "VideoPlayer must not receive the LiveVideoPlayer-only sync prop",
+  );
+  const officialRuntimeResult = compileVisualProject(
+    { ...modelProject, scenes: { [interactiveScene.sceneId]: interactiveScene } },
+    { generatedAt: fixedTime, outputMode: "classic-runtime" },
+  );
+  assert(
+    officialRuntimeResult.canStage &&
+      !officialRuntimeResult.diagnostics.some(
+        (diagnostic) =>
+          (diagnostic.code === "runtime-component-adapter-missing" ||
+            diagnostic.code === "runtime-component-metadata-only") &&
+          (diagnostic.componentId === mirror.id ||
+            diagnostic.componentId === billboardY.id ||
+            diagnostic.componentId === skybox.id ||
+            diagnostic.componentId === interactable.id ||
+            diagnostic.componentId === textInput.id ||
+            diagnostic.componentId === liveVideoPlayer.id ||
+            diagnostic.componentId === screenShareDisplay.id ||
+            diagnostic.componentId === tagBoard.id ||
+            diagnostic.componentId === entryLogBoard.id ||
+            diagnostic.componentId === portal.id ||
+            diagnostic.componentId === "component-fixture-grabbable"),
+      ),
+    "Runtime Skybox, Mirror, and BillboardY must use concrete adapters",
   );
   captureSources?.({
     textured: texturedSource,

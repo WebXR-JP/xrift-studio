@@ -146,6 +146,14 @@ export function runXriftMcpEditorToolFixtures(): void {
         fog: { enabled: false, color: "#102030", near: 12, far: 96 },
         ambient: { color: "#abcdef", intensity: 0.8 },
         camera: { near: 0.05, far: 500, fov: 60 },
+        postprocessing: {
+          enabled: true,
+          hdr: { enabled: true, toneMapping: "aces" },
+          bloom: { enabled: true, threshold: 2.4, strength: 0.18, radius: 0.24 },
+          ao: { enabled: true, radius: 8, minDistance: 0.005, maxDistance: 0.12 },
+          exposure: 0.78,
+        },
+        vegetation: { enabled: true, windStrength: 0.1, windSpeed: 0.9, gustStrength: 0.4 },
         editor: {
           backgroundColor: "#111827",
           gizmo: {
@@ -190,7 +198,7 @@ export function runXriftMcpEditorToolFixtures(): void {
     debugAutomationBridge?: unknown;
   };
   assert(
-    ["skybox", "fog", "ambient", "camera", "editor"].every(
+    ["skybox", "fog", "ambient", "camera", "postprocessing", "vegetation", "editor"].every(
       (section) =>
         typeof (
           editorContext.result.sceneSettings as Record<string, unknown>
@@ -580,6 +588,9 @@ export function runXriftMcpEditorToolFixtures(): void {
       sceneSettingsResult.bundle.scene.settings.fog.enabled === false &&
       sceneSettingsResult.bundle.scene.settings.ambient.intensity === 0.8 &&
       sceneSettingsResult.bundle.scene.settings.camera.fov === 60 &&
+      sceneSettingsResult.bundle.scene.settings.postprocessing.hdr.enabled &&
+      sceneSettingsResult.bundle.scene.settings.postprocessing.ao.maxDistance === 0.12 &&
+      sceneSettingsResult.bundle.scene.settings.vegetation.windSpeed === 0.9 &&
       sceneSettingsResult.bundle.scene.settings.editor.gizmo.snapEnabled &&
       sceneSettingsResult.bundle.scene.settings.editor.backgroundColor ===
         "#111827",
@@ -1785,6 +1796,7 @@ export function runXriftMcpEditorToolFixtures(): void {
         ],
         castShadow: false,
         receiveShadow: false,
+        maxDistance: 120,
       },
     },
   });
@@ -1793,6 +1805,7 @@ export function runXriftMcpEditorToolFixtures(): void {
     materialBindings?: Array<{ materialAssetId?: string }>;
     castShadow?: boolean;
     receiveShadow?: boolean;
+    maxDistance?: number;
   };
   assert(
     meshUpdated.changed &&
@@ -1800,7 +1813,8 @@ export function runXriftMcpEditorToolFixtures(): void {
       updatedMesh.materialBindings?.[0]?.materialAssetId ===
         BUILTIN_ASSET_IDS.material.blue &&
       updatedMesh.castShadow === false &&
-      updatedMesh.receiveShadow === false,
+      updatedMesh.receiveShadow === false &&
+      updatedMesh.maxDistance === 120,
     "update_component should persist Mesh Renderer bindings and shadow settings",
   );
   current = { ...current, bundle: meshUpdated.bundle, revision: current.revision + 1 };

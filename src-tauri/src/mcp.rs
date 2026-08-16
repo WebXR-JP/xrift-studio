@@ -28,7 +28,7 @@ const MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS: u64 = 120_000;
 const MCP_MAX_CONCURRENT_CONNECTIONS: usize = 32;
 const MCP_MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 const MCP_MAX_CLIENT_NAME_CHARS: usize = 128;
-const MCP_TOOL_NAMES: [&str; 82] = [
+const MCP_TOOL_NAMES: [&str; 83] = [
     "get_editor_context",
     "get_scripting_capabilities",
     "analyze_component_code",
@@ -66,6 +66,7 @@ const MCP_TOOL_NAMES: [&str; 82] = [
     "create_script_asset",
     "apply_script_template",
     "update_script_asset",
+    "capture_scene_debug",
     "set_play_mode",
     "search_external_assets",
     "get_external_asset_options",
@@ -2919,6 +2920,21 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "capture_scene_debug",
+            "description": "Read live Scene View renderer metrics or start/stop a bounded, MCP-owned WebM capture. This does not change SceneDocument, AssetManifest, selection, or Undo history. metrics returns FPS, frame time, draw calls, triangles, visible mesh count, geometry/texture memory counts, and camera Far. start accepts durationMs from 1000 to 15000; stop saves the recording to the app debug-captures directory and returns its path.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "action": { "type": "string", "enum": ["metrics", "start", "stop"] },
+                    "durationMs": { "type": "integer", "minimum": 1000, "maximum": 15000 }
+                },
+                "required": ["projectId", "sceneId", "action"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "set_play_mode",
             "description": "Start or stop the visual editor Play session. Starting Play checks the project-scoped content-hash approval for every referenced Script before evaluation. XRift Studio's stdio MCP editor tools cannot approve source; the debug-only privileged Tauri MCP bridge is outside this trust boundary. Unapproved source returns SCRIPT_APPROVAL_REQUIRED unless unapprovedPolicy is explicitly set to skip. Compilation failure leaves the editor in Edit mode.",
             "inputSchema": {
@@ -2986,7 +3002,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "update_scene_settings",
-            "description": "Update persisted Skybox, Fog, ambient light, camera, and editor viewport settings through XRift Studio history and autosave. This is supported during Edit and Play; Play reflects the shared Scene settings immediately.",
+            "description": "Update persisted Skybox, Fog, ambient light, camera, post effects, and editor viewport settings through XRift Studio history and autosave. This is supported during Edit and Play; Play reflects the shared Scene settings immediately.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3065,6 +3081,26 @@ fn tool_definitions() -> Value {
                         "minProperties": 1,
                         "additionalProperties": false
                     },
+                    "postprocessing": {
+                        "type": "object",
+                        "properties": {
+                            "enabled": { "type": "boolean" },
+                            "exposure": { "type": "number", "minimum": 0 },
+                            "bloom": {
+                                "type": "object",
+                                "properties": {
+                                    "enabled": { "type": "boolean" },
+                                    "threshold": { "type": "number", "minimum": 0 },
+                                    "strength": { "type": "number", "minimum": 0 },
+                                    "radius": { "type": "number", "minimum": 0 }
+                                },
+                                "minProperties": 1,
+                                "additionalProperties": false
+                            }
+                        },
+                        "minProperties": 1,
+                        "additionalProperties": false
+                    },
                     "editor": {
                         "type": "object",
                         "properties": {
@@ -3095,6 +3131,7 @@ fn tool_definitions() -> Value {
                     { "required": ["fog"] },
                     { "required": ["ambient"] },
                     { "required": ["camera"] },
+                    { "required": ["postprocessing"] },
                     { "required": ["editor"] }
                 ],
                 "additionalProperties": false
@@ -3318,7 +3355,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "update_component",
-            "description": "Persist supported Component fields and enabled state through Editor history. Built-in Mesh Renderer, Rigid Body, Collider, Light, Text, Audio Source, Animation, and Particle Emitter patches use the same validators as Inspector. Mesh Renderer patches can update enabled, complete materialBindings, Cast/Receive Shadow, and static Model pose. Use update_transform for Transform values and update_script_component for Script properties/references.",
+            "description": "Persist supported Component fields and enabled state through Editor history. Built-in Mesh Renderer, Rigid Body, Collider, Light, Text, Audio Source, Animation, and Particle Emitter patches use the same validators as Inspector. Mesh Renderer patches can update enabled, complete materialBindings, Cast/Receive Shadow, static Model pose, and optional maxDistance (null clears the Mesh Far Clip and restores Scene Camera Far). Use update_transform for Transform values and update_script_component for Script properties/references.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3347,6 +3384,7 @@ fn tool_definitions() -> Value {
                             },
                             "castShadow": { "type": "boolean" },
                             "receiveShadow": { "type": "boolean" },
+                            "maxDistance": { "type": ["number", "null"], "minimum": 0.1, "maximum": 1000000 },
                             "modelPose": {
                                 "type": ["object", "null"],
                                 "properties": {
@@ -3921,12 +3959,18 @@ mod tests {
                 .and_then(Value::as_u64),
             Some(1)
         );
+        assert!(
+            update_component
+                .pointer("/inputSchema/properties/patch/properties/maxDistance")
+                .is_some(),
+            "update_component should expose Mesh maxDistance"
+        );
 
         let update_scene_settings = tools
             .iter()
             .find(|tool| tool.get("name").and_then(Value::as_str) == Some("update_scene_settings"))
             .expect("update_scene_settings");
-        for section in ["skybox", "fog", "ambient", "camera", "editor"] {
+        for section in ["skybox", "fog", "ambient", "camera", "postprocessing", "editor"] {
             assert_eq!(
                 update_scene_settings
                     .pointer(&format!("/inputSchema/properties/{section}/minProperties"))
@@ -3940,7 +3984,7 @@ mod tests {
                 .pointer("/inputSchema/anyOf")
                 .and_then(Value::as_array)
                 .map(Vec::len),
-            Some(5)
+            Some(6)
         );
         assert!(
             update_scene_settings
