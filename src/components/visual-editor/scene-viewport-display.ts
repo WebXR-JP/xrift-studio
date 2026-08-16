@@ -48,7 +48,10 @@ export type SceneViewportDisplayProfile = {
   showAllColliders: boolean;
 };
 
-const NEUTRAL_DEBUG_BACKGROUND = "#e7ebf0";
+// Keep neutral gray materials readable while inspecting geometry without the
+// authored skybox or lighting. This is an editor-only display color and never
+// changes the Scene background used by Play or published worlds.
+const NEUTRAL_DEBUG_BACKGROUND = "#27272a";
 
 export function getSceneViewportDisplayProfile(
   mode: SceneViewportDisplayMode,

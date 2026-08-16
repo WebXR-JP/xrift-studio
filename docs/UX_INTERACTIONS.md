@@ -193,7 +193,7 @@ F-06 アイテム検査
 - Asset のドラッグ中は Scene View だけを配置可能領域として示し、drop 前には Entity を増やさない。
 - ギズモ操作中はカメラ操作を競合させず、Scene View と Inspector の Transform 値を同期する。Inspector の軸ラベルをスクラブする時も local Transform を即時同期し、Scale の比率固定中は操作軸の倍率で不均等比率を保つ。
 - Entity選択中のFは、そのEntity subtreeの描画boundsへカメラとOrbit中心を合わせる。フォーカス中に別Entityを選択しただけでは追従せず、Fを押した時だけ対象を切り替える。
-- 待機中のギズモと選択補助線はニュートラルカラーで控えめにし、操作中の軸とAsset drop targetだけを明るく示す。
+- 待機中のギズモと選択補助線はニュートラルカラーで控えめにし、操作中の軸とAsset drop targetだけを明るく示す。「ライトなし」「ワイヤー」「コライダー編集」は、既定のグレーMaterialが背景に埋もれない暗いneutral背景を使い、Scene settingsや公開結果は変更しない。
 - panel resize / dock 中は drop preview と minimum size を示し、authoring Command や selection を変更しない。
 - Material Asset の color、metalness、roughness、texture 参照は Edit と Play の Inspectorから変更でき、同じ Asset ID を参照する全 Entity の preview と同期する。Playでは参照Entityだけを再起動し、Entity 固有 Material 値へ複製しない。
 - 外部 GLB / GLTF の drop は Import Queue で validate、source copy、derive、dynamic thumbnail、manifest commit まで処理する。Assets への drop は Scene 配置へ進めず、Scene への明示 drop だけが import 成功後の配置を同じ transaction intent で続ける。

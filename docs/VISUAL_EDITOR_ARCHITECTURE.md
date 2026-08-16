@@ -113,7 +113,7 @@ visual manifest が存在するが壊れている場合、classic として推�
 - 選択中のエンティティだけに移動、回転、拡大縮小のギズモを表示する。
 - 通常clickは単体選択、Shift / Ctrl・Cmd clickは追加／解除とし、複数選択中は全対象へoutline、最後に選んだprimary Entityだけにgizmoを表示する。pointer downからupまでにcamera drag相当の移動があれば選択を確定しない。
 - ギズモ操作中はカメラ操作との競合を止め、操作終了時に一つの履歴として確定する。
-- Editの表示は一つの目的別selectorで「シーン」「ライトなし」「ワイヤー」「コライダー」を切り替える。Skybox、Fog、Lightを個別toolbar toggleとして並べず、表示モードはSceneDocument、Undo、自動保存、compile、Play結果を変更しない。
+- Editの表示は一つの目的別selectorで「シーン」「ライトなし」「ワイヤー」「コライダー」を切り替える。Skybox、Fog、Lightを個別toolbar toggleとして並べず、診断用の3モードは既定のグレーMaterialと形状を見分けられる暗いneutral背景を使う。表示モードはSceneDocument、Undo、自動保存、compile、Play結果を変更しない。
 - 空間へ Model / Prefab をドロップした場合は、配置したエンティティを直ちに選択する。Material の drop は Entity を増やさず、対象 Mesh slot の binding を変更する。
 - Scene View の空間または Entity を右クリックすると Create submenu を開き、Empty、Box、Sphere、Plane、Cylinder など Registry 登録済み primitive を click point または選択親の下へ作成する。作成位置と親を menu 内で読めるようにし、`CreatePrimitiveCommand` 一件で追加と選択を確定する。
 - Edit と Play は明示的に分け、同じ Scene View で切り替える。
