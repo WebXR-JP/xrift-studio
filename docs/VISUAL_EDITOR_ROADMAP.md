@@ -68,7 +68,7 @@ Visual projectはコードを隠すだけの画面ではなく、Scene、Asset�
 | 2 | Editor shell／command | 利用可能・継続改善 | 複数選択、検索、shortcut設定、panel restoreを実用水準にする。 |
 | 3 | Asset import | 利用可能・検証中 | sidecar付きglTF、reimport差分、欠落参照、Open Brush、Unity importの実データ受け入れを完了する。 |
 | 4 | Material／Texture／Audio | 利用可能・継続改善 | Inspector、thumbnail、Scene View、生成コードの見え方と音を一致させる。 |
-| 5 | XRift Component／Play | 利用可能・検証中 | Worldのcharacter、collider、spawn、cameraとItem previewを実runtimeで受け入れる。 |
+| 5 | XRift Component／Play | 利用可能・検証中 | Worldのcharacter、静的Collider、spawn、cameraとItem previewを実runtimeで受け入れる。動的Rigid BodyとXRift Component adapterは未完了警告を維持する。 |
 | 6 | Save／Compile／Upload | 利用可能・堅牢化中 | 診断元への移動、認証、再試行、staging provenance、正式result表示を一つの流れにする。 |
 | 7 | Static avatar pose | 利用可能・継続改善 | humanoid名、一般bone、shape keyの保存、再読込、生成コードをfixtureと実VRMで一致させる。 |
 | 8 | Animation authoring | 計画中 | timeline上でbone／shape key keyframeを編集・再生し、clipとして保存できる。 |
@@ -92,7 +92,7 @@ repository内の開発版はRuntime JSON、Three.js／R3F adapter、dry-run、�
 2. Model再importへ別source選択、sidecar付きglTF、変更差分、消失slot参照一覧を追加する。
 3. VRM／skinned modelの静的ポーズを実機で磨き、timeline用のpose／clip data contractを先に固定する。
 4. AI connectionの認証境界、timeout、sidecar同梱、失敗後の再接続をrelease環境で確認する。
-5. `xrift-studio-runtime`のAudio、Particle、Collider physics、XRift固有Component adapterを追加し、ClassicとEditor Previewの結果を一致させる。
+5. `xrift-studio-runtime`のAudio、Particle、動的Rigid Body、XRift固有Component adapterを追加し、ClassicとEditor Previewの結果を一致させる。静的Collider／Spawn Pointは実runtimeへ接続済み。
 6. Material、Play、XRift Component、Uploadを同じVisual documentから通しで受け入れる。
 
 ## 完了判定

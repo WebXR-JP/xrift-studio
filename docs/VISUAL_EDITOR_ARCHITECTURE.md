@@ -127,7 +127,7 @@ visual manifest が存在するが壊れている場合、classic として推�
 - 右側は Entity と Asset の唯一の property editor とする。`sceneSelection` と `assetSelection` は独立して保持し、最後に明示操作した対象を `inspectorContext` として表示する。Asset を選んでも Entity selection 自体は消えず、Inspector header の Entity / Asset breadcrumb または pinned tab で直前の Entity properties へ一操作で戻れる。
 - Entity context は Transform、Component、geometry / model reference、material slots、`castShadow` / `receiveShadow`、XRift Studio 固有 authoring field を扱う。Material context は glTF PBR / extensions、Texture context は source、色空間、resize、mipmap / sampler、compression、derived / diagnostics を扱う。Model、Prefab、Particle も同じ右 Inspector の kind-specific section を使う。
 - Material Asset の変更は、その ID を参照するすべての Entity へ反映する。Inspector header には Asset kind、stable ID、参照数、「共有中」、dirty / stale status を表示する。
-- Mesh の Material は glTF mesh primitive に対応する slot ごとに表示し、`materialBindings[].slot` と `materialAssetId` を編集する。`castShadow` と `receiveShadow` は Material ではなく Entity の Mesh Component にある「影」section で扱う。
+- Mesh の Material は glTF mesh primitive に対応する slot ごとに表示し、`materialBindings[].slot` と `materialAssetId` を編集する。`castShadow` と `receiveShadow` は Material ではなく Entity の Mesh Component にある「影」section で扱う。アセット単位の任意の `maxDistance`（Far Clip）は同じ Mesh Component に保存し、未設定時は Scene Camera の `far` を使う。Inspector、MCP、Editor Preview、Play、Classic compiler はこの値を共有し、葉や遠景モデルだけを安全に距離制限できる。
 - Assets から Material を Entity Inspector の slot または Scene View の Mesh へ drag できる。hover 中は対象 Entity / slot と置換前後の Material 名を表示し、drop は `AssignMaterialCommand` 一件にする。複数 slot が曖昧なら drop 前に slot chooser を開き、推測適用しない。
 - Assets から Texture を Material Inspector の対応 slot へ drag できる。用途が base color / emissive なら sRGB、metallic-roughness / normal / occlusion なら linear の recipe を提案し、既存 recipe と衝突する場合は確定前に選択肢を示す。
 - Entity 固有の Material override を追加する場合は、共有 Material Asset の編集とは別の明示的 Component / Command にし、現在どちらを編集しているか header と field group で区別する。
@@ -557,7 +557,7 @@ glTF は一つの mesh に複数の mesh primitive を持ち、各 primitive が
 
 再 import で primitive 構成が変わった場合は、元 index、名前、構造 fingerprint の順に binding を照合する。自動対応できない binding は削除や別 slot への推測をせず `stale-binding` diagnostic とし、右 Inspector から置換先を選べるようにする。
 
-`castShadow` と `receiveShadow` は XRift Studio の Mesh Component / target adapter 用 authoring 設定であり、glTF 2.0 core Material field ではない。glTF import では profile の既定値を入れ、Material から推測しない。glTF へ再出力する場合も Material JSON へ追加せず、XRift compiler adapter が runtime 設定として扱う。`doubleSided` は Material、影は Entity / Mesh と、UI section と保存先を分ける。
+`castShadow` と `receiveShadow` は XRift Studio の Mesh Component / target adapter 用 authoring 設定であり、glTF 2.0 core Material field ではない。glTF import では profile の既定値を入れ、Material から推測しない。glTF へ再出力する場合も Material JSON へ追加せず、XRift compiler adapter が runtime 設定として扱う。`maxDistance` も同じく renderer adapter の設定で、`0.1..1,000,000` の有限値または未設定を受け付け、`null` 更新で Scene Camera の `far` へ戻す。`doubleSided` は Material、影と描画距離は Entity / Mesh と、UI section と保存先を分ける。
 
 #### Material extension Registry
 

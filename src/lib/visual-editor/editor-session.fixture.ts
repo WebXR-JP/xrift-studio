@@ -7,6 +7,8 @@ import {
 import {
   SCENE_DOCUMENT_SCHEMA_VERSION,
   createBoxColliderComponent,
+  createVegetationWindComponent,
+  updateVegetationWindComponent,
   migrateLegacyParentRigidBodies,
   type SceneDocument,
   type SceneEntity,
@@ -144,6 +146,42 @@ export function runEditorSessionHierarchyFixtureAssertions(): void {
       "world",
     ).added,
     "an Entity must not receive duplicate Rigid Body components",
+  );
+
+  const vegetationAdded = addEditorComponent(
+    physicsScene,
+    project.assets,
+    physicsEntityId,
+    "core.wind",
+    "world",
+  );
+  const vegetation = vegetationAdded.scene.entities[physicsEntityId]?.components.find(
+    (component) => component.type === "vegetation-wind",
+  );
+  assert(
+    vegetationAdded.added && vegetation?.type === "vegetation-wind",
+    "Wind must be addable as an explicit Entity Component",
+  );
+  const tunedVegetationScene = updateVegetationWindComponent(
+    vegetationAdded.scene,
+    physicsEntityId,
+    { windStrength: 0.2, windSpeed: 1.1, gustStrength: 0.5 },
+    vegetation?.id,
+  );
+  const tunedVegetation = tunedVegetationScene.entities[physicsEntityId]?.components.find(
+    (component) => component.type === "vegetation-wind",
+  );
+  assert(
+    tunedVegetation?.type === "vegetation-wind" &&
+      tunedVegetation.windStrength === 0.2 &&
+      tunedVegetation.windSpeed === 1.1 &&
+      tunedVegetation.gustStrength === 0.5,
+    "Wind edits must stay on the explicit component",
+  );
+  assert(
+    createVegetationWindComponent("vegetation-fixture")?.type ===
+      "vegetation-wind",
+      "Wind factory must emit the registered component shape",
   );
 
   const scriptAsset = createScriptAsset(

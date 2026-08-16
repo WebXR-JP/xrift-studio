@@ -34,7 +34,8 @@
     "cli:build": "vite build --config vite.cli.config.mjs",
     "cli:test": "node scripts/check-fixture-coverage.mjs && pnpm cli:build && node dist/cli/fixture.mjs",
     "runtime:build": "pnpm --filter xrift-studio-runtime build",
-    "runtime:typecheck": "pnpm --filter xrift-studio-runtime typecheck"
+    "runtime:typecheck": "pnpm --filter xrift-studio-runtime typecheck",
+    "runtime:shell:check": "node scripts/check-world-runtime-shell.mjs"
   },
   "overrides": {
     "dompurify": "3.4.12"

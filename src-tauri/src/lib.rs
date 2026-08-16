@@ -5166,6 +5166,70 @@ fn save_screenshot(path: String, data_url: String) -> Result<(), String> {
     std::fs::write(&target, bytes).map_err(|error| format!("保存に失敗しました: {}", error))
 }
 
+#[tauri::command]
+fn save_video(path: String, data_url: String) -> Result<(), String> {
+    let target = PathBuf::from(&path);
+    let is_webm = target
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.eq_ignore_ascii_case("webm"))
+        .unwrap_or(false);
+    if !is_webm {
+        return Err("デバッグ動画はWebM形式で保存してください。".to_string());
+    }
+    if let Ok(metadata) = std::fs::symlink_metadata(&target) {
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err("保存先が通常のファイルではありません。".to_string());
+        }
+    }
+    if !data_url.starts_with("data:video/webm;base64,") {
+        return Err("WebM動画データを確認できません。".to_string());
+    }
+    let bytes = decode_base64_data_url(&data_url, "WebM動画データが不正です。")?;
+    if bytes.is_empty() || bytes.len() > 256 * 1024 * 1024 {
+        return Err("デバッグ動画のサイズが不正です。15秒以内の録画を保存してください。".to_string());
+    }
+    if let Some(parent) = target.parent() {
+        if !parent.is_dir() {
+            return Err("保存先フォルダーが見つかりません。".to_string());
+        }
+    }
+    std::fs::write(&target, bytes).map_err(|error| format!("保存に失敗しました: {}", error))
+}
+
+#[tauri::command]
+fn save_debug_video(
+    app: AppHandle,
+    data_url: String,
+    label: Option<String>,
+) -> Result<String, String> {
+    let directory = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| format!("デバッグ動画の保存先を確認できません: {}", error))?
+        .join("debug-captures");
+    std::fs::create_dir_all(&directory)
+        .map_err(|error| format!("デバッグ動画の保存先を作成できません: {}", error))?;
+    let safe_label: String = label
+        .unwrap_or_else(|| "scene-view".to_string())
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric() || *character == '-' || *character == '_')
+        .take(48)
+        .collect();
+    let safe_label = if safe_label.is_empty() {
+        "scene-view"
+    } else {
+        safe_label.as_str()
+    };
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| format!("時刻を取得できません: {}", error))?
+        .as_millis();
+    let path = directory.join(format!("{}-{}.webm", safe_label, timestamp));
+    save_video(path.to_string_lossy().to_string(), data_url)?;
+    Ok(path.to_string_lossy().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
@@ -5237,6 +5301,8 @@ pub fn run() {
             read_thumbnail,
             write_thumbnail,
             save_screenshot,
+            save_video,
+            save_debug_video,
             read_audio_data_url,
             read_image_data_url,
             list_files,
@@ -5279,6 +5345,27 @@ mod tests {
                 .expect("clock must be after epoch")
                 .as_nanos()
         ))
+    }
+
+    #[test]
+    fn debug_video_writer_accepts_only_bounded_webm_data() {
+        let fixture_root = reset_fixture_root("debug-video");
+        std::fs::create_dir_all(&fixture_root).expect("debug video fixture directory must exist");
+        let target = fixture_root.join("capture.webm");
+        save_video(
+            target.to_string_lossy().to_string(),
+            "data:video/webm;base64,AA==".to_string(),
+        )
+        .expect("valid WebM data URL should be saved");
+        assert_eq!(std::fs::read(&target).expect("saved WebM must be readable"), vec![0]);
+
+        let invalid_extension = fixture_root.join("capture.mp4");
+        assert!(save_video(
+            invalid_extension.to_string_lossy().to_string(),
+            "data:video/webm;base64,AA==".to_string(),
+        )
+        .is_err());
+        std::fs::remove_dir_all(&fixture_root).expect("debug video fixture must be removed");
     }
 
     #[test]

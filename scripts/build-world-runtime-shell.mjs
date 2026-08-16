@@ -40,6 +40,11 @@ const RUNTIME_PACKAGE_DIR = path.join(repoRoot, "packages", "xrift-studio-runtim
 /** Keep in step with COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC in src/lib/xrift-cli.ts. */
 const WORLD_COMPONENTS_SPEC = "@xrift/world-components@0.43.0";
 const SHELL_ENTRY = "remoteEntry.js";
+const RUNTIME_CONTRACT_SOURCE = path.join(
+  RUNTIME_PACKAGE_DIR,
+  "src",
+  "schema.ts",
+);
 
 /**
  * Scene data and per-world files never belong in the shell: the shell is the
@@ -121,6 +126,7 @@ async function main() {
   }
 
   const outputDir = path.resolve(repoRoot, options.out);
+  const runtimeContract = await readRuntimeContractVersion();
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "xrift-shell-"));
   const projectName = "xrift-studio-runtime-shell";
   const projectDir = path.join(tempRoot, projectName);
@@ -215,7 +221,16 @@ async function main() {
     const version = digest.digest("hex").slice(0, 12);
     await fs.writeFile(
       path.join(outputDir, "shell-manifest.json"),
-      `${JSON.stringify({ version, entry: SHELL_ENTRY, files: shellFiles.sort() }, null, 2)}\n`,
+      `${JSON.stringify(
+        {
+          version,
+          runtimeContract,
+          entry: SHELL_ENTRY,
+          files: shellFiles.sort(),
+        },
+        null,
+        2,
+      )}\n`,
       "utf8",
     );
 
@@ -230,6 +245,19 @@ async function main() {
       await fs.rm(tempRoot, { recursive: true, force: true });
     }
   }
+}
+
+async function readRuntimeContractVersion() {
+  const source = await fs.readFile(RUNTIME_CONTRACT_SOURCE, "utf8");
+  const match = source.match(
+    /XRIFT_RUNTIME_CONTRACT_VERSION\s*=\s*[\r\n\s]*"([^"]+)"/,
+  );
+  if (!match?.[1]) {
+    throw new Error(
+      `Runtime contract version could not be read from ${RUNTIME_CONTRACT_SOURCE}`,
+    );
+  }
+  return match[1];
 }
 
 /** See the note at the top of this file for why dts has to go. */

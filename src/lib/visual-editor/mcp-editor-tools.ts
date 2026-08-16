@@ -45,11 +45,15 @@ import {
   renameEntity as renameEntityInScene,
   updateAnimationComponent,
   updateAudioSourceComponent,
+  updateVegetationWindComponent,
   updateColliderComponent,
   updateEntityTransform,
   updateLightComponent,
   setMeshMaterialBinding,
   updateMeshShadowSettings,
+  updateMeshVisibilitySettings,
+  MESH_MAX_DISTANCE_MAX,
+  MESH_MAX_DISTANCE_MIN,
   updateRigidBodyComponent,
   updateTextComponent,
   type AnimationPatch,
@@ -64,6 +68,7 @@ import {
   type TextPatch,
   type Vec3,
   type ModelPoseState,
+  type MeshVisibilityPatch,
 } from "./scene-document";
 import {
   terrainHeightRange,
@@ -82,6 +87,8 @@ import {
   type ScenePhysicsSettings,
   type SceneFogSettings,
   type SceneGizmoSettings,
+  type ScenePostprocessingSettings,
+  type SceneVegetationSettings,
   type SceneSettings,
   type SceneSkyboxSettings,
 } from "./scene-settings";
@@ -236,6 +243,10 @@ export const XRIFT_MCP_LOCAL_ASSET_TOOLS = [
 
 export type XriftMcpLocalAssetToolName =
   (typeof XRIFT_MCP_LOCAL_ASSET_TOOLS)[number];
+
+/** Scene diagnostics are routed to the live R3F viewport, not document history. */
+export const XRIFT_MCP_DEBUG_TOOLS = ["capture_scene_debug"] as const;
+export type XriftMcpDebugToolName = (typeof XRIFT_MCP_DEBUG_TOOLS)[number];
 
 /** Script tools perform project file I/O or change Play mode in the React host. */
 export const XRIFT_MCP_SCRIPT_TOOLS = [
@@ -1350,13 +1361,15 @@ function updateSceneSettings(
     "fog",
     "ambient",
     "camera",
+    "postprocessing",
+    "vegetation",
     "physics",
     "editor",
   ] as const;
   if (!sections.some((section) => argumentsValue[section] !== undefined)) {
     invalidArgument(
       "Scene settings",
-      "skybox、fog、ambient、camera、physics、editorのいずれかを含むobject",
+      "skybox、fog、ambient、camera、postprocessing、vegetation、physics、editorのいずれかを含むobject",
     );
   }
   const settings: SceneSettings = {
@@ -1417,6 +1430,31 @@ function updateSceneSettings(
               "fov",
             ]),
           ),
+    postprocessing:
+      argumentsValue.postprocessing === undefined
+        ? currentSettings.postprocessing
+        : applyPostprocessingPatch(
+            currentSettings.postprocessing,
+            sceneSettingsPatch(argumentsValue.postprocessing, "postprocessing", [
+              "enabled",
+              "hdr",
+              "bloom",
+              "ao",
+              "exposure",
+            ]),
+          ),
+    vegetation:
+      argumentsValue.vegetation === undefined
+        ? currentSettings.vegetation
+        : applyVegetationPatch(
+            currentSettings.vegetation,
+            sceneSettingsPatch(argumentsValue.vegetation, "vegetation", [
+              "enabled",
+              "windStrength",
+              "windSpeed",
+              "gustStrength",
+            ]),
+          ),
     physics:
       argumentsValue.physics === undefined
         ? currentSettings.physics
@@ -1438,7 +1476,14 @@ function updateSceneSettings(
             ]),
           ),
   };
-  if (sameSceneSettings(currentSettings, settings)) {
+  // resolveSceneSettings supplies defaults for old documents. Persist the
+  // newly introduced subsections once even when the requested values already
+  // equal those defaults; otherwise an apparently successful no-op would
+  // leave HDR/AO/vegetation absent from the file forever.
+  if (
+    sameSceneSettings(currentSettings, settings) &&
+    hasCanonicalSceneQualitySettings(context.bundle.scene.settings)
+  ) {
     return unchanged(
       context,
       {
@@ -2468,6 +2513,28 @@ function updateComponent(
       );
       break;
     }
+    case "vegetation-wind": {
+      assertPatchKeys(
+        patch,
+        ["enabled"],
+        component.type,
+        {
+          guidance:
+            "Windの強さ・速度・突風はScene SettingsのWind（グローバル）で変更してください（MCPではupdate_scene_settingsのvegetation section）",
+        },
+      );
+      const enabled = optionalBoolean(patch.enabled, "patch.enabled");
+      scene =
+        enabled === undefined
+          ? context.bundle.scene
+          : updateVegetationWindComponent(
+              context.bundle.scene,
+              entityId,
+              { enabled },
+              componentId,
+            );
+      break;
+    }
     case "particle-emitter": {
       assertPatchKeys(
         patch,
@@ -2604,7 +2671,14 @@ function updateComponent(
     case "mesh": {
       assertPatchKeys(
         patch,
-        ["enabled", "materialBindings", "castShadow", "receiveShadow", "modelPose"],
+        [
+          "enabled",
+          "materialBindings",
+          "castShadow",
+          "receiveShadow",
+          "modelPose",
+          "maxDistance",
+        ],
         component.type,
       );
       const mesh = component;
@@ -2614,6 +2688,24 @@ function updateComponent(
         patch.receiveShadow,
         "patch.receiveShadow",
       );
+      const hasMaxDistance = Object.prototype.hasOwnProperty.call(
+        patch,
+        "maxDistance",
+      );
+      const maxDistance = hasMaxDistance
+        ? optionalNullableFiniteNumber(patch.maxDistance, "patch.maxDistance")
+        : undefined;
+      if (
+        maxDistance !== undefined &&
+        maxDistance !== null &&
+        (maxDistance < MESH_MAX_DISTANCE_MIN ||
+          maxDistance > MESH_MAX_DISTANCE_MAX)
+      ) {
+        invalidArgument(
+          "patch.maxDistance",
+          `number between ${MESH_MAX_DISTANCE_MIN} and ${MESH_MAX_DISTANCE_MAX}, or null to clear`,
+        );
+      }
       const materialBindings =
         patch.materialBindings === undefined
           ? undefined
@@ -2668,6 +2760,14 @@ function updateComponent(
           scene,
           entityId,
           { castShadow, receiveShadow },
+          componentId,
+        );
+      }
+      if (hasMaxDistance) {
+        scene = updateMeshVisibilitySettings(
+          scene,
+          entityId,
+          { maxDistance } satisfies MeshVisibilityPatch,
           componentId,
         );
       }
@@ -4608,6 +4708,124 @@ function applyCameraPatch(
   return next;
 }
 
+function applyPostprocessingPatch(
+  current: ScenePostprocessingSettings,
+  patch: Record<string, unknown>,
+): ScenePostprocessingSettings {
+  const next: ScenePostprocessingSettings = {
+    ...current,
+    hdr: { ...current.hdr },
+    bloom: { ...current.bloom },
+    ao: { ...current.ao },
+  };
+  const enabled = optionalBoolean(patch.enabled, "postprocessing.enabled");
+  if (enabled !== undefined) next.enabled = enabled;
+  if (patch.hdr !== undefined) {
+    const hdrPatch = sceneSettingsPatch(patch.hdr, "postprocessing.hdr", [
+      "enabled",
+      "toneMapping",
+    ]);
+    const hdrEnabled = optionalBoolean(
+      hdrPatch.enabled,
+      "postprocessing.hdr.enabled",
+    );
+    if (hdrEnabled !== undefined) next.hdr.enabled = hdrEnabled;
+    if (
+      hdrPatch.toneMapping !== undefined &&
+      hdrPatch.toneMapping !== "aces" &&
+      hdrPatch.toneMapping !== "none"
+    ) {
+      invalidArgument("postprocessing.hdr.toneMapping", "aces または none");
+    }
+    if (hdrPatch.toneMapping !== undefined) {
+      next.hdr.toneMapping = hdrPatch.toneMapping;
+    }
+  }
+  if (patch.exposure !== undefined) {
+    next.exposure = sceneNumber(patch.exposure, "postprocessing.exposure", 0);
+  }
+  if (patch.bloom !== undefined) {
+    const bloomPatch = sceneSettingsPatch(patch.bloom, "postprocessing.bloom", [
+      "enabled",
+      "threshold",
+      "strength",
+      "radius",
+    ]);
+    const bloomEnabled = optionalBoolean(
+      bloomPatch.enabled,
+      "postprocessing.bloom.enabled",
+    );
+    if (bloomEnabled !== undefined) next.bloom.enabled = bloomEnabled;
+    for (const [field, minimum] of [
+      ["threshold", 0],
+      ["strength", 0],
+      ["radius", 0],
+    ] as const) {
+      if (bloomPatch[field] !== undefined) {
+        next.bloom[field] = sceneNumber(
+          bloomPatch[field],
+          `postprocessing.bloom.${field}`,
+          minimum,
+        );
+      }
+    }
+  }
+  if (patch.ao !== undefined) {
+    const aoPatch = sceneSettingsPatch(patch.ao, "postprocessing.ao", [
+      "enabled",
+      "radius",
+      "minDistance",
+      "maxDistance",
+    ]);
+    const aoEnabled = optionalBoolean(
+      aoPatch.enabled,
+      "postprocessing.ao.enabled",
+    );
+    if (aoEnabled !== undefined) next.ao.enabled = aoEnabled;
+    for (const [field, minimum] of [
+      ["radius", 0.1],
+      ["minDistance", 0],
+      ["maxDistance", 0.001],
+    ] as const) {
+      if (aoPatch[field] !== undefined) {
+        next.ao[field] = sceneNumber(
+          aoPatch[field],
+          `postprocessing.ao.${field}`,
+          minimum,
+        );
+      }
+    }
+    if (next.ao.maxDistance <= next.ao.minDistance) {
+      throw new XriftMcpEditorToolError(
+        "INVALID_ARGUMENT",
+        "postprocessing.ao.maxDistanceはminDistanceより大きい値にしてください",
+      );
+    }
+  }
+  return next;
+}
+
+function applyVegetationPatch(
+  current: SceneVegetationSettings,
+  patch: Record<string, unknown>,
+): SceneVegetationSettings {
+  const next = { ...current };
+  if (patch.enabled !== undefined) {
+    const enabled = optionalBoolean(patch.enabled, "vegetation.enabled");
+    if (enabled !== undefined) next.enabled = enabled;
+  }
+  for (const [field, minimum] of [
+    ["windStrength", 0],
+    ["windSpeed", 0],
+    ["gustStrength", 0],
+  ] as const) {
+    if (patch[field] !== undefined) {
+      next[field] = sceneNumber(patch[field], `vegetation.${field}`, minimum);
+    }
+  }
+  return next;
+}
+
 function applyPhysicsPatch(
   current: ScenePhysicsSettings,
   patch: Record<string, unknown>,
@@ -4783,6 +5001,31 @@ function sameSceneSettings(
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function hasCanonicalSceneQualitySettings(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const settings = value as Record<string, unknown>;
+  const vegetation = settings.vegetation;
+  const postprocessing = settings.postprocessing;
+  if (!postprocessing || typeof postprocessing !== "object" || Array.isArray(postprocessing)) {
+    return false;
+  }
+  const post = postprocessing as Record<string, unknown>;
+  return (
+    vegetation !== undefined &&
+    typeof vegetation === "object" &&
+    vegetation !== null &&
+    !Array.isArray(vegetation) &&
+    post.hdr !== undefined &&
+    typeof post.hdr === "object" &&
+    post.hdr !== null &&
+    !Array.isArray(post.hdr) &&
+    post.ao !== undefined &&
+    typeof post.ao === "object" &&
+    post.ao !== null &&
+    !Array.isArray(post.ao)
+  );
+}
+
 function placementFailureMessage(reason: string): string {
   switch (reason) {
     case "asset-missing":
@@ -4895,6 +5138,8 @@ function componentDefinitionId(component: SceneComponent): string | null {
       return "core.particle";
     case "animation":
       return "core.animation";
+    case "vegetation-wind":
+      return "core.wind";
     case "audio-source":
       return "core.audio-source";
     case "text":
@@ -5723,6 +5968,15 @@ function optionalFiniteNumber(value: unknown, name: string): number | undefined 
     invalidArgument(name, "finite number");
   }
   return value;
+}
+
+function optionalNullableFiniteNumber(
+  value: unknown,
+  name: string,
+): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  return optionalFiniteNumber(value, name) ?? null;
 }
 
 function optionalNumberTuple<N extends number>(

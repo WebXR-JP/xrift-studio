@@ -98,6 +98,9 @@ F-06 アイテム検査
 
 | MI-77 | World Playでキャラクターを生成せず、SpawnPointからフリーカメラで探索する | Play開始時はSpawnPointの目線にカメラを置き、WASD / 矢印で水平移動、Q/Eで上下移動、Shiftで加速、左または右ドラッグで視点回転を受け付ける。Play Windowの案内面に操作方法を残し、カメラ操作中は編集用の選択操作を確定しない。 | Stopでカメラ入力とPlay専用状態を破棄し、開始前に保存したEdit cameraへ戻る。Play中の移動はSceneDocument、選択、Undo履歴を変更しない。 |
 
+| MI-80 | Scene Viewの「診断」を開く、または「録画」を開始する | 実際のThree.js rendererからFPS、frame time、draw calls、triangles、visible mesh数、geometry / texture数、camera位置 / Farを0.5秒ごとに表示する。「録画」はScene ViewのCanvasを最大15秒WebMへ記録し、録画中は`REC`と保存状態を表示する。診断表示は編集データや描画結果を変更しない。 | 録画停止または15秒で保存ダイアログへ進み、キャンセルではScene Viewへ戻る。WebM非対応・保存失敗時は原因と再試行を残す。連続録画は上限で自動停止し、アプリのメモリを無制限に増やさない。 |
+| MI-81 | Entity InspectorでWind Componentを追加または編集する | Add Componentから対象EntityへWind Componentを付け、Enabledを切り替える。Componentが付いたEntityと子Meshだけを対象にし、Mesh名や植物らしさの推測を行わない。風の強さ・速度・突風はScene Settingsの「Wind（グローバル）」で一括編集し、Scene Viewへ反映する。 | 追加・変更は一件のScene更新として保存し、Play中は対象Entityの実行コピーへ同期する。無効値や古いrevisionではScene、selection、historyを変更せず、Inspectorの入力と再試行先を残す。成功後は同じEntity Inspectorに留まり、Preview / Compile / Playへ進める。 |
+
 ## 機能一覧
 
 | 機能 ID | 機能 | 参照するインタラクション | 完了条件 |
@@ -127,9 +130,12 @@ F-06 アイテム検査
 | F-29 | Custom Shader authoringとMaterial適用 | MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-48 | Material InspectorまたはMCPからGLSL、uniform、variant、時間uniformを作成・編集し、同じMaterial AssetをMesh slotへ割り当ててScene View、Play、生成Worldへ反映できる。無効なshaderは診断とPBR復帰を残し、成功後は対象Materialへ戻れる。 |
 | F-26 | アプリデータのリセット | MI-03, MI-04, MI-05, MI-09, MI-66 | 実行中CLIとの競合や一時的なfile lockで部分的な状態を残さず、ランタイムのみまたは全データを確実に新しい起動から分離する。失敗時は対象と再試行方法を確認したまま復帰できる。 |
 | F-27 | 公開前パフォーマンス概算とAsset最適化 | MI-04, MI-07, MI-27, MI-67 | World / Itemの更新前に初回ロード容量と回線別時間、Assetと実行時VRAMのrange、端末別Studio基準、容量・負荷順の内訳と最適化候補を確認できる。対応候補は個別選択してresize、KTX2、DracoをAssetへ適用し、変換結果と再計算値を確認した上で同じUpload reviewへ戻れる。 |
+| F-30 | Visual QA診断と短時間録画 | MI-03, MI-05, MI-14, MI-26, MI-80 | Scene ViewとPlay Windowで実rendererのFPS、frame time、draw calls、triangles、mesh可視数、camera Farを確認でき、最大15秒のWebMを保存して問題の発生前後を再現できる。診断や録画はSceneDocument、AssetManifest、Undo履歴を変更せず、停止・保存失敗・WebM非対応から同じScene Viewへ戻れる。 |
 | F-28 | Script AssetとScript Component | MI-03, MI-05, MI-09, MI-14, MI-69, MI-70, MI-71, MI-72, MI-73 | Script AssetをTypeScriptで書き、共通Template catalogからsource preview付きで作成し、EntityへScript Componentとして複数付けられる。宣言したpropertyがInspectorへ自動で並び、Asset参照とEntity参照を選べる。Play中のpropertyは再起動なしで次のframeへ反映し、明示参照した基本Texture / Audio、Entity自身のAudio Source / Light / Material / Particleをowner単位で操作できる。明示参照Entityのworld座標近接をruntime eventへつなぎ、Light等の視覚効果をchannelで接続できる。Entity / Component構成と対応するauthoring propertyは永続化し、Light scalarは既存runtime、それ以外は影響Entityだけを再同期する。実行時例外は該当Scriptだけを止める。同じhost、root、Audio / Light / Particle runtime、参照resolverを公開ワールドへ静的importとして出力し、MCPも同じTemplate、参照契約、revision検査で作成・編集・適用・実行できる。 |
 | F-30 | Textureから遠景 / 草カードを作成 | MI-05, MI-09, MI-11, MI-15, MI-16, MI-25 | 通常のTexture Assetから、alpha blend・両面Materialを持つ平面・180 / 270度カーブの遠景、1枚 / クロスの草カードを一件のUndo履歴で作成し、配置直後にScene ViewとEntity Inspectorで位置とMaterialを調整できる。 |
 | F-31 | Terrain authoring / MCP | MI-03, MI-05, MI-09, MI-13, MI-16, MI-78 | Createメニューからstatic Terrainを追加し、InspectorとMCPの同じRaise / Lower / Flatten / Smoothブラシで高さサンプルを編集する。各スタンプは一件のUndo履歴として保存され、Scene View、Play、生成コード、Trimesh Colliderへ同じTerrainを反映する。 |
+| F-32 | Scene post effects | MI-03, MI-05, MI-09, MI-13, MI-15, MI-16, MI-80 | Scene settingsでHDR / AO / Bloom / 露出を編集し、Scene View、Play、生成Worldの同じレンダリング設定へ反映する。設定は保存・再読込・公開レビューまで同じScene contractで扱う。 |
+| F-33 | Wind Component | MI-03, MI-05, MI-09, MI-11, MI-13, MI-14, MI-15, MI-16, MI-81 | Entity InspectorまたはMCPからWind Componentを明示的に追加し、対象Entityと子MeshだけへScene Settingsのグローバル風設定を適用する。Editor Preview、Play、生成World、Runtime manifestは同じComponentとScene値を使い、名前・Mesh分類・言語に依存した対象推測を行わない。 |
 
 ## F-23 公式XRift ComponentカタログとClassic / TSX変換の状態設計
 
@@ -944,6 +950,32 @@ F-06 アイテム検査
 ### 戻り先
 
 - 作成・ブラシ適用後はTerrain Inspectorに留まる。Undo / Redoで直前のTerrain samplesを戻し、必要ならMaterialまたはCollider診断へ進める。
+
+## F-32 Scene post effects の状態設計
+
+参照: MI-03, MI-05, MI-09, MI-13, MI-15, MI-16, MI-80
+
+### 操作前
+
+- Scene settingsにポストエフェクトを表示し、全体の有効化、HDR / tone mapping、SSAO、Bloomの有効化、threshold / strength / radius、exposureを一つのまとまりとして編集できる。WindはEntity Componentで対象を指定し、風量はScene settingsのグローバル値で一括調整する。既存Sceneのvegetation sectionはWind設定として互換保持し、sectionや新しい subsectionがなくても既定値で読み込み、古い制作データを壊さない。
+
+### 処理中
+
+- MCPとInspectorは同じrevision検査、autosave、Scene View同期を使う。HDR / AO / Bloomを個別に無効にした場合も通常のrendererへ戻し、最後のフレームを画面に残さない。
+
+### 成功時
+
+- Scene ViewとPlayで同じpostprocessing設定を確認でき、公開用の生成Worldにも同じHDR / AO / Bloom / exposureが出力される。WindはComponentを付けたEntityだけを対象にし、Scene Settingsのグローバル値がEditor / Play / Runtimeへ反映される。保存後にライブラリへ戻り再オープンしてもsectionと値を再取得できる。
+- 保存後にSceneを再読込しても、設定値とRenderer contractを失わず、次のライティング改善へ進める。
+
+### 失敗時
+
+- 無効なpostprocessing sectionはSceneを開けなくする代わりに、対象pathと期待するobject shapeを示して修正する。古いSceneでsectionがない場合は互換既定値を使う。
+- Viteやrendererの初期化に失敗した場合はSceneデータを変更せず、再読み込みまたはライブラリへ戻る導線を残す。
+
+### 戻り先
+
+- 設定変更後はScene Viewへ留まり、Play、Compile、公開レビューの順に進める。失敗時はScene settingsまたは変換manifestのdiagnosticsへ戻る。
 
 ## 実装制約
 

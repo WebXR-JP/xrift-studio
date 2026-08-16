@@ -1,4 +1,5 @@
 import {
+  Activity,
   ArrowLeft,
   Axis3D,
   Box,
@@ -128,6 +129,8 @@ export const EDITOR_ICONS = {
   textInput: TextCursorInput,
   billboardY: Rotate3D,
   warning: TriangleAlert,
+  diagnostics: Activity,
+  record: CircleDot,
   ai: Bot,
   refresh: RefreshCw,
   search: Search,

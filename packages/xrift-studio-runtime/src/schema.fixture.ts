@@ -60,6 +60,34 @@ export function runRuntimeSchemaFixtureAssertions(): void {
     "A valid bounded Terrain manifest was rejected",
   );
 
+  const colliderAndSpawn = structuredClone(validTerrain);
+  const colliderAndSpawnComponents = colliderAndSpawn.scenes["scene-main"].entities
+    .terrain.components as unknown as unknown[];
+  colliderAndSpawnComponents.push(
+    {
+      id: "collider-ground",
+      type: "collider",
+      enabled: true,
+      shape: "box",
+      center: [0, -0.5, 0],
+      halfExtents: [4, 0.5, 4],
+      isTrigger: false,
+      friction: 0.8,
+      restitution: 0.1,
+      bodyType: "fixed",
+    },
+    {
+      id: "spawn-player",
+      type: "spawn-point",
+      enabled: true,
+      target: "player",
+    },
+  );
+  assert(
+    isXriftRuntimeManifest(colliderAndSpawn),
+    "Collider and Spawn Point runtime components were rejected",
+  );
+
   const invalidResolution = structuredClone(validTerrain);
   (invalidResolution.scenes["scene-main"].entities.terrain.components[0] as {
     geometry: { resolution: number };

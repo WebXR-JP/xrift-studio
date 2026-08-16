@@ -31,6 +31,7 @@ import {
   PREFAB_DOCUMENT_SCHEMA_VERSION,
   type PrefabDocument,
 } from "./prefab-document";
+import { DEFAULT_SCENE_SETTINGS } from "./scene-settings";
 import {
   VISUAL_PROJECT_SCHEMA_VERSION,
   type VisualProjectDocument,
@@ -75,10 +76,17 @@ export const assetManifestCodec: VisualDocumentCodec<AssetManifest> = {
 export const sceneDocumentCodec: VisualDocumentCodec<SceneDocument> = {
   serialize: stableSerializeJson,
   parse: (json) => {
-    const parsed = parseTypedDocument<SceneDocument>(
-      json,
-      validateSceneDocument,
-    );
+    const parsedJson = parseJson(json);
+    if (!parsedJson.ok) return parsedJson;
+    // The postprocessing section was introduced after the first scene format.
+    // A few early documents serialized it as a bare boolean, which otherwise
+    // makes the whole project fail to open with a type error. Normalize only
+    // that legacy shape; canonical objects continue through strict validation.
+    const migrated = migrateLegacyScenePostprocessing(parsedJson.value);
+    const issues = validateSceneDocument(migrated);
+    const parsed: ParseDocumentResult<SceneDocument> = issues.length > 0
+      ? { ok: false, issues }
+      : { ok: true, document: migrated as SceneDocument, issues: [] };
     return parsed.ok
       ? {
           ok: true,
@@ -88,6 +96,27 @@ export const sceneDocumentCodec: VisualDocumentCodec<SceneDocument> = {
       : parsed;
   },
 };
+
+function migrateLegacyScenePostprocessing(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.settings)) return value;
+  const raw = value.settings.postprocessing;
+  if (raw === undefined || isRecord(raw)) return value;
+
+  return {
+    ...value,
+    settings: {
+      ...value.settings,
+      postprocessing: {
+        ...DEFAULT_SCENE_SETTINGS.postprocessing,
+        bloom: { ...DEFAULT_SCENE_SETTINGS.postprocessing.bloom },
+        enabled:
+          typeof raw === "boolean"
+            ? raw
+            : DEFAULT_SCENE_SETTINGS.postprocessing.enabled,
+      },
+    },
+  };
+}
 
 export const prefabDocumentCodec: VisualDocumentCodec<PrefabDocument> = {
   serialize: stableSerializeJson,
@@ -950,7 +979,16 @@ function validateSceneSettings(
   }
   validateKnownKeys(
     value,
-    ["skybox", "fog", "ambient", "camera", "physics", "editor"],
+    [
+      "skybox",
+      "fog",
+      "ambient",
+      "camera",
+      "postprocessing",
+      "vegetation",
+      "physics",
+      "editor",
+    ],
     path,
     issues,
   );
@@ -1079,6 +1117,140 @@ function validateSceneSettings(
       }
     },
   );
+  if (value.postprocessing !== undefined) {
+    validateSceneSettingsObject(
+      value.postprocessing,
+      ["enabled", "hdr", "bloom", "ao", "exposure"],
+      `${path}.postprocessing`,
+      issues,
+      (entry) => {
+        validateBoolean(entry, "enabled", `${path}.postprocessing`, issues);
+        validateFinite(entry, "exposure", `${path}.postprocessing`, issues, 0);
+        if (entry.hdr !== undefined) {
+          validateSceneSettingsObject(
+            entry.hdr,
+            ["enabled", "toneMapping"],
+            `${path}.postprocessing.hdr`,
+            issues,
+            (hdr) => {
+              validateBoolean(
+                hdr,
+                "enabled",
+                `${path}.postprocessing.hdr`,
+                issues,
+              );
+              if (
+                hdr.toneMapping !== undefined &&
+                hdr.toneMapping !== "aces" &&
+                hdr.toneMapping !== "none"
+              ) {
+                issues.push(
+                  issue(
+                    `${path}.postprocessing.hdr.toneMapping`,
+                    "value",
+                    "toneMapping must be aces or none",
+                  ),
+                );
+              }
+            },
+          );
+        }
+        validateSceneSettingsObject(
+          entry.bloom,
+          ["enabled", "threshold", "strength", "radius"],
+          `${path}.postprocessing.bloom`,
+          issues,
+          (bloom) => {
+            validateBoolean(
+              bloom,
+              "enabled",
+              `${path}.postprocessing.bloom`,
+              issues,
+            );
+            validateFinite(
+              bloom,
+              "threshold",
+              `${path}.postprocessing.bloom`,
+              issues,
+              0,
+            );
+            validateFinite(
+              bloom,
+              "strength",
+              `${path}.postprocessing.bloom`,
+              issues,
+              0,
+            );
+            validateFinite(
+              bloom,
+              "radius",
+              `${path}.postprocessing.bloom`,
+              issues,
+              0,
+            );
+          },
+        );
+        if (entry.ao !== undefined) {
+          validateSceneSettingsObject(
+            entry.ao,
+            ["enabled", "radius", "minDistance", "maxDistance"],
+            `${path}.postprocessing.ao`,
+            issues,
+            (ao) => {
+              validateBoolean(
+                ao,
+                "enabled",
+                `${path}.postprocessing.ao`,
+                issues,
+              );
+              validateFinite(ao, "radius", `${path}.postprocessing.ao`, issues, 0.1);
+              validateFinite(
+                ao,
+                "minDistance",
+                `${path}.postprocessing.ao`,
+                issues,
+                0,
+              );
+              validateFinite(
+                ao,
+                "maxDistance",
+                `${path}.postprocessing.ao`,
+                issues,
+                0.001,
+              );
+              if (
+                isFiniteNumber(ao.minDistance) &&
+                isFiniteNumber(ao.maxDistance) &&
+                ao.maxDistance <= ao.minDistance
+              ) {
+                issues.push(
+                  issue(
+                    `${path}.postprocessing.ao.maxDistance`,
+                    "range",
+                    "AO maxDistance must be greater than minDistance",
+                  ),
+                );
+              }
+            },
+          );
+        }
+      },
+    );
+  }
+  if (value.vegetation !== undefined) {
+    validateSceneSettingsObject(
+      value.vegetation,
+      ["enabled", "windStrength", "windSpeed", "gustStrength"],
+      `${path}.vegetation`,
+      issues,
+      (entry) => {
+        validateBoolean(entry, "enabled", `${path}.vegetation`, issues);
+        validateFinite(entry, "windStrength", `${path}.vegetation`, issues, 0);
+        validateFinite(entry, "windSpeed", `${path}.vegetation`, issues, 0);
+        validateFinite(entry, "gustStrength", `${path}.vegetation`, issues, 0);
+      },
+    );
+  }
   validateSceneSettingsObject(
     value.physics,
     ["gravity", "allowInfiniteJump"],
@@ -1529,6 +1701,21 @@ function validatePrefabComponentShape(
     return;
   }
   if (component.type === "mesh") {
+    if (
+      component.maxDistance !== undefined &&
+      (typeof component.maxDistance !== "number" ||
+        !Number.isFinite(component.maxDistance) ||
+        component.maxDistance < 0.1 ||
+        component.maxDistance > 1_000_000)
+    ) {
+      issues.push(
+        issue(
+          `${path}.maxDistance`,
+          "range",
+          "Mesh maxDistance must be between 0.1 and 1000000",
+        ),
+      );
+    }
     if (!Array.isArray(component.materialBindings)) {
       issues.push(issue(`${path}.materialBindings`, "type", "materialBindings must be an array"));
     } else if (
@@ -1606,6 +1793,22 @@ function validatePrefabComponentShape(
     validateAudioSourceComponentShape(component, path, issues);
   } else if (component.type === "animation") {
     validateAnimationComponentShape(component, path, issues);
+  } else if (component.type === "vegetation-wind") {
+    if (typeof component.enabled !== "boolean") {
+      issues.push(issue(`${path}.enabled`, "type", "vegetation wind enabled must be a boolean"));
+    }
+    for (const field of ["windStrength", "windSpeed", "gustStrength"] as const) {
+      const value = component[field];
+      if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+        issues.push(
+          issue(
+            `${path}.${field}`,
+            "range",
+            `${field} must be a finite number >= 0`,
+          ),
+        );
+      }
+    }
   } else if (
     component.type === "particle-emitter" &&
     (typeof component.particleAssetId !== "string" || !component.particleAssetId)

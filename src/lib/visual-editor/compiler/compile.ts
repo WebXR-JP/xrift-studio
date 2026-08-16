@@ -948,6 +948,162 @@ ${skybox.iblEnabled ? `
   );
 }
 
+function registerScenePostprocessingSupport(
+  settings: SceneSettings,
+  context: CompileContext,
+): void {
+  context.reactValueImports.add("useEffect");
+  context.reactValueImports.add("useMemo");
+  context.fiberImports.add("useFrame");
+  context.fiberImports.add("useThree");
+  context.threeValueImports.add("Vector2");
+  context.threeValueImports.add("HalfFloatType");
+  context.threeValueImports.add("RGBAFormat");
+  context.threeValueImports.add("WebGLRenderTarget");
+  context.threeValueImports.add("NoToneMapping");
+  context.threeValueImports.add("ACESFilmicToneMapping");
+  context.threeValueImports.add("SRGBColorSpace");
+  context.extraImports.add(
+    'import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";',
+  );
+  context.extraImports.add(
+    'import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";',
+  );
+  context.extraImports.add(
+    'import { SSAOPass } from "three/examples/jsm/postprocessing/SSAOPass.js";',
+  );
+  context.extraImports.add(
+    'import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";',
+  );
+  context.supportDeclarations.set(
+    "scene-environment:postprocessing",
+    `const XRiftStudioPostprocessing: FC<{ settings: ${JSON.stringify(settings.postprocessing)} }> = ({ settings }) => {
+  const { camera, gl, scene, size } = useThree();
+  const hdrEnabled = settings.hdr.enabled;
+  const pipeline = useMemo(() => {
+    const renderTarget = hdrEnabled
+      ? new WebGLRenderTarget(size.width, size.height, {
+          type: HalfFloatType,
+          format: RGBAFormat,
+          depthBuffer: true,
+          stencilBuffer: false,
+        })
+      : undefined;
+    const composer = new EffectComposer(gl, renderTarget);
+    const renderPass = new RenderPass(scene, camera);
+    const aoPass = new SSAOPass(scene, camera, size.width, size.height);
+    const bloomPass = new UnrealBloomPass(
+      new Vector2(size.width, size.height),
+      settings.bloom.strength,
+      settings.bloom.radius,
+      settings.bloom.threshold,
+    );
+    composer.addPass(renderPass);
+    composer.addPass(aoPass);
+    composer.addPass(bloomPass);
+    return { composer, aoPass, bloomPass };
+  }, [camera, gl, hdrEnabled, scene]);
+  useEffect(() => {
+    pipeline.composer.setSize(size.width, size.height);
+  }, [pipeline, size.height, size.width]);
+  useEffect(() => {
+    const previousToneMapping = gl.toneMapping;
+    const previousExposure = gl.toneMappingExposure;
+    const previousOutputColorSpace = gl.outputColorSpace;
+    gl.outputColorSpace = SRGBColorSpace;
+    gl.toneMapping = settings.hdr.toneMapping === "none"
+      ? NoToneMapping
+      : ACESFilmicToneMapping;
+    gl.toneMappingExposure = settings.exposure;
+    return () => {
+      gl.toneMapping = previousToneMapping;
+      gl.toneMappingExposure = previousExposure;
+      gl.outputColorSpace = previousOutputColorSpace;
+    };
+  }, [gl, settings.exposure, settings.hdr.toneMapping]);
+  useEffect(() => {
+    pipeline.bloomPass.enabled = settings.enabled && settings.bloom.enabled;
+    pipeline.bloomPass.threshold = settings.bloom.threshold;
+    pipeline.bloomPass.strength = settings.bloom.strength;
+    pipeline.bloomPass.radius = settings.bloom.radius;
+    pipeline.aoPass.enabled = settings.enabled && settings.ao.enabled;
+    pipeline.aoPass.kernelRadius = settings.ao.radius;
+    pipeline.aoPass.minDistance = settings.ao.minDistance;
+    pipeline.aoPass.maxDistance = Math.max(settings.ao.maxDistance, settings.ao.minDistance + 0.001);
+  }, [gl, pipeline, settings]);
+  useEffect(() => () => pipeline.composer.dispose(), [pipeline]);
+  useFrame(() => {
+    if (settings.enabled) {
+      pipeline.composer.render();
+    } else {
+      // Positive-priority frame callbacks own rendering in R3F. Fall back to
+      // the normal renderer when the author disables postprocessing.
+      gl.render(scene, camera);
+    }
+  }, 1);
+  return null;
+};`,
+  );
+}
+
+function registerVegetationWindSupport(
+  settings: SceneSettings["vegetation"],
+  context: CompileContext,
+): void {
+  const vegetationTargets = Object.values(context.scene.entities).flatMap(
+    (entity) =>
+      entity.components
+        .filter((component) => component.type === "vegetation-wind")
+        .map((component) => ({
+          entityId: entity.id,
+          enabled: component.enabled,
+        })),
+  );
+  if (vegetationTargets.length === 0) return;
+  context.reactValueImports.add("useLayoutEffect");
+  context.reactValueImports.add("useState");
+  context.fiberImports.add("useFrame");
+  context.fiberImports.add("useThree");
+  context.supportDeclarations.set(
+    "scene-environment:vegetation",
+    `const XRiftStudioWind: FC<{ settings: ${JSON.stringify(settings)}; targets: ReadonlyArray<{ entityId: string; enabled: boolean }> }> = ({ settings, targets: windTargets }) => {
+  const { scene } = useThree();
+  const [targets, setTargets] = useState<Array<{ object: any; position: any; rotation: any; phase: number; componentEnabled: boolean }>>([]);
+  useLayoutEffect(() => {
+    const targetSettings = new Map(windTargets.map((target) => [target.entityId, target]));
+    const seen = new Set<any>();
+    const found: Array<{ object: any; position: any; rotation: any; phase: number; componentEnabled: boolean }> = [];
+    scene.traverse((root: any) => {
+      const component = targetSettings.get(root.userData?.xriftEntityId);
+      if (!component) return;
+      root.traverse((object: any) => {
+        if (!object.isMesh || seen.has(object)) return;
+        seen.add(object);
+        found.push({ object, position: object.position.clone(), rotation: object.rotation.clone(), phase: found.length * 0.73, componentEnabled: component.enabled });
+      });
+    });
+    setTargets(found);
+  }, [scene, windTargets]);
+  useFrame(({ clock }) => {
+    if (!settings.enabled || targets.length === 0) return;
+    const elapsed = clock.getElapsedTime();
+    for (const target of targets) {
+      if (!target.componentEnabled) continue;
+      const wave = Math.sin(elapsed * settings.windSpeed + target.phase) * 0.7 +
+        Math.sin(elapsed * settings.windSpeed * 0.37 + target.phase * 1.7) * settings.gustStrength;
+      target.object.position.copy(target.position);
+      target.object.position.x += wave * settings.windStrength * 0.03;
+      target.object.position.y += Math.cos(elapsed * settings.windSpeed * 0.63 + target.phase) * settings.windStrength * 0.01;
+      target.object.rotation.copy(target.rotation);
+      target.object.rotation.z += wave * settings.windStrength * 0.35;
+      target.object.rotation.x += wave * settings.windStrength * 0.16;
+    }
+  });
+  return null;
+};`,
+  );
+}
+
 function renderSceneEnvironment(
   settings: SceneSettings,
   context: CompileContext,
@@ -955,6 +1111,29 @@ function renderSceneEnvironment(
   const content: string[] = [
     `<ambientLight color={${JSON.stringify(settings.ambient.color)}} intensity={${formatNumber(settings.ambient.intensity)}} />`,
   ];
+
+  registerScenePostprocessingSupport(settings, context);
+  content.push(
+    `<XRiftStudioPostprocessing settings={${JSON.stringify(settings.postprocessing)} } />`,
+  );
+  registerVegetationWindSupport(settings.vegetation, context);
+  const hasVegetationWind = Object.values(context.scene.entities).some((entity) =>
+    entity.components.some((component) => component.type === "vegetation-wind"),
+  );
+  if (hasVegetationWind) {
+    const vegetationTargets = Object.values(context.scene.entities).flatMap(
+      (entity) =>
+        entity.components
+          .filter((component) => component.type === "vegetation-wind")
+          .map((component) => ({
+            entityId: entity.id,
+            enabled: component.enabled,
+          })),
+    );
+    content.push(
+      `<XRiftStudioWind settings={${JSON.stringify(settings.vegetation)} } targets={${JSON.stringify(vegetationTargets)} } />`,
+    );
+  }
 
   if (settings.skybox.enabled || settings.skybox.iblEnabled) {
     const projectedSkybox =
@@ -1614,7 +1793,41 @@ function renderMesh(
     geometry.kind === "terrain"
       ? renderTerrainGeometry(geometry.terrain, context)
       : geometryJsx(geometry.primitive);
-  return `<mesh castShadow={${mesh.castShadow}} receiveShadow={${mesh.receiveShadow}}>\n  ${geometryJsxContent}\n  ${materialJsx}\n</mesh>`;
+  return renderMeshMaxDistance(
+    `<mesh castShadow={${mesh.castShadow}} receiveShadow={${mesh.receiveShadow}}>\n  ${geometryJsxContent}\n  ${materialJsx}\n</mesh>`,
+    mesh.maxDistance,
+    context,
+  );
+}
+
+function renderMeshMaxDistance(
+  content: string,
+  maxDistance: number | undefined,
+  context: CompileContext,
+): string {
+  if (maxDistance === undefined) return content;
+  context.reactTypeImports.add("ReactNode");
+  context.reactValueImports.add("useRef");
+  context.fiberImports.add("useFrame");
+  context.threeTypeImports.add("Group");
+  context.threeValueImports.add("Vector3");
+  context.supportDeclarations.set(
+    "render:max-distance",
+    `type XriftMeshMaxDistanceProps = { maxDistance: number; children: ReactNode };
+
+const XriftMeshMaxDistance: FC<XriftMeshMaxDistanceProps> = ({ maxDistance, children }) => {
+  const ref = useRef<Group>(null);
+  const worldPosition = useRef(new Vector3());
+  useFrame(({ camera }) => {
+    const target = ref.current;
+    if (!target) return;
+    target.getWorldPosition(worldPosition.current);
+    target.visible = camera.position.distanceTo(worldPosition.current) <= maxDistance;
+  });
+  return <group ref={ref}>{children}</group>;
+};`,
+  );
+  return `<XriftMeshMaxDistance maxDistance={${formatNumber(maxDistance)}}>${content}</XriftMeshMaxDistance>`;
 }
 
 type ResolvedMeshGeometry =
@@ -1879,19 +2092,25 @@ function renderModelMesh(
     };
   }, [actions${usesClipNames ? ", names" : ""}]);`
     : "";
+  const modelContent = `<group${autoplay ? " ref={animationRoot}" : ""} scale={${formatNumber(modelScale)}}${vrm0Rotation}>
+      <Clone
+        object={${poseSource.objectName}}
+        castShadow={${mesh.castShadow}}
+        receiveShadow={${mesh.receiveShadow}}${inject}
+      />
+    </group>`;
+  const renderedModelContent = renderMeshMaxDistance(
+    modelContent,
+    mesh.maxDistance,
+    context,
+  );
   const source = `const ${componentName}: FC = () => {
   const modelUrl = useCompiledAssetUrl(${urlConstant});
   ${loaderSource}
 ${poseSource.declaration}
 ${animationSource}
   return (
-    <group${autoplay ? " ref={animationRoot}" : ""} scale={${formatNumber(modelScale)}}${vrm0Rotation}>
-      <Clone
-        object={${poseSource.objectName}}
-        castShadow={${mesh.castShadow}}
-        receiveShadow={${mesh.receiveShadow}}${inject}
-      />
-    </group>
+    ${renderedModelContent}
   );
 };`;
   context.supportDeclarations.set(`model:${componentName}`, source);
@@ -4013,8 +4232,15 @@ function generateRuntimeAdapterSource(kind: VisualProjectKind): string {
   return `import type { FC } from "react";
 import { ${runtimeComponent} } from "xrift-studio-runtime/react-three-fiber";
 
-export const ${component}: FC = () => (
-  <${runtimeComponent} manifest="/xrift/runtime.json" />
+export interface ${component}Props {
+  position?: [number, number, number];
+  scale?: number;
+}
+
+export const ${component}: FC<${component}Props> = ({ position = [0, 0, 0], scale = 1 }) => (
+  <group position={position} scale={scale}>
+    <${runtimeComponent} manifest="/xrift/runtime.json" />
+  </group>
 );${defaultExport}`;
 }
 

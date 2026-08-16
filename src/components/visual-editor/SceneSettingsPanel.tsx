@@ -768,6 +768,211 @@ export function SceneSettingsInspector({
         </Section>
 
         <Section
+          title="ポストエフェクト"
+          description="HDR、AO、発光、露出をScene View、Play、公開Worldで共有します。"
+        >
+          <Toggle
+            label="ポストエフェクトを有効にする"
+            checked={settings.postprocessing.enabled}
+            disabled={readOnly}
+            onChange={(enabled) =>
+              update({
+                ...settings,
+                postprocessing: { ...settings.postprocessing, enabled },
+              })
+            }
+          />
+          <Toggle
+            label="HDRレンダリング"
+            title="Half FloatのHDRバッファとACESトーンマッピングを使用します"
+            checked={settings.postprocessing.hdr.enabled}
+            disabled={readOnly || !settings.postprocessing.enabled}
+            onChange={(enabled) =>
+              update({
+                ...settings,
+                postprocessing: {
+                  ...settings.postprocessing,
+                  hdr: { ...settings.postprocessing.hdr, enabled },
+                },
+              })
+            }
+          />
+          <Toggle
+            label="スクリーンスペースAO"
+            title="深度と法線から接地影を生成します"
+            checked={settings.postprocessing.ao.enabled}
+            disabled={readOnly || !settings.postprocessing.enabled}
+            onChange={(enabled) =>
+              update({
+                ...settings,
+                postprocessing: {
+                  ...settings.postprocessing,
+                  ao: { ...settings.postprocessing.ao, enabled },
+                },
+              })
+            }
+          />
+          <NumberField
+            label="AO半径"
+            value={settings.postprocessing.ao.radius}
+            min={0.1}
+            step={0.5}
+            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.ao.enabled}
+            onChange={(radius) =>
+              update({
+                ...settings,
+                postprocessing: {
+                  ...settings.postprocessing,
+                  ao: { ...settings.postprocessing.ao, radius },
+                },
+              })
+            }
+          />
+          <NumberField
+            label="AO最大距離"
+            value={settings.postprocessing.ao.maxDistance}
+            min={settings.postprocessing.ao.minDistance + 0.001}
+            step={0.01}
+            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.ao.enabled}
+            onChange={(maxDistance) =>
+              update({
+                ...settings,
+                postprocessing: {
+                  ...settings.postprocessing,
+                  ao: {
+                    ...settings.postprocessing.ao,
+                    maxDistance: Math.max(
+                      maxDistance,
+                      settings.postprocessing.ao.minDistance + 0.001,
+                    ),
+                  },
+                },
+              })
+            }
+          />
+          <Toggle
+            label="Bloomを有効にする"
+            checked={settings.postprocessing.bloom.enabled}
+            disabled={readOnly || !settings.postprocessing.enabled}
+            onChange={(enabled) =>
+              update({
+                ...settings,
+                postprocessing: {
+                  ...settings.postprocessing,
+                  bloom: { ...settings.postprocessing.bloom, enabled },
+                },
+              })
+            }
+          />
+          <NumberField
+            label="Bloomしきい値"
+            value={settings.postprocessing.bloom.threshold}
+            min={0}
+            step={0.01}
+            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.bloom.enabled}
+            onChange={(threshold) =>
+              update({
+                ...settings,
+                postprocessing: {
+                  ...settings.postprocessing,
+                  bloom: { ...settings.postprocessing.bloom, threshold },
+                },
+              })
+            }
+          />
+          <NumberField
+            label="Bloom強度"
+            value={settings.postprocessing.bloom.strength}
+            min={0}
+            step={0.05}
+            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.bloom.enabled}
+            onChange={(strength) =>
+              update({
+                ...settings,
+                postprocessing: {
+                  ...settings.postprocessing,
+                  bloom: { ...settings.postprocessing.bloom, strength },
+                },
+              })
+            }
+          />
+          <NumberField
+            label="Bloom半径"
+            value={settings.postprocessing.bloom.radius}
+            min={0}
+            max={1}
+            step={0.01}
+            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.bloom.enabled}
+            onChange={(radius) =>
+              update({
+                ...settings,
+                postprocessing: {
+                  ...settings.postprocessing,
+                  bloom: { ...settings.postprocessing.bloom, radius },
+                },
+              })
+            }
+          />
+          <NumberField
+            label="露出"
+            value={settings.postprocessing.exposure}
+            min={0}
+            step={0.05}
+            disabled={readOnly || !settings.postprocessing.enabled}
+            onChange={(exposure) =>
+              update({
+                ...settings,
+                postprocessing: { ...settings.postprocessing, exposure },
+              })
+            }
+          />
+        </Section>
+
+        <Section
+          title="Wind（グローバル）"
+          description="Wind Componentを付けたEntityと子Mesh全体へ適用する風の設定です。Mesh名から対象を推測しません。"
+        >
+          <Toggle
+            label="Windを有効にする"
+            checked={settings.vegetation.enabled}
+            disabled={readOnly}
+            onChange={(enabled) =>
+              update({ ...settings, vegetation: { ...settings.vegetation, enabled } })
+            }
+          />
+          <NumberField
+            label="風の強さ"
+            value={settings.vegetation.windStrength}
+            min={0}
+            step={0.01}
+            disabled={readOnly || !settings.vegetation.enabled}
+            onChange={(windStrength) =>
+              update({ ...settings, vegetation: { ...settings.vegetation, windStrength } })
+            }
+          />
+          <NumberField
+            label="風の速度"
+            value={settings.vegetation.windSpeed}
+            min={0}
+            step={0.05}
+            disabled={readOnly || !settings.vegetation.enabled}
+            onChange={(windSpeed) =>
+              update({ ...settings, vegetation: { ...settings.vegetation, windSpeed } })
+            }
+          />
+          <NumberField
+            label="突風の強さ"
+            value={settings.vegetation.gustStrength}
+            min={0}
+            step={0.05}
+            disabled={readOnly || !settings.vegetation.enabled}
+            onChange={(gustStrength) =>
+              update({ ...settings, vegetation: { ...settings.vegetation, gustStrength } })
+            }
+          />
+        </Section>
+
+        <Section
           title="プレイヤーの物理"
           description="公開後のワールドでの重力とジャンプです。xrift.jsonのphysicsとして保存され、Playでも同じ値で確認できます。"
         >

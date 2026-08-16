@@ -69,7 +69,13 @@ function compileRuntimeScene(
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([entityId, entity]) => [
           entityId,
-          compileRuntimeEntity(entity, assets, diagnostics, scene.sceneId),
+          compileRuntimeEntity(
+            entity,
+            assets,
+            diagnostics,
+            scene.sceneId,
+            scene.entities,
+          ),
         ]),
     ),
     settings: scene.settings
@@ -85,6 +91,7 @@ function compileRuntimeEntity(
   assets: AssetManifest,
   diagnostics: CompilerDiagnostic[],
   sceneId: string,
+  allEntities: Record<string, SceneEntity>,
 ): XriftRuntimeEntity {
   const transform = entity.components.find((component) => component.type === "transform");
   const components: XriftRuntimeComponent[] = [];
@@ -118,6 +125,9 @@ function compileRuntimeEntity(
         })),
         castShadow: component.castShadow,
         receiveShadow: component.receiveShadow,
+        ...(component.maxDistance === undefined
+          ? {}
+          : { maxDistance: component.maxDistance }),
         modelPose: component.modelPose
           ? JSON.parse(JSON.stringify(component.modelPose))
           : undefined,
@@ -145,7 +155,7 @@ function compileRuntimeEntity(
         sceneId,
         entity.id,
         component.id,
-        "missing",
+        runtimeXriftComponentSupport(component.schemaId),
       );
       components.push({
         id: component.id,
@@ -160,36 +170,32 @@ function compileRuntimeEntity(
       continue;
     }
     if (component.type === "particle-emitter") {
-      diagnostics.push({
-        severity: "blocking",
-        code: "runtime-particle-adapter-missing",
-        message:
-          "xrift-studio-runtimeはparticle-emitterをまだ描画できないため、Classic runtime出力を停止しました",
-        sceneId,
-        entityId: entity.id,
-        componentId: component.id,
-      });
+      // The R3F runtime uses the same bounded particle simulation as the
+      // generated Script runtime. Keep the authored component in the manifest
+      // so the adapter can resolve its Particle Asset at load time.
     } else if (component.type === "audio-source") {
-      appendRuntimeAdapterDiagnostic(
-        diagnostics,
-        component.type,
-        sceneId,
-        entity.id,
-        component.id,
-        "missing",
-      );
+      // Audio sources are mounted by the R3F adapter using the shared
+      // AudioSource runtime (including positional audio and autoplay state).
     } else if (
       component.type === "collider" ||
       component.type === "rigid-body" ||
       component.type === "spawn-point"
     ) {
+      const runtimePhysicsSupport =
+        component.type === "rigid-body"
+          ? runtimeRigidBodySupport(entity, component, allEntities)
+          : component.type === "collider" &&
+              component.bodyType !== undefined &&
+              component.bodyType !== "fixed"
+            ? runtimeLegacyDynamicColliderSupport(entity, component, allEntities)
+            : "supported";
       appendRuntimeAdapterDiagnostic(
         diagnostics,
         component.type,
         sceneId,
         entity.id,
         component.id,
-        "metadata-only",
+        runtimePhysicsSupport,
       );
     }
     components.push(
@@ -214,14 +220,40 @@ function compileRuntimeEntity(
   };
 }
 
+function runtimeXriftComponentSupport(
+  schemaId: string,
+): "supported" | "missing" {
+  switch (schemaId) {
+    case "xrift.spawn-point":
+    case "xrift.skybox":
+    case "xrift.mirror":
+    case "xrift.billboard-y":
+    case "xrift.interactable":
+    case "xrift.grabbable":
+    case "xrift.text-input":
+    case "xrift.video-screen":
+    case "xrift.video-player":
+    case "xrift.live-video-player":
+    case "xrift.video-180-sphere":
+    case "xrift.screen-share-display":
+    case "xrift.tag-board":
+    case "xrift.entry-log-board":
+    case "xrift.portal":
+      return "supported";
+    default:
+      return "missing";
+  }
+}
+
 function appendRuntimeAdapterDiagnostic(
   diagnostics: CompilerDiagnostic[],
   componentType: string,
   sceneId: string,
   entityId: string,
   componentId: string,
-  support: "missing" | "metadata-only",
+  support: "missing" | "metadata-only" | "supported",
 ): void {
+  if (support === "supported") return;
   diagnostics.push({
     severity: "warning",
     code:
@@ -235,6 +267,94 @@ function appendRuntimeAdapterDiagnostic(
     sceneId,
     entityId,
     componentId,
+  });
+}
+
+function runtimeRigidBodySupport(
+  entity: SceneEntity,
+  component: Extract<SceneEntity["components"][number], { type: "rigid-body" }>,
+  allEntities: Record<string, SceneEntity>,
+): "supported" | "metadata-only" {
+  if (entity.parentId !== null) return "metadata-only";
+  const descendantPhysics = Object.values(allEntities).some(
+    (candidate) =>
+      candidate.id !== entity.id &&
+      isDescendantEntity(candidate.id, entity.id, allEntities) &&
+      candidate.components.some(
+        (child) =>
+          child.enabled &&
+          child.type === "rigid-body",
+      ),
+  );
+  if (descendantPhysics) return "metadata-only";
+  const hasMeshInBody = hasEnabledMeshInSubtree(entity.id, allEntities);
+  const colliders = entity.components.filter(
+    (candidate): candidate is Extract<
+      SceneEntity["components"][number],
+      { type: "collider" }
+    > => candidate.enabled && candidate.type === "collider",
+  );
+  if (colliders.some((candidate) => candidate.shape === "mesh") && !hasMeshInBody) {
+    return "metadata-only";
+  }
+  const hasDescendantCollider = Object.values(allEntities).some(
+    (candidate) =>
+      candidate.id !== entity.id &&
+      isDescendantEntity(candidate.id, entity.id, allEntities) &&
+      candidate.components.some(
+        (child) => child.enabled && child.type === "collider",
+      ),
+  );
+  if (colliders.length > 0 || hasDescendantCollider) return "supported";
+  return component.autoColliders !== "none" && hasMeshInBody
+    ? "supported"
+    : "metadata-only";
+}
+
+function isDescendantEntity(
+  entityId: string,
+  ancestorId: string,
+  allEntities: Record<string, SceneEntity>,
+): boolean {
+  let current: SceneEntity | undefined = allEntities[entityId];
+  while (current) {
+    if (current.id === ancestorId) return true;
+    current = current.parentId === null ? undefined : allEntities[current.parentId];
+  }
+  return false;
+}
+
+function runtimeLegacyDynamicColliderSupport(
+  entity: SceneEntity,
+  component: Extract<SceneEntity["components"][number], { type: "collider" }>,
+  allEntities: Record<string, SceneEntity>,
+): "supported" | "metadata-only" {
+  if (entity.parentId !== null) return "metadata-only";
+  if (component.shape === "box") return "supported";
+  return hasEnabledMeshInSubtree(entity.id, allEntities)
+    ? "supported"
+    : "metadata-only";
+}
+
+function hasEnabledMeshInSubtree(
+  rootEntityId: string,
+  allEntities: Record<string, SceneEntity>,
+): boolean {
+  return Object.values(allEntities).some((candidate) => {
+    if (
+      !candidate.enabled ||
+      !candidate.components.some(
+        (component) => component.enabled && component.type === "mesh",
+      )
+    ) {
+      return false;
+    }
+    let current: SceneEntity | undefined = candidate;
+    while (current) {
+      if (current.id === rootEntityId) return true;
+      current = current.parentId === null ? undefined : allEntities[current.parentId];
+    }
+    return false;
   });
 }
 
