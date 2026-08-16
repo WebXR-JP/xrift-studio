@@ -3740,8 +3740,11 @@ export function SceneViewport({
           <OfficialXriftPreviewProvider
             withPhysics
             gravity={
+              // Scene settings hold gravity as a positive magnitude, matching
+              // xrift.json, so Play applies the same number the published
+              // world receives rather than a separate hardcoded constant.
               editorMode === "play" && projectKind === "world"
-                ? [0, -9.81, 0]
+                ? [0, -sceneSettings.physics.gravity, 0]
                 : [0, 0, 0]
             }
           >

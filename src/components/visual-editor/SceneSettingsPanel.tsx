@@ -767,7 +767,39 @@ export function SceneSettingsInspector({
           <NumberField label="強さ" value={settings.ambient.intensity} min={0} step={0.05} disabled={readOnly} onChange={(intensity) => update({ ...settings, ambient: { ...settings.ambient, intensity } })} />
         </Section>
 
-        <Section title="カメラ" description="編集ビューのクリッピング範囲と画角です。">
+        <Section
+          title="プレイヤーの物理"
+          description="公開後のワールドでの重力とジャンプです。xrift.jsonのphysicsとして保存され、Playでも同じ値で確認できます。"
+        >
+          <NumberField
+            label="重力"
+            value={settings.physics.gravity}
+            min={0}
+            max={100}
+            step={0.01}
+            disabled={readOnly}
+            onChange={(gravity) =>
+              update({ ...settings, physics: { ...settings.physics, gravity } })
+            }
+          />
+          <Toggle
+            label="無限ジャンプを許可"
+            description="空中でも繰り返しジャンプできるようにします。"
+            checked={settings.physics.allowInfiniteJump}
+            disabled={readOnly}
+            onChange={(allowInfiniteJump) =>
+              update({
+                ...settings,
+                physics: { ...settings.physics, allowInfiniteJump },
+              })
+            }
+          />
+        </Section>
+
+        <Section
+          title="カメラ"
+          description="クリッピング範囲と画角です。NearとFarはxrift.jsonのcameraとして公開先にも反映されます。"
+        >
           <NumberField label="Near" value={settings.camera.near} min={0.01} max={settings.camera.far - 0.0001} step={0.01} disabled={readOnly} onChange={(near) => update({ ...settings, camera: { ...settings.camera, near } })} />
           <NumberField label="Far" value={settings.camera.far} min={1} step={1} disabled={readOnly} onChange={(far) => update({ ...settings, camera: { ...settings.camera, far: Math.max(far, settings.camera.near + 0.0001) } })} />
           <NumberField label="視野角" value={settings.camera.fov} min={1} max={179} step={1} disabled={readOnly} onChange={(fov) => update({ ...settings, camera: { ...settings.camera, fov } })} />

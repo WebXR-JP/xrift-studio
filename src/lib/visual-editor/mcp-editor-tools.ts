@@ -79,6 +79,7 @@ import {
   resolveSceneSettings,
   type SceneAmbientSettings,
   type SceneCameraSettings,
+  type ScenePhysicsSettings,
   type SceneFogSettings,
   type SceneGizmoSettings,
   type SceneSettings,
@@ -1349,12 +1350,13 @@ function updateSceneSettings(
     "fog",
     "ambient",
     "camera",
+    "physics",
     "editor",
   ] as const;
   if (!sections.some((section) => argumentsValue[section] !== undefined)) {
     invalidArgument(
       "Scene settings",
-      "skybox、fog、ambient、camera、editorのいずれかを含むobject",
+      "skybox、fog、ambient、camera、physics、editorのいずれかを含むobject",
     );
   }
   const settings: SceneSettings = {
@@ -1413,6 +1415,16 @@ function updateSceneSettings(
               "near",
               "far",
               "fov",
+            ]),
+          ),
+    physics:
+      argumentsValue.physics === undefined
+        ? currentSettings.physics
+        : applyPhysicsPatch(
+            currentSettings.physics,
+            sceneSettingsPatch(argumentsValue.physics, "physics", [
+              "gravity",
+              "allowInfiniteJump",
             ]),
           ),
     editor:
@@ -4592,6 +4604,25 @@ function applyCameraPatch(
       "INVALID_ARGUMENT",
       "camera.farはcamera.nearより大きい値にしてください",
     );
+  }
+  return next;
+}
+
+function applyPhysicsPatch(
+  current: ScenePhysicsSettings,
+  patch: Record<string, unknown>,
+): ScenePhysicsSettings {
+  const next = { ...current };
+  if (patch.gravity !== undefined) {
+    // Zero is allowed — a weightless world is a legitimate setting — but a
+    // negative value would invert the direction XRift derives from this.
+    next.gravity = sceneNumber(patch.gravity, "physics.gravity", 0, 100);
+  }
+  if (patch.allowInfiniteJump !== undefined) {
+    if (typeof patch.allowInfiniteJump !== "boolean") {
+      invalidArgument("physics.allowInfiniteJump", "boolean");
+    }
+    next.allowInfiniteJump = patch.allowInfiniteJump;
   }
   return next;
 }

@@ -244,6 +244,12 @@ export function compileVisualProject(
     documents.project.projectKind,
     documents.project.metadata.title,
     documents.project.metadata.description,
+    // Physics and camera are per-world, so they come from the entry Scene's
+    // settings — the same ones Play uses — keeping the published world's
+    // gravity and clipping identical to what the author tested.
+    resolvedEntryScene
+      ? resolveSceneSettings(resolvedEntryScene.scene.settings)
+      : undefined,
   );
   const sourcePath =
     documents.project.projectKind === "world" ? "src/World.tsx" : "src/Item.tsx";
@@ -3836,7 +3842,23 @@ function generateXriftJson(
   kind: VisualProjectKind,
   title: string,
   description: string,
+  settings?: SceneSettings,
 ): string {
+  // physics and camera are world-only in xrift.json; an item has neither, and
+  // emitting them would produce a config the CLI does not recognise.
+  const worldSettings =
+    kind === "world" && settings
+      ? {
+          physics: {
+            gravity: settings.physics.gravity,
+            allowInfiniteJump: settings.physics.allowInfiniteJump,
+          },
+          camera: {
+            near: settings.camera.near,
+            far: settings.camera.far,
+          },
+        }
+      : {};
   return stableSerializeJson({
     [kind]: {
       distDir: "./dist",
@@ -3845,6 +3867,7 @@ function generateXriftJson(
       thumbnailPath: "thumbnail.png",
       buildCommand: "npm run build",
       ignore: ["**/.DS_Store", "**/Thumbs.db", "**/*.js.map", "**/.gitkeep"],
+      ...worldSettings,
     },
   });
 }

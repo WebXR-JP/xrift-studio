@@ -950,7 +950,7 @@ function validateSceneSettings(
   }
   validateKnownKeys(
     value,
-    ["skybox", "fog", "ambient", "camera", "editor"],
+    ["skybox", "fog", "ambient", "camera", "physics", "editor"],
     path,
     issues,
   );
@@ -1077,6 +1077,18 @@ function validateSceneSettings(
       ) {
         issues.push(issue(`${path}.camera.far`, "range", "camera far must be greater than near"));
       }
+    },
+  );
+  validateSceneSettingsObject(
+    value.physics,
+    ["gravity", "allowInfiniteJump"],
+    `${path}.physics`,
+    issues,
+    (entry) => {
+      // Zero gravity is a valid world; only a negative magnitude is rejected,
+      // because XRift derives the downward direction from this value.
+      validateFinite(entry, "gravity", `${path}.physics`, issues, 0);
+      validateBoolean(entry, "allowInfiniteJump", `${path}.physics`, issues);
     },
   );
   validateSceneSettingsObject(

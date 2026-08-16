@@ -11,6 +11,7 @@ import { compileVisualProject } from "./compiler";
 import type { VisualCompilerDocuments } from "./compiler";
 import { VisualCompilationError, type XriftUploadResult } from "./publish";
 import type { VisualPublishPipelineProgress } from "./publish";
+import { resolveSceneSettings } from "./scene-settings";
 
 /**
  * Browser upload path.
@@ -325,12 +326,24 @@ export async function uploadVisualProjectFromWeb(
 
   const client = new XriftClient({ token: request.token });
 
+  // Physics and camera participate in contentHash, so they must be sent here
+  // as well as written into the staged xrift.json — omitting them would make
+  // a web upload hash differently from the identical world published from the
+  // desktop path.
+  const entryScene = Object.values(request.documents.scenes)[0];
+  const settings = resolveSceneSettings(entryScene?.settings);
+
   try {
     const result = await client.worlds.upload(files, {
       worldId: request.worldId,
       name: request.documents.project.metadata.title,
       description: request.documents.project.metadata.description,
       thumbnailPath: request.thumbnail ? THUMBNAIL_PATH : undefined,
+      physics: {
+        gravity: settings.physics.gravity,
+        allowInfiniteJump: settings.physics.allowInfiniteJump,
+      },
+      camera: { near: settings.camera.near, far: settings.camera.far },
       onProgress: (progress) => {
         request.report({
           stage: "uploading",

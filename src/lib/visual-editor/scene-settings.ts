@@ -48,6 +48,20 @@ export type SceneCameraSettings = {
   fov: number;
 };
 
+/**
+ * Player physics for the published world.
+ *
+ * These are the two knobs `xrift.json`'s `world.physics` carries, so they are
+ * modelled with XRift's names and units rather than Studio's own: `gravity` is
+ * a positive magnitude here, matching the template's `9.81` default, while the
+ * editor's Play mode applies it as a downward vector.
+ */
+export type ScenePhysicsSettings = {
+  /** Downward acceleration magnitude. XRift's template default is 9.81. */
+  gravity: number;
+  allowInfiniteJump: boolean;
+};
+
 export type SceneGizmoSettings = {
   size: number;
   gridVisible: boolean;
@@ -64,6 +78,7 @@ export type SceneSettings = {
   fog: SceneFogSettings;
   ambient: SceneAmbientSettings;
   camera: SceneCameraSettings;
+  physics: ScenePhysicsSettings;
   editor: {
     backgroundColor: string;
     gizmo: SceneGizmoSettings;
@@ -102,6 +117,12 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
     near: 0.1,
     far: 2000,
     fov: 46,
+  },
+  // Matches the values XRift's own world template ships with, so a Studio
+  // world behaves like a hand-written one until the author changes them.
+  physics: {
+    gravity: 9.81,
+    allowInfiniteJump: true,
   },
   editor: {
     backgroundColor: "#18181b",
@@ -176,6 +197,7 @@ function vec3Or(
  */
 export function resolveSceneSettings(value: unknown): SceneSettings {
   const settings = isRecord(value) ? value : {};
+  const physics = isRecord(settings.physics) ? settings.physics : {};
   const skybox = isRecord(settings.skybox) ? settings.skybox : {};
   const fog = isRecord(settings.fog) ? settings.fog : {};
   const ambient = isRecord(settings.ambient) ? settings.ambient : {};
@@ -279,6 +301,19 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
       near: Math.min(normalizedCameraNear, resolvedCameraFar - 0.0001),
       far: resolvedCameraFar,
       fov: finiteOr(camera.fov, DEFAULT_SCENE_SETTINGS.camera.fov, 1),
+    },
+    physics: {
+      // Clamped at 0 rather than a positive minimum: zero gravity is a valid
+      // world, and a negative value here would invert the sign XRift expects.
+      gravity: finiteOr(
+        physics.gravity,
+        DEFAULT_SCENE_SETTINGS.physics.gravity,
+        0,
+      ),
+      allowInfiniteJump: booleanOr(
+        physics.allowInfiniteJump,
+        DEFAULT_SCENE_SETTINGS.physics.allowInfiniteJump,
+      ),
     },
     editor: {
       backgroundColor: colorOr(
