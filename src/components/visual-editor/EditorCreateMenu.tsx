@@ -21,6 +21,7 @@ import {
   type EditorComponentDefinition,
   type SceneEntity,
   type VisualProjectKind,
+  TERRAIN_PRESETS,
 } from "../../lib/visual-editor";
 import { EDITOR_ICONS, getEditorComponentIcon } from "./editor-icons";
 
@@ -36,7 +37,7 @@ type Props = {
   onClose: () => void;
   onCreateEmpty: () => void;
   onCreatePrimitive: (creationId: string) => void;
-  onCreateTerrain: () => void;
+  onCreateTerrain: (presetId?: string) => void;
   onPlaceBuiltinPrefab: (recipeId: string) => void;
   onCreateXriftObject: (definitionId: string) => void;
   onCreateComponentObject: (definitionId: string) => void;
@@ -316,7 +317,7 @@ export function EditorCreateMenu({
                 {terrainMatches ? (
                   <MenuItem
                     icon={Mountain}
-                    label="地形"
+                    label="地形（平ら）"
                     detail="ブラシで形を整えられる高さマップ"
                     disabled={disabled}
                     trailing="作成"
@@ -326,6 +327,22 @@ export function EditorCreateMenu({
                     }}
                   />
                 ) : null}
+                {terrainMatches
+                  ? TERRAIN_PRESETS.map((preset) => (
+                      <MenuItem
+                        key={preset.id}
+                        icon={Mountain}
+                        label={`地形・${preset.label}`}
+                        detail={preset.description}
+                        disabled={disabled}
+                        trailing="作成"
+                        onClick={() => {
+                          onCreateTerrain(preset.id);
+                          onClose();
+                        }}
+                      />
+                    ))
+                  : null}
               </MenuSection>
             ) : null}
 

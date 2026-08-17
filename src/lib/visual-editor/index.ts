@@ -75,6 +75,7 @@ export * from "./terrain";
 export * from "./terrain.fixture";
 export * from "./terrain-grass";
 export * from "./terrain-grass.fixture";
+export * from "./terrain-presets";
 export * from "./texture-card";
 export * from "./serialization";
 export * from "./starter-templates";

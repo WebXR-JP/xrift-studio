@@ -147,6 +147,7 @@ import { tauri } from "../../lib/tauri";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { ParticleEmitterVisual } from "./ParticleEmitterVisual";
 import { SceneThumbnailCapture } from "./SceneThumbnailCapture";
+import { TerrainGrassVisual } from "./TerrainGrassVisual";
 import {
   ScenePerformanceProbe,
   SceneVideoCapture,
@@ -742,7 +743,40 @@ function TerrainMeshVisual({
           color={materialDropHighlighted ? "#38bdf8" : EDITOR_SELECTION_COLOR}
         />
       ) : null}
+      {/* Grass is a child of the Terrain mesh, so it inherits the Entity's
+          transform and moves with the ground it grows on. */}
+      <TerrainGrassLayers terrain={terrain} style={viewportMaterialStyle} />
     </mesh>
+  );
+}
+
+/**
+ * Draws every grass layer a Terrain carries. The layers are skipped in the
+ * non-lit viewport styles, where the author is inspecting the surface itself
+ * and a field of blades would only be in the way.
+ */
+function TerrainGrassLayers({
+  terrain,
+  style,
+}: {
+  terrain: TerrainGeometry;
+  style: SceneViewportMaterialStyle;
+}) {
+  const wind = useContext(SceneWindContext);
+  if (style === "wireframe" || style === "collider-wireframe" || style === "ghost") {
+    return null;
+  }
+  return (
+    <>
+      {(terrain.grass ?? []).map((layer) => (
+        <TerrainGrassVisual
+          key={layer.id}
+          terrain={terrain}
+          layer={layer}
+          wind={wind}
+        />
+      ))}
+    </>
   );
 }
 

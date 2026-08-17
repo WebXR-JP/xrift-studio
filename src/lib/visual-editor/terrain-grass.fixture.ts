@@ -1,4 +1,14 @@
-import { applyTerrainBrush, createTerrainGeometry } from "./terrain";
+import {
+  applyTerrainBrush,
+  createTerrainGeometry,
+  isTerrainGeometry,
+  terrainHeightRange,
+} from "./terrain";
+import {
+  TERRAIN_PRESETS,
+  createTerrainFromPreset,
+  getTerrainPreset,
+} from "./terrain-presets";
 import {
   TERRAIN_GRASS_MAX_INSTANCES,
   TERRAIN_GRASS_PRESETS,
@@ -268,4 +278,62 @@ function assertPresets(): void {
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);
+}
+
+/** Assertions for the ready-made Terrain presets. */
+export function runTerrainPresetFixtureAssertions(): void {
+  assert(TERRAIN_PRESETS.length > 0, "No Terrain presets ship");
+  for (const preset of TERRAIN_PRESETS) {
+    const terrain = createTerrainFromPreset(preset);
+    assert(
+      isTerrainGeometry(terrain),
+      `Terrain preset「${preset.id}」produced an invalid Terrain`,
+    );
+    // A preset exists to hand the author somewhere rather than a flat plate.
+    const range = terrainHeightRange(terrain);
+    assert(
+      range.max - range.min > 0.5,
+      `Terrain preset「${preset.id}」is flat (range ${(range.max - range.min).toFixed(2)})`,
+    );
+    // A Terrain that ends on a cliff reads as a cut-out, so the border falls
+    // away to the base level on every side.
+    const cells = terrain.resolution - 1;
+    for (let index = 0; index <= cells; index += 1) {
+      for (const edge of [
+        terrain.heights[index],
+        terrain.heights[cells * terrain.resolution + index],
+        terrain.heights[index * terrain.resolution],
+        terrain.heights[index * terrain.resolution + cells],
+      ]) {
+        assert(
+          Math.abs(edge) < 0.001,
+          `Terrain preset「${preset.id}」does not settle at its border (${edge})`,
+        );
+      }
+    }
+    const layers = terrain.grass ?? [];
+    if (preset.grassPresetId) {
+      assert(
+        layers.length > 0 && layers.every(isTerrainGrassLayer),
+        `Terrain preset「${preset.id}」carries no usable grass`,
+      );
+      // The point of a preset is that it looks planted on arrival.
+      const placed = layers.reduce(
+        (sum, entry) => sum + generateTerrainGrassInstances(terrain, entry).placed,
+        0,
+      );
+      assert(
+        placed > 0,
+        `Terrain preset「${preset.id}」grows nothing on its own shape`,
+      );
+    }
+    assert(
+      getTerrainPreset(preset.id)?.label === preset.label,
+      `Terrain preset「${preset.id}」cannot be resolved by id`,
+    );
+  }
+  assert(
+    getTerrainPreset("nope") === undefined,
+    "getTerrainPreset resolved an unknown preset",
+  );
 }

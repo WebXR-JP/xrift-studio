@@ -1,4 +1,8 @@
 import { useCallback, useRef, type Dispatch, type SetStateAction } from "react";
+import {
+  createTerrainFromPreset,
+  getTerrainPreset,
+} from "../../lib/visual-editor";
 import { BUILTIN_ASSET_IDS, type PrototypeVisualProject } from "../../lib/visual-editor/prototype-project";
 import {
   addTerrainEntity,
@@ -73,7 +77,7 @@ export function useTerrainAuthoring({
   lastSavedBundleRef,
 }: TerrainAuthoringOptions) {
   const strokeRef = useRef<TerrainStrokeTransaction | null>(null);
-  const handleCreateTerrain = useCallback(() => {
+  const handleCreateTerrain = useCallback((presetId?: string) => {
     if (editorMode !== "edit") {
       notify("地形は編集モードで作成してください");
       return;
@@ -94,10 +98,16 @@ export function useTerrainAuthoring({
         notify("地形に使うマテリアルがありません");
         return current;
       }
+      // A preset arrives shaped and planted. Without one the author still gets
+      // the flat plate they can sculpt from.
+      const preset = presetId ? getTerrainPreset(presetId) : undefined;
       const created = addTerrainEntity(
         current.present.bundle.scene,
         current.present.bundle.assets,
         materialAssetId,
+        preset
+          ? { ...createTerrainFromPreset(preset), name: preset.label }
+          : {},
       );
       if (!created) {
         notify("現在のSceneに地形を作成できませんでした");

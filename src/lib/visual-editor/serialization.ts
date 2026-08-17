@@ -26,6 +26,7 @@ import {
 } from "./material-extension-registry";
 import { normalizeParticleProperties } from "./particle-system";
 import { isTerrainGeometry } from "./terrain";
+import { isTerrainGrassLayer } from "./terrain-grass";
 import { isSerializableJsonValue } from "./component-registry";
 import {
   PREFAB_DOCUMENT_SCHEMA_VERSION,
@@ -1768,6 +1769,26 @@ function validatePrefabComponentShape(
           "terrain height samples are invalid",
         ),
       );
+    }
+    // Grass is validated here rather than inside isTerrainGeometry so the
+    // terrain module keeps a type-only dependency on the grass module and the
+    // two never form an import cycle.
+    if (
+      isRecord(component.geometry) &&
+      component.geometry.kind === "terrain" &&
+      isRecord(component.geometry.terrain) &&
+      component.geometry.terrain.grass !== undefined
+    ) {
+      const grass = component.geometry.terrain.grass;
+      if (!Array.isArray(grass) || !grass.every(isTerrainGrassLayer)) {
+        issues.push(
+          issue(
+            `${path}.geometry.terrain.grass`,
+            "range",
+            "terrain grass layers are invalid",
+          ),
+        );
+      }
     }
     if (
       isRecord(component.geometry) &&

@@ -13,6 +13,8 @@ export const TERRAIN_SIZE_MIN = 0.5;
 export const TERRAIN_SIZE_MAX = 512;
 export const TERRAIN_HEIGHT_ABSOLUTE_MAX = 256;
 
+import type { TerrainGrassLayer } from "./terrain-grass";
+
 export type TerrainGeometry = {
   width: number;
   depth: number;
@@ -26,6 +28,12 @@ export type TerrainGeometry = {
    * remain valid and render as a solid surface.
    */
   holes?: boolean[];
+  /**
+   * Rule-placed vegetation. Only the rules are stored; the blades themselves
+   * are regenerated from the seed and this height field, so a densely planted
+   * Terrain costs no more document than a bare one.
+   */
+  grass?: TerrainGrassLayer[];
 };
 
 export type TerrainGeometryOptions = Partial<TerrainGeometry>;
@@ -97,7 +105,10 @@ export function createTerrainGeometry(
     options.holes.every((hole) => typeof hole === "boolean")
       ? [...options.holes]
       : Array.from({ length: holeLength }, () => false);
-  return { width, depth, resolution, heights, holes };
+  const grass = Array.isArray(options.grass) ? [...options.grass] : undefined;
+  return grass
+    ? { width, depth, resolution, heights, holes, grass }
+    : { width, depth, resolution, heights, holes };
 }
 
 export function isTerrainGeometry(value: unknown): value is TerrainGeometry {
