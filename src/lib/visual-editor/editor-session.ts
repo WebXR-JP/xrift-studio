@@ -70,6 +70,12 @@ export type EditorComponentDefinition = {
     | "official-xrift";
   schemaId?: string;
   lightType?: LightComponent["lightType"];
+  /**
+   * Distance falloff for an Audio Source entry. A global entry creates the
+   * same component with it off, the way each Light entry creates one Light
+   * component with a different lightType.
+   */
+  audioSpatial?: boolean;
 };
 
 const BOTH_PROJECT_KINDS = ["world", "item"] as const;
@@ -127,6 +133,14 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
     "vegetation-wind",
   ),
   definition("core.audio-source", "Audio Source", "media", true, "audio-source"),
+  definition(
+    "core.audio-source.global",
+    "Global Audio (BGM)",
+    "media",
+    true,
+    "audio-source",
+    { audioSpatial: false },
+  ),
   definition("core.text", "Text", "rendering", true, "text"),
   definition("scripting.script", "Script", "scripting", true, "script"),
   ...XRIFT_COMPONENT_REGISTRY.map(
@@ -645,7 +659,7 @@ function definition(
   category: EditorComponentCategory,
   allowMultiple: boolean,
   componentType: EditorComponentDefinition["componentType"],
-  options: Pick<EditorComponentDefinition, "lightType"> = {},
+  options: Pick<EditorComponentDefinition, "lightType" | "audioSpatial"> = {},
 ): EditorComponentDefinition {
   return {
     id,
@@ -774,7 +788,11 @@ function createRegisteredComponent(
     const audio = Object.values(assets.assets).find(
       (asset) => asset.kind === "audio",
     );
-    return createAudioSourceComponent(id, audio?.id ?? "");
+    return createAudioSourceComponent(
+      id,
+      audio?.id ?? "",
+      definition.audioSpatial ?? true,
+    );
   }
   if (definition.componentType === "text") {
     return createTextComponent(id);

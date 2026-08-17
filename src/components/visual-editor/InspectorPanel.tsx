@@ -2454,12 +2454,17 @@ function AudioSourceInspector({
           onChange={(autoplay) => onChange({ autoplay })}
         />
         <ToggleRow
-          label="Spatial"
+          label="距離で減衰 (Spatial)"
           checked={component.spatial}
           disabled={readOnly}
           onChange={(spatial) => onChange({ spatial })}
         />
       </div>
+      {!component.spatial ? (
+        <p className="border-t border-slate-100 pt-2 text-[11px] leading-4 text-slate-500">
+          距離減衰なしで再生します。Entityの位置に関わらずシーン全体へ同じ音量で届くので、BGMや環境音に向きます。
+        </p>
+      ) : null}
       {component.spatial ? (
         <div className="space-y-2 border-t border-slate-100 pt-2">
           <ColliderNumberField

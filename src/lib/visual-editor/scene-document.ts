@@ -786,9 +786,18 @@ export function createScriptComponent(
   };
 }
 
+/**
+ * Creates an Audio Source.
+ *
+ * `spatial: false` is not a lesser positional source — it is the whole of what
+ * background music needs: one volume everywhere, no distance falloff. So a
+ * global source also starts looping and playing on its own, because a BGM the
+ * author has to trigger is not what they came for.
+ */
 export function createAudioSourceComponent(
   id: string,
   audioAssetId = "",
+  spatial = true,
 ): AudioSourceComponent | null {
   const normalizedId = id.trim();
   if (!normalizedId) return null;
@@ -798,9 +807,9 @@ export function createAudioSourceComponent(
     enabled: true,
     audioAssetId: audioAssetId.trim(),
     volume: 1,
-    loop: false,
-    autoplay: false,
-    spatial: true,
+    loop: !spatial,
+    autoplay: !spatial,
+    spatial,
     refDistance: 1,
     rolloffFactor: 1,
     maxDistance: 10000,
