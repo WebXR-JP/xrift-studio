@@ -13,7 +13,7 @@ import type {
   VisualCompileResult,
   VisualCompilerDocuments,
 } from "./compiler";
-import { compileVisualProject } from "./compiler";
+import { compileVisualProject, compilerStagingDirectoryName } from "./compiler";
 import { resolveLocalBasisTranscoderPath } from "./basis-transcoder";
 
 export type VisualPublishPipelineStage =
@@ -934,4 +934,43 @@ function compactResult(result: XriftUploadResult): XriftUploadResult {
   return Object.fromEntries(
     Object.entries(result).filter(([, value]) => value !== undefined),
   ) as XriftUploadResult;
+}
+
+/**
+ * The marker Tauri puts on the one publish failure an author can resolve.
+ *
+ * A previous upload was marked started but never advanced the publication
+ * sidecar, so Studio cannot tell whether the world reached XRift. It refuses to
+ * retry on its own — that could publish the same world twice — and every later
+ * publish stops at the same point until someone resolves it.
+ */
+export const XRIFT_UPLOAD_ATTEMPT_UNRESOLVED = "XRIFT_UPLOAD_ATTEMPT_UNRESOLVED";
+
+export function isUnresolvedXriftUploadAttempt(error: unknown): boolean {
+  const message =
+    error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  return message.includes(XRIFT_UPLOAD_ATTEMPT_UNRESOLVED);
+}
+
+/**
+ * Clears a stale upload attempt so publishing can be tried again.
+ *
+ * This is the author's decision, not Studio's: it is only safe once they have
+ * checked XRift and seen that the previous attempt did not land. Tauri still
+ * refuses if the staging publication moved after the attempt started, so this
+ * can never erase the record of an upload that actually completed.
+ *
+ * The staging directory is derived from the project identity rather than from a
+ * fresh compile, because a project stuck in this state cannot reach the point
+ * where a compile would hand back the name.
+ */
+export async function clearStaleXriftUploadAttempt(
+  authoringProjectPath: string,
+  projectId: string,
+  projectKind: ProjectKind,
+): Promise<void> {
+  await tauri.clearCompilerUploadAttempt(
+    authoringProjectPath,
+    compilerStagingDirectoryName(projectId, projectKind),
+  );
 }

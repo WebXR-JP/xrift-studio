@@ -58,7 +58,7 @@
   "devDependencies": {
     "@react-three/fiber": "9.6.1",
     "@react-three/rapier": "2.2.0",
-    "@xrift/world-components": "0.43.0",
+    "@xrift/world-components": "0.47.0",
     "@types/react": "^19.2.17",
     "@types/three": "0.185.1",
     "react": "^19.2.7",

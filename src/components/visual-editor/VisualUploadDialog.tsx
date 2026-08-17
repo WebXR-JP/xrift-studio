@@ -19,6 +19,7 @@ import type { ProjectKind } from "../../lib/tauri";
 import { imageDataUrlToPng } from "../../lib/project-thumbnail";
 import type { AssetOptimizationProgress } from "../../lib/visual-editor/asset-optimization";
 import { VisualPublishCancellationController } from "../../lib/visual-editor/publish-cancellation";
+import { isUnresolvedXriftUploadAttempt } from "../../lib/visual-editor/publish";
 import {
   formatVramBytes,
   type WorldVramEstimate,
@@ -117,6 +118,12 @@ type Props = {
     report: (progress: VisualPublishProgress) => void,
     signal: AbortSignal,
   ) => Promise<VisualPublishResult>;
+  /**
+   * Discards a previous upload attempt whose outcome Studio could not confirm.
+   * Present only when the project is in that state; the author decides, after
+   * checking XRift, that the previous attempt did not land.
+   */
+  onClearStaleUploadAttempt?: () => Promise<void>;
 };
 
 type Requirement = {
@@ -150,6 +157,7 @@ export function VisualUploadDialog({
   onLocateDiagnostic,
   onApplyOptimizations,
   onPublish,
+  onClearStaleUploadAttempt,
 }: Props) {
   const [stage, setStage] = useState<VisualPublishStage>("review");
   const [progress, setProgress] = useState<VisualPublishProgress | null>(null);
@@ -165,6 +173,14 @@ export function VisualUploadDialog({
   const [thumbnailError, setThumbnailError] = useState<string | null>(null);
   const [vramDetailsOpen, setVramDetailsOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [clearingAttempt, setClearingAttempt] = useState(false);
+  const [clearAttemptError, setClearAttemptError] = useState<string | null>(null);
+  const [attemptCleared, setAttemptCleared] = useState(false);
+  // One publish failure is the author's to resolve rather than Studio's: a
+  // previous upload that never confirmed. Every later publish stops at the same
+  // point until it is settled, so the way out belongs on this screen.
+  const unresolvedUploadAttempt =
+    stage === "failed" && isUnresolvedXriftUploadAttempt(error);
   const cancellationRef = useRef<VisualPublishCancellationController | null>(
     null,
   );
@@ -747,11 +763,74 @@ export function VisualUploadDialog({
                 <AlertCircle size={27} aria-hidden="true" />
               </span>
               <h3 className="mt-5 text-lg font-semibold text-slate-950">
-                XRiftへ送信できませんでした
+                {unresolvedUploadAttempt
+                  ? "前回の送信結果を確認できていません"
+                  : "XRiftへ送信できませんでした"}
               </h3>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
-                {error || "処理を再実行するか、Editorへ戻って診断を確認してください。"}
+                {unresolvedUploadAttempt
+                  ? "前回の送信がXRiftへ届いたかどうかを判断できないため、二重公開を避けて送信を止めています。"
+                  : error || "処理を再実行するか、Editorへ戻って診断を確認してください。"}
               </p>
+              {unresolvedUploadAttempt ? (
+                <div className="mx-auto mt-5 max-w-md rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-left">
+                  <p className="text-xs font-semibold text-amber-900">
+                    XRiftで公開状況を確認してください
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-amber-800">
+                    すでに公開されている場合は、解除せずEditorへ戻ってください。公開されていなければ、前回の試行を解除して送信し直せます。
+                  </p>
+                  {attemptCleared ? (
+                    <p className="mt-2 rounded border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-xs leading-5 text-emerald-800">
+                      前回の試行を解除しました。「準備を再確認」から送信し直せます。
+                    </p>
+                  ) : null}
+                  {clearAttemptError ? (
+                    <p
+                      className="mt-2 rounded border border-rose-200 bg-rose-50 px-2.5 py-2 text-xs leading-5 text-rose-800"
+                      role="alert"
+                    >
+                      {clearAttemptError}
+                    </p>
+                  ) : null}
+                  {onClearStaleUploadAttempt && !attemptCleared ? (
+                    <button
+                      type="button"
+                      disabled={clearingAttempt}
+                      onClick={() => {
+                        setClearingAttempt(true);
+                        setClearAttemptError(null);
+                        void onClearStaleUploadAttempt()
+                          .then(() => {
+                            setAttemptCleared(true);
+                            setError(null);
+                          })
+                          .catch((reason: unknown) => {
+                            setClearAttemptError(
+                              reason instanceof Error
+                                ? reason.message
+                                : String(reason),
+                            );
+                          })
+                          .finally(() => setClearingAttempt(false));
+                      }}
+                      className="mt-2.5 flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {clearingAttempt ? (
+                        <>
+                          <RotateCcw size={13} className="animate-spin" aria-hidden="true" />
+                          解除中
+                        </>
+                      ) : (
+                        "公開されていないので前回の試行を解除する"
+                      )}
+                    </button>
+                  ) : null}
+                  <p className="mt-2 break-words font-mono text-[10px] leading-4 text-amber-700">
+                    {error}
+                  </p>
+                </div>
+              ) : null}
             </div>
           )}
           {thumbnailStagingSha256 ? (

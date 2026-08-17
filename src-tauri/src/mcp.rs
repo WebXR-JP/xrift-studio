@@ -3984,7 +3984,15 @@ mod tests {
             .iter()
             .find(|tool| tool.get("name").and_then(Value::as_str) == Some("update_scene_settings"))
             .expect("update_scene_settings");
-        for section in ["skybox", "fog", "ambient", "camera", "postprocessing", "editor"] {
+        for section in [
+            "skybox",
+            "fog",
+            "ambient",
+            "camera",
+            "postprocessing",
+            "vegetation",
+            "editor",
+        ] {
             assert_eq!(
                 update_scene_settings
                     .pointer(&format!("/inputSchema/properties/{section}/minProperties"))
@@ -3998,7 +4006,15 @@ mod tests {
                 .pointer("/inputSchema/anyOf")
                 .and_then(Value::as_array)
                 .map(Vec::len),
-            Some(6)
+            Some(7)
+        );
+        // Wind drives both the transform-based Wind component and every
+        // wind-aware Shader Material, so MCP has to be able to set it.
+        assert!(
+            update_scene_settings
+                .pointer("/inputSchema/properties/vegetation/properties/windDirectionDegrees")
+                .is_some(),
+            "update_scene_settings should expose the scene wind direction"
         );
         assert!(
             update_scene_settings

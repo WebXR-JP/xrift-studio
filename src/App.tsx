@@ -60,6 +60,7 @@ import {
   createVisualProjectOnDisk,
   defaultVisualStarterTemplateId,
   publishVisualProject,
+  clearStaleXriftUploadAttempt,
   readVisualProjectFromDisk,
   prepareStarterVisualProject,
   sanitizePublishFailure,
@@ -1086,6 +1087,21 @@ function App() {
               afterBytes: result.afterBytes,
             };
           }}
+          onClearStaleUploadAttempt={(() => {
+            const stuckProjectPath = visualSession.project?.path;
+            if (!stuckProjectPath || !publishBundle) return undefined;
+            // Only reachable from the unresolved-attempt panel, after the author
+            // has checked XRift. Tauri still refuses if the staging publication
+            // moved after the attempt started, so an upload that actually
+            // completed can never be erased here.
+            return async () => {
+              await clearStaleXriftUploadAttempt(
+                stuckProjectPath,
+                publishBundle.project.projectId,
+                publishBundle.project.projectKind,
+              );
+            };
+          })()}
           onPublish={async (report, signal) => {
             if (!publishBundle) throw new Error("公開する制作データがありません。");
             let savedProjectPath: string | null = null;

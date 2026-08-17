@@ -2697,6 +2697,22 @@ fn write_compiler_staging_owner_record(
     write_file_synced(&path, format!("{}\n", raw).as_bytes())
 }
 
+/// Marks the one publish failure the author can resolve themselves.
+///
+/// A previous upload was marked started but never advanced the publication
+/// sidecar, so whether it reached XRift is unknown. Retrying silently could
+/// publish the same world twice, which is why preparation refuses to continue.
+/// The author is the only one who can tell which happened, so the message
+/// carries a code the UI matches to offer the recovery.
+const XRIFT_UPLOAD_ATTEMPT_UNRESOLVED: &str = "XRIFT_UPLOAD_ATTEMPT_UNRESOLVED";
+
+fn unresolved_upload_attempt_message(detail: &str) -> String {
+    format!(
+        "{}: 前回のXRiftへの送信結果を確認できていません（{}）。XRiftで公開状況を確認し、重複していなければ前回の送信試行を解除してから再送信してください。",
+        XRIFT_UPLOAD_ATTEMPT_UNRESOLVED, detail
+    )
+}
+
 fn verify_compiler_upload_advanced(
     owner: &CompilerStagingOwner,
     uploaded: &LoadedCompilerPublicationMetadata,
@@ -3146,7 +3162,8 @@ fn prepare_compiler_staging(
             (Some(owner), Some(loaded)) if owner.upload_attempt_started_unix_ms.is_some() => {
                 // Only a sidecar advanced beyond the recorded pre-upload
                 // baseline proves that the prior remote attempt completed.
-                verify_compiler_upload_advanced(owner, loaded)?;
+                verify_compiler_upload_advanced(owner, loaded)
+                    .map_err(|detail| unresolved_upload_attempt_message(&detail))?;
                 persist_verified_authoring_publication_metadata(
                     &authoring_root,
                     &manifest,
@@ -3167,10 +3184,9 @@ fn prepare_compiler_staging(
                 )?;
             }
             (Some(owner), None) if owner.upload_attempt_started_unix_ms.is_some() => {
-                return Err(
-                    "a previous XRift upload attempt has no saved remote result; automatic retry is blocked"
-                        .to_string(),
-                )
+                return Err(unresolved_upload_attempt_message(
+                    "a previous XRift upload attempt has no saved remote result",
+                ))
             }
             _ => {}
         }

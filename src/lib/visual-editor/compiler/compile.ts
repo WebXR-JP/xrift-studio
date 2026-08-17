@@ -309,13 +309,10 @@ export function compileVisualProject(
   const canStage = !uniqueDiagnostics.some(
     (diagnostic) => diagnostic.severity === "blocking",
   );
-  const projectIdentity = safeFileSegment(documents.project.projectId).slice(0, 72);
-  const stagingDirectoryName = [
-    "xrift-studio",
+  const stagingDirectoryName = compilerStagingDirectoryName(
+    documents.project.projectId,
     documents.project.projectKind,
-    projectIdentity,
-    sha256Utf8(documents.project.projectId).slice(0, 12),
-  ].join("-");
+  );
   const requiredPublicationFiles = [
     {
       purpose: "thumbnail" as const,
@@ -1279,6 +1276,23 @@ const XRiftStudioPostprocessing: FC<{ settings: XRiftStudioPostprocessingSetting
 }
 
 /** Colour handling without the compositor, for scenes with post effects off. */
+/**
+ * The staging directory a project compiles into. It depends only on the
+ * project's identity, so recovery paths can find a previous attempt's staging
+ * without recompiling the project first.
+ */
+export function compilerStagingDirectoryName(
+  projectId: string,
+  projectKind: VisualProjectKind,
+): string {
+  return [
+    "xrift-studio",
+    projectKind,
+    safeFileSegment(projectId).slice(0, 72),
+    sha256Utf8(projectId).slice(0, 12),
+  ].join("-");
+}
+
 function registerSceneToneMappingSupport(
   settings: ScenePostprocessingSettings,
   context: CompileContext,

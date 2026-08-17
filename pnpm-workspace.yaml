@@ -6,7 +6,7 @@ allowBuilds:
   sharp: false
 
 minimumReleaseAgeExclude:
-  - '@xrift/world-components@0.43.0'
+  - '@xrift/world-components@0.47.0'
 
 overrides:
   dompurify: 3.4.12
