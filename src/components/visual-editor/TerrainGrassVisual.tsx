@@ -11,7 +11,10 @@ import {
   Vector2,
 } from "three";
 import {
+  TERRAIN_GRASS_FRAGMENT_SHADER,
   TERRAIN_GRASS_MAX_INSTANCES,
+  TERRAIN_GRASS_VERTEX_SHADER,
+  createTerrainGrassBladeBuffers,
   generateTerrainGrassInstances,
   getTerrainGrassType,
   type ResolvedWind,
@@ -67,8 +70,8 @@ export function TerrainGrassVisual({
         uWindTurbulence: { value: 0 },
         uTime: { value: 0 },
       },
-      vertexShader: GRASS_VERTEX_SHADER,
-      fragmentShader: GRASS_FRAGMENT_SHADER,
+      vertexShader: TERRAIN_GRASS_VERTEX_SHADER,
+      fragmentShader: TERRAIN_GRASS_FRAGMENT_SHADER,
       side: DoubleSide,
     });
   }, [type]);
@@ -130,108 +133,20 @@ export function TerrainGrassVisual({
  * position — the position is about to be moved.
  */
 function createBladeGeometry(cards: number): BufferGeometry {
-  const positions: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-  // Segments along the height, so the vertex stage can arc the blade. A blade
-  // built from one quad can only ever be a straight spike.
-  const segments = 4;
-  for (let card = 0; card < cards; card += 1) {
-    const angle = (Math.PI * card) / Math.max(cards, 1);
-    const dirX = Math.cos(angle);
-    const dirZ = Math.sin(angle);
-    const cardBase = card * (segments + 1) * 2;
-    for (let step = 0; step <= segments; step += 1) {
-      const t = step / segments;
-      // Taper to a point, biased so the blade keeps its width low down and
-      // narrows quickly near the tip the way a real one does.
-      const halfWidth = 0.5 * (1 - t) * (1 - t * 0.45);
-      positions.push(-dirX * halfWidth, t, -dirZ * halfWidth);
-      positions.push(dirX * halfWidth, t, dirZ * halfWidth);
-      uvs.push(0, t, 1, t);
-    }
-    for (let step = 0; step < segments; step += 1) {
-      const a = cardBase + step * 2;
-      indices.push(a, a + 1, a + 3, a, a + 3, a + 2);
-    }
-  }
+  const buffers = createTerrainGrassBladeBuffers(cards);
   const geometry = new BufferGeometry();
   geometry.setAttribute(
     "position",
-    new BufferAttribute(new Float32Array(positions), 3),
+    new BufferAttribute(new Float32Array(buffers.positions), 3),
   );
-  geometry.setAttribute("uv", new BufferAttribute(new Float32Array(uvs), 2));
-  geometry.setIndex(indices);
+  geometry.setAttribute(
+    "uv",
+    new BufferAttribute(new Float32Array(buffers.uvs), 2),
+  );
+  geometry.setIndex(buffers.indices);
   geometry.computeVertexNormals();
   return geometry;
 }
 
-const GRASS_VERTEX_SHADER = `uniform float uHeight;
-uniform float uWidth;
-uniform float uSway;
-uniform float uCurve;
-uniform float uCullDistance;
-uniform vec2 uWindDirection;
-uniform float uWindSpeed;
-uniform float uWindTurbulence;
-uniform float uTime;
-varying float vHeightFraction;
-varying float vShade;
-
-void main() {
-  vHeightFraction = uv.y;
-  vec4 anchor = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-
-  // Distance culling. A blade thinner than a pixel cannot be drawn, only
-  // aliased, and a whole field of them turns the ground into moire rings.
-  // Shrinking them out before that point removes the artefact without paying
-  // for transparency or sorting.
-  float distanceToCamera = distance(cameraPosition, anchor.xyz);
-  float visibility =
-    1.0 - smoothstep(uCullDistance * 0.65, uCullDistance, distanceToCamera);
-  if (visibility <= 0.001) {
-    // Outside the clip volume, so the blade costs nothing beyond this vertex.
-    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
-    return;
-  }
-
-  float t = uv.y;
-  vec3 local = vec3(
-    position.x * uWidth,
-    position.y * uHeight * visibility,
-    position.z * uWidth
-  );
-
-  // Each blade leans on its own axis and arcs over rather than standing
-  // straight, which is most of what separates grass from a field of spikes.
-  float lean = uCurve * t * t * uHeight * 0.5;
-  local.x += lean;
-
-  vec4 rooted = instanceMatrix * vec4(local, 1.0);
-  // The instance's world position is the phase, so neighbouring blades lean at
-  // slightly different moments. One phase for the whole field would make it
-  // pulse like a single sheet.
-  float phase = uTime * uWindSpeed + anchor.x * 0.35 + anchor.z * 0.27;
-  float gust = 1.0 + uWindTurbulence * 0.5 * sin(phase * 0.31);
-  float bend = uSway * uWindSpeed * 0.09 * gust * sin(phase) * t * t;
-  rooted.xz += uWindDirection * bend * uHeight;
-
-  vec4 worldPosition = modelMatrix * rooted;
-  // A cheap wrap-around shade so a dense field still has form. Blades are
-  // unlit otherwise and would read as flat cut-outs.
-  vec3 faceNormal = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * vec3(position.x, 0.35, position.z));
-  vShade = 0.65 + 0.35 * clamp(dot(faceNormal, normalize(vec3(0.4, 0.8, 0.3))), 0.0, 1.0);
-  gl_Position = projectionMatrix * viewMatrix * worldPosition;
-}`;
-
-const GRASS_FRAGMENT_SHADER = `uniform vec3 uBaseColor;
-uniform vec3 uTipColor;
-varying float vHeightFraction;
-varying float vShade;
-
-void main() {
-  vec3 color = mix(uBaseColor, uTipColor, vHeightFraction * vHeightFraction);
-  gl_FragColor = vec4(color * vShade, 1.0);
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
-}`;
+// Shaders live in the shared runtime module so the compiled world reads the
+// same copy. Nothing below this line should redefine them.

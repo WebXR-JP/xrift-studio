@@ -34,6 +34,12 @@ import {
   skyShaderTextureUniformNames,
 } from "../sky-shader";
 import { resolveSceneWind, windDrivenUniforms } from "../wind-contract";
+import { getTerrainGrassType } from "../terrain-grass";
+import {
+  TERRAIN_GRASS_FRAGMENT_SHADER,
+  TERRAIN_GRASS_VERTEX_SHADER,
+  terrainGrassRuntimeSource,
+} from "../terrain-grass-runtime";
 import { detectTimeUniforms } from "../../../../packages/xrift-studio-runtime/src/shader-time";
 import type { VisualProjectKind } from "../project-document";
 import {
@@ -2119,12 +2125,21 @@ function renderMesh(
   const materialJsx = material
     ? renderMaterial(entity, mesh, material, context)
     : '<meshStandardMaterial color="#ff00ff" />';
-  const geometryJsxContent =
+  const terrainConstant =
     geometry.kind === "terrain"
-      ? renderTerrainGeometry(geometry.terrain, context)
-      : geometryJsx(geometry.primitive);
+      ? registerTerrainDataConstant(geometry.terrain, context)
+      : null;
+  const geometryJsxContent = terrainConstant
+    ? renderTerrainGeometry(terrainConstant, context)
+    : geometry.kind === "primitive"
+      ? geometryJsx(geometry.primitive)
+      : "";
+  const grassJsx =
+    geometry.kind === "terrain" && terrainConstant
+      ? renderTerrainGrassLayers(entity, geometry.terrain, terrainConstant, context)
+      : "";
   return renderMeshMaxDistance(
-    `<mesh castShadow={${mesh.castShadow}} receiveShadow={${mesh.receiveShadow}}>\n  ${geometryJsxContent}\n  ${materialJsx}\n</mesh>`,
+    `<mesh castShadow={${mesh.castShadow}} receiveShadow={${mesh.receiveShadow}}>\n  ${geometryJsxContent}\n  ${materialJsx}\n</mesh>${grassJsx}`,
     mesh.maxDistance,
     context,
   );
@@ -2198,8 +2213,54 @@ function resolveMeshGeometry(
     : { kind: "primitive", primitive: asset.primitive };
 }
 
-function renderTerrainGeometry(
+/**
+ * The terrain payload is shared between the surface mesh and the grass, and a
+ * height field is sixteen thousand numbers: serializing it once per consumer
+ * would double the world for every planted Terrain.
+ */
+function registerTerrainDataConstant(
   terrain: TerrainGeometry,
+  context: CompileContext,
+): string {
+  const json = JSON.stringify(terrain);
+  const name = generatedIdentifier(
+    "XRIFT_TERRAIN_DATA",
+    sha256Utf8(json).slice(0, 16),
+  );
+  registerTerrainDataTypes(context);
+  context.supportDeclarations.set(
+    `terrain-data:${name}`,
+    `const ${name}: XriftTerrainGeometryData = ${json};`,
+  );
+  return name;
+}
+
+function registerTerrainDataTypes(context: CompileContext): void {
+  context.supportDeclarations.set(
+    "terrain:data-types",
+    `type XriftTerrainGrassLayerData = {
+  id: string;
+  typeId: string;
+  density: number;
+  heightRange: readonly number[];
+  slopeLimitDegrees: number;
+  seed: number;
+  mask?: readonly number[];
+};
+
+type XriftTerrainGeometryData = {
+  width: number;
+  depth: number;
+  resolution: number;
+  heights: readonly number[];
+  holes?: readonly boolean[];
+  grass?: readonly XriftTerrainGrassLayerData[];
+};`,
+  );
+}
+
+function renderTerrainGeometry(
+  terrainConstant: string,
   context: CompileContext,
 ): string {
   context.reactValueImports.add("useEffect");
@@ -2208,13 +2269,7 @@ function renderTerrainGeometry(
   context.threeValueImports.add("Float32BufferAttribute");
   context.supportDeclarations.set(
     "terrain:geometry",
-    `type XriftTerrainGeometryData = {
-  width: number;
-  depth: number;
-  resolution: number;
-  heights: readonly number[];
-  holes?: readonly boolean[];
-};
+    `
 
 function XriftTerrainGeometry({ terrain }: { terrain: XriftTerrainGeometryData }) {
   const geometry = useMemo(() => {
@@ -2253,7 +2308,202 @@ function XriftTerrainGeometry({ terrain }: { terrain: XriftTerrainGeometryData }
   return <primitive object={geometry} attach="geometry" />;
 }`,
   );
-  return `<XriftTerrainGeometry terrain={${JSON.stringify(terrain)}} />`;
+  return `<XriftTerrainGeometry terrain={${terrainConstant}} />`;
+}
+
+/**
+ * Emits a Terrain's grass into the world.
+ *
+ * Only the rules travel — the blades are regenerated at runtime by the same
+ * placement algorithm the editor uses, embedded as source so the world owes
+ * nothing to Studio. The wind is resolved at compile time through the shared
+ * wind contract, so published grass moves with the same air as everything
+ * else in the scene.
+ */
+function renderTerrainGrassLayers(
+  entity: SceneEntity,
+  terrain: TerrainGeometry,
+  terrainConstant: string,
+  context: CompileContext,
+): string {
+  const layers = terrain.grass ?? [];
+  if (layers.length === 0) return "";
+  const entityWind = entity.components.find(
+    (component): component is Extract<typeof component, { type: "vegetation-wind" }> =>
+      component.type === "vegetation-wind",
+  );
+  const wind = resolveSceneWind(
+    resolveSceneSettings(context.scene.settings).vegetation,
+    entityWind,
+  );
+
+  const jsx: string[] = [];
+  for (let index = 0; index < layers.length; index += 1) {
+    const layer = layers[index];
+    const type = getTerrainGrassType(layer.typeId);
+    if (!type) {
+      addDiagnostic(context, {
+        severity: "warning",
+        code: "terrain-grass-type-unknown",
+        message: `草の種類「${layer.typeId}」が不明のため、この層は出力しません`,
+        sceneId: context.scene.sceneId,
+        entityId: entity.id,
+      });
+      continue;
+    }
+    jsx.push(
+      `<XRiftStudioTerrainGrass terrain={${terrainConstant}} layerIndex={${index}} type={${JSON.stringify(
+        {
+          height: type.height,
+          width: type.width,
+          cards: type.cards,
+          curve: type.curve,
+          cullDistance: type.cullDistance,
+          sway: type.sway,
+          baseColor: type.baseColor,
+          tipColor: type.tipColor,
+        },
+      )}} wind={{ direction: [${formatNumber(wind.direction[0])}, ${formatNumber(
+        wind.direction[1],
+      )}], speed: ${formatNumber(wind.speed)}, turbulence: ${formatNumber(
+        wind.turbulence,
+      )} }} />`,
+    );
+  }
+  if (jsx.length === 0) return "";
+
+  context.reactValueImports.add("useEffect");
+  context.reactValueImports.add("useMemo");
+  context.reactValueImports.add("useRef");
+  context.fiberImports.add("useFrame");
+  [
+    "BufferGeometry",
+    "Float32BufferAttribute",
+    "Matrix4",
+    "Vector3",
+    "Vector2",
+    "Color",
+    "ShaderMaterial",
+    "DoubleSide",
+  ].forEach((name) => context.threeValueImports.add(name));
+  context.threeTypeImports.add("InstancedMesh");
+  context.supportDeclarations.set(
+    "terrain:grass",
+    `${terrainGrassRuntimeSource({ typed: true })}
+
+const XRIFT_TERRAIN_GRASS_VERTEX_SHADER = ${JSON.stringify(TERRAIN_GRASS_VERTEX_SHADER)};
+const XRIFT_TERRAIN_GRASS_FRAGMENT_SHADER = ${JSON.stringify(TERRAIN_GRASS_FRAGMENT_SHADER)};
+
+type XRiftStudioTerrainGrassTypeProps = {
+  height: number;
+  width: number;
+  cards: number;
+  curve: number;
+  cullDistance: number;
+  sway: number;
+  baseColor: string;
+  tipColor: string;
+};
+
+const XRiftStudioTerrainGrass: FC<{
+  terrain: XriftTerrainGeometryData;
+  layerIndex: number;
+  type: XRiftStudioTerrainGrassTypeProps;
+  wind: { direction: [number, number]; speed: number; turbulence: number };
+}> = ({ terrain, layerIndex, type, wind }) => {
+  const layer = terrain.grass?.[layerIndex];
+  const meshRef = useRef<InstancedMesh>(null);
+  const placement = useMemo(
+    () => (layer ? xriftTerrainGrassPlace(terrain, layer, 50000) : null),
+    [layer, terrain],
+  );
+  const geometry = useMemo(() => {
+    const buffers = xriftTerrainGrassBladeBuffers(type.cards);
+    const next = new BufferGeometry();
+    next.setAttribute(
+      "position",
+      new Float32BufferAttribute(new Float32Array(buffers.positions), 3),
+    );
+    next.setAttribute(
+      "uv",
+      new Float32BufferAttribute(new Float32Array(buffers.uvs), 2),
+    );
+    next.setIndex(buffers.indices);
+    next.computeVertexNormals();
+    return next;
+  }, [type.cards]);
+  const material = useMemo(
+    () =>
+      new ShaderMaterial({
+        uniforms: {
+          uBaseColor: { value: new Color(type.baseColor) },
+          uTipColor: { value: new Color(type.tipColor) },
+          uHeight: { value: type.height },
+          uWidth: { value: type.width },
+          uSway: { value: type.sway },
+          uCurve: { value: type.curve },
+          uCullDistance: { value: type.cullDistance },
+          uWindDirection: { value: new Vector2(wind.direction[0], wind.direction[1]) },
+          uWindSpeed: { value: wind.speed },
+          uWindTurbulence: { value: wind.turbulence },
+          uTime: { value: 0 },
+        },
+        vertexShader: XRIFT_TERRAIN_GRASS_VERTEX_SHADER,
+        fragmentShader: XRIFT_TERRAIN_GRASS_FRAGMENT_SHADER,
+        side: DoubleSide,
+      }),
+    // The inline prop objects change identity every render, so the deps are
+    // the scalars themselves.
+    [
+      type.baseColor,
+      type.tipColor,
+      type.height,
+      type.width,
+      type.sway,
+      type.curve,
+      type.cullDistance,
+      wind.direction[0],
+      wind.direction[1],
+      wind.speed,
+      wind.turbulence,
+    ],
+  );
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  useEffect(() => () => material.dispose(), [material]);
+  useEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh || !placement) return;
+    const matrix = new Matrix4();
+    const scale = new Vector3();
+    for (let index = 0; index < placement.placed; index += 1) {
+      const s = placement.scales[index] ?? 1;
+      matrix.makeRotationY(placement.rotations[index] ?? 0);
+      matrix.scale(scale.set(s, s, s));
+      matrix.setPosition(
+        placement.positions[index * 3] ?? 0,
+        placement.positions[index * 3 + 1] ?? 0,
+        placement.positions[index * 3 + 2] ?? 0,
+      );
+      mesh.setMatrixAt(index, matrix);
+    }
+    mesh.count = placement.placed;
+    mesh.instanceMatrix.needsUpdate = true;
+  }, [placement]);
+  useFrame((state) => {
+    const uniform = material.uniforms.uTime;
+    if (uniform) uniform.value = state.clock.getElapsedTime();
+  });
+  if (!placement || placement.placed === 0) return null;
+  return (
+    <instancedMesh
+      ref={meshRef}
+      args={[geometry, material, placement.placed]}
+      frustumCulled={false}
+    />
+  );
+};`,
+  );
+  return jsx.join("");
 }
 
 type ModelMaterialOverride = {

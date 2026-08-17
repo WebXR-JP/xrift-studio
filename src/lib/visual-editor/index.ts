@@ -74,6 +74,7 @@ export * from "./skybox-import.fixture";
 export * from "./terrain";
 export * from "./terrain.fixture";
 export * from "./terrain-grass";
+export * from "./terrain-grass-runtime";
 export * from "./terrain-grass.fixture";
 export * from "./terrain-presets";
 export * from "./texture-card";

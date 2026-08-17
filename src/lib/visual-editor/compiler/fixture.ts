@@ -260,7 +260,10 @@ export function runVisualCompilerFixtureAssertions(
       terrainSource.includes("function XriftTerrainGeometry") &&
       terrainSource.includes("Float32BufferAttribute") &&
       terrainSource.includes("terrain.holes?.[cell]") &&
-      terrainSource.includes("<XriftTerrainGeometry terrain={{") &&
+      // The terrain payload is a shared module constant so the surface mesh
+      // and the grass reference one copy of the height field.
+      /<XriftTerrainGeometry terrain=\{XRIFT_TERRAIN_DATA_\w+\}/.test(terrainSource) &&
+      /const XRIFT_TERRAIN_DATA_\w+: XriftTerrainGeometryData = \{"width"/.test(terrainSource) &&
       terrainSource.includes('colliders="trimesh"'),
     "Terrain must compile with its generated geometry and fixed Trimesh Collider",
   );

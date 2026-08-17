@@ -5,6 +5,17 @@ import {
   terrainHeightRange,
 } from "./terrain";
 import {
+  createTerrainGrassBladeBuffers,
+  terrainGrassRuntimeSource,
+} from "./terrain-grass-runtime";
+import {
+  BUILTIN_ASSET_IDS,
+  createPrototypeProject,
+} from "./prototype-project";
+import { addTerrainEntity } from "./scene-document";
+import { resolveSceneSettings } from "./scene-settings";
+import { compileVisualProject } from "./compiler/compile";
+import {
   TERRAIN_ARRANGE_GAP,
   TERRAIN_PRESETS,
   arrangeTerrainFootprints,
@@ -512,5 +523,219 @@ export function runTerrainPresetFixtureAssertions(): void {
     arrangeTerrainFootprints([]).size === 0 &&
       arrangeTerrainFootprints([stacked[0]]).size === 0,
     "Arranging must do nothing when there is nothing to separate",
+  );
+}
+
+/**
+ * Assertions for grass in the published world.
+ *
+ * The world regenerates blades from the stored rules with an embedded copy of
+ * the placement algorithm, so the one thing that matters is that the embedded
+ * copy and the TypeScript implementation are the same function. The fixture
+ * holds them bit-identical by evaluating the embedded source.
+ */
+export function runTerrainGrassPublishFixtureAssertions(): void {
+  assertEmbeddedPlacementEquivalence();
+  assertCompiledWorldGrass();
+}
+
+type EmbeddedGrassRuntime = {
+  place: (
+    terrain: unknown,
+    layer: unknown,
+    maxInstances: number,
+  ) => {
+    positions: Float32Array;
+    rotations: Float32Array;
+    scales: Float32Array;
+    placed: number;
+  };
+  blades: (cards: number) => {
+    positions: number[];
+    uvs: number[];
+    indices: number[];
+  };
+};
+
+function evaluateEmbeddedGrassRuntime(): EmbeddedGrassRuntime {
+  const source = terrainGrassRuntimeSource({ typed: false });
+  const factory = new Function(
+    `${source}\nreturn { place: xriftTerrainGrassPlace, blades: xriftTerrainGrassBladeBuffers };`,
+  );
+  return factory() as EmbeddedGrassRuntime;
+}
+
+function assertEmbeddedPlacementEquivalence(): void {
+  const runtime = evaluateEmbeddedGrassRuntime();
+
+  const flat = flatTerrain();
+  const ramp = {
+    ...flat,
+    heights: flat.heights.map((_, index) => {
+      const x = index % flat.resolution;
+      return x < flat.resolution / 2 ? 0 : (x - flat.resolution / 2) * 1.5;
+    }),
+  };
+  const holed = applyTerrainBrush(flat, {
+    kind: "hole-add",
+    center: [0, 0],
+    radius: 8,
+    strength: 1,
+  });
+  const masked = applyTerrainGrassBrush(flat, layer({ density: 12 }), {
+    mode: "erase",
+    center: [3, -2],
+    radius: 6,
+    strength: 0.7,
+  });
+
+  const cases: Array<{
+    name: string;
+    terrain: ReturnType<typeof flatTerrain>;
+    layer: TerrainGrassLayer;
+    limit: number;
+  }> = [
+    { name: "flat", terrain: flat, layer: layer(), limit: 50_000 },
+    {
+      name: "slope-limited ramp",
+      terrain: ramp,
+      layer: layer({ slopeLimitDegrees: 10, density: 12 }),
+      limit: 50_000,
+    },
+    {
+      name: "height band",
+      terrain: ramp,
+      layer: layer({ heightRange: [5, 1000], density: 12 }),
+      limit: 50_000,
+    },
+    { name: "holes", terrain: holed, layer: layer({ density: 12 }), limit: 50_000 },
+    { name: "painted mask", terrain: flat, layer: masked, limit: 50_000 },
+    { name: "cap", terrain: flat, layer: layer({ density: 500 }), limit: 1000 },
+  ];
+
+  for (const testCase of cases) {
+    const expected = generateTerrainGrassInstances(
+      testCase.terrain,
+      testCase.layer,
+      testCase.limit,
+    );
+    const actual = runtime.place(testCase.terrain, testCase.layer, testCase.limit);
+    assert(
+      actual.placed === expected.placed,
+      `Embedded placement count diverged on ${testCase.name} (${actual.placed} vs ${expected.placed})`,
+    );
+    for (const field of ["positions", "rotations", "scales"] as const) {
+      const expectedValues = expected[field];
+      const actualValues = actual[field];
+      assert(
+        actualValues.length === expectedValues.length &&
+          actualValues.every((value, index) => value === expectedValues[index]),
+        `Embedded placement ${field} diverged on ${testCase.name}`,
+      );
+    }
+  }
+
+  for (const cards of [1, 2, 3]) {
+    const expected = createTerrainGrassBladeBuffers(cards);
+    const actual = runtime.blades(cards);
+    for (const field of ["positions", "uvs", "indices"] as const) {
+      assert(
+        actual[field].length === expected[field].length &&
+          actual[field].every((value, index) => value === expected[field][index]),
+        `Embedded blade ${field} diverged for ${cards} cards`,
+      );
+    }
+  }
+}
+
+function assertCompiledWorldGrass(): void {
+  const prototype = createPrototypeProject("world", "grass-publish");
+  const preset = getTerrainPreset("meadow-plain");
+  if (!preset) throw new Error("meadow-plain preset is missing");
+  const geometry = createTerrainFromPreset(preset);
+  const placed = addTerrainEntity(
+    prototype.scene,
+    prototype.assets,
+    BUILTIN_ASSET_IDS.material.green,
+    { ...geometry, name: preset.label },
+  );
+  assert(placed !== null, "Publish fixture could not place a Terrain");
+  if (!placed) return;
+  const settings = resolveSceneSettings(placed.scene.settings);
+  const scene = {
+    ...placed.scene,
+    settings: {
+      ...settings,
+      vegetation: {
+        ...settings.vegetation,
+        enabled: true,
+        windSpeed: 1.25,
+        windDirectionDegrees: 0,
+      },
+    },
+  };
+  const compiled = compileVisualProject(
+    {
+      project: prototype.project,
+      scenes: { [scene.sceneId]: scene },
+      assets: prototype.assets,
+      prefabs: prototype.prefabs,
+    },
+    { generatedAt: "2026-01-01T00:00:00.000Z" },
+  );
+  const source =
+    compiled.overlayFiles.find((file) => file.relativePath === "src/World.tsx")
+      ?.content ?? "";
+  assert(compiled.canStage, "A world with planted Terrain must stay stageable");
+  assert(
+    source.includes("XRiftStudioTerrainGrass"),
+    "The compiled world does not render the Terrain grass",
+  );
+  // The embedded algorithm must be the exact typed rendering of the shared
+  // template, so the equivalence proven above covers what actually ships.
+  assert(
+    source.includes(terrainGrassRuntimeSource({ typed: true })),
+    "The compiled world embeds a different placement algorithm",
+  );
+  // The scene wind must arrive as literals: direction 0 degrees is +X.
+  assert(
+    source.includes("wind={{ direction: [1, 0], speed: 1.25, turbulence:"),
+    "The scene wind was not compiled into the grass",
+  );
+  // One terrain, three layers, but the height field must be serialized once.
+  assert(
+    source.split('"heights"').length === 2,
+    "The terrain height field is serialized more than once",
+  );
+  const layerCount = source.split("<XRiftStudioTerrainGrass").length - 1;
+  assert(
+    layerCount === (geometry.grass?.length ?? 0),
+    `Expected ${geometry.grass?.length} grass layers in the world, found ${layerCount}`,
+  );
+
+  // A bare Terrain must not drag the grass runtime in.
+  const bare = addTerrainEntity(
+    prototype.scene,
+    prototype.assets,
+    BUILTIN_ASSET_IDS.material.green,
+  );
+  assert(bare !== null, "Publish fixture could not place a bare Terrain");
+  if (!bare) return;
+  const bareCompiled = compileVisualProject(
+    {
+      project: prototype.project,
+      scenes: { [bare.scene.sceneId]: bare.scene },
+      assets: prototype.assets,
+      prefabs: prototype.prefabs,
+    },
+    { generatedAt: "2026-01-01T00:00:00.000Z" },
+  );
+  const bareSource =
+    bareCompiled.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(
+    !bareSource.includes("XRiftStudioTerrainGrass"),
+    "A Terrain without grass still shipped the grass runtime",
   );
 }

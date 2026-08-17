@@ -44,6 +44,7 @@ import { runBasisTranscoderFixtureAssertions } from "../src/lib/visual-editor/ba
 import { runTerrainFixtureAssertions } from "../src/lib/visual-editor/terrain.fixture.ts";
 import {
   runTerrainGrassFixtureAssertions,
+  runTerrainGrassPublishFixtureAssertions,
   runTerrainPresetFixtureAssertions,
 } from "../src/lib/visual-editor/terrain-grass.fixture.ts";
 import { runAssetOperationLockFixtureAssertions } from "../src/components/visual-editor/asset-operation-lock.fixture.ts";
@@ -242,6 +243,7 @@ try {
     ["terrain", runTerrainFixtureAssertions],
     ["terrain grass", runTerrainGrassFixtureAssertions],
     ["terrain presets", runTerrainPresetFixtureAssertions],
+    ["terrain grass publish", runTerrainGrassPublishFixtureAssertions],
     ["runtime schema", runRuntimeSchemaFixtureAssertions],
     ["shader time", runShaderTimeFixtureAssertions],
     ["mcp editor tools", runXriftMcpEditorToolFixtures],
