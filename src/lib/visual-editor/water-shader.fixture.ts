@@ -121,6 +121,33 @@ function assertCatalogIntegrity(): void {
       entry.shader.fragmentShader.includes("vWorldPosition.xz, uDetailScale"),
       `Water「${entry.id}」does not tile its detail in world space`,
     );
+    // Wave phase must advance linearly with time. Scaling it by anything that
+    // itself varies with time adds a term proportional to elapsed time, so the
+    // waves accelerate and eventually run backwards — the longer a published
+    // world stays open, the worse it gets. That shipped once; it must not again.
+    const phaseLine = entry.shader.fragmentShader
+      .split("\n")
+      .find((line) => line.includes("float phase ="));
+    assert(
+      phaseLine !== undefined,
+      `Water「${entry.id}」has no wave phase definition to check`,
+    );
+    assert(
+      !/\bgust\b|\bsin\s*\(|\bcos\s*\(/.test(phaseLine ?? ""),
+      `Water「${entry.id}」scales its wave phase by a time-varying term: ${phaseLine?.trim()}`,
+    );
+    for (const call of entry.shader.fragmentShader.split("xriftWaterGerstner(").slice(1)) {
+      const argumentText = call.slice(0, call.indexOf(")"));
+      assert(
+        !/phase\s*\*/.test(argumentText),
+        `Water「${entry.id}」multiplies the shared phase at a Gerstner call site`,
+      );
+    }
+    // The speed multiplier is what makes "a bit slower" an author-side edit.
+    assert(
+      entry.parameters.some((parameter) => parameter.uniform === "uWaveSpeed"),
+      `Water「${entry.id}」does not expose the wave speed`,
+    );
     // The layer count is an actual count, so its range must be whole numbers.
     const layers = entry.parameters.find(
       (parameter) => parameter.uniform === "uWaveLayers",

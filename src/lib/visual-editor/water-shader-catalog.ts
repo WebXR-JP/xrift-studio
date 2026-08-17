@@ -12,8 +12,10 @@ import { WIND_CONTRACT_GLSL_UNIFORMS } from "./wind-contract";
  * Water is not a scene slot. It is assigned to a mesh like any other Material,
  * so a pond and an ocean are the same preset on differently sized planes.
  *
- * Waves are driven by the shared wind contract rather than a per-material
- * speed, so water and foliage in one scene always move with the same air.
+ * Waves are driven by the shared wind contract, so water and foliage in one
+ * scene always move with the same air. `uWaveSpeed` is a multiplier on that
+ * wind rather than a speed of its own: it says how strongly this surface
+ * answers, which is a property of the water, not of the air.
  */
 export type WaterShaderCatalogCategory = "lake" | "ocean" | "stylized";
 
@@ -190,12 +192,22 @@ const WATER_WAVE_ACCUMULATION_GLSL = `  vec3 tangent = vec3(1.0, 0.0, 0.0);
   vec2 windDirection = length(uWindDirection) > 0.0001
     ? normalize(uWindDirection)
     : vec2(1.0, 0.0);
-  float phase = uTime * uWindSpeed;
+  // Phase advances linearly with time and nothing may scale it by time again.
+  // A gust that multiplied the accumulated phase added a term proportional to
+  // elapsed time, so the waves swung faster and faster and eventually ran
+  // backwards — worse the longer a published world stayed open.
+  float phase = uTime * uWindSpeed * max(uWaveSpeed, 0.0);
   float baseWavelength = 12.0 / max(uWaveScale, 0.05);
-  float steepness = clamp(uWaveHeight, 0.0, 1.0);
+  // Gusts belong on the amplitude. This stays bounded however long the world
+  // runs, and a gust making the water choppier is what it looks like anyway.
+  float gust = 1.0 + uWindTurbulence * 0.25 * sin(uTime * 0.35);
+  float steepness = clamp(uWaveHeight * gust, 0.0, 1.0);
   float layers = clamp(uWaveLayers, 1.0, 4.0);
-  float gust = 1.0 + uWindTurbulence * 0.6 * sin(phase * 0.37);
 
+  // Every layer shares one phase. Their speeds already differ through the
+  // dispersion relation inside the Gerstner term, where a shorter wave travels
+  // slower; multiplying phase per layer on top of that made the small waves
+  // outrun the swell instead of riding it.
   displacement += xriftWaterGerstner(
     windDirection, steepness, baseWavelength, phase, vWorldPosition, tangent, binormal
   );
@@ -203,21 +215,21 @@ const WATER_WAVE_ACCUMULATION_GLSL = `  vec3 tangent = vec3(1.0, 0.0, 0.0);
   if (layers >= 2.0) {
     displacement += xriftWaterGerstner(
       xriftWaterRotate(windDirection, 0.6458), steepness * 0.72, baseWavelength * 0.53,
-      phase * 1.31 * gust, vWorldPosition, tangent, binormal
+      phase, vWorldPosition, tangent, binormal
     );
     amplitudeSum += steepness * 0.72 * baseWavelength * 0.53 / XRIFT_WATER_TAU;
   }
   if (layers >= 3.0) {
     displacement += xriftWaterGerstner(
       xriftWaterRotate(windDirection, -1.0123), steepness * 0.48, baseWavelength * 0.27,
-      phase * 1.73 * gust, vWorldPosition, tangent, binormal
+      phase, vWorldPosition, tangent, binormal
     );
     amplitudeSum += steepness * 0.48 * baseWavelength * 0.27 / XRIFT_WATER_TAU;
   }
   if (layers >= 4.0) {
     displacement += xriftWaterGerstner(
       xriftWaterRotate(windDirection, 1.9548), steepness * 0.31, baseWavelength * 0.13,
-      phase * 2.15 * gust, vWorldPosition, tangent, binormal
+      phase, vWorldPosition, tangent, binormal
     );
     amplitudeSum += steepness * 0.31 * baseWavelength * 0.13 / XRIFT_WATER_TAU;
   }
@@ -251,6 +263,7 @@ uniform float uOpacity;
 uniform float uWaveHeight;
 uniform float uWaveScale;
 uniform float uWaveLayers;
+uniform float uWaveSpeed;
 uniform float uFresnelPower;
 uniform float uReflectivity;
 uniform float uDetailScale;
@@ -364,6 +377,15 @@ function waterBaseUniforms(): ClassicR3fMaterialShader["uniforms"] {
 }
 
 const WAVE_PARAMETERS: readonly WaterShaderParameter[] = [
+  {
+    uniform: "uWaveSpeed",
+    label: "波の速さ",
+    hint: "Scene設定のWindに対する、この水面の反応の倍率です。0で水面が止まります。",
+    kind: "number",
+    min: 0,
+    max: 2,
+    step: 0.01,
+  },
   {
     uniform: "uWaveLayers",
     label: "波の重ね数",
@@ -513,6 +535,7 @@ export const WATER_SHADER_CATALOG: readonly WaterShaderCatalogEntry[] = [
         uWaveHeight: { kind: "number", value: 0.16 },
         uWaveScale: { kind: "number", value: 1.4 },
         uWaveLayers: { kind: "number", value: 2 },
+        uWaveSpeed: { kind: "number", value: 0.22 },
         uFresnelPower: { kind: "number", value: 4 },
         uReflectivity: { kind: "number", value: 0.55 },
         uDetailScale: { kind: "number", value: 0.55 },
@@ -575,6 +598,7 @@ export const WATER_SHADER_CATALOG: readonly WaterShaderCatalogEntry[] = [
         uWaveHeight: { kind: "number", value: 0.42 },
         uWaveScale: { kind: "number", value: 0.9 },
         uWaveLayers: { kind: "number", value: 3 },
+        uWaveSpeed: { kind: "number", value: 0.3 },
         uFresnelPower: { kind: "number", value: 3.4 },
         uReflectivity: { kind: "number", value: 0.68 },
         uDetailScale: { kind: "number", value: 0.32 },
@@ -639,6 +663,7 @@ export const WATER_SHADER_CATALOG: readonly WaterShaderCatalogEntry[] = [
         uWaveHeight: { kind: "number", value: 0.3 },
         uWaveScale: { kind: "number", value: 1.1 },
         uWaveLayers: { kind: "number", value: 2 },
+        uWaveSpeed: { kind: "number", value: 0.2 },
         uFresnelPower: { kind: "number", value: 3 },
         uReflectivity: { kind: "number", value: 0.4 },
         uDetailScale: { kind: "number", value: 0.4 },
