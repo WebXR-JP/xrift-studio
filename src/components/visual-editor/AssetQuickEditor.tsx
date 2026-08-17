@@ -6,6 +6,10 @@ import {
   type DragEvent,
 } from "react";
 import { Canvas } from "@react-three/fiber";
+import {
+  isDrivenShaderUniform,
+  resolveShaderUniformLabel,
+} from "../../lib/visual-editor";
 import { Color, DoubleSide, type Material } from "three";
 import { tauri } from "../../lib/tauri";
 import {
@@ -1760,6 +1764,7 @@ function CustomShaderQuickEditor({
     const base = shader ?? createDefaultCustomShader();
     onChange({ shader: { ...base, ...patch, kind: "classic-r3f" } });
   };
+  const [showUniformNames, setShowUniformNames] = useState(false);
   const updateUniform = (name: string, value: ClassicR3fShaderUniform) => {
     if (!shader) return;
     updateShader({ uniforms: { ...shader.uniforms, [name]: value } });
@@ -1869,96 +1874,147 @@ function CustomShaderQuickEditor({
             />
           </label>
           <div className="rounded border border-slate-200 bg-slate-50 p-2">
-            <div className="mb-1.5 text-[11px] font-semibold text-slate-700">
-              Uniform values
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold text-slate-700">
+                Uniform values
+              </span>
+              <button
+                type="button"
+                aria-pressed={showUniformNames}
+                onClick={() => setShowUniformNames((shown) => !shown)}
+                title="GLSLのuniform名を表示する"
+                className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                {showUniformNames ? "名前を隠す" : "uniform名"}
+              </button>
             </div>
-            <div className="space-y-2">
-              {Object.entries(shader.uniforms).map(([name, uniform]) => (
-                <div key={name} className="rounded border border-slate-200 bg-white p-1.5">
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <span className="font-mono text-[10px] text-slate-700">{name}</span>
-                    <span className="text-[10px] text-slate-400">{uniform.kind}</span>
-                  </div>
-                  {uniform.kind === "number" ? (
-                    <input
-                      type="number"
-                      value={uniform.value}
-                      disabled={readOnly}
-                      step="any"
-                      onChange={(event) => {
-                        const value = Number(event.currentTarget.value);
-                        if (Number.isFinite(value)) {
-                          updateUniform(name, { kind: "number", value });
-                        }
-                      }}
-                      className={`${INPUT_CLASS} font-mono text-[10px]`}
-                    />
-                  ) : uniform.kind === "color" ? (
-                    <input
-                      type="color"
-                      value={uniform.value}
-                      disabled={readOnly}
-                      onChange={(event) =>
-                        updateUniform(name, {
-                          kind: "color",
-                          value: event.currentTarget.value,
-                        })
-                      }
-                      className="h-7 w-10 rounded border border-slate-300 bg-white p-0.5 disabled:opacity-50"
-                    />
-                  ) : uniform.kind === "vector" ? (
-                    <input
-                      type="text"
-                      value={uniform.value.join(", ")}
-                      disabled={readOnly}
-                      onChange={(event) => {
-                        const value = event.currentTarget.value
-                          .split(",")
-                          .map((entry) => Number(entry.trim()));
-                        if (
-                          value.length >= 2 &&
-                          value.length <= 4 &&
-                          value.every(Number.isFinite)
-                        ) {
-                          updateUniform(name, { kind: "vector", value });
-                        }
-                      }}
-                      className={`${INPUT_CLASS} font-mono text-[10px]`}
-                    />
-                  ) : (
-                    <div className="flex items-center gap-1.5">
-                      <select
-                        value={uniform.textureAssetId}
-                        disabled={readOnly || textures.length === 0}
-                        onChange={(event) =>
-                          updateUniform(name, {
-                            ...uniform,
-                            textureAssetId: event.currentTarget.value,
-                          })
-                        }
-                        className={`${INPUT_CLASS} min-w-0 font-mono text-[10px]`}
+            {/*
+              One row per uniform: label on the left, control on the right, the
+              same shape the rest of the Inspector uses. The old card gave every
+              uniform two full-width rows and a type badge, so a colour swatch
+              sat alone in a row of empty panel and the list ran far longer than
+              the values in it. The type badge is gone because the control
+              already shows what it is.
+            */}
+            <div className="space-y-1">
+              {Object.entries(shader.uniforms).map(([name, uniform]) => {
+                const meta = resolveShaderUniformLabel(
+                  name,
+                  shader.sourceModulePath,
+                );
+                const driven = isDrivenShaderUniform(name);
+                return (
+                  <div key={name} className="space-y-0.5">
+                    <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] items-center gap-2">
+                      <span
+                        className="truncate text-[11px] text-slate-700"
+                        title={meta.hint ? `${name} — ${meta.hint}` : name}
                       >
-                        {textures.length === 0 ? (
-                          <option value={uniform.textureAssetId}>Textureなし</option>
-                        ) : (
-                          textures.map((texture) => (
-                            <option key={texture.id} value={texture.id}>
-                              {texture.name}
-                            </option>
-                          ))
-                        )}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => onOpenTexture(uniform.textureAssetId)}
-                        className="shrink-0 rounded border border-slate-300 px-1.5 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
-                      >
-                        開く
-                      </button>
+                        {meta.label}
+                        {driven ? (
+                          <span className="ml-1 text-[9px] font-semibold text-slate-400">
+                            自動
+                          </span>
+                        ) : null}
+                      </span>
+                      {uniform.kind === "number" ? (
+                        <input
+                          type="number"
+                          value={uniform.value}
+                          disabled={readOnly}
+                          step="any"
+                          onChange={(event) => {
+                            const value = Number(event.currentTarget.value);
+                            if (Number.isFinite(value)) {
+                              updateUniform(name, { kind: "number", value });
+                            }
+                          }}
+                          className={`${INPUT_CLASS} font-mono text-[10px]`}
+                        />
+                      ) : uniform.kind === "color" ? (
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="color"
+                            value={uniform.value}
+                            disabled={readOnly}
+                            aria-label={meta.label}
+                            onChange={(event) =>
+                              updateUniform(name, {
+                                kind: "color",
+                                value: event.currentTarget.value,
+                              })
+                            }
+                            className="h-7 w-7 shrink-0 rounded border border-slate-300 bg-white p-0.5 disabled:opacity-50"
+                          />
+                          <span className="truncate font-mono text-[10px] uppercase text-slate-500">
+                            {uniform.value}
+                          </span>
+                        </div>
+                      ) : uniform.kind === "vector" ? (
+                        <input
+                          type="text"
+                          value={uniform.value.join(", ")}
+                          disabled={readOnly}
+                          aria-label={meta.label}
+                          onChange={(event) => {
+                            const value = event.currentTarget.value
+                              .split(",")
+                              .map((entry) => Number(entry.trim()));
+                            if (
+                              value.length >= 2 &&
+                              value.length <= 4 &&
+                              value.every(Number.isFinite)
+                            ) {
+                              updateUniform(name, { kind: "vector", value });
+                            }
+                          }}
+                          className={`${INPUT_CLASS} font-mono text-[10px]`}
+                        />
+                      ) : (
+                        <div className="flex min-w-0 items-center gap-1">
+                          <select
+                            value={uniform.textureAssetId}
+                            disabled={readOnly || textures.length === 0}
+                            aria-label={meta.label}
+                            onChange={(event) =>
+                              updateUniform(name, {
+                                ...uniform,
+                                textureAssetId: event.currentTarget.value,
+                              })
+                            }
+                            className={`${INPUT_CLASS} min-w-0 flex-1 text-[10px]`}
+                          >
+                            {textures.length === 0 ? (
+                              <option value={uniform.textureAssetId}>
+                                Textureなし
+                              </option>
+                            ) : (
+                              textures.map((texture) => (
+                                <option key={texture.id} value={texture.id}>
+                                  {texture.name}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => onOpenTexture(uniform.textureAssetId)}
+                            title="Textureを開く"
+                            className="shrink-0 rounded border border-slate-300 px-1 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+                          >
+                            開く
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              ))}
+                    {showUniformNames ? (
+                      <div className="font-mono text-[9px] text-slate-400">
+                        {name}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           </div>
           <button
