@@ -5,8 +5,11 @@ import {
   terrainHeightRange,
 } from "./terrain";
 import {
+  TERRAIN_ARRANGE_GAP,
   TERRAIN_PRESETS,
+  arrangeTerrainFootprints,
   createTerrainFromPreset,
+  findTerrainOverlaps,
   getTerrainPreset,
 } from "./terrain-presets";
 import {
@@ -466,5 +469,48 @@ export function runTerrainPresetFixtureAssertions(): void {
   assert(
     getTerrainPreset("nope") === undefined,
     "getTerrainPreset resolved an unknown preset",
+  );
+
+  // Two Terrains over the same ground tear into moire bands that read as a
+  // rendering fault. No depth trick fixes interpenetrating surfaces, so the
+  // editor has to detect the overlap and be able to undo it.
+  const stacked = [
+    { entityId: "a", name: "A", centerX: 0, centerZ: 0, width: 80, depth: 80 },
+    { entityId: "b", name: "B", centerX: 0, centerZ: 0, width: 120, depth: 120 },
+    { entityId: "c", name: "C", centerX: 0, centerZ: 0, width: 100, depth: 100 },
+  ];
+  assert(
+    findTerrainOverlaps(stacked).length === 3,
+    "Stacked Terrains were not reported as overlapping",
+  );
+  const moves = arrangeTerrainFootprints(stacked);
+  assert(
+    !moves.has("a") && moves.size === 2,
+    "Arranging must leave the first Terrain where the author put it",
+  );
+  const arranged = stacked.map((footprint) => {
+    const move = moves.get(footprint.entityId);
+    return move
+      ? { ...footprint, centerX: move[0], centerZ: move[1] }
+      : footprint;
+  });
+  assert(
+    findTerrainOverlaps(arranged).length === 0,
+    "Arranging did not separate the Terrains",
+  );
+  for (let index = 1; index < arranged.length; index += 1) {
+    const gap =
+      arranged[index].centerX -
+      arranged[index].width / 2 -
+      (arranged[index - 1].centerX + arranged[index - 1].width / 2);
+    assert(
+      Math.abs(gap - TERRAIN_ARRANGE_GAP) < 1e-9,
+      `Arranged Terrains are not evenly spaced (gap ${gap})`,
+    );
+  }
+  assert(
+    arrangeTerrainFootprints([]).size === 0 &&
+      arrangeTerrainFootprints([stacked[0]]).size === 0,
+    "Arranging must do nothing when there is nothing to separate",
   );
 }

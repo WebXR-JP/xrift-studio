@@ -38,6 +38,9 @@ type Props = {
   onCreateEmpty: () => void;
   onCreatePrimitive: (creationId: string) => void;
   onCreateTerrain: (presetId?: string, grassPresetId?: string | null) => void;
+  /** Pairs of Terrains sharing ground. Zero hides the repair entry. */
+  terrainOverlapCount: number;
+  onArrangeTerrains: () => void;
   onPlaceBuiltinPrefab: (recipeId: string) => void;
   onCreateXriftObject: (definitionId: string) => void;
   onCreateComponentObject: (definitionId: string) => void;
@@ -64,6 +67,8 @@ export function EditorCreateMenu({
   onCreateEmpty,
   onCreatePrimitive,
   onCreateTerrain,
+  terrainOverlapCount,
+  onArrangeTerrains,
   onPlaceBuiltinPrefab,
   onCreateXriftObject,
   onCreateComponentObject,
@@ -323,6 +328,19 @@ export function EditorCreateMenu({
                     trailing="作成"
                     onClick={() => {
                       onCreateTerrain();
+                      onClose();
+                    }}
+                  />
+                ) : null}
+                {terrainMatches && terrainOverlapCount > 0 ? (
+                  <MenuItem
+                    icon={Mountain}
+                    label="地形を横へ並べ直す"
+                    detail={`${terrainOverlapCount}組の地形が同じ場所にあり、表示が縞状に乱れます`}
+                    disabled={disabled}
+                    trailing="解消"
+                    onClick={() => {
+                      onArrangeTerrains();
                       onClose();
                     }}
                   />

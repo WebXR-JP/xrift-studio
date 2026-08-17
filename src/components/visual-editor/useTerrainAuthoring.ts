@@ -1,9 +1,19 @@
-import { useCallback, useRef, type Dispatch, type SetStateAction } from "react";
 import {
+  useCallback,
+  useMemo,
+  useRef,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
+import {
+  arrangeTerrainFootprints,
   createTerrainFromPreset,
+  findTerrainOverlaps,
   getTerrainGeometry,
   getTerrainPreset,
   getTransform,
+  updateEntityTransform,
+  type TerrainFootprint,
 } from "../../lib/visual-editor";
 import { BUILTIN_ASSET_IDS, type PrototypeVisualProject } from "../../lib/visual-editor/prototype-project";
 import {
@@ -113,7 +123,7 @@ export function useTerrainAuthoring({
       // the new one beside whatever is already there keeps both readable, and
       // the author can still drag it wherever they meant.
       const position = nextTerrainPosition(
-        current.present.bundle.scene,
+        collectTerrainFootprints(current.present.bundle.scene),
         geometry?.width ?? DEFAULT_TERRAIN_SPAN,
       );
       const created = addTerrainEntity(
@@ -296,8 +306,52 @@ export function useTerrainAuthoring({
     [finishTerrainStroke],
   );
 
+  // Scenes made before Terrains were placed side by side still carry stacks,
+  // and a stack is invisible as a cause: the author sees torn ground, not two
+  // Terrains. Counting them is what lets the editor say so.
+  const terrainOverlapCount = useMemo(
+    () => findTerrainOverlaps(collectTerrainFootprints(historyPresent.bundle.scene)).length,
+    [historyPresent.bundle.scene],
+  );
+
+  const handleArrangeTerrains = useCallback(() => {
+    if (editorMode !== "edit") {
+      notify("地形の整列は編集モードで行ってください");
+      return;
+    }
+    setHistory((current) => {
+      const footprints = collectTerrainFootprints(current.present.bundle.scene);
+      const moves = arrangeTerrainFootprints(footprints);
+      if (moves.size === 0) {
+        notify("重なっている地形はありません");
+        return current;
+      }
+      let scene = current.present.bundle.scene;
+      for (const [entityId, [x, z]] of moves) {
+        const entity = scene.entities[entityId];
+        if (!entity) continue;
+        const transform = getTransform(entity);
+        scene = updateEntityTransform(scene, entityId, {
+          position: [x, transform?.position?.[1] ?? 0, z],
+        });
+      }
+      if (scene === current.present.bundle.scene) return current;
+      markDirty();
+      notify(`${moves.size}件の地形を横へ並べ直しました`);
+      const nextBundle = touchProject({ ...current.present.bundle, scene });
+      bundleRef.current = nextBundle;
+      setSaveStatus("dirty");
+      return commitEditorHistory(current, {
+        ...current.present,
+        bundle: nextBundle,
+      });
+    });
+  }, [editorMode, markDirty, notify, setHistory, setSaveStatus, touchProject, bundleRef]);
+
   return {
     handleCreateTerrain,
+    terrainOverlapCount,
+    handleArrangeTerrains,
     handleTerrainBrush,
     handleTerrainSettings,
     handleTerrainStrokeStart,
@@ -319,22 +373,39 @@ const DEFAULT_TERRAIN_SPAN = 20;
  * presets builds a row to compare rather than a stack that z-fights.
  */
 function nextTerrainPosition(
-  scene: PrototypeVisualProject["scene"],
+  footprints: readonly TerrainFootprint[],
   width: number,
 ): [number, number, number] {
-  let rightEdge: number | null = null;
+  if (footprints.length === 0) return [0, 0, 0];
+  const rightEdge = footprints.reduce(
+    (edge, footprint) => Math.max(edge, footprint.centerX + footprint.width / 2),
+    -Infinity,
+  );
+  // A gap, so the two footprints never touch even after sculpting the edges.
+  return [rightEdge + width / 2 + 4, 0, 0];
+}
+
+
+/** Reads every Terrain's footprint, in Scene order. */
+export function collectTerrainFootprints(
+  scene: PrototypeVisualProject["scene"],
+): TerrainFootprint[] {
+  const footprints: TerrainFootprint[] = [];
   for (const entity of Object.values(scene.entities)) {
     for (const component of entity.components) {
       if (component.type !== "mesh") continue;
-      const existing = getTerrainGeometry(component);
-      if (!existing) continue;
+      const terrain = getTerrainGeometry(component);
+      if (!terrain) continue;
       const transform = getTransform(entity);
-      const centre = transform?.position?.[0] ?? 0;
-      const edge = centre + existing.width / 2;
-      rightEdge = rightEdge === null ? edge : Math.max(rightEdge, edge);
+      footprints.push({
+        entityId: entity.id,
+        name: entity.name,
+        centerX: transform?.position?.[0] ?? 0,
+        centerZ: transform?.position?.[2] ?? 0,
+        width: terrain.width,
+        depth: terrain.depth,
+      });
     }
   }
-  if (rightEdge === null) return [0, 0, 0];
-  // A gap, so the two footprints never touch even after sculpting the edges.
-  return [rightEdge + width / 2 + 4, 0, 0];
+  return footprints;
 }

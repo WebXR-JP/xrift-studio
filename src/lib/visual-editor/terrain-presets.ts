@@ -262,3 +262,70 @@ export function terrainPresetGrassLayers(
   const grassPreset = getTerrainGrassPreset(preset.grassPresetId);
   return grassPreset ? createTerrainGrassLayers(grassPreset) : [];
 }
+
+export type TerrainFootprint = {
+  entityId: string;
+  name: string;
+  centerX: number;
+  centerZ: number;
+  width: number;
+  depth: number;
+};
+
+export type TerrainOverlap = {
+  a: TerrainFootprint;
+  b: TerrainFootprint;
+};
+
+/**
+ * Terrains sharing ground.
+ *
+ * Two Terrains over the same patch are two nearly coplanar surfaces, and the
+ * depth buffer cannot separate them: the overlap tears into moire bands that
+ * read as a rendering fault rather than as "there are two here". No depth trick
+ * fixes it — surfaces that genuinely interpenetrate have no correct order — so
+ * the only repair is to stop them sharing the ground.
+ */
+export function findTerrainOverlaps(
+  footprints: readonly TerrainFootprint[],
+): TerrainOverlap[] {
+  const overlaps: TerrainOverlap[] = [];
+  for (let i = 0; i < footprints.length; i += 1) {
+    for (let j = i + 1; j < footprints.length; j += 1) {
+      const a = footprints[i];
+      const b = footprints[j];
+      const overlapX =
+        Math.abs(a.centerX - b.centerX) < (a.width + b.width) / 2;
+      const overlapZ =
+        Math.abs(a.centerZ - b.centerZ) < (a.depth + b.depth) / 2;
+      if (overlapX && overlapZ) overlaps.push({ a, b });
+    }
+  }
+  return overlaps;
+}
+
+/** Gap left between Terrains so sculpted edges never grow back into contact. */
+export const TERRAIN_ARRANGE_GAP = 4;
+
+/**
+ * Lays Terrains out in a row along +X, in their current order.
+ *
+ * The first one keeps its place, so the author's world does not jump out from
+ * under them; only the ones that were stacked on top of it move.
+ */
+export function arrangeTerrainFootprints(
+  footprints: readonly TerrainFootprint[],
+): Map<string, [number, number]> {
+  const moves = new Map<string, [number, number]>();
+  if (footprints.length === 0) return moves;
+  let cursor = footprints[0].centerX + footprints[0].width / 2;
+  for (let index = 1; index < footprints.length; index += 1) {
+    const footprint = footprints[index];
+    const centerX = cursor + TERRAIN_ARRANGE_GAP + footprint.width / 2;
+    cursor = centerX + footprint.width / 2;
+    if (centerX !== footprint.centerX || footprint.centerZ !== 0) {
+      moves.set(footprint.entityId, [centerX, 0]);
+    }
+  }
+  return moves;
+}

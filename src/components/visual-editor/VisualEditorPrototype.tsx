@@ -5509,6 +5509,8 @@ export function VisualEditorPrototype({
   const markEditorDirty = useCallback(() => setSaveStatus("dirty"), []);
   const {
     handleCreateTerrain,
+    terrainOverlapCount,
+    handleArrangeTerrains,
     handleTerrainBrush,
     handleTerrainSettings,
     handleTerrainStrokeStart,
@@ -5529,6 +5531,21 @@ export function VisualEditorPrototype({
     bundleRef,
     lastSavedBundleRef,
   });
+
+  const reportedTerrainOverlapRef = useRef(0);
+  useEffect(() => {
+    if (terrainOverlapCount === 0) {
+      reportedTerrainOverlapRef.current = 0;
+      return;
+    }
+    if (reportedTerrainOverlapRef.current === terrainOverlapCount) return;
+    reportedTerrainOverlapRef.current = terrainOverlapCount;
+    // Overlapping Terrains tear into moire bands, and the cause is invisible:
+    // the author sees broken ground, not two surfaces. Naming it is the fix.
+    setNotice(
+      `地形が${terrainOverlapCount}組重なっています。同じ場所に2つの地面があると表示が縞状に乱れます。Createメニューの「地形を横へ並べ直す」で解消できます`,
+    );
+  }, [terrainOverlapCount]);
 
   const handleAddTerrainPreset = useCallback(
     async (
@@ -8415,6 +8432,8 @@ export function VisualEditorPrototype({
                   executeCommand("entity.create-primitive", { creationId })
                 }
                 onCreateTerrain={handleCreateTerrain}
+            terrainOverlapCount={terrainOverlapCount}
+            onArrangeTerrains={handleArrangeTerrains}
                 onPlaceBuiltinPrefab={handlePlaceBuiltinPrefab}
                 onCreateXriftObject={handleCreateXriftObject}
                 onCreateComponentObject={handleCreateComponentObject}
