@@ -745,6 +745,7 @@ function MeshInspector({
   onGrassLayersChange,
   onTerrainSettings,
   onTerrainEditingChange,
+  terrainSceneEditing,
   showModelPose = true,
   materialBindingSourceNodeIndex,
 }: {
@@ -762,6 +763,10 @@ function MeshInspector({
   onTerrainEditingChange?: (
     editing: Omit<TerrainViewportEditing, "entityId" | "componentId"> | null,
   ) => void;
+  terrainSceneEditing?: Omit<
+    TerrainViewportEditing,
+    "entityId" | "componentId"
+  > | null;
   showModelPose?: boolean;
   materialBindingSourceNodeIndex?: number;
 }) {
@@ -1011,6 +1016,7 @@ function MeshInspector({
           onGrassLayersChange={onGrassLayersChange}
           onSettings={onTerrainSettings}
           onSceneEditingChange={onTerrainEditingChange}
+          sceneEditing={terrainSceneEditing}
         />
       ) : null}
     </div>
@@ -1176,6 +1182,7 @@ function TerrainInspector({
   onGrassLayersChange,
   onSettings,
   onSceneEditingChange,
+  sceneEditing: armedBrush,
 }: {
   terrain: TerrainGeometry;
   readOnly: boolean;
@@ -1187,6 +1194,8 @@ function TerrainInspector({
   onSceneEditingChange?: (
     editing: Omit<TerrainViewportEditing, "entityId" | "componentId"> | null,
   ) => void;
+  /** What the Scene View currently has armed, so shortcuts reach the panel. */
+  sceneEditing?: Omit<TerrainViewportEditing, "entityId" | "componentId"> | null;
 }) {
   const [mode, setMode] = useState<TerrainEditorMode>("sculpt");
   const [sculptKind, setSculptKind] = useState<TerrainViewportBrushKind>("raise");
@@ -1224,6 +1233,35 @@ function TerrainInspector({
   const paintable = mode !== "settings";
   const disabled =
     readOnly || !onBrush || !paintable || (grassTool && !activeGrassLayer);
+
+  // Radius, target height and brush kind can all change from the Scene View
+  // (bracket keys, Alt-pick). Mirroring them keeps the panel from showing a
+  // stale brush while the ground is being edited with a different one.
+  useEffect(() => {
+    if (!armedBrush) {
+      setSceneEditing(false);
+      return;
+    }
+    setSceneEditing(true);
+    setRadius(armedBrush.radius);
+    if (armedBrush.targetHeight !== undefined) {
+      setTargetHeight(armedBrush.targetHeight);
+    }
+    if (armedBrush.kind === "grass-paint" || armedBrush.kind === "grass-erase") {
+      setMode("grass");
+      setGrassKind(armedBrush.kind);
+      if (armedBrush.grassLayerId) setGrassLayerId(armedBrush.grassLayerId);
+    } else if (
+      armedBrush.kind === "hole-add" ||
+      armedBrush.kind === "hole-remove"
+    ) {
+      setMode("hole");
+      setHoleKind(armedBrush.kind);
+    } else {
+      setMode("sculpt");
+      setSculptKind(armedBrush.kind);
+    }
+  }, [armedBrush]);
 
   useEffect(() => {
     if (sceneEditing) return;
@@ -3470,6 +3508,7 @@ function EntityInspector({
   onTerrainGrassLayersChange,
   onTerrainSettings,
   onTerrainEditingChange,
+  terrainSceneEditing,
   onModelNodeMeshChange,
   onColliderChange,
   onRigidBodyChange,
@@ -3526,6 +3565,7 @@ function EntityInspector({
   onTerrainEditingChange: (
     editing: Omit<TerrainViewportEditing, "entityId"> | null,
   ) => void;
+  terrainSceneEditing: TerrainViewportEditing | null;
   onModelNodeMeshChange: (
     entityId: string,
     componentId: string,
@@ -3775,6 +3815,11 @@ function EntityInspector({
                 onTerrainEditingChange(
                   editing ? { ...editing, componentId: component.id } : null,
                 )
+              }
+              terrainSceneEditing={
+                terrainSceneEditing?.componentId === component.id
+                  ? terrainSceneEditing
+                  : null
               }
               onOpenMaterial={onOpenMaterial}
             />
@@ -4139,6 +4184,7 @@ export function InspectorPanel({
   onTerrainGrassLayersChange,
   onTerrainSettings,
   onTerrainEditingChange,
+  terrainSceneEditing = null,
   onColliderChange,
   onRigidBodyChange,
   onAutoFitCollider,
@@ -4221,6 +4267,7 @@ export function InspectorPanel({
     options: Pick<TerrainGeometryOptions, "width" | "depth" | "resolution">,
   ) => void;
   onTerrainEditingChange: (editing: TerrainViewportEditing | null) => void;
+  terrainSceneEditing?: TerrainViewportEditing | null;
   onColliderChange: (entityId: string, componentId: string, patch: ColliderPatch) => void;
   onRigidBodyChange: (
     entityId: string,
@@ -4471,6 +4518,11 @@ export function InspectorPanel({
             }
             onTerrainGrassLayersChange={(componentId, grass, notice) =>
               onTerrainGrassLayersChange(entity.id, componentId, grass, notice)
+            }
+            terrainSceneEditing={
+              terrainSceneEditing?.entityId === entity.id
+                ? terrainSceneEditing
+                : null
             }
             onTerrainSettings={(componentId, options) =>
               onTerrainSettings(entity.id, componentId, options)

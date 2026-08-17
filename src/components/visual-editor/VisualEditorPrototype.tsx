@@ -8608,6 +8608,12 @@ export function VisualEditorPrototype({
             onDropRejected={setNotice}
             onOptimizeColliders={handleOptimizeColliders}
             terrainEditing={terrainEditing}
+            onTerrainEditingPatch={(patch) =>
+              setTerrainEditing((current) =>
+                current ? { ...current, ...patch } : current,
+              )
+            }
+            onTerrainEditingExit={() => setTerrainEditing(null)}
             onTerrainStrokeStart={handleTerrainStrokeStart}
             onTerrainStroke={handleTerrainStroke}
             onTerrainStrokeEnd={handleTerrainStrokeEnd}
@@ -8642,6 +8648,7 @@ export function VisualEditorPrototype({
             onTerrainSettings={handleTerrainSettings}
             onTerrainGrassLayersChange={handleTerrainGrassLayersChange}
             onTerrainEditingChange={setTerrainEditing}
+            terrainSceneEditing={terrainEditing}
             onColliderChange={handleColliderChange}
             onRigidBodyChange={handleRigidBodyChange}
             onAutoFitCollider={handleAutoFitCollider}

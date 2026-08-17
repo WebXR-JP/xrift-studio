@@ -1,7 +1,9 @@
+import { TerrainBrushCursor } from "./TerrainBrushCursor";
 import {
   Canvas,
   useFrame,
   useThree,
+  createPortal,
 } from "@react-three/fiber";
 import {
   Edges,
@@ -39,6 +41,7 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
+  type MutableRefObject,
   useMemo,
   useRef,
   useState,
@@ -136,6 +139,7 @@ import {
   type VegetationWindComponent,
   type TerrainGeometry,
   type TerrainSceneBrushOperation,
+  type TerrainViewportBrushKind,
   type TerrainViewportEditing,
   type SkyboxAsset,
   type TransformPatch,
@@ -1880,6 +1884,88 @@ type SceneDropHit = {
   meshComponentId: string | null;
 };
 
+const XRIFT_TERRAIN_INVERSE: Partial<
+  Record<TerrainViewportBrushKind, TerrainViewportBrushKind>
+> = {
+  raise: "lower",
+  lower: "raise",
+  "hole-add": "hole-remove",
+  "hole-remove": "hole-add",
+  "grass-paint": "grass-erase",
+  "grass-erase": "grass-paint",
+};
+
+/** Ctrl swaps a brush for its opposite without a trip to the panel. */
+function invertTerrainBrush(
+  editing: TerrainViewportEditing,
+  inverted: boolean,
+): TerrainViewportEditing {
+  if (!inverted) return editing;
+  const kind = XRIFT_TERRAIN_INVERSE[editing.kind];
+  return kind ? { ...editing, kind } : editing;
+}
+
+/**
+ * Places the brush cursor in the armed Terrain's own space.
+ *
+ * The hover centre arrives as terrain-local X/Z, so the cursor is parented to
+ * the same object the hit was measured against; anything else would need the
+ * transform reapplied by hand and would drift as soon as the Terrain moved.
+ */
+function TerrainBrushCursorBinding({
+  terrain,
+  entityId,
+  kind,
+  radius,
+  falloff,
+  hoverRef,
+}: {
+  terrain: TerrainGeometry;
+  entityId: string;
+  kind: TerrainViewportBrushKind;
+  radius: number;
+  falloff: number;
+  hoverRef: MutableRefObject<[number, number] | null>;
+}) {
+  const { scene } = useThree();
+  const [host, setHost] = useState<Object3D | null>(null);
+  const [center, setCenter] = useState<[number, number] | null>(null);
+
+  useEffect(() => {
+    let found: Object3D | null = null;
+    scene.traverse((object) => {
+      if (found) return;
+      if (object.userData.authoringEntityId === entityId) found = object;
+    });
+    setHost(found);
+  }, [entityId, scene]);
+
+  // The centre lives in a ref so pointer moves stay cheap; this pulls it into
+  // state at frame rate for the one component that renders it.
+  useFrame(() => {
+    const next = hoverRef.current;
+    setCenter((current) => {
+      if (next === null) return current === null ? current : null;
+      if (current && current[0] === next[0] && current[1] === next[1]) {
+        return current;
+      }
+      return [next[0], next[1]];
+    });
+  });
+
+  if (!host) return null;
+  return createPortal(
+    <TerrainBrushCursor
+      terrain={terrain}
+      kind={kind}
+      radius={radius}
+      falloff={falloff}
+      center={center}
+    />,
+    host,
+  );
+}
+
 type SceneDropResolver = (
   clientX: number,
   clientY: number,
@@ -3257,6 +3343,8 @@ export function SceneViewport({
   onDropRejected,
   onOptimizeColliders,
   terrainEditing = null,
+  onTerrainEditingPatch,
+  onTerrainEditingExit,
   onTerrainStrokeStart,
   onTerrainStroke,
   onTerrainStrokeEnd,
@@ -3318,6 +3406,10 @@ export function SceneViewport({
   onOptimizeColliders: (entityIds?: readonly string[]) => void;
   /** Inspector-selected Terrain tool. A hit point supplies each stamp center. */
   terrainEditing?: TerrainViewportEditing | null;
+  onTerrainEditingPatch?: (
+    patch: Partial<Omit<TerrainViewportEditing, "entityId" | "componentId">>,
+  ) => void;
+  onTerrainEditingExit?: () => void;
   onTerrainStrokeStart?: (entityId: string, componentId: string) => boolean;
   onTerrainStroke?: (
     entityId: string,
@@ -3341,6 +3433,12 @@ export function SceneViewport({
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const dropResolverRef = useRef<SceneDropResolver | null>(null);
+  // The brush centre under the cursor. A ref because it updates on every
+  // pointer move and only the cursor mesh consumes it.
+  const terrainHoverRef = useRef<[number, number] | null>(null);
+  // Held for the length of a stroke: releasing Ctrl mid-drag must not flip the
+  // brush under the user's hand.
+  const terrainInvertedRef = useRef(false);
   const pressedKeysRef = useRef(new Set<string>());
   const worldPlayCameraInputRef = useRef<WorldPlayCameraInput>({
     pointerId: null,
@@ -3646,6 +3744,12 @@ export function SceneViewport({
   }, [editorMode]);
 
   useEffect(() => {
+    if (!terrainEditing) return;
+    const frame = window.requestAnimationFrame(() => viewportRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [terrainEditing]);
+
+  useEffect(() => {
     pressedKeysRef.current.clear();
     if (editorMode !== "play" || projectKind !== "world") return;
     const frame = window.requestAnimationFrame(() => viewportRef.current?.focus());
@@ -3659,6 +3763,26 @@ export function SceneViewport({
       onTerrainStrokeCancel?.(terrainPointer.entityId);
       event.preventDefault();
       return;
+    }
+    if (terrainEditing) {
+      // Escape with no stroke in flight means "leave the brush", so the way out
+      // is the same key whether or not a stroke is running.
+      if (event.key === "Escape") {
+        onTerrainEditingExit?.();
+        event.preventDefault();
+        return;
+      }
+      // Bracket keys size the brush without moving the eye off the ground.
+      if (event.key === "[" || event.key === "]") {
+        const step = Math.max(terrainEditing.radius * 0.15, 0.1);
+        const next =
+          event.key === "["
+            ? Math.max(0.1, terrainEditing.radius - step)
+            : terrainEditing.radius + step;
+        onTerrainEditingPatch?.({ radius: Number(next.toFixed(2)) });
+        event.preventDefault();
+        return;
+      }
     }
     if (editorMode !== "play" || projectKind !== "world") return;
     const key = event.key.toLowerCase();
@@ -3767,6 +3891,22 @@ export function SceneViewport({
       !transformDraggingRef.current
     ) {
       const hit = dropResolverRef.current?.(event.clientX, event.clientY);
+      // Alt samples the height under the cursor into the flatten target, so a
+      // road can be levelled to ground it already has rather than a guess.
+      if (
+        event.altKey &&
+        hit?.authoringEntityId === terrainEditing.entityId &&
+        hit.meshComponentId === terrainEditing.componentId &&
+        hit.localPosition
+      ) {
+        onTerrainEditingPatch?.({
+          kind: "flatten",
+          targetHeight: Number(hit.localPosition[1].toFixed(3)),
+        });
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (
         hit?.authoringEntityId === terrainEditing.entityId &&
         hit.renderedEntityId === terrainEditing.entityId &&
@@ -3782,9 +3922,10 @@ export function SceneViewport({
         viewportRef.current?.focus();
         event.currentTarget.setPointerCapture(event.pointerId);
         onTerrainStroke?.(terrainEditing.entityId, terrainEditing.componentId, {
-          ...terrainEditing,
+          ...invertTerrainBrush(terrainEditing, event.ctrlKey),
           center: [hit.localPosition[0], hit.localPosition[2]],
         });
+        terrainInvertedRef.current = event.ctrlKey;
         event.preventDefault();
         event.stopPropagation();
         return;
@@ -3836,9 +3977,36 @@ export function SceneViewport({
     }
   };
 
+  const terrainBrushTarget = useMemo(() => {
+    if (!terrainEditing) return null;
+    const entity = scene.entities[terrainEditing.entityId];
+    const mesh = entity?.components.find(
+      (component): component is Extract<typeof component, { type: "mesh" }> =>
+        component.type === "mesh" && component.id === terrainEditing.componentId,
+    );
+    const terrain =
+      mesh?.geometry?.kind === "terrain" ? mesh.geometry.terrain : null;
+    return terrain ? { terrain } : null;
+  }, [scene.entities, terrainEditing]);
+
+  const trackTerrainHover = (clientX: number, clientY: number) => {
+    if (!terrainEditing) {
+      terrainHoverRef.current = null;
+      return;
+    }
+    const hit = dropResolverRef.current?.(clientX, clientY);
+    terrainHoverRef.current =
+      hit?.authoringEntityId === terrainEditing.entityId &&
+      hit.meshComponentId === terrainEditing.componentId &&
+      hit.localPosition
+        ? [hit.localPosition[0], hit.localPosition[2]]
+        : null;
+  };
+
   const handleViewportPointerMove = (
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
+    trackTerrainHover(event.clientX, event.clientY);
     const terrainPointer = terrainPointerRef.current;
     if (terrainPointer?.pointerId === event.pointerId && terrainEditing) {
       const hit = dropResolverRef.current?.(event.clientX, event.clientY);
@@ -3848,7 +4016,7 @@ export function SceneViewport({
         hit.localPosition
       ) {
         onTerrainStroke?.(terrainPointer.entityId, terrainPointer.componentId, {
-          ...terrainEditing,
+          ...invertTerrainBrush(terrainEditing, terrainInvertedRef.current),
           center: [hit.localPosition[0], hit.localPosition[2]],
         });
       }
@@ -3908,10 +4076,11 @@ export function SceneViewport({
         hit.localPosition
       ) {
         onTerrainStroke?.(terrainPointer.entityId, terrainPointer.componentId, {
-          ...terrainEditing,
+          ...invertTerrainBrush(terrainEditing, terrainInvertedRef.current),
           center: [hit.localPosition[0], hit.localPosition[2]],
         });
       }
+      terrainInvertedRef.current = false;
       terrainPointerRef.current = null;
       onTerrainStrokeEnd?.(terrainPointer.entityId);
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -3939,7 +4108,7 @@ export function SceneViewport({
       ) {
         leftGesture.moved = true;
       }
-      if (!leftGesture.moved && !transformDraggingRef.current) {
+      if (!leftGesture.moved && !transformDraggingRef.current && !terrainEditing) {
         const releasedEntityId =
           dropResolverRef.current?.(event.clientX, event.clientY, {
             includeEntityOriginFallback: true,
@@ -4321,7 +4490,13 @@ export function SceneViewport({
 
       <div
         ref={viewportRef}
-        tabIndex={editorMode === "play" && projectKind === "world" ? 0 : -1}
+        tabIndex={
+          // Terrain shortcuts need the viewport focusable in Edit too, or the
+          // brush keys land on whatever the panel focused last.
+          (editorMode === "play" && projectKind === "world") || terrainEditing
+            ? 0
+            : -1
+        }
         className="relative min-h-0 flex-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-400"
         aria-label={
           editorMode === "play"
@@ -4482,7 +4657,13 @@ export function SceneViewport({
                     thumbnailCaptureActive ? new Set<string>() : selectedEntityIdSet
                   }
                   primaryEntityId={thumbnailCaptureActive ? null : selectedEntityId}
-                  editable={editorMode === "edit" && !thumbnailCaptureActive}
+                  editable={
+                    editorMode === "edit" &&
+                    !thumbnailCaptureActive &&
+                    // A brush is a gesture over the ground; leaving gizmos live
+                    // lets a stroke grab and drag an object instead of painting.
+                    !terrainEditing
+                  }
                   playing={editorMode === "play"}
                   physicsEnabled={
                     editorMode === "play" && projectKind === "world"
@@ -4504,6 +4685,16 @@ export function SceneViewport({
                   renderThumbnail={thumbnailCaptureActive}
                 />
               ))}
+              {terrainEditing && terrainBrushTarget ? (
+                <TerrainBrushCursorBinding
+                  terrain={terrainBrushTarget.terrain}
+                  entityId={terrainEditing.entityId}
+                  kind={terrainEditing.kind}
+                  radius={terrainEditing.radius}
+                  falloff={terrainEditing.falloff ?? 0.5}
+                  hoverRef={terrainHoverRef}
+                />
+              ) : null}
               {editorMode === "play" && projectKind === "world" ? (
                 <WorldPlayCameraController
                   initialPosition={runtimeSpawn.position}
