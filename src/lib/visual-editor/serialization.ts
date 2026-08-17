@@ -26,7 +26,7 @@ import {
 } from "./material-extension-registry";
 import { normalizeParticleProperties } from "./particle-system";
 import { isTerrainGeometry } from "./terrain";
-import { isTerrainGrassLayer } from "./terrain-grass";
+import { isTerrainGrassLayer, isTerrainGrassMask } from "./terrain-grass";
 import { isSerializableJsonValue } from "./component-registry";
 import {
   PREFAB_DOCUMENT_SCHEMA_VERSION,
@@ -1780,7 +1780,20 @@ function validatePrefabComponentShape(
       component.geometry.terrain.grass !== undefined
     ) {
       const grass = component.geometry.terrain.grass;
-      if (!Array.isArray(grass) || !grass.every(isTerrainGrassLayer)) {
+      const terrain = component.geometry.terrain;
+      const maskFits =
+        Array.isArray(grass) &&
+        grass.every(
+          (layer) =>
+            !isRecord(layer) ||
+            layer.mask === undefined ||
+            (typeof terrain.resolution === "number" &&
+              isTerrainGrassMask(
+                { resolution: terrain.resolution },
+                layer.mask,
+              )),
+        );
+      if (!Array.isArray(grass) || !grass.every(isTerrainGrassLayer) || !maskFits) {
         issues.push(
           issue(
             `${path}.geometry.terrain.grass`,

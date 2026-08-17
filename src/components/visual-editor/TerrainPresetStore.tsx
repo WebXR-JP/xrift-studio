@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { CheckCircle2, CircleAlert, LoaderCircle, Search } from "lucide-react";
 import {
+  TERRAIN_GRASS_PRESETS,
   TERRAIN_PRESETS,
   createTerrainFromPreset,
   generateTerrainGrassInstances,
@@ -28,10 +29,18 @@ export function TerrainPresetStore({
   onAdd,
 }: {
   disabledReason?: string | null;
-  onAdd: (preset: TerrainPreset) => Promise<TerrainPresetInstallResult>;
+  onAdd: (
+    preset: TerrainPreset,
+    grassPresetId: string | null,
+  ) => Promise<TerrainPresetInstallResult>;
 }) {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(TERRAIN_PRESETS[0]?.id ?? "");
+  // undefined means "whatever the Terrain preset ships with"; a value overrides
+  // it, and null places the Terrain bare.
+  const [grassChoice, setGrassChoice] = useState<string | null | undefined>(
+    undefined,
+  );
   const [adding, setAdding] = useState(false);
   const [addedMessage, setAddedMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,9 +61,11 @@ export function TerrainPresetStore({
   // What the author is actually agreeing to: the size, the relief and how many
   // blades it plants. A Terrain is the heaviest thing in this store, so the
   // numbers are shown rather than left to be discovered after placing it.
+  const effectiveGrassId =
+    grassChoice === undefined ? selected?.grassPresetId ?? null : grassChoice;
   const summary = useMemo(() => {
     if (!selected) return null;
-    const terrain = createTerrainFromPreset(selected);
+    const terrain = createTerrainFromPreset(selected, effectiveGrassId);
     const range = terrainHeightRange(terrain);
     const layers = (terrain.grass ?? []).map((layer) => {
       const placement = generateTerrainGrassInstances(terrain, layer);
@@ -73,7 +84,7 @@ export function TerrainPresetStore({
       layers,
       totalBlades: layers.reduce((sum, layer) => sum + layer.placed, 0),
     };
-  }, [selected]);
+  }, [effectiveGrassId, selected]);
 
   const addSelected = async () => {
     if (!selected || adding || disabledReason) return;
@@ -81,7 +92,7 @@ export function TerrainPresetStore({
     setAddedMessage(null);
     setError(null);
     try {
-      const result = await onAdd(selected);
+      const result = await onAdd(selected, effectiveGrassId);
       setAddedMessage(
         `「${result.entityName}」をSceneへ追加しました。ブラシで彫り足したり、草の密度をInspectorで変えられます。`,
       );
@@ -145,6 +156,7 @@ export function TerrainPresetStore({
                     aria-pressed={active}
                     onClick={() => {
                       setSelectedId(preset.id);
+                      setGrassChoice(undefined);
                       setAddedMessage(null);
                       setError(null);
                     }}
@@ -227,6 +239,32 @@ export function TerrainPresetStore({
                 ))}
               </ul>
             ) : null}
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-slate-700">
+                草のセット
+              </span>
+              <select
+                value={effectiveGrassId ?? ""}
+                disabled={adding}
+                onChange={(event) =>
+                  setGrassChoice(event.currentTarget.value || null)
+                }
+                className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-xs disabled:bg-slate-100"
+              >
+                <option value="">草なし</option>
+                {TERRAIN_GRASS_PRESETS.map((grass) => (
+                  <option key={grass.id} value={grass.id}>
+                    {grass.label}
+                    {grass.id === selected.grassPresetId ? "（既定）" : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                {TERRAIN_GRASS_PRESETS.find(
+                  (grass) => grass.id === effectiveGrassId,
+                )?.description ?? "草を植えずに地形だけを置きます。"}
+              </p>
+            </label>
             <Notice text="追加するとSceneへTerrain Entityが1つ増えます。形はブラシで彫り足せ、草の密度や種類はInspectorで変えられます。" />
             {disabledReason ? (
               <Notice tone="warning" text={disabledReason} />

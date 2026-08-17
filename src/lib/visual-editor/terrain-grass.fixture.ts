@@ -14,7 +14,10 @@ import {
   TERRAIN_GRASS_PRESETS,
   TERRAIN_GRASS_TYPES,
   createTerrainGrassLayers,
+  applyTerrainGrassBrush,
   generateTerrainGrassInstances,
+  isTerrainGrassMask,
+  sampleTerrainGrassMask,
   getTerrainGrassPreset,
   getTerrainGrassType,
   isTerrainGrassLayer,
@@ -31,7 +34,120 @@ export function runTerrainGrassFixtureAssertions(): void {
   assertDensityStability();
   assertRules();
   assertInstanceCap();
+  assertMaskPainting();
   assertPresets();
+}
+
+function assertMaskPainting(): void {
+  const terrain = flatTerrain();
+  const base = layer({ density: 12 });
+  const full = generateTerrainGrassInstances(terrain, base);
+
+  // A stroke falls off toward the rim, so one pass thins rather than clears —
+  // the same as any paint brush. Repeated passes are what clear a disc.
+  const single = applyTerrainGrassBrush(terrain, base, {
+    mode: "erase",
+    center: [0, 0],
+    radius: 6,
+    strength: 1,
+  });
+  assert(
+    generateTerrainGrassInstances(terrain, single).placed < full.placed,
+    "One erase pass removed nothing",
+  );
+  let erased = base;
+  for (let pass = 0; pass < 4; pass += 1) {
+    erased = applyTerrainGrassBrush(terrain, erased, {
+      mode: "erase",
+      center: [0, 0],
+      radius: 6,
+      strength: 1,
+    });
+  }
+  assert(
+    Array.isArray(erased.mask),
+    "Erasing did not create a coverage mask",
+  );
+  const afterErase = generateTerrainGrassInstances(terrain, erased);
+  assert(
+    afterErase.placed < full.placed && afterErase.placed > 0,
+    `Erasing cleared the wrong amount (${afterErase.placed} of ${full.placed})`,
+  );
+  for (let index = 0; index < afterErase.positions.length; index += 3) {
+    const distance = Math.hypot(
+      afterErase.positions[index],
+      afterErase.positions[index + 2],
+    );
+    assert(
+      distance > 2,
+      `A blade survived at the centre of a fully erased disc (r=${distance.toFixed(2)})`,
+    );
+  }
+
+  // Painting the same disc back must restore the field, and dropping a mask
+  // that is 1 everywhere keeps the document small.
+  let restored = erased;
+  for (let pass = 0; pass < 6; pass += 1) {
+    restored = applyTerrainGrassBrush(terrain, restored, {
+      mode: "paint",
+      center: [0, 0],
+      radius: 6,
+      strength: 1,
+    });
+  }
+  assert(
+    restored.mask === undefined,
+    "A fully repainted layer must not keep an all-ones mask",
+  );
+  const afterRestore = generateTerrainGrassInstances(terrain, restored);
+  assert(
+    afterRestore.placed === full.placed,
+    `Repainting did not restore the field (${afterRestore.placed} vs ${full.placed})`,
+  );
+
+  // Painting must thin a patch out, not shuffle the blades that remain.
+  const partial = applyTerrainGrassBrush(terrain, base, {
+    mode: "erase",
+    center: [4, 4],
+    radius: 5,
+    strength: 0.5,
+  });
+  const partialPlacement = generateTerrainGrassInstances(terrain, partial);
+  const survivors = new Set<string>();
+  for (let index = 0; index < partialPlacement.positions.length; index += 3) {
+    survivors.add(
+      `${partialPlacement.positions[index]},${partialPlacement.positions[index + 2]}`,
+    );
+  }
+  let matched = 0;
+  for (let index = 0; index < full.positions.length; index += 3) {
+    if (survivors.has(`${full.positions[index]},${full.positions[index + 2]}`)) {
+      matched += 1;
+    }
+  }
+  assert(
+    matched === survivors.size,
+    "Painting moved blades instead of thinning them out",
+  );
+  assert(
+    partialPlacement.placed < full.placed,
+    "A half-strength erase removed nothing",
+  );
+
+  // The mask rides at the height field's own resolution; anything else breaks
+  // the correspondence when the Terrain is sculpted.
+  assert(
+    isTerrainGrassMask(terrain, partial.mask) && isTerrainGrassLayer(partial),
+    "A painted layer failed its own schema",
+  );
+  assert(
+    !isTerrainGrassMask(terrain, [0.5, 0.5]),
+    "A mask of the wrong length was accepted",
+  );
+  assert(
+    sampleTerrainGrassMask(terrain, undefined, 0, 0) === 1,
+    "An unpainted layer must read as fully covered",
+  );
 }
 
 function flatTerrain() {

@@ -118,7 +118,133 @@ export type TerrainGrassLayer = {
   slopeLimitDegrees: number;
   /** Fixes the placement. Two layers with different seeds never overlap. */
   seed: number;
+  /**
+   * Optional per-sample coverage, 0..1, in the height field's own row-major
+   * order and resolution.
+   *
+   * Rules cannot express "not here". Absent, the layer is a uniform 1 and
+   * behaves exactly as it did before painting existed, so an unpainted layer
+   * carries no array at all and costs nothing.
+   */
+  mask?: number[];
 };
+
+/** Bilinear mask coverage at a Terrain-local point. 1 when unpainted. */
+export function sampleTerrainGrassMask(
+  terrain: TerrainGeometry,
+  mask: readonly number[] | undefined,
+  localX: number,
+  localZ: number,
+): number {
+  if (!mask) return 1;
+  const { width, depth, resolution } = terrain;
+  if (mask.length !== resolution * resolution) return 1;
+  const cells = resolution - 1;
+  const u = ((localX + width / 2) / width) * cells;
+  const v = ((localZ + depth / 2) / depth) * cells;
+  const x0 = Math.min(Math.max(Math.floor(u), 0), cells);
+  const z0 = Math.min(Math.max(Math.floor(v), 0), cells);
+  const x1 = Math.min(x0 + 1, cells);
+  const z1 = Math.min(z0 + 1, cells);
+  const fx = Math.min(Math.max(u - x0, 0), 1);
+  const fz = Math.min(Math.max(v - z0, 0), 1);
+  const m00 = mask[z0 * resolution + x0] ?? 1;
+  const m10 = mask[z0 * resolution + x1] ?? 1;
+  const m01 = mask[z1 * resolution + x0] ?? 1;
+  const m11 = mask[z1 * resolution + x1] ?? 1;
+  return (
+    m00 * (1 - fx) * (1 - fz) +
+    m10 * fx * (1 - fz) +
+    m01 * (1 - fx) * fz +
+    m11 * fx * fz
+  );
+}
+
+export const TERRAIN_GRASS_BRUSH_MODES = ["paint", "erase"] as const;
+export type TerrainGrassBrushMode = (typeof TERRAIN_GRASS_BRUSH_MODES)[number];
+
+export type TerrainGrassBrushOperation = {
+  mode: TerrainGrassBrushMode;
+  /** Terrain-local X/Z. */
+  center: [number, number];
+  radius: number;
+  /** 0..1 coverage change at the brush centre. */
+  strength: number;
+};
+
+/**
+ * Paints or erases one layer's coverage.
+ *
+ * The stroke falls off toward the rim so a pass leaves a soft edge instead of
+ * a stamped disc, which is what makes hand-placed grass read as grown rather
+ * than cut out. The mask is created on first use, so a layer only starts
+ * carrying an array once the author actually paints one.
+ */
+export function applyTerrainGrassBrush(
+  terrain: TerrainGeometry,
+  layer: TerrainGrassLayer,
+  operation: TerrainGrassBrushOperation,
+): TerrainGrassLayer {
+  const { width, depth, resolution } = terrain;
+  const radius = Math.max(operation.radius, 0);
+  if (radius <= 0) return layer;
+  const strength = Math.min(Math.max(operation.strength, 0), 1);
+  if (strength <= 0) return layer;
+  const length = resolution * resolution;
+  const mask =
+    layer.mask?.length === length ? [...layer.mask] : new Array(length).fill(1);
+  const xStep = width / (resolution - 1);
+  const zStep = depth / (resolution - 1);
+  let changed = false;
+
+  for (let z = 0; z < resolution; z += 1) {
+    const localZ = z * zStep - depth / 2;
+    for (let x = 0; x < resolution; x += 1) {
+      const localX = x * xStep - width / 2;
+      const distance = Math.hypot(
+        localX - operation.center[0],
+        localZ - operation.center[1],
+      );
+      if (distance > radius) continue;
+      const falloff = 1 - (distance / radius) ** 2;
+      const delta = strength * falloff;
+      const index = z * resolution + x;
+      const current = mask[index] ?? 1;
+      const next =
+        operation.mode === "paint"
+          ? Math.min(current + delta, 1)
+          : Math.max(current - delta, 0);
+      if (next !== current) {
+        mask[index] = next;
+        changed = true;
+      }
+    }
+  }
+
+  if (!changed) return layer;
+  // A mask that is 1 everywhere is the same as no mask, and dropping it keeps
+  // the Scene document small when a stroke is fully undone by painting back.
+  return mask.every((value) => value >= 1)
+    ? { ...layer, mask: undefined }
+    : { ...layer, mask };
+}
+
+export function isTerrainGrassMask(
+  terrain: Pick<TerrainGeometry, "resolution">,
+  value: unknown,
+): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length === terrain.resolution * terrain.resolution &&
+    value.every(
+      (entry) =>
+        typeof entry === "number" &&
+        Number.isFinite(entry) &&
+        entry >= 0 &&
+        entry <= 1,
+    )
+  );
+}
 
 /**
  * One layer may not exceed this many blades. A Terrain scaled up after the
@@ -247,6 +373,12 @@ export function generateTerrainGrassInstances(
     const height = sampleTerrainHeight(terrain, localX, localZ);
     if (height < low || height > high) continue;
     if (sampleTerrainSlopeDegrees(terrain, localX, localZ) > slopeLimit) continue;
+    // Coverage is a per-candidate probability drawn from the candidate's own
+    // hash, so painting thins a patch out rather than moving the blades that
+    // remain, and raising the density still fills in around them.
+    if (hash(layer.seed, index, 5) >= sampleTerrainGrassMask(terrain, layer.mask, localX, localZ)) {
+      continue;
+    }
 
     positions.push(localX, height, localZ);
     rotations.push(hash(layer.seed, index, 3) * Math.PI * 2);
@@ -285,7 +417,16 @@ export function isTerrainGrassLayer(value: unknown): value is TerrainGrassLayer 
     Number.isFinite(layer.slopeLimitDegrees) &&
     layer.slopeLimitDegrees >= 0 &&
     typeof layer.seed === "number" &&
-    Number.isFinite(layer.seed)
+    Number.isFinite(layer.seed) &&
+    (layer.mask === undefined ||
+      (Array.isArray(layer.mask) &&
+        layer.mask.every(
+          (entry) =>
+            typeof entry === "number" &&
+            Number.isFinite(entry) &&
+            entry >= 0 &&
+            entry <= 1,
+        )))
   );
 }
 

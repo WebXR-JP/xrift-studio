@@ -28,7 +28,11 @@ export type TerrainPresetId =
   | "meadow-plain"
   | "rolling-hills"
   | "valley"
-  | "dry-plateau";
+  | "dry-plateau"
+  | "island"
+  | "highland-ridge"
+  | "basin-lake"
+  | "dunes";
 
 export type TerrainPreset = {
   id: TerrainPresetId;
@@ -84,7 +88,7 @@ function smoothstep(edge0: number, edge1: number, value: number): number {
   return t * t * (3 - 2 * t);
 }
 
-export const TERRAIN_PRESETS: readonly TerrainPreset[] = [
+const BASE_PRESETS: readonly TerrainPreset[] = [
   {
     id: "meadow-plain",
     label: "草原",
@@ -140,6 +144,72 @@ export const TERRAIN_PRESETS: readonly TerrainPreset[] = [
   },
 ];
 
+const EXTRA_PRESETS: readonly TerrainPreset[] = [
+  {
+    id: "island",
+    label: "島",
+    description:
+      "周囲が落ち込む島です。外周へ水面を置くと海に浮かびます。",
+    width: 100,
+    depth: 100,
+    resolution: 113,
+    grassPresetId: "meadow",
+    height: (x, z) => {
+      const radius = Math.hypot(x, z) / 42;
+      const dome = (1 - smoothstep(0.15, 1, radius)) * 7;
+      return dome + hills(x, z, 0.9, 13) * (1 - smoothstep(0.5, 1, radius));
+    },
+  },
+  {
+    id: "highland-ridge",
+    label: "尾根",
+    description:
+      "細長い尾根が走る高地です。斜面が急なので枯れ草が上へ回ります。",
+    width: 140,
+    depth: 100,
+    resolution: 129,
+    grassPresetId: "hillside",
+    height: (x, z) => {
+      const ridge = Math.exp(-((z / 18) ** 2)) * 12;
+      return (ridge + hills(x, z, 1.6, 15)) * edgeFalloff(x, z, 140, 100);
+    },
+  },
+  {
+    id: "basin-lake",
+    label: "湖のくぼ地",
+    description:
+      "中央が深く落ちたくぼ地です。底へ水面を置くと湖になります。",
+    width: 110,
+    depth: 110,
+    resolution: 129,
+    grassPresetId: "meadow",
+    height: (x, z) => {
+      const radius = Math.hypot(x, z) / 34;
+      const basin = smoothstep(0, 1, Math.min(radius, 1)) * 8 - 8;
+      return (basin + 8 + hills(x, z, 1, 15)) * edgeFalloff(x, z, 110, 110);
+    },
+  },
+  {
+    id: "dunes",
+    label: "砂丘",
+    description:
+      "一定方向に連なる砂丘です。草はごくまばらにしか生えません。",
+    width: 130,
+    depth: 130,
+    resolution: 129,
+    grassPresetId: "sparse-dry",
+    height: (x, z) => {
+      const crest = Math.sin(x / 11 + Math.sin(z / 26) * 1.3) * 3.4;
+      return (crest + hills(x, z, 0.7, 9)) * edgeFalloff(x, z, 130, 130);
+    },
+  },
+];
+
+export const TERRAIN_PRESETS: readonly TerrainPreset[] = [
+  ...BASE_PRESETS,
+  ...EXTRA_PRESETS,
+];
+
 export function getTerrainPreset(
   presetId: string,
 ): TerrainPreset | undefined {
@@ -153,7 +223,11 @@ export function getTerrainPreset(
  * the author can do to a hand-made one — sculpt it, add a hole, change the
  * density — works on it immediately.
  */
-export function createTerrainFromPreset(preset: TerrainPreset): TerrainGeometry {
+export function createTerrainFromPreset(
+  preset: TerrainPreset,
+  /** Overrides the preset's own grass. `null` places the Terrain bare. */
+  grassPresetId?: string | null,
+): TerrainGeometry {
   const resolution = Math.min(
     Math.max(Math.round(preset.resolution), TERRAIN_RESOLUTION_MIN),
     TERRAIN_RESOLUTION_MAX,
@@ -169,7 +243,9 @@ export function createTerrainFromPreset(preset: TerrainPreset): TerrainGeometry 
       );
     }
   }
-  const grass = terrainPresetGrassLayers(preset);
+  const grass = terrainPresetGrassLayers(
+    grassPresetId === undefined ? preset : { ...preset, grassPresetId },
+  );
   return createTerrainGeometry({
     width: preset.width,
     depth: preset.depth,

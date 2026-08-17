@@ -5531,10 +5531,13 @@ export function VisualEditorPrototype({
   });
 
   const handleAddTerrainPreset = useCallback(
-    async (preset: TerrainPreset): Promise<TerrainPresetInstallResult> => {
+    async (
+      preset: TerrainPreset,
+      grassPresetId: string | null,
+    ): Promise<TerrainPresetInstallResult> => {
       // Placing a Terrain reuses the same path the Create menu takes, so a
       // preset from the store and one from the menu produce the same Entity.
-      handleCreateTerrain(preset.id);
+      handleCreateTerrain(preset.id, grassPresetId);
       setExternalStoreOpen(false);
       return { entityName: preset.label };
     },

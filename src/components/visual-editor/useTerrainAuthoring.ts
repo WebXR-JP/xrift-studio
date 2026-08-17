@@ -79,7 +79,8 @@ export function useTerrainAuthoring({
   lastSavedBundleRef,
 }: TerrainAuthoringOptions) {
   const strokeRef = useRef<TerrainStrokeTransaction | null>(null);
-  const handleCreateTerrain = useCallback((presetId?: string) => {
+  const handleCreateTerrain = useCallback(
+    (presetId?: string, grassPresetId?: string | null) => {
     if (editorMode !== "edit") {
       notify("地形は編集モードで作成してください");
       return;
@@ -103,7 +104,9 @@ export function useTerrainAuthoring({
       // A preset arrives shaped and planted. Without one the author still gets
       // the flat plate they can sculpt from.
       const preset = presetId ? getTerrainPreset(presetId) : undefined;
-      const geometry = preset ? createTerrainFromPreset(preset) : undefined;
+      const geometry = preset
+        ? createTerrainFromPreset(preset, grassPresetId)
+        : undefined;
       // Two Terrains at the origin are two nearly coincident surfaces, and the
       // depth buffer cannot separate them: the overlap tears into moire rings
       // that read as a rendering fault rather than as "you placed two". Setting

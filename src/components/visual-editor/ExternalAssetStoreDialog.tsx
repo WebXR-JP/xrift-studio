@@ -96,6 +96,7 @@ export function ExternalAssetStoreDialog({
   ) => Promise<WaterShaderInstallResult>;
   onAddTerrainPreset: (
     preset: TerrainPreset,
+    grassPresetId: string | null,
   ) => Promise<TerrainPresetInstallResult>;
   /** Scene wind, so Water previews move the way the scene will. */
   sceneWind: ResolvedWind;
