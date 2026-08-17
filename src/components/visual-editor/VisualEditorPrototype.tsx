@@ -138,6 +138,7 @@ import {
   type OpenBrushCatalogEntry,
   type SkyShaderCatalogEntry,
   type WaterShaderCatalogEntry,
+  type TerrainPreset,
   type EditorCommandId,
   type EntityClipboard,
   type ParticlePropertiesPatch,
@@ -179,6 +180,7 @@ import { ModelThumbnailGenerationQueue } from "./ModelThumbnailGenerationQueue";
 import { ExternalAssetStoreDialog } from "./ExternalAssetStoreDialog";
 import type { SkyShaderInstallResult } from "./SkyShaderStore";
 import type { WaterShaderInstallResult } from "./WaterShaderStore";
+import type { TerrainPresetInstallResult } from "./TerrainPresetStore";
 import {
   hasActiveAssetImport,
   resolveAssetOperationAvailability,
@@ -5528,6 +5530,17 @@ export function VisualEditorPrototype({
     lastSavedBundleRef,
   });
 
+  const handleAddTerrainPreset = useCallback(
+    async (preset: TerrainPreset): Promise<TerrainPresetInstallResult> => {
+      // Placing a Terrain reuses the same path the Create menu takes, so a
+      // preset from the store and one from the menu produce the same Entity.
+      handleCreateTerrain(preset.id);
+      setExternalStoreOpen(false);
+      return { entityName: preset.label };
+    },
+    [handleCreateTerrain],
+  );
+
   const handleOptimizeColliders = useCallback(
     (entityIds?: readonly string[]) => {
       if (editorMode !== "edit" && !playSession) return;
@@ -8823,6 +8836,7 @@ export function VisualEditorPrototype({
             onAddOpenBrush={handleAddOpenBrushMaterial}
             onAddSkyShader={handleAddSkyShader}
             onAddWaterShader={handleAddWaterShader}
+            onAddTerrainPreset={handleAddTerrainPreset}
             sceneWind={resolveSceneWind(
               resolveSceneSettings(bundle.scene.settings).vegetation,
             )}

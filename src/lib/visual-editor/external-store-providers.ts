@@ -7,7 +7,8 @@ export type ExternalStoreProvider = {
     | "open-brush"
     | "xrift-components"
     | "sky-shader"
-    | "water-shader";
+    | "water-shader"
+    | "terrain-preset";
   name: string;
   badge: string;
   summary: string;
@@ -80,6 +81,19 @@ export const EXTERNAL_STORE_PROVIDERS = [
     authorFallback: "XRift Studio contributors",
     attributionNote:
       "Gerstner波はMochie's Unity Shaders (MIT) を移植しています。波はScene設定のWindから駆動します。",
+  },
+  {
+    id: "xrift-terrain-presets",
+    kind: "terrain-preset",
+    name: "Terrain",
+    badge: "Official",
+    summary: "形と草が入った地形を追加",
+    homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
+    catalogKinds: [],
+    installableKinds: [],
+    authorFallback: "XRift Studio contributors",
+    attributionNote:
+      "高さフィールドと草の配置規則から生成します。追加後は普通のTerrainとして彫れます。",
   },
   {
     id: "xrift-components",

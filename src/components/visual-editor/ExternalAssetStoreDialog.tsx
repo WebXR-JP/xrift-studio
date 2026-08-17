@@ -10,6 +10,7 @@ import {
   Search,
   Store,
   Sunrise,
+  Mountain,
   Waves,
   X,
 } from "lucide-react";
@@ -30,6 +31,7 @@ import {
   type ResolvedWind,
   type SkyShaderCatalogEntry,
   type WaterShaderCatalogEntry,
+  type TerrainPreset,
   type VisualProjectKind,
   type XriftComponentDefinition,
 } from "../../lib/visual-editor";
@@ -50,6 +52,10 @@ import {
   WaterShaderStore,
   type WaterShaderInstallResult,
 } from "./WaterShaderStore";
+import {
+  TerrainPresetStore,
+  type TerrainPresetInstallResult,
+} from "./TerrainPresetStore";
 
 type StoreKindFilter = "all" | ExternalStoreAsset["assetKind"];
 
@@ -63,6 +69,7 @@ export function ExternalAssetStoreDialog({
   onAddOpenBrush,
   onAddSkyShader,
   onAddWaterShader,
+  onAddTerrainPreset,
   sceneWind,
   onAddOfficialComponent,
 }: {
@@ -87,6 +94,9 @@ export function ExternalAssetStoreDialog({
     entry: WaterShaderCatalogEntry,
     parameterValues: Readonly<Record<string, number | string>>,
   ) => Promise<WaterShaderInstallResult>;
+  onAddTerrainPreset: (
+    preset: TerrainPreset,
+  ) => Promise<TerrainPresetInstallResult>;
   /** Scene wind, so Water previews move the way the scene will. */
   sceneWind: ResolvedWind;
   onAddOfficialComponent: (
@@ -365,6 +375,11 @@ export function ExternalAssetStoreDialog({
               disabledReason={disabledReason}
               wind={sceneWind}
               onAdd={onAddWaterShader}
+            />
+          ) : provider.kind === "terrain-preset" ? (
+            <TerrainPresetStore
+              disabledReason={disabledReason}
+              onAdd={onAddTerrainPreset}
             />
           ) : provider.kind === "xrift-components" ? (
             <OfficialXriftComponentStore
@@ -956,6 +971,9 @@ function ProviderIcon({ kind }: { kind: ExternalStoreProvider["kind"] }) {
   if (kind === "open-brush") return <Brush size={14} aria-hidden="true" />;
   if (kind === "sky-shader") return <Sunrise size={14} aria-hidden="true" />;
   if (kind === "water-shader") return <Waves size={14} aria-hidden="true" />;
+  if (kind === "terrain-preset") {
+    return <Mountain size={14} aria-hidden="true" />;
+  }
   if (kind === "xrift-components") {
     return <Boxes size={14} aria-hidden="true" />;
   }
