@@ -114,14 +114,64 @@ export function runVisualCompilerFixtureAssertions(
     "new SphereGeometry(1, 32, 20)",
     "useFrame(({ camera })",
     "uExposure: { value: 1 }",
+    "ACESFilmicToneMapping",
+  ].forEach((fragment) =>
+    assert(
+      defaultWorldSource.includes(fragment),
+      `Infinite gradient Skybox source is missing: ${fragment}`,
+    ),
+  );
+  // Post effects are off in a new scene, so a default world must not carry the
+  // compositor at all. Keeping the colour handling is deliberate: dropping ACES
+  // and the exposure would shift every material.
+  assert(
+    defaultWorldSource.includes("XRiftStudioToneMapping"),
+    "A world without post effects must still apply the authored tone mapping",
+  );
+  ["new SSAOPass", "EffectComposer", "HalfFloatType", "UnrealBloomPass"].forEach(
+    (fragment) =>
+      assert(
+        !defaultWorldSource.includes(fragment),
+        `A world with post effects off must not build the compositor: ${fragment}`,
+      ),
+  );
+  const postprocessingWorld = toCompilerDocuments(
+    createPrototypeProject("world", "fixture-postprocessing"),
+  );
+  const postprocessingScene =
+    postprocessingWorld.scenes[postprocessingWorld.project.entrySceneId];
+  const enabledPostprocessing = compileVisualProject(
+    {
+      ...postprocessingWorld,
+      scenes: {
+        [postprocessingScene.sceneId]: {
+          ...postprocessingScene,
+          settings: {
+            ...resolveSceneSettings(postprocessingScene.settings),
+            postprocessing: {
+              ...resolveSceneSettings(postprocessingScene.settings)
+                .postprocessing,
+              enabled: true,
+            },
+          },
+        },
+      },
+    },
+    { generatedAt: fixedTime },
+  );
+  const enabledPostprocessingSource =
+    enabledPostprocessing.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  [
     "HalfFloatType",
     "new SSAOPass",
     "ACESFilmicToneMapping",
     'toneMapping: "aces" | "none"',
   ].forEach((fragment) =>
     assert(
-      defaultWorldSource.includes(fragment),
-      `Infinite gradient Skybox source is missing: ${fragment}`,
+      enabledPostprocessingSource.includes(fragment),
+      `An explicitly enabled postprocessing world is missing: ${fragment}`,
     ),
   );
   assert(

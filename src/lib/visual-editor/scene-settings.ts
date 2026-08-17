@@ -170,7 +170,12 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
     fov: 46,
   },
   postprocessing: {
-    enabled: true,
+    // Off by default. A new scene should start at the cheapest thing that
+    // still looks right, and the compositor costs a full-screen pass plus an
+    // SSAO pass before an author has asked for either. The individual effects
+    // keep their tuned values, so switching this on is one toggle rather than
+    // a setup task.
+    enabled: false,
     hdr: {
       enabled: true,
       toneMapping: "aces",

@@ -59,6 +59,7 @@ import {
 import type { TerrainGeometry } from "../terrain";
 import {
   resolveSceneSettings,
+  type ScenePostprocessingSettings,
   type SceneSettings,
 } from "../scene-settings";
 import {
@@ -1277,6 +1278,42 @@ const XRiftStudioPostprocessing: FC<{ settings: XRiftStudioPostprocessingSetting
   );
 }
 
+/** Colour handling without the compositor, for scenes with post effects off. */
+function registerSceneToneMappingSupport(
+  settings: ScenePostprocessingSettings,
+  context: CompileContext,
+): void {
+  context.reactValueImports.add("useEffect");
+  context.fiberImports.add("useThree");
+  context.threeValueImports.add("ACESFilmicToneMapping");
+  context.threeValueImports.add("NoToneMapping");
+  context.threeValueImports.add("SRGBColorSpace");
+  context.supportDeclarations.set(
+    "scene-environment:tone-mapping",
+    `const XRiftStudioToneMapping: FC = () => {
+  const gl = useThree((state) => state.gl);
+  useEffect(() => {
+    const previousToneMapping = gl.toneMapping;
+    const previousExposure = gl.toneMappingExposure;
+    const previousOutputColorSpace = gl.outputColorSpace;
+    gl.outputColorSpace = SRGBColorSpace;
+    gl.toneMapping = ${
+      settings.hdr.toneMapping === "none"
+        ? "NoToneMapping"
+        : "ACESFilmicToneMapping"
+    };
+    gl.toneMappingExposure = ${formatNumber(settings.exposure)};
+    return () => {
+      gl.toneMapping = previousToneMapping;
+      gl.toneMappingExposure = previousExposure;
+      gl.outputColorSpace = previousOutputColorSpace;
+    };
+  }, [gl]);
+  return null;
+};`,
+  );
+}
+
 function registerVegetationWindSupport(
   settings: SceneSettings["vegetation"],
   context: CompileContext,
@@ -1343,10 +1380,19 @@ function renderSceneEnvironment(
     `<ambientLight color={${JSON.stringify(settings.ambient.color)}} intensity={${formatNumber(settings.ambient.intensity)}} />`,
   ];
 
-  registerScenePostprocessingSupport(context);
-  content.push(
-    `<XRiftStudioPostprocessing settings={${JSON.stringify(settings.postprocessing)} } />`,
-  );
+  if (settings.postprocessing.enabled) {
+    registerScenePostprocessingSupport(context);
+    content.push(
+      `<XRiftStudioPostprocessing settings={${JSON.stringify(settings.postprocessing)} } />`,
+    );
+  } else {
+    // The compositor is off, but its colour handling is not: dropping ACES and
+    // the exposure would shift every material in the scene. Only the passes go
+    // away, so a world that never asked for bloom or AO stops paying for an HDR
+    // target and an SSAO buffer it never reads.
+    registerSceneToneMappingSupport(settings.postprocessing, context);
+    content.push("<XRiftStudioToneMapping />");
+  }
   registerVegetationWindSupport(settings.vegetation, context);
   const hasVegetationWind = Object.values(context.scene.entities).some((entity) =>
     entity.components.some((component) => component.type === "vegetation-wind"),
