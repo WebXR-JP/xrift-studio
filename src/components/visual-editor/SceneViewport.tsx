@@ -4387,12 +4387,27 @@ export function SceneViewport({
             />
           ) : null}
           {displayProfile.showEditorLighting ? (
+            // The shadow camera must cover the whole authoring area: a
+            // directional light's default frustum is only ±5m, so anything
+            // larger — a preset Terrain most of all — showed a sharp square
+            // where shadows applied inside and vanished outside, and the
+            // unbiased basic shadow map tore that square into moire stripes
+            // of self-shadowing acne. The normal bias is what removes the
+            // acne; the wide frustum is what removes the square.
             <directionalLight
-              position={[7, 10, 6]}
+              position={[70, 100, 60]}
               intensity={1.35}
               castShadow
-              shadow-mapSize-width={1024}
-              shadow-mapSize-height={1024}
+              shadow-mapSize-width={2048}
+              shadow-mapSize-height={2048}
+              shadow-camera-left={-120}
+              shadow-camera-right={120}
+              shadow-camera-top={120}
+              shadow-camera-bottom={-120}
+              shadow-camera-near={1}
+              shadow-camera-far={400}
+              shadow-bias={-0.0002}
+              shadow-normalBias={0.35}
             />
           ) : null}
           <ScenePostprocessing settings={sceneSettings.postprocessing} />

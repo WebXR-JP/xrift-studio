@@ -529,6 +529,28 @@ function configureThreeLight(
     light instanceof SpotLight
   ) {
     light.castShadow = authored.castShadow;
+    if (authored.castShadow) {
+      // Three's defaults assume a tabletop scene: a directional shadow camera
+      // spans ±5m and carries no bias. Over a Terrain that leaves a sharp
+      // square where shadows exist inside and vanish outside, torn into moire
+      // stripes of self-shadowing acne. The normal bias removes the acne; the
+      // wide frustum removes the square.
+      light.shadow.mapSize.set(2048, 2048);
+      light.shadow.bias = -0.0002;
+      light.shadow.normalBias = 0.35;
+      if (light instanceof DirectionalLight) {
+        light.shadow.camera.left = -120;
+        light.shadow.camera.right = 120;
+        light.shadow.camera.top = 120;
+        light.shadow.camera.bottom = -120;
+        light.shadow.camera.near = 1;
+        light.shadow.camera.far = 400;
+      }
+      light.shadow.camera.updateProjectionMatrix();
+      // The map may already exist at the old size when a light toggles.
+      light.shadow.map?.dispose();
+      light.shadow.map = null;
+    }
   }
   if (light instanceof HemisphereLight) {
     light.groundColor.set(authored.groundColor);
