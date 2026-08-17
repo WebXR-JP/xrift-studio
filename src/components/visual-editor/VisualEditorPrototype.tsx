@@ -16,6 +16,10 @@ import {
   applyOpenBrushCatalogInstall,
   applySkyShaderCatalogInstall,
   applyWaterShaderCatalogInstall,
+  applyTerrainSurfaceCatalogInstall,
+  setMeshMaterialBinding,
+  TERRAIN_MATERIAL_SLOT,
+  type TerrainSurfaceCatalogEntry,
   applyComponentCodeImportPlan,
   applyClassicProjectVisualImportEnhancements,
   analyzeComponentCode,
@@ -5243,6 +5247,68 @@ export function VisualEditorPrototype({
     [bundle.assets],
   );
 
+  /**
+   * Installs a surface preset and binds it to the Terrain in one step.
+   *
+   * Splitting these would leave the author in the store with a Material and no
+   * indication of where it goes; the whole point of the surface mode is that
+   * the ground changes when the button is pressed.
+   */
+  const handleApplyTerrainSurface = useCallback(
+    (
+      entityId: string,
+      componentId: string,
+      entry: TerrainSurfaceCatalogEntry,
+      values: Record<string, number | string>,
+    ) => {
+      if (editorMode !== "edit") {
+        setNotice("表面は編集モードで適用してください");
+        return;
+      }
+      setHistory((current) => {
+        const installed = applyTerrainSurfaceCatalogInstall(
+          current.present.bundle.assets,
+          entry,
+          values,
+        );
+        const scene = setMeshMaterialBinding(
+          current.present.bundle.scene,
+          installed.manifest,
+          entityId,
+          TERRAIN_MATERIAL_SLOT,
+          installed.primaryAssetId,
+          componentId,
+        );
+        // Re-applying the same preset leaves the binding untouched, so an
+        // unchanged Scene is only a failure when the Asset side did not move
+        // either. Treating it as one made a retune report as an error.
+        const assetsChanged =
+          installed.manifest !== current.present.bundle.assets;
+        if (scene === current.present.bundle.scene && !assetsChanged) {
+          setNotice("表面を適用できませんでした。対象の地形を確認してください");
+          return current;
+        }
+        setSaveStatus("dirty");
+        setNotice(
+          `表面に「${entry.label}」を適用しました。Materialとして細かく調整できます`,
+        );
+        const nextBundle = touchProject({
+          ...current.present.bundle,
+          assets: installed.manifest,
+          scene,
+        });
+        bundleRef.current = nextBundle;
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: nextBundle,
+          sceneSelection: { kind: "entity", id: entityId },
+          assetSelection: null,
+        });
+      });
+    },
+    [editorMode, setHistory, setNotice, setSaveStatus, touchProject],
+  );
+
   const handleAssignSkybox = useCallback(
     (assetId: string) => {
       if (editorMode !== "edit") return;
@@ -8649,6 +8715,7 @@ export function VisualEditorPrototype({
             onTerrainGrassLayersChange={handleTerrainGrassLayersChange}
             onTerrainEditingChange={setTerrainEditing}
             terrainSceneEditing={terrainEditing}
+            onApplyTerrainSurface={handleApplyTerrainSurface}
             onColliderChange={handleColliderChange}
             onRigidBodyChange={handleRigidBodyChange}
             onAutoFitCollider={handleAutoFitCollider}

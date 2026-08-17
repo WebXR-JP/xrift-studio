@@ -7,6 +7,7 @@ import {
   TerrainHoleRemoveIcon,
   TerrainLowerIcon,
   TerrainRaiseIcon,
+  TerrainSettingsIcon,
   TerrainSmoothIcon,
   TerrainStampIcon,
   TerrainSurfaceIcon,
@@ -77,6 +78,10 @@ import {
   type TerrainSceneBrushOperation,
   type TerrainGrassLayer,
   TERRAIN_GRASS_PRESETS,
+  TERRAIN_SURFACE_CATALOG,
+  fitTerrainSurfaceToRange,
+  getTerrainSurfacePreset,
+  type TerrainSurfaceCatalogEntry,
   TERRAIN_GRASS_TYPES,
   createTerrainGrassLayers,
   generateTerrainGrassInstances,
@@ -746,6 +751,7 @@ function MeshInspector({
   onTerrainSettings,
   onTerrainEditingChange,
   terrainSceneEditing,
+  onApplyTerrainSurface,
   showModelPose = true,
   materialBindingSourceNodeIndex,
 }: {
@@ -767,6 +773,10 @@ function MeshInspector({
     TerrainViewportEditing,
     "entityId" | "componentId"
   > | null;
+  onApplyTerrainSurface?: (
+    entry: TerrainSurfaceCatalogEntry,
+    values: Record<string, number | string>,
+  ) => void;
   showModelPose?: boolean;
   materialBindingSourceNodeIndex?: number;
 }) {
@@ -1017,6 +1027,7 @@ function MeshInspector({
           onSettings={onTerrainSettings}
           onSceneEditingChange={onTerrainEditingChange}
           sceneEditing={terrainSceneEditing}
+          onApplySurface={onApplyTerrainSurface}
         />
       ) : null}
     </div>
@@ -1029,7 +1040,7 @@ function MeshInspector({
  * operations could not show which one was live, and stacking every setting at
  * once made the panel unreadable about what it was currently editing.
  */
-type TerrainEditorMode = "sculpt" | "hole" | "grass" | "settings";
+type TerrainEditorMode = "sculpt" | "hole" | "grass" | "surface" | "settings";
 
 const TERRAIN_MODE_TABS: ReadonlyArray<{
   mode: TerrainEditorMode;
@@ -1056,10 +1067,16 @@ const TERRAIN_MODE_TABS: ReadonlyArray<{
     Icon: TerrainGrassIcon,
   },
   {
+    mode: "surface",
+    label: "表面",
+    title: "高さと傾斜でマテリアルを混ぜる",
+    Icon: TerrainSurfaceIcon,
+  },
+  {
     mode: "settings",
     label: "設定",
     title: "大きさと解像度を変更する",
-    Icon: TerrainSurfaceIcon,
+    Icon: TerrainSettingsIcon,
   },
 ];
 
@@ -1183,6 +1200,7 @@ function TerrainInspector({
   onSettings,
   onSceneEditingChange,
   sceneEditing: armedBrush,
+  onApplySurface,
 }: {
   terrain: TerrainGeometry;
   readOnly: boolean;
@@ -1196,6 +1214,10 @@ function TerrainInspector({
   ) => void;
   /** What the Scene View currently has armed, so shortcuts reach the panel. */
   sceneEditing?: Omit<TerrainViewportEditing, "entityId" | "componentId"> | null;
+  onApplySurface?: (
+    entry: TerrainSurfaceCatalogEntry,
+    values: Record<string, number | string>,
+  ) => void;
 }) {
   const [mode, setMode] = useState<TerrainEditorMode>("sculpt");
   const [sculptKind, setSculptKind] = useState<TerrainViewportBrushKind>("raise");
@@ -1230,7 +1252,7 @@ function TerrainInspector({
   const holeTool = mode === "hole";
   const heightTargetRequired =
     mode === "sculpt" && (sculptKind === "flatten" || sculptKind === "stamp");
-  const paintable = mode !== "settings";
+  const paintable = mode !== "settings" && mode !== "surface";
   const disabled =
     readOnly || !onBrush || !paintable || (grassTool && !activeGrassLayer);
 
@@ -1315,7 +1337,7 @@ function TerrainInspector({
 
   const selectMode = (nextMode: TerrainEditorMode) => {
     setMode(nextMode);
-    if (nextMode === "settings") {
+    if (nextMode === "settings" || nextMode === "surface") {
       // Nothing in the settings mode is a gesture, so leaving the Scene View
       // armed would let a stray click edit with an invisible brush.
       setSceneEditing(false);
@@ -1373,7 +1395,13 @@ function TerrainInspector({
         ))}
       </div>
 
-      {mode === "settings" ? (
+      {mode === "surface" ? (
+        <TerrainSurfaceSection
+          terrain={terrain}
+          readOnly={readOnly}
+          onApplySurface={onApplySurface}
+        />
+      ) : mode === "settings" ? (
         <section className="space-y-2" aria-label="地形設定">
           <TerrainNumberField
             label="幅"
@@ -1598,6 +1626,122 @@ function TerrainInspector({
         />
       ) : null}
     </ComponentCard>
+  );
+}
+
+
+/**
+ * The surface mode.
+ *
+ * Ground painted one flat colour reads as a shape rather than as terrain. The
+ * presets blend by height and slope — both already known from the geometry —
+ * so a usable result needs no hand painting. Their band edges are metres, so
+ * they are refitted to this Terrain's own elevation range before applying;
+ * a preset tuned for an 18m mountain would otherwise come out as one colour on
+ * a 2m field, which reads as a broken shader rather than a mistuned one.
+ */
+function TerrainSurfaceSection({
+  terrain,
+  readOnly,
+  onApplySurface,
+}: {
+  terrain: TerrainGeometry;
+  readOnly: boolean;
+  onApplySurface?: (
+    entry: TerrainSurfaceCatalogEntry,
+    values: Record<string, number | string>,
+  ) => void;
+}) {
+  const [presetId, setPresetId] = useState(
+    TERRAIN_SURFACE_CATALOG[0]?.id ?? "",
+  );
+  const preset = getTerrainSurfacePreset(presetId);
+  const range = terrainHeightRange(terrain);
+  const editable = !readOnly && Boolean(onApplySurface);
+  const fitted = useMemo(
+    () => (preset ? fitTerrainSurfaceToRange(preset, range) : null),
+    [preset, range.max, range.min],
+  );
+
+  return (
+    <section className="space-y-2" aria-label="地形の表面">
+      <p className="text-[11px] leading-4 text-slate-500">
+        高さと傾斜でマテリアルを混ぜます。急斜面には岩、高い所には別の色が自動で出るので、塗らなくても地形らしくなります。
+      </p>
+
+      <label className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-xs text-slate-700">
+        <select
+          value={presetId}
+          disabled={!editable}
+          onChange={(event) => setPresetId(event.currentTarget.value)}
+          aria-label="表面のプリセット"
+          className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
+        >
+          {TERRAIN_SURFACE_CATALOG.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={!editable || !preset || !fitted}
+          onClick={() => {
+            if (!preset || !fitted) return;
+            onApplySurface?.(preset, fitted);
+          }}
+          className="rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+        >
+          この地形へ適用
+        </button>
+      </label>
+
+      {preset ? (
+        <div className="space-y-1.5 rounded border border-slate-200 bg-slate-50 p-2">
+          <p className="text-[11px] leading-4 text-slate-600">
+            {preset.description}
+          </p>
+          <div className="flex items-center gap-1">
+            {(["uLowColor", "uMidColor", "uHighColor", "uSlopeColor"] as const).map(
+              (uniform) => {
+                const value = preset.shader.uniforms[uniform];
+                if (value?.kind !== "color") return null;
+                return (
+                  <span
+                    key={uniform}
+                    className="h-4 flex-1 rounded-sm border border-slate-300"
+                    style={{ background: value.value }}
+                    title={
+                      preset.parameters.find((p) => p.uniform === uniform)?.label ??
+                      uniform
+                    }
+                  />
+                );
+              },
+            )}
+          </div>
+          {fitted ? (
+            <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 text-[11px] text-slate-600">
+              <dt>この地形の高さ</dt>
+              <dd className="text-right font-mono">
+                {range.min.toFixed(1)} – {range.max.toFixed(1)} m
+              </dd>
+              <dt>低い所の境界</dt>
+              <dd className="text-right font-mono">
+                {Number(fitted.uLowHeight).toFixed(1)} m
+              </dd>
+              <dt>高い所の境界</dt>
+              <dd className="text-right font-mono">
+                {Number(fitted.uHighHeight).toFixed(1)} m
+              </dd>
+            </dl>
+          ) : null}
+          <p className="text-[10px] leading-4 text-slate-500">
+            境界はこの地形の高さに合わせて調整されます。適用後はMaterialとしてInspectorから細かく調整できます。
+          </p>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -3509,6 +3653,7 @@ function EntityInspector({
   onTerrainSettings,
   onTerrainEditingChange,
   terrainSceneEditing,
+  onApplyTerrainSurface,
   onModelNodeMeshChange,
   onColliderChange,
   onRigidBodyChange,
@@ -3566,6 +3711,11 @@ function EntityInspector({
     editing: Omit<TerrainViewportEditing, "entityId"> | null,
   ) => void;
   terrainSceneEditing: TerrainViewportEditing | null;
+  onApplyTerrainSurface: (
+    componentId: string,
+    entry: TerrainSurfaceCatalogEntry,
+    values: Record<string, number | string>,
+  ) => void;
   onModelNodeMeshChange: (
     entityId: string,
     componentId: string,
@@ -3820,6 +3970,9 @@ function EntityInspector({
                 terrainSceneEditing?.componentId === component.id
                   ? terrainSceneEditing
                   : null
+              }
+              onApplyTerrainSurface={(entry, values) =>
+                onApplyTerrainSurface(component.id, entry, values)
               }
               onOpenMaterial={onOpenMaterial}
             />
@@ -4185,6 +4338,7 @@ export function InspectorPanel({
   onTerrainSettings,
   onTerrainEditingChange,
   terrainSceneEditing = null,
+  onApplyTerrainSurface,
   onColliderChange,
   onRigidBodyChange,
   onAutoFitCollider,
@@ -4268,6 +4422,12 @@ export function InspectorPanel({
   ) => void;
   onTerrainEditingChange: (editing: TerrainViewportEditing | null) => void;
   terrainSceneEditing?: TerrainViewportEditing | null;
+  onApplyTerrainSurface: (
+    entityId: string,
+    componentId: string,
+    entry: TerrainSurfaceCatalogEntry,
+    values: Record<string, number | string>,
+  ) => void;
   onColliderChange: (entityId: string, componentId: string, patch: ColliderPatch) => void;
   onRigidBodyChange: (
     entityId: string,
@@ -4523,6 +4683,9 @@ export function InspectorPanel({
               terrainSceneEditing?.entityId === entity.id
                 ? terrainSceneEditing
                 : null
+            }
+            onApplyTerrainSurface={(componentId, entry, values) =>
+              onApplyTerrainSurface(entity.id, componentId, entry, values)
             }
             onTerrainSettings={(componentId, options) =>
               onTerrainSettings(entity.id, componentId, options)

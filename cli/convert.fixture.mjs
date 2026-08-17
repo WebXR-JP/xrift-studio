@@ -47,6 +47,7 @@ import {
   runTerrainGrassPublishFixtureAssertions,
   runTerrainPresetFixtureAssertions,
 } from "../src/lib/visual-editor/terrain-grass.fixture.ts";
+import { runTerrainSurfaceFixtureAssertions } from "../src/lib/visual-editor/terrain-surface.fixture.ts";
 import { runAssetOperationLockFixtureAssertions } from "../src/components/visual-editor/asset-operation-lock.fixture.ts";
 import { runAutosaveCoordinatorFixtureAssertions } from "../src/components/visual-editor/autosave-coordinator.fixture.ts";
 import { runCustomMaterialPreviewFixtureAssertions } from "../src/components/visual-editor/CustomMaterialPreview.fixture.ts";
@@ -244,6 +245,7 @@ try {
     ["terrain grass", runTerrainGrassFixtureAssertions],
     ["terrain presets", runTerrainPresetFixtureAssertions],
     ["terrain grass publish", runTerrainGrassPublishFixtureAssertions],
+    ["terrain surface", runTerrainSurfaceFixtureAssertions],
     ["runtime schema", runRuntimeSchemaFixtureAssertions],
     ["shader time", runShaderTimeFixtureAssertions],
     ["mcp editor tools", runXriftMcpEditorToolFixtures],

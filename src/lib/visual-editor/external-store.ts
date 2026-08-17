@@ -22,8 +22,15 @@ import {
   WATER_SHADER_CATALOG_REVISION,
   WATER_SHADER_CATALOG_SOURCE_URL,
   applyWaterShaderParameters,
-  type WaterShaderCatalogEntry,
 } from "./water-shader-catalog";
+import { type WaterShaderCatalogEntry } from "./water-shader-catalog";
+import {
+  applyTerrainSurfaceParameters,
+  TERRAIN_SURFACE_CATALOG_AUTHOR,
+  TERRAIN_SURFACE_CATALOG_REVISION,
+  TERRAIN_SURFACE_CATALOG_SOURCE_URL,
+  type TerrainSurfaceCatalogEntry,
+} from "./terrain-surface-catalog";
 import {
   SKY_SHADER_CATALOG_AUTHOR,
   SKY_SHADER_CATALOG_REVISION,
@@ -319,6 +326,62 @@ export function applySkyShaderCatalogInstall(
         authors: [SKY_SHADER_CATALOG_AUTHOR],
       },
       sourceHash: `${SKY_SHADER_CATALOG_REVISION}:${entry.id}`,
+    },
+  };
+  return {
+    manifest: { ...manifest, folders, assets },
+    primaryAssetId: materialId,
+    installedAssetIds: [materialId],
+    kind: "material",
+    alreadyInstalled,
+  };
+}
+
+/**
+ * Installs a Terrain surface preset as a Custom Shader Material Asset.
+ *
+ * Like Water it claims no slot: it is assigned to a Terrain's material like
+ * any other Material. Unlike Water, its height bands are meaningless until
+ * they match the ground they are painting, so callers pass values fitted to
+ * the target Terrain's elevation range.
+ */
+export function applyTerrainSurfaceCatalogInstall(
+  manifest: AssetManifest,
+  entry: TerrainSurfaceCatalogEntry,
+  parameterValues: Readonly<Record<string, number | string>> = {},
+): AppliedOpenBrushCatalogInstall {
+  const folder = externalFolder(manifest, "Terrain Surface");
+  const folders = { ...(manifest.folders ?? {}), [folder.id]: folder };
+  const materialId = `external-terrain-surface-${safeId(entry.id)}-material`;
+  const existing = manifest.assets[materialId];
+  const alreadyInstalled = existing?.kind === "material";
+  const material = createDefaultMaterialAsset({
+    id: materialId,
+    name: `Terrain · ${entry.label}`,
+    folderId: folder.id,
+  });
+  if (!material) {
+    throw new Error("Terrain表面のMaterial Assetを作成できませんでした");
+  }
+  const order = alreadyInstalled
+    ? (existing.order ?? nextOrder({ ...manifest, folders }, folder.id))
+    : nextOrder({ ...manifest, folders }, folder.id);
+  const assets: Record<string, SceneAsset> = {
+    ...manifest.assets,
+    [materialId]: {
+      ...material,
+      order,
+      shader: applyTerrainSurfaceParameters(entry, parameterValues),
+      attribution: {
+        providerId: "xrift-terrain-surfaces",
+        providerName: "XRift公式 Terrain表面",
+        externalId: entry.id,
+        assetUrl: TERRAIN_SURFACE_CATALOG_SOURCE_URL,
+        licenseName: "MIT",
+        licenseUrl: `${TERRAIN_SURFACE_CATALOG_SOURCE_URL}/blob/main/LICENSE`,
+        authors: [TERRAIN_SURFACE_CATALOG_AUTHOR],
+      },
+      sourceHash: `${TERRAIN_SURFACE_CATALOG_REVISION}:${entry.id}`,
     },
   };
   return {

@@ -94,6 +94,7 @@ export * from "./unity-package-import";
 export * from "./unity-package-import.fixture";
 export * from "./vram-estimate";
 export * from "./water-shader-catalog";
+export * from "./terrain-surface-catalog";
 export * from "./water-shader.fixture";
 export * from "./wind-contract";
 export * from "./wind-contract.fixture";

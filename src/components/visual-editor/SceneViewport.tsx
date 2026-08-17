@@ -676,13 +676,45 @@ function TerrainMeshVisual({
       : (pbr?.baseColorFactor[3] ?? material?.properties.opacity ?? 1);
   const normalScale = material?.properties.normalTexture?.scale ?? 1;
 
+  // Terrain accepts Custom Shader Materials like any other mesh. Without this
+  // the surface presets are assignable but never drawn: the standard material
+  // below would ignore the shader and paint the ground one flat colour.
+  const classicShaderTextures = useClassicShaderTextures(
+    material,
+    assets,
+    projectPath,
+  );
+  const authoredShaderMaterial = useMemo(
+    () =>
+      material?.shader?.kind === "classic-r3f" &&
+      validateClassicR3fMaterialShader(material.shader).length === 0
+        ? createClassicR3fMaterial(material.shader, classicShaderTextures, "")
+        : undefined,
+    [classicShaderTextures, material?.shader],
+  );
+  useWindDrivenMaterial(
+    authoredShaderMaterial,
+    material?.shader?.kind === "classic-r3f" ? material.shader : undefined,
+  );
+  useFrame((state) => {
+    const uniform = authoredShaderMaterial?.uniforms?.uTime;
+    if (uniform) uniform.value = state.clock.getElapsedTime();
+  });
+  const usesAuthoredShader =
+    Boolean(authoredShaderMaterial) &&
+    // Only the shading modes: wireframe, ghost and collider views exist to
+    // show structure, and a lit surface shader would defeat them.
+    (viewportMaterialStyle === "scene" || viewportMaterialStyle === "unlit");
+
   return (
     <mesh
       castShadow={component.castShadow}
       receiveShadow={component.receiveShadow}
     >
       <TerrainGeometryView terrain={terrain} />
-      {viewportMaterialStyle === "unlit" ? (
+      {usesAuthoredShader && authoredShaderMaterial ? (
+        <primitive object={authoredShaderMaterial} attach="material" />
+      ) : viewportMaterialStyle === "unlit" ? (
         <meshBasicMaterial
           color={material?.properties.color ?? "#6b8e4e"}
           map={materialTextures.baseColorMap}

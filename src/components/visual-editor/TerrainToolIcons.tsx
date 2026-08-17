@@ -155,3 +155,15 @@ export function TerrainSurfaceIcon({ className }: IconProps) {
     </Glyph>
   );
 }
+
+/** Sliders: the numeric settings rather than a brush. */
+export function TerrainSettingsIcon({ className }: IconProps) {
+  return (
+    <Glyph className={className}>
+      <path {...STROKE} d="M2 4.5h12M2 8h12M2 11.5h12" />
+      <circle {...STROKE} cx="5.5" cy="4.5" r="1.4" />
+      <circle {...STROKE} cx="10" cy="8" r="1.4" />
+      <circle {...STROKE} cx="6.5" cy="11.5" r="1.4" />
+    </Glyph>
+  );
+}
