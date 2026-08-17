@@ -36,6 +36,10 @@ export type TerrainGrassType = {
   width: number;
   /** Crossed cards per blade. More reads fuller from the side. */
   cards: number;
+  /** How far the blade arcs over. Straight blades read as spikes. */
+  curve: number;
+  /** Metres beyond which the layer stops drawing. */
+  cullDistance: number;
   baseColor: string;
   tipColor: string;
   /** How far the tip leans under a unit of wind. */
@@ -47,9 +51,11 @@ export const TERRAIN_GRASS_TYPES: readonly TerrainGrassType[] = [
     id: "short-grass",
     label: "短い芝",
     description: "足元を埋める短い芝です。広い面積に敷いても軽い種類です。",
-    height: 0.28,
-    width: 0.05,
-    cards: 2,
+    height: 0.22,
+    width: 0.016,
+    cards: 3,
+    curve: 0.35,
+    cullDistance: 34,
     baseColor: "#3f6b32",
     tipColor: "#7db55a",
     sway: 0.5,
@@ -58,9 +64,11 @@ export const TERRAIN_GRASS_TYPES: readonly TerrainGrassType[] = [
     id: "tall-grass",
     label: "背の高い草",
     description: "腰までの高さの草です。風で大きくしなり、原っぱらしくなります。",
-    height: 0.85,
-    width: 0.07,
+    height: 0.6,
+    width: 0.02,
     cards: 3,
+    curve: 0.5,
+    cullDistance: 46,
     baseColor: "#38602c",
     tipColor: "#93bf5c",
     sway: 1,
@@ -69,9 +77,11 @@ export const TERRAIN_GRASS_TYPES: readonly TerrainGrassType[] = [
     id: "wildflower",
     label: "花付きの草",
     description: "先端に花を持つ草です。密度を下げて他の草へ散らすと映えます。",
-    height: 0.5,
-    width: 0.06,
-    cards: 2,
+    height: 0.34,
+    width: 0.018,
+    cards: 3,
+    curve: 0.3,
+    cullDistance: 38,
     baseColor: "#436b34",
     tipColor: "#e8d36a",
     sway: 0.8,
@@ -80,9 +90,11 @@ export const TERRAIN_GRASS_TYPES: readonly TerrainGrassType[] = [
     id: "dry-grass",
     label: "枯れ草",
     description: "乾いた草です。高い場所や急な斜面に置くと荒れた地形に見えます。",
-    height: 0.6,
-    width: 0.06,
-    cards: 2,
+    height: 0.42,
+    width: 0.019,
+    cards: 3,
+    curve: 0.62,
+    cullDistance: 40,
     baseColor: "#6b5a2e",
     tipColor: "#c4ab63",
     sway: 1.2,

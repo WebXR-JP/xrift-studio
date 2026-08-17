@@ -1,7 +1,9 @@
 import { useCallback, useRef, type Dispatch, type SetStateAction } from "react";
 import {
   createTerrainFromPreset,
+  getTerrainGeometry,
   getTerrainPreset,
+  getTransform,
 } from "../../lib/visual-editor";
 import { BUILTIN_ASSET_IDS, type PrototypeVisualProject } from "../../lib/visual-editor/prototype-project";
 import {
@@ -101,13 +103,23 @@ export function useTerrainAuthoring({
       // A preset arrives shaped and planted. Without one the author still gets
       // the flat plate they can sculpt from.
       const preset = presetId ? getTerrainPreset(presetId) : undefined;
+      const geometry = preset ? createTerrainFromPreset(preset) : undefined;
+      // Two Terrains at the origin are two nearly coincident surfaces, and the
+      // depth buffer cannot separate them: the overlap tears into moire rings
+      // that read as a rendering fault rather than as "you placed two". Setting
+      // the new one beside whatever is already there keeps both readable, and
+      // the author can still drag it wherever they meant.
+      const position = nextTerrainPosition(
+        current.present.bundle.scene,
+        geometry?.width ?? DEFAULT_TERRAIN_SPAN,
+      );
       const created = addTerrainEntity(
         current.present.bundle.scene,
         current.present.bundle.assets,
         materialAssetId,
-        preset
-          ? { ...createTerrainFromPreset(preset), name: preset.label }
-          : {},
+        geometry
+          ? { ...geometry, name: preset?.label, position }
+          : { position },
       );
       if (!created) {
         notify("現在のSceneに地形を作成できませんでした");
@@ -291,4 +303,35 @@ export function useTerrainAuthoring({
     handleTerrainStrokeCancel,
     strokeActiveRef: strokeRef,
   };
+}
+
+
+/** Fallback footprint when a plain Terrain is created without a preset. */
+const DEFAULT_TERRAIN_SPAN = 20;
+
+/**
+ * Finds free ground for a new Terrain.
+ *
+ * Terrains are laid out along +X, each clear of the last, so repeatedly trying
+ * presets builds a row to compare rather than a stack that z-fights.
+ */
+function nextTerrainPosition(
+  scene: PrototypeVisualProject["scene"],
+  width: number,
+): [number, number, number] {
+  let rightEdge: number | null = null;
+  for (const entity of Object.values(scene.entities)) {
+    for (const component of entity.components) {
+      if (component.type !== "mesh") continue;
+      const existing = getTerrainGeometry(component);
+      if (!existing) continue;
+      const transform = getTransform(entity);
+      const centre = transform?.position?.[0] ?? 0;
+      const edge = centre + existing.width / 2;
+      rightEdge = rightEdge === null ? edge : Math.max(rightEdge, edge);
+    }
+  }
+  if (rightEdge === null) return [0, 0, 0];
+  // A gap, so the two footprints never touch even after sculpting the edges.
+  return [rightEdge + width / 2 + 4, 0, 0];
 }

@@ -61,6 +61,21 @@ function assertCatalog(): void {
       /^#[0-9a-f]{6}$/i.test(type.baseColor) && /^#[0-9a-f]{6}$/i.test(type.tipColor),
       `Grass type「${type.id}」has an unusable colour`,
     );
+    // A blade wider than a few centimetres reads as a spike rather than grass.
+    assert(
+      type.width <= 0.04 && type.height / type.width >= 10,
+      `Grass type「${type.id}」is too thick to read as a blade (${type.width}m wide, ${type.height}m tall)`,
+    );
+    assert(
+      type.curve > 0,
+      `Grass type「${type.id}」stands perfectly straight and will read as a spike`,
+    );
+    // Without a cull distance the far field aliases into moire rings, which is
+    // exactly how this shipped once.
+    assert(
+      type.cullDistance > 0 && type.cullDistance <= 80,
+      `Grass type「${type.id}」has no usable cull distance (${type.cullDistance})`,
+    );
     assert(
       getTerrainGrassType(type.id)?.label === type.label,
       `Grass type「${type.id}」cannot be resolved by id`,
