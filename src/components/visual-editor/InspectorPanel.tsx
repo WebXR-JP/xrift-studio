@@ -1,7 +1,21 @@
 import {
+  TerrainFlattenIcon,
+  TerrainGrassEraseIcon,
+  TerrainGrassIcon,
+  TerrainGrassPaintIcon,
+  TerrainHoleAddIcon,
+  TerrainHoleRemoveIcon,
+  TerrainLowerIcon,
+  TerrainRaiseIcon,
+  TerrainSmoothIcon,
+  TerrainStampIcon,
+  TerrainSurfaceIcon,
+} from "./TerrainToolIcons";
+import {
   useEffect,
   useMemo,
   useRef,
+  type ReactElement,
   useState,
   type DragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -1003,6 +1017,158 @@ function MeshInspector({
   );
 }
 
+/**
+ * Terrain authoring, arranged the way Unity arranges it: a toolbar of modes
+ * across the top, and only the selected mode's settings below. A dropdown of
+ * operations could not show which one was live, and stacking every setting at
+ * once made the panel unreadable about what it was currently editing.
+ */
+type TerrainEditorMode = "sculpt" | "hole" | "grass" | "settings";
+
+const TERRAIN_MODE_TABS: ReadonlyArray<{
+  mode: TerrainEditorMode;
+  label: string;
+  title: string;
+  Icon: (props: { className?: string }) => ReactElement;
+}> = [
+  {
+    mode: "sculpt",
+    label: "形",
+    title: "地形の高さを編集する",
+    Icon: TerrainRaiseIcon,
+  },
+  {
+    mode: "hole",
+    label: "穴",
+    title: "地形に穴を開ける・埋める",
+    Icon: TerrainHoleAddIcon,
+  },
+  {
+    mode: "grass",
+    label: "草",
+    title: "草のレイヤーを編集する",
+    Icon: TerrainGrassIcon,
+  },
+  {
+    mode: "settings",
+    label: "設定",
+    title: "大きさと解像度を変更する",
+    Icon: TerrainSurfaceIcon,
+  },
+];
+
+const TERRAIN_SCULPT_BRUSHES: ReadonlyArray<{
+  kind: TerrainViewportBrushKind;
+  label: string;
+  title: string;
+  Icon: (props: { className?: string }) => ReactElement;
+}> = [
+  {
+    kind: "raise",
+    label: "盛る",
+    title: "ブラシの下を盛り上げる",
+    Icon: TerrainRaiseIcon,
+  },
+  {
+    kind: "lower",
+    label: "掘る",
+    title: "ブラシの下を掘り下げる",
+    Icon: TerrainLowerIcon,
+  },
+  {
+    kind: "flatten",
+    label: "高さを揃える",
+    title: "目標の高さへ揃える",
+    Icon: TerrainFlattenIcon,
+  },
+  {
+    kind: "smooth",
+    label: "ならす",
+    title: "凹凸をなだらかにする",
+    Icon: TerrainSmoothIcon,
+  },
+  {
+    kind: "stamp",
+    label: "スタンプ",
+    title: "円形の起伏を押し当てる",
+    Icon: TerrainStampIcon,
+  },
+];
+
+const TERRAIN_HOLE_BRUSHES: ReadonlyArray<{
+  kind: TerrainViewportBrushKind;
+  label: string;
+  title: string;
+  Icon: (props: { className?: string }) => ReactElement;
+}> = [
+  {
+    kind: "hole-add",
+    label: "開ける",
+    title: "セルを抜いて穴にする",
+    Icon: TerrainHoleAddIcon,
+  },
+  {
+    kind: "hole-remove",
+    label: "埋める",
+    title: "抜いたセルを戻す",
+    Icon: TerrainHoleRemoveIcon,
+  },
+];
+
+const TERRAIN_GRASS_BRUSHES: ReadonlyArray<{
+  kind: TerrainViewportBrushKind;
+  label: string;
+  title: string;
+  Icon: (props: { className?: string }) => ReactElement;
+}> = [
+  {
+    kind: "grass-paint",
+    label: "生やす",
+    title: "選択中のレイヤーへ草を塗り足す",
+    Icon: TerrainGrassPaintIcon,
+  },
+  {
+    kind: "grass-erase",
+    label: "消す",
+    title: "選択中のレイヤーの草を消す",
+    Icon: TerrainGrassEraseIcon,
+  },
+];
+
+function TerrainToolButton({
+  active,
+  disabled,
+  label,
+  title,
+  Icon,
+  onClick,
+}: {
+  active: boolean;
+  disabled: boolean;
+  label: string;
+  title: string;
+  Icon: (props: { className?: string }) => ReactElement;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-pressed={active}
+      disabled={disabled}
+      onClick={onClick}
+      className={`flex flex-1 flex-col items-center gap-1 rounded border px-1 py-1.5 text-[10px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        active
+          ? "border-violet-500 bg-violet-600 text-white"
+          : "border-slate-300 bg-white text-slate-600 hover:border-violet-300 hover:bg-violet-50"
+      }`}
+    >
+      <Icon className="h-4 w-4" />
+      <span className="leading-none">{label}</span>
+    </button>
+  );
+}
+
 function TerrainInspector({
   terrain,
   readOnly,
@@ -1022,7 +1188,10 @@ function TerrainInspector({
     editing: Omit<TerrainViewportEditing, "entityId" | "componentId"> | null,
   ) => void;
 }) {
-  const [kind, setKind] = useState<TerrainViewportBrushKind>("raise");
+  const [mode, setMode] = useState<TerrainEditorMode>("sculpt");
+  const [sculptKind, setSculptKind] = useState<TerrainViewportBrushKind>("raise");
+  const [holeKind, setHoleKind] = useState<TerrainViewportBrushKind>("hole-add");
+  const [grassKind, setGrassKind] = useState<TerrainViewportBrushKind>("grass-paint");
   const [grassLayerId, setGrassLayerId] = useState<string | null>(null);
   const [addGrassTypeId, setAddGrassTypeId] = useState<string>(
     TERRAIN_GRASS_TYPES[0]?.id ?? "short-grass",
@@ -1030,7 +1199,6 @@ function TerrainInspector({
   const [grassPresetChoice, setGrassPresetChoice] = useState(
     TERRAIN_GRASS_PRESETS[0]?.id ?? "",
   );
-  const [grassCountsOpen, setGrassCountsOpen] = useState(false);
   const [centerX, setCenterX] = useState(0);
   const [centerZ, setCenterZ] = useState(0);
   const [radius, setRadius] = useState(2);
@@ -1041,15 +1209,21 @@ function TerrainInspector({
   const [depth, setDepth] = useState(terrain.depth);
   const [resolution, setResolution] = useState(terrain.resolution);
   const [sceneEditing, setSceneEditing] = useState(false);
+
   const range = terrainHeightRange(terrain);
   const maximumRadius = Math.max(terrain.width, terrain.depth);
   const grassLayers = terrain.grass ?? [];
-  const grassTool = kind === "grass-paint" || kind === "grass-erase";
   const activeGrassLayer =
     grassLayers.find((layer) => layer.id === grassLayerId) ?? grassLayers[0];
-  const disabled = readOnly || !onBrush || (grassTool && !activeGrassLayer);
-  const heightTargetRequired = kind === "flatten" || kind === "stamp";
-  const holeTool = kind === "hole-add" || kind === "hole-remove";
+  const kind =
+    mode === "grass" ? grassKind : mode === "hole" ? holeKind : sculptKind;
+  const grassTool = mode === "grass";
+  const holeTool = mode === "hole";
+  const heightTargetRequired =
+    mode === "sculpt" && (sculptKind === "flatten" || sculptKind === "stamp");
+  const paintable = mode !== "settings";
+  const disabled =
+    readOnly || !onBrush || !paintable || (grassTool && !activeGrassLayer);
 
   useEffect(() => {
     if (sceneEditing) return;
@@ -1058,42 +1232,73 @@ function TerrainInspector({
     setResolution(terrain.resolution);
   }, [sceneEditing, terrain.depth, terrain.resolution, terrain.width]);
 
-  const buildBrush = () =>
-    kind === "grass-paint" || kind === "grass-erase"
+  const buildBrushFor = (
+    nextKind: TerrainViewportBrushKind,
+    layerId = activeGrassLayer?.id,
+  ): Omit<TerrainViewportEditing, "entityId" | "componentId"> =>
+    nextKind === "grass-paint" || nextKind === "grass-erase"
       ? {
-          kind,
+          kind: nextKind,
           radius,
           strength: Math.min(strength, 1),
-          grassLayerId: activeGrassLayer?.id,
+          grassLayerId: layerId,
         }
       : {
-          kind,
+          kind: nextKind,
           radius,
-          strength: holeTool ? 1 : strength,
+          strength:
+            nextKind === "hole-add" || nextKind === "hole-remove" ? 1 : strength,
           falloff,
-          ...(heightTargetRequired ? { targetHeight } : {}),
+          ...(nextKind === "flatten" || nextKind === "stamp"
+            ? { targetHeight }
+            : {}),
         };
+
+  const buildBrush = () => buildBrushFor(kind);
 
   const updateSceneBrush = (
     patch: Partial<Omit<TerrainViewportEditing, "entityId" | "componentId">>,
   ) => {
     if (!sceneEditing || !onSceneEditingChange) return;
-    const next = { ...buildBrush(), ...patch };
-    if (next.kind === "flatten" || next.kind === "stamp") {
-      next.targetHeight ??= targetHeight;
+    onSceneEditingChange({ ...buildBrush(), ...patch });
+  };
+
+  /** Selecting a brush arms the Scene View with it, so the tool is the gesture. */
+  const selectBrush = (nextKind: TerrainViewportBrushKind) => {
+    if (nextKind === "grass-paint" || nextKind === "grass-erase") {
+      setGrassKind(nextKind);
+    } else if (nextKind === "hole-add" || nextKind === "hole-remove") {
+      setHoleKind(nextKind);
+    } else {
+      setSculptKind(nextKind);
     }
-    if (next.kind === "hole-add" || next.kind === "hole-remove") {
-      next.strength = 1;
+    if (sceneEditing) onSceneEditingChange?.(buildBrushFor(nextKind));
+  };
+
+  const selectMode = (nextMode: TerrainEditorMode) => {
+    setMode(nextMode);
+    if (nextMode === "settings") {
+      // Nothing in the settings mode is a gesture, so leaving the Scene View
+      // armed would let a stray click edit with an invisible brush.
+      setSceneEditing(false);
+      onSceneEditingChange?.(null);
+      return;
     }
-    if (next.kind === "grass-paint" || next.kind === "grass-erase") {
-      next.strength = Math.min(next.strength ?? 1, 1);
-    }
-    onSceneEditingChange(next);
+    const nextKind =
+      nextMode === "grass" ? grassKind : nextMode === "hole" ? holeKind : sculptKind;
+    if (sceneEditing) onSceneEditingChange?.(buildBrushFor(nextKind));
   };
 
   const applySettings = () => {
     onSettings?.({ width, depth, resolution });
   };
+
+  const modeBrushes =
+    mode === "grass"
+      ? TERRAIN_GRASS_BRUSHES
+      : mode === "hole"
+        ? TERRAIN_HOLE_BRUSHES
+        : TERRAIN_SCULPT_BRUSHES;
 
   return (
     <ComponentCard title="地形" subtitle="高さマップ・固定コライダー">
@@ -1112,407 +1317,540 @@ function TerrainInspector({
         </dd>
       </dl>
 
-      <section className="space-y-2 border-t border-slate-100 pt-2" aria-label="地形設定">
-        <h4 className="text-xs font-semibold text-slate-700">Terrain Settings</h4>
-        <TerrainNumberField
-          label="幅"
-          value={width}
-          min={0.5}
-          max={512}
-          step={0.5}
-          disabled={readOnly || !onSettings}
-          onChange={setWidth}
-        />
-        <TerrainNumberField
-          label="奥行き"
-          value={depth}
-          min={0.5}
-          max={512}
-          step={0.5}
-          disabled={readOnly || !onSettings}
-          onChange={setDepth}
-        />
-        <TerrainNumberField
-          label="Heightmap 解像度"
-          value={resolution}
-          min={9}
-          max={257}
-          step={1}
-          disabled={readOnly || !onSettings}
-          onChange={(value) => setResolution(Math.max(9, Math.min(257, Math.round(value))))}
-        />
-        <button
-          type="button"
-          disabled={readOnly || !onSettings || (width === terrain.width && depth === terrain.depth && resolution === terrain.resolution)}
-          onClick={applySettings}
-          className="w-full rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-violet-300 hover:bg-violet-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-        >
-          サイズ・解像度を適用
-        </button>
-        <p className="text-[11px] leading-4 text-slate-500">
-          解像度を変えても高さは補間、穴はセル単位で保持します。
-        </p>
-      </section>
+      <div
+        className="flex gap-1 border-t border-slate-100 pt-2"
+        role="group"
+        aria-label="地形の編集モード"
+      >
+        {TERRAIN_MODE_TABS.map((tab) => (
+          <TerrainToolButton
+            key={tab.mode}
+            active={mode === tab.mode}
+            disabled={readOnly}
+            label={tab.label}
+            title={tab.title}
+            Icon={tab.Icon}
+            onClick={() => selectMode(tab.mode)}
+          />
+        ))}
+      </div>
 
-      <section className="space-y-2 border-t border-slate-100 pt-2" aria-label="地形ブラシ">
-        <div className="flex items-center justify-between gap-2">
-          <h4 className="text-xs font-semibold text-slate-700">Terrain Tools</h4>
+      {mode === "settings" ? (
+        <section className="space-y-2" aria-label="地形設定">
+          <TerrainNumberField
+            label="幅"
+            value={width}
+            min={0.5}
+            max={512}
+            step={0.5}
+            disabled={readOnly || !onSettings}
+            onChange={setWidth}
+          />
+          <TerrainNumberField
+            label="奥行き"
+            value={depth}
+            min={0.5}
+            max={512}
+            step={0.5}
+            disabled={readOnly || !onSettings}
+            onChange={setDepth}
+          />
+          <TerrainNumberField
+            label="Heightmap 解像度"
+            value={resolution}
+            min={9}
+            max={257}
+            step={1}
+            disabled={readOnly || !onSettings}
+            onChange={(value) =>
+              setResolution(Math.max(9, Math.min(257, Math.round(value))))
+            }
+          />
           <button
             type="button"
-            disabled={disabled || !onSceneEditingChange}
-            aria-pressed={sceneEditing}
-            onClick={() => {
-              const next = !sceneEditing;
-              setSceneEditing(next);
-              onSceneEditingChange?.(next ? buildBrush() : null);
-            }}
-            className={`rounded px-2 py-1 text-[11px] font-semibold disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${
-              sceneEditing
-                ? "bg-violet-600 text-white hover:bg-violet-700"
-                : "border border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100"
-            }`}
+            disabled={
+              readOnly ||
+              !onSettings ||
+              (width === terrain.width &&
+                depth === terrain.depth &&
+                resolution === terrain.resolution)
+            }
+            onClick={applySettings}
+            className="w-full rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-violet-300 hover:bg-violet-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
           >
-            {sceneEditing ? "Scene編集を終了" : "Sceneで編集"}
+            サイズ・解像度を適用
           </button>
-        </div>
-        <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
-          操作
-          <select
-            value={kind}
-            disabled={disabled}
-            onChange={(event) => {
-              const next = event.currentTarget.value as TerrainViewportBrushKind;
-              setKind(next);
-              updateSceneBrush({
-                kind: next,
-                ...(next === "grass-paint" || next === "grass-erase"
-                  ? { grassLayerId: activeGrassLayer?.id }
-                  : {}),
-              });
-            }}
-            className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
-          >
-            <option value="raise">盛り上げる</option>
-            <option value="lower">掘る</option>
-            <option value="flatten">高さを設定</option>
-            <option value="smooth">滑らかにする</option>
-            <option value="stamp">円形スタンプ</option>
-            <option value="hole-add">穴を開ける</option>
-            <option value="hole-remove">穴を埋める</option>
-            <option value="grass-paint" disabled={grassLayers.length === 0}>
-              草を塗る
-            </option>
-            <option value="grass-erase" disabled={grassLayers.length === 0}>
-              草を消す
-            </option>
-          </select>
-        </label>
-        {grassTool ? (
-          <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
-            対象の層
-            <select
-              value={activeGrassLayer?.id ?? ""}
-              disabled={disabled}
-              onChange={(event) => {
-                const next = event.currentTarget.value;
-                setGrassLayerId(next);
-                updateSceneBrush({ grassLayerId: next });
+          <p className="text-[11px] leading-4 text-slate-500">
+            解像度を変えても高さは補間、穴はセル単位で保持します。
+          </p>
+        </section>
+      ) : (
+        <section className="space-y-2" aria-label="地形ブラシ">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="text-xs font-semibold text-slate-700">
+              {mode === "grass" ? "草ブラシ" : mode === "hole" ? "穴ブラシ" : "筆"}
+            </h4>
+            <button
+              type="button"
+              disabled={disabled || !onSceneEditingChange}
+              aria-pressed={sceneEditing}
+              onClick={() => {
+                const next = !sceneEditing;
+                setSceneEditing(next);
+                onSceneEditingChange?.(next ? buildBrush() : null);
               }}
-              className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
+              className={`rounded px-2 py-1 text-[11px] font-semibold disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${
+                sceneEditing
+                  ? "bg-violet-600 text-white hover:bg-violet-700"
+                  : "border border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100"
+              }`}
             >
-              {grassLayers.map((layer) => (
-                <option key={layer.id} value={layer.id}>
-                  {getTerrainGrassType(layer.typeId)?.label ?? layer.typeId}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        <TerrainNumberField
-          label="中心 X"
-          value={centerX}
-          min={-terrain.width / 2}
-          max={terrain.width / 2}
-          step={0.25}
-          disabled={disabled}
-          onChange={setCenterX}
-        />
-        <TerrainNumberField
-          label="中心 Z"
-          value={centerZ}
-          min={-terrain.depth / 2}
-          max={terrain.depth / 2}
-          step={0.25}
-          disabled={disabled}
-          onChange={setCenterZ}
-        />
-        <TerrainNumberField
-          label="半径"
-          value={radius}
-          min={0.1}
-          max={maximumRadius}
-          step={0.1}
-          disabled={disabled}
-          onChange={(value) => {
-            setRadius(value);
-            updateSceneBrush({ radius: value });
-          }}
-        />
-        <TerrainNumberField
-          label={
-            grassTool
-              ? "濃さ"
-              : kind === "smooth" || heightTargetRequired
-                ? "なじませる量"
-                : "強さ"
-          }
-          value={strength}
-          min={0.01}
-          max={grassTool || kind === "smooth" || heightTargetRequired ? 1 : 16}
-          step={0.05}
-          disabled={disabled || holeTool}
-          onChange={(value) => {
-            setStrength(value);
-            updateSceneBrush({ strength: value });
-          }}
-        />
-        {heightTargetRequired ? (
+              {sceneEditing ? "Scene編集を終了" : "Sceneで編集"}
+            </button>
+          </div>
+
+          <div className="flex gap-1" role="group" aria-label="ブラシの種類">
+            {modeBrushes.map((brush) => (
+              <TerrainToolButton
+                key={brush.kind}
+                active={kind === brush.kind}
+                disabled={disabled}
+                label={brush.label}
+                title={brush.title}
+                Icon={brush.Icon}
+                onClick={() => selectBrush(brush.kind)}
+              />
+            ))}
+          </div>
+
+          {mode === "grass" && grassLayers.length === 0 ? (
+            <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-800">
+              草のレイヤーがありません。下の一覧から追加するか、セットを適用すると塗れます。
+            </p>
+          ) : null}
+
           <TerrainNumberField
-            label="目標の高さ"
-            value={targetHeight}
-            min={-256}
-            max={256}
+            label="半径"
+            value={radius}
+            min={0.1}
+            max={maximumRadius}
             step={0.1}
             disabled={disabled}
             onChange={(value) => {
-              setTargetHeight(value);
-              updateSceneBrush({ targetHeight: value });
+              setRadius(value);
+              updateSceneBrush({ radius: value });
             }}
           />
-        ) : null}
-        <label
-          className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700"
-          hidden={grassTool}
+          <TerrainNumberField
+            label={
+              grassTool
+                ? "濃さ"
+                : sculptKind === "smooth" || heightTargetRequired
+                  ? "なじませる量"
+                  : "強さ"
+            }
+            value={strength}
+            min={0.01}
+            max={
+              grassTool || sculptKind === "smooth" || heightTargetRequired ? 1 : 16
+            }
+            step={0.05}
+            disabled={disabled || holeTool}
+            onChange={(value) => {
+              setStrength(value);
+              updateSceneBrush({ strength: value });
+            }}
+          />
+          {heightTargetRequired ? (
+            <TerrainNumberField
+              label="目標の高さ"
+              value={targetHeight}
+              min={-256}
+              max={256}
+              step={0.1}
+              disabled={disabled}
+              onChange={(value) => {
+                setTargetHeight(value);
+                updateSceneBrush({ targetHeight: value });
+              }}
+            />
+          ) : null}
+          {grassTool ? null : (
+            <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+              ブラシの柔らかさ
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={falloff}
+                disabled={disabled}
+                onChange={(event) => {
+                  const value = Number(event.currentTarget.value);
+                  setFalloff(value);
+                  updateSceneBrush({ falloff: value });
+                }}
+                className="h-2 w-full cursor-ew-resize accent-violet-600 disabled:cursor-not-allowed"
+              />
+            </label>
+          )}
+
+          <details className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
+            <summary className="cursor-pointer text-[11px] font-semibold text-slate-600">
+              数値の位置へ1回適用
+            </summary>
+            <div className="space-y-2 pt-2">
+              <TerrainNumberField
+                label="中心 X"
+                value={centerX}
+                min={-terrain.width / 2}
+                max={terrain.width / 2}
+                step={0.25}
+                disabled={disabled}
+                onChange={setCenterX}
+              />
+              <TerrainNumberField
+                label="中心 Z"
+                value={centerZ}
+                min={-terrain.depth / 2}
+                max={terrain.depth / 2}
+                step={0.25}
+                disabled={disabled}
+                onChange={setCenterZ}
+              />
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() =>
+                  onBrush?.({
+                    ...buildBrush(),
+                    center: [centerX, centerZ],
+                  } as TerrainSceneBrushOperation)
+                }
+                className="w-full rounded-md bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+              >
+                この位置へ適用
+              </button>
+            </div>
+          </details>
+
+          <p className="text-[11px] leading-4 text-slate-500">
+            {sceneEditing
+              ? "Scene上を左ドラッグして編集します。1ストロークは1件のUndoです。Escで取り消せます。"
+              : "「Sceneで編集」を押すと、Scene上を直接ドラッグして編集できます。"}
+          </p>
+        </section>
+      )}
+
+      {mode === "grass" ? (
+        <TerrainGrassLayerList
+          terrain={terrain}
+          grassLayers={grassLayers}
+          activeLayerId={activeGrassLayer?.id ?? null}
+          readOnly={readOnly}
+          addGrassTypeId={addGrassTypeId}
+          grassPresetChoice={grassPresetChoice}
+          onSelectLayer={(id) => {
+            setGrassLayerId(id);
+            updateSceneBrush({ grassLayerId: id });
+          }}
+          onAddGrassTypeChange={setAddGrassTypeId}
+          onGrassPresetChange={setGrassPresetChoice}
+          onGrassLayersChange={onGrassLayersChange}
+        />
+      ) : null}
+    </ComponentCard>
+  );
+}
+
+/**
+ * The grass layer stack.
+ *
+ * Layers are a list you build up, with exactly one selected — painting always
+ * lands on the selection rather than asking which layer each time.
+ */
+function TerrainGrassLayerList({
+  terrain,
+  grassLayers,
+  activeLayerId,
+  readOnly,
+  addGrassTypeId,
+  grassPresetChoice,
+  onSelectLayer,
+  onAddGrassTypeChange,
+  onGrassPresetChange,
+  onGrassLayersChange,
+}: {
+  terrain: TerrainGeometry;
+  grassLayers: readonly TerrainGrassLayer[];
+  activeLayerId: string | null;
+  readOnly: boolean;
+  addGrassTypeId: string;
+  grassPresetChoice: string;
+  onSelectLayer: (id: string) => void;
+  onAddGrassTypeChange: (id: string) => void;
+  onGrassPresetChange: (id: string) => void;
+  onGrassLayersChange?: (grass: TerrainGrassLayer[], notice: string) => void;
+}) {
+  const [countsOpen, setCountsOpen] = useState(false);
+  const editable = !readOnly && Boolean(onGrassLayersChange);
+
+  const move = (index: number, delta: number) => {
+    const target = index + delta;
+    if (target < 0 || target >= grassLayers.length) return;
+    const next = [...grassLayers];
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    onGrassLayersChange?.(next, "草のレイヤーを並べ替えました");
+  };
+
+  return (
+    <section className="space-y-2 border-t border-slate-100 pt-2" aria-label="草のレイヤー">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-xs font-semibold text-slate-700">草のレイヤー</h4>
+        <span className="text-[10px] font-semibold text-slate-400">
+          {grassLayers.length}層
+        </span>
+      </div>
+
+      {grassLayers.length === 0 ? (
+        <p className="text-[11px] leading-4 text-slate-500">
+          レイヤーを追加すると草が生えます。密度・高さ帯・傾斜のルールが配置を決め、ブラシで部分的に足し引きできます。
+        </p>
+      ) : (
+        <ul className="space-y-1">
+          {grassLayers.map((layer, index) => {
+            const active = layer.id === activeLayerId;
+            const type = getTerrainGrassType(layer.typeId);
+            return (
+              <li key={layer.id}>
+                <div
+                  className={`rounded border p-2 ${
+                    active
+                      ? "border-violet-400 bg-violet-50"
+                      : "border-slate-200 bg-white"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => onSelectLayer(layer.id)}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      title="このレイヤーを塗りの対象にする"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="h-4 w-4 shrink-0 rounded-sm border border-slate-300"
+                        style={{
+                          background: `linear-gradient(to top, ${
+                            type?.baseColor ?? "#4d7c0f"
+                          }, ${type?.tipColor ?? "#a3e635"})`,
+                        }}
+                      />
+                      <span
+                        className={`truncate text-[11px] font-semibold ${
+                          active ? "text-violet-800" : "text-slate-700"
+                        }`}
+                      >
+                        {type?.label ?? layer.typeId}
+                      </span>
+                      {active ? (
+                        <span className="shrink-0 rounded bg-violet-600 px-1 py-0.5 text-[9px] font-semibold text-white">
+                          編集中
+                        </span>
+                      ) : null}
+                    </button>
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <button
+                        type="button"
+                        disabled={!editable || index === 0}
+                        onClick={() => move(index, -1)}
+                        title="上へ移動"
+                        className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!editable || index === grassLayers.length - 1}
+                        onClick={() => move(index, 1)}
+                        title="下へ移動"
+                        className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!editable}
+                        onClick={() =>
+                          onGrassLayersChange?.(
+                            grassLayers.filter((entry) => entry.id !== layer.id),
+                            "草のレイヤーを削除しました",
+                          )
+                        }
+                        title="このレイヤーを削除"
+                        className="rounded border border-rose-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        削除
+                      </button>
+                    </div>
+                  </div>
+                  <TerrainNumberField
+                    label="密度 (本/m2)"
+                    value={layer.density}
+                    min={0}
+                    max={40}
+                    step={0.2}
+                    disabled={!editable}
+                    onChange={(density) =>
+                      onGrassLayersChange?.(
+                        grassLayers.map((entry) =>
+                          entry.id === layer.id ? { ...entry, density } : entry,
+                        ),
+                        "草の密度を変更しました",
+                      )
+                    }
+                  />
+                  <TerrainNumberField
+                    label="傾斜の上限 (度)"
+                    value={layer.slopeLimitDegrees}
+                    min={0}
+                    max={90}
+                    step={1}
+                    disabled={!editable}
+                    onChange={(slopeLimitDegrees) =>
+                      onGrassLayersChange?.(
+                        grassLayers.map((entry) =>
+                          entry.id === layer.id
+                            ? { ...entry, slopeLimitDegrees }
+                            : entry,
+                        ),
+                        "草の傾斜上限を変更しました",
+                      )
+                    }
+                  />
+                  {layer.mask ? (
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      <span className="text-[10px] text-slate-500">
+                        ブラシで調整済み
+                      </span>
+                      <button
+                        type="button"
+                        disabled={!editable}
+                        onClick={() =>
+                          onGrassLayersChange?.(
+                            grassLayers.map((entry) =>
+                              entry.id === layer.id
+                                ? (({ mask: _dropped, ...rest }) => rest)(entry)
+                                : entry,
+                            ),
+                            "ブラシの調整を戻しました",
+                          )
+                        }
+                        className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        塗りを戻す
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+        <select
+          value={addGrassTypeId}
+          disabled={!editable}
+          onChange={(event) => onAddGrassTypeChange(event.currentTarget.value)}
+          aria-label="追加する草の種類"
+          className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
         >
-          ブラシの柔らかさ
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={falloff}
-            disabled={disabled}
-            onChange={(event) => {
-              const value = Number(event.currentTarget.value);
-              setFalloff(value);
-              updateSceneBrush({ falloff: value });
-            }}
-            className="h-2 w-full cursor-ew-resize accent-violet-600 disabled:cursor-not-allowed"
-          />
-        </label>
+          {TERRAIN_GRASS_TYPES.map((type) => (
+            <option key={type.id} value={type.id}>
+              {type.label}
+            </option>
+          ))}
+        </select>
         <button
           type="button"
-          disabled={disabled}
-          onClick={() =>
-            onBrush?.({
-              ...buildBrush(),
-              center: [centerX, centerZ],
-            })
-          }
-          className="w-full rounded-md bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+          disabled={!editable}
+          onClick={() => {
+            const typeId = TERRAIN_GRASS_TYPES.find(
+              (type) => type.id === addGrassTypeId,
+            )?.id;
+            if (!typeId) return;
+            onGrassLayersChange?.(
+              [
+                ...grassLayers,
+                {
+                  id: `grass-layer-${Math.random().toString(36).slice(2, 10)}`,
+                  typeId,
+                  density: 4,
+                  heightRange: [-1000, 1000],
+                  slopeLimitDegrees: 40,
+                  seed: Math.floor(Math.random() * 2_147_483_647),
+                },
+              ],
+              "草のレイヤーを追加しました",
+            );
+          }}
+          className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-violet-300 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          地形に適用
+          レイヤーを追加
         </button>
-        <p className="text-[11px] leading-4 text-slate-500">
-          {sceneEditing
-            ? "Scene上を左ドラッグして編集します。1ストロークは1件のUndoです。Escで取り消せます。"
-            : "数値位置への1回適用も使えます。地形は固定のTrimesh Colliderとして出力されます。"}
-        </p>
-      </section>
+      </div>
 
-      <section className="space-y-2 border-t border-slate-100 pt-2" aria-label="草の層">
-        <div className="flex items-center justify-between gap-2">
-          <h4 className="text-xs font-semibold text-slate-700">草の層</h4>
-          <span className="text-[10px] font-semibold text-slate-400">
-            {grassLayers.length}層
-          </span>
-        </div>
-        {grassLayers.length === 0 ? (
-          <p className="text-[11px] leading-4 text-slate-500">
-            草のセットを適用するか、層を追加すると生えます。密度・高さ帯・傾斜のルールが配置を決め、塗りで部分的に調整できます。
-          </p>
-        ) : (
-          <div className="space-y-1.5">
-            {grassLayers.map((layer) => (
-              <div
-                key={layer.id}
-                className="rounded border border-slate-200 bg-slate-50 p-2"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-semibold text-slate-700">
-                    {getTerrainGrassType(layer.typeId)?.label ?? layer.typeId}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      disabled={readOnly || !onSceneEditingChange}
-                      onClick={() => {
-                        setKind("grass-paint");
-                        setGrassLayerId(layer.id);
-                        setSceneEditing(true);
-                        onSceneEditingChange?.({
-                          kind: "grass-paint",
-                          radius,
-                          strength: Math.min(strength, 1),
-                          grassLayerId: layer.id,
-                        });
-                      }}
-                      className="rounded border border-violet-300 bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      塗る
-                    </button>
-                    <button
-                      type="button"
-                      disabled={readOnly || !onSceneEditingChange}
-                      onClick={() => {
-                        setKind("grass-erase");
-                        setGrassLayerId(layer.id);
-                        setSceneEditing(true);
-                        onSceneEditingChange?.({
-                          kind: "grass-erase",
-                          radius,
-                          strength: Math.min(strength, 1),
-                          grassLayerId: layer.id,
-                        });
-                      }}
-                      className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      消す
-                    </button>
-                    <button
-                      type="button"
-                      disabled={readOnly || !onGrassLayersChange}
-                      onClick={() =>
-                        onGrassLayersChange?.(
-                          grassLayers.filter((entry) => entry.id !== layer.id),
-                          "草の層を削除しました",
-                        )
-                      }
-                      className="rounded border border-rose-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      削除
-                    </button>
-                  </div>
-                </div>
-                <TerrainNumberField
-                  label="密度 (本/m2)"
-                  value={layer.density}
-                  min={0}
-                  max={40}
-                  step={0.2}
-                  disabled={readOnly || !onGrassLayersChange}
-                  onChange={(density) =>
-                    onGrassLayersChange?.(
-                      grassLayers.map((entry) =>
-                        entry.id === layer.id ? { ...entry, density } : entry,
-                      ),
-                      "草の密度を変更しました",
-                    )
-                  }
-                />
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-          <select
-            value={addGrassTypeId}
-            disabled={readOnly || !onGrassLayersChange}
-            onChange={(event) => setAddGrassTypeId(event.currentTarget.value)}
-            aria-label="追加する草の種類"
-            className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
-          >
-            {TERRAIN_GRASS_TYPES.map((type) => (
-              <option key={type.id} value={type.id}>
-                {type.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            disabled={readOnly || !onGrassLayersChange}
-            onClick={() => {
-              const typeId = TERRAIN_GRASS_TYPES.find(
-                (type) => type.id === addGrassTypeId,
-              )?.id;
-              if (!typeId) return;
-              onGrassLayersChange?.(
-                [
-                  ...grassLayers,
-                  {
-                    id: `grass-layer-${Math.random().toString(36).slice(2, 10)}`,
-                    typeId,
-                    density: 4,
-                    heightRange: [-1000, 1000],
-                    slopeLimitDegrees: 40,
-                    seed: Math.floor(Math.random() * 2_147_483_647),
-                  },
-                ],
-                "草の層を追加しました",
-              );
-            }}
-            className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-violet-300 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            層を追加
-          </button>
-        </div>
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-          <select
-            value={grassPresetChoice}
-            disabled={readOnly || !onGrassLayersChange}
-            onChange={(event) => setGrassPresetChoice(event.currentTarget.value)}
-            aria-label="適用する草のセット"
-            className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
-          >
-            {TERRAIN_GRASS_PRESETS.map((preset) => (
-              <option key={preset.id} value={preset.id}>
-                {preset.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            disabled={readOnly || !onGrassLayersChange}
-            onClick={() => {
-              const preset = TERRAIN_GRASS_PRESETS.find(
-                (entry) => entry.id === grassPresetChoice,
-              );
-              if (!preset) return;
-              onGrassLayersChange?.(
-                createTerrainGrassLayers(preset),
-                `草のセット「${preset.label}」を適用しました`,
-              );
-            }}
-            className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-violet-300 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            セットを適用
-          </button>
-        </div>
-        {grassLayers.length > 0 ? (
-          <button
-            type="button"
-            aria-expanded={grassCountsOpen}
-            onClick={() => setGrassCountsOpen((open) => !open)}
-            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-left text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
-          >
-            {grassCountsOpen ? "本数を隠す" : "本数を確認"}
-          </button>
-        ) : null}
-        {grassCountsOpen && grassLayers.length > 0 ? (
-          <TerrainGrassCounts terrain={terrain} />
-        ) : null}
-      </section>
-    </ComponentCard>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+        <select
+          value={grassPresetChoice}
+          disabled={!editable}
+          onChange={(event) => onGrassPresetChange(event.currentTarget.value)}
+          aria-label="適用する草のセット"
+          className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
+        >
+          {TERRAIN_GRASS_PRESETS.map((preset) => (
+            <option key={preset.id} value={preset.id}>
+              {preset.label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={!editable}
+          onClick={() => {
+            const preset = TERRAIN_GRASS_PRESETS.find(
+              (entry) => entry.id === grassPresetChoice,
+            );
+            if (!preset) return;
+            onGrassLayersChange?.(
+              createTerrainGrassLayers(preset),
+              `草のセット「${preset.label}」を適用しました`,
+            );
+          }}
+          className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-violet-300 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          セットを適用
+        </button>
+      </div>
+
+      {grassLayers.length > 0 ? (
+        <button
+          type="button"
+          aria-expanded={countsOpen}
+          onClick={() => setCountsOpen((open) => !open)}
+          className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-left text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+        >
+          {countsOpen ? "本数を隠す" : "本数を確認"}
+        </button>
+      ) : null}
+      {countsOpen && grassLayers.length > 0 ? (
+        <TerrainGrassCounts terrain={terrain} />
+      ) : null}
+    </section>
   );
 }
 
