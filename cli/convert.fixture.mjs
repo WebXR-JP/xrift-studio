@@ -42,6 +42,7 @@ import { runScriptRuntimeReportFixtureAssertions } from "../src/lib/visual-edito
 import { runScriptEmitFixtureAssertions } from "../src/lib/visual-editor/compiler/script-emit.fixture.ts";
 import { runBasisTranscoderFixtureAssertions } from "../src/lib/visual-editor/basis-transcoder.fixture.ts";
 import { runTerrainFixtureAssertions } from "../src/lib/visual-editor/terrain.fixture.ts";
+import { runTerrainGrassFixtureAssertions } from "../src/lib/visual-editor/terrain-grass.fixture.ts";
 import { runAssetOperationLockFixtureAssertions } from "../src/components/visual-editor/asset-operation-lock.fixture.ts";
 import { runAutosaveCoordinatorFixtureAssertions } from "../src/components/visual-editor/autosave-coordinator.fixture.ts";
 import { runCustomMaterialPreviewFixtureAssertions } from "../src/components/visual-editor/CustomMaterialPreview.fixture.ts";
@@ -236,6 +237,7 @@ try {
   await runFixtureSuites([
     ["visual compiler", runVisualCompilerFixtureAssertions],
     ["terrain", runTerrainFixtureAssertions],
+    ["terrain grass", runTerrainGrassFixtureAssertions],
     ["runtime schema", runRuntimeSchemaFixtureAssertions],
     ["shader time", runShaderTimeFixtureAssertions],
     ["mcp editor tools", runXriftMcpEditorToolFixtures],
