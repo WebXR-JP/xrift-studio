@@ -14,6 +14,7 @@ import {
   applyExternalStoreInstall,
   applyExternalStoreInstallAndAnalyzeModel,
   applyOpenBrushCatalogInstall,
+  applySkyShaderCatalogInstall,
   applyComponentCodeImportPlan,
   applyClassicProjectVisualImportEnhancements,
   analyzeComponentCode,
@@ -133,6 +134,7 @@ import {
   type ModelAssetPatch,
   type ModelReimportProgress,
   type OpenBrushCatalogEntry,
+  type SkyShaderCatalogEntry,
   type EditorCommandId,
   type EntityClipboard,
   type ParticlePropertiesPatch,
@@ -172,6 +174,7 @@ import { EnvironmentTextureThumbnailGenerationQueue } from "./EnvironmentTexture
 import { MaterialThumbnailGenerationQueue } from "./MaterialThumbnailGenerationQueue";
 import { ModelThumbnailGenerationQueue } from "./ModelThumbnailGenerationQueue";
 import { ExternalAssetStoreDialog } from "./ExternalAssetStoreDialog";
+import type { SkyShaderInstallResult } from "./SkyShaderStore";
 import {
   hasActiveAssetImport,
   resolveAssetOperationAvailability,
@@ -413,6 +416,30 @@ function assignSkyboxToScene(
         enabled: true,
         iblEnabled: true,
         imageAssetId: assetId,
+      },
+    },
+  };
+}
+
+function assignSkyShaderToScene(
+  scene: PrototypeVisualProject["scene"],
+  assetId: string,
+): PrototypeVisualProject["scene"] {
+  const settings = resolveSceneSettings(scene.settings);
+  if (
+    settings.skybox.materialAssetId === assetId &&
+    settings.skybox.enabled
+  ) {
+    return scene;
+  }
+  return {
+    ...scene,
+    settings: {
+      ...settings,
+      skybox: {
+        ...settings.skybox,
+        enabled: true,
+        materialAssetId: assetId,
       },
     },
   };
@@ -5119,6 +5146,58 @@ export function VisualEditorPrototype({
     [bundle.assets],
   );
 
+  const handleAddSkyShader = useCallback(
+    async (
+      entry: SkyShaderCatalogEntry,
+      parameterValues: Readonly<Record<string, number | string>>,
+      applyToSky: boolean,
+    ): Promise<SkyShaderInstallResult> => {
+      const preview = applySkyShaderCatalogInstall(
+        bundle.assets,
+        entry,
+        parameterValues,
+      );
+      setHistory((current) => {
+        const applied = applySkyShaderCatalogInstall(
+          current.present.bundle.assets,
+          entry,
+          parameterValues,
+        );
+        const scene = applyToSky
+          ? assignSkyShaderToScene(
+              current.present.bundle.scene,
+              applied.primaryAssetId,
+            )
+          : current.present.bundle.scene;
+        const primary = applied.manifest.assets[applied.primaryAssetId];
+        setActiveAssetFolderId(primary?.folderId ?? null);
+        setSaveStatus("dirty");
+        setNotice(
+          applyToSky
+            ? `「${entry.label}」を空Shaderに設定しました。星の数などはInspectorで調整できます`
+            : `「${entry.label}」をMaterialとして追加しました。Assetsで選択されています`,
+        );
+        const nextBundle = touchProject({
+          ...current.present.bundle,
+          assets: applied.manifest,
+          scene,
+        });
+        bundleRef.current = nextBundle;
+        return commitEditorHistory(current, {
+          bundle: nextBundle,
+          sceneSelection: null,
+          assetSelection: applied.primaryAssetId,
+        });
+      });
+      setSceneSettingsOpen(false);
+      return {
+        alreadyInstalled: preview.alreadyInstalled,
+        appliedToSky: applyToSky,
+      };
+    },
+    [bundle.assets],
+  );
+
   const handleAssignSkybox = useCallback(
     (assetId: string) => {
       if (editorMode !== "edit") return;
@@ -8699,6 +8778,7 @@ export function VisualEditorPrototype({
             onClose={() => setExternalStoreOpen(false)}
             onInstalled={handleExternalStoreInstalled}
             onAddOpenBrush={handleAddOpenBrushMaterial}
+            onAddSkyShader={handleAddSkyShader}
             onAddOfficialComponent={handleAddOfficialComponent}
           />
           <SupportReportModal

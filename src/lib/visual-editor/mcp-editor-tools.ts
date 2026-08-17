@@ -140,6 +140,7 @@ import {
   type ClassicR3fMaterialShader,
   type ClassicR3fMaterialShaderPatch,
 } from "./custom-shader-contract";
+import { isSkyShaderMaterialAsset } from "./sky-shader";
 import {
   removeXriftComponent,
   updateXriftComponent,
@@ -1383,6 +1384,7 @@ function updateSceneSettings(
               "iblEnabled",
               "projection",
               "imageAssetId",
+              "materialAssetId",
               "topColor",
               "bottomColor",
               "offset",
@@ -4562,6 +4564,18 @@ function applySkyboxPatch(
       if (!hadImage && patch.iblEnabled === undefined) next.iblEnabled = true;
     }
   }
+  if (patch.materialAssetId !== undefined) {
+    if (patch.materialAssetId === null) {
+      delete next.materialAssetId;
+    } else {
+      const materialAssetId = requiredString(
+        patch.materialAssetId,
+        "skybox.materialAssetId",
+      );
+      assertSkyShaderMaterialAsset(context, materialAssetId);
+      next.materialAssetId = materialAssetId;
+    }
+  }
   const iblEnabled = optionalBoolean(
     patch.iblEnabled,
     "skybox.iblEnabled",
@@ -4629,6 +4643,34 @@ function assertSkyboxImageAsset(
       "INVALID_ARGUMENT",
       "skybox.imageAssetIdにはproject sourceを持つTexture Assetを指定してください",
       { imageAssetId, sourceKind: asset.source.kind },
+    );
+  }
+}
+
+function assertSkyShaderMaterialAsset(
+  context: XriftMcpEditorContext,
+  materialAssetId: string,
+): void {
+  const asset = context.bundle.assets.assets[materialAssetId];
+  if (!asset) {
+    throw new XriftMcpEditorToolError(
+      "ASSET_NOT_FOUND",
+      "skybox.materialAssetIdに指定されたAssetが見つかりません",
+      { materialAssetId },
+    );
+  }
+  if (asset.kind !== "material") {
+    throw new XriftMcpEditorToolError(
+      "ASSET_KIND_MISMATCH",
+      "skybox.materialAssetIdにはMaterial Assetを指定してください",
+      { materialAssetId, actualKind: asset.kind },
+    );
+  }
+  if (!isSkyShaderMaterialAsset(asset)) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      "skybox.materialAssetIdにはCustom Shader（classic-r3f）を持つMaterial Assetを指定してください",
+      { materialAssetId },
     );
   }
 }

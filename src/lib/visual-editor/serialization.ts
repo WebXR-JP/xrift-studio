@@ -999,6 +999,7 @@ function validateSceneSettings(
       "iblEnabled",
       "projection",
       "imageAssetId",
+      "materialAssetId",
       "topColor",
       "bottomColor",
       "offset",
@@ -1041,6 +1042,12 @@ function validateSceneSettings(
         (typeof entry.imageAssetId !== "string" || !entry.imageAssetId.trim())
       ) {
         issues.push(issue(`${path}.skybox.imageAssetId`, "type", "imageAssetId must be a non-empty string when set"));
+      }
+      if (
+        entry.materialAssetId !== undefined &&
+        (typeof entry.materialAssetId !== "string" || !entry.materialAssetId.trim())
+      ) {
+        issues.push(issue(`${path}.skybox.materialAssetId`, "type", "materialAssetId must be a non-empty string when set"));
       }
       // These fields were introduced after the initial settings schema; absent
       // values are normalized by resolveSceneSettings when old projects open.

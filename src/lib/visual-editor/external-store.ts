@@ -17,6 +17,13 @@ import {
   OPEN_BRUSH_CATALOG_SOURCE_URL,
   type OpenBrushCatalogEntry,
 } from "./open-brush-catalog";
+import {
+  SKY_SHADER_CATALOG_AUTHOR,
+  SKY_SHADER_CATALOG_REVISION,
+  SKY_SHADER_CATALOG_SOURCE_URL,
+  applySkyShaderParameters,
+  type SkyShaderCatalogEntry,
+} from "./sky-shader-catalog";
 
 export type AppliedExternalStoreInstall = {
   manifest: AssetManifest;
@@ -261,6 +268,59 @@ export async function applyExternalStoreInstallAndAnalyzeModel(
     );
   }
   return { ...applied, manifest: reimport.manifest };
+}
+
+/**
+ * Installs a Sky Shader preset as a plain Custom Shader Material Asset.
+ *
+ * Reinstalling the same preset overwrites its Material so the store stays the
+ * place to reset a sky to preset values, while every later tweak happens in the
+ * Material Inspector on the same asset the scene already points at.
+ */
+export function applySkyShaderCatalogInstall(
+  manifest: AssetManifest,
+  entry: SkyShaderCatalogEntry,
+  parameterValues: Readonly<Record<string, number | string>> = {},
+): AppliedOpenBrushCatalogInstall {
+  const folder = externalFolder(manifest, "空 Shader");
+  const folders = { ...(manifest.folders ?? {}), [folder.id]: folder };
+  const materialId = `external-sky-shader-${safeId(entry.id)}-material`;
+  const existing = manifest.assets[materialId];
+  const alreadyInstalled = existing?.kind === "material";
+  const material = createDefaultMaterialAsset({
+    id: materialId,
+    name: `空 · ${entry.label}`,
+    folderId: folder.id,
+  });
+  if (!material) throw new Error("空Shader Material Assetを作成できませんでした");
+  const order = alreadyInstalled
+    ? (existing.order ?? nextOrder({ ...manifest, folders }, folder.id))
+    : nextOrder({ ...manifest, folders }, folder.id);
+  const assets: Record<string, SceneAsset> = {
+    ...manifest.assets,
+    [materialId]: {
+      ...material,
+      order,
+      shader: applySkyShaderParameters(entry, parameterValues),
+      attribution: {
+        providerId: "xrift-sky-shaders",
+        providerName: "XRift公式 空Shader",
+        externalId: entry.id,
+        assetUrl: SKY_SHADER_CATALOG_SOURCE_URL,
+        licenseName: "MIT",
+        licenseUrl: `${SKY_SHADER_CATALOG_SOURCE_URL}/blob/main/LICENSE`,
+        authors: [SKY_SHADER_CATALOG_AUTHOR],
+      },
+      sourceHash: `${SKY_SHADER_CATALOG_REVISION}:${entry.id}`,
+    },
+  };
+  return {
+    manifest: { ...manifest, folders, assets },
+    primaryAssetId: materialId,
+    installedAssetIds: [materialId],
+    kind: "material",
+    alreadyInstalled,
+  };
 }
 
 export function applyOpenBrushCatalogInstall(

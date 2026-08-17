@@ -3737,6 +3737,7 @@ export function InspectorPanel({
             onChange={onSceneSettingsChange}
             onMetadataChange={onProjectMetadataChange}
             onThumbnailChanged={onThumbnailChanged}
+            onOpenAsset={onSelectAsset}
           />
         ) : multiSelectionActive ? (
           <MultiSelectionInspector

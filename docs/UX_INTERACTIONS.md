@@ -100,6 +100,8 @@ F-06 アイテム検査
 
 | MI-80 | Scene Viewの「診断」を開く、または「録画」を開始する | 実際のThree.js rendererからFPS、frame time、draw calls、triangles、visible mesh数、geometry / texture数、camera位置 / Farを0.5秒ごとに表示する。「録画」はScene ViewのCanvasを最大15秒WebMへ記録し、録画中は`REC`と保存状態を表示する。診断表示は編集データや描画結果を変更しない。 | 録画停止または15秒で保存ダイアログへ進み、キャンセルではScene Viewへ戻る。WebM非対応・保存失敗時は原因と再試行を残す。連続録画は上限で自動停止し、アプリのメモリを無制限に増やさない。 |
 | MI-81 | Entity InspectorでWind Componentを追加または編集する | Add Componentから対象EntityへWind Componentを付け、Enabledを切り替える。Componentが付いたEntityと子Meshだけを対象にし、Mesh名や植物らしさの推測を行わない。風の強さ・速度・突風はScene Settingsの「Wind（グローバル）」で一括編集し、Scene Viewへ反映する。 | 追加・変更は一件のScene更新として保存し、Play中は対象Entityの実行コピーへ同期する。無効値や古いrevisionではScene、selection、historyを変更せず、Inspectorの入力と再試行先を残す。成功後は同じEntity Inspectorに留まり、Preview / Compile / Playへ進める。 |
+| MI-82 | 「外部リソースを追加」の「空 Shader」から空Shaderを選び、追加する | カードと詳細プレビューは実際のGLSLをWebGLで内側から描画し、SVGやCSSの疑似サムネイルを使わない。詳細では星の数、太陽と月の高さ・方角、月の満ち欠け、雲の量と厚み、遠景の高さと起伏、色をuniform名付きのsliderで調整し、プレビューへ即時反映する。カードは静止画1枚、選択中のpresetだけをアニメーションさせ、WebGL contextを増やしすぎない。追加中はボタンをローディング表示にして二重追加を防ぐ。 | 成功時はMaterial Assetを一件追加してassetSelectionにし、「空へ設定」時はScene設定のskybox.materialAssetIdへ割り当てる。トーストで終わらせず、追加後もInspectorのUniform valuesで再調整できることを示す。同じpresetの再追加は同じMaterialを更新し、重複Assetを作らない。 |
+| MI-83 | Scene設定の「空Shader」でMaterialを選ぶ、または解除する | 割り当て中はSkybox画像とグラデーションより優先して空を描き、上空の色・地平線の色・オフセット・グラデーションを無効表示にする。水平回転と明るさはshaderのuniformへ渡すため有効なままにする。Materialが欠落または不正な場合は理由を示してグラデーションへ戻す。 | 割り当て・解除は一件のScene更新として保存する。割り当て中は当該MaterialのInspectorを開く操作を残し、星の数などの再調整へ到達できるようにする。 |
 
 ## 機能一覧
 
@@ -136,6 +138,7 @@ F-06 アイテム検査
 | F-31 | Terrain authoring / MCP | MI-03, MI-05, MI-09, MI-13, MI-16, MI-78 | Createメニューからstatic Terrainを追加し、InspectorとMCPの同じRaise / Lower / Flatten / Smoothブラシで高さサンプルを編集する。各スタンプは一件のUndo履歴として保存され、Scene View、Play、生成コード、Trimesh Colliderへ同じTerrainを反映する。 |
 | F-32 | Scene post effects | MI-03, MI-05, MI-09, MI-13, MI-15, MI-16, MI-80 | Scene settingsでHDR / AO / Bloom / 露出を編集し、Scene View、Play、生成Worldの同じレンダリング設定へ反映する。設定は保存・再読込・公開レビューまで同じScene contractで扱う。 |
 | F-33 | Wind Component | MI-03, MI-05, MI-09, MI-11, MI-13, MI-14, MI-15, MI-16, MI-81 | Entity InspectorまたはMCPからWind Componentを明示的に追加し、対象Entityと子MeshだけへScene Settingsのグローバル風設定を適用する。Editor Preview、Play、生成World、Runtime manifestは同じComponentとScene値を使い、名前・Mesh分類・言語に依存した対象推測を行わない。 |
+| F-34 | 空Shader（手続き的なSkybox） | MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-82, MI-83 | 画像Skyboxではなく、Custom Shader Materialとして昼・夕暮れ・朝焼け・夜空・オーロラ・星雲の空を追加できる。星の数、太陽と月の位置、月の満ち欠け、雲、地平線の遠景をuniformで調整でき、レイマーチする厚みのある雲も選べる。外部リソース集での調整とInspectorでの再調整が同じMaterialを指し、Scene View、Play、生成Worldが同じGLSLを描く。Materialが欠落した場合はグラデーションへ戻し、警告診断を残す。重いpresetはstep数をvariant defineとして残し、下げられる状態にする。 |
 
 ## F-23 公式XRift ComponentカタログとClassic / TSX変換の状態設計
 

@@ -5,7 +5,9 @@ import { tauri } from "../../lib/tauri";
 import { PROJECT_THUMBNAIL_CHANGED_EVENT } from "../../lib/project-thumbnail";
 import {
   isEnvironmentTextureAsset,
+  isSkyShaderMaterialAsset,
   resolveSceneSettings,
+  resolveSkyShaderMaterial,
   type AssetManifest,
   type SceneDocument,
   type SceneSettings,
@@ -29,6 +31,8 @@ type SceneSettingsInspectorProps = {
   onChange: (settings: SceneSettings) => void;
   onMetadataChange: (metadata: Pick<VisualProjectMetadata, "title" | "description">) => void;
   onThumbnailChanged: () => void;
+  /** Opens an Asset in the Inspector, used to reach a sky shader's uniforms. */
+  onOpenAsset: (assetId: string) => void;
 };
 
 function Section({
@@ -505,6 +509,76 @@ function SkyboxImageField({
   );
 }
 
+/**
+ * Assigns a Custom Shader Material to the sky. The shader draws the background
+ * instead of the gradient or the Skybox image, so this control also says which
+ * gradient values it is currently overriding and where to retune the shader.
+ */
+function SkyShaderField({
+  assets,
+  materialAssetId,
+  disabled,
+  onChange,
+  onOpenAsset,
+}: {
+  assets: AssetManifest;
+  materialAssetId: string | undefined;
+  disabled: boolean;
+  onChange: (materialAssetId: string | undefined) => void;
+  onOpenAsset: (assetId: string) => void;
+}) {
+  const candidates = Object.values(assets.assets).filter(isSkyShaderMaterialAsset);
+  const resolution = resolveSkyShaderMaterial(assets, materialAssetId);
+
+  return (
+    <div className="space-y-2">
+      <label className="block">
+        <span className="mb-1 block text-xs font-medium text-slate-700">
+          空Shader（Custom Shader Material）
+        </span>
+        <select
+          value={materialAssetId ?? ""}
+          disabled={disabled || (candidates.length === 0 && !materialAssetId)}
+          onChange={(event) => onChange(event.currentTarget.value || undefined)}
+          className="h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+        >
+          <option value="">使用しない</option>
+          {candidates.map((material) => (
+            <option key={material.id} value={material.id}>
+              {material.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {resolution.status === "ready" ? (
+        <div className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] leading-4 text-slate-600">
+          <p>
+            画像とグラデーションより優先して空を描いています。星の数や色はMaterialのUniform
+            valuesで変更します。
+          </p>
+          <button
+            type="button"
+            onClick={() => onOpenAsset(resolution.asset.id)}
+            className="mt-1.5 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100"
+          >
+            {resolution.asset.name}のUniformを編集
+          </button>
+        </div>
+      ) : resolution.status === "unavailable" ? (
+        <p className="rounded border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] leading-4 text-amber-800">
+          {resolution.reason}。グラデーションの空を表示しています。
+        </p>
+      ) : (
+        <p className="rounded border border-dashed border-slate-300 bg-slate-50 px-2.5 py-2 text-[11px] leading-4 text-slate-600">
+          {candidates.length === 0
+            ? "「外部リソースを追加」の空Shaderから、星空などのMaterialを追加できます。"
+            : "選ぶと画像とグラデーションより優先して空を描きます。"}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** Content for the right Inspector view; it intentionally has no modal shell. */
 export function SceneSettingsInspector({
   scene,
@@ -516,6 +590,7 @@ export function SceneSettingsInspector({
   onChange,
   onMetadataChange,
   onThumbnailChanged,
+  onOpenAsset,
 }: SceneSettingsInspectorProps) {
   const [thumbnailOpen, setThumbnailOpen] = useState(false);
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
@@ -530,6 +605,19 @@ export function SceneSettingsInspector({
   const skyboxControlsDisabled = readOnly || !settings.skybox.enabled;
   const exposureControlsDisabled =
     readOnly || (!settings.skybox.enabled && !settings.skybox.iblEnabled);
+  // A Sky Shader draws the background itself, so the gradient values stop
+  // affecting the scene while it is assigned.
+  const skyShaderActive =
+    settings.skybox.enabled &&
+    resolveSkyShaderMaterial(assets, settings.skybox.materialAssetId).status ===
+      "ready";
+  const gradientControlsDisabled =
+    readOnly ||
+    !settings.skybox.enabled ||
+    skyShaderActive ||
+    Boolean(settings.skybox.imageAssetId);
+  const rotationControlsDisabled =
+    readOnly || (!settings.skybox.imageAssetId && !skyShaderActive);
   const loadThumbnail = useCallback(async () => {
     if (!projectPath) {
       setThumbnailPreview(null);
@@ -676,6 +764,18 @@ export function SceneSettingsInspector({
               update({ ...settings, skybox: { ...settings.skybox, projection } })
             }
           />
+          <SkyShaderField
+            assets={assets}
+            materialAssetId={settings.skybox.materialAssetId}
+            disabled={skyboxControlsDisabled}
+            onChange={(materialAssetId) =>
+              update({
+                ...settings,
+                skybox: { ...settings.skybox, materialAssetId },
+              })
+            }
+            onOpenAsset={onOpenAsset}
+          />
           <SkyboxImageField
             assets={assets}
             imageAssetId={settings.skybox.imageAssetId}
@@ -696,7 +796,7 @@ export function SceneSettingsInspector({
               });
             }}
           />
-          <NumberField label="環境画像の水平回転 (度)" value={settings.skybox.rotationDegrees} step={1} disabled={imageControlsDisabled} onChange={(rotationDegrees) => update({ ...settings, skybox: { ...settings.skybox, rotationDegrees } })} />
+          <NumberField label="空の水平回転 (度)" value={settings.skybox.rotationDegrees} step={1} disabled={rotationControlsDisabled} onChange={(rotationDegrees) => update({ ...settings, skybox: { ...settings.skybox, rotationDegrees } })} />
           <Toggle
             label="シーンで追加反転"
             title="Texture InspectorのFlip Yに加えて、このSceneだけ上下を反転します"
@@ -705,10 +805,10 @@ export function SceneSettingsInspector({
             onChange={(flipY) => update({ ...settings, skybox: { ...settings.skybox, flipY } })}
           />
           <NumberField label="明るさ" value={settings.skybox.exposure} min={0} step={0.05} disabled={exposureControlsDisabled} onChange={(exposure) => update({ ...settings, skybox: { ...settings.skybox, exposure } })} />
-          <ColorField label="上空の色" value={settings.skybox.topColor} disabled={readOnly || !settings.skybox.enabled || Boolean(settings.skybox.imageAssetId)} onChange={(topColor) => update({ ...settings, skybox: { ...settings.skybox, topColor } })} />
-          <ColorField label="地平線の色" value={settings.skybox.bottomColor} disabled={readOnly || !settings.skybox.enabled || Boolean(settings.skybox.imageAssetId)} onChange={(bottomColor) => update({ ...settings, skybox: { ...settings.skybox, bottomColor } })} />
-          <NumberField label="オフセット" value={settings.skybox.offset} step={0.05} disabled={readOnly || !settings.skybox.enabled || Boolean(settings.skybox.imageAssetId)} onChange={(offset) => update({ ...settings, skybox: { ...settings.skybox, offset } })} />
-          <NumberField label="グラデーション" value={settings.skybox.exponent} min={0.01} step={0.01} disabled={readOnly || !settings.skybox.enabled || Boolean(settings.skybox.imageAssetId)} onChange={(exponent) => update({ ...settings, skybox: { ...settings.skybox, exponent } })} />
+          <ColorField label="上空の色" value={settings.skybox.topColor} disabled={gradientControlsDisabled} onChange={(topColor) => update({ ...settings, skybox: { ...settings.skybox, topColor } })} />
+          <ColorField label="地平線の色" value={settings.skybox.bottomColor} disabled={gradientControlsDisabled} onChange={(bottomColor) => update({ ...settings, skybox: { ...settings.skybox, bottomColor } })} />
+          <NumberField label="オフセット" value={settings.skybox.offset} step={0.05} disabled={gradientControlsDisabled} onChange={(offset) => update({ ...settings, skybox: { ...settings.skybox, offset } })} />
+          <NumberField label="グラデーション" value={settings.skybox.exponent} min={0.01} step={0.01} disabled={gradientControlsDisabled} onChange={(exponent) => update({ ...settings, skybox: { ...settings.skybox, exponent } })} />
           {settings.skybox.projection !== "infinite" ? (
             <div className="space-y-2.5 rounded border border-slate-200 bg-slate-50 p-2.5">
               <p className="text-[11px] leading-4 text-slate-600">

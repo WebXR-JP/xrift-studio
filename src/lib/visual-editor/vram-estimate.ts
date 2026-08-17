@@ -90,6 +90,7 @@ export function estimateWorldVram(
     }
   }
   addReference(resolvedScene.settings?.skybox.imageAssetId);
+  addReference(resolvedScene.settings?.skybox.materialAssetId);
 
   // Materials and particles can introduce textures that are not referenced
   // directly by an Entity.

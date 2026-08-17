@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Search,
   Store,
+  Sunrise,
   X,
 } from "lucide-react";
 import {
@@ -25,6 +26,7 @@ import {
   openBrushCategoryLabel,
   type OpenBrushCatalogCategory,
   type OpenBrushCatalogEntry,
+  type SkyShaderCatalogEntry,
   type VisualProjectKind,
   type XriftComponentDefinition,
 } from "../../lib/visual-editor";
@@ -37,6 +39,10 @@ import {
 import { formatFileSize } from "./editor-utils";
 import { CatalogThumbnailImage } from "./CatalogThumbnailImage";
 import { OfficialXriftComponentStore } from "./OfficialXriftComponentStore";
+import {
+  SkyShaderStore,
+  type SkyShaderInstallResult,
+} from "./SkyShaderStore";
 
 type StoreKindFilter = "all" | ExternalStoreAsset["assetKind"];
 
@@ -48,6 +54,7 @@ export function ExternalAssetStoreDialog({
   onClose,
   onInstalled,
   onAddOpenBrush,
+  onAddSkyShader,
   onAddOfficialComponent,
 }: {
   open: boolean;
@@ -62,6 +69,11 @@ export function ExternalAssetStoreDialog({
   onAddOpenBrush: (
     entry: OpenBrushCatalogEntry,
   ) => Promise<{ alreadyInstalled: boolean }>;
+  onAddSkyShader: (
+    entry: SkyShaderCatalogEntry,
+    parameterValues: Readonly<Record<string, number | string>>,
+    applyToSky: boolean,
+  ) => Promise<SkyShaderInstallResult>;
   onAddOfficialComponent: (
     definition: XriftComponentDefinition,
   ) => Promise<boolean>;
@@ -327,6 +339,11 @@ export function ExternalAssetStoreDialog({
             <OpenBrushStore
               disabledReason={disabledReason}
               onAdd={onAddOpenBrush}
+            />
+          ) : provider.kind === "sky-shader" ? (
+            <SkyShaderStore
+              disabledReason={disabledReason}
+              onAdd={onAddSkyShader}
             />
           ) : provider.kind === "xrift-components" ? (
             <OfficialXriftComponentStore
@@ -916,6 +933,7 @@ function OpenBrushStore({
 
 function ProviderIcon({ kind }: { kind: ExternalStoreProvider["kind"] }) {
   if (kind === "open-brush") return <Brush size={14} aria-hidden="true" />;
+  if (kind === "sky-shader") return <Sunrise size={14} aria-hidden="true" />;
   if (kind === "xrift-components") {
     return <Boxes size={14} aria-hidden="true" />;
   }

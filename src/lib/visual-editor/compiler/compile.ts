@@ -24,7 +24,15 @@ import {
 } from "../component-registry";
 import type { PrototypeVisualProject } from "../prototype-project";
 import { normalizeParticleProperties } from "../particle-system";
-import { validateClassicR3fMaterialShader } from "../custom-shader-contract";
+import {
+  validateClassicR3fMaterialShader,
+  type ClassicR3fMaterialShader,
+} from "../custom-shader-contract";
+import {
+  resolveSkyShaderMaterial,
+  skyShaderDrivenUniforms,
+  skyShaderTextureUniformNames,
+} from "../sky-shader";
 import { detectTimeUniforms } from "../../../../packages/xrift-studio-runtime/src/shader-time";
 import type { VisualProjectKind } from "../project-document";
 import {
@@ -829,6 +837,210 @@ void main() {
 }
 `;
 
+/**
+ * The sky mesh factory shared by the gradient/image sky and the Sky Shader, so
+ * both slots place the sky with the same projection, tripod center and scale.
+ */
+function skyGeometryFactorySource(
+  settings: SceneSettings,
+  context: CompileContext,
+): string {
+  const skybox = settings.skybox;
+  context.threeValueImports.add(
+    skybox.projection === "box" ? "BoxGeometry" : "SphereGeometry",
+  );
+  return skybox.projection === "box"
+    ? `const next = new BoxGeometry(1, 1, 1);
+    next.translate(0, 0.5, 0);
+    return next;`
+    : skybox.projection === "dome"
+      ? `const next = new SphereGeometry(0.5, 50, 50);
+    const position = next.attributes.position;
+    const radius = 0.5;
+    const bottomLimit = 0.1;
+    const curvatureRadiusSquared = 0.95 * 0.95;
+    for (let index = 0; index < position.count; index += 1) {
+      const x = position.getX(index) / radius;
+      let y = position.getY(index) / radius;
+      const z = position.getZ(index) / radius;
+      if (y < 0) {
+        y *= 0.3;
+        if (x * x + z * z < curvatureRadiusSquared) y = -bottomLimit;
+      }
+      position.setY(index, (y + bottomLimit) * radius);
+    }
+    position.needsUpdate = true;
+    next.computeVertexNormals();
+    next.computeBoundingBox();
+    next.computeBoundingSphere();
+    return next;`
+      : "return new SphereGeometry(1, 32, 20);";
+}
+
+/** The `<mesh>` attributes that place the sky for the current projection. */
+function skyMeshPlacementProps(
+  settings: SceneSettings,
+  refAttribute: string,
+): string {
+  const skybox = settings.skybox;
+  if (skybox.projection === "infinite") {
+    return `${refAttribute}
+      scale={100}`;
+  }
+  const meshRotation = skybox.meshRotationDegrees
+    .map((value) => formatNumber((value * Math.PI) / 180))
+    .join(", ");
+  return `position={[${skybox.meshPosition.map(formatNumber).join(", ")}]}
+      rotation={[${meshRotation}]}
+      scale={[${skybox.meshScale.map(formatNumber).join(", ")}]}`;
+}
+
+/**
+ * Emits the Sky Shader slot: the scene's Custom Shader Material drawn on the
+ * sky mesh instead of the gradient. Uniform values are literals, exactly as the
+ * Mesh Renderer path emits them, and Scene Settings drives the framing uniforms
+ * the shader declares.
+ */
+function registerSkyShaderSupport(
+  settings: SceneSettings,
+  shader: ClassicR3fMaterialShader,
+  context: CompileContext,
+): void {
+  const skybox = settings.skybox;
+  context.reactValueImports.add("useEffect");
+  context.reactValueImports.add("useMemo");
+  context.threeValueImports.add("BackSide");
+  const geometryFactory = skyGeometryFactorySource(settings, context);
+  const driven = new Map(
+    skyShaderDrivenUniforms(shader, skybox).map((entry) => [entry.name, entry]),
+  );
+  const uniformEntries: string[] = [];
+  for (const [name, uniform] of Object.entries(shader.uniforms)) {
+    const override = driven.get(name);
+    if (override) {
+      if (override.kind === "number") {
+        uniformEntries.push(
+          `${JSON.stringify(name)}: { value: ${formatNumber(override.value)} }`,
+        );
+      } else {
+        context.threeValueImports.add("Vector3");
+        uniformEntries.push(
+          `${JSON.stringify(name)}: { value: new Vector3(${override.value.map(formatNumber).join(", ")}) }`,
+        );
+      }
+      continue;
+    }
+    if (uniform.kind === "number") {
+      uniformEntries.push(
+        `${JSON.stringify(name)}: { value: ${formatNumber(uniform.value)} }`,
+      );
+      continue;
+    }
+    if (uniform.kind === "color") {
+      context.threeValueImports.add("Color");
+      uniformEntries.push(
+        `${JSON.stringify(name)}: { value: new Color(${JSON.stringify(uniform.value)}) }`,
+      );
+      continue;
+    }
+    if (uniform.kind === "vector") {
+      const vectorType =
+        uniform.value.length === 2
+          ? "Vector2"
+          : uniform.value.length === 3
+            ? "Vector3"
+            : "Vector4";
+      context.threeValueImports.add(vectorType);
+      uniformEntries.push(
+        `${JSON.stringify(name)}: { value: new ${vectorType}(${uniform.value.map(formatNumber).join(", ")}) }`,
+      );
+      continue;
+    }
+    // Texture uniforms are resolved by the Mesh Renderer path, which the sky
+    // mesh does not go through. Emitting null keeps the world compiling while
+    // the diagnostic tells the author which uniform lost its Texture.
+    uniformEntries.push(`${JSON.stringify(name)}: { value: null }`);
+  }
+
+  const timeUniforms = detectTimeUniforms(shader);
+  const followsCamera = skybox.projection === "infinite";
+  if (followsCamera || timeUniforms.length > 0) {
+    context.reactValueImports.add("useRef");
+    context.fiberImports.add("useFrame");
+  }
+  if (followsCamera) context.threeTypeImports.add("Mesh");
+  if (timeUniforms.length > 0) context.threeTypeImports.add("ShaderMaterial");
+  const variant =
+    shader.variants.find((candidate) => !candidate.meshNameIncludes) ??
+    shader.variants[0];
+  const frameBody = [
+    followsCamera
+      ? `    if (meshRef.current) meshRef.current.position.copy(camera.position);`
+      : "",
+    ...timeUniforms.map((spec) => {
+      if (spec.glslType === "vec4") {
+        return `    {
+      const uniform = materialRef.current?.uniforms[${JSON.stringify(spec.name)}];
+      if (uniform) {
+        const value = uniform.value;
+        if (value && "set" in value) {
+          value.set(elapsed / 20, elapsed, elapsed * 2, elapsed * 3);
+        } else {
+          uniform.value = [elapsed / 20, elapsed, elapsed * 2, elapsed * 3];
+        }
+      }
+    }`;
+      }
+      return `    if (materialRef.current?.uniforms[${JSON.stringify(spec.name)}]) { materialRef.current.uniforms[${JSON.stringify(spec.name)}].value = elapsed; }`;
+    }),
+  ].filter(Boolean);
+  // Only the values the callback actually reads are destructured, so the
+  // generated World stays clean under a strict unused-locals setting.
+  const frameArguments = [
+    ...(followsCamera ? ["camera"] : []),
+    ...(timeUniforms.length > 0 ? ["clock"] : []),
+  ];
+  const frameCode =
+    frameBody.length > 0
+      ? `  useFrame(({ ${frameArguments.join(", ")} }) => {
+${timeUniforms.length > 0 ? "    const elapsed = clock.getElapsedTime();\n" : ""}${frameBody.join("\n")}
+  });
+`
+      : "";
+
+  context.supportDeclarations.set(
+    "scene-environment:sky-shader",
+    `const XRiftStudioSkyShader: FC = () => {
+${followsCamera ? "  const meshRef = useRef<Mesh>(null);\n" : ""}${timeUniforms.length > 0 ? "  const materialRef = useRef<ShaderMaterial>(null);\n" : ""}  const geometry = useMemo(() => {
+    ${geometryFactory}
+  }, []);
+  const uniforms = useMemo(() => ({
+    ${uniformEntries.join(",\n    ")}
+  }), []);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+${frameCode}  return (
+    <mesh
+      geometry={geometry}
+      ${skyMeshPlacementProps(settings, followsCamera ? "ref={meshRef}" : "")}
+      frustumCulled={false}
+      renderOrder={-1}
+    >
+      <shaderMaterial
+        ${timeUniforms.length > 0 ? "ref={materialRef}" : ""}
+        side={BackSide}
+        depthTest={false}
+        depthWrite={false}
+        vertexShader={${JSON.stringify(shader.vertexShader)}}
+        fragmentShader={${JSON.stringify(shader.fragmentShader)}}
+        uniforms={uniforms}
+        defines={${JSON.stringify(variant.defines)}}
+      />
+    </mesh>
+  );
+};`,
+  );
+}
+
 function registerProjectedSkyboxSupport(
   settings: SceneSettings,
   context: CompileContext,
@@ -1153,9 +1365,43 @@ function renderSceneEnvironment(
     );
   }
 
-  if (settings.skybox.enabled || settings.skybox.iblEnabled) {
+  const skyShader = resolveSkyShaderMaterial(
+    context.assets,
+    settings.skybox.materialAssetId,
+  );
+  if (settings.skybox.materialAssetId && skyShader.status === "unavailable") {
+    addDiagnostic(context, {
+      severity: "warning",
+      code: "sky-shader-unavailable",
+      message: `${skyShader.reason}。空をグラデーションに戻しました`,
+      sceneId: context.scene.sceneId,
+      assetId: skyShader.assetId,
+      fieldPath: "settings.skybox.materialAssetId",
+    });
+  }
+  if (settings.skybox.enabled && skyShader.status === "ready") {
+    context.referencedAssetIds.add(skyShader.asset.id);
+    const textureUniforms = skyShaderTextureUniformNames(skyShader.shader);
+    if (textureUniforms.length > 0) {
+      addDiagnostic(context, {
+        severity: "warning",
+        code: "sky-shader-texture-unsupported",
+        message: `空Shader「${skyShader.asset.name}」のTexture uniform（${textureUniforms.join("、")}）は空スロットでは解決できません。手続き的なuniformだけを使ってください`,
+        sceneId: context.scene.sceneId,
+        assetId: skyShader.asset.id,
+        fieldPath: "settings.skybox.materialAssetId",
+      });
+    }
+    registerSkyShaderSupport(settings, skyShader.shader, context);
+    content.push("<XRiftStudioSkyShader />");
+  }
+  // A Sky Shader replaces the visible background but not image-based lighting,
+  // so the image path still runs when IBL is on.
+  const skyboxBackgroundEnabled =
+    settings.skybox.enabled && skyShader.status !== "ready";
+  if (skyboxBackgroundEnabled || settings.skybox.iblEnabled) {
     const projectedSkybox =
-      settings.skybox.enabled && settings.skybox.projection !== "infinite";
+      skyboxBackgroundEnabled && settings.skybox.projection !== "infinite";
     if (projectedSkybox) registerProjectedSkyboxSupport(settings, context);
     const imageAssetId = settings.skybox.imageAssetId;
     const imageAsset = imageAssetId ? context.assets.assets[imageAssetId] : undefined;
@@ -1191,7 +1437,7 @@ function renderSceneEnvironment(
         : exrSkybox
           ? "EXRLoader"
           : "TextureLoader";
-      const imageBackgroundSnapshot = settings.skybox.enabled
+      const imageBackgroundSnapshot = skyboxBackgroundEnabled
         ? `    const previousBackground = scene.background;
     const previousBackgroundIntensity = scene.backgroundIntensity;
     const previousBackgroundRotation = scene.backgroundRotation.clone();`
@@ -1201,7 +1447,7 @@ function renderSceneEnvironment(
     const previousEnvironmentIntensity = scene.environmentIntensity;
     const previousEnvironmentRotation = scene.environmentRotation.clone();`
         : "";
-      const imageBackgroundApply = settings.skybox.enabled
+      const imageBackgroundApply = skyboxBackgroundEnabled
         ? `    scene.background = texture;
     scene.backgroundIntensity = exposure;
     scene.backgroundRotation.set(0, rotation, 0);`
@@ -1211,7 +1457,7 @@ function renderSceneEnvironment(
     scene.environmentIntensity = exposure;
     scene.environmentRotation.set(0, rotation, 0);`
         : "";
-      const imageBackgroundRestore = settings.skybox.enabled
+      const imageBackgroundRestore = skyboxBackgroundEnabled
         ? `      scene.background = previousBackground;
       scene.backgroundIntensity = previousBackgroundIntensity;
       scene.backgroundRotation.copy(previousBackgroundRotation);`
@@ -1279,7 +1525,7 @@ ${imageIblRestore}
         addDiagnostic(context, {
           severity: "warning",
           code: "skybox-image-unavailable",
-          message: settings.skybox.enabled
+          message: skyboxBackgroundEnabled
             ? "Skybox画像を背景またはIBLに使用できないため、背景をグラデーションにフォールバックしました"
             : "Skybox画像を生成WorldのIBLに使用できません",
           sceneId: context.scene.sceneId,
@@ -1287,7 +1533,7 @@ ${imageIblRestore}
           fieldPath: "settings.skybox.imageAssetId",
         });
       }
-      if (settings.skybox.enabled) {
+      if (skyboxBackgroundEnabled) {
         registerProjectedSkyboxSupport(settings, context);
         content.push(`<XRiftStudioProjectedSkybox texture={null} />`);
       }

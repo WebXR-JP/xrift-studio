@@ -12,6 +12,12 @@ export type SceneSkyboxSettings = {
   projection: "infinite" | "box" | "dome";
   /** Optional equirectangular texture Asset used instead of the gradient. */
   imageAssetId?: string;
+  /**
+   * Optional Custom Shader Material Asset drawn as the sky. It takes priority
+   * over the image and the gradient, so a procedural sky (stars, aurora) stays
+   * one Material the Inspector can retune rather than a second settings shape.
+   */
+  materialAssetId?: string;
   topColor: string;
   bottomColor: string;
   offset: number;
@@ -125,6 +131,7 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
     iblEnabled: false,
     projection: "infinite",
     imageAssetId: undefined,
+    materialAssetId: undefined,
     topColor: "#87ceeb",
     bottomColor: "#ffffff",
     offset: 0,
@@ -278,6 +285,10 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
     typeof skybox.imageAssetId === "string" && skybox.imageAssetId.trim()
       ? skybox.imageAssetId
       : undefined;
+  const resolvedSkyboxMaterialAssetId =
+    typeof skybox.materialAssetId === "string" && skybox.materialAssetId.trim()
+      ? skybox.materialAssetId
+      : undefined;
   const resolvedSkyboxEnabled = booleanOr(
     skybox.enabled,
     DEFAULT_SCENE_SETTINGS.skybox.enabled,
@@ -318,6 +329,7 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
         DEFAULT_SCENE_SETTINGS.skybox.projection,
       ),
       imageAssetId: resolvedSkyboxImageAssetId,
+      materialAssetId: resolvedSkyboxMaterialAssetId,
       topColor: colorOr(skybox.topColor, DEFAULT_SCENE_SETTINGS.skybox.topColor),
       bottomColor: colorOr(
         skybox.bottomColor,

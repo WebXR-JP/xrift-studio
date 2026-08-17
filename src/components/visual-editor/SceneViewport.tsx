@@ -106,10 +106,13 @@ import {
   resolveOpenBrushEditorBrushBaseUrl,
   resolveRuntimeSpawn,
   resolveSceneSettings,
+  resolveSkyShaderMaterial,
+  skyShaderDrivenUniforms,
   createTerrainMeshBuffers,
   terrainHeightRange,
   STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID,
   type AssetManifest,
+  type ClassicR3fMaterialShader,
   type AnimationComponent,
   type AudioSourceComponent,
   type ColliderComponent,
@@ -2941,6 +2944,101 @@ function SceneWind({
   return null;
 }
 
+/**
+ * Draws the scene's Sky Shader Material on the sky mesh. Scene Settings feeds
+ * the framing uniforms the shader declares, so the Center, Rotation and
+ * Brightness controls keep working the same way they do for the built-in sky.
+ */
+function SkyShaderPreview({
+  shader,
+  settings,
+}: {
+  shader: ClassicR3fMaterialShader;
+  settings: SceneSettings["skybox"];
+}) {
+  const meshRef = useRef<Mesh>(null);
+  const geometry = useMemo(
+    () => createSkyGeometry(settings.projection),
+    [settings.projection],
+  );
+  const material = useMemo(() => {
+    const next = createClassicR3fMaterial(shader, {}, "");
+    next.side = BackSide;
+    next.depthTest = false;
+    next.depthWrite = false;
+    next.needsUpdate = true;
+    return next;
+  }, [shader]);
+  const driven = useMemo(
+    () => skyShaderDrivenUniforms(shader, settings),
+    [settings, shader],
+  );
+  const rotation = useMemo(
+    () =>
+      settings.meshRotationDegrees.map((value) => MathUtils.degToRad(value)) as [
+        number,
+        number,
+        number,
+      ],
+    [settings.meshRotationDegrees],
+  );
+
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  useEffect(() => () => material.dispose(), [material]);
+  useEffect(() => {
+    for (const entry of driven) {
+      const uniform = material.uniforms[entry.name];
+      if (!uniform) continue;
+      if (entry.kind === "number") {
+        uniform.value = entry.value;
+        continue;
+      }
+      const current = uniform.value;
+      if (current instanceof Vector3) {
+        current.set(entry.value[0], entry.value[1], entry.value[2]);
+      } else {
+        uniform.value = new Vector3(
+          entry.value[0],
+          entry.value[1],
+          entry.value[2],
+        );
+      }
+    }
+  }, [driven, material]);
+
+  useFrame(({ camera, clock }) => {
+    if (settings.projection === "infinite" && meshRef.current) {
+      meshRef.current.position.copy(camera.position);
+    }
+    const elapsed = clock.getElapsedTime();
+    const specs = material.userData.xriftTimeUniforms as
+      | TimeUniformSpec[]
+      | undefined;
+    if (!Array.isArray(specs)) return;
+    for (const spec of specs) {
+      const uniform = material.uniforms[spec.name];
+      if (uniform) {
+        applyTimeUniformValue(uniform as MutableUniformValue, spec, elapsed);
+      }
+    }
+  });
+
+  return (
+    <mesh
+      ref={meshRef}
+      geometry={geometry}
+      material={material}
+      position={
+        settings.projection === "infinite" ? undefined : settings.meshPosition
+      }
+      rotation={settings.projection === "infinite" ? undefined : rotation}
+      scale={settings.projection === "infinite" ? 100 : settings.meshScale}
+      frustumCulled={false}
+      renderOrder={-1}
+    />
+  );
+}
+
 function SceneSkyboxPreview({
   settings,
   assets,
@@ -2950,6 +3048,13 @@ function SceneSkyboxPreview({
   assets: AssetManifest;
   projectPath: string | undefined;
 }) {
+  const skyShader = useMemo(
+    () => resolveSkyShaderMaterial(assets, settings.materialAssetId),
+    [assets, settings.materialAssetId],
+  );
+  // The shader owns the visible sky; the image path still runs for IBL so a
+  // scene can light itself from an HDRI while a procedural sky is drawn.
+  const shaderDrawsSky = settings.enabled && skyShader.status === "ready";
   const imageTexture = useSceneSkyboxTexture(
     assets,
     settings.enabled || settings.iblEnabled ? settings.imageAssetId : undefined,
@@ -2957,7 +3062,22 @@ function SceneSkyboxPreview({
     settings.flipY,
   );
   if (!settings.enabled && !settings.iblEnabled) return null;
-  return <ProjectedSkyboxPreview texture={imageTexture} settings={settings} />;
+  const backgroundSettings = shaderDrawsSky
+    ? { ...settings, enabled: false }
+    : settings;
+  return (
+    <>
+      {shaderDrawsSky && skyShader.status === "ready" ? (
+        <SkyShaderPreview shader={skyShader.shader} settings={settings} />
+      ) : null}
+      {backgroundSettings.enabled || backgroundSettings.iblEnabled ? (
+        <ProjectedSkyboxPreview
+          texture={imageTexture}
+          settings={backgroundSettings}
+        />
+      ) : null}
+    </>
+  );
 }
 
 function EditorCameraSettings({

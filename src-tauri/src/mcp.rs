@@ -3002,7 +3002,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "update_scene_settings",
-            "description": "Update persisted Skybox, Fog, ambient light, camera, post effects, and editor viewport settings through XRift Studio history and autosave. This is supported during Edit and Play; Play reflects the shared Scene settings immediately.",
+            "description": "Update persisted Skybox, Sky Shader, Fog, ambient light, camera, post effects, and editor viewport settings through XRift Studio history and autosave. skybox.materialAssetId assigns a Custom Shader Material as the procedural sky; it draws the background instead of the image and the gradient. This is supported during Edit and Play; Play reflects the shared Scene settings immediately.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3016,6 +3016,7 @@ fn tool_definitions() -> Value {
                             "iblEnabled": { "type": "boolean" },
                             "projection": { "type": "string", "enum": ["infinite", "box", "dome"] },
                             "imageAssetId": { "type": ["string", "null"], "minLength": 1 },
+                            "materialAssetId": { "type": ["string", "null"], "minLength": 1 },
                             "topColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
                             "bottomColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
                             "offset": { "type": "number" },
