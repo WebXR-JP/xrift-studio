@@ -7,6 +7,7 @@ import {
   LineBasicMaterial,
   LineLoop,
   Mesh,
+  MeshBasicMaterial,
   type Group,
 } from "three";
 import { useFrame } from "@react-three/fiber";
@@ -58,6 +59,7 @@ export function TerrainBrushCursor({
 }) {
   const groupRef = useRef<Group>(null);
   const innerRef = useRef<Mesh>(null);
+  const innerMaterialRef = useRef<MeshBasicMaterial>(null);
   const color = useMemo(
     () => new Color(BRUSH_COLORS[kind] ?? "#a78bfa"),
     [kind],
@@ -130,6 +132,8 @@ export function TerrainBrushCursor({
     const outlinePositions = geometries.outline.getAttribute("position");
     const innerPositions = geometries.inner.getAttribute("position");
     const softRadius = radius * Math.max(0, Math.min(falloff, 1));
+    let minHeight = Number.POSITIVE_INFINITY;
+    let maxHeight = Number.NEGATIVE_INFINITY;
     for (let segment = 0; segment <= RING_SEGMENTS; segment += 1) {
       const angle = (segment / RING_SEGMENTS) * Math.PI * 2;
       const dirX = Math.cos(angle);
@@ -137,10 +141,13 @@ export function TerrainBrushCursor({
 
       const outerX = center[0] + dirX * radius;
       const outerZ = center[1] + dirZ * radius;
+      const outerHeight = sampleTerrainHeight(terrain, outerX, outerZ);
+      if (outerHeight < minHeight) minHeight = outerHeight;
+      if (outerHeight > maxHeight) maxHeight = outerHeight;
       outlinePositions.setXYZ(
         segment,
         outerX,
-        sampleTerrainHeight(terrain, outerX, outerZ) + SURFACE_OFFSET,
+        outerHeight + SURFACE_OFFSET,
         outerZ,
       );
 
@@ -155,12 +162,21 @@ export function TerrainBrushCursor({
       innerPositions.setXYZ(
         segment * 2 + 1,
         outerX,
-        sampleTerrainHeight(terrain, outerX, outerZ) + SURFACE_OFFSET,
+        outerHeight + SURFACE_OFFSET,
         outerZ,
       );
     }
     outlinePositions.needsUpdate = true;
     innerPositions.needsUpdate = true;
+    // On a cliff the two rings sit many metres apart in Y and the band between
+    // them becomes a vertical curtain that hides the ground it is describing.
+    // The outline alone still reads as the footprint, so the fill fades out as
+    // the footprint stops being roughly flat.
+    const fill = innerMaterialRef.current;
+    if (fill) {
+      const relief = (maxHeight - minHeight) / Math.max(radius, 0.001);
+      fill.opacity = 0.18 * (1 - Math.min(relief / 1.5, 1));
+    }
     if (import.meta.env.DEV) {
       // Verification hook: lets a debug session confirm the ring is live and
       // where it sits without reaching into the renderer's internals.
@@ -185,6 +201,7 @@ export function TerrainBrushCursor({
       <mesh ref={innerRef} frustumCulled={false} renderOrder={998}>
         <primitive object={geometries.inner} attach="geometry" />
         <meshBasicMaterial
+          ref={innerMaterialRef}
           color={color}
           transparent
           opacity={0.18}

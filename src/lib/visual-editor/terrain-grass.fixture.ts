@@ -541,6 +541,70 @@ export function runTerrainGrassPublishFixtureAssertions(): void {
   assertEmbeddedPlacementEquivalence();
   assertCompiledWorldGrass();
   assertSceneGrassBrushRouting();
+  assertGrassStrokeNeverSculpts();
+}
+
+/**
+ * A grass stroke must never reach the height field.
+ *
+ * This is the destructive direction of a bug that shipped: the panel could show
+ * the grass tool while the Scene View still held a sculpting brush, so a drag
+ * meant to paint carved a valley into the ground instead. The panel side is
+ * fixed by deriving the armed state from one source, and this pins the other
+ * half — that nothing routed as a grass stroke can move terrain.
+ */
+function assertGrassStrokeNeverSculpts(): void {
+  const prototype = createPrototypeProject("world", "grass-never-sculpts");
+  const preset = getTerrainPreset("rolling-hills");
+  if (!preset) throw new Error("rolling-hills preset is missing");
+  const placed = addTerrainEntity(
+    prototype.scene,
+    prototype.assets,
+    BUILTIN_ASSET_IDS.material.green,
+    createTerrainFromPreset(preset),
+  );
+  assert(placed !== null, "Sculpt-guard fixture could not place a Terrain");
+  if (!placed) return;
+
+  const readTerrain = (scene: typeof placed.scene) => {
+    const entity = scene.entities[placed.entityId];
+    const mesh = entity?.components.find(
+      (component) => component.type === "mesh",
+    );
+    return mesh && "geometry" in mesh && mesh.geometry?.kind === "terrain"
+      ? mesh.geometry.terrain
+      : undefined;
+  };
+  const before = readTerrain(placed.scene);
+  assert(Boolean(before), "Sculpt-guard fixture lost its Terrain");
+  if (!before) return;
+  const layerId = before.grass?.[0]?.id;
+  assert(Boolean(layerId), "Sculpt-guard fixture needs a grass layer");
+
+  for (const kind of ["grass-paint", "grass-erase"] as const) {
+    const next = applyTerrainBrushToScene(placed.scene, placed.entityId, {
+      kind,
+      center: [0, 0],
+      radius: 12,
+      strength: 1,
+      grassLayerId: layerId,
+    });
+    const after = readTerrain(next);
+    assert(Boolean(after), `${kind} stroke lost the Terrain`);
+    if (!after) continue;
+    assert(
+      after.heights === before.heights,
+      `${kind} のストロークが高さフィールドを書き換えています`,
+    );
+    assert(
+      after.holes === before.holes,
+      `${kind} のストロークが穴を書き換えています`,
+    );
+    assert(
+      after.width === before.width && after.depth === before.depth,
+      `${kind} のストロークが地形の大きさを変えています`,
+    );
+  }
 }
 
 /**

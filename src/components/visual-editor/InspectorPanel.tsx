@@ -1239,7 +1239,6 @@ function TerrainInspector({
   const [width, setWidth] = useState(terrain.width);
   const [depth, setDepth] = useState(terrain.depth);
   const [resolution, setResolution] = useState(terrain.resolution);
-  const [sceneEditing, setSceneEditing] = useState(false);
 
   const range = terrainHeightRange(terrain);
   const maximumRadius = Math.max(terrain.width, terrain.depth);
@@ -1253,6 +1252,10 @@ function TerrainInspector({
   const heightTargetRequired =
     mode === "sculpt" && (sculptKind === "flatten" || sculptKind === "stamp");
   const paintable = mode !== "settings" && mode !== "surface";
+  // Derived, never stored: two sources of truth for "is a brush armed" let the
+  // panel show one tool while the Scene View held another, so a click meant to
+  // paint grass carved the ground instead.
+  const sceneEditing = Boolean(armedBrush);
   const disabled =
     readOnly || !onBrush || !paintable || (grassTool && !activeGrassLayer);
 
@@ -1260,11 +1263,7 @@ function TerrainInspector({
   // (bracket keys, Alt-pick). Mirroring them keeps the panel from showing a
   // stale brush while the ground is being edited with a different one.
   useEffect(() => {
-    if (!armedBrush) {
-      setSceneEditing(false);
-      return;
-    }
-    setSceneEditing(true);
+    if (!armedBrush) return;
     setRadius(armedBrush.radius);
     if (armedBrush.targetHeight !== undefined) {
       setTargetHeight(armedBrush.targetHeight);
@@ -1323,30 +1322,58 @@ function TerrainInspector({
     onSceneEditingChange({ ...buildBrush(), ...patch });
   };
 
-  /** Selecting a brush arms the Scene View with it, so the tool is the gesture. */
-  const selectBrush = (nextKind: TerrainViewportBrushKind) => {
+  /**
+   * Arms the Scene View with a tool, and switches the panel to its mode.
+   *
+   * Both halves have to happen together. Changing only the panel leaves the
+   * previous tool armed, which is how choosing "paint grass" could still carve
+   * the ground on the next drag.
+   */
+  const armTool = (
+    nextMode: TerrainEditorMode,
+    nextKind: TerrainViewportBrushKind,
+    layerId = activeGrassLayer?.id,
+  ) => {
+    setMode(nextMode);
     if (nextKind === "grass-paint" || nextKind === "grass-erase") {
       setGrassKind(nextKind);
+      if (layerId) setGrassLayerId(layerId);
     } else if (nextKind === "hole-add" || nextKind === "hole-remove") {
       setHoleKind(nextKind);
     } else {
       setSculptKind(nextKind);
     }
-    if (sceneEditing) onSceneEditingChange?.(buildBrushFor(nextKind));
+    onSceneEditingChange?.(buildBrushFor(nextKind, layerId));
+  };
+
+  /** Selecting a brush arms the Scene View with it, so the tool is the gesture. */
+  const selectBrush = (nextKind: TerrainViewportBrushKind) => {
+    armTool(mode, nextKind);
   };
 
   const selectMode = (nextMode: TerrainEditorMode) => {
-    setMode(nextMode);
     if (nextMode === "settings" || nextMode === "surface") {
-      // Nothing in the settings mode is a gesture, so leaving the Scene View
-      // armed would let a stray click edit with an invisible brush.
-      setSceneEditing(false);
+      setMode(nextMode);
+      // Neither mode holds a gesture, so leaving the Scene View armed would let
+      // a stray click edit the ground with a brush that is no longer shown.
       onSceneEditingChange?.(null);
       return;
     }
-    const nextKind =
-      nextMode === "grass" ? grassKind : nextMode === "hole" ? holeKind : sculptKind;
-    if (sceneEditing) onSceneEditingChange?.(buildBrushFor(nextKind));
+    // Grass with no layer has nothing to paint into, and arming anyway would
+    // put the Scene View in a state where every stroke is silently dropped.
+    if (nextMode === "grass" && !activeGrassLayer) {
+      setMode(nextMode);
+      onSceneEditingChange?.(null);
+      return;
+    }
+    armTool(
+      nextMode,
+      nextMode === "grass"
+        ? grassKind
+        : nextMode === "hole"
+          ? holeKind
+          : sculptKind,
+    );
   };
 
   const applySettings = () => {
@@ -1460,11 +1487,9 @@ function TerrainInspector({
               type="button"
               disabled={disabled || !onSceneEditingChange}
               aria-pressed={sceneEditing}
-              onClick={() => {
-                const next = !sceneEditing;
-                setSceneEditing(next);
-                onSceneEditingChange?.(next ? buildBrush() : null);
-              }}
+              onClick={() =>
+                sceneEditing ? onSceneEditingChange?.(null) : armTool(mode, kind)
+              }
               className={`rounded px-2 py-1 text-[11px] font-semibold disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${
                 sceneEditing
                   ? "bg-violet-600 text-white hover:bg-violet-700"
@@ -1492,6 +1517,15 @@ function TerrainInspector({
           {mode === "grass" && grassLayers.length === 0 ? (
             <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-800">
               草のレイヤーがありません。下の一覧から追加するか、セットを適用すると塗れます。
+            </p>
+          ) : mode === "grass" &&
+            grassKind === "grass-paint" &&
+            !activeGrassLayer?.mask ? (
+            // Coverage starts full, so "生やす" has nothing to add until part of
+            // the layer has been erased. Without saying so, the first stroke an
+            // author tries looks like a broken brush.
+            <p className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] leading-4 text-slate-600">
+              このレイヤーはまだ全面に生えています。「生やす」は消した所を戻す筆なので、先に「消す」で間引いてください。
             </p>
           ) : null}
 
@@ -1617,8 +1651,10 @@ function TerrainInspector({
           addGrassTypeId={addGrassTypeId}
           grassPresetChoice={grassPresetChoice}
           onSelectLayer={(id) => {
-            setGrassLayerId(id);
-            updateSceneBrush({ grassLayerId: id });
+            // Picking a layer while a grass brush is armed must retarget it,
+            // not leave the stroke landing on the previous layer.
+            if (sceneEditing && grassTool) armTool("grass", grassKind, id);
+            else setGrassLayerId(id);
           }}
           onAddGrassTypeChange={setAddGrassTypeId}
           onGrassPresetChange={setGrassPresetChoice}
