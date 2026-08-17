@@ -2,7 +2,12 @@ import type { ExternalStoreAssetKind } from "../tauri";
 
 export type ExternalStoreProvider = {
   id: string;
-  kind: "remote-assets" | "open-brush" | "xrift-components" | "sky-shader";
+  kind:
+    | "remote-assets"
+    | "open-brush"
+    | "xrift-components"
+    | "sky-shader"
+    | "water-shader";
   name: string;
   badge: string;
   summary: string;
@@ -62,6 +67,19 @@ export const EXTERNAL_STORE_PROVIDERS = [
     authorFallback: "XRift Studio contributors",
     attributionNote:
       "画像ではなくGLSLで空を描くMaterialです。追加後もInspectorでuniformを編集できます。",
+  },
+  {
+    id: "xrift-water-shaders",
+    kind: "water-shader",
+    name: "Water Shader",
+    badge: "Official",
+    summary: "湖・海・セルルックの水を追加",
+    homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
+    catalogKinds: [],
+    installableKinds: [],
+    authorFallback: "XRift Studio contributors",
+    attributionNote:
+      "Gerstner波はMochie's Unity Shaders (MIT) を移植しています。波はScene設定のWindから駆動します。",
   },
   {
     id: "xrift-components",

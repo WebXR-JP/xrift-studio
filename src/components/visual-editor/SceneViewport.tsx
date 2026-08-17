@@ -33,8 +33,10 @@ import {
   type ScriptViewportRuntime,
 } from "./EntityScriptVisual";
 import {
+  createContext,
   Fragment,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -79,6 +81,7 @@ import {
   type Mesh,
   type MeshStandardMaterial,
   type Object3D,
+  type ShaderMaterial,
   type Texture,
 } from "three";
 import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
@@ -107,12 +110,16 @@ import {
   resolveRuntimeSpawn,
   resolveSceneSettings,
   resolveSkyShaderMaterial,
+  resolveSceneWind,
   skyShaderDrivenUniforms,
+  windDrivenUniforms,
+  STILL_WIND,
   createTerrainMeshBuffers,
   terrainHeightRange,
   STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID,
   type AssetManifest,
   type ClassicR3fMaterialShader,
+  type ResolvedWind,
   type AnimationComponent,
   type AudioSourceComponent,
   type ColliderComponent,
@@ -195,6 +202,68 @@ import {
   type SceneViewportDisplayMode,
   type SceneViewportMaterialStyle,
 } from "./scene-viewport-display";
+
+/**
+ * The wind every wind-driven Material in the viewport reads. It is a context
+ * rather than a prop so the Scene View matches the compiled world, where the
+ * compiler resolves the same wind per Entity: an Entity with a Wind component
+ * nests its own value, everything else inherits the scene's.
+ */
+const SceneWindContext = createContext<ResolvedWind>(STILL_WIND);
+
+/**
+ * Narrows the wind for one Entity's subtree. The Wind component overrides the
+ * rate and gustiness for the Materials under it; direction stays scene-wide.
+ */
+function EntityWindScope({
+  component,
+  children,
+}: {
+  component: VegetationWindComponent;
+  children: ReactNode;
+}) {
+  const scene = useContext(SceneWindContext);
+  const value = useMemo<ResolvedWind>(
+    () =>
+      component.enabled
+        ? {
+            direction: scene.direction,
+            speed: Math.max(component.windSpeed, 0),
+            turbulence: Math.min(Math.max(component.gustStrength, 0), 1),
+          }
+        : { ...STILL_WIND, direction: scene.direction },
+    [component.enabled, component.gustStrength, component.windSpeed, scene.direction],
+  );
+  return (
+    <SceneWindContext.Provider value={value}>{children}</SceneWindContext.Provider>
+  );
+}
+
+/** Pushes the scene's wind into a Custom Shader that declares those uniforms. */
+function useWindDrivenMaterial(
+  material: ShaderMaterial | undefined,
+  shader: ClassicR3fMaterialShader | undefined,
+): void {
+  const wind = useContext(SceneWindContext);
+  useEffect(() => {
+    if (!material || !shader) return;
+    for (const entry of windDrivenUniforms(shader, wind)) {
+      const uniform = material.uniforms[entry.name];
+      if (!uniform) continue;
+      if (entry.kind === "number") {
+        uniform.value = entry.value;
+        continue;
+      }
+      const current = uniform.value;
+      if (current instanceof Vector2) {
+        current.set(entry.value[0], entry.value[1]);
+      } else {
+        uniform.value = new Vector2(entry.value[0], entry.value[1]);
+      }
+    }
+    material.needsUpdate = true;
+  }, [material, shader, wind]);
+}
 
 const PLAY_KEYS = new Set([
   "w",
@@ -732,6 +801,10 @@ function PrimitiveMeshVisual({
         ? createClassicR3fMaterial(material.shader, classicShaderTextures, "")
         : undefined,
     [classicShaderTextures, material?.shader],
+  );
+  useWindDrivenMaterial(
+    authoredShaderMaterial,
+    material?.shader?.kind === "classic-r3f" ? material.shader : undefined,
   );
   const resolvedCustomShaderMaterial = authoredShaderMaterial ?? customShaderMaterial;
   const meshRef = useRef<Mesh | null>(null);
@@ -1610,6 +1683,10 @@ function EntityObject({
           component.type === "script" && component.enabled,
       )
     : [];
+  const entityWindComponent = entity.components.find(
+    (component): component is VegetationWindComponent =>
+      component.type === "vegetation-wind",
+  );
   const entityVisuals = (
     <Fragment key={runtimeRevision}>
       {scriptComponents.map((component) => (
@@ -1647,16 +1724,23 @@ function EntityObject({
       )}
     </Fragment>
   );
+  const windScopedVisuals = entityWindComponent ? (
+    <EntityWindScope component={entityWindComponent}>
+      {entityVisuals}
+    </EntityWindScope>
+  ) : (
+    entityVisuals
+  );
   const ownedColliderVisuals = rigidBodyOwner ? (
     <RuntimeOwnedColliderContent
       entity={entity}
       bodyType={rigidBodyOwner.bodyType}
       autoColliders={rigidBodyOwner.autoColliders}
     >
-      {entityVisuals}
+      {windScopedVisuals}
     </RuntimeOwnedColliderContent>
   ) : (
-    entityVisuals
+    windScopedVisuals
   );
 
   const setTransformControlsRef = useCallback(
@@ -3284,6 +3368,10 @@ export function SceneViewport({
     () => resolveSceneSettings(scene.settings),
     [scene.settings],
   );
+  const viewportWind = useMemo(
+    () => resolveSceneWind(sceneSettings.vegetation),
+    [sceneSettings.vegetation],
+  );
   const effectiveDisplayMode = editorMode === "play" ? "scene" : displayMode;
   const colliderOnlyEdit = effectiveDisplayMode === "colliders";
   const renderDisplayMode = thumbnailCaptureActive ? "scene" : effectiveDisplayMode;
@@ -4232,6 +4320,7 @@ export function SceneViewport({
             far: sceneSettings.camera.far,
           }}
         >
+          <SceneWindContext.Provider value={viewportWind}>
           <color
             attach="background"
             args={[
@@ -4394,6 +4483,7 @@ export function SceneViewport({
             frameTarget={selectedTransform?.position}
             onFocusChange={onFocusChange}
           />
+          </SceneWindContext.Provider>
         </Canvas>
 
         {debugOverlayEnabled && debugMetrics && !thumbnailCaptureActive ? (

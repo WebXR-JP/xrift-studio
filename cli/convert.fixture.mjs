@@ -70,6 +70,7 @@ import { runRuntimeSpawnFixtureAssertions } from "../src/lib/visual-editor/runti
 import { runSkyboxImportFixtureAssertions } from "../src/lib/visual-editor/skybox-import.fixture.ts";
 import { runSkyShaderFixtureAssertions } from "../src/lib/visual-editor/sky-shader.fixture.ts";
 import { runWindContractFixtureAssertions } from "../src/lib/visual-editor/wind-contract.fixture.ts";
+import { runWaterShaderFixtureAssertions } from "../src/lib/visual-editor/water-shader.fixture.ts";
 import { runUnityPackageImportFixture } from "../src/lib/visual-editor/unity-package-import.fixture.ts";
 
 // Asset import runs in the Tauri webview, so it uses the browser file APIs.  Node
@@ -280,6 +281,7 @@ try {
     ["skybox import", runSkyboxImportFixtureAssertions],
     ["sky shader", runSkyShaderFixtureAssertions],
     ["wind contract", runWindContractFixtureAssertions],
+    ["water shader", runWaterShaderFixtureAssertions],
     ["unity package import", runUnityPackageImportFixture],
     ["editor drag data", runEditorDragDataFixture],
     ["editor library drag", runEditorLibraryDragFixture],

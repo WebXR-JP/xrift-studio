@@ -10,6 +10,7 @@ import {
   Search,
   Store,
   Sunrise,
+  Waves,
   X,
 } from "lucide-react";
 import {
@@ -26,7 +27,9 @@ import {
   openBrushCategoryLabel,
   type OpenBrushCatalogCategory,
   type OpenBrushCatalogEntry,
+  type ResolvedWind,
   type SkyShaderCatalogEntry,
+  type WaterShaderCatalogEntry,
   type VisualProjectKind,
   type XriftComponentDefinition,
 } from "../../lib/visual-editor";
@@ -43,6 +46,10 @@ import {
   SkyShaderStore,
   type SkyShaderInstallResult,
 } from "./SkyShaderStore";
+import {
+  WaterShaderStore,
+  type WaterShaderInstallResult,
+} from "./WaterShaderStore";
 
 type StoreKindFilter = "all" | ExternalStoreAsset["assetKind"];
 
@@ -55,6 +62,8 @@ export function ExternalAssetStoreDialog({
   onInstalled,
   onAddOpenBrush,
   onAddSkyShader,
+  onAddWaterShader,
+  sceneWind,
   onAddOfficialComponent,
 }: {
   open: boolean;
@@ -74,6 +83,12 @@ export function ExternalAssetStoreDialog({
     parameterValues: Readonly<Record<string, number | string>>,
     applyToSky: boolean,
   ) => Promise<SkyShaderInstallResult>;
+  onAddWaterShader: (
+    entry: WaterShaderCatalogEntry,
+    parameterValues: Readonly<Record<string, number | string>>,
+  ) => Promise<WaterShaderInstallResult>;
+  /** Scene wind, so Water previews move the way the scene will. */
+  sceneWind: ResolvedWind;
   onAddOfficialComponent: (
     definition: XriftComponentDefinition,
   ) => Promise<boolean>;
@@ -344,6 +359,12 @@ export function ExternalAssetStoreDialog({
             <SkyShaderStore
               disabledReason={disabledReason}
               onAdd={onAddSkyShader}
+            />
+          ) : provider.kind === "water-shader" ? (
+            <WaterShaderStore
+              disabledReason={disabledReason}
+              wind={sceneWind}
+              onAdd={onAddWaterShader}
             />
           ) : provider.kind === "xrift-components" ? (
             <OfficialXriftComponentStore
@@ -934,6 +955,7 @@ function OpenBrushStore({
 function ProviderIcon({ kind }: { kind: ExternalStoreProvider["kind"] }) {
   if (kind === "open-brush") return <Brush size={14} aria-hidden="true" />;
   if (kind === "sky-shader") return <Sunrise size={14} aria-hidden="true" />;
+  if (kind === "water-shader") return <Waves size={14} aria-hidden="true" />;
   if (kind === "xrift-components") {
     return <Boxes size={14} aria-hidden="true" />;
   }

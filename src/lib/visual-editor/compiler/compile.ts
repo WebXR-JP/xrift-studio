@@ -33,6 +33,7 @@ import {
   skyShaderDrivenUniforms,
   skyShaderTextureUniformNames,
 } from "../sky-shader";
+import { resolveSceneWind, windDrivenUniforms } from "../wind-contract";
 import { detectTimeUniforms } from "../../../../packages/xrift-studio-runtime/src/shader-time";
 import type { VisualProjectKind } from "../project-document";
 import {
@@ -3043,7 +3044,37 @@ function registerClassicR3fMaterialComponent(
   const textureLines: string[] = [];
   const textureDependencies: string[] = [];
   const uniformEntries: string[] = [];
+  // Wind is authored on the Scene, not on the Material, so a shader that opts
+  // into the wind contract gets the scene's values rather than whatever was
+  // saved in its own uniforms.
+  const entityWind = entity.components.find(
+    (component): component is Extract<typeof component, { type: "vegetation-wind" }> =>
+      component.type === "vegetation-wind",
+  );
+  const wind = new Map(
+    windDrivenUniforms(
+      shader,
+      resolveSceneWind(
+        resolveSceneSettings(context.scene.settings).vegetation,
+        entityWind,
+      ),
+    ).map((entry) => [entry.name, entry]),
+  );
   for (const [uniformName, uniform] of Object.entries(shader.uniforms)) {
+    const windOverride = wind.get(uniformName);
+    if (windOverride) {
+      if (windOverride.kind === "number") {
+        uniformEntries.push(
+          `${JSON.stringify(uniformName)}: { value: ${formatNumber(windOverride.value)} }`,
+        );
+      } else {
+        context.threeValueImports.add("Vector2");
+        uniformEntries.push(
+          `${JSON.stringify(uniformName)}: { value: new Vector2(${windOverride.value.map(formatNumber).join(", ")}) }`,
+        );
+      }
+      continue;
+    }
     if (uniform.kind === "number") {
       uniformEntries.push(
         `${JSON.stringify(uniformName)}: { value: ${formatNumber(uniform.value)} }`,

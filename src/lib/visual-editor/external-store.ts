@@ -18,6 +18,13 @@ import {
   type OpenBrushCatalogEntry,
 } from "./open-brush-catalog";
 import {
+  WATER_SHADER_CATALOG_AUTHOR,
+  WATER_SHADER_CATALOG_REVISION,
+  WATER_SHADER_CATALOG_SOURCE_URL,
+  applyWaterShaderParameters,
+  type WaterShaderCatalogEntry,
+} from "./water-shader-catalog";
+import {
   SKY_SHADER_CATALOG_AUTHOR,
   SKY_SHADER_CATALOG_REVISION,
   SKY_SHADER_CATALOG_SOURCE_URL,
@@ -312,6 +319,59 @@ export function applySkyShaderCatalogInstall(
         authors: [SKY_SHADER_CATALOG_AUTHOR],
       },
       sourceHash: `${SKY_SHADER_CATALOG_REVISION}:${entry.id}`,
+    },
+  };
+  return {
+    manifest: { ...manifest, folders, assets },
+    primaryAssetId: materialId,
+    installedAssetIds: [materialId],
+    kind: "material",
+    alreadyInstalled,
+  };
+}
+
+/**
+ * Installs a Water preset as a plain Custom Shader Material Asset. Unlike the
+ * sky it claims no scene slot: the author assigns it to a mesh like any other
+ * Material, so one preset serves a pond and an ocean.
+ */
+export function applyWaterShaderCatalogInstall(
+  manifest: AssetManifest,
+  entry: WaterShaderCatalogEntry,
+  parameterValues: Readonly<Record<string, number | string>> = {},
+): AppliedOpenBrushCatalogInstall {
+  const folder = externalFolder(manifest, "Water Shader");
+  const folders = { ...(manifest.folders ?? {}), [folder.id]: folder };
+  const materialId = `external-water-shader-${safeId(entry.id)}-material`;
+  const existing = manifest.assets[materialId];
+  const alreadyInstalled = existing?.kind === "material";
+  const material = createDefaultMaterialAsset({
+    id: materialId,
+    name: `Water · ${entry.label}`,
+    folderId: folder.id,
+  });
+  if (!material) throw new Error("Water Material Assetを作成できませんでした");
+  const order = alreadyInstalled
+    ? (existing.order ?? nextOrder({ ...manifest, folders }, folder.id))
+    : nextOrder({ ...manifest, folders }, folder.id);
+  const assets: Record<string, SceneAsset> = {
+    ...manifest.assets,
+    [materialId]: {
+      ...material,
+      order,
+      shader: applyWaterShaderParameters(entry, parameterValues),
+      attribution: {
+        providerId: "xrift-water-shaders",
+        providerName: "XRift公式 Water Shader",
+        externalId: entry.id,
+        assetUrl: WATER_SHADER_CATALOG_SOURCE_URL,
+        licenseName: "MIT",
+        licenseUrl: `${WATER_SHADER_CATALOG_SOURCE_URL}/blob/main/LICENSE`,
+        // The Gerstner core is adapted from Mochie's Unity Shaders, so the
+        // credit travels with the Material rather than living only in a doc.
+        authors: [WATER_SHADER_CATALOG_AUTHOR, "MochiesCode (Gerstner waves, MIT)"],
+      },
+      sourceHash: `${WATER_SHADER_CATALOG_REVISION}:${entry.id}`,
     },
   };
   return {

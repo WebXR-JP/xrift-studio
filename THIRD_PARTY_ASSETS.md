@@ -53,3 +53,19 @@ The files below were selected from assets supplied by the project owner with exp
 | `polished-concrete.png` | `t300_floor_04_polished_concrete_floor_with_subtl.png` | `f82525e2c1117fd36b276538a72d765e34178435f7759b27acf151578f895458` |
 
 The original local storage paths are intentionally not recorded in source code or documentation. The fixed filenames, byte lengths, and hashes used for project creation are defined in `src/lib/visual-editor/starter-templates.ts`.
+
+## Water Shader の Gerstner 波
+
+| 取り込み先 | 上流ソース | ライセンス | 表示 |
+| --- | --- | --- | --- |
+| `src/lib/visual-editor/water-shader-catalog.ts` の `xriftWaterGerstner` | [`MochiesCode/Mochies-Unity-Shaders`](https://github.com/MochiesCode/Mochies-Unity-Shaders) `Assets/Mochie/Water Shader/WaterFunctions.cginc` の `GerstnerWave` | MIT | Copyright (c) 2020 MochiesCode |
+
+移植したのは分散関係 `c = sqrt(9.8 / k)`、振幅と急峻さの関係 `a = steepness / k`、
+および接線・従法線の解析微分だけで、HLSL から GLSL へ書き換えている。Unity 側の
+テッセレーション、GrabPass 屈折、リフレクションプローブ、深度バッファ由来の
+フォームは WebGL に対応物が無いため移植していない。
+
+MIT は substantial portion に著作権表示を求めるため、表示は3か所に置いている。
+GLSL のコメント、`applyWaterShaderCatalogInstall` が Material Asset へ書く
+`attribution.authors`、そしてこの表。Water の GLSL は生成 World へ埋め込まれて
+公開ワールドごと配布されるので、Asset に表示が乗っていることが実質的な条件を満たす。

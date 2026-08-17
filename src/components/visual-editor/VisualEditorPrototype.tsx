@@ -15,6 +15,7 @@ import {
   applyExternalStoreInstallAndAnalyzeModel,
   applyOpenBrushCatalogInstall,
   applySkyShaderCatalogInstall,
+  applyWaterShaderCatalogInstall,
   applyComponentCodeImportPlan,
   applyClassicProjectVisualImportEnhancements,
   analyzeComponentCode,
@@ -74,6 +75,7 @@ import {
   removeXriftComponent,
   resolveAssetCreationFolderId,
   resolveSceneSettings,
+  resolveSceneWind,
   renameAsset,
   renameAssetFolder,
   renameEntity,
@@ -135,6 +137,7 @@ import {
   type ModelReimportProgress,
   type OpenBrushCatalogEntry,
   type SkyShaderCatalogEntry,
+  type WaterShaderCatalogEntry,
   type EditorCommandId,
   type EntityClipboard,
   type ParticlePropertiesPatch,
@@ -175,6 +178,7 @@ import { MaterialThumbnailGenerationQueue } from "./MaterialThumbnailGenerationQ
 import { ModelThumbnailGenerationQueue } from "./ModelThumbnailGenerationQueue";
 import { ExternalAssetStoreDialog } from "./ExternalAssetStoreDialog";
 import type { SkyShaderInstallResult } from "./SkyShaderStore";
+import type { WaterShaderInstallResult } from "./WaterShaderStore";
 import {
   hasActiveAssetImport,
   resolveAssetOperationAvailability,
@@ -5198,6 +5202,45 @@ export function VisualEditorPrototype({
     [bundle.assets],
   );
 
+  const handleAddWaterShader = useCallback(
+    async (
+      entry: WaterShaderCatalogEntry,
+      parameterValues: Readonly<Record<string, number | string>>,
+    ): Promise<WaterShaderInstallResult> => {
+      const preview = applyWaterShaderCatalogInstall(
+        bundle.assets,
+        entry,
+        parameterValues,
+      );
+      setHistory((current) => {
+        const applied = applyWaterShaderCatalogInstall(
+          current.present.bundle.assets,
+          entry,
+          parameterValues,
+        );
+        const primary = applied.manifest.assets[applied.primaryAssetId];
+        setActiveAssetFolderId(primary?.folderId ?? null);
+        setSaveStatus("dirty");
+        setNotice(
+          `「${entry.label}」をMaterialとして追加しました。板ポリなどへ割り当てると水面になります`,
+        );
+        const nextBundle = touchProject({
+          ...current.present.bundle,
+          assets: applied.manifest,
+        });
+        bundleRef.current = nextBundle;
+        return commitEditorHistory(current, {
+          bundle: nextBundle,
+          sceneSelection: null,
+          assetSelection: applied.primaryAssetId,
+        });
+      });
+      setSceneSettingsOpen(false);
+      return { alreadyInstalled: preview.alreadyInstalled };
+    },
+    [bundle.assets],
+  );
+
   const handleAssignSkybox = useCallback(
     (assetId: string) => {
       if (editorMode !== "edit") return;
@@ -8779,6 +8822,10 @@ export function VisualEditorPrototype({
             onInstalled={handleExternalStoreInstalled}
             onAddOpenBrush={handleAddOpenBrushMaterial}
             onAddSkyShader={handleAddSkyShader}
+            onAddWaterShader={handleAddWaterShader}
+            sceneWind={resolveSceneWind(
+              resolveSceneSettings(bundle.scene.settings).vegetation,
+            )}
             onAddOfficialComponent={handleAddOfficialComponent}
           />
           <SupportReportModal
