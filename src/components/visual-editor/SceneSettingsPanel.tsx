@@ -1030,7 +1030,7 @@ export function SceneSettingsInspector({
 
         <Section
           title="Wind（グローバル）"
-          description="Wind Componentを付けたEntityと子Mesh全体へ適用する風の設定です。Mesh名から対象を推測しません。"
+          description="Wind Componentを付けたEntityと子Mesh全体、および風に反応するShader Materialへ適用します。シーンの風は常にこの1つです。Mesh名から対象を推測しません。"
         >
           <Toggle
             label="Windを有効にする"
@@ -1068,6 +1068,18 @@ export function SceneSettingsInspector({
             disabled={readOnly || !settings.vegetation.enabled}
             onChange={(gustStrength) =>
               update({ ...settings, vegetation: { ...settings.vegetation, gustStrength } })
+            }
+          />
+          <NumberField
+            label="風向き (度)"
+            value={settings.vegetation.windDirectionDegrees}
+            step={5}
+            disabled={readOnly || !settings.vegetation.enabled}
+            onChange={(windDirectionDegrees) =>
+              update({
+                ...settings,
+                vegetation: { ...settings.vegetation, windDirectionDegrees },
+              })
             }
           />
         </Section>

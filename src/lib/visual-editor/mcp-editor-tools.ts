@@ -1455,6 +1455,7 @@ function updateSceneSettings(
               "windStrength",
               "windSpeed",
               "gustStrength",
+              "windDirectionDegrees",
             ]),
           ),
     physics:
@@ -4864,6 +4865,12 @@ function applyVegetationPatch(
     if (patch[field] !== undefined) {
       next[field] = sceneNumber(patch[field], `vegetation.${field}`, minimum);
     }
+  }
+  if (patch.windDirectionDegrees !== undefined) {
+    next.windDirectionDegrees = sceneNumber(
+      patch.windDirectionDegrees,
+      "vegetation.windDirectionDegrees",
+    );
   }
   return next;
 }

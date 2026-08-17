@@ -69,6 +69,7 @@ import { runVisualUploadFixtureAssertions } from "../src/lib/visual-editor/uploa
 import { runRuntimeSpawnFixtureAssertions } from "../src/lib/visual-editor/runtime-spawn.fixture.ts";
 import { runSkyboxImportFixtureAssertions } from "../src/lib/visual-editor/skybox-import.fixture.ts";
 import { runSkyShaderFixtureAssertions } from "../src/lib/visual-editor/sky-shader.fixture.ts";
+import { runWindContractFixtureAssertions } from "../src/lib/visual-editor/wind-contract.fixture.ts";
 import { runUnityPackageImportFixture } from "../src/lib/visual-editor/unity-package-import.fixture.ts";
 
 // Asset import runs in the Tauri webview, so it uses the browser file APIs.  Node
@@ -278,6 +279,7 @@ try {
     ["model import contract", runModelImportContractFixtureAssertions],
     ["skybox import", runSkyboxImportFixtureAssertions],
     ["sky shader", runSkyShaderFixtureAssertions],
+    ["wind contract", runWindContractFixtureAssertions],
     ["unity package import", runUnityPackageImportFixture],
     ["editor drag data", runEditorDragDataFixture],
     ["editor library drag", runEditorLibraryDragFixture],

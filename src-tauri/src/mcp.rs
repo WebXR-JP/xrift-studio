@@ -3102,6 +3102,18 @@ fn tool_definitions() -> Value {
                         "minProperties": 1,
                         "additionalProperties": false
                     },
+                    "vegetation": {
+                        "type": "object",
+                        "properties": {
+                            "enabled": { "type": "boolean" },
+                            "windStrength": { "type": "number", "minimum": 0 },
+                            "windSpeed": { "type": "number", "minimum": 0 },
+                            "gustStrength": { "type": "number", "minimum": 0 },
+                            "windDirectionDegrees": { "type": "number" }
+                        },
+                        "minProperties": 1,
+                        "additionalProperties": false
+                    },
                     "editor": {
                         "type": "object",
                         "properties": {
@@ -3133,6 +3145,7 @@ fn tool_definitions() -> Value {
                     { "required": ["ambient"] },
                     { "required": ["camera"] },
                     { "required": ["postprocessing"] },
+                    { "required": ["vegetation"] },
                     { "required": ["editor"] }
                 ],
                 "additionalProperties": false

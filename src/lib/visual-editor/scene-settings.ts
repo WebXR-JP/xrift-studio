@@ -78,12 +78,22 @@ export type ScenePostprocessingSettings = {
   exposure: number;
 };
 
-/** Global wind settings applied to Entities with a Wind component. */
+/**
+ * Global wind. Entities with a Wind component sway from it, and shader
+ * materials that respond to wind — water, foliage — read the same values
+ * through the wind contract, so a scene only ever has one wind.
+ */
 export type SceneVegetationSettings = {
   enabled: boolean;
   windStrength: number;
   windSpeed: number;
   gustStrength: number;
+  /**
+   * Compass direction the wind blows toward, in degrees. The transform-based
+   * Wind component predates this and ignores it; it exists so shaders can
+   * agree on a direction instead of each picking their own.
+   */
+  windDirectionDegrees: number;
 };
 
 /**
@@ -187,6 +197,7 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
     windStrength: 0.08,
     windSpeed: 0.8,
     gustStrength: 0.35,
+    windDirectionDegrees: 45,
   },
   // Matches the values XRift's own world template ships with, so a Studio
   // world behaves like a hand-written one until the author changes them.
@@ -473,6 +484,10 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
         vegetation.gustStrength,
         DEFAULT_SCENE_SETTINGS.vegetation.gustStrength,
         0,
+      ),
+      windDirectionDegrees: finiteOr(
+        vegetation.windDirectionDegrees,
+        DEFAULT_SCENE_SETTINGS.vegetation.windDirectionDegrees,
       ),
     },
     physics: {

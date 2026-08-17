@@ -89,3 +89,5 @@ export * from "./shortcuts";
 export * from "./unity-package-import";
 export * from "./unity-package-import.fixture";
 export * from "./vram-estimate";
+export * from "./wind-contract";
+export * from "./wind-contract.fixture";

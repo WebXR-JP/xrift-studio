@@ -1247,7 +1247,13 @@ function validateSceneSettings(
   if (value.vegetation !== undefined) {
     validateSceneSettingsObject(
       value.vegetation,
-      ["enabled", "windStrength", "windSpeed", "gustStrength"],
+      [
+        "enabled",
+        "windStrength",
+        "windSpeed",
+        "gustStrength",
+        "windDirectionDegrees",
+      ],
       `${path}.vegetation`,
       issues,
       (entry) => {
@@ -1255,6 +1261,11 @@ function validateSceneSettings(
         validateFinite(entry, "windStrength", `${path}.vegetation`, issues, 0);
         validateFinite(entry, "windSpeed", `${path}.vegetation`, issues, 0);
         validateFinite(entry, "gustStrength", `${path}.vegetation`, issues, 0);
+        // Added after the first vegetation schema; absent values are filled in
+        // by resolveSceneSettings when an older project opens.
+        if (entry.windDirectionDegrees !== undefined) {
+          validateFinite(entry, "windDirectionDegrees", `${path}.vegetation`, issues);
+        }
       },
     );
   }
