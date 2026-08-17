@@ -1285,8 +1285,13 @@ function registerSceneToneMappingSupport(
 ): void {
   context.reactValueImports.add("useEffect");
   context.fiberImports.add("useThree");
-  context.threeValueImports.add("ACESFilmicToneMapping");
-  context.threeValueImports.add("NoToneMapping");
+  // Only the constant this scene actually uses: an unused import would fail a
+  // generated World built under noUnusedLocals.
+  const toneMapping =
+    settings.hdr.toneMapping === "none"
+      ? "NoToneMapping"
+      : "ACESFilmicToneMapping";
+  context.threeValueImports.add(toneMapping);
   context.threeValueImports.add("SRGBColorSpace");
   context.supportDeclarations.set(
     "scene-environment:tone-mapping",
@@ -1297,11 +1302,7 @@ function registerSceneToneMappingSupport(
     const previousExposure = gl.toneMappingExposure;
     const previousOutputColorSpace = gl.outputColorSpace;
     gl.outputColorSpace = SRGBColorSpace;
-    gl.toneMapping = ${
-      settings.hdr.toneMapping === "none"
-        ? "NoToneMapping"
-        : "ACESFilmicToneMapping"
-    };
+    gl.toneMapping = ${toneMapping};
     gl.toneMappingExposure = ${formatNumber(settings.exposure)};
     return () => {
       gl.toneMapping = previousToneMapping;
