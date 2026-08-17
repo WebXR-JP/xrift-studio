@@ -23,6 +23,10 @@ import {
   type TerrainGeometry,
   type TerrainGeometryOptions,
 } from "./terrain";
+import {
+  applyTerrainGrassBrush,
+  type TerrainGrassLayer,
+} from "./terrain-grass";
 
 export const SCENE_DOCUMENT_SCHEMA_VERSION = "0.1.0" as const;
 
@@ -989,20 +993,77 @@ export function getTerrainGeometry(
 }
 
 /** Applies one terrain brush stamp through the same Scene replacement boundary as Inspector edits. */
+/** A Scene View stroke: sculpt the heights or paint one grass layer's mask. */
+type TerrainGrassSceneBrushShape = {
+  center: [number, number];
+  radius: number;
+  strength: number;
+  grassLayerId?: string;
+};
+
+// Two single-literal arms rather than one with a union kind: the else branch
+// of a discriminant check can only remove a constituent whose kind is exactly
+// the compared literal, so a shared union kind would never narrow away.
+export type TerrainSceneBrushOperation =
+  | TerrainBrushOperation
+  | (TerrainGrassSceneBrushShape & { kind: "grass-paint" })
+  | (TerrainGrassSceneBrushShape & { kind: "grass-erase" });
+
 export function applyTerrainBrushToScene(
   scene: SceneDocument,
   entityId: string,
-  operation: TerrainBrushOperation,
+  operation: TerrainSceneBrushOperation,
   componentId?: string,
 ): SceneDocument {
   const entity = scene.entities[entityId];
   const mesh = entity ? getMesh(entity, componentId) : undefined;
   const terrain = mesh ? getTerrainGeometry(mesh) : undefined;
   if (!mesh || !terrain) return scene;
+  if (operation.kind === "grass-paint" || operation.kind === "grass-erase") {
+    const grassOperation = operation;
+    const layers = terrain.grass ?? [];
+    const index = layers.findIndex(
+      (layer) => layer.id === grassOperation.grassLayerId,
+    );
+    if (index < 0) return scene;
+    const nextLayer = applyTerrainGrassBrush(terrain, layers[index], {
+      mode: grassOperation.kind === "grass-paint" ? "paint" : "erase",
+      center: grassOperation.center,
+      radius: grassOperation.radius,
+      strength: grassOperation.strength,
+    });
+    if (nextLayer === layers[index]) return scene;
+    const grass = layers.map((layer, at) => (at === index ? nextLayer : layer));
+    return replaceMesh(scene, entityId, mesh.id, {
+      ...mesh,
+      geometry: { kind: "terrain", terrain: { ...terrain, grass } },
+    });
+  }
   const nextTerrain = applyTerrainBrush(terrain, operation);
   if (nextTerrain === terrain || terrainHeightsEqual(terrain, nextTerrain)) {
     return scene;
   }
+  return replaceMesh(scene, entityId, mesh.id, {
+    ...mesh,
+    geometry: { kind: "terrain", terrain: nextTerrain },
+  });
+}
+
+/** Replaces a Terrain's grass layers through the normal Scene boundary. */
+export function setTerrainGrassLayersInScene(
+  scene: SceneDocument,
+  entityId: string,
+  grass: readonly TerrainGrassLayer[],
+  componentId?: string,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  const mesh = entity ? getMesh(entity, componentId) : undefined;
+  const terrain = mesh ? getTerrainGeometry(mesh) : undefined;
+  if (!mesh || !terrain) return scene;
+  const nextTerrain =
+    grass.length > 0
+      ? { ...terrain, grass: [...grass] }
+      : (({ grass: _dropped, ...rest }) => rest)(terrain);
   return replaceMesh(scene, entityId, mesh.id, {
     ...mesh,
     geometry: { kind: "terrain", terrain: nextTerrain },

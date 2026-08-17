@@ -12,7 +12,10 @@ import {
   BUILTIN_ASSET_IDS,
   createPrototypeProject,
 } from "./prototype-project";
-import { addTerrainEntity } from "./scene-document";
+import {
+  addTerrainEntity,
+  applyTerrainBrushToScene,
+} from "./scene-document";
 import { resolveSceneSettings } from "./scene-settings";
 import { compileVisualProject } from "./compiler/compile";
 import {
@@ -537,6 +540,80 @@ export function runTerrainPresetFixtureAssertions(): void {
 export function runTerrainGrassPublishFixtureAssertions(): void {
   assertEmbeddedPlacementEquivalence();
   assertCompiledWorldGrass();
+  assertSceneGrassBrushRouting();
+}
+
+/**
+ * The Scene View grass brush flows through the same boundary as sculpting, so
+ * a stroke must reach exactly the addressed layer and nothing else.
+ */
+function assertSceneGrassBrushRouting(): void {
+  const prototype = createPrototypeProject("world", "grass-brush-routing");
+  const preset = getTerrainPreset("meadow-plain");
+  if (!preset) throw new Error("meadow-plain preset is missing");
+  const placed = addTerrainEntity(
+    prototype.scene,
+    prototype.assets,
+    BUILTIN_ASSET_IDS.material.green,
+    createTerrainFromPreset(preset),
+  );
+  assert(placed !== null, "Routing fixture could not place a Terrain");
+  if (!placed) return;
+  const entity = placed.scene.entities[placed.entityId];
+  const mesh = entity?.components.find((component) => component.type === "mesh");
+  const terrain =
+    mesh && "geometry" in mesh && mesh.geometry?.kind === "terrain"
+      ? mesh.geometry.terrain
+      : undefined;
+  assert(Boolean(terrain && mesh), "Routing fixture lost its Terrain");
+  if (!terrain || !mesh) return;
+  const layers = terrain.grass ?? [];
+  assert(layers.length >= 2, "Routing fixture needs at least two layers");
+
+  const stroked = applyTerrainBrushToScene(placed.scene, placed.entityId, {
+    kind: "grass-erase",
+    center: [0, 0],
+    radius: 10,
+    strength: 1,
+    grassLayerId: layers[0].id,
+  });
+  assert(stroked !== placed.scene, "A grass stroke did not change the scene");
+  const strokedEntity = stroked.entities[placed.entityId];
+  const strokedMesh = strokedEntity?.components.find(
+    (component) => component.type === "mesh",
+  );
+  const strokedTerrain =
+    strokedMesh && "geometry" in strokedMesh && strokedMesh.geometry?.kind === "terrain"
+      ? strokedMesh.geometry.terrain
+      : undefined;
+  assert(Boolean(strokedTerrain), "The stroked Terrain disappeared");
+  if (!strokedTerrain) return;
+  const strokedLayers = strokedTerrain.grass ?? [];
+  assert(
+    Array.isArray(strokedLayers[0]?.mask),
+    "The stroke did not paint the addressed layer",
+  );
+  assert(
+    strokedLayers[1] === layers[1],
+    "The stroke touched a layer it was not aimed at",
+  );
+  // Heights are sculpting's territory; a grass stroke must not move them.
+  assert(
+    strokedTerrain.heights === terrain.heights,
+    "A grass stroke modified the height field",
+  );
+
+  const missing = applyTerrainBrushToScene(placed.scene, placed.entityId, {
+    kind: "grass-paint",
+    center: [0, 0],
+    radius: 10,
+    strength: 1,
+    grassLayerId: "layer-that-does-not-exist",
+  });
+  assert(
+    missing === placed.scene,
+    "A stroke at a missing layer must leave the scene untouched",
+  );
 }
 
 type EmbeddedGrassRuntime = {

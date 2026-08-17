@@ -135,6 +135,7 @@ import {
   type SceneSettings,
   type VegetationWindComponent,
   type TerrainGeometry,
+  type TerrainSceneBrushOperation,
   type TerrainViewportEditing,
   type SkyboxAsset,
   type TransformPatch,
@@ -3321,7 +3322,7 @@ export function SceneViewport({
   onTerrainStroke?: (
     entityId: string,
     componentId: string,
-    operation: import("../../lib/visual-editor").TerrainBrushOperation,
+    operation: TerrainSceneBrushOperation,
   ) => void;
   onTerrainStrokeEnd?: (entityId: string) => void;
   onTerrainStrokeCancel?: (entityId: string) => void;

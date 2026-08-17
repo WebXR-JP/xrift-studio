@@ -7,6 +7,7 @@ import {
 } from "react";
 import {
   arrangeTerrainFootprints,
+  setTerrainGrassLayersInScene,
   createTerrainFromPreset,
   findTerrainOverlaps,
   getTerrainGeometry,
@@ -14,6 +15,8 @@ import {
   getTransform,
   updateEntityTransform,
   type TerrainFootprint,
+  type TerrainGrassLayer,
+  type TerrainSceneBrushOperation,
 } from "../../lib/visual-editor";
 import { BUILTIN_ASSET_IDS, type PrototypeVisualProject } from "../../lib/visual-editor/prototype-project";
 import {
@@ -156,7 +159,7 @@ export function useTerrainAuthoring({
     (
       entityId: string,
       componentId: string,
-      operation: TerrainBrushOperation,
+      operation: TerrainSceneBrushOperation,
     ) => {
       if (editorMode !== "edit" || importBusy) {
         notify("地形ブラシは編集モードでのみ使えます");
@@ -174,7 +177,13 @@ export function useTerrainAuthoring({
           return current;
         }
         markDirty();
-        notify(TERRAIN_BRUSH_SUCCESS_MESSAGE[operation.kind]);
+        notify(
+          operation.kind === "grass-paint"
+            ? "草を塗りました"
+            : operation.kind === "grass-erase"
+              ? "草を消しました"
+              : TERRAIN_BRUSH_SUCCESS_MESSAGE[operation.kind],
+        );
         return commitEditorHistory(current, {
           ...current.present,
           bundle: touchProject({ ...current.present.bundle, scene }),
@@ -232,7 +241,7 @@ export function useTerrainAuthoring({
   );
 
   const handleTerrainStroke = useCallback(
-    (entityId: string, componentId: string, operation: TerrainBrushOperation) => {
+    (entityId: string, componentId: string, operation: TerrainSceneBrushOperation) => {
       const transaction = strokeRef.current;
       if (
         editorMode !== "edit" ||
@@ -348,8 +357,44 @@ export function useTerrainAuthoring({
     });
   }, [editorMode, markDirty, notify, setHistory, setSaveStatus, touchProject, bundleRef]);
 
+  const handleTerrainGrassLayersChange = useCallback(
+    (
+      entityId: string,
+      componentId: string,
+      grass: readonly TerrainGrassLayer[],
+      notice: string,
+    ) => {
+      if (editorMode !== "edit") {
+        notify("草の層は編集モードで変更してください");
+        return;
+      }
+      setHistory((current) => {
+        const scene = setTerrainGrassLayersInScene(
+          current.present.bundle.scene,
+          entityId,
+          grass,
+          componentId,
+        );
+        if (scene === current.present.bundle.scene) return current;
+        markDirty();
+        notify(notice);
+        const bundle = touchProject({ ...current.present.bundle, scene });
+        bundleRef.current = bundle;
+        setSaveStatus("dirty");
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle,
+          sceneSelection: { kind: "entity", id: entityId },
+          assetSelection: null,
+        });
+      });
+    },
+    [bundleRef, editorMode, markDirty, notify, setHistory, setSaveStatus, touchProject],
+  );
+
   return {
     handleCreateTerrain,
+    handleTerrainGrassLayersChange,
     terrainOverlapCount,
     handleArrangeTerrains,
     handleTerrainBrush,

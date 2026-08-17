@@ -63,10 +63,27 @@ export type TerrainBrushOperation = {
 };
 
 /** Active Scene View brush configuration; its center is resolved from the raycast. */
-export type TerrainViewportEditing = Pick<
-  TerrainBrushOperation,
-  "kind" | "radius" | "strength" | "targetHeight" | "falloff"
+/**
+ * Brush kinds the Scene View can drive. The grass kinds live beside the
+ * sculpting ones because painting coverage is the same gesture as raising
+ * ground; they are not TerrainBrushKinds because they edit a grass layer's
+ * mask, never the height field, and the MCP sculpting contract stays as is.
+ */
+export type TerrainViewportBrushKind =
+  | TerrainBrushKind
+  | "grass-paint"
+  | "grass-erase";
+
+export type TerrainViewportEditing = Omit<
+  Pick<
+    TerrainBrushOperation,
+    "kind" | "radius" | "strength" | "targetHeight" | "falloff"
+  >,
+  "kind"
 > & {
+  kind: TerrainViewportBrushKind;
+  /** Target layer for the grass kinds. Ignored by the sculpting kinds. */
+  grassLayerId?: string;
   entityId: string;
   componentId: string;
 };

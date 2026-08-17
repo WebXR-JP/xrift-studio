@@ -5509,6 +5509,7 @@ export function VisualEditorPrototype({
   const markEditorDirty = useCallback(() => setSaveStatus("dirty"), []);
   const {
     handleCreateTerrain,
+    handleTerrainGrassLayersChange,
     terrainOverlapCount,
     handleArrangeTerrains,
     handleTerrainBrush,
@@ -8639,6 +8640,7 @@ export function VisualEditorPrototype({
             onMeshChange={handleMeshChange}
             onTerrainBrush={handleTerrainBrush}
             onTerrainSettings={handleTerrainSettings}
+            onTerrainGrassLayersChange={handleTerrainGrassLayersChange}
             onTerrainEditingChange={setTerrainEditing}
             onColliderChange={handleColliderChange}
             onRigidBodyChange={handleRigidBodyChange}
