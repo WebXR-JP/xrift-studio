@@ -97,6 +97,30 @@ function assertCatalogIntegrity(): void {
         );
       }
     }
+    // Gerstner swell alone leaves a large plane smooth between the crests, so
+    // every preset must also carry the tiled ripple detail and let the author
+    // set its density.
+    for (const uniform of ["uDetailScale", "uDetailStrength"]) {
+      assert(
+        entry.parameters.some((parameter) => parameter.uniform === uniform),
+        `Water「${entry.id}」does not expose ${uniform}`,
+      );
+    }
+    assert(
+      entry.shader.fragmentShader.includes("xriftWaterDetailNormal"),
+      `Water「${entry.id}」declares tiling detail it never draws`,
+    );
+    const detailStrength = entry.shader.uniforms.uDetailStrength;
+    assert(
+      detailStrength?.kind === "number" && detailStrength.value > 0,
+      `Water「${entry.id}」ships with its ripple detail switched off`,
+    );
+    // The tiling is in world units. Reading UVs here would stretch the ripples
+    // across a scaled plane instead of repeating them.
+    assert(
+      entry.shader.fragmentShader.includes("vWorldPosition.xz, uDetailScale"),
+      `Water「${entry.id}」does not tile its detail in world space`,
+    );
     // The layer count is an actual count, so its range must be whole numbers.
     const layers = entry.parameters.find(
       (parameter) => parameter.uniform === "uWaveLayers",

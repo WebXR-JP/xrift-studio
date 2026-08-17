@@ -112,6 +112,60 @@ vec3 xriftWaterGerstner(
   return vec3(d.x * a * cosF, a * sinF, d.y * a * cosF);
 }
 
+float xriftWaterHash(vec2 p) {
+  vec3 q = fract(vec3(p.xyx) * 0.1031);
+  q += dot(q, q.zyx + 31.32);
+  return fract((q.x + q.y) * q.z);
+}
+
+float xriftWaterNoise(vec2 p) {
+  vec2 cell = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(xriftWaterHash(cell), xriftWaterHash(cell + vec2(1.0, 0.0)), f.x),
+    mix(xriftWaterHash(cell + vec2(0.0, 1.0)), xriftWaterHash(cell + vec2(1.0, 1.0)), f.x),
+    f.y
+  );
+}
+
+/**
+ * Tiled high-frequency ripples on top of the Gerstner swell.
+ *
+ * The Gerstner layers alone give a large, smooth surface: correct in shape but
+ * empty between the crests, which is what makes a big water plane read as
+ * plastic. This is the detail a tiling normal map would normally supply, done
+ * procedurally so a preset needs no bundled texture.
+ *
+ * Tiling is in world units rather than UV, so scaling the mesh changes how
+ * much water there is instead of stretching the ripples across it. Two octaves
+ * drift at different rates, so the repeat never reads as a stamped tile.
+ */
+vec3 xriftWaterDetailNormal(
+  vec2 worldXZ,
+  float scale,
+  float strength,
+  vec2 windDirection,
+  float time
+) {
+  if (strength <= 0.0) {
+    return vec3(0.0, 1.0, 0.0);
+  }
+  vec2 uv = worldXZ * max(scale, 0.0001);
+  vec2 drift = windDirection * time * 0.35;
+  vec2 a = uv + drift;
+  vec2 b = uv * 1.93 - drift * 0.61;
+  float epsilon = 0.35;
+  float height = xriftWaterNoise(a) + xriftWaterNoise(b) * 0.5;
+  float alongX =
+    xriftWaterNoise(a + vec2(epsilon, 0.0)) + xriftWaterNoise(b + vec2(epsilon, 0.0)) * 0.5;
+  float alongZ =
+    xriftWaterNoise(a + vec2(0.0, epsilon)) + xriftWaterNoise(b + vec2(0.0, epsilon)) * 0.5;
+  return normalize(
+    vec3(-(alongX - height) * strength, 1.0, -(alongZ - height) * strength)
+  );
+}
+
 /** Approximated sky reflection. No render pass — the author matches the Sky. */
 vec3 xriftWaterSkyReflection(vec3 reflectDirection, vec3 zenith, vec3 horizon) {
   float up = clamp(reflectDirection.y * 0.5 + 0.5, 0.0, 1.0);
@@ -168,7 +222,12 @@ const WATER_WAVE_ACCUMULATION_GLSL = `  vec3 tangent = vec3(1.0, 0.0, 0.0);
     amplitudeSum += steepness * 0.31 * baseWavelength * 0.13 / XRIFT_WATER_TAU;
   }
 
-  vec3 waveNormal = normalize(cross(binormal, tangent));
+  vec3 detailNormal = xriftWaterDetailNormal(
+    vWorldPosition.xz, uDetailScale, uDetailStrength, windDirection, phase
+  );
+  vec3 waveNormal = normalize(
+    cross(binormal, tangent) + vec3(detailNormal.x, 0.0, detailNormal.z)
+  );
   // A wall assigned this Material keeps its own facing; only a surface that
   // actually points up gets the full wave normal.
   vec3 normal = normalize(mix(vWorldNormal, waveNormal, clamp(abs(vWorldNormal.y), 0.0, 1.0)));
@@ -194,6 +253,8 @@ uniform float uWaveScale;
 uniform float uWaveLayers;
 uniform float uFresnelPower;
 uniform float uReflectivity;
+uniform float uDetailScale;
+uniform float uDetailStrength;
 uniform float uGlintStrength;
 uniform float uSunAzimuth;
 uniform float uSunElevation;
@@ -261,7 +322,12 @@ ${WATER_WAVE_ACCUMULATION_GLSL}
   vec3 body = mix(uShallowColor, uDeepColor, shade);
   vec3 color = mix(body, skyColor, clamp(bandedFresnel * uReflectivity, 0.0, 1.0));
 
-  float bandedCrest = floor(clamp(crest * 0.5 + 0.5, 0.0, 1.0) * bands) / bands;
+  // Quantized shading swallows a smooth ripple: a small normal change rarely
+  // crosses a band edge, so the tiling detail has to enter through the crest
+  // term, where it becomes banded ripple shapes instead of disappearing.
+  float ripple = (detailNormal.x + detailNormal.z) * 0.5;
+  float bandedCrest =
+    floor(clamp(crest * 0.5 + 0.5 + ripple * 0.75, 0.0, 1.0) * bands) / bands;
   float foam = step(1.0 - clamp(uFoamAmount, 0.0, 1.0), bandedCrest);
   color = mix(color, uFoamColor, foam);
 
@@ -323,6 +389,32 @@ const WAVE_PARAMETERS: readonly WaterShaderParameter[] = [
     kind: "number",
     min: 0.05,
     max: 6,
+    step: 0.05,
+  },
+];
+
+/**
+ * The tiling detail. Kept next to the wave controls because it is the second
+ * half of the surface: the Gerstner layers give the swell, these give the
+ * texture between the crests.
+ */
+const DETAIL_PARAMETERS: readonly WaterShaderParameter[] = [
+  {
+    uniform: "uDetailScale",
+    label: "さざ波のタイリング",
+    hint: "1ワールド単位あたりの細かいさざ波の density です。ワールド座標なので、メッシュを大きくしても伸びません。",
+    kind: "number",
+    min: 0.01,
+    max: 3,
+    step: 0.01,
+  },
+  {
+    uniform: "uDetailStrength",
+    label: "さざ波の強さ",
+    hint: "細かいさざ波の凹凸です。0で大きなうねりだけになります。",
+    kind: "number",
+    min: 0,
+    max: 3,
     step: 0.05,
   },
 ];
@@ -400,7 +492,12 @@ export const WATER_SHADER_CATALOG: readonly WaterShaderCatalogEntry[] = [
     category: "lake",
     description:
       "静かな湖面です。波は小さく反射は控えめ。風の向きと速さはScene設定のWindから受け取るので、草と同じ風で動きます。",
-    parameters: [...WAVE_PARAMETERS, ...SURFACE_PARAMETERS, ...COLOR_PARAMETERS],
+    parameters: [
+      ...WAVE_PARAMETERS,
+      ...DETAIL_PARAMETERS,
+      ...SURFACE_PARAMETERS,
+      ...COLOR_PARAMETERS,
+    ],
     shader: {
       kind: "classic-r3f",
       sourceModulePath: "studio://water-shader/calm-lake",
@@ -418,6 +515,8 @@ export const WATER_SHADER_CATALOG: readonly WaterShaderCatalogEntry[] = [
         uWaveLayers: { kind: "number", value: 2 },
         uFresnelPower: { kind: "number", value: 4 },
         uReflectivity: { kind: "number", value: 0.55 },
+        uDetailScale: { kind: "number", value: 0.55 },
+        uDetailStrength: { kind: "number", value: 0.9 },
         uGlintStrength: { kind: "number", value: 0.8 },
       },
       variants: waterVariants(),
@@ -432,6 +531,7 @@ export const WATER_SHADER_CATALOG: readonly WaterShaderCatalogEntry[] = [
       "うねりと白波のある海です。白波は深度バッファではなく波の峰から出しているので、岸際ではなく波頭に乗ります。重ね数を上げるほど細かい波が増えます。",
     parameters: [
       ...WAVE_PARAMETERS,
+      ...DETAIL_PARAMETERS,
       {
         uniform: "uFoamAmount",
         label: "白波の量",
@@ -477,6 +577,8 @@ export const WATER_SHADER_CATALOG: readonly WaterShaderCatalogEntry[] = [
         uWaveLayers: { kind: "number", value: 3 },
         uFresnelPower: { kind: "number", value: 3.4 },
         uReflectivity: { kind: "number", value: 0.68 },
+        uDetailScale: { kind: "number", value: 0.32 },
+        uDetailStrength: { kind: "number", value: 1.3 },
         uGlintStrength: { kind: "number", value: 1.4 },
         uFoamAmount: { kind: "number", value: 0.34 },
         uFoamSharpness: { kind: "number", value: 0.22 },
@@ -502,6 +604,7 @@ export const WATER_SHADER_CATALOG: readonly WaterShaderCatalogEntry[] = [
         step: 1,
       },
       ...WAVE_PARAMETERS,
+      ...DETAIL_PARAMETERS,
       {
         uniform: "uFoamAmount",
         label: "白い波頭の量",
@@ -538,6 +641,8 @@ export const WATER_SHADER_CATALOG: readonly WaterShaderCatalogEntry[] = [
         uWaveLayers: { kind: "number", value: 2 },
         uFresnelPower: { kind: "number", value: 3 },
         uReflectivity: { kind: "number", value: 0.4 },
+        uDetailScale: { kind: "number", value: 0.4 },
+        uDetailStrength: { kind: "number", value: 0.9 },
         uGlintStrength: { kind: "number", value: 0 },
         uBandCount: { kind: "number", value: 4 },
         uFoamAmount: { kind: "number", value: 0.3 },
