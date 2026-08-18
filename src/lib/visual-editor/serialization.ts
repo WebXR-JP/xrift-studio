@@ -807,7 +807,7 @@ function validateKnownKeys(
         issue(
           `${path}.${key}`,
           "unsupported-property",
-          `Material extension property is not supported: ${key}`,
+          `property is not supported: ${key}`,
         ),
       );
     }
@@ -1017,9 +1017,7 @@ function validateSceneSettings(
     issues,
     (entry) => {
       validateBoolean(entry, "enabled", `${path}.skybox`, issues);
-      if (entry.iblEnabled !== undefined) {
-        validateBoolean(entry, "iblEnabled", `${path}.skybox`, issues);
-      }
+      validateBoolean(entry, "iblEnabled", `${path}.skybox`, issues);
       validateColor(entry, "topColor", `${path}.skybox`, issues);
       validateColor(entry, "bottomColor", `${path}.skybox`, issues);
       validateFinite(entry, "offset", `${path}.skybox`, issues);
@@ -1050,17 +1048,9 @@ function validateSceneSettings(
       ) {
         issues.push(issue(`${path}.skybox.materialAssetId`, "type", "materialAssetId must be a non-empty string when set"));
       }
-      // These fields were introduced after the initial settings schema; absent
-      // values are normalized by resolveSceneSettings when old projects open.
-      if (entry.rotationDegrees !== undefined) {
-        validateFinite(entry, "rotationDegrees", `${path}.skybox`, issues);
-      }
-      if (entry.flipY !== undefined) {
-        validateBoolean(entry, "flipY", `${path}.skybox`, issues);
-      }
-      if (entry.exposure !== undefined) {
-        validateFinite(entry, "exposure", `${path}.skybox`, issues, 0);
-      }
+      validateFinite(entry, "rotationDegrees", `${path}.skybox`, issues);
+      validateBoolean(entry, "flipY", `${path}.skybox`, issues);
+      validateFinite(entry, "exposure", `${path}.skybox`, issues, 0);
       validateOptionalVec3(entry, "meshPosition", `${path}.skybox`, issues);
       validateOptionalVec3(
         entry,
@@ -1125,151 +1115,139 @@ function validateSceneSettings(
       }
     },
   );
-  if (value.postprocessing !== undefined) {
-    validateSceneSettingsObject(
-      value.postprocessing,
-      ["enabled", "hdr", "bloom", "ao", "exposure"],
-      `${path}.postprocessing`,
-      issues,
-      (entry) => {
-        validateBoolean(entry, "enabled", `${path}.postprocessing`, issues);
-        validateFinite(entry, "exposure", `${path}.postprocessing`, issues, 0);
-        if (entry.hdr !== undefined) {
-          validateSceneSettingsObject(
-            entry.hdr,
-            ["enabled", "toneMapping"],
+  validateSceneSettingsObject(
+    value.postprocessing,
+    ["enabled", "hdr", "bloom", "ao", "exposure"],
+    `${path}.postprocessing`,
+    issues,
+    (entry) => {
+      validateBoolean(entry, "enabled", `${path}.postprocessing`, issues);
+      validateFinite(entry, "exposure", `${path}.postprocessing`, issues, 0);
+      validateSceneSettingsObject(
+        entry.hdr,
+        ["enabled", "toneMapping"],
+        `${path}.postprocessing.hdr`,
+        issues,
+        (hdr) => {
+          validateBoolean(
+            hdr,
+            "enabled",
             `${path}.postprocessing.hdr`,
             issues,
-            (hdr) => {
-              validateBoolean(
-                hdr,
-                "enabled",
-                `${path}.postprocessing.hdr`,
-                issues,
-              );
-              if (
-                hdr.toneMapping !== undefined &&
-                hdr.toneMapping !== "aces" &&
-                hdr.toneMapping !== "none"
-              ) {
-                issues.push(
-                  issue(
-                    `${path}.postprocessing.hdr.toneMapping`,
-                    "value",
-                    "toneMapping must be aces or none",
-                  ),
-                );
-              }
-            },
           );
-        }
-        validateSceneSettingsObject(
-          entry.bloom,
-          ["enabled", "threshold", "strength", "radius"],
-          `${path}.postprocessing.bloom`,
-          issues,
-          (bloom) => {
-            validateBoolean(
-              bloom,
-              "enabled",
-              `${path}.postprocessing.bloom`,
-              issues,
+          if (
+            hdr.toneMapping !== undefined &&
+            hdr.toneMapping !== "aces" &&
+            hdr.toneMapping !== "none"
+          ) {
+            issues.push(
+              issue(
+                `${path}.postprocessing.hdr.toneMapping`,
+                "value",
+                "toneMapping must be aces or none",
+              ),
             );
-            validateFinite(
-              bloom,
-              "threshold",
-              `${path}.postprocessing.bloom`,
-              issues,
-              0,
-            );
-            validateFinite(
-              bloom,
-              "strength",
-              `${path}.postprocessing.bloom`,
-              issues,
-              0,
-            );
-            validateFinite(
-              bloom,
-              "radius",
-              `${path}.postprocessing.bloom`,
-              issues,
-              0,
-            );
-          },
-        );
-        if (entry.ao !== undefined) {
-          validateSceneSettingsObject(
-            entry.ao,
-            ["enabled", "radius", "minDistance", "maxDistance"],
+          }
+        },
+      );
+      validateSceneSettingsObject(
+        entry.bloom,
+        ["enabled", "threshold", "strength", "radius"],
+        `${path}.postprocessing.bloom`,
+        issues,
+        (bloom) => {
+          validateBoolean(
+            bloom,
+            "enabled",
+            `${path}.postprocessing.bloom`,
+            issues,
+          );
+          validateFinite(
+            bloom,
+            "threshold",
+            `${path}.postprocessing.bloom`,
+            issues,
+            0,
+          );
+          validateFinite(
+            bloom,
+            "strength",
+            `${path}.postprocessing.bloom`,
+            issues,
+            0,
+          );
+          validateFinite(
+            bloom,
+            "radius",
+            `${path}.postprocessing.bloom`,
+            issues,
+            0,
+          );
+        },
+      );
+      validateSceneSettingsObject(
+        entry.ao,
+        ["enabled", "radius", "minDistance", "maxDistance"],
+        `${path}.postprocessing.ao`,
+        issues,
+        (ao) => {
+          validateBoolean(
+            ao,
+            "enabled",
             `${path}.postprocessing.ao`,
             issues,
-            (ao) => {
-              validateBoolean(
-                ao,
-                "enabled",
-                `${path}.postprocessing.ao`,
-                issues,
-              );
-              validateFinite(ao, "radius", `${path}.postprocessing.ao`, issues, 0.1);
-              validateFinite(
-                ao,
-                "minDistance",
-                `${path}.postprocessing.ao`,
-                issues,
-                0,
-              );
-              validateFinite(
-                ao,
-                "maxDistance",
-                `${path}.postprocessing.ao`,
-                issues,
-                0.001,
-              );
-              if (
-                isFiniteNumber(ao.minDistance) &&
-                isFiniteNumber(ao.maxDistance) &&
-                ao.maxDistance <= ao.minDistance
-              ) {
-                issues.push(
-                  issue(
-                    `${path}.postprocessing.ao.maxDistance`,
-                    "range",
-                    "AO maxDistance must be greater than minDistance",
-                  ),
-                );
-              }
-            },
           );
-        }
-      },
-    );
-  }
-  if (value.vegetation !== undefined) {
-    validateSceneSettingsObject(
-      value.vegetation,
-      [
-        "enabled",
-        "windStrength",
-        "windSpeed",
-        "gustStrength",
-        "windDirectionDegrees",
-      ],
-      `${path}.vegetation`,
-      issues,
-      (entry) => {
-        validateBoolean(entry, "enabled", `${path}.vegetation`, issues);
-        validateFinite(entry, "windStrength", `${path}.vegetation`, issues, 0);
-        validateFinite(entry, "windSpeed", `${path}.vegetation`, issues, 0);
-        validateFinite(entry, "gustStrength", `${path}.vegetation`, issues, 0);
-        // Added after the first vegetation schema; absent values are filled in
-        // by resolveSceneSettings when an older project opens.
-        if (entry.windDirectionDegrees !== undefined) {
-          validateFinite(entry, "windDirectionDegrees", `${path}.vegetation`, issues);
-        }
-      },
-    );
-  }
+          validateFinite(ao, "radius", `${path}.postprocessing.ao`, issues, 0.1);
+          validateFinite(
+            ao,
+            "minDistance",
+            `${path}.postprocessing.ao`,
+            issues,
+            0,
+          );
+          validateFinite(
+            ao,
+            "maxDistance",
+            `${path}.postprocessing.ao`,
+            issues,
+            0.001,
+          );
+          if (
+            isFiniteNumber(ao.minDistance) &&
+            isFiniteNumber(ao.maxDistance) &&
+            ao.maxDistance <= ao.minDistance
+          ) {
+            issues.push(
+              issue(
+                `${path}.postprocessing.ao.maxDistance`,
+                "range",
+                "AO maxDistance must be greater than minDistance",
+              ),
+            );
+          }
+        },
+      );
+    },
+  );
+  validateSceneSettingsObject(
+    value.vegetation,
+    [
+      "enabled",
+      "windStrength",
+      "windSpeed",
+      "gustStrength",
+      "windDirectionDegrees",
+    ],
+    `${path}.vegetation`,
+    issues,
+    (entry) => {
+      validateBoolean(entry, "enabled", `${path}.vegetation`, issues);
+      validateFinite(entry, "windStrength", `${path}.vegetation`, issues, 0);
+      validateFinite(entry, "windSpeed", `${path}.vegetation`, issues, 0);
+      validateFinite(entry, "gustStrength", `${path}.vegetation`, issues, 0);
+      validateFinite(entry, "windDirectionDegrees", `${path}.vegetation`, issues);
+    },
+  );
   validateSceneSettingsObject(
     value.physics,
     ["gravity", "allowInfiniteJump"],
@@ -1307,7 +1285,11 @@ function validateSceneSettings(
           validateFinite(gizmo, "size", `${path}.editor.gizmo`, issues, 0.1);
           validateBoolean(gizmo, "gridVisible", `${path}.editor.gizmo`, issues);
           validateFinite(gizmo, "gridSize", `${path}.editor.gizmo`, issues, 1);
-          if (!Number.isInteger(gizmo.gridDivisions) || Number(gizmo.gridDivisions) < 1) {
+          if (
+            gizmo.gridDivisions !== undefined &&
+            (!Number.isInteger(gizmo.gridDivisions) ||
+              Number(gizmo.gridDivisions) < 1)
+          ) {
             issues.push(issue(`${path}.editor.gizmo.gridDivisions`, "range", "grid divisions must be a positive integer"));
           }
           validateBoolean(gizmo, "snapEnabled", `${path}.editor.gizmo`, issues);
@@ -1320,6 +1302,13 @@ function validateSceneSettings(
   );
 }
 
+/**
+ * Validates one scene settings section. An absent section is valid: sections
+ * keep being added to SceneSettings, and resolveSceneSettings fills the default
+ * for every one it does not find. Requiring a section here would mean every
+ * project saved before that section existed stops opening after an update.
+ * Only a section that is present but not an object is a real defect.
+ */
 function validateSceneSettingsObject(
   value: unknown,
   keys: readonly string[],
@@ -1327,6 +1316,7 @@ function validateSceneSettingsObject(
   issues: DocumentValidationIssue[],
   validate: (entry: Record<string, unknown>) => void,
 ): void {
+  if (value === undefined) return;
   if (!isRecord(value)) {
     issues.push(issue(path, "type", "scene settings section must be an object"));
     return;
@@ -1335,12 +1325,17 @@ function validateSceneSettingsObject(
   validate(value);
 }
 
+// The field-level helpers below follow the same rule as the section helper: an
+// absent value takes the default from resolveSceneSettings, so only a value
+// that is present and wrong is reported.
+
 function validateBoolean(
   value: Record<string, unknown>,
   key: string,
   path: string,
   issues: DocumentValidationIssue[],
 ): void {
+  if (value[key] === undefined) return;
   if (typeof value[key] !== "boolean") {
     issues.push(issue(`${path}.${key}`, "type", `${key} must be a boolean`));
   }
@@ -1352,6 +1347,7 @@ function validateColor(
   path: string,
   issues: DocumentValidationIssue[],
 ): void {
+  if (value[key] === undefined) return;
   if (typeof value[key] !== "string" || !/^#[0-9a-f]{6}$/i.test(value[key])) {
     issues.push(issue(`${path}.${key}`, "color", `${key} must be a #RRGGBB color`));
   }
@@ -1364,6 +1360,7 @@ function validateFinite(
   issues: DocumentValidationIssue[],
   min?: number,
 ): void {
+  if (value[key] === undefined) return;
   if (!isFiniteNumber(value[key]) || (min !== undefined && value[key] < min)) {
     issues.push(issue(`${path}.${key}`, "range", `${key} must be a finite number${min === undefined ? "" : ` greater than or equal to ${min}`}`));
   }

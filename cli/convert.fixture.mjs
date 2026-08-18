@@ -75,6 +75,7 @@ import { runVisualUploadFixtureAssertions } from "../src/lib/visual-editor/uploa
 import { runRuntimeSpawnFixtureAssertions } from "../src/lib/visual-editor/runtime-spawn.fixture.ts";
 import { runSkyboxImportFixtureAssertions } from "../src/lib/visual-editor/skybox-import.fixture.ts";
 import { runSkyShaderFixtureAssertions } from "../src/lib/visual-editor/sky-shader.fixture.ts";
+import { runSceneSettingsCompatFixtureAssertions } from "../src/lib/visual-editor/scene-settings-compat.fixture.ts";
 import { runWindContractFixtureAssertions } from "../src/lib/visual-editor/wind-contract.fixture.ts";
 import { runWaterShaderFixtureAssertions } from "../src/lib/visual-editor/water-shader.fixture.ts";
 import { runUnityPackageImportFixture } from "../src/lib/visual-editor/unity-package-import.fixture.ts";
@@ -290,6 +291,7 @@ try {
     ["model import contract", runModelImportContractFixtureAssertions],
     ["skybox import", runSkyboxImportFixtureAssertions],
     ["sky shader", runSkyShaderFixtureAssertions],
+    ["scene settings compat", runSceneSettingsCompatFixtureAssertions],
     ["wind contract", runWindContractFixtureAssertions],
     ["water shader", runWaterShaderFixtureAssertions],
     ["unity package import", runUnityPackageImportFixture],
