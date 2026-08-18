@@ -1,7 +1,13 @@
 name: Release
 
-# 手動実行でタグを打ち、各 OS 向けの通常版とデバッグ協力用 Debug 版を
-# GitHub Release に添付するワークフロー（Windows / macOS / Linux 対応）。
+# 手動実行でタグを打ち、各 OS 向けの Release 版を GitHub Release に
+# 添付するワークフロー（Windows / macOS / Linux 対応）。
+#
+# 配信するのは Release 版だけにしている。以前は同じ実行で Debug 版も
+# 作って添付していたが、OS ごとに Rust を二度ビルドするため所要時間が
+# ほぼ倍になっていた。デバッグ協力を依頼するときは、その場で
+# `pnpm tauri:build --debug` を使うか、必要になった時点で Debug 版だけを
+# 作る手段を別に用意する。
 #
 # 使い方:
 #   Actions タブ → "Release" → "Run workflow" で
@@ -167,18 +173,13 @@ jobs:
             src-tauri/binaries/xrift-studio-mcp-sidecar-aarch64-apple-darwin \
             src-tauri/binaries/xrift-studio-mcp-sidecar-x86_64-apple-darwin \
             -output src-tauri/binaries/xrift-studio-mcp-sidecar-universal-apple-darwin
-          mkdir -p \
-            src-tauri/target/universal-apple-darwin/release \
-            src-tauri/target/universal-apple-darwin/debug
+          mkdir -p src-tauri/target/universal-apple-darwin/release
           lipo -create \
             src-tauri/target-mcp-sidecar/aarch64-apple-darwin/release/xrift-studio-mcp \
             src-tauri/target-mcp-sidecar/x86_64-apple-darwin/release/xrift-studio-mcp \
             -output src-tauri/target/universal-apple-darwin/release/xrift-studio-mcp
-          cp \
-            src-tauri/target/universal-apple-darwin/release/xrift-studio-mcp \
-            src-tauri/target/universal-apple-darwin/debug/xrift-studio-mcp
 
-      - name: Build & upload Release and Debug bundles
+      - name: Build & upload Release bundles
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -201,17 +202,19 @@ jobs:
             | macOS | `.dmg` (universal — Apple Silicon + Intel) |
             | Linux | `.deb` / `.rpm` / `.AppImage` |
 
-            各 OS について、通常利用向けの `release` 版と、初期利用者から
-            不具合調査に必要な情報を得るための `debug` 版を添付しています。
-            Debug 版は開発用機能を含み、サイズや動作速度も通常版と異なります。
-            普段使いには `release` 版を利用し、Debug 版は不具合の再現確認や
-            デバッグ協力を依頼された場合に利用してください。
+            添付しているのは通常利用向けの Release 版です。お使いの OS の
+            ファイルをダウンロードしてください。
+
+            不具合を見つけた場合は Issue で知らせてください。調査に詳しい
+            ログが必要なときは、こちらから確認手順を案内します。
 
             本アプリは XRift 公式とは無関係の有志製ツールです。
           releaseDraft: ${{ inputs.draft }}
           prerelease: ${{ inputs.prerelease }}
           includeRelease: true
-          includeDebug: true
+          # Debug 版は配信しない。同じ実行で Rust をもう一度ビルドするため
+          # 所要時間がほぼ倍になり、リリースが遅くなっていた。
+          includeDebug: false
           includeUpdaterJson: true
           assetNamePattern: '[name]_[version]_[platform]_[arch]_[mode][setup][ext]'
           args: ${{ matrix.args }}
