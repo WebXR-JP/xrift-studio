@@ -38,7 +38,7 @@ const repoPackage = (() => {
 
 const title = flag("title", "ここに更新の見出しを書く");
 const version = flag("version", repoPackage.version ?? "");
-const bed = flag("bed", "bright-120");
+const bed = flag("bed", "shipped-this-week-30");
 const from = flag("from", "");
 const to = flag("to", "HEAD");
 
@@ -67,10 +67,39 @@ copyFileSync(join(TEMPLATE, "tsconfig.json"), join(dest, "tsconfig.json"));
 copyFileSync(join(TEMPLATE, "gitignore"), join(dest, ".gitignore"));
 cpSync(join(TEMPLATE, "src"), join(dest, "src"), { recursive: true });
 
-// storyboard の BGM を指定に合わせる。
+// storyboard の BGM を指定に合わせ、シーンの小節数もその BGM の長さへ合わせる。
 const storyboardPath = join(dest, "storyboard.json");
 const storyboard = JSON.parse(readFileSync(storyboardPath, "utf8"));
+const beds = JSON.parse(readFileSync(join(KIT, "beds.json"), "utf8")).beds;
+const spec = beds[bed];
+if (!spec) {
+  console.error(`_kit/beds.json にない BGM です: ${bed}`);
+  console.error(`使えるのは: ${Object.keys(beds).join(", ")}`);
+  process.exit(1);
+}
 storyboard.music.bed = bed;
+
+// 楽曲を切り出した BGM は長さが決まっているので、動画の小節数をそこへ揃える。
+// ループする合成ベッドは長さを選ばないため、雛形の既定配分のままにする。
+if (!spec.loop) {
+  const rest = Math.max(3, spec.bars - 5);
+  const demoMain = Math.ceil(rest * 0.45);
+  const demoResult = Math.max(1, Math.round(rest * 0.28));
+  const summary = Math.max(1, rest - demoMain - demoResult);
+  const plan = {
+    "series-title": 1,
+    "feature-intro": 3,
+    "demo-main": demoMain,
+    "demo-result": demoResult,
+    summary,
+    outro: 1,
+  };
+  for (const scene of storyboard.scenes) {
+    if (plan[scene.id]) scene.durationInBars = plan[scene.id];
+  }
+  const total = storyboard.scenes.reduce((sum, scene) => sum + scene.durationInBars, 0);
+  console.log(`BGM ${bed}: ${spec.bars}小節 / storyboard の合計: ${total}小節`);
+}
 if (!version) {
   delete storyboard.version;
   for (const scene of storyboard.scenes) delete scene.version;

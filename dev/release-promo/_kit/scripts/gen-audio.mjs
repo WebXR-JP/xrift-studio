@@ -8,7 +8,7 @@
 // 出力はすべてこのスクリプトが合成した原音。外部音源を含まないので、
 // 出典表記やライセンス確認なしに動画へ使える。同じコードからは常に
 // 同じ波形が出るため、生成物は Git に入れず必要なときに作り直す。
-import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SR, Track, toWav } from "./dsp.mjs";
@@ -191,6 +191,18 @@ const write = (name, track, meta) => {
   console.log(`write  ${name}  ${sec.toFixed(2)}s`);
   return { ...meta, file: name, durationInSeconds: Number(sec.toFixed(4)) };
 };
+
+// beds.json と食い違ったまま書き出すと、動画側の小節計算がずれる。
+const beds = JSON.parse(readFileSync(resolve(HERE, "..", "beds.json"), "utf8")).beds;
+for (const bed of BEDS) {
+  const spec = beds[bed.id];
+  if (!spec) throw new Error(`_kit/beds.json に ${bed.id} がありません。`);
+  if (spec.bpm !== bed.bpm || spec.bars !== bed.bars) {
+    throw new Error(
+      `_kit/beds.json の ${bed.id} が合いません: ${spec.bpm}BPM ${spec.bars}小節 と ${bed.bpm}BPM ${bed.bars}小節`,
+    );
+  }
+}
 
 mkdirSync(ASSET_DIR, { recursive: true });
 

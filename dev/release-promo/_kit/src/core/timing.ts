@@ -31,12 +31,25 @@ export const createBeatGrid = ({ bpm, fps }: { bpm: number; fps: number }): Beat
   };
 };
 
-/** BGM の仕様。gen-audio.mjs の BEDS と必ず一致させる。 */
-export const BED_SPECS: Record<string, { bpm: number; bars: number }> = {
-  "bright-120": { bpm: 120, bars: 8 },
-  "calm-96": { bpm: 96, bars: 8 },
-  "drive-128": { bpm: 128, bars: 8 },
+import bedsJson from "../../beds.json";
+
+export type BedSpec = {
+  bpm: number;
+  bars: number;
+  /** 繰り返して使えるか。楽曲を切り出したものは前奏と終わりがあるので繰り返さない。 */
+  loop: boolean;
+  /** track は楽曲から切り出したもの、synth はこのリポジトリで合成したもの。 */
+  kind: "track" | "synth";
+  label: string;
 };
+
+/**
+ * BGM の仕様。実体は _kit/beds.json にあり、スクリプト側も同じファイルを読む。
+ * 書き出し時に cut-music.mjs と gen-audio.mjs がこの表と一致するか確認する。
+ */
+export const BED_SPECS: Record<string, BedSpec> = bedsJson.beds as Record<string, BedSpec>;
+
+export const isLoopingBed = (bed: string): boolean => BED_SPECS[bed]?.loop ?? false;
 
 /** BGM 1ループのフレーム数。ループを並べるときの長さになる。 */
 export const bedDurationInFrames = (bed: string, fps: number): number => {

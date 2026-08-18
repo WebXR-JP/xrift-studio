@@ -1,5 +1,15 @@
 import type { ThemeName } from "./theme";
 
+/** 使える BGM。BED_SPECS のキーと必ず揃える。 */
+export type BedId =
+  | "shipped-this-week-30"
+  | "shipped-this-week-60"
+  | "glass-atrium-pulse-30"
+  | "glass-atrium-pulse-60"
+  | "bright-120"
+  | "calm-96"
+  | "drive-128";
+
 export type Point = { x: number; y: number };
 
 /** 素材。画像でも動画でも同じ書き方で指定する。 */
@@ -179,12 +189,14 @@ export type Storyboard = {
   };
   music?: {
     /** _kit/assets/audio の BGM ID。none で無音。 */
-    bed: "bright-120" | "calm-96" | "drive-128" | "none";
+    bed: BedId | "none";
     volume?: number;
-    /** 省略時は BED_BPM から引く。 */
+    /** 省略時は BED_SPECS から引く。 */
     bpm?: number;
     fadeInInFrames?: number;
     fadeOutInFrames?: number;
+    /** BGM が動画より短くても警告を出さない。既定では書き出し画面に警告が出る。 */
+    allowShorterThanVideo?: boolean;
   };
   sfx?: {
     enabled?: boolean;

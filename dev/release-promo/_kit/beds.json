@@ -1,0 +1,54 @@
+{
+  "note": "使える BGM の一覧。TypeScript 側（src/core/timing.ts）とスクリプト側の両方がここを読む。楽曲カットは assets/music/tracks.json から cut-music.mjs が、合成ベッドは gen-audio.mjs が書き出す。どちらも書き出し時にこの表と一致するか確認する。",
+  "beds": {
+    "shipped-this-week-30": {
+      "bpm": 125,
+      "bars": 16,
+      "loop": false,
+      "kind": "track",
+      "label": "Shipped This Week 30秒（30.72秒 / 16小節）"
+    },
+    "shipped-this-week-60": {
+      "bpm": 125,
+      "bars": 31,
+      "loop": false,
+      "kind": "track",
+      "label": "Shipped This Week 60秒（59.52秒 / 31小節）"
+    },
+    "glass-atrium-pulse-30": {
+      "bpm": 121,
+      "bars": 15,
+      "loop": false,
+      "kind": "track",
+      "label": "Glass Atrium Pulse 30秒（29.75秒 / 15小節）"
+    },
+    "glass-atrium-pulse-60": {
+      "bpm": 121,
+      "bars": 30,
+      "loop": false,
+      "kind": "track",
+      "label": "Glass Atrium Pulse 60秒（59.50秒 / 30小節）"
+    },
+    "bright-120": {
+      "bpm": 120,
+      "bars": 8,
+      "loop": true,
+      "kind": "synth",
+      "label": "明るいポップ（ループ / 1小節2.00秒）"
+    },
+    "calm-96": {
+      "bpm": 96,
+      "bars": 8,
+      "loop": true,
+      "kind": "synth",
+      "label": "落ち着いた雰囲気（ループ / 1小節2.50秒）"
+    },
+    "drive-128": {
+      "bpm": 128,
+      "bars": 8,
+      "loop": true,
+      "kind": "synth",
+      "label": "勢いのある展開（ループ / 1小節1.875秒）"
+    }
+  }
+}

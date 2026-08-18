@@ -57,28 +57,32 @@ dev/release-promo/
   "scriptApproval": { "status": "approved", "approvedBy": "user" },
   "theme": "dark",
   "format": { "width": 1920, "height": 1080, "fps": 30 },
-  "music": { "bed": "bright-120", "volume": 0.32 },
+  "music": { "bed": "shipped-this-week-30", "volume": 0.7 },
   "sfx": { "enabled": true, "auto": true },
   "scenes": [ ... ]
 }
 ```
 
-- 尺は `durationInBars`（小節）で書く。BGM の拍とカットが必ず揃う。`bright-120` は 1 小節 = 2 秒。
+- 尺は `durationInBars`（小節）で書く。BGM の拍とカットが必ず揃う。1 小節の長さは BGM ごとに違う。
 - どうしてもフレーム単位で決めたいときだけ `durationInFrames` を使う。両方を書かない。
 - `format.durationInFrames` は書かない。シーンの合計から自動で決まる。
 - 収録が 16:9 以外なら `format.sourceAspect` を指定する（例: 16:10 なら `1.6`）。
 - `scriptApproval.status` が `approved` になるまでレンダリングしない。
 
-### 30秒の標準配分（120 BPM / 15 小節）
+### 尺は BGM が決める
 
-| 小節 | 秒 | シーン | 役割 |
+楽曲から切り出した BGM は長さが決まっている。**シーンの `durationInBars` の合計を、その BGM の小節数に合わせる。** 合っていないと途中で音が終わるか、曲の終わりが切れる。`new-promo.mjs` は `--bed` に合わせて雛形を作るので、通常はそのまま使えばよい。
+
+| BGM | 動画の長さ | 小節 | 標準の配分 |
 |---|---|---|---|
-| 1 | 0-2 | `title` | XRift Studio のアップデート動画だと分かる |
-| 2 | 2-6 | `feature` | 何が変わったか / 何がよくなるか の2行 |
-| 5 | 6-16 | `screen` | 主操作を実画面で示す |
-| 3 | 16-22 | `screen` または `compare` | 操作の結果を見せる |
-| 3 | 22-28 | `bullets` | 利用者にとっての結果 |
-| 1 | 28-30 | `end` | 公開中であることと対象の更新 |
+| `shipped-this-week-30`（既定） | 30.7秒 | 16 | 1 / 3 / 5 / 3 / 3 / 1 |
+| `glass-atrium-pulse-30` | 29.8秒 | 15 | 1 / 3 / 5 / 3 / 2 / 1 |
+| `shipped-this-week-60` | 59.5秒 | 31 | 1 / 3 / 12 / 7 / 7 / 1 |
+| `glass-atrium-pulse-60` | 59.5秒 | 30 | 1 / 3 / 12 / 7 / 6 / 1 |
+
+配分は「タイトル / 更新の紹介 / 実画面デモ / 結果 / まとめ / 締め」の順。どちらの曲も 8 小節目から主部に入るので、この配分だと実画面デモの途中で曲が開ける。
+
+ループする合成ベッド（`bright-120` `calm-96` `drive-128`）を選んだ場合は長さの制約がない。尺が中途半端なときはこちらを使う。BGM の一覧は [xrift-promo-audio](../xrift-promo-audio/SKILL.md) にある。
 
 ## シーンの種類
 

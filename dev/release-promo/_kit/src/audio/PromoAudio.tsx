@@ -2,6 +2,7 @@ import React from "react";
 import { Audio, Sequence, interpolate, staticFile, useVideoConfig } from "remotion";
 import type { Scene, SfxCue, SfxId, Storyboard } from "../core/storyboard";
 import { sceneDuration, sceneStarts } from "../core/storyboard";
+import { isLoopingBed } from "../core/timing";
 
 /** 効果音ごとの既定音量。BGM と字幕の邪魔をしない範囲に収める。 */
 const SFX_GAIN: Record<SfxId, number> = {
@@ -126,7 +127,8 @@ export const PromoAudio: React.FC<{
 
   const fadeIn = music?.fadeInInFrames ?? Math.round(fps * 0.5);
   const fadeOut = music?.fadeOutInFrames ?? Math.round(fps * 1.2);
-  const bedVolume = music?.volume ?? 0.32;
+  // BGM は -16 LUFS へ揃えてあるので、ここは動画全体の音量とほぼ同じ意味になる。
+  const bedVolume = music?.volume ?? 0.7;
 
   // 全体の音量カーブ。フェードと、効果音に合わせた一時的な下げを重ねる。
   const bedVolumeAt = React.useCallback(
@@ -155,12 +157,17 @@ export const PromoAudio: React.FC<{
   );
 
   const bedFrames = bedDurationInFrames ?? 0;
-  const repeats = music && music.bed !== "none" && bedFrames > 0
-    ? Math.ceil(totalDurationInFrames / bedFrames)
-    : 0;
+  const hasBed = Boolean(music) && music!.bed !== "none" && bedFrames > 0;
+  const loops = hasBed && isLoopingBed(music!.bed);
+  // ループ素材は動画の長さぶん並べる。楽曲を切り出したものは前奏と終わりがあるので 1 回だけ流す。
+  const repeats = !hasBed ? 0 : loops ? Math.ceil(totalDurationInFrames / bedFrames) : 1;
+
+  const shortBy = hasBed && !loops ? totalDurationInFrames - bedFrames : 0;
+  const warnShort = shortBy > fps && !music?.allowShorterThanVideo;
 
   return (
     <>
+      {warnShort ? <ShortBedWarning seconds={shortBy / fps} bed={music!.bed} /> : null}
       {Array.from({ length: repeats }).map((_, i) => (
         // ループ素材は継ぎ目が合うように作ってあるので、同じ長さで並べれば途切れない。
         <Sequence key={`bed-${i}`} from={i * bedFrames} durationInFrames={bedFrames} name={`BGM ${i + 1}`}>
@@ -185,6 +192,30 @@ export const PromoAudio: React.FC<{
     </>
   );
 };
+
+/**
+ * BGM が動画より短いときの警告。
+ * 途中から無音になった動画をそのまま公開しないよう、書き出しにも出す。
+ */
+const ShortBedWarning: React.FC<{ seconds: number; bed: string }> = ({ seconds, bed }) => (
+  <div
+    style={{
+      position: "absolute",
+      left: 0,
+      right: 0,
+      top: 0,
+      zIndex: 100,
+      padding: "14px 24px",
+      background: "#b91c1c",
+      color: "#ffffff",
+      fontSize: 26,
+      fontWeight: 700,
+      textAlign: "center",
+    }}
+  >
+    BGM「{bed}」が動画より {seconds.toFixed(1)} 秒短いです。長い BGM を選ぶか、シーンの小節数を減らしてください。
+  </div>
+);
 
 export { SFX_GAIN };
 export const sceneDurationOf = sceneDuration;

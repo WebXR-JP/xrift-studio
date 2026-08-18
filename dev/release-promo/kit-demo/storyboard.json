@@ -22,8 +22,8 @@
     "fps": 30
   },
   "music": {
-    "bed": "bright-120",
-    "volume": 0.32
+    "bed": "shipped-this-week-30",
+    "volume": 0.7
   },
   "sfx": {
     "enabled": true,
@@ -41,7 +41,7 @@
     {
       "id": "feature-intro",
       "kind": "feature",
-      "durationInBars": 2,
+      "durationInBars": 3,
       "headline": "リリース動画キットの動作確認",
       "subhead": "利用者にとって何がよくなるかを1行で書く",
       "claim": "この更新で何が変わったかを伝える",

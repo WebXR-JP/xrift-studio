@@ -26,12 +26,22 @@ if (!existsSync(join(project, "storyboard.json"))) {
 const storyboard = JSON.parse(readFileSync(join(project, "storyboard.json"), "utf8"));
 const bed = storyboard.music?.bed ?? "none";
 
+const run = (script, extra = []) => {
+  const r = spawnSync(process.execPath, [join(HERE, script), ...extra], { stdio: "inherit" });
+  if (r.status !== 0) process.exit(r.status ?? 1);
+};
+
 // 素材が生成されていなければ、その場で作る。生成物は Git に入れない運用のため、
 // 別のマシンや別のクローンでも同じ手順で揃う。
-if (!existsSync(KIT_AUDIO) || readdirSync(KIT_AUDIO).filter((f) => f.endsWith(".wav")).length === 0) {
-  console.log("音素材がないので生成します...");
-  const gen = spawnSync(process.execPath, [join(HERE, "gen-audio.mjs")], { stdio: "inherit" });
-  if (gen.status !== 0) process.exit(gen.status ?? 1);
+const has = (file) => existsSync(join(KIT_AUDIO, file));
+if (!existsSync(KIT_AUDIO) || !readdirSync(KIT_AUDIO).some((f) => f.startsWith("sfx-"))) {
+  console.log("効果音と合成 BGM がないので生成します...");
+  run("gen-audio.mjs");
+}
+// 楽曲から切り出す BGM は、必要になったときだけ書き出す。
+if (bed !== "none" && !has(`bgm-${bed}.wav`)) {
+  console.log(`BGM ${bed} がないので書き出します...`);
+  run("cut-music.mjs");
 }
 
 const destDir = join(project, "public", "audio");
@@ -39,7 +49,7 @@ mkdirSync(destDir, { recursive: true });
 mkdirSync(join(project, "public", "source"), { recursive: true });
 
 const wanted = readdirSync(KIT_AUDIO).filter((file) => {
-  if (file === "manifest.json") return true;
+  if (file === "manifest.json" || file === "music-manifest.json") return true;
   if (file.startsWith("sfx-")) return true;
   if (file === `bgm-${bed}.wav`) return true;
   return false;
@@ -47,7 +57,7 @@ const wanted = readdirSync(KIT_AUDIO).filter((file) => {
 
 if (bed !== "none" && !wanted.includes(`bgm-${bed}.wav`)) {
   console.error(`BGM が見つかりません: bgm-${bed}.wav`);
-  console.error("storyboard.music.bed を manifest.json にある ID にしてください。");
+  console.error("storyboard.music.bed を manifest.json か music-manifest.json にある ID にしてください。");
   process.exit(1);
 }
 

@@ -1,0 +1,52 @@
+{
+  "note": "リリース動画用の楽曲。XRift Studio の制作者本人が Suno で作成し、公開してよいものとして提供している。cuts は cut-music.mjs が書き出す長さ違いの版で、すべて小節の頭から始まり小節の頭で終わる。",
+  "targetLufs": -16,
+  "tracks": [
+    {
+      "id": "shipped-this-week",
+      "title": "Shipped This Week",
+      "artist": "operaticcassettes778",
+      "createdWith": "Suno",
+      "rights": "XRift Studio の制作者が作成。動画への使用と公開が許諾されている。",
+      "source": "shipped-this-week.mp3",
+      "bpm": 125,
+      "firstDownbeatSec": 0.924,
+      "structure": "0-4 前奏 / 4-8 助走 / 8-24 主部 / 24-28 静かな区間 / 28-40 立ち上がり / 40-64 主部 / 64-72 間奏 / 72-96 主部",
+      "cuts": [
+        {
+          "id": "shipped-this-week-30",
+          "label": "30秒。前奏から主部までを続けて使う標準の1本",
+          "segments": [[0, 16]]
+        },
+        {
+          "id": "shipped-this-week-60",
+          "label": "60秒。前奏と助走のあと、主部へつないで最後まで密度を保つ",
+          "segments": [[0, 8], [40, 63]]
+        }
+      ]
+    },
+    {
+      "id": "glass-atrium-pulse",
+      "title": "Glass Atrium Pulse",
+      "artist": "operaticcassettes778",
+      "createdWith": "Suno",
+      "rights": "XRift Studio の制作者が作成。動画への使用と公開が許諾されている。",
+      "source": "glass-atrium-pulse.mp3",
+      "bpm": 121,
+      "firstDownbeatSec": 0.003,
+      "structure": "0-4 前奏 / 4-8 助走 / 8-32 主部 / 32-36 静かな区間 / 36-40 立ち上がり / 40-56 主部 / 56-66 終わり",
+      "cuts": [
+        {
+          "id": "glass-atrium-pulse-30",
+          "label": "30秒。落ち着いた前奏から主部へ上がる",
+          "segments": [[0, 15]]
+        },
+        {
+          "id": "glass-atrium-pulse-60",
+          "label": "60秒。前奏から主部までを切らずに使う",
+          "segments": [[0, 30]]
+        }
+      ]
+    }
+  ]
+}

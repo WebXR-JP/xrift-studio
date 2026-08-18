@@ -40,23 +40,30 @@ _kit/
 ├─ scripts/
 │  ├─ dsp.mjs              波形・フィルタ・リバーブ・WAV 書き出し
 │  ├─ instruments.mjs      楽器と効果音の合成
-│  ├─ gen-audio.mjs        BGM と効果音の生成
+│  ├─ gen-audio.mjs        効果音と合成ループの生成
+│  ├─ analyze-music.mjs    楽曲の BPM・小節・構成の解析
+│  ├─ cut-music.mjs        楽曲から動画の尺への切り出し
 │  ├─ sync-assets.mjs      音素材を各プロジェクトの public/audio へ配る
 │  └─ new-promo.mjs        新しい動画プロジェクトを作る
+├─ assets/music/           原曲と切り出しの設計（tracks.json）
 ├─ assets/audio/           生成した WAV。Git には入れない
+├─ beds.json               使える BGM の一覧。TypeScript とスクリプトの両方が読む
 └─ template/               新規プロジェクトの雛形
 ```
 
 ## 音について
 
-BGM と効果音はすべてこのリポジトリのコードで合成している。外部素材を含まないので、出典表記もライセンス確認もいらない。種を固定しているため、何度生成しても同じ波形になる。
+BGM は 2 系統。標準は `assets/music/` の楽曲を動画の尺に合わせて切り出したもので、XRift Studio の制作者が Suno で作成し、公開してよいものとして提供している。もう 1 つは `gen-audio.mjs` が合成するループ素材。効果音はすべて合成音。外部素材を含まないので、出典表記もライセンス確認もいらない。
 
 ```powershell
-node _kit/scripts/gen-audio.mjs          # 無いものだけ生成
-node _kit/scripts/gen-audio.mjs --force  # 作り直す
+node _kit/scripts/analyze-music.mjs assets/music/xxx.mp3   # BPM と構成を調べる
+node _kit/scripts/cut-music.mjs                            # 30秒 / 60秒 を切り出す
+node _kit/scripts/gen-audio.mjs                            # 効果音と合成ループ
 ```
 
-生成物は `.gitignore` 対象。別のクローンでも同じコマンドで揃う。
+Git に入れるのは原曲（`assets/music/*.mp3`）と設計（`tracks.json` `beds.json`）だけ。書き出した WAV は `.gitignore` 対象で、別のクローンでも同じコマンドで同じものが揃う。
+
+使える BGM の一覧は `beds.json`。楽曲から切り出した BGM は長さが決まっているので、動画の小節数をその `bars` に合わせる。
 
 ## 動作確認
 
