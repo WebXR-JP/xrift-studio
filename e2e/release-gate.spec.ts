@@ -315,10 +315,35 @@ test("ビジュアル編集で地形を作成・整形できる", async ({ page 
       .getByText("地形", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("高さマップ・固定コライダー")).toBeVisible();
-  const sculpt = page.getByRole("button", { name: "地形に適用" });
+
+  // The editor opens in the sculpt mode with the raise brush selected, so the
+  // toolbar is what tells the author which tool is live.
+  const modes = page.getByRole("group", { name: "地形の編集モード" });
+  const brushes = page.getByRole("group", { name: "ブラシの種類" });
+  await expect(
+    modes.getByRole("button", { name: "形", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    brushes.getByRole("button", { name: "盛る", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+
+  // Sculpting is a Scene View gesture now; the numeric one-shot apply stays
+  // available behind a disclosure for exact placement.
+  await page.getByText("数値の位置へ1回適用").click();
+  const sculpt = page.getByRole("button", { name: "この位置へ適用" });
   await expect(sculpt).toBeVisible();
   await sculpt.click();
   await expect(page.getByText("地形を盛り上げました")).toBeVisible();
+
+  // Switching to the grass mode must swap the armed tool, not leave the
+  // sculpting brush live: a stroke meant to paint once carved the ground.
+  await modes.getByRole("button", { name: "草", exact: true }).click();
+  await expect(
+    brushes.getByRole("button", { name: "生やす", exact: true }),
+  ).toBeVisible();
+  await expect(
+    brushes.getByRole("button", { name: "盛る", exact: true }),
+  ).toHaveCount(0);
 });
 
 test("ビジュアル編集の一時保存失敗は自動再試行で復帰する", async ({
