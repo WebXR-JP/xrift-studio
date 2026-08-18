@@ -52,7 +52,9 @@
 | `headline` | 1 行目。何が変わったか |
 | `subhead` | 2 行目。利用者にとって何がよくなるか |
 | `eyebrow` | 既定は `今回のアップデート` |
-| `background` | 背景に敷く実画面。ぼかして薄く出る |
+| `background` | 背景に敷く実画面。ぼかして薄く出るので静止画を使う |
+
+長い見出しは日本語だと単語の途中で折り返される。`\n` を書いて切れ目を指定する。
 
 ### screen
 
@@ -64,10 +66,15 @@
 | `focus` | `x` `y` `scale` `startFrame` `durationInFrames` `holdInFrames` |
 | `callouts` | `[{ "x", "y", "text", "at", "durationInFrames", "side" }]` |
 | `keyHint` | `{ "keys": ["W","A","S","D"], "label": "移動", "at": 40, "sequence": true }` |
+| `redactions` | `[{ "x", "y", "width", "height", "mode", "reason" }]`。個人情報を伏せる。mode は blur か block |
 
 `source` を省くと「実画面の素材が未収録です」と表示される。架空の UI を作らず、収録が必要なことが分かる状態のまま止める。
 
 拡張子が `.mp4` `.webm` `.mov` `.m4v` なら動画として扱う。素材の音は既定で無音。使う場合は `volume` を指定する。
+
+動画素材は使う前に `prepare-footage.mjs` で整える。整えていないと、書き出しの途中で `No frame found at position` が出て止まる。
+
+フォーカスの輪は `pointer` があるシーンにだけ出る。範囲を見せるためのズームでは輪が出ないので、指していない場所を指したようには見えない。
 
 ### compare
 
@@ -92,11 +99,14 @@
 
 | フィールド | 内容 |
 |---|---|
+| `title` | 締めの見出し。省略すると `releaseStatus` から決まる |
 | `featureLabel` | 紹介した更新の名前 |
 | `version` | バージョンのバッジ |
 | `note` | 次の一手。入手先や確認先 |
 
-見出しは `releaseStatus` から決まる。`published` なら「アップデート公開中」、`upcoming` なら「アップデート公開予定」。ここを自由文にしない。
+見出しは `releaseStatus` から決まる。`published` なら「アップデート公開中」、`upcoming` なら「アップデート公開予定」。アップデート紹介では、ここを自由文にしない。
+
+アップデート以外の動画（アプリそのものの紹介など）では `title` に内容へ合う一言を指定する。実例は `dev/release-promo/studio-intro/storyboard.json`。
 
 ## 座標
 
