@@ -1,0 +1,22 @@
+{
+  "name": "xrift-release-promo-workspace",
+  "private": true,
+  "type": "module",
+  "description": "Shared dependency root for XRift Studio release promo videos. Every promo project under this directory resolves remotion/react from here, so there is exactly one React instance in a bundle.",
+  "scripts": {
+    "audio": "node _kit/scripts/gen-audio.mjs",
+    "new": "node _kit/scripts/new-promo.mjs",
+    "sync": "node _kit/scripts/sync-assets.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.503",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "remotion": "4.0.503"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "xrift-promo-kit-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "audio": "node ../_kit/scripts/gen-audio.mjs",
+    "sync": "node ../_kit/scripts/sync-assets.mjs",
+    "studio": "node ../_kit/scripts/sync-assets.mjs && remotion studio",
+    "render": "node ../_kit/scripts/sync-assets.mjs && remotion render Promo out/kit-demo.mp4",
+    "render:vertical": "node ../_kit/scripts/sync-assets.mjs && remotion render PromoVertical out/kit-demo-vertical.mp4",
+    "still": "node ../_kit/scripts/sync-assets.mjs && remotion still Promo --frame=230 out/kit-demo-check.png",
+    "still:vertical": "node ../_kit/scripts/sync-assets.mjs && remotion still PromoVertical --frame=230 out/kit-demo-check-vertical.png",
+    "typecheck": "tsc --noEmit"
+  }
+}

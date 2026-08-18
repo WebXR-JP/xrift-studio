@@ -1,0 +1,8 @@
+# このディレクトリを独立した pnpm ワークスペースの根にする。
+# こうしないと pnpm がリポジトリ本体のワークスペースへ登り、
+# XRift Studio 側の node_modules を作り直そうとする。
+# 各動画プロジェクトは依存を持たず、ここの node_modules を共有する。
+packages: []
+
+allowBuilds:
+  esbuild: true

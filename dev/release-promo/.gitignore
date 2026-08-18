@@ -1,0 +1,10 @@
+node_modules/
+out/
+
+# 生成物。node _kit/scripts/gen-audio.mjs でいつでも同じものが作れる。
+_kit/assets/audio/
+
+# 書き出した動画と収録素材。リポジトリを重くしないため既定で入れない。
+# 収録素材をどうしても残す場合は、サイズとライセンスを確認してから git add -f する。
+*.mp4
+*.webm

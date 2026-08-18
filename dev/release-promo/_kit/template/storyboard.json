@@ -1,0 +1,106 @@
+{
+  "id": "__SLUG__",
+  "from": "__FROM__",
+  "to": "__TO__",
+  "version": "__VERSION__",
+  "releaseStatus": "published",
+  "scriptApproval": {
+    "status": "pending"
+  },
+  "copyReview": {
+    "audience": "XRift Studio を使っている、または使い始めた制作者",
+    "soundOffComprehension": false,
+    "status": "pending"
+  },
+  "sourceNotes": [
+    "実画面の収録日と収録元をここに書く。素材側のカーソルは含めない。"
+  ],
+  "theme": "dark",
+  "format": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30
+  },
+  "music": {
+    "bed": "bright-120",
+    "volume": 0.32
+  },
+  "sfx": {
+    "enabled": true,
+    "auto": true
+  },
+  "scenes": [
+    {
+      "id": "series-title",
+      "kind": "title",
+      "durationInBars": 1,
+      "version": "__VERSION__",
+      "claim": "XRift Studio のアップデート動画であることを伝える",
+      "doneWhen": "先頭2秒でアップデート動画だと分かる"
+    },
+    {
+      "id": "feature-intro",
+      "kind": "feature",
+      "durationInBars": 2,
+      "headline": "__TITLE__",
+      "subhead": "利用者にとって何がよくなるかを1行で書く",
+      "claim": "この更新で何が変わったかを伝える",
+      "doneWhen": "変更内容と利用者にとっての変化が2行で伝わる"
+    },
+    {
+      "id": "demo-main",
+      "kind": "screen",
+      "durationInBars": 5,
+      "label": "実画面 / Visual Editor",
+      "caption": "主操作を短い文で説明します",
+      "claim": "主操作を実画面で示す",
+      "doneWhen": "操作対象と結果が読み取れる",
+      "pointer": {
+        "from": { "x": 0.42, "y": 0.5 },
+        "to": { "x": 0.45, "y": 0.12 },
+        "moveStartFrame": 18,
+        "moveDurationInFrames": 16,
+        "clickAtFrame": 42,
+        "scale": 1.9
+      },
+      "focus": {
+        "x": 0.45,
+        "y": 0.12,
+        "scale": 1.35,
+        "startFrame": 54,
+        "durationInFrames": 24,
+        "holdInFrames": 60
+      }
+    },
+    {
+      "id": "demo-result",
+      "kind": "screen",
+      "durationInBars": 3,
+      "label": "実画面 / 操作後",
+      "caption": "操作の結果をそのまま見せます",
+      "claim": "操作の結果が画面に残る",
+      "doneWhen": "成功表示だけでなく更新後の対象が見える",
+      "callouts": [
+        { "x": 0.5, "y": 0.5, "text": "確認したい場所", "at": 20, "side": "right" }
+      ]
+    },
+    {
+      "id": "summary",
+      "kind": "bullets",
+      "durationInBars": 3,
+      "heading": "この更新でできること",
+      "items": ["1つ目の変化", "2つ目の変化"],
+      "claim": "利用者にとっての結果を整理する",
+      "doneWhen": "音声なしで結果が読み取れる"
+    },
+    {
+      "id": "outro",
+      "kind": "end",
+      "durationInBars": 1,
+      "featureLabel": "__TITLE__",
+      "version": "__VERSION__",
+      "claim": "公開済みであることを示す",
+      "doneWhen": "公開状態と対象の更新が分かる"
+    }
+  ]
+}
