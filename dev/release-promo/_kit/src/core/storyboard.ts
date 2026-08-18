@@ -77,6 +77,22 @@ export type Callout = {
   side?: "left" | "right" | "top" | "bottom";
 };
 
+/**
+ * 実画面から伏せる範囲。素材内の 0〜1 座標で指定する。
+ * パス、アカウント名、他人のプロジェクト名など、公開したくないものを隠す。
+ * 素材そのものは加工せず、動画側で重ねるだけにして元を残す。
+ */
+export type Redaction = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** blur は下の映像をぼかす。block は塗りつぶす。既定は blur。 */
+  mode?: "blur" | "block";
+  /** 伏せている理由。レビューで何を隠したか分かるようにする。 */
+  reason?: string;
+};
+
 /** キーボード操作の提示。WASD などの実操作を画面外の枠で見せる。 */
 export type KeyHint = {
   keys: string[];
@@ -130,6 +146,7 @@ export type ScreenScene = SceneBase & {
   focus?: Focus;
   callouts?: Callout[];
   keyHint?: KeyHint;
+  redactions?: Redaction[];
 };
 
 export type CompareScene = SceneBase & {
@@ -138,6 +155,7 @@ export type CompareScene = SceneBase & {
   after: SourceRef;
   beforeLabel?: string;
   afterLabel?: string;
+  redactions?: Redaction[];
   /** ワイプの開始フレームと長さ。 */
   wipeAtFrame?: number;
   wipeDurationInFrames?: number;
@@ -153,6 +171,11 @@ export type BulletsScene = SceneBase & {
 
 export type EndScene = SceneBase & {
   kind: "end";
+  /**
+   * 締めの見出し。省略すると releaseStatus から「アップデート公開中」になる。
+   * アップデート紹介以外の動画では、内容に合う一言を指定する。
+   */
+  title?: string;
   featureLabel: string;
   version?: string;
   /** 次の一手。ダウンロード先やドキュメントの案内など。 */

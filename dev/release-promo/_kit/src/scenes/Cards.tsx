@@ -104,6 +104,7 @@ export const FeatureCard: React.FC<{ scene: FeatureScene; theme: Theme }> = ({ s
             fontSize: 72,
             fontWeight: 700,
             lineHeight: 1.28,
+            whiteSpace: "pre-line",
             opacity: line1,
             transform: `translateY(${interpolate(line1, [0, 1], [22, 0])}px)`,
           }}
@@ -118,6 +119,7 @@ export const FeatureCard: React.FC<{ scene: FeatureScene; theme: Theme }> = ({ s
             fontSize: 46,
             fontWeight: 700,
             lineHeight: 1.34,
+            whiteSpace: "pre-line",
             opacity: line2,
             transform: `translateY(${interpolate(line2, [0, 1], [18, 0])}px)`,
           }}
@@ -200,7 +202,8 @@ export const EndCard: React.FC<{
   const { fps, width } = useVideoConfig();
   const reveal = spring({ frame, fps, config: { damping: 200 } });
   const glow = interpolate(reveal, [0, 1], [0.3, 1]);
-  const status = releaseStatus === "published" ? "アップデート公開中" : "アップデート公開予定";
+  const status =
+    scene.title ?? (releaseStatus === "published" ? "アップデート公開中" : "アップデート公開予定");
 
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
@@ -259,8 +262,8 @@ export const EndCard: React.FC<{
           style={{
             position: "relative",
             marginTop: 26,
-            color: theme.inkFaint,
-            fontSize: 26,
+            color: theme.inkSoft,
+            fontSize: 30,
             fontWeight: 700,
             opacity: reveal,
           }}

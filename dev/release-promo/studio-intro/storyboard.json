@@ -1,0 +1,194 @@
+{
+  "id": "studio-intro",
+  "releaseStatus": "published",
+  "scriptApproval": {
+    "status": "approved",
+    "approvedBy": "user"
+  },
+  "copyReview": {
+    "audience": "XRift でワールドを作ってみたい人、XRift Studio をまだ知らない制作者",
+    "soundOffComprehension": true,
+    "status": "passed"
+  },
+  "sourceNotes": [
+    "public/source/*.mp4 は XRift Studio デスクトップ版の実画面収録。dev/release-promo/studio-guide で収録したものを流用している。",
+    "プロジェクト一覧に表示されるローカルパスにはWindowsのユーザー名が含まれるため、redactions で伏せている。素材そのものは加工していない。",
+    "収録中に公開・削除・アップロードは行っていない。"
+  ],
+  "theme": "dark",
+  "format": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30
+  },
+  "music": {
+    "bed": "glass-atrium-pulse-60",
+    "volume": 0.7
+  },
+  "sfx": {
+    "enabled": true,
+    "auto": true
+  },
+  "scenes": [
+    {
+      "id": "title",
+      "kind": "title",
+      "durationInBars": 2,
+      "eyebrow": "XRIFT STUDIO",
+      "title": "ワールドづくりを、ひとつの画面に",
+      "claim": "XRift Studio の紹介動画であることを伝える",
+      "doneWhen": "先頭4秒で何のアプリの動画か分かる"
+    },
+    {
+      "id": "what-it-is",
+      "kind": "feature",
+      "durationInBars": 3,
+      "eyebrow": "XRift Studio とは",
+      "headline": "XRiftのワールドを、\n見たまま組み立てられます",
+      "subhead": "制作環境の準備から公開まで、ひとつのアプリで進みます",
+      "background": "source/editor-still.png",
+      "claim": "準備・制作・公開を1つのアプリでまとめられる（README の対応機能）",
+      "doneWhen": "何ができるアプリかが2行で伝わる"
+    },
+    {
+      "id": "library",
+      "kind": "screen",
+      "durationInBars": 3,
+      "source": {
+        "src": "source/01-library.mp4",
+        "playbackRate": 0.863
+      },
+      "label": "実画面 / プロジェクト一覧",
+      "caption": "作ったワールドとアイテムが、一覧に並びます",
+      "redactions": [
+        {
+          "x": 0.11,
+          "y": 0.124,
+          "width": 0.228,
+          "height": 0.026,
+          "reason": "ローカルパスに含まれるユーザー名"
+        }
+      ],
+      "claim": "種別・サムネイル・名前・説明のカードで一覧表示できる",
+      "doneWhen": "プロジェクトが並んでいることが読み取れる"
+    },
+    {
+      "id": "editor",
+      "kind": "screen",
+      "durationInBars": 4,
+      "source": {
+        "src": "source/03-editor.mp4",
+        "playbackRate": 0.676
+      },
+      "label": "実画面 / ビジュアルエディター",
+      "caption": "Hierarchy、Scene View、Inspectorが1画面にそろいます",
+      "claim": "Hierarchy・Scene View・Inspector・Assets でシーンを編集できる",
+      "doneWhen": "編集画面の構成が読み取れる"
+    },
+    {
+      "id": "inspector",
+      "kind": "screen",
+      "durationInBars": 2,
+      "source": {
+        "src": "source/03-editor.mp4",
+        "startFrom": 45,
+        "playbackRate": 0.975
+      },
+      "label": "実画面 / Inspector",
+      "caption": "選んだEntityの位置や見た目は、その場で調整できます",
+      "focus": {
+        "x": 0.86,
+        "y": 0.42,
+        "scale": 1.5,
+        "startFrame": 8,
+        "durationInFrames": 24,
+        "holdInFrames": 40
+      },
+      "claim": "Inspector で Transform やマテリアルを編集できる",
+      "doneWhen": "Inspector の項目が読める大きさになっている"
+    },
+    {
+      "id": "add",
+      "kind": "screen",
+      "durationInBars": 3,
+      "source": {
+        "src": "source/05-add.mp4",
+        "playbackRate": 0.807
+      },
+      "label": "実画面 / 追加メニュー",
+      "caption": "Primitive、地形、XRift Componentを追加できます",
+      "focus": {
+        "x": 0.22,
+        "y": 0.46,
+        "scale": 1.45,
+        "startFrame": 20,
+        "durationInFrames": 26,
+        "holdInFrames": 60
+      },
+      "claim": "Create メニューから Primitive・地形・XRift Component を追加できる",
+      "doneWhen": "追加メニューの項目が読める"
+    },
+    {
+      "id": "play",
+      "kind": "screen",
+      "durationInBars": 4,
+      "source": {
+        "src": "source/04-play.mp4",
+        "playbackRate": 0.731
+      },
+      "label": "実画面 / Play",
+      "caption": "編集したままPlayに切り替えて、歩いて確かめられます",
+      "claim": "編集状態を保持したまま Play へ切り替えられる",
+      "doneWhen": "Play 中のワールドが見えている"
+    },
+    {
+      "id": "play-controls",
+      "kind": "screen",
+      "durationInBars": 2,
+      "source": {
+        "src": "source/04-play.mp4",
+        "startFrom": 60,
+        "playbackRate": 0.958
+      },
+      "label": "実画面 / Play",
+      "caption": "WASDで移動、ドラッグで視点を動かせます",
+      "keyHint": {
+        "keys": [
+          "W",
+          "A",
+          "S",
+          "D"
+        ],
+        "label": "移動",
+        "at": 14,
+        "sequence": true
+      },
+      "claim": "Play 中は WASD 移動とドラッグ視点で確認できる",
+      "doneWhen": "操作方法が読み取れる"
+    },
+    {
+      "id": "summary",
+      "kind": "bullets",
+      "durationInBars": 4,
+      "heading": "XRift Studio でできること",
+      "items": [
+        "3Dモデルや地形を置いて、ワールドを組み立てる",
+        "Playに切り替えて、その場で歩いて確かめる",
+        "XRiftへ公開して、URLで共有する"
+      ],
+      "background": "source/editor-still.png",
+      "claim": "制作・確認・公開の3つが1つのアプリでできる（README の対応機能）",
+      "doneWhen": "音を切っても3点が読める"
+    },
+    {
+      "id": "outro",
+      "kind": "end",
+      "durationInBars": 3,
+      "title": "XRiftのワールドづくりを、はじめよう",
+      "featureLabel": "XRift Studio — ワールドとアイテムの制作アプリ",
+      "note": "XRift 公式とは無関係の、有志製ツールです",
+      "claim": "入手の判断に必要な位置づけを伝える",
+      "doneWhen": "非公式ツールであることが分かる"
+    }
+  ]
+}

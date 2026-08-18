@@ -26,12 +26,11 @@ export const ScreenSceneView: React.FC<{
       })
     : 0;
 
-  // ズームの中心は、ポインターの着地点と同じ座標だけを指す。
-  const ringTarget = scene.focus
-    ? toStagePoint(box, scene.focus.x, scene.focus.y)
-    : scene.pointer
-      ? toStagePoint(box, scene.pointer.to.x, scene.pointer.to.y)
-      : null;
+  // 輪はクリック対象があるときだけ出す。ポインターと同じ一点を指す。
+  // 範囲を見せるためのズームでは輪を出さない。指していない場所を指したように見せない。
+  const ringTarget = scene.pointer
+    ? toStagePoint(box, scene.pointer.to.x, scene.pointer.to.y)
+    : null;
   const focusEnded =
     scene.focus === undefined
       ? true
@@ -40,8 +39,8 @@ export const ScreenSceneView: React.FC<{
   return (
     <AbsoluteFill>
       {scene.label ? <SceneLabel text={scene.label} theme={theme} /> : null}
-      <ScreenStage box={box} theme={theme} source={scene.source} focus={scene.focus} />
-      {ringTarget && scene.focus && !focusEnded ? (
+      <ScreenStage box={box} theme={theme} source={scene.source} focus={scene.focus} redactions={scene.redactions} />
+      {ringTarget && !focusEnded ? (
         <FocusRing x={ringTarget.x} y={ringTarget.y} progress={focusProgress} theme={theme} />
       ) : null}
       {(scene.callouts ?? []).map((callout, i) => (
@@ -73,7 +72,7 @@ export const CompareSceneView: React.FC<{
   return (
     <AbsoluteFill>
       {scene.label ? <SceneLabel text={scene.label} theme={theme} /> : null}
-      <ScreenStage box={box} theme={theme} source={scene.before} ambientZoom={false}>
+      <ScreenStage box={box} theme={theme} source={scene.before} ambientZoom={false} redactions={scene.redactions}>
         <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 0 0 ${(1 - wipe) * 100}%)` }}>
           <SourceMedia source={scene.after} />
         </div>

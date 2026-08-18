@@ -8,7 +8,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import type { Focus, SourceRef } from "../core/storyboard";
+import type { Focus, Redaction, SourceRef } from "../core/storyboard";
 import { normalizeSource } from "../core/storyboard";
 import type { Theme } from "../core/theme";
 import type { Box } from "../core/layout";
@@ -49,8 +49,10 @@ export const ScreenStage: React.FC<{
   focus?: Focus;
   /** 静止画のときだけ、ごく緩やかな寄りを足して映像を止めない。 */
   ambientZoom?: boolean;
+  /** 公開したくない範囲を伏せる。 */
+  redactions?: Redaction[];
   children?: React.ReactNode;
-}> = ({ box, theme, source, focus, ambientZoom = true, children }) => {
+}> = ({ box, theme, source, focus, ambientZoom = true, redactions, children }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width: frameWidth } = useVideoConfig();
   // 枠が画面より大きいときは切り取られるので、角丸と縁の光を出さない。
@@ -112,12 +114,32 @@ export const ScreenStage: React.FC<{
         }}
       >
         {source ? <SourceMedia source={source} /> : <MissingSource theme={theme} />}
+        {(redactions ?? []).map((r, i) => (
+          <Redacted key={`redact-${i}`} spec={r} />
+        ))}
       </div>
       {children}
     </div>
     </>
   );
 };
+
+/** 伏せる範囲。素材は加工せず、ここで重ねるだけにする。 */
+const Redacted: React.FC<{ spec: Redaction }> = ({ spec }) => (
+  <div
+    style={{
+      position: "absolute",
+      left: `${spec.x * 100}%`,
+      top: `${spec.y * 100}%`,
+      width: `${spec.width * 100}%`,
+      height: `${spec.height * 100}%`,
+      borderRadius: 6,
+      ...(spec.mode === "block"
+        ? { background: "rgba(100,116,139,.92)" }
+        : { backdropFilter: "blur(14px)", background: "rgba(148,163,184,.34)" }),
+    }}
+  />
+);
 
 /**
  * 素材が未収録のときの表示。
