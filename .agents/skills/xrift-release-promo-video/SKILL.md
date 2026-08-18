@@ -9,6 +9,18 @@ description: XRift Studio のアップデート紹介動画を、Git差分と実
 
 Git の変更をそのまま読み上げるのではなく、既存または使い始めた XRift Studio の制作者が「何が変わり、何ができるようになったか」を短い映像に翻訳する。実際の XRift Studio の画面を素材にし、Remotion のデータ駆動シーン、強調ポインター、ズーム、クリック演出を組み合わせて、公開後に X と Discord で共有できる普通のアップデート紹介動画を作る。
 
+## このスキルの範囲と関連スキル
+
+このスキルは、差分から何を紹介するかを決め、台本を作り、承認を得て、完成した動画をレビューするところまでを扱う。実装・音・収録は次のスキルへ渡す。
+
+| 作業 | スキル |
+|---|---|
+| Remotion の実装、storyboard の書き方、シーン部品、書き出し | [xrift-promo-kit](../xrift-promo-kit/SKILL.md) |
+| BGM と効果音、音量、拍とカットの同期 | [xrift-promo-audio](../xrift-promo-audio/SKILL.md) |
+| 実画面の収録、ポインターとズームの座標 | [xrift-promo-capture](../xrift-promo-capture/SKILL.md) |
+
+動画のシーンを毎回書き直さない。共有キット `dev/release-promo/_kit` に部品があり、動画ごとに書くのは `storyboard.json` だけにする。
+
 ## 基本方針
 
 - 最初に差分をユーザー価値へ変換し、内部リファクタリングやテストだけの変更は主役にしない。
@@ -17,7 +29,7 @@ Git の変更をそのまま読み上げるのではなく、既存または使�
 - 架空の UI や成功したように見えるモックは使わない。実機またはブラウザプレビューで確認・収録した画面だけを使う。表示イメージが必要な場合は、画面内に「表示イメージ」と明示する。
 - 素材側のカーソルは可能なら非表示にし、Remotion で決定論的な強調ポインターを重ねる。ポインターの移動、クリック波紋、フォーカス枠、ズームを同じ座標データから駆動する。
 - 公開済みを標準状態とし、終端は「XRift Studio アップデート公開中」にする。リリース前の動画だけは `releaseStatus` を `upcoming` にし、公開前であることを正しく示す。未確定のバージョン番号、性能値、公開日を断定しない。
-- 音声をオフにしても理解できることを必須にする。BGM は、利用許諾と出典を確認できる明るくポップなインストゥルメンタルを優先する。30秒の標準は、曲調の展開・ドロップ・情緒の変化が少ない単調なポップ・ループにし、字幕や画面操作を邪魔しない。長尺曲を使う場合は、BPM に合わせた4〜8小節の安定した区間を切り出してループし、つなぎ目を確認する。ユーザーが BGM ライブラリとして指定した `C:\Users\hagar\Pictures\3D.library\images` は最初に調べ、音声ファイルのメタデータでインストゥルメンタル、作者、長さ、BPM を確認して選ぶ。適切なローカル素材がない場合は、CC0 またはパブリックドメインの外部音源を探し、曲名、作者、ライセンス、配布ページ、取得日を storyboard に記録する。CC BY-NC、用途不明、出典不明の音源は使わない。適切な BGM がなければ無音にする。ナレーションはユーザーが明示的に求め、承認済み台本がある場合だけ追加する。
+- 音声をオフにしても理解できることを必須にする。BGM と効果音はキットの合成音源を既定とし、`storyboard.json` の `music.bed` で曲調を選ぶ。すべてこのリポジトリで合成した原音なので、出典表記もライセンス確認もいらない。外部音源を持ち込むのは、キットの音で足りないとユーザーが判断した場合だけにし、CC0 かパブリックドメインに限る。ナレーションはユーザーが明示的に求め、承認済み台本がある場合だけ追加する。詳しくは [xrift-promo-audio](../xrift-promo-audio/SKILL.md) を見る。
 - Remotion 実装・レンダリングの前に、30秒全体の台本を一塊でユーザーに提示して明示承認を得る。差分だけから動画を完成扱いにしない。
 - ルートの XRift Studio に Remotion 依存を追加するのは、ユーザーがアプリ本体への統合を求めた場合だけにする。通常は `dev/release-promo/<slug>/` に独立した動画ワークスペースを作る。
 
@@ -35,26 +47,21 @@ Git の変更をそのまま読み上げるのではなく、既存または使�
 | 尺 | 16:9、1920×1080 |
 | フレームレート | 30fps |
 | 構成 | アップデート情報 → 更新の紹介 → 実画面デモ → 利用者にとっての変化 → 公開中 |
-| 音声 | 無音でも理解できるテキスト。許諾済みのポップなインストゥルメンタルがある場合だけ BGM を付け、なければ無音。ナレーションは明示指定時のみ |
+| 音声 | 無音でも理解できるテキスト。BGM と効果音はキットの合成音源（既定は `bright-120`）。ナレーションは明示指定時のみ |
 | リリース状態 | `published`。`upcoming` は例外として明記する |
 
 出力先、アスペクト比、対象バージョン、字幕言語、ナレーションの有無が指定されている場合は既定値より優先する。16:9 以外を求められた場合も、台本承認前に画面内の UI と字幕の可読性を確認する。
 
 ### 2. 差分を抽出して候補を選ぶ
 
-動画用ワークスペースを先に作り、リポジトリの作業ツリーを汚さない。
+動画用ワークスペースを先に作り、リポジトリの作業ツリーを汚さない。雛形はキットが作る。
 
-```text
-dev/release-promo/<slug>/
-├─ src/                 # Remotion compositions
-├─ public/source/       # 元のスクリーンショット・録画。加工前を残す
-├─ public/overlays/     # ロゴ、音声、効果音などの許諾済み素材
-├─ storyboard.json      # 差分から編集した動画設計
-├─ diff.json            # extract-release-diff.mjs の生データ
-└─ out/                 # レンダリング結果。必ず gitignore 対象にする
+```powershell
+cd dev/release-promo
+node _kit/scripts/new-promo.mjs --slug <slug> --title "<更新の見出し>" --version <version>
 ```
 
-各動画ワークスペースの `.gitignore` には少なくとも `out/` と `*.mp4` を入れる。レンダリング動画、連番フレーム、プレビュー画像はローカル成果物またはリリース添付として渡し、Git には追加しない。
+作られる構成と、Git に入れる範囲は [xrift-promo-kit](../xrift-promo-kit/SKILL.md) にある。レンダリング動画、連番フレーム、生成した音素材、依存ディレクトリは Git に追加しない。
 
 ### Git に残す範囲を決める
 
@@ -79,7 +86,7 @@ node .agents/skills/xrift-release-promo-video/scripts/extract-release-diff.mjs `
 
 ### 3. 実画面を収録する
 
-画面キャプチャは `xrift-studio-verify` の流れを使う。ブラウザで確認できる導線はプレビューを、Tauri 固有の導線は実機を使う。
+画面キャプチャは `xrift-studio-verify` の流れを使う。ブラウザで確認できる導線はプレビューを、Tauri 固有の導線は実機を使う。動画に使える素材の条件と、ポインターやズームの座標の取り出し方は [xrift-promo-capture](../xrift-promo-capture/SKILL.md) にある。
 
 1. 対象コミットの状態でアプリを起動し、余計なウィンドウ、通知、個人情報を隠す。
 2. 操作前、操作中、成功後をそれぞれ撮る。成功トーストだけでなく、更新された対象まで画面に残す。
@@ -109,40 +116,35 @@ node .agents/skills/xrift-release-promo-video/scripts/extract-release-diff.mjs `
 
 ### 5. storyboard を作る
 
-`references/storyboard-schema.md` の形式で、差分の候補を映像の時間軸へ変換する。各シーンに `claim`、素材、テロップ、ポインター座標、フォーカス座標、完了条件を持たせる。
+[storyboard リファレンス](../xrift-promo-kit/references/storyboard.md) の形式で、差分の候補を映像の時間軸へ変換する。各シーンに `claim`、素材、テロップ、ポインター座標、フォーカス座標、完了条件を持たせる。尺は `durationInBars` で書き、BGM の拍とカットを揃える。
 
 承認済み台本をそのまま storyboard のテキスト、尺、座標、根拠へ反映する。台本にない新しい主張や画面文言を Remotion 側で追加しない。
 
-### 6. Remotion で実装する
+### 6. キットで実装する
 
-Remotion ワークスペースでは、現在の公式ドキュメントに合うバージョンを確認してから依存を揃える。プロジェクトの既存依存と混ぜず、動画側の `package.json` とロックファイルで管理する。
+Remotion のシーンを書き直さない。`dev/release-promo/_kit` の部品を使い、動画ごとに書くのは `storyboard.json` だけにする。書き方、シーンの種類、演出の既定値、縦型の扱いは [xrift-promo-kit](../xrift-promo-kit/SKILL.md) にある。
 
-- `Composition` の `inputProps` に storyboard を渡し、テキスト、素材、座標、尺をコードから分離する。
-- `useCurrentFrame` と `useVideoConfig` でフレーム基準にし、時間依存の `Date`、CSS animation、乱数を使わない。
-- `Sequence` でシーンを並べ、`spring` または `interpolate` でポインター移動、ズーム、テロップ、クリック波紋を同期する。
-- 画面素材は `staticFile()`、`<Img>`、`<Video>` など Remotion の読み込み経路を使い、最初のフレームから表示できるようにする。
-- 同じ素材を 16:9 と 9:16 で使う場合は、字幕とフォーカス位置が画面外へ出ないか別々に確認する。
+承認済み台本をそのまま storyboard のテキスト、尺、座標、根拠へ反映する。台本にない新しい主張や画面文言を実装側で追加しない。
+
+キットに無い演出が必要になったら、その動画のプロジェクトへ書かずキットへ足す。手順は [キットの拡張](../xrift-promo-kit/references/extending.md) にある。
 
 演出の既定値:
 
 - ポインターは実カーソルより大きく、1.6〜2.2倍程度。主役を覆わず、背景から十分に分離する。
-- 移動は 8〜18フレーム、クリック波紋は 10〜16フレーム、ズームは 18〜30フレームを目安にする。
-- フォーカスは 1.25〜1.7倍。急な最大ズームを避け、移動終了後に短い静止時間を置く。
+- 移動は 8〜18フレーム、ズームは 18〜30フレーム、倍率は 1.25〜1.7 を目安にする。
 - ポインター、リング、テロップの強調色は同じ意味に限定し、画面上の操作対象を隠さない。
 - 1画面にポインターを複数置かない。ポインターが移動する前に次の主張を始めない。
 - デモ内の主操作は1つにし、ズームは最大2回に制限する。ポインター、クリック波紋、ズームは同じ操作対象にだけ連動させる。
-
-実装パターンと座標計算は [Remotion パターン](references/remotion-patterns.md) を参照する。
 
 ### 7. プレビュー、レンダリング、レビュー
 
 動画ワークスペースを作った後にそのディレクトリで実行する。コマンドは現在の Remotion CLI に合わせて読み替える。
 
 ```powershell
-pnpm exec remotion studio
-pnpm exec remotion compositions
-pnpm exec remotion render FeaturePromo out/feature-promo.mp4
-pnpm exec remotion still FeaturePromo --frame=0 out/feature-promo-start.png
+npm run studio                 # プレビュー。タイムラインで音と尺を見る
+npm run still                  # 静止画で構図を確認
+npm run render                 # 横型 1920x1080
+npm run render:vertical        # 縦型 1080x1920
 ```
 
 確認項目:
@@ -163,8 +165,11 @@ pnpm exec remotion still FeaturePromo --frame=0 out/feature-promo-start.png
 ## リソースの使い分け
 
 - 差分の機械的な収集: `scripts/extract-release-diff.mjs`
-- storyboard の JSON 形式と座標ルール: [storyboard-schema.md](references/storyboard-schema.md)
-- Remotion のフォーカス、ズーム、強調ポインターの実装例: [remotion-patterns.md](references/remotion-patterns.md)
 - 30秒台本、自然な日本語、コピー監査: [short-video-copy.md](references/short-video-copy.md)
+- 実装、storyboard の書き方、シーン部品、書き出し: [xrift-promo-kit](../xrift-promo-kit/SKILL.md)
+- BGM と効果音、音量、拍とカットの同期: [xrift-promo-audio](../xrift-promo-audio/SKILL.md)
+- 実画面の収録とポインター座標の取り出し: [xrift-promo-capture](../xrift-promo-capture/SKILL.md)
+
+`references/storyboard-schema.md` と `references/remotion-patterns.md` は、キット導入前の書き方を残した資料。現在の実装は [xrift-promo-kit](../xrift-promo-kit/SKILL.md) を正とする。
 
 Remotion の CLI や API は更新されるため、実装時は公式の [CLI reference](https://www.remotion.dev/docs/cli) と [Player guide](https://www.remotion.dev/docs/player) を優先して確認する。

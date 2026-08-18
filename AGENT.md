@@ -89,4 +89,8 @@ pnpm build:preview       # GitHub Pages 用プレビューのビルド
 - 機能追加の方針スキル: `.agents/skills/xrift-studio-feature/SKILL.md`
 - 検証ループスキル: `.agents/skills/xrift-studio-verify/SKILL.md`
 - Blender × Studio モデリングスキル: `.agents/skills/xrift-mcp-blender-modeling/SKILL.md`
+- リリース動画の企画と台本: `.agents/skills/xrift-release-promo-video/SKILL.md`
+- リリース動画キット: `.agents/skills/xrift-promo-kit/SKILL.md`（実装は `dev/release-promo/_kit`）
+- リリース動画の音: `.agents/skills/xrift-promo-audio/SKILL.md`
+- リリース動画の実画面収録: `.agents/skills/xrift-promo-capture/SKILL.md`
 - MCP画面デバッグ: `docs/MCP_DEBUGGING.md`
