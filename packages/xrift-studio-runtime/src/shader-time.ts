@@ -1,12 +1,21 @@
 /**
- * Time-uniform helpers for Classic R3F Custom Shaders.
+ * Time-uniform helpers for animated shaders.
  *
  * A time uniform is a `float` or `vec4` uniform whose name follows a
- * conventional time spelling (for example `_UTime`, `uTime`, `_Time`, `time`
- * or `fTime`). When a shader declares one, Studio feeds it the wall-clock
- * elapsed seconds automatically in the editor Scene View, Material previews
- * and the exported runtime — no manual wiring required. The author can still
- * pin a single name with `animatedTimeUniform`; it takes precedence.
+ * conventional time spelling (for example `_UTime`, `uTime`, `_Time`, `time`,
+ * `fTime` or `u_time`). When a shader declares one, Studio feeds it the
+ * wall-clock elapsed seconds automatically in the editor Scene View, Material
+ * previews and the exported runtime — no manual wiring required. The author
+ * can still pin a single name with `animatedTimeUniform`; it takes precedence.
+ *
+ * This covers both shapes Studio renders: Classic R3F Custom Shaders, whose
+ * descriptor is known when the Material is built, and shaders that arrive
+ * already compiled — Open Brush brushes come out of three-icosa's glTF
+ * extension. `stampMaterialTimeUniforms` handles the second shape by reading
+ * the GLSL off the live Material.
+ *
+ * Every render path drives the same `userData.xriftTimeUniforms` contract, so
+ * stamping a Material is all it takes to make it animate everywhere.
  */
 
 /** Minimal structural view of a Classic R3F shader used for detection. */
@@ -24,8 +33,13 @@ export type TimeUniformSpec = {
   glslType: "float" | "vec4";
 };
 
-/** Matches conventional time uniform names: _UTime, uTime, _Time, time, fTime, … */
-const TIME_UNIFORM_NAME = /^_?(?:[uf]?time)$/i;
+/**
+ * Matches conventional time uniform names: _UTime, uTime, _Time, time, fTime,
+ * and the underscore-separated `u_time` / `_u_time` spelling that Open Brush
+ * brushes use. Open Brush brushes declare `uniform vec4 u_time;`, so leaving
+ * the separator out of this pattern froze every animated brush.
+ */
+const TIME_UNIFORM_NAME = /^_?(?:[uf]_?)?time$/i;
 
 const TIME_UNIFORM_TYPE = new Set(["float", "vec4"]);
 
@@ -146,4 +160,75 @@ export function applyTimeUniformValue(
     return;
   }
   uniform.value = elapsedSeconds;
+}
+
+/** Minimal structural view of a live three.js shader material. */
+export type TimeUniformMaterial = {
+  vertexShader?: string;
+  fragmentShader?: string;
+  uniforms?: Record<string, unknown>;
+  userData?: Record<string, unknown>;
+};
+
+/** Minimal structural view of a three.js object that can be traversed. */
+export type TimeUniformObject = {
+  traverse: (visit: (object: unknown) => void) => void;
+};
+
+/**
+ * Records the time uniforms a live material declares onto its `userData`, so
+ * every render path drives it from the one `xriftTimeUniforms` contract.
+ *
+ * Materials Studio builds from a Classic R3F shader are stamped at
+ * construction, where the shader descriptor is still in hand. Materials that
+ * arrive already built have no descriptor to read: Open Brush brushes come out
+ * of three-icosa's glTF extension with their GLSL already compiled in. Those
+ * are stamped from their own source instead, which is why this reads
+ * `vertexShader`/`fragmentShader` off the material rather than a descriptor.
+ *
+ * Returns the specs that were stamped, or an empty array when the material
+ * declares no time uniform.
+ */
+export function stampMaterialTimeUniforms(
+  material: TimeUniformMaterial | undefined,
+): TimeUniformSpec[] {
+  if (!material || !material.userData) return [];
+  // A material already carrying specs keeps them: the authored
+  // animatedTimeUniform is more specific than anything detected here.
+  const existing = material.userData.xriftTimeUniforms;
+  if (Array.isArray(existing) && existing.length > 0) {
+    return existing as TimeUniformSpec[];
+  }
+  const specs = detectTimeUniforms(material).filter(
+    // Only keep a spec the material can actually drive. Detection reads GLSL,
+    // so a uniform the material never bound would otherwise be recorded as
+    // animated and read as working when it is not.
+    (spec) => !material.uniforms || spec.name in material.uniforms,
+  );
+  if (specs.length === 0) return [];
+  material.userData.xriftTimeUniforms = specs;
+  return specs;
+}
+
+/**
+ * Stamps every material under a loaded object tree. Used right after a glTF
+ * finishes loading so brushes animate no matter which render path clones or
+ * reassigns the materials afterwards.
+ */
+export function stampObjectTimeUniforms(
+  root: TimeUniformObject | undefined,
+): number {
+  if (!root) return 0;
+  let stamped = 0;
+  root.traverse((object) => {
+    const mesh = object as { material?: unknown };
+    if (!mesh.material) return;
+    const entries = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const entry of entries) {
+      if (stampMaterialTimeUniforms(entry as TimeUniformMaterial).length > 0) {
+        stamped += 1;
+      }
+    }
+  });
+  return stamped;
 }

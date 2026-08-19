@@ -8,7 +8,14 @@ import {
   Vector3,
   type Material,
   type Object3D,
+  type ShaderMaterial,
 } from "three";
+import {
+  applyTimeUniformValue,
+  stampMaterialTimeUniforms,
+  type MutableUniformValue,
+  type TimeUniformSpec,
+} from "../../../packages/xrift-studio-runtime/src/shader-time";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   OPEN_BRUSH_CATALOG_GALLERY_URL,
@@ -141,6 +148,9 @@ function OpenBrushStroke({
 }) {
   const [preview, setPreview] = useState<Group | null>(null);
   const previewRef = useRef<Group | null>(null);
+  // Animated brushes read a time uniform, so the catalog shows the motion the
+  // brush actually has instead of a still frame of it.
+  const timeMaterialRef = useRef<ShaderMaterial | null>(null);
   const { invalidate } = useThree();
 
   useEffect(() => {
@@ -165,6 +175,10 @@ function OpenBrushStroke({
         const stroke = sourceNode.clone(true);
         const material = sourceMaterial.clone();
         ownedMaterials = [material];
+        timeMaterialRef.current =
+          stampMaterialTimeUniforms(material as ShaderMaterial).length > 0
+            ? (material as ShaderMaterial)
+            : null;
         stroke.traverse((object) => {
           if (object instanceof Mesh) {
             bindCustomShaderGeometryAttributes(
@@ -195,9 +209,22 @@ function OpenBrushStroke({
     };
   }, [entry, invalidate, onLoadState]);
 
-  useFrame((_, delta) => {
+  useFrame((frame, delta) => {
     if (animated && previewRef.current) {
       previewRef.current.rotation.y += Math.min(delta, 0.05) * 0.22;
+    }
+    const material = timeMaterialRef.current;
+    const specs = material?.userData.xriftTimeUniforms as
+      | TimeUniformSpec[]
+      | undefined;
+    if (!material || !Array.isArray(specs)) return;
+    const elapsed = frame.clock.getElapsedTime();
+    for (const spec of specs) {
+      applyTimeUniformValue(
+        material.uniforms[spec.name] as MutableUniformValue,
+        spec,
+        elapsed,
+      );
     }
   });
 

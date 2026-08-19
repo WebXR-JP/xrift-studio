@@ -50,7 +50,7 @@ import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.j
 import { Reflector } from "three/examples/jsm/objects/Reflector.js";
 import { Text } from "troika-three-text";
 
-import { detectTimeUniforms } from "../shader-time.js";
+import { detectTimeUniforms, stampObjectTimeUniforms } from "../shader-time.js";
 
 import {
   isXriftRuntimeManifest,
@@ -294,6 +294,11 @@ export class XriftThreeLoader {
       dracoLoader.dispose();
     }
     tagSourceMaterialIndices(gltf);
+    // Open Brush brushes arrive from three-icosa with their GLSL already
+    // compiled, so nothing has recorded their `u_time` uniform yet. Stamping
+    // the loaded tree here covers the Materials that later get cloned per slot,
+    // because a three.js Material clone carries userData with it.
+    stampObjectTimeUniforms(gltf.scene);
     gltf.scene.scale.multiplyScalar(asset.scale);
     return {
       root: gltf.scene,

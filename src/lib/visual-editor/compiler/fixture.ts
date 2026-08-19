@@ -40,6 +40,10 @@ import {
   BUILTIN_ASSET_IDS,
   createPrototypeProject,
 } from "../prototype-project";
+import {
+  OPEN_BRUSH_EXTENSION_NAMES,
+  OPEN_BRUSH_RUNTIME_PACKAGE,
+} from "../open-brush";
 import { resolveSceneSettings } from "../scene-settings";
 import {
   compilePrototypeVisualProject,
@@ -1848,6 +1852,58 @@ export function runVisualCompilerFixtureAssertions(
     "Project GLB path must be relative to the XRift base URL",
   );
   assert(modelSource.includes("<Clone"), "Model clone was not generated");
+
+  // Open Brush brushes carry their motion in `uniform vec4 u_time`, and the
+  // Materials come out of three-icosa already compiled, so no generated
+  // Material component drives them. Without a frame loop over the loaded
+  // strokes a published world shows every animated brush frozen, which reads
+  // as a successful import right up until nothing moves.
+  const openBrushModel: ModelAsset = {
+    ...projectModel,
+    importMetadata: {
+      ...projectModel.importMetadata!,
+      openBrush: {
+        renderer: "three-icosa" as const,
+        rendererVersion: OPEN_BRUSH_RUNTIME_PACKAGE,
+        extensionNames: [...OPEN_BRUSH_EXTENSION_NAMES],
+        brushNames: ["NeonPulse", "Fire"],
+      },
+    },
+  };
+  const openBrushResult = compileVisualProject(
+    {
+      ...modelProject,
+      assets: {
+        ...modelProject.assets,
+        assets: { ...modelProject.assets.assets, [openBrushModel.id]: openBrushModel },
+      },
+    },
+    { generatedAt: fixedTime },
+  );
+  const openBrushSource =
+    openBrushResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(openBrushResult.canStage, "Open Brush model should be stageable");
+  assert(
+    openBrushSource.includes("GLTFGoogleTiltBrushMaterialExtension"),
+    "Open Brush model did not register the three-icosa material extension",
+  );
+  [
+    "const brushTimeRoot = useRef<Group>(null);",
+    "ref={brushTimeRoot}",
+    "uniforms?.u_time",
+    "value.set(elapsed / 20, elapsed, elapsed * 2, elapsed * 3);",
+  ].forEach((fragment) =>
+    assert(
+      openBrushSource.includes(fragment),
+      `Open Brush time loop is missing: ${fragment}`,
+    ),
+  );
+  assert(
+    !modelSource.includes("brushTimeRoot"),
+    "A plain glTF model must not carry the Open Brush time loop",
+  );
   assert(
     modelSource.includes("XriftMeshMaxDistance") &&
       modelSource.includes("maxDistance={120}"),

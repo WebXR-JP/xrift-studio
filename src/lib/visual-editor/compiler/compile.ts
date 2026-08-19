@@ -2672,13 +2672,52 @@ function renderModelMesh(
     };
   }, [actions${usesClipNames ? ", names" : ""}]);`
     : "";
-  const modelContent = `<group${autoplay ? " ref={animationRoot}" : ""} scale={${formatNumber(modelScale)}}${vrm0Rotation}>
+  // Open Brush brushes read `uniform vec4 u_time` for their motion, and the
+  // Materials come out of three-icosa already compiled, so no Material
+  // component drives them. Walk the loaded strokes each frame instead, using
+  // the same Unity-style `_Time` vector the brushes were authored against.
+  if (isOpenBrush) {
+    context.reactValueImports.add("useRef");
+    context.fiberImports.add("useFrame");
+    context.threeTypeImports.add("Group");
+    context.threeTypeImports.add("Mesh");
+    context.threeTypeImports.add("ShaderMaterial");
+  }
+  const brushTimeSource = isOpenBrush
+    ? `  const brushTimeRoot = useRef<Group>(null);
+  useFrame(({ clock }) => {
+    const root = brushTimeRoot.current;
+    if (!root) return;
+    const elapsed = clock.getElapsedTime();
+    root.traverse((object) => {
+      const attached = (object as Mesh).material;
+      if (!attached) return;
+      for (const material of Array.isArray(attached) ? attached : [attached]) {
+        const uniform = (material as ShaderMaterial).uniforms?.u_time;
+        if (!uniform) continue;
+        const value = uniform.value;
+        if (value && typeof value === "object" && "set" in value) {
+          value.set(elapsed / 20, elapsed, elapsed * 2, elapsed * 3);
+        } else {
+          uniform.value = [elapsed / 20, elapsed, elapsed * 2, elapsed * 3];
+        }
+      }
+    });
+  });
+`
+    : "";
+  const clonedModel = `<group${autoplay ? " ref={animationRoot}" : ""} scale={${formatNumber(modelScale)}}${vrm0Rotation}>
       <Clone
         object={${poseSource.objectName}}
         castShadow={${mesh.castShadow}}
         receiveShadow={${mesh.receiveShadow}}${inject}
       />
     </group>`;
+  const modelContent = isOpenBrush
+    ? `<group ref={brushTimeRoot}>
+      ${clonedModel}
+    </group>`
+    : clonedModel;
   const renderedModelContent = renderMeshMaxDistance(
     modelContent,
     mesh.maxDistance,
@@ -2688,7 +2727,7 @@ function renderModelMesh(
   const modelUrl = useCompiledAssetUrl(${urlConstant});
   ${loaderSource}
 ${poseSource.declaration}
-${animationSource}
+${brushTimeSource}${animationSource}
   return (
     ${renderedModelContent}
   );

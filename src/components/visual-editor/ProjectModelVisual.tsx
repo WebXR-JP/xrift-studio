@@ -49,6 +49,7 @@ import { tauri } from "../../lib/tauri";
 import {
   applyTimeUniformValue,
   detectTimeUniforms,
+  stampMaterialTimeUniforms,
   type MutableUniformValue,
   type TimeUniformSpec,
 } from "../../../packages/xrift-studio-runtime/src/shader-time";
@@ -1025,6 +1026,11 @@ export function createAssignedMaterialPreviewMaterial(
       assignedTextures,
     );
     preview.name = `material_${assignedMaterial.shader.brushName}`;
+    // Open Brush brushes declare `uniform vec4 u_time` and read it for their
+    // motion. The Material comes out of three-icosa already compiled, so there
+    // is no Studio shader descriptor to detect from at construction; record the
+    // time uniforms here and the Scene View frame loop drives them.
+    stampMaterialTimeUniforms(preview as ShaderMaterial);
     preview.needsUpdate = true;
     return preview;
   }
