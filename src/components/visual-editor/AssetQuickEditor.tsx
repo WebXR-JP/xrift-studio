@@ -33,6 +33,8 @@ import {
   type ClassicR3fMaterialShader,
   type ClassicR3fShaderUniform,
   type MaterialAsset,
+  type MaterialBlendMode,
+  type MaterialDepthWrite,
   type MaterialAssetPatch,
   type MaterialExtensionsPatch,
   type MaterialTextureInfo,
@@ -3158,13 +3160,72 @@ function StandardMaterialQuickEditor({
           </select>
         </label>
         {asset.properties.alphaMode === "MASK" ? (
-          <RangeControl
-            label="Alpha cutoff"
-            value={asset.properties.alphaCutoff}
-            disabled={readOnly}
-            onChange={(alphaCutoff) => onChange({ alphaCutoff })}
-          />
+          <>
+            <RangeControl
+              label="Alpha cutoff"
+              value={asset.properties.alphaCutoff}
+              disabled={readOnly}
+              onChange={(alphaCutoff) => onChange({ alphaCutoff })}
+            />
+            <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
+              <span title="MSAAで切り抜きの境界をならします。葉や柵の縁がMASKより滑らかになり、BLENDと違って並び替えが要りません。">
+                Alpha to coverage
+              </span>
+              <input
+                type="checkbox"
+                checked={asset.properties.alphaToCoverage}
+                disabled={readOnly}
+                onChange={(event) =>
+                  onChange({ alphaToCoverage: event.currentTarget.checked })
+                }
+                className="h-4 w-4 accent-violet-600"
+              />
+            </label>
+          </>
         ) : null}
+        <label className="block text-xs text-slate-600">
+          <span className="mb-1 block">Blend mode</span>
+          <select
+            value={asset.properties.blending}
+            disabled={readOnly}
+            onChange={(event) =>
+              onChange({
+                blending: event.currentTarget.value as MaterialBlendMode,
+              })
+            }
+            className={INPUT_CLASS}
+          >
+            <option value="normal">Normal（通常）</option>
+            <option value="additive">Additive（加算・光として重なる）</option>
+            <option value="multiply">Multiply（乗算・暗く重なる）</option>
+            <option value="subtractive">Subtractive（減算）</option>
+          </select>
+          {asset.properties.blending !== "normal" ? (
+            <span className="mt-1 block text-[11px] leading-4 text-slate-500">
+              通常以外は透明パスで描くため、Alpha modeに関わらず半透明として扱われます。
+            </span>
+          ) : null}
+        </label>
+        <label className="block text-xs text-slate-600">
+          <span className="mb-1 block">Depth write</span>
+          <select
+            value={asset.properties.depthWrite}
+            disabled={readOnly}
+            onChange={(event) =>
+              onChange({
+                depthWrite: event.currentTarget.value as MaterialDepthWrite,
+              })
+            }
+            className={INPUT_CLASS}
+          >
+            <option value="auto">Auto（Alpha modeに従う）</option>
+            <option value="on">On（常に書き込む）</option>
+            <option value="off">Off（書き込まない）</option>
+          </select>
+          <span className="mt-1 block text-[11px] leading-4 text-slate-500">
+            重なった半透明の前後関係がおかしいときに手で決めます。
+          </span>
+        </label>
         <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
           Double sided
           <input

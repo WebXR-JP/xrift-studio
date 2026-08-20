@@ -234,6 +234,28 @@ export type OcclusionTextureInfo = MaterialTextureInfo & {
 
 export type MaterialAlphaMode = "OPAQUE" | "MASK" | "BLEND";
 
+/**
+ * How a fragment combines with what is already in the frame.
+ *
+ * glTF has no concept of this — it only describes opacity — but a VR world
+ * leans on it constantly: a hologram, a light shaft or a screen glow reads as
+ * light only when it adds to the frame rather than covering it.
+ */
+export type MaterialBlendMode =
+  | "normal"
+  | "additive"
+  | "multiply"
+  | "subtractive";
+
+/**
+ * Depth write override.
+ *
+ * `auto` follows the alpha mode, which is right almost always and wrong exactly
+ * when an author is fixing sorting by hand — two transparent surfaces that must
+ * not erase each other, or a cutout that should occlude properly.
+ */
+export type MaterialDepthWrite = "auto" | "on" | "off";
+
 export type KhrMaterialsIridescence = {
   iridescenceFactor: number;
   iridescenceTexture?: MaterialTextureInfo;
@@ -345,6 +367,13 @@ export type MaterialProperties = {
   alphaMode: MaterialAlphaMode;
   alphaCutoff: number;
   doubleSided: boolean;
+  blending: MaterialBlendMode;
+  depthWrite: MaterialDepthWrite;
+  /**
+   * Resolve cutout edges through MSAA instead of a hard threshold. Softer than
+   * MASK on foliage and fences, and unlike BLEND it needs no sorting.
+   */
+  alphaToCoverage: boolean;
   extensions: MaterialExtensions;
 
   /** @deprecated Use `pbrMetallicRoughness.baseColorFactor`. */
@@ -997,6 +1026,9 @@ export type MaterialAssetPatch = {
   alphaMode?: MaterialAlphaMode;
   alphaCutoff?: number;
   doubleSided?: boolean;
+  blending?: MaterialBlendMode;
+  depthWrite?: MaterialDepthWrite;
+  alphaToCoverage?: boolean;
   extensions?: MaterialExtensionsPatch;
 
   /** Migration-friendly prototype aliases. */
@@ -1021,6 +1053,9 @@ const DEFAULT_MATERIAL_PROPERTIES: MaterialProperties = {
   alphaMode: "OPAQUE",
   alphaCutoff: 0.5,
   doubleSided: false,
+  blending: "normal",
+  depthWrite: "auto",
+  alphaToCoverage: false,
   extensions: {},
   color: "#ffffff",
   opacity: 1,
@@ -1030,6 +1065,105 @@ const DEFAULT_MATERIAL_PROPERTIES: MaterialProperties = {
 
 export function isMaterialAlphaMode(value: unknown): value is MaterialAlphaMode {
   return value === "OPAQUE" || value === "MASK" || value === "BLEND";
+}
+
+export const MATERIAL_BLEND_MODES = [
+  "normal",
+  "additive",
+  "multiply",
+  "subtractive",
+] as const;
+
+export function isMaterialBlendMode(value: unknown): value is MaterialBlendMode {
+  return MATERIAL_BLEND_MODES.includes(value as MaterialBlendMode);
+}
+
+export const MATERIAL_DEPTH_WRITE_MODES = ["auto", "on", "off"] as const;
+
+export function isMaterialDepthWrite(
+  value: unknown,
+): value is MaterialDepthWrite {
+  return MATERIAL_DEPTH_WRITE_MODES.includes(value as MaterialDepthWrite);
+}
+
+/**
+ * The three.js constant a blend mode maps to.
+ *
+ * Returned as a name rather than the constant so the document layer stays free
+ * of three, and so the compiler can emit the identifier while the editor looks
+ * it up. One mapping, both surfaces.
+ */
+export function materialBlendingConstant(
+  mode: MaterialBlendMode,
+):
+  | "NormalBlending"
+  | "AdditiveBlending"
+  | "MultiplyBlending"
+  | "SubtractiveBlending" {
+  if (mode === "additive") return "AdditiveBlending";
+  if (mode === "multiply") return "MultiplyBlending";
+  if (mode === "subtractive") return "SubtractiveBlending";
+  return "NormalBlending";
+}
+
+/**
+ * Whether the surface has to be drawn in the transparent pass.
+ *
+ * A blend mode other than normal only does anything there: an additive surface
+ * drawn opaquely simply covers what is behind it, which is the opposite of what
+ * the author asked for.
+ */
+export function materialIsTransparent(properties: {
+  alphaMode: MaterialAlphaMode;
+  blending: MaterialBlendMode;
+}): boolean {
+  return properties.alphaMode === "BLEND" || properties.blending !== "normal";
+}
+
+/**
+ * Whether a Material writes depth, once `auto` is resolved.
+ *
+ * Blended surfaces skip the depth buffer by default because two of them would
+ * otherwise erase each other in whatever order they happened to draw.
+ */
+export function materialWritesDepth(properties: {
+  alphaMode: MaterialAlphaMode;
+  depthWrite: MaterialDepthWrite;
+}): boolean {
+  if (properties.depthWrite === "on") return true;
+  if (properties.depthWrite === "off") return false;
+  return properties.alphaMode !== "BLEND";
+}
+
+/**
+ * Every three.js prop the alpha settings decide, resolved once.
+ *
+ * The editor viewport, the Material preview and the compiler each used to work
+ * this out for themselves from `alphaMode` alone, which is how a Material comes
+ * to look one way while being authored and another once published.
+ */
+export function materialAlphaRenderProps(properties: {
+  alphaMode: MaterialAlphaMode;
+  alphaCutoff: number;
+  blending: MaterialBlendMode;
+  depthWrite: MaterialDepthWrite;
+  alphaToCoverage: boolean;
+}): {
+  transparent: boolean;
+  depthWrite: boolean;
+  blending: ReturnType<typeof materialBlendingConstant>;
+  alphaTest: number;
+  alphaToCoverage: boolean;
+} {
+  return {
+    transparent: materialIsTransparent(properties),
+    depthWrite: materialWritesDepth(properties),
+    blending: materialBlendingConstant(properties.blending),
+    // MASK is the only mode that clips; a cutoff on a blended surface would
+    // punch holes the author never asked for.
+    alphaTest: properties.alphaMode === "MASK" ? properties.alphaCutoff : 0,
+    alphaToCoverage: properties.alphaToCoverage,
+  };
 }
 
 export function isUnitInterval(value: unknown): value is number {
@@ -1272,6 +1406,16 @@ function applyMaterialPatch(
     typeof patch.doubleSided === "boolean"
       ? patch.doubleSided
       : current.doubleSided;
+  const blending = isMaterialBlendMode(patch.blending)
+    ? patch.blending
+    : current.blending;
+  const depthWrite = isMaterialDepthWrite(patch.depthWrite)
+    ? patch.depthWrite
+    : current.depthWrite;
+  const alphaToCoverage =
+    typeof patch.alphaToCoverage === "boolean"
+      ? patch.alphaToCoverage
+      : current.alphaToCoverage;
   const extensions = applyMaterialExtensionsPatch(
     current.extensions,
     patch.extensions,
@@ -1287,6 +1431,9 @@ function applyMaterialPatch(
     alphaMode,
     alphaCutoff,
     doubleSided,
+    blending,
+    depthWrite,
+    alphaToCoverage,
     extensions,
     color: color3ToHex(baseColorFactor),
     opacity: baseColorFactor[3],

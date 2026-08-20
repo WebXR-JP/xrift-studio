@@ -107,6 +107,7 @@ import {
   resolveSceneWind,
   skyShaderDrivenUniforms,
   lightingDrivenUniforms,
+  materialAlphaRenderProps,
   resolveSceneLighting,
   UNLIT_SCENE_LIGHTING,
   windDrivenUniforms,
@@ -703,6 +704,13 @@ function TerrainMeshVisual({
   useMaterialPreviewRenderSync(materialRef, materialTextures);
   const pbr = material?.properties.pbrMetallicRoughness;
   const alphaMode = material?.properties.alphaMode ?? "OPAQUE";
+  const alphaProps = materialAlphaRenderProps({
+    alphaMode,
+    alphaCutoff: material?.properties.alphaCutoff ?? 0.5,
+    blending: material?.properties.blending ?? "normal",
+    depthWrite: material?.properties.depthWrite ?? "auto",
+    alphaToCoverage: material?.properties.alphaToCoverage ?? false,
+  });
   const opacity =
     alphaMode === "OPAQUE"
       ? 1
@@ -793,13 +801,11 @@ function TerrainMeshVisual({
               ?.emissiveStrength ?? 1
           }
           opacity={opacity}
-          transparent={alphaMode === "BLEND"}
-          depthWrite={alphaMode !== "BLEND"}
-          alphaTest={
-            alphaMode === "MASK"
-              ? (material?.properties.alphaCutoff ?? 0.5)
-              : 0
-          }
+          transparent={alphaProps.transparent}
+          depthWrite={alphaProps.depthWrite}
+          alphaTest={alphaProps.alphaTest}
+          alphaToCoverage={alphaProps.alphaToCoverage}
+          blending={THREE_BLENDING[alphaProps.blending]}
           map={materialTextures.baseColorMap}
           metalnessMap={materialTextures.metallicRoughnessMap}
           roughnessMap={materialTextures.metallicRoughnessMap}
@@ -991,6 +997,13 @@ function PrimitiveMeshVisual({
   );
   const pbr = material?.properties.pbrMetallicRoughness;
   const alphaMode = material?.properties.alphaMode ?? "OPAQUE";
+  const alphaProps = materialAlphaRenderProps({
+    alphaMode,
+    alphaCutoff: material?.properties.alphaCutoff ?? 0.5,
+    blending: material?.properties.blending ?? "normal",
+    depthWrite: material?.properties.depthWrite ?? "auto",
+    alphaToCoverage: material?.properties.alphaToCoverage ?? false,
+  });
   const opacity =
     alphaMode === "OPAQUE"
       ? 1
@@ -1009,13 +1022,11 @@ function PrimitiveMeshVisual({
           color={material?.properties.color ?? "#f43f5e"}
           map={materialTextures.baseColorMap}
           opacity={opacity}
-          transparent={alphaMode === "BLEND"}
-          depthWrite={alphaMode !== "BLEND"}
-          alphaTest={
-            alphaMode === "MASK"
-              ? (material?.properties.alphaCutoff ?? 0.5)
-              : 0
-          }
+          transparent={alphaProps.transparent}
+          depthWrite={alphaProps.depthWrite}
+          alphaTest={alphaProps.alphaTest}
+          alphaToCoverage={alphaProps.alphaToCoverage}
+          blending={THREE_BLENDING[alphaProps.blending]}
           side={
             primitive === "plane" || material?.properties.doubleSided
               ? DoubleSide
@@ -3062,6 +3073,7 @@ function ProjectedSkyboxPreview({
 }
 
 import { ScenePostprocessing } from "./ScenePostprocessing";
+import { THREE_BLENDING } from "./material-blending";
 
 type EditorVegetationTarget = {
   object: Object3D;

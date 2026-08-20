@@ -6,6 +6,7 @@ import {
   getTextureAsset,
   getTextureSourceFormat,
   isEnvironmentTextureAsset,
+  materialAlphaRenderProps,
   normalizeMaterialProperties,
   type AssetManifest,
   type MaterialAsset,
@@ -3886,10 +3887,13 @@ function renderMaterialProps(
   const pbr = properties.pbrMetallicRoughness;
   const color = colorToHex(pbr.baseColorFactor);
   const opacity = properties.alphaMode === "OPAQUE" ? 1 : pbr.baseColorFactor[3];
+  // Resolved by the same function the editor viewport uses, so a published
+  // Material blends, clips and sorts the way it did while being authored.
+  const alpha = materialAlphaRenderProps(properties);
   const props = [
     `color=${JSON.stringify(color)}`,
     `opacity={${formatNumber(opacity)}}`,
-    `transparent={${properties.alphaMode === "BLEND"}}`,
+    `transparent={${alpha.transparent}}`,
   ];
   if (materialKind !== "basic") {
     props.push(
@@ -3908,10 +3912,15 @@ function renderMaterialProps(
   if (materialKind === "physical") {
     appendPhysicalMaterialProps(properties, context, props);
   }
-  if (properties.alphaMode === "MASK") {
-    props.push(`alphaTest={${formatNumber(properties.alphaCutoff)}}`);
+  if (alpha.alphaTest > 0) {
+    props.push(`alphaTest={${formatNumber(alpha.alphaTest)}}`);
   }
-  if (properties.alphaMode === "BLEND") props.push("depthWrite={false}");
+  if (alpha.alphaToCoverage) props.push("alphaToCoverage");
+  if (!alpha.depthWrite) props.push("depthWrite={false}");
+  if (alpha.blending !== "NormalBlending") {
+    context.threeValueImports.add(alpha.blending);
+    props.push(`blending={${alpha.blending}}`);
+  }
   if (properties.doubleSided) {
     props.push("side={DoubleSide}");
   }
