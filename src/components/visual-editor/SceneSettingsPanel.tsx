@@ -879,6 +879,93 @@ export function SceneSettingsInspector({
         </Section>
 
         <Section
+          title="色味"
+          description="仕上がった絵の色を整えます。露出は光の量、こちらは光が届いたあとの見え方です。ポストエフェクトが有効なときに効きます。"
+        >
+          <Toggle
+            label="色味の調整を有効にする"
+            checked={settings.postprocessing.grading.enabled}
+            disabled={readOnly || !settings.postprocessing.enabled}
+            onChange={(enabled) =>
+              update({
+                ...settings,
+                postprocessing: {
+                  ...settings.postprocessing,
+                  grading: { ...settings.postprocessing.grading, enabled },
+                },
+              })
+            }
+          />
+          <NumberField
+            label="コントラスト"
+            value={settings.postprocessing.grading.contrast}
+            min={0}
+            max={3}
+            step={0.05}
+            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.grading.enabled}
+            onChange={(contrast) =>
+              update({
+                ...settings,
+                postprocessing: {
+                  ...settings.postprocessing,
+                  grading: { ...settings.postprocessing.grading, contrast },
+                },
+              })
+            }
+          />
+          <NumberField
+            label="彩度"
+            value={settings.postprocessing.grading.saturation}
+            min={0}
+            max={3}
+            step={0.05}
+            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.grading.enabled}
+            onChange={(saturation) =>
+              update({
+                ...settings,
+                postprocessing: {
+                  ...settings.postprocessing,
+                  grading: { ...settings.postprocessing.grading, saturation },
+                },
+              })
+            }
+          />
+          <NumberField
+            label="色温度"
+            value={settings.postprocessing.grading.temperature}
+            min={-1}
+            max={1}
+            step={0.05}
+            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.grading.enabled}
+            onChange={(temperature) =>
+              update({
+                ...settings,
+                postprocessing: {
+                  ...settings.postprocessing,
+                  grading: { ...settings.postprocessing.grading, temperature },
+                },
+              })
+            }
+          />
+          <NumberField
+            label="色かぶり"
+            value={settings.postprocessing.grading.tint}
+            min={-1}
+            max={1}
+            step={0.05}
+            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.grading.enabled}
+            onChange={(tint) =>
+              update({
+                ...settings,
+                postprocessing: {
+                  ...settings.postprocessing,
+                  grading: { ...settings.postprocessing.grading, tint },
+                },
+              })
+            }
+          />
+        </Section>
+        <Section
           title="ポストエフェクト"
           description="HDR、AO、発光、露出をScene View、Play、公開Worldで共有します。"
         >

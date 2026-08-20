@@ -104,6 +104,10 @@ import {
 } from "../open-brush";
 import { createOpenBrushRuntimeOverlayFile } from "./open-brush-emit";
 import {
+  createScenePostprocessingOverlayFile,
+  SCENE_POSTPROCESSING_OVERLAY_PATH,
+} from "./scene-postprocessing-emit";
+import {
   publishPermissionsJson,
   resolvePublishPermissions,
   type ResolvedPublishPermissions,
@@ -327,6 +331,17 @@ export function compileVisualProject(
   // published world never depends on which runtime shape it was built with.
   if (usesOpenBrushModels) {
     overlayFiles.push(createOpenBrushRuntimeOverlayFile());
+  }
+  // The compositor module ships whenever the Scene composites at all.
+  if (
+    resolvedEntryScene &&
+    resolveSceneSettings(resolvedEntryScene.scene.settings).postprocessing
+      .enabled &&
+    !overlayFiles.some(
+      (file) => file.relativePath === SCENE_POSTPROCESSING_OVERLAY_PATH,
+    )
+  ) {
+    overlayFiles.push(createScenePostprocessingOverlayFile());
   }
   diagnoseUnsupportedAssets(documents.assets, diagnostics);
   const uniqueDiagnostics = deduplicateDiagnostics(diagnostics);
@@ -1200,119 +1215,18 @@ ${skybox.iblEnabled ? `
   );
 }
 
+/**
+ * Ships the compositor into the published world as an overlay module.
+ *
+ * The generated world used to carry its own copy of the whole pipeline as a
+ * string template — a second implementation of tone mapping, SSAO, Bloom and
+ * now colour grading, maintained by hand beside the editor's. Emitting the
+ * real module is the same thing light, audio and particle runtimes already do,
+ * and it is what keeps a published world graded the way the editor showed it.
+ */
 function registerScenePostprocessingSupport(context: CompileContext): void {
-  context.reactValueImports.add("useEffect");
-  context.reactValueImports.add("useMemo");
-  context.fiberImports.add("useFrame");
-  context.fiberImports.add("useThree");
-  context.threeValueImports.add("Vector2");
-  context.threeValueImports.add("HalfFloatType");
-  context.threeValueImports.add("RGBAFormat");
-  context.threeValueImports.add("WebGLRenderTarget");
-  context.threeValueImports.add("NoToneMapping");
-  context.threeValueImports.add("ACESFilmicToneMapping");
-  context.threeValueImports.add("SRGBColorSpace");
   context.extraImports.add(
-    'import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";',
-  );
-  context.extraImports.add(
-    'import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";',
-  );
-  context.extraImports.add(
-    'import { SSAOPass } from "three/examples/jsm/postprocessing/SSAOPass.js";',
-  );
-  context.extraImports.add(
-    'import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";',
-  );
-  context.supportDeclarations.set(
-    "scene-environment:postprocessing",
-    `type XRiftStudioPostprocessingSettings = {
-  enabled: boolean;
-  hdr: {
-    enabled: boolean;
-    toneMapping: "aces" | "none";
-  };
-  bloom: {
-    enabled: boolean;
-    threshold: number;
-    strength: number;
-    radius: number;
-  };
-  ao: {
-    enabled: boolean;
-    radius: number;
-    minDistance: number;
-    maxDistance: number;
-  };
-  exposure: number;
-};
-
-const XRiftStudioPostprocessing: FC<{ settings: XRiftStudioPostprocessingSettings }> = ({ settings }) => {
-  const { camera, gl, scene, size } = useThree();
-  const hdrEnabled = settings.hdr.enabled;
-  const pipeline = useMemo(() => {
-    const renderTarget = hdrEnabled
-      ? new WebGLRenderTarget(size.width, size.height, {
-          type: HalfFloatType,
-          format: RGBAFormat,
-          depthBuffer: true,
-          stencilBuffer: false,
-        })
-      : undefined;
-    const composer = new EffectComposer(gl, renderTarget);
-    const renderPass = new RenderPass(scene, camera);
-    const aoPass = new SSAOPass(scene, camera, size.width, size.height);
-    const bloomPass = new UnrealBloomPass(
-      new Vector2(size.width, size.height),
-      settings.bloom.strength,
-      settings.bloom.radius,
-      settings.bloom.threshold,
-    );
-    composer.addPass(renderPass);
-    composer.addPass(aoPass);
-    composer.addPass(bloomPass);
-    return { composer, aoPass, bloomPass };
-  }, [camera, gl, hdrEnabled, scene]);
-  useEffect(() => {
-    pipeline.composer.setSize(size.width, size.height);
-  }, [pipeline, size.height, size.width]);
-  useEffect(() => {
-    const previousToneMapping = gl.toneMapping;
-    const previousExposure = gl.toneMappingExposure;
-    const previousOutputColorSpace = gl.outputColorSpace;
-    gl.outputColorSpace = SRGBColorSpace;
-    gl.toneMapping = settings.hdr.toneMapping === "none"
-      ? NoToneMapping
-      : ACESFilmicToneMapping;
-    gl.toneMappingExposure = settings.exposure;
-    return () => {
-      gl.toneMapping = previousToneMapping;
-      gl.toneMappingExposure = previousExposure;
-      gl.outputColorSpace = previousOutputColorSpace;
-    };
-  }, [gl, settings.exposure, settings.hdr.toneMapping]);
-  useEffect(() => {
-    pipeline.bloomPass.enabled = settings.enabled && settings.bloom.enabled;
-    pipeline.bloomPass.threshold = settings.bloom.threshold;
-    pipeline.bloomPass.strength = settings.bloom.strength;
-    pipeline.bloomPass.radius = settings.bloom.radius;
-    pipeline.aoPass.enabled = settings.enabled && settings.ao.enabled;
-    pipeline.aoPass.kernelRadius = settings.ao.radius;
-    pipeline.aoPass.minDistance = settings.ao.minDistance;
-    pipeline.aoPass.maxDistance = Math.max(settings.ao.maxDistance, settings.ao.minDistance + 0.001);
-  }, [gl, pipeline, settings]);
-  useEffect(() => () => pipeline.composer.dispose(), [pipeline]);
-  useFrame(() => {
-    if (settings.enabled) {
-      pipeline.composer.render();
-    } else {
-      // Positive-priority frame callbacks own rendering in R3F. Fall back to
-      // the normal renderer when the author disables postprocessing.
-      gl.render(scene, camera);
-    }
-  }, 1);
-  return null;
-};`,
+    'import { ScenePostprocessing } from "./xrift-studio/scene-postprocessing";',
   );
 }
 
@@ -1444,7 +1358,7 @@ function renderSceneEnvironment(
   if (settings.postprocessing.enabled) {
     registerScenePostprocessingSupport(context);
     content.push(
-      `<XRiftStudioPostprocessing settings={${JSON.stringify(settings.postprocessing)} } />`,
+      `<ScenePostprocessing settings={${JSON.stringify(settings.postprocessing)}} />`,
     );
   } else {
     // The compositor is off, but its colour handling is not: dropping ACES and

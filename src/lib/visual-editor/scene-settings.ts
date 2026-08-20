@@ -79,6 +79,25 @@ export type ScenePostprocessingSettings = {
     minDistance: number;
     maxDistance: number;
   };
+  /**
+   * Colour grading, applied last.
+   *
+   * Exposure decides how much light reaches the frame; grading decides what it
+   * looks like once it has. Warming a Scene by raising exposure blows out the
+   * highlights instead, which is the usual reason a world ends up washed out
+   * rather than warm.
+   */
+  grading: {
+    enabled: boolean;
+    /** 1 leaves contrast alone; above 1 deepens shadows around mid grey. */
+    contrast: number;
+    /** 1 leaves saturation alone; 0 is greyscale. */
+    saturation: number;
+    /** -1 cools toward blue, +1 warms toward orange. */
+    temperature: number;
+    /** -1 shifts toward green, +1 toward magenta. */
+    tint: number;
+  };
   exposure: number;
 };
 
@@ -226,6 +245,15 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
       minDistance: 0.005,
       maxDistance: 0.1,
     },
+    grading: {
+      // Neutral by default: on, but changing nothing. An author who opens the
+      // controls sees the identity values rather than a look someone chose.
+      enabled: true,
+      contrast: 1,
+      saturation: 1,
+      temperature: 0,
+      tint: 0,
+    },
     exposure: 0.85,
   },
   vegetation: {
@@ -268,6 +296,11 @@ function finiteOr(value: unknown, fallback: number, min?: number): number {
     (min === undefined || value >= min)
     ? value
     : fallback;
+}
+
+function clampedOr(value: unknown, fallback: number): number {
+  const resolved = typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  return Math.min(Math.max(resolved, -1), 1);
 }
 
 function booleanOr(value: unknown, fallback: boolean): boolean {
@@ -321,6 +354,9 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
   const hdr = isRecord(postprocessing.hdr) ? postprocessing.hdr : {};
   const bloom = isRecord(postprocessing.bloom) ? postprocessing.bloom : {};
   const ao = isRecord(postprocessing.ao) ? postprocessing.ao : {};
+  const grading = isRecord(postprocessing.grading)
+    ? postprocessing.grading
+    : {};
   const vegetation = isRecord(settings.vegetation) ? settings.vegetation : {};
   const editor = isRecord(settings.editor) ? settings.editor : {};
   const gizmo = isRecord(editor.gizmo) ? editor.gizmo : {};
@@ -492,6 +528,30 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
             DEFAULT_SCENE_SETTINGS.postprocessing.ao.minDistance,
             0,
           ) + 0.001,
+        ),
+      },
+      grading: {
+        enabled: booleanOr(
+          grading.enabled,
+          DEFAULT_SCENE_SETTINGS.postprocessing.grading.enabled,
+        ),
+        contrast: finiteOr(
+          grading.contrast,
+          DEFAULT_SCENE_SETTINGS.postprocessing.grading.contrast,
+          0,
+        ),
+        saturation: finiteOr(
+          grading.saturation,
+          DEFAULT_SCENE_SETTINGS.postprocessing.grading.saturation,
+          0,
+        ),
+        temperature: clampedOr(
+          grading.temperature,
+          DEFAULT_SCENE_SETTINGS.postprocessing.grading.temperature,
+        ),
+        tint: clampedOr(
+          grading.tint,
+          DEFAULT_SCENE_SETTINGS.postprocessing.grading.tint,
         ),
       },
       exposure: finiteOr(

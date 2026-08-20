@@ -1119,7 +1119,7 @@ function validateSceneSettings(
   );
   validateSceneSettingsObject(
     value.postprocessing,
-    ["enabled", "hdr", "bloom", "ao", "exposure"],
+    ["enabled", "hdr", "bloom", "ao", "grading", "exposure"],
     `${path}.postprocessing`,
     issues,
     (entry) => {
@@ -1184,6 +1184,46 @@ function validateSceneSettings(
             `${path}.postprocessing.bloom`,
             issues,
             0,
+          );
+        },
+      );
+      validateSceneSettingsObject(
+        entry.grading,
+        ["enabled", "contrast", "saturation", "temperature", "tint"],
+        `\.postprocessing.grading`,
+        issues,
+        (grading) => {
+          validateBoolean(
+            grading,
+            "enabled",
+            `\.postprocessing.grading`,
+            issues,
+          );
+          validateFinite(
+            grading,
+            "contrast",
+            `\.postprocessing.grading`,
+            issues,
+            0,
+          );
+          validateFinite(
+            grading,
+            "saturation",
+            `\.postprocessing.grading`,
+            issues,
+            0,
+          );
+          validateFinite(
+            grading,
+            "temperature",
+            `\.postprocessing.grading`,
+            issues,
+          );
+          validateFinite(
+            grading,
+            "tint",
+            `\.postprocessing.grading`,
+            issues,
           );
         },
       );

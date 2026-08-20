@@ -191,11 +191,31 @@ export function runVisualCompilerFixtureAssertions(
     enabledPostprocessing.overlayFiles.find(
       (file) => file.relativePath === "src/World.tsx",
     )?.content ?? "";
+  // The pipeline itself is no longer inlined into World.tsx: the compiler ships
+  // the editor's own compositor module, so a published world grades colour with
+  // the same code the author was looking at.
+  const postprocessingOverlay = enabledPostprocessing.overlayFiles.find(
+    (file) => file.relativePath === "src/xrift-studio/scene-postprocessing.tsx",
+  );
+  assert(
+    postprocessingOverlay !== undefined,
+    "An explicitly enabled postprocessing world did not ship the compositor",
+  );
   [
     "HalfFloatType",
     "new SSAOPass",
     "ACESFilmicToneMapping",
-    'toneMapping: "aces" | "none"',
+    "uSaturation",
+    "uTemperature",
+  ].forEach((fragment) =>
+    assert(
+      postprocessingOverlay.content.includes(fragment),
+      `The shipped compositor is missing: ${fragment}`,
+    ),
+  );
+  [
+    'import { ScenePostprocessing } from "./xrift-studio/scene-postprocessing"',
+    "<ScenePostprocessing settings={",
   ].forEach((fragment) =>
     assert(
       enabledPostprocessingSource.includes(fragment),
