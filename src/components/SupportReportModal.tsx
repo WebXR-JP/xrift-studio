@@ -19,6 +19,7 @@ import {
 } from "../lib/support-links";
 import {
   createSupportReportDraft,
+  sanitizeSupportErrorDetail,
   sanitizeSupportErrorMessage,
   type SupportReportContext,
 } from "../lib/support-report";
@@ -85,6 +86,10 @@ export function SupportReportModal({
     () => sanitizeSupportErrorMessage(context?.errorMessage),
     [context?.errorMessage],
   );
+  const sanitizedErrorDetail = useMemo(
+    () => sanitizeSupportErrorDetail(context?.errorDetail),
+    [context?.errorDetail],
+  );
   const sanitizedDiagnostics = useMemo(
     () =>
       context?.diagnostics
@@ -149,6 +154,7 @@ export function SupportReportModal({
 - プロジェクト数: ${projectCount}
 - 現在の画面: ${context?.currentScreen ?? "プロジェクト一覧"}
 ${sanitizedErrorMessage ? `\n## 発生したエラー\n${sanitizedErrorMessage}\n` : ""}
+${sanitizedErrorDetail ? `\n## エラーの詳細な出力\n\`\`\`\n${sanitizedErrorDetail}\n\`\`\`\n` : ""}
 ${sanitizedDiagnostics.length > 0 ? `\n## 関連する診断\n${sanitizedDiagnostics.map((diagnostic) => `- ${diagnostic}`).join("\n")}\n` : ""}
 
 ${createSupportReportDraft(context, sanitizedErrorMessage)}
@@ -161,6 +167,7 @@ ${createSupportReportDraft(context, sanitizedErrorMessage)}
       environment,
       projectCount,
       sanitizedDiagnostics,
+      sanitizedErrorDetail,
       sanitizedErrorMessage,
     ],
   );

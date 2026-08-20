@@ -1,4 +1,8 @@
 import { Euler, Matrix4, Quaternion, Vector3 } from "three";
+import {
+  permissionDomainForUrl,
+  type PublishPermissionRequirement,
+} from "./compiler/publish-permissions";
 
 export const OPEN_BRUSH_EXTENSION_NAMES = [
   "GOOGLE_tilt_brush_material",
@@ -88,13 +92,26 @@ export const OPEN_BRUSH_RUNTIME_PACKAGE = "three-icosa@0.4.2-alpha.18";
 export const OPEN_BRUSH_RENDERER = "three-icosa@0.4.2-alpha.18";
 
 /**
- * `three-icosa` is published as a Parcel bundle whose identifiers carry
- * `$hash$var$` prefixes, so XRift's `no-obfuscation` code rule rejects every
- * world that bundles it. The rule is allowable via `permissions`, so a world
- * using OpenBrush declares it; a world without OpenBrush declares nothing and
- * keeps the check enforced.
+ * What a published world must declare to ship OpenBrush strokes.
+ *
+ * `three-icosa` is a Parcel bundle whose identifiers carry `$hash$var$`
+ * prefixes, so the `no-obfuscation` rule rejects any world that includes it.
+ * The brush shaders and textures are then fetched from the brush library at
+ * runtime, which the network rule guards. Both are consequences of using
+ * OpenBrush at all, so the compiler declares them for worlds that do and leaves
+ * every other world fully checked.
  */
-export const OPEN_BRUSH_ALLOWED_CODE_RULES = ["no-obfuscation"] as const;
+export const OPEN_BRUSH_PUBLISH_PERMISSION: PublishPermissionRequirement = {
+  feature: "OpenBrush",
+  reason:
+    "OpenBrushのブラシはthree-icosaの難読化されたコードを含み、ブラシごとのShaderとTextureを配布元から読み込みます",
+  // Each brush names its own shader and texture files, so their URLs are built
+  // per brush rather than written as literals. The analyzer reports that as
+  // `no-network-without-permission` no matter which hosts are allowed, so the
+  // rule is declared alongside the host it contacts.
+  allowedCodeRules: ["no-network-without-permission", "no-obfuscation"],
+  allowedDomains: [permissionDomainForUrl(OPEN_BRUSH_BRUSH_BASE_URL)],
+};
 
 const OPEN_BRUSH_PLACEHOLDER_IMAGE_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";

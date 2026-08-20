@@ -985,6 +985,7 @@ export function VisualUploadDialog({
       context={{
         currentScreen: `${projectLabel}公開の失敗画面`,
         errorMessage: error,
+        errorDetail: failure?.detail,
         diagnostics: thumbnailStagingSha256
           ? [
               "公開用ステージングへコピー済み",

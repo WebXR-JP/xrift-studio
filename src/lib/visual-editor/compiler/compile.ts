@@ -94,10 +94,16 @@ import {
 } from "./script-emit";
 import {
   isOpenBrushModelMetadata,
-  OPEN_BRUSH_ALLOWED_CODE_RULES,
   OPEN_BRUSH_BRUSH_BASE_URL,
+  OPEN_BRUSH_PUBLISH_PERMISSION,
   OPEN_BRUSH_RUNTIME_PACKAGE,
 } from "../open-brush";
+import { createOpenBrushRuntimeOverlayFile } from "./open-brush-emit";
+import {
+  publishPermissionsJson,
+  resolvePublishPermissions,
+  type ResolvedPublishPermissions,
+} from "./publish-permissions";
 import {
   getPrefabAssetDocumentReference,
   isPrefabAsset,
@@ -258,6 +264,11 @@ export function compileVisualProject(
       : emptySource(documents.project.projectKind);
   }
   const usesOpenBrushModels = projectUsesOpenBrushModels(documents.assets);
+  // Every emitted feature that trips a platform security rule declares its own
+  // requirement; nothing here knows what those rules are.
+  const publishPermissions = resolvePublishPermissions([
+    ...(usesOpenBrushModels ? [OPEN_BRUSH_PUBLISH_PERMISSION] : []),
+  ]);
   const xriftJson = generateXriftJson(
     documents.project.projectKind,
     documents.project.metadata.title,
@@ -268,7 +279,7 @@ export function compileVisualProject(
     resolvedEntryScene
       ? resolveSceneSettings(resolvedEntryScene.scene.settings)
       : undefined,
-    usesOpenBrushModels ? OPEN_BRUSH_ALLOWED_CODE_RULES : [],
+    publishPermissions,
   );
   const sourcePath =
     documents.project.projectKind === "world" ? "src/World.tsx" : "src/Item.tsx";
@@ -307,6 +318,11 @@ export function compileVisualProject(
     )
   ) {
     overlayFiles.push(createScriptLightOverlayFile());
+  }
+  // Emitted for both output modes: the brush loader is self-contained, so a
+  // published world never depends on which runtime shape it was built with.
+  if (usesOpenBrushModels) {
+    overlayFiles.push(createOpenBrushRuntimeOverlayFile());
   }
   diagnoseUnsupportedAssets(documents.assets, diagnostics);
   const uniqueDiagnostics = deduplicateDiagnostics(diagnostics);
@@ -347,6 +363,7 @@ export function compileVisualProject(
     provenance,
     provenanceFile,
     ...(runtimeManifestFile ? { runtimeManifestFile } : {}),
+    ...(publishPermissions ? { publishPermissions } : {}),
     stagingPlan: {
       owner: "xrift-studio-compiler",
       templateKind: documents.project.projectKind,
@@ -2601,8 +2618,10 @@ function renderModelMesh(
     context.extraImports.add(
       'import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";',
     );
+    // Stock three-icosa cannot build a compilable brush material on its own;
+    // the shared loader emitted as an overlay is what the viewport uses too.
     context.extraImports.add(
-      '// @ts-expect-error three-icosa does not publish TypeScript declarations\nimport { GLTFGoogleTiltBrushMaterialExtension } from "three-icosa/dist/three-icosa.module.js";',
+      'import { createOpenBrushMaterialExtension } from "./xrift-studio/open-brush-runtime";',
     );
   } else {
     context.dreiImports.add("useGLTF");
@@ -2659,7 +2678,7 @@ function renderModelMesh(
     : isOpenBrush
       ? `const { scene, parser${autoplay ? ", animations" : ""} } = useLoader(GLTFLoader, modelUrl, (loader) => {
     loader.register(
-      (parser) => new GLTFGoogleTiltBrushMaterialExtension(parser, ${JSON.stringify(OPEN_BRUSH_BRUSH_BASE_URL)}),
+      (parser) => createOpenBrushMaterialExtension(parser, ${JSON.stringify(OPEN_BRUSH_BRUSH_BASE_URL)}),
     );
   });`
       : !needsParser
@@ -4725,7 +4744,7 @@ function generateXriftJson(
   title: string,
   description: string,
   settings?: SceneSettings,
-  allowedCodeRules: readonly string[] = [],
+  permissions?: ResolvedPublishPermissions,
 ): string {
   // physics and camera are world-only in xrift.json; an item has neither, and
   // emitting them would produce a config the CLI does not recognise.
@@ -4742,11 +4761,6 @@ function generateXriftJson(
           },
         }
       : {};
-  // `permissions` applies to both kinds, unlike physics and camera above.
-  const permissions =
-    allowedCodeRules.length > 0
-      ? { permissions: { allowedCodeRules: [...allowedCodeRules] } }
-      : {};
   return stableSerializeJson({
     [kind]: {
       distDir: "./dist",
@@ -4756,7 +4770,8 @@ function generateXriftJson(
       buildCommand: "npm run build",
       ignore: ["**/.DS_Store", "**/Thumbs.db", "**/*.js.map", "**/.gitkeep"],
       ...worldSettings,
-      ...permissions,
+      // `permissions` applies to both kinds, unlike physics and camera above.
+      ...publishPermissionsJson(permissions),
     },
   });
 }

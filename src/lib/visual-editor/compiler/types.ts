@@ -4,6 +4,7 @@ import type { PrefabDocument } from "../prefab-document";
 import type { VisualProjectDocument, VisualProjectKind } from "../project-document";
 import type { SceneDocument } from "../scene-document";
 import type { CompilationProvenance } from "../serialization";
+import type { ResolvedPublishPermissions } from "./publish-permissions";
 
 export const VISUAL_COMPILER_VERSION = "0.6.0" as const;
 
@@ -92,6 +93,11 @@ export type VisualCompileResult = {
   provenanceFile: CompilerOverlayFile;
   runtimeManifestFile?: CompilerOverlayFile;
   stagingPlan: CompilerStagingPlan;
+  /**
+   * Platform permissions this world declares, and why. Absent when the world
+   * publishes with every security check enforced.
+   */
+  publishPermissions?: ResolvedPublishPermissions;
 };
 
 export type VisualCompilerOptions = {

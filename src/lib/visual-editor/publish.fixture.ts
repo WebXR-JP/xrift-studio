@@ -177,6 +177,24 @@ export function runVisualPublishFixtureAssertions(): void {
     checkFailure.summary.includes("Worldの検査に失敗しました"),
     "Check failure summary did not name the failed step",
   );
+  // The summary has to say what went wrong, not merely that something did.
+  assert(
+    checkFailure.summary.includes("no-obfuscation"),
+    `Check failure summary did not name the reason: ${checkFailure.summary}`,
+  );
+  assert(
+    !checkFailure.summary.includes("✗"),
+    "Check failure summary kept the CLI's marker character",
+  );
+  // Output with no marked verdict must not have a line promoted by position.
+  const unmarkedFailure = formatPublishCommandFailure("Worldの検査", {
+    stderr: "",
+    stdout: "step one\nstep two\nstep three",
+  });
+  assert(
+    unmarkedFailure.summary.includes("下のCLI出力"),
+    "Unmarked output should point at the full log instead of guessing a reason",
+  );
 }
 
 function runCancellationAssertions(): void {

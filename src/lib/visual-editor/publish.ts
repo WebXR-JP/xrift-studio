@@ -148,15 +148,42 @@ export function formatPublishCommandFailure(
     .join("\n");
   const safeDetail = detail ? sanitizePublishFailure(detail, privatePaths) : "";
   const recovery = publishCommandRecovery(operation, safeDetail).trim();
+  const headline = publishFailureHeadline(safeDetail);
   return {
     summary: recovery
       ? `${operation}に失敗しました。${recovery}`
-      : safeDetail
-        ? `${operation}に失敗しました。下のCLI出力を確認してください。`
-        : `${operation}に失敗しました。`,
+      : headline
+        ? `${operation}に失敗しました: ${headline}`
+        : safeDetail
+          ? `${operation}に失敗しました。下のCLI出力を確認してください。`
+          : `${operation}に失敗しました。`,
     detail: safeDetail,
   };
 }
+
+/**
+ * Names the failure in the CLI's own words.
+ *
+ * Command line tools mark their verdict lines, so the first marked line is the
+ * reason — far better than a summary that only says to go read the output.
+ * Position is never used to guess: an unmarked output yields no headline and
+ * the reader is pointed at the full log instead.
+ */
+function publishFailureHeadline(detail: string): string | undefined {
+  const marked = detail
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => PUBLISH_FAILURE_MARKER.test(line));
+  if (!marked) return undefined;
+  const stripped = marked.replace(PUBLISH_FAILURE_MARKER, "").trim();
+  if (!stripped) return undefined;
+  return stripped.length > PUBLISH_FAILURE_HEADLINE_MAX_CHARS
+    ? `${stripped.slice(0, PUBLISH_FAILURE_HEADLINE_MAX_CHARS)}…`
+    : stripped;
+}
+
+const PUBLISH_FAILURE_MARKER = /^(?:[✗×✖❌]|Error:|error:|ERROR:)\s*/;
+const PUBLISH_FAILURE_HEADLINE_MAX_CHARS = 200;
 
 function publishCommandRecovery(operation: string, detail?: string): string {
   if (

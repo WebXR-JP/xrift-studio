@@ -41,6 +41,7 @@ import {
   createPrototypeProject,
 } from "../prototype-project";
 import {
+  OPEN_BRUSH_BRUSH_BASE_URL,
   OPEN_BRUSH_EXTENSION_NAMES,
   OPEN_BRUSH_RUNTIME_PACKAGE,
 } from "../open-brush";
@@ -1885,9 +1886,39 @@ export function runVisualCompilerFixtureAssertions(
       (file) => file.relativePath === "src/World.tsx",
     )?.content ?? "";
   assert(openBrushResult.canStage, "Open Brush model should be stageable");
+  // Stock three-icosa leaves `#version` inside a RawShaderMaterial and mutates
+  // its presets between loads, so a published world must go through the same
+  // loader the viewport uses or its brush shaders fail to compile.
   assert(
-    openBrushSource.includes("GLTFGoogleTiltBrushMaterialExtension"),
-    "Open Brush model did not register the three-icosa material extension",
+    openBrushSource.includes("createOpenBrushMaterialExtension"),
+    "Open Brush model did not register the shared brush material extension",
+  );
+  assert(
+    !openBrushSource.includes("new GLTFGoogleTiltBrushMaterialExtension"),
+    "Open Brush model still constructs the unpatched three-icosa extension",
+  );
+  const openBrushOverlay = openBrushResult.overlayFiles.find(
+    (file) => file.relativePath === "src/xrift-studio/open-brush-runtime.ts",
+  );
+  assert(
+    openBrushOverlay !== undefined,
+    "Open Brush world did not emit the brush loader overlay",
+  );
+  for (const fragment of [
+    "normalizeOpenBrushGlslSource",
+    "source.glslVersion = GLSL3",
+    "installIsolatedLoader",
+  ]) {
+    assert(
+      openBrushOverlay.content.includes(fragment),
+      `Open Brush loader overlay is missing: ${fragment}`,
+    );
+  }
+  assert(
+    !modelResult.overlayFiles.some(
+      (file) => file.relativePath === "src/xrift-studio/open-brush-runtime.ts",
+    ),
+    "A world without Open Brush must not carry the brush loader overlay",
   );
   [
     "const brushTimeRoot = useRef<Group>(null);",
@@ -1914,12 +1945,33 @@ export function runVisualCompilerFixtureAssertions(
     ).world ?? {};
   assert(
     JSON.stringify(xriftConfig(openBrushResult).permissions) ===
-      JSON.stringify({ allowedCodeRules: ["no-obfuscation"] }),
-    "Open Brush world did not allow the no-obfuscation code rule",
+      JSON.stringify({
+        allowedCodeRules: ["no-network-without-permission", "no-obfuscation"],
+        allowedDomains: ["icosa-foundation.github.io"],
+      }),
+    "Open Brush world did not declare the permissions its bundle requires",
   );
   assert(
     xriftConfig(modelResult).permissions === undefined,
-    "A world without Open Brush must not relax the no-obfuscation rule",
+    "A world without Open Brush must publish with every check enforced",
+  );
+  // The allowed domain is derived from the brush library URL, so moving the
+  // library can never leave the permission pointing at the old host.
+  assert(
+    openBrushResult.publishPermissions?.allowedDomains.every((domain) =>
+      OPEN_BRUSH_BRUSH_BASE_URL.includes(domain),
+    ) === true,
+    "Open Brush permission domain drifted from the brush library URL",
+  );
+  assert(
+    openBrushResult.publishPermissions?.requirements.some(
+      (requirement) => requirement.feature === "OpenBrush",
+    ) === true,
+    "Publish permissions did not record which feature required them",
+  );
+  assert(
+    modelResult.publishPermissions === undefined,
+    "A world without guarded features must report no publish permissions",
   );
   assert(
     modelSource.includes("XriftMeshMaxDistance") &&

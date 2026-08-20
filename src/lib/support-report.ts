@@ -3,6 +3,12 @@ export type SupportReportContext = {
   /** The action or screen transition during which the problem occurred. */
   failureTiming?: string;
   errorMessage?: string | null;
+  /**
+   * Verbatim output behind the failure, such as a CLI log. A summary alone
+   * tells the reader that something failed but not what, so whatever the
+   * failure screen shows has to travel with the report.
+   */
+  errorDetail?: string | null;
   diagnostics?: string[];
   project?: {
     name: string;
@@ -11,8 +17,18 @@ export type SupportReportContext = {
 };
 
 const MAX_ERROR_MESSAGE_LENGTH = 2_000;
+/** Tool output is the part a reader needs in full, so it gets a larger budget. */
+const MAX_ERROR_DETAIL_LENGTH = 8_000;
+
+export function sanitizeSupportErrorDetail(value: unknown): string | null {
+  return sanitizeSupportText(value, MAX_ERROR_DETAIL_LENGTH);
+}
 
 export function sanitizeSupportErrorMessage(value: unknown): string | null {
+  return sanitizeSupportText(value, MAX_ERROR_MESSAGE_LENGTH);
+}
+
+function sanitizeSupportText(value: unknown, maxLength: number): string | null {
   const raw =
     value instanceof Error
       ? value.message
@@ -34,8 +50,8 @@ export function sanitizeSupportErrorMessage(value: unknown): string | null {
     .replace(/\bfile:\/\/\/[^\s)]+/gi, "[ローカルパス]")
     .replace(/\/(?:Users|home|tmp|var\/folders)\/[^;\r\n]*/g, "[ローカルパス]");
 
-  if (sanitized.length <= MAX_ERROR_MESSAGE_LENGTH) return sanitized;
-  return `${sanitized.slice(0, MAX_ERROR_MESSAGE_LENGTH)}\n…（長いメッセージを省略しました）`;
+  if (sanitized.length <= maxLength) return sanitized;
+  return `${sanitized.slice(0, maxLength)}\n…（長いメッセージを省略しました）`;
 }
 
 /**
