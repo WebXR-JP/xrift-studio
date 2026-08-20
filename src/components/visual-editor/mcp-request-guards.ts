@@ -13,15 +13,15 @@ import {
 import type { ScriptCompileError } from "./useScriptRuntime";
 import type { EditorMode } from "./types";
 
-/** External store tools reach the network and the Import Queue, so the shell runs them. */
-export const XRIFT_MCP_EXTERNAL_STORE_TOOLS = [
-  "search_external_assets",
-  "get_external_asset_options",
-  "install_external_asset",
-] as const;
-
-export type XriftMcpExternalStoreTool =
-  (typeof XRIFT_MCP_EXTERNAL_STORE_TOOLS)[number];
+/**
+ * External store tools reach the network and the Import Queue, so the shell
+ * runs them. The list itself belongs to mcp-tool-registry along with every
+ * other tool; it is re-exported here so importers of this module keep working.
+ */
+export {
+  XRIFT_MCP_EXTERNAL_STORE_TOOLS,
+  type XriftMcpExternalStoreTool,
+} from "../../lib/visual-editor";
 
 export function mcpRequiredString(value: unknown, name: string): string {
   if (typeof value !== "string" || !value.trim()) {

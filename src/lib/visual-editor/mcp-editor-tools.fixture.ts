@@ -14,8 +14,62 @@ import {
   XriftMcpEditorToolError,
   type XriftMcpEditorContext,
 } from "./mcp-editor-tools";
+import {
+  XRIFT_MCP_DEBUG_TOOLS,
+  XRIFT_MCP_EDITOR_TOOLS,
+  XRIFT_MCP_EXTERNAL_STORE_TOOLS,
+  XRIFT_MCP_SCRIPT_TOOLS,
+  XRIFT_MCP_TOOLS,
+  xriftMcpToolSurface,
+} from "./mcp-tool-registry";
+
+/**
+ * The tool contract used to be written out by hand in six places and had
+ * already drifted: the Rust allow-list carried three tools the TypeScript
+ * arrays did not. These assertions hold the single registry to the shape every
+ * derived list and the generated Rust schema depend on.
+ */
+function assertMcpToolRegistryIsCoherent(): void {
+  const names = XRIFT_MCP_TOOLS.map((tool) => tool.name);
+  assert(
+    new Set(names).size === names.length,
+    "A tool name is declared more than once in the MCP registry",
+  );
+  const surfaces = XRIFT_MCP_TOOLS.reduce<Record<string, number>>(
+    (counts, tool) => ({
+      ...counts,
+      [tool.surface]: (counts[tool.surface] ?? 0) + 1,
+    }),
+    {},
+  );
+  const derivedTotal =
+    XRIFT_MCP_EDITOR_TOOLS.length +
+    XRIFT_MCP_LOCAL_ASSET_TOOLS.length +
+    XRIFT_MCP_SCRIPT_TOOLS.length +
+    XRIFT_MCP_EXTERNAL_STORE_TOOLS.length +
+    XRIFT_MCP_DEBUG_TOOLS.length;
+  assert(
+    derivedTotal === names.length,
+    `Derived tool lists cover ${derivedTotal} of ${names.length} registered tools`,
+  );
+  assert(
+    Object.keys(surfaces).length === 5,
+    "A registered tool uses a surface no derived list reads",
+  );
+  for (const name of names) {
+    assert(
+      xriftMcpToolSurface(name) !== undefined,
+      `Registered tool ${name} has no resolvable surface`,
+    );
+  }
+  assert(
+    xriftMcpToolSurface("not_a_registered_tool") === undefined,
+    "An unregistered tool name resolved to a surface",
+  );
+}
 
 export function runXriftMcpEditorToolFixtures(): void {
+  assertMcpToolRegistryIsCoherent();
   const initial = createPrototypeProject("world", "mcp-fixture");
   const particle = createDefaultParticleAsset({
     id: "asset-mcp-particle",

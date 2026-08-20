@@ -87,16 +87,11 @@ import {
   resolveEditorCommands,
   executeXriftMcpEditorTool,
   extractScriptContract,
-  XRIFT_MCP_EDITOR_TOOLS,
-  XRIFT_MCP_DEBUG_TOOLS,
-  XRIFT_MCP_LOCAL_ASSET_TOOLS,
-  XRIFT_MCP_SCRIPT_TOOLS,
   kindForPath,
   PROJECT_PACKAGE_EXTENSION_PATTERN,
   type AssetFormatKind,
   XriftMcpEditorToolError,
   type ScriptContract,
-  type XriftMcpScriptToolName,
   shortcutForCommand,
   synchronizePlaySession,
   redoEditorHistory,
@@ -162,10 +157,10 @@ import {
   type VisualProjectKind,
   type KhrInteractivityExtension,
   type XriftMcpEditorToolName,
-  type XriftMcpLocalAssetToolName,
   type XriftComponentDefinition,
   mcpTextureImportSettingsPatch,
   describeVisualUploadCapabilities,
+  xriftMcpToolSurface,
 } from "../../lib/visual-editor";
 import {
   tauri,
@@ -286,7 +281,6 @@ import {
   type VisualEditorLayout,
 } from "./editor-layout";
 import {
-  XRIFT_MCP_EXTERNAL_STORE_TOOLS,
   assertMcpExternalStoreWrite,
   mcpOptionalInteger,
   mcpOptionalScriptLanguage,
@@ -294,7 +288,6 @@ import {
   mcpRequiredString,
   scriptCompileErrorsForMcp,
   waitForEditorCommit,
-  type XriftMcpExternalStoreTool,
 } from "./mcp-request-guards";
 import {
   approvalRequiredSnapshots,
@@ -1967,32 +1960,20 @@ export function VisualEditorPrototype({
       request: XriftMcpEditorRequestEvent,
     ): Promise<void> => {
       try {
-        const localAssetTool = XRIFT_MCP_LOCAL_ASSET_TOOLS.includes(
-          request.tool as XriftMcpLocalAssetToolName,
-        );
-        const debugTool = XRIFT_MCP_DEBUG_TOOLS.includes(
-          request.tool as "capture_scene_debug",
-        );
-        const externalStoreTool = XRIFT_MCP_EXTERNAL_STORE_TOOLS.includes(
-          request.tool as XriftMcpExternalStoreTool,
-        );
-        const scriptTool = XRIFT_MCP_SCRIPT_TOOLS.includes(
-          request.tool as XriftMcpScriptToolName,
-        );
-        if (
-          !localAssetTool &&
-          !debugTool &&
-          !externalStoreTool &&
-          !scriptTool &&
-          !XRIFT_MCP_EDITOR_TOOLS.includes(
-            request.tool as XriftMcpEditorToolName,
-          )
-        ) {
+        // The registry says which surface owns a tool, so an unknown name is
+        // simply one with no surface rather than something five membership
+        // tests have to agree about.
+        const surface = xriftMcpToolSurface(request.tool);
+        if (!surface) {
           throw new XriftMcpEditorToolError(
             "TOOL_NOT_FOUND",
             "対応していないAI editor toolです",
           );
         }
+        const localAssetTool = surface === "local-asset";
+        const debugTool = surface === "debug";
+        const externalStoreTool = surface === "external-store";
+        const scriptTool = surface === "script";
         if (debugTool) {
           const args = request.arguments;
           const projectId = mcpRequiredString(args.projectId, "projectId");

@@ -160,106 +160,21 @@ import {
   optimizeColliderConfiguration,
 } from "./collider-diagnostics";
 
-export const XRIFT_MCP_EDITOR_TOOLS = [
-  "get_editor_context",
-  "get_scripting_capabilities",
-  "analyze_component_code",
-  "apply_component_code_import_plan",
-  "list_assets",
-  "update_project_metadata",
-  "create_asset_folder",
-  "rename_asset",
-  "rename_asset_folder",
-  "move_asset",
-  "move_asset_folder",
-  "delete_asset",
-  "delete_asset_folder",
-  "inspect_colliders",
-  "optimize_colliders",
-  "get_audio_asset",
-  "get_model_asset",
-  "get_texture_asset",
-  "update_model_asset",
-  "update_texture_asset",
-  "create_document_asset",
-  "get_particle_asset",
-  "update_particle_asset",
-  "update_scene_settings",
-  "place_asset",
-  "list_entities",
-  "list_component_definitions",
-  "get_entity_components",
-  "create_primitive",
-  "get_terrain",
-  "create_terrain",
-  "sculpt_terrain",
-  "update_terrain",
-  "place_builtin_prefab",
-  "create_prefab",
-  "add_component",
-  "update_component",
-  "remove_component",
-  "set_entity_enabled",
-  "update_script_component",
-  "update_transform",
-  "set_material",
-  "get_material_asset",
-  "update_material_asset",
-  "create_custom_shader",
-  "get_custom_shader",
-  "update_custom_shader",
-  "set_material_texture_transform",
-  "rename_entity",
-  "duplicate_entity",
-  "reparent_entity",
-  "delete_entity",
-  "create_empty_entity",
-  "list_interactivity_operations",
-  "get_interactivity_asset",
-  "create_interactivity_asset",
-  "add_interactivity_node",
-  "connect_interactivity_nodes",
-  "set_interactivity_value",
-  "set_interactivity_configuration",
-  "configure_interactivity_material_pointer",
-  "disconnect_interactivity_socket",
-  "delete_interactivity_node",
-  "validate_interactivity_asset",
-] as const;
+// Tool names and their execution surface come from mcp-tool-registry, which is
+// the one place a tool is declared. These re-exports keep existing importers
+// working without giving the list a second home.
+import type { XriftMcpEditorToolName } from "./mcp-tool-registry";
 
-export type XriftMcpEditorToolName = (typeof XRIFT_MCP_EDITOR_TOOLS)[number];
-
-/** Local Asset tools perform native file I/O in the React host. */
-export const XRIFT_MCP_LOCAL_ASSET_TOOLS = [
-  "import_audio_asset",
-  "import_texture_asset",
-  "import_model_asset",
-  "import_skybox_asset",
-  "import_shader_asset",
-  "reimport_model_asset",
-  "get_shader_asset",
-  "update_shader_asset",
-  "set_project_thumbnail",
-] as const;
-
-export type XriftMcpLocalAssetToolName =
-  (typeof XRIFT_MCP_LOCAL_ASSET_TOOLS)[number];
-
-/** Scene diagnostics are routed to the live R3F viewport, not document history. */
-export const XRIFT_MCP_DEBUG_TOOLS = ["capture_scene_debug"] as const;
-export type XriftMcpDebugToolName = (typeof XRIFT_MCP_DEBUG_TOOLS)[number];
-
-/** Script tools perform project file I/O or change Play mode in the React host. */
-export const XRIFT_MCP_SCRIPT_TOOLS = [
-  "list_script_templates",
-  "get_script_asset",
-  "create_script_asset",
-  "apply_script_template",
-  "update_script_asset",
-  "set_play_mode",
-] as const;
-
-export type XriftMcpScriptToolName = (typeof XRIFT_MCP_SCRIPT_TOOLS)[number];
+export {
+  XRIFT_MCP_DEBUG_TOOLS,
+  XRIFT_MCP_EDITOR_TOOLS,
+  XRIFT_MCP_LOCAL_ASSET_TOOLS,
+  XRIFT_MCP_SCRIPT_TOOLS,
+  type XriftMcpDebugToolName,
+  type XriftMcpEditorToolName,
+  type XriftMcpLocalAssetToolName,
+  type XriftMcpScriptToolName,
+} from "./mcp-tool-registry";
 
 export type XriftMcpEditorRequest = {
   id: string;
@@ -312,140 +227,97 @@ export class XriftMcpEditorToolError extends Error {
   }
 }
 
+type XriftMcpDocumentToolHandler = (
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+) => XriftMcpEditorToolOutcome;
+
+/**
+ * Every document tool, keyed by the name the registry declares.
+ *
+ * Typing this as a complete Record is what keeps the two in step: a tool added
+ * to the registry without a handler here fails to compile, and a handler with no
+ * registry entry has no name to be reached by. The dispatcher that replaced a
+ * 130-line switch is the lookup below it.
+ */
+const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
+  XriftMcpEditorToolName,
+  XriftMcpDocumentToolHandler
+> = {
+  get_editor_context: readEditorContext,
+  get_scripting_capabilities: readScriptingCapabilities,
+  analyze_component_code: analyzeComponentCodeTool,
+  apply_component_code_import_plan: applyComponentCodeImportPlanTool,
+  list_assets: listAssets,
+  update_project_metadata: updateProjectMetadata,
+  create_asset_folder: createAssetFolder,
+  rename_asset: renameLibraryAsset,
+  rename_asset_folder: renameLibraryAssetFolder,
+  move_asset: moveLibraryAssetTool,
+  move_asset_folder: moveLibraryAssetFolderTool,
+  delete_asset: deleteLibraryAsset,
+  delete_asset_folder: deleteLibraryAssetFolder,
+  inspect_colliders: inspectColliders,
+  optimize_colliders: optimizeColliders,
+  get_audio_asset: getAudio,
+  get_model_asset: getModel,
+  get_texture_asset: getTexture,
+  update_model_asset: updateModel,
+  update_texture_asset: updateTexture,
+  create_document_asset: createDocumentAsset,
+  get_particle_asset: getParticleAsset,
+  update_particle_asset: updateParticleAssetTool,
+  update_scene_settings: updateSceneSettings,
+  place_asset: placeAsset,
+  list_entities: listEntities,
+  list_component_definitions: listComponentDefinitions,
+  get_entity_components: getEntityComponents,
+  create_primitive: createPrimitive,
+  get_terrain: getTerrain,
+  create_terrain: createTerrain,
+  sculpt_terrain: sculptTerrain,
+  update_terrain: updateTerrain,
+  place_builtin_prefab: placeBuiltinPrefab,
+  create_prefab: createPrefab,
+  add_component: addComponent,
+  update_component: updateComponent,
+  remove_component: removeComponent,
+  set_entity_enabled: setEntityEnabled,
+  update_script_component: updateScriptComponent,
+  update_transform: updateTransform,
+  set_material: setMaterial,
+  get_material_asset: getMaterial,
+  update_material_asset: updateMaterial,
+  create_custom_shader: createCustomShader,
+  get_custom_shader: getCustomShader,
+  update_custom_shader: updateCustomShader,
+  set_material_texture_transform: setMaterialTextureTransform,
+  rename_entity: renameEntity,
+  duplicate_entity: duplicateEntity,
+  reparent_entity: reparentEntity,
+  delete_entity: deleteEntity,
+  create_empty_entity: createEmptyEntity,
+  list_interactivity_operations: listInteractivityOperations,
+  get_interactivity_asset: getInteractivityAsset,
+  create_interactivity_asset: createInteractivityAsset,
+  add_interactivity_node: addInteractivityNode,
+  connect_interactivity_nodes: connectInteractivityNodes,
+  set_interactivity_value: setInteractivityValue,
+  set_interactivity_configuration: setInteractivityConfiguration,
+  configure_interactivity_material_pointer: configureInteractivityMaterial,
+  disconnect_interactivity_socket: disconnectInteractivitySocket,
+  delete_interactivity_node: deleteInteractivityNode,
+  validate_interactivity_asset: validateInteractivityAsset,
+};
+
 export function executeXriftMcpEditorTool(
   context: XriftMcpEditorContext,
   request: XriftMcpEditorRequest,
 ): XriftMcpEditorToolOutcome {
-  switch (request.tool) {
-    case "get_editor_context":
-      return readEditorContext(context);
-    case "get_scripting_capabilities":
-      return readScriptingCapabilities(context);
-    case "analyze_component_code":
-      return analyzeComponentCodeTool(context, request.arguments);
-    case "apply_component_code_import_plan":
-      return applyComponentCodeImportPlanTool(context, request.arguments);
-    case "list_assets":
-      return listAssets(context, request.arguments);
-    case "update_project_metadata":
-      return updateProjectMetadata(context, request.arguments);
-    case "create_asset_folder":
-      return createAssetFolder(context, request.arguments);
-    case "rename_asset":
-      return renameLibraryAsset(context, request.arguments);
-    case "rename_asset_folder":
-      return renameLibraryAssetFolder(context, request.arguments);
-    case "move_asset":
-      return moveLibraryAssetTool(context, request.arguments);
-    case "move_asset_folder":
-      return moveLibraryAssetFolderTool(context, request.arguments);
-    case "delete_asset":
-      return deleteLibraryAsset(context, request.arguments);
-    case "delete_asset_folder":
-      return deleteLibraryAssetFolder(context, request.arguments);
-    case "inspect_colliders":
-      return inspectColliders(context, request.arguments);
-    case "optimize_colliders":
-      return optimizeColliders(context, request.arguments);
-    case "get_audio_asset":
-      return getAudio(context, request.arguments);
-    case "get_model_asset":
-      return getModel(context, request.arguments);
-    case "get_texture_asset":
-      return getTexture(context, request.arguments);
-    case "update_model_asset":
-      return updateModel(context, request.arguments);
-    case "update_texture_asset":
-      return updateTexture(context, request.arguments);
-    case "create_document_asset":
-      return createDocumentAsset(context, request.arguments);
-    case "get_particle_asset":
-      return getParticleAsset(context, request.arguments);
-    case "update_particle_asset":
-      return updateParticleAssetTool(context, request.arguments);
-    case "update_scene_settings":
-      return updateSceneSettings(context, request.arguments);
-    case "place_asset":
-      return placeAsset(context, request.arguments);
-    case "list_entities":
-      return listEntities(context);
-    case "list_component_definitions":
-      return listComponentDefinitions(context);
-    case "get_entity_components":
-      return getEntityComponents(context, request.arguments);
-    case "create_primitive":
-      return createPrimitive(context, request.arguments);
-    case "get_terrain":
-      return getTerrain(context, request.arguments);
-    case "create_terrain":
-      return createTerrain(context, request.arguments);
-    case "sculpt_terrain":
-      return sculptTerrain(context, request.arguments);
-    case "update_terrain":
-      return updateTerrain(context, request.arguments);
-    case "place_builtin_prefab":
-      return placeBuiltinPrefab(context, request.arguments);
-    case "create_prefab":
-      return createPrefab(context, request.arguments);
-    case "add_component":
-      return addComponent(context, request.arguments);
-    case "update_component":
-      return updateComponent(context, request.arguments);
-    case "remove_component":
-      return removeComponent(context, request.arguments);
-    case "set_entity_enabled":
-      return setEntityEnabled(context, request.arguments);
-    case "update_script_component":
-      return updateScriptComponent(context, request.arguments);
-    case "update_transform":
-      return updateTransform(context, request.arguments);
-    case "set_material":
-      return setMaterial(context, request.arguments);
-    case "get_material_asset":
-      return getMaterial(context, request.arguments);
-    case "update_material_asset":
-      return updateMaterial(context, request.arguments);
-    case "create_custom_shader":
-      return createCustomShader(context, request.arguments);
-    case "get_custom_shader":
-      return getCustomShader(context, request.arguments);
-    case "update_custom_shader":
-      return updateCustomShader(context, request.arguments);
-    case "set_material_texture_transform":
-      return setMaterialTextureTransform(context, request.arguments);
-    case "rename_entity":
-      return renameEntity(context, request.arguments);
-    case "duplicate_entity":
-      return duplicateEntity(context, request.arguments);
-    case "reparent_entity":
-      return reparentEntity(context, request.arguments);
-    case "delete_entity":
-      return deleteEntity(context, request.arguments);
-    case "create_empty_entity":
-      return createEmptyEntity(context, request.arguments);
-    case "list_interactivity_operations":
-      return listInteractivityOperations(context);
-    case "get_interactivity_asset":
-      return getInteractivityAsset(context, request.arguments);
-    case "create_interactivity_asset":
-      return createInteractivityAsset(context, request.arguments);
-    case "add_interactivity_node":
-      return addInteractivityNode(context, request.arguments);
-    case "connect_interactivity_nodes":
-      return connectInteractivityNodes(context, request.arguments);
-    case "set_interactivity_value":
-      return setInteractivityValue(context, request.arguments);
-    case "set_interactivity_configuration":
-      return setInteractivityConfiguration(context, request.arguments);
-    case "configure_interactivity_material_pointer":
-      return configureInteractivityMaterial(context, request.arguments);
-    case "disconnect_interactivity_socket":
-      return disconnectInteractivitySocket(context, request.arguments);
-    case "delete_interactivity_node":
-      return deleteInteractivityNode(context, request.arguments);
-    case "validate_interactivity_asset":
-      return validateInteractivityAsset(context, request.arguments);
-  }
+  return XRIFT_MCP_DOCUMENT_TOOL_HANDLERS[request.tool](
+    context,
+    request.arguments,
+  );
 }
 
 function readScriptingCapabilities(
