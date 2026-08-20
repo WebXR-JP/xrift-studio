@@ -32,6 +32,7 @@ import {
   type ResolvedWind,
   type SkyShaderCatalogEntry,
   type WaterShaderCatalogEntry,
+  type GlowFixtureShape,
   type GlowMaterialPreset,
   type TerrainPreset,
   type VisualProjectKind,
@@ -107,6 +108,7 @@ export function ExternalAssetStoreDialog({
     grassPresetId: string | null,
   ) => Promise<TerrainPresetInstallResult>;
   onAddGlowMaterial: (
+    shape: GlowFixtureShape,
     preset: GlowMaterialPreset,
   ) => Promise<GlowMaterialInstallResult>;
   /** Whether this Scene will bloom, so the glow shelf can say if it will not. */

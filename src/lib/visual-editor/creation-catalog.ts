@@ -42,6 +42,9 @@ export const BUILTIN_PRIMITIVE_CREATION_IDS = {
   cone: "builtin-primitive/cone",
   plane: "builtin-primitive/plane",
   glowCube: "builtin-primitive/glow-cube",
+  glowPanel: "builtin-primitive/glow-panel",
+  glowTube: "builtin-primitive/glow-tube",
+  glowBulb: "builtin-primitive/glow-bulb",
   backdropCard: "builtin-primitive/backdrop-card",
   grassCard: "builtin-primitive/grass-card",
 } as const;
@@ -104,6 +107,62 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
       },
       // A light source that also darkens what is behind it looks wrong, and a
       // fixture is usually placed out of reach.
+      castShadow: false,
+      receiveShadow: false,
+      addCollider: false,
+    },
+  ),
+  createDefinition(
+    BUILTIN_PRIMITIVE_CREATION_IDS.glowPanel,
+    "光るパネル",
+    "面で照らす板状の光。天井や壁に埋め込む面光源として",
+    "plane",
+    "#ffedd5",
+    BUILTIN_ASSET_IDS.material.glow,
+    {
+      // Lies flat and faces down, the way a ceiling panel does.
+      defaultTransform: {
+        position: [0, 2.8, 0],
+        rotation: [Math.PI / 2, 0, 0],
+        scale: [2, 1, 1],
+      },
+      castShadow: false,
+      receiveShadow: false,
+      addCollider: false,
+    },
+  ),
+  createDefinition(
+    BUILTIN_PRIMITIVE_CREATION_IDS.glowTube,
+    "光るチューブ",
+    "細長い蛍光灯のような光。通路や什器の縁に沿わせて",
+    "cylinder",
+    "#e0f2fe",
+    BUILTIN_ASSET_IDS.material.glow,
+    {
+      // Laid on its side so it reads as a tube rather than a pillar.
+      defaultTransform: {
+        position: [0, 2.6, 0],
+        rotation: [0, 0, Math.PI / 2],
+        scale: [0.06, 2.4, 0.06],
+      },
+      castShadow: false,
+      receiveShadow: false,
+      addCollider: false,
+    },
+  ),
+  createDefinition(
+    BUILTIN_PRIMITIVE_CREATION_IDS.glowBulb,
+    "光る球",
+    "電球のような点の光。ランプや吊り下げ照明の芯に",
+    "sphere",
+    "#ffedd5",
+    BUILTIN_ASSET_IDS.material.glow,
+    {
+      defaultTransform: {
+        position: [0, 2.2, 0],
+        rotation: [0, 0, 0],
+        scale: [0.22, 0.22, 0.22],
+      },
       castShadow: false,
       receiveShadow: false,
       addCollider: false,

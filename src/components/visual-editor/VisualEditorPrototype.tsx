@@ -160,11 +160,11 @@ import {
   type XriftComponentDefinition,
   mcpTextureImportSettingsPatch,
   describeVisualUploadCapabilities,
-  BUILTIN_PRIMITIVE_CREATION_IDS,
   createGlowMaterialAsset,
   ensureBuiltinMaterialAsset,
   glowMaterialAssetId,
   sceneBloomIsActive,
+  type GlowFixtureShape,
   type GlowMaterialPreset,
   type MaterialAsset,
   xriftMcpToolSurface,
@@ -5643,20 +5643,21 @@ export function VisualEditorPrototype({
 
   const handleAddGlowMaterial = useCallback(
     async (
+      shape: GlowFixtureShape,
       preset: GlowMaterialPreset,
     ): Promise<GlowMaterialInstallResult> => {
-      // Placing goes through the Create menu path, so a glow cube from the
-      // store and one from the menu are the same Entity. Only the Material
-      // differs, and that difference travels with the preset.
+      // Placing goes through the Create menu path, so a fixture from the store
+      // and one from the menu are the same Entity. Only the Material differs,
+      // and that difference travels with the tint.
       handlePlacePrimitive(
-        BUILTIN_PRIMITIVE_CREATION_IDS.glowCube,
+        shape.creationId,
         undefined,
         glowMaterialAssetId(preset.id) === BUILTIN_ASSET_IDS.material.glow
           ? undefined
           : createGlowMaterialAsset(preset),
       );
       setExternalStoreOpen(false);
-      return { entityName: `${preset.label}の光るキューブ` };
+      return { entityName: `${preset.label}の光る${shape.label}` };
     },
     [handlePlacePrimitive],
   );

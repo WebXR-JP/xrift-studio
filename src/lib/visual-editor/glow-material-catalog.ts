@@ -3,6 +3,7 @@ import {
   type MaterialAsset,
 } from "./asset-manifest";
 import { BUILTIN_ASSET_IDS } from "./builtin-asset-ids";
+import { BUILTIN_PRIMITIVE_CREATION_IDS } from "./creation-catalog";
 import { DEFAULT_SCENE_SETTINGS } from "./scene-settings";
 
 /**
@@ -46,6 +47,74 @@ export const GLOW_MATERIAL_PRESETS: readonly GlowMaterialPreset[] = [
     tint: "#f0abfc",
   },
 ];
+
+/**
+ * The shapes the glow shelf offers.
+ *
+ * Shape and colour are separate choices: a tube in warm white and a tube in
+ * cyan are the same fixture, so pairing every shape with every tint would turn
+ * four decisions into sixteen cards. The shelf lists shapes and lets the tint
+ * be chosen alongside, the way the Terrain shelf lists terrains and lets the
+ * grass be chosen.
+ */
+export type GlowFixtureShape = {
+  id: string;
+  label: string;
+  description: string;
+  /** Creation the shelf places, shared with the Create menu. */
+  creationId: string;
+  /** Preview geometry, matching the creation's primitive. */
+  preview: "box" | "plane" | "cylinder" | "sphere";
+  /** Preview scale, so a card shows the proportions the fixture is placed at. */
+  previewScale: readonly [number, number, number];
+  /** Tint the shape reads best in, used until the author picks another. */
+  defaultTintId: string;
+};
+
+export const GLOW_FIXTURE_SHAPES: readonly GlowFixtureShape[] = [
+  {
+    id: "cube",
+    label: "キューブ",
+    description: "どこにでも置ける基本の発光体。手軽な間接照明として",
+    creationId: BUILTIN_PRIMITIVE_CREATION_IDS.glowCube,
+    preview: "box",
+    previewScale: [1, 1, 1],
+    defaultTintId: "warm-white",
+  },
+  {
+    id: "panel",
+    label: "パネル",
+    description: "面で照らす板状の光。天井や壁に埋め込む面光源として",
+    creationId: BUILTIN_PRIMITIVE_CREATION_IDS.glowPanel,
+    preview: "plane",
+    previewScale: [1.8, 1, 1],
+    defaultTintId: "warm-white",
+  },
+  {
+    id: "tube",
+    label: "チューブ",
+    description: "細長い蛍光灯のような光。通路や什器の縁に沿わせて",
+    creationId: BUILTIN_PRIMITIVE_CREATION_IDS.glowTube,
+    preview: "cylinder",
+    previewScale: [0.09, 2.2, 0.09],
+    defaultTintId: "cool-white",
+  },
+  {
+    id: "bulb",
+    label: "球",
+    description: "電球のような点の光。ランプや吊り下げ照明の芯に",
+    creationId: BUILTIN_PRIMITIVE_CREATION_IDS.glowBulb,
+    preview: "sphere",
+    previewScale: [0.5, 0.5, 0.5],
+    defaultTintId: "warm-white",
+  },
+];
+
+export function getGlowFixtureShape(
+  shapeId: string,
+): GlowFixtureShape | undefined {
+  return GLOW_FIXTURE_SHAPES.find((shape) => shape.id === shapeId);
+}
 
 /** Rec. 709 relative luminance of an sRGB hex, in linear light. */
 export function tintRelativeLuminance(tint: string): number {

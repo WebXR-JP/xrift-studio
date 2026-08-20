@@ -99,15 +99,15 @@ export const EXTERNAL_STORE_PROVIDERS = [
   {
     id: "xrift-glow-materials",
     kind: "glow-material",
-    name: "光るキューブ",
+    name: "光る照明",
     badge: "Official",
-    summary: "Bloomで光るMaterialを追加",
+    summary: "Bloomで光る照明を追加",
     homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
     catalogKinds: [],
     installableKinds: [],
     authorFallback: "XRift Studio contributors",
     attributionNote:
-      "発光するPBR Materialです。Scene設定のBloomが拾う明るさで置きます。",
+      "発光するPBR Materialです。Scene設定のBloomが拾う明るさで置きます。形と色は別に選べます。",
   },
   {
     id: "xrift-components",
