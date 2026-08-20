@@ -2,11 +2,33 @@ import {
   ASSET_MANIFEST_SCHEMA_VERSION,
   type AssetManifest,
 } from "./asset-manifest";
+import { safeIdSegment } from "./document-id";
 import { expandGltfAssets, type GltfJson } from "./gltf-derived-assets";
 import { assetManifestCodec } from "./serialization";
 
+/**
+ * Derived Asset ids are built from the Model's Asset id, which ends in the
+ * source hash that makes it unique. A private copy of this sanitizer used to
+ * strip everything after the last dot, so two Models whose file names carried a
+ * dot — `chair.v2.glb` and `chair.v3.glb` — both collapsed to `model-chair` and
+ * their derived Textures collided on one id.
+ */
+function assertModelAssetIdSegmentsStayUnique(): void {
+  const first = safeIdSegment("model-chair.v2-9f13c0a8b2d1");
+  const second = safeIdSegment("model-chair.v3-4b7e51d9c063");
+  assert(
+    first === "model-chair.v2-9f13c0a8b2d1",
+    `Model Asset id segment was shortened: ${first}`,
+  );
+  assert(
+    first !== second,
+    "Two Models differing only after a dot produced the same id segment",
+  );
+}
+
 /** Filesystem-free assertions for embedded glTF Material/Texture expansion. */
 export async function runGltfDerivedAssetFixtureAssertions(): Promise<void> {
+  assertModelAssetIdSegmentsStayUnique();
   const image = pngFixture();
   const json: GltfJson = {
     asset: { version: "2.0" },

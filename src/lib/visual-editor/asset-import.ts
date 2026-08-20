@@ -1,3 +1,4 @@
+import { safeIdSegment } from "./document-id";
 import { isRecord } from "../json-guards";
 import {
   ACESFilmicToneMapping,
@@ -2479,7 +2480,7 @@ function createModelFolderPlan(
     const modelFolder = ensureImportFolder(
       knownFolders,
       created,
-      `folder-${safeSegment(modelAssetId)}`,
+      `folder-${safeIdSegment(modelAssetId)}`,
       modelName,
       requestedParentId,
     );
@@ -2490,14 +2491,14 @@ function createModelFolderPlan(
   const materialFolder = ensureImportFolder(
     knownFolders,
     created,
-    `folder-${safeSegment(modelAssetId)}-materials`,
+    `folder-${safeIdSegment(modelAssetId)}-materials`,
     childParentId ? "Materials" : `${modelName} Materials`,
     childParentId,
   );
   const textureFolder = ensureImportFolder(
     knownFolders,
     created,
-    `folder-${safeSegment(modelAssetId)}-textures`,
+    `folder-${safeIdSegment(modelAssetId)}-textures`,
     childParentId ? "Textures" : `${modelName} Textures`,
     childParentId,
   );
@@ -2552,7 +2553,7 @@ function createSourceDestination(
   sourceHash: string,
   extension: string,
 ): string {
-  const stem = safeSegment(removeExtension(fileName));
+  const stem = safeIdSegment(removeExtension(fileName));
   const destination = `assets/imported/${category}/${sourceHash.slice(0, 16)}/${stem}.${extension}`;
   if (!isSafeAssetImportDestination(destination)) {
     throw new Error("Unable to create a safe asset destination");
@@ -2565,7 +2566,7 @@ function createImportedAssetId(
   fileName: string,
   sourceHash: string,
 ): string {
-  return `${kind}-${safeSegment(removeExtension(fileName))}-${sourceHash.slice(0, 12)}`;
+  return `${kind}-${safeIdSegment(removeExtension(fileName))}-${sourceHash.slice(0, 12)}`;
 }
 
 function normalizedDisplayName(value: string | undefined, fileName: string): string {
@@ -2657,17 +2658,6 @@ function removeExtension(value: string): string {
   const leaf = leafFileName(value);
   const index = leaf.lastIndexOf(".");
   return index > 0 ? leaf.slice(0, index) : leaf;
-}
-
-function safeSegment(value: string): string {
-  return (
-    value
-      .normalize("NFKC")
-      .trim()
-      .replace(/[^a-zA-Z0-9._-]+/g, "-")
-      .replace(/^[.-]+|[.-]+$/g, "")
-      .slice(0, 80) || "asset"
-  );
 }
 
 function vectorTuple(value: Vector3): [number, number, number] {

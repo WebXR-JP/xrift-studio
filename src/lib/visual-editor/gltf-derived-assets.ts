@@ -1,3 +1,4 @@
+import { safeIdSegment } from "./document-id";
 import { errorMessage } from "../json-guards";
 import {
   normalizeMaterialProperties,
@@ -381,7 +382,7 @@ function expandOpenBrushTextures(
     }
     const extension = openBrushTextureFormat(builtinKey);
     const asset: TextureAsset = {
-      id: reused?.id ?? `texture-${safeSegment(input.modelAssetId)}-${textureIndex}`,
+      id: reused?.id ?? `texture-${safeIdSegment(input.modelAssetId)}-${textureIndex}`,
       name: reused?.name ?? cleanName(stringValue(texture.name), openBrushTextureName(builtinKey)),
       kind: "texture",
       status: "ready",
@@ -513,7 +514,7 @@ function createExpandedTexture(
   }
   const id =
     reused?.id ??
-    `texture-${safeSegment(input.modelAssetId)}-${textureIndex >= 0 ? textureIndex : `image-${image.index}`}`;
+    `texture-${safeIdSegment(input.modelAssetId)}-${textureIndex >= 0 ? textureIndex : `image-${image.index}`}`;
   const importSettings =
     previous?.importedFromModel?.isUserOverridden
       ? previous.importSettings
@@ -602,7 +603,7 @@ function expandMaterials(
     return {
       id:
         previous?.id ??
-        `material-${safeSegment(input.modelAssetId)}-${materialIndex}`,
+        `material-${safeIdSegment(input.modelAssetId)}-${materialIndex}`,
       name: previous?.name ?? sourceName,
       kind: "material",
       status: "ready",
@@ -1060,16 +1061,6 @@ function stringValue(value: unknown): string | undefined {
 
 function cleanName(value: string | undefined, fallback: string): string {
   return value?.trim() || fallback;
-}
-
-function safeSegment(value: string): string {
-  const normalized = value
-    .trim()
-    .replace(/\.[^.]+$/, "")
-    .replace(/[^a-z0-9._-]+/gi, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-  return normalized || "asset";
 }
 
 function hasBytes(bytes: Uint8Array, expected: readonly number[]): boolean {
