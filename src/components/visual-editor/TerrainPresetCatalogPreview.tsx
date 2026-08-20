@@ -6,6 +6,7 @@ import {
   createTerrainFromPreset,
   createTerrainMeshBuffers,
   resolveSceneWind,
+  type ResolvedSceneLighting,
   type ResolvedWind,
   type TerrainGeometry,
   type TerrainPreset,
@@ -18,6 +19,15 @@ import { TerrainGrassVisual } from "./TerrainGrassVisual";
  * not the Terrain's own.
  */
 const PREVIEW_GRASS_INSTANCES = 2500;
+
+/** The card lights itself, so grass reads the way it will in a lit Scene. */
+const PREVIEW_LIGHTING: ResolvedSceneLighting = {
+  sunDirection: [0.42, 0.67, 0.61],
+  sunColor: [1, 0.97, 0.9],
+  sunIntensity: 1.6,
+  ambientColor: [1, 1, 1],
+  ambientIntensity: 0.55,
+};
 
 /**
  * Renders a Terrain preset from the real height field and the real grass
@@ -115,6 +125,7 @@ function TerrainPresetSurface({
           terrain={terrain}
           layer={layer}
           wind={wind}
+          lighting={PREVIEW_LIGHTING}
           maxInstances={PREVIEW_GRASS_INSTANCES}
         />
       ))}

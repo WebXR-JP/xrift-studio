@@ -9,6 +9,7 @@ import {
   Matrix4,
   ShaderMaterial,
   Vector2,
+  Vector3,
 } from "three";
 import {
   TERRAIN_GRASS_FRAGMENT_SHADER,
@@ -17,6 +18,7 @@ import {
   createTerrainGrassBladeBuffers,
   generateTerrainGrassInstances,
   getTerrainGrassType,
+  type ResolvedSceneLighting,
   type ResolvedWind,
   type TerrainGeometry,
   type TerrainGrassLayer,
@@ -34,11 +36,14 @@ export function TerrainGrassVisual({
   terrain,
   layer,
   wind,
+  lighting,
   maxInstances = TERRAIN_GRASS_MAX_INSTANCES,
 }: {
   terrain: TerrainGeometry;
   layer: TerrainGrassLayer;
   wind: ResolvedWind;
+  /** The Scene's key light, so grass shades with the ground it stands on. */
+  lighting: ResolvedSceneLighting;
   maxInstances?: number;
 }) {
   const type = getTerrainGrassType(layer.typeId);
@@ -60,6 +65,11 @@ export function TerrainGrassVisual({
       uniforms: {
         uBaseColor: { value: new Color(type.baseColor) },
         uTipColor: { value: new Color(type.tipColor) },
+        uSunDirection: { value: new Vector3(...lighting.sunDirection) },
+        uSunColor: { value: new Color(...lighting.sunColor) },
+        uSunIntensity: { value: lighting.sunIntensity },
+        uAmbientColor: { value: new Color(...lighting.ambientColor) },
+        uAmbientIntensity: { value: lighting.ambientIntensity },
         uHeight: { value: type.height },
         uWidth: { value: type.width },
         uSway: { value: type.sway },

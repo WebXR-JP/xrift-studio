@@ -55,6 +55,7 @@ uniform vec2 uWindDirection;
 uniform float uWindSpeed;
 uniform float uWindTurbulence;
 uniform float uTime;
+uniform vec3 uSunDirection;
 varying float vHeightFraction;
 varying float vShade;
 
@@ -100,7 +101,7 @@ void main() {
   // A cheap wrap-around shade so a dense field still has form. Blades are
   // unlit otherwise and would read as flat cut-outs.
   vec3 faceNormal = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * vec3(position.x, 0.35, position.z));
-  vShade = 0.65 + 0.35 * clamp(dot(faceNormal, normalize(vec3(0.4, 0.8, 0.3))), 0.0, 1.0);
+  vShade = 0.65 + 0.35 * clamp(dot(faceNormal, normalize(uSunDirection)), 0.0, 1.0);
   gl_Position = projectionMatrix * viewMatrix * worldPosition;
 }`;
 
@@ -108,10 +109,16 @@ export const TERRAIN_GRASS_FRAGMENT_SHADER = `uniform vec3 uBaseColor;
 uniform vec3 uTipColor;
 varying float vHeightFraction;
 varying float vShade;
+uniform vec3 uSunColor;
+uniform float uSunIntensity;
+uniform vec3 uAmbientColor;
+uniform float uAmbientIntensity;
 
 void main() {
   vec3 color = mix(uBaseColor, uTipColor, vHeightFraction * vHeightFraction);
-  gl_FragColor = vec4(color * vShade, 1.0);
+  vec3 light =
+    uAmbientColor * uAmbientIntensity + uSunColor * uSunIntensity;
+  gl_FragColor = vec4(color * vShade * light, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;

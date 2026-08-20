@@ -837,6 +837,7 @@ function TerrainGrassLayers({
   style: SceneViewportMaterialStyle;
 }) {
   const wind = useContext(SceneWindContext);
+  const lighting = useContext(SceneLightingContext);
   if (style === "wireframe" || style === "collider-wireframe" || style === "ghost") {
     return null;
   }
@@ -848,6 +849,7 @@ function TerrainGrassLayers({
           terrain={terrain}
           layer={layer}
           wind={wind}
+          lighting={lighting}
         />
       ))}
     </>
@@ -3499,12 +3501,17 @@ export function SceneViewport({
     () => resolveSceneLighting(scene, sceneSettings.ambient),
     [scene, sceneSettings.ambient],
   );
+  // Whether the author has given this Scene a key light of its own.
+  const sceneLightsItself = viewportLighting.sunIntensity > 0;
   const effectiveDisplayMode = editorMode === "play" ? "scene" : displayMode;
   const colliderOnlyEdit = effectiveDisplayMode === "colliders";
   const renderDisplayMode = thumbnailCaptureActive ? "scene" : effectiveDisplayMode;
   const displayProfile = useMemo(
     () => {
       const profile = getSceneViewportDisplayProfile(renderDisplayMode);
+      // `editorMode` belongs here: `renderDisplayMode` only changes on entering
+      // Play when the author was in a debug view, so leaving it out kept the
+      // editor light burning through Play in the ordinary case.
       return thumbnailCaptureActive || editorMode === "play"
         ? {
             ...profile,
@@ -3513,7 +3520,7 @@ export function SceneViewport({
           }
         : profile;
     },
-    [renderDisplayMode, thumbnailCaptureActive],
+    [editorMode, renderDisplayMode, thumbnailCaptureActive],
   );
   const runtimeSpawn = useMemo(
     () => resolveRuntimeSpawn(preview.scene),
@@ -4557,7 +4564,15 @@ export function SceneViewport({
               intensity={sceneSettings.ambient.intensity}
             />
           ) : null}
-          {displayProfile.showEditorLighting ? (
+          {displayProfile.showEditorLighting && !sceneLightsItself ? (
+            // Stands in only while the Scene has no light of its own.
+            //
+            // This used to burn alongside the author's lights, so setting up
+            // lighting changed almost nothing on screen — a fixed 1.35 key from
+            // the upper right drowned it — and then Play, which drops this
+            // light, looked like a different room. A Scene that lights itself
+            // now gets exactly its own light, in Edit and in Play alike.
+            //
             // The shadow camera must cover the whole authoring area: a
             // directional light's default frustum is only ±5m, so anything
             // larger — a preset Terrain most of all — showed a sharp square

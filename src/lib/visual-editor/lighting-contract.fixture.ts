@@ -6,6 +6,10 @@ import {
 } from "./lighting-contract";
 import { WATER_SHADER_CATALOG } from "./water-shader-catalog";
 import {
+  TERRAIN_GRASS_FRAGMENT_SHADER,
+  TERRAIN_GRASS_VERTEX_SHADER,
+} from "./terrain-grass-runtime";
+import {
   SCENE_DOCUMENT_SCHEMA_VERSION,
   createTransformComponent,
 } from "./scene-document";
@@ -133,6 +137,38 @@ export function runLightingContractFixtureAssertions(): void {
       `Water preset ${entry.id} still carries its own sun angles`,
     );
   }
+
+  // Grass had its own baked-in sun too — `vec3(0.4, 0.8, 0.3)` in the vertex
+  // shader — so a field stayed lit from the north-west no matter where the
+  // Scene's light was, and stayed at one brightness beside ground that
+  // responded. Both shaders must now read the contract.
+  assert(
+    TERRAIN_GRASS_VERTEX_SHADER.includes("uniform vec3 uSunDirection;"),
+    "The grass vertex shader does not declare the Scene's key light",
+  );
+  assert(
+    TERRAIN_GRASS_VERTEX_SHADER.includes("normalize(uSunDirection)"),
+    "The grass vertex shader does not shade from the Scene's key light",
+  );
+  assert(
+    !TERRAIN_GRASS_VERTEX_SHADER.includes("vec3(0.4, 0.8, 0.3)"),
+    "The grass vertex shader still carries its own sun direction",
+  );
+  for (const declaration of [
+    "uniform vec3 uSunColor;",
+    "uniform float uSunIntensity;",
+    "uniform vec3 uAmbientColor;",
+    "uniform float uAmbientIntensity;",
+  ]) {
+    assert(
+      TERRAIN_GRASS_FRAGMENT_SHADER.includes(declaration),
+      `The grass fragment shader is missing ${declaration}`,
+    );
+  }
+  assert(
+    TERRAIN_GRASS_FRAGMENT_SHADER.includes("vShade * light"),
+    "The grass fragment shader does not apply the Scene's light",
+  );
 
   // A shader that declares none of the uniforms receives nothing, so the
   // compiler never writes a uniform the GLSL cannot read.

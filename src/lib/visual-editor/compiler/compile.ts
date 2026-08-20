@@ -2367,6 +2367,12 @@ function renderTerrainGrassLayers(
     (component): component is Extract<typeof component, { type: "vegetation-wind" }> =>
       component.type === "vegetation-wind",
   );
+  // Grass shades from the same key light the ground does, resolved once at
+  // compile time through the lighting contract.
+  const grassLighting = resolveSceneLighting(
+    context.scene,
+    resolveSceneSettings(context.scene.settings).ambient,
+  );
   const wind = resolveSceneWind(
     resolveSceneSettings(context.scene.settings).vegetation,
     entityWind,
@@ -2402,7 +2408,7 @@ function renderTerrainGrassLayers(
         wind.direction[1],
       )}], speed: ${formatNumber(wind.speed)}, turbulence: ${formatNumber(
         wind.turbulence,
-      )} }} />`,
+      )} }} lighting={${JSON.stringify(grassLighting)}} />`,
     );
   }
   if (jsx.length === 0) return "";
@@ -2445,7 +2451,14 @@ const XRiftStudioTerrainGrass: FC<{
   layerIndex: number;
   type: XRiftStudioTerrainGrassTypeProps;
   wind: { direction: [number, number]; speed: number; turbulence: number };
-}> = ({ terrain, layerIndex, type, wind }) => {
+  lighting: {
+    sunDirection: [number, number, number];
+    sunColor: [number, number, number];
+    sunIntensity: number;
+    ambientColor: [number, number, number];
+    ambientIntensity: number;
+  };
+}> = ({ terrain, layerIndex, type, wind, lighting }) => {
   const layer = terrain.grass?.[layerIndex];
   const meshRef = useRef<InstancedMesh>(null);
   const placement = useMemo(
@@ -2481,6 +2494,11 @@ const XRiftStudioTerrainGrass: FC<{
           uWindDirection: { value: new Vector2(wind.direction[0], wind.direction[1]) },
           uWindSpeed: { value: wind.speed },
           uWindTurbulence: { value: wind.turbulence },
+          uSunDirection: { value: new Vector3(...lighting.sunDirection) },
+          uSunColor: { value: new Color(...lighting.sunColor) },
+          uSunIntensity: { value: lighting.sunIntensity },
+          uAmbientColor: { value: new Color(...lighting.ambientColor) },
+          uAmbientIntensity: { value: lighting.ambientIntensity },
           uTime: { value: 0 },
         },
         vertexShader: XRIFT_TERRAIN_GRASS_VERTEX_SHADER,
