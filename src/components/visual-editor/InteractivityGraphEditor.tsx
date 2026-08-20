@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   Controls,
@@ -7,37 +7,47 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
+  useNodesState,
+  useReactFlow,
   type Connection,
   type Edge,
   type Node,
   type NodeProps,
-  useNodesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
   cloneKhrInteractivityExtension,
   configureInteractivityMaterialPointer,
+  appendInteractivityOperation,
   getInteractivityOperationTemplate,
+  INTERACTIVITY_RECIPES,
   KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS,
   KHR_INTERACTIVITY_OPERATION_TEMPLATES,
+  linearRgbToTint,
   parseKhrInteractivityExtension,
   readInteractivityNodePosition,
+  setInteractivityLiteralValue,
+  tintToLinearRgb,
   validateKhrInteractivityExtension,
   writeInteractivityNodePosition,
   type InteractivityAsset,
   type InteractivityOperationTemplate,
+  type InteractivityRecipe,
   type KhrInteractivityExtension,
   type KhrInteractivityGraph,
+  type KhrInteractivityJsonValue,
   type KhrInteractivityNode,
   type MaterialAsset,
 } from "../../lib/visual-editor";
 import { EDITOR_ICONS } from "./editor-icons";
 
+type GraphNodeCategory = InteractivityOperationTemplate["category"] | "extension";
+
 type GraphNodeData = {
   index: number;
   op: string;
   label: string;
-  category: InteractivityOperationTemplate["category"] | "extension";
+  category: GraphNodeCategory;
   flowInputs: string[];
   flowOutputs: string[];
   valueInputs: string[];
@@ -46,44 +56,134 @@ type GraphNodeData = {
 
 type GraphFlowNode = Node<GraphNodeData, "interactivity">;
 
-const CATEGORY_CLASS: Record<GraphNodeData["category"], string> = {
-  event: "border-sky-400 bg-sky-50",
-  flow: "border-violet-400 bg-violet-50",
-  animation: "border-emerald-400 bg-emerald-50",
-  variable: "border-amber-400 bg-amber-50",
-  pointer: "border-cyan-400 bg-cyan-50",
-  math: "border-slate-400 bg-slate-50",
-  extension: "border-fuchsia-400 bg-fuchsia-50",
+/**
+ * Node colours for a dark canvas.
+ *
+ * These were the light Tailwind steps (`bg-sky-50` and friends) while the
+ * canvas sits at `slate-900` under `colorMode="dark"`, so every card glowed
+ * white against it and the whole editor read as a different application from
+ * the rest of Studio. The hue still carries the category; only the value
+ * changed, so a graph an author already knows stays recognisable.
+ */
+const CATEGORY_CLASS: Record<GraphNodeCategory, string> = {
+  event: "border-sky-500/70 bg-sky-950 text-sky-50",
+  flow: "border-violet-500/70 bg-violet-950 text-violet-50",
+  animation: "border-emerald-500/70 bg-emerald-950 text-emerald-50",
+  variable: "border-amber-500/70 bg-amber-950 text-amber-50",
+  pointer: "border-cyan-500/70 bg-cyan-950 text-cyan-50",
+  math: "border-slate-500/70 bg-slate-800 text-slate-50",
+  extension: "border-fuchsia-500/70 bg-fuchsia-950 text-fuchsia-50",
 };
 
+/** The same hues as flat colours, so the minimap is a map and not a legend of its own. */
+const CATEGORY_MINIMAP_COLOR: Record<GraphNodeCategory, string> = {
+  event: "#0284c7",
+  flow: "#7c3aed",
+  animation: "#059669",
+  variable: "#d97706",
+  pointer: "#0891b2",
+  math: "#475569",
+  extension: "#c026d3",
+};
+
+const CATEGORY_LABEL: Record<GraphNodeCategory, string> = {
+  event: "イベント",
+  flow: "フロー",
+  animation: "アニメーション",
+  variable: "変数",
+  pointer: "glTFプロパティ",
+  math: "数値",
+  extension: "拡張",
+};
+
+const PALETTE_CATEGORY_ORDER: readonly GraphNodeCategory[] = [
+  "event",
+  "flow",
+  "animation",
+  "pointer",
+  "variable",
+  "math",
+];
+
+const FLOW_SOCKET_COLOR = "#a78bfa";
+const VALUE_SOCKET_COLOR = "#22d3ee";
+
+const SOCKET_ROW_HEIGHT = 24;
+const SOCKET_ROW_PADDING = 8;
+
+/**
+ * Where a socket handle sits inside the node body.
+ *
+ * This has to agree with the row layout below it, not with a constant tuned by
+ * eye: a handle that floats away from the label it belongs to is what makes an
+ * author drag a wire into the wrong socket.
+ */
 function socketTop(index: number): number {
-  return 68 + index * 24;
+  return SOCKET_ROW_PADDING + index * SOCKET_ROW_HEIGHT + SOCKET_ROW_HEIGHT / 2;
 }
+
+/**
+ * How the canvas moves under the pointer.
+ *
+ * Wheel and trackpad pan; Ctrl and wheel zooms. The library default is the
+ * opposite, so scrolling to look at the next node pushed the whole graph into
+ * the distance instead of moving the canvas, which is the single thing that
+ * made this editor feel like it was fighting the author.
+ */
+const CANVAS_NAVIGATION = {
+  panOnScroll: true,
+  panOnDrag: true,
+  zoomOnScroll: false,
+  zoomOnPinch: true,
+  zoomOnDoubleClick: false,
+  minZoom: 0.2,
+  maxZoom: 2,
+} as const;
 
 function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNode>) {
   return (
     <article
       className={`min-w-56 rounded-lg border-2 shadow-lg ${CATEGORY_CLASS[data.category]} ${
-        selected ? "ring-2 ring-brand-400 ring-offset-2" : ""
+        selected ? "ring-2 ring-brand-400 ring-offset-2 ring-offset-slate-900" : ""
       }`}
     >
-      <header className="rounded-t-md border-b border-black/10 px-3 py-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-          {data.category}
+      <header className="rounded-t-md border-b border-white/10 px-3 py-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] opacity-60">
+          {CATEGORY_LABEL[data.category]}
         </p>
-        <p className="mt-0.5 text-sm font-bold text-slate-900">{data.label}</p>
-        <code className="text-[10px] text-slate-500">{data.op}</code>
+        <p className="mt-0.5 text-sm font-bold">{data.label}</p>
+        <code className="text-[10px] opacity-60">{data.op}</code>
       </header>
-      <div className="relative min-h-16 px-3 py-2 text-[11px] text-slate-600">
+      <div className="relative min-h-16 px-3 py-2 text-[11px]">
         <div className="grid grid-cols-2 gap-x-6">
           <div>
-            {[...data.flowInputs, ...data.valueInputs].map((socket) => (
-              <p key={`in-${socket}`} className="h-6 truncate text-left">{socket}</p>
+            {data.flowInputs.map((socket) => (
+              <p
+                key={`flow-in-${socket}`}
+                className="h-6 truncate text-left font-semibold text-violet-200"
+              >
+                {socket}
+              </p>
+            ))}
+            {data.valueInputs.map((socket) => (
+              <p key={`value-in-${socket}`} className="h-6 truncate text-left text-cyan-200">
+                {socket}
+              </p>
             ))}
           </div>
           <div>
-            {[...data.flowOutputs, ...data.valueOutputs].map((socket) => (
-              <p key={`out-${socket}`} className="h-6 truncate text-right">{socket}</p>
+            {data.flowOutputs.map((socket) => (
+              <p
+                key={`flow-out-${socket}`}
+                className="h-6 truncate text-right font-semibold text-violet-200"
+              >
+                {socket}
+              </p>
+            ))}
+            {data.valueOutputs.map((socket) => (
+              <p key={`value-out-${socket}`} className="h-6 truncate text-right text-cyan-200">
+                {socket}
+              </p>
             ))}
           </div>
         </div>
@@ -93,7 +193,7 @@ function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNode>) {
             id={`flow-in:${socket}`}
             type="target"
             position={Position.Left}
-            style={{ top: socketTop(index), width: 10, height: 10, background: "#7c3aed" }}
+            style={{ top: socketTop(index), width: 10, height: 10, background: FLOW_SOCKET_COLOR }}
           />
         ))}
         {data.valueInputs.map((socket, index) => (
@@ -107,7 +207,7 @@ function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNode>) {
               width: 10,
               height: 10,
               borderRadius: 2,
-              background: "#0891b2",
+              background: VALUE_SOCKET_COLOR,
             }}
           />
         ))}
@@ -117,7 +217,7 @@ function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNode>) {
             id={`flow-out:${socket}`}
             type="source"
             position={Position.Right}
-            style={{ top: socketTop(index), width: 10, height: 10, background: "#7c3aed" }}
+            style={{ top: socketTop(index), width: 10, height: 10, background: FLOW_SOCKET_COLOR }}
           />
         ))}
         {data.valueOutputs.map((socket, index) => (
@@ -131,7 +231,7 @@ function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNode>) {
               width: 10,
               height: 10,
               borderRadius: 2,
-              background: "#0891b2",
+              background: VALUE_SOCKET_COLOR,
             }}
           />
         ))}
@@ -193,7 +293,7 @@ function toFlowEdges(graph: KhrInteractivityGraph): Edge[] {
         targetHandle: `flow-in:${target.socket ?? "in"}`,
         type: "smoothstep",
         animated: true,
-        style: { stroke: "#7c3aed", strokeWidth: 2 },
+        style: { stroke: FLOW_SOCKET_COLOR, strokeWidth: 2 },
       });
     }
   }
@@ -207,7 +307,7 @@ function toFlowEdges(graph: KhrInteractivityGraph): Edge[] {
         sourceHandle: `value-out:${input.socket ?? "value"}`,
         targetHandle: `value-in:${socket}`,
         type: "smoothstep",
-        style: { stroke: "#0891b2", strokeWidth: 2 },
+        style: { stroke: VALUE_SOCKET_COLOR, strokeWidth: 2 },
       });
     }
   }
@@ -219,17 +319,6 @@ function parseHandle(handle: string | null | undefined): [string, string] | null
   const separator = handle.indexOf(":");
   if (separator < 0) return null;
   return [handle.slice(0, separator), handle.slice(separator + 1)];
-}
-
-function ensureGraphTypes(graph: KhrInteractivityGraph): Record<string, number> {
-  graph.types ??= [];
-  const ensure = (signature: string) => {
-    const current = graph.types!.findIndex((type) => type.signature === signature);
-    if (current >= 0) return current;
-    graph.types!.push({ signature });
-    return graph.types!.length - 1;
-  };
-  return { float: ensure("float"), int: ensure("int"), bool: ensure("bool") };
 }
 
 function removeNodeAndReindex(
@@ -265,7 +354,138 @@ function removeNodeAndReindex(
   }
 }
 
-export function InteractivityGraphEditor({
+function numbersOf(value: KhrInteractivityJsonValue[] | undefined, length: number): number[] {
+  return Array.from({ length }, (_unused, index) => {
+    const entry = value?.[index];
+    return typeof entry === "number" && Number.isFinite(entry) ? entry : 0;
+  });
+}
+
+/**
+ * An editor for one literal socket value.
+ *
+ * Without this the only way to say which colour a `pointer/set` writes was to
+ * hand-edit the KHR JSON, which is what made the graph editor feel like a
+ * viewer rather than an editor.
+ */
+function LiteralValueField({
+  socket,
+  signature,
+  value,
+  isColor,
+  disabled,
+  onChange,
+}: {
+  socket: string;
+  signature: string | undefined;
+  value: KhrInteractivityJsonValue[] | undefined;
+  isColor: boolean;
+  disabled: boolean;
+  onChange: (next: KhrInteractivityJsonValue[]) => void;
+}) {
+  const length =
+    signature === "float2" ? 2 : signature === "float3" ? 3 : signature === "float4" ? 4 : 1;
+  const channels = numbersOf(value, length);
+  const alpha = signature === "float4" ? channels[3] : null;
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[10px] font-medium text-slate-300">{socket}</span>
+        <code className="text-[9px] text-slate-500">{signature ?? "型未設定"}</code>
+      </div>
+      {signature === "bool" ? (
+        <label className="flex items-center gap-2 text-[10px] text-slate-300">
+          <input
+            type="checkbox"
+            checked={value?.[0] === true}
+            disabled={disabled}
+            onChange={(event) => onChange([event.target.checked])}
+            className="h-3.5 w-3.5"
+          />
+          {value?.[0] === true ? "true" : "false"}
+        </label>
+      ) : isColor ? (
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={linearRgbToTint(channels)}
+            disabled={disabled}
+            onChange={(event) => {
+              const [red, green, blue] = tintToLinearRgb(event.target.value);
+              onChange(alpha === null ? [red, green, blue] : [red, green, blue, alpha]);
+            }}
+            className="h-7 w-10 shrink-0 cursor-pointer rounded border border-slate-600 bg-slate-950 disabled:opacity-45"
+            aria-label={`${socket} の色`}
+          />
+          <code className="text-[10px] text-slate-400">{linearRgbToTint(channels)}</code>
+          {alpha === null ? null : (
+            <label className="ml-auto flex items-center gap-1 text-[10px] text-slate-400">
+              A
+              <input
+                type="number"
+                min={0}
+                max={1}
+                step={0.05}
+                value={alpha}
+                disabled={disabled}
+                onChange={(event) => {
+                  const next = Number(event.target.value);
+                  if (!Number.isFinite(next)) return;
+                  onChange([
+                    channels[0],
+                    channels[1],
+                    channels[2],
+                    Math.min(1, Math.max(0, next)),
+                  ]);
+                }}
+                className="h-7 w-16 rounded border border-slate-600 bg-slate-950 px-1.5 text-[11px] disabled:opacity-45"
+              />
+            </label>
+          )}
+        </div>
+      ) : (
+        <div className="flex gap-1">
+          {channels.map((entry, index) => (
+            <input
+              key={index}
+              type="number"
+              step={signature === "int" ? 1 : 0.1}
+              value={entry}
+              disabled={disabled}
+              onChange={(event) => {
+                const next = Number(event.target.value);
+                if (!Number.isFinite(next)) return;
+                const channel = signature === "int" ? Math.round(next) : next;
+                onChange(channels.map((prior, at) => (at === index ? channel : prior)));
+              }}
+              className="h-7 w-full min-w-0 rounded border border-slate-600 bg-slate-950 px-1.5 text-[11px] disabled:opacity-45"
+              aria-label={`${socket}${length > 1 ? ` ${index + 1}` : ""}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function InteractivityGraphEditor(props: {
+  asset: InteractivityAsset;
+  materials: readonly MaterialAsset[];
+  readOnly: boolean;
+  onSave: (assetId: string, extension: KhrInteractivityExtension) => void;
+  onClose: () => void;
+}) {
+  // The provider sits above the body so the palette can place a new node at the
+  // centre of what the author is actually looking at.
+  return (
+    <ReactFlowProvider>
+      <InteractivityGraphEditorBody {...props} />
+    </ReactFlowProvider>
+  );
+}
+
+function InteractivityGraphEditorBody({
   asset,
   materials,
   readOnly,
@@ -281,12 +501,15 @@ export function InteractivityGraphEditor({
   const [draft, setDraft] = useState(() => cloneKhrInteractivityExtension(asset.extension));
   const [graphIndex, setGraphIndex] = useState(asset.extension.graph ?? 0);
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(null);
-  const [operationToAdd, setOperationToAdd] = useState("animation/start");
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteQuery, setPaletteQuery] = useState("");
   const [jsonOpen, setJsonOpen] = useState(false);
   const [jsonDraft, setJsonDraft] = useState(() => JSON.stringify(asset.extension, null, 2));
   const [jsonMessage, setJsonMessage] = useState<string | null>(null);
   const graph = draft.graphs[graphIndex] ?? draft.graphs[0];
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<GraphFlowNode>([]);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const { screenToFlowPosition, fitView } = useReactFlow();
   const edges = useMemo(() => toFlowEdges(graph), [graph]);
   const diagnostics = useMemo(() => validateKhrInteractivityExtension(draft), [draft]);
   const errors = diagnostics.filter((diagnostic) => diagnostic.severity === "error");
@@ -313,17 +536,71 @@ export function InteractivityGraphEditor({
       : 0;
   const materialPointerNode = selectedDeclaration?.op.startsWith("pointer/") ?? false;
 
+  // `material` is authored through the picker above, and a socket fed by a wire
+  // has no literal to edit - showing either as a number field would invite the
+  // author to overwrite a connection they cannot see from here.
+  const literalValues = useMemo(
+    () =>
+      Object.entries(selectedNode?.values ?? {})
+        .filter(([socket, input]) => input.node === undefined && socket !== "material")
+        .map(([socket, input]) => ({
+          socket,
+          value: input.value,
+          signature:
+            input.type === undefined ? undefined : graph.types?.[input.type]?.signature,
+        })),
+    [graph.types, selectedNode],
+  );
+
+  const paletteGroups = useMemo(() => {
+    const query = paletteQuery.trim().toLowerCase();
+    return PALETTE_CATEGORY_ORDER.map((category) => ({
+      category,
+      templates: KHR_INTERACTIVITY_OPERATION_TEMPLATES.filter(
+        (template) =>
+          template.category === category &&
+          (query === "" ||
+            template.label.toLowerCase().includes(query) ||
+            template.op.toLowerCase().includes(query)),
+      ),
+    })).filter((group) => group.templates.length > 0);
+  }, [paletteQuery]);
+
+  const visibleRecipes = useMemo(() => {
+    const query = paletteQuery.trim().toLowerCase();
+    if (query === "") return INTERACTIVITY_RECIPES;
+    return INTERACTIVITY_RECIPES.filter(
+      (recipe) =>
+        recipe.label.toLowerCase().includes(query) ||
+        recipe.description.toLowerCase().includes(query),
+    );
+  }, [paletteQuery]);
+
+  // Selection is derived from the inspector's index rather than left to the
+  // canvas: rebuilding the nodes on every graph change wiped the library's own
+  // selection flag, so editing a value made the ring around the node you were
+  // editing disappear.
   useEffect(() => {
-    setFlowNodes(toFlowNodes(graph));
-  }, [graph, setFlowNodes]);
+    setFlowNodes(
+      toFlowNodes(graph).map((node) => ({
+        ...node,
+        selected: node.data.index === selectedNodeIndex,
+      })),
+    );
+  }, [graph, selectedNodeIndex, setFlowNodes]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key !== "Escape") return;
+      if (paletteOpen) {
+        setPaletteOpen(false);
+        return;
+      }
+      onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [onClose, paletteOpen]);
 
   const updateGraph = useCallback(
     (mutate: (graph: KhrInteractivityGraph) => void) => {
@@ -335,6 +612,29 @@ export function InteractivityGraphEditor({
       });
     },
     [graphIndex],
+  );
+
+  /**
+   * Where the next node lands.
+   *
+   * The old fixed grid put node twelve at a coordinate the author had probably
+   * panned away from minutes earlier, so adding a node looked like nothing had
+   * happened. Placing it at the centre of the visible canvas, with a small
+   * cascade so repeats do not stack, means the author sees what they added.
+   */
+  const nextNodePosition = useCallback(
+    (count: number, leadIn = 0) => {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      const center = rect
+        ? screenToFlowPosition({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 })
+        : { x: 160, y: 160 };
+      const cascade = (count % 5) * 28;
+      return {
+        x: Math.round(center.x - 112 - leadIn + cascade),
+        y: Math.round(center.y - 60 + cascade),
+      };
+    },
+    [screenToFlowPosition],
   );
 
   const handleConnect = useCallback(
@@ -395,32 +695,28 @@ export function InteractivityGraphEditor({
     [readOnly, updateGraph],
   );
 
-  const handleAddOperation = () => {
+  // An append always lands on the current length, so the node to select is known
+  // before the draft updates and no state is set from inside the updater.
+  const handleAddOperation = (op: string) => {
     if (readOnly) return;
+    const created = graph.nodes?.length ?? 0;
+    const position = nextNodePosition(created);
     updateGraph((nextGraph) => {
-      nextGraph.declarations ??= [];
-      nextGraph.nodes ??= [];
-      let declaration = nextGraph.declarations.findIndex(
-        (candidate) => candidate.op === operationToAdd,
-      );
-      if (declaration < 0) {
-        nextGraph.declarations.push({ op: operationToAdd });
-        declaration = nextGraph.declarations.length - 1;
-      }
-      const types = ensureGraphTypes(nextGraph);
-      const template = getInteractivityOperationTemplate(operationToAdd);
-      const nextNode: KhrInteractivityNode = {
-        declaration,
-        ...(template?.createNode?.(types) ?? {}),
-      };
-      nextGraph.nodes.push(
-        writeInteractivityNodePosition(nextNode, {
-          x: 120 + (nextGraph.nodes.length % 3) * 280,
-          y: 120 + Math.floor(nextGraph.nodes.length / 3) * 200,
-        }),
-      );
-      setSelectedNodeIndex(nextGraph.nodes.length - 1);
+      appendInteractivityOperation(nextGraph, op, position);
     });
+    setSelectedNodeIndex(created);
+    setPaletteOpen(false);
+  };
+
+  const handleApplyRecipe = (recipe: InteractivityRecipe) => {
+    if (readOnly) return;
+    const base = graph.nodes?.length ?? 0;
+    const origin = nextNodePosition(base, 160);
+    updateGraph((nextGraph) => {
+      recipe.build(nextGraph, origin, selectedMaterialIndex);
+    });
+    setSelectedNodeIndex(base + recipe.focusOffset);
+    setPaletteOpen(false);
   };
 
   const handleApplyJson = () => {
@@ -452,6 +748,7 @@ export function InteractivityGraphEditor({
   };
 
   const CloseIcon = EDITOR_ICONS.close;
+  const CreateIcon = EDITOR_ICONS.create;
   const DeleteIcon = EDITOR_ICONS.delete;
   const SaveIcon = EDITOR_ICONS.save;
 
@@ -488,26 +785,23 @@ export function InteractivityGraphEditor({
               </option>
             ))}
           </select>
-          <select
-            value={operationToAdd}
-            onChange={(event) => setOperationToAdd(event.target.value)}
-            disabled={readOnly}
-            className="h-8 max-w-48 rounded border border-slate-600 bg-slate-800 px-2 text-xs disabled:opacity-50"
-            aria-label="追加する公式operation"
-          >
-            {KHR_INTERACTIVITY_OPERATION_TEMPLATES.map((template) => (
-              <option key={template.op} value={template.op}>
-                {template.label} · {template.op}
-              </option>
-            ))}
-          </select>
           <button
             type="button"
-            onClick={handleAddOperation}
+            onClick={() => setPaletteOpen((open) => !open)}
             disabled={readOnly}
-            className="h-8 rounded bg-violet-600 px-3 text-xs font-semibold hover:bg-violet-500 disabled:opacity-40"
+            aria-expanded={paletteOpen}
+            className={`flex h-8 items-center gap-1.5 rounded px-3 text-xs font-semibold disabled:opacity-40 ${
+              paletteOpen ? "bg-violet-500" : "bg-violet-600 hover:bg-violet-500"
+            }`}
           >
-            ノード追加
+            <CreateIcon size={13} aria-hidden="true" /> 追加
+          </button>
+          <button
+            type="button"
+            onClick={() => fitView({ padding: 0.25, duration: 200 })}
+            className="h-8 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800"
+          >
+            全体表示
           </button>
           <button
             type="button"
@@ -534,42 +828,143 @@ export function InteractivityGraphEditor({
           </button>
         </header>
 
-        <div className="relative min-h-0 flex-1 bg-slate-900">
-          <ReactFlowProvider>
-            <ReactFlow<GraphFlowNode>
-              nodes={flowNodes}
-              edges={edges}
-              nodeTypes={nodeTypes}
-              onNodesChange={onNodesChange}
-              onNodeClick={(_, node) => setSelectedNodeIndex(node.data.index)}
-              onNodeDragStop={(_, node) =>
-                updateGraph((nextGraph) => {
-                  const target = nextGraph.nodes?.[node.data.index];
-                  if (target) nextGraph.nodes![node.data.index] = writeInteractivityNodePosition(target, node.position);
-                })
-              }
-              onConnect={handleConnect}
-              onEdgesDelete={handleDeleteEdges}
-              nodesDraggable={!readOnly}
-              nodesConnectable={!readOnly}
-              edgesReconnectable={!readOnly}
-              deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
-              fitView
-              fitViewOptions={{ padding: 0.25 }}
-              colorMode="dark"
-            >
-              <Background color="#475569" gap={24} size={1} />
-              <Controls position="bottom-left" />
-              <MiniMap
-                pannable
-                zoomable
-                position="bottom-right"
-                nodeColor={(node) =>
-                  node.data.category === "animation" ? "#10b981" : "#8b5cf6"
+        <div ref={canvasRef} className="relative min-h-0 flex-1 bg-slate-900">
+          <ReactFlow<GraphFlowNode>
+            nodes={flowNodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChange}
+            onNodeClick={(_, node) => setSelectedNodeIndex(node.data.index)}
+            onPaneClick={() => {
+              setSelectedNodeIndex(null);
+              setPaletteOpen(false);
+            }}
+            onNodeDragStop={(_, node) =>
+              updateGraph((nextGraph) => {
+                const target = nextGraph.nodes?.[node.data.index];
+                if (target) {
+                  nextGraph.nodes![node.data.index] = writeInteractivityNodePosition(
+                    target,
+                    node.position,
+                  );
                 }
-              />
-            </ReactFlow>
-          </ReactFlowProvider>
+              })
+            }
+            onConnect={handleConnect}
+            onEdgesDelete={handleDeleteEdges}
+            nodesDraggable={!readOnly}
+            nodesConnectable={!readOnly}
+            edgesReconnectable={!readOnly}
+            deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
+            selectionKeyCode="Shift"
+            {...CANVAS_NAVIGATION}
+            fitView
+            fitViewOptions={{ padding: 0.25 }}
+            colorMode="dark"
+          >
+            <Background color="#475569" gap={24} size={1} />
+            <Controls position="bottom-left" />
+            <MiniMap<GraphFlowNode>
+              pannable
+              zoomable
+              position="bottom-right"
+              maskColor="rgba(2, 6, 23, 0.7)"
+              nodeColor={(node) => CATEGORY_MINIMAP_COLOR[node.data.category]}
+            />
+          </ReactFlow>
+
+          {paletteOpen ? (
+            <div className="absolute left-3 top-3 z-20 flex max-h-[calc(100%-1.5rem)] w-80 flex-col rounded-lg border border-slate-700 bg-slate-950/95 shadow-2xl backdrop-blur">
+              <div className="shrink-0 border-b border-slate-700 p-2.5">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-bold">ノードを追加</p>
+                  <button
+                    type="button"
+                    onClick={() => setPaletteOpen(false)}
+                    className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                    aria-label="追加パネルを閉じる"
+                  >
+                    <CloseIcon size={13} aria-hidden="true" />
+                  </button>
+                </div>
+                <input
+                  type="search"
+                  value={paletteQuery}
+                  onChange={(event) => setPaletteQuery(event.target.value)}
+                  placeholder="色・アニメーション・待機"
+                  className="h-8 w-full rounded border border-slate-600 bg-slate-900 px-2 text-xs placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
+                  aria-label="ノードを検索"
+                />
+              </div>
+              <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-2.5">
+                {visibleRecipes.length > 0 ? (
+                  <section className="mb-3">
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                      よくある動き
+                    </p>
+                    <div className="space-y-1">
+                      {visibleRecipes.map((recipe) => {
+                        const blocked = recipe.needsMaterial === true && sortedMaterials.length === 0;
+                        return (
+                          <button
+                            key={recipe.id}
+                            type="button"
+                            disabled={readOnly || blocked}
+                            onClick={() => handleApplyRecipe(recipe)}
+                            className="block w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-2 text-left hover:border-violet-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-slate-700 disabled:hover:bg-slate-900"
+                          >
+                            <span className="block text-xs font-semibold">{recipe.label}</span>
+                            <span className="mt-0.5 block text-[10px] leading-4 text-slate-400">
+                              {blocked
+                                ? "Material Assetを1つ作るとこのレシピを使えます"
+                                : recipe.description}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ) : null}
+                {paletteGroups.map((group) => (
+                  <section key={group.category} className="mb-3 last:mb-0">
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                      {CATEGORY_LABEL[group.category]}
+                    </p>
+                    <div className="space-y-1">
+                      {group.templates.map((template) => (
+                        <button
+                          key={template.op}
+                          type="button"
+                          disabled={readOnly}
+                          onClick={() => handleAddOperation(template.op)}
+                          className="flex w-full items-center gap-2 rounded border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-left hover:border-violet-500 hover:bg-slate-800 disabled:opacity-45"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="h-2.5 w-2.5 shrink-0 rounded-full"
+                            style={{ background: CATEGORY_MINIMAP_COLOR[template.category] }}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-medium">
+                              {template.label}
+                            </span>
+                            <code className="block truncate text-[9px] text-slate-500">
+                              {template.op}
+                            </code>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+                {visibleRecipes.length === 0 && paletteGroups.length === 0 ? (
+                  <p className="rounded border border-slate-700 bg-slate-900 p-3 text-[11px] leading-5 text-slate-400">
+                    一致するノードがありません。検索語を短くしてください。
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <footer className="flex min-h-8 shrink-0 items-center gap-3 border-t border-slate-700 bg-slate-900 px-3 text-[10px] text-slate-400">
@@ -582,7 +977,8 @@ export function InteractivityGraphEditor({
           ) : (
             <span className="text-emerald-300">KHR graph validation OK</span>
           )}
-          <span className="ml-auto">紫: flow / 水色: value</span>
+          <span className="ml-auto">ドラッグ / ホイールで移動・Ctrl+ホイールで拡大</span>
+          <span>紫: flow / 水色: value</span>
         </footer>
       </div>
 
@@ -675,12 +1071,38 @@ export function InteractivityGraphEditor({
                   ) : null}
                 </section>
               ) : null}
-              <div>
-                <p className="mb-1 text-[10px] font-semibold uppercase text-slate-400">Canonical node</p>
-                <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded border border-slate-700 bg-slate-950 p-2 text-[10px] leading-4 text-cyan-100">
+
+              {literalValues.length > 0 ? (
+                <section className="space-y-2.5 rounded border border-slate-700 bg-slate-950/60 p-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-300">
+                    値
+                  </p>
+                  {literalValues.map((entry) => (
+                    <LiteralValueField
+                      key={entry.socket}
+                      socket={entry.socket}
+                      signature={entry.signature}
+                      value={entry.value}
+                      isColor={entry.socket === "value" && (selectedPointerPreset?.color ?? false)}
+                      disabled={readOnly}
+                      onChange={(next) =>
+                        updateGraph((nextGraph) => {
+                          setInteractivityLiteralValue(nextGraph, selectedNodeIndex, entry.socket, next);
+                        })
+                      }
+                    />
+                  ))}
+                </section>
+              ) : null}
+
+              <details className="rounded border border-slate-700 bg-slate-950">
+                <summary className="cursor-pointer px-2 py-1.5 text-[10px] font-semibold uppercase text-slate-400">
+                  Canonical node
+                </summary>
+                <pre className="max-h-72 overflow-auto whitespace-pre-wrap border-t border-slate-800 p-2 text-[10px] leading-4 text-cyan-100">
                   {JSON.stringify(selectedNode, null, 2)}
                 </pre>
-              </div>
+              </details>
               <button
                 type="button"
                 disabled={readOnly}
@@ -694,9 +1116,14 @@ export function InteractivityGraphEditor({
               </button>
             </div>
           ) : (
-            <p className="rounded border border-slate-700 bg-slate-950 p-3 text-xs leading-5 text-slate-400">
-              公式operationを追加して、紫のflowソケットまたは水色のvalueソケットを接続します。独自JavaScriptは保存しません。
-            </p>
+            <div className="space-y-2 rounded border border-slate-700 bg-slate-950 p-3 text-xs leading-5 text-slate-400">
+              <p>
+                「追加」から始めます。よくある動きのレシピを選ぶと、つながった状態のノードがそのまま置かれます。
+              </p>
+              <p>
+                ノードを選ぶと、色や時間などの値をこの欄で直接編集できます。独自JavaScriptは保存しません。
+              </p>
+            </div>
           )}
 
           {diagnostics.length > 0 ? (
@@ -723,7 +1150,12 @@ export function InteractivityGraphEditor({
           <div className="border-t border-slate-700 p-3">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-bold">KHR JSON import / export</p>
-              <button type="button" onClick={() => setJsonOpen(false)} className="text-slate-400 hover:text-white">
+              <button
+                type="button"
+                onClick={() => setJsonOpen(false)}
+                className="text-slate-400 hover:text-white"
+                aria-label="JSON欄を閉じる"
+              >
                 <CloseIcon size={13} aria-hidden="true" />
               </button>
             </div>

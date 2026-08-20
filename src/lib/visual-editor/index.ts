@@ -34,6 +34,7 @@ export * from "./material-extension-registry";
 export * from "./material-thumbnail";
 export * from "./model-thumbnail";
 export * from "./interactivity-graph";
+export * from "./interactivity-recipes";
 export * from "./glow-material-catalog";
 export * from "./lighting-contract";
 export * from "./mcp-tool-registry";

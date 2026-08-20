@@ -133,6 +133,26 @@ export function tintToLinearRgb(tint: string): [number, number, number] {
 }
 
 /**
+ * The round trip back from linear light to an sRGB hex.
+ *
+ * Anything that shows an authored colour in a `<input type="color">` needs
+ * this: glTF factors and three.js colours are stored linear, and handing a
+ * linear triple straight to the picker shows a washed-out swatch that does not
+ * match what the author sees in the viewport.
+ */
+export function linearRgbToTint(rgb: readonly number[]): string {
+  const channels = [0, 1, 2].map((index) => {
+    const linear = Math.min(Math.max(rgb[index] ?? 0, 0), 1);
+    const encoded =
+      linear <= 0.0031308 ? linear * 12.92 : 1.055 * linear ** (1 / 2.4) - 0.055;
+    return Math.round(encoded * 255)
+      .toString(16)
+      .padStart(2, "0");
+  });
+  return `#${channels.join("")}`;
+}
+
+/**
  * How far above the Bloom threshold a preset is placed.
  *
  * A tint is not free to be as bright as it looks: Bloom compares luminance, and

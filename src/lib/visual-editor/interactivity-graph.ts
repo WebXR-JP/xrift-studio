@@ -98,14 +98,23 @@ export type InteractivityMaterialPointerPreset = {
   pointer: string;
   signature: "bool" | "float" | "float2" | "float3" | "float4";
   extension?: "KHR_texture_transform";
+  /**
+   * True when the factor is a colour rather than a plain vector.
+   *
+   * The editor needs this to offer a colour picker instead of three or four
+   * raw channel fields, and it belongs here rather than in the editor because
+   * a preset added later would otherwise silently fall back to raw fields.
+   * glTF stores these factors in linear light, not sRGB.
+   */
+  color?: boolean;
 };
 
 /** Mutable glTF material properties exposed by KHR_interactivity pointer nodes. */
 export const KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS: readonly InteractivityMaterialPointerPreset[] = [
-  { id: "base-color", label: "Base Color", pointer: "/materials/[material]/pbrMetallicRoughness/baseColorFactor", signature: "float4" },
+  { id: "base-color", label: "Base Color", pointer: "/materials/[material]/pbrMetallicRoughness/baseColorFactor", signature: "float4", color: true },
   { id: "metallic", label: "Metallic", pointer: "/materials/[material]/pbrMetallicRoughness/metallicFactor", signature: "float" },
   { id: "roughness", label: "Roughness", pointer: "/materials/[material]/pbrMetallicRoughness/roughnessFactor", signature: "float" },
-  { id: "emissive", label: "Emissive", pointer: "/materials/[material]/emissiveFactor", signature: "float3" },
+  { id: "emissive", label: "Emissive", pointer: "/materials/[material]/emissiveFactor", signature: "float3", color: true },
   { id: "normal-scale", label: "Normal Scale", pointer: "/materials/[material]/normalTexture/scale", signature: "float" },
   { id: "occlusion-strength", label: "Occlusion Strength", pointer: "/materials/[material]/occlusionTexture/strength", signature: "float" },
   { id: "double-sided", label: "Double Sided", pointer: "/materials/[material]/doubleSided", signature: "bool" },

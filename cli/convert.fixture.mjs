@@ -76,6 +76,7 @@ import { runGlowMaterialCatalogFixtureAssertions } from "../src/lib/visual-edito
 import { runPrefabSourceDetachFixtureAssertions } from "../src/lib/visual-editor/prefab-source-detach.fixture.ts";
 import { runLightingContractFixtureAssertions } from "../src/lib/visual-editor/lighting-contract.fixture.ts";
 import { runMaterialAlphaFixtureAssertions } from "../src/lib/visual-editor/material-alpha.fixture.ts";
+import { runInteractivityRecipeFixtureAssertions } from "../src/lib/visual-editor/interactivity-recipes.fixture.ts";
 import { runVisualUploadFixtureAssertions } from "../src/lib/visual-editor/upload.fixture.ts";
 import { runRuntimeSpawnFixtureAssertions } from "../src/lib/visual-editor/runtime-spawn.fixture.ts";
 import { runSkyboxImportFixtureAssertions } from "../src/lib/visual-editor/skybox-import.fixture.ts";
@@ -291,6 +292,7 @@ try {
     ["prefab source detach", runPrefabSourceDetachFixtureAssertions],
     ["lighting contract", runLightingContractFixtureAssertions],
     ["material alpha", runMaterialAlphaFixtureAssertions],
+    ["interactivity recipes", runInteractivityRecipeFixtureAssertions],
     ["visual upload branch", runVisualUploadFixtureAssertions],
     ["classic project import", runClassicProjectImportFixtureAssertions],
     ["asset operation lock", runAssetOperationLockFixtureAssertions],
