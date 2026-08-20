@@ -106,6 +106,9 @@ import {
   resolveSkyShaderMaterial,
   resolveSceneWind,
   skyShaderDrivenUniforms,
+  lightingDrivenUniforms,
+  resolveSceneLighting,
+  UNLIT_SCENE_LIGHTING,
   windDrivenUniforms,
   STILL_WIND,
   createTerrainMeshBuffers,
@@ -113,6 +116,7 @@ import {
   STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID,
   type AssetManifest,
   type ClassicR3fMaterialShader,
+  type ResolvedSceneLighting,
   type ResolvedWind,
   type AnimationComponent,
   type AudioSourceComponent,
@@ -234,6 +238,44 @@ function EntityWindScope({
   return (
     <SceneWindContext.Provider value={value}>{children}</SceneWindContext.Provider>
   );
+}
+
+const SceneLightingContext = createContext<ResolvedSceneLighting>(
+  UNLIT_SCENE_LIGHTING,
+);
+
+/**
+ * Pushes the scene's key light into a Custom Shader that declares those
+ * uniforms, so an official Material shades from the same light as everything
+ * else instead of from a sun it carries itself.
+ */
+function useLightingDrivenMaterial(
+  material: ShaderMaterial | undefined,
+  shader: ClassicR3fMaterialShader | undefined,
+): void {
+  const lighting = useContext(SceneLightingContext);
+  useEffect(() => {
+    if (!material || !shader) return;
+    for (const entry of lightingDrivenUniforms(shader, lighting)) {
+      const uniform = material.uniforms[entry.name];
+      if (!uniform) continue;
+      if (entry.kind === "number") {
+        uniform.value = entry.value;
+        continue;
+      }
+      const current = uniform.value;
+      if (current instanceof Vector3) {
+        current.set(entry.value[0], entry.value[1], entry.value[2]);
+      } else {
+        uniform.value = new Vector3(
+          entry.value[0],
+          entry.value[1],
+          entry.value[2],
+        );
+      }
+    }
+    material.needsUpdate = true;
+  }, [lighting, material, shader]);
 }
 
 /** Pushes the scene's wind into a Custom Shader that declares those uniforms. */
@@ -687,6 +729,10 @@ function TerrainMeshVisual({
     authoredShaderMaterial,
     material?.shader?.kind === "classic-r3f" ? material.shader : undefined,
   );
+  useLightingDrivenMaterial(
+    authoredShaderMaterial,
+    material?.shader?.kind === "classic-r3f" ? material.shader : undefined,
+  );
   useFrame((state) => {
     const uniform = authoredShaderMaterial?.uniforms?.uTime;
     if (uniform) uniform.value = state.clock.getElapsedTime();
@@ -865,6 +911,10 @@ function PrimitiveMeshVisual({
     [classicShaderTextures, material?.shader],
   );
   useWindDrivenMaterial(
+    authoredShaderMaterial,
+    material?.shader?.kind === "classic-r3f" ? material.shader : undefined,
+  );
+  useLightingDrivenMaterial(
     authoredShaderMaterial,
     material?.shader?.kind === "classic-r3f" ? material.shader : undefined,
   );
@@ -3445,6 +3495,10 @@ export function SceneViewport({
     () => resolveSceneWind(sceneSettings.vegetation),
     [sceneSettings.vegetation],
   );
+  const viewportLighting = useMemo(
+    () => resolveSceneLighting(scene, sceneSettings.ambient),
+    [scene, sceneSettings.ambient],
+  );
   const effectiveDisplayMode = editorMode === "play" ? "scene" : displayMode;
   const colliderOnlyEdit = effectiveDisplayMode === "colliders";
   const renderDisplayMode = thumbnailCaptureActive ? "scene" : effectiveDisplayMode;
@@ -4470,6 +4524,7 @@ export function SceneViewport({
             far: sceneSettings.camera.far,
           }}
         >
+          <SceneLightingContext.Provider value={viewportLighting}>
           <SceneWindContext.Provider value={viewportWind}>
           <color
             attach="background"
@@ -4665,6 +4720,7 @@ export function SceneViewport({
             onFocusChange={onFocusChange}
           />
           </SceneWindContext.Provider>
+          </SceneLightingContext.Provider>
         </Canvas>
 
         {debugOverlayEnabled && debugMetrics && !thumbnailCaptureActive ? (

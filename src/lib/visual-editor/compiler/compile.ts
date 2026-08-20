@@ -33,6 +33,10 @@ import {
   skyShaderDrivenUniforms,
   skyShaderTextureUniformNames,
 } from "../sky-shader";
+import {
+  lightingDrivenUniforms,
+  resolveSceneLighting,
+} from "../lighting-contract";
 import { resolveSceneWind, windDrivenUniforms } from "../wind-contract";
 import { getTerrainGrassType } from "../terrain-grass";
 import {
@@ -3443,7 +3447,32 @@ function registerClassicR3fMaterialComponent(
       ),
     ).map((entry) => [entry.name, entry]),
   );
+  // The scene's key light, supplied the same way the wind is, so a published
+  // world shades its official Materials from the same light the editor did.
+  const lighting = new Map(
+    lightingDrivenUniforms(
+      shader,
+      resolveSceneLighting(
+        context.scene,
+        resolveSceneSettings(context.scene.settings).ambient,
+      ),
+    ).map((entry) => [entry.name, entry]),
+  );
   for (const [uniformName, uniform] of Object.entries(shader.uniforms)) {
+    const lightingOverride = lighting.get(uniformName);
+    if (lightingOverride) {
+      if (lightingOverride.kind === "number") {
+        uniformEntries.push(
+          `${JSON.stringify(uniformName)}: { value: ${formatNumber(lightingOverride.value)} }`,
+        );
+      } else {
+        context.threeValueImports.add("Vector3");
+        uniformEntries.push(
+          `${JSON.stringify(uniformName)}: { value: new Vector3(${lightingOverride.value.map(formatNumber).join(", ")}) }`,
+        );
+      }
+      continue;
+    }
     const windOverride = wind.get(uniformName);
     if (windOverride) {
       if (windOverride.kind === "number") {

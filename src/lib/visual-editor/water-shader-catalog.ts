@@ -1,4 +1,5 @@
 import type { ClassicR3fMaterialShader } from "./custom-shader-contract";
+import { LIGHTING_CONTRACT_GLSL_UNIFORMS } from "./lighting-contract";
 import { WIND_CONTRACT_GLSL_UNIFORMS } from "./wind-contract";
 
 /**
@@ -173,13 +174,7 @@ vec3 xriftWaterSkyReflection(vec3 reflectDirection, vec3 zenith, vec3 horizon) {
   float up = clamp(reflectDirection.y * 0.5 + 0.5, 0.0, 1.0);
   return mix(horizon, zenith, pow(up, 1.3));
 }
-
-vec3 xriftWaterSunDirection(float azimuthDegrees, float elevationDegrees) {
-  float azimuth = radians(azimuthDegrees);
-  float elevation = radians(elevationDegrees);
-  float horizontal = cos(elevation);
-  return vec3(horizontal * cos(azimuth), sin(elevation), horizontal * sin(azimuth));
-}`;
+`;
 
 /**
  * Layer seeds. Raising the layer count adds waves without moving the ones
@@ -249,7 +244,7 @@ const WATER_WAVE_ACCUMULATION_GLSL = `  vec3 tangent = vec3(1.0, 0.0, 0.0);
   vec3 skyColor = xriftWaterSkyReflection(
     reflect(-viewDirection, normal), uZenithColor, uHorizonColor
   );
-  vec3 sunDirection = xriftWaterSunDirection(uSunAzimuth, uSunElevation);
+  vec3 sunDirection = normalize(uSunDirection);
   vec3 halfVector = normalize(sunDirection + viewDirection);
   float glint = pow(clamp(dot(normal, halfVector), 0.0, 1.0), mix(400.0, 48.0, steepness));
   float crest = clamp(displacement.y / max(amplitudeSum, 0.0001), -1.0, 1.0);`;
@@ -258,7 +253,6 @@ const WATER_UNIFORM_BLOCK = `uniform vec3 uShallowColor;
 uniform vec3 uDeepColor;
 uniform vec3 uZenithColor;
 uniform vec3 uHorizonColor;
-uniform vec3 uSunColor;
 uniform float uOpacity;
 uniform float uWaveHeight;
 uniform float uWaveScale;
@@ -269,10 +263,9 @@ uniform float uReflectivity;
 uniform float uDetailScale;
 uniform float uDetailStrength;
 uniform float uGlintStrength;
-uniform float uSunAzimuth;
-uniform float uSunElevation;
 uniform float uTime;
 ${WIND_CONTRACT_GLSL_UNIFORMS}
+${LIGHTING_CONTRACT_GLSL_UNIFORMS}
 varying vec3 vWorldPosition;
 varying vec3 vWorldNormal;`;
 
@@ -285,7 +278,8 @@ ${WATER_WAVE_ACCUMULATION_GLSL}
 
   vec3 body = mix(uShallowColor, uDeepColor, pow(ndv, 0.7));
   vec3 color = mix(body, skyColor, clamp(fresnel * uReflectivity, 0.0, 1.0));
-  color += uSunColor * glint * uGlintStrength;
+  color += uSunColor * uSunIntensity * glint * uGlintStrength;
+  color += uAmbientColor * uAmbientIntensity * uReflectivity * 0.12;
 
   gl_FragColor = vec4(color, clamp(uOpacity, 0.0, 1.0));
   #include <tonemapping_fragment>
@@ -304,7 +298,8 @@ ${WATER_WAVE_ACCUMULATION_GLSL}
 
   vec3 body = mix(uShallowColor, uDeepColor, pow(ndv, 0.7));
   vec3 color = mix(body, skyColor, clamp(fresnel * uReflectivity, 0.0, 1.0));
-  color += uSunColor * glint * uGlintStrength;
+  color += uSunColor * uSunIntensity * glint * uGlintStrength;
+  color += uAmbientColor * uAmbientIntensity * uReflectivity * 0.12;
 
   // Without a depth buffer there is no shoreline to read, so the foam comes
   // from the wave crests themselves. It is honest about what it can see.
@@ -370,9 +365,11 @@ function waterBaseUniforms(): ClassicR3fMaterialShader["uniforms"] {
     uWindDirection: { kind: "vector", value: [1, 0] },
     uWindSpeed: { kind: "number", value: 0 },
     uWindTurbulence: { kind: "number", value: 0 },
-    uSunAzimuth: { kind: "number", value: 128 },
-    uSunElevation: { kind: "number", value: 42 },
+    uSunDirection: { kind: "vector", value: [0.42, 0.67, 0.61] },
     uSunColor: { kind: "color", value: "#fff4dc" },
+    uSunIntensity: { kind: "number", value: 1 },
+    uAmbientColor: { kind: "color", value: "#ffffff" },
+    uAmbientIntensity: { kind: "number", value: 0.55 },
   };
 }
 
