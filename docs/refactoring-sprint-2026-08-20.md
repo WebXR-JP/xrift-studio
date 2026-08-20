@@ -187,6 +187,32 @@ cargo check --manifest-path src-tauri/Cargo.toml   # Day 3 のみ
 Day 4 のみ `pnpm tauri:dev` を起動し、Tauri MCP でツール往復とコミット反映を実機確認する。
 本番ビルドは行わない (AGENT.md の方針に従う)。
 
+## 実施結果 (2026-08-20)
+
+### 完了
+
+| 項目 | 結果 |
+|---|---|
+| Day 1-1 B4 到達不能テンプレート削除 | `starter-templates.ts` 3,681 → 1,147行、fixture 727 → 317行、公開アセット −18MB |
+| Day 1-2 json-guards 抽出 | `isRecord` 13箇所 → 1 (別パッケージの2件は据え置き)、`errorMessage` 5 → 1。意図的に違う2件は理由を明記して残置 |
+| Day 1-3 公開診断の修正 | 二重の切り詰めを撤廃、CLI出力を画面とヘルプ報告の両方へ |
+| Day 1-4 OpenBrush 公開の解除 | `publish-permissions.ts` として仕組み化。実CLIで `APPROVE: 28` を確認 |
+| Day 2-7 ツール契約の単一ソース化 | `mcp-tool-registry.ts` に集約。6箇所の手書きが1つに |
+| Day 2-9 patch キーの乖離検出 | `patchKeysOf<Patch>()` でビルド時に検出 |
+| Day 3-10/11/12 TS→Rust 生成 | `MCP_TOOL_NAMES` を生成物へ。`pnpm cli:test` が古い生成物で落ちる |
+
+### 想定と違ったこと
+
+- **Rust のスキーマ 1,570行は今回動かせなかった**。`json!` の中で `texture_import_settings_schema(false)` のようなヘルパを呼んでいて、素の JSON ではない。ヘルパを展開すると共有していたサブスキーマが重複するので、移すこと自体が改悪になる。代わりに Rust テストを集合比較へ変え、スキーマ一覧と生成された allow-list が同じ集合であることを保証した。ツールの追加漏れはこれで必ず止まる。
+- **`updateComponent` の500行 switch は表にしなかった**。ケースごとに形が違い (uniform 4 / 追加検証あり 3 / 特殊 4)、表にしても複雑さが移るだけで消えない。本題は patch キーの手書きコピーだったので、そこだけを型で固定した。
+- **patch キーの乖離は現時点では無かった**。6つの Patch 型すべてが MCP のキー配列と一致していた。今回入れたのは予防であって修正ではない。
+- **`mcp-editor-tools.ts` はまだ 6,024行**。契約の集約で −89行にとどまる。ファイル分割 (Day 2-8) は未実施。
+- **`cargo check` はテストをコンパイルしない**。B4 のアセット削除で `include_bytes!` の参照が切れていたのを `cargo test` で発見した。AGENT.md に追記済み。
+
+### 副産物として見つかった実バグ
+
+- ドットを含む名前の Model (`chair.v2.glb`) で、派生 Texture/Material の id からハッシュ部が削られ衝突していた。`safeSegment` の2実装のうち片方だけが拡張子を落としており、それを id に適用していた。
+
 ## 7. 見送るもの (と理由)
 
 - **core component スキーマ表 (監査の本丸)** — 保存フォーマットに直接触れる。直近に保存互換のバグ修正が出ている領域であり、4日では移行網を含めて終わらない。次スプリント単独で取る
