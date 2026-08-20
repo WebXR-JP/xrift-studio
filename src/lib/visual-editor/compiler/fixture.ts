@@ -1904,6 +1904,23 @@ export function runVisualCompilerFixtureAssertions(
     !modelSource.includes("brushTimeRoot"),
     "A plain glTF model must not carry the Open Brush time loop",
   );
+  // three-icosa always trips `no-obfuscation`, so an Open Brush world must
+  // declare the permission or `xrift check` rejects every publish. A world
+  // without Open Brush must keep the rule enforced.
+  const xriftConfig = (result: typeof modelResult): Record<string, unknown> =>
+    JSON.parse(
+      result.overlayFiles.find((file) => file.relativePath === "xrift.json")
+        ?.content ?? "{}",
+    ).world ?? {};
+  assert(
+    JSON.stringify(xriftConfig(openBrushResult).permissions) ===
+      JSON.stringify({ allowedCodeRules: ["no-obfuscation"] }),
+    "Open Brush world did not allow the no-obfuscation code rule",
+  );
+  assert(
+    xriftConfig(modelResult).permissions === undefined,
+    "A world without Open Brush must not relax the no-obfuscation rule",
+  );
   assert(
     modelSource.includes("XriftMeshMaxDistance") &&
       modelSource.includes("maxDistance={120}"),

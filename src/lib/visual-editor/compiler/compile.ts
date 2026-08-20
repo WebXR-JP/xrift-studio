@@ -94,6 +94,7 @@ import {
 } from "./script-emit";
 import {
   isOpenBrushModelMetadata,
+  OPEN_BRUSH_ALLOWED_CODE_RULES,
   OPEN_BRUSH_BRUSH_BASE_URL,
   OPEN_BRUSH_RUNTIME_PACKAGE,
 } from "../open-brush";
@@ -256,6 +257,7 @@ export function compileVisualProject(
         )
       : emptySource(documents.project.projectKind);
   }
+  const usesOpenBrushModels = projectUsesOpenBrushModels(documents.assets);
   const xriftJson = generateXriftJson(
     documents.project.projectKind,
     documents.project.metadata.title,
@@ -266,6 +268,7 @@ export function compileVisualProject(
     resolvedEntryScene
       ? resolveSceneSettings(resolvedEntryScene.scene.settings)
       : undefined,
+    usesOpenBrushModels ? OPEN_BRUSH_ALLOWED_CODE_RULES : [],
   );
   const sourcePath =
     documents.project.projectKind === "world" ? "src/World.tsx" : "src/Item.tsx";
@@ -328,11 +331,7 @@ export function compileVisualProject(
   ];
   const runtimePackageSpecs: string[] =
     outputMode === "classic-runtime" ? [XRIFT_STUDIO_RUNTIME_PACKAGE] : [];
-  if (Object.values(documents.assets.assets).some(
-    (asset) =>
-      asset.kind === "model" &&
-      isOpenBrushModelMetadata(asset.importMetadata?.openBrush),
-  )) runtimePackageSpecs.push(OPEN_BRUSH_RUNTIME_PACKAGE);
+  if (usesOpenBrushModels) runtimePackageSpecs.push(OPEN_BRUSH_RUNTIME_PACKAGE);
   const bundledAssetCopyPlan =
     outputMode === "classic-jsx" &&
     generated.includes("function useCompiledKtx2(")
@@ -367,6 +366,21 @@ function createPublishedBasisAssetCopyPlan(): CompilerBundledAssetCopy[] {
     sourceFileName,
     targetRelativePath: `public/${PUBLISHED_BASIS_TRANSCODER_DIRECTORY}/${sourceFileName}`,
   }));
+}
+
+/**
+ * OpenBrush brushes render through `three-icosa`, which ships Parcel-bundled
+ * identifiers (`$hash$var$name`) that always trip the platform's
+ * `no-obfuscation` security rule. The same fact decides both the staged runtime
+ * package and the published permission, so it is derived once here instead of
+ * being re-scanned at each use.
+ */
+function projectUsesOpenBrushModels(assets: AssetManifest): boolean {
+  return Object.values(assets.assets).some(
+    (asset) =>
+      asset.kind === "model" &&
+      isOpenBrushModelMetadata(asset.importMetadata?.openBrush),
+  );
 }
 
 function sceneUsesParticleRuntime(scene: SceneDocument): boolean {
@@ -4711,6 +4725,7 @@ function generateXriftJson(
   title: string,
   description: string,
   settings?: SceneSettings,
+  allowedCodeRules: readonly string[] = [],
 ): string {
   // physics and camera are world-only in xrift.json; an item has neither, and
   // emitting them would produce a config the CLI does not recognise.
@@ -4727,6 +4742,11 @@ function generateXriftJson(
           },
         }
       : {};
+  // `permissions` applies to both kinds, unlike physics and camera above.
+  const permissions =
+    allowedCodeRules.length > 0
+      ? { permissions: { allowedCodeRules: [...allowedCodeRules] } }
+      : {};
   return stableSerializeJson({
     [kind]: {
       distDir: "./dist",
@@ -4736,6 +4756,7 @@ function generateXriftJson(
       buildCommand: "npm run build",
       ignore: ["**/.DS_Store", "**/Thumbs.db", "**/*.js.map", "**/.gitkeep"],
       ...worldSettings,
+      ...permissions,
     },
   });
 }

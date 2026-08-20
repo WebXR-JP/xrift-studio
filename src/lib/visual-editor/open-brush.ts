@@ -87,6 +87,15 @@ export function resolveOpenBrushBuiltinTextureUrl(
 export const OPEN_BRUSH_RUNTIME_PACKAGE = "three-icosa@0.4.2-alpha.18";
 export const OPEN_BRUSH_RENDERER = "three-icosa@0.4.2-alpha.18";
 
+/**
+ * `three-icosa` is published as a Parcel bundle whose identifiers carry
+ * `$hash$var$` prefixes, so XRift's `no-obfuscation` code rule rejects every
+ * world that bundles it. The rule is allowable via `permissions`, so a world
+ * using OpenBrush declares it; a world without OpenBrush declares nothing and
+ * keeps the check enforced.
+ */
+export const OPEN_BRUSH_ALLOWED_CODE_RULES = ["no-obfuscation"] as const;
+
 const OPEN_BRUSH_PLACEHOLDER_IMAGE_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
