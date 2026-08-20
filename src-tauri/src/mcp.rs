@@ -28,91 +28,10 @@ const MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS: u64 = 120_000;
 const MCP_MAX_CONCURRENT_CONNECTIONS: usize = 32;
 const MCP_MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 const MCP_MAX_CLIENT_NAME_CHARS: usize = 128;
-const MCP_TOOL_NAMES: [&str; 83] = [
-    "get_editor_context",
-    "get_scripting_capabilities",
-    "analyze_component_code",
-    "apply_component_code_import_plan",
-    "list_assets",
-    "update_project_metadata",
-    "create_asset_folder",
-    "rename_asset",
-    "rename_asset_folder",
-    "move_asset",
-    "move_asset_folder",
-    "delete_asset",
-    "delete_asset_folder",
-    "inspect_colliders",
-    "optimize_colliders",
-    "get_audio_asset",
-    "import_audio_asset",
-    "get_model_asset",
-    "import_model_asset",
-    "get_texture_asset",
-    "import_texture_asset",
-    "import_skybox_asset",
-    "import_shader_asset",
-    "get_shader_asset",
-    "update_shader_asset",
-    "reimport_model_asset",
-    "set_project_thumbnail",
-    "update_model_asset",
-    "update_texture_asset",
-    "create_document_asset",
-    "get_particle_asset",
-    "update_particle_asset",
-    "list_script_templates",
-    "get_script_asset",
-    "create_script_asset",
-    "apply_script_template",
-    "update_script_asset",
-    "capture_scene_debug",
-    "set_play_mode",
-    "search_external_assets",
-    "get_external_asset_options",
-    "install_external_asset",
-    "update_scene_settings",
-    "place_asset",
-    "list_entities",
-    "list_component_definitions",
-    "get_entity_components",
-    "create_primitive",
-    "get_terrain",
-    "create_terrain",
-    "sculpt_terrain",
-    "update_terrain",
-    "place_builtin_prefab",
-    "create_prefab",
-    "add_component",
-    "update_component",
-    "remove_component",
-    "set_entity_enabled",
-    "update_script_component",
-    "update_transform",
-    "set_material",
-    "get_material_asset",
-    "update_material_asset",
-    "create_custom_shader",
-    "get_custom_shader",
-    "update_custom_shader",
-    "set_material_texture_transform",
-    "rename_entity",
-    "duplicate_entity",
-    "reparent_entity",
-    "delete_entity",
-    "create_empty_entity",
-    "list_interactivity_operations",
-    "get_interactivity_asset",
-    "create_interactivity_asset",
-    "add_interactivity_node",
-    "connect_interactivity_nodes",
-    "set_interactivity_value",
-    "set_interactivity_configuration",
-    "configure_interactivity_material_pointer",
-    "disconnect_interactivity_socket",
-    "delete_interactivity_node",
-    "validate_interactivity_asset",
-];
+// The allow-list is generated from src/lib/visual-editor/mcp-tool-registry.ts,
+// the one place a tool is declared. Rust matches names and forwards; it never
+// interprets them, so it has no reason to keep a second copy of the list.
+include!("mcp_tool_names.rs");
 static MCP_MONOTONIC_START: OnceLock<Instant> = OnceLock::new();
 
 pub struct XriftMcpBrokerState {
@@ -3918,16 +3837,28 @@ mod tests {
     use super::*;
     use std::io::Cursor;
 
+    /// The allow-list is generated from the TypeScript registry, so its order
+    /// follows that table rather than the order schemas happen to be written in
+    /// here. What has to hold is that the two describe the same set of tools:
+    /// a schema with no allow-list entry can never be called, and an allow-list
+    /// entry with no schema is invisible to clients.
     #[test]
-    fn tool_list_exposes_the_initial_editor_surface() {
+    fn tool_list_matches_the_generated_allow_list() {
         let tools = tool_definitions();
-        let names: Vec<&str> = tools
+        let mut names: Vec<&str> = tools
             .as_array()
             .expect("tool list")
             .iter()
             .filter_map(|tool| tool.get("name").and_then(Value::as_str))
             .collect();
-        assert_eq!(names, MCP_TOOL_NAMES);
+        let schema_count = names.len();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), schema_count, "a tool schema is declared twice");
+
+        let mut allowed: Vec<&str> = MCP_TOOL_NAMES.to_vec();
+        allowed.sort_unstable();
+        assert_eq!(names, allowed);
     }
 
     #[test]

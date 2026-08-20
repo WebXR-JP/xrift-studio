@@ -6144,28 +6144,31 @@ mod tests {
                 base64::engine::general_purpose::STANDARD.encode(bytes)
             )
         };
-        let hdr = include_bytes!("../../public/visual-editor/starter-assets/studio-garden-2k.hdr");
+        // Built here rather than read from a bundled file: the validator only
+        // reads the header and the first pixel byte, so a real multi-megabyte
+        // panorama proved nothing the two cases below do not.
+        const HDR_HEADER: &[u8] = b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 1024 +X 2048\n";
+        let relative_path = "assets/starter/environment/panorama.hdr";
+        let mut hdr = HDR_HEADER.to_vec();
+        hdr.extend_from_slice(&[0x02, 0x02, 0x08, 0x00]);
 
         assert_eq!(
             decode_starter_asset_data_url(
-                &data_url("image/vnd.radiance", hdr),
-                "assets/starter/studio-guide/environment/studio-garden-2k.hdr",
+                &data_url("image/vnd.radiance", &hdr),
+                relative_path,
             )
-            .expect("the bundled Radiance HDR starter asset must be accepted"),
+            .expect("a well-formed Radiance HDR starter asset must be accepted"),
             hdr
         );
         assert!(decode_starter_asset_data_url(
-            &data_url("application/octet-stream", hdr),
-            "assets/starter/studio-guide/environment/studio-garden-2k.hdr",
+            &data_url("application/octet-stream", &hdr),
+            relative_path,
         )
         .expect_err("a mismatched HDR media type must be rejected")
         .contains("media type does not match"));
         assert!(decode_starter_asset_data_url(
-            &data_url(
-                "image/vnd.radiance",
-                b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 1024 +X 2048\n",
-            ),
-            "assets/starter/studio-guide/environment/studio-garden-2k.hdr",
+            &data_url("image/vnd.radiance", HDR_HEADER),
+            relative_path,
         )
         .expect_err("an HDR without pixel data must be rejected")
         .contains("HDR file is invalid"));
