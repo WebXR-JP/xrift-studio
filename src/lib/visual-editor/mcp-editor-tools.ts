@@ -2212,21 +2212,7 @@ function updateComponent(
     case "rigid-body":
       assertPatchKeys(
         patch,
-        [
-          "enabled",
-          "bodyType",
-          "autoColliders",
-          "isTrigger",
-          "friction",
-          "restitution",
-          "gravityScale",
-          "linearDamping",
-          "angularDamping",
-          "canSleep",
-          "ccd",
-          "lockTranslations",
-          "lockRotations",
-        ],
+        RIGID_BODY_PATCH_KEYS,
         component.type,
       );
       scene = updateRigidBodyComponent(
@@ -2239,24 +2225,7 @@ function updateComponent(
     case "collider":
       assertPatchKeys(
         patch,
-        [
-          "enabled",
-          "isTrigger",
-          "friction",
-          "restitution",
-          "center",
-          "halfExtents",
-          "fitMode",
-          "meshMode",
-          "bodyType",
-          "gravityScale",
-          "linearDamping",
-          "angularDamping",
-          "canSleep",
-          "ccd",
-          "lockTranslations",
-          "lockRotations",
-        ],
+        COLLIDER_PATCH_KEYS,
         component.type,
       );
       scene = updateColliderComponent(
@@ -2269,20 +2238,7 @@ function updateComponent(
     case "light":
       assertPatchKeys(
         patch,
-        [
-          "enabled",
-          "lightType",
-          "color",
-          "intensity",
-          "castShadow",
-          "groundColor",
-          "distance",
-          "decay",
-          "angle",
-          "penumbra",
-          "width",
-          "height",
-        ],
+        LIGHT_PATCH_KEYS,
         component.type,
       );
       scene = updateLightComponent(
@@ -2295,17 +2251,7 @@ function updateComponent(
     case "text":
       assertPatchKeys(
         patch,
-        [
-          "enabled",
-          "text",
-          "color",
-          "fontSize",
-          "maxWidth",
-          "anchorX",
-          "anchorY",
-          "outlineWidth",
-          "outlineColor",
-        ],
+        TEXT_PATCH_KEYS,
         component.type,
       );
       scene = updateTextComponent(
@@ -2318,17 +2264,7 @@ function updateComponent(
     case "audio-source": {
       assertPatchKeys(
         patch,
-        [
-          "enabled",
-          "audioAssetId",
-          "volume",
-          "loop",
-          "autoplay",
-          "spatial",
-          "refDistance",
-          "rolloffFactor",
-          "maxDistance",
-        ],
+        AUDIO_SOURCE_PATCH_KEYS,
         component.type,
       );
       const audioAssetId = patch.audioAssetId;
@@ -2360,7 +2296,7 @@ function updateComponent(
     case "animation": {
       assertPatchKeys(
         patch,
-        ["enabled", "autoplay", "loop", "clipName", "speed"],
+        ANIMATION_PATCH_KEYS,
         component.type,
       );
       if (patch.clipName !== undefined && typeof patch.clipName !== "string") {
@@ -5266,8 +5202,111 @@ function particlePatchValue(value: unknown): ParticlePropertiesPatch {
   return JSON.parse(JSON.stringify(patch)) as ParticlePropertiesPatch;
 }
 
-function assertPatchKeys(
-  patch: Record<string, unknown>,
+/**
+ * Declares which Patch fields `update_component` accepts, and fails the build
+ * when the Patch type and this list stop agreeing.
+ *
+ * The allow-list has to exist at runtime, so it cannot be read off the type.
+ * That made it a hand-copy of the Patch definition, and a field added to a
+ * component without being copied here becomes quietly unsettable through MCP —
+ * the same silent-drift failure that already produced one shipped bug in the
+ * document validators. Passing the list through here turns that into a compile
+ * error naming the field that was left out.
+ */
+function patchKeysOf<Patch>() {
+  return <const Keys extends readonly (keyof Patch)[]>(
+    keys: Exclude<keyof Patch, Keys[number]> extends never
+      ? Keys
+      : {
+          error: "update_component is missing a Patch field";
+          missing: Exclude<keyof Patch, Keys[number]>;
+        },
+  ): readonly string[] => keys as readonly string[];
+}
+
+const RIGID_BODY_PATCH_KEYS = patchKeysOf<RigidBodyPatch>()([
+  "enabled",
+  "bodyType",
+  "autoColliders",
+  "isTrigger",
+  "friction",
+  "restitution",
+  "gravityScale",
+  "linearDamping",
+  "angularDamping",
+  "canSleep",
+  "ccd",
+  "lockTranslations",
+  "lockRotations",
+]);
+
+const COLLIDER_PATCH_KEYS = patchKeysOf<ColliderPatch>()([
+  "enabled",
+  "isTrigger",
+  "friction",
+  "restitution",
+  "center",
+  "halfExtents",
+  "fitMode",
+  "meshMode",
+  "bodyType",
+  "gravityScale",
+  "linearDamping",
+  "angularDamping",
+  "canSleep",
+  "ccd",
+  "lockTranslations",
+  "lockRotations",
+]);
+
+const LIGHT_PATCH_KEYS = patchKeysOf<LightPatch>()([
+  "enabled",
+  "lightType",
+  "color",
+  "intensity",
+  "castShadow",
+  "groundColor",
+  "distance",
+  "decay",
+  "angle",
+  "penumbra",
+  "width",
+  "height",
+]);
+
+const TEXT_PATCH_KEYS = patchKeysOf<TextPatch>()([
+  "enabled",
+  "text",
+  "color",
+  "fontSize",
+  "maxWidth",
+  "anchorX",
+  "anchorY",
+  "outlineWidth",
+  "outlineColor",
+]);
+
+const AUDIO_SOURCE_PATCH_KEYS = patchKeysOf<AudioSourcePatch>()([
+  "enabled",
+  "audioAssetId",
+  "volume",
+  "loop",
+  "autoplay",
+  "spatial",
+  "refDistance",
+  "rolloffFactor",
+  "maxDistance",
+]);
+
+const ANIMATION_PATCH_KEYS = patchKeysOf<AnimationPatch>()([
+  "enabled",
+  "autoplay",
+  "loop",
+  "clipName",
+  "speed",
+]);
+
+function assertPatchKeys(  patch: Record<string, unknown>,
   allowedKeys: readonly string[],
   componentType: SceneComponent["type"],
   options: { guidance?: string } = {},
