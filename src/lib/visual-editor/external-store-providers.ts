@@ -8,7 +8,8 @@ export type ExternalStoreProvider = {
     | "xrift-components"
     | "sky-shader"
     | "water-shader"
-    | "terrain-preset";
+    | "terrain-preset"
+    | "glow-material";
   name: string;
   badge: string;
   summary: string;
@@ -94,6 +95,19 @@ export const EXTERNAL_STORE_PROVIDERS = [
     authorFallback: "XRift Studio contributors",
     attributionNote:
       "高さフィールドと草の配置規則から生成します。追加後は普通のTerrainとして彫れます。",
+  },
+  {
+    id: "xrift-glow-materials",
+    kind: "glow-material",
+    name: "光るキューブ",
+    badge: "Official",
+    summary: "Bloomで光るMaterialを追加",
+    homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
+    catalogKinds: [],
+    installableKinds: [],
+    authorFallback: "XRift Studio contributors",
+    attributionNote:
+      "発光するPBR Materialです。Scene設定のBloomが拾う明るさで置きます。",
   },
   {
     id: "xrift-components",

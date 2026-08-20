@@ -1,0 +1,72 @@
+import { Canvas } from "@react-three/fiber";
+import { useMemo } from "react";
+import {
+  DEFAULT_SCENE_SETTINGS,
+  glowEmissiveStrength,
+  type GlowMaterialPreset,
+} from "../../lib/visual-editor";
+import { ScenePostprocessing } from "./ScenePostprocessing";
+
+/**
+ * Renders a glow preset as the cube the author is about to place, through the
+ * scene's own compositor.
+ *
+ * The halo is the product here, and it exists only because Bloom runs. Drawing
+ * the card any other way — a swatch, a CSS shadow — would advertise something
+ * the Material does not do on its own.
+ */
+export function GlowMaterialCatalogPreview({
+  preset,
+  className = "h-full w-full",
+}: {
+  preset: GlowMaterialPreset;
+  className?: string;
+}) {
+  const emissiveStrength = useMemo(
+    () => glowEmissiveStrength(preset.tint),
+    [preset.tint],
+  );
+  // The card shows what the preset looks like when it works, so post effects
+  // are on here regardless of the scene's own setting.
+  const postprocessing = useMemo(
+    () => ({
+      ...DEFAULT_SCENE_SETTINGS.postprocessing,
+      enabled: true,
+      // SSAO costs a full pass and contributes nothing to a single cube on an
+      // empty background.
+      ao: { ...DEFAULT_SCENE_SETTINGS.postprocessing.ao, enabled: false },
+    }),
+    [],
+  );
+
+  return (
+    <div className={className}>
+      <Canvas
+        dpr={[1, 1.5]}
+        camera={{ position: [1.9, 1.4, 2.2], fov: 40 }}
+        gl={{ antialias: true }}
+      >
+        <color attach="background" args={["#0b1120"]} />
+        <ambientLight intensity={0.25} />
+        <directionalLight position={[3, 5, 2]} intensity={0.4} />
+        <mesh>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial
+            color={preset.tint}
+            emissive={preset.tint}
+            emissiveIntensity={emissiveStrength}
+            metalness={0}
+            roughness={1}
+          />
+        </mesh>
+        {/* A floor is what makes the halo legible as light rather than as a
+            bright square. */}
+        <mesh position={[0, -0.85, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[8, 8]} />
+          <meshStandardMaterial color="#1e293b" metalness={0} roughness={0.9} />
+        </mesh>
+        <ScenePostprocessing settings={postprocessing} />
+      </Canvas>
+    </div>
+  );
+}

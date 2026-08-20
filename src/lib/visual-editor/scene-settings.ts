@@ -81,6 +81,22 @@ export type ScenePostprocessingSettings = {
 };
 
 /**
+ * Whether an emissive Material in this scene will actually bloom.
+ *
+ * Post effects are off in a new scene and Bloom sits behind that switch, so an
+ * emissive Material can look flat for a reason that has nothing to do with the
+ * Material. Callers use this to say so rather than leaving it to be discovered.
+ */
+export function sceneBloomIsActive(scene: {
+  settings?: unknown;
+}): boolean {
+  const settings = resolveSceneSettings(
+    (scene.settings ?? undefined) as Parameters<typeof resolveSceneSettings>[0],
+  );
+  return settings.postprocessing.enabled && settings.postprocessing.bloom.enabled;
+}
+
+/**
  * Global wind. Entities with a Wind component sway from it, and shader
  * materials that respond to wind — water, foliage — read the same values
  * through the wind contract, so a scene only ever has one wind.

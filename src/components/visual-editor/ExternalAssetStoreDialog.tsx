@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   CircleAlert,
   ExternalLink,
+  Lightbulb,
   LoaderCircle,
   RefreshCw,
   Search,
@@ -31,6 +32,7 @@ import {
   type ResolvedWind,
   type SkyShaderCatalogEntry,
   type WaterShaderCatalogEntry,
+  type GlowMaterialPreset,
   type TerrainPreset,
   type VisualProjectKind,
   type XriftComponentDefinition,
@@ -56,6 +58,10 @@ import {
   TerrainPresetStore,
   type TerrainPresetInstallResult,
 } from "./TerrainPresetStore";
+import {
+  GlowMaterialStore,
+  type GlowMaterialInstallResult,
+} from "./GlowMaterialStore";
 
 type StoreKindFilter = "all" | ExternalStoreAsset["assetKind"];
 
@@ -70,6 +76,8 @@ export function ExternalAssetStoreDialog({
   onAddSkyShader,
   onAddWaterShader,
   onAddTerrainPreset,
+  onAddGlowMaterial,
+  sceneBloomActive,
   sceneWind,
   onAddOfficialComponent,
 }: {
@@ -98,6 +106,11 @@ export function ExternalAssetStoreDialog({
     preset: TerrainPreset,
     grassPresetId: string | null,
   ) => Promise<TerrainPresetInstallResult>;
+  onAddGlowMaterial: (
+    preset: GlowMaterialPreset,
+  ) => Promise<GlowMaterialInstallResult>;
+  /** Whether this Scene will bloom, so the glow shelf can say if it will not. */
+  sceneBloomActive: boolean;
   /** Scene wind, so Water previews move the way the scene will. */
   sceneWind: ResolvedWind;
   onAddOfficialComponent: (
@@ -381,6 +394,12 @@ export function ExternalAssetStoreDialog({
             <TerrainPresetStore
               disabledReason={disabledReason}
               onAdd={onAddTerrainPreset}
+            />
+          ) : provider.kind === "glow-material" ? (
+            <GlowMaterialStore
+              disabledReason={disabledReason}
+              bloomActive={sceneBloomActive}
+              onAdd={onAddGlowMaterial}
             />
           ) : provider.kind === "xrift-components" ? (
             <OfficialXriftComponentStore
@@ -974,6 +993,9 @@ function ProviderIcon({ kind }: { kind: ExternalStoreProvider["kind"] }) {
   if (kind === "water-shader") return <Waves size={14} aria-hidden="true" />;
   if (kind === "terrain-preset") {
     return <Mountain size={14} aria-hidden="true" />;
+  }
+  if (kind === "glow-material") {
+    return <Lightbulb size={14} aria-hidden="true" />;
   }
   if (kind === "xrift-components") {
     return <Boxes size={14} aria-hidden="true" />;

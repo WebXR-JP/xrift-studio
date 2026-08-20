@@ -10,6 +10,11 @@ import {
   BUILTIN_PRIMITIVE_CREATION_IDS,
   getBuiltinPrimitiveCreation,
 } from "./creation-catalog";
+import { BUILTIN_ASSET_IDS } from "./builtin-asset-ids";
+import {
+  createGlowMaterialAsset,
+  DEFAULT_GLOW_MATERIAL_PRESET,
+} from "./glow-material-catalog";
 import { createDocumentId } from "./document-id";
 import {
   VISUAL_PROJECT_SCHEMA_VERSION,
@@ -27,22 +32,8 @@ import {
 } from "./scene-document";
 import { DEFAULT_SCENE_SETTINGS } from "./scene-settings";
 
-export const BUILTIN_ASSET_IDS = {
-  geometry: {
-    box: "builtin-geometry-box",
-    sphere: "builtin-geometry-sphere",
-    cylinder: "builtin-geometry-cylinder",
-    cone: "builtin-geometry-cone",
-    plane: "builtin-geometry-plane",
-  },
-  material: {
-    blue: "builtin-material-blue",
-    violet: "builtin-material-violet",
-    green: "builtin-material-green",
-    orange: "builtin-material-orange",
-    slate: "builtin-material-slate",
-  },
-} as const;
+export { BUILTIN_ASSET_IDS } from "./builtin-asset-ids";
+
 
 export const BUILTIN_MATERIAL_ASSETS = [
   createBuiltinMaterial(
@@ -75,7 +66,31 @@ export const BUILTIN_MATERIAL_ASSETS = [
     "material/slate",
     "#cbd5e1",
   ),
+  createGlowMaterialAsset(DEFAULT_GLOW_MATERIAL_PRESET),
 ] satisfies readonly MaterialAsset[];
+
+/**
+ * Adds a builtin Material to a manifest that predates it.
+ *
+ * Builtin Materials are seeded when a project is created, so a project made
+ * before one existed does not have it. Placing something that depends on a
+ * specific Material has to bring it along rather than silently fall back to
+ * whatever Material happens to be present.
+ */
+export function ensureBuiltinMaterialAsset(
+  assets: AssetManifest,
+  materialAssetId: string,
+): AssetManifest {
+  if (assets.assets[materialAssetId]?.kind === "material") return assets;
+  const builtin = BUILTIN_MATERIAL_ASSETS.find(
+    (material) => material.id === materialAssetId,
+  );
+  if (!builtin) return assets;
+  return {
+    ...assets,
+    assets: { ...assets.assets, [builtin.id]: builtin },
+  };
+}
 
 export const BUILTIN_PRIMITIVE_ASSETS = [
   createBuiltinPrimitive(

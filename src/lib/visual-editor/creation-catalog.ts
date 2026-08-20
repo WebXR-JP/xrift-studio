@@ -1,3 +1,4 @@
+import { BUILTIN_ASSET_IDS } from "./builtin-asset-ids";
 import type {
   MaterialSlotDefinition,
   PrimitiveAsset,
@@ -23,6 +24,15 @@ export type BuiltinPrimitiveCreationDefinition = {
   addCollider: boolean;
   /** Texture-card presets are created from the matching Texture Inspector. */
   showInCreateMenu: boolean;
+  /**
+   * Builtin Material this creation is placed with.
+   *
+   * This used to be a shape-keyed map inside the editor shell, which meant a
+   * creation could not choose its own Material and two creations of the same
+   * shape could not differ. The glow cube is a box that must arrive emissive,
+   * so the choice belongs to the creation rather than to its geometry.
+   */
+  preferredMaterialAssetId: string;
 };
 
 export const BUILTIN_PRIMITIVE_CREATION_IDS = {
@@ -31,6 +41,7 @@ export const BUILTIN_PRIMITIVE_CREATION_IDS = {
   cylinder: "builtin-primitive/cylinder",
   cone: "builtin-primitive/cone",
   plane: "builtin-primitive/plane",
+  glowCube: "builtin-primitive/glow-cube",
   backdropCard: "builtin-primitive/backdrop-card",
   grassCard: "builtin-primitive/grass-card",
 } as const;
@@ -42,6 +53,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
     "壁、台、建物のブロックに使える基本形状",
     "box",
     "#60a5fa",
+    BUILTIN_ASSET_IDS.material.blue,
   ),
   createDefinition(
     BUILTIN_PRIMITIVE_CREATION_IDS.sphere,
@@ -49,6 +61,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
     "装飾やインタラクションの目印に使える球体",
     "sphere",
     "#a78bfa",
+    BUILTIN_ASSET_IDS.material.violet,
   ),
   createDefinition(
     BUILTIN_PRIMITIVE_CREATION_IDS.cylinder,
@@ -56,6 +69,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
     "柱や足場のベースに使える円柱",
     "cylinder",
     "#34d399",
+    BUILTIN_ASSET_IDS.material.green,
   ),
   createDefinition(
     BUILTIN_PRIMITIVE_CREATION_IDS.cone,
@@ -63,6 +77,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
     "マーカーや屋根に使える円錐",
     "cone",
     "#fb923c",
+    BUILTIN_ASSET_IDS.material.orange,
   ),
   createDefinition(
     BUILTIN_PRIMITIVE_CREATION_IDS.plane,
@@ -70,6 +85,29 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
     "ワールドの土台として配置できる床",
     "plane",
     "#94a3b8",
+    BUILTIN_ASSET_IDS.material.slate,
+  ),
+  createDefinition(
+    BUILTIN_PRIMITIVE_CREATION_IDS.glowCube,
+    "光るキューブ",
+    "Bloomで光って見えるキューブ。手軽な間接照明として置ける",
+    "box",
+    "#ffedd5",
+    BUILTIN_ASSET_IDS.material.glow,
+    {
+      // Off the floor and a little smaller than a plain cube: it reads as a
+      // fixture rather than a building block.
+      defaultTransform: {
+        position: [0, 1.6, 0],
+        rotation: [0, 0, 0],
+        scale: [0.6, 0.6, 0.6],
+      },
+      // A light source that also darkens what is behind it looks wrong, and a
+      // fixture is usually placed out of reach.
+      castShadow: false,
+      receiveShadow: false,
+      addCollider: false,
+    },
   ),
   createDefinition(
     BUILTIN_PRIMITIVE_CREATION_IDS.backdropCard,
@@ -77,6 +115,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
     "半透明テクスチャを使う、遠景向けの両面カード",
     "plane",
     "#7dd3fc",
+    BUILTIN_ASSET_IDS.material.slate,
     {
       defaultTransform: {
         position: [0, 5.5, -18],
@@ -95,6 +134,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
     "半透明テクスチャを使う、草や花向けの両面カード",
     "plane",
     "#86efac",
+    BUILTIN_ASSET_IDS.material.green,
     {
       defaultTransform: {
         position: [0, 1.2, 0],
@@ -147,6 +187,7 @@ function createDefinition(
   description: string,
   primitive: PrimitiveGeometry,
   previewColor: string,
+  preferredMaterialAssetId: string,
   options: Partial<
     Pick<
       BuiltinPrimitiveCreationDefinition,
@@ -165,6 +206,7 @@ function createDefinition(
     description,
     primitive,
     previewColor,
+    preferredMaterialAssetId,
     defaultTransform:
       options.defaultTransform ??
       (isPlane

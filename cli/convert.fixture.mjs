@@ -72,6 +72,7 @@ import { runModelReimportImpactFixtureAssertions } from "../src/lib/visual-edito
 import { runOpenBrushFixtureAssertions } from "../src/lib/visual-editor/open-brush.fixture.ts";
 import { runVisualPublishFixtureAssertions } from "../src/lib/visual-editor/publish.fixture.ts";
 import { runSupportReportFixtureAssertions } from "../src/lib/support-report.fixture.ts";
+import { runGlowMaterialCatalogFixtureAssertions } from "../src/lib/visual-editor/glow-material-catalog.fixture.ts";
 import { runVisualUploadFixtureAssertions } from "../src/lib/visual-editor/upload.fixture.ts";
 import { runRuntimeSpawnFixtureAssertions } from "../src/lib/visual-editor/runtime-spawn.fixture.ts";
 import { runSkyboxImportFixtureAssertions } from "../src/lib/visual-editor/skybox-import.fixture.ts";
@@ -283,6 +284,7 @@ try {
     ["runtime spawn", runRuntimeSpawnFixtureAssertions],
     ["visual publish", runVisualPublishFixtureAssertions],
     ["support report", runSupportReportFixtureAssertions],
+    ["glow material catalog", runGlowMaterialCatalogFixtureAssertions],
     ["visual upload branch", runVisualUploadFixtureAssertions],
     ["classic project import", runClassicProjectImportFixtureAssertions],
     ["asset operation lock", runAssetOperationLockFixtureAssertions],

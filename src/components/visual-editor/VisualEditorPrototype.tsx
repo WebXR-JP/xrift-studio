@@ -160,6 +160,13 @@ import {
   type XriftComponentDefinition,
   mcpTextureImportSettingsPatch,
   describeVisualUploadCapabilities,
+  BUILTIN_PRIMITIVE_CREATION_IDS,
+  createGlowMaterialAsset,
+  ensureBuiltinMaterialAsset,
+  glowMaterialAssetId,
+  sceneBloomIsActive,
+  type GlowMaterialPreset,
+  type MaterialAsset,
   xriftMcpToolSurface,
 } from "../../lib/visual-editor";
 import {
@@ -180,6 +187,7 @@ import { ExternalAssetStoreDialog } from "./ExternalAssetStoreDialog";
 import type { SkyShaderInstallResult } from "./SkyShaderStore";
 import type { WaterShaderInstallResult } from "./WaterShaderStore";
 import type { TerrainPresetInstallResult } from "./TerrainPresetStore";
+import type { GlowMaterialInstallResult } from "./GlowMaterialStore";
 import {
   hasActiveAssetImport,
   resolveAssetOperationAvailability,
@@ -4419,21 +4427,37 @@ export function VisualEditorPrototype({
   );
 
   const handlePlacePrimitive = useCallback(
-    (creationId: string, position?: Vec3) => {
+    (
+      creationId: string,
+      position?: Vec3,
+      /** Placed with this Material instead of the creation's own, and added to
+       *  the library if the project does not have it yet. Store presets use it
+       *  so every tint reaches the same placement path. */
+      overrideMaterial?: MaterialAsset,
+    ) => {
       const definition = getBuiltinPrimitiveCreation(creationId);
       if (!definition) return;
 
-      const preferredMaterialId = {
-        box: BUILTIN_ASSET_IDS.material.blue,
-        sphere: BUILTIN_ASSET_IDS.material.violet,
-        cylinder: BUILTIN_ASSET_IDS.material.green,
-        cone: BUILTIN_ASSET_IDS.material.orange,
-        plane: BUILTIN_ASSET_IDS.material.slate,
-      }[definition.primitive];
+      // The creation names the Material it wants, and a project made before
+      // that Material existed gets it added rather than silently falling back —
+      // a glow cube placed with an ordinary Material is not a glow cube.
+      const preferredMaterialId =
+        overrideMaterial?.id ?? definition.preferredMaterialAssetId;
+      const assets = overrideMaterial
+        ? bundle.assets.assets[overrideMaterial.id]?.kind === "material"
+          ? bundle.assets
+          : {
+              ...bundle.assets,
+              assets: {
+                ...bundle.assets.assets,
+                [overrideMaterial.id]: overrideMaterial,
+              },
+            }
+        : ensureBuiltinMaterialAsset(bundle.assets, preferredMaterialId);
       const materialAssetId =
-        bundle.assets.assets[preferredMaterialId]?.kind === "material"
+        assets.assets[preferredMaterialId]?.kind === "material"
           ? preferredMaterialId
-          : Object.values(bundle.assets.assets).find(
+          : Object.values(assets.assets).find(
               (asset) => asset.kind === "material",
             )?.id;
       if (!materialAssetId) {
@@ -4449,7 +4473,7 @@ export function VisualEditorPrototype({
       ];
       const result = addBuiltinPrimitiveEntity(
         bundle.scene,
-        bundle.assets,
+        assets,
         creationId,
         materialAssetId,
         position ?? fallbackPosition,
@@ -4458,10 +4482,18 @@ export function VisualEditorPrototype({
         setNotice("このプリミティブを現在のシーンへ配置できませんでした");
         return;
       }
-      setBundle(touchProject({ ...bundle, scene: result.scene }));
+      setBundle(touchProject({ ...bundle, assets, scene: result.scene }));
       setSceneSelection({ kind: "entity", id: result.entityId });
       setAssetSelection(null);
-      setNotice(`「${definition.name}」をシーンへ追加しました`);
+      // An emissive Material only reads as light once Bloom runs, and post
+      // effects are off in a new scene. Say where the switch is instead of
+      // letting the author wonder why the cube looks flat.
+      setNotice(
+        materialAssetId.startsWith(BUILTIN_ASSET_IDS.material.glow) &&
+          !sceneBloomIsActive(bundle.scene)
+          ? `「${definition.name}」を追加しました。光らせるにはScene設定のポストエフェクトとBloomを有効にしてください`
+          : `「${definition.name}」をシーンへ追加しました`,
+      );
     },
     [bundle, editorMode, setAssetSelection, setBundle, setSceneSelection],
   );
@@ -5607,6 +5639,26 @@ export function VisualEditorPrototype({
       return { entityName: preset.label };
     },
     [handleCreateTerrain],
+  );
+
+  const handleAddGlowMaterial = useCallback(
+    async (
+      preset: GlowMaterialPreset,
+    ): Promise<GlowMaterialInstallResult> => {
+      // Placing goes through the Create menu path, so a glow cube from the
+      // store and one from the menu are the same Entity. Only the Material
+      // differs, and that difference travels with the preset.
+      handlePlacePrimitive(
+        BUILTIN_PRIMITIVE_CREATION_IDS.glowCube,
+        undefined,
+        glowMaterialAssetId(preset.id) === BUILTIN_ASSET_IDS.material.glow
+          ? undefined
+          : createGlowMaterialAsset(preset),
+      );
+      setExternalStoreOpen(false);
+      return { entityName: `${preset.label}の光るキューブ` };
+    },
+    [handlePlacePrimitive],
   );
 
   const handleOptimizeColliders = useCallback(
@@ -8916,6 +8968,8 @@ export function VisualEditorPrototype({
             onAddSkyShader={handleAddSkyShader}
             onAddWaterShader={handleAddWaterShader}
             onAddTerrainPreset={handleAddTerrainPreset}
+            onAddGlowMaterial={handleAddGlowMaterial}
+            sceneBloomActive={sceneBloomIsActive(bundle.scene)}
             sceneWind={resolveSceneWind(
               resolveSceneSettings(bundle.scene.settings).vegetation,
             )}

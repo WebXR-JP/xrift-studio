@@ -1,0 +1,135 @@
+import {
+  normalizeMaterialProperties,
+  type MaterialAsset,
+} from "./asset-manifest";
+import { BUILTIN_ASSET_IDS } from "./builtin-asset-ids";
+import { DEFAULT_SCENE_SETTINGS } from "./scene-settings";
+
+/**
+ * Emissive Material presets that read as light once Bloom is on.
+ *
+ * These are ordinary PBR Materials, not custom shaders. An emissive factor
+ * bright enough to clear the Bloom threshold is the whole mechanism, which is
+ * why the shelf can offer lighting without adding a rendering path.
+ */
+export type GlowMaterialPreset = {
+  id: string;
+  label: string;
+  description: string;
+  /** sRGB hex used for both the base colour and the emissive factor. */
+  tint: string;
+};
+
+export const GLOW_MATERIAL_PRESETS: readonly GlowMaterialPreset[] = [
+  {
+    id: "warm-white",
+    label: "ウォームホワイト",
+    description: "室内灯のような暖かい白。天井や壁面の間接照明に",
+    tint: "#ffedd5",
+  },
+  {
+    id: "cool-white",
+    label: "クールホワイト",
+    description: "白色灯のような青みのある白。作業空間や通路に",
+    tint: "#e0f2fe",
+  },
+  {
+    id: "signal-cyan",
+    label: "シアン",
+    description: "案内や装飾向けの寒色。暗い場所で強く目立つ",
+    tint: "#67e8f9",
+  },
+  {
+    id: "signal-magenta",
+    label: "マゼンタ",
+    description: "演出向けの暖色寄りのピンク。舞台や看板に",
+    tint: "#f0abfc",
+  },
+];
+
+/** Rec. 709 relative luminance of an sRGB hex, in linear light. */
+export function tintRelativeLuminance(tint: string): number {
+  const [r, g, b] = tintToLinearRgb(tint);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+export function tintToLinearRgb(tint: string): [number, number, number] {
+  const value = tint.replace("#", "");
+  return [0, 2, 4].map((offset) => {
+    const channel = parseInt(value.slice(offset, offset + 2), 16) / 255;
+    return channel <= 0.04045
+      ? channel / 12.92
+      : ((channel + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+}
+
+/**
+ * How far above the Bloom threshold a preset is placed.
+ *
+ * A tint is not free to be as bright as it looks: Bloom compares luminance, and
+ * a saturated colour carries far less of it than white at the same emissive
+ * strength. Deriving the strength per tint is what keeps a cyan cube from
+ * arriving inert while a white one blooms — the alternative is a hand-tuned
+ * number per preset that silently stops being right when the threshold moves.
+ */
+const BLOOM_HEADROOM = 1.5;
+
+export function glowEmissiveStrength(
+  tint: string,
+  bloomThreshold = DEFAULT_SCENE_SETTINGS.postprocessing.bloom.threshold,
+): number {
+  const luminance = tintRelativeLuminance(tint);
+  if (luminance <= 0) return bloomThreshold * BLOOM_HEADROOM;
+  return Number(((bloomThreshold * BLOOM_HEADROOM) / luminance).toFixed(2));
+}
+
+export function getGlowMaterialPreset(
+  presetId: string,
+): GlowMaterialPreset | undefined {
+  return GLOW_MATERIAL_PRESETS.find((preset) => preset.id === presetId);
+}
+
+/**
+ * The first preset is what Studio ships as a builtin, so the Create menu and
+ * the store's warm white produce one Material rather than two that look alike.
+ */
+export const DEFAULT_GLOW_MATERIAL_PRESET = GLOW_MATERIAL_PRESETS[0];
+
+export function glowMaterialAssetId(presetId: string): string {
+  return presetId === DEFAULT_GLOW_MATERIAL_PRESET.id
+    ? BUILTIN_ASSET_IDS.material.glow
+    : `${BUILTIN_ASSET_IDS.material.glow}-${presetId}`;
+}
+
+export function createGlowMaterialAsset(
+  preset: GlowMaterialPreset,
+): MaterialAsset {
+  return {
+    id: glowMaterialAssetId(preset.id),
+    name: `グロー / ${preset.label}`,
+    kind: "material",
+    status: "ready",
+    source: { kind: "builtin", key: `material/glow/${preset.id}` },
+    properties: normalizeMaterialProperties({
+      color: preset.tint,
+      // The emissive term carries the surface, so the PBR response only shows
+      // where a scene light grazes it.
+      metalness: 0,
+      roughness: 1,
+      emissiveFactor: tintToUnitRgb(preset.tint),
+      extensions: {
+        KHR_materials_emissive_strength: {
+          emissiveStrength: glowEmissiveStrength(preset.tint),
+        },
+      },
+    }),
+  };
+}
+
+/** sRGB hex to the 0..1 triple `emissiveFactor` stores, without linearising. */
+function tintToUnitRgb(tint: string): [number, number, number] {
+  const value = tint.replace("#", "");
+  return [0, 2, 4].map((offset) =>
+    Number((parseInt(value.slice(offset, offset + 2), 16) / 255).toFixed(4)),
+  ) as [number, number, number];
+}
