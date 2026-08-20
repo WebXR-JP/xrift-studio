@@ -3,18 +3,11 @@ import { compileVisualProject } from "./compiler/compile";
 import { serializeVisualProjectDocuments } from "./persistence";
 import { updatePrefabDocumentFromSource } from "./prefab-document";
 import {
-  getKhrInteractivityOnStartAnimationIndices,
-  validateKhrInteractivityExtension,
-} from "./interactivity-graph";
-import {
   createTransformComponent,
   type RegisteredSceneComponent,
 } from "./scene-document";
 import {
   STARTER_ASSET_FOLDER_IDS,
-  STUDIO_GUIDE_DOOR_INTERACTIVITY_ASSET_ID,
-  STUDIO_GUIDE_PARTICLE_ASSET_IDS,
-  STUDIO_GUIDE_SKYBOX_TEXTURE_ASSET_ID,
   STARTER_WORLD_TEMPLATES,
   createStarterWorldProject,
   defaultVisualStarterTemplateId,
@@ -27,15 +20,6 @@ export function runStarterTemplateFixtureAssertions(): void {
   assert(
     defaultVisualStarterTemplateId("world") === "xrift-official",
     "The official XRift sample must be the default World starter",
-  );
-
-  assert(
-    !STARTER_WORLD_TEMPLATES.some(
-      (template) =>
-        (template.id as string) === "studio-guide" ||
-        (template.id as string) === "openbrush",
-    ),
-    "Guide and OpenBrush must not be selectable World starters",
   );
 
   const availableStarterTemplateIds: readonly StarterWorldTemplateId[] =
@@ -57,34 +41,9 @@ export function runStarterTemplateFixtureAssertions(): void {
 
     assert(
       plan.bundledAssetCopies.length ===
-        (templateId === "studio-guide"
-          ? 26
-          : templateId === "openbrush"
-            ? 2
-            : templateId === "xrift-official"
-              ? 5
-              : 0),
+        (templateId === "xrift-official" ? 5 : 0),
       `${templateId}: bundled source copy plan is incorrect`,
     );
-    if (templateId === "openbrush") {
-      const licenseCopy = plan.bundledAssetCopies.find(
-        (copy) => copy.assetId === "openbrush-apache-license",
-      );
-      assert(
-        licenseCopy?.targetRelativePath.endsWith(".txt") &&
-          licenseCopy.mediaType === "text/plain" &&
-          licenseCopy.integrity === "license-text",
-        "openbrush: license extension and media type must match",
-      );
-      assert(
-        plan.bundledAssetCopies.some(
-          (copy) =>
-            copy.assetId === "openbrush-all-brushes" &&
-            copy.integrity === "strict",
-        ),
-        "openbrush: model must retain strict integrity verification",
-      );
-    }
     if (templateId === "xrift-official") {
       assert(
         plan.bundledAssetCopies.some(
@@ -100,22 +59,12 @@ export function runStarterTemplateFixtureAssertions(): void {
         "xrift-official: source and MIT license must retain strict verification",
       );
     }
-    assert(modelAssets.length ===
-      (templateId === "studio-guide"
-        ? 12
-        : templateId === "openbrush"
-          ? 1
-          : templateId === "xrift-official"
-            ? 2
-            : 0),
-      `${templateId}: Model library is incorrect`);
     assert(
-      textureAssets.length ===
-        (templateId === "studio-guide"
-          ? 14
-          : templateId === "xrift-official"
-            ? 1
-            : 0),
+      modelAssets.length === (templateId === "xrift-official" ? 2 : 0),
+      `${templateId}: Model library is incorrect`,
+    );
+    assert(
+      textureAssets.length === (templateId === "xrift-official" ? 1 : 0),
       `${templateId}: Texture library is incorrect`,
     );
     assert(
@@ -125,15 +74,13 @@ export function runStarterTemplateFixtureAssertions(): void {
       `${templateId}: bundled direct-load Textures must render upright`,
     );
     assert(
-      particleAssets.length === (templateId === "studio-guide" ? 10 : 0),
+      particleAssets.length === 0,
       `${templateId}: Particle library is incorrect`,
     );
     assert(
-      templateId === "studio-guide"
-        ? materialAssets.length === 13
-        : templateId === "xrift-official"
-          ? materialAssets.length >= 7
-          : materialAssets.length === 1,
+      templateId === "xrift-official"
+        ? materialAssets.length >= 7
+        : materialAssets.length === 1,
       `${templateId}: converted Material library is incorrect`,
     );
     assert(prefabAssets.length > 0, `${templateId}: Prefab library is empty`);
@@ -192,384 +139,27 @@ export function runStarterTemplateFixtureAssertions(): void {
         outputMode: "classic-runtime",
       },
     );
-    const expectsParticleAdapterBlock = templateId === "studio-guide";
     assert(
-      result.canStage === !expectsParticleAdapterBlock,
-      expectsParticleAdapterBlock
-        ? `${templateId}: Classic runtime must block unsupported Particle output`
-        : `${templateId}: Starter World must compile for staging`,
+      result.canStage,
+      `${templateId}: Starter World must compile for staging`,
     );
     assert(
-      expectsParticleAdapterBlock
-        ? result.diagnostics.some(
-            (diagnostic) =>
-              diagnostic.severity === "blocking" &&
-              diagnostic.code === "runtime-particle-adapter-missing",
-          )
-        : !result.diagnostics.some(
-            (diagnostic) => diagnostic.severity === "blocking",
-          ),
-      expectsParticleAdapterBlock
-        ? `${templateId}: missing Particle adapter blocking diagnostic`
-        : `${templateId}: Starter World has a blocking diagnostic`,
+      !result.diagnostics.some(
+        (diagnostic) => diagnostic.severity === "blocking",
+      ),
+      `${templateId}: Starter World has a blocking diagnostic`,
     );
     assert(
       JSON.stringify(result.stagingPlan.runtimePackageSpecs) ===
-        JSON.stringify(
-          templateId === "openbrush"
-            ? [
-                "xrift-studio-runtime@0.1.0",
-                "three-icosa@0.4.2-alpha.18",
-              ]
-            : ["xrift-studio-runtime@0.1.0"],
-        ),
+        JSON.stringify(["xrift-studio-runtime@0.1.0"]),
       `${templateId}: compiler runtime package plan is incorrect`,
     );
-    if (templateId === "openbrush") {
-      const runtimeManifest = result.overlayFiles.find(
-        (file) => file.relativePath === "public/xrift/runtime.json",
-      )?.content ?? "";
-      assert(runtimeManifest.includes('"renderer": "three-icosa"'),
-        "OpenBrush starter must describe its runtime renderer");
-      assert(runtimeManifest.includes("three-icosa-template/brushes/"),
-        "OpenBrush starter must preserve the hosted brush library path");
-    }
     if (templateId !== "xrift-official") {
       assert(
         Object.values(plan.scene.entities).filter((entity) =>
           entity.components.some((component) => component.type === "light"),
         ).length === 1,
         `${templateId}: Starter World must use one main light`,
-      );
-    }
-    if ((templateId as string) === "studio-guide") {
-      const sceneEntities = Object.values(plan.scene.entities);
-      const studioTemplate = STARTER_WORLD_TEMPLATES.find(
-        (template) => (template.id as string) === "studio-guide",
-      );
-      const skyboxAsset =
-        plan.assets.assets[STUDIO_GUIDE_SKYBOX_TEXTURE_ASSET_ID];
-      const worldSource =
-        compileVisualProject(documents, {
-          generatedAt: "2026-01-01T00:00:00.000Z",
-          outputMode: "classic-jsx",
-        }).overlayFiles.find(
-          (file) => file.relativePath === "src/World.tsx",
-        )?.content ?? "";
-      assert(
-        studioTemplate?.description.includes("Codex") &&
-          studioTemplate.description.includes("MCP"),
-        "Studio guide card must introduce its Codex and MCP learning exhibit",
-      );
-      assert(
-        skyboxAsset?.kind === "texture" &&
-          skyboxAsset.usage === "environment" &&
-          skyboxAsset.projection === "equirectangular" &&
-          skyboxAsset.importMetadata?.sourceFormat === "hdr" &&
-          skyboxAsset.attribution?.providerId === "poly-haven" &&
-          skyboxAsset.attribution.licenseName === "CC0 1.0" &&
-          plan.scene.settings?.skybox.imageAssetId === skyboxAsset.id &&
-          plan.scene.settings.skybox.enabled &&
-          plan.scene.settings.skybox.iblEnabled,
-        "Studio guide must use the attributed Poly Haven HDRI as Skybox and IBL",
-      );
-      assert(
-        worldSource.includes("<XRiftStudioImageSkybox") &&
-          worldSource.includes("flipY={true}"),
-        "Studio guide must compile its HDR Skybox with the upright orientation",
-      );
-      assert(
-        !worldSource.includes(
-          "let sourceNodeIndex: number | undefined;",
-        ) &&
-          worldSource.includes(
-            "return () => {\n      action.stop();\n    };",
-          ),
-        "Studio guide must not generate unused Model resolver locals or an invalid Animation cleanup",
-      );
-      assert(
-        plan.bundledAssetCopies.every(
-          (copy) =>
-            !copy.targetRelativePath.includes(":") &&
-            !copy.targetRelativePath.includes("\\"),
-        ),
-        "Studio guide bundled assets must never retain a Google Drive path",
-      );
-      const museumPropAssets = modelAssets.filter((asset) =>
-        asset.name.startsWith("Museum Prop:"),
-      );
-      assert(
-        museumPropAssets.length === 7 &&
-          museumPropAssets.every(
-            (asset) =>
-              asset.kind === "model" &&
-              !asset.importSettings.generateColliders &&
-              asset.materialSlots.length >= 2,
-          ),
-        "Studio guide must register the optimized Drive prop library",
-      );
-      assert(
-        sceneEntities.filter((entity) =>
-          entity.id.startsWith("guide-planter-"),
-        ).length === 4 &&
-          [
-            "guide-information-board",
-            "guide-gallery-bench",
-            "guide-telescope",
-            "guide-sample-laptop",
-            "guide-sample-globe",
-            "guide-sample-vr-headset",
-          ].every((entityId) => {
-            const entity = plan.scene.entities[entityId];
-            return (
-              entity &&
-              !entity.components.some(
-                (component) => component.type === "collider",
-              )
-            );
-          }),
-        "Studio guide furnishings must add visual density without trimesh colliders",
-      );
-      const entityPosition = (entityId: string) => {
-        const transform = plan.scene.entities[entityId]?.components.find(
-          (component) => component.type === "transform",
-        );
-        return transform?.type === "transform"
-          ? transform.position
-          : undefined;
-      };
-      const entityScale = (entityId: string) => {
-        const transform = plan.scene.entities[entityId]?.components.find(
-          (component) => component.type === "transform",
-        );
-        return transform?.type === "transform"
-          ? transform.scale
-          : undefined;
-      };
-      const entityText = (entityId: string) => {
-        const component = plan.scene.entities[entityId]?.components.find(
-          (candidate) => candidate.type === "text",
-        );
-        return component?.type === "text" ? component.text : undefined;
-      };
-      assert(
-        JSON.stringify(entityPosition("starter-floor")) === "[0,0,-2.5]" &&
-          JSON.stringify(entityScale("starter-floor")) === "[26,40,1]" &&
-          JSON.stringify(entityPosition("guide-museum-wall-left")) ===
-            "[-11,2.6,-2.5]" &&
-          JSON.stringify(entityPosition("guide-museum-wall-right")) ===
-            "[11,2.6,-2.5]" &&
-          JSON.stringify(entityPosition("guide-museum-wall-back")) ===
-            "[0,2.6,-20]",
-        "Studio guide museum must retain its compact 22 m by 35 m layout",
-      );
-      assert(
-        [
-          "guide-sample-plinth",
-          "guide-laptop-plinth",
-          "guide-vr-plinth",
-        ].every((entityId) => {
-          const position = entityPosition(entityId);
-          return position && Math.abs(position[0]) >= 6;
-        }) &&
-          ["guide-museum-route-1", "guide-museum-route-2"].every(
-            (entityId) => {
-              const position = entityPosition(entityId);
-              return position && Math.abs(position[0]) === 2.25;
-            },
-          ) &&
-          JSON.stringify(entityPosition("guide-station-overview")) ===
-            "[5.25,2.55,10.2]" &&
-          JSON.stringify(entityScale("guide-station-overview-frame")) ===
-            "[5.95,4.84,0.12]" &&
-          Math.abs(
-            entityPosition("guide-practice-label-backdrop")?.[0] ?? 0,
-          ) >= 10 &&
-          Math.abs(
-            entityPosition("guide-components-backdrop")?.[0] ?? 0,
-          ) >= 10 &&
-          Math.abs(
-            entityPosition("guide-ai-workflow-backdrop")?.[0] ?? 0,
-          ) >= 10,
-        "Studio guide must keep the 4.5 m central promenade clear of plinths and large wall signs",
-      );
-      assert(
-        entityText("guide-ai-workflow-heading")?.includes("Codex + MCP") &&
-          entityText("guide-ai-workflow-body")?.includes("ワンクリック登録") &&
-          entityText("guide-ai-workflow-body")?.includes("Interactivity") &&
-          entityText("guide-ai-workflow-safety")?.includes("Undo・自動保存"),
-        "Studio guide must explain the Codex and MCP workflow, editable scope, and recovery path",
-      );
-      const tagBoardPosition = entityPosition("guide-xrift-tag-board");
-      const entryLogPosition = entityPosition("guide-xrift-entry-log");
-      assert(
-        tagBoardPosition?.[1] === 1.25 &&
-          tagBoardPosition[1] - 2.08 / 2 >= 0.2 &&
-          Math.abs(tagBoardPosition[0]) >= 6 &&
-          entryLogPosition?.[1] === 1.8 &&
-          entryLogPosition[1] - 3.15 / 2 >= 0.2 &&
-          Math.abs(entryLogPosition[0]) >= 6,
-        "Studio guide XRift boards must clear the floor using their official package bounds and stay outside the promenade",
-      );
-      const gltfDoor = plan.scene.entities["guide-gltf-door"];
-      const interactionDoor = plan.scene.entities["guide-interaction-door"];
-      const gltfDoorAnimation = gltfDoor?.components.find(
-        (component) => component.type === "animation",
-      );
-      const interactionDoorAnimation = interactionDoor?.components.find(
-        (component) => component.type === "animation",
-      );
-      assert(
-        gltfDoorAnimation?.type === "animation" &&
-          gltfDoorAnimation.autoplay &&
-          !gltfDoorAnimation.loop &&
-          interactionDoorAnimation?.type === "animation" &&
-          !interactionDoorAnimation.autoplay &&
-          !interactionDoorAnimation.loop,
-        "Studio guide doors must compare glTF Autoplay with Interaction playback",
-      );
-      assert(
-        !gltfDoor?.components.some(
-          (component) => component.type === "collider",
-        ) &&
-          !interactionDoor?.components.some(
-            (component) => component.type === "collider",
-          ),
-        "Animated guide doors must not leave a static collider in the route",
-      );
-      const interactionAsset =
-        plan.assets.assets[STUDIO_GUIDE_DOOR_INTERACTIVITY_ASSET_ID];
-      assert(
-        interactionAsset?.kind === "interactivity" &&
-          interactionAsset.folderId ===
-            STARTER_ASSET_FOLDER_IDS.behaviors &&
-          !validateKhrInteractivityExtension(
-            interactionAsset.extension,
-          ).some((diagnostic) => diagnostic.severity === "error") &&
-          JSON.stringify(
-            getKhrInteractivityOnStartAnimationIndices(
-              interactionAsset.extension,
-            ),
-          ) === "[0]",
-        "Studio guide must include an editable onStart to animation/start graph",
-      );
-      assert(
-        modelAssets.filter((asset) =>
-          asset.name.startsWith("Demo Door:"),
-        ).length === 2 &&
-          modelAssets
-            .filter((asset) => asset.name.startsWith("Demo Door:"))
-            .every(
-              (asset) =>
-                asset.kind === "model" &&
-                asset.importSettings.importAnimations &&
-                asset.importMetadata?.animations.length === 1 &&
-                asset.materialSlots.length === 3,
-            ),
-        "Studio guide must register both animated door Models and materials",
-      );
-      assert(
-        sceneEntities.filter((entity) =>
-          entity.name.endsWith("スクリーンショット"),
-        ).length === 7,
-        "Studio guide must include six visual learning screens and one install QR",
-      );
-      assert(
-        sceneEntities.filter((entity) =>
-          entity.components.some(
-            (component) =>
-              component.type === "xrift-component" &&
-              component.schemaId !== "xrift.spawn-point",
-          ),
-        ).length >= 3,
-        "Studio guide must include editable official XRift Component samples",
-      );
-      assert(
-        textureAssets.filter((asset) =>
-          asset.name.startsWith("Studio Guide:"),
-        ).length === 7 &&
-          textureAssets
-            .filter(
-              (asset) =>
-                asset.name.startsWith("Studio Guide:") &&
-                asset.name !== "Studio Guide: Install QR",
-            )
-            .every(
-              (asset) =>
-                asset.kind === "texture" &&
-                asset.importMetadata?.width === 1024 &&
-                asset.importMetadata.height === 576,
-            ),
-        "Studio guide screenshots must retain their learning-panel dimensions",
-      );
-      const installQr = textureAssets.find(
-        (asset) => asset.name === "Studio Guide: Install QR",
-      );
-      assert(
-        installQr?.kind === "texture" &&
-          installQr.importMetadata?.width === 1024 &&
-          installQr.importMetadata.height === 1024,
-        "Studio guide install QR must retain its square dimensions",
-      );
-      const reusableParticleAssets = STUDIO_GUIDE_PARTICLE_ASSET_IDS.map(
-        (assetId) => plan.assets.assets[assetId],
-      );
-      assert(
-        reusableParticleAssets.every(
-          (asset) =>
-            asset?.kind === "particle" &&
-            asset.folderId === STARTER_ASSET_FOLDER_IDS.particles &&
-            typeof asset.properties.renderer.textureAssetId === "string" &&
-            plan.assets.assets[asset.properties.renderer.textureAssetId]
-              ?.kind === "texture",
-        ),
-        "Studio guide Particle samples must be reusable Assets with valid Texture references",
-      );
-      const particleTextureAssets = textureAssets.filter((asset) =>
-        asset.name.startsWith("Particle Texture:"),
-      );
-      assert(
-        particleTextureAssets.length === 4 &&
-          particleTextureAssets.every(
-            (asset) =>
-              asset.kind === "texture" &&
-              asset.importMetadata?.sourceFormat === "png" &&
-              asset.importMetadata.width === 256 &&
-              asset.importMetadata.height === 256 &&
-              asset.importSettings.sampler.wrapS === "clamp-to-edge" &&
-              asset.importSettings.sampler.wrapT === "clamp-to-edge",
-          ),
-        "Studio guide must bundle four optimized reusable Particle textures",
-      );
-      const particleEntities = sceneEntities.filter((entity) =>
-        entity.components.some(
-          (component) => component.type === "particle-emitter",
-        ),
-      );
-      assert(
-        particleEntities.length === STUDIO_GUIDE_PARTICLE_ASSET_IDS.length &&
-          particleEntities.every(
-            (entity) =>
-              !entity.components.some(
-                (component) => component.type === "collider",
-              ),
-          ) &&
-          STUDIO_GUIDE_PARTICLE_ASSET_IDS.every((assetId) =>
-            particleEntities.some((entity) =>
-              entity.components.some(
-                (component) =>
-                  component.type === "particle-emitter" &&
-                  component.particleAssetId === assetId,
-              ),
-            ),
-          ),
-        "Studio guide Particle Lab must place every sample without route colliders",
-      );
-      assert(
-        sceneEntities.filter((entity) =>
-          entity.id.startsWith("guide-museum-wall-"),
-        ).length === 5,
-        "Studio guide must provide an editable one-floor museum shell",
       );
     }
     if (templateId === "xrift-official") {

@@ -79,6 +79,7 @@ export * from "./terrain-grass.fixture";
 export * from "./terrain-presets";
 export * from "./texture-card";
 export * from "./serialization";
+export * from "./legacy-starter-asset-ids";
 export * from "./starter-templates";
 export * from "./starter-templates.fixture";
 export * from "./scripting/script-contract";

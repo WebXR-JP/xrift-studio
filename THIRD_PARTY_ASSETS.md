@@ -7,7 +7,7 @@
 | `openbrush-all-brushes.glb` | [`icosa-foundation/three-icosa/examples/all_brushes.glb`](https://github.com/icosa-foundation/three-icosa/blob/18682538402ecf8470c4eee91f817ca6093acfa2/examples/all_brushes.glb) | `18682538402ecf8470c4eee91f817ca6093acfa2` | Apache-2.0 | `587fc0c477a8028a6acac21291868dbf4402f5aebd1fca71661e1ba83dd0a380` |
 | `openbrush-LICENSE.txt` | [`icosa-foundation/three-icosa/LICENSE`](https://github.com/icosa-foundation/three-icosa/blob/18682538402ecf8470c4eee91f817ca6093acfa2/LICENSE) | `18682538402ecf8470c4eee91f817ca6093acfa2` | Apache-2.0 license text | `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 
-The OpenBrush Starter copies both files into the created project. Brush shader textures are loaded at runtime from the three-icosa template host and are not bundled here.
+Both files back the OpenBrush catalog and its brush previews. Brush shader textures are loaded at runtime from the three-icosa template host and are not bundled here.
 
 ## External resource catalog thumbnails
 
