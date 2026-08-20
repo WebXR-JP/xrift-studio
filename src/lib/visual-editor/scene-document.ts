@@ -58,6 +58,20 @@ export type MeshComponent = ComponentBase & {
   receiveShadow: boolean;
   /** Optional local draw-distance cutoff. Omitted means scene camera.far. */
   maxDistance?: number;
+  /**
+   * Explicit draw order, for transparent surfaces the renderer cannot sort.
+   *
+   * Transparency is sorted by distance to the camera, which fails whenever two
+   * surfaces overlap without one being clearly in front — a decal on glass, a
+   * glow card inside a lamp. Higher draws later, so it lands on top. Zero is
+   * the renderer's own ordering and is what everything uses until an author
+   * has a reason not to.
+   *
+   * This lives on the Mesh rather than the Material because three carries it on
+   * the object: two Entities sharing one Material can still need opposite
+   * order.
+   */
+  renderOrder?: number;
   /** Static per-Entity Model pose. Timeline authoring can keyframe this later. */
   modelPose?: ModelPoseState;
 };
@@ -2122,7 +2136,12 @@ export const MESH_MAX_DISTANCE_MAX = 1_000_000;
 export type MeshVisibilityPatch = {
   /** `null` clears the authored cutoff and restores scene camera.far behavior. */
   maxDistance?: number | null;
+  /** `null` clears the authored order and restores the renderer's own sorting. */
+  renderOrder?: number | null;
 };
+
+/** Beyond this the value stops being an ordering and becomes a guess. */
+export const MESH_RENDER_ORDER_LIMIT = 1000;
 
 export function updateMeshShadowSettings(
   scene: SceneDocument,
@@ -2163,8 +2182,12 @@ export function updateMeshVisibilitySettings(
 ): SceneDocument {
   const entity = scene.entities[entityId];
   const mesh = entity ? getMesh(entity, componentId) : undefined;
-  if (!entity || !mesh || patch.maxDistance === undefined) return scene;
+  if (!entity || !mesh) return scene;
+  if (patch.maxDistance === undefined && patch.renderOrder === undefined) {
+    return scene;
+  }
   if (
+    patch.maxDistance !== undefined &&
     patch.maxDistance !== null &&
     (!Number.isFinite(patch.maxDistance) ||
       patch.maxDistance < MESH_MAX_DISTANCE_MIN ||
@@ -2172,13 +2195,33 @@ export function updateMeshVisibilitySettings(
   ) {
     return scene;
   }
+  if (
+    patch.renderOrder !== undefined &&
+    patch.renderOrder !== null &&
+    (!Number.isSafeInteger(patch.renderOrder) ||
+      Math.abs(patch.renderOrder) > MESH_RENDER_ORDER_LIMIT)
+  ) {
+    return scene;
+  }
   const next = { ...mesh };
   if (patch.maxDistance === null) {
     delete next.maxDistance;
-  } else {
+  } else if (patch.maxDistance !== undefined) {
     next.maxDistance = patch.maxDistance;
   }
-  if (next.maxDistance === mesh.maxDistance) return scene;
+  // Zero is the renderer's own ordering, so storing it would be a value that
+  // means "no value". Clearing keeps the document free of inert keys.
+  if (patch.renderOrder === null || patch.renderOrder === 0) {
+    delete next.renderOrder;
+  } else if (patch.renderOrder !== undefined) {
+    next.renderOrder = patch.renderOrder;
+  }
+  if (
+    next.maxDistance === mesh.maxDistance &&
+    next.renderOrder === mesh.renderOrder
+  ) {
+    return scene;
+  }
   return replaceMesh(scene, entityId, mesh.id, next);
 }
 

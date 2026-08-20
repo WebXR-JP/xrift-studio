@@ -1756,6 +1756,20 @@ function validatePrefabComponentShape(
   }
   if (component.type === "mesh") {
     if (
+      component.renderOrder !== undefined &&
+      (typeof component.renderOrder !== "number" ||
+        !Number.isSafeInteger(component.renderOrder) ||
+        Math.abs(component.renderOrder) > 1000)
+    ) {
+      issues.push(
+        issue(
+          `${path}.renderOrder`,
+          "range",
+          "Mesh renderOrder must be a whole number between -1000 and 1000",
+        ),
+      );
+    }
+    if (
       component.maxDistance !== undefined &&
       (typeof component.maxDistance !== "number" ||
         !Number.isFinite(component.maxDistance) ||

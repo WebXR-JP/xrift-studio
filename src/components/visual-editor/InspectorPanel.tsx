@@ -131,7 +131,7 @@ export type MeshInspectorPatch = Partial<
     | "receiveShadow"
     | "modelPose"
   >
-> & { maxDistance?: number | null };
+> & { maxDistance?: number | null; renderOrder?: number | null };
 
 export type ParticleEmitterInspectorPatch = Partial<
   Pick<ParticleEmitterComponent, "enabled" | "particleAssetId">
@@ -1002,6 +1002,48 @@ function MeshInspector({
           </div>
           <p className="text-[11px] leading-4 text-slate-500">
             葉や遠景モデルの負荷を抑える任意設定です。Editor / Play / 公開先で同じ距離判定を使います。
+          </p>
+        </div>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <label
+              htmlFor={`mesh-render-order-${component.id}`}
+              className="text-xs font-medium text-slate-600"
+              title="半透明の描画順を手で決めます。大きいほど後に描かれ、手前に出ます。0はレンダラー任せです。"
+            >
+              描画順 (Render Order)
+            </label>
+            {component.renderOrder !== undefined ? (
+              <button
+                type="button"
+                disabled={readOnly}
+                onClick={() => onChange({ renderOrder: null })}
+                className="rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-45"
+                title="描画順の指定を解除してレンダラー任せへ戻す"
+              >
+                自動へ戻す
+              </button>
+            ) : null}
+          </div>
+          <input
+            id={`mesh-render-order-${component.id}`}
+            type="number"
+            min={-1000}
+            max={1000}
+            step={1}
+            value={component.renderOrder ?? ""}
+            placeholder="自動 (0)"
+            disabled={readOnly}
+            onChange={(event) => {
+              const raw = event.currentTarget.value;
+              onChange({
+                renderOrder: raw === "" ? null : Number(raw),
+              });
+            }}
+            className="h-7 w-full min-w-0 rounded-sm border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+          />
+          <p className="text-[11px] leading-4 text-slate-500">
+            半透明どうしはカメラからの距離で並ぶため、ガラスに貼ったデカールやランプの中の発光体のように重なる面では順序が定まりません。そこだけ手で決めます。
           </p>
         </div>
         <ToggleRow

@@ -6,9 +6,50 @@ import {
   normalizeMaterialProperties,
   MATERIAL_BLEND_MODES,
 } from "./asset-manifest";
+import {
+  SCENE_DOCUMENT_SCHEMA_VERSION,
+  createTransformComponent,
+  updateMeshVisibilitySettings,
+  type MeshComponent,
+  type SceneDocument,
+} from "./scene-document";
 
 function assert(condition: boolean, message: string): asserts condition {
   if (!condition) throw new Error(message);
+}
+
+function sceneWithMesh(): SceneDocument {
+  const mesh: MeshComponent = {
+    id: "mesh-component",
+    type: "mesh",
+    enabled: true,
+    geometryAssetId: "builtin-primitive/box",
+    materialBindings: [],
+    castShadow: true,
+    receiveShadow: true,
+  };
+  return {
+    schemaVersion: SCENE_DOCUMENT_SCHEMA_VERSION,
+    sceneId: "alpha-fixture-scene",
+    name: "fixture",
+    rootEntityIds: ["mesh-entity"],
+    entities: {
+      "mesh-entity": {
+        id: "mesh-entity",
+        name: "mesh-entity",
+        parentId: null,
+        children: [],
+        enabled: true,
+        components: [createTransformComponent("mesh-transform"), mesh],
+      },
+    },
+  } as SceneDocument;
+}
+
+function meshOf(scene: SceneDocument): MeshComponent | undefined {
+  return scene.entities["mesh-entity"]?.components.find(
+    (component): component is MeshComponent => component.type === "mesh",
+  );
 }
 
 /** Deterministic assertions for the Material alpha and blending contract. */
@@ -88,6 +129,49 @@ export function runMaterialAlphaFixtureAssertions(): void {
       materialBlendingConstant("multiply") === "MultiplyBlending" &&
       materialBlendingConstant("subtractive") === "SubtractiveBlending",
     "A blend mode resolved to a three.js constant that does not exist",
+  );
+
+  // Draw order lives on the Mesh, not the Material: three carries it per
+  // object, so two Entities sharing one Material can still need opposite order.
+  // Zero is the renderer's own sorting, so it is stored as absent rather than
+  // as a key that means nothing.
+  const meshScene = sceneWithMesh();
+  const ordered = updateMeshVisibilitySettings(
+    meshScene,
+    "mesh-entity",
+    { renderOrder: 12 },
+  );
+  assert(
+    meshOf(ordered)?.renderOrder === 12,
+    "An authored draw order did not reach the Mesh",
+  );
+  const cleared = updateMeshVisibilitySettings(ordered, "mesh-entity", {
+    renderOrder: null,
+  });
+  assert(
+    meshOf(cleared)?.renderOrder === undefined,
+    "Clearing the draw order left a value behind",
+  );
+  const zeroed = updateMeshVisibilitySettings(ordered, "mesh-entity", {
+    renderOrder: 0,
+  });
+  assert(
+    meshOf(zeroed)?.renderOrder === undefined,
+    "Zero was stored as a draw order instead of meaning automatic",
+  );
+  const rejected = updateMeshVisibilitySettings(ordered, "mesh-entity", {
+    renderOrder: 5000,
+  });
+  assert(
+    meshOf(rejected)?.renderOrder === 12,
+    "A draw order beyond the limit was accepted",
+  );
+  const fractional = updateMeshVisibilitySettings(ordered, "mesh-entity", {
+    renderOrder: 1.5,
+  });
+  assert(
+    meshOf(fractional)?.renderOrder === 12,
+    "A fractional draw order was accepted",
   );
 
   // A Material saved before these fields existed still loads, and loads inert.

@@ -2489,6 +2489,7 @@ function updateComponent(
           "receiveShadow",
           "modelPose",
           "maxDistance",
+          "renderOrder",
         ],
         component.type,
       );
@@ -2503,6 +2504,13 @@ function updateComponent(
         patch,
         "maxDistance",
       );
+      const hasRenderOrder = Object.prototype.hasOwnProperty.call(
+        patch,
+        "renderOrder",
+      );
+      const renderOrder = hasRenderOrder
+        ? optionalNullableFiniteNumber(patch.renderOrder, "patch.renderOrder")
+        : undefined;
       const maxDistance = hasMaxDistance
         ? optionalNullableFiniteNumber(patch.maxDistance, "patch.maxDistance")
         : undefined;
@@ -2574,11 +2582,14 @@ function updateComponent(
           componentId,
         );
       }
-      if (hasMaxDistance) {
+      if (hasMaxDistance || hasRenderOrder) {
         scene = updateMeshVisibilitySettings(
           scene,
           entityId,
-          { maxDistance } satisfies MeshVisibilityPatch,
+          {
+            ...(hasMaxDistance ? { maxDistance } : {}),
+            ...(hasRenderOrder ? { renderOrder } : {}),
+          } satisfies MeshVisibilityPatch,
           componentId,
         );
       }

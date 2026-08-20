@@ -2093,9 +2093,13 @@ function renderMesh(
     geometry.kind === "terrain" && terrainConstant
       ? renderTerrainGrassLayers(entity, geometry.terrain, terrainConstant, context)
       : "";
-  return renderMeshMaxDistance(
-    `<mesh castShadow={${mesh.castShadow}} receiveShadow={${mesh.receiveShadow}}>\n  ${geometryJsxContent}\n  ${materialJsx}\n</mesh>${grassJsx}`,
-    mesh.maxDistance,
+  return renderMeshRenderOrder(
+    renderMeshMaxDistance(
+      `<mesh castShadow={${mesh.castShadow}} receiveShadow={${mesh.receiveShadow}}>\n  ${geometryJsxContent}\n  ${materialJsx}\n</mesh>${grassJsx}`,
+      mesh.maxDistance,
+      context,
+    ),
+    mesh.renderOrder,
     context,
   );
 }
@@ -2128,6 +2132,44 @@ const XriftMeshMaxDistance: FC<XriftMeshMaxDistanceProps> = ({ maxDistance, chil
 };`,
   );
   return `<XriftMeshMaxDistance maxDistance={${formatNumber(maxDistance)}}>${content}</XriftMeshMaxDistance>`;
+}
+
+/**
+ * Wraps a Mesh in the explicit draw order the author gave it.
+ *
+ * three reads `renderOrder` per object, so it has to reach the children rather
+ * than sit on the wrapper alone — the editor traverses for the same reason, and
+ * the two have to agree or a transparent surface sorts one way while authoring
+ * and another once published.
+ */
+function renderMeshRenderOrder(
+  content: string,
+  renderOrder: number | undefined,
+  context: CompileContext,
+): string {
+  if (renderOrder === undefined || renderOrder === 0) return content;
+  context.reactTypeImports.add("ReactNode");
+  context.reactValueImports.add("useEffect");
+  context.reactValueImports.add("useRef");
+  context.threeTypeImports.add("Group");
+  context.supportDeclarations.set(
+    "render:render-order",
+    `type XriftMeshRenderOrderProps = { renderOrder: number; children: ReactNode };
+
+const XriftMeshRenderOrder: FC<XriftMeshRenderOrderProps> = ({ renderOrder, children }) => {
+  const ref = useRef<Group>(null);
+  useEffect(() => {
+    const target = ref.current;
+    if (!target) return;
+    target.renderOrder = renderOrder;
+    target.traverse((object) => {
+      object.renderOrder = renderOrder;
+    });
+  }, [children, renderOrder]);
+  return <group ref={ref}>{children}</group>;
+};`,
+  );
+  return `<XriftMeshRenderOrder renderOrder={${formatNumber(renderOrder)}}>${content}</XriftMeshRenderOrder>`;
 }
 
 type ResolvedMeshGeometry =
@@ -2693,9 +2735,13 @@ function renderModelMesh(
       ${clonedModel}
     </group>`
     : clonedModel;
-  const renderedModelContent = renderMeshMaxDistance(
-    modelContent,
-    mesh.maxDistance,
+  const renderedModelContent = renderMeshRenderOrder(
+    renderMeshMaxDistance(
+      modelContent,
+      mesh.maxDistance,
+      context,
+    ),
+    mesh.renderOrder,
     context,
   );
   const source = `const ${componentName}: FC = () => {

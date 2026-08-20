@@ -452,9 +452,12 @@ const KHR_INTERACTIVITY_ON_START_ANIMATION_INDICES = [0] as const;
 /** Keeps Editor Preview in lockstep with the published Mesh maxDistance contract. */
 function RenderDistanceGate({
   maxDistance,
+  renderOrder,
   children,
 }: {
   maxDistance?: number;
+  /** Explicit draw order for transparency the renderer cannot sort by distance. */
+  renderOrder?: number;
   children: ReactNode;
 }) {
   const ref = useRef<Group | null>(null);
@@ -469,6 +472,18 @@ function RenderDistanceGate({
     group.getWorldPosition(worldPosition);
     group.visible = camera.position.distanceTo(worldPosition) <= maxDistance;
   });
+  // three reads renderOrder per object, so it has to reach the children rather
+  // than sit on the group: setting it here alone would order the group against
+  // its siblings and leave what is inside sorted by distance as before.
+  useEffect(() => {
+    const group = ref.current;
+    if (!group) return;
+    const order = renderOrder ?? 0;
+    group.renderOrder = order;
+    group.traverse((object) => {
+      object.renderOrder = order;
+    });
+  }, [children, renderOrder]);
   return <group ref={ref}>{children}</group>;
 }
 
@@ -563,7 +578,7 @@ function MeshVisual({
 
   if (projectModelSource && projectPath && geometry?.kind === "model") {
     return (
-      <RenderDistanceGate maxDistance={component.maxDistance}>
+      <RenderDistanceGate maxDistance={component.maxDistance} renderOrder={component.renderOrder}>
         <ProjectModelVisual
           projectPath={projectPath}
           sourceRelativePath={projectModelSource}
@@ -602,7 +617,7 @@ function MeshVisual({
   if (terrain) {
     const materialAssetId = getPrimaryMaterialAssetId(component);
     return (
-      <RenderDistanceGate maxDistance={component.maxDistance}>
+      <RenderDistanceGate maxDistance={component.maxDistance} renderOrder={component.renderOrder}>
         <TerrainMeshVisual
           component={component}
           terrain={terrain}
@@ -627,7 +642,7 @@ function MeshVisual({
       ? getMaterialAsset(assets, materialAssetId)
       : undefined;
     return (
-      <RenderDistanceGate maxDistance={component.maxDistance}>
+      <RenderDistanceGate maxDistance={component.maxDistance} renderOrder={component.renderOrder}>
         <PrimitiveMeshVisual
           component={component}
           primitive={primitive}
@@ -643,7 +658,7 @@ function MeshVisual({
   }
 
   return (
-    <RenderDistanceGate maxDistance={component.maxDistance}>
+    <RenderDistanceGate maxDistance={component.maxDistance} renderOrder={component.renderOrder}>
       <mesh castShadow={false} receiveShadow={false}>
         <boxGeometry args={[1, 1, 1]} />
         <meshBasicMaterial
