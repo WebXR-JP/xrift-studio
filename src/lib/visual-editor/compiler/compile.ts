@@ -1432,9 +1432,14 @@ function renderSceneEnvironment(
   settings: SceneSettings,
   context: CompileContext,
 ): string[] {
-  const content: string[] = [
-    `<ambientLight color={${JSON.stringify(settings.ambient.color)}} intensity={${formatNumber(settings.ambient.intensity)}} />`,
-  ];
+  const content: string[] = [];
+  // Only when the Scene asks for it: a flat fill lifts every surface with no
+  // direction, which is what made an unlit floor read as its own colour.
+  if (settings.ambient.enabled) {
+    content.push(
+      `<ambientLight color={${JSON.stringify(settings.ambient.color)}} intensity={${formatNumber(settings.ambient.intensity)}} />`,
+    );
+  }
 
   if (settings.postprocessing.enabled) {
     registerScenePostprocessingSupport(context);

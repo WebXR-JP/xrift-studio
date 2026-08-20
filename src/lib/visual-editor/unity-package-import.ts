@@ -1081,6 +1081,9 @@ function unitySceneSettings(
       : settings.fog,
     ambient: renderSettings
       ? {
+          // A Unity scene that carries ambient settings meant them, so the
+          // import switches it on rather than leaving a value that does nothing.
+          enabled: true,
           color: unityColorHex(renderSettings.m_AmbientSkyColor, settings.ambient.color),
           intensity: Math.max(
             unityNumber(renderSettings.m_AmbientIntensity, settings.ambient.intensity),

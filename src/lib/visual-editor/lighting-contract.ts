@@ -140,7 +140,7 @@ export function resolveSceneLighting(
     sunColor: hexToUnitRgb(keyColor),
     sunIntensity: keyIntensity,
     ambientColor: hexToUnitRgb(ambient.color),
-    ambientIntensity: Math.max(ambient.intensity, 0),
+    ambientIntensity: ambient.enabled ? Math.max(ambient.intensity, 0) : 0,
   };
 }
 

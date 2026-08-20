@@ -105,7 +105,30 @@ export function runVisualCompilerFixtureAssertions(
     "Legacy Scene settings must resolve HDR, AO, and vegetation defaults",
   );
 
-  const world = toCompilerDocuments(createPrototypeProject("world", "fixture-world"));
+  const newWorld = toCompilerDocuments(
+    createPrototypeProject("world", "fixture-world"),
+  );
+  // A new Scene ships with the skybox off, so a gradient sky is something the
+  // author switches on. These assertions are about emitting one, not about the
+  // default, so the fixture asks for it explicitly.
+  const world = {
+    ...newWorld,
+    scenes: Object.fromEntries(
+      Object.entries(newWorld.scenes).map(([sceneId, scene]) => [
+        sceneId,
+        {
+          ...scene,
+          settings: {
+            ...resolveSceneSettings(scene.settings),
+            skybox: {
+              ...resolveSceneSettings(scene.settings).skybox,
+              enabled: true,
+            },
+          },
+        },
+      ]),
+    ),
+  };
   const fixedTime = "2026-01-01T00:00:00.000Z";
   const first = compileVisualProject(world, { generatedAt: fixedTime });
   const second = compileVisualProject(world, { generatedAt: fixedTime });

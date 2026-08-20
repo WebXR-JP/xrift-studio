@@ -184,7 +184,7 @@ try {
     update: false,
     cliVersion: "fixture",
   });
-  assert(dryRun.status === "ready", "dry-run must report a writable export");
+  assert(dryRun.status === "ready", `dry-run must report a writable export, got ${dryRun.status}: ${JSON.stringify(dryRun.diagnostics ?? dryRun).slice(0, 400)}`);
   assert(
     dryRun.plannedFiles.includes("public/xrift/runtime.json"),
     "dry-run must include Runtime JSON",

@@ -46,6 +46,8 @@ export type SceneFogSettings = {
 };
 
 export type SceneAmbientSettings = {
+  /** Off means no flat fill at all, so an unlit surface stays black. */
+  enabled: boolean;
   color: string;
   intensity: number;
 };
@@ -155,7 +157,10 @@ export type SceneSettings = {
 
 export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
   skybox: {
-    enabled: true,
+    // Off for a new Scene. A gradient sky fills the frame with light-coloured
+    // pixels before the author has lit anything, which reads as though the
+    // Scene is lit when nothing in it is.
+    enabled: false,
     iblEnabled: false,
     projection: "infinite",
     imageAssetId: undefined,
@@ -179,6 +184,14 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
     far: 600,
   },
   ambient: {
+    // Off for a new Scene. An ambient light multiplies albedo with no falloff
+    // and no direction, so a scene-wide 0.55 white meant an unlit surface still
+    // showed its base colour at better than half brightness — a floor with no
+    // light in the Scene came out flat orange rather than black — and it filled
+    // every shadow the author's key light cast, so placing or moving a light
+    // barely changed the picture. The value below is what it uses once switched
+    // on; fill that comes from somewhere belongs to the skybox through `ibl`.
+    enabled: false,
     color: "#ffffff",
     intensity: 0.55,
   },
@@ -406,6 +419,9 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
       far: resolvedFogFar,
     },
     ambient: {
+      // A Scene saved before the switch existed had its ambient on, so the
+      // absent field reads as true rather than as the new-Scene default.
+      enabled: booleanOr(ambient.enabled, true),
       color: colorOr(ambient.color, DEFAULT_SCENE_SETTINGS.ambient.color),
       intensity: finiteOr(ambient.intensity, DEFAULT_SCENE_SETTINGS.ambient.intensity, 0),
     },

@@ -2997,9 +2997,20 @@ function LightInspector({
           }
           className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
         >
-          {Object.entries(LIGHT_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>{label}</option>
-          ))}
+          {Object.entries(LIGHT_LABELS)
+            // Ambient is Scene-wide, not something an Entity can hold: it has
+            // no position and no direction, so a second one on an object does
+            // nothing an author can reason about. Scene設定の環境光 owns it.
+            // A Scene saved with one still opens and still lists it here.
+            .filter(
+              ([value]) =>
+                value !== "ambient" || component.lightType === "ambient",
+            )
+            .map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
         </select>
       </label>
       <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">

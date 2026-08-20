@@ -170,6 +170,23 @@ export function runLightingContractFixtureAssertions(): void {
     "The grass fragment shader does not apply the Scene's light",
   );
 
+  // With no light in the Scene, albedo contributes nothing: an unlit surface
+  // is black. A flat ambient fill breaks that — it multiplies base colour with
+  // no direction and no falloff, so an unlit floor showed its own colour and
+  // every shadow the key light cast was filled back in.
+  assert(
+    DEFAULT_SCENE_SETTINGS.ambient.enabled === false,
+    "A new Scene lifts every surface before any light is placed",
+  );
+  const unlit = resolveSceneLighting(
+    sceneWithLights([]),
+    DEFAULT_SCENE_SETTINGS.ambient,
+  );
+  assert(
+    unlit.sunIntensity === 0 && unlit.ambientIntensity === 0,
+    "A Scene with no lights still reports light reaching its surfaces",
+  );
+
   // A shader that declares none of the uniforms receives nothing, so the
   // compiler never writes a uniform the GLSL cannot read.
   const bare = { uniforms: {} } as Parameters<typeof lightingDrivenUniforms>[0];

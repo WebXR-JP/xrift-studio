@@ -1090,12 +1090,13 @@ function validateSceneSettings(
   );
   validateSceneSettingsObject(
     value.ambient,
-    ["color", "intensity"],
-    `${path}.ambient`,
+    ["enabled", "color", "intensity"],
+    `\.ambient`,
     issues,
     (entry) => {
-      validateColor(entry, "color", `${path}.ambient`, issues);
-      validateFinite(entry, "intensity", `${path}.ambient`, issues, 0);
+      validateBoolean(entry, "enabled", `\.ambient`, issues);
+      validateColor(entry, "color", `\.ambient`, issues);
+      validateFinite(entry, "intensity", `\.ambient`, issues, 0);
     },
   );
   validateSceneSettingsObject(

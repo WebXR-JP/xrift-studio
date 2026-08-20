@@ -862,9 +862,20 @@ export function SceneSettingsInspector({
           <NumberField label="終了距離" value={settings.fog.far} min={0} step={0.5} disabled={readOnly || !settings.fog.enabled} onChange={(far) => update({ ...settings, fog: { ...settings.fog, far: Math.max(far, settings.fog.near + 0.001) } })} />
         </Section>
 
-        <Section title="環境光" description="全体を照らすアンビエントライトです。">
-          <ColorField label="環境光の色" value={settings.ambient.color} disabled={readOnly} onChange={(color) => update({ ...settings, ambient: { ...settings.ambient, color } })} />
-          <NumberField label="強さ" value={settings.ambient.intensity} min={0} step={0.05} disabled={readOnly} onChange={(intensity) => update({ ...settings, ambient: { ...settings.ambient, intensity } })} />
+        <Section
+          title="環境光"
+          description="全体を一律に持ち上げるアンビエントライトです。向きも減衰もないため、無効にするとライトの当たらない面は黒くなります。"
+        >
+          <Toggle
+            label="環境光を有効にする"
+            checked={settings.ambient.enabled}
+            disabled={readOnly}
+            onChange={(enabled) =>
+              update({ ...settings, ambient: { ...settings.ambient, enabled } })
+            }
+          />
+          <ColorField label="環境光の色" value={settings.ambient.color} disabled={readOnly || !settings.ambient.enabled} onChange={(color) => update({ ...settings, ambient: { ...settings.ambient, color } })} />
+          <NumberField label="強さ" value={settings.ambient.intensity} min={0} step={0.05} disabled={readOnly || !settings.ambient.enabled} onChange={(intensity) => update({ ...settings, ambient: { ...settings.ambient, intensity } })} />
         </Section>
 
         <Section

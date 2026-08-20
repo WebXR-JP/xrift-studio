@@ -1148,7 +1148,7 @@ function EditorLightIcon({
     <Html
       transform
       sprite
-      distanceFactor={7}
+      distanceFactor={4}
       zIndexRange={[2, 0]}
       style={{ pointerEvents: "none" }}
     >
@@ -1158,18 +1158,18 @@ function EditorLightIcon({
           alignItems: "center",
           background: selected ? "rgba(255,255,255,0.96)" : "rgba(15,23,42,0.82)",
           border: `2px solid ${selected ? EDITOR_SELECTION_COLOR : color}`,
-          borderRadius: 10,
+          borderRadius: 6,
           boxShadow: selected
             ? "0 0 0 3px rgba(148,163,184,0.28), 0 4px 14px rgba(15,23,42,0.28)"
             : "0 3px 10px rgba(15,23,42,0.28)",
           color: selected ? "#334155" : color,
           display: "flex",
-          height: 34,
+          height: 18,
           justifyContent: "center",
-          width: 34,
+          width: 18,
         }}
       >
-        <LightIcon size={20} strokeWidth={2} />
+        <LightIcon size={11} strokeWidth={2.2} />
       </div>
     </Html>
   );
@@ -1210,7 +1210,7 @@ function AudioSourceVisual({ selected }: { selected: boolean }) {
     <Html
       transform
       sprite
-      distanceFactor={7}
+      distanceFactor={4}
       zIndexRange={[2, 0]}
       style={{ pointerEvents: "none" }}
     >
@@ -1221,15 +1221,15 @@ function AudioSourceVisual({ selected }: { selected: boolean }) {
           alignItems: "center",
           background: selected ? "rgba(255,255,255,0.96)" : "rgba(15,23,42,0.82)",
           border: `2px solid ${selected ? EDITOR_SELECTION_COLOR : "#a78bfa"}`,
-          borderRadius: 10,
+          borderRadius: 6,
           boxShadow: selected
             ? "0 0 0 3px rgba(148,163,184,0.28), 0 4px 14px rgba(15,23,42,0.28)"
             : "0 3px 10px rgba(15,23,42,0.28)",
           color: selected ? "#6d28d9" : "#c4b5fd",
           display: "flex",
-          height: 34,
+          height: 18,
           justifyContent: "center",
-          width: 34,
+          width: 18,
         }}
       >
         <AudioIcon size={17} strokeWidth={2.2} />
@@ -3501,23 +3501,14 @@ export function SceneViewport({
     () => resolveSceneLighting(scene, sceneSettings.ambient),
     [scene, sceneSettings.ambient],
   );
-  // Whether the author has given this Scene a key light of its own.
-  const sceneLightsItself = viewportLighting.sunIntensity > 0;
   const effectiveDisplayMode = editorMode === "play" ? "scene" : displayMode;
   const colliderOnlyEdit = effectiveDisplayMode === "colliders";
   const renderDisplayMode = thumbnailCaptureActive ? "scene" : effectiveDisplayMode;
   const displayProfile = useMemo(
     () => {
       const profile = getSceneViewportDisplayProfile(renderDisplayMode);
-      // `editorMode` belongs here: `renderDisplayMode` only changes on entering
-      // Play when the author was in a debug view, so leaving it out kept the
-      // editor light burning through Play in the ordinary case.
       return thumbnailCaptureActive || editorMode === "play"
-        ? {
-            ...profile,
-            showHelpers: false,
-            showEditorLighting: false,
-          }
+        ? { ...profile, showHelpers: false }
         : profile;
     },
     [editorMode, renderDisplayMode, thumbnailCaptureActive],
@@ -4558,42 +4549,10 @@ export function SceneViewport({
             />
           ) : null}
           <EditorCameraSettings settings={sceneSettings.camera} />
-          {displayProfile.showSceneLighting ? (
+          {displayProfile.showSceneLighting && sceneSettings.ambient.enabled ? (
             <ambientLight
               color={sceneSettings.ambient.color}
               intensity={sceneSettings.ambient.intensity}
-            />
-          ) : null}
-          {displayProfile.showEditorLighting && !sceneLightsItself ? (
-            // Stands in only while the Scene has no light of its own.
-            //
-            // This used to burn alongside the author's lights, so setting up
-            // lighting changed almost nothing on screen — a fixed 1.35 key from
-            // the upper right drowned it — and then Play, which drops this
-            // light, looked like a different room. A Scene that lights itself
-            // now gets exactly its own light, in Edit and in Play alike.
-            //
-            // The shadow camera must cover the whole authoring area: a
-            // directional light's default frustum is only ±5m, so anything
-            // larger — a preset Terrain most of all — showed a sharp square
-            // where shadows applied inside and vanished outside, and the
-            // unbiased basic shadow map tore that square into moire stripes
-            // of self-shadowing acne. The normal bias is what removes the
-            // acne; the wide frustum is what removes the square.
-            <directionalLight
-              position={[70, 100, 60]}
-              intensity={1.35}
-              castShadow
-              shadow-mapSize-width={2048}
-              shadow-mapSize-height={2048}
-              shadow-camera-left={-120}
-              shadow-camera-right={120}
-              shadow-camera-top={120}
-              shadow-camera-bottom={-120}
-              shadow-camera-near={1}
-              shadow-camera-far={400}
-              shadow-bias={-0.0002}
-              shadow-normalBias={0.35}
             />
           ) : null}
           <ScenePostprocessing settings={sceneSettings.postprocessing} />

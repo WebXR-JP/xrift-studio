@@ -38,12 +38,21 @@ export const SCENE_VIEWPORT_DISPLAY_OPTIONS: readonly {
   },
 ] as const;
 
+/**
+ * What the viewport draws.
+ *
+ * There is deliberately no editor stand-in light. One used to burn in "scene"
+ * mode alongside the author's own lights, which meant an unlit Scene never
+ * looked unlit — turning the ambient light off still left everything lit, and
+ * a key light the author placed barely changed the picture. The viewport shows
+ * the Scene's real lighting; "unlit" is the mode for reading geometry without
+ * it.
+ */
 export type SceneViewportDisplayProfile = {
   backgroundColor: string | null;
   showSkybox: boolean;
   showFog: boolean;
   showSceneLighting: boolean;
-  showEditorLighting: boolean;
   showHelpers: boolean;
   showAllColliders: boolean;
 };
@@ -63,7 +72,6 @@ export function getSceneViewportDisplayProfile(
         showSkybox: true,
         showFog: true,
         showSceneLighting: true,
-        showEditorLighting: true,
         showHelpers: true,
         showAllColliders: false,
       };
@@ -73,7 +81,6 @@ export function getSceneViewportDisplayProfile(
         showSkybox: false,
         showFog: false,
         showSceneLighting: false,
-        showEditorLighting: false,
         showHelpers: true,
         showAllColliders: false,
       };
@@ -83,7 +90,6 @@ export function getSceneViewportDisplayProfile(
         showSkybox: false,
         showFog: false,
         showSceneLighting: false,
-        showEditorLighting: false,
         showHelpers: false,
         showAllColliders: false,
       };
@@ -93,7 +99,6 @@ export function getSceneViewportDisplayProfile(
         showSkybox: false,
         showFog: false,
         showSceneLighting: false,
-        showEditorLighting: false,
         showHelpers: false,
         showAllColliders: true,
       };
