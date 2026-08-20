@@ -165,7 +165,7 @@ export function GlowMaterialStore({
           )}
         </div>
         <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
-          カードは実際のMaterialとBloomをWebGLで描画しています。
+          カードは実際のMaterialをWebGLで描画しています。Bloomの光り方は右の詳細で確認できます。
         </footer>
       </section>
 
@@ -178,6 +178,7 @@ export function GlowMaterialStore({
             <GlowMaterialCatalogPreview
               preset={selected}
               className="aspect-[16/10] w-full overflow-hidden rounded-lg"
+              bloom
             />
             <div>
               <h3 className="text-base font-semibold text-slate-900">

@@ -1109,7 +1109,9 @@ fn validate_prefab_document(
     let source_scene = scenes_by_id
         .get(source_scene_id)
         .ok_or_else(|| format!("Prefab source scene is missing: {}", source_scene_id))?;
-    let source_entities = source_scene
+    // The scene must be present and well formed; which Entities it currently
+    // holds no longer decides whether the Prefab is valid.
+    source_scene
         .get("entities")
         .and_then(|entry| entry.as_object())
         .ok_or_else(|| {
@@ -1144,12 +1146,11 @@ fn validate_prefab_document(
                 source_root_id
             ));
         }
-        if !source_entities.contains_key(source_root_id) {
-            return Err(format!(
-                "Prefab source entity is missing: {}",
-                source_root_id
-            ));
-        }
+        // A missing source Entity is not corruption. `source` records where the
+        // Prefab was captured from, and deleting that Entity is ordinary
+        // editing; the Prefab document below is self-contained and still
+        // instantiates. Rejecting it here made one deletion break every
+        // subsequent save of the project.
     }
 
     let entities = value

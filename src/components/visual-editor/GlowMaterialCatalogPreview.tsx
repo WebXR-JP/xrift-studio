@@ -18,9 +18,19 @@ import { ScenePostprocessing } from "./ScenePostprocessing";
 export function GlowMaterialCatalogPreview({
   preset,
   className = "h-full w-full",
+  bloom = false,
 }: {
   preset: GlowMaterialPreset;
   className?: string;
+  /**
+   * Mounts the scene compositor.
+   *
+   * Each compositor allocates a half-float target plus an SSAO and a bloom
+   * pass, and one per card exhausted the GPU: the editor viewport started
+   * losing its WebGL context while the shelf was open. Only the detail pane
+   * carries it, and the cards render the same Material without the halo.
+   */
+  bloom?: boolean;
 }) {
   const emissiveStrength = useMemo(
     () => glowEmissiveStrength(preset.tint),
@@ -65,7 +75,7 @@ export function GlowMaterialCatalogPreview({
           <planeGeometry args={[8, 8]} />
           <meshStandardMaterial color="#1e293b" metalness={0} roughness={0.9} />
         </mesh>
-        <ScenePostprocessing settings={postprocessing} />
+        {bloom ? <ScenePostprocessing settings={postprocessing} /> : null}
       </Canvas>
     </div>
   );

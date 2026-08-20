@@ -467,20 +467,26 @@ function collectPrefabAssetPaths(
   return paths;
 }
 
+/**
+ * A Prefab's `source` records where it was captured from, not a dependency it
+ * needs to stay valid.
+ *
+ * Deleting the Entity a Prefab was made from is ordinary editing, and the
+ * Prefab document is a self-contained snapshot that still instantiates. This
+ * used to throw, which turned one deletion into a project whose every autosave
+ * failed with an id pair the author had no way to act on. The three readers of
+ * `source` — re-sync, the Inspector badge, and the Asset editor — already treat
+ * a missing source as "cannot re-sync" rather than as corruption.
+ *
+ * The scene reference is still required: a Prefab pointing at a scene that is
+ * not in the document set means the set itself is incomplete.
+ */
 function validatePrefabSource(
   prefab: PrefabDocument,
   scenes: Record<string, SceneDocument>,
 ): void {
-  const sourceScene = scenes[prefab.source.sceneId];
-  if (!sourceScene) {
+  if (!scenes[prefab.source.sceneId]) {
     throw new Error(`Prefab source scene is missing: ${prefab.prefabId}`);
-  }
-  for (const sourceRootId of prefab.source.rootEntityIds) {
-    if (!sourceScene.entities[sourceRootId]) {
-      throw new Error(
-        `Prefab source entity is missing: ${prefab.prefabId}/${sourceRootId}`,
-      );
-    }
   }
 }
 
