@@ -1,3 +1,4 @@
+import { errorMessage } from "../json-guards";
 import { tauri, type ProjectKind } from "../tauri";
 import {
   inspectClassicExportTarget,
@@ -1961,10 +1962,6 @@ function decodeDataUrl(dataUrl: string): { bytes: Uint8Array; mimeType: string }
     mimeType,
     bytes: Uint8Array.from(decoded, (character) => character.charCodeAt(0)),
   };
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 async function readClassicSourceModules(

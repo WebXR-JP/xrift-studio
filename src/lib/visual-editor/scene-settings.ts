@@ -1,3 +1,5 @@
+import { isRecord } from "../json-guards";
+
 /**
  * Scene-wide authoring values. These are intentionally separate from Entity
  * components: a sky, fog or editor camera applies to the whole scene rather
@@ -224,10 +226,6 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
     },
   },
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function colorOr(value: unknown, fallback: string): string {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)

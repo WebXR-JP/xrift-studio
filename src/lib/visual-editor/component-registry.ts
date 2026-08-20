@@ -1,3 +1,4 @@
+import { isPlainObjectRecord } from "../json-guards";
 import { createDocumentId } from "./document-id";
 import type { VisualProjectKind } from "./project-document";
 import type {
@@ -1109,7 +1110,7 @@ export function validateSerializedXriftComponents(
   value: unknown,
   projectKind?: VisualProjectKind,
 ): XriftComponentDiagnostic[] {
-  if (!isRecord(value) || !isRecord(value.entities)) return [];
+  if (!isPlainObjectRecord(value) || !isPlainObjectRecord(value.entities)) return [];
 
   const diagnostics: XriftComponentDiagnostic[] = [];
   const uniqueValues = new Map<
@@ -1118,12 +1119,12 @@ export function validateSerializedXriftComponents(
   >();
 
   for (const [entityId, entityValue] of Object.entries(value.entities)) {
-    if (!isRecord(entityValue) || !Array.isArray(entityValue.components)) continue;
+    if (!isPlainObjectRecord(entityValue) || !Array.isArray(entityValue.components)) continue;
     const componentIds = new Map<string, number>();
     const schemas = new Map<XriftComponentSchemaId, number>();
 
     entityValue.components.forEach((componentValue, componentIndex) => {
-      if (!isRecord(componentValue)) return;
+      if (!isPlainObjectRecord(componentValue)) return;
       const path = `${entityPath(entityId)}.components[${componentIndex}]`;
       const componentId =
         typeof componentValue.id === "string" ? componentValue.id : undefined;
@@ -1180,7 +1181,7 @@ export function validateSerializedXriftComponents(
         schemas.set(definition.schemaId, componentIndex);
       }
 
-      if (!isRecord(componentValue.properties)) return;
+      if (!isPlainObjectRecord(componentValue.properties)) return;
       for (const fieldDefinition of definition.fields) {
         if (!fieldDefinition.uniqueWithinScene) continue;
         const fieldValue = componentValue.properties[fieldDefinition.name];
@@ -1223,7 +1224,7 @@ export function validateXriftComponent(
   context: ValidateXriftComponentContext = {},
 ): XriftComponentDiagnostic[] {
   const path = context.path ?? "$";
-  if (!isRecord(value) || value.type !== "xrift-component") {
+  if (!isPlainObjectRecord(value) || value.type !== "xrift-component") {
     return [
       makeDiagnostic(
         "error",
@@ -1259,7 +1260,7 @@ export function validateXriftComponent(
       makeDiagnostic("error", "invalid-xrift-component", "schemaVersionが必要です。", `${path}.schemaVersion`, common),
     );
   }
-  if (!isRecord(value.properties) || !isSerializableJsonValue(value.properties)) {
+  if (!isPlainObjectRecord(value.properties) || !isSerializableJsonValue(value.properties)) {
     diagnostics.push(
       makeDiagnostic(
         "error",
@@ -1348,7 +1349,7 @@ export function validateXriftComponent(
       ),
     );
   }
-  if (!isRecord(value.properties)) return diagnostics;
+  if (!isPlainObjectRecord(value.properties)) return diagnostics;
 
   const fields = new Map(
     definition.fields.map((fieldDefinition) => [fieldDefinition.name, fieldDefinition]),
@@ -1501,7 +1502,7 @@ export function validateXriftComponentFieldValue(
       : typeFailure("number または [number, number, number]");
   }
   if (definition.kind === "grabbable-transform") {
-    if (!isRecord(value)) return typeFailure("GrabbableTransform");
+    if (!isPlainObjectRecord(value)) return typeFailure("GrabbableTransform");
     if (!isXYZ(value.position) || !isXYZ(value.rotation)) {
       return typeFailure("positionとrotationを持つGrabbableTransform");
     }
@@ -1514,7 +1515,7 @@ export function validateXriftComponentFieldValue(
     return null;
   }
   if (definition.kind === "json-object") {
-    if (!isRecord(value) || !isSerializableJsonValue(value)) {
+    if (!isPlainObjectRecord(value) || !isSerializableJsonValue(value)) {
       return typeFailure("JSON object");
     }
     const propertyDefinitions = definition.jsonObjectProperties;
@@ -1541,7 +1542,7 @@ export function validateXriftComponentFieldValue(
     const ids = new Set<string>();
     for (const tag of value) {
       if (
-        !isRecord(tag) ||
+        !isPlainObjectRecord(tag) ||
         typeof tag.id !== "string" ||
         typeof tag.label !== "string" ||
         typeof tag.color !== "string" ||
@@ -1694,7 +1695,7 @@ function isFiniteNumberArray(value: unknown, length: number): boolean {
 
 function isXYZ(value: unknown): boolean {
   return (
-    isRecord(value) &&
+    isPlainObjectRecord(value) &&
     typeof value.x === "number" &&
     Number.isFinite(value.x) &&
     typeof value.y === "number" &&
@@ -1712,7 +1713,7 @@ function isValidComponentAuthoringMetadata(
   value: unknown,
 ): value is ComponentAuthoringMetadata {
   if (
-    !isRecord(value) ||
+    !isPlainObjectRecord(value) ||
     value.source !== "builtin-prefab" ||
     typeof value.recipeId !== "string" ||
     !value.recipeId.trim() ||
@@ -1727,14 +1728,6 @@ function isValidComponentAuthoringMetadata(
       editablePropertyNames.every((entry) => entry.trim().length > 0) &&
       new Set(editablePropertyNames).size === editablePropertyNames.length)
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return false;
-  }
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
 }
 
 /** Rejects cycles, non-finite numbers, and non-plain objects. */
@@ -1755,7 +1748,7 @@ export function isSerializableJsonValue(
   ancestors.add(value);
   const valid = Array.isArray(value)
     ? value.every((entry) => isSerializableJsonValue(entry, ancestors))
-    : isRecord(value) &&
+    : isPlainObjectRecord(value) &&
       Object.values(value).every((entry) =>
         isSerializableJsonValue(entry, ancestors),
       );

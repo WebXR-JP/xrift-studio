@@ -1,3 +1,4 @@
+import { isRecord } from "../json-guards";
 import {
   ASSET_MANIFEST_SCHEMA_VERSION,
   isValidAssetFolderName,
@@ -1687,10 +1688,6 @@ function sortJsonValue(value: unknown): unknown {
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, entry]) => [key, sortJsonValue(entry)]),
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isUniqueStringArray(value: unknown, allowEmpty: boolean): value is string[] {

@@ -1,3 +1,4 @@
+import { isRecord } from "../json-guards";
 import {
   isValidMaterialSlotDefinition,
   normalizeProjectRelativePath,
@@ -1006,10 +1007,6 @@ function isFiniteVec3(value: unknown): value is [number, number, number] {
 function nearlyEqual(left: number, right: number): boolean {
   const scale = Math.max(1, Math.abs(left), Math.abs(right));
   return Math.abs(left - right) <= 1e-5 * scale;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function issue(

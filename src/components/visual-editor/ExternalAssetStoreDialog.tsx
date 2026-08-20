@@ -1019,6 +1019,11 @@ function kindLabel(kind: ExternalStoreAsset["assetKind"]): string {
   return "Model";
 }
 
+/**
+ * Deliberately not the shared `errorMessage` from json-guards: a store rejection
+ * arrives as a bare string as often as an Error, and the caller supplies the
+ * wording shown when neither carries anything readable.
+ */
 function errorMessage(reason: unknown, fallback: string): string {
   return typeof reason === "string" && reason.trim()
     ? reason

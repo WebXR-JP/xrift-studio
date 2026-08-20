@@ -1,3 +1,4 @@
+import { isRecord } from "../json-guards";
 import { tauri, type ProjectKind } from "../tauri";
 import { xrift, type LogLine } from "../xrift-cli";
 import {
@@ -354,10 +355,6 @@ function parseJsonRecord(source: string, message: string): Record<string, unknow
     // Use the same user-facing validation message for syntax and root shape.
   }
   throw new ClassicExportError("target-json-invalid", message);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function safeExportSegment(value: string): string {

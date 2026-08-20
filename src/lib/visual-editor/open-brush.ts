@@ -1,3 +1,4 @@
+import { isRecord } from "../json-guards";
 import { Euler, Matrix4, Quaternion, Vector3 } from "three";
 import {
   permissionDomainForUrl,
@@ -598,10 +599,6 @@ function finiteNumberArray(value: unknown, length: number): number[] | undefined
 function isExternalUri(value: string): boolean {
   const normalized = value.trim().toLowerCase();
   return normalized.length > 0 && !normalized.startsWith("data:");
-}
-
-function isRecord(value: unknown): value is JsonRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function toOwnedArrayBuffer(bytes: Uint8Array): ArrayBuffer {

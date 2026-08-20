@@ -1,3 +1,4 @@
+import { isRecord } from "../json-guards";
 import { Euler, Matrix4, Quaternion, Vector3 } from "three";
 import {
   getMaterialAsset,
@@ -421,8 +422,4 @@ function finiteNumberArray(value: unknown, length: number): number[] | undefined
     value.every((entry) => typeof entry === "number" && Number.isFinite(entry))
     ? value
     : undefined;
-}
-
-function isRecord(value: unknown): value is JsonRecord {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

@@ -1,3 +1,5 @@
+import { isRecord } from "../json-guards";
+
 export type EditorCommandId =
   | "project.save"
   | "project.publish"
@@ -441,8 +443,4 @@ function displayKey(key: string): string {
   if (normalized === "backspace") return "Backspace";
   if (/^f\d+$/.test(normalized)) return normalized.toUpperCase();
   return normalized.length === 1 ? normalized.toUpperCase() : normalized;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -1,3 +1,4 @@
+import { errorMessage } from "../json-guards";
 import {
   normalizeMaterialProperties,
   normalizeTextureImportSettings,
@@ -1079,8 +1080,4 @@ function asciiAt(bytes: Uint8Array, offset: number, expected: string): boolean {
   return [...expected].every(
     (character, index) => bytes[offset + index] === character.charCodeAt(0),
   );
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

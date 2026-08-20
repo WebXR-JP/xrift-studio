@@ -1,3 +1,4 @@
+import { isRecord } from "../json-guards";
 import type { AssetManifest, InteractivityAsset } from "./asset-manifest";
 
 export const KHR_INTERACTIVITY_EXTENSION_NAME = "KHR_interactivity" as const;
@@ -592,10 +593,6 @@ export function getKhrInteractivityOnStartAnimationIndices(
     }
   }
   return [...animationIndices].sort((left, right) => left - right);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function isNonNegativeInteger(value: unknown): value is number {

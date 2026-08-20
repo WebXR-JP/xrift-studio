@@ -1,3 +1,4 @@
+import { errorMessage, isRecord } from "../json-guards";
 import { Euler, Quaternion } from "three";
 import { parseDocument } from "yaml";
 import {
@@ -1388,10 +1389,6 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return isRecord(value) ? value : undefined;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function hierarchySize(entities: Record<string, SceneEntity>, rootId: string): number {
   const visited = new Set<string>();
   const pending = [rootId];
@@ -1434,10 +1431,6 @@ function ownedBytes(input: ArrayBuffer | Uint8Array): Uint8Array {
   const result = new Uint8Array(source.byteLength);
   result.set(source);
   return result;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function reportProgress(

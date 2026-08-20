@@ -1,3 +1,4 @@
+import { isRecord } from "../json-guards";
 import {
   ACESFilmicToneMapping,
   AmbientLight,
@@ -2691,10 +2692,12 @@ function stringArray(value: unknown): string[] {
     : [];
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
+/**
+ * Deliberately not the shared `errorMessage` from json-guards: an import
+ * diagnostic is written into a project document, so a stringified non-Error
+ * value must never leak into it. Blank and non-Error throws collapse to a fixed
+ * string instead.
+ */
 function errorMessage(error: unknown): string {
   return error instanceof Error && error.message.trim()
     ? error.message
