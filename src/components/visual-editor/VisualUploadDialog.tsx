@@ -19,7 +19,10 @@ import type { ProjectKind } from "../../lib/tauri";
 import { imageDataUrlToPng } from "../../lib/project-thumbnail";
 import type { AssetOptimizationProgress } from "../../lib/visual-editor/asset-optimization";
 import { VisualPublishCancellationController } from "../../lib/visual-editor/publish-cancellation";
-import { isUnresolvedXriftUploadAttempt } from "../../lib/visual-editor/publish";
+import {
+  isUnresolvedXriftUploadAttempt,
+  PublishCommandError,
+} from "../../lib/visual-editor/publish";
 import {
   formatVramBytes,
   type WorldVramEstimate,
@@ -162,7 +165,14 @@ export function VisualUploadDialog({
   const [stage, setStage] = useState<VisualPublishStage>("review");
   const [progress, setProgress] = useState<VisualPublishProgress | null>(null);
   const [result, setResult] = useState<VisualPublishResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Message and CLI output travel together so clearing one can never leave the
+  // other showing a stale reason.
+  const [failure, setFailure] = useState<{
+    message: string;
+    /** Full CLI output, shown verbatim so the reason stays legible. */
+    detail: string | null;
+  } | null>(null);
+  const error = failure?.message ?? null;
   const [thumbnailStagingSha256, setThumbnailStagingSha256] = useState<
     string | null
   >(null);
@@ -267,7 +277,7 @@ export function VisualUploadDialog({
       setStage("review");
       setProgress(null);
       setResult(null);
-      setError(null);
+      setFailure(null);
       setThumbnailStagingSha256(null);
       setThumbnailPreview(review.thumbnailPreview ?? null);
       setThumbnailBusy(false);
@@ -312,7 +322,7 @@ export function VisualUploadDialog({
   const startPublish = async () => {
     if (!ready || busy || cancellation.active) return;
     const controller = cancellation.begin();
-    setError(null);
+    setFailure(null);
     setResult(null);
     setThumbnailStagingSha256(null);
     setStage("saving");
@@ -342,13 +352,17 @@ export function VisualUploadDialog({
       setStage("succeeded");
     } catch (publishError) {
       const aborted = controller.signal.aborted;
-      setError(
-        aborted
+      setFailure({
+        message: aborted
           ? "公開処理を始める前に取り消しました。制作データは保持されています。"
           : publishError instanceof Error
             ? publishError.message
             : String(publishError),
-      );
+        detail:
+          !aborted && publishError instanceof PublishCommandError
+            ? publishError.detail || null
+            : null,
+      });
       setProgress(null);
       setStage(aborted ? "cancelled" : "failed");
     } finally {
@@ -772,6 +786,16 @@ export function VisualUploadDialog({
                   ? "前回の送信がXRiftへ届いたかどうかを判断できないため、二重公開を避けて送信を止めています。"
                   : error || "処理を再実行するか、Editorへ戻って診断を確認してください。"}
               </p>
+              {!unresolvedUploadAttempt && failure?.detail ? (
+                <div className="mx-auto mt-5 max-w-2xl text-left">
+                  <p className="text-xs font-semibold text-slate-700">
+                    CLIの出力
+                  </p>
+                  <pre className="scrollbar-thin mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-950 p-3 font-mono text-[11px] leading-5 text-slate-100">
+                    {failure.detail}
+                  </pre>
+                </div>
+              ) : null}
               {unresolvedUploadAttempt ? (
                 <div className="mx-auto mt-5 max-w-md rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-left">
                   <p className="text-xs font-semibold text-amber-900">
@@ -803,7 +827,7 @@ export function VisualUploadDialog({
                         void onClearStaleUploadAttempt()
                           .then(() => {
                             setAttemptCleared(true);
-                            setError(null);
+                            setFailure(null);
                           })
                           .catch((reason: unknown) => {
                             setClearAttemptError(
@@ -914,7 +938,7 @@ export function VisualUploadDialog({
                   type="button"
                   onClick={() => {
                     setStage("review");
-                    setError(null);
+                    setFailure(null);
                   }}
                   className="flex items-center gap-1.5 rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700"
                 >

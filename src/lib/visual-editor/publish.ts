@@ -95,36 +95,67 @@ function throwIfAborted(signal: AbortSignal): void {
   }
 }
 
+/**
+ * A failed CLI step, carrying its full output so the UI can show the reason
+ * instead of a fragment of it.
+ */
+export class PublishCommandError extends Error {
+  /** Full sanitized CLI output. Empty when the command printed nothing. */
+  readonly detail: string;
+
+  constructor(failure: PublishCommandFailure) {
+    super(failure.summary);
+    this.name = "PublishCommandError";
+    this.detail = failure.detail;
+  }
+}
+
+export type PublishCommandFailure = {
+  /** One line naming the step that failed, plus a recovery action if known. */
+  summary: string;
+  /** Full sanitized CLI output, for verbatim display. */
+  detail: string;
+};
+
 function assertSucceeded(
   result: RunResult,
   operation: string,
   privatePaths: string[] = [],
 ): void {
   if (result.code === 0) return;
-  throw new Error(formatPublishCommandFailure(operation, result, privatePaths));
+  throw new PublishCommandError(
+    formatPublishCommandFailure(operation, result, privatePaths),
+  );
 }
 
-/** Produces a safe, actionable error from both CLI output streams. */
+/**
+ * Produces a safe, actionable error from both CLI output streams.
+ *
+ * The output is kept whole. An earlier version showed only the last six lines,
+ * which silently discarded the verdict whenever a tool closed with a usage hint
+ * — `xrift check` ends its rejection with an example config, so the reason a
+ * world was refused never reached the author. Choosing which lines matter is
+ * the reader's job, not this function's.
+ */
 export function formatPublishCommandFailure(
   operation: string,
   result: Pick<RunResult, "stdout" | "stderr">,
   privatePaths: string[] = [],
-): string {
+): PublishCommandFailure {
   const detail = [result.stderr, result.stdout]
     .map((value) => value.trim())
     .filter(Boolean)
     .join("\n");
-  const safeDetail = detail
-    ? sanitizePublishFailure(detail, privatePaths)
-    : undefined;
-  const recovery = publishCommandRecovery(operation, safeDetail);
-  const visibleDetail = safeDetail
-    ?.split(/\r?\n/)
-    .slice(-6)
-    .join("\n");
-  return visibleDetail
-    ? `${operation}に失敗しました: ${recovery}${visibleDetail}`
-    : `${operation}に失敗しました。`;
+  const safeDetail = detail ? sanitizePublishFailure(detail, privatePaths) : "";
+  const recovery = publishCommandRecovery(operation, safeDetail).trim();
+  return {
+    summary: recovery
+      ? `${operation}に失敗しました。${recovery}`
+      : safeDetail
+        ? `${operation}に失敗しました。下のCLI出力を確認してください。`
+        : `${operation}に失敗しました。`,
+    detail: safeDetail,
+  };
 }
 
 function publishCommandRecovery(operation: string, detail?: string): string {
@@ -195,8 +226,15 @@ export function sanitizePublishFailure(
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  return lines.slice(-8).join("\n").slice(0, 1800);
+  // Redaction only. This function used to also keep the last 8 lines, which
+  // made it silently decide what the author was allowed to read — a CLI that
+  // closes with a usage hint had its verdict dropped here. How much to show is
+  // the display's call; the bound below only stops an unbounded CLI dump from
+  // entering React state.
+  return lines.join("\n").slice(0, SANITIZED_FAILURE_MAX_CHARS);
 }
+
+const SANITIZED_FAILURE_MAX_CHARS = 20_000;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

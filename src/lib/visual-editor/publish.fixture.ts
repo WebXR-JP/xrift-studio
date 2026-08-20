@@ -128,12 +128,54 @@ export function runVisualPublishFixtureAssertions(): void {
     },
   );
   assert(
-    templateFailure.includes("GitHub returned 403"),
+    templateFailure.detail.includes("GitHub returned 403"),
     "Command diagnostics discarded actionable stdout after stderr output",
   );
   assert(
-    templateFailure.includes("GitHubへのアクセス"),
+    templateFailure.summary.includes("GitHubへのアクセス"),
     "Template download failure did not offer a recovery action",
+  );
+
+  // `xrift check` prints its verdict and then closes with an example config.
+  // Reporting only the tail of the output dropped the verdict entirely, so the
+  // author saw the closing braces of the hint and nothing about the rejection.
+  const checkFailure = formatPublishCommandFailure("Worldの検査", {
+    stderr: "- Loading config...\n- Scanning files...\n✔ Found 28 JS files",
+    stdout: [
+      "🔒 Starting security check",
+      "━━━ __federation_expose_World-BxGL9Aml.js ━━━",
+      "  Score: 100  Verdict: REJECT",
+      "  ✗ [no-obfuscation] 疑わしい変数名が検出されました: $a0PbU$FileLoader",
+      "Results: 28 files  APPROVE: 27  REJECT: 1",
+      "❌ Security check failed",
+      "💡 Hint: Some rules can be allowed via world.permissions in xrift.json:",
+      '  - "no-obfuscation" → Add to allowedCodeRules to allow',
+      "  Example:",
+      "  {",
+      '      "world": {',
+      '          "permissions": {',
+      '              "allowedCodeRules": [',
+      '                  "no-obfuscation"',
+      "              ]",
+      "          }",
+      "      }",
+      "  }",
+    ].join("\n"),
+  });
+  for (const evidence of [
+    "no-obfuscation",
+    "REJECT",
+    "__federation_expose_World-BxGL9Aml.js",
+    "Loading config",
+  ]) {
+    assert(
+      checkFailure.detail.includes(evidence),
+      `Check failure output lost "${evidence}"`,
+    );
+  }
+  assert(
+    checkFailure.summary.includes("Worldの検査に失敗しました"),
+    "Check failure summary did not name the failed step",
   );
 }
 
