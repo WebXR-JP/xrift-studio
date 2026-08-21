@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import {
   chmod,
   mkdir,
@@ -21,6 +22,7 @@ import { runStarterTemplateFixtureAssertions } from "../src/lib/visual-editor/st
 import { createStarterWorldProject } from "../src/lib/visual-editor/starter-templates.ts";
 import { prepareStarterVisualProject } from "../src/lib/visual-editor/persistence.ts";
 import { runVisualCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/fixture.ts";
+import { compileStagedTypecheckWorld } from "../src/lib/visual-editor/compiler/staged-world.fixture.ts";
 import { runClassicExportFixtureAssertions } from "../src/lib/visual-editor/classic-export.fixture.ts";
 import { runComponentCodeImportFixtureAssertions } from "../src/lib/visual-editor/component-code-import.fixture.ts";
 import { runXriftMcpEditorToolFixtures } from "../src/lib/visual-editor/mcp-editor-tools.fixture.ts";
@@ -312,6 +314,7 @@ try {
     ["material drag", runMaterialDragFixtureAssertions],
     ["custom material preview", runCustomMaterialPreviewFixtureAssertions],
     ["project model material preview", runProjectModelMaterialPreviewFixtureAssertions],
+    ["staged world typecheck", runStagedWorldTypecheck],
   ]);
   process.stdout.write("convert/runtime fixture passed\n");
 } finally {
@@ -321,6 +324,111 @@ try {
     process.env.XRIFT_STUDIO_XRIFT_BIN = previousXriftBin;
   }
   await rm(fixtureRoot, { recursive: true, force: true });
+}
+
+/**
+ * Publishing runs the template's `tsc` over everything the compiler emitted,
+ * so Studio's own gate has to be that same check. This compiles one world that
+ * combines as many emit paths as documents can reach (sky shader, HDR post,
+ * grass terrain, water, particles, a built-in script) and typechecks the
+ * staged sources with the @xrift/cli world template's compiler options.
+ * Emit mistakes that only appear when features meet — duplicate import
+ * bindings, unused imports under noUnusedLocals — fail here instead of in the
+ * author's publish dialog.
+ */
+async function runStagedWorldTypecheck() {
+  const compiled = compileStagedTypecheckWorld();
+  const blocking = compiled.diagnostics.filter(
+    (diagnostic) => diagnostic.severity === "blocking",
+  );
+  assert(
+    compiled.canStage && blocking.length === 0,
+    `staged typecheck world must be stageable: ${JSON.stringify(blocking).slice(0, 400)}`,
+  );
+  // Inside node_modules on purpose: the staged sources import three, react and
+  // @xrift/world-components, and tsc resolves them by walking up to this
+  // repository's node_modules — the same versions the compiler was built
+  // against.
+  const stagedRoot = path.resolve(
+    "node_modules",
+    ".cache",
+    "xrift-studio",
+    "staged-typecheck",
+  );
+  await rm(stagedRoot, { recursive: true, force: true });
+  const written = [];
+  for (const file of compiled.overlayFiles) {
+    if (!/\.(ts|tsx)$/.test(file.relativePath)) continue;
+    const target = path.join(stagedRoot, file.relativePath);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, file.content);
+    written.push(file.relativePath);
+  }
+  assert(
+    written.includes("src/World.tsx") &&
+      written.includes("src/xrift-studio/script-host.tsx") &&
+      written.some((file) => file.startsWith("src/scripts/")),
+    `staged typecheck world is missing expected sources: ${written.join(", ")}`,
+  );
+  // The template consumes the world through src/index.tsx, so the staged
+  // sources are imported the same way here.
+  await writeFile(
+    path.join(stagedRoot, "src", "index.tsx"),
+    'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
+  );
+  // Mirrors the @xrift/cli world template's tsconfig (verified against a real
+  // publish staging). "types" deliberately leaves out @types/node: the staged
+  // build has no Node globals, so the gate must not either.
+  await writeFile(
+    path.join(stagedRoot, "tsconfig.json"),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          target: "ES2020",
+          useDefineForClassFields: true,
+          lib: ["ES2020", "DOM", "DOM.Iterable"],
+          module: "ESNext",
+          skipLibCheck: true,
+          moduleResolution: "bundler",
+          allowImportingTsExtensions: true,
+          resolveJsonModule: true,
+          isolatedModules: true,
+          noEmit: true,
+          jsx: "react-jsx",
+          strict: true,
+          noUnusedLocals: true,
+          noUnusedParameters: true,
+          noFallthroughCasesInSwitch: true,
+          esModuleInterop: true,
+          types: ["react", "react-dom", "vite/client"],
+          // The template writes this as baseUrl "." + "src/*"; the relative
+          // form means the same thing and also parses under TypeScript 7,
+          // which removed baseUrl.
+          paths: { "~/*": ["./src/*"] },
+        },
+        include: ["src"],
+      },
+      null,
+      2,
+    ),
+  );
+  const tsc = path.resolve("node_modules", "typescript", "bin", "tsc");
+  const result = await new Promise((resolve) => {
+    const child = spawn(
+      process.execPath,
+      [tsc, "-p", stagedRoot, "--pretty", "false"],
+      { stdio: ["ignore", "pipe", "pipe"] },
+    );
+    let output = "";
+    child.stdout.on("data", (chunk) => (output += chunk));
+    child.stderr.on("data", (chunk) => (output += chunk));
+    child.on("error", (error) => resolve({ code: -1, output: String(error) }));
+    child.on("close", (code) => resolve({ code, output }));
+  });
+  assert(
+    result.code === 0,
+    `staged world sources do not typecheck under the publish template's tsconfig (${stagedRoot}):\n${result.output.slice(0, 4000)}`,
+  );
 }
 
 async function verifyPreparedOfficialStarter() {

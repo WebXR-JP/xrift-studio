@@ -71,6 +71,12 @@ jobs:
             throw new Error("Release tag must match app version: " + expected);
           }'
 
+      # 公開ステージングの tsc をなぞる staged world typecheck を含む。
+      # コンパイラが出力するコードが公開ビルドで落ちる退行は、ここで
+      # リリース前に止まる。
+      - name: Run compiler fixtures and publish-staging checks
+        run: pnpm cli:test
+
       - name: Install Chromium for release E2E
         run: pnpm exec playwright install --with-deps chromium
 
