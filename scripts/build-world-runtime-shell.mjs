@@ -37,8 +37,12 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const RUNTIME_PACKAGE_DIR = path.join(repoRoot, "packages", "xrift-studio-runtime");
-/** Keep in step with COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC in src/lib/xrift-cli.ts. */
-const WORLD_COMPONENTS_SPEC = "@xrift/world-components@0.43.0";
+/**
+ * Keep in step with COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC in
+ * src/lib/xrift-cli.ts — `pnpm cli:test` fails when they drift
+ * (scripts/check-world-components-alignment.mjs).
+ */
+const WORLD_COMPONENTS_SPEC = "@xrift/world-components@0.47.0";
 const SHELL_ENTRY = "remoteEntry.js";
 const RUNTIME_CONTRACT_SOURCE = path.join(
   RUNTIME_PACKAGE_DIR,

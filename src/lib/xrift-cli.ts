@@ -39,10 +39,11 @@ export type CompilerStagingTemplateRequest = {
  * same version.
  *
  * Update this together with `@xrift/world-components` in package.json. The two
- * must always name the same version.
+ * must always name the same version — `pnpm cli:test` fails when they drift
+ * (scripts/check-world-components-alignment.mjs).
  */
 export const COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC =
-  "@xrift/world-components@0.43.0";
+  "@xrift/world-components@0.47.0";
 
 const COMPILER_RUNTIME_PACKAGE_ALLOWLIST = new Set([
   "three-icosa@0.4.2-alpha.18",
