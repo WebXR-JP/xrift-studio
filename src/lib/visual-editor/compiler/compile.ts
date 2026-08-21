@@ -801,9 +801,21 @@ function generateComponentSource(
   const worldImports = [...context.imports].sort();
   const threeValueImports = new Set(context.threeValueImports);
   if (context.usesDoubleSide) threeValueImports.add("DoubleSide");
+  // A value import already binds the name in type space too, so emitting the
+  // same identifier again in the `import type` line is a TS2300 duplicate that
+  // fails the published project's tsc run. Value imports win; only names that
+  // are never needed as values stay type-only.
+  const reactTypeImports = [...context.reactTypeImports]
+    .filter((name) => !context.reactValueImports.has(name))
+    .sort();
+  const threeTypeImports = [...context.threeTypeImports]
+    .filter((name) => !threeValueImports.has(name))
+    .sort();
   const imports = [
     ...[...context.extraImports].sort(),
-    `import type { ${[...context.reactTypeImports].sort().join(", ")} } from "react";`,
+    ...(reactTypeImports.length > 0
+      ? [`import type { ${reactTypeImports.join(", ")} } from "react";`]
+      : []),
     ...(context.reactValueImports.size > 0
       ? [`import { ${[...context.reactValueImports].sort().join(", ")} } from "react";`]
       : []),
@@ -819,8 +831,8 @@ function generateComponentSource(
     ...(context.rapierImports.size > 0
       ? [`import { ${[...context.rapierImports].sort().join(", ")} } from "@react-three/rapier";`]
       : []),
-    ...(context.threeTypeImports.size > 0
-      ? [`import type { ${[...context.threeTypeImports].sort().join(", ")} } from "three";`]
+    ...(threeTypeImports.length > 0
+      ? [`import type { ${threeTypeImports.join(", ")} } from "three";`]
       : []),
     ...(threeValueImports.size > 0
       ? [`import { ${[...threeValueImports].sort().join(", ")} } from "three";`]

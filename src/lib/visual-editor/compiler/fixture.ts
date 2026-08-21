@@ -24,6 +24,7 @@ import {
   updateParticleAsset,
 } from "../particle-system";
 import {
+  addBuiltinPrimitiveEntity,
   addTerrainEntity,
   createBoxColliderComponent,
   createMeshColliderComponent,
@@ -36,6 +37,13 @@ import {
   type SceneDocument,
   type SceneEntity,
 } from "../scene-document";
+import { BUILTIN_PRIMITIVE_CREATION_IDS } from "../creation-catalog";
+import { applyWaterShaderCatalogInstall } from "../external-store";
+import { WATER_SHADER_CATALOG } from "../water-shader-catalog";
+import {
+  createTerrainFromPreset,
+  getTerrainPreset,
+} from "../terrain-presets";
 import {
   BUILTIN_ASSET_IDS,
   createPrototypeProject,
@@ -2821,6 +2829,78 @@ export function runVisualCompilerFixtureAssertions(
     ),
     "Item source contract was not generated",
   );
+
+  assertImportBindingsStayUnique(fixedTime);
+}
+
+/**
+ * Terrain grass constructs `new ShaderMaterial(...)` while an animated classic
+ * Material only names the type, so one Scene holding both used to emit
+ * `ShaderMaterial` into both the `import type` and the value import from
+ * "three". The published project's tsc run rejects that as TS2300/TS1361 and
+ * the upload fails at the staging build, so a compiled World must never bind
+ * the same import identifier twice.
+ */
+function assertImportBindingsStayUnique(fixedTime: string): void {
+  const prototype = createPrototypeProject("world", "fixture-import-bindings");
+  const preset = getTerrainPreset("meadow-plain");
+  assert(preset, "Import-binding fixture needs the meadow-plain preset");
+  const terrainPlaced = addTerrainEntity(
+    prototype.scene,
+    prototype.assets,
+    BUILTIN_ASSET_IDS.material.green,
+    createTerrainFromPreset(preset),
+  );
+  assert(terrainPlaced, "Import-binding fixture could not place a Terrain");
+  const installed = applyWaterShaderCatalogInstall(
+    prototype.assets,
+    WATER_SHADER_CATALOG[0],
+  );
+  const placed = addBuiltinPrimitiveEntity(
+    terrainPlaced.scene,
+    installed.manifest,
+    BUILTIN_PRIMITIVE_CREATION_IDS.plane,
+    installed.primaryAssetId,
+  );
+  assert(placed, "Import-binding fixture could not place the Water plane");
+  const compiled = compileVisualProject(
+    {
+      project: prototype.project,
+      scenes: { [placed.scene.sceneId]: placed.scene },
+      assets: installed.manifest,
+      prefabs: prototype.prefabs,
+    },
+    { generatedAt: fixedTime },
+  );
+  assert(compiled.canStage, "Grass and Water in one Scene must stay stageable");
+  const source =
+    compiled.overlayFiles.find((file) => file.relativePath === "src/World.tsx")
+      ?.content ?? "";
+  assert(
+    source.includes("new ShaderMaterial(") &&
+      /import \{[^}]*\bShaderMaterial\b[^}]*\} from "three"/.test(source),
+    "The grass material must keep its ShaderMaterial value import",
+  );
+  for (const file of compiled.overlayFiles) {
+    if (!/\.(ts|tsx)$/.test(file.relativePath)) continue;
+    const bound = new Map<string, number>();
+    for (const statement of file.content.matchAll(
+      /^import(?:\s+type)?\s+(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s+from\s+"[^"]+";?\s*$/gm,
+    )) {
+      for (const raw of statement[1].split(",")) {
+        const name = raw.trim();
+        if (!name) continue;
+        bound.set(name, (bound.get(name) ?? 0) + 1);
+      }
+    }
+    const duplicated = [...bound.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([name]) => name);
+    assert(
+      duplicated.length === 0,
+      `${file.relativePath} binds the same import twice: ${duplicated.join(", ")}`,
+    );
+  }
 }
 
 function toCompilerDocuments(
