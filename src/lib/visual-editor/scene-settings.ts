@@ -246,9 +246,11 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
       maxDistance: 0.1,
     },
     grading: {
-      // Neutral by default: on, but changing nothing. An author who opens the
-      // controls sees the identity values rather than a look someone chose.
-      enabled: true,
+      // Off by default, at identity values. A neutral pass still costs a
+      // full-screen draw and still reads as "something is adjusting my
+      // colours" in the settings, so a new scene shows the author's own
+      // lighting until they ask for a look.
+      enabled: false,
       contrast: 1,
       saturation: 1,
       temperature: 0,

@@ -185,6 +185,64 @@ function publishFailureHeadline(detail: string): string | undefined {
 const PUBLISH_FAILURE_MARKER = /^(?:[✗×✖❌]|Error:|error:|ERROR:)\s*/;
 const PUBLISH_FAILURE_HEADLINE_MAX_CHARS = 200;
 
+/**
+ * Puts the build's own errors back into a failed check.
+ *
+ * `xrift check --build` runs the world's build internally and, when it fails,
+ * reports `Command failed: npm run build` without the compiler output. The
+ * author is then told to read a build log that was never shown. Re-running the
+ * same build in the same staging directory recovers the real Vite and
+ * TypeScript diagnostics, which is the only thing that says which Scene, Asset
+ * or Script is at fault.
+ *
+ * The check's own output stays first: it holds the verdict, and the build
+ * output is the evidence behind it.
+ */
+async function withRecoveredBuildOutput(
+  checked: RunResult,
+  stagingPath: string,
+  onLog: (line: LogLine) => void,
+  signal: AbortSignal,
+  report: (progress: VisualPublishPipelineProgress) => void,
+): Promise<Pick<RunResult, "stdout" | "stderr">> {
+  const combined = `${checked.stderr}\n${checked.stdout}`;
+  if (!BUILD_FAILURE_MARKER.test(combined)) return checked;
+  if (signal.aborted) return checked;
+  // Re-running the build takes as long as the build did. Without this the
+  // dialog sits on "checking" with nothing moving, which reads as a hang.
+  report({
+    stage: "checking",
+    label: "ビルドエラーを取得しています",
+    detail: "失敗したビルドをもう一度実行して、原因の出力を集めます。",
+    percent: 70,
+    cancelSafe: false,
+  });
+  let rebuilt: RunResult;
+  try {
+    rebuilt = await xrift.runCompilerStagingBuild(stagingPath, onLog);
+  } catch {
+    // Best effort. A build that cannot even be spawned leaves the original
+    // verdict in place rather than replacing it with our failure to look into
+    // it.
+    return checked;
+  }
+  const buildOutput = [rebuilt.stderr, rebuilt.stdout]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join("\n");
+  if (!buildOutput) return checked;
+  return {
+    stdout: `${checked.stdout}\n\n${BUILD_OUTPUT_SEPARATOR}\n${buildOutput}`,
+    stderr: checked.stderr,
+  };
+}
+
+/** How the CLI reports a failed build without saying what failed. */
+const BUILD_FAILURE_MARKER = /command failed:\s*npm\s+run\s+build/i;
+
+/** Names the recovered section, so the recovery text can point at it. */
+export const BUILD_OUTPUT_SEPARATOR = "--- npm run build ---";
+
 function publishCommandRecovery(operation: string, detail?: string): string {
   if (
     operation === "XRiftテンプレートの作成" &&
@@ -194,9 +252,9 @@ function publishCommandRecovery(operation: string, detail?: string): string {
   }
   if (
     /^(World|Item)の検査$/.test(operation) &&
-    /command failed:\s*npm\s+run\s+build/i.test(detail ?? "")
+    BUILD_FAILURE_MARKER.test(detail ?? "")
   ) {
-    return "公開用ステージングのnpm run buildが失敗しました。下のビルド出力を確認し、Scene・Asset・Scriptの問題を修正してから再試行してください。\n";
+    return `公開用ステージングのビルドが失敗しました。下の「${BUILD_OUTPUT_SEPARATOR}」以降にコンパイラの出力があります。該当するScene・Asset・Scriptを修正してから再試行してください。\n`;
   }
   return "";
 }
@@ -401,19 +459,14 @@ export async function materializeVisualCompilation(
       "公開用サムネイルのステージング検証結果を確認できないため、アップロードを停止しました。",
     );
   }
-  const includesOpenBrushRuntime =
-    compilation.stagingPlan.runtimePackageSpecs.includes(
-      "three-icosa@0.4.2-alpha.18",
-    );
   throwIfAborted(signal);
   report({
     stage: "compiling",
-    label: includesOpenBrushRuntime
-      ? "XRiftとOpenBrushの依存関係を準備しています"
-      : "XRiftの依存関係を準備しています",
-    detail: includesOpenBrushRuntime
-      ? "テンプレートの依存関係とOpenBrush描画ランタイムを公開用の一時プロジェクトへ追加します。"
-      : "テンプレートの依存関係を公開用の一時プロジェクトへ追加します。",
+    // Not "dependencies for the staging project": that named the mechanism and
+    // read like a fault report. What the author needs to know is that this is a
+    // normal step and that the first run is the slow one.
+    label: "公開の準備をしています",
+    detail: "必要なライブラリを取得します。初回は数分かかることがあります。",
     percent: 52,
     cancelSafe: false,
   });
@@ -428,7 +481,7 @@ export async function materializeVisualCompilation(
     ],
     onLog,
   );
-  assertSucceeded(installed, "XRift依存関係の準備", [
+  assertSucceeded(installed, "公開の準備", [
     authoringProjectPath,
     staged.projectPath,
   ]);
@@ -509,11 +562,21 @@ export async function publishVisualProject({
       kind === "world"
         ? await xrift.checkWorld(stagingPath, safeLog)
         : await xrift.checkItem(stagingPath, safeLog);
-    assertSucceeded(
-      checked,
-      `${kind === "world" ? "World" : "Item"}の検査`,
-      privatePaths,
-    );
+    if (checked.code !== 0) {
+      throw new PublishCommandError(
+        formatPublishCommandFailure(
+          `${kind === "world" ? "World" : "Item"}の検査`,
+          await withRecoveredBuildOutput(
+            checked,
+            stagingPath,
+            safeLog,
+            signal,
+            report,
+          ),
+          privatePaths,
+        ),
+      );
+    }
 
     throwIfAborted(signal);
     report({

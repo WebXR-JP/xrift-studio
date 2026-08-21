@@ -1,4 +1,5 @@
 import {
+  BUILD_OUTPUT_SEPARATOR,
   didXriftUploadStopBeforeRemoteTransfer,
   formatPublishCommandFailure,
   parseXriftUploadResult,
@@ -186,6 +187,40 @@ export function runVisualPublishFixtureAssertions(): void {
     !checkFailure.summary.includes("✗"),
     "Check failure summary kept the CLI's marker character",
   );
+  // A check that failed inside the world's own build has to arrive with that
+  // build's output. `xrift check --build` reports only `Command failed: npm run
+  // build`, so the publish path re-runs the build and appends it under a named
+  // separator; the recovery text points the author at that separator, and the
+  // two have to keep agreeing or the author is sent to a section that is not
+  // there.
+  const buildFailure = formatPublishCommandFailure("Worldの検査", {
+    stderr: "Command failed: npm run build",
+    stdout: [
+      "Loading config",
+      "",
+      BUILD_OUTPUT_SEPARATOR,
+      "src/World.tsx(12,3): error TS2304: Cannot find name 'Bloom'.",
+    ].join("\n"),
+  });
+  assert(
+    buildFailure.summary.includes(BUILD_OUTPUT_SEPARATOR),
+    `Build failure summary did not point at the recovered output: ${buildFailure.summary}`,
+  );
+  assert(
+    buildFailure.detail.includes("error TS2304"),
+    "Build failure detail lost the compiler diagnostic",
+  );
+  // Without the marker there is nothing to recover, so the author must not be
+  // told to read a section that was never appended.
+  const plainCheckFailure = formatPublishCommandFailure("Worldの検査", {
+    stderr: "",
+    stdout: "✗ REJECT xrift.json is missing a title",
+  });
+  assert(
+    !plainCheckFailure.summary.includes(BUILD_OUTPUT_SEPARATOR),
+    "A non-build check failure pointed at build output that does not exist",
+  );
+
   // Output with no marked verdict must not have a line promoted by position.
   const unmarkedFailure = formatPublishCommandFailure("Worldの検査", {
     stderr: "",

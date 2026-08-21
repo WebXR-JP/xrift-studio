@@ -332,6 +332,28 @@ export const xrift = {
       onLog,
     });
   },
+  /**
+   * Runs the staging project's own build, to recover the errors the check hid.
+   *
+   * `xrift check --build` reports a failed build as `Command failed: npm run
+   * build` and keeps the compiler's output to itself, so the author is told a
+   * build failed without being told why. Running the same build here puts the
+   * real Vite and TypeScript diagnostics in front of them. Same staging guard
+   * as every other command: this can only ever run in a compiler-owned
+   * directory, never in an authoring project.
+   */
+  runCompilerStagingBuild: (
+    projectPath: string,
+    onLog: (line: LogLine) => void,
+  ) => {
+    assertCompilerOwnedProjectPath(projectPath);
+    return run({
+      bin: "npm",
+      args: ["run", "build"],
+      cwd: projectPath,
+      onLog,
+    });
+  },
   checkItem: (projectPath: string, onLog: (l: LogLine) => void) =>
     run({
       bin: "xrift",
@@ -392,7 +414,7 @@ export function assertCompilerOwnedProjectPath(projectPath: string): void {
     !/^xrift-studio-[a-z0-9._-]+$/i.test(directoryName) ||
     directoryName.includes("..")
   ) {
-    throw new Error("Runtime packages can only be installed in compiler staging");
+    throw new Error("Compiler commands can only run in compiler staging");
   }
 }
 
