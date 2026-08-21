@@ -167,6 +167,7 @@ export function VisualUploadDialog({
   const [result, setResult] = useState<VisualPublishResult | null>(null);
   // Message and CLI output travel together so clearing one can never leave the
   // other showing a stale reason.
+  const [detailCopied, setDetailCopied] = useState(false);
   const [failure, setFailure] = useState<{
     message: string;
     /** Full CLI output, shown verbatim so the reason stays legible. */
@@ -352,6 +353,7 @@ export function VisualUploadDialog({
       setStage("succeeded");
     } catch (publishError) {
       const aborted = controller.signal.aborted;
+      setDetailCopied(false);
       setFailure({
         message: aborted
           ? "公開処理を始める前に取り消しました。制作データは保持されています。"
@@ -788,10 +790,26 @@ export function VisualUploadDialog({
               </p>
               {!unresolvedUploadAttempt && failure?.detail ? (
                 <div className="mx-auto mt-5 max-w-2xl text-left">
-                  <p className="text-xs font-semibold text-slate-700">
-                    CLIの出力
-                  </p>
-                  <pre className="scrollbar-thin mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-950 p-3 font-mono text-[11px] leading-5 text-slate-100">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold text-slate-700">
+                      エラーの内容
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void navigator.clipboard
+                          .writeText(failure.detail ?? "")
+                          .then(
+                            () => setDetailCopied(true),
+                            () => setDetailCopied(false),
+                          );
+                      }}
+                      className="rounded border border-slate-300 px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-100"
+                    >
+                      {detailCopied ? "コピーしました" : "コピー"}
+                    </button>
+                  </div>
+                  <pre className="scrollbar-thin mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-950 p-3 font-mono text-[11px] leading-5 text-slate-100">
                     {failure.detail}
                   </pre>
                 </div>

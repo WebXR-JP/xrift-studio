@@ -2,6 +2,8 @@ import {
   BUILD_OUTPUT_SEPARATOR,
   didXriftUploadStopBeforeRemoteTransfer,
   formatPublishCommandFailure,
+  PublishCommandError,
+  redactPublishFailure,
   parseXriftUploadResult,
   sanitizePublishFailure,
   type XriftUploadResult,
@@ -219,6 +221,38 @@ export function runVisualPublishFixtureAssertions(): void {
   assert(
     !plainCheckFailure.summary.includes(BUILD_OUTPUT_SEPARATOR),
     "A non-build check failure pointed at build output that does not exist",
+  );
+
+  // The pipeline's outer handler must not flatten a command failure. It used
+  // to rebuild every error as a plain Error, which dropped the CLI output the
+  // dialog renders under the summary - so the author was told to read output
+  // that was never shown. This is the seam that has to keep the class.
+  const carried = new PublishCommandError({
+    summary: "Worldの検査に失敗しました。",
+    detail: [
+      "Command failed: npm run build",
+      BUILD_OUTPUT_SEPARATOR,
+      "C:\staging\src\World.tsx(12,3): error TS2304: Cannot find name 'Bloom'.",
+    ].join("\n"),
+  });
+  const redacted = redactPublishFailure(carried, ["C:\staging"]);
+  assert(
+    redacted instanceof PublishCommandError,
+    "A command failure was flattened on its way out of the pipeline",
+  );
+  assert(
+    (redacted as PublishCommandError).detail.includes("error TS2304"),
+    "Redaction dropped the compiler diagnostic the author needs",
+  );
+  assert(
+    !(redacted as PublishCommandError).detail.includes("C:\staging"),
+    "Redaction left a local path in the output",
+  );
+  // A plain failure still arrives as a plain Error with a readable message.
+  const plain = redactPublishFailure(new Error("something broke"), []);
+  assert(
+    !(plain instanceof PublishCommandError) && plain.message === "something broke",
+    "A non-command failure was reshaped",
   );
 
   // Output with no marked verdict must not have a line promoted by position.

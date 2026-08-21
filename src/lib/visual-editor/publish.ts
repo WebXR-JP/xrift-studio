@@ -259,6 +259,34 @@ function publishCommandRecovery(operation: string, detail?: string): string {
   return "";
 }
 
+/**
+ * Redacts a failure on its way out of the publish pipeline, without flattening
+ * it.
+ *
+ * The pipeline used to rebuild every error as a plain `Error`, which threw away
+ * the CLI output a `PublishCommandError` was carrying. The dialog renders that
+ * output under the summary, so the flattening is why every message that said
+ * "read the output below" pointed at a panel that was never rendered. The class
+ * is preserved here and redaction is re-run against the paths discovered since
+ * the error was raised.
+ */
+export function redactPublishFailure(
+  error: unknown,
+  privatePaths: string[],
+): Error {
+  if (error instanceof PublishCommandError) {
+    return new PublishCommandError({
+      summary: sanitizePublishFailure(error.message, privatePaths),
+      detail: sanitizePublishFailure(error.detail, privatePaths),
+    });
+  }
+  const detail = sanitizePublishFailure(
+    error instanceof Error ? error.message : String(error),
+    privatePaths,
+  );
+  return new Error(detail || "XRiftへのアップロード処理に失敗しました。");
+}
+
 /** Keeps actionable CLI diagnostics while preventing credentials and local paths from reaching the UI. */
 export function sanitizePublishFailure(
   value: string,
@@ -681,11 +709,7 @@ export async function publishVisualProject({
     ) {
       throw error;
     }
-    const detail = sanitizePublishFailure(
-      error instanceof Error ? error.message : String(error),
-      privatePaths,
-    );
-    throw new Error(detail || "XRiftへのアップロード処理に失敗しました。");
+    throw redactPublishFailure(error, privatePaths);
   }
 }
 
