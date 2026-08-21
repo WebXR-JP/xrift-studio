@@ -1,6 +1,6 @@
 [package]
 name = "xrift-studio"
-version = "0.9.6"
+version = "0.9.7"
 description = "Community-built desktop app for creating XRift worlds and items"
 authors = ["xrift-studio contributors"]
 license = "MIT"
