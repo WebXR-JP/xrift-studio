@@ -1,19 +1,38 @@
 # Play で動作を確認する
 
-ビジュアルエディターでは、編集状態を保持したまま **Play** へ切り替えて、Scene の動作を確認できます。
+ビジュアルエディターでは、編集状態を保ったまま **Play** へ切り替えて、シーンの動作を確認できます。別のブラウザや開発サーバーを開く必要はありません。
 
 ## Play を開始する
 
-エディターの **Play** ボタンを押すと、Play モードに切り替わります。
+エディターの **Play** ボタン（`Ctrl/⌘ + Enter`）を押します。中央が **Play Window** に切り替わり、太い境界と専用のヘッダーで編集用の Scene View と区別されます。
 
-- **ワールド**: WASD 操作で移動し、重力・Collider・Script の動作を確認します。
-- **アイテム**: 周囲からの見え方を確認します。
+- **ワールド**: WASD で歩き、重力、Collider、Script、Interactivity の動作を確認します。
+- **アイテム**: ワールドの移動やプレイヤーを前提にせず、単体の見え方を確認します。
 
-Play 中は、編集データと分離した Play Window で動作します。Transform、Collider、Animation の変更は、対象 Entity だけを再実行します。
+Play Window に映るのは編集データのコピーです。左の Hierarchy と右の Inspector は編集データを表示し続けます。
+
+## Play 中にできること
+
+Play を止めずに次を変更できます。変更は通常どおり履歴と自動保存に入り、変更した Entity だけが作り直されます。
+
+- Transform、Collider、Animation の設定
+- Entity の追加・削除・複製・親子付け替え、Component の追加
+- Script の宣言済みプロパティ（次のフレームから反映）
+
+Play 中は次を変更できません。
+
+- Asset、Material、Scene 設定
+- ギズモ操作と Asset のドロップ
+
+Script の `ctx.materials`、`ctx.lights`、`ctx.audioSources` などによる変更は、その Script が動いている間だけの一時的なものです。Stop すると保存済みの値へ戻ります。
 
 ## Play を停止する
 
-**Stop** ボタンを押すと、編集モードに戻ります。Play 中の変更は、保存されたオーサリングデータには影響しません（Script の `ctx.materials` などの変更は Play 中だけ有効です）。
+**Stop** を押すと編集モードに戻ります。実行中のアバター、カメラ、入力状態、物理は破棄され、Play 中に加えた編集を含む最新のシーンと、Play 前の選択・カメラへ戻ります。実行中の位置や速度が保存データへ書き戻されることはありません。
+
+## 空の見え方について
+
+空 Shader は Scene View には描画されません。編集中の背景は単色のままなので、空の見え方は Play で確認してください。
 
 ## クラシックプロジェクトのローカル確認
 
@@ -22,3 +41,4 @@ Play 中は、編集データと分離した Play Window で動作します。Tr
 ## 次のステップ
 
 - [XRift への公開（アップロード）](./publishing.md)
+- [トラブルシューティング](./troubleshooting.md)

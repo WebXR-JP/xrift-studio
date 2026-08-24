@@ -21,7 +21,25 @@ import {
 import { XRIFT_STUDIO_REPOSITORY_URL } from "./lib/support-links";
 import { BrandMark as AppBrandMark } from "./components/Brand";
 
-const WIKI_RAW_BASE = `${XRIFT_STUDIO_REPOSITORY_URL}/blob/main/docs/wiki`;
+const REPO_BLOB_BASE = `${XRIFT_STUDIO_REPOSITORY_URL}/blob/main`;
+const WIKI_RAW_BASE = `${REPO_BLOB_BASE}/docs/wiki`;
+
+/**
+ * Turn a link written for the repository into one that works on the published
+ * site. The pages are authored to be read on GitHub too, so they link to
+ * neighbouring files with relative paths. Those paths resolve against the
+ * wiki's own URL once published, which points at nothing, so anything that is
+ * not a wiki page has to be re-pointed at the file in the repository.
+ */
+function resolveRepositoryHref(href: string): string {
+  const segments = ["docs", "wiki"];
+  for (const part of href.split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part === "..") segments.pop();
+    else segments.push(part);
+  }
+  return `${REPO_BLOB_BASE}/${segments.join("/")}`;
+}
 
 const wikiMarkdownFiles = import.meta.glob("/docs/wiki/*.md", {
   query: "?raw",
@@ -45,9 +63,9 @@ function useHashRoute(): string {
 /**
  * Same mark as the app and the landing page.
  *
- * This used to be a BookOpen glyph on a flat violet square, which made the
- * guide look like a different product from the editor it documents. The mark
- * comes from `src/components/Brand.tsx` so all three stay in step.
+ * The glyph comes from `src/components/Brand.tsx` so the guide, the site and
+ * the editor it documents stay in step. A guide with its own icon reads as a
+ * different product from the tool it belongs to.
  */
 function BrandMark() {
   return (
@@ -225,8 +243,9 @@ function MarkdownContent({ content }: { content: string }) {
         remarkPlugins={[remarkGfm]}
         components={{
           a: ({ href, children, ...props }) => {
-            if (href?.startsWith("./") || href?.startsWith("../")) {
-              const slug = href.replace(/^\.\.?\//, "").replace(/\.md$/, "");
+            const isRelative = href?.startsWith("./") || href?.startsWith("../");
+            if (isRelative && href) {
+              const slug = href.replace(/^\.\//, "").replace(/\.md$/, "");
               const page = getPageBySlug(slug);
               if (page) {
                 return (
@@ -236,8 +255,9 @@ function MarkdownContent({ content }: { content: string }) {
                 );
               }
             }
+            const resolved = isRelative && href ? resolveRepositoryHref(href) : href;
             return (
-              <a href={href} target="_blank" rel="noreferrer" {...props}>
+              <a href={resolved} target="_blank" rel="noreferrer" {...props}>
                 {children}
                 <ExternalLink size={12} className="ml-0.5 inline-block align-[-1px] opacity-60" />
               </a>

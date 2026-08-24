@@ -66,17 +66,21 @@ XRift Studio での制作は、次のような流れで進みます。
 | シーンをビジュアル編集する | Hierarchy、Scene View、Inspector、Assets を使い、Primitive、Model、Prefab、XRift Component を配置してギズモで調整する。 |
 | 3D 素材を取り込む | GLB／glTF、OBJ、VRM 0.x／1.x を Model Asset として取り込む。 |
 | アセットと表現を作る | Texture、Material、Particle、Prefab を Assets で管理し、Inspector から編集する。 |
+| 同じ構成を再利用する | Entity と子階層を Prefab Asset として保存し、何度でも配置する。配置ごとの差分は override として保持する。 |
 | 音を配置する | MP3 を Audio Asset として取り込み、Audio Source へ割り当てて保存・変換する。 |
 | 衝突判定を設定する | Primitive には Box Collider、インポート Model には Mesh Collider を初期設定する。 |
 | 地形をつくる | 高さサンプル Terrain を追加し、ブラシで編集する。形と草が入ったプリセットからも始められる。 |
 | 草を生やす | Terrain へ草の層を重ね、ブラシで塗って生やす・消す。Scene の風で揺れる。 |
 | 空と水をつくる | GLSL で描く空と水面の Material を公式カタログから追加し、Uniform values で調整する。 |
+| 光と色味を整える | Light を置いて色、強度、影、距離を設定する。露出やコントラストなどの色味は一つの compositor でまとめて調整する。 |
 | 外部の素材を取り込む | Poly Haven と ambientCG の CC0 素材、XRift 公式の Shader・Terrain・照明・Component をアプリ内から追加する。 |
 | ノードで動きをつける | KHR_interactivity 準拠のグラフを組み、開始時・毎フレーム・イベントをきっかけに色や再生を動かす。 |
 | Entity に振る舞いを与える | Script Asset を TypeScript で書き、Script Component として Entity へ付けて Play で実行する。 |
 | Editor 内で Play 確認する | 編集状態を保持したまま Play へ切り替え、動作を確認する。 |
 | ローカルで動作を確認する | 開発サーバーを起動・停止し、プレビュー URL をブラウザで開く。 |
+| 公開前に容量を見積もる | 初回ロード容量と回線別の時間、Asset と実行時 VRAM の目安を確認し、resize、KTX2、Draco を選んで適用する。 |
 | XRift に公開する | ログイン後、タイトル・説明・サムネイルを確認してアップロードする。 |
+| 通常の XRift 開発へ渡す | ビジュアル制作データを、Runtime JSON 付きの Classic プロジェクトへ一方向に書き出す。 |
 | AI と一緒に Scene を編集する | Codex、Claude Code、OpenCode、Cursor などを登録し、限定 MCP tool で Scene を編集する。 |
 
 ## まずはブラウザで見る
@@ -99,4 +103,4 @@ XRift Studio での制作は、次のような流れで進みます。
 
 ## 開発者向け
 
-ソースからビルド・改変する場合は、[開発ガイド](../DEVELOPMENT.md) と [AGENT.md](../AGENT.md) を参照してください。
+ソースからビルド・改変する場合は、[開発ガイド](../../DEVELOPMENT.md) と [AGENT.md](../../AGENT.md) を参照してください。

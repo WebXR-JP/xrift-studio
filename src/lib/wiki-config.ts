@@ -33,7 +33,7 @@ export const WIKI_PAGES: WikiPage[] = [
   { slug: "sky-and-water", file: "sky-and-water.md", title: "空と水をつくる", category: "create", order: 6 },
   { slug: "interactivity", file: "interactivity.md", title: "ノードで動きをつける", category: "create", order: 7 },
   { slug: "scripting", file: "scripting.md", title: "Entity に振る舞いを与える", category: "create", order: 8 },
-  { slug: "play-mode", file: "play-mode.md", title: "Play と公開", category: "publish", order: 0 },
+  { slug: "play-mode", file: "play-mode.md", title: "Play で動作を確認する", category: "publish", order: 0 },
   { slug: "publishing", file: "publishing.md", title: "XRift への公開", category: "publish", order: 1 },
   { slug: "ai-connection", file: "ai-connection.md", title: "AI と一緒に Scene を編集する", category: "advanced", order: 0 },
   { slug: "classic-export", file: "classic-export.md", title: "Classic への書き出し", category: "advanced", order: 1 },
