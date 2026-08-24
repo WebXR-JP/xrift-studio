@@ -26,6 +26,12 @@ Node.js や `@xrift/cli` の導入、コードまたはビジュアルエディ�
 | 音を配置する | 対応 | 対応 | MP3をAudio Assetとして取り込み、Audio Sourceへ割り当てて保存・変換する。 |
 | 衝突判定を設定する | 対応 | 対応 | PrimitiveにはBox Collider、インポートModelにはMesh Colliderを初期設定し、Center／Half Extentsの編集と自動フィットを行う。 |
 | 地形をつくる | 対応 | 対応 | Createメニューから高さサンプルTerrainを追加し、盛り上げる、掘る、高さを設定、滑らかにする、穴を開けるブラシで編集する。Scene View、static Trimesh Collider、生成コードで同じ三角形を使う。 |
+| 草を生やす | 対応 | 対応 | Terrainへ草の層を重ね、ブラシで塗って生やす・消す。Scene設定のWindで揺れる。 |
+| 空と水をつくる | 対応 | 対応 | GLSLで描く空Shaderと水面Materialを公式カタログから追加し、Uniform valuesで調整する。どちらもScene設定のWindとLightを共通入力にする。 |
+| 光と色味を整える | 対応 | 対応 | Directional／Point／Spot／AreaのLightを配置して色、強度、影、距離を設定する。露出やコントラストなどの色味は一つのcompositorで調整する。既定はオフ。 |
+| 外部の素材を取り込む | 対応 | 対応 | Poly HavenとambientCGのCC0素材、XRift公式のShader、Terrain、照明、Componentをアプリ内から追加する。作者とライセンスはAssetと公開物へ残す。 |
+| 同じ構成を再利用する | 対応 | 対応 | Entityと子階層をPrefab Assetとして保存し、何度でも配置する。配置ごとの差分はoverrideとして保持する。 |
+| ノードで動きをつける | 対応 | 対応 | KHR_interactivity準拠のグラフをノードエディターで編集し、開始時・毎フレーム・イベント受信をきっかけに色や再生を動かす。クリックや視線に反応するトリガーはない。 |
 | Entityに振る舞いを与える | 対応 | 対応 | Script AssetをTypeScriptで書き、Script ComponentとしてEntityへ付けてPlayで実行する。未承認のsourceは内容hashを確認してから実行し、同じScriptを公開ワールドへ静的importとして出力する。対応範囲は[Scripting Contract](./docs/SCRIPTING.md)にまとめている。 |
 | Editor内でPlay確認する | 対応 | 対応 | 編集状態を保持したままPlayへ切り替え、ワールドではWASD操作、アイテムでは周囲からの見え方を確認する。 |
 | 画像や 3D 素材を管理する | 対応 | 対応 | ファイルの追加、名前変更、削除、画像プレビュー、3D モデルプレビューを行う。 |
@@ -33,7 +39,8 @@ Node.js や `@xrift/cli` の導入、コードまたはビジュアルエディ�
 | ローカルで動作を確認する | 対応 | 対応 | 開発サーバーを起動・停止し、プレビュー URL をブラウザで開く。実行ログも同じ画面で確認する。 |
 | アイテムを検査する | 該当なし | 対応 | ビルドを含むセキュリティチェックを実行し、結果と修正に必要なログを確認する。 |
 | XRift に公開する | 対応 | 対応 | ログイン後、タイトル・説明・サムネイルを確認する。ビジュアル制作データは保存・検査・XRift向けTSX変換を行ってから種別に応じてアップロードする。 |
-| 公開したものを確認する | 対応 | 対応 | アップロード完了後に公開 URL を表示し、そのまま XRift のページを開く。 |
+| 公開前に容量を見積もる | 対応 | 対応 | 初回ロード容量と回線別の時間、Assetと実行時VRAMの目安を確認し、resize、KTX2、Dracoを選んで適用してから同じ確認画面へ戻る。 |
+| 公開したものを確認する | 対応 | 対応 | アップロード後にworldId／itemId、version、content hashを表示する。公式の結果がURLを返した場合はそのページを開く。審査中を公開済みとしては表示しない。 |
 | AIと一緒にSceneを編集する | 検証中 | 検証中 | Codex、Claude Code、Claude Desktop / Cowork、OpenCode、Cursorをアプリから登録し、必要ならOllamaのローカルmodelでCodex、Claude Code、OpenCodeを構成する。開いているSceneの読取・設定変更・Asset配置を限定MCP toolで行う。 |
 | 外部ツールで作業を続ける | 対応 | 対応 | プロジェクトをVS Codeまたはターミナルで開く。開発版CLIはVisual projectをRuntime JSON付きClassic projectへ一方向に書き出せる。 |
 
@@ -43,13 +50,17 @@ Node.js や `@xrift/cli` の導入、コードまたはビジュアルエディ�
 
 ## Visual projectを通常のXRift開発へ書き出す
 
-Visual Editorで作ったproject JSONとAssets一式を、新しいXRift Classic projectへ安全に書き出す`convert`を実装しています。最終的なnpm利用形は次のとおりです。
+Visual Editorで作ったproject JSONとAssets一式を、XRift Classic projectへ一方向に書き出せます。
+
+Visual Editor headerの「Classicへ書き出す」からは、既存のClassic projectを選んで追加できます。手書きentryを保つcomponent追加、backup付きentry切替、dependency plan、完了後のfolder／VS Code／terminal導線を用意しています。
+
+新しい空のfolderへ書き出す場合はCLIを使います。`--dry-run`、未改変exportの`--update`、衝突検知、provenanceを利用できます。
 
 ```bash
-npx xrift-studio convert ./my-visual-project --to classic --out ./my-xrift-world
+xrift-studio convert ./my-visual-project --to classic --out ./my-xrift-world
 ```
 
-現在はrepository内の開発版で、Visual Editor headerの「Classicへ書き出す」から既存Classic projectを選べます。手書きentryを保つcomponent追加、backup付きentry切替、dependency plan、完了後のfolder／VS Code／terminal導線を用意しています。CLIでは`--dry-run`、空folderへの書出し、未改変exportの`--update`、衝突検知、provenanceを利用できます。生成するRuntime JSONは`xrift-studio-runtime/three`または`xrift-studio-runtime/react-three-fiber`から読み込みます。npm公開とRuntime Component対応状況は[Visual Project Classic Export CLI](./docs/VISUAL_PROJECT_MIGRATION_CLI.md)を参照してください。
+CLIはnpm公開前のため、`pnpm cli:build`でビルドして`node dist/cli/xrift-studio.mjs`から実行します。生成するRuntime JSONは`xrift-studio-runtime/three`または`xrift-studio-runtime/react-three-fiber`から読み込みます。仕様とRuntime Componentの対応範囲は[Visual Project Classic Export CLI](./docs/VISUAL_PROJECT_MIGRATION_CLI.md)を参照してください。
 
 ## 体験設計
 
@@ -183,11 +194,13 @@ scripts/prepare-mcp-sidecar.mjs    MCP sidecarの開発／配布準備
 .github/workflows/         Pages とリリースの自動化
 AGENT.md                   AI エージェント向け開発ルール
 DEVELOPMENT.md             OS 別の開発・リリース手順
+docs/README.md             文書全体の地図。最初に読む順序もここ
+docs/VISUAL_EDITOR_ARCHITECTURE.md 設計の正本。データ・実行境界・変換
+docs/VISUAL_EDITOR_ROADMAP.md      対応範囲、設計上の境界、段階と完了判定
 docs/UX_PRINCIPLES.md      再現可能な制作体験の設計原則
 docs/UX_INTERACTIONS.md    状態ごとの動きと機能一覧を定義する Wiki
-docs/VISUAL_EDITOR_ARCHITECTURE.md Visual project のデータ・実行境界
-docs/VISUAL_EDITOR_ROADMAP.md      現在の対応範囲、制約、実装順序
-docs/VISUAL_PROJECT_MIGRATION_CLI.md Visual project移植CLIの仕様と段階計画
+docs/wiki/                 利用者向けの使い方ガイド。GitHub Pages でも配布
+docs/history/              日付ごとの監査・調査・計画の記録。現在の設計ではない
 .agents/skills/            XRift Studio の実装・UX・検証に使うエージェントスキル
 ```
 
@@ -209,7 +222,7 @@ docs/VISUAL_PROJECT_MIGRATION_CLI.md Visual project移植CLIの仕様と段階�
 
 ## 開発状況
 
-XRift Studioは開発中です。Visual EditorはOBJ／VRM、静的なbone／shape key pose、MP3、UnityPackage、AI connectionまで実装範囲を広げています。現在はOpen Brushを含む実データ受け入れ、Model再import、Play runtime、配布時のMCP sidecarを優先し、その後にanimation timelineとVisual project移植CLIへ進みます。実装順序と「何をもって完了とするか」は[Visual Editor Roadmap](./docs/VISUAL_EDITOR_ROADMAP.md)にまとめています。
+XRift Studioは開発中です。制作領域ごとの対応状況、設計上の境界、段階と完了判定は[対応範囲と段階](./docs/VISUAL_EDITOR_ROADMAP.md)にまとめています。設計そのものは[ビジュアルエディター設計](./docs/VISUAL_EDITOR_ARCHITECTURE.md)、文書全体の地図は[docs/README.md](./docs/README.md)を参照してください。
 
 ## ライセンス
 

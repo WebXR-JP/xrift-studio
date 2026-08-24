@@ -118,8 +118,10 @@ F-06 アイテム検査
 | F-08 | Visual Asset authoring / import | MI-11, MI-15, MI-16, MI-19, MI-20, MI-21, MI-28, MI-33, MI-36, MI-41, MI-46, MI-54, MI-56, MI-65 | Material / Texture / Model / GLTF / OBJ / VRM / Prefab / Particle を左のfolder tree、種類別collection、保存済みthumbnail付きで管理し、GLB / VRMの埋め込みMaterial / Textureを再利用可能なAssetへ展開する。Materialは変更時だけ一時rendererでthumbnailを更新し、card自体はWebGL contextを保持しない。HDR / EXRはequirectangular用途を持つTexture Assetとして取り込み、現在Sceneへ直ちに設定し、ソースから保存済みthumbnailを自動生成・再生成する。Texture Assetはcontext menuからproject thumbnailへ設定し、Scene Inspectorで実画像を確認できる。sourceを壊さずimport、右InspectorでFlip Yを含むrecipe編集、参照を保つreimport、stale診断を行え、配置したGLB / VRMはNode・Bone・Mesh単位で編集できる。Animation取り込みを有効にしたModelは配置時に再生設定へ到達できる。Asset編集中も`sceneSelection`は保持される。 |
 | F-09 | Command / Shortcut / Prefab | MI-12, MI-22, MI-23, MI-24, MI-28, MI-30, MI-31, MI-34, MI-38, MI-43 | toolbar、menu、keyboard、Hierarchy D&D と左下の一覧が同じ Command / Shortcut Registry を使い、Copy / Paste / Duplicate / Delete / Reparent、Entityフォーカスの切替と解除、Empty / Component 作成、Hierarchy からの Prefab 化、XRift built-in Prefab配置、Undo / Redo が IDs と両 selection を復元する。 |
 | F-10 | Visual Save / Compile / Preview / Upload | MI-03, MI-05, MI-07, MI-08, MI-09, MI-17, MI-25, MI-26, MI-27, MI-75 | authoring操作ごとの直列化された自動保存、journal付きcommit、決定的compiler / provenance、freshness検査、区別されたpreview、既存XRift check / uploadを一つのeditor flowで扱い、失敗や取消後もlast committed authoringと戻り先を保つ。Upload reviewから現行Sceneのサムネイルを保存し、新規公開と既存ワールド更新の両方で再確認できる。 |
+| F-11 | Collider authoring / export | MI-10, MI-11, MI-14, MI-44, MI-62 | importしたModelとbuilt-in primitiveへ既定Colliderが付き、形状、Center / Half Extents、自動フィット、Rigid Bodyの物理設定をInspectorから編集できる。Scene Viewの「コライダー」表示、Play、生成Worldが同じ物理表現を使う。 |
 | F-12 | Scene environment settings | MI-37, MI-38, MI-59 | 左下の歯車から右のScene Inspectorへ切り替え、ワールド名またはアイテム名、説明、サムネイル、Skyboxの背景表示・IBLライティング、無限遠・ボックス・地面付きドーム投影、画像・回転・明るさ・有限メッシュTransform・投影中心、Fog、環境光、Near/Far、FOV、背景、グリッド、ギズモ、スナップを一か所で設定し、公開情報、Scene View、生成Worldへ一貫して反映する。 |
 | F-13 | XRift Component editor preview | MI-10, MI-34, MI-39 | EditとPlayで公式package本体と同じRendererを使い、Portal、TagBoardを含むComponentの実際の見た目をStudio独自デザインへ置換せず確認できる。外部runtime機能だけを副作用なしProvider bridgeへ差し替える。 |
+| F-14 | Basic Component menu / Audio Source | MI-11, MI-20, MI-44 | Create、Hierarchy右クリック、InspectorのAdd Componentが同じComponent Registryとcategoryを表示し、検索から一件追加してInspectorへ到達できる。Audio SourceはImport済みAudio Assetを選び、編集画面を開いただけでは音を鳴らさない。 |
 | F-15 | OBJ / VRM import と静的モデルポーズ | MI-03, MI-05, MI-09, MI-20, MI-36, MI-41, MI-46, MI-56 | OBJ / VRMをModel Assetとして配置でき、VRMのNode・Bone・Skinned MeshをHierarchyから選び、配置EntityごとのTransform、node別Material、shape key weightを保存し、再表示と生成結果で同じ静的状態を復元できる。 |
 | F-16 | UnityPackage / Scene / Prefab import | MI-03, MI-05, MI-09, MI-11, MI-13, MI-20, MI-24, MI-47 | UnityPackageの論理pathnameとGUID参照を安全に復元し、対応Assetを抽出してScene階層を再構築し、再利用可能なXRift Prefabとして保存する。未対応Asset / Componentは黙って成功扱いせず診断とprovenanceへ残し、C#変換を行わない。 |
 | F-17 | AI editor integration / MCP | MI-03, MI-05, MI-09, MI-10, MI-11, MI-13, MI-25, MI-48, MI-60, MI-61 | 対応AI clientへXRift Studio MCPを一操作で登録し、必要ならOllamaのローカルmodelをCodex、Claude Code、OpenCodeのproviderとして構成する。認可したvisual projectの現在Scene、Asset、selection、revisionを読み取り、Skybox / Fog /環境光/Camera/Editor表示設定、Asset配置、Material編集、Interactivity Material pointer設定、Poly HavenとambientCGの検索・downloadを通常のEditor Command、Undo、Autosaveへ合流し、AIと手操作の競合を暗黙に上書きしない。登録後は接続状態、対象Scene、直近の編集と復帰手段がEditorに残る。 |
@@ -130,50 +132,19 @@ F-06 アイテム検査
 | F-22 | GLB / glTF Animation自動再生 | MI-11, MI-13, MI-14, MI-35, MI-36, MI-54, MI-56, MI-60 | Animationを含むModelを配置するとAnimation Componentが付き、source NodeをHierarchyへ展開したまま再生clipの選択、Autoplay、Loop、SpeedをInspectorで確認・変更できる。Edit中は静止し、Playと生成結果だけで再生し、Stop後は制作状態へ戻る。XRift Studioガイドでは通常のAutoplayと、埋め込みKHR_interactivityの`event/onStart → animation/start`が同じPlay開始で開く2枚扉を比較でき、右扉と同じグラフをInteractivity Asset Editorで確認・編集できる。 |
 | F-23 | 公式XRift ComponentカタログとClassic / TSX変換 | MI-03, MI-04, MI-05, MI-09, MI-34, MI-39, MI-52, MI-55, MI-64 | 外部リソースで公開package versionと公式sourceを確認しながら、配置可能な公式Componentを全件サムネイル付きで選べる。右上ImportからDrei / React Three Fiberの標準primitiveとLight、Rapier RigidBody、公式XRift JSXを安全なScene dataへ変換する。既存Classicは検査済みentryを同じ変換器へ渡し、未対応custom codeやAssetを完全変換と誤表示せず、追加後のEntityとInspectorへ到達できる。 |
 | F-24 | glTF Material制御とBehavior連携 | MI-15, MI-16, MI-25, MI-60, MI-84 | Material Textureのタイリング、Offset、Rotation、UV SetをglTF互換値として編集し、MCP、Animation導線、KHR_interactivity pointer nodeから同じMaterial設定へ到達できる。Runtime manifestでもTexture transformとRepeat samplerを維持する。 |
-| F-29 | Custom Shader authoringとMaterial適用 | MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-48 | Material InspectorまたはMCPからGLSL、uniform、variant、時間uniformを作成・編集し、同じMaterial AssetをMesh slotへ割り当ててScene View、Play、生成Worldへ反映できる。無効なshaderは診断とPBR復帰を残し、成功後は対象Materialへ戻れる。 |
+| F-25 | AssetsとOSファイルエクスプローラー | MI-11, MI-20, MI-28 | Assetsの右クリックから物理保存場所をエクスプローラーで開け、エクスプローラーからのdropも通常のImport Queueで扱う。未保存projectでは理由を示して無効にする。 |
 | F-26 | アプリデータのリセット | MI-03, MI-04, MI-05, MI-09, MI-66 | 実行中CLIとの競合や一時的なfile lockで部分的な状態を残さず、ランタイムのみまたは全データを確実に新しい起動から分離する。失敗時は対象と再試行方法を確認したまま復帰できる。 |
 | F-27 | 公開前パフォーマンス概算とAsset最適化 | MI-04, MI-07, MI-27, MI-67 | World / Itemの更新前に初回ロード容量と回線別時間、Assetと実行時VRAMのrange、端末別Studio基準、容量・負荷順の内訳と最適化候補を確認できる。対応候補は個別選択してresize、KTX2、DracoをAssetへ適用し、変換結果と再計算値を確認した上で同じUpload reviewへ戻れる。 |
-| F-30 | Visual QA診断と短時間録画 | MI-03, MI-05, MI-14, MI-26, MI-80 | Scene ViewとPlay Windowで実rendererのFPS、frame time、draw calls、triangles、mesh可視数、camera Farを確認でき、最大15秒のWebMを保存して問題の発生前後を再現できる。診断や録画はSceneDocument、AssetManifest、Undo履歴を変更せず、停止・保存失敗・WebM非対応から同じScene Viewへ戻れる。 |
 | F-28 | Script AssetとScript Component | MI-03, MI-05, MI-09, MI-14, MI-69, MI-70, MI-71, MI-72, MI-73 | Script AssetをTypeScriptで書き、共通Template catalogからsource preview付きで作成し、EntityへScript Componentとして複数付けられる。宣言したpropertyがInspectorへ自動で並び、Asset参照とEntity参照を選べる。Play中のpropertyは再起動なしで次のframeへ反映し、明示参照した基本Texture / Audio、Entity自身のAudio Source / Light / Material / Particleをowner単位で操作できる。明示参照Entityのworld座標近接をruntime eventへつなぎ、Light等の視覚効果をchannelで接続できる。Entity / Component構成と対応するauthoring propertyは永続化し、Light scalarは既存runtime、それ以外は影響Entityだけを再同期する。実行時例外は該当Scriptだけを止める。同じhost、root、Audio / Light / Particle runtime、参照resolverを公開ワールドへ静的importとして出力し、MCPも同じTemplate、参照契約、revision検査で作成・編集・適用・実行できる。 |
+| F-29 | Custom Shader authoringとMaterial適用 | MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-48 | Material InspectorまたはMCPからGLSL、uniform、variant、時間uniformを作成・編集し、同じMaterial AssetをMesh slotへ割り当ててScene View、Play、生成Worldへ反映できる。無効なshaderは診断とPBR復帰を残し、成功後は対象Materialへ戻れる。 |
 | F-30 | Textureから遠景 / 草カードを作成 | MI-05, MI-09, MI-11, MI-15, MI-16, MI-25 | 通常のTexture Assetから、alpha blend・両面Materialを持つ平面・180 / 270度カーブの遠景、1枚 / クロスの草カードを一件のUndo履歴で作成し、配置直後にScene ViewとEntity Inspectorで位置とMaterialを調整できる。 |
 | F-31 | Terrain authoring / MCP | MI-03, MI-05, MI-09, MI-13, MI-16, MI-78 | Createメニューからstatic Terrainを追加し、InspectorとMCPの同じRaise / Lower / Flatten / Smoothブラシで高さサンプルを編集する。各スタンプは一件のUndo履歴として保存され、Scene View、Play、生成コード、Trimesh Colliderへ同じTerrainを反映する。 |
 | F-32 | Scene post effects | MI-03, MI-05, MI-09, MI-13, MI-15, MI-16, MI-80 | Scene settingsでHDR / AO / Bloom / 露出を編集し、Scene View、Play、生成Worldの同じレンダリング設定へ反映する。設定は保存・再読込・公開レビューまで同じScene contractで扱う。 |
 | F-33 | Wind Component | MI-03, MI-05, MI-09, MI-11, MI-13, MI-14, MI-15, MI-16, MI-81 | Entity InspectorまたはMCPからWind Componentを明示的に追加し、対象Entityと子MeshだけへScene Settingsのグローバル風設定を適用する。Editor Preview、Play、生成World、Runtime manifestは同じComponentとScene値を使い、名前・Mesh分類・言語に依存した対象推測を行わない。 |
 | F-34 | 空Shader（手続き的なSkybox） | MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-82, MI-83 | 画像Skyboxではなく、Custom Shader Materialとして昼・夕暮れ・朝焼け・夜空・オーロラ・星雲の空を追加できる。星の数、太陽と月の位置、月の満ち欠け、雲、地平線の遠景をuniformで調整でき、レイマーチする厚みのある雲も選べる。外部リソース集での調整とInspectorでの再調整が同じMaterialを指し、Scene View、Play、生成Worldが同じGLSLを描く。Materialが欠落した場合はグラデーションへ戻し、警告診断を残す。重いpresetはstep数をvariant defineとして残し、下げられる状態にする。 |
+| F-35 | Visual QA診断と短時間録画 | MI-03, MI-05, MI-14, MI-26, MI-80 | Scene ViewとPlay Windowで実rendererのFPS、frame time、draw calls、triangles、mesh可視数、camera Farを確認でき、最大15秒のWebMを保存して問題の発生前後を再現できる。診断や録画はSceneDocument、AssetManifest、Undo履歴を変更せず、停止・保存失敗・WebM非対応から同じScene Viewへ戻れる。 |
 
-## F-23 公式XRift ComponentカタログとClassic / TSX変換の状態設計
-
-### 操作前
-
-- 公式カタログはAssetsの「外部から追加」でPoly Haven、Open Brushと同列の「XRift公式 Component」providerから開く。project kindで配置可能なComponentを全件表示し、各カードにComponent名、category、package本体を事前描画した保存済みthumbnailを置く。一覧と詳細を開くだけではWebGL Contextを作らない。`DevEnvironment`はScene Componentではなくdev entry用wrapperとして別注記する。
-- 選択中Componentには公開package version、公式source、実際に生成するnamed importとJSX sampleを表示する。
-- 右上の「Import」にはModel / 3D AssetとR3F / Classic変換を置く。R3F / Classic変換には貼り付け欄、「Classicプロジェクトを選択」、HTTPS / git SSHのRepository URL入力を並べ、folder / repository読込がデスクトップ機能であること、選択後のpackage名、entry、pathまたはURL、読み込んだmodule数を表示する。確定前にSceneへ追加するEntity、Model、Texture、Audio、Skybox、Custom Material、Collider部位と診断をreviewする。Classic Assetはこのreviewへ入る時点で書き込みなしの通常Import transactionまで準備し、原本容量、Texture解像度とRGBA / mipmap展開量、Model原寸、Model import scale、親を含む配置Scale、配置後寸法、中心補正、反転、同Scaleで復元するnamed Colliderを表示する。この段階ではScene、AssetManifest、project fileを変更しない。
-
-### 処理中
-
-- 公式sampleまたは貼り付けTSXをJavaScriptとして実行しない。import alias、JSX tag、string / boolean / number / array / object literal、`Math.PI`を含む有限な数式だけを解析する。
-- Drei primitiveはStudio primitiveとMaterialへ、R3F LightはLightへ、Rapier RigidBodyは親Entityの独立したRigid Body Componentへ、`Billboard`は`BillboardY`へ、`Reflector`は`Mirror`へ、`Sky` / `Environment`は`Skybox`へ変換する。RigidBodyの`fixed` / `dynamic` / `kinematicPosition` / `kinematicVelocity`、一般設定、`colliders`生成方式を保持し、親原点へ仮Box Colliderを作らない。動的callbackと未対応Componentだけを診断へ残す。
-- Classic folderまたは浅くcloneしたRepositoryは`package.json`、`xrift.json`、`src/World.tsx`または`src/Item.tsx`を検査し、file数、総容量、symlinkをnative境界で制限する。`src`内のTypeScript / JavaScript moduleを上限付きで読み、entryからrelative importを再帰的に解決する。local Componentはinstance境界をEntityとして保持し、静的に見つかるreturn JSXをその子へ展開する。参照されるlocal Model、Texture、MP3 / WAVは`baseUrl`、先頭`/`、`public/`を同じproject-relative pathへ正規化して重複を除き、通常のAsset transactionへ接続する。Repository URLでは浅いcloneのworking tree全体から解決し、宣言pathが欠けていても`public`内で同名fileが一意なら復旧する。sphere / BackSideの背景画像は有限半径のMeshではなく無限遠projectionのScene Skybox、`new Audio`のloop音源はAudio Sourceとして復元する。任意のcustom code、Hook、callback、条件分岐、動的collectionを実行しない。
-- `THREE.ShaderMaterial`はvertex / fragment GLSL、literal uniform、Texture sampler、mesh名に対するdefine variantだけを宣言的なCustom Material Assetへ保存する。元Modelのmaterial slotへ適用し、Scene View、Play、Classic JSX compilerで同じShaderと時間uniformを使う。OBJ内で明示的に選ばれたCollider mesh名はnamed submeshとして復元し、元の非表示Collider groupをモデル全体の代替Boxへ変換しない。
-- `group`、RigidBody、Drei / XRift wrapperを独立Entityとして残し、local Transformと親子順を維持する。定数参照を含むlocal ComponentのScaleとPositionを静的に復元し、Model import scale、中心offset、X反転を同じ単位系で合成する。named OBJ Colliderはroot Model描画を通らないためModel import scaleをCollider Entity自身へ適用し、可視Model、Collider、physics形状の寸法を一致させる。RigidBody Entityは次のネストしたRigidBody境界までの子孫Mesh / Colliderを一つのBodyとして所有する。対応するleaf Geometry、Light、Collider、公式Componentはその境界の子またはComponentとして変換する。
-- Scene、AssetManifest、selectionは「追加」を確定するまで変更しない。
-
-### 成功時
-
-- 追加Entity、必要なModel / Texture / Audio / Material、Skybox、Light、Collider、公式XRift Componentを一つのUndo履歴へ確定し、最後のEntityを選択してInspectorで編集できる。「インポート後、そのままPlayで確認」が有効なら、確定したScene / Assetの分離コピーで直ちにPlayを開始する。
-- compilerは`@xrift/world-components`から公式名をimportする。Portalなど実行時Contextが必要なComponentはEditとPlayでも公式本体を描画し、外部通信や遷移だけをStudio Provider bridgeで止め、生成結果では公式runtimeを使用する。
-
-### 失敗時
-
-- folder取消は入力を変えない。package / xrift manifestまたは同種entryの欠落、JSXなし、対応要素なし、project kind不一致、Entity / Material / Component作成失敗では追加を成功表示しない。個別Assetの欠落、未対応形式、変換失敗は対象pathをwarningとして残し、そのAssetだけをスキップして読み込めるSceneとAssetを一つの履歴へ確定する。
-- 入力コードとsource module path／行番号付き診断をdialogに保持し、literalへの修正、未対応要素の除去、別Componentの選択へ戻れる。
-
-### 戻り先
-
-- キャンセルとEscapeはSceneを変更せず同じEditorへ戻る。
-- 成功後はScene View、Hierarchy、右Inspectorが追加Entityへ同期し、Undoで追加前の両selectionとdocument setへ戻れる。
-
-## F-07 の状態設計
+## F-07 ビジュアルエディターの状態設計
 
 ### 操作前
 
@@ -460,7 +431,7 @@ F-06 アイテム検査
 ### 操作前
 
 - Import入口にGLB / glTF / OBJ / VRMを同じModel形式として表示する。OBJは単体のgeometryを取り込み、外部MTL / textureは自動取得せず、必要なMaterialをXRift Studio内で割り当てることを示す。
-- VRM 0.x / 1.xはModel Assetとして取り込み、humanoidを含むboneとshape keyを最後に正常解析したmetadataとして保持する。Timelineやclip編集が今回の静的pose編集に含まれないことをUI上で区別する。
+- VRM 0.x / 1.xはModel Assetとして取り込み、humanoidを含むboneとshape keyを最後に正常解析したmetadataとして保持する。Timelineやclip編集は静的pose編集の対象外であることをUI上で区別する。
 - 配置後はModel Entityの下にsourceのNode、Bone、Mesh、Skinned Meshを親子順で表示する。SkinはNodeごとに複製せず、親Model Entityの共有Rendererでbind poseとAnimationを維持する。
 - poseとnode別Material bindingはModel Asset共通値ではなく配置EntityのMesh componentに属する。同じModelの別配置を変更しない。
 
@@ -669,7 +640,7 @@ F-06 アイテム検査
 
 - 「後で」または確認失敗では現在の画面を維持する。成功時は再起動したXRift Studioの通常起動画面へ戻り、project一覧とアプリversionを再取得する。
 
-## F-21 外部Asset Storeと環境Texture Assetの状態設計
+## F-21 外部リソースStoreと環境Texture Assetの状態設計
 
 ### 操作前
 
@@ -701,7 +672,7 @@ F-06 アイテム検査
 
 - dialogを閉じると同じVisual Editor、Scene、選択、cameraへ戻る。成功後は選択済みAssetのInspectorへ到達し、SkyboxはScene ViewへのdragまたはScene settingsから変更できる。
 - Open Brush追加後の「Assetsで開く」はdialogを閉じ、選択済みMaterialの実previewとattributionを表示する。取消では追加前のAsset selectionを復元する。
-- 将来のprovider追加では共通catalog、download option、attribution、install resultを再利用し、Assets側にprovider固有の保存構造やlicense文言を散在させない。
+- provider を追加する場合も共通catalog、download option、attribution、install resultを再利用し、Assets側にprovider固有の保存構造やlicense文言を散在させない。
 
 ## F-22 GLB / glTF Animation自動再生の状態設計
 
@@ -736,6 +707,38 @@ F-06 アイテム検査
 - Component設定後も同じEntity Inspectorへ留まり、PlayからStopすると同じAnimation設定と選択へ戻る。
 - Model Assetを選ぶと検出済みclip一覧と取り込み設定を確認でき、Entityへ戻るとClipとSpeedの調整を続けられる。
 
+## F-23 公式XRift ComponentカタログとClassic / TSX変換の状態設計
+
+### 操作前
+
+- 公式カタログはAssetsの「外部から追加」でPoly Haven、Open Brushと同列の「XRift公式 Component」providerから開く。project kindで配置可能なComponentを全件表示し、各カードにComponent名、category、package本体を事前描画した保存済みthumbnailを置く。一覧と詳細を開くだけではWebGL Contextを作らない。`DevEnvironment`はScene Componentではなくdev entry用wrapperとして別注記する。
+- 選択中Componentには公開package version、公式source、実際に生成するnamed importとJSX sampleを表示する。
+- 右上の「Import」にはModel / 3D AssetとR3F / Classic変換を置く。R3F / Classic変換には貼り付け欄、「Classicプロジェクトを選択」、HTTPS / git SSHのRepository URL入力を並べ、folder / repository読込がデスクトップ機能であること、選択後のpackage名、entry、pathまたはURL、読み込んだmodule数を表示する。確定前にSceneへ追加するEntity、Model、Texture、Audio、Skybox、Custom Material、Collider部位と診断をreviewする。Classic Assetはこのreviewへ入る時点で書き込みなしの通常Import transactionまで準備し、原本容量、Texture解像度とRGBA / mipmap展開量、Model原寸、Model import scale、親を含む配置Scale、配置後寸法、中心補正、反転、同Scaleで復元するnamed Colliderを表示する。この段階ではScene、AssetManifest、project fileを変更しない。
+
+### 処理中
+
+- 公式sampleまたは貼り付けTSXをJavaScriptとして実行しない。import alias、JSX tag、string / boolean / number / array / object literal、`Math.PI`を含む有限な数式だけを解析する。
+- Drei primitiveはStudio primitiveとMaterialへ、R3F LightはLightへ、Rapier RigidBodyは親Entityの独立したRigid Body Componentへ、`Billboard`は`BillboardY`へ、`Reflector`は`Mirror`へ、`Sky` / `Environment`は`Skybox`へ変換する。RigidBodyの`fixed` / `dynamic` / `kinematicPosition` / `kinematicVelocity`、一般設定、`colliders`生成方式を保持し、親原点へ仮Box Colliderを作らない。動的callbackと未対応Componentだけを診断へ残す。
+- Classic folderまたは浅くcloneしたRepositoryは`package.json`、`xrift.json`、`src/World.tsx`または`src/Item.tsx`を検査し、file数、総容量、symlinkをnative境界で制限する。`src`内のTypeScript / JavaScript moduleを上限付きで読み、entryからrelative importを再帰的に解決する。local Componentはinstance境界をEntityとして保持し、静的に見つかるreturn JSXをその子へ展開する。参照されるlocal Model、Texture、MP3 / WAVは`baseUrl`、先頭`/`、`public/`を同じproject-relative pathへ正規化して重複を除き、通常のAsset transactionへ接続する。Repository URLでは浅いcloneのworking tree全体から解決し、宣言pathが欠けていても`public`内で同名fileが一意なら復旧する。sphere / BackSideの背景画像は有限半径のMeshではなく無限遠projectionのScene Skybox、`new Audio`のloop音源はAudio Sourceとして復元する。任意のcustom code、Hook、callback、条件分岐、動的collectionを実行しない。
+- `THREE.ShaderMaterial`はvertex / fragment GLSL、literal uniform、Texture sampler、mesh名に対するdefine variantだけを宣言的なCustom Material Assetへ保存する。元Modelのmaterial slotへ適用し、Scene View、Play、Classic JSX compilerで同じShaderと時間uniformを使う。OBJ内で明示的に選ばれたCollider mesh名はnamed submeshとして復元し、元の非表示Collider groupをモデル全体の代替Boxへ変換しない。
+- `group`、RigidBody、Drei / XRift wrapperを独立Entityとして残し、local Transformと親子順を維持する。定数参照を含むlocal ComponentのScaleとPositionを静的に復元し、Model import scale、中心offset、X反転を同じ単位系で合成する。named OBJ Colliderはroot Model描画を通らないためModel import scaleをCollider Entity自身へ適用し、可視Model、Collider、physics形状の寸法を一致させる。RigidBody Entityは次のネストしたRigidBody境界までの子孫Mesh / Colliderを一つのBodyとして所有する。対応するleaf Geometry、Light、Collider、公式Componentはその境界の子またはComponentとして変換する。
+- Scene、AssetManifest、selectionは「追加」を確定するまで変更しない。
+
+### 成功時
+
+- 追加Entity、必要なModel / Texture / Audio / Material、Skybox、Light、Collider、公式XRift Componentを一つのUndo履歴へ確定し、最後のEntityを選択してInspectorで編集できる。「インポート後、そのままPlayで確認」が有効なら、確定したScene / Assetの分離コピーで直ちにPlayを開始する。
+- compilerは`@xrift/world-components`から公式名をimportする。Portalなど実行時Contextが必要なComponentはEditとPlayでも公式本体を描画し、外部通信や遷移だけをStudio Provider bridgeで止め、生成結果では公式runtimeを使用する。
+
+### 失敗時
+
+- folder取消は入力を変えない。package / xrift manifestまたは同種entryの欠落、JSXなし、対応要素なし、project kind不一致、Entity / Material / Component作成失敗では追加を成功表示しない。個別Assetの欠落、未対応形式、変換失敗は対象pathをwarningとして残し、そのAssetだけをスキップして読み込めるSceneとAssetを一つの履歴へ確定する。
+- 入力コードとsource module path／行番号付き診断をdialogに保持し、literalへの修正、未対応要素の除去、別Componentの選択へ戻れる。
+
+### 戻り先
+
+- キャンセルとEscapeはSceneを変更せず同じEditorへ戻る。
+- 成功後はScene View、Hierarchy、右Inspectorが追加Entityへ同期し、Undoで追加前の両selectionとdocument setへ戻れる。
+
 ## F-24 glTF Material制御とBehavior連携の状態設計
 
 ### 操作前
@@ -764,38 +767,6 @@ F-06 アイテム検査
 
 - Material編集後は同じAsset Inspector、Animationからgraphを開いた後は同じInteractivity Assetへ戻れる。Scene selectionは維持し、Asset tabを閉じると元のEntity Inspectorへ戻る。
 - Material / graph変更の取消は通常のUndoを使い、MCP変更も同じhistoryとAutosaveから復元する。
-
-## F-29 Custom Shader authoringとMaterial適用の状態設計
-
-参照: MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-48
-
-### 操作前
-
-- Material Inspectorに「Custom Shaderを作成」を置き、標準PBR Materialから切り替えるとstarter GLSL、uniform、default variantを同じMaterial Assetへ作成する。作成だけではSceneのbindingを変えず、Material Assetを選択した状態を保つ。
-- Custom ShaderはMaterial内の編集可能なshader契約として、vertex / fragment GLSL、uniform値、variant、時間uniformを持つ。既存のModel由来shaderを直接壊さず、Material単位のcopyとして編集する。
-- MCPは`create_custom_shader`、`get_custom_shader`、`update_custom_shader`を公開し、`get_editor_context`のproject ID、Scene ID、revisionを要求する。既存Materialへの設定と新規Material作成は同じAssetManifest境界へ入る。
-
-### 処理中
-
-- GLSL source、uniform、variantの編集中はMaterialのassetSelectionと参照Entityを維持し、連続入力を一つのAsset更新へまとめる。処理中の保存・MCP更新は同じrevisionを消費し、古いMCP requestは`STALE_REVISION`で止める。
-- Scene ViewではCustom Shaderを実際のShaderMaterialとしてMeshへ適用し、primitiveとModelのMaterial slotで同じuniform・attribute・時間uniform契約を使う。Texture uniformは明示されたTexture Assetだけを読み込む。
-- MCP updateは`void main()`、uniform型、variant、source長を検証してからcommitする。Inspectorの途中入力は診断対象として保持し、compile / PlayではそのMaterialだけをPBR fallbackまたはblocking diagnosticへ分離する。
-
-### 成功時
-
-- Material InspectorにCustom Shader preview、GLSL、uniform、variant情報を残し、同じMaterialを参照する全Meshと生成Worldへ反映する。必要なら既存の`set_material`で任意のEntity slotへ割り当てられる。
-- GLSLはMaterial内の短い編集だけに閉じず、`.glsl` / `.vert` / `.frag` / `.vs` / `.fs`を通常のAssets ImportからShader Assetとして登録できる。AssetsのダブルクリックとMaterial Inspectorの「編集」はScriptと同じドック型Editorを開き、Vertex / FragmentごとにMaterial内コードまたはShader Assetを選択できる。
-- MCPの作成・更新結果にはMaterial Asset ID、shader内容、revisionAfterを返し、作成直後にMaterial Inspectorへ到達できる。Undo、Autosave、Play中の影響Entity再同期は通常のMaterial変更と同じにする。
-
-### 失敗時
-
-- shader形式不正、必須`main`欠落、uniform Texture欠落、variant不正、stale revision、Play / Import競合ではMaterial、Scene binding、historyを部分更新しない。原因code、field、Material IDをMCPとInspectorへ残す。
-- WebGL compile failureはEditor全体を停止せず、該当Materialのpreviewへ原因とPBRへ戻す操作を示す。MCPの不正更新は前回の正常なMaterialを維持する。
-
-### 戻り先
-
-- 成功後は同じMaterial Inspectorへ留まり、Scene Viewで参照Meshを確認できる。MCP作成後も`assetSelection`を新しいMaterialへ更新する。
-- 取消、PBRへ戻す、または失敗時の再試行では元のMaterial、Scene selection、Asset selectionを維持し、通常のUndoでCustom Shader設定前へ戻れる。
 
 ## F-25 AssetsとOSファイルエクスプローラーの状態設計
 
@@ -901,6 +872,38 @@ F-06 アイテム検査
 - 実行時例外では該当行への移動、そのScriptの再開、Stopのいずれかへ到達できる。
 - Stopは生成したmoduleとblob URL、timer、listener、読み込んだTexture、Material slot所有のTexture clone、独立Audio playerを破棄し、runtime Audio Source / Light / Material / Particle overrideを元へ戻す。Play中にInspector / MCPで保存したauthoring dataは残し、Editの選択とcameraへ戻る。
 - 公開のblockingでは該当Script、またはUpload reviewへ戻り、修正後に同じreviewを再確認できる。
+
+## F-29 Custom Shader authoringとMaterial適用の状態設計
+
+参照: MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-48
+
+### 操作前
+
+- Material Inspectorに「Custom Shaderを作成」を置き、標準PBR Materialから切り替えるとstarter GLSL、uniform、default variantを同じMaterial Assetへ作成する。作成だけではSceneのbindingを変えず、Material Assetを選択した状態を保つ。
+- Custom ShaderはMaterial内の編集可能なshader契約として、vertex / fragment GLSL、uniform値、variant、時間uniformを持つ。既存のModel由来shaderを直接壊さず、Material単位のcopyとして編集する。
+- MCPは`create_custom_shader`、`get_custom_shader`、`update_custom_shader`を公開し、`get_editor_context`のproject ID、Scene ID、revisionを要求する。既存Materialへの設定と新規Material作成は同じAssetManifest境界へ入る。
+
+### 処理中
+
+- GLSL source、uniform、variantの編集中はMaterialのassetSelectionと参照Entityを維持し、連続入力を一つのAsset更新へまとめる。処理中の保存・MCP更新は同じrevisionを消費し、古いMCP requestは`STALE_REVISION`で止める。
+- Scene ViewではCustom Shaderを実際のShaderMaterialとしてMeshへ適用し、primitiveとModelのMaterial slotで同じuniform・attribute・時間uniform契約を使う。Texture uniformは明示されたTexture Assetだけを読み込む。
+- MCP updateは`void main()`、uniform型、variant、source長を検証してからcommitする。Inspectorの途中入力は診断対象として保持し、compile / PlayではそのMaterialだけをPBR fallbackまたはblocking diagnosticへ分離する。
+
+### 成功時
+
+- Material InspectorにCustom Shader preview、GLSL、uniform、variant情報を残し、同じMaterialを参照する全Meshと生成Worldへ反映する。必要なら既存の`set_material`で任意のEntity slotへ割り当てられる。
+- GLSLはMaterial内の短い編集だけに閉じず、`.glsl` / `.vert` / `.frag` / `.vs` / `.fs`を通常のAssets ImportからShader Assetとして登録できる。AssetsのダブルクリックとMaterial Inspectorの「編集」はScriptと同じドック型Editorを開き、Vertex / FragmentごとにMaterial内コードまたはShader Assetを選択できる。
+- MCPの作成・更新結果にはMaterial Asset ID、shader内容、revisionAfterを返し、作成直後にMaterial Inspectorへ到達できる。Undo、Autosave、Play中の影響Entity再同期は通常のMaterial変更と同じにする。
+
+### 失敗時
+
+- shader形式不正、必須`main`欠落、uniform Texture欠落、variant不正、stale revision、Play / Import競合ではMaterial、Scene binding、historyを部分更新しない。原因code、field、Material IDをMCPとInspectorへ残す。
+- WebGL compile failureはEditor全体を停止せず、該当Materialのpreviewへ原因とPBRへ戻す操作を示す。MCPの不正更新は前回の正常なMaterialを維持する。
+
+### 戻り先
+
+- 成功後は同じMaterial Inspectorへ留まり、Scene Viewで参照Meshを確認できる。MCP作成後も`assetSelection`を新しいMaterialへ更新する。
+- 取消、PBRへ戻す、または失敗時の再試行では元のMaterial、Scene selection、Asset selectionを維持し、通常のUndoでCustom Shader設定前へ戻れる。
 
 ## F-30 Textureから遠景 / 草カードを作成の状態設計
 

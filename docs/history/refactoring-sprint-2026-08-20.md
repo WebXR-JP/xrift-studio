@@ -1,6 +1,6 @@
 # リファクタリング4日スプリント計画 (2026-08-20)
 
-前提: `docs/refactoring-audit-2026-08.md` (2026-08-09 の Thermo-Nuclear 監査) の続き。
+前提: `docs/history/refactoring-audit-2026-08.md` (2026-08-09 の Thermo-Nuclear 監査) の続き。
 監査から11日、**75コミット**が入ったが、そのほぼ全てが機能開発 (Terrain / Water / Sky / リリース動画) だった。
 本書は「4日で何を取るか」を決めるための、**実測に基づく現況確認**と**絞り込んだ実行計画**である。
 
@@ -26,7 +26,7 @@
 
 | 項目 | 規模 | 備考 |
 |---|---|---|
-| B4 到達不能な starter template | −2,870行 | `docs/b4-dead-template-removal-plan.md` に手順まで書かれている。実行されていない |
+| B4 到達不能な starter template | −2,870行 | `docs/history/b4-dead-template-removal-plan.md` に手順まで書かれている。実行されていない |
 | json-guards / import-shared の抽出 | `isRecord` **13箇所**、`errorMessage` 5箇所、`safeSegment` 3箇所 (うち2つは挙動非互換) | |
 | Phase 1-9 core component スキーマ表 | −1,200〜1,500行 | 監査の「本丸」 |
 | Phase 1-10 MCP ツール契約の単一ソース化 | −1,550行 (Rust) + −2,000行 (TS) | |
@@ -124,7 +124,7 @@ const visibleDetail = safeDetail?.split(/\r?\n/).slice(-6).join("\n");
 
 ### Day 1 — 削除と土台 (低リスク・即効)
 
-1. **B4 到達不能テンプレート削除** — `docs/b4-dead-template-removal-plan.md` の手順どおり。`starter-templates.ts` 3,681 → 約1,180、fixture 727 → 約345。**−2,870行**
+1. **B4 到達不能テンプレート削除** — `docs/history/b4-dead-template-removal-plan.md` の手順どおり。`starter-templates.ts` 3,681 → 約1,180、fixture 727 → 約345。**−2,870行**
 2. **`json-guards.ts` / `import-shared.ts` 抽出** — `isRecord` 13箇所を統合。`safeSegment` の非互換2実装は fixture で現挙動を固定してから分離 (ID 生成に使われているため挙動を変えない)
 3. **公開診断の修正** — `formatPublishCommandFailure` を「stderr 優先 + 失敗行の抽出」に変更し、`VisualUploadDialog` に CLI ログ表示を追加。今日のエラーが**そのまま読める**状態にする
 4. **OpenBrush 公開の解除** — `generateXriftJson` に `permissions` を通す (方式は要決定、5節)

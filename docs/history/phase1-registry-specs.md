@@ -1,8 +1,10 @@
-live repo (`/sessions/*/mnt/xrift-studio`) を全件確認しました。監査時点から行番号は多少ずれていますが、指摘箇所はすべて現存し、さらに **未指摘の重複が2箇所**（`VisualEditorPrototype.tsx` L291–296、`SceneViewport.tsx` L2350）、Task B にも **未指摘の5番目の手書き実装**（`serialization.ts` L483–880 の validator 群）を確認しました。
+# レジストリ統合の作業仕様 (2026-08-09)
+
+2026-08-09 時点の記録である。行番号とファイル構成は当時のものであり、その後の変更を反映していない。[コード品質監査レポート](./refactoring-audit-2026-08.md) の指摘に加え、`VisualEditorPrototype.tsx` と `SceneViewport.tsx` の重複2箇所、`serialization.ts` の validator 群を対象へ含めている。
 
 ---
 
-# Task A — asset-format-registry を単一の真実にする
+## Task A — asset-format-registry を単一の真実にする
 
 ## A-0. 現状の実測（live repo）
 
@@ -1311,7 +1313,7 @@ import: `ASSET_KIND_UI` を `../../lib/visual-editor` から追加。
 
 ---
 
-# Task B — KHR material 拡張のテーブル駆動化
+## Task B — KHR material 拡張のテーブル駆動化
 
 ## B-0. 実測した「手書き実装」の数 = **5**
 

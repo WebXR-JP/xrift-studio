@@ -18,13 +18,13 @@ package descriptionには`Unofficial community tools for XRift. Not affiliated w
 
 ## コマンド
 
-最終的なnpm利用形は次のとおりとする。
+npm公開後の利用形は次のとおりとする。
 
 ```bash
 npx xrift-studio convert ../my-visual-world --to classic --out .
 ```
 
-現在のrepository実装は、npm公開前でもbuildして検証できる。
+npm公開前は、repositoryでbuildして同じCLIを実行する。
 
 ```bash
 pnpm cli:build
