@@ -69,11 +69,42 @@ export const DEFAULT_PARTICLE_PROPERTIES: ParticleProperties = {
   },
 };
 
+/**
+ * What a preset is for, so the catalog can group the shelf.
+ *
+ * The grouping is by what an author is trying to make — a fire, weather, water
+ * — not by which simulation setting differs. Someone building a campfire looks
+ * for fire, not for "additive blending with upward gravity".
+ */
+export type ParticlePresetCategory =
+  | "fire"
+  | "weather"
+  | "water"
+  | "nature"
+  | "effect";
+
+export const PARTICLE_PRESET_CATEGORY_LABELS: Readonly<
+  Record<ParticlePresetCategory, string>
+> = {
+  fire: "火と煙",
+  weather: "天気",
+  water: "水",
+  nature: "自然",
+  effect: "演出",
+};
+
+/**
+ * The Particle presets, shared by the Asset Inspector and the resource store.
+ *
+ * One list rather than a separate store catalog: a preset the store offers and
+ * one the Inspector applies have to be the same numbers, and two lists drift.
+ */
 export const PARTICLE_AUTHORING_PRESETS = [
   {
     id: "fire",
     name: "炎",
     description: "上昇しながら赤く消える炎",
+    category: "fire",
     properties: {
       maxParticles: 320,
       duration: 4,
@@ -109,6 +140,7 @@ export const PARTICLE_AUTHORING_PRESETS = [
     id: "smoke",
     name: "煙",
     description: "ゆっくり広がって薄くなる煙",
+    category: "fire",
     properties: {
       maxParticles: 180,
       duration: 6,
@@ -144,6 +176,7 @@ export const PARTICLE_AUTHORING_PRESETS = [
     id: "magic",
     name: "魔法",
     description: "青紫にきらめく浮遊光",
+    category: "effect",
     properties: {
       maxParticles: 280,
       duration: 5,
@@ -179,6 +212,7 @@ export const PARTICLE_AUTHORING_PRESETS = [
     id: "snow",
     name: "雪",
     description: "広い範囲へ静かに降る雪",
+    category: "weather",
     properties: {
       maxParticles: 720,
       duration: 8,
@@ -214,6 +248,7 @@ export const PARTICLE_AUTHORING_PRESETS = [
     id: "confetti",
     name: "紙吹雪",
     description: "勢いよく広がって落下する紙片",
+    category: "effect",
     properties: {
       maxParticles: 460,
       duration: 5,
@@ -249,6 +284,7 @@ export const PARTICLE_AUTHORING_PRESETS = [
     id: "fountain",
     name: "噴水",
     description: "重力で弧を描く細かな飛沫",
+    category: "water",
     properties: {
       maxParticles: 520,
       duration: 5,
@@ -280,12 +316,201 @@ export const PARTICLE_AUTHORING_PRESETS = [
       },
     },
   },
+  {
+    id: "spark",
+    name: "火花",
+    description: "弾けて短く消える明るい火の粉",
+    category: "fire",
+    properties: {
+      maxParticles: 260,
+      duration: 3,
+      looping: true,
+      prewarm: false,
+      startDelay: { min: 0, max: 0 },
+      startLifetime: { min: 0.35, max: 0.9 },
+      startSpeed: { min: 1.8, max: 3.6 },
+      startSize: { min: 0.02, max: 0.05 },
+      startRotation: { min: 0, max: Math.PI * 2 },
+      gravity: [0, -4.5, 0],
+      emission: { rateOverTime: 60, bursts: [] },
+      shape: { type: "cone", radius: 0.06, angle: 42 },
+      colorOverLifetime: {
+        start: [1, 0.92, 0.6, 1],
+        end: [1, 0.3, 0.05, 0],
+      },
+      sizeOverLifetime: { min: 1, max: 0.25 },
+      velocityOverLifetime: {
+        linear: [0, 0, 0],
+        orbital: [0, 0, 0],
+      },
+      renderer: {
+        mode: "stretched-billboard",
+        blending: "additive",
+        sortMode: "youngest",
+        castShadow: false,
+        receiveShadow: false,
+      },
+    },
+  },
+  {
+    id: "steam",
+    name: "湯気",
+    description: "細く立ちのぼって消える白い湯気",
+    category: "water",
+    properties: {
+      maxParticles: 120,
+      duration: 5,
+      looping: true,
+      prewarm: true,
+      startDelay: { min: 0, max: 0 },
+      startLifetime: { min: 1.6, max: 3 },
+      startSpeed: { min: 0.12, max: 0.3 },
+      startSize: { min: 0.14, max: 0.3 },
+      startRotation: { min: 0, max: Math.PI * 2 },
+      gravity: [0, 0.22, 0],
+      emission: { rateOverTime: 14, bursts: [] },
+      shape: { type: "cone", radius: 0.12, angle: 14 },
+      colorOverLifetime: {
+        start: [1, 1, 1, 0.32],
+        end: [0.9, 0.94, 1, 0],
+      },
+      sizeOverLifetime: { min: 0.6, max: 2.1 },
+      velocityOverLifetime: {
+        linear: [0.04, 0.24, 0],
+        orbital: [0, 0.3, 0],
+      },
+      renderer: {
+        mode: "billboard",
+        blending: "normal",
+        sortMode: "distance",
+        castShadow: false,
+        receiveShadow: false,
+      },
+    },
+  },
+  {
+    id: "rain",
+    name: "雨",
+    description: "広い範囲へまっすぐ落ちる雨",
+    category: "weather",
+    properties: {
+      maxParticles: 900,
+      duration: 4,
+      looping: true,
+      prewarm: true,
+      startDelay: { min: 0, max: 0 },
+      startLifetime: { min: 1.1, max: 1.6 },
+      startSpeed: { min: 0.2, max: 0.6 },
+      startSize: { min: 0.02, max: 0.05 },
+      startRotation: { min: 0, max: 0 },
+      gravity: [0, -12, 0],
+      emission: { rateOverTime: 260, bursts: [] },
+      shape: { type: "box", size: [6, 0.1, 6] },
+      colorOverLifetime: {
+        start: [0.72, 0.82, 0.95, 0.55],
+        end: [0.6, 0.72, 0.9, 0.25],
+      },
+      sizeOverLifetime: { min: 1, max: 1 },
+      velocityOverLifetime: {
+        linear: [0.3, -1.2, 0],
+        orbital: [0, 0, 0],
+      },
+      renderer: {
+        mode: "stretched-billboard",
+        blending: "normal",
+        sortMode: "distance",
+        castShadow: false,
+        receiveShadow: false,
+      },
+    },
+  },
+  {
+    id: "sakura",
+    name: "桜",
+    description: "風に流されながら舞い落ちる花びら",
+    category: "weather",
+    properties: {
+      maxParticles: 420,
+      duration: 8,
+      looping: true,
+      prewarm: true,
+      startDelay: { min: 0, max: 0 },
+      startLifetime: { min: 5, max: 9 },
+      startSpeed: { min: 0, max: 0.1 },
+      startSize: { min: 0.05, max: 0.11 },
+      startRotation: { min: 0, max: Math.PI * 2 },
+      gravity: [0, -0.28, 0],
+      emission: { rateOverTime: 28, bursts: [] },
+      shape: { type: "box", size: [5, 0.1, 5] },
+      colorOverLifetime: {
+        start: [1, 0.78, 0.86, 0.95],
+        end: [1, 0.62, 0.76, 0],
+      },
+      sizeOverLifetime: { min: 1, max: 0.9 },
+      velocityOverLifetime: {
+        linear: [0.22, -0.06, 0],
+        orbital: [0, 0.5, 0],
+      },
+      renderer: {
+        mode: "billboard",
+        blending: "normal",
+        sortMode: "distance",
+        castShadow: false,
+        receiveShadow: false,
+      },
+    },
+  },
+  {
+    id: "firefly",
+    name: "蛍",
+    description: "ゆっくり漂って明滅する小さな光",
+    category: "nature",
+    properties: {
+      maxParticles: 90,
+      duration: 6,
+      looping: true,
+      prewarm: true,
+      startDelay: { min: 0, max: 0 },
+      startLifetime: { min: 2.5, max: 5 },
+      startSpeed: { min: 0.02, max: 0.12 },
+      startSize: { min: 0.03, max: 0.07 },
+      startRotation: { min: 0, max: Math.PI * 2 },
+      gravity: [0, 0.01, 0],
+      emission: { rateOverTime: 12, bursts: [] },
+      shape: { type: "sphere", radius: 2.4 },
+      colorOverLifetime: {
+        start: [0.86, 1, 0.5, 0.9],
+        end: [0.5, 0.9, 0.25, 0],
+      },
+      sizeOverLifetime: { min: 0.6, max: 1.1 },
+      velocityOverLifetime: {
+        linear: [0, 0.05, 0],
+        orbital: [0, 0.35, 0],
+      },
+      renderer: {
+        mode: "billboard",
+        blending: "additive",
+        sortMode: "youngest",
+        castShadow: false,
+        receiveShadow: false,
+      },
+    },
+  },
 ] satisfies ReadonlyArray<{
   id: string;
   name: string;
   description: string;
+  category: ParticlePresetCategory;
   properties: ParticlePropertiesPatch;
 }>;
+
+export type ParticleAuthoringPreset = (typeof PARTICLE_AUTHORING_PRESETS)[number];
+
+export function getParticleAuthoringPreset(
+  presetId: string,
+): ParticleAuthoringPreset | undefined {
+  return PARTICLE_AUTHORING_PRESETS.find((preset) => preset.id === presetId);
+}
 
 export function scaleParticleEmission(
   properties: ParticleProperties,

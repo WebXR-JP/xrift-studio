@@ -9,6 +9,7 @@ import {
   LoaderCircle,
   RefreshCw,
   Search,
+  Sparkles,
   Store,
   Sunrise,
   Mountain,
@@ -34,6 +35,7 @@ import {
   type WaterShaderCatalogEntry,
   type GlowFixtureShape,
   type GlowMaterialPreset,
+  type ParticleAuthoringPreset,
   type TerrainPreset,
   type VisualProjectKind,
   type XriftComponentDefinition,
@@ -60,6 +62,10 @@ import {
   type TerrainPresetInstallResult,
 } from "./TerrainPresetStore";
 import {
+  ParticlePresetStore,
+  type ParticlePresetInstallResult,
+} from "./ParticlePresetStore";
+import {
   GlowMaterialStore,
   type GlowMaterialInstallResult,
 } from "./GlowMaterialStore";
@@ -78,6 +84,7 @@ export function ExternalAssetStoreDialog({
   onAddWaterShader,
   onAddTerrainPreset,
   onAddGlowMaterial,
+  onAddParticlePreset,
   sceneBloomActive,
   sceneWind,
   onAddOfficialComponent,
@@ -111,6 +118,10 @@ export function ExternalAssetStoreDialog({
     shape: GlowFixtureShape,
     preset: GlowMaterialPreset,
   ) => Promise<GlowMaterialInstallResult>;
+  onAddParticlePreset: (
+    preset: ParticleAuthoringPreset,
+    placeInScene: boolean,
+  ) => Promise<ParticlePresetInstallResult>;
   /** Whether this Scene will bloom, so the glow shelf can say if it will not. */
   sceneBloomActive: boolean;
   /** Scene wind, so Water previews move the way the scene will. */
@@ -402,6 +413,11 @@ export function ExternalAssetStoreDialog({
               disabledReason={disabledReason}
               bloomActive={sceneBloomActive}
               onAdd={onAddGlowMaterial}
+            />
+          ) : provider.kind === "particle-preset" ? (
+            <ParticlePresetStore
+              disabledReason={disabledReason}
+              onAdd={onAddParticlePreset}
             />
           ) : provider.kind === "xrift-components" ? (
             <OfficialXriftComponentStore
@@ -998,6 +1014,9 @@ function ProviderIcon({ kind }: { kind: ExternalStoreProvider["kind"] }) {
   }
   if (kind === "glow-material") {
     return <Lightbulb size={14} aria-hidden="true" />;
+  }
+  if (kind === "particle-preset") {
+    return <Sparkles size={14} aria-hidden="true" />;
   }
   if (kind === "xrift-components") {
     return <Boxes size={14} aria-hidden="true" />;

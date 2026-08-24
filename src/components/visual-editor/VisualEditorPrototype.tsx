@@ -127,6 +127,7 @@ import {
   type ClassicProjectVisualImportSource,
   type AnimationPatch,
   type AssetManifest,
+  type ParticleAuthoringPreset,
   type AudioSourcePatch,
   type VegetationWindPatch,
   type LightPatch,
@@ -188,6 +189,7 @@ import type { SkyShaderInstallResult } from "./SkyShaderStore";
 import type { WaterShaderInstallResult } from "./WaterShaderStore";
 import type { TerrainPresetInstallResult } from "./TerrainPresetStore";
 import type { GlowMaterialInstallResult } from "./GlowMaterialStore";
+import type { ParticlePresetInstallResult } from "./ParticlePresetStore";
 import {
   hasActiveAssetImport,
   resolveAssetOperationAvailability,
@@ -588,6 +590,25 @@ function synchronizeProjectShellSnapshot(
       },
     },
   };
+}
+
+/**
+ * A display name no other Asset already uses.
+ *
+ * Preset names are fixed, so adding 炎 twice would otherwise leave two Assets
+ * called 炎 and no way to tell which Entity holds which. IDs stay unique on
+ * their own; this is only about what the author reads.
+ */
+function uniqueAssetName(assets: AssetManifest, base: string): string {
+  const taken = new Set(
+    Object.values(assets.assets).map((asset) => asset.name),
+  );
+  if (!taken.has(base)) return base;
+  for (let index = 2; index < 1000; index += 1) {
+    const candidate = `${base} ${index}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return base;
 }
 
 function firstAssetId(bundle: PrototypeVisualProject): string | null {
@@ -5662,6 +5683,88 @@ export function VisualEditorPrototype({
     [handlePlacePrimitive],
   );
 
+  const handleAddParticlePreset = useCallback(
+    async (
+      preset: ParticleAuthoringPreset,
+      placeInScene: boolean,
+    ): Promise<ParticlePresetInstallResult> => {
+      // The store throws so the shelf shows the reason next to the button the
+      // author just pressed, rather than a notice behind the modal.
+      if (editorMode !== "edit") {
+        throw new Error("Playを停止してからParticleを追加してください");
+      }
+      if (importBusy) {
+        throw new Error("アセットのインポート完了後に追加してください");
+      }
+
+      const assetId = createDocumentId("particle");
+      const folderId = resolveAssetCreationFolderId(
+        bundle.assets,
+        activeAssetFolderId,
+      );
+      const name = uniqueAssetName(bundle.assets, preset.name);
+      const added = addDefaultParticleAsset(bundle.assets, {
+        id: assetId,
+        name,
+        folderId,
+        properties: preset.properties,
+      });
+      if (!added.added) {
+        throw new Error("Particle Assetを作成できませんでした");
+      }
+
+      // Asset creation and placement land as one history entry: undoing a
+      // preset the author did not want should not leave its Asset behind.
+      let scene = bundle.scene;
+      let placedEntityId: string | null = null;
+      if (placeInScene) {
+        const count = bundle.scene.rootEntityIds.length;
+        const placement = instantiateSceneAsset(
+          scene,
+          added.manifest,
+          bundle.prefabs,
+          assetId,
+          {
+            position: [
+              roundTo(((count % 5) - 2) * 1.35, 1),
+              0,
+              roundTo((Math.floor(count / 5) - 0.5) * 1.35, 1),
+            ],
+          },
+        );
+        if (!placement.placed) {
+          throw new Error("ParticleをSceneへ配置できませんでした");
+        }
+        scene = placement.scene;
+        placedEntityId = placement.entityId;
+      }
+
+      setBundle(touchProject({ ...bundle, assets: added.manifest, scene }));
+      if (placedEntityId) {
+        setSceneSelection({ kind: "entity", id: placedEntityId });
+        // Placing puts something in the Scene, so get out of the way and let
+        // the author look at it — the same rule Terrain and the glow shelf use.
+        setExternalStoreOpen(false);
+        setNotice(
+          `「${name}」をSceneへ配置しました。放出量や色はAsset Inspectorで変えられます`,
+        );
+      } else {
+        setNotice(`「${name}」をAssetsへ追加しました`);
+      }
+      setAssetSelection(assetId);
+      return { assetName: name, placed: Boolean(placedEntityId) };
+    },
+    [
+      activeAssetFolderId,
+      bundle,
+      editorMode,
+      importBusy,
+      setAssetSelection,
+      setBundle,
+      setSceneSelection,
+    ],
+  );
+
   const handleOptimizeColliders = useCallback(
     (entityIds?: readonly string[]) => {
       if (editorMode !== "edit" && !playSession) return;
@@ -8970,6 +9073,7 @@ export function VisualEditorPrototype({
             onAddWaterShader={handleAddWaterShader}
             onAddTerrainPreset={handleAddTerrainPreset}
             onAddGlowMaterial={handleAddGlowMaterial}
+            onAddParticlePreset={handleAddParticlePreset}
             sceneBloomActive={sceneBloomIsActive(bundle.scene)}
             sceneWind={resolveSceneWind(
               resolveSceneSettings(bundle.scene.settings).vegetation,

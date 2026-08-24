@@ -9,7 +9,8 @@ export type ExternalStoreProvider = {
     | "sky-shader"
     | "water-shader"
     | "terrain-preset"
-    | "glow-material";
+    | "glow-material"
+    | "particle-preset";
   name: string;
   badge: string;
   summary: string;
@@ -108,6 +109,19 @@ export const EXTERNAL_STORE_PROVIDERS = [
     authorFallback: "XRift Studio contributors",
     attributionNote:
       "発光するPBR Materialです。Scene設定のBloomが拾う明るさで置きます。形と色は別に選べます。",
+  },
+  {
+    id: "xrift-particle-presets",
+    kind: "particle-preset",
+    name: "Particle",
+    badge: "Official",
+    summary: "炎・雪・桜などの粒を追加",
+    homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
+    catalogKinds: [],
+    installableKinds: [],
+    authorFallback: "XRift Studio contributors",
+    attributionNote:
+      "追加後は普通のParticle Assetです。放出量、寿命、色、TextureをそのままInspectorで変えられます。",
   },
   {
     id: "xrift-components",
