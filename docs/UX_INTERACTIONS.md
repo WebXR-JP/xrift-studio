@@ -51,7 +51,7 @@ F-06 アイテム検査
 | MI-32 | Visual Editor の render または動的 module 読み込みで例外が発生する | App 全体を白画面にせず、明るい既存配色の復帰面へ切り替え、落ちた機能名と制作データを保持している事実を示す。例外本文、stack、component stack、token、絶対 path は画面へ表示しない。動的 module 失敗は通常の render 例外と区別し、Editor用ファイルを再取得する必要があることだけを示す。 | 通常の「Editorを再試行」は Boundary と Editor subtree を remount する。動的 module 失敗では拒否済みの `React.lazy` を再利用せず、ユーザー操作による「アプリを再読み込み」で一度だけ再取得する。自動 reload loop は行わない。「プロジェクトライブラリへ戻る」または前画面へ戻る操作は既存 `onBack` を実行し、Editor 外の App 状態を維持する。 |
 | MI-33 | Particle Asset を作成・編集する、Scene / Hierarchy へ配置する、または Entity に Particle Emitter を追加する | Assets、右 Inspector、Scene View、Hierarchy のすべてで同じ Particle Asset ID を扱う。Particle の変更は Scene View の表現へ即時反映し、Asset を drop した時は Transform と Particle Emitter を持つ Entity を作る。Particle Asset がない状態で Particle Emitter を追加した時は既定 Asset を同じ操作内で作成する。 | 作成・配置・Component 追加・参照変更・削除はそれぞれ一つの履歴へ確定する。取消または失敗時は AssetManifest、SceneDocument、両 selection を開始前へ戻す。Play 中は既存Particle Assetのpropertyを保存し参照Emitterだけへ再反映できる。Assets panelからの新規Asset作成とdrop配置は無効のままにする。 |
 | MI-34 | toolbar の Create、または Hierarchy の右クリックから Entity / Component を作成する | Create は Empty Entity、Primitive、XRift Component、通常 Component の責務別入口を示す。すべての追加候補は名前、種別、説明、IDで検索でき、入力中は一致するカテゴリだけを開く。選択 Entity がある時は追加先を名前で示し、選択がない時も単独で成立する XRift Component は Transform 付き Entity として作成できる。wrapper は追加先 Entity がない限り無効にし、理由を表示する。 | 作成または追加は一件の history transaction とし、作成 Entity を `sceneSelection` にして Inspector を開く。検索の Escape はまず入力をクリアし、候補がない時は同じメニューに理由を残す。外側 click は document を変えず閉じる。Play中の対応済みEntity / Component作成はauthoring dataへ保存して追加Entityだけを実行コピーへ同期する。Import中と、Asset import / dropを必要とする作成は無効にし、必須値が未設定なら Inspector から設定して compile blocker を解消できる。 |
-| MI-35 | Visual World の新規作成で Starter Scene を選ぶ | 既定は1階建ての学習ミュージアムとして、公式ReleasesのURLとQR、実画面の教材パネル、実習用Asset、公式Componentを順路に沿って配置したXRift Studioガイドとする。建物は約22m × 35mに収め、中央には幅4.5mの連続した見通しと歩行帯を確保する。展示台は中央へ横一列に並べず左右へ交互に寄せ、大型の説明板は壁面または各展示の上部へ配置して入口から最終画面までの視線を塞がない。順路の中央には同じ見た目の2枚扉を並べ、左はglTF Animation + Animation Component、右は埋め込みKHR_interactivityの`event/onStart → animation/start`で開く比較展示を置く。奥のParticle LabにはGlow、Spark、Smoke、Confettiの透過Textureを使う10種のParticle Assetを展示し、Emitter選択からAssetを開いて複製・調整できることを案内する。背景とIBLには作者・CC0を保持したPoly HavenのStudio Garden HDRIを使い、入口、展示台、休憩場所、最終展示へユーザー提供の低負荷GLB小物を配置する。配置済み Scene と Assets へ追加される Model / Texture / Particle / Interactivity の内容をカード上に示す。空のワールドはメインライト1灯の明示的な最小構成として残し、教材・作例と混同しない。 | 作成成功時は bundled source を Google Driveなどの原本場所から切り離したproject-relative pathへhash検証付きでコピーし、Scene / Asset / Material / Particle / Interactivity / Collider / XRift Spawn / Skyboxの参照を一度に確定してEditorで開く。装飾用ModelとParticle展示は中央歩行帯へ張り出さず、歩行を妨げるColliderを自動追加しない。公式Component展示は`@xrift/world-components`の実boundsと原点を基準に下端を床面から0.2m以上離し、中央歩行帯の外へ配置する。Particle Textureはproject-relativeな256px透過PNGとして他のParticleにも再利用できる。Editでは両扉を閉じた制作状態で表示し、Play開始時に左はAnimation Component、右はKHR_interactivityグラフから一度だけ開き、Stop後は閉じた状態へ戻る。インストール導線は `https://github.com/WebXR-JP/xrift-studio/releases/latest` を文字とQRの両方で確認できる。copy / hash / document 保存の一部が失敗した場合は不完全な project を成功表示せず、新規作成へ戻れる。 |
+| MI-35 | Visual World / Item の新規作成でStarterを選ぶ | 作り方を選んだ次の画面で「最初のシーンとAssets」を選ぶ。Worldは公式ClassicテンプレートのR3F / JSXをVisualへ変換した「XRift公式サンプル」を既定の選択にし、床・メインライト1灯・Spawn Pointだけの「空のワールド」、読み込み元のシーンだけを静的解析してVisualへ変換する「XRift Classicからインポート」を同じ並びに置く。Itemは原点、プレビュー基準点、編集可能なMaterialを持つ最小構成から始める。各カードには何が入るかと、作成後にすべて編集できることを示す。プロジェクト名が空のままでは作成を開始できない状態にする。 | 作成成功時はbundled sourceをproject-relative pathへhash検証付きでコピーし、Scene / Asset / Material / Collider / Spawn Pointの参照を一度に確定してEditorで開く。Classicからのインポートは読み込み元にない床、Light、Spawn Pointを足さない。copy / hash / document保存のいずれかが失敗した場合は不完全なprojectを成功表示せず、一覧へ追加しないまま新規作成へ戻れる。 |
 | MI-36 | Model Assetを選択して構造を確認し、import設定を変更または再importする | 右Inspectorにsource/status、node・mesh・primitive、bounds、animation、Material slotと現在のimport recipeを分けて表示する。recipe変更は未適用であることを示し、source解析済みの事実と混同しない。再importでslotが消える時は確定前にScene / Prefabの影響先を列挙する。 | 再import成功時は同じAsset IDを維持し、同じslot identityへのMaterial割当を保持して追加・消失slotを明示する。影響を確認せず参照切れを成功表示しない。失敗時はlast-good metadata、thumbnail、Scene参照を維持し、原因と再試行を同じModel Inspectorに残す。Play中は閲覧のみとする。 |
 | MI-37 | 左下の歯車「シーン設定」を開き、公開情報、スカイボックス、フォグ、環境光、カメラ、ギズモを変更する | 現在のScene ViewとEntity / Asset selectionを保ったまま、右のEntity InspectorをScene Inspectorへ切り替える。ワールド名またはアイテム名と説明は現在の公開情報を表示し、入力欄から移動した時に確定する。Skybox画像の背景表示とIBLライティングは独立したトグルにし、両方、片方、どちらも使用しない状態を即時同期する。新規Sceneは広いWorldでも遠景を失いにくいCamera FarとFog距離から始め、数値は確定時に範囲へ補正する。Scene Viewへ不透明な補助床は追加せず、Skyboxまたは編集背景の上に軽いグリッドだけを表示する。Play中は値を読み取り専用にし、停止後に同じ設定画面へ戻れる。 | 設定変更はProjectまたはSceneDocumentを未保存にして自動保存へ合流し、公開情報はヘッダー、公開前確認、生成する`xrift.json`へ反映する。戻る、Entity / Assetの選択は変更済みの値を保持して通常Inspectorへ戻る。サムネイルは保存済みprojectでだけ既存の画像編集画面を開き、保存後に公開前確認へ戻れる。 |
 | MI-38 | 左下のユーティリティレールからショートカット一覧、ヘルプ、シーン設定を開く | 上からキーボード、ヘルプ、歯車を小さな同一サイズで常時表示する。hover / focusでは操作名を示し、開いている項目は背景、アイコン、`aria-expanded`または押下状態で区別する。ショートカットは中央Registryの現在のbindingを分類して表示し、ヘルプは作成、選択、素材配置、Playの最短導線とレイアウト初期化を示す。 | Escape、外側click、同じボタンで補助パネルを閉じ、Scene / Asset selectionとdocumentを変えない。歯車はScene Inspectorを切り替え、レイアウト初期化は既定配置へ戻して同じEditorを継続する。 |
@@ -110,7 +110,7 @@ F-06 アイテム検査
 | --- | --- | --- | --- |
 | F-01 | CLI 更新 | MI-03, MI-04, MI-05 | 現在と最新の差分を見て更新または延期でき、更新後の状態が再取得される。 |
 | F-02 | プロジェクトライブラリ | MI-01, MI-02, MI-03, MI-04, MI-05, MI-06, MI-09, MI-45, MI-74 | 項目を成果物種別、classic / visual、更新日時、公開状態で見分けられ、検索・並び替え・絞り込み・安全な削除と、新規作成・再開の入口が常に見つかる。壊れたvisual manifestをclassicと推測して開かない。ヘルプと報告から環境情報のコピー、画面保存、GitHub / ChatGPT相談へ到達できる。 |
-| F-03 | プロジェクト作成 | MI-03, MI-04, MI-05, MI-06, MI-13, MI-18, MI-35, MI-55, MI-68 | 四カードから item / world と classic / visual の組を一度に選べる。クラシックは code project、ビジュアルは専用 document project として開く。Visual World は中央4.5mの見通しを保ったコンパクトな1階建てミュージアムを巡り、公式インストール導線、Poly HavenのCC0 Skybox、実画面の教材パネル、左右へ寄せた編集用Assetと低ポリ小物、glTF AnimationとKHR_interactivityで開く2枚扉、4枚の透過Textureを使う10種のParticle、公式Componentを順番に学べるXRift Studioガイドを既定にし、メインライト1灯の空ワールド、公式Classic変換作例、OpenBrush作例も選べる。ローカルまたはRepository URLのXRift Classicは完全に空のVisual Sceneへ変換し、読み込み元にない床、Light、SpawnPointを追加しない。Visual Itemでも基本Starterまたは同種Classic projectから開始できる。 |
+| F-03 | プロジェクト作成 | MI-03, MI-04, MI-05, MI-06, MI-13, MI-18, MI-35, MI-55, MI-68 | 四カードから item / world と classic / visual の組を一度に選べる。クラシックは code project、ビジュアルは専用 document project として開く。ビジュアルは次の画面で最初のシーンとAssetsを選ぶ。Worldは公式ClassicテンプレートのR3F / JSXを変換した「XRift公式サンプル」を既定の選択にし、床・メインライト1灯・Spawn Pointだけの「空のワールド」、既存XRift Classicからの静的インポートも同じ並びから選べる。ローカルまたはRepository URLのXRift Classicは完全に空のVisual Sceneへ変換し、読み込み元にない床、Light、SpawnPointを追加しない。Visual Itemでも基本Starterまたは同種Classic projectから開始できる。 |
 | F-04 | ローカル実行 | MI-03, MI-05, MI-08 | 実行中であることと、プレビュー URL を開く操作が分かる。 |
 | F-05 | 公開準備とアップロード | MI-03, MI-04, MI-05, MI-07, MI-08, MI-09, MI-17, MI-27 | 初期値の upload を防ぎ、toolchain が不足しても authoring を失わず、review から upload result / 審査状態まで続けられる。正式 result にない公開 URL は推測しない。 |
 | F-06 | アイテム検査 | MI-03, MI-05, MI-09 | ビルドを含むセキュリティチェックを実行でき、成功時は公開、失敗時はログと編集へ進める。 |
@@ -125,11 +125,11 @@ F-06 アイテム検査
 | F-15 | OBJ / VRM import と静的モデルポーズ | MI-03, MI-05, MI-09, MI-20, MI-36, MI-41, MI-46, MI-56 | OBJ / VRMをModel Assetとして配置でき、VRMのNode・Bone・Skinned MeshをHierarchyから選び、配置EntityごとのTransform、node別Material、shape key weightを保存し、再表示と生成結果で同じ静的状態を復元できる。 |
 | F-16 | UnityPackage / Scene / Prefab import | MI-03, MI-05, MI-09, MI-11, MI-13, MI-20, MI-24, MI-47 | UnityPackageの論理pathnameとGUID参照を安全に復元し、対応Assetを抽出してScene階層を再構築し、再利用可能なXRift Prefabとして保存する。未対応Asset / Componentは黙って成功扱いせず診断とprovenanceへ残し、C#変換を行わない。 |
 | F-17 | AI editor integration / MCP | MI-03, MI-05, MI-09, MI-10, MI-11, MI-13, MI-25, MI-48, MI-60, MI-61 | 対応AI clientへXRift Studio MCPを一操作で登録し、必要ならOllamaのローカルmodelをCodex、Claude Code、OpenCodeのproviderとして構成する。認可したvisual projectの現在Scene、Asset、selection、revisionを読み取り、Skybox / Fog /環境光/Camera/Editor表示設定、Asset配置、Material編集、Interactivity Material pointer設定、Poly HavenとambientCGの検索・downloadを通常のEditor Command、Undo、Autosaveへ合流し、AIと手操作の競合を暗黙に上書きしない。登録後は接続状態、対象Scene、直近の編集と復帰手段がEditorに残る。 |
-| F-18 | OpenBrush import / shader rendering | MI-03, MI-05, MI-09, MI-15, MI-18, MI-20, MI-27, MI-35, MI-36, MI-49 | OpenBrush / Tilt Brush形式のglTFを通常のModel Assetとして取り込み、three-icosaの専用shaderでScene Viewと生成Worldを再現する。新規WorldではXRift Studioガイド、空ワールド、公式XRift作例、OpenBrush作例から選び、OpenBrush sampleとApache-2.0 licenseを検証付きで保存できる。 |
+| F-18 | OpenBrush import / shader rendering | MI-03, MI-05, MI-09, MI-15, MI-18, MI-20, MI-27, MI-35, MI-36, MI-49 | OpenBrush / Tilt Brush形式のglTFを通常のModel Assetとして取り込み、three-icosaの専用shaderでScene Viewと生成Worldを再現する。OpenBrush sampleは外部リソースのOpen Brush providerから追加し、Apache-2.0 licenseを検証付きで保存できる。 |
 | F-19 | VisualからClassicへの書き出し | MI-03, MI-04, MI-05, MI-09, MI-17, MI-26, MI-50 | Visual Editorの日常導線から任意の同種Classic projectを検査し、Runtime JSON、Asset、接続component、固定dependencyを手書き領域と分離して追加できる。成功後はfolder、VS Code、terminal、接続snippetへ進める。 |
 | F-20 | XRift Studio本体の更新 | MI-03, MI-04, MI-05, MI-09, MI-51 | 起動時またはAboutから署名済み更新を確認し、現在版、最新版、更新内容を見て延期またはinstallできる。進捗を確認したまま再起動し、更新後の版または失敗時の再試行へ到達できる。 |
 | F-21 | 外部リソースStoreと環境Texture Asset | MI-03, MI-04, MI-05, MI-09, MI-11, MI-15, MI-16, MI-21, MI-39, MI-49, MI-52, MI-55, MI-61 | Assetsから提供元、作者、license、HDR / EXR形式を確認して外部Material、Texture、HDRI、Model、XRift公式Componentを追加する。Poly Haven Modelは依存fileを検証した自己完結glTF Assetとして保存し、ambientCGは公式v3 APIのdownload ZIPからColor / NormalGLまたはEXRを検証して保存する。UIとMCPのどちらからも同じinstall境界を使う。ambientCGの3D ModelはOBJなどの非glTF形式のためcatalog表示に留め、インストール可能に見せない。Open BrushはPoly Havenと同列のproviderから検証済みbrushを実stroke previewで選び、GUIDとrenderer versionを保持したMaterial Assetとして追加できる。XRift公式Componentも同列のproviderから公開package本体のpreviewを確認してSceneへ追加できる。ローカルまたは外部のHDR / EXRはequirectangular用途のTexture Assetになり、Flip Yなどを編集し、import / install直後またはScene Viewへのdragでシーン全体へ設定できる。provider境界はUIと保存形式から分離し、追加ストアへ拡張できる。 |
-| F-22 | GLB / glTF Animation自動再生 | MI-11, MI-13, MI-14, MI-35, MI-36, MI-54, MI-56, MI-60 | Animationを含むModelを配置するとAnimation Componentが付き、source NodeをHierarchyへ展開したまま再生clipの選択、Autoplay、Loop、SpeedをInspectorで確認・変更できる。Edit中は静止し、Playと生成結果だけで再生し、Stop後は制作状態へ戻る。XRift Studioガイドでは通常のAutoplayと、埋め込みKHR_interactivityの`event/onStart → animation/start`が同じPlay開始で開く2枚扉を比較でき、右扉と同じグラフをInteractivity Asset Editorで確認・編集できる。 |
+| F-22 | GLB / glTF Animation自動再生 | MI-11, MI-13, MI-14, MI-35, MI-36, MI-54, MI-56, MI-60 | Animationを含むModelを配置するとAnimation Componentが付き、source NodeをHierarchyへ展開したまま再生clipの選択、Autoplay、Loop、SpeedをInspectorで確認・変更できる。Edit中は静止し、Playと生成結果だけで再生し、Stop後は制作状態へ戻る。Animation ComponentのAutoplayと、KHR_interactivityの`event/onStart → animation/start`は同じPlay開始で動く別経路であり、後者はInteractivity Asset Editorで確認・編集できる。 |
 | F-23 | 公式XRift ComponentカタログとClassic / TSX変換 | MI-03, MI-04, MI-05, MI-09, MI-34, MI-39, MI-52, MI-55, MI-64 | 外部リソースで公開package versionと公式sourceを確認しながら、配置可能な公式Componentを全件サムネイル付きで選べる。右上ImportからDrei / React Three Fiberの標準primitiveとLight、Rapier RigidBody、公式XRift JSXを安全なScene dataへ変換する。既存Classicは検査済みentryを同じ変換器へ渡し、未対応custom codeやAssetを完全変換と誤表示せず、追加後のEntityとInspectorへ到達できる。 |
 | F-24 | glTF Material制御とBehavior連携 | MI-15, MI-16, MI-25, MI-60, MI-84 | Material Textureのタイリング、Offset、Rotation、UV SetをglTF互換値として編集し、MCP、Animation導線、KHR_interactivity pointer nodeから同じMaterial設定へ到達できる。Runtime manifestでもTexture transformとRepeat samplerを維持する。 |
 | F-25 | AssetsとOSファイルエクスプローラー | MI-11, MI-20, MI-28 | Assetsの右クリックから物理保存場所をエクスプローラーで開け、エクスプローラーからのdropも通常のImport Queueで扱う。未保存projectでは理由を示して無効にする。 |
@@ -143,6 +143,184 @@ F-06 アイテム検査
 | F-33 | Wind Component | MI-03, MI-05, MI-09, MI-11, MI-13, MI-14, MI-15, MI-16, MI-81 | Entity InspectorまたはMCPからWind Componentを明示的に追加し、対象Entityと子MeshだけへScene Settingsのグローバル風設定を適用する。Editor Preview、Play、生成World、Runtime manifestは同じComponentとScene値を使い、名前・Mesh分類・言語に依存した対象推測を行わない。 |
 | F-34 | 空Shader（手続き的なSkybox） | MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-82, MI-83 | 画像Skyboxではなく、Custom Shader Materialとして昼・夕暮れ・朝焼け・夜空・オーロラ・星雲の空を追加できる。星の数、太陽と月の位置、月の満ち欠け、雲、地平線の遠景をuniformで調整でき、レイマーチする厚みのある雲も選べる。外部リソース集での調整とInspectorでの再調整が同じMaterialを指し、Scene View、Play、生成Worldが同じGLSLを描く。Materialが欠落した場合はグラデーションへ戻し、警告診断を残す。重いpresetはstep数をvariant defineとして残し、下げられる状態にする。 |
 | F-35 | Visual QA診断と短時間録画 | MI-03, MI-05, MI-14, MI-26, MI-80 | Scene ViewとPlay Windowで実rendererのFPS、frame time、draw calls、triangles、mesh可視数、camera Farを確認でき、最大15秒のWebMを保存して問題の発生前後を再現できる。診断や録画はSceneDocument、AssetManifest、Undo履歴を変更せず、停止・保存失敗・WebM非対応から同じScene Viewへ戻れる。 |
+
+## F-01 CLI更新の状態設計
+
+参照: MI-03, MI-04, MI-05
+
+### 操作前
+
+- 起動後にアプリが管理する `@xrift/cli` の現在版と最新版を確認し、差があるときだけダイアログを出す。設定画面の奥に更新を隠さない。
+- ダイアログは「@xrift/cli アップデート」「新しいバージョンが公開されました」を見出しにし、現在と最新のバージョンを左右に並べて示す。何が変わるのかを、版番号だけで終わらせない。
+- 主操作は「アップデート」の一つに絞り、「後で」と閉じるを同じ場所に残す。更新しない選択も安全に取れる。
+
+### 処理中
+
+- 実行中はラベルを「アップデート中…」に変え、「後で」と閉じるを無効にする。同じ更新を二重に走らせない。
+- 更新の対象はアプリが管理するCLIだけとし、システム側にインストールされた Node.js や CLI を変更しない。
+
+### 成功時
+
+- 更新後のバージョンを取り直して表示へ反映し、設定とバージョン情報からも同じ値を確認できる。
+- 更新はプロジェクトを閉じない。作業中の状態を保ったまま次の操作へ進める。
+
+### 失敗時
+
+- 失敗した理由を示し、ダイアログを開いたまま再試行できるようにする。現在版は変更しない。
+- ネットワークが使えない場合は更新を促し続けず、後から確認できる場所を示す。
+
+### 戻り先
+
+- 「後で」または閉じるでプロジェクトライブラリへ戻る。更新の有無にかかわらず、制作は続けられる。
+
+## F-02 プロジェクトライブラリの状態設計
+
+参照: MI-01, MI-02, MI-03, MI-04, MI-05, MI-06, MI-09, MI-45, MI-74
+
+### 操作前
+
+- セットアップ完了後の最初の画面をプロジェクトライブラリにする。件数と実際の保存先パスを見出しの下に示し、どこに保存されているかを隠さない。
+- 一覧の先頭に「新規プロジェクト」を常に固定し、空の状態でも作成の入口を失わせない。
+- 各カードは、サムネイル、成果物種別（World / Item）、制作方法（Visual / Classic）、名前、プロジェクト名、説明、更新日時、公開状態（公開済み / 未公開）で見分けられるようにする。サムネイルがない場合は「表紙なし」を示し、カードごと欠落したように見せない。
+- 検索、公開状態での絞り込み、並び順（最近更新した順 / 更新が古い順 / 最近公開した順 / 名前順）を同じ行に置き、現在の並びを一覧の上に書く。
+- カードには、サムネイル設定と削除を控えめな icon として置き、開く操作と取り違えない位置に離す。
+
+### 処理中
+
+- 読み込み中、空、失敗を区別して表示する。0件を失敗のように見せない。
+- 削除は対象と影響を確認してから実行し、確認前に一覧から消さない。
+
+### 成功時
+
+- カードを選ぶと、Visualはビジュアルエディター、Classicはコードエディターへ、正本に対応する画面で開く。
+- 作成、公開、サムネイル更新のあとは一覧を取り直し、対象カードを最新の状態で表示する。
+
+### 失敗時
+
+- 壊れたvisual manifestはclassicと推測して開かず、対象と修復手段を示す。
+- 一覧の取得に失敗した場合も新規作成の入口と再試行を残す。
+
+### 戻り先
+
+- 各エディターの「ライブラリ」からいつでも戻れる。未保存の変更がある場合は保存、破棄、取消を選べる。
+
+## F-03 プロジェクト作成の状態設計
+
+参照: MI-03, MI-04, MI-05, MI-06, MI-13, MI-18, MI-35, MI-55, MI-68
+
+### 操作前
+
+- 「新しいプロジェクトを作る」は、ワールドをコードで作る、アイテムをコードで作る、ワールドをビジュアルで作る、アイテムをビジュアルで作るの四カードを同じ画面に同じ階層で並べる。成果物と制作方法を二段階で往復させない。
+- 各カードには、何が作られるかを一文で書き、クラシック / ビジュアルのラベルを添える。
+- ビジュアルを選ぶと次の画面で「最初のシーンとAssets」を選ぶ。ここでは正本が専用のScene・Asset JSONであることを明記し、選択肢と、作成後にすべて編集できることを示す。
+- Worldの選択肢は、公式ClassicテンプレートのR3F / JSXを変換した作例を既定の選択とし、床・メインライト1灯・Spawn Pointだけの最小構成、既存XRift Classicからの静的インポートを同じ並びに置く。Itemは原点、プレビュー基準点、編集可能なMaterialを持つ最小構成から始める。
+- プロジェクト名の入力欄を同じ画面に置き、名前が空の間は作成を開始できない状態にする。押せるのに失敗する操作を出さない。
+- 「作り方を選び直す」で四カードへ戻れる。選択をやり直すために閉じ直す必要はない。
+
+### 処理中
+
+- 作成中は進行を示し、二重実行を防ぐ。bundled sourceのコピーとhash検証、document保存を一つの流れとして扱う。
+
+### 成功時
+
+- 作成したプロジェクトを一覧へ追加し、そのまま開く。作成の完了を通知だけで終わらせない。
+- Classicは既存のcode project作成と同じ結果を返し、Visualは専用documentをproject rootへ保存する。
+
+### 失敗時
+
+- コピー、hash検証、document保存のいずれかが失敗した場合は、不完全なプロジェクトを一覧へ追加せず、temporary directoryを回収する。
+- 失敗の理由と、戻る先（四カードまたは名前の入力）を示す。
+
+### 戻り先
+
+- キャンセル、または作成失敗のあとはプロジェクトライブラリへ戻る。入力済みの選択と名前は、同じ画面に留まる限り保持する。
+
+## F-04 ローカル実行の状態設計
+
+参照: MI-03, MI-05, MI-08
+
+### 操作前
+
+- Classicエディターのheaderに「実行」を置き、ローカルで起動してブラウザでプレビューすることをtooltipで示す。同じ並びに、サムネイル、ターミナル、VS Code、アップロードを置く。
+- 実行前は開発サーバーが動いていないことが分かるようにし、起動中のURLを表示しない。
+
+### 処理中
+
+- 押した直後はラベルを「起動中…」に変え、再度の実行を受け付けない。ログペインを自動で開き、起動の出力をそのまま見せる。
+- URLを検出したらheaderへ点滅する丸とURLのチップを出し、ブラウザを開く。開けなかった場合もURLは残し、チップから開き直せる。
+- 起動中はボタンを「停止」に変える。実行中と停止操作を同じ場所で切り替える。
+
+### 成功時
+
+- 起動中のURLはheaderに常に見えており、クリックでいつでも開き直せる。ログは同じ画面で追える。
+- 公開済みのプロジェクトでは「XRift で開く」を並べ、ローカルと公開先を取り違えない位置に置く。
+
+### 失敗時
+
+- 起動に失敗した場合は理由をログへ残し、ボタンを「実行」へ戻す。URLチップを出したままにしない。
+- 停止に失敗した場合も理由をログへ残し、状態表示を実際の状態に合わせる。
+
+### 戻り先
+
+- 「停止」で開発サーバーを終了し、URL表示を消す。ライブラリへ戻る操作はheaderの左端に常にある。
+
+## F-05 公開準備とアップロードの状態設計
+
+参照: MI-03, MI-04, MI-05, MI-07, MI-08, MI-09, MI-17, MI-27
+
+### 操作前
+
+- 「アップロード」はログインしていない間は実行できない状態にし、tooltipでログインが必要なことを示す。押せるのに必ず失敗する操作を出さない。
+- 押すとまず公開情報を確認する。確認中はラベルを「公開情報を確認中…」に変える。
+- タイトル、説明、サムネイルがテンプレートのままなら「公開前の準備」を開き、このまま公開すると初期ワールド（アイテム）のように表示される可能性があることを書く。主操作は情報の編集またはサムネイルの設定にする。
+- ビジュアルプロジェクトでは、公開情報、サムネイル、XRiftアカウント、公開先、公開データ、公開チェック、ロード容量・VRAMの目安を確認項目として並べ、それぞれの状態を一行で示す（[F-27](#f-27-公開前パフォーマンス概算とasset最適化の状態設計)）。
+
+### 処理中
+
+- ビジュアルは保存、変換、検査、送信の順に進み、現在どの段階かと、取り消せるかどうかを表示する。
+- 送信前の段階では取り消してもリモートを変更しない。送信開始後の取り消しはbest effortであることを明記する。
+
+### 成功時
+
+- 送信後はworldId / itemId、versionId、versionNumber、content hashを表示する。審査中を公開済みとして表示しない。
+- 公式の結果がURLを返した場合だけ、そのページを開く導線を出す。IDからURLを推測して作らない。
+- 公開済みのプロジェクトでは、以降エディターのheaderから公開先を開ける。
+
+### 失敗時
+
+- 失敗した段階、要約したエラー、リモートを変更したかどうかを示し、その段階から再試行できるようにする。
+- 検査で止まった場合は、修正に必要なログを同じ画面で読める状態にする。
+- 結果が不明な送信の再試行では、既知の公開先IDと入力のhashを照合し、新しい公開先を重複して作らない。
+
+### 戻り先
+
+- 編集を促された場合は対象の編集画面（`xrift.json` またはサムネイル）へ移動し、保存後に同じ確認へ戻る。閉じた場合はエディターへ戻り、制作データとリモートは変わらない。
+
+## F-06 アイテム検査の状態設計
+
+参照: MI-03, MI-05, MI-09
+
+### 操作前
+
+- 「チェック」はアイテムのClassicプロジェクトにだけ表示し、ビルドを含むセキュリティチェックを実行することをtooltipで示す。ワールドには出さない。
+- 実行中および公開情報の確認中は押せない状態にする。
+
+### 処理中
+
+- 実行と同時にログペインを開き、ビルドと検査の出力をそのまま流す。進行を要約だけで隠さない。
+
+### 成功時
+
+- 通過したことを通知し、そのままアップロードへ進める。ログは残したままにする。
+
+### 失敗時
+
+- 失敗したことと、ログを確認して修正する必要があることを通知する。ログペインは開いたままにして、原因へ到達できる状態を保つ。
+- 検査に失敗した状態でアップロードを既定の次操作として示さない。
+
+### 戻り先
+
+- 検査の結果にかかわらずエディターへ戻り、ファイル編集、再実行、アップロードのいずれも同じheaderから選べる。
 
 ## F-07 ビジュアルエディターの状態設計
 
@@ -492,7 +670,7 @@ F-06 アイテム検査
 
 ### 操作前
 
-- 新規Visual WorldのXRift Studioガイドは、入口と最終展示で「AI接続」からCodexをXRift Studio MCPへワンクリック登録できること、現在Sceneを会話から読み取り・編集できること、AI変更も通常のUndoと自動保存へ統合されることを説明する。展示は中央歩行帯を塞がない壁面へ置く。
+- AI connectionパネルは、対応clientをXRift Studio MCPへワンクリック登録できること、現在Sceneを会話から読み取り・編集できること、AIの変更も通常のUndoと自動保存へ入ることを、登録前に読める位置で説明する。
 - EditorのAI連携panelはCodex、Claude Code、Claude Desktop / Cowork、OpenCode、Cursorの検出結果、登録scope、XRift Studio MCP serverの状態を表示する。Codexは現在の`PATH`に加えて、公式installer、Codex app同梱CLI、npm、pnpm、WinGet、Homebrew、standalone installerの標準配置を確認し、起動時の環境変数が古い場合も再起動なしで検出する。OllamaはMCP client一覧へ混在させず、ローカルmodel providerとしてinstall状態、version、model一覧、構成先clientを別sectionに表示する。native APIがないブラウザでは登録済みに見せず「デスクトップ版で利用できます」と示す。Claude Desktop / Coworkはローカルsessionだけを対象にし、remote CoworkではローカルMCPを起動できないことを登録前に示す。
 - MCPは現在開いているvisual projectだけを候補にし、project ID、Scene ID、session revisionを接続clientへ返す。接続しただけではSceneDocument、AssetManifest、selection、historyを変更しない。
 - AI書き込みは認可済みprojectのEditと、差分同期に対応したPlay中のtoolだけに許可する。Import、project切替中、または非対応のPlay操作は理由付きで読み取り専用にする。World / ItemのUpload、project削除、形式を限定しない任意file read / write、任意shell操作は初期tool setへ含めない。Asset削除は参照を検査する明示toolに限定する。例外となるlocal Audio / Texture / Model / Skybox / Shader importは対応形式、通常file、symlink / reparse pointなし、容量上限、signatureまたはUTF-8を検査してmanaged project storageへcopyするだけとし、Entity削除はScene構造の永続操作として扱う。
@@ -824,6 +1002,39 @@ F-06 アイテム検査
 
 - 成功時は再起動後のsetupまたはproject一覧、失敗・取消時はAboutのDanger Zoneへ戻る。
 
+## F-27 公開前パフォーマンス概算とAsset最適化の状態設計
+
+参照: MI-04, MI-07, MI-27, MI-67
+
+### 操作前
+
+- Upload reviewの確認項目の最後に「ロード容量・VRAMの目安」を置き、ロード容量、VRAMのrange、優先度の高い改善候補の有無を一行で示す。「詳細を見る」から「ワールドの容量・パフォーマンス目安」を開く。
+- 詳細は「Asset VRAM」「初回Assetロード」「実行時の全体目安」「スマートフォン目安」を並べ、各数値の下に内訳を書く。Texture数とModel数、回線速度と所要秒数、加算した描画buffer量、余裕ありと判定するStudio基準の閾値を、数値だけで終わらせない。
+- デスクトップ判定、メッシュ配置数、高速回線での所要秒数を補助として同じ行に添える。
+- 「VRAM使用量が多い順」と「ロード容量が多い順」を寄与量の多い順に並べ、それぞれの前提を見出しの下に書く。前者は同じAssetの複数配置がGPUリソースを共有すること、後者は公開時にコピーされるAsset原本の合計であり、アプリ本体と通信オーバーヘッドを含まないことを示す。
+- 概算対象のAssetがないSceneでは0件と空状態の文を出す。合計値だけを見せて、内訳の取得に失敗したように見せない。
+- 末尾に、これが実測値ではないこと、ロード時間の計算に含まれないもの（キャッシュ、CDN、アプリ本体、HTTP処理）、VRAMが変動する条件（ブラウザ、GPU、画面解像度、影、ポストエフェクト、KTX2の転送先形式）、PNG / JPEG / WebPをGPU上のRGBA展開として数え、mipmap有効時に約33%を加算していることを明記する。
+
+### 操作中
+
+- 改善候補は対象Asset名と現在値を添えて示す。Textureは最大2048pxへの縮小とKTX2への変換、ModelはDraco圧縮を候補にし、推奨と検討をseverityとして区別して並べる。
+- 候補は個別にチェックでき、チェックした分だけをAssetへ適用する。適用中は進捗と対象を表示し、同じ候補の二重実行を防ぐ。
+- 概算はUpload reviewを開いた時点の公開対象Sceneと展開済みPrefabから解析する。Editorの選択、Scene、Assetを変更しない。
+
+### 成功時
+
+- 適用した候補は対象AssetのImport設定または派生Assetへ反映し、概算を再計算して同じ画面の数値と内訳を更新する。何がどう変わったかを見てから次を選べる。
+- 「公開前の確認へ戻る」でUpload reviewへ戻り、更新後の一行サマリを確認したうえで公開へ進める。
+
+### 失敗時
+
+- 変換に失敗した候補は対象Assetを変更せず、対象名と理由を残す。同時に選んだ他の候補の結果は取り消さない。
+- 概算できないAssetは概算対象外として示し、0や不明を余裕ありとして数えない。
+
+### 戻り先
+
+- 「公開前の確認へ戻る」でUpload review、閉じた場合はEditorへ戻る。どちらでもEditorの編集状態、選択、Inspector contextを変えない。
+
 ## F-28 Script AssetとScript Componentの状態設計
 
 参照: MI-03, MI-05, MI-09, MI-14, MI-69, MI-70, MI-71, MI-72, MI-73
@@ -983,6 +1194,103 @@ F-06 アイテム検査
 ### 戻り先
 
 - 設定変更後はScene Viewへ留まり、Play、Compile、公開レビューの順に進める。失敗時はScene settingsまたは変換manifestのdiagnosticsへ戻る。
+
+## F-33 Wind Componentの状態設計
+
+参照: MI-03, MI-05, MI-09, MI-11, MI-13, MI-14, MI-15, MI-16, MI-81
+
+### 操作前
+
+- Wind ComponentはEntity InspectorのAdd ComponentからRenderingカテゴリーに置く。Component検索でも同じ項目に到達できる。
+- Componentカードは「Wind」「Entity Component」を見出しにし、対象がこのEntityと子Meshであること、風の強さ・速度・突風はScene Settingsのグローバル設定を使うこと、Mesh名からは判定しないことを本文で示す。カード内の操作はEnabledだけにし、同じ値をComponentとScene Settingsの二か所で編集させない。
+- Scene Settingsの「Wind（グローバル）」に、Windの有効化、風の強さ、風の速度、突風の強さ、風向き（度）を置く。シーンの風は常に一つであることを同じ場所に書く。
+- 風に反応するShader Materialは、`uWindDirection`、`uWindSpeed`、`uWindTurbulence`を宣言したものだけが対象になる。宣言していないshaderへ値を渡さず、対応しているように見せない。
+
+### 操作中
+
+- Componentの追加とEnabledの切り替えは一件のScene更新として履歴と自動保存へ入り、Scene Viewへ即時反映する。InspectorとMCPは同じrevision検査を通る。
+- グローバル設定の変更はScene Viewの対象Entityと風対応Materialへ同時に反映する。水面が北へ、草が東へ流れるような食い違いを作らない。
+- 向きはグローバルのままとし、Entity側では上書きしない。一つのシーンに二つの風向きを持たせない。
+
+### 成功時
+
+- Editor Preview、Play、生成World、Runtime manifestが同じComponentとScene値を読み、同じ揺れを描く。
+- グローバルWindを無効にした場合、またはEntityのComponentを無効にした場合は完全な静止に戻す。Materialが独自に動き続けない。
+
+### 失敗時
+
+- 対象Entityに描画対象のMeshがない場合もComponent自体は保存し、対象が空であることを示す。名前や見た目からの推測で別のEntityを対象にしない。
+- Scene Settingsに風の設定がない古いSceneは互換既定値で読み込み、Sceneを開けなくしない。
+
+### 戻り先
+
+- 追加・変更後はEntity Inspectorに留まり、グローバル値の調整はScene Settingsへ一操作で移動できる。確認はPlayで行う。
+
+## F-34 空Shader（手続き的なSkybox）の状態設計
+
+参照: MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-82, MI-83
+
+### 操作前
+
+- 「外部リソースを追加」の左一覧に「空 Shader」を公式カタログとして置き、「画像ではなくGLSLで空を描くMaterialです」と件数を見出しに示す。
+- カードは実際のGLSLをWebGLで描画する。SVGやCSSの疑似サムネイルを使わず、カードで見えているものと追加後の空を一致させる。カテゴリー（昼、夕暮れ、朝焼け、夜空、オーロラ、宇宙）で絞り込める。
+- 詳細では、そのpresetが何を描くかと負荷の目安を文章で示し、Uniform valuesを名前・値・説明・uniform名付きのsliderとして並べる。変更はプレビューへ即時反映し、「既定値へ戻す」でpresetの値に戻せる。
+- 追加ボタンは「〇〇を空へ設定」とし、「追加後にSceneの空へ設定」を既定で有効にする。外した場合はMaterialだけを追加することを同じ場所に書く。
+- Scene Settingsのスカイボックスには「空Shader（Custom Shader Material）」の選択肢を置き、割り当て中はSkybox画像とグラデーションより優先して空を描くことを示す。
+
+### 操作中
+
+- 追加は通常のAsset import transactionを通り、Material Assetの作成とSceneのskybox設定を同じ履歴へ確定する。
+- 割り当て中は上空の色、地平線の色、オフセット、グラデーションを無効表示にする。水平回転と明るさはshaderのuniformへ渡すため有効なまま残す。
+- Scene Viewは空Shaderを描画しない。編集中の背景は単色のままで、見え方はPlayで確認する。この違いをUIで示し、描画に失敗したと誤解させない。
+
+### 成功時
+
+- 追加後はMaterial Assetとして残り、星の数や色をInspectorのUniform valuesから何度でも変更できる。カタログからの調整とInspectorでの再調整は同じMaterialを指す。
+- Play、生成World、Runtime manifestが同じGLSLと同じuniform値を使う。
+- 同じpresetをもう一度追加した場合はMaterialをpresetの値で上書きし、二つ目の同名Materialを増やさない。
+
+### 失敗時
+
+- 割り当てたMaterialが欠落または不正な場合は理由を示してグラデーションの空へ戻す。背景を空にしない。
+- 重いpresetはstep数をvariant defineとして残し、下げられる状態にする。負荷を隠さない。
+
+### 戻り先
+
+- 追加後はScene Settingsの空Shader欄へ戻り、「〇〇のUniformを編集」からMaterial Inspectorへ移動できる。カタログを閉じた場合もSceneとselectionは変わらない。
+
+## F-35 Visual QA診断と短時間録画の状態設計
+
+参照: MI-03, MI-05, MI-14, MI-26, MI-80
+
+### 操作前
+
+- Scene Viewのtoolbarに「診断」と「録画」を置く。どちらもEditとPlayの両方で使え、Play WindowではPlay中の実際のrendererを測る。
+- 「診断」はtoggleとして状態を保ち、押している間だけ右上へ計測panelを重ねる。panelはpointer eventsを受けず、下のScene Viewの操作を妨げない。
+- panelはFPS、frame time、draw calls、triangles、可視Mesh数と総Mesh数、geometry数とtexture数、camera位置とFarを表示する。計測中は`LIVE`、録画中は`REC`を同じ位置に出す。
+
+### 操作中
+
+- 計測は0.5秒ごとにThree.js rendererの実値から更新する。React stateからの推定値を表示しない。
+- 「録画」はScene ViewのCanvasを最大15秒のWebMへ記録する。開始時に診断表示を自動で有効にし、録画中であることと上限秒数を通知に出す。同じ操作でボタンは「停止」に変わる。
+- 上限に達した場合は自動で停止し、保存中であることを示す。保存中は開始も停止も受け付けない。
+- 診断表示と録画はSceneDocument、AssetManifest、Undo履歴、compile結果を変更しない。サムネイル撮影中はpanelを隠し、撮影結果へ写り込ませない。
+
+### 成功時
+
+- 停止または自動停止のあと、デスクトップ版では保存先を選んでWebMを保存し、保存したpathを通知に残す。ブラウザではファイルとしてダウンロードする。
+- MCPからの要求では、計測結果または保存したpathと録画時間を結果として返す。UIと同じ計測経路を使う。
+- 保存後はScene Viewへ戻り、診断表示の状態はそのまま残る。
+
+### 失敗時
+
+- WebViewがCanvasの録画に対応していない場合、利用できるWebM形式がない場合、録画されたフレームが0件の場合は、それぞれの理由を通知に出して録画状態を解除する。Sceneは変更しない。
+- 保存を取り消した場合は取り消したことを示す。保存に失敗した場合は理由を残し、診断表示と最後の計測値を維持する。
+- 別の録画を保存中に新しい要求が来た場合は、完了後に再試行するよう示して二重保存を始めない。
+
+### 戻り先
+
+- 診断表示は再度「診断」を押して閉じる。録画の成否にかかわらずScene ViewとPlayの状態は保たれ、選択とカメラを失わない。
 
 ## 実装制約
 
