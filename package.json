@@ -15,7 +15,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "build:preview": "vite build --config vite.preview.config.ts",
+    "build:preview": "vite build --config vite.preview.config.ts && node scripts/check-published-guide-assets.mjs",
     "preview:wiki": "vite --config vite.preview.config.ts",
     "build:wiki": "vite build --config vite.preview.config.ts",
     "starter:sync:xrift-official": "node scripts/sync-xrift-official-starter-assets.mjs",

@@ -38,12 +38,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # 使い方ガイドは wiki/index.html として最初からその階層に出力される。
+      # 以前はビルド後に wiki.html を wiki/ へ移していたが、相対パスの基準が
+      # ずれてJSとCSSが全て404になり、公開版が白紙になっていた。
+      # build:preview には公開ページが自分のアセットを解決できるかの検査が
+      # 含まれているので、同じ壊れ方が黙って再発することはない。
       - name: Build web preview
         run: |
           pnpm run build:preview
           mv preview-dist/preview.html preview-dist/index.html
-          mkdir -p preview-dist/wiki
-          mv preview-dist/wiki.html preview-dist/wiki/index.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

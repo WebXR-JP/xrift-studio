@@ -16,7 +16,11 @@ export default defineConfig({
     rollupOptions: {
       input: {
         preview: fileURLToPath(new URL("./preview.html", import.meta.url)),
-        wiki: fileURLToPath(new URL("./wiki.html", import.meta.url)),
+        // Authored at its published depth on purpose. The guide used to be
+        // built as wiki.html and moved into wiki/ afterwards, which left its
+        // relative "./assets/..." references pointing one directory too deep:
+        // every script and stylesheet 404'd and the guide served a blank page.
+        wiki: fileURLToPath(new URL("./wiki/index.html", import.meta.url)),
       },
     },
   },
