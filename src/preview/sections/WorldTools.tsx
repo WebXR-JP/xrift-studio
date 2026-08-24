@@ -27,7 +27,7 @@ export function WorldTools() {
 
         <figure className="preview-showcase mt-12" data-reveal>
           <img
-            src="./world-showcase.png"
+            src="./world-showcase.webp"
             alt="XRift Studioで作った湖畔のシーン。起伏のある地形に草が生え、手前に波の立つ水面、奥に夕暮れの空が広がっている"
             className="block h-auto w-full"
           />

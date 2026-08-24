@@ -4,7 +4,6 @@ import remarkGfm from "remark-gfm";
 import {
   ArrowLeft,
   ArrowRight,
-  BookOpen,
   ChevronRight,
   ExternalLink,
   Menu,
@@ -20,6 +19,7 @@ import {
   getPrevNext,
 } from "./lib/wiki-config";
 import { XRIFT_STUDIO_REPOSITORY_URL } from "./lib/support-links";
+import { BrandMark as AppBrandMark } from "./components/Brand";
 
 const WIKI_RAW_BASE = `${XRIFT_STUDIO_REPOSITORY_URL}/blob/main/docs/wiki`;
 
@@ -42,14 +42,19 @@ function useHashRoute(): string {
   return hash;
 }
 
+/**
+ * Same mark as the app and the landing page.
+ *
+ * This used to be a BookOpen glyph on a flat violet square, which made the
+ * guide look like a different product from the editor it documents. The mark
+ * comes from `src/components/Brand.tsx` so all three stay in step.
+ */
 function BrandMark() {
   return (
     <a href="#/index" className="flex items-center gap-2.5" aria-label="Wikiのトップへ">
-      <span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-600 text-white">
-        <BookOpen size={18} strokeWidth={2.2} />
-      </span>
+      <AppBrandMark size={36} />
       <span className="text-sm font-black tracking-[-0.025em] text-zinc-950">
-        XRift Studio 使い方ガイド
+        XRift <span className="text-zinc-400">Studio</span> 使い方ガイド
       </span>
     </a>
   );

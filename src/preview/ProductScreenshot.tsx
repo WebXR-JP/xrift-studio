@@ -1,7 +1,7 @@
 import { Play } from "lucide-react";
 
 /** Path of the editor capture shown in the hero and the workflow section. */
-export const EDITOR_SCREENSHOT = "./visual-editor-screenshot.png";
+export const EDITOR_SCREENSHOT = "./visual-editor-screenshot.webp";
 
 export function ProductScreenshot({
   compact = false,

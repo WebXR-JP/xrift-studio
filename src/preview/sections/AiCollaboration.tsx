@@ -52,7 +52,7 @@ export function AiCollaboration() {
 
           <figure className="preview-ai-figure" data-reveal>
             <img
-              src="./editor-ai-panel.png"
+              src="./editor-ai-panel.webp"
               alt="XRift StudioのAI接続画面。Codex、Claude Code、OpenCodeを登録できる一覧を表示している"
               className="block h-auto w-full"
             />
