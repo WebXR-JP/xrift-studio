@@ -19,8 +19,11 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムの
 - [クラシックエディター（コード編集）](./classic-editor.md)
 - [ビジュアルエディターの概要](./visual-editor.md)
 - [3D 素材の取り込み](./importing-assets.md)
+- [外部リソースから追加する](./external-resources.md)
 - [アセットと表現（Texture / Material / Particle）](./assets-and-materials.md)
 - [地形と衝突判定](./terrain-and-colliders.md)
+- [空と水をつくる](./sky-and-water.md)
+- [ノードで動きをつける（Interactivity）](./interactivity.md)
 - [Entity に振る舞いを与える（Scripting）](./scripting.md)
 
 ### 確認と公開
@@ -65,7 +68,11 @@ XRift Studio での制作は、次のような流れで進みます。
 | アセットと表現を作る | Texture、Material、Particle、Prefab を Assets で管理し、Inspector から編集する。 |
 | 音を配置する | MP3 を Audio Asset として取り込み、Audio Source へ割り当てて保存・変換する。 |
 | 衝突判定を設定する | Primitive には Box Collider、インポート Model には Mesh Collider を初期設定する。 |
-| 地形をつくる | 高さサンプル Terrain を追加し、ブラシで編集する。 |
+| 地形をつくる | 高さサンプル Terrain を追加し、ブラシで編集する。形と草が入ったプリセットからも始められる。 |
+| 草を生やす | Terrain へ草の層を重ね、ブラシで塗って生やす・消す。Scene の風で揺れる。 |
+| 空と水をつくる | GLSL で描く空と水面の Material を公式カタログから追加し、Uniform values で調整する。 |
+| 外部の素材を取り込む | Poly Haven と ambientCG の CC0 素材、XRift 公式の Shader・Terrain・照明・Component をアプリ内から追加する。 |
+| ノードで動きをつける | KHR_interactivity 準拠のグラフを組み、開始時・毎フレーム・イベントをきっかけに色や再生を動かす。 |
 | Entity に振る舞いを与える | Script Asset を TypeScript で書き、Script Component として Entity へ付けて Play で実行する。 |
 | Editor 内で Play 確認する | 編集状態を保持したまま Play へ切り替え、動作を確認する。 |
 | ローカルで動作を確認する | 開発サーバーを起動・停止し、プレビュー URL をブラウザで開く。 |
