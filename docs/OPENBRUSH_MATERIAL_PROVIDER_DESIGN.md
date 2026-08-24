@@ -142,7 +142,7 @@ type OpenBrushCatalogEntry = {
 
 作成する Material Asset の ID は `external-open-brush-{guid}-material` を基準に決定し、文字列の表示名に依存させない。attribution は既存の `AssetAttribution` に provider、作者、source URL、license を保存する。
 
-初期実装では、エディターは XRift Studio に同梱した固定 brush library を使い、生成 runtime は Material に保存した固定 renderer version と brush resource base を使う。ユーザー指定 URL や任意 GLSL の取得はこの入口では許可しない。将来 project-owned resource を発行する場合も、同じ catalog ID と Material descriptor を保ち、compiler の resource 解決だけを差し替える。
+エディターは XRift Studio に同梱した固定 brush library を使い、生成 runtime は Material に保存した固定 renderer version と brush resource base を使う。ユーザー指定 URL や任意 GLSL の取得はこの入口では許可しない。将来 project-owned resource を発行する場合も、同じ catalog ID と Material descriptor を保ち、compiler の resource 解決だけを差し替える。
 
 ## レイヤー境界
 
@@ -184,7 +184,7 @@ flowchart LR
 - 処理中、失敗、取消で二重実行や不完全な AssetManifest 更新が起きない。
 - save / reopen、Undo / Redo、Scene への Material 割り当て、compile 後も GUID と renderer version を保持する。
 
-## 今回含めないもの
+## この入口で扱わないもの
 
 - Open Brush の全 experimental brush の自動追従
 - 任意 URL からの brush shader / GLSL import
