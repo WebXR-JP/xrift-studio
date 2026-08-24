@@ -52,6 +52,35 @@ export function WorldTools() {
             );
           })}
         </div>
+
+        {/*
+          Movement is the one thing on this list a photograph cannot show, so it
+          gets the editor instead of the scene: the graph that drives it.
+        */}
+        <div
+          className="mt-16 grid gap-10 lg:grid-cols-[1.25fr_0.75fr] lg:items-center"
+          data-reveal
+        >
+          <figure className="preview-showcase">
+            <img
+              src="./editor-interactivity.webp"
+              alt="Interactivityのノードエディター。「開始時」のノードから「アニメーション再生」のノードへ線がつながっている"
+              className="block h-auto w-full"
+            />
+          </figure>
+          <div>
+            <h3 className="text-2xl font-black tracking-[-0.035em] text-zinc-950">
+              動きは、線でつなぐ。
+            </h3>
+            <p className="mt-4 text-sm leading-7 text-zinc-600">
+              「開始時」から「アニメーション再生」へ線を引けば、ワールドに入った瞬間から動きはじめます。
+              色や発光も同じつなぎ方で動かせます。
+            </p>
+            <p className="mt-4 text-xs leading-6 text-zinc-500">
+              glTFのKHR_interactivityに準拠したグラフなので、保存されるのは独自形式ではなく標準のJSONです。
+            </p>
+          </div>
+        </div>
       </div>
     </section>
   );
