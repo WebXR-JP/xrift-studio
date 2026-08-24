@@ -12,6 +12,8 @@ XRift Studio をインストールして、最初の制作環境を準備する�
 | macOS 12 以降 | `.dmg`（Apple Silicon / Intel） |
 | Linux | `.deb`、`.rpm`、`.AppImage` |
 
+> **macOS をお使いの場合**: 初回起動が「開発元を確認できないため開けません」という表示でブロックされることがあります。[macOS で開けないとき](./macos-gatekeeper.md) の手順で一度だけ許可すれば、次回以降は通常どおり起動できます。
+
 リリースがまだない場合は、[Web プレビュー](https://webxr-jp.github.io/xrift-studio/)またはソースからの開発環境をご利用ください。
 
 ## 2. アプリを起動する

@@ -38,6 +38,7 @@ export const WIKI_PAGES: WikiPage[] = [
   { slug: "ai-connection", file: "ai-connection.md", title: "AI と一緒に Scene を編集する", category: "advanced", order: 0 },
   { slug: "classic-export", file: "classic-export.md", title: "Classic への書き出し", category: "advanced", order: 1 },
   { slug: "troubleshooting", file: "troubleshooting.md", title: "トラブルシューティング", category: "troubleshoot", order: 0 },
+  { slug: "macos-gatekeeper", file: "macos-gatekeeper.md", title: "macOS で開けないとき", category: "troubleshoot", order: 1 },
 ];
 
 export function getCategoryLabel(categoryId: string): string {

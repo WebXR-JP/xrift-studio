@@ -39,6 +39,7 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムの
 ### トラブルシューティング
 
 - [トラブルシューティング](./troubleshooting.md)
+- [macOS で開けないとき](./macos-gatekeeper.md)
 
 ## 制作の流れ
 
@@ -98,6 +99,8 @@ XRift Studio での制作は、次のような流れで進みます。
 | Windows 10 / 11 | `.msi`（推奨）、`.exe` |
 | macOS 12 以降 | `.dmg`（Apple Silicon / Intel） |
 | Linux | `.deb`、`.rpm`、`.AppImage` |
+
+> **macOS をお使いの場合**: 初回起動が「開発元を確認できないため開けません」という表示でブロックされることがあります。[macOS で開けないとき](./macos-gatekeeper.md) の手順で一度だけ許可すれば、次回以降は通常どおり起動できます。
 
 リリースがまだない場合は、[Web プレビュー](https://webxr-jp.github.io/xrift-studio/)またはソースからの開発環境をご利用ください。
 
