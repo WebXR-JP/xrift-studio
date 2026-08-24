@@ -55,7 +55,7 @@ A と B は既存の実装の上に載るため速い。C は 4 点セットが�
 
 | ID | 名前 | 構成 |
 | --- | --- | --- |
-| B-1 | **焚き火** | 炎 Particle + 煙 Particle + Point Light（ゆらぎ）+ Audio Source + 石の輪 |
+| B-1 | **焚き火**（完了） | 炎 Particle + 煙 Particle + 暖色 Point Light + 石の輪 8 個。同梱音源がないため音は含まず、Audio Source の足し方を追加前に示す |
 | B-2 | **街灯** | 支柱 Mesh + 光る Material + Spot Light + Collider |
 | B-3 | **看板** | 板 Mesh + Text + 任意の BillboardY |
 | B-4 | **松明 / 壁ランタン** | 壁付けの小型 B-1 |
@@ -81,8 +81,8 @@ A と B は既存の実装の上に載るため速い。C は 4 点セットが�
 ## 進め方の提案
 
 1. ~~**A-1 Particle preset カタログ**~~ 完了。11 件を「外部から追加」へ置いた。preset の一覧は `particle-system.ts` の 1 か所のままで、Asset Inspector の Quick Tools とカタログが同じ値を読む。
-2. 次は **B-1 焚き火**。A-1 の炎と煙があるので、Light、音、石の輪と組み合わせて値を決めるだけで、「置くだけで様になる物」の最初の一つになる。
-3. その後は **C-1 Audio Zone** または **C-2 Weather**。どちらも Wind の契約をなぞれるので、設計を新しく起こさずに済む。
+2. ~~**B-1 焚き火**~~ 完了。「セット」provider を作り、その 1 件目として置いた。B-2 以降も同じ `SceneRecipe` にデータを足すだけで並ぶ。
+3. 次は **B-2 街灯** か **C-1 Audio Zone**。B-2 は既存の光る照明と Spot Light の組み合わせで安く、C-1 は Wind の契約をなぞれるので設計を新しく起こさずに済む。
 4. C を一つ入れるたびに、schema・Inspector・preview・compiler の 4 点が揃っていることを確認してから作成可能にする。
 
 各項目を作るときは、[UX 原則](./UX_PRINCIPLES.md) の手順に従い、[マイクロインタラクション Wiki](./UX_INTERACTIONS.md) へ機能 ID と状態設計を先に足す。
