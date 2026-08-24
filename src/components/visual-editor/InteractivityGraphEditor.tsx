@@ -40,6 +40,7 @@ import {
   type MaterialAsset,
 } from "../../lib/visual-editor";
 import { EDITOR_ICONS } from "./editor-icons";
+import { CodeTokens } from "../CodeBlock";
 
 type GraphNodeCategory = InteractivityOperationTemplate["category"] | "extension";
 
@@ -1099,8 +1100,11 @@ function InteractivityGraphEditorBody({
                 <summary className="cursor-pointer px-2 py-1.5 text-[10px] font-semibold uppercase text-slate-400">
                   Canonical node
                 </summary>
-                <pre className="max-h-72 overflow-auto whitespace-pre-wrap border-t border-slate-800 p-2 text-[10px] leading-4 text-cyan-100">
-                  {JSON.stringify(selectedNode, null, 2)}
+                <pre className="max-h-72 overflow-auto whitespace-pre-wrap border-t border-slate-800 p-2 text-[10px] leading-4 text-slate-200">
+                  <CodeTokens
+                    code={JSON.stringify(selectedNode, null, 2)}
+                    language="json"
+                  />
                 </pre>
               </details>
               <button

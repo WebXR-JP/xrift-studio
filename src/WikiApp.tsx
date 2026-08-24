@@ -20,6 +20,7 @@ import {
 } from "./lib/wiki-config";
 import { XRIFT_STUDIO_REPOSITORY_URL } from "./lib/support-links";
 import { BrandMark as AppBrandMark } from "./components/Brand";
+import { CodeBlock } from "./components/CodeBlock";
 
 const REPO_BLOB_BASE = `${XRIFT_STUDIO_REPOSITORY_URL}/blob/main`;
 const WIKI_RAW_BASE = `${REPO_BLOB_BASE}/docs/wiki`;
@@ -278,6 +279,20 @@ function MarkdownContent({ content }: { content: string }) {
               .replace(/[^\w\u3040-\u30ff\u4e00-\u9fff\s-]/g, "")
               .replace(/\s+/g, "-");
             return <h3 id={id}>{children}</h3>;
+          },
+          // The fenced block owns its own <pre>, so this one only unwraps.
+          pre: ({ children }) => <>{children}</>,
+          code: ({ className, children, ...props }) => {
+            const code = String(children).replace(/\n$/, "");
+            const language = /language-([\w-]+)/.exec(className ?? "")?.[1];
+            if (!language && !code.includes("\n")) {
+              return (
+                <code className={className} {...props}>
+                  {children}
+                </code>
+              );
+            }
+            return <CodeBlock code={code} language={language} />;
           },
         }}
       >

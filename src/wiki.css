@@ -115,14 +115,36 @@
 }
 
 .wiki-prose pre {
+  position: relative;
   margin: 1.25rem 0;
   padding: 1rem 1.25rem;
   overflow-x: auto;
   border-radius: 0.75rem;
   background: #18181b;
   color: #e4e4e7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.85rem;
   line-height: 1.7;
+}
+
+/*
+ * The language label tells the reader whether a block goes into a terminal or
+ * into a file. Only blocks whose language the highlighter knows carry one, so
+ * an unlabelled block is plain text rather than an unrecognised language.
+ */
+.wiki-prose pre[data-language] {
+  padding-top: 2.25rem;
+}
+
+.wiki-prose pre[data-language]::before {
+  content: attr(data-language);
+  position: absolute;
+  top: 0.6rem;
+  right: 1rem;
+  color: #a1a1aa;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .wiki-prose pre code {

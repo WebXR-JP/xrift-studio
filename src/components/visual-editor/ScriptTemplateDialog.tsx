@@ -21,6 +21,7 @@ import {
   getScriptTemplate,
   SCRIPT_TEMPLATE_CATALOG,
 } from "../../lib/visual-editor";
+import { CodeTokens } from "../CodeBlock";
 
 export type ScriptTemplateCreateRequest = {
   templateId: string;
@@ -306,7 +307,7 @@ export function ScriptTemplateDialog({
                 </span>
               </div>
               <pre className="scrollbar-thin h-[calc(100%-26px)] overflow-auto whitespace-pre-wrap rounded-lg border border-slate-800 bg-slate-900 p-4 font-mono text-[12px] leading-5 text-slate-200">
-                {sourcePreview}
+                <CodeTokens code={sourcePreview} language={template.language} />
               </pre>
             </div>
           </main>

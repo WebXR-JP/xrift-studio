@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./syntax-highlight.css";
 
 /*
  * R3F thumbnails set pointer-events inline on their Canvas wrapper.  A plain

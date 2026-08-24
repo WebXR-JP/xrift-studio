@@ -14,6 +14,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import type { ScriptAssetLanguage } from "../../lib/visual-editor/asset-manifest";
+import { CodeTokens } from "../CodeBlock";
 
 export type ScriptTrustPendingScript = Readonly<{
   id: string;
@@ -390,7 +391,14 @@ export function ScriptTrustDialog({
                     className="scrollbar-thin min-h-44 flex-1 overflow-auto whitespace-pre rounded-lg border border-slate-800 bg-slate-950 p-4 font-mono text-[12px] leading-5 text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                   >
                     <code>
-                      {selectedScript.source || "（空のScriptです）"}
+                      {selectedScript.source ? (
+                        <CodeTokens
+                          code={selectedScript.source}
+                          language={selectedScript.language}
+                        />
+                      ) : (
+                        "（空のScriptです）"
+                      )}
                     </code>
                   </pre>
                 </div>

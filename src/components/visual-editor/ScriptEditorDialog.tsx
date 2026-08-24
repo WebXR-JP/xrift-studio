@@ -7,6 +7,7 @@ import type { ScriptRuntimeReport } from "../../lib/visual-editor/scripting/runt
 import { extractScriptContract } from "../../lib/visual-editor/scripting/script-contract";
 import { setupMonaco } from "../../lib/monaco";
 import { EDITOR_ICONS } from "./editor-icons";
+import { CodeTokens } from "../CodeBlock";
 
 setupMonaco();
 
@@ -555,7 +556,9 @@ const unsubscribe = ctx.on(
 function GuideCode({ children }: { children: string }) {
   return (
     <pre className="mt-2 overflow-x-auto rounded-md border border-slate-200 bg-slate-900 p-2 text-[9px] leading-relaxed text-slate-100">
-      <code>{children}</code>
+      <code>
+        <CodeTokens code={children} language="ts" />
+      </code>
     </pre>
   );
 }

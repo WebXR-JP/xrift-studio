@@ -1,0 +1,60 @@
+/*
+ * Token colours for read-only code.
+ *
+ * Loaded from index.css so the guide, the landing page and the editor's Script
+ * dialogs all colour code the same way. Every surface that shows code is dark,
+ * so there is one palette rather than a light and a dark variant.
+ *
+ * Six hues, each with a job: violet for keywords, sky for types and JSX tags,
+ * blue for calls, green for strings, amber for numbers and attributes, grey for
+ * comments and punctuation. Anything the tokenizer does not recognise inherits
+ * the block's own colour, so an unhandled language reads as plain text instead
+ * of as a mistake.
+ */
+
+.tok-comment {
+  color: #8b8b96;
+  font-style: italic;
+}
+
+.tok-string {
+  color: #86efac;
+}
+
+.tok-number,
+.tok-constant,
+.tok-variable {
+  color: #fdba74;
+}
+
+.tok-keyword {
+  color: #c4b5fd;
+}
+
+.tok-type,
+.tok-tag {
+  color: #7dd3fc;
+}
+
+.tok-function {
+  color: #93c5fd;
+}
+
+.tok-attribute,
+.tok-flag {
+  color: #fcd34d;
+}
+
+.tok-property {
+  color: #e4e4e7;
+}
+
+.tok-punctuation,
+.tok-operator {
+  color: #a1a1aa;
+}
+
+.tok-command {
+  color: #93c5fd;
+  font-weight: 600;
+}
