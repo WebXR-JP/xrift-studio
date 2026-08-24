@@ -33,12 +33,14 @@
   outline-offset: 3px;
 }
 
-.preview-brand-mark {
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.18), transparent 45%),
-    linear-gradient(145deg, #18181b 20%, #5b21b6 100%);
-  box-shadow: 0 10px 25px rgba(91, 33, 182, 0.18);
-}
+/*
+ * The brand mark is not defined here.
+ *
+ * It comes from the application's own `gradient-brand` / `shadow-brand` in
+ * index.css by way of `src/components/Brand.tsx`, which this page reuses. The
+ * rule that used to sit here painted a near-black-to-purple square that matched
+ * neither the glyph nor the colour of the real logo.
+ */
 
 .preview-nav-link {
   align-items: center;
@@ -103,15 +105,16 @@
   background: #27272a;
 }
 
+/* Follows the app's gradient-brand so the site and the editor read as one product. */
 .preview-button-primary {
   color: #ffffff;
-  background: linear-gradient(135deg, #7c3aed, #5b21b6);
-  box-shadow: 0 15px 35px rgba(109, 40, 217, 0.24);
+  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 55%, #3b82f6 100%);
+  box-shadow: 0 15px 35px rgba(99, 102, 241, 0.26);
 }
 
 .preview-button-primary:hover {
-  background: linear-gradient(135deg, #6d28d9, #4c1d95);
-  box-shadow: 0 18px 40px rgba(109, 40, 217, 0.3);
+  background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 55%, #2563eb 100%);
+  box-shadow: 0 18px 40px rgba(99, 102, 241, 0.32);
 }
 
 .preview-button-light {
@@ -180,7 +183,7 @@
   left: -8rem;
   width: 22rem;
   height: 22rem;
-  background: radial-gradient(circle, rgba(34, 211, 238, 0.14), transparent 68%);
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.14), transparent 68%);
 }
 
 .preview-hero-glow-two {
@@ -188,7 +191,7 @@
   right: -10rem;
   width: 28rem;
   height: 28rem;
-  background: radial-gradient(circle, rgba(192, 132, 252, 0.18), transparent 68%);
+  background: radial-gradient(circle, rgba(167, 139, 250, 0.2), transparent 68%);
 }
 
 .preview-kicker,
@@ -209,7 +212,7 @@
 
 .preview-gradient-text {
   color: transparent;
-  background: linear-gradient(100deg, #6d28d9 10%, #9333ea 50%, #0891b2 95%);
+  background: linear-gradient(100deg, #7c3aed 5%, #6366f1 55%, #3b82f6 95%);
   background-clip: text;
   -webkit-background-clip: text;
 }
@@ -383,24 +386,6 @@
   line-height: 1.9;
 }
 
-.preview-benefit-card {
-  padding: 2rem;
-  border: 1px solid #e4e4e7;
-  border-radius: 1.5rem;
-  background: #ffffff;
-  box-shadow: 0 16px 45px rgba(39, 39, 42, 0.06);
-  transition:
-    transform 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease;
-}
-
-.preview-benefit-card:hover {
-  transform: translateY(-4px);
-  border-color: #ddd6fe;
-  box-shadow: 0 22px 50px rgba(39, 39, 42, 0.1);
-}
-
 .preview-kind-card {
   padding: 2rem;
   border-radius: 1.75rem;
@@ -426,28 +411,6 @@
   color: #155e75;
   border-color: #a5f3fc;
   background: linear-gradient(150deg, #ecfeff 0%, #cffafe 100%);
-}
-
-.preview-flow {
-  overflow: hidden;
-  border: 1px solid #e4e4e7;
-  border-radius: 1.75rem;
-  background: #ffffff;
-  box-shadow: 0 24px 70px rgba(39, 39, 42, 0.07);
-}
-
-.preview-flow-step {
-  min-width: 0;
-  padding: 2rem;
-  border-bottom: 1px solid #e4e4e7;
-}
-
-.preview-flow-step:last-child {
-  border-bottom: 0;
-}
-
-.preview-flow-arrow {
-  display: none;
 }
 
 .preview-import-card {
@@ -557,19 +520,6 @@
   backdrop-filter: blur(16px);
 }
 
-.preview-experiment-list {
-  border-top: 1px solid #e4e4e7;
-}
-
-.preview-experiment-row {
-  display: grid;
-  grid-template-columns: 1.5rem 2.75rem minmax(0, 1fr);
-  align-items: start;
-  gap: 1rem;
-  padding: 1.5rem 0;
-  border-bottom: 1px solid #e4e4e7;
-}
-
 .preview-demo-callout {
   isolation: isolate;
 }
@@ -649,40 +599,6 @@
   transform: translateY(0);
 }
 
-@media (min-width: 1024px) {
-  .preview-flow-step {
-    min-height: 18rem;
-    padding: 2.1rem;
-    border-right: 1px solid #e4e4e7;
-    border-bottom: 0;
-  }
-
-  .preview-flow-step:last-child {
-    border-right: 0;
-  }
-
-  .preview-flow-arrow {
-    position: absolute;
-    z-index: 2;
-    top: 2.8rem;
-    right: -0.6rem;
-    display: block;
-    padding: 0.2rem;
-    color: #a1a1aa;
-    background: #ffffff;
-  }
-}
-
-@media (min-width: 768px) and (max-width: 1023px) {
-  .preview-flow-step:nth-child(odd) {
-    border-right: 1px solid #e4e4e7;
-  }
-
-  .preview-flow-step:nth-child(3) {
-    border-bottom: 0;
-  }
-}
-
 @media (max-width: 767px) {
   .preview-section {
     padding-top: 5rem;
@@ -731,13 +647,75 @@
     font-size: 2.15rem;
   }
 
-  .preview-experiment-row {
-    grid-template-columns: 2.75rem minmax(0, 1fr);
-  }
+}
 
-  .preview-experiment-row > span:first-child {
-    display: none;
-  }
+/* Showcase capture for the "世界を作る道具" section. The image is the proof the
+   section exists to give, so the frame stays quiet around it. */
+.preview-showcase {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #e4e4e7;
+  border-radius: 1.75rem;
+  background: #ffffff;
+  box-shadow: 0 30px 80px rgba(39, 39, 42, 0.12);
+}
+
+.preview-showcase img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.preview-showcase-caption {
+  padding: 1rem 1.35rem 1.15rem;
+  border-top: 1px solid #f4f4f5;
+  color: #71717a;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+.preview-tool-card {
+  padding: 1.65rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 1.5rem;
+  background: #ffffff;
+  box-shadow: 0 16px 45px rgba(39, 39, 42, 0.05);
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.preview-tool-card:hover {
+  transform: translateY(-4px);
+  border-color: #ddd6fe;
+  box-shadow: 0 22px 50px rgba(39, 39, 42, 0.09);
+}
+
+.preview-flow-list {
+  border-top: 1px solid #e4e4e7;
+  border-bottom: 1px solid #e4e4e7;
+}
+
+.preview-flow-row {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr);
+  gap: 1rem;
+  padding: 1.5rem 0;
+  border-bottom: 1px solid #e4e4e7;
+}
+
+.preview-flow-row:last-child {
+  border-bottom: 0;
+}
+
+.preview-ai-figure {
+  overflow: hidden;
+  border: 1px solid #e4e4e7;
+  border-radius: 1.75rem;
+  background: #ffffff;
+  box-shadow: 0 26px 70px rgba(39, 39, 42, 0.1);
 }
 
 @media (prefers-reduced-motion: reduce) {
