@@ -673,6 +673,16 @@
   box-shadow: 0 26px 70px rgba(39, 39, 42, 0.1);
 }
 
+/* The publish dialog sits on the dark band, so its frame is a light edge
+   rather than a border that would disappear into the background. */
+.preview-publish-figure {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 1.5rem;
+  background: #ffffff;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .preview-shell *,
   .preview-shell *::before,
