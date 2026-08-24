@@ -316,43 +316,6 @@
   min-width: 45rem;
 }
 
-.preview-stage-label,
-.preview-stage-status {
-  position: absolute;
-  z-index: 4;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  border-radius: 999px;
-  color: #3f3f46;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 14px 35px rgba(39, 39, 42, 0.13);
-  backdrop-filter: blur(14px);
-  font-size: 0.68rem;
-  font-weight: 800;
-}
-
-.preview-stage-label {
-  top: 20%;
-  padding: 0.65rem 0.8rem;
-}
-
-.preview-stage-label-left {
-  left: -1.5rem;
-}
-
-.preview-stage-label-right {
-  right: -1.5rem;
-  color: #166534;
-}
-
-.preview-stage-status {
-  right: 2rem;
-  bottom: -1rem;
-  padding: 0.65rem 0.9rem;
-}
-
 .preview-section {
   padding-top: 7rem;
   padding-bottom: 7rem;
@@ -607,14 +570,6 @@
 
   .preview-kind-card {
     padding: 1.5rem;
-  }
-
-  .preview-stage-label {
-    display: none;
-  }
-
-  .preview-stage-status {
-    right: 1rem;
   }
 
   .preview-product-frame {

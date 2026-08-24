@@ -2,7 +2,6 @@ import {
   Check,
   Download,
   MonitorPlay,
-  Mountain,
   PackageOpen,
   Play,
   Shapes,
@@ -92,14 +91,12 @@ export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }
           className="preview-hero-stage relative mx-auto mt-14 max-w-6xl lg:mt-18"
           data-reveal
         >
-          <div className="preview-stage-label preview-stage-label-left">
-            <Mountain size={14} />
-            地形も水も空も、この中で
-          </div>
-          <div className="preview-stage-label preview-stage-label-right">
-            <Play size={13} fill="currentColor" />
-            その場でPlay
-          </div>
+          {/*
+            No floating callouts over the screenshot. They were annotations
+            stuck to the outside of the window that repeated the copy above,
+            and the "自動保存済み" one imitated app chrome from outside the app.
+            The capture is of a real scene now and carries the point on its own.
+          */}
           <button
             type="button"
             onClick={() => onOpenDemo("world")}
@@ -108,12 +105,6 @@ export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }
           >
             <ProductScreenshot interactive />
           </button>
-          <div className="preview-stage-status">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            自動保存済み
-            <span className="mx-1 h-4 w-px bg-zinc-200" />
-            World
-          </div>
         </div>
 
         <div
