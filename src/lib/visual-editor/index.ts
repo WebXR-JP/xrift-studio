@@ -57,6 +57,7 @@ export * from "./open-brush.fixture";
 export * from "./prefab-document";
 export * from "./persistence";
 export * from "./particle-system";
+export * from "./scene-recipe-catalog";
 export * from "./play-session";
 export * from "./play-session.fixture";
 export * from "./publish";

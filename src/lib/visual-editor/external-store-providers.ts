@@ -10,7 +10,8 @@ export type ExternalStoreProvider = {
     | "water-shader"
     | "terrain-preset"
     | "glow-material"
-    | "particle-preset";
+    | "particle-preset"
+    | "scene-recipe";
   name: string;
   badge: string;
   summary: string;
@@ -122,6 +123,19 @@ export const EXTERNAL_STORE_PROVIDERS = [
     authorFallback: "XRift Studio contributors",
     attributionNote:
       "追加後は普通のParticle Assetです。放出量、寿命、色、TextureをそのままInspectorで変えられます。",
+  },
+  {
+    id: "xrift-scene-recipes",
+    kind: "scene-recipe",
+    name: "セット",
+    badge: "Official",
+    summary: "焚き火などの組み立て済みを追加",
+    homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
+    catalogKinds: [],
+    installableKinds: [],
+    authorFallback: "XRift Studio contributors",
+    attributionNote:
+      "既存のPrimitive、Particle、Lightを組み合わせたEntityです。置いたあとは中身を1つずつ編集できます。",
   },
   {
     id: "xrift-components",

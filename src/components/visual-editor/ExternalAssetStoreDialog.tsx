@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   CircleAlert,
   ExternalLink,
+  Flame,
   Lightbulb,
   LoaderCircle,
   RefreshCw,
@@ -36,6 +37,7 @@ import {
   type GlowFixtureShape,
   type GlowMaterialPreset,
   type ParticleAuthoringPreset,
+  type SceneRecipe,
   type TerrainPreset,
   type VisualProjectKind,
   type XriftComponentDefinition,
@@ -66,6 +68,10 @@ import {
   type ParticlePresetInstallResult,
 } from "./ParticlePresetStore";
 import {
+  SceneRecipeStore,
+  type SceneRecipeInstallResult,
+} from "./SceneRecipeStore";
+import {
   GlowMaterialStore,
   type GlowMaterialInstallResult,
 } from "./GlowMaterialStore";
@@ -85,6 +91,7 @@ export function ExternalAssetStoreDialog({
   onAddTerrainPreset,
   onAddGlowMaterial,
   onAddParticlePreset,
+  onAddSceneRecipe,
   sceneBloomActive,
   sceneWind,
   onAddOfficialComponent,
@@ -122,6 +129,7 @@ export function ExternalAssetStoreDialog({
     preset: ParticleAuthoringPreset,
     placeInScene: boolean,
   ) => Promise<ParticlePresetInstallResult>;
+  onAddSceneRecipe: (recipe: SceneRecipe) => Promise<SceneRecipeInstallResult>;
   /** Whether this Scene will bloom, so the glow shelf can say if it will not. */
   sceneBloomActive: boolean;
   /** Scene wind, so Water previews move the way the scene will. */
@@ -418,6 +426,12 @@ export function ExternalAssetStoreDialog({
             <ParticlePresetStore
               disabledReason={disabledReason}
               onAdd={onAddParticlePreset}
+            />
+          ) : provider.kind === "scene-recipe" ? (
+            <SceneRecipeStore
+              projectKind={projectKind}
+              disabledReason={disabledReason}
+              onAdd={onAddSceneRecipe}
             />
           ) : provider.kind === "xrift-components" ? (
             <OfficialXriftComponentStore
@@ -1017,6 +1031,9 @@ function ProviderIcon({ kind }: { kind: ExternalStoreProvider["kind"] }) {
   }
   if (kind === "particle-preset") {
     return <Sparkles size={14} aria-hidden="true" />;
+  }
+  if (kind === "scene-recipe") {
+    return <Flame size={14} aria-hidden="true" />;
   }
   if (kind === "xrift-components") {
     return <Boxes size={14} aria-hidden="true" />;

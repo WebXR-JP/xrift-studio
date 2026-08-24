@@ -128,6 +128,8 @@ import {
   type AnimationPatch,
   type AssetManifest,
   type ParticleAuthoringPreset,
+  type SceneRecipe,
+  instantiateSceneRecipe,
   type AudioSourcePatch,
   type VegetationWindPatch,
   type LightPatch,
@@ -190,6 +192,7 @@ import type { WaterShaderInstallResult } from "./WaterShaderStore";
 import type { TerrainPresetInstallResult } from "./TerrainPresetStore";
 import type { GlowMaterialInstallResult } from "./GlowMaterialStore";
 import type { ParticlePresetInstallResult } from "./ParticlePresetStore";
+import type { SceneRecipeInstallResult } from "./SceneRecipeStore";
 import {
   hasActiveAssetImport,
   resolveAssetOperationAvailability,
@@ -5765,6 +5768,63 @@ export function VisualEditorPrototype({
     ],
   );
 
+  const handleAddSceneRecipe = useCallback(
+    async (recipe: SceneRecipe): Promise<SceneRecipeInstallResult> => {
+      if (editorMode !== "edit") {
+        throw new Error("Playを停止してからセットを追加してください");
+      }
+      if (importBusy) {
+        throw new Error("アセットのインポート完了後に追加してください");
+      }
+
+      const count = bundle.scene.rootEntityIds.length;
+      const result = instantiateSceneRecipe(
+        bundle.scene,
+        bundle.assets,
+        recipe.id,
+        bundle.project.projectKind,
+        [
+          roundTo(((count % 5) - 2) * 1.35, 1),
+          0,
+          roundTo((Math.floor(count / 5) - 0.5) * 1.35, 1),
+        ],
+      );
+      if (!result) {
+        throw new Error("このセットを現在のプロジェクトへ配置できませんでした");
+      }
+
+      // Subtree and its Particle Assets land as one history entry, so undoing
+      // the set does not leave its Assets behind.
+      setBundle(
+        touchProject({
+          ...bundle,
+          assets: result.assets,
+          scene: result.scene,
+        }),
+      );
+      setSceneSelection({ kind: "entity", id: result.rootEntityId });
+      setAssetSelection(null);
+      setExternalStoreOpen(false);
+      const entityName =
+        result.scene.entities[result.rootEntityId]?.name ?? recipe.name;
+      setNotice(
+        `「${entityName}」をSceneへ配置しました。中身のEntityはHierarchyから個別に編集できます`,
+      );
+      return {
+        entityName,
+        createdAssetCount: result.createdAssetIds.length,
+      };
+    },
+    [
+      bundle,
+      editorMode,
+      importBusy,
+      setAssetSelection,
+      setBundle,
+      setSceneSelection,
+    ],
+  );
+
   const handleOptimizeColliders = useCallback(
     (entityIds?: readonly string[]) => {
       if (editorMode !== "edit" && !playSession) return;
@@ -9074,6 +9134,7 @@ export function VisualEditorPrototype({
             onAddTerrainPreset={handleAddTerrainPreset}
             onAddGlowMaterial={handleAddGlowMaterial}
             onAddParticlePreset={handleAddParticlePreset}
+            onAddSceneRecipe={handleAddSceneRecipe}
             sceneBloomActive={sceneBloomIsActive(bundle.scene)}
             sceneWind={resolveSceneWind(
               resolveSceneSettings(bundle.scene.settings).vegetation,
