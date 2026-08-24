@@ -5,6 +5,7 @@ import {
   normalizeParticleProperties,
   type ParticleAuthoringPreset,
 } from "../../lib/visual-editor";
+import { useCatalogPreviewVisibility } from "./useCatalogPreviewVisibility";
 
 /**
  * Runs the preset's own simulation on the card.
@@ -18,12 +19,16 @@ export function ParticlePresetCatalogPreview({
   preset,
   className = "h-full w-full",
   detail = false,
+  lazy = false,
 }: {
   preset: ParticleAuthoringPreset;
   className?: string;
   /** The larger pane frames wider systems, which the card crop would clip. */
   detail?: boolean;
+  /** Grid cards mount only while on screen; see useCatalogPreviewVisibility. */
+  lazy?: boolean;
 }) {
+  const { ref, visible } = useCatalogPreviewVisibility<HTMLDivElement>();
   const config = useMemo(
     () => normalizeParticleProperties(preset.properties),
     [preset.properties],
@@ -42,7 +47,12 @@ export function ParticlePresetCatalogPreview({
   const distance = Math.max(2.2, Math.min(9, spread * 0.9 + 1.6));
 
   return (
-    <div className={className}>
+    <div ref={ref} className={`${className} bg-[#0b1120]`}>
+      {lazy && !visible ? (
+        <div className="flex h-full w-full items-center justify-center text-[10px] text-slate-500">
+          表示待ち
+        </div>
+      ) : (
       <Canvas
         dpr={[1, 1.5]}
         camera={{
@@ -59,6 +69,7 @@ export function ParticlePresetCatalogPreview({
           opacity={1}
         />
       </Canvas>
+      )}
     </div>
   );
 }

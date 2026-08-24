@@ -582,8 +582,14 @@ export function addDefaultParticleAsset(
   };
 }
 
+/**
+ * The properties an Asset created from `input` will hold.
+ *
+ * Takes the same patch shape the creation path takes, so a preview can resolve
+ * exactly what will be saved instead of approximating it.
+ */
 export function normalizeParticleProperties(
-  input: Partial<ParticleProperties> | undefined,
+  input: ParticlePropertiesPatch | undefined,
 ): ParticleProperties {
   return applyParticlePropertiesPatch(
     cloneParticleProperties(DEFAULT_PARTICLE_PROPERTIES),

@@ -201,6 +201,7 @@ export function ParticlePresetStore({
                     <ParticlePresetCatalogPreview
                       preset={preset}
                       className="aspect-[16/10] w-full"
+                      lazy
                     />
                     <div className="p-2.5">
                       <p className="truncate text-xs font-semibold text-slate-800">
