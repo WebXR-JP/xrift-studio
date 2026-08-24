@@ -41,6 +41,10 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを
 | [リリース前 E2E](./RELEASE_E2E.md) | Release workflow だけで走らせる受け入れテスト |
 | [XRift Studio Issue相談GPT](./BUG_REPORT_GPT.md) | 利用者がバグ報告と要望を整理するためのカスタム GPT 設計 |
 
+## これから作るもの
+
+[ワールド部品の追加計画](./WORLD_CONTENT_PLAN.md) は、初めてワールドを作る人が最初の一時間で欲しくなる部品を、カタログ preset・組み込み Prefab・新しい Component の三つに分けて並べた計画である。現在の対応範囲ではなく、これから足すものを扱う。
+
 ## 利用者向けガイド
 
 [`docs/wiki/`](./wiki/index.md) は、インストールから公開までを利用者向けにまとめた使い方ガイドである。GitHub Pages で Web サイトとしても配布する。掲載順とカテゴリは `src/lib/wiki-config.ts` が持ち、ページを追加・改名する時は両方を同じ変更で揃える。
