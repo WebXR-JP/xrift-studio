@@ -1,15 +1,13 @@
 // Fails when the published usage guide cannot load its own assets.
 //
-// The guide is served one directory below the site root, at /wiki/. It used to
-// be built as wiki.html at the root and moved into wiki/ afterwards, which left
-// the relative "./assets/..." references Vite had written pointing one level
-// too deep. Every script and stylesheet answered 404 and the guide served a
-// blank page — for long enough that the landing page's nav, footer and
-// "使い方ガイドを開く" button all led to nothing.
+// The guide is served one directory below the site root, at /wiki/, and Vite
+// writes relative "./assets/..." references into it. Get the entry's depth
+// wrong and every script and stylesheet answers 404: the page still loads, so
+// the build passes and the guide serves a blank white page, with the landing
+// page's nav, footer and "使い方ガイドを開く" button all leading to it.
 //
-// The build now emits wiki/index.html at its published depth, and this check
-// resolves each local reference against the directory the file is served from
-// so the same class of breakage cannot ship again unnoticed.
+// This check resolves each local reference against the directory the file is
+// actually served from, so that failure cannot ship unnoticed.
 
 import fs from "node:fs";
 import path from "node:path";

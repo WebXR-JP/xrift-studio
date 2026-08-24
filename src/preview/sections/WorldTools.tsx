@@ -3,11 +3,10 @@ import { worldTools } from "../content";
 /**
  * What a world is made of.
  *
- * The page used to describe the workflow three times over and never once show
- * what an author can actually build, while terrain, water, sky, light, audio
- * and the interactivity graph went unmentioned. This section is the answer to
- * that: one honest capture of a scene built entirely in the editor, then the
- * six materials it was built from.
+ * The rest of the page explains how the workflow goes; this section is the
+ * only place that shows what an author ends up with. One capture of a scene
+ * built entirely in the editor, then the six things it was built from —
+ * terrain, water, sky, light, audio and the interactivity graph.
  */
 export function WorldTools() {
   return (

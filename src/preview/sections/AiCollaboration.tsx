@@ -4,10 +4,10 @@ import { aiPoints } from "../content";
 /**
  * The MCP integration, at the size it actually is.
  *
- * This used to be one row of three inside a section headed "挑戦中の機能",
- * under a note saying coverage was still being verified — for a tool surface
- * the build checks on every run. It is the part of this editor that has no
- * counterpart in the tools it sits beside, so it gets its own section.
+ * This is the part of the editor with no counterpart in the tools it sits
+ * beside, so it gets a section of its own rather than a bullet among others.
+ * The claims here are checked by the build on every run — see the note above
+ * `aiPoints` in `../content` for what has to move together with the numbers.
  */
 export function AiCollaboration() {
   return (

@@ -3,11 +3,11 @@ import { Check, ScanSearch } from "lucide-react";
 /**
  * What the editor checks before a world leaves the machine.
  *
- * This section used to draw the publish dialog by hand in DOM, down to an
- * invented "18.4 MB" and a progress bar parked at 62%, with a span dressed up
- * as an upload button. It was a mock-up of a screen that exists, so it read as
- * cheaper than the real thing and stated numbers the app never produced. The
- * capture below is that screen.
+ * The screen shown here is a capture of the real publish dialog. Screens that
+ * exist are shown, never rebuilt in DOM: a hand-drawn copy invents numbers the
+ * app never produced, and it reads as cheaper than the thing it depicts. Text
+ * dressed up as a button is the same problem — the reader cannot tell what is
+ * a picture and what they can press.
  */
 const checks = [
   {

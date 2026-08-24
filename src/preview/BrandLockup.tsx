@@ -3,11 +3,10 @@ import { BrandMark } from "../components/Brand";
 /**
  * The landing page's brand lockup.
  *
- * The mark itself comes from the app's own `Brand.tsx` rather than being drawn
- * again here. This page used to render a generic lucide cube on a near-black
- * gradient, which matched neither the glyph nor the colour of the real logo, so
- * the site and the application it advertises looked like two products. Reusing
- * the component means the page cannot drift from the app again.
+ * The mark comes from the app's own `Brand.tsx` rather than being drawn again
+ * here, so the site cannot drift from the application it advertises. A page
+ * that redraws the logo ends up shipping a slightly different glyph or colour,
+ * and then the two read as separate products.
  *
  * The wordmark follows the same treatment the app uses — "XRift" at full
  * weight, "Studio" stepped back — at the heavier landing-page typography.

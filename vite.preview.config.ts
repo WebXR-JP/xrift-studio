@@ -16,10 +16,12 @@ export default defineConfig({
     rollupOptions: {
       input: {
         preview: fileURLToPath(new URL("./preview.html", import.meta.url)),
-        // Authored at its published depth on purpose. The guide used to be
-        // built as wiki.html and moved into wiki/ afterwards, which left its
-        // relative "./assets/..." references pointing one directory too deep:
-        // every script and stylesheet 404'd and the guide served a blank page.
+        // Authored at its published depth on purpose. The build emits relative
+        // "./assets/..." references, so the entry has to sit where it will be
+        // served from; building it at the root and moving it afterwards points
+        // every script and stylesheet one directory too deep and the guide
+        // serves a blank page. scripts/check-published-guide-assets.mjs fails
+        // the build if those references stop resolving.
         wiki: fileURLToPath(new URL("./wiki/index.html", import.meta.url)),
       },
     },

@@ -1,9 +1,10 @@
 // Generates the Rust MCP allow-list from the one place tools are declared.
 //
-// The tool list was maintained by hand on both sides of the IPC boundary and
-// had drifted: Rust knew three tools TypeScript's arrays did not. Rust never
-// interprets a tool name beyond matching it, so it has no reason to own the
-// list. Run with `--check` to fail when the generated file is stale.
+// Rust never interprets a tool name beyond matching it against the allow-list,
+// so it has no reason to own that list. Keeping a hand-written copy on each
+// side of the IPC boundary lets the two drift apart silently — one side ends up
+// knowing tools the other does not. Run with `--check` to fail when the
+// generated file is stale.
 
 import fs from "node:fs";
 import path from "node:path";

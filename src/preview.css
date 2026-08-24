@@ -34,12 +34,12 @@
 }
 
 /*
- * The brand mark is not defined here.
+ * The brand mark is deliberately not defined here.
  *
  * It comes from the application's own `gradient-brand` / `shadow-brand` in
- * index.css by way of `src/components/Brand.tsx`, which this page reuses. The
- * rule that used to sit here painted a near-black-to-purple square that matched
- * neither the glyph nor the colour of the real logo.
+ * index.css by way of `src/components/Brand.tsx`, which this page reuses. A
+ * second definition in this file would let the site's logo drift away from the
+ * app's without anything failing.
  */
 
 .preview-nav-link {

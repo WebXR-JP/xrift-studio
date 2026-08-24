@@ -6,7 +6,6 @@ import {
   CirclePlay,
   CloudSun,
   Droplets,
-  FileBox,
   Globe2,
   Image,
   Lightbulb,
@@ -16,7 +15,6 @@ import {
   PackageOpen,
   ShieldCheck,
   Upload,
-  WandSparkles,
   Workflow,
 } from "lucide-react";
 import {
@@ -149,10 +147,9 @@ export const importGroups = [
 /**
  * Where material comes from besides the author's own files.
  *
- * Unity and Open Brush used to sit under a section headed "挑戦中の機能" with a
- * note that coverage was still moving. Both ship with registered fixture
- * suites now, so they belong here with the other sources rather than being
- * presented as experiments.
+ * Every source listed here has a registered fixture suite behind it, which is
+ * what earns it a place on this list rather than a caveat about coverage. A
+ * source whose conversion is not covered by fixtures does not belong here.
  */
 export const assetSources = [
   {
@@ -201,11 +198,6 @@ export const aiPoints = [
     text: "AIの変更も通常のUndoと自動保存に入ります。Scriptは中身を確認して承認するまで実行されません。",
   },
 ] as const;
-
-export const experimentalNote = {
-  icon: WandSparkles,
-  fileIcon: FileBox,
-} as const;
 
 export const faqs = [
   {

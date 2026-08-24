@@ -21,9 +21,9 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
  * One copy, three consumers. The editor viewport mounts it, the external
  * resource store mounts it so a catalog card shows the halo the scene will
  * actually produce, and the compiler ships this same file into a published
- * world as an overlay. It used to be two hand-maintained copies — this module
- * and a string template inside the compiler — which is exactly how the editor
- * and the published world come to grade colour differently.
+ * world as an overlay. Keep it that way: a second copy — a string template in
+ * the compiler, say — is how the editor and the published world come to grade
+ * colour differently, and nothing fails to warn you.
  */
 export type XriftScenePostprocessingSettings = {
   enabled: boolean;

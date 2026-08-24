@@ -1138,9 +1138,10 @@ export function materialWritesDepth(properties: {
 /**
  * Every three.js prop the alpha settings decide, resolved once.
  *
- * The editor viewport, the Material preview and the compiler each used to work
- * this out for themselves from `alphaMode` alone, which is how a Material comes
- * to look one way while being authored and another once published.
+ * The editor viewport, the Material preview and the compiler all call this
+ * rather than deriving the props from `alphaMode` themselves. Three separate
+ * derivations is how a Material comes to look one way while being authored and
+ * another once published.
  */
 export function materialAlphaRenderProps(properties: {
   alphaMode: MaterialAlphaMode;
