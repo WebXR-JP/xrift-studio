@@ -18,6 +18,10 @@ export const BUILTIN_ASSET_IDS = {
     green: "builtin-material-green",
     orange: "builtin-material-orange",
     slate: "builtin-material-slate",
+    wood: "builtin-material-wood",
+    sand: "builtin-material-sand",
+    white: "builtin-material-white",
+    charcoal: "builtin-material-charcoal",
     glow: "builtin-material-glow",
   },
 } as const;

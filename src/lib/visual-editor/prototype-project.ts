@@ -66,6 +66,33 @@ export const BUILTIN_MATERIAL_ASSETS = [
     "material/slate",
     "#cbd5e1",
   ),
+  // Neutrals the assembled sets are made of. A wooden bench and a stone
+  // lantern both came out grey while the palette was only accent colours, and
+  // a set is judged by whether it looks like the thing it is named after.
+  createBuiltinMaterial(
+    BUILTIN_ASSET_IDS.material.wood,
+    "ウッド",
+    "material/wood",
+    "#8a5a3b",
+  ),
+  createBuiltinMaterial(
+    BUILTIN_ASSET_IDS.material.sand,
+    "サンド",
+    "material/sand",
+    "#d8c9a3",
+  ),
+  createBuiltinMaterial(
+    BUILTIN_ASSET_IDS.material.white,
+    "ホワイト",
+    "material/white",
+    "#e8eaee",
+  ),
+  createBuiltinMaterial(
+    BUILTIN_ASSET_IDS.material.charcoal,
+    "チャコール",
+    "material/charcoal",
+    "#3f4550",
+  ),
   createGlowMaterialAsset(DEFAULT_GLOW_MATERIAL_PRESET),
 ] satisfies readonly MaterialAsset[];
 
