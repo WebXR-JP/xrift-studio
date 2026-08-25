@@ -1,11 +1,23 @@
 import { useMemo, useState } from "react";
 import { CheckCircle2, CircleAlert, LoaderCircle, Search } from "lucide-react";
 import {
+  SCENE_RECIPE_CATEGORY_LABELS,
   getSceneRecipesForProjectKind,
   type SceneRecipe,
+  type SceneRecipeCategory,
   type VisualProjectKind,
 } from "../../lib/visual-editor";
 import { SceneRecipeCatalogPreview } from "./SceneRecipeCatalogPreview";
+
+const CATEGORY_ORDER: readonly SceneRecipeCategory[] = [
+  "light",
+  "nature",
+  "weather",
+  "water",
+  "structure",
+  "furniture",
+  "effect",
+];
 
 export type SceneRecipeInstallResult = {
   entityName: string;
@@ -35,6 +47,7 @@ export function SceneRecipeStore({
     [projectKind],
   );
   const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<"all" | SceneRecipeCategory>("all");
   const [selectedId, setSelectedId] = useState(recipes[0]?.id ?? "");
   const [adding, setAdding] = useState(false);
   const [addedMessage, setAddedMessage] = useState<string | null>(null);
@@ -45,13 +58,20 @@ export function SceneRecipeStore({
 
   const visible = useMemo(() => {
     const tokens = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
-    return recipes.filter((recipe) => {
-      const text = [recipe.id, recipe.name, recipe.description]
-        .join(" ")
-        .toLocaleLowerCase();
-      return tokens.every((token) => text.includes(token));
-    });
-  }, [query, recipes]);
+    return recipes
+      .filter((recipe) => category === "all" || recipe.category === category)
+      .filter((recipe) => {
+        const text = [
+          recipe.id,
+          recipe.name,
+          recipe.description,
+          SCENE_RECIPE_CATEGORY_LABELS[recipe.category],
+        ]
+          .join(" ")
+          .toLocaleLowerCase();
+        return tokens.every((token) => text.includes(token));
+      });
+  }, [category, query, recipes]);
 
   // What the author is about to get, counted from the recipe rather than
   // written by hand: a set that quietly grows a part should say so.
@@ -101,19 +121,38 @@ export function SceneRecipeStore({
               {recipes.length} sets
             </span>
           </div>
-          <label className="relative block">
-            <Search
-              size={14}
-              className="pointer-events-none absolute left-2.5 top-2 text-slate-400"
-            />
-            <span className="sr-only">セットを検索</span>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.currentTarget.value)}
-              placeholder="名前または説明で検索"
-              className="h-8 w-full rounded-md border border-slate-300 bg-white pl-8 pr-3 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-            />
-          </label>
+          <div className="flex items-center gap-2">
+            <label className="relative min-w-0 flex-1">
+              <Search
+                size={14}
+                className="pointer-events-none absolute left-2.5 top-2 text-slate-400"
+              />
+              <span className="sr-only">セットを検索</span>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.currentTarget.value)}
+                placeholder="名前または説明で検索"
+                className="h-8 w-full rounded-md border border-slate-300 bg-white pl-8 pr-3 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              />
+            </label>
+            <select
+              value={category}
+              onChange={(event) =>
+                setCategory(
+                  event.currentTarget.value as "all" | SceneRecipeCategory,
+                )
+              }
+              aria-label="セットのカテゴリ"
+              className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
+            >
+              <option value="all">すべて</option>
+              {CATEGORY_ORDER.map((entry) => (
+                <option key={entry} value={entry}>
+                  {SCENE_RECIPE_CATEGORY_LABELS[entry]}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-3">
           {visible.length === 0 ? (
@@ -149,8 +188,8 @@ export function SceneRecipeStore({
                       <p className="truncate text-xs font-semibold text-slate-800">
                         {recipe.name}
                       </p>
-                      <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-slate-500">
-                        {recipe.description}
+                      <p className="mt-1 text-[10px] font-medium text-slate-500">
+                        {SCENE_RECIPE_CATEGORY_LABELS[recipe.category]}
                       </p>
                     </div>
                   </button>

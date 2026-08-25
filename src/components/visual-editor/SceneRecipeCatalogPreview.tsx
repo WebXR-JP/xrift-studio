@@ -42,7 +42,18 @@ export function SceneRecipeCatalogPreview({
       live={live}
     >
       <color attach="background" args={["#0b1120"]} />
-      <ambientLight intensity={0.22} />
+      {/* A set that brings its own light is shown by that light — that is the
+          point of a campfire. A set that brings none would otherwise be a dark
+          smudge, so the card lights it neutrally. This is the card's lighting,
+          not the scene's: what gets placed is unchanged either way. */}
+      {recipe.parts.some((part) => part.kind === "light") ? (
+        <ambientLight intensity={0.22} />
+      ) : (
+        <>
+          <ambientLight intensity={0.55} />
+          <directionalLight position={[2.5, 4, 3]} intensity={1.2} />
+        </>
+      )}
       {/* A ground plane is what makes a ring of stones read as a ring
           rather than as blocks floating in the dark. */}
       <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
