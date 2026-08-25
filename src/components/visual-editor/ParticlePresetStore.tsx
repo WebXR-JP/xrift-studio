@@ -201,7 +201,6 @@ export function ParticlePresetStore({
                     <ParticlePresetCatalogPreview
                       preset={preset}
                       className="aspect-[16/10] w-full"
-                      lazy
                     />
                     <div className="p-2.5">
                       <p className="truncate text-xs font-semibold text-slate-800">
@@ -218,7 +217,7 @@ export function ParticlePresetStore({
           )}
         </div>
         <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
-          カードは実際のParticleを同じrendererで動かしています。
+          カードは実際のParticleを同じrendererで描いた1フレームです。動きは右で確認できます。
         </footer>
       </section>
 
@@ -232,6 +231,7 @@ export function ParticlePresetStore({
               preset={selected}
               className="aspect-[16/10] w-full overflow-hidden rounded-lg"
               detail
+              live
             />
             <div>
               <h3 className="text-base font-semibold text-slate-900">

@@ -1,13 +1,15 @@
-import { Canvas } from "@react-three/fiber";
 import { useMemo } from "react";
 import { XriftScriptParticleEmitter } from "../../../packages/xrift-studio-runtime/src/script/particle";
 import {
+  BUILTIN_ASSET_IDS,
   BUILTIN_MATERIAL_ASSETS,
+  getBuiltinPrimitiveCreation,
   getParticleAuthoringPreset,
   normalizeParticleProperties,
   type SceneRecipe,
   type SceneRecipePart,
 } from "../../lib/visual-editor";
+import { CatalogPreviewFrame } from "./CatalogPreviewFrame";
 
 /**
  * Builds the card from the recipe's own parts.
@@ -19,44 +21,58 @@ import {
 export function SceneRecipeCatalogPreview({
   recipe,
   className = "h-full w-full",
+  live = false,
 }: {
   recipe: SceneRecipe;
   className?: string;
+  /** The detail pane keeps one long-lived preview and stays in motion. */
+  live?: boolean;
 }) {
+  // A campfire is a metre across and a street light is over three tall.
+  // Framing both from a fixed camera shows a speck or a cropped pole, so the
+  // camera is derived from the parts the recipe actually places.
+  const framing = useMemo(() => recipeFraming(recipe), [recipe]);
+
   return (
-    <div className={className}>
-      <Canvas
-        dpr={[1, 1.5]}
-        camera={{ position: [1.5, 1.05, 1.9], fov: 42 }}
-        gl={{ antialias: true }}
-      >
-        <color attach="background" args={["#0b1120"]} />
-        <ambientLight intensity={0.22} />
-        {/* A ground plane is what makes a ring of stones read as a ring
-            rather than as blocks floating in the dark. */}
-        <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[8, 8]} />
-          <meshStandardMaterial color="#1e293b" metalness={0} roughness={0.95} />
-        </mesh>
-        {recipe.parts.map((part, index) => (
-          <RecipePartVisual key={`${part.kind}-${index}`} part={part} />
-        ))}
-      </Canvas>
-    </div>
+    <CatalogPreviewFrame
+      cacheKey={`recipe:${recipe.id}`}
+      cameraPosition={framing.cameraPosition}
+      lookAtY={framing.lookAtY}
+      className={className}
+      live={live}
+    >
+      <color attach="background" args={["#0b1120"]} />
+      <ambientLight intensity={0.22} />
+      {/* A ground plane is what makes a ring of stones read as a ring
+          rather than as blocks floating in the dark. */}
+      <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[8, 8]} />
+        <meshStandardMaterial color="#1e293b" metalness={0} roughness={0.95} />
+      </mesh>
+      {recipe.parts.map((part, index) => (
+        <RecipePartVisual key={`${part.kind}-${index}`} part={part} />
+      ))}
+    </CatalogPreviewFrame>
   );
 }
 
 function RecipePartVisual({ part }: { part: SceneRecipePart }) {
   if (part.kind === "primitive") {
+    const color = builtinMaterialColor(part.materialAssetId);
+    // The glow Material is emissive, and a lamp drawn as a grey ball would
+    // misrepresent the one thing the set is for.
+    const emissive = part.materialAssetId === BUILTIN_ASSET_IDS.material.glow;
     return (
       <mesh
         position={[...part.position]}
         rotation={[...part.rotation]}
         scale={[...part.scale]}
       >
-        <boxGeometry args={[1, 1, 1]} />
+        <PrimitiveGeometry creationId={part.creationId} />
         <meshStandardMaterial
-          color={builtinMaterialColor(part.materialAssetId)}
+          color={color}
+          emissive={emissive ? color : "#000000"}
+          emissiveIntensity={emissive ? 2.4 : 0}
           metalness={0}
           roughness={0.9}
         />
@@ -98,6 +114,50 @@ function RecipeParticleVisual({
       <XriftScriptParticleEmitter config={config} color="#ffffff" opacity={1} />
     </group>
   );
+}
+
+/**
+ * The geometry the placement will create, at the same unit size the builtin
+ * primitives use, so a scale in the recipe means the same thing here.
+ */
+function PrimitiveGeometry({ creationId }: { creationId: string }) {
+  const primitive = getBuiltinPrimitiveCreation(creationId)?.primitive;
+  if (primitive === "sphere") return <sphereGeometry args={[1, 24, 18]} />;
+  if (primitive === "cylinder") return <cylinderGeometry args={[1, 1, 1, 20]} />;
+  if (primitive === "cone") return <coneGeometry args={[1, 1, 20]} />;
+  if (primitive === "plane") return <planeGeometry args={[1, 1]} />;
+  return <boxGeometry args={[1, 1, 1]} />;
+}
+
+/**
+ * A camera that fits the recipe.
+ *
+ * Bounds come from the parts themselves rather than a number typed per recipe,
+ * so a set that grows a taller piece stays framed without anyone remembering
+ * to retune the card.
+ */
+function recipeFraming(recipe: SceneRecipe): {
+  cameraPosition: [number, number, number];
+  lookAtY: number;
+} {
+  let maxY = 0.6;
+  let maxRadius = 0.6;
+  for (const part of recipe.parts) {
+    const [x, y, z] = part.position;
+    const half =
+      part.kind === "primitive"
+        ? Math.max(part.scale[0], part.scale[1], part.scale[2]) / 2
+        : 0.2;
+    maxY = Math.max(maxY, y + half);
+    maxRadius = Math.max(maxRadius, Math.hypot(x, z) + half);
+  }
+  // Enough distance to hold the taller of "how wide" and "how tall", with the
+  // eye a little above the middle so the ground plane stays readable.
+  const distance = Math.max(2.2, maxRadius * 2.4 + maxY * 0.9);
+  return {
+    cameraPosition: [distance * 0.55, maxY * 0.75 + 0.5, distance * 0.8],
+    lookAtY: maxY * 0.45,
+  };
 }
 
 /** The Material the placement will actually assign, read from one place. */

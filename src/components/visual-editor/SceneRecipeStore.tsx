@@ -160,7 +160,7 @@ export function SceneRecipeStore({
           )}
         </div>
         <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
-          カードは配置されるものと同じ形状・Particle・ライトで描いています。
+          カードは配置されるものと同じ形状・Particle・ライトで描いた1フレームです。動きは右で確認できます。
         </footer>
       </section>
 
@@ -173,6 +173,7 @@ export function SceneRecipeStore({
             <SceneRecipeCatalogPreview
               recipe={selected}
               className="aspect-[16/10] w-full overflow-hidden rounded-lg"
+              live
             />
             <div>
               <h3 className="text-base font-semibold text-slate-900">
