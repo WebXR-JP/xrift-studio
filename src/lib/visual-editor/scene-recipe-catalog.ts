@@ -1,4 +1,6 @@
+import { ensureBuiltinModelAsset } from "./asset-import-persistence";
 import { BUILTIN_ASSET_IDS } from "./builtin-asset-ids";
+import { getBuiltinRecipeModel } from "./builtin-recipe-models";
 import { BUILTIN_PRIMITIVE_CREATION_IDS, getBuiltinPrimitiveCreation } from "./creation-catalog";
 import { createDocumentId } from "./document-id";
 import {
@@ -9,6 +11,7 @@ import {
 import { ensureBuiltinMaterialAsset } from "./prototype-project";
 import {
   createBuiltinPrimitiveMeshComponent,
+  createMeshComponent,
   createParticleEmitterComponent,
   createTransformComponent,
   type LightComponent,
@@ -41,6 +44,18 @@ export type SceneRecipePart =
       name: string;
       creationId: string;
       materialAssetId: string;
+      position: Vec3;
+      rotation: Vec3;
+      scale: Vec3;
+    }
+  | {
+      /**
+       * A bundled GLB (BUILTIN_RECIPE_MODELS), self-contained materials and
+       * all -- unlike "primitive", no materialAssetId to bind.
+       */
+      kind: "model";
+      name: string;
+      modelId: string;
       position: Vec3;
       rotation: Vec3;
       scale: Vec3;
@@ -416,13 +431,12 @@ const TORCH: SceneRecipe = {
   note: "壁に付ける場合は、追加後にTransformのRotationで傾けてください。炎は柄の先に固定されているので一緒に傾きます。",
   parts: [
     {
-      kind: "primitive",
+      kind: "model",
       name: "柄",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.cylinder,
-      materialAssetId: BUILTIN_ASSET_IDS.material.slate,
+      modelId: "torch",
       position: [0, 0.6, 0],
       rotation: [0, 0, 0],
-      scale: [0.035, 1.2, 0.035],
+      scale: [1, 1, 1],
     },
     {
       kind: "particle",
@@ -562,46 +576,18 @@ const FIREFLY_BUSH: SceneRecipe = {
 const BENCH: SceneRecipe = {
   id: SCENE_RECIPE_IDS.bench,
   name: "ベンチ",
-  description: "座面、脚、背もたれの3つ分でできた1.6mのベンチ。",
+  description: "木の座面と背もたれ、脚を渡す貫木を持つ1.6mの公園ベンチ。",
   category: "furniture",
   projectKinds: ["world", "item"],
   note: "座る機能は付いていません。見た目の家具として置けます。人が上を歩けないようにするならColliderを追加してください。",
   parts: [
     {
-      kind: "primitive",
-      name: "座面",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.box,
-      materialAssetId: BUILTIN_ASSET_IDS.material.slate,
+      kind: "model",
+      name: "ベンチ本体",
+      modelId: "bench",
       position: [0, 0.44, 0],
       rotation: [0, 0, 0],
-      scale: [1.6, 0.08, 0.45],
-    },
-    {
-      kind: "primitive",
-      name: "脚 左",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.box,
-      materialAssetId: BUILTIN_ASSET_IDS.material.slate,
-      position: [-0.66, 0.2, 0],
-      rotation: [0, 0, 0],
-      scale: [0.1, 0.4, 0.4],
-    },
-    {
-      kind: "primitive",
-      name: "脚 右",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.box,
-      materialAssetId: BUILTIN_ASSET_IDS.material.slate,
-      position: [0.66, 0.2, 0],
-      rotation: [0, 0, 0],
-      scale: [0.1, 0.4, 0.4],
-    },
-    {
-      kind: "primitive",
-      name: "背もたれ",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.box,
-      materialAssetId: BUILTIN_ASSET_IDS.material.slate,
-      position: [0, 0.72, -0.19],
-      rotation: [0, 0, 0],
-      scale: [1.6, 0.48, 0.06],
+      scale: [1, 1, 1],
     },
   ],
 };
@@ -1105,13 +1091,14 @@ export type SceneRecipeInstantiation = {
  * history entry: undoing a campfire nobody wanted should not leave its two
  * Particle Assets behind in the library.
  */
-export function instantiateSceneRecipe(
+export async function instantiateSceneRecipe(
   scene: SceneDocument,
   assets: AssetManifest,
   recipeId: string,
   projectKind: VisualProjectKind,
+  projectPath: string,
   position: Vec3 = [0, 0, 0],
-): SceneRecipeInstantiation | null {
+): Promise<SceneRecipeInstantiation | null> {
   const recipe = getSceneRecipe(recipeId);
   if (!recipe || !recipe.projectKinds.includes(projectKind)) return null;
 
@@ -1122,12 +1109,13 @@ export function instantiateSceneRecipe(
 
   for (const part of recipe.parts) {
     const entityId = createDocumentId("entity");
+    const hasTransform = part.kind === "primitive" || part.kind === "model";
     const components: SceneComponent[] = [
       createTransformComponent(
         createDocumentId("component-transform"),
         part.position,
-        part.kind === "primitive" ? part.rotation : [0, 0, 0],
-        part.kind === "primitive" ? part.scale : [1, 1, 1],
+        hasTransform ? part.rotation : [0, 0, 0],
+        hasTransform ? part.scale : [1, 1, 1],
       ),
     ];
 
@@ -1144,6 +1132,21 @@ export function instantiateSceneRecipe(
           definition,
           [{ slot: "default", materialAssetId: part.materialAssetId }],
         ),
+      );
+    } else if (part.kind === "model") {
+      const definition = getBuiltinRecipeModel(part.modelId);
+      if (!definition) return null;
+      const withModel = await ensureBuiltinModelAsset(
+        projectPath,
+        nextAssets,
+        definition,
+      );
+      if (!withModel || withModel.assets[definition.assetId]?.kind !== "model") {
+        return null;
+      }
+      nextAssets = withModel;
+      components.push(
+        createMeshComponent(createDocumentId("component-mesh"), definition.assetId, []),
       );
     } else if (part.kind === "particle") {
       const preset = getParticleAuthoringPreset(part.presetId);

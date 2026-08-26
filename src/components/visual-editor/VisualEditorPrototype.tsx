@@ -5776,13 +5776,17 @@ export function VisualEditorPrototype({
       if (importBusy) {
         throw new Error("アセットのインポート完了後に追加してください");
       }
+      if (!projectPath) {
+        throw new Error("プロジェクトを保存してからセットを追加してください");
+      }
 
       const count = bundle.scene.rootEntityIds.length;
-      const result = instantiateSceneRecipe(
+      const result = await instantiateSceneRecipe(
         bundle.scene,
         bundle.assets,
         recipe.id,
         bundle.project.projectKind,
+        projectPath,
         [
           roundTo(((count % 5) - 2) * 1.35, 1),
           0,
@@ -5819,6 +5823,7 @@ export function VisualEditorPrototype({
       bundle,
       editorMode,
       importBusy,
+      projectPath,
       setAssetSelection,
       setBundle,
       setSceneSelection,
