@@ -347,6 +347,58 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     provenance:
       "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
   },
+  {
+    modelId: "door",
+    assetId: "model-door-146099ac4f87",
+    publicPath: "/visual-editor/recipe-assets/door.glb",
+    fileName: "door.glb",
+    sha256:
+      "146099ac4f8730f765ee86e3e4b1b5e0b4454118798604337d5e8702b40b638e",
+    byteLength: 18456,
+    displayName: "ドア",
+    approxRadius: 1.05,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "window",
+    assetId: "model-window-7d8ec97d6c90",
+    publicPath: "/visual-editor/recipe-assets/window.glb",
+    fileName: "window.glb",
+    sha256:
+      "7d8ec97d6c90a57a217a3371a20f4e06674146a312eed232e3c3c5c0f1a5e9e2",
+    byteLength: 28108,
+    displayName: "窓",
+    approxRadius: 0.7,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "floorPanel",
+    assetId: "model-floor-panel-3354a6907dfe",
+    publicPath: "/visual-editor/recipe-assets/floor-panel.glb",
+    fileName: "floor-panel.glb",
+    sha256:
+      "3354a6907dfe11f1971e8c7a2e354c3f7bafd6135937d222f76d4bf774792c3e",
+    byteLength: 17976,
+    displayName: "床パネル",
+    approxRadius: 1.4,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "wallPanel",
+    assetId: "model-wall-panel-5de024a40101",
+    publicPath: "/visual-editor/recipe-assets/wall-panel.glb",
+    fileName: "wall-panel.glb",
+    sha256:
+      "5de024a40101008168377fb03f6d480e230047089d41c06b74783b7d52d59598",
+    byteLength: 7596,
+    displayName: "壁パネル",
+    approxRadius: 1.4,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
 ];
 
 export function getBuiltinRecipeModel(

@@ -146,6 +146,10 @@ export const SCENE_RECIPE_IDS = {
   tableSet: "scene-recipe.table-set",
   well: "scene-recipe.well",
   pier: "scene-recipe.pier",
+  door: "scene-recipe.door",
+  window: "scene-recipe.window",
+  floorPanel: "scene-recipe.floor-panel",
+  wallPanel: "scene-recipe.wall-panel",
 } as const;
 
 /**
@@ -1067,6 +1071,82 @@ const PIER: SceneRecipe = {
   ],
 };
 
+const DOOR: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.door,
+  name: "ドア",
+  description: "枠とノブ付きのドア。幅0.9m、壁の開口部に置きます。",
+  category: "structure",
+  projectKinds: ["world"],
+  note: "Colliderは入っていません。通り抜けを止めるにはドアへBox Colliderを追加してください。開閉はできない見た目だけのドアです。",
+  parts: [
+    {
+      kind: "model",
+      name: "ドア",
+      modelId: "door",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+  ],
+};
+
+const WINDOW: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.window,
+  name: "窓",
+  description: "木枠とガラス、水切りのある窓。幅0.9m、壁にはめ込んで使います。",
+  category: "structure",
+  projectKinds: ["world"],
+  note: "Colliderは入っていません。ガラスは見た目だけで、開閉はできません。",
+  parts: [
+    {
+      kind: "model",
+      name: "窓",
+      modelId: "window",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+  ],
+};
+
+const FLOOR_PANEL: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.floorPanel,
+  name: "床パネル",
+  description: "2m四方の床板タイル。並べて部屋の床に敷けます。",
+  category: "structure",
+  projectKinds: ["world"],
+  note: "原点は歩ける面（上面）です。板の厚みぶんだけ下に沈むので、既存の地面と同じ高さに置くと段差なく馴染みます。隣に並べるときは2mぶんずらしてください。",
+  parts: [
+    {
+      kind: "model",
+      name: "床パネル",
+      modelId: "floorPanel",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+  ],
+};
+
+const WALL_PANEL: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.wallPanel,
+  name: "壁パネル",
+  description: "幅2m・高さ2.4mの壁パネル。幅木付き。並べて部屋の壁を組めます。",
+  category: "structure",
+  projectKinds: ["world"],
+  note: "Colliderは入っていません。通り抜けを止めるには壁へBox Colliderを追加してください。並べるときは幅2mぶん横にずらすと隙間なく続きます。",
+  parts: [
+    {
+      kind: "model",
+      name: "壁パネル",
+      modelId: "wallPanel",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+  ],
+};
+
 export const SCENE_RECIPES: readonly SceneRecipe[] = [
   CAMPFIRE,
   TORCH,
@@ -1093,6 +1173,10 @@ export const SCENE_RECIPES: readonly SceneRecipe[] = [
   WALL,
   WELL,
   PIER,
+  DOOR,
+  WINDOW,
+  FLOOR_PANEL,
+  WALL_PANEL,
   BENCH,
   TABLE_SET,
   MAGIC_CIRCLE,
