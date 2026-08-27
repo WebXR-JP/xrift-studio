@@ -70,10 +70,25 @@ function useHashRoute(): string {
  */
 function BrandMark() {
   return (
-    <a href="#/index" className="flex items-center gap-2.5" aria-label="Wikiのトップへ">
-      <AppBrandMark size={36} />
-      <span className="text-sm font-black tracking-[-0.025em] text-zinc-950">
-        XRift <span className="text-zinc-400">Studio</span> 使い方ガイド
+    <a
+      href="#/index"
+      className="flex min-w-0 items-center gap-2 sm:gap-2.5"
+      aria-label="Wikiのトップへ"
+    >
+      {/*
+       * The mark steps down on narrow screens so the title keeps its line.
+       * At 320px the full-size mark plus the menu button leaves too little
+       * room for the label, which then wraps out of the fixed-height header.
+       */}
+      <span className="shrink-0 sm:hidden">
+        <AppBrandMark size={30} />
+      </span>
+      <span className="hidden shrink-0 sm:block">
+        <AppBrandMark size={36} />
+      </span>
+      <span className="truncate text-[13px] font-black tracking-[-0.025em] text-zinc-950 sm:text-sm">
+        XRift <span className="text-zinc-400">Studio</span>{" "}
+        <span className="whitespace-nowrap">使い方ガイド</span>
       </span>
     </a>
   );
@@ -88,7 +103,7 @@ function Sidebar({
 }) {
   const ordered = getOrderedPages();
   return (
-    <nav className="flex h-full flex-col overflow-y-auto p-4" aria-label="Wikiの目次">
+    <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4" aria-label="Wikiの目次">
       <div className="space-y-5">
         {WIKI_CATEGORIES.map((category) => {
           const pages = ordered.filter((p) => p.category === category.id);
@@ -169,7 +184,7 @@ function SearchResults({
   if (query.trim().length === 0) return null;
 
   return (
-    <div className="mt-2 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg">
+    <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg">
       {results.length === 0 ? (
         <p className="px-4 py-3 text-[13px] text-zinc-500">
           「{query.trim()}」に一致するページはありません。
@@ -282,6 +297,25 @@ function MarkdownContent({ content }: { content: string }) {
           },
           // The fenced block owns its own <pre>, so this one only unwraps.
           pre: ({ children }) => <>{children}</>,
+          /*
+           * A table is the one Markdown block with a min-content width the
+           * page cannot shrink. Left bare it stretches the whole column past
+           * a phone's viewport and every paragraph runs off the screen with
+           * it, so it gets a scroller of its own.
+           */
+          table: ({ children, ...props }) => (
+            <div className="wiki-table-block">
+              <p className="wiki-table-hint">表は横にスクロールできます</p>
+              <div
+                className="wiki-table-scroll"
+                role="region"
+                tabIndex={0}
+                aria-label="表（横にスクロールできます）"
+              >
+                <table {...props}>{children}</table>
+              </div>
+            </div>
+          ),
           code: ({ className, children, ...props }) => {
             const code = String(children).replace(/\n$/, "");
             const language = /language-([\w-]+)/.exec(className ?? "")?.[1];
@@ -370,6 +404,32 @@ export default function WikiApp() {
     document.title = page ? `${page.title} | XRift Studio 使い方ガイド` : "XRift Studio 使い方ガイド";
   }, [page]);
 
+  /*
+   * While the drawer covers the screen, the page behind it must not scroll —
+   * on a phone a swipe over the overlay otherwise moves the article instead of
+   * the list the reader is looking at.
+   */
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [sidebarOpen]);
+
+  // The drawer has no button once the persistent sidebar appears at lg.
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const wide = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => {
+      if (wide.matches) setSidebarOpen(false);
+    };
+    onChange();
+    wide.addEventListener("change", onChange);
+    return () => wide.removeEventListener("change", onChange);
+  }, [sidebarOpen]);
+
   if (!page) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-6 text-center">
@@ -386,19 +446,19 @@ export default function WikiApp() {
   return (
     <div className="min-h-screen bg-zinc-50">
       <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 lg:px-8">
-          <div className="flex items-center gap-2">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-1 sm:gap-2">
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 lg:hidden"
+              className="shrink-0 rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 lg:hidden"
               aria-label="目次を開く"
             >
               <Menu size={20} />
             </button>
             <BrandMark />
           </div>
-          <div className="hidden w-64 md:block">
+          <div className="relative hidden w-52 shrink-0 md:block lg:w-64">
             <SearchBox query={query} onQueryChange={setQuery} />
             <SearchResults query={query} onSelect={() => setQuery("")} />
           </div>
@@ -421,8 +481,8 @@ export default function WikiApp() {
             onClick={() => setSidebarOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute left-0 top-0 h-full w-72 bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-zinc-200 p-4">
+          <div className="absolute left-0 top-0 flex h-full w-[min(18rem,85vw)] flex-col bg-white shadow-xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 p-4">
               <span className="text-sm font-black text-zinc-900">目次</span>
               <button
                 type="button"
@@ -433,21 +493,35 @@ export default function WikiApp() {
                 <X size={18} />
               </button>
             </div>
+            {/*
+             * The header drops the search below md, so the drawer carries it.
+             * Otherwise a phone has no way to search the guide at all.
+             */}
+            <div className="relative shrink-0 border-b border-zinc-200 p-4 md:hidden">
+              <SearchBox query={query} onQueryChange={setQuery} />
+              <SearchResults
+                query={query}
+                onSelect={() => {
+                  setQuery("");
+                  setSidebarOpen(false);
+                }}
+              />
+            </div>
             <Sidebar currentSlug={slug} onNavigate={() => setSidebarOpen(false)} />
           </div>
         </div>
       ) : null}
 
       <div className="mx-auto flex max-w-7xl">
-        <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-64 shrink-0 border-r border-zinc-200 bg-white lg:block">
+        <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-64 shrink-0 border-r border-zinc-200 bg-white lg:flex lg:flex-col">
           <Sidebar currentSlug={slug} onNavigate={() => {}} />
         </aside>
 
-        <main className="min-w-0 flex-1 px-4 py-8 lg:px-10 lg:py-12">
-          <div className="mx-auto max-w-3xl">
-            <div className="mb-6 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+        <main className="min-w-0 flex-1 px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
+          <div className="mx-auto min-w-0 max-w-3xl">
+            <div className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold uppercase tracking-wider text-zinc-400">
               <span>{getCategoryLabel(page.category)}</span>
-              <ChevronRight size={12} />
+              <ChevronRight size={12} className="shrink-0" />
               <span className="text-violet-600">{page.title}</span>
             </div>
 
@@ -470,8 +544,8 @@ export default function WikiApp() {
                 </a>
               </div>
             ) : (
-              <div className="grid gap-10 lg:grid-cols-[1fr_12rem]">
-                <div>
+              <div className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_12rem]">
+                <div className="min-w-0">
                   <MarkdownContent content={content} />
                   <PageFooter slug={slug} />
                 </div>
