@@ -1,9 +1,12 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { XriftScriptParticleEmitter } from "../../../packages/xrift-studio-runtime/src/script/particle";
 import {
   BUILTIN_ASSET_IDS,
   BUILTIN_MATERIAL_ASSETS,
   getBuiltinPrimitiveCreation,
+  getBuiltinRecipeModel,
   getParticleAuthoringPreset,
   normalizeParticleProperties,
   type SceneRecipe,
@@ -103,7 +106,49 @@ function RecipePartVisual({ part }: { part: SceneRecipePart }) {
     );
   }
 
+  if (part.kind === "model") {
+    return (
+      <group position={[...part.position]} rotation={[...part.rotation]} scale={[...part.scale]}>
+        <RecipeModelVisual modelId={part.modelId} />
+      </group>
+    );
+  }
+
   return <RecipeParticleVisual part={part} />;
+}
+
+/**
+ * Loads a bundled recipe GLB straight from its public path. The card shows
+ * placements before the current project has imported the Model Asset, so
+ * this cannot go through project storage the way `ProjectModelVisual` does --
+ * same `GLTFLoader` class, same real-rendering rule (AGENT.md), different
+ * source.
+ */
+function RecipeModelVisual({ modelId }: { modelId: string }) {
+  const [object, setObject] = useState<THREE.Object3D | null>(null);
+
+  useEffect(() => {
+    const definition = getBuiltinRecipeModel(modelId);
+    if (!definition) return;
+    let cancelled = false;
+    const loader = new GLTFLoader();
+    loader.load(
+      definition.publicPath,
+      (gltf) => {
+        if (!cancelled) setObject(gltf.scene);
+      },
+      undefined,
+      () => {
+        if (!cancelled) setObject(null);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [modelId]);
+
+  if (!object) return null;
+  return <primitive object={object} />;
 }
 
 function RecipeParticleVisual({
@@ -158,7 +203,10 @@ function recipeFraming(recipe: SceneRecipe): {
     const half =
       part.kind === "primitive"
         ? Math.max(part.scale[0], part.scale[1], part.scale[2]) / 2
-        : 0.2;
+        : part.kind === "model"
+          ? (getBuiltinRecipeModel(part.modelId)?.approxRadius ?? 0.5) *
+            Math.max(part.scale[0], part.scale[1], part.scale[2])
+          : 0.2;
     maxY = Math.max(maxY, y + half);
     maxRadius = Math.max(maxRadius, Math.hypot(x, z) + half);
   }

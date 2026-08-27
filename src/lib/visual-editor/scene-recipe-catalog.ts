@@ -1,4 +1,6 @@
+import { ensureBuiltinModelAsset } from "./asset-import-persistence";
 import { BUILTIN_ASSET_IDS } from "./builtin-asset-ids";
+import { getBuiltinRecipeModel } from "./builtin-recipe-models";
 import { BUILTIN_PRIMITIVE_CREATION_IDS, getBuiltinPrimitiveCreation } from "./creation-catalog";
 import { createDocumentId } from "./document-id";
 import {
@@ -9,6 +11,7 @@ import {
 import { ensureBuiltinMaterialAsset } from "./prototype-project";
 import {
   createBuiltinPrimitiveMeshComponent,
+  createMeshComponent,
   createParticleEmitterComponent,
   createTransformComponent,
   type LightComponent,
@@ -41,6 +44,18 @@ export type SceneRecipePart =
       name: string;
       creationId: string;
       materialAssetId: string;
+      position: Vec3;
+      rotation: Vec3;
+      scale: Vec3;
+    }
+  | {
+      /**
+       * A bundled GLB (BUILTIN_RECIPE_MODELS), self-contained materials and
+       * all -- unlike "primitive", no materialAssetId to bind.
+       */
+      kind: "model";
+      name: string;
+      modelId: string;
       position: Vec3;
       rotation: Vec3;
       scale: Vec3;
@@ -131,6 +146,10 @@ export const SCENE_RECIPE_IDS = {
   tableSet: "scene-recipe.table-set",
   well: "scene-recipe.well",
   pier: "scene-recipe.pier",
+  door: "scene-recipe.door",
+  window: "scene-recipe.window",
+  floorPanel: "scene-recipe.floor-panel",
+  wallPanel: "scene-recipe.wall-panel",
 } as const;
 
 /**
@@ -141,6 +160,11 @@ export const SCENE_RECIPE_IDS = {
  * variation is what makes eight blocks read as stones, so it is computed from
  * the index rather than left to the caller to type out.
  */
+/** Authored diameter (meters, scale 1) of each hand-modeled rock GLB, so a
+ * caller's box-sized `size` param still maps to a real-world size. */
+const ROCK_MODEL_DIAMETER: Record<string, number> = { rockA: 0.84, rockB: 0.72 };
+const ROCK_MODEL_IDS = Object.keys(ROCK_MODEL_DIAMETER);
+
 function stoneRing(
   count: number,
   radius: number,
@@ -150,21 +174,22 @@ function stoneRing(
     const angle = (index / count) * Math.PI * 2;
     const wobble = ((index * 37) % 11) / 11 - 0.5;
     const height = size[1] * (1 + wobble * 0.35);
+    const modelId = ROCK_MODEL_IDS[index % ROCK_MODEL_IDS.length];
+    const base = ROCK_MODEL_DIAMETER[modelId];
     return {
-      kind: "primitive" as const,
+      kind: "model" as const,
       name: `石 ${index + 1}`,
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.box,
-      materialAssetId: BUILTIN_ASSET_IDS.material.slate,
+      modelId,
       position: [
         roundTo(Math.cos(angle) * radius),
-        roundTo(height / 2),
+        0,
         roundTo(Math.sin(angle) * radius),
       ] as Vec3,
-      rotation: [0, roundTo(angle + wobble), 0] as Vec3,
+      rotation: [0, roundTo(angle + wobble * 2), 0] as Vec3,
       scale: [
-        roundTo(size[0] * (1 + wobble * 0.3)),
-        roundTo(height),
-        roundTo(size[2] * (1 - wobble * 0.25)),
+        roundTo((size[0] * (1 + wobble * 0.3)) / base),
+        roundTo(height / base),
+        roundTo((size[2] * (1 - wobble * 0.25)) / base),
       ] as Vec3,
     };
   });
@@ -219,21 +244,29 @@ const cyl = (
   rotation: Vec3 = [0, 0, 0],
 ) => shape(C.cylinder, name, material, position, scale, rotation);
 
-const ball = (
+/** A firewood log, authored lying along +X from its own end -- `rotationY`
+ * turns it to face a little differently so a pile does not read as clones. */
+const logPart = (
   name: string,
-  material: string,
   position: Vec3,
+  rotationY: number,
   scale: Vec3,
-  rotation: Vec3 = [0, 0, 0],
-) => shape(C.sphere, name, material, position, scale, rotation);
+): SceneRecipePart => ({
+  kind: "model",
+  name,
+  modelId: "log",
+  position,
+  rotation: [0, rotationY, 0],
+  scale,
+});
 
-const cone = (
+const rockPart = (
   name: string,
-  material: string,
+  modelId: string,
   position: Vec3,
   scale: Vec3,
   rotation: Vec3 = [0, 0, 0],
-) => shape(C.cone, name, material, position, scale, rotation);
+): SceneRecipePart => ({ kind: "model", name, modelId, position, rotation, scale });
 
 function lamp(
   name: string,
@@ -266,30 +299,31 @@ function emit(
   return { kind: "particle", name, presetId, position, ...(overrides ? { overrides } : {}) };
 }
 
-/** Evenly spaced posts or trunks, each nudged so a row is not a fence of clones. */
-function scatterColumns(
+/** Evenly spaced bamboo culms, each nudged so a row is not a fence of clones.
+ * `height` is the reference height the bambooStalk GLB was modeled at. */
+function scatterBamboo(
   count: number,
-  material: string,
   namePrefix: string,
   radius: number,
   height: number,
-  thickness: number,
 ): SceneRecipePart[] {
+  const modelHeight = 3.2;
   return Array.from({ length: count }, (_, index) => {
     const angle = (index / count) * Math.PI * 2 + index * 0.7;
     const wobble = ((index * 53) % 13) / 13 - 0.5;
-    const tall = height * (1 + wobble * 0.3);
-    return cyl(
-      `${namePrefix} ${index + 1}`,
-      material,
-      [
+    const tall = (height * (1 + wobble * 0.3)) / modelHeight;
+    return {
+      kind: "model" as const,
+      name: `${namePrefix} ${index + 1}`,
+      modelId: "bambooStalk",
+      position: [
         roundTo(Math.cos(angle) * radius * (0.6 + Math.abs(wobble))),
-        roundTo(tall / 2),
+        0,
         roundTo(Math.sin(angle) * radius * (0.6 + Math.abs(wobble))),
-      ],
-      [thickness, roundTo(tall), thickness],
-      [roundTo(wobble * 0.06), 0, roundTo(wobble * 0.05)],
-    );
+      ] as Vec3,
+      rotation: [roundTo(wobble * 0.06), roundTo(angle), roundTo(wobble * 0.05)] as Vec3,
+      scale: [roundTo(tall), roundTo(tall), roundTo(tall)] as Vec3,
+    };
   });
 }
 
@@ -354,40 +388,12 @@ const STREET_LIGHT: SceneRecipe = {
   note: "球が光って見えるのはScene設定のポストエフェクトとBloomが有効なときです。無効でもライトは点きます。",
   parts: [
     {
-      kind: "primitive",
-      name: "台座",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.cylinder,
-      materialAssetId: BUILTIN_ASSET_IDS.material.slate,
-      position: [0, 0.06, 0],
+      kind: "model",
+      name: "支柱と笠",
+      modelId: "streetLight",
+      position: [0, 0, 0],
       rotation: [0, 0, 0],
-      scale: [0.16, 0.12, 0.16],
-    },
-    {
-      kind: "primitive",
-      name: "支柱",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.cylinder,
-      materialAssetId: BUILTIN_ASSET_IDS.material.slate,
-      position: [0, 1.5, 0],
-      rotation: [0, 0, 0],
-      scale: [0.05, 3, 0.05],
-    },
-    {
-      kind: "primitive",
-      name: "笠",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.cone,
-      materialAssetId: BUILTIN_ASSET_IDS.material.slate,
-      position: [0, 3.16, 0],
-      rotation: [0, 0, 0],
-      scale: [0.3, 0.24, 0.3],
-    },
-    {
-      kind: "primitive",
-      name: "光る球",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.sphere,
-      materialAssetId: BUILTIN_ASSET_IDS.material.glow,
-      position: [0, 2.94, 0],
-      rotation: [0, 0, 0],
-      scale: [0.13, 0.13, 0.13],
+      scale: [1, 1, 1],
     },
     {
       kind: "light",
@@ -416,13 +422,12 @@ const TORCH: SceneRecipe = {
   note: "壁に付ける場合は、追加後にTransformのRotationで傾けてください。炎は柄の先に固定されているので一緒に傾きます。",
   parts: [
     {
-      kind: "primitive",
+      kind: "model",
       name: "柄",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.cylinder,
-      materialAssetId: BUILTIN_ASSET_IDS.material.slate,
+      modelId: "torch",
       position: [0, 0.6, 0],
       rotation: [0, 0, 0],
-      scale: [0.035, 1.2, 0.035],
+      scale: [1, 1, 1],
     },
     {
       kind: "particle",
@@ -503,31 +508,12 @@ const FIREFLY_BUSH: SceneRecipe = {
   note: "蛍は暗いほど見えます。昼の空のままだとほとんど見えないので、夜空のプリセットか暗めのライトと合わせてください。",
   parts: [
     {
-      kind: "primitive",
-      name: "茂み 1",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.sphere,
-      materialAssetId: BUILTIN_ASSET_IDS.material.green,
-      position: [0, 0.22, 0],
+      kind: "model",
+      name: "茂み",
+      modelId: "bush",
+      position: [0, 0, 0],
       rotation: [0, 0, 0],
-      scale: [0.55, 0.3, 0.5],
-    },
-    {
-      kind: "primitive",
-      name: "茂み 2",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.sphere,
-      materialAssetId: BUILTIN_ASSET_IDS.material.green,
-      position: [0.6, 0.16, 0.35],
-      rotation: [0, 0.4, 0],
-      scale: [0.4, 0.22, 0.38],
-    },
-    {
-      kind: "primitive",
-      name: "茂み 3",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.sphere,
-      materialAssetId: BUILTIN_ASSET_IDS.material.green,
-      position: [-0.5, 0.14, -0.3],
-      rotation: [0, -0.6, 0],
-      scale: [0.36, 0.2, 0.34],
+      scale: [1, 1, 1],
     },
     {
       kind: "particle",
@@ -562,46 +548,18 @@ const FIREFLY_BUSH: SceneRecipe = {
 const BENCH: SceneRecipe = {
   id: SCENE_RECIPE_IDS.bench,
   name: "ベンチ",
-  description: "座面、脚、背もたれの3つ分でできた1.6mのベンチ。",
+  description: "木の座面と背もたれ、脚を渡す貫木を持つ1.6mの公園ベンチ。",
   category: "furniture",
   projectKinds: ["world", "item"],
   note: "座る機能は付いていません。見た目の家具として置けます。人が上を歩けないようにするならColliderを追加してください。",
   parts: [
     {
-      kind: "primitive",
-      name: "座面",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.box,
-      materialAssetId: BUILTIN_ASSET_IDS.material.slate,
+      kind: "model",
+      name: "ベンチ本体",
+      modelId: "bench",
       position: [0, 0.44, 0],
       rotation: [0, 0, 0],
-      scale: [1.6, 0.08, 0.45],
-    },
-    {
-      kind: "primitive",
-      name: "脚 左",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.box,
-      materialAssetId: BUILTIN_ASSET_IDS.material.slate,
-      position: [-0.66, 0.2, 0],
-      rotation: [0, 0, 0],
-      scale: [0.1, 0.4, 0.4],
-    },
-    {
-      kind: "primitive",
-      name: "脚 右",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.box,
-      materialAssetId: BUILTIN_ASSET_IDS.material.slate,
-      position: [0.66, 0.2, 0],
-      rotation: [0, 0, 0],
-      scale: [0.1, 0.4, 0.4],
-    },
-    {
-      kind: "primitive",
-      name: "背もたれ",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.box,
-      materialAssetId: BUILTIN_ASSET_IDS.material.slate,
-      position: [0, 0.72, -0.19],
-      rotation: [0, 0, 0],
-      scale: [1.6, 0.48, 0.06],
+      scale: [1, 1, 1],
     },
   ],
 };
@@ -623,15 +581,17 @@ const LANTERNS: SceneRecipe = {
       rotation: [0, 0, 0],
       scale: [2.6, 0.05, 0.05],
     },
-    ...[-0.9, 0, 0.9].map((x, index) => ({
-      kind: "primitive" as const,
-      name: `提灯 ${index + 1}`,
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.sphere,
-      materialAssetId: BUILTIN_ASSET_IDS.material.glow,
-      position: [x, 2.14, 0] as Vec3,
-      rotation: [0, 0, 0] as Vec3,
-      scale: [0.16, 0.21, 0.16] as Vec3,
-    })),
+    ...[-0.9, 0, 0.9].map(
+      (x, index) =>
+        ({
+          kind: "model",
+          name: `提灯 ${index + 1}`,
+          modelId: "lantern",
+          position: [x, 1.9, 0] as Vec3,
+          rotation: [0, 0, 0],
+          scale: [1, 1, 1],
+        }) satisfies SceneRecipePart,
+    ),
     {
       kind: "light",
       name: "灯り",
@@ -659,17 +619,14 @@ const STONE_LANTERN: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "火袋の光はBloomが有効なときに強く見えます。無効でもライトは点きます。",
   parts: [
-    cyl("基礎", M.slate, [0, 0.08, 0], [0.28, 0.16, 0.28]),
-    cyl("竿", M.slate, [0, 0.5, 0], [0.1, 0.7, 0.1]),
-    box("中台", M.slate, [0, 0.9, 0], [0.34, 0.1, 0.34]),
-    // Four corner posts rather than a solid box: a lantern whose light is
-    // sealed inside a block is a block.
-    box("火袋の柱 1", M.slate, [0.12, 1.1, 0.12], [0.04, 0.32, 0.04]),
-    box("火袋の柱 2", M.slate, [-0.12, 1.1, 0.12], [0.04, 0.32, 0.04]),
-    box("火袋の柱 3", M.slate, [0.12, 1.1, -0.12], [0.04, 0.32, 0.04]),
-    box("火袋の柱 4", M.slate, [-0.12, 1.1, -0.12], [0.04, 0.32, 0.04]),
-    ball("灯り玉", M.glow, [0, 1.1, 0], [0.09, 0.09, 0.09]),
-    cone("笠", M.slate, [0, 1.38, 0], [0.36, 0.22, 0.36]),
+    {
+      kind: "model",
+      name: "本体",
+      modelId: "stoneLantern",
+      position: [0, 0.08, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
     lamp("灯り", [0, 1.1, 0], "#ffd9a0", 1.4, 6),
   ],
 };
@@ -682,10 +639,14 @@ const BRAZIER: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "音は含みません。鉢と脚にColliderは入っていないので、通り抜けを止めるなら追加してください。",
   parts: [
-    cyl("脚 1", M.charcoal, [0.2, 0.3, 0], [0.045, 0.6, 0.045]),
-    cyl("脚 2", M.charcoal, [-0.1, 0.3, 0.173], [0.045, 0.6, 0.045]),
-    cyl("脚 3", M.charcoal, [-0.1, 0.3, -0.173], [0.045, 0.6, 0.045]),
-    cyl("鉢", M.charcoal, [0, 0.66, 0], [0.34, 0.14, 0.34]),
+    {
+      kind: "model",
+      name: "鉢と脚",
+      modelId: "brazier",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1.6, 1, 1.6],
+    },
     emit("炎", "fire", [0, 0.76, 0], {
       maxParticles: 220,
       startSize: { min: 0.1, max: 0.24 },
@@ -710,12 +671,14 @@ const CANDELABRA: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "机に置く場合は、Transformで机の高さまで上げてください。原点は台の底です。",
   parts: [
-    cyl("台", M.charcoal, [0, 0.025, 0], [0.14, 0.05, 0.14]),
-    cyl("軸", M.charcoal, [0, 0.18, 0], [0.025, 0.26, 0.025]),
-    box("腕", M.charcoal, [0, 0.3, 0], [0.3, 0.03, 0.03]),
-    cyl("ろうそく 1", M.white, [-0.13, 0.4, 0], [0.022, 0.16, 0.022]),
-    cyl("ろうそく 2", M.white, [0, 0.44, 0], [0.022, 0.2, 0.022]),
-    cyl("ろうそく 3", M.white, [0.13, 0.4, 0], [0.022, 0.16, 0.022]),
+    {
+      kind: "model",
+      name: "台と燭",
+      modelId: "candelabra",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
     emit("炎", "fire", [0, 0.55, 0], {
       maxParticles: 60,
       startSize: { min: 0.03, max: 0.07 },
@@ -730,15 +693,19 @@ const CANDELABRA: SceneRecipe = {
 const TREE: SceneRecipe = {
   id: SCENE_RECIPE_IDS.tree,
   name: "木",
-  description: "幹と3つの葉のかたまりでできた3.5mの木。",
+  description: "幹と根元の張り、重なる3つの葉のかたまりでできた3.5mの木。",
   category: "nature",
   projectKinds: ["world", "item"],
   note: "森にするときはこのセットを複製し、Transformで大きさと向きを変えてください。同じ木が並ぶと不自然に見えます。",
   parts: [
-    cyl("幹", M.wood, [0, 1.1, 0], [0.16, 2.2, 0.16]),
-    ball("葉 1", M.green, [0, 2.5, 0], [1.1, 0.85, 1.1]),
-    ball("葉 2", M.green, [0.45, 2.05, 0.3], [0.72, 0.6, 0.72]),
-    ball("葉 3", M.green, [-0.4, 2.15, -0.25], [0.66, 0.55, 0.66]),
+    {
+      kind: "model",
+      name: "本体",
+      modelId: "tree",
+      position: [0, 0.86, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
   ],
 };
 
@@ -749,7 +716,7 @@ const BAMBOO: SceneRecipe = {
   category: "nature",
   projectKinds: ["world", "item"],
   note: "Colliderは入っていません。通り抜けさせたくない場合は幹ごとに追加してください。",
-  parts: scatterColumns(7, M.green, "竹", 1.1, 3.6, 0.05),
+  parts: scatterBamboo(7, "竹", 1.1, 3.6),
 };
 
 const ROCKS: SceneRecipe = {
@@ -760,12 +727,12 @@ const ROCKS: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "地面へめり込ませる前提の配置です。Transformで少し沈めると据わりが良くなります。",
   parts: [
-    box("岩 1", M.slate, [0, 0.34, 0], [0.9, 0.68, 0.8], [0.06, 0.4, 0.04]),
-    box("岩 2", M.slate, [0.75, 0.22, 0.4], [0.6, 0.44, 0.55], [0, -0.7, 0.05]),
-    ball("岩 3", M.slate, [-0.6, 0.24, 0.35], [0.5, 0.36, 0.46]),
-    box("岩 4", M.slate, [-0.35, 0.16, -0.7], [0.44, 0.32, 0.4], [0.04, 1.1, 0]),
-    ball("岩 5", M.slate, [0.5, 0.14, -0.6], [0.34, 0.26, 0.32]),
-    box("岩 6", M.slate, [1.1, 0.1, -0.15], [0.3, 0.2, 0.28], [0, 0.5, 0.06]),
+    rockPart("岩 1", "rockA", [0, 0, 0], [1.071, 0.81, 0.952], [0.06, 0.4, 0.04]),
+    rockPart("岩 2", "rockB", [0.75, 0, 0.4], [0.833, 0.611, 0.764], [0, -0.7, 0.05]),
+    rockPart("岩 3", "rockA", [-0.6, 0, 0.35], [0.595, 0.429, 0.548], [0, 0, 0]),
+    rockPart("岩 4", "rockB", [-0.35, 0, -0.7], [0.611, 0.444, 0.556], [0.04, 1.1, 0]),
+    rockPart("岩 5", "rockA", [0.5, 0, -0.6], [0.405, 0.31, 0.381], [0, 0, 0]),
+    rockPart("岩 6", "rockB", [1.1, 0, -0.15], [0.417, 0.278, 0.389], [0, 0.5, 0.06]),
   ],
 };
 
@@ -777,10 +744,14 @@ const STUMP: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "座れる機能は付いていません。見た目の小物として置けます。",
   parts: [
-    cyl("切り株", M.wood, [0, 0.2, 0], [0.42, 0.4, 0.42]),
-    cyl("年輪", M.sand, [0, 0.405, 0], [0.38, 0.02, 0.38]),
-    ball("きのこ 1", M.white, [0.34, 0.06, 0.2], [0.07, 0.06, 0.07]),
-    ball("きのこ 2", M.white, [0.42, 0.05, 0.02], [0.05, 0.045, 0.05]),
+    {
+      kind: "model",
+      name: "切り株",
+      modelId: "stump",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
   ],
 };
 
@@ -790,13 +761,13 @@ const FIREWOOD: SceneRecipe = {
   description: "横に寝かせた薪を積んだ小山。焚き火の隣に。",
   category: "nature",
   projectKinds: ["world", "item"],
-  note: "薪は寝かせた円柱です。向きを変えるときは親のTransformを回すと束のまま動きます。",
+  note: "薪はモデルパーツです。向きを変えるときは親のTransformを回すと束のまま動きます。",
   parts: [
-    cyl("薪 1", M.wood, [-0.16, 0.09, 0.02], [0.09, 0.9, 0.09], [0, 0, Math.PI / 2]),
-    cyl("薪 2", M.wood, [0.16, 0.09, -0.04], [0.09, 0.86, 0.09], [0, 0, Math.PI / 2]),
-    cyl("薪 3", M.wood, [-0.02, 0.09, 0.24], [0.085, 0.8, 0.085], [0.05, 0, Math.PI / 2]),
-    cyl("薪 4", M.wood, [0, 0.26, 0.06], [0.09, 0.88, 0.09], [0, 0, Math.PI / 2]),
-    cyl("薪 5", M.wood, [-0.02, 0.42, 0.02], [0.085, 0.76, 0.085], [-0.04, 0, Math.PI / 2]),
+    logPart("薪 1", [-0.42, 0, 0.16], 0.05, [1, 1, 1]),
+    logPart("薪 2", [-0.4, 0, -0.1], -0.08, [0.95, 0.95, 0.95]),
+    logPart("薪 3", [-0.38, 0, 0.42], 0.15, [0.85, 0.9, 0.9]),
+    logPart("薪 4", [-0.4, 0.09, 0.03], 0.02, [0.97, 0.95, 0.95]),
+    logPart("薪 5", [-0.38, 0.17, 0.1], -0.05, [0.8, 0.85, 0.85]),
   ],
 };
 
@@ -808,11 +779,14 @@ const SNOWMAN: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "顔は前(+Z)を向いています。向きを変えるときは親のTransformを回してください。",
   parts: [
-    ball("下の雪玉", M.white, [0, 0.42, 0], [0.84, 0.84, 0.84]),
-    ball("上の雪玉", M.white, [0, 1.05, 0], [0.56, 0.56, 0.56]),
-    ball("目 1", M.charcoal, [-0.11, 1.14, 0.24], [0.05, 0.05, 0.05]),
-    ball("目 2", M.charcoal, [0.11, 1.14, 0.24], [0.05, 0.05, 0.05]),
-    cone("鼻", M.orange, [0, 1.04, 0.3], [0.05, 0.2, 0.05], [Math.PI / 2, 0, 0]),
+    {
+      kind: "model",
+      name: "雪だるま",
+      modelId: "snowman",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [2, 2, 2],
+    },
   ],
 };
 
@@ -897,8 +871,14 @@ const MAGIC_CIRCLE: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "床の模様はMaterialの色だけです。文様を入れるにはTextureを割り当ててください。",
   parts: [
-    cyl("陣", M.violet, [0, 0.015, 0], [1.5, 0.03, 1.5]),
-    cyl("内円", M.glow, [0, 0.035, 0], [0.9, 0.02, 0.9]),
+    {
+      kind: "model",
+      name: "陣",
+      modelId: "magicCircle",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [2, 2, 2],
+    },
     emit("光の粒", "magic", [0, 0.5, 0], {
       shape: { type: "sphere", radius: 0.75 },
     }),
@@ -914,8 +894,14 @@ const WARP_PILLAR: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "見た目だけのセットです。実際に移動させるには、XRift公式ComponentのPortalを重ねて置いてください。",
   parts: [
-    cyl("台", M.charcoal, [0, 0.08, 0], [0.62, 0.16, 0.62]),
-    cyl("柱", M.glow, [0, 1.5, 0], [0.3, 3, 0.3]),
+    {
+      kind: "model",
+      name: "台と柱",
+      modelId: "warpPillar",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1.8, 1, 1.8],
+    },
     emit("粒", "magic", [0, 1.4, 0], {
       shape: { type: "cone", radius: 0.3, angle: 6 },
       startLifetime: { min: 1.6, max: 2.6 },
@@ -933,9 +919,14 @@ const COLUMN: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "Colliderは入っていません。ぶつかるようにするには柱身へBox Colliderを追加してください。",
   parts: [
-    box("基礎", M.slate, [0, 0.09, 0], [0.62, 0.18, 0.62]),
-    cyl("柱身", M.white, [0, 1.6, 0], [0.22, 2.8, 0.22]),
-    box("柱頭", M.slate, [0, 3.08, 0], [0.56, 0.16, 0.56]),
+    {
+      kind: "model",
+      name: "柱",
+      modelId: "pillar",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
   ],
 };
 
@@ -947,10 +938,22 @@ const ARCH_GATE: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "内側の幅は約2.2mです。くぐれるようにするには、柱にだけColliderを足してください。",
   parts: [
-    box("左基礎", M.slate, [-1.2, 0.08, 0], [0.52, 0.16, 0.52]),
-    box("右基礎", M.slate, [1.2, 0.08, 0], [0.52, 0.16, 0.52]),
-    cyl("左柱", M.white, [-1.2, 1.5, 0], [0.2, 2.8, 0.2]),
-    cyl("右柱", M.white, [1.2, 1.5, 0], [0.2, 2.8, 0.2]),
+    {
+      kind: "model",
+      name: "左柱",
+      modelId: "pillar",
+      position: [-1.2, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [0.93, 0.93, 0.93],
+    },
+    {
+      kind: "model",
+      name: "右柱",
+      modelId: "pillar",
+      position: [1.2, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [0.93, 0.93, 0.93],
+    },
     box("梁", M.slate, [0, 3.05, 0], [2.9, 0.3, 0.42]),
   ],
 };
@@ -963,11 +966,14 @@ const STAIRS: SceneRecipe = {
   projectKinds: ["world"],
   note: "Colliderは入っていません。上れるようにするには段ごとにBox Colliderを追加してください。",
   parts: [
-    box("段 1", M.slate, [0, 0.09, 0], [1.6, 0.18, 0.4]),
-    box("段 2", M.slate, [0, 0.27, -0.4], [1.6, 0.18, 0.4]),
-    box("段 3", M.slate, [0, 0.45, -0.8], [1.6, 0.18, 0.4]),
-    box("段 4", M.slate, [0, 0.63, -1.2], [1.6, 0.18, 0.4]),
-    box("段 5", M.slate, [0, 0.81, -1.6], [1.6, 0.18, 0.4]),
+    {
+      kind: "model",
+      name: "階段",
+      modelId: "stairs",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
   ],
 };
 
@@ -979,11 +985,14 @@ const WALL: SceneRecipe = {
   projectKinds: ["world"],
   note: "Colliderは入っていません。通り抜けを止めるには塀の面へBox Colliderを追加してください。",
   parts: [
-    box("塀 1", M.slate, [-1.3, 0.9, 0], [2.3, 1.8, 0.2]),
-    box("塀 2", M.slate, [1.3, 0.9, 0], [2.3, 1.8, 0.2]),
-    box("柱 1", M.charcoal, [-2.5, 1, 0], [0.3, 2, 0.3]),
-    box("柱 2", M.charcoal, [0, 1, 0], [0.3, 2, 0.3]),
-    box("柱 3", M.charcoal, [2.5, 1, 0], [0.3, 2, 0.3]),
+    {
+      kind: "model",
+      name: "塀",
+      modelId: "wall",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
   ],
 };
 
@@ -995,15 +1004,30 @@ const TABLE_SET: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "座る機能は付いていません。物を置くならテーブル天板の高さは0.74mです。",
   parts: [
-    box("天板", M.wood, [0, 0.74, 0], [1.4, 0.06, 0.8]),
-    box("脚 1", M.wood, [-0.62, 0.36, -0.32], [0.08, 0.72, 0.08]),
-    box("脚 2", M.wood, [0.62, 0.36, -0.32], [0.08, 0.72, 0.08]),
-    box("脚 3", M.wood, [-0.62, 0.36, 0.32], [0.08, 0.72, 0.08]),
-    box("脚 4", M.wood, [0.62, 0.36, 0.32], [0.08, 0.72, 0.08]),
-    cyl("椅子 1 座面", M.wood, [0, 0.44, 0.85], [0.2, 0.06, 0.2]),
-    cyl("椅子 1 脚", M.wood, [0, 0.21, 0.85], [0.06, 0.42, 0.06]),
-    cyl("椅子 2 座面", M.wood, [0, 0.44, -0.85], [0.2, 0.06, 0.2]),
-    cyl("椅子 2 脚", M.wood, [0, 0.21, -0.85], [0.06, 0.42, 0.06]),
+    {
+      kind: "model",
+      name: "テーブル",
+      modelId: "table",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+    {
+      kind: "model",
+      name: "椅子 1",
+      modelId: "stool",
+      position: [0, 0, 0.85],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+    {
+      kind: "model",
+      name: "椅子 2",
+      modelId: "stool",
+      position: [0, 0, -0.85],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
   ],
 };
 
@@ -1017,10 +1041,14 @@ const WELL: SceneRecipe = {
   parts: [
     ...stoneRing(10, 0.62, [0.24, 0.4, 0.2]),
     cyl("水", M.blue, [0, 0.06, 0], [0.5, 0.1, 0.5]),
-    box("柱 1", M.wood, [-0.6, 0.9, 0], [0.09, 1.8, 0.09]),
-    box("柱 2", M.wood, [0.6, 0.9, 0], [0.09, 1.8, 0.09]),
-    cyl("巻き上げ棒", M.wood, [0, 1.6, 0], [0.05, 1.2, 0.05], [0, 0, Math.PI / 2]),
-    box("屋根", M.wood, [0, 1.86, 0], [1.5, 0.1, 0.9]),
+    {
+      kind: "model",
+      name: "柱と屋根",
+      modelId: "wellFrame",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
   ],
 };
 
@@ -1032,15 +1060,90 @@ const PIER: SceneRecipe = {
   projectKinds: ["world"],
   note: "Colliderは入っていません。上を歩けるようにするには板へBox Colliderを追加してください。",
   parts: [
-    box("板 1", M.wood, [0, 0.5, 0], [1.4, 0.06, 0.44]),
-    box("板 2", M.wood, [0, 0.5, -0.5], [1.4, 0.06, 0.44]),
-    box("板 3", M.wood, [0, 0.5, -1], [1.4, 0.06, 0.44]),
-    box("板 4", M.wood, [0, 0.5, -1.5], [1.4, 0.06, 0.44]),
-    box("板 5", M.wood, [0, 0.5, -2], [1.4, 0.06, 0.44]),
-    cyl("杭 1", M.wood, [-0.6, 0.25, -0.05], [0.07, 0.5, 0.07]),
-    cyl("杭 2", M.wood, [0.6, 0.25, -0.05], [0.07, 0.5, 0.07]),
-    cyl("杭 3", M.wood, [-0.6, 0.25, -1.95], [0.07, 0.5, 0.07]),
-    cyl("杭 4", M.wood, [0.6, 0.25, -1.95], [0.07, 0.5, 0.07]),
+    {
+      kind: "model",
+      name: "桟橋",
+      modelId: "pier",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+  ],
+};
+
+const DOOR: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.door,
+  name: "ドア",
+  description: "枠とノブ付きのドア。幅0.9m、壁の開口部に置きます。",
+  category: "structure",
+  projectKinds: ["world"],
+  note: "Colliderは入っていません。通り抜けを止めるにはドアへBox Colliderを追加してください。開閉はできない見た目だけのドアです。",
+  parts: [
+    {
+      kind: "model",
+      name: "ドア",
+      modelId: "door",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+  ],
+};
+
+const WINDOW: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.window,
+  name: "窓",
+  description: "木枠とガラス、水切りのある窓。幅0.9m、壁にはめ込んで使います。",
+  category: "structure",
+  projectKinds: ["world"],
+  note: "Colliderは入っていません。ガラスは見た目だけで、開閉はできません。",
+  parts: [
+    {
+      kind: "model",
+      name: "窓",
+      modelId: "window",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+  ],
+};
+
+const FLOOR_PANEL: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.floorPanel,
+  name: "床パネル",
+  description: "2m四方の床板タイル。並べて部屋の床に敷けます。",
+  category: "structure",
+  projectKinds: ["world"],
+  note: "原点は歩ける面（上面）です。板の厚みぶんだけ下に沈むので、既存の地面と同じ高さに置くと段差なく馴染みます。隣に並べるときは2mぶんずらしてください。",
+  parts: [
+    {
+      kind: "model",
+      name: "床パネル",
+      modelId: "floorPanel",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+  ],
+};
+
+const WALL_PANEL: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.wallPanel,
+  name: "壁パネル",
+  description: "幅2m・高さ2.4mの壁パネル。幅木付き。並べて部屋の壁を組めます。",
+  category: "structure",
+  projectKinds: ["world"],
+  note: "Colliderは入っていません。通り抜けを止めるには壁へBox Colliderを追加してください。並べるときは幅2mぶん横にずらすと隙間なく続きます。",
+  parts: [
+    {
+      kind: "model",
+      name: "壁パネル",
+      modelId: "wallPanel",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
   ],
 };
 
@@ -1070,6 +1173,10 @@ export const SCENE_RECIPES: readonly SceneRecipe[] = [
   WALL,
   WELL,
   PIER,
+  DOOR,
+  WINDOW,
+  FLOOR_PANEL,
+  WALL_PANEL,
   BENCH,
   TABLE_SET,
   MAGIC_CIRCLE,
@@ -1105,13 +1212,14 @@ export type SceneRecipeInstantiation = {
  * history entry: undoing a campfire nobody wanted should not leave its two
  * Particle Assets behind in the library.
  */
-export function instantiateSceneRecipe(
+export async function instantiateSceneRecipe(
   scene: SceneDocument,
   assets: AssetManifest,
   recipeId: string,
   projectKind: VisualProjectKind,
+  projectPath: string,
   position: Vec3 = [0, 0, 0],
-): SceneRecipeInstantiation | null {
+): Promise<SceneRecipeInstantiation | null> {
   const recipe = getSceneRecipe(recipeId);
   if (!recipe || !recipe.projectKinds.includes(projectKind)) return null;
 
@@ -1122,12 +1230,13 @@ export function instantiateSceneRecipe(
 
   for (const part of recipe.parts) {
     const entityId = createDocumentId("entity");
+    const hasTransform = part.kind === "primitive" || part.kind === "model";
     const components: SceneComponent[] = [
       createTransformComponent(
         createDocumentId("component-transform"),
         part.position,
-        part.kind === "primitive" ? part.rotation : [0, 0, 0],
-        part.kind === "primitive" ? part.scale : [1, 1, 1],
+        hasTransform ? part.rotation : [0, 0, 0],
+        hasTransform ? part.scale : [1, 1, 1],
       ),
     ];
 
@@ -1144,6 +1253,21 @@ export function instantiateSceneRecipe(
           definition,
           [{ slot: "default", materialAssetId: part.materialAssetId }],
         ),
+      );
+    } else if (part.kind === "model") {
+      const definition = getBuiltinRecipeModel(part.modelId);
+      if (!definition) return null;
+      const withModel = await ensureBuiltinModelAsset(
+        projectPath,
+        nextAssets,
+        definition,
+      );
+      if (!withModel || withModel.assets[definition.assetId]?.kind !== "model") {
+        return null;
+      }
+      nextAssets = withModel;
+      components.push(
+        createMeshComponent(createDocumentId("component-mesh"), definition.assetId, []),
       );
     } else if (part.kind === "particle") {
       const preset = getParticleAuthoringPreset(part.presetId);

@@ -1,12 +1,14 @@
 import { tauri } from "../tauri";
 import {
   commitAssetImportPlan,
+  createAssetImportPlan,
   createModelReimportPlan,
   type AssetImportDiagnostic,
   type AssetImportPlan,
   type AssetImportWrite,
 } from "./asset-import";
 import { getModelAsset, type AssetManifest } from "./asset-manifest";
+import type { BuiltinRecipeModelDefinition } from "./builtin-recipe-models";
 
 export type ModelReimportPhase =
   | "reading-source"
@@ -98,6 +100,58 @@ export async function commitAssetImportPlansToDisk(
     ),
   );
   return candidate;
+}
+
+/**
+ * Imports one of the app's bundled recipe GLBs into the open project, unless
+ * that project already has it. Mirrors `ensureBuiltinMaterialAsset`
+ * (prototype-project.ts): idempotent, no I/O once the Asset already exists,
+ * safe to call every time a `SceneRecipe` "model" part is placed.
+ *
+ * Returns null on any fetch/hash/import failure so the caller can fail the
+ * whole recipe placement rather than silently dropping one part.
+ */
+export async function ensureBuiltinModelAsset(
+  projectPath: string,
+  manifest: AssetManifest,
+  definition: BuiltinRecipeModelDefinition,
+): Promise<AssetManifest | null> {
+  if (manifest.assets[definition.assetId]?.kind === "model") return manifest;
+
+  let response: Response;
+  try {
+    response = await fetch(definition.publicPath, { cache: "reload" });
+  } catch {
+    return null;
+  }
+  if (!response.ok) return null;
+
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength !== definition.byteLength) return null;
+  if ((await sha256Bytes(bytes)) !== definition.sha256) return null;
+
+  const plan = await createAssetImportPlan({
+    fileName: definition.fileName,
+    bytes,
+    mimeType: "model/gltf-binary",
+    displayName: definition.displayName,
+    folderId: null,
+    existingManifest: manifest,
+  });
+  if (!plan.canCommit || !plan.asset) return null;
+  return commitAssetImportPlanToDisk(projectPath, manifest, plan);
+}
+
+async function sha256Bytes(bytes: Uint8Array): Promise<string> {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error("Web Crypto SHA-256 is unavailable");
+  }
+  const owned = new Uint8Array(bytes.byteLength);
+  owned.set(bytes);
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", owned.buffer);
+  return [...new Uint8Array(digest)]
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 /**
