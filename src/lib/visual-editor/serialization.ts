@@ -1317,6 +1317,7 @@ function validateSceneSettings(
           "gridSize",
           "gridDivisions",
           "snapEnabled",
+          "snapHoldShift",
           "translateSnap",
           "rotateSnapDegrees",
           "scaleSnap",
@@ -1335,6 +1336,7 @@ function validateSceneSettings(
             issues.push(issue(`${path}.editor.gizmo.gridDivisions`, "range", "grid divisions must be a positive integer"));
           }
           validateBoolean(gizmo, "snapEnabled", `${path}.editor.gizmo`, issues);
+          validateBoolean(gizmo, "snapHoldShift", `${path}.editor.gizmo`, issues);
           validateFinite(gizmo, "translateSnap", `${path}.editor.gizmo`, issues, 0.001);
           validateFinite(gizmo, "rotateSnapDegrees", `${path}.editor.gizmo`, issues, 0.1);
           validateFinite(gizmo, "scaleSnap", `${path}.editor.gizmo`, issues, 0.001);

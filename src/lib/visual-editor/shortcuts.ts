@@ -31,6 +31,13 @@ export type EditorCommandId =
   | "transform.rotate"
   | "transform.scale"
   | "transform.toggle-space"
+  | "transform.toggle-snap"
+  | "transform.nudge-x-negative"
+  | "transform.nudge-x-positive"
+  | "transform.nudge-y-negative"
+  | "transform.nudge-y-positive"
+  | "transform.nudge-z-negative"
+  | "transform.nudge-z-positive"
   | "play.toggle"
   | "layout.reset";
 
@@ -246,6 +253,48 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
     bindings: [],
   },
   {
+    id: "transform.toggle-snap",
+    label: "スナップの入切",
+    category: "transform",
+    bindings: [{ key: "x" }],
+  },
+  {
+    id: "transform.nudge-x-negative",
+    label: "選択をX-へ1ステップ",
+    category: "transform",
+    bindings: [{ key: "arrowleft" }],
+  },
+  {
+    id: "transform.nudge-x-positive",
+    label: "選択をX+へ1ステップ",
+    category: "transform",
+    bindings: [{ key: "arrowright" }],
+  },
+  {
+    id: "transform.nudge-z-negative",
+    label: "選択をZ-へ1ステップ",
+    category: "transform",
+    bindings: [{ key: "arrowup" }],
+  },
+  {
+    id: "transform.nudge-z-positive",
+    label: "選択をZ+へ1ステップ",
+    category: "transform",
+    bindings: [{ key: "arrowdown" }],
+  },
+  {
+    id: "transform.nudge-y-negative",
+    label: "選択をY-へ1ステップ",
+    category: "transform",
+    bindings: [{ key: "pagedown" }],
+  },
+  {
+    id: "transform.nudge-y-positive",
+    label: "選択をY+へ1ステップ",
+    category: "transform",
+    bindings: [{ key: "pageup" }],
+  },
+  {
     id: "play.toggle",
     label: "Play開始／停止",
     category: "play",
@@ -437,10 +486,24 @@ function normalizeKey(key: string): string {
   return key.trim().toLowerCase();
 }
 
+const KEY_DISPLAY_NAMES: Readonly<Record<string, string>> = {
+  delete: "Delete",
+  backspace: "Backspace",
+  escape: "Esc",
+  arrowup: "↑",
+  arrowdown: "↓",
+  arrowleft: "←",
+  arrowright: "→",
+  pageup: "PageUp",
+  pagedown: "PageDown",
+  home: "Home",
+  end: "End",
+};
+
 function displayKey(key: string): string {
   const normalized = normalizeKey(key);
-  if (normalized === "delete") return "Delete";
-  if (normalized === "backspace") return "Backspace";
+  const named = KEY_DISPLAY_NAMES[normalized];
+  if (named) return named;
   if (/^f\d+$/.test(normalized)) return normalized.toUpperCase();
   return normalized.length === 1 ? normalized.toUpperCase() : normalized;
 }

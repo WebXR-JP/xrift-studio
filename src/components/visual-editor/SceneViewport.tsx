@@ -131,6 +131,7 @@ import {
   type SceneComponent,
   type SceneDocument,
   type SceneEntity,
+  type SceneGizmoSettings,
   type SceneSettings,
   type VegetationWindComponent,
   type TerrainGeometry,
@@ -145,6 +146,16 @@ import {
   NATIVE_MODEL_EXTENSION_PATTERN,
 } from "../../lib/visual-editor";
 import { tauri } from "../../lib/tauri";
+import { isEditableShortcutTarget } from "../../lib/visual-editor/shortcuts";
+import {
+  formatSnapStep,
+  minSnapStepForMode,
+  resolveSnapActive,
+  snapPresetsForMode,
+  snapStepForMode,
+  snapStepLabel,
+  snapStepUnit,
+} from "../../lib/visual-editor/gizmo-snap";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { ParticleEmitterVisual } from "./ParticleEmitterVisual";
 import { SceneThumbnailCapture } from "./SceneThumbnailCapture";
@@ -1954,13 +1965,13 @@ function EntityObject({
           mode={transformMode}
           space={transformSpace}
           size={gizmo.size}
-          translationSnap={gizmo.snapEnabled ? gizmo.translateSnap : undefined}
+          // null, not undefined: three reads these live during a drag, and a
+          // removed prop is not guaranteed to clear the previous step.
+          translationSnap={gizmo.snapEnabled ? gizmo.translateSnap : null}
           rotationSnap={
-            gizmo.snapEnabled
-              ? (gizmo.rotateSnapDegrees * Math.PI) / 180
-              : undefined
+            gizmo.snapEnabled ? (gizmo.rotateSnapDegrees * Math.PI) / 180 : null
           }
-          scaleSnap={gizmo.snapEnabled ? gizmo.scaleSnap : undefined}
+          scaleSnap={gizmo.snapEnabled ? gizmo.scaleSnap : null}
           onMouseDown={() => {
             transformDraggingRef.current = true;
             onDraggingChange(true);
@@ -3323,6 +3334,272 @@ function EditorCameraSettings({
   return null;
 }
 
+/**
+ * The Scene View entry point for snapping: the button flips it, the label
+ * always says what one step is worth for the active tool, and the panel edits
+ * the three step sizes without a trip to Scene Settings.
+ */
+function SnapToolbarControl({
+  gizmo,
+  transformMode,
+  snapActive,
+  modifierHeld,
+  disabled,
+  playing,
+  open,
+  onOpenChange,
+  onChange,
+  shortcut,
+}: {
+  gizmo: SceneGizmoSettings;
+  transformMode: TransformMode;
+  /** Includes the held modifier, so the button shows what a drag would do now. */
+  snapActive: boolean;
+  modifierHeld: boolean;
+  disabled: boolean;
+  playing: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onChange?: (patch: Partial<SceneGizmoSettings>) => void;
+  shortcut?: string;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const step = snapStepForMode(gizmo, transformMode);
+  const stepText = formatSnapStep(transformMode, step);
+  const editable = Boolean(onChange) && !disabled;
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutside = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        onOpenChange(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onOpenChange(false);
+    };
+    window.addEventListener("pointerdown", closeOnOutside);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", closeOnOutside);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [onOpenChange, open]);
+
+  useEffect(() => {
+    if (disabled) onOpenChange(false);
+  }, [disabled, onOpenChange]);
+
+  return (
+    <div ref={containerRef} className="relative flex items-center">
+      <button
+        type="button"
+        aria-label={`スナップ${snapActive ? "有効" : "無効"}${
+          modifierHeld ? "。Shiftで反転中" : ""
+        }。1ステップ ${stepText}`}
+        aria-pressed={snapActive}
+        disabled={!editable}
+        onClick={() => onChange?.({ snapEnabled: !gizmo.snapEnabled })}
+        title={commandTitle(
+          `スナップを${gizmo.snapEnabled ? "切る" : "入れる"}。移動 ${formatSnapStep(
+            "translate",
+            gizmo.translateSnap,
+          )} / 回転 ${formatSnapStep(
+            "rotate",
+            gizmo.rotateSnapDegrees,
+          )} / 拡縮 ${formatSnapStep("scale", gizmo.scaleSnap)}${
+            gizmo.snapHoldShift ? "。Shiftを押している間は反転します" : ""
+          }`,
+          "transform.toggle-snap",
+          shortcut,
+        )}
+        className={`flex h-7 items-center gap-1 rounded-l border px-1.5 text-[11px] font-semibold tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
+          modifierHeld
+            ? "border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100"
+            : snapActive
+              ? "border-violet-500 bg-violet-600 text-white hover:bg-violet-500"
+              : playing
+                ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
+                : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
+        }`}
+      >
+        <EDITOR_ICONS.snap size={13} aria-hidden="true" />
+        <span className="hidden sm:inline">
+          {modifierHeld
+            ? snapActive
+              ? `Shift ${stepText}`
+              : "Shift 自由"
+            : stepText}
+        </span>
+      </button>
+      <button
+        type="button"
+        aria-label="スナップの間隔を設定"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        disabled={!editable}
+        onClick={() => onOpenChange(!open)}
+        title="スナップの間隔とShiftの扱いを設定"
+        className={`flex h-7 w-5 items-center justify-center rounded-r border border-l-0 transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
+          playing
+            ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
+            : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
+        }`}
+      >
+        <EDITOR_ICONS.expanded size={12} aria-hidden="true" />
+      </button>
+
+      {open && onChange ? (
+        <div
+          role="dialog"
+          aria-label="スナップ設定"
+          className="absolute right-0 top-full z-40 mt-1 w-64 rounded-md border border-slate-300 bg-white p-3 text-slate-800 shadow-xl"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[12px] font-semibold text-slate-800">スナップ</p>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={gizmo.snapEnabled}
+              onClick={() => onChange({ snapEnabled: !gizmo.snapEnabled })}
+              className={`h-6 rounded border px-2 text-[11px] font-semibold ${
+                gizmo.snapEnabled
+                  ? "border-violet-500 bg-violet-600 text-white"
+                  : "border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              {gizmo.snapEnabled ? "オン" : "オフ"}
+            </button>
+          </div>
+          <p className="mt-1 text-[11px] leading-4 text-slate-500">
+            ギズモのドラッグと矢印キーの1ステップを、指定した間隔にそろえます。
+          </p>
+
+          {(["translate", "rotate", "scale"] as const).map((mode) => (
+            <SnapStepField
+              key={mode}
+              mode={mode}
+              value={snapStepForMode(gizmo, mode)}
+              highlighted={mode === transformMode}
+              onChange={(value) =>
+                onChange(
+                  mode === "rotate"
+                    ? { rotateSnapDegrees: value }
+                    : mode === "scale"
+                      ? { scaleSnap: value }
+                      : { translateSnap: value },
+                )
+              }
+            />
+          ))}
+
+          <label className="mt-3 flex cursor-pointer items-start justify-between gap-3 border-t border-slate-100 pt-2.5">
+            <span>
+              <span className="block text-[11px] font-medium text-slate-700">
+                Shiftを押している間は反転する
+              </span>
+              <span className="block text-[11px] leading-4 text-slate-500">
+                オフの時は一時的にそろえ、オンの時は一時的に自由に動かせます。
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={gizmo.snapHoldShift}
+              onChange={(event) =>
+                onChange({ snapHoldShift: event.currentTarget.checked })
+              }
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+            />
+          </label>
+
+          <p className="mt-2 border-t border-slate-100 pt-2 text-[11px] leading-4 text-slate-500">
+            矢印キーで選択を1ステップ動かします。左右がX、上下がZ、PageUpとPageDownがYです。回転ツールと拡縮ツールでは、その軸の角度と倍率が同じ1ステップだけ動きます。
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SnapStepField({
+  mode,
+  value,
+  highlighted,
+  onChange,
+}: {
+  mode: TransformMode;
+  value: number;
+  /** The active tool's row is the one the toolbar label is showing. */
+  highlighted: boolean;
+  onChange: (value: number) => void;
+}) {
+  const minimum = minSnapStepForMode(mode);
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+
+  const commit = () => {
+    const next = Number(draft);
+    if (!Number.isFinite(next) || next < minimum) {
+      setDraft(String(value));
+      return;
+    }
+    if (next !== value) onChange(next);
+    else setDraft(String(value));
+  };
+
+  return (
+    <div
+      className={`mt-2.5 rounded border px-2 py-1.5 ${
+        highlighted ? "border-violet-200 bg-violet-50/60" : "border-transparent"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-[11px] font-medium text-slate-700">
+          {snapStepLabel(mode)}
+          <div className="mt-1 flex items-center gap-1">
+            <input
+              type="number"
+              value={draft}
+              min={minimum}
+              step={minimum}
+              onChange={(event) => setDraft(event.currentTarget.value)}
+              onBlur={commit}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commit();
+                }
+              }}
+              className="h-6 w-20 rounded border border-slate-300 px-1.5 text-right text-[11px] tabular-nums outline-none focus:border-violet-400"
+            />
+            <span className="text-[10px] text-slate-500">
+              {snapStepUnit(mode)}
+            </span>
+          </div>
+        </label>
+        <div className="flex max-w-[7.5rem] flex-wrap justify-end gap-1">
+          {snapPresetsForMode(mode).map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              aria-label={`${snapStepLabel(mode)}を${formatSnapStep(mode, preset)}にする`}
+              aria-pressed={preset === value}
+              onClick={() => onChange(preset)}
+              className={`h-5 rounded border px-1.5 text-[10px] font-semibold tabular-nums ${
+                preset === value
+                  ? "border-violet-500 bg-violet-600 text-white"
+                  : "border-slate-200 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
+              }`}
+            >
+              {formatSnapStep(mode, preset)}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SceneViewport({
   scene,
   assets,
@@ -3340,9 +3617,11 @@ export function SceneViewport({
   playDisabled,
   playPreparing,
   playShortcut,
+  snapShortcut,
   onTogglePlay,
   onTransformModeChange,
   onToggleTransformSpace,
+  onGizmoSettingsChange,
   notice,
   onSelect,
   onTransformCommit,
@@ -3395,9 +3674,12 @@ export function SceneViewport({
   /** Script compilation runs before Play starts; the button shows it. */
   playPreparing?: boolean;
   playShortcut?: string;
+  snapShortcut?: string;
   onTogglePlay: () => void;
   onTransformModeChange: (mode: TransformMode) => void;
   onToggleTransformSpace: () => void;
+  /** Snap is flipped often enough that the toolbar patches it without Undo. */
+  onGizmoSettingsChange?: (patch: Partial<SceneGizmoSettings>) => void;
   notice: string | null;
   onSelect: (
     selection: SceneViewportEntitySelection,
@@ -3473,6 +3755,11 @@ export function SceneViewport({
   const [materialDropTarget, setMaterialDropTarget] =
     useState<MaterialDropTarget | null>(null);
   const [projection, setProjection] = useState<ViewProjection>("perspective");
+  // Held-Shift inverts snap for the length of the hold. Tracked on window
+  // because the gizmo captures the pointer, so the key never reaches the
+  // viewport element once a drag is under way.
+  const [snapModifierHeld, setSnapModifierHeld] = useState(false);
+  const [snapPanelOpen, setSnapPanelOpen] = useState(false);
   const [thumbnailCaptureActive, setThumbnailCaptureActive] = useState(false);
   const [displayMode, setDisplayMode] =
     useState<SceneViewportDisplayMode>("scene");
@@ -3520,6 +3807,40 @@ export function SceneViewport({
     () => resolveSceneSettings(scene.settings),
     [scene.settings],
   );
+  const gizmoSettings = sceneSettings.editor.gizmo;
+  const snapActive = resolveSnapActive(gizmoSettings, snapModifierHeld);
+  // One object identity per resolved state keeps the Entity tree from
+  // re-rendering on unrelated renders.
+  const activeGizmo = useMemo(
+    () => ({ ...gizmoSettings, snapEnabled: snapActive }),
+    [gizmoSettings, snapActive],
+  );
+
+  useEffect(() => {
+    if (editorMode !== "edit" || !gizmoSettings.snapHoldShift) {
+      setSnapModifierHeld(false);
+      return;
+    }
+    const sync = (event: KeyboardEvent | PointerEvent) => {
+      // Shift also capitalises letters. Typing a name in the Inspector must
+      // not flip the gizmo and re-render the whole Entity tree.
+      if (isEditableShortcutTarget(event.target)) return;
+      setSnapModifierHeld(event.shiftKey);
+    };
+    const clear = () => setSnapModifierHeld(false);
+    window.addEventListener("keydown", sync);
+    window.addEventListener("keyup", sync);
+    window.addEventListener("pointerdown", sync);
+    window.addEventListener("blur", clear);
+    document.addEventListener("visibilitychange", clear);
+    return () => {
+      window.removeEventListener("keydown", sync);
+      window.removeEventListener("keyup", sync);
+      window.removeEventListener("pointerdown", sync);
+      window.removeEventListener("blur", clear);
+      document.removeEventListener("visibilitychange", clear);
+    };
+  }, [editorMode, gizmoSettings.snapHoldShift]);
   const viewportWind = useMemo(
     () => resolveSceneWind(sceneSettings.vegetation),
     [sceneSettings.vegetation],
@@ -4422,6 +4743,18 @@ export function SceneViewport({
               <EDITOR_ICONS.axis size={14} aria-hidden="true" />
             )}
           </button>
+          <SnapToolbarControl
+            gizmo={gizmoSettings}
+            transformMode={transformMode}
+            snapActive={snapActive}
+            modifierHeld={snapModifierHeld && gizmoSettings.snapHoldShift}
+            disabled={editorMode !== "edit" || colliderOnlyEdit}
+            playing={editorMode === "play"}
+            open={snapPanelOpen}
+            onOpenChange={setSnapPanelOpen}
+            onChange={onGizmoSettingsChange}
+            shortcut={snapShortcut}
+          />
           <select
             value={projection}
             disabled={editorMode !== "edit"}
@@ -4667,7 +5000,7 @@ export function SceneViewport({
                   runtimeEntityRevisions={runtimeEntityRevisions}
                   transformMode={transformMode}
                   transformSpace={transformSpace}
-                  gizmo={sceneSettings.editor.gizmo}
+                  gizmo={activeGizmo}
                   onTransformCommit={onTransformCommit}
                   onDraggingChange={(dragging) => {
                     transformDraggingRef.current = dragging;

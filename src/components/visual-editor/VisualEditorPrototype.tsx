@@ -42,6 +42,7 @@ import {
   assignMaterialToMeshSlots,
   commitEditorHistory,
   createEditorHistory,
+  type EditorHistory,
   createDocumentId,
   createTextureCard,
   createOfficialXriftComponentSample,
@@ -80,6 +81,11 @@ import {
   resolveAssetCreationFolderId,
   resolveSceneSettings,
   resolveSceneWind,
+  formatSnapStep,
+  nudgeTransformPatch,
+  snapStepForMode,
+  type NudgeAxis,
+  type NudgeDirection,
   renameAsset,
   renameAssetFolder,
   renameEntity,
@@ -146,6 +152,7 @@ import {
   type ParticlePropertiesPatch,
   type PlaySession,
   type PrototypeVisualProject,
+  type SceneGizmoSettings,
   type SceneSettings,
   type ScriptAsset,
   type ShaderAssetStage,
@@ -529,6 +536,47 @@ export type VisualEditorPrototypeProps = {
   initialLayout?: Partial<VisualEditorLayout>;
   onLayoutChange?: (layout: VisualEditorLayout) => void;
 };
+
+/**
+ * Gizmo settings - snap, its step sizes, the grid - are how the editor is set
+ * up rather than what the scene contains, so they are carried across Undo and
+ * Redo instead of being rewound with the document. Without this, turning snap
+ * off and then undoing an unrelated move would turn snap back on, because the
+ * restored snapshot still holds the value from when it was taken.
+ */
+function carryGizmoSettingsForward(
+  restored: PrototypeVisualProject,
+  live: PrototypeVisualProject,
+): PrototypeVisualProject {
+  const liveGizmo = resolveSceneSettings(live.scene.settings).editor.gizmo;
+  const restoredSettings = resolveSceneSettings(restored.scene.settings);
+  if (
+    JSON.stringify(restoredSettings.editor.gizmo) === JSON.stringify(liveGizmo)
+  ) {
+    return restored;
+  }
+  return {
+    ...restored,
+    scene: {
+      ...restored.scene,
+      settings: {
+        ...restoredSettings,
+        editor: { ...restoredSettings.editor, gizmo: liveGizmo },
+      },
+    },
+  };
+}
+
+/** Applies carryGizmoSettingsForward to the snapshot Undo or Redo restored. */
+function withLiveGizmoSettings(
+  history: EditorHistory<EditorSessionSnapshot>,
+  live: PrototypeVisualProject,
+): EditorHistory<EditorSessionSnapshot> {
+  const bundle = carryGizmoSettingsForward(history.present.bundle, live);
+  return bundle === history.present.bundle
+    ? history
+    : replaceEditorHistoryPresent(history, { ...history.present, bundle });
+}
 
 function touchProject(bundle: PrototypeVisualProject): PrototypeVisualProject {
   return {
@@ -3965,38 +4013,131 @@ export function VisualEditorPrototype({
     [],
   );
 
+  /**
+   * Snap gets flipped many times while a scene is laid out, so the toolbar
+   * patches the present snapshot instead of pushing an Undo entry: an Undo
+   * after a move should return the Entity, not the toolbar. The value still
+   * belongs to the scene document, so autosave still picks it up.
+   */
+  const handleGizmoSettingsChange = useCallback(
+    (patch: Partial<SceneGizmoSettings>) => {
+      if (editorMode !== "edit") return;
+      setHistory((current) => {
+        const currentBundle = current.present.bundle;
+        const settings = resolveSceneSettings(currentBundle.scene.settings);
+        const gizmo = { ...settings.editor.gizmo, ...patch };
+        if (JSON.stringify(gizmo) === JSON.stringify(settings.editor.gizmo)) {
+          return current;
+        }
+        setSaveStatus("dirty");
+        return replaceEditorHistoryPresent(current, {
+          ...current.present,
+          bundle: touchProject({
+            ...currentBundle,
+            scene: {
+              ...currentBundle.scene,
+              settings: {
+                ...settings,
+                editor: { ...settings.editor, gizmo },
+              },
+            },
+          }),
+        });
+      });
+    },
+    [editorMode],
+  );
+
   const handleSceneSettingsChange = useCallback(
     (settings: SceneSettings) => {
       if (editorMode !== "edit") return;
-      updateScene((scene) =>
-        JSON.stringify(scene.settings) === JSON.stringify(settings)
+      // Gizmo settings take the same Undo-free path as the Scene View toolbar,
+      // so the panel and the toolbar cannot disagree about whether flipping
+      // snap belongs in the history.
+      const { gizmo, ...editor } = settings.editor;
+      updateScene((scene) => {
+        const kept: SceneSettings = {
+          ...settings,
+          editor: { ...editor, gizmo: resolveSceneSettings(scene.settings).editor.gizmo },
+        };
+        return JSON.stringify(scene.settings) === JSON.stringify(kept)
           ? scene
-          : { ...scene, settings },
-      );
+          : { ...scene, settings: kept };
+      });
+      handleGizmoSettingsChange(gizmo);
       setNotice("シーン設定を更新しました。変更を自動保存します");
     },
-    [editorMode, updateScene],
+    [editorMode, handleGizmoSettingsChange, updateScene],
+  );
+
+  /**
+   * One keyboard step of the active gizmo tool, applied to every selected
+   * Entity. The step comes from the same snap settings the gizmo drag uses, so
+   * "move by exactly this much" needs no dragging at all.
+   */
+  const handleNudgeSelection = useCallback(
+    (axis: NudgeAxis, direction: NudgeDirection): boolean => {
+      if (editorMode !== "edit") return false;
+      const scene = bundleRef.current.scene;
+      const targets = selectedEntityIds.filter((entityId) =>
+        Boolean(getTransform(scene, entityId)),
+      );
+      if (targets.length === 0) return false;
+      const gizmo = resolveSceneSettings(scene.settings).editor.gizmo;
+      const step = snapStepForMode(gizmo, transformMode);
+      if (!Number.isFinite(step) || step <= 0) return false;
+
+      updateScene((current) => {
+        let next = current;
+        for (const entityId of targets) {
+          const transform = getTransform(next, entityId);
+          if (!transform) continue;
+          const patch = nudgeTransformPatch(
+            transform,
+            transformMode,
+            axis,
+            direction,
+            gizmo,
+            gizmo.snapEnabled,
+          );
+          if (patch) next = updateModelNodeEntityTransform(next, entityId, patch);
+        }
+        return next;
+      });
+
+      const action =
+        transformMode === "rotate"
+          ? "回転"
+          : transformMode === "scale"
+            ? "拡縮"
+            : "移動";
+      setNotice(
+        `${targets.length}件を${axis.toUpperCase()}${
+          direction > 0 ? "+" : "-"
+        }へ ${formatSnapStep(transformMode, step)} ${action}しました`,
+      );
+      return true;
+    },
+    [editorMode, selectedEntityIds, transformMode, updateScene],
   );
 
   const handleUndo = useCallback(() => {
     setHistory((current) => {
       const transition = undoEditorHistory(current);
-      if (transition.changed) {
-        setSaveStatus("dirty");
-        setNotice("元に戻しました");
-      }
-      return transition.history;
+      if (!transition.changed) return transition.history;
+      setSaveStatus("dirty");
+      setNotice("元に戻しました");
+      return withLiveGizmoSettings(transition.history, current.present.bundle);
     });
   }, []);
 
   const handleRedo = useCallback(() => {
     setHistory((current) => {
       const transition = redoEditorHistory(current);
-      if (transition.changed) {
-        setSaveStatus("dirty");
-        setNotice("やり直しました");
-      }
-      return transition.history;
+      if (!transition.changed) return transition.history;
+      setSaveStatus("dirty");
+      setNotice("やり直しました");
+      return withLiveGizmoSettings(transition.history, current.present.bundle);
     });
   }, []);
 
@@ -8317,6 +8458,38 @@ export function VisualEditorPrototype({
             current === "world" ? "local" : "world",
           );
           return true;
+        case "transform.toggle-snap": {
+          if (editorMode !== "edit") return false;
+          const gizmo = resolveSceneSettings(
+            bundleRef.current.scene.settings,
+          ).editor.gizmo;
+          const snapEnabled = !gizmo.snapEnabled;
+          handleGizmoSettingsChange({ snapEnabled });
+          setNotice(
+            snapEnabled
+              ? `スナップをオンにしました（移動 ${formatSnapStep(
+                  "translate",
+                  gizmo.translateSnap,
+                )} / 回転 ${formatSnapStep(
+                  "rotate",
+                  gizmo.rotateSnapDegrees,
+                )} / 拡縮 ${formatSnapStep("scale", gizmo.scaleSnap)}）`
+              : "スナップをオフにしました",
+          );
+          return true;
+        }
+        case "transform.nudge-x-negative":
+          return handleNudgeSelection("x", -1);
+        case "transform.nudge-x-positive":
+          return handleNudgeSelection("x", 1);
+        case "transform.nudge-y-negative":
+          return handleNudgeSelection("y", -1);
+        case "transform.nudge-y-positive":
+          return handleNudgeSelection("y", 1);
+        case "transform.nudge-z-negative":
+          return handleNudgeSelection("z", -1);
+        case "transform.nudge-z-positive":
+          return handleNudgeSelection("z", 1);
         case "play.toggle":
           if (editorMode === "play") stopPlayMode();
           else if (importBusy) {
@@ -8437,6 +8610,8 @@ export function VisualEditorPrototype({
       handleDelete,
       handleDuplicate,
       handleEntitySelectionChange,
+      handleGizmoSettingsChange,
+      handleNudgeSelection,
       handlePaste,
       handlePlacePrimitive,
       handleReparentEntity,
@@ -8834,6 +9009,7 @@ export function VisualEditorPrototype({
             playDisabled={renderedEditorMode === "edit" && importBusy}
             playPreparing={playPreparing}
             playShortcut={shortcutLabel("play.toggle")}
+            snapShortcut={shortcutLabel("transform.toggle-snap")}
             onTogglePlay={() => executeCommand("play.toggle")}
             onTransformModeChange={(mode) => {
               if (!renderedReadOnly) setTransformMode(mode);
@@ -8843,6 +9019,9 @@ export function VisualEditorPrototype({
                 executeCommand("transform.toggle-space");
               }
             }}
+            onGizmoSettingsChange={
+              renderedReadOnly ? undefined : handleGizmoSettingsChange
+            }
             notice={null}
             onSelect={handleSceneViewportSelection}
             onTransformCommit={handleGizmoCommit}
