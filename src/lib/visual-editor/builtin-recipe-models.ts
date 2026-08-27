@@ -217,6 +217,136 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     provenance:
       "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
   },
+  {
+    modelId: "pillar",
+    assetId: "model-pillar-e1b16b8f3f08",
+    publicPath: "/visual-editor/recipe-assets/pillar.glb",
+    fileName: "pillar.glb",
+    sha256:
+      "e1b16b8f3f088fca51773a2e137b78034b7fcb0b9c42384a78070ea5dbb1e871",
+    byteLength: 11144,
+    displayName: "石柱",
+    approxRadius: 1.6,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "stairs",
+    assetId: "model-stairs-1adc222a9080",
+    publicPath: "/visual-editor/recipe-assets/stairs.glb",
+    fileName: "stairs.glb",
+    sha256:
+      "1adc222a90806db593ac380f66b2e6573f4378ac51c56b949ce5f7b6b5dcf91f",
+    byteLength: 18732,
+    displayName: "階段",
+    approxRadius: 1.1,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "wall",
+    assetId: "model-wall-a08e2586e825",
+    publicPath: "/visual-editor/recipe-assets/wall.glb",
+    fileName: "wall.glb",
+    sha256:
+      "a08e2586e82579a63a0b0c9cfcaf35289b0bd08edf233c31e56956ceffbe4e0d",
+    byteLength: 24228,
+    displayName: "塀",
+    approxRadius: 2.6,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "wellFrame",
+    assetId: "model-well-frame-ad14bf1629ed",
+    publicPath: "/visual-editor/recipe-assets/well-frame.glb",
+    fileName: "well-frame.glb",
+    sha256:
+      "ad14bf1629ed290423aa6c17c1aed600e3df366564280f40327f0de672fe457d",
+    byteLength: 11012,
+    displayName: "井戸の屋根",
+    approxRadius: 0.95,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "pier",
+    assetId: "model-pier-63e595a4556b",
+    publicPath: "/visual-editor/recipe-assets/pier.glb",
+    fileName: "pier.glb",
+    sha256:
+      "63e595a4556b5047bba801c0cf5dabb37a114771dac99c0ab92174f5a1cd35b2",
+    byteLength: 30768,
+    displayName: "桟橋",
+    approxRadius: 1.2,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "table",
+    assetId: "model-table-006c45dbc7a2",
+    publicPath: "/visual-editor/recipe-assets/table.glb",
+    fileName: "table.glb",
+    sha256:
+      "006c45dbc7a2b619b16623949331fbeb4ec11a6a8efa2e1a2b90c6e022e8ad6a",
+    byteLength: 14376,
+    displayName: "テーブル",
+    approxRadius: 0.85,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "stool",
+    assetId: "model-stool-c656cb6dc82f",
+    publicPath: "/visual-editor/recipe-assets/stool.glb",
+    fileName: "stool.glb",
+    sha256:
+      "c656cb6dc82f69c1c9ea8aa687343692b1acca94ea651bb01e09f50bfe3e5c11",
+    byteLength: 7692,
+    displayName: "丸椅子",
+    approxRadius: 0.25,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "magicCircle",
+    assetId: "model-magic-circle-028dc11cee1f",
+    publicPath: "/visual-editor/recipe-assets/magic-circle.glb",
+    fileName: "magic-circle.glb",
+    sha256:
+      "028dc11cee1fa3ece600cf22ba9499462922c7570f8c7f8733521c5dfa5bf113",
+    byteLength: 14164,
+    displayName: "魔法陣",
+    approxRadius: 0.8,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "warpPillar",
+    assetId: "model-warp-pillar-7f9f9bd6d3a2",
+    publicPath: "/visual-editor/recipe-assets/warp-pillar.glb",
+    fileName: "warp-pillar.glb",
+    sha256:
+      "7f9f9bd6d3a2a92225ed4d69f7bb3839f551c762657a6663c829a0cf6a600509",
+    byteLength: 6880,
+    displayName: "ワープの柱",
+    approxRadius: 1.6,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "snowman",
+    assetId: "model-snowman-a0c6b14c79d6",
+    publicPath: "/visual-editor/recipe-assets/snowman.glb",
+    fileName: "snowman.glb",
+    sha256:
+      "a0c6b14c79d644e8e9b3f786f4020a0786fc04db62fb72baa3952bd9ae29c40e",
+    byteLength: 56796,
+    displayName: "雪だるま",
+    approxRadius: 0.55,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
 ];
 
 export function getBuiltinRecipeModel(

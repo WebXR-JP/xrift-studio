@@ -240,22 +240,6 @@ const cyl = (
   rotation: Vec3 = [0, 0, 0],
 ) => shape(C.cylinder, name, material, position, scale, rotation);
 
-const ball = (
-  name: string,
-  material: string,
-  position: Vec3,
-  scale: Vec3,
-  rotation: Vec3 = [0, 0, 0],
-) => shape(C.sphere, name, material, position, scale, rotation);
-
-const cone = (
-  name: string,
-  material: string,
-  position: Vec3,
-  scale: Vec3,
-  rotation: Vec3 = [0, 0, 0],
-) => shape(C.cone, name, material, position, scale, rotation);
-
 /** A firewood log, authored lying along +X from its own end -- `rotationY`
  * turns it to face a little differently so a pile does not read as clones. */
 const logPart = (
@@ -657,7 +641,7 @@ const BRAZIER: SceneRecipe = {
       modelId: "brazier",
       position: [0, 0, 0],
       rotation: [0, 0, 0],
-      scale: [1, 1, 1],
+      scale: [1.6, 1, 1.6],
     },
     emit("炎", "fire", [0, 0.76, 0], {
       maxParticles: 220,
@@ -791,11 +775,14 @@ const SNOWMAN: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "顔は前(+Z)を向いています。向きを変えるときは親のTransformを回してください。",
   parts: [
-    ball("下の雪玉", M.white, [0, 0.42, 0], [0.84, 0.84, 0.84]),
-    ball("上の雪玉", M.white, [0, 1.05, 0], [0.56, 0.56, 0.56]),
-    ball("目 1", M.charcoal, [-0.11, 1.14, 0.24], [0.05, 0.05, 0.05]),
-    ball("目 2", M.charcoal, [0.11, 1.14, 0.24], [0.05, 0.05, 0.05]),
-    cone("鼻", M.orange, [0, 1.04, 0.3], [0.05, 0.2, 0.05], [Math.PI / 2, 0, 0]),
+    {
+      kind: "model",
+      name: "雪だるま",
+      modelId: "snowman",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [2, 2, 2],
+    },
   ],
 };
 
@@ -880,8 +867,14 @@ const MAGIC_CIRCLE: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "床の模様はMaterialの色だけです。文様を入れるにはTextureを割り当ててください。",
   parts: [
-    cyl("陣", M.violet, [0, 0.015, 0], [1.5, 0.03, 1.5]),
-    cyl("内円", M.glow, [0, 0.035, 0], [0.9, 0.02, 0.9]),
+    {
+      kind: "model",
+      name: "陣",
+      modelId: "magicCircle",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [2, 2, 2],
+    },
     emit("光の粒", "magic", [0, 0.5, 0], {
       shape: { type: "sphere", radius: 0.75 },
     }),
@@ -897,8 +890,14 @@ const WARP_PILLAR: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "見た目だけのセットです。実際に移動させるには、XRift公式ComponentのPortalを重ねて置いてください。",
   parts: [
-    cyl("台", M.charcoal, [0, 0.08, 0], [0.62, 0.16, 0.62]),
-    cyl("柱", M.glow, [0, 1.5, 0], [0.3, 3, 0.3]),
+    {
+      kind: "model",
+      name: "台と柱",
+      modelId: "warpPillar",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1.8, 1, 1.8],
+    },
     emit("粒", "magic", [0, 1.4, 0], {
       shape: { type: "cone", radius: 0.3, angle: 6 },
       startLifetime: { min: 1.6, max: 2.6 },
@@ -916,9 +915,14 @@ const COLUMN: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "Colliderは入っていません。ぶつかるようにするには柱身へBox Colliderを追加してください。",
   parts: [
-    box("基礎", M.slate, [0, 0.09, 0], [0.62, 0.18, 0.62]),
-    cyl("柱身", M.white, [0, 1.6, 0], [0.22, 2.8, 0.22]),
-    box("柱頭", M.slate, [0, 3.08, 0], [0.56, 0.16, 0.56]),
+    {
+      kind: "model",
+      name: "柱",
+      modelId: "pillar",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
   ],
 };
 
@@ -930,10 +934,22 @@ const ARCH_GATE: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "内側の幅は約2.2mです。くぐれるようにするには、柱にだけColliderを足してください。",
   parts: [
-    box("左基礎", M.slate, [-1.2, 0.08, 0], [0.52, 0.16, 0.52]),
-    box("右基礎", M.slate, [1.2, 0.08, 0], [0.52, 0.16, 0.52]),
-    cyl("左柱", M.white, [-1.2, 1.5, 0], [0.2, 2.8, 0.2]),
-    cyl("右柱", M.white, [1.2, 1.5, 0], [0.2, 2.8, 0.2]),
+    {
+      kind: "model",
+      name: "左柱",
+      modelId: "pillar",
+      position: [-1.2, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [0.93, 0.93, 0.93],
+    },
+    {
+      kind: "model",
+      name: "右柱",
+      modelId: "pillar",
+      position: [1.2, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [0.93, 0.93, 0.93],
+    },
     box("梁", M.slate, [0, 3.05, 0], [2.9, 0.3, 0.42]),
   ],
 };
@@ -946,11 +962,14 @@ const STAIRS: SceneRecipe = {
   projectKinds: ["world"],
   note: "Colliderは入っていません。上れるようにするには段ごとにBox Colliderを追加してください。",
   parts: [
-    box("段 1", M.slate, [0, 0.09, 0], [1.6, 0.18, 0.4]),
-    box("段 2", M.slate, [0, 0.27, -0.4], [1.6, 0.18, 0.4]),
-    box("段 3", M.slate, [0, 0.45, -0.8], [1.6, 0.18, 0.4]),
-    box("段 4", M.slate, [0, 0.63, -1.2], [1.6, 0.18, 0.4]),
-    box("段 5", M.slate, [0, 0.81, -1.6], [1.6, 0.18, 0.4]),
+    {
+      kind: "model",
+      name: "階段",
+      modelId: "stairs",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
   ],
 };
 
@@ -962,11 +981,14 @@ const WALL: SceneRecipe = {
   projectKinds: ["world"],
   note: "Colliderは入っていません。通り抜けを止めるには塀の面へBox Colliderを追加してください。",
   parts: [
-    box("塀 1", M.slate, [-1.3, 0.9, 0], [2.3, 1.8, 0.2]),
-    box("塀 2", M.slate, [1.3, 0.9, 0], [2.3, 1.8, 0.2]),
-    box("柱 1", M.charcoal, [-2.5, 1, 0], [0.3, 2, 0.3]),
-    box("柱 2", M.charcoal, [0, 1, 0], [0.3, 2, 0.3]),
-    box("柱 3", M.charcoal, [2.5, 1, 0], [0.3, 2, 0.3]),
+    {
+      kind: "model",
+      name: "塀",
+      modelId: "wall",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
   ],
 };
 
@@ -978,15 +1000,30 @@ const TABLE_SET: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "座る機能は付いていません。物を置くならテーブル天板の高さは0.74mです。",
   parts: [
-    box("天板", M.wood, [0, 0.74, 0], [1.4, 0.06, 0.8]),
-    box("脚 1", M.wood, [-0.62, 0.36, -0.32], [0.08, 0.72, 0.08]),
-    box("脚 2", M.wood, [0.62, 0.36, -0.32], [0.08, 0.72, 0.08]),
-    box("脚 3", M.wood, [-0.62, 0.36, 0.32], [0.08, 0.72, 0.08]),
-    box("脚 4", M.wood, [0.62, 0.36, 0.32], [0.08, 0.72, 0.08]),
-    cyl("椅子 1 座面", M.wood, [0, 0.44, 0.85], [0.2, 0.06, 0.2]),
-    cyl("椅子 1 脚", M.wood, [0, 0.21, 0.85], [0.06, 0.42, 0.06]),
-    cyl("椅子 2 座面", M.wood, [0, 0.44, -0.85], [0.2, 0.06, 0.2]),
-    cyl("椅子 2 脚", M.wood, [0, 0.21, -0.85], [0.06, 0.42, 0.06]),
+    {
+      kind: "model",
+      name: "テーブル",
+      modelId: "table",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+    {
+      kind: "model",
+      name: "椅子 1",
+      modelId: "stool",
+      position: [0, 0, 0.85],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+    {
+      kind: "model",
+      name: "椅子 2",
+      modelId: "stool",
+      position: [0, 0, -0.85],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
   ],
 };
 
@@ -1000,10 +1037,14 @@ const WELL: SceneRecipe = {
   parts: [
     ...stoneRing(10, 0.62, [0.24, 0.4, 0.2]),
     cyl("水", M.blue, [0, 0.06, 0], [0.5, 0.1, 0.5]),
-    box("柱 1", M.wood, [-0.6, 0.9, 0], [0.09, 1.8, 0.09]),
-    box("柱 2", M.wood, [0.6, 0.9, 0], [0.09, 1.8, 0.09]),
-    cyl("巻き上げ棒", M.wood, [0, 1.6, 0], [0.05, 1.2, 0.05], [0, 0, Math.PI / 2]),
-    box("屋根", M.wood, [0, 1.86, 0], [1.5, 0.1, 0.9]),
+    {
+      kind: "model",
+      name: "柱と屋根",
+      modelId: "wellFrame",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
   ],
 };
 
@@ -1015,15 +1056,14 @@ const PIER: SceneRecipe = {
   projectKinds: ["world"],
   note: "Colliderは入っていません。上を歩けるようにするには板へBox Colliderを追加してください。",
   parts: [
-    box("板 1", M.wood, [0, 0.5, 0], [1.4, 0.06, 0.44]),
-    box("板 2", M.wood, [0, 0.5, -0.5], [1.4, 0.06, 0.44]),
-    box("板 3", M.wood, [0, 0.5, -1], [1.4, 0.06, 0.44]),
-    box("板 4", M.wood, [0, 0.5, -1.5], [1.4, 0.06, 0.44]),
-    box("板 5", M.wood, [0, 0.5, -2], [1.4, 0.06, 0.44]),
-    cyl("杭 1", M.wood, [-0.6, 0.25, -0.05], [0.07, 0.5, 0.07]),
-    cyl("杭 2", M.wood, [0.6, 0.25, -0.05], [0.07, 0.5, 0.07]),
-    cyl("杭 3", M.wood, [-0.6, 0.25, -1.95], [0.07, 0.5, 0.07]),
-    cyl("杭 4", M.wood, [0.6, 0.25, -1.95], [0.07, 0.5, 0.07]),
+    {
+      kind: "model",
+      name: "桟橋",
+      modelId: "pier",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
   ],
 };
 
