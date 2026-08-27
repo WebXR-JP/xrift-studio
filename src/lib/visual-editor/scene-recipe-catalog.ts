@@ -645,17 +645,14 @@ const STONE_LANTERN: SceneRecipe = {
   projectKinds: ["world", "item"],
   note: "火袋の光はBloomが有効なときに強く見えます。無効でもライトは点きます。",
   parts: [
-    cyl("基礎", M.slate, [0, 0.08, 0], [0.28, 0.16, 0.28]),
-    cyl("竿", M.slate, [0, 0.5, 0], [0.1, 0.7, 0.1]),
-    box("中台", M.slate, [0, 0.9, 0], [0.34, 0.1, 0.34]),
-    // Four corner posts rather than a solid box: a lantern whose light is
-    // sealed inside a block is a block.
-    box("火袋の柱 1", M.slate, [0.12, 1.1, 0.12], [0.04, 0.32, 0.04]),
-    box("火袋の柱 2", M.slate, [-0.12, 1.1, 0.12], [0.04, 0.32, 0.04]),
-    box("火袋の柱 3", M.slate, [0.12, 1.1, -0.12], [0.04, 0.32, 0.04]),
-    box("火袋の柱 4", M.slate, [-0.12, 1.1, -0.12], [0.04, 0.32, 0.04]),
-    ball("灯り玉", M.glow, [0, 1.1, 0], [0.09, 0.09, 0.09]),
-    cone("笠", M.slate, [0, 1.38, 0], [0.36, 0.22, 0.36]),
+    {
+      kind: "model",
+      name: "本体",
+      modelId: "stoneLantern",
+      position: [0, 0.08, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
     lamp("灯り", [0, 1.1, 0], "#ffd9a0", 1.4, 6),
   ],
 };
@@ -716,15 +713,19 @@ const CANDELABRA: SceneRecipe = {
 const TREE: SceneRecipe = {
   id: SCENE_RECIPE_IDS.tree,
   name: "木",
-  description: "幹と3つの葉のかたまりでできた3.5mの木。",
+  description: "幹と根元の張り、重なる3つの葉のかたまりでできた3.5mの木。",
   category: "nature",
   projectKinds: ["world", "item"],
   note: "森にするときはこのセットを複製し、Transformで大きさと向きを変えてください。同じ木が並ぶと不自然に見えます。",
   parts: [
-    cyl("幹", M.wood, [0, 1.1, 0], [0.16, 2.2, 0.16]),
-    ball("葉 1", M.green, [0, 2.5, 0], [1.1, 0.85, 1.1]),
-    ball("葉 2", M.green, [0.45, 2.05, 0.3], [0.72, 0.6, 0.72]),
-    ball("葉 3", M.green, [-0.4, 2.15, -0.25], [0.66, 0.55, 0.66]),
+    {
+      kind: "model",
+      name: "本体",
+      modelId: "tree",
+      position: [0, 0.86, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
   ],
 };
 

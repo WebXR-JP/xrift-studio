@@ -61,6 +61,32 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     provenance:
       "Codex image_gen (gpt-image-2) reference image + img2threejs procedural reconstruction (stylized, flat-shaded, project-original)",
   },
+  {
+    modelId: "stoneLantern",
+    assetId: "model-stone-lantern-d7e90cb234a1",
+    publicPath: "/visual-editor/recipe-assets/stone-lantern.glb",
+    fileName: "stone-lantern.glb",
+    sha256:
+      "d7e90cb234a17b8000550cb585b7a4b4b3a1fddce27528fa558ba67a27f54ee7",
+    byteLength: 6447252,
+    displayName: "石灯籠",
+    approxRadius: 0.75,
+    provenance:
+      "Codex image_gen (gpt-image-2) reference image + img2threejs procedural reconstruction (stylized, flat-shaded, project-original)",
+  },
+  {
+    modelId: "tree",
+    assetId: "model-tree-308af9d6be9d",
+    publicPath: "/visual-editor/recipe-assets/tree.glb",
+    fileName: "tree.glb",
+    sha256:
+      "308af9d6be9d18fca160b4d390b228ec81d691d0b85404900615e27cc0ee0c53",
+    byteLength: 7709528,
+    displayName: "木",
+    approxRadius: 1.1,
+    provenance:
+      "Codex image_gen (gpt-image-2) reference image + img2threejs procedural reconstruction (stylized, flat-shaded, project-original)",
+  },
 ];
 
 export function getBuiltinRecipeModel(
