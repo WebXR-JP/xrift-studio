@@ -204,6 +204,7 @@ import {
   type SceneViewportDisplayMode,
   type SceneViewportMaterialStyle,
 } from "./scene-viewport-display";
+import { applyWorldPlayCameraLook } from "./world-play-camera";
 
 /**
  * The wind every wind-driven Material in the viewport reads. It is a context
@@ -324,8 +325,6 @@ const EDITOR_SELECTION_COLOR = "#7c3aed";
 const MUTED_GIZMO_COLOR = new Color("#64748b");
 const WORLD_PLAY_CAMERA_EYE_HEIGHT = 1.6;
 const WORLD_PLAY_CAMERA_SPEED = 4.5;
-const WORLD_PLAY_CAMERA_LOOK_SENSITIVITY = 0.0025;
-const WORLD_PLAY_CAMERA_MAX_PITCH = Math.PI / 2 - 0.08;
 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -2698,15 +2697,15 @@ function WorldPlayCameraController({
   useFrame(({ camera }, delta) => {
     const input = inputRef.current;
     if (input.deltaX !== 0 || input.deltaY !== 0) {
-      // Play uses grab-style look: the view follows the pointer movement.
-      yawRef.current += input.deltaX * WORLD_PLAY_CAMERA_LOOK_SENSITIVITY;
-      pitchRef.current = Math.max(
-        -WORLD_PLAY_CAMERA_MAX_PITCH,
-        Math.min(
-          WORLD_PLAY_CAMERA_MAX_PITCH,
-          pitchRef.current + input.deltaY * WORLD_PLAY_CAMERA_LOOK_SENSITIVITY,
-        ),
+      // Play looks the way the pointer moves: drag right to turn right, drag
+      // down to look down. See `applyWorldPlayCameraLook` for the signs.
+      const look = applyWorldPlayCameraLook(
+        { yaw: yawRef.current, pitch: pitchRef.current },
+        input.deltaX,
+        input.deltaY,
       );
+      yawRef.current = look.yaw;
+      pitchRef.current = look.pitch;
       input.deltaX = 0;
       input.deltaY = 0;
     }
