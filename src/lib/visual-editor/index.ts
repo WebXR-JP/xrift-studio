@@ -36,6 +36,8 @@ export * from "./model-thumbnail";
 export * from "./interactivity-graph";
 export * from "./interactivity-recipes";
 export * from "./glow-material-catalog";
+export * from "./gizmo-snap";
+export * from "./gizmo-snap.fixture";
 export * from "./lighting-contract";
 export * from "./mcp-tool-registry";
 export * from "./mcp-editor-tools";

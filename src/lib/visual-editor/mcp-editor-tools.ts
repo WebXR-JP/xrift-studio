@@ -4736,6 +4736,7 @@ function applySceneEditorPatch(
         "gridSize",
         "gridDivisions",
         "snapEnabled",
+        "snapHoldShift",
         "translateSnap",
         "rotateSnapDegrees",
         "scaleSnap",
@@ -4750,7 +4751,11 @@ function applyGizmoPatch(
   patch: Record<string, unknown>,
 ): SceneGizmoSettings {
   const next = { ...current };
-  for (const field of ["gridVisible", "snapEnabled"] as const) {
+  for (const field of [
+    "gridVisible",
+    "snapEnabled",
+    "snapHoldShift",
+  ] as const) {
     const value = optionalBoolean(patch[field], `editor.gizmo.${field}`);
     if (value !== undefined) next[field] = value;
   }

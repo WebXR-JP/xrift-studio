@@ -155,7 +155,13 @@ export type SceneGizmoSettings = {
   gridSize: number;
   gridDivisions: number;
   snapEnabled: boolean;
+  /**
+   * Holding Shift inverts snapEnabled for the duration of the hold, so one key
+   * covers both "snap just this drag" and "leave the grid for just this drag".
+   */
+  snapHoldShift: boolean;
   translateSnap: number;
+  /** Degrees. Converted to radians only where the gizmo needs them. */
   rotateSnapDegrees: number;
   scaleSnap: number;
 };
@@ -279,6 +285,7 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
       gridSize: 40,
       gridDivisions: 40,
       snapEnabled: false,
+      snapHoldShift: true,
       translateSnap: 0.5,
       rotateSnapDegrees: 15,
       scaleSnap: 0.1,
@@ -626,6 +633,10 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
         snapEnabled: booleanOr(
           gizmo.snapEnabled,
           DEFAULT_SCENE_SETTINGS.editor.gizmo.snapEnabled,
+        ),
+        snapHoldShift: booleanOr(
+          gizmo.snapHoldShift,
+          DEFAULT_SCENE_SETTINGS.editor.gizmo.snapHoldShift,
         ),
         translateSnap: finiteOr(
           gizmo.translateSnap,
