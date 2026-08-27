@@ -87,6 +87,136 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     provenance:
       "Codex image_gen (gpt-image-2) reference image + img2threejs procedural reconstruction (stylized, flat-shaded, project-original)",
   },
+  {
+    modelId: "streetLight",
+    assetId: "model-street-light-c524ee6799c7",
+    publicPath: "/visual-editor/recipe-assets/street-light.glb",
+    fileName: "street-light.glb",
+    sha256:
+      "c524ee6799c7f92ced4e53074e40ff3bc98fe833a89140ca8089d11cb7c28cc8",
+    byteLength: 16700,
+    displayName: "街灯",
+    approxRadius: 1.7,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "rockA",
+    assetId: "model-rock-a-5c69a1e02b87",
+    publicPath: "/visual-editor/recipe-assets/rock-a.glb",
+    fileName: "rock-a.glb",
+    sha256:
+      "5c69a1e02b87f9e1adea39475b0607ecb3b7e291e4bb22472324f998769f392a",
+    byteLength: 8952,
+    displayName: "岩A",
+    approxRadius: 0.55,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "rockB",
+    assetId: "model-rock-b-bbe51e12d578",
+    publicPath: "/visual-editor/recipe-assets/rock-b.glb",
+    fileName: "rock-b.glb",
+    sha256:
+      "bbe51e12d578a311ba5ac070316b0a08d6e30afd06c8822c399e9bbe734935fe",
+    byteLength: 8948,
+    displayName: "岩B",
+    approxRadius: 0.5,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "brazier",
+    assetId: "model-brazier-b37eab4ba4b3",
+    publicPath: "/visual-editor/recipe-assets/brazier.glb",
+    fileName: "brazier.glb",
+    sha256:
+      "b37eab4ba4b341b3beae5dfcbe272ebb20c06fa9f5db11c45fb2d6d5b20cfcea",
+    byteLength: 8980,
+    displayName: "かがり火の鉢",
+    approxRadius: 0.45,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "lantern",
+    assetId: "model-lantern-896454119ac9",
+    publicPath: "/visual-editor/recipe-assets/lantern.glb",
+    fileName: "lantern.glb",
+    sha256:
+      "896454119ac9fae898433b74f3e7d0346b7f235df5b0819ec12f039cc461370f",
+    byteLength: 11748,
+    displayName: "提灯",
+    approxRadius: 0.2,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "candelabra",
+    assetId: "model-candelabra-c7125c4387cf",
+    publicPath: "/visual-editor/recipe-assets/candelabra.glb",
+    fileName: "candelabra.glb",
+    sha256:
+      "c7125c4387cfc91455580c002319bf173d91e422e9f3d1463c867ba2f39428d9",
+    byteLength: 21568,
+    displayName: "燭台",
+    approxRadius: 0.3,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "bambooStalk",
+    assetId: "model-bamboo-stalk-1c4d94a7cb11",
+    publicPath: "/visual-editor/recipe-assets/bamboo-stalk.glb",
+    fileName: "bamboo-stalk.glb",
+    sha256:
+      "1c4d94a7cb117b45dbe46d6835455ae2089edb84ba1af0560b0d2b88fd68c53e",
+    byteLength: 40924,
+    displayName: "竹",
+    approxRadius: 1.6,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "stump",
+    assetId: "model-stump-8c4734728e49",
+    publicPath: "/visual-editor/recipe-assets/stump.glb",
+    fileName: "stump.glb",
+    sha256:
+      "8c4734728e49ea5cf45aae9b6df776438e5db858f2363e4709f0a156c2ec8d14",
+    byteLength: 36260,
+    displayName: "切り株",
+    approxRadius: 0.46,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "log",
+    assetId: "model-log-6bb298856a65",
+    publicPath: "/visual-editor/recipe-assets/log.glb",
+    fileName: "log.glb",
+    sha256:
+      "6bb298856a654c9cad8741f351f660e673cb9c8953303e82c39f14ae108a032e",
+    byteLength: 9168,
+    displayName: "薪",
+    approxRadius: 0.43,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
+  {
+    modelId: "bush",
+    assetId: "model-bush-786140fee313",
+    publicPath: "/visual-editor/recipe-assets/bush.glb",
+    fileName: "bush.glb",
+    sha256:
+      "786140fee3133f6aac333f70001c25b7a855bfa4109df7b3ad7b89f4b5f9f14a",
+    byteLength: 26516,
+    displayName: "茂み",
+    approxRadius: 0.4,
+    provenance:
+      "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
+  },
 ];
 
 export function getBuiltinRecipeModel(
