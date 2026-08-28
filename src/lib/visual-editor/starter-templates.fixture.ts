@@ -25,7 +25,6 @@ const STARTER_LIBRARY_EXPECTATIONS: Record<
     bundledAssetCopies: number;
     models: number;
     textures: number;
-    audio: number;
     /** Exact count, or a lower bound for the converted official library. */
     materials: number | { atLeast: number };
   }
@@ -34,32 +33,16 @@ const STARTER_LIBRARY_EXPECTATIONS: Record<
     bundledAssetCopies: 5,
     models: 2,
     textures: 1,
-    audio: 0,
     materials: { atLeast: 7 },
   },
-  blank: {
-    bundledAssetCopies: 0,
-    models: 0,
-    textures: 0,
-    audio: 0,
-    materials: 1,
-  },
+  blank: { bundledAssetCopies: 0, models: 0, textures: 0, materials: 1 },
   // 部屋・家具・機材が 1 つの GLB に入っているので Model 1 本だけ。
   // 床も GLB 側にあるため builtin の地面 Material は持たない。
   "recording-studio": {
     bundledAssetCopies: 1,
     models: 1,
     textures: 0,
-    audio: 0,
     materials: 0,
-  },
-  // 音源 3 本（川・セミ・夜）+ builtin の地面 Material。
-  "summer-nature": {
-    bundledAssetCopies: 3,
-    models: 0,
-    textures: 0,
-    audio: 3,
-    materials: 1,
   },
 };
 
@@ -78,7 +61,6 @@ export function runStarterTemplateFixtureAssertions(): void {
     const modelAssets = assets.filter((asset) => asset.kind === "model");
     const textureAssets = assets.filter((asset) => asset.kind === "texture");
     const particleAssets = assets.filter((asset) => asset.kind === "particle");
-    const audioAssets = assets.filter((asset) => asset.kind === "audio");
     const materialAssets = assets.filter(
       (asset) =>
         asset.kind === "material" &&
@@ -126,43 +108,6 @@ export function runStarterTemplateFixtureAssertions(): void {
       particleAssets.length === 0,
       `${templateId}: Particle library is incorrect`,
     );
-    assert(
-      audioAssets.length === expected.audio,
-      `${templateId}: Audio library is incorrect`,
-    );
-    if (expected.audio > 0) {
-      assert(
-        audioAssets.every(
-          (asset) => asset.folderId === STARTER_ASSET_FOLDER_IDS.audio,
-        ),
-        `${templateId}: bundled Audio Assets must live in the Audio folder`,
-      );
-      const audioSourceEntities = Object.values(plan.scene.entities).filter(
-        (entity) =>
-          entity.components.some(
-            (component) => component.type === "audio-source",
-          ),
-      );
-      assert(
-        audioSourceEntities.length === expected.audio,
-        `${templateId}: every bundled Audio Asset must be placed as an Audio Source`,
-      );
-      assert(
-        audioSourceEntities.some((entity) =>
-          entity.components.some(
-            (component) =>
-              component.type === "audio-source" && component.spatial,
-          ),
-        ) &&
-          audioSourceEntities.some((entity) =>
-            entity.components.some(
-              (component) =>
-                component.type === "audio-source" && !component.spatial,
-            ),
-          ),
-        `${templateId}: summer ambience must mix spatial and global Audio Sources`,
-      );
-    }
     assert(
       typeof expected.materials === "number"
         ? materialAssets.length === expected.materials

@@ -3,7 +3,6 @@ import {
   normalizeTextureImportSettings,
   type AssetFolder,
   type AssetManifest,
-  type AudioAsset,
   type MaterialAsset,
   type ModelAsset,
   type PrefabAsset,
@@ -32,7 +31,6 @@ import {
 import {
   createBuiltinPrimitiveMeshComponent,
   createBoxColliderComponent,
-  createAudioSourceComponent,
   createMeshColliderComponent,
   createMeshComponent,
   createTransformComponent,
@@ -46,8 +44,7 @@ import {
 export type StarterWorldTemplateId =
   | "xrift-official"
   | "blank"
-  | "recording-studio"
-  | "summer-nature";
+  | "recording-studio";
 export type StarterItemTemplateId = "basic-item";
 export type VisualStarterTemplateId =
   | StarterWorldTemplateId
@@ -67,15 +64,9 @@ export type BundledStarterTextureId =
   | "wood-planks-clean"
   | "polished-concrete";
 
-export type BundledStarterAudioId =
-  | "summer-river"
-  | "summer-cicadas"
-  | "summer-night";
-
 export type BundledStarterAssetId =
   | BundledStarterModelId
-  | BundledStarterTextureId
-  | BundledStarterAudioId;
+  | BundledStarterTextureId;
 
 export type StarterAssetProvenance =
   | {
@@ -92,7 +83,7 @@ export type StarterAssetProvenance =
 
 export type BundledStarterAssetDefinition = {
   id: BundledStarterAssetId;
-  kind: "model" | "texture" | "audio";
+  kind: "model" | "texture";
   publicPath: string;
   projectRelativePath: string;
   byteLength: number;
@@ -101,8 +92,7 @@ export type BundledStarterAssetDefinition = {
     | "model/gltf-binary"
     | "image/png"
     | "image/jpeg"
-    | "image/vnd.radiance"
-    | "audio/mpeg";
+    | "image/vnd.radiance";
   provenance: StarterAssetProvenance;
 };
 
@@ -303,51 +293,6 @@ export const BUNDLED_STARTER_ASSETS = {
       permissionBasis: "provided-for-xrift-studio",
     },
   },
-  "summer-river": {
-    id: "summer-river",
-    kind: "audio",
-    publicPath: "/visual-editor/starter-assets/summer-river.mp3",
-    projectRelativePath: "assets/starter/summer-river.mp3",
-    byteLength: 32119,
-    sha256:
-      "2f3426a810bf377e52dba4af49652445b9d015541740ab306b4c5e2a00a58144",
-    mediaType: "audio/mpeg",
-    provenance: {
-      ownership: "project-owned",
-      sourceName: "summer-river.mp3 (XRift Studio 制作。Suno 生成)",
-      permissionBasis: "provided-for-xrift-studio",
-    },
-  },
-  "summer-cicadas": {
-    id: "summer-cicadas",
-    kind: "audio",
-    publicPath: "/visual-editor/starter-assets/summer-cicadas.mp3",
-    projectRelativePath: "assets/starter/summer-cicadas.mp3",
-    byteLength: 32119,
-    sha256:
-      "2f3426a810bf377e52dba4af49652445b9d015541740ab306b4c5e2a00a58144",
-    mediaType: "audio/mpeg",
-    provenance: {
-      ownership: "project-owned",
-      sourceName: "summer-cicadas.mp3 (XRift Studio 制作。Suno 生成)",
-      permissionBasis: "provided-for-xrift-studio",
-    },
-  },
-  "summer-night": {
-    id: "summer-night",
-    kind: "audio",
-    publicPath: "/visual-editor/starter-assets/summer-night.mp3",
-    projectRelativePath: "assets/starter/summer-night.mp3",
-    byteLength: 32119,
-    sha256:
-      "2f3426a810bf377e52dba4af49652445b9d015541740ab306b4c5e2a00a58144",
-    mediaType: "audio/mpeg",
-    provenance: {
-      ownership: "project-owned",
-      sourceName: "summer-night.mp3 (XRift Studio 制作。Suno 生成)",
-      permissionBasis: "provided-for-xrift-studio",
-    },
-  },
 } as const satisfies Record<string, BundledStarterAssetDefinition>;
 
 export const BUNDLED_STARTER_ASSET_IDS = [
@@ -361,9 +306,6 @@ export const BUNDLED_STARTER_ASSET_IDS = [
   "recording-studio",
   "wood-planks-clean",
   "polished-concrete",
-  "summer-river",
-  "summer-cicadas",
-  "summer-night",
 ] as const satisfies readonly BundledStarterAssetId[];
 
 const XRIFT_OFFICIAL_SOURCE_COPY: StarterAssetCopyPlanEntry = {
@@ -396,7 +338,6 @@ export const STARTER_ASSET_FOLDER_IDS = {
   materials: "starter-library-materials",
   textures: "starter-library-textures",
   particles: "starter-library-particles",
-  audio: "starter-library-audio",
   prefabs: "starter-library-prefabs",
   behaviors: "starter-library-behaviors",
 } as const;
@@ -418,13 +359,6 @@ export const STARTER_WORLD_TEMPLATES = [
     description:
       "小さな FM ラジオ局の収録ブース。3.6 x 2.8m の一室に机、椅子、マイク、ON AIR サインまで入った状態から始められます",
     bundledAssetIds: ["recording-studio"],
-  },
-  {
-    id: "summer-nature",
-    name: "夏の自然",
-    description:
-      "川のせせらぎとセミの声が流れる夏の原っぱ。再生・停止を切り替えられるオーディオパネル付き",
-    bundledAssetIds: ["summer-river", "summer-cicadas", "summer-night"],
   },
   {
     id: "blank",
@@ -510,23 +444,17 @@ function createStarterAssetFolders(): Record<string, AssetFolder> {
       parentId: STARTER_ASSET_FOLDER_IDS.root,
       order: 3,
     },
-    [STARTER_ASSET_FOLDER_IDS.audio]: {
-      id: STARTER_ASSET_FOLDER_IDS.audio,
-      name: "Audio",
-      parentId: STARTER_ASSET_FOLDER_IDS.root,
-      order: 4,
-    },
     [STARTER_ASSET_FOLDER_IDS.prefabs]: {
       id: STARTER_ASSET_FOLDER_IDS.prefabs,
       name: "Prefabs",
       parentId: STARTER_ASSET_FOLDER_IDS.root,
-      order: 5,
+      order: 4,
     },
     [STARTER_ASSET_FOLDER_IDS.behaviors]: {
       id: STARTER_ASSET_FOLDER_IDS.behaviors,
       name: "Behaviors",
       parentId: STARTER_ASSET_FOLDER_IDS.root,
-      order: 6,
+      order: 5,
     },
   };
 }
@@ -548,9 +476,6 @@ export function createStarterWorldProject(
   const textures = bundledDefinitions
     .filter((definition) => definition.kind === "texture")
     .map((definition) => createStarterTextureAsset(definition.id));
-  const audioAssets = bundledDefinitions
-    .filter((definition) => definition.kind === "audio")
-    .map((definition, order) => createStarterAudioAsset(definition.id, order));
   const baseAssets: AssetManifest = {
     ...prototype.assets,
     folders: createStarterAssetFolders(),
@@ -559,7 +484,6 @@ export function createStarterWorldProject(
       ...Object.fromEntries(customMaterials.map((asset) => [asset.id, asset])),
       ...Object.fromEntries(models.map((asset) => [asset.id, asset])),
       ...Object.fromEntries(textures.map((asset) => [asset.id, asset])),
-      ...Object.fromEntries(audioAssets.map((asset) => [asset.id, asset])),
     },
   };
   const imported =
@@ -810,34 +734,6 @@ function starterPrefabSeeds(
       },
     ];
   }
-  if (templateId === "summer-nature") {
-    return [
-      {
-        prefabId: "starter-ground",
-        assetId: "starter-prefab-ground",
-        name: "Ground Platform",
-        sourceEntityId: "starter-floor",
-      },
-      {
-        prefabId: "starter-summer-river",
-        assetId: "starter-prefab-summer-river",
-        name: "川のせせらぎ",
-        sourceEntityId: "starter-summer-river",
-      },
-      {
-        prefabId: "starter-summer-cicadas",
-        assetId: "starter-prefab-summer-cicadas",
-        name: "セミの声",
-        sourceEntityId: "starter-summer-cicadas",
-      },
-      {
-        prefabId: "starter-summer-night",
-        assetId: "starter-prefab-summer-night",
-        name: "夜の虫の声",
-        sourceEntityId: "starter-summer-night",
-      },
-    ];
-  }
   const ground: StarterPrefabSeed = {
     prefabId: "starter-ground",
     assetId: "starter-prefab-ground",
@@ -865,21 +761,6 @@ function createTemplateEntities(
       createSpawnEntity([-1.15, 0.05, 0.95]),
     ]);
   }
-  if (templateId === "summer-nature") {
-    return organizeStarterHierarchy([
-      createFloorEntity(),
-      createLightEntity(
-        "starter-sun",
-        "メインライト",
-        "directional",
-        [5, 8, 4],
-        2.4,
-        true,
-      ),
-      ...createSummerAudioEntities(),
-      createSpawnEntity(),
-    ]);
-  }
   return organizeStarterHierarchy([
     createFloorEntity(),
     createLightEntity(
@@ -892,67 +773,6 @@ function createTemplateEntities(
     ),
     createSpawnEntity(),
   ]);
-}
-
-/**
- * 夏の自然テンプレートの空間音源。川の音だけ空間音源（近づくと大きくなる）で、
- * セミと夜の音は Global BGM としてワールド全体に流れる。再生制御は
- * Script テンプレート audio-source-control を使うユーザーが後から足す。
- */
-function createSummerAudioEntities(): SceneEntity[] {
-  return [
-    createSummerAudioChildEntity(
-      "starter-summer-river",
-      "川のせせらぎ",
-      [0, 0, -6],
-      STARTER_AUDIO_IDS.summerRiver,
-      true,
-      0.9,
-    ),
-    createSummerAudioChildEntity(
-      "starter-summer-cicadas",
-      "セミの声",
-      [0, 0, 0],
-      STARTER_AUDIO_IDS.summerCicadas,
-      false,
-      0.4,
-    ),
-    createSummerAudioChildEntity(
-      "starter-summer-night",
-      "夜の虫の声",
-      [0, 0, 0],
-      STARTER_AUDIO_IDS.summerNight,
-      false,
-      0.35,
-    ),
-  ];
-}
-
-function createSummerAudioChildEntity(
-  id: string,
-  name: string,
-  position: Vec3,
-  audioAssetId: string,
-  spatial: boolean,
-  volume: number,
-): SceneEntity {
-  const audioSource = createAudioSourceComponent(
-    `${id}-audio-source`,
-    audioAssetId,
-    spatial,
-  );
-  if (!audioSource) throw new Error(`Audio Source could not be created: ${id}`);
-  return {
-    id,
-    name,
-    parentId: "starter-summer-audio",
-    children: [],
-    enabled: true,
-    components: [
-      createTransformComponent(`${id}-transform`, position),
-      { ...audioSource, volume },
-    ],
-  };
 }
 
 /** 部屋・家具・機材がすべて入った一体の Model。Mesh Collider が床と壁を兼ねる。 */
@@ -980,16 +800,8 @@ function createRecordingStudioEntity(): SceneEntity {
 function organizeStarterHierarchy(entities: SceneEntity[]): SceneEntity[] {
   const lightId = "starter-sun";
   const spawnId = "starter-spawn";
-  const audioGroupIds = new Set(
-    entities.flatMap((entity) => entity.children ?? []),
-  );
   const environmentChildren = entities
-    .filter(
-      (entity) =>
-        entity.id !== lightId &&
-        entity.id !== spawnId &&
-        !audioGroupIds.has(entity.id),
-    )
+    .filter((entity) => entity.id !== lightId && entity.id !== spawnId)
     .map((entity) => entity.id);
   const environment: SceneEntity = {
     id: "starter-environment",
@@ -1003,7 +815,6 @@ function organizeStarterHierarchy(entities: SceneEntity[]): SceneEntity[] {
   };
   const organized = entities.map((entity) => {
     if (entity.id === lightId || entity.id === spawnId) return entity;
-    if (audioGroupIds.has(entity.id)) return entity;
     return { ...entity, parentId: environment.id };
   });
   return [environment, ...organized];
@@ -1035,68 +846,6 @@ const STARTER_TEXTURE_IDS = {
   woodPlanks: "starter-texture-wood-planks-clean",
   polishedConcrete: "starter-texture-polished-concrete",
 } as const;
-
-const STARTER_AUDIO_IDS = {
-  summerRiver: "starter-audio-summer-river",
-  summerCicadas: "starter-audio-summer-cicadas",
-  summerNight: "starter-audio-summer-night",
-} as const;
-
-const STARTER_AUDIO_METADATA = {
-  "summer-river": {
-    assetId: STARTER_AUDIO_IDS.summerRiver,
-    name: "川のせせらぎ (夏)",
-    order: 0,
-  },
-  "summer-cicadas": {
-    assetId: STARTER_AUDIO_IDS.summerCicadas,
-    name: "セミの声 (夏)",
-    order: 1,
-  },
-  "summer-night": {
-    assetId: STARTER_AUDIO_IDS.summerNight,
-    name: "夜の虫の声 (夏)",
-    order: 2,
-  },
-} as const satisfies Record<
-  BundledStarterAudioId,
-  { assetId: string; name: string; order: number }
->;
-
-function createStarterAudioAsset(
-  bundledId: BundledStarterAssetId,
-  order: number,
-): AudioAsset {
-  if (!isBundledStarterAudioId(bundledId)) {
-    throw new Error(`Starter asset is not an Audio: ${bundledId}`);
-  }
-  const bundled = BUNDLED_STARTER_ASSETS[bundledId];
-  const metadata = STARTER_AUDIO_METADATA[bundledId];
-  return {
-    id: metadata.assetId,
-    name: metadata.name,
-    kind: "audio",
-    status: "ready",
-    source: { kind: "project", relativePath: bundled.projectRelativePath },
-    sourceHash: bundled.sha256,
-    thumbnail: { status: "missing" },
-    folderId: STARTER_ASSET_FOLDER_IDS.audio,
-    order,
-    importMetadata: {
-      sourceFormat: "mp3",
-      mimeType: bundled.mediaType,
-      byteLength: bundled.byteLength,
-    },
-  };
-}
-
-function isBundledStarterAudioId(
-  id: BundledStarterAssetId,
-): id is BundledStarterAudioId {
-  return (
-    id === "summer-river" || id === "summer-cicadas" || id === "summer-night"
-  );
-}
 
 const STARTER_MATERIAL_IDS = {
   ground: "starter-material-ground",
@@ -1367,7 +1116,7 @@ const STARTER_TEXTURE_METADATA = {
 >;
 
 function createStarterTextureAsset(bundledId: BundledStarterAssetId): TextureAsset {
-  if (isBundledStarterModelId(bundledId) || isBundledStarterAudioId(bundledId)) {
+  if (isBundledStarterModelId(bundledId)) {
     throw new Error(`Starter asset is not a Texture: ${bundledId}`);
   }
   const bundled = BUNDLED_STARTER_ASSETS[bundledId];
