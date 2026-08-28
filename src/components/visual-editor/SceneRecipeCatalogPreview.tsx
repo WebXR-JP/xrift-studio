@@ -114,43 +114,7 @@ function RecipePartVisual({ part }: { part: SceneRecipePart }) {
     );
   }
 
-  if (part.kind === "audio") {
-    return <RecipeAudioVisual part={part} />;
-  }
-
   return <RecipeParticleVisual part={part} />;
-}
-
-/**
- * Audio has no geometry, so the card renders a floating speaker proxy at the
- * placement position. Same rendering rule as every other card part: it shows
- * where the Audio Source will sit, not a fake waveform.
- */
-function RecipeAudioVisual({
-  part,
-}: {
-  part: Extract<SceneRecipePart, { kind: "audio" }>;
-}) {
-  const [x, y, z] = part.position;
-  const radius = part.spatial ? 0.16 : 0.24;
-  return (
-    <group position={[x, Math.max(y, radius), z]}>
-      <mesh rotation={[0, 0, 0]}>
-        <cylinderGeometry args={[radius, radius * 1.25, radius * 1.6, 20]} />
-        <meshStandardMaterial color="#334155" metalness={0.1} roughness={0.6} />
-      </mesh>
-      <mesh position={[0, radius * 0.82, 0]}>
-        <sphereGeometry args={[radius * 0.62, 16, 12]} />
-        <meshStandardMaterial color="#64748b" metalness={0} roughness={0.9} />
-      </mesh>
-      {!part.spatial ? null : (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -Math.max(y, radius), 0]}>
-          <ringGeometry args={[radius * 2.2, radius * 2.6, 32]} />
-          <meshStandardMaterial color="#38bdf8" emissive="#38bdf8" emissiveIntensity={0.6} />
-        </mesh>
-      )}
-    </group>
-  );
 }
 
 /**
@@ -242,9 +206,7 @@ function recipeFraming(recipe: SceneRecipe): {
         : part.kind === "model"
           ? (getBuiltinRecipeModel(part.modelId)?.approxRadius ?? 0.5) *
             Math.max(part.scale[0], part.scale[1], part.scale[2])
-          : part.kind === "audio"
-            ? 0.4
-            : 0.2;
+          : 0.2;
     maxY = Math.max(maxY, y + half);
     maxRadius = Math.max(maxRadius, Math.hypot(x, z) + half);
   }

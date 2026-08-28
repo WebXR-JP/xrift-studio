@@ -1,6 +1,5 @@
-import { ensureBuiltinModelAsset, ensureBuiltinRecipeAudioAsset } from "./asset-import-persistence";
+import { ensureBuiltinModelAsset } from "./asset-import-persistence";
 import { BUILTIN_ASSET_IDS } from "./builtin-asset-ids";
-import { getBuiltinRecipeAudio } from "./builtin-recipe-audio";
 import { getBuiltinRecipeModel } from "./builtin-recipe-models";
 import { BUILTIN_PRIMITIVE_CREATION_IDS, getBuiltinPrimitiveCreation } from "./creation-catalog";
 import { createDocumentId } from "./document-id";
@@ -12,7 +11,6 @@ import {
 import { ensureBuiltinMaterialAsset } from "./prototype-project";
 import {
   createBuiltinPrimitiveMeshComponent,
-  createAudioSourceComponent,
   createMeshComponent,
   createParticleEmitterComponent,
   createTransformComponent,
@@ -70,19 +68,6 @@ export type SceneRecipePart =
       /** Applied over the preset, for values this recipe needs different. */
       overrides?: ParticlePropertiesPatch;
       position: Vec3;
-    }
-  | {
-      /**
-       * A bundled ambience MP3 (BUILTIN_RECIPE_AUDIO) placed as an Audio
-       * Source. `spatial` decides positional falloff versus global playback;
-       * autoplay follows the same rule as createAudioSourceComponent.
-       */
-      kind: "audio";
-      name: string;
-      audioId: string;
-      position: Vec3;
-      spatial: boolean;
-      volume: number;
     }
   | {
       kind: "light";
@@ -165,9 +150,6 @@ export const SCENE_RECIPE_IDS = {
   window: "scene-recipe.window",
   floorPanel: "scene-recipe.floor-panel",
   wallPanel: "scene-recipe.wall-panel",
-  summerCicadas: "scene-recipe.summer-cicadas",
-  summerRiver: "scene-recipe.summer-river",
-  summerNight: "scene-recipe.summer-night",
 } as const;
 
 /**
@@ -1165,68 +1147,6 @@ const WALL_PANEL: SceneRecipe = {
   ],
 };
 
-/**
- * 環境音セット。空間音源（spatial）は置いた位置から距離減衰し、Global
- * （spatial: false）はワールド全体に一定音量で流れる。いずれも Play 開始時に
- * 自動再生を試み、ブラウザがブロックした場合は視聴者の最初の操作で鳴る。
- */
-const SUMMER_CICADAS: SceneRecipe = {
-  id: SCENE_RECIPE_IDS.summerCicadas,
-  name: "セミの声（夏）",
-  description: "夏の昼下がりのセミの声。ワールド全体にゆるくかかる環境音です。",
-  category: "nature",
-  projectKinds: ["world", "item"],
-  note: "Play開始時に自動再生します。音量はAudio Sourceのvolumeで調整できます。再生・停止を切り替えるには、Audio SourceコントローラーのScriptを同じEntityへ追加してください。",
-  parts: [
-    {
-      kind: "audio",
-      name: "セミの声",
-      audioId: "summerCicadas",
-      position: [0, 0, 0],
-      spatial: false,
-      volume: 0.4,
-    },
-  ],
-};
-
-const SUMMER_RIVER: SceneRecipe = {
-  id: SCENE_RECIPE_IDS.summerRiver,
-  name: "川のせせらぎ（夏）",
-  description: "流れる水の音。置いた場所に近づくほど大きく聞こえる空間音源です。",
-  category: "water",
-  projectKinds: ["world", "item"],
-  note: "近づくと大きくなる空間音源です。聞こえはじめる距離はAudio SourceのrefDistance、減衰の強さはrolloffFactorで調整できます。",
-  parts: [
-    {
-      kind: "audio",
-      name: "川のせせらぎ",
-      audioId: "summerRiver",
-      position: [0, 0, 0],
-      spatial: true,
-      volume: 0.9,
-    },
-  ],
-};
-
-const SUMMER_NIGHT: SceneRecipe = {
-  id: SCENE_RECIPE_IDS.summerNight,
-  name: "夜の虫の声（夏）",
-  description: "静かな夏の夜のコオロギなどの虫の声。ワールド全体に流れる環境音です。",
-  category: "nature",
-  projectKinds: ["world", "item"],
-  note: "Play開始時に自動再生します。夜のワールド向け。音量はAudio Sourceのvolumeで調整できます。",
-  parts: [
-    {
-      kind: "audio",
-      name: "夜の虫の声",
-      audioId: "summerNight",
-      position: [0, 0, 0],
-      spatial: false,
-      volume: 0.35,
-    },
-  ],
-};
-
 export const SCENE_RECIPES: readonly SceneRecipe[] = [
   CAMPFIRE,
   TORCH,
@@ -1262,9 +1182,6 @@ export const SCENE_RECIPES: readonly SceneRecipe[] = [
   MAGIC_CIRCLE,
   WARP_PILLAR,
   SNOWMAN,
-  SUMMER_CICADAS,
-  SUMMER_RIVER,
-  SUMMER_NIGHT,
 ];
 
 export function getSceneRecipe(recipeId: string): SceneRecipe | undefined {
@@ -1313,18 +1230,13 @@ export async function instantiateSceneRecipe(
 
   for (const part of recipe.parts) {
     const entityId = createDocumentId("entity");
-    const hasTransform =
-      part.kind === "primitive" || part.kind === "model" || part.kind === "audio";
-    const rotation: Vec3 =
-      hasTransform && part.kind !== "audio" ? part.rotation : [0, 0, 0];
-    const scale: Vec3 =
-      hasTransform && part.kind !== "audio" ? part.scale : [1, 1, 1];
+    const hasTransform = part.kind === "primitive" || part.kind === "model";
     const components: SceneComponent[] = [
       createTransformComponent(
         createDocumentId("component-transform"),
         part.position,
-        rotation,
-        scale,
+        hasTransform ? part.rotation : [0, 0, 0],
+        hasTransform ? part.scale : [1, 1, 1],
       ),
     ];
 
@@ -1376,26 +1288,6 @@ export async function instantiateSceneRecipe(
       );
       if (!emitter) return null;
       components.push(emitter);
-    } else if (part.kind === "audio") {
-      const definition = getBuiltinRecipeAudio(part.audioId);
-      if (!definition) return null;
-      const withAudio = await ensureBuiltinRecipeAudioAsset(
-        projectPath,
-        nextAssets,
-        definition,
-      );
-      if (!withAudio || withAudio.assets[definition.assetId]?.kind !== "audio") {
-        return null;
-      }
-      nextAssets = withAudio;
-      createdAssetIds.push(definition.assetId);
-      const audioSource = createAudioSourceComponent(
-        createDocumentId("component-audio-source"),
-        definition.assetId,
-        part.spatial,
-      );
-      if (!audioSource) return null;
-      components.push({ ...audioSource, volume: part.volume });
     } else {
       components.push({
         id: createDocumentId("component-light"),

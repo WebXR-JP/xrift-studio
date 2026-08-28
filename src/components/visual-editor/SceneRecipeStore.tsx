@@ -77,7 +77,7 @@ export function SceneRecipeStore({
   // written by hand: a set that quietly grows a part should say so.
   const contents = useMemo(() => {
     if (!selected) return null;
-    const counts = { primitive: 0, model: 0, particle: 0, light: 0, audio: 0 };
+    const counts = { primitive: 0, model: 0, particle: 0, light: 0 };
     for (const part of selected.parts) counts[part.kind] += 1;
     return counts;
   }, [selected]);
@@ -236,9 +236,6 @@ export function SceneRecipeStore({
                   <li>Particle {contents.particle} 種（Assetとして追加します）</li>
                 ) : null}
                 {contents.light > 0 ? <li>ライト {contents.light} 灯</li> : null}
-                {contents.audio > 0 ? (
-                  <li>音源 {contents.audio} 個（Audio Assetとして追加します）</li>
-                ) : null}
               </ul>
             </div>
 

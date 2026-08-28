@@ -92,15 +92,3 @@ GLSL のコメント、`applyWaterShaderCatalogInstall` が Material Asset へ�
 [Poly Haven のライセンス](https://polyhaven.com/license)は全アセット CC0 で、商用利用・
 再配布・改変が可能、クレジット表記は不要です。CC0 は追加の義務を課さないため、GLB 全体の
 provenance は `project-owned` として登録していますが、由来を辿れるようここに記録します。
-
-## Recipe ambience audio
-
-`public/visual-editor/recipe-assets/summer-*.mp3` は XRift Studio 側で
-Suno を使って生成した環境音で、ジオメトリ・外部素材を含みません。
-（現在はダミーの無音MP3。Suno生成の実音源に差し替える予定。）
-
-| Bundled file | Source | License | SHA-256 |
-| --- | --- | --- | --- |
-| `summer-cicadas.mp3` | XRift Studio 制作（Suno 生成予定） | project-owned | 2f3426a810bf377e52dba4af49652445b9d015541740ab306b4c5e2a00a58144 |
-| `summer-river.mp3` | XRift Studio 制作（Suno 生成予定） | project-owned | 2f3426a810bf377e52dba4af49652445b9d015541740ab306b4c5e2a00a58144 |
-| `summer-night.mp3` | XRift Studio 制作（Suno 生成予定） | project-owned | 2f3426a810bf377e52dba4af49652445b9d015541740ab306b4c5e2a00a58144 |
