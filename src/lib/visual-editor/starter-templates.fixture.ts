@@ -15,6 +15,37 @@ import {
   type StarterWorldTemplateId,
 } from "./starter-templates";
 
+/**
+ * Per-template library expectations. Adding a starter means adding a row here,
+ * which keeps the assertions below readable instead of a chain of ternaries.
+ */
+const STARTER_LIBRARY_EXPECTATIONS: Record<
+  StarterWorldTemplateId,
+  {
+    bundledAssetCopies: number;
+    models: number;
+    textures: number;
+    /** Exact count, or a lower bound for the converted official library. */
+    materials: number | { atLeast: number };
+  }
+> = {
+  "xrift-official": {
+    bundledAssetCopies: 5,
+    models: 2,
+    textures: 1,
+    materials: { atLeast: 7 },
+  },
+  blank: { bundledAssetCopies: 0, models: 0, textures: 0, materials: 1 },
+  // 部屋・家具・機材が 1 つの GLB に入っているので Model 1 本だけ。
+  // 床も GLB 側にあるため builtin の地面 Material は持たない。
+  "recording-studio": {
+    bundledAssetCopies: 1,
+    models: 1,
+    textures: 0,
+    materials: 0,
+  },
+};
+
 /** Deterministic, filesystem-free assertions for the bundled world starters. */
 export function runStarterTemplateFixtureAssertions(): void {
   assert(
@@ -39,9 +70,9 @@ export function runStarterTemplateFixtureAssertions(): void {
       (asset) => asset.kind === "template" && asset.templateType === "prefab",
     );
 
+    const expected = STARTER_LIBRARY_EXPECTATIONS[templateId];
     assert(
-      plan.bundledAssetCopies.length ===
-        (templateId === "xrift-official" ? 5 : 0),
+      plan.bundledAssetCopies.length === expected.bundledAssetCopies,
       `${templateId}: bundled source copy plan is incorrect`,
     );
     if (templateId === "xrift-official") {
@@ -60,11 +91,11 @@ export function runStarterTemplateFixtureAssertions(): void {
       );
     }
     assert(
-      modelAssets.length === (templateId === "xrift-official" ? 2 : 0),
+      modelAssets.length === expected.models,
       `${templateId}: Model library is incorrect`,
     );
     assert(
-      textureAssets.length === (templateId === "xrift-official" ? 1 : 0),
+      textureAssets.length === expected.textures,
       `${templateId}: Texture library is incorrect`,
     );
     assert(
@@ -78,9 +109,9 @@ export function runStarterTemplateFixtureAssertions(): void {
       `${templateId}: Particle library is incorrect`,
     );
     assert(
-      templateId === "xrift-official"
-        ? materialAssets.length >= 7
-        : materialAssets.length === 1,
+      typeof expected.materials === "number"
+        ? materialAssets.length === expected.materials
+        : materialAssets.length >= expected.materials.atLeast,
       `${templateId}: converted Material library is incorrect`,
     );
     assert(prefabAssets.length > 0, `${templateId}: Prefab library is empty`);

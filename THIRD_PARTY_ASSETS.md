@@ -69,3 +69,26 @@ MIT は substantial portion に著作権表示を求めるため、表示は3か
 GLSL のコメント、`applyWaterShaderCatalogInstall` が Material Asset へ書く
 `attribution.authors`、そしてこの表。Water の GLSL は生成 World へ埋め込まれて
 公開ワールドごと配布されるので、Asset に表示が乗っていることが実質的な条件を満たす。
+
+## Recording Studio World template
+
+収録スタジオ (`recording-studio`) の GLB は XRift Studio 側で Blender を使って
+手続き的に生成したもので、ジオメトリに外部アセットは含まれません。埋め込みテクスチャ
+だけが第三者素材です。
+
+| Bundled file | Upstream source | License | SHA-256 |
+| --- | --- | --- | --- |
+| `recording-studio.glb` | XRift Studio 制作（Blender で生成） | project-owned | `cc638574d4356502a93221006c45b30506ae5b554c642d0ab66c61ecc48aba8d` |
+
+埋め込まれている PBR テクスチャ（`baseColorTexture` / `normalTexture` /
+`metallicRoughnessTexture`、計 9 枚）の出所は次のとおりです。
+
+| テクスチャ | 出所 | 作者 | License | 加工 |
+| --- | --- | --- | --- | --- |
+| `oak_veneer_01` (1K) | [Poly Haven](https://polyhaven.com/a/oak_veneer_01) | Jenelle van Heerden | CC0-1.0 | なし |
+| `plastered_wall_04` (1K) | [Poly Haven](https://polyhaven.com/a/plastered_wall_04) | Rob Tuytel | CC0-1.0 | なし |
+| `dirty_carpet` (512) | [Poly Haven](https://polyhaven.com/a/dirty_carpet) | Rohit Seervi | CC0-1.0 | 彩度を落として 512 へ縮小 |
+
+[Poly Haven のライセンス](https://polyhaven.com/license)は全アセット CC0 で、商用利用・
+再配布・改変が可能、クレジット表記は不要です。CC0 は追加の義務を課さないため、GLB 全体の
+provenance は `project-owned` として登録していますが、由来を辿れるようここに記録します。

@@ -31,6 +31,8 @@ import {
 import {
   createBuiltinPrimitiveMeshComponent,
   createBoxColliderComponent,
+  createMeshColliderComponent,
+  createMeshComponent,
   createTransformComponent,
   renameEntity,
   type LightComponent,
@@ -39,7 +41,10 @@ import {
   type Vec3,
 } from "./scene-document";
 
-export type StarterWorldTemplateId = "xrift-official" | "blank";
+export type StarterWorldTemplateId =
+  | "xrift-official"
+  | "blank"
+  | "recording-studio";
 export type StarterItemTemplateId = "basic-item";
 export type VisualStarterTemplateId =
   | StarterWorldTemplateId
@@ -51,7 +56,8 @@ export type BundledStarterModelId =
   | "log-bench"
   | "torii-gate"
   | "mug"
-  | "wine-glass";
+  | "wine-glass"
+  | "recording-studio";
 
 export type BundledStarterTextureId =
   | "xrift-official-tokyo-station"
@@ -242,6 +248,21 @@ export const BUNDLED_STARTER_ASSETS = {
       permissionBasis: "provided-for-xrift-studio",
     },
   },
+  "recording-studio": {
+    id: "recording-studio",
+    kind: "model",
+    publicPath: "/visual-editor/starter-assets/recording-studio.glb",
+    projectRelativePath: "assets/starter/recording-studio/recording-studio.glb",
+    byteLength: 3702596,
+    sha256:
+      "cc638574d4356502a93221006c45b30506ae5b554c642d0ab66c61ecc48aba8d",
+    mediaType: "model/gltf-binary",
+    provenance: {
+      ownership: "project-owned",
+      sourceName: "PodcastStudio.glb (XRift Studio 制作。埋め込みテクスチャは Poly Haven CC0)",
+      permissionBasis: "provided-for-xrift-studio",
+    },
+  },
   "wood-planks-clean": {
     id: "wood-planks-clean",
     kind: "texture",
@@ -282,6 +303,7 @@ export const BUNDLED_STARTER_ASSET_IDS = [
   "torii-gate",
   "mug",
   "wine-glass",
+  "recording-studio",
   "wood-planks-clean",
   "polished-concrete",
 ] as const satisfies readonly BundledStarterAssetId[];
@@ -330,6 +352,13 @@ export const STARTER_WORLD_TEMPLATES = [
       "xrift-official-bunny",
       "xrift-official-tokyo-station",
     ],
+  },
+  {
+    id: "recording-studio",
+    name: "収録スタジオ",
+    description:
+      "小さな FM ラジオ局の収録ブース。3.6 x 2.8m の一室に机、椅子、マイク、ON AIR サインまで入った状態から始められます",
+    bundledAssetIds: ["recording-studio"],
   },
   {
     id: "blank",
@@ -461,7 +490,7 @@ export function createStarterWorldProject(
     templateId === "xrift-official"
       ? createOfficialTemplateDocuments(prototype.scene, baseAssets)
       : null;
-  const entities = imported ? [] : createTemplateEntities();
+  const entities = imported ? [] : createTemplateEntities(templateId);
   const baseScene: SceneDocument = imported
     ? { ...imported.scene, name: definition.name }
     : {
@@ -695,6 +724,16 @@ function starterPrefabSeeds(
         ]
       : [];
   }
+  if (templateId === "recording-studio") {
+    return [
+      {
+        prefabId: "starter-recording-studio",
+        assetId: "starter-prefab-recording-studio",
+        name: "Podcast Studio",
+        sourceEntityId: "starter-recording-studio",
+      },
+    ];
+  }
   const ground: StarterPrefabSeed = {
     prefabId: "starter-ground",
     assetId: "starter-prefab-ground",
@@ -704,7 +743,24 @@ function starterPrefabSeeds(
   return [ground];
 }
 
-function createTemplateEntities(): SceneEntity[] {
+function createTemplateEntities(
+  templateId: StarterWorldTemplateId,
+): SceneEntity[] {
+  if (templateId === "recording-studio") {
+    return organizeStarterHierarchy([
+      createRecordingStudioEntity(),
+      createLightEntity(
+        "starter-sun",
+        "メインライト",
+        "directional",
+        [5, 8, 4],
+        2.4,
+        true,
+      ),
+      // 部屋の中、窓と ON AIR サインを向いた位置
+      createSpawnEntity([-1.15, 0.05, 0.95]),
+    ]);
+  }
   return organizeStarterHierarchy([
     createFloorEntity(),
     createLightEntity(
@@ -717,6 +773,28 @@ function createTemplateEntities(): SceneEntity[] {
     ),
     createSpawnEntity(),
   ]);
+}
+
+/** 部屋・家具・機材がすべて入った一体の Model。Mesh Collider が床と壁を兼ねる。 */
+function createRecordingStudioEntity(): SceneEntity {
+  return {
+    id: "starter-recording-studio",
+    name: "Podcast Studio",
+    parentId: null,
+    children: [],
+    enabled: true,
+    components: [
+      createTransformComponent("starter-recording-studio-transform"),
+      createMeshComponent(
+        "starter-recording-studio-mesh",
+        STARTER_MODEL_IDS.recordingStudio,
+        [],
+      ),
+      createMeshColliderComponent("starter-recording-studio-collider", {
+        meshMode: "trimesh",
+      }),
+    ],
+  };
 }
 
 function organizeStarterHierarchy(entities: SceneEntity[]): SceneEntity[] {
@@ -750,6 +828,7 @@ const STARTER_MODEL_IDS = {
   toriiGate: "starter-model-torii-gate",
   mug: "starter-model-mug",
   wineGlass: "starter-model-wine-glass",
+  recordingStudio: "starter-model-recording-studio",
 } as const;
 
 const STARTER_MODEL_ORDER: Record<BundledStarterModelId, number> = {
@@ -759,6 +838,7 @@ const STARTER_MODEL_ORDER: Record<BundledStarterModelId, number> = {
   "torii-gate": 1,
   mug: 2,
   "wine-glass": 3,
+  "recording-studio": 0,
 };
 
 const STARTER_TEXTURE_IDS = {
@@ -774,7 +854,11 @@ const STARTER_MATERIAL_IDS = {
 function createStarterMaterials(
   templateId: StarterWorldTemplateId,
 ): MaterialAsset[] {
-  if (templateId === "xrift-official") return [];
+  // 収録スタジオは GLB が床まで持っているので、builtin の地面もその Material も要らない。
+  // 地面を重ねると自作の床の天面と同一平面になって Z-fighting する。
+  if (templateId === "xrift-official" || templateId === "recording-studio") {
+    return [];
+  }
   return [
     createMaterial(
       STARTER_MATERIAL_IDS.ground,
@@ -898,6 +982,35 @@ const STARTER_MODEL_METADATA = {
       boundingSphereRadius: 0.121969,
     }),
   },
+  "recording-studio": {
+    assetId: STARTER_MODEL_IDS.recordingStudio,
+    name: "収録スタジオ",
+    materialName: "MAT_Wall_Acoustic",
+    materialNames: [
+      "MAT_Wall_Acoustic",
+      "MAT_Booth_Interior",
+      "MAT_Screen_Dark",
+      "MAT_Ceiling",
+      "MAT_Seat_Fabric",
+      "MAT_Metal_Black",
+      "MAT_Emissive_Red",
+      "MAT_Plastic_Black",
+      "MAT_Door",
+      "MAT_Emissive_Cove",
+      "MAT_Emissive_Warm",
+      "MAT_Floor_Carpet",
+      "MAT_Wall_Wainscot",
+      "MAT_Wood_Oak",
+      "MAT_Glass",
+    ],
+    importMetadata: modelMetadata(48, 48, 65, {
+      min: [-1.9, -0.1, -2.6],
+      max: [1.9, 2.6, 1.5],
+      center: [0, 1.25, -0.55],
+      size: [3.8, 2.7, 4.1],
+      boundingSphereRadius: 3.10403,
+    }),
+  },
 } satisfies Record<BundledStarterModelId, StarterModelMetadata>;
 
 function modelMetadata(
@@ -959,7 +1072,8 @@ function isBundledStarterModelId(
     id === "log-bench" ||
     id === "torii-gate" ||
     id === "mug" ||
-    id === "wine-glass"
+    id === "wine-glass" ||
+    id === "recording-studio"
   );
 }
 
