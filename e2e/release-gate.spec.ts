@@ -115,6 +115,125 @@ test("モーダルは必要な時だけ開き、狭い画面でも操作を画�
   expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(600);
 });
 
+async function openVisualWorld(page: Page, name: string): Promise<void> {
+  await openProjectLibrary(page);
+  await page.getByRole("button", { name: /新規プロジェクト/ }).click();
+  await page.getByRole("button", { name: /ワールドをビジュアルで作る/ }).click();
+  await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
+  await page.getByLabel("プロジェクト名").fill(name);
+  await page.getByRole("button", { name: "作成して開く" }).click();
+  await expect(page.getByText("ビジュアル編集")).toBeVisible();
+}
+
+/**
+ * Reports header rows that wrap, overflow, or cover one of their own controls.
+ * The Scene View header used to centre Play on top of the transform gizmos and
+ * push the recording button past the panel edge at every window size.
+ */
+async function editorHeaderLayoutProblems(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const problems: string[] = [];
+    const headers: Array<[string, HTMLElement | null | undefined]> = [
+      [
+        "Scene View",
+        document
+          .querySelector('section[aria-labelledby="scene-view-heading"]')
+          ?.querySelector("h2")?.parentElement?.parentElement,
+      ],
+      [
+        "Assets",
+        document
+          .querySelector('section[aria-labelledby="assets-heading"]')
+          ?.querySelector("h2")?.parentElement?.parentElement,
+      ],
+    ];
+
+    for (const [name, header] of headers) {
+      if (!header) {
+        problems.push(`${name}: header not found`);
+        continue;
+      }
+      const headerBox = header.getBoundingClientRect();
+      if (header.scrollWidth > header.clientWidth) {
+        problems.push(
+          `${name}: 横に${header.scrollWidth - header.clientWidth}pxはみ出している`,
+        );
+      }
+      for (const control of header.querySelectorAll("button, select, input, h2")) {
+        const box = control.getBoundingClientRect();
+        if (box.width === 0 || box.height === 0) continue;
+        const label =
+          control.getAttribute("aria-label") ??
+          control.textContent?.trim().slice(0, 20) ??
+          control.tagName;
+        // A control that leaves its own header row has wrapped or been clipped.
+        if (
+          box.right > headerBox.right + 0.5 ||
+          box.left < headerBox.left - 0.5 ||
+          box.top < headerBox.top - 0.5 ||
+          box.bottom > headerBox.bottom + 0.5
+        ) {
+          problems.push(`${name}: 「${label}」が行からはみ出している`);
+          continue;
+        }
+        const hit = document.elementFromPoint(
+          box.left + box.width / 2,
+          box.top + box.height / 2,
+        );
+        if (!hit || !control.contains(hit)) {
+          problems.push(`${name}: 「${label}」が他の操作に覆われている`);
+        }
+      }
+    }
+    return problems;
+  });
+}
+
+test("狭い画面でもエディターのツールバーが一行に収まり、操作が重ならない", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 900, height: 720 });
+  await openVisualWorld(page, "release-narrow-toolbar");
+
+  const sceneToolbar = page.getByRole("toolbar", { name: "Scene Viewの操作" });
+  await expect(sceneToolbar).toBeVisible();
+  for (const gizmo of ["移動", "回転", "拡縮"]) {
+    await expect(sceneToolbar.getByRole("button", { name: gizmo })).toBeVisible();
+  }
+  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
+  expect(await editorHeaderLayoutProblems(page)).toEqual([]);
+
+  // The view controls that no longer fit stay reachable instead of being cut off.
+  const diagnostics = page.getByRole("button", { name: "Scene View診断表示" });
+  await expect(diagnostics).toBeHidden();
+  await page.getByRole("button", { name: "表示と診断の設定" }).click();
+  await expect(diagnostics).toBeVisible();
+  await expect(page.getByLabel("カメラ投影方式")).toBeVisible();
+  await expect(page.getByLabel("Scene View表示モード")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "診断動画を録画" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(diagnostics).toBeHidden();
+
+  const assets = page.getByRole("region", { name: "Assets" });
+  await expect(
+    assets.getByRole("button", { name: "アセットをインポート" }),
+  ).toBeVisible();
+  await expect(
+    assets.getByRole("button", { name: "外部から追加" }),
+  ).toBeVisible();
+  await expect(assets.getByRole("searchbox")).toBeVisible();
+
+  // A wide window keeps the same controls in the row itself.
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await expect(diagnostics).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "表示と診断の設定" }),
+  ).toBeHidden();
+  expect(await editorHeaderLayoutProblems(page)).toEqual([]);
+});
+
 const creationCases = [
   {
     title: "クラシックワールド",
