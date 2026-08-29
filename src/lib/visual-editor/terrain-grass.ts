@@ -34,8 +34,10 @@ export type TerrainGrassType = {
   height: number;
   /** Blade width at the base, in metres. */
   width: number;
-  /** Crossed cards per blade. More reads fuller from the side. */
+  /** Crossed cards per blade. One is the cheap default; more reads fuller. */
   cards: number;
+  /** Rows along the blade. More rows buy a smoother arc, not a wider blade. */
+  segments: number;
   /** How far the blade arcs over. Straight blades read as spikes. */
   curve: number;
   /** Metres beyond which the layer stops drawing. */
@@ -44,60 +46,180 @@ export type TerrainGrassType = {
   tipColor: string;
   /** How far the tip leans under a unit of wind. */
   sway: number;
+  /**
+   * How much sun passes through the blade when it stands between the eye and
+   * the light. Grass without it reads as painted card stock: a leaf is thin
+   * enough to glow, and that glow is most of what says "plant".
+   */
+  translucency: number;
+  /** Default spread of per-blade tint, 0..1. Nothing in a field is one colour. */
+  colorVariation: number;
+  /** Blades per tuft. Grass grows in clumps; scattered singles read as hair. */
+  clumpSize: number;
+  /** Metres a tuft's blades spread around its centre. */
+  clumpRadius: number;
 };
 
+/**
+ * The colour and size an author may take away from the type.
+ *
+ * A type is a starting point, not a verdict. Every field here is optional and
+ * absent by default, so a layer that has never been tuned carries nothing and
+ * a Scene document stays the size it was; the moment an author touches one, it
+ * and only it overrides the type.
+ */
+export type TerrainGrassAppearance = {
+  baseColor?: string;
+  tipColor?: string;
+  /** 0..1 spread of per-blade tint. */
+  colorVariation?: number;
+  /** Multiplies the type's height. */
+  heightScale?: number;
+  /** Multiplies the type's blade width. */
+  widthScale?: number;
+  /**
+   * 0..1 sky bounce the blades answer to.
+   *
+   * Foliage under an open sky is never unlit, even where a Scene supplies no
+   * ambient of its own — and a Scene lit only by its skybox supplies exactly
+   * that, which is how grass came out as black strands over lit ground. This
+   * is the material's answer to the sky, so it belongs to the layer rather
+   * than to the lighting contract, and an author can take it to zero.
+   */
+  fill?: number;
+};
+
+export type ResolvedTerrainGrassAppearance = {
+  baseColor: string;
+  tipColor: string;
+  colorVariation: number;
+  height: number;
+  width: number;
+  fill: number;
+};
+
+/** The sky bounce a layer uses until an author says otherwise. */
+export const TERRAIN_GRASS_DEFAULT_FILL = 0.34;
+
+function clamp(value: number, low: number, high: number): number {
+  return Math.min(Math.max(value, low), high);
+}
+
+function isHexColor(value: unknown): value is string {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+}
+
+/**
+ * The numbers a blade is actually drawn with.
+ *
+ * One resolver for the viewport, the Inspector swatch and the published world,
+ * so a layer an author tuned in Studio cannot arrive in the world wearing the
+ * type's colours instead.
+ */
+export function resolveTerrainGrassAppearance(
+  type: TerrainGrassType,
+  appearance: TerrainGrassAppearance | undefined,
+): ResolvedTerrainGrassAppearance {
+  return {
+    baseColor: isHexColor(appearance?.baseColor)
+      ? appearance.baseColor
+      : type.baseColor,
+    tipColor: isHexColor(appearance?.tipColor)
+      ? appearance.tipColor
+      : type.tipColor,
+    colorVariation: clamp(
+      appearance?.colorVariation ?? type.colorVariation,
+      0,
+      1,
+    ),
+    height: type.height * clamp(appearance?.heightScale ?? 1, 0.2, 4),
+    width: type.width * clamp(appearance?.widthScale ?? 1, 0.2, 4),
+    fill: clamp(appearance?.fill ?? TERRAIN_GRASS_DEFAULT_FILL, 0, 1),
+  };
+}
+
+/**
+ * The catalog.
+ *
+ * Blades are wide enough to survive a pixel and taper only near the tip, and
+ * the colours sit in the same register as a lit ground rather than well under
+ * it. Both were the difference between a field of grass and a field of dark
+ * hairs: a needle that thins to nothing from its base is a hair, and a blade
+ * two stops darker than the ground it stands on reads as one whatever its
+ * shape.
+ */
 export const TERRAIN_GRASS_TYPES: readonly TerrainGrassType[] = [
   {
     id: "short-grass",
     label: "短い芝",
     description: "足元を埋める短い芝です。広い面積に敷いても軽い種類です。",
-    height: 0.22,
-    width: 0.016,
-    cards: 3,
-    curve: 0.35,
+    height: 0.26,
+    width: 0.022,
+    cards: 1,
+    segments: 4,
+    curve: 0.4,
     cullDistance: 34,
-    baseColor: "#3f6b32",
-    tipColor: "#7db55a",
+    baseColor: "#4f7d33",
+    tipColor: "#96c45e",
     sway: 0.5,
+    translucency: 0.5,
+    colorVariation: 0.22,
+    clumpSize: 5,
+    clumpRadius: 0.26,
   },
   {
     id: "tall-grass",
     label: "背の高い草",
     description: "腰までの高さの草です。風で大きくしなり、原っぱらしくなります。",
-    height: 0.6,
-    width: 0.02,
-    cards: 3,
-    curve: 0.5,
+    height: 0.62,
+    width: 0.028,
+    cards: 1,
+    segments: 5,
+    curve: 0.62,
     cullDistance: 46,
-    baseColor: "#38602c",
-    tipColor: "#93bf5c",
+    baseColor: "#46702f",
+    tipColor: "#a9cc64",
     sway: 1,
+    translucency: 0.62,
+    colorVariation: 0.26,
+    clumpSize: 6,
+    clumpRadius: 0.38,
   },
   {
     id: "wildflower",
     label: "花付きの草",
     description: "先端に花を持つ草です。密度を下げて他の草へ散らすと映えます。",
-    height: 0.34,
-    width: 0.018,
-    cards: 3,
-    curve: 0.3,
+    height: 0.38,
+    width: 0.024,
+    cards: 2,
+    segments: 4,
+    curve: 0.28,
     cullDistance: 38,
-    baseColor: "#436b34",
-    tipColor: "#e8d36a",
+    baseColor: "#4c7635",
+    tipColor: "#f0dc7a",
     sway: 0.8,
+    translucency: 0.78,
+    colorVariation: 0.3,
+    clumpSize: 3,
+    clumpRadius: 0.34,
   },
   {
     id: "dry-grass",
     label: "枯れ草",
     description: "乾いた草です。高い場所や急な斜面に置くと荒れた地形に見えます。",
-    height: 0.42,
-    width: 0.019,
-    cards: 3,
-    curve: 0.62,
+    height: 0.46,
+    width: 0.026,
+    cards: 1,
+    segments: 5,
+    curve: 0.7,
     cullDistance: 40,
-    baseColor: "#6b5a2e",
-    tipColor: "#c4ab63",
+    baseColor: "#8a7440",
+    tipColor: "#dcc684",
     sway: 1.2,
+    translucency: 0.66,
+    colorVariation: 0.28,
+    clumpSize: 5,
+    clumpRadius: 0.42,
   },
 ];
 
@@ -118,6 +240,13 @@ export type TerrainGrassLayer = {
   slopeLimitDegrees: number;
   /** Fixes the placement. Two layers with different seeds never overlap. */
   seed: number;
+  /**
+   * Colour and size taken away from the type, for this layer only.
+   *
+   * Absent until an author changes something, so an untouched layer costs no
+   * bytes and keeps following its type when the catalog is retuned.
+   */
+  appearance?: TerrainGrassAppearance;
   /**
    * Optional per-sample coverage, 0..1, in the height field's own row-major
    * order and resolution.
@@ -250,8 +379,16 @@ export function isTerrainGrassMask(
  * One layer may not exceed this many blades. A Terrain scaled up after the
  * density was chosen would otherwise turn a reasonable number into millions,
  * and the author would meet it as a frozen editor rather than as a limit.
+ *
+ * The number is a triangle budget, not a taste, and it moved when the blade
+ * got cheaper: a single tapered card of four to five rows costs roughly a
+ * third of the three crossed cards it replaced, so the same field of triangles
+ * now buys close to three times the blades. Spending that on count is what
+ * closes the gaps — a large Terrain used to run out of blades long before it
+ * ran out of ground, and thin cover on wide ground is what read as a balding
+ * field.
  */
-export const TERRAIN_GRASS_MAX_INSTANCES = 50_000;
+export const TERRAIN_GRASS_MAX_INSTANCES = 140_000;
 
 export type TerrainGrassInstances = {
   /** Interleaved xyz per blade, in Terrain-local space. */
@@ -330,6 +467,17 @@ function candidateCount(terrain: TerrainGeometry, density: number): number {
   return Math.max(0, Math.floor(area * Math.max(density, 0)));
 }
 
+/** How a type's blades gather into tufts. Unknown types scatter singly. */
+export type TerrainGrassClump = { size: number; radius: number };
+
+export function terrainGrassClump(typeId: string): TerrainGrassClump {
+  const type = getTerrainGrassType(typeId);
+  return {
+    size: Math.max(Math.floor(type?.clumpSize ?? 1), 1),
+    radius: Math.max(type?.clumpRadius ?? 0, 0),
+  };
+}
+
 /**
  * Places one layer's blades.
  *
@@ -337,11 +485,19 @@ function candidateCount(terrain: TerrainGeometry, density: number): number {
  * on the density, so raising the density adds blades between the existing ones
  * instead of moving the field the author already approved of — the same rule
  * the Sky's star layers and the Water's wave layers follow.
+ *
+ * Candidates arrive in tufts rather than one at a time. A blade standing on
+ * its own with clear ground all round it is a hair; grass grows in clumps, and
+ * a handful of blades sharing a root is what the eye reads as a plant. Each
+ * tuft's centre comes from the tuft's index and each blade's offset from its
+ * own, so the density rule above survives intact: a denser layer adds blades
+ * to the tufts that are already there and starts new ones between them.
  */
 export function generateTerrainGrassInstances(
   terrain: TerrainGeometry,
   layer: TerrainGrassLayer,
   maxInstances: number = TERRAIN_GRASS_MAX_INSTANCES,
+  clump: TerrainGrassClump = terrainGrassClump(layer.typeId),
 ): TerrainGrassInstances {
   const requested = candidateCount(terrain, layer.density);
   const limit = Math.max(0, Math.floor(maxInstances));
@@ -353,11 +509,29 @@ export function generateTerrainGrassInstances(
   const high = Math.max(minHeight, maxHeight);
   const slopeLimit = Math.max(layer.slopeLimitDegrees, 0);
   const cells = terrain.resolution - 1;
+  const clumpSize = Math.max(Math.floor(clump.size), 1);
+  const clumpRadius = Math.max(clump.radius, 0);
+  const halfWidth = terrain.width / 2;
+  const halfDepth = terrain.depth / 2;
 
   for (let index = 0; index < requested; index += 1) {
     if (positions.length / 3 >= limit) break;
-    const localX = (hash(layer.seed, index, 1) - 0.5) * terrain.width;
-    const localZ = (hash(layer.seed, index, 2) - 0.5) * terrain.depth;
+    const tuft = Math.floor(index / clumpSize);
+    const tuftX = (hash(layer.seed, tuft, 6) - 0.5) * terrain.width;
+    const tuftZ = (hash(layer.seed, tuft, 7) - 0.5) * terrain.depth;
+    // Square-rooted radius keeps a tuft evenly filled rather than piling its
+    // blades onto the centre, which would put a bald ring around every clump.
+    const spreadAngle = hash(layer.seed, index, 1) * Math.PI * 2;
+    const spreadRadius =
+      Math.sqrt(hash(layer.seed, index, 2)) * clumpRadius;
+    const localX = Math.min(
+      Math.max(tuftX + Math.cos(spreadAngle) * spreadRadius, -halfWidth),
+      halfWidth,
+    );
+    const localZ = Math.min(
+      Math.max(tuftZ + Math.sin(spreadAngle) * spreadRadius, -halfDepth),
+      halfDepth,
+    );
 
     // A hole is a removed part of the surface, so nothing may stand on it.
     const cellX = Math.min(
@@ -384,7 +558,7 @@ export function generateTerrainGrassInstances(
     rotations.push(hash(layer.seed, index, 3) * Math.PI * 2);
     // Even a uniform species is never one size, and the variation is what
     // keeps a dense field from reading as a repeated stamp.
-    scales.push(0.75 + hash(layer.seed, index, 4) * 0.5);
+    scales.push(0.7 + hash(layer.seed, index, 4) * 0.6);
   }
 
   return {
@@ -418,6 +592,7 @@ export function isTerrainGrassLayer(value: unknown): value is TerrainGrassLayer 
     layer.slopeLimitDegrees >= 0 &&
     typeof layer.seed === "number" &&
     Number.isFinite(layer.seed) &&
+    isTerrainGrassAppearance(layer.appearance) &&
     (layer.mask === undefined ||
       (Array.isArray(layer.mask) &&
         layer.mask.every(
@@ -428,6 +603,36 @@ export function isTerrainGrassLayer(value: unknown): value is TerrainGrassLayer 
             entry <= 1,
         )))
   );
+}
+
+/** An absent override is valid; a present one must be usable as written. */
+function isTerrainGrassAppearance(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const appearance = value as Record<string, unknown>;
+  const colors: ReadonlyArray<"baseColor" | "tipColor"> = [
+    "baseColor",
+    "tipColor",
+  ];
+  for (const key of colors) {
+    const entry = appearance[key];
+    if (entry !== undefined && !isHexColor(entry)) return false;
+  }
+  const numbers: ReadonlyArray<
+    ["colorVariation" | "heightScale" | "widthScale" | "fill", number, number]
+  > = [
+    ["colorVariation", 0, 1],
+    ["heightScale", 0.2, 4],
+    ["widthScale", 0.2, 4],
+    ["fill", 0, 1],
+  ];
+  for (const [key, low, high] of numbers) {
+    const entry = appearance[key];
+    if (entry === undefined) continue;
+    if (typeof entry !== "number" || !Number.isFinite(entry)) return false;
+    if (entry < low || entry > high) return false;
+  }
+  return true;
 }
 
 export type TerrainGrassPreset = {
@@ -454,21 +659,21 @@ export const TERRAIN_GRASS_PRESETS: readonly TerrainGrassPreset[] = [
     layers: [
       {
         typeId: "short-grass",
-        density: 12,
+        density: 26,
         heightRange: [-1000, 1000],
         slopeLimitDegrees: 42,
         seed: 1301,
       },
       {
         typeId: "tall-grass",
-        density: 3,
+        density: 7,
         heightRange: [-1000, 1000],
         slopeLimitDegrees: 26,
         seed: 2207,
       },
       {
         typeId: "wildflower",
-        density: 0.6,
+        density: 1.4,
         heightRange: [-1000, 1000],
         slopeLimitDegrees: 20,
         seed: 3319,
@@ -483,14 +688,14 @@ export const TERRAIN_GRASS_PRESETS: readonly TerrainGrassPreset[] = [
     layers: [
       {
         typeId: "short-grass",
-        density: 9,
+        density: 20,
         heightRange: [-1000, 6],
         slopeLimitDegrees: 38,
         seed: 4127,
       },
       {
         typeId: "dry-grass",
-        density: 4,
+        density: 9,
         heightRange: [4, 1000],
         slopeLimitDegrees: 48,
         seed: 5231,
@@ -505,7 +710,7 @@ export const TERRAIN_GRASS_PRESETS: readonly TerrainGrassPreset[] = [
     layers: [
       {
         typeId: "dry-grass",
-        density: 1.8,
+        density: 4,
         heightRange: [-1000, 1000],
         slopeLimitDegrees: 40,
         seed: 6337,

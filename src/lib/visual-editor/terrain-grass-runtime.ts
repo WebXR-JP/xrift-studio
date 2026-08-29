@@ -11,38 +11,54 @@
  */
 
 /**
- * Blade card buffers. The height fraction rides in the UV because the vertex
- * stage is about to move the position; a blade built from one quad could only
- * ever be a spike, so each card is segmented and tapered.
+ * Blade card buffers.
+ *
+ * A card is a strip standing on the ground plane: `position.x` carries the
+ * blade's half-width profile, `position.y` the fraction of the way up, and the
+ * card's facing goes in `normal`. The shader needs the facing as a vector
+ * because it turns the card toward the eye, and it needs the profile as a
+ * scalar because it widens the blade with distance — neither survives being
+ * baked into an xz offset, which is what the old buffers did.
+ *
+ * The profile itself is the difference between a blade and a hair. A card that
+ * thins linearly from its base is a needle, and a field of needles is a head of
+ * hair; a real blade keeps most of its width for most of its length and gives
+ * it up near the tip, which is what `pow` pair below draws.
  */
-export function createTerrainGrassBladeBuffers(cards: number): {
+export function createTerrainGrassBladeBuffers(
+  cards: number,
+  segments: number,
+): {
   positions: number[];
+  normals: number[];
   uvs: number[];
   indices: number[];
 } {
   const positions: number[] = [];
+  const normals: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
-  const segments = 4;
+  const rows = Math.max(Math.floor(segments), 2);
   const cardCount = Math.max(Math.floor(cards), 1);
   for (let card = 0; card < cardCount; card += 1) {
     const angle = (Math.PI * card) / cardCount;
-    const dirX = Math.cos(angle);
-    const dirZ = Math.sin(angle);
-    const cardBase = card * (segments + 1) * 2;
-    for (let step = 0; step <= segments; step += 1) {
-      const t = step / segments;
-      const halfWidth = 0.5 * (1 - t) * (1 - t * 0.45);
-      positions.push(-dirX * halfWidth, t, -dirZ * halfWidth);
-      positions.push(dirX * halfWidth, t, dirZ * halfWidth);
+    const normalX = -Math.sin(angle);
+    const normalZ = Math.cos(angle);
+    const cardBase = card * (rows + 1) * 2;
+    for (let step = 0; step <= rows; step += 1) {
+      const t = step / rows;
+      const halfWidth = 0.5 * Math.pow(1 - Math.pow(t, 2.2), 0.55);
+      positions.push(-halfWidth, t, 0);
+      positions.push(halfWidth, t, 0);
+      normals.push(normalX, 0, normalZ, normalX, 0, normalZ);
       uvs.push(0, t, 1, t);
     }
-    for (let step = 0; step < segments; step += 1) {
+    for (let step = 0; step < rows; step += 1) {
       const a = cardBase + step * 2;
       indices.push(a, a + 1, a + 3, a, a + 3, a + 2);
     }
   }
-  return { positions, uvs, indices };
+  return { positions, normals, uvs, indices };
 }
 
 /** Grass blade shaders shared by the editor viewport and the compiled world. */
@@ -55,38 +71,77 @@ uniform vec2 uWindDirection;
 uniform float uWindSpeed;
 uniform float uWindTurbulence;
 uniform float uTime;
-uniform vec3 uSunDirection;
 varying float vHeightFraction;
-varying float vShade;
+varying float vTint;
+varying vec3 vNormal;
+varying vec3 vView;
+
+// One random per blade, from where the blade stands. Nothing per-instance has
+// to be uploaded for it, so variation costs a buffer of zero bytes.
+float xriftGrassRandom(vec2 seed) {
+  return fract(sin(dot(seed, vec2(41.7318, 289.4213))) * 43758.5453123);
+}
 
 void main() {
-  vHeightFraction = uv.y;
+  float t = uv.y;
+  vHeightFraction = t;
   vec4 anchor = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+  vTint = xriftGrassRandom(anchor.xz + vec2(11.7, 3.1));
 
-  // Distance culling. A blade thinner than a pixel cannot be drawn, only
+  // Distance thinning. A blade thinner than a pixel cannot be drawn, only
   // aliased, and a whole field of them turns the ground into moire rings.
-  // Shrinking them out before that point removes the artefact without paying
-  // for transparency or sorting.
+  // Blades leave one at a time rather than all shrinking together: a field
+  // losing height as one is a bald ring on the ground, a field losing members
+  // is grass getting sparser. The survivors take the missing blades' width, so
+  // the far cover stays as solid as it looked while costing a fraction of it.
   float distanceToCamera = distance(cameraPosition, anchor.xyz);
-  float visibility =
-    1.0 - smoothstep(uCullDistance * 0.65, uCullDistance, distanceToCamera);
-  if (visibility <= 0.001) {
+  float coverage =
+    1.0 - smoothstep(uCullDistance * 0.45, uCullDistance, distanceToCamera);
+  if (xriftGrassRandom(anchor.xz) > coverage) {
     // Outside the clip volume, so the blade costs nothing beyond this vertex.
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     return;
   }
+  float widthGain = clamp(inversesqrt(max(coverage, 0.14)), 1.0, 2.6);
 
-  float t = uv.y;
+  // The blade's own axes in world space. Everything below is decided in world
+  // space and brought back, so a Terrain that is rotated or scaled by its
+  // Entity still grows grass that stands up and leans downwind.
+  mat3 basis = mat3(modelMatrix) * mat3(instanceMatrix);
+  vec3 axisX = normalize(basis[0]);
+  vec3 axisY = normalize(basis[1]);
+  vec3 axisZ = normalize(basis[2]);
+
+  // A single card is a third of the cost of the crossed set it replaced, and
+  // this is what buys that back: as the card turns edge-on it swings toward
+  // the eye instead of collapsing to a line. Facing the eye already, it does
+  // not move at all, so a blade never spins under a walking camera.
+  vec3 cardNormal = normalize(basis * normal);
+  vec3 toCamera = normalize(cameraPosition - anchor.xyz);
+  vec3 cardSide = cross(axisY, cardNormal);
+  vec3 viewSide = cross(axisY, toCamera);
+  float cardSideLength = length(cardSide);
+  float viewSideLength = length(viewSide);
+  cardSide = cardSideLength > 0.001 ? cardSide / cardSideLength : axisX;
+  viewSide = viewSideLength > 0.001 ? viewSide / viewSideLength : cardSide;
+  // A side that flips as the camera crosses the blade would make the field
+  // shimmer, so the view side is taken along the card's own sense.
+  viewSide *= sign(dot(viewSide, cardSide) + 0.0001);
+  float facing = abs(dot(cardNormal, toCamera));
+  vec3 side = normalize(mix(cardSide, viewSide, 1.0 - facing));
+
   vec3 local = vec3(
-    position.x * uWidth,
-    position.y * uHeight * visibility,
-    position.z * uWidth
-  );
+    dot(side, axisX),
+    dot(side, axisY),
+    dot(side, axisZ)
+  ) * (position.x * uWidth * widthGain);
 
-  // Each blade leans on its own axis and arcs over rather than standing
-  // straight, which is most of what separates grass from a field of spikes.
-  float lean = uCurve * t * t * uHeight * 0.5;
-  local.x += lean;
+  // The arc. A blade that stands straight is a spike, and one that keeps its
+  // full length while arcing over is a stretched spike, so the lean takes its
+  // height back as it goes.
+  float arc = uCurve * t * t;
+  local.x += arc * uHeight * 0.5;
+  local.y += position.y * uHeight * (1.0 - 0.18 * arc);
 
   vec4 rooted = instanceMatrix * vec4(local, 1.0);
   // The instance's world position is the phase, so neighbouring blades lean at
@@ -98,27 +153,72 @@ void main() {
   rooted.xz += uWindDirection * bend * uHeight;
 
   vec4 worldPosition = modelMatrix * rooted;
-  // A cheap wrap-around shade so a dense field still has form. Blades are
-  // unlit otherwise and would read as flat cut-outs.
-  vec3 faceNormal = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * vec3(position.x, 0.35, position.z));
-  vShade = 0.65 + 0.35 * clamp(dot(faceNormal, normalize(uSunDirection)), 0.0, 1.0);
+  // The drawn card faces across its own width, and the higher up the blade the
+  // more of the sky it answers to — an arcing blade turns its face upward.
+  vec3 face = normalize(cross(side, axisY));
+  vNormal = normalize(mix(face, axisY, 0.32 * t));
+  vView = cameraPosition - worldPosition.xyz;
   gl_Position = projectionMatrix * viewMatrix * worldPosition;
 }`;
 
 export const TERRAIN_GRASS_FRAGMENT_SHADER = `uniform vec3 uBaseColor;
 uniform vec3 uTipColor;
-varying float vHeightFraction;
-varying float vShade;
+uniform vec3 uSunDirection;
 uniform vec3 uSunColor;
 uniform float uSunIntensity;
 uniform vec3 uAmbientColor;
 uniform float uAmbientIntensity;
+uniform float uTranslucency;
+uniform float uColorVariation;
+uniform float uFill;
+varying float vHeightFraction;
+varying float vTint;
+varying vec3 vNormal;
+varying vec3 vView;
 
 void main() {
-  vec3 color = mix(uBaseColor, uTipColor, vHeightFraction * vHeightFraction);
+  float t = vHeightFraction;
+  vec3 color = mix(uBaseColor, uTipColor, t * t);
+
+  // No two blades in a field are the same green, and one random per blade is
+  // what keeps a dense patch from reading as a repeated stamp. The warm half
+  // of the spread also dries the blade slightly, which is what a real field
+  // does with the ones that catch the most sun.
+  float tint = vTint * 2.0 - 1.0;
+  color *= 1.0 + tint * uColorVariation * 0.4;
+  color = mix(color, color * vec3(1.08, 0.97, 0.78), max(tint, 0.0) * uColorVariation);
+
+  vec3 view = normalize(vView);
+  vec3 normal = normalize(vNormal);
+  // Both faces of a blade are the same leaf, so the back of one must not go
+  // black just because its card was built facing the other way.
+  if (dot(normal, view) < 0.0) normal = -normal;
+  vec3 sun = normalize(uSunDirection);
+
+  // Wrapped diffuse. A leaf is thin enough that its terminator is soft, and a
+  // hard Lambert edge across a blade a centimetre wide is only a black band.
+  float wrap = dot(normal, sun) * 0.5 + 0.5;
+  // Occlusion down at the root, where a blade meets the ground and its
+  // neighbours. Without it a field reads as cut-outs standing on a plane.
+  float rootShade = mix(0.5, 1.0, t);
+  // Sun coming through the blade from the far side. A leaf glowing when it
+  // stands between the eye and the light is most of what says "plant" rather
+  // than "painted card".
+  float through =
+    pow(clamp(dot(-sun, view), 0.0, 1.0), 3.0) * uTranslucency * mix(0.3, 1.0, t);
+
+  vec3 sunLight = uSunColor * uSunIntensity;
+  // Foliage under an open sky is never unlit. A Scene lit only through its
+  // skybox hands this shader no sun and no ambient at all, and grass that
+  // answered only to those came out as black strands over lit ground.
+  vec3 skyLight =
+    uAmbientColor * uAmbientIntensity + mix(vec3(1.0), uSunColor, 0.6) * uFill;
   vec3 light =
-    uAmbientColor * uAmbientIntensity + uSunColor * uSunIntensity;
-  gl_FragColor = vec4(color * vShade * light, 1.0);
+    skyLight * mix(0.62, 1.0, normal.y * 0.5 + 0.5) * rootShade +
+    sunLight * wrap * rootShade +
+    sunLight * through;
+
+  gl_FragColor = vec4(color * light, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -199,7 +299,7 @@ export function terrainGrassRuntimeSource(options: { typed: boolean }): string {
     `  return m00 * (1 - fx) * (1 - fz) + m10 * fx * (1 - fz) + m01 * (1 - fx) * fz + m11 * fx * fz;`,
     `}`,
     ``,
-    `function xriftTerrainGrassPlace(terrain${terrainType}, layer${layerType}, maxInstances${num}) {`,
+    `function xriftTerrainGrassPlace(terrain${terrainType}, layer${layerType}, maxInstances${num}, clumpSize${num}, clumpRadius${num}) {`,
     `  const requested = Math.max(`,
     `    0,`,
     `    Math.floor(Math.max(terrain.width, 0) * Math.max(terrain.depth, 0) * Math.max(layer.density, 0)),`,
@@ -212,10 +312,25 @@ export function terrainGrassRuntimeSource(options: { typed: boolean }): string {
     `  const high = Math.max(layer.heightRange[0] ?? 0, layer.heightRange[1] ?? 0);`,
     `  const slopeLimit = Math.max(layer.slopeLimitDegrees, 0);`,
     `  const cells = terrain.resolution - 1;`,
+    `  const tuftSize = Math.max(Math.floor(clumpSize), 1);`,
+    `  const tuftRadius = Math.max(clumpRadius, 0);`,
+    `  const halfWidth = terrain.width / 2;`,
+    `  const halfDepth = terrain.depth / 2;`,
     `  for (let index = 0; index < requested; index += 1) {`,
     `    if (positions.length / 3 >= limit) break;`,
-    `    const localX = (xriftTerrainGrassHash(layer.seed, index, 1) - 0.5) * terrain.width;`,
-    `    const localZ = (xriftTerrainGrassHash(layer.seed, index, 2) - 0.5) * terrain.depth;`,
+    `    const tuft = Math.floor(index / tuftSize);`,
+    `    const tuftX = (xriftTerrainGrassHash(layer.seed, tuft, 6) - 0.5) * terrain.width;`,
+    `    const tuftZ = (xriftTerrainGrassHash(layer.seed, tuft, 7) - 0.5) * terrain.depth;`,
+    `    const spreadAngle = xriftTerrainGrassHash(layer.seed, index, 1) * Math.PI * 2;`,
+    `    const spreadRadius = Math.sqrt(xriftTerrainGrassHash(layer.seed, index, 2)) * tuftRadius;`,
+    `    const localX = Math.min(`,
+    `      Math.max(tuftX + Math.cos(spreadAngle) * spreadRadius, -halfWidth),`,
+    `      halfWidth,`,
+    `    );`,
+    `    const localZ = Math.min(`,
+    `      Math.max(tuftZ + Math.sin(spreadAngle) * spreadRadius, -halfDepth),`,
+    `      halfDepth,`,
+    `    );`,
     `    const cellX = Math.min(`,
     `      Math.max(Math.floor(((localX + terrain.width / 2) / terrain.width) * cells), 0),`,
     `      cells - 1,`,
@@ -236,7 +351,7 @@ export function terrainGrassRuntimeSource(options: { typed: boolean }): string {
     `    }`,
     `    positions.push(localX, height, localZ);`,
     `    rotations.push(xriftTerrainGrassHash(layer.seed, index, 3) * Math.PI * 2);`,
-    `    scales.push(0.75 + xriftTerrainGrassHash(layer.seed, index, 4) * 0.5);`,
+    `    scales.push(0.7 + xriftTerrainGrassHash(layer.seed, index, 4) * 0.6);`,
     `  }`,
     `  return {`,
     `    positions: new Float32Array(positions),`,
@@ -246,30 +361,32 @@ export function terrainGrassRuntimeSource(options: { typed: boolean }): string {
     `  };`,
     `}`,
     ``,
-    `function xriftTerrainGrassBladeBuffers(cards${num}) {`,
+    `function xriftTerrainGrassBladeBuffers(cards${num}, segments${num}) {`,
     `  const positions${numberArray} = [];`,
+    `  const normals${numberArray} = [];`,
     `  const uvs${numberArray} = [];`,
     `  const indices${numberArray} = [];`,
-    `  const segments = 4;`,
+    `  const rows = Math.max(Math.floor(segments), 2);`,
     `  const cardCount = Math.max(Math.floor(cards), 1);`,
     `  for (let card = 0; card < cardCount; card += 1) {`,
     `    const angle = (Math.PI * card) / cardCount;`,
-    `    const dirX = Math.cos(angle);`,
-    `    const dirZ = Math.sin(angle);`,
-    `    const cardBase = card * (segments + 1) * 2;`,
-    `    for (let step = 0; step <= segments; step += 1) {`,
-    `      const t = step / segments;`,
-    `      const halfWidth = 0.5 * (1 - t) * (1 - t * 0.45);`,
-    `      positions.push(-dirX * halfWidth, t, -dirZ * halfWidth);`,
-    `      positions.push(dirX * halfWidth, t, dirZ * halfWidth);`,
+    `    const normalX = -Math.sin(angle);`,
+    `    const normalZ = Math.cos(angle);`,
+    `    const cardBase = card * (rows + 1) * 2;`,
+    `    for (let step = 0; step <= rows; step += 1) {`,
+    `      const t = step / rows;`,
+    `      const halfWidth = 0.5 * Math.pow(1 - Math.pow(t, 2.2), 0.55);`,
+    `      positions.push(-halfWidth, t, 0);`,
+    `      positions.push(halfWidth, t, 0);`,
+    `      normals.push(normalX, 0, normalZ, normalX, 0, normalZ);`,
     `      uvs.push(0, t, 1, t);`,
     `    }`,
-    `    for (let step = 0; step < segments; step += 1) {`,
+    `    for (let step = 0; step < rows; step += 1) {`,
     `      const a = cardBase + step * 2;`,
     `      indices.push(a, a + 1, a + 3, a, a + 3, a + 2);`,
     `    }`,
     `  }`,
-    `  return { positions, uvs, indices };`,
+    `  return { positions, normals, uvs, indices };`,
     `}`,
   ].join("\n");
 }

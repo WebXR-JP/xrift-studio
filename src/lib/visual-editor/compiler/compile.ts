@@ -40,7 +40,12 @@ import {
   resolveSceneLighting,
 } from "../lighting-contract";
 import { resolveSceneWind, windDrivenUniforms } from "../wind-contract";
-import { getTerrainGrassType } from "../terrain-grass";
+import {
+  TERRAIN_GRASS_MAX_INSTANCES,
+  getTerrainGrassType,
+  resolveTerrainGrassAppearance,
+  terrainGrassClump,
+} from "../terrain-grass";
 import {
   TERRAIN_GRASS_FRAGMENT_SHADER,
   TERRAIN_GRASS_VERTEX_SHADER,
@@ -2368,17 +2373,28 @@ function renderTerrainGrassLayers(
       });
       continue;
     }
+    // The layer's own colour and size win over the type's, resolved by the same
+    // function the viewport uses, so a field an author tuned in Studio cannot
+    // arrive in the published world wearing the catalog's colours instead.
+    const appearance = resolveTerrainGrassAppearance(type, layer.appearance);
+    const clump = terrainGrassClump(layer.typeId);
     jsx.push(
       `<XRiftStudioTerrainGrass terrain={${terrainConstant}} layerIndex={${index}} type={${JSON.stringify(
         {
-          height: type.height,
-          width: type.width,
+          height: appearance.height,
+          width: appearance.width,
           cards: type.cards,
+          segments: type.segments,
           curve: type.curve,
           cullDistance: type.cullDistance,
           sway: type.sway,
-          baseColor: type.baseColor,
-          tipColor: type.tipColor,
+          translucency: type.translucency,
+          colorVariation: appearance.colorVariation,
+          fill: appearance.fill,
+          baseColor: appearance.baseColor,
+          tipColor: appearance.tipColor,
+          clumpSize: clump.size,
+          clumpRadius: clump.radius,
         },
       )}} wind={{ direction: [${formatNumber(wind.direction[0])}, ${formatNumber(
         wind.direction[1],
@@ -2415,11 +2431,17 @@ type XRiftStudioTerrainGrassTypeProps = {
   height: number;
   width: number;
   cards: number;
+  segments: number;
   curve: number;
   cullDistance: number;
   sway: number;
+  translucency: number;
+  colorVariation: number;
+  fill: number;
   baseColor: string;
   tipColor: string;
+  clumpSize: number;
+  clumpRadius: number;
 };
 
 const XRiftStudioTerrainGrass: FC<{
@@ -2438,24 +2460,38 @@ const XRiftStudioTerrainGrass: FC<{
   const layer = terrain.grass?.[layerIndex];
   const meshRef = useRef<InstancedMesh>(null);
   const placement = useMemo(
-    () => (layer ? xriftTerrainGrassPlace(terrain, layer, 50000) : null),
-    [layer, terrain],
+    () =>
+      layer
+        ? xriftTerrainGrassPlace(
+            terrain,
+            layer,
+            ${TERRAIN_GRASS_MAX_INSTANCES},
+            type.clumpSize,
+            type.clumpRadius,
+          )
+        : null,
+    [layer, terrain, type.clumpSize, type.clumpRadius],
   );
   const geometry = useMemo(() => {
-    const buffers = xriftTerrainGrassBladeBuffers(type.cards);
+    const buffers = xriftTerrainGrassBladeBuffers(type.cards, type.segments);
     const next = new BufferGeometry();
     next.setAttribute(
       "position",
       new Float32BufferAttribute(new Float32Array(buffers.positions), 3),
+    );
+    // The card's own facing. A flat strip has no surface to derive a normal
+    // from, and the shader needs the facing to turn the blade toward the eye.
+    next.setAttribute(
+      "normal",
+      new Float32BufferAttribute(new Float32Array(buffers.normals), 3),
     );
     next.setAttribute(
       "uv",
       new Float32BufferAttribute(new Float32Array(buffers.uvs), 2),
     );
     next.setIndex(buffers.indices);
-    next.computeVertexNormals();
     return next;
-  }, [type.cards]);
+  }, [type.cards, type.segments]);
   const material = useMemo(
     () =>
       new ShaderMaterial({
@@ -2467,6 +2503,9 @@ const XRiftStudioTerrainGrass: FC<{
           uSway: { value: type.sway },
           uCurve: { value: type.curve },
           uCullDistance: { value: type.cullDistance },
+          uTranslucency: { value: type.translucency },
+          uColorVariation: { value: type.colorVariation },
+          uFill: { value: type.fill },
           uWindDirection: { value: new Vector2(wind.direction[0], wind.direction[1]) },
           uWindSpeed: { value: wind.speed },
           uWindTurbulence: { value: wind.turbulence },
@@ -2491,6 +2530,9 @@ const XRiftStudioTerrainGrass: FC<{
       type.sway,
       type.curve,
       type.cullDistance,
+      type.translucency,
+      type.colorVariation,
+      type.fill,
       wind.direction[0],
       wind.direction[1],
       wind.speed,

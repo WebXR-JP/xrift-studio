@@ -141,20 +141,11 @@ export function runLightingContractFixtureAssertions(): void {
   // Grass had its own baked-in sun too — `vec3(0.4, 0.8, 0.3)` in the vertex
   // shader — so a field stayed lit from the north-west no matter where the
   // Scene's light was, and stayed at one brightness beside ground that
-  // responded. Both shaders must now read the contract.
-  assert(
-    TERRAIN_GRASS_VERTEX_SHADER.includes("uniform vec3 uSunDirection;"),
-    "The grass vertex shader does not declare the Scene's key light",
-  );
-  assert(
-    TERRAIN_GRASS_VERTEX_SHADER.includes("normalize(uSunDirection)"),
-    "The grass vertex shader does not shade from the Scene's key light",
-  );
-  assert(
-    !TERRAIN_GRASS_VERTEX_SHADER.includes("vec3(0.4, 0.8, 0.3)"),
-    "The grass vertex shader still carries its own sun direction",
-  );
+  // responded. It now reads the contract, and reads it per pixel: a blade is
+  // a centimetre wide and four rows tall, so a light term interpolated from
+  // its corners is a light term evaluated barely anywhere.
   for (const declaration of [
+    "uniform vec3 uSunDirection;",
     "uniform vec3 uSunColor;",
     "uniform float uSunIntensity;",
     "uniform vec3 uAmbientColor;",
@@ -166,8 +157,34 @@ export function runLightingContractFixtureAssertions(): void {
     );
   }
   assert(
-    TERRAIN_GRASS_FRAGMENT_SHADER.includes("vShade * light"),
+    TERRAIN_GRASS_FRAGMENT_SHADER.includes("normalize(uSunDirection)"),
+    "The grass fragment shader does not shade from the Scene's key light",
+  );
+  for (const shader of [
+    TERRAIN_GRASS_VERTEX_SHADER,
+    TERRAIN_GRASS_FRAGMENT_SHADER,
+  ]) {
+    assert(
+      !shader.includes("vec3(0.4, 0.8, 0.3)"),
+      "A grass shader still carries its own sun direction",
+    );
+  }
+  assert(
+    TERRAIN_GRASS_FRAGMENT_SHADER.includes("uSunColor * uSunIntensity") &&
+      TERRAIN_GRASS_FRAGMENT_SHADER.includes(
+        "uAmbientColor * uAmbientIntensity",
+      ),
     "The grass fragment shader does not apply the Scene's light",
+  );
+  // The sky bounce is the material's own answer to standing under open sky,
+  // and it is the one term that may light a blade the contract does not: a
+  // Scene lit through its skybox alone reports no sun and no ambient, and
+  // grass that answered only to those came out as black strands over lit
+  // ground. It stays an authoring value with a way down to zero, never a
+  // floor the contract cannot switch off.
+  assert(
+    TERRAIN_GRASS_FRAGMENT_SHADER.includes("uniform float uFill;"),
+    "The grass fragment shader has no sky bounce of its own",
   );
 
   // With no light in the Scene, albedo contributes nothing: an unlit surface

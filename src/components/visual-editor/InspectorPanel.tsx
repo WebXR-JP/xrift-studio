@@ -76,16 +76,20 @@ import {
   type TerrainViewportEditing,
   type TerrainViewportBrushKind,
   type TerrainSceneBrushOperation,
+  type TerrainGrassAppearance,
   type TerrainGrassLayer,
+  type TerrainGrassType,
   TERRAIN_GRASS_PRESETS,
   TERRAIN_SURFACE_CATALOG,
   fitTerrainSurfaceToRange,
   getTerrainSurfacePreset,
   type TerrainSurfaceCatalogEntry,
   TERRAIN_GRASS_TYPES,
+  TERRAIN_GRASS_MAX_INSTANCES,
   createTerrainGrassLayers,
   generateTerrainGrassInstances,
   getTerrainGrassType,
+  resolveTerrainGrassAppearance,
   type TextureAssetPatch,
   type TextureCardProfile,
   type TextComponent,
@@ -1882,6 +1886,10 @@ function TerrainGrassLayerList({
           {grassLayers.map((layer, index) => {
             const active = layer.id === activeLayerId;
             const type = getTerrainGrassType(layer.typeId);
+            const appearance = type
+              ? resolveTerrainGrassAppearance(type, layer.appearance)
+              : undefined;
+            const tuned = layer.appearance !== undefined;
             return (
               <li key={layer.id}>
                 <div
@@ -1904,8 +1912,8 @@ function TerrainGrassLayerList({
                         className="h-4 w-4 shrink-0 rounded-sm border border-slate-300"
                         style={{
                           background: `linear-gradient(to top, ${
-                            type?.baseColor ?? "#4d7c0f"
-                          }, ${type?.tipColor ?? "#a3e635"})`,
+                            appearance?.baseColor ?? "#4d7c0f"
+                          }, ${appearance?.tipColor ?? "#a3e635"})`,
                         }}
                       />
                       <span
@@ -1915,6 +1923,11 @@ function TerrainGrassLayerList({
                       >
                         {type?.label ?? layer.typeId}
                       </span>
+                      {tuned ? (
+                        <span className="shrink-0 rounded border border-slate-300 px-1 py-0.5 text-[9px] font-semibold text-slate-500">
+                          調整済み
+                        </span>
+                      ) : null}
                       {active ? (
                         <span className="shrink-0 rounded bg-violet-600 px-1 py-0.5 text-[9px] font-semibold text-white">
                           編集中
@@ -1990,6 +2003,23 @@ function TerrainGrassLayerList({
                       )
                     }
                   />
+                  {active && type ? (
+                    <TerrainGrassAppearanceFields
+                      type={type}
+                      layer={layer}
+                      disabled={!editable}
+                      onChange={(appearanceChange, notice) =>
+                        onGrassLayersChange?.(
+                          grassLayers.map((entry) =>
+                            entry.id === layer.id
+                              ? applyTerrainGrassAppearance(entry, appearanceChange)
+                              : entry,
+                          ),
+                          notice,
+                        )
+                      }
+                    />
+                  ) : null}
                   {layer.mask ? (
                     <div className="flex items-center justify-between gap-2 pt-1">
                       <span className="text-[10px] text-slate-500">
@@ -2128,20 +2158,183 @@ function TerrainGrassCounts({ terrain }: { terrain: TerrainGeometry }) {
       })),
     [terrain],
   );
+  const clamped = counts.some((entry) => entry.placement.clampedByLimit);
   return (
-    <ul className="space-y-1 rounded border border-slate-200 bg-slate-50 p-2 text-[11px] text-slate-600">
-      {counts.map((entry) => (
-        <li key={entry.id} className="flex justify-between gap-2">
-          <span>{entry.label}</span>
-          <span className="font-mono text-slate-500">
-            {entry.placement.placed.toLocaleString()}本
-            {entry.placement.clampedByLimit
-              ? `（上限で丸め・要求${entry.placement.requested.toLocaleString()}）`
-              : ""}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-1">
+      <ul className="space-y-1 rounded border border-slate-200 bg-slate-50 p-2 text-[11px] text-slate-600">
+        {counts.map((entry) => (
+          <li key={entry.id} className="flex justify-between gap-2">
+            <span>{entry.label}</span>
+            <span className="font-mono text-slate-500">
+              {entry.placement.placed.toLocaleString()}本
+              {entry.placement.clampedByLimit
+                ? `（上限で丸め・要求${entry.placement.requested.toLocaleString()}）`
+                : ""}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {/* A layer that hit the cap is thinner than its density says, and that
+          reads on the ground as bare patches rather than as a limit. Naming
+          the two ways out beats leaving the author to raise the density that
+          is already being ignored. */}
+      {clamped ? (
+        <p className="text-[10px] leading-4 text-slate-500">
+          上限（1層{TERRAIN_GRASS_MAX_INSTANCES.toLocaleString()}本）に達した層は、密度どおりには生えず地面が透けます。密度を下げるか、Terrainを分けて層ごとの面積を小さくしてください。
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A layer's own colour and size.
+ *
+ * The type is a starting point, not a verdict: an author who wants a paler
+ * meadow or a lower one should not have to leave the layer they are painting
+ * to get it. Only the selected layer shows these, so the stack stays a list
+ * you can read while the controls sit where the work is.
+ *
+ * Every field starts at the type's value and writes an override only once it
+ * is moved, so an untouched layer keeps following the catalog and「種類の既定
+ * に戻す」puts it back there in one step.
+ */
+function TerrainGrassAppearanceFields({
+  type,
+  layer,
+  disabled,
+  onChange,
+}: {
+  type: TerrainGrassType;
+  layer: TerrainGrassLayer;
+  disabled: boolean;
+  onChange: (appearance: TerrainGrassAppearance, notice: string) => void;
+}) {
+  const resolved = resolveTerrainGrassAppearance(type, layer.appearance);
+  const tuned = layer.appearance !== undefined;
+  return (
+    <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-semibold text-slate-500">見た目</span>
+        <button
+          type="button"
+          disabled={disabled || !tuned}
+          onClick={() => onChange({}, "草の見た目を種類の既定に戻しました")}
+          title="この層の色と大きさを種類の既定に戻す"
+          className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          種類の既定に戻す
+        </button>
+      </div>
+      <TerrainGrassColorField
+        label="根元の色"
+        value={resolved.baseColor}
+        disabled={disabled}
+        onChange={(baseColor) => onChange({ baseColor }, "草の根元の色を変更しました")}
+      />
+      <TerrainGrassColorField
+        label="穂先の色"
+        value={resolved.tipColor}
+        disabled={disabled}
+        onChange={(tipColor) => onChange({ tipColor }, "草の穂先の色を変更しました")}
+      />
+      <TerrainNumberField
+        label="色のばらつき"
+        value={round2(resolved.colorVariation)}
+        min={0}
+        max={1}
+        step={0.05}
+        disabled={disabled}
+        onChange={(colorVariation) =>
+          onChange({ colorVariation }, "草の色のばらつきを変更しました")
+        }
+      />
+      <TerrainNumberField
+        label="高さ (倍)"
+        value={round2(resolved.height / type.height)}
+        min={0.2}
+        max={4}
+        step={0.05}
+        disabled={disabled}
+        onChange={(heightScale) => onChange({ heightScale }, "草の高さを変更しました")}
+      />
+      <TerrainNumberField
+        label="葉の幅 (倍)"
+        value={round2(resolved.width / type.width)}
+        min={0.2}
+        max={4}
+        step={0.05}
+        disabled={disabled}
+        onChange={(widthScale) => onChange({ widthScale }, "草の葉の幅を変更しました")}
+      />
+      <TerrainNumberField
+        label="空の明るさ"
+        value={round2(resolved.fill)}
+        min={0}
+        max={1}
+        step={0.02}
+        disabled={disabled}
+        onChange={(fill) => onChange({ fill }, "草の空の明るさを変更しました")}
+      />
+      <p className="text-[10px] leading-4 text-slate-500">
+        空の明るさは、Sceneの光が届かない面を空からの照り返しでどれだけ起こすかです。0にすると光源だけで陰影が決まり、Skyboxしか光源がないSceneでは草が暗くなります。
+      </p>
+    </div>
+  );
+}
+
+/** Rounds a display value so a slider round-trip does not print 0.30000000004. */
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * Merges one appearance change into a layer, and drops the override entirely
+ * once nothing is left in it — an empty change is「戻す」, and a layer that
+ * carries no override follows its type again and costs the document nothing.
+ */
+function applyTerrainGrassAppearance(
+  layer: TerrainGrassLayer,
+  change: TerrainGrassAppearance,
+): TerrainGrassLayer {
+  const merged: TerrainGrassAppearance = Object.keys(change).length
+    ? { ...layer.appearance, ...change }
+    : {};
+  const cleaned = Object.fromEntries(
+    Object.entries(merged).filter(([, value]) => value !== undefined),
+  ) as TerrainGrassAppearance;
+  if (Object.keys(cleaned).length === 0) {
+    const { appearance: _dropped, ...rest } = layer;
+    return rest;
+  }
+  return { ...layer, appearance: cleaned };
+}
+
+function TerrainGrassColorField({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+      {label}
+      <span className="flex items-center gap-2">
+        <input
+          type="color"
+          value={value}
+          disabled={disabled}
+          onChange={(event) => onChange(event.currentTarget.value)}
+          className="h-8 w-12 rounded border border-slate-300 bg-white p-0.5 disabled:opacity-45"
+        />
+        <span className="font-normal text-[10px] text-slate-500">{value}</span>
+      </span>
+    </label>
   );
 }
 
