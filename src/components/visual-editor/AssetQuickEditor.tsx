@@ -50,6 +50,8 @@ import {
   type TextureAsset,
   type TextureAssetPatch,
   type TextureCardProfile,
+  planTextureProcessing,
+  TEXTURE_MAX_SIZE_CHOICES,
 } from "../../lib/visual-editor";
 import { EDITOR_ICONS } from "./editor-icons";
 import { CatalogThumbnailImage } from "./CatalogThumbnailImage";
@@ -3288,23 +3290,37 @@ function StandardMaterialQuickEditor({
   );
 }
 
+export type TextureProcessingState =
+  | { phase: "idle" }
+  | { phase: "reading" | "encoding" | "saving"; message: string }
+  | { phase: "succeeded" | "failed"; message: string };
+
 export function TextureQuickEditor({
   asset,
   projectPath,
   readOnly,
+  processingState = { phase: "idle" },
   onChange,
   onCreateCard,
+  onApplyProcessing,
 }: {
   asset: TextureAsset;
   projectPath?: string;
   readOnly: boolean;
+  processingState?: TextureProcessingState;
   onChange: (patch: TextureAssetPatch) => void;
   onCreateCard?: (profile: TextureCardProfile) => void;
+  onApplyProcessing?: () => void;
 }) {
   const settings = asset.importSettings;
   const resizeValue = settings.resize.mode === "original" ? "original" : String(settings.resize.maxSize);
   const sourceFormat = getTextureSourceFormat(asset);
   const environmentTexture = isEnvironmentTextureAsset(asset);
+  const processingBusy =
+    processingState.phase === "reading" ||
+    processingState.phase === "encoding" ||
+    processingState.phase === "saving";
+  const settingsDisabled = readOnly || processingBusy;
 
   return (
     <div className="space-y-3">
@@ -3341,7 +3357,7 @@ export function TextureQuickEditor({
           <span className="mb-1 block">最大解像度</span>
           <select
             value={resizeValue}
-            disabled={readOnly}
+            disabled={settingsDisabled}
             onChange={(event) => {
               const value = event.currentTarget.value;
               onChange({
@@ -3353,7 +3369,7 @@ export function TextureQuickEditor({
             className={INPUT_CLASS}
           >
             <option value="original">原寸</option>
-            {[256, 512, 1024, 2048, 4096, 8192].map((size) => (
+            {TEXTURE_MAX_SIZE_CHOICES.map((size) => (
               <option key={size} value={size}>最大 {size}px</option>
             ))}
           </select>
@@ -3370,7 +3386,7 @@ export function TextureQuickEditor({
             <div className="mt-1 grid grid-cols-3 gap-1.5">
               <button
                 type="button"
-                disabled={readOnly || !onCreateCard}
+                disabled={settingsDisabled || !onCreateCard}
                 onClick={() => onCreateCard?.("backdrop-flat")}
                 className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5 text-left text-[11px] font-semibold text-sky-800 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-45"
               >
@@ -3379,7 +3395,7 @@ export function TextureQuickEditor({
               </button>
               <button
                 type="button"
-                disabled={readOnly || !onCreateCard}
+                disabled={settingsDisabled || !onCreateCard}
                 onClick={() => onCreateCard?.("backdrop-arc-180")}
                 className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5 text-left text-[11px] font-semibold text-sky-800 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-45"
               >
@@ -3388,7 +3404,7 @@ export function TextureQuickEditor({
               </button>
               <button
                 type="button"
-                disabled={readOnly || !onCreateCard}
+                disabled={settingsDisabled || !onCreateCard}
                 onClick={() => onCreateCard?.("backdrop-arc-270")}
                 className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5 text-left text-[11px] font-semibold text-sky-800 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-45"
               >
@@ -3402,7 +3418,7 @@ export function TextureQuickEditor({
             <div className="mt-1 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                disabled={readOnly || !onCreateCard}
+                disabled={settingsDisabled || !onCreateCard}
                 onClick={() => onCreateCard?.("grass-single")}
                 className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-2 text-left text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-45"
               >
@@ -3413,7 +3429,7 @@ export function TextureQuickEditor({
               </button>
               <button
                 type="button"
-                disabled={readOnly || !onCreateCard}
+                disabled={settingsDisabled || !onCreateCard}
                 onClick={() => onCreateCard?.("grass-cross")}
                 className="rounded-md border border-emerald-300 bg-emerald-100 px-2 py-2 text-left text-xs font-semibold text-emerald-900 hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-45"
               >
@@ -3432,7 +3448,7 @@ export function TextureQuickEditor({
           <span className="mb-1 block">カラースペース</span>
           <select
             value={settings.colorSpace}
-            disabled={readOnly}
+            disabled={settingsDisabled}
             onChange={(event) =>
               onChange({ importSettings: { colorSpace: event.currentTarget.value as (typeof TEXTURE_COLOR_SPACES)[number] } })
             }
@@ -3446,7 +3462,7 @@ export function TextureQuickEditor({
           <input
             type="checkbox"
             checked={settings.generateMipmaps}
-            disabled={readOnly}
+            disabled={settingsDisabled}
             onChange={(event) => onChange({ importSettings: { generateMipmaps: event.currentTarget.checked } })}
             className="h-4 w-4 accent-violet-600"
           />
@@ -3456,7 +3472,7 @@ export function TextureQuickEditor({
           <input
             type="checkbox"
             checked={settings.flipY}
-            disabled={readOnly}
+            disabled={settingsDisabled}
             onChange={(event) => onChange({ importSettings: { flipY: event.currentTarget.checked } })}
             className="h-4 w-4 accent-violet-600"
           />
@@ -3470,7 +3486,7 @@ export function TextureQuickEditor({
               <span className="mb-1 block">{axis}</span>
               <select
                 value={settings.sampler[axis]}
-                disabled={readOnly}
+                disabled={settingsDisabled}
                 onChange={(event) => onChange({ importSettings: { sampler: { [axis]: event.currentTarget.value } } })}
                 className={INPUT_CLASS}
               >
@@ -3482,7 +3498,7 @@ export function TextureQuickEditor({
             <span className="mb-1 block">拡大フィルター</span>
             <select
               value={settings.sampler.magFilter}
-              disabled={readOnly}
+              disabled={settingsDisabled}
               onChange={(event) => onChange({ importSettings: { sampler: { magFilter: event.currentTarget.value as (typeof TEXTURE_MAG_FILTERS)[number] } } })}
               className={INPUT_CLASS}
             >
@@ -3493,7 +3509,7 @@ export function TextureQuickEditor({
             <span className="mb-1 block">縮小フィルター</span>
             <select
               value={settings.sampler.minFilter}
-              disabled={readOnly}
+              disabled={settingsDisabled}
               onChange={(event) => onChange({ importSettings: { sampler: { minFilter: event.currentTarget.value as (typeof TEXTURE_MIN_FILTERS)[number] } } })}
               className={INPUT_CLASS}
             >
@@ -3508,7 +3524,7 @@ export function TextureQuickEditor({
           <span className="mb-1 block">方式</span>
           <select
             value={settings.compression.format}
-            disabled={readOnly}
+            disabled={settingsDisabled}
             onChange={(event) => onChange({ importSettings: { compression: { format: event.currentTarget.value as (typeof TEXTURE_COMPRESSION_FORMATS)[number] } } })}
             className={INPUT_CLASS}
           >
@@ -3521,14 +3537,129 @@ export function TextureQuickEditor({
           min={0}
           max={100}
           step={1}
-          disabled={readOnly}
+          disabled={settingsDisabled}
           onChange={(quality) => onChange({ importSettings: { compression: { quality } } })}
         />
-        <p className="rounded border border-amber-200 bg-amber-50 p-1.5 text-xs leading-4 text-amber-800">
-          設定IRを更新しました。リサイズ・mipmap・圧縮は処理待ちです。
-        </p>
+      </EditorSection>
+
+      <EditorSection title="画像の書き出し">
+        <TextureProcessingPanel
+          asset={asset}
+          state={processingState}
+          busy={processingBusy}
+          readOnly={readOnly}
+          canApply={Boolean(projectPath && onApplyProcessing)}
+          onApply={onApplyProcessing}
+        />
       </EditorSection>
     </div>
+  );
+}
+
+/**
+ * 最大解像度・圧縮の設定はManifestに保持されるだけなので、原本へ反映するまでは
+ * 表示も公開結果も変わらない。ここで変換前後を並べて示し、実行まで案内する。
+ */
+function TextureProcessingPanel({
+  asset,
+  state,
+  busy,
+  readOnly,
+  canApply,
+  onApply,
+}: {
+  asset: TextureAsset;
+  state: TextureProcessingState;
+  busy: boolean;
+  readOnly: boolean;
+  canApply: boolean;
+  onApply?: () => void;
+}) {
+  const plan = planTextureProcessing(asset);
+
+  if (!plan.supported) {
+    return (
+      <p className="rounded border border-slate-200 bg-slate-50 p-1.5 text-xs leading-4 text-slate-600">
+        {plan.reason}
+      </p>
+    );
+  }
+
+  const currentSize =
+    plan.sourceWidth && plan.sourceHeight
+      ? `${plan.sourceWidth} × ${plan.sourceHeight}`
+      : "解像度不明";
+  const targetSize =
+    plan.targetWidth && plan.targetHeight
+      ? `${plan.targetWidth} × ${plan.targetHeight}`
+      : plan.maxSize
+        ? `最大 ${plan.maxSize}px`
+        : currentSize;
+  const targetFormat = plan.outputFormat === "jpeg" ? "JPEG" : plan.outputFormat.toUpperCase();
+  const blockedReason = readOnly
+    ? "Playを停止すると変換できます。"
+    : !canApply
+      ? "初回の自動保存が終わると変換できます。"
+      : null;
+
+  return (
+    <>
+      <dl className="grid grid-cols-[52px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
+        <dt className="text-slate-500">現在</dt>
+        <dd className="text-right tabular-nums text-slate-700">
+          {currentSize}・{plan.sourceFormat.toUpperCase()}・
+          {formatFileSize(plan.sourceByteLength)}
+        </dd>
+        <dt className="text-slate-500">変換後</dt>
+        <dd
+          className={`text-right tabular-nums ${plan.pending ? "font-semibold text-violet-700" : "text-slate-500"}`}
+        >
+          {plan.pending
+            ? `${targetSize}・${targetFormat}${plan.qualityApplies ? `・Quality ${plan.quality}` : ""}`
+            : "変更なし"}
+        </dd>
+      </dl>
+      {plan.pending && plan.outputFormatSubstituted ? (
+        <p className="text-[11px] leading-4 text-slate-500">
+          {plan.sourceFormat.toUpperCase()}は書き戻せないため、{targetFormat}で保存します。
+        </p>
+      ) : null}
+      {plan.pending && !plan.qualityApplies && plan.outputFormat === "png" ? (
+        <p className="text-[11px] leading-4 text-slate-500">
+          PNGは可逆のため、Qualityは容量に影響しません。圧縮するときはWEBPかKTX2を選びます。
+        </p>
+      ) : null}
+      <button
+        type="button"
+        disabled={!plan.pending || busy || readOnly || !canApply}
+        onClick={onApply}
+        className="h-8 w-full rounded-md border border-violet-300 bg-violet-50 px-3 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
+      >
+        {busy ? "変換中" : "この設定で画像を書き出す"}
+      </button>
+      {state.phase !== "idle" ? (
+        <p
+          role="status"
+          className={`rounded border p-1.5 text-xs leading-4 ${
+            state.phase === "failed"
+              ? "border-rose-200 bg-rose-50 text-rose-800"
+              : state.phase === "succeeded"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : "border-sky-200 bg-sky-50 text-sky-800"
+          }`}
+        >
+          {state.message}
+        </p>
+      ) : blockedReason ? (
+        <p className="text-[11px] leading-4 text-slate-500">{blockedReason}</p>
+      ) : plan.pending ? (
+        <p className="rounded border border-amber-200 bg-amber-50 p-1.5 text-xs leading-4 text-amber-800">
+          変換するまで、表示と公開結果は原本のままです。書き出すと元の画像ファイルは残したまま、Assetの参照先が変換後の画像へ切り替わります。
+        </p>
+      ) : (
+        <p className="text-[11px] leading-4 text-slate-500">{plan.settledReason}</p>
+      )}
+    </>
   );
 }
 
@@ -3550,6 +3681,8 @@ export function AssetQuickEditor({
   onParticleChange,
   onTextureChange,
   onCreateTextureCard,
+  textureProcessingState,
+  onApplyTextureProcessing,
   prefabs,
   onSelectPrefabSourceEntity,
   onUpdatePrefab,
@@ -3574,6 +3707,8 @@ export function AssetQuickEditor({
   modelReimportImpactNotice?: ModelReimportImpactNotice | null;
   onParticleChange: (assetId: string, patch: ParticlePropertiesPatch) => void;
   onTextureChange: (assetId: string, patch: TextureAssetPatch) => void;
+  textureProcessingState?: TextureProcessingState;
+  onApplyTextureProcessing?: (assetId: string) => void;
   onCreateTextureCard?: (
     textureAssetId: string,
     profile: TextureCardProfile,
@@ -3633,8 +3768,14 @@ export function AssetQuickEditor({
         asset={asset}
         projectPath={projectPath}
         readOnly={readOnly}
+        processingState={textureProcessingState}
         onChange={(patch) => onTextureChange(asset.id, patch)}
         onCreateCard={(profile) => onCreateTextureCard?.(asset.id, profile)}
+        onApplyProcessing={
+          onApplyTextureProcessing
+            ? () => onApplyTextureProcessing(asset.id)
+            : undefined
+        }
       />
     );
   }

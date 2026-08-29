@@ -86,6 +86,7 @@ export * from "./terrain-grass-runtime";
 export * from "./terrain-grass.fixture";
 export * from "./terrain-presets";
 export * from "./texture-card";
+export * from "./texture-processing";
 export * from "./serialization";
 export * from "./legacy-starter-asset-ids";
 export * from "./starter-templates";
