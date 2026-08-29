@@ -12,6 +12,7 @@ import { ensureBuiltinMaterialAsset } from "./prototype-project";
 import {
   createBuiltinPrimitiveMeshComponent,
   createMeshComponent,
+  createMeshColliderComponent,
   createParticleEmitterComponent,
   createTransformComponent,
   type LightComponent,
@@ -59,6 +60,13 @@ export type SceneRecipePart =
       position: Vec3;
       rotation: Vec3;
       scale: Vec3;
+      /**
+       * Adds a Mesh Collider to this part. Only for models an avatar has to
+       * stand on or inside -- a room's own floor and walls are the collision
+       * surface, and telling the author to add one by hand would leave them
+       * falling through the floor on the first Play.
+       */
+      collider?: "trimesh";
     }
   | {
       kind: "particle";
@@ -112,6 +120,22 @@ export type SceneRecipe = {
   projectKinds: readonly VisualProjectKind[];
   /** Said before placing: what the author still has to do themselves. */
   note: string;
+  /**
+   * Where the catalog card's camera stands, for sets that need one.
+   *
+   * Framing derived from the parts puts the camera outside the set's bounds.
+   * That is right for everything you look at, and wrong for a room you stand
+   * inside: from outside, a studio is a closed grey box with a ceiling on top.
+   */
+  preview?: {
+    cameraPosition: Vec3;
+    lookAtY: number;
+    /**
+     * The card's own ground plane. A room brings its own floor, and the two
+     * at the same height z-fight.
+     */
+    ground?: boolean;
+  };
   parts: readonly SceneRecipePart[];
 };
 
@@ -150,6 +174,7 @@ export const SCENE_RECIPE_IDS = {
   window: "scene-recipe.window",
   floorPanel: "scene-recipe.floor-panel",
   wallPanel: "scene-recipe.wall-panel",
+  recordingStudio: "scene-recipe.recording-studio",
 } as const;
 
 /**
@@ -1147,6 +1172,28 @@ const WALL_PANEL: SceneRecipe = {
   ],
 };
 
+const RECORDING_STUDIO: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.recordingStudio,
+  name: "収録スタジオ",
+  description:
+    "小さな FM ラジオ局の収録ブース。3.6 x 2.8m の一室に机、椅子、マイク、ON AIR サインまで入っています。",
+  category: "structure",
+  projectKinds: ["world"],
+  preview: { cameraPosition: [-1.8, 2.15, 1.42], lookAtY: 0.85, ground: false },
+  note: "床と壁を含む一体のModelです。原点は部屋の床の中心なので、既存の地面と同じ高さに置いてください。地面と床が重なるとZ-fightingするので、部屋の下の地面は消すか下げてください。Mesh Colliderが入っているので、そのまま中を歩けます。",
+  parts: [
+    {
+      kind: "model",
+      name: "収録スタジオ",
+      modelId: "recordingStudio",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+      collider: "trimesh",
+    },
+  ],
+};
+
 export const SCENE_RECIPES: readonly SceneRecipe[] = [
   CAMPFIRE,
   TORCH,
@@ -1177,6 +1224,7 @@ export const SCENE_RECIPES: readonly SceneRecipe[] = [
   WINDOW,
   FLOOR_PANEL,
   WALL_PANEL,
+  RECORDING_STUDIO,
   BENCH,
   TABLE_SET,
   MAGIC_CIRCLE,
@@ -1269,6 +1317,13 @@ export async function instantiateSceneRecipe(
       components.push(
         createMeshComponent(createDocumentId("component-mesh"), definition.assetId, []),
       );
+      if (part.collider === "trimesh") {
+        components.push(
+          createMeshColliderComponent(createDocumentId("component-collider"), {
+            meshMode: "trimesh",
+          }),
+        );
+      }
     } else if (part.kind === "particle") {
       const preset = getParticleAuthoringPreset(part.presetId);
       if (!preset) return null;

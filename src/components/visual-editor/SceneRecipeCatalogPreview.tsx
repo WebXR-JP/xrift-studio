@@ -59,10 +59,12 @@ export function SceneRecipeCatalogPreview({
       )}
       {/* A ground plane is what makes a ring of stones read as a ring
           rather than as blocks floating in the dark. */}
-      <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[8, 8]} />
-        <meshStandardMaterial color="#1e293b" metalness={0} roughness={0.95} />
-      </mesh>
+      {recipe.preview?.ground === false ? null : (
+        <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[8, 8]} />
+          <meshStandardMaterial color="#1e293b" metalness={0} roughness={0.95} />
+        </mesh>
+      )}
       {recipe.parts.map((part, index) => (
         <RecipePartVisual key={`${part.kind}-${index}`} part={part} />
       ))}
@@ -196,6 +198,10 @@ function recipeFraming(recipe: SceneRecipe): {
   cameraPosition: [number, number, number];
   lookAtY: number;
 } {
+  if (recipe.preview) {
+    const [x, y, z] = recipe.preview.cameraPosition;
+    return { cameraPosition: [x, y, z], lookAtY: recipe.preview.lookAtY };
+  }
   let maxY = 0.6;
   let maxRadius = 0.6;
   for (const part of recipe.parts) {

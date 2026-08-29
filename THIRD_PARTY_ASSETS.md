@@ -70,15 +70,15 @@ GLSL のコメント、`applyWaterShaderCatalogInstall` が Material Asset へ�
 `attribution.authors`、そしてこの表。Water の GLSL は生成 World へ埋め込まれて
 公開ワールドごと配布されるので、Asset に表示が乗っていることが実質的な条件を満たす。
 
-## Recording Studio World template
+## Recording Studio Scene recipe
 
-収録スタジオ (`recording-studio`) の GLB は XRift Studio 側で Blender を使って
+収録スタジオ (`scene-recipe.recording-studio`) の GLB は XRift Studio 側で Blender を使って
 手続き的に生成したもので、ジオメトリに外部アセットは含まれません。埋め込みテクスチャ
 だけが第三者素材です。
 
 | Bundled file | Upstream source | License | SHA-256 |
 | --- | --- | --- | --- |
-| `recording-studio.glb` | XRift Studio 制作（Blender で生成） | project-owned | `cc638574d4356502a93221006c45b30506ae5b554c642d0ab66c61ecc48aba8d` |
+| `public/visual-editor/recipe-assets/recording-studio.glb` | XRift Studio 制作（Blender で生成） | project-owned | `cc638574d4356502a93221006c45b30506ae5b554c642d0ab66c61ecc48aba8d` |
 
 埋め込まれている PBR テクスチャ（`baseColorTexture` / `normalTexture` /
 `metallicRoughnessTexture`、計 9 枚）の出所は次のとおりです。

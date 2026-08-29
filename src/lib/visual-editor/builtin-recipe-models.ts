@@ -399,6 +399,19 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     provenance:
       "Hand-authored Three.js geometry (project-original, no reference image or external generator)",
   },
+  {
+    modelId: "recordingStudio",
+    assetId: "model-recording-studio-cc638574d435",
+    publicPath: "/visual-editor/recipe-assets/recording-studio.glb",
+    fileName: "recording-studio.glb",
+    sha256:
+      "cc638574d4356502a93221006c45b30506ae5b554c642d0ab66c61ecc48aba8d",
+    byteLength: 3702596,
+    displayName: "収録スタジオ",
+    approxRadius: 2.05,
+    provenance:
+      "Blender procedural modeling by XRift Studio (project-original geometry). Embedded PBR textures are Poly Haven CC0-1.0; see THIRD_PARTY_ASSETS.md",
+  },
 ];
 
 export function getBuiltinRecipeModel(
