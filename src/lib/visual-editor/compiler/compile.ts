@@ -101,11 +101,14 @@ import {
   createScriptAudioSourceOverlayFile,
   createScriptLightOverlayFile,
   createScriptParticleOverlayFile,
+  createTextPanelOverlayFiles,
   planScriptEmission,
   renderScriptComponent,
   SCRIPT_AUDIO_SOURCE_OVERLAY_PATH,
   SCRIPT_LIGHT_OVERLAY_PATH,
   SCRIPT_PARTICLE_OVERLAY_PATH,
+  TEXT_PANEL_RUNTIME_OVERLAY_PATH,
+  TEXT_PANEL_RUNTIME_PACKAGE,
   type EmittedScriptModule,
 } from "./script-emit";
 import {
@@ -364,6 +367,16 @@ export function compileVisualProject(
   if (
     outputMode === "classic-jsx" &&
     resolvedEntryScene &&
+    sceneUsesTextPanelRuntime(resolvedEntryScene.scene) &&
+    !overlayFiles.some(
+      (file) => file.relativePath === TEXT_PANEL_RUNTIME_OVERLAY_PATH,
+    )
+  ) {
+    overlayFiles.push(...createTextPanelOverlayFiles());
+  }
+  if (
+    outputMode === "classic-jsx" &&
+    resolvedEntryScene &&
     sceneUsesInteractionTriggerRuntime(resolvedEntryScene.scene, documents.assets)
   ) {
     for (const file of createInteractionTriggerOverlayFiles()) {
@@ -433,6 +446,15 @@ export function compileVisualProject(
   const runtimePackageSpecs: string[] =
     outputMode === "classic-runtime" ? [XRIFT_STUDIO_RUNTIME_PACKAGE] : [];
   if (usesOpenBrushModels) runtimePackageSpecs.push(OPEN_BRUSH_RUNTIME_PACKAGE);
+  if (
+    outputMode === "classic-jsx" &&
+    resolvedEntryScene &&
+    sceneUsesTextPanelRuntime(resolvedEntryScene.scene)
+  ) {
+    // classic-runtime gets troika transitively through xrift-studio-runtime;
+    // the emitted-source mode imports it directly and must ask for it.
+    runtimePackageSpecs.push(TEXT_PANEL_RUNTIME_PACKAGE);
+  }
   const bundledAssetCopyPlan =
     outputMode === "classic-jsx" &&
     generated.includes("function useCompiledKtx2(")
@@ -527,6 +549,12 @@ function sceneUsesInteractionTriggerRuntime(
 function sceneUsesLightRuntime(scene: SceneDocument): boolean {
   return Object.values(scene.entities).some((entity) =>
     entity.components.some((component) => component.type === "light"),
+  );
+}
+
+function sceneUsesTextPanelRuntime(scene: SceneDocument): boolean {
+  return Object.values(scene.entities).some((entity) =>
+    entity.components.some((component) => component.type === "text"),
   );
 }
 
@@ -1939,8 +1967,7 @@ function renderEntity(
     } else if (component.type === "light") {
       localContent.push(renderLight(component, context));
     } else if (component.type === "text") {
-      context.dreiImports.add("Text");
-      localContent.push(renderText(component));
+      localContent.push(renderText(entity, component, context));
     } else if (component.type === "audio-source") {
       const rendered = renderAudioSource(entity, component, context);
       if (rendered) localContent.push(rendered);
@@ -4722,22 +4749,144 @@ function renderLight(
   return `<XriftScriptLight componentId=${JSON.stringify(light.id)} lightType=${JSON.stringify(light.lightType)} enabled={${light.enabled}} color=${JSON.stringify(light.color)} intensity={${formatNumber(light.intensity)}} castShadow={${light.castShadow}} groundColor=${JSON.stringify(light.groundColor ?? "#334155")} distance={${formatNumber(light.distance ?? 0)}} decay={${formatNumber(light.decay ?? 2)}} angle={${formatNumber(light.angle ?? Math.PI / 3)}} penumbra={${formatNumber(light.penumbra ?? 0.5)}} width={${formatNumber(light.width ?? 1)}} height={${formatNumber(light.height ?? 1)}} />`;
 }
 
-function renderText(text: TextComponent): string {
-  return `<Text color=${JSON.stringify(text.color)} fontSize={${formatNumber(
-    text.fontSize,
-  )}}${
-    text.maxWidth !== undefined
-      ? ` maxWidth={${formatNumber(text.maxWidth)}}`
-      : ""
-  } anchorX=${JSON.stringify(text.anchorX)} anchorY=${JSON.stringify(
-    text.anchorY,
-  )} outlineWidth={${formatNumber(text.outlineWidth)}} outlineColor=${JSON.stringify(
-    text.outlineColor,
-  )}>${escapeJsxText(text.text)}</Text>`;
+/**
+ * Emits the Text component as the shared runtime panel.
+ *
+ * Text and its background plate are one object at runtime because the plate is
+ * measured from the typeset block. Emitting a bare `<Text>` plus a guessed
+ * `<mesh>` would put the plate in a different place than the editor showed.
+ */
+function renderText(
+  entity: SceneEntity,
+  text: TextComponent,
+  context: CompileContext,
+): string {
+  registerCompiledTextPanelRuntime(context);
+  const configName = generatedIdentifier("TEXT_PANEL_CONFIG", `${entity.id}:${text.id}`);
+  context.supportDeclarations.set(
+    `text-panel-config:${configName}`,
+    `const ${configName}: XriftTextPanelConfig = ${JSON.stringify(
+      compiledTextPanelConfig(text),
+    )};`,
+  );
+  const backgroundTexture = resolveTextBackgroundTexture(entity, text, context);
+  if (!backgroundTexture) return `<XriftTextPanel config={${configName}} />`;
+
+  const componentName = generatedIdentifier(
+    "CompiledTextPanel",
+    `${entity.id}:${text.id}`,
+  );
+  context.supportDeclarations.set(
+    `text-panel:${componentName}`,
+    `const ${componentName}: FC = () => {
+${backgroundTexture.lines}  return <XriftTextPanel config={${configName}} map={textPanelMap} />;
+};`,
+  );
+  return `<${componentName} />`;
 }
 
-function escapeJsxText(value: string): string {
-  return `{${JSON.stringify(value)}}`;
+/**
+ * Drops the background when its Texture cannot be published.
+ *
+ * A missing plate image is reported and the caption still ships: losing the
+ * words as well would turn a broken asset reference into an empty wall.
+ */
+function resolveTextBackgroundTexture(
+  entity: SceneEntity,
+  text: TextComponent,
+  context: CompileContext,
+): { lines: string } | null {
+  const background = text.background;
+  if (background?.mode !== "texture") return null;
+  const textureAssetId = background.textureAssetId?.trim() ?? "";
+  if (!textureAssetId) {
+    addDiagnostic(context, {
+      severity: "warning",
+      code: "text-background-texture-unset",
+      message: "Text backgroundが画像に設定されていますが、Texture Assetが未選択です",
+      sceneId: context.scene.sceneId,
+      entityId: entity.id,
+      componentId: text.id,
+      fieldPath: "background.textureAssetId",
+    });
+    return null;
+  }
+  context.referencedAssetIds.add(textureAssetId);
+  const texture = getTextureAsset(context.assets, textureAssetId);
+  const runtimeUrl = texture
+    ? context.assetRuntimeUrls.get(texture.id)
+    : undefined;
+  if (!texture || !runtimeUrl) {
+    addDiagnostic(context, {
+      severity: "warning",
+      code: "text-background-texture-missing",
+      message: "Text backgroundのTexture Assetを出力できないため、文字だけを出力します",
+      sceneId: context.scene.sceneId,
+      entityId: entity.id,
+      componentId: text.id,
+      assetId: textureAssetId,
+      fieldPath: "background.textureAssetId",
+    });
+    return null;
+  }
+  const usesKtx2 = getTextureSourceFormat(texture) === "ktx2";
+  registerCompiledTextureRuntime(context, usesKtx2);
+  const urlConstant = registerAssetUrl(texture, runtimeUrl, context);
+  const optionsConstant = generatedIdentifier(
+    "TEXTURE_OPTIONS",
+    `text-panel:${text.id}`,
+  );
+  const settings = texture.importSettings;
+  context.supportDeclarations.set(
+    `texture-options:${optionsConstant}`,
+    `const ${optionsConstant}: CompiledTextureOptions = ${JSON.stringify({
+      channel: 0,
+      colorSpace: settings.colorSpace === "linear" ? "linear" : "srgb",
+      flipY: settings.flipY,
+      generateMipmaps: settings.generateMipmaps,
+      magFilter: settings.sampler.magFilter,
+      minFilter: settings.sampler.minFilter,
+      wrapS: settings.sampler.wrapS,
+      wrapT: settings.sampler.wrapT,
+    })};`,
+  );
+  return {
+    lines: `  const textPanelMapUrl = useCompiledAssetUrl(${urlConstant});
+  const textPanelMap = useCompiledTexture(${
+    usesKtx2 ? "useCompiledKtx2" : "useTexture"
+  }(textPanelMapUrl), ${optionsConstant});
+`,
+  };
+}
+
+function compiledTextPanelConfig(text: TextComponent): Record<string, unknown> {
+  return {
+    text: text.text,
+    color: text.color,
+    fontSize: text.fontSize,
+    ...(text.maxWidth === undefined ? {} : { maxWidth: text.maxWidth }),
+    anchorX: text.anchorX,
+    anchorY: text.anchorY,
+    outlineWidth: text.outlineWidth,
+    outlineColor: text.outlineColor,
+    ...(text.fontId === undefined ? {} : { fontId: text.fontId }),
+    ...(text.fontWeight === undefined ? {} : { fontWeight: text.fontWeight }),
+    ...(text.textAlign === undefined ? {} : { textAlign: text.textAlign }),
+    ...(text.lineHeight === undefined ? {} : { lineHeight: text.lineHeight }),
+    ...(text.letterSpacing === undefined
+      ? {}
+      : { letterSpacing: text.letterSpacing }),
+    ...(text.background === undefined ? {} : { background: text.background }),
+  };
+}
+
+function registerCompiledTextPanelRuntime(context: CompileContext): void {
+  context.extraImports.add(
+    'import { XriftTextPanel } from "./xrift-studio/text-panel-runtime";',
+  );
+  context.extraImports.add(
+    'import type { XriftTextPanelConfig } from "./xrift-studio/text-panel-layout";',
+  );
 }
 
 function renderAudioSource(

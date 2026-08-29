@@ -27,6 +27,18 @@ import {
   applyTerrainGrassBrush,
   type TerrainGrassLayer,
 } from "./terrain-grass";
+import {
+  DEFAULT_TEXT_BACKGROUND,
+  type XriftTextAlign,
+  type XriftTextBackground,
+  type XriftTextBackgroundFit,
+  type XriftTextBackgroundMode,
+} from "../../../packages/xrift-studio-runtime/src/text-panel-layout";
+import {
+  AUTOMATIC_TEXT_FONT_ID,
+  getTextFontDefinition,
+  resolveTextFontWeight,
+} from "../../../packages/xrift-studio-runtime/src/text-font-catalog";
 
 export const SCENE_DOCUMENT_SCHEMA_VERSION = "0.1.0" as const;
 
@@ -243,6 +255,18 @@ export type LightPatch = Partial<
   >
 >;
 
+/**
+ * Background plate drawn behind a Text component.
+ *
+ * The shape is shared with the runtime so the compiler can hand the authored
+ * value straight to the manifest without a translation step that could drift.
+ */
+export type TextBackground = XriftTextBackground;
+export type TextBackgroundMode = XriftTextBackgroundMode;
+export type TextBackgroundFit = XriftTextBackgroundFit;
+
+export { DEFAULT_TEXT_BACKGROUND };
+
 export type TextComponent = ComponentBase & {
   type: "text";
   text: string;
@@ -253,7 +277,18 @@ export type TextComponent = ComponentBase & {
   anchorY: "top" | "middle" | "bottom";
   outlineWidth: number;
   outlineColor: string;
+  /** Catalog id from text-font-catalog. Absent keeps the automatic font. */
+  fontId?: string;
+  fontWeight?: number;
+  textAlign?: XriftTextAlign;
+  /** Multiple of `fontSize`. Absent uses the font's own metrics. */
+  lineHeight?: number;
+  letterSpacing?: number;
+  background?: TextBackground;
 };
+
+/** Background fields may be patched individually; the rest is merged. */
+export type TextBackgroundPatch = Partial<TextBackground>;
 
 export type TextPatch = Partial<
   Pick<
@@ -267,8 +302,13 @@ export type TextPatch = Partial<
     | "anchorY"
     | "outlineWidth"
     | "outlineColor"
+    | "fontId"
+    | "fontWeight"
+    | "textAlign"
+    | "lineHeight"
+    | "letterSpacing"
   >
->;
+> & { background?: TextBackgroundPatch };
 
 export type SpawnPointComponent = ComponentBase & {
   type: "spawn-point";
@@ -924,6 +964,12 @@ export function createTextComponent(
     input.maxWidth > 0
       ? input.maxWidth
       : undefined;
+  const font = getTextFontDefinition(input.fontId);
+  const fontWeight = font
+    ? resolveTextFontWeight(font, input.fontWeight)
+    : typeof input.fontWeight === "number" && Number.isFinite(input.fontWeight)
+      ? input.fontWeight
+      : undefined;
   return {
     id: normalizedId,
     type: "text",
@@ -949,7 +995,169 @@ export function createTextComponent(
       typeof input.outlineColor === "string"
         ? input.outlineColor
         : "#000000",
+    ...(font ? { fontId: font.id } : {}),
+    ...(fontWeight !== undefined ? { fontWeight } : {}),
+    ...(input.textAlign !== undefined ? { textAlign: input.textAlign } : {}),
+    ...(typeof input.lineHeight === "number" &&
+    Number.isFinite(input.lineHeight) &&
+    input.lineHeight > 0
+      ? { lineHeight: input.lineHeight }
+      : {}),
+    ...(typeof input.letterSpacing === "number" &&
+    Number.isFinite(input.letterSpacing)
+      ? { letterSpacing: input.letterSpacing }
+      : {}),
+    ...(input.background
+      ? { background: normalizeTextBackground(input.background) }
+      : {}),
   };
+}
+
+/**
+ * Named starting points offered by the Create menu.
+ *
+ * A wall label and an exhibit caption are the two shapes a gallery-style world
+ * needs constantly, and both are the same component with different defaults.
+ */
+export type TextComponentPreset = "plain" | "panel" | "caption";
+
+export function textComponentPresetInput(
+  preset: TextComponentPreset | undefined,
+): Partial<Omit<TextComponent, "id" | "type">> {
+  if (preset === "panel") {
+    return {
+      text: "見出し",
+      color: "#ffffff",
+      fontSize: 0.28,
+      maxWidth: 3,
+      fontId: "noto-sans-jp",
+      fontWeight: 700,
+      textAlign: "center",
+      background: {
+        ...DEFAULT_TEXT_BACKGROUND,
+        mode: "color",
+        color: "#111827",
+        opacity: 0.92,
+        paddingX: 0.18,
+        paddingY: 0.12,
+      },
+    };
+  }
+  if (preset === "caption") {
+    return {
+      text: "作品名\n作者名, 制作年\n技法・素材",
+      color: "#1f2937",
+      fontSize: 0.06,
+      maxWidth: 0.9,
+      fontId: "noto-serif-jp",
+      textAlign: "left",
+      anchorX: "left",
+      lineHeight: 1.5,
+      background: {
+        ...DEFAULT_TEXT_BACKGROUND,
+        mode: "color",
+        color: "#f8fafc",
+        opacity: 1,
+        paddingX: 0.05,
+        paddingY: 0.04,
+      },
+    };
+  }
+  return {};
+}
+
+/** Clamps a background to values the renderers can draw without guessing. */
+export function normalizeTextBackground(
+  input: Partial<TextBackground>,
+): TextBackground {
+  const mode: TextBackgroundMode =
+    input.mode === "color" || input.mode === "texture" ? input.mode : "none";
+  const textureAssetId =
+    typeof input.textureAssetId === "string" && input.textureAssetId.trim()
+      ? input.textureAssetId.trim()
+      : undefined;
+  return {
+    mode,
+    color:
+      typeof input.color === "string" && input.color.trim()
+        ? input.color
+        : DEFAULT_TEXT_BACKGROUND.color,
+    opacity: clampTextUnit(input.opacity, DEFAULT_TEXT_BACKGROUND.opacity),
+    ...(textureAssetId ? { textureAssetId } : {}),
+    paddingX: nonNegativeOr(input.paddingX, DEFAULT_TEXT_BACKGROUND.paddingX),
+    paddingY: nonNegativeOr(input.paddingY, DEFAULT_TEXT_BACKGROUND.paddingY),
+    fit: input.fit === "fixed" ? "fixed" : "text",
+    width: positiveOr(input.width, DEFAULT_TEXT_BACKGROUND.width),
+    height: positiveOr(input.height, DEFAULT_TEXT_BACKGROUND.height),
+    offset: nonNegativeOr(input.offset, DEFAULT_TEXT_BACKGROUND.offset),
+    doubleSided: input.doubleSided === true,
+  };
+}
+
+function isValidTextBackgroundPatch(patch: TextBackgroundPatch): boolean {
+  if (patch.mode !== undefined && !["none", "color", "texture"].includes(patch.mode)) {
+    return false;
+  }
+  if (patch.fit !== undefined && !["text", "fixed"].includes(patch.fit)) return false;
+  if (
+    patch.color !== undefined &&
+    (typeof patch.color !== "string" || !patch.color.trim())
+  ) {
+    return false;
+  }
+  if (
+    patch.textureAssetId !== undefined &&
+    typeof patch.textureAssetId !== "string"
+  ) {
+    return false;
+  }
+  if (
+    patch.opacity !== undefined &&
+    (!Number.isFinite(patch.opacity) || patch.opacity < 0 || patch.opacity > 1)
+  ) {
+    return false;
+  }
+  for (const value of [patch.paddingX, patch.paddingY, patch.offset]) {
+    if (value !== undefined && (!Number.isFinite(value) || value < 0)) return false;
+  }
+  for (const value of [patch.width, patch.height]) {
+    if (value !== undefined && (!Number.isFinite(value) || value <= 0)) return false;
+  }
+  if (patch.doubleSided !== undefined && typeof patch.doubleSided !== "boolean") {
+    return false;
+  }
+  return true;
+}
+
+/** Compares including the nested background, which a key-wise scan would miss. */
+function textComponentsDiffer(left: TextComponent, right: TextComponent): boolean {
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  for (const key of keys) {
+    if (key === "background") continue;
+    if (
+      left[key as keyof TextComponent] !== right[key as keyof TextComponent]
+    ) {
+      return true;
+    }
+  }
+  return JSON.stringify(left.background ?? null) !== JSON.stringify(right.background ?? null);
+}
+
+function clampTextUnit(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.min(1, Math.max(0, value));
+}
+
+function positiveOr(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : fallback;
+}
+
+function nonNegativeOr(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : fallback;
 }
 
 export function createMeshComponent(
@@ -1811,14 +2019,66 @@ export function updateTextComponent(
   ) {
     return scene;
   }
-  const next: TextComponent = { ...current, ...patch };
   if (
-    !Object.keys(patch).some(
-      (key) => next[key as keyof TextComponent] !== current[key as keyof TextComponent],
-    )
+    patch.textAlign !== undefined &&
+    !["left", "center", "right", "justify"].includes(patch.textAlign)
   ) {
     return scene;
   }
+  if (
+    patch.lineHeight !== undefined &&
+    (!Number.isFinite(patch.lineHeight) || patch.lineHeight <= 0)
+  ) {
+    return scene;
+  }
+  if (
+    patch.letterSpacing !== undefined &&
+    !Number.isFinite(patch.letterSpacing)
+  ) {
+    return scene;
+  }
+  // An unknown font id would resolve to no file at all, so the Text would
+  // silently fall back rather than showing the lettering that was asked for.
+  if (
+    patch.fontId !== undefined &&
+    patch.fontId !== AUTOMATIC_TEXT_FONT_ID &&
+    !getTextFontDefinition(patch.fontId)
+  ) {
+    return scene;
+  }
+  if (
+    patch.fontWeight !== undefined &&
+    (!Number.isInteger(patch.fontWeight) ||
+      patch.fontWeight < 100 ||
+      patch.fontWeight > 900)
+  ) {
+    return scene;
+  }
+  const { background: backgroundPatch, ...scalarPatch } = patch;
+  if (backgroundPatch && !isValidTextBackgroundPatch(backgroundPatch)) return scene;
+  const mergedFontId = scalarPatch.fontId ?? current.fontId;
+  const next: TextComponent = {
+    ...current,
+    ...scalarPatch,
+    ...(backgroundPatch
+      ? {
+          background: normalizeTextBackground({
+            ...(current.background ?? DEFAULT_TEXT_BACKGROUND),
+            ...backgroundPatch,
+          }),
+        }
+      : {}),
+  };
+  // The automatic font is the absence of a choice, not a font id: storing the
+  // sentinel would leave two spellings of the same document state.
+  if (scalarPatch.fontId === AUTOMATIC_TEXT_FONT_ID) delete next.fontId;
+  // The chosen family may not publish the requested weight; snapping here keeps
+  // the document in step with the file the renderers will actually request.
+  if (scalarPatch.fontId !== undefined || scalarPatch.fontWeight !== undefined) {
+    const font = getTextFontDefinition(next.fontId ?? mergedFontId);
+    if (font) next.fontWeight = resolveTextFontWeight(font, next.fontWeight);
+  }
+  if (!textComponentsDiffer(current, next)) return scene;
   return {
     ...scene,
     entities: {
@@ -2874,6 +3134,13 @@ function cloneSceneComponent(
             },
           }
         : {}),
+    };
+  }
+  if (component.type === "text") {
+    return {
+      ...component,
+      id,
+      ...(component.background ? { background: { ...component.background } } : {}),
     };
   }
   if (component.type === "script") {

@@ -9,7 +9,6 @@ import {
   Edges,
   Html,
   OrbitControls,
-  Text as DreiText,
   TransformControls,
 } from "@react-three/drei";
 import {
@@ -18,6 +17,7 @@ import {
   RigidBody,
 } from "@react-three/rapier";
 import { SpawnPoint } from "@xrift/world-components";
+import { TextPanelVisual } from "./TextPanelVisual";
 import { XriftScriptRoot } from "../../../packages/xrift-studio-runtime/src/script/host";
 import {
   XriftAudioSource,
@@ -1545,18 +1545,16 @@ function ComponentVisual({
         />
       ) : null;
     case "text":
-      return (showHelpers || renderThumbnail) && component.enabled ? (
-        <DreiText
-          color={component.color}
-          fontSize={component.fontSize}
-          maxWidth={component.maxWidth}
-          anchorX={component.anchorX}
-          anchorY={component.anchorY}
-          outlineWidth={component.outlineWidth}
-          outlineColor={component.outlineColor}
-        >
-          {component.text}
-        </DreiText>
+      // `playing` is listed because Play forces `showHelpers` off: a wall label
+      // is world content, so hiding it during Play would misrepresent the
+      // world. The wireframe and collider display modes still drop it, the way
+      // they drop every other authored visual.
+      return (showHelpers || playing || renderThumbnail) && component.enabled ? (
+        <TextPanelVisual
+          component={component}
+          assets={assets}
+          projectPath={projectPath}
+        />
       ) : null;
     case "audio-source":
       return playing ? (

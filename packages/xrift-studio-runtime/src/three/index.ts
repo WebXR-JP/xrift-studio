@@ -48,7 +48,11 @@ import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { Reflector } from "three/examples/jsm/objects/Reflector.js";
-import { Text } from "troika-three-text";
+import {
+  DEFAULT_TEXT_BACKGROUND,
+  XriftTextPanelObject,
+  type XriftTextPanelConfig,
+} from "../text-panel.js";
 
 import { detectTimeUniforms, stampObjectTimeUniforms } from "../shader-time.js";
 import {
@@ -214,6 +218,7 @@ export class XriftThreeLoader {
           manifest,
           models,
           materials,
+          textures,
           animations,
           animationClipsByEntity,
           interactionAnimationCuesByEntity,
@@ -447,6 +452,7 @@ export class XriftThreeLoader {
     manifest: XriftRuntimeManifest;
     models: ReadonlyMap<string, LoadedModel>;
     materials: ReadonlyMap<string, Material>;
+    textures: ReadonlyMap<string, Texture>;
     animations: AnimationClip[];
     animationClipsByEntity: Map<string, AnimationClip[]>;
     interactionAnimationCuesByEntity: Map<string, InteractivityAnimationCue[]>;
@@ -538,18 +544,29 @@ export class XriftThreeLoader {
     if (component.type === "vegetation-wind") return null;
     if (component.type === "light") return createLight(component);
     if (component.type === "text") {
-      const text = new Text();
-      text.text = component.text;
-      text.color = component.color;
-      text.fontSize = component.fontSize;
-      text.maxWidth = component.maxWidth ?? Infinity;
-      text.anchorX = component.anchorX;
-      text.anchorY = component.anchorY;
-      text.outlineWidth = component.outlineWidth;
-      text.outlineColor = component.outlineColor;
-      text.sync();
-      text.userData.xriftStudioComponentId = component.id;
-      return text;
+      const background = component.background ?? DEFAULT_TEXT_BACKGROUND;
+      const backgroundTexture =
+        background.mode === "texture" && background.textureAssetId
+          ? input.textures.get(background.textureAssetId) ?? null
+          : null;
+      if (background.mode === "texture" && !backgroundTexture) {
+        input.diagnostics.push({
+          severity: "warning",
+          code: "text-background-texture-missing",
+          message: `Text background texture could not be loaded: ${
+            background.textureAssetId ?? "(unset)"
+          }`,
+          entityId: input.entity.id,
+          componentId: component.id,
+          ...(background.textureAssetId
+            ? { assetId: background.textureAssetId }
+            : {}),
+        });
+      }
+      const panel = new XriftTextPanelObject();
+      panel.update(runtimeTextPanelConfig(component), backgroundTexture);
+      panel.userData.xriftStudioComponentId = component.id;
+      return panel;
     }
     if (
       component.type === "xrift-component" &&
@@ -918,8 +935,12 @@ export function disposeXriftLoadResult(result: XriftLoadResult): void {
   const materials = new Set<Material>();
   const textures = new Set<Texture>();
   const reflectors = new Set<Reflector>();
+  const textPanels = new Set<XriftTextPanelObject>();
   result.root.traverse((object) => {
     if (object instanceof Reflector) reflectors.add(object);
+    // troika holds an SDF atlas and a derived material that the generic Mesh
+    // pass below cannot reach, so the panel is released through its own hook.
+    if (object instanceof XriftTextPanelObject) textPanels.add(object);
     if (!(object instanceof Mesh)) return;
     geometries.add(object.geometry);
     const entries = Array.isArray(object.material) ? object.material : [object.material];
@@ -935,6 +956,7 @@ export function disposeXriftLoadResult(result: XriftLoadResult): void {
   for (const material of materials) material.dispose();
   for (const texture of textures) texture.dispose();
   for (const reflector of reflectors) reflector.dispose();
+  for (const panel of textPanels) panel.dispose();
 }
 
 function createPrimitiveGeometry(
@@ -1195,6 +1217,38 @@ function nearestSourceNodeIndex(object: Object3D): number | undefined {
     current = current.parent;
   }
   return undefined;
+}
+
+/** Maps the manifest's Text component onto the shared panel configuration. */
+function runtimeTextPanelConfig(
+  component: Extract<XriftRuntimeComponent, { type: "text" }>,
+): XriftTextPanelConfig {
+  return {
+    text: component.text,
+    color: component.color,
+    fontSize: component.fontSize,
+    ...(component.maxWidth === undefined ? {} : { maxWidth: component.maxWidth }),
+    anchorX: component.anchorX,
+    anchorY: component.anchorY,
+    outlineWidth: component.outlineWidth,
+    outlineColor: component.outlineColor,
+    ...(component.fontId === undefined ? {} : { fontId: component.fontId }),
+    ...(component.fontWeight === undefined
+      ? {}
+      : { fontWeight: component.fontWeight }),
+    ...(component.textAlign === undefined
+      ? {}
+      : { textAlign: component.textAlign }),
+    ...(component.lineHeight === undefined
+      ? {}
+      : { lineHeight: component.lineHeight }),
+    ...(component.letterSpacing === undefined
+      ? {}
+      : { letterSpacing: component.letterSpacing }),
+    ...(component.background === undefined
+      ? {}
+      : { background: component.background }),
+  };
 }
 
 function createLight(

@@ -37,6 +37,12 @@ import {
 } from "../../lib/visual-editor";
 import type { InteractionTriggerPatch } from "../../lib/visual-editor/scene-document";
 import {
+  AUTOMATIC_TEXT_FONT_ID,
+  TEXT_FONT_CATALOG,
+  textFontWeightOptions,
+  type XriftTextFontDefinition,
+} from "../../../packages/xrift-studio-runtime/src/text-font-catalog";
+import {
   getGeometryAsset,
   getBuiltinPrimitiveCreation,
   getMaterialAsset,
@@ -99,7 +105,11 @@ import {
   type TextureAssetPatch,
   type TextureCardProfile,
   type TextComponent,
+  type TextBackgroundFit,
+  type TextBackgroundMode,
+  type TextBackgroundPatch,
   type TextPatch,
+  DEFAULT_TEXT_BACKGROUND,
   type TransformPatch,
   type VegetationWindComponent,
   type VegetationWindPatch,
@@ -3370,13 +3380,33 @@ function LightInspector({
 
 function TextInspector({
   component,
+  assets,
   readOnly,
   onChange,
+  onOpenAsset,
 }: {
   component: TextComponent;
+  assets: AssetManifest;
   readOnly: boolean;
   onChange: (patch: TextPatch) => void;
+  onOpenAsset: (assetId: string) => void;
 }) {
+  const background = component.background ?? DEFAULT_TEXT_BACKGROUND;
+  const patchBackground = (patch: TextBackgroundPatch) =>
+    onChange({ background: patch });
+  const fontGroups = useMemo(() => groupTextFonts(), []);
+  const weightOptions = textFontWeightOptions(component.fontId);
+  const textureAssets = useMemo(
+    () =>
+      Object.values(assets.assets)
+        .filter((asset) => asset.kind === "texture")
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    [assets],
+  );
+  const selectedTexture = background.textureAssetId
+    ? assets.assets[background.textureAssetId]
+    : undefined;
+
   return (
     <ComponentCard title="Text" subtitle="SDF">
       <ToggleRow
@@ -3394,6 +3424,48 @@ function TextInspector({
           onChange={(event) => onChange({ text: event.currentTarget.value })}
           className="mt-1 w-full resize-y rounded border border-slate-300 bg-white px-2 py-1.5 text-xs leading-5 text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100"
         />
+      </label>
+      <label className="block text-xs font-medium text-slate-600">
+        Font
+        <select
+          value={component.fontId ?? AUTOMATIC_TEXT_FONT_ID}
+          disabled={readOnly}
+          onChange={(event) => onChange({ fontId: event.currentTarget.value })}
+          className="mt-1 h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100"
+        >
+          <option value={AUTOMATIC_TEXT_FONT_ID}>自動（文字に合わせて選ぶ）</option>
+          {fontGroups.map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.fonts.map((font) => (
+                <option key={font.id} value={font.id}>
+                  {font.label} — {font.labelJa}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+      <p className="text-[11px] leading-4 text-slate-500">
+        {component.fontId && component.fontId !== AUTOMATIC_TEXT_FONT_ID
+          ? "選んだ書体はGoogle Fontsから初回だけ取得します。取得できないときは自動の書体で表示します。"
+          : "文字に含まれる文字種から書体を選びます。日本語と欧文が混ざっていても表示できます。"}
+      </p>
+      <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+        Weight
+        <select
+          value={String(component.fontWeight ?? 400)}
+          disabled={readOnly}
+          onChange={(event) =>
+            onChange({ fontWeight: Number(event.currentTarget.value) })
+          }
+          className="h-8 rounded border border-slate-300 bg-white px-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-100"
+        >
+          {weightOptions.map((weight) => (
+            <option key={weight} value={weight}>
+              {weight === 700 ? "Bold (700)" : `Regular (${weight})`}
+            </option>
+          ))}
+        </select>
       </label>
       <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
         <span>Color</span>
@@ -3438,6 +3510,42 @@ function TextInspector({
         step={0.1}
         disabled={readOnly}
         onChange={(maxWidth) => onChange({ maxWidth })}
+      />
+      <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+        Text Align
+        <select
+          value={component.textAlign ?? "center"}
+          disabled={readOnly}
+          onChange={(event) =>
+            onChange({
+              textAlign: event.currentTarget.value as NonNullable<
+                TextComponent["textAlign"]
+              >,
+            })
+          }
+          className="h-8 rounded border border-slate-300 bg-white px-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-100"
+        >
+          <option value="left">Left</option>
+          <option value="center">Center</option>
+          <option value="right">Right</option>
+          <option value="justify">Justify</option>
+        </select>
+      </label>
+      <ColliderNumberField
+        label="Line Height"
+        value={component.lineHeight ?? 1.25}
+        min={0.5}
+        step={0.05}
+        disabled={readOnly}
+        onChange={(lineHeight) => onChange({ lineHeight })}
+      />
+      <ColliderNumberField
+        label="Letter Spacing"
+        value={component.letterSpacing ?? 0}
+        min={-0.5}
+        step={0.005}
+        disabled={readOnly}
+        onChange={(letterSpacing) => onChange({ letterSpacing })}
       />
       <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
         Anchor X
@@ -3487,8 +3595,188 @@ function TextInspector({
           className="h-8 w-full cursor-pointer rounded border border-slate-300 bg-white p-1 disabled:opacity-50"
         />
       </div>
+
+      <div className="space-y-2 border-t border-slate-100 pt-2">
+        <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs font-medium text-slate-700">
+          Background
+          <select
+            value={background.mode}
+            disabled={readOnly}
+            onChange={(event) =>
+              patchBackground({
+                mode: event.currentTarget.value as TextBackgroundMode,
+              })
+            }
+            className="h-8 rounded border border-slate-300 bg-white px-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-100"
+          >
+            <option value="none">なし</option>
+            <option value="color">色</option>
+            <option value="texture">画像</option>
+          </select>
+        </label>
+        {background.mode === "none" ? (
+          <p className="text-[11px] leading-4 text-slate-500">
+            文字だけを空間に置きます。壁の解説や看板を作るときは「色」または「画像」を選ぶと、文字の後ろに板が付きます。
+          </p>
+        ) : null}
+      </div>
+
+      {background.mode !== "none" ? (
+        <div className="space-y-2">
+          {background.mode === "texture" ? (
+            <>
+              <label className="block text-xs font-medium text-slate-600">
+                背景の画像 (Texture Asset)
+                <select
+                  value={background.textureAssetId ?? ""}
+                  disabled={readOnly}
+                  onChange={(event) =>
+                    patchBackground({ textureAssetId: event.currentTarget.value })
+                  }
+                  className="mt-1 h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100"
+                >
+                  <option value="">未設定</option>
+                  {textureAssets.map((asset) => (
+                    <option key={asset.id} value={asset.id}>
+                      {asset.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {selectedTexture?.kind === "texture" ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenAsset(selectedTexture.id)}
+                  className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  {selectedTexture.name}を開く
+                </button>
+              ) : null}
+              {textureAssets.length === 0 ? (
+                <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
+                  Assetsのインポートから画像を追加すると、背景に選べます。
+                </p>
+              ) : !background.textureAssetId ? (
+                <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
+                  画像が未選択のため、背景は色だけで表示されます。
+                </p>
+              ) : null}
+            </>
+          ) : null}
+          <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+            <span>{background.mode === "texture" ? "画像の色味" : "背景色"}</span>
+            <input
+              type="color"
+              value={background.color}
+              disabled={readOnly}
+              onChange={(event) =>
+                patchBackground({ color: event.currentTarget.value })
+              }
+              className="h-8 w-full cursor-pointer rounded border border-slate-300 bg-white p-1 disabled:opacity-50"
+            />
+          </div>
+          <ColliderNumberField
+            label="不透明度"
+            value={background.opacity}
+            min={0}
+            max={1}
+            step={0.05}
+            disabled={readOnly}
+            onChange={(opacity) => patchBackground({ opacity })}
+          />
+          <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+            板のサイズ
+            <select
+              value={background.fit}
+              disabled={readOnly}
+              onChange={(event) =>
+                patchBackground({
+                  fit: event.currentTarget.value as TextBackgroundFit,
+                })
+              }
+              className="h-8 rounded border border-slate-300 bg-white px-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-100"
+            >
+              <option value="text">文字に合わせる</option>
+              <option value="fixed">サイズを指定</option>
+            </select>
+          </label>
+          {background.fit === "text" ? (
+            <>
+              <ColliderNumberField
+                label="左右の余白"
+                value={background.paddingX}
+                min={0}
+                step={0.01}
+                disabled={readOnly}
+                onChange={(paddingX) => patchBackground({ paddingX })}
+              />
+              <ColliderNumberField
+                label="上下の余白"
+                value={background.paddingY}
+                min={0}
+                step={0.01}
+                disabled={readOnly}
+                onChange={(paddingY) => patchBackground({ paddingY })}
+              />
+            </>
+          ) : (
+            <>
+              <ColliderNumberField
+                label="幅"
+                value={background.width}
+                min={0.01}
+                step={0.05}
+                disabled={readOnly}
+                onChange={(width) => patchBackground({ width })}
+              />
+              <ColliderNumberField
+                label="高さ"
+                value={background.height}
+                min={0.01}
+                step={0.05}
+                disabled={readOnly}
+                onChange={(height) => patchBackground({ height })}
+              />
+            </>
+          )}
+          <ColliderNumberField
+            label="文字との奥行き"
+            value={background.offset}
+            min={0}
+            step={0.001}
+            disabled={readOnly}
+            onChange={(offset) => patchBackground({ offset })}
+          />
+          <ToggleRow
+            label="裏からも見える"
+            checked={background.doubleSided}
+            disabled={readOnly}
+            onChange={(doubleSided) => patchBackground({ doubleSided })}
+          />
+          <p className="text-[11px] leading-4 text-slate-500">
+            背景と文字はライトの影響を受けません。展示の解説パネルのように、部屋の明るさに関わらず同じ見え方になります。
+          </p>
+        </div>
+      ) : null}
     </ComponentCard>
   );
+}
+
+/** Splits the catalog into the two script groups the picker shows. */
+function groupTextFonts(): Array<{
+  label: string;
+  fonts: readonly XriftTextFontDefinition[];
+}> {
+  return [
+    {
+      label: "日本語",
+      fonts: TEXT_FONT_CATALOG.filter((font) => font.subset === "japanese"),
+    },
+    {
+      label: "欧文",
+      fonts: TEXT_FONT_CATALOG.filter((font) => font.subset === "latin"),
+    },
+  ].filter((group) => group.fonts.length > 0);
 }
 
 function AudioSourceInspector({
@@ -4340,8 +4628,10 @@ function EntityInspector({
             <TextInspector
               key={component.id}
               component={component}
+              assets={assets}
               readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) => onTextChange(component.id, patch)}
+              onOpenAsset={onOpenMaterial}
             />
           );
         }

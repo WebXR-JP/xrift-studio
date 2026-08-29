@@ -1,3 +1,6 @@
+// Mirrors packages/xrift-studio-runtime/src/troika-three-text.d.ts. The root
+// program only includes `src`, so the runtime package's own ambient
+// declaration is not visible here, the same way three-icosa.d.ts is mirrored.
 declare module "troika-three-text" {
   import { Mesh } from "three";
 

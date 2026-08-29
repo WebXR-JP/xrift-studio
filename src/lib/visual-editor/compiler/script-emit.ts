@@ -6,6 +6,12 @@ import scriptLifecycleSource from "../../../../packages/xrift-studio-runtime/src
 import scriptInteractionTriggerSource from "../../../../packages/xrift-studio-runtime/src/script/interaction-trigger.ts?raw";
 import scriptInteractionTriggerRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/interaction-trigger-runtime.tsx?raw";
 import scriptParticleSource from "../../../../packages/xrift-studio-runtime/src/script/particle.tsx?raw";
+import textPanelRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/text-panel.tsx?raw";
+import textPanelObjectSource from "../../../../packages/xrift-studio-runtime/src/text-panel.ts?raw";
+import textPanelLayoutSource from "../../../../packages/xrift-studio-runtime/src/text-panel-layout.ts?raw";
+import textFontCatalogSource from "../../../../packages/xrift-studio-runtime/src/text-font-catalog.ts?raw";
+import troikaTextTypesSource from "../../../../packages/xrift-studio-runtime/src/troika-three-text.d.ts?raw";
+import runtimePackageManifest from "../../../../packages/xrift-studio-runtime/package.json";
 
 import type { AssetManifest, ScriptAsset } from "../asset-manifest";
 import type { JsonObject, ScriptComponent } from "../scene-document";
@@ -44,6 +50,21 @@ export const SCRIPT_LIFECYCLE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/script
 export const SCRIPT_PARTICLE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/particle-runtime.tsx`;
 export const INTERACTION_TRIGGER_MODEL_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interaction-trigger.ts`;
 export const INTERACTION_TRIGGER_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interaction-trigger-runtime.tsx`;
+export const TEXT_PANEL_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-panel-runtime.tsx`;
+export const TEXT_PANEL_OBJECT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-panel.ts`;
+export const TEXT_PANEL_LAYOUT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-panel-layout.ts`;
+export const TEXT_FONT_CATALOG_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-font-catalog.ts`;
+export const TEXT_PANEL_TYPES_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/troika-three-text.d.ts`;
+
+/**
+ * npm spec installed into a staged Classic project that contains Text.
+ *
+ * The emitted panel builds troika's SDF `Text` itself instead of going through
+ * drei, so the dependency has to be declared rather than inherited. Read from
+ * the runtime package's own manifest so the staged world can never be built
+ * against a different troika than the one Studio renders with.
+ */
+export const TEXT_PANEL_RUNTIME_PACKAGE = `troika-three-text@${runtimePackageManifest.dependencies["troika-three-text"]}`;
 
 export type EmittedScriptModule = {
   assetId: string;
@@ -202,6 +223,39 @@ export function createScriptAudioSourceOverlayFile(): CompilerOverlayFile {
     kind: "source",
     owner: "xrift-studio-compiler",
   };
+}
+
+/**
+ * The Text panel's runtime, emitted as a flat set of modules.
+ *
+ * The published world draws captions through the same object Studio does, so a
+ * plate cannot be measured one way in the editor and another way once the world
+ * is built. The runtime package writes `./x.js` specifiers for NodeNext
+ * resolution; the staged project is a bundler-mode TypeScript project, so those
+ * are rewritten to extensionless siblings in one flat directory.
+ */
+export function createTextPanelOverlayFiles(): CompilerOverlayFile[] {
+  return [
+    overlay(TEXT_PANEL_RUNTIME_OVERLAY_PATH, rewriteTextPanelImports(textPanelRuntimeSource)),
+    overlay(TEXT_PANEL_OBJECT_OVERLAY_PATH, rewriteTextPanelImports(textPanelObjectSource)),
+    overlay(TEXT_PANEL_LAYOUT_OVERLAY_PATH, rewriteTextPanelImports(textPanelLayoutSource)),
+    overlay(TEXT_FONT_CATALOG_OVERLAY_PATH, rewriteTextPanelImports(textFontCatalogSource)),
+    // troika ships no types, so the staged project needs the same ambient
+    // declaration Studio compiles against or `tsc` rejects the panel source.
+    overlay(TEXT_PANEL_TYPES_OVERLAY_PATH, troikaTextTypesSource),
+  ];
+}
+
+function overlay(relativePath: string, content: string): CompilerOverlayFile {
+  return { relativePath, content, kind: "source", owner: "xrift-studio-compiler" };
+}
+
+function rewriteTextPanelImports(source: string): string {
+  return source.replace(
+    /(\bfrom\s*)(["'])\.{1,2}\/(text-panel|text-panel-layout|text-font-catalog)\.js\2/g,
+    (_whole, prefix: string, quote: string, moduleName: string) =>
+      `${prefix}${quote}./${moduleName}${quote}`,
+  );
 }
 
 /**

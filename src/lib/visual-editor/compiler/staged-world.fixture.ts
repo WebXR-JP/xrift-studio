@@ -18,7 +18,10 @@ import {
 import {
   addBuiltinPrimitiveEntity,
   addTerrainEntity,
+  createTextComponent,
   createVegetationWindComponent,
+  textComponentPresetInput,
+  DEFAULT_TEXT_BACKGROUND,
   SCRIPT_CONTRACT_VERSION,
   type ScriptComponent,
 } from "../scene-document";
@@ -204,6 +207,38 @@ export function compileStagedTypecheckWorld(): ReturnType<
       [scriptEntity.id]: {
         ...scriptEntity,
         components: [...scriptEntity.components, scriptComponent],
+      },
+    },
+  };
+
+  // A Text panel with an image plate: it is the only path that emits the
+  // troika runtime overlays and a hoisted texture hook side by side, and both
+  // have to compile inside the same generated component file.
+  const textTarget = addBuiltinPrimitiveEntity(
+    scene,
+    assets,
+    BUILTIN_PRIMITIVE_CREATION_IDS.plane,
+    BUILTIN_ASSET_IDS.material.white,
+  );
+  if (!textTarget) throw new Error("staged fixture could not place a Text plane");
+  const textEntity = textTarget.scene.entities[textTarget.entityId];
+  if (!textEntity) throw new Error("staged fixture lost its Text Entity");
+  const textComponent = createTextComponent("staged-typecheck-text", {
+    ...textComponentPresetInput("panel"),
+    background: {
+      ...DEFAULT_TEXT_BACKGROUND,
+      mode: "texture",
+      textureAssetId: particleTexture.id,
+    },
+  });
+  if (!textComponent) throw new Error("staged fixture could not create Text");
+  scene = {
+    ...textTarget.scene,
+    entities: {
+      ...textTarget.scene.entities,
+      [textEntity.id]: {
+        ...textEntity,
+        components: [...textEntity.components, textComponent],
       },
     },
   };
