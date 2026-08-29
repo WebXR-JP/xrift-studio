@@ -68,10 +68,10 @@ F-06 アイテム検査
 | MI-49 | OpenBrush / Tilt Brush glTFをimportする、OpenBrush Starterを作成する、または対象Model / Materialを表示・変換する | `GOOGLE_tilt_brush_material`、exporter、brush名から形式を判定し、Model InspectorへOpenBrush badge、brush数、three-icosa rendererを表示する。Material InspectorはCustom Material Preview Adapterで元Modelの該当nodeを分離し、埋め込みbrush libraryから実ストローク形状、実GLSL、uniform、brush textureをリアルタイム描画する。 | 各source brushをbrush名、GUID、renderer version、source material indexを持つOpenBrush Material Assetへ展開して対応slotへ初期設定する。対応presetは専用shader、未対応presetまたはshader resource失敗時はGLB内のglTF PBR Materialを保持し、previewとInspectorへfallback理由を示す。明示的に割り当てた通常のXRift Materialだけがslot単位で上書きする。import時の古い外部画像URLは取得せず、安全な解析用画像へ置換する。 |
 | MI-50 | Visual Editorの「Classicへ書き出す」を開き、既存XRift Classic projectを選択する | OSのfolder picker後に`package.json`、`xrift.json`、World／Item entry、package managerを検査し、コンポーネント追加またはバックアップ付きentry切替、Runtime package installの結果を一つのdialogでreviewする。処理中は保存、compile、file追加、installのstageとprogressを表示し、閉じる操作と二重実行を止める。 | 成功時はRuntime JSON、Asset、接続componentをVisual Project IDごとの管理領域へ置き、folder、VS Code、terminal、接続snippetへ到達できる。既存entryは既定で変更せず、entry切替は確認後にbackupを残す。失敗時はVisual projectと既存手書きentryを維持し、folder再選択、再実行、package managerでのinstallへ戻れる。 |
 | MI-51 | アプリ起動後またはAboutの「更新を確認」でXRift Studio本体の更新を検知する | 確認中は制作を妨げず、更新がある時だけ現在版、最新版、リリースノートをdialogに表示する。「後で」を選ぶとライブラリheaderとAboutに更新導線を残す。download中はbytesと割合、install中は再起動準備を示し、閉じる操作と二重実行を止める。 | 署名検証済み更新のinstall後にアプリを再起動し、新しい現在版と完了通知を表示する。確認またはinstall失敗時は現在のアプリを維持し、Aboutまたは同じdialogから再試行できる。 |
-| MI-52 | Assetsの「外部から追加」を開く、provider sidebarでリソース集を選ぶ、HDR / EXRをimportする、外部Assetをinstallする、公式XRift Componentを追加する、または環境Texture AssetをScene Viewへdragする | 左sidebarにPoly Haven、ambientCG、Open Brush、XRift公式Componentを同じ階層で表示し、中央に選択中providerの検索、種別またはカテゴリ、一覧、右に作者、license、配布ページとprovider固有optionを表示する。Open Brushは固定catalogの代表stroke nodeをthree-icosaで事前描画した保存済みthumbnailを全48件に表示し、汎用sphereの疑似previewへ置換しない。XRift公式Componentは公開package本体と公式sampleを事前描画したversion付き保存済みthumbnailを表示する。一覧と詳細を開くだけではWebGL contextを作らない。provider切替ではSceneとAssetを変更せずcatalogだけを切り替える。ambientCGは公式v3 APIのmetadata、thumbnail、CC0情報を使い、HDRIとMaterialをZIPから検証して取り込む。3D Modelは対応形式がglTFでない場合に一覧だけ表示し、インストール可能に見せない。ローカルHDR / EXRはシグネチャ検証後にTextureとしてqueueへ表示する。downloadまたは追加処理中はprovider切替と主操作を無効にし、providerが返した固定domainまたは固定catalog revisionだけを扱う。環境Texture drag中はScene全体へ設定されることを表示する。 | 成功時はMaterialと参照Texture、形式とequirectangular用途を保持したTexture Asset、GUIDとrenderer versionを保持したOpenBrush Material Asset、または公式XRift Componentを持つEntityを選択する。環境TextureはFlip Yなどを編集でき、任意ならSkyboxへ直ちに設定する。Open BrushはSceneへ自動割当せず、同じGUIDとrenderer versionの再追加では既存Materialを選択する。公式Componentは一件のScene historyとして追加しInspectorを開く。保存済みthumbnailが欠落した場合は項目名と種類iconを表示し、「準備中」のままにしない。catalog取得失敗では同じproviderから再試行でき、install失敗時はmanifestとSceneを変更せず同じAssetとoptionから再試行できる。provider creditとlicenseはAssetに保持し、一覧とInspectorから確認できる。 |
+| MI-52 | Assetsの「外部から追加」を開く、provider sidebarでリソース集を選ぶ、HDR / EXRをimportする、外部Assetをinstallする、公式XRift Componentを追加する、または環境Texture AssetをScene Viewへdragする | 左sidebarはリソース集を「素材サイト」「空と自然」「光と演出」「ワールド機能」の区分見出しの下に表示し、中央に選択中providerの検索、種別またはカテゴリ、一覧、右に作者、license、配布ページとprovider固有optionを表示する。Open Brushは固定catalogの代表stroke nodeをthree-icosaで事前描画した保存済みthumbnailを全48件に表示し、汎用sphereの疑似previewへ置換しない。XRift公式Componentは公開package本体と公式sampleを事前描画したversion付き保存済みthumbnailを表示する。一覧と詳細を開くだけではWebGL contextを作らない。provider切替ではSceneとAssetを変更せずcatalogだけを切り替える。ambientCGは公式v3 APIのmetadata、thumbnail、CC0情報を使い、HDRIとMaterialをZIPから検証して取り込む。3D Modelは対応形式がglTFでない場合に一覧だけ表示し、インストール可能に見せない。ローカルHDR / EXRはシグネチャ検証後にTextureとしてqueueへ表示する。downloadまたは追加処理中はprovider切替と主操作を無効にし、providerが返した固定domainまたは固定catalog revisionだけを扱う。環境Texture drag中はScene全体へ設定されることを表示する。 | 成功時はMaterialと参照Texture、形式とequirectangular用途を保持したTexture Asset、GUIDとrenderer versionを保持したOpenBrush Material Asset、または公式XRift Componentを持つEntityを選択する。環境TextureはFlip Yなどを編集でき、任意ならSkyboxへ直ちに設定する。Open BrushはSceneへ自動割当せず、同じGUIDとrenderer versionの再追加では既存Materialを選択する。公式Componentは一件のScene historyとして追加しInspectorを開く。保存済みthumbnailが欠落した場合は項目名と種類iconを表示し、「準備中」のままにしない。catalog取得失敗では同じproviderから再試行でき、install失敗時はmanifestとSceneを変更せず同じAssetとoptionから再試行できる。provider creditとlicenseはAssetに保持し、一覧とInspectorから確認できる。 |
 | MI-53 | Hierarchy、Scene View、または Assets で Shift / Ctrl・Cmd を使って複数選択する | 選択行・カード・Scene上のoutlineを同じ選択状態として示し、Inspector見出しに件数を表示する。Hierarchy / AssetsのShiftは表示順の範囲、Scene ViewのShiftと全surfaceのCtrl・Cmdは追加／解除とする。Scene Viewでは最後に選んだEntityだけをprimaryとしてgizmoを表示し、camera dragを選択clickとして確定しない。Entityは共通するMesh Renderer / Light、Materialは共通PBR値だけを表示する。 | 選択だけではdocumentとhistoryを変更しない。一括変更は一件のhistoryとして確定し、Undoで全対象を戻す。HierarchyのDeleteと右クリックの削除は選択済みEntity全体を一回で削除し、選択解除または単体選択で通常Inspectorへ戻る。Play中は選択を維持して編集操作を無効にする。 |
 | MI-54 | Animation clipを含み`importAnimations`が有効なGLB / glTF ModelをSceneへ配置し、Playを開始する | 配置EntityへAnimation Componentを自動追加し、InspectorにClip選択、選択clipの長さとtrack数、Autoplay、Loop、Speedを表示する。Clipの既定は先頭clip名を併記した「先頭のClip」とする。Edit中は静止し、Play開始時だけ有効なAutoplayで選択clipを再生する。 | Loop有効時はPlay中と生成結果で繰り返す。Loop無効時は一度で停止する。Speedは選択clipだけへ0.01〜10倍で適用する。Play中にEnabled、Clip、Autoplay、Loop、Speedまたは同じEntityのTransform / Colliderを変更した時は、そのEntityのmixerとphysics bodyだけを破棄して先頭から再実行する。Stop、Component無効化、Entity破棄ではmixerを停止してEdit時の姿勢へ戻す。clip欠落や選択clipの消失時はScene View全体を止めず、同じInspectorに理由と選び直しを示す。 |
-| MI-55 | 外部リソースの「XRift公式 Component」で公式Componentを選ぶ | 公開中の`@xrift/world-components`検証version、公式source、利用可能な全Componentをgridへ表示する。thumbnailはpackage本体と公式sample childを固定generatorで事前描画し、Component名と公式badgeを焼き込んだ保存済みWebPを使う。versionが変わる時は保存先revisionを更新して全件を再生成し、SVG／CSSだけの識別用イラストへ置換しない。選択中Componentにはdescription、category、named import、versionを表示し、`DevEnvironment`はScene用でない理由を示す。 | 追加成功時は公式XRift Componentを一件のhistory transactionへ確定し、追加Entityを選択してScene ViewとInspectorへ到達する。Play、別Import中、project kind不一致、変換診断errorではSceneを変更せず理由を同じ詳細欄に残す。 |
+| MI-55 | 外部リソースの「ワールド機能」区分の「Component」で公式Componentを選ぶ | 公開中の`@xrift/world-components`検証version、公式source、利用可能な全Componentをgridへ表示する。thumbnailはpackage本体と公式sample childを固定generatorで事前描画し、Component名と公式badgeを焼き込んだ保存済みWebPを使う。versionが変わる時は保存先revisionを更新して全件を再生成し、SVG／CSSだけの識別用イラストへ置換しない。選択中Componentにはdescription、category、named import、versionを表示し、`DevEnvironment`はScene用でない理由を示す。 | 追加成功時は公式XRift Componentを一件のhistory transactionへ確定し、追加Entityを選択してScene ViewとInspectorへ到達する。Play、別Import中、project kind不一致、変換診断errorではSceneを変更せず理由を同じ詳細欄に残す。 |
 | MI-56 | GLB / VRM ModelをSceneへ配置し、展開されたNode、Bone、MeshをHierarchyで選択する | sourceの親子順を保つEntity treeをModel Entityの下へ表示し、行末をNode / Bone / Mesh / Skinで区別する。SkinまたはAnimationを含むModelは一つの共有Rendererを維持し、選択NodeのInspectorへsource node番号、共有Model、編集対象を表示する。Bone / Node TransformはScene Viewと共有Model poseへ即時同期し、Mesh / Skin行にはそのnodeが使うMaterial slotだけを表示する。 | Transformとnode別Material変更を一件のhistoryへ保存し、Undo / Redo、再表示、Classic JSX、Runtime manifestで同じ結果を復元する。同じsource materialを使う別nodeへnode別上書きを漏らさない。parse失敗時は単一Entityへ偽装せずImport Queueへ戻し、last-good Asset / Sceneを維持する。 |
 | MI-57 | Hierarchyの親Entityを折り畳む、展開する、検索で絞り込む、矢印キーで移動する、またはEntityのEnabledを変更する | 子を持つ行だけに展開状態と件数が分かる矢印を表示し、折り畳み中は子孫行だけを隠す。上下キーは表示中の前後、右キーは展開または最初の子、左キーは折り畳みまたは親、Home / Endは先頭 / 末尾へ選択を移し、選択行を表示範囲へ追従させる。Shift+上下は表示順の範囲選択とし、文字入力・IME変換中はHierarchy操作を抑止する。検索は名前、Entity種類、Component種類、Enabledの語を空白区切りで絞り込み、一致したEntityと祖先だけを自動展開する。折り畳み、検索、キー選択はSceneDocumentとUndo履歴を変更しない。単一Entity Inspectorの先頭はUnityと同じ順序でEnabledチェックと名前を一行に置き、Prefab sourceはアイコン、名前、更新アイコンだけを続ける。説明は常設せずtooltipと読み上げ名に移す。親が無効な子は継承された非表示状態をHierarchyの濃淡とInspectorの状態アイコンで示す。 | 検索を消すと検索前の折り畳み状態と同じ順序へ戻る。Scene Viewなどから折り畳まれた子孫を選択した時は祖先を自動展開して選択行とInspectorへ到達させる。Play中の選択移動と開閉は履歴を変更せず、Enabledや親子構造の変更は一件のauthoring historyとして実行中のScene、生成結果へ反映する。子Entity自身のEnabled値は保持する。一致なしでは検索語とクリア操作を表示する。 |
 | MI-58 | Entity InspectorでMesh Rendererを有効・無効にする、Material slotを確認する、またはMaterialを選択する | Mesh RendererのEnabledはComponent見出しの先頭へ置く。Material slotは入れ子のカード枠を使わず区切り線で並べ、Base Color、透明度、Texture有無を示すスウォッチ、選択欄、詳細を開くアイコンを一行にする。Material名だけに識別を依存せず、説明はtooltipと読み上げ名へ移す。 | EnabledとMaterial割当はそれぞれ一件のhistoryとしてScene View、Play、生成結果へ反映する。Materialを開いてもEntity選択を保持し、戻ると同じslotへ復帰できる。参照切れはスウォッチを未設定表示にし、既存bindingを暗黙に別Materialへ置換しない。 |
@@ -100,8 +100,8 @@ F-06 アイテム検査
 
 | MI-80 | Scene Viewの「診断」を開く、または「録画」を開始する | 実際のThree.js rendererからFPS、frame time、draw calls、triangles、visible mesh数、geometry / texture数、camera位置 / Farを0.5秒ごとに表示する。「録画」はScene ViewのCanvasを最大15秒WebMへ記録し、録画中は`REC`と保存状態を表示する。診断表示は編集データや描画結果を変更しない。 | 録画停止または15秒で保存ダイアログへ進み、キャンセルではScene Viewへ戻る。WebM非対応・保存失敗時は原因と再試行を残す。連続録画は上限で自動停止し、アプリのメモリを無制限に増やさない。 |
 | MI-81 | Entity InspectorでWind Componentを追加または編集する | Add Componentから対象EntityへWind Componentを付け、Enabledを切り替える。Componentが付いたEntityと子Meshだけを対象にし、Mesh名や植物らしさの推測を行わない。風の強さ・速度・突風はScene Settingsの「Wind（グローバル）」で一括編集し、Scene Viewへ反映する。 | 追加・変更は一件のScene更新として保存し、Play中は対象Entityの実行コピーへ同期する。無効値や古いrevisionではScene、selection、historyを変更せず、Inspectorの入力と再試行先を残す。成功後は同じEntity Inspectorに留まり、Preview / Compile / Playへ進める。 |
-| MI-82 | 「外部リソースを追加」の「空 Shader」から空Shaderを選び、追加する | カードと詳細プレビューは実際のGLSLをWebGLで内側から描画し、SVGやCSSの疑似サムネイルを使わない。詳細では星の数、太陽と月の高さ・方角、月の満ち欠け、雲の量と厚み、遠景の高さと起伏、色をuniform名付きのsliderで調整し、プレビューへ即時反映する。カードは静止画1枚、選択中のpresetだけをアニメーションさせ、WebGL contextを増やしすぎない。追加中はボタンをローディング表示にして二重追加を防ぐ。 | 成功時はMaterial Assetを一件追加してassetSelectionにし、「空へ設定」時はScene設定のskybox.materialAssetIdへ割り当てる。トーストで終わらせず、追加後もInspectorのUniform valuesで再調整できることを示す。同じpresetの再追加は同じMaterialを更新し、重複Assetを作らない。 |
-| MI-83 | Scene設定の「空Shader」でMaterialを選ぶ、または解除する | 割り当て中はSkybox画像とグラデーションより優先して空を描き、上空の色・地平線の色・オフセット・グラデーションを無効表示にする。水平回転と明るさはshaderのuniformへ渡すため有効なままにする。Materialが欠落または不正な場合は理由を示してグラデーションへ戻す。 | 割り当て・解除は一件のScene更新として保存する。割り当て中は当該MaterialのInspectorを開く操作を残し、星の数などの再調整へ到達できるようにする。 |
+| MI-82 | 「外部リソースを追加」の「Skybox Shader」からSkybox Shaderを選び、追加する | カードと詳細プレビューは実際のGLSLをWebGLで内側から描画し、SVGやCSSの疑似サムネイルを使わない。詳細では星の数、太陽と月の高さ・方角、月の満ち欠け、雲の量と厚み、遠景の高さと起伏、色をuniform名付きのsliderで調整し、プレビューへ即時反映する。カードは静止画1枚、選択中のpresetだけをアニメーションさせ、WebGL contextを増やしすぎない。追加中はボタンをローディング表示にして二重追加を防ぐ。 | 成功時はMaterial Assetを一件追加してassetSelectionにし、「空へ設定」時はScene設定のskybox.materialAssetIdへ割り当てる。トーストで終わらせず、追加後もInspectorのUniform valuesで再調整できることを示す。同じpresetの再追加は同じMaterialを更新し、重複Assetを作らない。 |
+| MI-83 | Scene設定の「Skybox Shader」でMaterialを選ぶ、または解除する | 割り当て中はSkybox画像とグラデーションより優先して空を描き、上空の色・地平線の色・オフセット・グラデーションを無効表示にする。水平回転と明るさはshaderのuniformへ渡すため有効なままにする。Materialが欠落または不正な場合は理由を示してグラデーションへ戻す。 | 割り当て・解除は一件のScene更新として保存する。割り当て中は当該MaterialのInspectorを開く操作を残し、星の数などの再調整へ到達できるようにする。 |
 | MI-84 | Interactivity Asset EditorでBehavior graphを編集する | canvasはドラッグとホイールで移動し、Ctrl+ホイールで拡大縮小する。ノードカードはScene View側と同じ暗い面に合わせ、categoryは色相だけで示す。socketのハンドルはラベルと同じ行に置き、紫はflow、水色はvalueとして形も変える。「追加」は検索付きの一覧を開き、上段に「よくある動き」（色を変える、ゆっくり変える、発光させる、アニメーションを再生、少し待ってから再生）、下段にcategory別の公式operationを並べる。追加したノードは現在見えているcanvasの中央へ置き、選択状態にする。選択中ノードの値は右のNode Inspectorで直接編集し、色のpointerではカラーピッカー、数値・整数・真偽はそれぞれの入力にする。 | レシピは接続済みで既定値の入ったノード列として一度に置き、Material Assetが無いレシピは理由を示して無効にする。canonical JSONは折りたたんだ副次表示にとどめ、値の編集にJSON直接編集を必須にしない。検証エラーがある間は保存を無効にし、件数と対象pathをDiagnosticsに残す。Escapeは追加パネルを先に閉じ、次にEditorを閉じる。 |
 | MI-85 | Scene Viewのツールバーでスナップを切り替える、`X`を押す、ドラッグ中にShiftを押す、または矢印キーで選択を動かす | ツールバーのスナップは押下状態と、現在のツールの1ステップ（移動はm、回転は度、拡縮は倍）を同じボタンに表示する。Shiftで反転している間は色を変えるだけにせず、ラベルにも「Shift」と反転後の状態を出す。間隔はボタン右のパネルで移動・回転・拡縮を個別に編集し、よく使う値をプリセットとして並べ、現在のツールの行を強調する。矢印キーの1ステップは左右がX、上下がZ、PageUpとPageDownがY、対象は現在のツールの軸の値とする。 | スナップの入切と間隔はScene設定と同じ`editor.gizmo`へ保存し、Undo履歴には積まない。Undoは直前のEntity操作へ戻す。矢印キーの1ステップはギズモの1操作と同じ履歴として確定する。スナップが有効なときは近い格子点へそろえ、無効なときは現在値へ指定量を足す。文字入力中はShiftも矢印キーもエディター操作にしない。 |
 
@@ -142,7 +142,7 @@ F-06 アイテム検査
 | F-31 | Terrain authoring / MCP | MI-03, MI-05, MI-09, MI-13, MI-16, MI-78 | Createメニューからstatic Terrainを追加し、InspectorとMCPの同じRaise / Lower / Flatten / Smoothブラシで高さサンプルを編集する。各スタンプは一件のUndo履歴として保存され、Scene View、Play、生成コード、Trimesh Colliderへ同じTerrainを反映する。 |
 | F-32 | Scene post effects | MI-03, MI-05, MI-09, MI-13, MI-15, MI-16, MI-80 | Scene settingsでHDR / AO / Bloom / 露出を編集し、Scene View、Play、生成Worldの同じレンダリング設定へ反映する。設定は保存・再読込・公開レビューまで同じScene contractで扱う。 |
 | F-33 | Wind Component | MI-03, MI-05, MI-09, MI-11, MI-13, MI-14, MI-15, MI-16, MI-81 | Entity InspectorまたはMCPからWind Componentを明示的に追加し、対象Entityと子MeshだけへScene Settingsのグローバル風設定を適用する。Editor Preview、Play、生成World、Runtime manifestは同じComponentとScene値を使い、名前・Mesh分類・言語に依存した対象推測を行わない。 |
-| F-34 | 空Shader（手続き的なSkybox） | MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-82, MI-83 | 画像Skyboxではなく、Custom Shader Materialとして昼・夕暮れ・朝焼け・夜空・オーロラ・星雲の空を追加できる。星の数、太陽と月の位置、月の満ち欠け、雲、地平線の遠景をuniformで調整でき、レイマーチする厚みのある雲も選べる。外部リソース集での調整とInspectorでの再調整が同じMaterialを指し、Scene View、Play、生成Worldが同じGLSLを描く。Materialが欠落した場合はグラデーションへ戻し、警告診断を残す。重いpresetはstep数をvariant defineとして残し、下げられる状態にする。 |
+| F-34 | Skybox Shader（手続き的な空） | MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-82, MI-83 | 画像Skyboxではなく、Custom Shader Materialとして昼・夕暮れ・朝焼け・夜空・オーロラ・星雲の空を追加できる。星の数、太陽と月の位置、月の満ち欠け、雲、地平線の遠景をuniformで調整でき、レイマーチする厚みのある雲も選べる。外部リソース集での調整とInspectorでの再調整が同じMaterialを指し、Scene View、Play、生成Worldが同じGLSLを描く。Materialが欠落した場合はグラデーションへ戻し、警告診断を残す。重いpresetはstep数をvariant defineとして残し、下げられる状態にする。 |
 | F-35 | Visual QA診断と短時間録画 | MI-03, MI-05, MI-14, MI-26, MI-80 | Scene ViewとPlay Windowで実rendererのFPS、frame time、draw calls、triangles、mesh可視数、camera Farを確認でき、最大15秒のWebMを保存して問題の発生前後を再現できる。診断や録画はSceneDocument、AssetManifest、Undo履歴を変更せず、停止・保存失敗・WebM非対応から同じScene Viewへ戻れる。 |
 
 ## F-01 CLI更新の状態設計
@@ -891,7 +891,7 @@ F-06 アイテム検査
 
 ### 操作前
 
-- 公式カタログはAssetsの「外部から追加」でPoly Haven、Open Brushと同列の「XRift公式 Component」providerから開く。project kindで配置可能なComponentを全件表示し、各カードにComponent名、category、package本体を事前描画した保存済みthumbnailを置く。一覧と詳細を開くだけではWebGL Contextを作らない。`DevEnvironment`はScene Componentではなくdev entry用wrapperとして別注記する。
+- 公式カタログはAssetsの「外部から追加」で「ワールド機能」区分の「Component」providerから開く。project kindで配置可能なComponentを全件表示し、各カードにComponent名、category、package本体を事前描画した保存済みthumbnailを置く。一覧と詳細を開くだけではWebGL Contextを作らない。`DevEnvironment`はScene Componentではなくdev entry用wrapperとして別注記する。
 - 選択中Componentには公開package version、公式source、実際に生成するnamed importとJSX sampleを表示する。
 - 右上の「Import」にはModel / 3D AssetとR3F / Classic変換を置く。R3F / Classic変換には貼り付け欄、「Classicプロジェクトを選択」、HTTPS / git SSHのRepository URL入力を並べ、folder / repository読込がデスクトップ機能であること、選択後のpackage名、entry、pathまたはURL、読み込んだmodule数を表示する。確定前にSceneへ追加するEntity、Model、Texture、Audio、Skybox、Custom Material、Collider部位と診断をreviewする。Classic Assetはこのreviewへ入る時点で書き込みなしの通常Import transactionまで準備し、原本容量、Texture解像度とRGBA / mipmap展開量、Model原寸、Model import scale、親を含む配置Scale、配置後寸法、中心補正、反転、同Scaleで復元するnamed Colliderを表示する。この段階ではScene、AssetManifest、project fileを変更しない。
 
@@ -1228,23 +1228,23 @@ F-06 アイテム検査
 
 - 追加・変更後はEntity Inspectorに留まり、グローバル値の調整はScene Settingsへ一操作で移動できる。確認はPlayで行う。
 
-## F-34 空Shader（手続き的なSkybox）の状態設計
+## F-34 Skybox Shader（手続き的な空）の状態設計
 
 参照: MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-82, MI-83
 
 ### 操作前
 
-- 「外部リソースを追加」の左一覧に「空 Shader」を公式カタログとして置き、「画像ではなくGLSLで空を描くMaterialです」と件数を見出しに示す。
+- 「外部リソースを追加」の左一覧に「Skybox Shader」を公式カタログとして置き、「画像ではなくGLSLで空を描くMaterialです」と件数を見出しに示す。
 - カードは実際のGLSLをWebGLで描画する。SVGやCSSの疑似サムネイルを使わず、カードで見えているものと追加後の空を一致させる。カテゴリー（昼、夕暮れ、朝焼け、夜空、オーロラ、宇宙）で絞り込める。
 - 詳細では、そのpresetが何を描くかと負荷の目安を文章で示し、Uniform valuesを名前・値・説明・uniform名付きのsliderとして並べる。変更はプレビューへ即時反映し、「既定値へ戻す」でpresetの値に戻せる。
 - 追加ボタンは「〇〇を空へ設定」とし、「追加後にSceneの空へ設定」を既定で有効にする。外した場合はMaterialだけを追加することを同じ場所に書く。
-- Scene Settingsのスカイボックスには「空Shader（Custom Shader Material）」の選択肢を置き、割り当て中はSkybox画像とグラデーションより優先して空を描くことを示す。
+- Scene Settingsのスカイボックスには「Skybox Shader（Custom Shader Material）」の選択肢を置き、割り当て中はSkybox画像とグラデーションより優先して空を描くことを示す。
 
 ### 操作中
 
 - 追加は通常のAsset import transactionを通り、Material Assetの作成とSceneのskybox設定を同じ履歴へ確定する。
 - 割り当て中は上空の色、地平線の色、オフセット、グラデーションを無効表示にする。水平回転と明るさはshaderのuniformへ渡すため有効なまま残す。
-- Scene Viewは空Shaderを描画しない。編集中の背景は単色のままで、見え方はPlayで確認する。この違いをUIで示し、描画に失敗したと誤解させない。
+- Scene ViewはSkybox Shaderを描画しない。編集中の背景は単色のままで、見え方はPlayで確認する。この違いをUIで示し、描画に失敗したと誤解させない。
 
 ### 成功時
 
@@ -1259,7 +1259,7 @@ F-06 アイテム検査
 
 ### 戻り先
 
-- 追加後はScene Settingsの空Shader欄へ戻り、「〇〇のUniformを編集」からMaterial Inspectorへ移動できる。カタログを閉じた場合もSceneとselectionは変わらない。
+- 追加後はScene SettingsのSkybox Shader欄へ戻り、「〇〇のUniformを編集」からMaterial Inspectorへ移動できる。カタログを閉じた場合もSceneとselectionは変わらない。
 
 ## F-35 Visual QA診断と短時間録画の状態設計
 
@@ -1320,3 +1320,27 @@ F-06 アイテム検査
   be started by graph behavior instead of unconditional viewer autoplay.
 - MCP clients can create the Asset, add nodes, connect flow/value sockets, set
   inline values, read canonical JSON, and validate against the same boundary.
+
+## F-36 Audio Asset試聴の状態設計
+
+参照: MI-03, MI-05, MI-09, MI-15, MI-20
+
+### 操作前
+
+- Audio AssetをAssetsから選ぶと、右Inspectorの「試聴」に再生コントロールを表示する。試聴はAudio Sourceの作成、配置、loop設定、SceneDocumentを変更しない。
+
+### 処理中
+
+- 管理済みのプロジェクト音源を読み込み中は「再生用の音源を読み込んでいます」と表示し、二重の再生操作を示さない。
+
+### 成功時
+
+- 読み込み後は標準の再生・停止・シーク操作を使え、Audio Assetの名前、形式、容量と同じInspector文脈を維持する。
+
+### 失敗時
+
+- ファイルが欠落、未保存、または読込に失敗した場合は再生可能であるように見せず、Assetsの保存先確認と再取込を案内する。Assetと選択状態は維持する。
+
+### 戻り先
+
+- 試聴の終了後も同じAudio Asset Inspectorに留まり、Audio Sourceへの配置は既存の配置操作から続けられる。

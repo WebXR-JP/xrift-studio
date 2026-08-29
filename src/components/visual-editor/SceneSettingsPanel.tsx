@@ -534,7 +534,7 @@ function SkyShaderField({
     <div className="space-y-2">
       <label className="block">
         <span className="mb-1 block text-xs font-medium text-slate-700">
-          空Shader（Custom Shader Material）
+          Skybox Shader（Custom Shader Material）
         </span>
         <select
           value={materialAssetId ?? ""}
@@ -571,7 +571,7 @@ function SkyShaderField({
       ) : (
         <p className="rounded border border-dashed border-slate-300 bg-slate-50 px-2.5 py-2 text-[11px] leading-4 text-slate-600">
           {candidates.length === 0
-            ? "「外部リソースを追加」の空Shaderから、星空などのMaterialを追加できます。"
+            ? "「外部リソースを追加」のSkybox Shaderから、星空などのMaterialを追加できます。"
             : "選ぶと画像とグラデーションより優先して空を描きます。"}
         </p>
       )}

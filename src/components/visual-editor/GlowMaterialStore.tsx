@@ -98,16 +98,16 @@ export function GlowMaterialStore({
     <>
       <section
         className="flex min-w-0 flex-1 flex-col border-r border-slate-200"
-        aria-label="光る照明一覧"
+        aria-label="発光オブジェクト一覧"
       >
         <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2.5">
           <div className="mb-2 flex items-start justify-between gap-3">
             <div>
               <h3 className="text-xs font-semibold text-slate-900">
-                光る照明
+                発光オブジェクト
               </h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                Bloomで光って見える照明です。ライトを増やさずに置けます
+                ネオンのようにBloomで光るオブジェクトです。ライトを増やさずに置けます
               </p>
             </div>
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
@@ -119,7 +119,7 @@ export function GlowMaterialStore({
               size={14}
               className="pointer-events-none absolute left-2.5 top-2 text-slate-400"
             />
-            <span className="sr-only">光る照明を検索</span>
+            <span className="sr-only">発光オブジェクトを検索</span>
             <input
               value={query}
               onChange={(event) => setQuery(event.currentTarget.value)}

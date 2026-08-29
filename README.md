@@ -27,7 +27,7 @@ Node.js や `@xrift/cli` の導入、コードまたはビジュアルエディ�
 | 衝突判定を設定する | 対応 | 対応 | PrimitiveにはBox Collider、インポートModelにはMesh Colliderを初期設定し、Center／Half Extentsの編集と自動フィットを行う。 |
 | 地形をつくる | 対応 | 対応 | Createメニューから高さサンプルTerrainを追加し、盛り上げる、掘る、高さを設定、滑らかにする、穴を開けるブラシで編集する。Scene View、static Trimesh Collider、生成コードで同じ三角形を使う。 |
 | 草を生やす | 対応 | 対応 | Terrainへ草の層を重ね、ブラシで塗って生やす・消す。Scene設定のWindで揺れる。 |
-| 空と水をつくる | 対応 | 対応 | GLSLで描く空Shaderと水面Materialを公式カタログから追加し、Uniform valuesで調整する。どちらもScene設定のWindとLightを共通入力にする。 |
+| 空と水をつくる | 対応 | 対応 | GLSLで描くSkybox Shaderと水面Materialを公式カタログから追加し、Uniform valuesで調整する。どちらもScene設定のWindとLightを共通入力にする。 |
 | 光と色味を整える | 対応 | 対応 | Directional／Point／Spot／AreaのLightを配置して色、強度、影、距離を設定する。露出やコントラストなどの色味は一つのcompositorで調整する。既定はオフ。 |
 | 外部の素材を取り込む | 対応 | 対応 | Poly HavenとambientCGのCC0素材、XRift公式のShader、Terrain、照明、Componentをアプリ内から追加する。作者とライセンスはAssetと公開物へ残す。 |
 | 同じ構成を再利用する | 対応 | 対応 | Entityと子階層をPrefab Assetとして保存し、何度でも配置する。配置ごとの差分はoverrideとして保持する。 |

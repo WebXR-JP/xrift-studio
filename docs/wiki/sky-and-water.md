@@ -2,15 +2,15 @@
 
 空と水は、画像を貼るのではなく GLSL で描く Material です。どちらも [外部リソース](./external-resources.md) の公式カタログから追加し、あとから Inspector の Uniform values で調整します。
 
-## 空 Shader
+## Skybox Shader
 
 ### 追加する
 
 1. Assets パネルの **外部から追加** を押します。
-2. 左の一覧から **空 Shader** を選びます。
+2. 左の一覧から **Skybox Shader** を選びます。
 3. プリセットを選び、**「〇〇を空へ設定」** を押します。
 
-**追加後に Scene の空へ設定** を有効にしたまま追加すると、Scene 設定の Skybox に割り当てられます。空 Shader は Skybox 画像より優先して背景を描きます。チェックを外すと Material だけが追加されます。
+**追加後に Scene の空へ設定** を有効にしたまま追加すると、Scene 設定の Skybox に割り当てられます。Skybox Shader は Skybox 画像より優先して背景を描きます。チェックを外すと Material だけが追加されます。
 
 ### プリセット
 
@@ -34,7 +34,7 @@ Material を選ぶと、Inspector の **Uniform values** で数値と色を変�
 
 **既定値へ戻す** でプリセットの値に戻せます。同じプリセットをカタログからもう一度追加した場合も、Material がプリセットの値で上書きされます。
 
-> **注意**: 空 Shader は Scene View には描画されません。編集中の Scene View では背景が単色のままなので、空の見え方は **Play** で確認してください。
+> **注意**: Skybox Shader は Scene View には描画されません。編集中の Scene View では背景が単色のままなので、空の見え方は **Play** で確認してください。
 
 ## Water Shader
 

@@ -566,7 +566,7 @@ Material schema は core metallic-roughness を完全対応し、extension を c
 
 #### Custom Shader Material
 
-GLSL を直接書く Material は Shader Asset として持つ。Shader Asset は UTF-8 の GLSL source と hash を管理下に保存し、Material 側は Shader Asset ID、typed uniform values、Texture uniform の Asset ID 参照を持つ。Studio Play、Editor Preview、生成物は同じ uniform descriptor を読む。空 Shader と水面 Material もこの仕組みの上に置き、Scene の Wind と Light を共通入力として受け取る（[マテリアルカタログ 仕様](./MATERIAL_CATALOG_SPEC.md)）。
+GLSL を直接書く Material は Shader Asset として持つ。Shader Asset は UTF-8 の GLSL source と hash を管理下に保存し、Material 側は Shader Asset ID、typed uniform values、Texture uniform の Asset ID 参照を持つ。Studio Play、Editor Preview、生成物は同じ uniform descriptor を読む。Skybox Shader と水面 Material もこの仕組みの上に置き、Scene の Wind と Light を共通入力として受け取る（[マテリアルカタログ 仕様](./MATERIAL_CATALOG_SPEC.md)）。
 
 #### Material Asset の新規作成
 
@@ -938,11 +938,11 @@ Import Queue は source copy、derived / thumbnail generation、AssetManifest co
 
 自分のファイル以外から素材を得る経路も、通常の import transaction の上に載せる。ブラウザで探して保存し直す手順をユーザーに要求しない。
 
-- Assets の「外部から追加」は catalog を開く。CC0 provider として Poly Haven（HDRI / Material / Model）と ambientCG（HDRI / Material、Model は検索のみ）、XRift 公式カタログとして Open Brush ブラシ Material、空 Shader、Water Shader、Terrain preset、発光照明、XRift 公式 Component を扱う。
+- Assets の「外部から追加」は catalog を開く。CC0 provider として Poly Haven（HDRI / Material / Model）と ambientCG（HDRI / Material、Model は検索のみ）、XRift 公式カタログとして Open Brush ブラシ Material、Skybox Shader、Water Shader、Terrain preset、発光オブジェクト、公式 Component を扱う。
 - ダウンロードは解像度と形式を選ばせ、確定前に容量の目安を示す。取得した実体は 6.1 の import transaction を通し、検証、source copy、derived 生成、manifest commit まで同じ経路で確定する。catalog 専用の抜け道を作らない。
 - catalog card は静止画のサムネイルではなく、実際の GLSL や高さフィールドを WebGL で描画する。カードで見えているものと、追加後に Scene へ入るものを一致させる。
 - 追加した Asset は作者、ライセンス、配布ページ URL を `attribution` として保持し、公開したワールドの生成物へも同じ情報を出力する。CC0 と MIT を同じ表示にせず、詳細パネルから配布ページとライセンス原文へ移動できるようにする。
-- HDRI は環境 Texture Asset として保存し、「追加後に Skybox へ設定」を選んだ場合だけ Scene settings の skybox を同じ transaction で更新する。空 Shader と Water Shader は Material Asset、Terrain preset は Terrain Entity 一件として追加し、追加後は通常の Asset / Entity として編集できる。
+- HDRI は環境 Texture Asset として保存し、「追加後に Skybox へ設定」を選んだ場合だけ Scene settings の skybox を同じ transaction で更新する。Skybox Shader と Water Shader は Material Asset、Terrain preset は Terrain Entity 一件として追加し、追加後は通常の Asset / Entity として編集できる。
 - 一時的な I/O 失敗は限定回数の再試行で吸収し、それでも失敗する場合は provider、対象ファイル、再試行手段を示して document を変更しない。
 
 ## 7. Command と Undo / Redo

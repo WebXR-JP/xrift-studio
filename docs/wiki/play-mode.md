@@ -32,7 +32,7 @@ Script の `ctx.materials`、`ctx.lights`、`ctx.audioSources` などによる�
 
 ## 空の見え方について
 
-空 Shader は Scene View には描画されません。編集中の背景は単色のままなので、空の見え方は Play で確認してください。
+Skybox Shader は Scene View には描画されません。編集中の背景は単色のままなので、空の見え方は Play で確認してください。
 
 ## クラシックプロジェクトのローカル確認
 

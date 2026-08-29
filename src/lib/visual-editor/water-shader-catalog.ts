@@ -493,7 +493,7 @@ const COLOR_PARAMETERS: readonly WaterShaderParameter[] = [
   {
     uniform: "uZenithColor",
     label: "映り込む天頂の色",
-    hint: "反射に使う空の色です。Sceneの空Shaderに合わせてください。",
+    hint: "反射に使う空の色です。SceneのSkybox Shaderに合わせてください。",
     kind: "color",
   },
   {

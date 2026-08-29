@@ -1421,7 +1421,7 @@ function renderSceneEnvironment(
       addDiagnostic(context, {
         severity: "warning",
         code: "sky-shader-texture-unsupported",
-        message: `空Shader「${skyShader.asset.name}」のTexture uniform（${textureUniforms.join("、")}）は空スロットでは解決できません。手続き的なuniformだけを使ってください`,
+        message: `Skybox Shader「${skyShader.asset.name}」のTexture uniform（${textureUniforms.join("、")}）は空スロットでは解決できません。手続き的なuniformだけを使ってください`,
         sceneId: context.scene.sceneId,
         assetId: skyShader.asset.id,
         fieldPath: "settings.skybox.materialAssetId",

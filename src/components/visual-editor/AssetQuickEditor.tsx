@@ -506,8 +506,40 @@ function PrefabQuickEditor({
   );
 }
 
-function AudioAssetInspector({ asset }: { asset: AudioAsset }) {
+function AudioAssetInspector({
+  asset,
+  projectPath,
+}: {
+  asset: AudioAsset;
+  projectPath?: string;
+}) {
   const AudioIcon = EDITOR_ICONS.audio;
+  const [source, setSource] = useState<
+    | { status: "loading" }
+    | { status: "ready"; dataUrl: string }
+    | { status: "failed" }
+  >({ status: "loading" });
+
+  useEffect(() => {
+    if (!projectPath || asset.source.kind !== "project") {
+      setSource({ status: "failed" });
+      return;
+    }
+    let active = true;
+    setSource({ status: "loading" });
+    void tauri
+      .readAudioDataUrl(projectPath, asset.source.relativePath)
+      .then((dataUrl) => {
+        if (active) setSource({ status: "ready", dataUrl });
+      })
+      .catch(() => {
+        if (active) setSource({ status: "failed" });
+      });
+    return () => {
+      active = false;
+    };
+  }, [asset.source, projectPath]);
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3 rounded-md border border-slate-200 bg-white p-3">
@@ -530,6 +562,21 @@ function AudioAssetInspector({ asset }: { asset: AudioAsset }) {
         <p className="text-[11px] leading-4 text-slate-500">
           Audio Sourceから参照され、実行・公開時に管理済み音声としてコピーされます。
         </p>
+      </EditorSection>
+      <EditorSection title="試聴">
+        {source.status === "loading" ? (
+          <p className="text-xs text-slate-500">再生用の音源を読み込んでいます。</p>
+        ) : null}
+        {source.status === "ready" ? (
+          <audio controls preload="metadata" src={source.dataUrl} className="h-9 w-full">
+            このブラウザでは音声を再生できません。
+          </audio>
+        ) : null}
+        {source.status === "failed" ? (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs leading-4 text-amber-800">
+            このAudio Assetの再生用ファイルを読み込めませんでした。Assetsの保存先を確認して、再取込してください。
+          </p>
+        ) : null}
       </EditorSection>
     </div>
   );
@@ -3605,7 +3652,7 @@ export function AssetQuickEditor({
   }
 
   if (asset.kind === "audio") {
-    return <AudioAssetInspector asset={asset} />;
+    return <AudioAssetInspector asset={asset} projectPath={projectPath} />;
   }
 
   if (asset.kind === "shader") {
