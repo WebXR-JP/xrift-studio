@@ -6,7 +6,7 @@ export const XRIFT_STUDIO_RUNTIME_SCHEMA_VERSION = "1.0.0" as const;
  * manifest, and the browser upload path refuses an older shell.
  */
 export const XRIFT_RUNTIME_CONTRACT_VERSION =
-  "2026-08-16-official-components-physics-v1" as const;
+  "2026-08-29-text-fonts-background-v1" as const;
 
 export type XriftRuntimeDiagnostic = {
   severity: "warning" | "error";
@@ -43,6 +43,22 @@ export type XriftRuntimeMaterialBinding = {
   slot: string;
   materialAssetId: string;
   sourceNodeIndex?: number;
+};
+
+/** Unlit plate drawn behind a Text component. */
+export type XriftRuntimeTextBackground = {
+  mode: "none" | "color" | "texture";
+  color: string;
+  opacity: number;
+  textureAssetId?: string;
+  paddingX: number;
+  paddingY: number;
+  /** `text` fits the plate to the rendered block; `fixed` uses width/height. */
+  fit: "text" | "fixed";
+  width: number;
+  height: number;
+  offset: number;
+  doubleSided: boolean;
 };
 
 export type XriftRuntimeComponent =
@@ -103,6 +119,14 @@ export type XriftRuntimeComponent =
       anchorY: "top" | "middle" | "bottom";
       outlineWidth: number;
       outlineColor: string;
+      /** Font catalog id. Absent keeps the automatically resolved Noto face. */
+      fontId?: string;
+      fontWeight?: number;
+      textAlign?: "left" | "center" | "right" | "justify";
+      /** Multiple of `fontSize`. Absent uses the font's own metrics. */
+      lineHeight?: number;
+      letterSpacing?: number;
+      background?: XriftRuntimeTextBackground;
     }
   | {
       id: string;

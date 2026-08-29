@@ -416,6 +416,63 @@ test("ビジュアルワールドを編集・Playし、公開確認で送信前�
   ).toBeDisabled();
 });
 
+test("ビジュアル編集でテキスト看板を置き、書体と背景を設定できる", async ({
+  page,
+}) => {
+  await openProjectLibrary(page);
+  await page.getByRole("button", { name: /新規プロジェクト/ }).click();
+  await page
+    .getByRole("button", { name: /ワールドをビジュアルで作る/ })
+    .click();
+  await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
+  await page.getByLabel("プロジェクト名").fill("release-text-flow");
+  await page.getByRole("button", { name: "作成して開く" }).click();
+
+  await page.getByRole("button", { name: "追加", exact: true }).click();
+  // Searched rather than navigated: the entry has to be findable by name from
+  // the same box that finds every other creation.
+  await page.getByPlaceholder("Component・Entityを検索…").fill("Text Panel");
+  await page.getByRole("button", { name: /Text Panel/ }).first().click();
+  await expect(page.getByText("Componentを追加しました")).toBeVisible();
+  // The Assets pane owns the Inspector until an Entity is picked again.
+  await page
+    .getByRole("tree", { name: "SceneのEntity階層" })
+    .getByText("Environment", { exact: true })
+    .click();
+
+  // The preset has to arrive usable: a plate behind the words and a Japanese
+  // face already chosen, not a bare Text the author has to assemble.
+  const inspector = page.getByRole("textbox", { name: "Content" });
+  await expect(inspector).toHaveValue("見出し");
+  await expect(page.getByRole("combobox", { name: "Font", exact: true })).toHaveValue(
+    "noto-sans-jp",
+  );
+  await expect(page.getByRole("combobox", { name: "Background", exact: true })).toHaveValue("color");
+  await expect(page.getByRole("combobox", { name: "板のサイズ" })).toHaveValue("text");
+
+  await inspector.fill("常設展 第1室");
+  await page.getByRole("combobox", { name: "Font", exact: true }).selectOption("zen-old-mincho");
+  await expect(page.getByRole("combobox", { name: "Font", exact: true })).toHaveValue(
+    "zen-old-mincho",
+  );
+
+  // Switching to an image background must ask for a Texture rather than
+  // silently drawing an empty plate.
+  await page.getByRole("combobox", { name: "Background", exact: true }).selectOption("texture");
+  await expect(
+    page.getByText("Assetsのインポートから画像を追加すると、背景に選べます。"),
+  ).toBeVisible();
+
+  await page.getByRole("combobox", { name: "Background", exact: true }).selectOption("color");
+  await page.getByRole("combobox", { name: "板のサイズ" }).selectOption("fixed");
+  await expect(page.getByRole("spinbutton", { name: "幅" })).toBeVisible();
+  await expect(page.getByRole("spinbutton", { name: "高さ" })).toBeVisible();
+
+  await expect(page.locator('header [role="status"]').first()).toContainText(
+    "保存済み",
+  );
+});
+
 test("ビジュアル編集で地形を作成・整形できる", async ({ page }) => {
   await openProjectLibrary(page);
   await page.getByRole("button", { name: /新規プロジェクト/ }).click();

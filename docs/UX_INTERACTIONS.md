@@ -107,6 +107,7 @@ F-06 アイテム検査
 | MI-86 | Interactivity Asset Editorでノードを置く、レシピを選ぶ、またはgraphを公開する | Playのruntime adapterが実行しないoperationは、ノードカード右上に「Play未対応」、inlineの定数のときだけ動くoperationには「定数のみ」を出す。「よくある動き」の一覧でも、実行できないレシピに同じ「Play未対応」と「置いて保存はできますが、Play と公開先ではまだ動きません」を添える。対象nodeのpathと理由はDiagnosticsへ、schema検証の結果と同じ一覧に並べる。 | 未対応でも配置、保存、公開は妨げない。canonical JSONはそのまま保存し、公開側のcompile diagnosticsにも同じ文言を`interactivity-operation-not-executed`として出し、Editorと公開先で表示を食い違わせない。未実装のoperationはflow出力も出さないため、その先のnodeは実行されたように見せない。 |
 | MI-87 | Terrain Inspectorの「草」で層を選び、色と大きさを調整する | 選択中の層だけに根元の色、穂先の色、色のばらつき、高さの倍率、葉の幅の倍率、空の明るさを開く。各値は種類の既定から始まり、動かした項目だけが層の上書きになる。上書きを持つ層は一覧に「調整済み」を出し、「種類の既定に戻す」は上書きを持つ層でだけ押せる。空の明るさは、Sceneの光が届かない面を空からの照り返しでどれだけ起こすかであり、0にできることと0にしたときの結果を説明文に置く。 | 変更は密度や傾斜と同じ一件のScene更新として保存し、Scene View、Play、生成Worldは同じ解決済みの値で草を描く。上書きを全て戻した層はappearanceを持たないScene documentへ戻る。層の選択、ブラシの狙い先、Inspectorの位置は変えない。 |
 | MI-88 | Editorのpanel幅が狭くなり、Scene ViewまたはAssetsのheaderに操作が収まらなくなる | headerは常に一行を保ち、操作を折り返さず、他の操作の上へ重ねない。名前は先に短く切り、次にラベルだけをアイコンへ落とす。Scene Viewのカメラ投影方式・表示モード・診断・録画は一つの「表示」ポップオーバーへまとまり、Assetsの検索欄は縮み、外部から追加・インポートはアイコンだけになる。判定はwindow幅ではなくpanel自身の幅で行い、panelのdragによる幅変更にも同じように反応する。 | 収まらない操作を消さず、同じ要素のまま到達できる状態を残す。ラベルを隠した操作には読み上げ名と`title`を残す。Play / 停止と録画中の状態はまとめ先へ隠さず、ポップオーバーの見出しに現在の状態を出す。ポップオーバーは領域外のpointerとEscapeで閉じ、SceneDocument、selection、Undo履歴を変更しない。 |
+| MI-89 | Text ComponentでGoogle Fontsの書体を選び、文字の後ろに背景の板を付ける | 書体は「自動」と、日本語・欧文に分けた一覧から選ぶ。選んだ書体は初回だけ配布元から取得し、取得が終わるまで文字は組版せず、背景の板だけを先に置く。取得済みの書体は再取得せず、すぐ表示する。背景は「なし」「色」「画像」から選び、板の大きさは「文字に合わせる」を既定にして、余白だけで看板の形を決められるようにする。板と文字はライトの影響を受けず、部屋の明るさに関わらず同じ見え方になる。 | 取得できなかった書体は自動の書体で表示し、Inspectorにその可能性を文言で残す。板は文字の実測値から組み立てるため、Scene View、Play、公開先で同じ位置と大きさになる。範囲外の余白、不透明度、幅・高さはSceneDocument、selection、historyを変更しない。背景に画像を選んで未設定のままなら、色だけで表示することを同じInspectorに示す。 |
 
 ## 機能一覧
 
@@ -147,6 +148,8 @@ F-06 アイテム検査
 | F-33 | Wind Component | MI-03, MI-05, MI-09, MI-11, MI-13, MI-14, MI-15, MI-16, MI-81 | Entity InspectorまたはMCPからWind Componentを明示的に追加し、対象Entityと子MeshだけへScene Settingsのグローバル風設定を適用する。Editor Preview、Play、生成World、Runtime manifestは同じComponentとScene値を使い、名前・Mesh分類・言語に依存した対象推測を行わない。 |
 | F-34 | Skybox Shader（手続き的な空） | MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-82, MI-83 | 画像Skyboxではなく、Custom Shader Materialとして昼・夕暮れ・朝焼け・夜空・オーロラ・星雲の空を追加できる。星の数、太陽と月の位置、月の満ち欠け、雲、地平線の遠景をuniformで調整でき、レイマーチする厚みのある雲も選べる。外部リソース集での調整とInspectorでの再調整が同じMaterialを指し、Scene View、Play、生成Worldが同じGLSLを描く。Materialが欠落した場合はグラデーションへ戻し、警告診断を残す。重いpresetはstep数をvariant defineとして残し、下げられる状態にする。 |
 | F-35 | Visual QA診断と短時間録画 | MI-03, MI-05, MI-14, MI-26, MI-80 | Scene ViewとPlay Windowで実rendererのFPS、frame time、draw calls、triangles、mesh可視数、camera Farを確認でき、最大15秒のWebMを保存して問題の発生前後を再現できる。診断や録画はSceneDocument、AssetManifest、Undo履歴を変更せず、停止・保存失敗・WebM非対応から同じScene Viewへ戻れる。 |
+| F-36 | Audio Asset試聴 | MI-03, MI-05, MI-09, MI-15, MI-20 | Audio AssetをAssetsから選ぶだけで試聴でき、Audio Sourceの作成やSceneDocumentを変更しない。 |
+| F-37 | Text Component（書体・背景） | MI-05, MI-09, MI-81, MI-89 | Text、Text Panel（看板）、Text Caption（作品キャプション）を同じComponent Registryから追加し、Google Fontsの日本語・欧文書体、色、太さ、揃え、行間と、色または画像の背景板をInspectorで設定できる。板は文字の実測値に合わせて組み立て、Scene View、Play、生成Classic source、公開Worldが同じ描画経路で同じ見た目になる。取得できない書体は自動の書体へ、出力できない背景画像は色だけの板へ落とし、文字は必ず表示する。 |
 
 ## F-01 CLI更新の状態設計
 
@@ -1350,3 +1353,35 @@ F-06 アイテム検査
 ### 戻り先
 
 - 試聴の終了後も同じAudio Asset Inspectorに留まり、Audio Sourceへの配置は既存の配置操作から続けられる。
+
+## F-37 Text Component（書体・背景）の状態設計
+
+参照: MI-05, MI-09, MI-81, MI-89
+
+### 操作前
+
+- Create、Hierarchy右クリック、InspectorのAdd ComponentのRenderingに「Text」「Text Panel (看板)」「Text Caption (作品キャプション)」を並べる。三つは同じText Componentで、初期の書体、揃え、背景の板だけが異なる。看板とキャプションは追加した時点で板と書体が入っており、美術館の解説や壁のラベルをそのまま置ける。
+- Inspectorは文字（内容、書体、太さ、色、大きさ、折り返し幅、揃え、行間、字間、基準点、縁取り）と背景（なし・色・画像、色味、不透明度、板の大きさ、余白または幅高さ、文字との奥行き、裏からの見え方）を一つのカードに順に並べる。
+- 書体は「自動」を既定にする。自動は文字に含まれる文字種から選ぶため、日本語と欧文が混ざっていても設定なしで表示できる。
+
+### 処理中
+
+- 書体を選ぶと、その書体のファイルを初回だけ配布元から取得し、取得が終わってから一度だけ組版する。取得の間は文字を描かず、背景の板だけを先に置く。取得済みの書体はキャッシュから即座に使う。自動の書体で先に組んでから差し替えないのは、その組版が文字種ごとの代替フォント取得を伴い、代替フォントの配布元へ到達できない環境では以後の組版ごと止まってしまうため。
+- 背景の画像はAssetsのTexture Assetから選ぶ。Edit中はプロジェクトの画像をそのまま読み、Scene ViewとPlayで同じ板を描く。
+- 板の大きさが「文字に合わせる」のときは、組版が終わるたびに実測した文字の範囲へ余白を足して板を組み直す。実測が終わるまでは板を出さないので、途中の大きさで一瞬ちらつかない。
+
+### 成功時
+
+- Scene View、Play、生成したClassic source、公開したWorldは同じText Componentの値から同じ描画経路で文字と板を描く。Studioが独自に別の見た目を作ることはない。
+- 書体は`fontId`だけをドキュメントへ保存し、ファイルのURLはカタログが一箇所で決める。家族が持たない太さを選んだ場合は、実際に配布されている太さへ丸めて保存する。
+- 背景に選んだTexture Assetは公開時の同梱対象になり、Runtime manifestにも参照が残る。
+
+### 失敗時
+
+- 書体を取得できなかった場合は自動の書体で表示を続ける。文字が消えることはなく、Inspectorに取得できない可能性を文言で残す。
+- 背景を「画像」にしたまま画像が未設定、または参照先が公開できないTextureのときは、compileで警告を出して色だけの板として出力する。文字は必ず出力する。
+- カタログにない書体ID、範囲外の太さ・行間・不透明度・余白・幅高さはSceneDocument、selection、historyを変更しない。MCPからの`update_component`も同じ境界で拒否し、背景の画像はTexture Assetを指しているときだけ受け付ける。
+
+### 戻り先
+
+- 変更は一件のScene更新として保存し、Undoで直前の書体・背景へ戻る。追加や編集の後も同じEntity Inspectorに留まり、Preview / Compile / Playへ進める。

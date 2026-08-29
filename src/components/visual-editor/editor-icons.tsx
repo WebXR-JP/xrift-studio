@@ -61,6 +61,7 @@ import {
   Pointer,
   SquarePlay,
   TextCursorInput,
+  Type,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -129,6 +130,7 @@ export const EDITOR_ICONS = {
   videoSphere: CirclePlay,
   screenShare: ScreenShare,
   textInput: TextCursorInput,
+  text: Type,
   billboardY: Rotate3D,
   warning: TriangleAlert,
   diagnostics: Activity,
@@ -173,6 +175,8 @@ export function getEditorComponentIcon(
       return EDITOR_ICONS.audio;
     case "script":
       return EDITOR_ICONS.script;
+    case "text":
+      return EDITOR_ICONS.text;
     default:
       return EDITOR_ICONS.component;
   }

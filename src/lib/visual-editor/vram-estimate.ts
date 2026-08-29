@@ -260,6 +260,12 @@ function collectComponentReferences(
     addReference(component.particleAssetId);
   } else if (component.type === "audio-source") {
     addReference(component.audioAssetId);
+  } else if (component.type === "text") {
+    // Only the plate's image counts: the SDF atlas troika builds for the
+    // glyphs is not an imported Asset and has no manifest entry to size.
+    if (component.background?.mode === "texture") {
+      addReference(component.background.textureAssetId);
+    }
   } else if (component.type === "xrift-component") {
     for (const assetId of component.assetReferences) addReference(assetId);
   }

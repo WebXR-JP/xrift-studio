@@ -19,6 +19,7 @@ export type AssetReferenceKind =
   | "scene-particle"
   | "scene-audio"
   | "scene-prefab"
+  | "scene-text"
   | "scene-xrift"
   | "material-texture"
   | "model-material"
@@ -29,6 +30,7 @@ export type AssetReferenceKind =
   | "prefab-particle"
   | "prefab-audio"
   | "prefab-prefab"
+  | "prefab-text"
   | "prefab-xrift";
 
 /** A user-facing location which must be unlinked before an Asset can be deleted. */
@@ -85,6 +87,7 @@ const ASSET_REFERENCE_LABELS: Record<AssetReferenceKind, string> = {
   "scene-particle": "Particle emitter",
   "scene-audio": "Audio Source",
   "scene-prefab": "Prefab instance",
+  "scene-text": "Text background",
   "scene-xrift": "XRift component",
   "material-texture": "Material texture slot",
   "model-material": "Model default material slot",
@@ -95,6 +98,7 @@ const ASSET_REFERENCE_LABELS: Record<AssetReferenceKind, string> = {
   "prefab-particle": "Prefab particle emitter",
   "prefab-audio": "Prefab Audio Source",
   "prefab-prefab": "Nested Prefab instance",
+  "prefab-text": "Prefab Text background",
   "prefab-xrift": "Prefab XRift component",
 };
 
@@ -363,8 +367,16 @@ function collectComponentReferences(
   scope: "scene" | "prefab",
   add: (reference: AssetReferenceLocation) => void,
 ): void {
-  const kind = (suffix: "geometry" | "material" | "particle" | "audio" | "prefab" | "xrift") =>
-    `${scope}-${suffix}` as AssetReferenceKind;
+  const kind = (
+    suffix:
+      | "geometry"
+      | "material"
+      | "particle"
+      | "audio"
+      | "prefab"
+      | "text"
+      | "xrift",
+  ) => `${scope}-${suffix}` as AssetReferenceKind;
   if (component.type === "mesh") {
     const geometryAssetId =
       component.geometry?.kind === "asset"
@@ -408,6 +420,17 @@ function collectComponentReferences(
       ownerId: entity.id,
       ownerName: entity.name,
       detail: "Audio Source",
+    });
+  } else if (
+    component.type === "text" &&
+    component.background?.mode === "texture" &&
+    component.background.textureAssetId === assetId
+  ) {
+    add({
+      kind: kind("text"),
+      ownerId: entity.id,
+      ownerName: entity.name,
+      detail: "Text background",
     });
   } else if (
     component.type === "prefab-instance" &&

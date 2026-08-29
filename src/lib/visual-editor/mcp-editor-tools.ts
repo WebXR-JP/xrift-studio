@@ -1,3 +1,4 @@
+import { isPlainObjectRecord } from "../json-guards";
 import { instantiateSceneAsset, isScenePlaceableAsset } from "./asset-placement";
 import {
   analyzeComponentCode,
@@ -2250,12 +2251,36 @@ function updateComponent(
         componentId,
       );
       break;
-    case "text":
+    case "text": {
       assertPatchKeys(
         patch,
         TEXT_PATCH_KEYS,
         component.type,
       );
+      const background = patch.background;
+      if (background !== undefined) {
+        if (!isPlainObjectRecord(background)) {
+          invalidArgument("patch.background", "object");
+        }
+        const textureAssetId = background.textureAssetId;
+        if (textureAssetId !== undefined) {
+          if (typeof textureAssetId !== "string") {
+            invalidArgument("patch.background.textureAssetId", "string");
+          }
+          // Resolved here rather than in the document layer, which has no
+          // Asset manifest: an id pointing at a Model would render a blank
+          // plate with no explanation.
+          if (
+            textureAssetId &&
+            context.bundle.assets.assets[textureAssetId]?.kind !== "texture"
+          ) {
+            invalidArgument(
+              "patch.background.textureAssetId",
+              "existing texture asset id",
+            );
+          }
+        }
+      }
       scene = updateTextComponent(
         context.bundle.scene,
         entityId,
@@ -2263,6 +2288,7 @@ function updateComponent(
         componentId,
       );
       break;
+    }
     case "audio-source": {
       assertPatchKeys(
         patch,
@@ -5314,6 +5340,12 @@ const TEXT_PATCH_KEYS = patchKeysOf<TextPatch>()([
   "anchorY",
   "outlineWidth",
   "outlineColor",
+  "fontId",
+  "fontWeight",
+  "textAlign",
+  "lineHeight",
+  "letterSpacing",
+  "background",
 ]);
 
 const AUDIO_SOURCE_PATCH_KEYS = patchKeysOf<AudioSourcePatch>()([

@@ -22,12 +22,14 @@ import {
   createRigidBodyComponent,
   createScriptComponent,
   createTextComponent,
+  textComponentPresetInput,
   createTransformComponent,
   createVegetationWindComponent,
   fitBoxColliderToMesh,
   getMesh,
   type ColliderComponent,
   type LightComponent,
+  type TextComponentPreset,
   type RegisteredSceneComponent,
   type SceneComponent,
   type SceneDocument,
@@ -70,6 +72,12 @@ export type EditorComponentDefinition = {
     | "official-xrift";
   schemaId?: string;
   lightType?: LightComponent["lightType"];
+  /**
+   * Ready-made Text setup for this entry. Museum-style signage needs a plate
+   * behind the words, and asking every author to assemble one from a bare Text
+   * is the difference between a usable entry and a starting point.
+   */
+  textPreset?: TextComponentPreset;
   /**
    * Distance falloff for an Audio Source entry. A global entry creates the
    * same component with it off, the way each Light entry creates one Light
@@ -142,6 +150,17 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
     { audioSpatial: false },
   ),
   definition("core.text", "Text", "rendering", true, "text"),
+  definition("core.text.panel", "Text Panel (看板)", "rendering", true, "text", {
+    textPreset: "panel",
+  }),
+  definition(
+    "core.text.caption",
+    "Text Caption (作品キャプション)",
+    "rendering",
+    true,
+    "text",
+    { textPreset: "caption" },
+  ),
   definition("scripting.script", "Script", "scripting", true, "script"),
   ...XRIFT_COMPONENT_REGISTRY.map(
     (component): EditorComponentDefinition => ({
@@ -659,7 +678,10 @@ function definition(
   category: EditorComponentCategory,
   allowMultiple: boolean,
   componentType: EditorComponentDefinition["componentType"],
-  options: Pick<EditorComponentDefinition, "lightType" | "audioSpatial"> = {},
+  options: Pick<
+    EditorComponentDefinition,
+    "lightType" | "audioSpatial" | "textPreset"
+  > = {},
 ): EditorComponentDefinition {
   return {
     id,
@@ -795,7 +817,7 @@ function createRegisteredComponent(
     );
   }
   if (definition.componentType === "text") {
-    return createTextComponent(id);
+    return createTextComponent(id, textComponentPresetInput(definition.textPreset));
   }
   if (definition.componentType === "script") {
     // Prefer the Script selected in Assets so Create -> Add Component always

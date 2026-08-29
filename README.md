@@ -23,6 +23,7 @@ Node.js や `@xrift/cli` の導入、コードまたはビジュアルエディ�
 | Unity素材を引き継ぐ | 検証中 | 検証中 | UnityPackage、`.unity`、`.prefab`を解析し、対応するScene、Prefab、Model、Textureへ変換する。 |
 | アバターの見た目を保存する | 対応 | 対応 | ボーンのXYZ回転とshape keyの値をEntityごとに保存し、Scene ViewとXRift向け生成コードへ反映する。timeline animationは今後対応する。 |
 | アセットと表現を作る | 対応 | 対応 | Texture、Material、Particle、PrefabをAssetsで管理し、Inspectorから編集する。PNG、JPG、WebP、KTX2に対応する。 |
+| 文字を置く | 対応 | 対応 | Text、Text Panel（看板）、Text Caption（作品キャプション）をCreateから追加し、Google Fontsの日本語・欧文書体、色、太さ、揃えと、色または画像の背景板をInspectorで設定する。板は文字の実測値に合わせて組み立て、Scene View、Play、公開ワールドで同じ見た目になる。 |
 | 音を配置する | 対応 | 対応 | MP3をAudio Assetとして取り込み、Audio Sourceへ割り当てて保存・変換する。 |
 | 衝突判定を設定する | 対応 | 対応 | PrimitiveにはBox Collider、インポートModelにはMesh Colliderを初期設定し、Center／Half Extentsの編集と自動フィットを行う。 |
 | 地形をつくる | 対応 | 対応 | Createメニューから高さサンプルTerrainを追加し、盛り上げる、掘る、高さを設定、滑らかにする、穴を開けるブラシで編集する。Scene View、static Trimesh Collider、生成コードで同じ三角形を使う。 |
