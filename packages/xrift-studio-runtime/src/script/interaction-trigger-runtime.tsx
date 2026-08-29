@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { useThree } from "@react-three/fiber";
 import { Color, LinearSRGBColorSpace, type Object3D } from "three";
 import {
@@ -135,6 +135,158 @@ function linearColor(value: readonly [number, number, number]): Color {
   return new Color().setRGB(value[0], value[1], value[2], LinearSRGBColorSpace);
 }
 
+export type XriftInteractionApplier = {
+  apply(action: XriftInteractionAction): void;
+  /** Releases every override this trigger owns, as Play Stop and unmount do. */
+  dispose(): void;
+};
+
+/**
+ * The write half of a trigger, without React.
+ *
+ * Kept separate from the component so the part that actually changes a world
+ * can be exercised against a plain scene graph: an override that survives Stop,
+ * or a toggle that reads the wrong current value, is not something a rendered
+ * preview makes obvious.
+ */
+export function createXriftInteractionApplier({
+  root,
+  componentId,
+  order,
+}: {
+  root: Object3D;
+  componentId: string;
+  order: number;
+}): XriftInteractionApplier {
+  const owner = {};
+  const lightOverrides = new Map<
+    XriftLightRuntimeBridge,
+    XriftLightRuntimeOverrides
+  >();
+  const audioOverrides = new Map<
+    XriftAudioSourceRuntimeBridge,
+    XriftAudioSourceRuntimeOverrides
+  >();
+  let commandRevision = 0;
+
+  const applyEntity = (target: Object3D, action: XriftInteractionAction) => {
+    // Visibility only: physics bodies stay as authored, which is the same
+    // meaning `enabled` has in the Editor viewport.
+    target.visible =
+      action.mode === "toggle"
+        ? !target.visible
+        : action.value?.kind === "bool"
+          ? action.value.value
+          : target.visible;
+  };
+
+  const applyLight = (target: Object3D, action: XriftInteractionAction) => {
+    forEachOwnedBridge(
+      target,
+      action.entityId,
+      XRIFT_LIGHT_RUNTIME_USER_DATA_KEY,
+      isLightBridge,
+      (bridge) => {
+        const state = bridge.read();
+        if (state.componentId !== action.componentId) return;
+        const next: XriftLightRuntimeOverrides = {
+          ...(lightOverrides.get(bridge) ?? {}),
+        };
+        if (action.property === "enabled") {
+          next.enabled =
+            action.mode === "toggle"
+              ? !state.enabled
+              : action.value?.kind === "bool"
+                ? action.value.value
+                : state.enabled;
+        } else if (
+          action.property === "intensity" &&
+          action.value?.kind === "float"
+        ) {
+          next.intensity = action.value.value;
+        } else if (action.property === "color" && action.value?.kind === "color") {
+          next.color = linearColor(action.value.value);
+        } else {
+          return;
+        }
+        lightOverrides.set(bridge, next);
+        bridge.setOwner(owner, order, componentId, next);
+      },
+    );
+  };
+
+  const applyAudioSource = (target: Object3D, action: XriftInteractionAction) => {
+    forEachOwnedBridge(
+      target,
+      action.entityId,
+      XRIFT_AUDIO_SOURCE_RUNTIME_USER_DATA_KEY,
+      isAudioSourceBridge,
+      (bridge) => {
+        const state = bridge.read();
+        if (state.componentId !== action.componentId) return;
+        if (action.property === "playback") {
+          if (action.value?.kind !== "enum") return;
+          commandRevision += 1;
+          const type =
+            action.value.value === "pause"
+              ? "pause"
+              : action.value.value === "stop"
+                ? "stop"
+                : "play";
+          // The bridge resolves an autoplay refusal as false rather than
+          // rejecting; a trigger has nowhere to report it, so it is dropped.
+          void bridge.command(owner, order, componentId, {
+            type,
+            revision: commandRevision,
+          });
+          return;
+        }
+        const next: XriftAudioSourceRuntimeOverrides = {
+          ...(audioOverrides.get(bridge) ?? {}),
+        };
+        if (action.property === "volume" && action.value?.kind === "float") {
+          next.volume = action.value.value;
+        } else if (action.property === "loop") {
+          next.loop =
+            action.mode === "toggle"
+              ? !state.loop
+              : action.value?.kind === "bool"
+                ? action.value.value
+                : state.loop;
+        } else {
+          return;
+        }
+        audioOverrides.set(bridge, next);
+        bridge.setOwner(owner, order, componentId, next);
+      },
+    );
+  };
+
+  return {
+    apply(action) {
+      const target = findEntityObject(root, action.entityId);
+      if (!target) return;
+      if (action.target === "entity") {
+        applyEntity(target, action);
+        return;
+      }
+      if (action.target === "light") {
+        applyLight(target, action);
+        return;
+      }
+      applyAudioSource(target, action);
+    },
+    dispose() {
+      // Overrides are runtime-only, exactly like a Script's: leaving them
+      // applied after Stop would show values the document never had.
+      for (const bridge of lightOverrides.keys()) bridge.removeOwner(owner);
+      for (const bridge of audioOverrides.keys()) bridge.removeOwner(owner);
+      lightOverrides.clear();
+      audioOverrides.clear();
+    },
+  };
+}
+
 export type XriftInteractionTriggerRuntimeProps = {
   /** Entity the graph is attached to; the one whose interaction starts it. */
   entityId: string;
@@ -157,135 +309,21 @@ export function XriftInteractionTriggerRuntime({
     () => collectXriftInteractionPrograms(graph),
     [graph],
   );
-  const ownerRef = useRef<object>({});
-  const lightOverridesRef = useRef(
-    new Map<XriftLightRuntimeBridge, XriftLightRuntimeOverrides>(),
-  );
-  const audioOverridesRef = useRef(
-    new Map<XriftAudioSourceRuntimeBridge, XriftAudioSourceRuntimeOverrides>(),
-  );
-  const commandRevisionRef = useRef(0);
-
-  const applyAction = useCallback(
-    (action: XriftInteractionAction) => {
-      const target = findEntityObject(scene, action.entityId);
-      if (!target) return;
-      const owner = ownerRef.current;
-      if (action.target === "entity") {
-        // Visibility only: physics bodies stay as authored, which is the same
-        // meaning `enabled` has in the Editor viewport.
-        target.visible =
-          action.mode === "toggle"
-            ? !target.visible
-            : action.value?.kind === "bool"
-              ? action.value.value
-              : target.visible;
-        return;
-      }
-      if (action.target === "light") {
-        forEachOwnedBridge(
-          target,
-          action.entityId,
-          XRIFT_LIGHT_RUNTIME_USER_DATA_KEY,
-          isLightBridge,
-          (bridge) => {
-            const state = bridge.read();
-            if (state.componentId !== action.componentId) return;
-            const current = lightOverridesRef.current.get(bridge) ?? {};
-            const next: XriftLightRuntimeOverrides = { ...current };
-            if (action.property === "enabled") {
-              next.enabled =
-                action.mode === "toggle"
-                  ? !state.enabled
-                  : action.value?.kind === "bool"
-                    ? action.value.value
-                    : state.enabled;
-            } else if (
-              action.property === "intensity" &&
-              action.value?.kind === "float"
-            ) {
-              next.intensity = action.value.value;
-            } else if (
-              action.property === "color" &&
-              action.value?.kind === "color"
-            ) {
-              next.color = linearColor(action.value.value);
-            } else {
-              return;
-            }
-            lightOverridesRef.current.set(bridge, next);
-            bridge.setOwner(owner, order, componentId, next);
-          },
-        );
-        return;
-      }
-      forEachOwnedBridge(
-        target,
-        action.entityId,
-        XRIFT_AUDIO_SOURCE_RUNTIME_USER_DATA_KEY,
-        isAudioSourceBridge,
-        (bridge) => {
-          const state = bridge.read();
-          if (state.componentId !== action.componentId) return;
-          if (action.property === "playback") {
-            if (action.value?.kind !== "enum") return;
-            commandRevisionRef.current += 1;
-            const revision = commandRevisionRef.current;
-            const type =
-              action.value.value === "pause"
-                ? "pause"
-                : action.value.value === "stop"
-                  ? "stop"
-                  : "play";
-            // The bridge resolves an autoplay refusal as false rather than
-            // rejecting; a trigger has nowhere to report it, so it is dropped.
-            void bridge.command(owner, order, componentId, { type, revision });
-            return;
-          }
-          const current = audioOverridesRef.current.get(bridge) ?? {};
-          const next: XriftAudioSourceRuntimeOverrides = { ...current };
-          if (action.property === "volume" && action.value?.kind === "float") {
-            next.volume = action.value.value;
-          } else if (action.property === "loop") {
-            next.loop =
-              action.mode === "toggle"
-                ? !state.loop
-                : action.value?.kind === "bool"
-                  ? action.value.value
-                  : state.loop;
-          } else {
-            return;
-          }
-          audioOverridesRef.current.set(bridge, next);
-          bridge.setOwner(owner, order, componentId, next);
-        },
-      );
-    },
+  const applier = useMemo(
+    () => createXriftInteractionApplier({ root: scene, componentId, order }),
     [componentId, order, scene],
   );
+
+  useEffect(() => () => applier.dispose(), [applier]);
 
   useEffect(() => {
     if (programs.length === 0) return;
     return subscribeXriftInteraction(entityId, () => {
       for (const program of programs) {
-        for (const action of program.actions) applyAction(action);
+        for (const action of program.actions) applier.apply(action);
       }
     });
-  }, [applyAction, entityId, programs]);
-
-  useEffect(() => {
-    const lights = lightOverridesRef.current;
-    const audios = audioOverridesRef.current;
-    const owner = ownerRef.current;
-    return () => {
-      // Overrides are runtime-only, exactly like a Script's: leaving them
-      // applied after Stop would show authored values the document never had.
-      for (const bridge of lights.keys()) bridge.removeOwner(owner);
-      for (const bridge of audios.keys()) bridge.removeOwner(owner);
-      lights.clear();
-      audios.clear();
-    };
-  }, []);
+  }, [applier, entityId, programs]);
 
   return null;
 }
