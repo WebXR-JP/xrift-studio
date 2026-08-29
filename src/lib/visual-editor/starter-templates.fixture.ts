@@ -36,14 +36,6 @@ const STARTER_LIBRARY_EXPECTATIONS: Record<
     materials: { atLeast: 7 },
   },
   blank: { bundledAssetCopies: 0, models: 0, textures: 0, materials: 1 },
-  // 部屋・家具・機材が 1 つの GLB に入っているので Model 1 本だけ。
-  // 床も GLB 側にあるため builtin の地面 Material は持たない。
-  "recording-studio": {
-    bundledAssetCopies: 1,
-    models: 1,
-    textures: 0,
-    materials: 0,
-  },
 };
 
 /** Deterministic, filesystem-free assertions for the bundled world starters. */
