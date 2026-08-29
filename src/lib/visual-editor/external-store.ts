@@ -296,7 +296,7 @@ export function applySkyShaderCatalogInstall(
   entry: SkyShaderCatalogEntry,
   parameterValues: Readonly<Record<string, number | string>> = {},
 ): AppliedOpenBrushCatalogInstall {
-  const folder = externalFolder(manifest, "空 Shader");
+  const folder = externalFolder(manifest, "Skybox Shader");
   const folders = { ...(manifest.folders ?? {}), [folder.id]: folder };
   const materialId = `external-sky-shader-${safeId(entry.id)}-material`;
   const existing = manifest.assets[materialId];
@@ -306,7 +306,7 @@ export function applySkyShaderCatalogInstall(
     name: `空 · ${entry.label}`,
     folderId: folder.id,
   });
-  if (!material) throw new Error("空Shader Material Assetを作成できませんでした");
+  if (!material) throw new Error("Skybox Shader Material Assetを作成できませんでした");
   const order = alreadyInstalled
     ? (existing.order ?? nextOrder({ ...manifest, folders }, folder.id))
     : nextOrder({ ...manifest, folders }, folder.id);
@@ -318,7 +318,7 @@ export function applySkyShaderCatalogInstall(
       shader: applySkyShaderParameters(entry, parameterValues),
       attribution: {
         providerId: "xrift-sky-shaders",
-        providerName: "XRift公式 空Shader",
+        providerName: "XRift公式 Skybox Shader",
         externalId: entry.id,
         assetUrl: SKY_SHADER_CATALOG_SOURCE_URL,
         licenseName: "MIT",

@@ -109,14 +109,14 @@ export function SkyShaderStore({
             : `「${selected.label}」をMaterialとして追加しました。`,
           result.appliedToSky
             ? "Sceneの空に設定済みです。星の数などはInspectorのUniform valuesで調整できます。"
-            : "Scene設定の「空Shader」から割り当てると空になります。",
+            : "Scene設定の「Skybox Shader」から割り当てると空になります。",
         ].join(""),
       );
     } catch (reason) {
       setError(
         reason instanceof Error && reason.message.trim()
           ? reason.message
-          : "空Shaderを追加できませんでした",
+          : "Skybox Shaderを追加できませんでした",
       );
     } finally {
       setAdding(false);
@@ -127,12 +127,12 @@ export function SkyShaderStore({
     <>
       <section
         className="flex min-w-0 flex-1 flex-col border-r border-slate-200"
-        aria-label="空Shader一覧"
+        aria-label="Skybox Shader一覧"
       >
         <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2.5">
           <div className="mb-2 flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-xs font-semibold text-slate-900">空 Shader</h3>
+              <h3 className="text-xs font-semibold text-slate-900">Skybox Shader</h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
                 画像ではなくGLSLで空を描くMaterialです。星の数などをuniformで調整できます
               </p>
@@ -147,7 +147,7 @@ export function SkyShaderStore({
                 size={14}
                 className="pointer-events-none absolute left-2.5 top-2 text-slate-400"
               />
-              <span className="sr-only">空Shaderを検索</span>
+              <span className="sr-only">Skybox Shaderを検索</span>
               <input
                 value={query}
                 onChange={(event) => setQuery(event.currentTarget.value)}
@@ -162,7 +162,7 @@ export function SkyShaderStore({
                   event.currentTarget.value as "all" | SkyShaderCatalogCategory,
                 )
               }
-              aria-label="空Shaderのカテゴリ"
+              aria-label="Skybox Shaderのカテゴリ"
               className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
             >
               <option value="all">すべて</option>
@@ -178,7 +178,7 @@ export function SkyShaderStore({
           {visible.length === 0 ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center text-xs text-slate-500">
               <Search size={22} />
-              <p>条件に合う空Shaderがありません</p>
+              <p>条件に合うSkybox Shaderがありません</p>
             </div>
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
@@ -221,7 +221,7 @@ export function SkyShaderStore({
 
       <aside
         className="scrollbar-thin w-[350px] shrink-0 overflow-auto bg-white p-4"
-        aria-label="選択した空Shaderの詳細"
+        aria-label="選択したSkybox Shaderの詳細"
       >
         {selected && previewShader ? (
           <div className="space-y-4">

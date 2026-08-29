@@ -31,7 +31,7 @@ Visual project はコードを隠すだけの画面ではなく、Scene、Asset�
 | Lighting | 利用可能 | Directional / Point / Spot / Area の Light を配置し、色、強度、影、距離を設定する。公式シェーダーも Scene の Light で陰影が付く。Light が無い Scene も既定光で見える。 |
 | 色味の調整 | 利用可能 | 露出、コントラスト、彩度などを一つの compositor で調整する。既定はオフ。 |
 | Terrain authoring | 利用可能 | Create メニューから高さサンプル Terrain を追加し、Inspector または MCP の Raise / Lower / Flatten / Smooth / Hole ブラシで編集する。草を層で塗り、Scene の Wind で揺らす。static Trimesh Collider、Play、compile、runtime manifest へ同じ Terrain を渡す。 |
-| 空と水 | 利用可能 | GLSL で描く空 Shader と水面 Material を公式カタログから追加し、Uniform values で調整する。どちらも Scene の Wind と Light を共通入力にする。 |
+| 空と水 | 利用可能 | GLSL で描く Skybox Shader と水面 Material を公式カタログから追加し、Uniform values で調整する。どちらも Scene の Wind と Light を共通入力にする。 |
 | 外部リソース | 利用可能 | Poly Haven と ambientCG の CC0 素材、XRift 公式の Shader / Terrain / 照明 / Component をアプリ内から追加する。作者とライセンスは Asset と生成物へ残す。 |
 | 表現と再利用 | 利用可能 | Primitive、Material、Particle、Prefab、Collider、XRift Component を作成・配置する。 |
 | Interactivity | 利用可能 | KHR_interactivity 準拠のグラフをノードエディターで編集し、開始時・毎フレーム・イベントをきっかけに色や再生を動かす。canonical JSON と validation を UI と MCP で共有する。 |
@@ -55,7 +55,7 @@ Visual project はコードを隠すだけの画面ではなく、Scene、Asset�
 - Model Animation は clip 選択、Autoplay、Loop、再生速度に対応する。開始タイミングの指定、複数 clip の同時再生、clip 間の遷移はない。
 - Interactivity のきっかけは開始時、毎フレーム、イベント受信の三つである。クリックや視線に反応するトリガーはない。利用者の操作に応じた動きは XRift Component または Scripting と組み合わせる。
 - Interactivity の runtime adapter は operation 単位で実装する。未対応 operation は canonical JSON に保持したまま no-op になる。
-- 空 Shader は Scene View には描画しない。編集中の背景は単色のままで、見え方は Play で確認する。
+- Skybox Shader は Scene View には描画しない。編集中の背景は単色のままで、見え方は Play で確認する。
 - Unity 固有 Component、Shader、Script、Animation を完全には移植しない。対応内容と未対応内容を import 前に示す。
 - Open Brush は brush ごとの描画差を継続検証中で、通常の Material override とは扱いを分ける。
 - Script の Play はアプリと同一 realm で動く。module scope の遮蔽は緩和であり、完全な sandbox ではない。

@@ -5362,7 +5362,7 @@ export function VisualEditorPrototype({
         setSaveStatus("dirty");
         setNotice(
           applyToSky
-            ? `「${entry.label}」を空Shaderに設定しました。星の数などはInspectorで調整できます`
+            ? `「${entry.label}」をSkybox Shaderに設定しました。星の数などはInspectorで調整できます`
             : `「${entry.label}」をMaterialとして追加しました。Assetsで選択されています`,
         );
         const nextBundle = touchProject({
@@ -5912,13 +5912,13 @@ export function VisualEditorPrototype({
   const handleAddSceneRecipe = useCallback(
     async (recipe: SceneRecipe): Promise<SceneRecipeInstallResult> => {
       if (editorMode !== "edit") {
-        throw new Error("Playを停止してからセットを追加してください");
+        throw new Error("Playを停止してから3Dセットを追加してください");
       }
       if (importBusy) {
         throw new Error("アセットのインポート完了後に追加してください");
       }
       if (!projectPath) {
-        throw new Error("プロジェクトを保存してからセットを追加してください");
+        throw new Error("プロジェクトを保存してから3Dセットを追加してください");
       }
 
       const count = bundle.scene.rootEntityIds.length;
@@ -5935,7 +5935,7 @@ export function VisualEditorPrototype({
         ],
       );
       if (!result) {
-        throw new Error("このセットを現在のプロジェクトへ配置できませんでした");
+        throw new Error("この3Dセットを現在のプロジェクトへ配置できませんでした");
       }
 
       // Subtree and its Particle Assets land as one history entry, so undoing

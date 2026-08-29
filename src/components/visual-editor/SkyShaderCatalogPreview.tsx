@@ -38,7 +38,7 @@ export function SkyShaderCatalogPreview({
         className={`flex flex-col items-center justify-center bg-slate-100 px-3 text-center ${className}`}
       >
         <span className="text-[11px] font-semibold text-slate-700">
-          空Shaderを表示できません
+          Skybox Shaderを表示できません
         </span>
         <span className="mt-1 text-[10px] leading-4 text-slate-500">
           {diagnostics[0]}
