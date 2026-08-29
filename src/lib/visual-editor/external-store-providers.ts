@@ -1,5 +1,20 @@
 import type { ExternalStoreAssetKind } from "../tauri";
 
+/**
+ * Sidebar sections for the external resource dialog. Providers are grouped by
+ * what the user is trying to add, not by where the data comes from — the
+ * badge and the detail pane carry license and origin.
+ */
+export const EXTERNAL_STORE_PROVIDER_GROUPS = [
+  { id: "material-sites", label: "素材サイト" },
+  { id: "sky-nature", label: "空と自然" },
+  { id: "light-decoration", label: "光と演出" },
+  { id: "world-features", label: "ワールド機能" },
+] as const;
+
+export type ExternalStoreProviderGroupId =
+  (typeof EXTERNAL_STORE_PROVIDER_GROUPS)[number]["id"];
+
 export type ExternalStoreProvider = {
   id: string;
   kind:
@@ -12,6 +27,7 @@ export type ExternalStoreProvider = {
     | "glow-material"
     | "particle-preset"
     | "scene-recipe";
+  group: ExternalStoreProviderGroupId;
   name: string;
   badge: string;
   summary: string;
@@ -26,9 +42,10 @@ export const EXTERNAL_STORE_PROVIDERS = [
   {
     id: "poly-haven",
     kind: "remote-assets",
+    group: "material-sites",
     name: "Poly Haven",
     badge: "CC0",
-    summary: "HDRI・マテリアル・モデルを探す",
+    summary: "空のHDRI・質感・小物モデルを探して追加",
     homepageUrl: "https://polyhaven.com",
     catalogKinds: ["hdri", "texture", "model"],
     installableKinds: ["hdri", "texture", "model"],
@@ -38,9 +55,10 @@ export const EXTERNAL_STORE_PROVIDERS = [
   {
     id: "ambient-cg",
     kind: "remote-assets",
+    group: "material-sites",
     name: "ambientCG",
     badge: "CC0",
-    summary: "HDRI・マテリアルを追加、モデルを探す",
+    summary: "床や壁の質感とHDRIを探して追加",
     homepageUrl: "https://ambientcg.com",
     catalogKinds: ["hdri", "texture", "model"],
     installableKinds: ["hdri", "texture"],
@@ -48,23 +66,12 @@ export const EXTERNAL_STORE_PROVIDERS = [
     attributionNote: "API提供元を明示し、アセットにはCC0情報を保存します。ModelはglTF対応後にインストールできます。",
   },
   {
-    id: "open-brush",
-    kind: "open-brush",
-    name: "Open Brush",
-    badge: "Official",
-    summary: "公式ブラシMaterialを追加",
-    homepageUrl: "https://openbrush.app",
-    catalogKinds: [],
-    installableKinds: [],
-    authorFallback: "Icosa Foundation contributors",
-    attributionNote: "検証済みのbrush GUIDとrenderer versionをMaterialへ保存します。",
-  },
-  {
     id: "xrift-sky-shaders",
     kind: "sky-shader",
+    group: "sky-nature",
     name: "空 Shader",
-    badge: "Official",
-    summary: "星空などの空Shaderを追加",
+    badge: "公式",
+    summary: "星空や夕焼けの空を追加",
     homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
     catalogKinds: [],
     installableKinds: [],
@@ -75,9 +82,10 @@ export const EXTERNAL_STORE_PROVIDERS = [
   {
     id: "xrift-water-shaders",
     kind: "water-shader",
+    group: "sky-nature",
     name: "Water Shader",
-    badge: "Official",
-    summary: "湖・海・セルルックの水を追加",
+    badge: "公式",
+    summary: "湖・海・セルルックの水面を追加",
     homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
     catalogKinds: [],
     installableKinds: [],
@@ -88,9 +96,10 @@ export const EXTERNAL_STORE_PROVIDERS = [
   {
     id: "xrift-terrain-presets",
     kind: "terrain-preset",
+    group: "sky-nature",
     name: "Terrain",
-    badge: "Official",
-    summary: "形と草が入った地形を追加",
+    badge: "公式",
+    summary: "起伏と草の入った地形を追加",
     homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
     catalogKinds: [],
     installableKinds: [],
@@ -101,8 +110,9 @@ export const EXTERNAL_STORE_PROVIDERS = [
   {
     id: "xrift-glow-materials",
     kind: "glow-material",
+    group: "light-decoration",
     name: "光る照明",
-    badge: "Official",
+    badge: "公式",
     summary: "Bloomで光る照明を追加",
     homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
     catalogKinds: [],
@@ -114,9 +124,10 @@ export const EXTERNAL_STORE_PROVIDERS = [
   {
     id: "xrift-particle-presets",
     kind: "particle-preset",
+    group: "light-decoration",
     name: "Particle",
-    badge: "Official",
-    summary: "炎・雪・桜などの粒を追加",
+    badge: "公式",
+    summary: "炎・雪・桜などのエフェクトを追加",
     homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
     catalogKinds: [],
     installableKinds: [],
@@ -127,9 +138,10 @@ export const EXTERNAL_STORE_PROVIDERS = [
   {
     id: "xrift-scene-recipes",
     kind: "scene-recipe",
+    group: "light-decoration",
     name: "セット",
-    badge: "Official",
-    summary: "焚き火などの組み立て済みを追加",
+    badge: "公式",
+    summary: "焚き火など組み立て済みの一式を追加",
     homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
     catalogKinds: [],
     installableKinds: [],
@@ -138,11 +150,25 @@ export const EXTERNAL_STORE_PROVIDERS = [
       "既存のPrimitive、Particle、Lightを組み合わせたEntityです。置いたあとは中身を1つずつ編集できます。",
   },
   {
+    id: "open-brush",
+    kind: "open-brush",
+    group: "light-decoration",
+    name: "Open Brush",
+    badge: "公式",
+    summary: "手描き風ブラシのMaterialを追加",
+    homepageUrl: "https://openbrush.app",
+    catalogKinds: [],
+    installableKinds: [],
+    authorFallback: "Icosa Foundation contributors",
+    attributionNote: "検証済みのbrush GUIDとrenderer versionをMaterialへ保存します。",
+  },
+  {
     id: "xrift-components",
     kind: "xrift-components",
-    name: "XRift公式 Component",
-    badge: "Official",
-    summary: "公式Component一覧から追加",
+    group: "world-features",
+    name: "Component",
+    badge: "公式",
+    summary: "Portal・Mirrorなどの機能を追加",
     homepageUrl: "https://github.com/WebXR-JP/xrift",
     catalogKinds: [],
     installableKinds: [],

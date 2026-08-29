@@ -44,6 +44,7 @@ import {
 } from "../../lib/visual-editor";
 import {
   DEFAULT_EXTERNAL_STORE_PROVIDER_ID,
+  EXTERNAL_STORE_PROVIDER_GROUPS,
   EXTERNAL_STORE_PROVIDERS,
   getExternalStoreProvider,
   type ExternalStoreProvider,
@@ -354,43 +355,59 @@ export function ExternalAssetStoreDialog({
           >
             <div className="border-b border-slate-200 px-3 py-3">
               <p className="text-xs font-semibold text-slate-800">リソース集</p>
-              <p className="mt-0.5 text-[10px] leading-4 text-slate-500">配布元ごとに一覧を切り替えます</p>
+              <p className="mt-0.5 text-[10px] leading-4 text-slate-500">追加したいものから選びます</p>
             </div>
-            <div className="space-y-1.5 p-2">
-              {EXTERNAL_STORE_PROVIDERS.map((entry) => {
-                const selectedProvider = entry.id === provider.id;
-                return (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    disabled={installing}
-                    onClick={() => selectProvider(entry.id)}
-                    aria-pressed={selectedProvider}
-                    className={`flex w-full items-start gap-2.5 rounded-lg border px-2.5 py-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                      selectedProvider
-                        ? "border-brand-300 bg-white text-slate-900 shadow-sm ring-1 ring-brand-100"
-                        : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-white"
-                    }`}
-                  >
-                    <span className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md ${selectedProvider ? "bg-brand-50 text-brand-700" : "bg-slate-200 text-slate-500"}`}>
-                      <ProviderIcon kind={entry.kind} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center justify-between gap-1">
-                        <span className="truncate text-xs font-semibold">{entry.name}</span>
-                        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">
-                          {entry.badge}
-                        </span>
-                      </span>
-                      <span className="mt-1 block text-[10px] leading-4 text-slate-500">
-                        {entry.summary}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-2">
+              {EXTERNAL_STORE_PROVIDER_GROUPS.map((group) => (
+                <div
+                  key={group.id}
+                  role="group"
+                  aria-label={group.label}
+                  className="mb-2.5 last:mb-0"
+                >
+                  <p className="px-1.5 pb-1 pt-0.5 text-[10px] font-semibold tracking-wide text-slate-400">
+                    {group.label}
+                  </p>
+                  <div className="space-y-1.5">
+                    {EXTERNAL_STORE_PROVIDERS.filter(
+                      (entry) => entry.group === group.id,
+                    ).map((entry) => {
+                      const selectedProvider = entry.id === provider.id;
+                      return (
+                        <button
+                          key={entry.id}
+                          type="button"
+                          disabled={installing}
+                          onClick={() => selectProvider(entry.id)}
+                          aria-pressed={selectedProvider}
+                          className={`flex w-full items-start gap-2.5 rounded-lg border px-2.5 py-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                            selectedProvider
+                              ? "border-brand-300 bg-white text-slate-900 shadow-sm ring-1 ring-brand-100"
+                              : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-white"
+                          }`}
+                        >
+                          <span className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md ${selectedProvider ? "bg-brand-50 text-brand-700" : "bg-slate-200 text-slate-500"}`}>
+                            <ProviderIcon kind={entry.kind} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center justify-between gap-1">
+                              <span className="truncate text-xs font-semibold">{entry.name}</span>
+                              <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">
+                                {entry.badge}
+                              </span>
+                            </span>
+                            <span className="mt-1 block text-[10px] leading-4 text-slate-500">
+                              {entry.summary}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
-            <p className="mt-auto border-t border-slate-200 px-3 py-3 text-[10px] leading-4 text-slate-500">
+            <p className="shrink-0 border-t border-slate-200 px-3 py-3 text-[10px] leading-4 text-slate-500">
               選択したリソース集のカタログ、利用条件、提供元情報を表示します。
             </p>
           </nav>
