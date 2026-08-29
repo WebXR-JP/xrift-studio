@@ -1,5 +1,8 @@
 import {
+  cloneKhrInteractivityExtension,
+  collectInteractivityRuntimeDiagnostics,
   configureInteractivityMaterialPointer,
+  createDefaultKhrInteractivityExtension,
   getInteractivityOperationTemplate,
   writeInteractivityNodePosition,
   type KhrInteractivityGraph,
@@ -204,3 +207,28 @@ export const INTERACTIVITY_RECIPES: readonly InteractivityRecipe[] = [
     },
   },
 ];
+
+/**
+ * Whether Play runs everything a recipe places.
+ *
+ * Derived by building the recipe into a scratch graph and asking the runtime
+ * adapter, rather than recorded per recipe, so a recipe can never advertise
+ * support the adapter does not have. Three of the shipped recipes write glTF
+ * properties through `pointer/set`, which the adapter does not implement, and
+ * the picker has to say so before an author spends a step on them.
+ */
+export function getInteractivityRecipeRuntimeSupport(
+  recipe: InteractivityRecipe,
+): "executed" | "ignored" {
+  const extension = cloneKhrInteractivityExtension(
+    createDefaultKhrInteractivityExtension(),
+  );
+  const graph = extension.graphs[0] as KhrInteractivityGraph;
+  graph.nodes = [];
+  graph.declarations = [];
+  graph.types = [];
+  recipe.build(graph, { x: 0, y: 0 }, 0);
+  return collectInteractivityRuntimeDiagnostics(extension).length === 0
+    ? "executed"
+    : "ignored";
+}

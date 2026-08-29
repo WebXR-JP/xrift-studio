@@ -101,6 +101,8 @@ import {
   KHR_INTERACTIVITY_OPERATION_TEMPLATES,
   KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS,
   addDefaultInteractivityAsset,
+  collectInteractivityRuntimeDiagnostics,
+  getInteractivityRuntimeSupport,
   cloneKhrInteractivityExtension,
   configureInteractivityMaterialPointer,
   getInteractivityOperationTemplate,
@@ -3702,15 +3704,22 @@ function listInteractivityOperations(
     {
       extension: "KHR_interactivity",
       status: "release-candidate-2026-07-16",
-      operations: KHR_INTERACTIVITY_OPERATION_TEMPLATES.map((template) => ({
-        op: template.op,
-        label: template.label,
-        category: template.category,
-        flowInputs: template.flowInputs,
-        flowOutputs: template.flowOutputs,
-        valueInputs: template.valueInputs,
-        valueOutputs: template.valueOutputs,
-      })),
+      operations: KHR_INTERACTIVITY_OPERATION_TEMPLATES.map((template) => {
+        // Carried on the listing so a client picks an operation knowing whether
+        // Play will run it, instead of discovering it only after authoring.
+        const runtime = getInteractivityRuntimeSupport(template.op);
+        return {
+          op: template.op,
+          label: template.label,
+          category: template.category,
+          flowInputs: template.flowInputs,
+          flowOutputs: template.flowOutputs,
+          valueInputs: template.valueInputs,
+          valueOutputs: template.valueOutputs,
+          runtimeSupport: runtime.support,
+          runtimeNote: runtime.note,
+        };
+      }),
     },
     "KHR_interactivity operation一覧を取得しました",
   );
@@ -4171,19 +4180,24 @@ function validateInteractivityAsset(
     requiredString(argumentsValue.assetId, "assetId"),
   );
   const diagnostics = validateKhrInteractivityExtension(asset.extension);
+  // Schema validity and Play-runtime support are reported separately so `valid`
+  // keeps meaning "this graph can be written", while a client can still see
+  // which operations the runtime adapter will not execute.
+  const runtimeDiagnostics = collectInteractivityRuntimeDiagnostics(asset.extension);
   return unchanged(
     context,
     {
       assetId: asset.id,
       valid: !diagnostics.some((diagnostic) => diagnostic.severity === "error"),
       diagnostics,
+      runtimeDiagnostics,
       graphCount: asset.extension.graphs.length,
       nodeCount: asset.extension.graphs.reduce(
         (count, graph) => count + (graph.nodes?.length ?? 0),
         0,
       ),
     },
-    diagnostics.length === 0
+    diagnostics.length === 0 && runtimeDiagnostics.length === 0
       ? "KHR_interactivity validationに成功しました"
       : "KHR_interactivity diagnosticsを取得しました",
   );

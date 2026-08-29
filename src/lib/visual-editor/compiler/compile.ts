@@ -19,6 +19,7 @@ import {
   type SceneAsset,
 } from "../asset-manifest";
 import { getBuiltinPrimitiveCreation } from "../creation-catalog";
+import { collectInteractivityRuntimeDiagnostics } from "../interactivity-graph";
 import {
   validateSerializedXriftComponents,
   validateXriftComponents,
@@ -345,6 +346,7 @@ export function compileVisualProject(
     overlayFiles.push(createScenePostprocessingOverlayFile());
   }
   diagnoseUnsupportedAssets(documents.assets, diagnostics);
+  diagnoseInteractivityRuntimeSupport(documents.assets, diagnostics);
   const uniqueDiagnostics = deduplicateDiagnostics(diagnostics);
   const provenanceFile = compilerFile(
     ".xrift-studio/compiler-provenance.json",
@@ -4617,6 +4619,34 @@ function diagnoseReferencedUnsupportedAssets(context: CompileContext): void {
       );
     } else if (asset.kind === "template" && !isPrefabAsset(asset)) {
       addDiagnostic(context, unsupportedAssetDiagnostic(asset, "prefab-asset-unsupported", "Template/Prefab Asset の展開は未対応です", "blocking"));
+    }
+  }
+}
+
+/**
+ * Repeats the Editor's Play-runtime warnings on the publish side.
+ *
+ * The canonical graph is published intact either way, so these are warnings,
+ * not blockers. What they prevent is the split where the Editor marks a node
+ * as unsupported and the publish result says nothing, leaving an author to
+ * believe the graph gained behavior by being uploaded.
+ */
+function diagnoseInteractivityRuntimeSupport(
+  assets: AssetManifest,
+  diagnostics: CompilerDiagnostic[],
+): void {
+  for (const asset of Object.values(assets.assets).sort((left, right) =>
+    left.id.localeCompare(right.id),
+  )) {
+    if (asset.kind !== "interactivity") continue;
+    for (const diagnostic of collectInteractivityRuntimeDiagnostics(asset.extension)) {
+      diagnostics.push({
+        severity: "warning",
+        code: "interactivity-operation-not-executed",
+        message: diagnostic.message,
+        assetId: asset.id,
+        fieldPath: diagnostic.path,
+      });
     }
   }
 }

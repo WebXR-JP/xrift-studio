@@ -17,9 +17,12 @@ import {
 import "@xyflow/react/dist/style.css";
 import {
   cloneKhrInteractivityExtension,
+  collectInteractivityRuntimeDiagnostics,
   configureInteractivityMaterialPointer,
   appendInteractivityOperation,
   getInteractivityOperationTemplate,
+  getInteractivityRecipeRuntimeSupport,
+  getInteractivityRuntimeSupport,
   INTERACTIVITY_RECIPES,
   KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS,
   KHR_INTERACTIVITY_OPERATION_TEMPLATES,
@@ -33,6 +36,7 @@ import {
   type InteractivityAsset,
   type InteractivityOperationTemplate,
   type InteractivityRecipe,
+  type InteractivityRuntimeSupport,
   type KhrInteractivityExtension,
   type KhrInteractivityGraph,
   type KhrInteractivityJsonValue,
@@ -53,6 +57,26 @@ type GraphNodeData = {
   flowOutputs: string[];
   valueInputs: string[];
   valueOutputs: string[];
+  runtimeSupport: InteractivityRuntimeSupport;
+};
+
+/**
+ * Card label for an operation Play will not run.
+ *
+ * Only the two states an author has to act on are labelled; a fully executed
+ * operation stays unmarked so the badge means something when it appears.
+ */
+const RUNTIME_SUPPORT_BADGE: Partial<
+  Record<InteractivityRuntimeSupport, { label: string; className: string }>
+> = {
+  ignored: {
+    label: "Play未対応",
+    className: "border-amber-500/50 bg-amber-500/15 text-amber-200",
+  },
+  conditional: {
+    label: "定数のみ",
+    className: "border-slate-400/40 bg-slate-400/10 text-slate-300",
+  },
 };
 
 type GraphFlowNode = Node<GraphNodeData, "interactivity">;
@@ -149,9 +173,21 @@ function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNode>) {
       }`}
     >
       <header className="rounded-t-md border-b border-white/10 px-3 py-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] opacity-60">
-          {CATEGORY_LABEL[data.category]}
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] opacity-60">
+            {CATEGORY_LABEL[data.category]}
+          </p>
+          {RUNTIME_SUPPORT_BADGE[data.runtimeSupport] ? (
+            <span
+              title="Play で実行されない operation です。詳細は右の Diagnostics を確認してください"
+              className={`shrink-0 rounded border px-1.5 py-px text-[9px] font-semibold ${
+                RUNTIME_SUPPORT_BADGE[data.runtimeSupport]?.className ?? ""
+              }`}
+            >
+              {RUNTIME_SUPPORT_BADGE[data.runtimeSupport]?.label}
+            </span>
+          ) : null}
+        </div>
         <p className="mt-0.5 text-sm font-bold">{data.label}</p>
         <code className="text-[10px] opacity-60">{data.op}</code>
       </header>
@@ -270,6 +306,7 @@ function operationData(
       new Set([...(template?.valueInputs ?? []), ...Object.keys(node.values ?? {})]),
     ),
     valueOutputs: Array.from(valueOutputs),
+    runtimeSupport: getInteractivityRuntimeSupport(op).support,
   };
 }
 
@@ -512,8 +549,18 @@ function InteractivityGraphEditorBody({
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const edges = useMemo(() => toFlowEdges(graph), [graph]);
-  const diagnostics = useMemo(() => validateKhrInteractivityExtension(draft), [draft]);
+  // Schema validation and Play-runtime support are separate questions about the
+  // same graph, so they are collected separately and shown in one list: a graph
+  // can be perfectly valid KHR JSON and still do nothing when Play runs it.
+  const diagnostics = useMemo(
+    () => [
+      ...validateKhrInteractivityExtension(draft),
+      ...collectInteractivityRuntimeDiagnostics(draft),
+    ],
+    [draft],
+  );
   const errors = diagnostics.filter((diagnostic) => diagnostic.severity === "error");
+  const warnings = diagnostics.filter((diagnostic) => diagnostic.severity === "warning");
   const selectedNode =
     selectedNodeIndex === null ? undefined : graph.nodes?.[selectedNodeIndex];
   const selectedDeclaration = selectedNode
@@ -522,6 +569,17 @@ function InteractivityGraphEditorBody({
   const sortedMaterials = useMemo(
     () => [...materials].sort((left, right) => left.id.localeCompare(right.id)),
     [materials],
+  );
+  // Recipes are static, so this is computed once rather than per render.
+  const recipeRuntimeSupport = useMemo(
+    () =>
+      new Map(
+        INTERACTIVITY_RECIPES.map((recipe) => [
+          recipe.id,
+          getInteractivityRecipeRuntimeSupport(recipe),
+        ]),
+      ),
+    [],
   );
   const selectedPointer = selectedNode?.configuration?.pointer?.value?.[0];
   const selectedPointerPreset = KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS.find(
@@ -906,6 +964,10 @@ function InteractivityGraphEditorBody({
                     <div className="space-y-1">
                       {visibleRecipes.map((recipe) => {
                         const blocked = recipe.needsMaterial === true && sortedMaterials.length === 0;
+                        // A recipe stays usable when Play cannot run it: the
+                        // graph is still saved and published. Saying so here
+                        // keeps the author from learning it only after Play.
+                        const playable = recipeRuntimeSupport.get(recipe.id) !== "ignored";
                         return (
                           <button
                             key={recipe.id}
@@ -914,12 +976,24 @@ function InteractivityGraphEditorBody({
                             onClick={() => handleApplyRecipe(recipe)}
                             className="block w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-2 text-left hover:border-violet-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-slate-700 disabled:hover:bg-slate-900"
                           >
-                            <span className="block text-xs font-semibold">{recipe.label}</span>
+                            <span className="flex items-start justify-between gap-2">
+                              <span className="text-xs font-semibold">{recipe.label}</span>
+                              {playable ? null : (
+                                <span className="shrink-0 rounded border border-amber-500/50 bg-amber-500/15 px-1.5 py-px text-[9px] font-semibold text-amber-200">
+                                  Play未対応
+                                </span>
+                              )}
+                            </span>
                             <span className="mt-0.5 block text-[10px] leading-4 text-slate-400">
                               {blocked
                                 ? "Material Assetを1つ作るとこのレシピを使えます"
                                 : recipe.description}
                             </span>
+                            {!blocked && !playable ? (
+                              <span className="mt-1 block text-[10px] leading-4 text-amber-200/80">
+                                置いて保存はできますが、Play と公開先ではまだ動きません
+                              </span>
+                            ) : null}
                           </button>
                         );
                       })}
@@ -973,8 +1047,8 @@ function InteractivityGraphEditorBody({
           <span>{edges.length} connections</span>
           {errors.length > 0 ? (
             <span className="font-semibold text-rose-300">{errors.length} errors・保存不可</span>
-          ) : diagnostics.length > 0 ? (
-            <span className="text-amber-300">{diagnostics.length} warnings</span>
+          ) : warnings.length > 0 ? (
+            <span className="text-amber-300">{warnings.length} warnings</span>
           ) : (
             <span className="text-emerald-300">KHR graph validation OK</span>
           )}

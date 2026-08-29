@@ -1990,17 +1990,26 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
             ? 0
             : clips.findIndex((clip) => clip.name === component.clipName)
           : -1;
-      const indices = new Set<number>();
-      if (selectedIndex >= 0) indices.add(selectedIndex);
-      for (const index of
-        result.interactionAnimationIndicesByEntity.get(entity.id) ?? []) {
-        indices.add(index);
+      // The earliest cue for a clip wins: the Animation Component's own
+      // autoplay starts immediately, so an interactivity delay must never
+      // postpone a clip another source already starts now.
+      const delayByIndex = new Map<number, number>();
+      const noteCue = (index: number, delaySeconds: number): void => {
+        const known = delayByIndex.get(index);
+        if (known === undefined || delaySeconds < known) {
+          delayByIndex.set(index, delaySeconds);
+        }
+      };
+      if (selectedIndex >= 0) noteCue(selectedIndex, 0);
+      for (const cue of
+        result.interactionAnimationCuesByEntity.get(entity.id) ?? []) {
+        noteCue(cue.animationIndex, cue.delaySeconds);
       }
       const speed =
         typeof component?.speed === "number" && Number.isFinite(component.speed)
           ? component.speed
           : 1;
-      return [...indices].flatMap((index) => {
+      return [...delayByIndex.entries()].flatMap(([index, delaySeconds]) => {
         const clip = clips[index];
         return clip
           ? [
@@ -2009,6 +2018,7 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
                 loop: component?.loop ?? false,
                 // Speed applies to the selected clip, not interactivity-driven ones.
                 timeScale: index === selectedIndex ? speed : 1,
+                delaySeconds,
                 mixer: new AnimationMixer(target),
               },
             ]
@@ -2027,6 +2037,11 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
         playback.loop ? Infinity : 1,
       );
       action.timeScale = playback.timeScale;
+      // `flow/setDelay` becomes mixer-clock scheduling rather than a timer, so
+      // the wait stays in step with the same clock that advances the clip.
+      if (playback.delaySeconds > 0) {
+        action.startAt(playback.mixer.time + playback.delaySeconds);
+      }
       action.play();
     }
     return () => {

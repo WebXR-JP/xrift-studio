@@ -1,4 +1,9 @@
 import { isRecord } from "../json-guards";
+import {
+  getInteractivityRuntimeSupport as getRuntimeSupport,
+  walkOnStart,
+  type InteractivityRuntimeSupport,
+} from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
 import type { AssetManifest, InteractivityAsset } from "./asset-manifest";
 
 export const KHR_INTERACTIVITY_EXTENSION_NAME = "KHR_interactivity" as const;
@@ -301,6 +306,13 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     flowOutputs: ["true", "false"],
     valueInputs: ["condition"],
     valueOutputs: [],
+    // Without a declared socket the Inspector has nothing to edit and the
+    // adapter has no condition to read, so a branch could only ever be
+    // unevaluable. The default picks `false` explicitly rather than leaving
+    // the taken side undefined.
+    createNode: (types) => ({
+      values: { condition: { type: types.bool, value: [false] } },
+    }),
   },
   {
     op: "flow/setDelay",
@@ -406,6 +418,63 @@ export function getInteractivityOperationTemplate(
   return KHR_INTERACTIVITY_OPERATION_TEMPLATES.find(
     (template) => template.op === op,
   );
+}
+
+/**
+ * How far the Play runtime adapter actually implements one operation.
+ *
+ * - `executed`: the adapter runs it and continues along its flow outputs.
+ * - `conditional`: the adapter runs it only for the inputs named in `note`.
+ * - `ignored`: the operation stays in the canonical JSON and does nothing.
+ *
+ * `ignored` is the boundary documented in `docs/KHR_INTERACTIVITY_EDITOR.md`:
+ * an unimplemented operation must behave as a no-op instead of being
+ * translated into arbitrary JavaScript. A no-op node produces no flow output
+ * either, so the adapter stops there rather than running the rest of the chain
+ * as though the skipped node had succeeded.
+ */
+export type InteractivityRuntimeAdapterEntry = {
+  support: InteractivityRuntimeSupport;
+  /** Shown verbatim in the Editor diagnostics panel and in publish diagnostics. */
+  note: string;
+};
+
+const KHR_INTERACTIVITY_IGNORED_FLOW_NOTE =
+  "Play の runtime adapter が未実装のため、この node と、ここから先の flow は動きません。canonical JSON には保存され、公開先でも同じく何も起きません。";
+
+const KHR_INTERACTIVITY_IGNORED_VALUE_NOTE =
+  "Play の runtime adapter は value を評価しないため、この node の値は使われません。canonical JSON には保存され、公開先でも同じく評価されません。";
+
+/**
+ * Why an operation reads the way it does in the Editor.
+ *
+ * The classification itself comes from the runtime package, so this table only
+ * has to explain it. An operation missing here still gets the right support
+ * from the shared table and a generic note, which is what keeps a newly
+ * adapted operation from silently reading as unsupported.
+ */
+const KHR_INTERACTIVITY_RUNTIME_NOTES: Readonly<Record<string, string>> = {
+  "event/onStart": "Play の開始時に、この node から flow を辿ります。",
+  "animation/start": "inline の animation index を再生対象に加えます。",
+  "animation/stop":
+    "同じ flow で先に開始した animation の再生を取り消します。すでに再生が始まった animation を途中で止めることはできないため、待機をはさんだ後の停止は動きません。",
+  "flow/branch":
+    "condition が inline の定数のときだけ、その分岐を辿ります。condition を他の node から接続した場合は評価できないため、この node で止まります。",
+  "flow/setDelay":
+    "duration が inline の定数のときだけ待機します。`done` は待機後、`out` は待機せずに続きます。`cancel` と `err` は未実装です。",
+  "variable/get": KHR_INTERACTIVITY_IGNORED_VALUE_NOTE,
+  "pointer/get": KHR_INTERACTIVITY_IGNORED_VALUE_NOTE,
+  "math/Inf": KHR_INTERACTIVITY_IGNORED_VALUE_NOTE,
+};
+
+export function getInteractivityRuntimeSupport(
+  op: string,
+): InteractivityRuntimeAdapterEntry {
+  const support = getRuntimeSupport(op);
+  return {
+    support,
+    note: KHR_INTERACTIVITY_RUNTIME_NOTES[op] ?? KHR_INTERACTIVITY_IGNORED_FLOW_NOTE,
+  };
 }
 
 export function configureInteractivityMaterialPointer(
@@ -562,46 +631,99 @@ export function createDefaultKhrInteractivityExtension(): KhrInteractivityExtens
 }
 
 /**
- * Resolves animation indices started by the selected graph's event/onStart
- * flow. This is the intentionally small runtime bridge used by the Studio
- * guide: the graph remains canonical KHR_interactivity data while Play can
- * demonstrate its direct animation/start behavior.
+ * The Play preview and the published runtime share one walk.
+ *
+ * Keeping a second copy here is what let the Editor and the published world
+ * drift apart, so the behaviour lives in the runtime package and this module
+ * only adds the Japanese notes the Editor shows. `walkOnStart` reads untrusted
+ * JSON structurally, which is also what the Editor needs: a graph is diagnosed
+ * while the author is still building it, before it validates.
  */
-export function getKhrInteractivityOnStartAnimationIndices(
+export type {
+  InteractivityAnimationCue,
+  InteractivityRuntimeSupport,
+} from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
+export { getKhrInteractivityOnStartAnimationCues } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
+
+
+/**
+ * Animation indices started by the selected graph, ignoring their delays.
+ *
+ * Kept for callers that only need the clip set; the delay-aware
+ * {@link getKhrInteractivityOnStartAnimationCues} is what Play uses.
+ */
+/**
+ * True when a socket is fed by another node.
+ *
+ * That is the one case the adapter cannot resolve, because it has no
+ * expression evaluator. An unwired socket always resolves, to its inline value
+ * or to its type default, so it is never reported.
+ */
+function isConnectedSocket(
+  socket: KhrInteractivityValueSocket | undefined,
+): boolean {
+  return socket?.node !== undefined;
+}
+
+/**
+ * Reports every node the runtime will not run.
+ *
+ * The Editor diagnostics panel, the compiler, and MCP validation all call this
+ * so an unsupported operation reads the same way while authoring and after
+ * publishing. These are warnings: an unsupported operation is a documented
+ * boundary, not a broken graph, and it must stay serialized in the canonical
+ * JSON either way.
+ */
+export function collectInteractivityRuntimeDiagnostics(
   value: unknown,
-): number[] {
+): InteractivityDiagnostic[] {
   const extension = parseKhrInteractivityExtension(value);
   if (!extension) return [];
-  const graph = extension.graphs[extension.graph ?? 0];
-  const declarations = graph?.declarations ?? [];
-  const nodes = graph?.nodes ?? [];
-  const startNodes = nodes.flatMap((node, nodeIndex) =>
-    declarations[node.declaration]?.op === "event/onStart" ? [nodeIndex] : [],
-  );
-  const pending = [...startNodes];
-  const visited = new Set<number>();
-  const animationIndices = new Set<number>();
-  while (pending.length > 0) {
-    const nodeIndex = pending.shift();
-    if (nodeIndex === undefined || visited.has(nodeIndex)) continue;
-    visited.add(nodeIndex);
-    const node = nodes[nodeIndex];
-    if (!node) continue;
-    if (declarations[node.declaration]?.op === "animation/start") {
-      const animationIndex = node.values?.animation?.value?.[0];
-      if (
-        typeof animationIndex === "number" &&
-        Number.isInteger(animationIndex) &&
-        animationIndex >= 0
-      ) {
-        animationIndices.add(animationIndex);
+  const diagnostics: InteractivityDiagnostic[] = [];
+  extension.graphs.forEach((graph, graphIndex) => {
+    const declarations = graph.declarations ?? [];
+    const nodes = graph.nodes ?? [];
+    nodes.forEach((node, nodeIndex) => {
+      const op = declarations[node.declaration]?.op;
+      if (!op) return;
+      const path = `$.graphs[${graphIndex}].nodes[${nodeIndex}]`;
+      const entry = getInteractivityRuntimeSupport(op);
+      if (entry.support === "ignored") {
+        diagnostics.push({ severity: "warning", path, message: `${op}: ${entry.note}` });
+        return;
       }
-    }
-    for (const flow of Object.values(node.flows ?? {})) {
-      if (!visited.has(flow.node)) pending.push(flow.node);
-    }
+      // A `conditional` operation only warns when this node's own input is the
+      // part the adapter cannot resolve, so a graph built from inline values
+      // and type defaults stays quiet.
+      const unevaluableInput =
+        (op === "flow/branch" && isConnectedSocket(node.values?.condition)) ||
+        (op === "flow/setDelay" && isConnectedSocket(node.values?.duration));
+      if (unevaluableInput) {
+        diagnostics.push({ severity: "warning", path, message: `${op}: ${entry.note}` });
+        return;
+      }
+      if (
+        (op === "animation/start" || op === "animation/stop") &&
+        isConnectedSocket(node.values?.animation)
+      ) {
+        diagnostics.push({
+          severity: "warning",
+          path,
+          message: `${op}: animation index を他の node から接続しているため、対象の clip を決められません。この node と、ここから先の flow は動きません。`,
+        });
+      }
+    });
+  });
+  // Path-dependent findings come from the walk itself, so the Editor cannot
+  // report a node as fine while the adapter quietly refuses to run it.
+  for (const issue of walkOnStart(value).issues) {
+    diagnostics.push({
+      severity: "warning",
+      path: `$.graphs[${issue.graphIndex}].nodes[${issue.nodeIndex}]`,
+      message: `${issue.op}: この停止より前に再生が始まるため、Play では止まりません。再生中の animation を途中で止める adapter は未実装です。`,
+    });
   }
-  return [...animationIndices].sort((left, right) => left - right);
+  return diagnostics;
 }
 
 function isNonNegativeInteger(value: unknown): value is number {

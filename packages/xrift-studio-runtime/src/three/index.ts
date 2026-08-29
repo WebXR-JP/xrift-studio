@@ -51,6 +51,10 @@ import { Reflector } from "three/examples/jsm/objects/Reflector.js";
 import { Text } from "troika-three-text";
 
 import { detectTimeUniforms, stampObjectTimeUniforms } from "../shader-time.js";
+import {
+  getKhrInteractivityOnStartAnimationCues,
+  type InteractivityAnimationCue,
+} from "../interactivity-adapter.js";
 
 import {
   isXriftRuntimeManifest,
@@ -67,7 +71,7 @@ export type XriftLoadResult = {
   assetBaseUrl: URL;
   animations: AnimationClip[];
   animationClipsByEntity: Map<string, AnimationClip[]>;
-  interactionAnimationIndicesByEntity: Map<string, number[]>;
+  interactionAnimationCuesByEntity: Map<string, InteractivityAnimationCue[]>;
   entities: Map<string, Object3D>;
   /** Spawn-point marker objects keyed by their component id. */
   spawnPoints: Map<string, Object3D>;
@@ -93,7 +97,7 @@ const DEFAULT_DRACO_DECODER_PATH =
 type LoadedModel = {
   root: Object3D;
   animations: AnimationClip[];
-  interactionAnimationIndices: number[];
+  interactionAnimationCues: InteractivityAnimationCue[];
   sourceMaterials: ReadonlyMap<number, Material>;
 };
 
@@ -172,7 +176,7 @@ export class XriftThreeLoader {
     const entities = new Map<string, Object3D>();
     const animations: AnimationClip[] = [];
     const animationClipsByEntity = new Map<string, AnimationClip[]>();
-    const interactionAnimationIndicesByEntity = new Map<string, number[]>();
+    const interactionAnimationCuesByEntity = new Map<string, InteractivityAnimationCue[]>();
     const spawnPoints = new Map<string, Object3D>();
 
     for (const entity of Object.values(entryScene.entities)) {
@@ -212,7 +216,7 @@ export class XriftThreeLoader {
           materials,
           animations,
           animationClipsByEntity,
-          interactionAnimationIndicesByEntity,
+          interactionAnimationCuesByEntity,
           diagnostics,
         });
         if (object) {
@@ -240,7 +244,7 @@ export class XriftThreeLoader {
       assetBaseUrl: assetBase,
       animations,
       animationClipsByEntity,
-      interactionAnimationIndicesByEntity,
+      interactionAnimationCuesByEntity,
       entities,
       spawnPoints,
       textures,
@@ -266,7 +270,7 @@ export class XriftThreeLoader {
       return {
         root,
         animations: [],
-        interactionAnimationIndices: [],
+        interactionAnimationCues: [],
         sourceMaterials: new Map(),
       };
     }
@@ -303,8 +307,8 @@ export class XriftThreeLoader {
     return {
       root: gltf.scene,
       animations: gltf.animations,
-      interactionAnimationIndices:
-        getKhrInteractivityOnStartAnimationIndices(
+      interactionAnimationCues:
+        getKhrInteractivityOnStartAnimationCues(
           (
             gltf.parser as unknown as {
               json?: RuntimeGltfDocument;
@@ -445,7 +449,7 @@ export class XriftThreeLoader {
     materials: ReadonlyMap<string, Material>;
     animations: AnimationClip[];
     animationClipsByEntity: Map<string, AnimationClip[]>;
-    interactionAnimationIndicesByEntity: Map<string, number[]>;
+    interactionAnimationCuesByEntity: Map<string, InteractivityAnimationCue[]>;
     diagnostics: XriftRuntimeDiagnostic[];
   }): Object3D | null {
     const { component } = input;
@@ -515,10 +519,10 @@ export class XriftThreeLoader {
           ...loaded.animations,
         ]);
       }
-      if (loaded.interactionAnimationIndices.length > 0) {
-        input.interactionAnimationIndicesByEntity.set(
+      if (loaded.interactionAnimationCues.length > 0) {
+        input.interactionAnimationCuesByEntity.set(
           input.entity.id,
-          loaded.interactionAnimationIndices,
+          loaded.interactionAnimationCues,
         );
       }
       instance.userData.xriftStudioComponentId = component.id;
@@ -1073,72 +1077,6 @@ type RuntimeGltfDocument = {
   meshes?: Array<{ primitives?: Array<{ material?: unknown }> }>;
   extensions?: Record<string, unknown>;
 };
-
-function getKhrInteractivityOnStartAnimationIndices(
-  value: unknown,
-): number[] {
-  const extension = asRecord(value);
-  const graphs = Array.isArray(extension?.graphs) ? extension.graphs : [];
-  const graphIndex =
-    typeof extension?.graph === "number" &&
-    Number.isInteger(extension.graph) &&
-    extension.graph >= 0
-      ? extension.graph
-      : 0;
-  const graph = asRecord(graphs[graphIndex]);
-  const declarations = Array.isArray(graph?.declarations)
-    ? graph.declarations
-    : [];
-  const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
-  const operationFor = (node: Record<string, unknown> | undefined) => {
-    const declarationIndex = node?.declaration;
-    if (
-      typeof declarationIndex !== "number" ||
-      !Number.isInteger(declarationIndex) ||
-      declarationIndex < 0
-    ) {
-      return undefined;
-    }
-    return asRecord(declarations[declarationIndex])?.op;
-  };
-  const pending = nodes.flatMap((candidate, nodeIndex) =>
-    operationFor(asRecord(candidate)) === "event/onStart" ? [nodeIndex] : [],
-  );
-  const visited = new Set<number>();
-  const animationIndices = new Set<number>();
-  while (pending.length > 0) {
-    const nodeIndex = pending.shift();
-    if (nodeIndex === undefined || visited.has(nodeIndex)) continue;
-    visited.add(nodeIndex);
-    const node = asRecord(nodes[nodeIndex]);
-    if (!node) continue;
-    if (operationFor(node) === "animation/start") {
-      const animationValue = asRecord(asRecord(node.values)?.animation)?.value;
-      const animationIndex =
-        Array.isArray(animationValue) ? animationValue[0] : undefined;
-      if (
-        typeof animationIndex === "number" &&
-        Number.isInteger(animationIndex) &&
-        animationIndex >= 0
-      ) {
-        animationIndices.add(animationIndex);
-      }
-    }
-    const flows = asRecord(node.flows);
-    for (const candidate of Object.values(flows ?? {})) {
-      const targetIndex = asRecord(candidate)?.node;
-      if (
-        typeof targetIndex === "number" &&
-        Number.isInteger(targetIndex) &&
-        targetIndex >= 0 &&
-        !visited.has(targetIndex)
-      ) {
-        pending.push(targetIndex);
-      }
-    }
-  }
-  return [...animationIndices].sort((left, right) => left - right);
-}
 
 function tagSourceMaterialIndices(gltf: GLTF): void {
   const parser = gltf.parser as unknown as {

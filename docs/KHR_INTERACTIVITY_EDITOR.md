@@ -92,3 +92,46 @@ operations must remain serialized and behave as a no-op rather than being
 translated to arbitrary JavaScript. WebXR controller/input acquisition remains
 an application responsibility and is connected to graph events at the runtime
 adapter boundary.
+
+### What the adapter executes
+
+`packages/xrift-studio-runtime/src/interactivity-adapter.ts` holds the walk and
+the support table, and it is the single source of truth. It lives in the
+runtime package because the Play preview and the published world animate from
+the same graph and must not drift apart: Studio imports it for Play and for its
+authoring diagnostics, and the three.js and React Three Fiber runtimes import
+it for playback. Studio adds only the Japanese notes shown in its UI, keyed off
+the shared classification, so a newly adapted operation cannot keep reading as
+unsupported in the Editor.
+
+The Editor node badges, the recipe list, the compiler, and
+`list_interactivity_operations` all read that table, so an operation can never
+look supported on one surface and unsupported on another. Extending the adapter
+means changing the table and the walk beside it together.
+
+| Operation | Support | Notes |
+| --- | --- | --- |
+| `event/onStart` | executed | Entry point for the walk. |
+| `animation/start` | executed | Reads the inline `animation` index. |
+| `animation/stop` | conditional | Cancels a start the same path reached earlier; it cannot stop a clip that is already playing. |
+| `flow/setDelay` | conditional | `out` continues immediately, `done` after the inline `duration`. `cancel` and `err` are not implemented. |
+| `flow/branch` | conditional | Follows one side when `condition` is resolvable. |
+| everything else | ignored | Serialized, never executed. |
+
+Two rules keep the no-op honest:
+
+- **A no-op node produces no flow output.** The walk stops at an unimplemented
+  operation rather than continuing as though it had succeeded. Doing otherwise
+  is worse than nothing: a graph gated behind `flow/branch` used to start both
+  branches, and one behind `flow/setDelay` used to start with no delay at all.
+- **An unconnected socket takes its type default; a connected one is
+  unevaluable.** There is no expression evaluator, so a socket fed by another
+  node stops the walk instead of being read from a stale inline literal.
+
+`collectInteractivityRuntimeDiagnostics` reports every node the walk refuses to
+run. The Editor merges those warnings into the same Diagnostics list as schema
+validation, the compiler emits them as `interactivity-operation-not-executed`,
+and `validate_interactivity_asset` returns them as `runtimeDiagnostics`
+alongside the schema `diagnostics`. They are warnings everywhere: an
+unsupported operation is a documented boundary, not a broken graph, and it must
+stay in the canonical JSON either way.

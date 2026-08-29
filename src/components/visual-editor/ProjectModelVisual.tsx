@@ -59,7 +59,7 @@ import {
   resolveAnimationClipIndex,
   applyCustomShaderSourceOverrides,
   bindCustomShaderGeometryAttributes,
-  getKhrInteractivityOnStartAnimationIndices,
+  getKhrInteractivityOnStartAnimationCues,
   hasCustomShaderEntrypoints,
   inspectCustomShaderUniforms,
   readCustomShaderAttributeBindings,
@@ -69,6 +69,7 @@ import {
   validateGltfNodeHierarchy,
   type AssetManifest,
   type AnimationComponent,
+  type InteractivityAnimationCue,
   type ClassicR3fMaterialShader,
   type MaterialAsset,
   type ModelPoseState,
@@ -136,7 +137,7 @@ export type ProjectModelLoadState =
       status: "ready";
       object: Object3D;
       animations: AnimationClip[];
-      interactionAnimationIndices: number[];
+      interactionAnimationCues: InteractivityAnimationCue[];
     }
   | { status: "error"; message: string };
 
@@ -159,13 +160,18 @@ const MODEL_DATA_CACHE = new Map<string, Promise<string>>();
 type ProjectModelData = {
   object: Object3D;
   animations: AnimationClip[];
-  interactionAnimationIndices: number[];
+  interactionAnimationCues: InteractivityAnimationCue[];
 };
 
 const MODEL_OBJECT_CACHE = new Map<string, Promise<ProjectModelData>>();
 const EMPTY_RESOLVED_MATERIALS: readonly ResolvedProjectModelMaterialAssignment[] =
   [];
 const EMPTY_ANIMATION_INDICES: readonly number[] = [];
+const EMPTY_ANIMATION_CUES: readonly InteractivityAnimationCue[] = [];
+
+/** One clip the mixer will play, and how long it waits before starting. */
+type ModelPlaybackCue = { clip: AnimationClip; delaySeconds: number };
+const EMPTY_PLAYBACK_CUES: readonly ModelPlaybackCue[] = [];
 
 export function ProjectModelVisual({
   projectPath,
@@ -377,10 +383,10 @@ function ProjectModelRender({
 }) {
   const readyObject = state.status === "ready" ? state.object : null;
   const animations = state.status === "ready" ? state.animations : [];
-  const interactionAnimationIndices =
+  const interactionAnimationCues =
     state.status === "ready"
-      ? (state.interactionAnimationIndices ?? EMPTY_ANIMATION_INDICES)
-      : EMPTY_ANIMATION_INDICES;
+      ? (state.interactionAnimationCues ?? EMPTY_ANIMATION_CUES)
+      : EMPTY_ANIMATION_CUES;
   const renderedModel = useMemo(() => {
     if (!readyObject) return null;
     // Sanitize the cached source before SkeletonUtils.clone recurses through it.
@@ -426,26 +432,34 @@ function ProjectModelRender({
       animations.map((clip) => clip.name),
     );
   }, [animation?.autoplay, animation?.enabled, animationClipName, animations]);
-  const playbackClips = useMemo(() => {
-    if (!playing) return [];
-    const indices = new Set<number>();
-    if (selectedClipIndex >= 0) indices.add(selectedClipIndex);
-    interactionAnimationIndices.forEach((index) => indices.add(index));
-    declaredInteractionAnimationIndices.forEach((index) => indices.add(index));
-    return [...indices].flatMap((index) =>
-      animations[index] ? [animations[index]] : [],
+  const playbackCues = useMemo(() => {
+    if (!playing) return EMPTY_PLAYBACK_CUES;
+    // The earliest cue for a clip wins: the Animation Component's own autoplay
+    // and the studio guide's declared clips both start immediately, so an
+    // interactivity delay must never postpone a clip another source starts now.
+    const delayByIndex = new Map<number, number>();
+    const noteCue = (index: number, delaySeconds: number): void => {
+      const known = delayByIndex.get(index);
+      if (known === undefined || delaySeconds < known) {
+        delayByIndex.set(index, delaySeconds);
+      }
+    };
+    if (selectedClipIndex >= 0) noteCue(selectedClipIndex, 0);
+    declaredInteractionAnimationIndices.forEach((index) => noteCue(index, 0));
+    interactionAnimationCues.forEach((cue) =>
+      noteCue(cue.animationIndex, cue.delaySeconds),
+    );
+    return [...delayByIndex.entries()].flatMap(([index, delaySeconds]) =>
+      animations[index] ? [{ clip: animations[index], delaySeconds }] : [],
     );
   }, [
     animations,
     declaredInteractionAnimationIndices,
-    interactionAnimationIndices,
+    interactionAnimationCues,
     playing,
     selectedClipIndex,
   ]);
-  const playbackActive = Boolean(
-    mixer &&
-      playbackClips.length > 0,
-  );
+  const playbackActive = Boolean(mixer && playbackCues.length > 0);
   const invalidate = useThree((canvasState) => canvasState.invalidate);
   const materialRuntimeInfo = useMemo(
     () =>
@@ -492,13 +506,16 @@ function ProjectModelRender({
     const loop = animation?.loop ?? false;
     const selectedClip =
       selectedClipIndex >= 0 ? animations[selectedClipIndex] : undefined;
-    const actions = playbackClips.map((clip) => {
+    const actions = playbackCues.map(({ clip, delaySeconds }) => {
       const action = mixer.clipAction(clip);
       action.reset();
       action.clampWhenFinished = !loop;
       action.setLoop(loop ? LoopRepeat : LoopOnce, loop ? Infinity : 1);
       // Speed belongs to the Animation Component, not to interactivity-driven clips.
       action.timeScale = clip === selectedClip ? animationSpeed : 1;
+      // `flow/setDelay` becomes mixer-clock scheduling rather than a timer, so
+      // the wait stays in step with the same clock that advances the clip.
+      if (delaySeconds > 0) action.startAt(mixer.time + delaySeconds);
       action.play();
       return action;
     });
@@ -506,7 +523,7 @@ function ProjectModelRender({
     return () => {
       actions.forEach((action) => action.stop());
       mixer.stopAllAction();
-      playbackClips.forEach((clip) => mixer.uncacheClip(clip));
+      playbackCues.forEach(({ clip }) => mixer.uncacheClip(clip));
       renderedObject.updateMatrixWorld(true);
       invalidate();
     };
@@ -517,7 +534,7 @@ function ProjectModelRender({
     invalidate,
     mixer,
     playbackActive,
-    playbackClips,
+    playbackCues,
     renderedObject,
     selectedClipIndex,
   ]);
@@ -1555,7 +1572,7 @@ async function parseSelfContainedModel(
   if (format === "obj") {
     const object = new OBJLoader().parse(new TextDecoder().decode(bytes));
     tagObjMaterialIndices(object);
-    return { object, animations: [], interactionAnimationIndices: [] };
+    return { object, animations: [], interactionAnimationCues: [] };
   }
 
   const source = format === "gltf" ? new TextDecoder().decode(bytes) : buffer;
@@ -1596,10 +1613,9 @@ async function parseSelfContainedModel(
         resolve({
           object: gltf.scene,
           animations: gltf.animations,
-          interactionAnimationIndices:
-            getKhrInteractivityOnStartAnimationIndices(
-              document.extensions?.KHR_interactivity,
-            ),
+          interactionAnimationCues: getKhrInteractivityOnStartAnimationCues(
+            document.extensions?.KHR_interactivity,
+          ),
         });
       },
       (error) => reject(error),

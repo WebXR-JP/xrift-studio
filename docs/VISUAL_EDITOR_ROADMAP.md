@@ -54,7 +54,7 @@ Visual project はコードを隠すだけの画面ではなく、Scene、Asset�
 - VRM の静的ポーズは保存できるが、keyframe、clip、補間、timeline 編集はない。
 - Model Animation は clip 選択、Autoplay、Loop、再生速度に対応する。開始タイミングの指定、複数 clip の同時再生、clip 間の遷移はない。
 - Interactivity のきっかけは開始時、毎フレーム、イベント受信の三つである。クリックや視線に反応するトリガーはない。利用者の操作に応じた動きは XRift Component または Scripting と組み合わせる。
-- Interactivity の runtime adapter は operation 単位で実装する。未対応 operation は canonical JSON に保持したまま no-op になる。
+- Interactivity の runtime adapter は operation 単位で実装する。未対応 operation は canonical JSON に保持したまま no-op になり、その node と、そこから先の flow は実行されない。対象と理由は Editor と公開側の診断に同じ内容で出る。値を他の node から接続した socket は評価できないため、同じく実行されない。
 - Skybox Shader は Scene View には描画しない。編集中の背景は単色のままで、見え方は Play で確認する。
 - Unity 固有 Component、Shader、Script、Animation を完全には移植しない。対応内容と未対応内容を import 前に示す。
 - Open Brush は brush ごとの描画差を継続検証中で、通常の Material override とは扱いを分ける。
@@ -73,7 +73,7 @@ Visual project はコードを隠すだけの画面ではなく、Scene、Asset�
 | 6 | Save / Compile / Upload | 利用可能・堅牢化中 | 診断元への移動、認証、再試行、staging provenance、正式 result 表示を一つの流れにする。 |
 | 7 | Static avatar pose | 利用可能・継続改善 | humanoid 名、一般 bone、shape key の保存、再読込、生成コードを fixture と実 VRM で一致させる。 |
 | 8 | 環境表現（Terrain / 空 / 水 / 光） | 利用可能・継続改善 | 草の密度と LOD、Wind の共有、公式シェーダーの陰影を大規模 Scene で受け入れる。 |
-| 9 | Interactivity | 利用可能・検証中 | canonical graph の編集、検証、保存を接続済み。runtime adapter の対応 operation を増やし、未対応 operation の no-op を UI から読めるようにする。 |
+| 9 | Interactivity | 利用可能・検証中 | canonical graph の編集、検証、保存に加えて、未対応 operation を Editor のノードバッジ・レシピ一覧・Diagnostics と公開側の compile diagnostics へ同じ内容で出す。`event/onStart`、`animation/start`、`animation/stop`、`flow/setDelay`、`flow/branch` を実行する。残る operation の adapter を増やす。 |
 | 10 | Scripting | 利用可能・検証中 | Script Asset、Script Component、承認 gate、Play 実行、静的 import 出力までを接続済み。実 XRift runtime で Play と公開の挙動一致を受け入れ、[Scripting Contract](./SCRIPTING.md) が未対応とする typed loader、pointer / player 参照、非同期例外の帰属を埋める。 |
 | 11 | Animation authoring | 計画中 | timeline 上で bone / shape key keyframe を編集・再生し、clip として保存できる。 |
 | 12 | Classic export UI / CLI / Runtime | 開発版 | Editor からの既存 Classic 追加、Runtime JSON、Three.js / R3F adapter、dependency plan、dry-run、衝突検知、Asset copy、provenance を実装済み。未対応 Runtime Component と npm 公開を完了する。 |
@@ -96,7 +96,7 @@ repository 内では Runtime JSON、Three.js / R3F adapter、dry-run、未改変
 3. VRM / skinned model の静的ポーズを実機で磨き、timeline 用の pose / clip data contract を先に固定する。
 4. AI connection の認証境界、timeout、sidecar 同梱、失敗後の再接続を release 環境で確認する。
 5. `xrift-studio-runtime` の Audio、Particle、動的 Rigid Body、XRift 固有 Component adapter を追加し、Classic と Editor Preview の結果を一致させる。静的 Collider / Spawn Point は実 runtime へ接続済み。
-6. Interactivity の runtime adapter を operation 単位で増やし、未対応 operation を Editor と公開の両方で同じ表示にする。
+6. Interactivity の runtime adapter へ `pointer/set`、`pointer/interpolate`、`variable/set`、`event/onTick` を追加する。未対応 operation の表示は Editor と公開で一致済みで、組み込みレシピ 5 件のうち Play で動くのは animation 系 2 件である。
 7. Material、Play、XRift Component、Upload を同じ Visual document から通しで受け入れる。
 
 ## 完了判定
