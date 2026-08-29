@@ -126,6 +126,7 @@ import {
   updateTextureAsset,
   addDefaultInteractivityAsset,
   applyTextureProcessing,
+  planTextureProcessing,
   collectInteractionTriggerTargets,
   createInteractionTriggerGraphExtension,
   syncInteractionTriggerEntityReferences,
@@ -2308,6 +2309,7 @@ export function VisualEditorPrototype({
           request.tool === "get_shader_asset" ||
           request.tool === "update_shader_asset" ||
           request.tool === "reimport_model_asset" ||
+          request.tool === "process_texture_asset" ||
           request.tool === "set_project_thumbnail"
         ) {
           const args = request.arguments;
@@ -2512,6 +2514,195 @@ export function VisualEditorPrototype({
               return;
             } finally {
               importRunningRef.current = false;
+              if (assetOperationRef.current?.token === operationToken) {
+                assetOperationRef.current = null;
+              }
+            }
+          }
+
+          // Texture Inspector の解像度変更と圧縮を MCP から実行する。
+          // update_texture_asset が書けるのは Import 設定だけで、原本の画像は
+          // そのまま残る。設定だけ書き換えて終わると、Editor では「未反映」と
+          // 表示されている状態を AI が「圧縮した」と報告してしまうため、実際の
+          // 変換までを一つの tool にする。
+          if (request.tool === "process_texture_asset") {
+            const textureAssetId = mcpRequiredString(
+              args.textureAssetId,
+              "textureAssetId",
+            );
+            const texture = sourceBundle.assets.assets[textureAssetId];
+            if (!texture || texture.kind !== "texture") {
+              throw new XriftMcpEditorToolError(
+                "TEXTURE_NOT_FOUND",
+                "指定されたTexture Assetが見つかりません",
+                { textureAssetId },
+              );
+            }
+            const availability = resolveAssetOperationAvailability(
+              "texture-processing",
+              {
+                readOnly: editorModeRef.current !== "edit",
+                assetImportActive:
+                  importRunningRef.current ||
+                  hasActiveAssetImport(importQueueRef.current),
+                modelReimportActive:
+                  assetOperationRef.current?.kind === "model-reimport",
+                textureProcessingActive:
+                  assetOperationRef.current?.kind === "texture-processing",
+              },
+            );
+            if (!availability.allowed) {
+              throw new XriftMcpEditorToolError(
+                "EDITOR_BUSY",
+                availability.disabledReason ?? "いまはTextureを変換できません",
+                { textureAssetId },
+              );
+            }
+            const plan = planTextureProcessing(texture);
+            if (!plan.supported) {
+              throw new XriftMcpEditorToolError(
+                "TEXTURE_PROCESSING_UNSUPPORTED",
+                plan.reason,
+                { textureAssetId },
+              );
+            }
+            // 何も変わらない変換は実行しない。原本を書き直せば内容が同じでも
+            // ハッシュとファイルサイズが動き、差分だけが増える。
+            if (!plan.pending) {
+              await tauri.completeXriftMcpRequest({
+                id: request.id,
+                ok: true,
+                result: {
+                  projectId: sourceBundle.project.projectId,
+                  sceneId: sourceBundle.scene.sceneId,
+                  textureAssetId,
+                  revision: mcpRevisionRef.current,
+                  changed: false,
+                  settledReason: plan.settledReason,
+                  sourceFormat: plan.sourceFormat,
+                  width: plan.sourceWidth,
+                  height: plan.sourceHeight,
+                  byteLength: plan.sourceByteLength,
+                },
+              });
+              return;
+            }
+            const operationToken = Symbol("mcp-texture-processing");
+            const startingRevision = mcpRevisionRef.current;
+            assetOperationRef.current = {
+              kind: "texture-processing",
+              token: operationToken,
+            };
+            setTextureProcessingFeedback({
+              assetId: textureAssetId,
+              state: {
+                phase: "reading",
+                message: `${texture.name}を読み込んでいます`,
+              },
+            });
+            try {
+              const result = await applyTextureProcessing(
+                currentProjectPath,
+                sourceBundle.assets,
+                textureAssetId,
+                (progress) =>
+                  setTextureProcessingFeedback({
+                    assetId: textureAssetId,
+                    state: {
+                      phase: progress.phase,
+                      message: progress.message,
+                    },
+                  }),
+              );
+              if (!result.ok) {
+                setTextureProcessingFeedback({
+                  assetId: textureAssetId,
+                  state: { phase: "failed", message: result.message },
+                });
+                throw new XriftMcpEditorToolError(
+                  "TEXTURE_PROCESSING_FAILED",
+                  result.message,
+                  { textureAssetId },
+                );
+              }
+              // 変換中に設定が動いていたら書き出した画像を採用しない。
+              // Inspector の手動変換と同じ判断で、原本を残す方を選ぶ。
+              if (
+                bundleRef.current.assets.assets[textureAssetId] !== texture ||
+                mcpRevisionRef.current !== startingRevision
+              ) {
+                const staleMessage =
+                  "変換中にTexture設定が変更されたため、適用を取り消しました。元の画像は残っています";
+                setTextureProcessingFeedback({
+                  assetId: textureAssetId,
+                  state: { phase: "failed", message: staleMessage },
+                });
+                throw new XriftMcpEditorToolError(
+                  "STALE_REVISION",
+                  staleMessage,
+                  { textureAssetId },
+                );
+              }
+              const formatLabel =
+                result.outputFormat === "jpeg"
+                  ? "JPEG"
+                  : result.outputFormat.toUpperCase();
+              const summary = `${result.width} × ${result.height}の${formatLabel}へ変換しました（${formatFileSize(result.beforeBytes)} → ${formatFileSize(result.afterBytes)}）`;
+              const nextBundle = touchProject({
+                ...bundleRef.current,
+                assets: result.manifest,
+              });
+              const revisionBefore = mcpRevisionRef.current;
+              mcpRevisionRef.current += 1;
+              mcpRevisionBundleRef.current = nextBundle;
+              bundleRef.current = nextBundle;
+              assetSelectionRef.current = textureAssetId;
+              saveStatusRef.current = "dirty";
+              setHistory((current) =>
+                commitEditorHistory(current, {
+                  ...current.present,
+                  bundle: nextBundle,
+                  assetSelection: textureAssetId,
+                }),
+              );
+              setSaveStatus("dirty");
+              setTextureProcessingFeedback({
+                assetId: textureAssetId,
+                state: { phase: "succeeded", message: summary },
+              });
+              const activity = `AIがTexture「${result.assetName}」を${summary}`;
+              setNotice(`${activity}。変更を自動保存します`);
+              setMcpLastActivity({
+                clientName: request.clientName || "AI client",
+                message: activity,
+                at: new Intl.DateTimeFormat("ja-JP", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                }).format(new Date()),
+                revision: mcpRevisionRef.current,
+              });
+              await tauri.completeXriftMcpRequest({
+                id: request.id,
+                ok: true,
+                result: {
+                  projectId: nextBundle.project.projectId,
+                  sceneId: nextBundle.scene.sceneId,
+                  textureAssetId,
+                  revisionBefore,
+                  revisionAfter: mcpRevisionRef.current,
+                  changed: true,
+                  outputFormat: result.outputFormat,
+                  width: result.width,
+                  height: result.height,
+                  beforeWidth: result.beforeWidth,
+                  beforeHeight: result.beforeHeight,
+                  beforeBytes: result.beforeBytes,
+                  afterBytes: result.afterBytes,
+                },
+              });
+              return;
+            } finally {
               if (assetOperationRef.current?.token === operationToken) {
                 assetOperationRef.current = null;
               }

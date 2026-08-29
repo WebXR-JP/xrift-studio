@@ -53,10 +53,17 @@ The built-in `xrift-studio` MCP server exposes:
 - `disconnect_interactivity_socket`
 - `delete_interactivity_node`
 - `validate_interactivity_asset`
+- `list_interaction_trigger_targets`
 
 Write tools require `projectId`, `sceneId`, and `expectedRevision`, exactly like
 the other XRift Studio editing tools. This prevents an AI client from applying a
 graph mutation to a stale editor snapshot.
+
+`add_interactivity_node` takes the defining extension from the operation
+template when the caller does not name one, exactly as the palette does. An
+operation KHR_interactivity does not define is only legal when its declaration
+names the extension that does, and a caller who had to supply that name by hand
+met a validation failure the Editor never produces.
 
 A typical animation workflow is:
 
@@ -127,6 +134,13 @@ An action whose target is not yet chosen is a warning, not an error: the graph
 is saved, the node is preserved, and the Editor, the compiler, and
 `validate_interactivity_asset` all report it the same way.
 
+`list_interaction_trigger_targets` returns that registry resolved against the
+open Scene: every Entity, the Components on it a trigger can write, and the
+property names, kinds, ranges and enum options each one accepts. The node
+editor builds its target pickers from the same call, so an MCP client cannot
+choose a target the Inspector would refuse to offer — and a property name that
+is not on the list produces a graph that validates and then does nothing.
+
 ### Attaching a graph
 
 An Interaction Trigger Component holds `interactivityAssetId` and the Entity ids
@@ -134,6 +148,14 @@ the graph writes to, mirroring the Script Component split. The interaction
 itself comes from the official `Interactable` on the same Entity; without one
 the Inspector says so and the compiler warns, because the trigger would never
 fire.
+
+`update_component` repoints the Component at another graph through
+`patch.interactivityAssetId`; an id that is not an Interactivity Asset is
+rejected rather than leaving a trigger pointed at a Material. `entityReferences`
+is not in the patch because it is derived, not authored: every graph write —
+from the node editor or from an MCP tool — re-reads the action targets and
+rewrites the list, so a graph an agent wires up cannot be published with no
+dependencies recorded.
 
 In Play, Studio supplies the player's half of the official contract: it
 raycasts the Interactables registered through `XRiftProvider` and calls the

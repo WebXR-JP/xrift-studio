@@ -98,6 +98,7 @@ import {
   type TerrainSurfaceCatalogEntry,
   TERRAIN_GRASS_TYPES,
   TERRAIN_GRASS_MAX_INSTANCES,
+  applyTerrainGrassAppearance,
   createTerrainGrassLayers,
   generateTerrainGrassInstances,
   getTerrainGrassType,
@@ -2312,23 +2313,6 @@ function round2(value: number): number {
  * once nothing is left in it — an empty change is「戻す」, and a layer that
  * carries no override follows its type again and costs the document nothing.
  */
-function applyTerrainGrassAppearance(
-  layer: TerrainGrassLayer,
-  change: TerrainGrassAppearance,
-): TerrainGrassLayer {
-  const merged: TerrainGrassAppearance = Object.keys(change).length
-    ? { ...layer.appearance, ...change }
-    : {};
-  const cleaned = Object.fromEntries(
-    Object.entries(merged).filter(([, value]) => value !== undefined),
-  ) as TerrainGrassAppearance;
-  if (Object.keys(cleaned).length === 0) {
-    const { appearance: _dropped, ...rest } = layer;
-    return rest;
-  }
-  return { ...layer, appearance: cleaned };
-}
-
 function TerrainGrassColorField({
   label,
   value,

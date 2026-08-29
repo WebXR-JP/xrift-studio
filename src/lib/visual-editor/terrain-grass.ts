@@ -635,6 +635,33 @@ function isTerrainGrassAppearance(value: unknown): boolean {
   return true;
 }
 
+/**
+ * Merges one appearance change into a layer, dropping the override entirely
+ * when nothing is left.
+ *
+ * An empty change means "back to the type", so the layer loses its
+ * `appearance` key rather than keeping an empty object: a Scene document that
+ * has been tuned and untuned again should weigh what it did before the tuning.
+ * The Inspector and the MCP tool both go through here so a layer edited by an
+ * agent and one edited by hand cannot end up shaped differently.
+ */
+export function applyTerrainGrassAppearance(
+  layer: TerrainGrassLayer,
+  change: TerrainGrassAppearance,
+): TerrainGrassLayer {
+  const merged: TerrainGrassAppearance = Object.keys(change).length
+    ? { ...layer.appearance, ...change }
+    : {};
+  const cleaned = Object.fromEntries(
+    Object.entries(merged).filter(([, value]) => value !== undefined),
+  ) as TerrainGrassAppearance;
+  if (Object.keys(cleaned).length === 0) {
+    const { appearance: _dropped, ...rest } = layer;
+    return rest;
+  }
+  return { ...layer, appearance: cleaned };
+}
+
 export type TerrainGrassPreset = {
   id: string;
   label: string;

@@ -24,6 +24,7 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを
 | 文書 | 扱う範囲 |
 | --- | --- |
 | [Scripting Contract](./SCRIPTING.md) | Script Asset の API、実行境界、承認 gate、対応範囲 |
+| [MCP editor tool の全体像](./MCP_EDITOR_TOOLS.md) | AI client へ公開する Editor 操作の一覧、surface ごとの権限、公開しない操作 |
 | [KHR_interactivity Editor / MCP design](./KHR_INTERACTIVITY_EDITOR.md) | ノードグラフの canonical 形式、検証、MCP 契約 |
 | [Terrain エディター 仕様](./TERRAIN_EDITOR_SPEC.md) | 地形と草のモード、ブラシ、性能、公開への反映 |
 | [マテリアルカタログ 仕様](./MATERIAL_CATALOG_SPEC.md) | 空・水 Shader、草、Wind 契約 |
