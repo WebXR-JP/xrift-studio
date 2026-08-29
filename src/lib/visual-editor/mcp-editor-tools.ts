@@ -2123,6 +2123,9 @@ function addComponent(
   const entityId = requiredString(argumentsValue.entityId, "entityId");
   const definitionId = requiredString(argumentsValue.definitionId, "definitionId");
   const scriptAssetId = optionalString(argumentsValue.scriptAssetId);
+  const interactivityAssetId = optionalString(
+    argumentsValue.interactivityAssetId,
+  );
   if (definitionId === "scripting.script") {
     const scriptAsset = scriptAssetId
       ? context.bundle.assets.assets[scriptAssetId]
@@ -2149,14 +2152,22 @@ function addComponent(
     entityId,
     definitionId,
     context.bundle.project.projectKind,
-    scriptAssetId,
+    // One preferred Asset per Component kind; only one of these is ever set
+    // because a definition consumes a single Asset kind.
+    scriptAssetId ?? interactivityAssetId,
     context.scriptContracts,
   );
   if (!result.added) {
     throw new XriftMcpEditorToolError(
       addComponentFailureCode(result.reason),
       addComponentFailureMessage(result.reason),
-      { entityId, definitionId, scriptAssetId, reason: result.reason },
+      {
+        entityId,
+        definitionId,
+        scriptAssetId,
+        interactivityAssetId,
+        reason: result.reason,
+      },
     );
   }
   const bundle = touchProject(context, { ...context.bundle, scene: result.scene });
@@ -2176,6 +2187,7 @@ function addComponent(
       entityId,
       definitionId,
       scriptAssetId,
+      interactivityAssetId,
       componentId: result.componentId,
     },
     activity: `AIが${definitionId}をEntityへ追加しました`,
@@ -2648,6 +2660,7 @@ function updateComponent(
     }
     case "spawn-point":
     case "prefab-instance":
+    case "interaction-trigger":
       assertPatchKeys(patch, ["enabled"], component.type);
       scene = updateSceneComponentEnabled(
         context.bundle.scene,
@@ -5059,6 +5072,8 @@ function componentDefinitionId(component: SceneComponent): string | null {
       return "core.text";
     case "script":
       return "scripting.script";
+    case "interaction-trigger":
+      return "interaction.trigger";
     case "xrift-component":
       return component.schemaId;
     case "prefab-instance":

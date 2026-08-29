@@ -19,10 +19,14 @@ import {
   type SceneAsset,
 } from "../asset-manifest";
 import { getBuiltinPrimitiveCreation } from "../creation-catalog";
-import { collectInteractivityRuntimeDiagnostics } from "../interactivity-graph";
+import {
+  collectInteractivityRuntimeDiagnostics,
+  collectXriftInteractionPrograms,
+} from "../interactivity-graph";
 import {
   validateSerializedXriftComponents,
   validateXriftComponents,
+  XRIFT_COMPONENT_SCHEMA_IDS,
 } from "../component-registry";
 import type { PrototypeVisualProject } from "../prototype-project";
 import { normalizeParticleProperties } from "../particle-system";
@@ -93,6 +97,7 @@ import { sha256Utf8 } from "./hash";
 import { collectRequiredScriptAssetIds } from "../scripting/script-schedule";
 import { createScriptAssetRuntimeDescriptorMap } from "../scripting/asset-runtime";
 import {
+  createInteractionTriggerOverlayFiles,
   createScriptAudioSourceOverlayFile,
   createScriptLightOverlayFile,
   createScriptParticleOverlayFile,
@@ -172,6 +177,14 @@ type CompileContext = {
   /** Running scheduling order, matching Play's Entity-then-Component walk. */
   scriptOrder: { next: number };
   usesScriptRuntime: boolean;
+  /**
+   * Entities an Interaction Trigger writes to.
+   *
+   * Collected before the walk because a disabled Entity is normally dropped
+   * from the output; one a trigger can re-show has to be emitted, hidden, so
+   * the published world can do what Play does.
+   */
+  interactionTriggerTargetEntityIds: ReadonlySet<string>;
 };
 
 type RenderedXriftWrapper = {
@@ -238,6 +251,20 @@ export function compileVisualProject(
       code: "script-unsupported-runtime-output",
       message:
         "Runtime JSON出力ではScriptを表現できません。Classic JSX出力を選んでください。",
+    });
+  }
+  if (
+    outputMode === "classic-runtime" &&
+    resolvedEntryScene &&
+    sceneUsesInteractionTriggerRuntime(resolvedEntryScene.scene, documents.assets)
+  ) {
+    // The runtime manifest carries the graph but no runtime reads it there, so
+    // a trigger would be silently dropped instead of running.
+    diagnostics.push({
+      severity: "blocking",
+      code: "interaction-trigger-unsupported-runtime-output",
+      message:
+        "Runtime JSON出力ではInteraction Triggerを実行できません。Classic JSX出力を選んでください。",
     });
   }
 
@@ -346,6 +373,37 @@ export function compileVisualProject(
     )
   ) {
     overlayFiles.push(...createTextPanelOverlayFiles());
+  }
+  if (
+    outputMode === "classic-jsx" &&
+    resolvedEntryScene &&
+    sceneUsesInteractionTriggerRuntime(resolvedEntryScene.scene, documents.assets)
+  ) {
+    for (const file of createInteractionTriggerOverlayFiles()) {
+      if (
+        !overlayFiles.some(
+          (candidate) => candidate.relativePath === file.relativePath,
+        )
+      ) {
+        overlayFiles.push(file);
+      }
+    }
+    // The trigger runtime writes through the Audio Source and Light bridges,
+    // so their modules ship with it even when the Scene has neither yet.
+    if (
+      !overlayFiles.some(
+        (file) => file.relativePath === SCRIPT_AUDIO_SOURCE_OVERLAY_PATH,
+      )
+    ) {
+      overlayFiles.push(createScriptAudioSourceOverlayFile());
+    }
+    if (
+      !overlayFiles.some(
+        (file) => file.relativePath === SCRIPT_LIGHT_OVERLAY_PATH,
+      )
+    ) {
+      overlayFiles.push(createScriptLightOverlayFile());
+    }
   }
   // Emitted for both output modes: the brush loader is self-contained, so a
   // published world never depends on which runtime shape it was built with.
@@ -460,6 +518,31 @@ function sceneUsesParticleRuntime(scene: SceneDocument): boolean {
 function sceneUsesAudioSourceRuntime(scene: SceneDocument): boolean {
   return Object.values(scene.entities).some((entity) =>
     entity.components.some((component) => component.type === "audio-source"),
+  );
+}
+
+/**
+ * True when a Scene has a trigger the published world has to run.
+ *
+ * Checked against the graph, not just the Component: a trigger whose graph has
+ * no interact entry point emits nothing, so shipping the runtime for it would
+ * add a module the world never uses.
+ */
+function sceneUsesInteractionTriggerRuntime(
+  scene: SceneDocument,
+  assets: AssetManifest,
+): boolean {
+  return Object.values(scene.entities).some((entity) =>
+    entity.components.some((component) => {
+      if (component.type !== "interaction-trigger" || !component.enabled) {
+        return false;
+      }
+      const asset = assets.assets[component.interactivityAssetId];
+      return (
+        asset?.kind === "interactivity" &&
+        collectXriftInteractionPrograms(asset.extension).length > 0
+      );
+    }),
   );
 }
 
@@ -777,6 +860,129 @@ function renderScript(
   );
 }
 
+type ResolvedInteractionTrigger = {
+  component: Extract<RegisteredSceneComponent, { type: "interaction-trigger" }>;
+  extension: unknown;
+  actionCount: number;
+};
+
+function collectInteractionTriggerTargetEntityIds(
+  scene: SceneDocument,
+  assets: AssetManifest,
+): ReadonlySet<string> {
+  const targets = new Set<string>();
+  for (const entity of Object.values(scene.entities)) {
+    for (const component of entity.components as RegisteredSceneComponent[]) {
+      if (component.type !== "interaction-trigger" || !component.enabled) continue;
+      const asset = assets.assets[component.interactivityAssetId];
+      if (asset?.kind !== "interactivity") continue;
+      for (const program of collectXriftInteractionPrograms(asset.extension)) {
+        for (const action of program.actions) targets.add(action.entityId);
+      }
+    }
+  }
+  return targets;
+}
+
+/**
+ * Resolves this Entity's triggers before its Components are rendered.
+ *
+ * The Interactable that starts a trigger is a different Component, and it may
+ * be rendered first, so whether `onInteract` needs wiring has to be known
+ * before the walk reaches either of them.
+ */
+function resolveInteractionTriggers(
+  entity: SceneEntity,
+  context: CompileContext,
+): ResolvedInteractionTrigger[] {
+  const resolved: ResolvedInteractionTrigger[] = [];
+  for (const component of entity.components as RegisteredSceneComponent[]) {
+    if (component.type !== "interaction-trigger" || !component.enabled) continue;
+    const asset = context.assets.assets[component.interactivityAssetId];
+    if (asset?.kind !== "interactivity") {
+      addDiagnostic(
+        context,
+        componentDiagnostic(
+          entity,
+          component.id,
+          "interaction-trigger-asset-missing",
+          "Interaction Triggerが参照するInteractivity Assetがありません",
+          component.interactivityAssetId,
+        ),
+      );
+      continue;
+    }
+    const programs = collectXriftInteractionPrograms(asset.extension);
+    const actionCount = programs.reduce(
+      (total, program) => total + program.actions.length,
+      0,
+    );
+    if (programs.length === 0) {
+      addDiagnostic(context, {
+        severity: "warning",
+        code: "interaction-trigger-without-event",
+        message:
+          "Interactivity Graphに「インタラクトされたとき」がないため、押しても何も起きません",
+        sceneId: context.scene.sceneId,
+        entityId: entity.id,
+        componentId: component.id,
+        assetId: asset.id,
+      });
+      continue;
+    }
+    resolved.push({ component, extension: asset.extension, actionCount });
+  }
+  if (
+    resolved.length > 0 &&
+    !entity.components.some(
+      (candidate) =>
+        candidate.type === "xrift-component" &&
+        candidate.schemaId === XRIFT_COMPONENT_SCHEMA_IDS.interactable &&
+        candidate.enabled,
+    )
+  ) {
+    addDiagnostic(context, {
+      severity: "warning",
+      code: "interaction-trigger-without-interactable",
+      message:
+        "EntityにInteractableがないため、公開先でこのTriggerを押せません",
+      sceneId: context.scene.sceneId,
+      entityId: entity.id,
+      componentId: resolved[0]?.component.id,
+    });
+  }
+  return resolved;
+}
+
+function interactionGraphIdentifier(assetId: string): string {
+  return `XriftInteractionGraph_${assetId.replace(/[^A-Za-z0-9_]/g, "_")}`;
+}
+
+function renderInteractionTrigger(
+  resolved: ResolvedInteractionTrigger,
+  entity: SceneEntity,
+  order: number,
+  context: CompileContext,
+): string {
+  context.extraImports.add(
+    'import { XriftInteractionTriggerRuntime, emitXriftInteraction } from "./xrift-studio/interaction-trigger-runtime";',
+  );
+  const identifier = interactionGraphIdentifier(
+    resolved.component.interactivityAssetId,
+  );
+  // One declaration per graph Asset, so two Entities sharing a graph publish
+  // one copy of its canonical JSON.
+  context.supportDeclarations.set(
+    `interaction-trigger:${resolved.component.interactivityAssetId}`,
+    `const ${identifier} = ${JSON.stringify(resolved.extension)};`,
+  );
+  return `<XriftInteractionTriggerRuntime entityId=${JSON.stringify(
+    entity.id,
+  )} componentId=${JSON.stringify(
+    resolved.component.id,
+  )} order={${order}} graph={${identifier}} />`;
+}
+
 function generateComponentSource(
   projectKind: VisualProjectKind,
   scene: SceneDocument,
@@ -813,6 +1019,10 @@ function generateComponentSource(
     scriptModules,
     scriptOrder: { next: 0 },
     usesScriptRuntime: false,
+    interactionTriggerTargetEntityIds: collectInteractionTriggerTargetEntityIds(
+      scene,
+      assets,
+    ),
   };
   const sceneSettings = resolveSceneSettings(scene.settings);
   const sceneEnvironment = renderSceneEnvironment(sceneSettings, context);
@@ -1672,7 +1882,9 @@ function renderEntity(
     return null;
   }
   context.visitedEntityIds.add(entityId);
-  if (!entity.enabled) return null;
+  if (!entity.enabled && !context.interactionTriggerTargetEntityIds.has(entityId)) {
+    return null;
+  }
   context.activeEntityIds.add(entityId);
 
   const transforms = entity.components.filter(
@@ -1721,6 +1933,13 @@ function renderEntity(
   const animation = animationComponents[0];
   const localContent: string[] = [];
   const wrappers: RenderedXriftWrapper[] = [];
+  const interactionTriggers = resolveInteractionTriggers(entity, context);
+  const interactionBindings: Record<string, string> =
+    interactionTriggers.length > 0
+      ? {
+          onInteract: `() => emitXriftInteraction(${JSON.stringify(entity.id)})`,
+        }
+      : {};
   for (const component of entity.components as RegisteredSceneComponent[]) {
     if (
       (!component.enabled &&
@@ -1773,8 +1992,29 @@ function renderEntity(
     } else if (component.type === "script") {
       const rendered = renderScript(entity, component, context);
       if (rendered) localContent.push(rendered);
+    } else if (component.type === "interaction-trigger") {
+      const resolved = interactionTriggers.find(
+        (candidate) => candidate.component.id === component.id,
+      );
+      if (resolved) {
+        localContent.push(
+          renderInteractionTrigger(
+            resolved,
+            entity,
+            interactionTriggers.indexOf(resolved),
+            context,
+          ),
+        );
+      }
     } else if (component.type === "xrift-component") {
-      renderRegisteredXriftComponent(entity, component, context, localContent, wrappers);
+      renderRegisteredXriftComponent(
+        entity,
+        component,
+        context,
+        localContent,
+        wrappers,
+        interactionBindings,
+      );
     } else {
       const unknownComponent = component as unknown as { id: string; type: string };
       addDiagnostic(context, componentDiagnostic(entity, unknownComponent.id, "component-unsupported", `未対応の component type: ${unknownComponent.type}`));
@@ -1840,10 +2080,13 @@ function renderEntity(
   const scale = vectorProp(transform?.scale ?? [1, 1, 1]);
   const name = JSON.stringify(entity.name);
   const userData = `{ xriftEntityId: ${JSON.stringify(entity.id)} }`;
+  // Only a trigger target reaches here while disabled, and it starts hidden
+  // exactly as the Editor viewport shows it.
+  const visible = entity.enabled ? "" : " visible={false}";
   if (!children) {
-    return `<group name=${name} position={${position}} rotation={${rotation}} scale={${scale}} userData={${userData}} />`;
+    return `<group name=${name} position={${position}} rotation={${rotation}} scale={${scale}}${visible} userData={${userData}} />`;
   }
-  return `<group name=${name} position={${position}} rotation={${rotation}} scale={${scale}} userData={${userData}}>\n${indent(children, 1)}\n</group>`;
+  return `<group name=${name} position={${position}} rotation={${rotation}} scale={${scale}}${visible} userData={${userData}}>\n${indent(children, 1)}\n</group>`;
 }
 
 function renderOwnedRigidBody(
@@ -4758,13 +5001,19 @@ function renderRegisteredXriftComponent(
   context: CompileContext,
   localContent: string[],
   wrappers: RenderedXriftWrapper[],
+  bindingOverrides: Readonly<Record<string, string>> = {},
 ): void {
   component.assetReferences.forEach((assetId) => context.referencedAssetIds.add(assetId));
-  const compiled = compileXriftComponent(component, context.projectKind, {
-    sceneId: context.scene.sceneId,
-    entityId: entity.id,
-    componentId: component.id,
-  });
+  const compiled = compileXriftComponent(
+    component,
+    context.projectKind,
+    {
+      sceneId: context.scene.sceneId,
+      entityId: entity.id,
+      componentId: component.id,
+    },
+    bindingOverrides,
+  );
   compiled.diagnostics.forEach((diagnostic) => addDiagnostic(context, diagnostic));
   if (compiled.importName) context.imports.add(compiled.importName);
   compiled.reactValueImports.forEach((name) => context.reactValueImports.add(name));
@@ -4801,12 +5050,19 @@ function diagnoseReferencedUnsupportedAssets(context: CompileContext): void {
     ) {
       addDiagnostic(
         context,
-        unsupportedAssetDiagnostic(
-          asset,
-          `${asset.kind}-asset-source-unsupported`,
-          `${asset.kind} Assetのsourceまたは変換recipeはcompiler未対応です`,
-          "blocking",
-        ),
+        hasUnappliedTextureRecipe(asset)
+          ? unsupportedAssetDiagnostic(
+              asset,
+              "texture-asset-recipe-unapplied",
+              "Textureの最大解像度・圧縮設定が原本へ未反映です。Texture Inspectorの「この設定で画像を書き出す」で変換してください",
+              "blocking",
+            )
+          : unsupportedAssetDiagnostic(
+              asset,
+              `${asset.kind}-asset-source-unsupported`,
+              `${asset.kind} Assetのsourceまたは変換recipeはcompiler未対応です`,
+              "blocking",
+            ),
       );
     } else if (asset.kind === "template" && !isPrefabAsset(asset)) {
       addDiagnostic(context, unsupportedAssetDiagnostic(asset, "prefab-asset-unsupported", "Template/Prefab Asset の展開は未対応です", "blocking"));
@@ -4974,6 +5230,22 @@ function entityDiagnostic(
   severity: CompilerDiagnostic["severity"],
 ): CompilerDiagnostic {
   return { severity, code, message, entityId: entity.id };
+}
+
+/**
+ * Import設定だけが原本へ未反映のTextureは、source自体は扱える。診断を
+ * 「未対応」で終わらせず、Inspectorで変換すれば解けることを示す。
+ */
+function hasUnappliedTextureRecipe(asset: SceneAsset): boolean {
+  return (
+    asset.kind === "texture" &&
+    asset.status === "ready" &&
+    asset.source.kind === "project" &&
+    isSafeRelativePath(asset.source.relativePath) &&
+    isAllowedStaticAssetSource(asset) &&
+    (asset.importSettings.compression.format !== "source" ||
+      asset.importSettings.resize.mode !== "original")
+  );
 }
 
 function unsupportedAssetDiagnostic(

@@ -11,6 +11,7 @@ export function runAssetOperationLockFixtureAssertions(): void {
     readOnly: false,
     assetImportActive: false,
     modelReimportActive: false,
+    textureProcessingActive: false,
   } as const;
   assert(
     resolveAssetOperationAvailability("asset-import", idle).allowed,
@@ -59,6 +60,70 @@ export function runAssetOperationLockFixtureAssertions(): void {
     !resolveAssetOperationAvailability("model-reimport", modelReimportActive)
       .allowed,
     "A second Model reimport was accepted",
+  );
+  const textureDuringReimport = resolveAssetOperationAvailability(
+    "texture-processing",
+    modelReimportActive,
+  );
+  assert(
+    !textureDuringReimport.allowed &&
+      textureDuringReimport.blocker === "model-reimport",
+    "Texture conversion was not blocked by a running Model reimport",
+  );
+
+  const textureProcessingActive = {
+    ...idle,
+    textureProcessingActive: true,
+  };
+  assert(
+    resolveAssetOperationAvailability("texture-processing", idle).allowed,
+    "Idle editor rejected a Texture conversion",
+  );
+  const secondTexture = resolveAssetOperationAvailability(
+    "texture-processing",
+    textureProcessingActive,
+  );
+  assert(
+    !secondTexture.allowed && secondTexture.blocker === "texture-processing",
+    "A second Texture conversion was accepted",
+  );
+  const importDuringTexture = resolveAssetOperationAvailability(
+    "asset-import",
+    textureProcessingActive,
+  );
+  assert(
+    !importDuringTexture.allowed &&
+      importDuringTexture.blocker === "texture-processing" &&
+      Boolean(importDuringTexture.disabledReason),
+    "Regular import was not blocked by a running Texture conversion",
+  );
+  const reimportDuringTexture = resolveAssetOperationAvailability(
+    "model-reimport",
+    textureProcessingActive,
+  );
+  assert(
+    !reimportDuringTexture.allowed &&
+      reimportDuringTexture.blocker === "texture-processing",
+    "Model reimport was not blocked by a running Texture conversion",
+  );
+  const textureDuringRegular = resolveAssetOperationAvailability(
+    "texture-processing",
+    regularImportActive,
+  );
+  assert(
+    !textureDuringRegular.allowed &&
+      textureDuringRegular.blocker === "asset-import",
+    "Texture conversion was not blocked by a running regular import",
+  );
+  const textureReadOnly = resolveAssetOperationAvailability(
+    "texture-processing",
+    { ...idle, readOnly: true },
+  );
+  assert(
+    !textureReadOnly.allowed &&
+      textureReadOnly.blocker === "read-only" &&
+      Boolean(textureReadOnly.disabledReason),
+    "Play mode did not block Texture conversion",
   );
 
   const readOnly = resolveAssetOperationAvailability("asset-import", {

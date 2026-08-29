@@ -107,7 +107,8 @@ F-06 アイテム検査
 | MI-86 | Interactivity Asset Editorでノードを置く、レシピを選ぶ、またはgraphを公開する | Playのruntime adapterが実行しないoperationは、ノードカード右上に「Play未対応」、inlineの定数のときだけ動くoperationには「定数のみ」を出す。「よくある動き」の一覧でも、実行できないレシピに同じ「Play未対応」と「置いて保存はできますが、Play と公開先ではまだ動きません」を添える。対象nodeのpathと理由はDiagnosticsへ、schema検証の結果と同じ一覧に並べる。 | 未対応でも配置、保存、公開は妨げない。canonical JSONはそのまま保存し、公開側のcompile diagnosticsにも同じ文言を`interactivity-operation-not-executed`として出し、Editorと公開先で表示を食い違わせない。未実装のoperationはflow出力も出さないため、その先のnodeは実行されたように見せない。 |
 | MI-87 | Terrain Inspectorの「草」で層を選び、色と大きさを調整する | 選択中の層だけに根元の色、穂先の色、色のばらつき、高さの倍率、葉の幅の倍率、空の明るさを開く。各値は種類の既定から始まり、動かした項目だけが層の上書きになる。上書きを持つ層は一覧に「調整済み」を出し、「種類の既定に戻す」は上書きを持つ層でだけ押せる。空の明るさは、Sceneの光が届かない面を空からの照り返しでどれだけ起こすかであり、0にできることと0にしたときの結果を説明文に置く。 | 変更は密度や傾斜と同じ一件のScene更新として保存し、Scene View、Play、生成Worldは同じ解決済みの値で草を描く。上書きを全て戻した層はappearanceを持たないScene documentへ戻る。層の選択、ブラシの狙い先、Inspectorの位置は変えない。 |
 | MI-88 | Editorのpanel幅が狭くなり、Scene ViewまたはAssetsのheaderに操作が収まらなくなる | headerは常に一行を保ち、操作を折り返さず、他の操作の上へ重ねない。名前は先に短く切り、次にラベルだけをアイコンへ落とす。Scene Viewのカメラ投影方式・表示モード・診断・録画は一つの「表示」ポップオーバーへまとまり、Assetsの検索欄は縮み、外部から追加・インポートはアイコンだけになる。判定はwindow幅ではなくpanel自身の幅で行い、panelのdragによる幅変更にも同じように反応する。 | 収まらない操作を消さず、同じ要素のまま到達できる状態を残す。ラベルを隠した操作には読み上げ名と`title`を残す。Play / 停止と録画中の状態はまとめ先へ隠さず、ポップオーバーの見出しに現在の状態を出す。ポップオーバーは領域外のpointerとEscapeで閉じ、SceneDocument、selection、Undo履歴を変更しない。 |
-| MI-89 | Text ComponentでGoogle Fontsの書体を選び、文字の後ろに背景の板を付ける | 書体は「自動」と、日本語・欧文に分けた一覧から選ぶ。選んだ書体は初回だけ配布元から取得し、取得が終わるまで文字は組版せず、背景の板だけを先に置く。取得済みの書体は再取得せず、すぐ表示する。背景は「なし」「色」「画像」から選び、板の大きさは「文字に合わせる」を既定にして、余白だけで看板の形を決められるようにする。板と文字はライトの影響を受けず、部屋の明るさに関わらず同じ見え方になる。 | 取得できなかった書体は自動の書体で表示し、Inspectorにその可能性を文言で残す。板は文字の実測値から組み立てるため、Scene View、Play、公開先で同じ位置と大きさになる。範囲外の余白、不透明度、幅・高さはSceneDocument、selection、historyを変更しない。背景に画像を選んで未設定のままなら、色だけで表示することを同じInspectorに示す。 |
+| MI-89 | Interaction Triggerを付けたEntityをPlayで押す | ポインタが押せる対象に重なる間だけカーソルをpointerにし、押した瞬間の追加演出は足さない。結果はEntityの表示、音、Lightなど対象そのものの変化で示す。 | 押せる対象がない場所ではカーソルを戻す。カメラ操作のドラッグ終わりはインタラクトにしない。Editでは押せる状態にせず、Stopで実行時の変更を破棄して制作状態へ戻す。 |
+| MI-90 | Text ComponentでGoogle Fontsの書体を選び、文字の後ろに背景の板を付ける | 書体は「自動」と、日本語・欧文に分けた一覧から選ぶ。選んだ書体は初回だけ配布元から取得し、取得が終わるまで文字は組版せず、背景の板だけを先に置く。取得済みの書体は再取得せず、すぐ表示する。背景は「なし」「色」「画像」から選び、板の大きさは「文字に合わせる」を既定にして、余白だけで看板の形を決められるようにする。板と文字はライトの影響を受けず、部屋の明るさに関わらず同じ見え方になる。 | 取得できなかった書体は自動の書体で表示し、Inspectorにその可能性を文言で残す。板は文字の実測値から組み立てるため、Scene View、Play、公開先で同じ位置と大きさになる。範囲外の余白、不透明度、幅・高さはSceneDocument、selection、historyを変更しない。背景に画像を選んで未設定のままなら、色だけで表示することを同じInspectorに示す。 |
 
 ## 機能一覧
 
@@ -148,8 +149,10 @@ F-06 アイテム検査
 | F-33 | Wind Component | MI-03, MI-05, MI-09, MI-11, MI-13, MI-14, MI-15, MI-16, MI-81 | Entity InspectorまたはMCPからWind Componentを明示的に追加し、対象Entityと子MeshだけへScene Settingsのグローバル風設定を適用する。Editor Preview、Play、生成World、Runtime manifestは同じComponentとScene値を使い、名前・Mesh分類・言語に依存した対象推測を行わない。 |
 | F-34 | Skybox Shader（手続き的な空） | MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-82, MI-83 | 画像Skyboxではなく、Custom Shader Materialとして昼・夕暮れ・朝焼け・夜空・オーロラ・星雲の空を追加できる。星の数、太陽と月の位置、月の満ち欠け、雲、地平線の遠景をuniformで調整でき、レイマーチする厚みのある雲も選べる。外部リソース集での調整とInspectorでの再調整が同じMaterialを指し、Scene View、Play、生成Worldが同じGLSLを描く。Materialが欠落した場合はグラデーションへ戻し、警告診断を残す。重いpresetはstep数をvariant defineとして残し、下げられる状態にする。 |
 | F-35 | Visual QA診断と短時間録画 | MI-03, MI-05, MI-14, MI-26, MI-80 | Scene ViewとPlay Windowで実rendererのFPS、frame time、draw calls、triangles、mesh可視数、camera Farを確認でき、最大15秒のWebMを保存して問題の発生前後を再現できる。診断や録画はSceneDocument、AssetManifest、Undo履歴を変更せず、停止・保存失敗・WebM非対応から同じScene Viewへ戻れる。 |
-| F-36 | Audio Asset試聴 | MI-03, MI-05, MI-09, MI-15, MI-20 | Audio AssetをAssetsから選ぶだけで試聴でき、Audio Sourceの作成やSceneDocumentを変更しない。 |
-| F-37 | Text Component（書体・背景） | MI-05, MI-09, MI-81, MI-89 | Text、Text Panel（看板）、Text Caption（作品キャプション）を同じComponent Registryから追加し、Google Fontsの日本語・欧文書体、色、太さ、揃え、行間と、色または画像の背景板をInspectorで設定できる。板は文字の実測値に合わせて組み立て、Scene View、Play、生成Classic source、公開Worldが同じ描画経路で同じ見た目になる。取得できない書体は自動の書体へ、出力できない背景画像は色だけの板へ落とし、文字は必ず表示する。 |
+| F-36 | Audio Asset試聴 | MI-03, MI-05, MI-09, MI-15, MI-20 | Audio AssetのInspectorから音源を試聴でき、SceneDocumentとAudio Sourceの配置を変更しない。 |
+| F-37 | Texture解像度変更・圧縮の適用 | MI-03, MI-05, MI-09, MI-15, MI-16, MI-25, MI-67 | Texture Inspectorの最大解像度・圧縮設定を、その場で原本の画像ファイルへ書き出せる。変換前後の解像度、形式、容量を同じ場所で見比べ、未反映のまま公開されない状態にする。環境Textureや書き戻せない形式は理由を示して実行させない。 |
+| F-38 | インタラクトのトリガー | MI-05, MI-09, MI-11, MI-14, MI-25, MI-60, MI-89 | EntityへInteraction Triggerを付け、公式Interactableで押したときに別Entityやそのコンポーネントのプロパティを変えられる。対象、コンポーネント、プロパティ、値はノードエディタのSceneから選び、Inspectorには押したときの動きが一覧で残る。Play、公開ワールド、MCPは同じcanonical graphと同じ適用経路を使う。 |
+| F-39 | Text Component（書体・背景） | MI-05, MI-09, MI-81, MI-90 | Text、Text Panel（看板）、Text Caption（作品キャプション）を同じComponent Registryから追加し、Google Fontsの日本語・欧文書体、色、太さ、揃え、行間と、色または画像の背景板をInspectorで設定できる。板は文字の実測値に合わせて組み立て、Scene View、Play、生成Classic source、公開Worldが同じ描画経路で同じ見た目になる。取得できない書体は自動の書体へ、出力できない背景画像は色だけの板へ落とし、文字は必ず表示する。 |
 
 ## F-01 CLI更新の状態設計
 
@@ -1354,9 +1357,70 @@ F-06 アイテム検査
 
 - 試聴の終了後も同じAudio Asset Inspectorに留まり、Audio Sourceへの配置は既存の配置操作から続けられる。
 
-## F-37 Text Component（書体・背景）の状態設計
+## F-37 Texture解像度変更・圧縮の適用の状態設計
 
-参照: MI-05, MI-09, MI-81, MI-89
+参照: MI-03, MI-05, MI-09, MI-15, MI-16, MI-25, MI-67
+
+### 操作前
+
+- Texture Inspectorの最大解像度と圧縮（方式・Quality）は設定として保持されるだけで、原本の画像ファイルは変わらない。「画像の書き出し」に現在の解像度・形式・容量と、変換後の解像度・形式・Qualityを並べて示す。
+- 設定が原本と一致していて変換するものがない場合は、その理由を示して実行操作を無効にする。環境Texture（HDRI）、KTX2やSVGなど書き戻せない形式、外部・組み込みsource、解析結果のないAssetは、実行操作を出さずに対応していない理由を示す。
+- 未反映の設定があるときは、変換するまで表示と公開結果が原本のままであること、書き出しても元の画像fileは残ることを操作の前に示す。
+- Play中と、アセットのインポート・Model再インポート・別Textureの変換中は実行できない。理由と、停止または完了後に同じInspectorから実行できることを示す。
+
+### 処理中
+
+- ボタンを「変換中」にして無効化し、同じTextureの設定変更も止める。読み込み・変換・保存の段階を文言で示し、二重実行を示さない。
+- 書き出しは`assets/.optimized/`へハッシュ名の新しいfileとして保存し、元の原本を上書きしない。保存に失敗した場合はAssetManifestを変更せず、表示中のTextureも壊さない。
+
+### 成功時
+
+- 変換後の解像度、形式、変換前後の容量をInspectorに残し、通知にも同じ内容を出す。AssetのsourceとImport metadataを書き出したfileへ切り替え、最大解像度は「原寸」、圧縮方式は「source」へ戻して、未反映の設定が残らないようにする。
+- 一件のUndo履歴として確定し、自動保存へ引き継ぐ。生成済みthumbnailはstaleにして再生成の対象にする。Undoで変換前のAssetへ戻る。
+
+### 失敗時
+
+- 失敗理由をInspectorと通知の両方に残し、元の原本と設定を保持する。変換中に同じTextureの設定が変わった場合は、書き出した画像を採用せず取り消したことを示す。
+- 未保存のプロジェクトでは実行せず、初回の自動保存後に実行できることを示す。
+
+### 戻り先
+
+- 成功・失敗のいずれでも同じTexture Inspectorに留まり、設定を変えて再実行するか、Upload reviewの容量見積もりへ進める。Upload reviewの一括最適化と同じ変換結果の保存先を使う。
+
+## F-38 インタラクトのトリガーの状態設計
+
+参照: MI-05, MI-09, MI-11, MI-14, MI-25, MI-60, MI-89
+
+### 操作前
+
+- Add ComponentのInteractionカテゴリに「Interaction Trigger」を置く。Interactivity Graphが一つもない場合は追加と同時に作成し、「インタラクトされたとき」だけを置いたGraphをノードエディタで開く。
+- Inspectorのカードには対象Graphの選択、Graphを開く操作、押したときの動きの一覧を出す。Interactableが付いていないEntityでは「押せない」ことと追加操作を先に示し、Play後に気づかせない。
+- ノードエディタのパレットは「インタラクトされたとき」をイベント、「プロパティを変える」「プロパティを切り替える」をEntity操作として並べる。追加直後のactionは対象未設定であることを診断に出す。
+
+### 処理中
+
+- action nodeを選ぶと、Entity、Component、プロパティを現在のSceneから選ぶ。Componentを変えるとプロパティは新しい対象で有効なものへ置き換え、値socketの型も一緒に書き換える。
+- 値はプロパティの型で編集する。ON/OFFはチェックボックス、数値は範囲付きの入力、色はカラーピッカー、再生状態は選択肢で示し、生のfloat配列を直接編集させない。
+- 未設定、対象が見つからない、ON/OFF以外への切り替えは、保存を止めずに警告としてDiagnosticsへ出す。canonical JSONからは削除しない。
+
+### 成功時
+
+- ノードカードには「Speaker / Audio Source の 再生 を 再生 にする」のように対象と結果を書く。Inspectorの一覧も同じ文で、Graphを開かずに何が起きるか分かる状態にする。
+- Playでは公式Interactableの登録をStudioがレイキャストし、押したときにAudio Source、Light、Entityの表示へ適用する。公開ワールドは同じruntime moduleとcanonical graphを出力し、Playと同じ結果になる。
+- Triggerが表示を戻すEntityは、無効なままでも非表示の状態で公開ワールドへ出力する。
+
+### 失敗時
+
+- Graph未設定、参照先Asset欠落、インタラクトのイベントがないGraphは公開時に診断を出し、Runtime JSON出力では実行できないためblockingにする。
+- Play中の適用は実行時のみで、Stopすると元の値へ戻る。物理コライダーはEntityの表示と別で、Triggerでは変えない。
+
+### 戻り先
+
+- ノードエディタを閉じると同じEntityのInspectorへ戻る。Inspectorの「開く」から同じGraphへ再び到達できる。
+- 変更はUndoとAutosaveの対象で、Graphの保存はAssetへ入り、同じGraphを使う他のEntityにも反映される。
+## F-39 Text Component（書体・背景）の状態設計
+
+参照: MI-05, MI-09, MI-81, MI-90
 
 ### 操作前
 

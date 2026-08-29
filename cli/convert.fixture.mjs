@@ -52,6 +52,7 @@ import {
   runTerrainPresetFixtureAssertions,
 } from "../src/lib/visual-editor/terrain-grass.fixture.ts";
 import { runTerrainSurfaceFixtureAssertions } from "../src/lib/visual-editor/terrain-surface.fixture.ts";
+import { runTextureProcessingFixtureAssertions } from "../src/lib/visual-editor/texture-processing.fixture.ts";
 import { runAssetOperationLockFixtureAssertions } from "../src/components/visual-editor/asset-operation-lock.fixture.ts";
 import { runAutosaveCoordinatorFixtureAssertions } from "../src/components/visual-editor/autosave-coordinator.fixture.ts";
 import { runCustomMaterialPreviewFixtureAssertions } from "../src/components/visual-editor/CustomMaterialPreview.fixture.ts";
@@ -85,6 +86,8 @@ import {
   runInteractivityRecipeFixtureAssertions,
   runInteractivityRuntimeAdapterFixtureAssertions,
 } from "../src/lib/visual-editor/interactivity-recipes.fixture.ts";
+import { runInteractionTriggerFixtureAssertions } from "../src/lib/visual-editor/interaction-trigger.fixture.ts";
+import { runInteractionTriggerApplierFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/interaction-trigger-applier.fixture.ts";
 import { runVisualUploadFixtureAssertions } from "../src/lib/visual-editor/upload.fixture.ts";
 import { runRuntimeSpawnFixtureAssertions } from "../src/lib/visual-editor/runtime-spawn.fixture.ts";
 import { runSkyboxImportFixtureAssertions } from "../src/lib/visual-editor/skybox-import.fixture.ts";
@@ -305,9 +308,12 @@ try {
     ["lighting contract", runLightingContractFixtureAssertions],
     ["material alpha", runMaterialAlphaFixtureAssertions],
     ["interactivity recipes", runInteractivityRecipeFixtureAssertions],
+    ["interaction trigger", runInteractionTriggerFixtureAssertions],
+    ["interaction trigger applier", runInteractionTriggerApplierFixtureAssertions],
     ["interactivity runtime adapter", runInteractivityRuntimeAdapterFixtureAssertions],
     ["visual upload branch", runVisualUploadFixtureAssertions],
     ["classic project import", runClassicProjectImportFixtureAssertions],
+    ["texture processing", runTextureProcessingFixtureAssertions],
     ["asset operation lock", runAssetOperationLockFixtureAssertions],
     ["audio import", runAudioImportFixtureAssertions],
     ["autosave coordinator", runAutosaveCoordinatorFixtureAssertions],

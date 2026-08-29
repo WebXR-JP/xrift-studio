@@ -159,15 +159,23 @@ export function OfficialXriftComponentRenderer({
 
 export function OfficialXriftEntityWrappers({
   components,
+  onInteract,
   children,
 }: {
   components: readonly XriftSceneComponent[];
+  /**
+   * Called when the official Interactable reports an interaction.
+   *
+   * Omitted outside Play and in catalog previews, where interacting with a
+   * sample must not run an Entity's Interaction Trigger.
+   */
+  onInteract?: () => void;
   children: ReactNode;
 }) {
   return components
     .filter((component) => component.enabled && isOfficialXriftWrapperComponent(component))
     .reduceRight<ReactNode>(
-      (content, component) => wrapOfficialComponent(component, content),
+      (content, component) => wrapOfficialComponent(component, content, onInteract),
       children,
     );
 }
@@ -252,6 +260,7 @@ export function officialXriftComponentNeedsPhysics(
 function wrapOfficialComponent(
   component: XriftSceneComponent,
   children: ReactNode,
+  onInteract?: () => void,
 ): ReactNode {
   const properties = component.properties;
   switch (component.schemaId) {
@@ -261,7 +270,7 @@ function wrapOfficialComponent(
         "children" | "onInteract"
       >;
       return (
-        <Interactable {...props} onInteract={() => {}}>
+        <Interactable {...props} onInteract={onInteract ?? (() => {})}>
           {children}
         </Interactable>
       );

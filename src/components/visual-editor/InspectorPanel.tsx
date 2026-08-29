@@ -30,6 +30,12 @@ import {
   type ScriptEntityOption,
 } from "./ScriptComponentInspector";
 import type { ScriptContract } from "../../lib/visual-editor/scripting/script-contract";
+import { InteractionTriggerInspector } from "./InteractionTriggerInspector";
+import {
+  collectInteractionTriggerTargets,
+  XRIFT_COMPONENT_SCHEMA_IDS,
+} from "../../lib/visual-editor";
+import type { InteractionTriggerPatch } from "../../lib/visual-editor/scene-document";
 import {
   AUTOMATIC_TEXT_FONT_ID,
   TEXT_FONT_CATALOG,
@@ -115,7 +121,10 @@ import {
   type RigidBodyComponent,
   type RigidBodyPatch,
 } from "../../lib/visual-editor";
-import { AssetQuickEditor } from "./AssetQuickEditor";
+import {
+  AssetQuickEditor,
+  type TextureProcessingState,
+} from "./AssetQuickEditor";
 import { tauri } from "../../lib/tauri";
 import type {
   ModelReimportImpactNotice,
@@ -3476,6 +3485,24 @@ function TextInspector({
         disabled={readOnly}
         onChange={(fontSize) => onChange({ fontSize })}
       />
+      <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+        <span className="text-[11px] text-slate-500">大きさを引いて調整</span>
+        <input
+          type="range"
+          aria-label="Font Sizeのスライダー"
+          min={0.01}
+          // 大きな見出しを数値で入れた後もつまみが端に張り付かないよう、上限を追従させる。
+          max={Math.max(1, roundTo(component.fontSize, 2))}
+          step={0.01}
+          value={component.fontSize}
+          disabled={readOnly}
+          onChange={(event) => {
+            const fontSize = event.currentTarget.valueAsNumber;
+            if (Number.isFinite(fontSize) && fontSize > 0) onChange({ fontSize });
+          }}
+          className="h-2 w-full cursor-ew-resize accent-violet-600 disabled:cursor-not-allowed disabled:opacity-50"
+        />
+      </label>
       <ColliderNumberField
         label="Max Width"
         value={component.maxWidth ?? 10}
@@ -4249,6 +4276,7 @@ function EntityInspector({
   scriptEntityOptions,
   onUpdateScriptComponent,
   onOpenScript,
+  onUpdateInteractionTrigger,
 }: {
   entity: SceneEntity;
   scene: SceneDocument;
@@ -4329,8 +4357,18 @@ function EntityInspector({
     patch: ScriptComponentPatch,
   ) => void;
   onOpenScript?: (scriptAssetId: string) => void;
+  onUpdateInteractionTrigger?: (
+    componentId: string,
+    patch: InteractionTriggerPatch,
+  ) => void;
 }) {
   const transform = getTransform(entity);
+  // Trigger targets follow the Scene, so an Entity renamed or added while the
+  // Inspector is open shows up in the summary without reopening it.
+  const interactionTriggerTargets = useMemo(
+    () => collectInteractionTriggerTargets(scene),
+    [scene],
+  );
   const [addComponentOpen, setAddComponentOpen] = useState(false);
   const [addComponentSearchQuery, setAddComponentSearchQuery] = useState("");
   const addComponentSearchInputRef = useRef<HTMLInputElement>(null);
@@ -4656,6 +4694,31 @@ function EntityInspector({
             </ComponentCard>
           );
         }
+        if (component.type === "interaction-trigger") {
+          const graphAsset = assets.assets[component.interactivityAssetId];
+          return (
+            <ComponentCard
+              key={component.id}
+              title="Interaction Trigger"
+              subtitle={graphAsset?.name ?? "未設定"}
+            >
+              <InteractionTriggerInspector
+                component={component}
+                entity={entity}
+                assets={assets}
+                targets={interactionTriggerTargets}
+                readOnly={readOnly}
+                onPatch={(patch) =>
+                  onUpdateInteractionTrigger?.(component.id, patch)
+                }
+                onOpenGraph={onOpenInteractivity}
+                onAddInteractable={() =>
+                  onAddComponent(XRIFT_COMPONENT_SCHEMA_IDS.interactable)
+                }
+              />
+            </ComponentCard>
+          );
+        }
         if (component.type === "script") {
           const scriptAsset = assets.assets[component.scriptAssetId];
           return (
@@ -4926,6 +4989,7 @@ export function InspectorPanel({
   scriptContracts,
   scriptEntityOptions,
   onUpdateScriptComponent,
+  onUpdateInteractionTrigger,
   onOpenScript,
   onOpenShader,
   onOpenMaterialShader,
@@ -4939,6 +5003,8 @@ export function InspectorPanel({
   onParticleChange,
   onTextureChange,
   onCreateTextureCard,
+  textureProcessingState,
+  onApplyTextureProcessing,
   onParticleEmitterChange,
   onRemoveParticleEmitter,
   projectKind,
@@ -5028,6 +5094,11 @@ export function InspectorPanel({
     patch: ScriptComponentPatch,
   ) => void;
   onOpenScript?: (scriptAssetId: string) => void;
+  onUpdateInteractionTrigger?: (
+    entityId: string,
+    componentId: string,
+    patch: InteractionTriggerPatch,
+  ) => void;
   onOpenShader: (shaderAssetId: string) => void;
   onOpenMaterialShader: (
     materialAssetId: string,
@@ -5050,6 +5121,8 @@ export function InspectorPanel({
     textureAssetId: string,
     profile: TextureCardProfile,
   ) => void;
+  textureProcessingState?: TextureProcessingState;
+  onApplyTextureProcessing?: (assetId: string) => void;
   onParticleEmitterChange: (
     entityId: string,
     componentId: string,
@@ -5220,6 +5293,8 @@ export function InspectorPanel({
               onParticleChange={onParticleChange}
               onTextureChange={onTextureChange}
               onCreateTextureCard={onCreateTextureCard}
+              textureProcessingState={textureProcessingState}
+              onApplyTextureProcessing={onApplyTextureProcessing}
               prefabs={prefabs}
               onSelectPrefabSourceEntity={onSelectPrefabSourceEntity}
               onUpdatePrefab={onUpdatePrefab}
@@ -5310,6 +5385,14 @@ export function InspectorPanel({
             {...(scriptEntityOptions ? { scriptEntityOptions } : {})}
             {...(onUpdateScriptComponent ? { onUpdateScriptComponent } : {})}
             {...(onOpenScript ? { onOpenScript } : {})}
+            {...(onUpdateInteractionTrigger
+              ? {
+                  onUpdateInteractionTrigger: (
+                    componentId: string,
+                    patch: InteractionTriggerPatch,
+                  ) => onUpdateInteractionTrigger(entity.id, componentId, patch),
+                }
+              : {})}
             projectKind={projectKind}
             onAddComponent={(definitionId) =>
               onAddComponent(entity.id, definitionId)

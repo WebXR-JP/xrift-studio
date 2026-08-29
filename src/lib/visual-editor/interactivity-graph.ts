@@ -4,6 +4,15 @@ import {
   walkOnStart,
   type InteractivityRuntimeSupport,
 } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
+import {
+  collectXriftInteractionIssues,
+  getXriftInteractionProperty,
+  xriftInteractionEnumIndex,
+  XRIFT_INTERACTION_EXTENSION_NAME,
+  XRIFT_INTERACTION_OPERATIONS,
+  type XriftInteractionPropertyDescriptor,
+  type XriftInteractionTargetKind,
+} from "../../../packages/xrift-studio-runtime/src/script/interaction-trigger";
 import type { AssetManifest, InteractivityAsset } from "./asset-manifest";
 
 export const KHR_INTERACTIVITY_EXTENSION_NAME = "KHR_interactivity" as const;
@@ -89,7 +98,23 @@ export type InteractivityDiagnostic = {
 export type InteractivityOperationTemplate = {
   op: string;
   label: string;
-  category: "event" | "flow" | "animation" | "variable" | "pointer" | "math";
+  /**
+   * glTF extension that defines this operation.
+   *
+   * Present only for XRift's own operations. KHR_interactivity requires an
+   * extension-defined declaration to name it, and the validator rejects a
+   * non-core `op` without one, so the declaration writer reads it from here
+   * rather than from a second list that could fall out of step.
+   */
+  extension?: string;
+  category:
+    | "event"
+    | "flow"
+    | "animation"
+    | "variable"
+    | "pointer"
+    | "math"
+    | "entity";
   flowInputs: string[];
   flowOutputs: string[];
   valueInputs: string[];
@@ -402,6 +427,55 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     }),
   },
   {
+    op: XRIFT_INTERACTION_OPERATIONS.onInteract,
+    label: "インタラクトされたとき",
+    category: "event",
+    extension: XRIFT_INTERACTION_EXTENSION_NAME,
+    flowInputs: [],
+    flowOutputs: ["out"],
+    valueInputs: [],
+    valueOutputs: [],
+  },
+  {
+    op: XRIFT_INTERACTION_OPERATIONS.setProperty,
+    label: "プロパティを変える",
+    category: "entity",
+    extension: XRIFT_INTERACTION_EXTENSION_NAME,
+    flowInputs: ["in"],
+    flowOutputs: ["out"],
+    valueInputs: ["value"],
+    valueOutputs: [],
+    // A new action starts on the Entity's own visibility: the one property
+    // every Entity has, so the node is complete except for its target.
+    createNode: (types) => ({
+      configuration: {
+        entity: { value: [""] },
+        component: { value: [""] },
+        targetKind: { value: ["entity"] },
+        property: { value: ["enabled"] },
+      },
+      values: { value: { type: types.bool, value: [true] } },
+    }),
+  },
+  {
+    op: XRIFT_INTERACTION_OPERATIONS.toggleProperty,
+    label: "プロパティを切り替える",
+    category: "entity",
+    extension: XRIFT_INTERACTION_EXTENSION_NAME,
+    flowInputs: ["in"],
+    flowOutputs: ["out"],
+    valueInputs: [],
+    valueOutputs: [],
+    createNode: () => ({
+      configuration: {
+        entity: { value: [""] },
+        component: { value: [""] },
+        targetKind: { value: ["entity"] },
+        property: { value: ["enabled"] },
+      },
+    }),
+  },
+  {
     op: "math/Inf",
     label: "無限値",
     category: "math",
@@ -462,6 +536,12 @@ const KHR_INTERACTIVITY_RUNTIME_NOTES: Readonly<Record<string, string>> = {
     "condition が inline の定数のときだけ、その分岐を辿ります。condition を他の node から接続した場合は評価できないため、この node で止まります。",
   "flow/setDelay":
     "duration が inline の定数のときだけ待機します。`done` は待機後、`out` は待機せずに続きます。`cancel` と `err` は未実装です。",
+  [XRIFT_INTERACTION_OPERATIONS.onInteract]:
+    "このグラフをInteraction ComponentでEntityへ接続し、そのEntityに公式のInteractableがあるときに動きます。",
+  [XRIFT_INTERACTION_OPERATIONS.setProperty]:
+    "対象Entity、Component、プロパティを選ぶと、インタラクト時にその値を書き込みます。値は定数だけを読みます。",
+  [XRIFT_INTERACTION_OPERATIONS.toggleProperty]:
+    "対象のON/OFFを、インタラクトのたびに反転します。切り替えられるのはON/OFFのプロパティだけです。",
   "variable/get": KHR_INTERACTIVITY_IGNORED_VALUE_NOTE,
   "pointer/get": KHR_INTERACTIVITY_IGNORED_VALUE_NOTE,
   "math/Inf": KHR_INTERACTIVITY_IGNORED_VALUE_NOTE,
@@ -644,6 +724,26 @@ export type {
   InteractivityRuntimeSupport,
 } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
 export { getKhrInteractivityOnStartAnimationCues } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
+export {
+  collectXriftInteractionIssues,
+  collectXriftInteractionPrograms,
+  getXriftInteractionProperties,
+  getXriftInteractionProperty,
+  hasXriftInteractionTrigger,
+  xriftInteractionEnumIndex,
+  XRIFT_INTERACTION_EXTENSION_NAME,
+  XRIFT_INTERACTION_OPERATIONS,
+  XRIFT_INTERACTION_PROPERTIES,
+  XRIFT_INTERACTION_TARGET_KINDS,
+  XRIFT_INTERACTION_TARGET_LABELS,
+} from "../../../packages/xrift-studio-runtime/src/script/interaction-trigger";
+export type {
+  XriftInteractionAction,
+  XriftInteractionProgram,
+  XriftInteractionPropertyDescriptor,
+  XriftInteractionPropertyKind,
+  XriftInteractionTargetKind,
+} from "../../../packages/xrift-studio-runtime/src/script/interaction-trigger";
 
 
 /**
@@ -714,6 +814,16 @@ export function collectInteractivityRuntimeDiagnostics(
       }
     });
   });
+  // An Interaction Trigger action is not unsupported, it is unfinished: the
+  // author still has to say which Entity and property it writes. Reporting it
+  // here puts it in the same list as everything else Play will not run.
+  for (const issue of collectXriftInteractionIssues(value)) {
+    diagnostics.push({
+      severity: "warning",
+      path: `$.graphs[${issue.graphIndex}].nodes[${issue.nodeIndex}]`,
+      message: `${issue.op}: ${INTERACTION_ISSUE_MESSAGES[issue.reason]}`,
+    });
+  }
   // Path-dependent findings come from the walk itself, so the Editor cannot
   // report a node as fine while the adapter quietly refuses to run it.
   for (const issue of walkOnStart(value).issues) {
@@ -724,6 +834,143 @@ export function collectInteractivityRuntimeDiagnostics(
     });
   }
   return diagnostics;
+}
+
+const INTERACTION_ISSUE_MESSAGES: Readonly<Record<string, string>> = {
+  "incomplete-configuration":
+    "対象のEntity・Component・値がまだ決まっていないため、この node と、ここから先の flow は動きません。",
+  "unknown-property":
+    "このプロパティはPlayと公開先のどちらでも変更できません。対応しているプロパティを選び直してください。",
+  "unsupported-toggle":
+    "切り替えはON/OFFのプロパティだけに使えます。数値や色は「プロパティを変える」で設定してください。",
+};
+
+/**
+ * Writes an Interaction Trigger action's target.
+ *
+ * The selector lives in `configuration` rather than in value sockets because it
+ * is structural: which Entity, which Component, which property. The value the
+ * action writes stays in the `value` socket, where the KHR type system can
+ * check it.
+ */
+export function configureInteractivityTriggerAction(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+  target: {
+    entityId: string;
+    componentId: string;
+    targetKind: XriftInteractionTargetKind;
+    property: string;
+  },
+): boolean {
+  const node = graph.nodes?.[nodeIndex];
+  const declaration = node ? graph.declarations?.[node.declaration] : undefined;
+  const op = declaration?.op;
+  if (
+    !node ||
+    (op !== XRIFT_INTERACTION_OPERATIONS.setProperty &&
+      op !== XRIFT_INTERACTION_OPERATIONS.toggleProperty)
+  ) {
+    return false;
+  }
+  const descriptor = getXriftInteractionProperty(
+    target.targetKind,
+    target.property,
+  );
+  if (!descriptor) return false;
+  node.configuration = {
+    ...(node.configuration ?? {}),
+    entity: { value: [target.entityId] },
+    component: { value: [target.componentId] },
+    targetKind: { value: [target.targetKind] },
+    property: { value: [target.property] },
+  };
+  if (op === XRIFT_INTERACTION_OPERATIONS.setProperty) {
+    // The socket's type follows the property, so switching from a number to a
+    // colour cannot leave a value the runtime would read as the wrong shape.
+    setInteractivityTriggerActionValue(
+      graph,
+      nodeIndex,
+      descriptor,
+      defaultTriggerActionValue(descriptor),
+    );
+  } else if (node.values) {
+    delete node.values.value;
+  }
+  return true;
+}
+
+/** The value a freshly targeted action writes, before the author edits it. */
+export function defaultTriggerActionValue(
+  descriptor: XriftInteractionPropertyDescriptor,
+): KhrInteractivityJsonValue[] {
+  switch (descriptor.kind) {
+    case "bool":
+      return [Boolean(descriptor.defaultValue)];
+    case "float":
+      return [Number(descriptor.defaultValue)];
+    case "color": {
+      const color = descriptor.defaultValue as readonly [number, number, number];
+      return [color[0], color[1], color[2]];
+    }
+    case "enum":
+      return [xriftInteractionEnumIndex(descriptor, String(descriptor.defaultValue))];
+  }
+}
+
+/** Writes the action's value socket with the type its property requires. */
+export function setInteractivityTriggerActionValue(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+  descriptor: XriftInteractionPropertyDescriptor,
+  value: KhrInteractivityJsonValue[],
+): boolean {
+  const node = graph.nodes?.[nodeIndex];
+  if (!node) return false;
+  graph.types ??= [];
+  const signature =
+    descriptor.kind === "bool"
+      ? "bool"
+      : descriptor.kind === "float"
+        ? "float"
+        : descriptor.kind === "color"
+          ? "float3"
+          : "int";
+  const existing = graph.types.findIndex((type) => type.signature === signature);
+  const typeIndex = existing >= 0 ? existing : graph.types.push({ signature }) - 1;
+  node.values = {
+    ...(node.values ?? {}),
+    value: { type: typeIndex, value },
+  };
+  return true;
+}
+
+/** Reads an action's target, for the Editor's pickers and node summaries. */
+export function readInteractivityTriggerAction(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+): {
+  entityId: string;
+  componentId: string;
+  targetKind: string;
+  property: string;
+  value: KhrInteractivityJsonValue[] | null;
+} | null {
+  const node = graph.nodes?.[nodeIndex];
+  if (!node) return null;
+  const configured = (name: string): string => {
+    const entry = node.configuration?.[name];
+    const first = Array.isArray(entry?.value) ? entry.value[0] : undefined;
+    return typeof first === "string" ? first : "";
+  };
+  const socket = node.values?.value;
+  return {
+    entityId: configured("entity"),
+    componentId: configured("component"),
+    targetKind: configured("targetKind"),
+    property: configured("property"),
+    value: Array.isArray(socket?.value) ? socket.value : null,
+  };
 }
 
 function isNonNegativeInteger(value: unknown): value is number {

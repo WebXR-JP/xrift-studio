@@ -124,6 +124,12 @@ import {
   updateParticleAsset,
   updatePrefabDocumentFromSource,
   updateTextureAsset,
+  addDefaultInteractivityAsset,
+  applyTextureProcessing,
+  collectInteractionTriggerTargets,
+  createInteractionTriggerGraphExtension,
+  syncInteractionTriggerEntityReferences,
+  updateInteractionTriggerComponent,
   updateInteractivityAsset,
   updateXriftComponent,
   type ColliderPatch,
@@ -137,6 +143,7 @@ import {
   type SceneRecipe,
   instantiateSceneRecipe,
   type AudioSourcePatch,
+  type InteractionTriggerPatch,
   type VegetationWindPatch,
   type LightPatch,
   type MaterialAssetPatch,
@@ -228,6 +235,7 @@ import {
   type MaterialSlotAssignmentOption,
 } from "./MaterialSlotAssignmentDialog";
 import type { ModelReimportState } from "./ModelAssetInspector";
+import type { TextureProcessingState } from "./AssetQuickEditor";
 import {
   InspectorPanel,
   type MeshInspectorPatch,
@@ -293,7 +301,7 @@ import {
   createScriptTrustSnapshotKey,
   type ScriptTrustDialogResult,
 } from "./ScriptTrustDialog";
-import { roundTo } from "./editor-utils";
+import { formatFileSize, roundTo } from "./editor-utils";
 import {
   DEFAULT_EDITOR_LAYOUT,
   EDITOR_LAYOUT_STORAGE_KEY,
@@ -405,6 +413,11 @@ type PendingMaterialAssignment = {
 type ModelReimportFeedback = {
   assetId: string;
   state: ModelReimportState;
+} | null;
+
+type TextureProcessingFeedback = {
+  assetId: string;
+  state: TextureProcessingState;
 } | null;
 
 function entityTransformMatches(
@@ -1324,6 +1337,8 @@ export function VisualEditorPrototype({
     useState<PendingMaterialAssignment>(null);
   const [modelReimportFeedback, setModelReimportFeedback] =
     useState<ModelReimportFeedback>(null);
+  const [textureProcessingFeedback, setTextureProcessingFeedback] =
+    useState<TextureProcessingFeedback>(null);
   const [activeAssetFolderId, setActiveAssetFolderId] = useState<string | null>(null);
   const [frameSelectionRequest, setFrameSelectionRequest] = useState(0);
   const [exitFocusRequest, setExitFocusRequest] = useState(0);
@@ -1395,7 +1410,7 @@ export function VisualEditorPrototype({
   const importQueueRef = useRef<QueuedAssetImport[]>([]);
   const importRunningRef = useRef(false);
   const assetOperationRef = useRef<{
-    kind: "asset-import" | "model-reimport";
+    kind: "asset-import" | "model-reimport" | "texture-processing";
     token: symbol;
   } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -1866,6 +1881,7 @@ export function VisualEditorPrototype({
     setDeleteDialog(null);
     setPendingMaterialAssignment(null);
     setModelReimportFeedback(null);
+    setTextureProcessingFeedback(null);
     setActiveAssetFolderId(null);
     setSelectedEntityIds(initialBundle.scene.rootEntityIds[0] ? [initialBundle.scene.rootEntityIds[0]] : []);
     setSelectedAssetIds(firstAssetId(initialBundle) ? [firstAssetId(initialBundle)!] : []);
@@ -1971,10 +1987,17 @@ export function VisualEditorPrototype({
         modelReimportFeedback.state.phase === "processing" ||
         modelReimportFeedback.state.phase === "committing"),
   );
+  const textureProcessingBusy = Boolean(
+    textureProcessingFeedback &&
+      (textureProcessingFeedback.state.phase === "reading" ||
+        textureProcessingFeedback.state.phase === "encoding" ||
+        textureProcessingFeedback.state.phase === "saving"),
+  );
   const importBusy =
     componentImportBusy ||
     mcpLocalAssetImportBusy ||
     modelReimportBusy ||
+    textureProcessingBusy ||
     pendingImports.some((entry) => importIsActive(entry.status));
   const editorModeRef = useRef(editorMode);
   editorModeRef.current = editorMode;
@@ -3995,6 +4018,9 @@ export function VisualEditorPrototype({
       modelReimportActive:
         modelReimportBusy ||
         assetOperationRef.current?.kind === "model-reimport",
+      textureProcessingActive:
+        textureProcessingBusy ||
+        assetOperationRef.current?.kind === "texture-processing",
     },
   );
   const builtinPrefabRecipes = useMemo(
@@ -5691,6 +5717,24 @@ export function VisualEditorPrototype({
     [editorMode, playSession, updateScene],
   );
 
+  const handleInteractionTriggerChange = useCallback(
+    (entityId: string, componentId: string, patch: InteractionTriggerPatch) => {
+      if (editorMode !== "edit" && !playSession) return;
+      updateScene((scene) =>
+        syncInteractionTriggerEntityReferences(
+          updateInteractionTriggerComponent(scene, entityId, componentId, patch),
+          bundleRef.current.assets,
+        ),
+      );
+      setNotice(
+        editorMode === "play"
+          ? "Interaction Triggerを保存し、このEntityのPlayを先頭から再実行しました"
+          : "Interaction TriggerをSceneへ反映しました",
+      );
+    },
+    [editorMode, playSession, updateScene],
+  );
+
   const handleAnimationChange = useCallback(
     (entityId: string, componentId: string, patch: AnimationPatch) => {
       if (editorMode !== "edit" && !playSession) return;
@@ -6350,6 +6394,8 @@ export function VisualEditorPrototype({
             hasActiveAssetImport(importQueueRef.current),
           modelReimportActive:
             assetOperationRef.current?.kind === "model-reimport",
+          textureProcessingActive:
+            assetOperationRef.current?.kind === "texture-processing",
         },
       );
       if (!availability.allowed) {
@@ -6473,14 +6519,158 @@ export function VisualEditorPrototype({
   const handleTextureChange = useCallback(
     (assetId: string, patch: TextureAssetPatch) => {
       if (editorMode !== "edit") return;
+      if (textureProcessingBusy) {
+        setNotice("Textureの変換完了後に設定を変更できます");
+        return;
+      }
       setBundle((current) => {
         const assets = updateTextureAsset(current.assets, assetId, patch);
         if (assets === current.assets) return current;
-        setNotice("Texture Import設定IRを更新しました。画像変換・圧縮は未実行です");
+        // 直前の変換結果は新しい設定に対する答えではないので、案内を戻す。
+        setTextureProcessingFeedback((feedback) =>
+          feedback?.assetId === assetId ? null : feedback,
+        );
+        setNotice(
+          "Texture Import設定を更新しました。「この設定で画像を書き出す」で原本へ反映します",
+        );
         return touchProject({ ...current, assets });
       });
     },
-    [editorMode],
+    [editorMode, textureProcessingBusy],
+  );
+
+
+  const handleApplyTextureProcessing = useCallback(
+    async (assetId: string) => {
+      const availability = resolveAssetOperationAvailability(
+        "texture-processing",
+        {
+          readOnly: editorMode !== "edit",
+          assetImportActive:
+            importRunningRef.current ||
+            hasActiveAssetImport(importQueueRef.current),
+          modelReimportActive:
+            assetOperationRef.current?.kind === "model-reimport",
+          textureProcessingActive:
+            assetOperationRef.current?.kind === "texture-processing",
+        },
+      );
+      if (!availability.allowed) {
+        const message = availability.disabledReason ?? "いまはTextureを変換できません";
+        setTextureProcessingFeedback({
+          assetId,
+          state: { phase: "failed", message },
+        });
+        setNotice(message);
+        return;
+      }
+      if (!projectPath) {
+        const message = "初回の自動保存完了後にTextureを変換できます";
+        setTextureProcessingFeedback({
+          assetId,
+          state: { phase: "failed", message },
+        });
+        setNotice(message);
+        return;
+      }
+
+      const startingAsset = bundleRef.current.assets.assets[assetId];
+      if (startingAsset?.kind !== "texture") {
+        const message = "変換するTexture Assetが見つかりません";
+        setTextureProcessingFeedback({
+          assetId,
+          state: { phase: "failed", message },
+        });
+        setNotice(message);
+        return;
+      }
+
+      const operationToken = Symbol("texture-processing");
+      assetOperationRef.current = {
+        kind: "texture-processing",
+        token: operationToken,
+      };
+      setTextureProcessingFeedback({
+        assetId,
+        state: {
+          phase: "reading",
+          message: `${startingAsset.name}を読み込んでいます`,
+        },
+      });
+
+      try {
+        const result = await applyTextureProcessing(
+          projectPath,
+          bundleRef.current.assets,
+          assetId,
+          (progress) => {
+            setTextureProcessingFeedback({
+              assetId,
+              state: { phase: progress.phase, message: progress.message },
+            });
+          },
+        );
+
+        if (!result.ok) {
+          setTextureProcessingFeedback({
+            assetId,
+            state: { phase: "failed", message: result.message },
+          });
+          setNotice(result.message);
+          return;
+        }
+
+        // 変換中に設定が動いた場合は、書き出した画像を採用せず原本のまま残す。
+        const staleMessage =
+          "変換中にTexture設定が変更されたため、適用を取り消しました。元の画像は残っています";
+        if (bundleRef.current.assets.assets[assetId] !== startingAsset) {
+          setTextureProcessingFeedback({
+            assetId,
+            state: { phase: "failed", message: staleMessage },
+          });
+          setNotice(staleMessage);
+          return;
+        }
+
+        const formatLabel =
+          result.outputFormat === "jpeg"
+            ? "JPEG"
+            : result.outputFormat.toUpperCase();
+        const summary = `${result.width} × ${result.height}の${formatLabel}へ変換しました（${formatFileSize(result.beforeBytes)} → ${formatFileSize(result.afterBytes)}）`;
+
+        setHistory((current) => {
+          if (current.present.bundle.assets.assets[assetId] !== startingAsset) {
+            setTextureProcessingFeedback({
+              assetId,
+              state: { phase: "failed", message: staleMessage },
+            });
+            setNotice(staleMessage);
+            return current;
+          }
+          const nextBundle = touchProject({
+            ...current.present.bundle,
+            assets: result.manifest,
+          });
+          bundleRef.current = nextBundle;
+          setSaveStatus("dirty");
+          setTextureProcessingFeedback({
+            assetId,
+            state: { phase: "succeeded", message: summary },
+          });
+          setNotice(`「${result.assetName}」を${summary}`);
+          return commitEditorHistory(current, {
+            ...current.present,
+            bundle: nextBundle,
+            assetSelection: assetId,
+          });
+        });
+      } finally {
+        if (assetOperationRef.current?.token === operationToken) {
+          assetOperationRef.current = null;
+        }
+      }
+    },
+    [editorMode, projectPath],
   );
 
   const handleCreateTextureCard = useCallback(
@@ -6958,6 +7148,18 @@ export function VisualEditorPrototype({
     scriptTemplateFolderId,
   ]);
 
+  /**
+   * Entities an Interactivity Graph can write to.
+   *
+   * Built here rather than inside the graph editor so the pickers always show
+   * the Scene the author is actually looking at, including edits made while the
+   * editor is open.
+   */
+  const interactionTriggerTargets = useMemo(
+    () => collectInteractionTriggerTargets(bundle.scene),
+    [bundle.scene],
+  );
+
   const handleSaveInteractivityAsset = useCallback(
     (assetId: string, extension: KhrInteractivityExtension) => {
       if (editorMode !== "edit") return;
@@ -6968,7 +7170,13 @@ export function VisualEditorPrototype({
           return current;
         }
         setNotice("KHR_interactivity GraphをAssetへ保存しました。別Sceneでも再利用できます");
-        return touchProject({ ...current, assets });
+        // The Entities the graph writes to are Component data, so saving the
+        // graph is what keeps each trigger's reference list true.
+        return touchProject({
+          ...current,
+          assets,
+          scene: syncInteractionTriggerEntityReferences(current.scene, assets),
+        });
       });
     },
     [editorMode, setBundle],
@@ -7107,9 +7315,39 @@ export function VisualEditorPrototype({
   const handleAddComponent = useCallback(
     (entityId: string, componentDefinitionId: string) => {
       const fallbackParticleId = createDocumentId("particle");
+      // Decided before the update so the editor can be opened afterwards: a
+      // state updater may run later than this callback, and reading its result
+      // from a captured variable would open nothing on the first click.
+      const needsInteractivityAsset =
+        componentDefinitionId === "interaction.trigger" &&
+        !Object.values(bundleRef.current.assets.assets).some(
+          (asset) => asset.kind === "interactivity",
+        );
+      const createdInteractivityAssetId = needsInteractivityAsset
+        ? createDocumentId("asset")
+        : null;
       setBundle((current) => {
         let assets = current.assets;
         let createdParticle = false;
+        let createdGraph = false;
+        // The same courtesy the Particle Emitter gets: a Component whose whole
+        // job is to run a graph is useless without one, so the graph is created
+        // here rather than sending the author to Assets and back.
+        if (createdInteractivityAssetId) {
+          const added = addDefaultInteractivityAsset(assets, {
+            id: createdInteractivityAssetId,
+            name: "新規Interactivity 1",
+            folderId: null,
+          });
+          if (added.added) {
+            assets = updateInteractivityAsset(
+              added.manifest,
+              added.assetId,
+              createInteractionTriggerGraphExtension(),
+            );
+            createdGraph = true;
+          }
+        }
         if (
           componentDefinitionId === "core.particle" &&
           !Object.values(assets.assets).some((asset) => asset.kind === "particle")
@@ -7129,8 +7367,9 @@ export function VisualEditorPrototype({
           entityId,
           componentDefinitionId,
           projectKind,
-          componentDefinitionId === "scripting.script"
-            ? assetSelection ?? undefined
+          componentDefinitionId === "scripting.script" ||
+          componentDefinitionId === "interaction.trigger"
+            ? createdInteractivityAssetId ?? assetSelection ?? undefined
             : undefined,
           componentDefinitionId === "scripting.script"
             ? scriptContractsRef.current
@@ -7145,7 +7384,9 @@ export function VisualEditorPrototype({
                 : result.reason === "dependency-missing"
                   ? componentDefinitionId === "scripting.script"
                     ? "先にAssetsでScriptを作成してください"
-                    : "必要なMeshまたはAssetがありません"
+                    : componentDefinitionId === "interaction.trigger"
+                      ? "先にAssetsでInteractivity Graphを作成してください"
+                      : "必要なMeshまたはAssetがありません"
                   : "Componentを追加できませんでした";
           setNotice(reason);
           return current;
@@ -7153,10 +7394,18 @@ export function VisualEditorPrototype({
         setNotice(
           createdParticle
             ? "Particle Assetを作成し、Particle Emitterを追加しました"
-            : "Componentを追加しました",
+            : createdGraph
+              ? "Interactivity Graphを作成し、Interaction Triggerを追加しました"
+              : "Componentを追加しました",
         );
         return touchProject({ ...current, assets, scene: result.scene });
       });
+      // A graph created for this Component is empty apart from its entry point,
+      // so the next step is always the node editor. Opening it is what keeps
+      // "追加した" from ending at a card the author has to hunt through.
+      if (createdInteractivityAssetId) {
+        setInteractivityEditorAssetId(createdInteractivityAssetId);
+      }
     },
     [assetSelection, editorMode, projectKind, setBundle],
   );
@@ -7846,6 +8095,8 @@ export function VisualEditorPrototype({
         importRunningRef.current || hasActiveAssetImport(importQueueRef.current),
       modelReimportActive:
         assetOperationRef.current?.kind === "model-reimport",
+      textureProcessingActive:
+        assetOperationRef.current?.kind === "texture-processing",
     });
     if (!availability.allowed) {
       setNotice(availability.disabledReason);
@@ -9114,6 +9365,7 @@ export function VisualEditorPrototype({
             scriptContracts={scriptEditor.contracts}
             scriptEntityOptions={scriptEntityOptions}
             onUpdateScriptComponent={handleUpdateScriptComponent}
+            onUpdateInteractionTrigger={handleInteractionTriggerChange}
             onOpenScript={(assetId) =>
               executeCommand("asset.edit-script", { assetId })
             }
@@ -9134,6 +9386,14 @@ export function VisualEditorPrototype({
             onParticleChange={handleParticleChange}
             onTextureChange={handleTextureChange}
             onCreateTextureCard={handleCreateTextureCard}
+            textureProcessingState={
+              textureProcessingFeedback?.assetId === assetSelection
+                ? textureProcessingFeedback.state
+                : { phase: "idle" }
+            }
+            onApplyTextureProcessing={(assetId) => {
+              void handleApplyTextureProcessing(assetId);
+            }}
             onParticleEmitterChange={handleParticleEmitterChange}
             onRemoveParticleEmitter={handleRemoveParticleEmitter}
             projectKind={projectKind}
@@ -9344,6 +9604,7 @@ export function VisualEditorPrototype({
               materials={Object.values(bundle.assets.assets).filter(
                 (asset) => asset.kind === "material",
               )}
+              triggerTargets={interactionTriggerTargets}
               readOnly={renderedReadOnly}
               onSave={handleSaveInteractivityAsset}
               onClose={() => setInteractivityEditorAssetId(null)}
