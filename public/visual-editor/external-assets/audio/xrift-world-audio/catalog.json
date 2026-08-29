@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "name": "XRift World Audio",
+  "items": [
+    { "id": "bgm-calm-exploration-a", "name": "穏やかな探索 A", "file": "bgm/bgm-calm-exploration-a.mp3", "kind": "bgm", "category": "探索", "loop": false },
+    { "id": "bgm-calm-exploration-b", "name": "穏やかな探索 B", "file": "bgm/bgm-calm-exploration-b.mp3", "kind": "bgm", "category": "探索", "loop": false },
+    { "id": "bgm-creator-workshop-a", "name": "クリエイター工房 A", "file": "bgm/bgm-creator-workshop-a.mp3", "kind": "bgm", "category": "制作", "loop": false },
+    { "id": "bgm-creator-workshop-b", "name": "クリエイター工房 B", "file": "bgm/bgm-creator-workshop-b.mp3", "kind": "bgm", "category": "制作", "loop": false },
+    { "id": "bgm-fantasy-forest-a", "name": "ファンタジーの森 A", "file": "bgm/bgm-fantasy-forest-a.mp3", "kind": "bgm", "category": "ファンタジー", "loop": false },
+    { "id": "bgm-fantasy-forest-b", "name": "ファンタジーの森 B", "file": "bgm/bgm-fantasy-forest-b.mp3", "kind": "bgm", "category": "ファンタジー", "loop": false },
+    { "id": "bgm-future-city-night-a", "name": "未来都市の夜 A", "file": "bgm/bgm-future-city-night-a.mp3", "kind": "bgm", "category": "未来都市", "loop": false },
+    { "id": "bgm-future-city-night-b", "name": "未来都市の夜 B", "file": "bgm/bgm-future-city-night-b.mp3", "kind": "bgm", "category": "未来都市", "loop": false },
+    { "id": "bgm-quiet-lobby-a", "name": "静かなロビー A", "file": "bgm/bgm-quiet-lobby-a.mp3", "kind": "bgm", "category": "ロビー", "loop": false },
+    { "id": "bgm-quiet-lobby-b", "name": "静かなロビー B", "file": "bgm/bgm-quiet-lobby-b.mp3", "kind": "bgm", "category": "ロビー", "loop": false },
+    { "id": "bgm-quiet-ruins-a", "name": "静かな遺跡 A", "file": "bgm/bgm-quiet-ruins-a.mp3", "kind": "bgm", "category": "遺跡", "loop": false },
+    { "id": "bgm-quiet-ruins-b", "name": "静かな遺跡 B", "file": "bgm/bgm-quiet-ruins-b.mp3", "kind": "bgm", "category": "遺跡", "loop": false },
+    { "id": "bgm-relaxing-cafe-a", "name": "くつろぎカフェ A", "file": "bgm/bgm-relaxing-cafe-a.mp3", "kind": "bgm", "category": "カフェ", "loop": false },
+    { "id": "bgm-relaxing-cafe-b", "name": "くつろぎカフェ B", "file": "bgm/bgm-relaxing-cafe-b.mp3", "kind": "bgm", "category": "カフェ", "loop": false },
+    { "id": "bgm-small-celebration-a", "name": "小さなお祝い A", "file": "bgm/bgm-small-celebration-a.mp3", "kind": "bgm", "category": "イベント", "loop": false },
+    { "id": "bgm-small-celebration-b", "name": "小さなお祝い B", "file": "bgm/bgm-small-celebration-b.mp3", "kind": "bgm", "category": "イベント", "loop": false },
+    { "id": "bgm-social-plaza-a", "name": "交流広場 A", "file": "bgm/bgm-social-plaza-a.mp3", "kind": "bgm", "category": "交流", "loop": false },
+    { "id": "bgm-social-plaza-b", "name": "交流広場 B", "file": "bgm/bgm-social-plaza-b.mp3", "kind": "bgm", "category": "交流", "loop": false },
+    { "id": "bgm-waterside-rest-a", "name": "水辺の休憩 A", "file": "bgm/bgm-waterside-rest-a.mp3", "kind": "bgm", "category": "水辺", "loop": false },
+    { "id": "bgm-waterside-rest-b", "name": "水辺の休憩 B", "file": "bgm/bgm-waterside-rest-b.mp3", "kind": "bgm", "category": "水辺", "loop": false }
+  ]
+}

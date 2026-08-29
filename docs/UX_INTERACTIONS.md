@@ -1320,3 +1320,27 @@ F-06 アイテム検査
   be started by graph behavior instead of unconditional viewer autoplay.
 - MCP clients can create the Asset, add nodes, connect flow/value sockets, set
   inline values, read canonical JSON, and validate against the same boundary.
+
+## F-36 Audio Asset試聴の状態設計
+
+参照: MI-03, MI-05, MI-09, MI-15, MI-20
+
+### 操作前
+
+- Audio AssetをAssetsから選ぶと、右Inspectorの「試聴」に再生コントロールを表示する。試聴はAudio Sourceの作成、配置、loop設定、SceneDocumentを変更しない。
+
+### 処理中
+
+- 管理済みのプロジェクト音源を読み込み中は「再生用の音源を読み込んでいます」と表示し、二重の再生操作を示さない。
+
+### 成功時
+
+- 読み込み後は標準の再生・停止・シーク操作を使え、Audio Assetの名前、形式、容量と同じInspector文脈を維持する。
+
+### 失敗時
+
+- ファイルが欠落、未保存、または読込に失敗した場合は再生可能であるように見せず、Assetsの保存先確認と再取込を案内する。Assetと選択状態は維持する。
+
+### 戻り先
+
+- 試聴の終了後も同じAudio Asset Inspectorに留まり、Audio Sourceへの配置は既存の配置操作から続けられる。
