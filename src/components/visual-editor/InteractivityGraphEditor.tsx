@@ -689,10 +689,13 @@ export function InteractivityGraphEditor(props: {
   );
 }
 
+/** Stable empty list: a fresh array per render would restart the node effect. */
+const NO_TRIGGER_TARGETS: readonly InteractionTriggerTargetEntity[] = [];
+
 function InteractivityGraphEditorBody({
   asset,
   materials,
-  triggerTargets = [],
+  triggerTargets = NO_TRIGGER_TARGETS,
   readOnly,
   onSave,
   onClose,
@@ -1402,9 +1405,7 @@ function InteractivityGraphEditorBody({
                             disabled={readOnly}
                             onChange={(event) =>
                               applyTriggerTarget({
-                                entityId: triggerComponent
-                                  ? triggerAction.entityId
-                                  : "",
+                                entityId: triggerAction.entityId,
                                 componentId: triggerAction.componentId,
                                 targetKind: triggerComponent.targetKind,
                                 property: event.target.value,

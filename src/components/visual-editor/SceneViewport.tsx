@@ -1838,6 +1838,12 @@ function EntityObject({
           component.type === "script" && component.enabled,
       )
     : [];
+  // Stable per Entity: the official Interactable writes this into userData on
+  // every change, and a fresh closure each render would rewrite it every time.
+  const handleInteract = useCallback(
+    () => emitXriftInteraction(entity.id),
+    [entity.id],
+  );
   // Triggers run in Play only, like Scripts: interacting while editing would
   // change Entities the author is still arranging.
   const interactionTriggerComponents =
@@ -1958,9 +1964,7 @@ function EntityObject({
       >
         <OfficialXriftEntityWrappers
           components={xriftWrapperComponents}
-          {...(playing
-            ? { onInteract: () => emitXriftInteraction(entity.id) }
-            : {})}
+          {...(playing ? { onInteract: handleInteract } : {})}
         >
           {physicsEnabled ? (
             ownRigidBody ? (
