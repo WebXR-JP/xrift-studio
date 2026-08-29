@@ -127,6 +127,7 @@ import {
   addDefaultInteractivityAsset,
   collectInteractionTriggerTargets,
   createInteractionTriggerGraphExtension,
+  syncInteractionTriggerEntityReferences,
   updateInteractionTriggerComponent,
   updateInteractivityAsset,
   updateXriftComponent,
@@ -5700,7 +5701,10 @@ export function VisualEditorPrototype({
     (entityId: string, componentId: string, patch: InteractionTriggerPatch) => {
       if (editorMode !== "edit" && !playSession) return;
       updateScene((scene) =>
-        updateInteractionTriggerComponent(scene, entityId, componentId, patch),
+        syncInteractionTriggerEntityReferences(
+          updateInteractionTriggerComponent(scene, entityId, componentId, patch),
+          bundleRef.current.assets,
+        ),
       );
       setNotice(
         editorMode === "play"
@@ -7000,7 +7004,13 @@ export function VisualEditorPrototype({
           return current;
         }
         setNotice("KHR_interactivity GraphをAssetへ保存しました。別Sceneでも再利用できます");
-        return touchProject({ ...current, assets });
+        // The Entities the graph writes to are Component data, so saving the
+        // graph is what keeps each trigger's reference list true.
+        return touchProject({
+          ...current,
+          assets,
+          scene: syncInteractionTriggerEntityReferences(current.scene, assets),
+        });
       });
     },
     [editorMode, setBundle],

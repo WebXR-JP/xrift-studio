@@ -5,6 +5,8 @@ import {
   type XriftInteractionPropertyDescriptor,
   type XriftInteractionTargetKind,
 } from "../../../packages/xrift-studio-runtime/src/script/interaction-trigger";
+import type { AssetManifest } from "./asset-manifest";
+import { collectXriftInteractionPrograms } from "./interactivity-graph";
 import type { SceneDocument, SceneEntity } from "./scene-document";
 
 /**
@@ -96,6 +98,54 @@ export function collectInteractionTriggerTargets(
   };
   scene.rootEntityIds.forEach((entityId) => visit(entityId, []));
   return targets;
+}
+
+/**
+ * Rewrites each trigger's `entityReferences` from its graph.
+ *
+ * The Component records the Entities its graph writes to, the way a Script
+ * Component records the ones it can reach. The list is derived rather than
+ * authored, so it cannot drift from the graph, and it is what lets the Editor
+ * and future Prefab work see the dependency without parsing every Asset.
+ */
+export function syncInteractionTriggerEntityReferences(
+  scene: SceneDocument,
+  assets: AssetManifest,
+): SceneDocument {
+  let changed = false;
+  const entities = Object.fromEntries(
+    Object.entries(scene.entities).map(([entityId, entity]) => {
+      let entityChanged = false;
+      const components = entity.components.map((component) => {
+        if (component.type !== "interaction-trigger") return component;
+        const asset = assets.assets[component.interactivityAssetId];
+        const references =
+          asset?.kind === "interactivity"
+            ? [
+                ...new Set(
+                  collectXriftInteractionPrograms(asset.extension).flatMap(
+                    (program) => program.actions.map((action) => action.entityId),
+                  ),
+                ),
+              ].sort()
+            : [];
+        if (
+          references.length === component.entityReferences.length &&
+          references.every(
+            (value, index) => component.entityReferences[index] === value,
+          )
+        ) {
+          return component;
+        }
+        entityChanged = true;
+        return { ...component, entityReferences: references };
+      });
+      if (!entityChanged) return [entityId, entity];
+      changed = true;
+      return [entityId, { ...entity, components }];
+    }),
+  );
+  return changed ? { ...scene, entities } : scene;
 }
 
 export function findInteractionTriggerTarget(

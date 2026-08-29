@@ -8,7 +8,10 @@ import {
   INTERACTION_TRIGGER_MODEL_OVERLAY_PATH,
   INTERACTION_TRIGGER_OVERLAY_PATH,
 } from "./compiler/script-emit";
-import { collectInteractionTriggerTargets } from "./interaction-trigger-targets";
+import {
+  collectInteractionTriggerTargets,
+  syncInteractionTriggerEntityReferences,
+} from "./interaction-trigger-targets";
 import {
   collectInteractivityRuntimeDiagnostics,
   collectXriftInteractionIssues,
@@ -54,6 +57,7 @@ export function runInteractionTriggerFixtureAssertions(): void {
   assertToggleRejectsNonBooleanProperty();
   assertWalkStopsAtUnsupportedOperation();
   assertSceneTargetsListWritableComponentsOnly();
+  assertEntityReferencesFollowTheGraph();
   assertPublishedWorldRunsTheTrigger();
   assertRuntimeJsonOutputIsBlocked();
 }
@@ -248,6 +252,22 @@ function assertSceneTargetsListWritableComponentsOnly(): void {
   assert(
     button?.path === "Button",
     "the target path does not name the Entity",
+  );
+}
+
+function assertEntityReferencesFollowTheGraph(): void {
+  const documents = buildDocuments();
+  const synced = syncInteractionTriggerEntityReferences(
+    documents.scenes.scene_main,
+    documents.assets,
+  );
+  const trigger = synced.entities.entity_button?.components.find(
+    (component) => component.type === "interaction-trigger",
+  );
+  assert(
+    trigger?.type === "interaction-trigger" &&
+      trigger.entityReferences.join(",") === "entity_sign,entity_speaker",
+    "the trigger's entityReferences were not derived from its graph",
   );
 }
 
