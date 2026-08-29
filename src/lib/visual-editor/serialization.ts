@@ -1950,6 +1950,24 @@ function validatePrefabComponentShape(
     if (!SCRIPT_RUN_MODES.includes(component.runIn as ScriptRunMode)) {
       issues.push(issue(`${path}.runIn`, "enum", "script runIn is invalid"));
     }
+  } else if (component.type === "interaction-trigger") {
+    if (
+      typeof component.interactivityAssetId !== "string" ||
+      !component.interactivityAssetId
+    ) {
+      issues.push(
+        issue(
+          `${path}.interactivityAssetId`,
+          "reference",
+          "Interaction Trigger asset is invalid",
+        ),
+      );
+    }
+    if (!isUniqueStringArray(component.entityReferences, true)) {
+      issues.push(
+        issue(`${path}.entityReferences`, "reference", "entityReferences are invalid"),
+      );
+    }
   } else if (component.type === "xrift-component") {
     if (!isUniqueStringArray(component.assetReferences, true)) {
       issues.push(issue(`${path}.assetReferences`, "reference", "assetReferences are invalid"));

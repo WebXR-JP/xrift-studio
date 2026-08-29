@@ -34,6 +34,7 @@ export * from "./material-assignment";
 export * from "./material-extension-registry";
 export * from "./material-thumbnail";
 export * from "./model-thumbnail";
+export * from "./interaction-trigger-targets";
 export * from "./interactivity-graph";
 export * from "./interactivity-recipes";
 export * from "./glow-material-catalog";

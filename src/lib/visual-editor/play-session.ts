@@ -252,6 +252,8 @@ function collectEntityAssetReferences(entity: SceneEntity): string[] {
       references.add(component.audioAssetId);
     } else if (component.type === "prefab-instance") {
       references.add(component.prefabAssetId);
+    } else if (component.type === "interaction-trigger") {
+      references.add(component.interactivityAssetId);
     } else if (
       component.type === "xrift-component" ||
       component.type === "script"

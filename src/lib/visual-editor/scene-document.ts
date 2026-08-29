@@ -429,6 +429,22 @@ export type ScriptComponent = ComponentBase & {
   runIn: ScriptRunMode;
 };
 
+/**
+ * Runs an Interactivity Graph when this Entity is interacted with.
+ *
+ * The graph itself is a reusable Interactivity Asset, so this Component holds
+ * only the reference and the Entities the graph writes to — the same split
+ * Script and Particle use. The interaction source is the Entity's own official
+ * `Interactable`; a trigger without one never fires, which the Inspector says
+ * rather than leaving the author to discover it in Play.
+ */
+export type InteractionTriggerComponent = ComponentBase & {
+  type: "interaction-trigger";
+  interactivityAssetId: string;
+  /** Entity IDs the graph's actions write to. Never code. */
+  entityReferences: string[];
+};
+
 /** Typed boundary for XRift-specific component schemas registered later. */
 export type XRiftComponent = ComponentBase & {
   type: "xrift-component";
@@ -461,6 +477,7 @@ export interface SceneComponentExtensionSchemaRegistry {
   "prefab-instance": PrefabInstanceComponent;
   "xrift-component": XRiftComponent;
   script: ScriptComponent;
+  "interaction-trigger": InteractionTriggerComponent;
 }
 
 export type CoreSceneComponent =
@@ -801,6 +818,22 @@ export function createScriptComponent(
     assetReferences: [],
     entityReferences: [],
     runIn: "play",
+  };
+}
+
+export function createInteractionTriggerComponent(
+  id: string,
+  interactivityAssetId: string,
+): InteractionTriggerComponent | null {
+  const normalizedId = id.trim();
+  const normalizedAssetId = interactivityAssetId.trim();
+  if (!normalizedId || !normalizedAssetId) return null;
+  return {
+    id: normalizedId,
+    type: "interaction-trigger",
+    enabled: true,
+    interactivityAssetId: normalizedAssetId,
+    entityReferences: [],
   };
 }
 
@@ -1884,6 +1917,77 @@ export function updateAudioSourceComponent(
 }
 
 /** Applies an Animation playback edit atomically. */
+export type InteractionTriggerPatch = Partial<
+  Pick<InteractionTriggerComponent, "enabled" | "interactivityAssetId" | "entityReferences">
+>;
+
+/**
+ * Updates an Interaction Trigger Component.
+ *
+ * `entityReferences` mirrors the Script Component's: the Entities the graph
+ * writes to are recorded on the Component so a Prefab copy or an Entity id
+ * remap can follow them, and so the compiler can see them without reading the
+ * graph.
+ */
+export function updateInteractionTriggerComponent(
+  scene: SceneDocument,
+  entityId: string,
+  componentId: string,
+  patch: InteractionTriggerPatch,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  const current = entity?.components.find(
+    (component): component is InteractionTriggerComponent =>
+      component.type === "interaction-trigger" && component.id === componentId,
+  );
+  if (!entity || !current) return scene;
+  if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") return scene;
+  if (
+    patch.interactivityAssetId !== undefined &&
+    (typeof patch.interactivityAssetId !== "string" ||
+      !patch.interactivityAssetId.trim())
+  ) {
+    return scene;
+  }
+  if (
+    patch.entityReferences !== undefined &&
+    (!Array.isArray(patch.entityReferences) ||
+      patch.entityReferences.some((value) => typeof value !== "string" || !value))
+  ) {
+    return scene;
+  }
+  const next: InteractionTriggerComponent = {
+    ...current,
+    ...patch,
+    ...(patch.interactivityAssetId !== undefined
+      ? { interactivityAssetId: patch.interactivityAssetId.trim() }
+      : {}),
+    ...(patch.entityReferences !== undefined
+      ? { entityReferences: [...new Set(patch.entityReferences)] }
+      : {}),
+  };
+  if (
+    next.enabled === current.enabled &&
+    next.interactivityAssetId === current.interactivityAssetId &&
+    next.entityReferences.join("\u0000") ===
+      current.entityReferences.join("\u0000")
+  ) {
+    return scene;
+  }
+  return {
+    ...scene,
+    entities: {
+      ...scene.entities,
+      [entityId]: {
+        ...entity,
+        components: entity.components.map((component) =>
+          component.id === componentId ? next : component,
+        ),
+      },
+    },
+  };
+}
+
 export function updateAnimationComponent(
   scene: SceneDocument,
   entityId: string,
@@ -2778,6 +2882,15 @@ function cloneSceneComponent(
       id,
       properties: cloneJsonObject(component.properties),
       assetReferences: [...component.assetReferences],
+      entityReferences: component.entityReferences.map(
+        (entityId) => entityIdMap[entityId] ?? entityId,
+      ),
+    };
+  }
+  if (component.type === "interaction-trigger") {
+    return {
+      ...component,
+      id,
       entityReferences: component.entityReferences.map(
         (entityId) => entityIdMap[entityId] ?? entityId,
       ),

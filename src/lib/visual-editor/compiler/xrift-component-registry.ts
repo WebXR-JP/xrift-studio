@@ -33,10 +33,20 @@ export type CompiledXriftComponent = {
  * callbacks are selected from fixed registry adapters; document data is never
  * interpreted as JavaScript or JSX.
  */
+export type XriftComponentBindingOverrides = Readonly<Record<string, string>>;
+
 export function compileXriftComponent(
   component: XRiftComponent,
   targetKind: VisualProjectKind,
   source: Pick<CompilerDiagnostic, "sceneId" | "entityId" | "componentId">,
+  /**
+   * Expressions replacing a registry callback that would otherwise be a no-op.
+   *
+   * Only the compiler supplies these, and only from its own generated code —
+   * an Interaction Trigger wiring `onInteract`, for instance. Document data
+   * never reaches this map, so nothing authored can become executable here.
+   */
+  bindingOverrides: XriftComponentBindingOverrides = {},
 ): CompiledXriftComponent {
   const definition = getXriftComponentDefinition(component.schemaId);
   if (!definition) {
@@ -159,7 +169,10 @@ export function compileXriftComponent(
 
   const propText = renderProps(
     props,
-    noopBindings.map((binding) => `${binding.name}={() => {}}`),
+    noopBindings.map(
+      (binding) =>
+        `${binding.name}={${bindingOverrides[binding.name] ?? "() => {}"}}`,
+    ),
   );
   const wrapper = definition.attachBehavior.kind === "wrapper";
   return {

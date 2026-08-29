@@ -82,6 +82,70 @@ they do not require a second proprietary graph format.
 The MCP boundary deliberately does not accept arbitrary JavaScript, write into
 an unknown project revision, or silently keep a mutation that fails validation.
 
+## XRIFT_studio_interaction: interaction triggers
+
+Studio adds one extension of its own, `XRIFT_studio_interaction`, for the
+question a graph cannot answer in core KHR terms: what happens when a player
+interacts with this Entity, and which Scene Component does it change.
+
+| Operation | Sockets | Configuration |
+| --- | --- | --- |
+| `xrift/onInteract` | flow `out` | none; the Entity carrying the graph is the source |
+| `xrift/setProperty` | flow `in`, `out`, value `value` | `entity`, `component`, `targetKind`, `property` |
+| `xrift/toggleProperty` | flow `in`, `out` | the same four, restricted to an ON/OFF property |
+
+Each declaration names the extension, so the graph stays a valid
+`KHR_interactivity` document and another tool preserves it as an unknown
+operation rather than failing to load it.
+
+The target lives in `configuration` because it is structural — which Entity,
+which Component, which property — while the value stays in the `value` socket
+where the KHR type system can check it. `targetKind` is stored beside the
+Component id so the published runtime, which has no Scene document, can resolve
+the write on its own. Enum values (Audio Source playback) are stored as the
+option index, because KHR_interactivity has no string type.
+
+### What a trigger can write
+
+`packages/xrift-studio-runtime/src/script/interaction-trigger.ts` holds the
+property registry and the parse, and it is the single source of truth for both
+surfaces. A property belongs there only when Play and the published world apply
+it through the same runtime bridge:
+
+| Target | Properties |
+| --- | --- |
+| Entity | `enabled` (visibility; physics colliders are unchanged) |
+| Audio Source | `playback` (play / pause / stop), `volume`, `loop` |
+| Light | `enabled`, `intensity`, `color` |
+
+Writes go through the Audio Source and Light runtime bridges that Scripts
+already own, so a trigger and a Script changing the same Component compose
+instead of overwriting each other, and everything a trigger changes is runtime
+state that Stop discards.
+
+An action whose target is not yet chosen is a warning, not an error: the graph
+is saved, the node is preserved, and the Editor, the compiler, and
+`validate_interactivity_asset` all report it the same way.
+
+### Attaching a graph
+
+An Interaction Trigger Component holds `interactivityAssetId` and the Entity ids
+the graph writes to, mirroring the Script Component split. The interaction
+itself comes from the official `Interactable` on the same Entity; without one
+the Inspector says so and the compiler warns, because the trigger would never
+fire.
+
+In Play, Studio supplies the player's half of the official contract: it
+raycasts the Interactables registered through `XRiftProvider` and calls the
+`onInteract` the component parked in userData. In a published world the XRift
+player does that, and the compiler wires `onInteract` to the same emit. An
+Entity a trigger re-shows is emitted even when it is authored disabled, hidden,
+so the published world can do what Play does.
+
+Collider-entered triggers are not implemented. Studio Play has no player body
+to enter one, so a `onTriggerEnter` operation could not be tested before
+publishing, which is the drift this document exists to prevent.
+
 ## Runtime boundary
 
 The Asset, project serialization, and runtime manifest preserve the full

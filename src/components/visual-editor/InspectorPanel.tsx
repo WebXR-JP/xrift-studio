@@ -30,6 +30,12 @@ import {
   type ScriptEntityOption,
 } from "./ScriptComponentInspector";
 import type { ScriptContract } from "../../lib/visual-editor/scripting/script-contract";
+import { InteractionTriggerInspector } from "./InteractionTriggerInspector";
+import {
+  collectInteractionTriggerTargets,
+  XRIFT_COMPONENT_SCHEMA_IDS,
+} from "../../lib/visual-editor";
+import type { InteractionTriggerPatch } from "../../lib/visual-editor/scene-document";
 import {
   getGeometryAsset,
   getBuiltinPrimitiveCreation,
@@ -3982,6 +3988,7 @@ function EntityInspector({
   scriptEntityOptions,
   onUpdateScriptComponent,
   onOpenScript,
+  onUpdateInteractionTrigger,
 }: {
   entity: SceneEntity;
   scene: SceneDocument;
@@ -4062,8 +4069,18 @@ function EntityInspector({
     patch: ScriptComponentPatch,
   ) => void;
   onOpenScript?: (scriptAssetId: string) => void;
+  onUpdateInteractionTrigger?: (
+    componentId: string,
+    patch: InteractionTriggerPatch,
+  ) => void;
 }) {
   const transform = getTransform(entity);
+  // Trigger targets follow the Scene, so an Entity renamed or added while the
+  // Inspector is open shows up in the summary without reopening it.
+  const interactionTriggerTargets = useMemo(
+    () => collectInteractionTriggerTargets(scene),
+    [scene],
+  );
   const [addComponentOpen, setAddComponentOpen] = useState(false);
   const [addComponentSearchQuery, setAddComponentSearchQuery] = useState("");
   const addComponentSearchInputRef = useRef<HTMLInputElement>(null);
@@ -4387,6 +4404,31 @@ function EntityInspector({
             </ComponentCard>
           );
         }
+        if (component.type === "interaction-trigger") {
+          const graphAsset = assets.assets[component.interactivityAssetId];
+          return (
+            <ComponentCard
+              key={component.id}
+              title="Interaction Trigger"
+              subtitle={graphAsset?.name ?? "未設定"}
+            >
+              <InteractionTriggerInspector
+                component={component}
+                entity={entity}
+                assets={assets}
+                targets={interactionTriggerTargets}
+                readOnly={readOnly}
+                onPatch={(patch) =>
+                  onUpdateInteractionTrigger?.(component.id, patch)
+                }
+                onOpenGraph={onOpenInteractivity}
+                onAddInteractable={() =>
+                  onAddComponent(XRIFT_COMPONENT_SCHEMA_IDS.interactable)
+                }
+              />
+            </ComponentCard>
+          );
+        }
         if (component.type === "script") {
           const scriptAsset = assets.assets[component.scriptAssetId];
           return (
@@ -4657,6 +4699,7 @@ export function InspectorPanel({
   scriptContracts,
   scriptEntityOptions,
   onUpdateScriptComponent,
+  onUpdateInteractionTrigger,
   onOpenScript,
   onOpenShader,
   onOpenMaterialShader,
@@ -4761,6 +4804,11 @@ export function InspectorPanel({
     patch: ScriptComponentPatch,
   ) => void;
   onOpenScript?: (scriptAssetId: string) => void;
+  onUpdateInteractionTrigger?: (
+    entityId: string,
+    componentId: string,
+    patch: InteractionTriggerPatch,
+  ) => void;
   onOpenShader: (shaderAssetId: string) => void;
   onOpenMaterialShader: (
     materialAssetId: string,
@@ -5047,6 +5095,14 @@ export function InspectorPanel({
             {...(scriptEntityOptions ? { scriptEntityOptions } : {})}
             {...(onUpdateScriptComponent ? { onUpdateScriptComponent } : {})}
             {...(onOpenScript ? { onOpenScript } : {})}
+            {...(onUpdateInteractionTrigger
+              ? {
+                  onUpdateInteractionTrigger: (
+                    componentId: string,
+                    patch: InteractionTriggerPatch,
+                  ) => onUpdateInteractionTrigger(entity.id, componentId, patch),
+                }
+              : {})}
             projectKind={projectKind}
             onAddComponent={(definitionId) =>
               onAddComponent(entity.id, definitionId)
