@@ -38,7 +38,11 @@ export function ensureInteractivityDeclaration(
   graph.declarations ??= [];
   const existing = graph.declarations.findIndex((candidate) => candidate.op === op);
   if (existing >= 0) return existing;
-  graph.declarations.push({ op });
+  // An operation KHR_interactivity does not define is only legal when its
+  // declaration names the extension that does; the template carries that name
+  // so a node placed from the palette validates like one written by hand.
+  const extension = getInteractivityOperationTemplate(op)?.extension;
+  graph.declarations.push(extension ? { op, extension } : { op });
   return graph.declarations.length - 1;
 }
 

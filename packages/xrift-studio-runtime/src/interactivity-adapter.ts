@@ -45,6 +45,12 @@ export const KHR_INTERACTIVITY_RUNTIME_SUPPORT: Readonly<
   "animation/stop": "conditional",
   "flow/branch": "conditional",
   "flow/setDelay": "conditional",
+  // XRIFT_studio_interaction. Run by the Interaction Trigger runtime rather
+  // than by the walk below, and only once the graph is attached to an Entity,
+  // which is why they are conditional instead of executed.
+  "xrift/onInteract": "conditional",
+  "xrift/setProperty": "conditional",
+  "xrift/toggleProperty": "conditional",
 };
 
 export function getInteractivityRuntimeSupport(

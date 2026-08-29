@@ -124,6 +124,7 @@ import {
   updateParticleAsset,
   updatePrefabDocumentFromSource,
   updateTextureAsset,
+  collectInteractionTriggerTargets,
   updateInteractivityAsset,
   updateXriftComponent,
   type ColliderPatch,
@@ -6958,6 +6959,18 @@ export function VisualEditorPrototype({
     scriptTemplateFolderId,
   ]);
 
+  /**
+   * Entities an Interactivity Graph can write to.
+   *
+   * Built here rather than inside the graph editor so the pickers always show
+   * the Scene the author is actually looking at, including edits made while the
+   * editor is open.
+   */
+  const interactionTriggerTargets = useMemo(
+    () => collectInteractionTriggerTargets(bundle.scene),
+    [bundle.scene],
+  );
+
   const handleSaveInteractivityAsset = useCallback(
     (assetId: string, extension: KhrInteractivityExtension) => {
       if (editorMode !== "edit") return;
@@ -9344,6 +9357,7 @@ export function VisualEditorPrototype({
               materials={Object.values(bundle.assets.assets).filter(
                 (asset) => asset.kind === "material",
               )}
+              triggerTargets={interactionTriggerTargets}
               readOnly={renderedReadOnly}
               onSave={handleSaveInteractivityAsset}
               onClose={() => setInteractivityEditorAssetId(null)}

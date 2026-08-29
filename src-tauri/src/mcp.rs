@@ -3271,7 +3271,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "add_component",
-            "description": "Add a Component from the central Editor registry to an existing Entity. Call list_component_definitions for valid definitionId values. For scripting.script, also pass the Script Asset ID returned by list_assets.",
+            "description": "Add a Component from the central Editor registry to an existing Entity. Call list_component_definitions for valid definitionId values. For scripting.script, also pass the Script Asset ID returned by list_assets. For interaction.trigger, pass the Interactivity Asset ID as interactivityAssetId.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3280,6 +3280,7 @@ fn tool_definitions() -> Value {
                     "expectedRevision": { "type": "integer", "minimum": 0 },
                     "entityId": { "type": "string" },
                     "scriptAssetId": { "type": "string" },
+                    "interactivityAssetId": { "type": "string" },
                     "definitionId": { "type": "string", "minLength": 1 }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "entityId", "definitionId"],

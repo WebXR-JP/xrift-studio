@@ -43,6 +43,23 @@ import {
   type KhrInteractivityNode,
   type MaterialAsset,
 } from "../../lib/visual-editor";
+import {
+  configureInteractivityTriggerAction,
+  defaultTriggerActionValue,
+  getXriftInteractionProperty,
+  readInteractivityTriggerAction,
+  setInteractivityTriggerActionValue,
+  xriftInteractionEnumIndex,
+  XRIFT_INTERACTION_OPERATIONS,
+  type XriftInteractionPropertyDescriptor,
+  type XriftInteractionTargetKind,
+} from "../../lib/visual-editor";
+import {
+  describeInteractionTriggerAction,
+  findInteractionTriggerTarget,
+  findInteractionTriggerTargetComponent,
+  type InteractionTriggerTargetEntity,
+} from "../../lib/visual-editor";
 import { EDITOR_ICONS } from "./editor-icons";
 import { CodeTokens } from "../CodeBlock";
 
@@ -58,6 +75,8 @@ type GraphNodeData = {
   valueInputs: string[];
   valueOutputs: string[];
   runtimeSupport: InteractivityRuntimeSupport;
+  /** One-line description of an Interaction Trigger action's target. */
+  summary?: string;
 };
 
 /**
@@ -97,6 +116,7 @@ const CATEGORY_CLASS: Record<GraphNodeCategory, string> = {
   variable: "border-amber-500/70 bg-amber-950 text-amber-50",
   pointer: "border-cyan-500/70 bg-cyan-950 text-cyan-50",
   math: "border-slate-500/70 bg-slate-800 text-slate-50",
+  entity: "border-orange-500/70 bg-orange-950 text-orange-50",
   extension: "border-fuchsia-500/70 bg-fuchsia-950 text-fuchsia-50",
 };
 
@@ -108,6 +128,7 @@ const CATEGORY_MINIMAP_COLOR: Record<GraphNodeCategory, string> = {
   variable: "#d97706",
   pointer: "#0891b2",
   math: "#475569",
+  entity: "#ea580c",
   extension: "#c026d3",
 };
 
@@ -118,11 +139,13 @@ const CATEGORY_LABEL: Record<GraphNodeCategory, string> = {
   variable: "変数",
   pointer: "glTFプロパティ",
   math: "数値",
+  entity: "Entity操作",
   extension: "拡張",
 };
 
 const PALETTE_CATEGORY_ORDER: readonly GraphNodeCategory[] = [
   "event",
+  "entity",
   "flow",
   "animation",
   "pointer",
@@ -189,6 +212,9 @@ function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNode>) {
           ) : null}
         </div>
         <p className="mt-0.5 text-sm font-bold">{data.label}</p>
+        {data.summary ? (
+          <p className="mt-0.5 text-[11px] leading-4 opacity-90">{data.summary}</p>
+        ) : null}
         <code className="text-[10px] opacity-60">{data.op}</code>
       </header>
       <div className="relative min-h-16 px-3 py-2 text-[11px]">
@@ -279,10 +305,32 @@ function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNode>) {
 
 const nodeTypes = { interactivity: InteractivityNodeCard };
 
+function isTriggerActionOp(op: string | undefined): boolean {
+  return (
+    op === XRIFT_INTERACTION_OPERATIONS.setProperty ||
+    op === XRIFT_INTERACTION_OPERATIONS.toggleProperty
+  );
+}
+
+function triggerActionSummary(
+  graph: KhrInteractivityGraph,
+  index: number,
+  op: string,
+  targets: readonly InteractionTriggerTargetEntity[],
+): string | undefined {
+  const action = readInteractivityTriggerAction(graph, index);
+  if (!action) return undefined;
+  return describeInteractionTriggerAction(targets, {
+    ...action,
+    mode: op === XRIFT_INTERACTION_OPERATIONS.toggleProperty ? "toggle" : "set",
+  });
+}
+
 function operationData(
   graph: KhrInteractivityGraph,
   node: KhrInteractivityNode,
   index: number,
+  targets: readonly InteractionTriggerTargetEntity[],
 ): GraphNodeData {
   const declaration = graph.declarations?.[node.declaration];
   const op = declaration?.op ?? `missing/declaration-${node.declaration}`;
@@ -307,15 +355,21 @@ function operationData(
     ),
     valueOutputs: Array.from(valueOutputs),
     runtimeSupport: getInteractivityRuntimeSupport(op).support,
+    ...(isTriggerActionOp(op)
+      ? { summary: triggerActionSummary(graph, index, op, targets) }
+      : {}),
   };
 }
 
-function toFlowNodes(graph: KhrInteractivityGraph): GraphFlowNode[] {
+function toFlowNodes(
+  graph: KhrInteractivityGraph,
+  targets: readonly InteractionTriggerTargetEntity[],
+): GraphFlowNode[] {
   return (graph.nodes ?? []).map((node, index) => ({
     id: String(index),
     type: "interactivity",
     position: readInteractivityNodePosition(node, index),
-    data: operationData(graph, node, index),
+    data: operationData(graph, node, index, targets),
   }));
 }
 
@@ -507,9 +561,121 @@ function LiteralValueField({
   );
 }
 
+/**
+ * An editor for the value one Interaction Trigger action writes.
+ *
+ * The generic literal editor can only offer raw numbers because it knows the
+ * KHR type and nothing else. Here the property descriptor supplies the range,
+ * the option labels and whether the three floats are a colour, so the author
+ * edits "音量 0.4" instead of "float[0] = 0.4".
+ */
+function TriggerValueField({
+  descriptor,
+  value,
+  disabled,
+  onChange,
+}: {
+  descriptor: XriftInteractionPropertyDescriptor;
+  value: KhrInteractivityJsonValue[] | null;
+  disabled: boolean;
+  onChange: (next: KhrInteractivityJsonValue[]) => void;
+}) {
+  const current = value ?? defaultTriggerActionValue(descriptor);
+  const first = current[0];
+  if (descriptor.kind === "bool") {
+    const checked = first !== false;
+    return (
+      <label className="flex items-center gap-2 text-[10px] text-slate-300">
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={(event) => onChange([event.target.checked])}
+          className="h-3.5 w-3.5"
+        />
+        {descriptor.label}を{checked ? "ON" : "OFF"}にする
+      </label>
+    );
+  }
+  if (descriptor.kind === "enum") {
+    const options = descriptor.options ?? [];
+    const index =
+      typeof first === "number" && options[first]
+        ? first
+        : xriftInteractionEnumIndex(descriptor, String(descriptor.defaultValue));
+    return (
+      <label className="block text-[10px] text-slate-300">
+        {descriptor.label}
+        <select
+          value={index}
+          disabled={disabled}
+          onChange={(event) => onChange([Number(event.target.value)])}
+          className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs"
+        >
+          {options.map((option, optionIndex) => (
+            <option key={option.value} value={optionIndex}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+  if (descriptor.kind === "color") {
+    const channels = numbersOf(current, 3);
+    return (
+      <label className="block text-[10px] text-slate-300">
+        {descriptor.label}
+        <span className="mt-1 flex items-center gap-2">
+          <input
+            type="color"
+            value={linearRgbToTint(channels)}
+            disabled={disabled}
+            onChange={(event) => onChange(tintToLinearRgb(event.target.value))}
+            className="h-7 w-10 shrink-0 cursor-pointer rounded border border-slate-600 bg-slate-950 disabled:opacity-45"
+            aria-label={`${descriptor.label} の色`}
+          />
+          <code className="text-[10px] text-slate-400">
+            {linearRgbToTint(channels)}
+          </code>
+        </span>
+      </label>
+    );
+  }
+  const numeric = typeof first === "number" ? first : Number(descriptor.defaultValue);
+  return (
+    <label className="block text-[10px] text-slate-300">
+      {descriptor.label}
+      <input
+        type="number"
+        value={numeric}
+        min={descriptor.min}
+        max={descriptor.max}
+        step={descriptor.step ?? 0.1}
+        disabled={disabled}
+        onChange={(event) => {
+          const next = Number(event.target.value);
+          if (!Number.isFinite(next)) return;
+          const lower = descriptor.min ?? Number.NEGATIVE_INFINITY;
+          const upper = descriptor.max ?? Number.POSITIVE_INFINITY;
+          onChange([Math.min(Math.max(next, lower), upper)]);
+        }}
+        className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs"
+      />
+    </label>
+  );
+}
+
 export function InteractivityGraphEditor(props: {
   asset: InteractivityAsset;
   materials: readonly MaterialAsset[];
+  /**
+   * Entities this graph can write to, collected from the open Scene.
+   *
+   * Empty when the editor is opened without a Scene; the trigger pickers then
+   * say so instead of offering targets that do not exist.
+   */
+  triggerTargets?: readonly InteractionTriggerTargetEntity[];
   readOnly: boolean;
   onSave: (assetId: string, extension: KhrInteractivityExtension) => void;
   onClose: () => void;
@@ -526,12 +692,14 @@ export function InteractivityGraphEditor(props: {
 function InteractivityGraphEditorBody({
   asset,
   materials,
+  triggerTargets = [],
   readOnly,
   onSave,
   onClose,
 }: {
   asset: InteractivityAsset;
   materials: readonly MaterialAsset[];
+  triggerTargets?: readonly InteractionTriggerTargetEntity[];
   readOnly: boolean;
   onSave: (assetId: string, extension: KhrInteractivityExtension) => void;
   onClose: () => void;
@@ -594,6 +762,27 @@ function InteractivityGraphEditorBody({
       ? configuredMaterialIndex
       : 0;
   const materialPointerNode = selectedDeclaration?.op.startsWith("pointer/") ?? false;
+  const triggerActionNode = isTriggerActionOp(selectedDeclaration?.op);
+  const triggerAction =
+    triggerActionNode && selectedNodeIndex !== null
+      ? readInteractivityTriggerAction(graph, selectedNodeIndex)
+      : null;
+  const triggerEntity = triggerAction
+    ? findInteractionTriggerTarget(triggerTargets, triggerAction.entityId)
+    : undefined;
+  const triggerComponent = triggerAction
+    ? findInteractionTriggerTargetComponent(
+        triggerTargets,
+        triggerAction.entityId,
+        triggerAction.componentId,
+      )
+    : undefined;
+  const triggerDescriptor = triggerAction
+    ? getXriftInteractionProperty(triggerAction.targetKind, triggerAction.property)
+    : undefined;
+  const triggerToggleNode =
+    selectedDeclaration?.op === XRIFT_INTERACTION_OPERATIONS.toggleProperty;
+
 
   // `material` is authored through the picker above, and a socket fed by a wire
   // has no literal to edit - showing either as a number field would invite the
@@ -601,14 +790,21 @@ function InteractivityGraphEditorBody({
   const literalValues = useMemo(
     () =>
       Object.entries(selectedNode?.values ?? {})
-        .filter(([socket, input]) => input.node === undefined && socket !== "material")
+        .filter(
+          ([socket, input]) =>
+            input.node === undefined &&
+            socket !== "material" &&
+            // An Interaction Trigger value is edited by the picker below, which
+            // knows the property's range, options and colour space.
+            !(socket === "value" && isTriggerActionOp(selectedDeclaration?.op)),
+        )
         .map(([socket, input]) => ({
           socket,
           value: input.value,
           signature:
             input.type === undefined ? undefined : graph.types?.[input.type]?.signature,
         })),
-    [graph.types, selectedNode],
+    [graph.types, selectedDeclaration?.op, selectedNode],
   );
 
   const paletteGroups = useMemo(() => {
@@ -641,12 +837,12 @@ function InteractivityGraphEditorBody({
   // editing disappear.
   useEffect(() => {
     setFlowNodes(
-      toFlowNodes(graph).map((node) => ({
+      toFlowNodes(graph, triggerTargets).map((node) => ({
         ...node,
         selected: node.data.index === selectedNodeIndex,
       })),
     );
-  }, [graph, selectedNodeIndex, setFlowNodes]);
+  }, [graph, selectedNodeIndex, setFlowNodes, triggerTargets]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -694,6 +890,45 @@ function InteractivityGraphEditorBody({
       };
     },
     [screenToFlowPosition],
+  );
+
+  /**
+   * Applies a target choice, keeping the property valid for the new target.
+   *
+   * Switching from an Audio Source to a Light must not leave `volume` behind:
+   * the runtime would drop the action and the node would look configured.
+   */
+  const applyTriggerTarget = useCallback(
+    (next: {
+      entityId: string;
+      componentId: string;
+      targetKind: XriftInteractionTargetKind;
+      property: string;
+    }) => {
+      if (readOnly || selectedNodeIndex === null) return;
+      updateGraph((nextGraph) => {
+        configureInteractivityTriggerAction(nextGraph, selectedNodeIndex, next);
+      });
+    },
+    [readOnly, selectedNodeIndex, updateGraph],
+  );
+
+  const applyTriggerValue = useCallback(
+    (
+      descriptor: XriftInteractionPropertyDescriptor,
+      value: KhrInteractivityJsonValue[],
+    ) => {
+      if (readOnly || selectedNodeIndex === null) return;
+      updateGraph((nextGraph) => {
+        setInteractivityTriggerActionValue(
+          nextGraph,
+          selectedNodeIndex,
+          descriptor,
+          value,
+        );
+      });
+    },
+    [readOnly, selectedNodeIndex, updateGraph],
   );
 
   const handleConnect = useCallback(
@@ -1067,6 +1302,152 @@ function InteractivityGraphEditorBody({
         <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-3">
           {selectedNode && selectedNodeIndex !== null ? (
             <div className="space-y-3">
+              {triggerActionNode && triggerAction ? (
+                <section className="space-y-2 rounded border border-orange-800 bg-orange-950/30 p-2.5">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-300">
+                      対象
+                    </p>
+                    <p className="mt-1 text-[10px] leading-4 text-slate-400">
+                      インタラクトされたときに書き込むEntityとプロパティを選びます。
+                    </p>
+                  </div>
+                  {triggerTargets.length === 0 ? (
+                    <p className="rounded border border-slate-700 bg-slate-950 p-2 text-[10px] leading-4 text-slate-400">
+                      Sceneを開いた状態でこのグラフを編集すると、対象のEntityを選べます。
+                    </p>
+                  ) : (
+                    <>
+                      <label className="block text-[10px] text-slate-300">
+                        Entity
+                        <select
+                          value={triggerAction.entityId}
+                          disabled={readOnly}
+                          onChange={(event) => {
+                            const entity = findInteractionTriggerTarget(
+                              triggerTargets,
+                              event.target.value,
+                            );
+                            const first = entity?.components[0];
+                            if (!entity || !first?.properties[0]) return;
+                            applyTriggerTarget({
+                              entityId: entity.entityId,
+                              componentId: first.componentId,
+                              targetKind: first.targetKind,
+                              property: first.properties[0].name,
+                            });
+                          }}
+                          className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs"
+                        >
+                          {triggerEntity ? null : (
+                            <option value={triggerAction.entityId}>
+                              {triggerAction.entityId
+                                ? "見つからないEntity"
+                                : "Entityを選択"}
+                            </option>
+                          )}
+                          {triggerTargets.map((target) => (
+                            <option key={target.entityId} value={target.entityId}>
+                              {target.path}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      {triggerEntity ? (
+                        <label className="block text-[10px] text-slate-300">
+                          Component
+                          <select
+                            value={triggerAction.componentId}
+                            disabled={readOnly}
+                            onChange={(event) => {
+                              const component = triggerEntity.components.find(
+                                (candidate) =>
+                                  candidate.componentId === event.target.value,
+                              );
+                              if (!component?.properties[0]) return;
+                              applyTriggerTarget({
+                                entityId: triggerEntity.entityId,
+                                componentId: component.componentId,
+                                targetKind: component.targetKind,
+                                property: component.properties[0].name,
+                              });
+                            }}
+                            className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs"
+                          >
+                            {triggerComponent ? null : (
+                              <option value={triggerAction.componentId}>
+                                見つからないComponent
+                              </option>
+                            )}
+                            {triggerEntity.components.map((component) => (
+                              <option
+                                key={component.componentId || "entity"}
+                                value={component.componentId}
+                              >
+                                {component.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <p className="rounded border border-amber-800 bg-amber-950/30 p-2 text-[10px] leading-4 text-amber-200">
+                          このEntityはSceneにありません。対象を選び直すまで、この node は動きません。
+                        </p>
+                      )}
+                      {triggerComponent ? (
+                        <label className="block text-[10px] text-slate-300">
+                          プロパティ
+                          <select
+                            value={triggerAction.property}
+                            disabled={readOnly}
+                            onChange={(event) =>
+                              applyTriggerTarget({
+                                entityId: triggerComponent
+                                  ? triggerAction.entityId
+                                  : "",
+                                componentId: triggerAction.componentId,
+                                targetKind: triggerComponent.targetKind,
+                                property: event.target.value,
+                              })
+                            }
+                            className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs"
+                          >
+                            {triggerComponent.properties
+                              // Toggling is only meaningful for an ON/OFF
+                              // property, so the picker never offers a
+                              // property this node could not act on.
+                              .filter(
+                                (property) =>
+                                  !triggerToggleNode || property.kind === "bool",
+                              )
+                              .map((property) => (
+                                <option key={property.name} value={property.name}>
+                                  {property.label}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                      ) : null}
+                      {triggerDescriptor ? (
+                        <p className="text-[10px] leading-4 text-slate-400">
+                          {triggerDescriptor.description}
+                        </p>
+                      ) : null}
+                      {triggerDescriptor && !triggerToggleNode ? (
+                        <TriggerValueField
+                          descriptor={triggerDescriptor}
+                          value={triggerAction.value}
+                          disabled={readOnly}
+                          onChange={(next) =>
+                            applyTriggerValue(triggerDescriptor, next)
+                          }
+                        />
+                      ) : null}
+                    </>
+                  )}
+                </section>
+              ) : null}
+
               {materialPointerNode ? (
                 <section className="space-y-2 rounded border border-cyan-800 bg-cyan-950/30 p-2.5">
                   <div>

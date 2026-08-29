@@ -55,6 +55,7 @@ export type AssetReferenceCollection = {
   prefabAssetIds: string[];
   xriftAssetIds: string[];
   scriptAssetIds: string[];
+  interactivityAssetIds: string[];
 };
 
 export type CreatePrefabDocumentInput = {
@@ -232,6 +233,7 @@ export function collectSceneAssetReferences(
   const prefabs = new Set<string>();
   const xrift = new Set<string>();
   const scripts = new Set<string>();
+  const interactivity = new Set<string>();
   const visited = new Set<string>();
 
   const visit = (entityId: string) => {
@@ -262,6 +264,8 @@ export function collectSceneAssetReferences(
       } else if (component.type === "script") {
         scripts.add(component.scriptAssetId);
         component.assetReferences.forEach((assetId) => scripts.add(assetId));
+      } else if (component.type === "interaction-trigger") {
+        interactivity.add(component.interactivityAssetId);
       }
     }
     entity.children.forEach(visit);
@@ -290,6 +294,7 @@ export function collectSceneAssetReferences(
     prefabAssetIds: [...prefabs].sort(),
     xriftAssetIds: [...xrift].sort(),
     scriptAssetIds: [...scripts].sort(),
+    interactivityAssetIds: [...interactivity].sort(),
   };
 }
 

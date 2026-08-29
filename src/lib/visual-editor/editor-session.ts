@@ -16,6 +16,7 @@ import {
   createAudioSourceComponent,
   createBoxColliderComponent,
   createBuiltinPrimitiveMeshComponent,
+  createInteractionTriggerComponent,
   createMeshColliderComponent,
   createMeshComponent,
   createParticleEmitterComponent,
@@ -143,6 +144,13 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
   ),
   definition("core.text", "Text", "rendering", true, "text"),
   definition("scripting.script", "Script", "scripting", true, "script"),
+  definition(
+    "interaction.trigger",
+    "Interaction Trigger",
+    "interaction",
+    true,
+    "interaction-trigger",
+  ),
   ...XRIFT_COMPONENT_REGISTRY.map(
     (component): EditorComponentDefinition => ({
       id: component.schemaId,
@@ -796,6 +804,21 @@ function createRegisteredComponent(
   }
   if (definition.componentType === "text") {
     return createTextComponent(id);
+  }
+  if (definition.componentType === "interaction-trigger") {
+    // Prefer the Interactivity Graph selected in Assets, for the same reason a
+    // Script Component prefers the selected Script: Add Component right after
+    // creating a graph should attach that graph.
+    const preferred = preferredAssetId
+      ? assets.assets[preferredAssetId]
+      : undefined;
+    const graph =
+      preferred?.kind === "interactivity"
+        ? preferred
+        : Object.values(assets.assets).find(
+            (asset) => asset.kind === "interactivity",
+          );
+    return graph ? createInteractionTriggerComponent(id, graph.id) : null;
   }
   if (definition.componentType === "script") {
     // Prefer the Script selected in Assets so Create -> Add Component always

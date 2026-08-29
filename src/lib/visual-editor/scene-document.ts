@@ -429,6 +429,22 @@ export type ScriptComponent = ComponentBase & {
   runIn: ScriptRunMode;
 };
 
+/**
+ * Runs an Interactivity Graph when this Entity is interacted with.
+ *
+ * The graph itself is a reusable Interactivity Asset, so this Component holds
+ * only the reference and the Entities the graph writes to — the same split
+ * Script and Particle use. The interaction source is the Entity's own official
+ * `Interactable`; a trigger without one never fires, which the Inspector says
+ * rather than leaving the author to discover it in Play.
+ */
+export type InteractionTriggerComponent = ComponentBase & {
+  type: "interaction-trigger";
+  interactivityAssetId: string;
+  /** Entity IDs the graph's actions write to. Never code. */
+  entityReferences: string[];
+};
+
 /** Typed boundary for XRift-specific component schemas registered later. */
 export type XRiftComponent = ComponentBase & {
   type: "xrift-component";
@@ -461,6 +477,7 @@ export interface SceneComponentExtensionSchemaRegistry {
   "prefab-instance": PrefabInstanceComponent;
   "xrift-component": XRiftComponent;
   script: ScriptComponent;
+  "interaction-trigger": InteractionTriggerComponent;
 }
 
 export type CoreSceneComponent =
@@ -801,6 +818,22 @@ export function createScriptComponent(
     assetReferences: [],
     entityReferences: [],
     runIn: "play",
+  };
+}
+
+export function createInteractionTriggerComponent(
+  id: string,
+  interactivityAssetId: string,
+): InteractionTriggerComponent | null {
+  const normalizedId = id.trim();
+  const normalizedAssetId = interactivityAssetId.trim();
+  if (!normalizedId || !normalizedAssetId) return null;
+  return {
+    id: normalizedId,
+    type: "interaction-trigger",
+    enabled: true,
+    interactivityAssetId: normalizedAssetId,
+    entityReferences: [],
   };
 }
 
@@ -2778,6 +2811,15 @@ function cloneSceneComponent(
       id,
       properties: cloneJsonObject(component.properties),
       assetReferences: [...component.assetReferences],
+      entityReferences: component.entityReferences.map(
+        (entityId) => entityIdMap[entityId] ?? entityId,
+      ),
+    };
+  }
+  if (component.type === "interaction-trigger") {
+    return {
+      ...component,
+      id,
       entityReferences: component.entityReferences.map(
         (entityId) => entityIdMap[entityId] ?? entityId,
       ),
