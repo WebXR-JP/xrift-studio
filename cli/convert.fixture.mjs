@@ -50,6 +50,7 @@ import {
   runTerrainPresetFixtureAssertions,
 } from "../src/lib/visual-editor/terrain-grass.fixture.ts";
 import { runTerrainSurfaceFixtureAssertions } from "../src/lib/visual-editor/terrain-surface.fixture.ts";
+import { runTextureProcessingFixtureAssertions } from "../src/lib/visual-editor/texture-processing.fixture.ts";
 import { runAssetOperationLockFixtureAssertions } from "../src/components/visual-editor/asset-operation-lock.fixture.ts";
 import { runAutosaveCoordinatorFixtureAssertions } from "../src/components/visual-editor/autosave-coordinator.fixture.ts";
 import { runCustomMaterialPreviewFixtureAssertions } from "../src/components/visual-editor/CustomMaterialPreview.fixture.ts";
@@ -304,6 +305,7 @@ try {
     ["interactivity runtime adapter", runInteractivityRuntimeAdapterFixtureAssertions],
     ["visual upload branch", runVisualUploadFixtureAssertions],
     ["classic project import", runClassicProjectImportFixtureAssertions],
+    ["texture processing", runTextureProcessingFixtureAssertions],
     ["asset operation lock", runAssetOperationLockFixtureAssertions],
     ["audio import", runAudioImportFixtureAssertions],
     ["autosave coordinator", runAutosaveCoordinatorFixtureAssertions],

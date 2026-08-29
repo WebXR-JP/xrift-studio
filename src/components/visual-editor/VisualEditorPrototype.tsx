@@ -124,6 +124,7 @@ import {
   updateParticleAsset,
   updatePrefabDocumentFromSource,
   updateTextureAsset,
+  applyTextureProcessing,
   updateInteractivityAsset,
   updateXriftComponent,
   type ColliderPatch,
@@ -228,6 +229,7 @@ import {
   type MaterialSlotAssignmentOption,
 } from "./MaterialSlotAssignmentDialog";
 import type { ModelReimportState } from "./ModelAssetInspector";
+import type { TextureProcessingState } from "./AssetQuickEditor";
 import {
   InspectorPanel,
   type MeshInspectorPatch,
@@ -293,7 +295,7 @@ import {
   createScriptTrustSnapshotKey,
   type ScriptTrustDialogResult,
 } from "./ScriptTrustDialog";
-import { roundTo } from "./editor-utils";
+import { formatFileSize, roundTo } from "./editor-utils";
 import {
   DEFAULT_EDITOR_LAYOUT,
   EDITOR_LAYOUT_STORAGE_KEY,
@@ -405,6 +407,11 @@ type PendingMaterialAssignment = {
 type ModelReimportFeedback = {
   assetId: string;
   state: ModelReimportState;
+} | null;
+
+type TextureProcessingFeedback = {
+  assetId: string;
+  state: TextureProcessingState;
 } | null;
 
 function entityTransformMatches(
@@ -1324,6 +1331,8 @@ export function VisualEditorPrototype({
     useState<PendingMaterialAssignment>(null);
   const [modelReimportFeedback, setModelReimportFeedback] =
     useState<ModelReimportFeedback>(null);
+  const [textureProcessingFeedback, setTextureProcessingFeedback] =
+    useState<TextureProcessingFeedback>(null);
   const [activeAssetFolderId, setActiveAssetFolderId] = useState<string | null>(null);
   const [frameSelectionRequest, setFrameSelectionRequest] = useState(0);
   const [exitFocusRequest, setExitFocusRequest] = useState(0);
@@ -1395,7 +1404,7 @@ export function VisualEditorPrototype({
   const importQueueRef = useRef<QueuedAssetImport[]>([]);
   const importRunningRef = useRef(false);
   const assetOperationRef = useRef<{
-    kind: "asset-import" | "model-reimport";
+    kind: "asset-import" | "model-reimport" | "texture-processing";
     token: symbol;
   } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -1866,6 +1875,7 @@ export function VisualEditorPrototype({
     setDeleteDialog(null);
     setPendingMaterialAssignment(null);
     setModelReimportFeedback(null);
+    setTextureProcessingFeedback(null);
     setActiveAssetFolderId(null);
     setSelectedEntityIds(initialBundle.scene.rootEntityIds[0] ? [initialBundle.scene.rootEntityIds[0]] : []);
     setSelectedAssetIds(firstAssetId(initialBundle) ? [firstAssetId(initialBundle)!] : []);
@@ -1971,10 +1981,17 @@ export function VisualEditorPrototype({
         modelReimportFeedback.state.phase === "processing" ||
         modelReimportFeedback.state.phase === "committing"),
   );
+  const textureProcessingBusy = Boolean(
+    textureProcessingFeedback &&
+      (textureProcessingFeedback.state.phase === "reading" ||
+        textureProcessingFeedback.state.phase === "encoding" ||
+        textureProcessingFeedback.state.phase === "saving"),
+  );
   const importBusy =
     componentImportBusy ||
     mcpLocalAssetImportBusy ||
     modelReimportBusy ||
+    textureProcessingBusy ||
     pendingImports.some((entry) => importIsActive(entry.status));
   const editorModeRef = useRef(editorMode);
   editorModeRef.current = editorMode;
@@ -3995,6 +4012,9 @@ export function VisualEditorPrototype({
       modelReimportActive:
         modelReimportBusy ||
         assetOperationRef.current?.kind === "model-reimport",
+      textureProcessingActive:
+        textureProcessingBusy ||
+        assetOperationRef.current?.kind === "texture-processing",
     },
   );
   const builtinPrefabRecipes = useMemo(
@@ -6350,6 +6370,8 @@ export function VisualEditorPrototype({
             hasActiveAssetImport(importQueueRef.current),
           modelReimportActive:
             assetOperationRef.current?.kind === "model-reimport",
+          textureProcessingActive:
+            assetOperationRef.current?.kind === "texture-processing",
         },
       );
       if (!availability.allowed) {
@@ -6473,14 +6495,158 @@ export function VisualEditorPrototype({
   const handleTextureChange = useCallback(
     (assetId: string, patch: TextureAssetPatch) => {
       if (editorMode !== "edit") return;
+      if (textureProcessingBusy) {
+        setNotice("Textureの変換完了後に設定を変更できます");
+        return;
+      }
       setBundle((current) => {
         const assets = updateTextureAsset(current.assets, assetId, patch);
         if (assets === current.assets) return current;
-        setNotice("Texture Import設定IRを更新しました。画像変換・圧縮は未実行です");
+        // 直前の変換結果は新しい設定に対する答えではないので、案内を戻す。
+        setTextureProcessingFeedback((feedback) =>
+          feedback?.assetId === assetId ? null : feedback,
+        );
+        setNotice(
+          "Texture Import設定を更新しました。「この設定で画像を書き出す」で原本へ反映します",
+        );
         return touchProject({ ...current, assets });
       });
     },
-    [editorMode],
+    [editorMode, textureProcessingBusy],
+  );
+
+
+  const handleApplyTextureProcessing = useCallback(
+    async (assetId: string) => {
+      const availability = resolveAssetOperationAvailability(
+        "texture-processing",
+        {
+          readOnly: editorMode !== "edit",
+          assetImportActive:
+            importRunningRef.current ||
+            hasActiveAssetImport(importQueueRef.current),
+          modelReimportActive:
+            assetOperationRef.current?.kind === "model-reimport",
+          textureProcessingActive:
+            assetOperationRef.current?.kind === "texture-processing",
+        },
+      );
+      if (!availability.allowed) {
+        const message = availability.disabledReason ?? "いまはTextureを変換できません";
+        setTextureProcessingFeedback({
+          assetId,
+          state: { phase: "failed", message },
+        });
+        setNotice(message);
+        return;
+      }
+      if (!projectPath) {
+        const message = "初回の自動保存完了後にTextureを変換できます";
+        setTextureProcessingFeedback({
+          assetId,
+          state: { phase: "failed", message },
+        });
+        setNotice(message);
+        return;
+      }
+
+      const startingAsset = bundleRef.current.assets.assets[assetId];
+      if (startingAsset?.kind !== "texture") {
+        const message = "変換するTexture Assetが見つかりません";
+        setTextureProcessingFeedback({
+          assetId,
+          state: { phase: "failed", message },
+        });
+        setNotice(message);
+        return;
+      }
+
+      const operationToken = Symbol("texture-processing");
+      assetOperationRef.current = {
+        kind: "texture-processing",
+        token: operationToken,
+      };
+      setTextureProcessingFeedback({
+        assetId,
+        state: {
+          phase: "reading",
+          message: `${startingAsset.name}を読み込んでいます`,
+        },
+      });
+
+      try {
+        const result = await applyTextureProcessing(
+          projectPath,
+          bundleRef.current.assets,
+          assetId,
+          (progress) => {
+            setTextureProcessingFeedback({
+              assetId,
+              state: { phase: progress.phase, message: progress.message },
+            });
+          },
+        );
+
+        if (!result.ok) {
+          setTextureProcessingFeedback({
+            assetId,
+            state: { phase: "failed", message: result.message },
+          });
+          setNotice(result.message);
+          return;
+        }
+
+        // 変換中に設定が動いた場合は、書き出した画像を採用せず原本のまま残す。
+        const staleMessage =
+          "変換中にTexture設定が変更されたため、適用を取り消しました。元の画像は残っています";
+        if (bundleRef.current.assets.assets[assetId] !== startingAsset) {
+          setTextureProcessingFeedback({
+            assetId,
+            state: { phase: "failed", message: staleMessage },
+          });
+          setNotice(staleMessage);
+          return;
+        }
+
+        const formatLabel =
+          result.outputFormat === "jpeg"
+            ? "JPEG"
+            : result.outputFormat.toUpperCase();
+        const summary = `${result.width} × ${result.height}の${formatLabel}へ変換しました（${formatFileSize(result.beforeBytes)} → ${formatFileSize(result.afterBytes)}）`;
+
+        setHistory((current) => {
+          if (current.present.bundle.assets.assets[assetId] !== startingAsset) {
+            setTextureProcessingFeedback({
+              assetId,
+              state: { phase: "failed", message: staleMessage },
+            });
+            setNotice(staleMessage);
+            return current;
+          }
+          const nextBundle = touchProject({
+            ...current.present.bundle,
+            assets: result.manifest,
+          });
+          bundleRef.current = nextBundle;
+          setSaveStatus("dirty");
+          setTextureProcessingFeedback({
+            assetId,
+            state: { phase: "succeeded", message: summary },
+          });
+          setNotice(`「${result.assetName}」を${summary}`);
+          return commitEditorHistory(current, {
+            ...current.present,
+            bundle: nextBundle,
+            assetSelection: assetId,
+          });
+        });
+      } finally {
+        if (assetOperationRef.current?.token === operationToken) {
+          assetOperationRef.current = null;
+        }
+      }
+    },
+    [editorMode, projectPath],
   );
 
   const handleCreateTextureCard = useCallback(
@@ -7846,6 +8012,8 @@ export function VisualEditorPrototype({
         importRunningRef.current || hasActiveAssetImport(importQueueRef.current),
       modelReimportActive:
         assetOperationRef.current?.kind === "model-reimport",
+      textureProcessingActive:
+        assetOperationRef.current?.kind === "texture-processing",
     });
     if (!availability.allowed) {
       setNotice(availability.disabledReason);
@@ -9134,6 +9302,14 @@ export function VisualEditorPrototype({
             onParticleChange={handleParticleChange}
             onTextureChange={handleTextureChange}
             onCreateTextureCard={handleCreateTextureCard}
+            textureProcessingState={
+              textureProcessingFeedback?.assetId === assetSelection
+                ? textureProcessingFeedback.state
+                : { phase: "idle" }
+            }
+            onApplyTextureProcessing={(assetId) => {
+              void handleApplyTextureProcessing(assetId);
+            }}
             onParticleEmitterChange={handleParticleEmitterChange}
             onRemoveParticleEmitter={handleRemoveParticleEmitter}
             projectKind={projectKind}

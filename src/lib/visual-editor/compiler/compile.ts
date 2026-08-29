@@ -4652,12 +4652,19 @@ function diagnoseReferencedUnsupportedAssets(context: CompileContext): void {
     ) {
       addDiagnostic(
         context,
-        unsupportedAssetDiagnostic(
-          asset,
-          `${asset.kind}-asset-source-unsupported`,
-          `${asset.kind} Assetのsourceまたは変換recipeはcompiler未対応です`,
-          "blocking",
-        ),
+        hasUnappliedTextureRecipe(asset)
+          ? unsupportedAssetDiagnostic(
+              asset,
+              "texture-asset-recipe-unapplied",
+              "Textureの最大解像度・圧縮設定が原本へ未反映です。Texture Inspectorの「この設定で画像を書き出す」で変換してください",
+              "blocking",
+            )
+          : unsupportedAssetDiagnostic(
+              asset,
+              `${asset.kind}-asset-source-unsupported`,
+              `${asset.kind} Assetのsourceまたは変換recipeはcompiler未対応です`,
+              "blocking",
+            ),
       );
     } else if (asset.kind === "template" && !isPrefabAsset(asset)) {
       addDiagnostic(context, unsupportedAssetDiagnostic(asset, "prefab-asset-unsupported", "Template/Prefab Asset の展開は未対応です", "blocking"));
@@ -4825,6 +4832,22 @@ function entityDiagnostic(
   severity: CompilerDiagnostic["severity"],
 ): CompilerDiagnostic {
   return { severity, code, message, entityId: entity.id };
+}
+
+/**
+ * Import設定だけが原本へ未反映のTextureは、source自体は扱える。診断を
+ * 「未対応」で終わらせず、Inspectorで変換すれば解けることを示す。
+ */
+function hasUnappliedTextureRecipe(asset: SceneAsset): boolean {
+  return (
+    asset.kind === "texture" &&
+    asset.status === "ready" &&
+    asset.source.kind === "project" &&
+    isSafeRelativePath(asset.source.relativePath) &&
+    isAllowedStaticAssetSource(asset) &&
+    (asset.importSettings.compression.format !== "source" ||
+      asset.importSettings.resize.mode !== "original")
+  );
 }
 
 function unsupportedAssetDiagnostic(

@@ -5,6 +5,14 @@ import type {
   TextureAsset,
 } from "./asset-manifest";
 import type { PrototypeVisualProject } from "./prototype-project";
+import {
+  assetBytesToDataUrl,
+  copyAssetBytes,
+  processedAssetPath,
+  readProjectAssetBytes,
+  renderImageBytes,
+  sha256Hex,
+} from "./texture-processing";
 import type { VramRecommendation } from "./vram-estimate";
 
 export type AssetOptimizationOperation = NonNullable<
@@ -70,7 +78,7 @@ export async function applyAssetOptimizations(
       label: `${sourceAsset.name}を読み込んでいます`,
       phase: "reading",
     });
-    const sourceBytes = await readProjectBytes(
+    const sourceBytes = await readProjectAssetBytes(
       projectPath,
       sourceAsset.source.relativePath,
     );
@@ -110,7 +118,7 @@ export async function applyAssetOptimizations(
     await Promise.all(
       optimized.map(async (entry) => ({
         relativePath: entry.relativePath,
-        dataUrl: await bytesToDataUrl(entry.bytes, mimeTypeForPath(entry.relativePath)),
+        dataUrl: await assetBytesToDataUrl(entry.bytes, mimeTypeForPath(entry.relativePath)),
       })),
     ),
   );
@@ -167,7 +175,11 @@ async function optimizeTexture(
   }
 
   const resized = shouldResize
-    ? await resizeImage(sourceBytes, 2048)
+    ? await renderImageBytes(sourceBytes, {
+        maxSize: 2048,
+        mimeType: "image/webp",
+        quality: 0.86,
+      })
     : {
         bytes: sourceBytes,
         width: asset.importMetadata.width,
@@ -180,7 +192,7 @@ async function optimizeTexture(
 
   if (shouldEncodeKtx2) {
     const { encodeToKTX2 } = await import("ktx2-encoder");
-    bytes = await encodeToKTX2(copyBytes(resized.bytes), {
+    bytes = await encodeToKTX2(copyAssetBytes(resized.bytes), {
       isUASTC: false,
       qualityLevel: Math.max(
         1,
@@ -197,8 +209,8 @@ async function optimizeTexture(
     sourceFormat = "ktx2";
   }
 
-  const sourceHash = await sha256(bytes);
-  const relativePath = optimizedPath(asset.id, sourceHash, extension);
+  const sourceHash = await sha256Hex(bytes);
+  const relativePath = processedAssetPath(asset.id, sourceHash, extension);
   return {
     beforeBytes: sourceBytes.byteLength,
     bytes,
@@ -253,11 +265,11 @@ async function optimizeModel(
   const io = new WebIO()
     .registerExtensions(ALL_EXTENSIONS)
     .registerDependencies({ "draco3d.encoder": encoder });
-  const document = await io.readBinary(copyBytes(sourceBytes));
+  const document = await io.readBinary(copyAssetBytes(sourceBytes));
   await document.transform(draco({ method: "edgebreaker" }));
-  const bytes = copyBytes(await io.writeBinary(document));
-  const sourceHash = await sha256(bytes);
-  const relativePath = optimizedPath(asset.id, sourceHash, "glb");
+  const bytes = copyAssetBytes(await io.writeBinary(document));
+  const sourceHash = await sha256Hex(bytes);
+  const relativePath = processedAssetPath(asset.id, sourceHash, "glb");
   const extensionsUsed = new Set([
     ...metadata.extensionsUsed,
     KHRDracoMeshCompression.EXTENSION_NAME,
@@ -298,82 +310,6 @@ async function createDracoEncoder(): Promise<object> {
   const wasmUrl = (wasmModule as { default: string }).default;
   const wasmBinary = new Uint8Array(await (await fetch(wasmUrl)).arrayBuffer());
   return createEncoderModule({ wasmBinary });
-}
-
-async function resizeImage(
-  bytes: Uint8Array,
-  maxSize: number,
-): Promise<{ bytes: Uint8Array; width: number; height: number }> {
-  const bitmap = await createImageBitmap(new Blob([copyBytes(bytes)]));
-  try {
-    const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d", { alpha: true });
-    if (!context) throw new Error("画像変換用のCanvasを作成できませんでした。");
-    context.drawImage(bitmap, 0, 0, width, height);
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob(
-        (result) =>
-          result
-            ? resolve(result)
-            : reject(new Error("画像の縮小結果をエンコードできませんでした。")),
-        "image/webp",
-        0.86,
-      );
-    });
-    return {
-      bytes: new Uint8Array(await blob.arrayBuffer()),
-      width,
-      height,
-    };
-  } finally {
-    bitmap.close();
-  }
-}
-
-async function readProjectBytes(
-  projectPath: string,
-  relativePath: string,
-): Promise<Uint8Array> {
-  const dataUrl = await tauri.readProjectFileDataUrl(projectPath, relativePath);
-  const response = await fetch(dataUrl);
-  if (!response.ok) throw new Error("アセット原本を読み込めませんでした。");
-  return new Uint8Array(await response.arrayBuffer());
-}
-
-function optimizedPath(assetId: string, hash: string, extension: string): string {
-  const safeAssetId = assetId.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 64);
-  return `assets/.optimized/${safeAssetId}-${hash.slice(0, 16)}.${extension}`;
-}
-
-async function sha256(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", copyBytes(bytes));
-  return [...new Uint8Array(digest)]
-    .map((value) => value.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function copyBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
-  return new Uint8Array(bytes);
-}
-
-async function bytesToDataUrl(bytes: Uint8Array, mimeType: string): Promise<string> {
-  return await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener("load", () =>
-      typeof reader.result === "string"
-        ? resolve(reader.result)
-        : reject(new Error("変換結果を保存形式へ変換できませんでした。")),
-    );
-    reader.addEventListener("error", () =>
-      reject(reader.error ?? new Error("変換結果を保存形式へ変換できませんでした。")),
-    );
-    reader.readAsDataURL(new Blob([copyBytes(bytes)], { type: mimeType }));
-  });
 }
 
 function mimeTypeForPath(relativePath: string): string {
