@@ -3,6 +3,8 @@ import scriptAudioSource from "../../../../packages/xrift-studio-runtime/src/scr
 import scriptHostSource from "../../../../packages/xrift-studio-runtime/src/script/host.tsx?raw";
 import scriptLightSource from "../../../../packages/xrift-studio-runtime/src/script/light.tsx?raw";
 import scriptLifecycleSource from "../../../../packages/xrift-studio-runtime/src/script/lifecycle.ts?raw";
+import scriptInteractionTriggerSource from "../../../../packages/xrift-studio-runtime/src/script/interaction-trigger.ts?raw";
+import scriptInteractionTriggerRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/interaction-trigger-runtime.tsx?raw";
 import scriptParticleSource from "../../../../packages/xrift-studio-runtime/src/script/particle.tsx?raw";
 
 import type { AssetManifest, ScriptAsset } from "../asset-manifest";
@@ -40,6 +42,8 @@ export const SCRIPT_HOST_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/script-host
 export const SCRIPT_LIGHT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/light-runtime.tsx`;
 export const SCRIPT_LIFECYCLE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/script-lifecycle.ts`;
 export const SCRIPT_PARTICLE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/particle-runtime.tsx`;
+export const INTERACTION_TRIGGER_MODEL_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interaction-trigger.ts`;
+export const INTERACTION_TRIGGER_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interaction-trigger-runtime.tsx`;
 
 export type EmittedScriptModule = {
   assetId: string;
@@ -200,6 +204,30 @@ export function createScriptAudioSourceOverlayFile(): CompilerOverlayFile {
   };
 }
 
+/**
+ * The Interaction Trigger runtime, plus the graph model it reads.
+ *
+ * Emitted as the same source Studio Play imports, for the same reason the Audio
+ * Source and Light runtimes are: a published trigger that behaved differently
+ * from the one the author tested would make Play useless for behavior.
+ */
+export function createInteractionTriggerOverlayFiles(): CompilerOverlayFile[] {
+  return [
+    {
+      relativePath: INTERACTION_TRIGGER_MODEL_OVERLAY_PATH,
+      content: scriptInteractionTriggerSource,
+      kind: "source",
+      owner: "xrift-studio-compiler",
+    },
+    {
+      relativePath: INTERACTION_TRIGGER_OVERLAY_PATH,
+      content: rewriteRuntimeLocalImports(scriptInteractionTriggerRuntimeSource),
+      kind: "source",
+      owner: "xrift-studio-compiler",
+    },
+  ];
+}
+
 export function createScriptLightOverlayFile(): CompilerOverlayFile {
   return {
     relativePath: SCRIPT_LIGHT_OVERLAY_PATH,
@@ -254,7 +282,7 @@ function rewriteScriptApiImports(source: string): string {
 /** Runtime overlays import sibling package modules by package-relative paths. */
 function rewriteRuntimeLocalImports(source: string): string {
   return source.replace(
-    /(\bfrom\s*)(["'])\.\/(api|audio-source|light|lifecycle|particle)\.js\2/g,
+    /(\bfrom\s*)(["'])\.\/(api|audio-source|light|lifecycle|particle|interaction-trigger)\.js\2/g,
     (_whole, prefix: string, quote: string, moduleName: string) =>
       `${prefix}${quote}./${
         moduleName === "api"
@@ -265,7 +293,9 @@ function rewriteRuntimeLocalImports(source: string): string {
               ? "light-runtime"
               : moduleName === "lifecycle"
                 ? "script-lifecycle"
-                : "particle-runtime"
+                : moduleName === "interaction-trigger"
+                  ? "interaction-trigger"
+                  : "particle-runtime"
       }${quote}`,
   );
 }

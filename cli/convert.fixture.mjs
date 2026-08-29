@@ -83,6 +83,7 @@ import {
   runInteractivityRecipeFixtureAssertions,
   runInteractivityRuntimeAdapterFixtureAssertions,
 } from "../src/lib/visual-editor/interactivity-recipes.fixture.ts";
+import { runInteractionTriggerFixtureAssertions } from "../src/lib/visual-editor/interaction-trigger.fixture.ts";
 import { runVisualUploadFixtureAssertions } from "../src/lib/visual-editor/upload.fixture.ts";
 import { runRuntimeSpawnFixtureAssertions } from "../src/lib/visual-editor/runtime-spawn.fixture.ts";
 import { runSkyboxImportFixtureAssertions } from "../src/lib/visual-editor/skybox-import.fixture.ts";
@@ -301,6 +302,7 @@ try {
     ["lighting contract", runLightingContractFixtureAssertions],
     ["material alpha", runMaterialAlphaFixtureAssertions],
     ["interactivity recipes", runInteractivityRecipeFixtureAssertions],
+    ["interaction trigger", runInteractionTriggerFixtureAssertions],
     ["interactivity runtime adapter", runInteractivityRuntimeAdapterFixtureAssertions],
     ["visual upload branch", runVisualUploadFixtureAssertions],
     ["classic project import", runClassicProjectImportFixtureAssertions],
