@@ -149,7 +149,8 @@ F-06 アイテム検査
 | F-34 | Skybox Shader（手続き的な空） | MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-82, MI-83 | 画像Skyboxではなく、Custom Shader Materialとして昼・夕暮れ・朝焼け・夜空・オーロラ・星雲の空を追加できる。星の数、太陽と月の位置、月の満ち欠け、雲、地平線の遠景をuniformで調整でき、レイマーチする厚みのある雲も選べる。外部リソース集での調整とInspectorでの再調整が同じMaterialを指し、Scene View、Play、生成Worldが同じGLSLを描く。Materialが欠落した場合はグラデーションへ戻し、警告診断を残す。重いpresetはstep数をvariant defineとして残し、下げられる状態にする。 |
 | F-35 | Visual QA診断と短時間録画 | MI-03, MI-05, MI-14, MI-26, MI-80 | Scene ViewとPlay Windowで実rendererのFPS、frame time、draw calls、triangles、mesh可視数、camera Farを確認でき、最大15秒のWebMを保存して問題の発生前後を再現できる。診断や録画はSceneDocument、AssetManifest、Undo履歴を変更せず、停止・保存失敗・WebM非対応から同じScene Viewへ戻れる。 |
 | F-36 | Audio Asset試聴 | MI-03, MI-05, MI-09, MI-15, MI-20 | Audio AssetのInspectorから音源を試聴でき、SceneDocumentとAudio Sourceの配置を変更しない。 |
-| F-37 | インタラクトのトリガー | MI-05, MI-09, MI-11, MI-14, MI-25, MI-60, MI-89 | EntityへInteraction Triggerを付け、公式Interactableで押したときに別Entityやそのコンポーネントのプロパティを変えられる。対象、コンポーネント、プロパティ、値はノードエディタのSceneから選び、Inspectorには押したときの動きが一覧で残る。Play、公開ワールド、MCPは同じcanonical graphと同じ適用経路を使う。 |
+| F-37 | Texture解像度変更・圧縮の適用 | MI-03, MI-05, MI-09, MI-15, MI-16, MI-25, MI-67 | Texture Inspectorの最大解像度・圧縮設定を、その場で原本の画像ファイルへ書き出せる。変換前後の解像度、形式、容量を同じ場所で見比べ、未反映のまま公開されない状態にする。環境Textureや書き戻せない形式は理由を示して実行させない。 |
+| F-38 | インタラクトのトリガー | MI-05, MI-09, MI-11, MI-14, MI-25, MI-60, MI-89 | EntityへInteraction Triggerを付け、公式Interactableで押したときに別Entityやそのコンポーネントのプロパティを変えられる。対象、コンポーネント、プロパティ、値はノードエディタのSceneから選び、Inspectorには押したときの動きが一覧で残る。Play、公開ワールド、MCPは同じcanonical graphと同じ適用経路を使う。 |
 
 ## F-01 CLI更新の状態設計
 
@@ -1354,7 +1355,37 @@ F-06 アイテム検査
 
 - 試聴の終了後も同じAudio Asset Inspectorに留まり、Audio Sourceへの配置は既存の配置操作から続けられる。
 
-## F-37 インタラクトのトリガーの状態設計
+## F-37 Texture解像度変更・圧縮の適用の状態設計
+
+参照: MI-03, MI-05, MI-09, MI-15, MI-16, MI-25, MI-67
+
+### 操作前
+
+- Texture Inspectorの最大解像度と圧縮（方式・Quality）は設定として保持されるだけで、原本の画像ファイルは変わらない。「画像の書き出し」に現在の解像度・形式・容量と、変換後の解像度・形式・Qualityを並べて示す。
+- 設定が原本と一致していて変換するものがない場合は、その理由を示して実行操作を無効にする。環境Texture（HDRI）、KTX2やSVGなど書き戻せない形式、外部・組み込みsource、解析結果のないAssetは、実行操作を出さずに対応していない理由を示す。
+- 未反映の設定があるときは、変換するまで表示と公開結果が原本のままであること、書き出しても元の画像fileは残ることを操作の前に示す。
+- Play中と、アセットのインポート・Model再インポート・別Textureの変換中は実行できない。理由と、停止または完了後に同じInspectorから実行できることを示す。
+
+### 処理中
+
+- ボタンを「変換中」にして無効化し、同じTextureの設定変更も止める。読み込み・変換・保存の段階を文言で示し、二重実行を示さない。
+- 書き出しは`assets/.optimized/`へハッシュ名の新しいfileとして保存し、元の原本を上書きしない。保存に失敗した場合はAssetManifestを変更せず、表示中のTextureも壊さない。
+
+### 成功時
+
+- 変換後の解像度、形式、変換前後の容量をInspectorに残し、通知にも同じ内容を出す。AssetのsourceとImport metadataを書き出したfileへ切り替え、最大解像度は「原寸」、圧縮方式は「source」へ戻して、未反映の設定が残らないようにする。
+- 一件のUndo履歴として確定し、自動保存へ引き継ぐ。生成済みthumbnailはstaleにして再生成の対象にする。Undoで変換前のAssetへ戻る。
+
+### 失敗時
+
+- 失敗理由をInspectorと通知の両方に残し、元の原本と設定を保持する。変換中に同じTextureの設定が変わった場合は、書き出した画像を採用せず取り消したことを示す。
+- 未保存のプロジェクトでは実行せず、初回の自動保存後に実行できることを示す。
+
+### 戻り先
+
+- 成功・失敗のいずれでも同じTexture Inspectorに留まり、設定を変えて再実行するか、Upload reviewの容量見積もりへ進める。Upload reviewの一括最適化と同じ変換結果の保存先を使う。
+
+## F-38 インタラクトのトリガーの状態設計
 
 参照: MI-05, MI-09, MI-11, MI-14, MI-25, MI-60, MI-89
 

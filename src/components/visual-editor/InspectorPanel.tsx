@@ -111,7 +111,10 @@ import {
   type RigidBodyComponent,
   type RigidBodyPatch,
 } from "../../lib/visual-editor";
-import { AssetQuickEditor } from "./AssetQuickEditor";
+import {
+  AssetQuickEditor,
+  type TextureProcessingState,
+} from "./AssetQuickEditor";
 import { tauri } from "../../lib/tauri";
 import type {
   ModelReimportImpactNotice,
@@ -3410,6 +3413,24 @@ function TextInspector({
         disabled={readOnly}
         onChange={(fontSize) => onChange({ fontSize })}
       />
+      <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+        <span className="text-[11px] text-slate-500">大きさを引いて調整</span>
+        <input
+          type="range"
+          aria-label="Font Sizeのスライダー"
+          min={0.01}
+          // 大きな見出しを数値で入れた後もつまみが端に張り付かないよう、上限を追従させる。
+          max={Math.max(1, roundTo(component.fontSize, 2))}
+          step={0.01}
+          value={component.fontSize}
+          disabled={readOnly}
+          onChange={(event) => {
+            const fontSize = event.currentTarget.valueAsNumber;
+            if (Number.isFinite(fontSize) && fontSize > 0) onChange({ fontSize });
+          }}
+          className="h-2 w-full cursor-ew-resize accent-violet-600 disabled:cursor-not-allowed disabled:opacity-50"
+        />
+      </label>
       <ColliderNumberField
         label="Max Width"
         value={component.maxWidth ?? 10}
@@ -4692,6 +4713,8 @@ export function InspectorPanel({
   onParticleChange,
   onTextureChange,
   onCreateTextureCard,
+  textureProcessingState,
+  onApplyTextureProcessing,
   onParticleEmitterChange,
   onRemoveParticleEmitter,
   projectKind,
@@ -4808,6 +4831,8 @@ export function InspectorPanel({
     textureAssetId: string,
     profile: TextureCardProfile,
   ) => void;
+  textureProcessingState?: TextureProcessingState;
+  onApplyTextureProcessing?: (assetId: string) => void;
   onParticleEmitterChange: (
     entityId: string,
     componentId: string,
@@ -4978,6 +5003,8 @@ export function InspectorPanel({
               onParticleChange={onParticleChange}
               onTextureChange={onTextureChange}
               onCreateTextureCard={onCreateTextureCard}
+              textureProcessingState={textureProcessingState}
+              onApplyTextureProcessing={onApplyTextureProcessing}
               prefabs={prefabs}
               onSelectPrefabSourceEntity={onSelectPrefabSourceEntity}
               onUpdatePrefab={onUpdatePrefab}
