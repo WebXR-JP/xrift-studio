@@ -24,6 +24,11 @@ import {
   type XriftAudioSourceSourceStatus,
 } from "../../../packages/xrift-studio-runtime/src/script/audio-source";
 import { XriftScriptLight } from "../../../packages/xrift-studio-runtime/src/script/light";
+import { PlayInteractionHost } from "./PlayInteractionHost";
+import {
+  emitXriftInteraction,
+  XriftInteractionTriggerRuntime,
+} from "../../../packages/xrift-studio-runtime/src/script/interaction-trigger-runtime";
 import {
   applyTimeUniformValue,
   type MutableUniformValue,
@@ -1833,12 +1838,36 @@ function EntityObject({
           component.type === "script" && component.enabled,
       )
     : [];
+  // Triggers run in Play only, like Scripts: interacting while editing would
+  // change Entities the author is still arranging.
+  const interactionTriggerComponents =
+    playing && effectivelyEnabled
+      ? entity.components.filter(
+          (
+            component,
+          ): component is Extract<SceneComponent, { type: "interaction-trigger" }> =>
+            component.type === "interaction-trigger" && component.enabled,
+        )
+      : [];
   const entityWindComponent = entity.components.find(
     (component): component is VegetationWindComponent =>
       component.type === "vegetation-wind",
   );
   const entityVisuals = (
     <Fragment key={runtimeRevision}>
+      {interactionTriggerComponents.map((component, index) => {
+        const graphAsset = assets.assets[component.interactivityAssetId];
+        if (graphAsset?.kind !== "interactivity") return null;
+        return (
+          <XriftInteractionTriggerRuntime
+            key={component.id}
+            entityId={entity.id}
+            graph={graphAsset.extension}
+            componentId={component.id}
+            order={index}
+          />
+        );
+      })}
       {scriptComponents.map((component) => (
         <EntityScriptVisual
           key={component.id}
@@ -1927,7 +1956,12 @@ function EntityObject({
         scale={transform?.scale ?? [1, 1, 1]}
         userData={{ authoringEntityId, renderedEntityId: entity.id }}
       >
-        <OfficialXriftEntityWrappers components={xriftWrapperComponents}>
+        <OfficialXriftEntityWrappers
+          components={xriftWrapperComponents}
+          {...(playing
+            ? { onInteract: () => emitXriftInteraction(entity.id) }
+            : {})}
+        >
           {physicsEnabled ? (
             ownRigidBody ? (
               <RuntimeOwnedRigidBody component={ownRigidBody}>
@@ -5055,6 +5089,7 @@ export function SceneViewport({
                 : [0, 0, 0]
             }
           >
+            <PlayInteractionHost active={editorMode === "play"} />
             <ScriptViewportProvider value={scriptRuntime ?? null}>
             <XriftScriptRoot pressedKeys={pressedKeysRef.current}>
             <Fragment key={editorMode}>

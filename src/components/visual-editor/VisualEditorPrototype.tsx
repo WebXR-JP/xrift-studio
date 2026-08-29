@@ -124,7 +124,10 @@ import {
   updateParticleAsset,
   updatePrefabDocumentFromSource,
   updateTextureAsset,
+  addDefaultInteractivityAsset,
   collectInteractionTriggerTargets,
+  createInteractionTriggerGraphExtension,
+  updateInteractionTriggerComponent,
   updateInteractivityAsset,
   updateXriftComponent,
   type ColliderPatch,
@@ -138,6 +141,7 @@ import {
   type SceneRecipe,
   instantiateSceneRecipe,
   type AudioSourcePatch,
+  type InteractionTriggerPatch,
   type VegetationWindPatch,
   type LightPatch,
   type MaterialAssetPatch,
@@ -5692,6 +5696,21 @@ export function VisualEditorPrototype({
     [editorMode, playSession, updateScene],
   );
 
+  const handleInteractionTriggerChange = useCallback(
+    (entityId: string, componentId: string, patch: InteractionTriggerPatch) => {
+      if (editorMode !== "edit" && !playSession) return;
+      updateScene((scene) =>
+        updateInteractionTriggerComponent(scene, entityId, componentId, patch),
+      );
+      setNotice(
+        editorMode === "play"
+          ? "Interaction Triggerを保存し、このEntityのPlayを先頭から再実行しました"
+          : "Interaction TriggerをSceneへ反映しました",
+      );
+    },
+    [editorMode, playSession, updateScene],
+  );
+
   const handleAnimationChange = useCallback(
     (entityId: string, componentId: string, patch: AnimationPatch) => {
       if (editorMode !== "edit" && !playSession) return;
@@ -7120,9 +7139,39 @@ export function VisualEditorPrototype({
   const handleAddComponent = useCallback(
     (entityId: string, componentDefinitionId: string) => {
       const fallbackParticleId = createDocumentId("particle");
+      // Decided before the update so the editor can be opened afterwards: a
+      // state updater may run later than this callback, and reading its result
+      // from a captured variable would open nothing on the first click.
+      const needsInteractivityAsset =
+        componentDefinitionId === "interaction.trigger" &&
+        !Object.values(bundleRef.current.assets.assets).some(
+          (asset) => asset.kind === "interactivity",
+        );
+      const createdInteractivityAssetId = needsInteractivityAsset
+        ? createDocumentId("asset")
+        : null;
       setBundle((current) => {
         let assets = current.assets;
         let createdParticle = false;
+        let createdGraph = false;
+        // The same courtesy the Particle Emitter gets: a Component whose whole
+        // job is to run a graph is useless without one, so the graph is created
+        // here rather than sending the author to Assets and back.
+        if (createdInteractivityAssetId) {
+          const added = addDefaultInteractivityAsset(assets, {
+            id: createdInteractivityAssetId,
+            name: "新規Interactivity 1",
+            folderId: null,
+          });
+          if (added.added) {
+            assets = updateInteractivityAsset(
+              added.manifest,
+              added.assetId,
+              createInteractionTriggerGraphExtension(),
+            );
+            createdGraph = true;
+          }
+        }
         if (
           componentDefinitionId === "core.particle" &&
           !Object.values(assets.assets).some((asset) => asset.kind === "particle")
@@ -7142,8 +7191,9 @@ export function VisualEditorPrototype({
           entityId,
           componentDefinitionId,
           projectKind,
-          componentDefinitionId === "scripting.script"
-            ? assetSelection ?? undefined
+          componentDefinitionId === "scripting.script" ||
+          componentDefinitionId === "interaction.trigger"
+            ? createdInteractivityAssetId ?? assetSelection ?? undefined
             : undefined,
           componentDefinitionId === "scripting.script"
             ? scriptContractsRef.current
@@ -7158,7 +7208,9 @@ export function VisualEditorPrototype({
                 : result.reason === "dependency-missing"
                   ? componentDefinitionId === "scripting.script"
                     ? "先にAssetsでScriptを作成してください"
-                    : "必要なMeshまたはAssetがありません"
+                    : componentDefinitionId === "interaction.trigger"
+                      ? "先にAssetsでInteractivity Graphを作成してください"
+                      : "必要なMeshまたはAssetがありません"
                   : "Componentを追加できませんでした";
           setNotice(reason);
           return current;
@@ -7166,10 +7218,18 @@ export function VisualEditorPrototype({
         setNotice(
           createdParticle
             ? "Particle Assetを作成し、Particle Emitterを追加しました"
-            : "Componentを追加しました",
+            : createdGraph
+              ? "Interactivity Graphを作成し、Interaction Triggerを追加しました"
+              : "Componentを追加しました",
         );
         return touchProject({ ...current, assets, scene: result.scene });
       });
+      // A graph created for this Component is empty apart from its entry point,
+      // so the next step is always the node editor. Opening it is what keeps
+      // "追加した" from ending at a card the author has to hunt through.
+      if (createdInteractivityAssetId) {
+        setInteractivityEditorAssetId(createdInteractivityAssetId);
+      }
     },
     [assetSelection, editorMode, projectKind, setBundle],
   );
@@ -9127,6 +9187,7 @@ export function VisualEditorPrototype({
             scriptContracts={scriptEditor.contracts}
             scriptEntityOptions={scriptEntityOptions}
             onUpdateScriptComponent={handleUpdateScriptComponent}
+            onUpdateInteractionTrigger={handleInteractionTriggerChange}
             onOpenScript={(assetId) =>
               executeCommand("asset.edit-script", { assetId })
             }

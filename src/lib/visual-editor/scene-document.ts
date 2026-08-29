@@ -1917,6 +1917,77 @@ export function updateAudioSourceComponent(
 }
 
 /** Applies an Animation playback edit atomically. */
+export type InteractionTriggerPatch = Partial<
+  Pick<InteractionTriggerComponent, "enabled" | "interactivityAssetId" | "entityReferences">
+>;
+
+/**
+ * Updates an Interaction Trigger Component.
+ *
+ * `entityReferences` mirrors the Script Component's: the Entities the graph
+ * writes to are recorded on the Component so a Prefab copy or an Entity id
+ * remap can follow them, and so the compiler can see them without reading the
+ * graph.
+ */
+export function updateInteractionTriggerComponent(
+  scene: SceneDocument,
+  entityId: string,
+  componentId: string,
+  patch: InteractionTriggerPatch,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  const current = entity?.components.find(
+    (component): component is InteractionTriggerComponent =>
+      component.type === "interaction-trigger" && component.id === componentId,
+  );
+  if (!entity || !current) return scene;
+  if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") return scene;
+  if (
+    patch.interactivityAssetId !== undefined &&
+    (typeof patch.interactivityAssetId !== "string" ||
+      !patch.interactivityAssetId.trim())
+  ) {
+    return scene;
+  }
+  if (
+    patch.entityReferences !== undefined &&
+    (!Array.isArray(patch.entityReferences) ||
+      patch.entityReferences.some((value) => typeof value !== "string" || !value))
+  ) {
+    return scene;
+  }
+  const next: InteractionTriggerComponent = {
+    ...current,
+    ...patch,
+    ...(patch.interactivityAssetId !== undefined
+      ? { interactivityAssetId: patch.interactivityAssetId.trim() }
+      : {}),
+    ...(patch.entityReferences !== undefined
+      ? { entityReferences: [...new Set(patch.entityReferences)] }
+      : {}),
+  };
+  if (
+    next.enabled === current.enabled &&
+    next.interactivityAssetId === current.interactivityAssetId &&
+    next.entityReferences.join("\u0000") ===
+      current.entityReferences.join("\u0000")
+  ) {
+    return scene;
+  }
+  return {
+    ...scene,
+    entities: {
+      ...scene.entities,
+      [entityId]: {
+        ...entity,
+        components: entity.components.map((component) =>
+          component.id === componentId ? next : component,
+        ),
+      },
+    },
+  };
+}
+
 export function updateAnimationComponent(
   scene: SceneDocument,
   entityId: string,

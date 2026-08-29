@@ -92,7 +92,8 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     target: "audio-source",
     name: "playback",
     label: "再生",
-    description: "Audio Sourceの再生・一時停止・停止を切り替えます。",
+    description:
+      "Audio Sourceの再生・一時停止・停止を切り替えます。押したときに鳴らすには、Audio SourceのEnabledはONのまま、Autoplayをオフにしておきます。",
     kind: "enum",
     defaultValue: "play",
     options: [

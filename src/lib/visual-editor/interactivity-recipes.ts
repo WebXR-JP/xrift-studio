@@ -5,6 +5,8 @@ import {
   createDefaultKhrInteractivityExtension,
   getInteractivityOperationTemplate,
   writeInteractivityNodePosition,
+  XRIFT_INTERACTION_OPERATIONS,
+  type KhrInteractivityExtension,
   type KhrInteractivityGraph,
   type KhrInteractivityJsonValue,
   type KhrInteractivityNode,
@@ -92,6 +94,31 @@ export function setInteractivityLiteralValue(
   const current = node?.values?.[socket];
   if (!node || !current) return;
   node.values = { ...node.values, [socket]: { ...current, value } };
+}
+
+/**
+ * A graph that starts from the interaction, not from `event/onStart`.
+ *
+ * The default Interactivity Asset is an animation-on-start example, which is
+ * the wrong first node for a trigger: an author who adds an Interaction Trigger
+ * has already said what starts it. Seeding the entry point means the first
+ * thing they do in the editor is choose what the button changes.
+ */
+export function createInteractionTriggerGraphExtension(): KhrInteractivityExtension {
+  const extension = cloneKhrInteractivityExtension(
+    createDefaultKhrInteractivityExtension(),
+  );
+  const graph = extension.graphs[0] as KhrInteractivityGraph;
+  graph.name = "Interaction trigger";
+  graph.types = [];
+  graph.declarations = [];
+  graph.nodes = [];
+  appendInteractivityOperation(
+    graph,
+    XRIFT_INTERACTION_OPERATIONS.onInteract,
+    { x: 80, y: 160 },
+  );
+  return extension;
 }
 
 /**
