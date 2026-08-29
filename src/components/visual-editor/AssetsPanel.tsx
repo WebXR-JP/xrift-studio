@@ -1595,17 +1595,22 @@ export function AssetsPanel({
         onChange={handleFileInput}
         className="sr-only"
       />
-      <div className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-editor-border bg-editor-surface px-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <h2 id="assets-heading" className="text-[13px] font-semibold text-slate-800">Assets</h2>
-          <nav className="flex min-w-0 items-center gap-1 text-xs text-slate-500" aria-label="Asset folder breadcrumb">
+      {/*
+       * The header keeps its single row at every panel width: the breadcrumb is
+       * the only part allowed to shrink, and the actions drop their labels
+       * through container queries instead of wrapping onto a second line.
+       */}
+      <div className="@container/assets-header flex h-10 shrink-0 items-center justify-between gap-3 border-b border-editor-border bg-editor-surface px-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <h2 id="assets-heading" className="shrink-0 text-[13px] font-semibold text-slate-800">Assets</h2>
+          <nav className="hidden min-w-0 items-center gap-1 overflow-hidden text-xs text-slate-500 @[460px]/assets-header:flex" aria-label="Asset folder breadcrumb">
             <button
               type="button"
               onClick={() => onActiveFolderChange(null)}
               onDragOver={handleRootDragOver}
               onDragLeave={() => setRootDropTarget(false)}
               onDrop={(event) => handleLibraryMove(event, null)}
-              className={`rounded-md px-1.5 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${rootDropTarget ? "bg-brand-100 text-brand-800" : "hover:bg-editor-subtle hover:text-editor-text"}`}
+              className={`shrink-0 rounded-md px-1.5 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${rootDropTarget ? "bg-brand-100 text-brand-800" : "hover:bg-editor-subtle hover:text-editor-text"}`}
               title="Assets直下を開く。アセットまたはフォルダーをここへドロップして移動"
             >
               Assets
@@ -1631,17 +1636,17 @@ export function AssetsPanel({
             ))}
           </nav>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           {normalizedExternalLockReason ? (
             <span
               role="status"
-              className="max-w-44 truncate rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800"
+              className="max-w-24 shrink truncate rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800 @[560px]/assets-header:max-w-44"
               title={normalizedExternalLockReason}
             >
               {normalizedExternalLockReason}
             </span>
           ) : null}
-          <label className="relative flex h-7 w-52 items-center">
+          <label className="relative flex h-7 w-32 items-center @[560px]/assets-header:w-40 @[700px]/assets-header:w-52">
             <span className="sr-only">アセットを検索</span>
             <input
               type="search"
@@ -1669,11 +1674,11 @@ export function AssetsPanel({
               </button>
             ) : null}
           </label>
-          <button type="button" onClick={() => setViewMode("grid")} aria-label="グリッド表示" aria-pressed={viewMode === "grid"} title={commandTitle("グリッド表示", "SetAssetView.Grid")} className={`rounded p-1 ${viewMode === "grid" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><GridIcon size={14} aria-hidden="true" /></button>
-          <button type="button" onClick={() => setViewMode("list")} aria-label="リスト表示" aria-pressed={viewMode === "list"} title={commandTitle("リスト表示", "SetAssetView.List")} className={`rounded p-1 ${viewMode === "list" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><ListIcon size={14} aria-hidden="true" /></button>
-          <button type="button" disabled={assetMutationLocked} onClick={openCreationMenu} aria-label="新規アセットまたはフォルダー" title={assetMutationDisabledReason ?? "新規アセットまたはフォルダー"} className="ml-1 rounded border border-slate-300 bg-white p-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"><CreateIcon size={14} aria-hidden="true" /></button>
-          <button type="button" disabled={assetMutationLocked} onClick={onOpenExternalStore} title={assetMutationDisabledReason ?? "外部リソースからAssetまたは公式Componentを追加"} className="flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45"><Store size={12} aria-hidden="true" />外部から追加</button>
-          <button type="button" disabled={importLocked} onClick={() => { if (onCommand("asset.import")) fileInputRef.current?.click(); }} title={importDisabledReason ?? commandTitle("アセットをインポート", "asset.import")} className="flex items-center gap-1 rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45"><ImportIcon size={12} aria-hidden="true" />インポート</button>
+          <button type="button" onClick={() => setViewMode("grid")} aria-label="グリッド表示" aria-pressed={viewMode === "grid"} title={commandTitle("グリッド表示", "SetAssetView.Grid")} className={`shrink-0 rounded p-1 ${viewMode === "grid" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><GridIcon size={14} aria-hidden="true" /></button>
+          <button type="button" onClick={() => setViewMode("list")} aria-label="リスト表示" aria-pressed={viewMode === "list"} title={commandTitle("リスト表示", "SetAssetView.List")} className={`shrink-0 rounded p-1 ${viewMode === "list" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><ListIcon size={14} aria-hidden="true" /></button>
+          <button type="button" disabled={assetMutationLocked} onClick={openCreationMenu} aria-label="新規アセットまたはフォルダー" title={assetMutationDisabledReason ?? "新規アセットまたはフォルダー"} className="ml-1 shrink-0 rounded border border-slate-300 bg-white p-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"><CreateIcon size={14} aria-hidden="true" /></button>
+          <button type="button" disabled={assetMutationLocked} onClick={onOpenExternalStore} title={assetMutationDisabledReason ?? "外部リソースからAssetまたは公式Componentを追加"} aria-label="外部から追加" className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45 @[620px]/assets-header:px-2.5"><Store size={12} aria-hidden="true" /><span className="hidden @[620px]/assets-header:inline">外部から追加</span></button>
+          <button type="button" disabled={importLocked} onClick={() => { if (onCommand("asset.import")) fileInputRef.current?.click(); }} title={importDisabledReason ?? commandTitle("アセットをインポート", "asset.import")} aria-label="アセットをインポート" className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md bg-brand-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45 @[520px]/assets-header:px-2.5"><ImportIcon size={12} aria-hidden="true" /><span className="hidden @[520px]/assets-header:inline">インポート</span></button>
         </div>
       </div>
 

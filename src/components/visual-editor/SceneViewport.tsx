@@ -3390,7 +3390,7 @@ function SnapToolbarControl({
   }, [disabled, onOpenChange]);
 
   return (
-    <div ref={containerRef} className="relative flex items-center">
+    <div ref={containerRef} className="relative flex shrink-0 items-center">
       <button
         type="button"
         aria-label={`スナップ${snapActive ? "有効" : "無効"}${
@@ -3423,7 +3423,9 @@ function SnapToolbarControl({
         }`}
       >
         <EDITOR_ICONS.snap size={13} aria-hidden="true" />
-        <span className="hidden sm:inline">
+        {/* The step only fits while the Scene View header is wide enough; the
+            button keeps its aria-label and title when it does not. */}
+        <span className="hidden @[420px]/scene-header:inline">
           {modifierHeld
             ? snapActive
               ? `Shift ${stepText}`
@@ -3759,6 +3761,11 @@ export function SceneViewport({
   // viewport element once a drag is under way.
   const [snapModifierHeld, setSnapModifierHeld] = useState(false);
   const [snapPanelOpen, setSnapPanelOpen] = useState(false);
+  // The view controls stay inline while the Scene View header is wide enough
+  // and collapse into this popover when it is not. Only the open state lives in
+  // React; which of the two forms is shown is a container query on the header,
+  // so the controls exist once in the DOM either way.
+  const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [thumbnailCaptureActive, setThumbnailCaptureActive] = useState(false);
   const [displayMode, setDisplayMode] =
     useState<SceneViewportDisplayMode>("scene");
@@ -3775,6 +3782,24 @@ export function SceneViewport({
   const lastDebugVideoPathRef = useRef<string | null>(null);
   const debugResultRef = useRef(onDebugCaptureResult);
   debugResultRef.current = onDebugCaptureResult;
+  const viewMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!viewMenuOpen) return;
+    const closeOnOutside = (event: PointerEvent) => {
+      if (!viewMenuRef.current?.contains(event.target as Node)) {
+        setViewMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setViewMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", closeOnOutside);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", closeOnOutside);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [viewMenuOpen]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [transformDragging, setTransformDragging] = useState(false);
   const transformDraggingRef = useRef(false);
@@ -4633,32 +4658,44 @@ export function SceneViewport({
       aria-labelledby="scene-view-heading"
     >
       <div
-        className={`relative flex h-9 shrink-0 items-center justify-between gap-2 border-b px-2.5 ${
+        className={`@container/scene-header relative flex h-9 shrink-0 items-center gap-2 border-b px-2.5 ${
           editorMode === "play"
             ? "border-violet-400/70 bg-violet-950"
             : "border-slate-200 bg-slate-50"
         }`}
       >
-        <div className="flex min-w-0 items-center gap-2">
+        {/*
+         * The title shrinks first, the toolbar never shrinks below its content,
+         * and Play sits between two equal flexible halves. Play therefore stays
+         * centred while the toolbar fits in its half and slides left instead of
+         * covering the tools when it does not.
+         */}
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <h2
             id="scene-view-heading"
-            className={`text-[12px] font-semibold ${
+            title={editorMode === "play" ? "Play Window" : "Scene View"}
+            className={`truncate text-[12px] font-semibold ${
               editorMode === "play" ? "text-zinc-100" : "text-slate-800"
             }`}
           >
             {editorMode === "play" ? "Play Window" : "Scene View"}
           </h2>
           {editorMode === "play" ? (
-            <span
-              className="hidden rounded border border-violet-300/50 bg-violet-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-100 lg:inline"
-              role="status"
-              aria-live="polite"
-            >
-              分離された実行コピー · 更新 {runtimeRevision}
-            </span>
+            <>
+              <span className="hidden shrink-0 truncate text-xs text-zinc-400 @[900px]/scene-header:inline">
+                {profileLabel}
+              </span>
+              <span
+                className="hidden shrink-0 rounded border border-violet-300/50 bg-violet-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-100 @[1100px]/scene-header:inline"
+                role="status"
+                aria-live="polite"
+              >
+                分離された実行コピー · 更新 {runtimeRevision}
+              </span>
+            </>
           ) : selectedEntityIds.length > 1 ? (
             <span
-              className="hidden rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 lg:inline"
+              className="hidden shrink-0 rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 @[900px]/scene-header:inline"
               role="status"
               aria-live="polite"
             >
@@ -4666,7 +4703,7 @@ export function SceneViewport({
             </span>
           ) : null}
         </div>
-        <div className="pointer-events-none absolute inset-y-0 left-1/2 z-10 flex -translate-x-1/2 items-center">
+        <div className="flex shrink-0 items-center">
           <button
             type="button"
             disabled={playDisabled || playPreparing}
@@ -4683,7 +4720,7 @@ export function SceneViewport({
               "play.toggle",
               playShortcut,
             )}
-            className={`pointer-events-auto flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition-colors disabled:cursor-wait disabled:opacity-45 ${
+            className={`flex h-7 min-w-20 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-xs font-semibold transition-colors disabled:cursor-wait disabled:opacity-45 ${
               editorMode === "play"
                 ? "border-rose-400/70 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25"
                 : "border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100"
@@ -4697,7 +4734,7 @@ export function SceneViewport({
                 : "Play"}
           </button>
         </div>
-        <div className="flex min-w-0 items-center gap-1.5" role="toolbar" aria-label="Scene Viewの操作">
+        <div className="flex flex-1 items-center justify-end gap-1.5" role="toolbar" aria-label="Scene Viewの操作">
           {(["translate", "rotate", "scale"] as const).map((mode) => {
             const Icon = EDITOR_ICONS[mode === "translate" ? "move" : mode];
             const label = mode === "translate" ? "移動" : mode === "rotate" ? "回転" : "拡縮";
@@ -4710,7 +4747,7 @@ export function SceneViewport({
                 disabled={editorMode !== "edit" || colliderOnlyEdit}
                 onClick={() => onTransformModeChange(mode)}
                 title={commandTitle(`${label}ギズモ`, `transform.${mode}`)}
-                className={`flex size-7 items-center justify-center rounded border transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
+                className={`flex size-7 shrink-0 items-center justify-center rounded border transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
                   transformMode === mode
                     ? editorMode === "play"
                       ? "border-violet-400 bg-violet-500/80 text-white"
@@ -4730,7 +4767,7 @@ export function SceneViewport({
             disabled={editorMode !== "edit" || colliderOnlyEdit}
             onClick={onToggleTransformSpace}
             title={commandTitle("ギズモ座標系を切り替える", "transform.toggle-space")}
-            className={`flex size-7 items-center justify-center rounded border disabled:cursor-not-allowed disabled:opacity-35 ${
+            className={`flex size-7 shrink-0 items-center justify-center rounded border disabled:cursor-not-allowed disabled:opacity-35 ${
               editorMode === "play"
                 ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
                 : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
@@ -4754,88 +4791,138 @@ export function SceneViewport({
             onChange={onGizmoSettingsChange}
             shortcut={snapShortcut}
           />
-          <select
-            value={projection}
-            disabled={editorMode !== "edit"}
-            onChange={(event) => setProjection(event.currentTarget.value as ViewProjection)}
-            aria-label="カメラ投影方式"
-            title="Perspective / Ortho"
-            className={`h-7 rounded border px-1.5 text-[11px] font-medium outline-none focus:border-violet-400 disabled:cursor-not-allowed disabled:opacity-50 ${
-              editorMode === "play"
-                ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500"
-                : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
-            }`}
+          {/*
+           * Camera, display mode, diagnostics and recording are one group that
+           * the header lays out inline when it is wide enough and as a popover
+           * when it is not. The controls are the same elements in both forms,
+           * so no control is duplicated or dropped from the accessibility tree.
+           */}
+          <div
+            ref={viewMenuRef}
+            className="relative flex shrink-0 items-center @[760px]/scene-header:contents"
           >
-            <option value="perspective">Perspective</option>
-            <option value="orthographic">Ortho</option>
-          </select>
-          <select
-            value={effectiveDisplayMode}
-            disabled={editorMode !== "edit"}
-            onChange={(event) =>
-              setDisplayMode(event.currentTarget.value as SceneViewportDisplayMode)
-            }
-            aria-label="Scene View表示モード"
-            title={
-              SCENE_VIEWPORT_DISPLAY_OPTIONS.find(
-                (option) => option.value === effectiveDisplayMode,
-              )?.description
-            }
-            className={`h-7 rounded border px-1.5 text-[11px] font-semibold outline-none focus:border-violet-400 disabled:cursor-not-allowed disabled:opacity-50 ${
-              editorMode === "play"
-                ? "border-zinc-700 bg-zinc-800 text-zinc-300"
-                : displayMode === "scene"
-                  ? "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
-                  : "border-violet-300 bg-violet-50 text-violet-700 hover:border-violet-400"
-            }`}
-          >
-            {SCENE_VIEWPORT_DISPLAY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            aria-label="Scene View診断表示"
-            aria-pressed={debugOverlayEnabled}
-            onClick={() => setDebugOverlayEnabled((enabled) => !enabled)}
-            title="FPS、描画負荷、カメラ距離を表示"
-            className={`flex h-7 items-center gap-1 rounded border px-2 text-[11px] font-semibold transition-colors ${
-              debugOverlayEnabled
-                ? editorMode === "play"
-                  ? "border-cyan-300/70 bg-cyan-400/15 text-cyan-100"
-                  : "border-cyan-400 bg-cyan-50 text-cyan-700"
-                : editorMode === "play"
-                  ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
-                  : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
-            }`}
-          >
-            <EDITOR_ICONS.diagnostics size={13} aria-hidden="true" />
-            診断
-          </button>
-          <button
-            type="button"
-            aria-label={videoRecording ? "診断動画を停止" : "診断動画を録画"}
-            onClick={toggleVideoRecording}
-            disabled={videoSaving}
-            title={videoRecording ? "診断動画を停止して保存" : "Scene Viewを最大15秒録画"}
-            className={`flex h-7 items-center gap-1 rounded border px-2 text-[11px] font-semibold transition-colors disabled:cursor-wait disabled:opacity-50 ${
-              videoRecording
-                ? "border-rose-300 bg-rose-500/15 text-rose-700 hover:bg-rose-500/25"
-                : editorMode === "play"
-                  ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
-                  : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
-            }`}
-          >
-            <EDITOR_ICONS.record size={13} aria-hidden="true" />
-            {videoSaving ? "保存中" : videoRecording ? "停止" : "録画"}
-          </button>
-          {editorMode === "play" ? (
-            <span className="hidden truncate text-xs text-zinc-400 xl:inline">
-              {profileLabel}
-            </span>
-          ) : null}
+            <button
+              type="button"
+              aria-label="表示と診断の設定"
+              aria-expanded={viewMenuOpen}
+              aria-haspopup="dialog"
+              onClick={() => setViewMenuOpen((open) => !open)}
+              title="カメラ投影方式、表示モード、診断、録画"
+              className={`flex h-7 shrink-0 items-center justify-center gap-1 rounded border px-2 text-[11px] font-semibold transition-colors @[420px]/scene-header:min-w-[66px] @[760px]/scene-header:hidden ${
+                videoRecording
+                  ? "border-rose-300 bg-rose-500/15 text-rose-700"
+                  : debugOverlayEnabled
+                    ? editorMode === "play"
+                      ? "border-cyan-300/70 bg-cyan-400/15 text-cyan-100"
+                      : "border-cyan-400 bg-cyan-50 text-cyan-700"
+                    : displayMode !== "scene"
+                      ? "border-violet-300 bg-violet-50 text-violet-700"
+                      : editorMode === "play"
+                        ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
+                        : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
+              }`}
+            >
+              <EDITOR_ICONS.settings size={13} aria-hidden="true" />
+              <span className="hidden @[420px]/scene-header:inline">
+                {videoRecording ? "録画中" : "表示"}
+              </span>
+            </button>
+            <div
+              role="group"
+              aria-label="表示と診断"
+              className={`absolute right-0 top-full z-40 mt-1 w-60 shrink-0 flex-col items-stretch gap-2 rounded-md border border-slate-300 bg-white p-3 shadow-xl @[760px]/scene-header:static @[760px]/scene-header:z-auto @[760px]/scene-header:mt-0 @[760px]/scene-header:flex @[760px]/scene-header:w-auto @[760px]/scene-header:flex-row @[760px]/scene-header:items-center @[760px]/scene-header:gap-1.5 @[760px]/scene-header:rounded-none @[760px]/scene-header:border-0 @[760px]/scene-header:bg-transparent @[760px]/scene-header:p-0 @[760px]/scene-header:shadow-none ${
+                viewMenuOpen ? "flex" : "hidden"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 @[760px]/scene-header:contents">
+                <span className="text-[11px] font-medium text-slate-600 @[760px]/scene-header:hidden">
+                  カメラ
+                </span>
+                <select
+                  value={projection}
+                  disabled={editorMode !== "edit"}
+                  onChange={(event) => setProjection(event.currentTarget.value as ViewProjection)}
+                  aria-label="カメラ投影方式"
+                  title="Perspective / Ortho"
+                  className={`h-7 shrink-0 rounded border px-1.5 text-[11px] font-medium outline-none focus:border-violet-400 disabled:cursor-not-allowed disabled:opacity-50 ${
+                    editorMode === "play"
+                      ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500"
+                      : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                  }`}
+                >
+                  <option value="perspective">Perspective</option>
+                  <option value="orthographic">Ortho</option>
+                </select>
+              </div>
+              <div className="flex items-center justify-between gap-2 @[760px]/scene-header:contents">
+                <span className="text-[11px] font-medium text-slate-600 @[760px]/scene-header:hidden">
+                  表示モード
+                </span>
+                <select
+                  value={effectiveDisplayMode}
+                  disabled={editorMode !== "edit"}
+                  onChange={(event) =>
+                    setDisplayMode(event.currentTarget.value as SceneViewportDisplayMode)
+                  }
+                  aria-label="Scene View表示モード"
+                  title={
+                    SCENE_VIEWPORT_DISPLAY_OPTIONS.find(
+                      (option) => option.value === effectiveDisplayMode,
+                    )?.description
+                  }
+                  className={`h-7 shrink-0 rounded border px-1.5 text-[11px] font-semibold outline-none focus:border-violet-400 disabled:cursor-not-allowed disabled:opacity-50 ${
+                    editorMode === "play"
+                      ? "border-zinc-700 bg-zinc-800 text-zinc-300"
+                      : displayMode === "scene"
+                        ? "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                        : "border-violet-300 bg-violet-50 text-violet-700 hover:border-violet-400"
+                  }`}
+                >
+                  {SCENE_VIEWPORT_DISPLAY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                aria-label="Scene View診断表示"
+                aria-pressed={debugOverlayEnabled}
+                onClick={() => setDebugOverlayEnabled((enabled) => !enabled)}
+                title="FPS、描画負荷、カメラ距離を表示"
+                className={`flex h-7 min-w-[68px] shrink-0 items-center justify-center gap-1 rounded border px-2 text-[11px] font-semibold transition-colors ${
+                  debugOverlayEnabled
+                    ? editorMode === "play"
+                      ? "border-cyan-300/70 bg-cyan-400/15 text-cyan-100"
+                      : "border-cyan-400 bg-cyan-50 text-cyan-700"
+                    : editorMode === "play"
+                      ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
+                      : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
+                }`}
+              >
+                <EDITOR_ICONS.diagnostics size={13} aria-hidden="true" />
+                診断
+              </button>
+              <button
+                type="button"
+                aria-label={videoRecording ? "診断動画を停止" : "診断動画を録画"}
+                onClick={toggleVideoRecording}
+                disabled={videoSaving}
+                title={videoRecording ? "診断動画を停止して保存" : "Scene Viewを最大15秒録画"}
+                className={`flex h-7 min-w-[68px] shrink-0 items-center justify-center gap-1 rounded border px-2 text-[11px] font-semibold transition-colors disabled:cursor-wait disabled:opacity-50 ${
+                  videoRecording
+                    ? "border-rose-300 bg-rose-500/15 text-rose-700 hover:bg-rose-500/25"
+                    : editorMode === "play"
+                      ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
+                      : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
+                }`}
+              >
+                <EDITOR_ICONS.record size={13} aria-hidden="true" />
+                {videoSaving ? "保存中" : videoRecording ? "停止" : "録画"}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
