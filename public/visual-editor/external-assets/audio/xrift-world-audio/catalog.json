@@ -21,6 +21,15 @@
     { "id": "bgm-social-plaza-a", "name": "交流広場 A", "file": "bgm/bgm-social-plaza-a.mp3", "kind": "bgm", "category": "交流", "loop": false },
     { "id": "bgm-social-plaza-b", "name": "交流広場 B", "file": "bgm/bgm-social-plaza-b.mp3", "kind": "bgm", "category": "交流", "loop": false },
     { "id": "bgm-waterside-rest-a", "name": "水辺の休憩 A", "file": "bgm/bgm-waterside-rest-a.mp3", "kind": "bgm", "category": "水辺", "loop": false },
-    { "id": "bgm-waterside-rest-b", "name": "水辺の休憩 B", "file": "bgm/bgm-waterside-rest-b.mp3", "kind": "bgm", "category": "水辺", "loop": false }
+    { "id": "bgm-waterside-rest-b", "name": "水辺の休憩 B", "file": "bgm/bgm-waterside-rest-b.mp3", "kind": "bgm", "category": "水辺", "loop": false },
+    { "id": "sfx-wave-calm-a", "name": "穏やかな海岸の波 A", "file": "sfx/sfx-wave-calm-a.mp3", "kind": "sfx", "category": "波", "loop": true },
+    { "id": "sfx-wave-calm-b", "name": "穏やかな海岸の波 B", "file": "sfx/sfx-wave-calm-b.mp3", "kind": "sfx", "category": "波", "loop": true },
+    { "id": "sfx-wave-calm-c", "name": "穏やかな海岸の波 C", "file": "sfx/sfx-wave-calm-c.mp3", "kind": "sfx", "category": "波", "loop": true },
+    { "id": "sfx-wave-ocean-a", "name": "静かな海辺の波 A", "file": "sfx/sfx-wave-ocean-a.mp3", "kind": "sfx", "category": "波", "loop": true },
+    { "id": "sfx-wave-ocean-b", "name": "静かな海辺の波 B", "file": "sfx/sfx-wave-ocean-b.mp3", "kind": "sfx", "category": "波", "loop": true },
+    { "id": "sfx-wind-meadow-a", "name": "草原のそよ風 A", "file": "sfx/sfx-wind-meadow-a.mp3", "kind": "sfx", "category": "風", "loop": true },
+    { "id": "sfx-wind-meadow-b", "name": "草原のそよ風 B", "file": "sfx/sfx-wind-meadow-b.mp3", "kind": "sfx", "category": "風", "loop": true },
+    { "id": "sfx-wind-forest-a", "name": "森の穏やかな風 A", "file": "sfx/sfx-wind-forest-a.mp3", "kind": "sfx", "category": "風", "loop": true },
+    { "id": "sfx-wind-forest-b", "name": "森の穏やかな風 B", "file": "sfx/sfx-wind-forest-b.mp3", "kind": "sfx", "category": "風", "loop": true }
   ]
 }
