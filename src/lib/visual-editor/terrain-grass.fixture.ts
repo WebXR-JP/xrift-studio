@@ -38,6 +38,7 @@ import {
   getTerrainGrassPreset,
   getTerrainGrassType,
   isTerrainGrassLayer,
+  terrainGrassClump,
   sampleTerrainHeight,
   sampleTerrainSlopeDegrees,
   type TerrainGrassLayer,
@@ -189,6 +190,25 @@ function assertCatalog(): void {
     assert(
       type.height > 0 && type.width > 0 && type.cards >= 1,
       `Grass type「${type.id}」has no drawable shape`,
+    );
+    // A blade built from a single row is a quad, and a quad cannot arc — the
+    // curve below would only shear it.
+    assert(
+      type.segments >= 3 && type.segments <= 8,
+      `Grass type「${type.id}」has an unusable segment count (${type.segments})`,
+    );
+    // Grass grows in tufts. A type that scatters its blades one at a time over
+    // open ground is the field of hairs this catalog exists to avoid.
+    assert(
+      type.clumpSize >= 2 && type.clumpRadius > 0 && type.clumpRadius <= 1,
+      `Grass type「${type.id}」does not grow in tufts (${type.clumpSize} at ${type.clumpRadius}m)`,
+    );
+    assert(
+      type.translucency > 0 &&
+        type.translucency <= 1 &&
+        type.colorVariation >= 0 &&
+        type.colorVariation <= 1,
+      `Grass type「${type.id}」has an unusable shading response`,
     );
     assert(
       /^#[0-9a-f]{6}$/i.test(type.baseColor) && /^#[0-9a-f]{6}$/i.test(type.tipColor),
@@ -685,14 +705,20 @@ type EmbeddedGrassRuntime = {
     terrain: unknown,
     layer: unknown,
     maxInstances: number,
+    clumpSize: number,
+    clumpRadius: number,
   ) => {
     positions: Float32Array;
     rotations: Float32Array;
     scales: Float32Array;
     placed: number;
   };
-  blades: (cards: number) => {
+  blades: (
+    cards: number,
+    segments: number,
+  ) => {
     positions: number[];
+    normals: number[];
     uvs: number[];
     indices: number[];
   };
@@ -760,7 +786,14 @@ function assertEmbeddedPlacementEquivalence(): void {
       testCase.layer,
       testCase.limit,
     );
-    const actual = runtime.place(testCase.terrain, testCase.layer, testCase.limit);
+    const clump = terrainGrassClump(testCase.layer.typeId);
+    const actual = runtime.place(
+      testCase.terrain,
+      testCase.layer,
+      testCase.limit,
+      clump.size,
+      clump.radius,
+    );
     assert(
       actual.placed === expected.placed,
       `Embedded placement count diverged on ${testCase.name} (${actual.placed} vs ${expected.placed})`,
@@ -777,16 +810,33 @@ function assertEmbeddedPlacementEquivalence(): void {
   }
 
   for (const cards of [1, 2, 3]) {
-    const expected = createTerrainGrassBladeBuffers(cards);
-    const actual = runtime.blades(cards);
-    for (const field of ["positions", "uvs", "indices"] as const) {
-      assert(
-        actual[field].length === expected[field].length &&
-          actual[field].every((value, index) => value === expected[field][index]),
-        `Embedded blade ${field} diverged for ${cards} cards`,
-      );
+    for (const segments of [2, 4, 5]) {
+      const expected = createTerrainGrassBladeBuffers(cards, segments);
+      const actual = runtime.blades(cards, segments);
+      for (const field of ["positions", "normals", "uvs", "indices"] as const) {
+        assert(
+          actual[field].length === expected[field].length &&
+            actual[field].every((value, index) => value === expected[field][index]),
+          `Embedded blade ${field} diverged for ${cards} cards of ${segments} segments`,
+        );
+      }
     }
   }
+
+  // A card that thins from its base is a needle, and a field of needles is a
+  // head of hair. The profile has to hold its width for most of the blade and
+  // give it up at the tip, so the taper is asserted where it belongs.
+  const profile = createTerrainGrassBladeBuffers(1, 8);
+  const halfWidthAt = (step: number) => Math.abs(profile.positions[step * 6 + 3]);
+  assert(
+    halfWidthAt(4) / halfWidthAt(0) > 0.6,
+    "The blade profile is already a needle at its midpoint",
+  );
+  assert(
+    halfWidthAt(8) === 0 &&
+      halfWidthAt(7) - halfWidthAt(8) > halfWidthAt(0) - halfWidthAt(4),
+    "The blade tapers along its length rather than at the tip",
+  );
 }
 
 function assertCompiledWorldGrass(): void {

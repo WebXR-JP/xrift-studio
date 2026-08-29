@@ -105,6 +105,7 @@ F-06 アイテム検査
 | MI-84 | Interactivity Asset EditorでBehavior graphを編集する | canvasはドラッグとホイールで移動し、Ctrl+ホイールで拡大縮小する。ノードカードはScene View側と同じ暗い面に合わせ、categoryは色相だけで示す。socketのハンドルはラベルと同じ行に置き、紫はflow、水色はvalueとして形も変える。「追加」は検索付きの一覧を開き、上段に「よくある動き」（色を変える、ゆっくり変える、発光させる、アニメーションを再生、少し待ってから再生）、下段にcategory別の公式operationを並べる。追加したノードは現在見えているcanvasの中央へ置き、選択状態にする。選択中ノードの値は右のNode Inspectorで直接編集し、色のpointerではカラーピッカー、数値・整数・真偽はそれぞれの入力にする。 | レシピは接続済みで既定値の入ったノード列として一度に置き、Material Assetが無いレシピは理由を示して無効にする。canonical JSONは折りたたんだ副次表示にとどめ、値の編集にJSON直接編集を必須にしない。検証エラーがある間は保存を無効にし、件数と対象pathをDiagnosticsに残す。Escapeは追加パネルを先に閉じ、次にEditorを閉じる。 |
 | MI-85 | Scene Viewのツールバーでスナップを切り替える、`X`を押す、ドラッグ中にShiftを押す、または矢印キーで選択を動かす | ツールバーのスナップは押下状態と、現在のツールの1ステップ（移動はm、回転は度、拡縮は倍）を同じボタンに表示する。Shiftで反転している間は色を変えるだけにせず、ラベルにも「Shift」と反転後の状態を出す。間隔はボタン右のパネルで移動・回転・拡縮を個別に編集し、よく使う値をプリセットとして並べ、現在のツールの行を強調する。矢印キーの1ステップは左右がX、上下がZ、PageUpとPageDownがY、対象は現在のツールの軸の値とする。 | スナップの入切と間隔はScene設定と同じ`editor.gizmo`へ保存し、Undo履歴には積まない。Undoは直前のEntity操作へ戻す。矢印キーの1ステップはギズモの1操作と同じ履歴として確定する。スナップが有効なときは近い格子点へそろえ、無効なときは現在値へ指定量を足す。文字入力中はShiftも矢印キーもエディター操作にしない。 |
 | MI-86 | Interactivity Asset Editorでノードを置く、レシピを選ぶ、またはgraphを公開する | Playのruntime adapterが実行しないoperationは、ノードカード右上に「Play未対応」、inlineの定数のときだけ動くoperationには「定数のみ」を出す。「よくある動き」の一覧でも、実行できないレシピに同じ「Play未対応」と「置いて保存はできますが、Play と公開先ではまだ動きません」を添える。対象nodeのpathと理由はDiagnosticsへ、schema検証の結果と同じ一覧に並べる。 | 未対応でも配置、保存、公開は妨げない。canonical JSONはそのまま保存し、公開側のcompile diagnosticsにも同じ文言を`interactivity-operation-not-executed`として出し、Editorと公開先で表示を食い違わせない。未実装のoperationはflow出力も出さないため、その先のnodeは実行されたように見せない。 |
+| MI-87 | Terrain Inspectorの「草」で層を選び、色と大きさを調整する | 選択中の層だけに根元の色、穂先の色、色のばらつき、高さの倍率、葉の幅の倍率、空の明るさを開く。各値は種類の既定から始まり、動かした項目だけが層の上書きになる。上書きを持つ層は一覧に「調整済み」を出し、「種類の既定に戻す」は上書きを持つ層でだけ押せる。空の明るさは、Sceneの光が届かない面を空からの照り返しでどれだけ起こすかであり、0にできることと0にしたときの結果を説明文に置く。 | 変更は密度や傾斜と同じ一件のScene更新として保存し、Scene View、Play、生成Worldは同じ解決済みの値で草を描く。上書きを全て戻した層はappearanceを持たないScene documentへ戻る。層の選択、ブラシの狙い先、Inspectorの位置は変えない。 |
 
 ## 機能一覧
 
@@ -140,7 +141,7 @@ F-06 アイテム検査
 | F-28 | Script AssetとScript Component | MI-03, MI-05, MI-09, MI-14, MI-69, MI-70, MI-71, MI-72, MI-73 | Script AssetをTypeScriptで書き、共通Template catalogからsource preview付きで作成し、EntityへScript Componentとして複数付けられる。宣言したpropertyがInspectorへ自動で並び、Asset参照とEntity参照を選べる。Play中のpropertyは再起動なしで次のframeへ反映し、明示参照した基本Texture / Audio、Entity自身のAudio Source / Light / Material / Particleをowner単位で操作できる。明示参照Entityのworld座標近接をruntime eventへつなぎ、Light等の視覚効果をchannelで接続できる。Entity / Component構成と対応するauthoring propertyは永続化し、Light scalarは既存runtime、それ以外は影響Entityだけを再同期する。実行時例外は該当Scriptだけを止める。同じhost、root、Audio / Light / Particle runtime、参照resolverを公開ワールドへ静的importとして出力し、MCPも同じTemplate、参照契約、revision検査で作成・編集・適用・実行できる。 |
 | F-29 | Custom Shader authoringとMaterial適用 | MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-48 | Material InspectorまたはMCPからGLSL、uniform、variant、時間uniformを作成・編集し、同じMaterial AssetをMesh slotへ割り当ててScene View、Play、生成Worldへ反映できる。無効なshaderは診断とPBR復帰を残し、成功後は対象Materialへ戻れる。 |
 | F-30 | Textureから遠景 / 草カードを作成 | MI-05, MI-09, MI-11, MI-15, MI-16, MI-25 | 通常のTexture Assetから、alpha blend・両面Materialを持つ平面・180 / 270度カーブの遠景、1枚 / クロスの草カードを一件のUndo履歴で作成し、配置直後にScene ViewとEntity Inspectorで位置とMaterialを調整できる。 |
-| F-31 | Terrain authoring / MCP | MI-03, MI-05, MI-09, MI-13, MI-16, MI-78 | Createメニューからstatic Terrainを追加し、InspectorとMCPの同じRaise / Lower / Flatten / Smoothブラシで高さサンプルを編集する。各スタンプは一件のUndo履歴として保存され、Scene View、Play、生成コード、Trimesh Colliderへ同じTerrainを反映する。 |
+| F-31 | Terrain authoring / MCP | MI-03, MI-05, MI-09, MI-13, MI-16, MI-78, MI-87 | Createメニューからstatic Terrainを追加し、InspectorとMCPの同じRaise / Lower / Flatten / Smoothブラシで高さサンプルを編集する。各スタンプは一件のUndo履歴として保存され、Scene View、Play、生成コード、Trimesh Colliderへ同じTerrainを反映する。 |
 | F-32 | Scene post effects | MI-03, MI-05, MI-09, MI-13, MI-15, MI-16, MI-80 | Scene settingsでHDR / AO / Bloom / 露出を編集し、Scene View、Play、生成Worldの同じレンダリング設定へ反映する。設定は保存・再読込・公開レビューまで同じScene contractで扱う。 |
 | F-33 | Wind Component | MI-03, MI-05, MI-09, MI-11, MI-13, MI-14, MI-15, MI-16, MI-81 | Entity InspectorまたはMCPからWind Componentを明示的に追加し、対象Entityと子MeshだけへScene Settingsのグローバル風設定を適用する。Editor Preview、Play、生成World、Runtime manifestは同じComponentとScene値を使い、名前・Mesh分類・言語に依存した対象推測を行わない。 |
 | F-34 | Skybox Shader（手続き的な空） | MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-82, MI-83 | 画像Skyboxではなく、Custom Shader Materialとして昼・夕暮れ・朝焼け・夜空・オーロラ・星雲の空を追加できる。星の数、太陽と月の位置、月の満ち欠け、雲、地平線の遠景をuniformで調整でき、レイマーチする厚みのある雲も選べる。外部リソース集での調整とInspectorでの再調整が同じMaterialを指し、Scene View、Play、生成Worldが同じGLSLを描く。Materialが欠落した場合はグラデーションへ戻し、警告診断を残す。重いpresetはstep数をvariant defineとして残し、下げられる状態にする。 |
@@ -1147,12 +1148,13 @@ F-06 アイテム検査
 
 ## F-31 Terrain authoring / MCP の状態設計
 
-参照: MI-03, MI-05, MI-09, MI-13, MI-16, MI-76
+参照: MI-03, MI-05, MI-09, MI-13, MI-16, MI-76, MI-87
 
 ### 操作前
 
 - Createメニューの「Terrain」から、16 × 16m・33 × 33 sample・平坦なTerrainを作成できる。Terrainには常にstatic Trimesh Colliderを付け、Material slotは一つだけにする。
 - 選択中TerrainのInspectorにはSize、Resolution、現在のHeight rangeと、Raise / Lower / Flatten / SmoothのBrushを表示する。中心X/Z、radius、strength、Flattenのtarget heightを指定して一回のスタンプを適用する。
+- 「草」では層の一覧、密度、傾斜の上限に加えて、選択中の層だけに色と大きさを開く。値は種類の既定から始まり、動かした項目だけが層の上書きになるので、既定のまま使う層は何も持たない。
 
 ### 処理中
 
@@ -1163,6 +1165,7 @@ F-06 アイテム検査
 
 - Terrainを選択したままScene View、Hierarchy、Inspectorを更新し、各スタンプを一件のUndo履歴とautosave対象として確定する。Scene View、Play、compile、runtime manifestは同じheight samplesを使う。
 - static Trimesh Colliderの範囲はTerrainの幅、奥行き、高さrangeに追従する。Material slotからTerrainの見た目を続けて調整できる。
+- 草の色と大きさの変更も同じ一件のScene更新として確定し、Scene View、Play、生成Worldは同じ解決済みの値で描く。「種類の既定に戻す」で層は上書きを持たない状態へ戻る。層が本数の上限に達している場合は「本数を確認」に、密度どおりに生えないことと下げ方を示す。
 
 ### 失敗時
 
