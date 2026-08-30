@@ -73,7 +73,9 @@ import {
   resolveOpenBrushEditorBrushBaseUrl,
   validateGltfNodeHierarchy,
   type AssetManifest,
+  planInteractivityAnimationCues,
   type InteractivityAnimationCue,
+  type InteractivityAnimationPlan,
   type ClassicR3fMaterialShader,
   type MaterialAsset,
   type ModelPoseState,
@@ -175,15 +177,7 @@ const EMPTY_ANIMATION_INDICES: readonly number[] = [];
 const EMPTY_ANIMATION_CUES: readonly InteractivityAnimationCue[] = [];
 
 /** One clip the mixer will play, and how long it waits before starting. */
-type ModelPlaybackCue = {
-  clip: AnimationClip;
-  delaySeconds: number;
-  /** An unbounded start loops; one with an end time plays a single pass. */
-  loop: boolean;
-  speed: number;
-  /** Clip-local seconds to start from. */
-  startTime: number;
-};
+type ModelPlaybackCue = InteractivityAnimationPlan & { clip: AnimationClip };
 const EMPTY_PLAYBACK_CUES: readonly ModelPlaybackCue[] = [];
 
 export function ProjectModelVisual({
@@ -449,51 +443,21 @@ function ProjectModelRender({
     /*
      * What plays comes from the graph, and each clip brings its own settings.
      *
-     * v1 removed the Animation Component, so there is no per-Entity loop or
-     * speed to fall back on: an `animation/start` with no end time runs until
-     * something stops it, which on a mixer is a loop, and one that named an end
-     * time wants a single pass. The earliest start for a clip wins, so two
-     * graphs asking for the same clip is one clip playing.
+     * Both sources are the same kind of statement — "this clip starts at this
+     * moment" — whether the graph came with the glTF or is an Asset attached to
+     * this Entity. The studio guide's bundled Model declares its own clips,
+     * which open a door once rather than looping.
      */
-    const planByIndex = new Map<
-      number,
-      { delaySeconds: number; loop: boolean; speed: number; startTime: number }
-    >();
-    const note = (
-      index: number,
-      plan: { delaySeconds: number; loop: boolean; speed: number; startTime: number },
-    ): void => {
-      const known = planByIndex.get(index);
-      if (known && known.delaySeconds <= plan.delaySeconds) return;
-      planByIndex.set(index, plan);
-    };
-    // The studio guide's bundled Model declares its own clips, which open a
-    // door once rather than looping.
-    declaredInteractionAnimationIndices.forEach((index) =>
-      note(index, { delaySeconds: 0, loop: false, speed: 1, startTime: 0 }),
-    );
-    const noteCue = (cue: InteractivityAnimationCue) =>
-      note(cue.animationIndex, {
-        delaySeconds: cue.delaySeconds,
-        loop: (cue.endTime ?? null) === null && cue.stopSeconds === undefined,
-        speed:
-          typeof cue.speed === "number" &&
-          Number.isFinite(cue.speed) &&
-          cue.speed !== 0
-            ? cue.speed
-            : 1,
-        startTime:
-          typeof cue.startTime === "number" && Number.isFinite(cue.startTime)
-            ? Math.max(0, cue.startTime)
-            : 0,
-      });
-    // Both sources are the same kind of statement — "this clip starts at this
-    // moment" — whether the graph came with the glTF or is an Asset the author
-    // attached to this Entity.
-    interactionAnimationCues.forEach(noteCue);
-    (graphAnimationCues ?? EMPTY_ANIMATION_CUES).forEach(noteCue);
-    return [...planByIndex.entries()].flatMap(([index, plan]) =>
-      animations[index] ? [{ clip: animations[index], ...plan }] : [],
+    return planInteractivityAnimationCues([
+      ...declaredInteractionAnimationIndices.map((index) => ({
+        animationIndex: index,
+        delaySeconds: 0,
+        endTime: 0,
+      })),
+      ...interactionAnimationCues,
+      ...(graphAnimationCues ?? EMPTY_ANIMATION_CUES),
+    ]).flatMap((plan) =>
+      animations[plan.index] ? [{ clip: animations[plan.index], ...plan }] : [],
     );
   }, [
     animations,

@@ -999,12 +999,14 @@ export function createDefaultKhrInteractivityExtension(): KhrInteractivityExtens
  */
 export type {
   InteractivityAnimationCue,
+  InteractivityAnimationPlan,
   InteractivityRuntimeSupport,
 } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
 export {
   applyEasing,
   dryRunInteractivityGraph,
   getKhrInteractivityOnStartAnimationCues,
+  planInteractivityAnimationCues,
   INTERACTIVITY_EASINGS,
 } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
 export type { InteractivityEasing } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";

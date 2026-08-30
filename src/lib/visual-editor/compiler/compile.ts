@@ -23,6 +23,7 @@ import {
   collectInteractivityRuntimeDiagnostics,
   collectXriftInteractionPrograms,
   getKhrInteractivityOnStartAnimationCues,
+  planInteractivityAnimationCues,
   hasXriftInteractionRuntimeWork,
   hasXriftSelfStartingEntry,
   XRIFT_INTERACTION_SELF_ENTITY_ID,
@@ -3026,39 +3027,7 @@ function renderModelMesh(
         ? `const { scene${animationLoaded ? ", animations" : ""} } = useGLTF(modelUrl);`
         : `const { scene, parser${animationLoaded ? ", animations" : ""} } = useGLTF(modelUrl);`;
   const animationBindings = (animationBridgeable ? ["mixer", "clips"] : []).join(", ");
-  // The earliest start for a clip wins, the same rule the Editor applies: two
-  // graphs asking for one clip is one clip playing, from the first moment
-  // either of them asked.
-  const graphCuePlans = [
-    ...graphAnimationCues
-      .reduce((plans, cue) => {
-        const known = plans.get(cue.animationIndex);
-        if (known && known.delaySeconds <= cue.delaySeconds) return plans;
-        plans.set(cue.animationIndex, {
-          index: cue.animationIndex,
-          delaySeconds: cue.delaySeconds,
-          loop: (cue.endTime ?? null) === null && cue.stopSeconds === undefined,
-          speed:
-            typeof cue.speed === "number" &&
-            Number.isFinite(cue.speed) &&
-            cue.speed !== 0
-              ? cue.speed
-              : 1,
-          startTime:
-            typeof cue.startTime === "number" && Number.isFinite(cue.startTime)
-              ? Math.max(0, cue.startTime)
-              : 0,
-        });
-        return plans;
-      }, new Map<number, {
-        index: number;
-        delaySeconds: number;
-        loop: boolean;
-        speed: number;
-        startTime: number;
-      }>())
-      .values(),
-  ].sort((left, right) => left.index - right.index);
+  const graphCuePlans = planInteractivityAnimationCues(graphAnimationCues);
   if (graphCuePlans.length > 0) {
     context.threeValueImports.add("LoopRepeat");
     context.threeValueImports.add("LoopOnce");
