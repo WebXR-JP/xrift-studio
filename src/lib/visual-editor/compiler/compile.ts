@@ -5394,7 +5394,8 @@ function isAllowedStaticAssetSource(asset: SceneAsset): boolean {
       : ["png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg", "ktx2"].includes(extension);
   }
   if (asset.kind === "skybox") return ["hdr", "exr", "png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"].includes(extension);
-  if (asset.kind === "audio") return extension === "mp3" || extension === "wav";
+  if (asset.kind === "audio")
+    return ["mp3", "wav", "ogg", "flac", "m4a", "webm"].includes(extension);
   return false;
 }
 
