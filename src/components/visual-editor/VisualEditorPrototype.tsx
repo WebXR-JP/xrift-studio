@@ -329,6 +329,13 @@ import {
   type VisualEditorLayout,
 } from "./editor-layout";
 import {
+  DEFAULT_TEXTURE_IMPORT_MAX_SIZE,
+  loadTextureImportMaxSize,
+  saveTextureImportMaxSize,
+  textureImportMaxSizePatch,
+  type TextureImportMaxSize,
+} from "./texture-import-defaults";
+import {
   assertMcpExternalStoreWrite,
   mcpFiniteNumber,
   mcpOptionalInteger,
@@ -1470,6 +1477,11 @@ export function VisualEditorPrototype({
   const [layout, setLayout] = useState<VisualEditorLayout>({
     ...loadEditorLayout(initialLayout),
   });
+  // 取り込むTextureに入れておく最大解像度。原本は変換せず、公開時に反映される。
+  const [textureImportMaxSize, setTextureImportMaxSize] =
+    useState<TextureImportMaxSize>(DEFAULT_TEXTURE_IMPORT_MAX_SIZE);
+  const textureImportMaxSizeRef = useRef(textureImportMaxSize);
+  textureImportMaxSizeRef.current = textureImportMaxSize;
   const [transformMode, setTransformMode] = useState<TransformMode>("translate");
   const [transformSpace, setTransformSpace] = useState<TransformSpace>("world");
   const [editorMode, setEditorMode] = useState<EditorMode>("edit");
@@ -2103,6 +2115,10 @@ export function VisualEditorPrototype({
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
+  useEffect(() => {
+    setTextureImportMaxSize(loadTextureImportMaxSize());
   }, []);
 
   useEffect(() => {
@@ -7468,7 +7484,7 @@ export function VisualEditorPrototype({
           feedback?.assetId === assetId ? null : feedback,
         );
         setNotice(
-          "Texture Import設定を更新しました。「この設定で画像を書き出す」で原本へ反映します",
+          "Texture Import設定を更新しました。公開時にこの設定へ変換されます。Editorの表示も合わせるときは「この設定で画像を書き出す」を使います",
         );
         return touchProject({ ...current, assets });
       });
@@ -9163,6 +9179,11 @@ export function VisualEditorPrototype({
                 ...(companion.type ? { mimeType: companion.type } : {}),
               })),
             );
+            // 取り込み時の最大解像度は、単体のTextureにもモデル内蔵のTextureにも
+            // 同じように入れる。原本は変換せず、公開時にこの解像度へ変換される。
+            const textureImportSettings = textureImportMaxSizePatch(
+              textureImportMaxSizeRef.current,
+            );
             const plan = await createAssetImportPlan({
               fileName: sourceFile.name,
               bytes,
@@ -9170,6 +9191,7 @@ export function VisualEditorPrototype({
               folderId,
               existingManifest: workingManifest,
               ...(companionFiles.length > 0 ? { companionFiles } : {}),
+              ...(textureImportSettings ? { textureImportSettings } : {}),
               preferredKind:
                 queued.resourceKind === "model" ||
                 queued.resourceKind === "texture"
@@ -10445,6 +10467,11 @@ export function VisualEditorPrototype({
                   ? "Playを停止してからImportしてください"
                   : assetImportPanelAvailability.disabledReason
               }
+              textureMaxSize={textureImportMaxSize}
+              onTextureMaxSizeChange={(value) => {
+                setTextureImportMaxSize(value);
+                saveTextureImportMaxSize(value);
+              }}
               onImportModel={() => globalModelImportInputRef.current?.click()}
               onImportR3f={() => setComponentImportOpen(true)}
             />

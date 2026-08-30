@@ -18,10 +18,18 @@ import {
   type PrimitiveGeometry,
   type SceneAsset,
 } from "../asset-manifest";
+import {
+  isConvertibleTextureSourceFormat,
+  isPublishedAsKtx2,
+  planTextureConversion,
+  textureOutputExtension,
+} from "../texture-conversion";
 import { getBuiltinPrimitiveCreation } from "../creation-catalog";
 import {
   collectInteractivityRuntimeDiagnostics,
   collectXriftInteractionPrograms,
+  getKhrInteractivityOnStartAnimationCues,
+  planInteractivityAnimationCues,
   hasXriftInteractionRuntimeWork,
   hasXriftSelfStartingEntry,
   XRIFT_INTERACTION_SELF_ENTITY_ID,
@@ -422,6 +430,7 @@ export function compileVisualProject(
     overlayFiles.push(createScenePostprocessingOverlayFile());
   }
   diagnoseUnsupportedAssets(documents.assets, diagnostics);
+  diagnoseIgnoredTextureRecipes(documents.assets, assetCopyPlan, diagnostics);
   diagnoseInteractivityRuntimeSupport(documents.assets, diagnostics);
   const uniqueDiagnostics = deduplicateDiagnostics(diagnostics);
   const provenanceFile = compilerFile(
@@ -2915,6 +2924,28 @@ function renderModelMesh(
       sceneUsesInteractionTriggerRuntime(context.scene, context.assets),
   );
   const animationLoaded = animationBridgeable;
+  /*
+   * The clips this Entity's own graphs start with the world, emitted rather
+   * than left to the graph runtime to push.
+   *
+   * The runtime is a sibling of this Model and starts as soon as it mounts;
+   * this Model suspends on its glTF, so its animation bridge does not exist
+   * yet when `event/onStart` fires, and nothing retries. Reading the graph at
+   * compile time and starting the clips here makes the published world play
+   * what the Editor plays, and leaves the bridge for what only it can do —
+   * pausing, seeking and switching while the world runs.
+   */
+  const graphAnimationCues = animationBridgeable
+    ? (entity.components as RegisteredSceneComponent[]).flatMap((component) => {
+        if (component.type !== "interaction-trigger" || !component.enabled) {
+          return [];
+        }
+        const asset = context.assets.assets[component.interactivityAssetId];
+        return asset?.kind === "interactivity"
+          ? getKhrInteractivityOnStartAnimationCues(asset.extension)
+          : [];
+      })
+    : [];
   if (isObj) {
     context.fiberImports.add("useLoader");
     context.extraImports.add(
@@ -3003,6 +3034,33 @@ function renderModelMesh(
         ? `const { scene${animationLoaded ? ", animations" : ""} } = useGLTF(modelUrl);`
         : `const { scene, parser${animationLoaded ? ", animations" : ""} } = useGLTF(modelUrl);`;
   const animationBindings = (animationBridgeable ? ["mixer", "clips"] : []).join(", ");
+  const graphCuePlans = planInteractivityAnimationCues(graphAnimationCues);
+  if (graphCuePlans.length > 0) {
+    context.threeValueImports.add("LoopRepeat");
+    context.threeValueImports.add("LoopOnce");
+  }
+  const graphCueSource =
+    graphCuePlans.length > 0
+      ? `
+  useEffect(() => {
+    const started = ${JSON.stringify(graphCuePlans)}.flatMap((cue) => {
+      const clip = clips[cue.index];
+      if (!clip) return [];
+      const action = mixer.clipAction(clip);
+      action.reset();
+      action.clampWhenFinished = !cue.loop;
+      action.setLoop(cue.loop ? LoopRepeat : LoopOnce, cue.loop ? Infinity : 1);
+      action.timeScale = cue.speed;
+      if (cue.startTime > 0) action.time = cue.startTime;
+      if (cue.delaySeconds > 0) action.startAt(mixer.time + cue.delaySeconds);
+      action.play();
+      return [action];
+    });
+    return () => {
+      started.forEach((action) => action.stop());
+    };
+  }, [clips, mixer]);`
+      : "";
   // The same bridge Studio Play attaches, so a graph that starts, pauses or
   // re-times a clip behaves identically in the published world. Nothing plays
   // on its own: what starts a clip is an `animation/start` node.
@@ -3043,7 +3101,7 @@ function renderModelMesh(
     : "";
   const animationSource = animationLoaded
     ? `  const animationRoot = useRef<Group>(null);
-  const { ${animationBindings} } = useAnimations(animations, animationRoot);${animationBridgeSource}`
+  const { ${animationBindings} } = useAnimations(animations, animationRoot);${graphCueSource}${animationBridgeSource}`
     : "";
   // Open Brush brushes read `uniform vec4 u_time` for their motion, and the
   // Materials come out of three-icosa already compiled, so no Material
@@ -3877,7 +3935,7 @@ function registerClassicR3fMaterialComponent(
       "classicTexture",
       `${asset.id}:${uniformName}`,
     );
-    const usesKtx2 = getTextureSourceFormat(texture) === "ktx2";
+    const usesKtx2 = isPublishedAsKtx2(texture);
     registerCompiledTextureRuntime(context, usesKtx2);
     const urlConstant = registerAssetUrl(texture, runtimeUrl, context);
     const optionsConstant = generatedIdentifier(
@@ -4127,7 +4185,7 @@ function addCompiledTexture(
     addDiagnostic(context, {
       severity: "blocking",
       code: "material-texture-source-unsupported",
-      message: "Textureはproject-relativeな対応画像sourceかつ未変換recipeである必要があります",
+      message: `${texture.name}を公開できません。プロジェクト内に保存された対応形式の画像を選び直してください`,
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: mesh.id,
@@ -4137,7 +4195,7 @@ function addCompiledTexture(
     return false;
   }
 
-  const usesKtx2 = getTextureSourceFormat(texture) === "ktx2";
+  const usesKtx2 = isPublishedAsKtx2(texture);
   registerCompiledTextureRuntime(context, usesKtx2);
   const urlConstant = registerAssetUrl(texture, runtimeUrl, context);
   const optionsConstant = generatedIdentifier(
@@ -4623,7 +4681,7 @@ function renderParticleEmitter(
     if (textureAsset) {
       context.reactValueImports.add("useEffect");
       context.reactValueImports.add("useMemo");
-      const usesKtx2 = getTextureSourceFormat(textureAsset) === "ktx2";
+      const usesKtx2 = isPublishedAsKtx2(textureAsset);
       if (usesKtx2) registerCompiledKtx2Runtime(context);
       else context.dreiImports.add("useTexture");
       const urlConstant = registerAssetUrl(textureAsset, textureUrl, context);
@@ -4752,7 +4810,7 @@ function resolveParticleTextureUrl(
     addDiagnostic(context, {
       severity: "blocking",
       code: "particle-texture-source-unsupported",
-      message: "Particle Textureは変換不要なproject-relative画像である必要があります",
+      message: "Particleに使う画像を公開できません。プロジェクト内に保存された対応形式の画像を選び直してください",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: component.id,
@@ -4859,7 +4917,7 @@ function resolveTextBackgroundTexture(
     });
     return null;
   }
-  const usesKtx2 = getTextureSourceFormat(texture) === "ktx2";
+  const usesKtx2 = isPublishedAsKtx2(texture);
   registerCompiledTextureRuntime(context, usesKtx2);
   const urlConstant = registerAssetUrl(texture, runtimeUrl, context);
   const optionsConstant = generatedIdentifier(
@@ -5080,19 +5138,12 @@ function diagnoseReferencedUnsupportedAssets(context: CompileContext): void {
     ) {
       addDiagnostic(
         context,
-        hasUnappliedTextureRecipe(asset)
-          ? unsupportedAssetDiagnostic(
-              asset,
-              "texture-asset-recipe-unapplied",
-              "Textureの最大解像度・圧縮設定が原本へ未反映です。Texture Inspectorの「この設定で画像を書き出す」で変換してください",
-              "blocking",
-            )
-          : unsupportedAssetDiagnostic(
-              asset,
-              `${asset.kind}-asset-source-unsupported`,
-              `${asset.kind} Assetのsourceまたは変換recipeはcompiler未対応です`,
-              "blocking",
-            ),
+        unsupportedAssetDiagnostic(
+          asset,
+          `${asset.kind}-asset-source-unsupported`,
+          `${asset.name}のファイル形式または保存場所は公開に対応していません`,
+          "blocking",
+        ),
       );
     } else if (asset.kind === "template" && !isPrefabAsset(asset)) {
       addDiagnostic(context, unsupportedAssetDiagnostic(asset, "prefab-asset-unsupported", "Template/Prefab Asset の展開は未対応です", "blocking"));
@@ -5152,6 +5203,52 @@ function diagnoseUnsupportedAssets(
   }
 }
 
+/**
+ * 公開時に適用できないTexture Import設定を、警告として一度だけ知らせる。
+ *
+ * 最大解像度と圧縮は公開時に自動で適用されるので、通常は何も出ない。SVG、KTX2、
+ * HDRIのようにCanvasで描き直せない原本だけは設定を反映できず、原本がそのまま
+ * 配られる。黙って無視すると「設定したのに軽くならない」原因が追えなくなるため、
+ * 公開は止めずに理由だけを残す。
+ */
+function diagnoseIgnoredTextureRecipes(
+  assets: AssetManifest,
+  assetCopyPlan: readonly AssetCopyPlanEntry[],
+  diagnostics: CompilerDiagnostic[],
+): void {
+  const converted = new Set(
+    assetCopyPlan
+      .filter((entry) => entry.textureConversion)
+      .map((entry) => entry.assetId),
+  );
+  for (const asset of Object.values(assets.assets).sort((left, right) =>
+    left.id.localeCompare(right.id),
+  )) {
+    if (asset.kind !== "texture") continue;
+    if (converted.has(asset.id)) continue;
+    if (!isAssetSupportedByCompiler(asset)) continue;
+    if (
+      asset.importSettings.compression.format === "source" &&
+      asset.importSettings.resize.mode === "original" &&
+      asset.importSettings.resize.powerOfTwo !== true
+    ) {
+      continue;
+    }
+    // 原本がすでに設定を満たしている場合も変換は起きない。それは正常なので、
+    // 「そもそも適用できない形式」だけを残す。環境Texture（HDRI）へ解像度設定を
+    // 反映できないことはTexture Inspectorが説明するので、ここでは繰り返さない。
+    if (isEnvironmentTextureAsset(asset)) continue;
+    if (isConvertibleTextureSourceFormat(getTextureSourceFormat(asset))) continue;
+    diagnostics.push({
+      severity: "warning",
+      code: "texture-recipe-not-applicable",
+      message: `${asset.name}は原本の形式が解像度変更・圧縮に対応していないため、原本のまま公開します`,
+      assetId: asset.id,
+      fieldPath: "importSettings",
+    });
+  }
+}
+
 function createAssetCopyPlan(
   assets: AssetManifest,
   diagnostics: CompilerDiagnostic[],
@@ -5187,7 +5284,15 @@ function createAssetCopyPlan(
       });
       continue;
     }
-    const fileName = asset.source.relativePath.split("/").filter(Boolean).pop() ?? "asset.bin";
+    // 未反映のImport設定は、原本を書き換えずに出力側で適用する。公開されるのは
+    // 変換後の画像なので、コピー先のファイル名も変換後の拡張子で決める。
+    const textureConversion =
+      asset.kind === "texture" ? (planTextureConversion(asset) ?? undefined) : undefined;
+    const sourceFileName =
+      asset.source.relativePath.split("/").filter(Boolean).pop() ?? "asset.bin";
+    const fileName = textureConversion
+      ? `${stripFileExtension(sourceFileName)}.${textureOutputExtension(textureConversion.outputFormat)}`
+      : sourceFileName;
     const targetRelativePath =
       outputMode === "classic-runtime"
         ? `public/xrift/assets/${safeFileSegment(asset.id)}-${safeFileSegment(fileName)}`
@@ -5209,6 +5314,7 @@ function createAssetCopyPlan(
       targetRelativePath,
       purpose: assetPurpose(asset),
       supportedByCompiler: isAssetSupportedByCompiler(asset),
+      ...(textureConversion ? { textureConversion } : {}),
     });
   }
   return plan;
@@ -5260,22 +5366,6 @@ function entityDiagnostic(
   severity: CompilerDiagnostic["severity"],
 ): CompilerDiagnostic {
   return { severity, code, message, entityId: entity.id };
-}
-
-/**
- * Import設定だけが原本へ未反映のTextureは、source自体は扱える。診断を
- * 「未対応」で終わらせず、Inspectorで変換すれば解けることを示す。
- */
-function hasUnappliedTextureRecipe(asset: SceneAsset): boolean {
-  return (
-    asset.kind === "texture" &&
-    asset.status === "ready" &&
-    asset.source.kind === "project" &&
-    isSafeRelativePath(asset.source.relativePath) &&
-    isAllowedStaticAssetSource(asset) &&
-    (asset.importSettings.compression.format !== "source" ||
-      asset.importSettings.resize.mode !== "original")
-  );
 }
 
 function unsupportedAssetDiagnostic(
@@ -5441,11 +5531,15 @@ function isAssetSupportedByCompiler(asset: SceneAsset): boolean {
   if (asset.kind === "model") return true;
   if (asset.kind === "audio") return true;
   if (asset.kind === "skybox") return ["hdr", "exr", "png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"].includes(fileExtension(asset.source.relativePath));
-  if (asset.kind !== "texture") return false;
-  return (
-    asset.importSettings.compression.format === "source" &&
-    asset.importSettings.resize.mode === "original"
-  );
+  // Textureの最大解像度・圧縮設定は、原本を書き換えなくても公開時に適用できる。
+  // 未反映であることは公開を止める理由にならない。適用できない形式（SVG / KTX2 /
+  // HDRI）は原本のまま配られ、`diagnoseIgnoredTextureRecipes` が警告で知らせる。
+  return asset.kind === "texture";
+}
+
+function stripFileExtension(fileName: string): string {
+  const index = fileName.lastIndexOf(".");
+  return index > 0 ? fileName.slice(0, index) : fileName;
 }
 
 function fileExtension(relativePath: string): string {

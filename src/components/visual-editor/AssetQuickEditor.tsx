@@ -3763,8 +3763,9 @@ const TEXTURE_COMPRESSION_FORMAT_HINTS: Record<
 };
 
 /**
- * 最大解像度・圧縮の設定はManifestに保持されるだけなので、原本へ反映するまでは
- * 表示も公開結果も変わらない。ここで変換前後を並べて示し、実行まで案内する。
+ * 最大解像度・圧縮の設定は公開時に自動で適用されるので、公開だけが目的なら
+ * ここでの書き出しは要らない。Editorの表示と原本そのものを軽くしたいときに使う
+ * 操作として、変換前後を並べて示す。
  */
 function TextureProcessingPanel({
   asset,
@@ -3883,7 +3884,7 @@ function TextureProcessingPanel({
         <p className="text-[11px] leading-4 text-slate-500">{blockedReason}</p>
       ) : plan.pending ? (
         <p className="rounded border border-amber-200 bg-amber-50 p-1.5 text-xs leading-4 text-amber-800">
-          変換するまで、表示と公開結果は原本のままです。書き出すと元の画像ファイルは残したまま、Assetの参照先が変換後の画像へ切り替わります。
+          公開時にはこの設定へ自動で変換されるため、公開だけが目的ならここでの書き出しは要りません。書き出すとEditorの表示も変換後になります。元の画像ファイルは残るので、いつでも原本へ戻せます。
         </p>
       ) : (
         <p className="text-[11px] leading-4 text-slate-500">{plan.settledReason}</p>

@@ -104,7 +104,7 @@ F-06 アイテム検査
 | MI-83 | Scene設定の「Skybox Shader」でMaterialを選ぶ、または解除する | 割り当て中はSkybox画像とグラデーションより優先して空を描き、上空の色・地平線の色・オフセット・グラデーションを無効表示にする。水平回転と明るさはshaderのuniformへ渡すため有効なままにする。Materialが欠落または不正な場合は理由を示してグラデーションへ戻す。 | 割り当て・解除は一件のScene更新として保存する。割り当て中は当該MaterialのInspectorを開く操作を残し、星の数などの再調整へ到達できるようにする。 |
 | MI-84 | Interactivity Asset EditorでBehavior graphを編集する | ノードカードは幅を揃え、長い名前や説明はカードの中で省略する。socketは日本語で書き、正式名はその行のtitleに残す。categoryは色相だけで示し、紫はflow、水色はvalueとして形も変える。canvasはドラッグとホイールで移動し、Ctrl+ホイールで拡大縮小する。ノードは24pxのグリッドへ吸着する。線は選択してDeleteで切り、端をつかんで別のsocketへ繋ぎ替える。つなげない組み合わせはドラッグ中に拒否する。選んだノードにつながる線は太く、それ以外は控えめにする。ノードのDeleteは接続ごとdocumentから消し、Ctrl+Zで元に戻す。Ctrl+Dで複製する。「整列」は流れの順に左から右へ並べ直す。「拡大」で画面いっぱいに広げ、Node Inspectorとタイムラインの大きさは境界のドラッグで変える。「追加」は検索付きの一覧を開き、上段に「よくある動き」、下段にcategory別の公式operationを並べ、categoryの見出しはスクロール中も残す。追加したノードは、選択中のノードの右隣で既存のノードと重ならない位置へ置き、選択状態にする。 | レシピは接続済みで既定値の入ったノード列として一度に置き、Material Assetが無いレシピは理由を示して無効にする。追加パネルを開き直すときは前回の検索語を残さない。カードは幅が同じなので、内容がカードの外へ出ることはない。socketのハンドルは枠の外側へ半分出したまま切り取らない。canonical JSONは折りたたんだ副次表示にとどめ、値の編集にJSON直接編集を必須にしない。検証エラーがある間は保存を無効にし、件数と対象pathをDiagnosticsに残す。Undo / RedoはScene側のhistoryとは独立で、グラフエディターを開いている間はEditor全体のショートカットを止める。未保存のまま閉じようとしたら、保存・破棄・編集に戻るを選ばせる。Escapeは追加パネル、グラフの管理、確認、Editorの順に閉じる。 |
 | MI-85 | Scene Viewのツールバーでスナップを切り替える、`X`を押す、ドラッグ中にShiftを押す、または矢印キーで選択を動かす | ツールバーのスナップは押下状態と、現在のツールの1ステップ（移動はm、回転は度、拡縮は倍）を同じボタンに表示する。Shiftで反転している間は色を変えるだけにせず、ラベルにも「Shift」と反転後の状態を出す。間隔はボタン右のパネルで移動・回転・拡縮を個別に編集し、よく使う値をプリセットとして並べ、現在のツールの行を強調する。矢印キーの1ステップは左右がX、上下がZ、PageUpとPageDownがY、対象は現在のツールの軸の値とする。 | スナップの入切と間隔はScene設定と同じ`editor.gizmo`へ保存し、Undo履歴には積まない。Undoは直前のEntity操作へ戻す。矢印キーの1ステップはギズモの1操作と同じ履歴として確定する。スナップが有効なときは近い格子点へそろえ、無効なときは現在値へ指定量を足す。文字入力中はShiftも矢印キーもエディター操作にしない。 |
-| MI-86 | Interactivity Asset Editorでノードを置く、レシピを選ぶ、またはgraphを公開する | Playの実行エンジンが実行しないoperationは、ノードカード右上に「Play未対応」、実行はされるが対象への接続が要るoperationには「接続が必要」を出す。「よくある動き」の一覧でも、実行できないレシピに同じ「Play未対応」と「置いて保存はできますが、Play と公開先ではまだ動きません」を添える。対象nodeのpathと理由はDiagnosticsへ、schema検証の結果と同じ一覧に並べる。 | 未対応でも配置、保存、公開は妨げない。canonical JSONはそのまま保存し、公開側のcompile diagnosticsにも同じ文言を`interactivity-operation-not-executed`として出し、Editorと公開先で表示を食い違わせない。未実装のoperationはflow出力も出さないため、その先のnodeは実行されたように見せない。interpreterが実行できてもhostが対象を解決できないoperationは未対応として扱い、動くと見せない。 |
+| MI-86 | Interactivity Asset Editorでノードを置く、レシピを選ぶ、またはgraphを公開する | Playの実行エンジンが実行しないoperationは、ノードカード右上に「Play未対応」、実行はされるが何が動くかが付け先しだいのoperationには「付け先しだい」を出す。「よくある動き」の一覧でも、実行できないレシピに同じ「Play未対応」と「置いて保存はできますが、Play と公開先ではまだ動きません」を添える。対象nodeのpathと理由はDiagnosticsへ、schema検証の結果と同じ一覧に並べる。 | 未対応でも配置、保存、公開は妨げない。canonical JSONはそのまま保存し、公開側のcompile diagnosticsにも同じ文言を`interactivity-operation-not-executed`として出し、Editorと公開先で表示を食い違わせない。未実装のoperationはflow出力も出さないため、その先のnodeは実行されたように見せない。interpreterが実行できてもhostが対象を解決できないoperationは未対応として扱い、動くと見せない。 |
 | MI-87 | Terrain Inspectorの「草」で層を選び、色と大きさを調整する | 選択中の層だけに根元の色、穂先の色、色のばらつき、高さの倍率、葉の幅の倍率、空の明るさを開く。各値は種類の既定から始まり、動かした項目だけが層の上書きになる。上書きを持つ層は一覧に「調整済み」を出し、「種類の既定に戻す」は上書きを持つ層でだけ押せる。空の明るさは、Sceneの光が届かない面を空からの照り返しでどれだけ起こすかであり、0にできることと0にしたときの結果を説明文に置く。 | 変更は密度や傾斜と同じ一件のScene更新として保存し、Scene View、Play、生成Worldは同じ解決済みの値で草を描く。上書きを全て戻した層はappearanceを持たないScene documentへ戻る。層の選択、ブラシの狙い先、Inspectorの位置は変えない。 |
 | MI-88 | Editorのpanel幅が狭くなり、Scene ViewまたはAssetsのheaderに操作が収まらなくなる | headerは常に一行を保ち、操作を折り返さず、他の操作の上へ重ねない。名前は先に短く切り、次にラベルだけをアイコンへ落とす。Scene Viewのカメラ投影方式・表示モード・診断・録画は一つの「表示」ポップオーバーへまとまり、Assetsの検索欄は縮み、外部から追加・インポートはアイコンだけになる。判定はwindow幅ではなくpanel自身の幅で行い、panelのdragによる幅変更にも同じように反応する。 | 収まらない操作を消さず、同じ要素のまま到達できる状態を残す。ラベルを隠した操作には読み上げ名と`title`を残す。Play / 停止と録画中の状態はまとめ先へ隠さず、ポップオーバーの見出しに現在の状態を出す。ポップオーバーは領域外のpointerとEscapeで閉じ、SceneDocument、selection、Undo履歴を変更しない。 |
 | MI-89 | Interaction Triggerを付けたEntityをPlayで押す | ポインタが押せる対象に重なる間だけカーソルをpointerにし、押した瞬間の追加演出は足さない。結果はEntityの表示、音、Lightなど対象そのものの変化で示す。 | 押せる対象がない場所ではカーソルを戻す。カメラ操作のドラッグ終わりはインタラクトにしない。Editでは押せる状態にせず、Stopで実行時の変更を破棄して制作状態へ戻す。 |
@@ -121,7 +121,7 @@ F-06 アイテム検査
 | MI-100 | Texture / Model のImport設定を原本へ反映する、解除する、または公開前のVRAM見積もりから自動最適化する | Texture Inspectorは変換前後の解像度・形式・容量と、画質の設定が効く形式かどうかを示す。最大解像度と「辺を2のべき乗に揃える」は独立に選べ、結果の解像度を実行前に出す。画質は0..100の数値ではなく最高・高・標準・軽量の段で選ばせ、数値は結果として添える。Textureを2件以上選ぶとInspectorが一括変換になり、変換対象・変更なし・対象外の件数を分けて出す。Model Inspectorは実行する処理 (頂点結合・頂点バッファ共有・キーフレーム間引き・Draco) を並べ、Material SlotとNode構造が変わらないことを前置きする。変換結果を使っている間は「使用中」と「原本」を並べ、その場に解除操作を置く。実行中はボタンを無効にし、進捗を同じ場所へ出す。 | 変換は非破壊とする。結果は`assets/.optimized/`へcontent hash名で書き、原本のファイルは書き換えず消さない。Assetの`source`が指す先だけを差し替え、変換前の`source`・解析結果・Import設定を控えて、解除でそのまま復元する。二度目以降の変換でも控えは最初の原本を指したままにする。一括変換は全件をエンコードしてから1回のtransactionで保存し、1件でも失敗したらどのAssetも差し替えない。公開前の自動最適化は対応外のAssetを見送って理由を残し、変換できたものだけを適用する。失敗時は内部の英語メッセージではなく、次に取る操作が分かる文へ置き換える。 |
 
 | MI-100 | ノードエディターの canvas を右クリックする | 押した場所に追加パネルを開き、検索欄へフォーカスを置く。打つと絞り込み、Enter で先頭のノードを押した場所へ置く。ノードカードの上で押しても同じ。ツールバーの「追加」は画面の隅に開き、置き場所は従来どおり。 | 手はすでに canvas にあって、次に置きたい場所も指している。ツールバーまで往復させるのが、グラフを描く作業を書類の記入に変えていた。カードの上で押して何も出ないのは、無視されたように見える。 |
-| MI-101 | 新しい Interactivity Graph を作る | ノードは「開始時」1 つだけ。グラフの名前は「メイン」。 | 以前は `event/onStart` → `animation/start` を置き、名前も「Animation on start」だった。`animation/start` は clip を持つ Model が要るので、開いた瞬間に「接続が必要」のノードが 1 つあり、アニメーションと関係ないグラフの名前がアニメーションを名乗っていた。既定は、Scene が守れない約束をしない。 |
+| MI-101 | 新しい Interactivity Graph を作る | ノードは「開始時」1 つだけ。グラフの名前は「メイン」。 | 以前は `event/onStart` → `animation/start` を置き、名前も「Animation on start」だった。`animation/start` は clip を持つ Model が要るので、開いた瞬間に「付け先しだい」のノードが 1 つあり、アニメーションと関係ないグラフの名前がアニメーションを名乗っていた。既定は、Scene が守れない約束をしない。 |
 | MI-102 | グラフがまだどの Entity にも付いていない | エディターの上に帯を出し、選んでいる Entity へその場で付けられるようにする。付いたあとは帯を消し、フッターに付け先の名前を出す。押すとその Entity を選ぶ。「インタラクト時」を使うのに Interactable が無いときは、続けてそれを追加できる。 | グラフは Entity の Interaction Trigger に指されてはじめて動く。「開始時」から始まるグラフも同じ。それを言う場所がどこにも無く、最初の一周はたいてい「組んで、Play して、何も起きない」だった。答えはこの canvas に無い Entity の側にあるので、グラフを見ているだけでは辿り着けない。 |
 | MI-103 | Model Asset の Inspector で「アニメーションのGraphを作る」を押す | その Model のすべての clip を「開始時」からループ再生する Interactivity Asset を 1 つ作り、ノードエディターのタブで開く。clip 1 つにつき「アニメーション再生」を 1 枚置き、カードには元の clip 名を出す。作るのは Asset だけで、Entity には付けない。押した結果は「N 件の clip を再生する Graph を作成しました」と、開いた canvas そのもので伝える。 | Animation Component が再生できる clip は 1 つで、数十個に分かれた動きは選びようがない。手で組むと clip ごとにノード 1 つと inline value 3 つになる。付け先まで決めてしまうと、64 ノードの生成と Entity への追加が 1 回の取り消し単位に混ざるので、置き場所は作者の操作として残す。カードが全部「アニメーション再生」では読み分けられないので、clip 名を extras に持たせて表示する。 |
 | MI-104 | 生成したグラフのアニメーションノード | 終了時刻を持たない再生はループする。1 回だけにしたい clip は Node Inspector で終了時刻を入れる。要らない clip はノードを消すだけで、残りの再生は変わらない。 | 待機・旗・群れのような動きは、止まる時刻を持たないのが自然な既定。ループを別のスイッチにすると、64 枚すべてで同じ操作を繰り返させることになる。扇状に配りたい出力は 8 個ずつ「順番に実行」へまとめる。64 socket のカードは canvas より高く、線が全部同じ 1 点から出る。 |
@@ -129,9 +129,11 @@ F-06 アイテム検査
 | MI-106 | animation clip を持つ Model を Scene へ置く | その Model の全 clip をループ再生する Interactivity Graph を作り、Interaction Trigger として置いた Entity に付ける。置いた時点で動く。 | Animation Component を廃止したので、置いただけで動く状態を別のもので作り直す必要がある。1 clip を選んで再生する代わりに全部鳴らすのは、動きが数十個の clip に分かれた Model では「どれか 1 つ」を選べないため。要らない clip はノードを消す。 |
 | MI-107 | Animation Component があるプロジェクトを開く | 開いた時に、Component ごとに clip・ループ・速度を引き継いだグラフと Interaction Trigger を作り、Component を外す。変換した件数をその場で伝え、保存で確定することを添える。自動再生でなかったものと、Model に無い clip 名を指していたものは変換せず外し、件数を同じ文で伝える。Scene と Prefab の両方を同じ manifest に対して変換する。 | 開く瞬間が、clip・ループ・速度が書き留められている最後の場所になる。読めるまま放置すると、公開したワールドが黙って動かなくなる。自動再生でなかった Component は再生ではなく別のグラフの操作先だったので、グラフにすると鳴っていなかったものが鳴り始める。Prefab を残すと、置いた瞬間に動かなくなる。 |
 | MI-108 | 廃止された Component を MCP から編集しようとする | `COMPONENT_REMOVED` で断り、clip の再生は `animation/start` ノードで行うことを返す。削除だけは通す。 | 断らないと、変換されていない document をエージェントが編集し続けて生かしてしまう。出口として削除は残す。 |
-| MI-109 | 参照されている Asset を削除しようとする | 削除ダイアログは参照元を並べるだけで終わらせない。各行に「選択」と「外す」を置き、外すと何が起きるか（参照を空にする / Componentごと外す）を行に書く。1 件外すごとに再解析して一覧を更新し、参照が無くなったところで同じダイアログの主操作が「削除」に変わる。まとめて片付けるときはフッターの「参照を外して削除」を 1 回押す。 | 以前は参照名を出して「先に参照を外してください」で終わっていた。どこを直せばいいのかは Hierarchy と Inspector を往復して探すしかなく、12 箇所で使われている Material は 12 往復だった。外す操作は authoring history に入るので「元に戻す」で戻せる。Entity は消さない。Geometry を失った Mesh のように参照なしで成立しない Component だけが外れ、空になった Entity は Hierarchy に残るので、消すかどうかは作者が決める。Prefab の中の参照は選択できないので、その旨を伝えてから外す。 |
-| MI-110 | Scene View で Entity を右クリックする | ポインタの下の Entity を選択し、メニューの先頭にその名前と「削除」を出す。下には従来の Create Mesh を残す。ポインタの下に何も無ければ Create Mesh だけを出す。 | 3D ビューで消したいものは、たいてい見えている物そのもの。Hierarchy で同じ行を探し直すのが、消すという 1 操作を探索に変えていた。右クリックが選択も兼ねるのは、メニューの対象とギズモの対象が食い違わないようにするため。 |
-| MI-111 | Model が多い Scene の編集が重い | Scene View の「表示」に描画品質を置き、「高品質」と「軽量」を選ぶ。軽量は影とポストエフェクトを外し、描画解像度を下げる。選択はこのブラウザに残り、既定は高品質。Play 中とサムネイル撮影中は常に高品質へ戻り、選択欄は Play 中無効にする。 | 置く・動かすの間に見ているのは配置であって陰影ではない。影のパスとポストエフェクトは、その間ずっと画面外の作業に時間を使っている。Play と公開物まで軽くすると、確認しているものが公開されるものと違ってしまうので、編集中の見え方だけを変える。document にも公開物にも残さない。 |
+| MI-109 | Play を押した Entity のグラフが、開始時に clip を再生する | 再生は Model 側が行う。Entity に付いたグラフが開始時に鳴らす clip を読み取り、Model が読み込み終わった時点で、cue ごとの loop・速度・開始位置で再生する。公開先でも同じ内容を生成コードへ書き出す。 | グラフの runtime は Model より先に描かれ、Model は glTF の読み込みで待たされるので、`event/onStart` が撃たれた時点で Model 側の bridge はまだ無い。押し込む側は相手が居なければ黙って何もせず、再試行もしない。「設定は出ているのに動かない」の正体がこれだった。bridge は Play 中の一時停止・シーク・切り替えという、bridge にしかできないことに残す。 |
+| MI-110 | 対象を持たないと何も起きない operation のバッジ | 「付け先しだい」と出し、「実行はされます。実際に何が動くかは、このグラフを付けた Entity が持つ Model・Material・音源などで決まります」を添える。 | 以前は「接続が必要」だった。ノード側には欠けているものが無く（clip 番号を入れたアニメーションノードは完成している）、配線が足りないと読めてしまう。実際に依存しているのは付け先の Entity で、それは canvas 上部の帯がすでに名指ししている。 |
+| MI-111 | 参照されている Asset を削除しようとする | 削除ダイアログは参照元を並べるだけで終わらせない。各行に「選択」と「外す」を置き、外すと何が起きるか（参照を空にする / Componentごと外す）を行に書く。1 件外すごとに再解析して一覧を更新し、参照が無くなったところで同じダイアログの主操作が「削除」に変わる。まとめて片付けるときはフッターの「参照を外して削除」を 1 回押す。 | 以前は参照名を出して「先に参照を外してください」で終わっていた。どこを直せばいいのかは Hierarchy と Inspector を往復して探すしかなく、12 箇所で使われている Material は 12 往復だった。外す操作は authoring history に入るので「元に戻す」で戻せる。Entity は消さない。Geometry を失った Mesh のように参照なしで成立しない Component だけが外れ、空になった Entity は Hierarchy に残るので、消すかどうかは作者が決める。Prefab の中の参照は選択できないので、その旨を伝えてから外す。 |
+| MI-112 | Scene View で Entity を右クリックする | ポインタの下の Entity を選択し、メニューの先頭にその名前と「削除」を出す。下には従来の Create Mesh を残す。ポインタの下に何も無ければ Create Mesh だけを出す。 | 3D ビューで消したいものは、たいてい見えている物そのもの。Hierarchy で同じ行を探し直すのが、消すという 1 操作を探索に変えていた。右クリックが選択も兼ねるのは、メニューの対象とギズモの対象が食い違わないようにするため。 |
+| MI-113 | Model が多い Scene の編集が重い | Scene View の「表示」に描画品質を置き、「高品質」と「軽量」を選ぶ。軽量は影とポストエフェクトを外し、描画解像度を下げる。選択はこのブラウザに残り、既定は高品質。Play 中とサムネイル撮影中は常に高品質へ戻り、選択欄は Play 中無効にする。 | 置く・動かすの間に見ているのは配置であって陰影ではない。影のパスとポストエフェクトは、その間ずっと画面外の作業に時間を使っている。Play と公開物まで軽くすると、確認しているものが公開されるものと違ってしまうので、編集中の見え方だけを変える。document にも公開物にも残さない。 |
 
 
 ## 機能一覧
@@ -144,7 +146,7 @@ F-06 アイテム検査
 | F-04 | ローカル実行 | MI-03, MI-05, MI-08 | 実行中であることと、プレビュー URL を開く操作が分かる。 |
 | F-05 | 公開準備とアップロード | MI-03, MI-04, MI-05, MI-07, MI-08, MI-09, MI-17, MI-27 | 初期値の upload を防ぎ、toolchain が不足しても authoring を失わず、review から upload result / 審査状態まで続けられる。正式 result にない公開 URL は推測しない。 |
 | F-06 | アイテム検査 | MI-03, MI-05, MI-09 | ビルドを含むセキュリティチェックを実行でき、成功時は公開、失敗時はログと編集へ進める。 |
-| F-07 | ビジュアルエディター | MI-01, MI-09, MI-10, MI-11, MI-12, MI-13, MI-14, MI-15, MI-16, MI-18, MI-21, MI-22, MI-29, MI-30, MI-31, MI-32, MI-33, MI-34, MI-35, MI-37, MI-38, MI-40, MI-42, MI-43, MI-46, MI-53, MI-54, MI-56, MI-57, MI-58, MI-59, MI-60, MI-62, MI-63, MI-64, MI-65, MI-84, MI-85, MI-86, MI-88, MI-91, MI-92, MI-93, MI-94, MI-109, MI-110, MI-111 | 四カードの入口、Hierarchy、Scene View、右 Inspector、下 Assets を使い、独立 selection、Scene Viewを含む複数選択と共通プロパティ編集、復元可能なEntityフォーカス、目的別のScene View表示、Empty / primitive / XRift Component 作成、Asset / Material / Particle / XRift Prefab D&D、Hierarchyの文字検索・種類フィルター・折り畳み・並び替え・親子化・Enabled、親子Transform、軸スクラブとScale比率固定、ComponentごとのEnabled、視覚的なMaterial選択、Material / Texture / Particle 編集、Material Textureのタイリング、Animation / InteractivityからのMaterial操作、配置Entityごとの静的なモデルポーズ、GLB / VRMのNode・Bone・Mesh別編集、GLB / glTF AnimationのPlay時自動再生、動的 thumbnail、Texture Assetから設定できるproject thumbnail、Playとシーン全体の環境設定、右上のModel / R3F / Classic Importを扱える。左下のユーティリティレールからヘルプ、ショートカット、シーン設定へ迷わず到達できる。panel layout は resize / dock 後も復元され、Editor render / module load failure は App 全体へ伝播させず再試行、再読み込み、一覧への復帰を選べる。 |
+| F-07 | ビジュアルエディター | MI-01, MI-09, MI-10, MI-11, MI-12, MI-13, MI-14, MI-15, MI-16, MI-18, MI-21, MI-22, MI-29, MI-30, MI-31, MI-32, MI-33, MI-34, MI-35, MI-37, MI-38, MI-40, MI-42, MI-43, MI-46, MI-53, MI-54, MI-56, MI-57, MI-58, MI-59, MI-60, MI-62, MI-63, MI-64, MI-65, MI-84, MI-85, MI-86, MI-88, MI-91, MI-92, MI-93, MI-94, MI-111, MI-112, MI-113 | 四カードの入口、Hierarchy、Scene View、右 Inspector、下 Assets を使い、独立 selection、Scene Viewを含む複数選択と共通プロパティ編集、復元可能なEntityフォーカス、目的別のScene View表示、Empty / primitive / XRift Component 作成、Asset / Material / Particle / XRift Prefab D&D、Hierarchyの文字検索・種類フィルター・折り畳み・並び替え・親子化・Enabled、親子Transform、軸スクラブとScale比率固定、ComponentごとのEnabled、視覚的なMaterial選択、Material / Texture / Particle 編集、Material Textureのタイリング、Animation / InteractivityからのMaterial操作、配置Entityごとの静的なモデルポーズ、GLB / VRMのNode・Bone・Mesh別編集、GLB / glTF AnimationのPlay時自動再生、動的 thumbnail、Texture Assetから設定できるproject thumbnail、Playとシーン全体の環境設定、右上のModel / R3F / Classic Importを扱える。左下のユーティリティレールからヘルプ、ショートカット、シーン設定へ迷わず到達できる。panel layout は resize / dock 後も復元され、Editor render / module load failure は App 全体へ伝播させず再試行、再読み込み、一覧への復帰を選べる。 |
 | F-08 | Visual Asset authoring / import | MI-11, MI-15, MI-16, MI-19, MI-20, MI-21, MI-28, MI-33, MI-36, MI-41, MI-46, MI-54, MI-56, MI-65, MI-100 | Material / Texture / Model / GLTF / OBJ / VRM / Prefab / Particle を左のfolder tree、種類別collection、保存済みthumbnail付きで管理し、GLB / VRMの埋め込みMaterial / Textureを再利用可能なAssetへ展開する。Materialは変更時だけ一時rendererでthumbnailを更新し、card自体はWebGL contextを保持しない。HDR / EXRはequirectangular用途を持つTexture Assetとして取り込み、現在Sceneへ直ちに設定し、ソースから保存済みthumbnailを自動生成・再生成する。Texture Assetはcontext menuからproject thumbnailへ設定し、Scene Inspectorで実画像を確認できる。sourceを壊さずimport、右InspectorでFlip Yを含むrecipe編集、参照を保つreimport、stale診断を行え、配置したGLB / VRMはNode・Bone・Mesh単位で編集できる。Animation取り込みを有効にしたModelは配置時に再生設定へ到達できる。Asset編集中も`sceneSelection`は保持される。 |
 | F-09 | Command / Shortcut / Prefab | MI-12, MI-22, MI-23, MI-24, MI-28, MI-30, MI-31, MI-34, MI-38, MI-43, MI-85 | toolbar、menu、keyboard、Hierarchy D&D と左下の一覧が同じ Command / Shortcut Registry を使い、Copy / Paste / Duplicate / Delete / Reparent、Entityフォーカスの切替と解除、Empty / Component 作成、Hierarchy からの Prefab 化、XRift built-in Prefab配置、Undo / Redo が IDs と両 selection を復元する。 |
 | F-10 | Visual Save / Compile / Preview / Upload | MI-03, MI-05, MI-07, MI-08, MI-09, MI-17, MI-25, MI-26, MI-27, MI-75 | authoring操作ごとの直列化された自動保存、journal付きcommit、決定的compiler / provenance、freshness検査、区別されたpreview、既存XRift check / uploadを一つのeditor flowで扱い、失敗や取消後もlast committed authoringと戻り先を保つ。Upload reviewから現行Sceneのサムネイルを保存し、新規公開と既存ワールド更新の両方で再確認できる。 |
@@ -1388,9 +1390,9 @@ F-06 アイテム検査
 
 ### 操作前
 
-- Texture Inspectorの最大解像度と圧縮（方式・Quality）は設定として保持されるだけで、原本の画像ファイルは変わらない。「画像の書き出し」に現在の解像度・形式・容量と、変換後の解像度・形式・Qualityを並べて示す。
+- Texture Inspectorの最大解像度と圧縮（方式・Quality）は設定として保持されるだけで、原本の画像ファイルは変わらない。公開時には F-40 の変換が同じ設定を自動で適用するため、この操作はEditorの表示と原本そのものを軽くしたいときに使う。「画像の書き出し」に現在の解像度・形式・容量と、変換後の解像度・形式・Qualityを並べて示す。
 - 設定が原本と一致していて変換するものがない場合は、その理由を示して実行操作を無効にする。環境Texture（HDRI）、KTX2やSVGなど書き戻せない形式、外部・組み込みsource、解析結果のないAssetは、実行操作を出さずに対応していない理由を示す。
-- 未反映の設定があるときは、変換するまで表示と公開結果が原本のままであること、書き出しても元の画像fileは残ることを操作の前に示す。
+- 未反映の設定があるときは、公開結果には自動で反映されること、この操作はEditorの表示も変換後にすること、書き出しても元の画像fileは残ることを操作の前に示す。
 - Play中と、アセットのインポート・Model再インポート・別Textureの変換中は実行できない。理由と、停止または完了後に同じInspectorから実行できることを示す。
 
 ### 処理中
@@ -1410,7 +1412,7 @@ F-06 アイテム検査
 
 ### 戻り先
 
-- 成功・失敗のいずれでも同じTexture Inspectorに留まり、設定を変えて再実行するか、Upload reviewの容量見積もりへ進める。Upload reviewの一括最適化と同じ変換結果の保存先を使う。
+- 成功・失敗のいずれでも同じTexture Inspectorに留まり、設定を変えて再実行するか、Upload reviewの容量見積もりへ進める。Upload reviewの一括最適化と同じ変換結果の保存先を使う。書き出さずに公開へ進んだ場合は F-40 の公開時変換が同じ設定を適用する。
 
 ## F-38 インタラクトのトリガーの状態設計
 
@@ -1474,3 +1476,34 @@ F-06 アイテム検査
 ### 戻り先
 
 - 変更は一件のScene更新として保存し、Undoで直前の書体・背景へ戻る。追加や編集の後も同じEntity Inspectorに留まり、Preview / Compile / Playへ進める。
+
+## F-40 公開時のTexture変換と取り込み時の最大解像度の状態設計
+
+参照: MI-03, MI-05, MI-09, MI-15, MI-16, MI-25, MI-67
+
+### 操作前
+
+- Texture Import設定（最大解像度・2のべき乗・圧縮）が原本へ未反映であることは、公開を止める理由にしない。制作データの原本はそのまま残し、公開・アップロード・Classic書き出しが配る画像だけを設定どおりに作り直す。Upload reviewは「原本へ未反映です」という診断を出さず、「Texture N枚を公開用に変換します」と、変換前後の解像度・形式の内訳を示す。
+- 原本の形式が解像度変更・圧縮に対応していない場合（SVG、KTX2）は、公開を止めずに原本のまま配ることと、軽くしたい場合の読み込み直しを同じカードに示す。環境Texture（HDRI）へ設定が効かないことはTexture Inspectorが説明するので、公開前には繰り返さない。
+- Importメニューに「取り込むTextureの最大解像度」を置く。単体のTextureにもモデル内蔵のTextureにも同じ設定が入り、原本は変換しないこと、公開時にその解像度へ変換されることを操作の前に示す。選択はEditor Stateとしてブラウザに残り、制作データとUndo履歴には入らない。
+
+### 処理中
+
+- 公開の変換は、staging・アップロードバンドル・Classic書き出しのいずれでも同じ計算とエンコード経路を通る。経路によって配られる画像が変わらない。
+- 変換中は公開の進行表示に「Textureを公開用に変換しています」と、何枚目かと「制作データの原本はそのまま残ります」を示す。この段階は安全に取り消せる。
+- 取り込み時の最大解像度は、取り込んだTextureのImport設定になるだけで、この時点では画像を作り直さない。glTFのsampler由来の設定は取り込みの既定より優先する。
+
+### 成功時
+
+- 公開されたTextureは設定どおりの解像度・形式になり、コピー先のファイル名も変換後の拡張子で決まる。KTX2へ変換したTextureは、生成コードとRuntime manifestでもKTX2として読み込まれる。
+- 制作データのファイルは読むだけで、書き換えない。Editorの表示は原本のままなので、後から解像度を上げ直せる。
+- 容量の見積もりでは、未反映の設定があるTextureの配信容量は「公開時に変換するため実際はこれより小さくなる」ことを示す。
+
+### 失敗時
+
+- 変換に失敗した場合は、どのTextureで失敗したかを添えて公開を止める。制作データは変更しない。
+- 設定を反映できない原本は、公開を止めずに警告だけを残し、原本のまま出力する。診断を黙って消さない。
+
+### 戻り先
+
+- 公開後もImport設定はそのまま残るので、解像度や圧縮を変えて公開し直せる。Editorの表示と原本そのものを軽くしたいときは、同じ設定のまま F-37 の「この設定で画像を書き出す」へ進める。

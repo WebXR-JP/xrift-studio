@@ -137,6 +137,62 @@ export type InteractivityAnimationCue = {
   speed?: number;
 };
 
+/** What a surface should do with one clip, resolved from the cues that name it. */
+export type InteractivityAnimationPlan = {
+  /** Clip index in the Model. */
+  index: number;
+  /** Seconds after the graph starts. */
+  delaySeconds: number;
+  /** An unbounded start loops; one that named an end time plays a single pass. */
+  loop: boolean;
+  speed: number;
+  /** Clip-local seconds to start from. */
+  startTime: number;
+};
+
+/**
+ * Turns the cues a graph produced into one plan per clip.
+ *
+ * Three surfaces play these — Studio's Scene View, Studio's Play preview, and
+ * the code the compiler writes for a published world — and the rules are the
+ * part that has to agree between them. They did not: the reading of "no end
+ * time" as a loop is what makes an idle, a flag or a flock behave, and a
+ * surface that got it wrong played the clip once and stopped, which looks like
+ * the graph being broken rather than a rule being applied differently.
+ *
+ * The earliest start for a clip wins. Two graphs asking for the same clip is
+ * one clip playing, from the first moment either of them asked — a mixer has
+ * one action per clip, so there is no second playback to give the later cue.
+ */
+export function planInteractivityAnimationCues(
+  cues: readonly InteractivityAnimationCue[],
+): InteractivityAnimationPlan[] {
+  const byIndex = new Map<number, InteractivityAnimationPlan>();
+  for (const cue of cues) {
+    const known = byIndex.get(cue.animationIndex);
+    if (known && known.delaySeconds <= cue.delaySeconds) continue;
+    byIndex.set(cue.animationIndex, {
+      index: cue.animationIndex,
+      delaySeconds: cue.delaySeconds,
+      // A start with no end time runs until something stops it, which on a
+      // mixer means looping. A graph that named an end time wants one pass, and
+      // so does one the same graph stops later.
+      loop: (cue.endTime ?? null) === null && cue.stopSeconds === undefined,
+      speed:
+        typeof cue.speed === "number" &&
+        Number.isFinite(cue.speed) &&
+        cue.speed !== 0
+          ? cue.speed
+          : 1,
+      startTime:
+        typeof cue.startTime === "number" && Number.isFinite(cue.startTime)
+          ? Math.max(0, cue.startTime)
+          : 0,
+    });
+  }
+  return [...byIndex.values()].sort((left, right) => left.index - right.index);
+}
+
 /** A node the interpreter refused to run, and why. */
 export type InteractivityRuntimeIssue = InteractivityIssue;
 

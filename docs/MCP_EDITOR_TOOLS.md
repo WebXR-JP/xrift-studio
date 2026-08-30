@@ -260,6 +260,7 @@ Undo 履歴も選択も動かさない。
 | 任意 path の読み書き・削除 | Rust 側の path 検証と権限制御を迂回させない |
 | 任意 JavaScript の実行 | Script は trust gate 付きの Asset としてだけ入る |
 | Texture の一括変換 | 人が複数選択したものをまとめて書き出すための導線。AI からは `process_texture_asset` を Asset ごとに呼べばよく、対象の選び方も AI 側で決まる |
+| 取り込み時の Texture 最大解像度 | Import メニューに残る Editor State で、document には入らない。AI は `import_local_texture` と `update_texture_asset` の `importSettings.resize` で同じ結果を Asset ごとに指定できる |
 
 ## 機能を足すときの手順
 

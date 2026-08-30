@@ -43,6 +43,7 @@ import {
 } from "../src/lib/visual-editor/animation-component-migration.fixture.ts";
 import { runAnimationRuntimeBridgeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/animation.fixture.ts";
 import { runAnimationMixerControllerFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/animation-mixer.fixture.ts";
+import { runInteractivityAnimationPlanFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity-animation-plan.fixture.ts";
 import { runInteractivityGraphListFixtureAssertions } from "../src/lib/visual-editor/interactivity-recipes.fixture.ts";
 import { runShaderTimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/shader-time.fixture.ts";
 import { runTextPanelFixtureAssertions } from "../packages/xrift-studio-runtime/src/text-panel.fixture.ts";
@@ -290,6 +291,7 @@ try {
     ["animation component load migration", runAnimationComponentLoadMigrationFixtureAssertions],
     ["animation action component ids", runAnimationActionComponentIdFixtureAssertions],
     ["animation mixer controller", runAnimationMixerControllerFixtureAssertions],
+    ["interactivity animation plan", runInteractivityAnimationPlanFixtureAssertions],
     ["interactivity graph list", runInteractivityGraphListFixtureAssertions],
     ["shader time", runShaderTimeFixtureAssertions],
     ["text panel", runTextPanelFixtureAssertions],

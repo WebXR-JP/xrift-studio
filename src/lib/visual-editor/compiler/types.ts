@@ -5,6 +5,7 @@ import type { VisualProjectDocument, VisualProjectKind } from "../project-docume
 import type { SceneDocument } from "../scene-document";
 import type { CompilationProvenance } from "../serialization";
 import type { ResolvedPublishPermissions } from "./publish-permissions";
+import type { TextureConversion } from "../texture-conversion";
 
 export const VISUAL_COMPILER_VERSION = "0.6.0" as const;
 
@@ -54,6 +55,14 @@ export type AssetCopyPlanEntry = {
   targetRelativePath: string;
   purpose: "texture" | "skybox" | "model" | "audio" | "particle" | "prefab" | "other";
   supportedByCompiler: boolean;
+  /**
+   * 出力時にだけ適用するTextureの変換。
+   *
+   * 最大解像度・圧縮のImport設定は、制作データの原本を書き換えずに公開結果へ
+   * 反映する。ここに値があるコピーは、原本をそのまま複製せず、この内容で
+   * 作り直した画像を `targetRelativePath` へ書く。
+   */
+  textureConversion?: TextureConversion;
 };
 
 export type RequiredPublicationFileCopy = {

@@ -1,4 +1,5 @@
 import {
+  ASSET_MANIFEST_SCHEMA_VERSION,
   normalizeTextureImportSettings,
   type TextureAsset,
   type TextureImportSettingsPatch,
@@ -7,13 +8,16 @@ import {
 import {
   describeTextureOptimization,
   fitWithin,
+  isPublishedAsKtx2,
   ktx2QualityLevel,
   nearestPowerOfTwo,
+  planTextureConversion,
   planTextureProcessing,
   processedAssetPath,
   resolveOutputFormat,
   resolveTargetSize,
   revertTextureOptimization,
+  summarizeTexturePublishConversions,
 } from "./texture-processing";
 
 /** Canvasを触らずに、変換の可否と変換後の見積もりだけを確かめる。 */
@@ -26,6 +30,94 @@ export function runTextureProcessingFixtureAssertions(): void {
   assertKtx2Quality();
   assertPowerOfTwo();
   assertNonDestructiveRevert();
+  assertPublishConversion();
+}
+
+/**
+ * 未反映のImport設定は、原本を書き換えずに公開時へ持ち越せる必要がある。
+ * ここが壊れると、作者は公開のたびに原本の書き出しを強いられる。
+ */
+function assertPublishConversion(): void {
+  const settled = textureAsset(
+    { sourceFormat: "png", width: 1024, height: 1024 },
+    { resize: { mode: "original" }, compression: { format: "source" } },
+  );
+  assert(
+    planTextureConversion(settled) === null,
+    "A settled Texture recipe must not schedule a publish-time conversion",
+  );
+  assert(
+    !isPublishedAsKtx2(settled),
+    "A PNG Texture without a recipe must not be published as KTX2",
+  );
+
+  const pending = textureAsset(
+    { sourceFormat: "png", width: 4096, height: 4096 },
+    {
+      colorSpace: "srgb",
+      resize: { mode: "max-size", maxSize: 1024 },
+      compression: { format: "ktx2", quality: 80 },
+    },
+  );
+  const conversion = planTextureConversion(pending);
+  assert(
+    conversion?.outputFormat === "ktx2" &&
+      conversion.extension === "ktx2" &&
+      conversion.mimeType === "image/ktx2" &&
+      conversion.maxSize === 1024 &&
+      conversion.quality === 80 &&
+      conversion.srgb,
+    "An unapplied Texture recipe did not produce a publish-time conversion",
+  );
+  assert(
+    isPublishedAsKtx2(pending),
+    "A Texture converted to KTX2 at publish time was not reported as KTX2",
+  );
+
+  // すでに最大解像度へ収まっている原本は、作り直しても同じ絵にしかならない。
+  const alreadyFitting = textureAsset(
+    { sourceFormat: "png", width: 512, height: 512 },
+    { resize: { mode: "max-size", maxSize: 1024 }, compression: { format: "source" } },
+  );
+  assert(
+    planTextureConversion(alreadyFitting) === null,
+    "A source already within the max size must not be re-encoded",
+  );
+
+  // Canvasで描き直せない原本は設定を反映できない。公開は原本のまま続ける。
+  const unconvertible = textureAsset(
+    { sourceFormat: "svg", width: undefined, height: undefined },
+    { resize: { mode: "max-size", maxSize: 512 }, compression: { format: "source" } },
+    { source: { kind: "project", relativePath: "assets/imported/textures/logo.svg" } },
+  );
+  assert(
+    planTextureConversion(unconvertible) === null,
+    "An SVG source must not be scheduled for conversion",
+  );
+
+  const summary = summarizeTexturePublishConversions({
+    schemaVersion: ASSET_MANIFEST_SCHEMA_VERSION,
+    assets: {
+      [settled.id]: settled,
+      "texture-pending": { ...pending, id: "texture-pending", name: "Pending" },
+      "texture-unconvertible": {
+        ...unconvertible,
+        id: "texture-unconvertible",
+        name: "Logo",
+      },
+    },
+  });
+  assert(
+    summary.converted.length === 1 &&
+      summary.converted[0].assetId === "texture-pending" &&
+      summary.converted[0].from === "4096 × 4096・PNG" &&
+      summary.converted[0].to === "1024 × 1024・KTX2",
+    "The publish conversion summary did not describe the converted Texture",
+  );
+  assert(
+    summary.ignored.length === 1 && summary.ignored[0].assetId === "texture-unconvertible",
+    "The publish conversion summary did not report the unapplicable recipe",
+  );
 }
 
 /**

@@ -5,9 +5,22 @@ import {
   isEnvironmentTextureAsset,
   type AssetManifest,
   type TextureAsset,
-  type TextureCompressionFormat,
   type TextureSourceFormat,
 } from "./asset-manifest";
+import {
+  isConvertibleTextureSourceFormat,
+  mimeTypeOf,
+  processedAssetPath,
+  resolveOutputFormat,
+  resolveTargetSize,
+  textureOutputExtension,
+  type TextureOutputFormat,
+} from "./texture-conversion";
+import {
+  assetBytesToDataUrl,
+  convertTextureBytes,
+  sha256Hex,
+} from "./texture-codec";
 import {
   createAssetImportTransactionId,
   describeAssetImportFailure,
@@ -16,25 +29,47 @@ import {
 /**
  * Texture Import設定（最大解像度・圧縮）を、原本の画像ファイルへ実際に反映する。
  *
- * 設定はAsset Manifestに保持されるだけで原本は書き換わらないため、変換前は
- * 表示も公開結果も原本のままになる。ここで書き出した画像を新しい原本にすると、
- * 設定は「原寸 / source」へ戻り、Compilerの静的コピー対象へ戻る。
+ * 設定はAsset Manifestに保持されるだけで原本は書き換わらない。公開だけが目的なら
+ * 出力側の変換（texture-conversion.ts）で足りるため、ここは「プロジェクトの原本
+ * そのものを軽くしたい」ときの操作になる。書き出した画像を新しい原本にすると、
+ * 設定は「原寸 / source」へ戻り、変換前の原本は `optimizedFrom` に残る。
  */
 
-export const TEXTURE_MAX_SIZE_CHOICES = [256, 512, 1024, 2048, 4096, 8192] as const;
-
-/** Canvas / KTX2エンコーダで書き出せる形式。 */
-export type TextureOutputFormat = "png" | "jpeg" | "webp" | "ktx2";
-
-/** 解像度変更・圧縮を実行できる原本の形式。 */
-const CONVERTIBLE_SOURCE_FORMATS: readonly TextureSourceFormat[] = [
-  "png",
-  "jpeg",
-  "webp",
-  "avif",
-  "gif",
-  "bmp",
-];
+// 既存の呼び出し元が texture-processing から読み続けられるよう、変換の計算は
+// texture-conversion.ts に移したうえでここから再輸出する。
+export {
+  assetBytesToDataUrl,
+  convertPublishedTextureBytes,
+  convertTextureBytes,
+  copyAssetBytes,
+  encodeKtx2,
+  renderImageBytes,
+  sha256Hex,
+} from "./texture-codec";
+export {
+  CONVERTIBLE_TEXTURE_SOURCE_FORMATS,
+  TEXTURE_MAX_SIZE_CHOICES,
+  fitWithin,
+  isConvertibleTextureSourceFormat,
+  isPublishedAsKtx2,
+  ktx2QualityLevel,
+  mimeTypeOf,
+  nearestPowerOfTwo,
+  planTextureConversion,
+  processedAssetPath,
+  resolveOutputFormat,
+  resolvePublishedTextureFormat,
+  resolveTargetSize,
+  summarizeTexturePublishConversions,
+  textureOutputExtension,
+} from "./texture-conversion";
+export type {
+  TextureConversion,
+  TextureMaxSizeChoice,
+  TextureOutputFormat,
+  TexturePublishConversionEntry,
+  TexturePublishConversionSummary,
+} from "./texture-conversion";
 
 export type TextureProcessingPlan =
   | { supported: false; reason: string }
@@ -109,7 +144,7 @@ export function planTextureProcessing(asset: TextureAsset): TextureProcessingPla
       reason: "画像の解析結果がないため変換できません。再インポートしてください。",
     };
   }
-  if (!CONVERTIBLE_SOURCE_FORMATS.includes(sourceFormat)) {
+  if (!isConvertibleTextureSourceFormat(sourceFormat)) {
     return {
       supported: false,
       reason: `${sourceFormat.toUpperCase()}は解像度変更・圧縮に対応していません。PNG / JPEG / WEBPで読み込み直してください。`,
@@ -370,25 +405,23 @@ async function encodeTextureForPlan(
   );
 
   report?.({ phase: "encoding", message: `${asset.name}を変換しています` });
-  // KTX2はBasis圧縮の前段なので、中間画像は可逆のPNGで渡して二重の劣化を避ける。
-  const rendered = await renderImageBytes(sourceBytes, {
+  const rendered = await convertTextureBytes(sourceBytes, {
+    sourceFormat: plan.sourceFormat,
+    outputFormat: plan.outputFormat,
+    extension: textureOutputExtension(plan.outputFormat),
+    mimeType: mimeTypeOf(plan.outputFormat),
     maxSize: plan.maxSize,
     powerOfTwo: plan.powerOfTwo,
-    mimeType: plan.outputFormat === "ktx2" ? "image/png" : mimeTypeOf(plan.outputFormat),
-    quality: plan.qualityApplies && plan.outputFormat !== "ktx2" ? plan.quality / 100 : undefined,
+    quality: asset.importSettings.compression.quality,
+    qualityApplies: plan.qualityApplies,
+    generateMipmaps: asset.importSettings.generateMipmaps,
+    srgb: asset.importSettings.colorSpace === "srgb",
+    outputFormatSubstituted: plan.outputFormatSubstituted,
   });
-
-  let bytes = rendered.bytes;
-  if (plan.outputFormat === "ktx2") {
-    bytes = await encodeKtx2(rendered.bytes, {
-      quality: asset.importSettings.compression.quality,
-      generateMipmaps: asset.importSettings.generateMipmaps,
-      srgb: asset.importSettings.colorSpace === "srgb",
-    });
-  }
+  const bytes = rendered.bytes;
 
   const sourceHash = await sha256Hex(bytes);
-  const extension = plan.outputFormat === "jpeg" ? "jpg" : plan.outputFormat;
+  const extension = textureOutputExtension(plan.outputFormat);
   const relativePath = processedAssetPath(asset.id, sourceHash, extension);
   const mimeType = mimeTypeOf(plan.outputFormat);
 
@@ -544,118 +577,6 @@ function describeTextureFailure(assetName: string, error: unknown): string {
   return `${assetName}を変換できませんでした。${describeAssetImportFailure(error)}`;
 }
 
-/**
- * Basis / KTX2のqualityLevelは 1..255 の探索量で、JPEGの画質パーセントとは
- * 意味が違う。Import設定の 0..100 をここで一度だけ写像する。
- */
-export function ktx2QualityLevel(quality: number): number {
-  const normalized = Number.isFinite(quality) ? quality : 100;
-  return Math.max(1, Math.min(255, Math.round((normalized / 100) * 254) + 1));
-}
-
-async function encodeKtx2(
-  bytes: Uint8Array,
-  options: { quality: number; generateMipmaps: boolean; srgb: boolean },
-): Promise<Uint8Array> {
-  const { encodeToKTX2 } = await import("ktx2-encoder");
-  const encoded = await encodeToKTX2(copyAssetBytes(bytes), {
-    isUASTC: false,
-    qualityLevel: ktx2QualityLevel(options.quality),
-    compressionLevel: 2,
-    generateMipmap: options.generateMipmaps,
-    isPerceptual: options.srgb,
-    isSetKTX2SRGBTransferFunc: options.srgb,
-    isKTX2File: true,
-  });
-  const result = new Uint8Array(encoded);
-  if (result.byteLength === 0) {
-    throw new Error(
-      "KTX2エンコーダーが空の結果を返しました。最大解像度を下げるか、WEBPで書き出してください。",
-    );
-  }
-  return result;
-}
-
-export function fitWithin(
-  width: number,
-  height: number,
-  maxSize: number | null,
-): { width: number; height: number } {
-  if (!maxSize || maxSize <= 0) return { width, height };
-  const scale = Math.min(1, maxSize / Math.max(width, height));
-  return {
-    width: Math.max(1, Math.round(width * scale)),
-    height: Math.max(1, Math.round(height * scale)),
-  };
-}
-
-/** Canvasが確実に扱える上限。これを超える辺は端末によって描画できない。 */
-const MAX_RENDERED_TEXTURE_SIZE = 8192;
-
-/**
- * 辺を最も近い2のべき乗へ丸める。最大解像度が指定されていればそれを超えない。
- *
- * KTX2 / BasisのGPU圧縮、mipmap、repeat wrapはどれも2のべき乗の辺を前提に
- * 設計されているため、1000 × 600のような半端な原本は 1024 × 512 にした方が
- * 転送先のGPU形式でも扱いが素直になる。縦横は別々に丸めるので、アスペクト比は
- * わずかに変わる。
- */
-export function nearestPowerOfTwo(size: number, maxSize: number | null): number {
-  const ceiling = Math.min(
-    MAX_RENDERED_TEXTURE_SIZE,
-    maxSize && maxSize > 0 ? maxSize : MAX_RENDERED_TEXTURE_SIZE,
-  );
-  if (!Number.isFinite(size) || size <= 1) return 1;
-  const exponent = Math.round(Math.log2(size));
-  const snapped = 2 ** Math.max(0, exponent);
-  return Math.max(1, Math.min(ceiling, snapped));
-}
-
-/** 最大解像度へ収めてから、必要なら辺を2のべき乗へ丸める。 */
-export function resolveTargetSize(
-  width: number,
-  height: number,
-  maxSize: number | null,
-  powerOfTwo: boolean,
-): { width: number; height: number } {
-  const fitted = fitWithin(width, height, maxSize);
-  if (!powerOfTwo) return fitted;
-  return {
-    width: nearestPowerOfTwo(fitted.width, maxSize),
-    height: nearestPowerOfTwo(fitted.height, maxSize),
-  };
-}
-
-export function resolveOutputFormat(
-  sourceFormat: TextureSourceFormat,
-  compressionFormat: TextureCompressionFormat,
-): TextureOutputFormat {
-  if (compressionFormat === "ktx2") return "ktx2";
-  if (compressionFormat === "webp") return "webp";
-  // Canvasが書き戻せるのはPNG / JPEG / WEBPだけなので、それ以外はWEBPへ寄せる。
-  if (sourceFormat === "png" || sourceFormat === "jpeg" || sourceFormat === "webp") {
-    return sourceFormat;
-  }
-  return "webp";
-}
-
-export function mimeTypeOf(format: TextureOutputFormat): string {
-  if (format === "ktx2") return "image/ktx2";
-  if (format === "png") return "image/png";
-  if (format === "jpeg") return "image/jpeg";
-  return "image/webp";
-}
-
-/** 変換結果は原本と混ざらないよう、専用ディレクトリへハッシュ名で書き出す。 */
-export function processedAssetPath(
-  assetId: string,
-  hash: string,
-  extension: string,
-): string {
-  const safeAssetId = assetId.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 64);
-  return `assets/.optimized/${safeAssetId}-${hash.slice(0, 16)}.${extension}`;
-}
-
 export async function readProjectAssetBytes(
   projectPath: string,
   relativePath: string,
@@ -664,73 +585,4 @@ export async function readProjectAssetBytes(
   const response = await fetch(dataUrl);
   if (!response.ok) throw new Error("アセット原本を読み込めませんでした。");
   return new Uint8Array(await response.arrayBuffer());
-}
-
-export async function assetBytesToDataUrl(
-  bytes: Uint8Array,
-  mimeType: string,
-): Promise<string> {
-  return await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener("load", () =>
-      typeof reader.result === "string"
-        ? resolve(reader.result)
-        : reject(new Error("変換結果を保存形式へ変換できませんでした。")),
-    );
-    reader.addEventListener("error", () =>
-      reject(reader.error ?? new Error("変換結果を保存形式へ変換できませんでした。")),
-    );
-    reader.readAsDataURL(new Blob([copyAssetBytes(bytes)], { type: mimeType }));
-  });
-}
-
-export async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", copyAssetBytes(bytes));
-  return [...new Uint8Array(digest)]
-    .map((value) => value.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-export function copyAssetBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
-  return new Uint8Array(bytes);
-}
-
-/** Canvasで縮小と再エンコードをまとめて行う。maxSizeがnullなら解像度は保つ。 */
-export async function renderImageBytes(
-  bytes: Uint8Array,
-  options: {
-    maxSize: number | null;
-    mimeType: string;
-    quality?: number;
-    powerOfTwo?: boolean;
-  },
-): Promise<{ bytes: Uint8Array; width: number; height: number }> {
-  const bitmap = await createImageBitmap(new Blob([copyAssetBytes(bytes)]));
-  try {
-    const { width, height } = resolveTargetSize(
-      bitmap.width,
-      bitmap.height,
-      options.maxSize,
-      options.powerOfTwo === true,
-    );
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d", { alpha: true });
-    if (!context) throw new Error("画像変換用のCanvasを作成できませんでした。");
-    context.drawImage(bitmap, 0, 0, width, height);
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob(
-        (result) =>
-          result
-            ? resolve(result)
-            : reject(new Error("画像の変換結果をエンコードできませんでした。")),
-        options.mimeType,
-        options.quality,
-      );
-    });
-    return { bytes: new Uint8Array(await blob.arrayBuffer()), width, height };
-  } finally {
-    bitmap.close();
-  }
 }

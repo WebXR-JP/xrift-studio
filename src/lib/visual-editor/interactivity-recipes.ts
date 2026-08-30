@@ -352,7 +352,10 @@ export function createModelAnimationClipGraphExtension(
           y: 0,
         })
       : null;
-  if (root !== null) connectInteractivityFlow(graph, start, "out", root);
+  if (root !== null) {
+    connectInteractivityFlow(graph, start, "out", root);
+    annotateInteractivityNode(graph, root, "全部まとめて同時に開始します");
+  }
 
   // Each group gets its own column, rather than every clip going into one that
   // ends up thirteen thousand pixels tall: sixty-four clips then read as eight
@@ -373,6 +376,12 @@ export function createModelAnimationClipGraphExtension(
     if (fan !== null) {
       if (root === null) connectInteractivityFlow(graph, start, "out", fan);
       else connectInteractivityFlow(graph, root, String(groupIndex), fan);
+      // The card reads「順番に実行」, which is what the operation is: it runs its
+      // outputs in socket order. What it is not is a queue — every clip here
+      // starts in the same instant, because starting an animation returns
+      // immediately. Said on the card, because "in order" is exactly what an
+      // author fears when a graph plays sixty-four clips.
+      annotateInteractivityNode(graph, fan, "全部まとめて同時に開始します");
     }
 
     // Wired before anything is placed: a card is as tall as the sockets it
@@ -439,4 +448,21 @@ export function createModelAnimationClipGraphExtension(
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Writes the one-line note a card shows under its title. */
+function annotateInteractivityNode(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+  note: string,
+): void {
+  const node = graph.nodes?.[nodeIndex];
+  if (!node) return;
+  node.extras = {
+    ...(node.extras ?? {}),
+    xriftStudio: {
+      ...(isPlainRecord(node.extras?.xriftStudio) ? node.extras.xriftStudio : {}),
+      note,
+    },
+  };
 }

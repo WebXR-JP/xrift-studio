@@ -12,6 +12,7 @@ import type { VisualCompilerDocuments } from "./compiler";
 import { VisualCompilationError, type XriftUploadResult } from "./publish";
 import type { VisualPublishPipelineProgress } from "./publish";
 import { resolveSceneSettings } from "./scene-settings";
+import { convertPublishedTextureBytes } from "./texture-codec";
 
 /**
  * Browser upload path.
@@ -186,7 +187,15 @@ export async function assembleWebUploadFiles(
     // Compiler targets are rooted at `public/`, which the template's build
     // would normally flatten into the bundle root.
     const targetPath = entry.targetRelativePath.replace(/^public\//, "");
-    files.set(targetPath, await request.readAssetBytes(entry.sourceRelativePath));
+    // 未反映のTexture Import設定は、ここで配るバイト列にだけ適用する。
+    // プロジェクトの原本は読むだけで書き換えない。
+    files.set(
+      targetPath,
+      await convertPublishedTextureBytes(
+        await request.readAssetBytes(entry.sourceRelativePath),
+        entry.textureConversion,
+      ),
+    );
   }
 
   if (request.thumbnail) files.set(THUMBNAIL_PATH, request.thumbnail);
