@@ -3713,8 +3713,11 @@ fn validate_asset_import_transaction_id(transaction_id: &str) -> Result<&str, St
 
 fn validate_asset_import_path(relative_path: &str) -> Result<PathBuf, String> {
     let normalized = relative_path.trim().replace('\\', "/");
+    // `assets/.optimized/` は Texture 変換と自動最適化の書き出し先。原本とは
+    // 分けた content-addressed なファイルなので、import と同じ規則で扱う。
     if !normalized.starts_with("assets/imported/")
         && !normalized.starts_with("assets/.derived/thumbnails/")
+        && !normalized.starts_with("assets/.optimized/")
     {
         return Err("asset import target is outside the managed Asset folders".to_string());
     }
@@ -5443,6 +5446,44 @@ mod tests {
                 .expect("clock must be after epoch")
                 .as_nanos()
         ))
+    }
+
+    #[test]
+    fn asset_import_targets_cover_every_managed_write_directory() {
+        // Texture変換と自動最適化はここへ書き出す。許可されていないと、公開前の
+        // 最適化とKTX2変換がまとめて失敗する。
+        for relative in [
+            "assets/imported/textures/a/b.png",
+            "assets/.derived/thumbnails/a.png",
+            "assets/.optimized/texture-abc-0123456789abcdef.ktx2",
+            "assets/.optimized/model-abc-0123456789abcdef.glb",
+        ] {
+            assert!(
+                validate_asset_import_path(relative).is_ok(),
+                "managed asset import target was rejected: {relative}"
+            );
+        }
+        for relative in [
+            "assets/other/a.png",
+            "public/thumbnail.png",
+            "../outside.png",
+            "assets/.optimized/../../escape.png",
+        ] {
+            assert!(
+                validate_asset_import_path(relative).is_err(),
+                "unmanaged asset import target was accepted: {relative}"
+            );
+        }
+    }
+
+    #[test]
+    fn asset_import_transaction_ids_require_the_shared_prefix() {
+        assert!(validate_asset_import_transaction_id("asset-import-texture-abc123").is_ok());
+        assert!(validate_asset_import_transaction_id("asset-import-optimize-abc123").is_ok());
+        // 以前フロント側が渡していた形。プレフィックスがないと必ず失敗する。
+        assert!(validate_asset_import_transaction_id("texture-convert-abc123").is_err());
+        assert!(validate_asset_import_transaction_id("asset-optimize-abc123").is_err());
+        assert!(validate_asset_import_transaction_id("asset-import-a/b").is_err());
     }
 
     #[test]

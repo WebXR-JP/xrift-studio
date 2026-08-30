@@ -56,6 +56,9 @@ import {
 } from "../src/lib/visual-editor/terrain-grass.fixture.ts";
 import { runTerrainSurfaceFixtureAssertions } from "../src/lib/visual-editor/terrain-surface.fixture.ts";
 import { runTextureProcessingFixtureAssertions } from "../src/lib/visual-editor/texture-processing.fixture.ts";
+import { runAssetImportTransactionFixtureAssertions } from "../src/lib/visual-editor/asset-import-transaction.fixture.ts";
+import { runModelOptimizationFixtureAssertions } from "../src/lib/visual-editor/model-optimization.fixture.ts";
+import { runModelAnimationGroupFixtureAssertions } from "../src/lib/visual-editor/model-animation-groups.fixture.ts";
 import { runAssetOperationLockFixtureAssertions } from "../src/components/visual-editor/asset-operation-lock.fixture.ts";
 import { runAutosaveCoordinatorFixtureAssertions } from "../src/components/visual-editor/autosave-coordinator.fixture.ts";
 import { runCustomMaterialPreviewFixtureAssertions } from "../src/components/visual-editor/CustomMaterialPreview.fixture.ts";
@@ -323,6 +326,9 @@ try {
     ["visual upload branch", runVisualUploadFixtureAssertions],
     ["classic project import", runClassicProjectImportFixtureAssertions],
     ["texture processing", runTextureProcessingFixtureAssertions],
+    ["asset import transaction", runAssetImportTransactionFixtureAssertions],
+    ["model optimization", runModelOptimizationFixtureAssertions],
+    ["model animation groups", runModelAnimationGroupFixtureAssertions],
     ["asset operation lock", runAssetOperationLockFixtureAssertions],
     ["audio import", runAudioImportFixtureAssertions],
     ["autosave coordinator", runAutosaveCoordinatorFixtureAssertions],
