@@ -407,8 +407,8 @@ export function compileVisualProject(
         overlayFiles.push(file);
       }
     }
-    // The trigger runtime writes through the Audio Source and Light bridges,
-    // so their modules ship with it even when the Scene has neither yet.
+    // The trigger runtime writes through the Audio Source, Light and Particle
+    // bridges, so their modules ship with it even when the Scene has none yet.
     if (
       !overlayFiles.some(
         (file) => file.relativePath === SCRIPT_AUDIO_SOURCE_OVERLAY_PATH,
@@ -422,6 +422,13 @@ export function compileVisualProject(
       )
     ) {
       overlayFiles.push(createScriptLightOverlayFile());
+    }
+    if (
+      !overlayFiles.some(
+        (file) => file.relativePath === SCRIPT_PARTICLE_OVERLAY_PATH,
+      )
+    ) {
+      overlayFiles.push(createScriptParticleOverlayFile());
     }
   }
   // Emitted for both output modes: the brush loader is self-contained, so a
@@ -1040,7 +1047,7 @@ function renderInteractionTrigger(
   context: CompileContext,
 ): string {
   context.extraImports.add(
-    'import { XriftInteractionTriggerRuntime, emitXriftInteraction } from "./xrift-studio/interaction-trigger-runtime";',
+    'import { XriftInteractionTriggerRuntime } from "./xrift-studio/interaction-trigger-runtime";',
   );
   const identifier = interactionGraphIdentifier(
     resolved.component.interactivityAssetId,
@@ -5163,6 +5170,14 @@ function renderRegisteredXriftComponent(
     bindingOverrides,
   );
   compiled.diagnostics.forEach((diagnostic) => addDiagnostic(context, diagnostic));
+  // `emitXriftInteraction` is imported only once a registry callback actually
+  // takes the override. An Entity whose Trigger has no Interactable renders no
+  // `onInteract`, and an unused import fails the published world's `tsc`.
+  if (compiled.appliedBindingOverrides?.includes("onInteract")) {
+    context.extraImports.add(
+      'import { emitXriftInteraction } from "./xrift-studio/interaction-trigger-runtime";',
+    );
+  }
   if (compiled.importName) context.imports.add(compiled.importName);
   compiled.reactValueImports.forEach((name) => context.reactValueImports.add(name));
   compiled.reactTypeImports.forEach((name) => context.reactTypeImports.add(name));

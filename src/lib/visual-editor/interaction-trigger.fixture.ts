@@ -14,6 +14,9 @@ import {
   ANIMATION_RUNTIME_OVERLAY_PATH,
   ANIMATION_MIXER_OVERLAY_PATH,
   SCENE_RUNTIME_OVERLAY_PATH,
+  SCRIPT_AUDIO_SOURCE_OVERLAY_PATH,
+  SCRIPT_LIGHT_OVERLAY_PATH,
+  SCRIPT_PARTICLE_OVERLAY_PATH,
 } from "./compiler/script-emit";
 import {
   collectInteractionTriggerTargets,
@@ -68,6 +71,7 @@ export function runInteractionTriggerFixtureAssertions(): void {
   assertEntityReferencesFollowTheGraph();
   assertPublishedWorldRunsTheTrigger();
   assertPublishedWorldRunsAGraphNobodyPresses();
+  assertPublishedWorldOmitsTheUnusedInteractionEmitter();
   assertRuntimeJsonOutputIsBlocked();
 }
 
@@ -389,9 +393,15 @@ function assertPublishedWorldRunsTheTrigger(): void {
   assert(Boolean(world), "World.tsx was not emitted");
   assert(
     world!.includes(
-      'import { XriftInteractionTriggerRuntime, emitXriftInteraction } from "./xrift-studio/interaction-trigger-runtime";',
+      'import { XriftInteractionTriggerRuntime } from "./xrift-studio/interaction-trigger-runtime";',
     ),
     "the published world does not import the Interaction Trigger runtime",
+  );
+  assert(
+    world!.includes(
+      'import { emitXriftInteraction } from "./xrift-studio/interaction-trigger-runtime";',
+    ),
+    "the published world does not import the interaction emitter it wires",
   );
   assert(
     world!.includes('onInteract={() => emitXriftInteraction("entity_button")}'),
@@ -461,14 +471,77 @@ function assertPublishedWorldRunsTheTrigger(): void {
   assert(
     (runtimeOverlay ?? "").includes('from "./audio-source-runtime"') &&
       (runtimeOverlay ?? "").includes('from "./light-runtime"') &&
+      (runtimeOverlay ?? "").includes('from "./particle-runtime"') &&
       (runtimeOverlay ?? "").includes('from "./interaction-trigger"'),
     "the emitted trigger runtime does not import its staged siblings",
   );
+  // The trigger runtime writes through every bridge it imports, so each of
+  // those modules has to be staged even when the Scene uses none of them yet.
+  // Without them the published world fails `tsc` on a missing module.
+  for (const path of [
+    SCRIPT_AUDIO_SOURCE_OVERLAY_PATH,
+    SCRIPT_LIGHT_OVERLAY_PATH,
+    SCRIPT_PARTICLE_OVERLAY_PATH,
+  ]) {
+    assert(
+      result.overlayFiles.some((file) => file.relativePath === path),
+      `the published world is missing the bridge module ${path}`,
+    );
+  }
   assert(
     !result.diagnostics.some(
       (diagnostic) => diagnostic.severity === "blocking",
     ),
     "publishing a trigger produced a blocking diagnostic",
+  );
+}
+
+/**
+ * A Trigger without an Interactable publishes no unused import.
+ *
+ * `emitXriftInteraction` only reaches the generated JSX through an official
+ * Interactable's `onInteract`. An Entity without one renders no call, so
+ * importing the emitter anyway left the staged project failing its own `tsc`
+ * on TS6133 — a world that compiled in Studio and could not be built.
+ */
+function assertPublishedWorldOmitsTheUnusedInteractionEmitter(): void {
+  const documents = buildDocuments();
+  const scene = documents.scenes.scene_main;
+  if (!scene) throw new Error("the fixture's Scene is missing");
+  const button = scene.entities.entity_button;
+  if (!button) throw new Error("the fixture's Entity is missing");
+  const result = compileVisualProject(
+    {
+      ...documents,
+      scenes: {
+        ...documents.scenes,
+        scene_main: {
+          ...scene,
+          entities: {
+            ...scene.entities,
+            entity_button: {
+              ...button,
+              components: button.components.filter(
+                (component) => component.type !== "xrift-component",
+              ),
+            },
+          },
+        },
+      },
+    },
+    { generatedAt: "2026-08-29T00:00:00.000Z" },
+  );
+  const world = result.overlayFiles.find(
+    (file) => file.relativePath === "src/World.tsx",
+  )?.content;
+  assert(Boolean(world), "World.tsx was not emitted without an Interactable");
+  assert(
+    world!.includes("<XriftInteractionTriggerRuntime"),
+    "the trigger was dropped when its Entity had no Interactable",
+  );
+  assert(
+    !world!.includes("emitXriftInteraction"),
+    "the published world imports an interaction emitter it never calls",
   );
 }
 
