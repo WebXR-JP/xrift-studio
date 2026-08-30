@@ -3818,6 +3818,32 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "list_material_presets",
+            "description": "List the Material catalogs an author picks from: sky shaders by category, water surfaces, and glow tints for emissive fixtures, each with its named parameters, ranges and defaults. create_custom_shader takes arbitrary GLSL, which is the wrong tool for \"make this look like a sky\" — writing one from scratch invents numbers this catalog already has. Terrain ground surfaces are in list_terrain_presets instead, because they are chosen together with a Terrain shape.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "create_material_from_preset",
+            "description": "Create one Material from a catalog preset: a sky or water shader Material with optional parameter overrides, or a glow tint. Returns the Material Asset id and the next step, because neither is finished on its own — a sky Material becomes the sky only once update_scene_settings points the skybox at it, and water is a Material assigned to a plane with set_material. Re-creating an already installed preset reports alreadyInstalled rather than duplicating it.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "kind": { "type": "string", "enum": ["sky", "water", "glow"] },
+                    "presetId": { "type": "string", "minLength": 1 },
+                    "parameters": {
+                        "type": "object",
+                        "description": "Uniform values from list_material_presets; numbers are clamped to the listed range and colours are #rrggbb. Not accepted for glow.",
+                        "additionalProperties": { "type": ["number", "string"] }
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "kind", "presetId"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "create_custom_shader",
             "description": "Create a reusable Material with an authored GLSL Custom Shader, or attach a starter/provided Custom Shader to an existing Material. The shader is saved inside the Material and is immediately available to set_material, Scene View, Play, and compile.",
             "inputSchema": {

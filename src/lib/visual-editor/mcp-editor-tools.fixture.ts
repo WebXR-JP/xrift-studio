@@ -1302,6 +1302,87 @@ export function runXriftMcpEditorToolFixtures(): void {
     "list_entities should include the previously placed Entity",
   );
 
+  // create_custom_shader takes arbitrary GLSL, so a caller without the catalog
+  // invents numbers for "a sky" that the catalog already has.
+  const materialPresets = executeXriftMcpEditorTool(current, {
+    id: "fixture-list-material-presets",
+    tool: "list_material_presets",
+    arguments: {},
+  });
+  const skyPresets = materialPresets.result.sky as Array<{
+    id: string;
+    parameters: Array<{ uniform: string; default: unknown }>;
+  }>;
+  const glowPresets = materialPresets.result.glow as Array<{ id: string }>;
+  assert(
+    skyPresets.length > 0 &&
+      (materialPresets.result.water as unknown[]).length > 0 &&
+      glowPresets.length > 0,
+    "list_material_presets should expose the sky, water and glow catalogs",
+  );
+
+  const skyMaterial = executeXriftMcpEditorTool(current, {
+    id: "fixture-create-sky-material",
+    tool: "create_material_from_preset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      kind: "sky",
+      presetId: skyPresets[0].id,
+    },
+  });
+  const skyMaterialId = skyMaterial.result.materialAssetId as string;
+  assert(
+    skyMaterial.changed &&
+      skyMaterial.bundle.assets.assets[skyMaterialId]?.kind === "material" &&
+      typeof skyMaterial.result.nextStep === "string",
+    "create_material_from_preset should install a sky Material and say what is left to do",
+  );
+  current = { ...current, bundle: skyMaterial.bundle, revision: current.revision + 1 };
+
+  // A preset that is already installed is not a second copy of it.
+  const skyAgain = executeXriftMcpEditorTool(current, {
+    id: "fixture-create-sky-material-again",
+    tool: "create_material_from_preset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      kind: "sky",
+      presetId: skyPresets[0].id,
+    },
+  });
+  assert(
+    skyAgain.result.alreadyInstalled === true &&
+      skyAgain.result.materialAssetId === skyMaterialId,
+    "Re-creating an installed preset should reuse its Material rather than duplicate it",
+  );
+  current = { ...current, bundle: skyAgain.bundle, revision: current.revision + 1 };
+
+  let glowParameterCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(current, {
+      id: "fixture-glow-parameters-rejected",
+      tool: "create_material_from_preset",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        kind: "glow",
+        presetId: glowPresets[0].id,
+        parameters: { uWhatever: 1 },
+      },
+    });
+  } catch (error) {
+    glowParameterCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    glowParameterCode === "INVALID_ARGUMENT",
+    "A glow preset is a tint, so it should reject shader parameters rather than ignore them",
+  );
+
   // A caller that cannot see the ready-made sets builds a campfire out of
   // primitives, which is a dozen calls for a worse result.
   const sceneRecipes = executeXriftMcpEditorTool(current, {

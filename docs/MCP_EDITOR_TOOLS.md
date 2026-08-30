@@ -27,7 +27,7 @@ document 以外は React shell か Tauri 側が持つ副作用を伴う。
 書き込み tool は `projectId`、`sceneId`、`expectedRevision` を要求する。古い
 snapshot への適用を弾くためで、複数 client が同時に触っても編集は直列化される。
 
-## document (77)
+## document (79)
 
 **Editor context / Project**
 `get_editor_context`, `get_scripting_capabilities`, `update_project_metadata`
@@ -41,8 +41,17 @@ snapshot への適用を弾くためで、複数 client が同時に触っても
 `get_audio_asset`, `get_model_asset`, `update_model_asset`,
 `get_texture_asset`, `update_texture_asset`, `get_particle_asset`,
 `update_particle_asset`, `get_material_asset`, `update_material_asset`,
-`set_material`, `set_material_texture_transform`, `create_custom_shader`,
-`get_custom_shader`, `update_custom_shader`
+`set_material`, `set_material_texture_transform`, `list_material_presets`,
+`create_material_from_preset`, `create_custom_shader`, `get_custom_shader`,
+`update_custom_shader`
+
+`create_custom_shader` は任意の GLSL を受けるので、「空っぽく見せる」には
+向かない道具。ゼロから書く caller はカタログが持っている数値を発明することに
+なる。`list_material_presets` は空・水・グローのカタログを、名前付きの
+パラメーターと範囲と既定値ごと返す。`create_material_from_preset` は Material
+を作って `nextStep` を返す。空は Scene settings の skybox が指して初めて空に
+なり、水は板ポリへ割り当てて初めて水面になるので、作っただけでは終わらない。
+Terrain の地面は形と一緒に選ぶものなので `list_terrain_presets` の方にある。
 
 **Scene / Entity**
 `update_scene_settings`, `list_entities`, `get_entity_components`,

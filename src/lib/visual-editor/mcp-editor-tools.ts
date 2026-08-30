@@ -95,7 +95,29 @@ import {
   fitTerrainSurfaceToRange,
   getTerrainSurfacePreset,
 } from "./terrain-surface-catalog";
-import { applyTerrainSurfaceCatalogInstall } from "./external-store";
+import {
+  applySkyShaderCatalogInstall,
+  applyTerrainSurfaceCatalogInstall,
+  applyWaterShaderCatalogInstall,
+} from "./external-store";
+import {
+  SKY_SHADER_CATALOG,
+  defaultSkyShaderParameterValues,
+  getSkyShaderCatalogEntry,
+  skyShaderCategoryLabel,
+  type SkyShaderCatalogEntry,
+} from "./sky-shader-catalog";
+import {
+  WATER_SHADER_CATALOG,
+  defaultWaterShaderParameterValues,
+  getWaterShaderCatalogEntry,
+  type WaterShaderCatalogEntry,
+} from "./water-shader-catalog";
+import {
+  GLOW_MATERIAL_PRESETS,
+  createGlowMaterialAsset,
+  getGlowMaterialPreset,
+} from "./glow-material-catalog";
 import {
   SCENE_RECIPE_CATEGORY_LABELS,
   getSceneRecipesForProjectKind,
@@ -358,6 +380,8 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   set_material: setMaterial,
   get_material_asset: getMaterial,
   update_material_asset: updateMaterial,
+  list_material_presets: listMaterialPresets,
+  create_material_from_preset: createMaterialFromPreset,
   create_custom_shader: createCustomShader,
   get_custom_shader: getCustomShader,
   update_custom_shader: updateCustomShader,
@@ -2032,6 +2056,234 @@ function updateTerrain(
       resolution,
     },
     activity: `AIがTerrain「${entity.name}」のサイズと解像度を更新しました`,
+  };
+}
+
+/**
+ * The Material catalogs: skies, water, and the glow tints for light fixtures.
+ *
+ * `create_custom_shader` accepts arbitrary GLSL, which is the wrong tool for
+ * "make this look like a sky": a caller writing one from scratch is inventing
+ * numbers the catalog already has, and the result is not the sky an author
+ * would have picked from the same menu. The sky and water entries are shader
+ * Materials with named, ranged parameters; glow is a tint for the emissive
+ * fixtures the primitive catalog places.
+ */
+function listMaterialPresets(
+  context: XriftMcpEditorContext,
+): XriftMcpEditorToolOutcome {
+  const describeParameters = (
+    parameters: readonly {
+      uniform: string;
+      label: string;
+      hint: string;
+      kind: "number" | "color";
+      min?: number;
+      max?: number;
+      step?: number;
+    }[],
+    defaults: Record<string, number | string>,
+  ) =>
+    parameters.map((parameter) => ({
+      uniform: parameter.uniform,
+      label: parameter.label,
+      hint: parameter.hint,
+      kind: parameter.kind,
+      ...(parameter.kind === "number"
+        ? { min: parameter.min, max: parameter.max, step: parameter.step }
+        : {}),
+      default: defaults[parameter.uniform],
+    }));
+  return unchanged(
+    context,
+    {
+      sky: SKY_SHADER_CATALOG.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        category: entry.category,
+        categoryLabel: skyShaderCategoryLabel(entry.category),
+        description: entry.description,
+        parameters: describeParameters(
+          entry.parameters,
+          defaultSkyShaderParameterValues(entry),
+        ),
+      })),
+      water: WATER_SHADER_CATALOG.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        description: entry.description,
+        parameters: describeParameters(
+          entry.parameters,
+          defaultWaterShaderParameterValues(entry),
+        ),
+      })),
+      glow: GLOW_MATERIAL_PRESETS.map((preset) => ({
+        id: preset.id,
+        label: preset.label,
+        description: preset.description,
+        tint: preset.tint,
+      })),
+      // Terrain ground surfaces are their own catalog because they are chosen
+      // with a Terrain shape rather than on their own.
+      terrainSurfacesIn: "list_terrain_presets",
+    },
+    "Material presetの一覧を取得しました",
+  );
+}
+
+const MATERIAL_PRESET_KINDS = ["sky", "water", "glow"] as const;
+
+function createMaterialFromPreset(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const kind = requiredEnum(argumentsValue.kind, "kind", MATERIAL_PRESET_KINDS);
+  const presetId = requiredString(argumentsValue.presetId, "presetId");
+
+  if (kind === "glow") {
+    if (argumentsValue.parameters !== undefined) {
+      invalidArgument("parameters", "omitted for a glow preset");
+    }
+    const preset = getGlowMaterialPreset(presetId);
+    if (!preset) {
+      throw new XriftMcpEditorToolError(
+        "MATERIAL_PRESET_NOT_FOUND",
+        "指定されたglow presetが見つかりません",
+        {
+          presetId,
+          presetIds: GLOW_MATERIAL_PRESETS.map((entry) => entry.id),
+        },
+      );
+    }
+    const asset = createGlowMaterialAsset(preset);
+    const existing = context.bundle.assets.assets[asset.id];
+    if (existing?.kind === "material") {
+      return unchanged(
+        context,
+        {
+          projectId: context.bundle.project.projectId,
+          sceneId: context.bundle.scene.sceneId,
+          revision: context.revision,
+          kind,
+          presetId,
+          materialAssetId: asset.id,
+          alreadyInstalled: true,
+        },
+        `glow「${preset.label}」はすでにProjectにあります`,
+      );
+    }
+    const assets = {
+      ...context.bundle.assets,
+      assets: { ...context.bundle.assets.assets, [asset.id]: asset },
+    };
+    const bundle = touchProject(context, { ...context.bundle, assets });
+    return {
+      changed: true,
+      bundle,
+      sceneSelection: context.sceneSelection,
+      assetSelection: asset.id,
+      result: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        revisionBefore: context.revision,
+        revisionAfter: context.revision + 1,
+        kind,
+        presetId,
+        materialAssetId: asset.id,
+        alreadyInstalled: false,
+      },
+      activity: `AIがglow Material「${preset.label}」を追加しました`,
+    };
+  }
+
+  const entry =
+    kind === "sky"
+      ? getSkyShaderCatalogEntry(presetId)
+      : getWaterShaderCatalogEntry(presetId);
+  if (!entry) {
+    throw new XriftMcpEditorToolError(
+      "MATERIAL_PRESET_NOT_FOUND",
+      "指定されたMaterial presetが見つかりません",
+      {
+        kind,
+        presetId,
+        presetIds: (kind === "sky"
+          ? SKY_SHADER_CATALOG
+          : WATER_SHADER_CATALOG
+        ).map((candidate) => candidate.id),
+      },
+    );
+  }
+  const values =
+    kind === "sky"
+      ? defaultSkyShaderParameterValues(entry as SkyShaderCatalogEntry)
+      : defaultWaterShaderParameterValues(entry as WaterShaderCatalogEntry);
+  if (argumentsValue.parameters !== undefined) {
+    const supplied = recordValue(argumentsValue.parameters, "parameters");
+    assertObjectKeys(
+      supplied,
+      "parameters",
+      entry.parameters.map((parameter) => parameter.uniform),
+    );
+    for (const parameter of entry.parameters) {
+      const value = supplied[parameter.uniform];
+      if (value === undefined) continue;
+      if (parameter.kind === "number") {
+        values[parameter.uniform] = terrainMcpNumber(
+          value,
+          `parameters.${parameter.uniform}`,
+          parameter.min,
+          parameter.min,
+          parameter.max,
+        );
+        continue;
+      }
+      if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) {
+        invalidArgument(`parameters.${parameter.uniform}`, "a #rrggbb colour");
+      }
+      values[parameter.uniform] = value.toLowerCase();
+    }
+  }
+  const installed =
+    kind === "sky"
+      ? applySkyShaderCatalogInstall(
+          context.bundle.assets,
+          entry as SkyShaderCatalogEntry,
+          values,
+        )
+      : applyWaterShaderCatalogInstall(
+          context.bundle.assets,
+          entry as WaterShaderCatalogEntry,
+          values,
+        );
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    assets: installed.manifest,
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: installed.primaryAssetId,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      kind,
+      presetId,
+      materialAssetId: installed.primaryAssetId,
+      alreadyInstalled: installed.alreadyInstalled,
+      parameters: values,
+      // A sky Material only becomes the sky once the Scene points at it, and
+      // water is a Material on a plane. Neither happens here.
+      nextStep:
+        kind === "sky"
+          ? "update_scene_settings の skybox でこのMaterialを指定してください"
+          : "set_material で板ポリなどのMesh slotへ割り当ててください",
+    },
+    activity: `AIが${kind === "sky" ? "Skybox" : "Water"} Material「${entry.label}」を追加しました`,
   };
 }
 
