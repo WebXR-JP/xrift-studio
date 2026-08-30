@@ -27,6 +27,7 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを
 | [MCP editor tool の全体像](./MCP_EDITOR_TOOLS.md) | AI client へ公開する Editor 操作の一覧、surface ごとの権限、公開しない操作 |
 | [KHR_interactivity Editor / MCP design](./KHR_INTERACTIVITY_EDITOR.md) | ノードグラフの canonical 形式、検証、MCP 契約 |
 | [Terrain エディター 仕様](./TERRAIN_EDITOR_SPEC.md) | 地形と草のモード、ブラシ、性能、公開への反映 |
+| [カメラタイムライン 仕様](./CAMERA_TIMELINE_SPEC.md) | camera Component、時間で進む実行器、カメラ用 op、再生場所（未実装の設計） |
 | [マテリアルカタログ 仕様](./MATERIAL_CATALOG_SPEC.md) | 空・水 Shader、草、Wind 契約 |
 | [Model Import Contract](./MODEL_IMPORT_CONTRACT.md) | Model の取り込みと再取り込み、永続化する情報 |
 | [UnityPackage import](./UNITY_PACKAGE_IMPORT.md) | `.unitypackage` / `.unity` / `.prefab` の変換フロー |
@@ -45,6 +46,8 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを
 ## これから作るもの
 
 [ワールド部品の追加計画](./WORLD_CONTENT_PLAN.md) は、初めてワールドを作る人が最初の一時間で欲しくなる部品を、カタログ preset・組み込み Prefab・新しい Component の三つに分けて並べた計画である。現在の対応範囲ではなく、これから足すものを扱う。
+
+[カメラタイムライン 仕様](./CAMERA_TIMELINE_SPEC.md) は、決まった経路をカメラで再生してデバッグするための設計である。camera Component、KHR_interactivity の上に載せるカメラ用 operation、そして「時間で進む実行器」を扱う。全体が未実装で、既存の静的な walk との共存が設計の要点になる。
 
 ## 利用者向けガイド
 
