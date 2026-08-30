@@ -13,6 +13,7 @@ import {
   INTERACTIVITY_VALUE_OVERLAY_PATH,
   ANIMATION_RUNTIME_OVERLAY_PATH,
   ANIMATION_MIXER_OVERLAY_PATH,
+  SCENE_RUNTIME_OVERLAY_PATH,
 } from "./compiler/script-emit";
 import {
   collectInteractionTriggerTargets,
@@ -303,6 +304,12 @@ function assertPublishedWorldRunsTheTrigger(): void {
     world!.includes("xrift/onInteract"),
     "the canonical graph was not published with the world",
   );
+  // Exposure and the screen fade have no Entity to hang from, so the Scene-wide
+  // runtime has to be mounted by the world itself.
+  assert(
+    world!.includes("<XriftSceneRuntime />"),
+    "the published world does not mount the Scene-wide graph runtime",
+  );
   // The Entity the graph re-shows is authored disabled; dropping it would make
   // the published trigger a no-op while Play still worked.
   assert(
@@ -318,6 +325,7 @@ function assertPublishedWorldRunsTheTrigger(): void {
     INTERACTIVITY_VALUE_OVERLAY_PATH,
     ANIMATION_RUNTIME_OVERLAY_PATH,
     ANIMATION_MIXER_OVERLAY_PATH,
+    SCENE_RUNTIME_OVERLAY_PATH,
   ]) {
     assert(
       result.overlayFiles.some((file) => file.relativePath === path),

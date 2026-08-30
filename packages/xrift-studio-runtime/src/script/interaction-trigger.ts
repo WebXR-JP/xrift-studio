@@ -38,7 +38,18 @@ export type XriftInteractionTargetKind =
   | "transform"
   | "animation"
   | "audio-source"
-  | "light";
+  | "light"
+  | "scene";
+
+/**
+ * Stand-in Entity id for Scene-wide targets.
+ *
+ * Exposure and the screen fade belong to no Entity, but an action still needs
+ * something in the `entity` slot: it is what the Editor's picker selects and
+ * what the trigger records as a dependency. A reserved id keeps the shape of
+ * every other action instead of making Scene actions a second format.
+ */
+export const XRIFT_INTERACTION_SCENE_ENTITY_ID = "__xrift_scene__" as const;
 
 export const XRIFT_INTERACTION_TARGET_KINDS: readonly XriftInteractionTargetKind[] = [
   "entity",
@@ -46,6 +57,7 @@ export const XRIFT_INTERACTION_TARGET_KINDS: readonly XriftInteractionTargetKind
   "animation",
   "audio-source",
   "light",
+  "scene",
 ];
 
 export const XRIFT_INTERACTION_TARGET_LABELS: Readonly<
@@ -56,6 +68,7 @@ export const XRIFT_INTERACTION_TARGET_LABELS: Readonly<
   animation: "Animation",
   "audio-source": "Audio Source",
   light: "Light",
+  scene: "Scene",
 };
 
 export type XriftInteractionPropertyKind =
@@ -73,7 +86,7 @@ export type XriftInteractionPropertyKind =
  * requiring an id there would make a complete action look unfinished.
  */
 export const XRIFT_INTERACTION_ENTITY_SCOPED_TARGETS: ReadonlySet<string> =
-  new Set<XriftInteractionTargetKind>(["entity", "transform"]);
+  new Set<XriftInteractionTargetKind>(["entity", "transform", "scene"]);
 
 export function isXriftInteractionEntityScoped(target: string): boolean {
   return XRIFT_INTERACTION_ENTITY_SCOPED_TARGETS.has(target);
@@ -185,6 +198,38 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     min: 0,
     max: 600,
     step: 0.1,
+  },
+  {
+    target: "scene",
+    name: "exposure",
+    label: "露出",
+    description:
+      "画面全体の明るさを設定します。1が既定です。Playを止めるとSceneの設定へ戻ります。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0,
+    max: 8,
+    step: 0.05,
+  },
+  {
+    target: "scene",
+    name: "fade",
+    label: "画面のフェード",
+    description:
+      "0で世界が見え、1で画面全体を覆います。時間をかけて変えるとホワイトアウトや暗転になります。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0,
+    max: 1,
+    step: 0.01,
+  },
+  {
+    target: "scene",
+    name: "fadeColor",
+    label: "フェードの色",
+    description: "画面を覆う色です。値はリニア空間のRGBで保存されます。",
+    kind: "color",
+    defaultValue: [1, 1, 1],
   },
   {
     target: "audio-source",

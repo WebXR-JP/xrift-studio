@@ -29,6 +29,7 @@ import {
   emitXriftInteraction,
   XriftInteractionTriggerRuntime,
 } from "../../../packages/xrift-studio-runtime/src/script/interaction-trigger-runtime";
+import { XriftSceneRuntime } from "../../../packages/xrift-studio-runtime/src/script/scene-runtime";
 import {
   applyTimeUniformValue,
   type MutableUniformValue,
@@ -5224,6 +5225,9 @@ export function SceneViewport({
             />
           ) : null}
           <ScenePostprocessing settings={sceneSettings.postprocessing} />
+          {/* Scene-wide graph writes: exposure and the screen fade. Mounted only
+              while Play runs, so a graph never dims the editing view. */}
+          <XriftSceneRuntime enabled={editorMode === "play"} />
           <SceneWind
             sceneDocument={preview.scene}
             settings={sceneSettings.vegetation}

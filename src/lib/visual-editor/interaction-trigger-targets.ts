@@ -1,6 +1,7 @@
 import {
   getXriftInteractionProperties,
   getXriftInteractionProperty,
+  XRIFT_INTERACTION_SCENE_ENTITY_ID,
   XRIFT_INTERACTION_TARGET_LABELS,
   type XriftInteractionPropertyDescriptor,
   type XriftInteractionTargetKind,
@@ -55,7 +56,24 @@ function componentLabel(
 export function collectInteractionTriggerTargets(
   scene: SceneDocument,
 ): InteractionTriggerTargetEntity[] {
-  const targets: InteractionTriggerTargetEntity[] = [];
+  // The Scene itself comes first: exposure and the screen fade belong to no
+  // Entity, and burying them under an arbitrary one would make an author hunt
+  // for the target of a change that covers the whole view.
+  const targets: InteractionTriggerTargetEntity[] = [
+    {
+      entityId: XRIFT_INTERACTION_SCENE_ENTITY_ID,
+      name: "Scene",
+      path: "Scene 全体",
+      components: [
+        {
+          componentId: "",
+          targetKind: "scene",
+          label: XRIFT_INTERACTION_TARGET_LABELS.scene,
+          properties: getXriftInteractionProperties("scene"),
+        },
+      ],
+    },
+  ];
   const visit = (entityId: string, ancestors: readonly string[]) => {
     const entity = scene.entities[entityId];
     if (!entity) return;
@@ -139,9 +157,16 @@ export function syncInteractionTriggerEntityReferences(
           asset?.kind === "interactivity"
             ? [
                 ...new Set(
-                  collectXriftInteractionPrograms(asset.extension).flatMap(
-                    (program) => program.actions.map((action) => action.entityId),
-                  ),
+                  collectXriftInteractionPrograms(asset.extension)
+                    .flatMap((program) =>
+                      program.actions.map((action) => action.entityId),
+                    )
+                    // The Scene stand-in is not an Entity, so it is not a
+                    // dependency the compiler has to keep emitting.
+                    .filter(
+                      (entityId) =>
+                        entityId !== XRIFT_INTERACTION_SCENE_ENTITY_ID,
+                    ),
                 ),
               ].sort()
             : [];

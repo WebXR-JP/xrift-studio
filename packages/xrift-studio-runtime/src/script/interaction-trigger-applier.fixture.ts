@@ -11,6 +11,11 @@ import {
   createXriftLightRuntimeBridge,
 } from "./light.js";
 import { createXriftInteractionApplier } from "./interaction-trigger-runtime.js";
+import {
+  XRIFT_SCENE_RUNTIME_USER_DATA_KEY,
+  createXriftSceneRuntimeBridge,
+} from "./scene-runtime.js";
+import { XRIFT_INTERACTION_SCENE_ENTITY_ID } from "./interaction-trigger.js";
 import type { XriftInteractionAction } from "./interaction-trigger.js";
 
 /**
@@ -219,7 +224,40 @@ export async function runInteractionTriggerApplierFixtureAssertions(): Promise<v
     "a Transform rotation could not be read back",
   );
 
+  // Scene-wide writes go to the bridge on the Scene root, not to an Entity,
+  // and releasing the trigger has to put the authored look back.
+  const sceneBridge = createXriftSceneRuntimeBridge();
+  (root.userData as Record<string, unknown>)[
+    XRIFT_SCENE_RUNTIME_USER_DATA_KEY
+  ] = sceneBridge;
+  applier.apply(
+    action({
+      entityId: XRIFT_INTERACTION_SCENE_ENTITY_ID,
+      componentId: null,
+      target: "scene",
+      property: "fade",
+      value: { kind: "float", value: 1 },
+    }),
+  );
+  applier.apply(
+    action({
+      entityId: XRIFT_INTERACTION_SCENE_ENTITY_ID,
+      componentId: null,
+      target: "scene",
+      property: "exposure",
+      value: { kind: "float", value: 4 },
+    }),
+  );
+  const fadedTo = sceneBridge.read().fade;
+  const exposedTo = sceneBridge.read().exposure;
+  assert(fadedTo === 1, "a Scene fade did not reach the Scene bridge");
+  assert(exposedTo === 4, "a Scene exposure did not reach the Scene bridge");
+
   applier.dispose();
+  assert(
+    sceneBridge.read().fade === 0 && sceneBridge.read().exposure === null,
+    "Scene overrides survived the trigger's disposal",
+  );
   const restoredTo = [platform.position.x, platform.position.y, platform.position.z].join(",");
   assert(
     restoredTo === "1,2,3",

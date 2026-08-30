@@ -1626,6 +1626,14 @@ function renderSceneEnvironment(
     registerSceneToneMappingSupport(settings.postprocessing, context);
     content.push("<XRiftStudioToneMapping />");
   }
+  // Scene-wide graph writes. Emitted only where a graph can send them, so a
+  // world with no behavior never carries the overlay or the extra frame work.
+  if (sceneUsesInteractionTriggerRuntime(context.scene, context.assets)) {
+    context.extraImports.add(
+      'import { XriftSceneRuntime } from "./xrift-studio/scene-runtime";',
+    );
+    content.push("<XriftSceneRuntime />");
+  }
   registerVegetationWindSupport(settings.vegetation, context);
   const hasVegetationWind = Object.values(context.scene.entities).some((entity) =>
     entity.components.some((component) => component.type === "vegetation-wind"),

@@ -17,6 +17,11 @@ import {
   type XriftLightRuntimeOverrides,
 } from "./light.js";
 import {
+  emitXriftSceneEvent,
+  findXriftSceneRuntimeBridge,
+  type XriftSceneRuntimeBridge,
+} from "./scene-runtime.js";
+import {
   getXriftInteractionProperty,
   type XriftInteractionAction,
   type XriftInteractionTargetKind,
@@ -287,6 +292,45 @@ export function createXriftInteractionApplier({
   };
 
   const animationOwners = new Set<XriftAnimationRuntimeBridge>();
+  const sceneOwners = new Set<XriftSceneRuntimeBridge>();
+
+  const applyScene = (action: XriftInteractionAction) => {
+    const bridge = findXriftSceneRuntimeBridge(root);
+    if (!bridge) return;
+    sceneOwners.add(bridge);
+    if (action.property === "exposure" && action.value?.kind === "float") {
+      bridge.setOwner(owner, order, componentId, {
+        exposure: action.value.value,
+      });
+      return;
+    }
+    if (action.property === "fade" && action.value?.kind === "float") {
+      bridge.setOwner(owner, order, componentId, { fade: action.value.value });
+      return;
+    }
+    if (action.property === "fadeColor" && action.value?.kind === "color") {
+      bridge.setOwner(owner, order, componentId, {
+        fadeColor: action.value.value,
+      });
+    }
+  };
+
+  const readScene = (property: string): XriftInteractionValue | null => {
+    const bridge = findXriftSceneRuntimeBridge(root);
+    if (!bridge) return null;
+    const state = bridge.read();
+    if (property === "exposure") {
+      return { kind: "float", value: state.exposure ?? 1 };
+    }
+    if (property === "fade") return { kind: "float", value: state.fade };
+    if (property === "fadeColor") {
+      return {
+        kind: "color",
+        value: [state.fadeColor[0], state.fadeColor[1], state.fadeColor[2]],
+      };
+    }
+    return null;
+  };
 
   const applyAnimation = (target: Object3D, action: XriftInteractionAction) => {
     forEachOwnedBridge(
@@ -506,6 +550,7 @@ export function createXriftInteractionApplier({
 
   return {
     read(target) {
+      if (target.targetKind === "scene") return readScene(target.property);
       const object = findEntityObject(root, target.entityId);
       if (!object) return null;
       if (target.targetKind === "entity") return readEntity(object, target.property);
@@ -519,6 +564,10 @@ export function createXriftInteractionApplier({
       return readAudioSource(object, target);
     },
     apply(action) {
+      if (action.target === "scene") {
+        applyScene(action);
+        return;
+      }
       const target = findEntityObject(root, action.entityId);
       if (!target) return;
       if (action.target === "entity") {
@@ -544,6 +593,8 @@ export function createXriftInteractionApplier({
       // applied after Stop would show values the document never had.
       for (const bridge of animationOwners) bridge.removeOwner(owner);
       animationOwners.clear();
+      for (const bridge of sceneOwners) bridge.removeOwner(owner);
+      sceneOwners.clear();
       for (const bridge of lightOverrides.keys()) bridge.removeOwner(owner);
       for (const bridge of audioOverrides.keys()) bridge.removeOwner(owner);
       lightOverrides.clear();
@@ -638,6 +689,11 @@ export function createXriftInteractionHost(
       });
       if (!current) return null;
       return toInteractivityValue(descriptor.kind, current, descriptor.options ?? []);
+    },
+    emitEvent(name, payload) {
+      const values = new Map<string, readonly (number | boolean)[]>();
+      for (const [key, entry] of payload) values.set(key, entry.data);
+      emitXriftSceneEvent(name, values);
     },
     writeProperty(target, value) {
       const descriptor = descriptorFor(target);
