@@ -28,6 +28,7 @@ export type InteractivityScheduleEntry =
   | {
       readonly kind: "animation-start";
       readonly timeSeconds: number;
+      readonly nodeIndex: number;
       readonly animationIndex: number;
       readonly startTime: number;
       readonly endTime: number | null;
@@ -36,28 +37,33 @@ export type InteractivityScheduleEntry =
   | {
       readonly kind: "animation-stop";
       readonly timeSeconds: number;
+      readonly nodeIndex: number;
       readonly animationIndex: number;
     }
   | {
       readonly kind: "property";
       readonly timeSeconds: number;
+      readonly nodeIndex: number;
       readonly target: InteractivityActionTarget;
       readonly value: InteractivityValue;
     }
   | {
       readonly kind: "pointer";
       readonly timeSeconds: number;
+      readonly nodeIndex: number;
       readonly pointer: string;
       readonly value: InteractivityValue;
     }
   | {
       readonly kind: "event";
       readonly timeSeconds: number;
+      readonly nodeIndex: number;
       readonly name: string;
     }
   | {
       readonly kind: "log";
       readonly timeSeconds: number;
+      readonly nodeIndex: number;
       readonly message: string;
     };
 
@@ -108,6 +114,7 @@ export function dryRunInteractivityGraph(
   const entries: InteractivityScheduleEntry[] = [];
   let engine: InteractivityEngine | null = null;
   const at = () => engine?.currentTime ?? 0;
+  const from = () => engine?.activeNodeIndex ?? -1;
 
   const host: InteractivityHost = {
     random: seededRandom(options.seed ?? 1),
@@ -115,6 +122,7 @@ export function dryRunInteractivityGraph(
       entries.push({
         kind: "animation-start",
         timeSeconds: at(),
+        nodeIndex: from(),
         animationIndex: request.animationIndex,
         startTime: request.startTime,
         endTime: request.endTime,
@@ -124,18 +132,31 @@ export function dryRunInteractivityGraph(
       entries.push({
         kind: "animation-stop",
         timeSeconds: at(),
+        nodeIndex: from(),
         animationIndex: request.animationIndex,
       }),
     writeProperty: (target, value) => {
-      entries.push({ kind: "property", timeSeconds: at(), target, value });
+      entries.push({
+        kind: "property",
+        timeSeconds: at(),
+        nodeIndex: from(),
+        target,
+        value,
+      });
       return true;
     },
     // No `writePointer`: nothing in Studio resolves a glTF Object Model pointer
     // yet, and a dry run that pretended otherwise would predict a Play the
     // author is not going to get. A caller with a resolver passes one in.
-    emitEvent: (name) => entries.push({ kind: "event", timeSeconds: at(), name }),
+    emitEvent: (name) =>
+      entries.push({ kind: "event", timeSeconds: at(), nodeIndex: from(), name }),
     log: (entry) =>
-      entries.push({ kind: "log", timeSeconds: at(), message: entry.message }),
+      entries.push({
+        kind: "log",
+        timeSeconds: at(),
+        nodeIndex: entry.nodeIndex,
+        message: entry.message,
+      }),
     ...(options.readProperty ? { readProperty: options.readProperty } : {}),
     ...(options.readPointer ? { readPointer: options.readPointer } : {}),
   };

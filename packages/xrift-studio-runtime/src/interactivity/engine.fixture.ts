@@ -485,6 +485,37 @@ export function runInteractivityEngineFixtureAssertions(): void {
     );
   }
 
+  // Every scheduled entry names the node that produced it, so the timeline can
+  // send an author from "at 2 s the light changes" back to the node.
+  {
+    const builder = new GraphBuilder();
+    const start = builder.node("event/onStart");
+    const wait = builder.node("flow/setDelay", {
+      values: { duration: builder.float(2) },
+    });
+    const write = builder.node("xrift/setProperty", {
+      configuration: {
+        entity: { value: ["entity-1"] },
+        component: { value: ["light-1"] },
+        targetKind: { value: ["light"] },
+        property: { value: ["intensity"] },
+      },
+      values: { value: builder.float(2) },
+    });
+    builder.connect(start, "out", wait);
+    builder.connect(wait, "done", write);
+    const run = dryRunInteractivityGraph(builder.build());
+    const entry = run.entries.find((candidate) => candidate.kind === "property");
+    assert(
+      entry !== undefined && entry.nodeIndex === write,
+      "a scheduled write did not report the node that made it",
+    );
+    assert(
+      entry !== undefined && Math.abs(entry.timeSeconds - 2) < 1e-6,
+      "a scheduled write landed at the wrong time",
+    );
+  }
+
   // An interaction can now wait, which the previous trigger walk could not.
   {
     const builder = new GraphBuilder();

@@ -62,6 +62,7 @@ import {
   type InteractionTriggerTargetEntity,
 } from "../../lib/visual-editor";
 import { EditorDialog } from "./EditorDialog";
+import { InteractivityTimeline } from "./InteractivityTimeline";
 import { EDITOR_ICONS } from "./editor-icons";
 import { CodeTokens } from "../CodeBlock";
 
@@ -161,6 +162,16 @@ const PALETTE_CATEGORY_ORDER: readonly GraphNodeCategory[] = [
   "variable",
   "math",
 ];
+
+/**
+ * Stable prop identities for the canvas.
+ *
+ * A fresh array here re-subscribes React Flow's key handler on every render,
+ * and a re-render triggered by the key press itself then misses the key up:
+ * the handler stays latched and the *next* Delete does nothing at all.
+ */
+const DELETE_KEY_CODES: string[] = ["Backspace", "Delete"];
+const FIT_VIEW_OPTIONS = { padding: 0.25 } as const;
 
 const FLOW_SOCKET_COLOR = "#a78bfa";
 const VALUE_SOCKET_COLOR = "#22d3ee";
@@ -774,6 +785,56 @@ type GraphDraftHistory = {
   index: number;
 };
 
+/** Roughly one node card, used to keep a new node clear of an existing one. */
+const NODE_FOOTPRINT = { width: 240, height: 140 };
+
+/**
+ * Nudges a candidate position until it does not land on an existing node.
+ *
+ * Dropping a new node exactly on top of another is what made "add" feel like
+ * nothing happened: the card was there, underneath the one already in view.
+ */
+function freePositionNear(
+  graph: KhrInteractivityGraph,
+  candidate: { x: number; y: number },
+): { x: number; y: number } {
+  const placed = (graph.nodes ?? []).map((node, index) =>
+    readInteractivityNodePosition(node, index),
+  );
+  let { x, y } = candidate;
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const overlapping = placed.some(
+      (position) =>
+        Math.abs(position.x - x) < NODE_FOOTPRINT.width &&
+        Math.abs(position.y - y) < NODE_FOOTPRINT.height,
+    );
+    if (!overlapping) break;
+    y += NODE_FOOTPRINT.height;
+  }
+  return { x: Math.round(x), y: Math.round(y) };
+}
+
+/**
+ * Which entry point the timeline should show first.
+ *
+ * A graph seeded by an Interaction Trigger has no `event/onStart` at all, so
+ * opening the timeline on "開始時" would answer a question the graph does not
+ * ask and read as "this graph does nothing".
+ */
+function preferredTimelineEntry(
+  graph: KhrInteractivityGraph,
+): "start" | "interact" {
+  const operations = new Set(
+    (graph.nodes ?? []).map(
+      (node) => graph.declarations?.[node.declaration]?.op ?? "",
+    ),
+  );
+  if (operations.has("event/onStart")) return "start";
+  return operations.has(XRIFT_INTERACTION_OPERATIONS.onInteract)
+    ? "interact"
+    : "start";
+}
+
 /** Stable empty list: a fresh array per render would restart the node effect. */
 const NO_TRIGGER_TARGETS: readonly InteractionTriggerTargetEntity[] = [];
 
@@ -804,6 +865,11 @@ function InteractivityGraphEditorBody({
   const canRedo = history.index < history.entries.length - 1;
   const [graphIndex, setGraphIndex] = useState(asset.extension.graph ?? 0);
   const [expanded, setExpanded] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [timelineEntry, setTimelineEntry] = useState<"start" | "interact">("start");
+  const [timelineHorizon, setTimelineHorizon] = useState(120);
+  const [timelineHeight, setTimelineHeight] = useState(200);
+  const [playheadSeconds, setPlayheadSeconds] = useState(0);
   const [inspectorWidth, setInspectorWidth] = useState(288);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(null);
@@ -1048,17 +1114,32 @@ function InteractivityGraphEditorBody({
    */
   const nextNodePosition = useCallback(
     (count: number, leadIn = 0) => {
+      // Adding a node while one is selected means "and then this", so the new
+      // node lands to the right of it instead of on top of whatever is at the
+      // centre of the view. A cascade alone never cleared a node's own width.
+      const anchor =
+        selectedNodeIndex === null
+          ? undefined
+          : graph.nodes?.[selectedNodeIndex]
+            ? readInteractivityNodePosition(
+                graph.nodes[selectedNodeIndex]!,
+                selectedNodeIndex,
+              )
+            : undefined;
+      if (anchor && leadIn === 0) {
+        return freePositionNear(graph, { x: anchor.x + 300, y: anchor.y });
+      }
       const rect = canvasRef.current?.getBoundingClientRect();
       const center = rect
         ? screenToFlowPosition({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 })
         : { x: 160, y: 160 };
-      const cascade = (count % 5) * 28;
-      return {
-        x: Math.round(center.x - 112 - leadIn + cascade),
-        y: Math.round(center.y - 60 + cascade),
-      };
+      const cascade = (count % 5) * 56;
+      return freePositionNear(graph, {
+        x: center.x - 112 - leadIn + cascade,
+        y: center.y - 60 + cascade,
+      });
     },
-    [screenToFlowPosition],
+    [graph.nodes, screenToFlowPosition, selectedNodeIndex],
   );
 
   /**
@@ -1234,7 +1315,7 @@ function InteractivityGraphEditorBody({
                 KHR_interactivity RC
               </span>
             </div>
-            <p className="text-[10px] text-slate-400">
+            <p className="truncate text-[10px] text-slate-400">
               Scene Viewを確認しながら編集・glTF準拠JSONを再利用
             </p>
           </div>
@@ -1244,7 +1325,7 @@ function InteractivityGraphEditorBody({
               setGraphIndex(Number(event.target.value));
               setSelectedNodeIndex(null);
             }}
-            className="h-8 rounded border border-slate-600 bg-slate-800 px-2 text-xs"
+            className="h-8 shrink-0 rounded border border-slate-600 bg-slate-800 px-2 text-xs"
             aria-label="Behavior graph"
           >
             {draft.graphs.map((candidate, index) => (
@@ -1258,13 +1339,13 @@ function InteractivityGraphEditorBody({
             onClick={() => setPaletteOpen((open) => !open)}
             disabled={readOnly}
             aria-expanded={paletteOpen}
-            className={`flex h-8 items-center gap-1.5 rounded px-3 text-xs font-semibold disabled:opacity-40 ${
+            className={`flex h-8 shrink-0 items-center gap-1.5 rounded px-3 text-xs font-semibold disabled:opacity-40 ${
               paletteOpen ? "bg-violet-500" : "bg-violet-600 hover:bg-violet-500"
             }`}
           >
             <CreateIcon size={13} aria-hidden="true" /> 追加
           </button>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={undo}
@@ -1287,23 +1368,41 @@ function InteractivityGraphEditorBody({
           <button
             type="button"
             onClick={() => fitView({ padding: 0.25, duration: 200 })}
-            className="h-8 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800"
+            className="h-8 shrink-0 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800"
           >
             全体表示
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTimelineOpen((current) => {
+                if (!current) setTimelineEntry(preferredTimelineEntry(graph));
+                return !current;
+              });
+            }}
+            aria-pressed={timelineOpen}
+            title="開始からの時間で、何が起きるかを並べます"
+            className={`h-8 shrink-0 rounded border px-3 text-xs ${
+              timelineOpen
+                ? "border-violet-400 bg-violet-500/20 text-violet-100"
+                : "border-slate-600 hover:bg-slate-800"
+            }`}
+          >
+            タイムライン
           </button>
           <button
             type="button"
             onClick={() => setExpanded((current) => !current)}
             aria-pressed={expanded}
             title={expanded ? "元の大きさに戻す" : "画面いっぱいに広げる"}
-            className="h-8 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800"
+            className="h-8 shrink-0 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800"
           >
             {expanded ? "縮小" : "拡大"}
           </button>
           <button
             type="button"
             onClick={handleCopyJson}
-            className="h-8 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800"
+            className="h-8 shrink-0 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800"
           >
             JSON
           </button>
@@ -1311,14 +1410,14 @@ function InteractivityGraphEditorBody({
             type="button"
             onClick={() => onSave(asset.id, draft)}
             disabled={readOnly || errors.length > 0}
-            className="flex h-8 items-center gap-1.5 rounded bg-emerald-600 px-3 text-xs font-bold hover:bg-emerald-500 disabled:opacity-40"
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded bg-emerald-600 px-3 text-xs font-bold hover:bg-emerald-500 disabled:opacity-40"
           >
             <SaveIcon size={13} aria-hidden="true" /> 保存
           </button>
           <button
             type="button"
             onClick={requestClose}
-            className="rounded p-2 text-slate-300 hover:bg-slate-800 hover:text-white"
+            className="shrink-0 rounded p-2 text-slate-300 hover:bg-slate-800 hover:text-white"
             aria-label="Interactivity editorを閉じる"
           >
             <CloseIcon size={16} aria-hidden="true" />
@@ -1354,11 +1453,11 @@ function InteractivityGraphEditorBody({
             nodesDraggable={!readOnly}
             nodesConnectable={!readOnly}
             edgesReconnectable={!readOnly}
-            deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
+            deleteKeyCode={readOnly ? null : DELETE_KEY_CODES}
             selectionKeyCode="Shift"
             {...CANVAS_NAVIGATION}
             fitView
-            fitViewOptions={{ padding: 0.25 }}
+            fitViewOptions={FIT_VIEW_OPTIONS}
             colorMode="dark"
           >
             <Background color="#475569" gap={24} size={1} />
@@ -1481,6 +1580,50 @@ function InteractivityGraphEditorBody({
             </div>
           ) : null}
         </div>
+
+        {timelineOpen ? (
+          <>
+            <div
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="タイムラインの高さ"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                const startY = event.clientY;
+                const startHeight = timelineHeight;
+                const move = (moveEvent: PointerEvent) => {
+                  const next = startHeight + (startY - moveEvent.clientY);
+                  setTimelineHeight(Math.min(460, Math.max(120, next)));
+                };
+                const end = () => {
+                  window.removeEventListener("pointermove", move);
+                  window.removeEventListener("pointerup", end);
+                };
+                window.addEventListener("pointermove", move);
+                window.addEventListener("pointerup", end);
+              }}
+              className="h-1 shrink-0 cursor-row-resize bg-slate-700 hover:bg-violet-500"
+            />
+            <div style={{ height: timelineHeight }} className="flex min-h-0 shrink-0">
+              <InteractivityTimeline
+                extension={draft}
+                graphIndex={graphIndex}
+                entryPoint={timelineEntry}
+                horizonSeconds={timelineHorizon}
+                playheadSeconds={playheadSeconds}
+                triggerTargets={triggerTargets}
+                selectedNodeIndex={selectedNodeIndex}
+                onEntryPointChange={setTimelineEntry}
+                onHorizonChange={(seconds) => {
+                  setTimelineHorizon(seconds);
+                  setPlayheadSeconds((current) => Math.min(current, seconds));
+                }}
+                onPlayheadChange={setPlayheadSeconds}
+                onSelectNode={setSelectedNodeIndex}
+              />
+            </div>
+          </>
+        ) : null}
 
         <footer className="flex min-h-8 shrink-0 items-center gap-3 border-t border-slate-700 bg-slate-900 px-3 text-[10px] text-slate-400">
           <span>{graph.nodes?.length ?? 0} nodes</span>

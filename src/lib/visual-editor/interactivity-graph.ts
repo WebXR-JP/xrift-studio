@@ -982,7 +982,14 @@ export type {
   InteractivityAnimationCue,
   InteractivityRuntimeSupport,
 } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
-export { getKhrInteractivityOnStartAnimationCues } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
+export {
+  dryRunInteractivityGraph,
+  getKhrInteractivityOnStartAnimationCues,
+} from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
+export type {
+  InteractivityDryRun,
+  InteractivityScheduleEntry,
+} from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
 export {
   collectXriftInteractionIssues,
   collectXriftInteractionPrograms,

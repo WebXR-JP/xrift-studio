@@ -9365,7 +9365,11 @@ export function VisualEditorPrototype({
       if (
         deleteDialog ||
         pendingMaterialAssignment ||
-        scriptTemplateFolderId !== undefined
+        scriptTemplateFolderId !== undefined ||
+        // The graph editor is a modal with its own Delete, Undo and Redo. Left
+        // unguarded, cutting a wire also deleted the selected Entity and undo
+        // stepped through two histories at once.
+        interactivityEditorAssetId !== null
       ) {
         return;
       }
@@ -9378,6 +9382,7 @@ export function VisualEditorPrototype({
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [
     deleteDialog,
+    interactivityEditorAssetId,
     executeCommand,
     pendingMaterialAssignment,
     resolvedCommands,

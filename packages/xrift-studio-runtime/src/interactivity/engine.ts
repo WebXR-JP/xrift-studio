@@ -331,6 +331,7 @@ export class InteractivityEngine {
 
   private timeSeconds = 0;
   private lastTickSeconds = 0;
+  private activeNode = -1;
   private nextTimerId = 1;
   private budget = 0;
   private started = false;
@@ -359,6 +360,17 @@ export class InteractivityEngine {
   /** Seconds since {@link start}, advanced by {@link update}. */
   get currentTime(): number {
     return this.timeSeconds;
+  }
+
+  /**
+   * The node currently running, or -1 between activations.
+   *
+   * A host is called from inside one node's execution and otherwise has no way
+   * to say which node asked for a write. The timeline needs that to send an
+   * author from "at 35 s the light changes" back to the node that changed it.
+   */
+  get activeNodeIndex(): number {
+    return this.activeNode;
   }
 
   getIssues(): readonly InteractivityIssue[] {
@@ -524,6 +536,7 @@ export class InteractivityEngine {
       return [];
     }
     this.record(nodeIndex, node.op, socket);
+    this.activeNode = nodeIndex;
     const seen = new Set<string>();
 
     switch (node.op) {
