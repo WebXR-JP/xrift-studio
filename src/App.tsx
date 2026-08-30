@@ -723,11 +723,7 @@ function App() {
         // converted while it loaded. Said once, on open, because the author is
         // about to look at a Scene whose Hierarchy changed under them.
         const migrationNotice = documents.animationMigration
-          ? describeAnimationComponentMigration({
-              scene,
-              assets: documents.assets,
-              ...documents.animationMigration,
-            })
+          ? describeAnimationComponentMigration(documents.animationMigration)
           : null;
         if (migrationNotice) {
           toast({

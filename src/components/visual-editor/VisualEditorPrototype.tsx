@@ -8269,7 +8269,9 @@ export function VisualEditorPrototype({
    */
   const interactionTriggerTargets = useMemo(
     () => collectInteractionTriggerTargets(bundle.scene, bundle.assets),
-    [bundle.scene],
+    // The Animation row now comes from the Model's clips, so the manifest is
+    // part of the answer: re-importing a Model to add clips has to refresh it.
+    [bundle.scene, bundle.assets],
   );
 
   const handleSaveInteractivityAsset = useCallback(

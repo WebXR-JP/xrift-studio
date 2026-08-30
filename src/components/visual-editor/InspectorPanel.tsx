@@ -4307,7 +4307,9 @@ function EntityInspector({
   // Inspector is open shows up in the summary without reopening it.
   const interactionTriggerTargets = useMemo(
     () => collectInteractionTriggerTargets(scene, assets),
-    [scene],
+    // The Animation row is derived from the Model's clips, not from a
+    // Component, so the manifest belongs in the dependencies.
+    [scene, assets],
   );
   const [addComponentOpen, setAddComponentOpen] = useState(false);
   const [addComponentSearchQuery, setAddComponentSearchQuery] = useState("");

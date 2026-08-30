@@ -23,7 +23,11 @@ import {
   type SceneDocument,
   type SceneEntity,
 } from "./scene-document";
-import { addDefaultInteractivityAsset } from "./interactivity-graph";
+import {
+  addDefaultInteractivityAsset,
+  cloneKhrInteractivityExtension,
+  type KhrInteractivityExtension,
+} from "./interactivity-graph";
 import type { AssetManifest } from "./asset-manifest";
 import { createModelAnimationClipGraphExtension } from "./interactivity-recipes";
 
@@ -222,11 +226,55 @@ export function migrateAnimationComponentsToGraphs(
   };
 }
 
+/**
+ * Clears the Component ids that graphs used to name on Animation actions.
+ *
+ * A graph written before v1 says「この Animation Component の再生中を切り替える」
+ * and carries the Component's id. That Component is gone, and animation is now
+ * addressed per Entity — one Model, one mixer — so the id points at nothing.
+ * The runtime ignores it, but the Editor's picker would show the action as
+ * targeting a Component that is not there, so the id is dropped on open too.
+ *
+ * Returns the same object when there was nothing to clear, so a project that
+ * has already been converted does not look edited.
+ */
+export function clearAnimationActionComponentIds(
+  extension: KhrInteractivityExtension,
+): { extension: KhrInteractivityExtension; cleared: number } {
+  let cleared = 0;
+  const next = cloneKhrInteractivityExtension(extension);
+  for (const graph of next.graphs) {
+    for (const node of graph.nodes ?? []) {
+      const configuration = node.configuration;
+      if (!configuration) continue;
+      const targetKind = configuration.targetKind?.value?.[0];
+      const component = configuration.component?.value?.[0];
+      if (targetKind !== "animation") continue;
+      if (typeof component !== "string" || component === "") continue;
+      node.configuration = {
+        ...configuration,
+        component: { ...configuration.component!, value: [""] },
+      };
+      cleared += 1;
+    }
+  }
+  return cleared > 0 ? { extension: next, cleared } : { extension, cleared: 0 };
+}
+
 /** One line for the notice bar, or null when nothing was converted. */
 export function describeAnimationComponentMigration(
-  result: AnimationComponentMigrationResult,
+  result: Pick<AnimationComponentMigrationResult, "converted" | "skipped"> & {
+    clearedActions?: number;
+  },
 ): string | null {
-  if (result.converted.length === 0 && result.skipped.length === 0) return null;
+  const clearedActions = result.clearedActions ?? 0;
+  if (
+    result.converted.length === 0 &&
+    result.skipped.length === 0 &&
+    clearedActions === 0
+  ) {
+    return null;
+  }
   const parts: string[] = [];
   if (result.converted.length > 0) {
     parts.push(
@@ -247,6 +295,11 @@ export function describeAnimationComponentMigration(
   const missing = result.skipped.filter((entry) => entry.reason === "no-clip");
   if (missing.length > 0) {
     parts.push(`clipが見つからない${missing.length}件は外しました`);
+  }
+  if (clearedActions > 0) {
+    parts.push(
+      `Animationを操作する${clearedActions}件のノードは、Entityの Model を直接指すようにしました`,
+    );
   }
   return parts.join("。");
 }

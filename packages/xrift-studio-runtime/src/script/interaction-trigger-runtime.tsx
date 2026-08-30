@@ -610,7 +610,10 @@ export function createXriftInteractionApplier({
       isXriftAnimationRuntimeBridge,
       (bridge) => {
         const state = bridge.read();
-        if (action.componentId && state.componentId !== action.componentId) return;
+        // Animation is addressed per Entity, not per Component: one Model has
+        // one mixer, and the Component that used to own it is gone. A graph
+        // written before that still names a component id, and matching on it
+        // would silently make every one of those graphs do nothing.
         animationOwners.add(bridge);
         if (action.property === "playing") {
           const playing =

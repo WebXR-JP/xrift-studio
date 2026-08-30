@@ -362,24 +362,26 @@ export function createModelAnimationClipGraphExtension(
 
   groups.forEach((members, groupIndex) => {
     const column = firstGroupColumn + groupIndex * MODEL_ANIMATION_COLUMN_GAP;
-    let cursorY = 0;
+    const groupTop = 0;
     const fan =
       members.length > 1
         ? appendInteractivityOperation(graph, "flow/sequence", {
             x: column,
-            y: cursorY,
+            y: groupTop,
           })
         : null;
     if (fan !== null) {
       if (root === null) connectInteractivityFlow(graph, start, "out", fan);
       else connectInteractivityFlow(graph, root, String(groupIndex), fan);
-      cursorY +=
-        estimateInteractivityNodeHeight(graph, fan) + MODEL_ANIMATION_ROW_GAP;
     }
-    members.forEach((plan, indexInGroup) => {
+
+    // Wired before anything is placed: a card is as tall as the sockets it
+    // actually uses, and the sequence only knows how many outputs it has once
+    // its clips are connected. Measuring it first put the first clip inside it.
+    const plays = members.map((plan, indexInGroup) => {
       const play = appendInteractivityOperation(graph, "animation/start", {
         x: column,
-        y: cursorY,
+        y: groupTop,
       });
       const node = graph.nodes![play]!;
       const types = ensureInteractivityTypes(graph);
@@ -415,11 +417,22 @@ export function createModelAnimationClipGraphExtension(
       } else {
         connectInteractivityFlow(graph, fan, String(indexInGroup), play);
       }
-      // Measured rather than assumed: a card is as tall as its sockets, and a
-      // fixed pitch guessed from one operation stacks the next one on top of it.
+      return play;
+    });
+
+    let cursorY = groupTop;
+    if (fan !== null) {
+      cursorY +=
+        estimateInteractivityNodeHeight(graph, fan) + MODEL_ANIMATION_ROW_GAP;
+    }
+    for (const play of plays) {
+      graph.nodes![play] = writeInteractivityNodePosition(graph.nodes![play]!, {
+        x: column,
+        y: cursorY,
+      });
       cursorY +=
         estimateInteractivityNodeHeight(graph, play) + MODEL_ANIMATION_ROW_GAP;
-    });
+    }
   });
   return extension;
 }

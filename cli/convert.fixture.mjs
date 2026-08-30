@@ -37,6 +37,7 @@ import { runAudioSourceRuntimeFixtureAssertions } from "../packages/xrift-studio
 import { runRuntimeSchemaFixtureAssertions } from "../packages/xrift-studio-runtime/src/schema.fixture.ts";
 import { runInteractivityEngineFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity/engine.fixture.ts";
 import {
+  runAnimationActionComponentIdFixtureAssertions,
   runAnimationComponentLoadMigrationFixtureAssertions,
   runAnimationComponentMigrationFixtureAssertions,
 } from "../src/lib/visual-editor/animation-component-migration.fixture.ts";
@@ -285,6 +286,7 @@ try {
     ["animation runtime bridge", runAnimationRuntimeBridgeFixtureAssertions],
     ["animation component migration", runAnimationComponentMigrationFixtureAssertions],
     ["animation component load migration", runAnimationComponentLoadMigrationFixtureAssertions],
+    ["animation action component ids", runAnimationActionComponentIdFixtureAssertions],
     ["animation mixer controller", runAnimationMixerControllerFixtureAssertions],
     ["interactivity graph list", runInteractivityGraphListFixtureAssertions],
     ["shader time", runShaderTimeFixtureAssertions],

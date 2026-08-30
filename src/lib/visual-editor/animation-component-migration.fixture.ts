@@ -22,11 +22,22 @@ import {
   type SceneEntity,
 } from "./scene-document";
 import {
+  clearAnimationActionComponentIds,
   describeAnimationComponentMigration,
   migrateAnimationComponentsToGraphs,
   sceneHasAnimationComponents,
 } from "./animation-component-migration";
-import { getKhrInteractivityOnStartAnimationCues } from "./interactivity-graph";
+import {
+  configureInteractivityTriggerAction,
+  getKhrInteractivityOnStartAnimationCues,
+  readInteractivityTriggerAction,
+  XRIFT_INTERACTION_OPERATIONS,
+  type KhrInteractivityGraph,
+} from "./interactivity-graph";
+import {
+  appendInteractivityOperation,
+  createInteractionTriggerGraphExtension,
+} from "./interactivity-recipes";
 import {
   parseVisualProjectFiles,
   serializeVisualProjectDocuments,
@@ -349,5 +360,77 @@ export function runAnimationComponentLoadMigrationFixtureAssertions(): void {
   assert(
     again.animationMigration === undefined,
     "opening an already-converted project converted something again",
+  );
+}
+
+/**
+ * A graph written before v1 kept working, or the change is a silent break.
+ *
+ *「押したら再生／停止」was written against an Animation Component and carries
+ * its id. That Component is gone and animation is addressed per Entity now, so
+ * an id left in place points at nothing: the runtime matched on it, which would
+ * have made every one of those graphs quietly do nothing in Play and in
+ * published worlds, with no diagnostic anywhere.
+ */
+export function runAnimationActionComponentIdFixtureAssertions(): void {
+  const extension = createInteractionTriggerGraphExtension();
+  const graph = extension.graphs[0] as KhrInteractivityGraph;
+  const action = appendInteractivityOperation(
+    graph,
+    XRIFT_INTERACTION_OPERATIONS.toggleProperty,
+    { x: 0, y: 0 },
+  );
+  const configured = configureInteractivityTriggerAction(graph, action, {
+    entityId: "entity-door",
+    componentId: "component-anim-gone",
+    targetKind: "animation",
+    property: "playing",
+  });
+  assert(configured, "the fixture could not write an Animation action");
+  assert(
+    readInteractivityTriggerAction(graph, action)?.componentId ===
+      "component-anim-gone",
+    "the fixture did not actually record the Component id",
+  );
+
+  const cleared = clearAnimationActionComponentIds(extension);
+  assert(cleared.cleared === 1, "the stale Component id was not cleared");
+  const clearedGraph = cleared.extension.graphs[0] as KhrInteractivityGraph;
+  const after = readInteractivityTriggerAction(clearedGraph, action);
+  assert(
+    after?.componentId === "",
+    "the Animation action still names a Component that no longer exists",
+  );
+  assert(
+    after?.targetKind === "animation" && after.property === "playing",
+    "clearing the Component id changed what the action does",
+  );
+  assert(
+    after?.entityId === "entity-door",
+    "clearing the Component id changed which Entity the action targets",
+  );
+
+  // Actions on other targets keep their Component id: an Audio Source or a
+  // Light is still one of several a single Entity can carry.
+  const audio = appendInteractivityOperation(
+    clearedGraph,
+    XRIFT_INTERACTION_OPERATIONS.setProperty,
+    { x: 0, y: 0 },
+  );
+  configureInteractivityTriggerAction(clearedGraph, audio, {
+    entityId: "entity-door",
+    componentId: "component-audio",
+    targetKind: "audio-source",
+    property: "volume",
+  });
+  const again = clearAnimationActionComponentIds(cleared.extension);
+  assert(
+    again.cleared === 0 && again.extension === cleared.extension,
+    "a second pass changed a graph that had nothing left to clear",
+  );
+  assert(
+    readInteractivityTriggerAction(clearedGraph, audio)?.componentId ===
+      "component-audio",
+    "clearing Animation ids also cleared an Audio Source's",
   );
 }

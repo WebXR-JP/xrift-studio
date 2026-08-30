@@ -21,6 +21,7 @@ import {
 } from "./open-brush-hierarchy";
 import { expandModelEntityHierarchy } from "./model-hierarchy";
 import {
+  clearAnimationActionComponentIds,
   migrateAnimationComponentsInEntities,
   type AnimationComponentMigrationResult,
 } from "./animation-component-migration";
@@ -54,7 +55,10 @@ export type VisualProjectDocuments = {
   animationMigration?: Pick<
     AnimationComponentMigrationResult,
     "converted" | "skipped"
-  >;
+  > & {
+    /** Animation actions whose stale Component id was dropped. */
+    clearedActions?: number;
+  };
 };
 
 export type PreparedStarterVisualProject = {
@@ -448,13 +452,34 @@ export function parseVisualProjectFiles(
         : { ...prefab, entities: result.entities };
   }
 
+  /*
+   * A graph written before v1 names the Animation Component it acted on.
+   * Animation is addressed per Entity now, so that id points at nothing: the
+   * runtime ignores it, and the Editor's picker would otherwise show the action
+   * as targeting a Component that is not in the Scene.
+   */
+  let clearedActions = 0;
+  for (const [assetId, asset] of Object.entries(migratedAssets.assets)) {
+    if (asset.kind !== "interactivity") continue;
+    const result = clearAnimationActionComponentIds(asset.extension);
+    if (result.cleared === 0) continue;
+    clearedActions += result.cleared;
+    migratedAssets = {
+      ...migratedAssets,
+      assets: {
+        ...migratedAssets.assets,
+        [assetId]: { ...asset, extension: result.extension },
+      },
+    };
+  }
+
   return {
     project,
     scenes: migratedScenes,
     assets: migratedAssets,
     prefabs: migratedPrefabs,
-    ...(converted.length > 0 || skipped.length > 0
-      ? { animationMigration: { converted, skipped } }
+    ...(converted.length > 0 || skipped.length > 0 || clearedActions > 0
+      ? { animationMigration: { converted, skipped, clearedActions } }
       : {}),
   };
 }

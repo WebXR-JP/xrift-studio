@@ -1850,10 +1850,21 @@ export function estimateInteractivityNodeHeight(
   const node = graph.nodes?.[index];
   const op = node ? graph.declarations?.[node.declaration]?.op : undefined;
   const template = op ? getInteractivityOperationTemplate(op) : undefined;
-  const inputs =
-    (template?.flowInputs ?? ["in"]).length + (template?.valueInputs ?? []).length;
-  const outputs =
-    (template?.flowOutputs ?? []).length + (template?.valueOutputs ?? []).length;
+  // Counted the way the card draws them: a socket the node actually uses is a
+  // row whether or not its template declared one. `flow/sequence` is the case
+  // that makes this matter — its template names three outputs and the spec runs
+  // as many as are connected, so measuring the template alone puts the next
+  // card on top of a sequence that fans out to eight.
+  const inputs = new Set([
+    ...(template?.flowInputs ?? ["in"]),
+    ...(template?.valueInputs ?? []),
+    ...Object.keys(node?.values ?? {}),
+  ]).size;
+  const outputs = new Set([
+    ...(template?.flowOutputs ?? []),
+    ...(template?.valueOutputs ?? []),
+    ...Object.keys(node?.flows ?? {}),
+  ]).size;
   const rows = Math.max(inputs, outputs, 1);
   // Header: category row, up to two title lines, the operation name, and the
   // optional summary an Interaction Trigger action carries.

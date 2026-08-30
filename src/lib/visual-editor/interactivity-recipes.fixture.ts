@@ -3,7 +3,6 @@ import {
   cloneKhrInteractivityExtension,
   collectInteractivityRuntimeDiagnostics,
   createDefaultKhrInteractivityExtension,
-  estimateInteractivityNodeHeight,
   getInteractivityOperationTemplate,
   getInteractivityRuntimeSupport,
   getKhrInteractivityOnStartAnimationCues,
@@ -554,13 +553,33 @@ export function runModelAnimationGraphFixtureAssertions(): void {
   // Sixty-four cards land in a column, and a pitch guessed from one operation
   // stacks them on each other: the graph opens as an unreadable pile and the
   // author's first act is to drag them apart.
-  const placed = (extension.graphs[0]?.nodes ?? []).map((node, index) => ({
-    ...readInteractivityNodePosition(node, index),
-    height: estimateInteractivityNodeHeight(
-      extension.graphs[0] as KhrInteractivityGraph,
-      index,
-    ),
-  }));
+  //
+  // Measured from the sockets the cards actually draw, not from the operation
+  // templates. `flow/sequence` declares three outputs and renders one row per
+  // connected output, so a check that trusts the template agrees with a layout
+  // that drops the first clip inside the sequence that fans out to it.
+  const layoutGraph = extension.graphs[0] as KhrInteractivityGraph;
+  const placed = (layoutGraph.nodes ?? []).map((node, index) => {
+    const op = layoutGraph.declarations?.[node.declaration]?.op ?? "";
+    const template = getInteractivityOperationTemplate(op);
+    const rows = Math.max(
+      new Set([
+        ...(template?.flowInputs ?? ["in"]),
+        ...(template?.valueInputs ?? []),
+        ...Object.keys(node.values ?? {}),
+      ]).size,
+      new Set([
+        ...(template?.flowOutputs ?? []),
+        ...(template?.valueOutputs ?? []),
+        ...Object.keys(node.flows ?? {}),
+      ]).size,
+      1,
+    );
+    return {
+      ...readInteractivityNodePosition(node, index),
+      height: 76 + rows * 20 + 12,
+    };
+  });
   for (let left = 0; left < placed.length; left += 1) {
     for (let right = left + 1; right < placed.length; right += 1) {
       const a = placed[left]!;
