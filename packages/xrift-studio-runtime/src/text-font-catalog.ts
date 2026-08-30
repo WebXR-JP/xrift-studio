@@ -152,7 +152,15 @@ function defaultTextFontBaseUrl(): string {
   // Studio and the generated Classic project are both Vite apps, so this is
   // right for every surface except a published world, which is served under a
   // base XRift decides at load time and therefore passes in explicitly.
-  return import.meta.env?.BASE_URL ?? "/";
+  //
+  // The type is widened at the access rather than read off `ImportMeta`: this
+  // module is also emitted into the staged publish project, whose tsconfig does
+  // not pull in Vite's ambient types, and `import.meta.env` there is a `tsc`
+  // error that only surfaces once the world is being published. The cast stays
+  // inside the member expression on purpose — a bundler replaces
+  // `import.meta.env`, not a local alias of `import.meta`.
+  const env = (import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env;
+  return env?.BASE_URL ?? "/";
 }
 
 /** Weights offered by the picker for a font id, including the automatic one. */
