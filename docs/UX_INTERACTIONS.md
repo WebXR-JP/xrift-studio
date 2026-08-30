@@ -355,7 +355,8 @@ F-06 アイテム検査
 - Material drag 中は Scene Mesh または Entity Inspector slot だけを drop target とし、slot が複数なら chooser を表示する。Texture drag は右 Material Inspector の compatible slot だけを target にする。
 - Asset のドラッグ中は Scene View だけを配置可能領域として示し、drop 前には Entity を増やさない。
 - ギズモ操作中はカメラ操作を競合させず、Scene View と Inspector の Transform 値を同期する。Inspector の軸ラベルをスクラブする時も local Transform を即時同期し、Scale の比率固定中は操作軸の倍率で不均等比率を保つ。
-- Entity選択中のFは、そのEntity subtreeの描画boundsへカメラとOrbit中心を合わせる。フォーカス中に別Entityを選択しただけでは追従せず、Fを押した時だけ対象を切り替える。
+- ギズモとそのドラッグ平面は、親子関係に関わらず対象Entityのworld位置に置く。ギズモをEntityの祖先の下に描かず、祖先のTransformを二重に適用しない。ドラッグ開始時はカメラの慣性を先に止め、操作中の見え方と移動量を一致させる。
+- Entity選択中のFは、そのEntity subtreeの描画boundsへカメラとOrbit中心を合わせる。boundsは表示中のMeshだけから測り、コライダー枠、ライトの向き矢印、選択輪郭などの編集用補助表示と、無効化された子は含めない。フォーカス中に別Entityを選択しただけでは追従せず、Fを押した時だけ対象を切り替える。
 - 待機中のギズモと選択補助線はニュートラルカラーで控えめにし、操作中の軸とAsset drop targetだけを明るく示す。「ライトなし」「ワイヤー」「コライダー編集」は、既定のグレーMaterialが背景に埋もれない暗いneutral背景を使い、Scene settingsや公開結果は変更しない。
 - panel resize / dock 中は drop preview と minimum size を示し、authoring Command や selection を変更しない。
 - Scene View と Assets のheaderは、panelが狭くなっても一行を保つ。Scene Viewは名前を先に切り、次にスナップと「表示」のラベルをアイコンへ落とし、カメラ投影方式・表示モード・診断・録画を「表示」ポップオーバーへまとめる。Assetsは検索欄を縮め、breadcrumbを畳み、外部から追加とインポートをアイコンへ落とす。Play / 停止は常に一行の中に残し、他の操作へ重ねない。

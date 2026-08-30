@@ -59,7 +59,6 @@ import {
 } from "react";
 import {
   BackSide,
-  Box3,
   BoxGeometry,
   BufferGeometry,
   Color,
@@ -74,7 +73,6 @@ import {
   Quaternion,
   Raycaster,
   SRGBColorSpace,
-  Sphere,
   SphereGeometry,
   TextureLoader,
   Vector2,
@@ -152,6 +150,12 @@ import {
 } from "../../lib/visual-editor";
 import { tauri } from "../../lib/tauri";
 import { isEditableShortcutTarget } from "../../lib/visual-editor/shortcuts";
+import {
+  EDITOR_HELPER_USER_DATA,
+  computeEntityFocusBounds,
+  resolveEntityWorldPosition,
+  resolveFocusDistance,
+} from "../../lib/visual-editor/gizmo-focus";
 import {
   formatSnapStep,
   minSnapStepForMode,
@@ -903,7 +907,10 @@ function TerrainSelectionOutline({
   const range = terrainHeightRange(terrain);
   const height = Math.max(0.05, range.max - range.min);
   return (
-    <mesh position={[0, (range.min + range.max) / 2, 0]}>
+    <mesh
+      position={[0, (range.min + range.max) / 2, 0]}
+      userData={EDITOR_HELPER_USER_DATA}
+    >
       <boxGeometry args={[terrain.width, height, terrain.depth]} />
       <meshBasicMaterial color={color} wireframe depthTest={false} transparent opacity={0.88} />
     </mesh>
@@ -1425,7 +1432,7 @@ function DirectionArrow({
 }) {
   const rotationX = direction < 0 ? -Math.PI / 2 : Math.PI / 2;
   return (
-    <group position={position}>
+    <group position={position} userData={EDITOR_HELPER_USER_DATA}>
       <mesh
         position={[0, 0, direction * 0.34]}
         rotation={[rotationX, 0, 0]}
@@ -1516,7 +1523,11 @@ function ComponentVisual({
         return null;
       }
       return (
-        <mesh position={component.center} renderOrder={20}>
+        <mesh
+          position={component.center}
+          renderOrder={20}
+          userData={EDITOR_HELPER_USER_DATA}
+        >
           <boxGeometry
             args={[
               component.halfExtents[0] * 2,
@@ -1994,24 +2005,17 @@ function EntityObject({
       transform &&
       displayMode !== "colliders" &&
       entity.id === authoringEntityId ? (
-        <TransformControls
-          ref={setTransformControlsRef}
-          object={objectRef}
-          mode={transformMode}
-          space={transformSpace}
-          size={gizmo.size}
-          // null, not undefined: three reads these live during a drag, and a
-          // removed prop is not guaranteed to clear the previous step.
-          translationSnap={gizmo.snapEnabled ? gizmo.translateSnap : null}
-          rotationSnap={
-            gizmo.snapEnabled ? (gizmo.rotateSnapDegrees * Math.PI) / 180 : null
-          }
-          scaleSnap={gizmo.snapEnabled ? gizmo.scaleSnap : null}
-          onMouseDown={() => {
+        <EntityTransformGizmo
+          controlsRef={setTransformControlsRef}
+          objectRef={objectRef}
+          transformMode={transformMode}
+          transformSpace={transformSpace}
+          gizmo={gizmo}
+          onDragStart={() => {
             transformDraggingRef.current = true;
             onDraggingChange(true);
           }}
-          onMouseUp={() => {
+          onDragEnd={() => {
             commitTransform();
             transformDraggingRef.current = false;
             onDraggingChange(false);
@@ -2019,6 +2023,55 @@ function EntityObject({
         />
       ) : null}
     </>
+  );
+}
+
+/**
+ * The transform gizmo for the primary selected Entity.
+ *
+ * Three positions the gizmo handles and the drag plane in the controls' own
+ * parent space, so the controls have to hang off the Scene root. Written where
+ * they are used - inside the Entity's ancestors, and inside a RigidBody while
+ * physics is armed - the ancestors' transform is applied a second time: a
+ * child Entity's gizmo draws away from the object it moves, and the drag plane
+ * drifts with it so a drag moves the object by the wrong amount.
+ */
+function EntityTransformGizmo({
+  controlsRef,
+  objectRef,
+  transformMode,
+  transformSpace,
+  gizmo,
+  onDragStart,
+  onDragEnd,
+}: {
+  controlsRef: (controls: ElementRef<typeof TransformControls> | null) => void;
+  objectRef: MutableRefObject<Group>;
+  transformMode: TransformMode;
+  transformSpace: TransformSpace;
+  gizmo: SceneSettings["editor"]["gizmo"];
+  onDragStart: () => void;
+  onDragEnd: () => void;
+}) {
+  const sceneRoot = useThree((state) => state.scene);
+  return createPortal(
+    <TransformControls
+      ref={controlsRef}
+      object={objectRef}
+      mode={transformMode}
+      space={transformSpace}
+      size={gizmo.size}
+      // null, not undefined: three reads these live during a drag, and a
+      // removed prop is not guaranteed to clear the previous step.
+      translationSnap={gizmo.snapEnabled ? gizmo.translateSnap : null}
+      rotationSnap={
+        gizmo.snapEnabled ? (gizmo.rotateSnapDegrees * Math.PI) / 180 : null
+      }
+      scaleSnap={gizmo.snapEnabled ? gizmo.scaleSnap : null}
+      onMouseDown={onDragStart}
+      onMouseUp={onDragEnd}
+    />,
+    sceneRoot,
   );
 }
 
@@ -2521,6 +2574,29 @@ function findSceneEntityObject(
   return result;
 }
 
+type SettleableOrbitControls = {
+  enableDamping: boolean;
+  update: () => void;
+};
+
+/**
+ * Drops the momentum OrbitControls is still easing out.
+ *
+ * Damping keeps applying the last drag's rotation and pan for dozens of frames
+ * after the pointer is released, and `update()` only clears that residue when
+ * damping is off. Without this flush, a camera pose written by focus - or the
+ * pose restored when focus is left - is dragged off the object over the next
+ * few frames, and a gizmo drag that starts on a still-gliding camera measures
+ * against a viewpoint that is no longer where the author is looking.
+ */
+function settleOrbitControls(controls: SettleableOrbitControls | null): void {
+  if (!controls) return;
+  const damping = controls.enableDamping;
+  controls.enableDamping = false;
+  controls.update();
+  controls.enableDamping = damping;
+}
+
 /**
  * Where a caller can put the Scene View camera.
  *
@@ -2622,12 +2698,13 @@ function CameraControls({
       onFocusChange(null);
       return false;
     }
+    settleOrbitControls(controls);
     camera.position.copy(snapshot.position);
     camera.quaternion.copy(snapshot.quaternion);
     camera.up.copy(snapshot.up);
     camera.zoom = snapshot.zoom;
     controls.target.copy(snapshot.target);
-    controls.update();
+    settleOrbitControls(controls);
     camera.updateProjectionMatrix();
     focusSnapshotRef.current = null;
     focusedEntityIdRef.current = null;
@@ -2676,6 +2753,10 @@ function CameraControls({
       return;
     }
 
+    // Read the pose only after the previous drag's momentum is spent, or the
+    // snapshot restores a camera the author never came to rest at.
+    settleOrbitControls(controls);
+
     if (!focusSnapshotRef.current) {
       focusSnapshotRef.current = {
         position: camera.position.clone(),
@@ -2691,13 +2772,15 @@ function CameraControls({
     const target = new Vector3();
     let radius = 0;
     if (selectedObject) {
-      selectedObject.updateWorldMatrix(true, true);
-      const bounds = new Box3().setFromObject(selectedObject);
-      if (!bounds.isEmpty()) {
-        const sphere = bounds.getBoundingSphere(new Sphere());
-        target.copy(sphere.center);
-        radius = sphere.radius;
+      // Measured from the drawn content only. Framing the raw Object3D bounds
+      // would follow the collider wireframe that appears with the selection
+      // and leave the gizmo, which sits on the Entity origin, off centre.
+      const bounds = computeEntityFocusBounds(selectedObject);
+      if (bounds) {
+        target.fromArray(bounds.center);
+        radius = bounds.radius;
       } else {
+        selectedObject.updateWorldMatrix(true, true);
         selectedObject.getWorldPosition(target);
       }
     } else if (frameTarget) {
@@ -2708,22 +2791,19 @@ function CameraControls({
 
     const offset = camera.position.clone().sub(controls.target);
     if (offset.lengthSq() < 0.01) offset.set(4, 3, 4);
-    let distance = Math.max(2.5, Math.min(8, offset.length()));
-    if (camera instanceof PerspectiveCamera && radius > 0.001) {
-      const verticalFov = MathUtils.degToRad(camera.fov);
-      const horizontalFov = 2 * Math.atan(
-        Math.tan(verticalFov / 2) * camera.aspect,
-      );
-      const limitingFov = Math.max(
-        Math.min(verticalFov, horizontalFov),
-        MathUtils.degToRad(1),
-      );
-      distance = Math.max(2.5, radius / Math.sin(limitingFov / 2) * 1.15);
-    }
-    offset.setLength(Math.min(distance, camera.far * 0.8));
+    const distance = resolveFocusDistance({
+      radius,
+      currentDistance: Math.min(8, offset.length()),
+      ...(camera instanceof PerspectiveCamera
+        ? { verticalFov: MathUtils.degToRad(camera.fov), aspect: camera.aspect }
+        : {}),
+      minDistance: 2.5,
+      maxDistance: camera.far * 0.8,
+    });
+    offset.setLength(distance);
     controls.target.copy(target);
     camera.position.copy(target.clone().add(offset));
-    controls.update();
+    settleOrbitControls(controls);
     focusedEntityIdRef.current = frameEntityId;
     onFocusChange({
       entityId: frameEntityId,
@@ -2746,6 +2826,15 @@ function CameraControls({
     restoreFocusSnapshot();
   }, [exitFocusRequest, restoreFocusSnapshot]);
 
+  // A gizmo drag is measured against the camera it starts with, and orbit
+  // damping is frozen rather than finished while the controls are disabled.
+  // Spending it here keeps the drag steady and stops the view from lurching
+  // when the drag hands the camera back.
+  useLayoutEffect(() => {
+    if (!transformDragging) return;
+    settleOrbitControls(controlsRef.current);
+  }, [transformDragging]);
+
   const handledCameraRequestRef = useRef(0);
   useLayoutEffect(() => {
     const request = cameraRequest;
@@ -2766,7 +2855,7 @@ function CameraControls({
     const currentTarget = controls.target.clone();
     const currentPosition = camera.position.clone();
     const finish = (message?: string) => {
-      controls.update();
+      settleOrbitControls(controls);
       camera.updateProjectionMatrix();
       report({
         ok: true,
@@ -2809,14 +2898,15 @@ function CameraControls({
         });
         return;
       }
-      object.updateWorldMatrix(true, true);
-      const bounds = new Box3().setFromObject(object);
-      if (bounds.isEmpty()) {
-        object.getWorldPosition(target);
+      // The same drawn-content measurement the F key uses, so an agent and a
+      // person framing the same Entity land in the same place.
+      const bounds = computeEntityFocusBounds(object);
+      if (bounds) {
+        target.fromArray(bounds.center);
+        radius = bounds.radius;
       } else {
-        const sphere = bounds.getBoundingSphere(new Sphere());
-        target.copy(sphere.center);
-        radius = sphere.radius;
+        object.updateWorldMatrix(true, true);
+        object.getWorldPosition(target);
       }
     } else if (request.preset) {
       // A preset with no Entity keeps looking at whatever the view was on, so
@@ -2833,24 +2923,24 @@ function CameraControls({
       return;
     }
 
-    let distance = request.distance;
-    if (distance === undefined) {
-      // Keeping the current distance is what makes a named view read as
-      // "turn and look from there": capping it would silently zoom in on a
-      // large Terrain the caller had deliberately backed away from.
-      const previous = currentPosition.clone().sub(currentTarget).length();
-      distance = Math.max(2.5, previous > 0.01 ? previous : 8);
-      if (camera instanceof PerspectiveCamera && radius > 0.001) {
-        const verticalFov = MathUtils.degToRad(camera.fov);
-        const horizontalFov =
-          2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
-        const limitingFov = Math.max(
-          Math.min(verticalFov, horizontalFov),
-          MathUtils.degToRad(1),
-        );
-        distance = Math.max(2.5, (radius / Math.sin(limitingFov / 2)) * 1.15);
-      }
-    }
+    // Keeping the current distance is what makes a named view read as "turn
+    // and look from there": capping it would silently zoom in on a large
+    // Terrain the caller had deliberately backed away from.
+    const previous = currentPosition.clone().sub(currentTarget).length();
+    const distance =
+      request.distance ??
+      resolveFocusDistance({
+        radius,
+        currentDistance: previous > 0.01 ? previous : 8,
+        ...(camera instanceof PerspectiveCamera
+          ? {
+              verticalFov: MathUtils.degToRad(camera.fov),
+              aspect: camera.aspect,
+            }
+          : {}),
+        minDistance: 2.5,
+        maxDistance: Number.POSITIVE_INFINITY,
+      });
     const direction = request.preset
       ? new Vector3(...SCENE_VIEW_CAMERA_DIRECTIONS[request.preset])
       : currentPosition.clone().sub(currentTarget);
@@ -4124,9 +4214,17 @@ export function SceneViewport({
     () => new Set(selectedEntityIds),
     [selectedEntityIds],
   );
-  const selectedTransform = selectedEntityId
-    ? getTransform(scene, selectedEntityId)
-    : undefined;
+  // Transforms are stored in the parent's space, so a child Entity's own
+  // position is not somewhere the camera can look. This is only reached when
+  // the Entity has no object in the scene graph yet, but pointing the fallback
+  // at the wrong place is exactly the drift focus is meant to remove.
+  const selectedWorldPosition = useMemo(
+    () =>
+      selectedEntityId
+        ? resolveEntityWorldPosition(scene, selectedEntityId) ?? undefined
+        : undefined,
+    [scene, selectedEntityId],
+  );
   const colliderInspection = useMemo(
     () => inspectColliderConfiguration(scene),
     [scene],
@@ -5358,7 +5456,7 @@ export function SceneViewport({
                 ? scene.entities[selectedEntityId]?.name ?? null
                 : null
             }
-            frameTarget={selectedTransform?.position}
+            frameTarget={selectedWorldPosition}
             cameraRequest={cameraRequest}
             onCameraResult={onCameraResult}
             onFocusChange={onFocusChange}

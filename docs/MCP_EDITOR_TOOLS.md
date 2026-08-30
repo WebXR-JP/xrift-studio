@@ -173,7 +173,9 @@ Undo 履歴も選択も動かさない。
 - `set_scene_view_camera` — 俯瞰 (`top`) / 真下から (`bottom`) / 各軸 (`front`
   `back` `left` `right`) / 既定の斜め (`iso`)、`focusEntityId` で Entity の
   実描画 bounds へ寄る、あるいは `position` と `target` の直接指定。preset
-  だけを渡した場合は今の注視点を保つので、「いまの対象を上から見る」になる
+  だけを渡した場合は今の注視点を保つので、「いまの対象を上から見る」になる。
+  bounds は F キーと同じ経路で測るので、コライダー枠のような編集用の補助表示
+  や無効化した子は含めない。agent と人が同じ Entity を同じ場所から見る
 
 保存先を caller が選べないのは意図的。確認のために撮った画像は一時的な成果物
 なので、project ではなく app data へ置く。

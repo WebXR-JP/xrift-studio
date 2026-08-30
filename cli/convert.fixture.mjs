@@ -94,6 +94,7 @@ import { runRuntimeSpawnFixtureAssertions } from "../src/lib/visual-editor/runti
 import { runSkyboxImportFixtureAssertions } from "../src/lib/visual-editor/skybox-import.fixture.ts";
 import { runSkyShaderFixtureAssertions } from "../src/lib/visual-editor/sky-shader.fixture.ts";
 import { runSceneSettingsCompatFixtureAssertions } from "../src/lib/visual-editor/scene-settings-compat.fixture.ts";
+import { runGizmoFocusFixtureAssertions } from "../src/lib/visual-editor/gizmo-focus.fixture.ts";
 import { runGizmoSnapFixtureAssertions } from "../src/lib/visual-editor/gizmo-snap.fixture.ts";
 import { runWindContractFixtureAssertions } from "../src/lib/visual-editor/wind-contract.fixture.ts";
 import { runWaterShaderFixtureAssertions } from "../src/lib/visual-editor/water-shader.fixture.ts";
@@ -325,6 +326,7 @@ try {
     ["skybox import", runSkyboxImportFixtureAssertions],
     ["sky shader", runSkyShaderFixtureAssertions],
     ["scene settings compat", runSceneSettingsCompatFixtureAssertions],
+    ["gizmo focus", runGizmoFocusFixtureAssertions],
     ["gizmo snap", runGizmoSnapFixtureAssertions],
     ["wind contract", runWindContractFixtureAssertions],
     ["water shader", runWaterShaderFixtureAssertions],
