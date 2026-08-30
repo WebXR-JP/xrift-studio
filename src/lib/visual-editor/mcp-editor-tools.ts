@@ -34,8 +34,6 @@ import {
 import type { PrototypeVisualProject } from "./prototype-project";
 import { XRIFT_SCRIPTING_CAPABILITIES } from "./scripting-capabilities.data";
 import {
-  ANIMATION_SPEED_MAX,
-  ANIMATION_SPEED_MIN,
   addBuiltinPrimitiveEntity,
   addTerrainEntity,
   applyTerrainBrushToScene,
@@ -45,7 +43,6 @@ import {
   getTerrainGeometry,
   getMeshMaterialSlots,
   renameEntity as renameEntityInScene,
-  updateAnimationComponent,
   updateAudioSourceComponent,
   updateVegetationWindComponent,
   updateColliderComponent,
@@ -59,7 +56,6 @@ import {
   updateRigidBodyComponent,
   updateTextComponent,
   updateInteractionTriggerComponent,
-  type AnimationPatch,
   type AudioSourcePatch,
   type ColliderPatch,
   type InteractionTriggerPatch,
@@ -219,10 +215,7 @@ import {
   type XriftInteractionPropertyDescriptor,
   type XriftInteractionTargetKind,
 } from "./interactivity-graph";
-import {
-  INTERACTIVITY_RECIPES,
-  getInteractivityRecipeRuntimeSupport,
-} from "./interactivity-recipes";
+import { createModelAnimationGraphExtension } from "./interactivity-recipes";
 import {
   addAssetFolder,
   getAudioAsset,
@@ -429,6 +422,7 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   list_interactivity_operations: listInteractivityOperations,
   get_interactivity_asset: getInteractivityAsset,
   create_interactivity_asset: createInteractivityAsset,
+  create_model_animation_graph: createModelAnimationGraph,
   add_interactivity_node: addInteractivityNode,
   connect_interactivity_nodes: connectInteractivityNodes,
   set_interactivity_value: setInteractivityValue,
@@ -445,8 +439,6 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   move_interactivity_node: moveInteractivityNode,
   duplicate_interactivity_node: duplicateInteractivityNodeTool,
   layout_interactivity_graph: layoutInteractivityGraph,
-  list_interactivity_recipes: listInteractivityRecipes,
-  apply_interactivity_recipe: applyInteractivityRecipe,
   list_interaction_trigger_targets: listInteractionTriggerTargets,
   configure_interactivity_trigger_action: configureInteractivityTriggerActionTool,
 };
@@ -1565,6 +1557,8 @@ function placeAsset(
   const bundle = touchProject(context, {
     ...context.bundle,
     scene: placement.scene,
+    // Placing an animated Model creates the graph that plays it.
+    assets: placement.assets,
   });
   return {
     changed: true,
@@ -3435,7 +3429,7 @@ function terrainGrassAppearancePatch(
 function listInteractionTriggerTargets(
   context: XriftMcpEditorContext,
 ): XriftMcpEditorToolOutcome {
-  const targets = collectInteractionTriggerTargets(context.bundle.scene);
+  const targets = collectInteractionTriggerTargets(context.bundle.scene, context.bundle.assets);
   return unchanged(
     context,
     {
@@ -3835,35 +3829,14 @@ function updateComponent(
       break;
     }
     case "animation": {
-      assertPatchKeys(
-        patch,
-        ANIMATION_PATCH_KEYS,
-        component.type,
+      // v1 removed the Animation Component. Opening a project converts any that
+      // are left into a graph, so an agent finding one is looking at a document
+      // that has not been opened since; editing it would keep it alive.
+      throw new XriftMcpEditorToolError(
+        "COMPONENT_REMOVED",
+        "Animation Componentは廃止されました。clipの再生はInteractivity Graphのanimation/startノードで行います",
+        { entityId, componentId, componentType: component.type },
       );
-      if (patch.clipName !== undefined && typeof patch.clipName !== "string") {
-        invalidArgument("patch.clipName", "string");
-      }
-      if (patch.speed !== undefined) {
-        const speed = patch.speed;
-        if (
-          typeof speed !== "number" ||
-          !Number.isFinite(speed) ||
-          speed < ANIMATION_SPEED_MIN ||
-          speed > ANIMATION_SPEED_MAX
-        ) {
-          invalidArgument(
-            "patch.speed",
-            `number between ${ANIMATION_SPEED_MIN} and ${ANIMATION_SPEED_MAX}`,
-          );
-        }
-      }
-      scene = updateAnimationComponent(
-        context.bundle.scene,
-        entityId,
-        patch as AnimationPatch,
-        componentId,
-      );
-      break;
     }
     case "vegetation-wind": {
       assertPatchKeys(
@@ -5337,9 +5310,9 @@ function createInteractivityAsset(
   const name = optionalString(argumentsValue.name) ?? "Interactivity Graph";
   const folderId = optionalNullableString(argumentsValue.folderId, "folderId");
   const template = requiredEnum(
-    argumentsValue.template ?? "animation-on-start",
+    argumentsValue.template ?? "start",
     "template",
-    ["animation-on-start", "empty"] as const,
+    ["start", "empty"] as const,
   );
   if (folderId && !context.bundle.assets.folders?.[folderId]) {
     throw new XriftMcpEditorToolError("FOLDER_NOT_FOUND", "指定されたAsset Folderが見つかりません", {
@@ -5386,6 +5359,75 @@ function createInteractivityAsset(
       extension: (assets.assets[assetId] as InteractivityAsset).extension,
     },
     activity: `AIがInteractivity Asset「${name}」を作成しました`,
+  };
+}
+
+/**
+ * The Model Inspector's「アニメーションのGraphを作る」, for an agent.
+ *
+ * A Model whose motion is spread over dozens of clips cannot be played by the
+ * Animation Component, which owns one; building the graph by hand is one node
+ * and three inline values per clip. The Asset is created and left unattached,
+ * because which Entity carries it is a placement decision this tool cannot make.
+ */
+function createModelAnimationGraph(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const modelAssetId = requiredString(argumentsValue.modelAssetId, "modelAssetId");
+  const model = context.bundle.assets.assets[modelAssetId];
+  if (model?.kind !== "model") {
+    throw new XriftMcpEditorToolError("ASSET_NOT_FOUND", "Model Assetが見つかりません", {
+      modelAssetId,
+    });
+  }
+  const clips = model.importMetadata?.animations ?? [];
+  if (clips.length === 0) {
+    throw new XriftMcpEditorToolError(
+      "MODEL_HAS_NO_ANIMATION",
+      "このModelにはanimation clipがありません",
+      { modelAssetId },
+    );
+  }
+  const folderId =
+    optionalNullableString(argumentsValue.folderId, "folderId") ?? model.folderId ?? null;
+  if (folderId && !context.bundle.assets.folders?.[folderId]) {
+    throw new XriftMcpEditorToolError("FOLDER_NOT_FOUND", "指定されたAsset Folderが見つかりません", {
+      folderId,
+    });
+  }
+  const name = optionalString(argumentsValue.name) ?? `${model.name} のアニメーション`;
+  const assetId = createDocumentId("interactivity");
+  const added = addDefaultInteractivityAsset(context.bundle.assets, {
+    id: assetId,
+    name,
+    folderId,
+    extension: createModelAnimationGraphExtension(clips.map((clip) => clip.name)),
+  });
+  if (!added.added) {
+    throw new XriftMcpEditorToolError("ASSET_NOT_CREATED", "Interactivity Assetを作成できませんでした");
+  }
+  const bundle = touchProject(context, { ...context.bundle, assets: added.manifest });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: assetId,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      assetId,
+      name,
+      modelAssetId,
+      clipCount: clips.length,
+      clipNames: clips.map((clip) => clip.name),
+      attached: false,
+      extension: (added.manifest.assets[assetId] as InteractivityAsset).extension,
+    },
+    activity: `AIが${clips.length}件のclipを再生するInteractivity Asset「${name}」を作成しました`,
   };
 }
 
@@ -6123,7 +6165,7 @@ function configureInteractivityTriggerActionTool(
     componentIdArgument !== undefined ||
     optionalString(argumentsValue.property) !== undefined;
 
-  const targets = collectInteractionTriggerTargets(context.bundle.scene);
+  const targets = collectInteractionTriggerTargets(context.bundle.scene, context.bundle.assets);
   const targetEntity = targets.find((candidate) => candidate.entityId === entityId);
   if (!targetEntity) {
     throw new XriftMcpEditorToolError(
@@ -6316,105 +6358,6 @@ function triggerActionValueFromArgument(
   }
 }
 
-/** The Editor's recipe list: a whole small sequence, not one node. */
-function listInteractivityRecipes(
-  context: XriftMcpEditorContext,
-): XriftMcpEditorToolOutcome {
-  return unchanged(
-    context,
-    {
-      recipes: INTERACTIVITY_RECIPES.map((recipe) => {
-        return {
-          id: recipe.id,
-          label: recipe.label,
-          description: recipe.description,
-          needsMaterial: recipe.needsMaterial === true,
-          runtimeSupport: getInteractivityRecipeRuntimeSupport(recipe),
-        };
-      }),
-      count: INTERACTIVITY_RECIPES.length,
-    },
-    "Interactivity recipeの一覧を取得しました",
-  );
-}
-
-function applyInteractivityRecipe(
-  context: XriftMcpEditorContext,
-  argumentsValue: Record<string, unknown>,
-): XriftMcpEditorToolOutcome {
-  assertWritableContext(context, argumentsValue);
-  const asset = requireInteractivityAsset(
-    context,
-    requiredString(argumentsValue.assetId, "assetId"),
-  );
-  const graphIndex =
-    optionalNonNegativeInteger(argumentsValue.graphIndex, "graphIndex") ??
-    asset.extension.graph ??
-    0;
-  const recipeId = requiredString(argumentsValue.recipeId, "recipeId");
-  const recipe = INTERACTIVITY_RECIPES.find((candidate) => candidate.id === recipeId);
-  if (!recipe) {
-    throw new XriftMcpEditorToolError(
-      "RECIPE_NOT_FOUND",
-      "指定されたInteractivity recipeが見つかりません",
-      { recipeId, supportedRecipeIds: INTERACTIVITY_RECIPES.map((one) => one.id) },
-    );
-  }
-  const materialAssetId = optionalString(argumentsValue.materialAssetId);
-  let materialIndex = 0;
-  if (recipe.needsMaterial) {
-    const materials = sortedMaterialAssetIds(context);
-    if (materials.length === 0) {
-      throw new XriftMcpEditorToolError(
-        "MATERIAL_NOT_FOUND",
-        "このrecipeはMaterialへ書き込みます。先にMaterial Assetを作成してください",
-        { recipeId },
-      );
-    }
-    materialIndex = materialAssetId
-      ? materials.indexOf(materialAssetId)
-      : 0;
-    if (materialIndex < 0) {
-      throw new XriftMcpEditorToolError(
-        "MATERIAL_NOT_FOUND",
-        "指定されたMaterial Assetが見つかりません",
-        { materialAssetId },
-      );
-    }
-  }
-  const extension = cloneKhrInteractivityExtension(asset.extension);
-  const graph = requireInteractivityGraph(extension.graphs, graphIndex);
-  const created = graph.nodes?.length ?? 0;
-  const origin =
-    optionalVec2(argumentsValue.position, "position") ??
-    freeInteractivityNodePosition(graph, { x: 120, y: 120 });
-  recipe.build(graph, origin, materialIndex);
-  return commitInteractivityMutation(
-    context,
-    asset,
-    extension,
-    {
-      assetId: asset.id,
-      graphIndex,
-      recipeId,
-      firstNodeIndex: created,
-      focusNodeIndex: created + recipe.focusOffset,
-      addedNodeCount: (graph.nodes?.length ?? 0) - created,
-      ...(recipe.needsMaterial
-        ? { materialAssetId: sortedMaterialAssetIds(context)[materialIndex] ?? null }
-        : {}),
-    },
-    `AIがInteractivity recipe「${recipe.label}」を適用しました`,
-  );
-}
-
-function sortedMaterialAssetIds(context: XriftMcpEditorContext): string[] {
-  return Object.values(context.bundle.assets.assets)
-    .filter((candidate) => candidate.kind === "material")
-    .map((candidate) => candidate.id)
-    .sort((left, right) => left.localeCompare(right));
-}
-
 /**
  * Runs the graph without a renderer and reports what happens, and when.
  *
@@ -6591,6 +6534,12 @@ function assertInteractivitySocket(
   const template = op ? getInteractivityOperationTemplate(op) : undefined;
   if (!template) return;
   if (template[kind].includes(socket)) return;
+  // `flow/sequence` is numbered, not fixed: the spec runs whatever outputs the
+  // author connected, in socket order, so the template's three are a starting
+  // point rather than a limit. A generated graph can fan out to far more.
+  if (op === "flow/sequence" && kind === "flowOutputs" && /^(0|[1-9][0-9]*)$/.test(socket)) {
+    return;
+  }
   throw new XriftMcpEditorToolError(
     "SOCKET_NOT_FOUND",
     `${op} には${socket} socketがありません`,
@@ -7427,8 +7376,10 @@ function componentDefinitionId(component: SceneComponent): string | null {
       return "core.spawn";
     case "particle-emitter":
       return "core.particle";
+    // The Animation Component is gone; a document still carrying one has not
+    // been opened since v1, and it maps to no definition an agent can add.
     case "animation":
-      return "core.animation";
+      return null;
     case "vegetation-wind":
       return "core.wind";
     case "audio-source":
@@ -7750,14 +7701,6 @@ const AUDIO_SOURCE_PATCH_KEYS = patchKeysOf<AudioSourcePatch>()([
 const INTERACTION_TRIGGER_PATCH_KEYS = patchKeysOf<
   Pick<InteractionTriggerPatch, "enabled" | "interactivityAssetId">
 >()(["enabled", "interactivityAssetId"]);
-
-const ANIMATION_PATCH_KEYS = patchKeysOf<AnimationPatch>()([
-  "enabled",
-  "autoplay",
-  "loop",
-  "clipName",
-  "speed",
-]);
 
 function assertPatchKeys(  patch: Record<string, unknown>,
   allowedKeys: readonly string[],

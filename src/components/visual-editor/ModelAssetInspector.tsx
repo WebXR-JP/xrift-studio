@@ -46,6 +46,7 @@ export function ModelAssetInspector({
   onChange,
   onOpenMaterial,
   onReimport,
+  onCreateAnimationGraph,
   onOptimize,
   onRevertOptimization,
 }: {
@@ -61,6 +62,7 @@ export function ModelAssetInspector({
   onChange: (patch: ModelAssetPatch) => void;
   onOpenMaterial: (assetId: string) => void;
   onReimport: () => void;
+  onCreateAnimationGraph?: () => void;
   onOptimize?: (options: ModelOptimizationOptions) => void;
   onRevertOptimization?: () => void;
 }) {
@@ -374,7 +376,11 @@ export function ModelAssetInspector({
         title={`Animations (${metadata?.animations.length ?? 0})`}
         description="ソース内で検出したanimation clip"
       >
-        <ModelAnimationList animations={metadata?.animations ?? []} />
+        <ModelAnimationList
+          animations={metadata?.animations ?? []}
+          readOnly={readOnly}
+          onCreateAnimationGraph={onCreateAnimationGraph}
+        />
       </InspectorSection>
 
       {metadata &&
@@ -636,8 +642,12 @@ function ModelOptimizationPanel({
  */
 function ModelAnimationList({
   animations,
+  readOnly,
+  onCreateAnimationGraph,
 }: {
   animations: readonly ModelAnimationMetadata[];
+  readOnly?: boolean;
+  onCreateAnimationGraph?: () => void;
 }) {
   if (animations.length === 0) {
     return <p className="text-xs text-slate-500">Animationは検出されていません。</p>;
@@ -661,8 +671,25 @@ function ModelAnimationList({
         <Metric label="Tracks" value={totalTracks} />
       </dl>
       <p className="text-[11px] leading-4 text-slate-500">
-        合計 {formatNumber(totalDuration)}s。配置すると全clipをまとめて1つの自動再生Componentとして扱います。
+        合計 {formatNumber(totalDuration)}s。Sceneへ配置すると、全clipをループ再生するInteractivity
+        Graphが一緒に作られ、そのEntityに付きます。
       </p>
+      {onCreateAnimationGraph ? (
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
+          <p className="text-[11px] leading-4 text-slate-600">
+            すでに置いてあるEntity用に、全{animations.length}
+            clipを同時にループ再生するGraphをあとから作れます。作成したGraphはAssetsに置くだけで、Entityには付きません。
+          </p>
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={onCreateAnimationGraph}
+            className="mt-2 h-8 rounded-md border border-violet-300 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            アニメーションのGraphを作る
+          </button>
+        </div>
+      ) : null}
       <div className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
         {groups.map((group) => (
           <details key={group.label} className="px-2.5 py-2">

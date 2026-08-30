@@ -15,7 +15,7 @@ Play Window に映るのは編集データのコピーです。左の Hierarchy 
 
 Play を止めずに次を変更できます。変更は通常どおり履歴と自動保存に入り、変更した Entity だけが作り直されます。
 
-- Transform、Collider、Animation の設定
+- Transform、Collider の設定
 - Entity の追加・削除・複製・親子付け替え、Component の追加
 - Script の宣言済みプロパティ（次のフレームから反映）
 

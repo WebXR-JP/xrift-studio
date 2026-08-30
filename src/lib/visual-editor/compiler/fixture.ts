@@ -9,10 +9,14 @@ import {
 } from "../asset-manifest";
 import { instantiateSceneAsset } from "../asset-placement";
 import {
+  getKhrInteractivityOnStartAnimationCues,
   KHR_INTERACTIVITY_EXTENSION_NAME,
   KHR_INTERACTIVITY_SPEC_STATUS,
 } from "../interactivity-graph";
-import { createInteractionTriggerGraphExtension } from "../interactivity-recipes";
+import {
+  createInteractionTriggerGraphExtension,
+  createModelAnimationGraphExtension,
+} from "../interactivity-recipes";
 import {
   XRIFT_COMPONENT_SCHEMA_IDS,
   createXriftComponent,
@@ -37,7 +41,6 @@ import {
   createRigidBodyComponent,
   createTransformComponent,
   createVegetationWindComponent,
-  type AnimationComponent,
   type ColliderComponent,
   type MeshComponent,
   type SceneDocument,
@@ -2122,14 +2125,39 @@ export function runVisualCompilerFixtureAssertions(
   assert(animationPlacement.placed, "Animated GLB fixture could not be placed");
   if (animationPlacement.placed) {
     const placedEntity = animationPlacement.scene.entities[animationPlacement.entityId];
+    // v1 places an animated Model with the graph that plays it, not with an
+    // Animation Component: one Component could name one clip, and a Model whose
+    // motion is split across several of them had no way to say "all of these".
     assert(
-      placedEntity?.components.some(
-        (component) =>
-          component.type === "animation" &&
-          component.autoplay &&
-          component.loop,
+      placedEntity?.components.every(
+        (component) => (component as { type: string }).type !== "animation",
       ),
-      "Animated GLB placement did not create an autoplay loop component",
+      "Animated GLB placement still creates an Animation Component",
+    );
+    const placedTrigger = placedEntity?.components.find(
+      (component) => component.type === "interaction-trigger",
+    );
+    assert(
+      placedTrigger !== undefined && placedTrigger.type === "interaction-trigger",
+      "Animated GLB placement did not create the graph that plays it",
+    );
+    const placedGraph =
+      animationPlacement.assets.assets[placedTrigger.interactivityAssetId];
+    assert(
+      placedGraph?.kind === "interactivity",
+      "the placed Trigger points at something that is not an Interactivity Asset",
+    );
+    const placedCues = getKhrInteractivityOnStartAnimationCues(
+      placedGraph.extension,
+    );
+    assert(
+      placedCues.length ===
+        (projectModel.importMetadata?.animations.length ?? 0),
+      "the placed graph does not play every clip the Model carries",
+    );
+    assert(
+      placedCues.every((cue) => (cue.endTime ?? null) === null),
+      "a placed clip carries an end time, so it would play once instead of looping",
     );
     assert(
       placedEntity?.components.some((component) => component.type === "mesh") &&
@@ -2143,6 +2171,9 @@ export function runVisualCompilerFixtureAssertions(
     );
     const animationDocuments: VisualCompilerDocuments = {
       ...modelProject,
+      // Placement created the graph that plays the Model, so the manifest it
+      // returned is the one the Scene refers to.
+      assets: animationPlacement.assets,
       scenes: {
         [animationPlacement.scene.sceneId]: animationPlacement.scene,
       },
@@ -2160,12 +2191,9 @@ export function runVisualCompilerFixtureAssertions(
       "useAnimations",
       "const { scene, animations } = useGLTF(modelUrl);",
       "const animationRoot = useRef<Group>(null);",
-      "const { actions, names } = useAnimations(animations, animationRoot);",
-      "const clipName = names[0];",
-      "const action = clipName ? actions[clipName] : undefined;",
-      "action.setLoop(LoopRepeat, Infinity);",
-      "action.timeScale = 1;",
-      "return () => {\n      action.stop();\n    };",
+      "const { mixer, clips } = useAnimations(animations, animationRoot);",
+      "createXriftAnimationRuntimeBridge",
+      "createXriftAnimationMixerController",
       "ref={animationRoot}",
     ].forEach((fragment) =>
       assert(
@@ -2173,11 +2201,16 @@ export function runVisualCompilerFixtureAssertions(
         `Animated GLB source is missing: ${fragment}`,
       ),
     );
-    // The live Animation bridge only ships where something can send it a
-    // command; a Scene with nothing to command it keeps the smaller output.
-    assert(
-      !animationSource.includes("createXriftAnimationRuntimeBridge"),
-      "an Animation bridge was emitted for a Scene with nothing to command it",
+    // Nothing plays on its own any more: what starts a clip is a node, so the
+    // published source must not carry an autoplay effect of its own.
+    [
+      "const clipName = names[0];",
+      "action.setLoop(LoopRepeat, Infinity);",
+    ].forEach((fragment) =>
+      assert(
+        !animationSource.includes(fragment),
+        `Animated GLB source still autoplays without a graph: ${fragment}`,
+      ),
     );
     const triggerGraphId = "asset-animated-trigger-graph";
     const triggerEntity =
@@ -2233,7 +2266,7 @@ export function runVisualCompilerFixtureAssertions(
       "createXriftAnimationRuntimeBridge",
       "createXriftAnimationMixerController",
       "XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY",
-      "const { actions, names, mixer, clips } = useAnimations(animations, animationRoot);",
+      "const { mixer, clips } = useAnimations(animations, animationRoot);",
       "animationBridge.current?.sample();",
     ].forEach((fragment) =>
       assert(
@@ -2250,11 +2283,70 @@ export function runVisualCompilerFixtureAssertions(
       "the Animation mixer overlay did not ship with its bridge",
     );
 
-    assertAnimationClipSelection(
-      animationDocuments,
-      projectModel.id,
-      fixedTime,
+    // A graph built from a Model's clips runs without an Animation Component:
+    // the Component owns one clip, and having sixty-four is the reason to reach
+    // for a graph. Publishing has to ship the mixer anyway, or those clips
+    // never move in the world.
+    const graphOnlyEntity = {
+      ...triggerEntity,
+      components: [
+        ...triggerEntity.components.filter(
+          (component) => (component as { type: string }).type !== "animation",
+        ),
+        triggerComponent,
+      ],
+    };
+    const graphOnlyResult = compileVisualProject(
+      {
+        ...triggeredDocuments,
+        assets: {
+          ...triggeredDocuments.assets,
+          assets: {
+            ...triggeredDocuments.assets.assets,
+            [triggerGraphId]: {
+              ...(triggeredDocuments.assets.assets[triggerGraphId] as Extract<
+                (typeof triggeredDocuments.assets.assets)[string],
+                { kind: "interactivity" }
+              >),
+              extension: createModelAnimationGraphExtension(["Idle", "Wave"]),
+            },
+          },
+        },
+        scenes: {
+          [animationPlacement.scene.sceneId]: {
+            ...animationPlacement.scene,
+            entities: {
+              ...animationPlacement.scene.entities,
+              [triggerEntity.id]: graphOnlyEntity,
+            },
+          },
+        },
+      },
+      { generatedAt: fixedTime },
     );
+    const graphOnlySource =
+      graphOnlyResult.overlayFiles.find(
+        (file) => file.relativePath === "src/World.tsx",
+      )?.content ?? "";
+    assert(
+      !graphOnlyEntity.components.some(
+        (component) => (component as { type: string }).type === "animation",
+      ),
+      "the graph-only Entity still carries an Animation Component",
+    );
+    [
+      "createXriftAnimationRuntimeBridge",
+      "createXriftAnimationMixerController",
+      // No Animation Component means no autoplay bindings; the mixer and the
+      // clips are the whole reason this block exists.
+      "const { mixer, clips } = useAnimations(animations, animationRoot);",
+    ].forEach((fragment) =>
+      assert(
+        graphOnlySource.includes(fragment),
+        `A Model played only by a graph is missing: ${fragment}`,
+      ),
+    );
+
     const retainedAnimationResult = compileVisualProject(
       {
         ...animationDocuments,
@@ -2274,23 +2366,31 @@ export function runVisualCompilerFixtureAssertions(
       },
       { generatedAt: fixedTime },
     );
+    // Turning the Model's import recipe off changes what a *new* placement
+    // does; a graph already in the Scene keeps playing what it names.
     assert(
       retainedAnimationResult.overlayFiles.some(
         (file) =>
           file.relativePath === "src/World.tsx" &&
           file.content.includes("useAnimations"),
       ),
-      "An existing Animation component stopped after the placement recipe changed",
+      "An existing animation graph stopped after the placement recipe changed",
     );
     const runtimeAnimationResult = compileVisualProject(animationDocuments, {
       generatedAt: fixedTime,
       outputMode: "classic-runtime",
     });
+    const runtimeAnimationManifest =
+      runtimeAnimationResult.runtimeManifestFile?.content ?? "";
+    // v1 publishes no Animation Component at all: the graph is what plays a
+    // clip, and a Component in the manifest would be one nothing reads.
     assert(
-      runtimeAnimationResult.runtimeManifestFile?.content.includes(
-        '"type": "animation"',
-      ),
-      "Runtime manifest did not preserve the Animation component",
+      !runtimeAnimationManifest.includes('"type": "animation"'),
+      "Runtime manifest still carries an Animation Component",
+    );
+    assert(
+      runtimeAnimationManifest.includes('"type": "interaction-trigger"'),
+      "Runtime manifest lost the Trigger that plays the Model's clips",
     );
   }
   const hierarchyModel: ModelAsset = {
@@ -3250,120 +3350,4 @@ function extractNamedEntitySource(source: string, entityName: string): string {
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
-}
-
-/**
- * Covers Animation clip selection and playback speed: an explicit clip must be
- * emitted by name, an unknown clip must warn instead of playing another clip,
- * and the runtime manifest must carry both fields.
- */
-function assertAnimationClipSelection(
-  documents: VisualCompilerDocuments,
-  modelAssetId: string,
-  generatedAt: string,
-): void {
-  const model = documents.assets.assets[modelAssetId];
-  assert(
-    model?.kind === "model" && model.importMetadata,
-    "Animation clip fixture needs the imported Model metadata",
-  );
-  const multiClipModel: ModelAsset = {
-    ...model,
-    importMetadata: {
-      ...model.importMetadata,
-      animations: [
-        ...model.importMetadata.animations,
-        { name: "Wave", duration: 1.5, trackCount: 3, sourceAnimationIndex: 1 },
-      ],
-    },
-  };
-
-  const withAnimationPatch = (
-    patch: Partial<AnimationComponent>,
-  ): VisualCompilerDocuments => ({
-    ...documents,
-    assets: {
-      ...documents.assets,
-      assets: {
-        ...documents.assets.assets,
-        [modelAssetId]: multiClipModel,
-      },
-    },
-    scenes: Object.fromEntries(
-      Object.entries(documents.scenes).map(([sceneId, scene]) => [
-        sceneId,
-        {
-          ...scene,
-          entities: Object.fromEntries(
-            Object.entries(scene.entities).map(([entityId, entity]) => [
-              entityId,
-              {
-                ...entity,
-                components: entity.components.map((component) =>
-                  component.type === "animation"
-                    ? { ...component, ...patch }
-                    : component,
-                ),
-              },
-            ]),
-          ),
-        },
-      ]),
-    ),
-  });
-
-  const selectedResult = compileVisualProject(
-    withAnimationPatch({ clipName: "Wave", speed: 2 }),
-    { generatedAt },
-  );
-  const selectedSource =
-    selectedResult.overlayFiles.find(
-      (file) => file.relativePath === "src/World.tsx",
-    )?.content ?? "";
-  assert(selectedResult.canStage, "A selected Animation clip should be stageable");
-  ['const clipName = "Wave";', "action.timeScale = 2;"].forEach((fragment) =>
-    assert(
-      selectedSource.includes(fragment),
-      `Selected Animation clip source is missing: ${fragment}`,
-    ),
-  );
-  assert(
-    selectedSource.includes(
-      "const { actions } = useAnimations(animations, animationRoot);",
-    ) && !selectedSource.includes("names"),
-    "A named Animation clip must not read the runtime clip name list",
-  );
-
-  const missingResult = compileVisualProject(
-    withAnimationPatch({ clipName: "Missing", speed: 1 }),
-    { generatedAt },
-  );
-  const missingSource =
-    missingResult.overlayFiles.find(
-      (file) => file.relativePath === "src/World.tsx",
-    )?.content ?? "";
-  assert(
-    missingResult.diagnostics.some(
-      (diagnostic) =>
-        diagnostic.code === "animation-clip-missing" &&
-        diagnostic.severity === "warning" &&
-        diagnostic.message.includes("Missing"),
-    ),
-    "An Animation clip that is gone from the Model must be reported",
-  );
-  assert(
-    !missingSource.includes("useAnimations"),
-    "An Animation clip that is gone from the Model must not play another clip",
-  );
-
-  const runtimeResult = compileVisualProject(
-    withAnimationPatch({ clipName: "Wave", speed: 2 }),
-    { generatedAt, outputMode: "classic-runtime" },
-  );
-  const runtimeManifest = runtimeResult.runtimeManifestFile?.content ?? "";
-  assert(
-    runtimeManifest.includes('"clipName": "Wave"') &&
-      runtimeManifest.includes('"speed": 2'),
-    "Runtime manifest did not preserve the Animation clip and speed",
-  );
 }

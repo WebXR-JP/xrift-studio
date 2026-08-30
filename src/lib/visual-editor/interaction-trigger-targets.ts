@@ -2,6 +2,7 @@ import {
   getXriftInteractionProperties,
   getXriftInteractionProperty,
   XRIFT_INTERACTION_SCENE_ENTITY_ID,
+  XRIFT_INTERACTION_SELF_ENTITY_ID,
   XRIFT_INTERACTION_TARGET_LABELS,
   type XriftInteractionPropertyDescriptor,
   type XriftInteractionTargetKind,
@@ -55,11 +56,58 @@ function componentLabel(
 
 export function collectInteractionTriggerTargets(
   scene: SceneDocument,
+  /**
+   * The manifest, to know which Entities have clips.
+   *
+   * Animation is no longer a Component to look for — v1 removed it — so the
+   * only way to say whether an Entity can be animated is to ask the Model it
+   * draws. Optional so a caller that only wants the Transform and Material
+   * rows does not have to carry one.
+   */
+  assets?: AssetManifest,
 ): InteractionTriggerTargetEntity[] {
   // The Scene itself comes first: exposure and the screen fade belong to no
   // Entity, and burying them under an arbitrary one would make an author hunt
   // for the target of a change that covers the whole view.
   const targets: InteractionTriggerTargetEntity[] = [
+    {
+      // Named before any real Entity because it is the answer that keeps the
+      // graph reusable: the same「押したら開く」on every door, each opening
+      // itself. Component ids are left empty on purpose — the owner is not
+      // known while authoring, so the runtime takes whichever Light or Audio
+      // Source that Entity turns out to have.
+      entityId: XRIFT_INTERACTION_SELF_ENTITY_ID,
+      name: "このグラフが付いた Entity",
+      path: "付けた先で決まる",
+      components: [
+        {
+          componentId: "",
+          targetKind: "entity",
+          label: ENTITY_SELF_LABEL,
+          properties: getXriftInteractionProperties("entity"),
+        },
+        {
+          componentId: "transform",
+          targetKind: "transform",
+          label: XRIFT_INTERACTION_TARGET_LABELS.transform,
+          properties: getXriftInteractionProperties("transform"),
+        },
+        {
+          componentId: "material",
+          targetKind: "material",
+          label: XRIFT_INTERACTION_TARGET_LABELS.material,
+          properties: getXriftInteractionProperties("material"),
+        },
+        ...(["animation", "audio-source", "light", "particle"] as const).map(
+          (targetKind) => ({
+            componentId: "",
+            targetKind,
+            label: XRIFT_INTERACTION_TARGET_LABELS[targetKind],
+            properties: getXriftInteractionProperties(targetKind),
+          }),
+        ),
+      ],
+    },
     {
       entityId: XRIFT_INTERACTION_SCENE_ENTITY_ID,
       name: "Scene",
@@ -114,13 +162,18 @@ export function collectInteractionTriggerTargets(
           properties: getXriftInteractionProperties("audio-source"),
         });
         audioIndex += 1;
-      } else if (component.type === "animation") {
-        components.push({
-          componentId: component.id,
-          targetKind: "animation",
-          label: XRIFT_INTERACTION_TARGET_LABELS.animation,
-          properties: getXriftInteractionProperties("animation"),
-        });
+      } else if (component.type === "mesh" && entityMeshHasClips(component, assets)) {
+        // Animation belongs to the Model this Entity draws, not to a Component:
+        // v1 removed the Animation Component, and a clip is addressed on the
+        // Entity's own mixer. The empty id says exactly that.
+        if (!components.some((candidate) => candidate.targetKind === "animation")) {
+          components.push({
+            componentId: "",
+            targetKind: "animation",
+            label: XRIFT_INTERACTION_TARGET_LABELS.animation,
+            properties: getXriftInteractionProperties("animation"),
+          });
+        }
       } else if (component.type === "particle-emitter") {
         components.push({
           componentId: component.id,
@@ -289,4 +342,15 @@ export function formatTriggerValue(
       return option?.label ?? "既定値";
     }
   }
+}
+
+/** Whether the Model this Mesh draws carries animation clips. */
+function entityMeshHasClips(
+  mesh: Extract<SceneEntity["components"][number], { type: "mesh" }>,
+  assets: AssetManifest | undefined,
+): boolean {
+  const assetId =
+    mesh.geometry?.kind === "asset" ? mesh.geometry.assetId : mesh.geometryAssetId;
+  const asset = assetId ? assets?.assets[assetId] : undefined;
+  return asset?.kind === "model" && (asset.importMetadata?.animations.length ?? 0) > 0;
 }

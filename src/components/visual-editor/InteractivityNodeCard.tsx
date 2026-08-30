@@ -193,8 +193,8 @@ export const NODE_CARD_WIDTH = INTERACTIVITY_NODE_CARD_WIDTH;
 export const FLOW_SOCKET_COLOR = "#a78bfa";
 export const VALUE_SOCKET_COLOR = "#22d3ee";
 
-const SOCKET_ROW_HEIGHT = 24;
-const SOCKET_ROW_PADDING = 8;
+const SOCKET_ROW_HEIGHT = 20;
+const SOCKET_ROW_PADDING = 6;
 
 /**
  * Where a socket handle sits inside the node body.
@@ -228,6 +228,58 @@ export const CANVAS_NAVIGATION = {
   maxZoom: 2,
 } as const;
 
+/**
+ * What each socket is for, in the words an author would use.
+ *
+ * 「出力」and「イベント」sit next to each other on the same card and say
+ * nothing about which one to drag: one continues the flow, the other is a value
+ * another node reads. Hovering has to answer that, because the colour alone
+ * only says they are different.
+ */
+const SOCKET_HINTS: Readonly<Record<string, string>> = {
+  in: "ここへ前のノードの流れをつなぎます",
+  out: "この操作を始めた直後に、次のノードへ進みます",
+  done: "この操作が終わってから、次のノードへ進みます",
+  err: "この操作ができなかったときに、次のノードへ進みます",
+  cancel: "ここへ流れが来ると、待機を取り消します",
+  reset: "ここへ流れが来ると、数えた回数や状態を戻します",
+  completed: "必要な入力がすべて揃ってから進みます",
+  loopBody: "繰り返しの 1 回ごとに、ここから先が動きます",
+  default: "どの番号にも当てはまらなかったときに進みます",
+  condition: "true か false を出すノードをつなぎます",
+  selection: "整数を出すノードをつなぎます。その番号の出力へ進みます",
+  duration: "秒数。0 ならその場で、正の値ならその時間をかけて変わります",
+  delay: "取り消したい待機の ID。「待機」の待機ID からつなぎます",
+  lastDelay: "この待機の ID。「待機を取り消す」へつなげます",
+  value: "書き込む値。数を出すノードをつないでも、直接入力してもかまいません",
+  animation: "再生するクリップの番号",
+  startTime: "クリップの何秒目から再生するか",
+  endTime: "クリップの何秒目で止めるか",
+  stopTime: "何秒目で止めるか",
+  speed: "再生の速さ。1 が等速、2 で倍速",
+  n: "何回まで通すか",
+  startIndex: "繰り返しの開始番号",
+  endIndex: "繰り返しの終了番号",
+  index: "いま何回目かを出します。他のノードの値としてつなげます",
+  event: "このノードが動いたことを値として出します",
+  a: "1 つめの値",
+  b: "2 つめの値",
+  c: "3 つめの値",
+};
+
+function socketHint(socket: string, kind: "flow" | "value", side: "left" | "right"): string {
+  const hint = SOCKET_HINTS[socket];
+  const role =
+    kind === "flow"
+      ? side === "left"
+        ? "flow の入力"
+        : "flow の出力"
+      : side === "left"
+        ? "value の入力"
+        : "value の出力";
+  return hint ? `${socket}（${role}）\n${hint}` : `${socket}（${role}）`;
+}
+
 function SocketRow({
   socket,
   side,
@@ -239,8 +291,8 @@ function SocketRow({
 }) {
   return (
     <p
-      title={socket}
-      className={`h-6 truncate leading-6 ${side === "right" ? "text-right" : "text-left"} ${
+      title={socketHint(socket, kind, side)}
+      className={`h-5 truncate leading-5 ${side === "right" ? "text-right" : "text-left"} ${
         kind === "flow" ? "font-semibold text-violet-200" : "text-cyan-200"
       }`}
     >
@@ -265,9 +317,9 @@ export function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNod
         selected ? "ring-2 ring-brand-400 ring-offset-2 ring-offset-slate-900" : ""
       } ${unreached ? "opacity-45" : ""}`}
     >
-      <header className="rounded-t-md border-b border-white/10 px-3 py-2">
+      <header className="rounded-t-md border-b border-white/10 px-2.5 py-1.5">
         <div className="flex items-center gap-1.5">
-          <p className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-[0.14em] opacity-60">
+          <p className="min-w-0 flex-1 truncate text-[9px] font-semibold uppercase tracking-[0.12em] opacity-60">
             {CATEGORY_LABEL[data.category]}
           </p>
           {unreached ? (
@@ -296,7 +348,7 @@ export function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNod
         </div>
         <p
           title={data.label}
-          className="mt-0.5 line-clamp-2 text-sm font-bold leading-5"
+          className="mt-0.5 line-clamp-2 text-[13px] font-bold leading-[1.3]"
         >
           {data.label}
         </p>

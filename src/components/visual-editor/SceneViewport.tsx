@@ -123,7 +123,6 @@ import {
   type ClassicR3fMaterialShader,
   type ResolvedSceneLighting,
   type ResolvedWind,
-  type AnimationComponent,
   type AudioSourceComponent,
   type ColliderComponent,
   type MaterialAsset,
@@ -509,7 +508,6 @@ function RenderDistanceGate({
 
 function MeshVisual({
   component,
-  animation,
   playing,
   assets,
   selected,
@@ -518,7 +516,6 @@ function MeshVisual({
   projectPath,
 }: {
   component: MeshComponent;
-  animation?: AnimationComponent;
   playing: boolean;
   assets: AssetManifest;
   selected: boolean;
@@ -610,7 +607,6 @@ function MeshVisual({
           assets={assets}
           assignedMaterials={assignedModelMaterials}
           pose={component.modelPose}
-          animation={animation}
           playing={playing}
           declaredInteractionAnimationIndices={
             geometry.id === STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID &&
@@ -1466,7 +1462,6 @@ function DirectionArrow({
 
 function ComponentVisual({
   component,
-  animation,
   playing,
   assets,
   selected,
@@ -1481,7 +1476,6 @@ function ComponentVisual({
   projectPath,
 }: {
   component: SceneComponent;
-  animation?: AnimationComponent;
   playing: boolean;
   assets: AssetManifest;
   selected: boolean;
@@ -1504,7 +1498,6 @@ function ComponentVisual({
         <group userData={{ meshComponentId: component.id }}>
           <MeshVisual
             component={component}
-            animation={animation}
             playing={playing}
             assets={assets}
             selected={materialDragActive ? materialDropHighlighted : selected}
@@ -1579,8 +1572,6 @@ function ComponentVisual({
       ) : showHelpers && component.enabled ? (
         <AudioSourceVisual selected={selected} />
       ) : null;
-    case "animation":
-      return null;
     case "spawn-point":
       return showHelpers && component.enabled ? (
         <SpawnPoint position={[0, 0, 0]} yaw={0} />
@@ -1829,10 +1820,6 @@ function EntityObject({
   const objectRef = useRef<Group>(null!);
   const transformControlsRef = useRef<ElementRef<typeof TransformControls>>(null);
   const transform = getTransform(entity);
-  const animation = entity.components.find(
-    (component): component is AnimationComponent =>
-      component.type === "animation" && component.enabled,
-  );
   const enabledColliders = entity.components.filter(
     (component): component is ColliderComponent =>
       component.type === "collider" && component.enabled,
@@ -1906,7 +1893,6 @@ function EntityObject({
           <ComponentVisual
             key={component.id}
             component={component}
-            animation={animation}
             playing={playing}
             assets={assets}
             selected={selected}

@@ -62,7 +62,6 @@ type HierarchyKindFilter =
   | "collider"
   | "audio-source"
   | "particle-emitter"
-  | "animation"
   | "spawn-point"
   | "xrift-component";
 
@@ -227,7 +226,6 @@ function entityMatchesKindFilters(
       case "collider":
       case "audio-source":
       case "particle-emitter":
-      case "animation":
       case "spawn-point":
       case "xrift-component":
         return entity.components.some((component) => component.type === kind);
@@ -359,7 +357,6 @@ const HIERARCHY_KIND_FILTERS = [
   { id: "collider", label: "コライダー", icon: EDITOR_ICONS.primitive },
   { id: "audio-source", label: "オーディオ", icon: EDITOR_ICONS.audio },
   { id: "particle-emitter", label: "パーティクル", icon: EDITOR_ICONS.particle },
-  { id: "animation", label: "アニメーション", icon: EDITOR_ICONS.animation },
   { id: "spawn-point", label: "スポーン", icon: EDITOR_ICONS.spawn },
   { id: "xrift-component", label: "XRift Component", icon: EDITOR_ICONS.component },
 ] as const satisfies ReadonlyArray<{

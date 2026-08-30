@@ -12,6 +12,7 @@ import {
   xriftInteractionEnumIndex,
   XRIFT_INTERACTION_EXTENSION_NAME,
   XRIFT_INTERACTION_OPERATIONS,
+  XRIFT_INTERACTION_SELF_ENTITY_ID,
   type XriftInteractionPropertyDescriptor,
   type XriftInteractionTargetKind,
 } from "../../../packages/xrift-studio-runtime/src/script/interaction-trigger";
@@ -546,12 +547,13 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     flowOutputs: ["out", "done"],
     valueInputs: ["value", "duration"],
     valueOutputs: [],
-    // A new action starts on the Entity's own visibility: the one property
-    // every Entity has, so the node is complete except for its target. The
+    // A new action starts complete: the Entity this graph is attached to, and
+    // the one property every Entity has. Naming an id here instead would tie
+    // the graph to one Scene before the author had chosen anything. The
     // duration starts at zero, which is an immediate write.
     createNode: (types) => ({
       configuration: {
-        entity: { value: [""] },
+        entity: { value: [XRIFT_INTERACTION_SELF_ENTITY_ID] },
         component: { value: [""] },
         targetKind: { value: ["entity"] },
         property: { value: ["enabled"] },
@@ -963,39 +965,24 @@ function nodeWithPosition(
 }
 
 /** The Khronos specification's onStart -> animation/start shape, with animation 0. */
+/**
+ * What a new graph starts as: one「開始時」node and nothing else.
+ *
+ * It used to start as `event/onStart` → `animation/start`, named "Animation on
+ * start". That is a fine sample and a bad default: `animation/start` needs a
+ * Model with clips on the Entity, so a fresh graph opened with a node already
+ * marked「接続が必要」, and the graph list said "Animation on start" for a graph
+ * that had nothing to do with animation. A single entry point makes no promise
+ * the Scene has not kept.
+ */
 export function createDefaultKhrInteractivityExtension(): KhrInteractivityExtension {
   return {
     graph: 0,
     graphs: [
       {
-        name: "Animation on start",
-        types: [{ signature: "float" }, { signature: "int" }],
-        declarations: [
-          { op: "event/onStart" },
-          { op: "math/Inf" },
-          { op: "animation/start" },
-        ],
-        nodes: [
-          nodeWithPosition(
-            { declaration: 0, flows: { out: { node: 2 } } },
-            80,
-            160,
-          ),
-          nodeWithPosition({ declaration: 1 }, 330, 330),
-          nodeWithPosition(
-            {
-              declaration: 2,
-              values: {
-                animation: { type: 1, value: [0] },
-                startTime: { type: 0, value: [0] },
-                endTime: { node: 1 },
-                speed: { type: 0, value: [1] },
-              },
-            },
-            590,
-            160,
-          ),
-        ],
+        name: "メイン",
+        declarations: [{ op: "event/onStart" }],
+        nodes: [nodeWithPosition({ declaration: 0 }, 120, 160)],
       },
     ],
   };
@@ -1037,6 +1024,7 @@ export {
   XRIFT_INTERACTION_EXTENSION_NAME,
   XRIFT_INTERACTION_OPERATIONS,
   XRIFT_INTERACTION_PROPERTIES,
+  XRIFT_INTERACTION_SELF_ENTITY_ID,
   XRIFT_INTERACTION_TARGET_KINDS,
   XRIFT_INTERACTION_TARGET_LABELS,
 } from "../../../packages/xrift-studio-runtime/src/script/interaction-trigger";
@@ -1266,6 +1254,27 @@ export function setInteractivityTriggerActionDuration(
     duration: { type: typeIndex, value: [Math.max(0, seconds)] },
   };
   return true;
+}
+
+/**
+ * The clip name a generated animation node was built from.
+ *
+ * `animation/start` addresses a clip by index, so a graph made from a Model's
+ * sixty-four clips is sixty-four cards that read「アニメーション再生」and differ
+ * only in a number. The name is written into `extras` at generation time and
+ * shown on the card; it is documentation, and nothing reads it at runtime, so a
+ * graph whose extras were stripped still plays.
+ */
+export function readInteractivityClipName(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+): string | undefined {
+  const extras = graph.nodes?.[nodeIndex]?.extras?.xriftStudio;
+  if (typeof extras !== "object" || extras === null || Array.isArray(extras)) {
+    return undefined;
+  }
+  const name = (extras as Record<string, unknown>).clipName;
+  return typeof name === "string" && name.trim().length > 0 ? name : undefined;
 }
 
 export function readInteractivityTriggerActionDuration(
@@ -1742,7 +1751,18 @@ export function removeInteractivityGraph(
 
 export function addDefaultInteractivityAsset(
   manifest: AssetManifest,
-  input: { id: string; name: string; folderId: string | null },
+  input: {
+    id: string;
+    name: string;
+    folderId: string | null;
+    /**
+     * A graph to seed instead of the empty default, for the creation paths that
+     * already know what the Asset is for — a Model's clips, an Interaction
+     * Trigger's entry point. Callers pass a graph they built with the same
+     * authoring helpers the editor uses, so nothing here has to know the shape.
+     */
+    extension?: KhrInteractivityExtension;
+  },
 ): { manifest: AssetManifest; assetId: string; added: boolean } {
   const id = input.id.trim();
   const name = input.name.trim();
@@ -1768,7 +1788,7 @@ export function addDefaultInteractivityAsset(
     order: Math.max(-1, ...siblingOrders) + 1,
     extensionName: KHR_INTERACTIVITY_EXTENSION_NAME,
     specStatus: KHR_INTERACTIVITY_SPEC_STATUS,
-    extension: createDefaultKhrInteractivityExtension(),
+    extension: input.extension ?? createDefaultKhrInteractivityExtension(),
   };
   return {
     manifest: {
@@ -1808,9 +1828,9 @@ export function updateInteractivityAsset(
  * sides — otherwise a graph an AI wrote opens as a stack of overlapping cards
  * and the author's first act is to press 整列.
  */
-export const INTERACTIVITY_NODE_CARD_WIDTH = 256;
-const INTERACTIVITY_SOCKET_ROW_HEIGHT = 24;
-const INTERACTIVITY_SOCKET_ROW_PADDING = 8;
+export const INTERACTIVITY_NODE_CARD_WIDTH = 216;
+const INTERACTIVITY_SOCKET_ROW_HEIGHT = 20;
+const INTERACTIVITY_SOCKET_ROW_PADDING = 6;
 const INTERACTIVITY_NODE_PLACEMENT_GAP = 32;
 const INTERACTIVITY_LAYOUT_COLUMN_GAP = 88;
 const INTERACTIVITY_LAYOUT_ROW_GAP = 40;
@@ -1830,14 +1850,25 @@ export function estimateInteractivityNodeHeight(
   const node = graph.nodes?.[index];
   const op = node ? graph.declarations?.[node.declaration]?.op : undefined;
   const template = op ? getInteractivityOperationTemplate(op) : undefined;
-  const inputs =
-    (template?.flowInputs ?? ["in"]).length + (template?.valueInputs ?? []).length;
-  const outputs =
-    (template?.flowOutputs ?? []).length + (template?.valueOutputs ?? []).length;
+  // Counted the way the card draws them: a socket the node actually uses is a
+  // row whether or not its template declared one. `flow/sequence` is the case
+  // that makes this matter — its template names three outputs and the spec runs
+  // as many as are connected, so measuring the template alone puts the next
+  // card on top of a sequence that fans out to eight.
+  const inputs = new Set([
+    ...(template?.flowInputs ?? ["in"]),
+    ...(template?.valueInputs ?? []),
+    ...Object.keys(node?.values ?? {}),
+  ]).size;
+  const outputs = new Set([
+    ...(template?.flowOutputs ?? []),
+    ...(template?.valueOutputs ?? []),
+    ...Object.keys(node?.flows ?? {}),
+  ]).size;
   const rows = Math.max(inputs, outputs, 1);
   // Header: category row, up to two title lines, the operation name, and the
   // optional summary an Interaction Trigger action carries.
-  const header = op && isInteractivityTriggerActionOp(op) ? 112 : 92;
+  const header = op && isInteractivityTriggerActionOp(op) ? 94 : 76;
   return (
     header +
     rows * INTERACTIVITY_SOCKET_ROW_HEIGHT +

@@ -21,6 +21,12 @@ import {
 } from "./open-brush-hierarchy";
 import { expandModelEntityHierarchy } from "./model-hierarchy";
 import {
+  clearAnimationActionComponentIds,
+  migrateAnimationComponentsInEntities,
+  type AnimationComponentMigrationResult,
+} from "./animation-component-migration";
+import { createDocumentId } from "./document-id";
+import {
   STARTER_ASSET_FOLDER_IDS,
   type StarterAssetCopyPlanEntry,
   type StarterVisualProjectPlan,
@@ -39,6 +45,20 @@ export type VisualProjectDocuments = {
   scenes: Record<string, SceneDocument>;
   assets: AssetManifest;
   prefabs: Record<string, PrefabDocument>;
+  /**
+   * What opening the project had to convert, when it was saved before v1.
+   *
+   * Present only when something changed, so an editor can say so once. The
+   * documents returned are already converted; this is the report, not a step
+   * still to take.
+   */
+  animationMigration?: Pick<
+    AnimationComponentMigrationResult,
+    "converted" | "skipped"
+  > & {
+    /** Animation actions whose stale Component id was dropped. */
+    clearedActions?: number;
+  };
 };
 
 export type PreparedStarterVisualProject = {
@@ -389,7 +409,79 @@ export function parseVisualProjectFiles(
     throw new Error("One or more prefab documents are missing");
   }
   validatePrefabReferences(prefabs, assets, prefabPaths);
-  return { project, scenes, assets, prefabs };
+
+  /*
+   * v1 removed the Animation Component. A document saved before that still has
+   * them, and the runtime no longer looks: converting on open is the only
+   * moment where the clip, the loop and the speed the author chose are still
+   * written down. Scenes and Prefabs go through together against one manifest,
+   * because a Prefab left un-converted would stop animating the moment it was
+   * placed.
+   */
+  let migratedAssets = assets;
+  const converted: AnimationComponentMigrationResult["converted"] = [];
+  const skipped: AnimationComponentMigrationResult["skipped"] = [];
+  const migratedScenes: Record<string, SceneDocument> = {};
+  for (const [sceneId, scene] of Object.entries(scenes)) {
+    const result = migrateAnimationComponentsInEntities(
+      scene.entities,
+      migratedAssets,
+      createDocumentId,
+    );
+    migratedAssets = result.assets;
+    converted.push(...result.converted);
+    skipped.push(...result.skipped);
+    migratedScenes[sceneId] =
+      result.entities === scene.entities
+        ? scene
+        : { ...scene, entities: result.entities };
+  }
+  const migratedPrefabs: Record<string, PrefabDocument> = {};
+  for (const [prefabId, prefab] of Object.entries(prefabs)) {
+    const result = migrateAnimationComponentsInEntities(
+      prefab.entities,
+      migratedAssets,
+      createDocumentId,
+    );
+    migratedAssets = result.assets;
+    converted.push(...result.converted);
+    skipped.push(...result.skipped);
+    migratedPrefabs[prefabId] =
+      result.entities === prefab.entities
+        ? prefab
+        : { ...prefab, entities: result.entities };
+  }
+
+  /*
+   * A graph written before v1 names the Animation Component it acted on.
+   * Animation is addressed per Entity now, so that id points at nothing: the
+   * runtime ignores it, and the Editor's picker would otherwise show the action
+   * as targeting a Component that is not in the Scene.
+   */
+  let clearedActions = 0;
+  for (const [assetId, asset] of Object.entries(migratedAssets.assets)) {
+    if (asset.kind !== "interactivity") continue;
+    const result = clearAnimationActionComponentIds(asset.extension);
+    if (result.cleared === 0) continue;
+    clearedActions += result.cleared;
+    migratedAssets = {
+      ...migratedAssets,
+      assets: {
+        ...migratedAssets.assets,
+        [assetId]: { ...asset, extension: result.extension },
+      },
+    };
+  }
+
+  return {
+    project,
+    scenes: migratedScenes,
+    assets: migratedAssets,
+    prefabs: migratedPrefabs,
+    ...(converted.length > 0 || skipped.length > 0 || clearedActions > 0
+      ? { animationMigration: { converted, skipped, clearedActions } }
+      : {}),
+  };
 }
 
 function serializePrefabDocuments(

@@ -1988,54 +1988,49 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
       const target = result.entities.get(entity.id);
       const clips = result.animationClipsByEntity.get(entity.id) ?? [];
       if (!target || clips.length === 0) return [];
-      const component = entity.components.find(
-        (
-          candidate,
-        ): candidate is Extract<
-          XriftRuntimeComponent,
-          { type: "animation" }
-        > =>
-          candidate.type === "animation" &&
-          candidate.enabled,
-      );
-      const selectedIndex =
-        component?.autoplay
-          ? component.clipName === undefined
-            ? 0
-            : clips.findIndex((clip) => clip.name === component.clipName)
-          : -1;
-      // The earliest cue for a clip wins: the Animation Component's own
-      // autoplay starts immediately, so an interactivity delay must never
-      // postpone a clip another source already starts now.
-      const delayByIndex = new Map<number, number>();
-      const noteCue = (index: number, delaySeconds: number): void => {
-        const known = delayByIndex.get(index);
-        if (known === undefined || delaySeconds < known) {
-          delayByIndex.set(index, delaySeconds);
-        }
-      };
-      if (selectedIndex >= 0) noteCue(selectedIndex, 0);
+      /*
+       * What plays, and how, comes only from the graph.
+       *
+       * v1 removed the Animation Component: one Component could name one clip,
+       * and a Model whose motion is split across dozens of them had no way to
+       * say "all of these". So loop and speed are per cue rather than per
+       * Entity, and an Entity with clips gets a mixer whether or not anything
+       * has started one yet — a graph can start a clip at any moment.
+       */
+      const planByIndex = new Map<
+        number,
+        { delaySeconds: number; loop: boolean; speed: number; startTime: number }
+      >();
       for (const cue of
         result.interactionAnimationCuesByEntity.get(entity.id) ?? []) {
-        noteCue(cue.animationIndex, cue.delaySeconds);
+        const known = planByIndex.get(cue.animationIndex);
+        // The earliest start for a clip wins: two graphs starting the same clip
+        // is one clip playing, from the first moment either of them asked.
+        if (known && known.delaySeconds <= cue.delaySeconds) continue;
+        planByIndex.set(cue.animationIndex, {
+          delaySeconds: cue.delaySeconds,
+          // A start with no end time runs until something stops it, which on a
+          // mixer means looping. A graph that named an end time wants one pass.
+          loop: (cue.endTime ?? null) === null && cue.stopSeconds === undefined,
+          speed:
+            typeof cue.speed === "number" && Number.isFinite(cue.speed) && cue.speed !== 0
+              ? cue.speed
+              : 1,
+          startTime:
+            typeof cue.startTime === "number" && Number.isFinite(cue.startTime)
+              ? Math.max(0, cue.startTime)
+              : 0,
+        });
       }
-      const speed =
-        typeof component?.speed === "number" && Number.isFinite(component.speed)
-          ? component.speed
-          : 1;
-      const cues = [...delayByIndex.entries()].flatMap(([index, delaySeconds]) => {
+      const cues = [...planByIndex.entries()].flatMap(([index, plan]) => {
         const clip = clips[index];
-        return clip ? [{ clip, index, delaySeconds }] : [];
+        return clip ? [{ clip, index, ...plan }] : [];
       });
       return [
         {
           entityId: entity.id,
           target,
           clips,
-          componentId: component?.id ?? null,
-          loop: component?.loop ?? false,
-          selectedIndex,
-          speed,
           cues,
           mixer: new AnimationMixer(target),
           bridge: null as XriftAnimationRuntimeBridge | null,
@@ -2050,13 +2045,10 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
       for (const cue of entry.cues) {
         const action = entry.mixer.clipAction(cue.clip);
         action.reset();
-        action.clampWhenFinished = !entry.loop;
-        action.setLoop(
-          entry.loop ? LoopRepeat : LoopOnce,
-          entry.loop ? Infinity : 1,
-        );
-        // Speed applies to the selected clip, not interactivity-driven ones.
-        action.timeScale = cue.index === entry.selectedIndex ? entry.speed : 1;
+        action.clampWhenFinished = !cue.loop;
+        action.setLoop(cue.loop ? LoopRepeat : LoopOnce, cue.loop ? Infinity : 1);
+        action.timeScale = cue.speed;
+        if (cue.startTime > 0) action.time = cue.startTime;
         // `flow/setDelay` becomes mixer-clock scheduling rather than a timer, so
         // the wait stays in step with the same clock that advances the clip.
         if (cue.delaySeconds > 0) {
@@ -2064,22 +2056,24 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
         }
         action.play();
       }
-      if (!entry.componentId) continue;
+      // A bridge for every Entity that has clips. What it should play is not
+      // known here — a graph can start any clip at any moment — so the bridge
+      // carries no clip of its own and no owner id, and the cues above have
+      // already started whatever begins with the world.
       const bridge = createXriftAnimationRuntimeBridge({
-        componentId: entry.componentId,
+        componentId: "",
         clipNames: entry.clips.map((clip) => clip.name),
-        clipIndex: Math.max(0, entry.selectedIndex),
-        // The cues above already perform autoplay.
+        clipIndex: 0,
         autoplay: false,
-        speed: entry.speed,
-        loop: entry.loop,
+        speed: 1,
+        loop: false,
       });
       const controller = createXriftAnimationMixerController({
         mixer: entry.mixer,
         clips: entry.clips,
-        clipIndex: Math.max(0, entry.selectedIndex),
-        loop: entry.loop,
-        speed: entry.speed,
+        clipIndex: 0,
+        loop: false,
+        speed: 1,
       });
       const disconnect = bridge.connect(controller);
       const holder = entry.target.userData as Record<string, unknown>;

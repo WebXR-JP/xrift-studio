@@ -62,7 +62,6 @@ Hierarchy で Entity をドラッグして、別の Entity の下に移動でき
 - **Audio Source**: 音声、音量、ループ
 - **Collider**: 衝突判定の形状とサイズ
 - **Rigid Body**: 物理挙動
-- **Animation**: アニメーションの clip、Autoplay、Loop、再生速度
 - **Script**: Script Component のプロパティと参照
 
 ## Assets パネルで管理する

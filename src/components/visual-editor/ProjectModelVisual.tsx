@@ -62,8 +62,6 @@ import {
 } from "../../../packages/xrift-studio-runtime/src/shader-time";
 import {
   normalizeMaterialProperties,
-  animationPlaybackSpeed,
-  resolveAnimationClipIndex,
   applyCustomShaderSourceOverrides,
   bindCustomShaderGeometryAttributes,
   getKhrInteractivityOnStartAnimationCues,
@@ -75,7 +73,6 @@ import {
   resolveOpenBrushEditorBrushBaseUrl,
   validateGltfNodeHierarchy,
   type AssetManifest,
-  type AnimationComponent,
   type InteractivityAnimationCue,
   type ClassicR3fMaterialShader,
   type MaterialAsset,
@@ -122,7 +119,6 @@ type Props = {
   assets: AssetManifest;
   assignedMaterials: readonly ProjectModelMaterialAssignment[];
   pose?: ModelPoseState;
-  animation?: AnimationComponent;
   playing?: boolean;
   declaredInteractionAnimationIndices?: readonly number[];
   sourceNodeIndex?: number;
@@ -177,7 +173,15 @@ const EMPTY_ANIMATION_INDICES: readonly number[] = [];
 const EMPTY_ANIMATION_CUES: readonly InteractivityAnimationCue[] = [];
 
 /** One clip the mixer will play, and how long it waits before starting. */
-type ModelPlaybackCue = { clip: AnimationClip; delaySeconds: number };
+type ModelPlaybackCue = {
+  clip: AnimationClip;
+  delaySeconds: number;
+  /** An unbounded start loops; one with an end time plays a single pass. */
+  loop: boolean;
+  speed: number;
+  /** Clip-local seconds to start from. */
+  startTime: number;
+};
 const EMPTY_PLAYBACK_CUES: readonly ModelPlaybackCue[] = [];
 
 export function ProjectModelVisual({
@@ -191,7 +195,6 @@ export function ProjectModelVisual({
   assets,
   assignedMaterials,
   pose,
-  animation,
   playing = false,
   declaredInteractionAnimationIndices = EMPTY_ANIMATION_INDICES,
   sourceNodeIndex,
@@ -260,7 +263,6 @@ export function ProjectModelVisual({
           selected={selected}
           assignedMaterials={resolvedMaterials}
           pose={pose}
-          animation={animation}
           playing={playing}
           declaredInteractionAnimationIndices={
             declaredInteractionAnimationIndices
@@ -361,7 +363,6 @@ function ProjectModelRender({
   selected,
   assignedMaterials,
   pose,
-  animation,
   playing,
   declaredInteractionAnimationIndices,
   sourceNodeIndex,
@@ -377,7 +378,6 @@ function ProjectModelRender({
   selected: boolean;
   assignedMaterials: readonly ResolvedProjectModelMaterialAssignment[];
   pose?: ModelPoseState;
-  animation?: AnimationComponent;
   playing: boolean;
   declaredInteractionAnimationIndices: readonly number[];
   sourceNodeIndex?: number;
@@ -430,41 +430,58 @@ function ProjectModelRender({
     () => (renderedObject ? new AnimationMixer(renderedObject) : null),
     [renderedObject],
   );
-  const animationClipName = animation?.clipName;
-  const animationSpeed = animation ? animationPlaybackSpeed(animation) : 1;
-  const selectedClipIndex = useMemo(() => {
-    if (!animation?.enabled || !animation.autoplay) return -1;
-    return resolveAnimationClipIndex(
-      { clipName: animationClipName },
-      animations.map((clip) => clip.name),
-    );
-  }, [animation?.autoplay, animation?.enabled, animationClipName, animations]);
   const playbackCues = useMemo(() => {
     if (!playing) return EMPTY_PLAYBACK_CUES;
-    // The earliest cue for a clip wins: the Animation Component's own autoplay
-    // and the studio guide's declared clips both start immediately, so an
-    // interactivity delay must never postpone a clip another source starts now.
-    const delayByIndex = new Map<number, number>();
-    const noteCue = (index: number, delaySeconds: number): void => {
-      const known = delayByIndex.get(index);
-      if (known === undefined || delaySeconds < known) {
-        delayByIndex.set(index, delaySeconds);
-      }
+    /*
+     * What plays comes from the graph, and each clip brings its own settings.
+     *
+     * v1 removed the Animation Component, so there is no per-Entity loop or
+     * speed to fall back on: an `animation/start` with no end time runs until
+     * something stops it, which on a mixer is a loop, and one that named an end
+     * time wants a single pass. The earliest start for a clip wins, so two
+     * graphs asking for the same clip is one clip playing.
+     */
+    const planByIndex = new Map<
+      number,
+      { delaySeconds: number; loop: boolean; speed: number; startTime: number }
+    >();
+    const note = (
+      index: number,
+      plan: { delaySeconds: number; loop: boolean; speed: number; startTime: number },
+    ): void => {
+      const known = planByIndex.get(index);
+      if (known && known.delaySeconds <= plan.delaySeconds) return;
+      planByIndex.set(index, plan);
     };
-    if (selectedClipIndex >= 0) noteCue(selectedClipIndex, 0);
-    declaredInteractionAnimationIndices.forEach((index) => noteCue(index, 0));
-    interactionAnimationCues.forEach((cue) =>
-      noteCue(cue.animationIndex, cue.delaySeconds),
+    // The studio guide's bundled Model declares its own clips, which open a
+    // door once rather than looping.
+    declaredInteractionAnimationIndices.forEach((index) =>
+      note(index, { delaySeconds: 0, loop: false, speed: 1, startTime: 0 }),
     );
-    return [...delayByIndex.entries()].flatMap(([index, delaySeconds]) =>
-      animations[index] ? [{ clip: animations[index], delaySeconds }] : [],
+    interactionAnimationCues.forEach((cue) =>
+      note(cue.animationIndex, {
+        delaySeconds: cue.delaySeconds,
+        loop: (cue.endTime ?? null) === null && cue.stopSeconds === undefined,
+        speed:
+          typeof cue.speed === "number" &&
+          Number.isFinite(cue.speed) &&
+          cue.speed !== 0
+            ? cue.speed
+            : 1,
+        startTime:
+          typeof cue.startTime === "number" && Number.isFinite(cue.startTime)
+            ? Math.max(0, cue.startTime)
+            : 0,
+      }),
+    );
+    return [...planByIndex.entries()].flatMap(([index, plan]) =>
+      animations[index] ? [{ clip: animations[index], ...plan }] : [],
     );
   }, [
     animations,
     declaredInteractionAnimationIndices,
     interactionAnimationCues,
     playing,
-    selectedClipIndex,
   ]);
   const playbackActive = Boolean(mixer && playbackCues.length > 0);
   const invalidate = useThree((canvasState) => canvasState.invalidate);
@@ -510,16 +527,13 @@ function ProjectModelRender({
     if (!mixer || !renderedObject || !playbackActive) {
       return;
     }
-    const loop = animation?.loop ?? false;
-    const selectedClip =
-      selectedClipIndex >= 0 ? animations[selectedClipIndex] : undefined;
-    const actions = playbackCues.map(({ clip, delaySeconds }) => {
+    const actions = playbackCues.map(({ clip, delaySeconds, loop, speed, startTime }) => {
       const action = mixer.clipAction(clip);
       action.reset();
       action.clampWhenFinished = !loop;
       action.setLoop(loop ? LoopRepeat : LoopOnce, loop ? Infinity : 1);
-      // Speed belongs to the Animation Component, not to interactivity-driven clips.
-      action.timeScale = clip === selectedClip ? animationSpeed : 1;
+      action.timeScale = speed;
+      if (startTime > 0) action.time = startTime;
       // `flow/setDelay` becomes mixer-clock scheduling rather than a timer, so
       // the wait stays in step with the same clock that advances the clip.
       if (delaySeconds > 0) action.startAt(mixer.time + delaySeconds);
@@ -535,43 +549,39 @@ function ProjectModelRender({
       invalidate();
     };
   }, [
-    animation?.loop,
-    animationSpeed,
     animations,
     invalidate,
     mixer,
     playbackActive,
     playbackCues,
     renderedObject,
-    selectedClipIndex,
   ]);
 
   // Live control, separate from the cue list above: the cues say what starts
   // when Play begins, and the bridge is how a running graph pauses, seeks,
   // switches or re-times that same clip afterwards.
-  const animationComponentId = animation?.id;
-  const animationLoop = animation?.loop ?? false;
   const animationBridgeRef = useRef<XriftAnimationRuntimeBridge | null>(null);
   const animationBridgeActiveRef = useRef(false);
 
   useEffect(() => {
-    if (!mixer || !renderedObject || !animationComponentId || !playing) return;
+    if (!mixer || !renderedObject || animations.length === 0 || !playing) return;
+    // What this Model should play is not known here — a graph can start any
+    // clip at any moment — so the bridge carries no clip of its own and no
+    // owner id, and the cues above already started whatever begins with Play.
     const bridge = createXriftAnimationRuntimeBridge({
-      componentId: animationComponentId,
+      componentId: "",
       clipNames: animations.map((clip) => clip.name),
-      clipIndex: Math.max(0, selectedClipIndex),
-      // The cue list already performs autoplay; starting it here as well would
-      // give one clip two owners fighting over its start time.
+      clipIndex: 0,
       autoplay: false,
-      speed: animationSpeed,
-      loop: animationLoop,
+      speed: 1,
+      loop: false,
     });
     const controller = createXriftAnimationMixerController({
       mixer,
       clips: animations,
-      clipIndex: Math.max(0, selectedClipIndex),
-      loop: animationLoop,
-      speed: animationSpeed,
+      clipIndex: 0,
+      loop: false,
+      speed: 1,
       onActiveChange: (active) => {
         animationBridgeActiveRef.current = active;
         invalidate();
@@ -588,17 +598,7 @@ function ProjectModelRender({
       animationBridgeRef.current = null;
       animationBridgeActiveRef.current = false;
     };
-  }, [
-    animationComponentId,
-    animationLoop,
-    animationSpeed,
-    animations,
-    invalidate,
-    mixer,
-    playing,
-    renderedObject,
-    selectedClipIndex,
-  ]);
+  }, [animations, invalidate, mixer, playing, renderedObject]);
 
   useFrame((frame, delta) => {
     if (playbackActive || animationBridgeActiveRef.current) {

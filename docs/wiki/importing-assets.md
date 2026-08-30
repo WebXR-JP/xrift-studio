@@ -24,7 +24,8 @@ Model Asset を Scene View へドラッグすると、Entity として配置さ�
 - **Transform**: 位置、回転、スケール
 - **Mesh Renderer**: マテリアル、影の設定
 - **Collider**: 衝突判定（インポート Model には Mesh Collider が初期設定されます）
-- **Animation**: アニメーションの clip、Autoplay、Loop、再生速度
+
+animation clip を持つ Model を Scene へ置くと、**その clip をすべてループ再生する Interactivity Graph** が一緒に作られ、Entity に付きます。どの clip を鳴らすか、何回鳴らすかは、そのグラフのノードで決めます。要らない clip はノードを消してください。詳しくは [ノードで動きをつける](./interactivity.md) を参照してください。
 
 ## アバターのポーズを保存する
 
