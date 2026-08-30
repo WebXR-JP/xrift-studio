@@ -151,7 +151,7 @@ import {
   PUBLISHED_BASIS_TRANSCODER_DIRECTORY,
 } from "../basis-transcoder";
 
-const XRIFT_STUDIO_RUNTIME_PACKAGE = "xrift-studio-runtime@0.1.0" as const;
+export const XRIFT_STUDIO_RUNTIME_PACKAGE = "xrift-studio-runtime@0.1.0" as const;
 
 type CompileContext = {
   projectKind: VisualProjectKind;

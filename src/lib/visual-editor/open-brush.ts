@@ -1,3 +1,4 @@
+import runtimePackageManifest from "../../../packages/xrift-studio-runtime/package.json";
 import { isRecord } from "../json-guards";
 import { Euler, Matrix4, Quaternion, Vector3 } from "three";
 import {
@@ -89,8 +90,14 @@ export function resolveOpenBrushBuiltinTextureUrl(
   return origin && origin !== "null" ? new URL(path, origin).href : path;
 }
 
-export const OPEN_BRUSH_RUNTIME_PACKAGE = "three-icosa@0.4.2-alpha.18";
-export const OPEN_BRUSH_RENDERER = "three-icosa@0.4.2-alpha.18";
+/**
+ * Read from the runtime package's own manifest rather than repeated here, so
+ * this spec and the publish installer's allowlist in `src/lib/xrift-cli.ts`
+ * cannot name different versions. When they disagree, publishing an OpenBrush
+ * world stops with "Invalid compiler runtime package request".
+ */
+export const OPEN_BRUSH_RUNTIME_PACKAGE = `three-icosa@${runtimePackageManifest.dependencies["three-icosa"]}`;
+export const OPEN_BRUSH_RENDERER = OPEN_BRUSH_RUNTIME_PACKAGE;
 
 /**
  * What a published world must declare to ship OpenBrush strokes.

@@ -1,5 +1,7 @@
 import { Command, type Child } from "@tauri-apps/plugin-shell";
 import { platform } from "@tauri-apps/plugin-os";
+
+import runtimePackageManifest from "../../packages/xrift-studio-runtime/package.json";
 import { tauri, type ProjectKind, type RuntimePaths } from "./tauri";
 
 export type LogKind = "stdout" | "stderr" | "info" | "exit";
@@ -45,11 +47,39 @@ export type CompilerStagingTemplateRequest = {
 export const COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC =
   "@xrift/world-components@0.47.0";
 
+/**
+ * The npm specs publish staging and Classic export are allowed to install.
+ *
+ * This set has to cover everything the compiler can put in
+ * `stagingPlan.runtimePackageSpecs`. A requested spec this set omits does not
+ * fall back to anything: the publish stops before npm runs and the author is
+ * told only "Invalid compiler runtime package request". That is what shipped
+ * for `troika-three-text` — the Text component's compile step requested it
+ * while this set still listed only the two older runtime packages, so every
+ * world containing Text failed to publish.
+ *
+ * The optional runtime dependencies are read from the runtime package's own
+ * manifest, which is the same source `TEXT_PANEL_RUNTIME_PACKAGE` and
+ * `OPEN_BRUSH_RUNTIME_PACKAGE` derive their specs from. Bumping a version
+ * there moves the request and the allowance together instead of letting them
+ * drift apart again.
+ */
 const COMPILER_RUNTIME_PACKAGE_ALLOWLIST = new Set([
-  "three-icosa@0.4.2-alpha.18",
-  "xrift-studio-runtime@0.1.0",
+  `three-icosa@${runtimePackageManifest.dependencies["three-icosa"]}`,
+  `troika-three-text@${runtimePackageManifest.dependencies["troika-three-text"]}`,
+  `${runtimePackageManifest.name}@${runtimePackageManifest.version}`,
   COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
 ]);
+
+/**
+ * Whether publish staging may install `spec`.
+ *
+ * Exported so a fixture can assert the compiler never asks for a package the
+ * installer would refuse, which is otherwise only discoverable by publishing.
+ */
+export function isAllowedCompilerRuntimePackage(spec: string): boolean {
+  return COMPILER_RUNTIME_PACKAGE_ALLOWLIST.has(spec);
+}
 
 const stamp = (kind: LogKind, text: string): LogLine => ({
   kind,

@@ -9,6 +9,13 @@ import {
   type XriftUploadResult,
 } from "./publish";
 import { VisualPublishCancellationController } from "./publish-cancellation";
+import { XRIFT_STUDIO_RUNTIME_PACKAGE } from "./compiler/compile";
+import { TEXT_PANEL_RUNTIME_PACKAGE } from "./compiler/script-emit";
+import { OPEN_BRUSH_RUNTIME_PACKAGE } from "./open-brush";
+import {
+  COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
+  isAllowedCompilerRuntimePackage,
+} from "../xrift-cli";
 
 /**
  * Lightweight, deterministic assertions for the XRift upload result boundary.
@@ -16,6 +23,7 @@ import { VisualPublishCancellationController } from "./publish-cancellation";
  */
 export function runVisualPublishFixtureAssertions(): void {
   runCancellationAssertions();
+  assertStagingCanInstallEveryRequestablePackage();
   assertResult(
     parseXriftUploadResult(
       '{"worldId":"world-01","versionId":"version-02","versionNumber":3,"contentHash":"abc123"}',
@@ -264,6 +272,31 @@ export function runVisualPublishFixtureAssertions(): void {
     unmarkedFailure.summary.includes("下のCLI出力"),
     "Unmarked output should point at the full log instead of guessing a reason",
   );
+}
+
+/**
+ * Every npm spec the compiler can request must be one publish staging is
+ * allowed to install.
+ *
+ * The two sides are edited in different files, and when they disagree the
+ * publish stops before npm runs with nothing but "Invalid compiler runtime
+ * package request" on screen. That shipped once: the Text component started
+ * requesting `troika-three-text` while the installer's allowlist still named
+ * only the two older runtime packages, so no world containing Text could be
+ * published.
+ */
+function assertStagingCanInstallEveryRequestablePackage(): void {
+  for (const spec of [
+    XRIFT_STUDIO_RUNTIME_PACKAGE,
+    OPEN_BRUSH_RUNTIME_PACKAGE,
+    TEXT_PANEL_RUNTIME_PACKAGE,
+    COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
+  ]) {
+    assert(
+      isAllowedCompilerRuntimePackage(spec),
+      `publish staging must be allowed to install ${spec}`,
+    );
+  }
 }
 
 function runCancellationAssertions(): void {

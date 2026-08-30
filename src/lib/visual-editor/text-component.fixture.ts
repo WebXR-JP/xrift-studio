@@ -9,7 +9,9 @@ import {
   TEXT_PANEL_LAYOUT_OVERLAY_PATH,
   TEXT_PANEL_OBJECT_OVERLAY_PATH,
   TEXT_PANEL_RUNTIME_OVERLAY_PATH,
+  TEXT_PANEL_RUNTIME_PACKAGE,
 } from "./compiler/script-emit";
+import { isAllowedCompilerRuntimePackage } from "../xrift-cli";
 import type { VisualCompilerDocuments } from "./compiler/types";
 import { addEditorComponent, createEmptyEntity } from "./editor-session";
 import { createPrototypeProject } from "./prototype-project";
@@ -209,6 +211,20 @@ function assertCompilerEmitsPanelRuntime(): void {
     compiled.assetCopyPlan.some((entry) => entry.assetId === TEXT_BACKGROUND_ASSET_ID),
     "the plate's Texture must be copied into the published world",
   );
+  assert(
+    compiled.stagingPlan.runtimePackageSpecs.includes(TEXT_PANEL_RUNTIME_PACKAGE),
+    "a Text world must ask staging to install troika",
+  );
+  // Asking for a package publish staging is not allowed to install is not a
+  // slow path, it is a dead end: the publish stops before npm runs and the
+  // author is told only "Invalid compiler runtime package request". Every spec
+  // the compiler can emit has to be installable.
+  for (const spec of compiled.stagingPlan.runtimePackageSpecs) {
+    assert(
+      isAllowedCompilerRuntimePackage(spec),
+      `publish staging must be allowed to install ${spec}`,
+    );
+  }
 }
 
 function assertRuntimeManifestCarriesBackground(): void {
