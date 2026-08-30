@@ -3,7 +3,7 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 91] = [
+pub const MCP_TOOL_NAMES: [&str; 103] = [
     "get_editor_context",
     "get_scripting_capabilities",
     "analyze_component_code",
@@ -32,9 +32,14 @@ pub const MCP_TOOL_NAMES: [&str; 91] = [
     "list_entities",
     "list_component_definitions",
     "get_entity_components",
+    "get_entity_bounds",
     "create_primitive",
     "get_terrain",
+    "sample_terrain_point",
+    "list_terrain_presets",
     "create_terrain",
+    "create_terrain_from_preset",
+    "apply_terrain_surface",
     "sculpt_terrain",
     "update_terrain",
     "list_terrain_grass_types",
@@ -43,6 +48,7 @@ pub const MCP_TOOL_NAMES: [&str; 91] = [
     "update_terrain_grass_layer",
     "delete_terrain_grass_layer",
     "paint_terrain_grass",
+    "list_scene_recipes",
     "place_builtin_prefab",
     "create_prefab",
     "add_component",
@@ -54,6 +60,9 @@ pub const MCP_TOOL_NAMES: [&str; 91] = [
     "set_material",
     "get_material_asset",
     "update_material_asset",
+    "list_material_presets",
+    "create_material_from_preset",
+    "create_texture_card",
     "create_custom_shader",
     "get_custom_shader",
     "update_custom_shader",
@@ -82,6 +91,7 @@ pub const MCP_TOOL_NAMES: [&str; 91] = [
     "import_shader_asset",
     "reimport_model_asset",
     "process_texture_asset",
+    "apply_scene_recipe",
     "get_shader_asset",
     "update_shader_asset",
     "set_project_thumbnail",
@@ -95,4 +105,6 @@ pub const MCP_TOOL_NAMES: [&str; 91] = [
     "get_external_asset_options",
     "install_external_asset",
     "capture_scene_debug",
+    "capture_scene_view",
+    "set_scene_view_camera",
 ];

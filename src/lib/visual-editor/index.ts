@@ -29,6 +29,8 @@ export * from "./document-asset-creation.fixture";
 export * from "./editor-history";
 export * from "./editor-session";
 export * from "./editor-session.fixture";
+export * from "./entity-bounds";
+export * from "./entity-bounds.fixture";
 export * from "./environment-texture-thumbnail";
 export * from "./material-assignment";
 export * from "./material-extension-registry";

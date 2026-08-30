@@ -111,6 +111,14 @@ export function runXriftMcpEditorToolFixtures(): void {
     importSettings: {},
   });
   assert(skyboxTexture, "Skybox Texture fixture could not be created");
+  // The skybox fixture above is an ordinary Texture with an .hdr path, which is
+  // not what the environment guards read. This one is marked as one.
+  const environmentTexture = {
+    ...skyboxTexture,
+    id: "asset-mcp-environment-texture",
+    name: "MCP Environment",
+    usage: "environment" as const,
+  };
   const model: ModelAsset = {
     id: "asset-mcp-model",
     name: "MCP Model",
@@ -143,6 +151,7 @@ export function runXriftMcpEditorToolFixtures(): void {
         [texture.id]: texture,
         [audio.id]: audio,
         [skyboxTexture.id]: skyboxTexture,
+        [environmentTexture.id]: environmentTexture,
         [model.id]: model,
         [script.id]: script,
       },
@@ -1302,6 +1311,249 @@ export function runXriftMcpEditorToolFixtures(): void {
     "list_entities should include the previously placed Entity",
   );
 
+  // A grass card by hand is a plane, an alpha-blended two-sided Material and no
+  // collider: four calls whose settings have to agree with each other.
+  const textureCard = executeXriftMcpEditorTool(current, {
+    id: "fixture-create-texture-card",
+    tool: "create_texture_card",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      textureAssetId: texture.id,
+      profile: "grass-cross",
+    },
+  });
+  const cardEntityId = textureCard.result.entityId as string;
+  const cardEntity = textureCard.bundle.scene.entities[cardEntityId];
+  assert(
+    textureCard.changed &&
+      cardEntity !== undefined &&
+      !cardEntity.components.some((component) => component.type === "collider"),
+    "create_texture_card should create the card Entity without a collider",
+  );
+  assert(
+    textureCard.bundle.assets.assets[
+      textureCard.result.materialAssetId as string
+    ]?.kind === "material",
+    "create_texture_card should create the card's Material in the same call",
+  );
+  current = { ...current, bundle: textureCard.bundle, revision: current.revision + 1 };
+
+  let environmentCardCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(current, {
+      id: "fixture-create-texture-card-environment",
+      tool: "create_texture_card",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        textureAssetId: environmentTexture.id,
+        profile: "backdrop-flat",
+      },
+    });
+  } catch (error) {
+    environmentCardCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    environmentCardCode === "ASSET_KIND_MISMATCH",
+    "An environment Texture belongs on the skybox, not on a card",
+  );
+
+  // create_custom_shader takes arbitrary GLSL, so a caller without the catalog
+  // invents numbers for "a sky" that the catalog already has.
+  const materialPresets = executeXriftMcpEditorTool(current, {
+    id: "fixture-list-material-presets",
+    tool: "list_material_presets",
+    arguments: {},
+  });
+  const skyPresets = materialPresets.result.sky as Array<{
+    id: string;
+    parameters: Array<{ uniform: string; default: unknown }>;
+  }>;
+  const glowPresets = materialPresets.result.glow as Array<{ id: string }>;
+  assert(
+    skyPresets.length > 0 &&
+      (materialPresets.result.water as unknown[]).length > 0 &&
+      glowPresets.length > 0,
+    "list_material_presets should expose the sky, water and glow catalogs",
+  );
+
+  const skyMaterial = executeXriftMcpEditorTool(current, {
+    id: "fixture-create-sky-material",
+    tool: "create_material_from_preset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      kind: "sky",
+      presetId: skyPresets[0].id,
+    },
+  });
+  const skyMaterialId = skyMaterial.result.materialAssetId as string;
+  assert(
+    skyMaterial.changed &&
+      skyMaterial.bundle.assets.assets[skyMaterialId]?.kind === "material" &&
+      typeof skyMaterial.result.nextStep === "string",
+    "create_material_from_preset should install a sky Material and say what is left to do",
+  );
+  current = { ...current, bundle: skyMaterial.bundle, revision: current.revision + 1 };
+
+  // A preset that is already installed is not a second copy of it.
+  const skyAgain = executeXriftMcpEditorTool(current, {
+    id: "fixture-create-sky-material-again",
+    tool: "create_material_from_preset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      kind: "sky",
+      presetId: skyPresets[0].id,
+    },
+  });
+  assert(
+    skyAgain.result.alreadyInstalled === true &&
+      skyAgain.result.materialAssetId === skyMaterialId,
+    "Re-creating an installed preset should reuse its Material rather than duplicate it",
+  );
+  current = { ...current, bundle: skyAgain.bundle, revision: current.revision + 1 };
+
+  let glowParameterCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(current, {
+      id: "fixture-glow-parameters-rejected",
+      tool: "create_material_from_preset",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        kind: "glow",
+        presetId: glowPresets[0].id,
+        parameters: { uWhatever: 1 },
+      },
+    });
+  } catch (error) {
+    glowParameterCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    glowParameterCode === "INVALID_ARGUMENT",
+    "A glow preset is a tint, so it should reject shader parameters rather than ignore them",
+  );
+
+  // A caller that cannot see the ready-made sets builds a campfire out of
+  // primitives, which is a dozen calls for a worse result.
+  const sceneRecipes = executeXriftMcpEditorTool(current, {
+    id: "fixture-list-scene-recipes",
+    tool: "list_scene_recipes",
+    arguments: {},
+  });
+  const listedRecipes = sceneRecipes.result.recipes as Array<{
+    id: string;
+    note: string;
+    partCount: number;
+    categoryLabel: string;
+  }>;
+  assert(
+    listedRecipes.length > 0 &&
+      listedRecipes.every(
+        (recipe) => recipe.partCount > 0 && recipe.categoryLabel.length > 0,
+      ),
+    "list_scene_recipes should report each set's parts and its category label",
+  );
+  assert(
+    listedRecipes.some((recipe) => recipe.note.length > 0),
+    "list_scene_recipes should carry the note about what the author still does",
+  );
+
+  // create_terrain makes a flat plate, which is the right primitive and the
+  // wrong starting point: everything the Create menu offers arrives shaped.
+  const terrainCatalog = executeXriftMcpEditorTool(current, {
+    id: "fixture-list-terrain-presets",
+    tool: "list_terrain_presets",
+    arguments: {},
+  });
+  const shapePresets = terrainCatalog.result.presets as Array<{ id: string }>;
+  const surfacePresets = terrainCatalog.result.surfaces as Array<{
+    id: string;
+    parameters: Array<{ uniform: string; default: unknown }>;
+  }>;
+  assert(
+    shapePresets.some((preset) => preset.id === "rolling-hills") &&
+      surfacePresets.length > 0 &&
+      surfacePresets.every((surface) =>
+        surface.parameters.every((parameter) => parameter.default !== undefined),
+      ),
+    "list_terrain_presets should expose both catalogs with usable defaults",
+  );
+
+  const presetTerrain = executeXriftMcpEditorTool(current, {
+    id: "fixture-create-terrain-from-preset",
+    tool: "create_terrain_from_preset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      presetId: "rolling-hills",
+    },
+  });
+  const presetTerrainId = presetTerrain.sceneSelection?.id as string;
+  assert(
+    presetTerrain.changed &&
+      presetTerrain.result.grassPresetId !== null &&
+      presetTerrain.result.overlappingTerrainCount === 0,
+    "create_terrain_from_preset should place a shaped, planted Terrain clear of the others",
+  );
+  current = { ...current, bundle: presetTerrain.bundle, revision: current.revision + 1 };
+
+  const presetShape = executeXriftMcpEditorTool(current, {
+    id: "fixture-preset-terrain-shape",
+    tool: "get_terrain",
+    arguments: { entityId: presetTerrainId },
+  });
+  assert(
+    (presetShape.result.maxHeight as number) >
+      (presetShape.result.minHeight as number),
+    "A preset Terrain should arrive sculpted rather than flat",
+  );
+
+  const surfaceApplied = executeXriftMcpEditorTool(current, {
+    id: "fixture-apply-terrain-surface",
+    tool: "apply_terrain_surface",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityId: presetTerrainId,
+      surfaceId: surfacePresets[0].id,
+    },
+  });
+  const surfaceParameters = surfaceApplied.result.parameters as Record<
+    string,
+    number | string
+  >;
+  assert(
+    surfaceApplied.changed &&
+      typeof surfaceApplied.result.materialAssetId === "string" &&
+      Object.keys(surfaceParameters).length > 0,
+    "apply_terrain_surface should install a Material and report the values it used",
+  );
+  // The bands are metres and this Terrain is not the preset's size, so leaving
+  // them at the preset's own numbers is what makes the ground one flat colour.
+  const range = {
+    min: presetShape.result.minHeight as number,
+    max: presetShape.result.maxHeight as number,
+  };
+  const lowBand = surfaceParameters.uLowHeight;
+  assert(
+    typeof lowBand !== "number" ||
+      (lowBand >= range.min - 1e-6 && lowBand <= range.max + 1e-6),
+    `The fitted height band ${String(lowBand)} fell outside ${range.min}..${range.max}`,
+  );
+  current = { ...current, bundle: surfaceApplied.bundle, revision: current.revision + 1 };
+
   const terrainCreated = executeXriftMcpEditorTool(current, {
     id: "fixture-create-terrain",
     tool: "create_terrain",
@@ -1556,6 +1808,45 @@ export function runXriftMcpEditorToolFixtures(): void {
     "get_terrain should report the Terrain's remaining grass layers",
   );
 
+  // The sculpt above raised the middle of this Terrain, so a caller that still
+  // reads y=0 there is placing things inside the hill.
+  const sampledPeak = executeXriftMcpEditorTool(current, {
+    id: "fixture-sample-terrain-peak",
+    tool: "sample_terrain_point",
+    arguments: { entityId: terrainId, point: [0, 0] },
+  });
+  const sampledEdge = executeXriftMcpEditorTool(current, {
+    id: "fixture-sample-terrain-edge",
+    tool: "sample_terrain_point",
+    arguments: { entityId: terrainId, point: [9.5, 6.5] },
+  });
+  assert(
+    (sampledPeak.result.height as number) >
+      (sampledEdge.result.height as number),
+    "sample_terrain_point should report the sculpted height, not a flat plane",
+  );
+  assert(
+    (sampledPeak.result.worldPosition as number[])[1] ===
+      (sampledPeak.result.height as number),
+    "A Terrain at the origin should report the same local and world height",
+  );
+  assert(
+    (sampledPeak.result.grass as unknown[]).length === 3 &&
+      sampledPeak.result.insideFootprint === true &&
+      sampledPeak.result.hole === false,
+    "sample_terrain_point should report holes and grass coverage at the point",
+  );
+
+  const outsideFootprint = executeXriftMcpEditorTool(current, {
+    id: "fixture-sample-terrain-outside",
+    tool: "sample_terrain_point",
+    arguments: { entityId: terrainId, point: [500, 500] },
+  });
+  assert(
+    outsideFootprint.result.insideFootprint === false,
+    "A point off the Terrain should say so rather than return the clamped rim silently",
+  );
+
   const primitiveCreated = executeXriftMcpEditorTool(current, {
     id: "fixture-create-primitive",
     tool: "create_primitive",
@@ -1571,6 +1862,33 @@ export function runXriftMcpEditorToolFixtures(): void {
   assert(primitiveCreated.changed, "create_primitive should change the bundle");
   const primitiveId = primitiveCreated.sceneSelection?.id;
   assert(typeof primitiveId === "string", "create_primitive should select the new Entity");
+  current = {
+    ...current,
+    bundle: primitiveCreated.bundle,
+    revision: current.revision + 1,
+  };
+
+  // A caller reading only the Transform knows where the box is and not that it
+  // is one metre across, which is the whole reason placement over MCP drifts.
+  const primitiveBounds = executeXriftMcpEditorTool(current, {
+    id: "fixture-get-entity-bounds",
+    tool: "get_entity_bounds",
+    arguments: { entityId: primitiveId },
+  });
+  const worldBox = primitiveBounds.result.world as {
+    size: number[];
+    center: number[];
+  };
+  assert(
+    worldBox.size.every((value) => Math.abs(value - 1) < 1e-6),
+    `A builtin box should measure one metre per axis, got ${worldBox.size.join(", ")}`,
+  );
+  assert(
+    worldBox.center.every((value) => Math.abs(value - 1) < 1e-6) &&
+      (primitiveBounds.result.measuredEntityIds as string[]).length === 1 &&
+      (primitiveBounds.result.unmeasuredEntityIds as string[]).length === 0,
+    "get_entity_bounds should place the box at the position it was created at",
+  );
   assert(
     primitiveCreated.bundle.scene.entities[primitiveId as string]?.components.some(
       (component) => component.type === "mesh",

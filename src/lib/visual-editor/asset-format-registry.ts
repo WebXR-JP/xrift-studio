@@ -135,6 +135,30 @@ export const ASSET_FORMATS = {
       extensions: ["wav"],
       altMimeTypes: ["audio/x-wav", "audio/wave"],
     },
+    ogg: {
+      label: "Ogg Vorbis",
+      mimeType: "audio/ogg",
+      extensions: ["ogg", "oga", "opus"],
+      altMimeTypes: ["audio/x-ogg", "application/ogg", "audio/vorbis", "audio/opus"],
+    },
+    flac: {
+      label: "FLAC",
+      mimeType: "audio/flac",
+      extensions: ["flac"],
+      altMimeTypes: ["audio/x-flac"],
+    },
+    m4a: {
+      label: "AAC (M4A)",
+      mimeType: "audio/mp4",
+      extensions: ["m4a", "aac"],
+      altMimeTypes: ["audio/aac", "audio/x-m4a", "audio/mp4a-latm"],
+    },
+    webm: {
+      label: "WebM Audio",
+      mimeType: "audio/webm",
+      extensions: ["weba"],
+      altMimeTypes: ["audio/x-webm"],
+    },
   },
   shader: {
     glsl: {

@@ -4,9 +4,11 @@ import {
   DEFAULT_MODEL_IMPORT_SETTINGS,
   createDefaultMaterialAsset,
   createTextureAsset,
+  AUDIO_MIME_BY_FORMAT,
   type AssetAttribution,
   type AssetFolder,
   type AssetManifest,
+  type AudioAsset,
   type ModelAsset,
   type SceneAsset,
   type TextureAsset,
@@ -43,7 +45,7 @@ export type AppliedExternalStoreInstall = {
   manifest: AssetManifest;
   primaryAssetId: string;
   installedAssetIds: string[];
-  kind: "skybox" | "material" | "model";
+  kind: "skybox" | "material" | "model" | "audio";
 };
 
 export type AppliedOpenBrushCatalogInstall = AppliedExternalStoreInstall & {
@@ -153,6 +155,41 @@ export function applyExternalStoreInstall(
       primaryAssetId: id,
       installedAssetIds: [id],
       kind: "skybox",
+    };
+  }
+
+  if (result.assetKind === "audio") {
+    const file = result.files.find((entry) => entry.role === "audio");
+    if (!file) throw new Error("Audio用のファイルがありません");
+    const mimeType =
+      AUDIO_MIME_BY_FORMAT[file.format as keyof typeof AUDIO_MIME_BY_FORMAT];
+    if (!mimeType) {
+      throw new Error(`対応していない音声形式です: ${file.format}`);
+    }
+    const id = `${baseId}-audio`;
+    const audio: AudioAsset = {
+      id,
+      name: result.name,
+      kind: "audio",
+      status: "ready",
+      source: { kind: "project", relativePath: file.relativePath },
+      sourceHash: file.sha256,
+      thumbnail: { status: "missing" },
+      folderId: folder.id,
+      order,
+      attribution: credit,
+      importMetadata: {
+        sourceFormat: file.format as keyof typeof AUDIO_MIME_BY_FORMAT,
+        mimeType,
+        byteLength: file.byteLength,
+      },
+    };
+    assets[id] = audio;
+    return {
+      manifest: { ...manifest, folders, assets },
+      primaryAssetId: id,
+      installedAssetIds: [id],
+      kind: "audio",
     };
   }
 

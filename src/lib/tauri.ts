@@ -148,7 +148,7 @@ export type LocalShaderImportSource = {
   source: string;
 };
 
-export type ExternalStoreAssetKind = "hdri" | "texture" | "model";
+export type ExternalStoreAssetKind = "hdri" | "texture" | "model" | "audio";
 export type ExternalStoreFileFormat = "hdr" | "exr";
 
 export type ExternalStoreAsset = {
@@ -198,7 +198,7 @@ export type ExternalStoreInstallRequest = {
 };
 
 export type ExternalStoreInstalledFile = {
-  role: "environment" | "base-color" | "normal" | "arm" | "model";
+  role: "environment" | "base-color" | "normal" | "arm" | "model" | "audio";
   relativePath: string;
   byteLength: number;
   sha256: string;
@@ -210,7 +210,7 @@ export type ExternalStoreInstallResult = {
   providerName: string;
   externalId: string;
   name: string;
-  assetKind: "hdri" | "texture" | "model";
+  assetKind: ExternalStoreAssetKind;
   resolution: string;
   files: ExternalStoreInstalledFile[];
   authors: string[];
@@ -357,6 +357,8 @@ export const tauri = {
   },
   saveDebugVideo: (dataUrl: string, label = "scene-view") =>
     invoke<string>("save_debug_video", { dataUrl, label }),
+  saveDebugImage: (dataUrl: string, label = "scene-view") =>
+    invoke<string>("save_debug_image", { dataUrl, label }),
   getVersions: () => invoke<Versions>("get_versions"),
   runtimePaths: () => invoke<RuntimePaths>("runtime_paths"),
   runtimeStatus: () => invoke<RuntimeStatus>("runtime_status"),
