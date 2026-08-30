@@ -16,6 +16,7 @@ import {
   type OcclusionTextureInfoPatch,
   type TextureAsset,
   type TextureImportSettings,
+  type TextureImportSettingsPatch,
   type TextureImportMetadata,
   type TextureSamplerSettings,
 } from "./asset-manifest";
@@ -76,6 +77,13 @@ export type ExpandGltfAssetsInput = {
   materialFolderId: string;
   textureFolderId: string;
   hashBytes: (bytes: Uint8Array) => Promise<string>;
+  /**
+   * 取り込み時に、展開したTextureへ最初から入れておくImport設定。
+   *
+   * glTFのsampler由来の設定を土台にして、その上へ重ねる。最大解像度のような
+   * 「取り込みの既定」をモデル内蔵Textureにも同じように効かせるために使う。
+   */
+  textureImportSettings?: TextureImportSettingsPatch;
   /** Retains three-icosa brush presets instead of treating them as PBR maps. */
   openBrush?: OpenBrushModelMetadata;
 };
@@ -282,7 +290,7 @@ function expandTextures(
       continue;
     }
     referencedImages.add(imageIndex);
-    const settings = textureSettings(input.json, texture);
+    const settings = textureSettings(input.json, texture, input.textureImportSettings);
     const recipeKey = `${image.hash}:${JSON.stringify(settings.sampler)}`;
     const shared = sharedByRecipe.get(recipeKey);
     if (shared) {
@@ -351,7 +359,9 @@ function expandOpenBrushTextures(
       });
       continue;
     }
-    const settings = textureSettings(input.json, texture);
+    // Open Brushのブラシ素材は組み込みsourceで、公開時の変換対象にならない。
+    // 取り込みの既定を入れても効かないので、sampler由来の設定だけにする。
+    const settings = textureSettings(input.json, texture, undefined);
     const recipeKey = `${builtinKey}:${JSON.stringify(settings.sampler)}`;
     const shared = sharedByRecipe.get(recipeKey);
     if (shared) {
@@ -854,11 +864,17 @@ function textureTransform(
   };
 }
 
-function textureSettings(json: GltfJson, texture: JsonObject): TextureImportSettings {
+function textureSettings(
+  json: GltfJson,
+  texture: JsonObject,
+  defaults: TextureImportSettingsPatch | undefined,
+): TextureImportSettings {
   const samplerIndex = integerValue(texture.sampler);
   const sampler =
     samplerIndex === undefined ? undefined : json.samplers?.[samplerIndex];
   return normalizeTextureImportSettings({
+    ...defaults,
+    // glTFのsamplerはモデル側の指定なので、取り込みの既定より優先する。
     sampler: {
       wrapS: wrapMode(sampler?.wrapS),
       wrapT: wrapMode(sampler?.wrapT),

@@ -10,11 +10,17 @@ import {
   type RunResult,
 } from "../xrift-cli";
 import type {
+  AssetCopyPlanEntry,
   VisualCompileResult,
   VisualCompilerDocuments,
 } from "./compiler";
 import { compileVisualProject, compilerStagingDirectoryName } from "./compiler";
 import { resolveLocalBasisTranscoderPath } from "./basis-transcoder";
+import {
+  assetBytesToDataUrl,
+  convertPublishedTextureBytes,
+  readProjectAssetBytes,
+} from "./texture-processing";
 import { resolveTextFontDirectoryUrl } from "../../../packages/xrift-studio-runtime/src/text-font-catalog";
 
 export type VisualPublishPipelineStage =
@@ -402,6 +408,54 @@ async function loadCompilerBundledAssetOverlays(
   );
 }
 
+/**
+ * 未反映のTexture Import設定を、公開用のコピーにだけ適用する。
+ *
+ * 制作データのファイルは読むだけで、書き換えない。変換した画像はコピー計画から
+ * 外してステージングへ直接書き込むので、原本を軽くしていなくても公開結果は
+ * 設定どおりの解像度・形式になる。
+ */
+async function convertStagedTextures(
+  authoringProjectPath: string,
+  assetCopyPlan: readonly AssetCopyPlanEntry[],
+  signal: AbortSignal,
+  report: (progress: VisualPublishPipelineProgress) => void,
+): Promise<{ files: { targetRelativePath: string; dataUrl: string }[] }> {
+  const targets = assetCopyPlan.filter((entry) => entry.textureConversion);
+  if (targets.length === 0) return { files: [] };
+
+  const files: { targetRelativePath: string; dataUrl: string }[] = [];
+  for (const [index, entry] of targets.entries()) {
+    throwIfAborted(signal);
+    const conversion = entry.textureConversion;
+    if (!conversion) continue;
+    report({
+      stage: "compiling",
+      label: "Textureを公開用に変換しています",
+      detail: `${index + 1} / ${targets.length}枚目。制作データの原本はそのまま残ります。`,
+      percent: 29 + Math.round((index / targets.length) * 10),
+      cancelSafe: true,
+    });
+    let bytes: Uint8Array;
+    try {
+      bytes = await convertPublishedTextureBytes(
+        await readProjectAssetBytes(authoringProjectPath, entry.sourceRelativePath),
+        conversion,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Texture「${entry.assetId}」を公開用に変換できませんでした。${message}`,
+      );
+    }
+    files.push({
+      targetRelativePath: entry.targetRelativePath,
+      dataUrl: await assetBytesToDataUrl(bytes, conversion.mimeType),
+    });
+  }
+  return { files };
+}
+
 export async function materializeVisualCompilation(
   authoringProjectPath: string,
   compilation: VisualCompileResult,
@@ -453,10 +507,17 @@ export async function materializeVisualCompilation(
     paths.rootPath,
   ]);
 
-  const binaryOverlayFiles = await loadCompilerBundledAssetOverlays(
+  const bundledOverlayFiles = await loadCompilerBundledAssetOverlays(
     compilation,
     signal,
   );
+  const convertedTextures = await convertStagedTextures(
+    authoringProjectPath,
+    compilation.stagingPlan.assetCopyPlan,
+    signal,
+    report,
+  );
+  const binaryOverlayFiles = [...bundledOverlayFiles, ...convertedTextures.files];
   let staged: Awaited<ReturnType<typeof tauri.applyCompilerStaging>>;
   try {
     staged = await tauri.applyCompilerStaging(
@@ -467,10 +528,12 @@ export async function materializeVisualCompilation(
         content: file.content,
       })),
       binaryOverlayFiles,
-      compilation.stagingPlan.assetCopyPlan.map((entry) => ({
-        sourceRelativePath: entry.sourceRelativePath,
-        targetRelativePath: entry.targetRelativePath,
-      })),
+      compilation.stagingPlan.assetCopyPlan
+        .filter((entry) => !entry.textureConversion)
+        .map((entry) => ({
+          sourceRelativePath: entry.sourceRelativePath,
+          targetRelativePath: entry.targetRelativePath,
+        })),
       compilation.stagingPlan.requiredPublicationFiles,
     );
   } catch (error) {

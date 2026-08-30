@@ -2665,7 +2665,7 @@ function TextureBatchProcessingCard({
   return (
     <ComponentCard title="複数のTexture" subtitle={`${textures.length}件`}>
       <p className="text-xs leading-5 text-slate-600">
-        各TextureのImport設定（最大解像度・圧縮方式）で、選択中のTextureをまとめて書き出します。設定が未反映のものだけが対象です。
+        各TextureのImport設定（最大解像度・圧縮方式）で、選択中のTextureをまとめて書き出します。公開時の変換とは別に、Editorの表示と原本そのものを軽くしたいときに使います。
       </p>
       <dl className="grid grid-cols-[64px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
         <dt className="text-slate-500">変換対象</dt>
