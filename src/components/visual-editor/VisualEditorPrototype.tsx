@@ -27,6 +27,7 @@ import {
   prepareClassicProjectVisualAssetImports,
   addDefaultParticleAsset,
   analyzeAssetDeletion,
+  detachAssetReferences,
   analyzeAssetFolderDeletion,
   autoFitBoxCollider,
   commitAssetImportPlanToDisk,
@@ -148,6 +149,7 @@ import {
   type ClassicProjectVisualImportPreview,
   type ClassicProjectVisualImportSource,
   type AssetManifest,
+  type AssetReferenceLocation,
   type ParticleAuthoringPreset,
   type SceneRecipe,
   instantiateSceneRecipe,
@@ -388,6 +390,31 @@ function sceneEntityIdsInHierarchyOrder(
   scene.rootEntityIds.forEach(visit);
   Object.keys(scene.entities).forEach(visit);
   return entityIds;
+}
+
+/**
+ * Re-reads an Asset's delete dialog state from the current documents.
+ *
+ * Unlinking a reference changes what blocks the delete, so the dialog is
+ * rebuilt from the analysis rather than edited in place; a row that is gone
+ * cannot linger and a delete that is now possible is offered immediately.
+ */
+function describeAssetDeleteTarget(
+  bundle: PrototypeVisualProject,
+  assetId: string,
+): AssetDeleteDialogTarget | null {
+  const analysis = analyzeAssetDeletion(
+    { assets: bundle.assets, scene: bundle.scene, prefabs: bundle.prefabs },
+    assetId,
+  );
+  if (!analysis.asset) return null;
+  return {
+    kind: "asset",
+    id: assetId,
+    name: analysis.asset.name,
+    canDelete: analysis.canDelete,
+    references: analysis.references,
+  };
 }
 
 type EditorSessionSnapshot = {
@@ -5028,27 +5055,14 @@ export function VisualEditorPrototype({
         );
         return;
       }
-      const analysis = analyzeAssetDeletion(
-        {
-          assets: bundle.assets,
-          scene: bundle.scene,
-          prefabs: bundle.prefabs,
-        },
-        assetId,
-      );
-      if (!analysis.asset) {
+      const target = describeAssetDeleteTarget(bundle, assetId);
+      if (!target) {
         setNotice("削除するAssetが見つかりませんでした");
         return;
       }
-      setDeleteDialog({
-        kind: "asset",
-        id: assetId,
-        name: analysis.asset.name,
-        canDelete: analysis.canDelete,
-        references: analysis.references,
-      });
+      setDeleteDialog(target);
     },
-    [bundle.assets, bundle.prefabs, bundle.scene, editorMode, importBusy],
+    [bundle, editorMode, importBusy],
   );
 
   const requestDeleteAssetFolder = useCallback(
@@ -5146,6 +5160,151 @@ export function VisualEditorPrototype({
     }
     setDeleteDialog(null);
   }, [activeAssetFolderId, deleteDialog, editorMode, importBusy]);
+
+  /**
+   * Unlinks one row of the blocked delete dialog and re-analyzes in place.
+   *
+   * The dialog used to name the references and stop there, which left the
+   * author to find every owner by hand before the delete became possible. The
+   * list stays open on what is left, so clearing a Material used by twelve
+   * Entities happens where the author is already reading.
+   */
+  const detachAssetReferenceFromDialog = useCallback(
+    (reference: AssetReferenceLocation) => {
+      const target = deleteDialog;
+      if (!target || target.kind !== "asset") return;
+      if (editorMode !== "edit" || importBusy) {
+        setNotice(
+          editorMode !== "edit"
+            ? "Playを停止してから参照を外してください"
+            : "アセットのインポート完了後に参照を外してください",
+        );
+        return;
+      }
+      setHistory((current) => {
+        const detached = detachAssetReferences(
+          {
+            assets: current.present.bundle.assets,
+            scene: current.present.bundle.scene,
+            prefabs: current.present.bundle.prefabs,
+          },
+          target.id,
+          reference,
+        );
+        if (!detached.changed) {
+          setNotice("この参照はすでに外れています");
+          setDeleteDialog(
+            describeAssetDeleteTarget(current.present.bundle, target.id) ?? null,
+          );
+          return current;
+        }
+        const bundle = touchProject({
+          ...current.present.bundle,
+          assets: detached.assets,
+          scene: detached.scene,
+          prefabs: detached.prefabs,
+        });
+        setDeleteDialog(describeAssetDeleteTarget(bundle, target.id) ?? null);
+        setSaveStatus("dirty");
+        setNotice(`「${reference.ownerName}」の参照を外しました`);
+        return commitEditorHistory(current, { ...current.present, bundle });
+      });
+    },
+    [deleteDialog, editorMode, importBusy],
+  );
+
+  /** Unlinks everything the dialog lists, then deletes, as one undo step. */
+  const detachReferencesAndDeleteAsset = useCallback(() => {
+    const target = deleteDialog;
+    if (!target || target.kind !== "asset") return;
+    if (editorMode !== "edit" || importBusy) {
+      setNotice(
+        editorMode !== "edit"
+          ? "Playを停止してからAssetを削除してください"
+          : "アセットのインポート完了後に削除してください",
+      );
+      return;
+    }
+    setHistory((current) => {
+      const detached = detachAssetReferences(
+        {
+          assets: current.present.bundle.assets,
+          scene: current.present.bundle.scene,
+          prefabs: current.present.bundle.prefabs,
+        },
+        target.id,
+      );
+      const result = deleteAssetIfUnreferenced(
+        {
+          assets: detached.assets,
+          scene: detached.scene,
+          prefabs: detached.prefabs,
+        },
+        target.id,
+      );
+      if (!result.changed) {
+        // The detach is dropped with the delete: a half-applied unlink would
+        // leave the Scene changed for an Asset that is still there.
+        setNotice(
+          result.reason === "referenced"
+            ? "外せない参照が残っているため削除を中止しました"
+            : "Assetは削除されませんでした",
+        );
+        setDeleteDialog(
+          describeAssetDeleteTarget(current.present.bundle, target.id) ?? null,
+        );
+        return current;
+      }
+      const assetSelection =
+        current.present.assetSelection === target.id
+          ? Object.values(result.assets.assets).find(
+              (asset) => asset.kind !== "primitive",
+            )?.id ?? null
+          : current.present.assetSelection;
+      setSaveStatus("dirty");
+      setNotice(
+        detached.detached.length > 0
+          ? `参照${detached.detached.length}件を外して「${target.name}」を削除しました`
+          : `「${target.name}」をAssetsから削除しました`,
+      );
+      setDeleteDialog(null);
+      return commitEditorHistory(current, {
+        ...current.present,
+        bundle: touchProject({
+          ...current.present.bundle,
+          assets: result.assets,
+          scene: detached.scene,
+          prefabs: result.prefabs,
+        }),
+        assetSelection,
+      });
+    });
+  }, [deleteDialog, editorMode, importBusy]);
+
+  /**
+   * Selects the owner of a reference so "where is this used?" is answered by
+   * the editor rather than by the author searching for the name.
+   */
+  const revealAssetReference = useCallback(
+    (reference: AssetReferenceLocation) => {
+      if (reference.kind.startsWith("scene-")) {
+        setSceneSelection({ kind: "entity", id: reference.ownerId });
+        setDeleteDialog(null);
+        setNotice(`「${reference.ownerName}」を選択しました`);
+        return;
+      }
+      if (reference.kind.startsWith("prefab-")) {
+        setNotice(
+          `「${reference.ownerName}」はPrefabの中の参照です。ここから外すか、Prefabを編集してください`,
+        );
+        return;
+      }
+      setAssetSelection(reference.ownerId);
+      setDeleteDialog(null);
+      setNotice(`Asset「${reference.ownerName}」を選択しました`);
+    },
+    [setAssetSelection, setSceneSelection],
+  );
 
   const handleMoveAsset = useCallback(
     (assetId: string, folderId: string | null) => {
@@ -10566,6 +10725,9 @@ export function VisualEditorPrototype({
                 creationId,
               })
             }
+            onDeleteEntity={(entityId) =>
+              executeCommand("edit.delete", { entityId })
+            }
             scriptRuntime={scriptViewportRuntime}
             frameSelectionRequest={frameSelectionRequest}
             exitFocusRequest={exitFocusRequest}
@@ -10991,6 +11153,9 @@ export function VisualEditorPrototype({
               target={deleteDialog}
               onCancel={() => setDeleteDialog(null)}
               onConfirm={confirmAssetLibraryDelete}
+              onDetachReference={detachAssetReferenceFromDialog}
+              onDetachAllReferences={detachReferencesAndDeleteAsset}
+              onRevealReference={revealAssetReference}
             />
           ) : null}
           {pendingMaterialAssignment ? (

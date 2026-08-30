@@ -2428,15 +2428,32 @@ fn tool_definitions() -> Value {
             }
         },
         {
-            "name": "delete_asset",
-            "description": "Delete an unreferenced user Asset. Built-in Assets and referenced Assets are protected; rejection returns reference details.",
+            "name": "detach_asset_references",
+            "description": "Unlink references to an Asset so it can be deleted. Slots are emptied and Components that cannot exist without the Asset (Geometry, Particle emitter, Prefab instance) are removed; Entities are kept. Pass ownerId to unlink one owner only.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "projectId": { "type": "string", "minLength": 1 },
                     "sceneId": { "type": "string", "minLength": 1 },
                     "expectedRevision": { "type": "integer", "minimum": 0 },
-                    "assetId": { "type": "string", "minLength": 1 }
+                    "assetId": { "type": "string", "minLength": 1 },
+                    "ownerId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "delete_asset",
+            "description": "Delete an unreferenced user Asset. Built-in Assets are protected, and a referenced Asset is rejected with its reference details unless detachReferences unlinks them first.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string", "minLength": 1 },
+                    "detachReferences": { "type": "boolean" }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "assetId"],
                 "additionalProperties": false

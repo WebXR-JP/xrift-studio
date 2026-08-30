@@ -27,15 +27,22 @@ document 以外は React shell か Tauri 側が持つ副作用を伴う。
 書き込み tool は `projectId`、`sceneId`、`expectedRevision` を要求する。古い
 snapshot への適用を弾くためで、複数 client が同時に触っても編集は直列化される。
 
-## document (90)
+## document (91)
 
 **Editor context / Project**
 `get_editor_context`, `get_scripting_capabilities`, `update_project_metadata`
 
 **Assets 一覧と整理**
 `list_assets`, `create_asset_folder`, `rename_asset`, `rename_asset_folder`,
-`move_asset`, `move_asset_folder`, `delete_asset`, `delete_asset_folder`,
-`create_document_asset`
+`move_asset`, `move_asset_folder`, `detach_asset_references`, `delete_asset`,
+`delete_asset_folder`, `create_document_asset`
+
+`delete_asset` は参照されている Asset を拒否し、詳細に参照元を返す。その拒否を
+自力で解けるようにするのが `detach_asset_references` で、Editor の削除ダイアログ
+が出す「参照を外す」と同じ操作を行う。Material slot のような差し替え可能な参照は
+空になり、Geometry・Particle emitter・Prefab instance のように参照なしでは成立
+しない Component は外れる。Entity は残る。`ownerId` を渡すと 1 件だけ外せる。
+`delete_asset` の `detachReferences` は、外してから削除するまでを 1 回で行う。
 
 **Asset の設定**
 `get_audio_asset`, `get_model_asset`, `update_model_asset`,
@@ -246,6 +253,7 @@ Undo 履歴も選択も動かさない。
 | --- | --- |
 | Undo / Redo | AI の操作は revision で直列化されており、Editor の履歴は人の操作単位。片方から巻き戻すと、もう片方が何を失ったのか読めなくなる |
 | 選択の変更だけ | 各 tool が結果として選択を移す。選択のためだけの tool は履歴も document も変えず、状態だけずらす |
+| Scene View の描画品質（高品質 / 軽量） | 編集中の描き方だけを変える Editor State で、document にも公開物にも残らない。Play とサムネイル撮影は常に高品質で描くので、AI が読む見た目も変わらない |
 | 拡大・全体表示・パネル幅・タイムラインの範囲と時刻 | 見え方だけの状態で document に残らない。ノードの位置は document に残るので `move_interactivity_node` と `layout_interactivity_graph` にある |
 | Project の保存・公開・アップロード | 外向きの不可逆操作。アップロード前の `xrift.json` とサムネイルの確認は人が通る導線に残す |
 | Login / account 操作 | 認証情報を MCP 境界へ渡さない |

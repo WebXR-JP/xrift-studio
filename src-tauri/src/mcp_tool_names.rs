@@ -3,7 +3,7 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 115] = [
+pub const MCP_TOOL_NAMES: [&str; 116] = [
     "get_editor_context",
     "get_scripting_capabilities",
     "analyze_component_code",
@@ -15,6 +15,7 @@ pub const MCP_TOOL_NAMES: [&str; 115] = [
     "rename_asset_folder",
     "move_asset",
     "move_asset_folder",
+    "detach_asset_references",
     "delete_asset",
     "delete_asset_folder",
     "inspect_colliders",

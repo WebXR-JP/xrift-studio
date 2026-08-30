@@ -33,12 +33,39 @@ export type AssetReferenceKind =
   | "prefab-text"
   | "prefab-xrift";
 
+/** What unlinking one reference does to the owner it is stored on. */
+export type AssetReferenceDetachEffect = "clear-slot" | "remove-component";
+
 /** A user-facing location which must be unlinked before an Asset can be deleted. */
 export type AssetReferenceLocation = {
   kind: AssetReferenceKind;
   ownerId: string;
   ownerName: string;
   detail: string;
+  /**
+   * Whether unlinking empties a slot or takes the whole Component with it.
+   *
+   * Geometry, Particle emitters and Prefab instances cannot exist without the
+   * Asset they point at, so unlinking removes the Component and leaves the
+   * Entity in place. Everything else is a slot the owner keeps working without.
+   */
+  detachEffect: AssetReferenceDetachEffect;
+};
+
+/** Identity of one reference row, stable across a re-analysis. */
+export type AssetReferenceSelector = {
+  kind: AssetReferenceKind;
+  ownerId: string;
+  detail: string;
+};
+
+export type AssetReferenceDetachResult = {
+  assets: AssetManifest;
+  scene: SceneDocument;
+  prefabs: Record<string, PrefabDocument>;
+  /** The rows that were actually unlinked, in the order they were applied. */
+  detached: AssetReferenceLocation[];
+  changed: boolean;
 };
 
 export type AssetDeletionAnalysis = {
@@ -106,6 +133,27 @@ export function assetReferenceKindLabel(kind: AssetReferenceKind): string {
   return ASSET_REFERENCE_LABELS[kind];
 }
 
+const ASSET_REFERENCE_DETACH_EFFECT_LABELS: Record<
+  AssetReferenceDetachEffect,
+  string
+> = {
+  "clear-slot": "参照を空にする",
+  "remove-component": "Componentごと外す",
+};
+
+export function assetReferenceDetachEffectLabel(
+  effect: AssetReferenceDetachEffect,
+): string {
+  return ASSET_REFERENCE_DETACH_EFFECT_LABELS[effect];
+}
+
+/** Row identity, so the UI can key a list and re-target it after a re-analysis. */
+export function assetReferenceKey(
+  reference: AssetReferenceSelector,
+): string {
+  return [reference.kind, reference.ownerId, reference.detail].join("\u0000");
+}
+
 /**
  * Collects every direct authoring reference which would become dangling after
  * deleting an Asset. The output is stable and contains one row per slot/use.
@@ -114,75 +162,102 @@ export function collectAssetReferences(
   documents: AssetReferenceDocuments,
   assetId: string,
 ): AssetReferenceLocation[] {
-  const normalizedAssetId = assetId.trim();
-  if (!normalizedAssetId) return [];
-
   const references: AssetReferenceLocation[] = [];
-  const seen = new Set<string>();
-  const add = (reference: AssetReferenceLocation) => {
-    const key = [
-      reference.kind,
-      reference.ownerId,
-      reference.detail,
-    ].join("\u0000");
-    if (seen.has(key)) return;
-    seen.add(key);
+  visitAssetReferences(documents, assetId, (reference) => {
     references.push(reference);
-  };
-
-  collectEntityReferences(
-    Object.values(documents.scene.entities),
-    normalizedAssetId,
-    "scene",
-    add,
-  );
-
-  for (const prefab of Object.values(documents.prefabs)) {
-    collectEntityReferences(
-      Object.values(prefab.entities),
-      normalizedAssetId,
-      "prefab",
-      (reference) =>
-        add({
-          ...reference,
-          ownerId: `${prefab.prefabId}/${reference.ownerId}`,
-          ownerName: `${prefab.name} / ${reference.ownerName}`,
-        }),
-    );
-  }
-
-  for (const asset of Object.values(documents.assets.assets)) {
-    if (asset.kind === "material") {
-      collectNestedAssetIds(asset.properties).forEach(({ assetId: nestedId, path }) => {
-        if (nestedId !== normalizedAssetId) return;
-        add({
-          kind: "material-texture",
-          ownerId: asset.id,
-          ownerName: asset.name,
-          detail: materialTexturePathLabel(path),
-        });
-      });
-    } else if (asset.kind === "model") {
-      asset.materialSlots.forEach((slot) => {
-        if (slot.defaultMaterialAssetId !== normalizedAssetId) return;
-        add({
-          kind: "model-material",
-          ownerId: asset.id,
-          ownerName: asset.name,
-          detail: `Default material slot: ${slot.name}`,
-        });
-      });
-    } else if (asset.kind === "particle") {
-      collectParticleRendererReferences(asset, normalizedAssetId, add);
-    }
-  }
-
+  });
   return references.sort(
     (left, right) =>
       left.ownerName.localeCompare(right.ownerName) ||
       left.kind.localeCompare(right.kind) ||
       left.detail.localeCompare(right.detail),
   );
+}
+
+/**
+ * Unlinks references to an Asset so it can be deleted from the same place the
+ * author found the problem.
+ *
+ * The blocked delete dialog used to be a dead end: it named the reference and
+ * left the author to find each owner by hand. Detaching is the same traversal
+ * the analysis runs, so a row the dialog shows is exactly a row this can clear.
+ * Pass `only` to unlink a single row; omit it to unlink every reference.
+ */
+export function detachAssetReferences(
+  documents: AssetReferenceDocuments,
+  assetId: string,
+  only?: AssetReferenceSelector,
+): AssetReferenceDetachResult {
+  const wanted = only ? assetReferenceKey(only) : null;
+  const nextEntities = { ...documents.scene.entities };
+  const nextAssetEntries = { ...documents.assets.assets };
+  const rewrittenPrefabs: Record<string, PrefabDocument> = {};
+  const detached: AssetReferenceLocation[] = [];
+
+  const prefabEntitiesFor = (
+    prefabId: string,
+  ): Record<string, SceneEntity> | null => {
+    const existing = rewrittenPrefabs[prefabId];
+    if (existing) return existing.entities;
+    const source = documents.prefabs[prefabId];
+    if (!source) return null;
+    const clone: PrefabDocument = { ...source, entities: { ...source.entities } };
+    rewrittenPrefabs[prefabId] = clone;
+    return clone.entities;
+  };
+
+  visitAssetReferences(documents, assetId, (reference, target) => {
+    if (wanted !== null && assetReferenceKey(reference) !== wanted) return;
+    if (target.scope === "asset") {
+      const owner = nextAssetEntries[target.assetId];
+      if (!owner) return;
+      nextAssetEntries[target.assetId] = target.match.detach(owner);
+      detached.push(reference);
+      return;
+    }
+    const entities =
+      target.scope === "scene"
+        ? nextEntities
+        : prefabEntitiesFor(target.prefabId);
+    if (!entities) return;
+    const entity = entities[target.entityId];
+    if (!entity) return;
+    const index = entity.components.findIndex(
+      (component) => component.id === target.componentId,
+    );
+    if (index < 0) return;
+    const rewritten = target.match.detach(
+      entity.components[index] as RegisteredSceneComponent,
+    );
+    entities[target.entityId] = {
+      ...entity,
+      components:
+        rewritten === null
+          ? entity.components.filter((_, position) => position !== index)
+          : entity.components.map((component, position) =>
+              position === index ? rewritten : component,
+            ),
+    };
+    detached.push(reference);
+  });
+
+  if (detached.length === 0) {
+    return {
+      assets: documents.assets,
+      scene: documents.scene,
+      prefabs: { ...documents.prefabs },
+      detached,
+      changed: false,
+    };
+  }
+
+  return {
+    assets: { ...documents.assets, assets: nextAssetEntries },
+    scene: { ...documents.scene, entities: nextEntities },
+    prefabs: { ...documents.prefabs, ...rewrittenPrefabs },
+    detached,
+    changed: true,
+  };
 }
 
 export function analyzeAssetDeletion(
@@ -346,38 +421,157 @@ export function moveLibraryFolder(
   };
 }
 
-function collectEntityReferences(
-  entities: SceneEntity[],
+/**
+ * Where a reference lives, so a detach can be applied to the exact owner the
+ * analysis reported. The traversal below is the single source for both.
+ */
+type AssetReferenceTarget =
+  | {
+      scope: "scene";
+      entityId: string;
+      componentId: string;
+      match: ComponentReferenceMatch;
+    }
+  | {
+      scope: "prefab";
+      prefabId: string;
+      entityId: string;
+      componentId: string;
+      match: ComponentReferenceMatch;
+    }
+  | { scope: "asset"; assetId: string; match: AssetOwnedReferenceMatch };
+
+type ComponentReferenceSuffix =
+  | "geometry"
+  | "material"
+  | "particle"
+  | "audio"
+  | "prefab"
+  | "text"
+  | "xrift";
+
+type ComponentReferenceMatch = {
+  suffix: ComponentReferenceSuffix;
+  detail: string;
+  detachEffect: AssetReferenceDetachEffect;
+  /** Rewritten Component, or null when it cannot exist without the Asset. */
+  detach: (component: RegisteredSceneComponent) => RegisteredSceneComponent | null;
+};
+
+type AssetOwnedReferenceMatch = {
+  kind: AssetReferenceKind;
+  detail: string;
+  detachEffect: AssetReferenceDetachEffect;
+  detach: (asset: SceneAsset) => SceneAsset;
+};
+
+/**
+ * Walks every reference to an Asset once, in the order the delete dialog lists
+ * them. Duplicated rows are dropped here so a row the author sees is one
+ * detachable unit.
+ */
+function visitAssetReferences(
+  documents: AssetReferenceDocuments,
   assetId: string,
-  scope: "scene" | "prefab",
-  add: (reference: AssetReferenceLocation) => void,
+  visit: (
+    reference: AssetReferenceLocation,
+    target: AssetReferenceTarget,
+  ) => void,
 ): void {
-  for (const entity of entities) {
+  const normalizedAssetId = assetId.trim();
+  if (!normalizedAssetId) return;
+
+  const seen = new Set<string>();
+  const emit = (
+    reference: AssetReferenceLocation,
+    target: AssetReferenceTarget,
+  ) => {
+    const key = assetReferenceKey(reference);
+    if (seen.has(key)) return;
+    seen.add(key);
+    visit(reference, target);
+  };
+
+  for (const entity of Object.values(documents.scene.entities)) {
     for (const rawComponent of entity.components) {
       const component = rawComponent as RegisteredSceneComponent;
-      collectComponentReferences(component, entity, assetId, scope, add);
+      for (const match of describeComponentReferences(
+        component,
+        normalizedAssetId,
+      )) {
+        emit(
+          {
+            kind: `scene-${match.suffix}` as AssetReferenceKind,
+            ownerId: entity.id,
+            ownerName: entity.name,
+            detail: match.detail,
+            detachEffect: match.detachEffect,
+          },
+          {
+            scope: "scene",
+            entityId: entity.id,
+            componentId: component.id,
+            match,
+          },
+        );
+      }
+    }
+  }
+
+  for (const prefab of Object.values(documents.prefabs)) {
+    for (const entity of Object.values(prefab.entities)) {
+      for (const rawComponent of entity.components) {
+        const component = rawComponent as RegisteredSceneComponent;
+        for (const match of describeComponentReferences(
+          component,
+          normalizedAssetId,
+        )) {
+          emit(
+            {
+              kind: `prefab-${match.suffix}` as AssetReferenceKind,
+              ownerId: `${prefab.prefabId}/${entity.id}`,
+              ownerName: `${prefab.name} / ${entity.name}`,
+              detail: match.detail,
+              detachEffect: match.detachEffect,
+            },
+            {
+              scope: "prefab",
+              prefabId: prefab.prefabId,
+              entityId: entity.id,
+              componentId: component.id,
+              match,
+            },
+          );
+        }
+      }
+    }
+  }
+
+  for (const asset of Object.values(documents.assets.assets)) {
+    for (const match of describeAssetOwnedReferences(
+      asset,
+      normalizedAssetId,
+    )) {
+      emit(
+        {
+          kind: match.kind,
+          ownerId: asset.id,
+          ownerName: asset.name,
+          detail: match.detail,
+          detachEffect: match.detachEffect,
+        },
+        { scope: "asset", assetId: asset.id, match },
+      );
     }
   }
 }
 
-function collectComponentReferences(
+function describeComponentReferences(
   component: RegisteredSceneComponent,
-  entity: SceneEntity,
   assetId: string,
-  scope: "scene" | "prefab",
-  add: (reference: AssetReferenceLocation) => void,
-): void {
-  const kind = (
-    suffix:
-      | "geometry"
-      | "material"
-      | "particle"
-      | "audio"
-      | "prefab"
-      | "text"
-      | "xrift",
-  ) => `${scope}-${suffix}` as AssetReferenceKind;
+): ComponentReferenceMatch[] {
   if (component.type === "mesh") {
+    const matches: ComponentReferenceMatch[] = [];
     const geometryAssetId =
       component.geometry?.kind === "asset"
         ? component.geometry.assetId
@@ -385,74 +579,253 @@ function collectComponentReferences(
           ? null
           : component.geometryAssetId;
     if (geometryAssetId === assetId) {
-      add({
-        kind: kind("geometry"),
-        ownerId: entity.id,
-        ownerName: entity.name,
+      matches.push({
+        suffix: "geometry",
         detail: "Geometry",
+        detachEffect: "remove-component",
+        detach: () => null,
       });
     }
     for (const binding of component.materialBindings) {
       if (binding.materialAssetId !== assetId) continue;
-      add({
-        kind: kind("material"),
-        ownerId: entity.id,
-        ownerName: entity.name,
-        detail: `Material slot: ${binding.slot}`,
+      const slot = binding.slot;
+      matches.push({
+        suffix: "material",
+        detail: `Material slot: ${slot}`,
+        detachEffect: "clear-slot",
+        // Dropping the binding restores the geometry's own default Material for
+        // that slot, which is what an unbound slot means everywhere else.
+        detach: (current) =>
+          current.type === "mesh"
+            ? {
+                ...current,
+                materialBindings: current.materialBindings.filter(
+                  (candidate) =>
+                    !(
+                      candidate.slot === slot &&
+                      candidate.materialAssetId === assetId
+                    ),
+                ),
+              }
+            : current,
       });
     }
-  } else if (
+    return matches;
+  }
+
+  if (
     component.type === "particle-emitter" &&
     component.particleAssetId === assetId
   ) {
-    add({
-      kind: kind("particle"),
-      ownerId: entity.id,
-      ownerName: entity.name,
-      detail: "Particle emitter",
-    });
-  } else if (
-    component.type === "audio-source" &&
-    component.audioAssetId === assetId
-  ) {
-    add({
-      kind: kind("audio"),
-      ownerId: entity.id,
-      ownerName: entity.name,
-      detail: "Audio Source",
-    });
-  } else if (
+    return [
+      {
+        suffix: "particle",
+        detail: "Particle emitter",
+        detachEffect: "remove-component",
+        detach: () => null,
+      },
+    ];
+  }
+
+  if (component.type === "audio-source" && component.audioAssetId === assetId) {
+    return [
+      {
+        suffix: "audio",
+        detail: "Audio Source",
+        detachEffect: "clear-slot",
+        detach: (current) =>
+          current.type === "audio-source"
+            ? { ...current, audioAssetId: "" }
+            : current,
+      },
+    ];
+  }
+
+  if (
     component.type === "text" &&
     component.background?.mode === "texture" &&
     component.background.textureAssetId === assetId
   ) {
-    add({
-      kind: kind("text"),
-      ownerId: entity.id,
-      ownerName: entity.name,
-      detail: "Text background",
-    });
-  } else if (
+    return [
+      {
+        suffix: "text",
+        detail: "Text background",
+        detachEffect: "clear-slot",
+        detach: (current) => {
+          if (current.type !== "text" || !current.background) return current;
+          const { textureAssetId: _removed, ...background } = current.background;
+          return { ...current, background: { ...background, mode: "color" } };
+        },
+      },
+    ];
+  }
+
+  if (
     component.type === "prefab-instance" &&
     component.prefabAssetId === assetId
   ) {
-    add({
-      kind: kind("prefab"),
-      ownerId: entity.id,
-      ownerName: entity.name,
-      detail: "Prefab instance",
-    });
-  } else if (component.type === "xrift-component") {
-    component.assetReferences.forEach((referenceId, index) => {
-      if (referenceId !== assetId) return;
-      add({
-        kind: kind("xrift"),
-        ownerId: entity.id,
-        ownerName: entity.name,
-        detail: `${component.schemaId} / Asset ${index + 1}`,
-      });
-    });
+    return [
+      {
+        suffix: "prefab",
+        detail: "Prefab instance",
+        detachEffect: "remove-component",
+        detach: () => null,
+      },
+    ];
   }
+
+  if (component.type === "xrift-component") {
+    return component.assetReferences.flatMap((referenceId, index) =>
+      referenceId === assetId
+        ? [
+            {
+              suffix: "xrift" as const,
+              detail: `${component.schemaId} / Asset ${index + 1}`,
+              detachEffect: "clear-slot" as const,
+              detach: (current: RegisteredSceneComponent) =>
+                current.type === "xrift-component"
+                  ? {
+                      ...current,
+                      assetReferences: current.assetReferences.filter(
+                        (candidate) => candidate !== assetId,
+                      ),
+                    }
+                  : current,
+            },
+          ]
+        : [],
+    );
+  }
+
+  return [];
+}
+
+function describeAssetOwnedReferences(
+  asset: SceneAsset,
+  assetId: string,
+): AssetOwnedReferenceMatch[] {
+  if (asset.kind === "material") {
+    // One slot can be stored twice: the canonical glTF TextureInfo and the
+    // deprecated `*TextureId` mirror normalization keeps beside it. They read as
+    // one slot, so the row clears both rather than leaving half the binding.
+    const pathsBySlot = new Map<string, string[]>();
+    for (const entry of collectNestedAssetIds(asset.properties)) {
+      if (entry.assetId !== assetId) continue;
+      const label = materialTexturePathLabel(entry.path);
+      pathsBySlot.set(label, [...(pathsBySlot.get(label) ?? []), entry.path]);
+    }
+    return [...pathsBySlot].map(([detail, paths]) => ({
+      kind: "material-texture" as const,
+      detail,
+      detachEffect: "clear-slot" as const,
+      detach: (current: SceneAsset) =>
+        current.kind === "material"
+          ? {
+              ...current,
+              properties: paths.reduce(
+                (properties, path) => clearNestedAssetId(properties, path),
+                current.properties,
+              ),
+            }
+          : current,
+    }));
+  }
+
+  if (asset.kind === "model") {
+    return asset.materialSlots
+      .filter((slot) => slot.defaultMaterialAssetId === assetId)
+      .map((slot) => ({
+        kind: "model-material" as const,
+        detail: `Default material slot: ${slot.name}`,
+        detachEffect: "clear-slot" as const,
+        detach: (current: SceneAsset) =>
+          current.kind === "model"
+            ? {
+                ...current,
+                materialSlots: current.materialSlots.map((candidate) => {
+                  if (
+                    candidate.slot !== slot.slot ||
+                    candidate.defaultMaterialAssetId !== assetId
+                  ) {
+                    return candidate;
+                  }
+                  const { defaultMaterialAssetId: _removed, ...rest } =
+                    candidate;
+                  return rest;
+                }),
+              }
+            : current,
+      }));
+  }
+
+  if (asset.kind === "particle") {
+    const matches: AssetOwnedReferenceMatch[] = [];
+    if (asset.properties.renderer.materialAssetId === assetId) {
+      matches.push({
+        kind: "particle-material",
+        detail: "Renderer material",
+        detachEffect: "clear-slot",
+        detach: (current) =>
+          current.kind === "particle"
+            ? detachParticleRendererAsset(current, "materialAssetId")
+            : current,
+      });
+    }
+    if (asset.properties.renderer.textureAssetId === assetId) {
+      matches.push({
+        kind: "particle-texture",
+        detail: "Renderer texture",
+        detachEffect: "clear-slot",
+        detach: (current) =>
+          current.kind === "particle"
+            ? detachParticleRendererAsset(current, "textureAssetId")
+            : current,
+      });
+    }
+    return matches;
+  }
+
+  return [];
+}
+
+function detachParticleRendererAsset(
+  asset: ParticleAsset,
+  field: "materialAssetId" | "textureAssetId",
+): ParticleAsset {
+  const { [field]: _removed, ...renderer } = asset.properties.renderer;
+  return {
+    ...asset,
+    properties: { ...asset.properties, renderer },
+  };
+}
+
+/**
+ * Removes the Asset ID `collectNestedAssetIds` found at `path`.
+ *
+ * A glTF-shaped texture slot is an object whose only purpose is the Asset it
+ * points at, so the slot object goes with it; the compatibility `*TextureId`
+ * keys are plain strings and only the key is removed.
+ */
+function clearNestedAssetId<T>(properties: T, path: string): T {
+  const segments = path.split(".").slice(1);
+  const target =
+    segments[segments.length - 1] === "textureAssetId"
+      ? segments.slice(0, -1)
+      : segments;
+  if (target.length === 0) return properties;
+  const clone = structuredCloneJson(properties);
+  let current: Record<string, unknown> = clone as Record<string, unknown>;
+  for (const segment of target.slice(0, -1)) {
+    const next = current[segment];
+    if (typeof next !== "object" || next === null) return clone;
+    current = next as Record<string, unknown>;
+  }
+  delete current[target[target.length - 1]];
+  return clone;
+}
+
+function structuredCloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function collectNestedAssetIds(
@@ -475,29 +848,6 @@ function collectNestedAssetIds(
     }
   }
   return output;
-}
-
-function collectParticleRendererReferences(
-  asset: ParticleAsset,
-  assetId: string,
-  add: (reference: AssetReferenceLocation) => void,
-): void {
-  if (asset.properties.renderer.materialAssetId === assetId) {
-    add({
-      kind: "particle-material",
-      ownerId: asset.id,
-      ownerName: asset.name,
-      detail: "Renderer material",
-    });
-  }
-  if (asset.properties.renderer.textureAssetId === assetId) {
-    add({
-      kind: "particle-texture",
-      ownerId: asset.id,
-      ownerName: asset.name,
-      detail: "Renderer texture",
-    });
-  }
 }
 
 function materialTexturePathLabel(path: string): string {

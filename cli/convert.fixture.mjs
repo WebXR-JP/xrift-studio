@@ -70,6 +70,7 @@ import { runAutosaveCoordinatorFixtureAssertions } from "../src/components/visua
 import { runCustomMaterialPreviewFixtureAssertions } from "../src/components/visual-editor/CustomMaterialPreview.fixture.ts";
 import { runEditorDragDataFixture } from "../src/components/visual-editor/editor-drag-data.fixture.ts";
 import { runEditorLayoutFixtureAssertions } from "../src/components/visual-editor/editor-layout.fixture.ts";
+import { runSceneViewportQualityFixtureAssertions } from "../src/components/visual-editor/scene-viewport-quality.fixture.ts";
 import { runWorldPlayCameraFixtureAssertions } from "../src/components/visual-editor/world-play-camera.fixture.ts";
 import { runEditorLibraryDragFixture } from "../src/components/visual-editor/editor-library-drag.fixture.ts";
 import { runMaterialDragFixtureAssertions } from "../src/components/visual-editor/material-drag.fixture.ts";
@@ -93,6 +94,7 @@ import { runVisualPublishFixtureAssertions } from "../src/lib/visual-editor/publ
 import { runSupportReportFixtureAssertions } from "../src/lib/support-report.fixture.ts";
 import { runGlowMaterialCatalogFixtureAssertions } from "../src/lib/visual-editor/glow-material-catalog.fixture.ts";
 import { runPrefabSourceDetachFixtureAssertions } from "../src/lib/visual-editor/prefab-source-detach.fixture.ts";
+import { runAssetReferenceDetachFixtureAssertions } from "../src/lib/visual-editor/asset-reference-detach.fixture.ts";
 import { runLightingContractFixtureAssertions } from "../src/lib/visual-editor/lighting-contract.fixture.ts";
 import { runMaterialAlphaFixtureAssertions } from "../src/lib/visual-editor/material-alpha.fixture.ts";
 import {
@@ -318,6 +320,7 @@ try {
     ["document asset creation", runDocumentAssetCreationFixtureAssertions],
     ["editor session hierarchy", runEditorSessionHierarchyFixtureAssertions],
     ["editor layout", runEditorLayoutFixtureAssertions],
+    ["scene viewport quality", runSceneViewportQualityFixtureAssertions],
     ["world play camera", runWorldPlayCameraFixtureAssertions],
     ["script execution scope", runScriptExecutionScopeFixtureAssertions],
     ["model hierarchy", runModelHierarchyFixtureAssertions],
@@ -328,6 +331,7 @@ try {
     ["support report", runSupportReportFixtureAssertions],
     ["glow material catalog", runGlowMaterialCatalogFixtureAssertions],
     ["prefab source detach", runPrefabSourceDetachFixtureAssertions],
+    ["asset reference detach", runAssetReferenceDetachFixtureAssertions],
     ["lighting contract", runLightingContractFixtureAssertions],
     ["material alpha", runMaterialAlphaFixtureAssertions],
     ["interactivity recipes", runInteractivityRecipeFixtureAssertions],
