@@ -34,6 +34,7 @@ export function compileRuntimeManifest(
   compilerVersion: string,
   diagnostics: CompilerDiagnostic[],
   decoders?: XriftRuntimeDecoderPaths,
+  textFontBaseUrl?: string,
 ): XriftRuntimeManifest {
   const runtimeAssets = compileRuntimeAssets(documents.assets, assetCopyPlan);
   const scenes = entryScene
@@ -56,6 +57,7 @@ export function compileRuntimeManifest(
     scenes,
     assets: runtimeAssets,
     ...(decoders && Object.keys(decoders).length > 0 ? { decoders } : {}),
+    ...(textFontBaseUrl ? { textFontBaseUrl } : {}),
   };
 }
 

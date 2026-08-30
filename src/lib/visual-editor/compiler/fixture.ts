@@ -38,6 +38,7 @@ import {
   createBoxColliderComponent,
   createInteractionTriggerComponent,
   createMeshColliderComponent,
+  createTextComponent,
   createRigidBodyComponent,
   createTransformComponent,
   createVegetationWindComponent,
@@ -2053,6 +2054,78 @@ export function runVisualCompilerFixtureAssertions(
       modelSource.includes("useGLTF(modelUrl)"),
     "Project GLB loader did not use the XRift base URL",
   );
+  // Text fonts: the file is copied for both output modes, and the world must be
+  // told where its own copy is. Runtime JSON has no generated source to carry
+  // that base, so the manifest names it; without it the catalog falls back to
+  // the host root and troika drops to its per-script fallback CDN.
+  const textComponent = createTextComponent("component-text-fixture", {
+    text: "こんにちは",
+    fontId: "noto-sans-jp",
+  });
+  assert(textComponent !== null, "Text fixture component could not be created");
+  const textScene = {
+    ...modelScene,
+    entities: {
+      ...modelScene.entities,
+      [modelEntity.id]: {
+        ...modelScene.entities[modelEntity.id],
+        components: [
+          ...modelScene.entities[modelEntity.id].components,
+          textComponent,
+        ],
+      },
+    },
+  };
+  const textProject: VisualCompilerDocuments = {
+    ...modelProject,
+    scenes: { [textScene.sceneId]: textScene },
+  };
+  const textJsxResult = compileVisualProject(textProject, {
+    generatedAt: fixedTime,
+  });
+  const textFontCopies = textJsxResult.stagingPlan.bundledAssetCopyPlan.filter(
+    (entry) => entry.source === "text-fonts",
+  );
+  assert(
+    textFontCopies.length === 1 &&
+      textFontCopies[0].targetRelativePath ===
+        "public/xrift-studio/vendor/text-fonts/noto-sans-jp-japanese-400-normal.woff",
+    "Classic JSX output must stage the Text font the Scene uses",
+  );
+  const textRuntimeResult = compileVisualProject(textProject, {
+    generatedAt: fixedTime,
+    outputMode: "classic-runtime",
+  });
+  assert(
+    JSON.stringify(
+      textRuntimeResult.stagingPlan.bundledAssetCopyPlan.filter(
+        (entry) => entry.source === "text-fonts",
+      ),
+    ) === JSON.stringify(textFontCopies),
+    "Runtime JSON output must stage the same Text font as Classic JSX",
+  );
+  const textRuntimeManifest = JSON.parse(
+    textRuntimeResult.overlayFiles.find(
+      (file) => file.relativePath === "public/xrift/runtime.json",
+    )?.content ?? "{}",
+  ) as { textFontBaseUrl?: string };
+  assert(
+    textRuntimeManifest.textFontBaseUrl === "../",
+    "Runtime JSON manifest must name where the world serves its bundled font",
+  );
+  const fontlessRuntimeManifest = JSON.parse(
+    compileVisualProject(modelProject, {
+      generatedAt: fixedTime,
+      outputMode: "classic-runtime",
+    }).overlayFiles.find(
+      (file) => file.relativePath === "public/xrift/runtime.json",
+    )?.content ?? "{}",
+  ) as { textFontBaseUrl?: string };
+  assert(
+    fontlessRuntimeManifest.textFontBaseUrl === undefined,
+    "A world with no Text must not declare a font base it does not ship",
+  );
+
   // Draco: a decoder file, like the KTX2 transcoder, must be shipped by the
   // world and pointed at from the world's own base URL, in either output mode.
   const dracoModel: ModelAsset = {

@@ -349,6 +349,17 @@ export type XriftRuntimeManifest = {
    * the files were shipped; the loader then falls back to its public defaults.
    */
   decoders?: XriftRuntimeDecoderPaths;
+  /**
+   * Base the world serves its bundled Text fonts from, relative to this
+   * manifest.
+   *
+   * The font file itself is copied next to the world for the same reason a
+   * decoder is: a published world cannot reach a CDN. Without this the loader
+   * falls back to the host's own base URL, which points at the site root
+   * instead of the world directory, so the copied file is never found and
+   * troika drops to its per-script fallback CDN.
+   */
+  textFontBaseUrl?: string;
 };
 
 export type XriftRuntimeDecoderPaths = {
@@ -386,6 +397,8 @@ export function isXriftRuntimeManifest(value: unknown): value is XriftRuntimeMan
     Object.values(scenes).every(isRuntimeScene) &&
     Object.values(assets).every(isRuntimeAsset) &&
     isRuntimeDecoderPaths(value.decoders) &&
+    (value.textFontBaseUrl === undefined ||
+      typeof value.textFontBaseUrl === "string") &&
     isRuntimeScene(scenes[entryScene])
   );
 }

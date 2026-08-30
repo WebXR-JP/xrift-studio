@@ -291,6 +291,16 @@ export function compileVisualProject(
     documents.assets,
     assetCopyPlan,
   );
+  // One flag decides everything Text pulls into the staged world: its overlay
+  // files, its runtime package and its font copies. Reading the Scene once is
+  // how they stay in agreement.
+  const usesTextPanel = resolvedEntryScene
+    ? sceneUsesTextPanelRuntime(resolvedEntryScene.scene)
+    : false;
+  const textFontCopyPlan =
+    usesTextPanel && resolvedEntryScene
+      ? createPublishedTextFontCopyPlan(resolvedEntryScene.scene)
+      : [];
   let runtimeManifestFile: CompilerOverlayFile | undefined;
   let generated: string;
   if (outputMode === "classic-runtime") {
@@ -313,6 +323,9 @@ export function compileVisualProject(
       VISUAL_COMPILER_VERSION,
       diagnostics,
       publishedRuntimeDecoderPaths(requiredVendorBundles),
+      // Named only when the world actually carries a font file, and relative to
+      // the manifest, exactly like the decoder directories.
+      textFontCopyPlan.length > 0 ? PUBLISHED_RUNTIME_ASSET_BASE : undefined,
     );
     generated = generateRuntimeAdapterSource(documents.project.projectKind);
     runtimeManifestFile = compilerFile(
@@ -333,12 +346,6 @@ export function compileVisualProject(
       : emptySource(documents.project.projectKind);
   }
   const usesOpenBrushModels = projectUsesOpenBrushModels(documents.assets);
-  // One flag decides everything Text pulls into the staged world: its overlay
-  // files, its runtime package and its font copies. Reading the Scene once is
-  // how they stay in agreement.
-  const usesTextPanel = resolvedEntryScene
-    ? sceneUsesTextPanelRuntime(resolvedEntryScene.scene)
-    : false;
   // Every emitted feature that trips a platform security rule declares its own
   // requirement; nothing here knows what those rules are.
   const publishPermissions = resolvePublishPermissions([
@@ -495,9 +502,7 @@ export function compileVisualProject(
     ...createPublishedVendorAssetCopyPlan(requiredVendorBundles),
     // Not gated on the output mode: both emitted source and the runtime package
     // read the font from the world's own files, so both need them copied.
-    ...(usesTextPanel && resolvedEntryScene
-      ? createPublishedTextFontCopyPlan(resolvedEntryScene.scene)
-      : []),
+    ...textFontCopyPlan,
   ];
 
   return {
@@ -594,17 +599,21 @@ function modelRequiresDracoDecoder(asset: ModelAsset): boolean {
 const DRACO_MESH_COMPRESSION_EXTENSION = "KHR_draco_mesh_compression" as const;
 
 /**
- * Runtime JSON へ書く decoder の場所。
+ * Runtime JSON の manifest から見た、compiler が置く public file の base。
  *
- * manifest は `public/xrift/` に、decoder は `public/xrift-studio/vendor/` に
- * 置かれる。runtime loader は manifest からの相対で解決するので、ここでも
- * 同じ相対で書く。必要のない bundle は書かない。
+ * manifest は `public/xrift/` にあり、decoder と font は `public/xrift-studio/`
+ * にある。runtime loader は manifest からの相対で解決するので、一段上を指す。
+ */
+const PUBLISHED_RUNTIME_ASSET_BASE = "../" as const;
+
+/**
+ * Runtime JSON へ書く decoder の場所。必要のない bundle は書かない。
  */
 function publishedRuntimeDecoderPaths(
   bundleIds: readonly VendorBundleId[],
 ): XriftRuntimeDecoderPaths {
   const relativeTo = (bundleId: VendorBundleId) =>
-    `../${VENDOR_BUNDLES[bundleId].publishedDirectory}/`;
+    `${PUBLISHED_RUNTIME_ASSET_BASE}${VENDOR_BUNDLES[bundleId].publishedDirectory}/`;
   return {
     ...(bundleIds.includes("three-basis")
       ? { ktx2TranscoderPath: relativeTo("three-basis") }
