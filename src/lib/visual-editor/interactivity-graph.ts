@@ -514,10 +514,7 @@ export type InteractivityRuntimeAdapterEntry = {
 };
 
 const KHR_INTERACTIVITY_IGNORED_FLOW_NOTE =
-  "Play の runtime adapter が未実装のため、この node と、ここから先の flow は動きません。canonical JSON には保存され、公開先でも同じく何も起きません。";
-
-const KHR_INTERACTIVITY_IGNORED_VALUE_NOTE =
-  "Play の runtime adapter は value を評価しないため、この node の値は使われません。canonical JSON には保存され、公開先でも同じく評価されません。";
+  "Play の実行エンジンが未対応の operation です。この node と、ここから先の flow は動きません。canonical JSON には保存され、公開先でも同じく何も起きません。";
 
 /**
  * Why an operation reads the way it does in the Editor.
@@ -529,31 +526,47 @@ const KHR_INTERACTIVITY_IGNORED_VALUE_NOTE =
  */
 const KHR_INTERACTIVITY_RUNTIME_NOTES: Readonly<Record<string, string>> = {
   "event/onStart": "Play の開始時に、この node から flow を辿ります。",
-  "animation/start": "inline の animation index を再生対象に加えます。",
-  "animation/stop":
-    "同じ flow で先に開始した animation の再生を取り消します。すでに再生が始まった animation を途中で止めることはできないため、待機をはさんだ後の停止は動きません。",
-  "flow/branch":
-    "condition が inline の定数のときだけ、その分岐を辿ります。condition を他の node から接続した場合は評価できないため、この node で止まります。",
+  "event/onTick": "毎フレーム、この node から flow を辿ります。",
+  "event/receive": "同じ Asset の `event/send` が送ったイベントを受け取ります。",
+  "event/send":
+    "名前付きイベントを送ります。同じ Asset の `event/receive` が受け取り、Scene 側へも通知します。",
   "flow/setDelay":
-    "duration が inline の定数のときだけ待機します。`done` は待機後、`out` は待機せずに続きます。`cancel` と `err` は未実装です。",
+    "`out` は待たずに続き、`done` は duration 秒後に続きます。`cancel` で待機を取り消せます。",
+  "flow/sequence": "接続した出力を、番号順に上から実行します。",
+  "flow/doN": "この node を通る回数を n 回までに制限します。`reset` で数え直します。",
+  "flow/for": "startIndex から endIndex まで、`loopBody` を繰り返します。",
+  "flow/while": "condition が true の間、`loopBody` を繰り返します。",
+  "flow/multiGate": "通るたびに、接続した出力を順番に切り替えます。",
+  "flow/waitAll": "接続したすべての入力が揃ってから `completed` へ進みます。",
+  "flow/throttle": "duration 秒の間、2 回目以降の入力を `err` へ流します。",
+  "animation/start":
+    "Model の animation を再生します。対象の Model を持つ Entity へ接続されている必要があります。",
+  "animation/stop":
+    "再生中の animation を止めます。対象の Model を持つ Entity へ接続されている必要があります。",
+  "pointer/set":
+    "glTF の値を書き換えます。対象を解決できる Entity または Material へ接続されている必要があります。",
+  "pointer/interpolate":
+    "glTF の値を duration 秒かけて変えます。対象を解決できる接続が必要です。",
   [XRIFT_INTERACTION_OPERATIONS.onInteract]:
     "このグラフをInteraction ComponentでEntityへ接続し、そのEntityに公式のInteractableがあるときに動きます。",
   [XRIFT_INTERACTION_OPERATIONS.setProperty]:
-    "対象Entity、Component、プロパティを選ぶと、インタラクト時にその値を書き込みます。値は定数だけを読みます。",
+    "対象Entity、Component、プロパティへ値を書き込みます。duration を指定すると、その秒数をかけて変化させます。",
   [XRIFT_INTERACTION_OPERATIONS.toggleProperty]:
-    "対象のON/OFFを、インタラクトのたびに反転します。切り替えられるのはON/OFFのプロパティだけです。",
-  "variable/get": KHR_INTERACTIVITY_IGNORED_VALUE_NOTE,
-  "pointer/get": KHR_INTERACTIVITY_IGNORED_VALUE_NOTE,
-  "math/Inf": KHR_INTERACTIVITY_IGNORED_VALUE_NOTE,
+    "対象のON/OFFを、通るたびに反転します。切り替えられるのはON/OFFのプロパティだけです。",
 };
 
 export function getInteractivityRuntimeSupport(
   op: string,
 ): InteractivityRuntimeAdapterEntry {
   const support = getRuntimeSupport(op);
+  if (support === "ignored") {
+    return { support, note: KHR_INTERACTIVITY_RUNTIME_NOTES[op] ?? KHR_INTERACTIVITY_IGNORED_FLOW_NOTE };
+  }
   return {
     support,
-    note: KHR_INTERACTIVITY_RUNTIME_NOTES[op] ?? KHR_INTERACTIVITY_IGNORED_FLOW_NOTE,
+    note:
+      KHR_INTERACTIVITY_RUNTIME_NOTES[op] ??
+      "Play の実行エンジンがこの operation を実行します。",
   };
 }
 
@@ -753,17 +766,26 @@ export type {
  * {@link getKhrInteractivityOnStartAnimationCues} is what Play uses.
  */
 /**
- * True when a socket is fed by another node.
+ * Why the engine refused to run a node, in the words the Editor shows.
  *
- * That is the one case the adapter cannot resolve, because it has no
- * expression evaluator. An unwired socket always resolves, to its inline value
- * or to its type default, so it is never reported.
+ * The reasons come from the interpreter itself rather than from a second guess
+ * made here, so the Editor cannot report a node as fine while Play quietly
+ * skips it.
  */
-function isConnectedSocket(
-  socket: KhrInteractivityValueSocket | undefined,
-): boolean {
-  return socket?.node !== undefined;
-}
+const RUNTIME_ISSUE_MESSAGES: Readonly<Record<string, string>> = {
+  "missing-declaration":
+    "declaration を解決できないため、この node と、ここから先の flow は動きません。",
+  "unsupported-operation":
+    "Play の実行エンジンが未対応の operation です。この node と、ここから先の flow は動きません。",
+  "unsupported-by-host":
+    "この操作に必要な接続がありません。対象の Entity・Model・Material へ接続すると動きます。",
+  "value-cycle":
+    "value の接続が循環しています。循環した socket は評価できないため、この入力は使われません。",
+  "invalid-input":
+    "入力値をこの操作に使えません。値を確認してください。",
+  "budget-exceeded":
+    "1 フレームで実行できる回数の上限に達しました。繰り返しの回数か条件を見直してください。",
+};
 
 /**
  * Reports every node the runtime will not run.
@@ -780,58 +802,43 @@ export function collectInteractivityRuntimeDiagnostics(
   const extension = parseKhrInteractivityExtension(value);
   if (!extension) return [];
   const diagnostics: InteractivityDiagnostic[] = [];
+  const reported = new Set<string>();
+  const push = (path: string, message: string) => {
+    const key = `${path}|${message}`;
+    if (reported.has(key)) return;
+    reported.add(key);
+    diagnostics.push({ severity: "warning", path, message });
+  };
+
   extension.graphs.forEach((graph, graphIndex) => {
     const declarations = graph.declarations ?? [];
-    const nodes = graph.nodes ?? [];
-    nodes.forEach((node, nodeIndex) => {
+    (graph.nodes ?? []).forEach((node, nodeIndex) => {
       const op = declarations[node.declaration]?.op;
       if (!op) return;
-      const path = `$.graphs[${graphIndex}].nodes[${nodeIndex}]`;
       const entry = getInteractivityRuntimeSupport(op);
-      if (entry.support === "ignored") {
-        diagnostics.push({ severity: "warning", path, message: `${op}: ${entry.note}` });
-        return;
-      }
-      // A `conditional` operation only warns when this node's own input is the
-      // part the adapter cannot resolve, so a graph built from inline values
-      // and type defaults stays quiet.
-      const unevaluableInput =
-        (op === "flow/branch" && isConnectedSocket(node.values?.condition)) ||
-        (op === "flow/setDelay" && isConnectedSocket(node.values?.duration));
-      if (unevaluableInput) {
-        diagnostics.push({ severity: "warning", path, message: `${op}: ${entry.note}` });
-        return;
-      }
-      if (
-        (op === "animation/start" || op === "animation/stop") &&
-        isConnectedSocket(node.values?.animation)
-      ) {
-        diagnostics.push({
-          severity: "warning",
-          path,
-          message: `${op}: animation index を他の node から接続しているため、対象の clip を決められません。この node と、ここから先の flow は動きません。`,
-        });
-      }
+      if (entry.support !== "ignored") return;
+      push(`$.graphs[${graphIndex}].nodes[${nodeIndex}]`, `${op}: ${entry.note}`);
     });
   });
+
   // An Interaction Trigger action is not unsupported, it is unfinished: the
   // author still has to say which Entity and property it writes. Reporting it
   // here puts it in the same list as everything else Play will not run.
   for (const issue of collectXriftInteractionIssues(value)) {
-    diagnostics.push({
-      severity: "warning",
-      path: `$.graphs[${issue.graphIndex}].nodes[${issue.nodeIndex}]`,
-      message: `${issue.op}: ${INTERACTION_ISSUE_MESSAGES[issue.reason]}`,
-    });
+    push(
+      `$.graphs[${issue.graphIndex}].nodes[${issue.nodeIndex}]`,
+      `${issue.op}: ${INTERACTION_ISSUE_MESSAGES[issue.reason]}`,
+    );
   }
-  // Path-dependent findings come from the walk itself, so the Editor cannot
-  // report a node as fine while the adapter quietly refuses to run it.
+
+  // Path-dependent findings come from running the graph, so a node the engine
+  // stops at is reported even when its operation is implemented.
   for (const issue of walkOnStart(value).issues) {
-    diagnostics.push({
-      severity: "warning",
-      path: `$.graphs[${issue.graphIndex}].nodes[${issue.nodeIndex}]`,
-      message: `${issue.op}: この停止より前に再生が始まるため、Play では止まりません。再生中の animation を途中で止める adapter は未実装です。`,
-    });
+    const detail = issue.detail ? `（${issue.detail}）` : "";
+    push(
+      `$.graphs[${issue.graphIndex}].nodes[${issue.nodeIndex}]`,
+      `${issue.op ?? "declaration"}: ${RUNTIME_ISSUE_MESSAGES[issue.reason] ?? issue.reason}${detail}`,
+    );
   }
   return diagnostics;
 }

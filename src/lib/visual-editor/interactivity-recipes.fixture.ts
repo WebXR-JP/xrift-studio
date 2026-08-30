@@ -11,10 +11,12 @@ import {
   readInteractivityNodePosition,
   type KhrInteractivityExtension,
   type KhrInteractivityGraph,
+  type KhrInteractivityJsonValue,
 } from "./interactivity-graph";
 import {
   appendInteractivityOperation,
   connectInteractivityFlow,
+  ensureInteractivityTypes,
   getInteractivityRecipeRuntimeSupport,
   INTERACTIVITY_RECIPE_COLOR,
   INTERACTIVITY_RECIPES,
@@ -182,13 +184,13 @@ export function runInteractivityRecipeFixtureAssertions(): void {
 }
 
 /**
- * What the Play runtime adapter actually executes.
+ * What the Play execution engine actually runs.
  *
- * The adapter used to walk every flow edge regardless of the operation, so a
- * graph gated behind a branch started both branches and a graph behind a delay
- * started with no delay at all. These assertions pin the two properties that
- * fix keeps: an unimplemented operation produces no flow output, and whatever
- * the walk refuses to run is reported instead of dropped in silence.
+ * These assertions pin the properties the engine keeps: a chain continues only
+ * through operations it implements, a computed input is evaluated rather than
+ * refused, and whatever it will not run is reported instead of dropped in
+ * silence. The support table and the engine have to agree, or a node card shows
+ * a badge that says one thing while Play does another.
  */
 export function runInteractivityRuntimeAdapterFixtureAssertions(): void {
   const build = (
@@ -200,17 +202,32 @@ export function runInteractivityRuntimeAdapterFixtureAssertions(): void {
       validateKhrInteractivityExtension(extension).every(
         (diagnostic) => diagnostic.severity !== "error",
       ),
-      "A runtime adapter case built an invalid graph, so its result proves nothing",
+      "A runtime engine case built an invalid graph, so its result proves nothing",
     );
     return extension;
   };
 
-  // A branch whose condition comes from another node must start nothing: the
-  // adapter has no expression evaluator. Following both sides was the original
-  // behaviour, and it played every clip in the graph.
-  const openBranch = build((graph) => {
+  /** Writes an inline value onto a socket the operation template does not declare. */
+  const setLiteral = (
+    graph: KhrInteractivityGraph,
+    nodeIndex: number,
+    socket: string,
+    signature: "float" | "int" | "bool",
+    value: KhrInteractivityJsonValue[],
+  ) => {
+    const types = ensureInteractivityTypes(graph);
+    const node = graph.nodes?.[nodeIndex];
+    if (!node) return;
+    node.values = { ...node.values, [socket]: { type: types[signature], value } };
+  };
+
+  // A branch whose condition is computed takes the matching side. The static
+  // walk this replaced could not evaluate a wire, so it ran neither side.
+  const computedBranch = build((graph) => {
     const start = appendInteractivityOperation(graph, "event/onStart", { x: 0, y: 0 });
-    const source = appendInteractivityOperation(graph, "variable/get", { x: 150, y: 160 });
+    const compare = appendInteractivityOperation(graph, "math/gt", { x: 150, y: 160 });
+    setLiteral(graph, compare, "a", "float", [2]);
+    setLiteral(graph, compare, "b", "float", [1]);
     const branch = appendInteractivityOperation(graph, "flow/branch", { x: 300, y: 0 });
     const whenTrue = appendInteractivityOperation(graph, "animation/start", { x: 600, y: -80 });
     const whenFalse = appendInteractivityOperation(graph, "animation/start", { x: 600, y: 80 });
@@ -223,18 +240,17 @@ export function runInteractivityRuntimeAdapterFixtureAssertions(): void {
     assert(branchNode !== undefined, "flow/branch node went missing");
     branchNode.values = {
       ...branchNode.values,
-      condition: { node: source, socket: "value" },
+      condition: { node: compare, socket: "value" },
     };
   });
+  const computed = getKhrInteractivityOnStartAnimationCues(computedBranch);
   assert(
-    getKhrInteractivityOnStartAnimationCues(openBranch).length === 0,
-    "An unevaluable flow/branch still started animations",
+    computed.length === 1 && computed[0]?.animationIndex === 0,
+    "A branch on a computed condition did not take exactly the matching side",
   );
   assert(
-    collectInteractivityRuntimeDiagnostics(openBranch).some((diagnostic) =>
-      diagnostic.message.startsWith("flow/branch:"),
-    ),
-    "An unevaluable flow/branch was skipped without being reported",
+    collectInteractivityRuntimeDiagnostics(computedBranch).length === 0,
+    "A graph the engine fully runs still reported a runtime warning",
   );
 
   // A constant condition picks exactly one side.
@@ -254,10 +270,6 @@ export function runInteractivityRuntimeAdapterFixtureAssertions(): void {
   assert(
     takenBranch.length === 1 && takenBranch[0]?.animationIndex === 0,
     "A constant flow/branch did not take exactly the matching side",
-  );
-  assert(
-    collectInteractivityRuntimeDiagnostics(constantBranch).length === 0,
-    "A graph the adapter fully runs still reported a runtime warning",
   );
 
   // `done` waits for the duration; `out` continues immediately. The shipped
@@ -288,29 +300,43 @@ export function runInteractivityRuntimeAdapterFixtureAssertions(): void {
     "flow/setDelay did not carry its duration to the `done` socket",
   );
 
-  // An unimplemented operation stops the walk instead of running the rest of
-  // the chain as though it had succeeded.
-  const behindIgnored = build((graph) => {
+  // A variable write runs, and the chain continues through it.
+  const throughVariable = build((graph) => {
     const start = appendInteractivityOperation(graph, "event/onStart", { x: 0, y: 0 });
     const write = appendInteractivityOperation(graph, "variable/set", { x: 300, y: 0 });
+    const play = appendInteractivityOperation(graph, "animation/start", { x: 600, y: 0 });
+    setInteractivityLiteralValue(graph, play, "animation", [2]);
+    connectInteractivityFlow(graph, start, "out", write);
+    connectInteractivityFlow(graph, write, "out", play);
+  });
+  const afterVariable = getKhrInteractivityOnStartAnimationCues(throughVariable);
+  assert(
+    afterVariable.length === 1 && afterVariable[0]?.animationIndex === 2,
+    "The chain no longer continues through variable/set",
+  );
+
+  // An operation no host implements stops the chain and is reported.
+  const behindPointer = build((graph) => {
+    const start = appendInteractivityOperation(graph, "event/onStart", { x: 0, y: 0 });
+    const write = appendInteractivityOperation(graph, "pointer/set", { x: 300, y: 0 });
     const play = appendInteractivityOperation(graph, "animation/start", { x: 600, y: 0 });
     setInteractivityLiteralValue(graph, play, "animation", [0]);
     connectInteractivityFlow(graph, start, "out", write);
     connectInteractivityFlow(graph, write, "out", play);
   });
   assert(
-    getKhrInteractivityOnStartAnimationCues(behindIgnored).length === 0,
-    "The walk continued past an unimplemented operation",
+    getKhrInteractivityOnStartAnimationCues(behindPointer).length === 0,
+    "The engine continued past an operation no host implements",
   );
   assert(
-    collectInteractivityRuntimeDiagnostics(behindIgnored).some((diagnostic) =>
-      diagnostic.message.startsWith("variable/set:"),
+    collectInteractivityRuntimeDiagnostics(behindPointer).some((diagnostic) =>
+      diagnostic.message.startsWith("pointer/set:"),
     ),
-    "An unimplemented operation was skipped without being reported",
+    "An operation no host implements was skipped without being reported",
   );
 
-  // `animation/stop` cancels a start it can still reach, and reports the case
-  // it cannot express rather than pretending the clip was stopped.
+  // `animation/stop` cancels a start it reaches at the same moment, and records
+  // the stop time when the graph waits in between.
   const stopped = build((graph) => {
     const start = appendInteractivityOperation(graph, "event/onStart", { x: 0, y: 0 });
     const play = appendInteractivityOperation(graph, "animation/start", { x: 300, y: 0 });
@@ -337,25 +363,26 @@ export function runInteractivityRuntimeAdapterFixtureAssertions(): void {
     connectInteractivityFlow(graph, play, "out", delay);
     connectInteractivityFlow(graph, delay, "done", stop);
   });
+  const timed = getKhrInteractivityOnStartAnimationCues(stoppedLate);
   assert(
-    getKhrInteractivityOnStartAnimationCues(stoppedLate).length === 1,
-    "A stop after a delay silently cancelled an animation that had already started",
+    timed.length === 1 && timed[0]?.delaySeconds === 0,
+    "A stop after a delay dropped the playback that had already started",
   );
   assert(
-    collectInteractivityRuntimeDiagnostics(stoppedLate).some((diagnostic) =>
-      diagnostic.message.startsWith("animation/stop:"),
-    ),
-    "A stop the adapter cannot express was not reported",
+    timed[0]?.stopSeconds === 2,
+    "A stop after a delay did not record when the playback ends",
   );
 
-  // The op table and the walk have to agree, or the badge on a node card says
+  // The op table and the engine have to agree, or the badge on a node card says
   // one thing while Play does another.
   assert(
     getInteractivityRuntimeSupport("event/onStart").support === "executed" &&
-      getInteractivityRuntimeSupport("animation/start").support === "executed" &&
-      getInteractivityRuntimeSupport("variable/set").support === "ignored" &&
+      getInteractivityRuntimeSupport("variable/set").support === "executed" &&
+      getInteractivityRuntimeSupport("flow/sequence").support === "executed" &&
+      getInteractivityRuntimeSupport("animation/start").support === "conditional" &&
+      getInteractivityRuntimeSupport("pointer/set").support === "ignored" &&
       getInteractivityRuntimeSupport("nonexistent/operation").support === "ignored",
-    "The runtime adapter table no longer matches the operations the walk runs",
+    "The runtime support table no longer matches the operations the engine runs",
   );
 
   // Every recipe reports its own support, and the animation recipes are the
@@ -382,6 +409,6 @@ export function runInteractivityRuntimeAdapterFixtureAssertions(): void {
   );
   assert(
     getInteractivityRecipeRuntimeSupport(recipeById("start-set-color")) === "ignored",
-    "A pointer/set recipe claimed Play support the adapter does not have",
+    "A pointer/set recipe claimed Play support no host provides",
   );
 }

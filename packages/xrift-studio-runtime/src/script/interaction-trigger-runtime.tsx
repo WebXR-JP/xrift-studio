@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { Color, LinearSRGBColorSpace, type Object3D } from "three";
 import {
   XRIFT_AUDIO_SOURCE_RUNTIME_USER_DATA_KEY,
@@ -12,9 +12,26 @@ import {
   type XriftLightRuntimeOverrides,
 } from "./light.js";
 import {
-  collectXriftInteractionPrograms,
+  getXriftInteractionProperty,
   type XriftInteractionAction,
+  type XriftInteractionTargetKind,
+  type XriftInteractionValue,
 } from "./interaction-trigger.js";
+import { InteractivityEngine } from "../interactivity/engine.js";
+import type {
+  InteractivityActionTarget,
+  InteractivityHost,
+} from "../interactivity/host.js";
+import {
+  asBoolean,
+  asNumber,
+  asNumbers,
+  boolValue,
+  floatValue,
+  intValue,
+  vectorValue,
+  type InteractivityValue,
+} from "../interactivity/value.js";
 
 /**
  * Runs Interaction Trigger graphs, in Studio Play and in a published world.
@@ -137,6 +154,13 @@ function linearColor(value: readonly [number, number, number]): Color {
 
 export type XriftInteractionApplier = {
   apply(action: XriftInteractionAction): void;
+  /** Live value of one property, so a graph can toggle or ramp from it. */
+  read(target: {
+    entityId: string;
+    componentId: string | null;
+    targetKind: XriftInteractionTargetKind;
+    property: string;
+  }): XriftInteractionValue | null;
   /** Releases every override this trigger owns, as Play Stop and unmount do. */
   dispose(): void;
 };
@@ -262,7 +286,73 @@ export function createXriftInteractionApplier({
     );
   };
 
+  const readEntity = (
+    object: Object3D,
+    property: string,
+  ): XriftInteractionValue | null =>
+    property === "enabled" ? { kind: "bool", value: object.visible } : null;
+
+  const readLight = (
+    object: Object3D,
+    target: { entityId: string; componentId: string | null; property: string },
+  ): XriftInteractionValue | null => {
+    // A callback cannot return through `forEachOwnedBridge`, and a plain `let`
+    // would be narrowed back to `null` by the time it is read.
+    const found: { value: XriftInteractionValue | null } = { value: null };
+    forEachOwnedBridge(
+      object,
+      target.entityId,
+      XRIFT_LIGHT_RUNTIME_USER_DATA_KEY,
+      isLightBridge,
+      (bridge) => {
+        const state = bridge.read();
+        if (found.value || state.componentId !== target.componentId) return;
+        if (target.property === "enabled") {
+          found.value = { kind: "bool", value: state.enabled };
+        } else if (target.property === "intensity") {
+          found.value = { kind: "float", value: state.intensity };
+        } else if (target.property === "color") {
+          const color = new Color(state.color);
+          found.value = { kind: "color", value: [color.r, color.g, color.b] };
+        }
+      },
+    );
+    return found.value;
+  };
+
+  const readAudioSource = (
+    object: Object3D,
+    target: { entityId: string; componentId: string | null; property: string },
+  ): XriftInteractionValue | null => {
+    const found: { value: XriftInteractionValue | null } = { value: null };
+    forEachOwnedBridge(
+      object,
+      target.entityId,
+      XRIFT_AUDIO_SOURCE_RUNTIME_USER_DATA_KEY,
+      isAudioSourceBridge,
+      (bridge) => {
+        const state = bridge.read();
+        if (found.value || state.componentId !== target.componentId) return;
+        if (target.property === "volume") {
+          found.value = { kind: "float", value: state.volume };
+        } else if (target.property === "loop") {
+          found.value = { kind: "bool", value: state.loop };
+        } else if (target.property === "playback") {
+          found.value = { kind: "enum", value: state.playback };
+        }
+      },
+    );
+    return found.value;
+  };
+
   return {
+    read(target) {
+      const object = findEntityObject(root, target.entityId);
+      if (!object) return null;
+      if (target.targetKind === "entity") return readEntity(object, target.property);
+      if (target.targetKind === "light") return readLight(object, target);
+      return readAudioSource(object, target);
+    },
     apply(action) {
       const target = findEntityObject(root, action.entityId);
       if (!target) return;
@@ -287,6 +377,99 @@ export function createXriftInteractionApplier({
   };
 }
 
+/** Reads one live property value into the engine's representation. */
+function toInteractivityValue(
+  kind: string,
+  value: XriftInteractionValue,
+  options: readonly { value: string; label: string }[],
+): InteractivityValue | null {
+  if (value.kind === "bool") return boolValue(value.value);
+  if (value.kind === "float") return floatValue(value.value);
+  if (value.kind === "color") return vectorValue([...value.value]);
+  if (value.kind === "enum") {
+    const index = options.findIndex((option) => option.value === value.value);
+    return intValue(index < 0 ? 0 : index);
+  }
+  void kind;
+  return null;
+}
+
+/**
+ * Narrows an engine value to what one property accepts.
+ *
+ * KHR_interactivity has no string type, so an enum arrives as the option index
+ * and is resolved against the property's own option list here — the same list
+ * the Editor's picker shows, so the two cannot disagree.
+ */
+function toInteractionValue(
+  kind: string,
+  options: readonly { value: string; label: string }[],
+  value: InteractivityValue,
+): XriftInteractionValue | null {
+  switch (kind) {
+    case "bool":
+      return { kind: "bool", value: asBoolean(value) };
+    case "float":
+      return { kind: "float", value: asNumber(value) };
+    case "color": {
+      const [red, green, blue] = asNumbers(value, 3);
+      return { kind: "color", value: [red ?? 0, green ?? 0, blue ?? 0] };
+    }
+    case "enum": {
+      const index = Math.trunc(asNumber(value));
+      const option = options[index];
+      return option ? { kind: "enum", value: option.value } : null;
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * The world a trigger graph can see and change.
+ *
+ * Every write goes through the same applier the previous static trigger used,
+ * so a graph and a Script that touch one Component still compose through the
+ * existing runtime bridges instead of fighting over the object.
+ */
+export function createXriftInteractionHost(
+  applier: XriftInteractionApplier,
+): InteractivityHost {
+  const descriptorFor = (target: InteractivityActionTarget) =>
+    getXriftInteractionProperty(target.targetKind, target.property);
+
+  return {
+    readProperty(target) {
+      const descriptor = descriptorFor(target);
+      if (!descriptor) return null;
+      const current = applier.read({
+        entityId: target.entityId,
+        componentId: target.componentId,
+        targetKind: descriptor.target,
+        property: target.property,
+      });
+      if (!current) return null;
+      return toInteractivityValue(descriptor.kind, current, descriptor.options ?? []);
+    },
+    writeProperty(target, value) {
+      const descriptor = descriptorFor(target);
+      if (!descriptor) return false;
+      const next = toInteractionValue(descriptor.kind, descriptor.options ?? [], value);
+      if (!next) return false;
+      applier.apply({
+        nodeIndex: -1,
+        mode: "set",
+        entityId: target.entityId,
+        componentId: target.componentId,
+        target: descriptor.target,
+        property: target.property,
+        value: next,
+      });
+      return true;
+    },
+  };
+}
+
 export type XriftInteractionTriggerRuntimeProps = {
   /** Entity the graph is attached to; the one whose interaction starts it. */
   entityId: string;
@@ -296,6 +479,14 @@ export type XriftInteractionTriggerRuntimeProps = {
   componentId?: string;
   /** Override composition order, matching how Script Components are ordered. */
   order?: number;
+  /**
+   * Whether the graph is allowed to run.
+   *
+   * A published world is always running; Studio passes its Play state, because
+   * a graph that started on `event/onStart` while the author was still editing
+   * would change the Scene View out from under them.
+   */
+  playing?: boolean;
 };
 
 export function XriftInteractionTriggerRuntime({
@@ -303,27 +494,40 @@ export function XriftInteractionTriggerRuntime({
   graph,
   componentId = "interaction-trigger",
   order = 0,
+  playing = true,
 }: XriftInteractionTriggerRuntimeProps) {
   const scene = useThree((state) => state.scene);
-  const programs = useMemo(
-    () => collectXriftInteractionPrograms(graph),
-    [graph],
-  );
   const applier = useMemo(
     () => createXriftInteractionApplier({ root: scene, componentId, order }),
     [componentId, order, scene],
+  );
+  const host = useMemo(() => createXriftInteractionHost(applier), [applier]);
+  const engine = useMemo(
+    () => (playing ? new InteractivityEngine(graph, host) : null),
+    [graph, host, playing],
   );
 
   useEffect(() => () => applier.dispose(), [applier]);
 
   useEffect(() => {
-    if (programs.length === 0) return;
-    return subscribeXriftInteraction(entityId, () => {
-      for (const program of programs) {
-        for (const action of program.actions) applier.apply(action);
-      }
-    });
-  }, [applier, entityId, programs]);
+    if (!engine) return;
+    // `event/onStart` is what makes a graph a timeline rather than only a
+    // reaction: the same Asset can wait, repeat and finish on its own.
+    engine.start();
+    return () => {
+      engine.dispose();
+      applier.dispose();
+    };
+  }, [applier, engine]);
+
+  useFrame((_state, delta) => {
+    engine?.update(delta);
+  });
+
+  useEffect(() => {
+    if (!engine) return;
+    return subscribeXriftInteraction(entityId, () => engine.interact());
+  }, [engine, entityId]);
 
   return null;
 }

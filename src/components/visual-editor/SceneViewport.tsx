@@ -1869,6 +1869,7 @@ function EntityObject({
             graph={graphAsset.extension}
             componentId={component.id}
             order={index}
+            playing={playing}
           />
         );
       })}
