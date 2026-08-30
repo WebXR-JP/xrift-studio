@@ -537,7 +537,6 @@ export class XriftThreeLoader {
       }
       return instance;
     }
-    if (component.type === "animation") return null;
     // Wind is consumed by the R3F frame adapter. It is an
     // Entity-scoped behavior component and does not create a standalone
     // Three.js object or diagnostic marker.

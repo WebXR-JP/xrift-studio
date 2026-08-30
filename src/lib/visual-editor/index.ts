@@ -39,6 +39,7 @@ export * from "./model-thumbnail";
 export * from "./interaction-trigger-targets";
 export * from "./interactivity-graph";
 export * from "./interactivity-recipes";
+export * from "./animation-component-migration";
 export * from "./glow-material-catalog";
 export * from "./gizmo-focus";
 export * from "./gizmo-focus.fixture";

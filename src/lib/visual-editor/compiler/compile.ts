@@ -61,9 +61,6 @@ import {
 import { detectTimeUniforms } from "../../../../packages/xrift-studio-runtime/src/shader-time";
 import type { VisualProjectKind } from "../project-document";
 import {
-  animationPlaybackSpeed,
-  resolveAnimationClipIndex,
-  type AnimationComponent,
   type BoxColliderComponent,
   type AudioSourceComponent,
   type ColliderComponent,
@@ -1927,10 +1924,6 @@ function renderEntity(
     addDiagnostic(context, entityDiagnostic(entity, "multiple-transforms", "複数の Transform のうち先頭だけを使用します", "warning"));
   }
   const transform = transforms[0];
-  const animationComponents = entity.components.filter(
-    (component): component is AnimationComponent =>
-      component.type === "animation" && component.enabled,
-  );
   const rigidBodies = entity.components.filter(
     (component): component is RigidBodyComponent =>
       component.type === "rigid-body" && component.enabled,
@@ -1948,18 +1941,6 @@ function renderEntity(
   }
   const ownRigidBody = rigidBodies[0];
   const rigidBodyOwner = ownRigidBody ?? inheritedRigidBody;
-  if (animationComponents.length > 1) {
-    addDiagnostic(
-      context,
-      entityDiagnostic(
-        entity,
-        "multiple-animation-components",
-        "複数のAnimationのうち先頭だけを使用します",
-        "warning",
-      ),
-    );
-  }
-  const animation = animationComponents[0];
   const localContent: string[] = [];
   const wrappers: RenderedXriftWrapper[] = [];
   const interactionTriggers = resolveInteractionTriggers(entity, context);
@@ -1984,10 +1965,13 @@ function renderEntity(
       continue;
     }
     if (component.type === "mesh") {
-      const rendered = renderMesh(entity, component, context, animation);
+      const rendered = renderMesh(entity, component, context);
       if (rendered) localContent.push(rendered);
     } else if (component.type === "animation") {
-      // Playback is applied by the sibling Model renderer.
+      // v1 removed the Animation Component and opening a project converts it
+      // into a graph, so nothing here should still carry one. Skipped rather
+      // than reported, because a document that reached the compiler with one
+      // has already been told on open.
       continue;
     } else if (component.type === "vegetation-wind") {
       // Wind is emitted once at scene level so it can update every explicitly
@@ -2387,12 +2371,11 @@ function renderMesh(
   entity: SceneEntity,
   mesh: MeshComponent,
   context: CompileContext,
-  animation?: AnimationComponent,
 ): string | null {
   const geometry = resolveMeshGeometry(mesh, context);
   if (!geometry) return null;
   if (geometry.kind === "model") {
-    return renderModelMesh(entity, mesh, geometry.asset, context, animation);
+    return renderModelMesh(entity, mesh, geometry.asset, context);
   }
   const material = resolveMeshMaterial(mesh, context);
   const materialJsx = material
@@ -2887,7 +2870,6 @@ function renderModelMesh(
   mesh: MeshComponent,
   model: ModelAsset,
   context: CompileContext,
-  animation?: AnimationComponent,
 ): string | null {
   context.referencedAssetIds.add(model.id);
   const runtimeUrl = context.assetRuntimeUrls.get(model.id);
@@ -2918,49 +2900,21 @@ function renderModelMesh(
     model.importMetadata?.openBrush,
   );
   const modelClips = model.importMetadata?.animations ?? [];
-  const animationClipIndex = animation
-    ? resolveAnimationClipIndex(
-        animation,
-        modelClips.map((clip) => clip.name),
-      )
-    : -1;
-  const animationClip =
-    animationClipIndex >= 0 ? modelClips[animationClipIndex] : undefined;
-  const animationSpeed = animation ? animationPlaybackSpeed(animation) : 1;
-  const autoplay = Boolean(
-    animation?.autoplay &&
-      animationClip &&
-      !isObj,
-  );
-  // A graph can play, pause, seek or switch a clip while the world runs, which
-  // needs the mixer to exist even when nothing autoplays. It is only worth
-  // emitting when something in the Scene can actually send those commands.
-  //
-  // The Animation Component is not required. A graph built from a Model's clips
-  // plays them without one — the Component owns a single clip, and a Model with
-  // sixty-four is the reason to use a graph in the first place — so gating the
-  // mixer on the Component would publish a world where those clips never move.
+  /*
+   * The mixer, for the graph to play through.
+   *
+   * v1 removed the Animation Component: a clip is started by an
+   * `animation/start` node, and a Model whose motion is split across dozens of
+   * clips is the reason it had to move. So nothing is emitted for a Scene with
+   * no graph in it, and everything is emitted for one that has a graph and a
+   * Model with clips — the Component is no longer part of the question.
+   */
   const animationBridgeable = Boolean(
     !isObj &&
       modelClips.length > 0 &&
       sceneUsesInteractionTriggerRuntime(context.scene, context.assets),
   );
-  const animationLoaded = autoplay || animationBridgeable;
-  if (animation && !animationClip) {
-    addDiagnostic(context, {
-      severity: "warning",
-      code: "animation-clip-missing",
-      message:
-        animation.clipName !== undefined && modelClips.length > 0
-          ? `Animationで選択したclip「${animation.clipName}」がModelにありません`
-          : "Animationを再生できるclipがModelにありません",
-      sceneId: context.scene.sceneId,
-      entityId: entity.id,
-      componentId: animation.id,
-      assetId: model.id,
-      ...(animation.clipName !== undefined ? { fieldPath: "clipName" } : {}),
-    });
-  }
+  const animationLoaded = animationBridgeable;
   if (isObj) {
     context.fiberImports.add("useLoader");
     context.extraImports.add(
@@ -2984,9 +2938,6 @@ function renderModelMesh(
     context.reactValueImports.add("useEffect");
     context.reactValueImports.add("useRef");
     context.threeTypeImports.add("Group");
-  }
-  if (autoplay) {
-    context.threeValueImports.add(animation?.loop ? "LoopRepeat" : "LoopOnce");
   }
   if (animationBridgeable) {
     context.fiberImports.add("useFrame");
@@ -3051,54 +3002,30 @@ function renderModelMesh(
       : !needsParser
         ? `const { scene${animationLoaded ? ", animations" : ""} } = useGLTF(modelUrl);`
         : `const { scene, parser${animationLoaded ? ", animations" : ""} } = useGLTF(modelUrl);`;
-  // An explicit clip is emitted by name so the generated world plays the same
-  // clip the editor previews. Without a selection the first clip stays default.
-  const selectedClipName = animation?.clipName;
-  const usesClipNames = selectedClipName === undefined;
-  const animationBindings = [
-    ...(autoplay ? ["actions"] : []),
-    ...(autoplay && usesClipNames ? ["names"] : []),
-    ...(animationBridgeable ? ["mixer", "clips"] : []),
-  ].join(", ");
-  const autoplaySource = autoplay
-    ? `
-  useEffect(() => {
-    const clipName = ${usesClipNames ? "names[0]" : JSON.stringify(selectedClipName)};
-    const action = clipName ? actions[clipName] : undefined;
-    if (!action) return;
-    action.reset();
-    action.clampWhenFinished = ${!animation?.loop};
-    action.setLoop(${animation?.loop ? "LoopRepeat, Infinity" : "LoopOnce, 1"});
-    action.timeScale = ${formatNumber(animationSpeed)};
-    action.play();
-    return () => {
-      action.stop();
-    };
-  }, [actions${usesClipNames ? ", names" : ""}]);`
-    : "";
-  // The same bridge Studio Play attaches, so a graph that pauses or re-times a
-  // clip behaves identically in the published world.
+  const animationBindings = (animationBridgeable ? ["mixer", "clips"] : []).join(", ");
+  // The same bridge Studio Play attaches, so a graph that starts, pauses or
+  // re-times a clip behaves identically in the published world. Nothing plays
+  // on its own: what starts a clip is an `animation/start` node.
   const animationBridgeSource = animationBridgeable
     ? `
   const animationBridge = useRef<XriftAnimationRuntimeBridge | null>(null);
   useEffect(() => {
     const root = animationRoot.current;
     if (!root) return;
-    const clipIndex = ${Math.max(0, animationClipIndex)};
     const bridge = createXriftAnimationRuntimeBridge({
-      componentId: ${JSON.stringify(animation?.id ?? "")},
+      componentId: "",
       clipNames: clips.map((clip) => clip.name),
-      clipIndex,
+      clipIndex: 0,
       autoplay: false,
-      speed: ${formatNumber(animationSpeed)},
-      loop: ${Boolean(animation?.loop)},
+      speed: 1,
+      loop: false,
     });
     const controller = createXriftAnimationMixerController({
       mixer,
       clips,
-      clipIndex,
-      loop: ${Boolean(animation?.loop)},
-      speed: ${formatNumber(animationSpeed)},
+      clipIndex: 0,
+      loop: false,
+      speed: 1,
     });
     const disconnect = bridge.connect(controller);
     root.userData[XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY] = bridge;
@@ -3116,7 +3043,7 @@ function renderModelMesh(
     : "";
   const animationSource = animationLoaded
     ? `  const animationRoot = useRef<Group>(null);
-  const { ${animationBindings} } = useAnimations(animations, animationRoot);${autoplaySource}${animationBridgeSource}`
+  const { ${animationBindings} } = useAnimations(animations, animationRoot);${animationBridgeSource}`
     : "";
   // Open Brush brushes read `uniform vec4 u_time` for their motion, and the
   // Materials come out of three-icosa already compiled, so no Material

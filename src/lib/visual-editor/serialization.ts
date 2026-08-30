@@ -2500,6 +2500,13 @@ function isValidModelNodeAuthoringMetadata(value: unknown): boolean {
   );
 }
 
+/**
+ * Reads the Animation Component v1 removed.
+ *
+ * Kept because a document saved before v1 still has them and the conversion on
+ * open has to be able to read the clip, the loop and the speed the author
+ * chose. Nothing writes one: after the conversion no document has any.
+ */
 function validateAnimationComponentShape(
   component: Record<string, unknown>,
   path: string,

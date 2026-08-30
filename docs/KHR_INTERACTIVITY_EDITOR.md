@@ -168,6 +168,36 @@ panel and over MCP, and nearly all of them were `pointer/*` shapes the runtime
 does not execute — a menu of things that look like a head start and then do
 nothing at Play. The nodes they were made of are all in the palette.
 
+### Animation belongs to the graph
+
+v1 removed the Animation Component. It played one clip, and a Model whose
+motion is split across dozens of them — gulls, water, a flag — had no way to
+say "all of these"; the one choice it offered was the one nobody wanted to
+make. A clip is now started by an `animation/start` node, beside the waits and
+conditions it runs with.
+
+Three things follow, and they are the whole of the breaking change:
+
+- **Placing an animated Model creates its graph.** It arrives playing, as it
+  always has; what plays it is an Asset the author can open and edit.
+- **No Component is needed to animate an Entity.** The mixer exists wherever a
+  Model has clips and the Scene runs a graph, in Studio Play and in a published
+  world alike. `xrift/setProperty` with `targetKind: "animation"` addresses that
+  mixer, with an empty component id.
+- **Opening a project converts what is left.** `migrateAnimationComponentsToGraphs`
+  turns each autoplaying Component into a graph that plays its clip with its
+  loop and speed, plus the Trigger that runs it, and removes the Component. It
+  runs in `parseVisualProjectFiles`, over Scenes and Prefabs together against
+  one manifest, so a Prefab cannot be left animating until it is placed. A
+  Component that was not autoplaying is dropped rather than converted: it was a
+  handle for another graph to command, and starting it would animate something
+  the world never animated.
+
+The document type stays readable — that is what makes the conversion possible —
+but nothing authors, renders, publishes or edits it. `update_component` refuses
+one with `COMPONENT_REMOVED`; `remove_component` still works, because that is
+the way out.
+
 ### Generating a graph from a Model's clips
 
 `create_model_animation_graph` builds `event/onStart` → `flow/sequence` →

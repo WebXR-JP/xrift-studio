@@ -1960,8 +1960,11 @@ export function runXriftMcpEditorToolFixtures(): void {
     revision: current.revision + 1,
   };
 
-  // add_component gates Animation on a Model that carries clips, so the fixture
-  // seeds the component directly to exercise the update_component patch path.
+  /*
+   * The Animation Component is gone, and an agent that finds one in a document
+   * that has not been opened since must be told, not allowed to keep it alive
+   * by editing it. Removing it still works, because that is the way out.
+   */
   const modelAnimationComponentId = "component-mcp-animation";
   const seededAnimation = createAnimationComponent(modelAnimationComponentId);
   assert(seededAnimation, "Animation fixture component could not be created");
@@ -1984,36 +1987,10 @@ export function runXriftMcpEditorToolFixtures(): void {
     },
   };
 
-  const modelAnimationUpdated = executeXriftMcpEditorTool(current, {
-    id: "fixture-update-animation",
-    tool: "update_component",
-    arguments: {
-      projectId: bundle.project.projectId,
-      sceneId: bundle.scene.sceneId,
-      expectedRevision: current.revision,
-      entityId: primitiveId,
-      componentId: modelAnimationComponentId,
-      patch: { clipName: "Wave", speed: 1.5 },
-    },
-  });
-  const updatedModelAnimation = modelAnimationUpdated.result.component as {
-    clipName?: string;
-    speed?: number;
-  };
-  assert(
-    updatedModelAnimation.clipName === "Wave" && updatedModelAnimation.speed === 1.5,
-    "update_component should persist the Animation clip and speed",
-  );
-  current = {
-    ...current,
-    bundle: modelAnimationUpdated.bundle,
-    revision: current.revision + 1,
-  };
-
-  let invalidAnimationSpeedCode: string | undefined;
+  let removedComponentCode: string | undefined;
   try {
     executeXriftMcpEditorTool(current, {
-      id: "fixture-invalid-animation-speed",
+      id: "fixture-update-animation",
       tool: "update_component",
       arguments: {
         projectId: bundle.project.projectId,
@@ -2021,16 +1998,16 @@ export function runXriftMcpEditorToolFixtures(): void {
         expectedRevision: current.revision,
         entityId: primitiveId,
         componentId: modelAnimationComponentId,
-        patch: { speed: 0 },
+        patch: { clipName: "Wave", speed: 1.5 },
       },
     });
   } catch (error) {
-    invalidAnimationSpeedCode =
+    removedComponentCode =
       error instanceof XriftMcpEditorToolError ? error.code : undefined;
   }
   assert(
-    invalidAnimationSpeedCode === "INVALID_ARGUMENT",
-    "update_component should reject an out-of-range Animation speed",
+    removedComponentCode === "COMPONENT_REMOVED",
+    "update_component should refuse to edit a removed Animation Component",
   );
 
   const modelAnimationRemoved = executeXriftMcpEditorTool(current, {

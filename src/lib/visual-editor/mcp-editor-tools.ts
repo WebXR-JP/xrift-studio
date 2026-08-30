@@ -34,8 +34,6 @@ import {
 import type { PrototypeVisualProject } from "./prototype-project";
 import { XRIFT_SCRIPTING_CAPABILITIES } from "./scripting-capabilities.data";
 import {
-  ANIMATION_SPEED_MAX,
-  ANIMATION_SPEED_MIN,
   addBuiltinPrimitiveEntity,
   addTerrainEntity,
   applyTerrainBrushToScene,
@@ -45,7 +43,6 @@ import {
   getTerrainGeometry,
   getMeshMaterialSlots,
   renameEntity as renameEntityInScene,
-  updateAnimationComponent,
   updateAudioSourceComponent,
   updateVegetationWindComponent,
   updateColliderComponent,
@@ -59,7 +56,6 @@ import {
   updateRigidBodyComponent,
   updateTextComponent,
   updateInteractionTriggerComponent,
-  type AnimationPatch,
   type AudioSourcePatch,
   type ColliderPatch,
   type InteractionTriggerPatch,
@@ -1561,6 +1557,8 @@ function placeAsset(
   const bundle = touchProject(context, {
     ...context.bundle,
     scene: placement.scene,
+    // Placing an animated Model creates the graph that plays it.
+    assets: placement.assets,
   });
   return {
     changed: true,
@@ -3431,7 +3429,7 @@ function terrainGrassAppearancePatch(
 function listInteractionTriggerTargets(
   context: XriftMcpEditorContext,
 ): XriftMcpEditorToolOutcome {
-  const targets = collectInteractionTriggerTargets(context.bundle.scene);
+  const targets = collectInteractionTriggerTargets(context.bundle.scene, context.bundle.assets);
   return unchanged(
     context,
     {
@@ -3831,35 +3829,14 @@ function updateComponent(
       break;
     }
     case "animation": {
-      assertPatchKeys(
-        patch,
-        ANIMATION_PATCH_KEYS,
-        component.type,
+      // v1 removed the Animation Component. Opening a project converts any that
+      // are left into a graph, so an agent finding one is looking at a document
+      // that has not been opened since; editing it would keep it alive.
+      throw new XriftMcpEditorToolError(
+        "COMPONENT_REMOVED",
+        "Animation Componentは廃止されました。clipの再生はInteractivity Graphのanimation/startノードで行います",
+        { entityId, componentId, componentType: component.type },
       );
-      if (patch.clipName !== undefined && typeof patch.clipName !== "string") {
-        invalidArgument("patch.clipName", "string");
-      }
-      if (patch.speed !== undefined) {
-        const speed = patch.speed;
-        if (
-          typeof speed !== "number" ||
-          !Number.isFinite(speed) ||
-          speed < ANIMATION_SPEED_MIN ||
-          speed > ANIMATION_SPEED_MAX
-        ) {
-          invalidArgument(
-            "patch.speed",
-            `number between ${ANIMATION_SPEED_MIN} and ${ANIMATION_SPEED_MAX}`,
-          );
-        }
-      }
-      scene = updateAnimationComponent(
-        context.bundle.scene,
-        entityId,
-        patch as AnimationPatch,
-        componentId,
-      );
-      break;
     }
     case "vegetation-wind": {
       assertPatchKeys(
@@ -6188,7 +6165,7 @@ function configureInteractivityTriggerActionTool(
     componentIdArgument !== undefined ||
     optionalString(argumentsValue.property) !== undefined;
 
-  const targets = collectInteractionTriggerTargets(context.bundle.scene);
+  const targets = collectInteractionTriggerTargets(context.bundle.scene, context.bundle.assets);
   const targetEntity = targets.find((candidate) => candidate.entityId === entityId);
   if (!targetEntity) {
     throw new XriftMcpEditorToolError(
@@ -7399,8 +7376,10 @@ function componentDefinitionId(component: SceneComponent): string | null {
       return "core.spawn";
     case "particle-emitter":
       return "core.particle";
+    // The Animation Component is gone; a document still carrying one has not
+    // been opened since v1, and it maps to no definition an agent can add.
     case "animation":
-      return "core.animation";
+      return null;
     case "vegetation-wind":
       return "core.wind";
     case "audio-source":
@@ -7722,14 +7701,6 @@ const AUDIO_SOURCE_PATCH_KEYS = patchKeysOf<AudioSourcePatch>()([
 const INTERACTION_TRIGGER_PATCH_KEYS = patchKeysOf<
   Pick<InteractionTriggerPatch, "enabled" | "interactivityAssetId">
 >()(["enabled", "interactivityAssetId"]);
-
-const ANIMATION_PATCH_KEYS = patchKeysOf<AnimationPatch>()([
-  "enabled",
-  "autoplay",
-  "loop",
-  "clipName",
-  "speed",
-]);
 
 function assertPatchKeys(  patch: Record<string, unknown>,
   allowedKeys: readonly string[],

@@ -1988,53 +1988,26 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
       const target = result.entities.get(entity.id);
       const clips = result.animationClipsByEntity.get(entity.id) ?? [];
       if (!target || clips.length === 0) return [];
-      const component = entity.components.find(
-        (
-          candidate,
-        ): candidate is Extract<
-          XriftRuntimeComponent,
-          { type: "animation" }
-        > =>
-          candidate.type === "animation" &&
-          candidate.enabled,
-      );
-      const selectedIndex =
-        component?.autoplay
-          ? component.clipName === undefined
-            ? 0
-            : clips.findIndex((clip) => clip.name === component.clipName)
-          : -1;
-      const speed =
-        typeof component?.speed === "number" && Number.isFinite(component.speed)
-          ? component.speed
-          : 1;
-      // The earliest cue for a clip wins: the Animation Component's own
-      // autoplay starts immediately, so an interactivity delay must never
-      // postpone a clip another source already starts now. Loop and speed are
-      // per cue rather than per Entity, because a graph that starts twenty
-      // clips is the normal case for a Model whose motion is spread across
-      // them, and the Component only ever describes its own one.
+      /*
+       * What plays, and how, comes only from the graph.
+       *
+       * v1 removed the Animation Component: one Component could name one clip,
+       * and a Model whose motion is split across dozens of them had no way to
+       * say "all of these". So loop and speed are per cue rather than per
+       * Entity, and an Entity with clips gets a mixer whether or not anything
+       * has started one yet — a graph can start a clip at any moment.
+       */
       const planByIndex = new Map<
         number,
         { delaySeconds: number; loop: boolean; speed: number; startTime: number }
       >();
-      const noteCue = (
-        index: number,
-        plan: {
-          delaySeconds: number;
-          loop: boolean;
-          speed: number;
-          startTime: number;
-        },
-      ): void => {
-        const known = planByIndex.get(index);
-        if (!known || plan.delaySeconds < known.delaySeconds) {
-          planByIndex.set(index, plan);
-        }
-      };
       for (const cue of
         result.interactionAnimationCuesByEntity.get(entity.id) ?? []) {
-        noteCue(cue.animationIndex, {
+        const known = planByIndex.get(cue.animationIndex);
+        // The earliest start for a clip wins: two graphs starting the same clip
+        // is one clip playing, from the first moment either of them asked.
+        if (known && known.delaySeconds <= cue.delaySeconds) continue;
+        planByIndex.set(cue.animationIndex, {
           delaySeconds: cue.delaySeconds,
           // A start with no end time runs until something stops it, which on a
           // mixer means looping. A graph that named an end time wants one pass.
@@ -2049,16 +2022,6 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
               : 0,
         });
       }
-      // Written last so the Component wins the clip it owns: it is the explicit
-      // setting an author typed, and it starts at zero anyway.
-      if (selectedIndex >= 0) {
-        planByIndex.set(selectedIndex, {
-          delaySeconds: 0,
-          loop: component?.loop ?? false,
-          speed,
-          startTime: 0,
-        });
-      }
       const cues = [...planByIndex.entries()].flatMap(([index, plan]) => {
         const clip = clips[index];
         return clip ? [{ clip, index, ...plan }] : [];
@@ -2068,10 +2031,6 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
           entityId: entity.id,
           target,
           clips,
-          componentId: component?.id ?? null,
-          loop: component?.loop ?? false,
-          selectedIndex,
-          speed,
           cues,
           mixer: new AnimationMixer(target),
           bridge: null as XriftAnimationRuntimeBridge | null,
@@ -2097,27 +2056,24 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
         }
         action.play();
       }
-      // A bridge for every Entity that has clips, not only for those carrying an
-      // Animation Component: a graph that plays a Model's clips is attached to
-      // the Entity, and asking the author to also add a Component they never
-      // configure would be a step whose only purpose is to satisfy this line.
-      // An Entity without the Component gets an empty owner id, which no
-      // Component-scoped action can match.
+      // A bridge for every Entity that has clips. What it should play is not
+      // known here — a graph can start any clip at any moment — so the bridge
+      // carries no clip of its own and no owner id, and the cues above have
+      // already started whatever begins with the world.
       const bridge = createXriftAnimationRuntimeBridge({
-        componentId: entry.componentId ?? "",
+        componentId: "",
         clipNames: entry.clips.map((clip) => clip.name),
-        clipIndex: Math.max(0, entry.selectedIndex),
-        // The cues above already perform autoplay.
+        clipIndex: 0,
         autoplay: false,
-        speed: entry.speed,
-        loop: entry.loop,
+        speed: 1,
+        loop: false,
       });
       const controller = createXriftAnimationMixerController({
         mixer: entry.mixer,
         clips: entry.clips,
-        clipIndex: Math.max(0, entry.selectedIndex),
-        loop: entry.loop,
-        speed: entry.speed,
+        clipIndex: 0,
+        loop: false,
+        speed: 1,
       });
       const disconnect = bridge.connect(controller);
       const holder = entry.target.userData as Record<string, unknown>;

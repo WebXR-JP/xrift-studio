@@ -36,6 +36,10 @@ import { runScriptAudioFixtureAssertions } from "../src/lib/visual-editor/script
 import { runAudioSourceRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source.fixture.ts";
 import { runRuntimeSchemaFixtureAssertions } from "../packages/xrift-studio-runtime/src/schema.fixture.ts";
 import { runInteractivityEngineFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity/engine.fixture.ts";
+import {
+  runAnimationComponentLoadMigrationFixtureAssertions,
+  runAnimationComponentMigrationFixtureAssertions,
+} from "../src/lib/visual-editor/animation-component-migration.fixture.ts";
 import { runAnimationRuntimeBridgeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/animation.fixture.ts";
 import { runAnimationMixerControllerFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/animation-mixer.fixture.ts";
 import { runInteractivityGraphListFixtureAssertions } from "../src/lib/visual-editor/interactivity-recipes.fixture.ts";
@@ -276,6 +280,8 @@ try {
     ["runtime schema", runRuntimeSchemaFixtureAssertions],
     ["interactivity engine", runInteractivityEngineFixtureAssertions],
     ["animation runtime bridge", runAnimationRuntimeBridgeFixtureAssertions],
+    ["animation component migration", runAnimationComponentMigrationFixtureAssertions],
+    ["animation component load migration", runAnimationComponentLoadMigrationFixtureAssertions],
     ["animation mixer controller", runAnimationMixerControllerFixtureAssertions],
     ["interactivity graph list", runInteractivityGraphListFixtureAssertions],
     ["shader time", runShaderTimeFixtureAssertions],

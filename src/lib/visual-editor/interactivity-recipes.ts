@@ -265,20 +265,7 @@ export function getInteractivityRecipeRuntimeSupport(
     : "ignored";
 }
 
-/**
- * A graph that plays every clip a Model carries, all at once and looping.
- *
- * The Animation Component plays one clip, which is what a single「再生中」can
- * mean. A Model can carry sixty-four — gulls, insects, a boat's wake — meant to
- * run together, and picking one of them is not a choice anybody wants to make.
- * Generating the graph puts all of them on the canvas as ordinary nodes, so the
- * ones an author does not want are deleted rather than configured away.
- *
- * `event/onStart` has one flow output and a flow output reaches one node, so a
- * `flow/sequence` does the fan-out. They are grouped rather than hung off a
- * single sequence because a card with sixty-four sockets is taller than the
- * canvas and every edge in the graph would leave the same point.
- */
+/** How many clips one `flow/sequence` fans out to before a new column starts. */
 const MODEL_ANIMATION_GROUP_SIZE = 8;
 
 /** Column pitch, from the card width plus room for the wires between columns. */
@@ -287,8 +274,58 @@ const MODEL_ANIMATION_COLUMN_GAP = 260;
 /** Vertical air between two stacked cards. */
 const MODEL_ANIMATION_ROW_GAP = 24;
 
+/**
+ * One clip a generated graph should play.
+ *
+ * Carried as data rather than derived from a clip name because the two callers
+ * want different things from the same builder: the Model Inspector's button
+ * loops everything, while converting an Animation Component has to keep the
+ * loop, speed and single pass that Component was set to.
+ */
+export type ModelAnimationClipPlan = {
+  /** Clip index in the Model, which is what `animation/start` addresses. */
+  index: number;
+  /** Clip name, shown on the card. Nothing reads it at runtime. */
+  name: string;
+  /** An unbounded play loops; see `durationSeconds` for the other case. */
+  loop: boolean;
+  speed: number;
+  /**
+   * Where a single pass ends, in clip-local seconds.
+   *
+   * Only read when `loop` is false. Left out, the play is unbounded and loops,
+   * so a converted Component that was not looping would start looping.
+   */
+  durationSeconds?: number;
+};
+
+/**
+ * A graph that plays every clip a Model carries, all at once and looping.
+ *
+ * The Animation Component played one clip, which is what a single「再生中」can
+ * mean. A Model can carry sixty-four — gulls, insects, a boat's wake — meant to
+ * run together, and picking one of them is not a choice anybody wants to make.
+ * Generating the graph puts all of them on the canvas as ordinary nodes, so the
+ * ones an author does not want are deleted rather than configured away.
+ */
 export function createModelAnimationGraphExtension(
   clipNames: readonly string[],
+): KhrInteractivityExtension {
+  return createModelAnimationClipGraphExtension(
+    clipNames.map((name, index) => ({ index, name, loop: true, speed: 1 })),
+  );
+}
+
+/**
+ * The same graph, for callers that know what each clip should do.
+ *
+ * `event/onStart` has one flow output and a flow output reaches one node, so a
+ * `flow/sequence` does the fan-out. They are grouped rather than hung off a
+ * single sequence because a card with sixty-four sockets is taller than the
+ * canvas and every edge in the graph would leave the same point.
+ */
+export function createModelAnimationClipGraphExtension(
+  plans: readonly ModelAnimationClipPlan[],
 ): KhrInteractivityExtension {
   const extension = cloneKhrInteractivityExtension(
     createDefaultKhrInteractivityExtension(),
@@ -299,11 +336,11 @@ export function createModelAnimationGraphExtension(
   graph.declarations = [];
   graph.types = [];
   const start = appendInteractivityOperation(graph, "event/onStart", { x: 0, y: 0 });
-  if (clipNames.length === 0) return extension;
+  if (plans.length === 0) return extension;
 
-  const groups: string[][] = [];
-  for (let index = 0; index < clipNames.length; index += MODEL_ANIMATION_GROUP_SIZE) {
-    groups.push([...clipNames.slice(index, index + MODEL_ANIMATION_GROUP_SIZE)]);
+  const groups: ModelAnimationClipPlan[][] = [];
+  for (let index = 0; index < plans.length; index += MODEL_ANIMATION_GROUP_SIZE) {
+    groups.push([...plans.slice(index, index + MODEL_ANIMATION_GROUP_SIZE)]);
   }
 
   // With one group the root sequence would forward a single output, so the
@@ -323,12 +360,11 @@ export function createModelAnimationGraphExtension(
   // still legible.
   const firstGroupColumn = MODEL_ANIMATION_COLUMN_GAP * (root === null ? 1 : 2);
 
-  let clip = 0;
-  groups.forEach((names, groupIndex) => {
+  groups.forEach((members, groupIndex) => {
     const column = firstGroupColumn + groupIndex * MODEL_ANIMATION_COLUMN_GAP;
     let cursorY = 0;
     const fan =
-      names.length > 1
+      members.length > 1
         ? appendInteractivityOperation(graph, "flow/sequence", {
             x: column,
             y: cursorY,
@@ -340,21 +376,29 @@ export function createModelAnimationGraphExtension(
       cursorY +=
         estimateInteractivityNodeHeight(graph, fan) + MODEL_ANIMATION_ROW_GAP;
     }
-    names.forEach((name, indexInGroup) => {
+    members.forEach((plan, indexInGroup) => {
       const play = appendInteractivityOperation(graph, "animation/start", {
         x: column,
         y: cursorY,
       });
       const node = graph.nodes![play]!;
       const types = ensureInteractivityTypes(graph);
+      // `endTime` is only written for a clip that should stop. An unbounded
+      // play runs until something stops it, which the mixer surfaces as a
+      // loop, and that is what an idle, a flag or a flock wants.
+      const bounded =
+        !plan.loop &&
+        typeof plan.durationSeconds === "number" &&
+        Number.isFinite(plan.durationSeconds) &&
+        plan.durationSeconds > 0;
       node.values = {
         ...(node.values ?? {}),
-        animation: { type: types.int, value: [clip] },
+        animation: { type: types.int, value: [plan.index] },
         startTime: { type: types.float, value: [0] },
-        // `endTime` is deliberately left unset. An unbounded play loops, which
-        // is what an idle, a flag, or a flock is for; a clip that should stop
-        // gets an end time typed in afterwards.
-        speed: { type: types.float, value: [1] },
+        ...(bounded
+          ? { endTime: { type: types.float, value: [plan.durationSeconds!] } }
+          : {}),
+        speed: { type: types.float, value: [plan.speed] },
       };
       node.extras = {
         ...(node.extras ?? {}),
@@ -362,7 +406,7 @@ export function createModelAnimationGraphExtension(
           ...(isPlainRecord(node.extras?.xriftStudio) ? node.extras.xriftStudio : {}),
           // The runtime reads the index; a column of identical cards is
           // unreadable, so the card reads the name from here.
-          clipName: name,
+          clipName: plan.name,
         },
       };
       if (fan === null) {
@@ -375,7 +419,6 @@ export function createModelAnimationGraphExtension(
       // fixed pitch guessed from one operation stacks the next one on top of it.
       cursorY +=
         estimateInteractivityNodeHeight(graph, play) + MODEL_ANIMATION_ROW_GAP;
-      clip += 1;
     });
   });
   return extension;

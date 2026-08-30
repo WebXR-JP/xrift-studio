@@ -108,7 +108,6 @@ import {
   undoEditorHistory,
   updateEntityEnabled,
   updateModelNodeEntityTransform,
-  updateAnimationComponent,
   updateAudioSourceComponent,
   updateVegetationWindComponent,
   updateColliderComponent,
@@ -141,7 +140,6 @@ import {
   type ComponentCodeImportPlan,
   type ClassicProjectVisualImportPreview,
   type ClassicProjectVisualImportSource,
-  type AnimationPatch,
   type AssetManifest,
   type ParticleAuthoringPreset,
   type SceneRecipe,
@@ -5102,6 +5100,9 @@ export function VisualEditorPrototype({
           bundle: touchProject({
             ...current.present.bundle,
             scene: result.scene,
+            // Placing an animated Model creates the graph that plays it, so the
+            // manifest has to be committed with the Scene.
+            assets: result.assets,
           }),
           sceneSelection: { kind: "entity", id: result.entityId },
           assetSelection: null,
@@ -6229,21 +6230,6 @@ export function VisualEditorPrototype({
     [editorMode, playSession, updateScene],
   );
 
-  const handleAnimationChange = useCallback(
-    (entityId: string, componentId: string, patch: AnimationPatch) => {
-      if (editorMode !== "edit" && !playSession) return;
-      updateScene((scene) =>
-        updateAnimationComponent(scene, entityId, patch, componentId),
-      );
-      setNotice(
-        editorMode === "play"
-          ? "Animation設定を保存し、このEntityのPlayを先頭から再実行しました"
-          : "Animation設定をSceneへ反映しました",
-      );
-    },
-    [editorMode, playSession, updateScene],
-  );
-
   const handleVegetationWindChange = useCallback(
     (
       entityId: string,
@@ -6398,6 +6384,7 @@ export function VisualEditorPrototype({
       // Asset creation and placement land as one history entry: undoing a
       // preset the author did not want should not leave its Asset behind.
       let scene = bundle.scene;
+      let placedAssets = added.manifest;
       let placedEntityId: string | null = null;
       if (placeInScene) {
         const count = bundle.scene.rootEntityIds.length;
@@ -6418,10 +6405,11 @@ export function VisualEditorPrototype({
           throw new Error("ParticleをSceneへ配置できませんでした");
         }
         scene = placement.scene;
+        placedAssets = placement.assets;
         placedEntityId = placement.entityId;
       }
 
-      setBundle(touchProject({ ...bundle, assets: added.manifest, scene }));
+      setBundle(touchProject({ ...bundle, assets: placedAssets, scene }));
       if (placedEntityId) {
         setSceneSelection({ kind: "entity", id: placedEntityId });
         // Placing puts something in the Scene, so get out of the way and let
@@ -7708,7 +7696,7 @@ export function VisualEditorPrototype({
    * editor is open.
    */
   const interactionTriggerTargets = useMemo(
-    () => collectInteractionTriggerTargets(bundle.scene),
+    () => collectInteractionTriggerTargets(bundle.scene, bundle.assets),
     [bundle.scene],
   );
 
@@ -10069,7 +10057,6 @@ export function VisualEditorPrototype({
             onRemoveRigidBody={handleRemoveRigidBody}
             onLightChange={handleLightChange}
             onTextChange={handleTextChange}
-            onAnimationChange={handleAnimationChange}
             onVegetationWindChange={handleVegetationWindChange}
             onAudioSourceChange={handleAudioSourceChange}
             onSelectAsset={handleSelectAsset}

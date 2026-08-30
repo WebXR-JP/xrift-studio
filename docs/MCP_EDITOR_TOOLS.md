@@ -137,6 +137,11 @@ world 座標、傾斜、穴、草の層ごとの被覆を返す。document は�
 の「アニメーションのGraphを作る」と同じもので、Asset を作るだけで Entity には
 付けない。付け先は `add_component` の `interaction.trigger` で選ぶ。
 
+Animation Component は廃止された。`place_asset` で clip を持つ Model を置くと、
+その全 clip を再生する Graph と Interaction Trigger が一緒に付く。`add_component`
+に `core.animation` は無く、まだ Component を持つ document に対する
+`update_component` は `COMPONENT_REMOVED` で断る（`remove_component` は通る）。
+
 ノードエディターで人ができる操作は、Undo / Redo、選択、canvas の見え方（拡大、
 全体表示、パネル幅）、タイムラインの範囲と時刻のつまみを除いて、すべてこの表に
 ある。除いた 4 つは document を変えない。
