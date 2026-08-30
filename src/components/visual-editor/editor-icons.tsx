@@ -63,6 +63,8 @@ import {
   TextCursorInput,
   Type,
   type LucideIcon,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import {
   getXriftComponentDefinition,
@@ -104,6 +106,8 @@ export const EDITOR_ICONS = {
   report: LifeBuoy,
   close: X,
   layout: PanelsTopLeft,
+  maximize: Maximize2,
+  minimize: Minimize2,
   asset: Palette,
   undo: Undo2,
   redo: Redo2,

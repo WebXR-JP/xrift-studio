@@ -223,7 +223,6 @@ function InteractivityGraphEditorBody({
   const canUndo = history.index > 0;
   const canRedo = history.index < history.entries.length - 1;
   const [graphIndex, setGraphIndex] = useState(asset.extension.graph ?? 0);
-  const [expanded, setExpanded] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [timelineEntry, setTimelineEntry] = useState<"start" | "interact">("start");
   const [timelineHorizon, setTimelineHorizon] = useState(120);
@@ -844,13 +843,13 @@ function InteractivityGraphEditorBody({
   const UndoIcon = EDITOR_ICONS.undo;
   const RedoIcon = EDITOR_ICONS.redo;
 
-  /** Built once: docked they sit on the tool row, expanded on the title row. */
+  /** Built once, pinned to the right of the tool row and outside its scroll. */
   const saveButton = (
     <button
       type="button"
       onClick={() => onSave(asset.id, draft)}
       disabled={readOnly || errors.length > 0}
-      className="flex h-8 shrink-0 items-center gap-1.5 rounded bg-emerald-600 px-3 text-xs font-bold hover:bg-emerald-500 disabled:opacity-40"
+      className="flex h-7 shrink-0 items-center gap-1.5 rounded bg-emerald-600 px-2.5 text-xs font-bold hover:bg-emerald-500 disabled:opacity-40"
     >
       <SaveIcon size={13} aria-hidden="true" /> 保存
     </button>
@@ -859,7 +858,7 @@ function InteractivityGraphEditorBody({
     <button
       type="button"
       onClick={requestClose}
-      className="shrink-0 rounded p-2 text-slate-300 hover:bg-slate-800 hover:text-white"
+      className="shrink-0 rounded p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white"
       aria-label="Interactivity editorを閉じる"
     >
       <CloseIcon size={16} aria-hidden="true" />
@@ -868,11 +867,7 @@ function InteractivityGraphEditorBody({
 
   return (
     <section
-      className={`absolute z-[75] flex min-h-0 overflow-hidden bg-slate-950 text-white ${
-        expanded
-          ? "rounded-xl border border-slate-600 shadow-2xl backdrop-blur"
-          : "border-t border-slate-800"
-      }`}
+      className="absolute z-[75] flex min-h-0 overflow-hidden border-t border-slate-800 bg-slate-950 text-white"
       /*
        * Docked, the editor fills the Scene View's cell and the two are tabs of
        * one place. It used to float over the viewport with a fixed 24px inset
@@ -881,16 +876,12 @@ function InteractivityGraphEditorBody({
        * unreachable. The tracks are draggable, so they are read rather than
        * guessed, and the cell's tab strip stays visible above.
        */
-      style={
-        expanded
-          ? { inset: "3.5rem 0.75rem 0.75rem" }
-          : {
-              top: "2.25rem",
-              left: "var(--xrift-hierarchy-track, 0px)",
-              right: "var(--xrift-inspector-track, 0px)",
-              bottom: "var(--xrift-assets-track, 0px)",
-            }
-      }
+      style={{
+        top: "2.25rem",
+        left: "var(--xrift-hierarchy-track, 0px)",
+        right: "var(--xrift-inspector-track, 0px)",
+        bottom: "var(--xrift-assets-track, 0px)",
+      }}
       aria-label="KHR_interactivity graph editor"
     >
       <div className="flex min-w-0 flex-1 flex-col">
@@ -903,30 +894,6 @@ function InteractivityGraphEditorBody({
           nothing.
         */}
         {/*
-          Docked, the cell's tab already names this graph, so the title row
-          would say it twice and cost 56px of canvas. Expanded there is no tab,
-          so the name comes back.
-        */}
-        <header
-          className={`h-14 shrink-0 items-center gap-3 border-b border-slate-700 bg-slate-900 px-3 ${
-            expanded ? "flex" : "hidden"
-          }`}
-        >
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-sm font-bold" title={asset.name}>
-              {asset.name}
-            </h2>
-            <p className="truncate text-[10px] text-slate-400">
-              Scene Viewを確認しながら編集・glTF準拠JSONを再利用
-            </p>
-          </div>
-          <div className="ml-auto flex shrink-0 items-center gap-1">
-            {saveButton}
-            {closeButton}
-          </div>
-        </header>
-
-        {/*
           The tools sit on their own row, and that row wraps.
           Everything used to share one fixed-height line with the title and the
           save button; a narrow editor pushed the end of it past the panel,
@@ -936,7 +903,7 @@ function InteractivityGraphEditorBody({
           of disappearing.
         */}
         <div className="relative shrink-0 border-b border-slate-700 bg-slate-900/60">
-        <div className="flex h-11 items-center gap-1.5 overflow-x-auto overflow-y-hidden px-2">
+        <div className="flex h-9 items-center gap-1 overflow-x-auto overflow-y-hidden px-2">
           <div className="relative shrink-0">
             <div className="flex items-center gap-1">
               <select
@@ -945,7 +912,7 @@ function InteractivityGraphEditorBody({
                   setGraphIndex(Number(event.target.value));
                   setSelectedNodeIndex(null);
                 }}
-                className="h-8 max-w-[11rem] shrink-0 rounded border border-slate-600 bg-slate-800 px-2 text-xs"
+                className="h-7 max-w-[11rem] shrink-0 rounded border border-slate-600 bg-slate-800 px-2 text-xs"
                 aria-label="Behavior graph"
               >
                 {draft.graphs.map((candidate, index) => (
@@ -961,7 +928,7 @@ function InteractivityGraphEditorBody({
                 aria-expanded={graphMenuOpen}
                 disabled={readOnly}
                 title="グラフの追加・複製・削除"
-                className="h-8 shrink-0 rounded border border-slate-600 px-2 text-xs hover:bg-slate-800 disabled:opacity-40"
+                className="h-7 shrink-0 rounded border border-slate-600 px-2 text-xs hover:bg-slate-800 disabled:opacity-40"
               >
                 グラフ
               </button>
@@ -1067,7 +1034,7 @@ function InteractivityGraphEditorBody({
             }}
             disabled={readOnly}
             aria-expanded={paletteOpen}
-            className={`flex h-8 shrink-0 items-center gap-1.5 rounded px-3 text-xs font-semibold disabled:opacity-40 ${
+            className={`flex h-7 shrink-0 items-center gap-1.5 rounded px-2.5 text-xs font-semibold disabled:opacity-40 ${
               paletteOpen ? "bg-violet-500" : "bg-violet-600 hover:bg-violet-500"
             }`}
           >
@@ -1080,7 +1047,7 @@ function InteractivityGraphEditorBody({
               disabled={readOnly || !canUndo}
               title="元に戻す (Ctrl+Z)"
               aria-label="元に戻す"
-              className="flex h-8 w-8 items-center justify-center rounded border border-slate-600 hover:bg-slate-800 disabled:opacity-35"
+              className="flex h-7 w-7 items-center justify-center rounded border border-slate-600 hover:bg-slate-800 disabled:opacity-35"
             >
               <UndoIcon size={14} aria-hidden="true" />
             </button>
@@ -1090,7 +1057,7 @@ function InteractivityGraphEditorBody({
               disabled={readOnly || !canRedo}
               title="やり直す (Ctrl+Shift+Z)"
               aria-label="やり直す"
-              className="flex h-8 w-8 items-center justify-center rounded border border-slate-600 hover:bg-slate-800 disabled:opacity-35"
+              className="flex h-7 w-7 items-center justify-center rounded border border-slate-600 hover:bg-slate-800 disabled:opacity-35"
             >
               <RedoIcon size={14} aria-hidden="true" />
             </button>
@@ -1100,14 +1067,14 @@ function InteractivityGraphEditorBody({
             onClick={handleAutoLayout}
             disabled={readOnly}
             title="流れの順に、左から右へ並べ直します"
-            className="h-8 shrink-0 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800 disabled:opacity-40"
+            className="h-7 shrink-0 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800 disabled:opacity-40"
           >
             整列
           </button>
           <button
             type="button"
             onClick={() => fitView({ padding: 0.25, duration: 200 })}
-            className="h-8 shrink-0 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800"
+            className="h-7 shrink-0 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800"
           >
             全体表示
           </button>
@@ -1121,7 +1088,7 @@ function InteractivityGraphEditorBody({
             }}
             aria-pressed={timelineOpen}
             title="開始からの時間で、何が起きるかを並べます"
-            className={`h-8 shrink-0 rounded border px-3 text-xs ${
+            className={`h-7 shrink-0 rounded border px-3 text-xs ${
               timelineOpen
                 ? "border-violet-400 bg-violet-500/20 text-violet-100"
                 : "border-slate-600 hover:bg-slate-800"
@@ -1131,17 +1098,8 @@ function InteractivityGraphEditorBody({
           </button>
           <button
             type="button"
-            onClick={() => setExpanded((current) => !current)}
-            aria-pressed={expanded}
-            title={expanded ? "元の大きさに戻す" : "画面いっぱいに広げる"}
-            className="h-8 shrink-0 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800"
-          >
-            {expanded ? "縮小" : "拡大"}
-          </button>
-          <button
-            type="button"
             onClick={handleCopyJson}
-            className="h-8 shrink-0 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800"
+            className="h-7 shrink-0 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800"
           >
             JSON
           </button>
@@ -1158,12 +1116,10 @@ function InteractivityGraphEditorBody({
             aria-hidden="true"
             className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-slate-900 to-transparent" 
           />
-          {expanded ? null : (
-            <div className="absolute inset-y-0 right-0 flex items-center gap-1 bg-slate-900 pl-2 pr-2">
-              {saveButton}
-              {closeButton}
-            </div>
-          )}
+          <div className="absolute inset-y-0 right-0 flex items-center gap-1 bg-slate-900 pl-2 pr-2">
+            {saveButton}
+            {closeButton}
+          </div>
         </div>
 
         <div ref={canvasRef} className="relative min-h-0 flex-1 bg-slate-900">
@@ -1214,7 +1170,7 @@ function InteractivityGraphEditorBody({
               only where there is room for both. 拡大 brings it back.
             */}
             <MiniMap<GraphFlowNode>
-              className={expanded ? undefined : "hidden 2xl:block"}
+              className="hidden 2xl:block"
               pannable
               zoomable
               position="bottom-right"
@@ -1382,7 +1338,7 @@ function InteractivityGraphEditorBody({
           crowding out the graph. State stays; the two hints step aside where
           there is no room, since they say the same thing every time.
         */}
-        <footer className="flex h-8 shrink-0 items-center gap-3 overflow-hidden whitespace-nowrap border-t border-slate-700 bg-slate-900 px-3 text-[10px] text-slate-400">
+        <footer className="flex h-7 shrink-0 items-center gap-2.5 overflow-hidden whitespace-nowrap border-t border-slate-700 bg-slate-900 px-2.5 text-[10px] text-slate-400">
           {/* Spec provenance belongs here, not in the header: it never changes
               and the header needs its width for the actions. */}
           <span className="shrink-0 rounded bg-emerald-400/15 px-1.5 py-0.5 font-semibold text-emerald-300">

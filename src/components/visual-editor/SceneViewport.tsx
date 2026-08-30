@@ -3850,6 +3850,8 @@ export function SceneViewport({
   activeTabId,
   onSelectTab,
   onCloseTab,
+  maximized,
+  onToggleMaximize,
   playShortcut,
   snapShortcut,
   onTogglePlay,
@@ -3920,6 +3922,9 @@ export function SceneViewport({
   activeTabId?: string;
   onSelectTab?: (id: string) => void;
   onCloseTab?: (id: string) => void;
+  /** Whether this cell currently has the whole editor area. */
+  maximized?: boolean;
+  onToggleMaximize?: () => void;
   playShortcut?: string;
   snapShortcut?: string;
   onTogglePlay: () => void;
@@ -4896,6 +4901,9 @@ export function SceneViewport({
               ? `${dragOverLabel ?? "Model / Prefab / Particle"}をSceneへ配置`
         : "CreateメニューからPrimitiveを追加";
 
+  const MaximizeIcon = EDITOR_ICONS.maximize;
+  const MinimizeIcon = EDITOR_ICONS.minimize;
+
   return (
     <section
       className={`relative flex min-h-0 flex-col overflow-hidden transition-shadow duration-200 ${
@@ -4919,6 +4927,32 @@ export function SceneViewport({
          * covering the tools when it does not.
          */}
         <div className="flex min-w-0 flex-1 items-center gap-2">
+          {onToggleMaximize ? (
+            <button
+              type="button"
+              onClick={onToggleMaximize}
+              aria-pressed={maximized}
+              title={
+                maximized
+                  ? "パネルを戻す"
+                  : "このビューだけを広げる（Hierarchy・Inspector・Assetsを畳む）"
+              }
+              aria-label={maximized ? "パネルを戻す" : "このビューだけを広げる"}
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${
+                editorMode === "play"
+                  ? "text-zinc-300 hover:bg-violet-900 hover:text-zinc-100"
+                  : maximized
+                    ? "bg-violet-100 text-violet-700"
+                    : "text-slate-500 hover:bg-slate-200 hover:text-slate-800"
+              }`}
+            >
+              {maximized ? (
+                <MinimizeIcon size={13} aria-hidden="true" />
+              ) : (
+                <MaximizeIcon size={13} aria-hidden="true" />
+              )}
+            </button>
+          ) : null}
           {tabs && tabs.length > 0 ? (
             <div
               role="tablist"
