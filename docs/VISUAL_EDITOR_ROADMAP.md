@@ -34,7 +34,7 @@ Visual project はコードを隠すだけの画面ではなく、Scene、Asset�
 | 空と水 | 利用可能 | GLSL で描く Skybox Shader と水面 Material を公式カタログから追加し、Uniform values で調整する。どちらも Scene の Wind と Light を共通入力にする。 |
 | 外部リソース | 利用可能 | Poly Haven と ambientCG の CC0 素材、XRift 公式の Shader / Terrain / 照明 / Component をアプリ内から追加する。作者とライセンスは Asset と生成物へ残す。 |
 | 表現と再利用 | 利用可能 | Primitive、Material、Particle、Prefab、Collider、XRift Component を作成・配置する。 |
-| Interactivity | 利用可能 | KHR_interactivity 準拠のグラフをノードエディターで編集し、開始時・毎フレーム・イベント・インタラクトをきっかけに動かす。待機、順次実行、繰り返し、合流、分岐、変数、算術を単一の実行エンジンで Play と公開先の両方が実行する。canonical JSON と validation を UI と MCP で共有する。 |
+| Interactivity | 利用可能 | KHR_interactivity 準拠のグラフをノードエディターで編集し、開始時・毎フレーム・イベント・インタラクトをきっかけに動かす。待機、順次実行、繰り返し、合流、分岐、変数、算術を単一の実行エンジンで Play と公開先の両方が実行する。Entity の表示、Transform、Animation、Material、Particle、Audio Source、Light、Scene の露出とフェードへ書き込む。1 つの Asset に複数のグラフを置き、イベントで結合する。時間軸のタイムラインで、何秒に何が起きるかを確認する。canonical JSON と validation を UI と MCP で共有する。 |
 | Scripting | 検証中 | Script Asset を TypeScript で書き、Script Component として Entity へ付け、property と reference を宣言して Play で実行する。未承認 source は内容 hash の確認を経てから実行し、同じ Script を公開ワールドへ静的 import として出力する。対応範囲は [Scripting Contract](./SCRIPTING.md) にまとめる。 |
 | Play | 利用可能 | 編集データと分離した Play Window で Play / Stop し、World は Rapier の重力・Collider・WASD controller、Item は単体表示を確認する。Transform / Collider / Animation 変更は対象 Entity だけ再実行する。runtime 受け入れは継続する。 |
 | Compile / Upload | 利用可能 | Visual document の保存、検査、XRift 向け TSX 生成、staging、World / Item の Upload 導線。生成コードは公開テンプレートと同じ tsc で検査する。 |
@@ -54,6 +54,7 @@ Visual project はコードを隠すだけの画面ではなく、Scene、Asset�
 - VRM の静的ポーズは保存できるが、keyframe、clip、補間、timeline 編集はない。
 - Model Animation は clip 選択、Autoplay、Loop、再生速度に対応する。開始タイミングの指定、複数 clip の同時再生、clip 間の遷移はない。
 - Interactivity のきっかけは開始時、毎フレーム、イベント受信、インタラクトの四つである。視線や近接に反応するトリガーはない。それらは XRift Component または Scripting と組み合わせる。
+- Interactivity から次の Scene へ進むことはできない。compiler が entry scene だけを変換するため、遷移の受け皿が公開側にない。`event/send` で名前付きイベントを送るところまでを扱う。
 - Interactivity の実行エンジンは operation 単位で実装する。未対応 operation は canonical JSON に保持したまま no-op になり、その node と、そこから先の flow は実行されない。対象と理由は Editor と公開側の診断に同じ内容で出る。glTF Object Model pointer を解決する host がまだないため、`pointer/*` は未対応として扱う。
 - Skybox Shader は Scene View には描画しない。編集中の背景は単色のままで、見え方は Play で確認する。
 - Unity 固有 Component、Shader、Script、Animation を完全には移植しない。対応内容と未対応内容を import 前に示す。
@@ -73,7 +74,7 @@ Visual project はコードを隠すだけの画面ではなく、Scene、Asset�
 | 6 | Save / Compile / Upload | 利用可能・堅牢化中 | 診断元への移動、認証、再試行、staging provenance、正式 result 表示を一つの流れにする。 |
 | 7 | Static avatar pose | 利用可能・継続改善 | humanoid 名、一般 bone、shape key の保存、再読込、生成コードを fixture と実 VRM で一致させる。 |
 | 8 | 環境表現（Terrain / 空 / 水 / 光） | 利用可能・継続改善 | 草の密度と LOD、Wind の共有、公式シェーダーの陰影を大規模 Scene で受け入れる。 |
-| 9 | Interactivity | 利用可能・検証中 | canonical graph の編集、検証、保存に加えて、未対応 operation を Editor のノードバッジ・レシピ一覧・Diagnostics と公開側の compile diagnostics へ同じ内容で出す。`event`、`flow`、`variable`、`animation`、`math`、`type`、`XRIFT_studio_interaction` の operation を単一エンジンで実行する。書き込み対象の拡張と `pointer/*` の host を増やす。 |
+| 9 | Interactivity | 利用可能・検証中 | canonical graph の編集、検証、保存に加えて、未対応 operation を Editor のノードバッジ・レシピ一覧・Diagnostics と公開側の compile diagnostics へ同じ内容で出す。`event`、`flow`、`variable`、`animation`、`math`、`type`、`XRIFT_studio_interaction` の operation を単一エンジンで実行し、8 種の対象へ書き込む。Scene 遷移と `pointer/*` の host を残す。 |
 | 10 | Scripting | 利用可能・検証中 | Script Asset、Script Component、承認 gate、Play 実行、静的 import 出力までを接続済み。実 XRift runtime で Play と公開の挙動一致を受け入れ、[Scripting Contract](./SCRIPTING.md) が未対応とする typed loader、pointer / player 参照、非同期例外の帰属を埋める。 |
 | 11 | Animation authoring | 計画中 | timeline 上で bone / shape key keyframe を編集・再生し、clip として保存できる。 |
 | 12 | Classic export UI / CLI / Runtime | 開発版 | Editor からの既存 Classic 追加、Runtime JSON、Three.js / R3F adapter、dependency plan、dry-run、衝突検知、Asset copy、provenance を実装済み。未対応 Runtime Component と npm 公開を完了する。 |
@@ -96,7 +97,7 @@ repository 内では Runtime JSON、Three.js / R3F adapter、dry-run、未改変
 3. VRM / skinned model の静的ポーズを実機で磨き、timeline 用の pose / clip data contract を先に固定する。
 4. AI connection の認証境界、timeout、sidecar 同梱、失敗後の再接続を release 環境で確認する。
 5. `xrift-studio-runtime` の Audio、Particle、動的 Rigid Body、XRift 固有 Component adapter を追加し、Classic と Editor Preview の結果を一致させる。静的 Collider / Spawn Point は実 runtime へ接続済み。
-6. Interactivity の書き込み対象へ Transform、Animation Component、Material、Particle、Scene 全体を追加し、`pointer/*` を解決する host を用意する。未対応 operation の表示は Editor と公開で一致済みで、組み込みレシピ 5 件のうち Play で動くのは animation 系 2 件である。
+6. Interactivity へ Scene 遷移と `pointer/*` を解決する host を追加する。書き込み対象は Transform、Animation、Material、Particle、Scene まで接続済みで、未対応 operation の表示は Editor と公開で一致する。
 7. Material、Play、XRift Component、Upload を同じ Visual document から通しで受け入れる。
 
 ## 完了判定

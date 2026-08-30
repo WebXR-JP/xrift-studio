@@ -122,13 +122,30 @@ it through the same runtime bridge:
 | Target | Properties |
 | --- | --- |
 | Entity | `enabled` (visibility; physics colliders are unchanged) |
+| Transform | `position`, `rotation` (degrees), `scale` |
+| Animation | `playing`, `clip`, `speed`, `time` |
+| Material | `baseColor`, `emissive`, `emissiveIntensity`, `opacity` |
+| Particle | `emitting`, `restart`, `emissionRate`, `sizeMultiplier`, `opacity`, `color` |
 | Audio Source | `playback` (play / pause / stop), `volume`, `loop` |
 | Light | `enabled`, `intensity`, `color` |
+| Scene | `exposure`, `fade`, `fadeColor` |
 
-Writes go through the Audio Source and Light runtime bridges that Scripts
-already own, so a trigger and a Script changing the same Component compose
-instead of overwriting each other, and everything a trigger changes is runtime
-state that Stop discards.
+Entity, Transform, Material and Scene belong to the Entity rather than to a
+Component that can appear twice, so they carry no Component id. Scene is
+addressed through a reserved Entity id, because it belongs to no Entity at all
+and an action still needs something in that slot.
+
+Writes go through the runtime bridges Scripts already own — Audio Source,
+Light, Particle, and the Animation bridge added for this — so a trigger and a
+Script changing the same Component compose instead of overwriting each other.
+Transform and Material have no bridge: they are written onto the object, so the
+trigger keeps the first value it saw and restores it on Stop, and a Material is
+cloned before it is changed so a shared Asset never leaks the write into another
+Entity. Everything a trigger changes is runtime state that Stop discards.
+
+A timed write is the same node: `xrift/setProperty` takes an optional `duration`
+and `easing`, and a positive duration interpolates instead of setting. That is
+what a fade, a dimming light or a moving door is made of.
 
 An action whose target is not yet chosen is a warning, not an error: the graph
 is saved, the node is preserved, and the Editor, the compiler, and
