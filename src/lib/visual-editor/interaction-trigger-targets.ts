@@ -87,6 +87,13 @@ export function collectInteractionTriggerTargets(
           properties: getXriftInteractionProperties("audio-source"),
         });
         audioIndex += 1;
+      } else if (component.type === "animation") {
+        components.push({
+          componentId: component.id,
+          targetKind: "animation",
+          label: XRIFT_INTERACTION_TARGET_LABELS.animation,
+          properties: getXriftInteractionProperties("animation"),
+        });
       } else if (component.type === "light") {
         components.push({
           componentId: component.id,

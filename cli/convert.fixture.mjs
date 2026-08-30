@@ -36,6 +36,7 @@ import { runScriptAudioFixtureAssertions } from "../src/lib/visual-editor/script
 import { runAudioSourceRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source.fixture.ts";
 import { runRuntimeSchemaFixtureAssertions } from "../packages/xrift-studio-runtime/src/schema.fixture.ts";
 import { runInteractivityEngineFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity/engine.fixture.ts";
+import { runAnimationRuntimeBridgeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/animation.fixture.ts";
 import { runShaderTimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/shader-time.fixture.ts";
 import { runTextPanelFixtureAssertions } from "../packages/xrift-studio-runtime/src/text-panel.fixture.ts";
 import { runTextComponentFixtureAssertions } from "../src/lib/visual-editor/text-component.fixture.ts";
@@ -270,6 +271,7 @@ try {
     ["entity bounds", runEntityBoundsFixtureAssertions],
     ["runtime schema", runRuntimeSchemaFixtureAssertions],
     ["interactivity engine", runInteractivityEngineFixtureAssertions],
+    ["animation runtime bridge", runAnimationRuntimeBridgeFixtureAssertions],
     ["shader time", runShaderTimeFixtureAssertions],
     ["text panel", runTextPanelFixtureAssertions],
     ["text component", runTextComponentFixtureAssertions],

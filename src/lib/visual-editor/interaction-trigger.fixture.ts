@@ -7,6 +7,12 @@ import { compileVisualProject } from "./compiler";
 import {
   INTERACTION_TRIGGER_MODEL_OVERLAY_PATH,
   INTERACTION_TRIGGER_OVERLAY_PATH,
+  INTERACTIVITY_ENGINE_OVERLAY_PATH,
+  INTERACTIVITY_GRAPH_OVERLAY_PATH,
+  INTERACTIVITY_HOST_OVERLAY_PATH,
+  INTERACTIVITY_VALUE_OVERLAY_PATH,
+  ANIMATION_RUNTIME_OVERLAY_PATH,
+  ANIMATION_MIXER_OVERLAY_PATH,
 } from "./compiler/script-emit";
 import {
   collectInteractionTriggerTargets,
@@ -306,12 +312,34 @@ function assertPublishedWorldRunsTheTrigger(): void {
   for (const path of [
     INTERACTION_TRIGGER_MODEL_OVERLAY_PATH,
     INTERACTION_TRIGGER_OVERLAY_PATH,
+    INTERACTIVITY_ENGINE_OVERLAY_PATH,
+    INTERACTIVITY_GRAPH_OVERLAY_PATH,
+    INTERACTIVITY_HOST_OVERLAY_PATH,
+    INTERACTIVITY_VALUE_OVERLAY_PATH,
+    ANIMATION_RUNTIME_OVERLAY_PATH,
+    ANIMATION_MIXER_OVERLAY_PATH,
   ]) {
     assert(
       result.overlayFiles.some((file) => file.relativePath === path),
       `the published world is missing ${path}`,
     );
   }
+  // The interpreter is what runs the graph, so it ships with the trigger: a
+  // published world that only carried the trigger component would wait for an
+  // engine that is not there.
+  const engineOverlay = result.overlayFiles.find(
+    (file) => file.relativePath === INTERACTIVITY_ENGINE_OVERLAY_PATH,
+  )?.content;
+  assert(
+    !/from\s+["']\.{1,2}\/(?:interactivity\/)?[a-z-]+\.js["']/.test(
+      engineOverlay ?? "",
+    ),
+    "the emitted interpreter still imports runtime-package specifiers",
+  );
+  assert(
+    (engineOverlay ?? "").includes('from "./interactivity-graph"'),
+    "the emitted interpreter does not import its graph reader as an overlay",
+  );
   const runtimeOverlay = result.overlayFiles.find(
     (file) => file.relativePath === INTERACTION_TRIGGER_OVERLAY_PATH,
   )?.content;

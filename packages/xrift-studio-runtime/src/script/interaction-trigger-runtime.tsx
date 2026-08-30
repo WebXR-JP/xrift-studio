@@ -7,6 +7,11 @@ import {
   type XriftAudioSourceRuntimeOverrides,
 } from "./audio-source.js";
 import {
+  XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY,
+  isXriftAnimationRuntimeBridge,
+  type XriftAnimationRuntimeBridge,
+} from "./animation.js";
+import {
   XRIFT_LIGHT_RUNTIME_USER_DATA_KEY,
   type XriftLightRuntimeBridge,
   type XriftLightRuntimeOverrides,
@@ -281,6 +286,83 @@ export function createXriftInteractionApplier({
     return null;
   };
 
+  const animationOwners = new Set<XriftAnimationRuntimeBridge>();
+
+  const applyAnimation = (target: Object3D, action: XriftInteractionAction) => {
+    forEachOwnedBridge(
+      target,
+      action.entityId,
+      XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY,
+      isXriftAnimationRuntimeBridge,
+      (bridge) => {
+        const state = bridge.read();
+        if (state.componentId !== action.componentId) return;
+        animationOwners.add(bridge);
+        if (action.property === "playing") {
+          const playing =
+            action.mode === "toggle"
+              ? !state.playing
+              : action.value?.kind === "bool"
+                ? action.value.value
+                : state.playing;
+          bridge.command(
+            owner,
+            order,
+            componentId,
+            playing ? { type: "play" } : { type: "pause" },
+          );
+          return;
+        }
+        if (action.property === "clip" && action.value?.kind === "float") {
+          bridge.command(owner, order, componentId, {
+            type: "select",
+            clipIndex: Math.round(action.value.value),
+          });
+          return;
+        }
+        if (action.property === "time" && action.value?.kind === "float") {
+          bridge.command(owner, order, componentId, {
+            type: "seek",
+            time: action.value.value,
+          });
+          return;
+        }
+        if (action.property === "speed" && action.value?.kind === "float") {
+          bridge.setOwner(owner, order, componentId, {
+            speed: action.value.value,
+          });
+        }
+      },
+    );
+  };
+
+  const readAnimation = (
+    object: Object3D,
+    target: { entityId: string; componentId: string | null; property: string },
+  ): XriftInteractionValue | null => {
+    const found: { value: XriftInteractionValue | null } = { value: null };
+    forEachOwnedBridge(
+      object,
+      target.entityId,
+      XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY,
+      isXriftAnimationRuntimeBridge,
+      (bridge) => {
+        const state = bridge.read();
+        if (found.value || state.componentId !== target.componentId) return;
+        if (target.property === "playing") {
+          found.value = { kind: "bool", value: state.playing };
+        } else if (target.property === "clip") {
+          found.value = { kind: "float", value: state.clipIndex };
+        } else if (target.property === "speed") {
+          found.value = { kind: "float", value: state.speed };
+        } else if (target.property === "time") {
+          found.value = { kind: "float", value: state.time };
+        }
+      },
+    );
+    return found.value;
+  };
+
   const applyLight = (target: Object3D, action: XriftInteractionAction) => {
     forEachOwnedBridge(
       target,
@@ -430,6 +512,9 @@ export function createXriftInteractionApplier({
       if (target.targetKind === "transform") {
         return readTransform(object, target.property);
       }
+      if (target.targetKind === "animation") {
+        return readAnimation(object, target);
+      }
       if (target.targetKind === "light") return readLight(object, target);
       return readAudioSource(object, target);
     },
@@ -444,6 +529,10 @@ export function createXriftInteractionApplier({
         applyTransform(target, action);
         return;
       }
+      if (action.target === "animation") {
+        applyAnimation(target, action);
+        return;
+      }
       if (action.target === "light") {
         applyLight(target, action);
         return;
@@ -453,6 +542,8 @@ export function createXriftInteractionApplier({
     dispose() {
       // Overrides are runtime-only, exactly like a Script's: leaving them
       // applied after Stop would show values the document never had.
+      for (const bridge of animationOwners) bridge.removeOwner(owner);
+      animationOwners.clear();
       for (const bridge of lightOverrides.keys()) bridge.removeOwner(owner);
       for (const bridge of audioOverrides.keys()) bridge.removeOwner(owner);
       lightOverrides.clear();

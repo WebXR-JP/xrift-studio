@@ -36,12 +36,14 @@ export type XriftInteractionOperation =
 export type XriftInteractionTargetKind =
   | "entity"
   | "transform"
+  | "animation"
   | "audio-source"
   | "light";
 
 export const XRIFT_INTERACTION_TARGET_KINDS: readonly XriftInteractionTargetKind[] = [
   "entity",
   "transform",
+  "animation",
   "audio-source",
   "light",
 ];
@@ -51,6 +53,7 @@ export const XRIFT_INTERACTION_TARGET_LABELS: Readonly<
 > = {
   entity: "Entity",
   transform: "Transform",
+  animation: "Animation",
   "audio-source": "Audio Source",
   light: "Light",
 };
@@ -139,6 +142,49 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
       "EntityのXYZ倍率を設定します。0にすると見えなくなります。Playを止めると元に戻ります。",
     kind: "vector3",
     defaultValue: [1, 1, 1],
+  },
+  {
+    target: "animation",
+    name: "playing",
+    label: "再生中",
+    description:
+      "AnimationのclipをONで再生し、OFFで止めます。押したときに動かすには、AnimationのAutoplayをオフにしておきます。",
+    kind: "bool",
+    defaultValue: true,
+  },
+  {
+    target: "animation",
+    name: "clip",
+    label: "クリップ番号",
+    description:
+      "再生するclipを番号で選びます。0がModelの最初のclipです。範囲外の番号は最後のclipになります。",
+    kind: "float",
+    defaultValue: 0,
+    min: 0,
+    max: 63,
+    step: 1,
+  },
+  {
+    target: "animation",
+    name: "speed",
+    label: "再生速度",
+    description: "1で等速、0.5で半分の速さになります。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0.01,
+    max: 10,
+    step: 0.05,
+  },
+  {
+    target: "animation",
+    name: "time",
+    label: "再生位置",
+    description: "clipの先頭からの秒数へ移動します。再生中なら、その位置から続けます。",
+    kind: "float",
+    defaultValue: 0,
+    min: 0,
+    max: 600,
+    step: 0.1,
   },
   {
     target: "audio-source",

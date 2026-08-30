@@ -96,6 +96,12 @@ import {
   type XriftParticleConfig,
 } from "../script/particle.js";
 import { XriftAudioSource } from "../script/audio-source.js";
+import {
+  XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY,
+  createXriftAnimationRuntimeBridge,
+  type XriftAnimationRuntimeBridge,
+} from "../script/animation.js";
+import { createXriftAnimationMixerController } from "../script/animation-mixer.js";
 
 export type XriftRuntimePrimitiveProps = ThreeElements["primitive"];
 
@@ -1967,7 +1973,15 @@ function XriftRuntimeTimeUniforms({ result }: { result: XriftLoadResult }) {
 }
 
 function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
-  const playbacks = useMemo(() => {
+  /**
+   * One mixer per Entity, not one per clip.
+   *
+   * A behavior graph can pause, seek or switch the clip an Entity is playing,
+   * and that only has a meaning when every clip on that Entity shares a mixer:
+   * with one mixer per clip, "switch to clip 2" would leave clip 1 running on
+   * its own timeline.
+   */
+  const entries = useMemo(() => {
     const scene = result.manifest.scenes[result.manifest.entryScene];
     if (!scene) return [];
     return Object.values(scene.entities).flatMap((entity) => {
@@ -2009,52 +2023,88 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
         typeof component?.speed === "number" && Number.isFinite(component.speed)
           ? component.speed
           : 1;
-      return [...delayByIndex.entries()].flatMap(([index, delaySeconds]) => {
+      const cues = [...delayByIndex.entries()].flatMap(([index, delaySeconds]) => {
         const clip = clips[index];
-        return clip
-          ? [
-              {
-                clip,
-                loop: component?.loop ?? false,
-                // Speed applies to the selected clip, not interactivity-driven ones.
-                timeScale: index === selectedIndex ? speed : 1,
-                delaySeconds,
-                mixer: new AnimationMixer(target),
-              },
-            ]
-          : [];
+        return clip ? [{ clip, index, delaySeconds }] : [];
       });
+      return [
+        {
+          entityId: entity.id,
+          target,
+          clips,
+          componentId: component?.id ?? null,
+          loop: component?.loop ?? false,
+          selectedIndex,
+          speed,
+          cues,
+          mixer: new AnimationMixer(target),
+          bridge: null as XriftAnimationRuntimeBridge | null,
+        },
+      ];
     });
   }, [result]);
 
   useEffect(() => {
-    for (const playback of playbacks) {
-      const action = playback.mixer.clipAction(playback.clip);
-      action.reset();
-      action.clampWhenFinished = !playback.loop;
-      action.setLoop(
-        playback.loop ? LoopRepeat : LoopOnce,
-        playback.loop ? Infinity : 1,
-      );
-      action.timeScale = playback.timeScale;
-      // `flow/setDelay` becomes mixer-clock scheduling rather than a timer, so
-      // the wait stays in step with the same clock that advances the clip.
-      if (playback.delaySeconds > 0) {
-        action.startAt(playback.mixer.time + playback.delaySeconds);
+    const cleanups: (() => void)[] = [];
+    for (const entry of entries) {
+      for (const cue of entry.cues) {
+        const action = entry.mixer.clipAction(cue.clip);
+        action.reset();
+        action.clampWhenFinished = !entry.loop;
+        action.setLoop(
+          entry.loop ? LoopRepeat : LoopOnce,
+          entry.loop ? Infinity : 1,
+        );
+        // Speed applies to the selected clip, not interactivity-driven ones.
+        action.timeScale = cue.index === entry.selectedIndex ? entry.speed : 1;
+        // `flow/setDelay` becomes mixer-clock scheduling rather than a timer, so
+        // the wait stays in step with the same clock that advances the clip.
+        if (cue.delaySeconds > 0) {
+          action.startAt(entry.mixer.time + cue.delaySeconds);
+        }
+        action.play();
       }
-      action.play();
+      if (!entry.componentId) continue;
+      const bridge = createXriftAnimationRuntimeBridge({
+        componentId: entry.componentId,
+        clipNames: entry.clips.map((clip) => clip.name),
+        clipIndex: Math.max(0, entry.selectedIndex),
+        // The cues above already perform autoplay.
+        autoplay: false,
+        speed: entry.speed,
+        loop: entry.loop,
+      });
+      const controller = createXriftAnimationMixerController({
+        mixer: entry.mixer,
+        clips: entry.clips,
+        clipIndex: Math.max(0, entry.selectedIndex),
+        loop: entry.loop,
+        speed: entry.speed,
+      });
+      const disconnect = bridge.connect(controller);
+      const holder = entry.target.userData as Record<string, unknown>;
+      holder[XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY] = bridge;
+      entry.bridge = bridge;
+      cleanups.push(() => {
+        disconnect();
+        controller.dispose();
+        delete holder[XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY];
+        entry.bridge = null;
+      });
     }
     return () => {
-      for (const playback of playbacks) {
-        playback.mixer.stopAllAction();
-        playback.mixer.uncacheRoot(playback.mixer.getRoot());
+      for (const cleanup of cleanups) cleanup();
+      for (const entry of entries) {
+        entry.mixer.stopAllAction();
+        entry.mixer.uncacheRoot(entry.mixer.getRoot());
       }
     };
-  }, [playbacks]);
+  }, [entries]);
 
   useFrame((_, delta) => {
-    for (const playback of playbacks) {
-      playback.mixer.update(Math.min(delta, 0.1));
+    for (const entry of entries) {
+      entry.mixer.update(Math.min(delta, 0.1));
+      entry.bridge?.sample();
     }
   });
 

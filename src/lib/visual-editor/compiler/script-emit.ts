@@ -6,6 +6,12 @@ import scriptLifecycleSource from "../../../../packages/xrift-studio-runtime/src
 import scriptInteractionTriggerSource from "../../../../packages/xrift-studio-runtime/src/script/interaction-trigger.ts?raw";
 import scriptInteractionTriggerRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/interaction-trigger-runtime.tsx?raw";
 import scriptParticleSource from "../../../../packages/xrift-studio-runtime/src/script/particle.tsx?raw";
+import scriptAnimationSource from "../../../../packages/xrift-studio-runtime/src/script/animation.ts?raw";
+import scriptAnimationMixerSource from "../../../../packages/xrift-studio-runtime/src/script/animation-mixer.ts?raw";
+import interactivityGraphSource from "../../../../packages/xrift-studio-runtime/src/interactivity/graph.ts?raw";
+import interactivityValueSource from "../../../../packages/xrift-studio-runtime/src/interactivity/value.ts?raw";
+import interactivityHostSource from "../../../../packages/xrift-studio-runtime/src/interactivity/host.ts?raw";
+import interactivityEngineSource from "../../../../packages/xrift-studio-runtime/src/interactivity/engine.ts?raw";
 import textPanelRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/text-panel.tsx?raw";
 import textPanelObjectSource from "../../../../packages/xrift-studio-runtime/src/text-panel.ts?raw";
 import textPanelLayoutSource from "../../../../packages/xrift-studio-runtime/src/text-panel-layout.ts?raw";
@@ -50,6 +56,12 @@ export const SCRIPT_LIFECYCLE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/script
 export const SCRIPT_PARTICLE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/particle-runtime.tsx`;
 export const INTERACTION_TRIGGER_MODEL_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interaction-trigger.ts`;
 export const INTERACTION_TRIGGER_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interaction-trigger-runtime.tsx`;
+export const ANIMATION_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/animation-runtime.ts`;
+export const ANIMATION_MIXER_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/animation-mixer-runtime.ts`;
+export const INTERACTIVITY_GRAPH_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interactivity-graph.ts`;
+export const INTERACTIVITY_VALUE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interactivity-value.ts`;
+export const INTERACTIVITY_HOST_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interactivity-host.ts`;
+export const INTERACTIVITY_ENGINE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interactivity-engine.ts`;
 export const TEXT_PANEL_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-panel-runtime.tsx`;
 export const TEXT_PANEL_OBJECT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-panel.ts`;
 export const TEXT_PANEL_LAYOUT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-panel-layout.ts`;
@@ -267,6 +279,7 @@ function rewriteTextPanelImports(source: string): string {
  */
 export function createInteractionTriggerOverlayFiles(): CompilerOverlayFile[] {
   return [
+    ...createInteractivityRuntimeOverlayFiles(),
     {
       relativePath: INTERACTION_TRIGGER_MODEL_OVERLAY_PATH,
       content: scriptInteractionTriggerSource,
@@ -334,24 +347,89 @@ function rewriteScriptApiImports(source: string): string {
 }
 
 /** Runtime overlays import sibling package modules by package-relative paths. */
-function rewriteRuntimeLocalImports(source: string): string {
+/**
+ * Overlay file names, keyed by the module name the runtime package uses.
+ *
+ * The package resolves siblings as `./x.js` and the interpreter as
+ * `../interactivity/x.js`; a staged project has neither layout, so every local
+ * specifier is rewritten to the flat overlay it was emitted as. The two tables
+ * are separate because `host` means one thing beside a Script and another
+ * beside the interpreter.
+ */
+const RUNTIME_SIBLING_OVERLAY_MODULES: Readonly<Record<string, string>> = {
+  api: "script-api",
+  "audio-source": "audio-source-runtime",
+  light: "light-runtime",
+  lifecycle: "script-lifecycle",
+  particle: "particle-runtime",
+  "interaction-trigger": "interaction-trigger",
+  animation: "animation-runtime",
+  "animation-mixer": "animation-mixer-runtime",
+  host: "script-host",
+};
+
+const INTERACTIVITY_OVERLAY_MODULES: Readonly<Record<string, string>> = {
+  graph: "interactivity-graph",
+  value: "interactivity-value",
+  host: "interactivity-host",
+  engine: "interactivity-engine",
+};
+
+/**
+ * Rewrites a runtime module's local imports to the flat overlay names.
+ *
+ * `scope` says which directory the file came from, because a sibling `host.js`
+ * means the Script host beside a Script module and the interpreter's host
+ * beside the interpreter. Guessing from the name alone silently emitted the
+ * wrong module.
+ */
+function rewriteRuntimeLocalImports(
+  source: string,
+  scope: "script" | "interactivity" = "script",
+): string {
+  const siblings =
+    scope === "interactivity"
+      ? INTERACTIVITY_OVERLAY_MODULES
+      : RUNTIME_SIBLING_OVERLAY_MODULES;
   return source.replace(
-    /(\bfrom\s*)(["'])\.\/(api|audio-source|light|lifecycle|particle|interaction-trigger)\.js\2/g,
-    (_whole, prefix: string, quote: string, moduleName: string) =>
-      `${prefix}${quote}./${
-        moduleName === "api"
-          ? "script-api"
-          : moduleName === "audio-source"
-            ? "audio-source-runtime"
-            : moduleName === "light"
-              ? "light-runtime"
-              : moduleName === "lifecycle"
-                ? "script-lifecycle"
-                : moduleName === "interaction-trigger"
-                  ? "interaction-trigger"
-                  : "particle-runtime"
-      }${quote}`,
+    /(\bfrom\s*)(["'])(\.{1,2}\/)(interactivity\/)?([a-z-]+)\.js\2/g,
+    (
+      whole,
+      prefix: string,
+      quote: string,
+      _relative: string,
+      interactivity: string | undefined,
+      moduleName: string,
+    ) => {
+      const overlay = interactivity
+        ? INTERACTIVITY_OVERLAY_MODULES[moduleName]
+        : siblings[moduleName];
+      return overlay ? `${prefix}${quote}./${overlay}${quote}` : whole;
+    },
   );
+}
+
+/**
+ * The interpreter and the Animation bridge, for a world that carries a graph.
+ *
+ * Emitted as the same source Studio Play imports so a published graph waits,
+ * repeats and animates exactly as the author saw it.
+ */
+export function createInteractivityRuntimeOverlayFiles(): CompilerOverlayFile[] {
+  const entries: readonly [string, string, "script" | "interactivity"][] = [
+    [INTERACTIVITY_GRAPH_OVERLAY_PATH, interactivityGraphSource, "interactivity"],
+    [INTERACTIVITY_VALUE_OVERLAY_PATH, interactivityValueSource, "interactivity"],
+    [INTERACTIVITY_HOST_OVERLAY_PATH, interactivityHostSource, "interactivity"],
+    [INTERACTIVITY_ENGINE_OVERLAY_PATH, interactivityEngineSource, "interactivity"],
+    [ANIMATION_RUNTIME_OVERLAY_PATH, scriptAnimationSource, "script"],
+    [ANIMATION_MIXER_OVERLAY_PATH, scriptAnimationMixerSource, "script"],
+  ];
+  return entries.map(([relativePath, content, scope]) => ({
+    relativePath,
+    content: rewriteRuntimeLocalImports(content, scope),
+    kind: "source" as const,
+    owner: "xrift-studio-compiler" as const,
+  }));
 }
 
 function uniqueImportName(asset: ScriptAsset, used: Set<string>): string {
