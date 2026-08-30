@@ -1,11 +1,10 @@
 import { useMemo } from "react";
 import {
-  dryRunInteractivityGraph,
   findInteractionTriggerTarget,
   getXriftInteractionProperty,
+  type InteractivityDryRun,
   type InteractivityScheduleEntry,
   type InteractionTriggerTargetEntity,
-  type KhrInteractivityExtension,
 } from "../../lib/visual-editor";
 
 /**
@@ -200,8 +199,7 @@ function axisTicks(horizonSeconds: number): number[] {
 }
 
 export function InteractivityTimeline({
-  extension,
-  graphIndex,
+  run,
   entryPoint,
   horizonSeconds,
   playheadSeconds,
@@ -212,8 +210,8 @@ export function InteractivityTimeline({
   onPlayheadChange,
   onSelectNode,
 }: {
-  extension: KhrInteractivityExtension;
-  graphIndex: number;
+  /** Result of running the graph forward, computed by the editor. */
+  run: InteractivityDryRun;
   entryPoint: "start" | "interact";
   horizonSeconds: number;
   playheadSeconds: number;
@@ -224,15 +222,6 @@ export function InteractivityTimeline({
   onPlayheadChange: (seconds: number) => void;
   onSelectNode: (nodeIndex: number) => void;
 }) {
-  const run = useMemo(
-    () =>
-      dryRunInteractivityGraph(extension, {
-        graphIndex,
-        entry: entryPoint,
-        horizonSeconds,
-      }),
-    [entryPoint, extension, graphIndex, horizonSeconds],
-  );
   const tracks = useMemo(
     () => buildTracks(run.entries, triggerTargets),
     [run.entries, triggerTargets],

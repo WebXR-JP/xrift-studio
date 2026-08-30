@@ -17,6 +17,7 @@ import {
   InteractivityEngine,
   type InteractivityEngineOptions,
   type InteractivityIssue,
+  type InteractivityTraceEntry,
 } from "./engine.js";
 import type {
   InteractivityActionTarget,
@@ -70,6 +71,10 @@ export type InteractivityScheduleEntry =
 export type InteractivityDryRun = {
   readonly entries: readonly InteractivityScheduleEntry[];
   readonly issues: readonly InteractivityIssue[];
+  /** Nodes that ran, and the first moment each did. */
+  readonly visitedNodes: ReadonlyMap<number, number>;
+  /** Node activations in order, for a step-by-step read of the run. */
+  readonly trace: readonly InteractivityTraceEntry[];
   /** Seconds actually simulated. Shorter than the horizon when nothing is left. */
   readonly simulatedSeconds: number;
   /** True when the run stopped at the horizon with work still pending. */
@@ -191,6 +196,8 @@ export function dryRunInteractivityGraph(
       (left, right) => left.timeSeconds - right.timeSeconds,
     ),
     issues: engine.getIssues(),
+    visitedNodes: engine.getVisitedNodes(),
+    trace: engine.getTrace(),
     simulatedSeconds: engine.currentTime,
     truncated,
   };

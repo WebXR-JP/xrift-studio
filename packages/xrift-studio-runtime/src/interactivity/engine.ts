@@ -337,6 +337,8 @@ export class InteractivityEngine {
   private interpolations: Interpolation[] = [];
   private readonly issues: InteractivityIssue[] = [];
   private readonly trace: InteractivityTraceEntry[] = [];
+  /** First time each node ran. Uncapped, unlike the trace, so it is complete. */
+  private readonly visited = new Map<number, number>();
 
   private timeSeconds = 0;
   private lastTickSeconds = 0;
@@ -389,6 +391,17 @@ export class InteractivityEngine {
 
   getTrace(): readonly InteractivityTraceEntry[] {
     return this.trace;
+  }
+
+  /**
+   * Every node that ran, and when it first did.
+   *
+   * The trace is bounded so a long run cannot grow without limit; this is not,
+   * because "which nodes never ran" is the question an author asks about a
+   * graph that does nothing, and a truncated answer would be wrong.
+   */
+  getVisitedNodes(): ReadonlyMap<number, number> {
+    return this.visited;
   }
 
   /** True while a timer or an interpolation is still pending. */
@@ -1004,6 +1017,12 @@ export class InteractivityEngine {
       return null;
     }
     seen.add(key);
+    // A value node never enters the flow, so without this it would read as
+    // never having run — which is the opposite of what an author needs to see
+    // when they are looking for the node that is not being used.
+    if (!this.visited.has(nodeIndex)) {
+      this.visited.set(nodeIndex, this.timeSeconds);
+    }
     const computed = this.evaluatePure(node, socket, seen);
     seen.delete(key);
     return computed;
@@ -1404,6 +1423,9 @@ export class InteractivityEngine {
   }
 
   private record(nodeIndex: number, op: string | null, socket: string): void {
+    if (!this.visited.has(nodeIndex)) {
+      this.visited.set(nodeIndex, this.timeSeconds);
+    }
     this.trace.push({ timeSeconds: this.timeSeconds, nodeIndex, op, socket });
     if (this.trace.length > this.traceLimit) this.trace.shift();
   }

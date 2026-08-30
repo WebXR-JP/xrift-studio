@@ -26,6 +26,7 @@ import {
   getInteractivityRuntimeSupport,
   INTERACTIVITY_RECIPES,
   addInteractivityGraph,
+  dryRunInteractivityGraph,
   duplicateInteractivityGraph,
   removeInteractivityGraph,
   renameInteractivityGraph,
@@ -84,6 +85,13 @@ type GraphNodeData = {
   runtimeSupport: InteractivityRuntimeSupport;
   /** One-line description of an Interaction Trigger action's target. */
   summary?: string;
+  /**
+   * When this node first ran in the timeline's dry run.
+   *
+   * `undefined` while the timeline is closed and nothing has been analysed;
+   * `null` once it has been, and this node never ran.
+   */
+  reachedSeconds?: number | null;
 };
 
 /**
@@ -217,7 +225,7 @@ function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNode>) {
     <article
       className={`min-w-56 rounded-lg border-2 shadow-lg ${CATEGORY_CLASS[data.category]} ${
         selected ? "ring-2 ring-brand-400 ring-offset-2 ring-offset-slate-900" : ""
-      }`}
+      } ${data.reachedSeconds === null ? "opacity-45" : ""}`}
     >
       <header className="rounded-t-md border-b border-white/10 px-3 py-2">
         <div className="flex items-start justify-between gap-2">
@@ -236,6 +244,18 @@ function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNode>) {
           ) : null}
         </div>
         <p className="mt-0.5 text-sm font-bold">{data.label}</p>
+        {data.reachedSeconds === null ? (
+          <p
+            title="タイムラインの範囲内では、このノードは一度も動きませんでした"
+            className="mt-0.5 text-[10px] font-semibold text-slate-400"
+          >
+            未到達
+          </p>
+        ) : data.reachedSeconds === undefined ? null : (
+          <p className="mt-0.5 text-[10px] font-semibold tabular-nums text-emerald-300">
+            {Math.round(data.reachedSeconds * 100) / 100}s に実行
+          </p>
+        )}
         {data.summary ? (
           <p className="mt-0.5 text-[11px] leading-4 opacity-90">{data.summary}</p>
         ) : null}
@@ -355,6 +375,7 @@ function operationData(
   node: KhrInteractivityNode,
   index: number,
   targets: readonly InteractionTriggerTargetEntity[],
+  visited: ReadonlyMap<number, number> | null,
 ): GraphNodeData {
   const declaration = graph.declarations?.[node.declaration];
   const op = declaration?.op ?? `missing/declaration-${node.declaration}`;
@@ -379,6 +400,9 @@ function operationData(
     ),
     valueOutputs: Array.from(valueOutputs),
     runtimeSupport: getInteractivityRuntimeSupport(op).support,
+    ...(visited === null
+      ? {}
+      : { reachedSeconds: visited.get(index) ?? null }),
     ...(isTriggerActionOp(op)
       ? { summary: triggerActionSummary(graph, index, op, targets) }
       : {}),
@@ -388,12 +412,13 @@ function operationData(
 function toFlowNodes(
   graph: KhrInteractivityGraph,
   targets: readonly InteractionTriggerTargetEntity[],
+  visited: ReadonlyMap<number, number> | null,
 ): GraphFlowNode[] {
   return (graph.nodes ?? []).map((node, index) => ({
     id: String(index),
     type: "interactivity",
     position: readInteractivityNodePosition(node, index),
-    data: operationData(graph, node, index, targets),
+    data: operationData(graph, node, index, targets, visited),
   }));
 }
 
@@ -869,6 +894,30 @@ function preferredTimelineEntry(
     : "start";
 }
 
+/**
+ * The node a diagnostic is about, read from its JSON path.
+ *
+ * A diagnostic that only prints `$.graphs[0].nodes[3]` makes the author count
+ * nodes by hand; the path already names the node, so the list can just go there.
+ */
+function parseDiagnosticTarget(
+  path: string,
+): { graphIndex: number; nodeIndex: number } | null {
+  const match = /^\$\.graphs\[(\d+)\]\.nodes\[(\d+)\]/.exec(path);
+  if (!match) return null;
+  return { graphIndex: Number(match[1]), nodeIndex: Number(match[2]) };
+}
+
+/** Shown before the first dry run finishes, so the timeline has a shape to draw. */
+const EMPTY_DRY_RUN = {
+  entries: [],
+  issues: [],
+  visitedNodes: new Map<number, number>(),
+  trace: [],
+  simulatedSeconds: 0,
+  truncated: false,
+} as const;
+
 /** Stable empty list: a fresh array per render would restart the node effect. */
 const NO_TRIGGER_TARGETS: readonly InteractionTriggerTargetEntity[] = [];
 
@@ -924,6 +973,24 @@ function InteractivityGraphEditorBody({
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const edges = useMemo(() => toFlowEdges(graph), [graph]);
+  /**
+   * The graph run forward, while the timeline is open.
+   *
+   * Computed here rather than inside the timeline because the canvas needs the
+   * same answer: a node that never ran is the first thing an author wants to
+   * see when a graph does nothing, and it has to be marked on the node itself.
+   */
+  const timelineRun = useMemo(
+    () =>
+      timelineOpen
+        ? dryRunInteractivityGraph(draft, {
+            graphIndex,
+            entry: timelineEntry,
+            horizonSeconds: timelineHorizon,
+          })
+        : null,
+    [draft, graphIndex, timelineEntry, timelineHorizon, timelineOpen],
+  );
   const dirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(asset.extension),
     [asset.extension, draft],
@@ -1048,12 +1115,20 @@ function InteractivityGraphEditorBody({
   // editing disappear.
   useEffect(() => {
     setFlowNodes(
-      toFlowNodes(graph, triggerTargets).map((node) => ({
-        ...node,
-        selected: node.data.index === selectedNodeIndex,
-      })),
+      toFlowNodes(graph, triggerTargets, timelineRun?.visitedNodes ?? null).map(
+        (node) => ({
+          ...node,
+          selected: node.data.index === selectedNodeIndex,
+        }),
+      ),
     );
-  }, [graph, selectedNodeIndex, setFlowNodes, triggerTargets]);
+  }, [
+    graph,
+    selectedNodeIndex,
+    setFlowNodes,
+    timelineRun,
+    triggerTargets,
+  ]);
 
   // Edges are canvas state as well as document state: without it the library
   // never marks one selected, and a connection could be drawn but not cut.
@@ -1776,8 +1851,7 @@ function InteractivityGraphEditorBody({
             />
             <div style={{ height: timelineHeight }} className="flex min-h-0 shrink-0">
               <InteractivityTimeline
-                extension={draft}
-                graphIndex={graphIndex}
+                run={timelineRun ?? EMPTY_DRY_RUN}
                 entryPoint={timelineEntry}
                 horizonSeconds={timelineHorizon}
                 playheadSeconds={playheadSeconds}
@@ -2136,19 +2210,45 @@ function InteractivityGraphEditorBody({
           {diagnostics.length > 0 ? (
             <div className="mt-4 space-y-1.5">
               <p className="text-[10px] font-semibold uppercase text-slate-400">Diagnostics</p>
-              {diagnostics.map((diagnostic, index) => (
-                <div
-                  key={`${diagnostic.path}-${index}`}
-                  className={`rounded border p-2 text-[10px] leading-4 ${
-                    diagnostic.severity === "error"
-                      ? "border-rose-800 bg-rose-950/40 text-rose-200"
-                      : "border-amber-800 bg-amber-950/30 text-amber-200"
-                  }`}
-                >
-                  <code>{diagnostic.path}</code>
-                  <p>{diagnostic.message}</p>
-                </div>
-              ))}
+              {diagnostics.map((diagnostic, index) => {
+                const target = parseDiagnosticTarget(diagnostic.path);
+                const tone =
+                  diagnostic.severity === "error"
+                    ? "border-rose-800 bg-rose-950/40 text-rose-200"
+                    : "border-amber-800 bg-amber-950/30 text-amber-200";
+                const body = (
+                  <>
+                    <code className="block">{diagnostic.path}</code>
+                    <p>{diagnostic.message}</p>
+                  </>
+                );
+                if (!target) {
+                  return (
+                    <div
+                      key={`${diagnostic.path}-${index}`}
+                      className={`rounded border p-2 text-[10px] leading-4 ${tone}`}
+                    >
+                      {body}
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    key={`${diagnostic.path}-${index}`}
+                    type="button"
+                    onClick={() => {
+                      if (target.graphIndex !== graphIndex) {
+                        setGraphIndex(target.graphIndex);
+                      }
+                      setSelectedNodeIndex(target.nodeIndex);
+                    }}
+                    title="このノードを選択します"
+                    className={`block w-full rounded border p-2 text-left text-[10px] leading-4 hover:brightness-125 ${tone}`}
+                  >
+                    {body}
+                  </button>
+                );
+              })}
             </div>
           ) : null}
         </div>
