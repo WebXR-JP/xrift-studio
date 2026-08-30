@@ -53,6 +53,8 @@ import {
   applyAssetOptimizations,
   exportVisualProjectToClassic,
   estimateWorldVram,
+  applyTextureProcessingBatch,
+  summarizeTexturePublishConversions,
   inspectClassicExportTarget,
   createVisualProjectFromClassicSource,
   createStarterVisualProject,
@@ -1020,6 +1022,9 @@ function App() {
             vramEstimate: publishBundle
               ? estimateWorldVram(publishBundle)
               : undefined,
+            textureConversions: publishBundle
+              ? summarizeTexturePublishConversions(publishBundle.assets)
+              : undefined,
           }}
           onClose={() => setVisualPublishBundle(null)}
           onMetadataChange={(title, description) => {
@@ -1073,6 +1078,41 @@ function App() {
               description:
                 diagnostic.entityId ?? diagnostic.assetId ?? diagnostic.fieldPath,
             });
+          }}
+          onApplyTextureConversions={async (assetIds, report) => {
+            if (!publishBundle) {
+              throw new Error("変換する制作データがありません。");
+            }
+            const projectPath = await handleSaveVisualProject(
+              publishBundle,
+              false,
+              false,
+            );
+            const result = await applyTextureProcessingBatch(
+              projectPath,
+              publishBundle.assets,
+              assetIds,
+              (progress) =>
+                report({
+                  message: progress.message,
+                  completed: progress.completed,
+                  total: progress.total,
+                }),
+            );
+            if (!result.ok) throw new Error(result.message);
+            const nextBundle = { ...publishBundle, assets: result.manifest };
+            await handleSaveVisualProject(nextBundle, false, false);
+            setVisualPublishBundle(nextBundle);
+            setVisualCompilationFresh(false);
+            return {
+              convertedAssetCount: result.convertedAssetNames.length,
+              beforeBytes: result.beforeBytes,
+              afterBytes: result.afterBytes,
+              skipped: result.skipped.map((entry) => ({
+                assetName: entry.assetName,
+                reason: entry.reason,
+              })),
+            };
           }}
           onApplyOptimizations={async (recommendationIds, report) => {
             if (!publishBundle) {

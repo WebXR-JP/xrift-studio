@@ -5,13 +5,19 @@ import {
   Import,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { TEXTURE_MAX_SIZE_CHOICES } from "../../lib/visual-editor/texture-conversion";
+import type { TextureImportMaxSize } from "./texture-import-defaults";
 
 export function EditorImportMenu({
   disabledReason,
+  textureMaxSize,
+  onTextureMaxSizeChange,
   onImportModel,
   onImportR3f,
 }: {
   disabledReason?: string | null;
+  textureMaxSize: TextureImportMaxSize;
+  onTextureMaxSizeChange: (value: TextureImportMaxSize) => void;
   onImportModel: () => void;
   onImportR3f: () => void;
 }) {
@@ -72,7 +78,32 @@ export function EditorImportMenu({
               onImportR3f();
             }}
           />
-          <p className="mx-1 mt-1 border-t border-slate-100 px-2 pt-2 text-[10px] leading-4 text-slate-500">
+          <label className="mx-1 mt-1 block border-t border-slate-100 px-1.5 pt-2.5">
+            <span className="block text-xs font-semibold text-slate-800">
+              取り込むTextureの最大解像度
+            </span>
+            <span className="mt-0.5 block text-[10px] leading-4 text-slate-500">
+              モデル内蔵のTextureにも同じ設定が入ります。原本は変換せず、公開時にこの解像度へ変換します
+            </span>
+            <select
+              value={String(textureMaxSize)}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                onTextureMaxSizeChange(
+                  value === "original" ? "original" : (Number(value) as TextureImportMaxSize),
+                );
+              }}
+              className="mt-1.5 h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 focus-visible:border-violet-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-100"
+            >
+              <option value="original">原寸のまま</option>
+              {TEXTURE_MAX_SIZE_CHOICES.map((size) => (
+                <option key={size} value={size}>
+                  長辺を最大 {size}px まで
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="mx-1 mt-2 border-t border-slate-100 px-2 pt-2 text-[10px] leading-4 text-slate-500">
             公式ComponentとOpen BrushはAssetsの「外部から追加」から選べます。
           </p>
         </div>

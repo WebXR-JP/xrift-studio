@@ -24,6 +24,7 @@ import type {
   VisualCompilerDocuments,
 } from "./types";
 import { OPEN_BRUSH_BRUSH_BASE_URL } from "../open-brush";
+import { isPublishedAsKtx2 } from "../texture-conversion";
 
 export function compileRuntimeManifest(
   documents: VisualCompilerDocuments,
@@ -463,7 +464,7 @@ function compileRuntimeAsset(
       name: asset.name,
       url,
       sourceFormat:
-        getTextureSourceFormat(asset) === "ktx2" ? "ktx2" : "image",
+        isPublishedAsKtx2(asset) ? "ktx2" : "image",
       colorSpace: asset.importSettings.colorSpace,
       flipY: asset.importSettings.flipY,
       sampler: {

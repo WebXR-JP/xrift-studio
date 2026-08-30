@@ -1432,6 +1432,131 @@ export function runVisualCompilerFixtureAssertions(
     "Texture copy plan support flag is incorrect",
   );
 
+  // 最大解像度・圧縮のImport設定は、制作データの原本を書き換えなくても公開できる。
+  // 公開を止めず、コピー計画に「出力時だけ効く変換」を載せることで解決する。
+  const unappliedRecipeTexture: TextureAsset = {
+    ...projectTexture,
+    id: "fixture-texture-unapplied-recipe",
+    importSettings: normalizeTextureImportSettings({
+      colorSpace: "srgb",
+      resize: { mode: "max-size", maxSize: 1024 },
+      compression: { format: "ktx2", quality: 80 },
+    }),
+    importMetadata: {
+      sourceFormat: "png",
+      mimeType: "image/png",
+      byteLength: 4 * 1024 * 1024,
+      width: 4096,
+      height: 4096,
+    },
+  };
+  const unappliedRecipeProject: VisualCompilerDocuments = {
+    ...world,
+    assets: updateMaterialAsset(
+      {
+        ...world.assets,
+        assets: {
+          ...world.assets.assets,
+          [unappliedRecipeTexture.id]: unappliedRecipeTexture,
+        },
+      },
+      BUILTIN_ASSET_IDS.material.blue,
+      { baseColorTextureId: unappliedRecipeTexture.id },
+    ),
+  };
+  const unappliedRecipeResult = compileVisualProject(unappliedRecipeProject, {
+    generatedAt: fixedTime,
+  });
+  assert(
+    unappliedRecipeResult.canStage,
+    "An unapplied Texture recipe must not block publishing",
+  );
+  assert(
+    !unappliedRecipeResult.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.assetId === unappliedRecipeTexture.id &&
+        diagnostic.severity === "blocking",
+    ),
+    "An unapplied Texture recipe must not raise a blocking diagnostic",
+  );
+  const unappliedRecipeCopy = unappliedRecipeResult.assetCopyPlan.find(
+    (entry) => entry.assetId === unappliedRecipeTexture.id,
+  );
+  assert(
+    unappliedRecipeCopy?.supportedByCompiler === true &&
+      unappliedRecipeCopy.sourceRelativePath === "assets/textures/albedo.png" &&
+      unappliedRecipeCopy.targetRelativePath ===
+        "public/xrift-studio-fixture-texture-unapplied-recipe-albedo.ktx2",
+    "Publish-time Texture conversion must retarget the copy to the converted format",
+  );
+  assert(
+    unappliedRecipeCopy?.textureConversion?.outputFormat === "ktx2" &&
+      unappliedRecipeCopy.textureConversion.maxSize === 1024 &&
+      unappliedRecipeCopy.textureConversion.srgb === true,
+    "Publish-time Texture conversion plan is incorrect",
+  );
+  const unappliedRecipeSource =
+    unappliedRecipeResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(
+    unappliedRecipeSource.includes("useCompiledKtx2(baseColorMapUrl)"),
+    "A Texture converted to KTX2 at publish time must load through the KTX2 runtime",
+  );
+
+  // 変換できない原本（SVG）は設定を反映できない。公開は止めず、理由だけを残す。
+  const unconvertibleRecipeTexture: TextureAsset = {
+    ...projectTexture,
+    id: "fixture-texture-unconvertible-recipe",
+    name: "Unconvertible Recipe Texture",
+    source: { kind: "project", relativePath: "assets/textures/logo.svg" },
+    importSettings: normalizeTextureImportSettings({
+      resize: { mode: "max-size", maxSize: 512 },
+      compression: { format: "source", quality: 80 },
+    }),
+    importMetadata: {
+      sourceFormat: "svg",
+      mimeType: "image/svg+xml",
+      byteLength: 12 * 1024,
+    },
+  };
+  const unconvertibleRecipeResult = compileVisualProject(
+    {
+      ...world,
+      assets: updateMaterialAsset(
+        {
+          ...world.assets,
+          assets: {
+            ...world.assets.assets,
+            [unconvertibleRecipeTexture.id]: unconvertibleRecipeTexture,
+          },
+        },
+        BUILTIN_ASSET_IDS.material.blue,
+        { baseColorTextureId: unconvertibleRecipeTexture.id },
+      ),
+    },
+    { generatedAt: fixedTime },
+  );
+  assert(
+    unconvertibleRecipeResult.canStage,
+    "A Texture recipe that cannot be applied must not block publishing",
+  );
+  assert(
+    unconvertibleRecipeResult.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === "texture-recipe-not-applicable" &&
+        diagnostic.severity === "warning" &&
+        diagnostic.assetId === unconvertibleRecipeTexture.id,
+    ),
+    "An unapplicable Texture recipe must be reported as a warning",
+  );
+  assert(
+    unconvertibleRecipeResult.assetCopyPlan.find(
+      (entry) => entry.assetId === unconvertibleRecipeTexture.id,
+    )?.textureConversion === undefined,
+    "An unapplicable Texture recipe must not schedule a conversion",
+  );
+
   const sourceScene = world.scenes[world.project.entrySceneId];
   const sourceSceneSettings = resolveSceneSettings(sourceScene.settings);
   const imageSkyboxScene: SceneDocument = {

@@ -1043,6 +1043,9 @@ async function createModelImportPlan(
     materialFolderId: folderPlan.materialFolderId,
     textureFolderId: folderPlan.textureFolderId,
     hashBytes: sha256AssetBytes,
+    ...(input.textureImportSettings
+      ? { textureImportSettings: input.textureImportSettings }
+      : {}),
     ...(openBrush ? { openBrush } : {}),
   });
   materialSlots = expanded.materialSlots;
