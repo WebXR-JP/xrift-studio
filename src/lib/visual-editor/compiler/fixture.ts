@@ -9,6 +9,11 @@ import {
 } from "../asset-manifest";
 import { instantiateSceneAsset } from "../asset-placement";
 import {
+  KHR_INTERACTIVITY_EXTENSION_NAME,
+  KHR_INTERACTIVITY_SPEC_STATUS,
+} from "../interactivity-graph";
+import { createInteractionTriggerGraphExtension } from "../interactivity-recipes";
+import {
   XRIFT_COMPONENT_SCHEMA_IDS,
   createXriftComponent,
 } from "../component-registry";
@@ -27,6 +32,7 @@ import {
   addBuiltinPrimitiveEntity,
   addTerrainEntity,
   createBoxColliderComponent,
+  createInteractionTriggerComponent,
   createMeshColliderComponent,
   createRigidBodyComponent,
   createTransformComponent,
@@ -652,8 +658,8 @@ export function runVisualCompilerFixtureAssertions(
     "Shared Particle runtime overlay was not emitted",
   );
   assert(
-    particleSource.includes("<XriftScriptParticleEmitter config="),
-    "Particle Asset was not wired to its Scene emitter",
+    /<XriftScriptParticleEmitter componentId="[^"]+" config=/.test(particleSource),
+    "Particle Asset was not wired to its Scene emitter by Component id",
   );
   [
     "const particleMapSource = useTexture(particleMapUrl)",
@@ -2167,6 +2173,83 @@ export function runVisualCompilerFixtureAssertions(
         `Animated GLB source is missing: ${fragment}`,
       ),
     );
+    // The live Animation bridge only ships where something can send it a
+    // command; a Scene with nothing to command it keeps the smaller output.
+    assert(
+      !animationSource.includes("createXriftAnimationRuntimeBridge"),
+      "an Animation bridge was emitted for a Scene with nothing to command it",
+    );
+    const triggerGraphId = "asset-animated-trigger-graph";
+    const triggerEntity =
+      animationPlacement.scene.entities[animationPlacement.entityId];
+    assert(triggerEntity !== undefined, "the animated Entity went missing");
+    const triggerComponent = createInteractionTriggerComponent(
+      "component-animated-trigger",
+      triggerGraphId,
+    );
+    assert(triggerComponent !== null, "the Interaction Trigger could not be made");
+    const triggeredDocuments: VisualCompilerDocuments = {
+      ...animationDocuments,
+      assets: {
+        ...animationDocuments.assets,
+        assets: {
+          ...animationDocuments.assets.assets,
+          [triggerGraphId]: {
+            id: triggerGraphId,
+            name: "Animation trigger",
+            kind: "interactivity",
+            status: "ready",
+            source: { kind: "document" },
+            thumbnail: { status: "missing" },
+            folderId: null,
+            order: 0,
+            extensionName: KHR_INTERACTIVITY_EXTENSION_NAME,
+            specStatus: KHR_INTERACTIVITY_SPEC_STATUS,
+            extension: createInteractionTriggerGraphExtension(),
+          },
+        },
+      },
+      scenes: {
+        [animationPlacement.scene.sceneId]: {
+          ...animationPlacement.scene,
+          entities: {
+            ...animationPlacement.scene.entities,
+            [triggerEntity.id]: {
+              ...triggerEntity,
+              components: [...triggerEntity.components, triggerComponent],
+            },
+          },
+        },
+      },
+    };
+    const triggeredResult = compileVisualProject(triggeredDocuments, {
+      generatedAt: fixedTime,
+    });
+    const triggeredSource =
+      triggeredResult.overlayFiles.find(
+        (file) => file.relativePath === "src/World.tsx",
+      )?.content ?? "";
+    [
+      "createXriftAnimationRuntimeBridge",
+      "createXriftAnimationMixerController",
+      "XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY",
+      "const { actions, names, mixer, clips } = useAnimations(animations, animationRoot);",
+      "animationBridge.current?.sample();",
+    ].forEach((fragment) =>
+      assert(
+        triggeredSource.includes(fragment),
+        `An Animation next to a trigger is missing: ${fragment}`,
+      ),
+    );
+    assert(
+      triggeredResult.overlayFiles.some(
+        (file) =>
+          file.relativePath.endsWith("animation-mixer-runtime.ts") &&
+          file.content.includes('from "./animation-runtime"'),
+      ),
+      "the Animation mixer overlay did not ship with its bridge",
+    );
+
     assertAnimationClipSelection(
       animationDocuments,
       projectModel.id,

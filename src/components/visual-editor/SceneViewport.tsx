@@ -29,6 +29,7 @@ import {
   emitXriftInteraction,
   XriftInteractionTriggerRuntime,
 } from "../../../packages/xrift-studio-runtime/src/script/interaction-trigger-runtime";
+import { XriftSceneRuntime } from "../../../packages/xrift-studio-runtime/src/script/scene-runtime";
 import {
   applyTimeUniformValue,
   type MutableUniformValue,
@@ -1594,8 +1595,15 @@ function ComponentVisual({
         asset?.kind === "particle" && asset.properties.renderer.materialAssetId
           ? assets.assets[asset.properties.renderer.materialAssetId]
           : undefined;
-      return (showHelpers || renderThumbnail) && component.enabled && asset?.kind === "particle" ? (
+      // `playing` is listed for the same reason the Text panel lists it: Play
+      // forces `showHelpers` off, and a particle effect is world content, so
+      // hiding it during Play would misrepresent the world — and would make a
+      // graph that starts an effect impossible to check.
+      return (showHelpers || playing || renderThumbnail) &&
+        component.enabled &&
+        asset?.kind === "particle" ? (
         <ParticleEmitterVisual
+          componentId={component.id}
           asset={asset}
           textureAsset={
             textureAsset?.kind === "texture" ? textureAsset : undefined
@@ -1880,6 +1888,7 @@ function EntityObject({
             graph={graphAsset.extension}
             componentId={component.id}
             order={index}
+            playing={playing}
           />
         );
       })}
@@ -3908,6 +3917,9 @@ function SnapStepField({
   );
 }
 
+/** The Scene View's own tab, always first and never closable. */
+export const SCENE_VIEW_TAB_ID = "scene-view";
+
 export function SceneViewport({
   scene,
   assets,
@@ -3924,6 +3936,12 @@ export function SceneViewport({
   transformSpace,
   playDisabled,
   playPreparing,
+  tabs,
+  activeTabId,
+  onSelectTab,
+  onCloseTab,
+  maximized,
+  onToggleMaximize,
   playShortcut,
   snapShortcut,
   onTogglePlay,
@@ -3983,6 +4001,20 @@ export function SceneViewport({
   playDisabled: boolean;
   /** Script compilation runs before Play starts; the button shows it. */
   playPreparing?: boolean;
+  /**
+   * Other editors that share this cell, shown beside the Scene View's name.
+   *
+   * A graph editor that floats over the viewport has to fit between the panels
+   * and ends up fighting them for width. As a tab it gets the whole cell, and
+   * the two are one place rather than one covering the other.
+   */
+  tabs?: readonly { id: string; label: string; closable?: boolean }[];
+  activeTabId?: string;
+  onSelectTab?: (id: string) => void;
+  onCloseTab?: (id: string) => void;
+  /** Whether this cell currently has the whole editor area. */
+  maximized?: boolean;
+  onToggleMaximize?: () => void;
   playShortcut?: string;
   snapShortcut?: string;
   onTogglePlay: () => void;
@@ -4967,6 +4999,9 @@ export function SceneViewport({
               ? `${dragOverLabel ?? "Model / Prefab / Particle"}をSceneへ配置`
         : "CreateメニューからPrimitiveを追加";
 
+  const MaximizeIcon = EDITOR_ICONS.maximize;
+  const MinimizeIcon = EDITOR_ICONS.minimize;
+
   return (
     <section
       className={`relative flex min-h-0 flex-col overflow-hidden transition-shadow duration-200 ${
@@ -4990,15 +5025,107 @@ export function SceneViewport({
          * covering the tools when it does not.
          */}
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <h2
-            id="scene-view-heading"
-            title={editorMode === "play" ? "Play Window" : "Scene View"}
-            className={`truncate text-[12px] font-semibold ${
-              editorMode === "play" ? "text-zinc-100" : "text-slate-800"
-            }`}
-          >
-            {editorMode === "play" ? "Play Window" : "Scene View"}
-          </h2>
+          {onToggleMaximize ? (
+            <button
+              type="button"
+              onClick={onToggleMaximize}
+              aria-pressed={maximized}
+              title={
+                maximized
+                  ? "パネルを戻す"
+                  : "このビューだけを広げる（Hierarchy・Inspector・Assetsを畳む）"
+              }
+              aria-label={maximized ? "パネルを戻す" : "このビューだけを広げる"}
+              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${
+                editorMode === "play"
+                  ? "text-zinc-300 hover:bg-violet-900 hover:text-zinc-100"
+                  : maximized
+                    ? "bg-violet-100 text-violet-700"
+                    : "text-slate-500 hover:bg-slate-200 hover:text-slate-800"
+              }`}
+            >
+              {maximized ? (
+                <MinimizeIcon size={12} aria-hidden="true" />
+              ) : (
+                <MaximizeIcon size={12} aria-hidden="true" />
+              )}
+            </button>
+          ) : null}
+          {tabs && tabs.length > 0 ? (
+            <div
+              role="tablist"
+              aria-label="Scene Viewとエディター"
+              className="flex min-w-0 items-center gap-px overflow-x-auto"
+            >
+              {[
+                {
+                  id: SCENE_VIEW_TAB_ID,
+                  label: editorMode === "play" ? "Play Window" : "Scene View",
+                },
+                ...tabs,
+              ].map((tab) => {
+                const active = (activeTabId ?? SCENE_VIEW_TAB_ID) === tab.id;
+                const closable = "closable" in tab && tab.closable;
+                return (
+                  <div
+                    key={tab.id}
+                    className={`flex shrink-0 items-center rounded-t ${
+                      active
+                        ? editorMode === "play"
+                          ? "bg-violet-900/70"
+                          : "bg-white shadow-[inset_0_-2px_0_0_rgb(124_58_237)]"
+                        : ""
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      id={tab.id === SCENE_VIEW_TAB_ID ? "scene-view-heading" : undefined}
+                      title={tab.label}
+                      onClick={() => onSelectTab?.(tab.id)}
+                      className={`max-w-[11rem] truncate px-2 py-0.5 text-[11px] font-semibold ${
+                        active
+                          ? editorMode === "play"
+                            ? "text-zinc-100"
+                            : "text-slate-900"
+                          : editorMode === "play"
+                            ? "text-zinc-400 hover:text-zinc-200"
+                            : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                    {closable ? (
+                      <button
+                        type="button"
+                        onClick={() => onCloseTab?.(tab.id)}
+                        aria-label={`${tab.label}を閉じる`}
+                        title={`${tab.label}を閉じる`}
+                        className={`mr-0.5 rounded px-0.5 text-[12px] leading-none ${
+                          editorMode === "play"
+                            ? "text-zinc-400 hover:bg-violet-800 hover:text-zinc-100"
+                            : "text-slate-400 hover:bg-slate-200 hover:text-slate-800"
+                        }`}
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <h2
+              id="scene-view-heading"
+              title={editorMode === "play" ? "Play Window" : "Scene View"}
+              className={`truncate text-[12px] font-semibold ${
+                editorMode === "play" ? "text-zinc-100" : "text-slate-800"
+              }`}
+            >
+              {editorMode === "play" ? "Play Window" : "Scene View"}
+            </h2>
+          )}
           {editorMode === "play" ? (
             <>
               <span className="hidden shrink-0 truncate text-xs text-zinc-400 @[900px]/scene-header:inline">
@@ -5321,6 +5448,9 @@ export function SceneViewport({
             />
           ) : null}
           <ScenePostprocessing settings={sceneSettings.postprocessing} />
+          {/* Scene-wide graph writes: exposure and the screen fade. Mounted only
+              while Play runs, so a graph never dims the editing view. */}
+          <XriftSceneRuntime enabled={editorMode === "play"} />
           <SceneWind
             sceneDocument={preview.scene}
             settings={sceneSettings.vegetation}

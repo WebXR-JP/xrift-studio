@@ -1,4 +1,4 @@
-import { Object3D } from "three";
+import { Mesh, MeshStandardMaterial, Object3D } from "three";
 
 import {
   XRIFT_AUDIO_SOURCE_RUNTIME_USER_DATA_KEY,
@@ -11,6 +11,15 @@ import {
   createXriftLightRuntimeBridge,
 } from "./light.js";
 import { createXriftInteractionApplier } from "./interaction-trigger-runtime.js";
+import {
+  XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY,
+  createXriftParticleRuntimeBridge,
+} from "./particle.js";
+import {
+  XRIFT_SCENE_RUNTIME_USER_DATA_KEY,
+  createXriftSceneRuntimeBridge,
+} from "./scene-runtime.js";
+import { XRIFT_INTERACTION_SCENE_ENTITY_ID } from "./interaction-trigger.js";
 import type { XriftInteractionAction } from "./interaction-trigger.js";
 
 /**
@@ -174,7 +183,202 @@ export async function runInteractionTriggerApplierFixtureAssertions(): Promise<v
     }),
   );
 
+  // Transform is written straight onto the object, so the assertion that
+  // matters is that Stop puts it back exactly where the Scene had it. A fresh
+  // Entity is used because the restore point is captured at the first write,
+  // and `sign` was already written to by the visibility case above.
+  const platform = entityObject("entity-platform");
+  platform.position.set(1, 2, 3);
+  root.add(platform);
+  applier.apply(
+    action({
+      entityId: "entity-platform",
+      componentId: "transform",
+      target: "transform",
+      property: "position",
+      value: { kind: "vector3", value: [4, 5, 6] },
+    }),
+  );
+  // Read into locals: the assertion helper narrows what it is given, and a
+  // narrowed `sign.position.x` would make the restore assertion below
+  // unreachable to the type checker.
+  const movedTo = [platform.position.x, platform.position.y, platform.position.z].join(",");
+  assert(movedTo === "4,5,6", "writing a Transform position did not apply");
+  applier.apply(
+    action({
+      entityId: "entity-platform",
+      componentId: "transform",
+      target: "transform",
+      property: "rotation",
+      value: { kind: "vector3", value: [0, 90, 0] },
+    }),
+  );
+  const turnedTo = platform.rotation.y;
+  assert(
+    Math.abs(turnedTo - Math.PI / 2) < 1e-6,
+    "a Transform rotation was not converted from degrees",
+  );
+  assert(
+    applier.read({
+      entityId: "entity-platform",
+      componentId: "transform",
+      targetKind: "transform",
+      property: "rotation",
+    })?.kind === "vector3",
+    "a Transform rotation could not be read back",
+  );
+
+  // A Material write owns a clone first: the Asset is shared, so writing the
+  // instance the Mesh happened to hold would recolour every other Entity.
+  const shared = new MeshStandardMaterial({ color: 0xffffff });
+  const lamp = entityObject("entity-lamp");
+  const lampMesh = new Mesh(undefined, shared);
+  lamp.add(lampMesh);
+  const bystander = entityObject("entity-bystander");
+  const bystanderMesh = new Mesh(undefined, shared);
+  bystander.add(bystanderMesh);
+  root.add(lamp, bystander);
+  applier.apply(
+    action({
+      entityId: "entity-lamp",
+      componentId: "material",
+      target: "material",
+      property: "baseColor",
+      value: { kind: "color", value: [1, 0, 0] },
+    }),
+  );
+  const lampMaterial = lampMesh.material as MeshStandardMaterial;
+  const lampIsRed = lampMaterial.color.r === 1 && lampMaterial.color.g === 0;
+  assert(lampIsRed, "a Material colour write did not reach the Entity's Mesh");
+  assert(
+    lampMaterial !== shared,
+    "a Material write changed the shared Asset instead of an owned clone",
+  );
+  const bystanderMaterial = bystanderMesh.material as MeshStandardMaterial;
+  const bystanderUntouched = bystanderMaterial.color.g === 1;
+  assert(
+    bystanderUntouched,
+    "a Material write leaked into another Entity using the same Material",
+  );
+  applier.apply(
+    action({
+      entityId: "entity-lamp",
+      componentId: "material",
+      target: "material",
+      property: "opacity",
+      value: { kind: "float", value: 0.25 },
+    }),
+  );
+  const lampOpacity = (lampMesh.material as MeshStandardMaterial).opacity;
+  const lampTransparent = (lampMesh.material as MeshStandardMaterial).transparent;
+  assert(
+    lampOpacity === 0.25 && lampTransparent,
+    "a Material opacity write did not switch the Material to the transparent pass",
+  );
+
+  // A Particle emitter is addressed by its Component id, so an Entity carrying
+  // two effects can start one without the other.
+  const smoke = createXriftParticleRuntimeBridge({ componentId: "component-smoke" });
+  const sparks = createXriftParticleRuntimeBridge({ componentId: "component-sparks" });
+  attach(sign, XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY, smoke);
+  attach(sign, XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY, sparks);
+  applier.apply(
+    action({
+      entityId: "entity-sign",
+      componentId: "component-sparks",
+      target: "particle",
+      property: "emitting",
+      value: { kind: "bool", value: true },
+    }),
+  );
+  assert(
+    sparks.read().playing === true && sparks.read().stopped === false,
+    "starting a Particle emitter did not reach its bridge",
+  );
+  assert(
+    smoke.read().playing === undefined,
+    "starting one Particle emitter also started the other",
+  );
+  applier.apply(
+    action({
+      entityId: "entity-sign",
+      componentId: "component-sparks",
+      target: "particle",
+      property: "emissionRate",
+      value: { kind: "float", value: 120 },
+    }),
+  );
+  assert(
+    sparks.read().emissionRate === 120 && sparks.read().playing === true,
+    "writing a second Particle property discarded the first",
+  );
+  const beforeBurst = sparks.read().restartRevision ?? 0;
+  applier.apply(
+    action({
+      entityId: "entity-sign",
+      componentId: "component-sparks",
+      target: "particle",
+      property: "restart",
+      value: { kind: "bool", value: true },
+    }),
+  );
+  assert(
+    (sparks.read().restartRevision ?? 0) > beforeBurst,
+    "a Particle burst did not restart the emitter",
+  );
+
+  // Scene-wide writes go to the bridge on the Scene root, not to an Entity,
+  // and releasing the trigger has to put the authored look back.
+  const sceneBridge = createXriftSceneRuntimeBridge();
+  (root.userData as Record<string, unknown>)[
+    XRIFT_SCENE_RUNTIME_USER_DATA_KEY
+  ] = sceneBridge;
+  applier.apply(
+    action({
+      entityId: XRIFT_INTERACTION_SCENE_ENTITY_ID,
+      componentId: null,
+      target: "scene",
+      property: "fade",
+      value: { kind: "float", value: 1 },
+    }),
+  );
+  applier.apply(
+    action({
+      entityId: XRIFT_INTERACTION_SCENE_ENTITY_ID,
+      componentId: null,
+      target: "scene",
+      property: "exposure",
+      value: { kind: "float", value: 4 },
+    }),
+  );
+  const fadedTo = sceneBridge.read().fade;
+  const exposedTo = sceneBridge.read().exposure;
+  assert(fadedTo === 1, "a Scene fade did not reach the Scene bridge");
+  assert(exposedTo === 4, "a Scene exposure did not reach the Scene bridge");
+
   applier.dispose();
+  assert(
+    lampMesh.material === shared,
+    "a Material write survived the trigger's disposal",
+  );
+  assert(
+    sparks.read().playing === undefined && sparks.read().emissionRate === undefined,
+    "Particle overrides survived the trigger's disposal",
+  );
+  assert(
+    sceneBridge.read().fade === 0 && sceneBridge.read().exposure === null,
+    "Scene overrides survived the trigger's disposal",
+  );
+  const restoredTo = [platform.position.x, platform.position.y, platform.position.z].join(",");
+  assert(
+    restoredTo === "1,2,3",
+    "a Transform write survived the trigger's disposal",
+  );
+  const restoredTurn = platform.rotation.y;
+  assert(
+    restoredTurn === 0,
+    "a Transform rotation survived the trigger's disposal",
+  );
   assert(
     light.read().intensity === 1 && !light.read().enabled,
     "Light overrides survived the trigger's disposal",

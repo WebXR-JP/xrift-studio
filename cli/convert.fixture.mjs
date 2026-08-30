@@ -35,6 +35,9 @@ import { runScriptLifecycleFixtureAssertions } from "../src/lib/visual-editor/sc
 import { runScriptAudioFixtureAssertions } from "../src/lib/visual-editor/scripting/audio-runtime.fixture.ts";
 import { runAudioSourceRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source.fixture.ts";
 import { runRuntimeSchemaFixtureAssertions } from "../packages/xrift-studio-runtime/src/schema.fixture.ts";
+import { runInteractivityEngineFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity/engine.fixture.ts";
+import { runAnimationRuntimeBridgeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/animation.fixture.ts";
+import { runInteractivityGraphListFixtureAssertions } from "../src/lib/visual-editor/interactivity-recipes.fixture.ts";
 import { runShaderTimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/shader-time.fixture.ts";
 import { runTextPanelFixtureAssertions } from "../packages/xrift-studio-runtime/src/text-panel.fixture.ts";
 import { runTextComponentFixtureAssertions } from "../src/lib/visual-editor/text-component.fixture.ts";
@@ -269,6 +272,9 @@ try {
     ["terrain surface", runTerrainSurfaceFixtureAssertions],
     ["entity bounds", runEntityBoundsFixtureAssertions],
     ["runtime schema", runRuntimeSchemaFixtureAssertions],
+    ["interactivity engine", runInteractivityEngineFixtureAssertions],
+    ["animation runtime bridge", runAnimationRuntimeBridgeFixtureAssertions],
+    ["interactivity graph list", runInteractivityGraphListFixtureAssertions],
     ["shader time", runShaderTimeFixtureAssertions],
     ["text panel", runTextPanelFixtureAssertions],
     ["text component", runTextComponentFixtureAssertions],

@@ -7,6 +7,13 @@ import { compileVisualProject } from "./compiler";
 import {
   INTERACTION_TRIGGER_MODEL_OVERLAY_PATH,
   INTERACTION_TRIGGER_OVERLAY_PATH,
+  INTERACTIVITY_ENGINE_OVERLAY_PATH,
+  INTERACTIVITY_GRAPH_OVERLAY_PATH,
+  INTERACTIVITY_HOST_OVERLAY_PATH,
+  INTERACTIVITY_VALUE_OVERLAY_PATH,
+  ANIMATION_RUNTIME_OVERLAY_PATH,
+  ANIMATION_MIXER_OVERLAY_PATH,
+  SCENE_RUNTIME_OVERLAY_PATH,
 } from "./compiler/script-emit";
 import {
   collectInteractionTriggerTargets,
@@ -59,6 +66,7 @@ export function runInteractionTriggerFixtureAssertions(): void {
   assertSceneTargetsListWritableComponentsOnly();
   assertEntityReferencesFollowTheGraph();
   assertPublishedWorldRunsTheTrigger();
+  assertPublishedWorldRunsAGraphNobodyPresses();
   assertRuntimeJsonOutputIsBlocked();
 }
 
@@ -271,6 +279,80 @@ function assertEntityReferencesFollowTheGraph(): void {
   );
 }
 
+/**
+ * A timeline graph reaches the published world.
+ *
+ * The compiler decided whether to carry the trigger runtime by asking whether
+ * the Asset had an `xrift/onInteract` entry. A graph whose entry is
+ * `event/onStart` — an opening sequence, the thing the timeline is for — has
+ * none, so it ran in Studio Play and was dropped from the world that shipped.
+ */
+function assertPublishedWorldRunsAGraphNobodyPresses(): void {
+  const documents = buildDocuments();
+  const graphAsset = documents.assets.assets[GRAPH_ASSET_ID];
+  if (graphAsset?.kind !== "interactivity") {
+    throw new Error("the fixture's Interactivity Asset is missing");
+  }
+  const extension = createDefaultKhrInteractivityExtension();
+  const graph = graphOf(extension);
+  graph.nodes = [];
+  graph.declarations = [];
+  const start = appendInteractivityOperation(graph, "event/onStart", { x: 0, y: 0 });
+  const reveal = appendInteractivityOperation(
+    graph,
+    XRIFT_INTERACTION_OPERATIONS.setProperty,
+    { x: 320, y: 0 },
+  );
+  configureInteractivityTriggerAction(graph, reveal, {
+    entityId: "entity_sign",
+    componentId: "",
+    targetKind: "entity",
+    property: "enabled",
+  });
+  connectInteractivityFlow(graph, start, "out", reveal);
+
+  const result = compileVisualProject(
+    {
+      ...documents,
+      assets: {
+        ...documents.assets,
+        assets: {
+          ...documents.assets.assets,
+          [GRAPH_ASSET_ID]: { ...graphAsset, extension },
+        },
+      },
+    },
+    { generatedAt: "2026-08-29T00:00:00.000Z" },
+  );
+  const world = result.overlayFiles.find(
+    (file) => file.relativePath === "src/World.tsx",
+  )?.content;
+  assert(Boolean(world), "World.tsx was not emitted for a self-starting graph");
+  assert(
+    world!.includes("<XriftInteractionTriggerRuntime"),
+    "a graph that starts itself was dropped from the published world",
+  );
+  assert(
+    result.overlayFiles.some(
+      (file) => file.relativePath === INTERACTIVITY_ENGINE_OVERLAY_PATH,
+    ),
+    "a self-starting graph shipped without the interpreter that runs it",
+  );
+  assert(
+    !result.diagnostics.some(
+      (diagnostic) => diagnostic.code === "interaction-trigger-without-event",
+    ),
+    "a graph with an onStart entry was reported as having no entry point",
+  );
+  // Nobody presses this one, so demanding an Interactable would be noise.
+  assert(
+    !result.diagnostics.some(
+      (diagnostic) => diagnostic.code === "interaction-trigger-without-interactable",
+    ),
+    "a graph that starts itself was asked for an Interactable",
+  );
+}
+
 function assertPublishedWorldRunsTheTrigger(): void {
   const result = compileVisualProject(buildDocuments(), {
     generatedAt: "2026-08-29T00:00:00.000Z",
@@ -297,6 +379,12 @@ function assertPublishedWorldRunsTheTrigger(): void {
     world!.includes("xrift/onInteract"),
     "the canonical graph was not published with the world",
   );
+  // Exposure and the screen fade have no Entity to hang from, so the Scene-wide
+  // runtime has to be mounted by the world itself.
+  assert(
+    world!.includes("<XriftSceneRuntime />"),
+    "the published world does not mount the Scene-wide graph runtime",
+  );
   // The Entity the graph re-shows is authored disabled; dropping it would make
   // the published trigger a no-op while Play still worked.
   assert(
@@ -306,12 +394,35 @@ function assertPublishedWorldRunsTheTrigger(): void {
   for (const path of [
     INTERACTION_TRIGGER_MODEL_OVERLAY_PATH,
     INTERACTION_TRIGGER_OVERLAY_PATH,
+    INTERACTIVITY_ENGINE_OVERLAY_PATH,
+    INTERACTIVITY_GRAPH_OVERLAY_PATH,
+    INTERACTIVITY_HOST_OVERLAY_PATH,
+    INTERACTIVITY_VALUE_OVERLAY_PATH,
+    ANIMATION_RUNTIME_OVERLAY_PATH,
+    ANIMATION_MIXER_OVERLAY_PATH,
+    SCENE_RUNTIME_OVERLAY_PATH,
   ]) {
     assert(
       result.overlayFiles.some((file) => file.relativePath === path),
       `the published world is missing ${path}`,
     );
   }
+  // The interpreter is what runs the graph, so it ships with the trigger: a
+  // published world that only carried the trigger component would wait for an
+  // engine that is not there.
+  const engineOverlay = result.overlayFiles.find(
+    (file) => file.relativePath === INTERACTIVITY_ENGINE_OVERLAY_PATH,
+  )?.content;
+  assert(
+    !/from\s+["']\.{1,2}\/(?:interactivity\/)?[a-z-]+\.js["']/.test(
+      engineOverlay ?? "",
+    ),
+    "the emitted interpreter still imports runtime-package specifiers",
+  );
+  assert(
+    (engineOverlay ?? "").includes('from "./interactivity-graph"'),
+    "the emitted interpreter does not import its graph reader as an overlay",
+  );
   const runtimeOverlay = result.overlayFiles.find(
     (file) => file.relativePath === INTERACTION_TRIGGER_OVERLAY_PATH,
   )?.content;

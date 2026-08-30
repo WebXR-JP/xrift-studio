@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type SetStateAction,
 } from "react";
@@ -244,6 +245,7 @@ import {
 } from "./InspectorPanel";
 import {
   SceneViewport,
+  SCENE_VIEW_TAB_ID,
   SCENE_VIEW_CAMERA_PRESETS,
   type SceneFocusState,
   type SceneViewCameraPreset,
@@ -756,6 +758,9 @@ function sanitizedImportMessage(error: unknown, projectPath: string): string {
   }
   return message.replace(/data:[^\s]+/gi, "[アセットデータ]");
 }
+
+/** The graph editor's tab in the Scene View's cell. */
+const INTERACTIVITY_GRAPH_TAB_ID = "interactivity-graph";
 
 export function VisualEditorPrototype({
   projectKind,
@@ -1473,6 +1478,24 @@ export function VisualEditorPrototype({
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
   const [externalStoreOpen, setExternalStoreOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  /**
+   * Whether the graph tab is the one in front of the Scene View's cell.
+   *
+   * The editor used to float over the viewport, where it fought the Inspector
+   * for width and had to be expanded to be usable. As a tab it takes the cell
+   * whole, and the Scene View is one click away rather than underneath.
+   */
+  const [graphTabActive, setGraphTabActive] = useState(true);
+  /**
+   * Gives the Scene View's cell the whole editor area.
+   *
+   * The cell is one column of three and one row of two, so whatever is in it —
+   * the viewport or the graph — works in about half the window. Collapsing the
+   * three panels is the difference between reading a graph and panning around
+   * one, and it applies to whichever tab is in front rather than being an
+   * editor-only trick.
+   */
+  const [viewportMaximized, setViewportMaximized] = useState(false);
   const [interactivityEditorAssetId, setInteractivityEditorAssetId] =
     useState<string | null>(null);
   const [pendingImports, setPendingImports] = useState<QueuedAssetImport[]>([]);
@@ -7255,6 +7278,7 @@ export function VisualEditorPrototype({
         );
         if (kind === "interactivity") {
           setInteractivityEditorAssetId(added.assetId);
+          setGraphTabActive(true);
         }
         return commitEditorHistory(current, {
           ...current.present,
@@ -7874,6 +7898,7 @@ export function VisualEditorPrototype({
       // "追加した" from ending at a card the author has to hunt through.
       if (createdInteractivityAssetId) {
         setInteractivityEditorAssetId(createdInteractivityAssetId);
+        setGraphTabActive(true);
       }
     },
     [assetSelection, editorMode, projectKind, setBundle],
@@ -9313,6 +9338,7 @@ export function VisualEditorPrototype({
             return false;
           }
           setInteractivityEditorAssetId(payload.assetId);
+          setGraphTabActive(true);
           return true;
         }
         case "asset.import":
@@ -9365,7 +9391,12 @@ export function VisualEditorPrototype({
       if (
         deleteDialog ||
         pendingMaterialAssignment ||
-        scriptTemplateFolderId !== undefined
+        scriptTemplateFolderId !== undefined ||
+        // The graph editor has its own Delete, Undo and Redo. Left unguarded,
+        // cutting a wire also deleted the selected Entity and undo stepped
+        // through two histories at once. Only while it is the tab in front:
+        // behind the Scene View it is not taking keystrokes.
+        (interactivityEditorAssetId !== null && graphTabActive)
       ) {
         return;
       }
@@ -9378,6 +9409,8 @@ export function VisualEditorPrototype({
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [
     deleteDialog,
+    graphTabActive,
+    interactivityEditorAssetId,
     executeCommand,
     pendingMaterialAssignment,
     resolvedCommands,
@@ -9446,9 +9479,42 @@ export function VisualEditorPrototype({
         : saveStatus === "error"
           ? EDITOR_ICONS.warning
           : EDITOR_ICONS.save;
-  const hierarchyTrack = `min(${layout.hierarchyWidth}px, 22%)`;
-  const inspectorTrack = `min(${layout.inspectorWidth}px, 36%)`;
-  const assetsTrack = `min(${layout.assetsHeight}px, calc(100% - 240px))`;
+  const interactivityEditorAsset =
+    interactivityEditorAssetId &&
+    bundle.assets.assets[interactivityEditorAssetId]?.kind === "interactivity"
+      ? bundle.assets.assets[interactivityEditorAssetId]
+      : null;
+  const interactivityEditorTabs = interactivityEditorAsset
+    ? [
+        {
+          id: INTERACTIVITY_GRAPH_TAB_ID,
+          label: interactivityEditorAsset.name,
+          closable: true,
+        },
+      ]
+    : [];
+
+  const hierarchyTrack = viewportMaximized
+    ? "0px"
+    : `min(${layout.hierarchyWidth}px, 22%)`;
+  const inspectorTrack = viewportMaximized
+    ? "0px"
+    : `min(${layout.inspectorWidth}px, 36%)`;
+  const assetsTrack = viewportMaximized
+    ? "0px"
+    : `min(${layout.assetsHeight}px, calc(100% - 240px))`;
+  /*
+   * `contents` while they are shown, so the wrapper is invisible to the grid
+   * and placement is exactly as before. Maximized it becomes the grid item
+   * itself and clips: the track is 0px, so the panel inside is simply not
+   * drawn. `hidden` would be simpler but takes the item out of the flow, and
+   * auto-placement then walks the remaining panels one cell to the left —
+   * putting the Scene View in the 0px column with its own header clipped away.
+   */
+  const sidePanelClass = (spansBothRows: boolean) =>
+    viewportMaximized
+      ? `overflow-hidden ${spansBothRows ? "row-span-2" : ""}`
+      : "contents";
 
   return (
     <div className="h-screen overflow-hidden bg-editor-canvas">
@@ -9672,11 +9738,21 @@ export function VisualEditorPrototype({
         <main
           ref={mainRef}
           className="relative grid min-h-0 flex-1 overflow-hidden"
-          style={{
-            gridTemplateColumns: `${hierarchyTrack} minmax(360px, 1fr) ${inspectorTrack}`,
-            gridTemplateRows: `minmax(240px, 1fr) ${assetsTrack}`,
-          }}
+          style={
+            {
+              gridTemplateColumns: `${hierarchyTrack} minmax(360px, 1fr) ${inspectorTrack}`,
+              gridTemplateRows: `minmax(240px, 1fr) ${assetsTrack}`,
+              // Published as custom properties so a panel that floats over the
+              // Scene View can stop at the columns instead of guessing their
+              // width. The tracks are draggable, so a hand-tuned inset drifts
+              // out of step the moment the author resizes one.
+              "--xrift-hierarchy-track": hierarchyTrack,
+              "--xrift-inspector-track": inspectorTrack,
+              "--xrift-assets-track": assetsTrack,
+            } as CSSProperties
+          }
         >
+          <div className={sidePanelClass(true)}>
           <HierarchyPanel
             scene={bundle.scene}
             selection={sceneSelection}
@@ -9709,6 +9785,7 @@ export function VisualEditorPrototype({
               )
             }
           />
+          </div>
           <SceneViewport
             scene={renderedPlaySession?.runtimeScene ?? bundle.scene}
             assets={renderedPlaySession?.runtimeAssets ?? bundle.assets}
@@ -9735,7 +9812,22 @@ export function VisualEditorPrototype({
             playPreparing={playPreparing}
             playShortcut={shortcutLabel("play.toggle")}
             snapShortcut={shortcutLabel("transform.toggle-snap")}
-            onTogglePlay={() => executeCommand("play.toggle")}
+            onTogglePlay={() => {
+              // Play is something you watch, so it brings the Scene View
+              // forward. The graph stays open in its tab.
+              setGraphTabActive(false);
+              executeCommand("play.toggle");
+            }}
+            tabs={interactivityEditorTabs}
+            activeTabId={
+              graphTabActive && interactivityEditorTabs.length > 0
+                ? INTERACTIVITY_GRAPH_TAB_ID
+                : SCENE_VIEW_TAB_ID
+            }
+            onSelectTab={(id) => setGraphTabActive(id === INTERACTIVITY_GRAPH_TAB_ID)}
+            onCloseTab={() => setInteractivityEditorAssetId(null)}
+            maximized={viewportMaximized}
+            onToggleMaximize={() => setViewportMaximized((current) => !current)}
             onTransformModeChange={(mode) => {
               if (!renderedReadOnly) setTransformMode(mode);
             }}
@@ -9795,6 +9887,7 @@ export function VisualEditorPrototype({
             cameraRequest={sceneCameraRequest}
             onCameraResult={resolveSceneCamera}
           />
+          <div className={sidePanelClass(true)}>
           <InspectorPanel
             scene={bundle.scene}
             assets={renderedPlaySession?.runtimeAssets ?? bundle.assets}
@@ -9902,6 +9995,8 @@ export function VisualEditorPrototype({
             onSetLightShadow={handleSetSelectedLightShadow}
             onApplyMaterialPatch={handleApplySelectedMaterialPatch}
           />
+          </div>
+          <div className={sidePanelClass(false)}>
           <AssetsPanel
             assets={bundle.assets}
             projectPath={projectPath}
@@ -9974,6 +10069,7 @@ export function VisualEditorPrototype({
               assetImportPanelAvailability.disabledReason
             }
           />
+          </div>
           <MaterialThumbnailGenerationQueue
             assets={bundle.assets}
             projectPath={projectPath}
@@ -10069,11 +10165,17 @@ export function VisualEditorPrototype({
             }}
             onClose={() => setSupportOpen(false)}
           />
-          {interactivityEditorAssetId &&
-          bundle.assets.assets[interactivityEditorAssetId]?.kind === "interactivity" ? (
+          {/*
+            Hidden, not unmounted. A tab that threw away the draft and its undo
+            history the moment you looked at the Scene View would be worse than
+            the window it replaced — the reason to look is usually to check
+            what the graph you are half way through writing is pointing at.
+          */}
+          {interactivityEditorAsset ? (
+            <div className={graphTabActive ? "contents" : "hidden"}>
             <InteractivityGraphEditor
-              key={interactivityEditorAssetId}
-              asset={bundle.assets.assets[interactivityEditorAssetId]}
+              key={interactivityEditorAsset.id}
+              asset={interactivityEditorAsset}
               materials={Object.values(bundle.assets.assets).filter(
                 (asset) => asset.kind === "material",
               )}
@@ -10082,6 +10184,7 @@ export function VisualEditorPrototype({
               onSave={handleSaveInteractivityAsset}
               onClose={() => setInteractivityEditorAssetId(null)}
             />
+            </div>
           ) : null}
           {scriptEditorAsset ? (
             <ScriptEditorDialog
@@ -10134,7 +10237,9 @@ export function VisualEditorPrototype({
             aria-label="Hierarchy panelの幅を変更"
             title={commandTitle("Hierarchy幅を変更", "ResizePanel.Hierarchy")}
             onPointerDown={(event) => beginResize("hierarchy", event)}
-            className="absolute bottom-0 top-0 z-40 w-1 cursor-col-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70"
+            className={`absolute bottom-0 top-0 z-40 w-1 cursor-col-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70 ${
+              viewportMaximized ? "hidden" : ""
+            }`}
             style={{ left: `calc(${hierarchyTrack} - 2px)` }}
           />
           {deleteDialog ? (
@@ -10172,7 +10277,9 @@ export function VisualEditorPrototype({
             aria-label="Inspector panelの幅を変更"
             title={commandTitle("Inspector幅を変更", "ResizePanel.Inspector")}
             onPointerDown={(event) => beginResize("inspector", event)}
-            className="absolute bottom-0 top-0 z-40 w-1 cursor-col-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70"
+            className={`absolute bottom-0 top-0 z-40 w-1 cursor-col-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70 ${
+              viewportMaximized ? "hidden" : ""
+            }`}
             style={{ right: `calc(${inspectorTrack} - 2px)` }}
           />
           <button
@@ -10180,7 +10287,9 @@ export function VisualEditorPrototype({
             aria-label="Assets panelの高さを変更"
             title={commandTitle("Assets高さを変更", "ResizePanel.Assets")}
             onPointerDown={(event) => beginResize("assets", event)}
-            className="absolute z-40 h-1 cursor-row-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70"
+            className={`absolute z-40 h-1 cursor-row-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70 ${
+              viewportMaximized ? "hidden" : ""
+            }`}
             style={{
               bottom: `calc(${assetsTrack} - 2px)`,
               left: hierarchyTrack,

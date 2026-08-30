@@ -3,7 +3,7 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 103] = [
+pub const MCP_TOOL_NAMES: [&str; 114] = [
     "get_editor_context",
     "get_scripting_capabilities",
     "analyze_component_code",
@@ -83,7 +83,18 @@ pub const MCP_TOOL_NAMES: [&str; 103] = [
     "disconnect_interactivity_socket",
     "delete_interactivity_node",
     "validate_interactivity_asset",
+    "update_interactivity_asset",
+    "simulate_interactivity_asset",
+    "add_interactivity_graph",
+    "update_interactivity_graph",
+    "delete_interactivity_graph",
+    "move_interactivity_node",
+    "duplicate_interactivity_node",
+    "layout_interactivity_graph",
+    "list_interactivity_recipes",
+    "apply_interactivity_recipe",
     "list_interaction_trigger_targets",
+    "configure_interactivity_trigger_action",
     "import_audio_asset",
     "import_texture_asset",
     "import_model_asset",

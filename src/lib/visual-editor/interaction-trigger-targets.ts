@@ -1,6 +1,7 @@
 import {
   getXriftInteractionProperties,
   getXriftInteractionProperty,
+  XRIFT_INTERACTION_SCENE_ENTITY_ID,
   XRIFT_INTERACTION_TARGET_LABELS,
   type XriftInteractionPropertyDescriptor,
   type XriftInteractionTargetKind,
@@ -55,7 +56,24 @@ function componentLabel(
 export function collectInteractionTriggerTargets(
   scene: SceneDocument,
 ): InteractionTriggerTargetEntity[] {
-  const targets: InteractionTriggerTargetEntity[] = [];
+  // The Scene itself comes first: exposure and the screen fade belong to no
+  // Entity, and burying them under an arbitrary one would make an author hunt
+  // for the target of a change that covers the whole view.
+  const targets: InteractionTriggerTargetEntity[] = [
+    {
+      entityId: XRIFT_INTERACTION_SCENE_ENTITY_ID,
+      name: "Scene",
+      path: "Scene 全体",
+      components: [
+        {
+          componentId: "",
+          targetKind: "scene",
+          label: XRIFT_INTERACTION_TARGET_LABELS.scene,
+          properties: getXriftInteractionProperties("scene"),
+        },
+      ],
+    },
+  ];
   const visit = (entityId: string, ancestors: readonly string[]) => {
     const entity = scene.entities[entityId];
     if (!entity) return;
@@ -65,6 +83,24 @@ export function collectInteractionTriggerTargets(
         targetKind: "entity",
         label: ENTITY_SELF_LABEL,
         properties: getXriftInteractionProperties("entity"),
+      },
+      {
+        // Transform belongs to the Entity rather than to a Component the author
+        // can add twice. It still carries a fixed id so the picker can tell it
+        // apart from the Entity's own row, which uses the empty id.
+        componentId: "transform",
+        targetKind: "transform",
+        label: XRIFT_INTERACTION_TARGET_LABELS.transform,
+        properties: getXriftInteractionProperties("transform"),
+      },
+      {
+        // One row for everything this Entity draws: a Material Asset is shared
+        // between Entities, so the write is scoped to this Entity's own copies
+        // rather than to a Material a picker could point anywhere.
+        componentId: "material",
+        targetKind: "material",
+        label: XRIFT_INTERACTION_TARGET_LABELS.material,
+        properties: getXriftInteractionProperties("material"),
       },
     ];
     let audioIndex = 0;
@@ -78,6 +114,20 @@ export function collectInteractionTriggerTargets(
           properties: getXriftInteractionProperties("audio-source"),
         });
         audioIndex += 1;
+      } else if (component.type === "animation") {
+        components.push({
+          componentId: component.id,
+          targetKind: "animation",
+          label: XRIFT_INTERACTION_TARGET_LABELS.animation,
+          properties: getXriftInteractionProperties("animation"),
+        });
+      } else if (component.type === "particle-emitter") {
+        components.push({
+          componentId: component.id,
+          targetKind: "particle",
+          label: XRIFT_INTERACTION_TARGET_LABELS.particle,
+          properties: getXriftInteractionProperties("particle"),
+        });
       } else if (component.type === "light") {
         components.push({
           componentId: component.id,
@@ -123,9 +173,16 @@ export function syncInteractionTriggerEntityReferences(
           asset?.kind === "interactivity"
             ? [
                 ...new Set(
-                  collectXriftInteractionPrograms(asset.extension).flatMap(
-                    (program) => program.actions.map((action) => action.entityId),
-                  ),
+                  collectXriftInteractionPrograms(asset.extension)
+                    .flatMap((program) =>
+                      program.actions.map((action) => action.entityId),
+                    )
+                    // The Scene stand-in is not an Entity, so it is not a
+                    // dependency the compiler has to keep emitting.
+                    .filter(
+                      (entityId) =>
+                        entityId !== XRIFT_INTERACTION_SCENE_ENTITY_ID,
+                    ),
                 ),
               ].sort()
             : [];
@@ -181,6 +238,8 @@ export function describeInteractionTriggerAction(
     property: string;
     mode: "set" | "toggle";
     value: readonly unknown[] | null;
+    /** Seconds the change is spread over. 0 or absent is an immediate write. */
+    durationSeconds?: number;
   },
 ): string {
   const entity = findInteractionTriggerTarget(targets, action.entityId);
@@ -195,7 +254,11 @@ export function describeInteractionTriggerAction(
   if (action.mode === "toggle") {
     return `${where} の${descriptor.label}を切り替える`;
   }
-  return `${where} の${descriptor.label}を ${formatTriggerValue(descriptor, action.value)} にする`;
+  const value = formatTriggerValue(descriptor, action.value);
+  const seconds = action.durationSeconds ?? 0;
+  return seconds > 0
+    ? `${where} の${descriptor.label}を ${seconds}秒かけて ${value} にする`
+    : `${where} の${descriptor.label}を ${value} にする`;
 }
 
 export function formatTriggerValue(
@@ -210,6 +273,15 @@ export function formatTriggerValue(
       return typeof first === "number" ? String(Number(first.toFixed(3))) : "既定値";
     case "color":
       return "指定した色";
+    case "vector3": {
+      const components = (value ?? []).slice(0, 3);
+      if (components.length !== 3 || components.some((entry) => typeof entry !== "number")) {
+        return "既定値";
+      }
+      return components
+        .map((entry) => String(Number((entry as number).toFixed(3))))
+        .join(", ");
+    }
     case "enum": {
       const options = descriptor.options ?? [];
       const option =

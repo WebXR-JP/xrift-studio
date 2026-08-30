@@ -24,6 +24,7 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムの
 - [地形と衝突判定](./terrain-and-colliders.md)
 - [空と水をつくる](./sky-and-water.md)
 - [ノードで動きをつける（Interactivity）](./interactivity.md)
+- [タイムラインを 1 本つくる](./interactivity-timeline.md)
 - [Entity に振る舞いを与える（Scripting）](./scripting.md)
 
 ### 確認と公開
@@ -75,7 +76,8 @@ XRift Studio での制作は、次のような流れで進みます。
 | 空と水をつくる | GLSL で描く空と水面の Material を公式カタログから追加し、Uniform values で調整する。 |
 | 光と色味を整える | Light を置いて色、強度、影、距離を設定する。露出やコントラストなどの色味は一つの compositor でまとめて調整する。 |
 | 外部の素材を取り込む | Poly Haven と ambientCG の CC0 素材、XRift 公式の Shader・Terrain・発光オブジェクト・3Dセット・Component をアプリ内から追加する。 |
-| ノードで動きをつける | KHR_interactivity 準拠のグラフを組み、開始時・毎フレーム・イベントをきっかけに色や再生を動かす。 |
+| ノードで動きをつける | KHR_interactivity 準拠のグラフを組み、開始時・毎フレーム・イベント・インタラクトをきっかけに、待つ・繰り返す・時間をかけて変える。 |
+| タイムラインを 1 本つくる | 白から始めて音を鳴らし扉を開けるまでの 12 秒を、最初から最後まで通しで作る作例。 |
 | Entity に振る舞いを与える | Script Asset を TypeScript で書き、Script Component として Entity へ付けて Play で実行する。 |
 | Editor 内で Play 確認する | 編集状態を保持したまま Play へ切り替え、動作を確認する。 |
 | ローカルで動作を確認する | 開発サーバーを起動・停止し、プレビュー URL をブラウザで開く。 |

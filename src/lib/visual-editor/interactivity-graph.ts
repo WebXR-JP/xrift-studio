@@ -1,7 +1,9 @@
 import { isRecord } from "../json-guards";
 import {
   getInteractivityRuntimeSupport as getRuntimeSupport,
+  parseEasing,
   walkOnStart,
+  type InteractivityEasing,
   type InteractivityRuntimeSupport,
 } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
 import {
@@ -304,6 +306,102 @@ const KHR_INTERACTIVITY_CORE_OPERATIONS = new Set([
   "variable/set",
 ]);
 
+/**
+ * Two-input arithmetic, comparison and logic, generated from one shape.
+ *
+ * These all take `a` and `b` and publish `value`, so writing them out by hand
+ * would be sixteen copies of the same eight lines and a place for one of them
+ * to drift. The socket names match what the engine reads.
+ */
+const MATH_PAIR_OPERATIONS: readonly {
+  op: string;
+  label: string;
+  kind: "float" | "bool";
+}[] = [
+  { op: "math/add", label: "足す", kind: "float" },
+  { op: "math/sub", label: "引く", kind: "float" },
+  { op: "math/mul", label: "掛ける", kind: "float" },
+  { op: "math/div", label: "割る", kind: "float" },
+  { op: "math/min", label: "小さいほう", kind: "float" },
+  { op: "math/max", label: "大きいほう", kind: "float" },
+  { op: "math/eq", label: "等しい", kind: "float" },
+  { op: "math/lt", label: "より小さい", kind: "float" },
+  { op: "math/le", label: "以下", kind: "float" },
+  { op: "math/gt", label: "より大きい", kind: "float" },
+  { op: "math/ge", label: "以上", kind: "float" },
+  { op: "math/and", label: "かつ", kind: "bool" },
+  { op: "math/or", label: "または", kind: "bool" },
+];
+
+const MATH_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
+  ...MATH_PAIR_OPERATIONS.map((entry) => ({
+    op: entry.op,
+    label: entry.label,
+    category: "math" as const,
+    flowInputs: [],
+    flowOutputs: [],
+    valueInputs: ["a", "b"],
+    valueOutputs: ["value"],
+    createNode: (types: Record<string, number>) => ({
+      values: {
+        a: { type: types[entry.kind], value: [entry.kind === "bool" ? false : 0] },
+        b: { type: types[entry.kind], value: [entry.kind === "bool" ? false : 0] },
+      },
+    }),
+  })),
+  {
+    op: "math/not",
+    label: "否定",
+    category: "math",
+    flowInputs: [],
+    flowOutputs: [],
+    valueInputs: ["a"],
+    valueOutputs: ["value"],
+    createNode: (types) => ({ values: { a: { type: types.bool, value: [false] } } }),
+  },
+  {
+    op: "math/random",
+    label: "乱数",
+    category: "math",
+    flowInputs: [],
+    flowOutputs: [],
+    valueInputs: [],
+    valueOutputs: ["value"],
+  },
+  {
+    op: "math/mix",
+    label: "2つの値を混ぜる",
+    category: "math",
+    flowInputs: [],
+    flowOutputs: [],
+    valueInputs: ["a", "b", "c"],
+    valueOutputs: ["value"],
+    createNode: (types) => ({
+      values: {
+        a: { type: types.float, value: [0] },
+        b: { type: types.float, value: [1] },
+        c: { type: types.float, value: [0.5] },
+      },
+    }),
+  },
+  {
+    op: "math/clamp",
+    label: "範囲に収める",
+    category: "math",
+    flowInputs: [],
+    flowOutputs: [],
+    valueInputs: ["a", "b", "c"],
+    valueOutputs: ["value"],
+    createNode: (types) => ({
+      values: {
+        a: { type: types.float, value: [0] },
+        b: { type: types.float, value: [0] },
+        c: { type: types.float, value: [1] },
+      },
+    }),
+  },
+];
+
 export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
   {
     op: "event/onStart",
@@ -442,11 +540,15 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     category: "entity",
     extension: XRIFT_INTERACTION_EXTENSION_NAME,
     flowInputs: ["in"],
-    flowOutputs: ["out"],
-    valueInputs: ["value"],
+    // `out` continues at once; `done` waits for the change to finish, which is
+    // what「2秒かけて動かしてから次」needs. Without it the completion the engine
+    // already sends had nowhere to go.
+    flowOutputs: ["out", "done"],
+    valueInputs: ["value", "duration"],
     valueOutputs: [],
     // A new action starts on the Entity's own visibility: the one property
-    // every Entity has, so the node is complete except for its target.
+    // every Entity has, so the node is complete except for its target. The
+    // duration starts at zero, which is an immediate write.
     createNode: (types) => ({
       configuration: {
         entity: { value: [""] },
@@ -454,7 +556,10 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
         targetKind: { value: ["entity"] },
         property: { value: ["enabled"] },
       },
-      values: { value: { type: types.bool, value: [true] } },
+      values: {
+        value: { type: types.bool, value: [true] },
+        duration: { type: types.float, value: [0] },
+      },
     }),
   },
   {
@@ -484,6 +589,156 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     valueInputs: [],
     valueOutputs: ["value"],
   },
+  {
+    op: "event/receive",
+    label: "イベントを受け取る",
+    category: "event",
+    flowInputs: [],
+    flowOutputs: ["out"],
+    valueInputs: [],
+    valueOutputs: [],
+  },
+  {
+    op: "event/send",
+    label: "イベントを送る",
+    category: "event",
+    flowInputs: ["in"],
+    flowOutputs: ["out"],
+    valueInputs: [],
+    valueOutputs: [],
+  },
+  {
+    op: "flow/sequence",
+    label: "順番に実行",
+    category: "flow",
+    flowInputs: ["in"],
+    // Three outputs is what makes the node usable without a socket editor. The
+    // engine runs whatever is connected, in socket-name order, so adding a
+    // fourth later does not change what an existing graph does.
+    flowOutputs: ["0", "1", "2"],
+    valueInputs: [],
+    valueOutputs: [],
+  },
+  {
+    op: "flow/doN",
+    label: "N回だけ通す",
+    category: "flow",
+    flowInputs: ["in", "reset"],
+    flowOutputs: ["out"],
+    valueInputs: ["n"],
+    valueOutputs: ["currentCount"],
+    createNode: (types) => ({ values: { n: { type: types.int, value: [1] } } }),
+  },
+  {
+    op: "flow/for",
+    label: "回数で繰り返す",
+    category: "flow",
+    flowInputs: ["in"],
+    flowOutputs: ["loopBody", "completed"],
+    valueInputs: ["startIndex", "endIndex"],
+    valueOutputs: ["index"],
+    createNode: (types) => ({
+      values: {
+        startIndex: { type: types.int, value: [0] },
+        endIndex: { type: types.int, value: [3] },
+      },
+    }),
+  },
+  {
+    op: "flow/while",
+    label: "条件の間くり返す",
+    category: "flow",
+    flowInputs: ["in"],
+    flowOutputs: ["loopBody", "completed"],
+    valueInputs: ["condition"],
+    valueOutputs: [],
+    createNode: (types) => ({
+      values: { condition: { type: types.bool, value: [false] } },
+    }),
+  },
+  {
+    op: "flow/multiGate",
+    label: "順番に切り替え",
+    category: "flow",
+    flowInputs: ["in", "reset"],
+    flowOutputs: ["0", "1", "2"],
+    valueInputs: [],
+    valueOutputs: [],
+  },
+  {
+    op: "flow/waitAll",
+    label: "すべて揃うまで待つ",
+    category: "flow",
+    flowInputs: ["0", "1", "reset"],
+    flowOutputs: ["completed", "out"],
+    valueInputs: [],
+    valueOutputs: ["remainingInputs"],
+  },
+  {
+    op: "flow/throttle",
+    label: "連続実行を防ぐ",
+    category: "flow",
+    flowInputs: ["in", "reset"],
+    flowOutputs: ["out", "err"],
+    valueInputs: ["duration"],
+    valueOutputs: ["lastRemainingTime"],
+    createNode: (types) => ({
+      values: { duration: { type: types.float, value: [1] } },
+    }),
+  },
+  {
+    op: "flow/cancelDelay",
+    label: "待機を取り消す",
+    category: "flow",
+    flowInputs: ["in"],
+    flowOutputs: ["out"],
+    valueInputs: ["delay"],
+    valueOutputs: [],
+    createNode: (types) => ({ values: { delay: { type: types.int, value: [0] } } }),
+  },
+  {
+    op: "flow/switch",
+    label: "値で分岐",
+    category: "flow",
+    flowInputs: ["in"],
+    flowOutputs: ["0", "1", "default"],
+    valueInputs: ["selection"],
+    valueOutputs: [],
+    createNode: (types) => ({
+      values: { selection: { type: types.int, value: [0] } },
+    }),
+  },
+  {
+    op: "animation/stopAt",
+    label: "時間を指定して停止",
+    category: "animation",
+    flowInputs: ["in"],
+    flowOutputs: ["out", "err", "done"],
+    valueInputs: ["animation", "stopTime"],
+    valueOutputs: [],
+    createNode: (types) => ({
+      values: {
+        animation: { type: types.int },
+        stopTime: { type: types.float, value: [0] },
+      },
+    }),
+  },
+  {
+    op: "variable/interpolate",
+    label: "変数をゆっくり変える",
+    category: "variable",
+    flowInputs: ["in"],
+    flowOutputs: ["out", "err", "done"],
+    valueInputs: ["value", "duration"],
+    valueOutputs: [],
+    createNode: (types) => ({
+      values: {
+        value: { type: types.float, value: [1] },
+        duration: { type: types.float, value: [1] },
+      },
+    }),
+  },
+  ...MATH_OPERATION_TEMPLATES,
 ];
 
 export function getInteractivityOperationTemplate(
@@ -514,10 +769,7 @@ export type InteractivityRuntimeAdapterEntry = {
 };
 
 const KHR_INTERACTIVITY_IGNORED_FLOW_NOTE =
-  "Play の runtime adapter が未実装のため、この node と、ここから先の flow は動きません。canonical JSON には保存され、公開先でも同じく何も起きません。";
-
-const KHR_INTERACTIVITY_IGNORED_VALUE_NOTE =
-  "Play の runtime adapter は value を評価しないため、この node の値は使われません。canonical JSON には保存され、公開先でも同じく評価されません。";
+  "Play の実行エンジンが未対応の operation です。この node と、ここから先の flow は動きません。canonical JSON には保存され、公開先でも同じく何も起きません。";
 
 /**
  * Why an operation reads the way it does in the Editor.
@@ -529,31 +781,70 @@ const KHR_INTERACTIVITY_IGNORED_VALUE_NOTE =
  */
 const KHR_INTERACTIVITY_RUNTIME_NOTES: Readonly<Record<string, string>> = {
   "event/onStart": "Play の開始時に、この node から flow を辿ります。",
-  "animation/start": "inline の animation index を再生対象に加えます。",
-  "animation/stop":
-    "同じ flow で先に開始した animation の再生を取り消します。すでに再生が始まった animation を途中で止めることはできないため、待機をはさんだ後の停止は動きません。",
-  "flow/branch":
-    "condition が inline の定数のときだけ、その分岐を辿ります。condition を他の node から接続した場合は評価できないため、この node で止まります。",
+  "event/onTick": "毎フレーム、この node から flow を辿ります。",
+  "event/receive": "同じ Asset の `event/send` が送ったイベントを受け取ります。",
+  "event/send":
+    "名前付きイベントを送ります。同じ Asset の `event/receive` が受け取り、Scene 側へも通知します。",
   "flow/setDelay":
-    "duration が inline の定数のときだけ待機します。`done` は待機後、`out` は待機せずに続きます。`cancel` と `err` は未実装です。",
+    "`out` は待たずに続き、`done` は duration 秒後に続きます。`cancel` で待機を取り消せます。",
+  "flow/sequence": "接続した出力を、番号順に上から実行します。",
+  "flow/doN": "この node を通る回数を n 回までに制限します。`reset` で数え直します。",
+  "flow/for": "startIndex から endIndex まで、`loopBody` を繰り返します。",
+  "flow/while": "condition が true の間、`loopBody` を繰り返します。",
+  "flow/multiGate": "通るたびに、接続した出力を順番に切り替えます。",
+  "flow/waitAll": "接続したすべての入力が揃ってから `completed` へ進みます。",
+  "flow/throttle": "duration 秒の間、2 回目以降の入力を `err` へ流します。",
+  "animation/start":
+    "Model の animation を再生します。対象の Model を持つ Entity へ接続されている必要があります。",
+  "animation/stop":
+    "再生中の animation を止めます。対象の Model を持つ Entity へ接続されている必要があります。",
+  "pointer/set":
+    "glTF の値を書き換えます。対象を解決できる Entity または Material へ接続されている必要があります。",
+  "pointer/interpolate":
+    "glTF の値を duration 秒かけて変えます。対象を解決できる接続が必要です。",
+  "pointer/get": "glTF の値を読み取ります。",
   [XRIFT_INTERACTION_OPERATIONS.onInteract]:
     "このグラフをInteraction ComponentでEntityへ接続し、そのEntityに公式のInteractableがあるときに動きます。",
   [XRIFT_INTERACTION_OPERATIONS.setProperty]:
-    "対象Entity、Component、プロパティを選ぶと、インタラクト時にその値を書き込みます。値は定数だけを読みます。",
+    "対象Entity、Component、プロパティへ値を書き込みます。duration を指定すると、その秒数をかけて変化させます。",
   [XRIFT_INTERACTION_OPERATIONS.toggleProperty]:
-    "対象のON/OFFを、インタラクトのたびに反転します。切り替えられるのはON/OFFのプロパティだけです。",
-  "variable/get": KHR_INTERACTIVITY_IGNORED_VALUE_NOTE,
-  "pointer/get": KHR_INTERACTIVITY_IGNORED_VALUE_NOTE,
-  "math/Inf": KHR_INTERACTIVITY_IGNORED_VALUE_NOTE,
+    "対象のON/OFFを、通るたびに反転します。切り替えられるのはON/OFFのプロパティだけです。",
+};
+
+/**
+ * Why an operation the interpreter knows still does not run.
+ *
+ * Kept apart from {@link KHR_INTERACTIVITY_RUNTIME_NOTES}, which says what an
+ * operation does when it runs. Reading the wrong one printed "glTF の値を
+ * 書き換えます" under a「Play未対応」badge — the exact contradiction the badge
+ * exists to prevent.
+ */
+const KHR_INTERACTIVITY_UNSUPPORTED_NOTES: Readonly<Record<string, string>> = {
+  "pointer/get":
+    "glTF Object Model の pointer を解決する接続がまだないため、Play と公開先では動きません。Entity や Material を変えるには「プロパティを変える」を使ってください。",
+  "pointer/set":
+    "glTF Object Model の pointer を解決する接続がまだないため、Play と公開先では動きません。Entity や Material を変えるには「プロパティを変える」を使ってください。",
+  "pointer/interpolate":
+    "glTF Object Model の pointer を解決する接続がまだないため、Play と公開先では動きません。時間をかけた変化は「プロパティを変える」の「かける時間」で作れます。",
 };
 
 export function getInteractivityRuntimeSupport(
   op: string,
 ): InteractivityRuntimeAdapterEntry {
   const support = getRuntimeSupport(op);
+  if (support === "ignored") {
+    return {
+      support,
+      note:
+        KHR_INTERACTIVITY_UNSUPPORTED_NOTES[op] ??
+        KHR_INTERACTIVITY_IGNORED_FLOW_NOTE,
+    };
+  }
   return {
     support,
-    note: KHR_INTERACTIVITY_RUNTIME_NOTES[op] ?? KHR_INTERACTIVITY_IGNORED_FLOW_NOTE,
+    note:
+      KHR_INTERACTIVITY_RUNTIME_NOTES[op] ??
+      "Play の実行エンジンがこの operation を実行します。",
   };
 }
 
@@ -723,13 +1014,25 @@ export type {
   InteractivityAnimationCue,
   InteractivityRuntimeSupport,
 } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
-export { getKhrInteractivityOnStartAnimationCues } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
+export {
+  applyEasing,
+  dryRunInteractivityGraph,
+  getKhrInteractivityOnStartAnimationCues,
+  INTERACTIVITY_EASINGS,
+} from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
+export type { InteractivityEasing } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
+export type {
+  InteractivityDryRun,
+  InteractivityScheduleEntry,
+} from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
 export {
   collectXriftInteractionIssues,
   collectXriftInteractionPrograms,
   getXriftInteractionProperties,
   getXriftInteractionProperty,
+  hasXriftInteractionRuntimeWork,
   hasXriftInteractionTrigger,
+  hasXriftSelfStartingEntry,
   xriftInteractionEnumIndex,
   XRIFT_INTERACTION_EXTENSION_NAME,
   XRIFT_INTERACTION_OPERATIONS,
@@ -753,17 +1056,26 @@ export type {
  * {@link getKhrInteractivityOnStartAnimationCues} is what Play uses.
  */
 /**
- * True when a socket is fed by another node.
+ * Why the engine refused to run a node, in the words the Editor shows.
  *
- * That is the one case the adapter cannot resolve, because it has no
- * expression evaluator. An unwired socket always resolves, to its inline value
- * or to its type default, so it is never reported.
+ * The reasons come from the interpreter itself rather than from a second guess
+ * made here, so the Editor cannot report a node as fine while Play quietly
+ * skips it.
  */
-function isConnectedSocket(
-  socket: KhrInteractivityValueSocket | undefined,
-): boolean {
-  return socket?.node !== undefined;
-}
+const RUNTIME_ISSUE_MESSAGES: Readonly<Record<string, string>> = {
+  "missing-declaration":
+    "declaration を解決できないため、この node と、ここから先の flow は動きません。",
+  "unsupported-operation":
+    "Play の実行エンジンが未対応の operation です。この node と、ここから先の flow は動きません。",
+  "unsupported-by-host":
+    "この操作に必要な接続がありません。対象の Entity・Model・Material へ接続すると動きます。",
+  "value-cycle":
+    "value の接続が循環しています。循環した socket は評価できないため、この入力は使われません。",
+  "invalid-input":
+    "入力値をこの操作に使えません。値を確認してください。",
+  "budget-exceeded":
+    "1 フレームで実行できる回数の上限に達しました。繰り返しの回数か条件を見直してください。",
+};
 
 /**
  * Reports every node the runtime will not run.
@@ -780,58 +1092,43 @@ export function collectInteractivityRuntimeDiagnostics(
   const extension = parseKhrInteractivityExtension(value);
   if (!extension) return [];
   const diagnostics: InteractivityDiagnostic[] = [];
+  const reported = new Set<string>();
+  const push = (path: string, message: string) => {
+    const key = `${path}|${message}`;
+    if (reported.has(key)) return;
+    reported.add(key);
+    diagnostics.push({ severity: "warning", path, message });
+  };
+
   extension.graphs.forEach((graph, graphIndex) => {
     const declarations = graph.declarations ?? [];
-    const nodes = graph.nodes ?? [];
-    nodes.forEach((node, nodeIndex) => {
+    (graph.nodes ?? []).forEach((node, nodeIndex) => {
       const op = declarations[node.declaration]?.op;
       if (!op) return;
-      const path = `$.graphs[${graphIndex}].nodes[${nodeIndex}]`;
       const entry = getInteractivityRuntimeSupport(op);
-      if (entry.support === "ignored") {
-        diagnostics.push({ severity: "warning", path, message: `${op}: ${entry.note}` });
-        return;
-      }
-      // A `conditional` operation only warns when this node's own input is the
-      // part the adapter cannot resolve, so a graph built from inline values
-      // and type defaults stays quiet.
-      const unevaluableInput =
-        (op === "flow/branch" && isConnectedSocket(node.values?.condition)) ||
-        (op === "flow/setDelay" && isConnectedSocket(node.values?.duration));
-      if (unevaluableInput) {
-        diagnostics.push({ severity: "warning", path, message: `${op}: ${entry.note}` });
-        return;
-      }
-      if (
-        (op === "animation/start" || op === "animation/stop") &&
-        isConnectedSocket(node.values?.animation)
-      ) {
-        diagnostics.push({
-          severity: "warning",
-          path,
-          message: `${op}: animation index を他の node から接続しているため、対象の clip を決められません。この node と、ここから先の flow は動きません。`,
-        });
-      }
+      if (entry.support !== "ignored") return;
+      push(`$.graphs[${graphIndex}].nodes[${nodeIndex}]`, `${op}: ${entry.note}`);
     });
   });
+
   // An Interaction Trigger action is not unsupported, it is unfinished: the
   // author still has to say which Entity and property it writes. Reporting it
   // here puts it in the same list as everything else Play will not run.
   for (const issue of collectXriftInteractionIssues(value)) {
-    diagnostics.push({
-      severity: "warning",
-      path: `$.graphs[${issue.graphIndex}].nodes[${issue.nodeIndex}]`,
-      message: `${issue.op}: ${INTERACTION_ISSUE_MESSAGES[issue.reason]}`,
-    });
+    push(
+      `$.graphs[${issue.graphIndex}].nodes[${issue.nodeIndex}]`,
+      `${issue.op}: ${INTERACTION_ISSUE_MESSAGES[issue.reason]}`,
+    );
   }
-  // Path-dependent findings come from the walk itself, so the Editor cannot
-  // report a node as fine while the adapter quietly refuses to run it.
+
+  // Path-dependent findings come from running the graph, so a node the engine
+  // stops at is reported even when its operation is implemented.
   for (const issue of walkOnStart(value).issues) {
-    diagnostics.push({
-      severity: "warning",
-      path: `$.graphs[${issue.graphIndex}].nodes[${issue.nodeIndex}]`,
-      message: `${issue.op}: この停止より前に再生が始まるため、Play では止まりません。再生中の animation を途中で止める adapter は未実装です。`,
-    });
+    const detail = issue.detail ? `（${issue.detail}）` : "";
+    push(
+      `$.graphs[${issue.graphIndex}].nodes[${issue.nodeIndex}]`,
+      `${issue.op ?? "declaration"}: ${RUNTIME_ISSUE_MESSAGES[issue.reason] ?? issue.reason}${detail}`,
+    );
   }
   return diagnostics;
 }
@@ -909,9 +1206,10 @@ export function defaultTriggerActionValue(
       return [Boolean(descriptor.defaultValue)];
     case "float":
       return [Number(descriptor.defaultValue)];
-    case "color": {
-      const color = descriptor.defaultValue as readonly [number, number, number];
-      return [color[0], color[1], color[2]];
+    case "color":
+    case "vector3": {
+      const components = descriptor.defaultValue as readonly [number, number, number];
+      return [components[0], components[1], components[2]];
     }
     case "enum":
       return [xriftInteractionEnumIndex(descriptor, String(descriptor.defaultValue))];
@@ -933,7 +1231,7 @@ export function setInteractivityTriggerActionValue(
       ? "bool"
       : descriptor.kind === "float"
         ? "float"
-        : descriptor.kind === "color"
+        : descriptor.kind === "color" || descriptor.kind === "vector3"
           ? "float3"
           : "int";
   const existing = graph.types.findIndex((type) => type.signature === signature);
@@ -943,6 +1241,66 @@ export function setInteractivityTriggerActionValue(
     value: { type: typeIndex, value },
   };
   return true;
+}
+
+/**
+ * How long an action takes, and how the change is distributed over that time.
+ *
+ * Both live on the node rather than in a second node: "move this over two
+ * seconds" is one thought, and splitting it into a write plus an interpolator
+ * is what makes a simple sequence read like a circuit diagram.
+ */
+export function setInteractivityTriggerActionDuration(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+  seconds: number,
+): boolean {
+  const node = graph.nodes?.[nodeIndex];
+  if (!node || !Number.isFinite(seconds)) return false;
+  graph.types ??= [];
+  const existing = graph.types.findIndex((type) => type.signature === "float");
+  const typeIndex =
+    existing >= 0 ? existing : graph.types.push({ signature: "float" }) - 1;
+  node.values = {
+    ...(node.values ?? {}),
+    duration: { type: typeIndex, value: [Math.max(0, seconds)] },
+  };
+  return true;
+}
+
+export function readInteractivityTriggerActionDuration(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+): number {
+  const socket = graph.nodes?.[nodeIndex]?.values?.duration;
+  if (!socket || socket.node !== undefined) return 0;
+  const first = socket.value?.[0];
+  return typeof first === "number" && Number.isFinite(first) && first > 0
+    ? first
+    : 0;
+}
+
+export function setInteractivityTriggerActionEasing(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+  easing: string,
+): boolean {
+  const node = graph.nodes?.[nodeIndex];
+  if (!node) return false;
+  node.configuration = {
+    ...(node.configuration ?? {}),
+    easing: { value: [easing] },
+  };
+  return true;
+}
+
+export function readInteractivityTriggerActionEasing(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+): InteractivityEasing {
+  return parseEasing(
+    graph.nodes?.[nodeIndex]?.configuration?.easing?.value?.[0],
+  );
 }
 
 /** Reads an action's target, for the Editor's pickers and node summaries. */
@@ -1232,7 +1590,10 @@ export function validateKhrInteractivityExtension(
     }
     if (nodes.length > 1024) error(`${graphPath}.nodes`, "XRift Studio supports up to 1024 nodes per graph");
 
-    const flowEdges = new Map<number, number[]>();
+    // Value connections are checked for cycles; flow connections are not,
+    // because a flow cycle is how a graph repeats. The engine bounds a loop with
+    // an activation budget rather than forbidding it here.
+    const valueEdges = new Map<number, number[]>();
     nodes.forEach((node, nodeIndex) => {
       const nodePath = `${graphPath}.nodes[${nodeIndex}]`;
       if (!isRecord(node) || !isNonNegativeInteger(node.declaration)) {
@@ -1268,8 +1629,12 @@ export function validateKhrInteractivityExtension(
           if (hasNode && hasValue) {
             error(`${nodePath}.values.${socket}`, "value socket cannot contain both node and inline value");
           }
-          if (hasNode && (!isNonNegativeInteger(input.node) || input.node >= nodeIndex)) {
-            error(`${nodePath}.values.${socket}.node`, "value source must reference an earlier node");
+          if (hasNode && (!isNonNegativeInteger(input.node) || input.node >= nodes.length)) {
+            error(`${nodePath}.values.${socket}.node`, "value source must reference a node in this graph");
+          } else if (hasNode && isNonNegativeInteger(input.node)) {
+            const sources = valueEdges.get(nodeIndex) ?? [];
+            sources.push(input.node);
+            valueEdges.set(nodeIndex, sources);
           }
           if (hasValue) {
             validateTypedValue(input.value, input.type, `${nodePath}.values.${socket}`);
@@ -1287,13 +1652,9 @@ export function validateKhrInteractivityExtension(
       }
       if (isRecord(node.flows)) {
         for (const [socket, target] of Object.entries(node.flows)) {
-          if (!isRecord(target) || !isNonNegativeInteger(target.node) || target.node <= nodeIndex || target.node >= nodes.length) {
-            error(`${nodePath}.flows.${socket}.node`, "flow target must reference a later node");
-            continue;
+          if (!isRecord(target) || !isNonNegativeInteger(target.node) || target.node >= nodes.length) {
+            error(`${nodePath}.flows.${socket}.node`, "flow target must reference a node in this graph");
           }
-          const targets = flowEdges.get(nodeIndex) ?? [];
-          targets.push(target.node);
-          flowEdges.set(nodeIndex, targets);
         }
       }
     });
@@ -1304,16 +1665,79 @@ export function validateKhrInteractivityExtension(
       if (visiting.has(nodeIndex)) return true;
       if (visited.has(nodeIndex)) return false;
       visiting.add(nodeIndex);
-      const cyclic = (flowEdges.get(nodeIndex) ?? []).some(visit);
+      const cyclic = (valueEdges.get(nodeIndex) ?? []).some(visit);
       visiting.delete(nodeIndex);
       visited.add(nodeIndex);
       return cyclic;
     };
     if (nodes.some((_, nodeIndex) => visit(nodeIndex))) {
-      error(`${graphPath}.nodes`, "behavior graph flow contains a cycle");
+      error(`${graphPath}.nodes`, "behavior graph value connections contain a cycle");
     }
   });
   return diagnostics;
+}
+
+export const KHR_INTERACTIVITY_MAX_GRAPHS = 64;
+
+/**
+ * Document operations on the list of graphs inside one Asset.
+ *
+ * An Asset has always been able to hold several graphs — the schema allows up
+ * to 64 — but nothing could create, copy or remove one, so the list was a
+ * feature only a hand-written JSON file could use. These keep the default-graph
+ * index consistent, which is the part that silently breaks when a graph in the
+ * middle disappears.
+ */
+export function addInteractivityGraph(
+  extension: KhrInteractivityExtension,
+  name: string,
+): number {
+  if (extension.graphs.length >= KHR_INTERACTIVITY_MAX_GRAPHS) return -1;
+  // No empty `types` array: the schema treats a present-but-empty one as an
+  // error, so a freshly added graph would be unsaveable until its first node.
+  extension.graphs.push({ name });
+  return extension.graphs.length - 1;
+}
+
+export function duplicateInteractivityGraph(
+  extension: KhrInteractivityExtension,
+  graphIndex: number,
+): number {
+  const source = extension.graphs[graphIndex];
+  if (!source || extension.graphs.length >= KHR_INTERACTIVITY_MAX_GRAPHS) {
+    return -1;
+  }
+  const copy = JSON.parse(JSON.stringify(source)) as KhrInteractivityGraph;
+  copy.name = `${source.name || `Graph ${graphIndex + 1}`} のコピー`;
+  extension.graphs.push(copy);
+  return extension.graphs.length - 1;
+}
+
+export function renameInteractivityGraph(
+  extension: KhrInteractivityExtension,
+  graphIndex: number,
+  name: string,
+): boolean {
+  const graph = extension.graphs[graphIndex];
+  if (!graph) return false;
+  graph.name = name;
+  return true;
+}
+
+/** Removes one graph, keeping the default-graph index pointing where it did. */
+export function removeInteractivityGraph(
+  extension: KhrInteractivityExtension,
+  graphIndex: number,
+): boolean {
+  if (extension.graphs.length <= 1 || !extension.graphs[graphIndex]) return false;
+  extension.graphs.splice(graphIndex, 1);
+  const current = extension.graph ?? 0;
+  if (current === graphIndex) {
+    extension.graph = 0;
+  } else if (current > graphIndex) {
+    extension.graph = current - 1;
+  }
+  return true;
 }
 
 export function addDefaultInteractivityAsset(
@@ -1373,4 +1797,268 @@ export function updateInteractivityAsset(
       [assetId]: { ...asset, extension: cloneKhrInteractivityExtension(extension) },
     },
   };
+}
+
+/**
+ * Node layout, shared by the Editor canvas and the MCP tools.
+ *
+ * Placement lived in the canvas component while the graph was only ever built
+ * by hand. A client that adds nodes through MCP lands on the same document, so
+ * "add", "duplicate" and "整列" have to put cards in the same places from both
+ * sides — otherwise a graph an AI wrote opens as a stack of overlapping cards
+ * and the author's first act is to press 整列.
+ */
+export const INTERACTIVITY_NODE_CARD_WIDTH = 256;
+const INTERACTIVITY_SOCKET_ROW_HEIGHT = 24;
+const INTERACTIVITY_SOCKET_ROW_PADDING = 8;
+const INTERACTIVITY_NODE_PLACEMENT_GAP = 32;
+const INTERACTIVITY_LAYOUT_COLUMN_GAP = 88;
+const INTERACTIVITY_LAYOUT_ROW_GAP = 40;
+
+export function isInteractivityTriggerActionOp(op: string | undefined): boolean {
+  return (
+    op === XRIFT_INTERACTION_OPERATIONS.setProperty ||
+    op === XRIFT_INTERACTION_OPERATIONS.toggleProperty
+  );
+}
+
+/** The height the canvas will give a card, from its socket count. */
+export function estimateInteractivityNodeHeight(
+  graph: KhrInteractivityGraph,
+  index: number,
+): number {
+  const node = graph.nodes?.[index];
+  const op = node ? graph.declarations?.[node.declaration]?.op : undefined;
+  const template = op ? getInteractivityOperationTemplate(op) : undefined;
+  const inputs =
+    (template?.flowInputs ?? ["in"]).length + (template?.valueInputs ?? []).length;
+  const outputs =
+    (template?.flowOutputs ?? []).length + (template?.valueOutputs ?? []).length;
+  const rows = Math.max(inputs, outputs, 1);
+  // Header: category row, up to two title lines, the operation name, and the
+  // optional summary an Interaction Trigger action carries.
+  const header = op && isInteractivityTriggerActionOp(op) ? 112 : 92;
+  return (
+    header +
+    rows * INTERACTIVITY_SOCKET_ROW_HEIGHT +
+    INTERACTIVITY_SOCKET_ROW_PADDING * 2
+  );
+}
+
+/**
+ * Nudges a candidate position until it does not land on an existing node.
+ *
+ * Dropping a new node exactly on top of another is what made "add" feel like
+ * nothing happened: the card was there, underneath the one already in view.
+ */
+export function freeInteractivityNodePosition(
+  graph: KhrInteractivityGraph,
+  candidate: { x: number; y: number },
+): { x: number; y: number } {
+  const placed = (graph.nodes ?? []).map((node, index) => ({
+    position: readInteractivityNodePosition(node, index),
+    height: estimateInteractivityNodeHeight(graph, index),
+  }));
+  let { x, y } = candidate;
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const blocking = placed.find(
+      (entry) =>
+        Math.abs(entry.position.x - x) <
+          INTERACTIVITY_NODE_CARD_WIDTH + INTERACTIVITY_NODE_PLACEMENT_GAP &&
+        y < entry.position.y + entry.height + INTERACTIVITY_NODE_PLACEMENT_GAP &&
+        y + entry.height > entry.position.y - INTERACTIVITY_NODE_PLACEMENT_GAP,
+    );
+    if (!blocking) break;
+    y = blocking.position.y + blocking.height + INTERACTIVITY_NODE_PLACEMENT_GAP;
+  }
+  return { x: Math.round(x), y: Math.round(y) };
+}
+
+/** Lays the graph out left to right in flow order. Mutates `graph`. */
+export function autoLayoutInteractivityGraph(graph: KhrInteractivityGraph): void {
+  const nodes = graph.nodes ?? [];
+  if (nodes.length === 0) return;
+  const depth = new Array<number>(nodes.length).fill(0);
+  const hasFlow = new Array<boolean>(nodes.length).fill(false);
+
+  const flowEdges: [number, number][] = [];
+  const valueEdges: [number, number][] = [];
+  nodes.forEach((node, index) => {
+    for (const target of Object.values(node.flows ?? {})) {
+      if (target.node >= nodes.length) continue;
+      flowEdges.push([index, target.node]);
+      hasFlow[index] = true;
+      hasFlow[target.node] = true;
+    }
+    for (const input of Object.values(node.values ?? {})) {
+      if (input.node === undefined || input.node >= nodes.length) continue;
+      valueEdges.push([input.node, index]);
+    }
+  });
+
+  // Bounded relaxation rather than a topological sort: a loop is legal here, and
+  // capping the passes is what keeps one from running forever.
+  for (let pass = 0; pass < nodes.length; pass += 1) {
+    let moved = false;
+    for (const [from, to] of flowEdges) {
+      const candidate = (depth[from] ?? 0) + 1;
+      if (candidate > (depth[to] ?? 0)) {
+        depth[to] = candidate;
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  // A node that only feeds a value goes just left of its consumer.
+  for (const [from, to] of valueEdges) {
+    if (hasFlow[from]) continue;
+    depth[from] = Math.max(0, (depth[to] ?? 0) - 1);
+  }
+
+  const columns = new Map<number, number[]>();
+  depth.forEach((column, index) => {
+    const existing = columns.get(column) ?? [];
+    existing.push(index);
+    columns.set(column, existing);
+  });
+
+  for (const [column, indices] of columns) {
+    indices.sort((left, right) => {
+      const leftY = readInteractivityNodePosition(nodes[left]!, left).y;
+      const rightY = readInteractivityNodePosition(nodes[right]!, right).y;
+      return leftY - rightY || left - right;
+    });
+    let y = 0;
+    for (const index of indices) {
+      const node = nodes[index];
+      if (!node) continue;
+      nodes[index] = writeInteractivityNodePosition(node, {
+        x: column * (INTERACTIVITY_NODE_CARD_WIDTH + INTERACTIVITY_LAYOUT_COLUMN_GAP),
+        y,
+      });
+      y +=
+        estimateInteractivityNodeHeight(graph, index) + INTERACTIVITY_LAYOUT_ROW_GAP;
+    }
+  }
+}
+
+/**
+ * Copies one node, without its connections.
+ *
+ * Values and configuration come along; connections do not. A copy that arrived
+ * already wired would put two writers on one flow socket.
+ */
+export function duplicateInteractivityNode(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+): number {
+  const original = graph.nodes?.[nodeIndex];
+  if (!original) return -1;
+  const anchor = readInteractivityNodePosition(original, nodeIndex);
+  const copy = JSON.parse(JSON.stringify(original)) as KhrInteractivityNode;
+  delete copy.flows;
+  if (copy.values) {
+    copy.values = Object.fromEntries(
+      Object.entries(copy.values).filter(([, input]) => input.node === undefined),
+    );
+    if (Object.keys(copy.values).length === 0) delete copy.values;
+  }
+  graph.nodes ??= [];
+  graph.nodes.push(
+    writeInteractivityNodePosition(
+      copy,
+      freeInteractivityNodePosition(graph, { x: anchor.x, y: anchor.y + 48 }),
+    ),
+  );
+  return graph.nodes.length - 1;
+}
+
+/**
+ * One node lifted out of a graph, ready to be placed in another one.
+ *
+ * Duplicating inside a graph can copy the node as-is, because its `declaration`
+ * and its inline `type` indexes already point at the right entries. Across
+ * graphs both are meaningless — index 2 is a different operation and a
+ * different signature over there — so a copy carries the names instead, and
+ * paste resolves them against wherever it lands.
+ */
+export type InteractivityNodeClipboard = {
+  readonly op: string;
+  readonly extension?: string;
+  readonly node: KhrInteractivityNode;
+  /** Signature per inline value socket, so paste can rebuild the type indexes. */
+  readonly signatures: Readonly<Record<string, string>>;
+};
+
+export function readInteractivityNodeForCopy(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+): InteractivityNodeClipboard | null {
+  const node = graph.nodes?.[nodeIndex];
+  const declaration = node ? graph.declarations?.[node.declaration] : undefined;
+  if (!node || !declaration) return null;
+  const copy = cloneJson(node);
+  // Connections do not come along. A pasted node that arrived already wired
+  // would put two writers on one socket, and across graphs the indexes it
+  // carried would point at whatever happens to sit there.
+  delete copy.flows;
+  const signatures: Record<string, string> = {};
+  if (copy.values) {
+    copy.values = Object.fromEntries(
+      Object.entries(copy.values).filter(([socket, input]) => {
+        if (input.node !== undefined) return false;
+        const signature =
+          input.type === undefined ? undefined : graph.types?.[input.type]?.signature;
+        if (signature) signatures[socket] = signature;
+        return true;
+      }),
+    );
+    if (Object.keys(copy.values).length === 0) delete copy.values;
+  }
+  return {
+    op: declaration.op,
+    ...(declaration.extension ? { extension: declaration.extension } : {}),
+    node: copy,
+    signatures,
+  };
+}
+
+/** Places a copied node in `graph`, resolving its declaration and types there. */
+export function pasteInteractivityNode(
+  graph: KhrInteractivityGraph,
+  entry: InteractivityNodeClipboard,
+  position?: { x: number; y: number },
+): number {
+  const node = cloneJson(entry.node);
+  graph.declarations ??= [];
+  let declaration = graph.declarations.findIndex(
+    (candidate) =>
+      candidate.op === entry.op && candidate.extension === entry.extension,
+  );
+  if (declaration < 0) {
+    graph.declarations.push({
+      op: entry.op,
+      ...(entry.extension ? { extension: entry.extension } : {}),
+    });
+    declaration = graph.declarations.length - 1;
+  }
+  node.declaration = declaration;
+  if (node.values) {
+    graph.types ??= [];
+    for (const [socket, input] of Object.entries(node.values)) {
+      const signature = entry.signatures[socket];
+      if (!signature) continue;
+      const existing = graph.types.findIndex(
+        (candidate) => candidate.signature === signature,
+      );
+      input.type =
+        existing >= 0 ? existing : graph.types.push({ signature }) - 1;
+    }
+  }
+  graph.nodes ??= [];
+  const anchor = position ?? readInteractivityNodePosition(node, graph.nodes.length);
+  graph.nodes.push(
+    writeInteractivityNodePosition(node, freeInteractivityNodePosition(graph, anchor)),
+  );
+  return graph.nodes.length - 1;
 }

@@ -2,10 +2,17 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
+import {
+  XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY,
+  createXriftAnimationRuntimeBridge,
+  type XriftAnimationRuntimeBridge,
+} from "../../../packages/xrift-studio-runtime/src/script/animation";
+import { createXriftAnimationMixerController } from "../../../packages/xrift-studio-runtime/src/script/animation-mixer";
 import {
   GLTFLoader,
   type GLTF,
@@ -539,8 +546,65 @@ function ProjectModelRender({
     selectedClipIndex,
   ]);
 
+  // Live control, separate from the cue list above: the cues say what starts
+  // when Play begins, and the bridge is how a running graph pauses, seeks,
+  // switches or re-times that same clip afterwards.
+  const animationComponentId = animation?.id;
+  const animationLoop = animation?.loop ?? false;
+  const animationBridgeRef = useRef<XriftAnimationRuntimeBridge | null>(null);
+  const animationBridgeActiveRef = useRef(false);
+
+  useEffect(() => {
+    if (!mixer || !renderedObject || !animationComponentId || !playing) return;
+    const bridge = createXriftAnimationRuntimeBridge({
+      componentId: animationComponentId,
+      clipNames: animations.map((clip) => clip.name),
+      clipIndex: Math.max(0, selectedClipIndex),
+      // The cue list already performs autoplay; starting it here as well would
+      // give one clip two owners fighting over its start time.
+      autoplay: false,
+      speed: animationSpeed,
+      loop: animationLoop,
+    });
+    const controller = createXriftAnimationMixerController({
+      mixer,
+      clips: animations,
+      clipIndex: Math.max(0, selectedClipIndex),
+      loop: animationLoop,
+      speed: animationSpeed,
+      onActiveChange: (active) => {
+        animationBridgeActiveRef.current = active;
+        invalidate();
+      },
+    });
+    const disconnect = bridge.connect(controller);
+    const holder = renderedObject.userData as Record<string, unknown>;
+    holder[XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY] = bridge;
+    animationBridgeRef.current = bridge;
+    return () => {
+      disconnect();
+      controller.dispose();
+      delete holder[XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY];
+      animationBridgeRef.current = null;
+      animationBridgeActiveRef.current = false;
+    };
+  }, [
+    animationComponentId,
+    animationLoop,
+    animationSpeed,
+    animations,
+    invalidate,
+    mixer,
+    playing,
+    renderedObject,
+    selectedClipIndex,
+  ]);
+
   useFrame((frame, delta) => {
-    if (playbackActive) mixer?.update(Math.min(delta, 0.1));
+    if (playbackActive || animationBridgeActiveRef.current) {
+      mixer?.update(Math.min(delta, 0.1));
+    }
+    animationBridgeRef.current?.sample();
     const elapsed = frame.clock.getElapsedTime();
     renderedModel?.ownedMaterials.forEach((material) => {
       const shader = material as ShaderMaterial;

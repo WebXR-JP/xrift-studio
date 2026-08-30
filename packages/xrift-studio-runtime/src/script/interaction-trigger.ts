@@ -33,23 +33,75 @@ export type XriftInteractionOperation =
  * set is deliberately small: a property belongs here only when Play and the
  * published world apply it through the same runtime bridge.
  */
-export type XriftInteractionTargetKind = "entity" | "audio-source" | "light";
+export type XriftInteractionTargetKind =
+  | "entity"
+  | "transform"
+  | "animation"
+  | "audio-source"
+  | "light"
+  | "particle"
+  | "material"
+  | "scene";
+
+/**
+ * Stand-in Entity id for Scene-wide targets.
+ *
+ * Exposure and the screen fade belong to no Entity, but an action still needs
+ * something in the `entity` slot: it is what the Editor's picker selects and
+ * what the trigger records as a dependency. A reserved id keeps the shape of
+ * every other action instead of making Scene actions a second format.
+ */
+export const XRIFT_INTERACTION_SCENE_ENTITY_ID = "__xrift_scene__" as const;
 
 export const XRIFT_INTERACTION_TARGET_KINDS: readonly XriftInteractionTargetKind[] = [
   "entity",
+  "transform",
+  "animation",
   "audio-source",
   "light",
+  "particle",
+  "material",
+  "scene",
 ];
 
 export const XRIFT_INTERACTION_TARGET_LABELS: Readonly<
   Record<XriftInteractionTargetKind, string>
 > = {
   entity: "Entity",
+  transform: "Transform",
+  animation: "Animation",
   "audio-source": "Audio Source",
   light: "Light",
+  particle: "Particle",
+  material: "Material",
+  scene: "Scene",
 };
 
-export type XriftInteractionPropertyKind = "bool" | "float" | "color" | "enum";
+export type XriftInteractionPropertyKind =
+  | "bool"
+  | "float"
+  | "color"
+  | "vector3"
+  | "enum";
+
+/**
+ * Targets that belong to the Entity rather than to one of its Components.
+ *
+ * A Component target needs an id so two Audio Sources on one Entity stay
+ * distinguishable; an Entity-scoped one has nothing to distinguish, so
+ * requiring an id there would make a complete action look unfinished.
+ */
+export const XRIFT_INTERACTION_ENTITY_SCOPED_TARGETS: ReadonlySet<string> =
+  new Set<XriftInteractionTargetKind>([
+    "entity",
+    "transform",
+    "material",
+    "scene",
+  ]);
+
+export function isXriftInteractionEntityScoped(target: string): boolean {
+  return XRIFT_INTERACTION_ENTITY_SCOPED_TARGETS.has(target);
+}
 
 export type XriftInteractionPropertyOption = {
   value: string;
@@ -87,6 +139,208 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     description: "Entityとその子の表示を切り替えます。物理コライダーは残ります。",
     kind: "bool",
     defaultValue: true,
+  },
+  {
+    target: "transform",
+    name: "position",
+    label: "位置",
+    description:
+      "Entityの位置を、親から見たXYZ（メートル）で設定します。Playを止めると元の位置に戻ります。",
+    kind: "vector3",
+    defaultValue: [0, 0, 0],
+  },
+  {
+    target: "transform",
+    name: "rotation",
+    label: "回転",
+    description:
+      "EntityのXYZ回転を度で設定します。Playを止めると元の回転に戻ります。",
+    kind: "vector3",
+    defaultValue: [0, 0, 0],
+  },
+  {
+    target: "transform",
+    name: "scale",
+    label: "大きさ",
+    description:
+      "EntityのXYZ倍率を設定します。0にすると見えなくなります。Playを止めると元に戻ります。",
+    kind: "vector3",
+    defaultValue: [1, 1, 1],
+  },
+  {
+    target: "animation",
+    name: "playing",
+    label: "再生中",
+    description:
+      "AnimationのclipをONで再生し、OFFで止めます。押したときに動かすには、AnimationのAutoplayをオフにしておきます。",
+    kind: "bool",
+    defaultValue: true,
+  },
+  {
+    target: "animation",
+    name: "clip",
+    label: "クリップ番号",
+    description:
+      "再生するclipを番号で選びます。0がModelの最初のclipです。範囲外の番号は最後のclipになります。",
+    kind: "float",
+    defaultValue: 0,
+    min: 0,
+    max: 63,
+    step: 1,
+  },
+  {
+    target: "animation",
+    name: "speed",
+    label: "再生速度",
+    description: "1で等速、0.5で半分の速さになります。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0.01,
+    max: 10,
+    step: 0.05,
+  },
+  {
+    target: "animation",
+    name: "time",
+    label: "再生位置",
+    description: "clipの先頭からの秒数へ移動します。再生中なら、その位置から続けます。",
+    kind: "float",
+    defaultValue: 0,
+    min: 0,
+    max: 600,
+    step: 0.1,
+  },
+  {
+    target: "material",
+    name: "baseColor",
+    label: "色",
+    description:
+      "このEntityが描くMaterialの色を変えます。Entity内のすべてのMaterialが対象です。Playを止めると元へ戻ります。",
+    kind: "color",
+    defaultValue: [1, 1, 1],
+  },
+  {
+    target: "material",
+    name: "emissive",
+    label: "発光色",
+    description:
+      "自己発光の色を変えます。Bloomと合わせると光って見えます。値はリニア空間のRGBです。",
+    kind: "color",
+    defaultValue: [0, 0, 0],
+  },
+  {
+    target: "material",
+    name: "emissiveIntensity",
+    label: "発光の強さ",
+    description: "発光色の強さを変えます。0で消灯します。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0,
+    max: 10,
+    step: 0.05,
+  },
+  {
+    target: "material",
+    name: "opacity",
+    label: "不透明度",
+    description:
+      "1で不透明、0で透明になります。1未満にすると半透明として描きます。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0,
+    max: 1,
+    step: 0.01,
+  },
+  {
+    target: "particle",
+    name: "emitting",
+    label: "放出",
+    description:
+      "ONで粒を出し、OFFで止めて消します。押したときに出すには、最初はOFFにしておきます。",
+    kind: "bool",
+    defaultValue: true,
+  },
+  {
+    target: "particle",
+    name: "restart",
+    label: "出し直す",
+    description:
+      "この値を書き込むたびに、粒を最初から出し直します。一瞬だけ吹き出す表現に使います。",
+    kind: "bool",
+    defaultValue: true,
+  },
+  {
+    target: "particle",
+    name: "emissionRate",
+    label: "放出量",
+    description: "1秒あたりに出る粒の数を上書きします。",
+    kind: "float",
+    defaultValue: 20,
+    min: 0,
+    max: 1000,
+    step: 1,
+  },
+  {
+    target: "particle",
+    name: "sizeMultiplier",
+    label: "粒の大きさ",
+    description: "1で元の大きさ、2で倍になります。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0,
+    max: 10,
+    step: 0.05,
+  },
+  {
+    target: "particle",
+    name: "opacity",
+    label: "粒の不透明度",
+    description: "0で見えなくなり、1で元の濃さになります。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0,
+    max: 1,
+    step: 0.01,
+  },
+  {
+    target: "particle",
+    name: "color",
+    label: "粒の色",
+    description: "粒の色を変えます。値はリニア空間のRGBで保存されます。",
+    kind: "color",
+    defaultValue: [1, 1, 1],
+  },
+  {
+    target: "scene",
+    name: "exposure",
+    label: "露出",
+    description:
+      "画面全体の明るさを設定します。1が既定です。Playを止めるとSceneの設定へ戻ります。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0,
+    max: 8,
+    step: 0.05,
+  },
+  {
+    target: "scene",
+    name: "fade",
+    label: "画面のフェード",
+    description:
+      "0で世界が見え、1で画面全体を覆います。時間をかけて変えるとホワイトアウトや暗転になります。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0,
+    max: 1,
+    step: 0.01,
+  },
+  {
+    target: "scene",
+    name: "fadeColor",
+    label: "フェードの色",
+    description: "画面を覆う色です。値はリニア空間のRGBで保存されます。",
+    kind: "color",
+    defaultValue: [1, 1, 1],
   },
   {
     target: "audio-source",
@@ -173,6 +427,8 @@ export type XriftInteractionValue =
   | { kind: "float"; value: number }
   /** Linear-light RGB, matching how KHR_interactivity stores glTF colour factors. */
   | { kind: "color"; value: [number, number, number] }
+  /** Position, rotation in degrees, or scale. */
+  | { kind: "vector3"; value: [number, number, number] }
   | { kind: "enum"; value: string };
 
 export type XriftInteractionAction = {
@@ -275,6 +531,21 @@ function readActionValue(
       const [red, green, blue] = channels as [number, number, number];
       return { kind: "color", value: [red, green, blue] };
     }
+    case "vector3": {
+      if (first === undefined) {
+        const fallback = descriptor.defaultValue as readonly [number, number, number];
+        return { kind: "vector3", value: [fallback[0], fallback[1], fallback[2]] };
+      }
+      const components = values.slice(0, 3);
+      if (
+        components.length !== 3 ||
+        components.some((entry) => typeof entry !== "number" || !Number.isFinite(entry))
+      ) {
+        return null;
+      }
+      const [x, y, z] = components as [number, number, number];
+      return { kind: "vector3", value: [x, y, z] };
+    }
     case "enum": {
       const options = descriptor.options ?? [];
       if (first === undefined) {
@@ -314,14 +585,26 @@ type ParsedGraph = {
   operationFor: (node: Record<string, unknown> | undefined) => string | undefined;
 };
 
-function parseSelectedGraph(value: unknown): ParsedGraph | null {
+/**
+ * Every graph in the Asset.
+ *
+ * The trigger runtime runs them all — an Asset holds several so they can
+ * compose — so the compiler's dependency list and the Editor's diagnostics have
+ * to look at all of them too. Reading only the default graph made an action in
+ * the second one invisible to both.
+ */
+function parseAllGraphs(value: unknown): ParsedGraph[] {
   const extension = asRecord(value);
   const graphs = Array.isArray(extension?.graphs) ? extension.graphs : [];
-  const rawIndex = extension?.graph;
-  const graphIndex =
-    typeof rawIndex === "number" && Number.isInteger(rawIndex) && rawIndex >= 0
-      ? rawIndex
-      : 0;
+  return graphs.flatMap((_candidate, index) => {
+    const parsed = parseGraphAt(value, index);
+    return parsed ? [parsed] : [];
+  });
+}
+
+function parseGraphAt(value: unknown, graphIndex: number): ParsedGraph | null {
+  const extension = asRecord(value);
+  const graphs = Array.isArray(extension?.graphs) ? extension.graphs : [];
   const graph = asRecord(graphs[graphIndex]);
   if (!graph) return null;
   const declarations = Array.isArray(graph.declarations) ? graph.declarations : [];
@@ -356,9 +639,9 @@ function readAction(
   if (!entityId || !target || !property) return null;
   const descriptor = getXriftInteractionProperty(target, property);
   if (!descriptor) return null;
-  // Only the Entity itself is component-less; every Component target needs an id
-  // so two Audio Sources on one Entity stay distinguishable.
-  if (descriptor.target !== "entity" && !componentId) return null;
+  if (!isXriftInteractionEntityScoped(descriptor.target) && !componentId) {
+    return null;
+  }
   const mode = op === XRIFT_INTERACTION_OPERATIONS.toggleProperty ? "toggle" : "set";
   if (mode === "toggle") {
     if (descriptor.kind !== "bool") return null;
@@ -366,7 +649,9 @@ function readAction(
       nodeIndex,
       mode,
       entityId,
-      componentId: descriptor.target === "entity" ? null : componentId,
+      componentId: isXriftInteractionEntityScoped(descriptor.target)
+        ? null
+        : componentId,
       target: descriptor.target,
       property: descriptor.name,
       value: null,
@@ -378,7 +663,9 @@ function readAction(
     nodeIndex,
     mode,
     entityId,
-    componentId: descriptor.target === "entity" ? null : componentId,
+    componentId: isXriftInteractionEntityScoped(descriptor.target)
+      ? null
+      : componentId,
     target: descriptor.target,
     property: descriptor.name,
     value,
@@ -395,8 +682,12 @@ function readAction(
 export function collectXriftInteractionPrograms(
   value: unknown,
 ): XriftInteractionProgram[] {
-  const parsed = parseSelectedGraph(value);
-  if (!parsed) return [];
+  return parseAllGraphs(value).flatMap((parsed) =>
+    collectGraphPrograms(parsed),
+  );
+}
+
+function collectGraphPrograms(parsed: ParsedGraph): XriftInteractionProgram[] {
   const programs: XriftInteractionProgram[] = [];
 
   const walk = (
@@ -453,6 +744,39 @@ export function hasXriftInteractionTrigger(value: unknown): boolean {
 }
 
 /**
+ * Entry points that run without anyone pressing anything.
+ *
+ * A timeline graph starts itself. Judging every Asset by whether it has an
+ * `xrift/onInteract` was right while the only thing a graph could express was
+ * "when this is pressed"; now it would drop a whole opening sequence.
+ */
+const XRIFT_SELF_STARTING_OPERATIONS: ReadonlySet<string> = new Set([
+  "event/onStart",
+  "event/onTick",
+  "event/receive",
+]);
+
+export function hasXriftSelfStartingEntry(value: unknown): boolean {
+  return parseAllGraphs(value).some((parsed) =>
+    parsed.nodes.some((candidate) => {
+      const op = parsed.operationFor(asRecord(candidate));
+      return op !== undefined && XRIFT_SELF_STARTING_OPERATIONS.has(op);
+    }),
+  );
+}
+
+/**
+ * True when the Asset has anything for the interpreter to run.
+ *
+ * This is what decides whether a published world carries the trigger runtime.
+ * It has to match what Studio's Play mounts, or a graph that works while
+ * authoring is missing from the world that ships.
+ */
+export function hasXriftInteractionRuntimeWork(value: unknown): boolean {
+  return parseAllGraphs(value).some((parsed) => parsed.nodes.length > 0);
+}
+
+/**
  * Reports every trigger action node the runtime will not run.
  *
  * Unlike an unsupported operation, an incomplete action is something the author
@@ -462,8 +786,10 @@ export function hasXriftInteractionTrigger(value: unknown): boolean {
 export function collectXriftInteractionIssues(
   value: unknown,
 ): XriftInteractionIssue[] {
-  const parsed = parseSelectedGraph(value);
-  if (!parsed) return [];
+  return parseAllGraphs(value).flatMap((parsed) => collectGraphIssues(parsed));
+}
+
+function collectGraphIssues(parsed: ParsedGraph): XriftInteractionIssue[] {
   const issues: XriftInteractionIssue[] = [];
   parsed.nodes.forEach((candidate, nodeIndex) => {
     const node = asRecord(candidate);
@@ -498,7 +824,7 @@ export function collectXriftInteractionIssues(
       return;
     }
     if (
-      descriptor.target !== "entity" &&
+      !isXriftInteractionEntityScoped(descriptor.target) &&
       !configurationString(node, "component")
     ) {
       issues.push({

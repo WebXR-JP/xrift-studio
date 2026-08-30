@@ -177,19 +177,52 @@ import {
 } from "./scripting/script-contract";
 import type { ScriptRuntimeReport } from "./scripting/runtime-report";
 import {
+  INTERACTIVITY_EASINGS,
+  KHR_INTERACTIVITY_MAX_GRAPHS,
   KHR_INTERACTIVITY_OPERATION_TEMPLATES,
   KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS,
   addDefaultInteractivityAsset,
+  addInteractivityGraph,
+  autoLayoutInteractivityGraph,
   collectInteractivityRuntimeDiagnostics,
+  configureInteractivityTriggerAction,
+  defaultTriggerActionValue,
+  dryRunInteractivityGraph,
+  duplicateInteractivityGraph,
+  duplicateInteractivityNode,
+  freeInteractivityNodePosition,
   getInteractivityRuntimeSupport,
+  getXriftInteractionProperty,
   cloneKhrInteractivityExtension,
   configureInteractivityMaterialPointer,
   getInteractivityOperationTemplate,
+  isInteractivityTriggerActionOp,
+  parseKhrInteractivityExtension,
+  pasteInteractivityNode,
+  readInteractivityNodeForCopy,
+  readInteractivityNodePosition,
+  readInteractivityTriggerAction,
+  readInteractivityTriggerActionDuration,
+  readInteractivityTriggerActionEasing,
+  removeInteractivityGraph,
+  renameInteractivityGraph,
+  setInteractivityTriggerActionDuration,
+  setInteractivityTriggerActionEasing,
+  setInteractivityTriggerActionValue,
   validateKhrInteractivityExtension,
   writeInteractivityNodePosition,
+  xriftInteractionEnumIndex,
+  XRIFT_INTERACTION_OPERATIONS,
+  type InteractivityScheduleEntry,
   type KhrInteractivityGraph,
   type KhrInteractivityJsonValue,
+  type XriftInteractionPropertyDescriptor,
+  type XriftInteractionTargetKind,
 } from "./interactivity-graph";
+import {
+  INTERACTIVITY_RECIPES,
+  getInteractivityRecipeRuntimeSupport,
+} from "./interactivity-recipes";
 import {
   addAssetFolder,
   getAudioAsset,
@@ -404,7 +437,18 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   disconnect_interactivity_socket: disconnectInteractivitySocket,
   delete_interactivity_node: deleteInteractivityNode,
   validate_interactivity_asset: validateInteractivityAsset,
+  update_interactivity_asset: updateInteractivityAssetTool,
+  simulate_interactivity_asset: simulateInteractivityAsset,
+  add_interactivity_graph: addInteractivityGraphTool,
+  update_interactivity_graph: updateInteractivityGraphTool,
+  delete_interactivity_graph: deleteInteractivityGraphTool,
+  move_interactivity_node: moveInteractivityNode,
+  duplicate_interactivity_node: duplicateInteractivityNodeTool,
+  layout_interactivity_graph: layoutInteractivityGraph,
+  list_interactivity_recipes: listInteractivityRecipes,
+  apply_interactivity_recipe: applyInteractivityRecipe,
   list_interaction_trigger_targets: listInteractionTriggerTargets,
+  configure_interactivity_trigger_action: configureInteractivityTriggerActionTool,
 };
 
 export function executeXriftMcpEditorTool(
@@ -5431,6 +5475,13 @@ function connectInteractivityNodes(
       targetNode,
     });
   }
+  // The canvas can only offer the sockets an operation declares, so a wire it
+  // draws always lands somewhere the runtime reads. A socket name invented over
+  // MCP saves as valid JSON and then does nothing, which is the hardest kind of
+  // failure to see. Operations with no template stay unchecked: they are the
+  // deliberate escape hatch for extensions this build does not know.
+  assertInteractivitySocket(graph, sourceNode, kind === "flow" ? "flowOutputs" : "valueOutputs", sourceSocket);
+  assertInteractivitySocket(graph, targetNode, kind === "flow" ? "flowInputs" : "valueInputs", targetSocket);
   if (kind === "flow") {
     source.flows = {
       ...(source.flows ?? {}),
@@ -5482,6 +5533,7 @@ function setInteractivityValue(
       nodeIndex,
     });
   }
+  assertInteractivitySocket(graph, nodeIndex, "valueInputs", socket);
   graph.types ??= [];
   let type = graph.types.findIndex((candidate) => candidate.signature === signature);
   if (type < 0) {
@@ -5744,6 +5796,805 @@ function validateInteractivityAsset(
     diagnostics.length === 0 && runtimeDiagnostics.length === 0
       ? "KHR_interactivity validationに成功しました"
       : "KHR_interactivity diagnosticsを取得しました",
+  );
+}
+
+/**
+ * The list of graphs inside one Asset.
+ *
+ * The Editor grew add / duplicate / rename / delete / "make this the default"
+ * for graphs; without the same four tools a client could target a second graph
+ * by index but never create one, so every MCP-authored Asset was stuck at one
+ * graph.
+ */
+function addInteractivityGraphTool(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const duplicateFrom = optionalNonNegativeInteger(
+    argumentsValue.duplicateFromGraphIndex,
+    "duplicateFromGraphIndex",
+  );
+  const name = optionalString(argumentsValue.name);
+  const extension = cloneKhrInteractivityExtension(asset.extension);
+  if (duplicateFrom !== undefined) {
+    requireInteractivityGraph(extension.graphs, duplicateFrom);
+  }
+  const graphIndex =
+    duplicateFrom === undefined
+      ? addInteractivityGraph(
+          extension,
+          name ?? `Graph ${extension.graphs.length + 1}`,
+        )
+      : duplicateInteractivityGraph(extension, duplicateFrom);
+  if (graphIndex < 0) {
+    throw new XriftMcpEditorToolError(
+      "GRAPH_LIMIT_REACHED",
+      `1つのAssetが持てるgraphは${KHR_INTERACTIVITY_MAX_GRAPHS}個までです`,
+      { graphCount: extension.graphs.length, limit: KHR_INTERACTIVITY_MAX_GRAPHS },
+    );
+  }
+  if (name !== undefined) renameInteractivityGraph(extension, graphIndex, name);
+  const graphName = extension.graphs[graphIndex]?.name ?? "";
+  return commitInteractivityMutation(
+    context,
+    asset,
+    extension,
+    {
+      assetId: asset.id,
+      graphIndex,
+      name: graphName,
+      duplicatedFromGraphIndex: duplicateFrom ?? null,
+      graphCount: extension.graphs.length,
+    },
+    `AIがbehavior graph「${graphName}」を追加しました`,
+  );
+}
+
+function updateInteractivityGraphTool(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const graphIndex = requiredInteger(argumentsValue.graphIndex, "graphIndex");
+  const name = optionalString(argumentsValue.name);
+  const isDefault = optionalBoolean(argumentsValue.isDefault, "isDefault");
+  if (name === undefined && isDefault === undefined) {
+    invalidArgument("name or isDefault", "at least one of them");
+  }
+  if (isDefault === false) {
+    // Clearing it would leave the extension without a default. A different
+    // graph becomes the default by naming that graph, not by unsetting this.
+    invalidArgument("isDefault", "true (別のgraphをisDefault: trueで指定してください)");
+  }
+  const extension = cloneKhrInteractivityExtension(asset.extension);
+  requireInteractivityGraph(extension.graphs, graphIndex);
+  if (name !== undefined) renameInteractivityGraph(extension, graphIndex, name);
+  if (isDefault) extension.graph = graphIndex;
+  return commitInteractivityMutation(
+    context,
+    asset,
+    extension,
+    {
+      assetId: asset.id,
+      graphIndex,
+      name: extension.graphs[graphIndex]?.name ?? "",
+      defaultGraphIndex: extension.graph ?? 0,
+    },
+    isDefault
+      ? "AIが既定のbehavior graphを変更しました"
+      : "AIがbehavior graphの名前を変更しました",
+  );
+}
+
+function deleteInteractivityGraphTool(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const graphIndex = requiredInteger(argumentsValue.graphIndex, "graphIndex");
+  const extension = cloneKhrInteractivityExtension(asset.extension);
+  requireInteractivityGraph(extension.graphs, graphIndex);
+  if (!removeInteractivityGraph(extension, graphIndex)) {
+    throw new XriftMcpEditorToolError(
+      "LAST_GRAPH",
+      "Assetの最後のbehavior graphは削除できません",
+      { graphIndex },
+    );
+  }
+  return commitInteractivityMutation(
+    context,
+    asset,
+    extension,
+    {
+      assetId: asset.id,
+      deletedGraphIndex: graphIndex,
+      graphCount: extension.graphs.length,
+      defaultGraphIndex: extension.graph ?? 0,
+    },
+    "AIがbehavior graphを削除しました",
+  );
+}
+
+/**
+ * Where a card sits on the canvas.
+ *
+ * Position is authoring state, not behaviour, but a graph whose cards overlap
+ * is unreadable, and the client that built it is the one that knows which node
+ * belongs where. `add_interactivity_node` can only place a card at creation.
+ */
+function moveInteractivityNode(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const graphIndex =
+    optionalNonNegativeInteger(argumentsValue.graphIndex, "graphIndex") ??
+    asset.extension.graph ??
+    0;
+  const nodeIndex = requiredInteger(argumentsValue.nodeIndex, "nodeIndex");
+  const position = optionalVec2(argumentsValue.position, "position");
+  if (!position) invalidArgument("position", "[x, y]");
+  const avoidOverlap =
+    optionalBoolean(argumentsValue.avoidOverlap, "avoidOverlap") ?? false;
+  const extension = cloneKhrInteractivityExtension(asset.extension);
+  const graph = requireInteractivityGraph(extension.graphs, graphIndex);
+  const node = graph.nodes?.[nodeIndex];
+  if (!node) {
+    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたnodeが見つかりません", {
+      nodeIndex,
+    });
+  }
+  const placed = avoidOverlap
+    ? freeInteractivityNodePosition(
+        {
+          ...graph,
+          nodes: graph.nodes?.filter((_, index) => index !== nodeIndex),
+        },
+        position,
+      )
+    : { x: Math.round(position.x), y: Math.round(position.y) };
+  graph.nodes![nodeIndex] = writeInteractivityNodePosition(node, placed);
+  return commitInteractivityMutation(
+    context,
+    asset,
+    extension,
+    { assetId: asset.id, graphIndex, nodeIndex, position: [placed.x, placed.y] },
+    "AIがInteractivity nodeを移動しました",
+  );
+}
+
+/** The canvas's「整列」: flow order left to right, one column per depth. */
+function layoutInteractivityGraph(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const graphIndex =
+    optionalNonNegativeInteger(argumentsValue.graphIndex, "graphIndex") ??
+    asset.extension.graph ??
+    0;
+  const extension = cloneKhrInteractivityExtension(asset.extension);
+  const graph = requireInteractivityGraph(extension.graphs, graphIndex);
+  autoLayoutInteractivityGraph(graph);
+  return commitInteractivityMutation(
+    context,
+    asset,
+    extension,
+    {
+      assetId: asset.id,
+      graphIndex,
+      positions: (graph.nodes ?? []).map((node, index) => {
+        const position = readInteractivityNodePosition(node, index);
+        return { nodeIndex: index, position: [position.x, position.y] };
+      }),
+    },
+    "AIがInteractivity graphを整列しました",
+  );
+}
+
+function duplicateInteractivityNodeTool(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const graphIndex =
+    optionalNonNegativeInteger(argumentsValue.graphIndex, "graphIndex") ??
+    asset.extension.graph ??
+    0;
+  const nodeIndex = requiredInteger(argumentsValue.nodeIndex, "nodeIndex");
+  const targetGraphIndex =
+    optionalNonNegativeInteger(argumentsValue.targetGraphIndex, "targetGraphIndex") ??
+    graphIndex;
+  const extension = cloneKhrInteractivityExtension(asset.extension);
+  const graph = requireInteractivityGraph(extension.graphs, graphIndex);
+  const target = requireInteractivityGraph(extension.graphs, targetGraphIndex);
+  // Within one graph the node can be copied as-is. Into another one its
+  // `declaration` and its inline `type` indexes mean something else entirely,
+  // so the copy carries the names and they are resolved on arrival.
+  const created =
+    targetGraphIndex === graphIndex
+      ? duplicateInteractivityNode(graph, nodeIndex)
+      : (() => {
+          const entry = readInteractivityNodeForCopy(graph, nodeIndex);
+          return entry ? pasteInteractivityNode(target, entry) : -1;
+        })();
+  if (created < 0) {
+    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたnodeが見つかりません", {
+      nodeIndex,
+    });
+  }
+  const op = target.declarations?.[target.nodes![created]!.declaration]?.op ?? "";
+  return commitInteractivityMutation(
+    context,
+    asset,
+    extension,
+    {
+      assetId: asset.id,
+      graphIndex,
+      targetGraphIndex,
+      sourceNodeIndex: nodeIndex,
+      nodeIndex: created,
+      op,
+      // Said out loud because the Editor's copy behaves the same way and a
+      // client that assumed the wires came along would build a broken graph.
+      connectionsCopied: false,
+    },
+    `AIが${op} nodeを複製しました`,
+  );
+}
+
+/**
+ * An Interaction Trigger action's target, value, duration and easing.
+ *
+ * `set_interactivity_configuration` and `set_interactivity_value` can write the
+ * same four configuration keys by hand, but nothing checks that the Entity has
+ * that component, that the property exists on that target kind, or that the
+ * value socket carries the type the property needs. Getting one of those wrong
+ * produces a graph that saves and then does nothing at Play, which is the
+ * failure the Editor's picker exists to prevent.
+ */
+function configureInteractivityTriggerActionTool(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const graphIndex =
+    optionalNonNegativeInteger(argumentsValue.graphIndex, "graphIndex") ??
+    asset.extension.graph ??
+    0;
+  const nodeIndex = requiredInteger(argumentsValue.nodeIndex, "nodeIndex");
+  const extension = cloneKhrInteractivityExtension(asset.extension);
+  const graph = requireInteractivityGraph(extension.graphs, graphIndex);
+  const node = graph.nodes?.[nodeIndex];
+  const op = node ? graph.declarations?.[node.declaration]?.op : undefined;
+  if (!node || !isInteractivityTriggerActionOp(op)) {
+    throw new XriftMcpEditorToolError(
+      "NOT_A_TRIGGER_ACTION",
+      "指定されたnodeはプロパティを変えるaction（xrift/setProperty または xrift/toggleProperty）ではありません",
+      { nodeIndex, op: op ?? null },
+    );
+  }
+
+  const current = readInteractivityTriggerAction(graph, nodeIndex);
+  // The Entity's own row and the Scene row carry an empty component id, so an
+  // empty string here is a real choice rather than an omission.
+  let componentIdArgument: string | undefined;
+  if (argumentsValue.componentId !== undefined) {
+    if (typeof argumentsValue.componentId !== "string") {
+      invalidArgument("componentId", "string");
+    }
+    componentIdArgument = argumentsValue.componentId.trim();
+  }
+  const entityId = optionalString(argumentsValue.entityId) ?? current?.entityId ?? "";
+  const componentId = componentIdArgument ?? current?.componentId ?? "";
+  const property = optionalString(argumentsValue.property) ?? current?.property ?? "";
+  const retargeted =
+    optionalString(argumentsValue.entityId) !== undefined ||
+    componentIdArgument !== undefined ||
+    optionalString(argumentsValue.property) !== undefined;
+
+  const targets = collectInteractionTriggerTargets(context.bundle.scene);
+  const targetEntity = targets.find((candidate) => candidate.entityId === entityId);
+  if (!targetEntity) {
+    throw new XriftMcpEditorToolError(
+      "TARGET_ENTITY_NOT_FOUND",
+      "指定されたEntityはInteraction Triggerの対象になりません",
+      {
+        entityId,
+        hint: "list_interaction_trigger_targets で対象と対応プロパティを確認できます",
+      },
+    );
+  }
+  const targetComponent = targetEntity.components.find(
+    (candidate) => candidate.componentId === componentId,
+  );
+  if (!targetComponent) {
+    throw new XriftMcpEditorToolError(
+      "TARGET_COMPONENT_NOT_FOUND",
+      "指定されたcomponentがそのEntityにありません",
+      {
+        entityId,
+        componentId,
+        availableComponentIds: targetEntity.components.map(
+          (candidate) => candidate.componentId,
+        ),
+      },
+    );
+  }
+  const descriptor = getXriftInteractionProperty(
+    targetComponent.targetKind as XriftInteractionTargetKind,
+    property,
+  );
+  if (!descriptor) {
+    throw new XriftMcpEditorToolError(
+      "TARGET_PROPERTY_NOT_FOUND",
+      "指定されたプロパティはこの対象にありません",
+      {
+        targetKind: targetComponent.targetKind,
+        property,
+        availableProperties: targetComponent.properties.map(
+          (candidate) => candidate.name,
+        ),
+      },
+    );
+  }
+
+  if (
+    retargeted &&
+    !configureInteractivityTriggerAction(graph, nodeIndex, {
+      entityId,
+      componentId,
+      targetKind: targetComponent.targetKind as XriftInteractionTargetKind,
+      property,
+    })
+  ) {
+    throw new XriftMcpEditorToolError(
+      "TARGET_NOT_APPLIED",
+      "Interaction Triggerのactionへ対象を設定できませんでした",
+      { nodeIndex, entityId, componentId, property },
+    );
+  }
+
+  const isToggle = op === XRIFT_INTERACTION_OPERATIONS.toggleProperty;
+  let value: KhrInteractivityJsonValue[] | null = null;
+  if (argumentsValue.value !== undefined) {
+    if (isToggle) {
+      throw new XriftMcpEditorToolError(
+        "VALUE_NOT_SUPPORTED",
+        "xrift/toggleProperty は値を持ちません。反転するだけの操作です",
+        { nodeIndex },
+      );
+    }
+    value = triggerActionValueFromArgument(argumentsValue.value, descriptor);
+    setInteractivityTriggerActionValue(graph, nodeIndex, descriptor, value);
+  } else if (retargeted && !isToggle) {
+    value = defaultTriggerActionValue(descriptor);
+  }
+
+  const durationSeconds = optionalFiniteNumber(
+    argumentsValue.durationSeconds,
+    "durationSeconds",
+  );
+  if (durationSeconds !== undefined) {
+    if (durationSeconds < 0) invalidArgument("durationSeconds", "number >= 0");
+    // ON/OFF and a choice have no midpoint, so a duration on one would promise
+    // a gradual change the runtime cannot make. The Editor hides the field for
+    // the same reason.
+    if (durationSeconds > 0 && !TIMED_TRIGGER_PROPERTY_KINDS.has(descriptor.kind)) {
+      throw new XriftMcpEditorToolError(
+        "DURATION_NOT_SUPPORTED",
+        "このプロパティは中間の値を持たないため、時間をかけて変えられません",
+        { property: descriptor.name, kind: descriptor.kind },
+      );
+    }
+    setInteractivityTriggerActionDuration(graph, nodeIndex, durationSeconds);
+  }
+
+  const easing = optionalString(argumentsValue.easing);
+  if (easing !== undefined) {
+    if (!(INTERACTIVITY_EASINGS as readonly string[]).includes(easing)) {
+      invalidArgument("easing", INTERACTIVITY_EASINGS.join(" | "));
+    }
+    setInteractivityTriggerActionEasing(graph, nodeIndex, easing);
+  }
+
+  return commitInteractivityMutation(
+    context,
+    asset,
+    extension,
+    {
+      assetId: asset.id,
+      graphIndex,
+      nodeIndex,
+      op,
+      entityId,
+      componentId,
+      targetKind: targetComponent.targetKind,
+      property,
+      value,
+      durationSeconds: readInteractivityTriggerActionDuration(graph, nodeIndex),
+      easing: readInteractivityTriggerActionEasing(graph, nodeIndex),
+    },
+    `AIがactionの対象を「${targetEntity.name} / ${descriptor.label}」に設定しました`,
+  );
+}
+
+/** Property kinds that can hold a midpoint, so a duration means something. */
+const TIMED_TRIGGER_PROPERTY_KINDS: ReadonlySet<string> = new Set([
+  "float",
+  "color",
+  "vector3",
+]);
+
+/**
+ * Accepts the shapes a caller naturally writes, in the type the socket needs.
+ *
+ * An enum arrives as its option id rather than the index the socket stores,
+ * because the index is an implementation detail of the property table and a
+ * caller reading `list_interaction_trigger_targets` sees ids.
+ */
+function triggerActionValueFromArgument(
+  value: unknown,
+  descriptor: XriftInteractionPropertyDescriptor,
+): KhrInteractivityJsonValue[] {
+  switch (descriptor.kind) {
+    case "bool": {
+      const single = Array.isArray(value) ? value[0] : value;
+      if (typeof single !== "boolean") invalidArgument("value", "true or false");
+      return [single];
+    }
+    case "float": {
+      const single = Array.isArray(value) ? value[0] : value;
+      if (typeof single !== "number" || !Number.isFinite(single)) {
+        invalidArgument("value", "a finite number");
+      }
+      return [single];
+    }
+    case "color":
+    case "vector3": {
+      if (
+        !Array.isArray(value) ||
+        value.length !== 3 ||
+        value.some((entry) => typeof entry !== "number" || !Number.isFinite(entry))
+      ) {
+        invalidArgument(
+          "value",
+          descriptor.kind === "color"
+            ? "[r, g, b]（0〜1のlinear RGB）"
+            : "[x, y, z]",
+        );
+      }
+      return [value[0] as number, value[1] as number, value[2] as number];
+    }
+    case "enum": {
+      const single = Array.isArray(value) ? value[0] : value;
+      const options = descriptor.options ?? [];
+      if (typeof single === "number" && Number.isInteger(single)) {
+        if (single < 0 || single >= options.length) {
+          invalidArgument("value", options.map((option) => option.value).join(" | "));
+        }
+        return [single];
+      }
+      if (
+        typeof single !== "string" ||
+        !options.some((option) => option.value === single)
+      ) {
+        invalidArgument("value", options.map((option) => option.value).join(" | "));
+      }
+      return [xriftInteractionEnumIndex(descriptor, single)];
+    }
+  }
+}
+
+/** The Editor's recipe list: a whole small sequence, not one node. */
+function listInteractivityRecipes(
+  context: XriftMcpEditorContext,
+): XriftMcpEditorToolOutcome {
+  return unchanged(
+    context,
+    {
+      recipes: INTERACTIVITY_RECIPES.map((recipe) => {
+        return {
+          id: recipe.id,
+          label: recipe.label,
+          description: recipe.description,
+          needsMaterial: recipe.needsMaterial === true,
+          runtimeSupport: getInteractivityRecipeRuntimeSupport(recipe),
+        };
+      }),
+      count: INTERACTIVITY_RECIPES.length,
+    },
+    "Interactivity recipeの一覧を取得しました",
+  );
+}
+
+function applyInteractivityRecipe(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const graphIndex =
+    optionalNonNegativeInteger(argumentsValue.graphIndex, "graphIndex") ??
+    asset.extension.graph ??
+    0;
+  const recipeId = requiredString(argumentsValue.recipeId, "recipeId");
+  const recipe = INTERACTIVITY_RECIPES.find((candidate) => candidate.id === recipeId);
+  if (!recipe) {
+    throw new XriftMcpEditorToolError(
+      "RECIPE_NOT_FOUND",
+      "指定されたInteractivity recipeが見つかりません",
+      { recipeId, supportedRecipeIds: INTERACTIVITY_RECIPES.map((one) => one.id) },
+    );
+  }
+  const materialAssetId = optionalString(argumentsValue.materialAssetId);
+  let materialIndex = 0;
+  if (recipe.needsMaterial) {
+    const materials = sortedMaterialAssetIds(context);
+    if (materials.length === 0) {
+      throw new XriftMcpEditorToolError(
+        "MATERIAL_NOT_FOUND",
+        "このrecipeはMaterialへ書き込みます。先にMaterial Assetを作成してください",
+        { recipeId },
+      );
+    }
+    materialIndex = materialAssetId
+      ? materials.indexOf(materialAssetId)
+      : 0;
+    if (materialIndex < 0) {
+      throw new XriftMcpEditorToolError(
+        "MATERIAL_NOT_FOUND",
+        "指定されたMaterial Assetが見つかりません",
+        { materialAssetId },
+      );
+    }
+  }
+  const extension = cloneKhrInteractivityExtension(asset.extension);
+  const graph = requireInteractivityGraph(extension.graphs, graphIndex);
+  const created = graph.nodes?.length ?? 0;
+  const origin =
+    optionalVec2(argumentsValue.position, "position") ??
+    freeInteractivityNodePosition(graph, { x: 120, y: 120 });
+  recipe.build(graph, origin, materialIndex);
+  return commitInteractivityMutation(
+    context,
+    asset,
+    extension,
+    {
+      assetId: asset.id,
+      graphIndex,
+      recipeId,
+      firstNodeIndex: created,
+      focusNodeIndex: created + recipe.focusOffset,
+      addedNodeCount: (graph.nodes?.length ?? 0) - created,
+      ...(recipe.needsMaterial
+        ? { materialAssetId: sortedMaterialAssetIds(context)[materialIndex] ?? null }
+        : {}),
+    },
+    `AIがInteractivity recipe「${recipe.label}」を適用しました`,
+  );
+}
+
+function sortedMaterialAssetIds(context: XriftMcpEditorContext): string[] {
+  return Object.values(context.bundle.assets.assets)
+    .filter((candidate) => candidate.kind === "material")
+    .map((candidate) => candidate.id)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+/**
+ * Runs the graph without a renderer and reports what happens, and when.
+ *
+ * This is the Editor's timeline as data. Reading the JSON tells a client what a
+ * graph is wired to do; only running it says whether the delay it wrote lands
+ * where it meant, whether a loop terminates, and which nodes are never reached.
+ * Nothing is written: the same simulation the timeline draws, over MCP.
+ */
+function simulateInteractivityAsset(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const graphIndex =
+    optionalNonNegativeInteger(argumentsValue.graphIndex, "graphIndex") ??
+    asset.extension.graph ??
+    0;
+  requireInteractivityGraph(asset.extension.graphs, graphIndex);
+  const horizonSeconds = optionalFiniteNumber(
+    argumentsValue.horizonSeconds,
+    "horizonSeconds",
+  );
+  if (horizonSeconds !== undefined && (horizonSeconds <= 0 || horizonSeconds > 600)) {
+    invalidArgument("horizonSeconds", "number from 0 to 600");
+  }
+  const stepSeconds = optionalFiniteNumber(argumentsValue.stepSeconds, "stepSeconds");
+  if (stepSeconds !== undefined && (stepSeconds <= 0 || stepSeconds > 1)) {
+    invalidArgument("stepSeconds", "number from 0 to 1");
+  }
+  const entry = requiredEnum(argumentsValue.entry ?? "start", "entry", [
+    "start",
+    "interact",
+  ] as const);
+  const run = dryRunInteractivityGraph(asset.extension, {
+    graphIndex,
+    entry,
+    ...(horizonSeconds === undefined ? {} : { horizonSeconds }),
+    ...(stepSeconds === undefined ? {} : { stepSeconds }),
+  });
+  const graph = asset.extension.graphs[graphIndex]!;
+  const nodeCount = graph.nodes?.length ?? 0;
+  const unreached: number[] = [];
+  for (let index = 0; index < nodeCount; index += 1) {
+    if (!run.visitedNodes.has(index)) unreached.push(index);
+  }
+  return unchanged(
+    context,
+    {
+      assetId: asset.id,
+      graphIndex,
+      entry,
+      simulatedSeconds: run.simulatedSeconds,
+      // True when the horizon ran out with work still pending: the sequence is
+      // longer than the window, not necessarily stuck.
+      truncated: run.truncated,
+      entries: run.entries.map(describeSimulationEntry),
+      issues: run.issues.map((issue) => ({
+        nodeIndex: issue.nodeIndex,
+        reason: issue.reason,
+        ...(issue.detail === undefined ? {} : { detail: issue.detail }),
+      })),
+      visitedNodes: [...run.visitedNodes.entries()]
+        .map(([nodeIndex, timeSeconds]) => ({ nodeIndex, firstRunSeconds: timeSeconds }))
+        .sort((left, right) => left.nodeIndex - right.nodeIndex),
+      unreachedNodes: unreached,
+      nodeCount,
+    },
+    run.entries.length === 0
+      ? "Interactivity graphを実行しましたが、起きることはありませんでした"
+      : `Interactivity graphの${run.simulatedSeconds}秒ぶんの進行を取得しました`,
+  );
+}
+
+function describeSimulationEntry(
+  entry: InteractivityScheduleEntry,
+): Record<string, unknown> {
+  // Exhaustive over the union: a new entry kind must decide what it reports
+  // rather than reaching a client as a bare timestamp.
+  const base = { kind: entry.kind, timeSeconds: entry.timeSeconds, nodeIndex: entry.nodeIndex };
+  switch (entry.kind) {
+    case "animation-start":
+      return {
+        ...base,
+        animationIndex: entry.animationIndex,
+        startTime: entry.startTime,
+        endTime: entry.endTime,
+        speed: entry.speed,
+      };
+    case "animation-stop":
+      return { ...base, animationIndex: entry.animationIndex };
+    case "property":
+      return {
+        ...base,
+        target: entry.target,
+        value: entry.value.data,
+        signature: entry.value.signature,
+        durationSeconds: entry.durationSeconds,
+      };
+    case "pointer":
+      return { ...base, pointer: entry.pointer, value: entry.value.data };
+    case "event":
+      return { ...base, name: entry.name };
+    case "log":
+      return { ...base, message: entry.message };
+  }
+}
+
+/**
+ * Replaces the Asset's whole KHR_interactivity extension.
+ *
+ * The Editor has the same escape hatch as a JSON panel, and it is the only way
+ * to write a graph in one call rather than one node at a time. The JSON is
+ * parsed through the same reader the Editor uses, so a document that is not a
+ * valid extension is refused before it can replace a working graph.
+ */
+function updateInteractivityAssetTool(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const asset = requireInteractivityAsset(
+    context,
+    requiredString(argumentsValue.assetId, "assetId"),
+  );
+  const parsed = parseKhrInteractivityExtension(argumentsValue.extension);
+  if (!parsed) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_EXTENSION",
+      "KHR_interactivity extensionとして読めませんでした",
+      {
+        diagnostics: isPlainObjectRecord(argumentsValue.extension)
+          ? validateKhrInteractivityExtension(
+              argumentsValue.extension as unknown as InteractivityAsset["extension"],
+            )
+          : [],
+      },
+    );
+  }
+  return commitInteractivityMutation(
+    context,
+    asset,
+    parsed,
+    {
+      assetId: asset.id,
+      graphCount: parsed.graphs.length,
+      defaultGraphIndex: parsed.graph ?? 0,
+      nodeCount: parsed.graphs.reduce(
+        (count, graph) => count + (graph.nodes?.length ?? 0),
+        0,
+      ),
+    },
+    `AIがInteractivity Asset「${asset.name}」のgraphを置き換えました`,
+  );
+}
+
+/**
+ * Rejects a socket the operation does not declare.
+ *
+ * Named sockets are part of an operation's signature, and the runtime reads
+ * only the ones it knows. Writing to another name produces a graph that
+ * validates, saves and silently does nothing.
+ */
+function assertInteractivitySocket(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+  kind: "flowInputs" | "flowOutputs" | "valueInputs" | "valueOutputs",
+  socket: string,
+): void {
+  const node = graph.nodes?.[nodeIndex];
+  const op = node ? graph.declarations?.[node.declaration]?.op : undefined;
+  const template = op ? getInteractivityOperationTemplate(op) : undefined;
+  if (!template) return;
+  if (template[kind].includes(socket)) return;
+  throw new XriftMcpEditorToolError(
+    "SOCKET_NOT_FOUND",
+    `${op} には${socket} socketがありません`,
+    { nodeIndex, op, socket, availableSockets: template[kind] },
   );
 }
 

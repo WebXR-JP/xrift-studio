@@ -25,12 +25,15 @@ import {
 const KTX2_TRANSCODER_PATH = resolveLocalBasisTranscoderPath();
 
 export function ParticleEmitterVisual({
+  componentId,
   asset,
   textureAsset,
   materialAsset,
   projectPath,
   selected,
 }: {
+  /** Particle Component being rendered, so a graph can address this emitter. */
+  componentId?: string;
   asset: ParticleAsset;
   textureAsset?: TextureAsset;
   materialAsset?: MaterialAsset;
@@ -63,6 +66,7 @@ export function ParticleEmitterVisual({
 
   return (
     <XriftScriptParticleEmitter
+      {...(componentId ? { componentId } : {})}
       config={properties}
       color={materialColor}
       opacity={materialBaseColor[3]}

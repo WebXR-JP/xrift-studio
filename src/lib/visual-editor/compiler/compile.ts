@@ -22,6 +22,8 @@ import { getBuiltinPrimitiveCreation } from "../creation-catalog";
 import {
   collectInteractivityRuntimeDiagnostics,
   collectXriftInteractionPrograms,
+  hasXriftInteractionRuntimeWork,
+  hasXriftSelfStartingEntry,
 } from "../interactivity-graph";
 import {
   validateSerializedXriftComponents,
@@ -540,7 +542,7 @@ function sceneUsesInteractionTriggerRuntime(
       const asset = assets.assets[component.interactivityAssetId];
       return (
         asset?.kind === "interactivity" &&
-        collectXriftInteractionPrograms(asset.extension).length > 0
+        hasXriftInteractionRuntimeWork(asset.extension)
       );
     }),
   );
@@ -864,6 +866,8 @@ type ResolvedInteractionTrigger = {
   component: Extract<RegisteredSceneComponent, { type: "interaction-trigger" }>;
   extension: unknown;
   actionCount: number;
+  /** How many `xrift/onInteract` entry points the graph has. */
+  interactPrograms: number;
 };
 
 function collectInteractionTriggerTargetEntityIds(
@@ -917,12 +921,15 @@ function resolveInteractionTriggers(
       (total, program) => total + program.actions.length,
       0,
     );
-    if (programs.length === 0) {
+    // A graph that starts itself needs the runtime even with no interact entry:
+    // a timeline on `event/onStart` is the whole point of one. Only a graph
+    // with neither kind of entry point is inert, and that is worth saying.
+    if (programs.length === 0 && !hasXriftSelfStartingEntry(asset.extension)) {
       addDiagnostic(context, {
         severity: "warning",
         code: "interaction-trigger-without-event",
         message:
-          "Interactivity Graphに「インタラクトされたとき」がないため、押しても何も起きません",
+          "Interactivity Graphに開始のnodeがないため、公開先では何も起きません",
         sceneId: context.scene.sceneId,
         entityId: entity.id,
         componentId: component.id,
@@ -930,10 +937,17 @@ function resolveInteractionTriggers(
       });
       continue;
     }
-    resolved.push({ component, extension: asset.extension, actionCount });
+    resolved.push({
+      component,
+      extension: asset.extension,
+      actionCount,
+      interactPrograms: programs.length,
+    });
   }
   if (
-    resolved.length > 0 &&
+    // Only a graph someone is meant to press needs an Interactable. Warning
+    // about one on a graph that starts itself would be noise on every timeline.
+    resolved.some((candidate) => candidate.interactPrograms > 0) &&
     !entity.components.some(
       (candidate) =>
         candidate.type === "xrift-component" &&
@@ -948,7 +962,8 @@ function resolveInteractionTriggers(
         "EntityにInteractableがないため、公開先でこのTriggerを押せません",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
-      componentId: resolved[0]?.component.id,
+      componentId: resolved.find((candidate) => candidate.interactPrograms > 0)
+        ?.component.id,
     });
   }
   return resolved;
@@ -1625,6 +1640,14 @@ function renderSceneEnvironment(
     // target and an SSAO buffer it never reads.
     registerSceneToneMappingSupport(settings.postprocessing, context);
     content.push("<XRiftStudioToneMapping />");
+  }
+  // Scene-wide graph writes. Emitted only where a graph can send them, so a
+  // world with no behavior never carries the overlay or the extra frame work.
+  if (sceneUsesInteractionTriggerRuntime(context.scene, context.assets)) {
+    context.extraImports.add(
+      'import { XriftSceneRuntime } from "./xrift-studio/scene-runtime";',
+    );
+    content.push("<XriftSceneRuntime />");
   }
   registerVegetationWindSupport(settings.vegetation, context);
   const hasVegetationWind = Object.values(context.scene.entities).some((entity) =>
@@ -2903,6 +2926,16 @@ function renderModelMesh(
       animationClip &&
       !isObj,
   );
+  // A graph can play, pause, seek or switch a clip while the world runs, which
+  // needs the mixer to exist even when nothing autoplays. It is only worth
+  // emitting when something in the Scene can actually send those commands.
+  const animationBridgeable = Boolean(
+    animation &&
+      animationClip &&
+      !isObj &&
+      sceneUsesInteractionTriggerRuntime(context.scene, context.assets),
+  );
+  const animationLoaded = autoplay || animationBridgeable;
   if (animation && !animationClip) {
     addDiagnostic(context, {
       severity: "warning",
@@ -2936,12 +2969,26 @@ function renderModelMesh(
   } else {
     context.dreiImports.add("useGLTF");
   }
-  if (autoplay) {
+  if (animationLoaded) {
     context.dreiImports.add("useAnimations");
     context.reactValueImports.add("useEffect");
     context.reactValueImports.add("useRef");
     context.threeTypeImports.add("Group");
+  }
+  if (autoplay) {
     context.threeValueImports.add(animation?.loop ? "LoopRepeat" : "LoopOnce");
+  }
+  if (animationBridgeable) {
+    context.fiberImports.add("useFrame");
+    context.extraImports.add(
+      'import { XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY, createXriftAnimationRuntimeBridge } from "./xrift-studio/animation-runtime";',
+    );
+    context.extraImports.add(
+      'import type { XriftAnimationRuntimeBridge } from "./xrift-studio/animation-runtime";',
+    );
+    context.extraImports.add(
+      'import { createXriftAnimationMixerController } from "./xrift-studio/animation-mixer-runtime";',
+    );
   }
 
   const materialComponents = overrides.map((override) => ({
@@ -2986,21 +3033,25 @@ function renderModelMesh(
   const loaderSource = isObj
     ? "const scene = useLoader(OBJLoader, modelUrl);"
     : isOpenBrush
-      ? `const { scene, parser${autoplay ? ", animations" : ""} } = useLoader(GLTFLoader, modelUrl, (loader) => {
+      ? `const { scene, parser${animationLoaded ? ", animations" : ""} } = useLoader(GLTFLoader, modelUrl, (loader) => {
     loader.register(
       (parser) => createOpenBrushMaterialExtension(parser, ${JSON.stringify(OPEN_BRUSH_BRUSH_BASE_URL)}),
     );
   });`
       : !needsParser
-        ? `const { scene${autoplay ? ", animations" : ""} } = useGLTF(modelUrl);`
-        : `const { scene, parser${autoplay ? ", animations" : ""} } = useGLTF(modelUrl);`;
+        ? `const { scene${animationLoaded ? ", animations" : ""} } = useGLTF(modelUrl);`
+        : `const { scene, parser${animationLoaded ? ", animations" : ""} } = useGLTF(modelUrl);`;
   // An explicit clip is emitted by name so the generated world plays the same
   // clip the editor previews. Without a selection the first clip stays default.
   const selectedClipName = animation?.clipName;
   const usesClipNames = selectedClipName === undefined;
-  const animationSource = autoplay
-    ? `  const animationRoot = useRef<Group>(null);
-  const { actions${usesClipNames ? ", names" : ""} } = useAnimations(animations, animationRoot);
+  const animationBindings = [
+    ...(autoplay ? ["actions"] : []),
+    ...(autoplay && usesClipNames ? ["names"] : []),
+    ...(animationBridgeable ? ["mixer", "clips"] : []),
+  ].join(", ");
+  const autoplaySource = autoplay
+    ? `
   useEffect(() => {
     const clipName = ${usesClipNames ? "names[0]" : JSON.stringify(selectedClipName)};
     const action = clipName ? actions[clipName] : undefined;
@@ -3014,6 +3065,48 @@ function renderModelMesh(
       action.stop();
     };
   }, [actions${usesClipNames ? ", names" : ""}]);`
+    : "";
+  // The same bridge Studio Play attaches, so a graph that pauses or re-times a
+  // clip behaves identically in the published world.
+  const animationBridgeSource = animationBridgeable
+    ? `
+  const animationBridge = useRef<XriftAnimationRuntimeBridge | null>(null);
+  useEffect(() => {
+    const root = animationRoot.current;
+    if (!root) return;
+    const clipIndex = ${Math.max(0, animationClipIndex)};
+    const bridge = createXriftAnimationRuntimeBridge({
+      componentId: ${JSON.stringify(animation?.id ?? "")},
+      clipNames: clips.map((clip) => clip.name),
+      clipIndex,
+      autoplay: false,
+      speed: ${formatNumber(animationSpeed)},
+      loop: ${Boolean(animation?.loop)},
+    });
+    const controller = createXriftAnimationMixerController({
+      mixer,
+      clips,
+      clipIndex,
+      loop: ${Boolean(animation?.loop)},
+      speed: ${formatNumber(animationSpeed)},
+    });
+    const disconnect = bridge.connect(controller);
+    root.userData[XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY] = bridge;
+    animationBridge.current = bridge;
+    return () => {
+      disconnect();
+      controller.dispose();
+      delete root.userData[XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY];
+      animationBridge.current = null;
+    };
+  }, [clips, mixer]);
+  useFrame(() => {
+    animationBridge.current?.sample();
+  });`
+    : "";
+  const animationSource = animationLoaded
+    ? `  const animationRoot = useRef<Group>(null);
+  const { ${animationBindings} } = useAnimations(animations, animationRoot);${autoplaySource}${animationBridgeSource}`
     : "";
   // Open Brush brushes read `uniform vec4 u_time` for their motion, and the
   // Materials come out of three-icosa already compiled, so no Material
@@ -3049,7 +3142,7 @@ function renderModelMesh(
   });
 `
     : "";
-  const clonedModel = `<group${autoplay ? " ref={animationRoot}" : ""} scale={${formatNumber(modelScale)}}${vrm0Rotation}>
+  const clonedModel = `<group${animationLoaded ? " ref={animationRoot}" : ""} scale={${formatNumber(modelScale)}}${vrm0Rotation}>
       <Clone
         object={${poseSource.objectName}}
         castShadow={${mesh.castShadow}}
@@ -4663,7 +4756,7 @@ function renderParticleEmitter(
     ? materialProperties.pbrMetallicRoughness.baseColorFactor[3]
     : 1;
   const source = `const ${componentName}: FC = () => {
-${textureLine}  return <XriftScriptParticleEmitter config={${configName}} color=${JSON.stringify(color)} opacity={${formatNumber(opacity)}}${textureProp} />;
+${textureLine}  return <XriftScriptParticleEmitter componentId=${JSON.stringify(component.id)} config={${configName}} color=${JSON.stringify(color)} opacity={${formatNumber(opacity)}}${textureProp} />;
 };`;
   context.supportDeclarations.set(`particle:${componentName}`, source);
   return `<${componentName} />`;
