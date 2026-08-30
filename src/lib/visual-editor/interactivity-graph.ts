@@ -1580,6 +1580,69 @@ export function validateKhrInteractivityExtension(
   return diagnostics;
 }
 
+export const KHR_INTERACTIVITY_MAX_GRAPHS = 64;
+
+/**
+ * Document operations on the list of graphs inside one Asset.
+ *
+ * An Asset has always been able to hold several graphs — the schema allows up
+ * to 64 — but nothing could create, copy or remove one, so the list was a
+ * feature only a hand-written JSON file could use. These keep the default-graph
+ * index consistent, which is the part that silently breaks when a graph in the
+ * middle disappears.
+ */
+export function addInteractivityGraph(
+  extension: KhrInteractivityExtension,
+  name: string,
+): number {
+  if (extension.graphs.length >= KHR_INTERACTIVITY_MAX_GRAPHS) return -1;
+  // No empty `types` array: the schema treats a present-but-empty one as an
+  // error, so a freshly added graph would be unsaveable until its first node.
+  extension.graphs.push({ name });
+  return extension.graphs.length - 1;
+}
+
+export function duplicateInteractivityGraph(
+  extension: KhrInteractivityExtension,
+  graphIndex: number,
+): number {
+  const source = extension.graphs[graphIndex];
+  if (!source || extension.graphs.length >= KHR_INTERACTIVITY_MAX_GRAPHS) {
+    return -1;
+  }
+  const copy = JSON.parse(JSON.stringify(source)) as KhrInteractivityGraph;
+  copy.name = `${source.name || `Graph ${graphIndex + 1}`} のコピー`;
+  extension.graphs.push(copy);
+  return extension.graphs.length - 1;
+}
+
+export function renameInteractivityGraph(
+  extension: KhrInteractivityExtension,
+  graphIndex: number,
+  name: string,
+): boolean {
+  const graph = extension.graphs[graphIndex];
+  if (!graph) return false;
+  graph.name = name;
+  return true;
+}
+
+/** Removes one graph, keeping the default-graph index pointing where it did. */
+export function removeInteractivityGraph(
+  extension: KhrInteractivityExtension,
+  graphIndex: number,
+): boolean {
+  if (extension.graphs.length <= 1 || !extension.graphs[graphIndex]) return false;
+  extension.graphs.splice(graphIndex, 1);
+  const current = extension.graph ?? 0;
+  if (current === graphIndex) {
+    extension.graph = 0;
+  } else if (current > graphIndex) {
+    extension.graph = current - 1;
+  }
+  return true;
+}
+
 export function addDefaultInteractivityAsset(
   manifest: AssetManifest,
   input: { id: string; name: string; folderId: string | null },

@@ -25,6 +25,10 @@ import {
   getInteractivityRecipeRuntimeSupport,
   getInteractivityRuntimeSupport,
   INTERACTIVITY_RECIPES,
+  addInteractivityGraph,
+  duplicateInteractivityGraph,
+  removeInteractivityGraph,
+  renameInteractivityGraph,
   KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS,
   KHR_INTERACTIVITY_OPERATION_TEMPLATES,
   linearRgbToTint,
@@ -902,6 +906,7 @@ function InteractivityGraphEditorBody({
   const [playheadSeconds, setPlayheadSeconds] = useState(0);
   const [inspectorWidth, setInspectorWidth] = useState(288);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+  const [graphMenuOpen, setGraphMenuOpen] = useState(false);
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
@@ -909,6 +914,11 @@ function InteractivityGraphEditorBody({
   const [jsonDraft, setJsonDraft] = useState(() => JSON.stringify(asset.extension, null, 2));
   const [jsonMessage, setJsonMessage] = useState<string | null>(null);
   const graph = draft.graphs[graphIndex] ?? draft.graphs[0];
+  const graphCount = draft.graphs.length;
+  useEffect(() => {
+    if (graphIndex < graphCount) return;
+    setGraphIndex(Math.max(0, graphCount - 1));
+  }, [graphCount, graphIndex]);
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<GraphFlowNode>([]);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const canvasRef = useRef<HTMLDivElement | null>(null);
@@ -1081,6 +1091,29 @@ function InteractivityGraphEditorBody({
     [graphIndex],
   );
 
+  /**
+   * Edits the Asset itself rather than one graph inside it.
+   *
+   * Adding, copying and removing a graph all change the list and the default
+   * index, which `updateGraph` cannot reach.
+   */
+  const updateExtension = useCallback(
+    (mutate: (extension: KhrInteractivityExtension) => void) => {
+      setHistory((current) => {
+        const base = current.entries[current.index];
+        if (!base) return current;
+        const next = cloneKhrInteractivityExtension(base);
+        mutate(next);
+        const entries = [
+          ...current.entries.slice(0, current.index + 1),
+          next,
+        ].slice(-GRAPH_HISTORY_LIMIT);
+        return { entries, index: entries.length - 1 };
+      });
+    },
+    [],
+  );
+
   const undo = useCallback(() => {
     setHistory((current) =>
       current.index > 0 ? { ...current, index: current.index - 1 } : current,
@@ -1124,6 +1157,10 @@ function InteractivityGraphEditorBody({
         setCloseConfirmOpen(false);
         return;
       }
+      if (graphMenuOpen) {
+        setGraphMenuOpen(false);
+        return;
+      }
       if (paletteOpen) {
         setPaletteOpen(false);
         return;
@@ -1132,7 +1169,7 @@ function InteractivityGraphEditorBody({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [closeConfirmOpen, paletteOpen, redo, requestClose, undo]);
+  }, [closeConfirmOpen, graphMenuOpen, paletteOpen, redo, requestClose, undo]);
 
   /**
    * Where the next node lands.
@@ -1349,21 +1386,124 @@ function InteractivityGraphEditorBody({
               Scene Viewを確認しながら編集・glTF準拠JSONを再利用
             </p>
           </div>
-          <select
-            value={graphIndex}
-            onChange={(event) => {
-              setGraphIndex(Number(event.target.value));
-              setSelectedNodeIndex(null);
-            }}
-            className="h-8 shrink-0 rounded border border-slate-600 bg-slate-800 px-2 text-xs"
-            aria-label="Behavior graph"
-          >
-            {draft.graphs.map((candidate, index) => (
-              <option key={index} value={index}>
-                {candidate.name || `Graph ${index + 1}`}
-              </option>
-            ))}
-          </select>
+          <div className="relative shrink-0">
+            <div className="flex items-center gap-1">
+              <select
+                value={graphIndex}
+                onChange={(event) => {
+                  setGraphIndex(Number(event.target.value));
+                  setSelectedNodeIndex(null);
+                }}
+                className="h-8 shrink-0 rounded border border-slate-600 bg-slate-800 px-2 text-xs"
+                aria-label="Behavior graph"
+              >
+                {draft.graphs.map((candidate, index) => (
+                  <option key={index} value={index}>
+                    {candidate.name || `Graph ${index + 1}`}
+                    {(draft.graph ?? 0) === index ? "（既定）" : ""}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setGraphMenuOpen((open) => !open)}
+                aria-expanded={graphMenuOpen}
+                disabled={readOnly}
+                title="グラフの追加・複製・削除"
+                className="h-8 shrink-0 rounded border border-slate-600 px-2 text-xs hover:bg-slate-800 disabled:opacity-40"
+              >
+                グラフ
+              </button>
+            </div>
+            {graphMenuOpen ? (
+              <div className="absolute left-0 top-9 z-30 w-64 space-y-2 rounded-lg border border-slate-700 bg-slate-950/95 p-2.5 shadow-2xl backdrop-blur">
+                <label className="block text-[10px] text-slate-300">
+                  名前
+                  <input
+                    type="text"
+                    value={graph.name ?? ""}
+                    disabled={readOnly}
+                    onChange={(event) => {
+                      const name = event.target.value;
+                      updateExtension((extension) => {
+                        renameInteractivityGraph(extension, graphIndex, name);
+                      });
+                    }}
+                    placeholder={`Graph ${graphIndex + 1}`}
+                    className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-900 px-2 text-xs"
+                  />
+                </label>
+                <p className="text-[10px] leading-4 text-slate-400">
+                  Assetの中のすべてのグラフが動きます。「イベントを送る」と「イベントを受け取る」でグラフ同士をつなげます。
+                </p>
+                <button
+                  type="button"
+                  disabled={readOnly || draft.graphs.length >= 64}
+                  onClick={() => {
+                    const created = draft.graphs.length;
+                    updateExtension((extension) => {
+                      addInteractivityGraph(
+                        extension,
+                        `Graph ${extension.graphs.length + 1}`,
+                      );
+                    });
+                    setGraphIndex(created);
+                    setSelectedNodeIndex(null);
+                    setGraphMenuOpen(false);
+                  }}
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-left text-xs hover:border-violet-500 hover:bg-slate-800 disabled:opacity-40"
+                >
+                  グラフを追加
+                </button>
+                <button
+                  type="button"
+                  disabled={readOnly || draft.graphs.length >= 64}
+                  onClick={() => {
+                    const created = draft.graphs.length;
+                    updateExtension((extension) => {
+                      duplicateInteractivityGraph(extension, graphIndex);
+                    });
+                    setGraphIndex(created);
+                    setSelectedNodeIndex(null);
+                    setGraphMenuOpen(false);
+                  }}
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-left text-xs hover:border-violet-500 hover:bg-slate-800 disabled:opacity-40"
+                >
+                  このグラフを複製
+                </button>
+                <button
+                  type="button"
+                  disabled={readOnly || (draft.graph ?? 0) === graphIndex}
+                  onClick={() => {
+                    updateExtension((extension) => {
+                      extension.graph = graphIndex;
+                    });
+                    setGraphMenuOpen(false);
+                  }}
+                  title="Modelへ埋め込んだ場合や、1つだけを走らせる書き出しで使われるグラフです"
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-left text-xs hover:border-violet-500 hover:bg-slate-800 disabled:opacity-40"
+                >
+                  既定のグラフにする
+                </button>
+                <button
+                  type="button"
+                  disabled={readOnly || draft.graphs.length <= 1}
+                  onClick={() => {
+                    const removed = graphIndex;
+                    updateExtension((extension) => {
+                      removeInteractivityGraph(extension, removed);
+                    });
+                    setGraphIndex(Math.max(0, removed - 1));
+                    setSelectedNodeIndex(null);
+                    setGraphMenuOpen(false);
+                  }}
+                  className="w-full rounded border border-rose-800 px-2 py-1.5 text-left text-xs text-rose-300 hover:bg-rose-950 disabled:opacity-40"
+                >
+                  このグラフを削除
+                </button>
+              </div>
+            ) : null}
+          </div>
           <button
             type="button"
             onClick={() => setPaletteOpen((open) => !open)}

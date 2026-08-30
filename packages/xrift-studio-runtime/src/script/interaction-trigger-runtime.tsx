@@ -41,6 +41,7 @@ import {
   type XriftInteractionValue,
 } from "./interaction-trigger.js";
 import { InteractivityEngine } from "../interactivity/engine.js";
+import { parseInteractivityExtension } from "../interactivity/graph.js";
 import type {
   InteractivityActionTarget,
   InteractivityHost,
@@ -1013,32 +1014,69 @@ export function XriftInteractionTriggerRuntime({
     [componentId, order, scene],
   );
   const host = useMemo(() => createXriftInteractionHost(applier), [applier]);
-  const engine = useMemo(
-    () => (playing ? new InteractivityEngine(graph, host) : null),
-    [graph, host, playing],
-  );
+  /**
+   * One engine per graph in the Asset.
+   *
+   * An Asset can hold several graphs, and the point of holding several is that
+   * they compose: one waits, another reacts to what it announced. Running only
+   * the document's default graph would make every other graph in the file
+   * inert, which is not what an author who made a second graph asked for.
+   */
+  const engines = useMemo(() => {
+    if (!playing) return [];
+    const parsed = parseInteractivityExtension(graph);
+    // Events are dispatched by this component rather than inside each engine,
+    // so a receiver in the sending graph runs exactly once.
+    const pending: string[] = [];
+    const created = parsed.graphs.map(
+      (candidate) =>
+        new InteractivityEngine(
+          graph,
+          {
+            ...host,
+            emitEvent: (name, payload) => {
+              pending.push(name);
+              host.emitEvent?.(name, payload);
+            },
+          },
+          { graphIndex: candidate.index, localEventDelivery: false },
+        ),
+    );
+    return created.map((engine) => ({ engine, pending, all: created }));
+  }, [graph, host, playing]);
 
   useEffect(() => () => applier.dispose(), [applier]);
 
   useEffect(() => {
-    if (!engine) return;
+    if (engines.length === 0) return;
     // `event/onStart` is what makes a graph a timeline rather than only a
     // reaction: the same Asset can wait, repeat and finish on its own.
-    engine.start();
+    for (const entry of engines) entry.engine.start();
     return () => {
-      engine.dispose();
+      for (const entry of engines) entry.engine.dispose();
       applier.dispose();
     };
-  }, [applier, engine]);
+  }, [applier, engines]);
 
   useFrame((_state, delta) => {
-    engine?.update(delta);
+    const first = engines[0];
+    if (!first) return;
+    for (const entry of engines) entry.engine.update(delta);
+    // Delivered after the frame's own work so a send cannot recurse into the
+    // activation that produced it.
+    if (first.pending.length === 0) return;
+    const names = first.pending.splice(0, first.pending.length);
+    for (const name of names) {
+      for (const entry of engines) entry.engine.receiveEvent(name);
+    }
   });
 
   useEffect(() => {
-    if (!engine) return;
-    return subscribeXriftInteraction(entityId, () => engine.interact());
-  }, [engine, entityId]);
+    if (engines.length === 0) return;
+    return subscribeXriftInteraction(entityId, () => {
+      for (const entry of engines) entry.engine.interact();
+    });
+  }, [engines, entityId]);
 
   return null;
 }

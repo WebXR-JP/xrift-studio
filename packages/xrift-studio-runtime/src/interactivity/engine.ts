@@ -78,6 +78,14 @@ export type InteractivityTraceEntry = {
 export type InteractivityEngineOptions = {
   /** Which graph of the extension to run. Defaults to the document's own. */
   readonly graphIndex?: number;
+  /**
+   * Whether `event/send` also delivers to this graph's own receivers.
+   *
+   * True for a graph running on its own. A host that runs several graphs of one
+   * Asset turns it off and delivers through its own dispatch instead, so a
+   * receiver in the sending graph is not run twice.
+   */
+  readonly localEventDelivery?: boolean;
   /** Node activations allowed per frame before the frame is cut short. */
   readonly activationBudget?: number;
   /** Trace entries kept for the debugger. Older entries are dropped. */
@@ -317,6 +325,7 @@ export class InteractivityEngine {
   private readonly host: InteractivityHost;
   private readonly activationBudget: number;
   private readonly traceLimit: number;
+  private readonly localEventDelivery: boolean;
 
   private readonly variables: InteractivityValue[] = [];
   private readonly outputs = new Map<string, InteractivityValue>();
@@ -348,6 +357,7 @@ export class InteractivityEngine {
     this.host = host;
     this.activationBudget = options.activationBudget ?? DEFAULT_ACTIVATION_BUDGET;
     this.traceLimit = options.traceLimit ?? DEFAULT_TRACE_LIMIT;
+    this.localEventDelivery = options.localEventDelivery ?? true;
     for (const variable of this.graph?.variables ?? []) {
       const signature =
         variable.typeIndex === null
@@ -920,6 +930,7 @@ export class InteractivityEngine {
 
   private queueLocalEvent(name: string, exclude: readonly FlowFrame[]): void {
     void exclude;
+    if (!this.localEventDelivery) return;
     for (const candidate of this.graph?.nodes ?? []) {
       if (candidate.op !== "event/receive") continue;
       if (this.configurationEventId(candidate) !== name) continue;

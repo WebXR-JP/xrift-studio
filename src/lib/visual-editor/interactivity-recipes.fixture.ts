@@ -14,6 +14,12 @@ import {
   type KhrInteractivityJsonValue,
 } from "./interactivity-graph";
 import {
+  addInteractivityGraph,
+  duplicateInteractivityGraph,
+  removeInteractivityGraph,
+  renameInteractivityGraph,
+} from "./interactivity-graph";
+import {
   appendInteractivityOperation,
   connectInteractivityFlow,
   ensureInteractivityTypes,
@@ -180,6 +186,89 @@ export function runInteractivityRecipeFixtureAssertions(): void {
   assert(
     reuseGraph.nodes?.[first]?.flows?.out?.node === delayIndex,
     "Reconnecting a flow socket did not replace the earlier target",
+  );
+}
+
+/**
+ * Adding, copying and removing graphs inside one Asset.
+ *
+ * The default-graph index is the part that breaks quietly: remove a graph in
+ * the middle and every index after it shifts, so a document that still says
+ * "run graph 2" starts running a different graph.
+ */
+export function runInteractivityGraphListFixtureAssertions(): void {
+  const extension: KhrInteractivityExtension = {
+    graph: 0,
+    graphs: [{ name: "First" }],
+  };
+
+  const second = addInteractivityGraph(extension, "Second");
+  assert(second === 1, "adding a graph did not return its index");
+  const third = addInteractivityGraph(extension, "Third");
+  assert(
+    extension.graphs.length === 3 && extension.graphs[third]?.name === "Third",
+    "adding graphs did not extend the Asset",
+  );
+  assert(
+    validateKhrInteractivityExtension(extension).every(
+      (diagnostic) => diagnostic.severity !== "error",
+    ),
+    "a freshly added graph cannot be saved",
+  );
+
+  extension.graph = 2;
+  assert(
+    removeInteractivityGraph(extension, 1),
+    "removing a graph in the middle was refused",
+  );
+  const remaining = extension.graphs.map((graph) => graph.name).join(",");
+  assert(
+    remaining === "First,Third",
+    `removing a graph did not close the gap: ${remaining}`,
+  );
+  const followedIndex = extension.graph;
+  assert(
+    followedIndex === 1,
+    "the default graph index did not follow the graph it pointed at",
+  );
+
+  extension.graph = 1;
+  assert(
+    removeInteractivityGraph(extension, 1),
+    "removing the default graph was refused",
+  );
+  const resetIndex = extension.graph;
+  assert(
+    resetIndex === 0,
+    "removing the default graph left the index pointing past the list",
+  );
+  assert(
+    !removeInteractivityGraph(extension, 0),
+    "the last graph was removed, leaving an Asset with no graph at all",
+  );
+
+  const source = extension.graphs[0];
+  assert(source !== undefined, "the remaining graph went missing");
+  source.declarations = [{ op: "event/onStart" }];
+  source.nodes = [{ declaration: 0 }];
+  const copyIndex = duplicateInteractivityGraph(extension, 0);
+  const copy = extension.graphs[copyIndex];
+  assert(copy !== undefined, "duplicating a graph produced nothing");
+  assert(copy.nodes?.length === 1, "duplicating a graph did not copy its nodes");
+  assert(
+    copy.nodes !== source.nodes,
+    "a duplicated graph shares its node array with the original",
+  );
+  assert(
+    renameInteractivityGraph(extension, copyIndex, "Renamed") &&
+      extension.graphs[copyIndex]?.name === "Renamed",
+    "renaming a graph did not take",
+  );
+  assert(
+    validateKhrInteractivityExtension(extension).every(
+      (diagnostic) => diagnostic.severity !== "error",
+    ),
+    "graph list edits produced an Asset the editor cannot save",
   );
 }
 

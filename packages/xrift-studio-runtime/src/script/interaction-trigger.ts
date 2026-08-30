@@ -585,14 +585,26 @@ type ParsedGraph = {
   operationFor: (node: Record<string, unknown> | undefined) => string | undefined;
 };
 
-function parseSelectedGraph(value: unknown): ParsedGraph | null {
+/**
+ * Every graph in the Asset.
+ *
+ * The trigger runtime runs them all — an Asset holds several so they can
+ * compose — so the compiler's dependency list and the Editor's diagnostics have
+ * to look at all of them too. Reading only the default graph made an action in
+ * the second one invisible to both.
+ */
+function parseAllGraphs(value: unknown): ParsedGraph[] {
   const extension = asRecord(value);
   const graphs = Array.isArray(extension?.graphs) ? extension.graphs : [];
-  const rawIndex = extension?.graph;
-  const graphIndex =
-    typeof rawIndex === "number" && Number.isInteger(rawIndex) && rawIndex >= 0
-      ? rawIndex
-      : 0;
+  return graphs.flatMap((_candidate, index) => {
+    const parsed = parseGraphAt(value, index);
+    return parsed ? [parsed] : [];
+  });
+}
+
+function parseGraphAt(value: unknown, graphIndex: number): ParsedGraph | null {
+  const extension = asRecord(value);
+  const graphs = Array.isArray(extension?.graphs) ? extension.graphs : [];
   const graph = asRecord(graphs[graphIndex]);
   if (!graph) return null;
   const declarations = Array.isArray(graph.declarations) ? graph.declarations : [];
@@ -670,8 +682,12 @@ function readAction(
 export function collectXriftInteractionPrograms(
   value: unknown,
 ): XriftInteractionProgram[] {
-  const parsed = parseSelectedGraph(value);
-  if (!parsed) return [];
+  return parseAllGraphs(value).flatMap((parsed) =>
+    collectGraphPrograms(parsed),
+  );
+}
+
+function collectGraphPrograms(parsed: ParsedGraph): XriftInteractionProgram[] {
   const programs: XriftInteractionProgram[] = [];
 
   const walk = (
@@ -737,8 +753,10 @@ export function hasXriftInteractionTrigger(value: unknown): boolean {
 export function collectXriftInteractionIssues(
   value: unknown,
 ): XriftInteractionIssue[] {
-  const parsed = parseSelectedGraph(value);
-  if (!parsed) return [];
+  return parseAllGraphs(value).flatMap((parsed) => collectGraphIssues(parsed));
+}
+
+function collectGraphIssues(parsed: ParsedGraph): XriftInteractionIssue[] {
   const issues: XriftInteractionIssue[] = [];
   parsed.nodes.forEach((candidate, nodeIndex) => {
     const node = asRecord(candidate);
