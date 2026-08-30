@@ -27,7 +27,7 @@ document 以外は React shell か Tauri 側が持つ副作用を伴う。
 書き込み tool は `projectId`、`sceneId`、`expectedRevision` を要求する。古い
 snapshot への適用を弾くためで、複数 client が同時に触っても編集は直列化される。
 
-## document (71)
+## document (77)
 
 **Editor context / Project**
 `get_editor_context`, `get_scripting_capabilities`, `update_project_metadata`
@@ -47,8 +47,16 @@ snapshot への適用を弾くためで、複数 client が同時に触っても
 **Scene / Entity**
 `update_scene_settings`, `list_entities`, `get_entity_components`,
 `get_entity_bounds`, `create_empty_entity`, `create_primitive`, `place_asset`,
-`place_builtin_prefab`, `create_prefab`, `rename_entity`, `duplicate_entity`,
-`reparent_entity`, `delete_entity`, `set_entity_enabled`, `update_transform`
+`list_scene_recipes`, `place_builtin_prefab`, `create_prefab`, `rename_entity`,
+`duplicate_entity`, `reparent_entity`, `delete_entity`, `set_entity_enabled`,
+`update_transform`
+
+`list_scene_recipes` は焚き火・松明・木・岩・雪・噴水・柱・階段・井戸・ベンチ・
+収録スタジオなどの出来合いの 3D セットを返す（配置は local-asset の
+`apply_scene_recipe`）。各セットは光・パーティクル・マテリアルが互いに
+噛み合った subtree で、同じものを primitive から組むと十数回の呼び出しで
+明らかに見劣りする。`note` は配置後に作者がまだやることなので、落とさず
+そのまま返す。
 
 `get_entity_bounds` は Transform ではなく**大きさ**を返す。`world` は既定で
 配下を含めた axis-aligned box、`local` は自身の Mesh の素の extent。回転して
@@ -105,12 +113,16 @@ world 座標、傾斜、穴、草の層ごとの被覆を返す。document は�
 **Component コードの取り込み**
 `analyze_component_code`, `apply_component_code_import_plan`
 
-## local-asset (10)
+## local-asset (11)
 
 `import_audio_asset`, `import_texture_asset`, `import_model_asset`,
 `import_skybox_asset`, `import_shader_asset`, `reimport_model_asset`,
-`process_texture_asset`, `get_shader_asset`, `update_shader_asset`,
-`set_project_thumbnail`
+`process_texture_asset`, `apply_scene_recipe`, `get_shader_asset`,
+`update_shader_asset`, `set_project_thumbnail`
+
+`apply_scene_recipe` が document ではなく shell にあるのは、セットの部品の
+Model を project へ書き出すため。Particle Asset と subtree は一件の history
+にまとめる。セットを Undo したときに Asset だけ残らないようにするため。
 
 `update_texture_asset` が書けるのは import 設定 (`maxSize`、`format`、
 `quality`) だけで、原本の画像はそのまま残る。実際に解像度を変えて再エンコード

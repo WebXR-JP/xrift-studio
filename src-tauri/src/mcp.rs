@@ -3515,6 +3515,32 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "list_scene_recipes",
+            "description": "List the ready-made 3D sets available for this project kind — campfire, torch, tree, rocks, snowfall, fountain, column, stairs, well, bench, recording studio and more — with their category, part count and the note saying what the author still has to do after placing. Each set is a subtree whose lights, particles and materials already agree with one another; building the same thing from primitives takes a dozen calls and comes out worse.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "apply_scene_recipe",
+            "description": "Place one ready-made 3D set into the scene as a single subtree, creating the Particle Assets and writing the bundled Models it needs. Returns the root Entity, its children and any Assets created, so each part can be adjusted afterwards. Omit position and it lands on the same grid the catalog uses rather than stacking at the origin. Requires a saved project; Edit mode only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "recipeId": { "type": "string", "minLength": 1 },
+                    "position": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "recipeId"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "place_builtin_prefab",
             "description": "Place a builtin XRift prefab (SpawnPoint, Mirror, Portal, TagBoard, VideoScreen, VideoPlayer, LiveVideoPlayer, or ScreenShareDisplay) into the scene.",
             "inputSchema": {

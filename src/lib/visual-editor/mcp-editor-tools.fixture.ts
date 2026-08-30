@@ -1302,6 +1302,31 @@ export function runXriftMcpEditorToolFixtures(): void {
     "list_entities should include the previously placed Entity",
   );
 
+  // A caller that cannot see the ready-made sets builds a campfire out of
+  // primitives, which is a dozen calls for a worse result.
+  const sceneRecipes = executeXriftMcpEditorTool(current, {
+    id: "fixture-list-scene-recipes",
+    tool: "list_scene_recipes",
+    arguments: {},
+  });
+  const listedRecipes = sceneRecipes.result.recipes as Array<{
+    id: string;
+    note: string;
+    partCount: number;
+    categoryLabel: string;
+  }>;
+  assert(
+    listedRecipes.length > 0 &&
+      listedRecipes.every(
+        (recipe) => recipe.partCount > 0 && recipe.categoryLabel.length > 0,
+      ),
+    "list_scene_recipes should report each set's parts and its category label",
+  );
+  assert(
+    listedRecipes.some((recipe) => recipe.note.length > 0),
+    "list_scene_recipes should carry the note about what the author still does",
+  );
+
   // create_terrain makes a flat plate, which is the right primitive and the
   // wrong starting point: everything the Create menu offers arrives shaped.
   const terrainCatalog = executeXriftMcpEditorTool(current, {

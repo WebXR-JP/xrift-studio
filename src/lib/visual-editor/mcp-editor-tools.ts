@@ -97,6 +97,10 @@ import {
 } from "./terrain-surface-catalog";
 import { applyTerrainSurfaceCatalogInstall } from "./external-store";
 import {
+  SCENE_RECIPE_CATEGORY_LABELS,
+  getSceneRecipesForProjectKind,
+} from "./scene-recipe-catalog";
+import {
   terrainCellHasHole,
   terrainHeightRange,
   TERRAIN_BRUSH_KINDS,
@@ -342,6 +346,7 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   update_terrain_grass_layer: updateTerrainGrassLayer,
   delete_terrain_grass_layer: deleteTerrainGrassLayer,
   paint_terrain_grass: paintTerrainGrass,
+  list_scene_recipes: listSceneRecipes,
   place_builtin_prefab: placeBuiltinPrefab,
   create_prefab: createPrefab,
   add_component: addComponent,
@@ -2028,6 +2033,46 @@ function updateTerrain(
     },
     activity: `AIがTerrain「${entity.name}」のサイズと解像度を更新しました`,
   };
+}
+
+/**
+ * The ready-made sets: a campfire, a well, a stairway, a recording studio.
+ *
+ * Each recipe is a small subtree with its lights, particles and materials
+ * already agreeing with one another. Built part by part from primitives the
+ * result is recognisably worse, and takes a dozen tool calls to get there, so
+ * a caller that cannot see this catalog reaches for the harder path by default.
+ *
+ * `note` is what the author still has to do themselves after placing, and it
+ * is carried through rather than dropped: it is the difference between a set
+ * that works and one that looks placed and does nothing.
+ */
+function listSceneRecipes(
+  context: XriftMcpEditorContext,
+): XriftMcpEditorToolOutcome {
+  const projectKind = context.bundle.project.projectKind;
+  const recipes = getSceneRecipesForProjectKind(projectKind);
+  return unchanged(
+    context,
+    {
+      projectKind,
+      recipes: recipes.map((recipe) => ({
+        id: recipe.id,
+        name: recipe.name,
+        description: recipe.description,
+        category: recipe.category,
+        categoryLabel: SCENE_RECIPE_CATEGORY_LABELS[recipe.category],
+        note: recipe.note,
+        partCount: recipe.parts.length,
+        partKinds: [...new Set(recipe.parts.map((part) => part.kind))],
+      })),
+      count: recipes.length,
+      categories: Object.entries(SCENE_RECIPE_CATEGORY_LABELS).map(
+        ([id, label]) => ({ id, label }),
+      ),
+    },
+    "3Dセットの一覧を取得しました",
+  );
 }
 
 /**

@@ -3,7 +3,7 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 98] = [
+pub const MCP_TOOL_NAMES: [&str; 100] = [
     "get_editor_context",
     "get_scripting_capabilities",
     "analyze_component_code",
@@ -48,6 +48,7 @@ pub const MCP_TOOL_NAMES: [&str; 98] = [
     "update_terrain_grass_layer",
     "delete_terrain_grass_layer",
     "paint_terrain_grass",
+    "list_scene_recipes",
     "place_builtin_prefab",
     "create_prefab",
     "add_component",
@@ -87,6 +88,7 @@ pub const MCP_TOOL_NAMES: [&str; 98] = [
     "import_shader_asset",
     "reimport_model_asset",
     "process_texture_asset",
+    "apply_scene_recipe",
     "get_shader_asset",
     "update_shader_asset",
     "set_project_thumbnail",

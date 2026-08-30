@@ -2481,6 +2481,7 @@ export function VisualEditorPrototype({
           request.tool === "update_shader_asset" ||
           request.tool === "reimport_model_asset" ||
           request.tool === "process_texture_asset" ||
+          request.tool === "apply_scene_recipe" ||
           request.tool === "set_project_thumbnail"
         ) {
           const args = request.arguments;
@@ -2689,6 +2690,112 @@ export function VisualEditorPrototype({
                 assetOperationRef.current = null;
               }
             }
+          }
+
+          // 3Dセットは、部品のModelをprojectへ書き出してから組み立てる。
+          // Assetのfile I/Oを伴うので、documentのtoolではなくshellが持つ。
+          if (request.tool === "apply_scene_recipe") {
+            const recipeId = mcpRequiredString(args.recipeId, "recipeId");
+            const sourceScene = sourceBundle.scene;
+            const position =
+              mcpOptionalVec3(args.position, "position") ??
+              // 何も指定されなければ、店から置いたときと同じ格子へ並べる。
+              // 全部が原点へ重なると、置いた結果が読めなくなる。
+              ([
+                roundTo(((sourceScene.rootEntityIds.length % 5) - 2) * 1.35, 1),
+                0,
+                roundTo(
+                  (Math.floor(sourceScene.rootEntityIds.length / 5) - 0.5) *
+                    1.35,
+                  1,
+                ),
+              ] as [number, number, number]);
+            // 部品のModel書き出しを待つ間にEditorが動くことがある。
+            // 待つ前のrevisionを覚えておき、動いていたら適用しない。
+            const startingRevision = mcpRevisionRef.current;
+            const placed = await instantiateSceneRecipe(
+              sourceScene,
+              sourceBundle.assets,
+              recipeId,
+              sourceBundle.project.projectKind,
+              currentProjectPath,
+              position,
+            );
+            if (!placed) {
+              throw new XriftMcpEditorToolError(
+                "SCENE_RECIPE_UNAVAILABLE",
+                "この3Dセットを現在のProjectへ配置できませんでした。recipeIdとproject kindを確認してください",
+                { recipeId, projectKind: sourceBundle.project.projectKind },
+              );
+            }
+            if (
+              bundleRef.current !== sourceBundle ||
+              mcpRevisionRef.current !== startingRevision
+            ) {
+              throw new XriftMcpEditorToolError(
+                "STALE_REVISION",
+                "3Dセットの配置中にProjectが更新されました。最新のEditor contextで再試行してください",
+                { recipeId },
+              );
+            }
+            // Subtree と、その Particle Asset を一件の history にする。
+            // セットを Undo したときに Asset だけ残らないようにするため。
+            const nextBundle = touchProject({
+              ...bundleRef.current,
+              assets: placed.assets,
+              scene: placed.scene,
+            });
+            const revisionBefore = mcpRevisionRef.current;
+            mcpRevisionRef.current += 1;
+            mcpRevisionBundleRef.current = nextBundle;
+            bundleRef.current = nextBundle;
+            sceneSelectionRef.current = {
+              kind: "entity",
+              id: placed.rootEntityId,
+            };
+            assetSelectionRef.current = null;
+            saveStatusRef.current = "dirty";
+            setHistory((current) =>
+              commitEditorHistory(current, {
+                ...current.present,
+                bundle: nextBundle,
+                sceneSelection: { kind: "entity", id: placed.rootEntityId },
+                assetSelection: null,
+              }),
+            );
+            setSaveStatus("dirty");
+            const entityName =
+              placed.scene.entities[placed.rootEntityId]?.name ?? recipeId;
+            const activity = `AIが3Dセット「${entityName}」をSceneへ配置しました`;
+            setNotice(`${activity}。変更を自動保存します`);
+            setMcpLastActivity({
+              clientName: request.clientName || "AI client",
+              message: activity,
+              at: new Intl.DateTimeFormat("ja-JP", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              }).format(new Date()),
+              revision: mcpRevisionRef.current,
+            });
+            await tauri.completeXriftMcpRequest({
+              id: request.id,
+              ok: true,
+              result: {
+                projectId: nextBundle.project.projectId,
+                sceneId: nextBundle.scene.sceneId,
+                revisionBefore,
+                revisionAfter: mcpRevisionRef.current,
+                recipeId,
+                entityId: placed.rootEntityId,
+                entityName,
+                position,
+                childEntityIds:
+                  placed.scene.entities[placed.rootEntityId]?.children ?? [],
+                createdAssetIds: placed.createdAssetIds,
+              },
+            });
+            return;
           }
 
           // Texture Inspector の解像度変更と圧縮を MCP から実行する。
