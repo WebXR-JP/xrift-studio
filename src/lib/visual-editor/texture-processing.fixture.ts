@@ -5,10 +5,15 @@ import {
   type TextureSourceFormat,
 } from "./asset-manifest";
 import {
+  describeTextureOptimization,
   fitWithin,
+  ktx2QualityLevel,
+  nearestPowerOfTwo,
   planTextureProcessing,
   processedAssetPath,
   resolveOutputFormat,
+  resolveTargetSize,
+  revertTextureOptimization,
 } from "./texture-processing";
 
 /** Canvasを触らずに、変換の可否と変換後の見積もりだけを確かめる。 */
@@ -18,6 +23,171 @@ export function runTextureProcessingFixtureAssertions(): void {
   assertUnsupportedSources();
   assertPendingDetection();
   assertProcessedPath();
+  assertKtx2Quality();
+  assertPowerOfTwo();
+  assertNonDestructiveRevert();
+}
+
+/**
+ * 2のべき乗への丸めは最大解像度と併用できる必要がある。上限を超える丸め上げは
+ * Canvasが描けない辺を作るので、必ず上限側で止まることを固定する。
+ */
+function assertPowerOfTwo(): void {
+  assert(
+    nearestPowerOfTwo(1000, null) === 1024 && nearestPowerOfTwo(600, null) === 512,
+    "A non power-of-two edge did not snap to the nearest power of two",
+  );
+  assert(
+    nearestPowerOfTwo(1024, null) === 1024,
+    "An edge that is already a power of two was changed",
+  );
+  assert(
+    nearestPowerOfTwo(1800, 1024) === 1024,
+    "Snapping ignored the max size ceiling",
+  );
+  assert(
+    nearestPowerOfTwo(1, null) === 1 && nearestPowerOfTwo(0, null) === 1,
+    "A degenerate edge collapsed below one pixel",
+  );
+  assert(
+    nearestPowerOfTwo(20000, null) === 8192,
+    "Snapping produced an edge past the renderable ceiling",
+  );
+
+  const both = resolveTargetSize(4000, 3000, 1024, true);
+  assert(
+    both.width === 1024 && both.height === 1024,
+    `Max size and power-of-two did not compose: ${both.width} × ${both.height}`,
+  );
+  const potOnly = resolveTargetSize(1000, 600, null, true);
+  assert(
+    potOnly.width === 1024 && potOnly.height === 512,
+    "Power-of-two without a max size did not snap both edges",
+  );
+  const off = resolveTargetSize(1000, 600, null, false);
+  assert(
+    off.width === 1000 && off.height === 600,
+    "Sizes changed while power-of-two was off",
+  );
+
+  // 最大解像度に収まっていても、辺が2のべき乗でなければ変換は必要。
+  const pending = plan(
+    { sourceFormat: "png", width: 1000, height: 600 },
+    { resize: { mode: "original", powerOfTwo: true } },
+  );
+  assert(
+    pending.supported &&
+      pending.pending &&
+      pending.powerOfTwo &&
+      pending.targetWidth === 1024 &&
+      pending.targetHeight === 512,
+    "A power-of-two only recipe was not reported as pending",
+  );
+  const settled = plan(
+    { sourceFormat: "png", width: 1024, height: 512 },
+    { resize: { mode: "original", powerOfTwo: true } },
+  );
+  assert(
+    settled.supported && !settled.pending,
+    "A source that is already power-of-two was reported as pending",
+  );
+}
+
+/**
+ * 圧縮しても原本は消さない。参照先だけを差し替え、控えから必ず戻せる。
+ * ここが壊れると、作者は変換をやり直す手段を失う。
+ */
+function assertNonDestructiveRevert(): void {
+  const original = textureAsset(
+    { sourceFormat: "png", width: 2048, height: 2048 },
+    { compression: { format: "ktx2" } },
+  );
+  assert(
+    !describeTextureOptimization(original).optimized,
+    "An untouched Texture was reported as optimized",
+  );
+
+  const optimized: TextureAsset = {
+    ...original,
+    source: { kind: "project", relativePath: "assets/.optimized/t-abc.ktx2" },
+    sourceHash: "b".repeat(64),
+    importMetadata: {
+      sourceFormat: "ktx2",
+      mimeType: "image/ktx2",
+      byteLength: 1024,
+      width: 1024,
+      height: 1024,
+    },
+    importSettings: normalizeTextureImportSettings(
+      { compression: { format: "source" } },
+      normalizeTextureImportSettings(
+        original.importSettings as unknown as TextureImportSettingsPatch,
+      ),
+    ),
+    optimizedFrom: {
+      source: original.source,
+      sourceHash: original.sourceHash,
+      importMetadata: original.importMetadata,
+      importSettings: original.importSettings,
+      appliedAt: "2026-01-01T00:00:00.000Z",
+    },
+  };
+
+  const status = describeTextureOptimization(optimized);
+  assert(
+    status.optimized &&
+      status.current.label === "1024 × 1024・KTX2" &&
+      status.original.label === "2048 × 2048・PNG",
+    "The in-use and original variants were not described for the author",
+  );
+
+  const manifest = {
+    assets: { [optimized.id]: optimized },
+  } as unknown as Parameters<typeof revertTextureOptimization>[0];
+  const reverted = revertTextureOptimization(manifest, optimized.id);
+  assert(reverted.ok, "Reverting a converted Texture failed");
+  if (!reverted.ok) return;
+  const restored = reverted.manifest.assets[optimized.id];
+  assert(
+    restored.kind === "texture" &&
+      restored.source.kind === "project" &&
+      restored.source.relativePath === "assets/imported/textures/fixture.png" &&
+      restored.importMetadata?.sourceFormat === "png" &&
+      restored.importSettings.compression.format === "ktx2" &&
+      restored.optimizedFrom === undefined,
+    "Reverting did not restore the original source, metadata and recipe",
+  );
+
+  const alreadyOriginal = revertTextureOptimization(reverted.manifest, optimized.id);
+  assert(
+    !alreadyOriginal.ok,
+    "Reverting an Asset that already uses its original was accepted",
+  );
+}
+
+/**
+ * Basisのquality levelは 1..255 の探索量で、Import設定の 0..100 とは別の尺度。
+ * 0や範囲外を渡すとエンコーダが失敗するので、境界を固定しておく。
+ */
+function assertKtx2Quality(): void {
+  assert(ktx2QualityLevel(0) === 1, "The lowest quality mapped outside the Basis range");
+  assert(ktx2QualityLevel(100) === 255, "The highest quality did not reach the Basis maximum");
+  assert(
+    ktx2QualityLevel(50) > 1 && ktx2QualityLevel(50) < 255,
+    "A mid quality did not stay inside the Basis range",
+  );
+  assert(
+    ktx2QualityLevel(-40) === 1 && ktx2QualityLevel(400) === 255,
+    "An out-of-range quality was not clamped",
+  );
+  assert(
+    ktx2QualityLevel(Number.NaN) === 255,
+    "A non-numeric quality did not fall back to the maximum",
+  );
+  assert(
+    ktx2QualityLevel(70) >= ktx2QualityLevel(40),
+    "The Basis quality mapping is not monotonic",
+  );
 }
 
 function assertFitWithin(): void {
@@ -160,6 +330,18 @@ function assertPendingDetection(): void {
     "A Texture with unknown dimensions did not fall back to running the conversion",
   );
 
+  const ktx2 = plan(
+    { sourceFormat: "png", width: 1024, height: 1024 },
+    { compression: { format: "ktx2", quality: 80 } },
+  );
+  assert(
+    ktx2.supported &&
+      ktx2.pending &&
+      ktx2.outputFormat === "ktx2" &&
+      ktx2.qualityApplies,
+    "A KTX2 conversion did not report Quality as meaningful",
+  );
+
   const substituted = plan(
     { sourceFormat: "gif", width: 2048, height: 2048 },
     { resize: { mode: "max-size", maxSize: 512 } },
@@ -192,15 +374,30 @@ function plan(
   settings: TextureImportSettingsPatch,
   overrides: Partial<TextureAsset> = {},
 ): ReturnType<typeof planTextureProcessing> {
-  const asset: TextureAsset = {
+  return planTextureProcessing(textureAsset(metadata, settings, overrides));
+}
+
+function textureAsset(
+  metadata:
+    | {
+        sourceFormat: TextureSourceFormat;
+        width: number | undefined;
+        height: number | undefined;
+      }
+    | null,
+  settings: TextureImportSettingsPatch,
+  overrides: Partial<TextureAsset> = {},
+): TextureAsset {
+  return {
     id: "texture-processing-fixture",
     name: "Texture Processing Fixture",
     kind: "texture",
     status: "ready",
     source: {
       kind: "project",
-      relativePath: "assets/textures/texture-processing-fixture.png",
+      relativePath: "assets/imported/textures/fixture.png",
     },
+    sourceHash: "a".repeat(64),
     thumbnail: { status: "missing" },
     importSettings: normalizeTextureImportSettings(settings),
     ...(metadata
@@ -216,7 +413,6 @@ function plan(
       : {}),
     ...overrides,
   };
-  return planTextureProcessing(asset);
 }
 
 function assert(condition: unknown, message: string): asserts condition {

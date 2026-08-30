@@ -1,10 +1,22 @@
-import type { ReactNode } from "react";
-import type {
-  AssetManifest,
-  ModelAsset,
-  ModelAssetPatch,
-  ModelReimportImpact,
+import { useState, type ReactNode } from "react";
+import {
+  describeModelOptimization,
+  groupModelAnimations,
+  MODEL_OPTIMIZATION_STEP_LABELS,
+  planModelOptimization,
+  type AssetManifest,
+  type ModelAsset,
+  type ModelAssetPatch,
+  type ModelAnimationMetadata,
+  type ModelOptimizationOptions,
+  type ModelReimportImpact,
 } from "../../lib/visual-editor";
+import { AssetOptimizationOriginCard } from "./AssetOptimizationOriginCard";
+
+export type ModelOptimizationState =
+  | { phase: "idle" }
+  | { phase: "reading" | "encoding" | "saving"; message: string }
+  | { phase: "succeeded" | "failed"; message: string };
 
 export type ModelReimportState =
   | { phase: "idle" }
@@ -29,9 +41,13 @@ export function ModelAssetInspector({
   canReimport,
   reimportState,
   reimportImpactNotice,
+  optimizationState,
+  canOptimize,
   onChange,
   onOpenMaterial,
   onReimport,
+  onOptimize,
+  onRevertOptimization,
 }: {
   asset: ModelAsset;
   assets: AssetManifest;
@@ -40,9 +56,13 @@ export function ModelAssetInspector({
   canReimport: boolean;
   reimportState: ModelReimportState;
   reimportImpactNotice?: ModelReimportImpactNotice | null;
+  optimizationState?: ModelOptimizationState;
+  canOptimize?: boolean;
   onChange: (patch: ModelAssetPatch) => void;
   onOpenMaterial: (assetId: string) => void;
   onReimport: () => void;
+  onOptimize?: (options: ModelOptimizationOptions) => void;
+  onRevertOptimization?: () => void;
 }) {
   const metadata = asset.importMetadata;
   const openBrush = metadata?.openBrush;
@@ -201,13 +221,6 @@ export function ModelAssetInspector({
           }
         />
         <RecipeToggle
-          label="Mesh最適化"
-          description="保存値のみ表示。現在の変換・再インポート処理には反映されません"
-          checked={asset.importSettings.optimizeMeshes}
-          disabled
-          status="未対応"
-        />
-        <RecipeToggle
           label="Animationを取り込む"
           description="Animationを含むModelを新しく配置した時、自動再生用Componentを追加します"
           checked={asset.importSettings.importAnimations}
@@ -215,6 +228,21 @@ export function ModelAssetInspector({
           onChange={(importAnimations) =>
             onChange({ importSettings: { importAnimations } })
           }
+        />
+      </InspectorSection>
+
+      <InspectorSection
+        title="Mesh最適化 / Draco圧縮"
+        description="原本のGLBを書き換えて、配信サイズと頂点数を減らします"
+      >
+        <ModelOptimizationPanel
+          asset={asset}
+          state={optimizationState ?? { phase: "idle" }}
+          readOnly={readOnly}
+          canOptimize={Boolean(canOptimize && onOptimize)}
+          onChange={onChange}
+          onOptimize={onOptimize}
+          onRevert={onRevertOptimization}
         />
       </InspectorSection>
 
@@ -346,25 +374,7 @@ export function ModelAssetInspector({
         title={`Animations (${metadata?.animations.length ?? 0})`}
         description="ソース内で検出したanimation clip"
       >
-        {metadata?.animations.length ? (
-          <div className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
-            {metadata.animations.map((animation, index) => (
-              <div
-                key={`${animation.sourceAnimationIndex ?? index}-${animation.name}`}
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-2.5 py-2"
-              >
-                <span className="truncate text-xs font-medium text-slate-700">
-                  {animation.name}
-                </span>
-                <span className="text-[11px] tabular-nums text-slate-500">
-                  {formatNumber(animation.duration)}s · {animation.trackCount} tracks
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-slate-500">Animationは検出されていません。</p>
-        )}
+        <ModelAnimationList animations={metadata?.animations ?? []} />
       </InspectorSection>
 
       {metadata &&
@@ -490,6 +500,205 @@ function ModelReimportImpactSummary({
         </details>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * Import設定の「Mesh最適化」は長らく保存値だけで、実際の変換には繋がっていなかった。
+ * ここから原本のGLBを書き換えられるようにする。実行前後で何が変わるかを先に示し、
+ * 実行後は変換結果のサイズをその場に残す。
+ */
+function ModelOptimizationPanel({
+  asset,
+  state,
+  readOnly,
+  canOptimize,
+  onChange,
+  onOptimize,
+  onRevert,
+}: {
+  asset: ModelAsset;
+  state: ModelOptimizationState;
+  readOnly: boolean;
+  canOptimize: boolean;
+  onChange: (patch: ModelAssetPatch) => void;
+  onOptimize?: (options: ModelOptimizationOptions) => void;
+  onRevert?: () => void;
+}) {
+  // Mesh最適化はImport設定として残す値なので、Manifest側を唯一の状態にする。
+  // Draco圧縮は実行時だけの選択なので、ここでだけ持つ。
+  const optimizeMeshes = asset.importSettings.optimizeMeshes;
+  const [compressWithDraco, setCompressWithDraco] = useState(true);
+  const options: ModelOptimizationOptions = { optimizeMeshes, compressWithDraco };
+  const plan = planModelOptimization(asset, options);
+  const busy =
+    state.phase === "reading" || state.phase === "encoding" || state.phase === "saving";
+  const optimization = describeModelOptimization(asset);
+  const inUse = optimization.optimized ? (
+    <AssetOptimizationOriginCard
+      currentLabel={optimization.current.label}
+      currentBytes={optimization.current.byteLength}
+      originalLabel={optimization.original.label}
+      originalBytes={optimization.original.byteLength}
+      revertLabel="原本のGLBに戻す"
+      disabled={busy || readOnly || !onRevert}
+      onRevert={onRevert}
+    />
+  ) : null;
+
+  if (!plan.supported) {
+    return (
+      <>
+        {inUse}
+        <p className="rounded-md border border-slate-200 bg-slate-50 p-2 text-xs leading-4 text-slate-600">
+          {plan.reason}
+        </p>
+      </>
+    );
+  }
+
+  const blockedReason = readOnly
+    ? "Playを停止すると最適化できます。"
+    : !canOptimize
+      ? "初回の自動保存が終わると最適化できます。"
+      : null;
+
+  return (
+    <>
+      {inUse}
+      <RecipeToggle
+        label="Meshを最適化"
+        description="重複頂点の結合、頂点バッファの共有、Animationキーフレームの間引き"
+        checked={optimizeMeshes}
+        disabled={readOnly || busy}
+        onChange={(next) => onChange({ importSettings: { optimizeMeshes: next } })}
+      />
+      <RecipeToggle
+        label="Draco圧縮をかける"
+        description="配信サイズを下げます。描画時は頂点へ展開されるためVRAMは大きく減りません"
+        checked={compressWithDraco}
+        disabled={readOnly || busy || plan.alreadyDraco}
+        status={plan.alreadyDraco ? "適用済み" : undefined}
+        onChange={setCompressWithDraco}
+      />
+      <dl className="grid grid-cols-[52px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
+        <dt className="text-slate-500">現在</dt>
+        <dd className="text-right tabular-nums text-slate-700">
+          {formatBytes(plan.sourceByteLength)}
+        </dd>
+        <dt className="text-slate-500">実行</dt>
+        <dd
+          className={`text-right ${plan.steps.length > 0 ? "font-semibold text-violet-700" : "text-slate-500"}`}
+        >
+          {plan.steps.length > 0
+            ? plan.steps
+                .map((step) => MODEL_OPTIMIZATION_STEP_LABELS[step])
+                .join(" / ")
+            : "実行する処理なし"}
+        </dd>
+      </dl>
+      <p className="text-[11px] leading-4 text-slate-500">{plan.preservedNotice}</p>
+      <button
+        type="button"
+        disabled={plan.steps.length === 0 || busy || readOnly || !canOptimize}
+        onClick={() => onOptimize?.(options)}
+        className="h-8 w-full rounded-md border border-violet-300 bg-violet-50 px-3 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
+      >
+        {busy ? "最適化中" : "この設定でModelを最適化する"}
+      </button>
+      {state.phase !== "idle" ? (
+        <p
+          role="status"
+          className={`rounded border p-1.5 text-xs leading-4 ${
+            state.phase === "failed"
+              ? "border-rose-200 bg-rose-50 text-rose-800"
+              : state.phase === "succeeded"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : "border-sky-200 bg-sky-50 text-sky-800"
+          }`}
+        >
+          {state.message}
+        </p>
+      ) : blockedReason ? (
+        <p className="text-[11px] leading-4 text-slate-500">{blockedReason}</p>
+      ) : (
+        <p className="rounded border border-amber-200 bg-amber-50 p-1.5 text-xs leading-4 text-amber-800">
+          実行すると元のGLBは残したまま、Assetの参照先が最適化後のGLBへ切り替わります。
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
+ * 名前が連番のclipは数百件になる。全部を並べるとInspectorが読めなくなるので、
+ * 共通の接頭辞ごとに1行へまとめ、開いた時だけ内訳を出す。
+ */
+function ModelAnimationList({
+  animations,
+}: {
+  animations: readonly ModelAnimationMetadata[];
+}) {
+  if (animations.length === 0) {
+    return <p className="text-xs text-slate-500">Animationは検出されていません。</p>;
+  }
+
+  const groups = groupModelAnimations(animations);
+  const totalDuration = animations.reduce(
+    (total, animation) => total + animation.duration,
+    0,
+  );
+  const totalTracks = animations.reduce(
+    (total, animation) => total + animation.trackCount,
+    0,
+  );
+
+  return (
+    <>
+      <dl className="grid grid-cols-3 gap-2">
+        <Metric label="Clips" value={animations.length} />
+        <Metric label="Groups" value={groups.length} />
+        <Metric label="Tracks" value={totalTracks} />
+      </dl>
+      <p className="text-[11px] leading-4 text-slate-500">
+        合計 {formatNumber(totalDuration)}s。配置すると全clipをまとめて1つの自動再生Componentとして扱います。
+      </p>
+      <div className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
+        {groups.map((group) => (
+          <details key={group.label} className="px-2.5 py-2">
+            <summary className="grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 list-none">
+              <span className="truncate text-xs font-medium text-slate-700">
+                {group.label}
+                {group.animations.length > 1 ? (
+                  <span className="ml-1.5 rounded border border-slate-300 bg-slate-50 px-1 py-0.5 text-[10px] font-semibold text-slate-500">
+                    {group.animations.length} clips
+                  </span>
+                ) : null}
+              </span>
+              <span className="text-[11px] tabular-nums text-slate-500">
+                {formatNumber(group.animations[0].duration)}s ·{" "}
+                {group.totalTrackCount} tracks
+              </span>
+            </summary>
+            <div className="mt-1.5 space-y-1 border-t border-slate-100 pt-1.5">
+              {group.animations.map((animation, index) => (
+                <div
+                  key={`${animation.sourceAnimationIndex ?? index}-${animation.name}`}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3"
+                >
+                  <span className="truncate text-[11px] text-slate-600">
+                    {animation.name}
+                  </span>
+                  <span className="text-[11px] tabular-nums text-slate-400">
+                    {formatNumber(animation.duration)}s · {animation.trackCount} tracks
+                  </span>
+                </div>
+              ))}
+            </div>
+          </details>
+        ))}
+      </div>
+    </>
   );
 }
 

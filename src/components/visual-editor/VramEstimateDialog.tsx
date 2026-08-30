@@ -29,11 +29,15 @@ type Props = {
   onApplyOptimizations?: (
     recommendationIds: string[],
     report: (progress: AssetOptimizationProgress) => void,
-  ) => Promise<{
-    optimizedAssetCount: number;
-    beforeBytes: number;
-    afterBytes: number;
-  }>;
+  ) => Promise<AssetOptimizationOutcome>;
+};
+
+export type AssetOptimizationOutcome = {
+  optimizedAssetCount: number;
+  beforeBytes: number;
+  afterBytes: number;
+  /** 対応外や失敗で見送ったAsset。空でも成功扱い。 */
+  skipped?: { assetId: string; assetName: string; reason: string }[];
 };
 
 const RATING_LABELS: Record<VramDeviceRating, string> = {
@@ -59,11 +63,9 @@ export function VramEstimateDialog({
   const [applying, setApplying] = useState(false);
   const [progress, setProgress] = useState<AssetOptimizationProgress | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
-  const [applyResult, setApplyResult] = useState<{
-    optimizedAssetCount: number;
-    beforeBytes: number;
-    afterBytes: number;
-  } | null>(null);
+  const [applyResult, setApplyResult] = useState<AssetOptimizationOutcome | null>(
+    null,
+  );
   const actionableRecommendations = useMemo(
     () =>
       estimate.recommendations.filter(
@@ -503,6 +505,20 @@ export function VramEstimateDialog({
                   原本 {formatVramBytes(applyResult.beforeBytes)} → 変換後{" "}
                   {formatVramBytes(applyResult.afterBytes)}
                 </div>
+                {applyResult.skipped && applyResult.skipped.length > 0 ? (
+                  <details className="mt-1.5 text-xs">
+                    <summary className="cursor-pointer font-semibold">
+                      {applyResult.skipped.length}件は見送りました
+                    </summary>
+                    <ul className="mt-1 space-y-0.5">
+                      {applyResult.skipped.map((entry) => (
+                        <li key={entry.assetId}>
+                          {entry.assetName}: {entry.reason}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
               </div>
             </div>
           ) : null}

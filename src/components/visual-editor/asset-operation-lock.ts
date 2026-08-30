@@ -3,6 +3,7 @@ import type { PendingImport, PendingImportStatus } from "./types";
 export type AssetOperationKind =
   | "asset-import"
   | "model-reimport"
+  | "model-optimization"
   | "texture-processing";
 
 export type AssetOperationSnapshot = Readonly<{
@@ -85,20 +86,10 @@ export function resolveAssetOperationAvailability(
     return blocked("asset-import", BUSY_IMPORT_REASONS[requested]);
   }
   if (snapshot.modelReimportActive) {
-    return blocked(
-      "model-reimport",
-      requested === "model-reimport"
-        ? "Modelの再インポートが進行中です"
-        : "Modelの再インポート完了後にTextureを変換できます",
-    );
+    return blocked("model-reimport", MODEL_BUSY_REASONS[requested]);
   }
   if (snapshot.textureProcessingActive) {
-    return blocked(
-      "texture-processing",
-      requested === "texture-processing"
-        ? "Textureの変換が進行中です"
-        : "Textureの変換完了後にModelを再インポートできます",
-    );
+    return blocked("texture-processing", TEXTURE_BUSY_REASONS[requested]);
   }
 
   return available();
@@ -107,13 +98,30 @@ export function resolveAssetOperationAvailability(
 const READ_ONLY_REASONS: Record<AssetOperationKind, string> = {
   "asset-import": "Playを停止してからアセットをインポートしてください",
   "model-reimport": "Playを停止してからModelを再インポートしてください",
+  "model-optimization": "Playを停止してからModelを最適化してください",
   "texture-processing": "Playを停止してからTextureを変換してください",
 };
 
 const BUSY_IMPORT_REASONS: Record<AssetOperationKind, string> = {
   "asset-import": "アセットのインポートが進行中です",
   "model-reimport": "アセットのインポート完了後にModelを再インポートできます",
+  "model-optimization": "アセットのインポート完了後にModelを最適化できます",
   "texture-processing": "アセットのインポート完了後にTextureを変換できます",
+};
+
+/** Model最適化は原本を差し替えるので、再インポートと同じ排他区間で扱う。 */
+const MODEL_BUSY_REASONS: Record<AssetOperationKind, string> = {
+  "asset-import": "Modelの再インポート完了後にアセットをインポートできます",
+  "model-reimport": "Modelの再インポートが進行中です",
+  "model-optimization": "Modelの再インポート完了後にModelを最適化できます",
+  "texture-processing": "Modelの再インポート完了後にTextureを変換できます",
+};
+
+const TEXTURE_BUSY_REASONS: Record<AssetOperationKind, string> = {
+  "asset-import": "Textureの変換完了後にアセットをインポートできます",
+  "model-reimport": "Textureの変換完了後にModelを再インポートできます",
+  "model-optimization": "Textureの変換完了後にModelを最適化できます",
+  "texture-processing": "Textureの変換が進行中です",
 };
 
 function available(): AssetOperationAvailability {
