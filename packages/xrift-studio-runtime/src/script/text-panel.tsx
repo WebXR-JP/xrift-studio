@@ -20,15 +20,27 @@ export type XriftTextPanelProps = {
   config: XriftTextPanelConfig;
   /** Decoded Texture for a `texture` background. The host owns its lifetime. */
   map?: Texture | null;
+  /**
+   * Base the bundled font file is served from. Omitted uses the host's own,
+   * which is right everywhere except a published world; see
+   * `XriftTextPanelConfig.fontBaseUrl`.
+   */
+  fontBaseUrl?: string;
 };
 
-export function XriftTextPanel({ config, map = null }: XriftTextPanelProps) {
+export function XriftTextPanel({
+  config,
+  map = null,
+  fontBaseUrl,
+}: XriftTextPanelProps) {
   const invalidate = useThree((state) => state.invalidate);
   const panel = useMemo(() => new XriftTextPanelObject(), []);
   // Callers commonly rebuild the config object every render. Re-typesetting on
   // each of those would restart troika's SDF work for text that has not
   // changed, so the effect keys off the value rather than the identity.
-  const configKey = JSON.stringify(config);
+  const resolvedConfig =
+    fontBaseUrl === undefined ? config : { ...config, fontBaseUrl };
+  const configKey = JSON.stringify(resolvedConfig);
 
   useEffect(() => {
     panel.setLayoutListener(() => invalidate());
@@ -36,7 +48,7 @@ export function XriftTextPanel({ config, map = null }: XriftTextPanelProps) {
   }, [invalidate, panel]);
 
   useEffect(() => {
-    panel.update(config, map ?? null);
+    panel.update(resolvedConfig, map ?? null);
     // `config` is re-read through `configKey`; depending on it directly would
     // defeat the value comparison above.
     // eslint-disable-next-line react-hooks/exhaustive-deps

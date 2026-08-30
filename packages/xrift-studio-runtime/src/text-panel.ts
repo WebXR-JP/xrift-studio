@@ -64,10 +64,11 @@ const fontLoadRequests = new Map<string, Promise<FontLoadState>>();
 /**
  * Fetches a catalog font before handing its URL to troika.
  *
- * troika logs a failed font download and then never resolves that request, so
- * text assigned an unreachable font simply never appears. Checking first means
- * an offline editor or a blocked CDN falls back to the automatic Noto font and
- * still shows the words.
+ * troika logs a failed font read and then never resolves that request, so text
+ * assigned an unreachable font simply never appears. The file is bundled rather
+ * than downloaded, so this now guards a missing or misplaced copy rather than a
+ * blocked CDN: checking first falls back to the automatic Noto face and still
+ * shows the words.
  */
 export function loadTextPanelFont(url: string): Promise<FontLoadState> {
   const cached = fontLoadStates.get(url);
@@ -176,7 +177,11 @@ export class XriftTextPanelObject extends Group {
    *   is not blank while it waits.
    */
   private applyFont(config: XriftTextPanelConfig): void {
-    const url = resolveTextFontUrl(config.fontId, config.fontWeight);
+    const url = resolveTextFontUrl(
+      config.fontId,
+      config.fontWeight,
+      config.fontBaseUrl,
+    );
     const generation = ++this.fontGeneration;
     if (!url) {
       this.setFont(null);

@@ -95,40 +95,48 @@ provenance は `project-owned` として登録していますが、由来を辿�
 
 ## Text Component のフォント
 
-Text Component の書体は、リポジトリにファイルを同梱せず、`@fontsource` の固定
-version から実行時に取得します。カタログとファイル URL の組み立ては
+Text Component の書体は `@fontsource` の固定 version を依存として持ち、その
+`.woff` ファイルを Studio に同梱します。カタログとファイル path の組み立ては
 `packages/xrift-studio-runtime/src/text-font-catalog.ts` の一箇所にあり、Studio、
-Play、生成した Classic source、公開した World が同じ URL を読みます。
+Play、生成した Classic source、公開した World が同じ path を読みます。公開時は
+World が使う書体だけを `public/xrift-studio/vendor/text-fonts/` へコピーするため、
+公開された World はフォントのために通信しません。
 
 | 項目 | 値 |
 | --- | --- |
-| 配布元 | `https://cdn.jsdelivr.net/npm/@fontsource/<family>@5.3.0/files/<family>-<subset>-<weight>-normal.woff` |
-| 固定 version | `@fontsource` 5.3.0 |
+| 取得元 | npm `@fontsource/noto-sans-jp` 5.3.0（`--save-exact`） |
+| 同梱 path | `xrift-studio/vendor/text-fonts/<family>-<subset>-<weight>-normal.woff` |
 | 形式 | WOFF 1.0 |
-| License | すべて SIL Open Font License 1.1 |
+| License | SIL Open Font License 1.1 |
 | Upstream | [Google Fonts](https://fonts.google.com/) / [fontsource/font-files](https://github.com/fontsource/font-files) |
 
-収録している family は次のとおりです。日本語 16 書体は `japanese` subset
-（Basic Latin を含む）、欧文 10 書体は `latin` subset を使います。
+収録している family は次のとおりです。`japanese` subset は Basic Latin を含むため、
+和欧混在のキャプションでも 1 ファイルで足ります。
 
-| Subset | Family |
-| --- | --- |
-| japanese | Noto Sans JP, Noto Serif JP, Zen Kaku Gothic New, M PLUS Rounded 1c, Zen Maru Gothic, Kosugi Maru, Shippori Mincho, Zen Old Mincho, Klee One, Yuji Syuku, Dela Gothic One, RocknRoll One, Train One, DotGothic16, Yusei Magic, Hachi Maru Pop |
-| latin | Inter, Montserrat, Oswald, Space Grotesk, Bebas Neue, Playfair Display, Cormorant Garamond, Libre Baskerville, DM Serif Display, JetBrains Mono |
+| Subset | Family | Weight | サイズ |
+| --- | --- | --- | --- |
+| japanese | Noto Sans JP | 400 / 700 | 約 1.38MB / 約 1.39MB |
 
-同梱ではなく固定 URL を選んだ理由は三つあります。
+CDN からの実行時取得をやめ、同梱に切り替えた理由は次のとおりです。
 
-- 日本語 1 書体で 1.2〜4.2 MB あり、26 書体を同梱するとアプリと公開 World の
-  両方が実際に使う分以上に重くなる。
-- `fonts.gstatic.com` の path には Google 側の再公開で変わる revision が入るため、
-  数か月前に公開した World の書体が黙って変わる、あるいは 404 になる。npm の
-  version は不変。
-- Google Fonts CSS API は現代ブラウザへ WOFF2 だけを返すが、
-  troika-three-text は WOFF2 を明示的に拒否する。`@fontsource` は WOFF 1.0 も
-  公開しているので、SDF 化できる形式を確実に取得できる。
+- 公開した World がフォントを取得すると、それはネットワーク通信であり、権限を
+  宣言していない World は platform のセキュリティ検査に落ちる。しかもこの権限は
+  host だけに絞れない。file URL を family と weight から組み立てるため、解析器は
+  domain を許可しても `no-network-without-permission` を報告する（実測）。同梱に
+  すれば same-origin になり、宣言そのものが不要になる。
+- 数か月前に公開した World が、配布元の障害や変更に左右されなくなる。
+- Google Fonts CSS API は現代ブラウザへ WOFF2 だけを返すが、troika-three-text は
+  WOFF2 を明示的に拒否する。`@fontsource` は WOFF 1.0 も公開しているので、SDF 化
+  できる形式を確実に得られる。
 
-取得に失敗した場合（オフライン、CDN 到達不可）は、選んだ書体を適用せず
-troika の自動フォント解決（Noto）で描画します。文字が消えることはありません。
+同梱する family を増やすとアプリと公開 World の両方が重くなります（日本語 subset は
+1 書体あたり約 1.4MB）。そのため catalog は意図的に 1 書体だけです。`@fontsource` の
+version を上げるときは `scripts/vite-local-text-fonts.ts` が
+`TEXT_FONT_PACKAGE_VERSION` との一致を検査し、食い違えば build を失敗させます。
+
+同梱されていない書体 id が document に残っている場合（過去の catalog で選んだもの）、
+compiler が `text-font-not-bundled` の warning を出し、自動の書体で描画します。文字が
+消えることはありません。
 
 書体を選ばない「自動」では、troika-three-text が
 `https://cdn.jsdelivr.net/gh/lojjic/unicode-font-resolver@v1.0.1/packages/data`

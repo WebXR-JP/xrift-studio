@@ -91,11 +91,11 @@ function assertPresetsCreateReadyToUseText(): void {
     "an unknown font id must be dropped rather than stored",
   );
   const snapped = createTextComponent("text-snap", {
-    fontId: "dela-gothic-one",
-    fontWeight: 700,
+    fontId: "noto-sans-jp",
+    fontWeight: 900,
   });
   assert(
-    snapped?.fontWeight === 400,
+    snapped?.fontWeight === 700,
     "a weight the family does not publish must snap on creation",
   );
 }
@@ -149,19 +149,19 @@ function assertPatchesRejectUnusableValues(): void {
   );
 
   const restyled = updateTextComponent(withBackground, entityId, {
-    fontId: "zen-old-mincho",
+    fontId: "noto-sans-jp",
     fontWeight: 700,
   });
   assert(
     findText(restyled, entityId).fontWeight === 700,
     "a published weight must be kept as chosen",
   );
-  const snapped = updateTextComponent(restyled, entityId, {
-    fontId: "dela-gothic-one",
-  });
+  // Studio bundles one family, so the snap that still matters in a stored
+  // document is a weight that family never published.
+  const snapped = updateTextComponent(restyled, entityId, { fontWeight: 500 });
   assert(
     findText(snapped, entityId).fontWeight === 400,
-    "switching to a family without Bold must snap the stored weight",
+    "a weight the family does not publish must snap in the stored document",
   );
   // "auto" is the absence of a choice; storing it would give one state two
   // spellings and make the document compare unequal to itself.
@@ -215,27 +215,36 @@ function assertCompilerEmitsPanelRuntime(): void {
     compiled.stagingPlan.runtimePackageSpecs.includes(TEXT_PANEL_RUNTIME_PACKAGE),
     "a Text world must ask staging to install troika",
   );
-  // The font file is fetched at runtime, and the platform rejects a world that
-  // does not declare it. A world that builds is not a world that publishes, so
-  // the declaration is asserted on the generated manifest rather than trusted
-  // to whoever last edited the emission.
+  // Text used to download its font, which made the world reach the network and
+  // put a permission in its manifest. The file is bundled now, so a Text world
+  // must declare nothing: this asserts the manifest stays empty rather than
+  // trusting that whoever edits the emission remembers why.
   const manifest = JSON.parse(
     compiled.overlayFiles.find((file) => file.relativePath === "xrift.json")
       ?.content ?? "{}",
-  ) as {
-    world?: {
-      permissions?: { allowedCodeRules?: string[]; allowedDomains?: string[] };
-    };
-  };
-  const permissions = manifest.world?.permissions;
+  ) as { world?: { permissions?: unknown } };
   assert(
-    permissions?.allowedDomains?.includes("cdn.jsdelivr.net") === true,
-    "a Text world must declare the host its fonts are downloaded from",
+    manifest.world?.permissions === undefined,
+    "a Text world must publish without asking for a permission",
   );
   assert(
-    permissions?.allowedCodeRules?.includes("no-network-without-permission") ===
-      true,
-    "a Text world must declare the network rule its font download trips",
+    !source.includes("cdn.jsdelivr.net"),
+    "the generated world must not name a font CDN",
+  );
+  assert(
+    compiled.stagingPlan.bundledAssetCopyPlan.some(
+      (entry) =>
+        entry.source === "text-fonts" &&
+        entry.targetRelativePath ===
+          "public/xrift-studio/vendor/text-fonts/noto-sans-jp-japanese-700-normal.woff",
+    ),
+    "a Text world must carry the font file it renders with",
+  );
+  // XRift decides where a world's own files are served from at load time, so
+  // the generated source has to read that base rather than assume Studio's.
+  assert(
+    source.includes("fontBaseUrl={baseUrl}") && source.includes("useXRift()"),
+    "the generated world must resolve its font under the XRift base URL",
   );
   // Asking for a package publish staging is not allowed to install is not a
   // slow path, it is a dead end: the publish stops before npm runs and the

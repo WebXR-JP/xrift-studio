@@ -1,7 +1,7 @@
 import {
   AUTOMATIC_TEXT_FONT_ID,
   TEXT_FONT_CATALOG,
-  TEXT_FONT_PACKAGE_VERSION,
+  TEXT_FONT_DIRECTORY,
   getTextFontDefinition,
   resolveTextFontUrl,
   resolveTextFontWeight,
@@ -42,9 +42,16 @@ function assertFontCatalogResolvesPinnedFiles(): void {
       url?.endsWith(".woff") === true,
       `${font.id} must resolve to a WOFF 1.0 file, got ${url ?? "(none)"}`,
     );
+    // The whole point of bundling: a world that reaches off-origin for its
+    // font is rejected by the platform's security check, and the permission
+    // that would allow it cannot be narrowed to a host.
     assert(
-      url?.includes(`@${TEXT_FONT_PACKAGE_VERSION}/`) === true,
-      `${font.id} must resolve to the pinned package version`,
+      url?.includes("://") === false,
+      `${font.id} must resolve to a bundled file, got ${url ?? "(none)"}`,
+    );
+    assert(
+      url?.includes(TEXT_FONT_DIRECTORY) === true,
+      `${font.id} must resolve inside ${TEXT_FONT_DIRECTORY}`,
     );
   }
 
@@ -62,20 +69,31 @@ function assertFontCatalogResolvesPinnedFiles(): void {
   assert(notoSansJp !== undefined, "noto-sans-jp must stay in the catalog");
   assert(
     resolveTextFontUrl("noto-sans-jp", 700) ===
-      `https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-jp@${TEXT_FONT_PACKAGE_VERSION}/files/noto-sans-jp-japanese-700-normal.woff`,
-    "a weighted Japanese font must resolve to its pinned fontsource file",
+      `/${TEXT_FONT_DIRECTORY}/noto-sans-jp-japanese-700-normal.woff`,
+    "a weighted Japanese font must resolve to its bundled file",
+  );
+  // A published world is served under a base XRift decides at load time, so the
+  // same catalog has to answer for a host that is not Studio.
+  assert(
+    resolveTextFontUrl("noto-sans-jp", 400, "https://worlds.example.test/w/1/") ===
+      `https://worlds.example.test/w/1/${TEXT_FONT_DIRECTORY}/noto-sans-jp-japanese-400-normal.woff`,
+    "a published world must resolve the font under its own base",
+  );
+  assert(
+    resolveTextFontUrl("noto-sans-jp", 400, "https://worlds.example.test/w/1") ===
+      resolveTextFontUrl("noto-sans-jp", 400, "https://worlds.example.test/w/1/"),
+    "a base without a trailing slash must not lose a path segment",
   );
 
-  // A family that only ships Regular must snap rather than request a 404,
-  // which troika would never recover from.
-  const singleWeight = TEXT_FONT_CATALOG.find((font) => font.weights.length === 1);
-  assert(singleWeight !== undefined, "the catalog must keep a single-weight family");
+  // A weight the family never published must snap rather than request a file
+  // that is not there, which troika would never recover from.
   assert(
-    resolveTextFontWeight(singleWeight, 700) === singleWeight.weights[0],
+    resolveTextFontWeight(notoSansJp, 900) === 700 &&
+      resolveTextFontWeight(notoSansJp, 100) === 400,
     "a weight the family does not publish must snap to one it does",
   );
   assert(
-    textFontWeightOptions(singleWeight.id).length === 1,
+    textFontWeightOptions("noto-sans-jp").length === notoSansJp.weights.length,
     "the picker must only offer weights the family publishes",
   );
   assert(

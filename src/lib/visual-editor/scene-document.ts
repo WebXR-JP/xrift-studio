@@ -1049,7 +1049,7 @@ export function textComponentPresetInput(
       color: "#1f2937",
       fontSize: 0.06,
       maxWidth: 0.9,
-      fontId: "noto-serif-jp",
+      fontId: "noto-sans-jp",
       textAlign: "left",
       anchorX: "left",
       lineHeight: 1.5,

@@ -62,11 +62,18 @@ export type RequiredPublicationFileCopy = {
   targetRelativePath: "public/thumbnail.png";
 };
 
-export type CompilerBundledAssetCopy = {
-  source: "three-basis";
-  sourceFileName: LocalBasisTranscoderFileName;
-  targetRelativePath: string;
-};
+export type CompilerBundledAssetCopy =
+  | {
+      source: "three-basis";
+      sourceFileName: LocalBasisTranscoderFileName;
+      targetRelativePath: string;
+    }
+  | {
+      /** A Text font file Studio ships, copied so the world never downloads it. */
+      source: "text-fonts";
+      sourceFileName: string;
+      targetRelativePath: string;
+    };
 
 export type CompilerStagingPlan = {
   owner: "xrift-studio-compiler";

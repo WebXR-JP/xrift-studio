@@ -109,7 +109,6 @@ import {
   SCRIPT_AUDIO_SOURCE_OVERLAY_PATH,
   SCRIPT_LIGHT_OVERLAY_PATH,
   SCRIPT_PARTICLE_OVERLAY_PATH,
-  TEXT_FONT_PUBLISH_PERMISSION,
   TEXT_PANEL_RUNTIME_OVERLAY_PATH,
   TEXT_PANEL_RUNTIME_PACKAGE,
   type EmittedScriptModule,
@@ -151,6 +150,12 @@ import {
   LOCAL_BASIS_TRANSCODER_FILES,
   PUBLISHED_BASIS_TRANSCODER_DIRECTORY,
 } from "../basis-transcoder";
+import {
+  getTextFontDefinition,
+  resolveTextFontWeight,
+  TEXT_FONT_DIRECTORY,
+  textFontFileName,
+} from "../../../../packages/xrift-studio-runtime/src/text-font-catalog";
 
 export const XRIFT_STUDIO_RUNTIME_PACKAGE = "xrift-studio-runtime@0.1.0" as const;
 
@@ -312,11 +317,9 @@ export function compileVisualProject(
       : emptySource(documents.project.projectKind);
   }
   const usesOpenBrushModels = projectUsesOpenBrushModels(documents.assets);
-  // One flag decides both what gets emitted for Text and what the world
-  // declares for it. Reading the Scene twice is how the font fetch shipped
-  // without its permission: the emission grew a network call and the
-  // declaration stayed behind, so every world containing Text was rejected by
-  // the platform's security check after a successful build.
+  // One flag decides everything Text pulls into the staged world: its overlay
+  // files, its runtime package and its font copies. Reading the Scene once is
+  // how they stay in agreement.
   const usesTextPanel = resolvedEntryScene
     ? sceneUsesTextPanelRuntime(resolvedEntryScene.scene)
     : false;
@@ -324,7 +327,6 @@ export function compileVisualProject(
   // requirement; nothing here knows what those rules are.
   const publishPermissions = resolvePublishPermissions([
     ...(usesOpenBrushModels ? [OPEN_BRUSH_PUBLISH_PERMISSION] : []),
-    ...(usesTextPanel ? [TEXT_FONT_PUBLISH_PERMISSION] : []),
   ]);
   const xriftJson = generateXriftJson(
     documents.project.projectKind,
@@ -432,6 +434,9 @@ export function compileVisualProject(
   ) {
     overlayFiles.push(createScenePostprocessingOverlayFile());
   }
+  if (resolvedEntryScene) {
+    diagnoseUnbundledTextFonts(resolvedEntryScene.scene, diagnostics);
+  }
   diagnoseUnsupportedAssets(documents.assets, diagnostics);
   diagnoseInteractivityRuntimeSupport(documents.assets, diagnostics);
   const uniqueDiagnostics = deduplicateDiagnostics(diagnostics);
@@ -462,11 +467,17 @@ export function compileVisualProject(
     // the emitted-source mode imports it directly and must ask for it.
     runtimePackageSpecs.push(TEXT_PANEL_RUNTIME_PACKAGE);
   }
-  const bundledAssetCopyPlan =
-    outputMode === "classic-jsx" &&
+  const bundledAssetCopyPlan: CompilerBundledAssetCopy[] = [
+    ...(outputMode === "classic-jsx" &&
     generated.includes("function useCompiledKtx2(")
       ? createPublishedBasisAssetCopyPlan()
-      : [];
+      : []),
+    // Not gated on the output mode: both emitted source and the runtime package
+    // read the font from the world's own files, so both need them copied.
+    ...(usesTextPanel && resolvedEntryScene
+      ? createPublishedTextFontCopyPlan(resolvedEntryScene.scene)
+      : []),
+  ];
 
   return {
     targetKind: documents.project.projectKind,
@@ -489,6 +500,38 @@ export function compileVisualProject(
       requiredPublicationFiles,
     },
   };
+}
+
+/**
+ * Copies the font files the Scene's Text actually uses into the world.
+ *
+ * A published world may not download its font: the platform rejects a bundle
+ * that reaches the network without a declared permission, and that declaration
+ * cannot be narrowed to a host. Shipping the file the world uses makes the read
+ * same-origin, so no permission is needed and the world keeps working when the
+ * upstream CDN does not.
+ */
+function createPublishedTextFontCopyPlan(
+  scene: SceneDocument,
+): CompilerBundledAssetCopy[] {
+  const fileNames = new Set<string>();
+  for (const entity of Object.values(scene.entities)) {
+    for (const component of entity.components) {
+      if (component.type !== "text") continue;
+      const font = getTextFontDefinition(component.fontId);
+      // A Text left on the automatic face resolves no catalog file, so there is
+      // nothing to copy for it.
+      if (!font) continue;
+      fileNames.add(
+        textFontFileName(font, resolveTextFontWeight(font, component.fontWeight)),
+      );
+    }
+  }
+  return [...fileNames].sort().map((sourceFileName) => ({
+    source: "text-fonts" as const,
+    sourceFileName,
+    targetRelativePath: `public/${TEXT_FONT_DIRECTORY}/${sourceFileName}`,
+  }));
 }
 
 function createPublishedBasisAssetCopyPlan(): CompilerBundledAssetCopy[] {
@@ -4868,16 +4911,28 @@ function renderText(
     )};`,
   );
   const backgroundTexture = resolveTextBackgroundTexture(entity, text, context);
-  if (!backgroundTexture) return `<XriftTextPanel config={${configName}} />`;
+  // The font file travels with the world, and XRift decides at load time where
+  // the world's own files are served from. A Text on the automatic face reads
+  // no bundled file, so it needs neither the base nor the hook that reads it.
+  const usesBundledFont = getTextFontDefinition(text.fontId) !== undefined;
+  if (!backgroundTexture && !usesBundledFont) {
+    return `<XriftTextPanel config={${configName}} />`;
+  }
 
   const componentName = generatedIdentifier(
     "CompiledTextPanel",
     `${entity.id}:${text.id}`,
   );
+  if (usesBundledFont) context.imports.add("useXRift");
+  const props = [
+    `config={${configName}}`,
+    ...(usesBundledFont ? ["fontBaseUrl={baseUrl}"] : []),
+    ...(backgroundTexture ? ["map={textPanelMap}"] : []),
+  ].join(" ");
   context.supportDeclarations.set(
     `text-panel:${componentName}`,
     `const ${componentName}: FC = () => {
-${backgroundTexture.lines}  return <XriftTextPanel config={${configName}} map={textPanelMap} />;
+${usesBundledFont ? "  const { baseUrl } = useXRift();\n" : ""}${backgroundTexture?.lines ?? ""}  return <XriftTextPanel ${props} />;
 };`,
   );
   return `<${componentName} />`;
@@ -5176,6 +5231,38 @@ function diagnoseReferencedUnsupportedAssets(context: CompileContext): void {
  * as unsupported and the publish result says nothing, leaving an author to
  * believe the graph gained behavior by being uploaded.
  */
+/**
+ * Reports Text left on a font Studio no longer ships.
+ *
+ * Studio used to offer a catalog of families it downloaded from a CDN. Those
+ * files cannot travel with a published world, so the catalog is now the one
+ * family Studio bundles. A document that still names a removed family renders,
+ * but on the automatic face rather than the one its author chose — a change to
+ * the lettering that would otherwise only be visible by looking at the world.
+ */
+function diagnoseUnbundledTextFonts(
+  scene: SceneDocument,
+  diagnostics: CompilerDiagnostic[],
+): void {
+  for (const entity of Object.values(scene.entities).sort((left, right) =>
+    left.id.localeCompare(right.id),
+  )) {
+    for (const component of entity.components) {
+      if (component.type !== "text") continue;
+      const fontId = component.fontId;
+      if (!fontId || getTextFontDefinition(fontId)) continue;
+      diagnostics.push({
+        severity: "warning",
+        code: "text-font-not-bundled",
+        message: `書体「${fontId}」はStudioに同梱されていないため、自動の書体で表示されます。Inspectorで同梱の書体を選び直してください。`,
+        entityId: entity.id,
+        componentId: component.id,
+        fieldPath: "fontId",
+      });
+    }
+  }
+}
+
 function diagnoseInteractivityRuntimeSupport(
   assets: AssetManifest,
   diagnostics: CompilerDiagnostic[],

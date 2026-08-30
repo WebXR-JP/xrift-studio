@@ -46,6 +46,13 @@ export type XriftTextPanelConfig = {
   /** Catalog id from text-font-catalog. Absent or `auto` resolves Noto. */
   fontId?: string;
   fontWeight?: number;
+  /**
+   * Where the host serves its public files from, for the bundled font file.
+   *
+   * Absent means Studio's own base. A published world is served under a base
+   * XRift decides at load time, so its generated source passes that instead.
+   */
+  fontBaseUrl?: string;
   textAlign?: XriftTextAlign;
   /** Multiple of `fontSize`. Absent uses the font's own metrics. */
   lineHeight?: number;

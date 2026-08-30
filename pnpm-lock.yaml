@@ -11,6 +11,9 @@ importers:
 
   .:
     dependencies:
+      '@fontsource/noto-sans-jp':
+        specifier: 5.3.0
+        version: 5.3.0
       '@gltf-transform/core':
         specifier: 4.4.1
         version: 4.4.1
@@ -193,6 +196,9 @@ packages:
 
   '@emnapi/runtime@1.11.3':
     resolution: {integrity: sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==}
+
+  '@fontsource/noto-sans-jp@5.3.0':
+    resolution: {integrity: sha512-OZbBzZ8LrFRs2RFT2Cc0HUV2C2ZeSfyEXhDJWR0EZuZaraJfRubpvrFmUnCljuBDEkw8Vn6CE/+nf9dj9b+0lg==}
 
   '@gltf-transform/core@4.4.1':
     resolution: {integrity: sha512-ygWWFOrj1HnfvBimHF1yHTY4abbeBjn3CvljijaWKoRLMRV/a8pWYQu9rfMFQhfpT5kYZTD5Mp+dizAXPbiTDQ==}
@@ -2013,6 +2019,8 @@ snapshots:
     dependencies:
       tslib: 2.8.1
     optional: true
+
+  '@fontsource/noto-sans-jp@5.3.0': {}
 
   '@gltf-transform/core@4.4.1':
     dependencies:

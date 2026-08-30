@@ -15,6 +15,7 @@ import type {
 } from "./compiler";
 import { compileVisualProject, compilerStagingDirectoryName } from "./compiler";
 import { resolveLocalBasisTranscoderPath } from "./basis-transcoder";
+import { resolveTextFontDirectoryUrl } from "../../../packages/xrift-studio-runtime/src/text-font-catalog";
 
 export type VisualPublishPipelineStage =
   | "saving"
@@ -381,14 +382,16 @@ async function loadCompilerBundledAssetOverlays(
       const sourceDirectory =
         entry.source === "three-basis"
           ? resolveLocalBasisTranscoderPath()
-          : "";
+          : resolveTextFontDirectoryUrl();
       const response = await fetch(
         `${sourceDirectory}${encodeURIComponent(entry.sourceFileName)}`,
         { signal },
       );
       if (!response.ok) {
         throw new Error(
-          `公開用KTX2変換ファイルを読み込めませんでした (${response.status})`,
+          entry.source === "three-basis"
+            ? `公開用KTX2変換ファイルを読み込めませんでした (${response.status})`
+            : `公開用フォントファイルを読み込めませんでした (${response.status})`,
         );
       }
       return {
