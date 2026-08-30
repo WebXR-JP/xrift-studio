@@ -1,5 +1,5 @@
 import type { AssetManifest } from "../asset-manifest";
-import type { LocalBasisTranscoderFileName } from "../basis-transcoder";
+import type { VendorBundleId } from "../vendor-assets";
 import type { PrefabDocument } from "../prefab-document";
 import type { VisualProjectDocument, VisualProjectKind } from "../project-document";
 import type { SceneDocument } from "../scene-document";
@@ -73,8 +73,12 @@ export type RequiredPublicationFileCopy = {
 
 export type CompilerBundledAssetCopy =
   | {
-      source: "three-basis";
-      sourceFileName: LocalBasisTranscoderFileName;
+      /**
+       * A decoder file Studio ships (KTX2 transcoder, Draco decoder), copied so
+       * the published world never fetches one from a CDN it cannot reach.
+       */
+      source: VendorBundleId;
+      sourceFileName: string;
       targetRelativePath: string;
     }
   | {

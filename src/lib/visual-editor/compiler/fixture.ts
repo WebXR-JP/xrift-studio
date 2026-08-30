@@ -2053,6 +2053,87 @@ export function runVisualCompilerFixtureAssertions(
       modelSource.includes("useGLTF(modelUrl)"),
     "Project GLB loader did not use the XRift base URL",
   );
+  // Draco: a decoder file, like the KTX2 transcoder, must be shipped by the
+  // world and pointed at from the world's own base URL, in either output mode.
+  const dracoModel: ModelAsset = {
+    ...projectModel,
+    importMetadata: {
+      ...projectModel.importMetadata!,
+      extensionsUsed: ["KHR_draco_mesh_compression"],
+      extensionsRequired: ["KHR_draco_mesh_compression"],
+    },
+  };
+  const dracoProject: VisualCompilerDocuments = {
+    ...modelProject,
+    assets: {
+      ...modelProject.assets,
+      assets: { ...modelProject.assets.assets, [dracoModel.id]: dracoModel },
+    },
+  };
+  const dracoResult = compileVisualProject(dracoProject, {
+    generatedAt: fixedTime,
+  });
+  const dracoSource =
+    dracoResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(
+    dracoSource.includes(
+      'const COMPILED_DRACO_DECODER_DIRECTORY = "xrift-studio/vendor/three-draco/" as const;',
+    ) &&
+      dracoSource.includes(
+        "const dracoDecoderPath = useCompiledDracoDecoderPath();",
+      ) &&
+      dracoSource.includes("useGLTF(modelUrl, dracoDecoderPath)") &&
+      !dracoSource.includes("gstatic.com"),
+    "A Draco Model must load through the world's own decoder, never a CDN",
+  );
+  const dracoCopyTargets = dracoResult.stagingPlan.bundledAssetCopyPlan
+    .filter((entry) => entry.source === "three-draco")
+    .map((entry) => entry.targetRelativePath);
+  assert(
+    JSON.stringify(dracoCopyTargets) ===
+      JSON.stringify([
+        "public/xrift-studio/vendor/three-draco/draco_decoder.js",
+        "public/xrift-studio/vendor/three-draco/draco_decoder.wasm",
+        "public/xrift-studio/vendor/three-draco/draco_wasm_wrapper.js",
+        "public/xrift-studio/vendor/three-draco/README.md",
+      ]),
+    "Classic JSX output must stage the pinned Draco decoder next to the world",
+  );
+  const dracoRuntimeResult = compileVisualProject(dracoProject, {
+    generatedAt: fixedTime,
+    outputMode: "classic-runtime",
+  });
+  assert(
+    JSON.stringify(
+      dracoRuntimeResult.stagingPlan.bundledAssetCopyPlan.filter(
+        (entry) => entry.source === "three-draco",
+      ),
+    ) ===
+      JSON.stringify(
+        dracoResult.stagingPlan.bundledAssetCopyPlan.filter(
+          (entry) => entry.source === "three-draco",
+        ),
+      ),
+    "Runtime JSON output must stage the same Draco decoder as Classic JSX",
+  );
+  const dracoRuntimeManifest = JSON.parse(
+    dracoRuntimeResult.overlayFiles.find(
+      (file) => file.relativePath === "public/xrift/runtime.json",
+    )?.content ?? "{}",
+  ) as { decoders?: { dracoDecoderPath?: string; ktx2TranscoderPath?: string } };
+  assert(
+    dracoRuntimeManifest.decoders?.dracoDecoderPath ===
+      "../xrift-studio/vendor/three-draco/" &&
+      dracoRuntimeManifest.decoders.ktx2TranscoderPath === undefined,
+    "Runtime JSON manifest must name the decoders the world ships, and only those",
+  );
+  assert(
+    modelResult.stagingPlan.bundledAssetCopyPlan.length === 0,
+    "A Model without Draco must not drag a decoder into the world",
+  );
+
   assert(
     modelSource.includes(
       '"xrift-studio-fixture-model-project-fixture.glb" as const',

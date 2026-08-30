@@ -11,6 +11,7 @@ import type {
   XriftRuntimeAsset,
   XriftRuntimeComponent,
   XriftRuntimeEntity,
+  XriftRuntimeDecoderPaths,
   XriftRuntimeGeometry,
   XriftRuntimeManifest,
 } from "../../../../packages/xrift-studio-runtime/src/schema";
@@ -32,6 +33,7 @@ export function compileRuntimeManifest(
   assetCopyPlan: readonly AssetCopyPlanEntry[],
   compilerVersion: string,
   diagnostics: CompilerDiagnostic[],
+  decoders?: XriftRuntimeDecoderPaths,
 ): XriftRuntimeManifest {
   const runtimeAssets = compileRuntimeAssets(documents.assets, assetCopyPlan);
   const scenes = entryScene
@@ -53,6 +55,7 @@ export function compileRuntimeManifest(
     entryScene: documents.project.entrySceneId,
     scenes,
     assets: runtimeAssets,
+    ...(decoders && Object.keys(decoders).length > 0 ? { decoders } : {}),
   };
 }
 

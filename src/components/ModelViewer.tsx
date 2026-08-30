@@ -7,12 +7,16 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { resolveLocalVendorAssetPath } from "../lib/visual-editor/vendor-assets";
 import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 import { RefreshCw, Info } from "lucide-react";
 
 type Format = "glb" | "gltf" | "vrm" | "fbx" | "obj" | "drc";
 
-const DRACO_DECODER = "https://www.gstatic.com/draco/v1/decoders/";
+// Studio ships the decoder with the app: the desktop build must open a
+// Draco-compressed Model with no network, and the version then always matches
+// the pinned Three.js.
+const DRACO_DECODER = resolveLocalVendorAssetPath("three-draco");
 
 let sharedDracoLoader: DRACOLoader | null = null;
 function getDracoLoader(): DRACOLoader {

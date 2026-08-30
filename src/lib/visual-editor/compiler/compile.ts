@@ -152,10 +152,12 @@ import {
 } from "./types";
 import { compileXriftComponent } from "./xrift-component-registry";
 import { compileRuntimeManifest } from "./runtime-manifest";
+import type { XriftRuntimeDecoderPaths } from "../../../../packages/xrift-studio-runtime/src/schema";
+import { PUBLISHED_BASIS_TRANSCODER_DIRECTORY } from "../basis-transcoder";
 import {
-  LOCAL_BASIS_TRANSCODER_FILES,
-  PUBLISHED_BASIS_TRANSCODER_DIRECTORY,
-} from "../basis-transcoder";
+  VENDOR_BUNDLES,
+  type VendorBundleId,
+} from "../vendor-assets";
 import {
   getTextFontDefinition,
   resolveTextFontWeight,
@@ -282,8 +284,14 @@ export function compileVisualProject(
     });
   }
 
+  // Decided once, from the Assets that actually reach staging: the same fact
+  // decides which decoder files are copied and which paths the Runtime JSON
+  // manifest publishes, so the two can never disagree.
+  const requiredVendorBundles = resolveRequiredVendorBundles(
+    documents.assets,
+    assetCopyPlan,
+  );
   let runtimeManifestFile: CompilerOverlayFile | undefined;
-  let runtimeManifestUsesKtx2 = false;
   let generated: string;
   if (outputMode === "classic-runtime") {
     // Keep the JSX pass as a diagnostic oracle while runtime adapters reach
@@ -304,11 +312,9 @@ export function compileVisualProject(
       assetCopyPlan,
       VISUAL_COMPILER_VERSION,
       diagnostics,
+      publishedRuntimeDecoderPaths(requiredVendorBundles),
     );
     generated = generateRuntimeAdapterSource(documents.project.projectKind);
-    runtimeManifestUsesKtx2 = Object.values(runtimeManifest.assets).some(
-      (asset) => asset.kind === "texture" && asset.sourceFormat === "ktx2",
-    );
     runtimeManifestFile = compilerFile(
       "public/xrift/runtime.json",
       stableSerializeJson(runtimeManifest),
@@ -485,16 +491,8 @@ export function compileVisualProject(
     // the emitted-source mode imports it directly and must ask for it.
     runtimePackageSpecs.push(TEXT_PANEL_RUNTIME_PACKAGE);
   }
-  // Both output modes read KTX2 through the world's own Basis files, so the
-  // copy is decided per mode and never by the JSX pass alone: the runtime
-  // adapter has no `useCompiledKtx2` in its source, and gating on that string
-  // shipped Runtime JSON worlds whose transcoder URL answered 404.
-  const needsPublishedBasisAssets =
-    outputMode === "classic-jsx"
-      ? generated.includes("function useCompiledKtx2(")
-      : runtimeManifestUsesKtx2;
   const bundledAssetCopyPlan: CompilerBundledAssetCopy[] = [
-    ...(needsPublishedBasisAssets ? createPublishedBasisAssetCopyPlan() : []),
+    ...createPublishedVendorAssetCopyPlan(requiredVendorBundles),
     // Not gated on the output mode: both emitted source and the runtime package
     // read the font from the world's own files, so both need them copied.
     ...(usesTextPanel && resolvedEntryScene
@@ -557,12 +555,76 @@ function createPublishedTextFontCopyPlan(
   }));
 }
 
-function createPublishedBasisAssetCopyPlan(): CompilerBundledAssetCopy[] {
-  return LOCAL_BASIS_TRANSCODER_FILES.map((sourceFileName) => ({
-    source: "three-basis" as const,
-    sourceFileName,
-    targetRelativePath: `public/${PUBLISHED_BASIS_TRANSCODER_DIRECTORY}/${sourceFileName}`,
-  }));
+/**
+ * 公開したワールドが自前で配る decoder ファイルを決める。
+ *
+ * 判定は staging へコピーする Asset の事実だけを見る。生成コードに特定の
+ * helper 名が現れるかで決めていた時期があり、Runtime JSON 出力の生成物は
+ * 薄いアダプターでその名前を含まないため、KTX2 Texture を持つワールドが
+ * transcoder 無しで公開されていた。出力モードで結論が変わる判定にしない。
+ */
+function resolveRequiredVendorBundles(
+  assets: AssetManifest,
+  assetCopyPlan: readonly AssetCopyPlanEntry[],
+): VendorBundleId[] {
+  const required = new Set<VendorBundleId>();
+  for (const entry of assetCopyPlan) {
+    const asset = assets.assets[entry.assetId];
+    if (!asset) continue;
+    if (asset.kind === "texture" && isPublishedAsKtx2(asset)) {
+      required.add("three-basis");
+    }
+    if (asset.kind === "model" && modelRequiresDracoDecoder(asset)) {
+      required.add("three-draco");
+    }
+  }
+  return [...required].sort();
+}
+
+/** True when the published GLB can only be read with a Draco decoder. */
+function modelRequiresDracoDecoder(asset: ModelAsset): boolean {
+  const metadata = asset.importMetadata;
+  if (!metadata) return false;
+  return (
+    metadata.extensionsUsed.includes(DRACO_MESH_COMPRESSION_EXTENSION) ||
+    metadata.extensionsRequired.includes(DRACO_MESH_COMPRESSION_EXTENSION)
+  );
+}
+
+const DRACO_MESH_COMPRESSION_EXTENSION = "KHR_draco_mesh_compression" as const;
+
+/**
+ * Runtime JSON へ書く decoder の場所。
+ *
+ * manifest は `public/xrift/` に、decoder は `public/xrift-studio/vendor/` に
+ * 置かれる。runtime loader は manifest からの相対で解決するので、ここでも
+ * 同じ相対で書く。必要のない bundle は書かない。
+ */
+function publishedRuntimeDecoderPaths(
+  bundleIds: readonly VendorBundleId[],
+): XriftRuntimeDecoderPaths {
+  const relativeTo = (bundleId: VendorBundleId) =>
+    `../${VENDOR_BUNDLES[bundleId].publishedDirectory}/`;
+  return {
+    ...(bundleIds.includes("three-basis")
+      ? { ktx2TranscoderPath: relativeTo("three-basis") }
+      : {}),
+    ...(bundleIds.includes("three-draco")
+      ? { dracoDecoderPath: relativeTo("three-draco") }
+      : {}),
+  };
+}
+
+function createPublishedVendorAssetCopyPlan(
+  bundleIds: readonly VendorBundleId[],
+): CompilerBundledAssetCopy[] {
+  return bundleIds.flatMap((bundleId) =>
+    VENDOR_BUNDLES[bundleId].files.map((sourceFileName) => ({
+      source: bundleId,
+      sourceFileName,
+      targetRelativePath: `public/${VENDOR_BUNDLES[bundleId].publishedDirectory}/${sourceFileName}`,
+    })),
+  );
 }
 
 /**
@@ -3086,17 +3148,36 @@ function renderModelMesh(
     model.importMetadata.vrmVersion === "0"
       ? ` rotation={[0, ${formatNumber(Math.PI)}, 0]}`
       : "";
-  const loaderSource = isObj
-    ? "const scene = useLoader(OBJLoader, modelUrl);"
-    : isOpenBrush
-      ? `const { scene, parser${animationLoaded ? ", animations" : ""} } = useLoader(GLTFLoader, modelUrl, (loader) => {
+  const usesDraco = !isObj && modelRequiresDracoDecoder(model);
+  if (usesDraco) {
+    registerCompiledDracoRuntime(context);
+    if (isOpenBrush) {
+      context.extraImports.add(
+        'import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";',
+      );
+    }
+  }
+  const dracoBinding = usesDraco
+    ? "  const dracoDecoderPath = useCompiledDracoDecoderPath();\n"
+    : "";
+  const loaderSource =
+    dracoBinding +
+    (isObj
+      ? "const scene = useLoader(OBJLoader, modelUrl);"
+      : isOpenBrush
+        ? `const { scene, parser${animationLoaded ? ", animations" : ""} } = useLoader(GLTFLoader, modelUrl, (loader) => {
     loader.register(
       (parser) => createOpenBrushMaterialExtension(parser, ${JSON.stringify(OPEN_BRUSH_BRUSH_BASE_URL)}),
-    );
+    );${
+      usesDraco
+        ? `
+    loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath));`
+        : ""
+    }
   });`
-      : !needsParser
-        ? `const { scene${animationLoaded ? ", animations" : ""} } = useGLTF(modelUrl);`
-        : `const { scene, parser${animationLoaded ? ", animations" : ""} } = useGLTF(modelUrl);`;
+        : `const { scene${needsParser ? ", parser" : ""}${animationLoaded ? ", animations" : ""} } = useGLTF(modelUrl${
+            usesDraco ? ", dracoDecoderPath" : ""
+          });`);
   const animationBindings = (animationBridgeable ? ["mixer", "clips"] : []).join(", ");
   const graphCuePlans = planInteractivityAnimationCues(graphAnimationCues);
   if (graphCuePlans.length > 0) {
@@ -4399,6 +4480,30 @@ function registerCompiledKtx2Runtime(context: CompileContext): void {
 function useCompiledKtx2(assetUrl: string): Texture {
   const { baseUrl } = useXRift();
   return useKTX2(assetUrl, \`\${baseUrl}\${COMPILED_KTX2_TRANSCODER_DIRECTORY}\`);
+}`,
+  );
+}
+
+/**
+ * Dracoで圧縮したGLBを、ワールド自身が配るデコーダーで読む。
+ *
+ * 既定のdrei / three.jsはデコーダーをCDNから取りに来る。公開したワールドは
+ * 通信権限を持たないので、その経路ではModelごと読み込めない。KTX2と同じく
+ * `baseUrl`直下へコピーしたファイルを指す。
+ */
+function registerCompiledDracoRuntime(context: CompileContext): void {
+  const key = "model-runtime:use-compiled-draco-decoder-path";
+  if (context.supportDeclarations.has(key)) return;
+  context.imports.add("useXRift");
+  context.supportDeclarations.set(
+    key,
+    `const COMPILED_DRACO_DECODER_DIRECTORY = ${JSON.stringify(
+      `${VENDOR_BUNDLES["three-draco"].publishedDirectory}/`,
+    )} as const;
+
+function useCompiledDracoDecoderPath(): string {
+  const { baseUrl } = useXRift();
+  return \`\${baseUrl}\${COMPILED_DRACO_DECODER_DIRECTORY}\`;
 }`,
   );
 }

@@ -340,6 +340,20 @@ export type XriftRuntimeManifest = {
   entryScene: string;
   scenes: Record<string, XriftRuntimeScene>;
   assets: Record<string, XriftRuntimeAsset>;
+  /**
+   * Decoder directories the world ships itself, relative to this manifest.
+   *
+   * KTX2 and Draco cannot be read without a transcoder / decoder. A published
+   * world has no permission to reach a CDN, so the compiler copies the files
+   * next to the world and names them here. Absent on manifests compiled before
+   * the files were shipped; the loader then falls back to its public defaults.
+   */
+  decoders?: XriftRuntimeDecoderPaths;
+};
+
+export type XriftRuntimeDecoderPaths = {
+  ktx2TranscoderPath?: string;
+  dracoDecoderPath?: string;
 };
 
 const RUNTIME_TERRAIN_SIZE_MIN = 0.5;
@@ -371,7 +385,21 @@ export function isXriftRuntimeManifest(value: unknown): value is XriftRuntimeMan
     isRecord(assets) &&
     Object.values(scenes).every(isRuntimeScene) &&
     Object.values(assets).every(isRuntimeAsset) &&
+    isRuntimeDecoderPaths(value.decoders) &&
     isRuntimeScene(scenes[entryScene])
+  );
+}
+
+function isRuntimeDecoderPaths(
+  value: unknown,
+): value is XriftRuntimeDecoderPaths | undefined {
+  if (value === undefined) return true;
+  if (!isRecord(value)) return false;
+  return (
+    (value.ktx2TranscoderPath === undefined ||
+      typeof value.ktx2TranscoderPath === "string") &&
+    (value.dracoDecoderPath === undefined ||
+      typeof value.dracoDecoderPath === "string")
   );
 }
 
