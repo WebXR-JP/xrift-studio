@@ -452,7 +452,10 @@ async function runStagedWorldTypecheck() {
           noUnusedParameters: true,
           noFallthroughCasesInSwitch: true,
           esModuleInterop: true,
-          types: ["react", "react-dom", "vite/client"],
+          // No "vite/client": the real template does not pull Vite's ambient
+          // types in, so an overlay reaching for `import.meta.env` has to
+          // fail here rather than in the author's publish dialog.
+          types: ["react", "react-dom"],
           // The template writes this as baseUrl "." + "src/*"; the relative
           // form means the same thing and also parses under TypeScript 7,
           // which removed baseUrl.
