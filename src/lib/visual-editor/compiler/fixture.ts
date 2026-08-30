@@ -2346,6 +2346,37 @@ export function runVisualCompilerFixtureAssertions(
         `A Model played only by a graph is missing: ${fragment}`,
       ),
     );
+    /*
+     * The clips the graph starts have to be in the published source itself.
+     *
+     * The graph runtime is a sibling of the Model and starts as soon as it
+     * mounts, while the Model suspends on its glTF: `event/onStart` fires
+     * before the animation bridge exists, nothing retries, and the world ships
+     * with animations that never play. Compiling the cues in is what makes the
+     * published world play what the Editor plays.
+     */
+    assert(
+      graphOnlySource.includes("action.setLoop(cue.loop ? LoopRepeat : LoopOnce"),
+      "the published source does not start the clips the graph starts",
+    );
+    const emittedCues = graphOnlySource.match(/\[\{"index":[^\]]*\}\]/);
+    assert(
+      emittedCues !== null,
+      "the published source carries no cue list for the graph's clips",
+    );
+    const emitted = JSON.parse(emittedCues[0]) as {
+      index: number;
+      loop: boolean;
+      delaySeconds: number;
+    }[];
+    assert(
+      emitted.length === 2,
+      `the published source starts ${emitted.length} clips, not the graph's 2`,
+    );
+    assert(
+      emitted.every((cue) => cue.loop && cue.delaySeconds === 0),
+      "a published clip does not start with the world, or does not loop",
+    );
 
     const retainedAnimationResult = compileVisualProject(
       {

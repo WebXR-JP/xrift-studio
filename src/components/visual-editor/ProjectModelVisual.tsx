@@ -120,6 +120,8 @@ type Props = {
   assignedMaterials: readonly ProjectModelMaterialAssignment[];
   pose?: ModelPoseState;
   playing?: boolean;
+  /** Clips the Entity's own graphs start with the world. */
+  graphAnimationCues?: readonly InteractivityAnimationCue[];
   declaredInteractionAnimationIndices?: readonly number[];
   sourceNodeIndex?: number;
   sourceNodeName?: string;
@@ -196,6 +198,7 @@ export function ProjectModelVisual({
   assignedMaterials,
   pose,
   playing = false,
+  graphAnimationCues,
   declaredInteractionAnimationIndices = EMPTY_ANIMATION_INDICES,
   sourceNodeIndex,
   sourceNodeName,
@@ -264,6 +267,7 @@ export function ProjectModelVisual({
           assignedMaterials={resolvedMaterials}
           pose={pose}
           playing={playing}
+          graphAnimationCues={graphAnimationCues}
           declaredInteractionAnimationIndices={
             declaredInteractionAnimationIndices
           }
@@ -364,6 +368,7 @@ function ProjectModelRender({
   assignedMaterials,
   pose,
   playing,
+  graphAnimationCues,
   declaredInteractionAnimationIndices,
   sourceNodeIndex,
   sourceNodeName,
@@ -379,6 +384,15 @@ function ProjectModelRender({
   assignedMaterials: readonly ResolvedProjectModelMaterialAssignment[];
   pose?: ModelPoseState;
   playing: boolean;
+  /**
+   * Clips the Entity's own graphs start with the world.
+   *
+   * Passed in rather than pushed by the graph runtime: that runtime is
+   * rendered before this Model and starts before the animation bridge exists,
+   * so a clip it starts on `event/onStart` reaches nothing. Read here, the
+   * Model starts them itself once it has loaded.
+   */
+  graphAnimationCues?: readonly InteractivityAnimationCue[];
   declaredInteractionAnimationIndices: readonly number[];
   sourceNodeIndex?: number;
   sourceNodeName?: string;
@@ -458,7 +472,7 @@ function ProjectModelRender({
     declaredInteractionAnimationIndices.forEach((index) =>
       note(index, { delaySeconds: 0, loop: false, speed: 1, startTime: 0 }),
     );
-    interactionAnimationCues.forEach((cue) =>
+    const noteCue = (cue: InteractivityAnimationCue) =>
       note(cue.animationIndex, {
         delaySeconds: cue.delaySeconds,
         loop: (cue.endTime ?? null) === null && cue.stopSeconds === undefined,
@@ -472,14 +486,19 @@ function ProjectModelRender({
           typeof cue.startTime === "number" && Number.isFinite(cue.startTime)
             ? Math.max(0, cue.startTime)
             : 0,
-      }),
-    );
+      });
+    // Both sources are the same kind of statement — "this clip starts at this
+    // moment" — whether the graph came with the glTF or is an Asset the author
+    // attached to this Entity.
+    interactionAnimationCues.forEach(noteCue);
+    (graphAnimationCues ?? EMPTY_ANIMATION_CUES).forEach(noteCue);
     return [...planByIndex.entries()].flatMap(([index, plan]) =>
       animations[index] ? [{ clip: animations[index], ...plan }] : [],
     );
   }, [
     animations,
     declaredInteractionAnimationIndices,
+    graphAnimationCues,
     interactionAnimationCues,
     playing,
   ]);
@@ -564,7 +583,12 @@ function ProjectModelRender({
   const animationBridgeActiveRef = useRef(false);
 
   useEffect(() => {
-    if (!mixer || !renderedObject || animations.length === 0 || !playing) return;
+    // Attached whether or not Play is running. Gating it on `playing` meant the
+    // bridge appeared in the same commit that started the graph, and this Model
+    // renders after the graph runtime, so the first command of every session
+    // arrived before there was anything to receive it. Nothing commands a
+    // bridge outside Play, so attaching it early costs nothing.
+    if (!mixer || !renderedObject || animations.length === 0) return;
     // What this Model should play is not known here — a graph can start any
     // clip at any moment — so the bridge carries no clip of its own and no
     // owner id, and the cues above already started whatever begins with Play.
@@ -598,7 +622,7 @@ function ProjectModelRender({
       animationBridgeRef.current = null;
       animationBridgeActiveRef.current = false;
     };
-  }, [animations, invalidate, mixer, playing, renderedObject]);
+  }, [animations, invalidate, mixer, renderedObject]);
 
   useFrame((frame, delta) => {
     if (playbackActive || animationBridgeActiveRef.current) {

@@ -1265,6 +1265,24 @@ export function setInteractivityTriggerActionDuration(
  * shown on the card; it is documentation, and nothing reads it at runtime, so a
  * graph whose extras were stripped still plays.
  */
+/**
+ * A one-line note the generator left on a node, shown under its title.
+ *
+ * Documentation, not behaviour: nothing reads it at runtime, so a graph whose
+ * extras were stripped still does the same thing.
+ */
+export function readInteractivityNodeNote(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+): string | undefined {
+  const extras = graph.nodes?.[nodeIndex]?.extras?.xriftStudio;
+  if (typeof extras !== "object" || extras === null || Array.isArray(extras)) {
+    return undefined;
+  }
+  const note = (extras as Record<string, unknown>).note;
+  return typeof note === "string" && note.trim().length > 0 ? note : undefined;
+}
+
 export function readInteractivityClipName(
   graph: KhrInteractivityGraph,
   nodeIndex: number,
