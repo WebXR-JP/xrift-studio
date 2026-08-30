@@ -357,6 +357,8 @@ export const tauri = {
   },
   saveDebugVideo: (dataUrl: string, label = "scene-view") =>
     invoke<string>("save_debug_video", { dataUrl, label }),
+  saveDebugImage: (dataUrl: string, label = "scene-view") =>
+    invoke<string>("save_debug_image", { dataUrl, label }),
   getVersions: () => invoke<Versions>("get_versions"),
   runtimePaths: () => invoke<RuntimePaths>("runtime_paths"),
   runtimeStatus: () => invoke<RuntimeStatus>("runtime_status"),

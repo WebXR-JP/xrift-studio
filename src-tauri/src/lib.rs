@@ -5247,6 +5247,45 @@ fn save_debug_video(
     Ok(path.to_string_lossy().to_string())
 }
 
+/// Saves one Scene View frame beside the debug videos and returns its path.
+///
+/// The same directory and naming as `save_debug_video`, for the same reason:
+/// a capture taken to answer a question is a temporary artifact, so it belongs
+/// in app data rather than in the user's project, and an AI client asking for
+/// one must not be able to choose where the file lands.
+#[tauri::command]
+fn save_debug_image(
+    app: AppHandle,
+    data_url: String,
+    label: Option<String>,
+) -> Result<String, String> {
+    let directory = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| format!("診断画像の保存先を確認できません: {}", error))?
+        .join("debug-captures");
+    std::fs::create_dir_all(&directory)
+        .map_err(|error| format!("診断画像の保存先を作成できません: {}", error))?;
+    let safe_label: String = label
+        .unwrap_or_else(|| "scene-view".to_string())
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric() || *character == '-' || *character == '_')
+        .take(48)
+        .collect();
+    let safe_label = if safe_label.is_empty() {
+        "scene-view"
+    } else {
+        safe_label.as_str()
+    };
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| format!("時刻を取得できません: {}", error))?
+        .as_millis();
+    let path = directory.join(format!("{}-{}.png", safe_label, timestamp));
+    save_screenshot(path.to_string_lossy().to_string(), data_url)?;
+    Ok(path.to_string_lossy().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
@@ -5320,6 +5359,7 @@ pub fn run() {
             save_screenshot,
             save_video,
             save_debug_video,
+            save_debug_image,
             read_audio_data_url,
             read_image_data_url,
             list_files,

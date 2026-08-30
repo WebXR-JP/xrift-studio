@@ -2521,6 +2521,61 @@ function findSceneEntityObject(
   return result;
 }
 
+/**
+ * Where a caller can put the Scene View camera.
+ *
+ * The named views are the ones a person reaches for while debugging a layout —
+ * looking straight down to check spacing, straight on to check alignment — and
+ * they are exactly what someone driving the editor through MCP cannot do by
+ * dragging. `focusEntityId` is the same framing the F key performs, so an agent
+ * and a person end up at the same place.
+ */
+export const SCENE_VIEW_CAMERA_PRESETS = [
+  "top",
+  "bottom",
+  "front",
+  "back",
+  "left",
+  "right",
+  "iso",
+] as const;
+
+export type SceneViewCameraPreset = (typeof SCENE_VIEW_CAMERA_PRESETS)[number];
+
+export type SceneViewCameraRequest = {
+  /** Must change to run a new move, like the other viewport requests. */
+  id: number;
+  preset?: SceneViewCameraPreset;
+  /** Frames this Entity's real rendered bounds, as the F key does. */
+  focusEntityId?: string;
+  /** Explicit placement. `target` alone keeps the current distance. */
+  position?: Vec3;
+  target?: Vec3;
+  /** Overrides the distance a preset or a framing would have chosen. */
+  distance?: number;
+};
+
+export type SceneViewCameraResult = {
+  requestId: number;
+  ok: boolean;
+  position: Vec3;
+  target: Vec3;
+  /** Set when the move framed an Entity's bounds rather than a bare point. */
+  framedEntityId?: string;
+  message?: string;
+};
+
+/** Unit view directions, pointing from the target toward the camera. */
+const SCENE_VIEW_CAMERA_DIRECTIONS: Record<SceneViewCameraPreset, Vec3> = {
+  top: [0, 1, 0],
+  bottom: [0, -1, 0],
+  front: [0, 0, 1],
+  back: [0, 0, -1],
+  left: [-1, 0, 0],
+  right: [1, 0, 0],
+  iso: [1, 0.8, 1],
+};
+
 function CameraControls({
   editorMode,
   projectKind,
@@ -2531,6 +2586,8 @@ function CameraControls({
   frameEntityId,
   frameEntityName,
   frameTarget,
+  cameraRequest,
+  onCameraResult,
   onFocusChange,
 }: {
   editorMode: EditorMode;
@@ -2542,6 +2599,8 @@ function CameraControls({
   frameEntityId: string | null;
   frameEntityName: string | null;
   frameTarget?: Vec3;
+  cameraRequest?: SceneViewCameraRequest | null;
+  onCameraResult?: (result: SceneViewCameraResult) => void;
   onFocusChange: (focus: SceneFocusState | null) => void;
 }) {
   const camera = useThree((state) => state.camera);
@@ -2686,6 +2745,128 @@ function CameraControls({
     if (exitFocusRequest === 0) return;
     restoreFocusSnapshot();
   }, [exitFocusRequest, restoreFocusSnapshot]);
+
+  const handledCameraRequestRef = useRef(0);
+  useLayoutEffect(() => {
+    const request = cameraRequest;
+    if (!request || handledCameraRequestRef.current === request.id) return;
+    handledCameraRequestRef.current = request.id;
+    const controls = controlsRef.current;
+    const report = (result: Omit<SceneViewCameraResult, "requestId">) =>
+      onCameraResult?.({ ...result, requestId: request.id });
+    if (!controls) {
+      report({
+        ok: false,
+        position: camera.position.toArray() as Vec3,
+        target: [0, 0, 0],
+        message: "Scene Viewのカメラがまだ準備できていません",
+      });
+      return;
+    }
+    const currentTarget = controls.target.clone();
+    const currentPosition = camera.position.clone();
+    const finish = (message?: string) => {
+      controls.update();
+      camera.updateProjectionMatrix();
+      report({
+        ok: true,
+        position: camera.position.toArray() as Vec3,
+        target: controls.target.toArray() as Vec3,
+        ...(request.focusEntityId
+          ? { framedEntityId: request.focusEntityId }
+          : {}),
+        ...(message ? { message } : {}),
+      });
+    };
+
+    // An explicit placement is taken literally: a caller that computed a
+    // position from bounds should not have it re-derived here.
+    if (request.position || request.target) {
+      const target = request.target
+        ? new Vector3(...request.target)
+        : currentTarget;
+      const position = request.position
+        ? new Vector3(...request.position)
+        : target
+            .clone()
+            .add(currentPosition.clone().sub(currentTarget));
+      camera.position.copy(position);
+      controls.target.copy(target);
+      finish();
+      return;
+    }
+
+    const target = new Vector3();
+    let radius = 0;
+    if (request.focusEntityId) {
+      const object = findSceneEntityObject(threeScene, request.focusEntityId);
+      if (!object) {
+        report({
+          ok: false,
+          position: currentPosition.toArray() as Vec3,
+          target: currentTarget.toArray() as Vec3,
+          message: "指定されたEntityがScene Viewに見つかりません",
+        });
+        return;
+      }
+      object.updateWorldMatrix(true, true);
+      const bounds = new Box3().setFromObject(object);
+      if (bounds.isEmpty()) {
+        object.getWorldPosition(target);
+      } else {
+        const sphere = bounds.getBoundingSphere(new Sphere());
+        target.copy(sphere.center);
+        radius = sphere.radius;
+      }
+    } else if (request.preset) {
+      // A preset with no Entity keeps looking at whatever the view was on, so
+      // switching to the top view answers "what does this look like from
+      // above" rather than jumping back to the world origin.
+      target.copy(currentTarget);
+    } else {
+      report({
+        ok: false,
+        position: currentPosition.toArray() as Vec3,
+        target: currentTarget.toArray() as Vec3,
+        message: "preset、focusEntityId、position/targetのいずれかを指定してください",
+      });
+      return;
+    }
+
+    let distance = request.distance;
+    if (distance === undefined) {
+      // Keeping the current distance is what makes a named view read as
+      // "turn and look from there": capping it would silently zoom in on a
+      // large Terrain the caller had deliberately backed away from.
+      const previous = currentPosition.clone().sub(currentTarget).length();
+      distance = Math.max(2.5, previous > 0.01 ? previous : 8);
+      if (camera instanceof PerspectiveCamera && radius > 0.001) {
+        const verticalFov = MathUtils.degToRad(camera.fov);
+        const horizontalFov =
+          2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
+        const limitingFov = Math.max(
+          Math.min(verticalFov, horizontalFov),
+          MathUtils.degToRad(1),
+        );
+        distance = Math.max(2.5, (radius / Math.sin(limitingFov / 2)) * 1.15);
+      }
+    }
+    const direction = request.preset
+      ? new Vector3(...SCENE_VIEW_CAMERA_DIRECTIONS[request.preset])
+      : currentPosition.clone().sub(currentTarget);
+    if (direction.lengthSq() < 1e-6) direction.set(1, 0.8, 1);
+    direction.setLength(Math.min(distance, camera.far * 0.8));
+    camera.position.copy(target.clone().add(direction));
+    controls.target.copy(target);
+    // Straight down has no yaw to keep, and the default up vector makes the
+    // view roll to an arbitrary heading. Pinning it keeps -Z up on screen.
+    camera.up.set(
+      0,
+      request.preset === "top" || request.preset === "bottom" ? 0 : 1,
+      request.preset === "top" ? -1 : request.preset === "bottom" ? 1 : 0,
+    );
+    finish();
+  }, [camera, cameraRequest, onCameraResult, threeScene]);
 
   const enabled =
     editorMode === "edit"
@@ -3692,6 +3873,8 @@ export function SceneViewport({
   onScreenshotComplete,
   debugCaptureRequest = null,
   onDebugCaptureResult,
+  cameraRequest = null,
+  onCameraResult,
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
@@ -3768,6 +3951,8 @@ export function SceneViewport({
   /** MCP-driven metrics / bounded WebM capture request. */
   debugCaptureRequest?: SceneDebugCaptureRequest | null;
   onDebugCaptureResult?: (result: SceneDebugCaptureResult) => void;
+  cameraRequest?: SceneViewCameraRequest | null;
+  onCameraResult?: (result: SceneViewCameraResult) => void;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const dropResolverRef = useRef<SceneDropResolver | null>(null);
@@ -5174,6 +5359,8 @@ export function SceneViewport({
                 : null
             }
             frameTarget={selectedTransform?.position}
+            cameraRequest={cameraRequest}
+            onCameraResult={onCameraResult}
             onFocusChange={onFocusChange}
           />
           </SceneWindContext.Provider>

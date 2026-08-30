@@ -2888,6 +2888,50 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "capture_scene_view",
+            "description": "Save one PNG of the Scene View exactly as rendered and return its path in the app debug-captures directory. This is how a change is checked rather than assumed: metrics and the document say what should be on screen, and only a frame says what is. Point the camera with set_scene_view_camera first. Changes nothing in the project.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "set_scene_view_camera",
+            "description": "Move the Scene View camera. Give a named view (top and bottom look straight down and up, front/back/left/right look along an axis, iso is the default three-quarter view), or focusEntityId to frame one Entity's real rendered bounds the way the editor's focus shortcut does, or an explicit position and target. distance overrides how far back the camera sits. A named view with no Entity keeps the current look-at point, so switching to top answers what the current subject looks like from above. Returns the resulting position and target; changes nothing in the project.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "preset": {
+                        "type": "string",
+                        "enum": ["top", "bottom", "front", "back", "left", "right", "iso"]
+                    },
+                    "focusEntityId": { "type": "string", "minLength": 1 },
+                    "position": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3
+                    },
+                    "target": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3
+                    },
+                    "distance": { "type": "number", "minimum": 0.1, "maximum": 5000 }
+                },
+                "required": ["projectId", "sceneId"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "set_play_mode",
             "description": "Start or stop the visual editor Play session. Starting Play checks the project-scoped content-hash approval for every referenced Script before evaluation. XRift Studio's stdio MCP editor tools cannot approve source; the debug-only privileged Tauri MCP bridge is outside this trust boundary. Unapproved source returns SCRIPT_APPROVAL_REQUIRED unless unapprovedPolicy is explicitly set to skip. Compilation failure leaves the editor in Edit mode.",
             "inputSchema": {

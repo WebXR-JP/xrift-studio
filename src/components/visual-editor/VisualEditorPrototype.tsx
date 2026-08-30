@@ -244,8 +244,13 @@ import {
 } from "./InspectorPanel";
 import {
   SceneViewport,
+  SCENE_VIEW_CAMERA_PRESETS,
   type SceneFocusState,
+  type SceneViewCameraPreset,
+  type SceneViewCameraRequest,
+  type SceneViewCameraResult,
 } from "./SceneViewport";
+import type { SceneScreenshotRequest } from "./SceneScreenshotCapture";
 import type {
   SceneDebugCaptureRequest,
   SceneDebugCaptureResult,
@@ -311,9 +316,11 @@ import {
 } from "./editor-layout";
 import {
   assertMcpExternalStoreWrite,
+  mcpFiniteNumber,
   mcpOptionalInteger,
   mcpOptionalScriptLanguage,
   mcpOptionalString,
+  mcpOptionalVec3,
   mcpRequiredString,
   scriptCompileErrorsForMcp,
   waitForEditorCommit,
@@ -808,6 +815,67 @@ export function VisualEditorPrototype({
     const waiter = debugCaptureWaitersRef.current.get(result.requestId);
     if (!waiter) return;
     debugCaptureWaitersRef.current.delete(result.requestId);
+    waiter(result);
+  }, []);
+
+  // A still frame and a camera move, requested the same way the debug capture
+  // is: an id the viewport reacts to, and a waiter the request resolves.
+  const [sceneScreenshotRequest, setSceneScreenshotRequest] =
+    useState<SceneScreenshotRequest | null>(null);
+  const sceneScreenshotIdRef = useRef(0);
+  const requestSceneScreenshot = useCallback(
+    () =>
+      new Promise<{ ok: true; dataUrl: string } | { ok: false; message: string }>(
+        (resolve) => {
+          const id = sceneScreenshotIdRef.current + 1;
+          sceneScreenshotIdRef.current = id;
+          let settled = false;
+          const settle = (
+            result: { ok: true; dataUrl: string } | { ok: false; message: string },
+          ) => {
+            if (settled) return;
+            settled = true;
+            resolve(result);
+          };
+          setSceneScreenshotRequest({
+            id,
+            onCapture: (dataUrl) => settle({ ok: true, dataUrl }),
+            onError: (message) => settle({ ok: false, message }),
+          });
+          // The Canvas does not render while the window is hidden, so a request
+          // that never reaches a frame must still answer the MCP client.
+          window.setTimeout(
+            () =>
+              settle({
+                ok: false,
+                message: "Scene Viewのフレームを取得できませんでした",
+              }),
+            5_000,
+          );
+        },
+      ),
+    [],
+  );
+  const [sceneCameraRequest, setSceneCameraRequest] =
+    useState<SceneViewCameraRequest | null>(null);
+  const sceneCameraRequestIdRef = useRef(0);
+  const sceneCameraWaitersRef = useRef(
+    new Map<number, (result: SceneViewCameraResult) => void>(),
+  );
+  const requestSceneCamera = useCallback(
+    (request: Omit<SceneViewCameraRequest, "id">) =>
+      new Promise<SceneViewCameraResult>((resolve) => {
+        const id = sceneCameraRequestIdRef.current + 1;
+        sceneCameraRequestIdRef.current = id;
+        sceneCameraWaitersRef.current.set(id, resolve);
+        setSceneCameraRequest({ ...request, id });
+      }),
+    [],
+  );
+  const resolveSceneCamera = useCallback((result: SceneViewCameraResult) => {
+    const waiter = sceneCameraWaitersRef.current.get(result.requestId);
+    if (!waiter) return;
+    sceneCameraWaitersRef.current.delete(result.requestId);
     waiter(result);
   }, []);
   const mcpRevisionRef = useRef(0);
@@ -2091,6 +2159,109 @@ export function VisualEditorPrototype({
               "対象Sceneが現在のEditorと一致しません。get_editor_contextで再取得してください",
               { projectId, sceneId },
             );
+          }
+          if (request.tool === "set_scene_view_camera") {
+            const preset = mcpOptionalString(args.preset);
+            if (
+              preset !== undefined &&
+              !(SCENE_VIEW_CAMERA_PRESETS as readonly string[]).includes(preset)
+            ) {
+              throw new XriftMcpEditorToolError(
+                "INVALID_ARGUMENT",
+                `presetは${SCENE_VIEW_CAMERA_PRESETS.join("、")}のいずれかで指定してください`,
+              );
+            }
+            const focusEntityId = mcpOptionalString(args.focusEntityId);
+            if (
+              focusEntityId &&
+              !bundleRef.current.scene.entities[focusEntityId]
+            ) {
+              throw new XriftMcpEditorToolError(
+                "ENTITY_NOT_FOUND",
+                "指定されたEntityが見つかりません",
+                { entityId: focusEntityId },
+              );
+            }
+            const position = mcpOptionalVec3(args.position, "position");
+            const target = mcpOptionalVec3(args.target, "target");
+            const distance =
+              args.distance === undefined
+                ? undefined
+                : mcpFiniteNumber(args.distance, "distance", 0.1, 5_000);
+            if (!preset && !focusEntityId && !position && !target) {
+              throw new XriftMcpEditorToolError(
+                "INVALID_ARGUMENT",
+                "preset、focusEntityId、position/targetのいずれかを指定してください",
+              );
+            }
+            const moved = await requestSceneCamera({
+              ...(preset ? { preset: preset as SceneViewCameraPreset } : {}),
+              ...(focusEntityId ? { focusEntityId } : {}),
+              ...(position ? { position } : {}),
+              ...(target ? { target } : {}),
+              ...(distance === undefined ? {} : { distance }),
+            });
+            if (!moved.ok) {
+              throw new XriftMcpEditorToolError(
+                "SCENE_VIEW_CAMERA_FAILED",
+                moved.message ?? "Scene Viewのカメラを動かせませんでした",
+              );
+            }
+            await tauri.completeXriftMcpRequest({
+              id: request.id,
+              ok: true,
+              result: {
+                projectId,
+                sceneId,
+                revision: mcpRevisionRef.current,
+                position: moved.position,
+                target: moved.target,
+                ...(moved.framedEntityId
+                  ? { framedEntityId: moved.framedEntityId }
+                  : {}),
+                ...(preset ? { preset } : {}),
+              },
+            });
+            return;
+          }
+          if (request.tool === "capture_scene_view") {
+            // A frame is only worth anything from the Edit camera the caller
+            // just placed; during Play the viewport is the play copy.
+            const captured = await requestSceneScreenshot();
+            if (!captured.ok) {
+              throw new XriftMcpEditorToolError(
+                "SCENE_VIEW_CAPTURE_FAILED",
+                captured.message,
+              );
+            }
+            if (!tauri.isAvailable()) {
+              throw new XriftMcpEditorToolError(
+                "SCENE_VIEW_CAPTURE_FAILED",
+                "デスクトップ版でのみScene Viewを保存できます",
+              );
+            }
+            const path = await tauri.saveDebugImage(
+              captured.dataUrl,
+              "scene-view",
+            );
+            const byteLength = Math.floor(
+              ((captured.dataUrl.length - captured.dataUrl.indexOf(",") - 1) *
+                3) /
+                4,
+            );
+            await tauri.completeXriftMcpRequest({
+              id: request.id,
+              ok: true,
+              result: {
+                projectId,
+                sceneId,
+                revision: mcpRevisionRef.current,
+                path,
+                byteLength,
+                editorMode: editorModeRef.current,
+              },
+            });
+            return;
           }
           const action = mcpRequiredString(args.action, "action");
           if (action !== "metrics" && action !== "start" && action !== "stop") {
@@ -9512,6 +9683,10 @@ export function VisualEditorPrototype({
             onThumbnailCaptureError={onThumbnailCaptureError}
             debugCaptureRequest={debugCaptureRequest}
             onDebugCaptureResult={resolveDebugCapture}
+            screenshotRequest={sceneScreenshotRequest}
+            onScreenshotComplete={() => setSceneScreenshotRequest(null)}
+            cameraRequest={sceneCameraRequest}
+            onCameraResult={resolveSceneCamera}
           />
           <InspectorPanel
             scene={bundle.scene}

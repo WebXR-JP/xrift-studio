@@ -46,9 +46,15 @@ snapshot への適用を弾くためで、複数 client が同時に触っても
 
 **Scene / Entity**
 `update_scene_settings`, `list_entities`, `get_entity_components`,
-`create_empty_entity`, `create_primitive`, `place_asset`,
+`get_entity_bounds`, `create_empty_entity`, `create_primitive`, `place_asset`,
 `place_builtin_prefab`, `create_prefab`, `rename_entity`, `duplicate_entity`,
 `reparent_entity`, `delete_entity`, `set_entity_enabled`, `update_transform`
+
+`get_entity_bounds` は Transform ではなく**大きさ**を返す。`world` は既定で
+配下を含めた axis-aligned box、`local` は自身の Mesh の素の extent。回転して
+いる子は 8 隅を変換して含める箱にするので、重なり判定が安全側になる。extent
+を解決できない Mesh（metadata が無い時代の Model など）は union から黙って
+外さず `unmeasuredEntityIds` に出す。「小さい」と「不明」は違う。
 
 **Component**
 `list_component_definitions`, `add_component`, `update_component`,
@@ -58,7 +64,13 @@ snapshot への適用を弾くためで、複数 client が同時に触っても
 `inspect_colliders`, `optimize_colliders`
 
 **Terrain**
-`get_terrain`, `create_terrain`, `sculpt_terrain`, `update_terrain`
+`get_terrain`, `sample_terrain_point`, `create_terrain`, `sculpt_terrain`,
+`update_terrain`
+
+`sample_terrain_point` は Terrain-local の XZ から、補間した高さ、同じ点の
+world 座標、傾斜、穴、草の層ごとの被覆を返す。document は高さを平坦な配列で
+持っていて caller は引けないので、これが無いと彫った地形の上へ y=0 で置いて
+しまう。
 
 **Terrain の草**
 `list_terrain_grass_types`, `apply_terrain_grass_preset`,
@@ -104,9 +116,25 @@ Script の実行境界と trust gate は [Scripting の契約](./SCRIPTING.md) �
 `search_external_assets`, `get_external_asset_options`,
 `install_external_asset`
 
-## debug (1)
+## debug (3)
 
-`capture_scene_debug`
+`capture_scene_debug`, `capture_scene_view`, `set_scene_view_camera`
+
+document を書き換えず、生きた Scene View を読む / 向きを変えるだけの 3 つ。
+Undo 履歴も選択も動かさない。
+
+- `capture_scene_debug` — fps、frame time、draw call、triangle、可視 Mesh 数、
+  カメラの Far。WebM の録画も start / stop で扱う
+- `capture_scene_view` — 描画そのままの PNG を 1 枚、app の
+  `debug-captures` へ保存してパスを返す。**数値と document は「何が映るはず
+  か」しか言わない。実際に何が映っているかを言うのはフレームだけ**
+- `set_scene_view_camera` — 俯瞰 (`top`) / 真下から (`bottom`) / 各軸 (`front`
+  `back` `left` `right`) / 既定の斜め (`iso`)、`focusEntityId` で Entity の
+  実描画 bounds へ寄る、あるいは `position` と `target` の直接指定。preset
+  だけを渡した場合は今の注視点を保つので、「いまの対象を上から見る」になる
+
+保存先を caller が選べないのは意図的。確認のために撮った画像は一時的な成果物
+なので、project ではなく app data へ置く。
 
 ## 意図的に公開していない操作
 

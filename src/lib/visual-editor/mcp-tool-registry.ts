@@ -128,6 +128,8 @@ export const XRIFT_MCP_TOOLS = [
   { name: "install_external_asset", surface: "external-store" },
 
   { name: "capture_scene_debug", surface: "debug" },
+  { name: "capture_scene_view", surface: "debug" },
+  { name: "set_scene_view_camera", surface: "debug" },
 ] as const satisfies readonly XriftMcpToolDefinition[];
 
 export type XriftMcpToolName = (typeof XRIFT_MCP_TOOLS)[number]["name"];
