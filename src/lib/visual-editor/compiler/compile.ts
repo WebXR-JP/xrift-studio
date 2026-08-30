@@ -283,6 +283,7 @@ export function compileVisualProject(
   }
 
   let runtimeManifestFile: CompilerOverlayFile | undefined;
+  let runtimeManifestUsesKtx2 = false;
   let generated: string;
   if (outputMode === "classic-runtime") {
     // Keep the JSX pass as a diagnostic oracle while runtime adapters reach
@@ -305,6 +306,9 @@ export function compileVisualProject(
       diagnostics,
     );
     generated = generateRuntimeAdapterSource(documents.project.projectKind);
+    runtimeManifestUsesKtx2 = Object.values(runtimeManifest.assets).some(
+      (asset) => asset.kind === "texture" && asset.sourceFormat === "ktx2",
+    );
     runtimeManifestFile = compilerFile(
       "public/xrift/runtime.json",
       stableSerializeJson(runtimeManifest),
@@ -481,11 +485,16 @@ export function compileVisualProject(
     // the emitted-source mode imports it directly and must ask for it.
     runtimePackageSpecs.push(TEXT_PANEL_RUNTIME_PACKAGE);
   }
+  // Both output modes read KTX2 through the world's own Basis files, so the
+  // copy is decided per mode and never by the JSX pass alone: the runtime
+  // adapter has no `useCompiledKtx2` in its source, and gating on that string
+  // shipped Runtime JSON worlds whose transcoder URL answered 404.
+  const needsPublishedBasisAssets =
+    outputMode === "classic-jsx"
+      ? generated.includes("function useCompiledKtx2(")
+      : runtimeManifestUsesKtx2;
   const bundledAssetCopyPlan: CompilerBundledAssetCopy[] = [
-    ...(outputMode === "classic-jsx" &&
-    generated.includes("function useCompiledKtx2(")
-      ? createPublishedBasisAssetCopyPlan()
-      : []),
+    ...(needsPublishedBasisAssets ? createPublishedBasisAssetCopyPlan() : []),
     // Not gated on the output mode: both emitted source and the runtime package
     // read the font from the world's own files, so both need them copied.
     ...(usesTextPanel && resolvedEntryScene

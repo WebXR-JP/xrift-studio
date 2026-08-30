@@ -834,6 +834,29 @@ export function runVisualCompilerFixtureAssertions(
       ),
     "Classic runtime Particle output must be connected to the bounded R3F adapter",
   );
+
+  const runtimeKtx2Result = compileVisualProject(
+    {
+      ...world,
+      assets: {
+        ...particleAssetResult.manifest,
+        assets: {
+          ...particleAssetResult.manifest.assets,
+          [ktx2ParticleTexture.id]: ktx2ParticleTexture,
+        },
+      },
+      scenes: {
+        ...world.scenes,
+        [world.project.entrySceneId]: particlePlacement.scene,
+      },
+    },
+    { generatedAt: fixedTime, outputMode: "classic-runtime" },
+  );
+  assert(
+    JSON.stringify(runtimeKtx2Result.stagingPlan.bundledAssetCopyPlan) ===
+      JSON.stringify(ktx2ParticleResult.stagingPlan.bundledAssetCopyPlan),
+    "Runtime JSON output must stage the same Basis files as Classic JSX for KTX2 Textures",
+  );
   const particleWithoutTexture = updateParticleAsset(
     particleAssetResult.manifest,
     particleAssetResult.assetId,
