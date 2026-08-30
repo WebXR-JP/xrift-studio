@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type SetStateAction,
 } from "react";
@@ -9677,10 +9678,19 @@ export function VisualEditorPrototype({
         <main
           ref={mainRef}
           className="relative grid min-h-0 flex-1 overflow-hidden"
-          style={{
-            gridTemplateColumns: `${hierarchyTrack} minmax(360px, 1fr) ${inspectorTrack}`,
-            gridTemplateRows: `minmax(240px, 1fr) ${assetsTrack}`,
-          }}
+          style={
+            {
+              gridTemplateColumns: `${hierarchyTrack} minmax(360px, 1fr) ${inspectorTrack}`,
+              gridTemplateRows: `minmax(240px, 1fr) ${assetsTrack}`,
+              // Published as custom properties so a panel that floats over the
+              // Scene View can stop at the columns instead of guessing their
+              // width. The tracks are draggable, so a hand-tuned inset drifts
+              // out of step the moment the author resizes one.
+              "--xrift-hierarchy-track": hierarchyTrack,
+              "--xrift-inspector-track": inspectorTrack,
+              "--xrift-assets-track": assetsTrack,
+            } as CSSProperties
+          }
         >
           <HierarchyPanel
             scene={bundle.scene}

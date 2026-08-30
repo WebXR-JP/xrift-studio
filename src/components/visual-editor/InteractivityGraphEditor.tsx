@@ -841,17 +841,39 @@ function InteractivityGraphEditorBody({
   const CreateIcon = EDITOR_ICONS.create;
   const DeleteIcon = EDITOR_ICONS.delete;
   const SaveIcon = EDITOR_ICONS.save;
+  const UndoIcon = EDITOR_ICONS.undo;
+  const RedoIcon = EDITOR_ICONS.redo;
 
   return (
     <section
-      className={`absolute z-[75] flex min-h-0 overflow-hidden rounded-xl border border-slate-600 bg-slate-950/95 text-white shadow-2xl backdrop-blur ${
+      className="absolute z-[75] flex min-h-0 overflow-hidden rounded-xl border border-slate-600 bg-slate-950/95 text-white shadow-2xl backdrop-blur"
+      // The editor floats over the Scene View, so its edges follow the columns
+      // rather than the window. The right inset was a fixed 24px from the
+      // window, which put the last 300px of the editor — the save button among
+      // them — underneath the Inspector, and left the Inspector's own resize
+      // handle unreachable. The tracks are draggable, so they have to be read
+      // rather than guessed.
+      style={
         expanded
-          ? "bottom-3 left-3 right-3 top-14"
-          : "bottom-6 left-[clamp(260px,26vw,440px)] right-6 top-20"
-      }`}
+          ? { inset: "3.5rem 0.75rem 0.75rem" }
+          : {
+              top: "5rem",
+              bottom: "1rem",
+              left: "calc(var(--xrift-hierarchy-track, 0px) + 1rem)",
+              right: "calc(var(--xrift-inspector-track, 0px) + 1rem)",
+            }
+      }
       aria-label="KHR_interactivity graph editor"
     >
       <div className="flex min-w-0 flex-1 flex-col">
+        {/*
+          Wraps instead of clipping. Every control after the title was
+          `shrink-0` on a fixed-height row, so a narrow editor pushed the save
+          and close buttons past the panel's edge, where `overflow-hidden` cut
+          them off: the graph could still be edited but no longer saved. The row
+          now grows to a second line, which costs canvas height and hides
+          nothing.
+        */}
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-700 bg-slate-900 px-3">
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-sm font-bold" title={asset.name}>
@@ -861,6 +883,37 @@ function InteractivityGraphEditorBody({
               Scene Viewを確認しながら編集・glTF準拠JSONを再利用
             </p>
           </div>
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onSave(asset.id, draft)}
+              disabled={readOnly || errors.length > 0}
+              className="flex h-8 shrink-0 items-center gap-1.5 rounded bg-emerald-600 px-3 text-xs font-bold hover:bg-emerald-500 disabled:opacity-40"
+            >
+              <SaveIcon size={13} aria-hidden="true" /> 保存
+            </button>
+            <button
+              type="button"
+              onClick={requestClose}
+              className="shrink-0 rounded p-2 text-slate-300 hover:bg-slate-800 hover:text-white"
+              aria-label="Interactivity editorを閉じる"
+            >
+              <CloseIcon size={16} aria-hidden="true" />
+            </button>
+          </div>
+        </header>
+
+        {/*
+          The tools sit on their own row, and that row wraps.
+          Everything used to share one fixed-height line with the title and the
+          save button; a narrow editor pushed the end of it past the panel,
+          where `overflow-hidden` cut it off — the graph stayed editable but
+          could no longer be saved. Splitting by role keeps save and close in
+          one place at any width, and lets the tools take a second line instead
+          of disappearing.
+        */}
+        <div className="relative shrink-0 border-b border-slate-700 bg-slate-900/60">
+        <div className="flex h-11 items-center gap-1.5 overflow-x-auto overflow-y-hidden px-2">
           <div className="relative shrink-0">
             <div className="flex items-center gap-1">
               <select
@@ -869,7 +922,7 @@ function InteractivityGraphEditorBody({
                   setGraphIndex(Number(event.target.value));
                   setSelectedNodeIndex(null);
                 }}
-                className="h-8 shrink-0 rounded border border-slate-600 bg-slate-800 px-2 text-xs"
+                className="h-8 max-w-[11rem] shrink-0 rounded border border-slate-600 bg-slate-800 px-2 text-xs"
                 aria-label="Behavior graph"
               >
                 {draft.graphs.map((candidate, index) => (
@@ -1003,18 +1056,20 @@ function InteractivityGraphEditorBody({
               onClick={undo}
               disabled={readOnly || !canUndo}
               title="元に戻す (Ctrl+Z)"
-              className="h-8 rounded border border-slate-600 px-2 text-xs hover:bg-slate-800 disabled:opacity-35"
+              aria-label="元に戻す"
+              className="flex h-8 w-8 items-center justify-center rounded border border-slate-600 hover:bg-slate-800 disabled:opacity-35"
             >
-              元に戻す
+              <UndoIcon size={14} aria-hidden="true" />
             </button>
             <button
               type="button"
               onClick={redo}
               disabled={readOnly || !canRedo}
               title="やり直す (Ctrl+Shift+Z)"
-              className="h-8 rounded border border-slate-600 px-2 text-xs hover:bg-slate-800 disabled:opacity-35"
+              aria-label="やり直す"
+              className="flex h-8 w-8 items-center justify-center rounded border border-slate-600 hover:bg-slate-800 disabled:opacity-35"
             >
-              やり直す
+              <RedoIcon size={14} aria-hidden="true" />
             </button>
           </div>
           <button
@@ -1067,23 +1122,18 @@ function InteractivityGraphEditorBody({
           >
             JSON
           </button>
-          <button
-            type="button"
-            onClick={() => onSave(asset.id, draft)}
-            disabled={readOnly || errors.length > 0}
-            className="flex h-8 shrink-0 items-center gap-1.5 rounded bg-emerald-600 px-3 text-xs font-bold hover:bg-emerald-500 disabled:opacity-40"
-          >
-            <SaveIcon size={13} aria-hidden="true" /> 保存
-          </button>
-          <button
-            type="button"
-            onClick={requestClose}
-            className="shrink-0 rounded p-2 text-slate-300 hover:bg-slate-800 hover:text-white"
-            aria-label="Interactivity editorを閉じる"
-          >
-            <CloseIcon size={16} aria-hidden="true" />
-          </button>
-        </header>
+        </div>
+          {/*
+            The row scrolls rather than wrapping, so its height stays the same
+            at any width and the canvas keeps its space. The fade is what says
+            so: without it a row that ends mid-button reads as clipped, which is
+            the thing this panel was doing for real a moment ago.
+          */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-slate-900 to-transparent"
+          />
+        </div>
 
         <div ref={canvasRef} className="relative min-h-0 flex-1 bg-slate-900">
           <ReactFlow<GraphFlowNode>
@@ -1126,7 +1176,14 @@ function InteractivityGraphEditorBody({
           >
             <Background color="#475569" gap={24} size={1} />
             <Controls position="bottom-left" />
+            {/*
+              The minimap is an overview, and it stops being one when it covers
+              two fifths of the canvas. On a narrow window the docked editor is
+              small enough that the map competes with the graph, so it appears
+              only where there is room for both. 拡大 brings it back.
+            */}
             <MiniMap<GraphFlowNode>
+              className={expanded ? undefined : "hidden 2xl:block"}
               pannable
               zoomable
               position="bottom-right"
@@ -1288,26 +1345,36 @@ function InteractivityGraphEditorBody({
           </>
         ) : null}
 
-        <footer className="flex min-h-8 shrink-0 items-center gap-3 border-t border-slate-700 bg-slate-900 px-3 text-[10px] text-slate-400">
+        {/*
+          One line, always. Wrapping turned six short labels into a six-line
+          column that took most of a narrow canvas — the status of the graph
+          crowding out the graph. State stays; the two hints step aside where
+          there is no room, since they say the same thing every time.
+        */}
+        <footer className="flex h-8 shrink-0 items-center gap-3 overflow-hidden whitespace-nowrap border-t border-slate-700 bg-slate-900 px-3 text-[10px] text-slate-400">
           {/* Spec provenance belongs here, not in the header: it never changes
               and the header needs its width for the actions. */}
           <span className="shrink-0 rounded bg-emerald-400/15 px-1.5 py-0.5 font-semibold text-emerald-300">
             KHR_interactivity RC
           </span>
-          <span>{graph.nodes?.length ?? 0} nodes</span>
-          <span>{edges.length} connections</span>
+          <span className="shrink-0">{graph.nodes?.length ?? 0} nodes</span>
+          <span className="shrink-0">{edges.length} connections</span>
           {errors.length > 0 ? (
-            <span className="font-semibold text-rose-300">{errors.length} errors・保存不可</span>
+            <span className="shrink-0 font-semibold text-rose-300">
+              {errors.length} errors・保存不可
+            </span>
           ) : warnings.length > 0 ? (
-            <span className="text-amber-300">{warnings.length} warnings</span>
+            <span className="shrink-0 text-amber-300">{warnings.length} warnings</span>
           ) : (
-            <span className="text-emerald-300">KHR graph validation OK</span>
+            <span className="shrink-0 text-emerald-300">KHR graph validation OK</span>
           )}
-          {dirty ? <span className="text-slate-300">未保存の変更があります</span> : null}
-          <span className="ml-auto">
+          {dirty ? (
+            <span className="shrink-0 text-slate-300">未保存の変更があります</span>
+          ) : null}
+          <span className="ml-auto hidden shrink-0 2xl:inline">
             ドラッグ / ホイールで移動・Ctrl+ホイールで拡大・線を選んでDeleteで切断
           </span>
-          <span>紫: flow / 水色: value</span>
+          <span className="hidden shrink-0 xl:inline">紫: flow / 水色: value</span>
         </footer>
       </div>
 
@@ -1336,7 +1403,11 @@ function InteractivityGraphEditorBody({
       />
 
       <aside
-        style={{ width: inspectorWidth }}
+        // Never more than a third of the editor. At a fixed 240–560px the
+        // Inspector took 294 of a 487px-wide editor, leaving 193px of canvas —
+        // narrower than one node card, so the graph the panel exists to show
+        // was the thing that disappeared.
+        style={{ width: `min(${inspectorWidth}px, 34%)`, minWidth: 0 }}
         className="flex shrink-0 flex-col border-l border-slate-700 bg-slate-900"
       >
         <div className="border-b border-slate-700 px-3 py-2">
