@@ -27,7 +27,7 @@ document 以外は React shell か Tauri 側が持つ副作用を伴う。
 書き込み tool は `projectId`、`sceneId`、`expectedRevision` を要求する。古い
 snapshot への適用を弾くためで、複数 client が同時に触っても編集は直列化される。
 
-## document (91)
+## document (89)
 
 **Editor context / Project**
 `get_editor_context`, `get_scripting_capabilities`, `update_project_metadata`
@@ -117,7 +117,7 @@ world 座標、傾斜、穴、草の層ごとの被覆を返す。document は�
 （詳細は [Terrain エディター 仕様](./TERRAIN_EDITOR_SPEC.md) の「MCP から草を扱う」）
 
 **Interactivity graph / Interaction Trigger**
-`list_interactivity_operations`, `list_interactivity_recipes`,
+`list_interactivity_operations`,
 `list_interaction_trigger_targets`, `get_interactivity_asset`,
 `validate_interactivity_asset`, `simulate_interactivity_asset`,
 `create_interactivity_asset`, `update_interactivity_asset`,
@@ -127,7 +127,7 @@ world 座標、傾斜、穴、草の層ごとの被覆を返す。document は�
 `connect_interactivity_nodes`, `disconnect_interactivity_socket`,
 `set_interactivity_value`, `set_interactivity_configuration`,
 `configure_interactivity_material_pointer`,
-`configure_interactivity_trigger_action`, `apply_interactivity_recipe`,
+`configure_interactivity_trigger_action`,
 `move_interactivity_node`, `layout_interactivity_graph`
 （詳細は [KHR_interactivity Editor / MCP design](./KHR_INTERACTIVITY_EDITOR.md)）
 

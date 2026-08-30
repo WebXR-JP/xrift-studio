@@ -220,10 +220,6 @@ import {
   type XriftInteractionTargetKind,
 } from "./interactivity-graph";
 import {
-  INTERACTIVITY_RECIPES,
-  getInteractivityRecipeRuntimeSupport,
-} from "./interactivity-recipes";
-import {
   addAssetFolder,
   getAudioAsset,
   getMaterialAsset,
@@ -445,8 +441,6 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   move_interactivity_node: moveInteractivityNode,
   duplicate_interactivity_node: duplicateInteractivityNodeTool,
   layout_interactivity_graph: layoutInteractivityGraph,
-  list_interactivity_recipes: listInteractivityRecipes,
-  apply_interactivity_recipe: applyInteractivityRecipe,
   list_interaction_trigger_targets: listInteractionTriggerTargets,
   configure_interactivity_trigger_action: configureInteractivityTriggerActionTool,
 };
@@ -5337,9 +5331,9 @@ function createInteractivityAsset(
   const name = optionalString(argumentsValue.name) ?? "Interactivity Graph";
   const folderId = optionalNullableString(argumentsValue.folderId, "folderId");
   const template = requiredEnum(
-    argumentsValue.template ?? "animation-on-start",
+    argumentsValue.template ?? "start",
     "template",
-    ["animation-on-start", "empty"] as const,
+    ["start", "empty"] as const,
   );
   if (folderId && !context.bundle.assets.folders?.[folderId]) {
     throw new XriftMcpEditorToolError("FOLDER_NOT_FOUND", "指定されたAsset Folderが見つかりません", {
@@ -6314,105 +6308,6 @@ function triggerActionValueFromArgument(
       return [xriftInteractionEnumIndex(descriptor, single)];
     }
   }
-}
-
-/** The Editor's recipe list: a whole small sequence, not one node. */
-function listInteractivityRecipes(
-  context: XriftMcpEditorContext,
-): XriftMcpEditorToolOutcome {
-  return unchanged(
-    context,
-    {
-      recipes: INTERACTIVITY_RECIPES.map((recipe) => {
-        return {
-          id: recipe.id,
-          label: recipe.label,
-          description: recipe.description,
-          needsMaterial: recipe.needsMaterial === true,
-          runtimeSupport: getInteractivityRecipeRuntimeSupport(recipe),
-        };
-      }),
-      count: INTERACTIVITY_RECIPES.length,
-    },
-    "Interactivity recipeの一覧を取得しました",
-  );
-}
-
-function applyInteractivityRecipe(
-  context: XriftMcpEditorContext,
-  argumentsValue: Record<string, unknown>,
-): XriftMcpEditorToolOutcome {
-  assertWritableContext(context, argumentsValue);
-  const asset = requireInteractivityAsset(
-    context,
-    requiredString(argumentsValue.assetId, "assetId"),
-  );
-  const graphIndex =
-    optionalNonNegativeInteger(argumentsValue.graphIndex, "graphIndex") ??
-    asset.extension.graph ??
-    0;
-  const recipeId = requiredString(argumentsValue.recipeId, "recipeId");
-  const recipe = INTERACTIVITY_RECIPES.find((candidate) => candidate.id === recipeId);
-  if (!recipe) {
-    throw new XriftMcpEditorToolError(
-      "RECIPE_NOT_FOUND",
-      "指定されたInteractivity recipeが見つかりません",
-      { recipeId, supportedRecipeIds: INTERACTIVITY_RECIPES.map((one) => one.id) },
-    );
-  }
-  const materialAssetId = optionalString(argumentsValue.materialAssetId);
-  let materialIndex = 0;
-  if (recipe.needsMaterial) {
-    const materials = sortedMaterialAssetIds(context);
-    if (materials.length === 0) {
-      throw new XriftMcpEditorToolError(
-        "MATERIAL_NOT_FOUND",
-        "このrecipeはMaterialへ書き込みます。先にMaterial Assetを作成してください",
-        { recipeId },
-      );
-    }
-    materialIndex = materialAssetId
-      ? materials.indexOf(materialAssetId)
-      : 0;
-    if (materialIndex < 0) {
-      throw new XriftMcpEditorToolError(
-        "MATERIAL_NOT_FOUND",
-        "指定されたMaterial Assetが見つかりません",
-        { materialAssetId },
-      );
-    }
-  }
-  const extension = cloneKhrInteractivityExtension(asset.extension);
-  const graph = requireInteractivityGraph(extension.graphs, graphIndex);
-  const created = graph.nodes?.length ?? 0;
-  const origin =
-    optionalVec2(argumentsValue.position, "position") ??
-    freeInteractivityNodePosition(graph, { x: 120, y: 120 });
-  recipe.build(graph, origin, materialIndex);
-  return commitInteractivityMutation(
-    context,
-    asset,
-    extension,
-    {
-      assetId: asset.id,
-      graphIndex,
-      recipeId,
-      firstNodeIndex: created,
-      focusNodeIndex: created + recipe.focusOffset,
-      addedNodeCount: (graph.nodes?.length ?? 0) - created,
-      ...(recipe.needsMaterial
-        ? { materialAssetId: sortedMaterialAssetIds(context)[materialIndex] ?? null }
-        : {}),
-    },
-    `AIがInteractivity recipe「${recipe.label}」を適用しました`,
-  );
-}
-
-function sortedMaterialAssetIds(context: XriftMcpEditorContext): string[] {
-  return Object.values(context.bundle.assets.assets)
-    .filter((candidate) => candidate.kind === "material")
-    .map((candidate) => candidate.id)
-    .sort((left, right) => left.localeCompare(right));
 }
 
 /**

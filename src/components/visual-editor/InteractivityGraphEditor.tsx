@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import {
   Background,
   Controls,
-  MiniMap,
   ReactFlow,
   ReactFlowProvider,
   useEdgesState,
@@ -18,8 +24,6 @@ import {
   collectInteractivityRuntimeDiagnostics,
   configureInteractivityMaterialPointer,
   appendInteractivityOperation,
-  getInteractivityRecipeRuntimeSupport,
-  INTERACTIVITY_RECIPES,
   addInteractivityGraph,
   autoLayoutInteractivityGraph,
   duplicateInteractivityNode,
@@ -44,7 +48,6 @@ import {
   writeInteractivityNodePosition,
   type InteractivityAsset,
   type InteractivityNodeClipboard,
-  type InteractivityRecipe,
   type KhrInteractivityExtension,
   type KhrInteractivityGraph,
   type KhrInteractivityJsonValue,
@@ -119,6 +122,8 @@ export function InteractivityGraphEditor(props: {
   readOnly: boolean;
   onSave: (assetId: string, extension: KhrInteractivityExtension) => void;
   onClose: () => void;
+  /** What the Scene already does with this graph, and how to finish wiring it. */
+  setup?: InteractivityGraphSetup;
 }) {
   // The provider sits above the body so the palette can place a new node at the
   // centre of what the author is actually looking at.
@@ -128,6 +133,27 @@ export function InteractivityGraphEditor(props: {
     </ReactFlowProvider>
   );
 }
+
+/**
+ * What the Scene does with this graph, and the two things that finish it.
+ *
+ * A graph runs because an **Interaction Trigger** on some Entity points at it.
+ * That is true of every graph, including one that starts itself on
+ * `event/onStart` — the component is what mounts the runtime. Nothing said so,
+ * so the ordinary first experience was to wire a graph, press Play and watch
+ * nothing happen at all.
+ */
+export type InteractivityGraphSetup = {
+  readonly attachments: readonly {
+    entityId: string;
+    name: string;
+    hasInteractable: boolean;
+  }[];
+  readonly selectedEntity: { entityId: string; name: string } | null;
+  readonly onAttach: (entityId: string) => void;
+  readonly onAddInteractable: (entityId: string) => void;
+  readonly onSelectEntity: (entityId: string) => void;
+};
 
 /** How many graph edits stay undoable. Older entries fall off the front. */
 const GRAPH_HISTORY_LIMIT = 60;
@@ -204,6 +230,7 @@ function InteractivityGraphEditorBody({
   readOnly,
   onSave,
   onClose,
+  setup,
 }: {
   asset: InteractivityAsset;
   materials: readonly MaterialAsset[];
@@ -211,6 +238,7 @@ function InteractivityGraphEditorBody({
   readOnly: boolean;
   onSave: (assetId: string, extension: KhrInteractivityExtension) => void;
   onClose: () => void;
+  setup?: InteractivityGraphSetup;
 }) {
   // The draft is kept as a history rather than as one value: a graph editor
   // without undo makes every experiment a risk, and the Scene's own history is
@@ -287,6 +315,35 @@ function InteractivityGraphEditorBody({
     ],
     [draft],
   );
+  /**
+   * The one thing still standing between this graph and running.
+   *
+   * Reported in the order an author hits it: nothing runs the graph at all,
+   * then the graph can be pressed but the Entity cannot be.
+   */
+  const setupStep = useMemo(() => {
+    if (!setup) return null;
+    const usesInteract = (draft.graphs ?? []).some((candidate) =>
+      (candidate.nodes ?? []).some(
+        (node) =>
+          candidate.declarations?.[node.declaration]?.op ===
+          XRIFT_INTERACTION_OPERATIONS.onInteract,
+      ),
+    );
+    if (setup.attachments.length === 0) {
+      return { kind: "unattached" as const, usesInteract };
+    }
+    const pressable = setup.attachments.find((entry) => entry.hasInteractable);
+    if (usesInteract && !pressable) {
+      return {
+        kind: "not-pressable" as const,
+        usesInteract,
+        entity: setup.attachments[0]!,
+      };
+    }
+    return { kind: "ready" as const, usesInteract };
+  }, [draft.graphs, setup]);
+
   const errors = diagnostics.filter((diagnostic) => diagnostic.severity === "error");
   const warnings = diagnostics.filter((diagnostic) => diagnostic.severity === "warning");
   const selectedNode =
@@ -299,16 +356,6 @@ function InteractivityGraphEditorBody({
     [materials],
   );
   // Recipes are static, so this is computed once rather than per render.
-  const recipeRuntimeSupport = useMemo(
-    () =>
-      new Map(
-        INTERACTIVITY_RECIPES.map((recipe) => [
-          recipe.id,
-          getInteractivityRecipeRuntimeSupport(recipe),
-        ]),
-      ),
-    [],
-  );
   const selectedPointer = selectedNode?.configuration?.pointer?.value?.[0];
   const selectedPointerPreset = KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS.find(
     (preset) => preset.pointer === selectedPointer,
@@ -391,16 +438,6 @@ function InteractivityGraphEditorBody({
             template.op.toLowerCase().includes(query)),
       ),
     })).filter((group) => group.templates.length > 0);
-  }, [paletteQuery]);
-
-  const visibleRecipes = useMemo(() => {
-    const query = paletteQuery.trim().toLowerCase();
-    if (query === "") return INTERACTIVITY_RECIPES;
-    return INTERACTIVITY_RECIPES.filter(
-      (recipe) =>
-        recipe.label.toLowerCase().includes(query) ||
-        recipe.description.toLowerCase().includes(query),
-    );
   }, [paletteQuery]);
 
   // Selection is derived from the inspector's index rather than left to the
@@ -538,8 +575,62 @@ function InteractivityGraphEditorBody({
    * happened. Placing it at the centre of the visible canvas, with a small
    * cascade so repeats do not stack, means the author sees what they added.
    */
+  /** Flow coordinates of the last right-click, cleared once a node is placed. */
+  const [paletteDropAt, setPaletteDropAt] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+  /** Where the palette opens, so a right-click menu appears under the cursor. */
+  const [paletteAt, setPaletteAt] = useState<{ left: number; top: number } | null>(
+    null,
+  );
+
+  /**
+   * Right-click puts the add menu under the cursor, and the node after it.
+   *
+   * The canvas is where an author is already looking and already pointing.
+   * Sending them to a toolbar for the next node is the difference between
+   * drawing a graph and filling in a form. Cards answer too — right-clicking
+   * one and getting nothing reads as the editor ignoring the press.
+   */
+  const paletteSearchRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (paletteOpen) paletteSearchRef.current?.focus();
+  }, [paletteOpen]);
+
+  const openPaletteAtPointer = useCallback(
+    (event: ReactMouseEvent | MouseEvent) => {
+      if (readOnly) return;
+      event.preventDefault();
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPaletteQuery("");
+      setPaletteDropAt(
+        screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+      );
+      setPaletteAt({
+        left: Math.min(
+          Math.max(event.clientX - rect.x, 8),
+          Math.max(rect.width - 328, 8),
+        ),
+        top: Math.min(
+          Math.max(event.clientY - rect.y, 8),
+          Math.max(rect.height - 280, 8),
+        ),
+      });
+      setPaletteOpen(true);
+    },
+    [readOnly, screenToFlowPosition],
+  );
+
   const nextNodePosition = useCallback(
     (count: number, leadIn = 0) => {
+      // A right-click said where. Nothing else has to guess.
+      if (paletteDropAt) {
+        return freeInteractivityNodePosition(graph, {
+          x: paletteDropAt.x - NODE_CARD_WIDTH / 2,
+          y: paletteDropAt.y - 24,
+        });
+      }
       // Adding a node while one is selected means "and then this", so the new
       // node lands to the right of it instead of on top of whatever is at the
       // centre of the view. A cascade alone never cleared a node's own width.
@@ -568,7 +659,7 @@ function InteractivityGraphEditorBody({
         y: center.y - 60 + cascade,
       });
     },
-    [graph.nodes, screenToFlowPosition, selectedNodeIndex],
+    [graph.nodes, paletteDropAt, screenToFlowPosition, selectedNodeIndex],
   );
 
   /**
@@ -795,18 +886,9 @@ function InteractivityGraphEditorBody({
     });
     setSelectedNodeIndex(created);
     setPaletteOpen(false);
+    setPaletteDropAt(null);
   };
 
-  const handleApplyRecipe = (recipe: InteractivityRecipe) => {
-    if (readOnly) return;
-    const base = graph.nodes?.length ?? 0;
-    const origin = nextNodePosition(base, 160);
-    updateGraph((nextGraph) => {
-      recipe.build(nextGraph, origin, selectedMaterialIndex);
-    });
-    setSelectedNodeIndex(base + recipe.focusOffset);
-    setPaletteOpen(false);
-  };
 
   const handleApplyJson = () => {
     try {
@@ -1031,6 +1113,10 @@ function InteractivityGraphEditorBody({
                 if (!open) setPaletteQuery("");
                 return !open;
               });
+              // Opened from the toolbar, so it belongs in the corner and the
+              // node lands where the toolbar would have put it.
+              setPaletteAt(null);
+              setPaletteDropAt(null);
             }}
             disabled={readOnly}
             aria-expanded={paletteOpen}
@@ -1122,6 +1208,53 @@ function InteractivityGraphEditorBody({
           </div>
         </div>
 
+        {/*
+          Says what the Scene is missing, and does it. The graph itself cannot
+          answer「なぜ Play で何も起きないのか」, because the answer is always
+          about an Entity that is not on this canvas.
+        */}
+        {setup && setupStep && setupStep.kind !== "ready" ? (
+          <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-100">
+            {setupStep.kind === "unattached" ? (
+              <>
+                <span className="font-semibold">このグラフはまだ動きません。</span>
+                <span className="text-amber-200/90">
+                  Entity へ付けると、{setupStep.usesInteract ? "押したときに" : "ワールドに入ったときに"}動きます。
+                </span>
+                {setup.selectedEntity ? (
+                  <button
+                    type="button"
+                    disabled={readOnly}
+                    onClick={() => setup.onAttach(setup.selectedEntity!.entityId)}
+                    className="h-6 shrink-0 rounded bg-amber-400 px-2 text-[11px] font-bold text-amber-950 hover:bg-amber-300 disabled:opacity-40"
+                  >
+                    「{setup.selectedEntity.name}」に付ける
+                  </button>
+                ) : (
+                  <span className="text-amber-200/80">
+                    Hierarchy で Entity を選ぶと、ここから付けられます。
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                <span className="font-semibold">押しても始まりません。</span>
+                <span className="text-amber-200/90">
+                  「インタラクト時」から始まるグラフには、付け先の Entity に Interactable が要ります。
+                </span>
+                <button
+                  type="button"
+                  disabled={readOnly}
+                  onClick={() => setup.onAddInteractable(setupStep.entity.entityId)}
+                  className="h-6 shrink-0 rounded bg-amber-400 px-2 text-[11px] font-bold text-amber-950 hover:bg-amber-300 disabled:opacity-40"
+                >
+                  「{setupStep.entity.name}」に Interactable を追加
+                </button>
+              </>
+            )}
+          </div>
+        ) : null}
+
         <div ref={canvasRef} className="relative min-h-0 flex-1 bg-slate-900">
           <ReactFlow<GraphFlowNode>
             nodes={flowNodes}
@@ -1133,6 +1266,8 @@ function InteractivityGraphEditorBody({
               setSelectedNodeIndex(null);
               setPaletteOpen(false);
             }}
+            onPaneContextMenu={openPaletteAtPointer}
+            onNodeContextMenu={openPaletteAtPointer}
             onNodeDragStop={(_, node) =>
               updateGraph((nextGraph) => {
                 const target = nextGraph.nodes?.[node.data.index];
@@ -1163,24 +1298,13 @@ function InteractivityGraphEditorBody({
           >
             <Background color="#475569" gap={24} size={1} />
             <Controls position="bottom-left" />
-            {/*
-              The minimap is an overview, and it stops being one when it covers
-              two fifths of the canvas. On a narrow window the docked editor is
-              small enough that the map competes with the graph, so it appears
-              only where there is room for both. 拡大 brings it back.
-            */}
-            <MiniMap<GraphFlowNode>
-              className="hidden 2xl:block"
-              pannable
-              zoomable
-              position="bottom-right"
-              maskColor="rgba(2, 6, 23, 0.7)"
-              nodeColor={(node) => CATEGORY_MINIMAP_COLOR[node.data.category]}
-            />
           </ReactFlow>
 
           {paletteOpen ? (
-            <div className="absolute left-3 top-3 z-20 flex max-h-[calc(100%-1.5rem)] w-80 flex-col rounded-lg border border-slate-700 bg-slate-950/95 shadow-2xl backdrop-blur">
+            <div
+              className="absolute z-20 flex max-h-[calc(100%-1.5rem)] w-80 flex-col rounded-lg border border-slate-700 bg-slate-950/95 shadow-2xl backdrop-blur"
+              style={paletteAt ?? { left: "0.75rem", top: "0.75rem" }}
+            >
               <div className="shrink-0 border-b border-slate-700 p-2.5">
                 <div className="mb-2 flex items-center justify-between">
                   <p className="text-xs font-bold">ノードを追加</p>
@@ -1193,60 +1317,40 @@ function InteractivityGraphEditorBody({
                     <CloseIcon size={13} aria-hidden="true" />
                   </button>
                 </div>
+                {/*
+                  Focused the moment the panel opens, so the whole gesture is
+                  right-click, type the name, Enter. Reaching for the field
+                  first is the step that made adding a node feel like a form.
+                */}
                 <input
+                  ref={paletteSearchRef}
                   type="search"
                   value={paletteQuery}
                   onChange={(event) => setPaletteQuery(event.target.value)}
-                  placeholder="色・アニメーション・待機"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      const first = paletteGroups[0]?.templates[0];
+                      if (!first) return;
+                      event.preventDefault();
+                      handleAddOperation(first.op);
+                      return;
+                    }
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      setPaletteOpen(false);
+                    }
+                  }}
+                  placeholder="名前で絞り込む（待機・色・音）"
                   className="h-8 w-full rounded border border-slate-600 bg-slate-900 px-2 text-xs placeholder:text-slate-500 focus:border-violet-500 focus:outline-none"
                   aria-label="ノードを検索"
                 />
+                {paletteQuery && paletteGroups[0]?.templates[0] ? (
+                  <p className="mt-1 truncate text-[10px] text-slate-400">
+                    Enter で「{paletteGroups[0].templates[0].label}」を置きます
+                  </p>
+                ) : null}
               </div>
               <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-2.5">
-                {visibleRecipes.length > 0 ? (
-                  <section className="mb-3">
-                    <p className="sticky top-0 z-10 mb-1.5 bg-slate-950/95 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                      よくある動き
-                    </p>
-                    <div className="space-y-1">
-                      {visibleRecipes.map((recipe) => {
-                        const blocked = recipe.needsMaterial === true && sortedMaterials.length === 0;
-                        // A recipe stays usable when Play cannot run it: the
-                        // graph is still saved and published. Saying so here
-                        // keeps the author from learning it only after Play.
-                        const playable = recipeRuntimeSupport.get(recipe.id) !== "ignored";
-                        return (
-                          <button
-                            key={recipe.id}
-                            type="button"
-                            disabled={readOnly || blocked}
-                            onClick={() => handleApplyRecipe(recipe)}
-                            className="block w-full rounded border border-slate-700 bg-slate-900 px-2.5 py-2 text-left hover:border-violet-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-slate-700 disabled:hover:bg-slate-900"
-                          >
-                            <span className="flex items-start justify-between gap-2">
-                              <span className="text-xs font-semibold">{recipe.label}</span>
-                              {playable ? null : (
-                                <span className="shrink-0 rounded border border-amber-500/50 bg-amber-500/15 px-1.5 py-px text-[9px] font-semibold text-amber-200">
-                                  Play未対応
-                                </span>
-                              )}
-                            </span>
-                            <span className="mt-0.5 block text-[10px] leading-4 text-slate-400">
-                              {blocked
-                                ? "Material Assetを1つ作るとこのレシピを使えます"
-                                : recipe.description}
-                            </span>
-                            {!blocked && !playable ? (
-                              <span className="mt-1 block text-[10px] leading-4 text-amber-200/80">
-                                置いて保存はできますが、Play と公開先ではまだ動きません
-                              </span>
-                            ) : null}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-                ) : null}
                 {paletteGroups.map((group) => (
                   <section key={group.category} className="mb-3 last:mb-0">
                     <p className="sticky top-0 z-10 mb-1.5 bg-slate-950/95 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
@@ -1279,7 +1383,7 @@ function InteractivityGraphEditorBody({
                     </div>
                   </section>
                 ))}
-                {visibleRecipes.length === 0 && paletteGroups.length === 0 ? (
+                {paletteGroups.length === 0 ? (
                   <p className="rounded border border-slate-700 bg-slate-900 p-3 text-[11px] leading-5 text-slate-400">
                     一致するノードがありません。検索語を短くしてください。
                   </p>
@@ -1357,6 +1461,25 @@ function InteractivityGraphEditorBody({
           )}
           {dirty ? (
             <span className="shrink-0 text-slate-300">未保存の変更があります</span>
+          ) : null}
+          {setupStep?.kind === "ready" && setup ? (
+            <span className="flex shrink-0 items-center gap-1 text-slate-400">
+              付いている Entity:
+              {setup.attachments.slice(0, 3).map((entry) => (
+                <button
+                  key={entry.entityId}
+                  type="button"
+                  onClick={() => setup.onSelectEntity(entry.entityId)}
+                  title={`${entry.name}を選ぶ`}
+                  className="rounded px-1 text-slate-200 underline decoration-dotted hover:bg-slate-800"
+                >
+                  {entry.name}
+                </button>
+              ))}
+              {setup.attachments.length > 3
+                ? `ほか${setup.attachments.length - 3}件`
+                : null}
+            </span>
           ) : null}
           <span className="ml-auto hidden shrink-0 2xl:inline">
             ドラッグ / ホイールで移動・Ctrl+ホイールで拡大・線を選んでDeleteで切断
@@ -1719,7 +1842,7 @@ function InteractivityGraphEditorBody({
           ) : (
             <div className="space-y-2 rounded border border-slate-700 bg-slate-950 p-3 text-xs leading-5 text-slate-400">
               <p>
-                「追加」から始めます。よくある動きのレシピを選ぶと、つながった状態のノードがそのまま置かれます。
+                canvas を右クリック、または「追加」からノードを置きます。「開始時」から線をつないでいくと動きになります。
               </p>
               <p>
                 ノードを選ぶと、色や時間などの値をこの欄で直接編集できます。独自JavaScriptは保存しません。

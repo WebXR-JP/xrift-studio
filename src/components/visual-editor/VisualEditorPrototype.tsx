@@ -131,6 +131,7 @@ import {
   collectInteractionTriggerTargets,
   createInteractionTriggerGraphExtension,
   syncInteractionTriggerEntityReferences,
+  XRIFT_COMPONENT_SCHEMA_IDS,
   updateInteractionTriggerComponent,
   updateInteractivityAsset,
   updateXriftComponent,
@@ -7805,6 +7806,41 @@ export function VisualEditorPrototype({
     [editorMode, importBusy],
   );
 
+  /**
+   * Puts this graph on an Entity, or gives that Entity what it still needs.
+   *
+   * A graph runs because an Interaction Trigger on some Entity points at it —
+   * true even for a graph that starts itself. Nothing in the editor said so,
+   * so the usual first experience was to wire a graph, press Play, and watch
+   * nothing happen.
+   */
+  const handleAttachInteractivityAsset = useCallback(
+    (entityId: string, assetId: string) => {
+      if (editorMode !== "edit") return;
+      setBundle((current) => {
+        const result = addEditorComponent(
+          current.scene,
+          current.assets,
+          entityId,
+          "interaction.trigger",
+          projectKind,
+          assetId,
+        );
+        if (!result.added) return current;
+        return touchProject({
+          ...current,
+          scene: syncInteractionTriggerEntityReferences(
+            result.scene,
+            current.assets,
+          ),
+        });
+      });
+      const name = bundleRef.current.scene.entities[entityId]?.name ?? "Entity";
+      setNotice(`${name}へこのグラフを付けました`);
+    },
+    [editorMode, projectKind, setBundle],
+  );
+
   const handleAddComponent = useCallback(
     (entityId: string, componentDefinitionId: string) => {
       const fallbackParticleId = createDocumentId("particle");
@@ -9484,6 +9520,43 @@ export function VisualEditorPrototype({
     bundle.assets.assets[interactivityEditorAssetId]?.kind === "interactivity"
       ? bundle.assets.assets[interactivityEditorAssetId]
       : null;
+  /**
+   * Which Entities run this graph, and whether they can be pressed.
+   *
+   * The editor shows the graph; only the Scene knows whether anything will run
+   * it. Reading that here lets the editor say so instead of leaving the author
+   * to find out at Play.
+   */
+  const interactivityAttachments = interactivityEditorAsset
+    ? Object.values(bundle.scene.entities).flatMap((entity) =>
+        entity.components.some(
+          (component) =>
+            component.type === "interaction-trigger" &&
+            component.enabled &&
+            component.interactivityAssetId === interactivityEditorAsset.id,
+        )
+          ? [
+              {
+                entityId: entity.id,
+                name: entity.name,
+                hasInteractable: entity.components.some(
+                  (component) =>
+                    component.type === "xrift-component" &&
+                    component.schemaId ===
+                      XRIFT_COMPONENT_SCHEMA_IDS.interactable &&
+                    component.enabled,
+                ),
+              },
+            ]
+          : [],
+      )
+    : [];
+  const interactivitySelectedEntity = (() => {
+    const entityId = selectedEntityIds[0];
+    const entity = entityId ? bundle.scene.entities[entityId] : undefined;
+    return entity ? { entityId: entity.id, name: entity.name } : null;
+  })();
+
   const interactivityEditorTabs = interactivityEditorAsset
     ? [
         {
@@ -10183,6 +10256,22 @@ export function VisualEditorPrototype({
               readOnly={renderedReadOnly}
               onSave={handleSaveInteractivityAsset}
               onClose={() => setInteractivityEditorAssetId(null)}
+              setup={{
+                attachments: interactivityAttachments,
+                selectedEntity: interactivitySelectedEntity,
+                onAttach: (entityId) =>
+                  handleAttachInteractivityAsset(
+                    entityId,
+                    interactivityEditorAsset.id,
+                  ),
+                onAddInteractable: (entityId) =>
+                  handleAddComponent(
+                    entityId,
+                    XRIFT_COMPONENT_SCHEMA_IDS.interactable,
+                  ),
+                onSelectEntity: (entityId) =>
+                  handleEntitySelectionChange([entityId], entityId),
+              }}
             />
             </div>
           ) : null}

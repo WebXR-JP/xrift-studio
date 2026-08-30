@@ -118,8 +118,6 @@ export const XRIFT_MCP_TOOLS = [
   { name: "move_interactivity_node", surface: "document" },
   { name: "duplicate_interactivity_node", surface: "document" },
   { name: "layout_interactivity_graph", surface: "document" },
-  { name: "list_interactivity_recipes", surface: "document" },
-  { name: "apply_interactivity_recipe", surface: "document" },
   { name: "list_interaction_trigger_targets", surface: "document" },
   { name: "configure_interactivity_trigger_action", surface: "document" },
 

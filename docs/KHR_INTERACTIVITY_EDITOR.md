@@ -47,7 +47,6 @@ The built-in `xrift-studio` MCP server exposes:
 
 - `list_interactivity_operations` — every operation the palette offers, each with
   its sockets and whether the Play runtime executes it
-- `list_interactivity_recipes` — the ready-made sequences the add panel offers
 - `list_interaction_trigger_targets` — every Entity, Component and property an
   action can write to, with kinds, ranges and enum options
 - `get_interactivity_asset` — the canonical JSON
@@ -68,7 +67,6 @@ The built-in `xrift-studio` MCP server exposes:
 - `set_interactivity_value`, `set_interactivity_configuration`
 - `configure_interactivity_material_pointer`,
   `configure_interactivity_trigger_action`
-- `apply_interactivity_recipe`
 - `move_interactivity_node`, `layout_interactivity_graph`
 
 Every operation the node editor offers is here. The four the editor keeps to
@@ -164,10 +162,10 @@ what a graph is wired to do; only running it says whether the delay lands where
 its author meant, whether a loop terminates inside the horizon, and which branch
 is dead. Nothing is written, so it needs no revision.
 
-Higher-level sequences are `list_interactivity_recipes` and
-`apply_interactivity_recipe`, which add the same wired groups of nodes the
-Editor's add panel offers; they do not require a second proprietary graph
-format.
+There is no recipe catalogue. Ready-made sequences were offered in the add
+panel and over MCP, and nearly all of them were `pointer/*` shapes the runtime
+does not execute — a menu of things that look like a head start and then do
+nothing at Play. The nodes they were made of are all in the palette.
 
 ### Layout is part of the handover
 

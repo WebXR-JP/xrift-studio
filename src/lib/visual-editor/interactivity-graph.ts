@@ -963,39 +963,24 @@ function nodeWithPosition(
 }
 
 /** The Khronos specification's onStart -> animation/start shape, with animation 0. */
+/**
+ * What a new graph starts as: one「開始時」node and nothing else.
+ *
+ * It used to start as `event/onStart` → `animation/start`, named "Animation on
+ * start". That is a fine sample and a bad default: `animation/start` needs a
+ * Model with clips on the Entity, so a fresh graph opened with a node already
+ * marked「接続が必要」, and the graph list said "Animation on start" for a graph
+ * that had nothing to do with animation. A single entry point makes no promise
+ * the Scene has not kept.
+ */
 export function createDefaultKhrInteractivityExtension(): KhrInteractivityExtension {
   return {
     graph: 0,
     graphs: [
       {
-        name: "Animation on start",
-        types: [{ signature: "float" }, { signature: "int" }],
-        declarations: [
-          { op: "event/onStart" },
-          { op: "math/Inf" },
-          { op: "animation/start" },
-        ],
-        nodes: [
-          nodeWithPosition(
-            { declaration: 0, flows: { out: { node: 2 } } },
-            80,
-            160,
-          ),
-          nodeWithPosition({ declaration: 1 }, 330, 330),
-          nodeWithPosition(
-            {
-              declaration: 2,
-              values: {
-                animation: { type: 1, value: [0] },
-                startTime: { type: 0, value: [0] },
-                endTime: { node: 1 },
-                speed: { type: 0, value: [1] },
-              },
-            },
-            590,
-            160,
-          ),
-        ],
+        name: "メイン",
+        declarations: [{ op: "event/onStart" }],
+        nodes: [nodeWithPosition({ declaration: 0 }, 120, 160)],
       },
     ],
   };

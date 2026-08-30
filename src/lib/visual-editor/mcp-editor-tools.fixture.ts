@@ -3503,39 +3503,6 @@ export function runXriftMcpEditorToolFixtures(): void {
   }
   current = { ...current, bundle: pasted.bundle, revision: current.revision + 1 };
 
-  const recipes = executeXriftMcpEditorTool(current, {
-    id: "fixture-interactivity-recipes",
-    tool: "list_interactivity_recipes",
-    arguments: {},
-  });
-  const recipeList = recipes.result.recipes as Array<{
-    id: string;
-    needsMaterial: boolean;
-  }>;
-  assert(recipeList.length > 0, "list_interactivity_recipes should return the catalog");
-  const animationRecipe = recipeList.find((recipe) => !recipe.needsMaterial);
-  assert(
-    animationRecipe !== undefined,
-    "At least one recipe should not require a Material",
-  );
-  const appliedRecipe = executeXriftMcpEditorTool(current, {
-    id: "fixture-interactivity-apply-recipe",
-    tool: "apply_interactivity_recipe",
-    arguments: {
-      projectId: bundle.project.projectId,
-      sceneId: bundle.scene.sceneId,
-      expectedRevision: current.revision,
-      assetId: interactivityAssetId,
-      recipeId: animationRecipe!.id,
-    },
-  });
-  assert(
-    (appliedRecipe.result.addedNodeCount as number) >= 2 &&
-      appliedRecipe.result.firstNodeIndex === 4,
-    "apply_interactivity_recipe should append the recipe's wired nodes",
-  );
-  current = { ...current, bundle: appliedRecipe.bundle, revision: current.revision + 1 };
-
   let replaceRejectedCode: string | undefined;
   try {
     executeXriftMcpEditorTool(current, {

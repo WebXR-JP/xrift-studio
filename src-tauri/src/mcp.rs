@@ -4027,7 +4027,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "create_interactivity_asset",
-            "description": "Create a reusable KHR_interactivity Asset. Use animation-on-start for a spec-shaped event/onStart to animation/start sample, or empty to build a graph incrementally.",
+            "description": "Create a reusable KHR_interactivity Asset. `start` (the default) gives one event/onStart entry point to build from; `empty` gives a graph with no nodes.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4036,7 +4036,7 @@ fn tool_definitions() -> Value {
                     "expectedRevision": { "type": "integer", "minimum": 0 },
                     "name": { "type": "string", "minLength": 1 },
                     "folderId": { "type": ["string", "null"] },
-                    "template": { "type": "string", "enum": ["animation-on-start", "empty"] }
+                    "template": { "type": "string", "enum": ["start", "empty"] }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision"],
                 "additionalProperties": false
@@ -4328,30 +4328,6 @@ fn tool_definitions() -> Value {
                     "graphIndex": { "type": "integer", "minimum": 0 }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "assetId"],
-                "additionalProperties": false
-            }
-        },
-        {
-            "name": "list_interactivity_recipes",
-            "description": "List the ready-made sequences the Editor's add panel offers, such as changing a colour at start or playing an animation after a delay. Each recipe adds several wired nodes at once and reports whether the Play runtime executes it.",
-            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
-        },
-        {
-            "name": "apply_interactivity_recipe",
-            "description": "Add a ready-made sequence from list_interactivity_recipes into a graph, already wired. Recipes marked needsMaterial write to a Material and take materialAssetId.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "projectId": { "type": "string" },
-                    "sceneId": { "type": "string" },
-                    "expectedRevision": { "type": "integer", "minimum": 0 },
-                    "assetId": { "type": "string" },
-                    "graphIndex": { "type": "integer", "minimum": 0 },
-                    "recipeId": { "type": "string", "minLength": 1 },
-                    "materialAssetId": { "type": "string" },
-                    "position": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
-                },
-                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "recipeId"],
                 "additionalProperties": false
             }
         },
