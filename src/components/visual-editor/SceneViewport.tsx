@@ -147,6 +147,8 @@ import {
   type Vec3,
   type VisualProjectKind,
   NATIVE_MODEL_EXTENSION_PATTERN,
+  getKhrInteractivityOnStartAnimationCues,
+  type InteractivityAnimationCue,
 } from "../../lib/visual-editor";
 import { tauri } from "../../lib/tauri";
 import { isEditableShortcutTarget } from "../../lib/visual-editor/shortcuts";
@@ -508,6 +510,7 @@ function RenderDistanceGate({
 
 function MeshVisual({
   component,
+  graphAnimationCues,
   playing,
   assets,
   selected,
@@ -516,6 +519,7 @@ function MeshVisual({
   projectPath,
 }: {
   component: MeshComponent;
+  graphAnimationCues: readonly InteractivityAnimationCue[];
   playing: boolean;
   assets: AssetManifest;
   selected: boolean;
@@ -608,6 +612,7 @@ function MeshVisual({
           assignedMaterials={assignedModelMaterials}
           pose={component.modelPose}
           playing={playing}
+          graphAnimationCues={graphAnimationCues}
           declaredInteractionAnimationIndices={
             geometry.id === STUDIO_GUIDE_INTERACTION_DOOR_MODEL_ASSET_ID &&
             geometry.importMetadata?.extensionsUsed.includes("KHR_interactivity")
@@ -1462,6 +1467,7 @@ function DirectionArrow({
 
 function ComponentVisual({
   component,
+  graphAnimationCues,
   playing,
   assets,
   selected,
@@ -1476,6 +1482,7 @@ function ComponentVisual({
   projectPath,
 }: {
   component: SceneComponent;
+  graphAnimationCues: readonly InteractivityAnimationCue[];
   playing: boolean;
   assets: AssetManifest;
   selected: boolean;
@@ -1498,6 +1505,7 @@ function ComponentVisual({
         <group userData={{ meshComponentId: component.id }}>
           <MeshVisual
             component={component}
+            graphAnimationCues={graphAnimationCues}
             playing={playing}
             assets={assets}
             selected={materialDragActive ? materialDropHighlighted : selected}
@@ -1863,6 +1871,27 @@ function EntityObject({
     (component): component is VegetationWindComponent =>
       component.type === "vegetation-wind",
   );
+  /*
+   * What the Entity's graphs start on `event/onStart`, read here rather than
+   * waited for.
+   *
+   * The graph runtime below runs before this Entity's Model has attached its
+   * animation bridge — it is rendered first, and the bridge only exists once
+   * the Model has loaded — so a clip started by `event/onStart` is pushed at a
+   * Model that cannot hear it yet, and nothing retries. Handing the Model the
+   * cues instead lets it start them when it is ready, which is the same thing
+   * a published world does with a graph embedded in the glTF.
+   */
+  const graphAnimationCues = useMemo(
+    () =>
+      interactionTriggerComponents.flatMap((component) => {
+        const graphAsset = assets.assets[component.interactivityAssetId];
+        return graphAsset?.kind === "interactivity"
+          ? getKhrInteractivityOnStartAnimationCues(graphAsset.extension)
+          : [];
+      }),
+    [assets, interactionTriggerComponents],
+  );
   const entityVisuals = (
     <Fragment key={runtimeRevision}>
       {interactionTriggerComponents.map((component, index) => {
@@ -1893,6 +1922,7 @@ function EntityObject({
           <ComponentVisual
             key={component.id}
             component={component}
+            graphAnimationCues={graphAnimationCues}
             playing={playing}
             assets={assets}
             selected={selected}

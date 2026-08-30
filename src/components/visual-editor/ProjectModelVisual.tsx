@@ -73,7 +73,9 @@ import {
   resolveOpenBrushEditorBrushBaseUrl,
   validateGltfNodeHierarchy,
   type AssetManifest,
+  planInteractivityAnimationCues,
   type InteractivityAnimationCue,
+  type InteractivityAnimationPlan,
   type ClassicR3fMaterialShader,
   type MaterialAsset,
   type ModelPoseState,
@@ -120,6 +122,8 @@ type Props = {
   assignedMaterials: readonly ProjectModelMaterialAssignment[];
   pose?: ModelPoseState;
   playing?: boolean;
+  /** Clips the Entity's own graphs start with the world. */
+  graphAnimationCues?: readonly InteractivityAnimationCue[];
   declaredInteractionAnimationIndices?: readonly number[];
   sourceNodeIndex?: number;
   sourceNodeName?: string;
@@ -173,15 +177,7 @@ const EMPTY_ANIMATION_INDICES: readonly number[] = [];
 const EMPTY_ANIMATION_CUES: readonly InteractivityAnimationCue[] = [];
 
 /** One clip the mixer will play, and how long it waits before starting. */
-type ModelPlaybackCue = {
-  clip: AnimationClip;
-  delaySeconds: number;
-  /** An unbounded start loops; one with an end time plays a single pass. */
-  loop: boolean;
-  speed: number;
-  /** Clip-local seconds to start from. */
-  startTime: number;
-};
+type ModelPlaybackCue = InteractivityAnimationPlan & { clip: AnimationClip };
 const EMPTY_PLAYBACK_CUES: readonly ModelPlaybackCue[] = [];
 
 export function ProjectModelVisual({
@@ -196,6 +192,7 @@ export function ProjectModelVisual({
   assignedMaterials,
   pose,
   playing = false,
+  graphAnimationCues,
   declaredInteractionAnimationIndices = EMPTY_ANIMATION_INDICES,
   sourceNodeIndex,
   sourceNodeName,
@@ -264,6 +261,7 @@ export function ProjectModelVisual({
           assignedMaterials={resolvedMaterials}
           pose={pose}
           playing={playing}
+          graphAnimationCues={graphAnimationCues}
           declaredInteractionAnimationIndices={
             declaredInteractionAnimationIndices
           }
@@ -364,6 +362,7 @@ function ProjectModelRender({
   assignedMaterials,
   pose,
   playing,
+  graphAnimationCues,
   declaredInteractionAnimationIndices,
   sourceNodeIndex,
   sourceNodeName,
@@ -379,6 +378,15 @@ function ProjectModelRender({
   assignedMaterials: readonly ResolvedProjectModelMaterialAssignment[];
   pose?: ModelPoseState;
   playing: boolean;
+  /**
+   * Clips the Entity's own graphs start with the world.
+   *
+   * Passed in rather than pushed by the graph runtime: that runtime is
+   * rendered before this Model and starts before the animation bridge exists,
+   * so a clip it starts on `event/onStart` reaches nothing. Read here, the
+   * Model starts them itself once it has loaded.
+   */
+  graphAnimationCues?: readonly InteractivityAnimationCue[];
   declaredInteractionAnimationIndices: readonly number[];
   sourceNodeIndex?: number;
   sourceNodeName?: string;
@@ -435,51 +443,26 @@ function ProjectModelRender({
     /*
      * What plays comes from the graph, and each clip brings its own settings.
      *
-     * v1 removed the Animation Component, so there is no per-Entity loop or
-     * speed to fall back on: an `animation/start` with no end time runs until
-     * something stops it, which on a mixer is a loop, and one that named an end
-     * time wants a single pass. The earliest start for a clip wins, so two
-     * graphs asking for the same clip is one clip playing.
+     * Both sources are the same kind of statement — "this clip starts at this
+     * moment" — whether the graph came with the glTF or is an Asset attached to
+     * this Entity. The studio guide's bundled Model declares its own clips,
+     * which open a door once rather than looping.
      */
-    const planByIndex = new Map<
-      number,
-      { delaySeconds: number; loop: boolean; speed: number; startTime: number }
-    >();
-    const note = (
-      index: number,
-      plan: { delaySeconds: number; loop: boolean; speed: number; startTime: number },
-    ): void => {
-      const known = planByIndex.get(index);
-      if (known && known.delaySeconds <= plan.delaySeconds) return;
-      planByIndex.set(index, plan);
-    };
-    // The studio guide's bundled Model declares its own clips, which open a
-    // door once rather than looping.
-    declaredInteractionAnimationIndices.forEach((index) =>
-      note(index, { delaySeconds: 0, loop: false, speed: 1, startTime: 0 }),
-    );
-    interactionAnimationCues.forEach((cue) =>
-      note(cue.animationIndex, {
-        delaySeconds: cue.delaySeconds,
-        loop: (cue.endTime ?? null) === null && cue.stopSeconds === undefined,
-        speed:
-          typeof cue.speed === "number" &&
-          Number.isFinite(cue.speed) &&
-          cue.speed !== 0
-            ? cue.speed
-            : 1,
-        startTime:
-          typeof cue.startTime === "number" && Number.isFinite(cue.startTime)
-            ? Math.max(0, cue.startTime)
-            : 0,
-      }),
-    );
-    return [...planByIndex.entries()].flatMap(([index, plan]) =>
-      animations[index] ? [{ clip: animations[index], ...plan }] : [],
+    return planInteractivityAnimationCues([
+      ...declaredInteractionAnimationIndices.map((index) => ({
+        animationIndex: index,
+        delaySeconds: 0,
+        endTime: 0,
+      })),
+      ...interactionAnimationCues,
+      ...(graphAnimationCues ?? EMPTY_ANIMATION_CUES),
+    ]).flatMap((plan) =>
+      animations[plan.index] ? [{ clip: animations[plan.index], ...plan }] : [],
     );
   }, [
     animations,
     declaredInteractionAnimationIndices,
+    graphAnimationCues,
     interactionAnimationCues,
     playing,
   ]);
@@ -564,7 +547,12 @@ function ProjectModelRender({
   const animationBridgeActiveRef = useRef(false);
 
   useEffect(() => {
-    if (!mixer || !renderedObject || animations.length === 0 || !playing) return;
+    // Attached whether or not Play is running. Gating it on `playing` meant the
+    // bridge appeared in the same commit that started the graph, and this Model
+    // renders after the graph runtime, so the first command of every session
+    // arrived before there was anything to receive it. Nothing commands a
+    // bridge outside Play, so attaching it early costs nothing.
+    if (!mixer || !renderedObject || animations.length === 0) return;
     // What this Model should play is not known here — a graph can start any
     // clip at any moment — so the bridge carries no clip of its own and no
     // owner id, and the cues above already started whatever begins with Play.
@@ -598,7 +586,7 @@ function ProjectModelRender({
       animationBridgeRef.current = null;
       animationBridgeActiveRef.current = false;
     };
-  }, [animations, invalidate, mixer, playing, renderedObject]);
+  }, [animations, invalidate, mixer, renderedObject]);
 
   useFrame((frame, delta) => {
     if (playbackActive || animationBridgeActiveRef.current) {

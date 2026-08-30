@@ -22,6 +22,8 @@ import { getBuiltinPrimitiveCreation } from "../creation-catalog";
 import {
   collectInteractivityRuntimeDiagnostics,
   collectXriftInteractionPrograms,
+  getKhrInteractivityOnStartAnimationCues,
+  planInteractivityAnimationCues,
   hasXriftInteractionRuntimeWork,
   hasXriftSelfStartingEntry,
   XRIFT_INTERACTION_SELF_ENTITY_ID,
@@ -2963,6 +2965,28 @@ function renderModelMesh(
       sceneUsesInteractionTriggerRuntime(context.scene, context.assets),
   );
   const animationLoaded = animationBridgeable;
+  /*
+   * The clips this Entity's own graphs start with the world, emitted rather
+   * than left to the graph runtime to push.
+   *
+   * The runtime is a sibling of this Model and starts as soon as it mounts;
+   * this Model suspends on its glTF, so its animation bridge does not exist
+   * yet when `event/onStart` fires, and nothing retries. Reading the graph at
+   * compile time and starting the clips here makes the published world play
+   * what the Editor plays, and leaves the bridge for what only it can do —
+   * pausing, seeking and switching while the world runs.
+   */
+  const graphAnimationCues = animationBridgeable
+    ? (entity.components as RegisteredSceneComponent[]).flatMap((component) => {
+        if (component.type !== "interaction-trigger" || !component.enabled) {
+          return [];
+        }
+        const asset = context.assets.assets[component.interactivityAssetId];
+        return asset?.kind === "interactivity"
+          ? getKhrInteractivityOnStartAnimationCues(asset.extension)
+          : [];
+      })
+    : [];
   if (isObj) {
     context.fiberImports.add("useLoader");
     context.extraImports.add(
@@ -3051,6 +3075,33 @@ function renderModelMesh(
         ? `const { scene${animationLoaded ? ", animations" : ""} } = useGLTF(modelUrl);`
         : `const { scene, parser${animationLoaded ? ", animations" : ""} } = useGLTF(modelUrl);`;
   const animationBindings = (animationBridgeable ? ["mixer", "clips"] : []).join(", ");
+  const graphCuePlans = planInteractivityAnimationCues(graphAnimationCues);
+  if (graphCuePlans.length > 0) {
+    context.threeValueImports.add("LoopRepeat");
+    context.threeValueImports.add("LoopOnce");
+  }
+  const graphCueSource =
+    graphCuePlans.length > 0
+      ? `
+  useEffect(() => {
+    const started = ${JSON.stringify(graphCuePlans)}.flatMap((cue) => {
+      const clip = clips[cue.index];
+      if (!clip) return [];
+      const action = mixer.clipAction(clip);
+      action.reset();
+      action.clampWhenFinished = !cue.loop;
+      action.setLoop(cue.loop ? LoopRepeat : LoopOnce, cue.loop ? Infinity : 1);
+      action.timeScale = cue.speed;
+      if (cue.startTime > 0) action.time = cue.startTime;
+      if (cue.delaySeconds > 0) action.startAt(mixer.time + cue.delaySeconds);
+      action.play();
+      return [action];
+    });
+    return () => {
+      started.forEach((action) => action.stop());
+    };
+  }, [clips, mixer]);`
+      : "";
   // The same bridge Studio Play attaches, so a graph that starts, pauses or
   // re-times a clip behaves identically in the published world. Nothing plays
   // on its own: what starts a clip is an `animation/start` node.
@@ -3091,7 +3142,7 @@ function renderModelMesh(
     : "";
   const animationSource = animationLoaded
     ? `  const animationRoot = useRef<Group>(null);
-  const { ${animationBindings} } = useAnimations(animations, animationRoot);${animationBridgeSource}`
+  const { ${animationBindings} } = useAnimations(animations, animationRoot);${graphCueSource}${animationBridgeSource}`
     : "";
   // Open Brush brushes read `uniform vec4 u_time` for their motion, and the
   // Materials come out of three-icosa already compiled, so no Material

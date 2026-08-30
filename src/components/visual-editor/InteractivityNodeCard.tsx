@@ -56,9 +56,14 @@ export const RUNTIME_SUPPORT_BADGE: Partial<
     className: "border-amber-500/50 bg-amber-500/15 text-amber-200",
   },
   conditional: {
-    label: "接続が必要",
+    // Not「接続が必要」. Nothing is missing on the node — an animation node with
+    // its clip typed in is complete — and a badge that says a connection is
+    // required reads as an error the author cannot find. What it actually
+    // depends on is the Entity the graph is attached to, which the banner
+    // above the canvas already names.
+    label: "付け先しだい",
     title:
-      "実行はされますが、対象の Entity・Model・Material へ接続されるまで何も変わりません",
+      "このノードは実行されます。実際に何が動くかは、このグラフを付けた Entity が持つ Model・Material・音源などで決まります",
     className: "border-slate-400/40 bg-slate-400/10 text-slate-300",
   },
 };
