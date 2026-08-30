@@ -122,6 +122,31 @@ mask?: number[]   // 0..1、Terrain の resolution と同じ並び
 **実際に置かれた本数と、密度が要求した本数を常に表示する。** 上限で丸めたときは
 その旨を出す。黙って切り捨てない。
 
+### MCP から草を扱う
+
+草は長い間 Inspector からしか触れず、AI が作った Terrain は地面だけの状態で
+渡されていた。パネルと同じ操作単位で tool を分けてある。草の配列をまるごと
+受け取る tool にはしない。一部だけ間違った要求で、調整済みの層が推測値へ
+置き換わるため。
+
+| Tool | 対応する操作 |
+| --- | --- |
+| `list_terrain_grass_types` | 種類カタログ、preset、密度・傾斜・高さ帯・上限の一覧 |
+| `apply_terrain_grass_preset` | 「セットを適用」。層を積むのではなく置き換える |
+| `add_terrain_grass_layer` | 「レイヤーを追加」。appearance は同時に渡せる |
+| `update_terrain_grass_layer` | 種類・密度・高さ帯・傾斜上限・seed・appearance の変更と、`index` による並べ替え |
+| `delete_terrain_grass_layer` | 層の削除 |
+| `paint_terrain_grass` | 塗り足し / 消し。層を1つ指定する |
+
+`appearance` の各項目へ `null` を渡すとその上書きだけが消え、
+`patch.appearance` 自体へ `null` を渡すと種類の値へ全部戻る。省略は「今の値を
+そのまま」なので、この3つを混同しないこと。`patch.mask` へ `null` を渡すと
+塗りだけを戻す。
+
+`get_terrain` は層ごとに、解決後の色とこの Terrain で実際に置かれる本数を返す。
+上限で丸めた層は `clampedByInstanceLimit` で分かる。Inspector と同じく、黙って
+切り捨てない。
+
 ## 表面モード
 
 Terrain マテリアルは現在ひとつ。**高さと傾斜による混合**をここへ入れる。

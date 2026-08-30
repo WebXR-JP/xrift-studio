@@ -40,6 +40,7 @@ import {
   addTerrainEntity,
   applyTerrainBrushToScene,
   resampleTerrainInScene,
+  setTerrainGrassLayersInScene,
   duplicateEntityHierarchy,
   getTerrainGeometry,
   getMeshMaterialSlots,
@@ -57,9 +58,11 @@ import {
   MESH_MAX_DISTANCE_MIN,
   updateRigidBodyComponent,
   updateTextComponent,
+  updateInteractionTriggerComponent,
   type AnimationPatch,
   type AudioSourcePatch,
   type ColliderPatch,
+  type InteractionTriggerPatch,
   type LightPatch,
   type RigidBodyPatch,
   type SceneComponent,
@@ -80,7 +83,28 @@ import {
   TERRAIN_SIZE_MAX,
   TERRAIN_SIZE_MIN,
   type TerrainBrushOperation,
+  type TerrainGeometry,
 } from "./terrain";
+import {
+  TERRAIN_GRASS_BRUSH_MODES,
+  TERRAIN_GRASS_DEFAULT_FILL,
+  TERRAIN_GRASS_MAX_INSTANCES,
+  TERRAIN_GRASS_PRESETS,
+  TERRAIN_GRASS_TYPES,
+  applyTerrainGrassAppearance,
+  createTerrainGrassLayers,
+  getTerrainGrassPreset,
+  getTerrainGrassType,
+  isTerrainGrassLayer,
+  resolveTerrainGrassAppearance,
+  type TerrainGrassAppearance,
+  type TerrainGrassLayer,
+  type TerrainGrassTypeId,
+} from "./terrain-grass";
+import {
+  collectInteractionTriggerTargets,
+  syncInteractionTriggerEntityReferences,
+} from "./interaction-trigger-targets";
 import {
   resolveSceneSettings,
   type SceneAmbientSettings,
@@ -280,6 +304,12 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   create_terrain: createTerrain,
   sculpt_terrain: sculptTerrain,
   update_terrain: updateTerrain,
+  list_terrain_grass_types: listTerrainGrassTypes,
+  apply_terrain_grass_preset: applyTerrainGrassPreset,
+  add_terrain_grass_layer: addTerrainGrassLayer,
+  update_terrain_grass_layer: updateTerrainGrassLayer,
+  delete_terrain_grass_layer: deleteTerrainGrassLayer,
+  paint_terrain_grass: paintTerrainGrass,
   place_builtin_prefab: placeBuiltinPrefab,
   create_prefab: createPrefab,
   add_component: addComponent,
@@ -311,6 +341,7 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   disconnect_interactivity_socket: disconnectInteractivitySocket,
   delete_interactivity_node: deleteInteractivityNode,
   validate_interactivity_asset: validateInteractivityAsset,
+  list_interaction_trigger_targets: listInteractionTriggerTargets,
 };
 
 export function executeXriftMcpEditorTool(
@@ -1663,10 +1694,23 @@ function createPrimitive(
   };
 }
 
-function getTerrain(
+/**
+ * The Entity, mesh and Terrain geometry a Terrain tool operates on.
+ *
+ * Every Terrain tool starts from the same three lookups and the same failure,
+ * so they resolve it here rather than each carrying its own copy: a tool that
+ * disagreed about which mesh counts as the Terrain would read the geometry one
+ * way and write it another.
+ */
+function requireTerrain(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
-): XriftMcpEditorToolOutcome {
+): {
+  entityId: string;
+  entity: SceneEntity;
+  mesh: Extract<SceneComponent, { type: "mesh" }>;
+  terrain: TerrainGeometry;
+} {
   const entityId = requiredString(argumentsValue.entityId, "entityId");
   const componentId = optionalString(argumentsValue.componentId);
   const entity = requireEntity(context.bundle.scene, entityId);
@@ -1683,6 +1727,17 @@ function getTerrain(
       { entityId, ...(componentId ? { componentId } : {}) },
     );
   }
+  return { entityId, entity, mesh, terrain };
+}
+
+function getTerrain(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const { entityId, entity, mesh, terrain } = requireTerrain(
+    context,
+    argumentsValue,
+  );
   const range = terrainHeightRange(terrain);
   return unchanged(
     context,
@@ -1698,6 +1753,9 @@ function getTerrain(
       minHeight: range.min,
       maxHeight: range.max,
       materialAssetId: mesh.materialBindings[0]?.materialAssetId ?? null,
+      grass: (terrain.grass ?? []).map((layer) =>
+        describeTerrainGrassLayer(terrain, layer),
+      ),
     },
     `Terrain「${entity.name}」の概要を取得しました`,
   );
@@ -1790,22 +1848,7 @@ function sculptTerrain(
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
   assertWritableContext(context, argumentsValue);
-  const entityId = requiredString(argumentsValue.entityId, "entityId");
-  const componentId = optionalString(argumentsValue.componentId);
-  const entity = requireEntity(context.bundle.scene, entityId);
-  const mesh = entity.components.find(
-    (component): component is Extract<SceneComponent, { type: "mesh" }> =>
-      component.type === "mesh" &&
-      (componentId === undefined || component.id === componentId),
-  );
-  const terrain = mesh ? getTerrainGeometry(mesh) : undefined;
-  if (!mesh || !terrain) {
-    throw new XriftMcpEditorToolError(
-      "TERRAIN_NOT_FOUND",
-      "指定されたEntityにTerrainが見つかりません",
-      { entityId, ...(componentId ? { componentId } : {}) },
-    );
-  }
+  const { entityId, mesh, terrain } = requireTerrain(context, argumentsValue);
   const kind = requiredEnum(argumentsValue.kind, "kind", TERRAIN_BRUSH_KINDS);
   const center = optionalNumberTuple(argumentsValue.center, "center", 2);
   if (!center) invalidArgument("center", "[x, z]");
@@ -1895,22 +1938,10 @@ function updateTerrain(
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
   assertWritableContext(context, argumentsValue);
-  const entityId = requiredString(argumentsValue.entityId, "entityId");
-  const componentId = optionalString(argumentsValue.componentId);
-  const entity = requireEntity(context.bundle.scene, entityId);
-  const mesh = entity.components.find(
-    (component): component is Extract<SceneComponent, { type: "mesh" }> =>
-      component.type === "mesh" &&
-      (componentId === undefined || component.id === componentId),
+  const { entityId, entity, mesh, terrain } = requireTerrain(
+    context,
+    argumentsValue,
   );
-  const terrain = mesh ? getTerrainGeometry(mesh) : undefined;
-  if (!mesh || !terrain) {
-    throw new XriftMcpEditorToolError(
-      "TERRAIN_NOT_FOUND",
-      "指定されたEntityにTerrainが見つかりません",
-      { entityId, ...(componentId ? { componentId } : {}) },
-    );
-  }
   const width = terrainMcpNumber(
     argumentsValue.width,
     "width",
@@ -1965,6 +1996,625 @@ function updateTerrain(
     },
     activity: `AIがTerrain「${entity.name}」のサイズと解像度を更新しました`,
   };
+}
+
+/**
+ * Terrain grass over MCP.
+ *
+ * The Inspector's grass panel is the one Terrain feature an agent could not
+ * reach: it could raise ground and cut holes, but a Terrain it built arrived
+ * bare, and the author had to finish it by hand. These tools mirror the panel
+ * one operation at a time — the catalog, a preset, a layer, a stroke — rather
+ * than taking a whole grass array, so a partially wrong request fails on the
+ * field that is wrong instead of replacing a tuned stack with a guess.
+ */
+
+/** The Inspector's density slider ceiling, in blades per square metre. */
+const TERRAIN_GRASS_DENSITY_MAX = 40;
+
+/**
+ * How far a layer's height band may reach.
+ *
+ * The presets use ±1000 to mean "every altitude", which is far outside the
+ * ±256 a Terrain can actually be sculpted to, so the band is bounded by that
+ * sentinel rather than by the height limit.
+ */
+const TERRAIN_GRASS_BAND_LIMIT = 1000;
+
+const TERRAIN_GRASS_APPEARANCE_RANGES = {
+  colorVariation: [0, 1],
+  heightScale: [0.2, 4],
+  widthScale: [0.2, 4],
+  fill: [0, 1],
+} as const;
+
+/** A layer with no seed gets one from its id, so no two share a field. */
+function terrainGrassSeedFromId(id: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < id.length; index += 1) {
+    hash ^= id.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) % 2_147_483_647;
+}
+
+/**
+ * What a layer looks like to a caller.
+ *
+ * The stored layer is rules, not blades, so the numbers that matter to an
+ * agent — the colours it will actually be drawn with, and how many blades the
+ * density buys on this Terrain — are resolved here rather than left for the
+ * caller to work out from the catalog.
+ */
+function describeTerrainGrassLayer(
+  terrain: TerrainGeometry,
+  layer: TerrainGrassLayer,
+): Record<string, unknown> {
+  const type = getTerrainGrassType(layer.typeId);
+  const area = Math.max(terrain.width, 0) * Math.max(terrain.depth, 0);
+  const requested = Math.max(0, Math.floor(area * Math.max(layer.density, 0)));
+  return {
+    id: layer.id,
+    typeId: layer.typeId,
+    typeLabel: type?.label ?? null,
+    density: layer.density,
+    heightRange: [...layer.heightRange],
+    slopeLimitDegrees: layer.slopeLimitDegrees,
+    seed: layer.seed,
+    appearance: layer.appearance ? { ...layer.appearance } : null,
+    resolvedAppearance: type
+      ? resolveTerrainGrassAppearance(type, layer.appearance)
+      : null,
+    painted: layer.mask !== undefined,
+    estimatedBlades: Math.min(requested, TERRAIN_GRASS_MAX_INSTANCES),
+    clampedByInstanceLimit: requested > TERRAIN_GRASS_MAX_INSTANCES,
+  };
+}
+
+function requireTerrainGrassLayer(
+  terrain: TerrainGeometry,
+  entityId: string,
+  layerId: string,
+): { layers: readonly TerrainGrassLayer[]; index: number } {
+  const layers = terrain.grass ?? [];
+  const index = layers.findIndex((layer) => layer.id === layerId);
+  if (index < 0) {
+    throw new XriftMcpEditorToolError(
+      "TERRAIN_GRASS_LAYER_NOT_FOUND",
+      "指定された草のレイヤーが見つかりません",
+      { entityId, layerId, layerIds: layers.map((layer) => layer.id) },
+    );
+  }
+  return { layers, index };
+}
+
+/** Writes a layer stack back through the same Scene boundary the Inspector uses. */
+function commitTerrainGrass(
+  context: XriftMcpEditorContext,
+  target: { entityId: string; entity: SceneEntity; mesh: { id: string } },
+  layers: readonly TerrainGrassLayer[],
+  result: Record<string, unknown>,
+  activity: string,
+): XriftMcpEditorToolOutcome {
+  const scene = setTerrainGrassLayersInScene(
+    context.bundle.scene,
+    target.entityId,
+    layers,
+    target.mesh.id,
+  );
+  const bundle = touchProject(context, { ...context.bundle, scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: target.entityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId: target.entityId,
+      componentId: target.mesh.id,
+      ...result,
+    },
+    activity,
+  };
+}
+
+function listTerrainGrassTypes(
+  context: XriftMcpEditorContext,
+): XriftMcpEditorToolOutcome {
+  return unchanged(
+    context,
+    {
+      types: TERRAIN_GRASS_TYPES.map((type) => ({
+        id: type.id,
+        label: type.label,
+        description: type.description,
+        height: type.height,
+        width: type.width,
+        cullDistance: type.cullDistance,
+        baseColor: type.baseColor,
+        tipColor: type.tipColor,
+        colorVariation: type.colorVariation,
+        clumpSize: type.clumpSize,
+        clumpRadius: type.clumpRadius,
+      })),
+      presets: TERRAIN_GRASS_PRESETS.map((preset) => ({
+        id: preset.id,
+        label: preset.label,
+        description: preset.description,
+        layers: preset.layers.map((layer) => ({
+          typeId: layer.typeId,
+          density: layer.density,
+          heightRange: [...layer.heightRange],
+          slopeLimitDegrees: layer.slopeLimitDegrees,
+        })),
+      })),
+      limits: {
+        densityMax: TERRAIN_GRASS_DENSITY_MAX,
+        slopeLimitDegreesMax: 90,
+        heightBandLimit: TERRAIN_GRASS_BAND_LIMIT,
+        maxInstancesPerLayer: TERRAIN_GRASS_MAX_INSTANCES,
+        defaultFill: TERRAIN_GRASS_DEFAULT_FILL,
+        appearance: TERRAIN_GRASS_APPEARANCE_RANGES,
+      },
+    },
+    "Terrainの草の種類とセットを取得しました",
+  );
+}
+
+function applyTerrainGrassPreset(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const target = requireTerrain(context, argumentsValue);
+  const presetId = requiredString(argumentsValue.presetId, "presetId");
+  const preset = getTerrainGrassPreset(presetId);
+  if (!preset) {
+    throw new XriftMcpEditorToolError(
+      "TERRAIN_GRASS_PRESET_NOT_FOUND",
+      "指定された草のセットが見つかりません",
+      { presetId, presetIds: TERRAIN_GRASS_PRESETS.map((entry) => entry.id) },
+    );
+  }
+  // The Inspector's "セットを適用" replaces the stack rather than appending to
+  // it: a preset is a whole look, and layering two of them is what produced
+  // the unreadably dense fields this button exists to avoid.
+  const layers = createTerrainGrassLayers(preset);
+  return commitTerrainGrass(
+    context,
+    target,
+    layers,
+    {
+      presetId,
+      grass: layers.map((layer) =>
+        describeTerrainGrassLayer(target.terrain, layer),
+      ),
+    },
+    `AIがTerrain「${target.entity.name}」へ草のセット「${preset.label}」を適用しました`,
+  );
+}
+
+function addTerrainGrassLayer(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const target = requireTerrain(context, argumentsValue);
+  const typeId = requiredEnum(
+    argumentsValue.typeId,
+    "typeId",
+    TERRAIN_GRASS_TYPES.map((type) => type.id),
+  ) as TerrainGrassTypeId;
+  const id = createDocumentId("grass-layer");
+  const layer: TerrainGrassLayer = {
+    id,
+    typeId,
+    density: terrainMcpNumber(
+      argumentsValue.density,
+      "density",
+      4,
+      0,
+      TERRAIN_GRASS_DENSITY_MAX,
+    ),
+    heightRange: terrainGrassHeightRange(argumentsValue.heightRange),
+    slopeLimitDegrees: terrainMcpNumber(
+      argumentsValue.slopeLimitDegrees,
+      "slopeLimitDegrees",
+      40,
+      0,
+      90,
+    ),
+    seed: terrainMcpNumber(
+      argumentsValue.seed,
+      "seed",
+      terrainGrassSeedFromId(id),
+      0,
+      2_147_483_647,
+      true,
+    ),
+  };
+  const withAppearance =
+    argumentsValue.appearance === undefined
+      ? layer
+      : applyTerrainGrassAppearance(
+          layer,
+          terrainGrassAppearancePatch(argumentsValue.appearance, "appearance"),
+        );
+  if (!isTerrainGrassLayer(withAppearance)) {
+    invalidArgument("appearance", "a usable grass appearance override");
+  }
+  const layers = [...(target.terrain.grass ?? []), withAppearance];
+  return commitTerrainGrass(
+    context,
+    target,
+    layers,
+    {
+      layerId: id,
+      layer: describeTerrainGrassLayer(target.terrain, withAppearance),
+      layerCount: layers.length,
+    },
+    `AIがTerrain「${target.entity.name}」へ草のレイヤーを追加しました`,
+  );
+}
+
+function updateTerrainGrassLayer(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const target = requireTerrain(context, argumentsValue);
+  const layerId = requiredString(argumentsValue.layerId, "layerId");
+  const { layers, index } = requireTerrainGrassLayer(
+    target.terrain,
+    target.entityId,
+    layerId,
+  );
+  const current = layers[index];
+  const patch = componentPatchRecord(argumentsValue.patch);
+  assertObjectKeys(patch, "patch", [
+    "typeId",
+    "density",
+    "heightRange",
+    "slopeLimitDegrees",
+    "seed",
+    "appearance",
+    "mask",
+  ]);
+  let next: TerrainGrassLayer = {
+    ...current,
+    ...(patch.typeId === undefined
+      ? {}
+      : {
+          typeId: requiredEnum(
+            patch.typeId,
+            "patch.typeId",
+            TERRAIN_GRASS_TYPES.map((type) => type.id),
+          ) as TerrainGrassTypeId,
+        }),
+    ...(patch.density === undefined
+      ? {}
+      : {
+          density: terrainMcpNumber(
+            patch.density,
+            "patch.density",
+            current.density,
+            0,
+            TERRAIN_GRASS_DENSITY_MAX,
+          ),
+        }),
+    ...(patch.heightRange === undefined
+      ? {}
+      : {
+          heightRange: terrainGrassHeightRange(
+            patch.heightRange,
+            "patch.heightRange",
+          ),
+        }),
+    ...(patch.slopeLimitDegrees === undefined
+      ? {}
+      : {
+          slopeLimitDegrees: terrainMcpNumber(
+            patch.slopeLimitDegrees,
+            "patch.slopeLimitDegrees",
+            current.slopeLimitDegrees,
+            0,
+            90,
+          ),
+        }),
+    ...(patch.seed === undefined
+      ? {}
+      : {
+          seed: terrainMcpNumber(
+            patch.seed,
+            "patch.seed",
+            current.seed,
+            0,
+            2_147_483_647,
+            true,
+          ),
+        }),
+  };
+  if (patch.appearance !== undefined) {
+    next = applyTerrainGrassAppearance(
+      next,
+      // `null` is the whole override going away, which is not the same as an
+      // absent field: it takes the layer back to its type's colours.
+      patch.appearance === null
+        ? {}
+        : terrainGrassAppearancePatch(patch.appearance, "patch.appearance"),
+    );
+  }
+  if (patch.mask !== undefined) {
+    if (patch.mask !== null) {
+      invalidArgument("patch.mask", "null to clear the painted coverage");
+    }
+    const { mask: _dropped, ...rest } = next;
+    next = rest;
+  }
+  if (!isTerrainGrassLayer(next)) {
+    invalidArgument("patch", "a usable grass layer");
+  }
+  // Draw order is what decides which layer a blade of another sits behind, so
+  // moving a layer belongs with editing it rather than in a tool of its own.
+  const moveTo = optionalNonNegativeInteger(argumentsValue.index, "index");
+  let nextLayers = layers.map((layer, at) => (at === index ? next : layer));
+  if (moveTo !== undefined) {
+    if (moveTo >= layers.length) {
+      invalidArgument("index", `an integer from 0 to ${layers.length - 1}`);
+    }
+    const moved = [...nextLayers];
+    moved.splice(index, 1);
+    moved.splice(moveTo, 0, next);
+    nextLayers = moved;
+  }
+  if (JSON.stringify(nextLayers) === JSON.stringify(layers)) {
+    return unchanged(
+      context,
+      {
+        projectId: context.bundle.project.projectId,
+        sceneId: context.bundle.scene.sceneId,
+        revision: context.revision,
+        entityId: target.entityId,
+        componentId: target.mesh.id,
+        layerId,
+        layer: describeTerrainGrassLayer(target.terrain, current),
+      },
+      "草のレイヤーはすでに指定された状態です",
+    );
+  }
+  return commitTerrainGrass(
+    context,
+    target,
+    nextLayers,
+    {
+      layerId,
+      layer: describeTerrainGrassLayer(target.terrain, next),
+      order: nextLayers.map((layer) => layer.id),
+    },
+    `AIがTerrain「${target.entity.name}」の草のレイヤーを更新しました`,
+  );
+}
+
+function deleteTerrainGrassLayer(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const target = requireTerrain(context, argumentsValue);
+  const layerId = requiredString(argumentsValue.layerId, "layerId");
+  const { layers } = requireTerrainGrassLayer(
+    target.terrain,
+    target.entityId,
+    layerId,
+  );
+  const nextLayers = layers.filter((layer) => layer.id !== layerId);
+  return commitTerrainGrass(
+    context,
+    target,
+    nextLayers,
+    { layerId, layerCount: nextLayers.length },
+    `AIがTerrain「${target.entity.name}」の草のレイヤーを削除しました`,
+  );
+}
+
+function paintTerrainGrass(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const target = requireTerrain(context, argumentsValue);
+  const layerId = requiredString(argumentsValue.layerId, "layerId");
+  requireTerrainGrassLayer(target.terrain, target.entityId, layerId);
+  const mode = requiredEnum(
+    argumentsValue.mode,
+    "mode",
+    TERRAIN_GRASS_BRUSH_MODES,
+  );
+  const center = optionalNumberTuple(argumentsValue.center, "center", 2);
+  if (!center) invalidArgument("center", "[x, z]");
+  const radius = terrainMcpNumber(
+    argumentsValue.radius,
+    "radius",
+    1,
+    0.05,
+    Math.max(target.terrain.width, target.terrain.depth),
+  );
+  const strength = terrainMcpNumber(
+    argumentsValue.strength,
+    "strength",
+    0.5,
+    0.001,
+    1,
+  );
+  const operation = {
+    kind: mode === "paint" ? ("grass-paint" as const) : ("grass-erase" as const),
+    center,
+    radius,
+    strength,
+    grassLayerId: layerId,
+  };
+  const scene = applyTerrainBrushToScene(
+    context.bundle.scene,
+    target.entityId,
+    operation,
+    target.mesh.id,
+  );
+  if (scene === context.bundle.scene) {
+    throw new XriftMcpEditorToolError(
+      "TERRAIN_BRUSH_NO_EFFECT",
+      "Terrainの範囲内に有効な草のブラシ操作を適用できませんでした",
+      { entityId: target.entityId, componentId: target.mesh.id, operation },
+    );
+  }
+  const updatedMesh = scene.entities[target.entityId]?.components.find(
+    (component): component is Extract<SceneComponent, { type: "mesh" }> =>
+      component.type === "mesh" && component.id === target.mesh.id,
+  );
+  const updatedTerrain = updatedMesh ? getTerrainGeometry(updatedMesh) : undefined;
+  const updatedLayer = updatedTerrain?.grass?.find(
+    (layer) => layer.id === layerId,
+  );
+  const bundle = touchProject(context, { ...context.bundle, scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: target.entityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId: target.entityId,
+      componentId: target.mesh.id,
+      layerId,
+      operation,
+      layer:
+        updatedTerrain && updatedLayer
+          ? describeTerrainGrassLayer(updatedTerrain, updatedLayer)
+          : null,
+    },
+    activity: `AIがTerrainの草へ${mode}ブラシを適用しました`,
+  };
+}
+
+function terrainGrassHeightRange(
+  value: unknown,
+  name = "heightRange",
+): [number, number] {
+  const range = optionalNumberTuple(value, name, 2);
+  if (!range) return [-TERRAIN_GRASS_BAND_LIMIT, TERRAIN_GRASS_BAND_LIMIT];
+  const [low, high] = range;
+  if (
+    Math.abs(low) > TERRAIN_GRASS_BAND_LIMIT ||
+    Math.abs(high) > TERRAIN_GRASS_BAND_LIMIT
+  ) {
+    invalidArgument(
+      name,
+      `two numbers from -${TERRAIN_GRASS_BAND_LIMIT} to ${TERRAIN_GRASS_BAND_LIMIT}`,
+    );
+  }
+  return [Math.min(low, high), Math.max(low, high)];
+}
+
+/**
+ * One appearance change, with `null` meaning "back to the type" per field.
+ *
+ * Absent and null have to differ here: an absent field leaves whatever the
+ * author already tuned alone, while a null clears that one override without
+ * touching the rest of them.
+ */
+function terrainGrassAppearancePatch(
+  value: unknown,
+  name: string,
+): TerrainGrassAppearance {
+  const record = recordValue(value, name);
+  const change: TerrainGrassAppearance = {};
+  for (const key of ["baseColor", "tipColor"] as const) {
+    if (!Object.prototype.hasOwnProperty.call(record, key)) continue;
+    const entry = record[key];
+    if (entry === null) {
+      change[key] = undefined;
+      continue;
+    }
+    if (typeof entry !== "string" || !/^#[0-9a-f]{6}$/i.test(entry)) {
+      invalidArgument(`${name}.${key}`, "a #rrggbb colour, or null to clear");
+    }
+    change[key] = entry;
+  }
+  for (const [key, [low, high]] of Object.entries(
+    TERRAIN_GRASS_APPEARANCE_RANGES,
+  ) as ReadonlyArray<
+    [keyof typeof TERRAIN_GRASS_APPEARANCE_RANGES, readonly [number, number]]
+  >) {
+    if (!Object.prototype.hasOwnProperty.call(record, key)) continue;
+    const entry = record[key];
+    if (entry === null) {
+      change[key] = undefined;
+      continue;
+    }
+    if (typeof entry !== "number" || !Number.isFinite(entry) || entry < low || entry > high) {
+      invalidArgument(`${name}.${key}`, `a number from ${low} to ${high}, or null to clear`);
+    }
+    change[key] = entry;
+  }
+  const unsupported = Object.keys(record).find(
+    (key) =>
+      key !== "baseColor" &&
+      key !== "tipColor" &&
+      !(key in TERRAIN_GRASS_APPEARANCE_RANGES),
+  );
+  if (unsupported) {
+    invalidArgument(`${name}.${unsupported}`, "a supported appearance field");
+  }
+  return change;
+}
+
+/**
+ * The Entities and Components an Interaction Trigger action can be pointed at.
+ *
+ * The node editor builds its target pickers from this, and an agent writing a
+ * trigger graph needs the same list: the property names a `xrift/interaction`
+ * action may write are per Component kind, so guessing one produces a graph
+ * that validates and then does nothing.
+ */
+function listInteractionTriggerTargets(
+  context: XriftMcpEditorContext,
+): XriftMcpEditorToolOutcome {
+  const targets = collectInteractionTriggerTargets(context.bundle.scene);
+  return unchanged(
+    context,
+    {
+      targets: targets.map((target) => ({
+        entityId: target.entityId,
+        name: target.name,
+        path: target.path,
+        components: target.components.map((component) => ({
+          componentId: component.componentId,
+          targetKind: component.targetKind,
+          label: component.label,
+          properties: component.properties.map((property) => ({
+            name: property.name,
+            label: property.label,
+            description: property.description,
+            kind: property.kind,
+            defaultValue: property.defaultValue,
+            ...(property.min === undefined ? {} : { min: property.min }),
+            ...(property.max === undefined ? {} : { max: property.max }),
+            ...(property.step === undefined ? {} : { step: property.step }),
+            ...(property.options
+              ? { options: property.options.map((option) => ({ ...option })) }
+              : {}),
+          })),
+        })),
+      })),
+      count: targets.length,
+    },
+    "Interaction Triggerの対象一覧を取得しました",
+  );
 }
 
 function terrainMcpNumber(
@@ -2658,9 +3308,51 @@ function updateComponent(
       }
       break;
     }
+    case "interaction-trigger": {
+      assertPatchKeys(
+        patch,
+        INTERACTION_TRIGGER_PATCH_KEYS,
+        component.type,
+      );
+      // entityReferences is derived from the graph rather than authored, so it
+      // is not in the patch: the sync below re-reads it from whichever Asset
+      // the Component now points at.
+      const interactivityAssetId = patch.interactivityAssetId;
+      if (interactivityAssetId !== undefined) {
+        if (typeof interactivityAssetId !== "string") {
+          invalidArgument("patch.interactivityAssetId", "string");
+        }
+        if (
+          context.bundle.assets.assets[interactivityAssetId]?.kind !==
+          "interactivity"
+        ) {
+          invalidArgument(
+            "patch.interactivityAssetId",
+            "existing interactivity asset id",
+          );
+        }
+      }
+      scene = context.bundle.scene;
+      if (patch.enabled !== undefined) {
+        scene = updateSceneComponentEnabled(
+          scene,
+          entityId,
+          componentId,
+          requiredPatchEnabled(patch),
+        );
+      }
+      if (interactivityAssetId !== undefined) {
+        scene = syncInteractionTriggerEntityReferences(
+          updateInteractionTriggerComponent(scene, entityId, componentId, {
+            interactivityAssetId: interactivityAssetId as string,
+          }),
+          context.bundle.assets,
+        );
+      }
+      break;
+    }
     case "spawn-point":
     case "prefab-instance":
-    case "interaction-trigger":
       assertPatchKeys(patch, ["enabled"], component.type);
       scene = updateSceneComponentEnabled(
         context.bundle.scene,
@@ -3857,11 +4549,17 @@ function addInteractivityNode(
   );
   const graphIndex = optionalNonNegativeInteger(argumentsValue.graphIndex, "graphIndex") ?? asset.extension.graph ?? 0;
   const op = requiredString(argumentsValue.op, "op");
-  const definingExtension = optionalString(argumentsValue.extension);
   const position = optionalVec2(argumentsValue.position, "position");
   const extension = cloneKhrInteractivityExtension(asset.extension);
   const graph = requireInteractivityGraph(extension.graphs, graphIndex);
   const template = getInteractivityOperationTemplate(op);
+  // An operation KHR_interactivity does not define is only legal when its
+  // declaration names the extension that does. The palette reads that name off
+  // the operation template; a caller that had to supply it by hand met a
+  // validation failure the Editor never produces, so the template answers here
+  // too and the argument is only an override.
+  const definingExtension =
+    optionalString(argumentsValue.extension) ?? template?.extension;
   graph.declarations ??= [];
   graph.nodes ??= [];
   let declaration = graph.declarations.findIndex(
@@ -4265,7 +4963,16 @@ function commitInteractivityMutation(
       [asset.id]: { ...asset, extension },
     },
   };
-  const bundle = touchProject(context, { ...context.bundle, assets });
+  // An Interaction Trigger records the Entities its graph writes to, and the
+  // graph just moved. The editor shell re-derives that list after every hand
+  // edit; a graph built over MCP has to go through the same step, or the
+  // compiler sees a trigger with no dependencies and drops the Entities the
+  // agent just wired up.
+  const scene = syncInteractionTriggerEntityReferences(
+    context.bundle.scene,
+    assets,
+  );
+  const bundle = touchProject(context, { ...context.bundle, assets, scene });
   return {
     changed: true,
     bundle,
@@ -5374,6 +6081,17 @@ const AUDIO_SOURCE_PATCH_KEYS = patchKeysOf<AudioSourcePatch>()([
   "rolloffFactor",
   "maxDistance",
 ]);
+
+/**
+ * `entityReferences` is deliberately absent.
+ *
+ * It is derived from the graph the Component points at, not authored, so a
+ * caller that could set it would be able to write a list the graph disagrees
+ * with. Pointing the Component at another Asset re-derives it instead.
+ */
+const INTERACTION_TRIGGER_PATCH_KEYS = patchKeysOf<
+  Pick<InteractionTriggerPatch, "enabled" | "interactivityAssetId">
+>()(["enabled", "interactivityAssetId"]);
 
 const ANIMATION_PATCH_KEYS = patchKeysOf<AnimationPatch>()([
   "enabled",

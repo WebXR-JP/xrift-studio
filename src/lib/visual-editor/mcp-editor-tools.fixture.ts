@@ -1377,6 +1377,185 @@ export function runXriftMcpEditorToolFixtures(): void {
   );
   current = { ...current, bundle: terrainResampled.bundle, revision: current.revision + 1 };
 
+  // Terrain grass was the one Inspector panel MCP could not reach, so a Terrain
+  // an agent built arrived bare. These assertions walk the same path the panel
+  // does: catalog, preset, one layer, one stroke, and the layer's removal.
+  const grassCatalog = executeXriftMcpEditorTool(current, {
+    id: "fixture-list-terrain-grass-types",
+    tool: "list_terrain_grass_types",
+    arguments: {},
+  });
+  const grassTypes = grassCatalog.result.types as Array<{ id: string }>;
+  const grassPresets = grassCatalog.result.presets as Array<{ id: string }>;
+  assert(
+    grassTypes.some((type) => type.id === "short-grass") &&
+      grassPresets.some((preset) => preset.id === "meadow"),
+    "list_terrain_grass_types should expose the grass catalog and its presets",
+  );
+
+  const grassPresetApplied = executeXriftMcpEditorTool(current, {
+    id: "fixture-apply-terrain-grass-preset",
+    tool: "apply_terrain_grass_preset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityId: terrainId,
+      presetId: "meadow",
+    },
+  });
+  assert(
+    grassPresetApplied.changed &&
+      (grassPresetApplied.result.grass as unknown[]).length === 3,
+    "apply_terrain_grass_preset should expand a preset into its layer stack",
+  );
+  current = {
+    ...current,
+    bundle: grassPresetApplied.bundle,
+    revision: current.revision + 1,
+  };
+
+  const grassLayerAdded = executeXriftMcpEditorTool(current, {
+    id: "fixture-add-terrain-grass-layer",
+    tool: "add_terrain_grass_layer",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityId: terrainId,
+      typeId: "dry-grass",
+      density: 6,
+      appearance: { baseColor: "#4a5f2a" },
+    },
+  });
+  const grassLayerId = grassLayerAdded.result.layerId as string;
+  const addedLayer = grassLayerAdded.result.layer as {
+    resolvedAppearance: { baseColor: string };
+    estimatedBlades: number;
+    seed: number;
+  };
+  assert(
+    grassLayerAdded.changed &&
+      grassLayerAdded.result.layerCount === 4 &&
+      addedLayer.resolvedAppearance.baseColor === "#4a5f2a" &&
+      addedLayer.estimatedBlades > 0,
+    "add_terrain_grass_layer should append a layer carrying its appearance override",
+  );
+  current = {
+    ...current,
+    bundle: grassLayerAdded.bundle,
+    revision: current.revision + 1,
+  };
+
+  const grassLayerCleared = executeXriftMcpEditorTool(current, {
+    id: "fixture-update-terrain-grass-layer",
+    tool: "update_terrain_grass_layer",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityId: terrainId,
+      layerId: grassLayerId,
+      index: 0,
+      patch: { density: 9, appearance: null },
+    },
+  });
+  const clearedLayer = grassLayerCleared.result.layer as {
+    appearance: unknown;
+    density: number;
+  };
+  assert(
+    grassLayerCleared.changed &&
+      clearedLayer.appearance === null &&
+      clearedLayer.density === 9 &&
+      (grassLayerCleared.result.order as string[])[0] === grassLayerId,
+    "update_terrain_grass_layer should clear an override and move the layer",
+  );
+  current = {
+    ...current,
+    bundle: grassLayerCleared.bundle,
+    revision: current.revision + 1,
+  };
+
+  const grassPainted = executeXriftMcpEditorTool(current, {
+    id: "fixture-paint-terrain-grass",
+    tool: "paint_terrain_grass",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityId: terrainId,
+      layerId: grassLayerId,
+      mode: "erase",
+      center: [0, 0],
+      radius: 3,
+      strength: 1,
+    },
+  });
+  assert(
+    grassPainted.changed &&
+      (grassPainted.result.layer as { painted: boolean }).painted,
+    "paint_terrain_grass should record painted coverage on the layer",
+  );
+  current = { ...current, bundle: grassPainted.bundle, revision: current.revision + 1 };
+
+  let missingGrassLayerCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(current, {
+      id: "fixture-paint-terrain-grass-missing-layer",
+      tool: "paint_terrain_grass",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        entityId: terrainId,
+        layerId: "grass-layer-does-not-exist",
+        mode: "paint",
+        center: [0, 0],
+        radius: 1,
+        strength: 0.5,
+      },
+    });
+  } catch (error) {
+    missingGrassLayerCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    missingGrassLayerCode === "TERRAIN_GRASS_LAYER_NOT_FOUND",
+    "paint_terrain_grass should reject a layer id the Terrain does not carry",
+  );
+
+  const grassLayerDeleted = executeXriftMcpEditorTool(current, {
+    id: "fixture-delete-terrain-grass-layer",
+    tool: "delete_terrain_grass_layer",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityId: terrainId,
+      layerId: grassLayerId,
+    },
+  });
+  assert(
+    grassLayerDeleted.changed && grassLayerDeleted.result.layerCount === 3,
+    "delete_terrain_grass_layer should drop the layer it names",
+  );
+  current = {
+    ...current,
+    bundle: grassLayerDeleted.bundle,
+    revision: current.revision + 1,
+  };
+
+  const grassSummary = executeXriftMcpEditorTool(current, {
+    id: "fixture-get-terrain-grass",
+    tool: "get_terrain",
+    arguments: { entityId: terrainId },
+  });
+  assert(
+    (grassSummary.result.grass as unknown[]).length === 3,
+    "get_terrain should report the Terrain's remaining grass layers",
+  );
+
   const primitiveCreated = executeXriftMcpEditorTool(current, {
     id: "fixture-create-primitive",
     tool: "create_primitive",
@@ -2294,6 +2473,170 @@ export function runXriftMcpEditorToolFixtures(): void {
   assert(
     cycleCode === "INTERACTIVITY_VALIDATION_FAILED",
     "MCP graph writes should reject flow cycles atomically",
+  );
+
+  // An Interaction Trigger records the Entities its graph writes to, and the
+  // compiler reads that list rather than the graph. The editor shell re-derives
+  // it after every hand edit; these assertions hold the MCP path to the same
+  // rule, so a trigger an agent wires up is not published with no dependencies.
+  const triggerGraphCreated = executeXriftMcpEditorTool(current, {
+    id: "fixture-trigger-graph",
+    tool: "create_interactivity_asset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      name: "MCP Interaction Trigger",
+      template: "empty",
+    },
+  });
+  const triggerGraphId = triggerGraphCreated.result.assetId as string;
+  current = {
+    ...current,
+    bundle: triggerGraphCreated.bundle,
+    revision: current.revision + 1,
+  };
+
+  const triggerAdded = executeXriftMcpEditorTool(current, {
+    id: "fixture-trigger-add-component",
+    tool: "add_component",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityId: primitiveId,
+      definitionId: "interaction.trigger",
+      interactivityAssetId: triggerGraphId,
+    },
+  });
+  current = { ...current, bundle: triggerAdded.bundle, revision: current.revision + 1 };
+  const triggerComponent = current.bundle.scene.entities[
+    primitiveId as string
+  ]?.components.find(
+    (component) => component.type === "interaction-trigger",
+  );
+  assert(
+    triggerComponent?.type === "interaction-trigger" &&
+      triggerComponent.interactivityAssetId === triggerGraphId,
+    "add_component should attach an Interaction Trigger to the named graph",
+  );
+  const triggerComponentId = triggerComponent?.id as string;
+
+  const triggerTargets = executeXriftMcpEditorTool(current, {
+    id: "fixture-trigger-targets",
+    tool: "list_interaction_trigger_targets",
+    arguments: {},
+  });
+  const listedTargets = triggerTargets.result.targets as Array<{
+    entityId: string;
+    components: Array<{ properties: Array<{ name: string }> }>;
+  }>;
+  const primitiveTarget = listedTargets.find(
+    (target) => target.entityId === primitiveId,
+  );
+  assert(
+    primitiveTarget?.components[0]?.properties.some(
+      (property) => property.name === "enabled",
+    ) === true,
+    "list_interaction_trigger_targets should report the writable properties per target",
+  );
+
+  let triggerAssetKindCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(current, {
+      id: "fixture-trigger-wrong-asset",
+      tool: "update_component",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        entityId: primitiveId,
+        componentId: triggerComponentId,
+        patch: { interactivityAssetId: BUILTIN_ASSET_IDS.material.blue },
+      },
+    });
+  } catch (error) {
+    triggerAssetKindCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    triggerAssetKindCode === "INVALID_ARGUMENT",
+    "update_component should reject an Interaction Trigger graph that is not an Interactivity Asset",
+  );
+
+  const triggerEntry = executeXriftMcpEditorTool(current, {
+    id: "fixture-trigger-on-interact",
+    tool: "add_interactivity_node",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: triggerGraphId,
+      op: "xrift/onInteract",
+    },
+  });
+  current = { ...current, bundle: triggerEntry.bundle, revision: current.revision + 1 };
+
+  const triggerAction = executeXriftMcpEditorTool(current, {
+    id: "fixture-trigger-set-property",
+    tool: "add_interactivity_node",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: triggerGraphId,
+      op: "xrift/setProperty",
+    },
+  });
+  current = { ...current, bundle: triggerAction.bundle, revision: current.revision + 1 };
+
+  const triggerFlow = executeXriftMcpEditorTool(current, {
+    id: "fixture-trigger-connect",
+    tool: "connect_interactivity_nodes",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: triggerGraphId,
+      kind: "flow",
+      sourceNode: 0,
+      sourceSocket: "out",
+      targetNode: 1,
+      targetSocket: "in",
+    },
+  });
+  current = { ...current, bundle: triggerFlow.bundle, revision: current.revision + 1 };
+
+  for (const [key, value] of [
+    ["entity", [primitiveId as string]],
+    ["targetKind", ["entity"]],
+    ["property", ["enabled"]],
+  ] as const) {
+    const configured = executeXriftMcpEditorTool(current, {
+      id: `fixture-trigger-configure-${key}`,
+      tool: "set_interactivity_configuration",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        assetId: triggerGraphId,
+        nodeIndex: 1,
+        key,
+        value,
+      },
+    });
+    current = { ...current, bundle: configured.bundle, revision: current.revision + 1 };
+  }
+
+  const wiredTrigger = current.bundle.scene.entities[
+    primitiveId as string
+  ]?.components.find(
+    (component) => component.type === "interaction-trigger",
+  );
+  assert(
+    wiredTrigger?.type === "interaction-trigger" &&
+      wiredTrigger.entityReferences.includes(primitiveId as string),
+    "An MCP graph write should re-derive the Interaction Trigger's entityReferences",
   );
 
   let missingEntityCode: string | undefined;

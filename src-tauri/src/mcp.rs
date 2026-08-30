@@ -2244,6 +2244,25 @@ fn material_texture_slot_schema() -> Value {
     })
 }
 
+/// One Terrain grass layer's override of its type's colour and blade size.
+///
+/// Every field is optional and absent means "follow the type"; `null` clears an
+/// override that was set earlier, which is not the same as leaving it out.
+fn terrain_grass_appearance_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "baseColor": { "type": ["string", "null"], "pattern": "^#[0-9a-fA-F]{6}$" },
+            "tipColor": { "type": ["string", "null"], "pattern": "^#[0-9a-fA-F]{6}$" },
+            "colorVariation": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "heightScale": { "type": ["number", "null"], "minimum": 0.2, "maximum": 4 },
+            "widthScale": { "type": ["number", "null"], "minimum": 0.2, "maximum": 4 },
+            "fill": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+        },
+        "additionalProperties": false
+    })
+}
+
 fn tool_definitions() -> Value {
     json!([
         {
@@ -2648,6 +2667,21 @@ fn tool_definitions() -> Value {
                     "modelAssetId": { "type": "string", "minLength": 1 }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "modelAssetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "process_texture_asset",
+            "description": "Run a Texture Asset's import settings against its source image, writing the resized or re-encoded result back into the project. update_texture_asset only records maxSize, format and quality; until this runs the original image is what ships. Reports the before and after size, or the reason the settings are already settled. Edit mode only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "textureAssetId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "textureAssetId"],
                 "additionalProperties": false
             }
         },
@@ -3217,6 +3251,140 @@ fn tool_definitions() -> Value {
                     "resolution": { "type": "integer", "minimum": 9, "maximum": 257 }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "entityId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "list_terrain_grass_types",
+            "description": "List the Terrain grass catalog: every grass type with its default blade size and colours, every one-step preset with the layers it expands into, and the density, slope, height-band and per-layer instance limits the grass tools enforce. Call this before adding or tuning a grass layer instead of guessing typeId or presetId values.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "apply_terrain_grass_preset",
+            "description": "Replace a Terrain's grass layers with one preset's stack, matching the Inspector's one-step vegetation button. This discards existing layers, including any painted coverage; use add_terrain_grass_layer to add to a stack instead.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "componentId": { "type": "string", "minLength": 1 },
+                    "presetId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "presetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "add_terrain_grass_layer",
+            "description": "Add one grass layer to a Terrain. Blades are placed by rule rather than stored, so a layer is a density, a world-height band, a slope limit and a seed; appearance overrides the type's colours and blade size for this layer only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "componentId": { "type": "string", "minLength": 1 },
+                    "typeId": { "type": "string", "minLength": 1 },
+                    "density": { "type": "number", "minimum": 0, "maximum": 40 },
+                    "heightRange": {
+                        "type": "array",
+                        "items": { "type": "number", "minimum": -1000, "maximum": 1000 },
+                        "minItems": 2,
+                        "maxItems": 2
+                    },
+                    "slopeLimitDegrees": { "type": "number", "minimum": 0, "maximum": 90 },
+                    "seed": { "type": "integer", "minimum": 0, "maximum": 2147483647 },
+                    "appearance": terrain_grass_appearance_schema()
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "typeId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "update_terrain_grass_layer",
+            "description": "Change one grass layer's type, density, height band, slope limit, seed or appearance, and optionally move it in the draw order with index. Send patch.appearance as null to drop every override back to the type, an appearance field as null to clear just that one, and patch.mask as null to discard painted coverage.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "componentId": { "type": "string", "minLength": 1 },
+                    "layerId": { "type": "string", "minLength": 1 },
+                    "index": { "type": "integer", "minimum": 0 },
+                    "patch": {
+                        "type": "object",
+                        "properties": {
+                            "typeId": { "type": "string", "minLength": 1 },
+                            "density": { "type": "number", "minimum": 0, "maximum": 40 },
+                            "heightRange": {
+                                "type": "array",
+                                "items": { "type": "number", "minimum": -1000, "maximum": 1000 },
+                                "minItems": 2,
+                                "maxItems": 2
+                            },
+                            "slopeLimitDegrees": { "type": "number", "minimum": 0, "maximum": 90 },
+                            "seed": { "type": "integer", "minimum": 0, "maximum": 2147483647 },
+                            "appearance": {
+                                "anyOf": [
+                                    terrain_grass_appearance_schema(),
+                                    { "type": "null" }
+                                ]
+                            },
+                            "mask": { "type": "null" }
+                        },
+                        "minProperties": 1,
+                        "additionalProperties": false
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "layerId", "patch"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "delete_terrain_grass_layer",
+            "description": "Remove one grass layer from a Terrain, along with any coverage painted on it.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "componentId": { "type": "string", "minLength": 1 },
+                    "layerId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "layerId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "paint_terrain_grass",
+            "description": "Paint or erase one grass layer's coverage with a soft-edged brush in Terrain-local X/Z. A layer's rules cannot express \"not here\", so this is how grass is kept off a path or a clearing; erasing everywhere a layer covers drops the mask again.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "componentId": { "type": "string", "minLength": 1 },
+                    "layerId": { "type": "string", "minLength": 1 },
+                    "mode": { "type": "string", "enum": ["paint", "erase"] },
+                    "center": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 2,
+                        "maxItems": 2
+                    },
+                    "radius": { "type": "number", "exclusiveMinimum": 0 },
+                    "strength": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "layerId", "mode", "center", "radius"],
                 "additionalProperties": false
             }
         },
@@ -3829,6 +3997,11 @@ fn tool_definitions() -> Value {
                 "required": ["assetId"],
                 "additionalProperties": false
             }
+        },
+        {
+            "name": "list_interaction_trigger_targets",
+            "description": "List every Entity and Component an Interaction Trigger action can write to, with the exact property names, value kinds, ranges and enum options each one accepts. Call this before wiring xrift/interaction action nodes: a property name that is not on this list validates as a graph and then does nothing at runtime.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         }
     ])
 }

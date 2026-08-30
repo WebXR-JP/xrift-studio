@@ -171,6 +171,8 @@ pnpm dev
 
 MCP serverはTauri側のbrokerを介して現在開いているEditorへ接続します。request size、tool名、timeoutを制限し、Editorが待機していない時は操作を受け付けません。配布時は`pnpm mcp:sidecar:prepare:release`でserver binaryを準備し、Tauri sidecarとして同梱します。
 
+公開しているEditor toolの一覧と、意図的に公開していない操作は[MCP editor toolの全体像](./docs/MCP_EDITOR_TOOLS.md)にまとめています。
+
 開発中の画面調査には従来のTauri Bridgeも利用できます。`pnpm tauri:dev`でデバッグ版を起動し、`.mcp.json`の`tauri`設定をMCP対応clientから読み込みます。Tauri Bridgeはデバッグビルド専用です。エージェント向けの実装ルールは[AGENT.md](./AGENT.md)にまとめています。
 
 画面をスクリーンショットで確認しながら開発する手順は[MCP画面デバッグガイド](./docs/MCP_DEBUGGING.md)にまとめています。Codexはリポジトリの`.mcp.json`をそのまま使えます。DeepSeekなど別のMCP hostでは、`pnpm mcp:debug-config`で生成した設定を追加してください。
