@@ -62,6 +62,44 @@ export function mcpOptionalInteger(
   return value;
 }
 
+export function mcpFiniteNumber(
+  value: unknown,
+  name: string,
+  minimum: number,
+  maximum: number,
+): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value < minimum ||
+    value > maximum
+  ) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      `${name}は${minimum}〜${maximum}の数値で指定してください`,
+    );
+  }
+  return value;
+}
+
+export function mcpOptionalVec3(
+  value: unknown,
+  name: string,
+): [number, number, number] | undefined {
+  if (value === undefined) return undefined;
+  if (
+    !Array.isArray(value) ||
+    value.length !== 3 ||
+    value.some((entry) => typeof entry !== "number" || !Number.isFinite(entry))
+  ) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      `${name}は有限な数値3つの配列で指定してください`,
+    );
+  }
+  return [value[0] as number, value[1] as number, value[2] as number];
+}
+
 export type McpExternalStoreWriteContext = {
   bundle: PrototypeVisualProject;
   editorMode: EditorMode;

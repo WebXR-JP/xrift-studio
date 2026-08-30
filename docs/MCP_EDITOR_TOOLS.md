@@ -27,7 +27,7 @@ document 以外は React shell か Tauri 側が持つ副作用を伴う。
 書き込み tool は `projectId`、`sceneId`、`expectedRevision` を要求する。古い
 snapshot への適用を弾くためで、複数 client が同時に触っても編集は直列化される。
 
-## document (71)
+## document (80)
 
 **Editor context / Project**
 `get_editor_context`, `get_scripting_capabilities`, `update_project_metadata`
@@ -41,14 +41,43 @@ snapshot への適用を弾くためで、複数 client が同時に触っても
 `get_audio_asset`, `get_model_asset`, `update_model_asset`,
 `get_texture_asset`, `update_texture_asset`, `get_particle_asset`,
 `update_particle_asset`, `get_material_asset`, `update_material_asset`,
-`set_material`, `set_material_texture_transform`, `create_custom_shader`,
+`set_material`, `set_material_texture_transform`, `list_material_presets`,
+`create_material_from_preset`, `create_texture_card`, `create_custom_shader`,
 `get_custom_shader`, `update_custom_shader`
+
+`create_custom_shader` は任意の GLSL を受けるので、「空っぽく見せる」には
+向かない道具。ゼロから書く caller はカタログが持っている数値を発明することに
+なる。`list_material_presets` は空・水・グローのカタログを、名前付きの
+パラメーターと範囲と既定値ごと返す。`create_material_from_preset` は Material
+を作って `nextStep` を返す。空は Scene settings の skybox が指して初めて空に
+なり、水は板ポリへ割り当てて初めて水面になるので、作っただけでは終わらない。
+Terrain の地面は形と一緒に選ぶものなので `list_terrain_presets` の方にある。
+
+`create_texture_card` は透過 Texture から遠景板・草カードを作る。手で組むと
+板ポリ、アルファブレンドの両面 Material、コライダー無し、円弧なら継ぎ目の
+出ないセグメントの扇と、設定を互いに合わせた 4〜5 回の呼び出しになる。
+Material と Entity を一件にまとめるので、Undo でカードだけ消えて Material が
+残ることもない。
 
 **Scene / Entity**
 `update_scene_settings`, `list_entities`, `get_entity_components`,
-`create_empty_entity`, `create_primitive`, `place_asset`,
-`place_builtin_prefab`, `create_prefab`, `rename_entity`, `duplicate_entity`,
-`reparent_entity`, `delete_entity`, `set_entity_enabled`, `update_transform`
+`get_entity_bounds`, `create_empty_entity`, `create_primitive`, `place_asset`,
+`list_scene_recipes`, `place_builtin_prefab`, `create_prefab`, `rename_entity`,
+`duplicate_entity`, `reparent_entity`, `delete_entity`, `set_entity_enabled`,
+`update_transform`
+
+`list_scene_recipes` は焚き火・松明・木・岩・雪・噴水・柱・階段・井戸・ベンチ・
+収録スタジオなどの出来合いの 3D セットを返す（配置は local-asset の
+`apply_scene_recipe`）。各セットは光・パーティクル・マテリアルが互いに
+噛み合った subtree で、同じものを primitive から組むと十数回の呼び出しで
+明らかに見劣りする。`note` は配置後に作者がまだやることなので、落とさず
+そのまま返す。
+
+`get_entity_bounds` は Transform ではなく**大きさ**を返す。`world` は既定で
+配下を含めた axis-aligned box、`local` は自身の Mesh の素の extent。回転して
+いる子は 8 隅を変換して含める箱にするので、重なり判定が安全側になる。extent
+を解決できない Mesh（metadata が無い時代の Model など）は union から黙って
+外さず `unmeasuredEntityIds` に出す。「小さい」と「不明」は違う。
 
 **Component**
 `list_component_definitions`, `add_component`, `update_component`,
@@ -58,7 +87,28 @@ snapshot への適用を弾くためで、複数 client が同時に触っても
 `inspect_colliders`, `optimize_colliders`
 
 **Terrain**
-`get_terrain`, `create_terrain`, `sculpt_terrain`, `update_terrain`
+`get_terrain`, `sample_terrain_point`, `list_terrain_presets`,
+`create_terrain`, `create_terrain_from_preset`, `sculpt_terrain`,
+`update_terrain`, `apply_terrain_surface`
+
+`create_terrain` が作るのは平らな板で、primitive としては正しいが出発点として
+は間違っている。Create メニューは形の preset を 8 種と表面カタログを出していて、
+primitive しか無い caller は谷をブラシで一打ずつ彫ることになる。
+`create_terrain_from_preset` は彫って草まで載った状態で置く。`position` を
+省くと既存の Terrain の隣へ逃がす。同じ地面に 2 枚重なるとモアレになるため。
+重なりは阻止せず `overlappingTerrainCount` で報告する。意図的に隣接させたい
+場合があるが、モアレで気付かせてはいけない。
+
+`apply_terrain_surface` は高さと傾斜でマテリアルを混ぜる表面 preset を貼る。
+preset の高さ帯は絶対値のメートルなので、既定ではその Terrain の標高範囲へ
+合わせ直す。合わせずに貼ると全部の境界が範囲外に出て一色になり、「シェーダー
+が壊れている」ように見える。貼った結果は通常の Material なので、あとから
+Material の tool で調整できる。
+
+`sample_terrain_point` は Terrain-local の XZ から、補間した高さ、同じ点の
+world 座標、傾斜、穴、草の層ごとの被覆を返す。document は高さを平坦な配列で
+持っていて caller は引けないので、これが無いと彫った地形の上へ y=0 で置いて
+しまう。
 
 **Terrain の草**
 `list_terrain_grass_types`, `apply_terrain_grass_preset`,
@@ -78,12 +128,16 @@ snapshot への適用を弾くためで、複数 client が同時に触っても
 **Component コードの取り込み**
 `analyze_component_code`, `apply_component_code_import_plan`
 
-## local-asset (10)
+## local-asset (11)
 
 `import_audio_asset`, `import_texture_asset`, `import_model_asset`,
 `import_skybox_asset`, `import_shader_asset`, `reimport_model_asset`,
-`process_texture_asset`, `get_shader_asset`, `update_shader_asset`,
-`set_project_thumbnail`
+`process_texture_asset`, `apply_scene_recipe`, `get_shader_asset`,
+`update_shader_asset`, `set_project_thumbnail`
+
+`apply_scene_recipe` が document ではなく shell にあるのは、セットの部品の
+Model を project へ書き出すため。Particle Asset と subtree は一件の history
+にまとめる。セットを Undo したときに Asset だけ残らないようにするため。
 
 `update_texture_asset` が書けるのは import 設定 (`maxSize`、`format`、
 `quality`) だけで、原本の画像はそのまま残る。実際に解像度を変えて再エンコード
@@ -104,9 +158,25 @@ Script の実行境界と trust gate は [Scripting の契約](./SCRIPTING.md) �
 `search_external_assets`, `get_external_asset_options`,
 `install_external_asset`
 
-## debug (1)
+## debug (3)
 
-`capture_scene_debug`
+`capture_scene_debug`, `capture_scene_view`, `set_scene_view_camera`
+
+document を書き換えず、生きた Scene View を読む / 向きを変えるだけの 3 つ。
+Undo 履歴も選択も動かさない。
+
+- `capture_scene_debug` — fps、frame time、draw call、triangle、可視 Mesh 数、
+  カメラの Far。WebM の録画も start / stop で扱う
+- `capture_scene_view` — 描画そのままの PNG を 1 枚、app の
+  `debug-captures` へ保存してパスを返す。**数値と document は「何が映るはず
+  か」しか言わない。実際に何が映っているかを言うのはフレームだけ**
+- `set_scene_view_camera` — 俯瞰 (`top`) / 真下から (`bottom`) / 各軸 (`front`
+  `back` `left` `right`) / 既定の斜め (`iso`)、`focusEntityId` で Entity の
+  実描画 bounds へ寄る、あるいは `position` と `target` の直接指定。preset
+  だけを渡した場合は今の注視点を保つので、「いまの対象を上から見る」になる
+
+保存先を caller が選べないのは意図的。確認のために撮った画像は一時的な成果物
+なので、project ではなく app data へ置く。
 
 ## 意図的に公開していない操作
 

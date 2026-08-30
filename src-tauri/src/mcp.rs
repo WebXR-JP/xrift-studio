@@ -2888,6 +2888,50 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "capture_scene_view",
+            "description": "Save one PNG of the Scene View exactly as rendered and return its path in the app debug-captures directory. This is how a change is checked rather than assumed: metrics and the document say what should be on screen, and only a frame says what is. Point the camera with set_scene_view_camera first. Changes nothing in the project.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "set_scene_view_camera",
+            "description": "Move the Scene View camera. Give a named view (top and bottom look straight down and up, front/back/left/right look along an axis, iso is the default three-quarter view), or focusEntityId to frame one Entity's real rendered bounds the way the editor's focus shortcut does, or an explicit position and target. distance overrides how far back the camera sits. A named view with no Entity keeps the current look-at point, so switching to top answers what the current subject looks like from above. Returns the resulting position and target; changes nothing in the project.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "preset": {
+                        "type": "string",
+                        "enum": ["top", "bottom", "front", "back", "left", "right", "iso"]
+                    },
+                    "focusEntityId": { "type": "string", "minLength": 1 },
+                    "position": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3
+                    },
+                    "target": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3
+                    },
+                    "distance": { "type": "number", "minimum": 0.1, "maximum": 5000 }
+                },
+                "required": ["projectId", "sceneId"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "set_play_mode",
             "description": "Start or stop the visual editor Play session. Starting Play checks the project-scoped content-hash approval for every referenced Script before evaluation. XRift Studio's stdio MCP editor tools cannot approve source; the debug-only privileged Tauri MCP bridge is outside this trust boundary. Unapproved source returns SCRIPT_APPROVAL_REQUIRED unless unapprovedPolicy is explicitly set to skip. Compilation failure leaves the editor in Edit mode.",
             "inputSchema": {
@@ -3149,6 +3193,19 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "get_entity_bounds",
+            "description": "Measure how big an Entity actually is: the axis-aligned world box (min, max, center, size) for the Entity and, by default, its whole subtree, plus its own untransformed local box. get_entity_components returns a Transform and no extent, so this is what answers whether two things overlap, how high to place something, or how far apart to space a row. unmeasuredEntityIds names Entities whose Mesh extent could not be resolved rather than leaving them out of the box.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "includeDescendants": { "type": "boolean" }
+                },
+                "required": ["entityId"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "create_primitive",
             "description": "Create a builtin primitive shape (box, sphere, cylinder, cone, or plane) as a new scene entity.",
             "inputSchema": {
@@ -3180,6 +3237,75 @@ fn tool_definitions() -> Value {
                     "componentId": { "type": "string", "minLength": 1 }
                 },
                 "required": ["entityId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "sample_terrain_point",
+            "description": "Read the ground at one Terrain-local X/Z: the interpolated height, the same point in world space, the slope in degrees, whether the cell is a hole, and each grass layer's coverage there. Call this before placing anything on a sculpted Terrain — the document stores heights as a flat array, so y=0 is only correct on ground nobody has raised.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "componentId": { "type": "string", "minLength": 1 },
+                    "point": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 2,
+                        "maxItems": 2
+                    }
+                },
+                "required": ["entityId", "point"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "list_terrain_presets",
+            "description": "List the shaped Terrain presets the Create menu offers (meadow, rolling hills, valley, plateau, island, ridge, basin, dunes) with their footprint and default grass set, and the ground surface catalog with each surface's tunable uniforms, ranges and defaults. create_terrain only makes a flat plate; these are what a shaped, planted, textured Terrain starts from.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "create_terrain_from_preset",
+            "description": "Place a shaped Terrain from a preset, already sculpted and planted, instead of sculpting a flat plate stamp by stamp. Omit grassPresetId to keep the preset's own grass, or pass null to place it bare. Omit position and it lands clear of the Terrains already in the scene, because two Terrains over the same ground tear into moire bands; overlappingTerrainCount reports any overlap rather than blocking it.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "presetId": { "type": "string", "minLength": 1 },
+                    "grassPresetId": { "type": ["string", "null"] },
+                    "materialAssetId": { "type": "string", "minLength": 1 },
+                    "position": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "presetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "apply_terrain_surface",
+            "description": "Paint a Terrain's ground with a surface preset from the catalog, blending materials by height and slope. The preset's height bands are absolute metres, so they are fitted to this Terrain's own elevation range unless parameters are given — applied unchanged on a Terrain of a different scale the ground comes out one flat colour, which reads as a broken shader. The surface lands as an ordinary Material, so it can be retuned afterwards with the Material tools.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "componentId": { "type": "string", "minLength": 1 },
+                    "surfaceId": { "type": "string", "minLength": 1 },
+                    "parameters": {
+                        "type": "object",
+                        "description": "Uniform values from list_terrain_presets; numbers are clamped to the listed range and colours are #rrggbb.",
+                        "additionalProperties": { "type": ["number", "string"] }
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "surfaceId"],
                 "additionalProperties": false
             }
         },
@@ -3385,6 +3511,32 @@ fn tool_definitions() -> Value {
                     "strength": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "entityId", "layerId", "mode", "center", "radius"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "list_scene_recipes",
+            "description": "List the ready-made 3D sets available for this project kind — campfire, torch, tree, rocks, snowfall, fountain, column, stairs, well, bench, recording studio and more — with their category, part count and the note saying what the author still has to do after placing. Each set is a subtree whose lights, particles and materials already agree with one another; building the same thing from primitives takes a dozen calls and comes out worse.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "apply_scene_recipe",
+            "description": "Place one ready-made 3D set into the scene as a single subtree, creating the Particle Assets and writing the bundled Models it needs. Returns the root Entity, its children and any Assets created, so each part can be adjusted afterwards. Omit position and it lands on the same grid the catalog uses rather than stacking at the origin. Requires a saved project; Edit mode only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "recipeId": { "type": "string", "minLength": 1 },
+                    "position": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "recipeId"],
                 "additionalProperties": false
             }
         },
@@ -3662,6 +3814,51 @@ fn tool_definitions() -> Value {
                     }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "materialAssetId", "patch"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "list_material_presets",
+            "description": "List the Material catalogs an author picks from: sky shaders by category, water surfaces, and glow tints for emissive fixtures, each with its named parameters, ranges and defaults. create_custom_shader takes arbitrary GLSL, which is the wrong tool for \"make this look like a sky\" — writing one from scratch invents numbers this catalog already has. Terrain ground surfaces are in list_terrain_presets instead, because they are chosen together with a Terrain shape.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "create_material_from_preset",
+            "description": "Create one Material from a catalog preset: a sky or water shader Material with optional parameter overrides, or a glow tint. Returns the Material Asset id and the next step, because neither is finished on its own — a sky Material becomes the sky only once update_scene_settings points the skybox at it, and water is a Material assigned to a plane with set_material. Re-creating an already installed preset reports alreadyInstalled rather than duplicating it.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "kind": { "type": "string", "enum": ["sky", "water", "glow"] },
+                    "presetId": { "type": "string", "minLength": 1 },
+                    "parameters": {
+                        "type": "object",
+                        "description": "Uniform values from list_material_presets; numbers are clamped to the listed range and colours are #rrggbb. Not accepted for glow.",
+                        "additionalProperties": { "type": ["number", "string"] }
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "kind", "presetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "create_texture_card",
+            "description": "Turn a transparent Texture into a cut-out card Entity: a flat or curved distant backdrop, or a single or crossed grass card. Creates the alpha-blended two-sided Material and the collider-free Entity in one transaction, so undoing the card does not leave its Material behind. Environment Textures are rejected — they belong on the skybox.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "textureAssetId": { "type": "string", "minLength": 1 },
+                    "profile": {
+                        "type": "string",
+                        "enum": ["backdrop-flat", "backdrop-arc-180", "backdrop-arc-270", "grass-single", "grass-cross"]
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "textureAssetId", "profile"],
                 "additionalProperties": false
             }
         },

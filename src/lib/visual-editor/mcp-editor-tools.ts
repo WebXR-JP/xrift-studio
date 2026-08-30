@@ -75,8 +75,59 @@ import {
   type MeshVisibilityPatch,
 } from "./scene-document";
 import {
+  entityWorldMatrix,
+  getEntityWorldBounds,
+  transformPointByMatrix,
+} from "./entity-bounds";
+import {
+  DEFAULT_TERRAIN_SPAN,
+  TERRAIN_PRESETS,
+  createTerrainFromPreset,
+  findTerrainOverlaps,
+  getTerrainPreset,
+  nextTerrainPosition,
+  type TerrainFootprint,
+} from "./terrain-presets";
+import {
+  TERRAIN_SURFACE_CATALOG,
+  TERRAIN_SURFACE_CATALOG_REVISION,
+  defaultTerrainSurfaceParameterValues,
+  fitTerrainSurfaceToRange,
+  getTerrainSurfacePreset,
+} from "./terrain-surface-catalog";
+import {
+  applySkyShaderCatalogInstall,
+  applyTerrainSurfaceCatalogInstall,
+  applyWaterShaderCatalogInstall,
+} from "./external-store";
+import {
+  SKY_SHADER_CATALOG,
+  defaultSkyShaderParameterValues,
+  getSkyShaderCatalogEntry,
+  skyShaderCategoryLabel,
+  type SkyShaderCatalogEntry,
+} from "./sky-shader-catalog";
+import {
+  WATER_SHADER_CATALOG,
+  defaultWaterShaderParameterValues,
+  getWaterShaderCatalogEntry,
+  type WaterShaderCatalogEntry,
+} from "./water-shader-catalog";
+import {
+  GLOW_MATERIAL_PRESETS,
+  createGlowMaterialAsset,
+  getGlowMaterialPreset,
+} from "./glow-material-catalog";
+import {
+  SCENE_RECIPE_CATEGORY_LABELS,
+  getSceneRecipesForProjectKind,
+} from "./scene-recipe-catalog";
+import { createTextureCard } from "./texture-card";
+import {
+  terrainCellHasHole,
   terrainHeightRange,
   TERRAIN_BRUSH_KINDS,
+  TERRAIN_MATERIAL_SLOT,
   TERRAIN_HEIGHT_ABSOLUTE_MAX,
   TERRAIN_RESOLUTION_MAX,
   TERRAIN_RESOLUTION_MIN,
@@ -97,6 +148,9 @@ import {
   getTerrainGrassType,
   isTerrainGrassLayer,
   resolveTerrainGrassAppearance,
+  sampleTerrainGrassMask,
+  sampleTerrainHeight,
+  sampleTerrainSlopeDegrees,
   type TerrainGrassAppearance,
   type TerrainGrassLayer,
   type TerrainGrassTypeId,
@@ -299,9 +353,14 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   list_entities: listEntities,
   list_component_definitions: listComponentDefinitions,
   get_entity_components: getEntityComponents,
+  get_entity_bounds: getEntityBounds,
   create_primitive: createPrimitive,
   get_terrain: getTerrain,
+  sample_terrain_point: sampleTerrainPoint,
+  list_terrain_presets: listTerrainPresets,
   create_terrain: createTerrain,
+  create_terrain_from_preset: createTerrainFromPresetTool,
+  apply_terrain_surface: applyTerrainSurface,
   sculpt_terrain: sculptTerrain,
   update_terrain: updateTerrain,
   list_terrain_grass_types: listTerrainGrassTypes,
@@ -310,6 +369,7 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   update_terrain_grass_layer: updateTerrainGrassLayer,
   delete_terrain_grass_layer: deleteTerrainGrassLayer,
   paint_terrain_grass: paintTerrainGrass,
+  list_scene_recipes: listSceneRecipes,
   place_builtin_prefab: placeBuiltinPrefab,
   create_prefab: createPrefab,
   add_component: addComponent,
@@ -321,6 +381,9 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   set_material: setMaterial,
   get_material_asset: getMaterial,
   update_material_asset: updateMaterial,
+  list_material_presets: listMaterialPresets,
+  create_material_from_preset: createMaterialFromPreset,
+  create_texture_card: createTextureCardTool,
   create_custom_shader: createCustomShader,
   get_custom_shader: getCustomShader,
   update_custom_shader: updateCustomShader,
@@ -1996,6 +2059,750 @@ function updateTerrain(
     },
     activity: `AIがTerrain「${entity.name}」のサイズと解像度を更新しました`,
   };
+}
+
+/**
+ * The Material catalogs: skies, water, and the glow tints for light fixtures.
+ *
+ * `create_custom_shader` accepts arbitrary GLSL, which is the wrong tool for
+ * "make this look like a sky": a caller writing one from scratch is inventing
+ * numbers the catalog already has, and the result is not the sky an author
+ * would have picked from the same menu. The sky and water entries are shader
+ * Materials with named, ranged parameters; glow is a tint for the emissive
+ * fixtures the primitive catalog places.
+ */
+function listMaterialPresets(
+  context: XriftMcpEditorContext,
+): XriftMcpEditorToolOutcome {
+  const describeParameters = (
+    parameters: readonly {
+      uniform: string;
+      label: string;
+      hint: string;
+      kind: "number" | "color";
+      min?: number;
+      max?: number;
+      step?: number;
+    }[],
+    defaults: Record<string, number | string>,
+  ) =>
+    parameters.map((parameter) => ({
+      uniform: parameter.uniform,
+      label: parameter.label,
+      hint: parameter.hint,
+      kind: parameter.kind,
+      ...(parameter.kind === "number"
+        ? { min: parameter.min, max: parameter.max, step: parameter.step }
+        : {}),
+      default: defaults[parameter.uniform],
+    }));
+  return unchanged(
+    context,
+    {
+      sky: SKY_SHADER_CATALOG.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        category: entry.category,
+        categoryLabel: skyShaderCategoryLabel(entry.category),
+        description: entry.description,
+        parameters: describeParameters(
+          entry.parameters,
+          defaultSkyShaderParameterValues(entry),
+        ),
+      })),
+      water: WATER_SHADER_CATALOG.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        description: entry.description,
+        parameters: describeParameters(
+          entry.parameters,
+          defaultWaterShaderParameterValues(entry),
+        ),
+      })),
+      glow: GLOW_MATERIAL_PRESETS.map((preset) => ({
+        id: preset.id,
+        label: preset.label,
+        description: preset.description,
+        tint: preset.tint,
+      })),
+      // Terrain ground surfaces are their own catalog because they are chosen
+      // with a Terrain shape rather than on their own.
+      terrainSurfacesIn: "list_terrain_presets",
+    },
+    "Material presetの一覧を取得しました",
+  );
+}
+
+const MATERIAL_PRESET_KINDS = ["sky", "water", "glow"] as const;
+
+function createMaterialFromPreset(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const kind = requiredEnum(argumentsValue.kind, "kind", MATERIAL_PRESET_KINDS);
+  const presetId = requiredString(argumentsValue.presetId, "presetId");
+
+  if (kind === "glow") {
+    if (argumentsValue.parameters !== undefined) {
+      invalidArgument("parameters", "omitted for a glow preset");
+    }
+    const preset = getGlowMaterialPreset(presetId);
+    if (!preset) {
+      throw new XriftMcpEditorToolError(
+        "MATERIAL_PRESET_NOT_FOUND",
+        "指定されたglow presetが見つかりません",
+        {
+          presetId,
+          presetIds: GLOW_MATERIAL_PRESETS.map((entry) => entry.id),
+        },
+      );
+    }
+    const asset = createGlowMaterialAsset(preset);
+    const existing = context.bundle.assets.assets[asset.id];
+    if (existing?.kind === "material") {
+      return unchanged(
+        context,
+        {
+          projectId: context.bundle.project.projectId,
+          sceneId: context.bundle.scene.sceneId,
+          revision: context.revision,
+          kind,
+          presetId,
+          materialAssetId: asset.id,
+          alreadyInstalled: true,
+        },
+        `glow「${preset.label}」はすでにProjectにあります`,
+      );
+    }
+    const assets = {
+      ...context.bundle.assets,
+      assets: { ...context.bundle.assets.assets, [asset.id]: asset },
+    };
+    const bundle = touchProject(context, { ...context.bundle, assets });
+    return {
+      changed: true,
+      bundle,
+      sceneSelection: context.sceneSelection,
+      assetSelection: asset.id,
+      result: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        revisionBefore: context.revision,
+        revisionAfter: context.revision + 1,
+        kind,
+        presetId,
+        materialAssetId: asset.id,
+        alreadyInstalled: false,
+      },
+      activity: `AIがglow Material「${preset.label}」を追加しました`,
+    };
+  }
+
+  const entry =
+    kind === "sky"
+      ? getSkyShaderCatalogEntry(presetId)
+      : getWaterShaderCatalogEntry(presetId);
+  if (!entry) {
+    throw new XriftMcpEditorToolError(
+      "MATERIAL_PRESET_NOT_FOUND",
+      "指定されたMaterial presetが見つかりません",
+      {
+        kind,
+        presetId,
+        presetIds: (kind === "sky"
+          ? SKY_SHADER_CATALOG
+          : WATER_SHADER_CATALOG
+        ).map((candidate) => candidate.id),
+      },
+    );
+  }
+  const values =
+    kind === "sky"
+      ? defaultSkyShaderParameterValues(entry as SkyShaderCatalogEntry)
+      : defaultWaterShaderParameterValues(entry as WaterShaderCatalogEntry);
+  if (argumentsValue.parameters !== undefined) {
+    const supplied = recordValue(argumentsValue.parameters, "parameters");
+    assertObjectKeys(
+      supplied,
+      "parameters",
+      entry.parameters.map((parameter) => parameter.uniform),
+    );
+    for (const parameter of entry.parameters) {
+      const value = supplied[parameter.uniform];
+      if (value === undefined) continue;
+      if (parameter.kind === "number") {
+        values[parameter.uniform] = terrainMcpNumber(
+          value,
+          `parameters.${parameter.uniform}`,
+          parameter.min,
+          parameter.min,
+          parameter.max,
+        );
+        continue;
+      }
+      if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) {
+        invalidArgument(`parameters.${parameter.uniform}`, "a #rrggbb colour");
+      }
+      values[parameter.uniform] = value.toLowerCase();
+    }
+  }
+  const installed =
+    kind === "sky"
+      ? applySkyShaderCatalogInstall(
+          context.bundle.assets,
+          entry as SkyShaderCatalogEntry,
+          values,
+        )
+      : applyWaterShaderCatalogInstall(
+          context.bundle.assets,
+          entry as WaterShaderCatalogEntry,
+          values,
+        );
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    assets: installed.manifest,
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: installed.primaryAssetId,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      kind,
+      presetId,
+      materialAssetId: installed.primaryAssetId,
+      alreadyInstalled: installed.alreadyInstalled,
+      parameters: values,
+      // A sky Material only becomes the sky once the Scene points at it, and
+      // water is a Material on a plane. Neither happens here.
+      nextStep:
+        kind === "sky"
+          ? "update_scene_settings の skybox でこのMaterialを指定してください"
+          : "set_material で板ポリなどのMesh slotへ割り当ててください",
+    },
+    activity: `AIが${kind === "sky" ? "Skybox" : "Water"} Material「${entry.label}」を追加しました`,
+  };
+}
+
+const TEXTURE_CARD_PROFILES = [
+  "backdrop-flat",
+  "backdrop-arc-180",
+  "backdrop-arc-270",
+  "grass-single",
+  "grass-cross",
+] as const;
+
+/**
+ * A cut-out card from a transparent Texture: a distant backdrop, or grass.
+ *
+ * Assembling one by hand means a plane, an alpha-blended two-sided Material,
+ * no collider, and for the arcs a fan of segments that meet without seams —
+ * four or five calls whose settings have to agree. The single call keeps the
+ * Material and the Entity in one transaction, so an undone card does not leave
+ * its Material behind.
+ */
+function createTextureCardTool(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const textureAssetId = requiredString(
+    argumentsValue.textureAssetId,
+    "textureAssetId",
+  );
+  const profile = requiredEnum(
+    argumentsValue.profile,
+    "profile",
+    TEXTURE_CARD_PROFILES,
+  );
+  const created = createTextureCard(context.bundle.scene, context.bundle.assets, {
+    textureAssetId,
+    materialId: createDocumentId("material-card"),
+    profile,
+  });
+  if (!created.created) {
+    throw new XriftMcpEditorToolError(
+      created.reason === "texture-missing"
+        ? "TEXTURE_NOT_FOUND"
+        : created.reason === "environment-texture"
+          ? "ASSET_KIND_MISMATCH"
+          : "TEXTURE_CARD_CREATE_FAILED",
+      created.reason === "texture-missing"
+        ? "指定されたTexture Assetが見つかりません"
+        : created.reason === "environment-texture"
+          ? "環境Textureは遠景・草カードに使用できません"
+          : "カードを作成できませんでした",
+      { textureAssetId, profile, reason: created.reason },
+    );
+  }
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    assets: created.assets,
+    scene: created.scene,
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: created.entityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      textureAssetId,
+      profile,
+      entityId: created.entityId,
+      entityName: created.entityName,
+      materialAssetId: created.materialId,
+    },
+    activity: `AIが「${created.entityName}」をSceneへ作成しました`,
+  };
+}
+
+/**
+ * The ready-made sets: a campfire, a well, a stairway, a recording studio.
+ *
+ * Each recipe is a small subtree with its lights, particles and materials
+ * already agreeing with one another. Built part by part from primitives the
+ * result is recognisably worse, and takes a dozen tool calls to get there, so
+ * a caller that cannot see this catalog reaches for the harder path by default.
+ *
+ * `note` is what the author still has to do themselves after placing, and it
+ * is carried through rather than dropped: it is the difference between a set
+ * that works and one that looks placed and does nothing.
+ */
+function listSceneRecipes(
+  context: XriftMcpEditorContext,
+): XriftMcpEditorToolOutcome {
+  const projectKind = context.bundle.project.projectKind;
+  const recipes = getSceneRecipesForProjectKind(projectKind);
+  return unchanged(
+    context,
+    {
+      projectKind,
+      recipes: recipes.map((recipe) => ({
+        id: recipe.id,
+        name: recipe.name,
+        description: recipe.description,
+        category: recipe.category,
+        categoryLabel: SCENE_RECIPE_CATEGORY_LABELS[recipe.category],
+        note: recipe.note,
+        partCount: recipe.parts.length,
+        partKinds: [...new Set(recipe.parts.map((part) => part.kind))],
+      })),
+      count: recipes.length,
+      categories: Object.entries(SCENE_RECIPE_CATEGORY_LABELS).map(
+        ([id, label]) => ({ id, label }),
+      ),
+    },
+    "3Dセットの一覧を取得しました",
+  );
+}
+
+/**
+ * The shaped Terrains and the ground surfaces an author can start from.
+ *
+ * `create_terrain` makes a flat plate, which is the right primitive and the
+ * wrong starting point: the Create menu offers eight shaped presets and a
+ * surface catalog, and a caller with only the primitive had to sculpt a valley
+ * one brush stamp at a time. Both catalogs come back together because the two
+ * choices are made together — a shape and what it is made of.
+ */
+function listTerrainPresets(
+  context: XriftMcpEditorContext,
+): XriftMcpEditorToolOutcome {
+  return unchanged(
+    context,
+    {
+      presets: TERRAIN_PRESETS.map((preset) => ({
+        id: preset.id,
+        label: preset.label,
+        description: preset.description,
+        width: preset.width,
+        depth: preset.depth,
+        resolution: preset.resolution,
+        grassPresetId: preset.grassPresetId,
+      })),
+      surfaces: TERRAIN_SURFACE_CATALOG.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        category: entry.category,
+        description: entry.description,
+        parameters: entry.parameters.map((parameter) => ({
+          uniform: parameter.uniform,
+          label: parameter.label,
+          hint: parameter.hint,
+          kind: parameter.kind,
+          ...(parameter.kind === "number"
+            ? { min: parameter.min, max: parameter.max, step: parameter.step }
+            : {}),
+          default: defaultTerrainSurfaceParameterValues(entry)[
+            parameter.uniform
+          ],
+        })),
+      })),
+      catalogRevision: TERRAIN_SURFACE_CATALOG_REVISION,
+    },
+    "Terrainのpresetと表面カタログを取得しました",
+  );
+}
+
+function createTerrainFromPresetTool(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const presetId = requiredString(argumentsValue.presetId, "presetId");
+  const preset = getTerrainPreset(presetId);
+  if (!preset) {
+    throw new XriftMcpEditorToolError(
+      "TERRAIN_PRESET_NOT_FOUND",
+      "指定されたTerrain presetが見つかりません",
+      { presetId, presetIds: TERRAIN_PRESETS.map((entry) => entry.id) },
+    );
+  }
+  // `undefined` keeps the preset's own grass; an explicit null places it bare.
+  const hasGrassOverride = Object.prototype.hasOwnProperty.call(
+    argumentsValue,
+    "grassPresetId",
+  );
+  const grassPresetId = hasGrassOverride
+    ? optionalNullableString(argumentsValue.grassPresetId, "grassPresetId")
+    : undefined;
+  if (grassPresetId && !getTerrainGrassPreset(grassPresetId)) {
+    throw new XriftMcpEditorToolError(
+      "TERRAIN_GRASS_PRESET_NOT_FOUND",
+      "指定された草のセットが見つかりません",
+      { grassPresetId },
+    );
+  }
+  const geometry = createTerrainFromPreset(preset, grassPresetId);
+  const requestedMaterialAssetId = optionalString(
+    argumentsValue.materialAssetId,
+  );
+  const materialAssetId =
+    requestedMaterialAssetId ??
+    Object.values(context.bundle.assets.assets).find(
+      (asset) => asset.kind === "material",
+    )?.id;
+  if (!materialAssetId) {
+    throw new XriftMcpEditorToolError(
+      "NO_MATERIAL_AVAILABLE",
+      "ProjectにTerrainへ割り当てられるMaterialがありません",
+    );
+  }
+  // Two Terrains over the same ground are two nearly coplanar surfaces that
+  // tear into moire bands, so a new one lands clear of the existing row unless
+  // the caller places it deliberately.
+  const position =
+    optionalVec3(argumentsValue.position, "position") ??
+    nextTerrainPosition(
+      collectTerrainFootprintsForMcp(context.bundle.scene),
+      geometry.width || DEFAULT_TERRAIN_SPAN,
+    );
+  const created = addTerrainEntity(
+    context.bundle.scene,
+    context.bundle.assets,
+    materialAssetId,
+    { ...geometry, name: preset.label, position },
+  );
+  if (!created) {
+    throw new XriftMcpEditorToolError(
+      "TERRAIN_CREATE_FAILED",
+      "指定されたMaterialでTerrainを作成できません",
+      { materialAssetId },
+    );
+  }
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    scene: created.scene,
+  });
+  const overlaps = findTerrainOverlaps(
+    collectTerrainFootprintsForMcp(created.scene),
+  );
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: created.entityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId: created.entityId,
+      presetId,
+      grassPresetId: grassPresetId ?? preset.grassPresetId,
+      width: geometry.width,
+      depth: geometry.depth,
+      resolution: geometry.resolution,
+      position,
+      materialAssetId,
+      // Reported rather than blocked: an author may want two Terrains meeting
+      // on purpose, but they should never find out from the moire.
+      overlappingTerrainCount: overlaps.length,
+    },
+    activity: `AIがTerrain preset「${preset.label}」をSceneへ配置しました`,
+  };
+}
+
+/**
+ * Paints a Terrain's ground with one of the catalog's height/slope surfaces.
+ *
+ * The preset's height bands are metres, and a Terrain may span two of them or
+ * eighty. Applied unchanged, every edge would fall outside the range and the
+ * ground would come out one flat colour, which reads as a broken shader rather
+ * than a mistuned one — so the bands are fitted to this Terrain's own range
+ * unless the caller supplies values.
+ */
+function applyTerrainSurface(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const target = requireTerrain(context, argumentsValue);
+  const surfaceId = requiredString(argumentsValue.surfaceId, "surfaceId");
+  const entry = getTerrainSurfacePreset(surfaceId);
+  if (!entry) {
+    throw new XriftMcpEditorToolError(
+      "TERRAIN_SURFACE_NOT_FOUND",
+      "指定された表面presetが見つかりません",
+      {
+        surfaceId,
+        surfaceIds: TERRAIN_SURFACE_CATALOG.map((candidate) => candidate.id),
+      },
+    );
+  }
+  const fitted = fitTerrainSurfaceToRange(
+    entry,
+    terrainHeightRange(target.terrain),
+  );
+  const values = { ...fitted };
+  if (argumentsValue.parameters !== undefined) {
+    const supplied = recordValue(argumentsValue.parameters, "parameters");
+    assertObjectKeys(
+      supplied,
+      "parameters",
+      entry.parameters.map((parameter) => parameter.uniform),
+    );
+    for (const parameter of entry.parameters) {
+      const value = supplied[parameter.uniform];
+      if (value === undefined) continue;
+      if (parameter.kind === "number") {
+        values[parameter.uniform] = terrainMcpNumber(
+          value,
+          `parameters.${parameter.uniform}`,
+          parameter.min,
+          parameter.min,
+          parameter.max,
+        );
+        continue;
+      }
+      if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) {
+        invalidArgument(`parameters.${parameter.uniform}`, "a #rrggbb colour");
+      }
+      values[parameter.uniform] = value.toLowerCase();
+    }
+  }
+  const installed = applyTerrainSurfaceCatalogInstall(
+    context.bundle.assets,
+    entry,
+    values,
+  );
+  const scene = setMeshMaterialBinding(
+    context.bundle.scene,
+    installed.manifest,
+    target.entityId,
+    TERRAIN_MATERIAL_SLOT,
+    installed.primaryAssetId,
+    target.mesh.id,
+  );
+  const assetsChanged = installed.manifest !== context.bundle.assets;
+  if (scene === context.bundle.scene && !assetsChanged) {
+    return unchanged(
+      context,
+      {
+        projectId: context.bundle.project.projectId,
+        sceneId: context.bundle.scene.sceneId,
+        revision: context.revision,
+        entityId: target.entityId,
+        componentId: target.mesh.id,
+        surfaceId,
+        materialAssetId: installed.primaryAssetId,
+        parameters: values,
+      },
+      `Terrainの表面はすでに「${entry.label}」です`,
+    );
+  }
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    assets: installed.manifest,
+    scene,
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: target.entityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId: target.entityId,
+      componentId: target.mesh.id,
+      surfaceId,
+      // The surface lands as a normal Material, so it can be retuned with the
+      // Material tools afterwards rather than only through this catalog.
+      materialAssetId: installed.primaryAssetId,
+      parameters: values,
+    },
+    activity: `AIがTerrain「${target.entity.name}」の表面へ「${entry.label}」を適用しました`,
+  };
+}
+
+/** Footprints as the Terrain layout helpers expect them. */
+function collectTerrainFootprintsForMcp(
+  scene: SceneDocument,
+): TerrainFootprint[] {
+  const footprints: TerrainFootprint[] = [];
+  for (const entity of Object.values(scene.entities)) {
+    for (const component of entity.components) {
+      if (component.type !== "mesh") continue;
+      const terrain = getTerrainGeometry(component);
+      if (!terrain) continue;
+      const transform = entity.components.find(
+        (candidate): candidate is Extract<SceneComponent, { type: "transform" }> =>
+          candidate.type === "transform",
+      );
+      footprints.push({
+        entityId: entity.id,
+        name: entity.name,
+        centerX: transform?.position?.[0] ?? 0,
+        centerZ: transform?.position?.[2] ?? 0,
+        width: terrain.width,
+        depth: terrain.depth,
+      });
+    }
+  }
+  return footprints;
+}
+
+/**
+ * What is actually at a point on a Terrain.
+ *
+ * Placement over MCP had no way to ask: a caller could sculpt a hill and then
+ * put a bench at y=0 through the middle of it, because the document records
+ * heights as a flat array the caller cannot index into meaningfully. Height,
+ * slope, holes and grass coverage are the four things that decide whether a
+ * spot is usable, so they are answered together rather than one tool each.
+ */
+function sampleTerrainPoint(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const target = requireTerrain(context, argumentsValue);
+  const point = optionalNumberTuple(argumentsValue.point, "point", 2);
+  if (!point) invalidArgument("point", "[x, z] in Terrain-local metres");
+  const { terrain } = target;
+  const [localX, localZ] = point;
+  const insideFootprint =
+    Math.abs(localX) <= terrain.width / 2 + 1e-6 &&
+    Math.abs(localZ) <= terrain.depth / 2 + 1e-6;
+  const height = sampleTerrainHeight(terrain, localX, localZ);
+  const cells = terrain.resolution - 1;
+  const cellX = Math.min(
+    Math.max(
+      Math.floor(((localX + terrain.width / 2) / terrain.width) * cells),
+      0,
+    ),
+    cells - 1,
+  );
+  const cellZ = Math.min(
+    Math.max(
+      Math.floor(((localZ + terrain.depth / 2) / terrain.depth) * cells),
+      0,
+    ),
+    cells - 1,
+  );
+  const worldMatrix = entityWorldMatrix(context.bundle.scene, target.entityId);
+  return unchanged(
+    context,
+    {
+      entityId: target.entityId,
+      componentId: target.mesh.id,
+      point: [localX, localZ],
+      // Outside the footprint the height field is clamped to its edge, so the
+      // answer is the rim rather than the ground under the caller's point.
+      insideFootprint,
+      height,
+      localPosition: [localX, height, localZ],
+      worldPosition: transformPointByMatrix(worldMatrix, [
+        localX,
+        height,
+        localZ,
+      ]),
+      slopeDegrees: sampleTerrainSlopeDegrees(terrain, localX, localZ),
+      hole: terrainCellHasHole(terrain, cellX, cellZ),
+      grass: (terrain.grass ?? []).map((layer) => ({
+        id: layer.id,
+        typeId: layer.typeId,
+        coverage: sampleTerrainGrassMask(terrain, layer.mask, localX, localZ),
+      })),
+    },
+    `Terrain「${target.entity.name}」の地点を取得しました`,
+  );
+}
+
+/**
+ * The axis-aligned world box of an Entity, and the size the caller never had.
+ *
+ * `get_entity_components` returns a Transform and no extent, so anything
+ * reasoning about the Scene from MCP alone has been placing things without
+ * knowing how big they are. `unmeasured` names the Entities whose Mesh could
+ * not be resolved — a Model imported before its metadata existed — because
+ * silently leaving one out of the union reads as "small", not as "unknown".
+ */
+function getEntityBounds(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const entity = requireEntity(context.bundle.scene, entityId);
+  const includeDescendants =
+    optionalBoolean(argumentsValue.includeDescendants, "includeDescendants") ??
+    true;
+  const bounds = getEntityWorldBounds(
+    context.bundle.scene,
+    context.bundle.assets,
+    entityId,
+    { includeDescendants },
+  );
+  return unchanged(
+    context,
+    {
+      entityId,
+      name: entity.name,
+      includeDescendants,
+      world: bounds.world,
+      local: bounds.local,
+      worldPosition: transformPointByMatrix(
+        entityWorldMatrix(context.bundle.scene, entityId),
+        [0, 0, 0],
+      ),
+      measuredEntityIds: bounds.measured,
+      unmeasuredEntityIds: bounds.unmeasured,
+    },
+    bounds.world
+      ? `Entity「${entity.name}」のboundsを取得しました`
+      : `Entity「${entity.name}」に測れるgeometryがありません`,
+  );
 }
 
 /**
