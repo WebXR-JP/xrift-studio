@@ -158,7 +158,7 @@ interacts with this Entity, and which Scene Component does it change.
 | Operation | Sockets | Configuration |
 | --- | --- | --- |
 | `xrift/onInteract` | flow `out` | none; the Entity carrying the graph is the source |
-| `xrift/setProperty` | flow `in`, `out`, value `value` | `entity`, `component`, `targetKind`, `property` |
+| `xrift/setProperty` | flow `in`, `out`, `done`, value `value`, `duration` | `entity`, `component`, `targetKind`, `property`, `easing` |
 | `xrift/toggleProperty` | flow `in`, `out` | the same four, restricted to an ON/OFF property |
 
 Each declaration names the extension, so the graph stays a valid
@@ -207,6 +207,19 @@ A timed write is the same node: `xrift/setProperty` takes a `duration` value
 socket and an `easing` configuration, and a positive duration interpolates
 instead of setting. That is what a fade, a dimming light or a moving door is
 made of, and it is one node because "move this over two seconds" is one thought.
+
+The node has two flow outputs because the two questions are different. `out`
+continues as soon as the change starts, which is how several things move at
+once; `done` continues when it has finished, which is how one thing follows
+another. A write with no duration finishes immediately and takes both, so a
+sequence built through `done` does not stall the day its author sets the
+duration back to zero.
+
+An overshooting curve returns a ratio above 1 on purpose, and the blend is not
+clamped, so「少し行き過ぎて戻る」really passes its target. What keeps that from
+leaving a property outside its range is the write itself: a value is clamped to
+the range the property declares as it is applied, which is the same protection
+a hand-typed value needs.
 
 The curves are a curated set rather than arbitrary beziers — `linear`,
 `ease-in`, `ease-out`, `ease-in-out`, `ease-in-strong`, `ease-out-strong`, and

@@ -2,9 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   Controls,
-  Handle,
   MiniMap,
-  Position,
   ReactFlow,
   ReactFlowProvider,
   useEdgesState,
@@ -13,7 +11,6 @@ import {
   type Connection,
   type Edge,
   type Node,
-  type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
@@ -21,24 +18,19 @@ import {
   collectInteractivityRuntimeDiagnostics,
   configureInteractivityMaterialPointer,
   appendInteractivityOperation,
-  getInteractivityOperationTemplate,
   getInteractivityRecipeRuntimeSupport,
-  getInteractivityRuntimeSupport,
   INTERACTIVITY_RECIPES,
   addInteractivityGraph,
-  applyEasing,
   autoLayoutInteractivityGraph,
   duplicateInteractivityNode,
   freeInteractivityNodePosition,
   isInteractivityTriggerActionOp,
   dryRunInteractivityGraph,
-  INTERACTIVITY_EASINGS,
   duplicateInteractivityGraph,
   removeInteractivityGraph,
   renameInteractivityGraph,
   KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS,
   KHR_INTERACTIVITY_OPERATION_TEMPLATES,
-  linearRgbToTint,
   parseKhrInteractivityExtension,
   readInteractivityNodePosition,
   readInteractivityTriggerActionDuration,
@@ -46,33 +38,25 @@ import {
   setInteractivityLiteralValue,
   setInteractivityTriggerActionDuration,
   setInteractivityTriggerActionEasing,
-  tintToLinearRgb,
   validateKhrInteractivityExtension,
   writeInteractivityNodePosition,
   type InteractivityAsset,
-  type InteractivityEasing,
-  type InteractivityOperationTemplate,
   type InteractivityRecipe,
-  type InteractivityRuntimeSupport,
   type KhrInteractivityExtension,
   type KhrInteractivityGraph,
   type KhrInteractivityJsonValue,
-  type KhrInteractivityNode,
   type MaterialAsset,
 } from "../../lib/visual-editor";
 import {
   configureInteractivityTriggerAction,
-  defaultTriggerActionValue,
   getXriftInteractionProperty,
   readInteractivityTriggerAction,
   setInteractivityTriggerActionValue,
-  xriftInteractionEnumIndex,
   XRIFT_INTERACTION_OPERATIONS,
   type XriftInteractionPropertyDescriptor,
   type XriftInteractionTargetKind,
 } from "../../lib/visual-editor";
 import {
-  describeInteractionTriggerAction,
   findInteractionTriggerTarget,
   findInteractionTriggerTargetComponent,
   type InteractionTriggerTargetEntity,
@@ -81,1014 +65,43 @@ import { EditorDialog } from "./EditorDialog";
 import { InteractivityTimeline } from "./InteractivityTimeline";
 import { EDITOR_ICONS } from "./editor-icons";
 import { CodeTokens } from "../CodeBlock";
+import {
+  CANVAS_GRID,
+  CANVAS_NAVIGATION,
+  CATEGORY_LABEL,
+  CATEGORY_MINIMAP_COLOR,
+  DELETE_KEY_CODES,
+  FIT_VIEW_OPTIONS,
+  NODE_CARD_WIDTH,
+  PALETTE_CATEGORY_ORDER,
+  nodeTypes,
+  type GraphFlowNode,
+} from "./InteractivityNodeCard";
+import {
+  applyConnectionToGraph,
+  parseHandle,
+  removeConnectionFromGraph,
+  removeNodesAndReindex,
+  toFlowEdges,
+  toFlowNodes,
+} from "./interactivity-graph-flow";
+import {
+  LiteralValueField,
+  TIMED_PROPERTY_KINDS,
+  TriggerTimingField,
+  TriggerValueField,
+} from "./InteractivityNodeFields";
 
-type GraphNodeCategory = InteractivityOperationTemplate["category"] | "extension";
 
-type GraphNodeData = {
-  index: number;
-  op: string;
-  label: string;
-  category: GraphNodeCategory;
-  flowInputs: string[];
-  flowOutputs: string[];
-  valueInputs: string[];
-  valueOutputs: string[];
-  runtimeSupport: InteractivityRuntimeSupport;
-  /** One-line description of an Interaction Trigger action's target. */
-  summary?: string;
-  /**
-   * When this node first ran in the timeline's dry run.
-   *
-   * `undefined` while the timeline is closed and nothing has been analysed;
-   * `null` once it has been, and this node never ran.
-   */
-  reachedSeconds?: number | null;
-};
-
-/**
- * Card label for an operation Play will not run.
- *
- * Only the two states an author has to act on are labelled; a fully executed
- * operation stays unmarked so the badge means something when it appears.
- */
-const RUNTIME_SUPPORT_BADGE: Partial<
-  Record<
-    InteractivityRuntimeSupport,
-    { label: string; title: string; className: string }
-  >
-> = {
-  ignored: {
-    label: "Play未対応",
-    title:
-      "Play の実行エンジンがこの operation を実行しません。詳細は右の Diagnostics を確認してください",
-    className: "border-amber-500/50 bg-amber-500/15 text-amber-200",
-  },
-  conditional: {
-    label: "接続が必要",
-    title:
-      "実行はされますが、対象の Entity・Model・Material へ接続されるまで何も変わりません",
-    className: "border-slate-400/40 bg-slate-400/10 text-slate-300",
-  },
-};
-
-type GraphFlowNode = Node<GraphNodeData, "interactivity">;
-
-/**
- * Node colours for a dark canvas.
- *
- * These were the light Tailwind steps (`bg-sky-50` and friends) while the
- * canvas sits at `slate-900` under `colorMode="dark"`, so every card glowed
- * white against it and the whole editor read as a different application from
- * the rest of Studio. The hue still carries the category; only the value
- * changed, so a graph an author already knows stays recognisable.
- */
-const CATEGORY_CLASS: Record<GraphNodeCategory, string> = {
-  event: "border-sky-500/70 bg-sky-950 text-sky-50",
-  flow: "border-violet-500/70 bg-violet-950 text-violet-50",
-  animation: "border-emerald-500/70 bg-emerald-950 text-emerald-50",
-  variable: "border-amber-500/70 bg-amber-950 text-amber-50",
-  pointer: "border-cyan-500/70 bg-cyan-950 text-cyan-50",
-  math: "border-slate-500/70 bg-slate-800 text-slate-50",
-  entity: "border-orange-500/70 bg-orange-950 text-orange-50",
-  extension: "border-fuchsia-500/70 bg-fuchsia-950 text-fuchsia-50",
-};
-
-/** The same hues as flat colours, so the minimap is a map and not a legend of its own. */
-const CATEGORY_MINIMAP_COLOR: Record<GraphNodeCategory, string> = {
-  event: "#0284c7",
-  flow: "#7c3aed",
-  animation: "#059669",
-  variable: "#d97706",
-  pointer: "#0891b2",
-  math: "#475569",
-  entity: "#ea580c",
-  extension: "#c026d3",
-};
-
-const CATEGORY_LABEL: Record<GraphNodeCategory, string> = {
-  event: "イベント",
-  flow: "フロー",
-  animation: "アニメーション",
-  variable: "変数",
-  pointer: "glTFプロパティ",
-  math: "数値",
-  entity: "Entity操作",
-  extension: "拡張",
-};
-
-const PALETTE_CATEGORY_ORDER: readonly GraphNodeCategory[] = [
-  "event",
-  "entity",
-  "flow",
-  "animation",
-  "pointer",
-  "variable",
-  "math",
-];
-
-/**
- * Stable prop identities for the canvas.
- *
- * A fresh array here re-subscribes React Flow's key handler on every render,
- * and a re-render triggered by the key press itself then misses the key up:
- * the handler stays latched and the *next* Delete does nothing at all.
- */
-const DELETE_KEY_CODES: string[] = ["Backspace", "Delete"];
-const FIT_VIEW_OPTIONS = { padding: 0.25 } as const;
-
-/**
- * Japanese names for the sockets an author actually reads.
- *
- * The canonical names are part of the KHR contract and stay in the saved JSON,
- * but `err`, `lastDelay` and `timeSinceLastTick` are not what a card should
- * show to someone building a sequence. The raw name stays in the row's tooltip,
- * so the two never drift apart in the author's head.
- */
-const SOCKET_LABELS: Readonly<Record<string, string>> = {
-  in: "入力",
-  out: "出力",
-  done: "完了後",
-  err: "失敗時",
-  cancel: "取り消し",
-  reset: "やり直し",
-  completed: "すべて完了後",
-  loopBody: "繰り返す先",
-  default: "その他",
-  condition: "条件",
-  selection: "選ぶ番号",
-  duration: "秒数",
-  delay: "待機ID",
-  lastDelay: "待機ID",
-  value: "値",
-  animation: "クリップ番号",
-  startTime: "開始位置",
-  endTime: "終了位置",
-  stopTime: "停止位置",
-  speed: "速度",
-  n: "回数",
-  startIndex: "開始番号",
-  endIndex: "終了番号",
-  index: "現在の番号",
-  currentCount: "通った回数",
-  remainingInputs: "残りの入力",
-  lastRemainingTime: "残り秒数",
-  event: "イベント",
-  timeSinceStart: "開始からの秒",
-  timeSinceLastTick: "前フレームからの秒",
-  material: "Material",
-  a: "A",
-  b: "B",
-  c: "C",
-  d: "D",
-};
-
-/** Numbered sockets read as positions, not as names. */
-function socketDisplayLabel(socket: string): string {
-  const named = SOCKET_LABELS[socket];
-  if (named) return named;
-  return /^\d+$/.test(socket) ? `${Number(socket) + 1}番目` : socket;
+/** True while a text field owns the keystroke, so editor shortcuts stand down. */
+function isTextEntryTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
-/**
- * Every node is the same width.
- *
- * A card that grew to fit its longest line pushed its own summary past the
- * border and made the canvas read as a pile of different objects. One width
- * means the graph reads as a structure, and nothing can stick out of a card.
- */
-const NODE_CARD_WIDTH = 256;
 
-const FLOW_SOCKET_COLOR = "#a78bfa";
-const VALUE_SOCKET_COLOR = "#22d3ee";
-
-const SOCKET_ROW_HEIGHT = 24;
-const SOCKET_ROW_PADDING = 8;
-
-/**
- * Where a socket handle sits inside the node body.
- *
- * This has to agree with the row layout below it, not with a constant tuned by
- * eye: a handle that floats away from the label it belongs to is what makes an
- * author drag a wire into the wrong socket.
- */
-function socketTop(index: number): number {
-  return SOCKET_ROW_PADDING + index * SOCKET_ROW_HEIGHT + SOCKET_ROW_HEIGHT / 2;
-}
-
-/**
- * How the canvas moves under the pointer.
- *
- * Wheel and trackpad pan; Ctrl and wheel zooms. The library default is the
- * opposite, so scrolling to look at the next node pushed the whole graph into
- * the distance instead of moving the canvas, which is the single thing that
- * made this editor feel like it was fighting the author.
- */
-/** Matches the background dots, so a snapped node lines up with what is drawn. */
-const CANVAS_GRID: [number, number] = [24, 24];
-
-const CANVAS_NAVIGATION = {
-  panOnScroll: true,
-  panOnDrag: true,
-  zoomOnScroll: false,
-  zoomOnPinch: true,
-  zoomOnDoubleClick: false,
-  minZoom: 0.2,
-  maxZoom: 2,
-} as const;
-
-function SocketRow({
-  socket,
-  side,
-  kind,
-}: {
-  socket: string;
-  side: "left" | "right";
-  kind: "flow" | "value";
-}) {
-  return (
-    <p
-      title={socket}
-      className={`h-6 truncate leading-6 ${side === "right" ? "text-right" : "text-left"} ${
-        kind === "flow" ? "font-semibold text-violet-200" : "text-cyan-200"
-      }`}
-    >
-      {socketDisplayLabel(socket)}
-    </p>
-  );
-}
-
-function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNode>) {
-  const badge = RUNTIME_SUPPORT_BADGE[data.runtimeSupport];
-  const reachedSeconds = data.reachedSeconds;
-  const unreached = reachedSeconds === null;
-  return (
-    <article
-      style={{ width: NODE_CARD_WIDTH }}
-      // No `overflow-hidden`: React Flow places the socket handles half outside
-      // the border on purpose, and clipping them would leave nothing to grab.
-      // The fixed width plus truncation is what keeps the content inside.
-      className={`rounded-lg border-2 shadow-lg transition-opacity ${
-        CATEGORY_CLASS[data.category]
-      } ${
-        selected ? "ring-2 ring-brand-400 ring-offset-2 ring-offset-slate-900" : ""
-      } ${unreached ? "opacity-45" : ""}`}
-    >
-      <header className="rounded-t-md border-b border-white/10 px-3 py-2">
-        <div className="flex items-center gap-1.5">
-          <p className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-[0.14em] opacity-60">
-            {CATEGORY_LABEL[data.category]}
-          </p>
-          {unreached ? (
-            <span
-              title="タイムラインの範囲内では、このノードは一度も動きませんでした"
-              className="shrink-0 rounded border border-slate-400/40 bg-slate-400/10 px-1.5 py-px text-[9px] font-semibold text-slate-300"
-            >
-              未到達
-            </span>
-          ) : reachedSeconds === undefined ? null : (
-            <span
-              title="タイムラインの実行で、このノードが最初に動いた時刻です"
-              className="shrink-0 rounded border border-emerald-400/40 bg-emerald-400/10 px-1.5 py-px text-[9px] font-semibold tabular-nums text-emerald-200"
-            >
-              {Math.round(reachedSeconds * 100) / 100}s
-            </span>
-          )}
-          {badge ? (
-            <span
-              title={badge.title}
-              className={`shrink-0 rounded border px-1.5 py-px text-[9px] font-semibold ${badge.className}`}
-            >
-              {badge.label}
-            </span>
-          ) : null}
-        </div>
-        <p
-          title={data.label}
-          className="mt-0.5 line-clamp-2 text-sm font-bold leading-5"
-        >
-          {data.label}
-        </p>
-        {data.summary ? (
-          <p
-            title={data.summary}
-            className="mt-1 line-clamp-2 text-[11px] leading-4 opacity-90"
-          >
-            {data.summary}
-          </p>
-        ) : null}
-        <code
-          title={data.op}
-          className="mt-0.5 block truncate text-[10px] opacity-60"
-        >
-          {data.op}
-        </code>
-      </header>
-      <div className="relative min-h-10 px-3 py-2 text-[11px]">
-        <div className="grid grid-cols-2 gap-x-4">
-          <div className="min-w-0">
-            {data.flowInputs.map((socket) => (
-              <SocketRow
-                key={`flow-in-${socket}`}
-                socket={socket}
-                side="left"
-                kind="flow"
-              />
-            ))}
-            {data.valueInputs.map((socket) => (
-              <SocketRow
-                key={`value-in-${socket}`}
-                socket={socket}
-                side="left"
-                kind="value"
-              />
-            ))}
-          </div>
-          <div className="min-w-0">
-            {data.flowOutputs.map((socket) => (
-              <SocketRow
-                key={`flow-out-${socket}`}
-                socket={socket}
-                side="right"
-                kind="flow"
-              />
-            ))}
-            {data.valueOutputs.map((socket) => (
-              <SocketRow
-                key={`value-out-${socket}`}
-                socket={socket}
-                side="right"
-                kind="value"
-              />
-            ))}
-          </div>
-        </div>
-        {data.flowInputs.map((socket, index) => (
-          <Handle
-            key={`flow-in-${socket}`}
-            id={`flow-in:${socket}`}
-            type="target"
-            position={Position.Left}
-            style={{ top: socketTop(index), width: 10, height: 10, background: FLOW_SOCKET_COLOR }}
-          />
-        ))}
-        {data.valueInputs.map((socket, index) => (
-          <Handle
-            key={`value-in-${socket}`}
-            id={`value-in:${socket}`}
-            type="target"
-            position={Position.Left}
-            style={{
-              top: socketTop(data.flowInputs.length + index),
-              width: 10,
-              height: 10,
-              borderRadius: 2,
-              background: VALUE_SOCKET_COLOR,
-            }}
-          />
-        ))}
-        {data.flowOutputs.map((socket, index) => (
-          <Handle
-            key={`flow-out-${socket}`}
-            id={`flow-out:${socket}`}
-            type="source"
-            position={Position.Right}
-            style={{ top: socketTop(index), width: 10, height: 10, background: FLOW_SOCKET_COLOR }}
-          />
-        ))}
-        {data.valueOutputs.map((socket, index) => (
-          <Handle
-            key={`value-out-${socket}`}
-            id={`value-out:${socket}`}
-            type="source"
-            position={Position.Right}
-            style={{
-              top: socketTop(data.flowOutputs.length + index),
-              width: 10,
-              height: 10,
-              borderRadius: 2,
-              background: VALUE_SOCKET_COLOR,
-            }}
-          />
-        ))}
-      </div>
-    </article>
-  );
-}
-
-const nodeTypes = { interactivity: InteractivityNodeCard };
-
-function triggerActionSummary(
-  graph: KhrInteractivityGraph,
-  index: number,
-  op: string,
-  targets: readonly InteractionTriggerTargetEntity[],
-): string | undefined {
-  const action = readInteractivityTriggerAction(graph, index);
-  if (!action) return undefined;
-  return describeInteractionTriggerAction(targets, {
-    ...action,
-    mode: op === XRIFT_INTERACTION_OPERATIONS.toggleProperty ? "toggle" : "set",
-    durationSeconds: readInteractivityTriggerActionDuration(graph, index),
-  });
-}
-
-function operationData(
-  graph: KhrInteractivityGraph,
-  node: KhrInteractivityNode,
-  index: number,
-  targets: readonly InteractionTriggerTargetEntity[],
-  visited: ReadonlyMap<number, number> | null,
-): GraphNodeData {
-  const declaration = graph.declarations?.[node.declaration];
-  const op = declaration?.op ?? `missing/declaration-${node.declaration}`;
-  const template = getInteractivityOperationTemplate(op);
-  const valueOutputs = new Set(template?.valueOutputs ?? []);
-  for (const candidate of graph.nodes ?? []) {
-    for (const input of Object.values(candidate.values ?? {})) {
-      if (input.node === index) valueOutputs.add(input.socket ?? "value");
-    }
-  }
-  return {
-    index,
-    op,
-    label: template?.label ?? op,
-    category: template?.category ?? "extension",
-    flowInputs: template?.flowInputs ?? ["in"],
-    flowOutputs: Array.from(
-      new Set([...(template?.flowOutputs ?? []), ...Object.keys(node.flows ?? {})]),
-    ),
-    valueInputs: Array.from(
-      new Set([...(template?.valueInputs ?? []), ...Object.keys(node.values ?? {})]),
-    ),
-    valueOutputs: Array.from(valueOutputs),
-    runtimeSupport: getInteractivityRuntimeSupport(op).support,
-    ...(visited === null
-      ? {}
-      : { reachedSeconds: visited.get(index) ?? null }),
-    ...(isInteractivityTriggerActionOp(op)
-      ? { summary: triggerActionSummary(graph, index, op, targets) }
-      : {}),
-  };
-}
-
-function toFlowNodes(
-  graph: KhrInteractivityGraph,
-  targets: readonly InteractionTriggerTargetEntity[],
-  visited: ReadonlyMap<number, number> | null,
-): GraphFlowNode[] {
-  return (graph.nodes ?? []).map((node, index) => ({
-    id: String(index),
-    type: "interactivity",
-    position: readInteractivityNodePosition(node, index),
-    data: operationData(graph, node, index, targets, visited),
-  }));
-}
-
-/**
- * Draws the connections, with the two readings a dense graph needs.
- *
- * Selecting a node brings its own wires forward and pushes the rest back, which
- * is the only way to follow one chain through a graph with thirty of them. When
- * the timeline has run, a wire whose source never ran is drawn as faint as the
- * node it comes from, so "this half is dead" is visible without reading labels.
- */
-function toFlowEdges(
-  graph: KhrInteractivityGraph,
-  options: {
-    selectedNodeIndex: number | null;
-    visited: ReadonlyMap<number, number> | null;
-  },
-): Edge[] {
-  const { selectedNodeIndex, visited } = options;
-  const emphasis = (sourceIndex: number, targetIndex: number): number => {
-    if (visited && !visited.has(sourceIndex)) return 0.2;
-    if (selectedNodeIndex === null) return 1;
-    return sourceIndex === selectedNodeIndex || targetIndex === selectedNodeIndex
-      ? 1
-      : 0.3;
-  };
-  const width = (sourceIndex: number, targetIndex: number): number =>
-    selectedNodeIndex !== null &&
-    (sourceIndex === selectedNodeIndex || targetIndex === selectedNodeIndex)
-      ? 3
-      : 2;
-
-  const edges: Edge[] = [];
-  for (const [sourceIndex, node] of (graph.nodes ?? []).entries()) {
-    for (const [socket, target] of Object.entries(node.flows ?? {})) {
-      const opacity = emphasis(sourceIndex, target.node);
-      edges.push({
-        id: `flow:${sourceIndex}:${socket}:${target.node}:${target.socket ?? "in"}`,
-        source: String(sourceIndex),
-        target: String(target.node),
-        sourceHandle: `flow-out:${socket}`,
-        targetHandle: `flow-in:${target.socket ?? "in"}`,
-        type: "smoothstep",
-        animated: opacity === 1,
-        style: {
-          stroke: FLOW_SOCKET_COLOR,
-          strokeWidth: width(sourceIndex, target.node),
-          opacity,
-        },
-      });
-    }
-  }
-  for (const [targetIndex, node] of (graph.nodes ?? []).entries()) {
-    for (const [socket, input] of Object.entries(node.values ?? {})) {
-      if (input.node === undefined) continue;
-      const opacity = emphasis(input.node, targetIndex);
-      edges.push({
-        id: `value:${input.node}:${input.socket ?? "value"}:${targetIndex}:${socket}`,
-        source: String(input.node),
-        target: String(targetIndex),
-        sourceHandle: `value-out:${input.socket ?? "value"}`,
-        targetHandle: `value-in:${socket}`,
-        type: "smoothstep",
-        style: {
-          stroke: VALUE_SOCKET_COLOR,
-          strokeWidth: width(input.node, targetIndex),
-          opacity,
-        },
-      });
-    }
-  }
-  return edges;
-}
-
-function parseHandle(handle: string | null | undefined): [string, string] | null {
-  if (!handle) return null;
-  const separator = handle.indexOf(":");
-  if (separator < 0) return null;
-  return [handle.slice(0, separator), handle.slice(separator + 1)];
-}
-
-/**
- * Removes nodes and repairs every index that pointed past them.
- *
- * Node identity in a KHR graph is its position in the array, so deleting one
- * renumbers the rest. Doing several at once in a single pass is what keeps a
- * multi-select delete from remapping against indices an earlier removal already
- * moved.
- */
-function removeNodesAndReindex(
-  graph: KhrInteractivityGraph,
-  removed: readonly number[],
-): void {
-  const dropped = new Set(removed);
-  const nodes = graph.nodes ?? [];
-  const remap = new Map<number, number>();
-  let next = 0;
-  for (let index = 0; index < nodes.length; index += 1) {
-    if (dropped.has(index)) continue;
-    remap.set(index, next);
-    next += 1;
-  }
-  graph.nodes = nodes.filter((_unused, index) => !dropped.has(index));
-  for (const node of graph.nodes) {
-    if (node.flows) {
-      node.flows = Object.fromEntries(
-        Object.entries(node.flows).flatMap(([socket, target]) => {
-          const moved = remap.get(target.node);
-          return moved === undefined ? [] : [[socket, { ...target, node: moved }]];
-        }),
-      );
-      if (Object.keys(node.flows).length === 0) delete node.flows;
-    }
-    if (node.values) {
-      node.values = Object.fromEntries(
-        Object.entries(node.values).flatMap(([socket, input]) => {
-          if (input.node === undefined) return [[socket, input]];
-          const moved = remap.get(input.node);
-          return moved === undefined ? [] : [[socket, { ...input, node: moved }]];
-        }),
-      );
-      if (Object.keys(node.values).length === 0) delete node.values;
-    }
-  }
-}
-
-/** Writes one connection into the graph, in whichever direction it runs. */
-function applyConnectionToGraph(
-  graph: KhrInteractivityGraph,
-  connection: { source: string | null; target: string | null; sourceHandle?: string | null; targetHandle?: string | null },
-): void {
-  const sourceIndex = Number(connection.source);
-  const targetIndex = Number(connection.target);
-  const sourceHandle = parseHandle(connection.sourceHandle);
-  const targetHandle = parseHandle(connection.targetHandle);
-  if (!sourceHandle || !targetHandle) return;
-  const source = graph.nodes?.[sourceIndex];
-  const target = graph.nodes?.[targetIndex];
-  if (!source || !target) return;
-  if (sourceHandle[0] === "flow-out" && targetHandle[0] === "flow-in") {
-    source.flows = {
-      ...(source.flows ?? {}),
-      [sourceHandle[1]]: {
-        node: targetIndex,
-        ...(targetHandle[1] === "in" ? {} : { socket: targetHandle[1] }),
-      },
-    };
-  }
-  if (sourceHandle[0] === "value-out" && targetHandle[0] === "value-in") {
-    target.values = {
-      ...(target.values ?? {}),
-      [targetHandle[1]]: {
-        node: sourceIndex,
-        ...(sourceHandle[1] === "value" ? {} : { socket: sourceHandle[1] }),
-      },
-    };
-  }
-}
-
-/** Removes one connection, addressed the same way the canvas draws it. */
-function removeConnectionFromGraph(graph: KhrInteractivityGraph, edge: Edge): void {
-  const sourceHandle = parseHandle(edge.sourceHandle);
-  const targetHandle = parseHandle(edge.targetHandle);
-  if (sourceHandle?.[0] === "flow-out") {
-    const node = graph.nodes?.[Number(edge.source)];
-    if (node?.flows) {
-      delete node.flows[sourceHandle[1]];
-      if (Object.keys(node.flows).length === 0) delete node.flows;
-    }
-  }
-  if (targetHandle?.[0] === "value-in") {
-    const node = graph.nodes?.[Number(edge.target)];
-    if (node?.values) {
-      delete node.values[targetHandle[1]];
-      if (Object.keys(node.values).length === 0) delete node.values;
-    }
-  }
-}
-
-function numbersOf(value: KhrInteractivityJsonValue[] | undefined, length: number): number[] {
-  return Array.from({ length }, (_unused, index) => {
-    const entry = value?.[index];
-    return typeof entry === "number" && Number.isFinite(entry) ? entry : 0;
-  });
-}
-
-/**
- * An editor for one literal socket value.
- *
- * Without this the only way to say which colour a `pointer/set` writes was to
- * hand-edit the KHR JSON, which is what made the graph editor feel like a
- * viewer rather than an editor.
- */
-function LiteralValueField({
-  socket,
-  signature,
-  value,
-  isColor,
-  disabled,
-  onChange,
-}: {
-  socket: string;
-  signature: string | undefined;
-  value: KhrInteractivityJsonValue[] | undefined;
-  isColor: boolean;
-  disabled: boolean;
-  onChange: (next: KhrInteractivityJsonValue[]) => void;
-}) {
-  const length =
-    signature === "float2" ? 2 : signature === "float3" ? 3 : signature === "float4" ? 4 : 1;
-  const channels = numbersOf(value, length);
-  const alpha = signature === "float4" ? channels[3] : null;
-
-  return (
-    <div className="space-y-1">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[10px] font-medium text-slate-300">{socket}</span>
-        <code className="text-[9px] text-slate-500">{signature ?? "型未設定"}</code>
-      </div>
-      {signature === "bool" ? (
-        <label className="flex items-center gap-2 text-[10px] text-slate-300">
-          <input
-            type="checkbox"
-            checked={value?.[0] === true}
-            disabled={disabled}
-            onChange={(event) => onChange([event.target.checked])}
-            className="h-3.5 w-3.5"
-          />
-          {value?.[0] === true ? "true" : "false"}
-        </label>
-      ) : isColor ? (
-        <div className="flex items-center gap-2">
-          <input
-            type="color"
-            value={linearRgbToTint(channels)}
-            disabled={disabled}
-            onChange={(event) => {
-              const [red, green, blue] = tintToLinearRgb(event.target.value);
-              onChange(alpha === null ? [red, green, blue] : [red, green, blue, alpha]);
-            }}
-            className="h-7 w-10 shrink-0 cursor-pointer rounded border border-slate-600 bg-slate-950 disabled:opacity-45"
-            aria-label={`${socket} の色`}
-          />
-          <code className="text-[10px] text-slate-400">{linearRgbToTint(channels)}</code>
-          {alpha === null ? null : (
-            <label className="ml-auto flex items-center gap-1 text-[10px] text-slate-400">
-              A
-              <input
-                type="number"
-                min={0}
-                max={1}
-                step={0.05}
-                value={alpha}
-                disabled={disabled}
-                onChange={(event) => {
-                  const next = Number(event.target.value);
-                  if (!Number.isFinite(next)) return;
-                  onChange([
-                    channels[0],
-                    channels[1],
-                    channels[2],
-                    Math.min(1, Math.max(0, next)),
-                  ]);
-                }}
-                className="h-7 w-16 rounded border border-slate-600 bg-slate-950 px-1.5 text-[11px] disabled:opacity-45"
-              />
-            </label>
-          )}
-        </div>
-      ) : (
-        <div className="flex gap-1">
-          {channels.map((entry, index) => (
-            <input
-              key={index}
-              type="number"
-              step={signature === "int" ? 1 : 0.1}
-              value={entry}
-              disabled={disabled}
-              onChange={(event) => {
-                const next = Number(event.target.value);
-                if (!Number.isFinite(next)) return;
-                const channel = signature === "int" ? Math.round(next) : next;
-                onChange(channels.map((prior, at) => (at === index ? channel : prior)));
-              }}
-              className="h-7 w-full min-w-0 rounded border border-slate-600 bg-slate-950 px-1.5 text-[11px] disabled:opacity-45"
-              aria-label={`${socket}${length > 1 ? ` ${index + 1}` : ""}`}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * An editor for the value one Interaction Trigger action writes.
- *
- * The generic literal editor can only offer raw numbers because it knows the
- * KHR type and nothing else. Here the property descriptor supplies the range,
- * the option labels and whether the three floats are a colour, so the author
- * edits "音量 0.4" instead of "float[0] = 0.4".
- */
-function TriggerValueField({
-  descriptor,
-  value,
-  disabled,
-  onChange,
-}: {
-  descriptor: XriftInteractionPropertyDescriptor;
-  value: KhrInteractivityJsonValue[] | null;
-  disabled: boolean;
-  onChange: (next: KhrInteractivityJsonValue[]) => void;
-}) {
-  const current = value ?? defaultTriggerActionValue(descriptor);
-  const first = current[0];
-  if (descriptor.kind === "bool") {
-    const checked = first !== false;
-    return (
-      <label className="flex items-center gap-2 text-[10px] text-slate-300">
-        <input
-          type="checkbox"
-          checked={checked}
-          disabled={disabled}
-          onChange={(event) => onChange([event.target.checked])}
-          className="h-3.5 w-3.5"
-        />
-        {descriptor.label}を{checked ? "ON" : "OFF"}にする
-      </label>
-    );
-  }
-  if (descriptor.kind === "enum") {
-    const options = descriptor.options ?? [];
-    const index =
-      typeof first === "number" && options[first]
-        ? first
-        : xriftInteractionEnumIndex(descriptor, String(descriptor.defaultValue));
-    return (
-      <label className="block text-[10px] text-slate-300">
-        {descriptor.label}
-        <select
-          value={index}
-          disabled={disabled}
-          onChange={(event) => onChange([Number(event.target.value)])}
-          className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs"
-        >
-          {options.map((option, optionIndex) => (
-            <option key={option.value} value={optionIndex}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
-    );
-  }
-  if (descriptor.kind === "color") {
-    const channels = numbersOf(current, 3);
-    return (
-      <label className="block text-[10px] text-slate-300">
-        {descriptor.label}
-        <span className="mt-1 flex items-center gap-2">
-          <input
-            type="color"
-            value={linearRgbToTint(channels)}
-            disabled={disabled}
-            onChange={(event) => onChange(tintToLinearRgb(event.target.value))}
-            className="h-7 w-10 shrink-0 cursor-pointer rounded border border-slate-600 bg-slate-950 disabled:opacity-45"
-            aria-label={`${descriptor.label} の色`}
-          />
-          <code className="text-[10px] text-slate-400">
-            {linearRgbToTint(channels)}
-          </code>
-        </span>
-      </label>
-    );
-  }
-  if (descriptor.kind === "vector3") {
-    const components = numbersOf(current, 3);
-    return (
-      <div className="space-y-1">
-        <span className="block text-[10px] text-slate-300">{descriptor.label}</span>
-        <div className="flex gap-1">
-          {(["X", "Y", "Z"] as const).map((axis, index) => (
-            <label key={axis} className="flex min-w-0 flex-1 items-center gap-1">
-              <span className="text-[9px] text-slate-500">{axis}</span>
-              <input
-                type="number"
-                step={descriptor.step ?? 0.1}
-                value={components[index] ?? 0}
-                disabled={disabled}
-                onChange={(event) => {
-                  const next = Number(event.target.value);
-                  if (!Number.isFinite(next)) return;
-                  onChange(
-                    components.map((prior, at) => (at === index ? next : prior)),
-                  );
-                }}
-                className="h-8 w-full min-w-0 rounded border border-slate-600 bg-slate-950 px-1.5 text-xs disabled:opacity-45"
-                aria-label={`${descriptor.label} ${axis}`}
-              />
-            </label>
-          ))}
-        </div>
-      </div>
-    );
-  }
-  const numeric = typeof first === "number" ? first : Number(descriptor.defaultValue);
-  return (
-    <label className="block text-[10px] text-slate-300">
-      {descriptor.label}
-      <input
-        type="number"
-        value={numeric}
-        min={descriptor.min}
-        max={descriptor.max}
-        step={descriptor.step ?? 0.1}
-        disabled={disabled}
-        onChange={(event) => {
-          const next = Number(event.target.value);
-          if (!Number.isFinite(next)) return;
-          const lower = descriptor.min ?? Number.NEGATIVE_INFINITY;
-          const upper = descriptor.max ?? Number.POSITIVE_INFINITY;
-          onChange([Math.min(Math.max(next, lower), upper)]);
-        }}
-        className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs"
-      />
-    </label>
-  );
-}
-
-/**
- * Property kinds a timed change is meaningful for.
- *
- * A switch and a picked option have no halfway point; offering a duration for
- * them would promise a fade that can only ever be a jump at the end.
- */
-const TIMED_PROPERTY_KINDS: ReadonlySet<string> = new Set([
-  "float",
-  "color",
-  "vector3",
-]);
-
-const EASING_LABELS: Readonly<Record<InteractivityEasing, string>> = {
-  linear: "一定の速さ",
-  "ease-in": "ゆっくり始まる",
-  "ease-out": "ゆっくり止まる",
-  "ease-in-out": "両端がゆっくり",
-  "ease-in-strong": "強くゆっくり始まる",
-  "ease-out-strong": "強くゆっくり止まる",
-  "ease-out-back": "少し行き過ぎて戻る",
-};
-
-/** Draws the chosen curve, so the wording and the motion are the same thing. */
-function EasingCurve({ easing }: { easing: InteractivityEasing }) {
-  const points = Array.from({ length: 33 }, (_unused, step) => {
-    const ratio = step / 32;
-    const eased = applyEasing(ratio, easing);
-    // The back curve leaves the unit square; the viewBox is padded for it.
-    return `${(ratio * 60).toFixed(2)},${(26 - eased * 20).toFixed(2)}`;
-  }).join(" ");
-  return (
-    <svg
-      viewBox="0 0 60 32"
-      role="img"
-      aria-label={`${EASING_LABELS[easing]}の変化の仕方`}
-      className="h-8 w-16 shrink-0 rounded border border-slate-700 bg-slate-950"
-    >
-      <line x1="0" y1="26" x2="60" y2="26" stroke="#334155" strokeWidth="0.5" />
-      <line x1="0" y1="6" x2="60" y2="6" stroke="#334155" strokeWidth="0.5" />
-      <polyline
-        points={points}
-        fill="none"
-        stroke="#a78bfa"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-/**
- * How long an action takes, and how the change is spread over that time.
- *
- * A door that snaps open and a door that swings open are the same action with
- * a different duration, so this belongs on the action rather than in a separate
- * node. It is only offered for values that have an in-between: flipping a
- * switch or picking an option halfway through means nothing.
- */
-function TriggerTimingField({
-  seconds,
-  easing,
-  disabled,
-  onSecondsChange,
-  onEasingChange,
-}: {
-  seconds: number;
-  easing: InteractivityEasing;
-  disabled: boolean;
-  onSecondsChange: (seconds: number) => void;
-  onEasingChange: (easing: InteractivityEasing) => void;
-}) {
-  return (
-    <div className="space-y-2 rounded border border-slate-700 bg-slate-950/60 p-2">
-      <label className="block text-[10px] text-slate-300">
-        かける時間（秒）
-        <input
-          type="number"
-          min={0}
-          max={600}
-          step={0.1}
-          value={seconds}
-          disabled={disabled}
-          onChange={(event) => {
-            const next = Number(event.target.value);
-            if (!Number.isFinite(next)) return;
-            onSecondsChange(Math.min(600, Math.max(0, next)));
-          }}
-          className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs disabled:opacity-45"
-        />
-      </label>
-      {seconds > 0 ? (
-        <div className="flex items-end gap-2">
-          <label className="min-w-0 flex-1 text-[10px] text-slate-300">
-            変わり方
-            <select
-              value={easing}
-              disabled={disabled}
-              onChange={(event) =>
-                onEasingChange(event.target.value as InteractivityEasing)
-              }
-              className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs"
-            >
-              {INTERACTIVITY_EASINGS.map((entry) => (
-                <option key={entry} value={entry}>
-                  {EASING_LABELS[entry]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <EasingCurve easing={easing} />
-        </div>
-      ) : (
-        <p className="text-[10px] leading-4 text-slate-400">
-          0 のままなら、その場ですぐ変わります。秒数を入れると、その時間をかけて変化します。
-        </p>
-      )}
-    </div>
-  );
-}
 
 export function InteractivityGraphEditor(props: {
   asset: InteractivityAsset;
@@ -1513,6 +526,11 @@ function InteractivityGraphEditorBody({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const modifier = event.metaKey || event.ctrlKey;
+      // Ctrl+Z belongs to whatever text field has focus. Taking it while the
+      // author is typing in the JSON panel or renaming a graph would undo the
+      // graph instead of the sentence, and the rename pushes one history entry
+      // per keystroke, so the two undos are not even the same size.
+      if (modifier && isTextEntryTarget(event.target)) return;
       if (modifier && event.key.toLowerCase() === "z") {
         event.preventDefault();
         if (event.shiftKey) redo();

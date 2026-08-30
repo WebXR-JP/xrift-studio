@@ -596,4 +596,171 @@ export function runInteractivityEngineFixtureAssertions(): void {
       "a delayed interaction did not write after its wait",
     );
   }
+
+  // 「少し行き過ぎて戻る」has to actually pass its target and come back. The
+  // curve started at 2.0 and the blend clamped the ratio, so the change snapped
+  // to the target on the first frame and then dipped below it.
+  {
+    const builder = new GraphBuilder();
+    const start = builder.node("event/onStart");
+    const write = builder.node("xrift/setProperty", {
+      configuration: {
+        entity: { value: ["entity-1"] },
+        component: { value: ["light-1"] },
+        targetKind: { value: ["light"] },
+        property: { value: ["intensity"] },
+        easing: { value: ["ease-out-back"] },
+      },
+      values: { value: builder.float(1), duration: builder.float(2) },
+    });
+    builder.connect(start, "out", write);
+    const writes: RecordedWrite[] = [];
+    let engine: InteractivityEngine | null = null;
+    engine = new InteractivityEngine(
+      builder.build(),
+      recordingHost(writes, () => {
+        if (!engine) throw new Error("engine read before it was constructed");
+        return engine;
+      }),
+    );
+    engine.start();
+    for (let step = 0; step < 60; step += 1) engine.update(1 / 30);
+    const first = writes[0];
+    assert(
+      first !== undefined && asNumber(first.value) < 0.2,
+      "an overshooting curve did not start near where the value already was",
+    );
+    assert(
+      writes.some((entry) => asNumber(entry.value) > 1.02),
+      "an overshooting curve never passed its target",
+    );
+    const settled = writes[writes.length - 1];
+    assert(
+      settled !== undefined && Math.abs(asNumber(settled.value) - 1) < 1e-6,
+      "an overshooting curve did not settle on its target",
+    );
+  }
+
+  // A timed write continues on `done` when it finishes, and immediately when it
+  // has no duration: a sequence wired through `done` must not stall the day its
+  // author sets the duration back to zero.
+  for (const duration of [2, 0]) {
+    const builder = new GraphBuilder();
+    const start = builder.node("event/onStart");
+    const write = builder.node("xrift/setProperty", {
+      configuration: {
+        entity: { value: ["entity-1"] },
+        component: { value: ["light-1"] },
+        targetKind: { value: ["light"] },
+        property: { value: ["intensity"] },
+      },
+      values: { value: builder.float(1), duration: builder.float(duration) },
+    });
+    const after = builder.node("debug/log", {
+      values: { message: { type: builder.type("string"), value: ["landed"] } },
+    });
+    builder.connect(start, "out", write);
+    builder.connect(write, "done", after);
+    const run = dryRunInteractivityGraph(builder.build());
+    const logged = run.entries.find((entry) => entry.kind === "log");
+    assert(
+      logged !== undefined && Math.abs(logged.timeSeconds - duration) < 0.05,
+      `a ${duration}s change continued on done at ${logged?.timeSeconds ?? "never"} instead of ${duration}`,
+    );
+  }
+
+  // `event/receive` runs, so the timeline cannot report a node whose whole
+  // chain fired as one that was never reached.
+  {
+    const builder = new GraphBuilder();
+    const eventIndex = builder.event("opened");
+    const start = builder.node("event/onStart");
+    const send = builder.node("event/send", {
+      configuration: { event: { value: [eventIndex] } },
+    });
+    const receive = builder.node("event/receive", {
+      configuration: { event: { value: [eventIndex] } },
+    });
+    const write = builder.node("xrift/setProperty", {
+      configuration: {
+        entity: { value: ["entity-1"] },
+        component: { value: [""] },
+        targetKind: { value: ["entity"] },
+        property: { value: ["enabled"] },
+      },
+      values: { value: builder.bool(false) },
+    });
+    builder.connect(start, "out", send);
+    builder.connect(receive, "out", write);
+    const run = dryRunInteractivityGraph(builder.build());
+    assert(
+      run.entries.some((entry) => entry.kind === "property"),
+      "a local event never reached its receiver",
+    );
+    assert(
+      run.visitedNodes.has(receive),
+      "a receiver whose chain ran was reported as never reached",
+    );
+  }
+
+  // `math/Inf` is a value, not a zero: coercing it made `math/isInf` answer
+  // false about the constant standing right next to it.
+  {
+    const builder = new GraphBuilder();
+    const start = builder.node("event/onStart");
+    const infinity = builder.node("math/Inf");
+    const isInfinite = builder.node("math/isInf");
+    const branch = builder.node("flow/branch");
+    const write = builder.node("xrift/setProperty", {
+      configuration: {
+        entity: { value: ["entity-1"] },
+        component: { value: [""] },
+        targetKind: { value: ["entity"] },
+        property: { value: ["enabled"] },
+      },
+      values: { value: builder.bool(false) },
+    });
+    builder.setValue(isInfinite, "a", { node: infinity, socket: "value" });
+    builder.setValue(branch, "condition", { node: isInfinite, socket: "value" });
+    builder.connect(start, "out", branch);
+    builder.connect(branch, "true", write);
+    const run = dryRunInteractivityGraph(builder.build());
+    assert(
+      run.entries.some((entry) => entry.kind === "property"),
+      "math/isInf did not recognise math/Inf",
+    );
+  }
+
+  // Equality looks at every component: two positions that share an x are not
+  // the same position.
+  {
+    const builder = new GraphBuilder();
+    const float3 = builder.type("float3");
+    const start = builder.node("event/onStart");
+    const equals = builder.node("math/eq", {
+      values: {
+        a: { type: float3, value: [1, 0, 0] },
+        b: { type: float3, value: [1, 5, 5] },
+      },
+    });
+    const branch = builder.node("flow/branch");
+    const write = builder.node("xrift/setProperty", {
+      configuration: {
+        entity: { value: ["entity-1"] },
+        component: { value: [""] },
+        targetKind: { value: ["entity"] },
+        property: { value: ["enabled"] },
+      },
+      values: { value: builder.bool(false) },
+    });
+    builder.setValue(branch, "condition", { node: equals, socket: "value" });
+    builder.connect(start, "out", branch);
+    builder.connect(branch, "true", write);
+    const run = dryRunInteractivityGraph(builder.build());
+    assert(
+      !run.entries.some((entry) => entry.kind === "property"),
+      "two different vectors compared equal because only their first component was read",
+    );
+  }
+
 }

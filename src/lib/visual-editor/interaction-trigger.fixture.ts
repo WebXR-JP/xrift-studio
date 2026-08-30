@@ -66,6 +66,7 @@ export function runInteractionTriggerFixtureAssertions(): void {
   assertSceneTargetsListWritableComponentsOnly();
   assertEntityReferencesFollowTheGraph();
   assertPublishedWorldRunsTheTrigger();
+  assertPublishedWorldRunsAGraphNobodyPresses();
   assertRuntimeJsonOutputIsBlocked();
 }
 
@@ -275,6 +276,80 @@ function assertEntityReferencesFollowTheGraph(): void {
     trigger?.type === "interaction-trigger" &&
       trigger.entityReferences.join(",") === "entity_sign,entity_speaker",
     "the trigger's entityReferences were not derived from its graph",
+  );
+}
+
+/**
+ * A timeline graph reaches the published world.
+ *
+ * The compiler decided whether to carry the trigger runtime by asking whether
+ * the Asset had an `xrift/onInteract` entry. A graph whose entry is
+ * `event/onStart` — an opening sequence, the thing the timeline is for — has
+ * none, so it ran in Studio Play and was dropped from the world that shipped.
+ */
+function assertPublishedWorldRunsAGraphNobodyPresses(): void {
+  const documents = buildDocuments();
+  const graphAsset = documents.assets.assets[GRAPH_ASSET_ID];
+  if (graphAsset?.kind !== "interactivity") {
+    throw new Error("the fixture's Interactivity Asset is missing");
+  }
+  const extension = createDefaultKhrInteractivityExtension();
+  const graph = graphOf(extension);
+  graph.nodes = [];
+  graph.declarations = [];
+  const start = appendInteractivityOperation(graph, "event/onStart", { x: 0, y: 0 });
+  const reveal = appendInteractivityOperation(
+    graph,
+    XRIFT_INTERACTION_OPERATIONS.setProperty,
+    { x: 320, y: 0 },
+  );
+  configureInteractivityTriggerAction(graph, reveal, {
+    entityId: "entity_sign",
+    componentId: "",
+    targetKind: "entity",
+    property: "enabled",
+  });
+  connectInteractivityFlow(graph, start, "out", reveal);
+
+  const result = compileVisualProject(
+    {
+      ...documents,
+      assets: {
+        ...documents.assets,
+        assets: {
+          ...documents.assets.assets,
+          [GRAPH_ASSET_ID]: { ...graphAsset, extension },
+        },
+      },
+    },
+    { generatedAt: "2026-08-29T00:00:00.000Z" },
+  );
+  const world = result.overlayFiles.find(
+    (file) => file.relativePath === "src/World.tsx",
+  )?.content;
+  assert(Boolean(world), "World.tsx was not emitted for a self-starting graph");
+  assert(
+    world!.includes("<XriftInteractionTriggerRuntime"),
+    "a graph that starts itself was dropped from the published world",
+  );
+  assert(
+    result.overlayFiles.some(
+      (file) => file.relativePath === INTERACTIVITY_ENGINE_OVERLAY_PATH,
+    ),
+    "a self-starting graph shipped without the interpreter that runs it",
+  );
+  assert(
+    !result.diagnostics.some(
+      (diagnostic) => diagnostic.code === "interaction-trigger-without-event",
+    ),
+    "a graph with an onStart entry was reported as having no entry point",
+  );
+  // Nobody presses this one, so demanding an Interactable would be noise.
+  assert(
+    !result.diagnostics.some(
+      (diagnostic) => diagnostic.code === "interaction-trigger-without-interactable",
+    ),
+    "a graph that starts itself was asked for an Interactable",
   );
 }
 

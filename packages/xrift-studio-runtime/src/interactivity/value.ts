@@ -26,8 +26,16 @@ export function boolValue(value: boolean): InteractivityValue {
   return value ? TRUE : FALSE;
 }
 
+/**
+ * A computed float, non-finite included.
+ *
+ * `math/Inf` and `math/NaN` are constants the specification defines, so the
+ * sanitising belongs at the JSON boundary ({@link fromJsonValue}) rather than
+ * here — coercing a computed infinity to zero made `math/isInf` answer false
+ * about the value produced one node earlier.
+ */
 export function floatValue(value: number): InteractivityValue {
-  return { signature: "float", data: [Number.isFinite(value) ? value : 0] };
+  return { signature: "float", data: [value] };
 }
 
 export function intValue(value: number): InteractivityValue {
@@ -97,7 +105,10 @@ export function asNumber(value: InteractivityValue | null): number {
   if (!value) return 0;
   const first = value.data[0];
   if (typeof first === "boolean") return first ? 1 : 0;
-  return typeof first === "number" && Number.isFinite(first) ? first : 0;
+  // Non-finite numbers pass through. JSON cannot express one, so an infinity
+  // here was computed — `math/Inf` is a constant the specification defines, and
+  // coercing it to 0 made `math/isInf` answer false about its own value.
+  return typeof first === "number" ? first : 0;
 }
 
 export function asInteger(value: InteractivityValue | null): number {
@@ -112,7 +123,7 @@ export function asNumbers(
   const components: number[] = [];
   for (let index = 0; index < length; index += 1) {
     const entry = value?.data[index];
-    if (typeof entry === "number" && Number.isFinite(entry)) {
+    if (typeof entry === "number") {
       components.push(entry);
     } else if (typeof entry === "boolean") {
       components.push(entry ? 1 : 0);
@@ -141,18 +152,22 @@ export function mixValues(
   to: InteractivityValue,
   ratio: number,
 ): InteractivityValue {
-  const clamped = ratio <= 0 ? 0 : ratio >= 1 ? 1 : ratio;
+  // Not clamped to 0..1. An easing that overshoots hands a ratio above 1 on
+  // purpose, and `math/mix` is defined as a plain blend, so pinning the ratio
+  // here would quietly turn「少し行き過ぎて戻る」into a slow ease-out. Values
+  // that must stay inside a range are clamped where they are written.
+  const mix = Number.isFinite(ratio) ? ratio : 0;
   if (to.signature === "bool") {
-    // A boolean has no midpoint; it flips once the blend passes the halfway
-    // point, so a timed write of a switch still lands on a legal value.
-    return clamped < 1 ? from : to;
+    // A boolean has no midpoint; it flips once the blend reaches the end, so a
+    // timed write of a switch still lands on a legal value.
+    return mix < 1 ? from : to;
   }
   const length = Math.max(valueLength(from), valueLength(to));
   const start = asNumbers(from, length);
   const end = asNumbers(to, length);
   const blended = end.map((entry, index) => {
     const base = start[index] ?? 0;
-    return base + (entry - base) * clamped;
+    return base + (entry - base) * mix;
   });
   if (to.signature === "int") {
     return { signature: "int", data: blended.map((entry) => Math.round(entry)) };
@@ -214,9 +229,11 @@ export function applyEasing(ratio: number, easing: InteractivityEasing): number 
       return 1 - back * back * back;
     case "ease-out-back": {
       // Overshoots by about ten percent and settles, which is what a lid or a
-      // sign wants when it stops. The constants are the usual "back" pair.
+      // sign wants when it stops. The constants are the usual "back" pair, and
+      // the returned ratio deliberately passes 1 before coming back — the
+      // caller must not clamp it, or the curve is just a slow ease-out.
       const overshoot = 1.70158;
-      return 1 + (overshoot + 1) * back * back * back - overshoot * back * back;
+      return 1 - (overshoot + 1) * back * back * back + overshoot * back * back;
     }
     case "linear":
       return clamped;

@@ -461,15 +461,14 @@ export class InteractivityEngine {
         .filter((timer) => !timer.cancelled && timer.dueAt <= frameEnd)
         .sort((left, right) => left.dueAt - right.dueAt || left.id - right.id)[0];
       if (!due) break;
-      const step = Math.max(0, due.dueAt - this.timeSeconds);
-      this.advanceInterpolations(step);
+      this.advanceInterpolations(due.dueAt);
       this.timeSeconds = due.dueAt;
       due.cancelled = true;
       this.timers = this.timers.filter((timer) => timer !== due);
       this.runOutput(due.node, due.socket);
     }
 
-    this.advanceInterpolations(Math.max(0, frameEnd - this.timeSeconds));
+    this.advanceInterpolations(frameEnd);
     this.timeSeconds = frameEnd;
 
     for (const node of this.graph.nodes) {
@@ -516,9 +515,19 @@ export class InteractivityEngine {
    * re-enter: waking `flow/setDelay` at its own `done` socket would run the wait
    * a second time instead of continuing past it.
    */
+  /**
+   * Continues from one node's flow output, without re-entering the node.
+   *
+   * Used by everything that resumes later: a delay's `done`, and a local event
+   * delivered to `event/receive`. The node is recorded even though it is not
+   * stepped again, because it did run — without this the timeline reports a
+   * receiver whose whole chain fired as 未到達.
+   */
   private runOutput(nodeIndex: number, socket: string): void {
     const node = this.graph?.nodes[nodeIndex];
-    const target = node?.flows.get(socket);
+    if (!node) return;
+    this.record(nodeIndex, node.op, socket);
+    const target = node.flows.get(socket);
     if (!target) return;
     this.runFrom(target.node, target.socket);
   }
@@ -813,7 +822,8 @@ export class InteractivityEngine {
           startTime,
           // An unset or non-positive end plays the whole clip; the RC uses
           // `math/Inf` for "do not stop", which arrives here as a non-finite
-          // number rather than as a separate socket shape.
+          // number rather than as a separate socket shape. `asNumber` passes
+          // one through, so this is the check that decides, not a coercion.
           endTime:
             endTime === null || !Number.isFinite(endTime) || endTime <= startTime
               ? null
@@ -898,7 +908,11 @@ export class InteractivityEngine {
           return this.follow(node, "out");
         }
         const written = this.host.writeProperty(target, next);
-        return this.follow(node, written ? "out" : "err");
+        if (!written) return this.follow(node, "err");
+        // An immediate write completes immediately, so `done` fires now. A
+        // sequence wired through `done` must not stall the day its author sets
+        // the duration back to zero.
+        return [...this.follow(node, "out"), ...this.follow(node, "done")];
       }
 
       default:
@@ -1183,8 +1197,23 @@ export class InteractivityEngine {
       }
       case "math/random":
         return floatValue((this.host.random ?? Math.random)());
-      case "math/eq":
-        return boolValue(asNumber(a()) === asNumber(b()));
+      case "math/eq": {
+        // Every component, not just the first: `(1,0,0)` and `(1,5,5)` are not
+        // the same position. The ordering operations below stay scalar, which
+        // is the only shape the specification defines them for.
+        const left = a();
+        const right = b();
+        const length = Math.max(
+          left ? left.data.length : 0,
+          right ? right.data.length : 0,
+          1,
+        );
+        const leftComponents = asNumbers(left, length);
+        const rightComponents = asNumbers(right, length);
+        return boolValue(
+          leftComponents.every((entry, index) => entry === rightComponents[index]),
+        );
+      }
       case "math/lt":
         return boolValue(asNumber(a()) < asNumber(b()));
       case "math/le":
@@ -1333,26 +1362,43 @@ export class InteractivityEngine {
     this.interpolations.push(interpolation);
   }
 
-  private advanceInterpolations(deltaSeconds: number): void {
+  /**
+   * Advances every running interpolation up to `endTime`.
+   *
+   * A finished one continues at the instant it finished rather than at the end
+   * of the frame that noticed. The difference is invisible at 60fps and is a
+   * whole step in a dry run, where it would put「2秒かけて動かしてから次」on the
+   * timeline at the wrong second.
+   */
+  private advanceInterpolations(endTime: number): void {
+    const deltaSeconds = endTime - this.timeSeconds;
     if (deltaSeconds <= 0 || this.interpolations.length === 0) return;
-    const finished: Interpolation[] = [];
+    const finished: { entry: Interpolation; at: number }[] = [];
     for (const entry of this.interpolations) {
       if (entry.cancelled) continue;
       entry.elapsed += deltaSeconds;
       const ratio = entry.duration === 0 ? 1 : entry.elapsed / entry.duration;
       this.applyInterpolation(entry, ratio);
-      if (ratio >= 1) finished.push(entry);
+      if (ratio >= 1) {
+        finished.push({ entry, at: endTime - Math.max(0, entry.elapsed - entry.duration) });
+      }
     }
     if (finished.length === 0) return;
+    const done = new Set(finished.map((candidate) => candidate.entry));
     this.interpolations = this.interpolations.filter(
-      (entry) => !finished.includes(entry) && !entry.cancelled,
+      (entry) => !done.has(entry) && !entry.cancelled,
     );
-    for (const entry of finished) {
+    finished.sort((left, right) => left.at - right.at);
+    const resume = this.timeSeconds;
+    for (const { entry, at } of finished) {
       const node = this.graph?.nodes[entry.node];
       if (!node) continue;
       const target = node.flows.get("done");
-      if (target) this.runFrom(target.node, target.socket);
+      if (!target) continue;
+      this.timeSeconds = at;
+      this.runFrom(target.node, target.socket);
     }
+    this.timeSeconds = resume;
   }
 
   private applyInterpolation(entry: Interpolation, ratio: number): void {

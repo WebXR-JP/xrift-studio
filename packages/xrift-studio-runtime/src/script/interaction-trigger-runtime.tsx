@@ -36,6 +36,7 @@ import {
 } from "./scene-runtime.js";
 import {
   getXriftInteractionProperty,
+  type XriftInteractionPropertyDescriptor,
   type XriftInteractionAction,
   type XriftInteractionTargetKind,
   type XriftInteractionValue,
@@ -904,27 +905,55 @@ function toInteractivityValue(
  * and is resolved against the property's own option list here — the same list
  * the Editor's picker shows, so the two cannot disagree.
  */
+/**
+ * The engine's value in the shape the property takes, inside its legal range.
+ *
+ * The range matters because a write does not have to come from a slider: a
+ * computed value, or an easing that deliberately passes its target and comes
+ * back, can land outside what the property accepts. Clamping here keeps that
+ * one node's overshoot from becoming a negative opacity or a mirrored scale.
+ * Position and rotation have no declared range and are left alone.
+ */
 function toInteractionValue(
-  kind: string,
-  options: readonly { value: string; label: string }[],
+  descriptor: XriftInteractionPropertyDescriptor,
   value: InteractivityValue,
 ): XriftInteractionValue | null {
-  switch (kind) {
+  const options = descriptor.options ?? [];
+  const bounded = (entry: number, low?: number, high?: number): number => {
+    if (!Number.isFinite(entry)) return low ?? 0;
+    if (low !== undefined && entry < low) return low;
+    if (high !== undefined && entry > high) return high;
+    return entry;
+  };
+  switch (descriptor.kind) {
     case "bool":
       return { kind: "bool", value: asBoolean(value) };
     case "float":
-      return { kind: "float", value: asNumber(value) };
+      return {
+        kind: "float",
+        value: bounded(asNumber(value), descriptor.min, descriptor.max),
+      };
     case "color": {
       const [red, green, blue] = asNumbers(value, 3);
-      return { kind: "color", value: [red ?? 0, green ?? 0, blue ?? 0] };
+      return {
+        kind: "color",
+        value: [
+          bounded(red ?? 0, 0, 1),
+          bounded(green ?? 0, 0, 1),
+          bounded(blue ?? 0, 0, 1),
+        ],
+      };
     }
     case "vector3": {
       const [x, y, z] = asNumbers(value, 3);
-      return { kind: "vector3", value: [x ?? 0, y ?? 0, z ?? 0] };
+      return {
+        kind: "vector3",
+        value: [bounded(x ?? 0), bounded(y ?? 0), bounded(z ?? 0)],
+      };
     }
     case "enum": {
       const index = Math.trunc(asNumber(value));
-      const option = options[index];
+      const option = options[Math.min(Math.max(index, 0), options.length - 1)];
       return option ? { kind: "enum", value: option.value } : null;
     }
     default:
@@ -966,7 +995,7 @@ export function createXriftInteractionHost(
     writeProperty(target, value) {
       const descriptor = descriptorFor(target);
       if (!descriptor) return false;
-      const next = toInteractionValue(descriptor.kind, descriptor.options ?? [], value);
+      const next = toInteractionValue(descriptor, value);
       if (!next) return false;
       applier.apply({
         nodeIndex: -1,

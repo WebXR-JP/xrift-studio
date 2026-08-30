@@ -744,6 +744,39 @@ export function hasXriftInteractionTrigger(value: unknown): boolean {
 }
 
 /**
+ * Entry points that run without anyone pressing anything.
+ *
+ * A timeline graph starts itself. Judging every Asset by whether it has an
+ * `xrift/onInteract` was right while the only thing a graph could express was
+ * "when this is pressed"; now it would drop a whole opening sequence.
+ */
+const XRIFT_SELF_STARTING_OPERATIONS: ReadonlySet<string> = new Set([
+  "event/onStart",
+  "event/onTick",
+  "event/receive",
+]);
+
+export function hasXriftSelfStartingEntry(value: unknown): boolean {
+  return parseAllGraphs(value).some((parsed) =>
+    parsed.nodes.some((candidate) => {
+      const op = parsed.operationFor(asRecord(candidate));
+      return op !== undefined && XRIFT_SELF_STARTING_OPERATIONS.has(op);
+    }),
+  );
+}
+
+/**
+ * True when the Asset has anything for the interpreter to run.
+ *
+ * This is what decides whether a published world carries the trigger runtime.
+ * It has to match what Studio's Play mounts, or a graph that works while
+ * authoring is missing from the world that ships.
+ */
+export function hasXriftInteractionRuntimeWork(value: unknown): boolean {
+  return parseAllGraphs(value).some((parsed) => parsed.nodes.length > 0);
+}
+
+/**
  * Reports every trigger action node the runtime will not run.
  *
  * Unlike an unsupported operation, an incomplete action is something the author

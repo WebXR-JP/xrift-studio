@@ -22,6 +22,8 @@ import { getBuiltinPrimitiveCreation } from "../creation-catalog";
 import {
   collectInteractivityRuntimeDiagnostics,
   collectXriftInteractionPrograms,
+  hasXriftInteractionRuntimeWork,
+  hasXriftSelfStartingEntry,
 } from "../interactivity-graph";
 import {
   validateSerializedXriftComponents,
@@ -540,7 +542,7 @@ function sceneUsesInteractionTriggerRuntime(
       const asset = assets.assets[component.interactivityAssetId];
       return (
         asset?.kind === "interactivity" &&
-        collectXriftInteractionPrograms(asset.extension).length > 0
+        hasXriftInteractionRuntimeWork(asset.extension)
       );
     }),
   );
@@ -864,6 +866,8 @@ type ResolvedInteractionTrigger = {
   component: Extract<RegisteredSceneComponent, { type: "interaction-trigger" }>;
   extension: unknown;
   actionCount: number;
+  /** How many `xrift/onInteract` entry points the graph has. */
+  interactPrograms: number;
 };
 
 function collectInteractionTriggerTargetEntityIds(
@@ -917,12 +921,15 @@ function resolveInteractionTriggers(
       (total, program) => total + program.actions.length,
       0,
     );
-    if (programs.length === 0) {
+    // A graph that starts itself needs the runtime even with no interact entry:
+    // a timeline on `event/onStart` is the whole point of one. Only a graph
+    // with neither kind of entry point is inert, and that is worth saying.
+    if (programs.length === 0 && !hasXriftSelfStartingEntry(asset.extension)) {
       addDiagnostic(context, {
         severity: "warning",
         code: "interaction-trigger-without-event",
         message:
-          "Interactivity Graphに「インタラクトされたとき」がないため、押しても何も起きません",
+          "Interactivity Graphに開始のnodeがないため、公開先では何も起きません",
         sceneId: context.scene.sceneId,
         entityId: entity.id,
         componentId: component.id,
@@ -930,10 +937,17 @@ function resolveInteractionTriggers(
       });
       continue;
     }
-    resolved.push({ component, extension: asset.extension, actionCount });
+    resolved.push({
+      component,
+      extension: asset.extension,
+      actionCount,
+      interactPrograms: programs.length,
+    });
   }
   if (
-    resolved.length > 0 &&
+    // Only a graph someone is meant to press needs an Interactable. Warning
+    // about one on a graph that starts itself would be noise on every timeline.
+    resolved.some((candidate) => candidate.interactPrograms > 0) &&
     !entity.components.some(
       (candidate) =>
         candidate.type === "xrift-component" &&
@@ -948,7 +962,8 @@ function resolveInteractionTriggers(
         "EntityにInteractableがないため、公開先でこのTriggerを押せません",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
-      componentId: resolved[0]?.component.id,
+      componentId: resolved.find((candidate) => candidate.interactPrograms > 0)
+        ?.component.id,
     });
   }
   return resolved;

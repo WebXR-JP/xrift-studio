@@ -540,7 +540,10 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     category: "entity",
     extension: XRIFT_INTERACTION_EXTENSION_NAME,
     flowInputs: ["in"],
-    flowOutputs: ["out"],
+    // `out` continues at once; `done` waits for the change to finish, which is
+    // what「2秒かけて動かしてから次」needs. Without it the completion the engine
+    // already sends had nowhere to go.
+    flowOutputs: ["out", "done"],
     valueInputs: ["value", "duration"],
     valueOutputs: [],
     // A new action starts on the Entity's own visibility: the one property
@@ -799,6 +802,7 @@ const KHR_INTERACTIVITY_RUNTIME_NOTES: Readonly<Record<string, string>> = {
     "glTF の値を書き換えます。対象を解決できる Entity または Material へ接続されている必要があります。",
   "pointer/interpolate":
     "glTF の値を duration 秒かけて変えます。対象を解決できる接続が必要です。",
+  "pointer/get": "glTF の値を読み取ります。",
   [XRIFT_INTERACTION_OPERATIONS.onInteract]:
     "このグラフをInteraction ComponentでEntityへ接続し、そのEntityに公式のInteractableがあるときに動きます。",
   [XRIFT_INTERACTION_OPERATIONS.setProperty]:
@@ -807,12 +811,34 @@ const KHR_INTERACTIVITY_RUNTIME_NOTES: Readonly<Record<string, string>> = {
     "対象のON/OFFを、通るたびに反転します。切り替えられるのはON/OFFのプロパティだけです。",
 };
 
+/**
+ * Why an operation the interpreter knows still does not run.
+ *
+ * Kept apart from {@link KHR_INTERACTIVITY_RUNTIME_NOTES}, which says what an
+ * operation does when it runs. Reading the wrong one printed "glTF の値を
+ * 書き換えます" under a「Play未対応」badge — the exact contradiction the badge
+ * exists to prevent.
+ */
+const KHR_INTERACTIVITY_UNSUPPORTED_NOTES: Readonly<Record<string, string>> = {
+  "pointer/get":
+    "glTF Object Model の pointer を解決する接続がまだないため、Play と公開先では動きません。Entity や Material を変えるには「プロパティを変える」を使ってください。",
+  "pointer/set":
+    "glTF Object Model の pointer を解決する接続がまだないため、Play と公開先では動きません。Entity や Material を変えるには「プロパティを変える」を使ってください。",
+  "pointer/interpolate":
+    "glTF Object Model の pointer を解決する接続がまだないため、Play と公開先では動きません。時間をかけた変化は「プロパティを変える」の「かける時間」で作れます。",
+};
+
 export function getInteractivityRuntimeSupport(
   op: string,
 ): InteractivityRuntimeAdapterEntry {
   const support = getRuntimeSupport(op);
   if (support === "ignored") {
-    return { support, note: KHR_INTERACTIVITY_RUNTIME_NOTES[op] ?? KHR_INTERACTIVITY_IGNORED_FLOW_NOTE };
+    return {
+      support,
+      note:
+        KHR_INTERACTIVITY_UNSUPPORTED_NOTES[op] ??
+        KHR_INTERACTIVITY_IGNORED_FLOW_NOTE,
+    };
   }
   return {
     support,
@@ -1004,7 +1030,9 @@ export {
   collectXriftInteractionPrograms,
   getXriftInteractionProperties,
   getXriftInteractionProperty,
+  hasXriftInteractionRuntimeWork,
   hasXriftInteractionTrigger,
+  hasXriftSelfStartingEntry,
   xriftInteractionEnumIndex,
   XRIFT_INTERACTION_EXTENSION_NAME,
   XRIFT_INTERACTION_OPERATIONS,
