@@ -93,6 +93,15 @@ export function collectInteractionTriggerTargets(
         label: XRIFT_INTERACTION_TARGET_LABELS.transform,
         properties: getXriftInteractionProperties("transform"),
       },
+      {
+        // One row for everything this Entity draws: a Material Asset is shared
+        // between Entities, so the write is scoped to this Entity's own copies
+        // rather than to a Material a picker could point anywhere.
+        componentId: "material",
+        targetKind: "material",
+        label: XRIFT_INTERACTION_TARGET_LABELS.material,
+        properties: getXriftInteractionProperties("material"),
+      },
     ];
     let audioIndex = 0;
     let lightIndex = 0;

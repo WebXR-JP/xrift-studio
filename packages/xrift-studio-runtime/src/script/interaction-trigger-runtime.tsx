@@ -5,6 +5,8 @@ import {
   LinearSRGBColorSpace,
   MathUtils,
   SRGBColorSpace,
+  type Material,
+  type Mesh,
   type Object3D,
 } from "three";
 import {
@@ -317,6 +319,128 @@ export function createXriftInteractionApplier({
 
   const animationOwners = new Set<XriftAnimationRuntimeBridge>();
   const sceneOwners = new Set<XriftSceneRuntimeBridge>();
+  /**
+   * Meshes whose Material this trigger replaced with its own clone.
+   *
+   * A Material Asset is shared, so writing to the instance a Mesh happens to
+   * hold would recolour every other Entity using it. Owning a clone first is
+   * what keeps the change to this Entity, and keeping the original is what puts
+   * the Scene back on Stop.
+   */
+  const materialRestores = new Map<Mesh, Material | Material[]>();
+
+  const isMesh = (object: Object3D): object is Mesh =>
+    (object as Mesh & { isMesh?: boolean }).isMesh === true;
+
+  /** Visits this Entity's own Meshes, stopping at a nested Entity. */
+  const forEachOwnedMesh = (
+    root: Object3D,
+    entityId: string,
+    callback: (mesh: Mesh) => void,
+  ): void => {
+    const visit = (object: Object3D) => {
+      if (object !== root) {
+        const marker = entityMarker(object);
+        if (marker && marker !== entityId) return;
+      }
+      if (isMesh(object)) callback(object);
+      for (const child of object.children) visit(child);
+    };
+    visit(root);
+  };
+
+  const ownMaterials = (mesh: Mesh): Material[] => {
+    if (!materialRestores.has(mesh)) {
+      materialRestores.set(mesh, mesh.material);
+      mesh.material = Array.isArray(mesh.material)
+        ? mesh.material.map((entry) => entry.clone())
+        : mesh.material.clone();
+    }
+    return Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  };
+
+  type WritableMaterial = Material & {
+    color?: Color;
+    emissive?: Color;
+    emissiveIntensity?: number;
+  };
+
+  const applyMaterial = (target: Object3D, action: XriftInteractionAction) => {
+    forEachOwnedMesh(target, action.entityId, (mesh) => {
+      for (const material of ownMaterials(mesh) as WritableMaterial[]) {
+        if (action.property === "baseColor" && action.value?.kind === "color") {
+          material.color?.setRGB(
+            action.value.value[0],
+            action.value.value[1],
+            action.value.value[2],
+            LinearSRGBColorSpace,
+          );
+        } else if (
+          action.property === "emissive" &&
+          action.value?.kind === "color"
+        ) {
+          material.emissive?.setRGB(
+            action.value.value[0],
+            action.value.value[1],
+            action.value.value[2],
+            LinearSRGBColorSpace,
+          );
+        } else if (
+          action.property === "emissiveIntensity" &&
+          action.value?.kind === "float"
+        ) {
+          if (material.emissiveIntensity !== undefined) {
+            material.emissiveIntensity = action.value.value;
+          }
+        } else if (
+          action.property === "opacity" &&
+          action.value?.kind === "float"
+        ) {
+          material.opacity = action.value.value;
+          // Below 1 the Material has to be drawn in the transparent pass, or
+          // the change simply does not show.
+          material.transparent = material.transparent || action.value.value < 1;
+        } else {
+          continue;
+        }
+        material.needsUpdate = true;
+      }
+    });
+  };
+
+  const readMaterial = (
+    object: Object3D,
+    target: { entityId: string; property: string },
+  ): XriftInteractionValue | null => {
+    const found: { value: XriftInteractionValue | null } = { value: null };
+    forEachOwnedMesh(object, target.entityId, (mesh) => {
+      if (found.value) return;
+      const materials = Array.isArray(mesh.material)
+        ? mesh.material
+        : [mesh.material];
+      const material = materials[0] as WritableMaterial | undefined;
+      if (!material) return;
+      if (target.property === "baseColor" && material.color) {
+        found.value = {
+          kind: "color",
+          value: [material.color.r, material.color.g, material.color.b],
+        };
+      } else if (target.property === "emissive" && material.emissive) {
+        found.value = {
+          kind: "color",
+          value: [material.emissive.r, material.emissive.g, material.emissive.b],
+        };
+      } else if (target.property === "emissiveIntensity") {
+        found.value = {
+          kind: "float",
+          value: material.emissiveIntensity ?? 1,
+        };
+      } else if (target.property === "opacity") {
+        found.value = { kind: "float", value: material.opacity };
+      }
+    });
+    return found.value;
+  };
   const particleOverrides = new Map<
     XriftParticleRuntimeBridge,
     XriftParticleRuntimeOverrides
@@ -682,6 +806,9 @@ export function createXriftInteractionApplier({
       if (target.targetKind === "particle") {
         return readParticle(object, target);
       }
+      if (target.targetKind === "material") {
+        return readMaterial(object, target);
+      }
       if (target.targetKind === "light") return readLight(object, target);
       return readAudioSource(object, target);
     },
@@ -708,6 +835,10 @@ export function createXriftInteractionApplier({
         applyParticle(target, action);
         return;
       }
+      if (action.target === "material") {
+        applyMaterial(target, action);
+        return;
+      }
       if (action.target === "light") {
         applyLight(target, action);
         return;
@@ -723,6 +854,14 @@ export function createXriftInteractionApplier({
       sceneOwners.clear();
       for (const bridge of particleOverrides.keys()) bridge.removeOwner(owner);
       particleOverrides.clear();
+      for (const [mesh, original] of materialRestores) {
+        const owned = mesh.material;
+        mesh.material = original;
+        for (const entry of Array.isArray(owned) ? owned : [owned]) {
+          entry.dispose();
+        }
+      }
+      materialRestores.clear();
       for (const bridge of lightOverrides.keys()) bridge.removeOwner(owner);
       for (const bridge of audioOverrides.keys()) bridge.removeOwner(owner);
       lightOverrides.clear();

@@ -40,6 +40,7 @@ export type XriftInteractionTargetKind =
   | "audio-source"
   | "light"
   | "particle"
+  | "material"
   | "scene";
 
 /**
@@ -59,6 +60,7 @@ export const XRIFT_INTERACTION_TARGET_KINDS: readonly XriftInteractionTargetKind
   "audio-source",
   "light",
   "particle",
+  "material",
   "scene",
 ];
 
@@ -71,6 +73,7 @@ export const XRIFT_INTERACTION_TARGET_LABELS: Readonly<
   "audio-source": "Audio Source",
   light: "Light",
   particle: "Particle",
+  material: "Material",
   scene: "Scene",
 };
 
@@ -89,7 +92,12 @@ export type XriftInteractionPropertyKind =
  * requiring an id there would make a complete action look unfinished.
  */
 export const XRIFT_INTERACTION_ENTITY_SCOPED_TARGETS: ReadonlySet<string> =
-  new Set<XriftInteractionTargetKind>(["entity", "transform", "scene"]);
+  new Set<XriftInteractionTargetKind>([
+    "entity",
+    "transform",
+    "material",
+    "scene",
+  ]);
 
 export function isXriftInteractionEntityScoped(target: string): boolean {
   return XRIFT_INTERACTION_ENTITY_SCOPED_TARGETS.has(target);
@@ -201,6 +209,47 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     min: 0,
     max: 600,
     step: 0.1,
+  },
+  {
+    target: "material",
+    name: "baseColor",
+    label: "色",
+    description:
+      "このEntityが描くMaterialの色を変えます。Entity内のすべてのMaterialが対象です。Playを止めると元へ戻ります。",
+    kind: "color",
+    defaultValue: [1, 1, 1],
+  },
+  {
+    target: "material",
+    name: "emissive",
+    label: "発光色",
+    description:
+      "自己発光の色を変えます。Bloomと合わせると光って見えます。値はリニア空間のRGBです。",
+    kind: "color",
+    defaultValue: [0, 0, 0],
+  },
+  {
+    target: "material",
+    name: "emissiveIntensity",
+    label: "発光の強さ",
+    description: "発光色の強さを変えます。0で消灯します。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0,
+    max: 10,
+    step: 0.05,
+  },
+  {
+    target: "material",
+    name: "opacity",
+    label: "不透明度",
+    description:
+      "1で不透明、0で透明になります。1未満にすると半透明として描きます。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0,
+    max: 1,
+    step: 0.01,
   },
   {
     target: "particle",

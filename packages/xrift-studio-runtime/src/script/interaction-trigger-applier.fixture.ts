@@ -1,4 +1,4 @@
-import { Object3D } from "three";
+import { Mesh, MeshStandardMaterial, Object3D } from "three";
 
 import {
   XRIFT_AUDIO_SOURCE_RUNTIME_USER_DATA_KEY,
@@ -228,6 +228,54 @@ export async function runInteractionTriggerApplierFixtureAssertions(): Promise<v
     "a Transform rotation could not be read back",
   );
 
+  // A Material write owns a clone first: the Asset is shared, so writing the
+  // instance the Mesh happened to hold would recolour every other Entity.
+  const shared = new MeshStandardMaterial({ color: 0xffffff });
+  const lamp = entityObject("entity-lamp");
+  const lampMesh = new Mesh(undefined, shared);
+  lamp.add(lampMesh);
+  const bystander = entityObject("entity-bystander");
+  const bystanderMesh = new Mesh(undefined, shared);
+  bystander.add(bystanderMesh);
+  root.add(lamp, bystander);
+  applier.apply(
+    action({
+      entityId: "entity-lamp",
+      componentId: "material",
+      target: "material",
+      property: "baseColor",
+      value: { kind: "color", value: [1, 0, 0] },
+    }),
+  );
+  const lampMaterial = lampMesh.material as MeshStandardMaterial;
+  const lampIsRed = lampMaterial.color.r === 1 && lampMaterial.color.g === 0;
+  assert(lampIsRed, "a Material colour write did not reach the Entity's Mesh");
+  assert(
+    lampMaterial !== shared,
+    "a Material write changed the shared Asset instead of an owned clone",
+  );
+  const bystanderMaterial = bystanderMesh.material as MeshStandardMaterial;
+  const bystanderUntouched = bystanderMaterial.color.g === 1;
+  assert(
+    bystanderUntouched,
+    "a Material write leaked into another Entity using the same Material",
+  );
+  applier.apply(
+    action({
+      entityId: "entity-lamp",
+      componentId: "material",
+      target: "material",
+      property: "opacity",
+      value: { kind: "float", value: 0.25 },
+    }),
+  );
+  const lampOpacity = (lampMesh.material as MeshStandardMaterial).opacity;
+  const lampTransparent = (lampMesh.material as MeshStandardMaterial).transparent;
+  assert(
+    lampOpacity === 0.25 && lampTransparent,
+    "a Material opacity write did not switch the Material to the transparent pass",
+  );
+
   // A Particle emitter is addressed by its Component id, so an Entity carrying
   // two effects can start one without the other.
   const smoke = createXriftParticleRuntimeBridge({ componentId: "component-smoke" });
@@ -309,6 +357,10 @@ export async function runInteractionTriggerApplierFixtureAssertions(): Promise<v
   assert(exposedTo === 4, "a Scene exposure did not reach the Scene bridge");
 
   applier.dispose();
+  assert(
+    lampMesh.material === shared,
+    "a Material write survived the trigger's disposal",
+  );
   assert(
     sparks.read().playing === undefined && sparks.read().emissionRate === undefined,
     "Particle overrides survived the trigger's disposal",
