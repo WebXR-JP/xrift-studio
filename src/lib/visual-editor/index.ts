@@ -38,6 +38,8 @@ export * from "./interaction-trigger-targets";
 export * from "./interactivity-graph";
 export * from "./interactivity-recipes";
 export * from "./glow-material-catalog";
+export * from "./gizmo-focus";
+export * from "./gizmo-focus.fixture";
 export * from "./gizmo-snap";
 export * from "./gizmo-snap.fixture";
 export * from "./lighting-contract";
