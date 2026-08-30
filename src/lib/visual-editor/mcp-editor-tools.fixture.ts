@@ -1302,6 +1302,92 @@ export function runXriftMcpEditorToolFixtures(): void {
     "list_entities should include the previously placed Entity",
   );
 
+  // create_terrain makes a flat plate, which is the right primitive and the
+  // wrong starting point: everything the Create menu offers arrives shaped.
+  const terrainCatalog = executeXriftMcpEditorTool(current, {
+    id: "fixture-list-terrain-presets",
+    tool: "list_terrain_presets",
+    arguments: {},
+  });
+  const shapePresets = terrainCatalog.result.presets as Array<{ id: string }>;
+  const surfacePresets = terrainCatalog.result.surfaces as Array<{
+    id: string;
+    parameters: Array<{ uniform: string; default: unknown }>;
+  }>;
+  assert(
+    shapePresets.some((preset) => preset.id === "rolling-hills") &&
+      surfacePresets.length > 0 &&
+      surfacePresets.every((surface) =>
+        surface.parameters.every((parameter) => parameter.default !== undefined),
+      ),
+    "list_terrain_presets should expose both catalogs with usable defaults",
+  );
+
+  const presetTerrain = executeXriftMcpEditorTool(current, {
+    id: "fixture-create-terrain-from-preset",
+    tool: "create_terrain_from_preset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      presetId: "rolling-hills",
+    },
+  });
+  const presetTerrainId = presetTerrain.sceneSelection?.id as string;
+  assert(
+    presetTerrain.changed &&
+      presetTerrain.result.grassPresetId !== null &&
+      presetTerrain.result.overlappingTerrainCount === 0,
+    "create_terrain_from_preset should place a shaped, planted Terrain clear of the others",
+  );
+  current = { ...current, bundle: presetTerrain.bundle, revision: current.revision + 1 };
+
+  const presetShape = executeXriftMcpEditorTool(current, {
+    id: "fixture-preset-terrain-shape",
+    tool: "get_terrain",
+    arguments: { entityId: presetTerrainId },
+  });
+  assert(
+    (presetShape.result.maxHeight as number) >
+      (presetShape.result.minHeight as number),
+    "A preset Terrain should arrive sculpted rather than flat",
+  );
+
+  const surfaceApplied = executeXriftMcpEditorTool(current, {
+    id: "fixture-apply-terrain-surface",
+    tool: "apply_terrain_surface",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityId: presetTerrainId,
+      surfaceId: surfacePresets[0].id,
+    },
+  });
+  const surfaceParameters = surfaceApplied.result.parameters as Record<
+    string,
+    number | string
+  >;
+  assert(
+    surfaceApplied.changed &&
+      typeof surfaceApplied.result.materialAssetId === "string" &&
+      Object.keys(surfaceParameters).length > 0,
+    "apply_terrain_surface should install a Material and report the values it used",
+  );
+  // The bands are metres and this Terrain is not the preset's size, so leaving
+  // them at the preset's own numbers is what makes the ground one flat colour.
+  const range = {
+    min: presetShape.result.minHeight as number,
+    max: presetShape.result.maxHeight as number,
+  };
+  const lowBand = surfaceParameters.uLowHeight;
+  assert(
+    typeof lowBand !== "number" ||
+      (lowBand >= range.min - 1e-6 && lowBand <= range.max + 1e-6),
+    `The fitted height band ${String(lowBand)} fell outside ${range.min}..${range.max}`,
+  );
+  current = { ...current, bundle: surfaceApplied.bundle, revision: current.revision + 1 };
+
   const terrainCreated = executeXriftMcpEditorTool(current, {
     id: "fixture-create-terrain",
     tool: "create_terrain",

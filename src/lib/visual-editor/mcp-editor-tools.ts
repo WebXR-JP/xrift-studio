@@ -80,9 +80,27 @@ import {
   transformPointByMatrix,
 } from "./entity-bounds";
 import {
+  DEFAULT_TERRAIN_SPAN,
+  TERRAIN_PRESETS,
+  createTerrainFromPreset,
+  findTerrainOverlaps,
+  getTerrainPreset,
+  nextTerrainPosition,
+  type TerrainFootprint,
+} from "./terrain-presets";
+import {
+  TERRAIN_SURFACE_CATALOG,
+  TERRAIN_SURFACE_CATALOG_REVISION,
+  defaultTerrainSurfaceParameterValues,
+  fitTerrainSurfaceToRange,
+  getTerrainSurfacePreset,
+} from "./terrain-surface-catalog";
+import { applyTerrainSurfaceCatalogInstall } from "./external-store";
+import {
   terrainCellHasHole,
   terrainHeightRange,
   TERRAIN_BRUSH_KINDS,
+  TERRAIN_MATERIAL_SLOT,
   TERRAIN_HEIGHT_ABSOLUTE_MAX,
   TERRAIN_RESOLUTION_MAX,
   TERRAIN_RESOLUTION_MIN,
@@ -312,7 +330,10 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   create_primitive: createPrimitive,
   get_terrain: getTerrain,
   sample_terrain_point: sampleTerrainPoint,
+  list_terrain_presets: listTerrainPresets,
   create_terrain: createTerrain,
+  create_terrain_from_preset: createTerrainFromPresetTool,
+  apply_terrain_surface: applyTerrainSurface,
   sculpt_terrain: sculptTerrain,
   update_terrain: updateTerrain,
   list_terrain_grass_types: listTerrainGrassTypes,
@@ -2007,6 +2028,295 @@ function updateTerrain(
     },
     activity: `AIがTerrain「${entity.name}」のサイズと解像度を更新しました`,
   };
+}
+
+/**
+ * The shaped Terrains and the ground surfaces an author can start from.
+ *
+ * `create_terrain` makes a flat plate, which is the right primitive and the
+ * wrong starting point: the Create menu offers eight shaped presets and a
+ * surface catalog, and a caller with only the primitive had to sculpt a valley
+ * one brush stamp at a time. Both catalogs come back together because the two
+ * choices are made together — a shape and what it is made of.
+ */
+function listTerrainPresets(
+  context: XriftMcpEditorContext,
+): XriftMcpEditorToolOutcome {
+  return unchanged(
+    context,
+    {
+      presets: TERRAIN_PRESETS.map((preset) => ({
+        id: preset.id,
+        label: preset.label,
+        description: preset.description,
+        width: preset.width,
+        depth: preset.depth,
+        resolution: preset.resolution,
+        grassPresetId: preset.grassPresetId,
+      })),
+      surfaces: TERRAIN_SURFACE_CATALOG.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        category: entry.category,
+        description: entry.description,
+        parameters: entry.parameters.map((parameter) => ({
+          uniform: parameter.uniform,
+          label: parameter.label,
+          hint: parameter.hint,
+          kind: parameter.kind,
+          ...(parameter.kind === "number"
+            ? { min: parameter.min, max: parameter.max, step: parameter.step }
+            : {}),
+          default: defaultTerrainSurfaceParameterValues(entry)[
+            parameter.uniform
+          ],
+        })),
+      })),
+      catalogRevision: TERRAIN_SURFACE_CATALOG_REVISION,
+    },
+    "Terrainのpresetと表面カタログを取得しました",
+  );
+}
+
+function createTerrainFromPresetTool(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const presetId = requiredString(argumentsValue.presetId, "presetId");
+  const preset = getTerrainPreset(presetId);
+  if (!preset) {
+    throw new XriftMcpEditorToolError(
+      "TERRAIN_PRESET_NOT_FOUND",
+      "指定されたTerrain presetが見つかりません",
+      { presetId, presetIds: TERRAIN_PRESETS.map((entry) => entry.id) },
+    );
+  }
+  // `undefined` keeps the preset's own grass; an explicit null places it bare.
+  const hasGrassOverride = Object.prototype.hasOwnProperty.call(
+    argumentsValue,
+    "grassPresetId",
+  );
+  const grassPresetId = hasGrassOverride
+    ? optionalNullableString(argumentsValue.grassPresetId, "grassPresetId")
+    : undefined;
+  if (grassPresetId && !getTerrainGrassPreset(grassPresetId)) {
+    throw new XriftMcpEditorToolError(
+      "TERRAIN_GRASS_PRESET_NOT_FOUND",
+      "指定された草のセットが見つかりません",
+      { grassPresetId },
+    );
+  }
+  const geometry = createTerrainFromPreset(preset, grassPresetId);
+  const requestedMaterialAssetId = optionalString(
+    argumentsValue.materialAssetId,
+  );
+  const materialAssetId =
+    requestedMaterialAssetId ??
+    Object.values(context.bundle.assets.assets).find(
+      (asset) => asset.kind === "material",
+    )?.id;
+  if (!materialAssetId) {
+    throw new XriftMcpEditorToolError(
+      "NO_MATERIAL_AVAILABLE",
+      "ProjectにTerrainへ割り当てられるMaterialがありません",
+    );
+  }
+  // Two Terrains over the same ground are two nearly coplanar surfaces that
+  // tear into moire bands, so a new one lands clear of the existing row unless
+  // the caller places it deliberately.
+  const position =
+    optionalVec3(argumentsValue.position, "position") ??
+    nextTerrainPosition(
+      collectTerrainFootprintsForMcp(context.bundle.scene),
+      geometry.width || DEFAULT_TERRAIN_SPAN,
+    );
+  const created = addTerrainEntity(
+    context.bundle.scene,
+    context.bundle.assets,
+    materialAssetId,
+    { ...geometry, name: preset.label, position },
+  );
+  if (!created) {
+    throw new XriftMcpEditorToolError(
+      "TERRAIN_CREATE_FAILED",
+      "指定されたMaterialでTerrainを作成できません",
+      { materialAssetId },
+    );
+  }
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    scene: created.scene,
+  });
+  const overlaps = findTerrainOverlaps(
+    collectTerrainFootprintsForMcp(created.scene),
+  );
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: created.entityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId: created.entityId,
+      presetId,
+      grassPresetId: grassPresetId ?? preset.grassPresetId,
+      width: geometry.width,
+      depth: geometry.depth,
+      resolution: geometry.resolution,
+      position,
+      materialAssetId,
+      // Reported rather than blocked: an author may want two Terrains meeting
+      // on purpose, but they should never find out from the moire.
+      overlappingTerrainCount: overlaps.length,
+    },
+    activity: `AIがTerrain preset「${preset.label}」をSceneへ配置しました`,
+  };
+}
+
+/**
+ * Paints a Terrain's ground with one of the catalog's height/slope surfaces.
+ *
+ * The preset's height bands are metres, and a Terrain may span two of them or
+ * eighty. Applied unchanged, every edge would fall outside the range and the
+ * ground would come out one flat colour, which reads as a broken shader rather
+ * than a mistuned one — so the bands are fitted to this Terrain's own range
+ * unless the caller supplies values.
+ */
+function applyTerrainSurface(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const target = requireTerrain(context, argumentsValue);
+  const surfaceId = requiredString(argumentsValue.surfaceId, "surfaceId");
+  const entry = getTerrainSurfacePreset(surfaceId);
+  if (!entry) {
+    throw new XriftMcpEditorToolError(
+      "TERRAIN_SURFACE_NOT_FOUND",
+      "指定された表面presetが見つかりません",
+      {
+        surfaceId,
+        surfaceIds: TERRAIN_SURFACE_CATALOG.map((candidate) => candidate.id),
+      },
+    );
+  }
+  const fitted = fitTerrainSurfaceToRange(
+    entry,
+    terrainHeightRange(target.terrain),
+  );
+  const values = { ...fitted };
+  if (argumentsValue.parameters !== undefined) {
+    const supplied = recordValue(argumentsValue.parameters, "parameters");
+    assertObjectKeys(
+      supplied,
+      "parameters",
+      entry.parameters.map((parameter) => parameter.uniform),
+    );
+    for (const parameter of entry.parameters) {
+      const value = supplied[parameter.uniform];
+      if (value === undefined) continue;
+      if (parameter.kind === "number") {
+        values[parameter.uniform] = terrainMcpNumber(
+          value,
+          `parameters.${parameter.uniform}`,
+          parameter.min,
+          parameter.min,
+          parameter.max,
+        );
+        continue;
+      }
+      if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) {
+        invalidArgument(`parameters.${parameter.uniform}`, "a #rrggbb colour");
+      }
+      values[parameter.uniform] = value.toLowerCase();
+    }
+  }
+  const installed = applyTerrainSurfaceCatalogInstall(
+    context.bundle.assets,
+    entry,
+    values,
+  );
+  const scene = setMeshMaterialBinding(
+    context.bundle.scene,
+    installed.manifest,
+    target.entityId,
+    TERRAIN_MATERIAL_SLOT,
+    installed.primaryAssetId,
+    target.mesh.id,
+  );
+  const assetsChanged = installed.manifest !== context.bundle.assets;
+  if (scene === context.bundle.scene && !assetsChanged) {
+    return unchanged(
+      context,
+      {
+        projectId: context.bundle.project.projectId,
+        sceneId: context.bundle.scene.sceneId,
+        revision: context.revision,
+        entityId: target.entityId,
+        componentId: target.mesh.id,
+        surfaceId,
+        materialAssetId: installed.primaryAssetId,
+        parameters: values,
+      },
+      `Terrainの表面はすでに「${entry.label}」です`,
+    );
+  }
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    assets: installed.manifest,
+    scene,
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: target.entityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId: target.entityId,
+      componentId: target.mesh.id,
+      surfaceId,
+      // The surface lands as a normal Material, so it can be retuned with the
+      // Material tools afterwards rather than only through this catalog.
+      materialAssetId: installed.primaryAssetId,
+      parameters: values,
+    },
+    activity: `AIがTerrain「${target.entity.name}」の表面へ「${entry.label}」を適用しました`,
+  };
+}
+
+/** Footprints as the Terrain layout helpers expect them. */
+function collectTerrainFootprintsForMcp(
+  scene: SceneDocument,
+): TerrainFootprint[] {
+  const footprints: TerrainFootprint[] = [];
+  for (const entity of Object.values(scene.entities)) {
+    for (const component of entity.components) {
+      if (component.type !== "mesh") continue;
+      const terrain = getTerrainGeometry(component);
+      if (!terrain) continue;
+      const transform = entity.components.find(
+        (candidate): candidate is Extract<SceneComponent, { type: "transform" }> =>
+          candidate.type === "transform",
+      );
+      footprints.push({
+        entityId: entity.id,
+        name: entity.name,
+        centerX: transform?.position?.[0] ?? 0,
+        centerZ: transform?.position?.[2] ?? 0,
+        width: terrain.width,
+        depth: terrain.depth,
+      });
+    }
+  }
+  return footprints;
 }
 
 /**

@@ -277,6 +277,30 @@ export type TerrainOverlap = {
   b: TerrainFootprint;
 };
 
+/** Fallback footprint when a plain Terrain is created without a preset. */
+export const DEFAULT_TERRAIN_SPAN = 20;
+
+/**
+ * Finds free ground for a new Terrain.
+ *
+ * Terrains are laid out along +X, each clear of the last, so repeatedly trying
+ * presets builds a row to compare rather than a stack that z-fights. The Create
+ * menu and the MCP tool share it: a Terrain an agent adds has to land beside
+ * the existing ones for the same reason one a person adds does.
+ */
+export function nextTerrainPosition(
+  footprints: readonly TerrainFootprint[],
+  width: number,
+): [number, number, number] {
+  if (footprints.length === 0) return [0, 0, 0];
+  const rightEdge = footprints.reduce(
+    (edge, footprint) => Math.max(edge, footprint.centerX + footprint.width / 2),
+    -Infinity,
+  );
+  // A gap, so the two footprints never touch even after sculpting the edges.
+  return [rightEdge + width / 2 + 4, 0, 0];
+}
+
 /**
  * Terrains sharing ground.
  *

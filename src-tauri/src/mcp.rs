@@ -3260,6 +3260,56 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "list_terrain_presets",
+            "description": "List the shaped Terrain presets the Create menu offers (meadow, rolling hills, valley, plateau, island, ridge, basin, dunes) with their footprint and default grass set, and the ground surface catalog with each surface's tunable uniforms, ranges and defaults. create_terrain only makes a flat plate; these are what a shaped, planted, textured Terrain starts from.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "create_terrain_from_preset",
+            "description": "Place a shaped Terrain from a preset, already sculpted and planted, instead of sculpting a flat plate stamp by stamp. Omit grassPresetId to keep the preset's own grass, or pass null to place it bare. Omit position and it lands clear of the Terrains already in the scene, because two Terrains over the same ground tear into moire bands; overlappingTerrainCount reports any overlap rather than blocking it.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "presetId": { "type": "string", "minLength": 1 },
+                    "grassPresetId": { "type": ["string", "null"] },
+                    "materialAssetId": { "type": "string", "minLength": 1 },
+                    "position": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "presetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "apply_terrain_surface",
+            "description": "Paint a Terrain's ground with a surface preset from the catalog, blending materials by height and slope. The preset's height bands are absolute metres, so they are fitted to this Terrain's own elevation range unless parameters are given — applied unchanged on a Terrain of a different scale the ground comes out one flat colour, which reads as a broken shader. The surface lands as an ordinary Material, so it can be retuned afterwards with the Material tools.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "componentId": { "type": "string", "minLength": 1 },
+                    "surfaceId": { "type": "string", "minLength": 1 },
+                    "parameters": {
+                        "type": "object",
+                        "description": "Uniform values from list_terrain_presets; numbers are clamped to the listed range and colours are #rrggbb.",
+                        "additionalProperties": { "type": ["number", "string"] }
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "surfaceId"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "create_terrain",
             "description": "Create a static height-sampled Terrain with a fixed Trimesh Collider. It starts flat; use sculpt_terrain for deterministic Raise, Lower, Set Height, Smooth, Stamp, and Paint Holes operations.",
             "inputSchema": {

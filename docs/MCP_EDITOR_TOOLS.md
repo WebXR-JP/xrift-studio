@@ -64,8 +64,23 @@ snapshot への適用を弾くためで、複数 client が同時に触っても
 `inspect_colliders`, `optimize_colliders`
 
 **Terrain**
-`get_terrain`, `sample_terrain_point`, `create_terrain`, `sculpt_terrain`,
-`update_terrain`
+`get_terrain`, `sample_terrain_point`, `list_terrain_presets`,
+`create_terrain`, `create_terrain_from_preset`, `sculpt_terrain`,
+`update_terrain`, `apply_terrain_surface`
+
+`create_terrain` が作るのは平らな板で、primitive としては正しいが出発点として
+は間違っている。Create メニューは形の preset を 8 種と表面カタログを出していて、
+primitive しか無い caller は谷をブラシで一打ずつ彫ることになる。
+`create_terrain_from_preset` は彫って草まで載った状態で置く。`position` を
+省くと既存の Terrain の隣へ逃がす。同じ地面に 2 枚重なるとモアレになるため。
+重なりは阻止せず `overlappingTerrainCount` で報告する。意図的に隣接させたい
+場合があるが、モアレで気付かせてはいけない。
+
+`apply_terrain_surface` は高さと傾斜でマテリアルを混ぜる表面 preset を貼る。
+preset の高さ帯は絶対値のメートルなので、既定ではその Terrain の標高範囲へ
+合わせ直す。合わせずに貼ると全部の境界が範囲外に出て一色になり、「シェーダー
+が壊れている」ように見える。貼った結果は通常の Material なので、あとから
+Material の tool で調整できる。
 
 `sample_terrain_point` は Terrain-local の XZ から、補間した高さ、同じ点の
 world 座標、傾斜、穴、草の層ごとの被覆を返す。document は高さを平坦な配列で
