@@ -367,6 +367,61 @@ export function runInteractivityEngineFixtureAssertions(): void {
     );
   }
 
+  // Easing changes where the value is partway through, not where it ends, and
+  // a timed change is reported to the timeline as one span rather than as a
+  // frame-by-frame stream.
+  {
+    const builder = new GraphBuilder();
+    const start = builder.node("event/onStart");
+    const write = builder.node("xrift/setProperty", {
+      configuration: {
+        entity: { value: ["entity-1"] },
+        component: { value: ["light-1"] },
+        targetKind: { value: ["light"] },
+        property: { value: ["intensity"] },
+        easing: { value: ["ease-out-strong"] },
+      },
+      values: { value: builder.float(1), duration: builder.float(2) },
+    });
+    builder.connect(start, "out", write);
+    const writes: RecordedWrite[] = [];
+    let engine: InteractivityEngine | null = null;
+    engine = new InteractivityEngine(
+      builder.build(),
+      recordingHost(writes, () => {
+        if (!engine) throw new Error("engine read before it was constructed");
+        return engine;
+      }),
+    );
+    engine.start();
+    for (let step = 0; step < 60; step += 1) engine.update(1 / 30);
+    const halfway = writes.find((entry) => entry.time >= 1);
+    assert(
+      halfway !== undefined && asNumber(halfway.value) > 0.8,
+      "an ease-out curve did not move most of the way by the halfway point",
+    );
+    const landed = writes[writes.length - 1];
+    assert(
+      landed !== undefined && Math.abs(asNumber(landed.value) - 1) < 1e-6,
+      "an eased change did not land exactly on its target",
+    );
+
+    const run = dryRunInteractivityGraph(builder.build());
+    const spans = run.entries.filter((entry) => entry.kind === "property");
+    assert(
+      spans.length === 1,
+      `a timed change produced ${spans.length} timeline entries instead of one span`,
+    );
+    const span = spans[0];
+    assert(
+      span !== undefined &&
+        span.kind === "property" &&
+        span.durationSeconds === 2 &&
+        span.timeSeconds === 0,
+      "a timed change was not reported as a span starting when it began",
+    );
+  }
+
   // A cycle among values is reported instead of running forever.
   {
     const builder = new GraphBuilder();

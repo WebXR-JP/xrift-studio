@@ -160,14 +160,36 @@ export function mixValues(
   return { signature: to.signature, data: blended };
 }
 
-export type InteractivityEasing = "linear" | "ease-in" | "ease-out" | "ease-in-out";
+/**
+ * How a timed change is distributed over its duration.
+ *
+ * A curated set rather than arbitrary curves: an author picking "ゆっくり止まる"
+ * for a door is making a real choice, and a bezier editor is not what that
+ * choice needs. Every entry is monotonic except `ease-out-back`, which
+ * deliberately overshoots and settles.
+ */
+export type InteractivityEasing =
+  | "linear"
+  | "ease-in"
+  | "ease-out"
+  | "ease-in-out"
+  | "ease-in-strong"
+  | "ease-out-strong"
+  | "ease-out-back";
 
-const EASINGS: ReadonlySet<string> = new Set<InteractivityEasing>([
+export const INTERACTIVITY_EASINGS: readonly InteractivityEasing[] = [
   "linear",
   "ease-in",
   "ease-out",
   "ease-in-out",
-]);
+  "ease-in-strong",
+  "ease-out-strong",
+  "ease-out-back",
+];
+
+const EASINGS: ReadonlySet<string> = new Set<InteractivityEasing>(
+  INTERACTIVITY_EASINGS,
+);
 
 export function parseEasing(value: unknown): InteractivityEasing {
   return typeof value === "string" && EASINGS.has(value)
@@ -178,15 +200,24 @@ export function parseEasing(value: unknown): InteractivityEasing {
 /** Shapes a 0..1 progress ratio. Kept here so Play and publish ease alike. */
 export function applyEasing(ratio: number, easing: InteractivityEasing): number {
   const clamped = ratio <= 0 ? 0 : ratio >= 1 ? 1 : ratio;
+  const back = 1 - clamped;
   switch (easing) {
     case "ease-in":
       return clamped * clamped;
     case "ease-out":
-      return 1 - (1 - clamped) * (1 - clamped);
+      return 1 - back * back;
     case "ease-in-out":
-      return clamped < 0.5
-        ? 2 * clamped * clamped
-        : 1 - 2 * (1 - clamped) * (1 - clamped);
+      return clamped < 0.5 ? 2 * clamped * clamped : 1 - 2 * back * back;
+    case "ease-in-strong":
+      return clamped * clamped * clamped;
+    case "ease-out-strong":
+      return 1 - back * back * back;
+    case "ease-out-back": {
+      // Overshoots by about ten percent and settles, which is what a lid or a
+      // sign wants when it stops. The constants are the usual "back" pair.
+      const overshoot = 1.70158;
+      return 1 + (overshoot + 1) * back * back * back - overshoot * back * back;
+    }
     case "linear":
       return clamped;
   }

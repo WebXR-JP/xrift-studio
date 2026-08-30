@@ -144,7 +144,12 @@ function buildTracks(
       track.markers.push({
         id: `property-${index}`,
         timeSeconds: entry.timeSeconds,
-        endSeconds: null,
+        // A timed change is a span, not a moment: drawing it as a bar is what
+        // makes a two-second fade readable next to an instant switch.
+        endSeconds:
+          entry.durationSeconds > 0
+            ? entry.timeSeconds + entry.durationSeconds
+            : null,
         label: formatValue(entry.value.data),
         nodeIndex: entry.nodeIndex,
         tone: "property",

@@ -26,7 +26,9 @@ import {
   getInteractivityRuntimeSupport,
   INTERACTIVITY_RECIPES,
   addInteractivityGraph,
+  applyEasing,
   dryRunInteractivityGraph,
+  INTERACTIVITY_EASINGS,
   duplicateInteractivityGraph,
   removeInteractivityGraph,
   renameInteractivityGraph,
@@ -35,11 +37,16 @@ import {
   linearRgbToTint,
   parseKhrInteractivityExtension,
   readInteractivityNodePosition,
+  readInteractivityTriggerActionDuration,
+  readInteractivityTriggerActionEasing,
   setInteractivityLiteralValue,
+  setInteractivityTriggerActionDuration,
+  setInteractivityTriggerActionEasing,
   tintToLinearRgb,
   validateKhrInteractivityExtension,
   writeInteractivityNodePosition,
   type InteractivityAsset,
+  type InteractivityEasing,
   type InteractivityOperationTemplate,
   type InteractivityRecipe,
   type InteractivityRuntimeSupport,
@@ -484,6 +491,7 @@ function triggerActionSummary(
   return describeInteractionTriggerAction(targets, {
     ...action,
     mode: op === XRIFT_INTERACTION_OPERATIONS.toggleProperty ? "toggle" : "set",
+    durationSeconds: readInteractivityTriggerActionDuration(graph, index),
   });
 }
 
@@ -965,6 +973,126 @@ function TriggerValueField({
   );
 }
 
+/**
+ * Property kinds a timed change is meaningful for.
+ *
+ * A switch and a picked option have no halfway point; offering a duration for
+ * them would promise a fade that can only ever be a jump at the end.
+ */
+const TIMED_PROPERTY_KINDS: ReadonlySet<string> = new Set([
+  "float",
+  "color",
+  "vector3",
+]);
+
+const EASING_LABELS: Readonly<Record<InteractivityEasing, string>> = {
+  linear: "一定の速さ",
+  "ease-in": "ゆっくり始まる",
+  "ease-out": "ゆっくり止まる",
+  "ease-in-out": "両端がゆっくり",
+  "ease-in-strong": "強くゆっくり始まる",
+  "ease-out-strong": "強くゆっくり止まる",
+  "ease-out-back": "少し行き過ぎて戻る",
+};
+
+/** Draws the chosen curve, so the wording and the motion are the same thing. */
+function EasingCurve({ easing }: { easing: InteractivityEasing }) {
+  const points = Array.from({ length: 33 }, (_unused, step) => {
+    const ratio = step / 32;
+    const eased = applyEasing(ratio, easing);
+    // The back curve leaves the unit square; the viewBox is padded for it.
+    return `${(ratio * 60).toFixed(2)},${(26 - eased * 20).toFixed(2)}`;
+  }).join(" ");
+  return (
+    <svg
+      viewBox="0 0 60 32"
+      role="img"
+      aria-label={`${EASING_LABELS[easing]}の変化の仕方`}
+      className="h-8 w-16 shrink-0 rounded border border-slate-700 bg-slate-950"
+    >
+      <line x1="0" y1="26" x2="60" y2="26" stroke="#334155" strokeWidth="0.5" />
+      <line x1="0" y1="6" x2="60" y2="6" stroke="#334155" strokeWidth="0.5" />
+      <polyline
+        points={points}
+        fill="none"
+        stroke="#a78bfa"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * How long an action takes, and how the change is spread over that time.
+ *
+ * A door that snaps open and a door that swings open are the same action with
+ * a different duration, so this belongs on the action rather than in a separate
+ * node. It is only offered for values that have an in-between: flipping a
+ * switch or picking an option halfway through means nothing.
+ */
+function TriggerTimingField({
+  seconds,
+  easing,
+  disabled,
+  onSecondsChange,
+  onEasingChange,
+}: {
+  seconds: number;
+  easing: InteractivityEasing;
+  disabled: boolean;
+  onSecondsChange: (seconds: number) => void;
+  onEasingChange: (easing: InteractivityEasing) => void;
+}) {
+  return (
+    <div className="space-y-2 rounded border border-slate-700 bg-slate-950/60 p-2">
+      <label className="block text-[10px] text-slate-300">
+        かける時間（秒）
+        <input
+          type="number"
+          min={0}
+          max={600}
+          step={0.1}
+          value={seconds}
+          disabled={disabled}
+          onChange={(event) => {
+            const next = Number(event.target.value);
+            if (!Number.isFinite(next)) return;
+            onSecondsChange(Math.min(600, Math.max(0, next)));
+          }}
+          className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs disabled:opacity-45"
+        />
+      </label>
+      {seconds > 0 ? (
+        <div className="flex items-end gap-2">
+          <label className="min-w-0 flex-1 text-[10px] text-slate-300">
+            変わり方
+            <select
+              value={easing}
+              disabled={disabled}
+              onChange={(event) =>
+                onEasingChange(event.target.value as InteractivityEasing)
+              }
+              className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs"
+            >
+              {INTERACTIVITY_EASINGS.map((entry) => (
+                <option key={entry} value={entry}>
+                  {EASING_LABELS[entry]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <EasingCurve easing={easing} />
+        </div>
+      ) : (
+        <p className="text-[10px] leading-4 text-slate-400">
+          0 のままなら、その場ですぐ変わります。秒数を入れると、その時間をかけて変化します。
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function InteractivityGraphEditor(props: {
   asset: InteractivityAsset;
   materials: readonly MaterialAsset[];
@@ -1324,6 +1452,14 @@ function InteractivityGraphEditorBody({
     : undefined;
   const triggerToggleNode =
     selectedDeclaration?.op === XRIFT_INTERACTION_OPERATIONS.toggleProperty;
+  const triggerDuration =
+    triggerActionNode && selectedNodeIndex !== null
+      ? readInteractivityTriggerActionDuration(graph, selectedNodeIndex)
+      : 0;
+  const triggerEasing =
+    triggerActionNode && selectedNodeIndex !== null
+      ? readInteractivityTriggerActionEasing(graph, selectedNodeIndex)
+      : "linear";
 
 
   // `material` is authored through the picker above, and a socket fed by a wire
@@ -1336,9 +1472,13 @@ function InteractivityGraphEditorBody({
           ([socket, input]) =>
             input.node === undefined &&
             socket !== "material" &&
-            // An Interaction Trigger value is edited by the picker below, which
-            // knows the property's range, options and colour space.
-            !(socket === "value" && isTriggerActionOp(selectedDeclaration?.op)),
+            // An Interaction Trigger value and its timing are edited by the
+            // pickers below, which know the property's range, options, colour
+            // space, and whether a duration means anything for it.
+            !(
+              (socket === "value" || socket === "duration") &&
+              isTriggerActionOp(selectedDeclaration?.op)
+            ),
         )
         .map(([socket, input]) => ({
           socket,
@@ -2420,6 +2560,33 @@ function InteractivityGraphEditorBody({
                           disabled={readOnly}
                           onChange={(next) =>
                             applyTriggerValue(triggerDescriptor, next)
+                          }
+                        />
+                      ) : null}
+                      {triggerDescriptor &&
+                      !triggerToggleNode &&
+                      TIMED_PROPERTY_KINDS.has(triggerDescriptor.kind) ? (
+                        <TriggerTimingField
+                          seconds={triggerDuration}
+                          easing={triggerEasing}
+                          disabled={readOnly}
+                          onSecondsChange={(seconds) =>
+                            updateGraph((nextGraph) => {
+                              setInteractivityTriggerActionDuration(
+                                nextGraph,
+                                selectedNodeIndex,
+                                seconds,
+                              );
+                            })
+                          }
+                          onEasingChange={(easing) =>
+                            updateGraph((nextGraph) => {
+                              setInteractivityTriggerActionEasing(
+                                nextGraph,
+                                selectedNodeIndex,
+                                easing,
+                              );
+                            })
                           }
                         />
                       ) : null}

@@ -186,7 +186,9 @@ flow は後ろへ、value は前へ、という index 制約を検証から外�
 
 `scene` は Scene 全体を対象にする特殊な kind とする。露出と画面フェードは post-processing 側の値へ、`next` は Scene 遷移の要求へ変換する。Scene 遷移は Graph が直接画面を切り替えるのではなく、ホストへ要求を出し、遷移の実行はホストの責務とする。
 
-補間つきの書き込みは、専用 operation を増やすのではなく、既存の `xrift/setProperty` に `duration` と `easing` の value socket を足す形で扱う。`duration` が 0 なら即時、正の値なら補間になる。
+補間つきの書き込みは、専用 operation を増やすのではなく、既存の `xrift/setProperty` に `duration` の value socket と `easing` の configuration を足す形で扱う。`duration` が 0 なら即時、正の値なら補間になる。
+
+イージングは任意の曲線ではなく、選ぶ意味のある範囲に絞る。`linear`、`ease-in`、`ease-out`、`ease-in-out`、`ease-in-strong`、`ease-out-strong`、および行き過ぎて戻る `ease-out-back` の 7 種とする。中間値を持たない bool と enum には時間を出さない。途中が無い値に「かける時間」を出すと、最後に飛ぶだけの変化を補間だと約束することになる。
 
 ### 5. Graph の合成
 

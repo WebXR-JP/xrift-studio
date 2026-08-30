@@ -238,6 +238,8 @@ export function describeInteractionTriggerAction(
     property: string;
     mode: "set" | "toggle";
     value: readonly unknown[] | null;
+    /** Seconds the change is spread over. 0 or absent is an immediate write. */
+    durationSeconds?: number;
   },
 ): string {
   const entity = findInteractionTriggerTarget(targets, action.entityId);
@@ -252,7 +254,11 @@ export function describeInteractionTriggerAction(
   if (action.mode === "toggle") {
     return `${where} の${descriptor.label}を切り替える`;
   }
-  return `${where} の${descriptor.label}を ${formatTriggerValue(descriptor, action.value)} にする`;
+  const value = formatTriggerValue(descriptor, action.value);
+  const seconds = action.durationSeconds ?? 0;
+  return seconds > 0
+    ? `${where} の${descriptor.label}を ${seconds}秒かけて ${value} にする`
+    : `${where} の${descriptor.label}を ${value} にする`;
 }
 
 export function formatTriggerValue(

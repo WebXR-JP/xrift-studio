@@ -1,7 +1,9 @@
 import { isRecord } from "../json-guards";
 import {
   getInteractivityRuntimeSupport as getRuntimeSupport,
+  parseEasing,
   walkOnStart,
+  type InteractivityEasing,
   type InteractivityRuntimeSupport,
 } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
 import {
@@ -539,10 +541,11 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     extension: XRIFT_INTERACTION_EXTENSION_NAME,
     flowInputs: ["in"],
     flowOutputs: ["out"],
-    valueInputs: ["value"],
+    valueInputs: ["value", "duration"],
     valueOutputs: [],
     // A new action starts on the Entity's own visibility: the one property
-    // every Entity has, so the node is complete except for its target.
+    // every Entity has, so the node is complete except for its target. The
+    // duration starts at zero, which is an immediate write.
     createNode: (types) => ({
       configuration: {
         entity: { value: [""] },
@@ -550,7 +553,10 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
         targetKind: { value: ["entity"] },
         property: { value: ["enabled"] },
       },
-      values: { value: { type: types.bool, value: [true] } },
+      values: {
+        value: { type: types.bool, value: [true] },
+        duration: { type: types.float, value: [0] },
+      },
     }),
   },
   {
@@ -983,9 +989,12 @@ export type {
   InteractivityRuntimeSupport,
 } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
 export {
+  applyEasing,
   dryRunInteractivityGraph,
   getKhrInteractivityOnStartAnimationCues,
+  INTERACTIVITY_EASINGS,
 } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
+export type { InteractivityEasing } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
 export type {
   InteractivityDryRun,
   InteractivityScheduleEntry,
@@ -1204,6 +1213,66 @@ export function setInteractivityTriggerActionValue(
     value: { type: typeIndex, value },
   };
   return true;
+}
+
+/**
+ * How long an action takes, and how the change is distributed over that time.
+ *
+ * Both live on the node rather than in a second node: "move this over two
+ * seconds" is one thought, and splitting it into a write plus an interpolator
+ * is what makes a simple sequence read like a circuit diagram.
+ */
+export function setInteractivityTriggerActionDuration(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+  seconds: number,
+): boolean {
+  const node = graph.nodes?.[nodeIndex];
+  if (!node || !Number.isFinite(seconds)) return false;
+  graph.types ??= [];
+  const existing = graph.types.findIndex((type) => type.signature === "float");
+  const typeIndex =
+    existing >= 0 ? existing : graph.types.push({ signature: "float" }) - 1;
+  node.values = {
+    ...(node.values ?? {}),
+    duration: { type: typeIndex, value: [Math.max(0, seconds)] },
+  };
+  return true;
+}
+
+export function readInteractivityTriggerActionDuration(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+): number {
+  const socket = graph.nodes?.[nodeIndex]?.values?.duration;
+  if (!socket || socket.node !== undefined) return 0;
+  const first = socket.value?.[0];
+  return typeof first === "number" && Number.isFinite(first) && first > 0
+    ? first
+    : 0;
+}
+
+export function setInteractivityTriggerActionEasing(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+  easing: string,
+): boolean {
+  const node = graph.nodes?.[nodeIndex];
+  if (!node) return false;
+  node.configuration = {
+    ...(node.configuration ?? {}),
+    easing: { value: [easing] },
+  };
+  return true;
+}
+
+export function readInteractivityTriggerActionEasing(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+): InteractivityEasing {
+  return parseEasing(
+    graph.nodes?.[nodeIndex]?.configuration?.easing?.value?.[0],
+  );
 }
 
 /** Reads an action's target, for the Editor's pickers and node summaries. */

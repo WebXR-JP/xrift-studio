@@ -143,9 +143,16 @@ trigger keeps the first value it saw and restores it on Stop, and a Material is
 cloned before it is changed so a shared Asset never leaks the write into another
 Entity. Everything a trigger changes is runtime state that Stop discards.
 
-A timed write is the same node: `xrift/setProperty` takes an optional `duration`
-and `easing`, and a positive duration interpolates instead of setting. That is
-what a fade, a dimming light or a moving door is made of.
+A timed write is the same node: `xrift/setProperty` takes a `duration` value
+socket and an `easing` configuration, and a positive duration interpolates
+instead of setting. That is what a fade, a dimming light or a moving door is
+made of, and it is one node because "move this over two seconds" is one thought.
+
+The curves are a curated set rather than arbitrary beziers — `linear`,
+`ease-in`, `ease-out`, `ease-in-out`, `ease-in-strong`, `ease-out-strong`, and
+`ease-out-back`, which overshoots and settles. The Inspector offers a duration
+only for properties that have a halfway point: a switch or a picked option would
+otherwise promise a fade that could only be a jump at the end.
 
 An action whose target is not yet chosen is a warning, not an error: the graph
 is saved, the node is preserved, and the Editor, the compiler, and

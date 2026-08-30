@@ -43,6 +43,7 @@ export type {
 } from "./interactivity/host.js";
 export type { InteractivityValue } from "./interactivity/value.js";
 export {
+  applyEasing,
   asBoolean,
   asNumber,
   asNumbers,
@@ -50,8 +51,11 @@ export {
   floatValue,
   fromJsonValue,
   intValue,
+  parseEasing,
   vectorValue,
+  INTERACTIVITY_EASINGS,
 } from "./interactivity/value.js";
+export type { InteractivityEasing } from "./interactivity/value.js";
 
 /**
  * How far this runtime implements one operation.

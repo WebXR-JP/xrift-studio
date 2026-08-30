@@ -47,6 +47,8 @@ export type InteractivityScheduleEntry =
       readonly nodeIndex: number;
       readonly target: InteractivityActionTarget;
       readonly value: InteractivityValue;
+      /** Seconds the change is spread over. 0 for an immediate write. */
+      readonly durationSeconds: number;
     }
   | {
       readonly kind: "pointer";
@@ -117,6 +119,8 @@ export function dryRunInteractivityGraph(
   const horizon = Math.max(0, options.horizonSeconds ?? DEFAULT_HORIZON_SECONDS);
   const step = Math.max(1 / 240, options.stepSeconds ?? DEFAULT_STEP_SECONDS);
   const entries: InteractivityScheduleEntry[] = [];
+  /** Timed changes already recorded, so their samples are not recorded again. */
+  const timed: { target: InteractivityActionTarget; endsAt: number }[] = [];
   let engine: InteractivityEngine | null = null;
   const at = () => engine?.currentTime ?? 0;
   const from = () => engine?.activeNodeIndex ?? -1;
@@ -140,14 +144,41 @@ export function dryRunInteractivityGraph(
         nodeIndex: from(),
         animationIndex: request.animationIndex,
       }),
-    writeProperty: (target, value) => {
+    beginTimedWrite: (write) => {
+      if (!write.target) return;
+      timed.push({
+        target: write.target,
+        endsAt: at() + write.durationSeconds,
+      });
       entries.push({
         kind: "property",
         timeSeconds: at(),
         nodeIndex: from(),
-        target,
-        value,
+        target: write.target,
+        value: write.to,
+        durationSeconds: write.durationSeconds,
       });
+    },
+    writeProperty: (target, value) => {
+      // A timed change is already recorded as one entry spanning its duration;
+      // its per-frame samples would otherwise bury the timeline in duplicates.
+      const covered = timed.some(
+        (entry) =>
+          entry.endsAt >= at() - 1e-6 &&
+          entry.target.entityId === target.entityId &&
+          entry.target.componentId === target.componentId &&
+          entry.target.property === target.property,
+      );
+      if (!covered) {
+        entries.push({
+          kind: "property",
+          timeSeconds: at(),
+          nodeIndex: from(),
+          target,
+          value,
+          durationSeconds: 0,
+        });
+      }
       return true;
     },
     // No `writePointer`: nothing in Studio resolves a glTF Object Model pointer

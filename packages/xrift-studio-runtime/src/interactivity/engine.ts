@@ -1320,6 +1320,16 @@ export class InteractivityEngine {
       this.schedule(entry.node, "done", 0);
       return;
     }
+    if (entry.kind !== "variable") {
+      this.host.beginTimedWrite?.({
+        target: entry.target,
+        pointer: entry.kind === "pointer" ? entry.pointer : null,
+        from: entry.from,
+        to: entry.to,
+        durationSeconds: duration,
+        easing: entry.easing,
+      });
+    }
     this.interpolations.push(interpolation);
   }
 
