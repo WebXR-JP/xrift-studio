@@ -41,6 +41,7 @@ import {
   type MaterialTextureInfoPatch,
   type MaterialTextureTransform,
   type ModelAssetPatch,
+  type ModelOptimizationOptions,
   type ParticlePropertiesPatch,
   type PrefabDocument,
   type PrefabAsset,
@@ -61,6 +62,7 @@ import { CustomMaterialPreview } from "./CustomMaterialPreview";
 import type { ProjectModelMaterialRuntimeInfo } from "./ProjectModelVisual";
 import {
   ModelAssetInspector,
+  type ModelOptimizationState,
   type ModelReimportImpactNotice,
   type ModelReimportState,
 } from "./ModelAssetInspector";
@@ -3528,11 +3530,22 @@ export function TextureQuickEditor({
             onChange={(event) => onChange({ importSettings: { compression: { format: event.currentTarget.value as (typeof TEXTURE_COMPRESSION_FORMATS)[number] } } })}
             className={INPUT_CLASS}
           >
-            {TEXTURE_COMPRESSION_FORMATS.map((value) => <option key={value} value={value}>{value}</option>)}
+            {TEXTURE_COMPRESSION_FORMATS.map((value) => (
+              <option key={value} value={value}>
+                {TEXTURE_COMPRESSION_FORMAT_LABELS[value]}
+              </option>
+            ))}
           </select>
+          <span className="mt-1 block text-[11px] leading-4 text-slate-500">
+            {TEXTURE_COMPRESSION_FORMAT_HINTS[settings.compression.format]}
+          </span>
         </label>
         <RangeControl
-          label="Quality"
+          label={
+            settings.compression.format === "ktx2"
+              ? "圧縮品質（Basis）"
+              : "画質（JPEG / WEBP）"
+          }
           value={settings.compression.quality}
           min={0}
           max={100}
@@ -3540,6 +3553,11 @@ export function TextureQuickEditor({
           disabled={settingsDisabled}
           onChange={(quality) => onChange({ importSettings: { compression: { quality } } })}
         />
+        <p className="text-[11px] leading-4 text-slate-500">
+          {settings.compression.format === "ktx2"
+            ? "KTX2ではBasisの探索量になります。上げるほど同じ容量で画質が上がり、変換時間が伸びます。"
+            : "JPEG / WEBPで書き出す時の画質です。PNGは可逆のため容量に影響しません。"}
+        </p>
       </EditorSection>
 
       <EditorSection title="画像の書き出し">
@@ -3555,6 +3573,24 @@ export function TextureQuickEditor({
     </div>
   );
 }
+
+const TEXTURE_COMPRESSION_FORMAT_LABELS: Record<
+  (typeof TEXTURE_COMPRESSION_FORMATS)[number],
+  string
+> = {
+  source: "変換しない（原本の形式）",
+  webp: "WEBP（配信サイズを下げる）",
+  ktx2: "KTX2 / Basis（GPU圧縮）",
+};
+
+const TEXTURE_COMPRESSION_FORMAT_HINTS: Record<
+  (typeof TEXTURE_COMPRESSION_FORMATS)[number],
+  string
+> = {
+  source: "原本の形式のまま書き出します。最大解像度だけを変えたい時に選びます。",
+  webp: "通信量は減りますが、GPU上ではRGBAへ展開されるためVRAMは変わりません。",
+  ktx2: "GPUが圧縮のまま扱えるため、通信量とVRAMの両方を下げられます。端末により見た目が変わります。",
+};
 
 /**
  * 最大解像度・圧縮の設定はManifestに保持されるだけなので、原本へ反映するまでは
@@ -3678,6 +3714,8 @@ export function AssetQuickEditor({
   onReimportModel,
   modelReimportState,
   modelReimportImpactNotice,
+  modelOptimizationState,
+  onApplyModelOptimization,
   onParticleChange,
   onTextureChange,
   onCreateTextureCard,
@@ -3705,6 +3743,11 @@ export function AssetQuickEditor({
   onReimportModel: (assetId: string) => void;
   modelReimportState: ModelReimportState;
   modelReimportImpactNotice?: ModelReimportImpactNotice | null;
+  modelOptimizationState?: ModelOptimizationState;
+  onApplyModelOptimization?: (
+    assetId: string,
+    options: ModelOptimizationOptions,
+  ) => void;
   onParticleChange: (assetId: string, patch: ParticlePropertiesPatch) => void;
   onTextureChange: (assetId: string, patch: TextureAssetPatch) => void;
   textureProcessingState?: TextureProcessingState;
@@ -3755,9 +3798,16 @@ export function AssetQuickEditor({
         canReimport={Boolean(projectPath && asset.source.kind === "project")}
         reimportState={modelReimportState}
         reimportImpactNotice={modelReimportImpactNotice}
+        optimizationState={modelOptimizationState}
+        canOptimize={Boolean(projectPath && onApplyModelOptimization)}
         onChange={(patch) => onModelChange(asset.id, patch)}
         onOpenMaterial={onSelectAsset}
         onReimport={() => onReimportModel(asset.id)}
+        onOptimize={
+          onApplyModelOptimization
+            ? (options) => onApplyModelOptimization(asset.id, options)
+            : undefined
+        }
       />
     );
   }

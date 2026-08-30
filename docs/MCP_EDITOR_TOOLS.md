@@ -160,12 +160,12 @@ Ctrl+C / Ctrl+V と同じく別のグラフへも置ける。同じグラフの�
 **Component コードの取り込み**
 `analyze_component_code`, `apply_component_code_import_plan`
 
-## local-asset (11)
+## local-asset (12)
 
 `import_audio_asset`, `import_texture_asset`, `import_model_asset`,
 `import_skybox_asset`, `import_shader_asset`, `reimport_model_asset`,
-`process_texture_asset`, `apply_scene_recipe`, `get_shader_asset`,
-`update_shader_asset`, `set_project_thumbnail`
+`process_texture_asset`, `optimize_model_asset`, `apply_scene_recipe`,
+`get_shader_asset`, `update_shader_asset`, `set_project_thumbnail`
 
 `apply_scene_recipe` が document ではなく shell にあるのは、セットの部品の
 Model を project へ書き出すため。Particle Asset と subtree は一件の history
@@ -177,6 +177,14 @@ Model を project へ書き出すため。Particle Asset と subtree は一件�
 Editor 上では「未反映」と表示されている状態と食い違うため、変換の実行を別の
 tool にしてある。既に設定が反映済みなら `changed: false` と理由を返し、原本を
 書き直さない。
+
+`update_model_asset` も同じで、書けるのは import recipe (`scale`、
+`generateColliders`、`optimizeMeshes`、`importAnimations`) だけ。原本の GLB を
+実際に書き換えるのは `optimize_model_asset`。頂点の結合、頂点バッファの共有、
+Animation キーフレームの間引きと、任意で Draco 圧縮を行う。Material Slot、Node
+構造、Animation clip の本数は変えない。Material や Node の索引が動くと、Entity
+側の Material 割当が別の Material へ移るため、統合や平坦化は行わない。実行する
+処理がなければ `changed: false` を返す。
 
 ## script (6)
 
@@ -225,6 +233,7 @@ Undo 履歴も選択も動かさない。
 | Login / account 操作 | 認証情報を MCP 境界へ渡さない |
 | 任意 path の読み書き・削除 | Rust 側の path 検証と権限制御を迂回させない |
 | 任意 JavaScript の実行 | Script は trust gate 付きの Asset としてだけ入る |
+| Texture の一括変換 | 人が複数選択したものをまとめて書き出すための導線。AI からは `process_texture_asset` を Asset ごとに呼べばよく、対象の選び方も AI 側で決まる |
 
 ## 機能を足すときの手順
 

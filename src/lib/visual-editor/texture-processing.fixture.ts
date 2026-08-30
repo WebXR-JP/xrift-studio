@@ -6,6 +6,7 @@ import {
 } from "./asset-manifest";
 import {
   fitWithin,
+  ktx2QualityLevel,
   planTextureProcessing,
   processedAssetPath,
   resolveOutputFormat,
@@ -18,6 +19,32 @@ export function runTextureProcessingFixtureAssertions(): void {
   assertUnsupportedSources();
   assertPendingDetection();
   assertProcessedPath();
+  assertKtx2Quality();
+}
+
+/**
+ * Basisのquality levelは 1..255 の探索量で、Import設定の 0..100 とは別の尺度。
+ * 0や範囲外を渡すとエンコーダが失敗するので、境界を固定しておく。
+ */
+function assertKtx2Quality(): void {
+  assert(ktx2QualityLevel(0) === 1, "The lowest quality mapped outside the Basis range");
+  assert(ktx2QualityLevel(100) === 255, "The highest quality did not reach the Basis maximum");
+  assert(
+    ktx2QualityLevel(50) > 1 && ktx2QualityLevel(50) < 255,
+    "A mid quality did not stay inside the Basis range",
+  );
+  assert(
+    ktx2QualityLevel(-40) === 1 && ktx2QualityLevel(400) === 255,
+    "An out-of-range quality was not clamped",
+  );
+  assert(
+    ktx2QualityLevel(Number.NaN) === 255,
+    "A non-numeric quality did not fall back to the maximum",
+  );
+  assert(
+    ktx2QualityLevel(70) >= ktx2QualityLevel(40),
+    "The Basis quality mapping is not monotonic",
+  );
 }
 
 function assertFitWithin(): void {
@@ -158,6 +185,18 @@ function assertPendingDetection(): void {
       unknownSize.pending &&
       unknownSize.targetWidth === null,
     "A Texture with unknown dimensions did not fall back to running the conversion",
+  );
+
+  const ktx2 = plan(
+    { sourceFormat: "png", width: 1024, height: 1024 },
+    { compression: { format: "ktx2", quality: 80 } },
+  );
+  assert(
+    ktx2.supported &&
+      ktx2.pending &&
+      ktx2.outputFormat === "ktx2" &&
+      ktx2.qualityApplies,
+    "A KTX2 conversion did not report Quality as meaningful",
   );
 
   const substituted = plan(

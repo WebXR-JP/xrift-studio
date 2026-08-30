@@ -71,6 +71,9 @@ import {
   type MaterialAsset,
   type MaterialAssetPatch,
   type ModelAssetPatch,
+  type ModelOptimizationOptions,
+  type TextureAsset,
+  planTextureProcessing,
   type ModelBoneMetadata,
   type ModelMorphTargetMetadata,
   type ModelPoseState,
@@ -128,6 +131,7 @@ import {
 } from "./AssetQuickEditor";
 import { tauri } from "../../lib/tauri";
 import type {
+  ModelOptimizationState,
   ModelReimportImpactNotice,
   ModelReimportState,
 } from "./ModelAssetInspector";
@@ -2512,20 +2516,24 @@ function MultiSelectionInspector({
   selectedEntityIds,
   selectedAssetIds,
   readOnly,
+  textureBatchState,
   onSetEntitiesEnabled,
   onSetMeshShadow,
   onSetLightShadow,
   onApplyMaterialPatch,
+  onApplyTextureBatch,
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
   selectedEntityIds: readonly string[];
   selectedAssetIds: readonly string[];
   readOnly: boolean;
+  textureBatchState?: TextureProcessingState;
   onSetEntitiesEnabled: (enabled: boolean) => void;
   onSetMeshShadow: (patch: Pick<MeshInspectorPatch, "castShadow" | "receiveShadow">) => void;
   onSetLightShadow: (castShadow: boolean) => void;
   onApplyMaterialPatch: (patch: MaterialAssetPatch) => void;
+  onApplyTextureBatch?: (assetIds: readonly string[]) => void;
 }) {
   const entities = selectedEntityIds
     .map((id) => scene.entities[id])
@@ -2543,6 +2551,7 @@ function MultiSelectionInspector({
   const meshCastShadow = sameBoolean(entities.flatMap((entity) => entity.components.filter((component) => component.type === "mesh").map((component) => component.castShadow)));
   const meshReceiveShadow = sameBoolean(entities.flatMap((entity) => entity.components.filter((component) => component.type === "mesh").map((component) => component.receiveShadow)));
   const lightCastShadow = sameBoolean(entities.flatMap((entity) => entity.components.filter((component) => component.type === "light").map((component) => component.castShadow)));
+  const textures = selectedAssets.filter((asset) => asset.kind === "texture");
   const materialProperties = materials.map((asset) => normalizeMaterialProperties(asset.properties as MaterialAssetPatch));
   const sameValue = <T,>(values: T[]) => values.length > 0 && values.every((value) => value === values[0]) ? values[0] : undefined;
   const materialColor = sameValue(materialProperties.map((properties) => properties.color));
@@ -2584,6 +2593,20 @@ function MultiSelectionInspector({
     );
   }
 
+  if (textures.length > 1) {
+    return (
+      <div className="space-y-3">
+        <TextureBatchProcessingCard
+          textures={textures}
+          otherSelectionCount={selectedAssets.length - textures.length}
+          readOnly={readOnly}
+          state={textureBatchState ?? { phase: "idle" }}
+          onApply={onApplyTextureBatch}
+        />
+      </div>
+    );
+  }
+
   if (allMaterials) {
     return (
       <div className="space-y-3">
@@ -2601,7 +2624,106 @@ function MultiSelectionInspector({
     );
   }
 
-  return <p className="rounded border border-dashed border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">複数選択では同種のEntityまたはMaterialを選ぶと共通プロパティを編集できます。</p>;
+  return <p className="rounded border border-dashed border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">複数選択では同種のEntityまたはMaterialを選ぶと共通プロパティを編集できます。Textureを2件以上選ぶと、Import設定でまとめて変換できます。</p>;
+}
+
+/**
+ * Textureの変換は1枚ずつしか実行できず、数十枚あるModel由来のTextureを
+ * KTX2へ寄せるのが現実的でなかった。選択中のTextureのうち、変換待ちの
+ * ものだけをまとめて書き出す。
+ */
+function TextureBatchProcessingCard({
+  textures,
+  otherSelectionCount,
+  readOnly,
+  state,
+  onApply,
+}: {
+  textures: readonly TextureAsset[];
+  otherSelectionCount: number;
+  readOnly: boolean;
+  state: TextureProcessingState;
+  onApply?: (assetIds: readonly string[]) => void;
+}) {
+  const plans = textures.map((texture) => ({
+    texture,
+    plan: planTextureProcessing(texture),
+  }));
+  const pending = plans.filter((entry) => entry.plan.supported && entry.plan.pending);
+  const blocked = plans.filter((entry) => !entry.plan.supported);
+  const settled = plans.length - pending.length - blocked.length;
+  const busy =
+    state.phase === "reading" || state.phase === "encoding" || state.phase === "saving";
+  const outputSummary = [
+    ...new Set(
+      pending.map((entry) =>
+        entry.plan.supported
+          ? entry.plan.outputFormat === "jpeg"
+            ? "JPEG"
+            : entry.plan.outputFormat.toUpperCase()
+          : "",
+      ),
+    ),
+  ]
+    .filter(Boolean)
+    .join(" / ");
+
+  return (
+    <ComponentCard title="複数のTexture" subtitle={`${textures.length}件`}>
+      <p className="text-xs leading-5 text-slate-600">
+        各TextureのImport設定（最大解像度・圧縮方式）で、選択中のTextureをまとめて書き出します。設定が未反映のものだけが対象です。
+      </p>
+      <dl className="grid grid-cols-[64px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
+        <dt className="text-slate-500">変換対象</dt>
+        <dd className="text-right tabular-nums font-semibold text-violet-700">
+          {pending.length}件{outputSummary ? `・${outputSummary}` : ""}
+        </dd>
+        <dt className="text-slate-500">変更なし</dt>
+        <dd className="text-right tabular-nums text-slate-500">{settled}件</dd>
+        {blocked.length > 0 ? (
+          <>
+            <dt className="text-slate-500">対象外</dt>
+            <dd className="text-right tabular-nums text-slate-500">{blocked.length}件</dd>
+          </>
+        ) : null}
+      </dl>
+      {otherSelectionCount > 0 ? (
+        <p className="text-[11px] leading-4 text-slate-500">
+          Texture以外の{otherSelectionCount}件は変換しません。
+        </p>
+      ) : null}
+      <button
+        type="button"
+        disabled={pending.length === 0 || busy || readOnly || !onApply}
+        onClick={() => onApply?.(pending.map((entry) => entry.texture.id))}
+        className="h-8 w-full rounded-md border border-violet-300 bg-violet-50 px-3 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
+      >
+        {busy ? "変換中" : `選択した${pending.length}件をまとめて変換する`}
+      </button>
+      {state.phase !== "idle" ? (
+        <p
+          role="status"
+          className={`rounded border p-1.5 text-xs leading-4 ${
+            state.phase === "failed"
+              ? "border-rose-200 bg-rose-50 text-rose-800"
+              : state.phase === "succeeded"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : "border-sky-200 bg-sky-50 text-sky-800"
+          }`}
+        >
+          {state.message}
+        </p>
+      ) : pending.length === 0 ? (
+        <p className="text-[11px] leading-4 text-slate-500">
+          変換待ちのTextureがありません。1件ずつ選んでCompressionの方式か最大解像度を設定してください。
+        </p>
+      ) : (
+        <p className="rounded border border-amber-200 bg-amber-50 p-1.5 text-xs leading-4 text-amber-800">
+          元の画像ファイルは残したまま、Assetの参照先が変換後の画像へ切り替わります。1件でも失敗した場合は、どのAssetも差し替えません。
+        </p>
+      )}
+    </ComponentCard>
+  );
 }
 
 function ModelPoseEditor({
@@ -4984,11 +5106,15 @@ export function InspectorPanel({
   onReimportModel,
   modelReimportState,
   modelReimportImpactNotice,
+  modelOptimizationState,
+  onApplyModelOptimization,
   onParticleChange,
   onTextureChange,
   onCreateTextureCard,
   textureProcessingState,
   onApplyTextureProcessing,
+  textureBatchState,
+  onApplyTextureBatch,
   onParticleEmitterChange,
   onRemoveParticleEmitter,
   projectKind,
@@ -5099,6 +5225,11 @@ export function InspectorPanel({
   onReimportModel: (assetId: string) => void;
   modelReimportState: ModelReimportState;
   modelReimportImpactNotice?: ModelReimportImpactNotice | null;
+  modelOptimizationState?: ModelOptimizationState;
+  onApplyModelOptimization?: (
+    assetId: string,
+    options: ModelOptimizationOptions,
+  ) => void;
   onParticleChange: (assetId: string, patch: ParticlePropertiesPatch) => void;
   onTextureChange: (assetId: string, patch: TextureAssetPatch) => void;
   onCreateTextureCard: (
@@ -5107,6 +5238,8 @@ export function InspectorPanel({
   ) => void;
   textureProcessingState?: TextureProcessingState;
   onApplyTextureProcessing?: (assetId: string) => void;
+  textureBatchState?: TextureProcessingState;
+  onApplyTextureBatch?: (assetIds: readonly string[]) => void;
   onParticleEmitterChange: (
     entityId: string,
     componentId: string,
@@ -5234,10 +5367,12 @@ export function InspectorPanel({
             selectedEntityIds={selectedEntityIds}
             selectedAssetIds={selectedAssetIds}
             readOnly={readOnly}
+            textureBatchState={textureBatchState}
             onSetEntitiesEnabled={onSetEntitiesEnabled}
             onSetMeshShadow={onSetMeshShadow}
             onSetLightShadow={onSetLightShadow}
             onApplyMaterialPatch={onApplyMaterialPatch}
+            onApplyTextureBatch={onApplyTextureBatch}
           />
         ) : asset ? (
           <div className="space-y-3">
@@ -5274,6 +5409,8 @@ export function InspectorPanel({
               onReimportModel={onReimportModel}
               modelReimportState={modelReimportState}
               modelReimportImpactNotice={modelReimportImpactNotice}
+              modelOptimizationState={modelOptimizationState}
+              onApplyModelOptimization={onApplyModelOptimization}
               onParticleChange={onParticleChange}
               onTextureChange={onTextureChange}
               onCreateTextureCard={onCreateTextureCard}

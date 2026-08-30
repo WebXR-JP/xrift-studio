@@ -2686,6 +2686,23 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "optimize_model_asset",
+            "description": "Rewrite a project-managed GLB Model Asset in place with mesh optimization (vertex welding, shared vertex buffers, animation keyframe resampling) and optional Draco compression, keeping Material Slots, node structure and animation clips intact. update_model_asset only records the import recipe; until this runs the original GLB is what ships. Reports the before and after size, or that the settings are already settled. Edit mode only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "modelAssetId": { "type": "string", "minLength": 1 },
+                    "optimizeMeshes": { "type": "boolean", "default": true },
+                    "compressWithDraco": { "type": "boolean", "default": true }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "modelAssetId"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "set_project_thumbnail",
             "description": "Set the saved project thumbnail from an existing browser-decodable Texture or environment Texture Asset without exposing file bytes or external paths.",
             "inputSchema": {

@@ -8,6 +8,10 @@ import {
   type TextureCompressionFormat,
   type TextureSourceFormat,
 } from "./asset-manifest";
+import {
+  createAssetImportTransactionId,
+  describeAssetImportFailure,
+} from "./asset-import-transaction";
 
 /**
  * Texture Import設定（最大解像度・圧縮）を、原本の画像ファイルへ実際に反映する。
@@ -167,54 +171,222 @@ export async function applyTextureProcessing(
   if (!plan.pending) {
     return { ok: false, message: plan.settledReason ?? "変換する設定がありません。" };
   }
-  if (asset.source.kind !== "project") {
-    return { ok: false, message: "プロジェクト内に保存された画像だけ変換できます。" };
+
+  let encoded: EncodedTexture;
+  try {
+    encoded = await encodeTextureForPlan(projectPath, asset, plan, (progress) =>
+      report?.(progress),
+    );
+  } catch (error) {
+    return { ok: false, message: describeTextureFailure(asset.name, error) };
   }
 
   try {
-    report?.({ phase: "reading", message: `${asset.name}を読み込んでいます` });
-    const sourceBytes = await readProjectAssetBytes(
-      projectPath,
-      asset.source.relativePath,
-    );
-
-    report?.({ phase: "encoding", message: `${asset.name}を変換しています` });
-    // KTX2はBasis圧縮の前段なので、中間画像は可逆のPNGで渡して二重の劣化を避ける。
-    const rendered = await renderImageBytes(sourceBytes, {
-      maxSize: plan.maxSize,
-      mimeType: plan.outputFormat === "ktx2" ? "image/png" : mimeTypeOf(plan.outputFormat),
-      quality: plan.qualityApplies ? plan.quality / 100 : undefined,
-    });
-
-    let bytes = rendered.bytes;
-    if (plan.outputFormat === "ktx2") {
-      const { encodeToKTX2 } = await import("ktx2-encoder");
-      bytes = await encodeToKTX2(copyAssetBytes(rendered.bytes), {
-        isUASTC: false,
-        qualityLevel: Math.max(
-          1,
-          Math.min(255, Math.round(asset.importSettings.compression.quality * 2.55)),
-        ),
-        compressionLevel: 2,
-        generateMipmap: asset.importSettings.generateMipmaps,
-        isPerceptual: asset.importSettings.colorSpace === "srgb",
-        isSetKTX2SRGBTransferFunc: asset.importSettings.colorSpace === "srgb",
-        isKTX2File: true,
-      });
-    }
-
     report?.({ phase: "saving", message: `${asset.name}を保存しています` });
-    const sourceHash = await sha256Hex(bytes);
-    const extension = plan.outputFormat === "jpeg" ? "jpg" : plan.outputFormat;
-    const relativePath = processedAssetPath(asset.id, sourceHash, extension);
-    const mimeType = mimeTypeOf(plan.outputFormat);
-    await tauri.commitVisualAssetImport(
-      projectPath,
-      `texture-convert-${Date.now().toString(36)}`,
-      [{ relativePath, dataUrl: await assetBytesToDataUrl(bytes, mimeType) }],
-    );
+    await commitProcessedTextures(projectPath, [encoded]);
+  } catch (error) {
+    return { ok: false, message: describeTextureFailure(asset.name, error) };
+  }
 
-    const processed: TextureAsset = {
+  return {
+    ok: true,
+    manifest: {
+      ...manifest,
+      assets: { ...manifest.assets, [assetId]: encoded.asset },
+    },
+    assetName: asset.name,
+    beforeBytes: encoded.beforeBytes,
+    afterBytes: encoded.bytes.byteLength,
+    beforeWidth: plan.sourceWidth,
+    beforeHeight: plan.sourceHeight,
+    width: encoded.width,
+    height: encoded.height,
+    outputFormat: encoded.outputFormat,
+  };
+}
+
+export type TextureBatchProcessingProgress = {
+  phase: "reading" | "encoding" | "saving";
+  message: string;
+  completed: number;
+  total: number;
+};
+
+export type TextureBatchSkip = { assetId: string; assetName: string; reason: string };
+
+export type TextureBatchProcessingResult =
+  | { ok: false; message: string; skipped: TextureBatchSkip[] }
+  | {
+      ok: true;
+      manifest: AssetManifest;
+      convertedAssetNames: string[];
+      beforeBytes: number;
+      afterBytes: number;
+      skipped: TextureBatchSkip[];
+    };
+
+/**
+ * 選択した複数のTextureを、現在のImport設定でまとめて書き出す。
+ *
+ * 1枚ずつ実行すると、書き込みも履歴も枚数分に分かれる。ここでは全部を
+ * エンコードしてから1回のtransactionで保存し、途中で失敗したら原本を
+ * 1つも置き換えない。
+ */
+export async function applyTextureProcessingBatch(
+  projectPath: string,
+  manifest: AssetManifest,
+  assetIds: readonly string[],
+  report?: (progress: TextureBatchProcessingProgress) => void,
+): Promise<TextureBatchProcessingResult> {
+  const skipped: TextureBatchSkip[] = [];
+  const targets: { asset: TextureAsset; plan: Extract<TextureProcessingPlan, { supported: true }> }[] =
+    [];
+
+  for (const assetId of assetIds) {
+    const asset = getTextureAsset(manifest, assetId);
+    if (!asset) {
+      skipped.push({
+        assetId,
+        assetName: assetId,
+        reason: "Texture Assetが見つかりませんでした。",
+      });
+      continue;
+    }
+    const plan = planTextureProcessing(asset);
+    if (!plan.supported) {
+      skipped.push({ assetId, assetName: asset.name, reason: plan.reason });
+      continue;
+    }
+    if (!plan.pending) {
+      skipped.push({
+        assetId,
+        assetName: asset.name,
+        reason: plan.settledReason ?? "変換する設定がありません。",
+      });
+      continue;
+    }
+    targets.push({ asset, plan });
+  }
+
+  if (targets.length === 0) {
+    return {
+      ok: false,
+      message:
+        "変換できるTextureがありません。最大解像度か圧縮方式を設定してから実行してください。",
+      skipped,
+    };
+  }
+
+  const encoded: EncodedTexture[] = [];
+  for (const [index, target] of targets.entries()) {
+    try {
+      encoded.push(
+        await encodeTextureForPlan(projectPath, target.asset, target.plan, (progress) =>
+          report?.({
+            ...progress,
+            completed: index,
+            total: targets.length,
+          }),
+        ),
+      );
+    } catch (error) {
+      return {
+        ok: false,
+        message: describeTextureFailure(target.asset.name, error),
+        skipped,
+      };
+    }
+  }
+
+  // 保存先が重なると transaction ごと弾かれるので、同じ内容の書き出しは1件へ寄せる。
+  const writes = new Map<string, EncodedTexture>();
+  for (const entry of encoded) writes.set(entry.relativePath, entry);
+
+  try {
+    report?.({
+      phase: "saving",
+      message: `${encoded.length}件の変換結果をまとめて保存しています`,
+      completed: targets.length,
+      total: targets.length,
+    });
+    await commitProcessedTextures(projectPath, [...writes.values()]);
+  } catch (error) {
+    return {
+      ok: false,
+      message: `${encoded.length}件の変換結果を保存できませんでした。${describeAssetImportFailure(error)}`,
+      skipped,
+    };
+  }
+
+  const assets = { ...manifest.assets };
+  for (const entry of encoded) assets[entry.asset.id] = entry.asset;
+  return {
+    ok: true,
+    manifest: { ...manifest, assets },
+    convertedAssetNames: encoded.map((entry) => entry.asset.name),
+    beforeBytes: encoded.reduce((total, entry) => total + entry.beforeBytes, 0),
+    afterBytes: encoded.reduce((total, entry) => total + entry.bytes.byteLength, 0),
+    skipped,
+  };
+}
+
+type EncodedTexture = {
+  asset: TextureAsset;
+  bytes: Uint8Array;
+  relativePath: string;
+  mimeType: string;
+  beforeBytes: number;
+  width: number;
+  height: number;
+  outputFormat: TextureOutputFormat;
+};
+
+async function encodeTextureForPlan(
+  projectPath: string,
+  asset: TextureAsset,
+  plan: Extract<TextureProcessingPlan, { supported: true }>,
+  report?: (progress: TextureProcessingProgress) => void,
+): Promise<EncodedTexture> {
+  if (asset.source.kind !== "project") {
+    throw new Error("プロジェクト内に保存された画像だけ変換できます。");
+  }
+  report?.({ phase: "reading", message: `${asset.name}を読み込んでいます` });
+  const sourceBytes = await readProjectAssetBytes(
+    projectPath,
+    asset.source.relativePath,
+  );
+
+  report?.({ phase: "encoding", message: `${asset.name}を変換しています` });
+  // KTX2はBasis圧縮の前段なので、中間画像は可逆のPNGで渡して二重の劣化を避ける。
+  const rendered = await renderImageBytes(sourceBytes, {
+    maxSize: plan.maxSize,
+    mimeType: plan.outputFormat === "ktx2" ? "image/png" : mimeTypeOf(plan.outputFormat),
+    quality: plan.qualityApplies && plan.outputFormat !== "ktx2" ? plan.quality / 100 : undefined,
+  });
+
+  let bytes = rendered.bytes;
+  if (plan.outputFormat === "ktx2") {
+    bytes = await encodeKtx2(rendered.bytes, {
+      quality: asset.importSettings.compression.quality,
+      generateMipmaps: asset.importSettings.generateMipmaps,
+      srgb: asset.importSettings.colorSpace === "srgb",
+    });
+  }
+
+  const sourceHash = await sha256Hex(bytes);
+  const extension = plan.outputFormat === "jpeg" ? "jpg" : plan.outputFormat;
+  const relativePath = processedAssetPath(asset.id, sourceHash, extension);
+  const mimeType = mimeTypeOf(plan.outputFormat);
+
+  return {
+    bytes,
+    relativePath,
+    mimeType,
+    beforeBytes: plan.sourceByteLength || sourceBytes.byteLength,
+    width: rendered.width,
+    height: rendered.height,
+    outputFormat: plan.outputFormat,
+    asset: {
       ...asset,
       source: { kind: "project", relativePath },
       sourceHash,
@@ -240,31 +412,60 @@ export async function applyTextureProcessing(
             importedFromModel: { ...asset.importedFromModel, isUserOverridden: true },
           }
         : {}),
-    };
+    },
+  };
+}
 
-    return {
-      ok: true,
-      manifest: {
-        ...manifest,
-        assets: { ...manifest.assets, [assetId]: processed },
-      },
-      assetName: asset.name,
-      beforeBytes: plan.sourceByteLength || sourceBytes.byteLength,
-      afterBytes: bytes.byteLength,
-      beforeWidth: plan.sourceWidth,
-      beforeHeight: plan.sourceHeight,
-      width: rendered.width,
-      height: rendered.height,
-      outputFormat: plan.outputFormat,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      message: `${asset.name}を変換できませんでした。${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    };
+async function commitProcessedTextures(
+  projectPath: string,
+  entries: readonly EncodedTexture[],
+): Promise<void> {
+  await tauri.commitVisualAssetImport(
+    projectPath,
+    createAssetImportTransactionId("texture"),
+    await Promise.all(
+      entries.map(async (entry) => ({
+        relativePath: entry.relativePath,
+        dataUrl: await assetBytesToDataUrl(entry.bytes, entry.mimeType),
+      })),
+    ),
+  );
+}
+
+function describeTextureFailure(assetName: string, error: unknown): string {
+  return `${assetName}を変換できませんでした。${describeAssetImportFailure(error)}`;
+}
+
+/**
+ * Basis / KTX2のqualityLevelは 1..255 の探索量で、JPEGの画質パーセントとは
+ * 意味が違う。Import設定の 0..100 をここで一度だけ写像する。
+ */
+export function ktx2QualityLevel(quality: number): number {
+  const normalized = Number.isFinite(quality) ? quality : 100;
+  return Math.max(1, Math.min(255, Math.round((normalized / 100) * 254) + 1));
+}
+
+async function encodeKtx2(
+  bytes: Uint8Array,
+  options: { quality: number; generateMipmaps: boolean; srgb: boolean },
+): Promise<Uint8Array> {
+  const { encodeToKTX2 } = await import("ktx2-encoder");
+  const encoded = await encodeToKTX2(copyAssetBytes(bytes), {
+    isUASTC: false,
+    qualityLevel: ktx2QualityLevel(options.quality),
+    compressionLevel: 2,
+    generateMipmap: options.generateMipmaps,
+    isPerceptual: options.srgb,
+    isSetKTX2SRGBTransferFunc: options.srgb,
+    isKTX2File: true,
+  });
+  const result = new Uint8Array(encoded);
+  if (result.byteLength === 0) {
+    throw new Error(
+      "KTX2エンコーダーが空の結果を返しました。最大解像度を下げるか、WEBPで書き出してください。",
+    );
   }
+  return result;
 }
 
 export function fitWithin(
