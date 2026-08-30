@@ -1556,6 +1556,45 @@ export function runXriftMcpEditorToolFixtures(): void {
     "get_terrain should report the Terrain's remaining grass layers",
   );
 
+  // The sculpt above raised the middle of this Terrain, so a caller that still
+  // reads y=0 there is placing things inside the hill.
+  const sampledPeak = executeXriftMcpEditorTool(current, {
+    id: "fixture-sample-terrain-peak",
+    tool: "sample_terrain_point",
+    arguments: { entityId: terrainId, point: [0, 0] },
+  });
+  const sampledEdge = executeXriftMcpEditorTool(current, {
+    id: "fixture-sample-terrain-edge",
+    tool: "sample_terrain_point",
+    arguments: { entityId: terrainId, point: [9.5, 6.5] },
+  });
+  assert(
+    (sampledPeak.result.height as number) >
+      (sampledEdge.result.height as number),
+    "sample_terrain_point should report the sculpted height, not a flat plane",
+  );
+  assert(
+    (sampledPeak.result.worldPosition as number[])[1] ===
+      (sampledPeak.result.height as number),
+    "A Terrain at the origin should report the same local and world height",
+  );
+  assert(
+    (sampledPeak.result.grass as unknown[]).length === 3 &&
+      sampledPeak.result.insideFootprint === true &&
+      sampledPeak.result.hole === false,
+    "sample_terrain_point should report holes and grass coverage at the point",
+  );
+
+  const outsideFootprint = executeXriftMcpEditorTool(current, {
+    id: "fixture-sample-terrain-outside",
+    tool: "sample_terrain_point",
+    arguments: { entityId: terrainId, point: [500, 500] },
+  });
+  assert(
+    outsideFootprint.result.insideFootprint === false,
+    "A point off the Terrain should say so rather than return the clamped rim silently",
+  );
+
   const primitiveCreated = executeXriftMcpEditorTool(current, {
     id: "fixture-create-primitive",
     tool: "create_primitive",
@@ -1571,6 +1610,33 @@ export function runXriftMcpEditorToolFixtures(): void {
   assert(primitiveCreated.changed, "create_primitive should change the bundle");
   const primitiveId = primitiveCreated.sceneSelection?.id;
   assert(typeof primitiveId === "string", "create_primitive should select the new Entity");
+  current = {
+    ...current,
+    bundle: primitiveCreated.bundle,
+    revision: current.revision + 1,
+  };
+
+  // A caller reading only the Transform knows where the box is and not that it
+  // is one metre across, which is the whole reason placement over MCP drifts.
+  const primitiveBounds = executeXriftMcpEditorTool(current, {
+    id: "fixture-get-entity-bounds",
+    tool: "get_entity_bounds",
+    arguments: { entityId: primitiveId },
+  });
+  const worldBox = primitiveBounds.result.world as {
+    size: number[];
+    center: number[];
+  };
+  assert(
+    worldBox.size.every((value) => Math.abs(value - 1) < 1e-6),
+    `A builtin box should measure one metre per axis, got ${worldBox.size.join(", ")}`,
+  );
+  assert(
+    worldBox.center.every((value) => Math.abs(value - 1) < 1e-6) &&
+      (primitiveBounds.result.measuredEntityIds as string[]).length === 1 &&
+      (primitiveBounds.result.unmeasuredEntityIds as string[]).length === 0,
+    "get_entity_bounds should place the box at the position it was created at",
+  );
   assert(
     primitiveCreated.bundle.scene.entities[primitiveId as string]?.components.some(
       (component) => component.type === "mesh",

@@ -3149,6 +3149,19 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "get_entity_bounds",
+            "description": "Measure how big an Entity actually is: the axis-aligned world box (min, max, center, size) for the Entity and, by default, its whole subtree, plus its own untransformed local box. get_entity_components returns a Transform and no extent, so this is what answers whether two things overlap, how high to place something, or how far apart to space a row. unmeasuredEntityIds names Entities whose Mesh extent could not be resolved rather than leaving them out of the box.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "includeDescendants": { "type": "boolean" }
+                },
+                "required": ["entityId"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "create_primitive",
             "description": "Create a builtin primitive shape (box, sphere, cylinder, cone, or plane) as a new scene entity.",
             "inputSchema": {
@@ -3180,6 +3193,25 @@ fn tool_definitions() -> Value {
                     "componentId": { "type": "string", "minLength": 1 }
                 },
                 "required": ["entityId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "sample_terrain_point",
+            "description": "Read the ground at one Terrain-local X/Z: the interpolated height, the same point in world space, the slope in degrees, whether the cell is a hole, and each grass layer's coverage there. Call this before placing anything on a sculpted Terrain — the document stores heights as a flat array, so y=0 is only correct on ground nobody has raised.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "componentId": { "type": "string", "minLength": 1 },
+                    "point": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 2,
+                        "maxItems": 2
+                    }
+                },
+                "required": ["entityId", "point"],
                 "additionalProperties": false
             }
         },

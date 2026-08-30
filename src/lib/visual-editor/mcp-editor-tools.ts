@@ -75,6 +75,12 @@ import {
   type MeshVisibilityPatch,
 } from "./scene-document";
 import {
+  entityWorldMatrix,
+  getEntityWorldBounds,
+  transformPointByMatrix,
+} from "./entity-bounds";
+import {
+  terrainCellHasHole,
   terrainHeightRange,
   TERRAIN_BRUSH_KINDS,
   TERRAIN_HEIGHT_ABSOLUTE_MAX,
@@ -97,6 +103,9 @@ import {
   getTerrainGrassType,
   isTerrainGrassLayer,
   resolveTerrainGrassAppearance,
+  sampleTerrainGrassMask,
+  sampleTerrainHeight,
+  sampleTerrainSlopeDegrees,
   type TerrainGrassAppearance,
   type TerrainGrassLayer,
   type TerrainGrassTypeId,
@@ -299,8 +308,10 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   list_entities: listEntities,
   list_component_definitions: listComponentDefinitions,
   get_entity_components: getEntityComponents,
+  get_entity_bounds: getEntityBounds,
   create_primitive: createPrimitive,
   get_terrain: getTerrain,
+  sample_terrain_point: sampleTerrainPoint,
   create_terrain: createTerrain,
   sculpt_terrain: sculptTerrain,
   update_terrain: updateTerrain,
@@ -1996,6 +2007,117 @@ function updateTerrain(
     },
     activity: `AIがTerrain「${entity.name}」のサイズと解像度を更新しました`,
   };
+}
+
+/**
+ * What is actually at a point on a Terrain.
+ *
+ * Placement over MCP had no way to ask: a caller could sculpt a hill and then
+ * put a bench at y=0 through the middle of it, because the document records
+ * heights as a flat array the caller cannot index into meaningfully. Height,
+ * slope, holes and grass coverage are the four things that decide whether a
+ * spot is usable, so they are answered together rather than one tool each.
+ */
+function sampleTerrainPoint(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const target = requireTerrain(context, argumentsValue);
+  const point = optionalNumberTuple(argumentsValue.point, "point", 2);
+  if (!point) invalidArgument("point", "[x, z] in Terrain-local metres");
+  const { terrain } = target;
+  const [localX, localZ] = point;
+  const insideFootprint =
+    Math.abs(localX) <= terrain.width / 2 + 1e-6 &&
+    Math.abs(localZ) <= terrain.depth / 2 + 1e-6;
+  const height = sampleTerrainHeight(terrain, localX, localZ);
+  const cells = terrain.resolution - 1;
+  const cellX = Math.min(
+    Math.max(
+      Math.floor(((localX + terrain.width / 2) / terrain.width) * cells),
+      0,
+    ),
+    cells - 1,
+  );
+  const cellZ = Math.min(
+    Math.max(
+      Math.floor(((localZ + terrain.depth / 2) / terrain.depth) * cells),
+      0,
+    ),
+    cells - 1,
+  );
+  const worldMatrix = entityWorldMatrix(context.bundle.scene, target.entityId);
+  return unchanged(
+    context,
+    {
+      entityId: target.entityId,
+      componentId: target.mesh.id,
+      point: [localX, localZ],
+      // Outside the footprint the height field is clamped to its edge, so the
+      // answer is the rim rather than the ground under the caller's point.
+      insideFootprint,
+      height,
+      localPosition: [localX, height, localZ],
+      worldPosition: transformPointByMatrix(worldMatrix, [
+        localX,
+        height,
+        localZ,
+      ]),
+      slopeDegrees: sampleTerrainSlopeDegrees(terrain, localX, localZ),
+      hole: terrainCellHasHole(terrain, cellX, cellZ),
+      grass: (terrain.grass ?? []).map((layer) => ({
+        id: layer.id,
+        typeId: layer.typeId,
+        coverage: sampleTerrainGrassMask(terrain, layer.mask, localX, localZ),
+      })),
+    },
+    `Terrain「${target.entity.name}」の地点を取得しました`,
+  );
+}
+
+/**
+ * The axis-aligned world box of an Entity, and the size the caller never had.
+ *
+ * `get_entity_components` returns a Transform and no extent, so anything
+ * reasoning about the Scene from MCP alone has been placing things without
+ * knowing how big they are. `unmeasured` names the Entities whose Mesh could
+ * not be resolved — a Model imported before its metadata existed — because
+ * silently leaving one out of the union reads as "small", not as "unknown".
+ */
+function getEntityBounds(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const entity = requireEntity(context.bundle.scene, entityId);
+  const includeDescendants =
+    optionalBoolean(argumentsValue.includeDescendants, "includeDescendants") ??
+    true;
+  const bounds = getEntityWorldBounds(
+    context.bundle.scene,
+    context.bundle.assets,
+    entityId,
+    { includeDescendants },
+  );
+  return unchanged(
+    context,
+    {
+      entityId,
+      name: entity.name,
+      includeDescendants,
+      world: bounds.world,
+      local: bounds.local,
+      worldPosition: transformPointByMatrix(
+        entityWorldMatrix(context.bundle.scene, entityId),
+        [0, 0, 0],
+      ),
+      measuredEntityIds: bounds.measured,
+      unmeasuredEntityIds: bounds.unmeasured,
+    },
+    bounds.world
+      ? `Entity「${entity.name}」のboundsを取得しました`
+      : `Entity「${entity.name}」に測れるgeometryがありません`,
+  );
 }
 
 /**

@@ -3,7 +3,7 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 91] = [
+pub const MCP_TOOL_NAMES: [&str; 93] = [
     "get_editor_context",
     "get_scripting_capabilities",
     "analyze_component_code",
@@ -32,8 +32,10 @@ pub const MCP_TOOL_NAMES: [&str; 91] = [
     "list_entities",
     "list_component_definitions",
     "get_entity_components",
+    "get_entity_bounds",
     "create_primitive",
     "get_terrain",
+    "sample_terrain_point",
     "create_terrain",
     "sculpt_terrain",
     "update_terrain",
