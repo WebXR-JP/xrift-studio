@@ -29,7 +29,10 @@ import {
   normalizeProjectRelativePath,
   normalizeTextureImportSettings,
   isEnvironmentTextureAsset,
+  AUDIO_MIME_BY_FORMAT,
   type AudioAsset,
+  type AudioMimeType,
+  type AudioSourceFormat,
   type AssetFolder,
   type AssetManifest,
   type MaterialAsset,
@@ -83,8 +86,7 @@ export type SupportedAssetImportFormat =
   | StudioImageFormat
   | "hdr"
   | "exr"
-  | "mp3"
-  | "wav";
+  | AudioSourceFormat;
 
 export type ClassifiedAssetImport =
   | {
@@ -107,9 +109,9 @@ export type ClassifiedAssetImport =
     }
   | {
       kind: "audio";
-      format: "mp3" | "wav";
-      mimeType: "audio/mpeg" | "audio/wav";
-      extension: "mp3" | "wav";
+      format: AudioSourceFormat;
+      mimeType: AudioMimeType;
+      extension: AudioSourceFormat;
     };
 
 type NativeGltfModelClassification = Extract<
@@ -289,32 +291,56 @@ export function classifyAssetImport(
       extension: "exr",
     };
   }
-  if (
-    extension === "mp3" ||
-    normalizedMime === "audio/mpeg" ||
-    normalizedMime === "audio/mp3"
-  ) {
-    return {
-      kind: "audio",
-      format: "mp3",
-      mimeType: "audio/mpeg",
-      extension: "mp3",
-    };
-  }
-  if (
-    extension === "wav" ||
-    normalizedMime === "audio/wav" ||
-    normalizedMime === "audio/x-wav" ||
-    normalizedMime === "audio/wave"
-  ) {
-    return {
-      kind: "audio",
-      format: "wav",
-      mimeType: "audio/wav",
-      extension: "wav",
-    };
-  }
+  const audio = classifyAudio(extension, normalizedMime);
+  if (audio) return audio;
   return undefined;
+}
+
+/**
+ * Every audio container a browser can decode, so anything usable in a WebGL
+ * or WebXR world imports without conversion. Extension and mime are both
+ * accepted because drag-and-drop often supplies only one of them.
+ */
+const AUDIO_MATCHERS: {
+  format: AudioSourceFormat;
+  extensions: string[];
+  mimeTypes: string[];
+}[] = [
+  { format: "mp3", extensions: ["mp3"], mimeTypes: ["audio/mpeg", "audio/mp3"] },
+  {
+    format: "wav",
+    extensions: ["wav"],
+    mimeTypes: ["audio/wav", "audio/x-wav", "audio/wave"],
+  },
+  {
+    format: "ogg",
+    extensions: ["ogg", "oga", "opus"],
+    mimeTypes: ["audio/ogg", "audio/x-ogg", "application/ogg", "audio/vorbis", "audio/opus"],
+  },
+  { format: "flac", extensions: ["flac"], mimeTypes: ["audio/flac", "audio/x-flac"] },
+  {
+    format: "m4a",
+    extensions: ["m4a", "aac"],
+    mimeTypes: ["audio/mp4", "audio/aac", "audio/x-m4a", "audio/mp4a-latm"],
+  },
+  { format: "webm", extensions: ["weba"], mimeTypes: ["audio/webm", "audio/x-webm"] },
+];
+
+function classifyAudio(
+  extension: string,
+  normalizedMime: string,
+): Extract<ClassifiedAssetImport, { kind: "audio" }> | undefined {
+  const match = AUDIO_MATCHERS.find(
+    (entry) =>
+      entry.extensions.includes(extension) || entry.mimeTypes.includes(normalizedMime),
+  );
+  if (!match) return undefined;
+  return {
+    kind: "audio",
+    format: match.format,
+    mimeType: AUDIO_MIME_BY_FORMAT[match.format],
+    extension: match.format,
+  };
 }
 
 function replaceFileExtension(fileName: string, extension: string): string {
@@ -1863,10 +1889,7 @@ function createAudioImportPlan(
   classification: Extract<ClassifiedAssetImport, { kind: "audio" }>,
 ): AssetImportPlan {
   const diagnostics: AssetImportDiagnostic[] = [];
-  const validSignature =
-    classification.format === "mp3"
-      ? hasMp3Signature(bytes)
-      : hasWavSignature(bytes);
+  const validSignature = hasAudioSignature(bytes, classification.format);
   if (!validSignature) {
     diagnostics.push({
       severity: "blocking",
@@ -2411,6 +2434,60 @@ function hasWavSignature(bytes: Uint8Array): boolean {
       true,
     ) + 8 <= bytes.byteLength
   );
+}
+
+/**
+ * Ogg pages open with the "OggS" capture pattern. Requiring a Vorbis or Opus
+ * identification header just after it keeps other Ogg payloads out of the
+ * audio import path, matching has_ogg_signature on the Rust side.
+ */
+function hasOggSignature(bytes: Uint8Array): boolean {
+  if (bytes.byteLength < 32 || !asciiAt(bytes, 0, "OggS")) return false;
+  const limit = Math.min(bytes.byteLength - 7, 4096);
+  for (let index = 0; index < limit; index += 1) {
+    if (bytes[index] === 0x01 && asciiAt(bytes, index + 1, "vorbis")) return true;
+    if (asciiAt(bytes, index, "OpusHead")) return true;
+  }
+  return false;
+}
+
+function hasFlacSignature(bytes: Uint8Array): boolean {
+  return bytes.byteLength >= 8 && asciiAt(bytes, 0, "fLaC");
+}
+
+/** ISO base media file: a "ftyp" box with an audio-capable brand. */
+function hasMp4AudioSignature(bytes: Uint8Array): boolean {
+  if (bytes.byteLength < 12 || !asciiAt(bytes, 4, "ftyp")) return false;
+  const brand = String.fromCharCode(...bytes.slice(8, 12));
+  return ["M4A ", "mp42", "mp41", "isom", "iso2", "dash", "M4B "].includes(brand);
+}
+
+/** Matroska/WebM EBML header. */
+function hasWebmSignature(bytes: Uint8Array): boolean {
+  return (
+    bytes.byteLength >= 4 &&
+    bytes[0] === 0x1a &&
+    bytes[1] === 0x45 &&
+    bytes[2] === 0xdf &&
+    bytes[3] === 0xa3
+  );
+}
+
+function hasAudioSignature(bytes: Uint8Array, format: AudioSourceFormat): boolean {
+  switch (format) {
+    case "mp3":
+      return hasMp3Signature(bytes);
+    case "wav":
+      return hasWavSignature(bytes);
+    case "ogg":
+      return hasOggSignature(bytes);
+    case "flac":
+      return hasFlacSignature(bytes);
+    case "m4a":
+      return hasMp4AudioSignature(bytes);
+    case "webm":
+      return hasWebmSignature(bytes);
+  }
 }
 
 function asciiAt(bytes: Uint8Array, offset: number, expected: string): boolean {

@@ -1093,6 +1093,7 @@ function installableKindsLabel(provider: ExternalStoreProvider): string {
 function kindLabel(kind: ExternalStoreAsset["assetKind"]): string {
   if (kind === "hdri") return "Skybox / HDRI";
   if (kind === "texture") return "Material / Texture";
+  if (kind === "audio") return "Audio";
   return "Model";
 }
 

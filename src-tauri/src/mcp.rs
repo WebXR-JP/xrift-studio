@@ -2505,7 +2505,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "import_audio_asset",
-            "description": "Validate and import one trusted local MP3 or WAV file into managed project storage while Edit is active. sourcePath must be an absolute path to a regular non-symlink/non-reparse file no larger than 128 MB. Extension and file signature must agree. The result returns the Audio Asset and project-relative destination, never file bytes, a data URL, or the external source path.",
+            "description": "Validate and import one trusted local audio file into managed project storage while Edit is active. MP3, WAV, OGG, FLAC, M4A/AAC and WebM are accepted, covering every container a browser runtime can decode. sourcePath must be an absolute path to a regular non-symlink/non-reparse file no larger than 128 MB. Extension and file signature must agree. The result returns the Audio Asset and project-relative destination, never file bytes, a data URL, or the external source path.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

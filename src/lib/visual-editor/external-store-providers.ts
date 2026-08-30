@@ -66,6 +66,20 @@ export const EXTERNAL_STORE_PROVIDERS = [
     attributionNote: "API提供元を明示し、アセットにはCC0情報を保存します。ModelはglTF対応後にインストールできます。",
   },
   {
+    id: "otogura",
+    kind: "remote-assets",
+    group: "material-sites",
+    name: "音蔵",
+    badge: "フリー",
+    summary: "効果音と環境音を探して追加",
+    homepageUrl: "https://yushimatenjin.github.io/sound-generator/",
+    catalogKinds: ["audio"],
+    installableKinds: ["audio"],
+    authorFallback: "音蔵 (おとぐら)",
+    attributionNote:
+      "Stable Audio 3 でローカル生成した音源です。ループ環境音は継ぎ目が出ないよう加工済みで、商用・改変を含め自由に使えます。",
+  },
+  {
     id: "xrift-sky-shaders",
     kind: "sky-shader",
     group: "sky-nature",
