@@ -109,17 +109,13 @@ export class XriftThreeLoader {
   readonly assetBaseUrl?: string;
   readonly manager: LoadingManager;
   readonly renderer?: WebGLRenderer;
-  readonly ktx2TranscoderPath: string;
-  readonly dracoDecoderPath: string;
+  private readonly options: XriftThreeLoaderOptions;
 
   constructor(options: XriftThreeLoaderOptions = {}) {
+    this.options = options;
     this.assetBaseUrl = options.assetBaseUrl;
     this.manager = options.manager ?? new LoadingManager();
     this.renderer = options.renderer;
-    this.ktx2TranscoderPath =
-      options.ktx2TranscoderPath ?? DEFAULT_KTX2_TRANSCODER_PATH;
-    this.dracoDecoderPath =
-      options.dracoDecoderPath ?? DEFAULT_DRACO_DECODER_PATH;
   }
 
   async load(input: string | URL | XriftRuntimeManifest): Promise<XriftLoadResult> {
@@ -149,6 +145,16 @@ export class XriftThreeLoader {
     if (!entryScene) throw new Error("Runtime entry scene is missing");
     const diagnostics: XriftRuntimeDiagnostic[] = [];
     const assetBase = this.resolveAssetBase(manifestUrl);
+    const ktx2TranscoderPath = this.resolveDecoderPath(
+      "ktx2",
+      manifest,
+      assetBase,
+    );
+    const dracoDecoderPath = this.resolveDecoderPath(
+      "draco",
+      manifest,
+      assetBase,
+    );
     const assets = Object.values(manifest.assets);
     const modelAssets = assets.filter(
       (asset): asset is Extract<XriftRuntimeAsset, { kind: "model" }> =>
@@ -164,13 +170,13 @@ export class XriftThreeLoader {
       Promise.all(
         modelAssets.map(async (asset) => [
           asset.id,
-          await this.loadModel(asset, assetBase),
+          await this.loadModel(asset, assetBase, dracoDecoderPath),
         ] as const),
       ),
       Promise.all(
         textureAssets.map(async (asset) => [
           asset.id,
-          await this.loadTexture(asset, assetBase),
+          await this.loadTexture(asset, assetBase, ktx2TranscoderPath),
         ] as const),
       ),
     ]);
@@ -264,9 +270,38 @@ export class XriftThreeLoader {
     return browserBaseUrl();
   }
 
+  /**
+   * Decoder directory for one compressed format.
+   *
+   * Caller options win, then the directory the manifest says the world ships
+   * itself, and only then the public default. A published world cannot reach a
+   * CDN, so a manifest that names its own files must never be overridden by
+   * the default.
+   */
+  private resolveDecoderPath(
+    kind: "ktx2" | "draco",
+    manifest: XriftRuntimeManifest,
+    assetBase: URL,
+  ): string {
+    const option =
+      kind === "ktx2"
+        ? this.options.ktx2TranscoderPath
+        : this.options.dracoDecoderPath;
+    if (option) return option;
+    const declared =
+      kind === "ktx2"
+        ? manifest.decoders?.ktx2TranscoderPath
+        : manifest.decoders?.dracoDecoderPath;
+    if (declared) return new URL(declared, assetBase).toString();
+    return kind === "ktx2"
+      ? DEFAULT_KTX2_TRANSCODER_PATH
+      : DEFAULT_DRACO_DECODER_PATH;
+  }
+
   private async loadModel(
     asset: Extract<XriftRuntimeAsset, { kind: "model" }>,
     assetBase: URL,
+    dracoDecoderPath: string,
   ): Promise<LoadedModel> {
     const url = new URL(asset.url, assetBase).toString();
     if (asset.sourceFormat === "obj") {
@@ -281,7 +316,7 @@ export class XriftThreeLoader {
     }
     const loader = new GLTFLoader(this.manager);
     const dracoLoader = new DRACOLoader(this.manager).setDecoderPath(
-      this.dracoDecoderPath,
+      dracoDecoderPath,
     );
     loader.setDRACOLoader(dracoLoader);
     if (asset.openBrush?.renderer === "three-icosa") {
@@ -327,11 +362,12 @@ export class XriftThreeLoader {
   private async loadTexture(
     asset: Extract<XriftRuntimeAsset, { kind: "texture" | "skybox" }>,
     assetBase: URL,
+    ktx2TranscoderPath: string,
   ): Promise<Texture> {
     const url = new URL(asset.url, assetBase).toString();
     const texture =
       asset.kind === "texture" && asset.sourceFormat === "ktx2"
-        ? await this.loadKtx2Texture(url)
+        ? await this.loadKtx2Texture(url, ktx2TranscoderPath)
         : asset.kind === "skybox" && asset.sourceFormat === "hdr"
           ? await new RGBELoader(this.manager).loadAsync(url)
           : asset.kind === "skybox" && asset.sourceFormat === "exr"
@@ -348,14 +384,17 @@ export class XriftThreeLoader {
     return texture;
   }
 
-  private async loadKtx2Texture(url: string): Promise<Texture> {
+  private async loadKtx2Texture(
+    url: string,
+    ktx2TranscoderPath: string,
+  ): Promise<Texture> {
     if (!this.renderer) {
       throw new Error(
         "KTX2 texture loading requires XriftThreeLoaderOptions.renderer",
       );
     }
     const loader = new KTX2Loader(this.manager)
-      .setTranscoderPath(this.ktx2TranscoderPath)
+      .setTranscoderPath(ktx2TranscoderPath)
       .detectSupport(this.renderer);
     try {
       return await loader.loadAsync(url);

@@ -15,7 +15,7 @@ import type {
   VisualCompilerDocuments,
 } from "./compiler";
 import { compileVisualProject, compilerStagingDirectoryName } from "./compiler";
-import { resolveLocalBasisTranscoderPath } from "./basis-transcoder";
+import { resolveLocalVendorAssetPath, VENDOR_BUNDLES } from "./vendor-assets";
 import {
   assetBytesToDataUrl,
   convertPublishedTextureBytes,
@@ -386,18 +386,18 @@ async function loadCompilerBundledAssetOverlays(
     compilation.stagingPlan.bundledAssetCopyPlan.map(async (entry) => {
       throwIfAborted(signal);
       const sourceDirectory =
-        entry.source === "three-basis"
-          ? resolveLocalBasisTranscoderPath()
-          : resolveTextFontDirectoryUrl();
+        entry.source === "text-fonts"
+          ? resolveTextFontDirectoryUrl()
+          : resolveLocalVendorAssetPath(entry.source);
       const response = await fetch(
         `${sourceDirectory}${encodeURIComponent(entry.sourceFileName)}`,
         { signal },
       );
       if (!response.ok) {
         throw new Error(
-          entry.source === "three-basis"
-            ? `公開用KTX2変換ファイルを読み込めませんでした (${response.status})`
-            : `公開用フォントファイルを読み込めませんでした (${response.status})`,
+          entry.source === "text-fonts"
+            ? `公開用フォントファイルを読み込めませんでした (${response.status})`
+            : `公開用${VENDOR_BUNDLES[entry.source].label}を読み込めませんでした (${response.status})`,
         );
       }
       return {

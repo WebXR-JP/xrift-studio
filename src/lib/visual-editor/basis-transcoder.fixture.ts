@@ -2,6 +2,10 @@ import {
   LOCAL_BASIS_TRANSCODER_DIRECTORY,
   resolveLocalBasisTranscoderPath,
 } from "./basis-transcoder";
+import {
+  VENDOR_BUNDLES,
+  resolveLocalVendorAssetPath,
+} from "./vendor-assets";
 
 export function runBasisTranscoderFixtureAssertions(): void {
   assert(
@@ -28,6 +32,17 @@ export function runBasisTranscoderFixtureAssertions(): void {
     resolveLocalBasisTranscoderPath("https://assets.example/studio/") ===
       "https://assets.example/studio/visual-editor/vendor/three-basis/",
     "absolute Basis transcoder path is incorrect",
+  );
+  assert(
+    resolveLocalVendorAssetPath("three-draco", "/") ===
+      "/visual-editor/vendor/three-draco/",
+    "local Draco decoder path is incorrect",
+  );
+  assert(
+    VENDOR_BUNDLES["three-draco"].publishedDirectory ===
+      "xrift-studio/vendor/three-draco" &&
+      VENDOR_BUNDLES["three-draco"].files.includes("draco_wasm_wrapper.js"),
+    "published Draco decoder bundle changed unexpectedly",
   );
 }
 

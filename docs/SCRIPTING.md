@@ -220,8 +220,15 @@ Script の再起動または Stop で自動的に dispose する。
 Material / Particle の preview と `ctx.assets.loadTexture` は別の読み込み経路である。Studio の preview は project source を
 Tauri IPC で読み、`importMetadata.sourceFormat` または拡張子が KTX2 なら、Studio に同梱した Basis JS / WASM で変換する。
 OpenBrush の `source.kind = "builtin"` Texture は project path がなくても同梱 URL から表示できる。どちらも preview のために
-CDN を必要としない。`classic-jsx` の生成物も KTX2 を使う場合は固定した Basis file を
+CDN を必要としない。生成物も KTX2 を使う場合は固定した Basis file を
 `public/xrift-studio/vendor/three-basis/` へ出力し、XRift の `baseUrl` から解決する。
+
+decoder を要する形式は KTX2 だけではない。Draco 圧縮した Model は
+`public/xrift-studio/vendor/three-draco/` へ decoder を出力する。どの形式が何を必要とするかは
+`src/lib/visual-editor/vendor-assets.ts` の表が一箇所だけ持ち、同梱の要否は staging へ copy する
+Asset の事実から決める。生成コードに特定の helper 名が現れるかで決めない。出力モードごとに
+生成物の形が違うため、文字列一致は片方の出力モードで静かに外れる。`classic-runtime` では
+Runtime manifest の `decoders` が同じ場所を示し、loader は manifest からの相対で解決する。
 
 この対応は Material / Particle の preview と生成物の描画経路に限る。Script の `ctx.assets.loadTexture` は引き続き
 Three.js の標準 `TextureLoader` を使うため、KTX2 / HDR / EXR を typed Texture として返さない。
@@ -663,6 +670,8 @@ Script source と host adapter を staging の overlay file として出力し�
   XRift の `baseUrl` で解決してから `ctx.assets.url` / `loadTexture` を Play と同じ参照 gate へ通す
 - KTX2 を参照する Material / Particle がある場合は pinned Basis JS / WASM を staging の
   `public/xrift-studio/vendor/three-basis/` へ copy し、`useKTX2` の transcoder path を XRift の `baseUrl` で解決する
+- Draco 圧縮した Model がある場合は pinned Draco decoder を `public/xrift-studio/vendor/three-draco/` へ copy し、
+  `useGLTF` の decoder path を XRift の `baseUrl` で解決する
 - Entity group へ安定 ID を付け、`entityReferences` に宣言した ID だけを `ctx.find` で解決する
 - World / Item instance ごとの scope marker 内だけを探索し、同じ Item を複数配置しても別 instance の Entity を返さない
 - Texture cache / dispose、Audio停止・解放、Material clone / restore、frame 更新と event bus は host の lifecycle に属し、

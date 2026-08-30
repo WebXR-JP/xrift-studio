@@ -1,42 +1,33 @@
+import {
+  VENDOR_BUNDLES,
+  resolveLocalVendorAssetPath,
+} from "./vendor-assets";
+
 /**
- * Public directory emitted by the local Three.js Basis Vite plugin.
- *
- * Keep this value synchronized with LOCAL_THREE_BASIS_DIRECTORY in
- * scripts/vite-local-three-basis.ts.
+ * KTX2向けの別名。実体は `vendor-assets.ts` の bundle 表で、decoder を要する
+ * 形式はすべてそこに並ぶ。ここは KTX2 だけを見る呼び出し側のための入口。
  */
 export const LOCAL_BASIS_TRANSCODER_DIRECTORY =
-  "visual-editor/vendor/three-basis";
+  VENDOR_BUNDLES["three-basis"].localDirectory;
 
-export const LOCAL_BASIS_TRANSCODER_FILES = [
-  "basis_transcoder.js",
-  "basis_transcoder.wasm",
-  "README.md",
-] as const;
+export const LOCAL_BASIS_TRANSCODER_FILES =
+  VENDOR_BUNDLES["three-basis"].files;
 
 export type LocalBasisTranscoderFileName =
   (typeof LOCAL_BASIS_TRANSCODER_FILES)[number];
 
 /**
- * Public directory copied into compiler-owned Classic JSX staging projects.
+ * Public directory copied into compiler-owned staging projects.
  *
  * This path is relative to XRift's runtime `baseUrl`, matching the other
  * compiler-managed public assets.
  */
 export const PUBLISHED_BASIS_TRANSCODER_DIRECTORY =
-  "xrift-studio/vendor/three-basis";
+  VENDOR_BUNDLES["three-basis"].publishedDirectory;
 
-/**
- * Returns the directory URL expected by Three.js KTX2Loader.
- *
- * Vite's BASE_URL keeps the same helper valid for the root-based Tauri app and
- * for builds hosted below a path prefix.
- */
+/** Returns the directory URL expected by Three.js KTX2Loader inside Studio. */
 export function resolveLocalBasisTranscoderPath(
-  baseUrl: string = import.meta.env?.BASE_URL ?? "/",
+  baseUrl?: string,
 ): string {
-  const normalizedBase = baseUrl.trim() || "/";
-  const baseWithTrailingSlash = normalizedBase.endsWith("/")
-    ? normalizedBase
-    : `${normalizedBase}/`;
-  return `${baseWithTrailingSlash}${LOCAL_BASIS_TRANSCODER_DIRECTORY}/`;
+  return resolveLocalVendorAssetPath("three-basis", baseUrl);
 }

@@ -18,6 +18,8 @@ import {
   type GLTF,
 } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { resolveLocalVendorAssetPath } from "../../lib/visual-editor/vendor-assets";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   VRMLoaderPlugin,
@@ -1642,6 +1644,11 @@ async function parseSelfContainedModel(
 
   return new Promise<ProjectModelData>((resolve, reject) => {
     const loader = new GLTFLoader();
+    // Draco圧縮したModelは、デコーダーが無いと編集画面から消える。Inspectorの
+    // 最適化で原本を圧縮できる以上、viewportも同じデコーダーを持つ。
+    loader.setDRACOLoader(
+      new DRACOLoader().setDecoderPath(resolveLocalVendorAssetPath("three-draco")),
+    );
     if (format === "vrm") {
       loader.register((parser) => new VRMLoaderPlugin(parser));
     }
