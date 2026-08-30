@@ -32,4 +32,20 @@ declare module "troika-three-text" {
     sync(callback?: () => void): void;
     dispose(): void;
   }
+
+  /**
+   * Loads a font and generates glyphs for `characters` ahead of any `Text`.
+   *
+   * The callback is invoked once the font is readable. A font troika cannot
+   * read is only logged, so the callback never runs for one — the caller has
+   * to decide how long to wait.
+   */
+  export function preloadFont(
+    options: {
+      font: string;
+      characters: string | readonly string[];
+      sdfGlyphSize?: number;
+    },
+    callback: () => void,
+  ): void;
 }
