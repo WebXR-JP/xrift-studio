@@ -26,6 +26,14 @@ export type CompiledXriftComponent = {
   supportDeclarations: CompilerSupportDeclaration[];
   reactValueImports: string[];
   reactTypeImports: string[];
+  /**
+   * Binding names whose override actually reached the emitted JSX.
+   *
+   * The compiler adds the import backing an override only when it is listed
+   * here, so a component that never renders the callback cannot leave the
+   * published world with an unused import.
+   */
+  appliedBindingOverrides?: readonly string[];
 };
 
 /**
@@ -174,6 +182,9 @@ export function compileXriftComponent(
         `${binding.name}={${bindingOverrides[binding.name] ?? "() => {}"}}`,
     ),
   );
+  const appliedBindingOverrides = noopBindings
+    .map((binding) => binding.name)
+    .filter((name) => bindingOverrides[name] !== undefined);
   const wrapper = definition.attachBehavior.kind === "wrapper";
   return {
     definition,
@@ -186,6 +197,7 @@ export function compileXriftComponent(
     supportDeclarations: [],
     reactValueImports: [],
     reactTypeImports: [],
+    appliedBindingOverrides,
   };
 }
 
