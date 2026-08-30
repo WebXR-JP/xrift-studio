@@ -8,6 +8,7 @@ import {
   SCRIPT_ASSET_LANGUAGES,
   SHADER_ASSET_CONTRACT_VERSION,
   SHADER_ASSET_STAGES,
+  AUDIO_MIME_BY_FORMAT,
   type AssetManifest,
   type ScriptAssetLanguage,
   type SkyboxAsset,
@@ -389,14 +390,19 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
         );
       }
     }
+    /** A stored Audio Asset must name a supported format and its one mime type. */
+    const isAudioFormatPair = (format: unknown, mimeType: unknown): boolean =>
+      typeof format === "string" &&
+      format in AUDIO_MIME_BY_FORMAT &&
+      AUDIO_MIME_BY_FORMAT[format as keyof typeof AUDIO_MIME_BY_FORMAT] === mimeType;
     if (candidate.kind === "audio") {
       if (
         !isRecord(candidate.importMetadata) ||
         !(
-          (candidate.importMetadata.sourceFormat === "mp3" &&
-            candidate.importMetadata.mimeType === "audio/mpeg") ||
-          (candidate.importMetadata.sourceFormat === "wav" &&
-            candidate.importMetadata.mimeType === "audio/wav")
+          isAudioFormatPair(
+            candidate.importMetadata.sourceFormat,
+            candidate.importMetadata.mimeType,
+          )
         ) ||
         !Number.isInteger(candidate.importMetadata.byteLength) ||
         Number(candidate.importMetadata.byteLength) <= 0

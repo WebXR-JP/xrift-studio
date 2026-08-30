@@ -592,9 +592,30 @@ export type SkyboxAsset = AssetBase<"skybox"> & {
   byteLength?: number;
 };
 
+/** Every container a WebGL/WebXR runtime can decode through HTMLAudioElement. */
+export type AudioSourceFormat = "mp3" | "wav" | "ogg" | "flac" | "m4a" | "webm";
+
+export type AudioMimeType =
+  | "audio/mpeg"
+  | "audio/wav"
+  | "audio/ogg"
+  | "audio/flac"
+  | "audio/mp4"
+  | "audio/webm";
+
+/** The one mime type each format is stored as; alternates normalise to these. */
+export const AUDIO_MIME_BY_FORMAT = {
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  flac: "audio/flac",
+  m4a: "audio/mp4",
+  webm: "audio/webm",
+} as const satisfies Record<AudioSourceFormat, AudioMimeType>;
+
 export type AudioImportMetadata = {
-  sourceFormat: "mp3" | "wav";
-  mimeType: "audio/mpeg" | "audio/wav";
+  sourceFormat: AudioSourceFormat;
+  mimeType: AudioMimeType;
   byteLength: number;
 };
 

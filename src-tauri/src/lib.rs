@@ -3766,6 +3766,10 @@ fn local_audio_mime_type(path: &Path) -> Option<&'static str> {
     {
         Some("mp3") => Some("audio/mpeg"),
         Some("wav") => Some("audio/wav"),
+        Some("ogg") | Some("oga") | Some("opus") => Some("audio/ogg"),
+        Some("flac") => Some("audio/flac"),
+        Some("m4a") | Some("aac") => Some("audio/mp4"),
+        Some("weba") => Some("audio/webm"),
         _ => None,
     }
 }
@@ -3806,10 +3810,47 @@ fn has_wav_signature(bytes: &[u8]) -> bool {
         .is_some_and(|total_size| total_size <= bytes.len())
 }
 
+/// Ogg pages always start with the "OggS" capture pattern; requiring a Vorbis
+/// identification header right after it keeps other Ogg payloads (Theora, and
+/// so on) out of the audio import path.
+fn has_ogg_signature(bytes: &[u8]) -> bool {
+    if bytes.get(0..4) != Some(b"OggS") {
+        return false;
+    }
+    let scan = &bytes[..bytes.len().min(4096)];
+    scan.windows(7)
+        .any(|window| window == b"\x01vorbis" || window == b"OpusHea")
+}
+
+fn has_flac_signature(bytes: &[u8]) -> bool {
+    bytes.len() >= 8 && bytes.starts_with(b"fLaC")
+}
+
+/// ISO base media file: a "ftyp" box carrying an audio-capable brand.
+fn has_mp4_audio_signature(bytes: &[u8]) -> bool {
+    if bytes.len() < 12 || bytes.get(4..8) != Some(b"ftyp") {
+        return false;
+    }
+    matches!(
+        bytes.get(8..12),
+        Some(b"M4A ") | Some(b"mp42") | Some(b"mp41") | Some(b"isom") | Some(b"iso2")
+            | Some(b"dash") | Some(b"M4B ")
+    )
+}
+
+/// Matroska/WebM EBML header.
+fn has_webm_signature(bytes: &[u8]) -> bool {
+    bytes.starts_with(&[0x1a, 0x45, 0xdf, 0xa3])
+}
+
 fn has_audio_signature(bytes: &[u8], mime_type: &str) -> bool {
     match mime_type {
         "audio/mpeg" => has_mp3_signature(bytes),
         "audio/wav" => has_wav_signature(bytes),
+        "audio/ogg" => has_ogg_signature(bytes),
+        "audio/flac" => has_flac_signature(bytes),
+        "audio/mp4" => has_mp4_audio_signature(bytes),
+        "audio/webm" => has_webm_signature(bytes),
         _ => false,
     }
 }
