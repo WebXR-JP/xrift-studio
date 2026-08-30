@@ -3905,6 +3905,7 @@ export function AssetQuickEditor({
   onAssignShaderAsset,
   onModelChange,
   onReimportModel,
+  onCreateModelAnimationGraph,
   modelReimportState,
   modelReimportImpactNotice,
   modelOptimizationState,
@@ -3936,6 +3937,7 @@ export function AssetQuickEditor({
   ) => void;
   onModelChange: (assetId: string, patch: ModelAssetPatch) => void;
   onReimportModel: (assetId: string) => void;
+  onCreateModelAnimationGraph?: (assetId: string) => void;
   modelReimportState: ModelReimportState;
   modelReimportImpactNotice?: ModelReimportImpactNotice | null;
   modelOptimizationState?: ModelOptimizationState;
@@ -4000,6 +4002,11 @@ export function AssetQuickEditor({
         onChange={(patch) => onModelChange(asset.id, patch)}
         onOpenMaterial={onSelectAsset}
         onReimport={() => onReimportModel(asset.id)}
+        onCreateAnimationGraph={
+          onCreateModelAnimationGraph
+            ? () => onCreateModelAnimationGraph(asset.id)
+            : undefined
+        }
         onOptimize={
           onApplyModelOptimization
             ? (options) => onApplyModelOptimization(asset.id, options)

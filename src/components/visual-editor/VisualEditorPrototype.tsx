@@ -108,7 +108,6 @@ import {
   undoEditorHistory,
   updateEntityEnabled,
   updateModelNodeEntityTransform,
-  updateAnimationComponent,
   updateAudioSourceComponent,
   updateVegetationWindComponent,
   updateColliderComponent,
@@ -137,7 +136,9 @@ import {
   revertTextureOptimization,
   collectInteractionTriggerTargets,
   createInteractionTriggerGraphExtension,
+  createModelAnimationGraphExtension,
   syncInteractionTriggerEntityReferences,
+  XRIFT_COMPONENT_SCHEMA_IDS,
   updateInteractionTriggerComponent,
   updateInteractivityAsset,
   updateXriftComponent,
@@ -146,7 +147,6 @@ import {
   type ComponentCodeImportPlan,
   type ClassicProjectVisualImportPreview,
   type ClassicProjectVisualImportSource,
-  type AnimationPatch,
   type AssetManifest,
   type ParticleAuthoringPreset,
   type SceneRecipe,
@@ -5396,6 +5396,9 @@ export function VisualEditorPrototype({
           bundle: touchProject({
             ...current.present.bundle,
             scene: result.scene,
+            // Placing an animated Model creates the graph that plays it, so the
+            // manifest has to be committed with the Scene.
+            assets: result.assets,
           }),
           sceneSelection: { kind: "entity", id: result.entityId },
           assetSelection: null,
@@ -6523,21 +6526,6 @@ export function VisualEditorPrototype({
     [editorMode, playSession, updateScene],
   );
 
-  const handleAnimationChange = useCallback(
-    (entityId: string, componentId: string, patch: AnimationPatch) => {
-      if (editorMode !== "edit" && !playSession) return;
-      updateScene((scene) =>
-        updateAnimationComponent(scene, entityId, patch, componentId),
-      );
-      setNotice(
-        editorMode === "play"
-          ? "Animation設定を保存し、このEntityのPlayを先頭から再実行しました"
-          : "Animation設定をSceneへ反映しました",
-      );
-    },
-    [editorMode, playSession, updateScene],
-  );
-
   const handleVegetationWindChange = useCallback(
     (
       entityId: string,
@@ -6692,6 +6680,7 @@ export function VisualEditorPrototype({
       // Asset creation and placement land as one history entry: undoing a
       // preset the author did not want should not leave its Asset behind.
       let scene = bundle.scene;
+      let placedAssets = added.manifest;
       let placedEntityId: string | null = null;
       if (placeInScene) {
         const count = bundle.scene.rootEntityIds.length;
@@ -6712,10 +6701,11 @@ export function VisualEditorPrototype({
           throw new Error("ParticleをSceneへ配置できませんでした");
         }
         scene = placement.scene;
+        placedAssets = placement.assets;
         placedEntityId = placement.entityId;
       }
 
-      setBundle(touchProject({ ...bundle, assets: added.manifest, scene }));
+      setBundle(touchProject({ ...bundle, assets: placedAssets, scene }));
       if (placedEntityId) {
         setSceneSelection({ kind: "entity", id: placedEntityId });
         // Placing puts something in the Scene, so get out of the way and let
@@ -7865,6 +7855,63 @@ export function VisualEditorPrototype({
     [activeAssetFolderId, editorMode, importBusy],
   );
 
+  /**
+   * Builds a graph that plays every clip a Model carries, from the Model.
+   *
+   * The Animation Component keeps working and keeps playing its one clip; this
+   * is the other reading of "play the animations", for a Model whose motion is
+   * spread over dozens of clips meant to run together. The Asset is created and
+   * opened, but not attached to anything: which Entity should carry it is the
+   * author's decision, and generating sixty-four nodes is already enough of a
+   * change to make in one click.
+   */
+  const handleCreateModelAnimationGraph = useCallback(
+    (assetId: string) => {
+      if (editorMode !== "edit") {
+        setNotice("Playを停止してからGraphを作成してください");
+        return;
+      }
+      const model = bundleRef.current.assets.assets[assetId];
+      if (model?.kind !== "model") return;
+      const clips = model.importMetadata?.animations ?? [];
+      if (clips.length === 0) {
+        setNotice("このModelにはanimation clipがありません");
+        return;
+      }
+      const graphAssetId = createDocumentId("asset");
+      setHistory((current) => {
+        const assets = current.present.bundle.assets;
+        const added = addDefaultInteractivityAsset(assets, {
+          id: graphAssetId,
+          name: `${model.name} のアニメーション`,
+          folderId: model.folderId ?? null,
+          extension: createModelAnimationGraphExtension(
+            clips.map((clip) => clip.name),
+          ),
+        });
+        if (!added.added) {
+          setNotice("Graphを作成できませんでした");
+          return current;
+        }
+        setSaveStatus("dirty");
+        setNotice(
+          `${clips.length}件のclipを再生するGraphを作成しました。Entityに付けるとPlayでループ再生されます`,
+        );
+        setInteractivityEditorAssetId(added.assetId);
+        setGraphTabActive(true);
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: touchProject({
+            ...current.present.bundle,
+            assets: added.manifest,
+          }),
+          assetSelection: added.assetId,
+        });
+      });
+    },
+    [editorMode],
+  );
+
   const handleCreateAssetFolder = useCallback(() => {
     if (editorMode !== "edit") return;
     const folderId = createDocumentId("folder");
@@ -8221,8 +8268,10 @@ export function VisualEditorPrototype({
    * editor is open.
    */
   const interactionTriggerTargets = useMemo(
-    () => collectInteractionTriggerTargets(bundle.scene),
-    [bundle.scene],
+    () => collectInteractionTriggerTargets(bundle.scene, bundle.assets),
+    // The Animation row now comes from the Model's clips, so the manifest is
+    // part of the answer: re-importing a Model to add clips has to refresh it.
+    [bundle.scene, bundle.assets],
   );
 
   const handleSaveInteractivityAsset = useCallback(
@@ -8375,6 +8424,41 @@ export function VisualEditorPrototype({
       });
     },
     [editorMode, importBusy],
+  );
+
+  /**
+   * Puts this graph on an Entity, or gives that Entity what it still needs.
+   *
+   * A graph runs because an Interaction Trigger on some Entity points at it —
+   * true even for a graph that starts itself. Nothing in the editor said so,
+   * so the usual first experience was to wire a graph, press Play, and watch
+   * nothing happen.
+   */
+  const handleAttachInteractivityAsset = useCallback(
+    (entityId: string, assetId: string) => {
+      if (editorMode !== "edit") return;
+      setBundle((current) => {
+        const result = addEditorComponent(
+          current.scene,
+          current.assets,
+          entityId,
+          "interaction.trigger",
+          projectKind,
+          assetId,
+        );
+        if (!result.added) return current;
+        return touchProject({
+          ...current,
+          scene: syncInteractionTriggerEntityReferences(
+            result.scene,
+            current.assets,
+          ),
+        });
+      });
+      const name = bundleRef.current.scene.entities[entityId]?.name ?? "Entity";
+      setNotice(`${name}へこのグラフを付けました`);
+    },
+    [editorMode, projectKind, setBundle],
   );
 
   const handleAddComponent = useCallback(
@@ -10056,6 +10140,60 @@ export function VisualEditorPrototype({
     bundle.assets.assets[interactivityEditorAssetId]?.kind === "interactivity"
       ? bundle.assets.assets[interactivityEditorAssetId]
       : null;
+  /**
+   * Which Entities run this graph, and whether they can be pressed.
+   *
+   * The editor shows the graph; only the Scene knows whether anything will run
+   * it. Reading that here lets the editor say so instead of leaving the author
+   * to find out at Play.
+   */
+  const interactivityAttachments = interactivityEditorAsset
+    ? Object.values(bundle.scene.entities).flatMap((entity) =>
+        entity.components.some(
+          (component) =>
+            component.type === "interaction-trigger" &&
+            component.enabled &&
+            component.interactivityAssetId === interactivityEditorAsset.id,
+        )
+          ? [
+              {
+                entityId: entity.id,
+                name: entity.name,
+                hasInteractable: entity.components.some(
+                  (component) =>
+                    component.type === "xrift-component" &&
+                    component.schemaId ===
+                      XRIFT_COMPONENT_SCHEMA_IDS.interactable &&
+                    component.enabled,
+                ),
+                // A graph that plays clips is attached to the Entity that has
+                // them, and「Modelを間違えた」looks exactly like「グラフが壊れて
+                // いる」in Play. Counted here because the canvas cannot see it.
+                animationClipCount: entity.components.reduce((total, component) => {
+                  if (component.type !== "mesh") return total;
+                  const assetId =
+                    component.geometry?.kind === "asset"
+                      ? component.geometry.assetId
+                      : component.geometryAssetId;
+                  const asset = assetId ? bundle.assets.assets[assetId] : undefined;
+                  return (
+                    total +
+                    (asset?.kind === "model"
+                      ? asset.importMetadata?.animations.length ?? 0
+                      : 0)
+                  );
+                }, 0),
+              },
+            ]
+          : [],
+      )
+    : [];
+  const interactivitySelectedEntity = (() => {
+    const entityId = selectedEntityIds[0];
+    const entity = entityId ? bundle.scene.entities[entityId] : undefined;
+    return entity ? { entityId: entity.id, name: entity.name } : null;
+  })();
+
   const interactivityEditorTabs = interactivityEditorAsset
     ? [
         {
@@ -10493,7 +10631,6 @@ export function VisualEditorPrototype({
             onRemoveRigidBody={handleRemoveRigidBody}
             onLightChange={handleLightChange}
             onTextChange={handleTextChange}
-            onAnimationChange={handleAnimationChange}
             onVegetationWindChange={handleVegetationWindChange}
             onAudioSourceChange={handleAudioSourceChange}
             onSelectAsset={handleSelectAsset}
@@ -10516,6 +10653,7 @@ export function VisualEditorPrototype({
             onMaterialChange={handleMaterialChange}
             onModelChange={handleModelChange}
             onReimportModel={handleReimportModel}
+            onCreateModelAnimationGraph={handleCreateModelAnimationGraph}
             modelReimportState={
               modelReimportFeedback?.assetId === assetSelection
                 ? modelReimportFeedback.state
@@ -10773,6 +10911,22 @@ export function VisualEditorPrototype({
               readOnly={renderedReadOnly}
               onSave={handleSaveInteractivityAsset}
               onClose={() => setInteractivityEditorAssetId(null)}
+              setup={{
+                attachments: interactivityAttachments,
+                selectedEntity: interactivitySelectedEntity,
+                onAttach: (entityId) =>
+                  handleAttachInteractivityAsset(
+                    entityId,
+                    interactivityEditorAsset.id,
+                  ),
+                onAddInteractable: (entityId) =>
+                  handleAddComponent(
+                    entityId,
+                    XRIFT_COMPONENT_SCHEMA_IDS.interactable,
+                  ),
+                onSelectEntity: (entityId) =>
+                  handleEntitySelectionChange([entityId], entityId),
+              }}
             />
             </div>
           ) : null}

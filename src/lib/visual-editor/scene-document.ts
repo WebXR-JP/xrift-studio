@@ -350,7 +350,19 @@ export type AudioSourcePatch = Partial<
   >
 >;
 
-/** Plays one animation clip embedded in the sibling Model Asset. */
+/**
+ * Removed in v1. Kept only so a document saved before it can be read.
+ *
+ * It played one clip, and a Model whose motion is split across dozens of them
+ * had no way to say "all of these". Playback moved into the graph, where a clip
+ * is an `animation/start` node beside the waits and conditions it runs with.
+ * Nothing authors, renders or publishes this any more: opening a project
+ * converts every one of these into a graph and removes it. Do not add it to a
+ * new code path — the only code that should still name this type is the
+ * conversion in `animation-component-migration.ts`.
+ *
+ * @deprecated
+ */
 export type AnimationComponent = ComponentBase & {
   type: "animation";
   autoplay: boolean;
@@ -907,6 +919,9 @@ export function createAudioSourceComponent(
   };
 }
 
+/**
+ * @deprecated Removed in v1; only the conversion and its fixtures build one.
+ */
 export function createAnimationComponent(id: string): AnimationComponent | null {
   const normalizedId = id.trim();
   if (!normalizedId) return null;
@@ -2242,62 +2257,6 @@ export function updateInteractionTriggerComponent(
         ...entity,
         components: entity.components.map((component) =>
           component.id === componentId ? next : component,
-        ),
-      },
-    },
-  };
-}
-
-export function updateAnimationComponent(
-  scene: SceneDocument,
-  entityId: string,
-  patch: AnimationPatch,
-  componentId?: string,
-): SceneDocument {
-  const entity = scene.entities[entityId];
-  const current = entity?.components.find(
-    (component): component is AnimationComponent =>
-      component.type === "animation" &&
-      (componentId === undefined || component.id === componentId),
-  );
-  if (!entity || !current) return scene;
-  if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") return scene;
-  if (patch.autoplay !== undefined && typeof patch.autoplay !== "boolean") return scene;
-  if (patch.loop !== undefined && typeof patch.loop !== "boolean") return scene;
-  if (
-    patch.clipName !== undefined &&
-    (typeof patch.clipName !== "string" || patch.clipName.trim() === "")
-  ) {
-    return scene;
-  }
-  if (
-    patch.speed !== undefined &&
-    (typeof patch.speed !== "number" ||
-      !Number.isFinite(patch.speed) ||
-      patch.speed < ANIMATION_SPEED_MIN ||
-      patch.speed > ANIMATION_SPEED_MAX)
-  ) {
-    return scene;
-  }
-
-  const next: AnimationComponent = { ...current, ...patch };
-  const changed = Object.keys(patch).some(
-    (key) =>
-      next[key as keyof AnimationComponent] !==
-      current[key as keyof AnimationComponent],
-  );
-  if (!changed) return scene;
-  // Keep cleared optional fields out of the saved document instead of storing undefined.
-  if (next.clipName === undefined) delete next.clipName;
-  if (next.speed === undefined) delete next.speed;
-  return {
-    ...scene,
-    entities: {
-      ...scene.entities,
-      [entityId]: {
-        ...entity,
-        components: entity.components.map((component) =>
-          component.id === current.id ? next : component,
         ),
       },
     },

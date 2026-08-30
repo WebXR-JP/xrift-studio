@@ -12,7 +12,6 @@ import {
 } from "./scripting/script-contract";
 import {
   cloneEntityHierarchy,
-  createAnimationComponent,
   createAudioSourceComponent,
   createBoxColliderComponent,
   createBuiltinPrimitiveMeshComponent,
@@ -133,7 +132,6 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
   }),
   definition("core.spawn", "Spawn Point", "world", false, "spawn-point"),
   definition("core.particle", "Particle Emitter", "rendering", true, "particle-emitter"),
-  definition("core.animation", "Animation", "rendering", false, "animation"),
   definition(
     "core.wind",
     "Wind",
@@ -806,11 +804,6 @@ function createRegisteredComponent(
     const particle = Object.values(assets.assets).find((asset) => asset.kind === "particle");
     return particle ? createParticleEmitterComponent(id, particle.id) : null;
   }
-  if (definition.componentType === "animation") {
-    return entityHasImportedAnimation(entity, assets)
-      ? createAnimationComponent(id)
-      : null;
-  }
   if (definition.componentType === "vegetation-wind") {
     return createVegetationWindComponent(id, vegetationDefaults);
   }
@@ -864,23 +857,4 @@ function createRegisteredComponent(
     };
   }
   return null;
-}
-
-function entityHasImportedAnimation(
-  entity: SceneEntity,
-  assets: AssetManifest,
-): boolean {
-  return entity.components.some((component) => {
-    if (component.type !== "mesh") return false;
-    const assetId =
-      component.geometry?.kind === "asset"
-        ? component.geometry.assetId
-        : component.geometryAssetId;
-    const asset = assets.assets[assetId];
-    return (
-      asset?.kind === "model" &&
-      asset.importSettings.importAnimations &&
-      Boolean(asset.importMetadata?.animations.length)
-    );
-  });
 }

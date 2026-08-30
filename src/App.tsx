@@ -58,6 +58,7 @@ import {
   createStarterVisualProject,
   createPreparedStarterVisualProjectOnDisk,
   createVisualProjectOnDisk,
+  describeAnimationComponentMigration,
   defaultVisualStarterTemplateId,
   publishVisualProject,
   clearStaleXriftUploadAttempt,
@@ -718,6 +719,19 @@ function App() {
       .then((documents) => {
         const scene = documents.scenes[documents.project.entrySceneId];
         if (!scene) throw new Error("Entry Sceneが見つかりません");
+        // v1 removed the Animation Component, so a project saved before it was
+        // converted while it loaded. Said once, on open, because the author is
+        // about to look at a Scene whose Hierarchy changed under them.
+        const migrationNotice = documents.animationMigration
+          ? describeAnimationComponentMigration(documents.animationMigration)
+          : null;
+        if (migrationNotice) {
+          toast({
+            kind: "info",
+            title: "Animationをグラフへ変換しました",
+            description: `${migrationNotice}。保存すると確定します。`,
+          });
+        }
         setVisualSession({
           project,
           bundle: {

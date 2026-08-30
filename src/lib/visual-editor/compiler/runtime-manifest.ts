@@ -135,17 +135,10 @@ function compileRuntimeEntity(
       continue;
     }
     if (component.type === "animation") {
-      components.push({
-        id: component.id,
-        type: "animation",
-        enabled: component.enabled,
-        autoplay: component.autoplay,
-        loop: component.loop,
-        ...(component.clipName === undefined
-          ? {}
-          : { clipName: component.clipName }),
-        ...(component.speed === undefined ? {} : { speed: component.speed }),
-      });
+      // v1 removed the Animation Component: what plays a clip is an
+      // `animation/start` node. Opening a project converts any that are left,
+      // so one reaching here is a document that skipped that and is dropped
+      // rather than published as a Component nothing reads.
       continue;
     }
     if (component.type === "xrift-component") {

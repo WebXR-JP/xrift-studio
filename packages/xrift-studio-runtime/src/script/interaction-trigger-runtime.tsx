@@ -36,6 +36,8 @@ import {
 } from "./scene-runtime.js";
 import {
   getXriftInteractionProperty,
+  resolveXriftInteractionEntityId,
+  XRIFT_INTERACTION_SELF_ENTITY_ID,
   type XriftInteractionPropertyDescriptor,
   type XriftInteractionAction,
   type XriftInteractionTargetKind,
@@ -192,6 +194,23 @@ function linearColor(value: readonly [number, number, number]): Color {
 
 export type XriftInteractionApplier = {
   apply(action: XriftInteractionAction): void;
+  /**
+   * Plays one clip beside whatever else is running.
+   *
+   * The Animation Component plays a single clip, which is all one「再生中」can
+   * mean. A Model can carry sixty-four meant to run together — gulls, insects,
+   * a boat's wake — so a graph needs a way to name them one at a time.
+   */
+  playClip(
+    entityId: string,
+    request: {
+      clipIndex: number;
+      loop: boolean;
+      speed: number;
+      fromSeconds: number | null;
+    },
+  ): void;
+  stopClip(entityId: string, clipIndex: number): void;
   /** Live value of one property, so a graph can toggle or ramp from it. */
   read(target: {
     entityId: string;
@@ -215,10 +234,13 @@ export function createXriftInteractionApplier({
   root,
   componentId,
   order,
+  selfEntityId = null,
 }: {
   root: Object3D;
   componentId: string;
   order: number;
+  /** The Entity this trigger sits on, substituted for the self sentinel. */
+  selfEntityId?: string | null;
 }): XriftInteractionApplier {
   const owner = {};
   /**
@@ -238,6 +260,9 @@ export function createXriftInteractionApplier({
       scale: [number, number, number];
     }
   >();
+  const ownEntityId = (id: string): string =>
+    resolveXriftInteractionEntityId(id, selfEntityId);
+
   const remember = (object: Object3D): void => {
     if (restorePoints.has(object)) return;
     restorePoints.set(object, {
@@ -368,7 +393,7 @@ export function createXriftInteractionApplier({
   };
 
   const applyMaterial = (target: Object3D, action: XriftInteractionAction) => {
-    forEachOwnedMesh(target, action.entityId, (mesh) => {
+    forEachOwnedMesh(target, ownEntityId(action.entityId), (mesh) => {
       for (const material of ownMaterials(mesh) as WritableMaterial[]) {
         if (action.property === "baseColor" && action.value?.kind === "color") {
           material.color?.setRGB(
@@ -415,7 +440,7 @@ export function createXriftInteractionApplier({
     target: { entityId: string; property: string },
   ): XriftInteractionValue | null => {
     const found: { value: XriftInteractionValue | null } = { value: null };
-    forEachOwnedMesh(object, target.entityId, (mesh) => {
+    forEachOwnedMesh(object, ownEntityId(target.entityId), (mesh) => {
       if (found.value) return;
       const materials = Array.isArray(mesh.material)
         ? mesh.material
@@ -452,12 +477,12 @@ export function createXriftInteractionApplier({
   const applyParticle = (target: Object3D, action: XriftInteractionAction) => {
     forEachOwnedBridge(
       target,
-      action.entityId,
+      ownEntityId(action.entityId),
       XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY,
       isParticleBridge,
       (bridge) => {
         const state = bridge.read();
-        if (state.componentId !== action.componentId) return;
+        if (action.componentId && state.componentId !== action.componentId) return;
         // The bridge replaces an owner's overrides wholesale, so the running
         // set is kept here: writing the rate after the switch must not undo it.
         const next: XriftParticleRuntimeOverrides = {
@@ -513,12 +538,12 @@ export function createXriftInteractionApplier({
     const found: { value: XriftInteractionValue | null } = { value: null };
     forEachOwnedBridge(
       object,
-      target.entityId,
+      ownEntityId(target.entityId),
       XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY,
       isParticleBridge,
       (bridge) => {
         const state = bridge.read();
-        if (found.value || state.componentId !== target.componentId) return;
+        if (found.value || (target.componentId && state.componentId !== target.componentId)) return;
         if (target.property === "emitting") {
           found.value = {
             kind: "bool",
@@ -580,12 +605,15 @@ export function createXriftInteractionApplier({
   const applyAnimation = (target: Object3D, action: XriftInteractionAction) => {
     forEachOwnedBridge(
       target,
-      action.entityId,
+      ownEntityId(action.entityId),
       XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY,
       isXriftAnimationRuntimeBridge,
       (bridge) => {
         const state = bridge.read();
-        if (state.componentId !== action.componentId) return;
+        // Animation is addressed per Entity, not per Component: one Model has
+        // one mixer, and the Component that used to own it is gone. A graph
+        // written before that still names a component id, and matching on it
+        // would silently make every one of those graphs do nothing.
         animationOwners.add(bridge);
         if (action.property === "playing") {
           const playing =
@@ -632,12 +660,12 @@ export function createXriftInteractionApplier({
     const found: { value: XriftInteractionValue | null } = { value: null };
     forEachOwnedBridge(
       object,
-      target.entityId,
+      ownEntityId(target.entityId),
       XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY,
       isXriftAnimationRuntimeBridge,
       (bridge) => {
         const state = bridge.read();
-        if (found.value || state.componentId !== target.componentId) return;
+        if (found.value || (target.componentId && state.componentId !== target.componentId)) return;
         if (target.property === "playing") {
           found.value = { kind: "bool", value: state.playing };
         } else if (target.property === "clip") {
@@ -655,12 +683,12 @@ export function createXriftInteractionApplier({
   const applyLight = (target: Object3D, action: XriftInteractionAction) => {
     forEachOwnedBridge(
       target,
-      action.entityId,
+      ownEntityId(action.entityId),
       XRIFT_LIGHT_RUNTIME_USER_DATA_KEY,
       isLightBridge,
       (bridge) => {
         const state = bridge.read();
-        if (state.componentId !== action.componentId) return;
+        if (action.componentId && state.componentId !== action.componentId) return;
         const next: XriftLightRuntimeOverrides = {
           ...(lightOverrides.get(bridge) ?? {}),
         };
@@ -690,12 +718,12 @@ export function createXriftInteractionApplier({
   const applyAudioSource = (target: Object3D, action: XriftInteractionAction) => {
     forEachOwnedBridge(
       target,
-      action.entityId,
+      ownEntityId(action.entityId),
       XRIFT_AUDIO_SOURCE_RUNTIME_USER_DATA_KEY,
       isAudioSourceBridge,
       (bridge) => {
         const state = bridge.read();
-        if (state.componentId !== action.componentId) return;
+        if (action.componentId && state.componentId !== action.componentId) return;
         if (action.property === "playback") {
           if (action.value?.kind !== "enum") return;
           commandRevision += 1;
@@ -749,12 +777,12 @@ export function createXriftInteractionApplier({
     const found: { value: XriftInteractionValue | null } = { value: null };
     forEachOwnedBridge(
       object,
-      target.entityId,
+      ownEntityId(target.entityId),
       XRIFT_LIGHT_RUNTIME_USER_DATA_KEY,
       isLightBridge,
       (bridge) => {
         const state = bridge.read();
-        if (found.value || state.componentId !== target.componentId) return;
+        if (found.value || (target.componentId && state.componentId !== target.componentId)) return;
         if (target.property === "enabled") {
           found.value = { kind: "bool", value: state.enabled };
         } else if (target.property === "intensity") {
@@ -775,12 +803,12 @@ export function createXriftInteractionApplier({
     const found: { value: XriftInteractionValue | null } = { value: null };
     forEachOwnedBridge(
       object,
-      target.entityId,
+      ownEntityId(target.entityId),
       XRIFT_AUDIO_SOURCE_RUNTIME_USER_DATA_KEY,
       isAudioSourceBridge,
       (bridge) => {
         const state = bridge.read();
-        if (found.value || state.componentId !== target.componentId) return;
+        if (found.value || (target.componentId && state.componentId !== target.componentId)) return;
         if (target.property === "volume") {
           found.value = { kind: "float", value: state.volume };
         } else if (target.property === "loop") {
@@ -793,10 +821,47 @@ export function createXriftInteractionApplier({
     return found.value;
   };
 
+  const forEachAnimationBridge = (
+    entityId: string,
+    visit: (bridge: XriftAnimationRuntimeBridge) => void,
+  ): void => {
+    const object = findEntityObject(root, ownEntityId(entityId));
+    if (!object) return;
+    forEachOwnedBridge(
+      object,
+      ownEntityId(entityId),
+      XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY,
+      isXriftAnimationRuntimeBridge,
+      (bridge) => {
+        animationOwners.add(bridge);
+        visit(bridge);
+      },
+    );
+  };
+
   return {
+    playClip(entityId, request) {
+      forEachAnimationBridge(entityId, (bridge) => {
+        bridge.command(owner, order, componentId, {
+          type: "play-clip",
+          clipIndex: request.clipIndex,
+          loop: request.loop,
+          speed: request.speed,
+          time: request.fromSeconds,
+        });
+      });
+    },
+    stopClip(entityId, clipIndex) {
+      forEachAnimationBridge(entityId, (bridge) => {
+        bridge.command(owner, order, componentId, {
+          type: "stop-clip",
+          clipIndex,
+        });
+      });
+    },
     read(target) {
       if (target.targetKind === "scene") return readScene(target.property);
-      const object = findEntityObject(root, target.entityId);
+      const object = findEntityObject(root, ownEntityId(target.entityId));
       if (!object) return null;
       if (target.targetKind === "entity") return readEntity(object, target.property);
       if (target.targetKind === "transform") {
@@ -819,7 +884,7 @@ export function createXriftInteractionApplier({
         applyScene(action);
         return;
       }
-      const target = findEntityObject(root, action.entityId);
+      const target = findEntityObject(root, ownEntityId(action.entityId));
       if (!target) return;
       if (action.target === "entity") {
         applyEntity(target, action);
@@ -975,6 +1040,30 @@ export function createXriftInteractionHost(
     getXriftInteractionProperty(target.targetKind, target.property);
 
   return {
+    /**
+     * `animation/start` plays a clip on the Entity this graph is attached to.
+     *
+     * The graph names a clip by index, which is what the specification's
+     * operation carries, and the Entity is the owner — the same rule an action
+     * with no explicit target follows. Several of these run at once, so a Model
+     * whose clips are meant to play together can have all of them started.
+     *
+     * `endTime` decides the loop: the specification's「最後まで再生して終わる」
+     * is a bounded play, and a clip with no end is one an author wants to keep
+     * going. That is also what a Model full of gulls and waves wants by
+     * default, and the engine still sends `done` for the bounded case.
+     */
+    startAnimation(request) {
+      applier.playClip(XRIFT_INTERACTION_SELF_ENTITY_ID, {
+        clipIndex: request.animationIndex,
+        loop: request.endTime === null,
+        speed: request.speed,
+        fromSeconds: request.startTime,
+      });
+    },
+    stopAnimation(request) {
+      applier.stopClip(XRIFT_INTERACTION_SELF_ENTITY_ID, request.animationIndex);
+    },
     readProperty(target) {
       const descriptor = descriptorFor(target);
       if (!descriptor) return null;
@@ -1039,8 +1128,14 @@ export function XriftInteractionTriggerRuntime({
 }: XriftInteractionTriggerRuntimeProps) {
   const scene = useThree((state) => state.scene);
   const applier = useMemo(
-    () => createXriftInteractionApplier({ root: scene, componentId, order }),
-    [componentId, order, scene],
+    () =>
+      createXriftInteractionApplier({
+        root: scene,
+        componentId,
+        order,
+        selfEntityId: entityId,
+      }),
+    [componentId, entityId, order, scene],
   );
   const host = useMemo(() => createXriftInteractionHost(applier), [applier]);
   /**

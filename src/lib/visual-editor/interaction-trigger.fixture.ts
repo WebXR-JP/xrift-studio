@@ -29,6 +29,7 @@ import {
   setInteractivityTriggerActionValue,
   validateKhrInteractivityExtension,
   XRIFT_INTERACTION_OPERATIONS,
+  XRIFT_INTERACTION_SELF_ENTITY_ID,
   getXriftInteractionProperty,
   type KhrInteractivityExtension,
   type KhrInteractivityGraph,
@@ -155,6 +156,29 @@ function assertConfiguredActionIsParsed(): void {
 }
 
 function assertUnfinishedActionIsReported(): void {
+  // A freshly placed action already points at the Entity the graph is attached
+  // to, so it is complete before the author has chosen anything. That is what
+  // lets one graph sit on many Entities.
+  {
+    const extension = createInteractionTriggerGraphExtension();
+    const graph = graphOf(extension);
+    const action = appendInteractivityOperation(
+      graph,
+      XRIFT_INTERACTION_OPERATIONS.setProperty,
+      { x: 400, y: 160 },
+    );
+    connectInteractivityFlow(graph, 0, "out", action);
+    const program = collectXriftInteractionPrograms(extension)[0];
+    assert(
+      program?.actions[0]?.entityId === XRIFT_INTERACTION_SELF_ENTITY_ID,
+      "a new action did not default to the Entity the graph is attached to",
+    );
+    assert(
+      collectInteractivityRuntimeDiagnostics(extension).length === 0,
+      "a new action was reported as unfinished",
+    );
+  }
+
   const extension = createInteractionTriggerGraphExtension();
   const graph = graphOf(extension);
   const action = appendInteractivityOperation(
@@ -163,6 +187,8 @@ function assertUnfinishedActionIsReported(): void {
     { x: 400, y: 160 },
   );
   connectInteractivityFlow(graph, 0, "out", action);
+  // Clearing the Entity by hand is still an unfinished action.
+  graph.nodes![action]!.configuration!.entity = { value: [""] };
   assert(
     collectXriftInteractionPrograms(extension)[0]?.actions.length === 0,
     "an action with no target was treated as runnable",

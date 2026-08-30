@@ -7,6 +7,8 @@ import type {
   SceneAsset,
 } from "./asset-manifest";
 import { createDocumentId } from "./document-id";
+import { addDefaultInteractivityAsset } from "./interactivity-graph";
+import { createModelAnimationGraphExtension } from "./interactivity-recipes";
 import {
   expandModelEntityHierarchy,
   hasModelNodeHierarchy,
@@ -16,9 +18,9 @@ import {
   type PrefabDocument,
 } from "./prefab-document";
 import {
+  createInteractionTriggerComponent,
   createMeshColliderComponent,
   createMeshComponent,
-  createAnimationComponent,
   createAudioSourceComponent,
   createParticleEmitterComponent,
   createTransformComponent,
@@ -32,6 +34,15 @@ export type SceneAssetPlacementResult =
   | {
       placed: true;
       scene: SceneDocument;
+      /**
+       * The manifest after placement, which can gain an Asset.
+       *
+       * Placing an animated Model creates the Interactivity Graph that plays
+       * its clips, because v1 has no Animation Component to add instead.
+       * Callers must commit this alongside the Scene; dropping it leaves a
+       * Trigger pointing at a graph that is not in the project.
+       */
+      assets: AssetManifest;
       entityId: string;
       assetName: string;
       assetKind: "model" | "particle" | "prefab" | "audio";
@@ -87,8 +98,9 @@ export function instantiateSceneAsset(
     return { placed: false, scene, reason: "unsupported-kind" };
   }
 
+  let nextAssets = assets;
   if (asset.kind === "model") {
-    entity = createModelEntity(
+    const created = createModelEntity(
       scene,
       entityId,
       asset,
@@ -96,6 +108,8 @@ export function instantiateSceneAsset(
       position,
       parentEntityId,
     );
+    nextAssets = created.assets;
+    entity = created.entity;
     assetKind = "model";
   } else if (asset.kind === "particle") {
     entity = createParticleEntity(
@@ -179,6 +193,7 @@ export function instantiateSceneAsset(
     assetKind,
     assetName: asset.name,
     entityId,
+    assets: nextAssets,
     scene: expandedScene,
   };
 }
@@ -244,7 +259,7 @@ function createModelEntity(
   assets: AssetManifest,
   position: Vec3,
   parentEntityId: string | null,
-): SceneEntity {
+): { assets: AssetManifest; entity: SceneEntity } {
   const materialBindings: MaterialBinding[] = asset.materialSlots.flatMap(
     (slot) =>
       slot.defaultMaterialAssetId &&
@@ -252,35 +267,65 @@ function createModelEntity(
         ? [{ slot: slot.slot, materialAssetId: slot.defaultMaterialAssetId }]
         : [],
   );
-  const animation = hasImportedAnimations(asset)
-    ? createAnimationComponent(createDocumentId("component-animation"))
-    : null;
+  /*
+   * An animated Model arrives playing, as it always has — but through a graph
+   * rather than an Animation Component, which v1 removed. Every clip loops,
+   * because a Model whose motion is split across clips means them to run
+   * together; the graph is an ordinary Asset, so an author who wants only one
+   * of them deletes the rest.
+   */
+  const clips = hasImportedAnimations(asset)
+    ? (asset.importMetadata?.animations ?? [])
+    : [];
+  let nextAssets = assets;
+  let trigger: SceneEntity["components"][number] | null = null;
+  if (clips.length > 0) {
+    const graphAssetId = createDocumentId("interactivity");
+    const added = addDefaultInteractivityAsset(assets, {
+      id: graphAssetId,
+      name: `${asset.name} のアニメーション`,
+      folderId: asset.folderId ?? null,
+      extension: createModelAnimationGraphExtension(
+        clips.map((clip) => clip.name),
+      ),
+    });
+    if (added.added) {
+      nextAssets = added.manifest;
+      trigger = createInteractionTriggerComponent(
+        createDocumentId("component-interaction-trigger"),
+        graphAssetId,
+      );
+    }
+  }
   return {
-    id: entityId,
-    name: uniqueEntityName(scene, asset.name),
-    parentId: parentEntityId,
-    children: [],
-    enabled: true,
-    components: [
-      createTransformComponent(
-        createDocumentId("component-transform"),
-        position,
-      ),
-      createMeshComponent(
-        createDocumentId("component-mesh"),
-        asset.id,
-        materialBindings,
-      ),
-      ...(animation ? [animation] : []),
-      ...(asset.importSettings.generateColliders
-        ? [
-            createMeshColliderComponent(
-              createDocumentId("component-collider"),
-              { meshMode: "trimesh" },
-            ),
-          ]
-        : []),
-    ],
+    assets: nextAssets,
+    entity: {
+      id: entityId,
+      name: uniqueEntityName(scene, asset.name),
+      parentId: parentEntityId,
+      children: [],
+      enabled: true,
+      components: [
+        createTransformComponent(
+          createDocumentId("component-transform"),
+          position,
+        ),
+        createMeshComponent(
+          createDocumentId("component-mesh"),
+          asset.id,
+          materialBindings,
+        ),
+        ...(trigger ? [trigger] : []),
+        ...(asset.importSettings.generateColliders
+          ? [
+              createMeshColliderComponent(
+                createDocumentId("component-collider"),
+                { meshMode: "trimesh" },
+              ),
+            ]
+          : []),
+      ],
+    },
   };
 }
 

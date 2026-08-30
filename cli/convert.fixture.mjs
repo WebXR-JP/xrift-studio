@@ -36,7 +36,13 @@ import { runScriptAudioFixtureAssertions } from "../src/lib/visual-editor/script
 import { runAudioSourceRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source.fixture.ts";
 import { runRuntimeSchemaFixtureAssertions } from "../packages/xrift-studio-runtime/src/schema.fixture.ts";
 import { runInteractivityEngineFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity/engine.fixture.ts";
+import {
+  runAnimationActionComponentIdFixtureAssertions,
+  runAnimationComponentLoadMigrationFixtureAssertions,
+  runAnimationComponentMigrationFixtureAssertions,
+} from "../src/lib/visual-editor/animation-component-migration.fixture.ts";
 import { runAnimationRuntimeBridgeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/animation.fixture.ts";
+import { runAnimationMixerControllerFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/animation-mixer.fixture.ts";
 import { runInteractivityGraphListFixtureAssertions } from "../src/lib/visual-editor/interactivity-recipes.fixture.ts";
 import { runShaderTimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/shader-time.fixture.ts";
 import { runTextPanelFixtureAssertions } from "../packages/xrift-studio-runtime/src/text-panel.fixture.ts";
@@ -92,6 +98,7 @@ import { runMaterialAlphaFixtureAssertions } from "../src/lib/visual-editor/mate
 import {
   runInteractivityRecipeFixtureAssertions,
   runInteractivityRuntimeAdapterFixtureAssertions,
+  runModelAnimationGraphFixtureAssertions,
 } from "../src/lib/visual-editor/interactivity-recipes.fixture.ts";
 import { runInteractionTriggerFixtureAssertions } from "../src/lib/visual-editor/interaction-trigger.fixture.ts";
 import { runInteractionTriggerApplierFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/interaction-trigger-applier.fixture.ts";
@@ -277,6 +284,10 @@ try {
     ["runtime schema", runRuntimeSchemaFixtureAssertions],
     ["interactivity engine", runInteractivityEngineFixtureAssertions],
     ["animation runtime bridge", runAnimationRuntimeBridgeFixtureAssertions],
+    ["animation component migration", runAnimationComponentMigrationFixtureAssertions],
+    ["animation component load migration", runAnimationComponentLoadMigrationFixtureAssertions],
+    ["animation action component ids", runAnimationActionComponentIdFixtureAssertions],
+    ["animation mixer controller", runAnimationMixerControllerFixtureAssertions],
     ["interactivity graph list", runInteractivityGraphListFixtureAssertions],
     ["shader time", runShaderTimeFixtureAssertions],
     ["text panel", runTextPanelFixtureAssertions],
@@ -320,6 +331,7 @@ try {
     ["lighting contract", runLightingContractFixtureAssertions],
     ["material alpha", runMaterialAlphaFixtureAssertions],
     ["interactivity recipes", runInteractivityRecipeFixtureAssertions],
+    ["model animation graph", runModelAnimationGraphFixtureAssertions],
     ["interaction trigger", runInteractionTriggerFixtureAssertions],
     ["interaction trigger applier", runInteractionTriggerApplierFixtureAssertions],
     ["interactivity runtime adapter", runInteractivityRuntimeAdapterFixtureAssertions],

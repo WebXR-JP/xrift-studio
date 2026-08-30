@@ -27,7 +27,7 @@ document 以外は React shell か Tauri 側が持つ副作用を伴う。
 書き込み tool は `projectId`、`sceneId`、`expectedRevision` を要求する。古い
 snapshot への適用を弾くためで、複数 client が同時に触っても編集は直列化される。
 
-## document (91)
+## document (90)
 
 **Editor context / Project**
 `get_editor_context`, `get_scripting_capabilities`, `update_project_metadata`
@@ -117,19 +117,30 @@ world 座標、傾斜、穴、草の層ごとの被覆を返す。document は�
 （詳細は [Terrain エディター 仕様](./TERRAIN_EDITOR_SPEC.md) の「MCP から草を扱う」）
 
 **Interactivity graph / Interaction Trigger**
-`list_interactivity_operations`, `list_interactivity_recipes`,
+`list_interactivity_operations`,
 `list_interaction_trigger_targets`, `get_interactivity_asset`,
 `validate_interactivity_asset`, `simulate_interactivity_asset`,
-`create_interactivity_asset`, `update_interactivity_asset`,
+`create_interactivity_asset`, `create_model_animation_graph`,
+`update_interactivity_asset`,
 `add_interactivity_graph`, `update_interactivity_graph`,
 `delete_interactivity_graph`, `add_interactivity_node`,
 `duplicate_interactivity_node`, `delete_interactivity_node`,
 `connect_interactivity_nodes`, `disconnect_interactivity_socket`,
 `set_interactivity_value`, `set_interactivity_configuration`,
 `configure_interactivity_material_pointer`,
-`configure_interactivity_trigger_action`, `apply_interactivity_recipe`,
+`configure_interactivity_trigger_action`,
 `move_interactivity_node`, `layout_interactivity_graph`
 （詳細は [KHR_interactivity Editor / MCP design](./KHR_INTERACTIVITY_EDITOR.md)）
+
+`create_model_animation_graph` は Model Asset の animation clip
+すべてを `event/onStart` から同時にループ再生するグラフを作る。Model Inspector
+の「アニメーションのGraphを作る」と同じもので、Asset を作るだけで Entity には
+付けない。付け先は `add_component` の `interaction.trigger` で選ぶ。
+
+Animation Component は廃止された。`place_asset` で clip を持つ Model を置くと、
+その全 clip を再生する Graph と Interaction Trigger が一緒に付く。`add_component`
+に `core.animation` は無く、まだ Component を持つ document に対する
+`update_component` は `COMPONENT_REMOVED` で断る（`remove_component` は通る）。
 
 ノードエディターで人ができる操作は、Undo / Redo、選択、canvas の見え方（拡大、
 全体表示、パネル幅）、タイムラインの範囲と時刻のつまみを除いて、すべてこの表に
