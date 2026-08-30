@@ -53,6 +53,27 @@ export type XriftInteractionTargetKind =
  */
 export const XRIFT_INTERACTION_SCENE_ENTITY_ID = "__xrift_scene__" as const;
 
+/**
+ * "Whatever Entity this graph is attached to."
+ *
+ * An action that names an Entity by id belongs to one Scene and one Entity, so
+ * a graph is a one-off no matter how general its logic is. Pointing at the
+ * owner instead makes the graph the reusable part: attach「押したら開く」to
+ * every door and each one opens itself. An explicit id still wins, for the
+ * cases where a switch over here moves a thing over there.
+ */
+export const XRIFT_INTERACTION_SELF_ENTITY_ID = "__xrift_self__" as const;
+
+/** The Entity an action names, with the owner substituted for the sentinel. */
+export function resolveXriftInteractionEntityId(
+  entityId: string,
+  selfEntityId: string | null,
+): string {
+  return entityId === XRIFT_INTERACTION_SELF_ENTITY_ID && selfEntityId
+    ? selfEntityId
+    : entityId;
+}
+
 export const XRIFT_INTERACTION_TARGET_KINDS: readonly XriftInteractionTargetKind[] = [
   "entity",
   "transform",

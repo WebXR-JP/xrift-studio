@@ -2,6 +2,7 @@ import {
   getXriftInteractionProperties,
   getXriftInteractionProperty,
   XRIFT_INTERACTION_SCENE_ENTITY_ID,
+  XRIFT_INTERACTION_SELF_ENTITY_ID,
   XRIFT_INTERACTION_TARGET_LABELS,
   type XriftInteractionPropertyDescriptor,
   type XriftInteractionTargetKind,
@@ -60,6 +61,44 @@ export function collectInteractionTriggerTargets(
   // Entity, and burying them under an arbitrary one would make an author hunt
   // for the target of a change that covers the whole view.
   const targets: InteractionTriggerTargetEntity[] = [
+    {
+      // Named before any real Entity because it is the answer that keeps the
+      // graph reusable: the same「押したら開く」on every door, each opening
+      // itself. Component ids are left empty on purpose — the owner is not
+      // known while authoring, so the runtime takes whichever Light or Audio
+      // Source that Entity turns out to have.
+      entityId: XRIFT_INTERACTION_SELF_ENTITY_ID,
+      name: "このグラフが付いた Entity",
+      path: "付けた先で決まる",
+      components: [
+        {
+          componentId: "",
+          targetKind: "entity",
+          label: ENTITY_SELF_LABEL,
+          properties: getXriftInteractionProperties("entity"),
+        },
+        {
+          componentId: "transform",
+          targetKind: "transform",
+          label: XRIFT_INTERACTION_TARGET_LABELS.transform,
+          properties: getXriftInteractionProperties("transform"),
+        },
+        {
+          componentId: "material",
+          targetKind: "material",
+          label: XRIFT_INTERACTION_TARGET_LABELS.material,
+          properties: getXriftInteractionProperties("material"),
+        },
+        ...(["animation", "audio-source", "light", "particle"] as const).map(
+          (targetKind) => ({
+            componentId: "",
+            targetKind,
+            label: XRIFT_INTERACTION_TARGET_LABELS[targetKind],
+            properties: getXriftInteractionProperties(targetKind),
+          }),
+        ),
+      ],
+    },
     {
       entityId: XRIFT_INTERACTION_SCENE_ENTITY_ID,
       name: "Scene",

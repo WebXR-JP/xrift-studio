@@ -24,6 +24,7 @@ import {
   collectXriftInteractionPrograms,
   hasXriftInteractionRuntimeWork,
   hasXriftSelfStartingEntry,
+  XRIFT_INTERACTION_SELF_ENTITY_ID,
 } from "../interactivity-graph";
 import {
   validateSerializedXriftComponents,
@@ -881,7 +882,12 @@ function collectInteractionTriggerTargetEntityIds(
       const asset = assets.assets[component.interactivityAssetId];
       if (asset?.kind !== "interactivity") continue;
       for (const program of collectXriftInteractionPrograms(asset.extension)) {
-        for (const action of program.actions) targets.add(action.entityId);
+        for (const action of program.actions) {
+          // The owner is already in the Scene by definition, and it is not
+          // known here anyway — the same graph can sit on several Entities.
+          if (action.entityId === XRIFT_INTERACTION_SELF_ENTITY_ID) continue;
+          targets.add(action.entityId);
+        }
       }
     }
   }

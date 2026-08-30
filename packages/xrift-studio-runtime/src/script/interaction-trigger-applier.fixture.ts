@@ -19,7 +19,10 @@ import {
   XRIFT_SCENE_RUNTIME_USER_DATA_KEY,
   createXriftSceneRuntimeBridge,
 } from "./scene-runtime.js";
-import { XRIFT_INTERACTION_SCENE_ENTITY_ID } from "./interaction-trigger.js";
+import {
+  XRIFT_INTERACTION_SCENE_ENTITY_ID,
+  XRIFT_INTERACTION_SELF_ENTITY_ID,
+} from "./interaction-trigger.js";
 import type { XriftInteractionAction } from "./interaction-trigger.js";
 
 /**
@@ -387,6 +390,74 @@ export async function runInteractionTriggerApplierFixtureAssertions(): Promise<v
     audio.read().volume === 1,
     "Audio Source overrides survived the trigger's disposal",
   );
+
+  // The same graph on two Entities has to move the one it is attached to. An
+  // action naming the self sentinel resolves to whoever owns the trigger, and
+  // an unspecified component means "whichever one that Entity turns out to
+  // have" — the only thing a reusable graph can say about a Light it has never
+  // seen.
+  {
+    const ownRoot = new Object3D();
+    const doorA = entityObject("entity-door-a");
+    const doorB = entityObject("entity-door-b");
+    ownRoot.add(doorA, doorB);
+    const lampA = createXriftLightRuntimeBridge({
+      componentId: "component-light-a",
+      lightType: "point",
+      enabled: true,
+      color: "#ffffff",
+      intensity: 1,
+    });
+    attach(doorA, XRIFT_LIGHT_RUNTIME_USER_DATA_KEY, lampA);
+
+    for (const [entityId, door] of [
+      ["entity-door-a", doorA],
+      ["entity-door-b", doorB],
+    ] as const) {
+      const applier = createXriftInteractionApplier({
+        root: ownRoot,
+        componentId: "component-trigger",
+        order: 0,
+        selfEntityId: entityId,
+      });
+      door.visible = true;
+      applier.apply(
+        action({
+          entityId: XRIFT_INTERACTION_SELF_ENTITY_ID,
+          componentId: null,
+          target: "entity",
+          property: "enabled",
+          value: { kind: "bool", value: false },
+        }),
+      );
+    }
+    assert(
+      doorA.visible === false && doorB.visible === false,
+      "the self sentinel did not resolve to the Entity that owns the trigger",
+    );
+
+    const owningApplier = createXriftInteractionApplier({
+      root: ownRoot,
+      componentId: "component-trigger",
+      order: 0,
+      selfEntityId: "entity-door-a",
+    });
+    owningApplier.apply(
+      action({
+        entityId: XRIFT_INTERACTION_SELF_ENTITY_ID,
+        // Unspecified on purpose: the graph does not know this Light's id.
+        componentId: "",
+        target: "light",
+        property: "intensity",
+        value: { kind: "float", value: 4 },
+      }),
+    );
+    assert(
+      Math.abs(lampA.read().intensity - 4) < 1e-6,
+      "an unspecified component did not reach the Light the Entity actually has",
+    );
+  }
+
 }
 
 function entityObject(entityId: string): Object3D {
@@ -399,6 +470,7 @@ function attach(parent: Object3D, key: string, bridge: unknown): void {
   const holder = new Object3D();
   holder.userData[key] = bridge;
   parent.add(holder);
+
 }
 
 function action(

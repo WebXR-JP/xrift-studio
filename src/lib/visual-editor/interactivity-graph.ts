@@ -12,6 +12,7 @@ import {
   xriftInteractionEnumIndex,
   XRIFT_INTERACTION_EXTENSION_NAME,
   XRIFT_INTERACTION_OPERATIONS,
+  XRIFT_INTERACTION_SELF_ENTITY_ID,
   type XriftInteractionPropertyDescriptor,
   type XriftInteractionTargetKind,
 } from "../../../packages/xrift-studio-runtime/src/script/interaction-trigger";
@@ -546,12 +547,13 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     flowOutputs: ["out", "done"],
     valueInputs: ["value", "duration"],
     valueOutputs: [],
-    // A new action starts on the Entity's own visibility: the one property
-    // every Entity has, so the node is complete except for its target. The
+    // A new action starts complete: the Entity this graph is attached to, and
+    // the one property every Entity has. Naming an id here instead would tie
+    // the graph to one Scene before the author had chosen anything. The
     // duration starts at zero, which is an immediate write.
     createNode: (types) => ({
       configuration: {
-        entity: { value: [""] },
+        entity: { value: [XRIFT_INTERACTION_SELF_ENTITY_ID] },
         component: { value: [""] },
         targetKind: { value: ["entity"] },
         property: { value: ["enabled"] },
@@ -1022,6 +1024,7 @@ export {
   XRIFT_INTERACTION_EXTENSION_NAME,
   XRIFT_INTERACTION_OPERATIONS,
   XRIFT_INTERACTION_PROPERTIES,
+  XRIFT_INTERACTION_SELF_ENTITY_ID,
   XRIFT_INTERACTION_TARGET_KINDS,
   XRIFT_INTERACTION_TARGET_LABELS,
 } from "../../../packages/xrift-studio-runtime/src/script/interaction-trigger";
@@ -1793,9 +1796,9 @@ export function updateInteractivityAsset(
  * sides — otherwise a graph an AI wrote opens as a stack of overlapping cards
  * and the author's first act is to press 整列.
  */
-export const INTERACTIVITY_NODE_CARD_WIDTH = 256;
-const INTERACTIVITY_SOCKET_ROW_HEIGHT = 24;
-const INTERACTIVITY_SOCKET_ROW_PADDING = 8;
+export const INTERACTIVITY_NODE_CARD_WIDTH = 216;
+const INTERACTIVITY_SOCKET_ROW_HEIGHT = 20;
+const INTERACTIVITY_SOCKET_ROW_PADDING = 6;
 const INTERACTIVITY_NODE_PLACEMENT_GAP = 32;
 const INTERACTIVITY_LAYOUT_COLUMN_GAP = 88;
 const INTERACTIVITY_LAYOUT_ROW_GAP = 40;
@@ -1822,7 +1825,7 @@ export function estimateInteractivityNodeHeight(
   const rows = Math.max(inputs, outputs, 1);
   // Header: category row, up to two title lines, the operation name, and the
   // optional summary an Interaction Trigger action carries.
-  const header = op && isInteractivityTriggerActionOp(op) ? 112 : 92;
+  const header = op && isInteractivityTriggerActionOp(op) ? 94 : 76;
   return (
     header +
     rows * INTERACTIVITY_SOCKET_ROW_HEIGHT +
