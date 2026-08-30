@@ -24,7 +24,7 @@ import {
   PlaneGeometry,
   type Texture,
 } from "three";
-import { Text } from "troika-three-text";
+import { preloadFont, Text } from "troika-three-text";
 
 import { resolveTextFontUrl } from "./text-font-catalog.js";
 import {
@@ -62,27 +62,64 @@ const fontLoadStates = new Map<string, FontLoadState>();
 const fontLoadRequests = new Map<string, Promise<FontLoadState>>();
 
 /**
- * Fetches a catalog font before handing its URL to troika.
+ * How long a font read may take before the automatic face is used instead.
+ *
+ * troika only logs a font it could not read, so nothing else would report one.
+ * In practice its loader answers either way — a missing file resolves through
+ * its own fallback in about the time a present one takes (measured against a
+ * 404 base) — so this is the guard for a read that never answers at all rather
+ * than the normal failure path. The wait is long enough that a slow connection
+ * is never mistaken for a missing file.
+ */
+const FONT_LOAD_TIMEOUT_MS = 10_000;
+
+/**
+ * One character, so the request actually reaches the font.
+ *
+ * troika short-circuits an empty string before loading anything and reports
+ * success, which would be indistinguishable from a font that loaded. Basic
+ * Latin is present in every bundled subset, including the Japanese ones.
+ */
+const FONT_PROBE_CHARACTER = "A";
+
+/**
+ * Loads a catalog font through troika before handing its URL to a `Text`.
  *
  * troika logs a failed font read and then never resolves that request, so text
  * assigned an unreachable font simply never appears. The file is bundled rather
  * than downloaded, so this now guards a missing or misplaced copy rather than a
  * blocked CDN: checking first falls back to the automatic Noto face and still
  * shows the words.
+ *
+ * The check goes through troika's own loader rather than `fetch`. The read is
+ * same-origin either way, but a published world is scanned as a bundle, and a
+ * `fetch` in the world's own code is reported as `no-network-without-permission`
+ * whatever it requests — which would make every world containing Text declare a
+ * network permission it does not use. See THIRD_PARTY_ASSETS.md.
  */
 export function loadTextPanelFont(url: string): Promise<FontLoadState> {
   const cached = fontLoadStates.get(url);
   if (cached) return Promise.resolve(cached);
   const pending = fontLoadRequests.get(url);
   if (pending) return pending;
-  const request = fetch(url, { credentials: "omit" })
-    .then((response): FontLoadState => (response.ok ? "loaded" : "failed"))
-    .catch((): FontLoadState => "failed")
-    .then((state: FontLoadState) => {
-      fontLoadStates.set(url, state);
-      fontLoadRequests.delete(url);
-      return state;
-    });
+  const request = new Promise<FontLoadState>((resolve) => {
+    const timer = setTimeout(() => resolve("failed"), FONT_LOAD_TIMEOUT_MS);
+    const settle = (state: FontLoadState) => {
+      clearTimeout(timer);
+      resolve(state);
+    };
+    try {
+      preloadFont({ font: url, characters: FONT_PROBE_CHARACTER }, () =>
+        settle("loaded"),
+      );
+    } catch {
+      settle("failed");
+    }
+  }).then((state) => {
+    fontLoadStates.set(url, state);
+    fontLoadRequests.delete(url);
+    return state;
+  });
   fontLoadRequests.set(url, request);
   return request;
 }

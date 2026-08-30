@@ -379,6 +379,41 @@ try {
 }
 
 /**
+ * The platform scans the built bundle and rejects a world whose own code makes
+ * a network call it did not declare. The rule does not care that a request is
+ * same-origin, so an emitted overlay reaching for `fetch` is a rejected publish
+ * even when it only reads a file the compiler bundled beside it.
+ *
+ * This is the source-level half of that check: emitted code may use a network
+ * API only when the compiled world declares `no-network-without-permission`.
+ * A feature that has to reach the network says so through a
+ * `PublishPermissionRequirement`; a feature that does not must not carry one
+ * in, because that would put the declaration on every world using it.
+ */
+function assertStagedWorldDeclaresItsNetworkUse(compiled) {
+  const networkApis = [
+    /\bfetch\s*\(/,
+    /\bXMLHttpRequest\b/,
+    /\bnew\s+WebSocket\b/,
+    /\bnew\s+EventSource\b/,
+    /\bnavigator\s*\.\s*sendBeacon\b/,
+    /\bimportScripts\s*\(/,
+  ];
+  const offenders = compiled.overlayFiles
+    .filter((file) => /\.(ts|tsx)$/.test(file.relativePath))
+    .filter((file) => networkApis.some((api) => api.test(file.content)))
+    .map((file) => file.relativePath);
+  const declared =
+    compiled.publishPermissions?.allowedCodeRules.includes(
+      "no-network-without-permission",
+    ) ?? false;
+  assert(
+    offenders.length === 0 || declared,
+    `staged world uses a network API without declaring it: ${offenders.join(", ")}`,
+  );
+}
+
+/**
  * Publishing runs the template's `tsc` over everything the compiler emitted,
  * so Studio's own gate has to be that same check. This compiles one world that
  * combines as many emit paths as documents can reach (sky shader, HDR post,
@@ -422,6 +457,7 @@ async function runStagedWorldTypecheck() {
       written.some((file) => file.startsWith("src/scripts/")),
     `staged typecheck world is missing expected sources: ${written.join(", ")}`,
   );
+  assertStagedWorldDeclaresItsNetworkUse(compiled);
   // The template consumes the world through src/index.tsx, so the staged
   // sources are imported the same way here.
   await writeFile(

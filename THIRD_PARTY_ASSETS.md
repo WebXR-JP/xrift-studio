@@ -125,6 +125,11 @@ CDN からの実行時取得をやめ、同梱に切り替えた理由は次の�
   domain を許可しても `no-network-without-permission` を報告する（実測）。同梱に
   すれば same-origin になり、宣言そのものが不要になる。
 - 数か月前に公開した World が、配布元の障害や変更に左右されなくなる。
+- 同梱していても、World 自身のコードが `fetch` を持っていれば解析器は
+  `no-network-without-permission` を報告する。same-origin かどうかは区別されない。
+  そのため `text-panel.ts` は書体の到達確認を自前の `fetch` ではなく
+  troika の `preloadFont` で行う。実際の読み込みは troika の worker 側にあり、
+  Text を含む World が通信権限を宣言せずに公開できる状態を保つ。
 - Google Fonts CSS API は現代ブラウザへ WOFF2 だけを返すが、troika-three-text は
   WOFF2 を明示的に拒否する。`@fontsource` は WOFF 1.0 も公開しているので、SDF 化
   できる形式を確実に得られる。
