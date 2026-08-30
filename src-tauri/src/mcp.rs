@@ -4063,7 +4063,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "connect_interactivity_nodes",
-            "description": "Connect two KHR_interactivity nodes through a named flow or value socket. Invalid references and flow cycles are rejected atomically.",
+            "description": "Connect two KHR_interactivity nodes through a named flow or value socket. Invalid references are rejected atomically. A flow cycle is a loop and is allowed; a value cycle cannot be evaluated and is rejected.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4187,11 +4187,199 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "validate_interactivity_asset",
-            "description": "Validate node declarations, references, inline types, graph indexes, and acyclic flow for a reusable KHR_interactivity Asset without changing the project.",
+            "description": "Validate node declarations, references, inline types, graph indexes, and value cycles for a reusable KHR_interactivity Asset without changing the project. Also reports which nodes the Play runtime will not execute.",
             "inputSchema": {
                 "type": "object",
                 "properties": { "assetId": { "type": "string" } },
                 "required": ["assetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "update_interactivity_asset",
+            "description": "Replace the whole KHR_interactivity extension of an Asset with canonical JSON. Writes a graph in one call instead of node by node; refused unless the JSON parses as a valid extension.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string" },
+                    "extension": { "type": "object" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "extension"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "simulate_interactivity_asset",
+            "description": "Run a graph without a renderer and report what happens and when: animation starts and stops, property writes with the seconds they are spread over, events, logs, the first time each node runs, and which nodes are never reached. This is the Editor timeline as data and the way to debug delays, loops and dead branches. Changes nothing.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "assetId": { "type": "string" },
+                    "graphIndex": { "type": "integer", "minimum": 0 },
+                    "entry": { "type": "string", "enum": ["start", "interact"] },
+                    "horizonSeconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 600 },
+                    "stepSeconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+                },
+                "required": ["assetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "add_interactivity_graph",
+            "description": "Add a behavior graph to an Interactivity Asset, or copy an existing one with duplicateFromGraphIndex. An Asset holds up to 64 graphs, and every graph of an Asset runs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string" },
+                    "name": { "type": "string", "minLength": 1 },
+                    "duplicateFromGraphIndex": { "type": "integer", "minimum": 0 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "update_interactivity_graph",
+            "description": "Rename a behavior graph, or make it the Asset's default graph with isDefault. The default is the graph used when a Model embeds the extension or an export runs a single graph.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string" },
+                    "graphIndex": { "type": "integer", "minimum": 0 },
+                    "name": { "type": "string", "minLength": 1 },
+                    "isDefault": { "type": "boolean" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "graphIndex"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "delete_interactivity_graph",
+            "description": "Delete one behavior graph from an Interactivity Asset, keeping the default-graph index pointing where it did. The last remaining graph cannot be deleted.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string" },
+                    "graphIndex": { "type": "integer", "minimum": 0 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "graphIndex"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "move_interactivity_node",
+            "description": "Move a node's card on the graph canvas. Set avoidOverlap to push it clear of the cards already there instead of landing on top of one.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string" },
+                    "graphIndex": { "type": "integer", "minimum": 0 },
+                    "nodeIndex": { "type": "integer", "minimum": 0 },
+                    "position": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+                    "avoidOverlap": { "type": "boolean" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "nodeIndex", "position"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "duplicate_interactivity_node",
+            "description": "Copy a node with its inline values and configuration, placed clear of the original. Connections are not copied.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string" },
+                    "graphIndex": { "type": "integer", "minimum": 0 },
+                    "nodeIndex": { "type": "integer", "minimum": 0 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "nodeIndex"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "layout_interactivity_graph",
+            "description": "Lay every card of one graph out left to right in flow order, the same arrangement the Editor's align button produces. Use it after building a graph so an author opens a readable canvas.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string" },
+                    "graphIndex": { "type": "integer", "minimum": 0 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "list_interactivity_recipes",
+            "description": "List the ready-made sequences the Editor's add panel offers, such as changing a colour at start or playing an animation after a delay. Each recipe adds several wired nodes at once and reports whether the Play runtime executes it.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "apply_interactivity_recipe",
+            "description": "Add a ready-made sequence from list_interactivity_recipes into a graph, already wired. Recipes marked needsMaterial write to a Material and take materialAssetId.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string" },
+                    "graphIndex": { "type": "integer", "minimum": 0 },
+                    "recipeId": { "type": "string", "minLength": 1 },
+                    "materialAssetId": { "type": "string" },
+                    "position": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "recipeId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "configure_interactivity_trigger_action",
+            "description": "Point an xrift/setProperty or xrift/toggleProperty node at an Entity, Component and property from list_interaction_trigger_targets, and set its value, the seconds the change takes, and the easing curve. The value is written with the type the property needs, and an unknown Entity, Component or property is refused rather than saved as a graph that does nothing. Omit the target fields to adjust only the value, duration or easing of the action already configured.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string" },
+                    "graphIndex": { "type": "integer", "minimum": 0 },
+                    "nodeIndex": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string" },
+                    "componentId": { "type": "string" },
+                    "property": { "type": "string", "minLength": 1 },
+                    "value": {},
+                    "durationSeconds": { "type": "number", "minimum": 0 },
+                    "easing": {
+                        "type": "string",
+                        "enum": [
+                            "linear", "ease-in", "ease-out", "ease-in-out",
+                            "ease-in-strong", "ease-out-strong", "ease-out-back"
+                        ]
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId", "nodeIndex"],
                 "additionalProperties": false
             }
         },

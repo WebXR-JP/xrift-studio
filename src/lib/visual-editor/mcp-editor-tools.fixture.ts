@@ -3,6 +3,7 @@ import { BUILTIN_ASSET_IDS, createPrototypeProject } from "./prototype-project";
 import {
   createTextureAsset,
   type AudioAsset,
+  type InteractivityAsset,
   type ModelAsset,
 } from "./asset-manifest";
 import { createAnimationComponent } from "./scene-document";
@@ -2798,8 +2799,52 @@ export function runXriftMcpEditorToolFixtures(): void {
     "A flow loop should validate now that repeating is expressible",
   );
 
+  // A socket the operation does not declare is refused, the same way the canvas
+  // can only draw a wire between handles an operation actually has. Saving one
+  // produces valid JSON that the runtime then ignores.
+  let unknownSocketCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(current, {
+      id: "fixture-interactivity-unknown-socket",
+      tool: "connect_interactivity_nodes",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        assetId: interactivityAssetId,
+        kind: "value",
+        sourceNode: 2,
+        sourceSocket: "value",
+        targetNode: 1,
+        targetSocket: "speed",
+      },
+    });
+  } catch (error) {
+    unknownSocketCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    unknownSocketCode === "SOCKET_NOT_FOUND",
+    "Connecting a socket the operation does not declare should be refused",
+  );
+
   // A cycle among values still cannot be evaluated, so it stays an error and
   // the write is rejected whole rather than leaving half a connection behind.
+  for (const label of ["cycle-a", "cycle-b"]) {
+    const added = executeXriftMcpEditorTool(current, {
+      id: `fixture-interactivity-${label}`,
+      tool: "add_interactivity_node",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        assetId: interactivityAssetId,
+        op: "math/add",
+      },
+    });
+    current = { ...current, bundle: added.bundle, revision: current.revision + 1 };
+  }
+
   const firstValueLink = executeXriftMcpEditorTool(current, {
     id: "fixture-interactivity-value-link",
     tool: "connect_interactivity_nodes",
@@ -2809,10 +2854,10 @@ export function runXriftMcpEditorToolFixtures(): void {
       expectedRevision: current.revision,
       assetId: interactivityAssetId,
       kind: "value",
-      sourceNode: 2,
+      sourceNode: 3,
       sourceSocket: "value",
-      targetNode: 1,
-      targetSocket: "speed",
+      targetNode: 4,
+      targetSocket: "a",
     },
   });
   current = {
@@ -2832,10 +2877,10 @@ export function runXriftMcpEditorToolFixtures(): void {
         expectedRevision: current.revision,
         assetId: interactivityAssetId,
         kind: "value",
-        sourceNode: 1,
+        sourceNode: 4,
         sourceSocket: "value",
-        targetNode: 2,
-        targetSocket: "duration",
+        targetNode: 3,
+        targetSocket: "a",
       },
     });
   } catch (error) {
@@ -3008,6 +3053,445 @@ export function runXriftMcpEditorToolFixtures(): void {
     wiredTrigger?.type === "interaction-trigger" &&
       wiredTrigger.entityReferences.includes(primitiveId as string),
     "An MCP graph write should re-derive the Interaction Trigger's entityReferences",
+  );
+
+  // The Editor's picker and the MCP tool have to agree on what a valid target
+  // is: a graph that saves with an Entity the Scene does not have runs at Play
+  // as silence, which is the failure this tool exists to make impossible.
+  const actionTargeted = executeXriftMcpEditorTool(current, {
+    id: "fixture-trigger-action-target",
+    tool: "configure_interactivity_trigger_action",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: triggerGraphId,
+      nodeIndex: 1,
+      entityId: primitiveId,
+      componentId: "transform",
+      property: "position",
+      value: [1, 2, 3],
+      durationSeconds: 2.5,
+      easing: "ease-out-back",
+    },
+  });
+  assert(
+    actionTargeted.result.targetKind === "transform" &&
+      actionTargeted.result.durationSeconds === 2.5 &&
+      actionTargeted.result.easing === "ease-out-back",
+    "configure_interactivity_trigger_action should record the target, duration and easing",
+  );
+  current = { ...current, bundle: actionTargeted.bundle, revision: current.revision + 1 };
+  {
+    const graph = (
+      current.bundle.assets.assets[triggerGraphId as string] as InteractivityAsset
+    ).extension.graphs[0]!;
+    const action = graph.nodes?.[1];
+    assert(
+      action?.configuration?.entity?.value?.[0] === primitiveId &&
+        action?.configuration?.component?.value?.[0] === "transform" &&
+        action?.configuration?.property?.value?.[0] === "position",
+      "The action's configuration should name the Entity, Component and property",
+    );
+    const valueSocket = action?.values?.value;
+    assert(
+      graph.types?.[valueSocket?.type ?? -1]?.signature === "float3" &&
+        JSON.stringify(valueSocket?.value) === JSON.stringify([1, 2, 3]),
+      "A vector3 property should write a float3 value socket",
+    );
+    assert(
+      (action?.values?.duration?.value?.[0] as number) === 2.5,
+      "The duration should be an inline value on the action node",
+    );
+  }
+
+  // Re-running the tool without the target keeps it, so adjusting the timing of
+  // an action does not silently reset what it points at.
+  const actionRetimed = executeXriftMcpEditorTool(current, {
+    id: "fixture-trigger-action-retime",
+    tool: "configure_interactivity_trigger_action",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: triggerGraphId,
+      nodeIndex: 1,
+      durationSeconds: 0,
+    },
+  });
+  assert(
+    actionRetimed.result.property === "position" &&
+      actionRetimed.result.durationSeconds === 0,
+    "Setting only the duration should keep the action's target",
+  );
+  current = { ...current, bundle: actionRetimed.bundle, revision: current.revision + 1 };
+
+  for (const [id, args, expected] of [
+    [
+      "unknown-entity",
+      { entityId: "entity-does-not-exist", property: "enabled" },
+      "TARGET_ENTITY_NOT_FOUND",
+    ],
+    [
+      "unknown-property",
+      { entityId: primitiveId, componentId: "transform", property: "loudness" },
+      "TARGET_PROPERTY_NOT_FOUND",
+    ],
+    [
+      "wrong-value-shape",
+      { entityId: primitiveId, componentId: "transform", property: "position", value: 4 },
+      "INVALID_ARGUMENT",
+    ],
+    [
+      "duration-on-a-switch",
+      {
+        entityId: primitiveId,
+        componentId: "",
+        property: "enabled",
+        durationSeconds: 1,
+      },
+      "DURATION_NOT_SUPPORTED",
+    ],
+  ] as const) {
+    let code: string | undefined;
+    try {
+      executeXriftMcpEditorTool(current, {
+        id: `fixture-trigger-action-${id}`,
+        tool: "configure_interactivity_trigger_action",
+        arguments: {
+          projectId: bundle.project.projectId,
+          sceneId: bundle.scene.sceneId,
+          expectedRevision: current.revision,
+          assetId: triggerGraphId,
+          nodeIndex: 1,
+          ...args,
+        },
+      });
+    } catch (error) {
+      code = error instanceof XriftMcpEditorToolError ? error.code : undefined;
+    }
+    assert(
+      code === expected,
+      `configure_interactivity_trigger_action should reject ${id} with ${expected}`,
+    );
+  }
+
+  // An enum property takes the option id a client can read off
+  // list_interaction_trigger_targets, not the index the socket stores.
+  const audioEntityId = executeXriftMcpEditorTool(current, {
+    id: "fixture-trigger-action-audio-entity",
+    tool: "create_empty_entity",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      name: "Speaker",
+    },
+  });
+  current = { ...current, bundle: audioEntityId.bundle, revision: current.revision + 1 };
+  const speakerId = audioEntityId.result.entityId as string;
+  const audioAdded = executeXriftMcpEditorTool(current, {
+    id: "fixture-trigger-action-audio-component",
+    tool: "add_component",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      entityId: speakerId,
+      definitionId: "core.audio-source",
+    },
+  });
+  current = { ...current, bundle: audioAdded.bundle, revision: current.revision + 1 };
+  const audioComponentId = audioAdded.result.componentId as string;
+  const playbackSet = executeXriftMcpEditorTool(current, {
+    id: "fixture-trigger-action-playback",
+    tool: "configure_interactivity_trigger_action",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: triggerGraphId,
+      nodeIndex: 1,
+      entityId: speakerId,
+      componentId: audioComponentId,
+      property: "playback",
+      value: "play",
+    },
+  });
+  assert(
+    Array.isArray(playbackSet.result.value) &&
+      typeof (playbackSet.result.value as unknown[])[0] === "number",
+    "An enum option id should be stored as its index",
+  );
+  current = { ...current, bundle: playbackSet.bundle, revision: current.revision + 1 };
+
+  // A second graph in the same Asset, plus the timing the sequence relies on.
+  const secondGraph = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-add-graph",
+    tool: "add_interactivity_graph",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      name: "Timeline",
+    },
+  });
+  assert(
+    secondGraph.result.graphIndex === 1 && secondGraph.result.graphCount === 2,
+    "add_interactivity_graph should append a graph",
+  );
+  current = { ...current, bundle: secondGraph.bundle, revision: current.revision + 1 };
+
+  const defaultGraph = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-default-graph",
+    tool: "update_interactivity_graph",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      graphIndex: 1,
+      name: "Sequence",
+      isDefault: true,
+    },
+  });
+  assert(
+    defaultGraph.result.defaultGraphIndex === 1 &&
+      defaultGraph.result.name === "Sequence",
+    "update_interactivity_graph should rename and set the default graph",
+  );
+  current = { ...current, bundle: defaultGraph.bundle, revision: current.revision + 1 };
+
+  const copiedGraph = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-duplicate-graph",
+    tool: "add_interactivity_graph",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      duplicateFromGraphIndex: 0,
+    },
+  });
+  assert(
+    copiedGraph.result.graphIndex === 2 &&
+      copiedGraph.result.duplicatedFromGraphIndex === 0,
+    "add_interactivity_graph should copy an existing graph",
+  );
+  current = { ...current, bundle: copiedGraph.bundle, revision: current.revision + 1 };
+
+  const removedGraph = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-delete-graph",
+    tool: "delete_interactivity_graph",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      graphIndex: 2,
+    },
+  });
+  assert(
+    removedGraph.result.graphCount === 2 &&
+      removedGraph.result.defaultGraphIndex === 1,
+    "delete_interactivity_graph should keep the default index pointing where it did",
+  );
+  current = { ...current, bundle: removedGraph.bundle, revision: current.revision + 1 };
+
+  // A whole sequence written in one call, then simulated: the pair a client
+  // uses to build a timeline and check that it lands where it meant.
+  const replaced = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-replace-json",
+    tool: "update_interactivity_asset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      extension: {
+        graph: 0,
+        graphs: [
+          {
+            name: "Sequence",
+            types: [{ signature: "float" }],
+            declarations: [
+              { op: "event/onStart" },
+              { op: "flow/setDelay" },
+              { op: "animation/start" },
+            ],
+            nodes: [
+              { declaration: 0, flows: { out: { node: 1 } } },
+              {
+                declaration: 1,
+                values: { duration: { type: 0, value: [3] } },
+                flows: { done: { node: 2 } },
+              },
+              { declaration: 2 },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  assert(
+    replaced.result.graphCount === 1 && replaced.result.nodeCount === 3,
+    "update_interactivity_asset should replace the whole extension",
+  );
+  current = { ...current, bundle: replaced.bundle, revision: current.revision + 1 };
+
+  const simulated = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-simulate",
+    tool: "simulate_interactivity_asset",
+    arguments: { assetId: interactivityAssetId, horizonSeconds: 10 },
+  });
+  const simulatedEntries = simulated.result.entries as Array<{
+    kind: string;
+    timeSeconds: number;
+  }>;
+  assert(
+    simulatedEntries.some(
+      (entry) => entry.kind === "animation-start" && entry.timeSeconds >= 3,
+    ),
+    "simulate_interactivity_asset should report the animation after the delay",
+  );
+  assert(
+    (simulated.result.unreachedNodes as number[]).length === 0 &&
+      simulated.changed === false,
+    "A fully wired graph should report no unreached nodes and change nothing",
+  );
+
+  const layout = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-layout",
+    tool: "layout_interactivity_graph",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+    },
+  });
+  const laidOut = layout.result.positions as Array<{
+    nodeIndex: number;
+    position: [number, number];
+  }>;
+  assert(
+    laidOut.length === 3 &&
+      laidOut[0]!.position[0] < laidOut[1]!.position[0] &&
+      laidOut[1]!.position[0] < laidOut[2]!.position[0],
+    "layout_interactivity_graph should order the flow left to right",
+  );
+  current = { ...current, bundle: layout.bundle, revision: current.revision + 1 };
+
+  const movedNode = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-move-node",
+    tool: "move_interactivity_node",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      nodeIndex: 2,
+      position: [640, 320],
+    },
+  });
+  assert(
+    JSON.stringify(movedNode.result.position) === JSON.stringify([640, 320]),
+    "move_interactivity_node should write the position it was given",
+  );
+  current = { ...current, bundle: movedNode.bundle, revision: current.revision + 1 };
+
+  const duplicatedNode = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-duplicate-node",
+    tool: "duplicate_interactivity_node",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      nodeIndex: 1,
+    },
+  });
+  assert(
+    duplicatedNode.result.nodeIndex === 3 &&
+      duplicatedNode.result.connectionsCopied === false,
+    "duplicate_interactivity_node should append a copy without its connections",
+  );
+  {
+    const graph = (
+      current.bundle.assets.assets[interactivityAssetId as string] as InteractivityAsset
+    ).extension.graphs[0]!;
+    const copy = (
+      duplicatedNode.bundle.assets.assets[
+        interactivityAssetId as string
+      ] as InteractivityAsset
+    ).extension.graphs[0]!.nodes?.[3];
+    assert(
+      copy?.flows === undefined &&
+        JSON.stringify(copy?.values?.duration?.value) ===
+          JSON.stringify(graph.nodes?.[1]?.values?.duration?.value),
+      "The copy should keep its inline values and drop its flows",
+    );
+  }
+  current = {
+    ...current,
+    bundle: duplicatedNode.bundle,
+    revision: current.revision + 1,
+  };
+
+  const recipes = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-recipes",
+    tool: "list_interactivity_recipes",
+    arguments: {},
+  });
+  const recipeList = recipes.result.recipes as Array<{
+    id: string;
+    needsMaterial: boolean;
+  }>;
+  assert(recipeList.length > 0, "list_interactivity_recipes should return the catalog");
+  const animationRecipe = recipeList.find((recipe) => !recipe.needsMaterial);
+  assert(
+    animationRecipe !== undefined,
+    "At least one recipe should not require a Material",
+  );
+  const appliedRecipe = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-apply-recipe",
+    tool: "apply_interactivity_recipe",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      recipeId: animationRecipe!.id,
+    },
+  });
+  assert(
+    (appliedRecipe.result.addedNodeCount as number) >= 2 &&
+      appliedRecipe.result.firstNodeIndex === 4,
+    "apply_interactivity_recipe should append the recipe's wired nodes",
+  );
+  current = { ...current, bundle: appliedRecipe.bundle, revision: current.revision + 1 };
+
+  let replaceRejectedCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(current, {
+      id: "fixture-interactivity-replace-invalid",
+      tool: "update_interactivity_asset",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        assetId: interactivityAssetId,
+        extension: { graphs: [{ name: "Broken", nodes: [{ declaration: 7 }] }] },
+      },
+    });
+  } catch (error) {
+    replaceRejectedCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    replaceRejectedCode === "INVALID_EXTENSION",
+    "update_interactivity_asset should refuse JSON that is not a valid extension",
   );
 
   let missingEntityCode: string | undefined;

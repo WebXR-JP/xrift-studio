@@ -1770,3 +1770,177 @@ export function updateInteractivityAsset(
     },
   };
 }
+
+/**
+ * Node layout, shared by the Editor canvas and the MCP tools.
+ *
+ * Placement lived in the canvas component while the graph was only ever built
+ * by hand. A client that adds nodes through MCP lands on the same document, so
+ * "add", "duplicate" and "整列" have to put cards in the same places from both
+ * sides — otherwise a graph an AI wrote opens as a stack of overlapping cards
+ * and the author's first act is to press 整列.
+ */
+export const INTERACTIVITY_NODE_CARD_WIDTH = 256;
+const INTERACTIVITY_SOCKET_ROW_HEIGHT = 24;
+const INTERACTIVITY_SOCKET_ROW_PADDING = 8;
+const INTERACTIVITY_NODE_PLACEMENT_GAP = 32;
+const INTERACTIVITY_LAYOUT_COLUMN_GAP = 88;
+const INTERACTIVITY_LAYOUT_ROW_GAP = 40;
+
+export function isInteractivityTriggerActionOp(op: string | undefined): boolean {
+  return (
+    op === XRIFT_INTERACTION_OPERATIONS.setProperty ||
+    op === XRIFT_INTERACTION_OPERATIONS.toggleProperty
+  );
+}
+
+/** The height the canvas will give a card, from its socket count. */
+export function estimateInteractivityNodeHeight(
+  graph: KhrInteractivityGraph,
+  index: number,
+): number {
+  const node = graph.nodes?.[index];
+  const op = node ? graph.declarations?.[node.declaration]?.op : undefined;
+  const template = op ? getInteractivityOperationTemplate(op) : undefined;
+  const inputs =
+    (template?.flowInputs ?? ["in"]).length + (template?.valueInputs ?? []).length;
+  const outputs =
+    (template?.flowOutputs ?? []).length + (template?.valueOutputs ?? []).length;
+  const rows = Math.max(inputs, outputs, 1);
+  // Header: category row, up to two title lines, the operation name, and the
+  // optional summary an Interaction Trigger action carries.
+  const header = op && isInteractivityTriggerActionOp(op) ? 112 : 92;
+  return (
+    header +
+    rows * INTERACTIVITY_SOCKET_ROW_HEIGHT +
+    INTERACTIVITY_SOCKET_ROW_PADDING * 2
+  );
+}
+
+/**
+ * Nudges a candidate position until it does not land on an existing node.
+ *
+ * Dropping a new node exactly on top of another is what made "add" feel like
+ * nothing happened: the card was there, underneath the one already in view.
+ */
+export function freeInteractivityNodePosition(
+  graph: KhrInteractivityGraph,
+  candidate: { x: number; y: number },
+): { x: number; y: number } {
+  const placed = (graph.nodes ?? []).map((node, index) => ({
+    position: readInteractivityNodePosition(node, index),
+    height: estimateInteractivityNodeHeight(graph, index),
+  }));
+  let { x, y } = candidate;
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const blocking = placed.find(
+      (entry) =>
+        Math.abs(entry.position.x - x) <
+          INTERACTIVITY_NODE_CARD_WIDTH + INTERACTIVITY_NODE_PLACEMENT_GAP &&
+        y < entry.position.y + entry.height + INTERACTIVITY_NODE_PLACEMENT_GAP &&
+        y + entry.height > entry.position.y - INTERACTIVITY_NODE_PLACEMENT_GAP,
+    );
+    if (!blocking) break;
+    y = blocking.position.y + blocking.height + INTERACTIVITY_NODE_PLACEMENT_GAP;
+  }
+  return { x: Math.round(x), y: Math.round(y) };
+}
+
+/** Lays the graph out left to right in flow order. Mutates `graph`. */
+export function autoLayoutInteractivityGraph(graph: KhrInteractivityGraph): void {
+  const nodes = graph.nodes ?? [];
+  if (nodes.length === 0) return;
+  const depth = new Array<number>(nodes.length).fill(0);
+  const hasFlow = new Array<boolean>(nodes.length).fill(false);
+
+  const flowEdges: [number, number][] = [];
+  const valueEdges: [number, number][] = [];
+  nodes.forEach((node, index) => {
+    for (const target of Object.values(node.flows ?? {})) {
+      if (target.node >= nodes.length) continue;
+      flowEdges.push([index, target.node]);
+      hasFlow[index] = true;
+      hasFlow[target.node] = true;
+    }
+    for (const input of Object.values(node.values ?? {})) {
+      if (input.node === undefined || input.node >= nodes.length) continue;
+      valueEdges.push([input.node, index]);
+    }
+  });
+
+  // Bounded relaxation rather than a topological sort: a loop is legal here, and
+  // capping the passes is what keeps one from running forever.
+  for (let pass = 0; pass < nodes.length; pass += 1) {
+    let moved = false;
+    for (const [from, to] of flowEdges) {
+      const candidate = (depth[from] ?? 0) + 1;
+      if (candidate > (depth[to] ?? 0)) {
+        depth[to] = candidate;
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  // A node that only feeds a value goes just left of its consumer.
+  for (const [from, to] of valueEdges) {
+    if (hasFlow[from]) continue;
+    depth[from] = Math.max(0, (depth[to] ?? 0) - 1);
+  }
+
+  const columns = new Map<number, number[]>();
+  depth.forEach((column, index) => {
+    const existing = columns.get(column) ?? [];
+    existing.push(index);
+    columns.set(column, existing);
+  });
+
+  for (const [column, indices] of columns) {
+    indices.sort((left, right) => {
+      const leftY = readInteractivityNodePosition(nodes[left]!, left).y;
+      const rightY = readInteractivityNodePosition(nodes[right]!, right).y;
+      return leftY - rightY || left - right;
+    });
+    let y = 0;
+    for (const index of indices) {
+      const node = nodes[index];
+      if (!node) continue;
+      nodes[index] = writeInteractivityNodePosition(node, {
+        x: column * (INTERACTIVITY_NODE_CARD_WIDTH + INTERACTIVITY_LAYOUT_COLUMN_GAP),
+        y,
+      });
+      y +=
+        estimateInteractivityNodeHeight(graph, index) + INTERACTIVITY_LAYOUT_ROW_GAP;
+    }
+  }
+}
+
+/**
+ * Copies one node, without its connections.
+ *
+ * Values and configuration come along; connections do not. A copy that arrived
+ * already wired would put two writers on one flow socket.
+ */
+export function duplicateInteractivityNode(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+): number {
+  const original = graph.nodes?.[nodeIndex];
+  if (!original) return -1;
+  const anchor = readInteractivityNodePosition(original, nodeIndex);
+  const copy = JSON.parse(JSON.stringify(original)) as KhrInteractivityNode;
+  delete copy.flows;
+  if (copy.values) {
+    copy.values = Object.fromEntries(
+      Object.entries(copy.values).filter(([, input]) => input.node === undefined),
+    );
+    if (Object.keys(copy.values).length === 0) delete copy.values;
+  }
+  graph.nodes ??= [];
+  graph.nodes.push(
+    writeInteractivityNodePosition(
+      copy,
+      freeInteractivityNodePosition(graph, { x: anchor.x, y: anchor.y + 48 }),
+    ),
+  );
+  return graph.nodes.length - 1;
+}

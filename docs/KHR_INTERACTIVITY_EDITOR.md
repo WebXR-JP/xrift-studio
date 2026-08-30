@@ -31,7 +31,7 @@ Before UI or MCP writes are committed, validation checks:
 - default graph, declaration, node, flow, value-source, and type indexes
 - the RC type signatures, typed value lengths, JSON scalar kinds, and duplicate types
 - inline, type-default, and connected value sources
-- value connections point to earlier nodes and flow connections point to later nodes
+- value connections form no cycle; a flow cycle is a loop and is allowed
 - nodes require declarations
 - core operation names versus extension-defined operation declarations
 - bounded graph/node counts for editor safety
@@ -43,17 +43,37 @@ errors reject the write atomically.
 
 The built-in `xrift-studio` MCP server exposes:
 
-- `list_interactivity_operations`
-- `get_interactivity_asset`
-- `create_interactivity_asset`
-- `add_interactivity_node`
-- `connect_interactivity_nodes`
-- `set_interactivity_value`
-- `set_interactivity_configuration`
-- `disconnect_interactivity_socket`
-- `delete_interactivity_node`
-- `validate_interactivity_asset`
-- `list_interaction_trigger_targets`
+**Read**
+
+- `list_interactivity_operations` — every operation the palette offers, each with
+  its sockets and whether the Play runtime executes it
+- `list_interactivity_recipes` — the ready-made sequences the add panel offers
+- `list_interaction_trigger_targets` — every Entity, Component and property an
+  action can write to, with kinds, ranges and enum options
+- `get_interactivity_asset` — the canonical JSON
+- `validate_interactivity_asset` — schema diagnostics and runtime diagnostics
+- `simulate_interactivity_asset` — what the graph does, and when
+
+**The graph list**
+
+- `create_interactivity_asset`, `update_interactivity_asset`
+- `add_interactivity_graph`, `update_interactivity_graph`,
+  `delete_interactivity_graph`
+
+**Nodes and wires**
+
+- `add_interactivity_node`, `duplicate_interactivity_node`,
+  `delete_interactivity_node`
+- `connect_interactivity_nodes`, `disconnect_interactivity_socket`
+- `set_interactivity_value`, `set_interactivity_configuration`
+- `configure_interactivity_material_pointer`,
+  `configure_interactivity_trigger_action`
+- `apply_interactivity_recipe`
+- `move_interactivity_node`, `layout_interactivity_graph`
+
+Every operation the node editor offers is here. The four the editor keeps to
+itself are Undo / Redo, selection, the canvas view (zoom, fit, panel widths) and
+the timeline's own range and playhead — none of them change the document.
 
 Write tools require `projectId`, `sceneId`, and `expectedRevision`, exactly like
 the other XRift Studio editing tools. This prevents an AI client from applying a
@@ -82,9 +102,49 @@ A typical animation workflow is:
 With this surface an MCP client can generate reusable animation-start graphs,
 delayed sequences, branches, variable and glTF Object Model pointer operations,
 or vendor-extension nodes. It can also inspect and repair an existing graph
-without replacing its canonical JSON. Higher-level tools such as “play clip 2
-after five seconds” can be added as MCP recipes that call these atomic tools;
-they do not require a second proprietary graph format.
+without replacing its canonical JSON.
+
+### Refusing what the canvas cannot draw
+
+A node's sockets are part of its operation's signature, and the runtime reads
+only the ones it knows. The canvas can only draw a wire between handles the
+operation declares; a socket name invented over MCP saves as valid JSON and then
+does nothing at Play, which is the hardest kind of failure to see from the
+outside. `connect_interactivity_nodes` and `set_interactivity_value` therefore
+refuse a socket the operation does not declare. Operations with no template stay
+unchecked, because they are the deliberate escape hatch for extensions this
+build does not know.
+
+`configure_interactivity_trigger_action` applies the same rule to an action's
+target: the Entity, the Component on it and the property on that target kind all
+have to exist, and the value is written with the type the property needs — an
+enum by its option id rather than by the index the socket happens to store. The
+same call carries the seconds the change takes and the easing curve, and refuses
+a duration on a property with no midpoint, because a gradual change the runtime
+cannot make is a promise the graph would break.
+
+### Reading a sequence back
+
+`simulate_interactivity_asset` runs the graph with no renderer and reports the
+animation starts and stops, the property writes with the seconds each is spread
+over, the events, the logs, the first time each node ran, and the nodes that
+were never reached. It is the Editor's timeline as data. Reading the JSON says
+what a graph is wired to do; only running it says whether the delay lands where
+its author meant, whether a loop terminates inside the horizon, and which branch
+is dead. Nothing is written, so it needs no revision.
+
+Higher-level sequences are `list_interactivity_recipes` and
+`apply_interactivity_recipe`, which add the same wired groups of nodes the
+Editor's add panel offers; they do not require a second proprietary graph
+format.
+
+### Layout is part of the handover
+
+`move_interactivity_node` and `layout_interactivity_graph` exist because a graph
+an agent builds is opened by a person. Without them every MCP-authored graph
+arrives as a stack of cards on the same spot, and the author's first act is to
+press the align button. `layout_interactivity_graph` produces exactly the
+arrangement that button does.
 
 The MCP boundary deliberately does not accept arbitrary JavaScript, write into
 an unknown project revision, or silently keep a mutation that fails validation.

@@ -27,7 +27,7 @@ document 以外は React shell か Tauri 側が持つ副作用を伴う。
 書き込み tool は `projectId`、`sceneId`、`expectedRevision` を要求する。古い
 snapshot への適用を弾くためで、複数 client が同時に触っても編集は直列化される。
 
-## document (80)
+## document (91)
 
 **Editor context / Project**
 `get_editor_context`, `get_scripting_capabilities`, `update_project_metadata`
@@ -117,13 +117,40 @@ world 座標、傾斜、穴、草の層ごとの被覆を返す。document は�
 （詳細は [Terrain エディター 仕様](./TERRAIN_EDITOR_SPEC.md) の「MCP から草を扱う」）
 
 **Interactivity graph / Interaction Trigger**
-`list_interactivity_operations`, `get_interactivity_asset`,
-`create_interactivity_asset`, `add_interactivity_node`,
-`connect_interactivity_nodes`, `set_interactivity_value`,
-`set_interactivity_configuration`, `configure_interactivity_material_pointer`,
-`disconnect_interactivity_socket`, `delete_interactivity_node`,
-`validate_interactivity_asset`, `list_interaction_trigger_targets`
+`list_interactivity_operations`, `list_interactivity_recipes`,
+`list_interaction_trigger_targets`, `get_interactivity_asset`,
+`validate_interactivity_asset`, `simulate_interactivity_asset`,
+`create_interactivity_asset`, `update_interactivity_asset`,
+`add_interactivity_graph`, `update_interactivity_graph`,
+`delete_interactivity_graph`, `add_interactivity_node`,
+`duplicate_interactivity_node`, `delete_interactivity_node`,
+`connect_interactivity_nodes`, `disconnect_interactivity_socket`,
+`set_interactivity_value`, `set_interactivity_configuration`,
+`configure_interactivity_material_pointer`,
+`configure_interactivity_trigger_action`, `apply_interactivity_recipe`,
+`move_interactivity_node`, `layout_interactivity_graph`
 （詳細は [KHR_interactivity Editor / MCP design](./KHR_INTERACTIVITY_EDITOR.md)）
+
+ノードエディターで人ができる操作は、Undo / Redo、選択、canvas の見え方（拡大、
+全体表示、パネル幅）、タイムラインの範囲と時刻のつまみを除いて、すべてこの表に
+ある。除いた 4 つは document を変えない。
+
+`configure_interactivity_trigger_action` は `set_interactivity_configuration`
+と `set_interactivity_value` で手書きできる 4 つの key を、Entity・Component・
+プロパティの実在と値の型ごと引き受ける。対象を間違えたグラフは保存でき、Play で
+何も起きない。Editor のピッカーが防いでいるのはこの失敗で、MCP から書くときだけ
+素通りするわけにはいかない。かける時間とイージングも同じ呼び出しにある。中間の
+値を持たないプロパティへ時間を指定すると拒否する。runtime が作れない滑らかさを
+グラフが約束しないため。
+
+`simulate_interactivity_asset` はレンダラー無しでグラフを進め、いつ何が起きるか
+を返す。Editor のタイムラインと同じ実行で、JSON を読んでも「その待機が意図した
+時刻に届くか」「その繰り返しが終わるか」「どの枝が一度も動かないか」は分からない。
+書き込みはしないので revision も要らない。
+
+`move_interactivity_node` と `layout_interactivity_graph` があるのは、AI が組んだ
+グラフを人が開くから。位置を書けないと、全部のカードが同じ場所に積まれた状態で
+渡ることになり、作者の最初の操作が「整列」を押すことになる。
 
 **Component コードの取り込み**
 `analyze_component_code`, `apply_component_code_import_plan`
@@ -186,6 +213,7 @@ Undo 履歴も選択も動かさない。
 | --- | --- |
 | Undo / Redo | AI の操作は revision で直列化されており、Editor の履歴は人の操作単位。片方から巻き戻すと、もう片方が何を失ったのか読めなくなる |
 | 選択の変更だけ | 各 tool が結果として選択を移す。選択のためだけの tool は履歴も document も変えず、状態だけずらす |
+| 拡大・全体表示・パネル幅・タイムラインの範囲と時刻 | 見え方だけの状態で document に残らない。ノードの位置は document に残るので `move_interactivity_node` と `layout_interactivity_graph` にある |
 | Project の保存・公開・アップロード | 外向きの不可逆操作。アップロード前の `xrift.json` とサムネイルの確認は人が通る導線に残す |
 | Login / account 操作 | 認証情報を MCP 境界へ渡さない |
 | 任意 path の読み書き・削除 | Rust 側の path 検証と権限制御を迂回させない |
