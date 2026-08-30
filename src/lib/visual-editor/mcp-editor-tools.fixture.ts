@@ -111,6 +111,14 @@ export function runXriftMcpEditorToolFixtures(): void {
     importSettings: {},
   });
   assert(skyboxTexture, "Skybox Texture fixture could not be created");
+  // The skybox fixture above is an ordinary Texture with an .hdr path, which is
+  // not what the environment guards read. This one is marked as one.
+  const environmentTexture = {
+    ...skyboxTexture,
+    id: "asset-mcp-environment-texture",
+    name: "MCP Environment",
+    usage: "environment" as const,
+  };
   const model: ModelAsset = {
     id: "asset-mcp-model",
     name: "MCP Model",
@@ -143,6 +151,7 @@ export function runXriftMcpEditorToolFixtures(): void {
         [texture.id]: texture,
         [audio.id]: audio,
         [skyboxTexture.id]: skyboxTexture,
+        [environmentTexture.id]: environmentTexture,
         [model.id]: model,
         [script.id]: script,
       },
@@ -1300,6 +1309,57 @@ export function runXriftMcpEditorToolFixtures(): void {
   assert(
     listedEntities.some((entity) => entity.id === placed.sceneSelection?.id),
     "list_entities should include the previously placed Entity",
+  );
+
+  // A grass card by hand is a plane, an alpha-blended two-sided Material and no
+  // collider: four calls whose settings have to agree with each other.
+  const textureCard = executeXriftMcpEditorTool(current, {
+    id: "fixture-create-texture-card",
+    tool: "create_texture_card",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      textureAssetId: texture.id,
+      profile: "grass-cross",
+    },
+  });
+  const cardEntityId = textureCard.result.entityId as string;
+  const cardEntity = textureCard.bundle.scene.entities[cardEntityId];
+  assert(
+    textureCard.changed &&
+      cardEntity !== undefined &&
+      !cardEntity.components.some((component) => component.type === "collider"),
+    "create_texture_card should create the card Entity without a collider",
+  );
+  assert(
+    textureCard.bundle.assets.assets[
+      textureCard.result.materialAssetId as string
+    ]?.kind === "material",
+    "create_texture_card should create the card's Material in the same call",
+  );
+  current = { ...current, bundle: textureCard.bundle, revision: current.revision + 1 };
+
+  let environmentCardCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(current, {
+      id: "fixture-create-texture-card-environment",
+      tool: "create_texture_card",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        textureAssetId: environmentTexture.id,
+        profile: "backdrop-flat",
+      },
+    });
+  } catch (error) {
+    environmentCardCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    environmentCardCode === "ASSET_KIND_MISMATCH",
+    "An environment Texture belongs on the skybox, not on a card",
   );
 
   // create_custom_shader takes arbitrary GLSL, so a caller without the catalog

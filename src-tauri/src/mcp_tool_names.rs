@@ -3,7 +3,7 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 102] = [
+pub const MCP_TOOL_NAMES: [&str; 103] = [
     "get_editor_context",
     "get_scripting_capabilities",
     "analyze_component_code",
@@ -62,6 +62,7 @@ pub const MCP_TOOL_NAMES: [&str; 102] = [
     "update_material_asset",
     "list_material_presets",
     "create_material_from_preset",
+    "create_texture_card",
     "create_custom_shader",
     "get_custom_shader",
     "update_custom_shader",

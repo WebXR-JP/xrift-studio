@@ -3844,6 +3844,25 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "create_texture_card",
+            "description": "Turn a transparent Texture into a cut-out card Entity: a flat or curved distant backdrop, or a single or crossed grass card. Creates the alpha-blended two-sided Material and the collider-free Entity in one transaction, so undoing the card does not leave its Material behind. Environment Textures are rejected — they belong on the skybox.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "textureAssetId": { "type": "string", "minLength": 1 },
+                    "profile": {
+                        "type": "string",
+                        "enum": ["backdrop-flat", "backdrop-arc-180", "backdrop-arc-270", "grass-single", "grass-cross"]
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "textureAssetId", "profile"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "create_custom_shader",
             "description": "Create a reusable Material with an authored GLSL Custom Shader, or attach a starter/provided Custom Shader to an existing Material. The shader is saved inside the Material and is immediately available to set_material, Scene View, Play, and compile.",
             "inputSchema": {

@@ -122,6 +122,7 @@ import {
   SCENE_RECIPE_CATEGORY_LABELS,
   getSceneRecipesForProjectKind,
 } from "./scene-recipe-catalog";
+import { createTextureCard } from "./texture-card";
 import {
   terrainCellHasHole,
   terrainHeightRange,
@@ -382,6 +383,7 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   update_material_asset: updateMaterial,
   list_material_presets: listMaterialPresets,
   create_material_from_preset: createMaterialFromPreset,
+  create_texture_card: createTextureCardTool,
   create_custom_shader: createCustomShader,
   get_custom_shader: getCustomShader,
   update_custom_shader: updateCustomShader,
@@ -2284,6 +2286,82 @@ function createMaterialFromPreset(
           : "set_material で板ポリなどのMesh slotへ割り当ててください",
     },
     activity: `AIが${kind === "sky" ? "Skybox" : "Water"} Material「${entry.label}」を追加しました`,
+  };
+}
+
+const TEXTURE_CARD_PROFILES = [
+  "backdrop-flat",
+  "backdrop-arc-180",
+  "backdrop-arc-270",
+  "grass-single",
+  "grass-cross",
+] as const;
+
+/**
+ * A cut-out card from a transparent Texture: a distant backdrop, or grass.
+ *
+ * Assembling one by hand means a plane, an alpha-blended two-sided Material,
+ * no collider, and for the arcs a fan of segments that meet without seams —
+ * four or five calls whose settings have to agree. The single call keeps the
+ * Material and the Entity in one transaction, so an undone card does not leave
+ * its Material behind.
+ */
+function createTextureCardTool(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const textureAssetId = requiredString(
+    argumentsValue.textureAssetId,
+    "textureAssetId",
+  );
+  const profile = requiredEnum(
+    argumentsValue.profile,
+    "profile",
+    TEXTURE_CARD_PROFILES,
+  );
+  const created = createTextureCard(context.bundle.scene, context.bundle.assets, {
+    textureAssetId,
+    materialId: createDocumentId("material-card"),
+    profile,
+  });
+  if (!created.created) {
+    throw new XriftMcpEditorToolError(
+      created.reason === "texture-missing"
+        ? "TEXTURE_NOT_FOUND"
+        : created.reason === "environment-texture"
+          ? "ASSET_KIND_MISMATCH"
+          : "TEXTURE_CARD_CREATE_FAILED",
+      created.reason === "texture-missing"
+        ? "指定されたTexture Assetが見つかりません"
+        : created.reason === "environment-texture"
+          ? "環境Textureは遠景・草カードに使用できません"
+          : "カードを作成できませんでした",
+      { textureAssetId, profile, reason: created.reason },
+    );
+  }
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    assets: created.assets,
+    scene: created.scene,
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: created.entityId },
+    assetSelection: null,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      textureAssetId,
+      profile,
+      entityId: created.entityId,
+      entityName: created.entityName,
+      materialAssetId: created.materialId,
+    },
+    activity: `AIが「${created.entityName}」をSceneへ作成しました`,
   };
 }
 
