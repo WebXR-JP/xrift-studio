@@ -23,7 +23,13 @@
 /** Immutable npm version the file URLs are pinned to. */
 export const TEXT_FONT_PACKAGE_VERSION = "5.3.0" as const;
 
-const FONTSOURCE_BASE = "https://cdn.jsdelivr.net/npm/@fontsource";
+/**
+ * Where the font files are fetched from at runtime.
+ *
+ * Exported so the publish permission a world containing Text has to declare
+ * derives its host from this same constant instead of repeating it.
+ */
+export const TEXT_FONT_FILE_BASE_URL = "https://cdn.jsdelivr.net/npm/@fontsource";
 
 /** Font id meaning "let the runtime pick a Noto face that covers the text". */
 export const AUTOMATIC_TEXT_FONT_ID = "auto" as const;
@@ -146,7 +152,7 @@ export function resolveTextFontUrl(
   const font = getTextFontDefinition(fontId);
   if (!font) return undefined;
   const weight = resolveTextFontWeight(font, fontWeight);
-  return `${FONTSOURCE_BASE}/${font.id}@${TEXT_FONT_PACKAGE_VERSION}/files/${font.id}-${font.subset}-${weight}-normal.woff`;
+  return `${TEXT_FONT_FILE_BASE_URL}/${font.id}@${TEXT_FONT_PACKAGE_VERSION}/files/${font.id}-${font.subset}-${weight}-normal.woff`;
 }
 
 /** Weights offered by the picker for a font id, including the automatic one. */

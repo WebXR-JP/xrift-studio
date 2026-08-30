@@ -19,8 +19,13 @@ import textPanelLayoutSource from "../../../../packages/xrift-studio-runtime/src
 import textFontCatalogSource from "../../../../packages/xrift-studio-runtime/src/text-font-catalog.ts?raw";
 import troikaTextTypesSource from "../../../../packages/xrift-studio-runtime/src/troika-three-text.d.ts?raw";
 import runtimePackageManifest from "../../../../packages/xrift-studio-runtime/package.json";
+import { TEXT_FONT_FILE_BASE_URL } from "../../../../packages/xrift-studio-runtime/src/text-font-catalog";
 
 import type { AssetManifest, ScriptAsset } from "../asset-manifest";
+import {
+  permissionDomainForUrl,
+  type PublishPermissionRequirement,
+} from "./publish-permissions";
 import type { JsonObject, ScriptComponent } from "../scene-document";
 import type { ScriptAssetRuntimeDescriptor } from "../scripting/asset-runtime";
 import { stripCommentsAndStrings } from "../scripting/script-contract";
@@ -79,6 +84,25 @@ export const TEXT_PANEL_TYPES_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/troika
  * against a different troika than the one Studio renders with.
  */
 export const TEXT_PANEL_RUNTIME_PACKAGE = `troika-three-text@${runtimePackageManifest.dependencies["troika-three-text"]}`;
+
+/**
+ * What a published world containing Text has to declare.
+ *
+ * troika reads the chosen face from the pinned `@fontsource` files at runtime,
+ * so the world makes a network request the platform guards. The file URL is
+ * built per font id and weight rather than written as a literal, so the
+ * analyzer reports `no-network-without-permission` even when the host is
+ * allowed — measured against `xrift check`, which still rejects the bundle
+ * with only `allowedDomains` set. Both are declared for the same reason
+ * OpenBrush declares both: they are consequences of using the feature at all.
+ */
+export const TEXT_FONT_PUBLISH_PERMISSION: PublishPermissionRequirement = {
+  feature: "Text",
+  reason:
+    "Textの書体はfontsourceの配布元からフォントファイルを読み込みます",
+  allowedCodeRules: ["no-network-without-permission"],
+  allowedDomains: [permissionDomainForUrl(TEXT_FONT_FILE_BASE_URL)],
+};
 
 export type EmittedScriptModule = {
   assetId: string;

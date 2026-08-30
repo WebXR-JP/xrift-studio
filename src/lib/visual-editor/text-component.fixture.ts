@@ -215,6 +215,28 @@ function assertCompilerEmitsPanelRuntime(): void {
     compiled.stagingPlan.runtimePackageSpecs.includes(TEXT_PANEL_RUNTIME_PACKAGE),
     "a Text world must ask staging to install troika",
   );
+  // The font file is fetched at runtime, and the platform rejects a world that
+  // does not declare it. A world that builds is not a world that publishes, so
+  // the declaration is asserted on the generated manifest rather than trusted
+  // to whoever last edited the emission.
+  const manifest = JSON.parse(
+    compiled.overlayFiles.find((file) => file.relativePath === "xrift.json")
+      ?.content ?? "{}",
+  ) as {
+    world?: {
+      permissions?: { allowedCodeRules?: string[]; allowedDomains?: string[] };
+    };
+  };
+  const permissions = manifest.world?.permissions;
+  assert(
+    permissions?.allowedDomains?.includes("cdn.jsdelivr.net") === true,
+    "a Text world must declare the host its fonts are downloaded from",
+  );
+  assert(
+    permissions?.allowedCodeRules?.includes("no-network-without-permission") ===
+      true,
+    "a Text world must declare the network rule its font download trips",
+  );
   // Asking for a package publish staging is not allowed to install is not a
   // slow path, it is a dead end: the publish stops before npm runs and the
   // author is told only "Invalid compiler runtime package request". Every spec

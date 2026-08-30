@@ -109,6 +109,7 @@ import {
   SCRIPT_AUDIO_SOURCE_OVERLAY_PATH,
   SCRIPT_LIGHT_OVERLAY_PATH,
   SCRIPT_PARTICLE_OVERLAY_PATH,
+  TEXT_FONT_PUBLISH_PERMISSION,
   TEXT_PANEL_RUNTIME_OVERLAY_PATH,
   TEXT_PANEL_RUNTIME_PACKAGE,
   type EmittedScriptModule,
@@ -311,10 +312,19 @@ export function compileVisualProject(
       : emptySource(documents.project.projectKind);
   }
   const usesOpenBrushModels = projectUsesOpenBrushModels(documents.assets);
+  // One flag decides both what gets emitted for Text and what the world
+  // declares for it. Reading the Scene twice is how the font fetch shipped
+  // without its permission: the emission grew a network call and the
+  // declaration stayed behind, so every world containing Text was rejected by
+  // the platform's security check after a successful build.
+  const usesTextPanel = resolvedEntryScene
+    ? sceneUsesTextPanelRuntime(resolvedEntryScene.scene)
+    : false;
   // Every emitted feature that trips a platform security rule declares its own
   // requirement; nothing here knows what those rules are.
   const publishPermissions = resolvePublishPermissions([
     ...(usesOpenBrushModels ? [OPEN_BRUSH_PUBLISH_PERMISSION] : []),
+    ...(usesTextPanel ? [TEXT_FONT_PUBLISH_PERMISSION] : []),
   ]);
   const xriftJson = generateXriftJson(
     documents.project.projectKind,
@@ -368,8 +378,7 @@ export function compileVisualProject(
   }
   if (
     outputMode === "classic-jsx" &&
-    resolvedEntryScene &&
-    sceneUsesTextPanelRuntime(resolvedEntryScene.scene) &&
+    usesTextPanel &&
     !overlayFiles.some(
       (file) => file.relativePath === TEXT_PANEL_RUNTIME_OVERLAY_PATH,
     )
@@ -448,11 +457,7 @@ export function compileVisualProject(
   const runtimePackageSpecs: string[] =
     outputMode === "classic-runtime" ? [XRIFT_STUDIO_RUNTIME_PACKAGE] : [];
   if (usesOpenBrushModels) runtimePackageSpecs.push(OPEN_BRUSH_RUNTIME_PACKAGE);
-  if (
-    outputMode === "classic-jsx" &&
-    resolvedEntryScene &&
-    sceneUsesTextPanelRuntime(resolvedEntryScene.scene)
-  ) {
+  if (outputMode === "classic-jsx" && usesTextPanel) {
     // classic-runtime gets troika transitively through xrift-studio-runtime;
     // the emitted-source mode imports it directly and must ask for it.
     runtimePackageSpecs.push(TEXT_PANEL_RUNTIME_PACKAGE);
