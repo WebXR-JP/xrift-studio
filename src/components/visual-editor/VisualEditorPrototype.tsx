@@ -130,6 +130,7 @@ import {
   planTextureProcessing,
   collectInteractionTriggerTargets,
   createInteractionTriggerGraphExtension,
+  createModelAnimationGraphExtension,
   syncInteractionTriggerEntityReferences,
   XRIFT_COMPONENT_SCHEMA_IDS,
   updateInteractionTriggerComponent,
@@ -7294,6 +7295,63 @@ export function VisualEditorPrototype({
     [activeAssetFolderId, editorMode, importBusy],
   );
 
+  /**
+   * Builds a graph that plays every clip a Model carries, from the Model.
+   *
+   * The Animation Component keeps working and keeps playing its one clip; this
+   * is the other reading of "play the animations", for a Model whose motion is
+   * spread over dozens of clips meant to run together. The Asset is created and
+   * opened, but not attached to anything: which Entity should carry it is the
+   * author's decision, and generating sixty-four nodes is already enough of a
+   * change to make in one click.
+   */
+  const handleCreateModelAnimationGraph = useCallback(
+    (assetId: string) => {
+      if (editorMode !== "edit") {
+        setNotice("Playを停止してからGraphを作成してください");
+        return;
+      }
+      const model = bundleRef.current.assets.assets[assetId];
+      if (model?.kind !== "model") return;
+      const clips = model.importMetadata?.animations ?? [];
+      if (clips.length === 0) {
+        setNotice("このModelにはanimation clipがありません");
+        return;
+      }
+      const graphAssetId = createDocumentId("asset");
+      setHistory((current) => {
+        const assets = current.present.bundle.assets;
+        const added = addDefaultInteractivityAsset(assets, {
+          id: graphAssetId,
+          name: `${model.name} のアニメーション`,
+          folderId: model.folderId ?? null,
+          extension: createModelAnimationGraphExtension(
+            clips.map((clip) => clip.name),
+          ),
+        });
+        if (!added.added) {
+          setNotice("Graphを作成できませんでした");
+          return current;
+        }
+        setSaveStatus("dirty");
+        setNotice(
+          `${clips.length}件のclipを再生するGraphを作成しました。Entityに付けるとPlayでループ再生されます`,
+        );
+        setInteractivityEditorAssetId(added.assetId);
+        setGraphTabActive(true);
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: touchProject({
+            ...current.present.bundle,
+            assets: added.manifest,
+          }),
+          assetSelection: added.assetId,
+        });
+      });
+    },
+    [editorMode],
+  );
+
   const handleCreateAssetFolder = useCallback(() => {
     if (editorMode !== "edit") return;
     const folderId = createDocumentId("folder");
@@ -9546,6 +9604,23 @@ export function VisualEditorPrototype({
                       XRIFT_COMPONENT_SCHEMA_IDS.interactable &&
                     component.enabled,
                 ),
+                // A graph that plays clips is attached to the Entity that has
+                // them, and「Modelを間違えた」looks exactly like「グラフが壊れて
+                // いる」in Play. Counted here because the canvas cannot see it.
+                animationClipCount: entity.components.reduce((total, component) => {
+                  if (component.type !== "mesh") return total;
+                  const assetId =
+                    component.geometry?.kind === "asset"
+                      ? component.geometry.assetId
+                      : component.geometryAssetId;
+                  const asset = assetId ? bundle.assets.assets[assetId] : undefined;
+                  return (
+                    total +
+                    (asset?.kind === "model"
+                      ? asset.importMetadata?.animations.length ?? 0
+                      : 0)
+                  );
+                }, 0),
               },
             ]
           : [],
@@ -10017,6 +10092,7 @@ export function VisualEditorPrototype({
             onMaterialChange={handleMaterialChange}
             onModelChange={handleModelChange}
             onReimportModel={handleReimportModel}
+            onCreateModelAnimationGraph={handleCreateModelAnimationGraph}
             modelReimportState={
               modelReimportFeedback?.assetId === assetSelection
                 ? modelReimportFeedback.state

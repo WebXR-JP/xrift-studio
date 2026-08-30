@@ -3,9 +3,11 @@ import {
   cloneKhrInteractivityExtension,
   collectInteractivityRuntimeDiagnostics,
   createDefaultKhrInteractivityExtension,
+  estimateInteractivityNodeHeight,
   getInteractivityOperationTemplate,
   getInteractivityRuntimeSupport,
   getKhrInteractivityOnStartAnimationCues,
+  INTERACTIVITY_NODE_CARD_WIDTH,
   KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS,
   validateKhrInteractivityExtension,
   readInteractivityNodePosition,
@@ -22,12 +24,14 @@ import {
 import {
   appendInteractivityOperation,
   connectInteractivityFlow,
+  createModelAnimationGraphExtension,
   ensureInteractivityTypes,
   getInteractivityRecipeRuntimeSupport,
   INTERACTIVITY_RECIPE_COLOR,
   INTERACTIVITY_RECIPES,
   setInteractivityLiteralValue,
 } from "./interactivity-recipes";
+import { removeNodesAndReindex } from "../../components/visual-editor/interactivity-graph-flow";
 
 function assert(condition: boolean, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -499,5 +503,101 @@ export function runInteractivityRuntimeAdapterFixtureAssertions(): void {
   assert(
     getInteractivityRecipeRuntimeSupport(recipeById("start-set-color")) === "ignored",
     "A pointer/set recipe claimed Play support no host provides",
+  );
+}
+
+
+/**
+ * The graph a Model's clips generate, checked the way Play will read it.
+ *
+ * The generator's whole promise is「押せば全部のclipが同時にループ再生される」,
+ * and that promise is only kept if the dry run reports one cue per clip, all at
+ * zero, none of them bounded. Counting nodes would not catch a fan-out that
+ * reused a socket and quietly dropped sixty of them.
+ */
+export function runModelAnimationGraphFixtureAssertions(): void {
+  const names = Array.from({ length: 64 }, (_, index) => `Clip ${index}`);
+  const extension = createModelAnimationGraphExtension(names);
+  assert(
+    validateKhrInteractivityExtension(extension).every(
+      (item) => item.severity !== "error",
+    ),
+    "The generated animation graph does not validate",
+  );
+  assert(
+    collectInteractivityRuntimeDiagnostics(extension).length === 0,
+    "The generated animation graph contains something Play cannot run",
+  );
+
+  const cues = getKhrInteractivityOnStartAnimationCues(extension);
+  assert(
+    cues.length === names.length,
+    `The generated graph starts ${cues.length} clips, not ${names.length}`,
+  );
+  assert(
+    cues.every((cue) => cue.delaySeconds === 0),
+    "A generated clip does not start with the world",
+  );
+  assert(
+    new Set(cues.map((cue) => cue.animationIndex)).size === names.length,
+    "The generated graph starts the same clip more than once",
+  );
+  assert(
+    cues.every((cue) => (cue.endTime ?? null) === null),
+    "A generated clip carries an end time, so it would play once instead of looping",
+  );
+  assert(
+    cues.every((cue) => cue.stopSeconds === undefined),
+    "A generated clip is stopped by its own graph",
+  );
+
+  // Sixty-four cards land in a column, and a pitch guessed from one operation
+  // stacks them on each other: the graph opens as an unreadable pile and the
+  // author's first act is to drag them apart.
+  const placed = (extension.graphs[0]?.nodes ?? []).map((node, index) => ({
+    ...readInteractivityNodePosition(node, index),
+    height: estimateInteractivityNodeHeight(
+      extension.graphs[0] as KhrInteractivityGraph,
+      index,
+    ),
+  }));
+  for (let left = 0; left < placed.length; left += 1) {
+    for (let right = left + 1; right < placed.length; right += 1) {
+      const a = placed[left]!;
+      const b = placed[right]!;
+      const overlaps =
+        a.x < b.x + INTERACTIVITY_NODE_CARD_WIDTH &&
+        b.x < a.x + INTERACTIVITY_NODE_CARD_WIDTH &&
+        a.y < b.y + b.height &&
+        b.y < a.y + a.height;
+      assert(!overlaps, `Generated nodes ${left} and ${right} are placed on top of each other`);
+    }
+  }
+
+  // Deleting a play node has to leave the rest playing: an author trimming
+  // sixty-four clips down to the three they want does it one node at a time.
+  const trimmed = cloneKhrInteractivityExtension(extension);
+  const graph = trimmed.graphs[0] as KhrInteractivityGraph;
+  const victim = (graph.nodes ?? []).findIndex(
+    (node) => graph.declarations?.[node.declaration]?.op === "animation/start",
+  );
+  assert(victim >= 0, "The generated graph has no animation node to delete");
+  removeNodesAndReindex(graph, [victim]);
+  assert(
+    getKhrInteractivityOnStartAnimationCues(trimmed).length === names.length - 1,
+    "Deleting one generated clip changed how many of the others play",
+  );
+
+  // One clip is the degenerate case the grouping must not break.
+  const single = createModelAnimationGraphExtension(["Idle"]);
+  assert(
+    getKhrInteractivityOnStartAnimationCues(single).length === 1,
+    "A Model with one clip did not generate a graph that plays it",
+  );
+  assert(
+    getKhrInteractivityOnStartAnimationCues(
+      createModelAnimationGraphExtension([]),
+    ).length === 0,
+    "A Model with no clips generated a graph that plays something",
   );
 }

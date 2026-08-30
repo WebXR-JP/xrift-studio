@@ -219,6 +219,7 @@ import {
   type XriftInteractionPropertyDescriptor,
   type XriftInteractionTargetKind,
 } from "./interactivity-graph";
+import { createModelAnimationGraphExtension } from "./interactivity-recipes";
 import {
   addAssetFolder,
   getAudioAsset,
@@ -425,6 +426,7 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   list_interactivity_operations: listInteractivityOperations,
   get_interactivity_asset: getInteractivityAsset,
   create_interactivity_asset: createInteractivityAsset,
+  create_model_animation_graph: createModelAnimationGraph,
   add_interactivity_node: addInteractivityNode,
   connect_interactivity_nodes: connectInteractivityNodes,
   set_interactivity_value: setInteractivityValue,
@@ -5383,6 +5385,75 @@ function createInteractivityAsset(
   };
 }
 
+/**
+ * The Model Inspector's「アニメーションのGraphを作る」, for an agent.
+ *
+ * A Model whose motion is spread over dozens of clips cannot be played by the
+ * Animation Component, which owns one; building the graph by hand is one node
+ * and three inline values per clip. The Asset is created and left unattached,
+ * because which Entity carries it is a placement decision this tool cannot make.
+ */
+function createModelAnimationGraph(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const modelAssetId = requiredString(argumentsValue.modelAssetId, "modelAssetId");
+  const model = context.bundle.assets.assets[modelAssetId];
+  if (model?.kind !== "model") {
+    throw new XriftMcpEditorToolError("ASSET_NOT_FOUND", "Model Assetが見つかりません", {
+      modelAssetId,
+    });
+  }
+  const clips = model.importMetadata?.animations ?? [];
+  if (clips.length === 0) {
+    throw new XriftMcpEditorToolError(
+      "MODEL_HAS_NO_ANIMATION",
+      "このModelにはanimation clipがありません",
+      { modelAssetId },
+    );
+  }
+  const folderId =
+    optionalNullableString(argumentsValue.folderId, "folderId") ?? model.folderId ?? null;
+  if (folderId && !context.bundle.assets.folders?.[folderId]) {
+    throw new XriftMcpEditorToolError("FOLDER_NOT_FOUND", "指定されたAsset Folderが見つかりません", {
+      folderId,
+    });
+  }
+  const name = optionalString(argumentsValue.name) ?? `${model.name} のアニメーション`;
+  const assetId = createDocumentId("interactivity");
+  const added = addDefaultInteractivityAsset(context.bundle.assets, {
+    id: assetId,
+    name,
+    folderId,
+    extension: createModelAnimationGraphExtension(clips.map((clip) => clip.name)),
+  });
+  if (!added.added) {
+    throw new XriftMcpEditorToolError("ASSET_NOT_CREATED", "Interactivity Assetを作成できませんでした");
+  }
+  const bundle = touchProject(context, { ...context.bundle, assets: added.manifest });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: assetId,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      assetId,
+      name,
+      modelAssetId,
+      clipCount: clips.length,
+      clipNames: clips.map((clip) => clip.name),
+      attached: false,
+      extension: (added.manifest.assets[assetId] as InteractivityAsset).extension,
+    },
+    activity: `AIが${clips.length}件のclipを再生するInteractivity Asset「${name}」を作成しました`,
+  };
+}
+
 function addInteractivityNode(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
@@ -6486,6 +6557,12 @@ function assertInteractivitySocket(
   const template = op ? getInteractivityOperationTemplate(op) : undefined;
   if (!template) return;
   if (template[kind].includes(socket)) return;
+  // `flow/sequence` is numbered, not fixed: the spec runs whatever outputs the
+  // author connected, in socket order, so the template's three are a starting
+  // point rather than a limit. A generated graph can fan out to far more.
+  if (op === "flow/sequence" && kind === "flowOutputs" && /^(0|[1-9][0-9]*)$/.test(socket)) {
+    return;
+  }
   throw new XriftMcpEditorToolError(
     "SOCKET_NOT_FOUND",
     `${op} には${socket} socketがありません`,

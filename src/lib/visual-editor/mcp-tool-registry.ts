@@ -102,6 +102,7 @@ export const XRIFT_MCP_TOOLS = [
   { name: "list_interactivity_operations", surface: "document" },
   { name: "get_interactivity_asset", surface: "document" },
   { name: "create_interactivity_asset", surface: "document" },
+  { name: "create_model_animation_graph", surface: "document" },
   { name: "add_interactivity_node", surface: "document" },
   { name: "connect_interactivity_nodes", surface: "document" },
   { name: "set_interactivity_value", surface: "document" },

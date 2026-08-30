@@ -2935,10 +2935,14 @@ function renderModelMesh(
   // A graph can play, pause, seek or switch a clip while the world runs, which
   // needs the mixer to exist even when nothing autoplays. It is only worth
   // emitting when something in the Scene can actually send those commands.
+  //
+  // The Animation Component is not required. A graph built from a Model's clips
+  // plays them without one — the Component owns a single clip, and a Model with
+  // sixty-four is the reason to use a graph in the first place — so gating the
+  // mixer on the Component would publish a world where those clips never move.
   const animationBridgeable = Boolean(
-    animation &&
-      animationClip &&
-      !isObj &&
+    !isObj &&
+      modelClips.length > 0 &&
       sceneUsesInteractionTriggerRuntime(context.scene, context.assets),
   );
   const animationLoaded = autoplay || animationBridgeable;

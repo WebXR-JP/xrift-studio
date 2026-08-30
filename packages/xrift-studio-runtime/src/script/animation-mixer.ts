@@ -81,7 +81,59 @@ export function createXriftAnimationMixerController(
     return action;
   };
 
+  /**
+   * Clips a graph started, kept apart from the Component's single action.
+   *
+   * `mixer.clipAction` returns one action per clip, so the two paths cannot
+   * share: the Component owning `action` shapes it from its own loop and speed,
+   * and a graph shaping the same object would silently change the Component's
+   * clip. Keeping the graph's clips in their own map is what lets both run.
+   */
+  const started = new Map<number, AnimationAction>();
+
+  const boundedIndex = (value: number): number =>
+    clips.length === 0
+      ? -1
+      : Math.min(Math.max(Math.trunc(value), 0), clips.length - 1);
+
   return {
+    playClip(nextIndex, options) {
+      const index = boundedIndex(nextIndex);
+      const clip = clips[index];
+      if (!clip) return;
+      const target = started.get(index) ?? mixer.clipAction(clip);
+      started.set(index, target);
+      target.clampWhenFinished = !options.loop;
+      target.setLoop(
+        options.loop ? LoopRepeat : LoopOnce,
+        options.loop ? Infinity : 1,
+      );
+      target.timeScale = options.speed;
+      target.paused = false;
+      const from = options.fromSeconds;
+      if (from !== null || !target.isRunning()) {
+        target.reset();
+        target.time =
+          from !== null && Number.isFinite(from)
+            ? Math.min(Math.max(from, 0), clip.duration)
+            : 0;
+      }
+      target.play();
+      setActive(true);
+    },
+    stopClip(nextIndex) {
+      const index = boundedIndex(nextIndex);
+      const target = started.get(index);
+      if (!target) return;
+      target.stop();
+      started.delete(index);
+      if (started.size === 0 && !(action && action.isRunning())) setActive(false);
+    },
+    stopStartedClips() {
+      for (const target of started.values()) target.stop();
+      started.clear();
+      if (!(action && action.isRunning())) setActive(false);
+    },
     select(nextIndex, nextLoop) {
       loop = nextLoop;
       const bounded =
@@ -160,6 +212,8 @@ export function createXriftAnimationMixerController(
       };
     },
     dispose() {
+      for (const target of started.values()) target.stop();
+      started.clear();
       action?.stop();
       action = null;
       setActive(false);

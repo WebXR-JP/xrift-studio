@@ -148,6 +148,8 @@ export type InteractivityGraphSetup = {
     entityId: string;
     name: string;
     hasInteractable: boolean;
+    /** Clips the Entity's Model carries, for graphs that play them. */
+    animationClipCount: number;
   }[];
   readonly selectedEntity: { entityId: string; name: string } | null;
   readonly onAttach: (entityId: string) => void;
@@ -337,6 +339,24 @@ function InteractivityGraphEditorBody({
     if (usesInteract && !pressable) {
       return {
         kind: "not-pressable" as const,
+        usesInteract,
+        entity: setup.attachments[0]!,
+      };
+    }
+    // A graph that plays clips on an Entity with none is the quiet failure a
+    // generated animation graph runs into: it was attached to the wrong Entity,
+    // and Play just does nothing.
+    const playsAnimation = (draft.graphs ?? []).some((candidate) =>
+      (candidate.nodes ?? []).some((node) =>
+        candidate.declarations?.[node.declaration]?.op?.startsWith("animation/"),
+      ),
+    );
+    if (
+      playsAnimation &&
+      setup.attachments.every((entry) => entry.animationClipCount === 0)
+    ) {
+      return {
+        kind: "no-clips" as const,
         usesInteract,
         entity: setup.attachments[0]!,
       };
@@ -1235,6 +1255,21 @@ function InteractivityGraphEditorBody({
                     Hierarchy で Entity を選ぶと、ここから付けられます。
                   </span>
                 )}
+              </>
+            ) : setupStep.kind === "no-clips" ? (
+              <>
+                <span className="font-semibold">再生するclipがありません。</span>
+                <span className="text-amber-200/90">
+                  「{setupStep.entity.name}」のModelにanimation
+                  clipがないため、アニメーションのノードは何も動かしません。clipを持つModelのEntityへ付け替えてください。
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setup.onSelectEntity(setupStep.entity.entityId)}
+                  className="h-6 shrink-0 rounded border border-amber-400/60 px-2 text-[11px] font-bold text-amber-100 hover:bg-amber-400/20"
+                >
+                  「{setupStep.entity.name}」を選ぶ
+                </button>
               </>
             ) : (
               <>

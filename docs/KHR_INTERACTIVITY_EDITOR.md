@@ -55,7 +55,8 @@ The built-in `xrift-studio` MCP server exposes:
 
 **The graph list**
 
-- `create_interactivity_asset`, `update_interactivity_asset`
+- `create_interactivity_asset`, `create_model_animation_graph`,
+  `update_interactivity_asset`
 - `add_interactivity_graph`, `update_interactivity_graph`,
   `delete_interactivity_graph`
 
@@ -166,6 +167,34 @@ There is no recipe catalogue. Ready-made sequences were offered in the add
 panel and over MCP, and nearly all of them were `pointer/*` shapes the runtime
 does not execute — a menu of things that look like a head start and then do
 nothing at Play. The nodes they were made of are all in the palette.
+
+### Generating a graph from a Model's clips
+
+`create_model_animation_graph` builds `event/onStart` → `flow/sequence` →
+one `animation/start` per clip, and is the same thing the Model Inspector's
+button does. It exists because the Animation Component plays one clip, and a
+Model whose motion is spread over sixty-four of them cannot say "play them all"
+any other way: by hand that is one node and three inline values per clip.
+
+Three decisions are worth stating, because a caller cannot infer them:
+
+- **No `endTime`.** An unbounded `animation/start` runs until something stops
+  it, which the mixer surfaces as a loop. Ambient motion — gulls, water, a flag
+  — has no moment it should stop at, and making every generated node carry an
+  end time would mean editing sixty-four of them to get there.
+- **Grouped fan-out.** A flow output reaches one node, so the fan-out is
+  `flow/sequence`; its outputs are numbered and the spec runs whatever is
+  connected, so nothing limits it to the three the template declares. They are
+  grouped eight at a time anyway: one card with sixty-four sockets is taller
+  than the canvas, and every edge in the graph would leave the same point.
+- **Not attached.** The tool creates the Asset and stops. Which Entity carries
+  it is a placement decision, and folding sixty-four generated nodes and a
+  Component addition into one undo step makes both harder to take back.
+
+The clip's name is written to `extras.xriftStudio.clipName` and shown on the
+card. Nothing reads it at runtime — `animation/start` addresses a clip by index
+— so a graph whose extras were stripped still plays; without it the canvas is a
+column of identical cards.
 
 ### Layout is part of the handover
 

@@ -4982,6 +4982,7 @@ export function InspectorPanel({
   onMaterialChange,
   onModelChange,
   onReimportModel,
+  onCreateModelAnimationGraph,
   modelReimportState,
   modelReimportImpactNotice,
   onParticleChange,
@@ -5097,6 +5098,7 @@ export function InspectorPanel({
   onMaterialChange: (assetId: string, patch: MaterialAssetPatch) => void;
   onModelChange: (assetId: string, patch: ModelAssetPatch) => void;
   onReimportModel: (assetId: string) => void;
+  onCreateModelAnimationGraph?: (assetId: string) => void;
   modelReimportState: ModelReimportState;
   modelReimportImpactNotice?: ModelReimportImpactNotice | null;
   onParticleChange: (assetId: string, patch: ParticlePropertiesPatch) => void;
@@ -5272,6 +5274,7 @@ export function InspectorPanel({
               onAssignShaderAsset={onAssignShaderAsset}
               onModelChange={onModelChange}
               onReimportModel={onReimportModel}
+              onCreateModelAnimationGraph={onCreateModelAnimationGraph}
               modelReimportState={modelReimportState}
               modelReimportImpactNotice={modelReimportImpactNotice}
               onParticleChange={onParticleChange}

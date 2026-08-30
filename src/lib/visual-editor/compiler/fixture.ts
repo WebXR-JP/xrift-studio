@@ -12,7 +12,10 @@ import {
   KHR_INTERACTIVITY_EXTENSION_NAME,
   KHR_INTERACTIVITY_SPEC_STATUS,
 } from "../interactivity-graph";
-import { createInteractionTriggerGraphExtension } from "../interactivity-recipes";
+import {
+  createInteractionTriggerGraphExtension,
+  createModelAnimationGraphExtension,
+} from "../interactivity-recipes";
 import {
   XRIFT_COMPONENT_SCHEMA_IDS,
   createXriftComponent,
@@ -2248,6 +2251,70 @@ export function runVisualCompilerFixtureAssertions(
           file.content.includes('from "./animation-runtime"'),
       ),
       "the Animation mixer overlay did not ship with its bridge",
+    );
+
+    // A graph built from a Model's clips runs without an Animation Component:
+    // the Component owns one clip, and having sixty-four is the reason to reach
+    // for a graph. Publishing has to ship the mixer anyway, or those clips
+    // never move in the world.
+    const graphOnlyEntity = {
+      ...triggerEntity,
+      components: [
+        ...triggerEntity.components.filter(
+          (component) => (component as { type: string }).type !== "animation",
+        ),
+        triggerComponent,
+      ],
+    };
+    const graphOnlyResult = compileVisualProject(
+      {
+        ...triggeredDocuments,
+        assets: {
+          ...triggeredDocuments.assets,
+          assets: {
+            ...triggeredDocuments.assets.assets,
+            [triggerGraphId]: {
+              ...(triggeredDocuments.assets.assets[triggerGraphId] as Extract<
+                (typeof triggeredDocuments.assets.assets)[string],
+                { kind: "interactivity" }
+              >),
+              extension: createModelAnimationGraphExtension(["Idle", "Wave"]),
+            },
+          },
+        },
+        scenes: {
+          [animationPlacement.scene.sceneId]: {
+            ...animationPlacement.scene,
+            entities: {
+              ...animationPlacement.scene.entities,
+              [triggerEntity.id]: graphOnlyEntity,
+            },
+          },
+        },
+      },
+      { generatedAt: fixedTime },
+    );
+    const graphOnlySource =
+      graphOnlyResult.overlayFiles.find(
+        (file) => file.relativePath === "src/World.tsx",
+      )?.content ?? "";
+    assert(
+      !graphOnlyEntity.components.some(
+        (component) => (component as { type: string }).type === "animation",
+      ),
+      "the graph-only Entity still carries an Animation Component",
+    );
+    [
+      "createXriftAnimationRuntimeBridge",
+      "createXriftAnimationMixerController",
+      // No Animation Component means no autoplay bindings; the mixer and the
+      // clips are the whole reason this block exists.
+      "const { mixer, clips } = useAnimations(animations, animationRoot);",
+    ].forEach((fragment) =>
+      assert(
+        graphOnlySource.includes(fragment),
+        `A Model played only by a graph is missing: ${fragment}`,
+      ),
     );
 
     assertAnimationClipSelection(

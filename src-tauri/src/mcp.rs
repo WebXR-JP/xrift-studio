@@ -4043,6 +4043,23 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "create_model_animation_graph",
+            "description": "Create a KHR_interactivity Asset that plays every animation clip of a Model Asset at once, looping, on event/onStart. The Asset is created only; attach it to an Entity with add_component (interaction.trigger) to make it run.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "modelAssetId": { "type": "string" },
+                    "name": { "type": "string", "minLength": 1 },
+                    "folderId": { "type": ["string", "null"] }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "modelAssetId"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "add_interactivity_node",
             "description": "Add any KHR_interactivity operation node to a graph. Known operations receive XRift socket templates; unknown operations remain canonical generic nodes, with an optional defining extension name.",
             "inputSchema": {

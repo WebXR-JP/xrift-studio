@@ -3,6 +3,7 @@ import {
   collectInteractivityRuntimeDiagnostics,
   configureInteractivityMaterialPointer,
   createDefaultKhrInteractivityExtension,
+  estimateInteractivityNodeHeight,
   getInteractivityOperationTemplate,
   writeInteractivityNodePosition,
   XRIFT_INTERACTION_OPERATIONS,
@@ -262,4 +263,124 @@ export function getInteractivityRecipeRuntimeSupport(
   return collectInteractivityRuntimeDiagnostics(extension).length === 0
     ? "executed"
     : "ignored";
+}
+
+/**
+ * A graph that plays every clip a Model carries, all at once and looping.
+ *
+ * The Animation Component plays one clip, which is what a single「再生中」can
+ * mean. A Model can carry sixty-four — gulls, insects, a boat's wake — meant to
+ * run together, and picking one of them is not a choice anybody wants to make.
+ * Generating the graph puts all of them on the canvas as ordinary nodes, so the
+ * ones an author does not want are deleted rather than configured away.
+ *
+ * `event/onStart` has one flow output and a flow output reaches one node, so a
+ * `flow/sequence` does the fan-out. They are grouped rather than hung off a
+ * single sequence because a card with sixty-four sockets is taller than the
+ * canvas and every edge in the graph would leave the same point.
+ */
+const MODEL_ANIMATION_GROUP_SIZE = 8;
+
+/** Column pitch, from the card width plus room for the wires between columns. */
+const MODEL_ANIMATION_COLUMN_GAP = 260;
+
+/** Vertical air between two stacked cards. */
+const MODEL_ANIMATION_ROW_GAP = 24;
+
+export function createModelAnimationGraphExtension(
+  clipNames: readonly string[],
+): KhrInteractivityExtension {
+  const extension = cloneKhrInteractivityExtension(
+    createDefaultKhrInteractivityExtension(),
+  );
+  const graph = extension.graphs[0] as KhrInteractivityGraph;
+  graph.name = "アニメーション";
+  graph.nodes = [];
+  graph.declarations = [];
+  graph.types = [];
+  const start = appendInteractivityOperation(graph, "event/onStart", { x: 0, y: 0 });
+  if (clipNames.length === 0) return extension;
+
+  const groups: string[][] = [];
+  for (let index = 0; index < clipNames.length; index += MODEL_ANIMATION_GROUP_SIZE) {
+    groups.push([...clipNames.slice(index, index + MODEL_ANIMATION_GROUP_SIZE)]);
+  }
+
+  // With one group the root sequence would forward a single output, so the
+  // clips hang straight off `event/onStart` instead.
+  const root =
+    groups.length > 1
+      ? appendInteractivityOperation(graph, "flow/sequence", {
+          x: MODEL_ANIMATION_COLUMN_GAP,
+          y: 0,
+        })
+      : null;
+  if (root !== null) connectInteractivityFlow(graph, start, "out", root);
+
+  // Each group gets its own column, rather than every clip going into one that
+  // ends up thirteen thousand pixels tall: sixty-four clips then read as eight
+  // columns of eight, which fits on a screen at a zoom where the names are
+  // still legible.
+  const firstGroupColumn = MODEL_ANIMATION_COLUMN_GAP * (root === null ? 1 : 2);
+
+  let clip = 0;
+  groups.forEach((names, groupIndex) => {
+    const column = firstGroupColumn + groupIndex * MODEL_ANIMATION_COLUMN_GAP;
+    let cursorY = 0;
+    const fan =
+      names.length > 1
+        ? appendInteractivityOperation(graph, "flow/sequence", {
+            x: column,
+            y: cursorY,
+          })
+        : null;
+    if (fan !== null) {
+      if (root === null) connectInteractivityFlow(graph, start, "out", fan);
+      else connectInteractivityFlow(graph, root, String(groupIndex), fan);
+      cursorY +=
+        estimateInteractivityNodeHeight(graph, fan) + MODEL_ANIMATION_ROW_GAP;
+    }
+    names.forEach((name, indexInGroup) => {
+      const play = appendInteractivityOperation(graph, "animation/start", {
+        x: column,
+        y: cursorY,
+      });
+      const node = graph.nodes![play]!;
+      const types = ensureInteractivityTypes(graph);
+      node.values = {
+        ...(node.values ?? {}),
+        animation: { type: types.int, value: [clip] },
+        startTime: { type: types.float, value: [0] },
+        // `endTime` is deliberately left unset. An unbounded play loops, which
+        // is what an idle, a flag, or a flock is for; a clip that should stop
+        // gets an end time typed in afterwards.
+        speed: { type: types.float, value: [1] },
+      };
+      node.extras = {
+        ...(node.extras ?? {}),
+        xriftStudio: {
+          ...(isPlainRecord(node.extras?.xriftStudio) ? node.extras.xriftStudio : {}),
+          // The runtime reads the index; a column of identical cards is
+          // unreadable, so the card reads the name from here.
+          clipName: name,
+        },
+      };
+      if (fan === null) {
+        if (root === null) connectInteractivityFlow(graph, start, "out", play);
+        else connectInteractivityFlow(graph, root, String(groupIndex), play);
+      } else {
+        connectInteractivityFlow(graph, fan, String(indexInGroup), play);
+      }
+      // Measured rather than assumed: a card is as tall as its sockets, and a
+      // fixed pitch guessed from one operation stacks the next one on top of it.
+      cursorY +=
+        estimateInteractivityNodeHeight(graph, play) + MODEL_ANIMATION_ROW_GAP;
+      clip += 1;
+    });
+  });
+  return extension;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

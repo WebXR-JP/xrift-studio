@@ -32,6 +32,7 @@ export function ModelAssetInspector({
   onChange,
   onOpenMaterial,
   onReimport,
+  onCreateAnimationGraph,
 }: {
   asset: ModelAsset;
   assets: AssetManifest;
@@ -43,6 +44,7 @@ export function ModelAssetInspector({
   onChange: (patch: ModelAssetPatch) => void;
   onOpenMaterial: (assetId: string) => void;
   onReimport: () => void;
+  onCreateAnimationGraph?: () => void;
 }) {
   const metadata = asset.importMetadata;
   const openBrush = metadata?.openBrush;
@@ -347,7 +349,26 @@ export function ModelAssetInspector({
         description="ソース内で検出したanimation clip"
       >
         {metadata?.animations.length ? (
-          <div className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
+          <>
+            {onCreateAnimationGraph ? (
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
+                <p className="text-[11px] leading-4 text-slate-600">
+                  Animation Componentが再生できるclipは1つです。全
+                  {metadata.animations.length}
+                  clipを同時にループ再生するInteractivity
+                  Graphを作れます。作成したGraphはAssetsに置くだけで、Entityには付きません。
+                </p>
+                <button
+                  type="button"
+                  disabled={readOnly}
+                  onClick={onCreateAnimationGraph}
+                  className="mt-2 h-8 rounded-md border border-violet-300 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  アニメーションのGraphを作る
+                </button>
+              </div>
+            ) : null}
+            <div className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
             {metadata.animations.map((animation, index) => (
               <div
                 key={`${animation.sourceAnimationIndex ?? index}-${animation.name}`}
@@ -360,8 +381,9 @@ export function ModelAssetInspector({
                   {formatNumber(animation.duration)}s · {animation.trackCount} tracks
                 </span>
               </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </>
         ) : (
           <p className="text-xs text-slate-500">Animationは検出されていません。</p>
         )}

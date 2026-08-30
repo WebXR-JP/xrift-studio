@@ -1256,6 +1256,27 @@ export function setInteractivityTriggerActionDuration(
   return true;
 }
 
+/**
+ * The clip name a generated animation node was built from.
+ *
+ * `animation/start` addresses a clip by index, so a graph made from a Model's
+ * sixty-four clips is sixty-four cards that read「アニメーション再生」and differ
+ * only in a number. The name is written into `extras` at generation time and
+ * shown on the card; it is documentation, and nothing reads it at runtime, so a
+ * graph whose extras were stripped still plays.
+ */
+export function readInteractivityClipName(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+): string | undefined {
+  const extras = graph.nodes?.[nodeIndex]?.extras?.xriftStudio;
+  if (typeof extras !== "object" || extras === null || Array.isArray(extras)) {
+    return undefined;
+  }
+  const name = (extras as Record<string, unknown>).clipName;
+  return typeof name === "string" && name.trim().length > 0 ? name : undefined;
+}
+
 export function readInteractivityTriggerActionDuration(
   graph: KhrInteractivityGraph,
   nodeIndex: number,
@@ -1730,7 +1751,18 @@ export function removeInteractivityGraph(
 
 export function addDefaultInteractivityAsset(
   manifest: AssetManifest,
-  input: { id: string; name: string; folderId: string | null },
+  input: {
+    id: string;
+    name: string;
+    folderId: string | null;
+    /**
+     * A graph to seed instead of the empty default, for the creation paths that
+     * already know what the Asset is for — a Model's clips, an Interaction
+     * Trigger's entry point. Callers pass a graph they built with the same
+     * authoring helpers the editor uses, so nothing here has to know the shape.
+     */
+    extension?: KhrInteractivityExtension;
+  },
 ): { manifest: AssetManifest; assetId: string; added: boolean } {
   const id = input.id.trim();
   const name = input.name.trim();
@@ -1756,7 +1788,7 @@ export function addDefaultInteractivityAsset(
     order: Math.max(-1, ...siblingOrders) + 1,
     extensionName: KHR_INTERACTIVITY_EXTENSION_NAME,
     specStatus: KHR_INTERACTIVITY_SPEC_STATUS,
-    extension: createDefaultKhrInteractivityExtension(),
+    extension: input.extension ?? createDefaultKhrInteractivityExtension(),
   };
   return {
     manifest: {

@@ -12,6 +12,7 @@ import {
   getInteractivityOperationTemplate,
   getInteractivityRuntimeSupport,
   isInteractivityTriggerActionOp,
+  readInteractivityClipName,
   readInteractivityNodePosition,
   readInteractivityTriggerAction,
   readInteractivityTriggerActionDuration,
@@ -80,6 +81,9 @@ export function operationData(
       : { reachedSeconds: visited.get(index) ?? null }),
     ...(isInteractivityTriggerActionOp(op)
       ? { summary: triggerActionSummary(graph, index, op, targets) }
+      : {}),
+    ...(op.startsWith("animation/")
+      ? { summary: readInteractivityClipName(graph, index) }
       : {}),
   };
 }

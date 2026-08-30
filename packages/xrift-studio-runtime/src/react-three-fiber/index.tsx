@@ -2004,28 +2004,64 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
             ? 0
             : clips.findIndex((clip) => clip.name === component.clipName)
           : -1;
-      // The earliest cue for a clip wins: the Animation Component's own
-      // autoplay starts immediately, so an interactivity delay must never
-      // postpone a clip another source already starts now.
-      const delayByIndex = new Map<number, number>();
-      const noteCue = (index: number, delaySeconds: number): void => {
-        const known = delayByIndex.get(index);
-        if (known === undefined || delaySeconds < known) {
-          delayByIndex.set(index, delaySeconds);
-        }
-      };
-      if (selectedIndex >= 0) noteCue(selectedIndex, 0);
-      for (const cue of
-        result.interactionAnimationCuesByEntity.get(entity.id) ?? []) {
-        noteCue(cue.animationIndex, cue.delaySeconds);
-      }
       const speed =
         typeof component?.speed === "number" && Number.isFinite(component.speed)
           ? component.speed
           : 1;
-      const cues = [...delayByIndex.entries()].flatMap(([index, delaySeconds]) => {
+      // The earliest cue for a clip wins: the Animation Component's own
+      // autoplay starts immediately, so an interactivity delay must never
+      // postpone a clip another source already starts now. Loop and speed are
+      // per cue rather than per Entity, because a graph that starts twenty
+      // clips is the normal case for a Model whose motion is spread across
+      // them, and the Component only ever describes its own one.
+      const planByIndex = new Map<
+        number,
+        { delaySeconds: number; loop: boolean; speed: number; startTime: number }
+      >();
+      const noteCue = (
+        index: number,
+        plan: {
+          delaySeconds: number;
+          loop: boolean;
+          speed: number;
+          startTime: number;
+        },
+      ): void => {
+        const known = planByIndex.get(index);
+        if (!known || plan.delaySeconds < known.delaySeconds) {
+          planByIndex.set(index, plan);
+        }
+      };
+      for (const cue of
+        result.interactionAnimationCuesByEntity.get(entity.id) ?? []) {
+        noteCue(cue.animationIndex, {
+          delaySeconds: cue.delaySeconds,
+          // A start with no end time runs until something stops it, which on a
+          // mixer means looping. A graph that named an end time wants one pass.
+          loop: (cue.endTime ?? null) === null && cue.stopSeconds === undefined,
+          speed:
+            typeof cue.speed === "number" && Number.isFinite(cue.speed) && cue.speed !== 0
+              ? cue.speed
+              : 1,
+          startTime:
+            typeof cue.startTime === "number" && Number.isFinite(cue.startTime)
+              ? Math.max(0, cue.startTime)
+              : 0,
+        });
+      }
+      // Written last so the Component wins the clip it owns: it is the explicit
+      // setting an author typed, and it starts at zero anyway.
+      if (selectedIndex >= 0) {
+        planByIndex.set(selectedIndex, {
+          delaySeconds: 0,
+          loop: component?.loop ?? false,
+          speed,
+          startTime: 0,
+        });
+      }
+      const cues = [...planByIndex.entries()].flatMap(([index, plan]) => {
         const clip = clips[index];
-        return clip ? [{ clip, index, delaySeconds }] : [];
+        return clip ? [{ clip, index, ...plan }] : [];
       });
       return [
         {
@@ -2050,13 +2086,10 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
       for (const cue of entry.cues) {
         const action = entry.mixer.clipAction(cue.clip);
         action.reset();
-        action.clampWhenFinished = !entry.loop;
-        action.setLoop(
-          entry.loop ? LoopRepeat : LoopOnce,
-          entry.loop ? Infinity : 1,
-        );
-        // Speed applies to the selected clip, not interactivity-driven ones.
-        action.timeScale = cue.index === entry.selectedIndex ? entry.speed : 1;
+        action.clampWhenFinished = !cue.loop;
+        action.setLoop(cue.loop ? LoopRepeat : LoopOnce, cue.loop ? Infinity : 1);
+        action.timeScale = cue.speed;
+        if (cue.startTime > 0) action.time = cue.startTime;
         // `flow/setDelay` becomes mixer-clock scheduling rather than a timer, so
         // the wait stays in step with the same clock that advances the clip.
         if (cue.delaySeconds > 0) {
@@ -2064,9 +2097,14 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
         }
         action.play();
       }
-      if (!entry.componentId) continue;
+      // A bridge for every Entity that has clips, not only for those carrying an
+      // Animation Component: a graph that plays a Model's clips is attached to
+      // the Entity, and asking the author to also add a Component they never
+      // configure would be a step whose only purpose is to satisfy this line.
+      // An Entity without the Component gets an empty owner id, which no
+      // Component-scoped action can match.
       const bridge = createXriftAnimationRuntimeBridge({
-        componentId: entry.componentId,
+        componentId: entry.componentId ?? "",
         clipNames: entry.clips.map((clip) => clip.name),
         clipIndex: Math.max(0, entry.selectedIndex),
         // The cues above already perform autoplay.

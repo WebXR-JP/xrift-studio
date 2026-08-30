@@ -37,6 +37,7 @@ import {
 import {
   getXriftInteractionProperty,
   resolveXriftInteractionEntityId,
+  XRIFT_INTERACTION_SELF_ENTITY_ID,
   type XriftInteractionPropertyDescriptor,
   type XriftInteractionAction,
   type XriftInteractionTargetKind,
@@ -193,6 +194,23 @@ function linearColor(value: readonly [number, number, number]): Color {
 
 export type XriftInteractionApplier = {
   apply(action: XriftInteractionAction): void;
+  /**
+   * Plays one clip beside whatever else is running.
+   *
+   * The Animation Component plays a single clip, which is all one「再生中」can
+   * mean. A Model can carry sixty-four meant to run together — gulls, insects,
+   * a boat's wake — so a graph needs a way to name them one at a time.
+   */
+  playClip(
+    entityId: string,
+    request: {
+      clipIndex: number;
+      loop: boolean;
+      speed: number;
+      fromSeconds: number | null;
+    },
+  ): void;
+  stopClip(entityId: string, clipIndex: number): void;
   /** Live value of one property, so a graph can toggle or ramp from it. */
   read(target: {
     entityId: string;
@@ -800,7 +818,44 @@ export function createXriftInteractionApplier({
     return found.value;
   };
 
+  const forEachAnimationBridge = (
+    entityId: string,
+    visit: (bridge: XriftAnimationRuntimeBridge) => void,
+  ): void => {
+    const object = findEntityObject(root, ownEntityId(entityId));
+    if (!object) return;
+    forEachOwnedBridge(
+      object,
+      ownEntityId(entityId),
+      XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY,
+      isXriftAnimationRuntimeBridge,
+      (bridge) => {
+        animationOwners.add(bridge);
+        visit(bridge);
+      },
+    );
+  };
+
   return {
+    playClip(entityId, request) {
+      forEachAnimationBridge(entityId, (bridge) => {
+        bridge.command(owner, order, componentId, {
+          type: "play-clip",
+          clipIndex: request.clipIndex,
+          loop: request.loop,
+          speed: request.speed,
+          time: request.fromSeconds,
+        });
+      });
+    },
+    stopClip(entityId, clipIndex) {
+      forEachAnimationBridge(entityId, (bridge) => {
+        bridge.command(owner, order, componentId, {
+          type: "stop-clip",
+          clipIndex,
+        });
+      });
+    },
     read(target) {
       if (target.targetKind === "scene") return readScene(target.property);
       const object = findEntityObject(root, ownEntityId(target.entityId));
@@ -982,6 +1037,30 @@ export function createXriftInteractionHost(
     getXriftInteractionProperty(target.targetKind, target.property);
 
   return {
+    /**
+     * `animation/start` plays a clip on the Entity this graph is attached to.
+     *
+     * The graph names a clip by index, which is what the specification's
+     * operation carries, and the Entity is the owner — the same rule an action
+     * with no explicit target follows. Several of these run at once, so a Model
+     * whose clips are meant to play together can have all of them started.
+     *
+     * `endTime` decides the loop: the specification's「最後まで再生して終わる」
+     * is a bounded play, and a clip with no end is one an author wants to keep
+     * going. That is also what a Model full of gulls and waves wants by
+     * default, and the engine still sends `done` for the bounded case.
+     */
+    startAnimation(request) {
+      applier.playClip(XRIFT_INTERACTION_SELF_ENTITY_ID, {
+        clipIndex: request.animationIndex,
+        loop: request.endTime === null,
+        speed: request.speed,
+        fromSeconds: request.startTime,
+      });
+    },
+    stopAnimation(request) {
+      applier.stopClip(XRIFT_INTERACTION_SELF_ENTITY_ID, request.animationIndex);
+    },
     readProperty(target) {
       const descriptor = descriptorFor(target);
       if (!descriptor) return null;

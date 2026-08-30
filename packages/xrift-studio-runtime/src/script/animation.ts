@@ -26,7 +26,19 @@ export type XriftAnimationRuntimeCommand =
   | { type: "pause" }
   | { type: "stop" }
   | { type: "seek"; time: number }
-  | { type: "select"; clipIndex: number };
+  | { type: "select"; clipIndex: number }
+  // Graph-driven playback. Unlike "play", these name a clip and leave the
+  // Component's own clip and its「再生中」state alone, so a Model's sixty-four
+  // clips can run together without any of them being the Component's.
+  | {
+      type: "play-clip";
+      clipIndex: number;
+      loop: boolean;
+      speed: number;
+      time: number | null;
+    }
+  | { type: "stop-clip"; clipIndex: number }
+  | { type: "stop-started-clips" };
 
 export type XriftAnimationRuntimeState = {
   readonly revision: number;
@@ -50,6 +62,22 @@ export type XriftAnimationRuntimeController = {
   setSpeed(speed: number): void;
   seek(seconds: number): void;
   sample(): { playing: boolean; time: number; duration: number };
+  /**
+   * Graph-driven playback, running beside the Component's own clip.
+   *
+   * The Animation Component plays one clip, which is what a single「再生中」
+   * checkbox can mean. A Model can carry sixty-four: gulls, insects, a boat's
+   * wake, all of them meant to run at once. These start and stop clips
+   * independently, so a graph can hold as many as the Model has, and the
+   * Component keeps behaving exactly as it did.
+   */
+  playClip?(
+    clipIndex: number,
+    options: { loop: boolean; speed: number; fromSeconds: number | null },
+  ): void;
+  stopClip?(clipIndex: number): void;
+  /** Every clip this graph started; the Component's own clip is left alone. */
+  stopStartedClips?(): void;
 };
 
 export type XriftAnimationRuntimeBridge = {
@@ -208,6 +236,19 @@ export function createXriftAnimationRuntimeBridge(
         case "select":
           commandedClip = command.clipIndex;
           push(null, state.playing);
+          return;
+        case "play-clip":
+          controller?.playClip?.(command.clipIndex, {
+            loop: command.loop,
+            speed: command.speed,
+            fromSeconds: command.time,
+          });
+          return;
+        case "stop-clip":
+          controller?.stopClip?.(command.clipIndex);
+          return;
+        case "stop-started-clips":
+          controller?.stopStartedClips?.();
           return;
       }
     },
