@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import {
+  describeModelOptimization,
   groupModelAnimations,
   MODEL_OPTIMIZATION_STEP_LABELS,
   planModelOptimization,
@@ -10,6 +11,7 @@ import {
   type ModelOptimizationOptions,
   type ModelReimportImpact,
 } from "../../lib/visual-editor";
+import { AssetOptimizationOriginCard } from "./AssetOptimizationOriginCard";
 
 export type ModelOptimizationState =
   | { phase: "idle" }
@@ -45,6 +47,7 @@ export function ModelAssetInspector({
   onOpenMaterial,
   onReimport,
   onOptimize,
+  onRevertOptimization,
 }: {
   asset: ModelAsset;
   assets: AssetManifest;
@@ -59,6 +62,7 @@ export function ModelAssetInspector({
   onOpenMaterial: (assetId: string) => void;
   onReimport: () => void;
   onOptimize?: (options: ModelOptimizationOptions) => void;
+  onRevertOptimization?: () => void;
 }) {
   const metadata = asset.importMetadata;
   const openBrush = metadata?.openBrush;
@@ -238,6 +242,7 @@ export function ModelAssetInspector({
           canOptimize={Boolean(canOptimize && onOptimize)}
           onChange={onChange}
           onOptimize={onOptimize}
+          onRevert={onRevertOptimization}
         />
       </InspectorSection>
 
@@ -510,6 +515,7 @@ function ModelOptimizationPanel({
   canOptimize,
   onChange,
   onOptimize,
+  onRevert,
 }: {
   asset: ModelAsset;
   state: ModelOptimizationState;
@@ -517,6 +523,7 @@ function ModelOptimizationPanel({
   canOptimize: boolean;
   onChange: (patch: ModelAssetPatch) => void;
   onOptimize?: (options: ModelOptimizationOptions) => void;
+  onRevert?: () => void;
 }) {
   // Mesh最適化はImport設定として残す値なので、Manifest側を唯一の状態にする。
   // Draco圧縮は実行時だけの選択なので、ここでだけ持つ。
@@ -526,12 +533,27 @@ function ModelOptimizationPanel({
   const plan = planModelOptimization(asset, options);
   const busy =
     state.phase === "reading" || state.phase === "encoding" || state.phase === "saving";
+  const optimization = describeModelOptimization(asset);
+  const inUse = optimization.optimized ? (
+    <AssetOptimizationOriginCard
+      currentLabel={optimization.current.label}
+      currentBytes={optimization.current.byteLength}
+      originalLabel={optimization.original.label}
+      originalBytes={optimization.original.byteLength}
+      revertLabel="原本のGLBに戻す"
+      disabled={busy || readOnly || !onRevert}
+      onRevert={onRevert}
+    />
+  ) : null;
 
   if (!plan.supported) {
     return (
-      <p className="rounded-md border border-slate-200 bg-slate-50 p-2 text-xs leading-4 text-slate-600">
-        {plan.reason}
-      </p>
+      <>
+        {inUse}
+        <p className="rounded-md border border-slate-200 bg-slate-50 p-2 text-xs leading-4 text-slate-600">
+          {plan.reason}
+        </p>
+      </>
     );
   }
 
@@ -543,6 +565,7 @@ function ModelOptimizationPanel({
 
   return (
     <>
+      {inUse}
       <RecipeToggle
         label="Meshを最適化"
         description="重複頂点の結合、頂点バッファの共有、Animationキーフレームの間引き"

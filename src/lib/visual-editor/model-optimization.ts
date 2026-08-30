@@ -216,9 +216,21 @@ export async function applyModelOptimization(
         extensionsRequired: optimized.extensionsRequired,
       },
       importSettings: {
+        // 参照先が最適化後のGLBになったので、いま見えている設定は反映済みへ戻す。
+        // 実行時の設定は optimizedFrom に控えてあり、戻せば元へ復元される。
         ...asset.importSettings,
-        // 書き出したGLBが新しい原本なので、設定は反映済みの状態へ戻す。
         optimizeMeshes: false,
+      },
+      // 原本のGLBは書き換えないので、ここを保持している限り必ず戻せる。
+      // 二度目以降の最適化では最初の原本を指したまま、時刻だけ更新する。
+      optimizedFrom: {
+        ...(asset.optimizedFrom ?? {
+          source: asset.source,
+          sourceHash: asset.sourceHash,
+          importMetadata: asset.importMetadata,
+          importSettings: asset.importSettings,
+        }),
+        appliedAt: new Date().toISOString(),
       },
     };
 
@@ -325,4 +337,79 @@ export async function createDracoEncoder(): Promise<object> {
   const wasmUrl = (wasmModule as { default: string }).default;
   const wasmBinary = new Uint8Array(await (await fetch(wasmUrl)).arrayBuffer());
   return createEncoderModule({ wasmBinary });
+}
+
+
+export type ModelOptimizationStatus =
+  | { optimized: false }
+  | {
+      optimized: true;
+      current: { label: string; byteLength: number };
+      original: { label: string; byteLength: number | null };
+    };
+
+/** 「いま何を使っているか」と「戻せる原本があるか」をInspector向けにまとめる。 */
+export function describeModelOptimization(
+  asset: ModelAsset,
+): ModelOptimizationStatus {
+  const origin = asset.optimizedFrom;
+  if (!origin) return { optimized: false };
+  return {
+    optimized: true,
+    current: {
+      label: describeModelVariant(asset.importMetadata),
+      byteLength: asset.importMetadata?.byteLength ?? 0,
+    },
+    original: {
+      label: describeModelVariant(origin.importMetadata),
+      byteLength: origin.importMetadata?.byteLength ?? null,
+    },
+  };
+}
+
+function describeModelVariant(metadata: ModelImportMetadata | undefined): string {
+  if (!metadata) return "解析結果なし";
+  const draco =
+    metadata.extensionsUsed.includes("KHR_draco_mesh_compression") ||
+    metadata.extensionsRequired.includes("KHR_draco_mesh_compression");
+  return `${metadata.meshCount}メッシュ・${draco ? "Draco圧縮あり" : "メッシュ圧縮なし"}`;
+}
+
+/**
+ * 最適化結果の参照をやめ、控えてある原本のGLBへ戻す。
+ * 最適化後のファイルは消さない。同じ設定で作り直せば同じ内容になる。
+ */
+export function revertModelOptimization(
+  manifest: AssetManifest,
+  assetId: string,
+):
+  | { ok: false; message: string }
+  | { ok: true; manifest: AssetManifest; assetName: string } {
+  const asset = manifest.assets[assetId];
+  if (!asset || asset.kind !== "model") {
+    return { ok: false, message: "対象のModel Assetが見つかりませんでした。" };
+  }
+  const origin = asset.optimizedFrom;
+  if (!origin) {
+    return { ok: false, message: `${asset.name}は原本をそのまま使っています。` };
+  }
+
+  const restored: ModelAsset = {
+    ...asset,
+    source: origin.source,
+    sourceHash: origin.sourceHash,
+    importMetadata: origin.importMetadata,
+    importSettings: origin.importSettings,
+    thumbnail:
+      asset.thumbnail?.status === "generated"
+        ? { ...asset.thumbnail, status: "stale" }
+        : asset.thumbnail,
+  };
+  delete restored.optimizedFrom;
+
+  return {
+    ok: true,
+    assetName: asset.name,
+    manifest: { ...manifest, assets: { ...manifest.assets, [assetId]: restored } },
+  };
 }

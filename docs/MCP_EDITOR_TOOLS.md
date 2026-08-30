@@ -160,12 +160,13 @@ Ctrl+C / Ctrl+V と同じく別のグラフへも置ける。同じグラフの�
 **Component コードの取り込み**
 `analyze_component_code`, `apply_component_code_import_plan`
 
-## local-asset (12)
+## local-asset (13)
 
 `import_audio_asset`, `import_texture_asset`, `import_model_asset`,
 `import_skybox_asset`, `import_shader_asset`, `reimport_model_asset`,
-`process_texture_asset`, `optimize_model_asset`, `apply_scene_recipe`,
-`get_shader_asset`, `update_shader_asset`, `set_project_thumbnail`
+`process_texture_asset`, `optimize_model_asset`, `revert_asset_optimization`,
+`apply_scene_recipe`, `get_shader_asset`, `update_shader_asset`,
+`set_project_thumbnail`
 
 `apply_scene_recipe` が document ではなく shell にあるのは、セットの部品の
 Model を project へ書き出すため。Particle Asset と subtree は一件の history
@@ -185,6 +186,12 @@ Animation キーフレームの間引きと、任意で Draco 圧縮を行う。
 構造、Animation clip の本数は変えない。Material や Node の索引が動くと、Entity
 側の Material 割当が別の Material へ移るため、統合や平坦化は行わない。実行する
 処理がなければ `changed: false` を返す。
+
+変換と最適化はどちらも非破壊で、原本のファイルは書き換えない。変換結果を
+`assets/.optimized/` へ書き、Asset の `source` が指す先だけを差し替える。変換前の
+`source`、解析結果、Import 設定は `optimizedFrom` に控える。
+`revert_asset_optimization` はこの控えから原本へ戻す。AI が圧縮を試して戻せないと
+作者が手で直すことになるため、実行と同じ surface に解除も置いてある。
 
 ## script (6)
 

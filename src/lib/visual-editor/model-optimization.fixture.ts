@@ -1,6 +1,8 @@
 import type { ModelAsset, ModelImportMetadata } from "./asset-manifest";
 import {
+  describeModelOptimization,
   planModelOptimization,
+  revertModelOptimization,
   type ModelOptimizationOptions,
 } from "./model-optimization";
 
@@ -11,6 +13,70 @@ import {
 export function runModelOptimizationFixtureAssertions(): void {
   assertUnsupportedSources();
   assertPlannedSteps();
+  assertNonDestructiveRevert();
+}
+
+/**
+ * 最適化しても原本のGLBは消さない。参照先だけを差し替え、控えから必ず戻せる。
+ * ここが壊れると、作者は最適化をやり直す手段を失う。
+ */
+function assertNonDestructiveRevert(): void {
+  const original = modelAsset({ animations: [] });
+  assert(
+    !describeModelOptimization(original).optimized,
+    "An untouched Model was reported as optimized",
+  );
+
+  const optimized: ModelAsset = {
+    ...original,
+    source: { kind: "project", relativePath: "assets/.optimized/m-abc.glb" },
+    sourceHash: "b".repeat(64),
+    importMetadata: {
+      ...original.importMetadata!,
+      byteLength: 1024,
+      meshCount: 1,
+      extensionsRequired: ["KHR_draco_mesh_compression"],
+    },
+    importSettings: { ...original.importSettings, optimizeMeshes: false },
+    optimizedFrom: {
+      source: original.source,
+      sourceHash: original.sourceHash,
+      importMetadata: original.importMetadata,
+      importSettings: original.importSettings,
+      appliedAt: "2026-01-01T00:00:00.000Z",
+    },
+  };
+
+  const status = describeModelOptimization(optimized);
+  assert(
+    status.optimized &&
+      status.current.label === "1メッシュ・Draco圧縮あり" &&
+      status.original.label === "2メッシュ・メッシュ圧縮なし",
+    "The in-use and original variants were not described for the author",
+  );
+
+  const manifest = {
+    assets: { [optimized.id]: optimized },
+  } as unknown as Parameters<typeof revertModelOptimization>[0];
+  const reverted = revertModelOptimization(manifest, optimized.id);
+  assert(reverted.ok, "Reverting an optimized Model failed");
+  if (!reverted.ok) return;
+  const restored = reverted.manifest.assets[optimized.id];
+  assert(
+    restored.kind === "model" &&
+      restored.source.kind === "project" &&
+      restored.source.relativePath === "assets/imported/models/a/b.glb" &&
+      restored.importMetadata?.byteLength === 8 * 1024 * 1024 &&
+      restored.importSettings.optimizeMeshes &&
+      restored.optimizedFrom === undefined,
+    "Reverting did not restore the original GLB, metadata and recipe",
+  );
+
+  const alreadyOriginal = revertModelOptimization(reverted.manifest, optimized.id);
+  assert(
+    !alreadyOriginal.ok,
+    "Reverting an Asset that already uses its original was accepted",
+  );
 }
 
 function assertUnsupportedSources(): void {
@@ -115,12 +181,20 @@ function plan(
     compressWithDraco: true,
   },
 ): ReturnType<typeof planModelOptimization> {
-  const asset: ModelAsset = {
+  return planModelOptimization(modelAsset(metadata, overrides), options);
+}
+
+function modelAsset(
+  metadata: Partial<ModelImportMetadata> | null,
+  overrides: Partial<ModelAsset> = {},
+): ModelAsset {
+  return {
     id: "model-optimization-fixture",
     name: "Model Optimization Fixture",
     kind: "model",
     status: "ready",
     source: { kind: "project", relativePath: "assets/imported/models/a/b.glb" },
+    sourceHash: "a".repeat(64),
     importSettings: {
       scale: 1,
       generateColliders: false,
@@ -150,7 +224,6 @@ function plan(
       : undefined,
     ...overrides,
   };
-  return planModelOptimization(asset, options);
 }
 
 function assert(condition: boolean, message: string): void {

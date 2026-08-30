@@ -217,17 +217,21 @@ async function optimizeTexture(
     throw new Error(`${asset.name}の形式は自動Texture最適化に対応していません。`);
   }
 
-  const resized = shouldResize
-    ? await renderImageBytes(sourceBytes, {
-        maxSize: 2048,
-        mimeType: "image/webp",
-        quality: 0.86,
-      })
-    : {
-        bytes: sourceBytes,
-        width: asset.importMetadata.width,
-        height: asset.importMetadata.height,
-      };
+  // KTX2へ送る中間画像は可逆のPNGにして、WEBPとBasisで二重に劣化させない。
+  // GPU圧縮は2のべき乗の辺で素直に効くので、その時だけ辺を丸める。
+  const resized =
+    shouldResize || shouldEncodeKtx2
+      ? await renderImageBytes(sourceBytes, {
+          maxSize: shouldResize ? 2048 : null,
+          powerOfTwo: shouldEncodeKtx2,
+          mimeType: shouldEncodeKtx2 ? "image/png" : "image/webp",
+          quality: shouldEncodeKtx2 ? undefined : 0.86,
+        })
+      : {
+          bytes: sourceBytes,
+          width: asset.importMetadata.width,
+          height: asset.importMetadata.height,
+        };
   let bytes = resized.bytes;
   let extension = "webp";
   let mimeType = "image/webp";
@@ -272,11 +276,21 @@ async function optimizeTexture(
       },
       importSettings: {
         ...asset.importSettings,
-        resize: { mode: "original" },
+        resize: { mode: "original", powerOfTwo: false },
         compression: {
           ...asset.importSettings.compression,
           format: "source",
         },
+      },
+      // 原本は書き換えないので、Inspectorからいつでも戻せる。
+      optimizedFrom: {
+        ...(asset.optimizedFrom ?? {
+          source: asset.source,
+          sourceHash: asset.sourceHash,
+          importMetadata: asset.importMetadata,
+          importSettings: asset.importSettings,
+        }),
+        appliedAt: new Date().toISOString(),
       },
     },
   };
@@ -326,6 +340,15 @@ async function optimizeModel(
         extensionsRequired: optimized.extensionsRequired,
       },
       importSettings: { ...asset.importSettings, optimizeMeshes: false },
+      optimizedFrom: {
+        ...(asset.optimizedFrom ?? {
+          source: asset.source,
+          sourceHash: asset.sourceHash,
+          importMetadata: asset.importMetadata,
+          importSettings: asset.importSettings,
+        }),
+        appliedAt: new Date().toISOString(),
+      },
     },
   };
 }

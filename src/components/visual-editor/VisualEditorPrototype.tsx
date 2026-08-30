@@ -133,6 +133,8 @@ import {
   MODEL_OPTIMIZATION_STEP_LABELS,
   planModelOptimization,
   planTextureProcessing,
+  revertModelOptimization,
+  revertTextureOptimization,
   collectInteractionTriggerTargets,
   createInteractionTriggerGraphExtension,
   syncInteractionTriggerEntityReferences,
@@ -2536,6 +2538,7 @@ export function VisualEditorPrototype({
           request.tool === "reimport_model_asset" ||
           request.tool === "process_texture_asset" ||
           request.tool === "optimize_model_asset" ||
+          request.tool === "revert_asset_optimization" ||
           request.tool === "apply_scene_recipe" ||
           request.tool === "set_project_thumbnail"
         ) {
@@ -3040,6 +3043,96 @@ export function VisualEditorPrototype({
                 assetOperationRef.current = null;
               }
             }
+          }
+
+          // 変換・最適化の解除。原本は消していないので、参照先と Import 設定を
+          // 戻すだけで済む。AI が圧縮を試して戻せないと、作者が手で直すことに
+          // なるため、実行と同じ surface に解除も置く。
+          if (request.tool === "revert_asset_optimization") {
+            const assetId = mcpRequiredString(args.assetId, "assetId");
+            const target = sourceBundle.assets.assets[assetId];
+            if (!target || (target.kind !== "texture" && target.kind !== "model")) {
+              throw new XriftMcpEditorToolError(
+                "ASSET_NOT_FOUND",
+                "Texture または Model Asset が見つかりません",
+                { assetId },
+              );
+            }
+            const availability = resolveAssetOperationAvailability(
+              target.kind === "texture" ? "texture-processing" : "model-optimization",
+              {
+                readOnly: editorModeRef.current !== "edit",
+                assetImportActive:
+                  importRunningRef.current ||
+                  hasActiveAssetImport(importQueueRef.current),
+                modelReimportActive:
+                  assetOperationRef.current?.kind === "model-reimport",
+                textureProcessingActive:
+                  assetOperationRef.current?.kind === "texture-processing",
+              },
+            );
+            if (!availability.allowed) {
+              throw new XriftMcpEditorToolError(
+                "EDITOR_BUSY",
+                availability.disabledReason ?? "いまは原本へ戻せません",
+                { assetId },
+              );
+            }
+            const result =
+              target.kind === "texture"
+                ? revertTextureOptimization(sourceBundle.assets, assetId)
+                : revertModelOptimization(sourceBundle.assets, assetId);
+            if (!result.ok) {
+              throw new XriftMcpEditorToolError(
+                "ASSET_NOT_OPTIMIZED",
+                result.message,
+                { assetId },
+              );
+            }
+            const nextBundle = touchProject({
+              ...bundleRef.current,
+              assets: result.manifest,
+            });
+            const revisionBefore = mcpRevisionRef.current;
+            mcpRevisionRef.current += 1;
+            mcpRevisionBundleRef.current = nextBundle;
+            bundleRef.current = nextBundle;
+            assetSelectionRef.current = assetId;
+            saveStatusRef.current = "dirty";
+            setHistory((current) =>
+              commitEditorHistory(current, {
+                ...current.present,
+                bundle: nextBundle,
+                assetSelection: assetId,
+              }),
+            );
+            setSaveStatus("dirty");
+            const activity = `AIが「${result.assetName}」を原本に戻しました`;
+            setNotice(`${activity}。変更を自動保存します`);
+            setMcpLastActivity({
+              clientName: request.clientName || "AI client",
+              message: activity,
+              at: new Intl.DateTimeFormat("ja-JP", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              }).format(new Date()),
+              revision: mcpRevisionRef.current,
+            });
+            await tauri.completeXriftMcpRequest({
+              id: request.id,
+              ok: true,
+              result: {
+                projectId: nextBundle.project.projectId,
+                sceneId: nextBundle.scene.sceneId,
+                assetId,
+                assetKind: target.kind,
+                revisionBefore,
+                revisionAfter: mcpRevisionRef.current,
+                reverted: true,
+              },
+            });
+            return;
           }
 
           // Model Inspector の Mesh 最適化 / Draco 圧縮を MCP から実行する。
@@ -7480,6 +7573,66 @@ export function VisualEditorPrototype({
     [editorMode, projectPath],
   );
 
+  /**
+   * 変換・最適化の解除。原本ファイルは残してあるので、Manifestの参照先と
+   * Import設定を戻すだけで済む。書き出したファイルは消さない。
+   */
+  const handleRevertAssetOptimization = useCallback(
+    (assetId: string, kind: "texture" | "model") => {
+      if (editorMode !== "edit") {
+        setNotice("Playを停止してから原本に戻してください");
+        return;
+      }
+      if (
+        assetOperationRef.current?.kind === "model-reimport" ||
+        assetOperationRef.current?.kind === "texture-processing"
+      ) {
+        setNotice("変換の完了後に原本へ戻せます");
+        return;
+      }
+      setHistory((current) => {
+        const result =
+          kind === "texture"
+            ? revertTextureOptimization(current.present.bundle.assets, assetId)
+            : revertModelOptimization(current.present.bundle.assets, assetId);
+        if (!result.ok) {
+          setNotice(result.message);
+          return current;
+        }
+        const nextBundle = touchProject({
+          ...current.present.bundle,
+          assets: result.manifest,
+        });
+        bundleRef.current = nextBundle;
+        setSaveStatus("dirty");
+        if (kind === "texture") {
+          setTextureProcessingFeedback({
+            assetId,
+            state: {
+              phase: "succeeded",
+              message: "原本に戻しました。変換前のImport設定も復元しています",
+            },
+          });
+        } else {
+          setModelOptimizationFeedback({
+            assetId,
+            state: {
+              phase: "succeeded",
+              message: "原本に戻しました。変換前のImport設定も復元しています",
+            },
+          });
+        }
+        setNotice(`「${result.assetName}」を原本に戻しました`);
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: nextBundle,
+          assetSelection: assetId,
+        });
+      });
+    },
+    [editorMode],
+  );
+
   const handleApplyModelOptimization = useCallback(
     async (assetId: string, options: ModelOptimizationOptions) => {
       const availability = resolveAssetOperationAvailability(
@@ -10391,6 +10544,12 @@ export function VisualEditorPrototype({
             onApplyTextureProcessing={(assetId) => {
               void handleApplyTextureProcessing(assetId);
             }}
+            onRevertTextureProcessing={(assetId) =>
+              handleRevertAssetOptimization(assetId, "texture")
+            }
+            onRevertModelOptimization={(assetId) =>
+              handleRevertAssetOptimization(assetId, "model")
+            }
             onParticleEmitterChange={handleParticleEmitterChange}
             onRemoveParticleEmitter={handleRemoveParticleEmitter}
             projectKind={projectKind}

@@ -5113,6 +5113,8 @@ export function InspectorPanel({
   onCreateTextureCard,
   textureProcessingState,
   onApplyTextureProcessing,
+  onRevertTextureProcessing,
+  onRevertModelOptimization,
   textureBatchState,
   onApplyTextureBatch,
   onParticleEmitterChange,
@@ -5238,6 +5240,8 @@ export function InspectorPanel({
   ) => void;
   textureProcessingState?: TextureProcessingState;
   onApplyTextureProcessing?: (assetId: string) => void;
+  onRevertTextureProcessing?: (assetId: string) => void;
+  onRevertModelOptimization?: (assetId: string) => void;
   textureBatchState?: TextureProcessingState;
   onApplyTextureBatch?: (assetIds: readonly string[]) => void;
   onParticleEmitterChange: (
@@ -5416,6 +5420,8 @@ export function InspectorPanel({
               onCreateTextureCard={onCreateTextureCard}
               textureProcessingState={textureProcessingState}
               onApplyTextureProcessing={onApplyTextureProcessing}
+              onRevertTextureProcessing={onRevertTextureProcessing}
+              onRevertModelOptimization={onRevertModelOptimization}
               prefabs={prefabs}
               onSelectPrefabSourceEntity={onSelectPrefabSourceEntity}
               onUpdatePrefab={onUpdatePrefab}

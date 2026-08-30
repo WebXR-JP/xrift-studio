@@ -2703,6 +2703,21 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "revert_asset_optimization",
+            "description": "Point a converted Texture or optimized Model Asset back at the original file it was made from, restoring the import settings used at conversion time. Conversion never rewrites the original, so this always succeeds while the Asset still uses a converted file. Edit mode only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetId": { "type": "string", "minLength": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetId"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "set_project_thumbnail",
             "description": "Set the saved project thumbnail from an existing browser-decodable Texture or environment Texture Asset without exposing file bytes or external paths.",
             "inputSchema": {

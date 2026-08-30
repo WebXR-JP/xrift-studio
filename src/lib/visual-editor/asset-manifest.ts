@@ -182,11 +182,22 @@ export type ModelImportMetadata = {
   openBrush?: import("./open-brush").OpenBrushModelMetadata;
 };
 
+/** Texture と同じ非破壊の控え。Model の Mesh 最適化 / Draco 圧縮で使う。 */
+export type ModelOptimizationOrigin = {
+  source: AssetSource;
+  sourceHash?: string;
+  importMetadata?: ModelImportMetadata;
+  importSettings: ModelImportSettings;
+  appliedAt: string;
+};
+
 export type ModelAsset = AssetBase<"model"> & {
   importSettings: ModelImportSettings;
   /** Slots discovered from glTF primitives/material indices during import. */
   materialSlots: MaterialSlotDefinition[];
   importMetadata?: ModelImportMetadata;
+  /** 最適化結果を使っている間だけ存在する。原本へ戻すための控え。 */
+  optimizedFrom?: ModelOptimizationOrigin;
 };
 
 export type ModelAssetPatch = {
@@ -441,9 +452,14 @@ export const TEXTURE_COMPRESSION_FORMATS = ["source", "webp", "ktx2"] as const;
 export type TextureCompressionFormat =
   (typeof TEXTURE_COMPRESSION_FORMATS)[number];
 
+/**
+ * `powerOfTwo` は最大解像度とは独立した丸め。GPU圧縮とmipmap、repeat wrapは
+ * 2のべき乗の辺で素直に働くため、原寸のままでも辺だけ揃えたい場面がある。
+ * 旧documentには無いので optional にし、normalizerが必ず埋める。
+ */
 export type TextureResizeSettings =
-  | { mode: "original" }
-  | { mode: "max-size"; maxSize: number };
+  | { mode: "original"; powerOfTwo?: boolean }
+  | { mode: "max-size"; maxSize: number; powerOfTwo?: boolean };
 
 export type TextureSamplerSettings = {
   wrapS: TextureWrapMode;
@@ -487,9 +503,29 @@ export type TextureImportMetadata = {
   height?: number;
 };
 
+/**
+ * 変換前の原本を丸ごと控えておく記録。
+ *
+ * 解像度変更・圧縮は原本ファイルを書き換えず、変換結果を別ファイルとして書き、
+ * `source` の指す先だけを差し替える。ここに変換前の `source` と解析結果、
+ * 変換に使ったImport設定を残すので、いつでも原本へ戻して設定を組み直せる。
+ * 二度目以降の変換でもこの記録は上書きせず、最初の原本を指したままにする。
+ */
+export type TextureOptimizationOrigin = {
+  source: AssetSource;
+  sourceHash?: string;
+  importMetadata?: TextureImportMetadata;
+  /** 変換を実行した時のImport設定。戻した時にそのまま復元する。 */
+  importSettings: TextureImportSettings;
+  /** ISO 8601。最後に変換した時刻。 */
+  appliedAt: string;
+};
+
 export type TextureAsset = AssetBase<"texture"> & {
   importSettings: TextureImportSettings;
   importMetadata?: TextureImportMetadata;
+  /** 変換結果を使っている間だけ存在する。原本へ戻すための控え。 */
+  optimizedFrom?: TextureOptimizationOrigin;
   /** Environment textures are equirectangular images used by Scene Skybox. */
   usage?: "surface" | "environment";
   projection?: "equirectangular";
@@ -1907,7 +1943,7 @@ export const DEFAULT_TEXTURE_IMPORT_SETTINGS: TextureImportSettings = {
   colorSpace: "auto",
   generateMipmaps: true,
   flipY: false,
-  resize: { mode: "original" },
+  resize: { mode: "original", powerOfTwo: false },
   sampler: {
     wrapS: "repeat",
     wrapT: "repeat",
@@ -2512,11 +2548,15 @@ function normalizeTextureResize(
   value: TextureResizeSettings | undefined,
   fallback: TextureResizeSettings,
 ): TextureResizeSettings {
-  if (!value) return { ...fallback };
-  if (value.mode === "original") return { mode: "original" };
+  if (!value) return { ...fallback, powerOfTwo: fallback.powerOfTwo === true };
+  const powerOfTwo =
+    typeof value.powerOfTwo === "boolean"
+      ? value.powerOfTwo
+      : fallback.powerOfTwo === true;
+  if (value.mode === "original") return { mode: "original", powerOfTwo };
   return value.mode === "max-size" && isValidTextureMaxSize(value.maxSize)
-    ? { mode: "max-size", maxSize: value.maxSize }
-    : { ...fallback };
+    ? { mode: "max-size", maxSize: value.maxSize, powerOfTwo }
+    : { ...fallback, powerOfTwo };
 }
 
 function hasOwn<ObjectType extends object>(

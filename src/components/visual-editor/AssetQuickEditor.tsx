@@ -51,12 +51,15 @@ import {
   type TextureAsset,
   type TextureAssetPatch,
   type TextureCardProfile,
+  describeTextureOptimization,
   planTextureProcessing,
+  resolveTargetSize,
   TEXTURE_MAX_SIZE_CHOICES,
 } from "../../lib/visual-editor";
 import { EDITOR_ICONS } from "./editor-icons";
 import { CatalogThumbnailImage } from "./CatalogThumbnailImage";
 import { formatFileSize } from "./editor-utils";
+import { AssetOptimizationOriginCard } from "./AssetOptimizationOriginCard";
 import { ParticleAssetInspector } from "./ParticleAssetInspector";
 import { CustomMaterialPreview } from "./CustomMaterialPreview";
 import type { ProjectModelMaterialRuntimeInfo } from "./ProjectModelVisual";
@@ -3305,6 +3308,7 @@ export function TextureQuickEditor({
   onChange,
   onCreateCard,
   onApplyProcessing,
+  onRevertProcessing,
 }: {
   asset: TextureAsset;
   projectPath?: string;
@@ -3313,9 +3317,12 @@ export function TextureQuickEditor({
   onChange: (patch: TextureAssetPatch) => void;
   onCreateCard?: (profile: TextureCardProfile) => void;
   onApplyProcessing?: () => void;
+  onRevertProcessing?: () => void;
 }) {
   const settings = asset.importSettings;
   const resizeValue = settings.resize.mode === "original" ? "original" : String(settings.resize.maxSize);
+  const powerOfTwo = settings.resize.powerOfTwo === true;
+  const resizePreview = describeResizePreview(asset);
   const sourceFormat = getTextureSourceFormat(asset);
   const environmentTexture = isEnvironmentTextureAsset(asset);
   const processingBusy =
@@ -3364,18 +3371,63 @@ export function TextureQuickEditor({
               const value = event.currentTarget.value;
               onChange({
                 importSettings: {
-                  resize: value === "original" ? { mode: "original" } : { mode: "max-size", maxSize: Number(value) },
+                  resize:
+                    value === "original"
+                      ? { mode: "original", powerOfTwo }
+                      : { mode: "max-size", maxSize: Number(value), powerOfTwo },
                 },
               });
             }}
             className={INPUT_CLASS}
           >
-            <option value="original">原寸</option>
+            <option value="original">原寸のまま</option>
             {TEXTURE_MAX_SIZE_CHOICES.map((size) => (
-              <option key={size} value={size}>最大 {size}px</option>
+              <option key={size} value={size}>長辺を最大 {size}px まで</option>
             ))}
           </select>
         </label>
+        <label className="flex items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
+          <span className="min-w-0">
+            <span className="block text-xs font-medium text-slate-700">
+              辺を2のべき乗に揃える
+            </span>
+            <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">
+              256、512、1024のような辺にします。mipmap、繰り返しタイリング、GPU圧縮がきれいに効きます
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={powerOfTwo}
+            disabled={settingsDisabled}
+            onChange={(event) =>
+              onChange({
+                importSettings: {
+                  resize: { ...settings.resize, powerOfTwo: event.currentTarget.checked },
+                },
+              })
+            }
+            className="mt-0.5 h-4 w-4 shrink-0 accent-violet-600 disabled:cursor-not-allowed disabled:opacity-50"
+          />
+        </label>
+        {resizePreview ? (
+          <dl className="grid grid-cols-[42px_minmax(0,1fr)] gap-1 text-xs">
+            <dt className="text-slate-500">現在</dt>
+            <dd className="text-right tabular-nums text-slate-700">
+              {resizePreview.from}
+            </dd>
+            <dt className="text-slate-500">変換後</dt>
+            <dd
+              className={`text-right tabular-nums ${resizePreview.changes ? "font-semibold text-violet-700" : "text-slate-500"}`}
+            >
+              {resizePreview.changes ? resizePreview.to : "変わりません"}
+            </dd>
+          </dl>
+        ) : null}
+        {resizePreview?.upscales ? (
+          <p className="text-[11px] leading-4 text-amber-700">
+            いちばん近い2のべき乗が原本より大きいため、引き伸ばされます。容量を減らしたい時は最大解像度も下げてください。
+          </p>
+        ) : null}
       </EditorSection>
 
       {!environmentTexture ? (
@@ -3540,24 +3592,12 @@ export function TextureQuickEditor({
             {TEXTURE_COMPRESSION_FORMAT_HINTS[settings.compression.format]}
           </span>
         </label>
-        <RangeControl
-          label={
-            settings.compression.format === "ktx2"
-              ? "圧縮品質（Basis）"
-              : "画質（JPEG / WEBP）"
-          }
-          value={settings.compression.quality}
-          min={0}
-          max={100}
-          step={1}
+        <TextureQualityControl
+          format={settings.compression.format}
+          quality={settings.compression.quality}
           disabled={settingsDisabled}
           onChange={(quality) => onChange({ importSettings: { compression: { quality } } })}
         />
-        <p className="text-[11px] leading-4 text-slate-500">
-          {settings.compression.format === "ktx2"
-            ? "KTX2ではBasisの探索量になります。上げるほど同じ容量で画質が上がり、変換時間が伸びます。"
-            : "JPEG / WEBPで書き出す時の画質です。PNGは可逆のため容量に影響しません。"}
-        </p>
       </EditorSection>
 
       <EditorSection title="画像の書き出し">
@@ -3568,10 +3608,140 @@ export function TextureQuickEditor({
           readOnly={readOnly}
           canApply={Boolean(projectPath && onApplyProcessing)}
           onApply={onApplyProcessing}
+          onRevert={onRevertProcessing}
         />
       </EditorSection>
     </div>
   );
+}
+
+/**
+ * Qualityは0..100の数値で保存するが、その数字自体は作者に何も伝えない。
+ * 「80%」が何と比べて80なのかは、JPEGの画質とBasisの探索量で意味が違う。
+ * 入口では見た目と容量のどちらを優先するかだけを選ばせ、数値は結果として示す。
+ */
+const TEXTURE_QUALITY_LEVELS = [
+  {
+    quality: 95,
+    label: "最高",
+    hint: "元の見た目をほぼ保つ。容量は大きめ",
+  },
+  {
+    quality: 85,
+    label: "高",
+    hint: "近くで見るものに。既定",
+  },
+  {
+    quality: 70,
+    label: "標準",
+    hint: "壁や床など、面積の広いものに",
+  },
+  {
+    quality: 50,
+    label: "軽量",
+    hint: "遠景や小さく映るものに。容量は最小",
+  },
+] as const;
+
+function TextureQualityControl({
+  format,
+  quality,
+  disabled,
+  onChange,
+}: {
+  format: (typeof TEXTURE_COMPRESSION_FORMATS)[number];
+  quality: number;
+  disabled: boolean;
+  onChange: (quality: number) => void;
+}) {
+  const ktx2 = format === "ktx2";
+  // 一番近い段を選択中として示す。MCPや旧documentの半端な値でも段が消えない。
+  const nearest = TEXTURE_QUALITY_LEVELS.reduce((closest, level) =>
+    Math.abs(level.quality - quality) < Math.abs(closest.quality - quality)
+      ? level
+      : closest,
+  );
+  const exact = TEXTURE_QUALITY_LEVELS.some((level) => level.quality === quality);
+
+  return (
+    <div className="text-xs text-slate-600">
+      <span className="mb-1 block">{ktx2 ? "圧縮の強さ" : "書き出す画質"}</span>
+      <div className="grid grid-cols-4 gap-1" role="group" aria-label="画質の目安">
+        {TEXTURE_QUALITY_LEVELS.map((level) => {
+          const selected = exact
+            ? level.quality === quality
+            : level.quality === nearest.quality;
+          return (
+            <button
+              key={level.quality}
+              type="button"
+              disabled={disabled}
+              aria-pressed={selected}
+              title={level.hint}
+              onClick={() => onChange(level.quality)}
+              className={`rounded-md border px-1 py-1.5 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-45 ${
+                selected
+                  ? "border-violet-300 bg-violet-50 text-violet-800"
+                  : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {level.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-1 text-[11px] leading-4 text-slate-500">
+        {exact
+          ? nearest.hint
+          : `${nearest.hint}に近い設定です（保存値 ${quality}）`}
+      </p>
+      <p className="mt-1 text-[11px] leading-4 text-slate-500">
+        {ktx2
+          ? "KTX2ではGPU上の容量は解像度だけで決まります。ここで変わるのは通信量と見た目、それに変換にかかる時間です。"
+          : "PNGは可逆のため、この設定では容量が変わりません。軽くしたい時はWEBPかKTX2を選びます。"}
+      </p>
+    </div>
+  );
+}
+
+/** 保存値に一番近い段の名前。数値のままだと何と比べた値なのか伝わらない。 */
+function textureQualityLabel(quality: number): string {
+  const nearest = TEXTURE_QUALITY_LEVELS.reduce((closest, level) =>
+    Math.abs(level.quality - quality) < Math.abs(closest.quality - quality)
+      ? level
+      : closest,
+  );
+  return nearest.quality === quality
+    ? nearest.label
+    : `${nearest.label}相当（${quality}）`;
+}
+
+/** 最大解像度と2のべき乗を合わせた結果を、実行前に見せる。 */
+function describeResizePreview(asset: TextureAsset): {
+  from: string;
+  to: string;
+  changes: boolean;
+  upscales: boolean;
+} | null {
+  const width = asset.importMetadata?.width;
+  const height = asset.importMetadata?.height;
+  if (!width || !height) return null;
+  const maxSize =
+    asset.importSettings.resize.mode === "max-size"
+      ? asset.importSettings.resize.maxSize
+      : null;
+  const target = resolveTargetSize(
+    width,
+    height,
+    maxSize,
+    asset.importSettings.resize.powerOfTwo === true,
+  );
+  return {
+    from: `${width} × ${height}`,
+    to: `${target.width} × ${target.height}`,
+    changes: target.width !== width || target.height !== height,
+    upscales: target.width > width || target.height > height,
+  };
 }
 
 const TEXTURE_COMPRESSION_FORMAT_LABELS: Record<
@@ -3603,6 +3773,7 @@ function TextureProcessingPanel({
   readOnly,
   canApply,
   onApply,
+  onRevert,
 }: {
   asset: TextureAsset;
   state: TextureProcessingState;
@@ -3610,14 +3781,30 @@ function TextureProcessingPanel({
   readOnly: boolean;
   canApply: boolean;
   onApply?: () => void;
+  onRevert?: () => void;
 }) {
   const plan = planTextureProcessing(asset);
+  const optimization = describeTextureOptimization(asset);
+  const inUse = optimization.optimized ? (
+    <AssetOptimizationOriginCard
+      currentLabel={optimization.current.label}
+      currentBytes={optimization.current.byteLength}
+      originalLabel={optimization.original.label}
+      originalBytes={optimization.original.byteLength}
+      revertLabel="原本の画像に戻す"
+      disabled={busy || readOnly || !onRevert}
+      onRevert={onRevert}
+    />
+  ) : null;
 
   if (!plan.supported) {
     return (
-      <p className="rounded border border-slate-200 bg-slate-50 p-1.5 text-xs leading-4 text-slate-600">
-        {plan.reason}
-      </p>
+      <>
+        {inUse}
+        <p className="rounded border border-slate-200 bg-slate-50 p-1.5 text-xs leading-4 text-slate-600">
+          {plan.reason}
+        </p>
+      </>
     );
   }
 
@@ -3640,6 +3827,7 @@ function TextureProcessingPanel({
 
   return (
     <>
+      {inUse}
       <dl className="grid grid-cols-[52px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
         <dt className="text-slate-500">現在</dt>
         <dd className="text-right tabular-nums text-slate-700">
@@ -3651,7 +3839,7 @@ function TextureProcessingPanel({
           className={`text-right tabular-nums ${plan.pending ? "font-semibold text-violet-700" : "text-slate-500"}`}
         >
           {plan.pending
-            ? `${targetSize}・${targetFormat}${plan.qualityApplies ? `・Quality ${plan.quality}` : ""}`
+            ? `${targetSize}・${targetFormat}${plan.qualityApplies ? `・画質${textureQualityLabel(plan.quality)}` : ""}`
             : "変更なし"}
         </dd>
       </dl>
@@ -3660,9 +3848,14 @@ function TextureProcessingPanel({
           {plan.sourceFormat.toUpperCase()}は書き戻せないため、{targetFormat}で保存します。
         </p>
       ) : null}
+      {plan.pending && plan.powerOfTwo ? (
+        <p className="text-[11px] leading-4 text-slate-500">
+          辺をいちばん近い2のべき乗へ丸めるため、縦横比がわずかに変わります。
+        </p>
+      ) : null}
       {plan.pending && !plan.qualityApplies && plan.outputFormat === "png" ? (
         <p className="text-[11px] leading-4 text-slate-500">
-          PNGは可逆のため、Qualityは容量に影響しません。圧縮するときはWEBPかKTX2を選びます。
+          PNGは可逆のため、画質の設定では容量が変わりません。圧縮するときはWEBPかKTX2を選びます。
         </p>
       ) : null}
       <button
@@ -3721,6 +3914,8 @@ export function AssetQuickEditor({
   onCreateTextureCard,
   textureProcessingState,
   onApplyTextureProcessing,
+  onRevertTextureProcessing,
+  onRevertModelOptimization,
   prefabs,
   onSelectPrefabSourceEntity,
   onUpdatePrefab,
@@ -3752,6 +3947,8 @@ export function AssetQuickEditor({
   onTextureChange: (assetId: string, patch: TextureAssetPatch) => void;
   textureProcessingState?: TextureProcessingState;
   onApplyTextureProcessing?: (assetId: string) => void;
+  onRevertTextureProcessing?: (assetId: string) => void;
+  onRevertModelOptimization?: (assetId: string) => void;
   onCreateTextureCard?: (
     textureAssetId: string,
     profile: TextureCardProfile,
@@ -3808,6 +4005,11 @@ export function AssetQuickEditor({
             ? (options) => onApplyModelOptimization(asset.id, options)
             : undefined
         }
+        onRevertOptimization={
+          onRevertModelOptimization
+            ? () => onRevertModelOptimization(asset.id)
+            : undefined
+        }
       />
     );
   }
@@ -3824,6 +4026,11 @@ export function AssetQuickEditor({
         onApplyProcessing={
           onApplyTextureProcessing
             ? () => onApplyTextureProcessing(asset.id)
+            : undefined
+        }
+        onRevertProcessing={
+          onRevertTextureProcessing
+            ? () => onRevertTextureProcessing(asset.id)
             : undefined
         }
       />

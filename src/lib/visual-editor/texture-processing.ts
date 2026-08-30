@@ -49,6 +49,8 @@ export type TextureProcessingPlan =
       sourceHeight: number | null;
       sourceByteLength: number;
       maxSize: number | null;
+      /** 辺を2のべき乗へ丸めるか。最大解像度とは独立に効く。 */
+      powerOfTwo: boolean;
       targetWidth: number | null;
       targetHeight: number | null;
       outputFormat: TextureOutputFormat;
@@ -116,16 +118,22 @@ export function planTextureProcessing(asset: TextureAsset): TextureProcessingPla
 
   const settings = asset.importSettings;
   const maxSize = settings.resize.mode === "max-size" ? settings.resize.maxSize : null;
+  const powerOfTwo = settings.resize.powerOfTwo === true;
   const sourceWidth = metadata.width ?? null;
   const sourceHeight = metadata.height ?? null;
   const fitted =
-    sourceWidth && sourceHeight ? fitWithin(sourceWidth, sourceHeight, maxSize) : null;
+    sourceWidth && sourceHeight
+      ? resolveTargetSize(sourceWidth, sourceHeight, maxSize, powerOfTwo)
+      : null;
   const outputFormat = resolveOutputFormat(sourceFormat, settings.compression.format);
+  // 解像度が分からない原本は、指定がある限り実際に描き直して確かめるしかない。
+  const sizeUnknown = sourceWidth === null || sourceHeight === null;
   const resizePending =
-    maxSize !== null &&
-    (sourceWidth === null ||
-      sourceHeight === null ||
-      Math.max(sourceWidth, sourceHeight) > maxSize);
+    (maxSize !== null || powerOfTwo) &&
+    (sizeUnknown ||
+      fitted === null ||
+      fitted.width !== sourceWidth ||
+      fitted.height !== sourceHeight);
   const formatPending = settings.compression.format !== "source";
 
   return {
@@ -134,14 +142,19 @@ export function planTextureProcessing(asset: TextureAsset): TextureProcessingPla
     settledReason:
       resizePending || formatPending
         ? null
-        : maxSize !== null
-          ? "原本はすでに指定した最大解像度に収まっています。"
-          : "変換する設定がありません。最大解像度か圧縮方式を選んでください。",
+        : powerOfTwo && maxSize !== null
+          ? "原本はすでに指定した最大解像度に収まっていて、辺も2のべき乗です。"
+          : powerOfTwo
+            ? "原本の辺はすでに2のべき乗です。"
+            : maxSize !== null
+              ? "原本はすでに指定した最大解像度に収まっています。"
+              : "変換する設定がありません。最大解像度、2のべき乗、圧縮方式のいずれかを選んでください。",
     sourceFormat,
     sourceWidth,
     sourceHeight,
     sourceByteLength: metadata.byteLength,
     maxSize,
+    powerOfTwo,
     targetWidth: fitted?.width ?? null,
     targetHeight: fitted?.height ?? null,
     outputFormat,
@@ -360,6 +373,7 @@ async function encodeTextureForPlan(
   // KTX2はBasis圧縮の前段なので、中間画像は可逆のPNGで渡して二重の劣化を避ける。
   const rendered = await renderImageBytes(sourceBytes, {
     maxSize: plan.maxSize,
+    powerOfTwo: plan.powerOfTwo,
     mimeType: plan.outputFormat === "ktx2" ? "image/png" : mimeTypeOf(plan.outputFormat),
     quality: plan.qualityApplies && plan.outputFormat !== "ktx2" ? plan.quality / 100 : undefined,
   });
@@ -402,10 +416,22 @@ async function encodeTextureForPlan(
         height: rendered.height,
       },
       importSettings: {
+        // 参照先が変換後の画像になったので、いま見えている設定は反映済みへ戻す。
+        // 変換に使った設定は optimizedFrom に控えてあり、戻せば元へ復元される。
         ...asset.importSettings,
-        // 書き出した画像が新しい原本なので、設定は未反映のない状態へ戻す。
-        resize: { mode: "original" },
+        resize: { mode: "original", powerOfTwo: false },
         compression: { ...asset.importSettings.compression, format: "source" },
+      },
+      // 原本ファイルは書き換えないので、ここを保持している限り必ず戻せる。
+      // 二度目以降の変換では最初の原本を指したまま、時刻だけ更新する。
+      optimizedFrom: {
+        ...(asset.optimizedFrom ?? {
+          source: asset.source,
+          sourceHash: asset.sourceHash,
+          importMetadata: asset.importMetadata,
+          importSettings: asset.importSettings,
+        }),
+        appliedAt: new Date().toISOString(),
       },
       ...(asset.importedFromModel
         ? {
@@ -413,6 +439,88 @@ async function encodeTextureForPlan(
           }
         : {}),
     },
+  };
+}
+
+export type TextureOptimizationStatus =
+  | { optimized: false }
+  | {
+      optimized: true;
+      /** いま使っている変換結果。 */
+      current: { label: string; byteLength: number };
+      /** 残してある原本。ここへ戻せる。 */
+      original: { label: string; byteLength: number | null };
+    };
+
+/**
+ * 「いま何を使っているか」と「戻せる原本があるか」を1か所で判定する。
+ * Inspectorはこの結果だけを見て、現在の参照先と解除操作を出す。
+ */
+export function describeTextureOptimization(
+  asset: TextureAsset,
+): TextureOptimizationStatus {
+  const origin = asset.optimizedFrom;
+  if (!origin) return { optimized: false };
+  return {
+    optimized: true,
+    current: {
+      label: describeTextureVariant(asset.importMetadata),
+      byteLength: asset.importMetadata?.byteLength ?? 0,
+    },
+    original: {
+      label: describeTextureVariant(origin.importMetadata),
+      byteLength: origin.importMetadata?.byteLength ?? null,
+    },
+  };
+}
+
+function describeTextureVariant(
+  metadata: TextureAsset["importMetadata"],
+): string {
+  if (!metadata) return "解析結果なし";
+  const size =
+    metadata.width && metadata.height
+      ? `${metadata.width} × ${metadata.height}`
+      : "解像度不明";
+  return `${size}・${metadata.sourceFormat.toUpperCase()}`;
+}
+
+/**
+ * 変換結果の参照をやめ、控えてある原本へ戻す。
+ *
+ * 変換結果のファイルは消さない。同じ設定で作り直せば同じ内容・同じハッシュに
+ * なるため、消す判断はプロジェクトの掃除としてまとめて行う方が安全になる。
+ */
+export function revertTextureOptimization(
+  manifest: AssetManifest,
+  assetId: string,
+): { ok: false; message: string } | { ok: true; manifest: AssetManifest; assetName: string } {
+  const asset = getTextureAsset(manifest, assetId);
+  if (!asset) {
+    return { ok: false, message: "対象のTexture Assetが見つかりませんでした。" };
+  }
+  const origin = asset.optimizedFrom;
+  if (!origin) {
+    return { ok: false, message: `${asset.name}は原本をそのまま使っています。` };
+  }
+
+  const restored: TextureAsset = {
+    ...asset,
+    source: origin.source,
+    sourceHash: origin.sourceHash,
+    importMetadata: origin.importMetadata,
+    importSettings: origin.importSettings,
+    thumbnail:
+      asset.thumbnail?.status === "generated"
+        ? { ...asset.thumbnail, status: "stale" }
+        : asset.thumbnail,
+  };
+  delete restored.optimizedFrom;
+
+  return {
+    ok: true,
+    assetName: asset.name,
+    manifest: { ...manifest, assets: { ...manifest.assets, [assetId]: restored } },
   };
 }
 
@@ -478,6 +586,43 @@ export function fitWithin(
   return {
     width: Math.max(1, Math.round(width * scale)),
     height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
+/** Canvasが確実に扱える上限。これを超える辺は端末によって描画できない。 */
+const MAX_RENDERED_TEXTURE_SIZE = 8192;
+
+/**
+ * 辺を最も近い2のべき乗へ丸める。最大解像度が指定されていればそれを超えない。
+ *
+ * KTX2 / BasisのGPU圧縮、mipmap、repeat wrapはどれも2のべき乗の辺を前提に
+ * 設計されているため、1000 × 600のような半端な原本は 1024 × 512 にした方が
+ * 転送先のGPU形式でも扱いが素直になる。縦横は別々に丸めるので、アスペクト比は
+ * わずかに変わる。
+ */
+export function nearestPowerOfTwo(size: number, maxSize: number | null): number {
+  const ceiling = Math.min(
+    MAX_RENDERED_TEXTURE_SIZE,
+    maxSize && maxSize > 0 ? maxSize : MAX_RENDERED_TEXTURE_SIZE,
+  );
+  if (!Number.isFinite(size) || size <= 1) return 1;
+  const exponent = Math.round(Math.log2(size));
+  const snapped = 2 ** Math.max(0, exponent);
+  return Math.max(1, Math.min(ceiling, snapped));
+}
+
+/** 最大解像度へ収めてから、必要なら辺を2のべき乗へ丸める。 */
+export function resolveTargetSize(
+  width: number,
+  height: number,
+  maxSize: number | null,
+  powerOfTwo: boolean,
+): { width: number; height: number } {
+  const fitted = fitWithin(width, height, maxSize);
+  if (!powerOfTwo) return fitted;
+  return {
+    width: nearestPowerOfTwo(fitted.width, maxSize),
+    height: nearestPowerOfTwo(fitted.height, maxSize),
   };
 }
 
@@ -553,11 +698,21 @@ export function copyAssetBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
 /** Canvasで縮小と再エンコードをまとめて行う。maxSizeがnullなら解像度は保つ。 */
 export async function renderImageBytes(
   bytes: Uint8Array,
-  options: { maxSize: number | null; mimeType: string; quality?: number },
+  options: {
+    maxSize: number | null;
+    mimeType: string;
+    quality?: number;
+    powerOfTwo?: boolean;
+  },
 ): Promise<{ bytes: Uint8Array; width: number; height: number }> {
   const bitmap = await createImageBitmap(new Blob([copyAssetBytes(bytes)]));
   try {
-    const { width, height } = fitWithin(bitmap.width, bitmap.height, options.maxSize);
+    const { width, height } = resolveTargetSize(
+      bitmap.width,
+      bitmap.height,
+      options.maxSize,
+      options.powerOfTwo === true,
+    );
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
