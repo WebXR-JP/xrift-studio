@@ -1972,3 +1972,93 @@ export function duplicateInteractivityNode(
   );
   return graph.nodes.length - 1;
 }
+
+/**
+ * One node lifted out of a graph, ready to be placed in another one.
+ *
+ * Duplicating inside a graph can copy the node as-is, because its `declaration`
+ * and its inline `type` indexes already point at the right entries. Across
+ * graphs both are meaningless — index 2 is a different operation and a
+ * different signature over there — so a copy carries the names instead, and
+ * paste resolves them against wherever it lands.
+ */
+export type InteractivityNodeClipboard = {
+  readonly op: string;
+  readonly extension?: string;
+  readonly node: KhrInteractivityNode;
+  /** Signature per inline value socket, so paste can rebuild the type indexes. */
+  readonly signatures: Readonly<Record<string, string>>;
+};
+
+export function readInteractivityNodeForCopy(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+): InteractivityNodeClipboard | null {
+  const node = graph.nodes?.[nodeIndex];
+  const declaration = node ? graph.declarations?.[node.declaration] : undefined;
+  if (!node || !declaration) return null;
+  const copy = cloneJson(node);
+  // Connections do not come along. A pasted node that arrived already wired
+  // would put two writers on one socket, and across graphs the indexes it
+  // carried would point at whatever happens to sit there.
+  delete copy.flows;
+  const signatures: Record<string, string> = {};
+  if (copy.values) {
+    copy.values = Object.fromEntries(
+      Object.entries(copy.values).filter(([socket, input]) => {
+        if (input.node !== undefined) return false;
+        const signature =
+          input.type === undefined ? undefined : graph.types?.[input.type]?.signature;
+        if (signature) signatures[socket] = signature;
+        return true;
+      }),
+    );
+    if (Object.keys(copy.values).length === 0) delete copy.values;
+  }
+  return {
+    op: declaration.op,
+    ...(declaration.extension ? { extension: declaration.extension } : {}),
+    node: copy,
+    signatures,
+  };
+}
+
+/** Places a copied node in `graph`, resolving its declaration and types there. */
+export function pasteInteractivityNode(
+  graph: KhrInteractivityGraph,
+  entry: InteractivityNodeClipboard,
+  position?: { x: number; y: number },
+): number {
+  const node = cloneJson(entry.node);
+  graph.declarations ??= [];
+  let declaration = graph.declarations.findIndex(
+    (candidate) =>
+      candidate.op === entry.op && candidate.extension === entry.extension,
+  );
+  if (declaration < 0) {
+    graph.declarations.push({
+      op: entry.op,
+      ...(entry.extension ? { extension: entry.extension } : {}),
+    });
+    declaration = graph.declarations.length - 1;
+  }
+  node.declaration = declaration;
+  if (node.values) {
+    graph.types ??= [];
+    for (const [socket, input] of Object.entries(node.values)) {
+      const signature = entry.signatures[socket];
+      if (!signature) continue;
+      const existing = graph.types.findIndex(
+        (candidate) => candidate.signature === signature,
+      );
+      input.type =
+        existing >= 0 ? existing : graph.types.push({ signature }) - 1;
+    }
+  }
+  graph.nodes ??= [];
+  const anchor = position ?? readInteractivityNodePosition(node, graph.nodes.length);
+  graph.nodes.push(
+    writeInteractivityNodePosition(node, freeInteractivityNodePosition(graph, anchor)),
+  );
+  return graph.nodes.length - 1;
+}

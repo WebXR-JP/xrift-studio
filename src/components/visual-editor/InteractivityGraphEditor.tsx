@@ -23,6 +23,8 @@ import {
   addInteractivityGraph,
   autoLayoutInteractivityGraph,
   duplicateInteractivityNode,
+  pasteInteractivityNode,
+  readInteractivityNodeForCopy,
   freeInteractivityNodePosition,
   isInteractivityTriggerActionOp,
   dryRunInteractivityGraph,
@@ -41,6 +43,7 @@ import {
   validateKhrInteractivityExtension,
   writeInteractivityNodePosition,
   type InteractivityAsset,
+  type InteractivityNodeClipboard,
   type InteractivityRecipe,
   type KhrInteractivityExtension,
   type KhrInteractivityGraph,
@@ -497,6 +500,9 @@ function InteractivityGraphEditorBody({
     setSelectedNodeIndex(null);
   }, []);
 
+  /** Survives switching graphs, so a node can be carried between them. */
+  const [clipboard, setClipboard] = useState<InteractivityNodeClipboard | null>(null);
+
   const handleDuplicateNode = useCallback(() => {
     if (readOnly || selectedNodeIndex === null) return;
     const source = graph.nodes?.[selectedNodeIndex];
@@ -507,6 +513,7 @@ function InteractivityGraphEditorBody({
     });
     setSelectedNodeIndex(created);
   }, [graph.nodes, readOnly, selectedNodeIndex, updateGraph]);
+
 
   const handleAutoLayout = useCallback(() => {
     if (readOnly) return;
@@ -523,56 +530,6 @@ function InteractivityGraphEditorBody({
     onClose();
   }, [dirty, onClose, readOnly]);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const modifier = event.metaKey || event.ctrlKey;
-      // Ctrl+Z belongs to whatever text field has focus. Taking it while the
-      // author is typing in the JSON panel or renaming a graph would undo the
-      // graph instead of the sentence, and the rename pushes one history entry
-      // per keystroke, so the two undos are not even the same size.
-      if (modifier && isTextEntryTarget(event.target)) return;
-      if (modifier && event.key.toLowerCase() === "z") {
-        event.preventDefault();
-        if (event.shiftKey) redo();
-        else undo();
-        return;
-      }
-      if (modifier && event.key.toLowerCase() === "d") {
-        event.preventDefault();
-        handleDuplicateNode();
-        return;
-      }
-      if (modifier && event.key.toLowerCase() === "y") {
-        event.preventDefault();
-        redo();
-        return;
-      }
-      if (event.key !== "Escape") return;
-      if (closeConfirmOpen) {
-        setCloseConfirmOpen(false);
-        return;
-      }
-      if (graphMenuOpen) {
-        setGraphMenuOpen(false);
-        return;
-      }
-      if (paletteOpen) {
-        setPaletteOpen(false);
-        return;
-      }
-      requestClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    closeConfirmOpen,
-    graphMenuOpen,
-    handleDuplicateNode,
-    paletteOpen,
-    redo,
-    requestClose,
-    undo,
-  ]);
 
   /**
    * Where the next node lands.
@@ -737,6 +694,99 @@ function InteractivityGraphEditorBody({
 
   // An append always lands on the current length, so the node to select is known
   // before the draft updates and no state is set from inside the updater.
+  /**
+   * Copy and paste, which duplicate cannot replace.
+   *
+   * Ctrl+D makes a copy beside the original. Copy and paste is for the other
+   * two things: placing the same node several times, and carrying one into
+   * another graph of the same Asset — where its declaration index and its type
+   * indexes mean something different, so the clipboard carries the names.
+   */
+  const handleCopyNode = useCallback(() => {
+    if (selectedNodeIndex === null) return;
+    const entry = readInteractivityNodeForCopy(graph, selectedNodeIndex);
+    if (!entry) return;
+    setClipboard(entry);
+  }, [graph, selectedNodeIndex]);
+
+  const handlePasteNode = useCallback(() => {
+    if (readOnly || !clipboard) return;
+    const created = graph.nodes?.length ?? 0;
+    updateGraph((nextGraph) => {
+      pasteInteractivityNode(nextGraph, clipboard, nextNodePosition(created));
+    });
+    setSelectedNodeIndex(created);
+  }, [clipboard, graph.nodes, nextNodePosition, readOnly, updateGraph]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const modifier = event.metaKey || event.ctrlKey;
+      // Ctrl+Z belongs to whatever text field has focus. Taking it while the
+      // author is typing in the JSON panel or renaming a graph would undo the
+      // graph instead of the sentence, and the rename pushes one history entry
+      // per keystroke, so the two undos are not even the same size.
+      if (modifier && isTextEntryTarget(event.target)) return;
+      if (modifier && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (modifier && event.key.toLowerCase() === "d") {
+        event.preventDefault();
+        handleDuplicateNode();
+        return;
+      }
+      if (modifier && event.key.toLowerCase() === "c") {
+        // Only when a node is selected: otherwise Ctrl+C is the browser's, and
+        // taking it would stop an author copying text out of the JSON panel.
+        if (selectedNodeIndex === null) return;
+        event.preventDefault();
+        handleCopyNode();
+        return;
+      }
+      if (modifier && event.key.toLowerCase() === "v") {
+        if (!clipboard) return;
+        event.preventDefault();
+        handlePasteNode();
+        return;
+      }
+      if (modifier && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        redo();
+        return;
+      }
+      if (event.key !== "Escape") return;
+      if (closeConfirmOpen) {
+        setCloseConfirmOpen(false);
+        return;
+      }
+      if (graphMenuOpen) {
+        setGraphMenuOpen(false);
+        return;
+      }
+      if (paletteOpen) {
+        setPaletteOpen(false);
+        return;
+      }
+      requestClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    closeConfirmOpen,
+    graphMenuOpen,
+    handleCopyNode,
+    handleDuplicateNode,
+    handlePasteNode,
+    clipboard,
+    selectedNodeIndex,
+    paletteOpen,
+    redo,
+    requestClose,
+    undo,
+  ]);
+
   const handleAddOperation = (op: string) => {
     if (readOnly) return;
     const created = graph.nodes?.length ?? 0;

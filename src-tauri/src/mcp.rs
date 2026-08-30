@@ -4299,7 +4299,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "duplicate_interactivity_node",
-            "description": "Copy a node with its inline values and configuration, placed clear of the original. Connections are not copied.",
+            "description": "Copy a node with its inline values and configuration, placed clear of the original. Connections are not copied. Pass targetGraphIndex to paste it into another graph of the same Asset, where its operation and value types are resolved again.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4308,6 +4308,7 @@ fn tool_definitions() -> Value {
                     "expectedRevision": { "type": "integer", "minimum": 0 },
                     "assetId": { "type": "string" },
                     "graphIndex": { "type": "integer", "minimum": 0 },
+                    "targetGraphIndex": { "type": "integer", "minimum": 0 },
                     "nodeIndex": { "type": "integer", "minimum": 0 }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "assetId", "nodeIndex"],

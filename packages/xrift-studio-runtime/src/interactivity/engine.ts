@@ -96,6 +96,15 @@ const DEFAULT_ACTIVATION_BUDGET = 20000;
 const DEFAULT_TRACE_LIMIT = 500;
 const MAX_PENDING_TIMERS = 4096;
 
+/**
+ * How many distinct moments one frame may resolve.
+ *
+ * A frame is not one instant: a long one contains every wait that came due
+ * inside it, in order. The cap is what keeps a graph that schedules zero-second
+ * work from stepping forever without advancing the clock.
+ */
+const MAX_FRAME_STEPS = 4096;
+
 /** Operations this engine executes. Anything else is reported, never guessed. */
 export const INTERACTIVITY_EXECUTED_OPERATIONS: ReadonlySet<string> = new Set([
   "event/onStart",
@@ -456,13 +465,22 @@ export class InteractivityEngine {
     const frameEnd = this.timeSeconds + delta;
     this.budget = this.activationBudget;
 
-    for (;;) {
+    // Walk the frame moment by moment rather than timer by timer. An
+    // interpolation that finishes mid-frame continues into new waits, and one
+    // of those can be due before a timer that was already pending. Jumping
+    // straight to the earliest pending timer ran the later event first and then
+    // set the clock back to run the earlier one — invisible at 60fps, plain in
+    // any long frame: a tab returning from the background, a stall, or a dry
+    // run stepping in whole seconds.
+    for (let step = 0; step < MAX_FRAME_STEPS; step += 1) {
+      const next = this.nextEventTime(frameEnd);
+      if (next === null) break;
+      this.advanceInterpolations(next);
+      this.timeSeconds = next;
       const due = this.timers
-        .filter((timer) => !timer.cancelled && timer.dueAt <= frameEnd)
+        .filter((timer) => !timer.cancelled && timer.dueAt <= next)
         .sort((left, right) => left.dueAt - right.dueAt || left.id - right.id)[0];
-      if (!due) break;
-      this.advanceInterpolations(due.dueAt);
-      this.timeSeconds = due.dueAt;
+      if (!due) continue;
       due.cancelled = true;
       this.timers = this.timers.filter((timer) => timer !== due);
       this.runOutput(due.node, due.socket);
@@ -602,10 +620,14 @@ export class InteractivityEngine {
       }
 
       case "flow/switch": {
-        const selection = asInteger(this.readSocket(node, "selection", seen));
-        const named = node.flows.has(String(selection))
-          ? String(selection)
-          : "default";
+        // A missing selection is not case 0. `asInteger(null)` is 0, so an
+        // unwired node silently took the first case instead of the fallback the
+        // author wired for exactly this.
+        const selected = this.readSocket(node, "selection", seen);
+        const named =
+          selected !== null && node.flows.has(String(asInteger(selected)))
+            ? String(asInteger(selected))
+            : "default";
         return this.follow(node, named);
       }
 
@@ -647,7 +669,10 @@ export class InteractivityEngine {
           this.setOutput(nodeIndex, "currentCount", intValue(0));
           return [];
         }
-        const limit = asInteger(this.readSocket(node, "n", seen)) || 1;
+        // `|| 1` turned an explicit 0 into 1, so「0回だけ通す」let one through.
+        // Only an absent socket falls back to once.
+        const declared = this.readSocket(node, "n", seen);
+        const limit = declared === null ? 1 : Math.max(0, asInteger(declared));
         const current = asInteger(this.outputs.get(outputKey(nodeIndex, "currentCount")) ?? null);
         if (current >= limit) return [];
         this.setOutput(nodeIndex, "currentCount", intValue(current + 1));
@@ -837,6 +862,11 @@ export class InteractivityEngine {
           endTime !== null && Number.isFinite(endTime) && endTime > startTime
             ? (endTime - startTime) / Math.abs(speed || 1)
             : null;
+        // Restarting the same node replaces its pending completion instead of
+        // stacking a second one, the same rule a timed write follows. A clip
+        // retriggered every second otherwise left a queue of `done` flows that
+        // all fired later, long after the play they belonged to had ended.
+        this.cancelTimersOf(nodeIndex);
         if (finish !== null && node.flows.has("done")) {
           this.schedule(nodeIndex, "done", finish);
         }
@@ -1305,6 +1335,30 @@ export class InteractivityEngine {
     return id;
   }
 
+  /**
+   * The next moment inside this frame at which anything happens.
+   *
+   * Both kinds of pending work count: a wait that comes due, and an
+   * interpolation that reaches its end and continues on `done`. Looking at only
+   * one of them is what let the two run out of order.
+   */
+  private nextEventTime(frameEnd: number): number | null {
+    let next: number | null = null;
+    const consider = (time: number): void => {
+      const clamped = time < this.timeSeconds ? this.timeSeconds : time;
+      if (clamped > frameEnd) return;
+      if (next === null || clamped < next) next = clamped;
+    };
+    for (const timer of this.timers) {
+      if (!timer.cancelled) consider(timer.dueAt);
+    }
+    for (const entry of this.interpolations) {
+      if (entry.cancelled) continue;
+      consider(this.timeSeconds + Math.max(0, entry.duration - entry.elapsed));
+    }
+    return next;
+  }
+
   private cancelTimersOf(nodeIndex: number): void {
     for (const timer of this.timers) {
       if (timer.node === nodeIndex) timer.cancelled = true;
@@ -1372,13 +1426,15 @@ export class InteractivityEngine {
    */
   private advanceInterpolations(endTime: number): void {
     const deltaSeconds = endTime - this.timeSeconds;
-    if (deltaSeconds <= 0 || this.interpolations.length === 0) return;
+    if (deltaSeconds < 0 || this.interpolations.length === 0) return;
     const finished: { entry: Interpolation; at: number }[] = [];
     for (const entry of this.interpolations) {
       if (entry.cancelled) continue;
       entry.elapsed += deltaSeconds;
       const ratio = entry.duration === 0 ? 1 : entry.elapsed / entry.duration;
-      this.applyInterpolation(entry, ratio);
+      // A zero-length step still has to retire an entry that has nothing left
+      // to run, but it must not re-write a value that has not moved.
+      if (deltaSeconds > 0 || ratio >= 1) this.applyInterpolation(entry, ratio);
       if (ratio >= 1) {
         finished.push({ entry, at: endTime - Math.max(0, entry.elapsed - entry.duration) });
       }

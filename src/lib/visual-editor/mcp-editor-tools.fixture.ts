@@ -3439,6 +3439,70 @@ export function runXriftMcpEditorToolFixtures(): void {
     revision: current.revision + 1,
   };
 
+  // Carrying a node into another graph is not a clone: over there its
+  // declaration index is a different operation and its type index a different
+  // signature, so both have to be resolved again on arrival.
+  const secondGraphForPaste = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-paste-graph",
+    tool: "add_interactivity_graph",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      name: "Paste target",
+    },
+  });
+  const pasteGraphIndex = secondGraphForPaste.result.graphIndex as number;
+  current = {
+    ...current,
+    bundle: secondGraphForPaste.bundle,
+    revision: current.revision + 1,
+  };
+
+  const pasted = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-paste-node",
+    tool: "duplicate_interactivity_node",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      graphIndex: 0,
+      targetGraphIndex: pasteGraphIndex,
+      nodeIndex: 1,
+    },
+  });
+  assert(
+    pasted.result.nodeIndex === 0 && pasted.result.op === "flow/setDelay",
+    "duplicate_interactivity_node should paste into the graph it was told to",
+  );
+  {
+    const graphs = (
+      pasted.bundle.assets.assets[interactivityAssetId as string] as InteractivityAsset
+    ).extension.graphs;
+    const source = graphs[0]!;
+    const target = graphs[pasteGraphIndex]!;
+    const copy = target.nodes?.[0];
+    assert(
+      target.declarations?.[copy?.declaration ?? -1]?.op === "flow/setDelay",
+      "the pasted node's declaration was not resolved in the graph it landed in",
+    );
+    const sourceSocket = source.nodes?.[1]?.values?.duration;
+    const copiedSocket = copy?.values?.duration;
+    assert(
+      target.types?.[copiedSocket?.type ?? -1]?.signature ===
+        source.types?.[sourceSocket?.type ?? -1]?.signature &&
+        JSON.stringify(copiedSocket?.value) === JSON.stringify(sourceSocket?.value),
+      "the pasted node lost the type or the value of its inline socket",
+    );
+    assert(
+      source.nodes?.length === 4,
+      "pasting into another graph should not change the graph it came from",
+    );
+  }
+  current = { ...current, bundle: pasted.bundle, revision: current.revision + 1 };
+
   const recipes = executeXriftMcpEditorTool(current, {
     id: "fixture-interactivity-recipes",
     tool: "list_interactivity_recipes",

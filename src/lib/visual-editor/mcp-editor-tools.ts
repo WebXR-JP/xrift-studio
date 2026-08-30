@@ -198,6 +198,8 @@ import {
   getInteractivityOperationTemplate,
   isInteractivityTriggerActionOp,
   parseKhrInteractivityExtension,
+  pasteInteractivityNode,
+  readInteractivityNodeForCopy,
   readInteractivityNodePosition,
   readInteractivityTriggerAction,
   readInteractivityTriggerActionDuration,
@@ -6026,15 +6028,28 @@ function duplicateInteractivityNodeTool(
     asset.extension.graph ??
     0;
   const nodeIndex = requiredInteger(argumentsValue.nodeIndex, "nodeIndex");
+  const targetGraphIndex =
+    optionalNonNegativeInteger(argumentsValue.targetGraphIndex, "targetGraphIndex") ??
+    graphIndex;
   const extension = cloneKhrInteractivityExtension(asset.extension);
   const graph = requireInteractivityGraph(extension.graphs, graphIndex);
-  const created = duplicateInteractivityNode(graph, nodeIndex);
+  const target = requireInteractivityGraph(extension.graphs, targetGraphIndex);
+  // Within one graph the node can be copied as-is. Into another one its
+  // `declaration` and its inline `type` indexes mean something else entirely,
+  // so the copy carries the names and they are resolved on arrival.
+  const created =
+    targetGraphIndex === graphIndex
+      ? duplicateInteractivityNode(graph, nodeIndex)
+      : (() => {
+          const entry = readInteractivityNodeForCopy(graph, nodeIndex);
+          return entry ? pasteInteractivityNode(target, entry) : -1;
+        })();
   if (created < 0) {
     throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたnodeが見つかりません", {
       nodeIndex,
     });
   }
-  const op = graph.declarations?.[graph.nodes![created]!.declaration]?.op ?? "";
+  const op = target.declarations?.[target.nodes![created]!.declaration]?.op ?? "";
   return commitInteractivityMutation(
     context,
     asset,
@@ -6042,6 +6057,7 @@ function duplicateInteractivityNodeTool(
     {
       assetId: asset.id,
       graphIndex,
+      targetGraphIndex,
       sourceNodeIndex: nodeIndex,
       nodeIndex: created,
       op,

@@ -657,7 +657,7 @@ export function runInteractivityEngineFixtureAssertions(): void {
       values: { value: builder.float(1), duration: builder.float(duration) },
     });
     const after = builder.node("debug/log", {
-      values: { message: { type: builder.type("string"), value: ["landed"] } },
+      configuration: { message: { value: ["landed"] } },
     });
     builder.connect(start, "out", write);
     builder.connect(write, "done", after);
@@ -760,6 +760,155 @@ export function runInteractivityEngineFixtureAssertions(): void {
     assert(
       !run.entries.some((entry) => entry.kind === "property"),
       "two different vectors compared equal because only their first component was read",
+    );
+  }
+
+
+  // One long frame must not reorder the sequence.
+  //
+  // A frame can be much longer than 1/60s — a tab coming back from the
+  // background, a stall, a dry run stepping in whole seconds. Inside one, a
+  // timer created by an interpolation that finished mid-frame is due earlier
+  // than a timer that was already pending, so picking the earliest pending
+  // timer first ran the later event first and pushed the clock backwards.
+  {
+    const builder = new GraphBuilder();
+    const start = builder.node("event/onStart");
+    const move = builder.node("xrift/setProperty", {
+      configuration: {
+        entity: { value: ["entity-1"] },
+        component: { value: ["light-1"] },
+        targetKind: { value: ["light"] },
+        property: { value: ["intensity"] },
+      },
+      values: { value: builder.float(1), duration: builder.float(2) },
+    });
+    const afterMove = builder.node("flow/setDelay", {
+      values: { duration: builder.float(1) },
+    });
+    const atThree = builder.node("debug/log", {
+      configuration: { message: { value: ["three"] } },
+    });
+    const secondStart = builder.node("event/onStart");
+    const longWait = builder.node("flow/setDelay", {
+      values: { duration: builder.float(5) },
+    });
+    const atFive = builder.node("debug/log", {
+      configuration: { message: { value: ["five"] } },
+    });
+    builder.connect(start, "out", move);
+    builder.connect(move, "done", afterMove);
+    builder.connect(afterMove, "done", atThree);
+    builder.connect(secondStart, "out", longWait);
+    builder.connect(longWait, "done", atFive);
+
+    const logged: { message: string; time: number }[] = [];
+    let engine: InteractivityEngine | null = null;
+    engine = new InteractivityEngine(builder.build(), {
+      writeProperty: () => true,
+      log: (entry) =>
+        logged.push({ message: entry.message, time: engine?.currentTime ?? -1 }),
+    });
+    engine.start();
+    // One frame that covers the whole sequence, the way a stalled tab resumes.
+    engine.update(10);
+    const order = logged.map((entry) => entry.message).join(",");
+    assert(
+      order === "three,five",
+      `one long frame ran the sequence as ${order} instead of three,five`,
+    );
+    assert(
+      logged.every(
+        (entry, index) => index === 0 || entry.time >= logged[index - 1]!.time,
+      ),
+      `the clock went backwards inside one frame: ${logged.map((entry) => entry.time).join(",")}`,
+    );
+    assert(
+      Math.abs((logged[0]?.time ?? -1) - 3) < 1e-6 &&
+        Math.abs((logged[1]?.time ?? -1) - 5) < 1e-6,
+      `events landed at ${logged.map((entry) => entry.time).join(",")} instead of 3,5`,
+    );
+  }
+
+
+  // 「0回だけ通す」means never. Reading the count as `n || 1` turned an explicit
+  // zero into one, so the gate an author had closed let the first one through.
+  for (const [limit, expected] of [[0, 0], [1, 1], [3, 3]] as const) {
+    const builder = new GraphBuilder();
+    const start = builder.node("event/onStart");
+    const repeat = builder.node("flow/for", {
+      values: { startIndex: builder.int(0), endIndex: builder.int(5) },
+    });
+    const gate = builder.node("flow/doN", { values: { n: builder.int(limit) } });
+    const logged = builder.node("debug/log", {
+      configuration: { message: { value: ["through"] } },
+    });
+    builder.connect(start, "out", repeat);
+    builder.connect(repeat, "loopBody", gate);
+    builder.connect(gate, "out", logged);
+    const run = dryRunInteractivityGraph(builder.build());
+    const passes = run.entries.filter((entry) => entry.kind === "log").length;
+    assert(
+      passes === expected,
+      `flow/doN(${limit}) let ${passes} through instead of ${expected}`,
+    );
+  }
+
+  // An unwired selection belongs on `default`. `asInteger(null)` is 0, so the
+  // node silently took case 0 instead of the fallback the author wired.
+  {
+    const builder = new GraphBuilder();
+    const start = builder.node("event/onStart");
+    const choose = builder.node("flow/switch");
+    const caseZero = builder.node("debug/log", {
+      configuration: { message: { value: ["zero"] } },
+    });
+    const fallback = builder.node("debug/log", {
+      configuration: { message: { value: ["default"] } },
+    });
+    builder.connect(start, "out", choose);
+    builder.connect(choose, "0", caseZero);
+    builder.connect(choose, "default", fallback);
+    const run = dryRunInteractivityGraph(builder.build());
+    const taken = run.entries.flatMap((entry) =>
+      entry.kind === "log" ? [entry.message] : [],
+    );
+    assert(
+      taken.join(",") === "default",
+      `an unwired flow/switch took ${taken.join(",")} instead of default`,
+    );
+  }
+
+  // Restarting a clip replaces its pending completion instead of stacking one.
+  // A clip retriggered on a loop otherwise left a queue of `done` flows that
+  // all fired later, long after the play they belonged to had ended.
+  {
+    const builder = new GraphBuilder();
+    const start = builder.node("event/onStart");
+    const beat = builder.node("flow/setDelay", {
+      values: { duration: builder.float(1) },
+    });
+    const play = builder.node("animation/start", {
+      values: {
+        animation: builder.int(0),
+        startTime: builder.float(0),
+        endTime: builder.float(5),
+        speed: builder.float(1),
+      },
+    });
+    const finished = builder.node("debug/log", {
+      configuration: { message: { value: ["finished"] } },
+    });
+    builder.connect(start, "out", beat);
+    builder.connect(beat, "done", play);
+    // Retrigger every second, so three plays start before the first would end.
+    builder.connect(play, "out", beat);
+    builder.connect(play, "done", finished);
+    const run = dryRunInteractivityGraph(builder.build(), { horizonSeconds: 12 });
+    const finishes = run.entries.filter((entry) => entry.kind === "log");
+    assert(
+      finishes.length <= 1,
+      `a restarted clip reported ${finishes.length} completions instead of at most one`,
     );
   }
 

@@ -123,6 +123,37 @@ same call carries the seconds the change takes and the easing curve, and refuses
 a duration on a property with no midpoint, because a gradual change the runtime
 cannot make is a promise the graph would break.
 
+### One frame is not one instant
+
+A frame can be far longer than 1/60s: a tab returning from the background, a
+stall, or a dry run stepping in whole seconds. Inside one, the engine walks to
+each moment something happens, in order, rather than to the next pending timer.
+That distinction matters because an interpolation finishing mid-frame continues
+into new waits, and one of those can be due *before* a timer that was already
+pending. Jumping straight to the pending timer ran the later event first and
+then set the clock back to run the earlier one — a sequence silently reordering
+itself on exactly the frames a player is most likely to notice.
+
+Three neighbouring rules follow from the same principle, that a node's answer
+must not depend on how the frame happened to be sliced:
+
+- Restarting `animation/start` replaces that node's pending completion instead
+  of stacking a second one, the way a timed write replaces its interpolation. A
+  clip retriggered on a loop otherwise leaves a queue of `done` flows that all
+  fire later, long after the play they belonged to ended.
+- `flow/doN` with an explicit `n` of 0 lets nothing through. Reading the count
+  as `n || 1` turned a closed gate into a gate that passes once.
+- `flow/switch` with no readable selection takes `default`. An integer cast of
+  "nothing" is 0, so an unwired node quietly took the first case instead of the
+  fallback the author wired for exactly this.
+
+Two behaviours are deliberate Studio choices rather than readings of the
+specification, and are called out here so nobody has to guess from the code:
+`flow/waitAll` re-arms itself once it fires `completed`, so it can be used
+inside a loop without a `reset` wire; and `flow/multiGate` cycles through the
+outputs that are actually connected, so an unconnected socket does not consume
+a turn.
+
 ### Reading a sequence back
 
 `simulate_interactivity_asset` runs the graph with no renderer and reports the

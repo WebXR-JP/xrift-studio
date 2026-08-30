@@ -135,6 +135,11 @@ world 座標、傾斜、穴、草の層ごとの被覆を返す。document は�
 全体表示、パネル幅）、タイムラインの範囲と時刻のつまみを除いて、すべてこの表に
 ある。除いた 4 つは document を変えない。
 
+`duplicate_interactivity_node` は `targetGraphIndex` を受け、Editor の
+Ctrl+C / Ctrl+V と同じく別のグラフへも置ける。同じグラフの中なら node はその
+まま写せるが、別のグラフでは `declaration` の index も inline value の `type`
+の index も別のものを指すので、名前で持ち出して着地先で引き直す。
+
 `configure_interactivity_trigger_action` は `set_interactivity_configuration`
 と `set_interactivity_value` で手書きできる 4 つの key を、Entity・Component・
 プロパティの実在と値の型ごと引き受ける。対象を間違えたグラフは保存でき、Play で
