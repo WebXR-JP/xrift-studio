@@ -13,6 +13,15 @@ const POLY_HAVEN_API: &str = "https://api.polyhaven.com";
 const POLY_HAVEN_PROVIDER_ID: &str = "poly-haven";
 const AMBIENT_CG_API: &str = "https://ambientcg.com/api/v3";
 const AMBIENT_CG_PROVIDER_ID: &str = "ambient-cg";
+/// 音蔵 serves a Poly Haven shaped read-only catalogue of freely usable
+/// sounds, so it reuses this pipeline rather than needing its own.
+const OTOGURA_API: &str = "https://yushimatenjin.github.io/sound-generator/api/v1";
+const OTOGURA_PROVIDER_ID: &str = "otogura";
+const OTOGURA_HOST: &str = "yushimatenjin.github.io";
+const OTOGURA_NAME: &str = "音蔵";
+/// Audio has no resolution ladder; one pseudo-resolution keeps the shared
+/// install request shape intact.
+const OTOGURA_RESOLUTION: &str = "src";
 const POLY_HAVEN_USER_AGENT: &str =
     "XRiftStudio/0.6.0 (+https://github.com/xrift-studio/xrift-studio; asset-browser)";
 
@@ -115,7 +124,10 @@ fn external_store_client() -> Result<reqwest::Client, String> {
 }
 
 fn validate_provider(provider_id: &str) -> Result<(), String> {
-    if matches!(provider_id, POLY_HAVEN_PROVIDER_ID | AMBIENT_CG_PROVIDER_ID) {
+    if matches!(
+        provider_id,
+        POLY_HAVEN_PROVIDER_ID | AMBIENT_CG_PROVIDER_ID | OTOGURA_PROVIDER_ID
+    ) {
         Ok(())
     } else {
         Err("未対応の外部ストアです".to_string())
@@ -151,6 +163,100 @@ async fn fetch_poly_haven_json(path: &str) -> Result<Value, String> {
         .json::<Value>()
         .await
         .map_err(|error| format!("Poly Havenの応答を読み取れませんでした: {}", error))
+}
+
+async fn fetch_otogura_json(path: &str) -> Result<Value, String> {
+    let response = external_store_client()?
+        .get(format!("{}{}", OTOGURA_API, path))
+        .send()
+        .await
+        .map_err(|error| format!("音蔵へ接続できませんでした: {}", error))?;
+    if !response.status().is_success() {
+        return Err(format!("音蔵APIがエラーを返しました ({})", response.status()));
+    }
+    response
+        .json::<Value>()
+        .await
+        .map_err(|error| format!("音蔵の応答を読み取れませんでした: {}", error))
+}
+
+/// The single audio file behind an 音蔵 entry.
+async fn otogura_download_spec(id: &str) -> Result<DownloadSpec, String> {
+    let files = fetch_otogura_json(&format!("/files/{}.json", id)).await?;
+    let entry = files
+        .get("audio")
+        .and_then(|audio| audio.get(OTOGURA_RESOLUTION))
+        .and_then(|resolution| resolution.get("ogg"))
+        .ok_or_else(|| "音蔵の音源ファイルが見つかりません".to_string())?;
+    let url = entry
+        .get("url")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "音蔵のダウンロードURLがありません".to_string())?;
+    Ok(DownloadSpec {
+        role: "audio".to_string(),
+        url: url.to_string(),
+        size: entry.get("size").and_then(Value::as_u64).unwrap_or_default(),
+        extension: "ogg".to_string(),
+    })
+}
+
+fn otogura_asset(id: &str, value: &Value) -> ExternalStoreAsset {
+    let strings = |key: &str| {
+        value
+            .get(key)
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    };
+    ExternalStoreAsset {
+        provider_id: OTOGURA_PROVIDER_ID.to_string(),
+        external_id: id.to_string(),
+        name: value
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or(id)
+            .to_string(),
+        description: value
+            .get("description")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        category: strings("categories").first().cloned().unwrap_or_default(),
+        tags: strings("tags"),
+        thumbnail_url: value
+            .get("thumbnail_url")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        asset_kind: "audio".to_string(),
+        max_resolution: None,
+        download_count: value
+            .get("download_count")
+            .and_then(Value::as_u64)
+            .unwrap_or_default(),
+        authors: value
+            .get("authors")
+            .and_then(Value::as_object)
+            .map(|authors| authors.keys().cloned().collect())
+            .unwrap_or_else(|| vec![OTOGURA_NAME.to_string()]),
+        asset_url: format!("{}/thumb/{}.png", OTOGURA_API, id),
+        license_name: value
+            .get("license")
+            .and_then(Value::as_str)
+            .unwrap_or("Free to use")
+            .to_string(),
+        license_url: value
+            .get("license_url")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+    }
 }
 
 async fn fetch_ambient_cg_json(query: &str) -> Result<Value, String> {
@@ -411,6 +517,18 @@ pub async fn list_external_store_assets(
     provider_id: String,
 ) -> Result<Vec<ExternalStoreAsset>, String> {
     validate_provider(&provider_id)?;
+    if provider_id == OTOGURA_PROVIDER_ID {
+        let payload = fetch_otogura_json("/assets.json").await?;
+        let entries = payload
+            .as_object()
+            .ok_or_else(|| "音蔵のアセット一覧が不正です".to_string())?;
+        let mut assets = entries
+            .iter()
+            .map(|(id, value)| otogura_asset(id, value))
+            .collect::<Vec<_>>();
+        assets.sort_by(|left, right| left.name.cmp(&right.name));
+        return Ok(assets);
+    }
     if provider_id == AMBIENT_CG_PROVIDER_ID {
         let payload = fetch_ambient_cg_json(
             "?sort=popular&limit=500&include=type,shortDescription,longDescription,title,url,tags,downloadStatistics,technique,downloads,thumbnails",
@@ -653,6 +771,21 @@ pub async fn get_external_store_asset_options(
 ) -> Result<ExternalStoreAssetOptions, String> {
     validate_provider(&provider_id)?;
     let id = validate_external_id(&external_id)?;
+    if provider_id == OTOGURA_PROVIDER_ID {
+        let spec = otogura_download_spec(id).await?;
+        return Ok(ExternalStoreAssetOptions {
+            provider_id,
+            external_id: id.to_string(),
+            asset_kind: "audio".to_string(),
+            resolutions: vec![ExternalStoreResolution {
+                id: OTOGURA_RESOLUTION.to_string(),
+                label: "OGG".to_string(),
+                byte_length: spec.size,
+                file_count: 1,
+                formats: Vec::new(),
+            }],
+        });
+    }
     if provider_id == AMBIENT_CG_PROVIDER_ID {
         let payload = fetch_ambient_cg_json(&format!(
             "?id={}&include=type,title,url,maps,downloads,thumbnails",
@@ -697,6 +830,12 @@ fn validate_download_url(provider_id: &str, value: &str) -> Result<reqwest::Url,
     let allowed = match provider_id {
         POLY_HAVEN_PROVIDER_ID => {
             url.scheme() == "https" && url.host_str() == Some("dl.polyhaven.org")
+        }
+        OTOGURA_PROVIDER_ID => {
+            url.scheme() == "https"
+                && url.host_str() == Some(OTOGURA_HOST)
+                && url.path().starts_with("/sound-generator/")
+                && url.path().ends_with(".ogg")
         }
         AMBIENT_CG_PROVIDER_ID => {
             url.scheme() == "https"
@@ -1139,6 +1278,9 @@ pub async fn install_external_store_asset(
     request: ExternalStoreInstallRequest,
 ) -> Result<ExternalStoreInstallResult, String> {
     validate_provider(&request.provider_id)?;
+    if request.provider_id == OTOGURA_PROVIDER_ID {
+        return install_otogura_asset(project_path, request).await;
+    }
     if request.provider_id == AMBIENT_CG_PROVIDER_ID {
         return install_ambient_cg_asset(project_path, request).await;
     }
@@ -1316,9 +1458,163 @@ pub async fn install_external_store_asset(
     })
 }
 
+/// One audio file, no resolution ladder and no companion maps, so this stays
+/// much simpler than the texture and model installers above.
+async fn install_otogura_asset(
+    project_path: String,
+    request: ExternalStoreInstallRequest,
+) -> Result<ExternalStoreInstallResult, String> {
+    let id = validate_external_id(&request.external_id)?.to_string();
+    if request
+        .format
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty() && value != "ogg")
+    {
+        return Err("音蔵の音源はOGGのみ配布しています".to_string());
+    }
+
+    let catalog = fetch_otogura_json("/assets.json").await?;
+    let metadata = catalog
+        .get(&id)
+        .ok_or_else(|| "音蔵にアセットが見つかりません".to_string())?
+        .clone();
+    let spec = otogura_download_spec(&id).await?;
+
+    let project_root = super::canonical_project_root(&project_path)?;
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_millis();
+    let staging_relative = PathBuf::from(".cache")
+        .join("xrift-studio-external-store")
+        .join(format!("{}-{}", id, timestamp));
+    super::ensure_no_symlink_ancestors(&project_root, &staging_relative)?;
+    let staging_root = project_root.join(&staging_relative);
+    std::fs::create_dir_all(&staging_root).map_err(|error| error.to_string())?;
+
+    let relative = PathBuf::from("assets")
+        .join("imported")
+        .join("external")
+        .join(OTOGURA_PROVIDER_ID)
+        .join(&id)
+        .join(format!("{}.ogg", id));
+
+    let result = async {
+        super::ensure_no_symlink_ancestors(&project_root, &relative)?;
+        let temporary = staging_root.join("download.ogg");
+        let (byte_length, sha256) = download_to(OTOGURA_PROVIDER_ID, &temporary, &spec).await?;
+
+        let target = project_root.join(&relative);
+        match super::retry_transient_io(|| std::fs::symlink_metadata(&target)) {
+            Ok(metadata) => {
+                if metadata.file_type().is_symlink() || !metadata.is_file() {
+                    return Err("外部アセットの保存先が通常ファイルではありません".to_string());
+                }
+                if file_sha256(&target)? != sha256 {
+                    return Err("同じ保存先に異なる内容のファイルがあります".to_string());
+                }
+                let _ = std::fs::remove_file(&temporary);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                if let Some(parent) = target.parent() {
+                    std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+                }
+                super::retry_transient_io(|| std::fs::rename(&temporary, &target))
+                    .map_err(|error| error.to_string())?;
+            }
+            Err(error) => {
+                return Err(format!("外部アセットの保存先を確認できません: {}", error));
+            }
+        }
+
+        Ok::<_, String>(vec![ExternalStoreInstalledFile {
+            role: "audio".to_string(),
+            relative_path: relative.to_string_lossy().replace('\\', "/"),
+            byte_length,
+            sha256,
+            format: "ogg".to_string(),
+        }])
+    }
+    .await;
+    let _ = std::fs::remove_dir_all(&staging_root);
+    let installed = result?;
+
+    Ok(ExternalStoreInstallResult {
+        provider_id: OTOGURA_PROVIDER_ID.to_string(),
+        provider_name: OTOGURA_NAME.to_string(),
+        external_id: id.clone(),
+        name: metadata
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or(&id)
+            .to_string(),
+        asset_kind: "audio".to_string(),
+        resolution: OTOGURA_RESOLUTION.to_string(),
+        files: installed,
+        authors: metadata
+            .get("authors")
+            .and_then(Value::as_object)
+            .map(|authors| authors.keys().cloned().collect())
+            .unwrap_or_else(|| vec![OTOGURA_NAME.to_string()]),
+        asset_url: "https://yushimatenjin.github.io/sound-generator/".to_string(),
+        license_name: metadata
+            .get("license")
+            .and_then(Value::as_str)
+            .unwrap_or("Free to use")
+            .to_string(),
+        license_url: metadata
+            .get("license_url")
+            .and_then(Value::as_str)
+            .unwrap_or("https://stability.ai/license")
+            .to_string(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn otogura_download_urls_are_restricted_to_the_published_site() {
+        assert!(validate_download_url(
+            OTOGURA_PROVIDER_ID,
+            "https://yushimatenjin.github.io/sound-generator/processed/medium/a.ogg",
+        )
+        .is_ok());
+        // Wrong host, wrong path prefix, wrong extension and plain HTTP must all fail.
+        for candidate in [
+            "https://evil.example.com/sound-generator/a.ogg",
+            "https://yushimatenjin.github.io/other/a.ogg",
+            "https://yushimatenjin.github.io/sound-generator/a.exe",
+            "http://yushimatenjin.github.io/sound-generator/a.ogg",
+        ] {
+            assert!(
+                validate_download_url(OTOGURA_PROVIDER_ID, candidate).is_err(),
+                "should reject {candidate}"
+            );
+        }
+    }
+
+    #[test]
+    fn otogura_catalog_entry_maps_to_an_audio_asset() {
+        let value: Value = serde_json::json!({
+            "name": "ambience-ocean-calm-01",
+            "type": "audio",
+            "categories": ["波"],
+            "tags": ["loop", "波"],
+            "authors": { "音蔵 (おとぐら)": "generator" },
+            "thumbnail_url": "https://yushimatenjin.github.io/sound-generator/api/v1/thumb/x.png",
+            "description": "gentle ocean waves",
+            "license": "Free to use",
+            "license_url": "https://stability.ai/license"
+        });
+        let asset = otogura_asset("ambience-ocean-calm-01", &value);
+        assert_eq!(asset.asset_kind, "audio");
+        assert_eq!(asset.category, "波");
+        assert_eq!(asset.authors, vec!["音蔵 (おとぐら)".to_string()]);
+        assert!(asset.thumbnail_url.ends_with(".png"));
+    }
 
     #[test]
     fn texture_bundle_selects_gltf_pbr_maps() {

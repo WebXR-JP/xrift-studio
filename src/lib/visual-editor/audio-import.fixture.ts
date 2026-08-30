@@ -8,6 +8,7 @@ import {
   createAssetImportPlan,
 } from "./asset-import";
 import { assetManifestCodec } from "./serialization";
+import { applyExternalStoreInstall } from "./external-store";
 
 /** An Ogg page header followed by the Vorbis identification packet. */
 function oggVorbisBytes(): Uint8Array {
@@ -123,6 +124,46 @@ export async function runAudioImportFixtureAssertions(): Promise<void> {
   assert(
     assetManifestCodec.parse(assetManifestCodec.serialize(committed)).ok,
     "Committed Audio Asset does not pass Manifest validation",
+  );
+
+  // A sound installed from the external store must land as a playable Audio
+  // Asset that still passes Manifest validation.
+  const installed = applyExternalStoreInstall(emptyManifest, {
+    providerId: "otogura",
+    providerName: "音蔵",
+    externalId: "ambience-ocean-calm-01",
+    name: "ambience-ocean-calm-01",
+    assetKind: "audio",
+    resolution: "src",
+    files: [
+      {
+        role: "audio",
+        relativePath:
+          "assets/imported/external/otogura/ambience-ocean-calm-01/ambience-ocean-calm-01.ogg",
+        byteLength: 788566,
+        sha256: "fixture-external-ogg-sha256",
+        format: "ogg",
+      },
+    ],
+    authors: ["音蔵 (おとぐら)"],
+    assetUrl: "https://yushimatenjin.github.io/sound-generator/",
+    licenseName: "Free to use",
+    licenseUrl: "https://stability.ai/license",
+  });
+  const installedAudio = installed.manifest.assets[installed.primaryAssetId];
+  assert(
+    installed.kind === "audio" && installedAudio?.kind === "audio",
+    "External store install did not produce an Audio Asset",
+  );
+  assert(
+    installedAudio?.kind === "audio" &&
+      installedAudio.importMetadata.sourceFormat === "ogg" &&
+      installedAudio.importMetadata.mimeType === "audio/ogg",
+    "Installed sound did not record ogg import metadata",
+  );
+  assert(
+    assetManifestCodec.parse(assetManifestCodec.serialize(installed.manifest)).ok,
+    "Installed Audio Asset does not pass Manifest validation",
   );
 
   const invalidPlan = await createAssetImportPlan({
