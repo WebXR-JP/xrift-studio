@@ -3827,6 +3827,9 @@ function SnapStepField({
   );
 }
 
+/** The Scene View's own tab, always first and never closable. */
+export const SCENE_VIEW_TAB_ID = "scene-view";
+
 export function SceneViewport({
   scene,
   assets,
@@ -3843,6 +3846,10 @@ export function SceneViewport({
   transformSpace,
   playDisabled,
   playPreparing,
+  tabs,
+  activeTabId,
+  onSelectTab,
+  onCloseTab,
   playShortcut,
   snapShortcut,
   onTogglePlay,
@@ -3902,6 +3909,17 @@ export function SceneViewport({
   playDisabled: boolean;
   /** Script compilation runs before Play starts; the button shows it. */
   playPreparing?: boolean;
+  /**
+   * Other editors that share this cell, shown beside the Scene View's name.
+   *
+   * A graph editor that floats over the viewport has to fit between the panels
+   * and ends up fighting them for width. As a tab it gets the whole cell, and
+   * the two are one place rather than one covering the other.
+   */
+  tabs?: readonly { id: string; label: string; closable?: boolean }[];
+  activeTabId?: string;
+  onSelectTab?: (id: string) => void;
+  onCloseTab?: (id: string) => void;
   playShortcut?: string;
   snapShortcut?: string;
   onTogglePlay: () => void;
@@ -4901,15 +4919,81 @@ export function SceneViewport({
          * covering the tools when it does not.
          */}
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <h2
-            id="scene-view-heading"
-            title={editorMode === "play" ? "Play Window" : "Scene View"}
-            className={`truncate text-[12px] font-semibold ${
-              editorMode === "play" ? "text-zinc-100" : "text-slate-800"
-            }`}
-          >
-            {editorMode === "play" ? "Play Window" : "Scene View"}
-          </h2>
+          {tabs && tabs.length > 0 ? (
+            <div
+              role="tablist"
+              aria-label="Scene Viewとエディター"
+              className="flex min-w-0 items-center gap-0.5 overflow-x-auto"
+            >
+              {[
+                {
+                  id: SCENE_VIEW_TAB_ID,
+                  label: editorMode === "play" ? "Play Window" : "Scene View",
+                },
+                ...tabs,
+              ].map((tab) => {
+                const active = (activeTabId ?? SCENE_VIEW_TAB_ID) === tab.id;
+                const closable = "closable" in tab && tab.closable;
+                return (
+                  <div
+                    key={tab.id}
+                    className={`flex shrink-0 items-center rounded-t ${
+                      active
+                        ? editorMode === "play"
+                          ? "bg-violet-900/70"
+                          : "bg-white shadow-[inset_0_-2px_0_0_rgb(124_58_237)]"
+                        : ""
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      id={tab.id === SCENE_VIEW_TAB_ID ? "scene-view-heading" : undefined}
+                      title={tab.label}
+                      onClick={() => onSelectTab?.(tab.id)}
+                      className={`max-w-[12rem] truncate px-2.5 py-1 text-[12px] font-semibold ${
+                        active
+                          ? editorMode === "play"
+                            ? "text-zinc-100"
+                            : "text-slate-900"
+                          : editorMode === "play"
+                            ? "text-zinc-400 hover:text-zinc-200"
+                            : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                    {closable ? (
+                      <button
+                        type="button"
+                        onClick={() => onCloseTab?.(tab.id)}
+                        aria-label={`${tab.label}を閉じる`}
+                        title={`${tab.label}を閉じる`}
+                        className={`mr-1 rounded px-1 text-[13px] leading-none ${
+                          editorMode === "play"
+                            ? "text-zinc-400 hover:bg-violet-800 hover:text-zinc-100"
+                            : "text-slate-400 hover:bg-slate-200 hover:text-slate-800"
+                        }`}
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <h2
+              id="scene-view-heading"
+              title={editorMode === "play" ? "Play Window" : "Scene View"}
+              className={`truncate text-[12px] font-semibold ${
+                editorMode === "play" ? "text-zinc-100" : "text-slate-800"
+              }`}
+            >
+              {editorMode === "play" ? "Play Window" : "Scene View"}
+            </h2>
+          )}
           {editorMode === "play" ? (
             <>
               <span className="hidden shrink-0 truncate text-xs text-zinc-400 @[900px]/scene-header:inline">

@@ -844,23 +844,51 @@ function InteractivityGraphEditorBody({
   const UndoIcon = EDITOR_ICONS.undo;
   const RedoIcon = EDITOR_ICONS.redo;
 
+  /** Built once: docked they sit on the tool row, expanded on the title row. */
+  const saveButton = (
+    <button
+      type="button"
+      onClick={() => onSave(asset.id, draft)}
+      disabled={readOnly || errors.length > 0}
+      className="flex h-8 shrink-0 items-center gap-1.5 rounded bg-emerald-600 px-3 text-xs font-bold hover:bg-emerald-500 disabled:opacity-40"
+    >
+      <SaveIcon size={13} aria-hidden="true" /> 保存
+    </button>
+  );
+  const closeButton = (
+    <button
+      type="button"
+      onClick={requestClose}
+      className="shrink-0 rounded p-2 text-slate-300 hover:bg-slate-800 hover:text-white"
+      aria-label="Interactivity editorを閉じる"
+    >
+      <CloseIcon size={16} aria-hidden="true" />
+    </button>
+  );
+
   return (
     <section
-      className="absolute z-[75] flex min-h-0 overflow-hidden rounded-xl border border-slate-600 bg-slate-950/95 text-white shadow-2xl backdrop-blur"
-      // The editor floats over the Scene View, so its edges follow the columns
-      // rather than the window. The right inset was a fixed 24px from the
-      // window, which put the last 300px of the editor — the save button among
-      // them — underneath the Inspector, and left the Inspector's own resize
-      // handle unreachable. The tracks are draggable, so they have to be read
-      // rather than guessed.
+      className={`absolute z-[75] flex min-h-0 overflow-hidden bg-slate-950 text-white ${
+        expanded
+          ? "rounded-xl border border-slate-600 shadow-2xl backdrop-blur"
+          : "border-t border-slate-800"
+      }`}
+      /*
+       * Docked, the editor fills the Scene View's cell and the two are tabs of
+       * one place. It used to float over the viewport with a fixed 24px inset
+       * from the window, which put its last 300px — the save button among them
+       * — under the Inspector and left the Inspector's own resize handle
+       * unreachable. The tracks are draggable, so they are read rather than
+       * guessed, and the cell's tab strip stays visible above.
+       */
       style={
         expanded
           ? { inset: "3.5rem 0.75rem 0.75rem" }
           : {
-              top: "5rem",
-              bottom: "1rem",
-              left: "calc(var(--xrift-hierarchy-track, 0px) + 1rem)",
-              right: "calc(var(--xrift-inspector-track, 0px) + 1rem)",
+              top: "2.25rem",
+              left: "var(--xrift-hierarchy-track, 0px)",
+              right: "var(--xrift-inspector-track, 0px)",
+              bottom: "var(--xrift-assets-track, 0px)",
             }
       }
       aria-label="KHR_interactivity graph editor"
@@ -874,7 +902,16 @@ function InteractivityGraphEditorBody({
           now grows to a second line, which costs canvas height and hides
           nothing.
         */}
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-700 bg-slate-900 px-3">
+        {/*
+          Docked, the cell's tab already names this graph, so the title row
+          would say it twice and cost 56px of canvas. Expanded there is no tab,
+          so the name comes back.
+        */}
+        <header
+          className={`h-14 shrink-0 items-center gap-3 border-b border-slate-700 bg-slate-900 px-3 ${
+            expanded ? "flex" : "hidden"
+          }`}
+        >
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-sm font-bold" title={asset.name}>
               {asset.name}
@@ -884,22 +921,8 @@ function InteractivityGraphEditorBody({
             </p>
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={() => onSave(asset.id, draft)}
-              disabled={readOnly || errors.length > 0}
-              className="flex h-8 shrink-0 items-center gap-1.5 rounded bg-emerald-600 px-3 text-xs font-bold hover:bg-emerald-500 disabled:opacity-40"
-            >
-              <SaveIcon size={13} aria-hidden="true" /> 保存
-            </button>
-            <button
-              type="button"
-              onClick={requestClose}
-              className="shrink-0 rounded p-2 text-slate-300 hover:bg-slate-800 hover:text-white"
-              aria-label="Interactivity editorを閉じる"
-            >
-              <CloseIcon size={16} aria-hidden="true" />
-            </button>
+            {saveButton}
+            {closeButton}
           </div>
         </header>
 
@@ -1127,12 +1150,20 @@ function InteractivityGraphEditorBody({
             The row scrolls rather than wrapping, so its height stays the same
             at any width and the canvas keeps its space. The fade is what says
             so: without it a row that ends mid-button reads as clipped, which is
-            the thing this panel was doing for real a moment ago.
+            the thing this panel was doing for real a moment ago. Save and close
+            sit outside the scroll, because the one thing that must never need
+            a scroll to reach is the way to keep the work.
           */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-slate-900 to-transparent"
+            className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-slate-900 to-transparent" 
           />
+          {expanded ? null : (
+            <div className="absolute inset-y-0 right-0 flex items-center gap-1 bg-slate-900 pl-2 pr-2">
+              {saveButton}
+              {closeButton}
+            </div>
+          )}
         </div>
 
         <div ref={canvasRef} className="relative min-h-0 flex-1 bg-slate-900">
