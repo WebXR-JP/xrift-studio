@@ -658,8 +658,8 @@ export function runVisualCompilerFixtureAssertions(
     "Shared Particle runtime overlay was not emitted",
   );
   assert(
-    particleSource.includes("<XriftScriptParticleEmitter config="),
-    "Particle Asset was not wired to its Scene emitter",
+    /<XriftScriptParticleEmitter componentId="[^"]+" config=/.test(particleSource),
+    "Particle Asset was not wired to its Scene emitter by Component id",
   );
   [
     "const particleMapSource = useTexture(particleMapUrl)",

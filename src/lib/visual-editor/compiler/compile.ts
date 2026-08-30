@@ -4741,7 +4741,7 @@ function renderParticleEmitter(
     ? materialProperties.pbrMetallicRoughness.baseColorFactor[3]
     : 1;
   const source = `const ${componentName}: FC = () => {
-${textureLine}  return <XriftScriptParticleEmitter config={${configName}} color=${JSON.stringify(color)} opacity={${formatNumber(opacity)}}${textureProp} />;
+${textureLine}  return <XriftScriptParticleEmitter componentId=${JSON.stringify(component.id)} config={${configName}} color=${JSON.stringify(color)} opacity={${formatNumber(opacity)}}${textureProp} />;
 };`;
   context.supportDeclarations.set(`particle:${componentName}`, source);
   return `<${componentName} />`;

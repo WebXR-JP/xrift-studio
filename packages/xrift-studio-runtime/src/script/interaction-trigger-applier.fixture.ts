@@ -12,6 +12,10 @@ import {
 } from "./light.js";
 import { createXriftInteractionApplier } from "./interaction-trigger-runtime.js";
 import {
+  XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY,
+  createXriftParticleRuntimeBridge,
+} from "./particle.js";
+import {
   XRIFT_SCENE_RUNTIME_USER_DATA_KEY,
   createXriftSceneRuntimeBridge,
 } from "./scene-runtime.js";
@@ -224,6 +228,57 @@ export async function runInteractionTriggerApplierFixtureAssertions(): Promise<v
     "a Transform rotation could not be read back",
   );
 
+  // A Particle emitter is addressed by its Component id, so an Entity carrying
+  // two effects can start one without the other.
+  const smoke = createXriftParticleRuntimeBridge({ componentId: "component-smoke" });
+  const sparks = createXriftParticleRuntimeBridge({ componentId: "component-sparks" });
+  attach(sign, XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY, smoke);
+  attach(sign, XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY, sparks);
+  applier.apply(
+    action({
+      entityId: "entity-sign",
+      componentId: "component-sparks",
+      target: "particle",
+      property: "emitting",
+      value: { kind: "bool", value: true },
+    }),
+  );
+  assert(
+    sparks.read().playing === true && sparks.read().stopped === false,
+    "starting a Particle emitter did not reach its bridge",
+  );
+  assert(
+    smoke.read().playing === undefined,
+    "starting one Particle emitter also started the other",
+  );
+  applier.apply(
+    action({
+      entityId: "entity-sign",
+      componentId: "component-sparks",
+      target: "particle",
+      property: "emissionRate",
+      value: { kind: "float", value: 120 },
+    }),
+  );
+  assert(
+    sparks.read().emissionRate === 120 && sparks.read().playing === true,
+    "writing a second Particle property discarded the first",
+  );
+  const beforeBurst = sparks.read().restartRevision ?? 0;
+  applier.apply(
+    action({
+      entityId: "entity-sign",
+      componentId: "component-sparks",
+      target: "particle",
+      property: "restart",
+      value: { kind: "bool", value: true },
+    }),
+  );
+  assert(
+    (sparks.read().restartRevision ?? 0) > beforeBurst,
+    "a Particle burst did not restart the emitter",
+  );
+
   // Scene-wide writes go to the bridge on the Scene root, not to an Entity,
   // and releasing the trigger has to put the authored look back.
   const sceneBridge = createXriftSceneRuntimeBridge();
@@ -254,6 +309,10 @@ export async function runInteractionTriggerApplierFixtureAssertions(): Promise<v
   assert(exposedTo === 4, "a Scene exposure did not reach the Scene bridge");
 
   applier.dispose();
+  assert(
+    sparks.read().playing === undefined && sparks.read().emissionRate === undefined,
+    "Particle overrides survived the trigger's disposal",
+  );
   assert(
     sceneBridge.read().fade === 0 && sceneBridge.read().exposure === null,
     "Scene overrides survived the trigger's disposal",

@@ -78,6 +78,14 @@ export type XriftParticleRuntimeOverrides = {
 
 export type XriftParticleRuntimeState = XriftParticleRuntimeOverrides & {
   revision: number;
+  /**
+   * Which Particle Component this bridge belongs to.
+   *
+   * Empty when the emitter was mounted without one. A trigger aimed at a
+   * specific emitter needs it: an Entity can carry two, and the Editor's
+   * picker lists them separately.
+   */
+  componentId: string;
 };
 
 export type XriftParticleRuntimeBridge = {
@@ -99,7 +107,9 @@ export const XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY =
  * Commands receive a bridge-global revision, so two Script owners can never
  * cancel each other's restart merely because their local counters match.
  */
-export function createXriftParticleRuntimeBridge(): XriftParticleRuntimeBridge {
+export function createXriftParticleRuntimeBridge(
+  options: { componentId?: string } = {},
+): XriftParticleRuntimeBridge {
   const owners = new Map<
     object,
     {
@@ -108,12 +118,14 @@ export function createXriftParticleRuntimeBridge(): XriftParticleRuntimeBridge {
       overrides: XriftParticleRuntimeOverrides;
     }
   >();
-  let state: XriftParticleRuntimeState = { revision: 0 };
+  const componentId = options.componentId ?? "";
+  let state: XriftParticleRuntimeState = { revision: 0, componentId };
   let restartRevision = 0;
 
   const recompute = () => {
     const next: XriftParticleRuntimeState = {
       revision: state.revision + 1,
+      componentId,
       ...(restartRevision > 0 ? { restartRevision } : {}),
     };
     const ordered = [...owners.values()].sort(
@@ -155,6 +167,8 @@ type ParticleSeed = {
 };
 
 export type XriftScriptParticleEmitterProps = {
+  /** Particle Component this emitter renders, so a trigger can address it. */
+  componentId?: string;
   config: XriftParticleConfig;
   color: ColorRepresentation;
   opacity: number;
@@ -261,6 +275,7 @@ export function resolveXriftParticleBirthTime(
 export const XriftScriptParticleEmitter: FC<
   XriftScriptParticleEmitterProps
 > = ({
+  componentId,
   config,
   color,
   opacity,
@@ -275,7 +290,10 @@ export const XriftScriptParticleEmitter: FC<
   const pointsRef = useRef<Points>(null);
   const elapsedRef = useRef(0);
   const restartRevisionRef = useRef(0);
-  const runtimeBridge = useMemo(createXriftParticleRuntimeBridge, []);
+  const runtimeBridge = useMemo(
+    () => createXriftParticleRuntimeBridge({ componentId: componentId ?? "" }),
+    [componentId],
+  );
   const runtimeUserData = useMemo(
     () => ({ [XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY]: runtimeBridge }),
     [runtimeBridge],

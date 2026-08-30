@@ -1584,8 +1584,15 @@ function ComponentVisual({
         asset?.kind === "particle" && asset.properties.renderer.materialAssetId
           ? assets.assets[asset.properties.renderer.materialAssetId]
           : undefined;
-      return (showHelpers || renderThumbnail) && component.enabled && asset?.kind === "particle" ? (
+      // `playing` is listed for the same reason the Text panel lists it: Play
+      // forces `showHelpers` off, and a particle effect is world content, so
+      // hiding it during Play would misrepresent the world — and would make a
+      // graph that starts an effect impossible to check.
+      return (showHelpers || playing || renderThumbnail) &&
+        component.enabled &&
+        asset?.kind === "particle" ? (
         <ParticleEmitterVisual
+          componentId={component.id}
           asset={asset}
           textureAsset={
             textureAsset?.kind === "texture" ? textureAsset : undefined

@@ -112,6 +112,13 @@ export function collectInteractionTriggerTargets(
           label: XRIFT_INTERACTION_TARGET_LABELS.animation,
           properties: getXriftInteractionProperties("animation"),
         });
+      } else if (component.type === "particle-emitter") {
+        components.push({
+          componentId: component.id,
+          targetKind: "particle",
+          label: XRIFT_INTERACTION_TARGET_LABELS.particle,
+          properties: getXriftInteractionProperties("particle"),
+        });
       } else if (component.type === "light") {
         components.push({
           componentId: component.id,

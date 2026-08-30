@@ -39,6 +39,7 @@ export type XriftInteractionTargetKind =
   | "animation"
   | "audio-source"
   | "light"
+  | "particle"
   | "scene";
 
 /**
@@ -57,6 +58,7 @@ export const XRIFT_INTERACTION_TARGET_KINDS: readonly XriftInteractionTargetKind
   "animation",
   "audio-source",
   "light",
+  "particle",
   "scene",
 ];
 
@@ -68,6 +70,7 @@ export const XRIFT_INTERACTION_TARGET_LABELS: Readonly<
   animation: "Animation",
   "audio-source": "Audio Source",
   light: "Light",
+  particle: "Particle",
   scene: "Scene",
 };
 
@@ -198,6 +201,65 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     min: 0,
     max: 600,
     step: 0.1,
+  },
+  {
+    target: "particle",
+    name: "emitting",
+    label: "放出",
+    description:
+      "ONで粒を出し、OFFで止めて消します。押したときに出すには、最初はOFFにしておきます。",
+    kind: "bool",
+    defaultValue: true,
+  },
+  {
+    target: "particle",
+    name: "restart",
+    label: "出し直す",
+    description:
+      "この値を書き込むたびに、粒を最初から出し直します。一瞬だけ吹き出す表現に使います。",
+    kind: "bool",
+    defaultValue: true,
+  },
+  {
+    target: "particle",
+    name: "emissionRate",
+    label: "放出量",
+    description: "1秒あたりに出る粒の数を上書きします。",
+    kind: "float",
+    defaultValue: 20,
+    min: 0,
+    max: 1000,
+    step: 1,
+  },
+  {
+    target: "particle",
+    name: "sizeMultiplier",
+    label: "粒の大きさ",
+    description: "1で元の大きさ、2で倍になります。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0,
+    max: 10,
+    step: 0.05,
+  },
+  {
+    target: "particle",
+    name: "opacity",
+    label: "粒の不透明度",
+    description: "0で見えなくなり、1で元の濃さになります。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0,
+    max: 1,
+    step: 0.01,
+  },
+  {
+    target: "particle",
+    name: "color",
+    label: "粒の色",
+    description: "粒の色を変えます。値はリニア空間のRGBで保存されます。",
+    kind: "color",
+    defaultValue: [1, 1, 1],
   },
   {
     target: "scene",

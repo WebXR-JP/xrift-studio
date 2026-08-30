@@ -1,6 +1,12 @@
 import { useEffect, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { Color, LinearSRGBColorSpace, MathUtils, type Object3D } from "three";
+import {
+  Color,
+  LinearSRGBColorSpace,
+  MathUtils,
+  SRGBColorSpace,
+  type Object3D,
+} from "three";
 import {
   XRIFT_AUDIO_SOURCE_RUNTIME_USER_DATA_KEY,
   type XriftAudioSourceRuntimeBridge,
@@ -16,6 +22,11 @@ import {
   type XriftLightRuntimeBridge,
   type XriftLightRuntimeOverrides,
 } from "./light.js";
+import {
+  XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY,
+  type XriftParticleRuntimeBridge,
+  type XriftParticleRuntimeOverrides,
+} from "./particle.js";
 import {
   emitXriftSceneEvent,
   findXriftSceneRuntimeBridge,
@@ -143,6 +154,19 @@ function isAudioSourceBridge(
     candidate !== null &&
     typeof candidate.setOwner === "function" &&
     typeof candidate.command === "function" &&
+    typeof candidate.read === "function"
+  );
+}
+
+function isParticleBridge(
+  value: unknown,
+): value is XriftParticleRuntimeBridge {
+  const candidate = value as XriftParticleRuntimeBridge | null;
+  return (
+    typeof candidate === "object" &&
+    candidate !== null &&
+    typeof candidate.setOwner === "function" &&
+    typeof candidate.removeOwner === "function" &&
     typeof candidate.read === "function"
   );
 }
@@ -293,6 +317,101 @@ export function createXriftInteractionApplier({
 
   const animationOwners = new Set<XriftAnimationRuntimeBridge>();
   const sceneOwners = new Set<XriftSceneRuntimeBridge>();
+  const particleOverrides = new Map<
+    XriftParticleRuntimeBridge,
+    XriftParticleRuntimeOverrides
+  >();
+  let particleRestarts = 0;
+
+  const applyParticle = (target: Object3D, action: XriftInteractionAction) => {
+    forEachOwnedBridge(
+      target,
+      action.entityId,
+      XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY,
+      isParticleBridge,
+      (bridge) => {
+        const state = bridge.read();
+        if (state.componentId !== action.componentId) return;
+        // The bridge replaces an owner's overrides wholesale, so the running
+        // set is kept here: writing the rate after the switch must not undo it.
+        const next: XriftParticleRuntimeOverrides = {
+          ...(particleOverrides.get(bridge) ?? {}),
+        };
+        if (action.property === "emitting") {
+          const emitting =
+            action.mode === "toggle"
+              ? state.stopped === true || state.playing === false
+              : action.value?.kind === "bool"
+                ? action.value.value
+                : true;
+          next.playing = emitting;
+          next.stopped = !emitting;
+        } else if (
+          action.property === "restart" &&
+          (action.mode === "toggle" || action.value?.kind === "bool")
+        ) {
+          particleRestarts += 1;
+          next.restartRevision = particleRestarts;
+          next.playing = true;
+          next.stopped = false;
+        } else if (
+          action.property === "emissionRate" &&
+          action.value?.kind === "float"
+        ) {
+          next.emissionRate = action.value.value;
+        } else if (
+          action.property === "sizeMultiplier" &&
+          action.value?.kind === "float"
+        ) {
+          next.sizeMultiplier = action.value.value;
+        } else if (
+          action.property === "opacity" &&
+          action.value?.kind === "float"
+        ) {
+          next.opacity = action.value.value;
+        } else if (action.property === "color" && action.value?.kind === "color") {
+          next.color = linearColor(action.value.value).getHex(SRGBColorSpace);
+        } else {
+          return;
+        }
+        particleOverrides.set(bridge, next);
+        bridge.setOwner(owner, order, componentId, next);
+      },
+    );
+  };
+
+  const readParticle = (
+    object: Object3D,
+    target: { entityId: string; componentId: string | null; property: string },
+  ): XriftInteractionValue | null => {
+    const found: { value: XriftInteractionValue | null } = { value: null };
+    forEachOwnedBridge(
+      object,
+      target.entityId,
+      XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY,
+      isParticleBridge,
+      (bridge) => {
+        const state = bridge.read();
+        if (found.value || state.componentId !== target.componentId) return;
+        if (target.property === "emitting") {
+          found.value = {
+            kind: "bool",
+            value: state.stopped !== true && state.playing !== false,
+          };
+        } else if (target.property === "emissionRate") {
+          found.value = { kind: "float", value: state.emissionRate ?? 0 };
+        } else if (target.property === "sizeMultiplier") {
+          found.value = { kind: "float", value: state.sizeMultiplier ?? 1 };
+        } else if (target.property === "opacity") {
+          found.value = { kind: "float", value: state.opacity ?? 1 };
+        } else if (target.property === "color") {
+          const color = new Color(state.color ?? 0xffffff);
+          found.value = { kind: "color", value: [color.r, color.g, color.b] };
+        }
+      },
+    );
+    return found.value;
+  };
 
   const applyScene = (action: XriftInteractionAction) => {
     const bridge = findXriftSceneRuntimeBridge(root);
@@ -560,6 +679,9 @@ export function createXriftInteractionApplier({
       if (target.targetKind === "animation") {
         return readAnimation(object, target);
       }
+      if (target.targetKind === "particle") {
+        return readParticle(object, target);
+      }
       if (target.targetKind === "light") return readLight(object, target);
       return readAudioSource(object, target);
     },
@@ -582,6 +704,10 @@ export function createXriftInteractionApplier({
         applyAnimation(target, action);
         return;
       }
+      if (action.target === "particle") {
+        applyParticle(target, action);
+        return;
+      }
       if (action.target === "light") {
         applyLight(target, action);
         return;
@@ -595,6 +721,8 @@ export function createXriftInteractionApplier({
       animationOwners.clear();
       for (const bridge of sceneOwners) bridge.removeOwner(owner);
       sceneOwners.clear();
+      for (const bridge of particleOverrides.keys()) bridge.removeOwner(owner);
+      particleOverrides.clear();
       for (const bridge of lightOverrides.keys()) bridge.removeOwner(owner);
       for (const bridge of audioOverrides.keys()) bridge.removeOwner(owner);
       lightOverrides.clear();
