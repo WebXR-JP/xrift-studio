@@ -226,7 +226,38 @@ import {
   type SceneViewportDisplayMode,
   type SceneViewportMaterialStyle,
 } from "./scene-viewport-display";
+import {
+  SCENE_VIEWPORT_QUALITY_OPTIONS,
+  getSceneViewportQualityProfile,
+  loadSceneViewportQualityMode,
+  saveSceneViewportQualityMode,
+  type SceneViewportQualityMode,
+} from "./scene-viewport-quality";
 import { applyWorldPlayCameraLook } from "./world-play-camera";
+
+/**
+ * Recompiles Materials when shadows are switched off or on.
+ *
+ * three keeps the compiled program a Material already has, so turning the
+ * shadow map off without this leaves every surface sampling the shadow map it
+ * last rendered — the frames get cheaper and the shadows freeze in place
+ * instead of going away.
+ */
+function ViewportShadowQuality({ enabled }: { enabled: boolean }) {
+  const gl = useThree((state) => state.gl);
+  const scene = useThree((state) => state.scene);
+  useEffect(() => {
+    gl.shadowMap.needsUpdate = true;
+    scene.traverse((object) => {
+      const material = (object as Mesh).material;
+      if (!material) return;
+      for (const entry of Array.isArray(material) ? material : [material]) {
+        entry.needsUpdate = true;
+      }
+    });
+  }, [enabled, gl, scene]);
+  return null;
+}
 
 /**
  * The wind every wind-driven Material in the viewport reads. It is a context
@@ -3973,6 +4004,7 @@ export function SceneViewport({
   onDropBuiltinPrefab,
   onDropSceneAsset,
   onCreatePrimitive,
+  onDeleteEntity,
   frameSelectionRequest,
   exitFocusRequest,
   focusedEntity,
@@ -4054,6 +4086,8 @@ export function SceneViewport({
   onDropBuiltinPrefab: (recipeId: string, position: Vec3) => void;
   onDropSceneAsset: (assetId: string, position: Vec3) => void;
   onCreatePrimitive: (creationId: string) => void;
+  /** Deletes the Entity the viewport's context menu was opened on. */
+  onDeleteEntity: (entityId: string) => void;
   frameSelectionRequest: number;
   exitFocusRequest: number;
   focusedEntity: SceneFocusState | null;
@@ -4128,6 +4162,9 @@ export function SceneViewport({
   const [thumbnailCaptureActive, setThumbnailCaptureActive] = useState(false);
   const [displayMode, setDisplayMode] =
     useState<SceneViewportDisplayMode>("scene");
+  const [qualityMode, setQualityMode] = useState<SceneViewportQualityMode>(
+    loadSceneViewportQualityMode,
+  );
   const [debugOverlayEnabled, setDebugOverlayEnabled] = useState(false);
   const [debugMetrics, setDebugMetrics] =
     useState<ScenePerformanceMetrics | null>(null);
@@ -4159,7 +4196,13 @@ export function SceneViewport({
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [viewMenuOpen]);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    /** The Entity the pointer was over, so the menu can act on it. */
+    entityId: string | null;
+    entityName: string | null;
+  } | null>(null);
   const [transformDragging, setTransformDragging] = useState(false);
   const transformDraggingRef = useRef(false);
   const terrainPointerRef = useRef<{
@@ -4233,6 +4276,15 @@ export function SceneViewport({
     [scene, sceneSettings.ambient],
   );
   const effectiveDisplayMode = editorMode === "play" ? "scene" : displayMode;
+  // Play and thumbnail capture are previews of the published world, so they
+  // always draw at full quality however the editing view is set.
+  const qualityProfile = useMemo(
+    () =>
+      getSceneViewportQualityProfile(
+        editorMode === "play" || thumbnailCaptureActive ? "high" : qualityMode,
+      ),
+    [editorMode, qualityMode, thumbnailCaptureActive],
+  );
   const colliderOnlyEdit = effectiveDisplayMode === "colliders";
   const renderDisplayMode = thumbnailCaptureActive ? "scene" : effectiveDisplayMode;
   const displayProfile = useMemo(
@@ -4981,9 +5033,26 @@ export function SceneViewport({
     }
     rightPointerGestureRef.current = null;
     const bounds = event.currentTarget.getBoundingClientRect();
+    // Right-clicking an object acts on that object, the way the Hierarchy's own
+    // context menu does: the Entity under the pointer is selected first, so the
+    // menu's delete and the gizmo never disagree about the target.
+    const pointedEntityId =
+      dropResolverRef.current?.(event.clientX, event.clientY, {
+        includeEntityOriginFallback: true,
+      }).authoringEntityId ?? null;
+    if (
+      pointedEntityId &&
+      !(selection?.kind === "entity" && selection.id === pointedEntityId)
+    ) {
+      onSelect({ kind: "entity", id: pointedEntityId }, { additive: false });
+    }
     setContextMenu({
       x: Math.min(event.clientX - bounds.left, Math.max(8, bounds.width - 190)),
       y: Math.min(event.clientY - bounds.top, Math.max(8, bounds.height - 206)),
+      entityId: pointedEntityId,
+      entityName: pointedEntityId
+        ? scene.entities[pointedEntityId]?.name ?? null
+        : null,
     });
   };
 
@@ -5277,7 +5346,7 @@ export function SceneViewport({
                     ? editorMode === "play"
                       ? "border-cyan-300/70 bg-cyan-400/15 text-cyan-100"
                       : "border-cyan-400 bg-cyan-50 text-cyan-700"
-                    : displayMode !== "scene"
+                    : displayMode !== "scene" || qualityMode !== "high"
                       ? "border-violet-300 bg-violet-50 text-violet-700"
                       : editorMode === "play"
                         ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
@@ -5341,6 +5410,42 @@ export function SceneViewport({
                   }`}
                 >
                   {SCENE_VIEWPORT_DISPLAY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center justify-between gap-2 @[760px]/scene-header:contents">
+                <span className="text-[11px] font-medium text-slate-600 @[760px]/scene-header:hidden">
+                  描画品質
+                </span>
+                <select
+                  value={qualityMode}
+                  disabled={editorMode !== "edit"}
+                  onChange={(event) => {
+                    const next = event.currentTarget
+                      .value as SceneViewportQualityMode;
+                    setQualityMode(next);
+                    saveSceneViewportQualityMode(next);
+                  }}
+                  aria-label="Scene View描画品質"
+                  title={
+                    editorMode === "play"
+                      ? "Play中は高品質で描画します"
+                      : SCENE_VIEWPORT_QUALITY_OPTIONS.find(
+                          (option) => option.value === qualityMode,
+                        )?.description
+                  }
+                  className={`h-7 shrink-0 rounded border px-1.5 text-[11px] font-semibold outline-none focus:border-violet-400 disabled:cursor-not-allowed disabled:opacity-50 ${
+                    editorMode === "play"
+                      ? "border-zinc-700 bg-zinc-800 text-zinc-300"
+                      : qualityMode === "high"
+                        ? "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                        : "border-violet-300 bg-violet-50 text-violet-700 hover:border-violet-400"
+                  }`}
+                >
+                  {SCENE_VIEWPORT_QUALITY_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -5419,8 +5524,8 @@ export function SceneViewport({
         <Canvas
           key={projection}
           orthographic={projection === "orthographic"}
-          shadows="basic"
-          dpr={[1, 1.5]}
+          shadows={qualityProfile.shadows ? "basic" : false}
+          dpr={qualityProfile.dpr}
           camera={{
             position: [7, 5, 7],
             ...(projection === "orthographic"
@@ -5463,7 +5568,10 @@ export function SceneViewport({
               intensity={sceneSettings.ambient.intensity}
             />
           ) : null}
-          <ScenePostprocessing settings={sceneSettings.postprocessing} />
+          <ViewportShadowQuality enabled={qualityProfile.shadows} />
+          {qualityProfile.postprocessing ? (
+            <ScenePostprocessing settings={sceneSettings.postprocessing} />
+          ) : null}
           {/* Scene-wide graph writes: exposure and the screen fade. Mounted only
               while Play runs, so a graph never dims the editing view. */}
           <XriftSceneRuntime enabled={editorMode === "play"} />
@@ -5770,6 +5878,33 @@ export function SceneViewport({
             onPointerDown={(event) => event.stopPropagation()}
             onContextMenu={(event) => event.stopPropagation()}
           >
+            {contextMenu.entityId ? (
+              <>
+                <p
+                  className="truncate px-2 py-1 text-xs font-semibold text-slate-500"
+                  title={contextMenu.entityName ?? contextMenu.entityId}
+                >
+                  {contextMenu.entityName ?? contextMenu.entityId}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const entityId = contextMenu.entityId;
+                    setContextMenu(null);
+                    if (entityId) onDeleteEntity(entityId);
+                  }}
+                  title={commandTitle(
+                    `${contextMenu.entityName ?? "Entity"}を削除`,
+                    "edit.delete",
+                  )}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-rose-50 hover:text-rose-700"
+                >
+                  <EDITOR_ICONS.delete size={14} aria-hidden="true" />
+                  削除
+                </button>
+                <div className="my-1 border-t border-slate-200" />
+              </>
+            ) : null}
             <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
               Create Mesh
             </p>

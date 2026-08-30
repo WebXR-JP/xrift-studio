@@ -22,7 +22,10 @@ import {
   updateEntityEnabled,
 } from "./editor-session";
 import {
+  analyzeAssetDeletion,
+  collectAssetReferences,
   deleteAssetIfUnreferenced,
+  detachAssetReferences,
   deleteEmptyAssetFolder,
   moveLibraryAsset,
   moveLibraryFolder,
@@ -362,6 +365,7 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   rename_asset_folder: renameLibraryAssetFolder,
   move_asset: moveLibraryAssetTool,
   move_asset_folder: moveLibraryAssetFolderTool,
+  detach_asset_references: detachLibraryAssetReferences,
   delete_asset: deleteLibraryAsset,
   delete_asset_folder: deleteLibraryAssetFolder,
   inspect_colliders: inspectColliders,
@@ -874,30 +878,122 @@ function moveLibraryAssetFolderTool(
   };
 }
 
+/**
+ * Unlinks references to an Asset, the same operation the delete dialog offers.
+ *
+ * Without this an agent could see the rejection details of `delete_asset` and
+ * still have no way to act on them but to guess at the owning Components. Pass
+ * `ownerId` to unlink one owner; omit it to unlink every reference.
+ */
+function detachLibraryAssetReferences(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const assetId = requiredString(argumentsValue.assetId, "assetId");
+  const ownerId = optionalString(argumentsValue.ownerId);
+  let documents = {
+    assets: context.bundle.assets,
+    scene: context.bundle.scene,
+    prefabs: context.bundle.prefabs,
+  };
+  const analysis = analyzeAssetDeletion(documents, assetId);
+  if (!analysis.asset) {
+    throw new XriftMcpEditorToolError("ASSET_NOT_FOUND", "Assetが見つかりません", {
+      assetId,
+    });
+  }
+  const requested = ownerId
+    ? analysis.references.filter((reference) => reference.ownerId === ownerId)
+    : analysis.references;
+  if (requested.length === 0) {
+    throw new XriftMcpEditorToolError(
+      "ASSET_REFERENCE_NOT_FOUND",
+      "外す参照が見つかりません",
+      { assetId, ownerId, references: analysis.references },
+    );
+  }
+  const detached: typeof analysis.references = [];
+  for (const reference of requested) {
+    const result = detachAssetReferences(documents, assetId, reference);
+    if (!result.changed) continue;
+    documents = {
+      assets: result.assets,
+      scene: result.scene,
+      prefabs: result.prefabs,
+    };
+    detached.push(...result.detached);
+  }
+  if (detached.length === 0) {
+    throw new XriftMcpEditorToolError(
+      "ASSET_REFERENCE_NOT_FOUND",
+      "外す参照が見つかりません",
+      { assetId, ownerId },
+    );
+  }
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    assets: documents.assets,
+    scene: documents.scene,
+    prefabs: documents.prefabs,
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      assetId,
+      detached,
+      remainingReferences: collectAssetReferences(documents, assetId),
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+    },
+    activity: `AIがAsset「${analysis.asset.name}」の参照${detached.length}件を外しました`,
+  };
+}
+
 function deleteLibraryAsset(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
   assertWritableContext(context, argumentsValue);
   const assetId = requiredString(argumentsValue.assetId, "assetId");
+  const detachReferences =
+    optionalBoolean(argumentsValue.detachReferences, "detachReferences") ?? false;
+  const documents = {
+    assets: context.bundle.assets,
+    scene: context.bundle.scene,
+    prefabs: context.bundle.prefabs,
+  };
+  // Unlinking stays opt-in: a delete that silently rewrote the Scene would be
+  // a bigger edit than the one the caller asked for.
+  const detached = detachReferences
+    ? detachAssetReferences(documents, assetId)
+    : null;
   const deleted = deleteAssetIfUnreferenced(
-    {
-      assets: context.bundle.assets,
-      scene: context.bundle.scene,
-      prefabs: context.bundle.prefabs,
-    },
+    detached?.changed
+      ? {
+          assets: detached.assets,
+          scene: detached.scene,
+          prefabs: detached.prefabs,
+        }
+      : documents,
     assetId,
   );
   if (!deleted.changed) {
     throw new XriftMcpEditorToolError(
       "ASSET_DELETE_REJECTED",
-      "Assetは削除できません。参照を解除してから再試行してください",
+      "Assetは削除できません。detachReferencesを指定するか、参照を解除してから再試行してください",
       { assetId, reason: deleted.reason, references: deleted.references },
     );
   }
   const bundle = touchProject(context, {
     ...context.bundle,
     assets: deleted.assets,
+    ...(detached?.changed ? { scene: detached.scene } : {}),
     prefabs: deleted.prefabs,
   });
   return {
@@ -910,6 +1006,7 @@ function deleteLibraryAsset(
       assetId,
       deleted: true,
       deletedPrefabId: deleted.deletedPrefabId,
+      detachedReferences: detached?.detached ?? [],
       revisionBefore: context.revision,
       revisionAfter: context.revision + 1,
     },

@@ -42,6 +42,7 @@ export const XRIFT_MCP_TOOLS = [
   { name: "rename_asset_folder", surface: "document" },
   { name: "move_asset", surface: "document" },
   { name: "move_asset_folder", surface: "document" },
+  { name: "detach_asset_references", surface: "document" },
   { name: "delete_asset", surface: "document" },
   { name: "delete_asset_folder", surface: "document" },
   { name: "inspect_colliders", surface: "document" },

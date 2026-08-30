@@ -1123,6 +1123,46 @@ export function runXriftMcpEditorToolFixtures(): void {
     "delete_asset should protect referenced Assets",
   );
 
+  // The rejection above is only useful if the agent can act on it, so the same
+  // unlink the delete dialog offers is reachable as a tool: detach, then delete.
+  const particleReferencesDetached = executeXriftMcpEditorTool(current, {
+    id: "fixture-detach-asset-references",
+    tool: "detach_asset_references",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: particle.id,
+    },
+  });
+  assert(
+    (particleReferencesDetached.result.detached as unknown[]).length > 0 &&
+      (particleReferencesDetached.result.remainingReferences as unknown[]).length === 0,
+    "detach_asset_references should unlink every reference it reports",
+  );
+  // The unlink is checked on a branch of the fixture state: the rest of the
+  // suite still needs the Particle emitter this would have removed.
+  const detachedContext = {
+    ...current,
+    bundle: particleReferencesDetached.bundle,
+    revision: current.revision + 1,
+  };
+  const detachedParticleDeleted = executeXriftMcpEditorTool(detachedContext, {
+    id: "fixture-delete-detached-asset",
+    tool: "delete_asset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: detachedContext.revision,
+      assetId: particle.id,
+    },
+  });
+  assert(
+    detachedParticleDeleted.changed &&
+      detachedParticleDeleted.bundle.assets.assets[particle.id] === undefined,
+    "delete_asset should accept an Asset whose references were unlinked",
+  );
+
   const componentDefinitions = executeXriftMcpEditorTool(current, {
     id: "fixture-component-definitions",
     tool: "list_component_definitions",
