@@ -512,6 +512,7 @@ function estimateTextureLoadBytes(asset: TextureAsset): {
   }
   const recipe =
     asset.importSettings.resize.mode !== "original" ||
+    asset.importSettings.resize.powerOfTwo === true ||
     asset.importSettings.compression.format !== "source";
   return {
     bytes: metadata.byteLength,

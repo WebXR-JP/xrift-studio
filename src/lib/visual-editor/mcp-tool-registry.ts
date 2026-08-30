@@ -129,6 +129,8 @@ export const XRIFT_MCP_TOOLS = [
   { name: "import_shader_asset", surface: "local-asset" },
   { name: "reimport_model_asset", surface: "local-asset" },
   { name: "process_texture_asset", surface: "local-asset" },
+  { name: "optimize_model_asset", surface: "local-asset" },
+  { name: "revert_asset_optimization", surface: "local-asset" },
   { name: "apply_scene_recipe", surface: "local-asset" },
   { name: "get_shader_asset", surface: "local-asset" },
   { name: "update_shader_asset", surface: "local-asset" },

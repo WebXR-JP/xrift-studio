@@ -8,11 +8,20 @@ import type { PrototypeVisualProject } from "./prototype-project";
 import {
   assetBytesToDataUrl,
   copyAssetBytes,
+  ktx2QualityLevel,
   processedAssetPath,
   readProjectAssetBytes,
   renderImageBytes,
   sha256Hex,
 } from "./texture-processing";
+import {
+  createAssetImportTransactionId,
+  describeAssetImportFailure,
+} from "./asset-import-transaction";
+import {
+  optimizeModelBytes,
+  planModelOptimization,
+} from "./model-optimization";
 import type { VramRecommendation } from "./vram-estimate";
 
 export type AssetOptimizationOperation = NonNullable<
@@ -26,11 +35,19 @@ export type AssetOptimizationProgress = {
   phase: "reading" | "encoding" | "saving";
 };
 
+export type AssetOptimizationSkip = {
+  assetId: string;
+  assetName: string;
+  reason: string;
+};
+
 export type AssetOptimizationResult = {
   bundle: PrototypeVisualProject;
   optimizedAssetCount: number;
   beforeBytes: number;
   afterBytes: number;
+  /** 対応していない、または変換に失敗して見送ったAsset。 */
+  skipped: AssetOptimizationSkip[];
 };
 
 type PlannedOperation = {
@@ -66,11 +83,19 @@ export async function applyAssetOptimizations(
   }
 
   const optimized: OptimizedAsset[] = [];
+  const skipped: AssetOptimizationSkip[] = [];
   for (let index = 0; index < plans.length; index += 1) {
     const plan = plans[index];
     const sourceAsset = bundle.assets.assets[plan.assetId];
+    // 1件でも対応外があると全部が止まっていた。まとめて選ぶ操作なので、
+    // 変換できたものは残し、見送った理由を呼び出し側へ返す。
     if (!sourceAsset || sourceAsset.source.kind !== "project") {
-      throw new Error("最適化するアセットの原本を確認できませんでした。");
+      skipped.push({
+        assetId: plan.assetId,
+        assetName: sourceAsset?.name ?? plan.assetId,
+        reason: "プロジェクト内に保存された原本を確認できませんでした。",
+      });
+      continue;
     }
     report?.({
       completed: index,
@@ -78,32 +103,43 @@ export async function applyAssetOptimizations(
       label: `${sourceAsset.name}を読み込んでいます`,
       phase: "reading",
     });
-    const sourceBytes = await readProjectAssetBytes(
-      projectPath,
-      sourceAsset.source.relativePath,
-    );
-    report?.({
-      completed: index,
-      total: plans.length,
-      label: `${sourceAsset.name}を最適化しています`,
-      phase: "encoding",
-    });
-    if (sourceAsset.kind === "texture") {
-      optimized.push(
-        await optimizeTexture(
-          sourceAsset,
-          sourceBytes,
-          plan.operations,
-        ),
+    try {
+      const sourceBytes = await readProjectAssetBytes(
+        projectPath,
+        sourceAsset.source.relativePath,
       );
-    } else if (
-      sourceAsset.kind === "model" &&
-      plan.operations.has("draco-model")
-    ) {
-      optimized.push(await optimizeModel(sourceAsset, sourceBytes));
-    } else {
-      throw new Error(`${sourceAsset.name}は選択した自動最適化に対応していません。`);
+      report?.({
+        completed: index,
+        total: plans.length,
+        label: `${sourceAsset.name}を最適化しています`,
+        phase: "encoding",
+      });
+      if (sourceAsset.kind === "texture") {
+        optimized.push(await optimizeTexture(sourceAsset, sourceBytes, plan.operations));
+      } else if (sourceAsset.kind === "model" && plan.operations.has("draco-model")) {
+        optimized.push(await optimizeModel(sourceAsset, sourceBytes));
+      } else {
+        skipped.push({
+          assetId: plan.assetId,
+          assetName: sourceAsset.name,
+          reason: "選択した自動最適化に対応していません。",
+        });
+      }
+    } catch (error) {
+      skipped.push({
+        assetId: plan.assetId,
+        assetName: sourceAsset.name,
+        reason: error instanceof Error ? error.message : String(error),
+      });
     }
+  }
+
+  if (optimized.length === 0) {
+    throw new Error(
+      `選択した${plans.length}件はどれも最適化できませんでした。${
+        skipped[0]?.reason ?? ""
+      }`,
+    );
   }
 
   report?.({
@@ -112,16 +148,22 @@ export async function applyAssetOptimizations(
     label: "変換したアセットをまとめて保存しています",
     phase: "saving",
   });
-  await tauri.commitVisualAssetImport(
-    projectPath,
-    `asset-optimize-${Date.now().toString(36)}`,
-    await Promise.all(
-      optimized.map(async (entry) => ({
-        relativePath: entry.relativePath,
-        dataUrl: await assetBytesToDataUrl(entry.bytes, mimeTypeForPath(entry.relativePath)),
-      })),
-    ),
-  );
+  try {
+    await tauri.commitVisualAssetImport(
+      projectPath,
+      createAssetImportTransactionId("optimize"),
+      await Promise.all(
+        optimized.map(async (entry) => ({
+          relativePath: entry.relativePath,
+          dataUrl: await assetBytesToDataUrl(entry.bytes, mimeTypeForPath(entry.relativePath)),
+        })),
+      ),
+    );
+  } catch (error) {
+    throw new Error(
+      `最適化した${optimized.length}件を保存できませんでした。${describeAssetImportFailure(error)}`,
+    );
+  }
 
   const assets = { ...bundle.assets.assets };
   for (const entry of optimized) assets[entry.asset.id] = entry.asset;
@@ -140,6 +182,7 @@ export async function applyAssetOptimizations(
     optimizedAssetCount: optimized.length,
     beforeBytes: optimized.reduce((sum, entry) => sum + entry.beforeBytes, 0),
     afterBytes: optimized.reduce((sum, entry) => sum + entry.bytes.byteLength, 0),
+    skipped,
   };
 }
 
@@ -174,17 +217,21 @@ async function optimizeTexture(
     throw new Error(`${asset.name}の形式は自動Texture最適化に対応していません。`);
   }
 
-  const resized = shouldResize
-    ? await renderImageBytes(sourceBytes, {
-        maxSize: 2048,
-        mimeType: "image/webp",
-        quality: 0.86,
-      })
-    : {
-        bytes: sourceBytes,
-        width: asset.importMetadata.width,
-        height: asset.importMetadata.height,
-      };
+  // KTX2へ送る中間画像は可逆のPNGにして、WEBPとBasisで二重に劣化させない。
+  // GPU圧縮は2のべき乗の辺で素直に効くので、その時だけ辺を丸める。
+  const resized =
+    shouldResize || shouldEncodeKtx2
+      ? await renderImageBytes(sourceBytes, {
+          maxSize: shouldResize ? 2048 : null,
+          powerOfTwo: shouldEncodeKtx2,
+          mimeType: shouldEncodeKtx2 ? "image/png" : "image/webp",
+          quality: shouldEncodeKtx2 ? undefined : 0.86,
+        })
+      : {
+          bytes: sourceBytes,
+          width: asset.importMetadata.width,
+          height: asset.importMetadata.height,
+        };
   let bytes = resized.bytes;
   let extension = "webp";
   let mimeType = "image/webp";
@@ -194,10 +241,7 @@ async function optimizeTexture(
     const { encodeToKTX2 } = await import("ktx2-encoder");
     bytes = await encodeToKTX2(copyAssetBytes(resized.bytes), {
       isUASTC: false,
-      qualityLevel: Math.max(
-        1,
-        Math.min(255, Math.round(asset.importSettings.compression.quality * 2.55)),
-      ),
+      qualityLevel: ktx2QualityLevel(asset.importSettings.compression.quality),
       compressionLevel: 2,
       generateMipmap: asset.importSettings.generateMipmaps,
       isPerceptual: asset.importSettings.colorSpace === "srgb",
@@ -232,11 +276,21 @@ async function optimizeTexture(
       },
       importSettings: {
         ...asset.importSettings,
-        resize: { mode: "original" },
+        resize: { mode: "original", powerOfTwo: false },
         compression: {
           ...asset.importSettings.compression,
           format: "source",
         },
+      },
+      // 原本は書き換えないので、Inspectorからいつでも戻せる。
+      optimizedFrom: {
+        ...(asset.optimizedFrom ?? {
+          source: asset.source,
+          sourceHash: asset.sourceHash,
+          importMetadata: asset.importMetadata,
+          importSettings: asset.importSettings,
+        }),
+        appliedAt: new Date().toISOString(),
       },
     },
   };
@@ -246,41 +300,26 @@ async function optimizeModel(
   asset: ModelAsset,
   sourceBytes: Uint8Array,
 ): Promise<OptimizedAsset> {
-  const metadata = asset.importMetadata;
-  if (
-    metadata?.sourceFormat !== "glb" ||
-    [...metadata.extensionsUsed, ...metadata.extensionsRequired].some(
-      (extension) => /^(?:VRM|VRMC_)/.test(extension),
-    )
-  ) {
-    throw new Error(`${asset.name}は安全なDraco自動変換の対象ではありません。`);
+  const plan = planModelOptimization(asset, {
+    optimizeMeshes: true,
+    compressWithDraco: true,
+  });
+  if (!plan.supported) throw new Error(`${asset.name}は${plan.reason}`);
+  if (plan.steps.length === 0) {
+    throw new Error(`${asset.name}はすでに最適化済みです。`);
   }
-  const [{ WebIO }, { ALL_EXTENSIONS, KHRDracoMeshCompression }, { draco }, encoder] =
-    await Promise.all([
-      import("@gltf-transform/core"),
-      import("@gltf-transform/extensions"),
-      import("@gltf-transform/functions"),
-      createDracoEncoder(),
-    ]);
-  const io = new WebIO()
-    .registerExtensions(ALL_EXTENSIONS)
-    .registerDependencies({ "draco3d.encoder": encoder });
-  const document = await io.readBinary(copyAssetBytes(sourceBytes));
-  await document.transform(draco({ method: "edgebreaker" }));
-  const bytes = copyAssetBytes(await io.writeBinary(document));
-  const sourceHash = await sha256Hex(bytes);
+  const metadata = asset.importMetadata;
+  if (!metadata) {
+    throw new Error(`${asset.name}の構造解析結果がありません。`);
+  }
+  const optimized = await optimizeModelBytes(sourceBytes, plan.steps, {
+    decodeDraco: plan.requiresDracoDecoder,
+  });
+  const sourceHash = await sha256Hex(optimized.bytes);
   const relativePath = processedAssetPath(asset.id, sourceHash, "glb");
-  const extensionsUsed = new Set([
-    ...metadata.extensionsUsed,
-    KHRDracoMeshCompression.EXTENSION_NAME,
-  ]);
-  const extensionsRequired = new Set([
-    ...metadata.extensionsRequired,
-    KHRDracoMeshCompression.EXTENSION_NAME,
-  ]);
   return {
     beforeBytes: sourceBytes.byteLength,
-    bytes,
+    bytes: optimized.bytes,
     relativePath,
     asset: {
       ...asset,
@@ -294,22 +333,24 @@ async function optimizeModel(
         ...metadata,
         sourceFormat: "glb",
         sourceFileName: relativePath.split("/").pop(),
-        byteLength: bytes.byteLength,
-        extensionsUsed: [...extensionsUsed],
-        extensionsRequired: [...extensionsRequired],
+        byteLength: optimized.bytes.byteLength,
+        meshCount: optimized.meshCount,
+        primitiveCount: optimized.primitiveCount,
+        extensionsUsed: optimized.extensionsUsed,
+        extensionsRequired: optimized.extensionsRequired,
+      },
+      importSettings: { ...asset.importSettings, optimizeMeshes: false },
+      optimizedFrom: {
+        ...(asset.optimizedFrom ?? {
+          source: asset.source,
+          sourceHash: asset.sourceHash,
+          importMetadata: asset.importMetadata,
+          importSettings: asset.importSettings,
+        }),
+        appliedAt: new Date().toISOString(),
       },
     },
   };
-}
-
-async function createDracoEncoder(): Promise<object> {
-  const [{ default: createEncoderModule }, wasmModule] = await Promise.all([
-    import("draco3dgltf/draco_encoder_gltf_nodejs.js"),
-    import("draco3dgltf/draco_encoder.wasm?url"),
-  ]);
-  const wasmUrl = (wasmModule as { default: string }).default;
-  const wasmBinary = new Uint8Array(await (await fetch(wasmUrl)).arrayBuffer());
-  return createEncoderModule({ wasmBinary });
 }
 
 function mimeTypeForPath(relativePath: string): string {

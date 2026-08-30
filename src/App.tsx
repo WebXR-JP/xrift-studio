@@ -1103,6 +1103,7 @@ function App() {
               optimizedAssetCount: result.optimizedAssetCount,
               beforeBytes: result.beforeBytes,
               afterBytes: result.afterBytes,
+              skipped: result.skipped,
             };
           }}
           onClearStaleUploadAttempt={(() => {
