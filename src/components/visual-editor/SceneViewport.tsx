@@ -4938,7 +4938,7 @@ export function SceneViewport({
                   : "このビューだけを広げる（Hierarchy・Inspector・Assetsを畳む）"
               }
               aria-label={maximized ? "パネルを戻す" : "このビューだけを広げる"}
-              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${
+              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${
                 editorMode === "play"
                   ? "text-zinc-300 hover:bg-violet-900 hover:text-zinc-100"
                   : maximized
@@ -4947,9 +4947,9 @@ export function SceneViewport({
               }`}
             >
               {maximized ? (
-                <MinimizeIcon size={13} aria-hidden="true" />
+                <MinimizeIcon size={12} aria-hidden="true" />
               ) : (
-                <MaximizeIcon size={13} aria-hidden="true" />
+                <MaximizeIcon size={12} aria-hidden="true" />
               )}
             </button>
           ) : null}
@@ -4957,7 +4957,7 @@ export function SceneViewport({
             <div
               role="tablist"
               aria-label="Scene Viewとエディター"
-              className="flex min-w-0 items-center gap-0.5 overflow-x-auto"
+              className="flex min-w-0 items-center gap-px overflow-x-auto"
             >
               {[
                 {
@@ -4986,7 +4986,7 @@ export function SceneViewport({
                       id={tab.id === SCENE_VIEW_TAB_ID ? "scene-view-heading" : undefined}
                       title={tab.label}
                       onClick={() => onSelectTab?.(tab.id)}
-                      className={`max-w-[12rem] truncate px-2.5 py-1 text-[12px] font-semibold ${
+                      className={`max-w-[11rem] truncate px-2 py-0.5 text-[11px] font-semibold ${
                         active
                           ? editorMode === "play"
                             ? "text-zinc-100"
@@ -5004,7 +5004,7 @@ export function SceneViewport({
                         onClick={() => onCloseTab?.(tab.id)}
                         aria-label={`${tab.label}を閉じる`}
                         title={`${tab.label}を閉じる`}
-                        className={`mr-1 rounded px-1 text-[13px] leading-none ${
+                        className={`mr-0.5 rounded px-0.5 text-[12px] leading-none ${
                           editorMode === "play"
                             ? "text-zinc-400 hover:bg-violet-800 hover:text-zinc-100"
                             : "text-slate-400 hover:bg-slate-200 hover:text-slate-800"
