@@ -185,6 +185,68 @@ const PALETTE_CATEGORY_ORDER: readonly GraphNodeCategory[] = [
 const DELETE_KEY_CODES: string[] = ["Backspace", "Delete"];
 const FIT_VIEW_OPTIONS = { padding: 0.25 } as const;
 
+/**
+ * Japanese names for the sockets an author actually reads.
+ *
+ * The canonical names are part of the KHR contract and stay in the saved JSON,
+ * but `err`, `lastDelay` and `timeSinceLastTick` are not what a card should
+ * show to someone building a sequence. The raw name stays in the row's tooltip,
+ * so the two never drift apart in the author's head.
+ */
+const SOCKET_LABELS: Readonly<Record<string, string>> = {
+  in: "入力",
+  out: "出力",
+  done: "完了後",
+  err: "失敗時",
+  cancel: "取り消し",
+  reset: "やり直し",
+  completed: "すべて完了後",
+  loopBody: "繰り返す先",
+  default: "その他",
+  condition: "条件",
+  selection: "選ぶ番号",
+  duration: "秒数",
+  delay: "待機ID",
+  lastDelay: "待機ID",
+  value: "値",
+  animation: "クリップ番号",
+  startTime: "開始位置",
+  endTime: "終了位置",
+  stopTime: "停止位置",
+  speed: "速度",
+  n: "回数",
+  startIndex: "開始番号",
+  endIndex: "終了番号",
+  index: "現在の番号",
+  currentCount: "通った回数",
+  remainingInputs: "残りの入力",
+  lastRemainingTime: "残り秒数",
+  event: "イベント",
+  timeSinceStart: "開始からの秒",
+  timeSinceLastTick: "前フレームからの秒",
+  material: "Material",
+  a: "A",
+  b: "B",
+  c: "C",
+  d: "D",
+};
+
+/** Numbered sockets read as positions, not as names. */
+function socketDisplayLabel(socket: string): string {
+  const named = SOCKET_LABELS[socket];
+  if (named) return named;
+  return /^\d+$/.test(socket) ? `${Number(socket) + 1}番目` : socket;
+}
+
+/**
+ * Every node is the same width.
+ *
+ * A card that grew to fit its longest line pushed its own summary past the
+ * border and made the canvas read as a pile of different objects. One width
+ * means the graph reads as a structure, and nothing can stick out of a card.
+ */
+const NODE_CARD_WIDTH = 256;
+
 const FLOW_SOCKET_COLOR = "#a78bfa";
 const VALUE_SOCKET_COLOR = "#22d3ee";
 
@@ -210,6 +272,9 @@ function socketTop(index: number): number {
  * the distance instead of moving the canvas, which is the single thing that
  * made this editor feel like it was fighting the author.
  */
+/** Matches the background dots, so a snapped node lines up with what is drawn. */
+const CANVAS_GRID: [number, number] = [24, 24];
+
 const CANVAS_NAVIGATION = {
   panOnScroll: true,
   panOnDrag: true,
@@ -220,77 +285,129 @@ const CANVAS_NAVIGATION = {
   maxZoom: 2,
 } as const;
 
+function SocketRow({
+  socket,
+  side,
+  kind,
+}: {
+  socket: string;
+  side: "left" | "right";
+  kind: "flow" | "value";
+}) {
+  return (
+    <p
+      title={socket}
+      className={`h-6 truncate leading-6 ${side === "right" ? "text-right" : "text-left"} ${
+        kind === "flow" ? "font-semibold text-violet-200" : "text-cyan-200"
+      }`}
+    >
+      {socketDisplayLabel(socket)}
+    </p>
+  );
+}
+
 function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNode>) {
+  const badge = RUNTIME_SUPPORT_BADGE[data.runtimeSupport];
+  const reachedSeconds = data.reachedSeconds;
+  const unreached = reachedSeconds === null;
   return (
     <article
-      className={`min-w-56 rounded-lg border-2 shadow-lg ${CATEGORY_CLASS[data.category]} ${
+      style={{ width: NODE_CARD_WIDTH }}
+      // No `overflow-hidden`: React Flow places the socket handles half outside
+      // the border on purpose, and clipping them would leave nothing to grab.
+      // The fixed width plus truncation is what keeps the content inside.
+      className={`rounded-lg border-2 shadow-lg transition-opacity ${
+        CATEGORY_CLASS[data.category]
+      } ${
         selected ? "ring-2 ring-brand-400 ring-offset-2 ring-offset-slate-900" : ""
-      } ${data.reachedSeconds === null ? "opacity-45" : ""}`}
+      } ${unreached ? "opacity-45" : ""}`}
     >
       <header className="rounded-t-md border-b border-white/10 px-3 py-2">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] opacity-60">
+        <div className="flex items-center gap-1.5">
+          <p className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-[0.14em] opacity-60">
             {CATEGORY_LABEL[data.category]}
           </p>
-          {RUNTIME_SUPPORT_BADGE[data.runtimeSupport] ? (
+          {unreached ? (
             <span
-              title={RUNTIME_SUPPORT_BADGE[data.runtimeSupport]?.title}
-              className={`shrink-0 rounded border px-1.5 py-px text-[9px] font-semibold ${
-                RUNTIME_SUPPORT_BADGE[data.runtimeSupport]?.className ?? ""
-              }`}
+              title="タイムラインの範囲内では、このノードは一度も動きませんでした"
+              className="shrink-0 rounded border border-slate-400/40 bg-slate-400/10 px-1.5 py-px text-[9px] font-semibold text-slate-300"
             >
-              {RUNTIME_SUPPORT_BADGE[data.runtimeSupport]?.label}
+              未到達
+            </span>
+          ) : reachedSeconds === undefined ? null : (
+            <span
+              title="タイムラインの実行で、このノードが最初に動いた時刻です"
+              className="shrink-0 rounded border border-emerald-400/40 bg-emerald-400/10 px-1.5 py-px text-[9px] font-semibold tabular-nums text-emerald-200"
+            >
+              {Math.round(reachedSeconds * 100) / 100}s
+            </span>
+          )}
+          {badge ? (
+            <span
+              title={badge.title}
+              className={`shrink-0 rounded border px-1.5 py-px text-[9px] font-semibold ${badge.className}`}
+            >
+              {badge.label}
             </span>
           ) : null}
         </div>
-        <p className="mt-0.5 text-sm font-bold">{data.label}</p>
-        {data.reachedSeconds === null ? (
-          <p
-            title="タイムラインの範囲内では、このノードは一度も動きませんでした"
-            className="mt-0.5 text-[10px] font-semibold text-slate-400"
-          >
-            未到達
-          </p>
-        ) : data.reachedSeconds === undefined ? null : (
-          <p className="mt-0.5 text-[10px] font-semibold tabular-nums text-emerald-300">
-            {Math.round(data.reachedSeconds * 100) / 100}s に実行
-          </p>
-        )}
+        <p
+          title={data.label}
+          className="mt-0.5 line-clamp-2 text-sm font-bold leading-5"
+        >
+          {data.label}
+        </p>
         {data.summary ? (
-          <p className="mt-0.5 text-[11px] leading-4 opacity-90">{data.summary}</p>
+          <p
+            title={data.summary}
+            className="mt-1 line-clamp-2 text-[11px] leading-4 opacity-90"
+          >
+            {data.summary}
+          </p>
         ) : null}
-        <code className="text-[10px] opacity-60">{data.op}</code>
+        <code
+          title={data.op}
+          className="mt-0.5 block truncate text-[10px] opacity-60"
+        >
+          {data.op}
+        </code>
       </header>
-      <div className="relative min-h-16 px-3 py-2 text-[11px]">
-        <div className="grid grid-cols-2 gap-x-6">
-          <div>
+      <div className="relative min-h-10 px-3 py-2 text-[11px]">
+        <div className="grid grid-cols-2 gap-x-4">
+          <div className="min-w-0">
             {data.flowInputs.map((socket) => (
-              <p
+              <SocketRow
                 key={`flow-in-${socket}`}
-                className="h-6 truncate text-left font-semibold text-violet-200"
-              >
-                {socket}
-              </p>
+                socket={socket}
+                side="left"
+                kind="flow"
+              />
             ))}
             {data.valueInputs.map((socket) => (
-              <p key={`value-in-${socket}`} className="h-6 truncate text-left text-cyan-200">
-                {socket}
-              </p>
+              <SocketRow
+                key={`value-in-${socket}`}
+                socket={socket}
+                side="left"
+                kind="value"
+              />
             ))}
           </div>
-          <div>
+          <div className="min-w-0">
             {data.flowOutputs.map((socket) => (
-              <p
+              <SocketRow
                 key={`flow-out-${socket}`}
-                className="h-6 truncate text-right font-semibold text-violet-200"
-              >
-                {socket}
-              </p>
+                socket={socket}
+                side="right"
+                kind="flow"
+              />
             ))}
             {data.valueOutputs.map((socket) => (
-              <p key={`value-out-${socket}`} className="h-6 truncate text-right text-cyan-200">
-                {socket}
-              </p>
+              <SocketRow
+                key={`value-out-${socket}`}
+                socket={socket}
+                side="right"
+                kind="value"
+              />
             ))}
           </div>
         </div>
@@ -422,10 +539,39 @@ function toFlowNodes(
   }));
 }
 
-function toFlowEdges(graph: KhrInteractivityGraph): Edge[] {
+/**
+ * Draws the connections, with the two readings a dense graph needs.
+ *
+ * Selecting a node brings its own wires forward and pushes the rest back, which
+ * is the only way to follow one chain through a graph with thirty of them. When
+ * the timeline has run, a wire whose source never ran is drawn as faint as the
+ * node it comes from, so "this half is dead" is visible without reading labels.
+ */
+function toFlowEdges(
+  graph: KhrInteractivityGraph,
+  options: {
+    selectedNodeIndex: number | null;
+    visited: ReadonlyMap<number, number> | null;
+  },
+): Edge[] {
+  const { selectedNodeIndex, visited } = options;
+  const emphasis = (sourceIndex: number, targetIndex: number): number => {
+    if (visited && !visited.has(sourceIndex)) return 0.2;
+    if (selectedNodeIndex === null) return 1;
+    return sourceIndex === selectedNodeIndex || targetIndex === selectedNodeIndex
+      ? 1
+      : 0.3;
+  };
+  const width = (sourceIndex: number, targetIndex: number): number =>
+    selectedNodeIndex !== null &&
+    (sourceIndex === selectedNodeIndex || targetIndex === selectedNodeIndex)
+      ? 3
+      : 2;
+
   const edges: Edge[] = [];
   for (const [sourceIndex, node] of (graph.nodes ?? []).entries()) {
     for (const [socket, target] of Object.entries(node.flows ?? {})) {
+      const opacity = emphasis(sourceIndex, target.node);
       edges.push({
         id: `flow:${sourceIndex}:${socket}:${target.node}:${target.socket ?? "in"}`,
         source: String(sourceIndex),
@@ -433,14 +579,19 @@ function toFlowEdges(graph: KhrInteractivityGraph): Edge[] {
         sourceHandle: `flow-out:${socket}`,
         targetHandle: `flow-in:${target.socket ?? "in"}`,
         type: "smoothstep",
-        animated: true,
-        style: { stroke: FLOW_SOCKET_COLOR, strokeWidth: 2 },
+        animated: opacity === 1,
+        style: {
+          stroke: FLOW_SOCKET_COLOR,
+          strokeWidth: width(sourceIndex, target.node),
+          opacity,
+        },
       });
     }
   }
   for (const [targetIndex, node] of (graph.nodes ?? []).entries()) {
     for (const [socket, input] of Object.entries(node.values ?? {})) {
       if (input.node === undefined) continue;
+      const opacity = emphasis(input.node, targetIndex);
       edges.push({
         id: `value:${input.node}:${input.socket ?? "value"}:${targetIndex}:${socket}`,
         source: String(input.node),
@@ -448,7 +599,11 @@ function toFlowEdges(graph: KhrInteractivityGraph): Edge[] {
         sourceHandle: `value-out:${input.socket ?? "value"}`,
         targetHandle: `value-in:${socket}`,
         type: "smoothstep",
-        style: { stroke: VALUE_SOCKET_COLOR, strokeWidth: 2 },
+        style: {
+          stroke: VALUE_SOCKET_COLOR,
+          strokeWidth: width(input.node, targetIndex),
+          opacity,
+        },
       });
     }
   }
@@ -844,8 +999,30 @@ type GraphDraftHistory = {
   index: number;
 };
 
-/** Roughly one node card, used to keep a new node clear of an existing one. */
-const NODE_FOOTPRINT = { width: 240, height: 140 };
+/** Gap kept between a new node and the ones already placed. */
+const NODE_PLACEMENT_GAP = 32;
+
+/**
+ * How tall a card will be, from the sockets its operation declares.
+ *
+ * Placement has to know this: the animation node is three times the height of
+ * an event node, and a fixed guess either dropped a new card on top of a tall
+ * one or pushed it half a screen away from a short one.
+ */
+function estimateNodeHeight(graph: KhrInteractivityGraph, index: number): number {
+  const node = graph.nodes?.[index];
+  const op = node ? graph.declarations?.[node.declaration]?.op : undefined;
+  const template = op ? getInteractivityOperationTemplate(op) : undefined;
+  const inputs =
+    (template?.flowInputs ?? ["in"]).length + (template?.valueInputs ?? []).length;
+  const outputs =
+    (template?.flowOutputs ?? []).length + (template?.valueOutputs ?? []).length;
+  const rows = Math.max(inputs, outputs, 1);
+  // Header: category row, up to two title lines, the operation name, and the
+  // optional summary an Interaction Trigger action carries.
+  const header = op && isTriggerActionOp(op) ? 112 : 92;
+  return header + rows * SOCKET_ROW_HEIGHT + SOCKET_ROW_PADDING * 2;
+}
 
 /**
  * Nudges a candidate position until it does not land on an existing node.
@@ -857,20 +1034,100 @@ function freePositionNear(
   graph: KhrInteractivityGraph,
   candidate: { x: number; y: number },
 ): { x: number; y: number } {
-  const placed = (graph.nodes ?? []).map((node, index) =>
-    readInteractivityNodePosition(node, index),
-  );
+  const placed = (graph.nodes ?? []).map((node, index) => ({
+    position: readInteractivityNodePosition(node, index),
+    height: estimateNodeHeight(graph, index),
+  }));
   let { x, y } = candidate;
   for (let attempt = 0; attempt < 24; attempt += 1) {
-    const overlapping = placed.some(
-      (position) =>
-        Math.abs(position.x - x) < NODE_FOOTPRINT.width &&
-        Math.abs(position.y - y) < NODE_FOOTPRINT.height,
+    const blocking = placed.find(
+      (entry) =>
+        Math.abs(entry.position.x - x) < NODE_CARD_WIDTH + NODE_PLACEMENT_GAP &&
+        y < entry.position.y + entry.height + NODE_PLACEMENT_GAP &&
+        y + entry.height > entry.position.y - NODE_PLACEMENT_GAP,
     );
-    if (!overlapping) break;
-    y += NODE_FOOTPRINT.height;
+    if (!blocking) break;
+    y = blocking.position.y + blocking.height + NODE_PLACEMENT_GAP;
   }
   return { x: Math.round(x), y: Math.round(y) };
+}
+
+/** Horizontal distance between one layout column and the next. */
+const LAYOUT_COLUMN_GAP = 88;
+const LAYOUT_ROW_GAP = 40;
+
+/**
+ * Lays the graph out left to right, in the order it runs.
+ *
+ * A graph that arrived as JSON, or one built by adding nodes wherever there was
+ * room, reads as a pile. Flow depth is the only ordering that matters to an
+ * author, so it becomes the column; a value producer sits one column left of
+ * whatever consumes it, which is where the eye already looks for it.
+ */
+function autoLayoutInteractivityGraph(graph: KhrInteractivityGraph): void {
+  const nodes = graph.nodes ?? [];
+  if (nodes.length === 0) return;
+  const depth = new Array<number>(nodes.length).fill(0);
+  const hasFlow = new Array<boolean>(nodes.length).fill(false);
+
+  const flowEdges: [number, number][] = [];
+  const valueEdges: [number, number][] = [];
+  nodes.forEach((node, index) => {
+    for (const target of Object.values(node.flows ?? {})) {
+      if (target.node >= nodes.length) continue;
+      flowEdges.push([index, target.node]);
+      hasFlow[index] = true;
+      hasFlow[target.node] = true;
+    }
+    for (const input of Object.values(node.values ?? {})) {
+      if (input.node === undefined || input.node >= nodes.length) continue;
+      valueEdges.push([input.node, index]);
+    }
+  });
+
+  // Bounded relaxation rather than a topological sort: a loop is legal here, and
+  // capping the passes is what keeps one from running forever.
+  for (let pass = 0; pass < nodes.length; pass += 1) {
+    let moved = false;
+    for (const [from, to] of flowEdges) {
+      const candidate = (depth[from] ?? 0) + 1;
+      if (candidate > (depth[to] ?? 0)) {
+        depth[to] = candidate;
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  // A node that only feeds a value goes just left of its consumer.
+  for (const [from, to] of valueEdges) {
+    if (hasFlow[from]) continue;
+    depth[from] = Math.max(0, (depth[to] ?? 0) - 1);
+  }
+
+  const columns = new Map<number, number[]>();
+  depth.forEach((column, index) => {
+    const existing = columns.get(column) ?? [];
+    existing.push(index);
+    columns.set(column, existing);
+  });
+
+  for (const [column, indices] of columns) {
+    indices.sort((left, right) => {
+      const leftY = readInteractivityNodePosition(nodes[left]!, left).y;
+      const rightY = readInteractivityNodePosition(nodes[right]!, right).y;
+      return leftY - rightY || left - right;
+    });
+    let y = 0;
+    for (const index of indices) {
+      const node = nodes[index];
+      if (!node) continue;
+      nodes[index] = writeInteractivityNodePosition(node, {
+        x: column * (NODE_CARD_WIDTH + LAYOUT_COLUMN_GAP),
+        y,
+      });
+      y += estimateNodeHeight(graph, index) + LAYOUT_ROW_GAP;
+    }
+  }
 }
 
 /**
@@ -972,7 +1229,6 @@ function InteractivityGraphEditorBody({
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
-  const edges = useMemo(() => toFlowEdges(graph), [graph]);
   /**
    * The graph run forward, while the timeline is open.
    *
@@ -990,6 +1246,14 @@ function InteractivityGraphEditorBody({
           })
         : null,
     [draft, graphIndex, timelineEntry, timelineHorizon, timelineOpen],
+  );
+  const edges = useMemo(
+    () =>
+      toFlowEdges(graph, {
+        selectedNodeIndex,
+        visited: timelineRun?.visitedNodes ?? null,
+      }),
+    [graph, selectedNodeIndex, timelineRun],
   );
   const dirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(asset.extension),
@@ -1205,6 +1469,43 @@ function InteractivityGraphEditorBody({
     setSelectedNodeIndex(null);
   }, []);
 
+  const handleDuplicateNode = useCallback(() => {
+    if (readOnly || selectedNodeIndex === null) return;
+    const source = graph.nodes?.[selectedNodeIndex];
+    if (!source) return;
+    const created = graph.nodes?.length ?? 0;
+    const anchor = readInteractivityNodePosition(source, selectedNodeIndex);
+    updateGraph((nextGraph) => {
+      const original = nextGraph.nodes?.[selectedNodeIndex];
+      if (!original) return;
+      // Values and configuration come along; connections do not. A copy that
+      // arrived already wired would put two writers on one socket.
+      const copy = JSON.parse(JSON.stringify(original)) as KhrInteractivityNode;
+      delete copy.flows;
+      if (copy.values) {
+        copy.values = Object.fromEntries(
+          Object.entries(copy.values).filter(([, input]) => input.node === undefined),
+        );
+        if (Object.keys(copy.values).length === 0) delete copy.values;
+      }
+      nextGraph.nodes ??= [];
+      nextGraph.nodes.push(
+        writeInteractivityNodePosition(
+          copy,
+          freePositionNear(nextGraph, { x: anchor.x, y: anchor.y + 48 }),
+        ),
+      );
+    });
+    setSelectedNodeIndex(created);
+  }, [graph.nodes, readOnly, selectedNodeIndex, updateGraph]);
+
+  const handleAutoLayout = useCallback(() => {
+    if (readOnly) return;
+    updateGraph((nextGraph) => autoLayoutInteractivityGraph(nextGraph));
+    window.setTimeout(() => fitView({ padding: 0.25, duration: 250 }), 0);
+  }, [fitView, readOnly, updateGraph]);
+
+
   const requestClose = useCallback(() => {
     if (dirty && !readOnly) {
       setCloseConfirmOpen(true);
@@ -1220,6 +1521,11 @@ function InteractivityGraphEditorBody({
         event.preventDefault();
         if (event.shiftKey) redo();
         else undo();
+        return;
+      }
+      if (modifier && event.key.toLowerCase() === "d") {
+        event.preventDefault();
+        handleDuplicateNode();
         return;
       }
       if (modifier && event.key.toLowerCase() === "y") {
@@ -1244,7 +1550,15 @@ function InteractivityGraphEditorBody({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [closeConfirmOpen, graphMenuOpen, paletteOpen, redo, requestClose, undo]);
+  }, [
+    closeConfirmOpen,
+    graphMenuOpen,
+    handleDuplicateNode,
+    paletteOpen,
+    redo,
+    requestClose,
+    undo,
+  ]);
 
   /**
    * Where the next node lands.
@@ -1269,7 +1583,10 @@ function InteractivityGraphEditorBody({
               )
             : undefined;
       if (anchor && leadIn === 0) {
-        return freePositionNear(graph, { x: anchor.x + 300, y: anchor.y });
+        return freePositionNear(graph, {
+          x: anchor.x + NODE_CARD_WIDTH + 64,
+          y: anchor.y,
+        });
       }
       const rect = canvasRef.current?.getBoundingClientRect();
       const center = rect
@@ -1277,7 +1594,7 @@ function InteractivityGraphEditorBody({
         : { x: 160, y: 160 };
       const cascade = (count % 5) * 56;
       return freePositionNear(graph, {
-        x: center.x - 112 - leadIn + cascade,
+        x: center.x - NODE_CARD_WIDTH / 2 - leadIn + cascade,
         y: center.y - 60 + cascade,
       });
     },
@@ -1321,6 +1638,28 @@ function InteractivityGraphEditorBody({
       });
     },
     [readOnly, selectedNodeIndex, updateGraph],
+  );
+
+  /**
+   * Whether a wire can land where it is being dragged.
+   *
+   * Without this the canvas happily draws a flow output into a value input and
+   * then nothing happens, because the document has no way to say that. Refusing
+   * it during the drag is the difference between "this cannot connect" and "the
+   * editor ignored me".
+   */
+  const isValidConnection = useCallback(
+    (connection: Connection | Edge) => {
+      if (connection.source === connection.target) return false;
+      const source = parseHandle(connection.sourceHandle);
+      const target = parseHandle(connection.targetHandle);
+      if (!source || !target) return false;
+      return (
+        (source[0] === "flow-out" && target[0] === "flow-in") ||
+        (source[0] === "value-out" && target[0] === "value-in")
+      );
+    },
+    [],
   );
 
   const handleConnect = useCallback(
@@ -1451,12 +1790,9 @@ function InteractivityGraphEditorBody({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-700 bg-slate-900 px-3">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h2 className="truncate text-sm font-bold">{asset.name}</h2>
-              <span className="rounded bg-emerald-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
-                KHR_interactivity RC
-              </span>
-            </div>
+            <h2 className="truncate text-sm font-bold" title={asset.name}>
+              {asset.name}
+            </h2>
             <p className="truncate text-[10px] text-slate-400">
               Scene Viewを確認しながら編集・glTF準拠JSONを再利用
             </p>
@@ -1581,7 +1917,14 @@ function InteractivityGraphEditorBody({
           </div>
           <button
             type="button"
-            onClick={() => setPaletteOpen((open) => !open)}
+            onClick={() => {
+              setPaletteOpen((open) => {
+                // A search left over from the last node makes the palette look
+                // empty the next time it opens.
+                if (!open) setPaletteQuery("");
+                return !open;
+              });
+            }}
             disabled={readOnly}
             aria-expanded={paletteOpen}
             className={`flex h-8 shrink-0 items-center gap-1.5 rounded px-3 text-xs font-semibold disabled:opacity-40 ${
@@ -1610,6 +1953,15 @@ function InteractivityGraphEditorBody({
               やり直す
             </button>
           </div>
+          <button
+            type="button"
+            onClick={handleAutoLayout}
+            disabled={readOnly}
+            title="流れの順に、左から右へ並べ直します"
+            className="h-8 shrink-0 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800 disabled:opacity-40"
+          >
+            整列
+          </button>
           <button
             type="button"
             onClick={() => fitView({ padding: 0.25, duration: 200 })}
@@ -1700,6 +2052,9 @@ function InteractivityGraphEditorBody({
             edgesReconnectable={!readOnly}
             deleteKeyCode={readOnly ? null : DELETE_KEY_CODES}
             selectionKeyCode="Shift"
+            snapToGrid
+            snapGrid={CANVAS_GRID}
+            isValidConnection={isValidConnection}
             {...CANVAS_NAVIGATION}
             fitView
             fitViewOptions={FIT_VIEW_OPTIONS}
@@ -1742,7 +2097,7 @@ function InteractivityGraphEditorBody({
               <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-2.5">
                 {visibleRecipes.length > 0 ? (
                   <section className="mb-3">
-                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    <p className="sticky top-0 z-10 mb-1.5 bg-slate-950/95 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                       よくある動き
                     </p>
                     <div className="space-y-1">
@@ -1786,7 +2141,7 @@ function InteractivityGraphEditorBody({
                 ) : null}
                 {paletteGroups.map((group) => (
                   <section key={group.category} className="mb-3 last:mb-0">
-                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    <p className="sticky top-0 z-10 mb-1.5 bg-slate-950/95 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                       {CATEGORY_LABEL[group.category]}
                     </p>
                     <div className="space-y-1">
@@ -1870,6 +2225,11 @@ function InteractivityGraphEditorBody({
         ) : null}
 
         <footer className="flex min-h-8 shrink-0 items-center gap-3 border-t border-slate-700 bg-slate-900 px-3 text-[10px] text-slate-400">
+          {/* Spec provenance belongs here, not in the header: it never changes
+              and the header needs its width for the actions. */}
+          <span className="shrink-0 rounded bg-emerald-400/15 px-1.5 py-0.5 font-semibold text-emerald-300">
+            KHR_interactivity RC
+          </span>
           <span>{graph.nodes?.length ?? 0} nodes</span>
           <span>{edges.length} connections</span>
           {errors.length > 0 ? (
@@ -2182,19 +2542,30 @@ function InteractivityGraphEditorBody({
                   />
                 </pre>
               </details>
-              <button
-                type="button"
-                disabled={readOnly}
-                onClick={() => {
-                  updateGraph((nextGraph) =>
-                    removeNodesAndReindex(nextGraph, [selectedNodeIndex]),
-                  );
-                  setSelectedNodeIndex(null);
-                }}
-                className="flex w-full items-center justify-center gap-1.5 rounded border border-rose-700 px-2 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-950 disabled:opacity-40"
-              >
-                <DeleteIcon size={13} aria-hidden="true" /> ノードを削除
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={readOnly}
+                  onClick={handleDuplicateNode}
+                  title="Ctrl+D"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded border border-slate-600 px-2 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-40"
+                >
+                  <CreateIcon size={13} aria-hidden="true" /> 複製
+                </button>
+                <button
+                  type="button"
+                  disabled={readOnly}
+                  onClick={() => {
+                    updateGraph((nextGraph) =>
+                      removeNodesAndReindex(nextGraph, [selectedNodeIndex]),
+                    );
+                    setSelectedNodeIndex(null);
+                  }}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded border border-rose-700 px-2 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-950 disabled:opacity-40"
+                >
+                  <DeleteIcon size={13} aria-hidden="true" /> 削除
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-2 rounded border border-slate-700 bg-slate-950 p-3 text-xs leading-5 text-slate-400">

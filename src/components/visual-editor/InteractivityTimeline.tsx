@@ -288,7 +288,7 @@ export function InteractivityTimeline({
           <p className="p-3 text-[11px] leading-5 text-slate-400">
             {entryPoint === "start"
               ? "開始時から動くものがありません。「開始時」ノードから順に繋ぐと、ここに時刻が並びます。"
-              : "インタラクトから動くものがありません。"}
+              : "インタラクトから動くものがありません。「インタラクトされたとき」ノードから順に繋ぐと、ここに時刻が並びます。"}
           </p>
         ) : (
           <div className="min-w-[420px]">
