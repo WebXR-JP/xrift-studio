@@ -304,6 +304,102 @@ const KHR_INTERACTIVITY_CORE_OPERATIONS = new Set([
   "variable/set",
 ]);
 
+/**
+ * Two-input arithmetic, comparison and logic, generated from one shape.
+ *
+ * These all take `a` and `b` and publish `value`, so writing them out by hand
+ * would be sixteen copies of the same eight lines and a place for one of them
+ * to drift. The socket names match what the engine reads.
+ */
+const MATH_PAIR_OPERATIONS: readonly {
+  op: string;
+  label: string;
+  kind: "float" | "bool";
+}[] = [
+  { op: "math/add", label: "足す", kind: "float" },
+  { op: "math/sub", label: "引く", kind: "float" },
+  { op: "math/mul", label: "掛ける", kind: "float" },
+  { op: "math/div", label: "割る", kind: "float" },
+  { op: "math/min", label: "小さいほう", kind: "float" },
+  { op: "math/max", label: "大きいほう", kind: "float" },
+  { op: "math/eq", label: "等しい", kind: "float" },
+  { op: "math/lt", label: "より小さい", kind: "float" },
+  { op: "math/le", label: "以下", kind: "float" },
+  { op: "math/gt", label: "より大きい", kind: "float" },
+  { op: "math/ge", label: "以上", kind: "float" },
+  { op: "math/and", label: "かつ", kind: "bool" },
+  { op: "math/or", label: "または", kind: "bool" },
+];
+
+const MATH_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
+  ...MATH_PAIR_OPERATIONS.map((entry) => ({
+    op: entry.op,
+    label: entry.label,
+    category: "math" as const,
+    flowInputs: [],
+    flowOutputs: [],
+    valueInputs: ["a", "b"],
+    valueOutputs: ["value"],
+    createNode: (types: Record<string, number>) => ({
+      values: {
+        a: { type: types[entry.kind], value: [entry.kind === "bool" ? false : 0] },
+        b: { type: types[entry.kind], value: [entry.kind === "bool" ? false : 0] },
+      },
+    }),
+  })),
+  {
+    op: "math/not",
+    label: "否定",
+    category: "math",
+    flowInputs: [],
+    flowOutputs: [],
+    valueInputs: ["a"],
+    valueOutputs: ["value"],
+    createNode: (types) => ({ values: { a: { type: types.bool, value: [false] } } }),
+  },
+  {
+    op: "math/random",
+    label: "乱数",
+    category: "math",
+    flowInputs: [],
+    flowOutputs: [],
+    valueInputs: [],
+    valueOutputs: ["value"],
+  },
+  {
+    op: "math/mix",
+    label: "2つの値を混ぜる",
+    category: "math",
+    flowInputs: [],
+    flowOutputs: [],
+    valueInputs: ["a", "b", "c"],
+    valueOutputs: ["value"],
+    createNode: (types) => ({
+      values: {
+        a: { type: types.float, value: [0] },
+        b: { type: types.float, value: [1] },
+        c: { type: types.float, value: [0.5] },
+      },
+    }),
+  },
+  {
+    op: "math/clamp",
+    label: "範囲に収める",
+    category: "math",
+    flowInputs: [],
+    flowOutputs: [],
+    valueInputs: ["a", "b", "c"],
+    valueOutputs: ["value"],
+    createNode: (types) => ({
+      values: {
+        a: { type: types.float, value: [0] },
+        b: { type: types.float, value: [0] },
+        c: { type: types.float, value: [1] },
+      },
+    }),
+  },
+];
+
 export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
   {
     op: "event/onStart",
@@ -484,6 +580,156 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     valueInputs: [],
     valueOutputs: ["value"],
   },
+  {
+    op: "event/receive",
+    label: "イベントを受け取る",
+    category: "event",
+    flowInputs: [],
+    flowOutputs: ["out"],
+    valueInputs: [],
+    valueOutputs: [],
+  },
+  {
+    op: "event/send",
+    label: "イベントを送る",
+    category: "event",
+    flowInputs: ["in"],
+    flowOutputs: ["out"],
+    valueInputs: [],
+    valueOutputs: [],
+  },
+  {
+    op: "flow/sequence",
+    label: "順番に実行",
+    category: "flow",
+    flowInputs: ["in"],
+    // Three outputs is what makes the node usable without a socket editor. The
+    // engine runs whatever is connected, in socket-name order, so adding a
+    // fourth later does not change what an existing graph does.
+    flowOutputs: ["0", "1", "2"],
+    valueInputs: [],
+    valueOutputs: [],
+  },
+  {
+    op: "flow/doN",
+    label: "N回だけ通す",
+    category: "flow",
+    flowInputs: ["in", "reset"],
+    flowOutputs: ["out"],
+    valueInputs: ["n"],
+    valueOutputs: ["currentCount"],
+    createNode: (types) => ({ values: { n: { type: types.int, value: [1] } } }),
+  },
+  {
+    op: "flow/for",
+    label: "回数で繰り返す",
+    category: "flow",
+    flowInputs: ["in"],
+    flowOutputs: ["loopBody", "completed"],
+    valueInputs: ["startIndex", "endIndex"],
+    valueOutputs: ["index"],
+    createNode: (types) => ({
+      values: {
+        startIndex: { type: types.int, value: [0] },
+        endIndex: { type: types.int, value: [3] },
+      },
+    }),
+  },
+  {
+    op: "flow/while",
+    label: "条件の間くり返す",
+    category: "flow",
+    flowInputs: ["in"],
+    flowOutputs: ["loopBody", "completed"],
+    valueInputs: ["condition"],
+    valueOutputs: [],
+    createNode: (types) => ({
+      values: { condition: { type: types.bool, value: [false] } },
+    }),
+  },
+  {
+    op: "flow/multiGate",
+    label: "順番に切り替え",
+    category: "flow",
+    flowInputs: ["in", "reset"],
+    flowOutputs: ["0", "1", "2"],
+    valueInputs: [],
+    valueOutputs: [],
+  },
+  {
+    op: "flow/waitAll",
+    label: "すべて揃うまで待つ",
+    category: "flow",
+    flowInputs: ["0", "1", "reset"],
+    flowOutputs: ["completed", "out"],
+    valueInputs: [],
+    valueOutputs: ["remainingInputs"],
+  },
+  {
+    op: "flow/throttle",
+    label: "連続実行を防ぐ",
+    category: "flow",
+    flowInputs: ["in", "reset"],
+    flowOutputs: ["out", "err"],
+    valueInputs: ["duration"],
+    valueOutputs: ["lastRemainingTime"],
+    createNode: (types) => ({
+      values: { duration: { type: types.float, value: [1] } },
+    }),
+  },
+  {
+    op: "flow/cancelDelay",
+    label: "待機を取り消す",
+    category: "flow",
+    flowInputs: ["in"],
+    flowOutputs: ["out"],
+    valueInputs: ["delay"],
+    valueOutputs: [],
+    createNode: (types) => ({ values: { delay: { type: types.int, value: [0] } } }),
+  },
+  {
+    op: "flow/switch",
+    label: "値で分岐",
+    category: "flow",
+    flowInputs: ["in"],
+    flowOutputs: ["0", "1", "default"],
+    valueInputs: ["selection"],
+    valueOutputs: [],
+    createNode: (types) => ({
+      values: { selection: { type: types.int, value: [0] } },
+    }),
+  },
+  {
+    op: "animation/stopAt",
+    label: "時間を指定して停止",
+    category: "animation",
+    flowInputs: ["in"],
+    flowOutputs: ["out", "err", "done"],
+    valueInputs: ["animation", "stopTime"],
+    valueOutputs: [],
+    createNode: (types) => ({
+      values: {
+        animation: { type: types.int },
+        stopTime: { type: types.float, value: [0] },
+      },
+    }),
+  },
+  {
+    op: "variable/interpolate",
+    label: "変数をゆっくり変える",
+    category: "variable",
+    flowInputs: ["in"],
+    flowOutputs: ["out", "err", "done"],
+    valueInputs: ["value", "duration"],
+    valueOutputs: [],
+    createNode: (types) => ({
+      values: {
+        value: { type: types.float, value: [1] },
+        duration: { type: types.float, value: [1] },
+      },
+    }),
+  },
+  ...MATH_OPERATION_TEMPLATES,
 ];
 
 export function getInteractivityOperationTemplate(
@@ -1239,7 +1485,10 @@ export function validateKhrInteractivityExtension(
     }
     if (nodes.length > 1024) error(`${graphPath}.nodes`, "XRift Studio supports up to 1024 nodes per graph");
 
-    const flowEdges = new Map<number, number[]>();
+    // Value connections are checked for cycles; flow connections are not,
+    // because a flow cycle is how a graph repeats. The engine bounds a loop with
+    // an activation budget rather than forbidding it here.
+    const valueEdges = new Map<number, number[]>();
     nodes.forEach((node, nodeIndex) => {
       const nodePath = `${graphPath}.nodes[${nodeIndex}]`;
       if (!isRecord(node) || !isNonNegativeInteger(node.declaration)) {
@@ -1275,8 +1524,12 @@ export function validateKhrInteractivityExtension(
           if (hasNode && hasValue) {
             error(`${nodePath}.values.${socket}`, "value socket cannot contain both node and inline value");
           }
-          if (hasNode && (!isNonNegativeInteger(input.node) || input.node >= nodeIndex)) {
-            error(`${nodePath}.values.${socket}.node`, "value source must reference an earlier node");
+          if (hasNode && (!isNonNegativeInteger(input.node) || input.node >= nodes.length)) {
+            error(`${nodePath}.values.${socket}.node`, "value source must reference a node in this graph");
+          } else if (hasNode && isNonNegativeInteger(input.node)) {
+            const sources = valueEdges.get(nodeIndex) ?? [];
+            sources.push(input.node);
+            valueEdges.set(nodeIndex, sources);
           }
           if (hasValue) {
             validateTypedValue(input.value, input.type, `${nodePath}.values.${socket}`);
@@ -1294,13 +1547,9 @@ export function validateKhrInteractivityExtension(
       }
       if (isRecord(node.flows)) {
         for (const [socket, target] of Object.entries(node.flows)) {
-          if (!isRecord(target) || !isNonNegativeInteger(target.node) || target.node <= nodeIndex || target.node >= nodes.length) {
-            error(`${nodePath}.flows.${socket}.node`, "flow target must reference a later node");
-            continue;
+          if (!isRecord(target) || !isNonNegativeInteger(target.node) || target.node >= nodes.length) {
+            error(`${nodePath}.flows.${socket}.node`, "flow target must reference a node in this graph");
           }
-          const targets = flowEdges.get(nodeIndex) ?? [];
-          targets.push(target.node);
-          flowEdges.set(nodeIndex, targets);
         }
       }
     });
@@ -1311,13 +1560,13 @@ export function validateKhrInteractivityExtension(
       if (visiting.has(nodeIndex)) return true;
       if (visited.has(nodeIndex)) return false;
       visiting.add(nodeIndex);
-      const cyclic = (flowEdges.get(nodeIndex) ?? []).some(visit);
+      const cyclic = (valueEdges.get(nodeIndex) ?? []).some(visit);
       visiting.delete(nodeIndex);
       visited.add(nodeIndex);
       return cyclic;
     };
     if (nodes.some((_, nodeIndex) => visit(nodeIndex))) {
-      error(`${graphPath}.nodes`, "behavior graph flow contains a cycle");
+      error(`${graphPath}.nodes`, "behavior graph value connections contain a cycle");
     }
   });
   return diagnostics;

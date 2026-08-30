@@ -171,51 +171,75 @@ publishing, which is the drift this document exists to prevent.
 ## Runtime boundary
 
 The Asset, project serialization, and runtime manifest preserve the full
-canonical graph. This work unit establishes the authoring and interchange
-boundary; it does not claim a complete KHR_interactivity behavior executor.
-Runtime adapters are implemented operation by operation and unsupported
-operations must remain serialized and behave as a no-op rather than being
+canonical graph. Operations are implemented one at a time; an unsupported
+operation must remain serialized and behave as a no-op rather than being
 translated to arbitrary JavaScript. WebXR controller/input acquisition remains
-an application responsibility and is connected to graph events at the runtime
-adapter boundary.
+an application responsibility and is connected to graph events at the host
+boundary.
 
-### What the adapter executes
+### One engine, two surfaces
 
-`packages/xrift-studio-runtime/src/interactivity-adapter.ts` holds the walk and
-the support table, and it is the single source of truth. It lives in the
-runtime package because the Play preview and the published world animate from
-the same graph and must not drift apart: Studio imports it for Play and for its
-authoring diagnostics, and the three.js and React Three Fiber runtimes import
-it for playback. Studio adds only the Japanese notes shown in its UI, keyed off
-the shared classification, so a newly adapted operation cannot keep reading as
-unsupported in the Editor.
+`packages/xrift-studio-runtime/src/interactivity/` holds the interpreter, and
+it is the single source of truth. It lives in the runtime package because the
+Play preview and the published world run from the same graph and must not
+drift apart: Studio imports it for Play and for its authoring diagnostics, and
+the three.js and React Three Fiber runtimes import it for playback. Studio adds
+only the Japanese notes shown in its UI, keyed off the shared classification,
+so a newly implemented operation cannot keep reading as unsupported in the
+Editor.
+
+The engine keeps the two evaluation directions apart. Values are pulled on
+demand, and a cycle among them is a reported error, because a value that
+depends on itself has no answer. Flows are pushed from an entry point, and a
+cycle among them is a loop, which is how a graph repeats; it is bounded by an
+activation budget per frame rather than forbidden by the schema. Waits and
+timed changes are scheduled and continued at the moment they come due, so a
+chain of one-second waits lands on whole seconds instead of drifting by a frame
+on every hop.
+
+Everything the engine changes in the world goes through `InteractivityHost`.
+The engine itself knows nothing about three.js, React, or the Scene document,
+which is what lets Studio and a published world supply different plumbing under
+one contract — and what lets the whole interpreter be exercised without a
+renderer.
+
+`dryRunInteractivityGraph` runs a graph forward without a renderer and reports
+what happens and when. The Editor uses it for diagnostics, the Model visual
+uses it for the clips a graph starts and stops, and the fixtures use it to
+assert ordering and timing without a clock. Randomness is seeded, so two runs
+of one graph produce the same report.
+
+### What the engine executes
 
 The Editor node badges, the recipe list, the compiler, and
-`list_interactivity_operations` all read that table, so an operation can never
-look supported on one surface and unsupported on another. Extending the adapter
-means changing the table and the walk beside it together.
+`list_interactivity_operations` all read one table, so an operation can never
+look supported on one surface and unsupported on another.
 
-| Operation | Support | Notes |
+| Group | Support | Notes |
 | --- | --- | --- |
-| `event/onStart` | executed | Entry point for the walk. |
-| `animation/start` | executed | Reads the inline `animation` index. |
-| `animation/stop` | conditional | Cancels a start the same path reached earlier; it cannot stop a clip that is already playing. |
-| `flow/setDelay` | conditional | `out` continues immediately, `done` after the inline `duration`. `cancel` and `err` are not implemented. |
-| `flow/branch` | conditional | Follows one side when `condition` is resolvable. |
+| `event/onStart`, `event/onTick`, `event/receive` | executed | Entry points. |
+| `event/send` | conditional | Reaches other graphs in the Asset; the Scene-facing notification needs a host. |
+| `flow/branch`, `switch`, `sequence`, `setDelay`, `cancelDelay`, `doN`, `multiGate`, `waitAll`, `throttle`, `for`, `while` | executed | Waiting, ordering, repeating and joining. |
+| `variable/get`, `set`, `interpolate` | executed | `interpolate` advances every frame and continues on `done`. |
+| `math/*`, `type/*`, `ref/eq` | executed | Arithmetic, comparison, logic, vectors and conversions. |
+| `animation/start`, `stop`, `stopAt` | conditional | Needs a host that owns the clips. |
+| `xrift/onInteract`, `setProperty`, `toggleProperty` | conditional | Needs the graph to be attached to an Entity. |
+| `pointer/get`, `set`, `interpolate` | ignored | Implemented in the interpreter; no host resolves a glTF Object Model pointer yet. |
 | everything else | ignored | Serialized, never executed. |
 
 Two rules keep the no-op honest:
 
-- **A no-op node produces no flow output.** The walk stops at an unimplemented
+- **A no-op node produces no flow output.** Execution stops at an unimplemented
   operation rather than continuing as though it had succeeded. Doing otherwise
-  is worse than nothing: a graph gated behind `flow/branch` used to start both
-  branches, and one behind `flow/setDelay` used to start with no delay at all.
-- **An unconnected socket takes its type default; a connected one is
-  unevaluable.** There is no expression evaluator, so a socket fed by another
-  node stops the walk instead of being read from a stale inline literal.
+  is worse than nothing: a graph gated behind a branch would start both sides.
+- **An operation classified as unsupported stays unsupported in the UI even
+  when the interpreter would run it.** `pointer/*` is the current case: a badge
+  that promised a write no host performs would be a lie the author only
+  discovers in Play.
 
 `collectInteractivityRuntimeDiagnostics` reports every node the walk refuses to
-run. The Editor merges those warnings into the same Diagnostics list as schema
+run, together with the nodes it stopped at while running the graph. The
+Editor merges those warnings into the same Diagnostics list as schema
 validation, the compiler emits them as `interactivity-operation-not-executed`,
 and `validate_interactivity_asset` returns them as `runtimeDiagnostics`
 alongside the schema `diagnostics`. They are warnings everywhere: an

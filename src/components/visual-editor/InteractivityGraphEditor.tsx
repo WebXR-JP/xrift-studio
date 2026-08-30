@@ -7,6 +7,7 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
+  useEdgesState,
   useNodesState,
   useReactFlow,
   type Connection,
@@ -60,6 +61,7 @@ import {
   findInteractionTriggerTargetComponent,
   type InteractionTriggerTargetEntity,
 } from "../../lib/visual-editor";
+import { EditorDialog } from "./EditorDialog";
 import { EDITOR_ICONS } from "./editor-icons";
 import { CodeTokens } from "../CodeBlock";
 
@@ -86,14 +88,21 @@ type GraphNodeData = {
  * operation stays unmarked so the badge means something when it appears.
  */
 const RUNTIME_SUPPORT_BADGE: Partial<
-  Record<InteractivityRuntimeSupport, { label: string; className: string }>
+  Record<
+    InteractivityRuntimeSupport,
+    { label: string; title: string; className: string }
+  >
 > = {
   ignored: {
     label: "Play未対応",
+    title:
+      "Play の実行エンジンがこの operation を実行しません。詳細は右の Diagnostics を確認してください",
     className: "border-amber-500/50 bg-amber-500/15 text-amber-200",
   },
   conditional: {
-    label: "定数のみ",
+    label: "接続が必要",
+    title:
+      "実行はされますが、対象の Entity・Model・Material へ接続されるまで何も変わりません",
     className: "border-slate-400/40 bg-slate-400/10 text-slate-300",
   },
 };
@@ -202,7 +211,7 @@ function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNode>) {
           </p>
           {RUNTIME_SUPPORT_BADGE[data.runtimeSupport] ? (
             <span
-              title="Play で実行されない operation です。詳細は右の Diagnostics を確認してください"
+              title={RUNTIME_SUPPORT_BADGE[data.runtimeSupport]?.title}
               className={`shrink-0 rounded border px-1.5 py-px text-[9px] font-semibold ${
                 RUNTIME_SUPPORT_BADGE[data.runtimeSupport]?.className ?? ""
               }`}
@@ -413,34 +422,99 @@ function parseHandle(handle: string | null | undefined): [string, string] | null
   return [handle.slice(0, separator), handle.slice(separator + 1)];
 }
 
-function removeNodeAndReindex(
+/**
+ * Removes nodes and repairs every index that pointed past them.
+ *
+ * Node identity in a KHR graph is its position in the array, so deleting one
+ * renumbers the rest. Doing several at once in a single pass is what keeps a
+ * multi-select delete from remapping against indices an earlier removal already
+ * moved.
+ */
+function removeNodesAndReindex(
   graph: KhrInteractivityGraph,
-  removedIndex: number,
+  removed: readonly number[],
 ): void {
-  graph.nodes = (graph.nodes ?? []).filter((_, index) => index !== removedIndex);
+  const dropped = new Set(removed);
+  const nodes = graph.nodes ?? [];
+  const remap = new Map<number, number>();
+  let next = 0;
+  for (let index = 0; index < nodes.length; index += 1) {
+    if (dropped.has(index)) continue;
+    remap.set(index, next);
+    next += 1;
+  }
+  graph.nodes = nodes.filter((_unused, index) => !dropped.has(index));
   for (const node of graph.nodes) {
     if (node.flows) {
       node.flows = Object.fromEntries(
-        Object.entries(node.flows)
-          .filter(([, target]) => target.node !== removedIndex)
-          .map(([socket, target]) => [
-            socket,
-            { ...target, node: target.node > removedIndex ? target.node - 1 : target.node },
-          ]),
+        Object.entries(node.flows).flatMap(([socket, target]) => {
+          const moved = remap.get(target.node);
+          return moved === undefined ? [] : [[socket, { ...target, node: moved }]];
+        }),
       );
       if (Object.keys(node.flows).length === 0) delete node.flows;
     }
     if (node.values) {
       node.values = Object.fromEntries(
-        Object.entries(node.values)
-          .filter(([, input]) => input.node !== removedIndex)
-          .map(([socket, input]) => [
-            socket,
-            input.node !== undefined && input.node > removedIndex
-              ? { ...input, node: input.node - 1 }
-              : input,
-          ]),
+        Object.entries(node.values).flatMap(([socket, input]) => {
+          if (input.node === undefined) return [[socket, input]];
+          const moved = remap.get(input.node);
+          return moved === undefined ? [] : [[socket, { ...input, node: moved }]];
+        }),
       );
+      if (Object.keys(node.values).length === 0) delete node.values;
+    }
+  }
+}
+
+/** Writes one connection into the graph, in whichever direction it runs. */
+function applyConnectionToGraph(
+  graph: KhrInteractivityGraph,
+  connection: { source: string | null; target: string | null; sourceHandle?: string | null; targetHandle?: string | null },
+): void {
+  const sourceIndex = Number(connection.source);
+  const targetIndex = Number(connection.target);
+  const sourceHandle = parseHandle(connection.sourceHandle);
+  const targetHandle = parseHandle(connection.targetHandle);
+  if (!sourceHandle || !targetHandle) return;
+  const source = graph.nodes?.[sourceIndex];
+  const target = graph.nodes?.[targetIndex];
+  if (!source || !target) return;
+  if (sourceHandle[0] === "flow-out" && targetHandle[0] === "flow-in") {
+    source.flows = {
+      ...(source.flows ?? {}),
+      [sourceHandle[1]]: {
+        node: targetIndex,
+        ...(targetHandle[1] === "in" ? {} : { socket: targetHandle[1] }),
+      },
+    };
+  }
+  if (sourceHandle[0] === "value-out" && targetHandle[0] === "value-in") {
+    target.values = {
+      ...(target.values ?? {}),
+      [targetHandle[1]]: {
+        node: sourceIndex,
+        ...(sourceHandle[1] === "value" ? {} : { socket: sourceHandle[1] }),
+      },
+    };
+  }
+}
+
+/** Removes one connection, addressed the same way the canvas draws it. */
+function removeConnectionFromGraph(graph: KhrInteractivityGraph, edge: Edge): void {
+  const sourceHandle = parseHandle(edge.sourceHandle);
+  const targetHandle = parseHandle(edge.targetHandle);
+  if (sourceHandle?.[0] === "flow-out") {
+    const node = graph.nodes?.[Number(edge.source)];
+    if (node?.flows) {
+      delete node.flows[sourceHandle[1]];
+      if (Object.keys(node.flows).length === 0) delete node.flows;
+    }
+  }
+  if (targetHandle?.[0] === "value-in") {
+    const node = graph.nodes?.[Number(edge.target)];
+    if (node?.values) {
+      delete node.values[targetHandle[1]];
       if (Object.keys(node.values).length === 0) delete node.values;
     }
   }
@@ -689,6 +763,17 @@ export function InteractivityGraphEditor(props: {
   );
 }
 
+/** How many graph edits stay undoable. Older entries fall off the front. */
+const GRAPH_HISTORY_LIMIT = 60;
+
+const INSPECTOR_MIN_WIDTH = 240;
+const INSPECTOR_MAX_WIDTH = 560;
+
+type GraphDraftHistory = {
+  entries: KhrInteractivityExtension[];
+  index: number;
+};
+
 /** Stable empty list: a fresh array per render would restart the node effect. */
 const NO_TRIGGER_TARGETS: readonly InteractionTriggerTargetEntity[] = [];
 
@@ -707,8 +792,20 @@ function InteractivityGraphEditorBody({
   onSave: (assetId: string, extension: KhrInteractivityExtension) => void;
   onClose: () => void;
 }) {
-  const [draft, setDraft] = useState(() => cloneKhrInteractivityExtension(asset.extension));
+  // The draft is kept as a history rather than as one value: a graph editor
+  // without undo makes every experiment a risk, and the Scene's own history is
+  // a different document with a different lifetime.
+  const [history, setHistory] = useState<GraphDraftHistory>(() => ({
+    entries: [cloneKhrInteractivityExtension(asset.extension)],
+    index: 0,
+  }));
+  const draft = history.entries[history.index] ?? asset.extension;
+  const canUndo = history.index > 0;
+  const canRedo = history.index < history.entries.length - 1;
   const [graphIndex, setGraphIndex] = useState(asset.extension.graph ?? 0);
+  const [expanded, setExpanded] = useState(false);
+  const [inspectorWidth, setInspectorWidth] = useState(288);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
@@ -717,9 +814,14 @@ function InteractivityGraphEditorBody({
   const [jsonMessage, setJsonMessage] = useState<string | null>(null);
   const graph = draft.graphs[graphIndex] ?? draft.graphs[0];
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<GraphFlowNode>([]);
+  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
   const edges = useMemo(() => toFlowEdges(graph), [graph]);
+  const dirty = useMemo(
+    () => JSON.stringify(draft) !== JSON.stringify(asset.extension),
+    [asset.extension, draft],
+  );
   // Schema validation and Play-runtime support are separate questions about the
   // same graph, so they are collected separately and shown in one list: a graph
   // can be perfectly valid KHR JSON and still do nothing when Play runs it.
@@ -847,30 +949,94 @@ function InteractivityGraphEditorBody({
     );
   }, [graph, selectedNodeIndex, setFlowNodes, triggerTargets]);
 
+  // Edges are canvas state as well as document state: without it the library
+  // never marks one selected, and a connection could be drawn but not cut.
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (paletteOpen) {
-        setPaletteOpen(false);
-        return;
-      }
-      onClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, paletteOpen]);
+    setFlowEdges(edges);
+  }, [edges, setFlowEdges]);
+
+
+  const commitDraft = useCallback((next: KhrInteractivityExtension) => {
+    setHistory((current) => {
+      const entries = [
+        ...current.entries.slice(0, current.index + 1),
+        next,
+      ].slice(-GRAPH_HISTORY_LIMIT);
+      return { entries, index: entries.length - 1 };
+    });
+  }, []);
 
   const updateGraph = useCallback(
     (mutate: (graph: KhrInteractivityGraph) => void) => {
-      setDraft((current) => {
-        const next = cloneKhrInteractivityExtension(current);
+      setHistory((current) => {
+        const base = current.entries[current.index];
+        if (!base) return current;
+        const next = cloneKhrInteractivityExtension(base);
         const target = next.graphs[graphIndex] ?? next.graphs[0];
+        if (!target) return current;
         mutate(target);
-        return next;
+        const entries = [
+          ...current.entries.slice(0, current.index + 1),
+          next,
+        ].slice(-GRAPH_HISTORY_LIMIT);
+        return { entries, index: entries.length - 1 };
       });
     },
     [graphIndex],
   );
+
+  const undo = useCallback(() => {
+    setHistory((current) =>
+      current.index > 0 ? { ...current, index: current.index - 1 } : current,
+    );
+    setSelectedNodeIndex(null);
+  }, []);
+
+  const redo = useCallback(() => {
+    setHistory((current) =>
+      current.index < current.entries.length - 1
+        ? { ...current, index: current.index + 1 }
+        : current,
+    );
+    setSelectedNodeIndex(null);
+  }, []);
+
+  const requestClose = useCallback(() => {
+    if (dirty && !readOnly) {
+      setCloseConfirmOpen(true);
+      return;
+    }
+    onClose();
+  }, [dirty, onClose, readOnly]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const modifier = event.metaKey || event.ctrlKey;
+      if (modifier && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (modifier && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        redo();
+        return;
+      }
+      if (event.key !== "Escape") return;
+      if (closeConfirmOpen) {
+        setCloseConfirmOpen(false);
+        return;
+      }
+      if (paletteOpen) {
+        setPaletteOpen(false);
+        return;
+      }
+      requestClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [closeConfirmOpen, paletteOpen, redo, requestClose, undo]);
 
   /**
    * Where the next node lands.
@@ -937,57 +1103,58 @@ function InteractivityGraphEditorBody({
   const handleConnect = useCallback(
     (connection: Connection) => {
       if (readOnly || connection.source === connection.target) return;
-      const sourceIndex = Number(connection.source);
-      const targetIndex = Number(connection.target);
-      const sourceHandle = parseHandle(connection.sourceHandle);
-      const targetHandle = parseHandle(connection.targetHandle);
-      if (!sourceHandle || !targetHandle) return;
+      updateGraph((nextGraph) => applyConnectionToGraph(nextGraph, connection));
+    },
+    [readOnly, updateGraph],
+  );
+
+  /**
+   * Moves an existing wire to a new socket.
+   *
+   * The canvas already let an author grab an edge end; without this the grab
+   * simply snapped back, which reads as the editor refusing an edit rather than
+   * as a missing handler.
+   */
+  const handleReconnect = useCallback(
+    (previous: Edge, connection: Connection) => {
+      if (readOnly) return;
       updateGraph((nextGraph) => {
-        const source = nextGraph.nodes?.[sourceIndex];
-        const target = nextGraph.nodes?.[targetIndex];
-        if (!source || !target) return;
-        if (sourceHandle[0] === "flow-out" && targetHandle[0] === "flow-in") {
-          source.flows = {
-            ...(source.flows ?? {}),
-            [sourceHandle[1]]: {
-              node: targetIndex,
-              ...(targetHandle[1] === "in" ? {} : { socket: targetHandle[1] }),
-            },
-          };
-        }
-        if (sourceHandle[0] === "value-out" && targetHandle[0] === "value-in") {
-          target.values = {
-            ...(target.values ?? {}),
-            [targetHandle[1]]: {
-              node: sourceIndex,
-              ...(sourceHandle[1] === "value" ? {} : { socket: sourceHandle[1] }),
-            },
-          };
-        }
+        removeConnectionFromGraph(nextGraph, previous);
+        applyConnectionToGraph(nextGraph, connection);
       });
     },
     [readOnly, updateGraph],
   );
 
-  const handleDeleteEdges = useCallback(
-    (deleted: Edge[]) => {
+  /**
+   * Deletes a selection of nodes and wires in one document edit.
+   *
+   * Nodes and edges are removed together rather than through separate handlers:
+   * removing a node renumbers the rest, so an edge deletion applied afterwards
+   * would address the wrong connection.
+   */
+  const handleDeleteElements = useCallback(
+    ({ nodes: removedNodes, edges: removedEdges }: { nodes: Node[]; edges: Edge[] }) => {
       if (readOnly) return;
+      const removedIndices = removedNodes
+        .map((node) => Number(node.id))
+        .filter((index) => Number.isInteger(index));
+      if (removedIndices.length === 0 && removedEdges.length === 0) return;
+      const dropped = new Set(removedIndices);
       updateGraph((nextGraph) => {
-        for (const edge of deleted) {
-          const source = Number(edge.source);
-          const target = Number(edge.target);
-          const sourceHandle = parseHandle(edge.sourceHandle);
-          const targetHandle = parseHandle(edge.targetHandle);
-          if (sourceHandle?.[0] === "flow-out") {
-            const node = nextGraph.nodes?.[source];
-            if (node?.flows) delete node.flows[sourceHandle[1]];
+        for (const edge of removedEdges) {
+          // A wire attached to a node that is going away is handled by the
+          // renumbering below; deleting it by index first would be redundant.
+          if (dropped.has(Number(edge.source)) || dropped.has(Number(edge.target))) {
+            continue;
           }
-          if (targetHandle?.[0] === "value-in") {
-            const node = nextGraph.nodes?.[target];
-            if (node?.values) delete node.values[targetHandle[1]];
-          }
+          removeConnectionFromGraph(nextGraph, edge);
+        }
+        if (removedIndices.length > 0) {
+          removeNodesAndReindex(nextGraph, removedIndices);
         }
       });
+      if (removedIndices.length > 0) setSelectedNodeIndex(null);
     },
     [readOnly, updateGraph],
   );
@@ -1023,7 +1190,7 @@ function InteractivityGraphEditorBody({
         setJsonMessage("公式スキーマ互換性エラーがあります。下の診断を確認してください");
         return;
       }
-      setDraft(parsed);
+      commitDraft(parsed);
       setGraphIndex(parsed.graph ?? 0);
       setSelectedNodeIndex(null);
       setJsonMessage("KHR_interactivity JSONを読み込みました");
@@ -1051,7 +1218,11 @@ function InteractivityGraphEditorBody({
 
   return (
     <section
-      className="absolute bottom-6 left-[clamp(260px,26vw,440px)] right-6 top-20 z-[75] flex min-h-0 overflow-hidden rounded-xl border border-slate-600 bg-slate-950/95 text-white shadow-2xl backdrop-blur"
+      className={`absolute z-[75] flex min-h-0 overflow-hidden rounded-xl border border-slate-600 bg-slate-950/95 text-white shadow-2xl backdrop-blur ${
+        expanded
+          ? "bottom-3 left-3 right-3 top-14"
+          : "bottom-6 left-[clamp(260px,26vw,440px)] right-6 top-20"
+      }`}
       aria-label="KHR_interactivity graph editor"
     >
       <div className="flex min-w-0 flex-1 flex-col">
@@ -1093,12 +1264,41 @@ function InteractivityGraphEditorBody({
           >
             <CreateIcon size={13} aria-hidden="true" /> 追加
           </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={undo}
+              disabled={readOnly || !canUndo}
+              title="元に戻す (Ctrl+Z)"
+              className="h-8 rounded border border-slate-600 px-2 text-xs hover:bg-slate-800 disabled:opacity-35"
+            >
+              元に戻す
+            </button>
+            <button
+              type="button"
+              onClick={redo}
+              disabled={readOnly || !canRedo}
+              title="やり直す (Ctrl+Shift+Z)"
+              className="h-8 rounded border border-slate-600 px-2 text-xs hover:bg-slate-800 disabled:opacity-35"
+            >
+              やり直す
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => fitView({ padding: 0.25, duration: 200 })}
             className="h-8 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800"
           >
             全体表示
+          </button>
+          <button
+            type="button"
+            onClick={() => setExpanded((current) => !current)}
+            aria-pressed={expanded}
+            title={expanded ? "元の大きさに戻す" : "画面いっぱいに広げる"}
+            className="h-8 rounded border border-slate-600 px-3 text-xs hover:bg-slate-800"
+          >
+            {expanded ? "縮小" : "拡大"}
           </button>
           <button
             type="button"
@@ -1117,7 +1317,7 @@ function InteractivityGraphEditorBody({
           </button>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="rounded p-2 text-slate-300 hover:bg-slate-800 hover:text-white"
             aria-label="Interactivity editorを閉じる"
           >
@@ -1128,7 +1328,7 @@ function InteractivityGraphEditorBody({
         <div ref={canvasRef} className="relative min-h-0 flex-1 bg-slate-900">
           <ReactFlow<GraphFlowNode>
             nodes={flowNodes}
-            edges={edges}
+            edges={flowEdges}
             nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
             onNodeClick={(_, node) => setSelectedNodeIndex(node.data.index)}
@@ -1147,8 +1347,10 @@ function InteractivityGraphEditorBody({
                 }
               })
             }
+            onEdgesChange={onEdgesChange}
             onConnect={handleConnect}
-            onEdgesDelete={handleDeleteEdges}
+            onReconnect={handleReconnect}
+            onDelete={handleDeleteElements}
             nodesDraggable={!readOnly}
             nodesConnectable={!readOnly}
             edgesReconnectable={!readOnly}
@@ -1290,12 +1492,42 @@ function InteractivityGraphEditorBody({
           ) : (
             <span className="text-emerald-300">KHR graph validation OK</span>
           )}
-          <span className="ml-auto">ドラッグ / ホイールで移動・Ctrl+ホイールで拡大</span>
+          {dirty ? <span className="text-slate-300">未保存の変更があります</span> : null}
+          <span className="ml-auto">
+            ドラッグ / ホイールで移動・Ctrl+ホイールで拡大・線を選んでDeleteで切断
+          </span>
           <span>紫: flow / 水色: value</span>
         </footer>
       </div>
 
-      <aside className="flex w-72 shrink-0 flex-col border-l border-slate-700 bg-slate-900">
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Node Inspectorの幅"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          const startX = event.clientX;
+          const startWidth = inspectorWidth;
+          const move = (moveEvent: PointerEvent) => {
+            const next = startWidth + (startX - moveEvent.clientX);
+            setInspectorWidth(
+              Math.min(INSPECTOR_MAX_WIDTH, Math.max(INSPECTOR_MIN_WIDTH, next)),
+            );
+          };
+          const end = () => {
+            window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", end);
+          };
+          window.addEventListener("pointermove", move);
+          window.addEventListener("pointerup", end);
+        }}
+        className="w-1 shrink-0 cursor-col-resize bg-slate-700 hover:bg-violet-500"
+      />
+
+      <aside
+        style={{ width: inspectorWidth }}
+        className="flex shrink-0 flex-col border-l border-slate-700 bg-slate-900"
+      >
         <div className="border-b border-slate-700 px-3 py-2">
           <p className="text-xs font-bold">Node Inspector</p>
           <p className="text-[10px] text-slate-400">
@@ -1567,7 +1799,9 @@ function InteractivityGraphEditorBody({
                 type="button"
                 disabled={readOnly}
                 onClick={() => {
-                  updateGraph((nextGraph) => removeNodeAndReindex(nextGraph, selectedNodeIndex));
+                  updateGraph((nextGraph) =>
+                    removeNodesAndReindex(nextGraph, [selectedNodeIndex]),
+                  );
                   setSelectedNodeIndex(null);
                 }}
                 className="flex w-full items-center justify-center gap-1.5 rounded border border-rose-700 px-2 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-950 disabled:opacity-40"
@@ -1639,6 +1873,71 @@ function InteractivityGraphEditorBody({
           </div>
         ) : null}
       </aside>
+
+      {closeConfirmOpen ? (
+        <EditorDialog
+          onDismiss={() => setCloseConfirmOpen(false)}
+          ariaLabelledBy="interactivity-close-dialog-title"
+          ariaDescribedBy="interactivity-close-dialog-description"
+          backdropClassName="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-[1px]"
+          surfaceClassName="w-full max-w-sm overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+        >
+          <header
+            data-app-modal-header
+            className="border-b border-slate-200 px-5 py-4"
+          >
+            <h2
+              id="interactivity-close-dialog-title"
+              className="text-sm font-semibold text-slate-900"
+            >
+              保存せずに閉じますか
+            </h2>
+          </header>
+          <div data-app-modal-body className="px-5 py-4">
+            <p
+              id="interactivity-close-dialog-description"
+              className="text-xs leading-5 text-slate-600"
+            >
+              このグラフの変更はまだ保存されていません。閉じると編集内容は失われます。
+            </p>
+          </div>
+          <footer
+            data-app-modal-footer
+            className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3"
+          >
+            <button
+              type="button"
+              autoFocus
+              onClick={() => setCloseConfirmOpen(false)}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+            >
+              編集に戻る
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCloseConfirmOpen(false);
+                onSave(asset.id, draft);
+                onClose();
+              }}
+              disabled={errors.length > 0}
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+            >
+              保存して閉じる
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCloseConfirmOpen(false);
+                onClose();
+              }}
+              className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+            >
+              破棄して閉じる
+            </button>
+          </footer>
+        </EditorDialog>
+      ) : null}
     </section>
   );
 }

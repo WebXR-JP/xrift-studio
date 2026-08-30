@@ -2768,6 +2768,59 @@ export function runXriftMcpEditorToolFixtures(): void {
   assert(graphValidation.result.valid === true, "MCP-authored KHR graph should validate");
   assert(graphValidation.result.nodeCount === 3, "MCP graph should retain all nodes");
 
+  // A flow that runs backwards is a loop, which is how a graph repeats. The
+  // engine bounds a loop with an activation budget, so the document no longer
+  // has to forbid one to stay safe.
+  const loopConnected = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-loop",
+    tool: "connect_interactivity_nodes",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      kind: "flow",
+      sourceNode: 2,
+      sourceSocket: "done",
+      targetNode: 1,
+      targetSocket: "in",
+    },
+  });
+  current = { ...current, bundle: loopConnected.bundle, revision: current.revision + 1 };
+
+  const loopValidation = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-loop-validate",
+    tool: "validate_interactivity_asset",
+    arguments: { assetId: interactivityAssetId },
+  });
+  assert(
+    loopValidation.result.valid === true,
+    "A flow loop should validate now that repeating is expressible",
+  );
+
+  // A cycle among values still cannot be evaluated, so it stays an error and
+  // the write is rejected whole rather than leaving half a connection behind.
+  const firstValueLink = executeXriftMcpEditorTool(current, {
+    id: "fixture-interactivity-value-link",
+    tool: "connect_interactivity_nodes",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      assetId: interactivityAssetId,
+      kind: "value",
+      sourceNode: 2,
+      sourceSocket: "value",
+      targetNode: 1,
+      targetSocket: "speed",
+    },
+  });
+  current = {
+    ...current,
+    bundle: firstValueLink.bundle,
+    revision: current.revision + 1,
+  };
+
   let cycleCode: string | undefined;
   try {
     executeXriftMcpEditorTool(current, {
@@ -2778,11 +2831,11 @@ export function runXriftMcpEditorToolFixtures(): void {
         sceneId: bundle.scene.sceneId,
         expectedRevision: current.revision,
         assetId: interactivityAssetId,
-        kind: "flow",
+        kind: "value",
         sourceNode: 1,
-        sourceSocket: "done",
-        targetNode: 0,
-        targetSocket: "in",
+        sourceSocket: "value",
+        targetNode: 2,
+        targetSocket: "duration",
       },
     });
   } catch (error) {
@@ -2790,7 +2843,7 @@ export function runXriftMcpEditorToolFixtures(): void {
   }
   assert(
     cycleCode === "INTERACTIVITY_VALIDATION_FAILED",
-    "MCP graph writes should reject flow cycles atomically",
+    "MCP graph writes should reject value cycles atomically",
   );
 
   // An Interaction Trigger records the Entities its graph writes to, and the
