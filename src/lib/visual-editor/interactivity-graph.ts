@@ -1169,9 +1169,10 @@ export function defaultTriggerActionValue(
       return [Boolean(descriptor.defaultValue)];
     case "float":
       return [Number(descriptor.defaultValue)];
-    case "color": {
-      const color = descriptor.defaultValue as readonly [number, number, number];
-      return [color[0], color[1], color[2]];
+    case "color":
+    case "vector3": {
+      const components = descriptor.defaultValue as readonly [number, number, number];
+      return [components[0], components[1], components[2]];
     }
     case "enum":
       return [xriftInteractionEnumIndex(descriptor, String(descriptor.defaultValue))];
@@ -1193,7 +1194,7 @@ export function setInteractivityTriggerActionValue(
       ? "bool"
       : descriptor.kind === "float"
         ? "float"
-        : descriptor.kind === "color"
+        : descriptor.kind === "color" || descriptor.kind === "vector3"
           ? "float3"
           : "int";
   const existing = graph.types.findIndex((type) => type.signature === signature);

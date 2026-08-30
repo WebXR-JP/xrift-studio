@@ -727,6 +727,36 @@ function TriggerValueField({
       </label>
     );
   }
+  if (descriptor.kind === "vector3") {
+    const components = numbersOf(current, 3);
+    return (
+      <div className="space-y-1">
+        <span className="block text-[10px] text-slate-300">{descriptor.label}</span>
+        <div className="flex gap-1">
+          {(["X", "Y", "Z"] as const).map((axis, index) => (
+            <label key={axis} className="flex min-w-0 flex-1 items-center gap-1">
+              <span className="text-[9px] text-slate-500">{axis}</span>
+              <input
+                type="number"
+                step={descriptor.step ?? 0.1}
+                value={components[index] ?? 0}
+                disabled={disabled}
+                onChange={(event) => {
+                  const next = Number(event.target.value);
+                  if (!Number.isFinite(next)) return;
+                  onChange(
+                    components.map((prior, at) => (at === index ? next : prior)),
+                  );
+                }}
+                className="h-8 w-full min-w-0 rounded border border-slate-600 bg-slate-950 px-1.5 text-xs disabled:opacity-45"
+                aria-label={`${descriptor.label} ${axis}`}
+              />
+            </label>
+          ))}
+        </div>
+      </div>
+    );
+  }
   const numeric = typeof first === "number" ? first : Number(descriptor.defaultValue);
   return (
     <label className="block text-[10px] text-slate-300">

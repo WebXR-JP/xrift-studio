@@ -66,6 +66,15 @@ export function collectInteractionTriggerTargets(
         label: ENTITY_SELF_LABEL,
         properties: getXriftInteractionProperties("entity"),
       },
+      {
+        // Transform belongs to the Entity rather than to a Component the author
+        // can add twice. It still carries a fixed id so the picker can tell it
+        // apart from the Entity's own row, which uses the empty id.
+        componentId: "transform",
+        targetKind: "transform",
+        label: XRIFT_INTERACTION_TARGET_LABELS.transform,
+        properties: getXriftInteractionProperties("transform"),
+      },
     ];
     let audioIndex = 0;
     let lightIndex = 0;
@@ -210,6 +219,15 @@ export function formatTriggerValue(
       return typeof first === "number" ? String(Number(first.toFixed(3))) : "既定値";
     case "color":
       return "指定した色";
+    case "vector3": {
+      const components = (value ?? []).slice(0, 3);
+      if (components.length !== 3 || components.some((entry) => typeof entry !== "number")) {
+        return "既定値";
+      }
+      return components
+        .map((entry) => String(Number((entry as number).toFixed(3))))
+        .join(", ");
+    }
     case "enum": {
       const options = descriptor.options ?? [];
       const option =

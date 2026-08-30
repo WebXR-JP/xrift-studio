@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { Color, LinearSRGBColorSpace, type Object3D } from "three";
+import { Color, LinearSRGBColorSpace, MathUtils, type Object3D } from "three";
 import {
   XRIFT_AUDIO_SOURCE_RUNTIME_USER_DATA_KEY,
   type XriftAudioSourceRuntimeBridge,
@@ -183,6 +183,32 @@ export function createXriftInteractionApplier({
   order: number;
 }): XriftInteractionApplier {
   const owner = {};
+  /**
+   * What an Entity looked like before this trigger touched it.
+   *
+   * Visibility and Transform are written straight onto the object rather than
+   * through a bridge, so nothing else would put them back. Capturing the first
+   * value means Play Stop leaves the Scene exactly as it was authored, which is
+   * the same promise the Light and Audio overrides already make.
+   */
+  const restorePoints = new Map<
+    Object3D,
+    {
+      visible: boolean;
+      position: [number, number, number];
+      rotation: [number, number, number];
+      scale: [number, number, number];
+    }
+  >();
+  const remember = (object: Object3D): void => {
+    if (restorePoints.has(object)) return;
+    restorePoints.set(object, {
+      visible: object.visible,
+      position: [object.position.x, object.position.y, object.position.z],
+      rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
+      scale: [object.scale.x, object.scale.y, object.scale.z],
+    });
+  };
   const lightOverrides = new Map<
     XriftLightRuntimeBridge,
     XriftLightRuntimeOverrides
@@ -194,6 +220,7 @@ export function createXriftInteractionApplier({
   let commandRevision = 0;
 
   const applyEntity = (target: Object3D, action: XriftInteractionAction) => {
+    remember(target);
     // Visibility only: physics bodies stay as authored, which is the same
     // meaning `enabled` has in the Editor viewport.
     target.visible =
@@ -202,6 +229,56 @@ export function createXriftInteractionApplier({
         : action.value?.kind === "bool"
           ? action.value.value
           : target.visible;
+  };
+
+  const applyTransform = (target: Object3D, action: XriftInteractionAction) => {
+    if (action.value?.kind !== "vector3") return;
+    remember(target);
+    const [x, y, z] = action.value.value;
+    if (action.property === "position") {
+      target.position.set(x, y, z);
+      return;
+    }
+    if (action.property === "rotation") {
+      // Authored in degrees, because a graph is edited by hand and radians are
+      // not a number an author has an opinion about.
+      target.rotation.set(
+        MathUtils.degToRad(x),
+        MathUtils.degToRad(y),
+        MathUtils.degToRad(z),
+      );
+      return;
+    }
+    if (action.property === "scale") target.scale.set(x, y, z);
+  };
+
+  const readTransform = (
+    object: Object3D,
+    property: string,
+  ): XriftInteractionValue | null => {
+    if (property === "position") {
+      return {
+        kind: "vector3",
+        value: [object.position.x, object.position.y, object.position.z],
+      };
+    }
+    if (property === "rotation") {
+      return {
+        kind: "vector3",
+        value: [
+          MathUtils.radToDeg(object.rotation.x),
+          MathUtils.radToDeg(object.rotation.y),
+          MathUtils.radToDeg(object.rotation.z),
+        ],
+      };
+    }
+    if (property === "scale") {
+      return {
+        kind: "vector3",
+        value: [object.scale.x, object.scale.y, object.scale.z],
+      };
+    }
+    return null;
   };
 
   const applyLight = (target: Object3D, action: XriftInteractionAction) => {
@@ -350,6 +427,9 @@ export function createXriftInteractionApplier({
       const object = findEntityObject(root, target.entityId);
       if (!object) return null;
       if (target.targetKind === "entity") return readEntity(object, target.property);
+      if (target.targetKind === "transform") {
+        return readTransform(object, target.property);
+      }
       if (target.targetKind === "light") return readLight(object, target);
       return readAudioSource(object, target);
     },
@@ -358,6 +438,10 @@ export function createXriftInteractionApplier({
       if (!target) return;
       if (action.target === "entity") {
         applyEntity(target, action);
+        return;
+      }
+      if (action.target === "transform") {
+        applyTransform(target, action);
         return;
       }
       if (action.target === "light") {
@@ -373,6 +457,13 @@ export function createXriftInteractionApplier({
       for (const bridge of audioOverrides.keys()) bridge.removeOwner(owner);
       lightOverrides.clear();
       audioOverrides.clear();
+      for (const [object, original] of restorePoints) {
+        object.visible = original.visible;
+        object.position.set(...original.position);
+        object.rotation.set(...original.rotation);
+        object.scale.set(...original.scale);
+      }
+      restorePoints.clear();
     },
   };
 }
@@ -385,7 +476,9 @@ function toInteractivityValue(
 ): InteractivityValue | null {
   if (value.kind === "bool") return boolValue(value.value);
   if (value.kind === "float") return floatValue(value.value);
-  if (value.kind === "color") return vectorValue([...value.value]);
+  if (value.kind === "color" || value.kind === "vector3") {
+    return vectorValue([...value.value]);
+  }
   if (value.kind === "enum") {
     const index = options.findIndex((option) => option.value === value.value);
     return intValue(index < 0 ? 0 : index);
@@ -414,6 +507,10 @@ function toInteractionValue(
     case "color": {
       const [red, green, blue] = asNumbers(value, 3);
       return { kind: "color", value: [red ?? 0, green ?? 0, blue ?? 0] };
+    }
+    case "vector3": {
+      const [x, y, z] = asNumbers(value, 3);
+      return { kind: "vector3", value: [x ?? 0, y ?? 0, z ?? 0] };
     }
     case "enum": {
       const index = Math.trunc(asNumber(value));

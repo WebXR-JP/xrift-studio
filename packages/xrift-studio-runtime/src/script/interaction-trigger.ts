@@ -33,10 +33,15 @@ export type XriftInteractionOperation =
  * set is deliberately small: a property belongs here only when Play and the
  * published world apply it through the same runtime bridge.
  */
-export type XriftInteractionTargetKind = "entity" | "audio-source" | "light";
+export type XriftInteractionTargetKind =
+  | "entity"
+  | "transform"
+  | "audio-source"
+  | "light";
 
 export const XRIFT_INTERACTION_TARGET_KINDS: readonly XriftInteractionTargetKind[] = [
   "entity",
+  "transform",
   "audio-source",
   "light",
 ];
@@ -45,11 +50,31 @@ export const XRIFT_INTERACTION_TARGET_LABELS: Readonly<
   Record<XriftInteractionTargetKind, string>
 > = {
   entity: "Entity",
+  transform: "Transform",
   "audio-source": "Audio Source",
   light: "Light",
 };
 
-export type XriftInteractionPropertyKind = "bool" | "float" | "color" | "enum";
+export type XriftInteractionPropertyKind =
+  | "bool"
+  | "float"
+  | "color"
+  | "vector3"
+  | "enum";
+
+/**
+ * Targets that belong to the Entity rather than to one of its Components.
+ *
+ * A Component target needs an id so two Audio Sources on one Entity stay
+ * distinguishable; an Entity-scoped one has nothing to distinguish, so
+ * requiring an id there would make a complete action look unfinished.
+ */
+export const XRIFT_INTERACTION_ENTITY_SCOPED_TARGETS: ReadonlySet<string> =
+  new Set<XriftInteractionTargetKind>(["entity", "transform"]);
+
+export function isXriftInteractionEntityScoped(target: string): boolean {
+  return XRIFT_INTERACTION_ENTITY_SCOPED_TARGETS.has(target);
+}
 
 export type XriftInteractionPropertyOption = {
   value: string;
@@ -87,6 +112,33 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     description: "Entityとその子の表示を切り替えます。物理コライダーは残ります。",
     kind: "bool",
     defaultValue: true,
+  },
+  {
+    target: "transform",
+    name: "position",
+    label: "位置",
+    description:
+      "Entityの位置を、親から見たXYZ（メートル）で設定します。Playを止めると元の位置に戻ります。",
+    kind: "vector3",
+    defaultValue: [0, 0, 0],
+  },
+  {
+    target: "transform",
+    name: "rotation",
+    label: "回転",
+    description:
+      "EntityのXYZ回転を度で設定します。Playを止めると元の回転に戻ります。",
+    kind: "vector3",
+    defaultValue: [0, 0, 0],
+  },
+  {
+    target: "transform",
+    name: "scale",
+    label: "大きさ",
+    description:
+      "EntityのXYZ倍率を設定します。0にすると見えなくなります。Playを止めると元に戻ります。",
+    kind: "vector3",
+    defaultValue: [1, 1, 1],
   },
   {
     target: "audio-source",
@@ -173,6 +225,8 @@ export type XriftInteractionValue =
   | { kind: "float"; value: number }
   /** Linear-light RGB, matching how KHR_interactivity stores glTF colour factors. */
   | { kind: "color"; value: [number, number, number] }
+  /** Position, rotation in degrees, or scale. */
+  | { kind: "vector3"; value: [number, number, number] }
   | { kind: "enum"; value: string };
 
 export type XriftInteractionAction = {
@@ -275,6 +329,21 @@ function readActionValue(
       const [red, green, blue] = channels as [number, number, number];
       return { kind: "color", value: [red, green, blue] };
     }
+    case "vector3": {
+      if (first === undefined) {
+        const fallback = descriptor.defaultValue as readonly [number, number, number];
+        return { kind: "vector3", value: [fallback[0], fallback[1], fallback[2]] };
+      }
+      const components = values.slice(0, 3);
+      if (
+        components.length !== 3 ||
+        components.some((entry) => typeof entry !== "number" || !Number.isFinite(entry))
+      ) {
+        return null;
+      }
+      const [x, y, z] = components as [number, number, number];
+      return { kind: "vector3", value: [x, y, z] };
+    }
     case "enum": {
       const options = descriptor.options ?? [];
       if (first === undefined) {
@@ -356,9 +425,9 @@ function readAction(
   if (!entityId || !target || !property) return null;
   const descriptor = getXriftInteractionProperty(target, property);
   if (!descriptor) return null;
-  // Only the Entity itself is component-less; every Component target needs an id
-  // so two Audio Sources on one Entity stay distinguishable.
-  if (descriptor.target !== "entity" && !componentId) return null;
+  if (!isXriftInteractionEntityScoped(descriptor.target) && !componentId) {
+    return null;
+  }
   const mode = op === XRIFT_INTERACTION_OPERATIONS.toggleProperty ? "toggle" : "set";
   if (mode === "toggle") {
     if (descriptor.kind !== "bool") return null;
@@ -366,7 +435,9 @@ function readAction(
       nodeIndex,
       mode,
       entityId,
-      componentId: descriptor.target === "entity" ? null : componentId,
+      componentId: isXriftInteractionEntityScoped(descriptor.target)
+        ? null
+        : componentId,
       target: descriptor.target,
       property: descriptor.name,
       value: null,
@@ -378,7 +449,9 @@ function readAction(
     nodeIndex,
     mode,
     entityId,
-    componentId: descriptor.target === "entity" ? null : componentId,
+    componentId: isXriftInteractionEntityScoped(descriptor.target)
+      ? null
+      : componentId,
     target: descriptor.target,
     property: descriptor.name,
     value,
@@ -498,7 +571,7 @@ export function collectXriftInteractionIssues(
       return;
     }
     if (
-      descriptor.target !== "entity" &&
+      !isXriftInteractionEntityScoped(descriptor.target) &&
       !configurationString(node, "component")
     ) {
       issues.push({

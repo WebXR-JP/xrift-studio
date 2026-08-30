@@ -174,7 +174,62 @@ export async function runInteractionTriggerApplierFixtureAssertions(): Promise<v
     }),
   );
 
+  // Transform is written straight onto the object, so the assertion that
+  // matters is that Stop puts it back exactly where the Scene had it. A fresh
+  // Entity is used because the restore point is captured at the first write,
+  // and `sign` was already written to by the visibility case above.
+  const platform = entityObject("entity-platform");
+  platform.position.set(1, 2, 3);
+  root.add(platform);
+  applier.apply(
+    action({
+      entityId: "entity-platform",
+      componentId: "transform",
+      target: "transform",
+      property: "position",
+      value: { kind: "vector3", value: [4, 5, 6] },
+    }),
+  );
+  // Read into locals: the assertion helper narrows what it is given, and a
+  // narrowed `sign.position.x` would make the restore assertion below
+  // unreachable to the type checker.
+  const movedTo = [platform.position.x, platform.position.y, platform.position.z].join(",");
+  assert(movedTo === "4,5,6", "writing a Transform position did not apply");
+  applier.apply(
+    action({
+      entityId: "entity-platform",
+      componentId: "transform",
+      target: "transform",
+      property: "rotation",
+      value: { kind: "vector3", value: [0, 90, 0] },
+    }),
+  );
+  const turnedTo = platform.rotation.y;
+  assert(
+    Math.abs(turnedTo - Math.PI / 2) < 1e-6,
+    "a Transform rotation was not converted from degrees",
+  );
+  assert(
+    applier.read({
+      entityId: "entity-platform",
+      componentId: "transform",
+      targetKind: "transform",
+      property: "rotation",
+    })?.kind === "vector3",
+    "a Transform rotation could not be read back",
+  );
+
   applier.dispose();
+  const restoredTo = [platform.position.x, platform.position.y, platform.position.z].join(",");
+  assert(
+    restoredTo === "1,2,3",
+    "a Transform write survived the trigger's disposal",
+  );
+  const restoredTurn = platform.rotation.y;
+  assert(
+    restoredTurn === 0,
+    "a Transform rotation survived the trigger's disposal",
+  );
   assert(
     light.read().intensity === 1 && !light.read().enabled,
     "Light overrides survived the trigger's disposal",
