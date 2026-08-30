@@ -96,6 +96,7 @@ import {
   type XriftParticleConfig,
 } from "../script/particle.js";
 import { XriftAudioSource } from "../script/audio-source.js";
+import { planInteractivityAnimationCues } from "../interactivity-adapter.js";
 import {
   XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY,
   createXriftAnimationRuntimeBridge,
@@ -1997,34 +1998,11 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
        * Entity, and an Entity with clips gets a mixer whether or not anything
        * has started one yet — a graph can start a clip at any moment.
        */
-      const planByIndex = new Map<
-        number,
-        { delaySeconds: number; loop: boolean; speed: number; startTime: number }
-      >();
-      for (const cue of
-        result.interactionAnimationCuesByEntity.get(entity.id) ?? []) {
-        const known = planByIndex.get(cue.animationIndex);
-        // The earliest start for a clip wins: two graphs starting the same clip
-        // is one clip playing, from the first moment either of them asked.
-        if (known && known.delaySeconds <= cue.delaySeconds) continue;
-        planByIndex.set(cue.animationIndex, {
-          delaySeconds: cue.delaySeconds,
-          // A start with no end time runs until something stops it, which on a
-          // mixer means looping. A graph that named an end time wants one pass.
-          loop: (cue.endTime ?? null) === null && cue.stopSeconds === undefined,
-          speed:
-            typeof cue.speed === "number" && Number.isFinite(cue.speed) && cue.speed !== 0
-              ? cue.speed
-              : 1,
-          startTime:
-            typeof cue.startTime === "number" && Number.isFinite(cue.startTime)
-              ? Math.max(0, cue.startTime)
-              : 0,
-        });
-      }
-      const cues = [...planByIndex.entries()].flatMap(([index, plan]) => {
-        const clip = clips[index];
-        return clip ? [{ clip, index, ...plan }] : [];
+      const cues = planInteractivityAnimationCues(
+        result.interactionAnimationCuesByEntity.get(entity.id) ?? [],
+      ).flatMap((plan) => {
+        const clip = clips[plan.index];
+        return clip ? [{ clip, ...plan }] : [];
       });
       return [
         {
