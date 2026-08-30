@@ -517,7 +517,7 @@ function estimateTextureLoadBytes(asset: TextureAsset): {
   return {
     bytes: metadata.byteLength,
     detail: `${metadata.sourceFormat.toUpperCase()}原本${
-      recipe ? " / 変換設定は原本容量へ未反映" : ""
+      recipe ? " / 公開時に変換するため実際の配信容量はこれより小さくなります" : ""
     }`,
   };
 }

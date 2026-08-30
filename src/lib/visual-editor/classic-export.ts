@@ -7,6 +7,11 @@ import {
   type VisualCompilerDocuments,
 } from "./compiler";
 import { stableSerializeJson } from "./serialization";
+import {
+  assetBytesToDataUrl,
+  convertPublishedTextureBytes,
+  readProjectAssetBytes,
+} from "./texture-processing";
 
 const RUNTIME_PACKAGE_SPEC = "xrift-studio-runtime@0.1.0" as const;
 
@@ -187,10 +192,18 @@ export async function exportVisualProjectToClassic(input: {
     compilation.assetCopyPlan.map(async (entry) => {
       const suffix = entry.targetRelativePath.replace(/^public\/xrift\//, "");
       const targetRelativePath = `${publicRoot}/${suffix}`;
-      const dataUrl = await tauri.readProjectFileDataUrl(
-        authoringPath,
-        entry.sourceRelativePath,
-      );
+      // 未反映のTexture Import設定は書き出す画像にだけ適用する。制作データの
+      // 原本は読むだけで、書き換えない。
+      const conversion = entry.textureConversion;
+      const dataUrl = conversion
+        ? await assetBytesToDataUrl(
+            await convertPublishedTextureBytes(
+              await readProjectAssetBytes(authoringPath, entry.sourceRelativePath),
+              conversion,
+            ),
+            conversion.mimeType,
+          )
+        : await tauri.readProjectFileDataUrl(authoringPath, entry.sourceRelativePath);
       await tauri.writeBinaryFile(input.target.path, targetRelativePath, dataUrl);
       generatedFiles.push(targetRelativePath);
     }),
