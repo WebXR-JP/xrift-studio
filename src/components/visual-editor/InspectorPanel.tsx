@@ -3533,7 +3533,7 @@ function TextInspector({
           onChange={(event) => onChange({ fontId: event.currentTarget.value })}
           className="mt-1 h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100"
         >
-          <option value={AUTOMATIC_TEXT_FONT_ID}>自動（文字に合わせて選ぶ）</option>
+          <option value={AUTOMATIC_TEXT_FONT_ID}>自動（同梱の標準書体）</option>
           {fontGroups.map((group) => (
             <optgroup key={group.label} label={group.label}>
               {group.fonts.map((font) => (
@@ -3547,8 +3547,8 @@ function TextInspector({
       </label>
       <p className="text-[11px] leading-4 text-slate-500">
         {component.fontId && component.fontId !== AUTOMATIC_TEXT_FONT_ID
-          ? "選んだ書体はGoogle Fontsから初回だけ取得します。取得できないときは自動の書体で表示します。"
-          : "文字に含まれる文字種から書体を選びます。日本語と欧文が混ざっていても表示できます。"}
+          ? "選んだ書体のファイルはStudioに同梱し、公開したWorldにも同梱します。"
+          : "日本語と欧文を含む標準書体で表示します。Studioも公開したWorldも同じ同梱ファイルを読みます。"}
       </p>
       <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
         Weight

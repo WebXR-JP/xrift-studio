@@ -204,14 +204,14 @@ export class XriftTextPanelObject extends Group {
    * shape this:
    *
    * - Assigning a URL that turns out to be unreachable is unrecoverable, which
-   *   is why the file is fetched first and a failure falls back to the
-   *   automatic face instead.
-   * - Letting the first frame sync on the automatic face while the chosen font
-   *   downloads sends every glyph to troika's per-script fallback CDN, and if
-   *   that CDN is blocked the Text is stuck there even after its own font
-   *   arrives. Hiding the Text keeps `onBeforeRender` from firing until the
-   *   decision is made; the background plate is already in place, so a panel
-   *   is not blank while it waits.
+   *   is why the file is fetched first and a failure falls back to troika's own
+   *   face instead.
+   * - Letting the first frame sync on troika's face while the bundled font
+   *   downloads sends every glyph to its per-script fallback CDN, and if that
+   *   CDN is blocked the Text is stuck there even after its own font arrives.
+   *   Hiding the Text keeps `onBeforeRender` from firing until the decision is
+   *   made; the background plate is already in place, so a panel is not blank
+   *   while it waits.
    */
   private applyFont(config: XriftTextPanelConfig): void {
     const url = resolveTextFontUrl(
@@ -220,10 +220,6 @@ export class XriftTextPanelObject extends Group {
       config.fontBaseUrl,
     );
     const generation = ++this.fontGeneration;
-    if (!url) {
-      this.setFont(null);
-      return;
-    }
     const known = peekTextPanelFont(url);
     if (known) {
       this.setFont(known === "loaded" ? url : null);

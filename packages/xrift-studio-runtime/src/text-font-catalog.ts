@@ -99,25 +99,26 @@ export const TEXT_FONT_CATALOG: readonly XriftTextFontDefinition[] = [
 const CATALOG_BY_ID = new Map(TEXT_FONT_CATALOG.map((font) => [font.id, font]));
 
 /**
- * Face a published world uses when the author left the automatic font.
+ * Face used when the document names no font, or names one this build does not
+ * ship.
  *
- * The automatic font is troika's per-script resolver, which downloads faces
- * from a CDN. A published world has no permission to reach one, so its Text
- * would never appear. Publishing therefore substitutes one bundled face; the
- * japanese subset also carries Basic Latin, so mixed Japanese and English text
- * is covered by the single file the world ships.
- *
- * Studio's own surfaces keep the automatic font: they can reach the resolver,
- * and it is what keeps other scripts legible while authoring.
+ * troika's own default is a per-script resolver that downloads faces from a
+ * CDN. Nothing here uses it: a published world has no permission to reach a
+ * CDN, so its Text would never appear, and Studio would show a face the
+ * published world cannot. One bundled file answers for both — the japanese
+ * subset also carries Basic Latin, so mixed Japanese and English text is
+ * covered by the single file a world ships.
  */
-export const PUBLISHED_FALLBACK_TEXT_FONT_ID = "noto-sans-jp" as const;
+export const DEFAULT_TEXT_FONT_ID = "noto-sans-jp" as const;
 
 /**
- * Font id a published world actually renders with: the author's choice when it
- * is in the catalog, otherwise the bundled fallback.
+ * Font id that is actually rendered: the author's choice when this build ships
+ * it, otherwise the bundled default. Every surface — the editor viewport, Play,
+ * generated Classic source and the published world — resolves through here, so
+ * they cannot disagree about the lettering.
  */
-export function resolvePublishedTextFontId(fontId: string | undefined): string {
-  return getTextFontDefinition(fontId)?.id ?? PUBLISHED_FALLBACK_TEXT_FONT_ID;
+export function resolveRenderedTextFontId(fontId: string | undefined): string {
+  return getTextFontDefinition(fontId)?.id ?? DEFAULT_TEXT_FONT_ID;
 }
 
 export function getTextFontDefinition(
@@ -145,9 +146,11 @@ export function resolveTextFontWeight(
 }
 
 /**
- * Bundled file URL for a catalog entry, or `undefined` for the automatic font.
- * `undefined` is meaningful: it tells troika to resolve Noto faces per script,
- * which is what keeps mixed-script text legible without any explicit choice.
+ * Bundled file URL for the face a Text renders with.
+ *
+ * The automatic font resolves here too, to `DEFAULT_TEXT_FONT_ID`: leaving it
+ * unresolved handed the typesetting to troika's per-script CDN resolver, which
+ * a published world cannot reach.
  *
  * `baseUrl` is where the host serves its public files from; see
  * `TEXT_FONT_DIRECTORY`.
@@ -156,9 +159,10 @@ export function resolveTextFontUrl(
   fontId: string | undefined,
   fontWeight?: number,
   baseUrl?: string,
-): string | undefined {
-  const font = getTextFontDefinition(fontId);
-  if (!font) return undefined;
+): string {
+  const font =
+    getTextFontDefinition(fontId) ??
+    (CATALOG_BY_ID.get(DEFAULT_TEXT_FONT_ID) as XriftTextFontDefinition);
   const weight = resolveTextFontWeight(font, fontWeight);
   return `${resolveTextFontDirectoryUrl(baseUrl)}${textFontFileName(font, weight)}`;
 }

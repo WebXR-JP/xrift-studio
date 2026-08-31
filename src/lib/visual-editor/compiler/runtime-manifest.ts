@@ -26,7 +26,7 @@ import type {
 } from "./types";
 import { OPEN_BRUSH_BRUSH_BASE_URL } from "../open-brush";
 import { isPublishedAsKtx2 } from "../texture-conversion";
-import { resolvePublishedTextFontId } from "../../../../packages/xrift-studio-runtime/src/text-font-catalog";
+import { resolveRenderedTextFontId } from "../../../../packages/xrift-studio-runtime/src/text-font-catalog";
 
 export function compileRuntimeManifest(
   documents: VisualCompilerDocuments,
@@ -202,10 +202,10 @@ function compileRuntimeEntity(
       JSON.stringify(component),
     ) as XriftRuntimeComponent;
     if (runtimeComponent.type === "text") {
-      // Published worlds render with a bundled face. The automatic font is
-      // troika's CDN resolver, which a published world cannot reach, so the
-      // substitution is decided here rather than left to the runtime.
-      runtimeComponent.fontId = resolvePublishedTextFontId(
+      // The face is resolved here so the manifest names the file the world
+      // actually carries, rather than leaving "auto" for the runtime to
+      // interpret.
+      runtimeComponent.fontId = resolveRenderedTextFontId(
         runtimeComponent.fontId,
       );
     }

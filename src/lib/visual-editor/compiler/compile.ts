@@ -161,7 +161,7 @@ import {
 import {
   AUTOMATIC_TEXT_FONT_ID,
   getTextFontDefinition,
-  resolvePublishedTextFontId,
+  resolveRenderedTextFontId,
   resolveTextFontWeight,
   TEXT_FONT_DIRECTORY,
   textFontFileName,
@@ -546,11 +546,10 @@ function createPublishedTextFontCopyPlan(
   for (const entity of Object.values(scene.entities)) {
     for (const component of entity.components) {
       if (component.type !== "text") continue;
-      // A Text left on the automatic face is published with the bundled
-      // fallback: the automatic face is a CDN resolver a published world cannot
-      // reach, so leaving it would ship a Text that never appears.
+      // Every Text renders with a bundled face, the automatic one included, so
+      // each Text names a file the world has to carry.
       const font = getTextFontDefinition(
-        resolvePublishedTextFontId(component.fontId),
+        resolveRenderedTextFontId(component.fontId),
       );
       if (!font) continue;
       fileNames.add(
@@ -5149,7 +5148,7 @@ function compiledTextPanelConfig(text: TextComponent): Record<string, unknown> {
     anchorY: text.anchorY,
     outlineWidth: text.outlineWidth,
     outlineColor: text.outlineColor,
-    fontId: resolvePublishedTextFontId(text.fontId),
+    fontId: resolveRenderedTextFontId(text.fontId),
     ...(text.fontWeight === undefined ? {} : { fontWeight: text.fontWeight }),
     ...(text.textAlign === undefined ? {} : { textAlign: text.textAlign }),
     ...(text.lineHeight === undefined ? {} : { lineHeight: text.lineHeight }),

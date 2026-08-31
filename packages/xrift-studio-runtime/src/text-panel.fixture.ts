@@ -39,30 +39,35 @@ function assertFontCatalogResolvesPinnedFiles(): void {
     // would render nothing at all rather than falling back.
     const url = resolveTextFontUrl(font.id);
     assert(
-      url?.endsWith(".woff") === true,
-      `${font.id} must resolve to a WOFF 1.0 file, got ${url ?? "(none)"}`,
+      url.endsWith(".woff"),
+      `${font.id} must resolve to a WOFF 1.0 file, got ${url}`,
     );
     // The whole point of bundling: a world that reaches off-origin for its
     // font is rejected by the platform's security check, and the permission
     // that would allow it cannot be narrowed to a host.
     assert(
-      url?.includes("://") === false,
-      `${font.id} must resolve to a bundled file, got ${url ?? "(none)"}`,
+      !url.includes("://"),
+      `${font.id} must resolve to a bundled file, got ${url}`,
     );
     assert(
-      url?.includes(TEXT_FONT_DIRECTORY) === true,
+      url.includes(TEXT_FONT_DIRECTORY),
       `${font.id} must resolve inside ${TEXT_FONT_DIRECTORY}`,
     );
   }
 
+  // Leaving the automatic font unresolved handed typesetting to troika's
+  // per-script CDN resolver, which a published world cannot reach.
+  const defaultUrl = `/${TEXT_FONT_DIRECTORY}/noto-sans-jp-japanese-400-normal.woff`;
   assert(
-    resolveTextFontUrl(undefined) === undefined &&
-      resolveTextFontUrl(AUTOMATIC_TEXT_FONT_ID) === undefined,
-    "the automatic font must resolve to no explicit file",
+    resolveTextFontUrl(undefined) === defaultUrl &&
+      resolveTextFontUrl(AUTOMATIC_TEXT_FONT_ID) === defaultUrl &&
+      resolveTextFontUrl("not-a-real-family") === defaultUrl,
+    "the automatic font must resolve to the bundled default file",
   );
   assert(
-    resolveTextFontUrl("not-a-real-family") === undefined,
-    "an unknown font id must not produce a URL",
+    resolveTextFontUrl(AUTOMATIC_TEXT_FONT_ID, 700) ===
+      `/${TEXT_FONT_DIRECTORY}/noto-sans-jp-japanese-700-normal.woff`,
+    "the automatic font must keep the weight the author chose",
   );
 
   const notoSansJp = getTextFontDefinition("noto-sans-jp");
