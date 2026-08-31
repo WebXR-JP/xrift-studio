@@ -3376,7 +3376,7 @@ export function TextureQuickEditor({
               {(sourceFormat ?? "HDRI").toUpperCase()}・環境テクスチャ
             </p>
           ) : null}
-          <p className="break-all text-xs leading-4 text-slate-500">{sourceLabel(asset)}</p>
+          <p className="break-all text-xs leading-4 text-slate-500">{textureSourceDisplayLabel(asset)}</p>
           {asset.importedFromModel ? (
             <p className={`mt-1 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${asset.importedFromModel.isUserOverridden ? "border-amber-200 bg-amber-50 text-amber-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
               {asset.importedFromModel.isUserOverridden
@@ -3387,19 +3387,22 @@ export function TextureQuickEditor({
         </div>
       </div>
 
-      <EditorSection title="ソース / サイズ">
+      <EditorSection title="ソース">
         <div className="flex items-center justify-between gap-2 text-xs text-slate-600">
           <span>使用中の解像度: {asset.importMetadata?.width && asset.importMetadata.height ? `${asset.importMetadata.width} × ${asset.importMetadata.height}px` : "未取得"}</span>
           <button type="button" disabled={!projectPath || asset.source.kind !== "project" || currentInspection?.busy} onClick={() => void inspectDimensions()} className="shrink-0 rounded border border-slate-300 px-2 py-1 hover:bg-slate-50 disabled:opacity-45">{currentInspection?.busy ? "取得中" : "サイズを確認"}</button>
         </div>
         {currentInspection?.message ? <p role="status" className="text-xs text-amber-700">{currentInspection.message}</p> : null}
-        {asset.optimizedFrom ? <p className="text-[11px] leading-4 text-slate-500">使用中: {(getTextureSourceFormat(asset) ?? "不明").toUpperCase()}。適用済みの設定を表示しています。変更すると、保持した元画像から作り直します。</p> : null}
         <dl className="grid grid-cols-[42px_minmax(0,1fr)] gap-1 text-xs">
           <dt className="text-slate-500">状態</dt>
           <dd className="text-right font-medium text-slate-700">{asset.status}</dd>
           <dt className="text-slate-500">ソース</dt>
-          <dd className="truncate text-right text-slate-700" title={sourceLabel(asset)}>{sourceLabel(asset)}</dd>
+          <dd className="truncate text-right text-slate-700" title={textureSourceDisplayLabel(asset)}>{textureSourceDisplayLabel(asset)}</dd>
         </dl>
+        {asset.optimizedFrom ? <p className="text-[11px] leading-4 text-slate-500">変換済み（{(getTextureSourceFormat(asset) ?? "不明").toUpperCase()}）の画像を、シーンと公開の両方で使っています。元画像は保持してあるので、いつでも戻せます。</p> : null}
+      </EditorSection>
+
+      <EditorSection title="サイズと圧縮">
         <label className="block text-xs text-slate-600">
           <span className="mb-1 block">最大解像度</span>
           <select
@@ -3466,6 +3469,41 @@ export function TextureQuickEditor({
             いちばん近い2のべき乗が原本より大きいため、引き伸ばされます。容量を減らしたい時は最大解像度も下げてください。
           </p>
         ) : null}
+        <label className="block text-xs text-slate-600">
+          <span className="mb-1 block">圧縮方式</span>
+          <select
+            value={settings.compression.format}
+            disabled={settingsDisabled}
+            onChange={(event) => onChange({ importSettings: { compression: { format: event.currentTarget.value as (typeof TEXTURE_COMPRESSION_FORMATS)[number] } } })}
+            className={INPUT_CLASS}
+          >
+            {TEXTURE_COMPRESSION_FORMATS.map((value) => (
+              <option key={value} value={value}>
+                {TEXTURE_COMPRESSION_FORMAT_LABELS[value]}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-[11px] leading-4 text-slate-500">
+            {TEXTURE_COMPRESSION_FORMAT_HINTS[settings.compression.format]}
+          </span>
+        </label>
+        <TextureQualityControl
+          format={settings.compression.format}
+          quality={settings.compression.quality}
+          disabled={settingsDisabled}
+          onChange={(quality) => onChange({ importSettings: { compression: { quality } } })}
+        />
+        <div className="border-t border-slate-200 pt-2">
+          <TextureProcessingPanel
+            asset={asset}
+            state={processingState}
+            busy={processingBusy}
+            readOnly={readOnly}
+            canApply={Boolean(projectPath && onApplyProcessing)}
+            onApply={onApplyProcessing}
+            onRevert={onRevertProcessing}
+          />
+        </div>
       </EditorSection>
 
       {!environmentTexture ? (
@@ -3611,46 +3649,19 @@ export function TextureQuickEditor({
         </div>
       </EditorSection>
 
-      <EditorSection title="Compression">
-        <label className="block text-xs text-slate-600">
-          <span className="mb-1 block">方式</span>
-          <select
-            value={settings.compression.format}
-            disabled={settingsDisabled}
-            onChange={(event) => onChange({ importSettings: { compression: { format: event.currentTarget.value as (typeof TEXTURE_COMPRESSION_FORMATS)[number] } } })}
-            className={INPUT_CLASS}
-          >
-            {TEXTURE_COMPRESSION_FORMATS.map((value) => (
-              <option key={value} value={value}>
-                {TEXTURE_COMPRESSION_FORMAT_LABELS[value]}
-              </option>
-            ))}
-          </select>
-          <span className="mt-1 block text-[11px] leading-4 text-slate-500">
-            {TEXTURE_COMPRESSION_FORMAT_HINTS[settings.compression.format]}
-          </span>
-        </label>
-        <TextureQualityControl
-          format={settings.compression.format}
-          quality={settings.compression.quality}
-          disabled={settingsDisabled}
-          onChange={(quality) => onChange({ importSettings: { compression: { quality } } })}
-        />
-      </EditorSection>
-
-      <EditorSection title="画像の書き出し">
-        <TextureProcessingPanel
-          asset={asset}
-          state={processingState}
-          busy={processingBusy}
-          readOnly={readOnly}
-          canApply={Boolean(projectPath && onApplyProcessing)}
-          onApply={onApplyProcessing}
-          onRevert={onRevertProcessing}
-        />
-      </EditorSection>
     </div>
   );
+}
+
+/**
+ * 変換済みTextureの参照先は `assets/.optimized/` のハッシュ名ファイルになるが、
+ * 作者にとってのソースはあくまで取り込んだ元画像。別ファイルが増えたように
+ * 見せず、元画像のパスを出し続ける。
+ */
+function textureSourceDisplayLabel(asset: TextureAsset): string {
+  const origin = asset.optimizedFrom;
+  if (origin && origin.source.kind === "project") return origin.source.relativePath;
+  return sourceLabel(asset);
 }
 
 /**
@@ -3934,7 +3945,7 @@ function TextureProcessingPanel({
         <p className="text-[11px] leading-4 text-slate-500">{blockedReason}</p>
       ) : plan.pending ? (
         <p className="rounded border border-amber-200 bg-amber-50 p-1.5 text-xs leading-4 text-amber-800">
-          公開時にはこの設定へ自動で変換されるため、公開だけが目的ならここでの書き出しは要りません。書き出すとEditorの表示も変換後になります。元の画像ファイルは残るので、いつでも原本へ戻せます。
+          変換すると、シーンの表示と公開物の両方がこの画像を使います。元の画像ファイルは残るので、いつでも原本へ戻せます。変換しないまま公開した場合も、公開時に同じ設定で変換されます。
         </p>
       ) : (
         <p className="text-[11px] leading-4 text-slate-500">{plan.settledReason}</p>
