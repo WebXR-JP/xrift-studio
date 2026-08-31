@@ -1579,6 +1579,7 @@ function ComponentVisual({
             isTrigger={component.isTrigger}
             selected={selected}
             colliderMode={showAllColliders}
+            collisionModelAssetId={component.collisionModelAssetId}
           />
         ) : null;
       }
@@ -1762,9 +1763,20 @@ function useModelNodeColliderGeometry(
   modelNode: SceneEntityModelNode,
   assets: AssetManifest,
   projectPath: string | undefined,
+  collisionModelAssetId?: string,
 ): ModelNodeColliderGeometryData | null {
+  // 当たり判定だけ差し替えてあるなら、そちらのModelを読む。見た目のMeshは
+  // 触らないので、重いままでも当たりは軽い一枚で済む。
+  const collisionAsset = collisionModelAssetId
+    ? assets.assets[collisionModelAssetId]
+    : undefined;
+  const collisionModel =
+    collisionAsset?.kind === "model" ? collisionAsset : undefined;
   const asset = assets.assets[modelNode.modelAssetId];
-  const modelAsset = asset?.kind === "model" ? asset : undefined;
+  const modelAsset =
+    collisionModel ?? (asset?.kind === "model" ? asset : undefined);
+  // 焼き出したModelはNodeが1つだけなので、常に先頭を使う。
+  const sourceNodeIndex = collisionModel ? 0 : modelNode.sourceNodeIndex;
   const sourceRelativePath = modelAsset
     ? resolveProjectModelSource(modelAsset, projectPath)
     : undefined;
@@ -1790,12 +1802,9 @@ function useModelNodeColliderGeometry(
   return useMemo(
     () =>
       modelObject
-        ? extractModelNodeColliderGeometry(
-            modelObject,
-            modelNode.sourceNodeIndex,
-          )
+        ? extractModelNodeColliderGeometry(modelObject, sourceNodeIndex)
         : null,
-    [modelObject, modelNode.sourceNodeIndex],
+    [modelObject, sourceNodeIndex],
   );
 }
 
@@ -1816,7 +1825,12 @@ function ModelNodeMeshColliderShapes({
   assets: AssetManifest;
   projectPath?: string;
 }) {
-  const geometry = useModelNodeColliderGeometry(modelNode, assets, projectPath);
+  const geometry = useModelNodeColliderGeometry(
+    modelNode,
+    assets,
+    projectPath,
+    collider.collisionModelAssetId,
+  );
   if (!geometry) return null;
   const bodyIsFixed = (collider.bodyType ?? "fixed") === "fixed";
   return collider.meshMode === "convex" || !bodyIsFixed ? (
@@ -1853,6 +1867,7 @@ function ModelNodeMeshColliderOutline({
   isTrigger,
   selected,
   colliderMode,
+  collisionModelAssetId,
 }: {
   modelNode: SceneEntityModelNode;
   assets: AssetManifest;
@@ -1861,8 +1876,14 @@ function ModelNodeMeshColliderOutline({
   selected: boolean;
   /** コライダー編集: the Scene's own Meshes are hidden behind this one. */
   colliderMode: boolean;
+  collisionModelAssetId?: string;
 }) {
-  const data = useModelNodeColliderGeometry(modelNode, assets, projectPath);
+  const data = useModelNodeColliderGeometry(
+    modelNode,
+    assets,
+    projectPath,
+    collisionModelAssetId,
+  );
   const geometry = useMemo(() => {
     if (!data) return null;
     const built = new BufferGeometry();

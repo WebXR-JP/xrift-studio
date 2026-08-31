@@ -215,6 +215,14 @@ export type MeshColliderComponent = ColliderComponentBase & {
   /** Mesh colliders always follow the sibling Mesh geometry. */
   fitMode: "auto";
   meshMode: ColliderMeshMode;
+  /**
+   * 当たり判定にだけ使う、軽量化済みのジオメトリ。
+   *
+   * 当たり判定に見た目の細かさは要らない。地面一枚が78,166三角形あっても、
+   * 歩く分には1割で足りる。ここが入っていると、見た目はそのままで当たりだけ
+   * この Model へ差し替わる。省略すると従来どおり見た目のジオメトリを使う。
+   */
+  collisionModelAssetId?: string;
 };
 
 export type ColliderComponent =
@@ -1707,6 +1715,8 @@ export function autoFitBoxCollider(
 }
 
 export type ColliderPatch = {
+  /** 当たり判定だけを差し替える軽量Model。nullで見た目のジオメトリへ戻す。 */
+  collisionModelAssetId?: string | null;
   enabled?: boolean;
   isTrigger?: boolean;
   friction?: number;
@@ -1891,6 +1901,8 @@ export function updateColliderComponent(
   let next: ColliderComponent;
   if (current.shape === "box") {
     if (patch.meshMode !== undefined) return scene;
+    // 別ジオメトリを当てられるのはMesh Colliderだけ。Boxは寸法が本体。
+    if (patch.collisionModelAssetId !== undefined) return scene;
     if (patch.center !== undefined && !isFiniteVec3(patch.center)) return scene;
     if (
       patch.halfExtents !== undefined &&
@@ -1919,11 +1931,19 @@ export function updateColliderComponent(
     ) {
       return scene;
     }
+    const collisionModelAssetId =
+      patch.collisionModelAssetId === undefined
+        ? current.collisionModelAssetId
+        : (patch.collisionModelAssetId ?? undefined);
     next = {
       ...current,
       ...surface,
       meshMode: patch.meshMode ?? current.meshMode,
+      ...(collisionModelAssetId
+        ? { collisionModelAssetId }
+        : { collisionModelAssetId: undefined }),
     };
+    if (!collisionModelAssetId) delete next.collisionModelAssetId;
   }
   if (collidersEqual(current, next)) return scene;
   return replaceCollider(scene, entityId, current.id, next);
@@ -3267,7 +3287,10 @@ function collidersEqual(
         vectorsEqual(left.halfExtents, right.halfExtents)
     : left.shape === "mesh" &&
         right.shape === "mesh" &&
-        left.meshMode === right.meshMode;
+        left.meshMode === right.meshMode &&
+        // 差し替え先が変わればまったく別の当たり判定になる。ここを見落とすと
+        // 「変化なし」と判断されて、書き込みが黙って捨てられる。
+        left.collisionModelAssetId === right.collisionModelAssetId;
 }
 
 function normalizeMaterialBindings(

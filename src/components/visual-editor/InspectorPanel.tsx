@@ -73,6 +73,7 @@ import {
   type ModelAsset,
   type ModelAssetPatch,
   type ModelOptimizationOptions,
+  COLLIDER_BAKE_RATIOS,
   describeModelOptimization,
   planModelOptimization,
   MODEL_SIMPLIFY_RATIOS,
@@ -2434,6 +2435,8 @@ function ModelNodeInspector({
   optimizationState,
   onApplyModelOptimization,
   onRevertModelOptimization,
+  onBakeNodeCollider,
+  onClearNodeCollider,
 }: {
   entity: SceneEntity;
   scene: SceneDocument;
@@ -2452,9 +2455,19 @@ function ModelNodeInspector({
     options: ModelOptimizationOptions,
   ) => void;
   onRevertModelOptimization?: (assetId: string) => void;
+  onBakeNodeCollider?: (
+    entityId: string,
+    componentId: string,
+    ratio: number,
+  ) => void;
+  onClearNodeCollider?: (entityId: string, componentId: string) => void;
 }) {
   const node = entity.modelNode;
   if (!node) return null;
+  const nodeMeshCollider = entity.components.find(
+    (component): component is Extract<ColliderComponent, { shape: "mesh" }> =>
+      component.type === "collider" && component.shape === "mesh",
+  );
   const modelEntity = scene.entities[node.modelEntityId];
   const mesh = modelEntity?.components.find(
     (component): component is MeshComponent => component.type === "mesh",
@@ -2527,15 +2540,28 @@ function ModelNodeInspector({
       </ComponentCard>
       {model?.kind === "model" &&
       (node.nodeType === "mesh" || node.nodeType === "skinned-mesh") ? (
-        <ModelNodeDecimatePanel
-          model={model}
-          sourceNodeIndex={node.sourceNodeIndex}
-          nodeName={entity.name}
-          readOnly={readOnly}
-          state={optimizationState}
-          onApply={onApplyModelOptimization}
-          onRevert={onRevertModelOptimization}
-        />
+        <>
+          <ModelNodeDecimatePanel
+            model={model}
+            sourceNodeIndex={node.sourceNodeIndex}
+            nodeName={entity.name}
+            readOnly={readOnly}
+            state={optimizationState}
+            onApply={onApplyModelOptimization}
+            onRevert={onRevertModelOptimization}
+          />
+          {nodeMeshCollider ? (
+            <ModelNodeColliderBakePanel
+              entityId={entity.id}
+              collider={nodeMeshCollider}
+              assets={assets}
+              nodeName={entity.name}
+              readOnly={readOnly}
+              onBake={onBakeNodeCollider}
+              onClear={onClearNodeCollider}
+            />
+          ) : null}
+        </>
       ) : null}
       {nodeMesh && node.sourceMaterialIndices.length > 0 ? (
         <MeshInspector
@@ -2713,6 +2739,110 @@ function ModelNodeDecimatePanel({
       ) : (
         <p className="text-xs leading-5 text-slate-600">{plan.reason}</p>
       )}
+    </ComponentCard>
+  );
+}
+
+/**
+ * 当たり判定だけを軽量化する。
+ *
+ * 見た目を削ると質感まで落ちる。歩ければいい面は当たりだけ荒くすればよく、
+ * 重いMeshをそのまま見せられる。焼き出した先は普通のModel Assetなので、
+ * 参照を外せば元の見た目のジオメトリへ戻る。
+ */
+function ModelNodeColliderBakePanel({
+  entityId,
+  collider,
+  assets,
+  nodeName,
+  readOnly,
+  onBake,
+  onClear,
+}: {
+  entityId: string;
+  collider: Extract<ColliderComponent, { shape: "mesh" }>;
+  assets: AssetManifest;
+  nodeName: string;
+  readOnly: boolean;
+  onBake?: (entityId: string, componentId: string, ratio: number) => void;
+  onClear?: (entityId: string, componentId: string) => void;
+}) {
+  const [pendingRatio, setPendingRatio] = useState<number | null>(null);
+  const baked = collider.collisionModelAssetId
+    ? assets.assets[collider.collisionModelAssetId]
+    : undefined;
+  const bakedTriangles =
+    baked?.kind === "model" ? baked.importMetadata?.primitiveCount : undefined;
+  return (
+    <ComponentCard title="当たり判定だけ軽量化" subtitle="見た目はそのまま">
+      <p className="text-xs leading-5 text-slate-600">
+        歩ければ十分な面は、当たり判定だけ荒くできます。「{nodeName}
+        」の見た目は変わりません。
+      </p>
+      {baked?.kind === "model" ? (
+        <div className="space-y-1.5 rounded border border-emerald-200 bg-emerald-50 p-2">
+          <p className="text-xs leading-5 text-emerald-900">
+            いまの当たり判定: {baked.name}
+            {bakedTriangles !== undefined ? `（${bakedTriangles} primitive）` : ""}
+          </p>
+          <button
+            type="button"
+            disabled={readOnly || !onClear}
+            onClick={() => onClear?.(entityId, collider.id)}
+            className="h-8 w-full rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            見た目のジオメトリへ戻す
+          </button>
+        </div>
+      ) : null}
+      <div className="flex gap-1.5">
+        {COLLIDER_BAKE_RATIOS.map((ratio) => (
+          <button
+            key={ratio}
+            type="button"
+            disabled={readOnly || !onBake}
+            aria-pressed={pendingRatio === ratio}
+            onClick={() =>
+              setPendingRatio((current) => (current === ratio ? null : ratio))
+            }
+            className={`h-8 flex-1 rounded-md border text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45 ${
+              pendingRatio === ratio
+                ? "border-teal-600 bg-teal-600 text-white"
+                : "border-teal-300 bg-teal-50 text-teal-800 hover:bg-teal-100"
+            }`}
+          >
+            {Math.round(ratio * 100)}%
+          </button>
+        ))}
+      </div>
+      {pendingRatio !== null ? (
+        <div className="space-y-1.5 rounded border border-teal-200 bg-teal-50 p-2">
+          <p className="text-xs leading-5 text-teal-900">
+            当たり判定を{Math.round(pendingRatio * 100)}
+            %のポリゴンで作り直します。見た目のMeshは変わりません。
+          </p>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              disabled={readOnly || !onBake}
+              onClick={() => {
+                onBake?.(entityId, collider.id, pendingRatio);
+                setPendingRatio(null);
+              }}
+              className="h-8 flex-1 rounded-md border border-teal-600 bg-teal-600 px-3 text-xs font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              当たり判定を作る
+            </button>
+            <button
+              type="button"
+              onClick={() => setPendingRatio(null)}
+              className="h-8 rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              やめる
+            </button>
+          </div>
+        </div>
+      ) : null}
     </ComponentCard>
   );
 }
@@ -4520,6 +4650,8 @@ function EntityInspector({
   modelOptimizationState,
   onApplyModelOptimization,
   onRevertModelOptimization,
+  onBakeNodeCollider,
+  onClearNodeCollider,
   onColliderChange,
   onRigidBodyChange,
   onAutoFitCollider,
@@ -4594,6 +4726,8 @@ function EntityInspector({
     options: ModelOptimizationOptions,
   ) => void;
   onRevertModelOptimization?: (assetId: string) => void;
+  onBakeNodeCollider?: (entityId: string, componentId: string, ratio: number) => void;
+  onClearNodeCollider?: (entityId: string, componentId: string) => void;
   onColliderChange: (componentId: string, patch: ColliderPatch) => void;
   onRigidBodyChange: (componentId: string, patch: RigidBodyPatch) => void;
   onAutoFitCollider: (componentId: string) => void;
@@ -4828,6 +4962,8 @@ function EntityInspector({
           optimizationState={modelOptimizationState}
           onApplyModelOptimization={onApplyModelOptimization}
           onRevertModelOptimization={onRevertModelOptimization}
+          onBakeNodeCollider={onBakeNodeCollider}
+          onClearNodeCollider={onClearNodeCollider}
         />
       ) : null}
 
@@ -5335,6 +5471,8 @@ export function InspectorPanel({
   onApplyTextureProcessing,
   onRevertTextureProcessing,
   onRevertModelOptimization,
+  onBakeNodeCollider,
+  onClearNodeCollider,
   textureBatchState,
   onApplyTextureBatch,
   onParticleEmitterChange,
@@ -5463,6 +5601,8 @@ export function InspectorPanel({
   onApplyTextureProcessing?: (assetId: string) => void;
   onRevertTextureProcessing?: (assetId: string) => void;
   onRevertModelOptimization?: (assetId: string) => void;
+  onBakeNodeCollider?: (entityId: string, componentId: string, ratio: number) => void;
+  onClearNodeCollider?: (entityId: string, componentId: string) => void;
   textureBatchState?: TextureProcessingState;
   onApplyTextureBatch?: (assetIds: readonly string[], settings?: TextureImportSettingsPatch) => void;
   onParticleEmitterChange: (
@@ -5695,6 +5835,8 @@ export function InspectorPanel({
             modelOptimizationState={modelOptimizationState}
             onApplyModelOptimization={onApplyModelOptimization}
             onRevertModelOptimization={onRevertModelOptimization}
+            onBakeNodeCollider={onBakeNodeCollider}
+            onClearNodeCollider={onClearNodeCollider}
             onColliderChange={(componentId, patch) =>
               onColliderChange(entity.id, componentId, patch)
             }

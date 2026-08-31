@@ -3833,12 +3833,23 @@ function updateComponent(
         componentId,
       );
       break;
-    case "collider":
+    case "collider": {
       assertPatchKeys(
         patch,
         COLLIDER_PATCH_KEYS,
         component.type,
       );
+      // 差し替え先が本当にModelかは、Assetを持つここでしか確かめられない。
+      const collisionModelAssetId = patch.collisionModelAssetId;
+      if (
+        typeof collisionModelAssetId === "string" &&
+        context.bundle.assets.assets[collisionModelAssetId]?.kind !== "model"
+      ) {
+        invalidArgument(
+          "patch.collisionModelAssetId",
+          "existing model asset id",
+        );
+      }
       scene = updateColliderComponent(
         context.bundle.scene,
         entityId,
@@ -3846,6 +3857,7 @@ function updateComponent(
         componentId,
       );
       break;
+    }
     case "light":
       assertPatchKeys(
         patch,
@@ -7800,6 +7812,7 @@ const RIGID_BODY_PATCH_KEYS = patchKeysOf<RigidBodyPatch>()([
 ]);
 
 const COLLIDER_PATCH_KEYS = patchKeysOf<ColliderPatch>()([
+  "collisionModelAssetId",
   "enabled",
   "isTrigger",
   "friction",

@@ -114,6 +114,7 @@ import {
   updateAudioSourceComponent,
   updateVegetationWindComponent,
   updateColliderComponent,
+  type ColliderComponent,
   optimizeColliderConfiguration,
   updateRigidBodyComponent,
   updateLightComponent,
@@ -133,6 +134,7 @@ import {
   applyTextureProcessingBatch,
   type ModelOptimizationOptions,
   MODEL_OPTIMIZATION_STEP_LABELS,
+  bakeNodeColliderModel,
   isValidSimplifyRatio,
   planModelOptimization,
   planTextureProcessing,
@@ -7976,6 +7978,112 @@ export function VisualEditorPrototype({
     [editorMode],
   );
 
+  /*
+   * 当たり判定だけを軽量化する。
+   *
+   * 見た目のMeshは触らない。地面のように重いまま見せたいものほど、当たりは
+   * 荒くて構わない。焼き出した軽量Modelを別Assetにして、Mesh Colliderから
+   * そこを指す。元に戻すのは参照を外すだけで済む。
+   */
+  const handleBakeNodeCollider = useCallback(
+    async (entityId: string, componentId: string, ratio: number) => {
+      const availability = resolveAssetOperationAvailability(
+        "model-optimization",
+        {
+          readOnly: editorMode !== "edit",
+          assetImportActive:
+            importRunningRef.current ||
+            hasActiveAssetImport(importQueueRef.current),
+          modelReimportActive:
+            assetOperationRef.current?.kind === "model-reimport",
+          textureProcessingActive:
+            assetOperationRef.current?.kind === "texture-processing",
+        },
+      );
+      if (!availability.allowed) {
+        setNotice(availability.disabledReason ?? "いまは当たり判定を作れません");
+        return;
+      }
+      if (!projectPath) {
+        setNotice("プロジェクトの保存後に当たり判定を作成できます");
+        return;
+      }
+      const entity = bundleRef.current.scene.entities[entityId];
+      const modelNode = entity?.modelNode;
+      const collider = entity?.components.find(
+        (component): component is ColliderComponent =>
+          component.type === "collider" && component.id === componentId,
+      );
+      if (!entity || !modelNode || collider?.shape !== "mesh") {
+        setNotice("当たり判定を作るMesh Colliderが見つかりませんでした");
+        return;
+      }
+      const token = Symbol("collider-bake");
+      assetOperationRef.current = { kind: "model-reimport", token };
+      setNotice(`「${entity.name}」の当たり判定を作成しています`);
+      try {
+        const result = await bakeNodeColliderModel(
+          projectPath,
+          bundleRef.current.assets,
+          {
+            modelAssetId: modelNode.modelAssetId,
+            sourceNodeIndex: modelNode.sourceNodeIndex,
+            ratio,
+            nodeName: entity.name,
+            existingAssetId: collider.collisionModelAssetId,
+            createAssetId: () => createDocumentId("model-collision"),
+          },
+        );
+        if (!result.ok) {
+          setNotice(result.message);
+          return;
+        }
+        setHistory((current) => {
+          const scene = updateColliderComponent(
+            current.present.bundle.scene,
+            entityId,
+            { collisionModelAssetId: result.assetId },
+            componentId,
+          );
+          const nextBundle = touchProject({
+            ...current.present.bundle,
+            scene,
+            assets: result.manifest,
+          });
+          bundleRef.current = nextBundle;
+          setSaveStatus("dirty");
+          return commitEditorHistory(current, {
+            ...current.present,
+            bundle: nextBundle,
+          });
+        });
+        setNotice(
+          `「${entity.name}」の当たり判定を ${result.triangles.before.toLocaleString()} → ${result.triangles.after.toLocaleString()} ポリゴンで作成しました。見た目はそのままです`,
+        );
+      } finally {
+        if (assetOperationRef.current?.token === token) {
+          assetOperationRef.current = null;
+        }
+      }
+    },
+    [editorMode, projectPath],
+  );
+
+  const handleClearNodeCollider = useCallback(
+    (entityId: string, componentId: string) => {
+      updateScene((scene) =>
+        updateColliderComponent(
+          scene,
+          entityId,
+          { collisionModelAssetId: null },
+          componentId,
+        ),
+      );
+      setNotice("当たり判定を見た目のジオメトリへ戻しました");
+    },
+    [updateScene],
+  );
+
   const handleApplyModelOptimization = useCallback(
     async (assetId: string, options: ModelOptimizationOptions) => {
       const availability = resolveAssetOperationAvailability(
@@ -11107,6 +11215,10 @@ export function VisualEditorPrototype({
             onRevertTextureProcessing={(assetId) =>
               handleRevertAssetOptimization(assetId, "texture")
             }
+            onBakeNodeCollider={(entityId, componentId, ratio) => {
+              void handleBakeNodeCollider(entityId, componentId, ratio);
+            }}
+            onClearNodeCollider={handleClearNodeCollider}
             onRevertModelOptimization={(assetId) =>
               handleRevertAssetOptimization(assetId, "model")
             }

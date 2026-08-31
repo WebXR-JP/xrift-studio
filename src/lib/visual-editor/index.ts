@@ -39,6 +39,8 @@ export * from "./material-extension-registry";
 export * from "./material-thumbnail";
 export * from "./model-animation-groups";
 export * from "./model-animation-groups.fixture";
+export * from "./model-collider-bake";
+export * from "./model-decimation";
 export * from "./model-optimization";
 export * from "./model-optimization.fixture";
 export * from "./model-thumbnail";

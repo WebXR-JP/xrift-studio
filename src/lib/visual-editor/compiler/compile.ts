@@ -2432,7 +2432,14 @@ function renderModelNodeColliderGeometry(
 ): string | null {
   const modelNode = entity.modelNode;
   if (!modelNode) return null;
-  const model = context.assets.assets[modelNode.modelAssetId];
+  // 当たり判定だけ差し替えてあるなら、そちらのModelを使う。焼き出したModelは
+  // Nodeが1つだけなので、選ぶのは常に先頭。見た目のMeshには触らない。
+  const collision = collider.collisionModelAssetId
+    ? context.assets.assets[collider.collisionModelAssetId]
+    : undefined;
+  const collisionModel = collision?.kind === "model" ? collision : undefined;
+  const sourceNodeIndex = collisionModel ? 0 : modelNode.sourceNodeIndex;
+  const model = collisionModel ?? context.assets.assets[modelNode.modelAssetId];
   if (model?.kind !== "model") return null;
   context.referencedAssetIds.add(model.id);
   const runtimeUrl = context.assetRuntimeUrls.get(model.id);
@@ -2453,7 +2460,7 @@ function renderModelNodeColliderGeometry(
   const urlConstant = registerAssetUrl(model, runtimeUrl, context);
   const componentName = generatedIdentifier(
     "CompiledModelNodeCollider",
-    `${model.id}:${modelNode.sourceNodeIndex}`,
+    `${model.id}:${sourceNodeIndex}`,
   );
   context.dreiImports.add("useGLTF");
   context.reactValueImports.add("useMemo");
@@ -2479,7 +2486,7 @@ ${usesDraco ? "  const dracoDecoderPath = useCompiledDracoDecoderPath();\n" : ""
       }
     });
     const selected = copies.find(
-      (object) => object.userData.xriftSourceNodeIndex === ${modelNode.sourceNodeIndex},
+      (object) => object.userData.xriftSourceNodeIndex === ${sourceNodeIndex},
     );
     if (!selected) return null;
     for (const child of [...selected.children]) {
