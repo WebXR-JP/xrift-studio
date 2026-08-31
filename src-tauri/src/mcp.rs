@@ -2729,7 +2729,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "optimize_model_asset",
-            "description": "Rewrite a project-managed GLB Model Asset in place with mesh optimization (vertex welding, shared vertex buffers, animation keyframe resampling) and optional Draco compression, keeping Material Slots, node structure and animation clips intact. update_model_asset only records the import recipe; until this runs the original GLB is what ships. Reports the before and after size, or that the settings are already settled. Edit mode only.",
+            "description": "Rewrite a project-managed GLB Model Asset in place with mesh optimization (vertex welding, shared vertex buffers, animation keyframe resampling), optional polygon decimation, and optional Draco compression, keeping Material Slots, node structure and animation clips intact. update_model_asset only records the import recipe; until this runs the original GLB is what ships. Set simplifyRatio to decimate: it is the fraction of polygons to keep, and simplifySourceNodeIndex limits it to one glTF node (the sourceNodeIndex a Model node Entity reports through list_entities). Decimation merges normal and UV seams and is reversible only through revert_asset_optimization. Reports the before and after size, the triangle count when decimating, or that the settings are already settled. Edit mode only.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2738,7 +2738,9 @@ fn tool_definitions() -> Value {
                     "expectedRevision": { "type": "integer", "minimum": 0 },
                     "modelAssetId": { "type": "string", "minLength": 1 },
                     "optimizeMeshes": { "type": "boolean", "default": true },
-                    "compressWithDraco": { "type": "boolean", "default": true }
+                    "compressWithDraco": { "type": "boolean", "default": true },
+                    "simplifyRatio": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 },
+                    "simplifySourceNodeIndex": { "type": "integer", "minimum": 0 }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "modelAssetId"],
                 "additionalProperties": false

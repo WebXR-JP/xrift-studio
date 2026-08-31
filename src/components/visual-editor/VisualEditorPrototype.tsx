@@ -133,6 +133,7 @@ import {
   applyTextureProcessingBatch,
   type ModelOptimizationOptions,
   MODEL_OPTIMIZATION_STEP_LABELS,
+  isValidSimplifyRatio,
   planModelOptimization,
   planTextureProcessing,
   revertModelOptimization,
@@ -3246,9 +3247,38 @@ export function VisualEditorPrototype({
                 { modelAssetId },
               );
             }
+            const simplifyRatio =
+              typeof args.simplifyRatio === "number"
+                ? args.simplifyRatio
+                : undefined;
+            if (simplifyRatio !== undefined && !isValidSimplifyRatio(simplifyRatio)) {
+              throw new XriftMcpEditorToolError(
+                "MODEL_OPTIMIZATION_UNSUPPORTED",
+                "simplifyRatioは0より大きく1未満で指定してください",
+                { modelAssetId, simplifyRatio },
+              );
+            }
+            const simplifySourceNodeIndex =
+              typeof args.simplifySourceNodeIndex === "number"
+                ? args.simplifySourceNodeIndex
+                : undefined;
             const options: ModelOptimizationOptions = {
               optimizeMeshes: args.optimizeMeshes !== false,
               compressWithDraco: args.compressWithDraco !== false,
+              ...(simplifyRatio !== undefined
+                ? {
+                    simplify: {
+                      ratio: simplifyRatio,
+                      target:
+                        simplifySourceNodeIndex === undefined
+                          ? { kind: "model" as const }
+                          : {
+                              kind: "node" as const,
+                              sourceNodeIndex: simplifySourceNodeIndex,
+                            },
+                    },
+                  }
+                : {}),
             };
             const availability = resolveAssetOperationAvailability(
               "model-optimization",
@@ -3393,6 +3423,7 @@ export function VisualEditorPrototype({
                   steps: result.steps,
                   beforeBytes: result.beforeBytes,
                   afterBytes: result.afterBytes,
+                  ...(result.triangles ? { triangles: result.triangles } : {}),
                 },
               });
               return;
@@ -8015,7 +8046,12 @@ export function VisualEditorPrototype({
           return;
         }
 
-        const summary = `${formatFileSize(result.beforeBytes)} → ${formatFileSize(result.afterBytes)}へ最適化しました（${result.steps
+        // 間引きの手応えは容量ではなく三角形の数で伝わる。描画の重さはそちらで
+        // 決まるし、圧縮のかかり方しだいで容量はほとんど動かないこともある。
+        const triangleSummary = result.triangles
+          ? `ポリゴン ${result.triangles.before.toLocaleString()} → ${result.triangles.after.toLocaleString()}、`
+          : "";
+        const summary = `${triangleSummary}${formatFileSize(result.beforeBytes)} → ${formatFileSize(result.afterBytes)}へ最適化しました（${result.steps
           .map((step) => MODEL_OPTIMIZATION_STEP_LABELS[step])
           .join(" / ")}）`;
         setHistory((current) => {

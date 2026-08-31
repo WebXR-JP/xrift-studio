@@ -83,6 +83,9 @@ importers:
       lucide-react:
         specifier: 1.25.0
         version: 1.25.0(react@19.2.8)
+      meshoptimizer:
+        specifier: ^1.2.0
+        version: 1.2.0
       monaco-editor:
         specifier: 0.55.1
         version: 0.55.1
@@ -1554,6 +1557,9 @@ packages:
 
   meshoptimizer@1.1.1:
     resolution: {integrity: sha512-oRFNWJRDA/WTrVj7NWvqa5HqE1t9MYDj2VaWirQCzCCrAd2GHrqR/sQezCxiWATPNlKTcRaPRHPJwIRoPBAp5g==}
+
+  meshoptimizer@1.2.0:
+    resolution: {integrity: sha512-davRZeIJbxJrE24cwQle7ZDsxjdk/OphNOV83oX+efQinyoHY9Jcyz3MHbaoG0qySZajldGztNZ1RN/T19PZsg==}
 
   micromark-core-commonmark@2.0.3:
     resolution: {integrity: sha512-RDBrHEMSxVFLg6xvnXmb1Ayr2WzLAWjeSATAoxwKYJV94TeNavgoIdA0a9ytzDSVzBy2YKFK+emCPOEibLeCrg==}
@@ -3224,6 +3230,8 @@ snapshots:
       three: 0.185.1
 
   meshoptimizer@1.1.1: {}
+
+  meshoptimizer@1.2.0: {}
 
   micromark-core-commonmark@2.0.3:
     dependencies:

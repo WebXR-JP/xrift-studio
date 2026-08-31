@@ -70,8 +70,11 @@ import {
   type MaterialBinding,
   type MaterialAsset,
   type MaterialAssetPatch,
+  type ModelAsset,
   type ModelAssetPatch,
   type ModelOptimizationOptions,
+  planModelOptimization,
+  MODEL_SIMPLIFY_RATIOS,
   type TextureAsset,
   planTextureProcessing,
   type ModelBoneMetadata,
@@ -2427,6 +2430,8 @@ function ModelNodeInspector({
   readOnly,
   onMeshChange,
   onOpenMaterial,
+  optimizationState,
+  onApplyModelOptimization,
 }: {
   entity: SceneEntity;
   scene: SceneDocument;
@@ -2439,6 +2444,11 @@ function ModelNodeInspector({
     patch: MeshInspectorPatch,
   ) => void;
   onOpenMaterial: (assetId: string) => void;
+  optimizationState?: ModelOptimizationState;
+  onApplyModelOptimization?: (
+    assetId: string,
+    options: ModelOptimizationOptions,
+  ) => void;
 }) {
   const node = entity.modelNode;
   if (!node) return null;
@@ -2512,6 +2522,17 @@ function ModelNodeInspector({
           Transformは共有Modelのこのノードだけへ適用されます。SkinとAnimationは親のModel Entityで維持します。
         </p>
       </ComponentCard>
+      {model?.kind === "model" &&
+      (node.nodeType === "mesh" || node.nodeType === "skinned-mesh") ? (
+        <ModelNodeDecimatePanel
+          model={model}
+          sourceNodeIndex={node.sourceNodeIndex}
+          nodeName={entity.name}
+          readOnly={readOnly}
+          state={optimizationState}
+          onApply={onApplyModelOptimization}
+        />
+      ) : null}
       {nodeMesh && node.sourceMaterialIndices.length > 0 ? (
         <MeshInspector
           component={nodeMesh}
@@ -2543,6 +2564,92 @@ function ModelNodeInspector({
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * 選んだNode一枚だけを間引く。
+ *
+ * 重さはNodeごとに偏る。地面や岩の一枚が数万三角形を占めていても、Model全体を
+ * 削ると軽くする必要のない小物まで崩れる。ここは選択中のNodeだけを対象にし、
+ * 元へ戻す導線をModel Assetの最適化と共有する。
+ */
+function ModelNodeDecimatePanel({
+  model,
+  sourceNodeIndex,
+  nodeName,
+  readOnly,
+  state,
+  onApply,
+}: {
+  model: ModelAsset;
+  sourceNodeIndex: number;
+  nodeName: string;
+  readOnly: boolean;
+  state?: ModelOptimizationState;
+  onApply?: (assetId: string, options: ModelOptimizationOptions) => void;
+}) {
+  const busy =
+    state?.phase === "reading" ||
+    state?.phase === "encoding" ||
+    state?.phase === "saving";
+  const plan = planModelOptimization(model, {
+    optimizeMeshes: false,
+    compressWithDraco: false,
+    simplify: { ratio: 0.5, target: { kind: "node", sourceNodeIndex } },
+  });
+  return (
+    <ComponentCard title="このメッシュを軽量化" subtitle="ポリゴンの間引き">
+      {plan.supported ? (
+        <>
+          <p className="text-xs leading-5 text-slate-600">
+            「{nodeName}」のポリゴンだけを減らします。残す割合を選んでください。
+          </p>
+          <div className="flex gap-1.5">
+            {MODEL_SIMPLIFY_RATIOS.map((ratio) => (
+              <button
+                key={ratio}
+                type="button"
+                disabled={busy || readOnly || !onApply}
+                onClick={() =>
+                  onApply?.(model.id, {
+                    optimizeMeshes: false,
+                    compressWithDraco: false,
+                    simplify: { ratio, target: { kind: "node", sourceNodeIndex } },
+                  })
+                }
+                className="h-8 flex-1 rounded-md border border-violet-300 bg-violet-50 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {Math.round(ratio * 100)}%
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] leading-4 text-slate-500">
+            Node構造とMaterialの割当は変わりません。継ぎ目の法線とUVは統合されるので、元に戻すときはModel Assetの「原本のGLBに戻す」を使ってください。
+          </p>
+          {state && state.phase !== "idle" ? (
+            <p
+              role="status"
+              className={`rounded border p-1.5 text-xs leading-4 ${
+                state.phase === "failed"
+                  ? "border-rose-200 bg-rose-50 text-rose-800"
+                  : state.phase === "succeeded"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-sky-200 bg-sky-50 text-sky-800"
+              }`}
+            >
+              {state.message}
+            </p>
+          ) : readOnly ? (
+            <p className="text-[11px] leading-4 text-slate-500">
+              Playを停止すると軽量化できます。
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <p className="text-xs leading-5 text-slate-600">{plan.reason}</p>
+      )}
+    </ComponentCard>
   );
 }
 
@@ -4346,6 +4453,8 @@ function EntityInspector({
   terrainSceneEditing,
   onApplyTerrainSurface,
   onModelNodeMeshChange,
+  modelOptimizationState,
+  onApplyModelOptimization,
   onColliderChange,
   onRigidBodyChange,
   onAutoFitCollider,
@@ -4412,6 +4521,12 @@ function EntityInspector({
     entityId: string,
     componentId: string,
     patch: MeshInspectorPatch,
+  ) => void;
+  /** Model NodeのInspectorから、そのNodeだけを間引くために使う。 */
+  modelOptimizationState?: ModelOptimizationState;
+  onApplyModelOptimization?: (
+    assetId: string,
+    options: ModelOptimizationOptions,
   ) => void;
   onColliderChange: (componentId: string, patch: ColliderPatch) => void;
   onRigidBodyChange: (componentId: string, patch: RigidBodyPatch) => void;
@@ -4644,6 +4759,8 @@ function EntityInspector({
           readOnly={readOnly}
           onMeshChange={onModelNodeMeshChange}
           onOpenMaterial={onOpenMaterial}
+          optimizationState={modelOptimizationState}
+          onApplyModelOptimization={onApplyModelOptimization}
         />
       ) : null}
 
@@ -5508,6 +5625,8 @@ export function InspectorPanel({
               )
             }
             onModelNodeMeshChange={onMeshChange}
+            modelOptimizationState={modelOptimizationState}
+            onApplyModelOptimization={onApplyModelOptimization}
             onColliderChange={(componentId, patch) =>
               onColliderChange(entity.id, componentId, patch)
             }

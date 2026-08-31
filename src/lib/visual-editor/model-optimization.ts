@@ -1,5 +1,6 @@
 import { tauri } from "../tauri";
 import type { AssetManifest, ModelAsset, ModelImportMetadata } from "./asset-manifest";
+import { decimatePrimitive } from "./model-decimation";
 import {
   createAssetImportTransactionId,
   describeAssetImportFailure,
@@ -26,13 +27,31 @@ export type ModelOptimizationStep =
   | "weld"
   | "dedup-accessors"
   | "resample-animations"
+  | "simplify"
   | "draco";
 
 export const MODEL_OPTIMIZATION_STEP_LABELS: Record<ModelOptimizationStep, string> = {
   weld: "重複頂点の結合",
   "dedup-accessors": "同一頂点バッファの共有",
   "resample-animations": "Animationキーフレームの間引き",
+  simplify: "ポリゴンの間引き",
   draco: "Dracoメッシュ圧縮",
+};
+
+/**
+ * 間引きの対象。
+ *
+ * Draw callも三角形数もNodeごとに偏るので、重い一枚だけを削れる必要がある。
+ * Model原本を書き換えるため、同じModelを使う配置すべてに反映される。
+ */
+export type ModelSimplifyTarget =
+  | { kind: "model" }
+  | { kind: "node"; sourceNodeIndex: number };
+
+export type ModelSimplifyOptions = {
+  /** 残す頂点の割合。0.5で半分。 */
+  ratio: number;
+  target: ModelSimplifyTarget;
 };
 
 export type ModelOptimizationOptions = {
@@ -40,7 +59,16 @@ export type ModelOptimizationOptions = {
   optimizeMeshes: boolean;
   /** KHR_draco_mesh_compressionで配信サイズを下げる。 */
   compressWithDraco: boolean;
+  /** 形状を犠牲にして三角形を減らす。省略すると実行しない。 */
+  simplify?: ModelSimplifyOptions;
 };
+
+/** 間引きで選べる割合。UIと MCP で同じ選択肢を使う。 */
+export const MODEL_SIMPLIFY_RATIOS = [0.75, 0.5, 0.25, 0.1] as const;
+
+export function isValidSimplifyRatio(ratio: number): boolean {
+  return Number.isFinite(ratio) && ratio > 0 && ratio < 1;
+}
 
 export type ModelOptimizationPlan =
   | { supported: false; reason: string }
@@ -70,6 +98,8 @@ export type ModelOptimizationResult =
       beforeBytes: number;
       afterBytes: number;
       steps: ModelOptimizationStep[];
+      /** 間引きを実行したときだけ入る、三角形数の前後。 */
+      triangles?: { before: number; after: number };
     };
 
 export function planModelOptimization(
@@ -116,6 +146,9 @@ export function planModelOptimization(
     steps.push("weld", "dedup-accessors");
     if (metadata.animations.length > 0) steps.push("resample-animations");
   }
+  if (options.simplify && isValidSimplifyRatio(options.simplify.ratio)) {
+    steps.push("simplify");
+  }
   // すでにDraco圧縮済みのGLBは、Mesh最適化のために一度展開される。そのまま
   // 書き戻すと圧縮が外れて配信サイズが増えるので、再圧縮まで含める。
   if (
@@ -131,8 +164,9 @@ export function planModelOptimization(
     steps,
     alreadyDraco,
     requiresDracoDecoder: alreadyDraco,
-    preservedNotice:
-      "Material Slot、Node構造、Animationの本数は変わりません。Entity側の割当はそのまま使えます。",
+    preservedNotice: steps.includes("simplify")
+      ? "Material Slot、Node構造、Animationの本数は変わりません。形状は変わるので、元に戻すときは「最適化を元に戻す」を使ってください。"
+      : "Material Slot、Node構造、Animationの本数は変わりません。Entity側の割当はそのまま使えます。",
   };
 }
 
@@ -180,6 +214,7 @@ export async function applyModelOptimization(
     });
     const optimized = await optimizeModelBytes(sourceBytes, plan.steps, {
       decodeDraco: plan.requiresDracoDecoder,
+      simplify: options.simplify,
     });
 
     report?.({ phase: "saving", message: `${asset.name}を保存しています` });
@@ -241,6 +276,7 @@ export async function applyModelOptimization(
       beforeBytes: metadata.byteLength || sourceBytes.byteLength,
       afterBytes: optimized.bytes.byteLength,
       steps: plan.steps,
+      ...(optimized.triangles ? { triangles: optimized.triangles } : {}),
     };
   } catch (error) {
     return {
@@ -256,6 +292,8 @@ export type OptimizedModelBytes = {
   primitiveCount: number;
   extensionsUsed: string[];
   extensionsRequired: string[];
+  /** 間引きを実行したときだけ入る、三角形数の前後。 */
+  triangles?: { before: number; after: number };
 };
 
 /**
@@ -265,7 +303,7 @@ export type OptimizedModelBytes = {
 export async function optimizeModelBytes(
   sourceBytes: Uint8Array,
   steps: readonly ModelOptimizationStep[],
-  options: { decodeDraco?: boolean } = {},
+  options: { decodeDraco?: boolean; simplify?: ModelSimplifyOptions } = {},
 ): Promise<OptimizedModelBytes> {
   const [core, extensions, functions] = await Promise.all([
     import("@gltf-transform/core"),
@@ -299,6 +337,22 @@ export async function optimizeModelBytes(
       functions.dedup({ propertyTypes: [core.PropertyType.ACCESSOR] }),
     );
   }
+  let triangles: { before: number; after: number } | undefined;
+  if (steps.includes("simplify") && options.simplify) {
+    triangles = await simplifyDocument(document, options.simplify);
+    // 差し替え前の頂点バッファは誰からも参照されなくなるが、残したままだと
+    // 書き出しサイズが増える。ACCESSORだけを対象にして、Material索引と
+    // Node構造には触れない。
+    await document.transform(
+      functions.prune({
+        propertyTypes: [core.PropertyType.ACCESSOR],
+        keepAttributes: true,
+        keepLeaves: true,
+        keepSolidTextures: true,
+        keepExtras: true,
+      }),
+    );
+  }
   if (steps.includes("draco")) {
     await document.transform(functions.draco({ method: "edgebreaker" }));
   }
@@ -316,7 +370,49 @@ export async function optimizeModelBytes(
     extensionsRequired: root
       .listExtensionsRequired()
       .map((extension) => extension.extensionName),
+    ...(triangles ? { triangles } : {}),
   };
+}
+
+/**
+ * 対象のPrimitiveだけを間引く。
+ *
+ * `simplify()` はDocument全体を対象にするので、Nodeを選べるようPrimitive単位の
+ * APIを使う。索引を動かす変換は挟まない。Nodeの並び、Mesh、Materialはそのまま
+ * なので、Entity側の `sourceNodeIndex` とMaterial Slotの割当は生きたままになる。
+ */
+async function simplifyDocument(
+  document: import("@gltf-transform/core").Document,
+  options: ModelSimplifyOptions,
+): Promise<{ before: number; after: number }> {
+  const targets = collectSimplifyTargetMeshes(document, options.target);
+  if (targets.length === 0) {
+    throw new Error(
+      "間引く対象のMeshが見つかりませんでした。Meshを持つNodeを選んでください。",
+    );
+  }
+  let before = 0;
+  let after = 0;
+  for (const mesh of targets) {
+    for (const primitive of mesh.listPrimitives()) {
+      const result = await decimatePrimitive(document, primitive, options.ratio);
+      before += result.before;
+      after += result.after;
+    }
+  }
+  return { before, after };
+}
+
+function collectSimplifyTargetMeshes(
+  document: import("@gltf-transform/core").Document,
+  target: ModelSimplifyTarget,
+): import("@gltf-transform/core").Mesh[] {
+  const root = document.getRoot();
+  if (target.kind === "model") return root.listMeshes();
+  // Nodeの並びはglTFのnodes配列そのままで、Entityが持つsourceNodeIndexと同じ。
+  const node = root.listNodes()[target.sourceNodeIndex];
+  const mesh = node?.getMesh();
+  return mesh ? [mesh] : [];
 }
 
 export async function createDracoDecoder(): Promise<object> {
