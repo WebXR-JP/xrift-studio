@@ -2328,7 +2328,31 @@ function renderOwnedColliderContent(
   }
 
   let renderedChildren = children;
-  if (meshCollider) {
+  if (meshCollider && !entityHasEnabledMesh(entity)) {
+    const nodeColliderGeometry = renderModelNodeColliderGeometry(
+      entity,
+      meshCollider,
+      context,
+    );
+    if (nodeColliderGeometry) {
+      renderedChildren = [renderedChildren, nodeColliderGeometry]
+        .filter(Boolean)
+        .join("\n");
+    } else if (!renderedChildren) {
+      addDiagnostic(context, {
+        severity: "warning",
+        code: "mesh-collider-without-local-mesh",
+        message: "Mesh ColliderのEntityに有効なMesh Rendererがありません",
+        sceneId: context.scene.sceneId,
+        entityId: entity.id,
+        componentId: meshCollider.id,
+      });
+    }
+  }
+  // An empty MeshCollider is not just useless, it does not compile: its
+  // children are what it wraps, and React's typing requires them. Whatever
+  // left this Entity without geometry has already been reported.
+  if (meshCollider && renderedChildren) {
     context.rapierImports.add("MeshCollider");
     const type =
       meshCollider.meshMode === "convex" || bodyType !== "fixed"
@@ -2375,6 +2399,114 @@ function renderOwnedColliderContent(
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function entityHasEnabledMesh(entity: SceneEntity): boolean {
+  return entity.components.some(
+    (component) => component.type === "mesh" && component.enabled,
+  );
+}
+
+/**
+ * The collision geometry of a shared-source Model node, for its own RigidBody.
+ *
+ * An expanded node draws through the Model root, so its Entity is an empty
+ * group and Rapier — which builds a Mesh Collider by sweeping the meshes under
+ * the body — finds nothing to collide with. What is emitted here is that one
+ * node, cloned out of the same glTF the Model root loads, with the nested
+ * glTF nodes dropped (each is its own Entity's business) and its Transform
+ * cleared, since the Entity chain already places it.
+ *
+ * The clone stays *visible* and its materials are the thing switched off:
+ * Rapier skips invisible objects, so hiding the object would hide the
+ * collision with it.
+ */
+function renderModelNodeColliderGeometry(
+  entity: SceneEntity,
+  collider: MeshColliderComponent,
+  context: CompileContext,
+): string | null {
+  const modelNode = entity.modelNode;
+  if (!modelNode) return null;
+  const model = context.assets.assets[modelNode.modelAssetId];
+  if (model?.kind !== "model") return null;
+  context.referencedAssetIds.add(model.id);
+  const runtimeUrl = context.assetRuntimeUrls.get(model.id);
+  if (!runtimeUrl) {
+    addDiagnostic(context, {
+      severity: "warning",
+      code: "model-node-collider-source-unsupported",
+      message:
+        "Mesh ColliderのModel Nodeが参照するModel sourceを公開物へ含められません",
+      sceneId: context.scene.sceneId,
+      entityId: entity.id,
+      componentId: collider.id,
+      assetId: model.id,
+    });
+    return null;
+  }
+
+  const urlConstant = registerAssetUrl(model, runtimeUrl, context);
+  const componentName = generatedIdentifier(
+    "CompiledModelNodeCollider",
+    `${model.id}:${modelNode.sourceNodeIndex}`,
+  );
+  context.dreiImports.add("useGLTF");
+  context.reactValueImports.add("useMemo");
+  context.threeTypeImports.add("Material");
+  context.extraImports.add(
+    'import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";',
+  );
+  const usesDraco = modelRequiresDracoDecoder(model);
+  if (usesDraco) registerCompiledDracoRuntime(context);
+  const source = `const ${componentName}: FC = () => {
+${usesDraco ? "  const dracoDecoderPath = useCompiledDracoDecoderPath();\n" : ""}  const modelUrl = useCompiledAssetUrl(${urlConstant});
+  const { scene, parser } = useGLTF(modelUrl${usesDraco ? ", dracoDecoderPath" : ""});
+  const colliderNode = useMemo(() => {
+    const cloned = cloneSkeleton(scene);
+    const originals: typeof scene.children = [];
+    const copies: typeof scene.children = [];
+    scene.traverse((object) => originals.push(object));
+    cloned.traverse((object) => copies.push(object));
+    originals.forEach((original, index) => {
+      const nodeIndex = parser.associations.get(original)?.nodes;
+      if (typeof nodeIndex === "number" && copies[index]) {
+        copies[index].userData.xriftSourceNodeIndex = nodeIndex;
+      }
+    });
+    const selected = copies.find(
+      (object) => object.userData.xriftSourceNodeIndex === ${modelNode.sourceNodeIndex},
+    );
+    if (!selected) return null;
+    for (const child of [...selected.children]) {
+      if (typeof child.userData.xriftSourceNodeIndex === "number") selected.remove(child);
+    }
+    selected.removeFromParent();
+    selected.position.set(0, 0, 0);
+    selected.quaternion.identity();
+    selected.scale.set(1, 1, 1);
+    const hide = (material: Material): Material => {
+      const copy = material.clone();
+      copy.visible = false;
+      return copy;
+    };
+    selected.traverse((object) => {
+      const mesh = object as typeof object & {
+        isMesh?: boolean;
+        material?: Material | Material[];
+      };
+      if (!mesh.isMesh || !mesh.material) return;
+      mesh.material = Array.isArray(mesh.material)
+        ? mesh.material.map(hide)
+        : hide(mesh.material);
+    });
+    return selected;
+  }, [scene, parser]);
+  if (!colliderNode) return null;
+  return <primitive object={colliderNode} />;
+};`;
+  context.supportDeclarations.set(`model-node-collider:${componentName}`, source);
+  return `<${componentName} />`;
 }
 
 function renderColliderBody(
@@ -2436,18 +2568,23 @@ function renderColliderBody(
       componentId: duplicate.id,
     });
   }
-  if (
-    meshCollider &&
-    !entity.components.some((component) => component.type === "mesh" && component.enabled)
-  ) {
-    addDiagnostic(context, {
-      severity: "warning",
-      code: "mesh-collider-without-local-mesh",
-      message: "Mesh ColliderのEntityに有効なMesh Rendererがありません",
-      sceneId: context.scene.sceneId,
-      entityId: entity.id,
-      componentId: meshCollider.id,
-    });
+  let nodeColliderGeometry: string | null = null;
+  if (meshCollider && !entityHasEnabledMesh(entity)) {
+    nodeColliderGeometry = renderModelNodeColliderGeometry(
+      entity,
+      meshCollider,
+      context,
+    );
+    if (!nodeColliderGeometry) {
+      addDiagnostic(context, {
+        severity: "warning",
+        code: "mesh-collider-without-local-mesh",
+        message: "Mesh ColliderのEntityに有効なMesh Rendererがありません",
+        sceneId: context.scene.sceneId,
+        entityId: entity.id,
+        componentId: meshCollider.id,
+      });
+    }
   }
   if (boxes.length === 0 && !meshCollider) return children;
 
@@ -2498,6 +2635,7 @@ function renderColliderBody(
       (collider) =>
         `<CuboidCollider args={${vectorProp(collider.halfExtents)}} position={${vectorProp(collider.center)}} sensor={${collider.isTrigger}} friction={${formatNumber(collider.friction)}} restitution={${formatNumber(collider.restitution)}} />`,
     ),
+    ...(nodeColliderGeometry ? [nodeColliderGeometry] : []),
     ...(children ? [children] : []),
   ].join("\n");
   return `<RigidBody ${rigidBodyProps.join(" ")}>\n${indent(content, 1)}\n</RigidBody>`;

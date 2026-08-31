@@ -2047,6 +2047,123 @@ export function runVisualCompilerFixtureAssertions(
       modelSource.includes("useGLTF(modelUrl)"),
     "Project GLB loader did not use the XRift base URL",
   );
+
+  /*
+   * A Mesh Collider on an expanded shared-Model node.
+   *
+   * The node Entity is a transform-only proxy — the Model root draws its
+   * geometry — so the body it produces has nothing inside unless the compiler
+   * emits the node's own geometry. Empty is not merely inert: an empty
+   * `MeshCollider` fails the published world's type-check, which is how this
+   * first surfaced.
+   */
+  const nodeColliderEntityId = `${modelEntity.id}-model-node-0`;
+  const nodeColliderEntity: SceneEntity = {
+    id: nodeColliderEntityId,
+    name: "Animated Root",
+    parentId: modelEntity.id,
+    children: [],
+    enabled: true,
+    components: [
+      createTransformComponent(
+        `${nodeColliderEntityId}-transform`,
+        [0, 0, 0],
+        [0, 0, 0],
+        [1, 1, 1],
+      ),
+      createMeshColliderComponent(`${nodeColliderEntityId}-collider`, {
+        meshMode: "trimesh",
+      }),
+    ],
+    modelNode: {
+      modelEntityId: modelEntity.id,
+      modelAssetId: projectModel.id,
+      sourceNodeIndex: 0,
+      nodeType: "mesh",
+      sourceMaterialIndices: [0, 1],
+      restPosition: [0, 0, 0],
+      restRotation: [0, 0, 0],
+      restScale: [1, 1, 1],
+    },
+  };
+  const nodeColliderScene: SceneDocument = {
+    ...modelScene,
+    entities: {
+      ...modelScene.entities,
+      [modelEntity.id]: {
+        ...modelScene.entities[modelEntity.id],
+        children: [
+          ...modelScene.entities[modelEntity.id].children,
+          nodeColliderEntityId,
+        ],
+      },
+      [nodeColliderEntityId]: nodeColliderEntity,
+    },
+  };
+  const nodeColliderResult = compileVisualProject(
+    {
+      ...modelProject,
+      scenes: { [nodeColliderScene.sceneId]: nodeColliderScene },
+    },
+    { generatedAt: fixedTime },
+  );
+  const nodeColliderSource =
+    nodeColliderResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(
+    nodeColliderResult.canStage,
+    "A Mesh Collider on a Model node must be stageable",
+  );
+  assert(
+    nodeColliderSource.includes("CompiledModelNodeCollider") &&
+      nodeColliderSource.includes("xriftSourceNodeIndex === 0"),
+    "A Model node's Mesh Collider must emit that node's collision geometry",
+  );
+  assert(
+    !/<RigidBody[^>]*>\s*<\/RigidBody>/.test(nodeColliderSource),
+    "A Model node's RigidBody must not be emitted empty",
+  );
+  assert(
+    !nodeColliderResult.diagnostics.some(
+      (diagnostic) => diagnostic.code === "mesh-collider-without-local-mesh",
+    ),
+    "A Model node that names geometry must not be reported as Mesh-less",
+  );
+
+  const ownedNodeColliderScene: SceneDocument = {
+    ...nodeColliderScene,
+    entities: {
+      ...nodeColliderScene.entities,
+      [modelEntity.id]: {
+        ...nodeColliderScene.entities[modelEntity.id],
+        components: [
+          ...nodeColliderScene.entities[modelEntity.id].components,
+          createRigidBodyComponent("component-rigid-body-model-node-fixture", {
+            autoColliders: "none",
+            bodyType: "fixed",
+          }),
+        ],
+      },
+    },
+  };
+  const ownedNodeColliderSource =
+    compileVisualProject(
+      {
+        ...modelProject,
+        scenes: { [ownedNodeColliderScene.sceneId]: ownedNodeColliderScene },
+      },
+      { generatedAt: fixedTime },
+    ).overlayFiles.find((file) => file.relativePath === "src/World.tsx")
+      ?.content ?? "";
+  assert(
+    ownedNodeColliderSource.includes("CompiledModelNodeCollider"),
+    "A Model node inside a parent Rigid Body must still emit its collision geometry",
+  );
+  assert(
+    !/<MeshCollider[^>]*>\s*<\/MeshCollider>/.test(ownedNodeColliderSource),
+    "MeshCollider must never be emitted without the children it wraps",
+  );
   // Text fonts: the file is copied for both output modes, and the world must be
   // told where its own copy is. Runtime JSON has no generated source to carry
   // that base, so the manifest names it; without it the catalog falls back to

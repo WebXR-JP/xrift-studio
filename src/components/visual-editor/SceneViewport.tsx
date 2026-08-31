@@ -1578,6 +1578,7 @@ function ComponentVisual({
             projectPath={projectPath}
             isTrigger={component.isTrigger}
             selected={selected}
+            colliderMode={showAllColliders}
           />
         ) : null;
       }
@@ -1835,19 +1836,31 @@ function ModelNodeMeshColliderShapes({
   );
 }
 
-/** Wireframe of a shared-Model node's Mesh Collider for コライダー編集. */
+/**
+ * Above this, a wireframe of every triangle stops being a shape and becomes a
+ * solid field of lines — a beach's ground node is one mesh with hundreds of
+ * thousands of them. Dense nodes are drawn as a translucent skin instead, which
+ * says the same thing about where the collision is and leaves the world behind
+ * it readable.
+ */
+const MODEL_NODE_COLLIDER_WIREFRAME_TRIANGLE_LIMIT = 4000;
+
+/** Outline of a shared-Model node's Mesh Collider for コライダー編集. */
 function ModelNodeMeshColliderOutline({
   modelNode,
   assets,
   projectPath,
   isTrigger,
   selected,
+  colliderMode,
 }: {
   modelNode: SceneEntityModelNode;
   assets: AssetManifest;
   projectPath?: string;
   isTrigger: boolean;
   selected: boolean;
+  /** コライダー編集: the Scene's own Meshes are hidden behind this one. */
+  colliderMode: boolean;
 }) {
   const data = useModelNodeColliderGeometry(modelNode, assets, projectPath);
   const geometry = useMemo(() => {
@@ -1861,19 +1874,46 @@ function ModelNodeMeshColliderOutline({
     return built;
   }, [data]);
   useEffect(() => () => geometry?.dispose(), [geometry]);
-  if (!geometry) return null;
+  if (!geometry || !data) return null;
+  const color = isTrigger ? "#d97706" : "#0f766e";
+  const dense =
+    data.indices.length / 3 > MODEL_NODE_COLLIDER_WIREFRAME_TRIANGLE_LIMIT;
   return (
     <mesh
       geometry={geometry}
       renderOrder={20}
       userData={EDITOR_HELPER_USER_DATA}
     >
+      {/*
+       * Depth-tested, unlike the Box outline: a box is twelve edges and can be
+       * drawn through whatever hides it, while a Model node's collider follows
+       * real geometry, so drawing its far side over its near side — over the
+       * whole viewport — hides the Scene instead of explaining it. The offset
+       * keeps it off the identical surface it traces.
+       */}
       <meshBasicMaterial
-        color={isTrigger ? "#d97706" : "#0f766e"}
-        wireframe
+        color={color}
+        wireframe={!dense}
+        side={dense ? DoubleSide : undefined}
         transparent
-        opacity={selected ? 0.9 : 0.62}
-        depthTest={false}
+        /*
+         * A skin over a hidden Scene has to carry the picture on its own; the
+         * same skin over the Model it traces only has to say "collision here",
+         * so it stays a wash rather than a repaint of the ground.
+         */
+        opacity={
+          dense
+            ? colliderMode
+              ? 0.38
+              : 0.18
+            : selected
+              ? 0.9
+              : 0.62
+        }
+        depthWrite={false}
+        polygonOffset
+        polygonOffsetFactor={-1}
+        polygonOffsetUnits={-1}
       />
     </mesh>
   );
