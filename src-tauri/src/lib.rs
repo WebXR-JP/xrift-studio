@@ -4104,8 +4104,11 @@ fn read_local_font_import_source_path(
     }
     let expected_length = opened_metadata.len();
     let mut bytes = Vec::with_capacity(expected_length as usize);
-    use std::io::Read;
-    file.by_ref()
+    // Named through the trait rather than as a method: `File` implements both
+    // `Read` and `Write`, both of which are in scope at the top of this file
+    // and both of which offer `by_ref`, so the method call form does not
+    // compile. The read is capped at the length the metadata check agreed on.
+    Read::by_ref(&mut file)
         .take(expected_length)
         .read_to_end(&mut bytes)
         .map_err(|_| "local Font source cannot be read".to_string())?;
