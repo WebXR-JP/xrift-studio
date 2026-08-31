@@ -451,10 +451,20 @@ test("ビジュアル編集でテキスト看板を置き、書体と背景を�
   await expect(page.getByRole("combobox", { name: "板のサイズ" })).toHaveValue("text");
 
   await inspector.fill("常設展 第1室");
-  await page.getByRole("combobox", { name: "Font", exact: true }).selectOption("zen-old-mincho");
-  await expect(page.getByRole("combobox", { name: "Font", exact: true })).toHaveValue(
-    "zen-old-mincho",
-  );
+  // Studio bundles one family, so the choice left to the author is between
+  // naming that face and letting the runtime resolve it. Both have to land on
+  // the same bundled file, and the note under the picker is what says so.
+  const font = page.getByRole("combobox", { name: "Font", exact: true });
+  await font.selectOption("auto");
+  await expect(font).toHaveValue("auto");
+  await expect(
+    page.getByText("日本語と欧文を含む標準書体で表示します。"),
+  ).toBeVisible();
+  await font.selectOption("noto-sans-jp");
+  await expect(font).toHaveValue("noto-sans-jp");
+  await expect(
+    page.getByText("選んだ書体のファイルはStudioに同梱し、"),
+  ).toBeVisible();
 
   // Switching to an image background must ask for a Texture rather than
   // silently drawing an empty plate.
