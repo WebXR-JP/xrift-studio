@@ -28,6 +28,7 @@ export function extractGltfModelNodeHierarchy(value: unknown): ModelNodeMetadata
   const nodes = value.nodes;
   const meshes = Array.isArray(value.meshes) ? value.meshes : [];
   const skins = Array.isArray(value.skins) ? value.skins : [];
+  const accessors = Array.isArray(value.accessors) ? value.accessors : [];
   const hierarchy = selectedSceneNodeHierarchy(value, nodes);
   const includedNodeIndices = hierarchy.includedNodeIndices;
   const jointNodeIndices = new Set(
@@ -55,6 +56,7 @@ export function extractGltfModelNodeHierarchy(value: unknown): ModelNodeMetadata
       : [];
     const childSourceNodeIndices =
       hierarchy.childNodeIndicesByParent.get(sourceNodeIndex) ?? [];
+    const bounds = nodeLocalMeshBounds(mesh, accessors);
     return [{
       sourceNodeIndex,
       name: modelNodeName(node.name, sourceNodeIndex),
@@ -70,8 +72,61 @@ export function extractGltfModelNodeHierarchy(value: unknown): ModelNodeMetadata
       ...(jointNodeIndices.has(sourceNodeIndex) ? { isBone: true } : {}),
       sourceMaterialIndices,
       ...modelNodeTransform(node),
+      ...(bounds ? { bounds } : {}),
     }];
   });
+}
+
+/**
+ * Node-local AABB of one glTF mesh, from its POSITION accessor min/max.
+ *
+ * Read from the glTF JSON rather than parsed geometry so import stays cheap:
+ * the exporter already wrote exact bounds into every POSITION accessor. Raw
+ * glTF units — the Entity chain carries the import scale.
+ */
+function nodeLocalMeshBounds(
+  mesh: unknown,
+  accessors: unknown[],
+): { min: [number, number, number]; max: [number, number, number] } | undefined {
+  if (!isRecord(mesh) || !Array.isArray(mesh.primitives)) return undefined;
+  let min: [number, number, number] | undefined;
+  let max: [number, number, number] | undefined;
+  for (const primitive of mesh.primitives) {
+    if (!isRecord(primitive) || !isRecord(primitive.attributes)) continue;
+    const accessorIndex = integerIndex(
+      primitive.attributes.POSITION,
+      accessors.length,
+    );
+    const accessor =
+      accessorIndex === undefined ? undefined : accessors[accessorIndex];
+    if (!isRecord(accessor)) continue;
+    const accessorMin = finiteVec3(accessor.min);
+    const accessorMax = finiteVec3(accessor.max);
+    if (!accessorMin || !accessorMax) continue;
+    min = min
+      ? [
+          Math.min(min[0], accessorMin[0]),
+          Math.min(min[1], accessorMin[1]),
+          Math.min(min[2], accessorMin[2]),
+        ]
+      : accessorMin;
+    max = max
+      ? [
+          Math.max(max[0], accessorMax[0]),
+          Math.max(max[1], accessorMax[1]),
+          Math.max(max[2], accessorMax[2]),
+        ]
+      : accessorMax;
+  }
+  return min && max ? { min, max } : undefined;
+}
+
+function finiteVec3(value: unknown): [number, number, number] | undefined {
+  return Array.isArray(value) &&
+    value.length === 3 &&
+    value.every((entry) => typeof entry === "number" && Number.isFinite(entry))
+    ? [value[0], value[1], value[2]]
+    : undefined;
 }
 
 export function getModelNodeHierarchy(asset: ModelAsset): readonly ModelNodeMetadata[] {
@@ -379,6 +434,35 @@ export function updateModelNodeEntityEnabled(
  * Scenes and Prefabs share it, like the Animation conversion beside it in
  * `persistence.ts`.
  */
+/** True when this expanded node names geometry the shared Model draws. */
+export function isModelNodeGeometryEntity(entity: SceneEntity): boolean {
+  return (
+    entity.modelNode?.nodeType === "mesh" ||
+    entity.modelNode?.nodeType === "skinned-mesh"
+  );
+}
+
+/**
+ * Node-local bounds of an expanded shared-Model node, in raw glTF units.
+ * Null for documents imported before per-node bounds were recorded — a
+ * reimport of the Model Asset fills them in.
+ */
+export function getModelNodeLocalBounds(
+  entity: SceneEntity,
+  assets: AssetManifest,
+): { min: Vec3; max: Vec3 } | null {
+  const modelNode = entity.modelNode;
+  if (!modelNode) return null;
+  const asset = assets.assets[modelNode.modelAssetId];
+  if (asset?.kind !== "model") return null;
+  const node = getModelNodeHierarchy(asset).find(
+    (candidate) => candidate.sourceNodeIndex === modelNode.sourceNodeIndex,
+  );
+  return node?.bounds
+    ? { min: [...node.bounds.min], max: [...node.bounds.max] }
+    : null;
+}
+
 export function reconcileModelNodeEnabledInEntities(
   entities: Readonly<Record<string, SceneEntity>>,
 ): { entities: Record<string, SceneEntity>; reconciled: number } {

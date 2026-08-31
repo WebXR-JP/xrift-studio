@@ -18,9 +18,11 @@ import {
   TransformControls,
 } from "@react-three/drei";
 import {
+  ConvexHullCollider,
   CuboidCollider,
   MeshCollider,
   RigidBody,
+  TrimeshCollider,
 } from "@react-three/rapier";
 import { SpawnPoint } from "@xrift/world-components";
 import { TextPanelVisual } from "./TextPanelVisual";
@@ -75,7 +77,9 @@ import {
   Euler,
   Float32BufferAttribute,
   MathUtils,
+  Matrix4,
   OrthographicCamera,
+  Uint32BufferAttribute,
   Plane,
   PerspectiveCamera,
   Quaternion,
@@ -195,7 +199,9 @@ import {
   applyOpenBrushMaterialAssetProperties,
   createClassicR3fMaterial,
   useClassicShaderTextures,
+  loadProjectModelData,
   ProjectModelVisual,
+  PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY,
 } from "./ProjectModelVisual";
 import {
   loadOpenBrushPreviewMaterial,
@@ -1520,6 +1526,7 @@ function ComponentVisual({
   showAllColliders,
   effectivelyEnabled,
   projectPath,
+  entityModelNode,
 }: {
   component: SceneComponent;
   graphAnimationCues: readonly InteractivityAnimationCue[];
@@ -1535,6 +1542,8 @@ function ComponentVisual({
   showAllColliders: boolean;
   effectivelyEnabled: boolean;
   projectPath?: string;
+  /** Set for expanded shared-Model nodes: the geometry their Model draws. */
+  entityModelNode?: SceneEntity["modelNode"];
 }) {
   switch (component.type) {
     case "transform":
@@ -1556,13 +1565,21 @@ function ComponentVisual({
         </group>
       );
     case "collider":
-      if (
-        playing ||
-        !component.enabled ||
-        (!selected && !showAllColliders) ||
-        component.shape !== "box"
-      ) {
+      if (playing || !component.enabled || (!selected && !showAllColliders)) {
         return null;
+      }
+      if (component.shape === "mesh") {
+        // A shared-Model node's Mesh Collider has no sibling Mesh to repaint,
+        // so its outline is the baked node geometry itself.
+        return entityModelNode ? (
+          <ModelNodeMeshColliderOutline
+            modelNode={entityModelNode}
+            assets={assets}
+            projectPath={projectPath}
+            isTrigger={component.isTrigger}
+            selected={selected}
+          />
+        ) : null;
       }
       return (
         <mesh
@@ -1666,6 +1683,202 @@ function ComponentVisual({
   }
 }
 
+type SceneEntityModelNode = NonNullable<SceneEntity["modelNode"]>;
+
+type ModelNodeColliderGeometryData = {
+  vertices: Float32Array;
+  indices: Uint32Array;
+};
+
+/**
+ * Bakes the collider geometry of one shared-Model node: the node's own
+ * meshes, in node-local space, excluding descendants that are glTF nodes
+ * themselves — those belong to their own expanded Entities. Read-only over
+ * the shared cached model object.
+ */
+function extractModelNodeColliderGeometry(
+  root: Object3D,
+  sourceNodeIndex: number,
+): ModelNodeColliderGeometryData | null {
+  root.updateMatrixWorld(true);
+  let found: Object3D | null = null;
+  root.traverse((candidate) => {
+    if (
+      !found &&
+      candidate.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] ===
+        sourceNodeIndex
+    ) {
+      found = candidate;
+    }
+  });
+  const node = found as Object3D | null;
+  if (!node) return null;
+  const nodeInverse = new Matrix4().copy(node.matrixWorld).invert();
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const vertex = new Vector3();
+  const visit = (object: Object3D, isNodeRoot: boolean) => {
+    if (!isNodeRoot) {
+      const candidateIndex =
+        object.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY];
+      if (typeof candidateIndex === "number") return;
+    }
+    const mesh = object as Mesh & { isMesh?: boolean };
+    const geometry = mesh.isMesh ? (mesh.geometry as BufferGeometry) : null;
+    const position = geometry?.getAttribute("position");
+    if (geometry && position) {
+      const toNodeLocal = new Matrix4().multiplyMatrices(
+        nodeInverse,
+        object.matrixWorld,
+      );
+      const offset = positions.length / 3;
+      for (let index = 0; index < position.count; index += 1) {
+        vertex.fromBufferAttribute(position, index).applyMatrix4(toNodeLocal);
+        positions.push(vertex.x, vertex.y, vertex.z);
+      }
+      const meshIndex = geometry.getIndex();
+      if (meshIndex) {
+        for (let index = 0; index < meshIndex.count; index += 1) {
+          indices.push(offset + meshIndex.getX(index));
+        }
+      } else {
+        for (let index = 0; index < position.count; index += 1) {
+          indices.push(offset + index);
+        }
+      }
+    }
+    for (const child of object.children) visit(child, false);
+  };
+  visit(node, true);
+  if (positions.length === 0 || indices.length === 0) return null;
+  return {
+    vertices: new Float32Array(positions),
+    indices: new Uint32Array(indices),
+  };
+}
+
+function useModelNodeColliderGeometry(
+  modelNode: SceneEntityModelNode,
+  assets: AssetManifest,
+  projectPath: string | undefined,
+): ModelNodeColliderGeometryData | null {
+  const asset = assets.assets[modelNode.modelAssetId];
+  const modelAsset = asset?.kind === "model" ? asset : undefined;
+  const sourceRelativePath = modelAsset
+    ? resolveProjectModelSource(modelAsset, projectPath)
+    : undefined;
+  const sourceHash = modelAsset?.sourceHash;
+  const [modelObject, setModelObject] = useState<Object3D | null>(null);
+  useEffect(() => {
+    if (!projectPath || !sourceRelativePath) {
+      setModelObject(null);
+      return;
+    }
+    let active = true;
+    void loadProjectModelData(projectPath, sourceRelativePath, sourceHash)
+      .then((data) => {
+        if (active) setModelObject(data.object);
+      })
+      .catch(() => {
+        if (active) setModelObject(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [projectPath, sourceHash, sourceRelativePath]);
+  return useMemo(
+    () =>
+      modelObject
+        ? extractModelNodeColliderGeometry(
+            modelObject,
+            modelNode.sourceNodeIndex,
+          )
+        : null,
+    [modelObject, modelNode.sourceNodeIndex],
+  );
+}
+
+/**
+ * Physics shapes for a Mesh Collider on a shared-Model node. The node Entity
+ * draws nothing itself — the Model root does — so Rapier's own child-mesh
+ * sweep finds no geometry there. Explicit shapes carry the node's baked
+ * triangles instead; Rapier applies the Entity's world scale to the args.
+ */
+function ModelNodeMeshColliderShapes({
+  modelNode,
+  collider,
+  assets,
+  projectPath,
+}: {
+  modelNode: SceneEntityModelNode;
+  collider: Extract<ColliderComponent, { shape: "mesh" }>;
+  assets: AssetManifest;
+  projectPath?: string;
+}) {
+  const geometry = useModelNodeColliderGeometry(modelNode, assets, projectPath);
+  if (!geometry) return null;
+  const bodyIsFixed = (collider.bodyType ?? "fixed") === "fixed";
+  return collider.meshMode === "convex" || !bodyIsFixed ? (
+    <ConvexHullCollider
+      args={[geometry.vertices]}
+      friction={collider.friction}
+      restitution={collider.restitution}
+      sensor={collider.isTrigger}
+    />
+  ) : (
+    <TrimeshCollider
+      args={[geometry.vertices, geometry.indices]}
+      friction={collider.friction}
+      restitution={collider.restitution}
+      sensor={collider.isTrigger}
+    />
+  );
+}
+
+/** Wireframe of a shared-Model node's Mesh Collider for コライダー編集. */
+function ModelNodeMeshColliderOutline({
+  modelNode,
+  assets,
+  projectPath,
+  isTrigger,
+  selected,
+}: {
+  modelNode: SceneEntityModelNode;
+  assets: AssetManifest;
+  projectPath?: string;
+  isTrigger: boolean;
+  selected: boolean;
+}) {
+  const data = useModelNodeColliderGeometry(modelNode, assets, projectPath);
+  const geometry = useMemo(() => {
+    if (!data) return null;
+    const built = new BufferGeometry();
+    built.setAttribute(
+      "position",
+      new Float32BufferAttribute(data.vertices, 3),
+    );
+    built.setIndex(new Uint32BufferAttribute(data.indices, 1));
+    return built;
+  }, [data]);
+  useEffect(() => () => geometry?.dispose(), [geometry]);
+  if (!geometry) return null;
+  return (
+    <mesh
+      geometry={geometry}
+      renderOrder={20}
+      userData={EDITOR_HELPER_USER_DATA}
+    >
+      <meshBasicMaterial
+        color={isTrigger ? "#d97706" : "#0f766e"}
+        wireframe
+        transparent
+        opacity={selected ? 0.9 : 0.62}
+        depthTest={false}
+      />
+    </mesh>
+  );
+}
+
 function RuntimePhysicsEntity({
   entity,
   children,
@@ -1681,6 +1894,9 @@ function RuntimePhysicsEntity({
   const meshCollider = colliders.find(
     (component) => component.shape === "mesh",
   );
+  // A shared-Model node has no meshes of its own for Rapier to sweep; its
+  // Mesh Collider arrives as explicit baked shapes through children instead.
+  const autoMeshCollider = entity.modelNode ? undefined : meshCollider;
   const primaryCollider = meshCollider ?? colliders[0]!;
   const bodyType = primaryCollider.bodyType ?? "fixed";
 
@@ -1688,8 +1904,8 @@ function RuntimePhysicsEntity({
     <RigidBody
       type={bodyType}
       colliders={
-        meshCollider
-          ? meshCollider.meshMode === "convex" || bodyType !== "fixed"
+        autoMeshCollider
+          ? autoMeshCollider.meshMode === "convex" || bodyType !== "fixed"
             ? "hull"
             : "trimesh"
           : false
@@ -1741,7 +1957,9 @@ function RuntimeOwnedColliderContent({
     (component) => component.shape === "mesh",
   );
   let renderedChildren = children;
-  if (meshCollider) {
+  // A shared-Model node's Mesh Collider ships explicit baked shapes through
+  // children; wrapping its empty subtree here would generate nothing.
+  if (meshCollider && !entity.modelNode) {
     renderedChildren = (
       <MeshCollider
         type={
@@ -1976,6 +2194,7 @@ function EntityObject({
             showAllColliders={displayProfile.showAllColliders}
             effectivelyEnabled={effectivelyEnabled}
             projectPath={projectPath}
+            entityModelNode={entity.modelNode}
           />
         ),
       )}
@@ -1999,6 +2218,25 @@ function EntityObject({
   ) : (
     windScopedVisuals
   );
+  const modelNodeMeshCollider = entity.modelNode
+    ? entity.components.find(
+        (
+          component,
+        ): component is Extract<ColliderComponent, { shape: "mesh" }> =>
+          component.type === "collider" &&
+          component.enabled &&
+          component.shape === "mesh",
+      )
+    : undefined;
+  const modelNodeColliderShapes =
+    physicsEnabled && entity.modelNode && modelNodeMeshCollider ? (
+      <ModelNodeMeshColliderShapes
+        modelNode={entity.modelNode}
+        collider={modelNodeMeshCollider}
+        assets={assets}
+        projectPath={projectPath}
+      />
+    ) : null;
 
   const setTransformControlsRef = useCallback(
     (controls: ElementRef<typeof TransformControls> | null) => {
@@ -2042,16 +2280,19 @@ function EntityObject({
             ownRigidBody ? (
               <RuntimeOwnedRigidBody component={ownRigidBody}>
                 {ownedColliderVisuals}
+                {modelNodeColliderShapes}
                 {children}
               </RuntimeOwnedRigidBody>
             ) : rigidBodyOwner ? (
               <>
                 {ownedColliderVisuals}
+                {modelNodeColliderShapes}
                 {children}
               </>
             ) : (
               <RuntimePhysicsEntity entity={entity}>
                 {entityVisuals}
+                {modelNodeColliderShapes}
                 {children}
               </RuntimePhysicsEntity>
             )

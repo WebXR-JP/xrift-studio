@@ -11,6 +11,10 @@ import {
   type ScriptContract,
 } from "./scripting/script-contract";
 import {
+  getModelNodeLocalBounds,
+  isModelNodeGeometryEntity,
+} from "./model-hierarchy";
+import {
   cloneEntityHierarchy,
   createAudioSourceComponent,
   createBoxColliderComponent,
@@ -25,6 +29,7 @@ import {
   textComponentPresetInput,
   createTransformComponent,
   createVegetationWindComponent,
+  fitBoxColliderToLocalBounds,
   fitBoxColliderToMesh,
   getMesh,
   type ColliderComponent,
@@ -750,10 +755,20 @@ function createRegisteredComponent(
   if (definition.id === "physics.box-collider") {
     const collider = createBoxColliderComponent(id);
     const mesh = getMesh(entity);
-    return mesh ? fitBoxColliderToMesh(collider, mesh, assets) : collider;
+    if (mesh) return fitBoxColliderToMesh(collider, mesh, assets);
+    // An expanded shared-Model node has no Mesh of its own; its extent lives
+    // in the Model Asset's node metadata (absent for pre-bounds imports).
+    const nodeBounds = getModelNodeLocalBounds(entity, assets);
+    return nodeBounds
+      ? fitBoxColliderToLocalBounds(collider, nodeBounds.min, nodeBounds.max)
+      : collider;
   }
   if (definition.id === "physics.mesh-collider") {
-    return getMesh(entity) ? createMeshColliderComponent(id) : null;
+    // A shared-Model node's geometry is drawn by the Model root, so the
+    // sibling-Mesh rule extends to nodes that name real geometry.
+    return getMesh(entity) || isModelNodeGeometryEntity(entity)
+      ? createMeshColliderComponent(id)
+      : null;
   }
   if (definition.componentType === "rigid-body") {
     const legacyCollider = entity.components.find(

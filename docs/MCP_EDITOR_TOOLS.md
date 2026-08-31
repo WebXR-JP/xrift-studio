@@ -102,6 +102,16 @@ Animation を持つ GLB / VRM の展開ノード）は、ジオメトリを親 M
 **Collider**
 `inspect_colliders`, `optimize_colliders`
 
+共有ソースの Model ノード（`modelNode` 付き Entity）には `add_component` で
+`physics.mesh-collider` / `physics.box-collider` を付けられる。Mesh Collider は
+そのノード自身のジオメトリを焼いた当たり（子ノードは各自の Entity の管轄）、
+Box は import 時に記録したノード bounds へ自動フィットする（bounds は新規
+import / reimport で付く。旧 Asset は既定サイズになる）。Mesh Collider を
+付けられるのはジオメトリを持つノード（nodeType mesh / skinned-mesh）だけで、
+Bone / 空ノードは `DEPENDENCY_MISSING` で断られる。pose で非表示にしたノードは
+描画と同時に当たりからも外れる。`get_entity_bounds` は bounds を持つノードを
+実測に含める。
+
 **Terrain**
 `get_terrain`, `sample_terrain_point`, `list_terrain_presets`,
 `create_terrain`, `create_terrain_from_preset`, `sculpt_terrain`,

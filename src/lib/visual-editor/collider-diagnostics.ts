@@ -98,7 +98,12 @@ function hasEnabledMeshInBody(scene: SceneDocument, rootId: string): boolean {
     if (
       entity.components.some(
         (component) => component.type === "mesh" && component.enabled,
-      )
+      ) ||
+      // A shared-Model node names geometry its Model root draws: a Mesh
+      // Collider there has real triangles even though the Entity carries no
+      // Mesh Component of its own.
+      entity.modelNode?.nodeType === "mesh" ||
+      entity.modelNode?.nodeType === "skinned-mesh"
     ) {
       return true;
     }
@@ -210,7 +215,7 @@ export function inspectColliderConfiguration(
           fixLabel: "Convex Hullへ変更",
         });
       }
-      if (owner?.component.autoColliders !== "none") {
+      if (owner && owner.component.autoColliders !== "none") {
         pushDiagnostic(diagnostics, {
           code: "explicit-mesh-with-auto-collider",
           severity: "warning",

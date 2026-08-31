@@ -173,6 +173,37 @@ type ProjectModelData = {
 };
 
 const MODEL_OBJECT_CACHE = new Map<string, Promise<ProjectModelData>>();
+
+/**
+ * Loads and caches one Model source's parsed three.js data. Shared by the
+ * Mesh renderer and by per-node consumers (Model node colliders) so a Scene
+ * never parses the same source twice. The resolved object is shared and
+ * read-only: clone before mutating.
+ */
+export function loadProjectModelData(
+  projectPath: string,
+  sourceRelativePath: string,
+  sourceHash: string | undefined,
+  loadRevision = 0,
+): Promise<ProjectModelData> {
+  const cacheKey = `${projectPath}\n${sourceRelativePath}\n${sourceHash ?? ""}\n${loadRevision}`;
+  const cached = MODEL_OBJECT_CACHE.get(cacheKey);
+  if (cached) return cached;
+  const dataPromise =
+    MODEL_DATA_CACHE.get(cacheKey) ??
+    tauri.readProjectFileDataUrl(projectPath, sourceRelativePath);
+  MODEL_DATA_CACHE.set(cacheKey, dataPromise);
+  const promise = dataPromise
+    .then(dataUrlToArrayBuffer)
+    .then((buffer) => parseSelfContainedModel(buffer, sourceRelativePath));
+  promise.catch(() => {
+    MODEL_DATA_CACHE.delete(cacheKey);
+    MODEL_OBJECT_CACHE.delete(cacheKey);
+  });
+  MODEL_OBJECT_CACHE.set(cacheKey, promise);
+  return promise;
+}
+
 const EMPTY_RESOLVED_MATERIALS: readonly ResolvedProjectModelMaterialAssignment[] =
   [];
 const EMPTY_ANIMATION_INDICES: readonly number[] = [];
@@ -210,25 +241,17 @@ export function ProjectModelVisual({
   useEffect(() => {
     let active = true;
     setState({ status: "loading" });
-    const dataPromise =
-      MODEL_DATA_CACHE.get(cacheKey) ??
-      tauri.readProjectFileDataUrl(projectPath, sourceRelativePath);
-    MODEL_DATA_CACHE.set(cacheKey, dataPromise);
-    const promise =
-      MODEL_OBJECT_CACHE.get(cacheKey) ??
-      dataPromise
-        .then(dataUrlToArrayBuffer)
-        .then((buffer) => parseSelfContainedModel(buffer, sourceRelativePath));
-    MODEL_OBJECT_CACHE.set(cacheKey, promise);
-
-    void promise
+    void loadProjectModelData(
+      projectPath,
+      sourceRelativePath,
+      sourceHash,
+      loadRevision,
+    )
       .then((data) => {
         if (!active) return;
         setState({ status: "ready", ...data });
       })
       .catch((error) => {
-        MODEL_DATA_CACHE.delete(cacheKey);
-        MODEL_OBJECT_CACHE.delete(cacheKey);
         if (active) {
           setState({
             status: "error",

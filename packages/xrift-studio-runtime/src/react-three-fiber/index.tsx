@@ -1625,7 +1625,16 @@ function collectRuntimeColliderEntries(
       ];
     });
     const meshCollider = colliders.find((collider) => collider.shape === "mesh");
-    const meshSource = meshCollider && containsMesh(source) ? source.clone(true) : null;
+    let meshSource: Object3D | null = null;
+    if (meshCollider) {
+      if (containsMesh(source)) {
+        meshSource = source.clone(true);
+      } else if (entity.modelNode) {
+        // A shared-Model node draws nothing itself; its collider geometry
+        // lives under the Model root's loaded object.
+        meshSource = cloneModelNodeGeometry(result, entity.modelNode);
+      }
+    }
     const mesh = meshSource ? prepareColliderClone(meshSource) : null;
     entries.push({
       id: entity.id,
@@ -1676,12 +1685,61 @@ function containsMesh(object: Object3D): boolean {
   return found;
 }
 
+/**
+ * Collider geometry for a Mesh Collider on a shared-Model node: the node's
+ * subtree cloned out of the Model root's loaded object, minus descendants
+ * that are glTF nodes of their own — their colliders are their own
+ * Entities' business. The proxy Entity's world transform places the result,
+ * so the clone's own Transform is discarded by prepareColliderClone.
+ */
+function cloneModelNodeGeometry(
+  result: XriftLoadResult,
+  modelNode: {
+    modelAssetId: string;
+    modelEntityId: string;
+    sourceNodeIndex: number;
+  },
+): Object3D | null {
+  const modelRoot = result.entities.get(modelNode.modelEntityId);
+  if (!modelRoot) return null;
+  let node: Object3D | null = null;
+  modelRoot.traverse((candidate) => {
+    if (
+      !node &&
+      candidate.userData.xriftSourceNodeIndex === modelNode.sourceNodeIndex
+    ) {
+      node = candidate;
+    }
+  });
+  if (!node) return null;
+  const clone = (node as Object3D).clone(true);
+  const strays: Object3D[] = [];
+  clone.traverse((child) => {
+    if (
+      child !== clone &&
+      typeof child.userData.xriftSourceNodeIndex === "number"
+    ) {
+      strays.push(child);
+    }
+  });
+  for (const stray of strays) stray.removeFromParent();
+  return containsMesh(clone) ? clone : null;
+}
+
 function prepareColliderClone(object: Object3D, preserveRootTransform = false): Object3D {
   if (!preserveRootTransform) {
     object.position.set(0, 0, 0);
     object.rotation.set(0, 0, 0);
     object.scale.set(1, 1, 1);
   }
+  // A node the Model pose hides (visible: false) is out of the world's sight
+  // and out of its physics: drop it before visibility is forced back on for
+  // Rapier's sweep below.
+  const hidden: Object3D[] = [];
+  object.traverse((child) => {
+    if (child !== object && !child.visible) hidden.push(child);
+  });
+  for (const child of hidden) child.removeFromParent();
   object.traverse((child) => {
     child.visible = true;
     if (!(child instanceof Mesh)) return;

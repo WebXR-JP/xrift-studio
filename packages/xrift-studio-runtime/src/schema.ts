@@ -212,6 +212,16 @@ export type XriftRuntimeEntity = {
   enabled: boolean;
   transform: XriftRuntimeTransform;
   components: XriftRuntimeComponent[];
+  /**
+   * Present for an expanded shared-source Model node: a transform-only proxy
+   * whose geometry the named Model root draws. A Mesh Collider on such an
+   * entity resolves its triangles from that Model by source node index.
+   */
+  modelNode?: {
+    modelAssetId: string;
+    modelEntityId: string;
+    sourceNodeIndex: number;
+  };
 };
 
 export type XriftRuntimeScene = {

@@ -239,6 +239,18 @@ function compileRuntimeEntity(
           }
         : { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
     components,
+    // A shared-Model node owns no geometry: the runtime resolves its Mesh
+    // Collider (and nothing else, today) through the Model root's loaded
+    // object by source node index.
+    ...(entity.modelNode
+      ? {
+          modelNode: {
+            modelAssetId: entity.modelNode.modelAssetId,
+            modelEntityId: entity.modelNode.modelEntityId,
+            sourceNodeIndex: entity.modelNode.sourceNodeIndex,
+          },
+        }
+      : {}),
   };
 }
 

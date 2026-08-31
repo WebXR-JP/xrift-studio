@@ -1663,6 +1663,27 @@ export function fitBoxColliderToMesh(
   };
 }
 
+/**
+ * Fits a box collider to raw local bounds, for shapes that have no Mesh
+ * Component of their own — an expanded shared-Model node, whose extent comes
+ * from its glTF node metadata. Bounds are taken as-is: the Entity chain
+ * already carries any import scale.
+ */
+export function fitBoxColliderToLocalBounds(
+  collider: BoxColliderComponent,
+  min: Vec3,
+  max: Vec3,
+): BoxColliderComponent {
+  const bounds = colliderBoundsFromMinMax(min, max, 1);
+  if (!bounds) return collider;
+  return {
+    ...collider,
+    center: cloneVec3(bounds.center),
+    halfExtents: cloneVec3(bounds.halfExtents),
+    fitMode: "auto",
+  };
+}
+
 export function autoFitBoxCollider(
   scene: SceneDocument,
   assets: AssetManifest,

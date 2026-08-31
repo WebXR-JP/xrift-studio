@@ -4,6 +4,7 @@ import {
   type ModelAsset,
 } from "./asset-manifest";
 import { instantiateSceneAsset } from "./asset-placement";
+import { addEditorComponent } from "./editor-session";
 import {
   extractGltfModelNodeHierarchy,
   hasModelNodeHierarchy,
@@ -17,7 +18,8 @@ export function runModelHierarchyFixtureAssertions(): void {
   const nodes = extractGltfModelNodeHierarchy({
     scene: 0,
     scenes: [{ nodes: [0] }, { nodes: [2] }],
-    meshes: [{ primitives: [{ material: 0 }] }],
+    meshes: [{ primitives: [{ material: 0, attributes: { POSITION: 0 } }] }],
+    accessors: [{ min: [-1, 0, -2], max: [3, 4, 5] }],
     nodes: [
       { name: "Ward", children: [1] },
       { name: "nishitoda_5chome", mesh: 0, translation: [1, 2, 3] },
@@ -29,6 +31,12 @@ export function runModelHierarchyFixtureAssertions(): void {
     nodes[1]?.name === "nishitoda_5chome" &&
       nodes[1]?.parentSourceNodeIndex === 0,
     "Selected glTF node hierarchy was not extracted",
+  );
+  assert(
+    JSON.stringify(nodes[1]?.bounds) ===
+      JSON.stringify({ min: [-1, 0, -2], max: [3, 4, 5] }) &&
+      nodes[0]?.bounds === undefined,
+    "Node bounds must come from the POSITION accessor of the node's own mesh",
   );
   const repairedNodes = extractGltfModelNodeHierarchy({
     scene: 0,
@@ -50,7 +58,8 @@ export function runModelHierarchyFixtureAssertions(): void {
     scene: 0,
     scenes: [{ nodes: [0] }],
     skins: [{ joints: [1] }],
-    meshes: [{ primitives: [{ material: 0 }] }],
+    meshes: [{ primitives: [{ material: 0, attributes: { POSITION: 0 } }] }],
+    accessors: [{ min: [-0.5, 0, -0.5], max: [0.5, 2, 0.5] }],
     nodes: [
       { name: "Body", mesh: 0, skin: 0, children: [1] },
       { name: "Hips" },
@@ -265,6 +274,50 @@ export function runModelHierarchyFixtureAssertions(): void {
   assert(
     agreed.entities === reconciled.entities && agreed.reconciled === 0,
     "Reconciliation must return the same object when nothing changes",
+  );
+
+  // Per-node colliders: geometry nodes accept them, bare bones do not, and
+  // the box variant fits itself to the node bounds recorded at import.
+  const meshColliderAdd = addEditorComponent(
+    avatarPlacement.scene,
+    avatarManifest,
+    bodyNode.id,
+    "physics.mesh-collider",
+    "world",
+  );
+  assert(
+    meshColliderAdd.added,
+    "Mesh Collider must attach to a shared Model geometry node",
+  );
+  const boneColliderAdd = addEditorComponent(
+    avatarPlacement.scene,
+    avatarManifest,
+    hipsNode.id,
+    "physics.mesh-collider",
+    "world",
+  );
+  assert(
+    !boneColliderAdd.added && boneColliderAdd.reason === "dependency-missing",
+    "Mesh Collider must not attach to a Bone node that names no geometry",
+  );
+  const boxColliderAdd = addEditorComponent(
+    avatarPlacement.scene,
+    avatarManifest,
+    bodyNode.id,
+    "physics.box-collider",
+    "world",
+  );
+  const fittedBox = boxColliderAdd.scene.entities[bodyNode.id]?.components.find(
+    (component) => component.type === "collider" && component.shape === "box",
+  );
+  assert(
+    boxColliderAdd.added &&
+      fittedBox?.type === "collider" &&
+      fittedBox.shape === "box" &&
+      fittedBox.fitMode === "auto" &&
+      Math.abs(fittedBox.center[1] - 1) < 1e-6 &&
+      Math.abs(fittedBox.halfExtents[1] - 1) < 1e-6,
+    "Box Collider must auto-fit to the node bounds metadata",
   );
 }
 

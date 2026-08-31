@@ -155,6 +155,12 @@ export type ModelNodeMetadata = {
   position: [number, number, number];
   rotation: [number, number, number];
   scale: [number, number, number];
+  /**
+   * Node-local AABB of this node's own mesh, from the glTF POSITION accessor
+   * min/max, in raw glTF units (no import scale, no node Transform). Optional
+   * for documents imported before per-node collider auto-fit was added.
+   */
+  bounds?: { min: [number, number, number]; max: [number, number, number] };
 };
 
 /** Derived import facts. These are safe to rebuild from the Model source. */

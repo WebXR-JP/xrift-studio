@@ -1,5 +1,9 @@
 import type { AssetManifest } from "./asset-manifest";
 import {
+  getModelNodeLocalBounds,
+  isModelNodeGeometryEntity,
+} from "./model-hierarchy";
+import {
   getColliderAutoFitBounds,
   getTransform,
   type SceneDocument,
@@ -178,7 +182,12 @@ function localMeshBounds(
     (component): component is Extract<SceneEntity["components"][number], { type: "mesh" }> =>
       component.type === "mesh",
   );
-  if (!mesh) return null;
+  if (!mesh) {
+    // A shared-Model node draws through its Model root, so its extent comes
+    // from the Model Asset's node metadata (absent for pre-bounds imports).
+    const nodeBounds = getModelNodeLocalBounds(entity, assets);
+    return nodeBounds ? boundsOf(nodeBounds.min, nodeBounds.max) : null;
+  }
   const fit = getColliderAutoFitBounds(mesh, assets);
   if (!fit) return null;
   return boundsOf(
@@ -222,9 +231,9 @@ export function getEntityWorldBounds(
 
   const visit = (current: SceneEntity): void => {
     const local = localMeshBounds(current, assets);
-    const hasMesh = current.components.some(
-      (component) => component.type === "mesh",
-    );
+    const hasMesh =
+      current.components.some((component) => component.type === "mesh") ||
+      isModelNodeGeometryEntity(current);
     if (local) {
       measured.push(current.id);
       const matrix = entityWorldMatrix(scene, current.id);
