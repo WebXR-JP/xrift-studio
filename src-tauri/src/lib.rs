@@ -313,6 +313,15 @@ struct LocalAudioImportSource {
 
 #[derive(Serialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+struct LocalFontImportSource {
+    file_name: String,
+    mime_type: String,
+    byte_length: u64,
+    data_url: String,
+}
+
+#[derive(Serialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 struct LocalModelImportSource {
     file_name: String,
     mime_type: String,
@@ -3846,6 +3855,36 @@ fn has_webm_signature(bytes: &[u8]) -> bool {
     bytes.starts_with(&[0x1a, 0x45, 0xdf, 0xa3])
 }
 
+/// Font containers troika can parse. WOFF2 is deliberately absent: troika
+/// rejects it and a Text assigned a font it cannot parse never typesets, so an
+/// unsupported file is refused at the boundary instead.
+fn local_font_mime_type(path: &Path) -> Option<&'static str> {
+    match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("ttf") => Some("font/ttf"),
+        Some("otf") => Some("font/otf"),
+        Some("woff") => Some("font/woff"),
+        _ => None,
+    }
+}
+
+/// SFNT / WOFF container check. `.ttf` and `.otf` are both SFNT wrappers and
+/// are published under either name, so the tag is accepted for both.
+fn has_font_signature(bytes: &[u8]) -> bool {
+    if bytes.starts_with(b"wOF2") {
+        return false;
+    }
+    bytes.starts_with(&[0x00, 0x01, 0x00, 0x00])
+        || bytes.starts_with(b"OTTO")
+        || bytes.starts_with(b"true")
+        || bytes.starts_with(b"ttcf")
+        || bytes.starts_with(b"wOFF")
+}
+
 fn has_audio_signature(bytes: &[u8], mime_type: &str) -> bool {
     match mime_type {
         "audio/mpeg" => has_mp3_signature(bytes),
@@ -4025,6 +4064,83 @@ fn read_local_audio_import_source(source_path: String) -> Result<LocalAudioImpor
         return Err("local Audio source path is invalid".to_string());
     }
     read_local_audio_import_source_path(Path::new(source_path))
+}
+
+const MAX_LOCAL_FONT_BYTES: u64 = 64 * 1024 * 1024;
+
+fn read_local_font_import_source_path(
+    source_path: &Path,
+) -> Result<LocalFontImportSource, String> {
+    if !source_path.is_absolute() {
+        return Err("local Font source must use an absolute path".to_string());
+    }
+    let source_metadata = std::fs::symlink_metadata(source_path)
+        .map_err(|_| "local Font source cannot be inspected".to_string())?;
+    if source_metadata.file_type().is_symlink() || !source_metadata.is_file() {
+        return Err("local Font source must be a regular non-symlink file".to_string());
+    }
+    if source_metadata.len() == 0 || source_metadata.len() > MAX_LOCAL_FONT_BYTES {
+        return Err("local Font source exceeds the supported size".to_string());
+    }
+    let mime_type = local_font_mime_type(source_path)
+        .ok_or_else(|| "local Font source format is not supported".to_string())?;
+    let canonical_source = source_path
+        .canonicalize()
+        .map_err(|_| "local Font source cannot be resolved".to_string())?;
+    let canonical_metadata = std::fs::symlink_metadata(&canonical_source)
+        .map_err(|_| "local Font source cannot be inspected".to_string())?;
+    if canonical_metadata.file_type().is_symlink()
+        || !canonical_metadata.is_file()
+        || canonical_metadata.len() != source_metadata.len()
+    {
+        return Err("local Font source changed while it was inspected".to_string());
+    }
+    let mut file = open_absolute_file_without_links(&canonical_source)?;
+    let opened_metadata = file
+        .metadata()
+        .map_err(|_| "local Font source cannot be inspected".to_string())?;
+    if !opened_metadata.is_file() || opened_metadata.len() != source_metadata.len() {
+        return Err("local Font source changed while it was inspected".to_string());
+    }
+    let expected_length = opened_metadata.len();
+    let mut bytes = Vec::with_capacity(expected_length as usize);
+    use std::io::Read;
+    file.by_ref()
+        .take(expected_length)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "local Font source cannot be read".to_string())?;
+    if bytes.len() as u64 != expected_length {
+        return Err("local Font source changed while it was read".to_string());
+    }
+    if !has_font_signature(&bytes) {
+        return Err("local Font source signature is invalid".to_string());
+    }
+    let file_name = canonical_source
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| "local Font source file name is invalid".to_string())?;
+
+    use base64::Engine;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Ok(LocalFontImportSource {
+        file_name: file_name.to_string(),
+        mime_type: mime_type.to_string(),
+        byte_length: expected_length,
+        data_url: format!("data:{};base64,{}", mime_type, encoded),
+    })
+}
+
+#[tauri::command]
+fn read_local_font_import_source(source_path: String) -> Result<LocalFontImportSource, String> {
+    let source_path = source_path.trim();
+    if source_path.is_empty()
+        || source_path.len() > 4096
+        || source_path.chars().any(char::is_control)
+    {
+        return Err("local Font source path is invalid".to_string());
+    }
+    read_local_font_import_source_path(Path::new(source_path))
 }
 
 fn read_local_texture_import_source_path(
@@ -4796,6 +4912,9 @@ fn read_image_data_url(project_path: String, rel: String) -> Result<String, Stri
         Some("ktx2") => "image/ktx2",
         Some("hdr") => "image/vnd.radiance",
         Some("exr") => "image/x-exr",
+        Some("ttf") => "font/ttf",
+        Some("otf") => "font/otf",
+        Some("woff") => "font/woff",
         _ => "application/octet-stream",
     };
     use base64::Engine;
@@ -5385,6 +5504,7 @@ pub fn run() {
             persist_compiler_publication_result,
             commit_visual_asset_import,
             read_local_audio_import_source,
+            read_local_font_import_source,
             read_local_texture_import_source,
             read_local_model_import_source,
             read_local_shader_import_source,
