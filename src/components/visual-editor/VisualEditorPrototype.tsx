@@ -109,7 +109,7 @@ import {
   reparentEntityHierarchy,
   reimportModelAssetFromDisk,
   undoEditorHistory,
-  updateEntityEnabled,
+  updateModelNodeEntityEnabled,
   updateModelNodeEntityTransform,
   updateAudioSourceComponent,
   updateVegetationWindComponent,
@@ -5119,15 +5119,50 @@ export function VisualEditorPrototype({
           ? [sceneSelection.id]
           : [];
     if (entityIds.length === 0) return;
-    const sourceNames = entityIds
+    // A shared-source Model node is part of the Model: deleting its Entity
+    // would keep the geometry on screen and orphan its pose, so Delete hides
+    // it instead. The row stays, showing the eye toggle that brings it back.
+    const modelNodeIds = entityIds.filter(
+      (entityId) => bundle.scene.entities[entityId]?.modelNode,
+    );
+    const deletableIds = entityIds.filter(
+      (entityId) =>
+        bundle.scene.entities[entityId] &&
+        !bundle.scene.entities[entityId]?.modelNode,
+    );
+    const sourceNames = deletableIds
       .map((entityId) => bundle.scene.entities[entityId]?.name)
       .filter((name): name is string => Boolean(name));
-    const scene = deleteEntityHierarchy(bundle.scene, entityIds);
+    const hiddenNames = modelNodeIds
+      .map((entityId) => bundle.scene.entities[entityId]?.name)
+      .filter((name): name is string => Boolean(name));
+    let scene = bundle.scene;
+    for (const entityId of modelNodeIds) {
+      scene = updateModelNodeEntityEnabled(scene, entityId, false);
+    }
+    scene = deleteEntityHierarchy(scene, deletableIds);
     if (scene === bundle.scene) return;
     setBundle(touchProject({ ...bundle, scene }));
-    setSceneSelection(null);
-    setAssetSelection(null);
-    setNotice(sourceNames.length === 1 ? `「${sourceNames[0]}」を削除しました` : `${sourceNames.length}件のEntityを削除しました`);
+    if (deletableIds.length > 0) {
+      setSceneSelection(null);
+      setAssetSelection(null);
+    }
+    const messages: string[] = [];
+    if (sourceNames.length > 0) {
+      messages.push(
+        sourceNames.length === 1
+          ? `「${sourceNames[0]}」を削除しました`
+          : `${sourceNames.length}件のEntityを削除しました`,
+      );
+    }
+    if (hiddenNames.length > 0) {
+      messages.push(
+        hiddenNames.length === 1
+          ? `「${hiddenNames[0]}」はModelの一部のため非表示にしました。目のアイコンで再表示できます`
+          : `${hiddenNames.length}件のノードはModelの一部のため非表示にしました。目のアイコンで再表示できます`,
+      );
+    }
+    if (messages.length > 0) setNotice(messages.join("。"));
   }, [bundle, editorMode, sceneSelection?.id, selectedEntityIds, setAssetSelection, setBundle, setSceneSelection]);
 
   const requestDeleteAsset = useCallback(
@@ -6145,10 +6180,12 @@ export function VisualEditorPrototype({
     (entityId: string, enabled: boolean) => {
       updateScene((scene) => {
         const entity = scene.entities[entityId];
-        const next = updateEntityEnabled(scene, entityId, enabled);
+        const next = updateModelNodeEntityEnabled(scene, entityId, enabled);
         if (next !== scene) {
           setNotice(
-            `「${entity?.name ?? "Entity"}」を${enabled ? "有効" : "無効"}にしました`,
+            entity?.modelNode
+              ? `「${entity.name}」を${enabled ? "表示" : "非表示"}にしました`
+              : `「${entity?.name ?? "Entity"}」を${enabled ? "有効" : "無効"}にしました`,
           );
         }
         return next;
@@ -6667,7 +6704,7 @@ export function VisualEditorPrototype({
     (enabled: boolean) => {
       if (editorMode !== "edit" || selectedEntityIds.length < 2) return;
       updateScene((scene) => selectedEntityIds.reduce(
-        (next, entityId) => updateEntityEnabled(next, entityId, enabled),
+        (next, entityId) => updateModelNodeEntityEnabled(next, entityId, enabled),
         scene,
       ));
       setNotice(`${selectedEntityIds.length}件のEntityを${enabled ? "有効" : "無効"}にしました`);

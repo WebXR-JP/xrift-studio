@@ -19,7 +19,10 @@ import {
 import {
   hasOpenBrushNodeHierarchy,
 } from "./open-brush-hierarchy";
-import { expandModelEntityHierarchy } from "./model-hierarchy";
+import {
+  expandModelEntityHierarchy,
+  reconcileModelNodeEnabledInEntities,
+} from "./model-hierarchy";
 import {
   clearAnimationActionComponentIds,
   migrateAnimationComponentsInEntities,
@@ -59,6 +62,11 @@ export type VisualProjectDocuments = {
     /** Animation actions whose stale Component id was dropped. */
     clearedActions?: number;
   };
+  /**
+   * Shared-source Model node Entities whose `enabled` flag was realigned with
+   * the pose visibility that renders. Present only when something changed.
+   */
+  modelNodeEnabledReconciled?: number;
 };
 
 export type PreparedStarterVisualProject = {
@@ -453,6 +461,26 @@ export function parseVisualProjectFiles(
   }
 
   /*
+   * Node visibility used to be a flag nothing read: shared-source Model nodes
+   * saved `enabled: false` while every renderer kept drawing them. Now that
+   * the flag renders (mirrored into the Mesh pose), opening realigns stale
+   * flags with the pose, so an old document keeps looking exactly as it did.
+   */
+  let modelNodeEnabledReconciled = 0;
+  for (const [sceneId, scene] of Object.entries(migratedScenes)) {
+    const result = reconcileModelNodeEnabledInEntities(scene.entities);
+    if (result.reconciled === 0) continue;
+    modelNodeEnabledReconciled += result.reconciled;
+    migratedScenes[sceneId] = { ...scene, entities: result.entities };
+  }
+  for (const [prefabId, prefab] of Object.entries(migratedPrefabs)) {
+    const result = reconcileModelNodeEnabledInEntities(prefab.entities);
+    if (result.reconciled === 0) continue;
+    modelNodeEnabledReconciled += result.reconciled;
+    migratedPrefabs[prefabId] = { ...prefab, entities: result.entities };
+  }
+
+  /*
    * A graph written before v1 names the Animation Component it acted on.
    * Animation is addressed per Entity now, so that id points at nothing: the
    * runtime ignores it, and the Editor's picker would otherwise show the action
@@ -481,6 +509,7 @@ export function parseVisualProjectFiles(
     ...(converted.length > 0 || skipped.length > 0 || clearedActions > 0
       ? { animationMigration: { converted, skipped, clearedActions } }
       : {}),
+    ...(modelNodeEnabledReconciled > 0 ? { modelNodeEnabledReconciled } : {}),
   };
 }
 

@@ -81,6 +81,8 @@ export type XriftRuntimeComponent =
             position: [number, number, number];
             rotation: [number, number, number];
             scale: [number, number, number];
+            /** false hides the node's subtree; omitted means visible. */
+            visible?: boolean;
           }
         >;
       };

@@ -527,6 +527,29 @@ function assertStaticModelPoseUsesRestOffsets(): void {
     face.morphTargetInfluences[0] === 0.75,
     "Static shape-key pose was not applied",
   );
+
+  // Hiding is part of the pose: a node marked visible: false disappears with
+  // its subtree, while nodes without the flag stay exactly as they were.
+  const child = new Mesh(new BoxGeometry(), new MeshBasicMaterial());
+  head.add(child);
+  applyStaticModelPose(root, {
+    bones: {},
+    morphTargets: {},
+    nodes: {
+      "7": {
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        visible: false,
+      },
+    },
+  });
+  assert(
+    head.visible === false && root.visible && face.visible,
+    "A pose entry with visible: false must hide only that node's subtree",
+  );
+  child.geometry.dispose();
+  (child.material as MeshBasicMaterial).dispose();
 }
 
 function assertModelNodeMaterialOverridesStayIsolated(

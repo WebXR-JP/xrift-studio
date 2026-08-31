@@ -101,6 +101,15 @@ export type ModelNodeTransformOffset = {
   position: Vec3;
   rotation: Vec3;
   scale: Vec3;
+  /**
+   * false hides this glTF node's subtree in every renderer.
+   *
+   * Lives on the pose rather than on the expanded node Entity because a
+   * shared-source Model (Skin, Animation) draws all of its nodes through the
+   * root Mesh: the node Entity owns no geometry, so its `enabled` flag alone
+   * reaches nothing on screen. Omitted means visible.
+   */
+  visible?: boolean;
 };
 
 export type MeshGeometryReference =
@@ -3070,6 +3079,9 @@ function cloneSceneComponent(
                             position: cloneVec3(value.position),
                             rotation: cloneVec3(value.rotation),
                             scale: cloneVec3(value.scale),
+                            ...(value.visible === false
+                              ? { visible: false }
+                              : {}),
                           },
                         ],
                       ),

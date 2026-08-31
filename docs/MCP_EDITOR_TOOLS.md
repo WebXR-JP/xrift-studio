@@ -73,6 +73,15 @@ Material と Entity を一件にまとめるので、Undo でカードだけ消�
 `duplicate_entity`, `reparent_entity`, `delete_entity`, `set_entity_enabled`,
 `update_transform`
 
+共有ソースの Model ノード（`list_entities` が `modelNode` を返す Entity。Skin /
+Animation を持つ GLB / VRM の展開ノード）は、ジオメトリを親 Model の共有 Mesh が
+描くため Entity 単体では消せない。`delete_entity` は削除せず非表示（親 Mesh の
+`modelPose.nodes[i].visible: false`）へ変換し、結果の `deleted: false` と
+`modelNodeVisibility: "hidden"` でそう伝える。再表示は `set_entity_enabled`
+（`enabled: true`）。Model から完全に取り除くにはソースを編集して再インポート
+する。`set_entity_enabled` はこのノードに対して enabled と pose visibility を
+同時に書くので、Scene View・公開ワールド・Runtime の見た目が一致する。
+
 `list_scene_recipes` は焚き火・松明・木・岩・雪・噴水・柱・階段・井戸・ベンチ・
 収録スタジオなどの出来合いの 3D セットを返す（配置は local-asset の
 `apply_scene_recipe`）。各セットは光・パーティクル・マテリアルが互いに

@@ -743,6 +743,16 @@ function App() {
             description: `${migrationNotice}。保存すると確定します。`,
           });
         }
+        // Node visibility used to be a flag nothing read. Opening realigns the
+        // stale flags with what renders, and the author should hear why the
+        // Hierarchy's eye icons just changed under them.
+        if (documents.modelNodeEnabledReconciled) {
+          toast({
+            kind: "info",
+            title: "モデルノードの表示状態を整えました",
+            description: `${documents.modelNodeEnabledReconciled}件のノードの目アイコンを、実際の表示と一致させました。以後は目アイコンでモデル内のノードを非表示にできます。`,
+          });
+        }
         setVisualSession({
           project,
           bundle: {

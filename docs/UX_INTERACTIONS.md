@@ -135,6 +135,7 @@ F-06 アイテム検査
 | MI-112 | Scene View で Entity を右クリックする | ポインタの下の Entity を選択し、メニューの先頭にその名前と「削除」を出す。下には従来の Create Mesh を残す。ポインタの下に何も無ければ Create Mesh だけを出す。 | 3D ビューで消したいものは、たいてい見えている物そのもの。Hierarchy で同じ行を探し直すのが、消すという 1 操作を探索に変えていた。右クリックが選択も兼ねるのは、メニューの対象とギズモの対象が食い違わないようにするため。 |
 | MI-113 | Model が多い Scene の編集が重い | Scene View の「表示」に描画品質を置き、「高品質」「軽量 (描画75%)」「描画50%」「描画25%」から選ぶ。高品質だけがディスプレイの解像度に追従し (1.5倍が上限)、残りは CSS 表示サイズに対する固定の割合として描く。ラベルの割合は実際に描くピクセル数であり、`title` には接続中のディスプレイでの実描画割合を添える。選択はこのブラウザに残り、既定は高品質。Play 中とサムネイル撮影中は常に高品質へ戻り、選択欄は Play 中無効にする。 | 置く・動かすの間に見ているのは配置であって陰影ではない。影のパスとポストエフェクトは、その間ずっと画面外の作業に時間を使っている。割合を範囲ではなく固定値で持たせるのは、React Three Fiber が渡された範囲へディスプレイ自身の devicePixelRatio を丸め込むためで、以前の軽量は 0.75〜1 を要求した結果 1 倍ディスプレイでは 1 に落ち着き、軽くなったと表示しながら以前と同じ枚数のピクセルを描いていた。ラベルの割合が画面ごとに違う意味になると、重いときに選ぶ判断そのものが立たない。Play と公開物まで軽くすると、確認しているものが公開されるものと違ってしまうので、編集中の見え方だけを変える。document にも公開物にも残さない。 |
 | MI-114 | Edit 中に、選択済みの Entity を Scene View でもう一度クリックする | 同じレイをその Entity の配下だけへ向け直す。配下の面のうち最も手前のものを選択し、面がレイ上に無ければ、クリック位置の近く（MI-10 と同じ補助半径）に原点を持つ配下の Entity（コライダーや Empty などメッシュ無し）を選択する。クリックのたびに一段ずつ埋まった面を降りるので、島 → 階段 → 段一つ、へ同じ場所の連続クリックで到達できる。 | 大きいメッシュはレイの最初の面を常に自分で受けるため、内側の Entity はクリックだけでは選べなかった。掘り下げは、最初の面が現在の選択そのものか、その祖先（選択が埋まっている状態）の時だけ働く。埋まった選択をもう一度クリックしても祖先へ跳ね返らず選択を保ち、無関係な Entity や見えている子孫を直接クリックした時は従来どおり最前面を選ぶ。選択のためにシーンデータや Undo 履歴は変更しない。 |
+| MI-115 | 共有ソースの Model ノード（Skin / Animation を持つ GLB / VRM の展開ノード）を目アイコンで非表示にする、または Delete で消そうとする | 目アイコンは Entity の enabled と同時に、親 Model の Mesh pose へ `visible: false` を書き、Scene View・公開ワールド・Runtime の三経路でそのノードのサブツリーごと描画を消す。Delete は Entity を消さずに同じ非表示へ変換し、「Modelの一部のため非表示にしました。目のアイコンで再表示できます」と伝える。旧版が保存した「無効なのに描画されている」ノードは、プロジェクトを開いた時に目アイコンを実際の表示へそろえ、件数をトーストで伝える。 | ジオメトリは親 Model の共有 Mesh が丸ごと描くため、ノード Entity の enabled だけでは画面に届かず、行を消してもメッシュは残り pose だけが取り残されていた。非表示を Transform と同じ pose 経路に載せることで、どの描画でも同じ結果を保ち、「消せたように見えて残る」状態を作らない。 |
 
 
 ## 機能一覧
@@ -155,7 +156,7 @@ F-06 アイテム検査
 | F-12 | Scene environment settings | MI-37, MI-38, MI-59 | 左下の歯車から右のScene Inspectorへ切り替え、ワールド名またはアイテム名、説明、サムネイル、Skyboxの背景表示・IBLライティング、無限遠・ボックス・地面付きドーム投影、画像・回転・明るさ・有限メッシュTransform・投影中心、Fog、環境光、Near/Far、FOV、背景、グリッド、ギズモ、スナップを一か所で設定し、公開情報、Scene View、生成Worldへ一貫して反映する。 |
 | F-13 | XRift Component editor preview | MI-10, MI-34, MI-39 | EditとPlayで公式package本体と同じRendererを使い、Portal、TagBoardを含むComponentの実際の見た目をStudio独自デザインへ置換せず確認できる。外部runtime機能だけを副作用なしProvider bridgeへ差し替える。 |
 | F-14 | Basic Component menu / Audio Source | MI-11, MI-20, MI-44 | Create、Hierarchy右クリック、InspectorのAdd Componentが同じComponent Registryとcategoryを表示し、検索から一件追加してInspectorへ到達できる。Audio SourceはImport済みAudio Assetを選び、編集画面を開いただけでは音を鳴らさない。 |
-| F-15 | OBJ / VRM import と静的モデルポーズ | MI-03, MI-05, MI-09, MI-20, MI-36, MI-41, MI-46, MI-56 | OBJ / VRMをModel Assetとして配置でき、VRMのNode・Bone・Skinned MeshをHierarchyから選び、配置EntityごとのTransform、node別Material、shape key weightを保存し、再表示と生成結果で同じ静的状態を復元できる。 |
+| F-15 | OBJ / VRM import と静的モデルポーズ | MI-03, MI-05, MI-09, MI-20, MI-36, MI-41, MI-46, MI-56, MI-115 | OBJ / VRMをModel Assetとして配置でき、VRMのNode・Bone・Skinned MeshをHierarchyから選び、配置EntityごとのTransform、node別Material、shape key weight、node別の表示 / 非表示を保存し、再表示と生成結果で同じ静的状態を復元できる。 |
 | F-16 | UnityPackage / Scene / Prefab import | MI-03, MI-05, MI-09, MI-11, MI-13, MI-20, MI-24, MI-47 | UnityPackageの論理pathnameとGUID参照を安全に復元し、対応Assetを抽出してScene階層を再構築し、再利用可能なXRift Prefabとして保存する。未対応Asset / Componentは黙って成功扱いせず診断とprovenanceへ残し、C#変換を行わない。 |
 | F-17 | AI editor integration / MCP | MI-03, MI-05, MI-09, MI-10, MI-11, MI-13, MI-25, MI-48, MI-60, MI-61 | 対応AI clientへXRift Studio MCPを一操作で登録し、必要ならOllamaのローカルmodelをCodex、Claude Code、OpenCodeのproviderとして構成する。認可したvisual projectの現在Scene、Asset、selection、revisionを読み取り、Skybox / Fog /環境光/Camera/Editor表示設定、Asset配置、Material編集、Interactivity Material pointer設定、Poly HavenとambientCGの検索・downloadを通常のEditor Command、Undo、Autosaveへ合流し、AIと手操作の競合を暗黙に上書きしない。登録後は接続状態、対象Scene、直近の編集と復帰手段がEditorに残る。 |
 | F-18 | OpenBrush import / shader rendering | MI-03, MI-05, MI-09, MI-15, MI-18, MI-20, MI-27, MI-35, MI-36, MI-49 | OpenBrush / Tilt Brush形式のglTFを通常のModel Assetとして取り込み、three-icosaの専用shaderでScene Viewと生成Worldを再現する。OpenBrush sampleは外部リソースのOpen Brush providerから追加し、Apache-2.0 licenseを検証付きで保存できる。 |
@@ -658,12 +659,13 @@ F-06 アイテム検査
 - Import中は既存Import Queueで形式検証、source copy、parse、thumbnail、manifest commitを順に示し、二重Import / reimportを無効にする。
 - HierarchyでBoneまたはNodeを選ぶと、そのlocal Transformを通常の数値入力とギズモで編集し、共有Modelのsource node poseへ即時反映する。従来のbone選択UIとshape keyの0..1 weightも同じ配置の静的poseとして維持する。
 - Mesh / Skinned Mesh Nodeを選ぶと、そのsource nodeが使うMaterial slotだけを表示する。同じsource material indexを共有する別Nodeとは`sourceNodeIndex`で上書きを分離する。
+- Hierarchyの目アイコンは共有ModelのNodeにも効く。enabledと同時に共有Meshのpose（`nodes[i].visible`）へ書き、そのNodeのサブツリーの描画をScene View・公開ワールド・Runtimeで一致して消す。DeleteはNodeをEntityとして削除せず同じ非表示へ変換し、理由と再表示手段を通知する（MI-115）。
 - pose変更は有効な有限値だけを確定する。Play中は読み取り専用にし、Asset reimport中はlast-good metadataと現在のEntity poseを表示したまま編集を止める。
 
 ### 成功時
 
 - Import成功後は新Model Assetを選択し、形式、bone数、shape key数、source、thumbnailをInspectorに残す。「配置」でEntityを作成してからpose編集へ進める。
-- Bone / Node Transform、node別Material、shape key weightは共有Mesh componentへ保存し、Undo / Redo、project再表示、Scene View、Classic JSX、Runtime manifestで同じ静的状態を復元する。
+- Bone / Node Transform、node別Material、node別の表示 / 非表示、shape key weightは共有Mesh componentへ保存し、Undo / Redo、project再表示、Scene View、Classic JSX、Runtime manifestで同じ静的状態を復元する。旧版が保存した「無効なのに描画される」Node flagはprojectを開いた時に実態へそろえ、件数を通知する。
 - 「ポーズをリセット」はboneとshape keyだけを初期値へ戻し、Entity Transform、Material binding、Collider、Model Assetを維持する。
 
 ### 失敗時

@@ -258,10 +258,16 @@ export function updateModelNodeEntityTransform(
   };
   const nodes = { ...(mesh.modelPose?.nodes ?? {}) };
   const key = String(modelNode.sourceNodeIndex);
-  if (isIdentityNodeOffset(offset.position, offset.rotation, offset.scale)) {
+  // A hidden node keeps its pose entry even at the rest Transform: the entry
+  // is what carries `visible: false` to the renderers.
+  const hidden = nodes[key]?.visible === false;
+  if (
+    isIdentityNodeOffset(offset.position, offset.rotation, offset.scale) &&
+    !hidden
+  ) {
     delete nodes[key];
   } else {
-    nodes[key] = offset;
+    nodes[key] = hidden ? { ...offset, visible: false } : offset;
   }
   const modelPose = {
     bones: { ...(mesh.modelPose?.bones ?? {}) },
@@ -279,6 +285,124 @@ export function updateModelNodeEntityTransform(
       ...nextScene.entities,
       [modelEntity.id]: { ...modelEntity, components },
     },
+  };
+}
+
+/**
+ * Persists an Entity's enabled flag and, for a shared-source Model node,
+ * mirrors it into the root Mesh pose as per-node visibility.
+ *
+ * A shared-source Model (Skin, Animation) draws every node through the root
+ * Entity's one Mesh, so a node Entity's own `enabled` flag reaches nothing on
+ * screen. The pose is the channel every renderer — Scene View, compiled
+ * world, runtime manifest — already reads per node, so the eye toggle writes
+ * there too. Entities without `modelNode` (static expansions own their
+ * Meshes, ordinary Entities own their Components) keep the plain flag-only
+ * behaviour, so callers can use this for any Entity.
+ */
+export function updateModelNodeEntityEnabled(
+  scene: SceneDocument,
+  entityId: string,
+  enabled: boolean,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  if (!entity) return scene;
+  const withEnabled: SceneDocument =
+    entity.enabled === enabled
+      ? scene
+      : {
+          ...scene,
+          entities: {
+            ...scene.entities,
+            [entityId]: { ...entity, enabled },
+          },
+        };
+  const modelNode = entity.modelNode;
+  if (!modelNode) return withEnabled;
+  const modelEntity = withEnabled.entities[modelNode.modelEntityId];
+  const mesh = modelEntity?.components.find(
+    (component): component is MeshComponent => component.type === "mesh",
+  );
+  if (!modelEntity || !mesh) return withEnabled;
+
+  const nodes = { ...(mesh.modelPose?.nodes ?? {}) };
+  const key = String(modelNode.sourceNodeIndex);
+  const existing = nodes[key];
+  if ((existing?.visible === false) === !enabled) return withEnabled;
+  if (enabled) {
+    if (!existing) return withEnabled;
+    const { visible: _visible, ...offset } = existing;
+    if (isIdentityNodeOffset(offset.position, offset.rotation, offset.scale)) {
+      delete nodes[key];
+    } else {
+      nodes[key] = offset;
+    }
+  } else {
+    nodes[key] = existing
+      ? { ...existing, visible: false }
+      : {
+          position: [0, 0, 0],
+          rotation: [0, 0, 0],
+          scale: [1, 1, 1],
+          visible: false,
+        };
+  }
+  const modelPose = {
+    bones: { ...(mesh.modelPose?.bones ?? {}) },
+    morphTargets: { ...(mesh.modelPose?.morphTargets ?? {}) },
+    ...(Object.keys(nodes).length > 0 ? { nodes } : {}),
+  };
+  const components = modelEntity.components.map((component) =>
+    component.id === mesh.id && component.type === "mesh"
+      ? { ...component, modelPose }
+      : component,
+  );
+  return {
+    ...withEnabled,
+    entities: {
+      ...withEnabled.entities,
+      [modelEntity.id]: { ...modelEntity, components },
+    },
+  };
+}
+
+/**
+ * Realigns shared-source Model node `enabled` flags with what actually
+ * renders.
+ *
+ * Documents written before node visibility existed collected `enabled: false`
+ * on these nodes — the eye toggle saved the flag, but no renderer read it, so
+ * every one of those nodes kept drawing. Left alone, the flags would turn
+ * into a mass disappearance the moment they start to mean something, so
+ * opening a document sets each node Entity's flag to what its pose
+ * visibility — the value that renders — says. Works on a bag of Entities so
+ * Scenes and Prefabs share it, like the Animation conversion beside it in
+ * `persistence.ts`.
+ */
+export function reconcileModelNodeEnabledInEntities(
+  entities: Readonly<Record<string, SceneEntity>>,
+): { entities: Record<string, SceneEntity>; reconciled: number } {
+  let reconciled = 0;
+  let next: Record<string, SceneEntity> | null = null;
+  for (const [entityId, entity] of Object.entries(entities)) {
+    const modelNode = entity.modelNode;
+    if (!modelNode) continue;
+    const modelEntity = entities[modelNode.modelEntityId];
+    const mesh = modelEntity?.components.find(
+      (component): component is MeshComponent => component.type === "mesh",
+    );
+    if (!mesh) continue;
+    const hidden =
+      mesh.modelPose?.nodes?.[String(modelNode.sourceNodeIndex)]?.visible ===
+      false;
+    if (entity.enabled === !hidden) continue;
+    next = next ?? { ...entities };
+    next[entityId] = { ...entity, enabled: !hidden };
+    reconciled += 1;
+  }
+  return {
+    entities: next ?? (entities as Record<string, SceneEntity>),
+    reconciled,
   };
 }
 

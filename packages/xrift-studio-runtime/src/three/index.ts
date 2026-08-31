@@ -1264,6 +1264,8 @@ function applyModelPose(
       object.scale.x *= nodeTransform.scale[0];
       object.scale.y *= nodeTransform.scale[1];
       object.scale.z *= nodeTransform.scale[2];
+      // Hides the node's subtree, matching the Editor's eye toggle.
+      if (nodeTransform.visible === false) object.visible = false;
     }
     const rotation = component.modelPose?.bones[object.name];
     if (rotation) {

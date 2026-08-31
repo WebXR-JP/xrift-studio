@@ -2411,6 +2411,17 @@ function validateModelPoseShape(
               "Model node pose must contain finite position, rotation, and non-zero scale",
             ),
           );
+        } else if (
+          transform.visible !== undefined &&
+          typeof transform.visible !== "boolean"
+        ) {
+          issues.push(
+            issue(
+              `${path}.nodes.${key}.visible`,
+              "type",
+              "Model node visibility must be a boolean",
+            ),
+          );
         }
       }
     }

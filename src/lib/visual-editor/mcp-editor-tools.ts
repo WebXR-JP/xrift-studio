@@ -19,8 +19,8 @@ import {
   getEntityReparentDecision,
   renameAsset,
   reparentEntityHierarchy,
-  updateEntityEnabled,
 } from "./editor-session";
+import { updateModelNodeEntityEnabled } from "./model-hierarchy";
 import {
   analyzeAssetDeletion,
   collectAssetReferences,
@@ -1685,6 +1685,9 @@ function listEntities(context: XriftMcpEditorContext): XriftMcpEditorToolOutcome
       parentId: entity.parentId,
       children: entity.children,
       enabled: entity.enabled,
+      // Distinguishes a shared-source Model node (transform-only proxy whose
+      // geometry the Model root draws) from an Entity that owns its Meshes.
+      ...(entity.modelNode ? { modelNode: entity.modelNode } : {}),
       components: entity.components,
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
@@ -1744,6 +1747,7 @@ function getEntityComponents(
       entityId,
       entityName: entity.name,
       entityEnabled: entity.enabled,
+      ...(entity.modelNode ? { modelNode: entity.modelNode } : {}),
       components,
       count: components.length,
     },
@@ -4447,7 +4451,13 @@ function setEntityEnabled(
       { entityId },
     );
   }
-  const scene = updateEntityEnabled(context.bundle.scene, entityId, enabled);
+  // updateModelNodeEntityEnabled also mirrors a shared-source Model node's
+  // flag into the root Mesh pose, which is what actually renders.
+  const scene = updateModelNodeEntityEnabled(
+    context.bundle.scene,
+    entityId,
+    enabled,
+  );
   if (scene === context.bundle.scene) {
     return unchanged(
       context,
@@ -4474,9 +4484,14 @@ function setEntityEnabled(
       revisionAfter: context.revision + 1,
       entityId,
       enabled,
+      ...(entity.modelNode
+        ? { modelNodeVisibility: enabled ? "visible" : "hidden" }
+        : {}),
       synchronizedDuringPlay: context.editorMode === "play",
     },
-    activity: `AIが「${entity.name}」を${enabled ? "有効" : "無効"}にしました`,
+    activity: entity.modelNode
+      ? `AIが「${entity.name}」を${enabled ? "表示" : "非表示"}にしました`
+      : `AIが「${entity.name}」を${enabled ? "有効" : "無効"}にしました`,
   };
 }
 
@@ -5301,6 +5316,50 @@ function deleteEntity(
 ): XriftMcpEditorToolOutcome {
   assertWritableContext(context, argumentsValue, { allowPlay: true });
   const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const target = context.bundle.scene.entities[entityId];
+  // A shared-source Model node is part of the Model: deleting its Entity
+  // would keep the geometry on screen and orphan its pose. Hide it instead,
+  // and say so, so the caller knows the row is still there to re-show.
+  if (target?.modelNode) {
+    const hiddenScene = updateModelNodeEntityEnabled(
+      context.bundle.scene,
+      entityId,
+      false,
+    );
+    if (hiddenScene === context.bundle.scene) {
+      return unchanged(
+        context,
+        {
+          projectId: context.bundle.project.projectId,
+          sceneId: context.bundle.scene.sceneId,
+          revision: context.revision,
+          entityId,
+          deleted: false,
+          modelNodeVisibility: "hidden",
+        },
+        "このEntityはModel内のノードで、すでに非表示です。削除するにはModel Assetを編集して再インポートしてください",
+      );
+    }
+    const bundle = touchProject(context, { ...context.bundle, scene: hiddenScene });
+    return {
+      changed: true,
+      bundle,
+      sceneSelection: context.sceneSelection,
+      assetSelection: context.assetSelection,
+      result: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        revisionBefore: context.revision,
+        revisionAfter: context.revision + 1,
+        entityId,
+        deleted: false,
+        modelNodeVisibility: "hidden",
+        message:
+          "Model内のノードはModel本体の一部のため、Entityとしては削除せず非表示にしました。再表示はset_entity_enabled(enabled: true)。Modelから完全に取り除くにはソースを編集して再インポートしてください",
+      },
+      activity: `AIが「${target.name}」を非表示にしました`,
+    };
+  }
   const scene = deleteEntityHierarchy(context.bundle.scene, [entityId]);
   if (scene === context.bundle.scene) {
     throw new XriftMcpEditorToolError(
@@ -8094,6 +8153,7 @@ function meshModelPoseValue(value: unknown): ModelPoseState | null {
         "position",
         "rotation",
         "scale",
+        "visible",
       ]);
       const position = optionalVec3(
         node.position,
@@ -8113,7 +8173,15 @@ function meshModelPoseValue(value: unknown): ModelPoseState | null {
           "position、rotation、scaleを持つobject",
         );
       }
-      nodes[name] = { position, rotation, scale };
+      if (node.visible !== undefined && typeof node.visible !== "boolean") {
+        invalidArgument(`patch.modelPose.nodes.${name}.visible`, "boolean");
+      }
+      nodes[name] = {
+        position,
+        rotation,
+        scale,
+        ...(node.visible === false ? { visible: false } : {}),
+      };
     }
   }
   return {

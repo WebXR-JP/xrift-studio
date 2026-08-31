@@ -3748,7 +3748,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "set_entity_enabled",
-            "description": "Persist an Entity's enabled state. During Play the authoring and running scenes synchronize immediately.",
+            "description": "Persist an Entity's enabled state. For a shared-source Model node (entity with modelNode) this also toggles the node's visibility inside the Model's rendered geometry. During Play the authoring and running scenes synchronize immediately.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4055,7 +4055,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "delete_entity",
-            "description": "Delete an entity and its child hierarchy from the scene.",
+            "description": "Delete an entity and its child hierarchy from the scene. A shared-source Model node (entity with modelNode) is part of its Model and cannot be deleted: it is hidden instead and the result says so; re-show it with set_entity_enabled.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

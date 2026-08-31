@@ -970,6 +970,9 @@ export function applyStaticModelPose(
         child.scale.y * nodeOffset.scale[1],
         child.scale.z * nodeOffset.scale[2],
       );
+      // Hides the node's whole subtree, matching how a disabled Entity hides
+      // its children. Applied to the per-instance clone, never the cache.
+      if (nodeOffset.visible === false) child.visible = false;
     }
     const bone = child as Object3D & { isBone?: boolean };
     const rotation = bone.isBone && child.name ? pose.bones[child.name] : undefined;

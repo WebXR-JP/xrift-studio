@@ -3423,7 +3423,7 @@ ${needsSourceNodeTags ? `    originals.forEach((original, index) => {
 ${tagSourceNodes}${selectSourceNode}    const output = ${sourceNodeIndex === undefined && sourceNodeName === undefined ? "cloned" : "selected"};
     const boneRotations = ${boneRotations} as Record<string, [number, number, number]>;
     const morphTargetWeights = ${morphTargets} as Record<string, number>;
-    const nodeTransforms = ${nodeTransforms} as Record<string, { position: [number, number, number]; rotation: [number, number, number]; scale: [number, number, number] }>;
+    const nodeTransforms = ${nodeTransforms} as Record<string, { position: [number, number, number]; rotation: [number, number, number]; scale: [number, number, number]; visible?: boolean }>;
     output.traverse((object) => {
       const sourceNodeIndex = object.userData.xriftSourceNodeIndex;
       const nodeTransform = typeof sourceNodeIndex === "number"
@@ -3445,6 +3445,7 @@ ${tagSourceNodes}${selectSourceNode}    const output = ${sourceNodeIndex === und
           object.scale.y * nodeTransform.scale[1],
           object.scale.z * nodeTransform.scale[2],
         );
+        if (nodeTransform.visible === false) object.visible = false;
       }
       const boneObject = object as typeof object & { isBone?: boolean };
       const rotation = boneObject.isBone ? boneRotations[object.name] : undefined;

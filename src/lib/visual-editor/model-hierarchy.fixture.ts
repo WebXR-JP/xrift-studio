@@ -7,6 +7,8 @@ import { instantiateSceneAsset } from "./asset-placement";
 import {
   extractGltfModelNodeHierarchy,
   hasModelNodeHierarchy,
+  reconcileModelNodeEnabledInEntities,
+  updateModelNodeEntityEnabled,
   updateModelNodeEntityTransform,
 } from "./model-hierarchy";
 import { SCENE_DOCUMENT_SCHEMA_VERSION } from "./scene-document";
@@ -198,6 +200,71 @@ export function runModelHierarchyFixtureAssertions(): void {
       JSON.stringify(avatarMesh.modelPose?.nodes?.["1"]?.rotation) ===
         JSON.stringify([0.1, 0.2, 0.3]),
     "Bone Entity Transform must update the shared Model pose",
+  );
+
+  const hiddenAvatarScene = updateModelNodeEntityEnabled(
+    posedAvatarScene,
+    hipsNode.id,
+    false,
+  );
+  const hiddenMesh = hiddenAvatarScene.entities[avatarRoot.id]?.components.find(
+    (component) => component.type === "mesh",
+  );
+  assert(
+    hiddenAvatarScene.entities[hipsNode.id]?.enabled === false &&
+      hiddenMesh?.type === "mesh" &&
+      hiddenMesh.modelPose?.nodes?.["1"]?.visible === false &&
+      JSON.stringify(hiddenMesh.modelPose?.nodes?.["1"]?.rotation) ===
+        JSON.stringify([0.1, 0.2, 0.3]),
+    "Disabling a shared Model node must hide it in the pose and keep its offset",
+  );
+  const identityHiddenScene = updateModelNodeEntityTransform(
+    hiddenAvatarScene,
+    hipsNode.id,
+    { rotation: [0, 0, 0] },
+  );
+  const identityHiddenMesh = identityHiddenScene.entities[
+    avatarRoot.id
+  ]?.components.find((component) => component.type === "mesh");
+  assert(
+    identityHiddenMesh?.type === "mesh" &&
+      identityHiddenMesh.modelPose?.nodes?.["1"]?.visible === false,
+    "Returning a hidden node to its rest Transform must keep it hidden",
+  );
+  const shownAvatarScene = updateModelNodeEntityEnabled(
+    identityHiddenScene,
+    hipsNode.id,
+    true,
+  );
+  const shownMesh = shownAvatarScene.entities[avatarRoot.id]?.components.find(
+    (component) => component.type === "mesh",
+  );
+  assert(
+    shownAvatarScene.entities[hipsNode.id]?.enabled === true &&
+      shownMesh?.type === "mesh" &&
+      shownMesh.modelPose?.nodes?.["1"] === undefined,
+    "Re-enabling a rest-posed node must remove its pose entry entirely",
+  );
+
+  // Documents written before node visibility existed saved enabled: false on
+  // nodes that kept rendering. Opening realigns each flag with the pose.
+  const legacyEntities = {
+    ...avatarPlacement.scene.entities,
+    [bodyNode.id]: {
+      ...avatarPlacement.scene.entities[bodyNode.id],
+      enabled: false,
+    },
+  };
+  const reconciled = reconcileModelNodeEnabledInEntities(legacyEntities);
+  assert(
+    reconciled.reconciled === 1 &&
+      reconciled.entities[bodyNode.id]?.enabled === true,
+    "Opening must realign a stale disabled flag with the visible pose",
+  );
+  const agreed = reconcileModelNodeEnabledInEntities(reconciled.entities);
+  assert(
+    agreed.entities === reconciled.entities && agreed.reconciled === 0,
+    "Reconciliation must return the same object when nothing changes",
   );
 }
 
