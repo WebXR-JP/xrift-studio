@@ -7,7 +7,8 @@ import {
   type AssetImportPlan,
   type AssetImportWrite,
 } from "./asset-import";
-import { getModelAsset, type AssetManifest } from "./asset-manifest";
+import { getModelAsset, type AssetManifest, type TextureImportSettingsPatch } from "./asset-manifest";
+import { applyTextureProcessingBatch, planTextureProcessing, type TextureBatchProcessingProgress } from "./texture-processing";
 import type { BuiltinRecipeModelDefinition } from "./builtin-recipe-models";
 
 export type ModelReimportPhase =
@@ -48,8 +49,9 @@ export async function commitAssetImportPlanToDisk(
   projectPath: string,
   manifest: AssetManifest,
   plan: AssetImportPlan,
+  onTextureProgress?: (progress: TextureBatchProcessingProgress) => void,
 ): Promise<AssetManifest> {
-  return commitAssetImportPlan(manifest, plan, async (request) => {
+  const committed = await commitAssetImportPlan(manifest, plan, async (request) => {
     const writes = await Promise.all(
       request.writes.map(async (write) => ({
         relativePath: write.relativePath,
@@ -62,6 +64,27 @@ export async function commitAssetImportPlanToDisk(
       writes,
     );
   });
+  return processImportedTextures(projectPath, manifest, committed, onTextureProgress);
+}
+
+async function processImportedTextures(projectPath: string, previous: AssetManifest, candidate: AssetManifest, onProgress?: (progress: TextureBatchProcessingProgress) => void): Promise<AssetManifest> {
+  const targets = Object.values(candidate.assets).filter((asset) => {
+    if (asset.kind !== "texture" || asset === previous.assets[asset.id]) return false;
+    const plan = planTextureProcessing(asset);
+    return plan.supported && plan.pending;
+  }).map((asset) => asset.id);
+  if (!targets.length) return candidate;
+  const result = await applyTextureProcessingBatch(projectPath, candidate, targets, onProgress);
+  if (!result.ok) throw new Error(result.message);
+  // Automatic import processing does not turn a synced Texture into a user override.
+  for (const id of targets) {
+    const asset = result.manifest.assets[id];
+    const before = candidate.assets[id];
+    if (asset.kind === "texture" && before.kind === "texture") {
+      result.manifest.assets[id] = { ...asset, importedFromModel: before.importedFromModel };
+    }
+  }
+  return result.manifest;
 }
 
 /**
@@ -99,7 +122,7 @@ export async function commitAssetImportPlansToDisk(
       })),
     ),
   );
-  return candidate;
+  return processImportedTextures(projectPath, manifest, candidate);
 }
 
 /**
@@ -164,6 +187,7 @@ export async function reimportModelAssetFromDisk(
   manifest: AssetManifest,
   assetId: string,
   onProgress?: ModelReimportProgressListener,
+  textureImportSettings?: TextureImportSettingsPatch,
 ): Promise<ModelReimportResult> {
   const asset = getModelAsset(manifest, assetId);
   if (!asset || asset.source.kind !== "project") {
@@ -201,6 +225,7 @@ export async function reimportModelAssetFromDisk(
     const bytes = await dataUrlToArrayBuffer(dataUrl);
     reportModelReimport(onProgress, "inspecting-source", "モデル構造を検査しています");
     const plan = await createModelReimportPlan(asset, {
+      textureImportSettings,
       fileName,
       bytes,
       mimeType:
@@ -234,6 +259,7 @@ export async function reimportModelAssetFromDisk(
       projectPath,
       manifest,
       plan,
+      (progress) => reportModelReimport(onProgress, "committing-assets", `${progress.message}（${Math.min(progress.completed + 1, progress.total)}/${progress.total}）`),
     );
     reportModelReimport(onProgress, "complete", "モデルを再取り込みしました");
     return {

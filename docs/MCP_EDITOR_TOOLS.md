@@ -259,13 +259,14 @@ Undo 履歴も選択も動かさない。
 | --- | --- |
 | Undo / Redo | AI の操作は revision で直列化されており、Editor の履歴は人の操作単位。片方から巻き戻すと、もう片方が何を失ったのか読めなくなる |
 | 選択の変更だけ | 各 tool が結果として選択を移す。選択のためだけの tool は履歴も document も変えず、状態だけずらす |
-| Scene View の描画品質（高品質 / 軽量） | 編集中の描き方だけを変える Editor State で、document にも公開物にも残らない。Play とサムネイル撮影は常に高品質で描くので、AI が読む見た目も変わらない |
+| Scene View の描画品質（高品質 / 軽量 / 描画50% / 描画25%） | 編集中の描き方だけを変える Editor State で、document にも公開物にも残らない。Play とサムネイル撮影は常に高品質で描くので、AI が読む見た目も変わらない |
 | 拡大・全体表示・パネル幅・タイムラインの範囲と時刻 | 見え方だけの状態で document に残らない。ノードの位置は document に残るので `move_interactivity_node` と `layout_interactivity_graph` にある |
 | Project の保存・公開・アップロード | 外向きの不可逆操作。アップロード前の `xrift.json` とサムネイルの確認は人が通る導線に残す |
 | Login / account 操作 | 認証情報を MCP 境界へ渡さない |
 | 任意 path の読み書き・削除 | Rust 側の path 検証と権限制御を迂回させない |
 | 任意 JavaScript の実行 | Script は trust gate 付きの Asset としてだけ入る |
 | Texture の一括変換 | 人が複数選択したものをまとめて書き出すための導線。AI からは `process_texture_asset` を Asset ごとに呼べばよく、対象の選び方も AI 側で決まる |
+| Textureの共通設定・サイズ確認 | 共通設定は `update_texture_asset` の `importSettings` と `process_texture_asset` で同じ処理を実行できる。サイズ確認は既存画像の読み取りだけを行うInspectorの表示状態。再インポートで取得した寸法はAssetのimportMetadataにも入る |
 | 取り込み時の Texture 最大解像度 | Import メニューに残る Editor State で、document には入らない。AI は `import_local_texture` と `update_texture_asset` の `importSettings.resize` で同じ結果を Asset ごとに指定できる |
 
 ## 機能を足すときの手順

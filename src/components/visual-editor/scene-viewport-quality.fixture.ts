@@ -35,7 +35,7 @@ export function runSceneViewportQualityFixtureAssertions(): void {
   );
 
   assert(
-    SCENE_VIEWPORT_QUALITY_OPTIONS.length === 2 &&
+    SCENE_VIEWPORT_QUALITY_OPTIONS.length === 4 &&
       SCENE_VIEWPORT_QUALITY_OPTIONS.every(
         (option) => option.label.length > 0 && option.description.length > 0,
       ),
@@ -53,5 +53,11 @@ export function runSceneViewportQualityFixtureAssertions(): void {
       normalizeSceneViewportQualityMode(candidate) === "high",
       `Unreadable stored quality "${String(candidate)}" did not fall back to 高品質`,
     );
+  }
+  for (const mode of ["half", "quarter"] as const) {
+    const profile = getSceneViewportQualityProfile(mode);
+    const scale = mode === "half" ? 0.5 : 0.25;
+    assert(profile.dpr[0] === scale && profile.dpr[1] === scale && !profile.shadows && !profile.postprocessing, "Reduced resolution must remain fixed on HiDPI displays");
+    assert(normalizeSceneViewportQualityMode(mode) === mode, "Reduced resolution preference was lost");
   }
 }

@@ -13,6 +13,8 @@ import {
   nearestPowerOfTwo,
   planTextureConversion,
   planTextureProcessing,
+  textureProcessingSource,
+  textureProcessingSettings,
   processedAssetPath,
   resolveOutputFormat,
   resolveTargetSize,
@@ -31,6 +33,28 @@ export function runTextureProcessingFixtureAssertions(): void {
   assertPowerOfTwo();
   assertNonDestructiveRevert();
   assertPublishConversion();
+  assertOptimizedReprocessing();
+}
+
+function assertOptimizedReprocessing(): void {
+  const original = textureAsset({ sourceFormat: "jpeg", width: 4096, height: 2048 }, { resize: { mode: "max-size", maxSize: 1024 }, compression: { format: "ktx2" } });
+  const optimized = textureAsset({ sourceFormat: "ktx2", width: 1024, height: 512 }, {}, {
+    source: { kind: "project", relativePath: "assets/.optimized/test.ktx2" },
+    optimizedFrom: { source: original.source, sourceHash: original.sourceHash, importMetadata: original.importMetadata, importSettings: original.importSettings, appliedAt: "2026-08-31T00:00:00Z" },
+  });
+  const settled = planTextureProcessing(optimized);
+  assert(settled.supported && !settled.pending, "An optimized KTX2 with a retained original must be settled, not unsupported");
+  const changed = { ...optimized, importSettings: normalizeTextureImportSettings({ resize: { mode: "max-size", maxSize: 2048 }, compression: { format: "ktx2" } }) };
+  const plan = planTextureProcessing(changed);
+  assert(plan.supported && plan.pending && plan.targetWidth === 2048 && plan.targetHeight === 1024, "Reprocessing must recover detail from the original, not upscale KTX2");
+  assert(textureProcessingSource(changed).source === original.source, "Reprocessing read the optimized file");
+  const unchanged = planTextureProcessing({ ...optimized, importSettings: original.importSettings });
+  assert(unchanged.supported && !unchanged.pending, "An already applied recipe was re-encoded");
+  const legacy = { ...optimized, optimizedFrom: { ...optimized.optimizedFrom!, importSettings: normalizeTextureImportSettings() } };
+  const legacySettings = textureProcessingSettings(legacy);
+  assert(legacySettings.compression.format === "ktx2" && legacySettings.resize.mode === "max-size" && legacySettings.resize.maxSize === 1024, "Legacy Optimize lost its actual output format and size");
+  const legacyPlan = planTextureProcessing({ ...legacy, importSettings: legacySettings });
+  assert(legacyPlan.supported && !legacyPlan.pending, "Legacy optimized output was unnecessarily re-encoded");
 }
 
 /**

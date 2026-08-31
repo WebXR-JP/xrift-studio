@@ -6,8 +6,8 @@ import type { TextureImportSettingsPatch } from "../../lib/visual-editor/asset-m
  *
  * Editor State であって制作データではない。Undo履歴にも Asset Manifest にも
  * 入らず、保存に失敗しても取り込みは続けられる。設定は取り込んだTextureの
- * Import設定になり、公開時にその解像度へ変換される。原本は変換しないので、
- * 後から Inspector で解像度を上げ直せる。
+ * Import設定になり、取り込み時に編集用画像へ適用される。元画像を保持するので、
+ * 後から Inspector で元画像から解像度を上げ直せる。
  */
 export type TextureImportMaxSize = "original" | (typeof TEXTURE_MAX_SIZE_CHOICES)[number];
 

@@ -83,7 +83,7 @@ export function EditorImportMenu({
               取り込むTextureの最大解像度
             </span>
             <span className="mt-0.5 block text-[10px] leading-4 text-slate-500">
-              モデル内蔵のTextureにも同じ設定が入ります。原本は変換せず、公開時にこの解像度へ変換します
+              モデル内蔵のTextureも、この上限で編集用画像を作ります。元画像は保持します。モデルの再インポートにも適用します（保護した個別設定を優先）
             </span>
             <select
               value={String(textureMaxSize)}

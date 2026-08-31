@@ -1,3 +1,6 @@
+import { readImageDimensions } from "../../lib/visual-editor/gltf-derived-assets";
+import { readProjectAssetBytes, textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
+import { normalizeTextureImportSettings } from "../../lib/visual-editor/asset-manifest";
 import {
   useCallback,
   useEffect,
@@ -3301,11 +3304,11 @@ export type TextureProcessingState =
   | { phase: "succeeded" | "failed"; message: string };
 
 export function TextureQuickEditor({
-  asset,
+  asset: sourceAsset,
   projectPath,
   readOnly,
   processingState = { phase: "idle" },
-  onChange,
+  onChange: onAssetChange,
   onCreateCard,
   onApplyProcessing,
   onRevertProcessing,
@@ -3319,6 +3322,35 @@ export function TextureQuickEditor({
   onApplyProcessing?: () => void;
   onRevertProcessing?: () => void;
 }) {
+  const [inspection, setInspection] = useState<{ key: string; width?: number; height?: number; message?: string; busy?: boolean } | null>(null);
+  const inspectionKey = `${projectPath}:${sourceAsset.id}:${sourceAsset.sourceHash}:${sourceLabel(sourceAsset)}`;
+  const currentInspection = inspection?.key === inspectionKey ? inspection : null;
+  const asset: TextureAsset = {
+    ...sourceAsset,
+    importSettings: textureProcessingSettings(sourceAsset),
+    ...(currentInspection?.width && sourceAsset.importMetadata ? { importMetadata: { ...sourceAsset.importMetadata, width: currentInspection.width, height: currentInspection.height } } : {}),
+  };
+  const onChange = (patch: TextureAssetPatch) => onAssetChange({ ...patch, ...(patch.importSettings ? { importSettings: normalizeTextureImportSettings(patch.importSettings, asset.importSettings) } : {}) });
+  const inspectDimensions = async () => {
+    if (!projectPath || sourceAsset.source.kind !== "project") return;
+    setInspection({ key: inspectionKey, busy: true });
+    try {
+      const bytes = await readProjectAssetBytes(projectPath, sourceAsset.source.relativePath);
+      const dimensions = readImageDimensions(bytes, getTextureSourceFormat(sourceAsset) ?? "png")?.dimensions;
+      if (dimensions) {
+        setInspection({ key: inspectionKey, ...dimensions });
+      } else {
+        const owned = new Uint8Array(bytes.length);
+        owned.set(bytes);
+        const bitmap = await createImageBitmap(new Blob([owned.buffer]));
+        const size = { width: bitmap.width, height: bitmap.height };
+        bitmap.close();
+        setInspection({ key: inspectionKey, ...size });
+      }
+    } catch {
+      setInspection({ key: inspectionKey, message: "サイズを取得できません。元ファイルを確認して再試行してください。" });
+    }
+  };
   const settings = asset.importSettings;
   const resizeValue = settings.resize.mode === "original" ? "original" : String(settings.resize.maxSize);
   const powerOfTwo = settings.resize.powerOfTwo === true;
@@ -3356,6 +3388,12 @@ export function TextureQuickEditor({
       </div>
 
       <EditorSection title="ソース / サイズ">
+        <div className="flex items-center justify-between gap-2 text-xs text-slate-600">
+          <span>使用中の解像度: {asset.importMetadata?.width && asset.importMetadata.height ? `${asset.importMetadata.width} × ${asset.importMetadata.height}px` : "未取得"}</span>
+          <button type="button" disabled={!projectPath || asset.source.kind !== "project" || currentInspection?.busy} onClick={() => void inspectDimensions()} className="shrink-0 rounded border border-slate-300 px-2 py-1 hover:bg-slate-50 disabled:opacity-45">{currentInspection?.busy ? "取得中" : "サイズを確認"}</button>
+        </div>
+        {currentInspection?.message ? <p role="status" className="text-xs text-amber-700">{currentInspection.message}</p> : null}
+        {asset.optimizedFrom ? <p className="text-[11px] leading-4 text-slate-500">使用中: {(getTextureSourceFormat(asset) ?? "不明").toUpperCase()}。適用済みの設定を表示しています。変更すると、保持した元画像から作り直します。</p> : null}
         <dl className="grid grid-cols-[42px_minmax(0,1fr)] gap-1 text-xs">
           <dt className="text-slate-500">状態</dt>
           <dd className="text-right font-medium text-slate-700">{asset.status}</dd>
@@ -3726,6 +3764,18 @@ function describeResizePreview(asset: TextureAsset): {
   const width = asset.importMetadata?.width;
   const height = asset.importMetadata?.height;
   if (!width || !height) return null;
+  const plan = planTextureProcessing(asset);
+  if (asset.optimizedFrom && plan.supported) {
+    const targetWidth = plan.pending ? plan.targetWidth : width;
+    const targetHeight = plan.pending ? plan.targetHeight : height;
+    if (!targetWidth || !targetHeight) return null;
+    return {
+      from: `${width} × ${height}`,
+      to: `${targetWidth} × ${targetHeight}`,
+      changes: targetWidth !== width || targetHeight !== height,
+      upscales: targetWidth > (plan.sourceWidth ?? targetWidth) || targetHeight > (plan.sourceHeight ?? targetHeight),
+    };
+  }
   const maxSize =
     asset.importSettings.resize.mode === "max-size"
       ? asset.importSettings.resize.maxSize
@@ -3748,7 +3798,7 @@ const TEXTURE_COMPRESSION_FORMAT_LABELS: Record<
   (typeof TEXTURE_COMPRESSION_FORMATS)[number],
   string
 > = {
-  source: "変換しない（原本の形式）",
+  source: "画像形式を維持（サイズのみ変更）",
   webp: "WEBP（配信サイズを下げる）",
   ktx2: "KTX2 / Basis（GPU圧縮）",
 };
@@ -3757,7 +3807,7 @@ const TEXTURE_COMPRESSION_FORMAT_HINTS: Record<
   (typeof TEXTURE_COMPRESSION_FORMATS)[number],
   string
 > = {
-  source: "原本の形式のまま書き出します。最大解像度だけを変えたい時に選びます。",
+  source: "変換元の画像形式を維持します。変換済みの場合は、保持した元画像の形式です。サイズの指定がなければ追加の変換はしません。",
   webp: "通信量は減りますが、GPU上ではRGBAへ展開されるためVRAMは変わりません。",
   ktx2: "GPUが圧縮のまま扱えるため、通信量とVRAMの両方を下げられます。端末により見た目が変わります。",
 };
@@ -3830,7 +3880,7 @@ function TextureProcessingPanel({
     <>
       {inUse}
       <dl className="grid grid-cols-[52px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
-        <dt className="text-slate-500">現在</dt>
+        <dt className="text-slate-500">変換元</dt>
         <dd className="text-right tabular-nums text-slate-700">
           {currentSize}・{plan.sourceFormat.toUpperCase()}・
           {formatFileSize(plan.sourceByteLength)}

@@ -1,3 +1,6 @@
+import { normalizeTextureImportSettings, type TextureImportSettingsPatch } from "../../lib/visual-editor/asset-manifest";
+import { TEXTURE_MAX_SIZE_CHOICES } from "../../lib/visual-editor/texture-conversion";
+import { textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
 import {
   TerrainFlattenIcon,
   TerrainGrassEraseIcon,
@@ -2566,7 +2569,7 @@ function MultiSelectionInspector({
   onSetMeshShadow: (patch: Pick<MeshInspectorPatch, "castShadow" | "receiveShadow">) => void;
   onSetLightShadow: (castShadow: boolean) => void;
   onApplyMaterialPatch: (patch: MaterialAssetPatch) => void;
-  onApplyTextureBatch?: (assetIds: readonly string[]) => void;
+  onApplyTextureBatch?: (assetIds: readonly string[], settings?: TextureImportSettingsPatch) => void;
 }) {
   const entities = selectedEntityIds
     .map((id) => scene.entities[id])
@@ -2630,6 +2633,7 @@ function MultiSelectionInspector({
     return (
       <div className="space-y-3">
         <TextureBatchProcessingCard
+          key={textures.map((texture) => texture.id).join(":")}
           textures={textures}
           otherSelectionCount={selectedAssets.length - textures.length}
           readOnly={readOnly}
@@ -2676,11 +2680,17 @@ function TextureBatchProcessingCard({
   otherSelectionCount: number;
   readOnly: boolean;
   state: TextureProcessingState;
-  onApply?: (assetIds: readonly string[]) => void;
+  onApply?: (assetIds: readonly string[], settings?: TextureImportSettingsPatch) => void;
 }) {
+  const [maxSize, setMaxSize] = useState("keep");
+  const [format, setFormat] = useState("keep");
+  const settings: TextureImportSettingsPatch = {
+    ...(maxSize === "keep" ? {} : { resize: maxSize === "original" ? { mode: "original" as const } : { mode: "max-size" as const, maxSize: Number(maxSize) } }),
+    ...(format === "keep" ? {} : { compression: { format: format as "source" | "webp" | "ktx2" } }),
+  };
   const plans = textures.map((texture) => ({
     texture,
-    plan: planTextureProcessing(texture),
+    plan: planTextureProcessing({ ...texture, importSettings: normalizeTextureImportSettings(settings, textureProcessingSettings(texture)) }),
   }));
   const pending = plans.filter((entry) => entry.plan.supported && entry.plan.pending);
   const blocked = plans.filter((entry) => !entry.plan.supported);
@@ -2704,8 +2714,23 @@ function TextureBatchProcessingCard({
   return (
     <ComponentCard title="複数のTexture" subtitle={`${textures.length}件`}>
       <p className="text-xs leading-5 text-slate-600">
-        各TextureのImport設定（最大解像度・圧縮方式）で、選択中のTextureをまとめて書き出します。公開時の変換とは別に、Editorの表示と原本そのものを軽くしたいときに使います。
+        共通の設定で、編集に使う画像を変換します。変換済みの画像は、保存してある元画像から作り直します。
       </p>
+      <label className="block text-xs text-slate-600">最大解像度
+        <select value={maxSize} disabled={busy || readOnly} onChange={(event) => setMaxSize(event.currentTarget.value)} className="mt-1 h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs">
+          <option value="keep">各Textureの設定を使う</option>
+          <option value="original">変換元のサイズを維持</option>
+          {TEXTURE_MAX_SIZE_CHOICES.map((size) => <option key={size} value={size}>長辺 最大 {size}px</option>)}
+        </select>
+      </label>
+      <label className="block text-xs text-slate-600">圧縮方式
+        <select value={format} disabled={busy || readOnly} onChange={(event) => setFormat(event.currentTarget.value)} className="mt-1 h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs">
+          <option value="keep">各Textureの設定を使う</option>
+          <option value="source">変換元の画像形式を維持</option>
+          <option value="webp">WEBP</option>
+          <option value="ktx2">KTX2（GPU圧縮）</option>
+        </select>
+      </label>
       <dl className="grid grid-cols-[64px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
         <dt className="text-slate-500">変換対象</dt>
         <dd className="text-right tabular-nums font-semibold text-violet-700">
@@ -2720,6 +2745,15 @@ function TextureBatchProcessingCard({
           </>
         ) : null}
       </dl>
+      <details className="text-xs text-slate-600">
+        <summary className="cursor-pointer">Textureごとの内訳と理由</summary>
+        <ul className="mt-2 max-h-48 space-y-2 overflow-auto">
+          {plans.map(({ texture, plan }) => <li key={texture.id}>
+            <span className="font-medium">{texture.name}</span>
+            <span className="block text-[11px] text-slate-500">{!plan.supported ? plan.reason : plan.pending ? `${plan.targetWidth ?? "?"} × ${plan.targetHeight ?? "?"}・${plan.outputFormat.toUpperCase()}${texture.optimizedFrom ? "（保存した元画像から変換）" : ""}` : plan.settledReason}</span>
+          </li>)}
+        </ul>
+      </details>
       {otherSelectionCount > 0 ? (
         <p className="text-[11px] leading-4 text-slate-500">
           Texture以外の{otherSelectionCount}件は変換しません。
@@ -2728,7 +2762,7 @@ function TextureBatchProcessingCard({
       <button
         type="button"
         disabled={pending.length === 0 || busy || readOnly || !onApply}
-        onClick={() => onApply?.(pending.map((entry) => entry.texture.id))}
+        onClick={() => onApply?.(pending.map((entry) => entry.texture.id), settings)}
         className="h-8 w-full rounded-md border border-violet-300 bg-violet-50 px-3 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
       >
         {busy ? "変換中" : `選択した${pending.length}件をまとめて変換する`}
@@ -2748,7 +2782,7 @@ function TextureBatchProcessingCard({
         </p>
       ) : pending.length === 0 ? (
         <p className="text-[11px] leading-4 text-slate-500">
-          変換待ちのTextureがありません。1件ずつ選んでCompressionの方式か最大解像度を設定してください。
+          上の最大解像度・圧縮方式を選んでください。変更不要・対象外の理由は内訳で確認できます。
         </p>
       ) : (
         <p className="rounded border border-amber-200 bg-amber-50 p-1.5 text-xs leading-4 text-amber-800">
@@ -5246,7 +5280,7 @@ export function InspectorPanel({
   onRevertTextureProcessing?: (assetId: string) => void;
   onRevertModelOptimization?: (assetId: string) => void;
   textureBatchState?: TextureProcessingState;
-  onApplyTextureBatch?: (assetIds: readonly string[]) => void;
+  onApplyTextureBatch?: (assetIds: readonly string[], settings?: TextureImportSettingsPatch) => void;
   onParticleEmitterChange: (
     entityId: string,
     componentId: string,

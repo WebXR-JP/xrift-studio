@@ -116,7 +116,41 @@ export type TextureProcessingResult =
       outputFormat: TextureOutputFormat;
     };
 
-export function planTextureProcessing(asset: TextureAsset): TextureProcessingPlan {
+/** Recover the applied recipe, including results from the legacy Optimize flow. */
+export function appliedTextureProcessingSettings(asset: TextureAsset): TextureAsset["importSettings"] {
+  const recipe = asset.optimizedFrom?.importSettings ?? asset.importSettings;
+  const format = getTextureSourceFormat(asset);
+  const width = asset.importMetadata?.width;
+  const height = asset.importMetadata?.height;
+  const origin = asset.optimizedFrom?.importMetadata;
+  // Legacy Optimize stored the pre-optimization settings, not its actual recipe.
+  // Recover the known output format/size so a later resize does not drop KTX2.
+  const shrunk = width && height && (!origin?.width || !origin.height || width < origin.width || height < origin.height);
+  return {
+    ...recipe,
+    resize: recipe.resize.mode === "original" && shrunk ? { mode: "max-size", maxSize: Math.max(width, height), powerOfTwo: recipe.resize.powerOfTwo } : recipe.resize,
+    compression: { ...recipe.compression, format: format === "ktx2" || format === "webp" ? format : recipe.compression.format },
+  };
+}
+
+export function textureProcessingSettings(asset: TextureAsset): TextureAsset["importSettings"] {
+  const settings = asset.importSettings;
+  if (!asset.optimizedFrom || settings.resize.mode !== "original" || settings.resize.powerOfTwo || settings.compression.format !== "source") return settings;
+  // Older manifests reset these fields after applying. Show the retained recipe
+  // and use it as the base of the next edit without changing publish semantics.
+  const applied = appliedTextureProcessingSettings(asset);
+  return { ...settings, resize: applied.resize, compression: { ...settings.compression, format: applied.compression.format } };
+}
+
+/** Re-encode from the retained original, never from a lossy optimized result. */
+export function textureProcessingSource(asset: TextureAsset): TextureAsset {
+  const origin = asset.optimizedFrom;
+  if (!origin) return asset;
+  return { ...asset, source: origin.source, sourceHash: origin.sourceHash, importMetadata: origin.importMetadata };
+}
+
+export function planTextureProcessing(input: TextureAsset): TextureProcessingPlan {
+  const asset = textureProcessingSource(input);
   if (asset.source.kind !== "project") {
     return {
       supported: false,
@@ -170,13 +204,20 @@ export function planTextureProcessing(asset: TextureAsset): TextureProcessingPla
       fitted.width !== sourceWidth ||
       fitted.height !== sourceHeight);
   const formatPending = settings.compression.format !== "source";
+  const alreadyApplied = Boolean(input.optimizedFrom &&
+    JSON.stringify(settings) === JSON.stringify(appliedTextureProcessingSettings(input)) &&
+    getTextureSourceFormat(input) === outputFormat &&
+    (!fitted || (fitted.width === input.importMetadata?.width && fitted.height === input.importMetadata?.height)));
+  const pending = !alreadyApplied && (resizePending || formatPending);
 
   return {
     supported: true,
-    pending: resizePending || formatPending,
+    pending,
     settledReason:
-      resizePending || formatPending
+      pending
         ? null
+        : input.optimizedFrom
+          ? "変換済みです。サイズや圧縮方式を変更すると、保持した元画像から作り直します。"
         : powerOfTwo && maxSize !== null
           ? "原本はすでに指定した最大解像度に収まっていて、辺も2のべき乗です。"
           : powerOfTwo
@@ -395,6 +436,8 @@ async function encodeTextureForPlan(
   plan: Extract<TextureProcessingPlan, { supported: true }>,
   report?: (progress: TextureProcessingProgress) => void,
 ): Promise<EncodedTexture> {
+  const originalAsset = asset;
+  asset = textureProcessingSource(asset);
   if (asset.source.kind !== "project") {
     throw new Error("プロジェクト内に保存された画像だけ変換できます。");
   }
@@ -429,12 +472,12 @@ async function encodeTextureForPlan(
     bytes,
     relativePath,
     mimeType,
-    beforeBytes: plan.sourceByteLength || sourceBytes.byteLength,
+    beforeBytes: originalAsset.importMetadata?.byteLength || sourceBytes.byteLength,
     width: rendered.width,
     height: rendered.height,
     outputFormat: plan.outputFormat,
     asset: {
-      ...asset,
+      ...originalAsset,
       source: { kind: "project", relativePath },
       sourceHash,
       thumbnail:
@@ -464,6 +507,7 @@ async function encodeTextureForPlan(
           importMetadata: asset.importMetadata,
           importSettings: asset.importSettings,
         }),
+        importSettings: asset.importSettings,
         appliedAt: new Date().toISOString(),
       },
       ...(asset.importedFromModel

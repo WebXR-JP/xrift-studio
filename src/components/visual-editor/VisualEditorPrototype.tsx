@@ -1,3 +1,5 @@
+import { textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
+import { normalizeTextureImportSettings } from "../../lib/visual-editor/asset-manifest";
 import {
   useCallback,
   useEffect,
@@ -2730,6 +2732,7 @@ export function VisualEditorPrototype({
                     assetId: modelAssetId,
                     state: modelReimportStateFromProgress(progress),
                   }),
+                textureImportMaxSizePatch(textureImportMaxSizeRef.current),
               );
               if (!result.ok) {
                 setModelReimportFeedback({
@@ -7427,6 +7430,7 @@ export function VisualEditorPrototype({
               state: modelReimportStateFromProgress(progress),
             });
           },
+          textureImportMaxSizePatch(textureImportMaxSizeRef.current),
         );
 
       if (!result.ok) {
@@ -7660,7 +7664,7 @@ export function VisualEditorPrototype({
   );
 
   const handleApplyTextureProcessingBatch = useCallback(
-    async (assetIds: readonly string[]) => {
+    async (assetIds: readonly string[], settings?: import("../../lib/visual-editor/asset-manifest").TextureImportSettingsPatch) => {
       const availability = resolveAssetOperationAvailability(
         "texture-processing",
         {
@@ -7708,9 +7712,16 @@ export function VisualEditorPrototype({
       });
 
       try {
+        let processingManifest = bundleRef.current.assets;
+        if (settings) {
+          for (const id of targets) {
+            const asset = processingManifest.assets[id];
+            if (asset.kind === "texture") processingManifest = updateTextureAsset(processingManifest, id, { importSettings: normalizeTextureImportSettings(settings, textureProcessingSettings(asset)) });
+          }
+        }
         const result = await applyTextureProcessingBatch(
           projectPath,
-          bundleRef.current.assets,
+          processingManifest,
           targets,
           (progress) => {
             setTextureBatchFeedback({

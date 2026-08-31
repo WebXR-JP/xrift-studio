@@ -196,7 +196,7 @@ export type CreateAssetImportPlanInput = {
 
 export type CreateModelReimportPlanInput = Omit<
   CreateAssetImportPlanInput,
-  "folderId" | "textureImportSettings"
+  "folderId"
 >;
 
 export type AtomicAssetImportCommitRequest = {

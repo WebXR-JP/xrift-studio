@@ -1,9 +1,10 @@
 import {
   ASSET_MANIFEST_SCHEMA_VERSION,
+  normalizeTextureImportSettings,
   type AssetManifest,
 } from "./asset-manifest";
 import { safeIdSegment } from "./document-id";
-import { expandGltfAssets, type GltfJson } from "./gltf-derived-assets";
+import { expandGltfAssets, readImageDimensions, type GltfJson } from "./gltf-derived-assets";
 import { assetManifestCodec } from "./serialization";
 
 /**
@@ -29,6 +30,10 @@ function assertModelAssetIdSegmentsStayUnique(): void {
 /** Filesystem-free assertions for embedded glTF Material/Texture expansion. */
 export async function runGltfDerivedAssetFixtureAssertions(): Promise<void> {
   assertModelAssetIdSegmentsStayUnique();
+  const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc2, 0, 8, 8, 4, 0, 8, 0, 1]);
+  const size = readImageDimensions(jpeg, "jpeg")?.dimensions;
+  assert(size?.width === 2048 && size.height === 1024, "Embedded progressive JPEG dimensions were lost");
+  assert(!readImageDimensions(jpeg.slice(0, 14), "jpeg"), "Truncated JPEG must not expose invalid dimensions");
   const image = pngFixture();
   const json: GltfJson = {
     asset: { version: "2.0" },
@@ -164,6 +169,30 @@ export async function runGltfDerivedAssetFixtureAssertions(): Promise<void> {
       .roughnessFactor === 0.23,
     "Reimport overwrote a user-edited Material",
   );
+  const optimizedTexture = {
+    ...texture,
+    importSettings: normalizeTextureImportSettings(),
+    importedFromModel: { ...texture.importedFromModel!, isUserOverridden: true },
+    optimizedFrom: {
+      source: texture.source,
+      sourceHash: texture.sourceHash,
+      importMetadata: texture.importMetadata,
+      importSettings: normalizeTextureImportSettings({ resize: { mode: "max-size", maxSize: 1024 }, compression: { format: "ktx2" } }),
+      appliedAt: "2026-08-31T00:00:00Z",
+    },
+  };
+  for (const protectedSettings of [true, false]) {
+    const result = await expandGltfAssets({
+      json, modelBytes: glbBinaryFixture(image), sourceFormat: "glb",
+      modelAssetId: "model-avocado-sourcehash", modelSourceHash: "b".repeat(64),
+      materialSlots: expanded.materialSlots, materialFolderId: "folder-avocado-materials", textureFolderId: "folder-avocado-textures", hashBytes: fixtureHash,
+      textureImportSettings: { resize: { mode: "max-size", maxSize: 512 } },
+      manifest: { ...manifest, assets: { ...manifest.assets, [texture.id]: { ...optimizedTexture, importedFromModel: { ...optimizedTexture.importedFromModel, isUserOverridden: protectedSettings } } } },
+    });
+    const settings = result.textureAssets[0].importSettings;
+    assert(settings.resize.mode === "max-size" && settings.resize.maxSize === (protectedSettings ? 1024 : 512), "Reimport lost the protected recipe or ignored the import maximum");
+    assert(settings.compression.format === "ktx2", "Reimport lost the applied compression format");
+  }
 
   const openBrushJson: GltfJson = {
     asset: { version: "2.0" },

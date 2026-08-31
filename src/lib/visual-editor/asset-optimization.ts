@@ -280,6 +280,7 @@ async function optimizeTexture(
         compression: {
           ...asset.importSettings.compression,
           format: "source",
+          quality: shouldEncodeKtx2 ? asset.importSettings.compression.quality : 86,
         },
       },
       // 原本は書き換えないので、Inspectorからいつでも戻せる。
@@ -290,8 +291,14 @@ async function optimizeTexture(
           importMetadata: asset.importMetadata,
           importSettings: asset.importSettings,
         }),
+        importSettings: {
+          ...asset.importSettings,
+          resize: shouldResize ? { mode: "max-size", maxSize: 2048, powerOfTwo: shouldEncodeKtx2 } : { mode: "original", powerOfTwo: shouldEncodeKtx2 },
+          compression: { ...asset.importSettings.compression, format: sourceFormat, quality: shouldEncodeKtx2 ? asset.importSettings.compression.quality : 86 },
+        },
         appliedAt: new Date().toISOString(),
       },
+      ...(asset.importedFromModel ? { importedFromModel: { ...asset.importedFromModel, isUserOverridden: true } } : {}),
     },
   };
 }
