@@ -243,6 +243,13 @@ export function SceneVramMetrics({ metrics }: { metrics: SceneVramEstimate }) {
         <span>Geometry {format(metrics.geometryVramBytes)}</span>
         <span>Texture {format(metrics.textureVramBytes)}</span>
       </div>
+      <dl className="mt-0.5 grid grid-cols-[1fr_auto] gap-x-2">
+        <dt>GPU圧縮済み {metrics.compressedTextureCount}件</dt>
+        <dd className="text-right">{format(metrics.compressedTextureVramBytes)}</dd>
+        <dt>非圧縮 {metrics.uncompressedTextureCount}件</dt>
+        <dd className="text-right">{format(metrics.uncompressedTextureVramBytes)}</dd>
+      </dl>
+      <div className="text-[10px] text-cyan-200/70">Textureの内訳。JPEG / WEBPもGPU上では非圧縮です。</div>
       <div>合計 {format(metrics.geometryVramBytes + metrics.textureVramBytes)}{metrics.unknownVramTextures > 0 ? `・未算定Texture ${metrics.unknownVramTextures}件` : ""}</div>
       <div className="text-[10px] text-cyan-200/70">共有参照は重複除外。影・描画バッファ・内部生成領域は含みません。</div>
     </div>

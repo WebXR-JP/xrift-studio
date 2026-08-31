@@ -1302,6 +1302,8 @@ F-06 アイテム検査
 
 ## F-35 Visual QA診断と短時間録画の状態設計
 
+- Texture VRAMはGPU圧縮済み／非圧縮の算定済み件数・MiBを分けて表示する。両者の容量合計はTexture全体と一致させ、未算定は別に数える。判定は実行中TextureのGPU形式を使い、JPEG/WEBPやKTX2のRGBAフォールバックをGPU圧縮済みと表示しない。
+
 参照: MI-03, MI-05, MI-14, MI-26, MI-80
 
 ### 操作前

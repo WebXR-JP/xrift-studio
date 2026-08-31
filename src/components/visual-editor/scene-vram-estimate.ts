@@ -1,11 +1,26 @@
 import type { BufferAttribute, BufferGeometry, InterleavedBufferAttribute, Material, Scene, Texture } from "three";
+import { AlphaFormat, RedFormat, RedIntegerFormat, RGFormat, RGIntegerFormat, RGBFormat, RGBAFormat, RGBAIntegerFormat, DepthFormat, DepthStencilFormat } from "three";
 import { getByteLength } from "three/src/extras/TextureUtils.js";
 
 export type SceneVramEstimate = {
   geometryVramBytes: number;
   textureVramBytes: number;
+  compressedTextureVramBytes: number;
+  uncompressedTextureVramBytes: number;
+  compressedTextureCount: number;
+  uncompressedTextureCount: number;
   unknownVramTextures: number;
 };
+
+const UNCOMPRESSED_FORMATS = new Set<number>([
+  AlphaFormat, RedFormat, RedIntegerFormat, RGFormat, RGIntegerFormat,
+  RGBFormat, RGBAFormat, RGBAIntegerFormat, DepthFormat, DepthStencilFormat,
+]);
+
+/** KTX2 can fall back to RGBA; the container/CompressedTexture flag alone is not proof of GPU compression. */
+function isGpuCompressedTexture(texture: Texture): boolean {
+  return "isCompressedTexture" in texture && texture.isCompressedTexture === true && !UNCOMPRESSED_FORMATS.has(texture.format);
+}
 
 /** Referenced scene resources, not total driver allocation or download sizes. */
 export function estimateSceneVram(scene: Scene): SceneVramEstimate {
@@ -66,13 +81,26 @@ export function estimateSceneVram(scene: Scene): SceneVramEstimate {
   collectTextures(scene.background);
   collectTextures(scene.environment);
   let textureVramBytes = 0;
+  let compressedTextureVramBytes = 0;
+  let uncompressedTextureVramBytes = 0;
+  let compressedTextureCount = 0;
+  let uncompressedTextureCount = 0;
   let unknownVramTextures = 0;
   for (const texture of textures) {
     const bytes = estimateRuntimeTextureBytes(texture);
     if (bytes === null) unknownVramTextures++;
-    else textureVramBytes += bytes;
+    else {
+      textureVramBytes += bytes;
+      if (isGpuCompressedTexture(texture)) {
+        compressedTextureVramBytes += bytes;
+        compressedTextureCount++;
+      } else {
+        uncompressedTextureVramBytes += bytes;
+        uncompressedTextureCount++;
+      }
+    }
   }
-  return { geometryVramBytes, textureVramBytes, unknownVramTextures };
+  return { geometryVramBytes, textureVramBytes, compressedTextureVramBytes, uncompressedTextureVramBytes, compressedTextureCount, uncompressedTextureCount, unknownVramTextures };
 }
 
 type TextureImage = {

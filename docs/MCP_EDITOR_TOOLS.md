@@ -238,6 +238,7 @@ Undo 履歴も選択も動かさない。
 
 - `capture_scene_debug` — fps、frame time、draw call、triangle、可視 Mesh 数、
   Geometry / Texture別のVRAM概算（geometryVramBytes / textureVramBytes）、未算定Texture数（unknownVramTextures）、
+  Texture内訳（compressedTextureVramBytes / uncompressedTextureVramBytes、compressedTextureCount / uncompressedTextureCount。未算定は除外）、
   カメラの Far。WebM の録画も start / stop で扱う
 - `capture_scene_view` — 描画そのままの PNG を 1 枚、app の
   `debug-captures` へ保存してパスを返す。**数値と document は「何が映るはず

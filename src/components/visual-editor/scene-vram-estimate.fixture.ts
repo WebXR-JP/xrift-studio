@@ -1,5 +1,6 @@
 import { BufferGeometry, Float32BufferAttribute, Uint16BufferAttribute, InterleavedBuffer, InterleavedBufferAttribute, Mesh, MeshBasicMaterial, Scene, DataTexture, CompressedTexture, RGBAFormat, RGBA_S3TC_DXT1_Format, UnsignedByteType, ShaderMaterial } from "three";
 import { estimateSceneVram, estimateRuntimeTextureBytes } from "./scene-vram-estimate";
+import type { Texture } from "three";
 
 function assert(value: boolean, message: string): void {
   if (!value) throw new Error(message);
@@ -18,6 +19,7 @@ export function runSceneVramEstimateFixtureAssertions(): void {
   scene.background = texture;
   const result = estimateSceneVram(scene);
   assert(result.geometryVramBytes === 42 && result.textureVramBytes === 84, "Shared geometry, materials and background textures must not multiply VRAM");
+  assert(result.uncompressedTextureCount === 1 && result.uncompressedTextureVramBytes === 84 && result.compressedTextureCount === 0, "Shared uncompressed textures must be counted once");
 
   const interleaved = new BufferGeometry();
   const buffer = new InterleavedBuffer(new Float32Array(18), 6);
@@ -37,6 +39,13 @@ export function runSceneVramEstimateFixtureAssertions(): void {
   scene.add(new Mesh(geometry, custom));
   const withUniforms = estimateSceneVram(scene);
   assert(withUniforms.textureVramBytes === 100 && withUniforms.unknownVramTextures === 1, "Uniform textures or unloaded texture accounting is incorrect");
+  assert(withUniforms.compressedTextureVramBytes === 16 && withUniforms.compressedTextureCount === 1 && withUniforms.uncompressedTextureVramBytes === 84 && withUniforms.uncompressedTextureCount === 1, "Compression breakdown must exclude unestimated textures and add up to the total");
+  const fallback: Texture = new CompressedTexture([{ data: new Uint8Array(64), width: 4, height: 4 }], 4, 4);
+  fallback.format = RGBAFormat;
+  custom.uniforms.fallback = { value: fallback };
+  const withFallback = estimateSceneVram(scene);
+  assert(withFallback.compressedTextureVramBytes === 16 && withFallback.uncompressedTextureVramBytes === 148 && withFallback.uncompressedTextureCount === 2, "RGBA fallback from KTX2 must not be reported as GPU compressed");
+  fallback.dispose();
   scene.clear();
   scene.background = null;
   assert(estimateSceneVram(scene).geometryVramBytes === 0 && estimateSceneVram(scene).textureVramBytes === 0, "Removed resources remained in the estimate");
