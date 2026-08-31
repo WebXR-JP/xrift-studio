@@ -314,13 +314,14 @@ function collectTextureIds(material: MaterialAsset): string[] {
   return [...ids];
 }
 
-type TextureByteEstimate = {
+export type TextureByteEstimate = {
   bytes: number;
   hasKnownDimensions: boolean;
   detail: string;
 };
 
-function estimateTextureBytes(asset: TextureAsset): TextureByteEstimate {
+/** Assets一覧の並び替えと表示も、この診断と同じ概算を使う。 */
+export function estimateTextureBytes(asset: TextureAsset): TextureByteEstimate {
   const metadata = asset.importMetadata;
   const sourceWidth = metadata?.width;
   const sourceHeight = metadata?.height;
