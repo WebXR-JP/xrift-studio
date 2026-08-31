@@ -26,6 +26,7 @@ import type {
 } from "./types";
 import { OPEN_BRUSH_BRUSH_BASE_URL } from "../open-brush";
 import { isPublishedAsKtx2 } from "../texture-conversion";
+import { resolveRenderedTextFontId } from "../../../../packages/xrift-studio-runtime/src/text-font-catalog";
 
 export function compileRuntimeManifest(
   documents: VisualCompilerDocuments,
@@ -34,6 +35,7 @@ export function compileRuntimeManifest(
   compilerVersion: string,
   diagnostics: CompilerDiagnostic[],
   decoders?: XriftRuntimeDecoderPaths,
+  textFontBaseUrl?: string,
 ): XriftRuntimeManifest {
   const runtimeAssets = compileRuntimeAssets(documents.assets, assetCopyPlan);
   const scenes = entryScene
@@ -56,6 +58,7 @@ export function compileRuntimeManifest(
     scenes,
     assets: runtimeAssets,
     ...(decoders && Object.keys(decoders).length > 0 ? { decoders } : {}),
+    ...(textFontBaseUrl ? { textFontBaseUrl } : {}),
   };
 }
 
@@ -195,9 +198,18 @@ function compileRuntimeEntity(
         runtimePhysicsSupport,
       );
     }
-    components.push(
-      JSON.parse(JSON.stringify(component)) as XriftRuntimeComponent,
-    );
+    const runtimeComponent = JSON.parse(
+      JSON.stringify(component),
+    ) as XriftRuntimeComponent;
+    if (runtimeComponent.type === "text") {
+      // The face is resolved here so the manifest names the file the world
+      // actually carries, rather than leaving "auto" for the runtime to
+      // interpret.
+      runtimeComponent.fontId = resolveRenderedTextFontId(
+        runtimeComponent.fontId,
+      );
+    }
+    components.push(runtimeComponent);
   }
   return {
     id: entity.id,

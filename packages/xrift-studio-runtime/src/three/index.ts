@@ -155,6 +155,14 @@ export class XriftThreeLoader {
       manifest,
       assetBase,
     );
+    // The world serves its own copy of the Text font. Without an explicit base
+    // the catalog falls back to the host's base URL, which is the site root
+    // rather than this world's directory, so the copied file is missed and
+    // troika drops to its per-script fallback CDN — unreachable from a
+    // published world.
+    const textFontBaseUrl = manifest.textFontBaseUrl
+      ? new URL(manifest.textFontBaseUrl, assetBase).toString()
+      : undefined;
     const assets = Object.values(manifest.assets);
     const modelAssets = assets.filter(
       (asset): asset is Extract<XriftRuntimeAsset, { kind: "model" }> =>
@@ -222,6 +230,7 @@ export class XriftThreeLoader {
           component,
           entity,
           manifest,
+          textFontBaseUrl,
           models,
           materials,
           textures,
@@ -489,6 +498,7 @@ export class XriftThreeLoader {
     component: XriftRuntimeComponent;
     entity: XriftRuntimeEntity;
     manifest: XriftRuntimeManifest;
+    textFontBaseUrl: string | undefined;
     models: ReadonlyMap<string, LoadedModel>;
     materials: ReadonlyMap<string, Material>;
     textures: ReadonlyMap<string, Texture>;
@@ -602,7 +612,10 @@ export class XriftThreeLoader {
         });
       }
       const panel = new XriftTextPanelObject();
-      panel.update(runtimeTextPanelConfig(component), backgroundTexture);
+      panel.update(
+        runtimeTextPanelConfig(component, input.textFontBaseUrl),
+        backgroundTexture,
+      );
       panel.userData.xriftStudioComponentId = component.id;
       return panel;
     }
@@ -1260,8 +1273,10 @@ function nearestSourceNodeIndex(object: Object3D): number | undefined {
 /** Maps the manifest's Text component onto the shared panel configuration. */
 function runtimeTextPanelConfig(
   component: Extract<XriftRuntimeComponent, { type: "text" }>,
+  fontBaseUrl: string | undefined,
 ): XriftTextPanelConfig {
   return {
+    ...(fontBaseUrl === undefined ? {} : { fontBaseUrl }),
     text: component.text,
     color: component.color,
     fontSize: component.fontSize,

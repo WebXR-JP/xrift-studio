@@ -159,7 +159,9 @@ import {
   type VendorBundleId,
 } from "../vendor-assets";
 import {
+  AUTOMATIC_TEXT_FONT_ID,
   getTextFontDefinition,
+  resolveRenderedTextFontId,
   resolveTextFontWeight,
   TEXT_FONT_DIRECTORY,
   textFontFileName,
@@ -291,6 +293,16 @@ export function compileVisualProject(
     documents.assets,
     assetCopyPlan,
   );
+  // One flag decides everything Text pulls into the staged world: its overlay
+  // files, its runtime package and its font copies. Reading the Scene once is
+  // how they stay in agreement.
+  const usesTextPanel = resolvedEntryScene
+    ? sceneUsesTextPanelRuntime(resolvedEntryScene.scene)
+    : false;
+  const textFontCopyPlan =
+    usesTextPanel && resolvedEntryScene
+      ? createPublishedTextFontCopyPlan(resolvedEntryScene.scene)
+      : [];
   let runtimeManifestFile: CompilerOverlayFile | undefined;
   let generated: string;
   if (outputMode === "classic-runtime") {
@@ -313,6 +325,9 @@ export function compileVisualProject(
       VISUAL_COMPILER_VERSION,
       diagnostics,
       publishedRuntimeDecoderPaths(requiredVendorBundles),
+      // Named only when the world actually carries a font file, and relative to
+      // the manifest, exactly like the decoder directories.
+      textFontCopyPlan.length > 0 ? PUBLISHED_RUNTIME_ASSET_BASE : undefined,
     );
     generated = generateRuntimeAdapterSource(documents.project.projectKind);
     runtimeManifestFile = compilerFile(
@@ -333,12 +348,6 @@ export function compileVisualProject(
       : emptySource(documents.project.projectKind);
   }
   const usesOpenBrushModels = projectUsesOpenBrushModels(documents.assets);
-  // One flag decides everything Text pulls into the staged world: its overlay
-  // files, its runtime package and its font copies. Reading the Scene once is
-  // how they stay in agreement.
-  const usesTextPanel = resolvedEntryScene
-    ? sceneUsesTextPanelRuntime(resolvedEntryScene.scene)
-    : false;
   // Every emitted feature that trips a platform security rule declares its own
   // requirement; nothing here knows what those rules are.
   const publishPermissions = resolvePublishPermissions([
@@ -495,9 +504,7 @@ export function compileVisualProject(
     ...createPublishedVendorAssetCopyPlan(requiredVendorBundles),
     // Not gated on the output mode: both emitted source and the runtime package
     // read the font from the world's own files, so both need them copied.
-    ...(usesTextPanel && resolvedEntryScene
-      ? createPublishedTextFontCopyPlan(resolvedEntryScene.scene)
-      : []),
+    ...textFontCopyPlan,
   ];
 
   return {
@@ -539,9 +546,11 @@ function createPublishedTextFontCopyPlan(
   for (const entity of Object.values(scene.entities)) {
     for (const component of entity.components) {
       if (component.type !== "text") continue;
-      const font = getTextFontDefinition(component.fontId);
-      // A Text left on the automatic face resolves no catalog file, so there is
-      // nothing to copy for it.
+      // Every Text renders with a bundled face, the automatic one included, so
+      // each Text names a file the world has to carry.
+      const font = getTextFontDefinition(
+        resolveRenderedTextFontId(component.fontId),
+      );
       if (!font) continue;
       fileNames.add(
         textFontFileName(font, resolveTextFontWeight(font, component.fontWeight)),
@@ -594,17 +603,21 @@ function modelRequiresDracoDecoder(asset: ModelAsset): boolean {
 const DRACO_MESH_COMPRESSION_EXTENSION = "KHR_draco_mesh_compression" as const;
 
 /**
- * Runtime JSON へ書く decoder の場所。
+ * Runtime JSON の manifest から見た、compiler が置く public file の base。
  *
- * manifest は `public/xrift/` に、decoder は `public/xrift-studio/vendor/` に
- * 置かれる。runtime loader は manifest からの相対で解決するので、ここでも
- * 同じ相対で書く。必要のない bundle は書かない。
+ * manifest は `public/xrift/` にあり、decoder と font は `public/xrift-studio/`
+ * にある。runtime loader は manifest からの相対で解決するので、一段上を指す。
+ */
+const PUBLISHED_RUNTIME_ASSET_BASE = "../" as const;
+
+/**
+ * Runtime JSON へ書く decoder の場所。必要のない bundle は書かない。
  */
 function publishedRuntimeDecoderPaths(
   bundleIds: readonly VendorBundleId[],
 ): XriftRuntimeDecoderPaths {
   const relativeTo = (bundleId: VendorBundleId) =>
-    `../${VENDOR_BUNDLES[bundleId].publishedDirectory}/`;
+    `${PUBLISHED_RUNTIME_ASSET_BASE}${VENDOR_BUNDLES[bundleId].publishedDirectory}/`;
   return {
     ...(bundleIds.includes("three-basis")
       ? { ktx2TranscoderPath: relativeTo("three-basis") }
@@ -5027,28 +5040,25 @@ function renderText(
     )};`,
   );
   const backgroundTexture = resolveTextBackgroundTexture(entity, text, context);
-  // The font file travels with the world, and XRift decides at load time where
-  // the world's own files are served from. A Text on the automatic face reads
-  // no bundled file, so it needs neither the base nor the hook that reads it.
-  const usesBundledFont = getTextFontDefinition(text.fontId) !== undefined;
-  if (!backgroundTexture && !usesBundledFont) {
-    return `<XriftTextPanel config={${configName}} />`;
-  }
-
   const componentName = generatedIdentifier(
     "CompiledTextPanel",
     `${entity.id}:${text.id}`,
   );
-  if (usesBundledFont) context.imports.add("useXRift");
+  // Every published Text reads a font file the world ships — the automatic face
+  // is substituted at compile time, because it is a CDN resolver a published
+  // world cannot reach — and XRift decides at load time where the world's own
+  // files are served from. So the base is always read.
+  context.imports.add("useXRift");
   const props = [
     `config={${configName}}`,
-    ...(usesBundledFont ? ["fontBaseUrl={baseUrl}"] : []),
+    "fontBaseUrl={baseUrl}",
     ...(backgroundTexture ? ["map={textPanelMap}"] : []),
   ].join(" ");
   context.supportDeclarations.set(
     `text-panel:${componentName}`,
     `const ${componentName}: FC = () => {
-${usesBundledFont ? "  const { baseUrl } = useXRift();\n" : ""}${backgroundTexture?.lines ?? ""}  return <XriftTextPanel ${props} />;
+  const { baseUrl } = useXRift();
+${backgroundTexture?.lines ?? ""}  return <XriftTextPanel ${props} />;
 };`,
   );
   return `<${componentName} />`;
@@ -5138,7 +5148,7 @@ function compiledTextPanelConfig(text: TextComponent): Record<string, unknown> {
     anchorY: text.anchorY,
     outlineWidth: text.outlineWidth,
     outlineColor: text.outlineColor,
-    ...(text.fontId === undefined ? {} : { fontId: text.fontId }),
+    fontId: resolveRenderedTextFontId(text.fontId),
     ...(text.fontWeight === undefined ? {} : { fontWeight: text.fontWeight }),
     ...(text.textAlign === undefined ? {} : { textAlign: text.textAlign }),
     ...(text.lineHeight === undefined ? {} : { lineHeight: text.lineHeight }),
@@ -5367,11 +5377,20 @@ function diagnoseUnbundledTextFonts(
     for (const component of entity.components) {
       if (component.type !== "text") continue;
       const fontId = component.fontId;
-      if (!fontId || getTextFontDefinition(fontId)) continue;
+      // The automatic face is a deliberate choice and is substituted with the
+      // bundled fallback at publish time, so it is not worth a warning. An id
+      // that is neither is a stale document the author should look at.
+      if (
+        !fontId ||
+        fontId === AUTOMATIC_TEXT_FONT_ID ||
+        getTextFontDefinition(fontId)
+      ) {
+        continue;
+      }
       diagnostics.push({
         severity: "warning",
         code: "text-font-not-bundled",
-        message: `書体「${fontId}」はStudioに同梱されていないため、自動の書体で表示されます。Inspectorで同梱の書体を選び直してください。`,
+        message: `書体「${fontId}」はStudioに同梱されていないため、同梱の書体で表示されます。Inspectorで書体を選び直してください。`,
         entityId: entity.id,
         componentId: component.id,
         fieldPath: "fontId",
