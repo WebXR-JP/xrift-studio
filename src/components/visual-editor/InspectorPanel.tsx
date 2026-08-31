@@ -204,6 +204,11 @@ function findPrefabSourceContext(
     )[0];
 }
 
+// Inspectorに専用UIが無いComponentの表示名。種別idをそのまま見せない。
+const UNSUPPORTED_COMPONENT_LABELS: Readonly<Record<string, string>> = {
+  animation: "Animation（廃止）",
+};
+
 function ComponentCard({
   title,
   subtitle,
@@ -4767,7 +4772,36 @@ function EntityInspector({
             </ComponentCard>
           );
         }
-        return null;
+        // Inspectorに編集UIを持たないComponentも、カードだけは出して外せる
+        // ようにする。廃止されたAnimation Componentのように、表示されないまま
+        // Entityに残り続けるものを作らない。prefab-instanceとxrift-componentは
+        // 後続のブロックが描くので、ここでは触らない。
+        if (
+          component.type === "prefab-instance" ||
+          component.type === "xrift-component"
+        ) {
+          return null;
+        }
+        return (
+          <ComponentCard
+            key={component.id}
+            title={UNSUPPORTED_COMPONENT_LABELS[component.type] ?? component.type}
+            subtitle="Inspector未対応"
+            remove={{
+              label: `${
+                UNSUPPORTED_COMPONENT_LABELS[component.type] ?? component.type
+              }を削除`,
+              disabled: readOnly && !liveRuntimeTuning,
+              onRemove: () => onRemoveComponent(component.id),
+            }}
+          >
+            <p className="text-xs leading-4 text-slate-600">
+              {component.type === "animation"
+                ? "Animation Componentは廃止されました。clipの再生はInteractivity Graphのanimation/startノードで行います。プロジェクトを開き直すと自動で変換されますが、ここから削除もできます。"
+                : "このComponentはInspectorで編集できません。不要であれば削除できます。"}
+            </p>
+          </ComponentCard>
+        );
       })}
 
       {registeredComponents

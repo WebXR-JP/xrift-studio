@@ -388,6 +388,7 @@ const COMPONENT_REMOVAL_LABELS: Readonly<Record<string, string>> = {
   "spawn-point": "Spawn Point",
   "interaction-trigger": "Interaction Trigger",
   script: "Script",
+  animation: "Animation（廃止）",
   "prefab-instance": "Prefab Instance",
 };
 
