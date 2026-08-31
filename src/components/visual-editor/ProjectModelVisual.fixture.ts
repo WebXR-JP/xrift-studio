@@ -24,6 +24,7 @@ import {
   normalizeTextureImportSettings,
   repairImportedObject3DHierarchy,
   updateMaterialAsset,
+  type ClassicR3fMaterialShader,
   type MaterialAsset,
   type TextureAsset,
 } from "../../lib/visual-editor";
@@ -35,6 +36,7 @@ import {
   applyAssignedMaterialPreviews,
   applyStaticModelPose,
   createAssignedMaterialPreviewMaterial,
+  createClassicR3fMaterial,
   getModelSelectionBounds,
   inspectProjectModelMaterialRuntime,
   selectSourceModelNode,
@@ -61,6 +63,7 @@ export async function runProjectModelMaterialPreviewFixtureAssertions(): Promise
   assertSourceNodeSelectionDoesNotDuplicateTheWholeModel();
   assertObject3DHierarchyRepairKeepsValidOwner();
   assertCustomShaderRuntimeCanBeInspected();
+  assertClassicR3fMaterialReceivesSceneFog();
   await assertOpenBrushPbrFallbackKeepsTheModelUsable();
 
   const project = createPrototypeProject("world", "model-material-preview");
@@ -362,6 +365,43 @@ async function assertOpenBrushPbrFallbackKeepsTheModelUsable(): Promise<void> {
   unsupportedMaterial.dispose();
   failedMesh.geometry.dispose();
   failedMaterial.dispose();
+}
+
+function assertClassicR3fMaterialReceivesSceneFog(): void {
+  const shader: ClassicR3fMaterialShader = {
+    kind: "classic-r3f",
+    sourceModulePath: "studio://custom-shader",
+    vertexShader:
+      "void main() {\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n}",
+    fragmentShader:
+      "#include <fog_pars_fragment>\nuniform float uTime;\nvoid main() {\n  gl_FragColor = vec4(1.0);\n  #include <fog_fragment>\n}",
+    uniforms: { uTime: { kind: "number", value: 0 } },
+    variants: [
+      {
+        name: "default",
+        defines: {},
+        side: "front",
+        transparent: false,
+        depthWrite: true,
+      },
+    ],
+  };
+  const material = createClassicR3fMaterial(shader, {}, "");
+  assert(
+    material.fog,
+    "Scene Fog cannot reach a Custom Shader while ShaderMaterial.fog stays false",
+  );
+  assert(
+    material.uniforms.fogColor !== undefined &&
+      material.uniforms.fogNear !== undefined &&
+      material.uniforms.fogFar !== undefined,
+    "The three.js fog uniforms were not supplied to the Custom Shader Material",
+  );
+  assert(
+    material.uniforms.uTime?.value === 0,
+    "The authored uniforms were lost while merging the fog uniforms",
+  );
+  material.dispose();
 }
 
 function assertCustomShaderRuntimeCanBeInspected(): void {

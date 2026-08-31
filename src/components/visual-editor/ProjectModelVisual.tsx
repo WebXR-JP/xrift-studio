@@ -46,6 +46,8 @@ import {
   ShaderMaterial,
   SRGBColorSpace,
   TextureLoader,
+  UniformsLib,
+  UniformsUtils,
   Vector2,
   Vector4,
   Vector3,
@@ -1197,7 +1199,7 @@ export function createClassicR3fMaterial(
     ) ??
     shader.variants.find((candidate) => !candidate.meshNameIncludes) ??
     shader.variants[0];
-  const uniforms = Object.fromEntries(
+  const authoredUniforms = Object.fromEntries(
     Object.entries(shader.uniforms).map(([name, uniform]) => {
       if (uniform.kind === "texture") {
         return [name, { value: textures[name] ?? null }];
@@ -1226,6 +1228,16 @@ export function createClassicR3fMaterial(
       return [name, { value: uniform.value }];
     }),
   );
+  // Scene Settings の Fog をカスタムシェーダーへ届ける。
+  // ShaderMaterial.fog は既定 false で、その場合 three は USE_FOG を定義せず
+  // fogColor / fogNear / fogFar も供給しないため、authored GLSL が
+  // <fog_fragment> を include しても何も起きない。
+  // UniformsUtils.merge は Texture まで clone してしまうので fog 側だけを clone し、
+  // 著者の uniform を後ろに置いて同名があれば著者側を優先する。
+  const uniforms = {
+    ...UniformsUtils.clone(UniformsLib.fog),
+    ...authoredUniforms,
+  };
   const material = new ShaderMaterial({
     name: `${shader.sourceModulePath}:${variant.name}`,
     vertexShader: shader.vertexShader,
@@ -1240,6 +1252,8 @@ export function createClassicR3fMaterial(
           : FrontSide,
     transparent: variant.transparent,
     depthWrite: variant.depthWrite,
+    // fog チャンクを include していないシェーダーは USE_FOG を無視するので後方互換。
+    fog: true,
   });
   if (shader.animatedTimeUniform) {
     material.userData.xriftAnimatedTimeUniform = shader.animatedTimeUniform;
