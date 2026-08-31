@@ -1,5 +1,6 @@
 import { PointerLockControls } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
+import { useRapier, type RapierRigidBody } from "@react-three/rapier";
 import {
   useEffect,
   useLayoutEffect,
@@ -9,7 +10,12 @@ import {
   useSyncExternalStore,
   type RefObject,
 } from "react";
-import type { PlayerMovement, UsersContextValue } from "@xrift/world-components";
+import type {
+  PlayerMovement,
+  TeleportContextValue,
+  TeleportDestination,
+  UsersContextValue,
+} from "@xrift/world-components";
 
 /*
  * World Play runs the same player `@xrift/world-components` gives a world
@@ -37,11 +43,13 @@ import {
 } from "@xrift/world-components/dist/components/DevEnvironment/components/GrabSystem/store";
 import { PhysicsPlayer } from "@xrift/world-components/dist/components/DevEnvironment/components/PhysicsPlayer";
 import {
+  CAMERA_Y_OFFSET,
   MOVE_SPEED,
   RESPAWN_Y_THRESHOLD,
 } from "@xrift/world-components/dist/components/DevEnvironment/constants";
 
 import type { Vec3 } from "../../lib/visual-editor/scene-document";
+import { resolveWorldPlayCapsuleSpawn } from "./world-play-spawn";
 
 /** The aim reticle a player sees in a published world. */
 export const WorldPlayCrosshair = Crosshair;
@@ -155,6 +163,110 @@ export function useWorldPlayUsers(): WorldPlayUsers {
   return { implementation, movementRef };
 }
 
+/** Moves the running player. Returns false when there is no player to move. */
+export type WorldPlayTeleportMover = (
+  destination: TeleportDestination,
+) => boolean;
+
+export type WorldPlayTeleport = {
+  implementation: TeleportContextValue;
+  moverRef: RefObject<WorldPlayTeleportMover | null>;
+};
+
+/**
+ * A real `useTeleport()`, instead of the package's `console.log` placeholder.
+ *
+ * The implementation is created above the player because `XRiftProvider` sits
+ * above it, and filled in by the player while it runs. Outside Play there is
+ * nobody to move, and a teleport that quietly does nothing is the honest
+ * answer: Edit has no player standing anywhere.
+ *
+ * **Teleport moves the player, and leaves the SpawnPoint alone.** Falling out
+ * of the world still returns to the Scene's SpawnPoint rather than to wherever
+ * the last teleport put someone, so a teleport into a pit is recoverable
+ * instead of a loop.
+ */
+export function useWorldPlayTeleport(): WorldPlayTeleport {
+  const moverRef = useRef<WorldPlayTeleportMover | null>(null);
+  const implementation = useMemo<TeleportContextValue>(
+    () => ({
+      teleport: (destination) => {
+        moverRef.current?.(destination);
+      },
+    }),
+    [],
+  );
+  return { implementation, moverRef };
+}
+
+/**
+ * Finds the running player's RigidBody and teleports it.
+ *
+ * `PhysicsPlayer` keeps its body to itself, so the player is identified the
+ * way it identifies itself every frame: the camera it drives sits exactly
+ * `CAMERA_Y_OFFSET` above the capsule's centre. That is a property of the
+ * component being used, not a guess about the Scene, and the alignment check
+ * fails the build if the constant moves.
+ *
+ * The alternative - routing teleport through `setSpawnPoint`, which the player
+ * does watch - was rejected because it would also move where a fall respawns.
+ */
+function WorldPlayTeleportBinding({
+  moverRef,
+}: {
+  moverRef: RefObject<WorldPlayTeleportMover | null>;
+}) {
+  const { world } = useRapier();
+  const camera = useThree((state) => state.camera);
+
+  useEffect(() => {
+    const findPlayerBody = (): RapierRigidBody | null => {
+      const x = camera.position.x;
+      const y = camera.position.y - CAMERA_Y_OFFSET;
+      const z = camera.position.z;
+      let nearest: RapierRigidBody | null = null;
+      // Tight enough that no other body can be mistaken for the capsule the
+      // camera is riding, loose enough to survive a frame of physics drift.
+      let nearestDistance = 0.05;
+      world.forEachRigidBody((body) => {
+        if (!body.isDynamic()) return;
+        const translation = body.translation();
+        const distance = Math.hypot(
+          translation.x - x,
+          translation.y - y,
+          translation.z - z,
+        );
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearest = body;
+        }
+      });
+      return nearest as RapierRigidBody | null;
+    };
+
+    moverRef.current = (destination) => {
+      const body = findPlayerBody();
+      if (!body) return false;
+      // The destination names the floor, the way a SpawnPoint does, so it is
+      // lifted onto the capsule's centre by the same rule.
+      const [cx, cy, cz] = resolveWorldPlayCapsuleSpawn(destination.position);
+      body.setTranslation({ x: cx, y: cy, z: cz }, true);
+      // Carrying the fall speed through would drop the player straight out of
+      // the place they were just put.
+      body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      if (typeof destination.yaw === "number") {
+        camera.rotation.set(0, (destination.yaw * Math.PI) / 180, 0, "YXZ");
+      }
+      return true;
+    };
+    return () => {
+      moverRef.current = null;
+    };
+  }, [camera, moverRef, world]);
+
+  return null;
+}
+
 /**
  * The Play player: pointer-lock look, the official physics character, grabbing.
  *
@@ -168,6 +280,7 @@ export function WorldPlayPlayer({
   allowInfiniteJump,
   grabStore,
   movementRef,
+  teleportMoverRef,
   onLockRefused,
 }: {
   /** Capsule centre, already lifted off the floor the SpawnPoint marks. */
@@ -177,6 +290,7 @@ export function WorldPlayPlayer({
   allowInfiniteJump: boolean;
   grabStore: DevGrabStore;
   movementRef: RefObject<PlayerMovement>;
+  teleportMoverRef: RefObject<WorldPlayTeleportMover | null>;
   /** Called when the browser turns the pointer lock down, so Play can say so. */
   onLockRefused?: () => void;
 }) {
@@ -248,6 +362,7 @@ export function WorldPlayPlayer({
         movementRef={movementRef}
       />
       <GrabSystem store={grabStore} />
+      <WorldPlayTeleportBinding moverRef={teleportMoverRef} />
     </>
   );
 }

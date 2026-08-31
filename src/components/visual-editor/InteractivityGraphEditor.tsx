@@ -143,7 +143,27 @@ export function InteractivityGraphEditor(props: {
    */
   triggerTargets?: readonly InteractionTriggerTargetEntity[];
   readOnly: boolean;
-  onSave: (assetId: string, extension: KhrInteractivityExtension) => void;
+  /**
+   * Persists the graph. `auto` marks the editor's own autosave, which must not
+   * toast and must not open a new Undo step for every keystroke.
+   */
+  onSave: (
+    assetId: string,
+    extension: KhrInteractivityExtension,
+    options?: { auto?: boolean },
+  ) => void;
+  /**
+   * The draft that is edited but not yet written, or null when there is none.
+   *
+   * Play reads the saved Asset, so an author who edits a graph and presses Play
+   * inside the autosave delay would watch the previous version run. Reporting
+   * the draft lets Play flush it first.
+   */
+  onPendingDraftChange?: (
+    pending: { assetId: string; extension: KhrInteractivityExtension } | null,
+  ) => void;
+  /** Renames the Interactivity Asset itself, not a graph inside it. */
+  onRenameAsset?: (name: string) => void;
   onClose: () => void;
   /** What the Scene already does with this graph, and how to finish wiring it. */
   setup?: InteractivityGraphSetup;
@@ -271,6 +291,8 @@ function InteractivityGraphEditorBody({
   triggerTargets = NO_TRIGGER_TARGETS,
   readOnly,
   onSave,
+  onPendingDraftChange,
+  onRenameAsset,
   onClose,
   setup,
 }: {
@@ -279,7 +301,15 @@ function InteractivityGraphEditorBody({
   assetChoices?: readonly InteractivityAssetChoice[];
   triggerTargets?: readonly InteractionTriggerTargetEntity[];
   readOnly: boolean;
-  onSave: (assetId: string, extension: KhrInteractivityExtension) => void;
+  onSave: (
+    assetId: string,
+    extension: KhrInteractivityExtension,
+    options?: { auto?: boolean },
+  ) => void;
+  onPendingDraftChange?: (
+    pending: { assetId: string; extension: KhrInteractivityExtension } | null,
+  ) => void;
+  onRenameAsset?: (name: string) => void;
   onClose: () => void;
   setup?: InteractivityGraphSetup;
 }) {
@@ -407,6 +437,61 @@ function InteractivityGraphEditorBody({
 
   const errors = diagnostics.filter((diagnostic) => diagnostic.severity === "error");
   const warnings = diagnostics.filter((diagnostic) => diagnostic.severity === "warning");
+
+  /*
+   * Autosave.
+   *
+   * The graph used to keep its work in a draft that only a Save button pushed
+   * to the Asset, while Play reads the Asset - so an edited graph that had not
+   * been saved ran its previous version, silently, and the author was left
+   * asking why the change did nothing. The rest of the editor autosaves; this
+   * panel is now the same.
+   *
+   * A graph with validation errors is deliberately not written: the Asset
+   * rejects it anyway, and writing on every keystroke would turn a half-drawn
+   * connection into a stream of refusals. The footer says so, and closing with
+   * errors still asks, because that is the one case where work can be lost.
+   */
+  const savable = dirty && !readOnly && errors.length === 0;
+
+  /** The Asset name, edited locally so a rename is one history entry. */
+  const [assetNameDraft, setAssetNameDraft] = useState(asset.name);
+  useEffect(() => setAssetNameDraft(asset.name), [asset.name]);
+  const commitAssetName = useCallback(() => {
+    const name = assetNameDraft.trim();
+    if (!name || name === asset.name) {
+      setAssetNameDraft(asset.name);
+      return;
+    }
+    onRenameAsset?.(name);
+  }, [assetNameDraft, asset.name, onRenameAsset]);
+
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+  const onPendingDraftChangeRef = useRef(onPendingDraftChange);
+  onPendingDraftChangeRef.current = onPendingDraftChange;
+
+  useEffect(() => {
+    onPendingDraftChangeRef.current?.(
+      savable ? { assetId: asset.id, extension: draft } : null,
+    );
+  }, [asset.id, draft, savable]);
+
+  useEffect(
+    () => () => onPendingDraftChangeRef.current?.(null),
+    [],
+  );
+
+  useEffect(() => {
+    if (!savable) return;
+    // Long enough that dragging a node is one write rather than sixty, short
+    // enough that reaching for Play is already past it.
+    const timer = window.setTimeout(
+      () => onSaveRef.current(asset.id, draft, { auto: true }),
+      400,
+    );
+    return () => window.clearTimeout(timer);
+  }, [asset.id, draft, savable]);
   const selectedNode =
     selectedNodeIndex === null ? undefined : graph.nodes?.[selectedNodeIndex];
   const selectedDeclaration = selectedNode
@@ -639,12 +724,15 @@ function InteractivityGraphEditorBody({
 
 
   const requestClose = useCallback(() => {
-    if (dirty && !readOnly) {
+    // Autosave has already written everything that could be written, so the
+    // only work still at risk is a draft the validator refuses.
+    if (dirty && !readOnly && errors.length > 0) {
       setCloseConfirmOpen(true);
       return;
     }
+    if (savable) onSaveRef.current(asset.id, draft, { auto: true });
     onClose();
-  }, [dirty, onClose, readOnly]);
+  }, [asset.id, dirty, draft, errors.length, onClose, readOnly, savable]);
 
 
   /**
@@ -1001,21 +1089,9 @@ function InteractivityGraphEditorBody({
   const CloseIcon = EDITOR_ICONS.close;
   const CreateIcon = EDITOR_ICONS.create;
   const DeleteIcon = EDITOR_ICONS.delete;
-  const SaveIcon = EDITOR_ICONS.save;
   const UndoIcon = EDITOR_ICONS.undo;
   const RedoIcon = EDITOR_ICONS.redo;
 
-  /** Built once, pinned to the right of the tool row and outside its scroll. */
-  const saveButton = (
-    <button
-      type="button"
-      onClick={() => onSave(asset.id, draft)}
-      disabled={readOnly || errors.length > 0}
-      className="flex h-7 shrink-0 items-center gap-1.5 rounded bg-emerald-600 px-2.5 text-xs font-bold hover:bg-emerald-500 disabled:opacity-40"
-    >
-      <SaveIcon size={13} aria-hidden="true" /> 保存
-    </button>
-  );
   const closeButton = (
     <button
       type="button"
@@ -1097,8 +1173,35 @@ function InteractivityGraphEditorBody({
             </div>
             {graphMenuOpen ? (
               <div className="absolute left-0 top-9 z-30 w-64 space-y-2 rounded-lg border border-slate-700 bg-slate-950/95 p-2.5 shadow-2xl backdrop-blur">
+                {/* The Asset's own name, which is what the Assets panel, the
+                    Inspector and every Entity referencing this graph show. It
+                    lives here because this is where an author already comes to
+                    name things, and the Assets panel's right-click Rename is
+                    not somewhere anyone looks from inside the graph. */}
                 <label className="block text-[10px] text-slate-300">
-                  名前
+                  Asset名
+                  <input
+                    type="text"
+                    value={assetNameDraft}
+                    disabled={readOnly || !onRenameAsset}
+                    onChange={(event) => setAssetNameDraft(event.target.value)}
+                    onBlur={() => commitAssetName()}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        commitAssetName();
+                      }
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        setAssetNameDraft(asset.name);
+                      }
+                    }}
+                    placeholder={asset.name}
+                    className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-900 px-2 text-xs disabled:opacity-40"
+                  />
+                </label>
+                <label className="block text-[10px] text-slate-300">
+                  このグラフの名前
                   <input
                     type="text"
                     value={graph.name ?? ""}
@@ -1283,7 +1386,6 @@ function InteractivityGraphEditorBody({
             className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-slate-900 to-transparent" 
           />
           <div className="absolute inset-y-0 right-0 flex items-center gap-1 bg-slate-900 pl-2 pr-2">
-            {saveButton}
             {closeButton}
           </div>
         </div>
@@ -1554,9 +1656,17 @@ function InteractivityGraphEditorBody({
           ) : (
             <span className="shrink-0 text-emerald-300">KHR graph validation OK</span>
           )}
-          {dirty ? (
-            <span className="shrink-0 text-slate-300">未保存の変更があります</span>
-          ) : null}
+          {readOnly ? (
+            <span className="shrink-0 text-slate-300">Play中は編集できません</span>
+          ) : dirty && errors.length > 0 ? (
+            <span className="shrink-0 font-semibold text-rose-300">
+              エラーのため自動保存を止めています
+            </span>
+          ) : dirty ? (
+            <span className="shrink-0 text-slate-300">自動保存中…</span>
+          ) : (
+            <span className="shrink-0 text-slate-400">自動保存済み</span>
+          )}
           {setupStep?.kind === "ready" && setup ? (
             <span className="flex shrink-0 items-center gap-1 text-slate-400">
               付いている Entity:
@@ -2084,7 +2194,7 @@ function InteractivityGraphEditorBody({
               id="interactivity-close-dialog-title"
               className="text-sm font-semibold text-slate-900"
             >
-              保存せずに閉じますか
+              エラーのため保存できていません
             </h2>
           </header>
           <div data-app-modal-body className="px-5 py-4">
@@ -2092,7 +2202,7 @@ function InteractivityGraphEditorBody({
               id="interactivity-close-dialog-description"
               className="text-xs leading-5 text-slate-600"
             >
-              このグラフの変更はまだ保存されていません。閉じると編集内容は失われます。
+              このグラフは自動保存されますが、検証エラーがある間は書き込みません。今の変更はまだAssetに入っていないため、閉じると失われます。
             </p>
           </div>
           <footer
@@ -2109,15 +2219,10 @@ function InteractivityGraphEditorBody({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setCloseConfirmOpen(false);
-                onSave(asset.id, draft);
-                onClose();
-              }}
-              disabled={errors.length > 0}
-              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+              onClick={() => setCloseConfirmOpen(false)}
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
             >
-              保存して閉じる
+              エラーを直す
             </button>
             <button
               type="button"

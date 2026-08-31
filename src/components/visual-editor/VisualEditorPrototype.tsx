@@ -8740,27 +8740,81 @@ export function VisualEditorPrototype({
     [bundle.scene, bundle.assets],
   );
 
+  /**
+   * The bundle the graph editor's autosave last produced.
+   *
+   * Used to decide whether an autosave continues the same editing session. The
+   * first write opens one project Undo entry; the rest replace it, because the
+   * graph editor has its own per-change undo and a stroke-by-stroke project
+   * history would bury every entry an author actually looks for. Any other
+   * edit in between ends the session, so nothing unrelated gets folded in.
+   */
+  const interactivityAutosavedBundleRef = useRef<PrototypeVisualProject | null>(
+    null,
+  );
+
   const handleSaveInteractivityAsset = useCallback(
-    (assetId: string, extension: KhrInteractivityExtension) => {
+    (
+      assetId: string,
+      extension: KhrInteractivityExtension,
+      options?: { auto?: boolean },
+    ) => {
       if (editorMode !== "edit") return;
-      setBundle((current) => {
-        const assets = updateInteractivityAsset(current.assets, assetId, extension);
-        if (assets === current.assets) {
-          setNotice("KHR_interactivity Graphに検証エラーがあるため保存しませんでした");
+      const auto = options?.auto === true;
+      setHistory((current) => {
+        const bundle = current.present.bundle;
+        const assets = updateInteractivityAsset(bundle.assets, assetId, extension);
+        if (assets === bundle.assets) {
+          // Autosave holds a graph the validator refuses rather than reporting
+          // it: the editor's own footer already says so, next to the errors.
+          if (!auto) {
+            setNotice("KHR_interactivity Graphに検証エラーがあるため保存しませんでした");
+          }
           return current;
         }
-        setNotice("KHR_interactivity GraphをAssetへ保存しました。別Sceneでも再利用できます");
+        if (!auto) {
+          setNotice("KHR_interactivity GraphをAssetへ保存しました。別Sceneでも再利用できます");
+        }
         // The Entities the graph writes to are Component data, so saving the
         // graph is what keeps each trigger's reference list true.
-        return touchProject({
-          ...current,
+        const nextBundle = touchProject({
+          ...bundle,
           assets,
-          scene: syncInteractionTriggerReferences(current.scene, assets),
+          scene: syncInteractionTriggerReferences(bundle.scene, assets),
         });
+        setSaveStatus("dirty");
+        const nextPresent = { ...current.present, bundle: nextBundle };
+        const continuesSession =
+          auto && interactivityAutosavedBundleRef.current === bundle;
+        interactivityAutosavedBundleRef.current = auto ? nextBundle : null;
+        return continuesSession
+          ? replaceEditorHistoryPresent(current, nextPresent)
+          : commitEditorHistory(current, nextPresent);
       });
     },
-    [editorMode, setBundle],
+    [editorMode],
   );
+
+  /**
+   * The graph draft the editor has not written yet, if any.
+   *
+   * Play reads the saved Asset, so this is flushed before Play prepares: an
+   * author who edits a graph and immediately presses Play would otherwise watch
+   * the previous version run, with nothing on screen saying why.
+   */
+  const pendingInteractivityDraftRef = useRef<{
+    assetId: string;
+    extension: KhrInteractivityExtension;
+  } | null>(null);
+
+  const flushInteractivityDraft = useCallback(() => {
+    const pending = pendingInteractivityDraftRef.current;
+    if (!pending) return;
+    pendingInteractivityDraftRef.current = null;
+    handleSaveInteractivityAsset(pending.assetId, pending.extension, {
+      auto: true,
+    });
+  }, [handleSaveInteractivityAsset]);
 
   const handleSetProjectThumbnailFromAsset = useCallback(
     async (assetId: string) => {
@@ -9923,6 +9977,10 @@ export function VisualEditorPrototype({
     };
     setCreateMenuOpen(false);
     setRenameTarget(null);
+    // Play reads the saved Assets. A graph edited in the last few hundred
+    // milliseconds is still a draft, and running its previous version is
+    // exactly the confusion autosave exists to remove.
+    flushInteractivityDraft();
 
     setPlayPreparing(true);
     try {
@@ -10152,6 +10210,7 @@ export function VisualEditorPrototype({
     }
   }, [
     approveScriptFingerprintsForUi,
+    flushInteractivityDraft,
     importBusy,
     projectKind,
     requestScriptTrustDecision,
@@ -11449,6 +11508,19 @@ export function VisualEditorPrototype({
               triggerTargets={interactionTriggerTargets}
               readOnly={renderedReadOnly}
               onSave={handleSaveInteractivityAsset}
+              onPendingDraftChange={(pending) => {
+                pendingInteractivityDraftRef.current = pending;
+              }}
+              onRenameAsset={(name) =>
+                commitRename(
+                  {
+                    kind: "asset",
+                    id: interactivityEditorAsset.id,
+                    requestId: Date.now(),
+                  },
+                  name,
+                )
+              }
               onClose={() => setInteractivityEditorAssetId(null)}
               setup={{
                 attachments: interactivityAttachments,

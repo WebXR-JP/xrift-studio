@@ -27,6 +27,7 @@ import {
   type SkyboxProps,
   type SpawnPointProps,
   type TagBoardProps,
+  type TeleportContextValue,
   type TextInputProps,
   type UsersContextValue,
   type Video180SphereProps,
@@ -81,6 +82,7 @@ export function OfficialXriftPreviewProvider({
   withPhysics = false,
   gravity = [0, 0, 0],
   grabbableImplementation,
+  teleportImplementation,
   usersImplementation,
 }: {
   children: ReactNode;
@@ -93,6 +95,12 @@ export function OfficialXriftPreviewProvider({
    */
   grabbableImplementation?: GrabbableContextValue;
   /**
+   * Where `useTeleport()` lands. World Play passes a mover that actually moves
+   * the running player; the package's own default only logs, so a world that
+   * teleports looked broken until it was published.
+   */
+  teleportImplementation?: TeleportContextValue;
+  /**
    * Who `useUsers()` reports. World Play passes a local user driven by the
    * running player, so a world that reads the viewer's name or position sees
    * one in Play instead of only after upload.
@@ -104,6 +112,7 @@ export function OfficialXriftPreviewProvider({
       baseUrl=""
       instanceImplementation={PREVIEW_INSTANCE_IMPLEMENTATION}
       grabbableImplementation={grabbableImplementation}
+      teleportImplementation={teleportImplementation}
       usersImplementation={usersImplementation}
       placementMode="preview"
     >

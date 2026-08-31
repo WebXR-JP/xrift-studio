@@ -262,6 +262,7 @@ import {
   WORLD_PLAY_LOCK_SURFACE_ATTRIBUTE,
   useWorldPlayGrabStore,
   useWorldPlayPointerLocked,
+  useWorldPlayTeleport,
   useWorldPlayUsers,
 } from "./WorldPlayPlayer";
 import { resolveWorldPlayCapsuleSpawn } from "./world-play-spawn";
@@ -4455,6 +4456,7 @@ export function SceneViewport({
   const [playLockRefused, setPlayLockRefused] = useState(false);
   const playGrabStore = useWorldPlayGrabStore();
   const playUsers = useWorldPlayUsers();
+  const playTeleport = useWorldPlayTeleport();
   const [dragOverKind, setDragOverKind] = useState<
     SceneViewportDragIntent["kind"] | null
   >(null);
@@ -6068,6 +6070,7 @@ export function SceneViewport({
                 : [0, 0, 0]
             }
             grabbableImplementation={playGrabStore.contextValue}
+            teleportImplementation={playTeleport.implementation}
             usersImplementation={playUsers.implementation}
           >
             {/* A World player aims from the crosshair, exactly as a published
@@ -6106,6 +6109,7 @@ export function SceneViewport({
                   allowInfiniteJump={sceneSettings.physics.allowInfiniteJump}
                   grabStore={playGrabStore}
                   movementRef={playUsers.movementRef}
+                  teleportMoverRef={playTeleport.moverRef}
                   onLockRefused={handlePlayLockRefused}
                 />
               ) : null}
