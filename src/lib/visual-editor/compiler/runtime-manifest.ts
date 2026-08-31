@@ -35,7 +35,7 @@ export function compileRuntimeManifest(
   compilerVersion: string,
   diagnostics: CompilerDiagnostic[],
   decoders?: XriftRuntimeDecoderPaths,
-  textFontBaseUrl?: string,
+  textFontDirectoryUrl?: string,
 ): XriftRuntimeManifest {
   const runtimeAssets = compileRuntimeAssets(documents.assets, assetCopyPlan);
   const scenes = entryScene
@@ -59,7 +59,7 @@ export function compileRuntimeManifest(
     scenes,
     assets: runtimeAssets,
     ...(decoders && Object.keys(decoders).length > 0 ? { decoders } : {}),
-    ...(textFontBaseUrl ? { textFontBaseUrl } : {}),
+    ...(textFontDirectoryUrl ? { textFontDirectoryUrl } : {}),
   };
 }
 
@@ -427,7 +427,9 @@ function compileRuntimeAssets(
   const runtimeUrlByAssetId = new Map(
     assetCopyPlan.map((entry) => [
       entry.assetId,
-      `./${entry.targetRelativePath.replace(/^public\/xrift\//, "")}`,
+      // Relative to the manifest, which sits at the world root alongside the
+      // Assets: a published world serves nothing below that root.
+      `./${entry.targetRelativePath.replace(/^public\//, "")}`,
     ]),
   );
   const entries: Array<[string, XriftRuntimeAsset]> = [];

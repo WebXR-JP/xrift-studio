@@ -155,13 +155,12 @@ export class XriftThreeLoader {
       manifest,
       assetBase,
     );
-    // The world serves its own copy of the Text font. Without an explicit base
-    // the catalog falls back to the host's base URL, which is the site root
-    // rather than this world's directory, so the copied file is missed and
-    // troika drops to its per-script fallback CDN — unreachable from a
-    // published world.
-    const textFontBaseUrl = manifest.textFontBaseUrl
-      ? new URL(manifest.textFontBaseUrl, assetBase).toString()
+    // The world serves its own copy of the Text font. Without an explicit
+    // directory the catalog falls back to Studio's, which does not exist in a
+    // published world, so the copied file is missed and troika drops to its
+    // per-script fallback CDN — unreachable from a published world.
+    const textFontDirectoryUrl = manifest.textFontDirectoryUrl
+      ? new URL(manifest.textFontDirectoryUrl, assetBase).toString()
       : undefined;
     // An imported font is a file the world carries, so it resolves against the
     // same base as every other Asset rather than through the catalog.
@@ -239,7 +238,7 @@ export class XriftThreeLoader {
           component,
           entity,
           manifest,
-          textFontBaseUrl,
+          textFontDirectoryUrl,
           fontUrlsByAssetId,
           models,
           materials,
@@ -508,7 +507,7 @@ export class XriftThreeLoader {
     component: XriftRuntimeComponent;
     entity: XriftRuntimeEntity;
     manifest: XriftRuntimeManifest;
-    textFontBaseUrl: string | undefined;
+    textFontDirectoryUrl: string | undefined;
     fontUrlsByAssetId: ReadonlyMap<string, string>;
     models: ReadonlyMap<string, LoadedModel>;
     materials: ReadonlyMap<string, Material>;
@@ -638,7 +637,7 @@ export class XriftThreeLoader {
         });
       }
       panel.update(
-        runtimeTextPanelConfig(component, input.textFontBaseUrl, fontUrl),
+        runtimeTextPanelConfig(component, input.textFontDirectoryUrl, fontUrl),
         backgroundTexture,
       );
       panel.userData.xriftStudioComponentId = component.id;
@@ -1298,11 +1297,11 @@ function nearestSourceNodeIndex(object: Object3D): number | undefined {
 /** Maps the manifest's Text component onto the shared panel configuration. */
 function runtimeTextPanelConfig(
   component: Extract<XriftRuntimeComponent, { type: "text" }>,
-  fontBaseUrl: string | undefined,
+  fontDirectoryUrl: string | undefined,
   fontUrl: string | undefined,
 ): XriftTextPanelConfig {
   return {
-    ...(fontBaseUrl === undefined ? {} : { fontBaseUrl }),
+    ...(fontDirectoryUrl === undefined ? {} : { fontDirectoryUrl }),
     ...(fontUrl === undefined ? {} : { fontUrl }),
     text: component.text,
     color: component.color,

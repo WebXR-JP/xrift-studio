@@ -21,17 +21,17 @@ export type XriftTextPanelProps = {
   /** Decoded Texture for a `texture` background. The host owns its lifetime. */
   map?: Texture | null;
   /**
-   * Base the bundled font file is served from. Omitted uses the host's own,
+   * Directory the bundled font file is served from. Omitted uses Studio's own,
    * which is right everywhere except a published world; see
-   * `XriftTextPanelConfig.fontBaseUrl`.
+   * `XriftTextPanelConfig.fontDirectoryUrl`.
    */
-  fontBaseUrl?: string;
+  fontDirectoryUrl?: string;
 };
 
 export function XriftTextPanel({
   config,
   map = null,
-  fontBaseUrl,
+  fontDirectoryUrl,
 }: XriftTextPanelProps) {
   const invalidate = useThree((state) => state.invalidate);
   const panel = useMemo(() => new XriftTextPanelObject(), []);
@@ -39,7 +39,7 @@ export function XriftTextPanel({
   // each of those would restart troika's SDF work for text that has not
   // changed, so the effect keys off the value rather than the identity.
   const resolvedConfig =
-    fontBaseUrl === undefined ? config : { ...config, fontBaseUrl };
+    fontDirectoryUrl === undefined ? config : { ...config, fontDirectoryUrl };
   const configKey = JSON.stringify(resolvedConfig);
 
   useEffect(() => {

@@ -6,7 +6,7 @@ export const XRIFT_STUDIO_RUNTIME_SCHEMA_VERSION = "1.0.0" as const;
  * manifest, and the browser upload path refuses an older shell.
  */
 export const XRIFT_RUNTIME_CONTRACT_VERSION =
-  "2026-08-29-text-fonts-background-v1" as const;
+  "2026-08-31-flat-published-files-v1" as const;
 
 export type XriftRuntimeDiagnostic = {
   severity: "warning" | "error";
@@ -359,16 +359,16 @@ export type XriftRuntimeManifest = {
    */
   decoders?: XriftRuntimeDecoderPaths;
   /**
-   * Base the world serves its bundled Text fonts from, relative to this
+   * Directory the world serves its bundled Text fonts from, relative to this
    * manifest.
    *
-   * The font file itself is copied next to the world for the same reason a
-   * decoder is: a published world cannot reach a CDN. Without this the loader
-   * falls back to the host's own base URL, which points at the site root
-   * instead of the world directory, so the copied file is never found and
-   * troika drops to its per-script fallback CDN.
+   * The font file itself is copied into the world for the same reason a decoder
+   * is: a published world cannot reach a CDN. Without this the loader falls
+   * back to Studio's own font directory, which does not exist in a published
+   * world, so the copied file is never found and troika drops to its per-script
+   * fallback CDN.
    */
-  textFontBaseUrl?: string;
+  textFontDirectoryUrl?: string;
 };
 
 export type XriftRuntimeDecoderPaths = {
@@ -406,8 +406,8 @@ export function isXriftRuntimeManifest(value: unknown): value is XriftRuntimeMan
     Object.values(scenes).every(isRuntimeScene) &&
     Object.values(assets).every(isRuntimeAsset) &&
     isRuntimeDecoderPaths(value.decoders) &&
-    (value.textFontBaseUrl === undefined ||
-      typeof value.textFontBaseUrl === "string") &&
+    (value.textFontDirectoryUrl === undefined ||
+      typeof value.textFontDirectoryUrl === "string") &&
     isRuntimeScene(scenes[entryScene])
   );
 }

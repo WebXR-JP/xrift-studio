@@ -77,17 +77,17 @@ function assertFontCatalogResolvesPinnedFiles(): void {
       `/${TEXT_FONT_DIRECTORY}/noto-sans-jp-japanese-700-normal.woff`,
     "a weighted Japanese font must resolve to its bundled file",
   );
-  // A published world is served under a base XRift decides at load time, so the
-  // same catalog has to answer for a host that is not Studio.
+  // A published world carries the file at its own root — it serves nothing
+  // below it — and names that directory rather than Studio's.
   assert(
     resolveTextFontUrl("noto-sans-jp", 400, "https://worlds.example.test/w/1/") ===
-      `https://worlds.example.test/w/1/${TEXT_FONT_DIRECTORY}/noto-sans-jp-japanese-400-normal.woff`,
-    "a published world must resolve the font under its own base",
+      "https://worlds.example.test/w/1/noto-sans-jp-japanese-400-normal.woff",
+    "a published world must resolve the font in the directory it was given",
   );
   assert(
     resolveTextFontUrl("noto-sans-jp", 400, "https://worlds.example.test/w/1") ===
       resolveTextFontUrl("noto-sans-jp", 400, "https://worlds.example.test/w/1/"),
-    "a base without a trailing slash must not lose a path segment",
+    "a directory without a trailing slash must not lose a path segment",
   );
 
   // A weight the family never published must snap rather than request a file
