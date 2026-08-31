@@ -1,7 +1,11 @@
-import { Blocks, Download, ExternalLink, GitBranch } from "lucide-react";
-import { releaseUrl, repositoryUrl } from "../content";
+import { Blocks, ExternalLink, GitBranch } from "lucide-react";
+import { DownloadButton } from "../DownloadButton";
+import { repositoryUrl } from "../content";
+import { useDownloadCta } from "../lib/useLatestRelease";
 
 export function FinalCta() {
+  const cta = useDownloadCta();
+
   return (
     <section className="px-5 py-20 lg:px-8 lg:py-28">
       <div
@@ -20,15 +24,12 @@ export function FinalCta() {
             いま持っている素材と、つくりたい景色を持ってきてください。XRiftへ届けるところまで、一緒に進めます。
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <a
-              href={releaseUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="preview-button preview-button-white preview-button-large w-full max-w-xs sm:w-auto"
-            >
-              <Download size={17} />
-              無料でダウンロード
-            </a>
+            <DownloadButton
+              cta={cta}
+              variant="white"
+              large
+              className="w-full max-w-xs sm:w-auto"
+            />
             <a
               href={repositoryUrl}
               target="_blank"
@@ -40,6 +41,13 @@ export function FinalCta() {
               <ExternalLink size={13} />
             </a>
           </div>
+          <p className="mt-5 text-xs font-semibold text-zinc-400">
+            {cta.meta}
+            <span className="mx-1.5 text-zinc-600">/</span>
+            <a href="#download" className="underline underline-offset-4">
+              他のOSとインストール手順
+            </a>
+          </p>
         </div>
       </div>
     </section>

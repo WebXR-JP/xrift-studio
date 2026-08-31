@@ -233,6 +233,38 @@ export const faqs = [
   {
     question: "WindowsやMac、Linuxで使えますか？",
     answer:
-      "はい。Windows・macOS・Linuxに対応しています。インストーラーはGitHubのリリースページからダウンロードできます。",
+      "はい。Windows・macOS・Linuxに対応しています。このページのダウンロードボタンは、見ているパソコンに合うインストーラーをそのまま保存します。他のOSや形式もダウンロードの欄から選べます。",
+  },
+  {
+    question: "ダウンロードしたら「WindowsによってPCが保護されました」と出ました。",
+    answer:
+      "コード署名を付けずに配布しているため、Windowsが初めて見るアプリとして警告を出します。「詳細情報」を押すと「実行」を選べます。ファイルの配布元はGitHubのリリースで、ページにはファイル名とSHA-256を表示しているので、保存したファイルと照合できます。",
   },
 ] as const;
+
+/**
+ * What happens after the file is saved.
+ *
+ * The warning steps are the reason this section exists. The app is shipped
+ * without code signing, so Windows shows SmartScreen and macOS refuses the
+ * first double click — and a person who has just downloaded an unfamiliar
+ * `.exe` reads that as "this was a mistake". Saying it up front, before it
+ * happens, is the difference between a warning and a scare.
+ */
+export const downloadSteps = {
+  windows: [
+    "保存した .exe ファイルを開きます。",
+    "「WindowsによってPCが保護されました」と表示されたら、「詳細情報」を押して「実行」を選びます。コード署名を付けていない配布のため、Windowsが初めて見るアプリとして警告します。",
+    "インストールが終わると、スタートメニューからXRift Studioを起動できます。",
+  ],
+  macos: [
+    "保存した .dmg を開き、XRift Studioをアプリケーションフォルダへドラッグします。",
+    "初回だけ、アプリを右クリックして「開く」を選びます。ダブルクリックでは「開発元を確認できません」と表示されます。",
+    "次回からは、通常どおりLaunchpadやDockから起動できます。",
+  ],
+  linux: [
+    "AppImageを選んだ場合は、実行権限を付けます（chmod +x でファイルを実行可能にします）。",
+    "ファイルを実行します。.deb や .rpm を選んだ場合は、お使いのパッケージマネージャーでインストールします。",
+    "起動後の使い方は、どの形式でも同じです。",
+  ],
+} as const;

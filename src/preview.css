@@ -528,6 +528,183 @@
   line-height: 1.8;
 }
 
+/* Download section.
+   Same card language as the rest of the page — white surface, 1.5rem radius,
+   zinc border — so the place that hands over an installer does not look like a
+   different site from the one that described the app. */
+.preview-download-card {
+  padding: 1.65rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 1.5rem;
+  background: #ffffff;
+  box-shadow: 0 16px 45px rgba(39, 39, 42, 0.05);
+}
+
+.preview-download-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+  color: #52525b;
+  font-size: 0.7rem;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.preview-download-started {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid #bbf7d0;
+  border-radius: 0.9rem;
+  color: #15803d;
+  background: #f0fdf4;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.preview-download-details {
+  margin-top: 0.85rem;
+  border-top: 1px solid #e4e4e7;
+}
+
+.preview-download-details summary {
+  display: flex;
+  cursor: pointer;
+  list-style: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 0 0.35rem;
+  color: #3f3f46;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.preview-download-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.preview-download-details > summary > span:first-child {
+  transition: color 180ms ease;
+}
+
+.preview-download-details summary:hover > span:first-child {
+  color: #6d28d9;
+}
+
+.preview-download-hash {
+  padding: 0.6rem 0.7rem;
+  border-radius: 0.75rem;
+  background: #fafafa;
+  color: #3f3f46;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.66rem;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.preview-download-note {
+  margin-top: 0.5rem;
+  color: #71717a;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+.preview-download-group-title {
+  color: #71717a;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.preview-download-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.9rem;
+  background: #ffffff;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.preview-download-option:hover {
+  border-color: #ddd6fe;
+  background: #faf5ff;
+}
+
+/* On a narrow screen the format name and the size fight for the same line and
+   both wrap mid-word. Stacked, each keeps its own line. */
+@media (max-width: 520px) {
+  .preview-download-option {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+  }
+}
+
+.preview-download-option-main {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.preview-download-step-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.preview-download-step-list li {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr);
+  gap: 0.7rem;
+  color: #52525b;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.8;
+}
+
+.preview-download-step-index {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  color: #6d28d9;
+  background: #f5f3ff;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.preview-download-recheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: 0.5rem;
+  color: #6d28d9;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.preview-hero-download-link {
+  color: #6d28d9;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
 .preview-final-cta {
   isolation: isolate;
   background:

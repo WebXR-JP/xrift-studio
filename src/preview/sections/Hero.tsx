@@ -1,14 +1,16 @@
+import { useState } from "react";
 import {
   Check,
-  Download,
   MonitorPlay,
   PackageOpen,
   Play,
   Shapes,
   Sparkles,
 } from "lucide-react";
+import { DownloadButton } from "../DownloadButton";
 import { ProductScreenshot } from "../ProductScreenshot";
-import { releaseUrl, type ProjectKind } from "../content";
+import { useDownloadCta } from "../lib/useLatestRelease";
+import { type ProjectKind } from "../content";
 
 const pills = [
   { icon: Shapes, text: "ワールド制作", tone: "preview-hero-pill-violet" },
@@ -17,6 +19,9 @@ const pills = [
 ] as const;
 
 export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }) {
+  const cta = useDownloadCta();
+  const [started, setStarted] = useState(false);
+
   return (
     <section
       id="top"
@@ -64,15 +69,13 @@ export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }
             className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row"
             data-reveal
           >
-            <a
-              href={releaseUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="preview-button preview-button-primary preview-button-large w-full max-w-xs sm:w-auto"
-            >
-              <Download size={17} />
-              無料でダウンロード
-            </a>
+            <DownloadButton
+              cta={cta}
+              variant="primary"
+              large
+              className="w-full max-w-xs sm:w-auto"
+              onStarted={() => setStarted(true)}
+            />
             <button
               type="button"
               onClick={() => onOpenDemo("world")}
@@ -82,8 +85,36 @@ export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }
               エディターを試す（このページで）
             </button>
           </div>
-          <p className="mt-4 text-xs font-medium text-zinc-500" data-reveal>
-            Windows・macOS・Linux / 無料・オープンソース
+          {/*
+            The line under the button says what the button is about to do:
+            which version, which file, how large. Someone who is unsure what a
+            download button on an unfamiliar site will save can read it before
+            pressing, and after pressing it says where to go next instead of
+            leaving the page silent.
+          */}
+          <p
+            className="mt-4 text-xs font-medium text-zinc-500"
+            data-reveal
+            aria-live="polite"
+          >
+            {started ? (
+              <>
+                ダウンロードを開始しました。
+                <a href="#download" className="preview-hero-download-link">
+                  インストールの手順を見る
+                </a>
+              </>
+            ) : (
+              <>
+                {cta.meta}
+                <span className="mx-1.5 text-zinc-300">/</span>
+                無料・オープンソース
+                <span className="mx-1.5 text-zinc-300">/</span>
+                <a href="#download" className="preview-hero-download-link">
+                  {cta.direct ? "他のOSとインストール手順" : "OSごとのファイルを見る"}
+                </a>
+              </>
+            )}
           </p>
         </div>
 

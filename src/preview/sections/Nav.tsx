@@ -1,6 +1,5 @@
 import { Download } from "lucide-react";
 import { BrandLockup } from "../BrandLockup";
-import { releaseUrl } from "../content";
 import { XRIFT_STUDIO_WIKI_URL } from "../../lib/support-links";
 
 export function Nav() {
@@ -31,12 +30,13 @@ export function Nav() {
           >
             使い方ガイド
           </a>
-          <a
-            href={releaseUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="preview-button preview-button-dark ml-2"
-          >
+          {/*
+            Scrolls rather than downloads. A sticky button that starts saving a
+            40MB installer the moment it is touched, while someone is still
+            reading, is its own kind of alarming — the download section a click
+            away shows the file first and downloads on the button there.
+          */}
+          <a href="#download" className="preview-button preview-button-dark ml-2">
             <Download size={15} />
             <span className="hidden sm:inline">無料でダウンロード</span>
             <span className="sm:hidden">ダウンロード</span>
