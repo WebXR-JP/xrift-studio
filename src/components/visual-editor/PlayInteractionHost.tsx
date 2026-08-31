@@ -111,23 +111,26 @@ export function PlayInteractionHost({
   }, [active, mode]);
 
   // On `window`, not the canvas: while the pointer is locked the browser
-  // retargets every mouse event at the locked element, and that element is the
-  // renderer's container rather than the canvas inside it. A listener on the
-  // canvas is a child of the target and never sees the press, so the crosshair
-  // would light up on a button and clicking it would do nothing.
+  // retargets every mouse event at the locked element, so a listener on a
+  // child of that element never sees the press and the crosshair would light
+  // up on a button that cannot be pressed.
   //
-  // Safe to take globally because this mode is only active while the lock is
-  // held, and a locked pointer has nowhere else to click.
+  // Unlocked, `window` is too wide - the Hierarchy and the Inspector are still
+  // there - so the press has to have landed on the rendered view. Play stays
+  // playable either way: the browser refuses a re-lock for about a second
+  // after Escape, and tying interaction to the lock made that second look like
+  // a broken world.
   useEffect(() => {
     if (!active || mode !== "crosshair") return;
     const onMouseDown = (event: MouseEvent) => {
       if (event.button !== 0) return;
+      if (!document.pointerLockElement && event.target !== domElement) return;
       const target = aimedRef.current;
       if (target) interact(target);
     };
     window.addEventListener("mousedown", onMouseDown);
     return () => window.removeEventListener("mousedown", onMouseDown);
-  }, [active, interact, mode]);
+  }, [active, domElement, interact, mode]);
 
   useEffect(() => {
     if (!active || mode !== "pointer") return;

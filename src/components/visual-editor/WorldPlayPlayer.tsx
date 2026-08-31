@@ -1,6 +1,7 @@
 import { PointerLockControls } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import {
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -46,14 +47,26 @@ import type { Vec3 } from "../../lib/visual-editor/scene-document";
 export const WorldPlayCrosshair = Crosshair;
 
 /**
- * Attribute the Scene View marks its canvas with so Play can lock the pointer.
+ * Attribute the Scene View marks its viewport with while a World is playing.
  *
- * drei's `PointerLockControls` locks on a click anywhere in `document` unless
- * it is given a selector. In a full-window world that is right; in an editor it
- * would mean clicking the Hierarchy or the Inspector swallows the mouse.
+ * Play scopes everything global it does - the pointer lock, the crosshair - to
+ * this element, because in an editor the rest of the window is still the
+ * Hierarchy and the Inspector.
  */
 export const WORLD_PLAY_LOCK_SURFACE_ATTRIBUTE = "data-world-play-lock-surface";
-export const WORLD_PLAY_LOCK_SURFACE_SELECTOR = `[${WORLD_PLAY_LOCK_SURFACE_ATTRIBUTE}] canvas`;
+
+/**
+ * Deliberately matches nothing.
+ *
+ * drei's `PointerLockControls` installs its own click handler that calls
+ * `lock()` on every click, with no catch. Chromium refuses a re-lock for about
+ * a second after the user presses Escape, so a player who pressed Escape and
+ * clicked straight back in got a rejected promise, a console error, and no
+ * pointer lock - and, since Play's aiming follows the lock, a world that had
+ * simply stopped responding. Play owns the lock request instead, so the
+ * failure can be caught and explained.
+ */
+const NO_AUTO_LOCK_SELECTOR = "[data-world-play-auto-lock-disabled]";
 
 const IDLE_MOVEMENT: PlayerMovement = {
   position: { x: 0, y: 0, z: 0 },
@@ -155,6 +168,7 @@ export function WorldPlayPlayer({
   allowInfiniteJump,
   grabStore,
   movementRef,
+  onLockRefused,
 }: {
   /** Capsule centre, already lifted off the floor the SpawnPoint marks. */
   spawnPosition: Vec3;
@@ -163,9 +177,41 @@ export function WorldPlayPlayer({
   allowInfiniteJump: boolean;
   grabStore: DevGrabStore;
   movementRef: RefObject<PlayerMovement>;
+  /** Called when the browser turns the pointer lock down, so Play can say so. */
+  onLockRefused?: () => void;
 }) {
   const camera = useThree((state) => state.camera);
+  const surface = useThree((state) => state.gl.domElement);
   const aimedRef = useRef(false);
+  const onLockRefusedRef = useRef(onLockRefused);
+  onLockRefusedRef.current = onLockRefused;
+
+  // Play's own click-to-lock, replacing the one drei installs. Locking the
+  // canvas explicitly - the same element `PointerLockControls` is told to use -
+  // keeps `isLocked` and the mouse-look in step with what actually holds the
+  // pointer.
+  useEffect(() => {
+    const onClick = () => {
+      if (document.pointerLockElement) return;
+      let request: unknown;
+      try {
+        request = surface.requestPointerLock();
+      } catch {
+        onLockRefusedRef.current?.();
+        return;
+      }
+      if (request instanceof Promise) {
+        request.catch(() => onLockRefusedRef.current?.());
+      }
+    };
+    const onError = () => onLockRefusedRef.current?.();
+    surface.addEventListener("click", onClick);
+    document.addEventListener("pointerlockerror", onError);
+    return () => {
+      surface.removeEventListener("click", onClick);
+      document.removeEventListener("pointerlockerror", onError);
+    };
+  }, [surface]);
 
   // Once, on entering Play. `PhysicsPlayer` sets the heading itself when an
   // official SpawnPoint registers, but a Scene whose spawn comes from the
@@ -190,7 +236,10 @@ export function WorldPlayPlayer({
 
   return (
     <>
-      <PointerLockControls selector={WORLD_PLAY_LOCK_SURFACE_SELECTOR} />
+      <PointerLockControls
+        domElement={surface}
+        selector={NO_AUTO_LOCK_SELECTOR}
+      />
       <PhysicsPlayer
         moveSpeed={MOVE_SPEED}
         spawnPosition={spawnPosition}

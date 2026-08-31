@@ -237,6 +237,7 @@ import {
   OfficialXriftComponentRenderer,
   OfficialXriftEntityWrappers,
   OfficialXriftPreviewProvider,
+  isOfficialXriftEditorHelperComponent,
   isOfficialXriftWrapperComponent,
 } from "./OfficialXriftComponentRenderer";
 import {
@@ -1667,7 +1668,19 @@ function ComponentVisual({
       ) : null;
     }
     case "xrift-component":
-      return showHelpers || renderThumbnail ? (
+      // `playing` is listed for the same reason the Text panel and the
+      // particle emitter list it: Play forces `showHelpers` off, and a Mirror,
+      // a video screen or a TagBoard is world content. Without it, Play - the
+      // one place an author can watch the official Components actually run -
+      // was the only place they were invisible, and a TagBoard's own buttons
+      // did not exist to be pressed.
+      //
+      // The SpawnPoint is the exception, and stays helper-only: its marker is
+      // dev-only in a published world, so drawing it in Play would put a green
+      // cylinder in front of a player who will never see one.
+      return showHelpers ||
+        renderThumbnail ||
+        (playing && !isOfficialXriftEditorHelperComponent(component)) ? (
         <OfficialXriftComponentRenderer component={component} />
       ) : null;
     case "script":
@@ -4439,6 +4452,7 @@ export function SceneViewport({
   const pressedKeysRef = useRef(new Set<string>());
   const playPointerLocked = useWorldPlayPointerLocked();
   const [playAimHit, setPlayAimHit] = useState(false);
+  const [playLockRefused, setPlayLockRefused] = useState(false);
   const playGrabStore = useWorldPlayGrabStore();
   const playUsers = useWorldPlayUsers();
   const [dragOverKind, setDragOverKind] = useState<
@@ -4620,6 +4634,13 @@ export function SceneViewport({
   );
   /** A World running its player, as opposed to an Item shown on its own. */
   const worldPlayActive = editorMode === "play" && projectKind === "world";
+  const handlePlayLockRefused = useCallback(() => setPlayLockRefused(true), []);
+  // The refusal is transient - the browser's cooldown after Escape is about a
+  // second - so the warning clears itself once the lock lands or Play ends,
+  // rather than sitting there after the thing it describes has passed.
+  useEffect(() => {
+    if (playPointerLocked || !worldPlayActive) setPlayLockRefused(false);
+  }, [playPointerLocked, worldPlayActive]);
   const modelProxyVisible = useMemo(
     () => hasModelProxy(preview.scene, assets, projectPath),
     [assets, preview.scene, projectPath],
@@ -6049,14 +6070,11 @@ export function SceneViewport({
             grabbableImplementation={playGrabStore.contextValue}
             usersImplementation={playUsers.implementation}
           >
-            {/* A World player aims from the crosshair while the mouse is
-                captured, exactly as a published world does; an Item has no
-                player, so its Play keeps the free pointer. */}
+            {/* A World player aims from the crosshair, exactly as a published
+                world does; an Item has no player, so its Play keeps the free
+                pointer. */}
             <PlayInteractionHost
-              active={
-                editorMode === "play" &&
-                (worldPlayActive ? playPointerLocked : true)
-              }
+              active={editorMode === "play"}
               mode={worldPlayActive ? "crosshair" : "pointer"}
               onAimChange={setPlayAimHit}
             />
@@ -6088,6 +6106,7 @@ export function SceneViewport({
                   allowInfiniteJump={sceneSettings.physics.allowInfiniteJump}
                   grabStore={playGrabStore}
                   movementRef={playUsers.movementRef}
+                  onLockRefused={handlePlayLockRefused}
                 />
               ) : null}
             </Fragment>
@@ -6208,7 +6227,7 @@ export function SceneViewport({
 
         {/* The player's aim, drawn by the same component a published world
             shows, so what is in reach here is what is in reach after upload. */}
-        {worldPlayActive && playPointerLocked && !thumbnailCaptureActive ? (
+        {worldPlayActive && !thumbnailCaptureActive ? (
           <WorldPlayCrosshair active={playAimHit} />
         ) : null}
 
@@ -6222,9 +6241,11 @@ export function SceneViewport({
                 role="status"
                 aria-live="polite"
               >
-                {playPointerLocked
-                  ? "マウス固定中 · Escで解放するとHierarchyとInspectorを操作できます"
-                  : "マウス未固定 · キー入力はワールドが受け取ります"}
+                {playLockRefused
+                  ? "マウスを固定できませんでした。Escの直後はブラウザが約1秒受け付けません。少し待ってもう一度クリックしてください"
+                  : playPointerLocked
+                    ? "マウス固定中 · Escで解放するとHierarchyとInspectorを操作できます"
+                    : "マウス未固定 · 視点は動きませんが、クロスヘアの先はクリックできます"}
               </p>
             ) : null}
             {lastReloadedEntityName ? (

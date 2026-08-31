@@ -269,6 +269,19 @@ export function isOfficialXriftWrapperComponent(
   );
 }
 
+/**
+ * Whether this official Component only exists to help the author.
+ *
+ * The SpawnPoint's marker is drawn behind `import.meta.env.DEV`, so a
+ * published world never shows it. Everything else on the list is world content
+ * a player sees, which is why Play draws those and drops this one.
+ */
+export function isOfficialXriftEditorHelperComponent(
+  component: XriftSceneComponent,
+): boolean {
+  return component.schemaId === XRIFT_COMPONENT_SCHEMA_IDS.spawnPoint;
+}
+
 export function officialXriftComponentNeedsPhysics(
   component: XriftSceneComponent,
 ): boolean {

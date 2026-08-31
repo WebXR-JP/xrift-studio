@@ -28,6 +28,12 @@ Play Window をクリックするとマウスが固定され、プレイヤー�
 
 マウス固定中はキー入力をワールドが受け取ります。Hierarchy と Inspector を操作するときは Esc でマウス固定を解除してください。
 
+Esc の直後はブラウザが約 1 秒のあいだマウス固定を受け付けません。すぐクリックし直すと固定できない旨が案内面に出るので、少し待ってからクリックしてください。固定できていない間も視点が動かないだけで、クロスヘアの先はクリックできます。
+
+Interactable を押すのに Collider や RigidBody は必要ありません。クロスヘアは描画されているメッシュを見ています（Collider は歩いてぶつかるかどうかだけを決めます）。
+
+Mirror、TagBoard、VideoPlayer、ScreenShareDisplay などの公式 Component は、Play でも編集中と同じ実描画で動きます。SpawnPoint のマーカーだけは Play で消えます。公開したワールドでも表示されないためです。
+
 Play Window に映るのは編集データのコピーです。左の Hierarchy と右の Inspector は編集データを表示し続けます。
 
 ## Play 中にできること
