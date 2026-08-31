@@ -12,6 +12,7 @@ export type AssetFormatKind =
   | "texture"
   | "skybox"
   | "audio"
+  | "font"
   | "shader"
   | "model"
   | "companion";
@@ -160,6 +161,29 @@ export const ASSET_FORMATS = {
       altMimeTypes: ["audio/x-webm"],
     },
   },
+  font: {
+    // troika parses TrueType, OpenType and WOFF 1.0 and rejects WOFF2, so a
+    // WOFF2 file is deliberately absent: importing one would produce a Text
+    // that never typesets rather than one that falls back.
+    ttf: {
+      label: "TrueType",
+      mimeType: "font/ttf",
+      extensions: ["ttf"],
+      altMimeTypes: ["application/x-font-ttf", "application/font-sfnt"],
+    },
+    otf: {
+      label: "OpenType",
+      mimeType: "font/otf",
+      extensions: ["otf"],
+      altMimeTypes: ["application/x-font-otf"],
+    },
+    woff: {
+      label: "WOFF",
+      mimeType: "font/woff",
+      extensions: ["woff"],
+      altMimeTypes: ["application/font-woff"],
+    },
+  },
   shader: {
     glsl: {
       label: "GLSL",
@@ -270,6 +294,7 @@ export type ThreeEditorModelFormat = keyof typeof ASSET_FORMATS.model;
 export type StudioImageFormat = keyof typeof ASSET_FORMATS.texture;
 export type SkyboxFormat = keyof typeof ASSET_FORMATS.skybox;
 export type AudioFormat = keyof typeof ASSET_FORMATS.audio;
+export type FontFormat = keyof typeof ASSET_FORMATS.font;
 
 /** Preserved shape: `{ [extension]: label }`. */
 export const THREE_EDITOR_MODEL_FORMATS = Object.fromEntries(
@@ -595,7 +620,7 @@ export const SUPPORTED_IMPORT_EXTENSION_PATTERN = extensionPattern([
 
 export const ASSET_IMPORT_ACCEPT = [
   ...PROJECT_PACKAGE_EXTENSIONS.map((extension) => `.${extension}`),
-  ...extensionsForKinds(["model", "texture", "skybox", "audio", "shader"], {
+  ...extensionsForKinds(["model", "texture", "skybox", "audio", "font", "shader"], {
     includeLegacy: false,
   }).map((extension) => `.${extension}`),
   ...[
@@ -625,6 +650,7 @@ export type AssetKindIconName =
   | "particle"
   | "asset"
   | "audio"
+  | "font"
   | "script"
   | "prefab"
   | "primitive";
@@ -643,6 +669,7 @@ export const ASSET_KIND_UI = {
   particle: { icon: "particle", label: "Particle" },
   interactivity: { icon: "asset", label: "KHR Interactivity" },
   audio: { icon: "audio", label: "Audio" },
+  font: { icon: "font", label: "Font" },
   script: { icon: "script", label: "Script" },
   shader: { icon: "script", label: "GLSL Shader" },
   template: { icon: "prefab", label: "Prefab" },

@@ -30,9 +30,13 @@ import {
   normalizeTextureImportSettings,
   isEnvironmentTextureAsset,
   AUDIO_MIME_BY_FORMAT,
+  FONT_MIME_BY_FORMAT,
   type AudioAsset,
   type AudioMimeType,
   type AudioSourceFormat,
+  type FontAsset,
+  type FontMimeType,
+  type FontSourceFormat,
   type AssetFolder,
   type AssetManifest,
   type MaterialAsset,
@@ -112,6 +116,12 @@ export type ClassifiedAssetImport =
       format: AudioSourceFormat;
       mimeType: AudioMimeType;
       extension: AudioSourceFormat;
+    }
+  | {
+      kind: "font";
+      format: FontSourceFormat;
+      mimeType: FontMimeType;
+      extension: FontSourceFormat;
     };
 
 type NativeGltfModelClassification = Extract<
@@ -159,7 +169,7 @@ export type AssetImportPlan = {
   replacesAssetId?: string;
   classification?: ClassifiedAssetImport;
   /** Primary Model, standalone Texture (including HDRI), or Audio selected after the transaction. */
-  asset?: ModelAsset | TextureAsset | AudioAsset;
+  asset?: ModelAsset | TextureAsset | AudioAsset | FontAsset;
   /** Material/Texture Assets expanded from an imported Model. */
   derivedAssets?: Array<MaterialAsset | TextureAsset>;
   /** Logical Asset folders created with the Model import. */
@@ -293,7 +303,54 @@ export function classifyAssetImport(
   }
   const audio = classifyAudio(extension, normalizedMime);
   if (audio) return audio;
+  const font = classifyFont(extension, normalizedMime);
+  if (font) return font;
   return undefined;
+}
+
+/**
+ * Font containers troika can parse. WOFF2 is absent on purpose: troika rejects
+ * it, and a Text assigned a font it cannot parse never typesets at all, so an
+ * unsupported file has to be refused at the boundary instead.
+ */
+const FONT_MATCHERS: {
+  format: FontSourceFormat;
+  extensions: string[];
+  mimeTypes: string[];
+}[] = [
+  {
+    format: "ttf",
+    extensions: ["ttf"],
+    mimeTypes: ["font/ttf", "application/x-font-ttf", "application/font-sfnt"],
+  },
+  {
+    format: "otf",
+    extensions: ["otf"],
+    mimeTypes: ["font/otf", "application/x-font-otf"],
+  },
+  {
+    format: "woff",
+    extensions: ["woff"],
+    mimeTypes: ["font/woff", "application/font-woff"],
+  },
+];
+
+function classifyFont(
+  extension: string,
+  normalizedMime: string,
+): Extract<ClassifiedAssetImport, { kind: "font" }> | undefined {
+  const match = FONT_MATCHERS.find(
+    (entry) =>
+      entry.extensions.includes(extension) ||
+      entry.mimeTypes.includes(normalizedMime),
+  );
+  if (!match) return undefined;
+  return {
+    kind: "font",
+    format: match.format,
+    mimeType: FONT_MIME_BY_FORMAT[match.format],
+    extension: match.format,
+  };
 }
 
 /**
@@ -584,6 +641,16 @@ async function createAssetImportPlanInternal(
   }
   if (classification.kind === "skybox") {
     return createSkyboxImportPlan(
+      input,
+      fileName,
+      bytes,
+      sourceHash,
+      transactionId,
+      classification,
+    );
+  }
+  if (classification.kind === "font") {
+    return createFontImportPlan(
       input,
       fileName,
       bytes,
@@ -1883,6 +1950,85 @@ function parseWithGltfLoader(
   });
 }
 
+/**
+ * A font file is imported as bytes and nothing else: Text renders from the file
+ * itself, so no conversion, no thumbnail and no derived data are involved. Only
+ * the container is verified, because troika treats a file it cannot parse as a
+ * sync that never completes rather than an error.
+ */
+function createFontImportPlan(
+  input: CreateAssetImportPlanInput,
+  fileName: string,
+  bytes: Uint8Array,
+  sourceHash: string,
+  transactionId: string,
+  classification: Extract<ClassifiedAssetImport, { kind: "font" }>,
+): AssetImportPlan {
+  const diagnostics: AssetImportDiagnostic[] = [];
+  if (hasWoff2Signature(bytes)) {
+    diagnostics.push({
+      severity: "blocking",
+      code: "woff2-not-supported",
+      message:
+        "WOFF2は表示に使えません。同じ書体のTTF、OTF、WOFFを読み込んでください。",
+      fileName,
+      fieldPath: "bytes",
+    });
+    return blockedPlan(transactionId, sourceHash, diagnostics, classification);
+  }
+  if (!hasFontSignature(bytes, classification.format)) {
+    diagnostics.push({
+      severity: "blocking",
+      code: `${classification.format}-signature-invalid`,
+      message: `${classification.format.toUpperCase()}のファイルシグネチャを確認できませんでした`,
+      fileName,
+      fieldPath: "bytes",
+    });
+    return blockedPlan(transactionId, sourceHash, diagnostics, classification);
+  }
+
+  const assetId = createImportedAssetId("font", fileName, sourceHash);
+  const sourceRelativePath = createSourceDestination(
+    "fonts",
+    fileName,
+    sourceHash,
+    classification.extension,
+  );
+  const familyName = readFontFamilyName(bytes);
+  const asset: FontAsset = {
+    id: assetId,
+    name: normalizedDisplayName(input.displayName ?? familyName, fileName),
+    kind: "font",
+    status: "ready",
+    source: { kind: "project", relativePath: sourceRelativePath },
+    sourceHash,
+    thumbnail: { status: "missing" },
+    folderId: normalizeFolderId(input.folderId),
+    importMetadata: {
+      sourceFormat: classification.format,
+      mimeType: classification.mimeType,
+      byteLength: bytes.byteLength,
+      ...(familyName ? { familyName } : {}),
+    },
+  };
+  return finishPlan(
+    transactionId,
+    sourceHash,
+    classification,
+    asset,
+    [
+      {
+        relativePath: sourceRelativePath,
+        purpose: "source",
+        mediaType: classification.mimeType,
+        sha256: sourceHash,
+        payload: { encoding: "bytes", bytes: bytes.slice() },
+      },
+    ],
+    diagnostics,
+  );
+}
+
 function createAudioImportPlan(
   input: CreateAssetImportPlanInput,
   fileName: string,
@@ -2493,6 +2639,79 @@ function hasAudioSignature(bytes: Uint8Array, format: AudioSourceFormat): boolea
   }
 }
 
+/**
+ * SFNT / WOFF container check.
+ *
+ * `.ttf` and `.otf` are both SFNT wrappers and are routinely published with
+ * either extension, so the tag is accepted for both rather than pinned to the
+ * name the file happened to carry.
+ */
+function hasFontSignature(bytes: Uint8Array, format: FontSourceFormat): boolean {
+  if (format === "woff") return asciiAt(bytes, 0, "wOFF");
+  return (
+    // TrueType outlines: version 1.0.
+    (bytes[0] === 0x00 &&
+      bytes[1] === 0x01 &&
+      bytes[2] === 0x00 &&
+      bytes[3] === 0x00) ||
+    // OpenType with CFF outlines.
+    asciiAt(bytes, 0, "OTTO") ||
+    // Legacy Apple TrueType.
+    asciiAt(bytes, 0, "true") ||
+    asciiAt(bytes, 0, "ttcf") ||
+    // A WOFF 1.0 file named `.ttf` is still parsable, so it is not rejected.
+    asciiAt(bytes, 0, "wOFF")
+  );
+}
+
+function hasWoff2Signature(bytes: Uint8Array): boolean {
+  return asciiAt(bytes, 0, "wOF2");
+}
+
+/**
+ * Family name from the SFNT `name` table, used only as the imported Asset's
+ * default display name. Anything unreadable simply falls back to the file name:
+ * the file itself is what renders.
+ */
+function readFontFamilyName(bytes: Uint8Array): string | undefined {
+  try {
+    if (!asciiAt(bytes, 0, "OTTO") && !(bytes[0] === 0x00 && bytes[1] === 0x01)) {
+      return undefined;
+    }
+    const view = new DataView(
+      bytes.buffer,
+      bytes.byteOffset,
+      bytes.byteLength,
+    );
+    const tableCount = view.getUint16(4);
+    for (let index = 0; index < tableCount; index += 1) {
+      const record = 12 + index * 16;
+      if (!asciiAt(bytes, record, "name")) continue;
+      const nameOffset = view.getUint32(record + 8);
+      const count = view.getUint16(nameOffset + 2);
+      const stringOffset = nameOffset + view.getUint16(nameOffset + 4);
+      for (let entry = 0; entry < count; entry += 1) {
+        const record6 = nameOffset + 6 + entry * 12;
+        // nameID 1 is the family name; only the Windows/Unicode BMP encoding is
+        // read, which is the one every modern font publishes.
+        if (view.getUint16(record6 + 6) !== 1) continue;
+        if (view.getUint16(record6) !== 3) continue;
+        const length = view.getUint16(record6 + 8);
+        const offset = stringOffset + view.getUint16(record6 + 10);
+        let name = "";
+        for (let position = 0; position + 1 < length; position += 2) {
+          name += String.fromCharCode(view.getUint16(offset + position));
+        }
+        const trimmed = name.trim();
+        if (trimmed) return trimmed;
+      }
+    }
+  } catch {
+    // A truncated or unusual table is not worth failing an import over.
+  }
+  return undefined;
+}
+
 function asciiAt(bytes: Uint8Array, offset: number, expected: string): boolean {
   return [...expected].every(
     (character, index) => bytes[offset + index] === character.charCodeAt(0),
@@ -2628,7 +2847,7 @@ function ensureImportFolder(
 }
 
 function createSourceDestination(
-  category: "models" | "textures" | "skyboxes" | "audio",
+  category: "models" | "textures" | "skyboxes" | "audio" | "fonts",
   fileName: string,
   sourceHash: string,
   extension: string,
@@ -2642,7 +2861,7 @@ function createSourceDestination(
 }
 
 function createImportedAssetId(
-  kind: "model" | "texture" | "skybox" | "audio",
+  kind: "model" | "texture" | "skybox" | "audio" | "font",
   fileName: string,
   sourceHash: string,
 ): string {
@@ -2681,7 +2900,7 @@ function finishPlan(
   transactionId: string,
   sourceHash: string,
   classification: ClassifiedAssetImport,
-  asset: ModelAsset | TextureAsset | AudioAsset,
+  asset: ModelAsset | TextureAsset | AudioAsset | FontAsset,
   writes: AssetImportWrite[],
   diagnostics: AssetImportDiagnostic[],
   replacesAssetId?: string,

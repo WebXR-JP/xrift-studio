@@ -43,9 +43,18 @@ export type XriftTextPanelConfig = {
   anchorY: XriftTextAnchorY;
   outlineWidth: number;
   outlineColor: string;
-  /** Catalog id from text-font-catalog. Absent or `auto` resolves Noto. */
+  /** Catalog id from text-font-catalog. Absent or `auto` resolves the default. */
   fontId?: string;
   fontWeight?: number;
+  /**
+   * Font file to typeset with, overriding the catalog.
+   *
+   * A project font is a file the author imported, so it has no catalog entry
+   * and no derived weights: the URL is the whole answer. It is always the
+   * world's own file - a data URL while authoring, a copied file once
+   * published - never a font fetched from somewhere else at runtime.
+   */
+  fontUrl?: string;
   /**
    * Where the host serves its public files from, for the bundled font file.
    *

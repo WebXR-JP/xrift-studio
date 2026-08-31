@@ -53,7 +53,15 @@ export type AssetCopyPlanEntry = {
   assetId: string;
   sourceRelativePath: string;
   targetRelativePath: string;
-  purpose: "texture" | "skybox" | "model" | "audio" | "particle" | "prefab" | "other";
+  purpose:
+    | "texture"
+    | "skybox"
+    | "model"
+    | "audio"
+    | "font"
+    | "particle"
+    | "prefab"
+    | "other";
   supportedByCompiler: boolean;
   /**
    * 出力時にだけ適用するTextureの変換。

@@ -36,6 +36,9 @@ import {
   XRIFT_COMPONENT_SCHEMA_IDS,
 } from "../../lib/visual-editor";
 import type { InteractionTriggerPatch } from "../../lib/visual-editor/scene-document";
+
+/** Distinguishes an imported Font Asset from a catalog id in the one picker. */
+const PROJECT_FONT_OPTION_PREFIX = "asset:" as const;
 import {
   AUTOMATIC_TEXT_FONT_ID,
   TEXT_FONT_CATALOG,
@@ -102,6 +105,7 @@ import {
   resolveTerrainGrassAppearance,
   type TextureAssetPatch,
   type TextureCardProfile,
+  type FontAsset,
   type TextComponent,
   type TextBackgroundFit,
   type TextBackgroundMode,
@@ -3542,6 +3546,18 @@ function TextInspector({
   const patchBackground = (patch: TextBackgroundPatch) =>
     onChange({ background: patch });
   const fontGroups = useMemo(() => groupTextFonts(), []);
+  // An imported font has no catalog entry, so the picker addresses it by Asset
+  // id. One control keeps "which lettering" a single decision.
+  const projectFonts = useMemo(
+    () =>
+      Object.values(assets.assets)
+        .filter((asset): asset is FontAsset => asset.kind === "font")
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    [assets],
+  );
+  const projectFontAsset = component.fontAssetId
+    ? projectFonts.find((asset) => asset.id === component.fontAssetId)
+    : undefined;
   const weightOptions = textFontWeightOptions(component.fontId);
   const textureAssets = useMemo(
     () =>
@@ -3583,9 +3599,22 @@ function TextInspector({
       <label className="block text-xs font-medium text-slate-600">
         Font
         <select
-          value={component.fontId ?? AUTOMATIC_TEXT_FONT_ID}
+          value={
+            component.fontAssetId
+              ? `${PROJECT_FONT_OPTION_PREFIX}${component.fontAssetId}`
+              : (component.fontId ?? AUTOMATIC_TEXT_FONT_ID)
+          }
           disabled={readOnly}
-          onChange={(event) => onChange({ fontId: event.currentTarget.value })}
+          onChange={(event) => {
+            const value = event.currentTarget.value;
+            onChange(
+              value.startsWith(PROJECT_FONT_OPTION_PREFIX)
+                ? {
+                    fontAssetId: value.slice(PROJECT_FONT_OPTION_PREFIX.length),
+                  }
+                : { fontId: value, fontAssetId: "" },
+            );
+          }}
           className="mt-1 h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100"
         >
           <option value={AUTOMATIC_TEXT_FONT_ID}>自動（同梱の標準書体）</option>
@@ -3598,12 +3627,26 @@ function TextInspector({
               ))}
             </optgroup>
           ))}
+          {projectFonts.length > 0 ? (
+            <optgroup label="プロジェクトのフォント">
+              {projectFonts.map((font) => (
+                <option
+                  key={font.id}
+                  value={`${PROJECT_FONT_OPTION_PREFIX}${font.id}`}
+                >
+                  {font.name}
+                </option>
+              ))}
+            </optgroup>
+          ) : null}
         </select>
       </label>
       <p className="text-[11px] leading-4 text-slate-500">
-        {component.fontId && component.fontId !== AUTOMATIC_TEXT_FONT_ID
-          ? "選んだ書体のファイルはStudioに同梱し、公開したWorldにも同梱します。"
-          : "日本語と欧文を含む標準書体で表示します。Studioも公開したWorldも同じ同梱ファイルを読みます。"}
+        {projectFontAsset
+          ? "取り込んだフォントファイルで表示します。太さは選べません。公開したWorldにも同じファイルを同梱します。"
+          : component.fontId && component.fontId !== AUTOMATIC_TEXT_FONT_ID
+            ? "選んだ書体のファイルはStudioに同梱し、公開したWorldにも同梱します。"
+            : "日本語と欧文を含む標準書体で表示します。Studioも公開したWorldも同じ同梱ファイルを読みます。"}
       </p>
       <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
         Weight
