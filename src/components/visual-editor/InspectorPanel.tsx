@@ -4519,6 +4519,7 @@ function EntityInspector({
   onModelNodeMeshChange,
   modelOptimizationState,
   onApplyModelOptimization,
+  onRevertModelOptimization,
   onColliderChange,
   onRigidBodyChange,
   onAutoFitCollider,
@@ -4592,6 +4593,7 @@ function EntityInspector({
     assetId: string,
     options: ModelOptimizationOptions,
   ) => void;
+  onRevertModelOptimization?: (assetId: string) => void;
   onColliderChange: (componentId: string, patch: ColliderPatch) => void;
   onRigidBodyChange: (componentId: string, patch: RigidBodyPatch) => void;
   onAutoFitCollider: (componentId: string) => void;
@@ -4825,6 +4827,7 @@ function EntityInspector({
           onOpenMaterial={onOpenMaterial}
           optimizationState={modelOptimizationState}
           onApplyModelOptimization={onApplyModelOptimization}
+          onRevertModelOptimization={onRevertModelOptimization}
         />
       ) : null}
 
@@ -5691,6 +5694,7 @@ export function InspectorPanel({
             onModelNodeMeshChange={onMeshChange}
             modelOptimizationState={modelOptimizationState}
             onApplyModelOptimization={onApplyModelOptimization}
+            onRevertModelOptimization={onRevertModelOptimization}
             onColliderChange={(componentId, patch) =>
               onColliderChange(entity.id, componentId, patch)
             }
