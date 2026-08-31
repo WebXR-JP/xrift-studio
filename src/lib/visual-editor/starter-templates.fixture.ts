@@ -164,7 +164,10 @@ export function runStarterTemplateFixtureAssertions(): void {
     );
     assert(
       result.canStage,
-      `${templateId}: Starter World must compile for staging`,
+      `${templateId}: Starter World must compile for staging: ${result.diagnostics
+        .filter((diagnostic) => diagnostic.severity === "blocking")
+        .map((diagnostic) => `${diagnostic.code} ${diagnostic.message}`)
+        .join(" / ")}`,
     );
     assert(
       !result.diagnostics.some(
