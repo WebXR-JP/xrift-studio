@@ -1309,6 +1309,7 @@ F-06 アイテム検査
 - Scene Viewのtoolbarに「診断」と「録画」を置く。どちらもEditとPlayの両方で使え、Play WindowではPlay中の実際のrendererを測る。
 - 「診断」はtoggleとして状態を保ち、押している間だけ右上へ計測panelを重ねる。panelはpointer eventsを受けず、下のScene Viewの操作を妨げない。
 - panelはFPS、frame time、draw calls、triangles、可視Mesh数と総Mesh数、geometry数とtexture数、camera位置とFarを表示する。計測中は`LIVE`、録画中は`REC`を同じ位置に出す。
+- Geometry・Texture別のVRAM概算と合計をMiBで表示する。実Sceneが参照する頂点・インデックス・インスタンス属性、Material/Uniform・背景・環境Textureを集計し、同じ参照は重複除外する。Textureは実際の形式とmipmapを考慮する。未読込・非対応形式は未算定件数を表示し、ゼロと断定しない。影・描画バッファ・内部生成領域は対象外と明示する。最初の計測を待って表示し、診断を閉じたら計測を止める。MCPのcapture_scene_debugにも同じ値を返す。
 
 ### 操作中
 

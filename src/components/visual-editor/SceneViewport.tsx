@@ -1,3 +1,4 @@
+import { SceneVramMetrics } from "./SceneDebugCapture";
 import { TerrainBrushCursor } from "./TerrainBrushCursor";
 import {
   Canvas,
@@ -5738,6 +5739,7 @@ export function SceneViewport({
               <span>Mesh {formatDebugNumber(debugMetrics.visibleMeshes)} / {formatDebugNumber(debugMetrics.totalMeshes)}</span>
               <span>Geo {formatDebugNumber(debugMetrics.geometries)} · Tex {formatDebugNumber(debugMetrics.textures)}</span>
             </div>
+            <SceneVramMetrics metrics={debugMetrics} />
             <div className="mt-1 border-t border-cyan-200/20 pt-1 text-cyan-200/80">
               Camera {debugMetrics.cameraPosition.map((value) => formatDebugNumber(value, 1)).join(", ")} · Far {formatDebugNumber(debugMetrics.cameraFar, 0)}m
             </div>

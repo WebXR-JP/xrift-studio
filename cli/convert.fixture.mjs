@@ -73,6 +73,7 @@ import { runCustomMaterialPreviewFixtureAssertions } from "../src/components/vis
 import { runEditorDragDataFixture } from "../src/components/visual-editor/editor-drag-data.fixture.ts";
 import { runEditorLayoutFixtureAssertions } from "../src/components/visual-editor/editor-layout.fixture.ts";
 import { runSceneViewportQualityFixtureAssertions } from "../src/components/visual-editor/scene-viewport-quality.fixture.ts";
+import { runSceneVramEstimateFixtureAssertions } from "../src/components/visual-editor/scene-vram-estimate.fixture.ts";
 import { runWorldPlayCameraFixtureAssertions } from "../src/components/visual-editor/world-play-camera.fixture.ts";
 import { runEditorLibraryDragFixture } from "../src/components/visual-editor/editor-library-drag.fixture.ts";
 import { runMaterialDragFixtureAssertions } from "../src/components/visual-editor/material-drag.fixture.ts";
@@ -325,6 +326,7 @@ try {
     ["editor session hierarchy", runEditorSessionHierarchyFixtureAssertions],
     ["editor layout", runEditorLayoutFixtureAssertions],
     ["scene viewport quality", runSceneViewportQualityFixtureAssertions],
+    ["scene VRAM estimate", runSceneVramEstimateFixtureAssertions],
     ["world play camera", runWorldPlayCameraFixtureAssertions],
     ["script execution scope", runScriptExecutionScopeFixtureAssertions],
     ["model hierarchy", runModelHierarchyFixtureAssertions],

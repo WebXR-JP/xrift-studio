@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import type { Scene } from "three";
+import { estimateSceneVram, type SceneVramEstimate } from "./scene-vram-estimate";
 
-export type ScenePerformanceMetrics = {
+export type ScenePerformanceMetrics = SceneVramEstimate & {
   fps: number;
   frameTimeMs: number;
   drawCalls: number;
@@ -65,6 +66,7 @@ export function ScenePerformanceProbe({
     const fps = Math.min(240, frameCountRef.current / elapsed);
     const frameTimeMs = (frameTimeRef.current / frameCountRef.current) * 1000;
     onSample({
+      ...estimateSceneVram(scene),
       fps,
       frameTimeMs,
       drawCalls: gl.info.render.calls,
@@ -230,4 +232,19 @@ export function formatDebugNumber(value: number, digits = 0): string {
     maximumFractionDigits: digits,
     minimumFractionDigits: digits,
   });
+}
+
+export function SceneVramMetrics({ metrics }: { metrics: SceneVramEstimate }) {
+  const format = (bytes: number) => `${formatDebugNumber(bytes / (1024 * 1024), 1)} MiB`;
+  return (
+    <div className="mt-1 border-t border-cyan-200/20 pt-1 text-cyan-100/90">
+      <div className="font-semibold">VRAM概算（シーン参照分）</div>
+      <div className="grid grid-cols-2 gap-x-3">
+        <span>Geometry {format(metrics.geometryVramBytes)}</span>
+        <span>Texture {format(metrics.textureVramBytes)}</span>
+      </div>
+      <div>合計 {format(metrics.geometryVramBytes + metrics.textureVramBytes)}{metrics.unknownVramTextures > 0 ? `・未算定Texture ${metrics.unknownVramTextures}件` : ""}</div>
+      <div className="text-[10px] text-cyan-200/70">共有参照は重複除外。影・描画バッファ・内部生成領域は含みません。</div>
+    </div>
+  );
 }
