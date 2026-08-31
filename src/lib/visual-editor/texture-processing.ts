@@ -48,6 +48,7 @@ export {
 } from "./texture-codec";
 export {
   CONVERTIBLE_TEXTURE_SOURCE_FORMATS,
+  RECOMMENDED_TEXTURE_MAX_SIZE,
   TEXTURE_MAX_SIZE_CHOICES,
   fitWithin,
   isConvertibleTextureSourceFormat,
@@ -419,7 +420,7 @@ export async function applyTextureProcessingBatch(
   };
 }
 
-type EncodedTexture = {
+export type EncodedTexture = {
   asset: TextureAsset;
   bytes: Uint8Array;
   relativePath: string;
@@ -430,7 +431,12 @@ type EncodedTexture = {
   outputFormat: TextureOutputFormat;
 };
 
-async function encodeTextureForPlan(
+/**
+ * 現在のImport設定で原本を描き直し、Manifestへ入れられるAssetの姿まで組み立てる。
+ * Inspectorの書き出し、一括変換、VRAM自動最適化のどれもこの1本を通すことで、
+ * どの入り口から変換しても同じ画像と同じ記録（optimizedFrom）になる。
+ */
+export async function encodeTextureForPlan(
   projectPath: string,
   asset: TextureAsset,
   plan: Extract<TextureProcessingPlan, { supported: true }>,

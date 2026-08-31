@@ -331,10 +331,14 @@ import {
   type VisualEditorLayout,
 } from "./editor-layout";
 import {
+  DEFAULT_TEXTURE_IMPORT_COMPRESSION,
   DEFAULT_TEXTURE_IMPORT_MAX_SIZE,
+  loadTextureImportCompression,
   loadTextureImportMaxSize,
+  saveTextureImportCompression,
   saveTextureImportMaxSize,
-  textureImportMaxSizePatch,
+  textureImportSettingsPatch,
+  type TextureImportCompression,
   type TextureImportMaxSize,
 } from "./texture-import-defaults";
 import {
@@ -598,6 +602,17 @@ type EditorCommandPayload = {
   componentDefinitionId?: string;
 };
 
+/**
+ * Editorの外（公開ダイアログの一括変換・最適化）で更新されたAsset Manifestを
+ * Editorの履歴へ取り込む。`expectedAssets` が現在のManifestと参照ごと一致する
+ * ときだけ適用し、途中で編集が入っていた場合は何もせずfalseを返す。
+ */
+export type ExternalAssetsCommit = (update: {
+  expectedAssets: AssetManifest;
+  nextAssets: AssetManifest;
+  notice: string;
+}) => boolean;
+
 export type VisualEditorPrototypeProps = {
   projectKind: VisualProjectKind;
   onBack: () => void;
@@ -614,6 +629,14 @@ export type VisualEditorPrototypeProps = {
   ) => void | string | Promise<void | string>;
   /** Upload/export orchestration is injected by the shell when available. */
   onUpload?: (bundle: PrototypeVisualProject) => void | Promise<void>;
+  /**
+   * 公開ダイアログなど、Editorの外で作られたAsset Manifestの更新を、この
+   * セッションの履歴へ取り込むための登録口。外の処理がディスクへ書いた変換を
+   * Editorが知らないままだと、次の保存が変換前のManifestで上書きしてしまう。
+   */
+  onRegisterExternalAssetsCommit?: (
+    commit: ExternalAssetsCommit | null,
+  ) => void;
   /** Opens the desktop Classic export flow without changing authoring data. */
   onClassicExport?: (bundle: PrototypeVisualProject) => void | Promise<void>;
   /** Fresh only after the current documents and required publication files were staged. */
@@ -840,6 +863,7 @@ export function VisualEditorPrototype({
   initialBundle: providedInitialBundle,
   onSave,
   onUpload,
+  onRegisterExternalAssetsCommit,
   onClassicExport,
   compilationFresh = false,
   onThumbnailChanged,
@@ -1497,11 +1521,16 @@ export function VisualEditorPrototype({
   const [layout, setLayout] = useState<VisualEditorLayout>({
     ...loadEditorLayout(initialLayout),
   });
-  // 取り込むTextureに入れておく最大解像度。原本は変換せず、公開時に反映される。
+  // 取り込むTextureに入れておく最大解像度と圧縮方式。取り込み時に編集用画像へ
+  // 適用され、シーンと公開の両方がその画像を使う。元画像は保持する。
   const [textureImportMaxSize, setTextureImportMaxSize] =
     useState<TextureImportMaxSize>(DEFAULT_TEXTURE_IMPORT_MAX_SIZE);
   const textureImportMaxSizeRef = useRef(textureImportMaxSize);
   textureImportMaxSizeRef.current = textureImportMaxSize;
+  const [textureImportCompression, setTextureImportCompression] =
+    useState<TextureImportCompression>(DEFAULT_TEXTURE_IMPORT_COMPRESSION);
+  const textureImportCompressionRef = useRef(textureImportCompression);
+  textureImportCompressionRef.current = textureImportCompression;
   const [transformMode, setTransformMode] = useState<TransformMode>("translate");
   const [transformSpace, setTransformSpace] = useState<TransformSpace>("world");
   const [editorMode, setEditorMode] = useState<EditorMode>("edit");
@@ -2139,6 +2168,7 @@ export function VisualEditorPrototype({
 
   useEffect(() => {
     setTextureImportMaxSize(loadTextureImportMaxSize());
+    setTextureImportCompression(loadTextureImportCompression());
   }, []);
 
   useEffect(() => {
@@ -2732,7 +2762,10 @@ export function VisualEditorPrototype({
                     assetId: modelAssetId,
                     state: modelReimportStateFromProgress(progress),
                   }),
-                textureImportMaxSizePatch(textureImportMaxSizeRef.current),
+                textureImportSettingsPatch(
+                  textureImportMaxSizeRef.current,
+                  textureImportCompressionRef.current,
+                ),
               );
               if (!result.ok) {
                 setModelReimportFeedback({
@@ -7430,7 +7463,10 @@ export function VisualEditorPrototype({
               state: modelReimportStateFromProgress(progress),
             });
           },
-          textureImportMaxSizePatch(textureImportMaxSizeRef.current),
+          textureImportSettingsPatch(
+            textureImportMaxSizeRef.current,
+            textureImportCompressionRef.current,
+          ),
         );
 
       if (!result.ok) {
@@ -7781,6 +7817,36 @@ export function VisualEditorPrototype({
     },
     [editorMode, projectPath],
   );
+
+  // 公開ダイアログの一括変換・最適化はEditorの外（App）で走り、ディスクと
+  // 公開バンドルだけを更新していた。ここで受け口を登録して、変換後のManifestを
+  // 同じ操作の中で履歴へ取り込む。これが無いと、シーンは変換前の画像を見せ
+  // 続け、次の保存が変換をManifestごと巻き戻してしまう。
+  useEffect(() => {
+    if (!onRegisterExternalAssetsCommit) return;
+    const commit: ExternalAssetsCommit = ({ expectedAssets, nextAssets, notice }) => {
+      if (editorModeRef.current !== "edit") return false;
+      if (assetOperationRef.current) return false;
+      if (bundleRef.current.assets !== expectedAssets) return false;
+      setHistory((current) => {
+        if (current.present.bundle.assets !== expectedAssets) return current;
+        const nextBundle = touchProject({
+          ...current.present.bundle,
+          assets: nextAssets,
+        });
+        bundleRef.current = nextBundle;
+        setSaveStatus("dirty");
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: nextBundle,
+        });
+      });
+      setNotice(notice);
+      return true;
+    };
+    onRegisterExternalAssetsCommit(commit);
+    return () => onRegisterExternalAssetsCommit(null);
+  }, [onRegisterExternalAssetsCommit]);
 
   /**
    * 変換・最適化の解除。原本ファイルは残してあるので、Manifestの参照先と
@@ -9265,10 +9331,12 @@ export function VisualEditorPrototype({
                 ...(companion.type ? { mimeType: companion.type } : {}),
               })),
             );
-            // 取り込み時の最大解像度は、単体のTextureにもモデル内蔵のTextureにも
-            // 同じように入れる。原本は変換せず、公開時にこの解像度へ変換される。
-            const textureImportSettings = textureImportMaxSizePatch(
+            // 取り込み時の最大解像度・圧縮方式は、単体のTextureにもモデル内蔵の
+            // Textureにも同じように入れる。取り込み後に編集用画像へ適用され、
+            // シーンと公開の両方がその画像を使う。元画像は保持する。
+            const textureImportSettings = textureImportSettingsPatch(
               textureImportMaxSizeRef.current,
+              textureImportCompressionRef.current,
             );
             const plan = await createAssetImportPlan({
               fileName: sourceFile.name,
@@ -10558,6 +10626,11 @@ export function VisualEditorPrototype({
                 setTextureImportMaxSize(value);
                 saveTextureImportMaxSize(value);
               }}
+              textureCompression={textureImportCompression}
+              onTextureCompressionChange={(value) => {
+                setTextureImportCompression(value);
+                saveTextureImportCompression(value);
+              }}
               onImportModel={() => globalModelImportInputRef.current?.click()}
               onImportR3f={() => setComponentImportOpen(true)}
             />
@@ -10944,8 +11017,8 @@ export function VisualEditorPrototype({
               void handleApplyModelOptimization(assetId, options);
             }}
             textureBatchState={textureBatchFeedback}
-            onApplyTextureBatch={(assetIds) => {
-              void handleApplyTextureProcessingBatch(assetIds);
+            onApplyTextureBatch={(assetIds, settings) => {
+              void handleApplyTextureProcessingBatch(assetIds, settings);
             }}
             onParticleChange={handleParticleChange}
             onTextureChange={handleTextureChange}

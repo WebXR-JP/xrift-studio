@@ -27,8 +27,11 @@ import {
   BUILTIN_PREFAB_DRAG_MIME,
   ASSET_IMPORT_ACCEPT,
   ASSET_KIND_UI,
+  estimateTextureBytes,
+  formatVramBytes,
   getXriftComponentDefinition,
   isEnvironmentTextureAsset,
+  isPublishedAsKtx2,
   isScenePlaceableAsset,
   listBuiltinPrefabRecipes,
   resolveAssetCreationFolderId,
@@ -124,10 +127,33 @@ function assetSourceLabel(asset: SceneAsset): string {
   if (asset.attribution) {
     return `${asset.attribution.providerName} · ${asset.attribution.licenseName}`;
   }
+  // 変換済みAssetの参照先はassets/.optimized/のハッシュ名ファイルになるが、
+  // 一覧に出すソースは取り込んだ元画像のままにする。別ファイルが増えたように
+  // 見せない。
+  const origin =
+    "optimizedFrom" in asset ? asset.optimizedFrom?.source : undefined;
+  if (origin?.kind === "project") return origin.relativePath;
   if (asset.source.kind === "project") return asset.source.relativePath;
   if (asset.source.kind === "builtin") return asset.source.key;
   return "document";
 }
+
+/** 一覧で並び替えに使う、いま使っているファイルの容量。 */
+function assetFileBytes(asset: SceneAsset): number | null {
+  if (!("importMetadata" in asset) || !asset.importMetadata) return null;
+  const byteLength = (asset.importMetadata as { byteLength?: unknown }).byteLength;
+  return typeof byteLength === "number" && Number.isFinite(byteLength)
+    ? byteLength
+    : null;
+}
+
+/** TextureだけVRAMの概算を持つ。VRAM診断と同じ計算を使う。 */
+function assetVramBytes(asset: SceneAsset): number | null {
+  if (asset.kind !== "texture" || asset.status !== "ready") return null;
+  return estimateTextureBytes(asset).bytes;
+}
+
+type AssetSortMode = "default" | "file-size" | "vram";
 
 function assetFolderPath(assets: AssetManifest, asset: SceneAsset): string {
   const segments: string[] = [];
@@ -487,6 +513,31 @@ function AssetCard({
   const KindIcon = EDITOR_ICONS[assetIconName(asset)];
   const DeleteIcon = EDITOR_ICONS.delete;
   const placeable = isScenePlaceableAsset(asset);
+  const fileBytes = assetFileBytes(asset);
+  const vramBytes = assetVramBytes(asset);
+  // KTX2にすればVRAMを下げられるTextureは、概算を強調して変換待ちだと分かるようにする。
+  const vramReducible =
+    vramBytes !== null && asset.kind === "texture" && !isPublishedAsKtx2(asset);
+  const sizeSummary =
+    fileBytes !== null || vramBytes !== null ? (
+      <span className="pointer-events-none block text-right text-[11px] leading-4 tabular-nums">
+        <span className="block text-slate-600">
+          {fileBytes !== null ? formatFileSize(fileBytes) : "—"}
+        </span>
+        {vramBytes !== null ? (
+          <span
+            className={`block ${vramReducible ? "font-medium text-amber-700" : "text-slate-400"}`}
+            title={
+              vramReducible
+                ? `VRAM概算 ${formatVramBytes(vramBytes)}。KTX2に変換するとVRAMを下げられます`
+                : `VRAM概算 ${formatVramBytes(vramBytes)}`
+            }
+          >
+            VRAM {formatVramBytes(vramBytes)}
+          </span>
+        ) : null}
+      </span>
+    ) : null;
   const dragDescription =
     asset.kind === "material"
       ? "Meshへ適用、またはFolderへ移動"
@@ -510,7 +561,7 @@ function AssetCard({
     return (
       <div
         onContextMenu={onOpenContext}
-        className={`group relative grid min-w-0 grid-cols-[46px_minmax(110px,1fr)_90px_70px_52px_28px] items-center gap-2 rounded-md border px-2 py-1 text-left ${
+        className={`group relative grid min-w-0 grid-cols-[46px_minmax(110px,1fr)_86px_90px_70px_52px_28px] items-center gap-2 rounded-md border px-2 py-1 text-left ${
           selected
             ? "border-brand-300 bg-brand-50"
             : "border-transparent bg-editor-surface hover:bg-editor-subtle"
@@ -525,7 +576,7 @@ function AssetCard({
           onClick={(event) => onSelect(asset.id, event)}
           onDoubleClick={() => onOpen()}
           title={commandTitle(`${asset.name}を選択／${dragDescription}`, "SelectAsset")}
-          className="col-span-4 grid cursor-grab grid-cols-[46px_minmax(110px,1fr)_90px_70px] items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing"
+          className="col-span-5 grid cursor-grab grid-cols-[46px_minmax(110px,1fr)_86px_90px_70px] items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing"
         >
           <span
             data-asset-drag-preview="true"
@@ -544,6 +595,7 @@ function AssetCard({
               </span>
             ) : null}
           </span>
+          {sizeSummary ?? <span />}
           <span className="flex items-center gap-1 text-xs text-slate-500">
             <KindIcon size={12} aria-hidden="true" />
             {assetKindLabel(asset)}
@@ -636,6 +688,24 @@ function AssetCard({
           {folderPath ? (
             <span className="mt-0.5 block truncate text-[11px] text-slate-400" title={assetSourceLabel(asset)}>
               {assetSourceLabel(asset)}
+            </span>
+          ) : null}
+          {fileBytes !== null || vramBytes !== null ? (
+            <span
+              className="mt-0.5 block truncate text-[11px] tabular-nums text-slate-500"
+              title={
+                vramBytes !== null && vramReducible
+                  ? "KTX2に変換するとVRAMを下げられます"
+                  : undefined
+              }
+            >
+              {fileBytes !== null ? formatFileSize(fileBytes) : ""}
+              {fileBytes !== null && vramBytes !== null ? " · " : ""}
+              {vramBytes !== null ? (
+                <span className={vramReducible ? "font-medium text-amber-700" : undefined}>
+                  VRAM {formatVramBytes(vramBytes)}
+                </span>
+              ) : null}
             </span>
           ) : null}
         </span>
@@ -1259,6 +1329,7 @@ export function AssetsPanel({
   const [rootDropTarget, setRootDropTarget] = useState(false);
   const [breadcrumbDropTargetId, setBreadcrumbDropTargetId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [sortMode, setSortMode] = useState<AssetSortMode>("default");
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -1321,18 +1392,37 @@ export function AssetsPanel({
       : activeFolder?.builtinPrefabs
         ? []
         : allAssets.filter((asset) => (asset.folderId ?? null) === null);
+  // 容量・VRAMの並び替えは大きい順。未変換の重いTextureを上へ集めて、
+  // そのままInspectorの変換へつなげるための並びなので、値が無いAssetは後ろへ。
+  const sortAssetsByMetric = (
+    list: readonly SceneAsset[],
+    metric: (asset: SceneAsset) => number | null,
+  ): SceneAsset[] =>
+    [...list].sort(
+      (left, right) =>
+        (metric(right) ?? -1) - (metric(left) ?? -1) ||
+        left.name.localeCompare(right.name) ||
+        left.id.localeCompare(right.id),
+    );
+  const applySortMode = (list: readonly SceneAsset[]): SceneAsset[] => {
+    if (sortMode === "file-size") return sortAssetsByMetric(list, assetFileBytes);
+    if (sortMode === "vram") return sortAssetsByMetric(list, assetVramBytes);
+    return [...list];
+  };
   const visibleAssets = searching
-    ? allAssets
-        .filter((asset) =>
-          matchesAssetSearch(asset, assetFolderPath(assets, asset), searchQuery),
-        )
-        .sort(
-          (left, right) =>
-            left.name.localeCompare(right.name) ||
-            left.kind.localeCompare(right.kind) ||
-            left.id.localeCompare(right.id),
-        )
-    : folderAssets;
+    ? applySortMode(
+        allAssets
+          .filter((asset) =>
+            matchesAssetSearch(asset, assetFolderPath(assets, asset), searchQuery),
+          )
+          .sort(
+            (left, right) =>
+              left.name.localeCompare(right.name) ||
+              left.kind.localeCompare(right.kind) ||
+              left.id.localeCompare(right.id),
+          ),
+      )
+    : applySortMode(folderAssets);
   const handleAssetSelect = (
     assetId: string,
     event: MouseEvent<HTMLButtonElement>,
@@ -1700,12 +1790,28 @@ export function AssetsPanel({
           onMoveFolder={onMoveFolder}
         />
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex h-8 shrink-0 items-center justify-between border-b border-editor-border bg-editor-subtle px-3 text-xs">
+          <div className="flex h-8 shrink-0 items-center justify-between gap-2 border-b border-editor-border bg-editor-subtle px-3 text-xs">
             <span className="truncate font-medium text-editor-text">
               {searching ? `「${searchQuery.trim()}」の検索結果` : activeFolder?.name ?? "Assets直下"}
             </span>
-            <span className="shrink-0 tabular-nums text-[11px] text-editor-muted" aria-live="polite">
-              {searching ? `${visibleAssets.length} / ${allAssets.length}件` : `${visibleItemCount}件`}
+            <span className="flex shrink-0 items-center gap-2">
+              <label className="flex items-center gap-1 text-[11px] text-editor-muted">
+                <span>並び替え</span>
+                <select
+                  value={sortMode}
+                  onChange={(event) =>
+                    setSortMode(event.currentTarget.value as AssetSortMode)
+                  }
+                  className="h-6 rounded border border-editor-border bg-editor-surface px-1 text-[11px] text-editor-text focus-visible:border-brand-400 focus-visible:outline-none"
+                >
+                  <option value="default">標準</option>
+                  <option value="file-size">ファイルサイズが大きい順</option>
+                  <option value="vram">VRAM概算が大きい順</option>
+                </select>
+              </label>
+              <span className="tabular-nums text-[11px] text-editor-muted" aria-live="polite">
+                {searching ? `${visibleAssets.length} / ${allAssets.length}件` : `${visibleItemCount}件`}
+              </span>
             </span>
           </div>
           <div className={`scrollbar-thin min-w-0 flex-1 overflow-auto p-2 ${viewMode === "grid" ? "grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(104px,1fr))] content-start gap-1.5" : "space-y-1"}`}>

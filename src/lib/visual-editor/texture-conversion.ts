@@ -18,6 +18,9 @@ import {
 
 export const TEXTURE_MAX_SIZE_CHOICES = [256, 512, 1024, 2048, 4096, 8192] as const;
 
+/** 自動最適化（VRAM推奨）がResizeで押さえる長辺。診断と適用で同じ値を使う。 */
+export const RECOMMENDED_TEXTURE_MAX_SIZE = 2048;
+
 export type TextureMaxSizeChoice = (typeof TEXTURE_MAX_SIZE_CHOICES)[number];
 
 /** Canvas / KTX2エンコーダで書き出せる形式。 */

@@ -313,7 +313,8 @@ function expandTextures(
 
   for (const image of images) {
     if (referencedImages.has(image.index)) continue;
-    const settings = normalizeTextureImportSettings();
+    // Texture slotを持たない画像にも、取り込み時の共通設定は同じように入れる。
+    const settings = normalizeTextureImportSettings(input.textureImportSettings);
     const recipeKey = `${image.hash}:${JSON.stringify(settings.sampler)}`;
     if (sharedByRecipe.has(recipeKey)) continue;
     const expanded = createExpandedTexture(

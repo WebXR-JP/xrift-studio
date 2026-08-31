@@ -6,18 +6,25 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { TEXTURE_MAX_SIZE_CHOICES } from "../../lib/visual-editor/texture-conversion";
-import type { TextureImportMaxSize } from "./texture-import-defaults";
+import type {
+  TextureImportCompression,
+  TextureImportMaxSize,
+} from "./texture-import-defaults";
 
 export function EditorImportMenu({
   disabledReason,
   textureMaxSize,
   onTextureMaxSizeChange,
+  textureCompression,
+  onTextureCompressionChange,
   onImportModel,
   onImportR3f,
 }: {
   disabledReason?: string | null;
   textureMaxSize: TextureImportMaxSize;
   onTextureMaxSizeChange: (value: TextureImportMaxSize) => void;
+  textureCompression: TextureImportCompression;
+  onTextureCompressionChange: (value: TextureImportCompression) => void;
   onImportModel: () => void;
   onImportR3f: () => void;
 }) {
@@ -78,31 +85,50 @@ export function EditorImportMenu({
               onImportR3f();
             }}
           />
-          <label className="mx-1 mt-1 block border-t border-slate-100 px-1.5 pt-2.5">
+          <div className="mx-1 mt-1 border-t border-slate-100 px-1.5 pt-2.5">
             <span className="block text-xs font-semibold text-slate-800">
-              取り込むTextureの最大解像度
+              取り込むTextureのサイズと圧縮
             </span>
             <span className="mt-0.5 block text-[10px] leading-4 text-slate-500">
-              モデル内蔵のTextureも、この上限で編集用画像を作ります。元画像は保持します。モデルの再インポートにも適用します（保護した個別設定を優先）
+              モデル内蔵のTextureも、この設定で編集用画像を作ります。元画像は保持し、シーンと公開の両方が変換後の画像を使います。モデルの再インポートにも適用します（保護した個別設定を優先）
             </span>
-            <select
-              value={String(textureMaxSize)}
-              onChange={(event) => {
-                const value = event.currentTarget.value;
-                onTextureMaxSizeChange(
-                  value === "original" ? "original" : (Number(value) as TextureImportMaxSize),
-                );
-              }}
-              className="mt-1.5 h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 focus-visible:border-violet-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-100"
-            >
-              <option value="original">原寸のまま</option>
-              {TEXTURE_MAX_SIZE_CHOICES.map((size) => (
-                <option key={size} value={size}>
-                  長辺を最大 {size}px まで
-                </option>
-              ))}
-            </select>
-          </label>
+            <label className="mt-1.5 block">
+              <span className="block text-[10px] font-medium text-slate-600">最大解像度</span>
+              <select
+                value={String(textureMaxSize)}
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  onTextureMaxSizeChange(
+                    value === "original" ? "original" : (Number(value) as TextureImportMaxSize),
+                  );
+                }}
+                className="mt-1 h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 focus-visible:border-violet-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-100"
+              >
+                <option value="original">原寸のまま</option>
+                {TEXTURE_MAX_SIZE_CHOICES.map((size) => (
+                  <option key={size} value={size}>
+                    長辺を最大 {size}px まで
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="mt-1.5 block">
+              <span className="block text-[10px] font-medium text-slate-600">圧縮方式</span>
+              <select
+                value={textureCompression}
+                onChange={(event) =>
+                  onTextureCompressionChange(
+                    event.currentTarget.value as TextureImportCompression,
+                  )
+                }
+                className="mt-1 h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 focus-visible:border-violet-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-100"
+              >
+                <option value="source">画像形式を維持</option>
+                <option value="webp">WEBP（配信サイズを下げる）</option>
+                <option value="ktx2">KTX2 / Basis（GPU圧縮）</option>
+              </select>
+            </label>
+          </div>
           <p className="mx-1 mt-2 border-t border-slate-100 px-2 pt-2 text-[10px] leading-4 text-slate-500">
             公式ComponentとOpen BrushはAssetsの「外部から追加」から選べます。
           </p>

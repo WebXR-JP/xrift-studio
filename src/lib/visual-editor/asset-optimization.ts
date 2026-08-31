@@ -1,18 +1,20 @@
 import { tauri } from "../tauri";
-import type {
-  ModelAsset,
-  SceneAsset,
-  TextureAsset,
+import {
+  normalizeTextureImportSettings,
+  type ModelAsset,
+  type SceneAsset,
+  type TextureAsset,
 } from "./asset-manifest";
 import type { PrototypeVisualProject } from "./prototype-project";
 import {
+  RECOMMENDED_TEXTURE_MAX_SIZE,
   assetBytesToDataUrl,
-  copyAssetBytes,
-  ktx2QualityLevel,
+  encodeTextureForPlan,
+  planTextureProcessing,
   processedAssetPath,
   readProjectAssetBytes,
-  renderImageBytes,
   sha256Hex,
+  textureProcessingSettings,
 } from "./texture-processing";
 import {
   createAssetImportTransactionId,
@@ -104,19 +106,27 @@ export async function applyAssetOptimizations(
       phase: "reading",
     });
     try {
-      const sourceBytes = await readProjectAssetBytes(
-        projectPath,
-        sourceAsset.source.relativePath,
-      );
-      report?.({
-        completed: index,
-        total: plans.length,
-        label: `${sourceAsset.name}を最適化しています`,
-        phase: "encoding",
-      });
       if (sourceAsset.kind === "texture") {
-        optimized.push(await optimizeTexture(sourceAsset, sourceBytes, plan.operations));
+        report?.({
+          completed: index,
+          total: plans.length,
+          label: `${sourceAsset.name}を最適化しています`,
+          phase: "encoding",
+        });
+        optimized.push(
+          await optimizeTexture(projectPath, sourceAsset, plan.operations),
+        );
       } else if (sourceAsset.kind === "model" && plan.operations.has("draco-model")) {
+        const sourceBytes = await readProjectAssetBytes(
+          projectPath,
+          sourceAsset.source.relativePath,
+        );
+        report?.({
+          completed: index,
+          total: plans.length,
+          label: `${sourceAsset.name}を最適化しています`,
+          phase: "encoding",
+        });
         optimized.push(await optimizeModel(sourceAsset, sourceBytes));
       } else {
         skipped.push({
@@ -199,9 +209,16 @@ function groupOperations(
   return [...grouped].map(([assetId, operations]) => ({ assetId, operations }));
 }
 
+/**
+ * VRAM推奨をInspectorと同じImport設定の語彙へ写し、共有の変換パイプライン
+ * （planTextureProcessing / encodeTextureForPlan）へ委譲する。以前はここが
+ * 独自のエンコード経路を持っていて、2048px・画質86のような、UIから再現
+ * できない recipe を残していた。共有経路は保持した元画像から描き直すので、
+ * 変換済みTextureをもう一度最適化しても二重に劣化しない。
+ */
 async function optimizeTexture(
+  projectPath: string,
   asset: TextureAsset,
-  sourceBytes: Uint8Array,
   operations: ReadonlySet<AssetOptimizationOperation>,
 ): Promise<OptimizedAsset> {
   const shouldResize = operations.has("resize-texture");
@@ -209,97 +226,42 @@ async function optimizeTexture(
   if (!shouldResize && !shouldEncodeKtx2) {
     throw new Error(`${asset.name}にはTexture最適化が選択されていません。`);
   }
-  if (
-    asset.usage === "environment" ||
-    !asset.importMetadata ||
-    !["png", "jpeg", "webp", "avif"].includes(asset.importMetadata.sourceFormat)
-  ) {
-    throw new Error(`${asset.name}の形式は自動Texture最適化に対応していません。`);
-  }
 
-  // KTX2へ送る中間画像は可逆のPNGにして、WEBPとBasisで二重に劣化させない。
-  // GPU圧縮は2のべき乗の辺で素直に効くので、その時だけ辺を丸める。
-  const resized =
-    shouldResize || shouldEncodeKtx2
-      ? await renderImageBytes(sourceBytes, {
-          maxSize: shouldResize ? 2048 : null,
-          powerOfTwo: shouldEncodeKtx2,
-          mimeType: shouldEncodeKtx2 ? "image/png" : "image/webp",
-          quality: shouldEncodeKtx2 ? undefined : 0.86,
-        })
-      : {
-          bytes: sourceBytes,
-          width: asset.importMetadata.width,
-          height: asset.importMetadata.height,
-        };
-  let bytes = resized.bytes;
-  let extension = "webp";
-  let mimeType = "image/webp";
-  let sourceFormat: "webp" | "ktx2" = "webp";
-
-  if (shouldEncodeKtx2) {
-    const { encodeToKTX2 } = await import("ktx2-encoder");
-    bytes = await encodeToKTX2(copyAssetBytes(resized.bytes), {
-      isUASTC: false,
-      qualityLevel: ktx2QualityLevel(asset.importSettings.compression.quality),
-      compressionLevel: 2,
-      generateMipmap: asset.importSettings.generateMipmaps,
-      isPerceptual: asset.importSettings.colorSpace === "srgb",
-      isSetKTX2SRGBTransferFunc: asset.importSettings.colorSpace === "srgb",
-      isKTX2File: true,
-    });
-    extension = "ktx2";
-    mimeType = "image/ktx2";
-    sourceFormat = "ktx2";
-  }
-
-  const sourceHash = await sha256Hex(bytes);
-  const relativePath = processedAssetPath(asset.id, sourceHash, extension);
-  return {
-    beforeBytes: sourceBytes.byteLength,
-    bytes,
-    relativePath,
-    asset: {
-      ...asset,
-      source: { kind: "project", relativePath },
-      sourceHash,
-      thumbnail:
-        asset.thumbnail?.status === "generated"
-          ? { ...asset.thumbnail, status: "stale" }
-          : asset.thumbnail,
-      importMetadata: {
-        sourceFormat,
-        mimeType,
-        byteLength: bytes.byteLength,
-        width: resized.width ?? asset.importMetadata.width,
-        height: resized.height ?? asset.importMetadata.height,
-      },
-      importSettings: {
-        ...asset.importSettings,
-        resize: { mode: "original", powerOfTwo: false },
-        compression: {
-          ...asset.importSettings.compression,
-          format: "source",
-          quality: shouldEncodeKtx2 ? asset.importSettings.compression.quality : 86,
-        },
-      },
-      // 原本は書き換えないので、Inspectorからいつでも戻せる。
-      optimizedFrom: {
-        ...(asset.optimizedFrom ?? {
-          source: asset.source,
-          sourceHash: asset.sourceHash,
-          importMetadata: asset.importMetadata,
-          importSettings: asset.importSettings,
-        }),
-        importSettings: {
-          ...asset.importSettings,
-          resize: shouldResize ? { mode: "max-size", maxSize: 2048, powerOfTwo: shouldEncodeKtx2 } : { mode: "original", powerOfTwo: shouldEncodeKtx2 },
-          compression: { ...asset.importSettings.compression, format: sourceFormat, quality: shouldEncodeKtx2 ? asset.importSettings.compression.quality : 86 },
-        },
-        appliedAt: new Date().toISOString(),
-      },
-      ...(asset.importedFromModel ? { importedFromModel: { ...asset.importedFromModel, isUserOverridden: true } } : {}),
+  const base = textureProcessingSettings(asset);
+  const target = normalizeTextureImportSettings(
+    {
+      // GPU圧縮は2のべき乗の辺で素直に効くので、KTX2のときだけ辺を丸める。
+      resize: shouldResize
+        ? {
+            mode: "max-size",
+            maxSize: RECOMMENDED_TEXTURE_MAX_SIZE,
+            powerOfTwo: base.resize.powerOfTwo === true || shouldEncodeKtx2,
+          }
+        : {
+            ...base.resize,
+            powerOfTwo: base.resize.powerOfTwo === true || shouldEncodeKtx2,
+          },
+      compression: { format: shouldEncodeKtx2 ? "ktx2" : "webp" },
     },
+    base,
+  );
+  const candidate: TextureAsset = { ...asset, importSettings: target };
+  const plan = planTextureProcessing(candidate);
+  if (!plan.supported) {
+    throw new Error(`${asset.name}は自動最適化できません。${plan.reason}`);
+  }
+  if (!plan.pending) {
+    throw new Error(
+      `${asset.name}は${plan.settledReason ?? "すでにこの設定で最適化済みです。"}`,
+    );
+  }
+
+  const encoded = await encodeTextureForPlan(projectPath, candidate, plan);
+  return {
+    beforeBytes: encoded.beforeBytes,
+    bytes: encoded.bytes,
+    relativePath: encoded.relativePath,
+    asset: encoded.asset,
   };
 }
 

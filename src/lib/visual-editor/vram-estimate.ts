@@ -8,6 +8,11 @@ import type {
 } from "./asset-manifest";
 import type { RegisteredSceneComponent } from "./scene-document";
 import { resolvePrefabInstances } from "./compiler/prefab-resolver";
+import {
+  RECOMMENDED_TEXTURE_MAX_SIZE,
+  fitWithin as fitTextureWithin,
+  isConvertibleTextureSourceFormat,
+} from "./texture-conversion";
 
 const MIB = 1024 * 1024;
 const RUNTIME_LOW_BYTES = 32 * MIB;
@@ -309,13 +314,14 @@ function collectTextureIds(material: MaterialAsset): string[] {
   return [...ids];
 }
 
-type TextureByteEstimate = {
+export type TextureByteEstimate = {
   bytes: number;
   hasKnownDimensions: boolean;
   detail: string;
 };
 
-function estimateTextureBytes(asset: TextureAsset): TextureByteEstimate {
+/** Assets一覧の並び替えと表示も、この診断と同じ概算を使う。 */
+export function estimateTextureBytes(asset: TextureAsset): TextureByteEstimate {
   const metadata = asset.importMetadata;
   const sourceWidth = metadata?.width;
   const sourceHeight = metadata?.height;
@@ -364,8 +370,12 @@ function textureRecommendations(
   const width = asset.importMetadata?.width;
   const height = asset.importMetadata?.height;
   const maxDimension = Math.max(width ?? 0, height ?? 0);
-  if (maxDimension > 2048) {
-    const resized = fitWithin(width ?? maxDimension, height ?? maxDimension, 2048);
+  if (maxDimension > RECOMMENDED_TEXTURE_MAX_SIZE) {
+    const resized = fitWithin(
+      width ?? maxDimension,
+      height ?? maxDimension,
+      RECOMMENDED_TEXTURE_MAX_SIZE,
+    );
     const mipFactor = asset.importSettings.generateMipmaps ? 4 / 3 : 1;
     const resizedVramBytes = resized.width * resized.height * 4 * mipFactor;
     const sourcePixels = Math.max(1, (width ?? 1) * (height ?? 1));
@@ -376,13 +386,11 @@ function textureRecommendations(
       operation:
         asset.source.kind === "project" &&
         asset.usage !== "environment" &&
-        ["png", "jpeg", "webp", "avif"].includes(
-          asset.importMetadata?.sourceFormat ?? "",
-        )
+        isConvertibleTextureSourceFormat(asset.importMetadata?.sourceFormat)
           ? "resize-texture"
           : undefined,
       severity: maxDimension > 4096 ? "recommended" : "consider",
-      title: `${asset.name}を最大2048pxへ縮小`,
+      title: `${asset.name}を最大${RECOMMENDED_TEXTURE_MAX_SIZE}pxへ縮小`,
       detail: `${width} × ${height}です。スマートフォン向けでは、見た目を確認しながら最大サイズを下げられます。`,
       assetId: asset.id,
       impact: "both",
@@ -416,9 +424,7 @@ function textureRecommendations(
       operation:
         asset.source.kind === "project" &&
         asset.usage !== "environment" &&
-        ["png", "jpeg", "webp", "avif"].includes(
-          asset.importMetadata?.sourceFormat ?? "",
-        )
+        isConvertibleTextureSourceFormat(asset.importMetadata?.sourceFormat)
           ? "ktx2-texture"
           : undefined,
       severity: currentVramBytes >= 16 * MIB ? "recommended" : "consider",
@@ -545,14 +551,7 @@ function fitWithin(
   height: number,
   maxSize?: number,
 ): { width: number; height: number } {
-  if (!maxSize || Math.max(width, height) <= maxSize) {
-    return { width, height };
-  }
-  const scale = maxSize / Math.max(width, height);
-  return {
-    width: Math.max(1, Math.round(width * scale)),
-    height: Math.max(1, Math.round(height * scale)),
-  };
+  return fitTextureWithin(width, height, maxSize ?? null);
 }
 
 function rateBytes(
