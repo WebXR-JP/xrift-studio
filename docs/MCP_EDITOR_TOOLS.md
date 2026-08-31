@@ -185,6 +185,15 @@ Ctrl+C / Ctrl+V と同じく別のグラフへも置ける。同じグラフの�
 値を持たないプロパティへ時間を指定すると拒否する。runtime が作れない滑らかさを
 グラフが約束しないため。
 
+値が数値でないプロパティは `value` を取らない。`kind` が `asset` のものは
+`valueAssetId`、`string` のものは `text` を取る。KHR_interactivity に string 型は
+無く、Asset も文も補間できる量ではないので、どちらも target と並んで
+`configuration` に入る。`valueAssetId` へ空文字を渡すと、シーン設定側の Asset へ
+戻る。`list_interaction_trigger_targets` は各プロパティの `kind` に加えて、
+受け付ける Asset の種類 (`assetKinds`) と、どの引数で渡すか (`argument`) を返す。
+`Scene` ターゲットへの書き込みはすべて client-local で、そのグラフを実行して
+いるビューアーの描画にだけ効く。
+
 `simulate_interactivity_asset` はレンダラー無しでグラフを進め、いつ何が起きるか
 を返す。Editor のタイムラインと同じ実行で、JSON を読んでも「その待機が意図した
 時刻に届くか」「その繰り返しが終わるか」「どの枝が一度も動かないか」は分からない。

@@ -144,6 +144,116 @@ export function LiteralValueField({
  * the option labels and whether the three floats are a colour, so the author
  * edits "音量 0.4" instead of "float[0] = 0.4".
  */
+/**
+ * Picks the Asset an action points a property at.
+ *
+ * Separate from `TriggerValueField` because there is no value to edit: the id
+ * is configuration, and「選ばない」is a real choice — it puts the Scene's own
+ * Asset back rather than leaving the action unfinished.
+ */
+/**
+ * Edits the text a text-valued action writes.
+ *
+ * A textarea rather than an input because a sign is often two lines, and a
+ * field that silently refuses a newline is worse than one that never offered.
+ * The font id is the exception this shares: the value is a catalog id, so it is
+ * offered as a list rather than as free text.
+ */
+export function TriggerTextField({
+  descriptor,
+  text,
+  options,
+  disabled,
+  onChange,
+}: {
+  descriptor: XriftInteractionPropertyDescriptor;
+  text: string;
+  /** Non-empty for a property whose strings come from a fixed list. */
+  options?: readonly { value: string; label: string }[];
+  disabled: boolean;
+  onChange: (text: string) => void;
+}) {
+  if (options && options.length > 0) {
+    const known = options.some((option) => option.value === text);
+    return (
+      <label className="block text-[10px] text-slate-300">
+        {descriptor.label}
+        <select
+          value={text}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.value)}
+          className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs"
+        >
+          {known ? null : <option value={text}>{text || "未設定"}</option>}
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+  return (
+    <label className="block text-[10px] text-slate-300">
+      {descriptor.label}
+      <textarea
+        value={text}
+        disabled={disabled}
+        rows={2}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 w-full resize-y rounded border border-slate-600 bg-slate-950 px-2 py-1 text-xs"
+      />
+    </label>
+  );
+}
+
+export function TriggerAssetField({
+  descriptor,
+  assetId,
+  choices,
+  disabled,
+  onChange,
+}: {
+  descriptor: XriftInteractionPropertyDescriptor;
+  assetId: string;
+  choices: readonly { id: string; name: string; kind: string }[];
+  disabled: boolean;
+  onChange: (assetId: string) => void;
+}) {
+  const kinds = descriptor.assetKinds ?? [];
+  const offered = choices
+    .filter((choice) => kinds.includes(choice.kind))
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const missing = assetId !== "" && !offered.some((choice) => choice.id === assetId);
+  return (
+    <label className="block text-[10px] text-slate-300">
+      {descriptor.label}
+      <select
+        value={assetId}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs"
+      >
+        <option value="">Sceneの設定に戻す</option>
+        {missing ? (
+          <option value={assetId}>見つからないAsset</option>
+        ) : null}
+        {offered.map((choice) => (
+          <option key={choice.id} value={choice.id}>
+            {choice.name}
+          </option>
+        ))}
+      </select>
+      {offered.length === 0 ? (
+        <span className="mt-1 block text-[10px] leading-4 text-amber-200">
+          差し替えられるAssetがProjectにありません。先にAssetsへ追加してください。
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
 export function TriggerValueField({
   descriptor,
   value,

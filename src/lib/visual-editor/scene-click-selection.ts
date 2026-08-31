@@ -61,10 +61,7 @@ export function resolveSceneClickSelection(
   if (!currentEntityId || !scene.entities[currentEntityId]) {
     return pick.fallbackEntityId;
   }
-  const anchored =
-    first !== null &&
-    (first === currentEntityId ||
-      isEntityDescendantOf(scene, currentEntityId, first));
+  const anchored = isSelectionBuriedUnderPick(scene, currentEntityId, pick);
   if (!anchored) return pick.fallbackEntityId;
   const surfaceDescendant = pick.rayEntityIds.find((id) =>
     isEntityDescendantOf(scene, id, currentEntityId),
@@ -81,4 +78,59 @@ export function resolveSceneClickSelection(
     return currentEntityId;
   }
   return pick.fallbackEntityId;
+}
+
+/**
+ * Decides what a right click acts on, so the menu matches the drilled selection.
+ *
+ * The frontmost surface alone is the wrong target once MI-114's drill-down has
+ * stepped inside a large mesh: the enclosing ancestor still owns the first hit,
+ * so a menu built from it would delete the whole subtree the user just drilled
+ * into. When the click lands on the selection itself, or on the ancestor the
+ * selection is buried under, the menu therefore keeps the current selection.
+ *
+ * Unlike a left click this never steps deeper — the target has to be what the
+ * viewport already shows as selected, not the next level down — and a click
+ * that leaves the selection's subtree falls back to the frontmost pick, the
+ * same restart a left click does.
+ */
+export function resolveSceneContextMenuTarget(
+  scene: SceneDocument,
+  currentEntityId: string | null,
+  pick: SceneClickPick,
+): string | null {
+  if (!currentEntityId || !scene.entities[currentEntityId]) {
+    return pick.fallbackEntityId;
+  }
+  if (!isSelectionBuriedUnderPick(scene, currentEntityId, pick)) {
+    return pick.fallbackEntityId;
+  }
+  const touchesSelection =
+    pick.rayEntityIds.includes(currentEntityId) ||
+    pick.originEntityIds.includes(currentEntityId) ||
+    pick.rayEntityIds.some((id) =>
+      isEntityDescendantOf(scene, id, currentEntityId),
+    ) ||
+    pick.originEntityIds.some((id) =>
+      isEntityDescendantOf(scene, id, currentEntityId),
+    );
+  return touchesSelection ? currentEntityId : pick.fallbackEntityId;
+}
+
+/**
+ * True when the frontmost surface is the selection itself or an ancestor of it,
+ * which is the state the drill-down anchors to: the selection is what the click
+ * is aimed at even though a larger mesh received the first hit.
+ */
+function isSelectionBuriedUnderPick(
+  scene: SceneDocument,
+  currentEntityId: string,
+  pick: SceneClickPick,
+): boolean {
+  const first = pick.rayEntityIds[0] ?? null;
+  if (first === null) return false;
+  return (
+    first === currentEntityId ||
+    isEntityDescendantOf(scene, currentEntityId, first)
+  );
 }

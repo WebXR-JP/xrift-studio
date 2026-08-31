@@ -37,7 +37,11 @@ import {
   emitXriftInteraction,
   XriftInteractionTriggerRuntime,
 } from "../../../packages/xrift-studio-runtime/src/script/interaction-trigger-runtime";
-import { XriftSceneRuntime } from "../../../packages/xrift-studio-runtime/src/script/scene-runtime";
+import {
+  XriftSceneRuntime,
+  XRIFT_SCENE_SKYBOX_USER_DATA_KEY,
+  type XriftSceneRuntimeAsset,
+} from "../../../packages/xrift-studio-runtime/src/script/scene-runtime";
 import {
   applyTimeUniformValue,
   type MutableUniformValue,
@@ -162,7 +166,10 @@ import {
   type InteractivityAnimationCue,
 } from "../../lib/visual-editor";
 import { tauri } from "../../lib/tauri";
-import { resolveSceneClickSelection } from "../../lib/visual-editor/scene-click-selection";
+import {
+  resolveSceneClickSelection,
+  resolveSceneContextMenuTarget,
+} from "../../lib/visual-editor/scene-click-selection";
 import { isEditableShortcutTarget } from "../../lib/visual-editor/shortcuts";
 import {
   EDITOR_HELPER_USER_DATA,
@@ -3507,6 +3514,112 @@ function createSkyGeometry(
   return new SphereGeometry(1, 32, 20);
 }
 
+/**
+ * Marks the editor's sky meshes as the authored sky.
+ *
+ * A behavior graph turning the background off for one viewer looks for this
+ * flag, because a gradient, Box, Dome or Sky Shader sky is a mesh rather than
+ * `scene.background`. One frozen object so the prop keeps its identity.
+ */
+const SKY_MESH_USER_DATA = Object.freeze({
+  [XRIFT_SCENE_SKYBOX_USER_DATA_KEY]: true,
+});
+
+/**
+ * Sky images the Scene's Interactivity Graphs can switch to, ready to load.
+ *
+ * Play has no published files, so the bytes are read out of the project and
+ * handed over as data URLs — the same thing `useSceneSkyboxTexture` does for
+ * the authored sky. The decoding itself belongs to the runtime module, so Play
+ * and a published world put the same image up.
+ */
+function useInteractionTriggerSkyAssets(
+  scene: SceneDocument,
+  assets: AssetManifest,
+  projectPath: string | undefined,
+): Readonly<Record<string, XriftSceneRuntimeAsset>> {
+  const assetIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const entity of Object.values(scene.entities)) {
+      for (const component of entity.components) {
+        if (component.type !== "interaction-trigger" || !component.enabled) {
+          continue;
+        }
+        for (const assetId of component.assetReferences ?? []) ids.add(assetId);
+      }
+    }
+    return [...ids].sort();
+  }, [scene.entities]);
+  const [resolved, setResolved] = useState<
+    Readonly<Record<string, XriftSceneRuntimeAsset>>
+  >({});
+  const key = assetIds.join("\n");
+
+  useEffect(() => {
+    let active = true;
+    if (!projectPath || assetIds.length === 0) {
+      setResolved({});
+      return () => {
+        active = false;
+      };
+    }
+    void Promise.all(
+      assetIds.map(async (assetId) => {
+        const asset = assets.assets[assetId];
+        if (
+          !asset ||
+          (asset.kind !== "texture" && asset.kind !== "skybox") ||
+          asset.source.kind !== "project"
+        ) {
+          return null;
+        }
+        const textureAsset =
+          asset.kind === "texture" && asset.source.kind === "project"
+            ? (asset as TextureAsset & {
+                source: { kind: "project"; relativePath: string };
+              })
+            : undefined;
+        const url =
+          textureAsset && !isEnvironmentTextureAsset(textureAsset)
+            ? await readProjectTextureDataUrl(projectPath, textureAsset)
+            : await tauri.readProjectFileDataUrl(
+                projectPath,
+                asset.source.relativePath,
+              );
+        return [
+          assetId,
+          {
+            url,
+            sourceFormat:
+              asset.kind === "skybox"
+                ? asset.sourceFormat
+                : getTextureSourceFormat(asset),
+            flipY: textureAsset?.importSettings.flipY ?? false,
+            name: asset.name,
+          } satisfies XriftSceneRuntimeAsset,
+        ] as const;
+      }),
+    )
+      .then((entries) => {
+        if (!active) return;
+        setResolved(
+          Object.fromEntries(entries.filter((entry) => entry !== null)),
+        );
+      })
+      .catch(() => {
+        // A sky the project cannot read stays absent, and the graph's swap
+        // simply leaves the authored sky up. Nothing stands in for it.
+        if (active) setResolved({});
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assets, key, projectPath]);
+
+  return resolved;
+}
+
 function useSceneSkyboxTexture(
   assets: AssetManifest,
   imageAssetId: string | undefined,
@@ -3718,6 +3831,7 @@ function ProjectedSkyboxPreview({
         <mesh
           ref={meshRef}
           geometry={geometry}
+          userData={SKY_MESH_USER_DATA}
           position={
             settings.projection === "infinite" ? undefined : settings.meshPosition
           }
@@ -3905,6 +4019,7 @@ function SkyShaderPreview({
       ref={meshRef}
       geometry={geometry}
       material={material}
+      userData={SKY_MESH_USER_DATA}
       position={
         settings.projection === "infinite" ? undefined : settings.meshPosition
       }
@@ -4514,6 +4629,13 @@ export function SceneViewport({
     [scene.settings],
   );
   const gizmoSettings = sceneSettings.editor.gizmo;
+  // Sky images the Scene's graphs can switch to, read out of the project so
+  // Play shows the same swap the published world will.
+  const triggerSkyAssets = useInteractionTriggerSkyAssets(
+    scene,
+    assets,
+    projectPath,
+  );
   const snapActive = resolveSnapActive(gizmoSettings, snapModifierHeld);
   // One object identity per resolved state keeps the Entity tree from
   // re-rendering on unrelated renders.
@@ -5333,11 +5455,24 @@ export function SceneViewport({
     const bounds = event.currentTarget.getBoundingClientRect();
     // Right-clicking an object acts on that object, the way the Hierarchy's own
     // context menu does: the Entity under the pointer is selected first, so the
-    // menu's delete and the gizmo never disagree about the target.
-    const pointedEntityId =
-      dropResolverRef.current?.(event.clientX, event.clientY, {
-        includeEntityOriginFallback: true,
-      }).authoringEntityId ?? null;
+    // menu's delete and the gizmo never disagree about the target. A selection
+    // drilled into a large mesh keeps the menu on the drilled Entity instead of
+    // the ancestor that still owns the frontmost surface, so delete never takes
+    // the whole subtree the click just stepped inside.
+    const pointerPick = dropResolverRef.current?.(
+      event.clientX,
+      event.clientY,
+      { includeEntityOriginFallback: true },
+    );
+    const pointedEntityId = resolveSceneContextMenuTarget(
+      scene,
+      selectedEntityId,
+      {
+        rayEntityIds: pointerPick?.rayEntityIds ?? [],
+        originEntityIds: pointerPick?.originEntityIds ?? [],
+        fallbackEntityId: pointerPick?.authoringEntityId ?? null,
+      },
+    );
     if (
       pointedEntityId &&
       !(selection?.kind === "entity" && selection.id === pointedEntityId)
@@ -5947,9 +6082,15 @@ export function SceneViewport({
           {qualityProfile.postprocessing ? (
             <ScenePostprocessing settings={sceneSettings.postprocessing} />
           ) : null}
-          {/* Scene-wide graph writes: exposure and the screen fade. Mounted only
-              while Play runs, so a graph never dims the editing view. */}
-          <XriftSceneRuntime enabled={editorMode === "play"} />
+          {/* Scene-wide graph writes: the compositor, fog, ambient light, the
+              sky, the camera and the screen fade. Mounted only while Play runs,
+              so a graph never changes the editing view out from under the
+              author. Everything it writes is this viewer's own, exactly as it
+              is for one person in a published world. */}
+          <XriftSceneRuntime
+            enabled={editorMode === "play"}
+            assets={triggerSkyAssets}
+          />
           <SceneWind
             sceneDocument={preview.scene}
             settings={sceneSettings.vegetation}

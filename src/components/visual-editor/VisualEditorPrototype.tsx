@@ -143,7 +143,7 @@ import {
   collectInteractionTriggerTargets,
   createInteractionTriggerGraphExtension,
   createModelAnimationGraphExtension,
-  syncInteractionTriggerEntityReferences,
+  syncInteractionTriggerReferences,
   XRIFT_COMPONENT_SCHEMA_IDS,
   updateInteractionTriggerComponent,
   updateInteractivityAsset,
@@ -6826,7 +6826,7 @@ export function VisualEditorPrototype({
     (entityId: string, componentId: string, patch: InteractionTriggerPatch) => {
       if (editorMode !== "edit" && !playSession) return;
       updateScene((scene) =>
-        syncInteractionTriggerEntityReferences(
+        syncInteractionTriggerReferences(
           updateInteractionTriggerComponent(scene, entityId, componentId, patch),
           bundleRef.current.assets,
         ),
@@ -8755,7 +8755,7 @@ export function VisualEditorPrototype({
         return touchProject({
           ...current,
           assets,
-          scene: syncInteractionTriggerEntityReferences(current.scene, assets),
+          scene: syncInteractionTriggerReferences(current.scene, assets),
         });
       });
     },
@@ -8915,7 +8915,7 @@ export function VisualEditorPrototype({
         if (!result.added) return current;
         return touchProject({
           ...current,
-          scene: syncInteractionTriggerEntityReferences(
+          scene: syncInteractionTriggerReferences(
             result.scene,
             current.assets,
           ),
@@ -11441,6 +11441,11 @@ export function VisualEditorPrototype({
               materials={Object.values(bundle.assets.assets).filter(
                 (asset) => asset.kind === "material",
               )}
+              assetChoices={Object.values(bundle.assets.assets).map((asset) => ({
+                id: asset.id,
+                name: asset.name,
+                kind: asset.kind,
+              }))}
               triggerTargets={interactionTriggerTargets}
               readOnly={renderedReadOnly}
               onSave={handleSaveInteractivityAsset}

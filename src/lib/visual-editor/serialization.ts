@@ -86,7 +86,9 @@ export const sceneDocumentCodec: VisualDocumentCodec<SceneDocument> = {
     // A few early documents serialized it as a bare boolean, which otherwise
     // makes the whole project fail to open with a type error. Normalize only
     // that legacy shape; canonical objects continue through strict validation.
-    const migrated = migrateLegacyScenePostprocessing(parsedJson.value);
+    const migrated = migrateLegacyInteractionTriggerAssetReferences(
+      migrateLegacyScenePostprocessing(parsedJson.value),
+    );
     const issues = validateSceneDocument(migrated);
     const parsed: ParseDocumentResult<SceneDocument> = issues.length > 0
       ? { ok: false, issues }
@@ -100,6 +102,42 @@ export const sceneDocumentCodec: VisualDocumentCodec<SceneDocument> = {
       : parsed;
   },
 };
+
+/**
+ * Fills in the Interaction Trigger's Asset dependency list.
+ *
+ * It was added when a graph gained Asset-valued properties — a sky image a
+ * viewer's button switches to. Every project saved before that has the field
+ * missing, and it is derived from the graph anyway, so an empty list is both
+ * correct and immediately rewritten by the next reference sync.
+ */
+function migrateLegacyInteractionTriggerAssetReferences(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.entities)) return value;
+  let changed = false;
+  const entities = Object.fromEntries(
+    Object.entries(value.entities).map(([entityId, entity]) => {
+      if (!isRecord(entity) || !Array.isArray(entity.components)) {
+        return [entityId, entity];
+      }
+      let entityChanged = false;
+      const components = entity.components.map((component) => {
+        if (
+          !isRecord(component) ||
+          component.type !== "interaction-trigger" ||
+          Array.isArray(component.assetReferences)
+        ) {
+          return component;
+        }
+        entityChanged = true;
+        return { ...component, assetReferences: [] };
+      });
+      if (!entityChanged) return [entityId, entity];
+      changed = true;
+      return [entityId, { ...entity, components }];
+    }),
+  );
+  return changed ? { ...value, entities } : value;
+}
 
 function migrateLegacyScenePostprocessing(value: unknown): unknown {
   if (!isRecord(value) || !isRecord(value.settings)) return value;
@@ -2007,6 +2045,11 @@ function validatePrefabComponentShape(
     if (!isUniqueStringArray(component.entityReferences, true)) {
       issues.push(
         issue(`${path}.entityReferences`, "reference", "entityReferences are invalid"),
+      );
+    }
+    if (!isUniqueStringArray(component.assetReferences, true)) {
+      issues.push(
+        issue(`${path}.assetReferences`, "reference", "assetReferences are invalid"),
       );
     }
   } else if (component.type === "xrift-component") {

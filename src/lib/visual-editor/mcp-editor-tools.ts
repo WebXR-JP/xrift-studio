@@ -156,7 +156,7 @@ import {
 } from "./terrain-grass";
 import {
   collectInteractionTriggerTargets,
-  syncInteractionTriggerEntityReferences,
+  syncInteractionTriggerReferences,
 } from "./interaction-trigger-targets";
 import {
   resolveSceneSettings,
@@ -201,12 +201,16 @@ import {
   readInteractivityNodeForCopy,
   readInteractivityNodePosition,
   readInteractivityTriggerAction,
+  readInteractivityTriggerActionAsset,
   readInteractivityTriggerActionDuration,
+  readInteractivityTriggerActionText,
   readInteractivityTriggerActionEasing,
   removeInteractivityGraph,
   renameInteractivityGraph,
   setInteractivityTriggerActionDuration,
   setInteractivityTriggerActionEasing,
+  setInteractivityTriggerActionAsset,
+  setInteractivityTriggerActionText,
   setInteractivityTriggerActionValue,
   validateKhrInteractivityExtension,
   writeInteractivityNodePosition,
@@ -3554,6 +3558,13 @@ function listInteractionTriggerTargets(
             ...(property.options
               ? { options: property.options.map((option) => ({ ...option })) }
               : {}),
+            // An Asset property is configured with `valueAssetId`, not `value`,
+            // and only accepts these kinds. Saying so here is what keeps a
+            // client from writing a graph that validates and does nothing.
+            ...(property.assetKinds
+              ? { assetKinds: [...property.assetKinds], argument: "valueAssetId" }
+              : {}),
+            ...(property.kind === "string" ? { argument: "text" } : {}),
           })),
         })),
       })),
@@ -4295,7 +4306,7 @@ function updateComponent(
         );
       }
       if (interactivityAssetId !== undefined) {
-        scene = syncInteractionTriggerEntityReferences(
+        scene = syncInteractionTriggerReferences(
           updateInteractionTriggerComponent(scene, entityId, componentId, {
             interactivityAssetId: interactivityAssetId as string,
           }),
@@ -6412,6 +6423,28 @@ function configureInteractivityTriggerActionTool(
   }
 
   const isToggle = op === XRIFT_INTERACTION_OPERATIONS.toggleProperty;
+  // An Asset id and a sentence live in `configuration`, not in the value
+  // socket, so they arrive as their own arguments. Sending `value` for one of
+  // those is a mistake worth naming rather than silently ignoring.
+  // `assetId` on this tool is the Interactivity Asset being edited, so the
+  // Asset an action points at needs its own name.
+  const assetArgument = optionalString(argumentsValue.valueAssetId);
+  const textArgument = optionalString(argumentsValue.text);
+  if (assetArgument !== undefined && descriptor.kind !== "asset") {
+    invalidArgument("valueAssetId", "Assetを取るpropertyだけが受け付けます");
+  }
+  if (textArgument !== undefined && descriptor.kind !== "string") {
+    invalidArgument("text", "文字列を取るpropertyだけが受け付けます");
+  }
+  if (assetArgument !== undefined) {
+    if (assetArgument !== "" && !context.bundle.assets.assets[assetArgument]) {
+      invalidArgument("valueAssetId", "ProjectにあるAssetのid、または空文字");
+    }
+    setInteractivityTriggerActionAsset(graph, nodeIndex, assetArgument);
+  }
+  if (textArgument !== undefined) {
+    setInteractivityTriggerActionText(graph, nodeIndex, textArgument);
+  }
   let value: KhrInteractivityJsonValue[] | null = null;
   if (argumentsValue.value !== undefined) {
     if (isToggle) {
@@ -6423,7 +6456,12 @@ function configureInteractivityTriggerActionTool(
     }
     value = triggerActionValueFromArgument(argumentsValue.value, descriptor);
     setInteractivityTriggerActionValue(graph, nodeIndex, descriptor, value);
-  } else if (retargeted && !isToggle) {
+  } else if (
+    retargeted &&
+    !isToggle &&
+    descriptor.kind !== "asset" &&
+    descriptor.kind !== "string"
+  ) {
     value = defaultTriggerActionValue(descriptor);
   }
 
@@ -6468,6 +6506,12 @@ function configureInteractivityTriggerActionTool(
       targetKind: targetComponent.targetKind,
       property,
       value,
+      ...(descriptor.kind === "asset"
+        ? { valueAssetId: readInteractivityTriggerActionAsset(graph, nodeIndex) }
+        : {}),
+      ...(descriptor.kind === "string"
+        ? { text: readInteractivityTriggerActionText(graph, nodeIndex) }
+        : {}),
       durationSeconds: readInteractivityTriggerActionDuration(graph, nodeIndex),
       easing: readInteractivityTriggerActionEasing(graph, nodeIndex),
     },
@@ -6539,6 +6583,12 @@ function triggerActionValueFromArgument(
       }
       return [xriftInteractionEnumIndex(descriptor, single)];
     }
+    case "asset":
+      // Handled before this point: an Asset property takes `assetId`, not
+      // `value`, because the id is configuration rather than a socket value.
+      invalidArgument("value", "assetId（このpropertyはAssetを指定します）");
+    case "string":
+      invalidArgument("value", "text（このpropertyは文字列を指定します）");
   }
 }
 
@@ -6759,7 +6809,7 @@ function commitInteractivityMutation(
   // edit; a graph built over MCP has to go through the same step, or the
   // compiler sees a trigger with no dependencies and drops the Entities the
   // agent just wired up.
-  const scene = syncInteractionTriggerEntityReferences(
+  const scene = syncInteractionTriggerReferences(
     context.bundle.scene,
     assets,
   );

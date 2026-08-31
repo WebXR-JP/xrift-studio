@@ -40,8 +40,12 @@ import {
   parseKhrInteractivityExtension,
   readInteractivityNodePosition,
   readInteractivityTriggerActionDuration,
+  readInteractivityTriggerActionAsset,
+  readInteractivityTriggerActionText,
   readInteractivityTriggerActionEasing,
   setInteractivityLiteralValue,
+  setInteractivityTriggerActionAsset,
+  setInteractivityTriggerActionText,
   setInteractivityTriggerActionDuration,
   setInteractivityTriggerActionEasing,
   validateKhrInteractivityExtension,
@@ -92,8 +96,14 @@ import {
   toFlowNodes,
 } from "./interactivity-graph-flow";
 import {
+  AUTOMATIC_TEXT_FONT_ID,
+  TEXT_FONT_CATALOG,
+} from "../../../packages/xrift-studio-runtime/src/text-font-catalog";
+import {
   LiteralValueField,
   TIMED_PROPERTY_KINDS,
+  TriggerAssetField,
+  TriggerTextField,
   TriggerTimingField,
   TriggerValueField,
 } from "./InteractivityNodeFields";
@@ -109,9 +119,22 @@ function isTextEntryTarget(target: EventTarget | null): boolean {
 
 
 
+/** One Asset an action can point an Asset-valued property at. */
+export type InteractivityAssetChoice = {
+  id: string;
+  name: string;
+  kind: string;
+};
+
 export function InteractivityGraphEditor(props: {
   asset: InteractivityAsset;
   materials: readonly MaterialAsset[];
+  /**
+   * Assets the graph can point a property at, for properties whose value is an
+   * Asset rather than a number — the sky image a「風景を変える」button switches
+   * to. Filtered per property by the kinds the property accepts.
+   */
+  assetChoices?: readonly InteractivityAssetChoice[];
   /**
    * Entities this graph can write to, collected from the open Scene.
    *
@@ -224,10 +247,27 @@ const EMPTY_DRY_RUN = {
 
 /** Stable empty list: a fresh array per render would restart the node effect. */
 const NO_TRIGGER_TARGETS: readonly InteractionTriggerTargetEntity[] = [];
+const NO_ASSET_CHOICES: readonly InteractivityAssetChoice[] = [];
+
+/**
+ * Faces a Text can be switched to.
+ *
+ * The catalog is what a world can publish without reaching a CDN, so the list
+ * is exactly the bundled families plus「自動」— offering a family the published
+ * world could not load would be a swap that only works while authoring.
+ */
+const TEXT_FONT_OPTIONS: readonly { value: string; label: string }[] = [
+  { value: AUTOMATIC_TEXT_FONT_ID, label: "自動" },
+  ...TEXT_FONT_CATALOG.map((font) => ({
+    value: font.id,
+    label: `${font.label}（${font.labelJa}）`,
+  })),
+];
 
 function InteractivityGraphEditorBody({
   asset,
   materials,
+  assetChoices = NO_ASSET_CHOICES,
   triggerTargets = NO_TRIGGER_TARGETS,
   readOnly,
   onSave,
@@ -236,6 +276,7 @@ function InteractivityGraphEditorBody({
 }: {
   asset: InteractivityAsset;
   materials: readonly MaterialAsset[];
+  assetChoices?: readonly InteractivityAssetChoice[];
   triggerTargets?: readonly InteractionTriggerTargetEntity[];
   readOnly: boolean;
   onSave: (assetId: string, extension: KhrInteractivityExtension) => void;
@@ -417,6 +458,20 @@ function InteractivityGraphEditorBody({
     triggerActionNode && selectedNodeIndex !== null
       ? readInteractivityTriggerActionEasing(graph, selectedNodeIndex)
       : "linear";
+  // Names for the cards: an action that swaps a sky should read「空を『夕焼け』
+  // にする」rather than an Asset id nobody recognises.
+  const assetNameById = useMemo(
+    () => new Map(assetChoices.map((choice) => [choice.id, choice.name])),
+    [assetChoices],
+  );
+  const triggerActionAsset =
+    triggerActionNode && selectedNodeIndex !== null
+      ? readInteractivityTriggerActionAsset(graph, selectedNodeIndex)
+      : "";
+  const triggerActionText =
+    triggerActionNode && selectedNodeIndex !== null
+      ? readInteractivityTriggerActionText(graph, selectedNodeIndex)
+      : "";
 
 
   // `material` is authored through the picker above, and a socket fed by a wire
@@ -466,7 +521,12 @@ function InteractivityGraphEditorBody({
   // editing disappear.
   useEffect(() => {
     setFlowNodes(
-      toFlowNodes(graph, triggerTargets, timelineRun?.visitedNodes ?? null).map(
+      toFlowNodes(
+        graph,
+        triggerTargets,
+        timelineRun?.visitedNodes ?? null,
+        assetNameById,
+      ).map(
         (node) => ({
           ...node,
           selected: node.data.index === selectedNodeIndex,
@@ -1693,7 +1753,50 @@ function InteractivityGraphEditorBody({
                           {triggerDescriptor.description}
                         </p>
                       ) : null}
-                      {triggerDescriptor && !triggerToggleNode ? (
+                      {triggerDescriptor?.kind === "string" &&
+                      !triggerToggleNode ? (
+                        <TriggerTextField
+                          descriptor={triggerDescriptor}
+                          text={triggerActionText}
+                          options={
+                            triggerDescriptor.name === "fontId"
+                              ? TEXT_FONT_OPTIONS
+                              : undefined
+                          }
+                          disabled={readOnly}
+                          onChange={(text) =>
+                            updateGraph((nextGraph) => {
+                              setInteractivityTriggerActionText(
+                                nextGraph,
+                                selectedNodeIndex,
+                                text,
+                              );
+                            })
+                          }
+                        />
+                      ) : null}
+                      {triggerDescriptor?.kind === "asset" &&
+                      !triggerToggleNode ? (
+                        <TriggerAssetField
+                          descriptor={triggerDescriptor}
+                          assetId={triggerActionAsset}
+                          choices={assetChoices}
+                          disabled={readOnly}
+                          onChange={(assetId) =>
+                            updateGraph((nextGraph) => {
+                              setInteractivityTriggerActionAsset(
+                                nextGraph,
+                                selectedNodeIndex,
+                                assetId,
+                              );
+                            })
+                          }
+                        />
+                      ) : null}
+                      {triggerDescriptor &&
+                      triggerDescriptor.kind !== "asset" &&
+                      triggerDescriptor.kind !== "string" &&
+                      !triggerToggleNode ? (
                         <TriggerValueField
                           descriptor={triggerDescriptor}
                           value={triggerAction.value}

@@ -19,6 +19,28 @@ export type InteractivityActionTarget = {
   readonly componentId: string | null;
   readonly targetKind: string;
   readonly property: string;
+  /**
+   * Asset the property should point at, for a property whose value is a
+   * project Asset rather than a number.
+   *
+   * `undefined` means this is not one of those — the value comes from the
+   * `value` socket as usual. `null` means the action names no Asset, which is
+   * a complete instruction: put the authored one back.
+   *
+   * It rides on the target rather than the value because an Asset id is
+   * structural, like the Entity and Component ids beside it: KHR_interactivity
+   * has no string type, and an Asset is not a quantity to interpolate toward.
+   */
+  readonly assetId?: string | null;
+  /**
+   * Free text the property should show, for a property whose value is a
+   * sentence rather than a number.
+   *
+   * `undefined` means this is not one of those. It is separate from `assetId`
+   * because the two are different obligations: an Asset id names something the
+   * world has to publish, a string names nothing at all.
+   */
+  readonly text?: string;
 };
 
 export type InteractivityAnimationRequest = {
@@ -67,6 +89,22 @@ export type InteractivityHost = {
     target: InteractivityActionTarget,
     value: InteractivityValue,
   ): boolean;
+  /**
+   * Points an Asset-valued property at `target.assetId`, or back at the
+   * authored Asset when that is `null`.
+   *
+   * Separate from `writeProperty` because there is no `InteractivityValue`
+   * that can carry an Asset id, and because the change has no midpoint: a
+   * duration on one of these would promise a cross-fade nothing performs.
+   */
+  writeAsset?(target: InteractivityActionTarget, assetId: string | null): boolean;
+  /**
+   * Writes `target.text` to a text-valued property.
+   *
+   * Like an Asset write it has no midpoint, so a duration on it is not
+   * honoured: half of「開いています」is not a word.
+   */
+  writeString?(target: InteractivityActionTarget, text: string): boolean;
   readPointer?(pointer: string): InteractivityValue | null;
   writePointer?(pointer: string, value: InteractivityValue): boolean;
   startAnimation?(request: InteractivityAnimationRequest): void;

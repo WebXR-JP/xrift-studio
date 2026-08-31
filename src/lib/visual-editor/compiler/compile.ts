@@ -67,6 +67,7 @@ import {
   terrainGrassRuntimeSource,
 } from "../terrain-grass-runtime";
 import { detectTimeUniforms } from "../../../../packages/xrift-studio-runtime/src/shader-time";
+import { XRIFT_SCENE_SKYBOX_USER_DATA_KEY } from "../../../../packages/xrift-studio-runtime/src/script/scene-runtime";
 import type { VisualProjectKind } from "../project-document";
 import {
   type BoxColliderComponent,
@@ -127,8 +128,8 @@ import {
 } from "../open-brush";
 import { createOpenBrushRuntimeOverlayFile } from "./open-brush-emit";
 import {
+  createScenePostprocessingBridgeOverlayFile,
   createScenePostprocessingOverlayFile,
-  SCENE_POSTPROCESSING_OVERLAY_PATH,
 } from "./scene-postprocessing-emit";
 import {
   publishPermissionsJson,
@@ -459,15 +460,29 @@ export function compileVisualProject(
     overlayFiles.push(createOpenBrushRuntimeOverlayFile());
   }
   // The compositor module ships whenever the Scene composites at all.
+  // The compositor ships when the Scene asks for it, and also when a graph can
+  // turn it on for one viewer — a「画質を上げる」button in a Scene whose post
+  // effects are off would otherwise publish and then do nothing.
   if (
     resolvedEntryScene &&
-    resolveSceneSettings(resolvedEntryScene.scene.settings).postprocessing
-      .enabled &&
-    !overlayFiles.some(
-      (file) => file.relativePath === SCENE_POSTPROCESSING_OVERLAY_PATH,
-    )
+    (resolveSceneSettings(resolvedEntryScene.scene.settings).postprocessing
+      .enabled ||
+      sceneRunsBehavior(resolvedEntryScene.scene, documents.assets))
   ) {
-    overlayFiles.push(createScenePostprocessingOverlayFile());
+    for (const file of [
+      createScenePostprocessingOverlayFile(),
+      // The compositor imports the Scene bridge, so it ships even when no
+      // graph does.
+      createScenePostprocessingBridgeOverlayFile(),
+    ]) {
+      if (
+        !overlayFiles.some(
+          (candidate) => candidate.relativePath === file.relativePath,
+        )
+      ) {
+        overlayFiles.push(file);
+      }
+    }
   }
   if (resolvedEntryScene) {
     diagnoseUnbundledTextFonts(resolvedEntryScene.scene, diagnostics);
@@ -1372,14 +1387,20 @@ function skyMeshPlacementProps(
   refAttribute: string,
 ): string {
   const skybox = settings.skybox;
+  // Marks the mesh as the authored sky, so a behavior graph turning the
+  // background off for one viewer can find it. `scene.background` alone is not
+  // enough: a gradient, Box, Dome or Sky Shader sky is a mesh.
+  const marker = `userData={{ ${XRIFT_SCENE_SKYBOX_USER_DATA_KEY}: true }}`;
   if (skybox.projection === "infinite") {
     return `${refAttribute}
+      ${marker}
       scale={100}`;
   }
   const meshRotation = skybox.meshRotationDegrees
     .map((value) => formatNumber((value * Math.PI) / 180))
     .join(", ");
-  return `position={[${skybox.meshPosition.map(formatNumber).join(", ")}]}
+  return `${marker}
+      position={[${skybox.meshPosition.map(formatNumber).join(", ")}]}
       rotation={[${meshRotation}]}
       scale={[${skybox.meshScale.map(formatNumber).join(", ")}]}`;
 }
@@ -1629,6 +1650,7 @@ ${skybox.iblEnabled ? `
     <mesh
       ${skybox.projection === "infinite" ? "ref={meshRef}" : ""}
       geometry={geometry}
+      userData={{ ${XRIFT_SCENE_SKYBOX_USER_DATA_KEY}: true }}
       ${skybox.projection === "infinite" ? "scale={100}" : `position={[${position}]}
       rotation={[${meshRotation}]}
       scale={[${scale}]}`}
@@ -1776,6 +1798,90 @@ function registerVegetationWindSupport(
   );
 }
 
+/**
+ * True when anything in the Scene can write the viewer's own picture.
+ *
+ * A behavior graph does it through `xrift/setProperty` on the Scene target; a
+ * Script does it through `ctx.viewer`. Neither is visible from the Scene
+ * settings, and a Script's calls are not visible from its source either
+ * without running it, so the presence of behavior is the honest test. Both the
+ * bridge and the compositor are cheap to mount and idle until used.
+ */
+function sceneRunsBehavior(scene: SceneDocument, assets: AssetManifest): boolean {
+  if (sceneUsesInteractionTriggerRuntime(scene, assets)) return true;
+  return Object.values(scene.entities).some((entity) =>
+    entity.components.some(
+      (component) => component.type === "script" && component.enabled,
+    ),
+  );
+}
+
+/**
+ * The Scene bridge, plus the sky images its graphs can switch to.
+ *
+ * The Asset ids come from the triggers' derived `assetReferences`, so a world
+ * publishes exactly the images its graphs can reach — no more, and never one
+ * fewer than the graph names. The URLs are resolved through the same
+ * `useCompiledAssetUrl` every other Asset uses, so a world served from a
+ * subdirectory finds them.
+ */
+function registerSceneGraphRuntime(context: CompileContext): string {
+  const entries: string[] = [];
+  const seen = new Set<string>();
+  for (const entity of Object.values(context.scene.entities)) {
+    for (const component of entity.components) {
+      if (component.type !== "interaction-trigger" || !component.enabled) {
+        continue;
+      }
+      for (const assetId of component.assetReferences ?? []) {
+        if (seen.has(assetId)) continue;
+        seen.add(assetId);
+        const asset = context.assets.assets[assetId];
+        const runtimeUrl = context.assetRuntimeUrls.get(assetId);
+        if (
+          !asset ||
+          !runtimeUrl ||
+          (asset.kind !== "texture" && asset.kind !== "skybox")
+        ) {
+          addDiagnostic(context, {
+            severity: "warning",
+            code: "interaction-trigger-asset-unavailable",
+            message: `Interactivity GraphがAsset「${assetId}」を指していますが、公開Worldへ出力できないため差し替えは起きません`,
+            sceneId: context.scene.sceneId,
+            entityId: entity.id,
+            componentId: component.id,
+          });
+          continue;
+        }
+        context.referencedAssetIds.add(assetId);
+        const urlConstant = registerAssetUrl(asset, runtimeUrl, context);
+        const sourceFormat =
+          asset.kind === "skybox"
+            ? asset.sourceFormat
+            : getTextureSourceFormat(asset);
+        // The Scene's own `flipY` belongs to the authored sky, not to a
+        // swapped-in one, so only the Asset's own import setting applies here.
+        const flipY = asset.kind === "texture" && asset.importSettings.flipY;
+        entries.push(
+          `    ${JSON.stringify(assetId)}: { url: useCompiledAssetUrl(${urlConstant}), sourceFormat: ${JSON.stringify(sourceFormat ?? null)} ?? undefined, flipY: ${flipY ? "true" : "false"}, name: ${JSON.stringify(asset.name)} },`,
+        );
+      }
+    }
+  }
+  if (entries.length === 0) return "<XriftSceneRuntime />";
+  context.reactTypeImports.add("FC");
+  context.supportDeclarations.set(
+    "scene-environment:graph-assets",
+    `const XRiftStudioSceneGraphRuntime: FC = () => {
+  const assets = {
+${entries.join("\n")}
+  };
+  return <XriftSceneRuntime assets={assets} />;
+};`,
+  );
+  return "<XRiftStudioSceneGraphRuntime />";
+}
+
 function renderSceneEnvironment(
   settings: SceneSettings,
   context: CompileContext,
@@ -1789,7 +1895,16 @@ function renderSceneEnvironment(
     );
   }
 
-  if (settings.postprocessing.enabled) {
+  // A graph or a Script that offers「画質を上げる」needs the compositor present
+  // even when the Scene has post effects off — that is the whole point of the
+  // button — so behavior decides this as much as the Scene settings do. It
+  // builds its passes on the first frame something turns them on, so a world
+  // that mounts it and never uses it pays nothing for the buffers.
+  const behaviorNeedsSceneRuntime = sceneRunsBehavior(
+    context.scene,
+    context.assets,
+  );
+  if (settings.postprocessing.enabled || behaviorNeedsSceneRuntime) {
     registerScenePostprocessingSupport(context);
     content.push(
       `<ScenePostprocessing settings={${JSON.stringify(settings.postprocessing)}} />`,
@@ -1802,13 +1917,13 @@ function renderSceneEnvironment(
     registerSceneToneMappingSupport(settings.postprocessing, context);
     content.push("<XRiftStudioToneMapping />");
   }
-  // Scene-wide graph writes. Emitted only where a graph can send them, so a
-  // world with no behavior never carries the overlay or the extra frame work.
-  if (sceneUsesInteractionTriggerRuntime(context.scene, context.assets)) {
+  // Scene-wide behavior writes. Emitted only where something can send them, so
+  // a world with no behavior never carries the overlay or the extra frame work.
+  if (behaviorNeedsSceneRuntime) {
     context.extraImports.add(
       'import { XriftSceneRuntime } from "./xrift-studio/scene-runtime";',
     );
-    content.push("<XriftSceneRuntime />");
+    content.push(registerSceneGraphRuntime(context));
   }
   registerVegetationWindSupport(settings.vegetation, context);
   const hasVegetationWind = Object.values(context.scene.entities).some((entity) =>
@@ -5251,6 +5366,8 @@ function renderText(
   context.imports.add("useXRift");
   const props = [
     `config={${configName}}`,
+    // A graph aimed at one of an Entity's two signs must not re-letter both.
+    `componentId={${JSON.stringify(text.id)}}`,
     "fontDirectoryUrl={baseUrl}",
     ...(projectFont ? ["fontUrl={textPanelFontUrl}"] : []),
     ...(backgroundTexture ? ["map={textPanelMap}"] : []),

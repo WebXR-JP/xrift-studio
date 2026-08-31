@@ -4426,7 +4426,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "configure_interactivity_trigger_action",
-            "description": "Point an xrift/setProperty or xrift/toggleProperty node at an Entity, Component and property from list_interaction_trigger_targets, and set its value, the seconds the change takes, and the easing curve. The value is written with the type the property needs, and an unknown Entity, Component or property is refused rather than saved as a graph that does nothing. Omit the target fields to adjust only the value, duration or easing of the action already configured.",
+            "description": "Point an xrift/setProperty or xrift/toggleProperty node at an Entity, Component and property from list_interaction_trigger_targets, and set its value, the seconds the change takes, and the easing curve. The value is written with the type the property needs, and an unknown Entity, Component or property is refused rather than saved as a graph that does nothing. Omit the target fields to adjust only the value, duration or easing of the action already configured. A property whose kind is \"asset\" takes valueAssetId instead of value, and one whose kind is \"string\" takes text: neither is a number the value socket can hold, so both are stored beside the target. Passing an empty valueAssetId puts the Scene's own Asset back.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4440,6 +4440,8 @@ fn tool_definitions() -> Value {
                     "componentId": { "type": "string" },
                     "property": { "type": "string", "minLength": 1 },
                     "value": {},
+                    "valueAssetId": { "type": "string" },
+                    "text": { "type": "string" },
                     "durationSeconds": { "type": "number", "minimum": 0 },
                     "easing": {
                         "type": "string",
