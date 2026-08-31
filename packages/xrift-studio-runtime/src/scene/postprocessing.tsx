@@ -170,7 +170,17 @@ export function ScenePostprocessing({
 }) {
   const { camera, gl, scene, size } = useThree();
   const hdrEnabled = settings.hdr.enabled;
-  const pipeline = useMemo(() => {
+  /**
+   * The composer, built the first frame anything actually needs it.
+   *
+   * A world whose Scene has post effects off still mounts this component, so a
+   * Script or a behavior graph can turn them on for one viewer. Building the
+   * HDR target and the SSAO buffer up front would make every such world pay for
+   * passes nobody asked for — on exactly the devices this feature exists to
+   * protect.
+   */
+  const buildPipeline = useMemo(() => {
+    return () => {
     const renderTarget = hdrEnabled
       ? new WebGLRenderTarget(size.width, size.height, {
           type: HalfFloatType,
@@ -205,8 +215,10 @@ export function ScenePostprocessing({
     // Last: grading judges the finished frame, including the bloom it picked up.
     composer.addPass(gradingPass);
     return { composer, aoPass, bloomPass, gradingPass };
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [camera, gl, hdrEnabled, scene]);
+  const pipelineRef = useRef<ReturnType<typeof buildPipeline> | null>(null);
 
   /**
    * The settings currently written into the passes.
@@ -217,15 +229,24 @@ export function ScenePostprocessing({
    */
   const appliedRef = useRef<XriftScenePostprocessingSettings | null>(null);
 
+  // A rebuilt factory means the renderer, camera, scene or HDR target changed,
+  // so whatever was built for the old one no longer belongs to this Canvas.
   useEffect(() => {
-    pipeline.composer.setSize(size.width, size.height);
-  }, [pipeline, size.height, size.width]);
+    const previous = pipelineRef.current;
+    pipelineRef.current = null;
+    appliedRef.current = null;
+    previous?.composer.dispose();
+  }, [buildPipeline]);
 
-  // A rebuilt pipeline has default pass values, and edited Scene settings are a
-  // new object the frame comparison would otherwise accept as already applied.
+  useEffect(() => {
+    pipelineRef.current?.composer.setSize(size.width, size.height);
+  }, [size.height, size.width]);
+
+  // Edited Scene settings are a new object the frame comparison would
+  // otherwise accept as already applied.
   useEffect(() => {
     appliedRef.current = null;
-  }, [pipeline, settings]);
+  }, [settings]);
 
   // What a graph's toggle flips away from. Only the compositor knows it.
   useEffect(
@@ -264,7 +285,10 @@ export function ScenePostprocessing({
    * graph can change them at any moment and the bridge is not React state. The
    * work is a handful of assignments; building the pipeline stays in `useMemo`.
    */
-  const configure = (active: XriftScenePostprocessingSettings): void => {
+  const configure = (
+    pipeline: NonNullable<typeof pipelineRef.current>,
+    active: XriftScenePostprocessingSettings,
+  ): void => {
     pipeline.bloomPass.enabled = active.enabled && active.bloom.enabled;
     pipeline.bloomPass.threshold = active.bloom.threshold;
     pipeline.bloomPass.strength = active.bloom.strength;
@@ -293,9 +317,10 @@ export function ScenePostprocessing({
 
   useEffect(
     () => () => {
-      pipeline.composer.dispose();
+      pipelineRef.current?.composer.dispose();
+      pipelineRef.current = null;
     },
-    [pipeline],
+    [],
   );
 
   useFrame(() => {
@@ -303,12 +328,17 @@ export function ScenePostprocessing({
     // state, so nothing re-renders when a viewer turns the passes on.
     const bridge = findXriftSceneRuntimeBridge(scene);
     const active = mergeSceneOverrides(settings, bridge?.read() ?? null);
-    const previous = appliedRef.current;
-    if (previous !== active) {
-      appliedRef.current = active;
-      configure(active);
+    if (active.enabled && !pipelineRef.current) {
+      pipelineRef.current = buildPipeline();
+      pipelineRef.current.composer.setSize(size.width, size.height);
+      appliedRef.current = null;
     }
-    if (active.enabled) {
+    const pipeline = pipelineRef.current;
+    if (pipeline && appliedRef.current !== active) {
+      appliedRef.current = active;
+      configure(pipeline, active);
+    }
+    if (active.enabled && pipeline) {
       pipeline.composer.render();
     } else {
       // A positive-priority frame callback takes over R3F's default render

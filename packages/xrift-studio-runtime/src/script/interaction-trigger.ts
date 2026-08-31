@@ -41,6 +41,7 @@ export type XriftInteractionTargetKind =
   | "light"
   | "particle"
   | "material"
+  | "text"
   | "scene";
 
 /**
@@ -90,6 +91,7 @@ export const XRIFT_INTERACTION_TARGET_KINDS: readonly XriftInteractionTargetKind
   "light",
   "particle",
   "material",
+  "text",
   "scene",
 ];
 
@@ -103,6 +105,7 @@ export const XRIFT_INTERACTION_TARGET_LABELS: Readonly<
   light: "Light",
   particle: "Particle",
   material: "Material",
+  text: "Text",
   scene: "Scene（この端末だけ）",
 };
 
@@ -112,6 +115,16 @@ export type XriftInteractionPropertyKind =
   | "color"
   | "vector3"
   | "enum"
+  /**
+   * Free text.
+   *
+   * Stored in `configuration` for the same reason an Asset id is:
+   * KHR_interactivity has no string type, and a sentence is not a quantity to
+   * interpolate toward. Unlike an Asset it is only itself — nothing has to be
+   * published for it — which is why the two stay separate rather than becoming
+   * one "not a number" kind.
+   */
+  | "string"
   /**
    * A project Asset, named by id.
    *
@@ -644,6 +657,129 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     kind: "color",
     defaultValue: [1, 1, 1],
   },
+  {
+    target: "text",
+    name: "enabled",
+    label: "表示",
+    description: "このTextだけを表示・非表示にします。Entityごと消すわけではありません。",
+    kind: "bool",
+    defaultValue: true,
+  },
+  {
+    target: "text",
+    name: "text",
+    label: "文字",
+    description:
+      "表示する文字を差し替えます。改行を含められます。時間をかけた変化はできません。",
+    kind: "string",
+    defaultValue: "",
+  },
+  {
+    target: "text",
+    name: "color",
+    label: "文字の色",
+    description: "文字の色を変えます。値はリニア空間のRGBで保存されます。",
+    kind: "color",
+    defaultValue: [1, 1, 1],
+  },
+  {
+    target: "text",
+    name: "fontSize",
+    label: "文字の大きさ",
+    description: "1文字の高さをメートルで指定します。",
+    kind: "float",
+    defaultValue: 0.2,
+    min: 0.001,
+    max: 20,
+    step: 0.01,
+  },
+  {
+    target: "text",
+    name: "fontWeight",
+    label: "太さ",
+    description:
+      "100から900までの字面の太さです。選んだフォントが持たない太さは、いちばん近いものになります。",
+    kind: "float",
+    defaultValue: 400,
+    min: 100,
+    max: 900,
+    step: 100,
+  },
+  {
+    target: "text",
+    name: "fontId",
+    label: "フォント",
+    description:
+      "カタログのフォントへ切り替えます。autoで自動選択に戻ります。Projectへ取り込んだフォントAssetを使っているTextでは、切り替えたあいだそのAssetを使いません。",
+    kind: "string",
+    defaultValue: "auto",
+  },
+  {
+    target: "text",
+    name: "textAlign",
+    label: "行揃え",
+    description: "複数行の揃え方を変えます。1行の位置はAnchorが決めます。",
+    kind: "enum",
+    defaultValue: "left",
+    options: [
+      { value: "left", label: "左" },
+      { value: "center", label: "中央" },
+      { value: "right", label: "右" },
+      { value: "justify", label: "両端" },
+    ],
+  },
+  {
+    target: "text",
+    name: "lineHeight",
+    label: "行の高さ",
+    description: "文字の大きさに対する行送りの倍率です。",
+    kind: "float",
+    defaultValue: 1.2,
+    min: 0.1,
+    max: 4,
+    step: 0.05,
+  },
+  {
+    target: "text",
+    name: "letterSpacing",
+    label: "字間",
+    description: "文字の大きさに対する字間の増減です。",
+    kind: "float",
+    defaultValue: 0,
+    min: -0.5,
+    max: 1,
+    step: 0.01,
+  },
+  {
+    target: "text",
+    name: "maxWidth",
+    label: "折り返し幅",
+    description: "この幅を超えると折り返します。0で折り返しません。",
+    kind: "float",
+    defaultValue: 0,
+    min: 0,
+    max: 100,
+    step: 0.05,
+  },
+  {
+    target: "text",
+    name: "outlineWidth",
+    label: "縁取りの太さ",
+    description: "文字の大きさに対する縁取りの太さです。0で縁取りなしになります。",
+    kind: "float",
+    defaultValue: 0,
+    min: 0,
+    max: 1,
+    step: 0.005,
+  },
+  {
+    target: "text",
+    name: "outlineColor",
+    label: "縁取りの色",
+    description: "縁取りの色です。値はリニア空間のRGBで保存されます。",
+    kind: "color",
+    defaultValue: [0, 0, 0],
+  },
 ];
 
 export function getXriftInteractionProperty(
@@ -673,7 +809,9 @@ export type XriftInteractionValue =
   | { kind: "vector3"; value: [number, number, number] }
   | { kind: "enum"; value: string }
   /** Asset id the property should point at. `null` clears it. */
-  | { kind: "asset"; value: string | null };
+  | { kind: "asset"; value: string | null }
+  /** Free text the property should show. */
+  | { kind: "string"; value: string };
 
 export type XriftInteractionAction = {
   nodeIndex: number;
@@ -791,6 +929,7 @@ function readActionValue(
       return { kind: "vector3", value: [x, y, z] };
     }
     case "asset":
+    case "string":
       // Handled before this function is reached; the socket carries nothing.
       return null;
     case "enum": {
@@ -904,15 +1043,20 @@ function readAction(
       value: null,
     };
   }
-  // An Asset id is configuration, not a socket value: it names a project
-  // resource rather than a quantity, so it is read from beside the target.
+  // An Asset id and a sentence are configuration, not socket values: neither is
+  // a quantity, so both are read from beside the target.
   const value =
     descriptor.kind === "asset"
       ? ({
           kind: "asset",
           value: configurationString(node, "asset") || null,
         } as const)
-      : readActionValue(node, descriptor);
+      : descriptor.kind === "string"
+        ? ({
+            kind: "string",
+            value: configurationString(node, "text") ?? "",
+          } as const)
+        : readActionValue(node, descriptor);
   if (!value) return null;
   return {
     nodeIndex,
@@ -1035,31 +1179,6 @@ export function collectXriftInteractionAssetIds(value: unknown): string[] {
     ),
   ].sort();
 }
-
-/**
- * True when a graph can turn the compositor on for the viewer running it.
- *
- * A world whose Scene settings have post effects off still has to carry the
- * compositor when a graph offers「画質を上げる」, or the button would validate,
- * publish, and then do nothing. Nothing else makes a world pay for it.
- */
-export function xriftInteractionWritesPostprocessing(value: unknown): boolean {
-  return collectXriftInteractionActions(value).some(
-    (action) =>
-      action.target === "scene" &&
-      XRIFT_INTERACTION_POSTPROCESSING_PROPERTIES.has(action.property),
-  );
-}
-
-const XRIFT_INTERACTION_POSTPROCESSING_PROPERTIES: ReadonlySet<string> = new Set([
-  "postprocessing",
-  "bloom",
-  "bloomStrength",
-  "bloomRadius",
-  "bloomThreshold",
-  "ao",
-  "grading",
-]);
 
 /** True when the graph has at least one interact entry point. */
 export function hasXriftInteractionTrigger(value: unknown): boolean {

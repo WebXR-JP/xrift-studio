@@ -68,7 +68,6 @@ import {
 } from "../terrain-grass-runtime";
 import { detectTimeUniforms } from "../../../../packages/xrift-studio-runtime/src/shader-time";
 import { XRIFT_SCENE_SKYBOX_USER_DATA_KEY } from "../../../../packages/xrift-studio-runtime/src/script/scene-runtime";
-import { xriftInteractionWritesPostprocessing } from "../../../../packages/xrift-studio-runtime/src/script/interaction-trigger";
 import type { VisualProjectKind } from "../project-document";
 import {
   type BoxColliderComponent,
@@ -464,10 +463,7 @@ export function compileVisualProject(
     resolvedEntryScene &&
     (resolveSceneSettings(resolvedEntryScene.scene.settings).postprocessing
       .enabled ||
-      sceneGraphWritesPostprocessing(
-        resolvedEntryScene.scene,
-        documents.assets,
-      ))
+      sceneRunsBehavior(resolvedEntryScene.scene, documents.assets))
   ) {
     for (const file of [
       createScenePostprocessingOverlayFile(),
@@ -1799,27 +1795,20 @@ function registerVegetationWindSupport(
 }
 
 /**
- * True when any attached graph can turn the compositor on for its viewer.
+ * True when anything in the Scene can write the viewer's own picture.
  *
- * Read from the graphs rather than from the Scene settings, because that is
- * where the answer is: an author who leaves post effects off and puts a
- * 「画質を上げる」button in the world means both things at once.
+ * A behavior graph does it through `xrift/setProperty` on the Scene target; a
+ * Script does it through `ctx.viewer`. Neither is visible from the Scene
+ * settings, and a Script's calls are not visible from its source either
+ * without running it, so the presence of behavior is the honest test. Both the
+ * bridge and the compositor are cheap to mount and idle until used.
  */
-function sceneGraphWritesPostprocessing(
-  scene: SceneDocument,
-  assets: AssetManifest,
-): boolean {
+function sceneRunsBehavior(scene: SceneDocument, assets: AssetManifest): boolean {
+  if (sceneUsesInteractionTriggerRuntime(scene, assets)) return true;
   return Object.values(scene.entities).some((entity) =>
-    entity.components.some((component) => {
-      if (component.type !== "interaction-trigger" || !component.enabled) {
-        return false;
-      }
-      const asset = assets.assets[component.interactivityAssetId];
-      return (
-        asset?.kind === "interactivity" &&
-        xriftInteractionWritesPostprocessing(asset.extension)
-      );
-    }),
+    entity.components.some(
+      (component) => component.type === "script" && component.enabled,
+    ),
   );
 }
 
@@ -1902,14 +1891,16 @@ function renderSceneEnvironment(
     );
   }
 
-  // A graph that offers「画質を上げる」needs the compositor present even when the
-  // Scene has post effects off — that is the whole point of the button — so the
-  // graphs decide this as much as the Scene settings do.
-  const graphNeedsCompositor = sceneGraphWritesPostprocessing(
+  // A graph or a Script that offers「画質を上げる」needs the compositor present
+  // even when the Scene has post effects off — that is the whole point of the
+  // button — so behavior decides this as much as the Scene settings do. It
+  // builds its passes on the first frame something turns them on, so a world
+  // that mounts it and never uses it pays nothing for the buffers.
+  const behaviorNeedsSceneRuntime = sceneRunsBehavior(
     context.scene,
     context.assets,
   );
-  if (settings.postprocessing.enabled || graphNeedsCompositor) {
+  if (settings.postprocessing.enabled || behaviorNeedsSceneRuntime) {
     registerScenePostprocessingSupport(context);
     content.push(
       `<ScenePostprocessing settings={${JSON.stringify(settings.postprocessing)}} />`,
@@ -1922,9 +1913,9 @@ function renderSceneEnvironment(
     registerSceneToneMappingSupport(settings.postprocessing, context);
     content.push("<XRiftStudioToneMapping />");
   }
-  // Scene-wide graph writes. Emitted only where a graph can send them, so a
-  // world with no behavior never carries the overlay or the extra frame work.
-  if (sceneUsesInteractionTriggerRuntime(context.scene, context.assets)) {
+  // Scene-wide behavior writes. Emitted only where something can send them, so
+  // a world with no behavior never carries the overlay or the extra frame work.
+  if (behaviorNeedsSceneRuntime) {
     context.extraImports.add(
       'import { XriftSceneRuntime } from "./xrift-studio/scene-runtime";',
     );
@@ -5179,6 +5170,8 @@ function renderText(
   context.imports.add("useXRift");
   const props = [
     `config={${configName}}`,
+    // A graph aimed at one of an Entity's two signs must not re-letter both.
+    `componentId={${JSON.stringify(text.id)}}`,
     "fontDirectoryUrl={baseUrl}",
     ...(projectFont ? ["fontUrl={textPanelFontUrl}"] : []),
     ...(backgroundTexture ? ["map={textPanelMap}"] : []),

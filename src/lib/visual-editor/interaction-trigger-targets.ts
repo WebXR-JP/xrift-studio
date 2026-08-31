@@ -49,6 +49,7 @@ function componentLabel(
   const siblings = entity.components.filter(
     (candidate) =>
       (targetKind === "audio-source" && candidate.type === "audio-source") ||
+      (targetKind === "text" && candidate.type === "text") ||
       (targetKind === "light" && candidate.type === "light"),
   );
   return siblings.length > 1 ? `${base} ${index + 1}` : base;
@@ -98,7 +99,7 @@ export function collectInteractionTriggerTargets(
           label: XRIFT_INTERACTION_TARGET_LABELS.material,
           properties: getXriftInteractionProperties("material"),
         },
-        ...(["animation", "audio-source", "light", "particle"] as const).map(
+        ...(["animation", "audio-source", "light", "particle", "text"] as const).map(
           (targetKind) => ({
             componentId: "",
             targetKind,
@@ -153,6 +154,7 @@ export function collectInteractionTriggerTargets(
     ];
     let audioIndex = 0;
     let lightIndex = 0;
+    let textIndex = 0;
     for (const component of entity.components) {
       if (component.type === "audio-source") {
         components.push({
@@ -189,6 +191,14 @@ export function collectInteractionTriggerTargets(
           properties: getXriftInteractionProperties("light"),
         });
         lightIndex += 1;
+      } else if (component.type === "text") {
+        components.push({
+          componentId: component.id,
+          targetKind: "text",
+          label: componentLabel(entity, "text", textIndex),
+          properties: getXriftInteractionProperties("text"),
+        });
+        textIndex += 1;
       }
     }
     targets.push({
@@ -380,6 +390,8 @@ export function formatTriggerValue(
       // The id lives in configuration, not the value socket, so there is
       // nothing here to format; callers describe it from the Asset's name.
       return "選んだAsset";
+    case "string":
+      return typeof first === "string" && first.length > 0 ? `「${first}」` : "空の文字";
   }
 }
 

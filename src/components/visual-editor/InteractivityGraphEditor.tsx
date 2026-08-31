@@ -41,9 +41,11 @@ import {
   readInteractivityNodePosition,
   readInteractivityTriggerActionDuration,
   readInteractivityTriggerActionAsset,
+  readInteractivityTriggerActionText,
   readInteractivityTriggerActionEasing,
   setInteractivityLiteralValue,
   setInteractivityTriggerActionAsset,
+  setInteractivityTriggerActionText,
   setInteractivityTriggerActionDuration,
   setInteractivityTriggerActionEasing,
   validateKhrInteractivityExtension,
@@ -94,9 +96,14 @@ import {
   toFlowNodes,
 } from "./interactivity-graph-flow";
 import {
+  AUTOMATIC_TEXT_FONT_ID,
+  TEXT_FONT_CATALOG,
+} from "../../../packages/xrift-studio-runtime/src/text-font-catalog";
+import {
   LiteralValueField,
   TIMED_PROPERTY_KINDS,
   TriggerAssetField,
+  TriggerTextField,
   TriggerTimingField,
   TriggerValueField,
 } from "./InteractivityNodeFields";
@@ -241,6 +248,21 @@ const EMPTY_DRY_RUN = {
 /** Stable empty list: a fresh array per render would restart the node effect. */
 const NO_TRIGGER_TARGETS: readonly InteractionTriggerTargetEntity[] = [];
 const NO_ASSET_CHOICES: readonly InteractivityAssetChoice[] = [];
+
+/**
+ * Faces a Text can be switched to.
+ *
+ * The catalog is what a world can publish without reaching a CDN, so the list
+ * is exactly the bundled families plus「自動」— offering a family the published
+ * world could not load would be a swap that only works while authoring.
+ */
+const TEXT_FONT_OPTIONS: readonly { value: string; label: string }[] = [
+  { value: AUTOMATIC_TEXT_FONT_ID, label: "自動" },
+  ...TEXT_FONT_CATALOG.map((font) => ({
+    value: font.id,
+    label: `${font.label}（${font.labelJa}）`,
+  })),
+];
 
 function InteractivityGraphEditorBody({
   asset,
@@ -445,6 +467,10 @@ function InteractivityGraphEditorBody({
   const triggerActionAsset =
     triggerActionNode && selectedNodeIndex !== null
       ? readInteractivityTriggerActionAsset(graph, selectedNodeIndex)
+      : "";
+  const triggerActionText =
+    triggerActionNode && selectedNodeIndex !== null
+      ? readInteractivityTriggerActionText(graph, selectedNodeIndex)
       : "";
 
 
@@ -1727,6 +1753,28 @@ function InteractivityGraphEditorBody({
                           {triggerDescriptor.description}
                         </p>
                       ) : null}
+                      {triggerDescriptor?.kind === "string" &&
+                      !triggerToggleNode ? (
+                        <TriggerTextField
+                          descriptor={triggerDescriptor}
+                          text={triggerActionText}
+                          options={
+                            triggerDescriptor.name === "fontId"
+                              ? TEXT_FONT_OPTIONS
+                              : undefined
+                          }
+                          disabled={readOnly}
+                          onChange={(text) =>
+                            updateGraph((nextGraph) => {
+                              setInteractivityTriggerActionText(
+                                nextGraph,
+                                selectedNodeIndex,
+                                text,
+                              );
+                            })
+                          }
+                        />
+                      ) : null}
                       {triggerDescriptor?.kind === "asset" &&
                       !triggerToggleNode ? (
                         <TriggerAssetField
@@ -1747,6 +1795,7 @@ function InteractivityGraphEditorBody({
                       ) : null}
                       {triggerDescriptor &&
                       triggerDescriptor.kind !== "asset" &&
+                      triggerDescriptor.kind !== "string" &&
                       !triggerToggleNode ? (
                         <TriggerValueField
                           descriptor={triggerDescriptor}

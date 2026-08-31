@@ -150,9 +150,7 @@ export function InteractionTriggerInspector({
                       ? null
                       : action.value.kind === "color"
                         ? action.value.value
-                        : action.value.kind === "enum"
-                          ? [action.value.value]
-                          : [action.value.value],
+                        : [action.value.value],
                   assetName:
                     action.value?.kind === "asset" && action.value.value
                       ? (assets.assets[action.value.value]?.name ??

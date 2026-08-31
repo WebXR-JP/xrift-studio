@@ -1179,10 +1179,18 @@ export function configureInteractivityTriggerAction(
     // is what tells the runtime this is an Asset write at all. So it is always
     // written — empty until the author picks one, which reads as「元に戻す」.
     node.configuration.asset = { value: [""] };
+    delete node.configuration.text;
+    if (node.values) delete node.values.value;
+    return true;
+  }
+  if (descriptor.kind === "string") {
+    node.configuration.text = { value: [String(descriptor.defaultValue)] };
+    delete node.configuration.asset;
     if (node.values) delete node.values.value;
     return true;
   }
   delete node.configuration.asset;
+  delete node.configuration.text;
   if (op === XRIFT_INTERACTION_OPERATIONS.setProperty) {
     // The socket's type follows the property, so switching from a number to a
     // colour cannot leave a value the runtime would read as the wrong shape.
@@ -1215,9 +1223,10 @@ export function defaultTriggerActionValue(
     case "enum":
       return [xriftInteractionEnumIndex(descriptor, String(descriptor.defaultValue))];
     case "asset":
-      // An Asset id is configuration, not a socket value. A node placed with
-      // no Asset chosen clears the override, which is a complete instruction
-      // rather than an unfinished one.
+    case "string":
+      // Both live in `configuration`, not in a socket. A node placed with
+      // nothing chosen is still a complete instruction — put the authored
+      // value back — rather than an unfinished one.
       return [];
   }
 }
@@ -1240,6 +1249,30 @@ export function setInteractivityTriggerActionAsset(
     asset: { value: [assetId] },
   };
   return true;
+}
+
+/** Writes the text a text-valued action shows. */
+export function setInteractivityTriggerActionText(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+  text: string,
+): boolean {
+  const node = graph.nodes?.[nodeIndex];
+  if (!node) return false;
+  node.configuration = {
+    ...(node.configuration ?? {}),
+    text: { value: [text] },
+  };
+  return true;
+}
+
+/** The text a text-valued action shows, for the Editor's field. */
+export function readInteractivityTriggerActionText(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+): string {
+  const entry = graph.nodes?.[nodeIndex]?.configuration?.text?.value?.[0];
+  return typeof entry === "string" ? entry : "";
 }
 
 /** The Asset an action points at, for the Editor's picker. */

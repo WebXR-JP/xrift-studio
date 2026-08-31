@@ -17,6 +17,7 @@ import textPanelRuntimeSource from "../../../../packages/xrift-studio-runtime/sr
 import textPanelObjectSource from "../../../../packages/xrift-studio-runtime/src/text-panel.ts?raw";
 import textPanelLayoutSource from "../../../../packages/xrift-studio-runtime/src/text-panel-layout.ts?raw";
 import textFontCatalogSource from "../../../../packages/xrift-studio-runtime/src/text-font-catalog.ts?raw";
+import textRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/text-runtime.ts?raw";
 import troikaTextTypesSource from "../../../../packages/xrift-studio-runtime/src/troika-three-text.d.ts?raw";
 import runtimePackageManifest from "../../../../packages/xrift-studio-runtime/package.json";
 
@@ -65,6 +66,7 @@ export const INTERACTIVITY_VALUE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/int
 export const INTERACTIVITY_HOST_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interactivity-host.ts`;
 export const INTERACTIVITY_ENGINE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interactivity-engine.ts`;
 export const TEXT_PANEL_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-panel-runtime.tsx`;
+export const TEXT_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-runtime.ts`;
 export const TEXT_PANEL_OBJECT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-panel.ts`;
 export const TEXT_PANEL_LAYOUT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-panel-layout.ts`;
 export const TEXT_FONT_CATALOG_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-font-catalog.ts`;
@@ -255,6 +257,9 @@ export function createTextPanelOverlayFiles(): CompilerOverlayFile[] {
     overlay(TEXT_PANEL_OBJECT_OVERLAY_PATH, rewriteTextPanelImports(textPanelObjectSource)),
     overlay(TEXT_PANEL_LAYOUT_OVERLAY_PATH, rewriteTextPanelImports(textPanelLayoutSource)),
     overlay(TEXT_FONT_CATALOG_OVERLAY_PATH, rewriteTextPanelImports(textFontCatalogSource)),
+    // The panel's runtime override bridge: a behavior graph re-letters a sign
+    // through it, so it ships wherever the panel does.
+    overlay(TEXT_RUNTIME_OVERLAY_PATH, rewriteTextPanelImports(textRuntimeSource)),
     // troika ships no types, so the staged project needs the same ambient
     // declaration Studio compiles against or `tsc` rejects the panel source.
     overlay(TEXT_PANEL_TYPES_OVERLAY_PATH, troikaTextTypesSource),
@@ -267,7 +272,7 @@ function overlay(relativePath: string, content: string): CompilerOverlayFile {
 
 function rewriteTextPanelImports(source: string): string {
   return source.replace(
-    /(\bfrom\s*)(["'])\.{1,2}\/(text-panel|text-panel-layout|text-font-catalog)\.js\2/g,
+    /(\bfrom\s*)(["'])\.{1,2}\/(text-panel|text-panel-layout|text-font-catalog|text-runtime)\.js\2/g,
     (_whole, prefix: string, quote: string, moduleName: string) =>
       `${prefix}${quote}./${moduleName}${quote}`,
   );
@@ -369,6 +374,7 @@ const RUNTIME_SIBLING_OVERLAY_MODULES: Readonly<Record<string, string>> = {
   animation: "animation-runtime",
   "animation-mixer": "animation-mixer-runtime",
   "scene-runtime": "scene-runtime",
+  "text-runtime": "text-runtime",
   host: "script-host",
 };
 

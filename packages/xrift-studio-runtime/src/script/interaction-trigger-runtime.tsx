@@ -33,6 +33,12 @@ import {
   type XriftParticleRuntimeOverrides,
 } from "./particle.js";
 import {
+  isXriftTextRuntimeBridge,
+  XRIFT_TEXT_RUNTIME_USER_DATA_KEY,
+  type XriftTextRuntimeBridge,
+  type XriftTextRuntimeOverrides,
+} from "./text-runtime.js";
+import {
   emitXriftSceneEvent,
   findXriftSceneRuntimeBridge,
   type XriftSceneRuntimeBridge,
@@ -154,6 +160,58 @@ function forEachOwnedBridge<Bridge>(
     for (const child of object.children) visit(child);
   };
   visit(root);
+}
+
+/**
+ * One action, as the Text bridge's override shape.
+ *
+ * Colours become CSS hex because that is what the panel config takes; the
+ * action carries linear RGB, which is how every other colour in a graph is
+ * stored, so the conversion belongs here rather than in the bridge.
+ */
+function textRuntimeOverrides(
+  action: XriftInteractionAction,
+): XriftTextRuntimeOverrides | null {
+  const value = action.value;
+  if (!value) return null;
+  switch (action.property) {
+    case "enabled":
+      return value.kind === "bool" ? { enabled: value.value } : null;
+    case "text":
+      return value.kind === "string" ? { text: value.value } : null;
+    case "fontId":
+      return value.kind === "string" ? { fontId: value.value } : null;
+    case "textAlign":
+      return value.kind === "enum"
+        ? { textAlign: value.value as XriftTextRuntimeOverrides["textAlign"] }
+        : null;
+    case "color":
+      return value.kind === "color" ? { color: hexFromLinear(value.value) } : null;
+    case "outlineColor":
+      return value.kind === "color"
+        ? { outlineColor: hexFromLinear(value.value) }
+        : null;
+    case "fontSize":
+      return value.kind === "float" ? { fontSize: value.value } : null;
+    case "fontWeight":
+      return value.kind === "float" ? { fontWeight: value.value } : null;
+    case "lineHeight":
+      return value.kind === "float" ? { lineHeight: value.value } : null;
+    case "letterSpacing":
+      return value.kind === "float" ? { letterSpacing: value.value } : null;
+    case "maxWidth":
+      return value.kind === "float" ? { maxWidth: value.value } : null;
+    case "outlineWidth":
+      return value.kind === "float" ? { outlineWidth: value.value } : null;
+    default:
+      return null;
+  }
+}
+
+function hexFromLinear(value: readonly [number, number, number]): string {
+  return `#${new Color()
+    .setRGB(value[0], value[1], value[2], LinearSRGBColorSpace)
+    .getHexString(SRGBColorSpace)}`;
 }
 
 function isAudioSourceBridge(
@@ -351,6 +409,7 @@ export function createXriftInteractionApplier({
 
   const animationOwners = new Set<XriftAnimationRuntimeBridge>();
   const sceneOwners = new Set<XriftSceneRuntimeBridge>();
+  const textOwners = new Set<XriftTextRuntimeBridge>();
   /**
    * Meshes whose Material this trigger replaced with its own clone.
    *
@@ -605,6 +664,70 @@ export function createXriftInteractionApplier({
     "fogColor",
     "ambientColor",
   ] as const;
+
+  /**
+   * Text is written through its own bridge, like Light and Particle: the panel
+   * is typeset from one config object, so re-lettering a sign has to go through
+   * the thing that owns that object rather than poking at the mesh.
+   */
+  const applyText = (target: Object3D, action: XriftInteractionAction) => {
+    forEachOwnedBridge(
+      target,
+      ownEntityId(action.entityId),
+      XRIFT_TEXT_RUNTIME_USER_DATA_KEY,
+      isXriftTextRuntimeBridge,
+      (bridge) => {
+        // An empty component id means「このEntityのText」, which is what a graph
+        // attached to the Entity itself writes.
+        if (action.componentId && bridge.read().componentId !== action.componentId) {
+          return;
+        }
+        const overrides = textRuntimeOverrides(action);
+        if (!overrides) return;
+        textOwners.add(bridge);
+        bridge.setOwner(owner, order, componentId, overrides);
+      },
+    );
+  };
+
+  const readText = (
+    target: Object3D,
+    action: { entityId: string; componentId: string | null; property: string },
+  ): XriftInteractionValue | null => {
+    const found: { value: XriftInteractionValue | null } = { value: null };
+    forEachOwnedBridge(
+      target,
+      ownEntityId(action.entityId),
+      XRIFT_TEXT_RUNTIME_USER_DATA_KEY,
+      isXriftTextRuntimeBridge,
+      (bridge) => {
+        const state = bridge.read();
+        if (
+          found.value ||
+          (action.componentId && state.componentId !== action.componentId)
+        ) {
+          return;
+        }
+        if (action.property === "enabled") {
+          found.value = { kind: "bool", value: state.enabled ?? true };
+          return;
+        }
+        const current = state.overrides[
+          action.property as keyof typeof state.overrides
+        ];
+        if (current === undefined) return;
+        if (typeof current === "number") {
+          found.value = { kind: "float", value: current };
+        } else if (typeof current === "string") {
+          found.value =
+            action.property === "color" || action.property === "outlineColor"
+              ? null
+              : { kind: "string", value: current };
+        }
+      },
+    );
+    return found.value;
+  };
 
   const applyScene = (action: XriftInteractionAction) => {
     const bridge = findXriftSceneRuntimeBridge(root);
@@ -1040,6 +1163,7 @@ export function createXriftInteractionApplier({
       if (target.targetKind === "material") {
         return readMaterial(object, target);
       }
+      if (target.targetKind === "text") return readText(object, target);
       if (target.targetKind === "light") return readLight(object, target);
       return readAudioSource(object, target);
     },
@@ -1070,6 +1194,10 @@ export function createXriftInteractionApplier({
         applyMaterial(target, action);
         return;
       }
+      if (action.target === "text") {
+        applyText(target, action);
+        return;
+      }
       if (action.target === "light") {
         applyLight(target, action);
         return;
@@ -1083,6 +1211,8 @@ export function createXriftInteractionApplier({
       animationOwners.clear();
       for (const bridge of sceneOwners) bridge.removeOwner(owner);
       sceneOwners.clear();
+      for (const bridge of textOwners) bridge.removeOwner(owner);
+      textOwners.clear();
       for (const bridge of particleOverrides.keys()) bridge.removeOwner(owner);
       particleOverrides.clear();
       for (const [mesh, original] of materialRestores) {
@@ -1262,6 +1392,20 @@ export function createXriftInteractionHost(
         target: descriptor.target,
         property: target.property,
         value: { kind: "asset", value: assetId },
+      });
+      return true;
+    },
+    writeString(target, text) {
+      const descriptor = descriptorFor(target);
+      if (!descriptor || descriptor.kind !== "string") return false;
+      applier.apply({
+        nodeIndex: -1,
+        mode: "set",
+        entityId: target.entityId,
+        componentId: target.componentId,
+        target: descriptor.target,
+        property: target.property,
+        value: { kind: "string", value: text },
       });
       return true;
     },

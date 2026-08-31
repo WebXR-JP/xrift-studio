@@ -462,6 +462,55 @@ export type ScriptParticles = {
 };
 
 /**
+ * What this viewer sees, for the duration of this Play session.
+ *
+ * Scene settings are shared by everyone in a world, which makes them the wrong
+ * place to answer「重い端末のユーザーにも遊んでほしい」: raising the quality for
+ * one viewer raises it for the person on a headset that cannot afford it. These
+ * writes are client-local — they land on the renderer running this Script and
+ * nothing else — so a world can offer「画質を上げる」and let each person choose.
+ *
+ * Runtime-only, like `lights` and `materials`: the Script's own overrides come
+ * off on restart, on failure and on Stop, and a viewer who re-enters sees the
+ * Scene settings again.
+ */
+export type ScriptViewer = {
+  /** Post effects as a whole. */
+  setPostprocessing(enabled: boolean): void;
+  setBloom(options: {
+    enabled?: boolean;
+    strength?: number;
+    radius?: number;
+    threshold?: number;
+  }): void;
+  setAmbientOcclusion(enabled: boolean): void;
+  setColorGrading(enabled: boolean): void;
+  /** Absolute tone-mapping exposure. 1 is the usual authored value. */
+  setExposure(value: number): void;
+  setFog(options: {
+    enabled?: boolean;
+    color?: string | number;
+    near?: number;
+    far?: number;
+  }): void;
+  setAmbient(options: {
+    enabled?: boolean;
+    color?: string | number;
+    intensity?: number;
+  }): void;
+  setSkybox(options: {
+    enabled?: boolean;
+    ibl?: boolean;
+    exposure?: number;
+    rotationDegrees?: number;
+  }): void;
+  /** Field of view in degrees. */
+  setCameraFov(degrees: number): void;
+  /** Removes this Script's viewer overrides, back to the Scene settings. */
+  reset(): void;
+};
+
+/**
  * Minimal structural stand-ins so this module stays dependency-free. The host
  * passes real three.js objects; scripts import three themselves for types.
  */
@@ -513,6 +562,12 @@ export type ScriptContext<
    * restored automatically on restart or Stop.
    */
   particles: ScriptParticles;
+  /**
+   * This viewer's own picture: post effects, exposure, fog, ambient light, the
+   * sky and the field of view. Client-local and runtime-only — nothing here is
+   * synchronised to other viewers or written to the Scene.
+   */
+  viewer: ScriptViewer;
   /** Only Entities declared through an `entity` prop are reachable. */
   find(entityId: string): ScriptObject3D | null;
   /** @deprecated Prefer `assets.url(assetId)`. */

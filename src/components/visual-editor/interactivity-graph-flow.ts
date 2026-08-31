@@ -16,7 +16,9 @@ import {
   readInteractivityNodeNote,
   readInteractivityNodePosition,
   readInteractivityTriggerAction,
+  getXriftInteractionProperty,
   readInteractivityTriggerActionAsset,
+  readInteractivityTriggerActionText,
   readInteractivityTriggerActionDuration,
   XRIFT_INTERACTION_OPERATIONS,
   type KhrInteractivityGraph,
@@ -44,9 +46,19 @@ export function triggerActionSummary(
   const action = readInteractivityTriggerAction(graph, index);
   if (!action) return undefined;
   const assetId = readInteractivityTriggerActionAsset(graph, index);
+  const descriptor = getXriftInteractionProperty(
+    action.targetKind,
+    action.property,
+  );
   return describeInteractionTriggerAction(targets, {
     ...action,
     mode: op === XRIFT_INTERACTION_OPERATIONS.toggleProperty ? "toggle" : "set",
+    // The text lives in configuration, so it stands in for the value socket
+    // the card would otherwise read.
+    value:
+      descriptor?.kind === "string"
+        ? [readInteractivityTriggerActionText(graph, index)]
+        : action.value,
     durationSeconds: readInteractivityTriggerActionDuration(graph, index),
     assetName: assetId ? (assetNames?.get(assetId) ?? assetId) : null,
   });

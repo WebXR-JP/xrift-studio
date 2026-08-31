@@ -37,6 +37,11 @@ import {
   type Texture,
   TextureLoader,
 } from "three";
+// Statically imported, not fetched on demand: a published world is built with
+// no dynamic import, so a graph that swaps to an HDR sky has to find its
+// decoder already there.
+import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
+import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
 
 export const XRIFT_SCENE_RUNTIME_USER_DATA_KEY = "xriftSceneRuntime" as const;
 
@@ -416,10 +421,7 @@ async function loadEquirectangularTexture(
   const format = asset.sourceFormat;
   let texture: Texture;
   if (format === "hdr" || format === "exr") {
-    // Imported on demand: a world whose graph never swaps to an HDR sky must
-    // not carry the decoder in its initial bundle.
-    const addons = await import("three/examples/jsm/Addons.js");
-    const Loader = format === "hdr" ? addons.HDRLoader : addons.EXRLoader;
+    const Loader = format === "hdr" ? HDRLoader : EXRLoader;
     texture = await new Loader().loadAsync(asset.url);
   } else {
     texture = await new TextureLoader().loadAsync(asset.url);
