@@ -44,6 +44,7 @@ export function compileRuntimeManifest(
           entryScene,
           documents.assets,
           diagnostics,
+          new Set(Object.keys(runtimeAssets)),
         ),
       }
     : {};
@@ -66,6 +67,7 @@ function compileRuntimeScene(
   scene: SceneDocument,
   assets: AssetManifest,
   diagnostics: CompilerDiagnostic[],
+  compiledAssetIds: ReadonlySet<string>,
 ) {
   return {
     id: scene.sceneId,
@@ -82,6 +84,7 @@ function compileRuntimeScene(
             diagnostics,
             scene.sceneId,
             scene.entities,
+            compiledAssetIds,
           ),
         ]),
     ),
@@ -99,6 +102,7 @@ function compileRuntimeEntity(
   diagnostics: CompilerDiagnostic[],
   sceneId: string,
   allEntities: Record<string, SceneEntity>,
+  compiledAssetIds: ReadonlySet<string>,
 ): XriftRuntimeEntity {
   const transform = entity.components.find((component) => component.type === "transform");
   const components: XriftRuntimeComponent[] = [];
@@ -202,6 +206,15 @@ function compileRuntimeEntity(
       JSON.stringify(component),
     ) as XriftRuntimeComponent;
     if (runtimeComponent.type === "text") {
+      // A font the world cannot carry is dropped rather than left as an id the
+      // runtime would look up and miss; the Text then renders with the catalog
+      // face, which is what the compiler warns about.
+      if (
+        runtimeComponent.fontAssetId &&
+        !compiledAssetIds.has(runtimeComponent.fontAssetId)
+      ) {
+        delete runtimeComponent.fontAssetId;
+      }
       // The face is resolved here so the manifest names the file the world
       // actually carries, rather than leaving "auto" for the runtime to
       // interpret.
@@ -501,6 +514,9 @@ function compileRuntimeAsset(
   }
   if (asset.kind === "audio" && url) {
     return { id: asset.id, kind: "audio", name: asset.name, url };
+  }
+  if (asset.kind === "font" && url) {
+    return { id: asset.id, kind: "font", name: asset.name, url };
   }
   if (asset.kind === "material") {
     return {

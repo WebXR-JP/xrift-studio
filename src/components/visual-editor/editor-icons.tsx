@@ -83,6 +83,7 @@ export const EDITOR_ICONS = {
   sceneEntity: FileBox,
   light: Lightbulb,
   audio: Volume2,
+  font: Type,
   script: Code,
   animation: CirclePlay,
   camera: Camera,

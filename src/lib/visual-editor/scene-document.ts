@@ -280,6 +280,13 @@ export type TextComponent = ComponentBase & {
   /** Catalog id from text-font-catalog. Absent keeps the automatic font. */
   fontId?: string;
   fontWeight?: number;
+  /**
+   * Font Asset the author imported, used instead of the catalog when set.
+   *
+   * The Asset owns the file; `fontId` stays as it was, so clearing the Asset
+   * reference falls back to the catalog choice rather than to nothing.
+   */
+  fontAssetId?: string;
   textAlign?: XriftTextAlign;
   /** Multiple of `fontSize`. Absent uses the font's own metrics. */
   lineHeight?: number;
@@ -304,6 +311,7 @@ export type TextPatch = Partial<
     | "outlineColor"
     | "fontId"
     | "fontWeight"
+    | "fontAssetId"
     | "textAlign"
     | "lineHeight"
     | "letterSpacing"
@@ -1011,6 +1019,9 @@ export function createTextComponent(
         ? input.outlineColor
         : "#000000",
     ...(font ? { fontId: font.id } : {}),
+    ...(typeof input.fontAssetId === "string" && input.fontAssetId.trim()
+      ? { fontAssetId: input.fontAssetId.trim() }
+      : {}),
     ...(fontWeight !== undefined ? { fontWeight } : {}),
     ...(input.textAlign !== undefined ? { textAlign: input.textAlign } : {}),
     ...(typeof input.lineHeight === "number" &&
@@ -2071,6 +2082,13 @@ export function updateTextComponent(
   }
   const { background: backgroundPatch, ...scalarPatch } = patch;
   if (backgroundPatch && !isValidTextBackgroundPatch(backgroundPatch)) return scene;
+  if (
+    scalarPatch.fontAssetId !== undefined &&
+    scalarPatch.fontAssetId !== "" &&
+    typeof scalarPatch.fontAssetId !== "string"
+  ) {
+    return scene;
+  }
   const mergedFontId = scalarPatch.fontId ?? current.fontId;
   const next: TextComponent = {
     ...current,
@@ -2084,6 +2102,9 @@ export function updateTextComponent(
         }
       : {}),
   };
+  // An empty id is how the Inspector says "back to the catalog font"; storing
+  // it would leave two spellings of the same document state.
+  if (scalarPatch.fontAssetId === "") delete next.fontAssetId;
   // The automatic font is the absence of a choice, not a font id: storing the
   // sentinel would leave two spellings of the same document state.
   if (scalarPatch.fontId === AUTOMATIC_TEXT_FONT_ID) delete next.fontId;

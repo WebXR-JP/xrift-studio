@@ -373,6 +373,7 @@ const IMPORT_RESOURCE_KIND: Readonly<
   model: "model",
   skybox: "skybox",
   audio: "audio",
+  font: "font",
   shader: "shader",
 };
 const AUTOSAVE_DELAY_MS = 800;
@@ -9467,7 +9468,7 @@ export function VisualEditorPrototype({
     if (unsupported.length > 0) {
       const names = unsupported.slice(0, 3).map((file) => file.name).join("、");
       setImportError(
-        `${names}${unsupported.length > 3 ? " ほか" : ""} は対象外です。Unity、Three.js Editor対応モデル、画像、HDR / EXR、MP3 / WAV、GLSL（.glsl / .vert / .frag）に対応します。`,
+        `${names}${unsupported.length > 3 ? " ほか" : ""} は対象外です。Unity、Three.js Editor対応モデル、画像、HDR / EXR、MP3 / WAV、フォント（.ttf / .otf / .woff）、GLSL（.glsl / .vert / .frag）に対応します。`,
       );
     } else {
       setImportError(null);

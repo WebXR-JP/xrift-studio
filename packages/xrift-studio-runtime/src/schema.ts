@@ -119,9 +119,11 @@ export type XriftRuntimeComponent =
       anchorY: "top" | "middle" | "bottom";
       outlineWidth: number;
       outlineColor: string;
-      /** Font catalog id. Absent keeps the automatically resolved Noto face. */
+      /** Font catalog id. Absent uses the bundled default face. */
       fontId?: string;
       fontWeight?: number;
+      /** Id of a `font` Asset in this manifest, used instead of the catalog. */
+      fontAssetId?: string;
       textAlign?: "left" | "center" | "right" | "justify";
       /** Multiple of `fontSize`. Absent uses the font's own metrics. */
       lineHeight?: number;
@@ -263,6 +265,13 @@ export type XriftRuntimeAsset =
   | {
       id: string;
       kind: "audio";
+      name: string;
+      url: string;
+    }
+  | {
+      /** A font file the world carries, referenced by a Text component. */
+      id: string;
+      kind: "font";
       name: string;
       url: string;
     }
@@ -519,6 +528,7 @@ function isRuntimeAsset(value: unknown): value is XriftRuntimeAsset {
     case "texture":
     case "skybox":
     case "audio":
+    case "font":
       return typeof value.url === "string";
     case "material":
     case "particle":

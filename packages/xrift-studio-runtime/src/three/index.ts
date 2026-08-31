@@ -163,6 +163,15 @@ export class XriftThreeLoader {
     const textFontBaseUrl = manifest.textFontBaseUrl
       ? new URL(manifest.textFontBaseUrl, assetBase).toString()
       : undefined;
+    // An imported font is a file the world carries, so it resolves against the
+    // same base as every other Asset rather than through the catalog.
+    const fontUrlsByAssetId = new Map(
+      Object.values(manifest.assets).flatMap((asset) =>
+        asset.kind === "font"
+          ? [[asset.id, new URL(asset.url, assetBase).toString()] as const]
+          : [],
+      ),
+    );
     const assets = Object.values(manifest.assets);
     const modelAssets = assets.filter(
       (asset): asset is Extract<XriftRuntimeAsset, { kind: "model" }> =>
@@ -231,6 +240,7 @@ export class XriftThreeLoader {
           entity,
           manifest,
           textFontBaseUrl,
+          fontUrlsByAssetId,
           models,
           materials,
           textures,
@@ -499,6 +509,7 @@ export class XriftThreeLoader {
     entity: XriftRuntimeEntity;
     manifest: XriftRuntimeManifest;
     textFontBaseUrl: string | undefined;
+    fontUrlsByAssetId: ReadonlyMap<string, string>;
     models: ReadonlyMap<string, LoadedModel>;
     materials: ReadonlyMap<string, Material>;
     textures: ReadonlyMap<string, Texture>;
@@ -612,8 +623,22 @@ export class XriftThreeLoader {
         });
       }
       const panel = new XriftTextPanelObject();
+      const fontAssetId = component.fontAssetId;
+      const fontUrl = fontAssetId
+        ? input.fontUrlsByAssetId.get(fontAssetId)
+        : undefined;
+      if (fontAssetId && !fontUrl) {
+        input.diagnostics.push({
+          severity: "warning",
+          code: "text-font-asset-missing",
+          message: `Text font asset could not be resolved: ${fontAssetId}`,
+          entityId: input.entity.id,
+          componentId: component.id,
+          assetId: fontAssetId,
+        });
+      }
       panel.update(
-        runtimeTextPanelConfig(component, input.textFontBaseUrl),
+        runtimeTextPanelConfig(component, input.textFontBaseUrl, fontUrl),
         backgroundTexture,
       );
       panel.userData.xriftStudioComponentId = component.id;
@@ -1274,9 +1299,11 @@ function nearestSourceNodeIndex(object: Object3D): number | undefined {
 function runtimeTextPanelConfig(
   component: Extract<XriftRuntimeComponent, { type: "text" }>,
   fontBaseUrl: string | undefined,
+  fontUrl: string | undefined,
 ): XriftTextPanelConfig {
   return {
     ...(fontBaseUrl === undefined ? {} : { fontBaseUrl }),
+    ...(fontUrl === undefined ? {} : { fontUrl }),
     text: component.text,
     color: component.color,
     fontSize: component.fontSize,
