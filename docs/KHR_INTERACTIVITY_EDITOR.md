@@ -246,7 +246,7 @@ interacts with this Entity, and which Scene Component does it change.
 | Operation | Sockets | Configuration |
 | --- | --- | --- |
 | `xrift/onInteract` | flow `out` | none; the Entity carrying the graph is the source |
-| `xrift/setProperty` | flow `in`, `out`, `done`, value `value`, `duration` | `entity`, `component`, `targetKind`, `property`, `easing` |
+| `xrift/setProperty` | flow `in`, `out`, `done`, value `value`, `duration` | `entity`, `component`, `targetKind`, `property`, `easing`, and `asset` or `text` for the two kinds whose value is not a number |
 | `xrift/toggleProperty` | flow `in`, `out` | the same four, restricted to an ON/OFF property |
 
 Each declaration names the extension, so the graph stays a valid
@@ -276,12 +276,60 @@ it through the same runtime bridge:
 | Particle | `emitting`, `restart`, `emissionRate`, `sizeMultiplier`, `opacity`, `color` |
 | Audio Source | `playback` (play / pause / stop), `volume`, `loop` |
 | Light | `enabled`, `intensity`, `color` |
-| Scene | `exposure`, `fade`, `fadeColor` |
+| Text | `enabled`, `text`, `color`, `fontSize`, `fontWeight`, `fontId`, `textAlign`, `lineHeight`, `letterSpacing`, `maxWidth`, `outlineWidth`, `outlineColor` |
+| Scene | `exposure`, `fade`, `fadeColor`, `postprocessing`, `bloom` (+`bloomStrength`, `bloomRadius`, `bloomThreshold`), `ao`, `grading`, `fog` (+`fogColor`, `fogNear`, `fogFar`), `ambient` (+`ambientColor`, `ambientIntensity`), `skybox`, `skyboxIbl`, `skyboxExposure`, `skyboxRotation`, `skyboxImage`, `cameraFov` |
 
 Entity, Transform, Material and Scene belong to the Entity rather than to a
 Component that can appear twice, so they carry no Component id. Scene is
 addressed through a reserved Entity id, because it belongs to no Entity at all
 and an action still needs something in that slot.
+
+### The Scene target is this viewer's, and only this viewer's
+
+Everything under `Scene` is **client-local**. A graph runs inside each viewer's
+own runtime, so the write lands on that viewer's renderer and reaches nobody
+else. That is the point rather than a limitation: post effects are a Scene
+setting, so switching them on used to mean switching them on for the person on
+the slowest headset too, and an author's only options were「品質を上げる」or
+「いちばん重い端末に合わせて諦める」. A world can now put a「画質を上げる」button
+in the room and let each person answer for their own device.
+
+Nothing here is synchronised and nothing is saved. Stop, and re-entry, put the
+Scene settings back — the same contract every other runtime override keeps.
+
+The set deliberately mirrors the Scene Settings panel rather than a hand-picked
+subset, because「設定にあるのにグラフから触れない」is the shape of the original
+complaint. The Editor-only rows are the exception: the gizmo, the grid and the
+editor background are not part of what a viewer sees.
+
+`skyboxImage`, `skyboxExposure` and `skyboxRotation` act on the background and
+on image-based lighting. A swapped image replaces a gradient, Box, Dome or Sky
+Shader sky as well, because those are meshes rather than `scene.background`;
+they carry `userData.xriftSceneSkybox` so the runtime can find them, and the
+three surfaces that build a sky all set it.
+
+`ambient` turns on an ambient light the runtime owns when the Scene has none,
+so「明るくする」does not quietly fail on exactly the Scenes whose 環境光 is off.
+
+### A value that is not a number
+
+`asset` and `string` properties store their value in `configuration`, beside
+the Entity and Component ids, rather than in the `value` socket. Two reasons,
+and both are the same reason the target lives there: `KHR_interactivity` has no
+string type, and neither an Asset id nor a sentence is a quantity to
+interpolate toward. A duration on one of them is not honoured — half of an
+Asset is nothing, and half of「開いています」is not a word.
+
+They reach the host as `writeAsset` and `writeString`, which are separate
+because the obligations differ: an Asset id names something the published world
+has to carry, a string names nothing at all. The Interaction Trigger Component
+records the Asset ids its graph can reach in `assetReferences`, derived from
+the graph exactly as `entityReferences` is, and that is what makes the compiler
+publish a sky image nothing in the Scene document mentions.
+
+Both derived lists are read from **every** action node rather than by walking
+forward from `xrift/onInteract`: a graph that starts itself on `event/onStart`,
+or one behind `event/receive`, still needs its Assets published.
 
 Writes go through the runtime bridges Scripts already own — Audio Source,
 Light, Particle, and the Animation bridge added for this — so a trigger and a
@@ -408,7 +456,7 @@ look supported on one surface and unsupported on another.
 | `variable/get`, `set`, `interpolate` | executed | `interpolate` advances every frame and continues on `done`. |
 | `math/*`, `type/*`, `ref/eq` | executed | Arithmetic, comparison, logic, vectors and conversions. |
 | `animation/start`, `stop`, `stopAt` | conditional | Needs a host that owns the clips. |
-| `xrift/onInteract`, `setProperty`, `toggleProperty` | conditional | Needs the graph to be attached to an Entity. |
+| `xrift/onInteract`, `setProperty`, `toggleProperty` | conditional | Needs the graph to be attached to an Entity. Scene writes also need the Scene bridge, which a published world carries whenever it carries behavior. |
 | `pointer/get`, `set`, `interpolate` | ignored | Implemented in the interpreter; no host resolves a glTF Object Model pointer yet. |
 | everything else | ignored | Serialized, never executed. |
 
