@@ -2126,6 +2126,69 @@ export function runVisualCompilerFixtureAssertions(
     "A world with no Text must not declare a font base it does not ship",
   );
 
+  // The automatic face is troika's CDN resolver. A published world cannot reach
+  // one, so publishing substitutes the bundled fallback and ships its file.
+  const autoTextComponent = createTextComponent("component-text-auto", {
+    text: "自動の書体",
+    fontId: "auto",
+  });
+  assert(
+    autoTextComponent !== null,
+    "Automatic-font Text fixture component could not be created",
+  );
+  const autoTextProject: VisualCompilerDocuments = {
+    ...modelProject,
+    scenes: {
+      [textScene.sceneId]: {
+        ...textScene,
+        entities: {
+          ...textScene.entities,
+          [modelEntity.id]: {
+            ...textScene.entities[modelEntity.id],
+            components: [
+              ...modelScene.entities[modelEntity.id].components,
+              autoTextComponent,
+            ],
+          },
+        },
+      },
+    },
+  };
+  const autoJsxResult = compileVisualProject(autoTextProject, {
+    generatedAt: fixedTime,
+  });
+  const autoJsxSource =
+    autoJsxResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(
+    JSON.stringify(
+      autoJsxResult.stagingPlan.bundledAssetCopyPlan.filter(
+        (entry) => entry.source === "text-fonts",
+      ),
+    ) === JSON.stringify(textFontCopies),
+    "A Text on the automatic face must ship the bundled fallback font",
+  );
+  assert(
+    autoJsxSource.includes('"fontId":"noto-sans-jp"') &&
+      !autoJsxSource.includes('"fontId":"auto"') &&
+      autoJsxSource.includes("fontBaseUrl={baseUrl}"),
+    "Classic JSX must publish the substituted font id and the world's own base",
+  );
+  const autoRuntimeManifest = JSON.parse(
+    compileVisualProject(autoTextProject, {
+      generatedAt: fixedTime,
+      outputMode: "classic-runtime",
+    }).overlayFiles.find(
+      (file) => file.relativePath === "public/xrift/runtime.json",
+    )?.content ?? "{}",
+  ) as { textFontBaseUrl?: string };
+  assert(
+    autoRuntimeManifest.textFontBaseUrl === "../" &&
+      !JSON.stringify(autoRuntimeManifest).includes('"fontId":"auto"'),
+    "Runtime JSON must publish the substituted font id and its base",
+  );
+
   // Draco: a decoder file, like the KTX2 transcoder, must be shipped by the
   // world and pointed at from the world's own base URL, in either output mode.
   const dracoModel: ModelAsset = {

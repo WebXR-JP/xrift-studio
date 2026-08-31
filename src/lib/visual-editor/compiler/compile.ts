@@ -159,7 +159,9 @@ import {
   type VendorBundleId,
 } from "../vendor-assets";
 import {
+  AUTOMATIC_TEXT_FONT_ID,
   getTextFontDefinition,
+  resolvePublishedTextFontId,
   resolveTextFontWeight,
   TEXT_FONT_DIRECTORY,
   textFontFileName,
@@ -544,9 +546,12 @@ function createPublishedTextFontCopyPlan(
   for (const entity of Object.values(scene.entities)) {
     for (const component of entity.components) {
       if (component.type !== "text") continue;
-      const font = getTextFontDefinition(component.fontId);
-      // A Text left on the automatic face resolves no catalog file, so there is
-      // nothing to copy for it.
+      // A Text left on the automatic face is published with the bundled
+      // fallback: the automatic face is a CDN resolver a published world cannot
+      // reach, so leaving it would ship a Text that never appears.
+      const font = getTextFontDefinition(
+        resolvePublishedTextFontId(component.fontId),
+      );
       if (!font) continue;
       fileNames.add(
         textFontFileName(font, resolveTextFontWeight(font, component.fontWeight)),
@@ -5036,28 +5041,25 @@ function renderText(
     )};`,
   );
   const backgroundTexture = resolveTextBackgroundTexture(entity, text, context);
-  // The font file travels with the world, and XRift decides at load time where
-  // the world's own files are served from. A Text on the automatic face reads
-  // no bundled file, so it needs neither the base nor the hook that reads it.
-  const usesBundledFont = getTextFontDefinition(text.fontId) !== undefined;
-  if (!backgroundTexture && !usesBundledFont) {
-    return `<XriftTextPanel config={${configName}} />`;
-  }
-
   const componentName = generatedIdentifier(
     "CompiledTextPanel",
     `${entity.id}:${text.id}`,
   );
-  if (usesBundledFont) context.imports.add("useXRift");
+  // Every published Text reads a font file the world ships — the automatic face
+  // is substituted at compile time, because it is a CDN resolver a published
+  // world cannot reach — and XRift decides at load time where the world's own
+  // files are served from. So the base is always read.
+  context.imports.add("useXRift");
   const props = [
     `config={${configName}}`,
-    ...(usesBundledFont ? ["fontBaseUrl={baseUrl}"] : []),
+    "fontBaseUrl={baseUrl}",
     ...(backgroundTexture ? ["map={textPanelMap}"] : []),
   ].join(" ");
   context.supportDeclarations.set(
     `text-panel:${componentName}`,
     `const ${componentName}: FC = () => {
-${usesBundledFont ? "  const { baseUrl } = useXRift();\n" : ""}${backgroundTexture?.lines ?? ""}  return <XriftTextPanel ${props} />;
+  const { baseUrl } = useXRift();
+${backgroundTexture?.lines ?? ""}  return <XriftTextPanel ${props} />;
 };`,
   );
   return `<${componentName} />`;
@@ -5147,7 +5149,7 @@ function compiledTextPanelConfig(text: TextComponent): Record<string, unknown> {
     anchorY: text.anchorY,
     outlineWidth: text.outlineWidth,
     outlineColor: text.outlineColor,
-    ...(text.fontId === undefined ? {} : { fontId: text.fontId }),
+    fontId: resolvePublishedTextFontId(text.fontId),
     ...(text.fontWeight === undefined ? {} : { fontWeight: text.fontWeight }),
     ...(text.textAlign === undefined ? {} : { textAlign: text.textAlign }),
     ...(text.lineHeight === undefined ? {} : { lineHeight: text.lineHeight }),
@@ -5376,11 +5378,20 @@ function diagnoseUnbundledTextFonts(
     for (const component of entity.components) {
       if (component.type !== "text") continue;
       const fontId = component.fontId;
-      if (!fontId || getTextFontDefinition(fontId)) continue;
+      // The automatic face is a deliberate choice and is substituted with the
+      // bundled fallback at publish time, so it is not worth a warning. An id
+      // that is neither is a stale document the author should look at.
+      if (
+        !fontId ||
+        fontId === AUTOMATIC_TEXT_FONT_ID ||
+        getTextFontDefinition(fontId)
+      ) {
+        continue;
+      }
       diagnostics.push({
         severity: "warning",
         code: "text-font-not-bundled",
-        message: `書体「${fontId}」はStudioに同梱されていないため、自動の書体で表示されます。Inspectorで同梱の書体を選び直してください。`,
+        message: `書体「${fontId}」はStudioに同梱されていないため、同梱の書体で表示されます。Inspectorで書体を選び直してください。`,
         entityId: entity.id,
         componentId: component.id,
         fieldPath: "fontId",

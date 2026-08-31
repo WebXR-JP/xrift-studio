@@ -98,6 +98,28 @@ export const TEXT_FONT_CATALOG: readonly XriftTextFontDefinition[] = [
 
 const CATALOG_BY_ID = new Map(TEXT_FONT_CATALOG.map((font) => [font.id, font]));
 
+/**
+ * Face a published world uses when the author left the automatic font.
+ *
+ * The automatic font is troika's per-script resolver, which downloads faces
+ * from a CDN. A published world has no permission to reach one, so its Text
+ * would never appear. Publishing therefore substitutes one bundled face; the
+ * japanese subset also carries Basic Latin, so mixed Japanese and English text
+ * is covered by the single file the world ships.
+ *
+ * Studio's own surfaces keep the automatic font: they can reach the resolver,
+ * and it is what keeps other scripts legible while authoring.
+ */
+export const PUBLISHED_FALLBACK_TEXT_FONT_ID = "noto-sans-jp" as const;
+
+/**
+ * Font id a published world actually renders with: the author's choice when it
+ * is in the catalog, otherwise the bundled fallback.
+ */
+export function resolvePublishedTextFontId(fontId: string | undefined): string {
+  return getTextFontDefinition(fontId)?.id ?? PUBLISHED_FALLBACK_TEXT_FONT_ID;
+}
+
 export function getTextFontDefinition(
   fontId: string | undefined,
 ): XriftTextFontDefinition | undefined {
