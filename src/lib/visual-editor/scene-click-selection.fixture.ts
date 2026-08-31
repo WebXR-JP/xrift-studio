@@ -1,6 +1,7 @@
 import {
   isEntityDescendantOf,
   resolveSceneClickSelection,
+  resolveSceneContextMenuTarget,
   type SceneClickPick,
 } from "./scene-click-selection";
 import {
@@ -128,6 +129,84 @@ export function runSceneClickSelectionFixtureAssertions(): void {
     resolveSceneClickSelection(scene, "island", pick([], [], null)),
     null,
     "an empty click must clear the selection through the fallback",
+  );
+
+  assertSelection(
+    resolveSceneContextMenuTarget(
+      scene,
+      "stair-1",
+      pick(["island", "stairs", "stair-1"], [], "island"),
+    ),
+    "stair-1",
+    "the context menu must act on the drilled selection, not the enclosing ancestor",
+  );
+
+  assertSelection(
+    resolveSceneContextMenuTarget(
+      scene,
+      "stairs",
+      pick(["island", "stairs", "stair-1"], [], "island"),
+    ),
+    "stairs",
+    "the context menu must keep the drilled selection instead of stepping deeper",
+  );
+
+  assertSelection(
+    resolveSceneContextMenuTarget(
+      scene,
+      "stairs",
+      pick(["island", "stair-1"], [], "island"),
+    ),
+    "stairs",
+    "a right click inside the selection's subtree must stay on the selection",
+  );
+
+  assertSelection(
+    resolveSceneContextMenuTarget(
+      scene,
+      "hidden-collider",
+      pick(["island"], ["hidden-collider"], "island"),
+    ),
+    "hidden-collider",
+    "a mesh-less selection reached by origin assist must stay the menu target",
+  );
+
+  assertSelection(
+    resolveSceneContextMenuTarget(
+      scene,
+      "island",
+      pick(["island", "stairs"], [], "island"),
+    ),
+    "island",
+    "without a drill the context menu must act on the frontmost surface",
+  );
+
+  assertSelection(
+    resolveSceneContextMenuTarget(scene, "stair-1", pick(["other"], [], "other")),
+    "other",
+    "right-clicking an unrelated Entity must retarget the menu to it",
+  );
+
+  assertSelection(
+    resolveSceneContextMenuTarget(
+      scene,
+      "stair-1",
+      pick(["island", "stair-2"], [], "island"),
+    ),
+    "island",
+    "a right click away from the buried selection must restart from the frontmost surface",
+  );
+
+  assertSelection(
+    resolveSceneContextMenuTarget(scene, "gone", pick(["island"], [], "island")),
+    "island",
+    "a stale selection id must leave the menu on the frontmost pick",
+  );
+
+  assertSelection(
+    resolveSceneContextMenuTarget(scene, "island", pick([], [], null)),
+    null,
+    "a right click on empty space must leave the menu without an Entity target",
   );
 }
 
