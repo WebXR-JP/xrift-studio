@@ -10944,8 +10944,8 @@ export function VisualEditorPrototype({
               void handleApplyModelOptimization(assetId, options);
             }}
             textureBatchState={textureBatchFeedback}
-            onApplyTextureBatch={(assetIds) => {
-              void handleApplyTextureProcessingBatch(assetIds);
+            onApplyTextureBatch={(assetIds, settings) => {
+              void handleApplyTextureProcessingBatch(assetIds, settings);
             }}
             onParticleChange={handleParticleChange}
             onTextureChange={handleTextureChange}
