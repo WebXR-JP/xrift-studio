@@ -24,15 +24,19 @@ import {
 } from "./interaction-trigger-targets";
 import {
   collectInteractivityRuntimeDiagnostics,
+  collectXriftInteractionActions,
   collectXriftInteractionIssues,
   collectXriftInteractionPrograms,
   configureInteractivityTriggerAction,
   createDefaultKhrInteractivityExtension,
   cloneKhrInteractivityExtension,
+  setInteractivityTriggerActionAsset,
   setInteractivityTriggerActionValue,
   validateKhrInteractivityExtension,
   XRIFT_INTERACTION_OPERATIONS,
+  XRIFT_INTERACTION_SCENE_ENTITY_ID,
   XRIFT_INTERACTION_SELF_ENTITY_ID,
+  getXriftInteractionProperties,
   getXriftInteractionProperty,
   type KhrInteractivityExtension,
   type KhrInteractivityGraph,
@@ -69,6 +73,10 @@ export function runInteractionTriggerFixtureAssertions(): void {
   assertWalkStopsAtUnsupportedOperation();
   assertSceneTargetsListWritableComponentsOnly();
   assertEntityReferencesFollowTheGraph();
+  assertTextIsAWritableTarget();
+  assertSceneTargetCoversTheSettingsPanel();
+  assertAssetValuedActionRecordsItsDependency();
+  assertPublishedWorldCarriesTheCompositorForAGraph();
   assertPublishedWorldRunsTheTrigger();
   assertPublishedWorldRunsAGraphNobodyPresses();
   assertPublishedWorldOmitsTheUnusedInteractionEmitter();
@@ -77,6 +85,7 @@ export function runInteractionTriggerFixtureAssertions(): void {
 
 const GRAPH_ASSET_ID = "asset_interactivity_trigger";
 const AUDIO_ASSET_ID = "asset_audio_click";
+const SKYBOX_ASSET_ID = "asset_skybox_sunset";
 const MATERIAL_ASSET_ID = "asset_material_plain";
 
 function graphOf(extension: KhrInteractivityExtension): KhrInteractivityGraph {
@@ -306,6 +315,208 @@ function assertEntityReferencesFollowTheGraph(): void {
     trigger?.type === "interaction-trigger" &&
       trigger.entityReferences.join(",") === "entity_sign,entity_speaker",
     "the trigger's entityReferences were not derived from its graph",
+  );
+}
+
+/**
+ * Text is offered as a target.
+ *
+ * The Component was in every Inspector list and in none of the trigger
+ * pickers, so「文字を変える」was a feature the Editor advertised and the graph
+ * could not reach. A picker that cannot name it is the same as not having it.
+ */
+function assertTextIsAWritableTarget(): void {
+  const documents = buildDocuments();
+  const targets = collectInteractionTriggerTargets(
+    documents.scenes.scene_main,
+    documents.assets,
+  );
+  const sign = targets.find((target) => target.entityId === "entity_sign");
+  const text = sign?.components.find(
+    (component) => component.targetKind === "text",
+  );
+  assert(Boolean(text), "the Text Component is not offered as a target");
+  assert(
+    text!.componentId === "component_sign_text",
+    "the Text target does not name the Component it writes",
+  );
+  for (const name of ["text", "color", "fontSize", "fontWeight", "fontId"]) {
+    assert(
+      text!.properties.some((property) => property.name === name),
+      `the Text target does not offer ${name}`,
+    );
+  }
+  assert(
+    text!.properties.find((property) => property.name === "text")?.kind ===
+      "string",
+    "the Text content is not offered as free text",
+  );
+}
+
+/**
+ * Every viewer-facing Scene setting is reachable from a graph.
+ *
+ * The complaint that produced this was「設定にあるのにグラフから触れない」, so
+ * the test is the settings panel rather than a list someone remembered to
+ * update. Editor-only rows — the gizmo, the grid, the editor background — are
+ * deliberately absent: they are not part of what a viewer sees.
+ */
+function assertSceneTargetCoversTheSettingsPanel(): void {
+  const scene = getXriftInteractionProperties("scene").map(
+    (property) => property.name,
+  );
+  for (const name of [
+    "postprocessing",
+    "bloom",
+    "ao",
+    "grading",
+    "exposure",
+    "fog",
+    "ambient",
+    "skybox",
+    "skyboxIbl",
+    "skyboxImage",
+    "cameraFov",
+  ]) {
+    assert(scene.includes(name), `the Scene target does not offer ${name}`);
+  }
+  const image = getXriftInteractionProperty("scene", "skyboxImage");
+  assert(
+    image?.kind === "asset" &&
+      (image.assetKinds ?? []).includes("skybox") &&
+      (image.assetKinds ?? []).includes("texture"),
+    "the sky image is not offered as an Asset the author can pick",
+  );
+}
+
+/**
+ * An Asset a graph points at becomes a recorded dependency.
+ *
+ * Nothing in the Scene document mentions a sky a button switches to, so
+ * without this the compiler has no reason to publish the image and the swap
+ * would work in Play and do nothing in the world that shipped.
+ */
+function assertAssetValuedActionRecordsItsDependency(): void {
+  const documents = buildDocuments();
+  const graphAsset = documents.assets.assets[GRAPH_ASSET_ID];
+  if (graphAsset?.kind !== "interactivity") {
+    throw new Error("the fixture's Interactivity Asset is missing");
+  }
+  const extension = cloneKhrInteractivityExtension(graphAsset.extension);
+  const graph = graphOf(extension);
+  const swap = appendInteractivityOperation(
+    graph,
+    XRIFT_INTERACTION_OPERATIONS.setProperty,
+    { x: 1000, y: 160 },
+  );
+  assert(
+    configureInteractivityTriggerAction(graph, swap, {
+      entityId: XRIFT_INTERACTION_SCENE_ENTITY_ID,
+      componentId: "",
+      targetKind: "scene",
+      property: "skyboxImage",
+    }),
+    "the sky image action could not be targeted",
+  );
+  assert(
+    setInteractivityTriggerActionAsset(graph, swap, SKYBOX_ASSET_ID),
+    "the sky image action could not be pointed at an Asset",
+  );
+  const parsed = collectXriftInteractionActions(extension).find(
+    (action) => action.property === "skyboxImage",
+  );
+  assert(
+    parsed?.value?.kind === "asset" && parsed.value.value === SKYBOX_ASSET_ID,
+    "the Asset id was not read back from the action's configuration",
+  );
+
+  const swapped = {
+    ...documents,
+    assets: {
+      ...documents.assets,
+      assets: {
+        ...documents.assets.assets,
+        [GRAPH_ASSET_ID]: { ...graphAsset, extension },
+      },
+    },
+  };
+  const synced = syncInteractionTriggerReferences(
+    swapped.scenes.scene_main,
+    swapped.assets,
+  );
+  const trigger = synced.entities.entity_button?.components.find(
+    (component) => component.type === "interaction-trigger",
+  );
+  assert(
+    trigger?.type === "interaction-trigger" &&
+      trigger.assetReferences.join(",") === SKYBOX_ASSET_ID,
+    "the trigger's assetReferences were not derived from its graph",
+  );
+}
+
+/**
+ * A world whose Scene has post effects off still ships the compositor when a
+ * graph can turn them on.
+ *
+ * Otherwise「画質を上げる」publishes, validates, and does nothing — which is
+ * worse than refusing to publish it.
+ */
+function assertPublishedWorldCarriesTheCompositorForAGraph(): void {
+  const documents = buildDocuments();
+  const graphAsset = documents.assets.assets[GRAPH_ASSET_ID];
+  if (graphAsset?.kind !== "interactivity") {
+    throw new Error("the fixture's Interactivity Asset is missing");
+  }
+  const extension = cloneKhrInteractivityExtension(graphAsset.extension);
+  const graph = graphOf(extension);
+  const brighten = appendInteractivityOperation(
+    graph,
+    XRIFT_INTERACTION_OPERATIONS.toggleProperty,
+    { x: 1000, y: 320 },
+  );
+  configureInteractivityTriggerAction(graph, brighten, {
+    entityId: XRIFT_INTERACTION_SCENE_ENTITY_ID,
+    componentId: "",
+    targetKind: "scene",
+    property: "postprocessing",
+  });
+  const result = compileVisualProject(
+    {
+      ...documents,
+      assets: {
+        ...documents.assets,
+        assets: {
+          ...documents.assets.assets,
+          [GRAPH_ASSET_ID]: { ...graphAsset, extension },
+        },
+      },
+    },
+    { generatedAt: "2026-08-29T00:00:00.000Z" },
+  );
+  const world = result.overlayFiles.find(
+    (file) => file.relativePath === "src/World.tsx",
+  )?.content;
+  assert(Boolean(world), "World.tsx was not emitted");
+  assert(
+    world!.includes("<ScenePostprocessing settings={"),
+    "the compositor was left out of a world whose graph turns it on",
+  );
+  assert(
+    result.overlayFiles.some(
+      (file) =>
+        file.relativePath === "src/xrift-studio/scene-postprocessing.tsx",
+    ) &&
+      result.overlayFiles.some(
+        (file) => file.relativePath === "src/xrift-studio/scene-runtime.tsx",
+      ),
+    "the compositor shipped without the Scene bridge it reads",
+  );
+  const compositor = result.overlayFiles.find(
+    (file) => file.relativePath === "src/xrift-studio/scene-postprocessing.tsx",
+  )?.content;
+  assert(
+    compositor!.includes('from "./scene-runtime"'),
+    "the staged compositor keeps a package path the flat world cannot resolve",
   );
 }
 
@@ -682,6 +893,18 @@ function buildScene(): SceneDocument {
             rotation: [0, 0, 0],
             scale: [1, 1, 1],
           },
+          {
+            id: "component_sign_text",
+            type: "text",
+            enabled: true,
+            text: "CLOSED",
+            color: "#ffffff",
+            fontSize: 0.2,
+            anchorX: "center",
+            anchorY: "middle",
+            outlineWidth: 0,
+            outlineColor: "#000000",
+          },
         ],
       },
     },
@@ -738,6 +961,16 @@ function buildDocuments() {
           metalness: 0,
           roughness: 1,
         }),
+      },
+      [SKYBOX_ASSET_ID]: {
+        id: SKYBOX_ASSET_ID,
+        name: "Sunset",
+        kind: "skybox",
+        status: "ready",
+        source: { kind: "project", relativePath: "assets/skybox/sunset.hdr" },
+        thumbnail: { status: "missing" },
+        projection: "equirectangular",
+        sourceFormat: "hdr",
       },
       [AUDIO_ASSET_ID]: {
         id: AUDIO_ASSET_ID,
