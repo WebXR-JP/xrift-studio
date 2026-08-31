@@ -173,6 +173,15 @@ function App() {
   const [visualLoading, setVisualLoading] = useState(false);
   const [visualPublishBundle, setVisualPublishBundle] =
     useState<PrototypeVisualProject | null>(null);
+  // 公開ダイアログの一括変換・最適化を、開いたままのEditor履歴へ返す受け口。
+  const visualExternalAssetsCommitRef = useRef<
+    | ((update: {
+        expectedAssets: PrototypeVisualProject["assets"];
+        nextAssets: PrototypeVisualProject["assets"];
+        notice: string;
+      }) => boolean)
+    | null
+  >(null);
   const [visualClassicExportBundle, setVisualClassicExportBundle] =
     useState<PrototypeVisualProject | null>(null);
   const [visualThumbnailReadiness, setVisualThumbnailReadiness] =
@@ -984,6 +993,9 @@ function App() {
                   );
                 }
               }}
+              onRegisterExternalAssetsCommit={(commit) => {
+                visualExternalAssetsCommitRef.current = commit;
+              }}
               onClassicExport={(bundle) => {
                 setVisualClassicExportBundle(bundle);
               }}
@@ -1104,6 +1116,13 @@ function App() {
             await handleSaveVisualProject(nextBundle, false, false);
             setVisualPublishBundle(nextBundle);
             setVisualCompilationFresh(false);
+            // シーンと公開物は同じ画像を使う。変換はダイアログ側で走るので、
+            // 開いたままのEditor履歴へも同じManifestを取り込む。
+            visualExternalAssetsCommitRef.current?.({
+              expectedAssets: publishBundle.assets,
+              nextAssets: result.manifest,
+              notice: `${result.convertedAssetNames.length}件のTextureを変換しました。シーンも変換後の画像を使います`,
+            });
             return {
               convertedAssetCount: result.convertedAssetNames.length,
               beforeBytes: result.beforeBytes,
@@ -1135,6 +1154,11 @@ function App() {
             await handleSaveVisualProject(result.bundle, false, false);
             setVisualPublishBundle(result.bundle);
             setVisualCompilationFresh(false);
+            visualExternalAssetsCommitRef.current?.({
+              expectedAssets: publishBundle.assets,
+              nextAssets: result.bundle.assets,
+              notice: `${result.optimizedAssetCount}件のAssetを最適化しました。シーンも最適化後のAssetを使います`,
+            });
             return {
               optimizedAssetCount: result.optimizedAssetCount,
               beforeBytes: result.beforeBytes,

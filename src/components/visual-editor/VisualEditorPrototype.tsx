@@ -602,6 +602,17 @@ type EditorCommandPayload = {
   componentDefinitionId?: string;
 };
 
+/**
+ * Editorの外（公開ダイアログの一括変換・最適化）で更新されたAsset Manifestを
+ * Editorの履歴へ取り込む。`expectedAssets` が現在のManifestと参照ごと一致する
+ * ときだけ適用し、途中で編集が入っていた場合は何もせずfalseを返す。
+ */
+export type ExternalAssetsCommit = (update: {
+  expectedAssets: AssetManifest;
+  nextAssets: AssetManifest;
+  notice: string;
+}) => boolean;
+
 export type VisualEditorPrototypeProps = {
   projectKind: VisualProjectKind;
   onBack: () => void;
@@ -618,6 +629,14 @@ export type VisualEditorPrototypeProps = {
   ) => void | string | Promise<void | string>;
   /** Upload/export orchestration is injected by the shell when available. */
   onUpload?: (bundle: PrototypeVisualProject) => void | Promise<void>;
+  /**
+   * 公開ダイアログなど、Editorの外で作られたAsset Manifestの更新を、この
+   * セッションの履歴へ取り込むための登録口。外の処理がディスクへ書いた変換を
+   * Editorが知らないままだと、次の保存が変換前のManifestで上書きしてしまう。
+   */
+  onRegisterExternalAssetsCommit?: (
+    commit: ExternalAssetsCommit | null,
+  ) => void;
   /** Opens the desktop Classic export flow without changing authoring data. */
   onClassicExport?: (bundle: PrototypeVisualProject) => void | Promise<void>;
   /** Fresh only after the current documents and required publication files were staged. */
@@ -844,6 +863,7 @@ export function VisualEditorPrototype({
   initialBundle: providedInitialBundle,
   onSave,
   onUpload,
+  onRegisterExternalAssetsCommit,
   onClassicExport,
   compilationFresh = false,
   onThumbnailChanged,
@@ -7797,6 +7817,36 @@ export function VisualEditorPrototype({
     },
     [editorMode, projectPath],
   );
+
+  // 公開ダイアログの一括変換・最適化はEditorの外（App）で走り、ディスクと
+  // 公開バンドルだけを更新していた。ここで受け口を登録して、変換後のManifestを
+  // 同じ操作の中で履歴へ取り込む。これが無いと、シーンは変換前の画像を見せ
+  // 続け、次の保存が変換をManifestごと巻き戻してしまう。
+  useEffect(() => {
+    if (!onRegisterExternalAssetsCommit) return;
+    const commit: ExternalAssetsCommit = ({ expectedAssets, nextAssets, notice }) => {
+      if (editorModeRef.current !== "edit") return false;
+      if (assetOperationRef.current) return false;
+      if (bundleRef.current.assets !== expectedAssets) return false;
+      setHistory((current) => {
+        if (current.present.bundle.assets !== expectedAssets) return current;
+        const nextBundle = touchProject({
+          ...current.present.bundle,
+          assets: nextAssets,
+        });
+        bundleRef.current = nextBundle;
+        setSaveStatus("dirty");
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: nextBundle,
+        });
+      });
+      setNotice(notice);
+      return true;
+    };
+    onRegisterExternalAssetsCommit(commit);
+    return () => onRegisterExternalAssetsCommit(null);
+  }, [onRegisterExternalAssetsCommit]);
 
   /**
    * 変換・最適化の解除。原本ファイルは残してあるので、Manifestの参照先と
