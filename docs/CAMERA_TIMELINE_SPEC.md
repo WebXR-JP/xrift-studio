@@ -14,7 +14,7 @@
 | KHR_interactivity のグラフ資産、ノードエディタ、検証 | `interactivity-graph.ts`、`InteractivityGraphEditor.tsx` | 実装済み |
 | Studio 独自 op を足す型 | `packages/xrift-studio-runtime/src/script/interaction-trigger.ts` | 実装済み。`XRIFT_studio_interaction` として `xrift/onInteract` ほか |
 | `event/onStart`、`flow/branch`、`flow/setDelay` | `interactivity-adapter.ts` | 宣言は通る。実行は後述のとおり静的 |
-| Play のカメラ | `SceneViewport.tsx` の `WorldPlayCameraController` | SpawnPoint から始まる自由飛行。WASD と pointer |
+| Play のカメラ | `SceneViewport.tsx` の `WorldPlayPlayer` | SpawnPoint から始まる一人称プレイヤー。公式 `PhysicsPlayer` と pointer lock |
 | Scene View のカメラ操作 | `SceneViewport.tsx` の `CameraControls` | Entity への寄りと、`set_scene_view_camera` からの名前付きビュー |
 | カメラの Entity | なし | Scene settings に near / far / fov があるだけ |
 
@@ -138,7 +138,7 @@ type CameraTimelineRun = {
 
 ### Play mode
 
-- 自由飛行からタイムラインへ渡し、終わったら自由飛行へ戻す。位置はタイムライン
+- プレイヤーからタイムラインへ渡し、終わったらプレイヤーへ戻す。位置はタイムライン
   の終端を引き継ぐ
 - 走っている間は WASD を無効にする。**動かせるように見えて動かないのは、壊れて
   見える**

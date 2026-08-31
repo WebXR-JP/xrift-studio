@@ -56,6 +56,47 @@ if (mismatches.length > 0) {
   );
 }
 
+// World Play mounts the parts DevEnvironment composes rather than a Studio
+// rewrite of them, so Play walks, jumps, grabs and aims by the same numbers a
+// world author gets from `npm run dev`. Those parts are reached by path because
+// the package's entry point exports only `DevEnvironment` itself, which opens
+// its own Canvas and cannot be nested in the Scene View. A package upgrade that
+// moves or renames them must fail here rather than at runtime, where the
+// symptom is a Play session with no player in it.
+const PLAY_PLAYER_MODULES = [
+  "components/DevEnvironment/constants",
+  "components/DevEnvironment/components/PhysicsPlayer",
+  "components/DevEnvironment/components/Crosshair",
+  "components/DevEnvironment/components/GrabSystem/index",
+  "components/DevEnvironment/components/GrabSystem/store",
+];
+
+const missingPlayModules = PLAY_PLAYER_MODULES.filter((relativePath) =>
+  ["js", "d.ts"].some(
+    (extension) =>
+      !fs.existsSync(
+        path.join(
+          repoRoot,
+          "node_modules/@xrift/world-components/dist",
+          `${relativePath}.${extension}`,
+        ),
+      ),
+  ),
+);
+
+if (missingPlayModules.length > 0) {
+  throw new Error(
+    "World Play's player parts are missing from @xrift/world-components " +
+      `${packageVersion}:\n${missingPlayModules.map((name) => `  dist/${name}`).join("\n")}\n` +
+      "src/components/visual-editor/WorldPlayPlayer.tsx imports these by path. " +
+      "Update the imports to the new layout, or take the parts from the " +
+      "package's public entry point if it now exports them.",
+  );
+}
+
 process.stdout.write(
   `@xrift/world-components aligned across editor, publish staging and shell: ${packageVersion}\n`,
+);
+process.stdout.write(
+  `World Play player parts resolved: ${PLAY_PLAYER_MODULES.length} modules\n`,
 );

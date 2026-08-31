@@ -36,7 +36,7 @@ Visual project はコードを隠すだけの画面ではなく、Scene、Asset�
 | 表現と再利用 | 利用可能 | Primitive、Material、Particle、Prefab、Collider、XRift Component を作成・配置する。 |
 | Interactivity | 利用可能 | KHR_interactivity 準拠のグラフをノードエディターで編集し、開始時・毎フレーム・イベント・インタラクトをきっかけに動かす。待機、順次実行、繰り返し、合流、分岐、変数、算術を単一の実行エンジンで Play と公開先の両方が実行する。Entity の表示、Transform、Animation、Material、Particle、Audio Source、Light、Scene の露出とフェードへ書き込む。1 つの Asset に複数のグラフを置き、イベントで結合する。時間軸のタイムラインで、何秒に何が起きるかを確認する。canonical JSON と validation を UI と MCP で共有する。 |
 | Scripting | 検証中 | Script Asset を TypeScript で書き、Script Component として Entity へ付け、property と reference を宣言して Play で実行する。未承認 source は内容 hash の確認を経てから実行し、同じ Script を公開ワールドへ静的 import として出力する。対応範囲は [Scripting Contract](./SCRIPTING.md) にまとめる。 |
-| Play | 利用可能 | 編集データと分離した Play Window で Play / Stop し、World は Rapier の重力・Collider・WASD controller、Item は単体表示を確認する。Transform / Collider / Animation 変更は対象 Entity だけ再実行する。runtime 受け入れは継続する。 |
+| Play | 利用可能 | 編集データと分離した Play Window で Play / Stop し、World は公式プレイヤー（Rapier の重力・Collider・一人称 controller・掴み・クロスヘアのインタラクト）、Item は単体表示を確認する。Transform / Collider / Animation 変更は対象 Entity だけ再実行する。runtime 受け入れは継続する。 |
 | Compile / Upload | 利用可能 | Visual document の保存、検査、XRift 向け TSX 生成、staging、World / Item の Upload 導線。生成コードは公開テンプレートと同じ tsc で検査する。 |
 | Open Brush | 検証中 | Open Brush / Tilt Brush 由来の glTF を判定し、`three-icosa` でブラシ表現を読み込む。ブラシごとの受け入れ確認を継続する。 |
 | Unity import | 検証中 | UnityPackage、`.unity`、`.prefab` を解析し、対応する Scene、Prefab、Model、Texture へ変換する。Unity 固有機能の完全互換ではない。 |

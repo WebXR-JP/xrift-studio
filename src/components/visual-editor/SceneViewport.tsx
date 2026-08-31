@@ -255,7 +255,15 @@ import {
   saveSceneViewportQualityMode,
   type SceneViewportQualityMode,
 } from "./scene-viewport-quality";
-import { applyWorldPlayCameraLook } from "./world-play-camera";
+import {
+  WorldPlayCrosshair,
+  WorldPlayPlayer,
+  WORLD_PLAY_LOCK_SURFACE_ATTRIBUTE,
+  useWorldPlayGrabStore,
+  useWorldPlayPointerLocked,
+  useWorldPlayUsers,
+} from "./WorldPlayPlayer";
+import { resolveWorldPlayCapsuleSpawn } from "./world-play-spawn";
 
 /**
  * Recompiles Materials when shadows are switched off or on.
@@ -381,25 +389,10 @@ function useWindDrivenMaterial(
   }, [material, shader, wind]);
 }
 
-const PLAY_KEYS = new Set([
-  "w",
-  "a",
-  "s",
-  "d",
-  "arrowup",
-  "arrowdown",
-  "arrowleft",
-  "arrowright",
-  "q",
-  "e",
-  "shift",
-]);
 const SCENE_VIEW_ENTITY_ORIGIN_HIT_RADIUS_PX = 18;
 const EDIT_CAMERA_TARGET: [number, number, number] = [0, 0.7, 0];
 const EDITOR_SELECTION_COLOR = "#7c3aed";
 const MUTED_GIZMO_COLOR = new Color("#64748b");
-const WORLD_PLAY_CAMERA_EYE_HEIGHT = 1.6;
-const WORLD_PLAY_CAMERA_SPEED = 4.5;
 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -415,14 +408,6 @@ function blobToDataUrl(blob: Blob): Promise<string> {
     reader.readAsDataURL(blob);
   });
 }
-
-type WorldPlayCameraInput = {
-  pointerId: number | null;
-  lastX: number;
-  lastY: number;
-  deltaX: number;
-  deltaY: number;
-};
 
 type ViewProjection = "perspective" | "orthographic";
 
@@ -3321,84 +3306,6 @@ function CameraControls({
   );
 }
 
-function WorldPlayCameraController({
-  initialPosition,
-  initialYaw,
-  isPressed,
-  inputRef,
-}: {
-  initialPosition: Vec3;
-  initialYaw: number;
-  isPressed: (key: string) => boolean;
-  inputRef: { current: WorldPlayCameraInput };
-}) {
-  const camera = useThree((state) => state.camera);
-  const initializedRef = useRef(false);
-  const yawRef = useRef(0);
-  const pitchRef = useRef(0);
-  const movement = useMemo(() => new Vector3(), []);
-  const forward = useMemo(() => new Vector3(), []);
-  const right = useMemo(() => new Vector3(), []);
-
-  useEffect(() => {
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-
-    camera.position.set(
-      initialPosition[0],
-      initialPosition[1] + WORLD_PLAY_CAMERA_EYE_HEIGHT,
-      initialPosition[2],
-    );
-    yawRef.current = initialYaw;
-    pitchRef.current = 0;
-    camera.rotation.set(pitchRef.current, yawRef.current, 0, "YXZ");
-    camera.updateProjectionMatrix();
-  }, [camera, initialPosition, initialYaw]);
-
-  useFrame(({ camera }, delta) => {
-    const input = inputRef.current;
-    if (input.deltaX !== 0 || input.deltaY !== 0) {
-      // Play looks the way the pointer moves: drag right to turn right, drag
-      // down to look down. See `applyWorldPlayCameraLook` for the signs.
-      const look = applyWorldPlayCameraLook(
-        { yaw: yawRef.current, pitch: pitchRef.current },
-        input.deltaX,
-        input.deltaY,
-      );
-      yawRef.current = look.yaw;
-      pitchRef.current = look.pitch;
-      input.deltaX = 0;
-      input.deltaY = 0;
-    }
-    camera.rotation.set(pitchRef.current, yawRef.current, 0, "YXZ");
-
-    movement.set(0, 0, 0);
-    // `forward` already points along the camera's local -Z axis, so the
-    // forward input must be positive here. The previous signs made W/S run
-    // exactly opposite to the camera-facing direction.
-    if (isPressed("w") || isPressed("arrowup")) movement.z += 1;
-    if (isPressed("s") || isPressed("arrowdown")) movement.z -= 1;
-    if (isPressed("a") || isPressed("arrowleft")) movement.x -= 1;
-    if (isPressed("d") || isPressed("arrowright")) movement.x += 1;
-    if (isPressed("e")) movement.y += 1;
-    if (isPressed("q")) movement.y -= 1;
-    if (movement.lengthSq() === 0) return;
-
-    forward.set(0, 0, -1).applyEuler(camera.rotation);
-    right.set(1, 0, 0).applyEuler(camera.rotation);
-    movement.set(
-      right.x * movement.x + forward.x * movement.z,
-      movement.y,
-      right.z * movement.x + forward.z * movement.z,
-    );
-    if (movement.lengthSq() > 1) movement.normalize();
-    const speed = WORLD_PLAY_CAMERA_SPEED * (isPressed("shift") ? 2 : 1);
-    camera.position.addScaledVector(movement, speed * Math.min(delta, 0.05));
-  });
-
-  return null;
-}
-
 function resolveProjectModelSource(
   asset: ModelAsset,
   projectPath: string | undefined,
@@ -4530,13 +4437,10 @@ export function SceneViewport({
   // brush under the user's hand.
   const terrainInvertedRef = useRef(false);
   const pressedKeysRef = useRef(new Set<string>());
-  const worldPlayCameraInputRef = useRef<WorldPlayCameraInput>({
-    pointerId: null,
-    lastX: 0,
-    lastY: 0,
-    deltaX: 0,
-    deltaY: 0,
-  });
+  const playPointerLocked = useWorldPlayPointerLocked();
+  const [playAimHit, setPlayAimHit] = useState(false);
+  const playGrabStore = useWorldPlayGrabStore();
+  const playUsers = useWorldPlayUsers();
   const [dragOverKind, setDragOverKind] = useState<
     SceneViewportDragIntent["kind"] | null
   >(null);
@@ -4710,13 +4614,15 @@ export function SceneViewport({
     () => resolveRuntimeSpawn(preview.scene),
     [preview.scene],
   );
+  const playCapsuleSpawn = useMemo(
+    () => resolveWorldPlayCapsuleSpawn(runtimeSpawn.position),
+    [runtimeSpawn.position],
+  );
+  /** A World running its player, as opposed to an Item shown on its own. */
+  const worldPlayActive = editorMode === "play" && projectKind === "world";
   const modelProxyVisible = useMemo(
     () => hasModelProxy(preview.scene, assets, projectPath),
     [assets, preview.scene, projectPath],
-  );
-  const isPressed = useCallback(
-    (key: string) => pressedKeysRef.current.has(key),
-    [],
   );
   const selectedEntityId =
     selection?.kind === "entity" ? selection.id : null;
@@ -4949,7 +4855,42 @@ export function SceneViewport({
     return () => window.cancelAnimationFrame(frame);
   }, [editorMode, projectKind]);
 
-  const handlePlayKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+  const playInputActiveRef = useRef(false);
+  playInputActiveRef.current = editorMode === "play" && projectKind === "world";
+
+  // Play's key state, for `ctx.input` in Scripts.
+  //
+  // Registered once for the life of the viewport, and in the capture phase on
+  // `window`, because the official `PhysicsPlayer` claims every key it handles
+  // with `stopImmediatePropagation` the moment Play starts. A listener that
+  // registers later - or sits on any lower target, as the viewport's own
+  // `onKeyDown` does - stops seeing W, A, S and D from that point on.
+  //
+  // Keys are stored as `event.code`, which is what `ctx.input.isKeyDown` is
+  // documented to take and what a published world reports through the runtime's
+  // own listener. Play used to store the lowercased `event.key`, so a Script
+  // asking for "KeyW" answered `false` here and `true` after upload.
+  useEffect(() => {
+    const keys = pressedKeysRef.current;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!playInputActiveRef.current || event.isComposing) return;
+      if (isEditableShortcutTarget(event.target)) return;
+      keys.add(event.code);
+    };
+    const handleKeyUp = (event: KeyboardEvent) => keys.delete(event.code);
+    const handleBlur = () => keys.clear();
+    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("keyup", handleKeyUp, true);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("keyup", handleKeyUp, true);
+      window.removeEventListener("blur", handleBlur);
+      keys.clear();
+    };
+  }, []);
+
+  const handleViewportKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Escape" && terrainPointerRef.current) {
       const terrainPointer = terrainPointerRef.current;
       terrainPointerRef.current = null;
@@ -4977,18 +4918,6 @@ export function SceneViewport({
         return;
       }
     }
-    if (editorMode !== "play" || projectKind !== "world") return;
-    const key = event.key.toLowerCase();
-    if (!PLAY_KEYS.has(key)) return;
-    event.preventDefault();
-    pressedKeysRef.current.add(key);
-  };
-
-  const handlePlayKeyUp = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    const key = event.key.toLowerCase();
-    if (!PLAY_KEYS.has(key)) return;
-    event.preventDefault();
-    pressedKeysRef.current.delete(key);
   };
 
   const handleDragEnter = (event: DragEvent<HTMLDivElement>) => {
@@ -5124,20 +5053,10 @@ export function SceneViewport({
         return;
       }
     }
-    if (
-      isCanvasPointer &&
-      editorMode === "play" &&
-      projectKind === "world" &&
-      (event.button === 0 || event.button === 2)
-    ) {
-      const input = worldPlayCameraInputRef.current;
-      input.pointerId = event.pointerId;
-      input.lastX = event.clientX;
-      input.lastY = event.clientY;
-      input.deltaX = 0;
-      input.deltaY = 0;
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
+    // While the mouse is captured by the player, the pointer coordinates stay
+    // frozen wherever the lock started, so every click would pick the same
+    // Entity. Aiming is the crosshair's job for as long as the lock holds.
+    if (playPointerLocked) return;
     if (
       isCanvasPointer &&
       event.button === 0 &&
@@ -5215,17 +5134,6 @@ export function SceneViewport({
       }
       return;
     }
-    const cameraInput = worldPlayCameraInputRef.current;
-    if (
-      editorMode === "play" &&
-      projectKind === "world" &&
-      cameraInput.pointerId === event.pointerId
-    ) {
-      cameraInput.deltaX += event.clientX - cameraInput.lastX;
-      cameraInput.deltaY += event.clientY - cameraInput.lastY;
-      cameraInput.lastX = event.clientX;
-      cameraInput.lastY = event.clientY;
-    }
     const leftGesture = leftPointerGestureRef.current;
     if (
       leftGesture &&
@@ -5280,13 +5188,6 @@ export function SceneViewport({
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
       return;
-    }
-    const cameraInput = worldPlayCameraInputRef.current;
-    if (cameraInput.pointerId === event.pointerId) {
-      cameraInput.pointerId = null;
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      }
     }
     const leftGesture = leftPointerGestureRef.current;
     if (leftGesture?.pointerId === event.pointerId) {
@@ -5350,9 +5251,6 @@ export function SceneViewport({
     if (terrainPointer) onTerrainStrokeCancel?.(terrainPointer.entityId);
     leftPointerGestureRef.current = null;
     rightPointerGestureRef.current = null;
-    worldPlayCameraInputRef.current.pointerId = null;
-    worldPlayCameraInputRef.current.deltaX = 0;
-    worldPlayCameraInputRef.current.deltaY = 0;
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -5493,7 +5391,9 @@ export function SceneViewport({
     projectKind === "world" ? "World Play Mode" : "Item Play Mode";
   const profileGuide =
     projectKind === "world"
-      ? "WASD / 矢印キーで移動 · ドラッグで視点 · Q/Eで上下 · Shiftで加速"
+      ? playPointerLocked
+        ? "WASD / 矢印キーで移動 · マウスで視点 · Space / Eでジャンプ · Gで掴む · クリックでインタラクト · Escでマウス解放"
+        : "画面をクリックしてマウスを固定すると、公開ワールドと同じ一人称プレイヤーで歩けます"
       : "ドラッグでアイテムをOrbit確認";
   const readyMaterialDropTarget =
     materialDropTarget?.status === "ready" ? materialDropTarget : null;
@@ -6018,9 +5918,12 @@ export function SceneViewport({
             ? `${profileLabel}。${profileGuide}`
             : "編集可能な3Dシーン"
         }
-        onKeyDown={handlePlayKeyDown}
-        onKeyUp={handlePlayKeyUp}
-        onBlur={() => pressedKeysRef.current.clear()}
+        // Scopes the pointer lock to the rendered view: without it a click on
+        // the Hierarchy or the Inspector would swallow the mouse too.
+        {...(worldPlayActive
+          ? { [WORLD_PLAY_LOCK_SURFACE_ATTRIBUTE]: "" }
+          : {})}
+        onKeyDown={handleViewportKeyDown}
         onPointerDown={handleViewportPointerDown}
         onPointerMove={handleViewportPointerMove}
         onPointerUp={handleViewportPointerUp}
@@ -6139,12 +6042,24 @@ export function SceneViewport({
               // Scene settings hold gravity as a positive magnitude, matching
               // xrift.json, so Play applies the same number the published
               // world receives rather than a separate hardcoded constant.
-              editorMode === "play" && projectKind === "world"
+              worldPlayActive
                 ? [0, -sceneSettings.physics.gravity, 0]
                 : [0, 0, 0]
             }
+            grabbableImplementation={playGrabStore.contextValue}
+            usersImplementation={playUsers.implementation}
           >
-            <PlayInteractionHost active={editorMode === "play"} />
+            {/* A World player aims from the crosshair while the mouse is
+                captured, exactly as a published world does; an Item has no
+                player, so its Play keeps the free pointer. */}
+            <PlayInteractionHost
+              active={
+                editorMode === "play" &&
+                (worldPlayActive ? playPointerLocked : true)
+              }
+              mode={worldPlayActive ? "crosshair" : "pointer"}
+              onAimChange={setPlayAimHit}
+            />
             <ScriptViewportProvider value={scriptRuntime ?? null}>
             <XriftScriptRoot pressedKeys={pressedKeysRef.current}>
             <Fragment key={editorMode}>
@@ -6166,12 +6081,13 @@ export function SceneViewport({
                   hoverRef={terrainHoverRef}
                 />
               ) : null}
-              {editorMode === "play" && projectKind === "world" ? (
-                <WorldPlayCameraController
-                  initialPosition={runtimeSpawn.position}
-                  initialYaw={runtimeSpawn.yaw}
-                  isPressed={isPressed}
-                  inputRef={worldPlayCameraInputRef}
+              {worldPlayActive ? (
+                <WorldPlayPlayer
+                  spawnPosition={playCapsuleSpawn}
+                  spawnYaw={runtimeSpawn.yaw}
+                  allowInfiniteJump={sceneSettings.physics.allowInfiniteJump}
+                  grabStore={playGrabStore}
+                  movementRef={playUsers.movementRef}
                 />
               ) : null}
             </Fragment>
@@ -6290,10 +6206,27 @@ export function SceneViewport({
           </div>
         ) : null}
 
+        {/* The player's aim, drawn by the same component a published world
+            shows, so what is in reach here is what is in reach after upload. */}
+        {worldPlayActive && playPointerLocked && !thumbnailCaptureActive ? (
+          <WorldPlayCrosshair active={playAimHit} />
+        ) : null}
+
         {editorMode === "play" ? (
           <div className="pointer-events-none absolute left-2.5 top-2.5 z-10 max-w-[80%] rounded-md border border-violet-400/60 bg-violet-950/90 px-2.5 py-1.5 text-xs leading-4 text-violet-50 shadow-lg backdrop-blur">
             <p className="font-semibold">実行コピー · 編集データとは分離</p>
             <p className="text-violet-200">{profileGuide}</p>
+            {worldPlayActive ? (
+              <p
+                className="mt-1 border-t border-violet-300/20 pt-1 text-violet-100"
+                role="status"
+                aria-live="polite"
+              >
+                {playPointerLocked
+                  ? "マウス固定中 · Escで解放するとHierarchyとInspectorを操作できます"
+                  : "マウス未固定 · キー入力はワールドが受け取ります"}
+              </p>
+            ) : null}
             {lastReloadedEntityName ? (
               <p className="mt-1 border-t border-violet-300/20 pt-1 text-violet-100">
                 {lastReloadedEntityName} を先頭から再実行

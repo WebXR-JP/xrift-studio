@@ -17,6 +17,7 @@ import {
   VideoScreen,
   XRiftProvider,
   type EntryLogBoardProps,
+  type GrabbableContextValue,
   type GrabbableProps,
   type InstanceContextValue,
   type InteractableProps,
@@ -27,6 +28,7 @@ import {
   type SpawnPointProps,
   type TagBoardProps,
   type TextInputProps,
+  type UsersContextValue,
   type Video180SphereProps,
   type VideoPlayerProps,
   type VideoScreenProps,
@@ -78,15 +80,31 @@ export function OfficialXriftPreviewProvider({
   children,
   withPhysics = false,
   gravity = [0, 0, 0],
+  grabbableImplementation,
+  usersImplementation,
 }: {
   children: ReactNode;
   withPhysics?: boolean;
   gravity?: [number, number, number];
+  /**
+   * Where `<Grabbable>` registers. World Play passes the official grab store so
+   * the same objects a published world lets a player pick up can be picked up
+   * here; the default implementation accepts registrations and never grabs.
+   */
+  grabbableImplementation?: GrabbableContextValue;
+  /**
+   * Who `useUsers()` reports. World Play passes a local user driven by the
+   * running player, so a world that reads the viewer's name or position sees
+   * one in Play instead of only after upload.
+   */
+  usersImplementation?: UsersContextValue;
 }) {
   const content = (
     <XRiftProvider
       baseUrl=""
       instanceImplementation={PREVIEW_INSTANCE_IMPLEMENTATION}
+      grabbableImplementation={grabbableImplementation}
+      usersImplementation={usersImplementation}
       placementMode="preview"
     >
       {children}

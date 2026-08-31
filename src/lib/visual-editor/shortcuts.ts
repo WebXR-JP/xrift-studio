@@ -298,7 +298,12 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
     id: "play.toggle",
     label: "Play開始／停止",
     category: "play",
-    bindings: [{ key: "f6" }],
+    // Ctrl/Cmd+Enter is the way out of a running World. The official player
+    // claims every unmodified key while Play runs - that is what stops arrow
+    // keys from nudging the selected Entity while the player walks - and it
+    // lets modified keys through, so F6 alone cannot reach Stop from inside a
+    // World.
+    bindings: [{ key: "f6" }, { key: "enter", primary: true }],
   },
   {
     id: "layout.reset",

@@ -1,7 +1,24 @@
-import { useEffect, useRef } from "react";
-import { useThree } from "@react-three/fiber";
-import { useXRift } from "@xrift/world-components";
+import { useCallback, useEffect, useRef } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
+import { LAYERS, useXRift } from "@xrift/world-components";
 import { Raycaster, Vector2, type Object3D } from "three";
+
+/**
+ * How far a player can reach an Interactable, in metres.
+ *
+ * The same reach `DevEnvironment`'s CenterRaycaster gives a world author. Play
+ * used to press a button from across the map, so an authored control that is
+ * plainly out of reach in a published world answered here.
+ */
+export const PLAY_CROSSHAIR_REACH = 3.5;
+
+const NDC_CENTRE = new Vector2(0, 0);
+
+export type PlayInteractionMode =
+  /** Item Play: the pointer is free, so the click position is the aim. */
+  | "pointer"
+  /** World Play: the pointer is locked, so the screen centre is the aim. */
+  | "crosshair";
 
 /**
  * The player's half of the official interaction contract, for Play.
@@ -15,29 +32,33 @@ import { Raycaster, Vector2, type Object3D } from "three";
  * registered Interactable through the scene's own depth order, so a wall in
  * front still blocks it, and an Interactable with `enabled: false` is silent.
  */
-export function PlayInteractionHost({ active }: { active: boolean }) {
+export function PlayInteractionHost({
+  active,
+  mode = "pointer",
+  onAimChange,
+}: {
+  active: boolean;
+  mode?: PlayInteractionMode;
+  /** Reports whether the crosshair is currently on a reachable Interactable. */
+  onAimChange?: (hit: boolean) => void;
+}) {
   const { interactableObjects } = useXRift();
   const camera = useThree((state) => state.camera);
   const scene = useThree((state) => state.scene);
   const domElement = useThree((state) => state.gl.domElement);
-  const raycasterRef = useRef(new Raycaster());
+  const pointerRaycasterRef = useRef(new Raycaster());
+  const crosshairRaycasterRef = useRef(new Raycaster());
   const pointerRef = useRef(new Vector2());
+  const aimedRef = useRef<Object3D | null>(null);
+  const aimHitRef = useRef(false);
+  const onAimChangeRef = useRef(onAimChange);
+  onAimChangeRef.current = onAimChange;
 
-  useEffect(() => {
-    if (!active) return;
-
-    const findInteractable = (event: PointerEvent): Object3D | null => {
+  // The whole scene, not just the registered objects: an Interactable behind a
+  // wall must not answer a click that the wall received.
+  const resolveInteractable = useCallback(
+    (raycaster: Raycaster): Object3D | null => {
       if (interactableObjects.size === 0) return null;
-      const rect = domElement.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return null;
-      pointerRef.current.set(
-        ((event.clientX - rect.left) / rect.width) * 2 - 1,
-        -((event.clientY - rect.top) / rect.height) * 2 + 1,
-      );
-      const raycaster = raycasterRef.current;
-      raycaster.setFromCamera(pointerRef.current, camera);
-      // The whole scene, not just the registered objects: an Interactable
-      // behind a wall must not answer a click that the wall received.
       for (const hit of raycaster.intersectObjects(scene.children, true)) {
         let current: Object3D | null = hit.object;
         while (current) {
@@ -49,6 +70,78 @@ export function PlayInteractionHost({ active }: { active: boolean }) {
         return null;
       }
       return null;
+    },
+    [interactableObjects, scene],
+  );
+
+  const interact = useCallback((target: Object3D) => {
+    const { id, onInteract } = target.userData as {
+      id?: unknown;
+      onInteract?: unknown;
+    };
+    if (typeof onInteract !== "function") return;
+    (onInteract as (id: string) => void)(typeof id === "string" ? id : "");
+  }, []);
+
+  // World Play aims from the screen centre because the pointer is locked, and
+  // it only considers the INTERACTABLE layer at the player's reach - the same
+  // two limits the official CenterRaycaster applies.
+  useFrame(() => {
+    if (!active || mode !== "crosshair") return;
+    const raycaster = crosshairRaycasterRef.current;
+    raycaster.far = PLAY_CROSSHAIR_REACH;
+    raycaster.layers.set(LAYERS.INTERACTABLE);
+    raycaster.setFromCamera(NDC_CENTRE, camera);
+    const target = resolveInteractable(raycaster);
+    aimedRef.current = target;
+    const hit = target !== null;
+    if (hit === aimHitRef.current) return;
+    aimHitRef.current = hit;
+    onAimChangeRef.current?.(hit);
+  });
+
+  useEffect(() => {
+    if (active && mode === "crosshair") return;
+    // Leaving Play, or leaving the pointer lock, must not leave the crosshair
+    // lit on a target the player can no longer see.
+    aimedRef.current = null;
+    if (!aimHitRef.current) return;
+    aimHitRef.current = false;
+    onAimChangeRef.current?.(false);
+  }, [active, mode]);
+
+  // On `window`, not the canvas: while the pointer is locked the browser
+  // retargets every mouse event at the locked element, and that element is the
+  // renderer's container rather than the canvas inside it. A listener on the
+  // canvas is a child of the target and never sees the press, so the crosshair
+  // would light up on a button and clicking it would do nothing.
+  //
+  // Safe to take globally because this mode is only active while the lock is
+  // held, and a locked pointer has nowhere else to click.
+  useEffect(() => {
+    if (!active || mode !== "crosshair") return;
+    const onMouseDown = (event: MouseEvent) => {
+      if (event.button !== 0) return;
+      const target = aimedRef.current;
+      if (target) interact(target);
+    };
+    window.addEventListener("mousedown", onMouseDown);
+    return () => window.removeEventListener("mousedown", onMouseDown);
+  }, [active, interact, mode]);
+
+  useEffect(() => {
+    if (!active || mode !== "pointer") return;
+
+    const findInteractable = (event: PointerEvent): Object3D | null => {
+      const rect = domElement.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return null;
+      pointerRef.current.set(
+        ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        -((event.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      const raycaster = pointerRaycasterRef.current;
+      raycaster.setFromCamera(pointerRef.current, camera);
+      return resolveInteractable(raycaster);
     };
 
     // A click that ends an orbit drag is a camera move, not an interaction.
@@ -68,14 +161,7 @@ export function PlayInteractionHost({ active }: { active: boolean }) {
         return;
       }
       const target = findInteractable(event);
-      if (!target) return;
-      const { id, onInteract } = target.userData as {
-        id?: unknown;
-        onInteract?: unknown;
-      };
-      if (typeof onInteract === "function") {
-        (onInteract as (id: string) => void)(typeof id === "string" ? id : "");
-      }
+      if (target) interact(target);
     };
 
     let lastMove = 0;
@@ -96,7 +182,7 @@ export function PlayInteractionHost({ active }: { active: boolean }) {
       domElement.removeEventListener("pointermove", onPointerMove);
       domElement.style.cursor = "";
     };
-  }, [active, camera, domElement, interactableObjects, scene]);
+  }, [active, camera, domElement, interact, mode, resolveInteractable]);
 
   return null;
 }

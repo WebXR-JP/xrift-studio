@@ -298,6 +298,7 @@ Undo 履歴も選択も動かさない。
 | Texture の一括変換 | 人が複数選択したものをまとめて書き出すための導線。AI からは `process_texture_asset` を Asset ごとに呼べばよく、対象の選び方も AI 側で決まる |
 | Textureの共通設定・サイズ確認 | 共通設定は `update_texture_asset` の `importSettings` と `process_texture_asset` で同じ処理を実行できる。サイズ確認は既存画像の読み取りだけを行うInspectorの表示状態。再インポートで取得した寸法はAssetのimportMetadataにも入る |
 | 取り込み時の Texture 最大解像度 | Import メニューに残る Editor State で、document には入らない。AI は `import_local_texture` と `update_texture_asset` の `importSettings.resize` で同じ結果を Asset ごとに指定できる |
+| World Play のプレイヤー操作（移動・視点・ジャンプ・掴み・インタラクト） | 実行中のプレイヤー入力で、document にも公開物にも残らない。位置も速度も PlaySession で捨てられる。視点はマウスのポインターロックが前提で、AI から送っても人の画面のロックは動かない。AI が Scene を見るには `set_scene_view_camera` と `capture_scene_debug` があり、インタラクトの結果を確かめるなら `set_play_mode` と Interactivity Graph / Script 側の状態を読む |
 
 ## 機能を足すときの手順
 
