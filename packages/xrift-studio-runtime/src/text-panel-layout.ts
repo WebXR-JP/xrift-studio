@@ -56,12 +56,13 @@ export type XriftTextPanelConfig = {
    */
   fontUrl?: string;
   /**
-   * Where the host serves its public files from, for the bundled font file.
+   * Directory the bundled font files are served from.
    *
-   * Absent means Studio's own base. A published world is served under a base
-   * XRift decides at load time, so its generated source passes that instead.
+   * Absent means Studio's own font directory. A published world carries the
+   * file at its root — it serves nothing below it — so its generated source
+   * passes the world's base URL instead.
    */
-  fontBaseUrl?: string;
+  fontDirectoryUrl?: string;
   textAlign?: XriftTextAlign;
   /** Multiple of `fontSize`. Absent uses the font's own metrics. */
   lineHeight?: number;

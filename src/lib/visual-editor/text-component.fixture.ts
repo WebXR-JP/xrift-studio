@@ -236,14 +236,15 @@ function assertCompilerEmitsPanelRuntime(): void {
       (entry) =>
         entry.source === "text-fonts" &&
         entry.targetRelativePath ===
-          "public/xrift-studio/vendor/text-fonts/noto-sans-jp-japanese-700-normal.woff",
+          "public/noto-sans-jp-japanese-700-normal.woff",
     ),
     "a Text world must carry the font file it renders with",
   );
   // XRift decides where a world's own files are served from at load time, so
   // the generated source has to read that base rather than assume Studio's.
   assert(
-    source.includes("fontBaseUrl={baseUrl}") && source.includes("useXRift()"),
+    source.includes("fontDirectoryUrl={baseUrl}") &&
+      source.includes("useXRift()"),
     "the generated world must resolve its font under the XRift base URL",
   );
   // Asking for a package publish staging is not allowed to install is not a

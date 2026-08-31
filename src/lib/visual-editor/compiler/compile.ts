@@ -153,9 +153,9 @@ import {
 import { compileXriftComponent } from "./xrift-component-registry";
 import { compileRuntimeManifest } from "./runtime-manifest";
 import type { XriftRuntimeDecoderPaths } from "../../../../packages/xrift-studio-runtime/src/schema";
-import { PUBLISHED_BASIS_TRANSCODER_DIRECTORY } from "../basis-transcoder";
 import {
   VENDOR_BUNDLES,
+  publishedVendorFileName,
   type VendorBundleId,
 } from "../vendor-assets";
 import {
@@ -163,7 +163,6 @@ import {
   getTextFontDefinition,
   resolveRenderedTextFontId,
   resolveTextFontWeight,
-  TEXT_FONT_DIRECTORY,
   textFontFileName,
 } from "../../../../packages/xrift-studio-runtime/src/text-font-catalog";
 
@@ -331,7 +330,7 @@ export function compileVisualProject(
     );
     generated = generateRuntimeAdapterSource(documents.project.projectKind);
     runtimeManifestFile = compilerFile(
-      "public/xrift/runtime.json",
+      PUBLISHED_RUNTIME_MANIFEST_PATH,
       stableSerializeJson(runtimeManifest),
       "metadata",
     );
@@ -560,7 +559,9 @@ function createPublishedTextFontCopyPlan(
   return [...fileNames].sort().map((sourceFileName) => ({
     source: "text-fonts" as const,
     sourceFileName,
-    targetRelativePath: `public/${TEXT_FONT_DIRECTORY}/${sourceFileName}`,
+    // The world root: a published world serves nothing below it, and the file
+    // name already carries the family, subset and weight.
+    targetRelativePath: `public/${sourceFileName}`,
   }));
 }
 
@@ -603,12 +604,19 @@ function modelRequiresDracoDecoder(asset: ModelAsset): boolean {
 const DRACO_MESH_COMPRESSION_EXTENSION = "KHR_draco_mesh_compression" as const;
 
 /**
- * Runtime JSON の manifest から見た、compiler が置く public file の base。
+ * 公開物はすべてワールド直下に置く。
  *
- * manifest は `public/xrift/` にあり、decoder と font は `public/xrift-studio/`
- * にある。runtime loader は manifest からの相対で解決するので、一段上を指す。
+ * 公開したワールドが配れるのはワールド直下のファイルだけで、`public/` の
+ * サブディレクトリは公開物に含まれない。manifest も Asset も decoder も font も
+ * 直下に置き、名前で名前空間を分ける。
  */
-const PUBLISHED_RUNTIME_ASSET_BASE = "../" as const;
+const PUBLISHED_RUNTIME_MANIFEST_FILE = "xrift-runtime.json" as const;
+const PUBLISHED_RUNTIME_MANIFEST_PATH =
+  `public/${PUBLISHED_RUNTIME_MANIFEST_FILE}` as const;
+const PUBLISHED_RUNTIME_ASSET_PREFIX = "xrift-runtime-asset-" as const;
+
+/** manifest から見たワールド直下。manifest 自身が直下にあるので同じ場所。 */
+const PUBLISHED_RUNTIME_ASSET_BASE = "./" as const;
 
 /**
  * Runtime JSON へ書く decoder の場所。必要のない bundle は書かない。
@@ -616,14 +624,12 @@ const PUBLISHED_RUNTIME_ASSET_BASE = "../" as const;
 function publishedRuntimeDecoderPaths(
   bundleIds: readonly VendorBundleId[],
 ): XriftRuntimeDecoderPaths {
-  const relativeTo = (bundleId: VendorBundleId) =>
-    `${PUBLISHED_RUNTIME_ASSET_BASE}${VENDOR_BUNDLES[bundleId].publishedDirectory}/`;
   return {
     ...(bundleIds.includes("three-basis")
-      ? { ktx2TranscoderPath: relativeTo("three-basis") }
+      ? { ktx2TranscoderPath: PUBLISHED_RUNTIME_ASSET_BASE }
       : {}),
     ...(bundleIds.includes("three-draco")
-      ? { dracoDecoderPath: relativeTo("three-draco") }
+      ? { dracoDecoderPath: PUBLISHED_RUNTIME_ASSET_BASE }
       : {}),
   };
 }
@@ -635,7 +641,7 @@ function createPublishedVendorAssetCopyPlan(
     VENDOR_BUNDLES[bundleId].files.map((sourceFileName) => ({
       source: bundleId,
       sourceFileName,
-      targetRelativePath: `public/${VENDOR_BUNDLES[bundleId].publishedDirectory}/${sourceFileName}`,
+      targetRelativePath: `public/${publishedVendorFileName(bundleId, sourceFileName)}`,
     })),
   );
 }
@@ -4486,13 +4492,12 @@ function registerCompiledKtx2Runtime(context: CompileContext): void {
   context.threeTypeImports.add("Texture");
   context.supportDeclarations.set(
     key,
-    `const COMPILED_KTX2_TRANSCODER_DIRECTORY = ${JSON.stringify(
-      `${PUBLISHED_BASIS_TRANSCODER_DIRECTORY}/`,
-    )} as const;
-
-function useCompiledKtx2(assetUrl: string): Texture {
+    // The transcoder files sit next to the world's own files: a published world
+    // serves nothing below its root, so the directory handed to the loader is
+    // the world's base URL itself.
+    `function useCompiledKtx2(assetUrl: string): Texture {
   const { baseUrl } = useXRift();
-  return useKTX2(assetUrl, \`\${baseUrl}\${COMPILED_KTX2_TRANSCODER_DIRECTORY}\`);
+  return useKTX2(assetUrl, baseUrl);
 }`,
   );
 }
@@ -4502,7 +4507,7 @@ function useCompiledKtx2(assetUrl: string): Texture {
  *
  * 既定のdrei / three.jsはデコーダーをCDNから取りに来る。公開したワールドは
  * 通信権限を持たないので、その経路ではModelごと読み込めない。KTX2と同じく
- * `baseUrl`直下へコピーしたファイルを指す。
+ * ワールド直下へコピーしたファイルを指す。
  */
 function registerCompiledDracoRuntime(context: CompileContext): void {
   const key = "model-runtime:use-compiled-draco-decoder-path";
@@ -4510,13 +4515,11 @@ function registerCompiledDracoRuntime(context: CompileContext): void {
   context.imports.add("useXRift");
   context.supportDeclarations.set(
     key,
-    `const COMPILED_DRACO_DECODER_DIRECTORY = ${JSON.stringify(
-      `${VENDOR_BUNDLES["three-draco"].publishedDirectory}/`,
-    )} as const;
-
-function useCompiledDracoDecoderPath(): string {
+    // As with KTX2: the decoder files are world-root files, so the decoder
+    // directory is the world's base URL.
+    `function useCompiledDracoDecoderPath(): string {
   const { baseUrl } = useXRift();
-  return \`\${baseUrl}\${COMPILED_DRACO_DECODER_DIRECTORY}\`;
+  return baseUrl;
 }`,
   );
 }
@@ -5052,7 +5055,7 @@ function renderText(
   context.imports.add("useXRift");
   const props = [
     `config={${configName}}`,
-    "fontBaseUrl={baseUrl}",
+    "fontDirectoryUrl={baseUrl}",
     ...(projectFont ? ["fontUrl={textPanelFontUrl}"] : []),
     ...(backgroundTexture ? ["map={textPanelMap}"] : []),
   ].join(" ");
@@ -5589,7 +5592,7 @@ function createAssetCopyPlan(
       : sourceFileName;
     const targetRelativePath =
       outputMode === "classic-runtime"
-        ? `public/xrift/assets/${safeFileSegment(asset.id)}-${safeFileSegment(fileName)}`
+        ? `public/${PUBLISHED_RUNTIME_ASSET_PREFIX}${safeFileSegment(asset.id)}-${safeFileSegment(fileName)}`
         : `public/xrift-studio-${safeFileSegment(asset.id)}-${safeFileSegment(fileName)}`;
     if (targets.has(targetRelativePath)) {
       diagnostics.push({
@@ -5863,7 +5866,11 @@ function generateRuntimeAdapterSource(kind: VisualProjectKind): string {
   const component = kind === "world" ? "World" : "Item";
   const runtimeComponent = kind === "world" ? "XriftWorld" : "XriftItem";
   const defaultExport = kind === "item" ? `\nexport default ${component};\n` : "";
+  // The manifest is one of the world's own files, and XRift decides at load
+  // time where those are served from. A site-root path would look outside the
+  // world entirely, so the base is read the same way the JSX output reads it.
   return `import type { FC } from "react";
+import { useXRift } from "@xrift/world-components";
 import { ${runtimeComponent} } from "xrift-studio-runtime/react-three-fiber";
 
 export interface ${component}Props {
@@ -5871,11 +5878,14 @@ export interface ${component}Props {
   scale?: number;
 }
 
-export const ${component}: FC<${component}Props> = ({ position = [0, 0, 0], scale = 1 }) => (
-  <group position={position} scale={scale}>
-    <${runtimeComponent} manifest="/xrift/runtime.json" />
-  </group>
-);${defaultExport}`;
+export const ${component}: FC<${component}Props> = ({ position = [0, 0, 0], scale = 1 }) => {
+  const { baseUrl } = useXRift();
+  return (
+    <group position={position} scale={scale}>
+      <${runtimeComponent} manifest={\`\${baseUrl}${PUBLISHED_RUNTIME_MANIFEST_FILE}\`} />
+    </group>
+  );
+};${defaultExport}`;
 }
 
 function emptySource(kind: VisualProjectKind): string {

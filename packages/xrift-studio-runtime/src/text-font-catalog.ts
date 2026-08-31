@@ -35,12 +35,12 @@
 export const TEXT_FONT_PACKAGE_VERSION = "5.3.0" as const;
 
 /**
- * Directory the font files are served from, relative to the runtime base URL.
+ * Directory Studio serves the font files from, relative to its base URL.
  *
- * Studio and a published world use the same relative path: Studio's Vite plugin
- * serves and emits it, and the compiler copies the files a world uses into its
- * `public/`. Only the base in front of it differs, which is why
- * `resolveTextFontUrl` takes one.
+ * Studio's Vite plugin serves and emits this path. A published world cannot
+ * serve a subdirectory at all, so the compiler copies the file it needs to the
+ * world root instead; `resolveTextFontUrl` therefore takes the directory rather
+ * than deriving it.
  */
 export const TEXT_FONT_DIRECTORY = "xrift-studio/vendor/text-fonts";
 
@@ -146,28 +146,35 @@ export function resolveTextFontWeight(
 }
 
 /**
- * Bundled file URL for the face a Text renders with.
+ * File URL for the face a Text renders with.
  *
  * The automatic font resolves here too, to `DEFAULT_TEXT_FONT_ID`: leaving it
  * unresolved handed the typesetting to troika's per-script CDN resolver, which
  * a published world cannot reach.
  *
- * `baseUrl` is where the host serves its public files from; see
- * `TEXT_FONT_DIRECTORY`.
+ * `directoryUrl` is the directory the font files themselves are in, not a base
+ * to append `TEXT_FONT_DIRECTORY` to. Studio serves them from that directory;
+ * a published world serves nothing below its own root and therefore carries
+ * them at the root, so the two layouts differ and the caller names the one it
+ * is serving from.
  */
 export function resolveTextFontUrl(
   fontId: string | undefined,
   fontWeight?: number,
-  baseUrl?: string,
+  directoryUrl?: string,
 ): string {
   const font =
     getTextFontDefinition(fontId) ??
     (CATALOG_BY_ID.get(DEFAULT_TEXT_FONT_ID) as XriftTextFontDefinition);
   const weight = resolveTextFontWeight(font, fontWeight);
-  return `${resolveTextFontDirectoryUrl(baseUrl)}${textFontFileName(font, weight)}`;
+  const directory = directoryUrl ?? resolveTextFontDirectoryUrl();
+  const withTrailingSlash = directory.endsWith("/")
+    ? directory
+    : `${directory}/`;
+  return `${withTrailingSlash}${textFontFileName(font, weight)}`;
 }
 
-/** Directory the host serves the bundled fonts from, with a trailing slash. */
+/** Directory Studio itself serves the bundled fonts from, with a trailing slash. */
 export function resolveTextFontDirectoryUrl(baseUrl?: string): string {
   const base = (baseUrl ?? defaultTextFontBaseUrl()).trim() || "/";
   const baseWithTrailingSlash = base.endsWith("/") ? base : `${base}/`;

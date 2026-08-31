@@ -781,12 +781,7 @@ export function runVisualCompilerFixtureAssertions(
     )?.content ?? "";
   assert(ktx2ParticleResult.canStage, "KTX2 Particle fixture should be stageable");
   assert(
-    ktx2ParticleSource.includes(
-      'const COMPILED_KTX2_TRANSCODER_DIRECTORY = "xrift-studio/vendor/three-basis/" as const;',
-    ) &&
-      ktx2ParticleSource.includes(
-        "return useKTX2(assetUrl, `${baseUrl}${COMPILED_KTX2_TRANSCODER_DIRECTORY}`);",
-      ) &&
+    ktx2ParticleSource.includes("return useKTX2(assetUrl, baseUrl);") &&
       ktx2ParticleSource.includes(
         "const particleMapSource = useCompiledKtx2(particleMapUrl);",
       ) &&
@@ -799,20 +794,17 @@ export function runVisualCompilerFixtureAssertions(
         {
           source: "three-basis",
           sourceFileName: "basis_transcoder.js",
-          targetRelativePath:
-            "public/xrift-studio/vendor/three-basis/basis_transcoder.js",
+          targetRelativePath: "public/basis_transcoder.js",
         },
         {
           source: "three-basis",
           sourceFileName: "basis_transcoder.wasm",
-          targetRelativePath:
-            "public/xrift-studio/vendor/three-basis/basis_transcoder.wasm",
+          targetRelativePath: "public/basis_transcoder.wasm",
         },
         {
           source: "three-basis",
           sourceFileName: "README.md",
-          targetRelativePath:
-            "public/xrift-studio/vendor/three-basis/README.md",
+          targetRelativePath: "public/three-basis-README.md",
         },
       ]),
     "KTX2 Particle output must stage the pinned Basis JS, WASM, and license",
@@ -2090,7 +2082,7 @@ export function runVisualCompilerFixtureAssertions(
   assert(
     textFontCopies.length === 1 &&
       textFontCopies[0].targetRelativePath ===
-        "public/xrift-studio/vendor/text-fonts/noto-sans-jp-japanese-400-normal.woff",
+        "public/noto-sans-jp-japanese-400-normal.woff",
     "Classic JSX output must stage the Text font the Scene uses",
   );
   const textRuntimeResult = compileVisualProject(textProject, {
@@ -2107,11 +2099,11 @@ export function runVisualCompilerFixtureAssertions(
   );
   const textRuntimeManifest = JSON.parse(
     textRuntimeResult.overlayFiles.find(
-      (file) => file.relativePath === "public/xrift/runtime.json",
+      (file) => file.relativePath === "public/xrift-runtime.json",
     )?.content ?? "{}",
-  ) as { textFontBaseUrl?: string };
+  ) as { textFontDirectoryUrl?: string };
   assert(
-    textRuntimeManifest.textFontBaseUrl === "../",
+    textRuntimeManifest.textFontDirectoryUrl === "./",
     "Runtime JSON manifest must name where the world serves its bundled font",
   );
   const fontlessRuntimeManifest = JSON.parse(
@@ -2119,11 +2111,11 @@ export function runVisualCompilerFixtureAssertions(
       generatedAt: fixedTime,
       outputMode: "classic-runtime",
     }).overlayFiles.find(
-      (file) => file.relativePath === "public/xrift/runtime.json",
+      (file) => file.relativePath === "public/xrift-runtime.json",
     )?.content ?? "{}",
-  ) as { textFontBaseUrl?: string };
+  ) as { textFontDirectoryUrl?: string };
   assert(
-    fontlessRuntimeManifest.textFontBaseUrl === undefined,
+    fontlessRuntimeManifest.textFontDirectoryUrl === undefined,
     "A world with no Text must not declare a font base it does not ship",
   );
 
@@ -2205,7 +2197,7 @@ export function runVisualCompilerFixtureAssertions(
   });
   const projectFontManifest = JSON.parse(
     projectFontRuntime.overlayFiles.find(
-      (file) => file.relativePath === "public/xrift/runtime.json",
+      (file) => file.relativePath === "public/xrift-runtime.json",
     )?.content ?? "{}",
   ) as {
     assets?: Record<string, { kind?: string; url?: string }>;
@@ -2257,7 +2249,7 @@ export function runVisualCompilerFixtureAssertions(
     danglingFontResult.canStage &&
       !JSON.stringify(
         danglingFontResult.overlayFiles.find(
-          (file) => file.relativePath === "public/xrift/runtime.json",
+          (file) => file.relativePath === "public/xrift-runtime.json",
         )?.content ?? "",
       ).includes("font-not-in-manifest"),
     "A font reference the world cannot carry must not reach the manifest",
@@ -2309,7 +2301,7 @@ export function runVisualCompilerFixtureAssertions(
   assert(
     autoJsxSource.includes('"fontId":"noto-sans-jp"') &&
       !autoJsxSource.includes('"fontId":"auto"') &&
-      autoJsxSource.includes("fontBaseUrl={baseUrl}"),
+      autoJsxSource.includes("fontDirectoryUrl={baseUrl}"),
     "Classic JSX must publish the substituted font id and the world's own base",
   );
   const autoRuntimeManifest = JSON.parse(
@@ -2317,11 +2309,11 @@ export function runVisualCompilerFixtureAssertions(
       generatedAt: fixedTime,
       outputMode: "classic-runtime",
     }).overlayFiles.find(
-      (file) => file.relativePath === "public/xrift/runtime.json",
+      (file) => file.relativePath === "public/xrift-runtime.json",
     )?.content ?? "{}",
-  ) as { textFontBaseUrl?: string };
+  ) as { textFontDirectoryUrl?: string };
   assert(
-    autoRuntimeManifest.textFontBaseUrl === "../" &&
+    autoRuntimeManifest.textFontDirectoryUrl === "./" &&
       !JSON.stringify(autoRuntimeManifest).includes('"fontId":"auto"'),
     "Runtime JSON must publish the substituted font id and its base",
   );
@@ -2351,9 +2343,7 @@ export function runVisualCompilerFixtureAssertions(
       (file) => file.relativePath === "src/World.tsx",
     )?.content ?? "";
   assert(
-    dracoSource.includes(
-      'const COMPILED_DRACO_DECODER_DIRECTORY = "xrift-studio/vendor/three-draco/" as const;',
-    ) &&
+    dracoSource.includes("function useCompiledDracoDecoderPath(): string {") &&
       dracoSource.includes(
         "const dracoDecoderPath = useCompiledDracoDecoderPath();",
       ) &&
@@ -2367,10 +2357,10 @@ export function runVisualCompilerFixtureAssertions(
   assert(
     JSON.stringify(dracoCopyTargets) ===
       JSON.stringify([
-        "public/xrift-studio/vendor/three-draco/draco_decoder.js",
-        "public/xrift-studio/vendor/three-draco/draco_decoder.wasm",
-        "public/xrift-studio/vendor/three-draco/draco_wasm_wrapper.js",
-        "public/xrift-studio/vendor/three-draco/README.md",
+        "public/draco_decoder.js",
+        "public/draco_decoder.wasm",
+        "public/draco_wasm_wrapper.js",
+        "public/three-draco-README.md",
       ]),
     "Classic JSX output must stage the pinned Draco decoder next to the world",
   );
@@ -2393,12 +2383,11 @@ export function runVisualCompilerFixtureAssertions(
   );
   const dracoRuntimeManifest = JSON.parse(
     dracoRuntimeResult.overlayFiles.find(
-      (file) => file.relativePath === "public/xrift/runtime.json",
+      (file) => file.relativePath === "public/xrift-runtime.json",
     )?.content ?? "{}",
   ) as { decoders?: { dracoDecoderPath?: string; ktx2TranscoderPath?: string } };
   assert(
-    dracoRuntimeManifest.decoders?.dracoDecoderPath ===
-      "../xrift-studio/vendor/three-draco/" &&
+    dracoRuntimeManifest.decoders?.dracoDecoderPath === "./" &&
       dracoRuntimeManifest.decoders.ktx2TranscoderPath === undefined,
     "Runtime JSON manifest must name the decoders the world ships, and only those",
   );
@@ -2406,6 +2395,36 @@ export function runVisualCompilerFixtureAssertions(
     modelResult.stagingPlan.bundledAssetCopyPlan.length === 0,
     "A Model without Draco must not drag a decoder into the world",
   );
+
+  // A published world serves only the files directly under its root: anything
+  // the compiler writes into a `public/` subdirectory answers 404 there,
+  // whichever output mode produced it. This kept the KTX2 transcoder, the Draco
+  // decoder and the Text font out of every published world until it was found.
+  for (const [label, documents] of [
+    ["Draco model", dracoProject],
+    ["Text font", textProject],
+  ] as const) {
+    for (const outputMode of ["classic-jsx", "classic-runtime"] as const) {
+      const staged = compileVisualProject(documents, {
+        generatedAt: fixedTime,
+        outputMode,
+      }).stagingPlan;
+      const nested = [
+        ...staged.overlayFiles.map((file) => file.relativePath),
+        ...staged.assetCopyPlan.map((entry) => entry.targetRelativePath),
+        ...staged.bundledAssetCopyPlan.map((entry) => entry.targetRelativePath),
+        ...staged.requiredPublicationFiles.map(
+          (file) => file.targetRelativePath,
+        ),
+      ].filter(
+        (path) => path.startsWith("public/") && path.slice(7).includes("/"),
+      );
+      assert(
+        nested.length === 0,
+        `${label} (${outputMode}) must publish every file at the world root, got ${nested.join(", ")}`,
+      );
+    }
+  }
 
   assert(
     modelSource.includes(

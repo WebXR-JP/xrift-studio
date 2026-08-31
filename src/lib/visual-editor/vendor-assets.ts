@@ -11,6 +11,9 @@
  * `resolveRequiredVendorBundles` に判定を足す。生成コードの文字列を見て
  * 同梱を決めない。出力モードごとに生成物の形が違うので、文字列一致は
  * 片方の出力モードで静かに外れる。
+ *
+ * 公開先での置き場所は `publishedVendorFileName` を見ること。ワールド直下
+ * にしか置けない。
  */
 export type VendorBundleId = "three-basis" | "three-draco";
 
@@ -24,26 +27,39 @@ export type VendorBundle = {
    * scripts/vite-local-three-vendor.ts が同じ値で配信・出力する。
    */
   readonly localDirectory: string;
-  /**
-   * 公開用 staging の public directory。XRift の `baseUrl` からの相対。
-   */
-  readonly publishedDirectory: string;
   readonly files: readonly string[];
 };
+
+/**
+ * 公開したワールドで配れるのは、ワールド直下のファイルだけ。
+ *
+ * `public/` のサブディレクトリは公開物に含まれず、置いても 404 になる。
+ * decoder はファイル名が loader 側で固定されている（DRACOLoader は
+ * `draco_wasm_wrapper.js` を、KTX2Loader は `basis_transcoder.js` を
+ * decoder path へ足す）ので、名前はそのままワールド直下へ置き、path には
+ * XRift の `baseUrl` をそのまま渡す。
+ *
+ * 名前が固定でない同梱物（ライセンス表記など）は、ワールド直下で他の
+ * ファイルとぶつからないよう bundle 名を前に付ける。
+ */
+export function publishedVendorFileName(
+  id: VendorBundleId,
+  fileName: string,
+): string {
+  return fileName === "README.md" ? `${id}-README.md` : fileName;
+}
 
 export const VENDOR_BUNDLES = {
   "three-basis": {
     id: "three-basis",
     label: "KTX2変換ファイル",
     localDirectory: "visual-editor/vendor/three-basis",
-    publishedDirectory: "xrift-studio/vendor/three-basis",
     files: ["basis_transcoder.js", "basis_transcoder.wasm", "README.md"],
   },
   "three-draco": {
     id: "three-draco",
     label: "Dracoデコーダー",
     localDirectory: "visual-editor/vendor/three-draco",
-    publishedDirectory: "xrift-studio/vendor/three-draco",
     files: [
       "draco_decoder.js",
       "draco_decoder.wasm",

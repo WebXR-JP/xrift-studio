@@ -32,10 +32,10 @@ import { convertPublishedTextureBytes } from "./texture-codec";
 /**
  * Where `runtime.json` sits inside the published bundle.
  *
- * The shell resolves this against its own `import.meta.url`, not the page, so
- * the path is relative to wherever XRift stored the world's files.
+ * The world root: a published world serves only the files directly under it,
+ * so a manifest in a subdirectory answers 404 however the shell resolves it.
  */
-const RUNTIME_MANIFEST_PATH = "xrift/runtime.json";
+const RUNTIME_MANIFEST_PATH = "xrift-runtime.json";
 const THUMBNAIL_PATH = "thumbnail.png";
 /** Module Federation entry the XRift player loads. */
 export const SHELL_ENTRY_PATH = "remoteEntry.js";
@@ -44,7 +44,7 @@ export const DEFAULT_SHELL_BASE_URL = "./xrift-runtime-shell";
 const SHELL_MANIFEST_FILE = "shell-manifest.json";
 /** The shell must be rebuilt when Runtime adapters change. */
 export const REQUIRED_RUNTIME_SHELL_CONTRACT =
-  "2026-08-29-text-fonts-background-v1" as const;
+  "2026-08-31-flat-published-files-v1" as const;
 
 /**
  * One file of the prebuilt runtime shell.

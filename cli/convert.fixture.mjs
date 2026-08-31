@@ -219,7 +219,7 @@ try {
   });
   assert(dryRun.status === "ready", `dry-run must report a writable export, got ${dryRun.status}: ${JSON.stringify(dryRun.diagnostics ?? dryRun).slice(0, 400)}`);
   assert(
-    dryRun.plannedFiles.includes("public/xrift/runtime.json"),
+    dryRun.plannedFiles.includes("public/xrift-runtime.json"),
     "dry-run must include Runtime JSON",
   );
 
@@ -232,7 +232,7 @@ try {
   });
   assert(converted.status === "succeeded", "convert must succeed");
   const runtime = JSON.parse(
-    await readFile(path.join(classicRoot, "public", "xrift", "runtime.json"), "utf8"),
+    await readFile(path.join(classicRoot, "public", "xrift-runtime.json"), "utf8"),
   );
   assert(runtime.format === "xrift-studio.runtime", "runtime format is incorrect");
   const loaded = await new XriftThreeLoader().parse(runtime);
@@ -240,7 +240,7 @@ try {
   const worldSource = await readFile(path.join(classicRoot, "src", "World.tsx"), "utf8");
   assert(
     worldSource.includes("xrift-studio-runtime/react-three-fiber") &&
-      worldSource.includes('/xrift/runtime.json') &&
+      worldSource.includes("xrift-runtime.json") &&
       worldSource.includes("export interface WorldProps") &&
       worldSource.includes("<group position={position} scale={scale}>"),
     "Classic adapter is not using xrift-studio-runtime",

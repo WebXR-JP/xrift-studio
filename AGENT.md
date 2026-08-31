@@ -74,6 +74,7 @@ pnpm build:preview       # GitHub Pages 用プレビューのビルド
 - ネイティブ API が使えないブラウザプレビューでは、成功したように見せるモックを実機能と混同させない。画面上でサンプル・デモであることを明示する。
 - 新しい Component を Add Component メニューへ足すときは、同じ作業単位で Inspector の削除導線も用意する。`ComponentCard` の `remove` を使い、削除ハンドラは `VisualEditorPrototype` の `handleRemoveComponent` に通す。Transform のように削除できない Component は、押した理由が分かる通知を返す。Inspector に専用 UI を持たない種別も、共通カードを出して見えない Component を作らない。追加できて外せない Component を残すと、ユーザーは Entity ごと作り直すしかなくなる。
 - Editor に新しい操作を足したら、同じ作業単位で MCP tool も足す。Inspector やツールバーからしか触れない操作は、AI から見ると存在しない機能になる。手順と surface ごとの権限は `docs/MCP_EDITOR_TOOLS.md` にある。公開しない判断をした場合は、その理由を同じ文書の「意図的に公開していない操作」へ記録する。
+- 公開した World が配信できるのは World 直下のファイルだけである。`public/` のサブディレクトリは公開物に含まれないので、Asset、decoder、font、Runtime manifest はすべて `public/` 直下へ平坦に置き、名前で衝突を避ける。詳細は `docs/SCRIPTING.md` の「公開物はワールド直下にしか置けない」にある。
 - Rust コマンドへ外部入力を渡すときは、既存のパス検証と権限制御を維持し、任意のパス実行や削除を追加しない。
 - 検証は「高速フィードバックループ」の 3 段階に従う。`pnpm typecheck`、`cargo check`、Vite の開発サーバーによるブラウザプレビュー、検証目的の `pnpm tauri:dev` 起動と MCP での読み取りは許可なしで行う。本番ビルドとインストーラ生成は通常の開発確認では実行せず、明示依頼、リリース成果物を作る直前、署名、バンドル、インストーラ設定の変更時だけ候補にする。実行前に目的と副作用を示してユーザーの許可を得る。実機での書き込みを伴う UI 操作も事前に許可を得る。許可なくビルド成果物、アプリデータ、公開先を変更しない。
 - 作業単位ごとに意図が分かるコミットを作成し、ユーザーの指示がある場合は `main` へ Push する。

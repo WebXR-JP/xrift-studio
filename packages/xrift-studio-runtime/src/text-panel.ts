@@ -216,7 +216,11 @@ export class XriftTextPanelObject extends Group {
   private applyFont(config: XriftTextPanelConfig): void {
     const url =
       config.fontUrl ??
-      resolveTextFontUrl(config.fontId, config.fontWeight, config.fontBaseUrl);
+      resolveTextFontUrl(
+        config.fontId,
+        config.fontWeight,
+        config.fontDirectoryUrl,
+      );
     const generation = ++this.fontGeneration;
     const known = peekTextPanelFont(url);
     if (known) {
