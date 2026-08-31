@@ -1,4 +1,5 @@
 import { getPrefabAssetDocumentReference } from "./compiler/prefab-resolver";
+import { collectXriftInteractionActions } from "./interactivity-graph";
 import { compileVisualProject } from "./compiler/compile";
 import { serializeVisualProjectDocuments } from "./persistence";
 import { updatePrefabDocumentFromSource } from "./prefab-document";
@@ -39,7 +40,94 @@ const STARTER_LIBRARY_EXPECTATIONS: Record<
 };
 
 /** Deterministic, filesystem-free assertions for the bundled world starters. */
+/**
+ * The official sample has to do something when its props are pressed.
+ *
+ * Upstream it does not: `<Interactable>` carries no `onInteract`, the Click
+ * Count label is a constant, and the portal is a disc with a word on it. A
+ * starter project whose two most pressable things are inert is the first thing
+ * a new author meets, so the conversion wires the graphs the Editor can
+ * express - and this is what stops that wiring from being dropped silently.
+ */
+function assertOfficialTemplateIsWired(): void {
+  const plan = createStarterWorldProject("xrift-official", "wired");
+  const entities = Object.values(plan.scene.entities);
+  const triggers = entities.flatMap((entity) =>
+    entity.components.filter(
+      (component) => component.type === "interaction-trigger",
+    ),
+  );
+  assert(
+    triggers.length === 4,
+    `the official template should wire two buttons and both portals, found ${triggers.length}`,
+  );
+  for (const trigger of triggers) {
+    const asset = plan.assets.assets[trigger.interactivityAssetId];
+    assert(
+      asset?.kind === "interactivity",
+      "a wired trigger points at no Interactivity Asset",
+    );
+  }
+
+  // The portal has to be pressable, or its graph is attached to something the
+  // crosshair can never reach.
+  const portals = entities.filter(
+    (entity) =>
+      entity.name === "Teleport Portal" &&
+      entity.components.some(
+        (component) => component.type === "interaction-trigger",
+      ),
+  );
+  // Both of them: a player teleported into the Secret Room whose return portal
+  // does nothing is sealed in, which is worse than never getting in.
+  assert(
+    portals.length === 2,
+    `both portals must be wired, found ${portals.length}`,
+  );
+  const portal = portals[0];
+  for (const candidate of portals) {
+    assert(
+      candidate.components.some(
+        (component) =>
+          component.type === "xrift-component" &&
+          component.schemaId === "xrift.interactable",
+      ),
+      "a teleport portal has a graph but nothing to press",
+    );
+  }
+
+  // And it has to move the player, not just look like it might.
+  const portalTrigger = portal!.components.find(
+    (component) => component.type === "interaction-trigger",
+  );
+  const portalGraph =
+    portalTrigger?.type === "interaction-trigger"
+      ? plan.assets.assets[portalTrigger.interactivityAssetId]
+      : undefined;
+  assert(
+    portalGraph?.kind === "interactivity" &&
+      collectXriftInteractionActions(portalGraph.extension).some(
+        (action) => action.target === "player" && action.property === "teleport",
+      ),
+    "the teleport portal's graph does not teleport",
+  );
+
+  // The labels stop promising a count nothing keeps.
+  const captions = entities
+    .filter((entity) => entity.name === "Click Count")
+    .flatMap((entity) =>
+      entity.components.flatMap((component) =>
+        component.type === "text" ? [component.text] : [],
+      ),
+    );
+  assert(
+    captions.length > 0 && captions.every((text) => !text.includes("0回クリック")),
+    "the button captions still advertise a counter that never counts",
+  );
+}
+
 export function runStarterTemplateFixtureAssertions(): void {
+  assertOfficialTemplateIsWired();
   assert(
     defaultVisualStarterTemplateId("world") === "xrift-official",
     "The official XRift sample must be the default World starter",

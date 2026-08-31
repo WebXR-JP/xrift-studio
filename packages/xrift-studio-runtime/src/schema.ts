@@ -202,6 +202,25 @@ export type XriftRuntimeComponent =
       properties: Record<string, unknown>;
       assetReferences: string[];
       entityReferences: string[];
+    }
+  | {
+      id: string;
+      type: "interaction-trigger";
+      enabled: boolean;
+      /**
+       * The graph itself, inlined.
+       *
+       * The authoring document points at an Interactivity Asset, but
+       * `runtime.json` is data a player reads in one pass: an Asset id would
+       * make the graph a second fetch the shell has no reason to know about.
+       * Carried as the canonical `KHR_interactivity` extension object, which is
+       * exactly what the trigger runtime parses.
+       */
+      graph: unknown;
+      /** Entity ids the graph's actions write to. Never code. */
+      entityReferences: string[];
+      /** Asset ids an action can point a property at, so they get published. */
+      assetReferences: string[];
     };
 
 export type XriftRuntimeEntity = {

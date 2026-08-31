@@ -23,6 +23,7 @@ import {
 } from "./prototype-project";
 import { applyComponentCodeImportPlan } from "./component-code-import";
 import { analyzeOfficialXriftWorldTemplate } from "./official-world-template-import";
+import { wireOfficialTemplateBehaviour } from "./official-template-behaviour";
 import {
   createPrefabAsset,
   createPrefabDocument,
@@ -563,12 +564,17 @@ function createOfficialTemplateDocuments(
         .join(", ") || "entity-count"}`,
     );
   }
-  return {
-    scene: applied.scene.rootEntityIds[0]
-      ? renameEntity(applied.scene, applied.scene.rootEntityIds[0], "World")
-      : applied.scene,
-    assets: rehomeOfficialImportedMaterials(applied.assets),
-  };
+  const named = applied.scene.rootEntityIds[0]
+    ? renameEntity(applied.scene, applied.scene.rootEntityIds[0], "World")
+    : applied.scene;
+  // The conversion is faithful, and the sample it is faithful to has no
+  // behaviour: its button and its portal look pressable and do nothing. That is
+  // the first thing anyone tries in a new project, so the graphs the Editor can
+  // express are wired here, after the import.
+  return wireOfficialTemplateBehaviour(
+    named,
+    rehomeOfficialImportedMaterials(applied.assets),
+  );
 }
 
 function rehomeOfficialImportedMaterials(

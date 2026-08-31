@@ -96,6 +96,12 @@ import {
   type XriftParticleConfig,
 } from "../script/particle.js";
 import { XriftAudioSource } from "../script/audio-source.js";
+import {
+  emitXriftInteraction,
+  XriftInteractionTriggerRuntime,
+} from "../script/interaction-trigger-runtime.js";
+import { XriftSceneRuntime } from "../script/scene-runtime.js";
+import { XriftPlayerRuntime } from "../script/player-runtime-host.js";
 import { planInteractivityAnimationCues } from "../interactivity-adapter.js";
 import {
   XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY,
@@ -188,6 +194,7 @@ function XriftRuntimeScene({
       <XriftRuntimeSpawnPointAdapter result={result} />
       <XriftRuntimeParticleAdapters result={result} />
       <XriftRuntimeAudioAdapters result={result} />
+      <XriftRuntimeInteractionTriggers result={result} />
     </>
   );
   return physicsEnabled ? (
@@ -692,6 +699,7 @@ function XriftRuntimeOfficialComponentAdapters({
         <Fragment key={target.key}>
           {createPortal(
             <XriftRuntimeOfficialWrappers
+              entityId={target.key}
               components={target.components}
               visual={target.visual}
             />,
@@ -714,9 +722,12 @@ function XriftRuntimeOfficialComponentAdapters({
 function XriftRuntimeOfficialWrappers({
   components,
   visual,
+  entityId,
 }: {
   components: readonly RuntimeOfficialWrapperComponent[];
   visual: Object3D;
+  /** Whose interaction this is, so a press reaches that Entity's graphs. */
+  entityId: string;
 }) {
   const [grabbableTransforms, setGrabbableTransforms] = useState<
     Record<string, GrabbableProps["transform"]>
@@ -749,7 +760,14 @@ function XriftRuntimeOfficialWrappers({
           enabled: booleanOr(properties.enabled, true),
         };
         return (
-          <Interactable {...props} onInteract={() => {}}>
+          <Interactable
+            {...props}
+            // The press has to reach the Entity's own graphs. Without this the
+            // published world had an Interactable that registered, highlighted
+            // under the crosshair, and then did nothing - the same silence
+            // Studio's Play had before it grew a host.
+            onInteract={() => emitXriftInteraction(entityId)}
+          >
             {children}
           </Interactable>
         );
@@ -947,6 +965,55 @@ function stringOr(value: unknown, fallback: string): string {
 
 function booleanOr(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
+}
+
+/**
+ * Runs the Scene's Interaction Trigger graphs.
+ *
+ * `runtime.json` used to be data with no behaviour: the compiler refused to
+ * stage a Scene with a trigger, because the manifest could carry the graph but
+ * nothing on this side read it, and publishing a world whose buttons silently
+ * did nothing was worse than refusing. This is the other half - the graph runs
+ * here exactly as it runs in Studio's Play, through the same component.
+ *
+ * The Scene and player bridges are mounted alongside, once, because a graph's
+ * actions reach them by looking on the Three.js scene: without them a graph
+ * that fades the screen or teleports the player would find nothing there.
+ */
+function XriftRuntimeInteractionTriggers({ result }: { result: XriftLoadResult }) {
+  const scene = result.manifest.scenes[result.manifest.entryScene];
+  const triggers = useMemo(() => {
+    if (!scene) return [];
+    return Object.values(scene.entities).flatMap((entity) => {
+      const target = result.entities.get(entity.id);
+      if (!target) return [];
+      return entity.components.flatMap((component, order) => {
+        if (component.type !== "interaction-trigger" || !component.enabled) {
+          return [];
+        }
+        return [
+          createPortal(
+            <XriftInteractionTriggerRuntime
+              key={`${entity.id}:${component.id}`}
+              entityId={entity.id}
+              graph={component.graph}
+              componentId={component.id}
+              order={order}
+            />,
+            target,
+          ),
+        ];
+      });
+    });
+  }, [result, scene]);
+  if (triggers.length === 0) return null;
+  return (
+    <>
+      <XriftSceneRuntime />
+      <XriftPlayerRuntime />
+      {triggers}
+    </>
+  );
 }
 
 function XriftRuntimeParticleAdapters({ result }: { result: XriftLoadResult }) {

@@ -276,20 +276,13 @@ export function compileVisualProject(
         "Runtime JSON出力ではScriptを表現できません。Classic JSX出力を選んでください。",
     });
   }
-  if (
-    outputMode === "classic-runtime" &&
-    resolvedEntryScene &&
-    sceneUsesInteractionTriggerRuntime(resolvedEntryScene.scene, documents.assets)
-  ) {
-    // The runtime manifest carries the graph but no runtime reads it there, so
-    // a trigger would be silently dropped instead of running.
-    diagnostics.push({
-      severity: "blocking",
-      code: "interaction-trigger-unsupported-runtime-output",
-      message:
-        "Runtime JSON出力ではInteraction Triggerを実行できません。Classic JSX出力を選んでください。",
-    });
-  }
+  // Interaction Triggers used to be blocked here: the manifest could carry the
+  // graph, but nothing on the runtime side read it, so a published world's
+  // buttons would have gone quiet. `XriftRuntimeInteractionTriggers` now runs
+  // them through the same component Studio's Play uses, so Runtime JSON and
+  // Classic JSX answer a press the same way. Scripts are still blocked above,
+  // and stay blocked for a different reason: a graph is data the interpreter
+  // walks, and a Script is source that has to be evaluated.
 
   // Decided once, from the Assets that actually reach staging: the same fact
   // decides which decoder files are copied and which paths the Runtime JSON

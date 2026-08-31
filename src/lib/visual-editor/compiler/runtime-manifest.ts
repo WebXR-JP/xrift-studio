@@ -145,6 +145,33 @@ function compileRuntimeEntity(
       });
       continue;
     }
+    if (component.type === "interaction-trigger") {
+      const asset = assets.assets[component.interactivityAssetId];
+      if (asset?.kind !== "interactivity") {
+        diagnostics.push({
+          severity: "blocking",
+          code: "runtime-interaction-trigger-graph-missing",
+          message:
+            "Interaction Triggerが参照するInteractivity Assetが見つかりません",
+          sceneId,
+          entityId: entity.id,
+          componentId: component.id,
+          fieldPath: "interactivityAssetId",
+        });
+        continue;
+      }
+      components.push({
+        id: component.id,
+        type: "interaction-trigger",
+        enabled: component.enabled,
+        // Inlined rather than referenced: see the schema. The clone keeps the
+        // manifest free of any object the authoring document still holds.
+        graph: JSON.parse(JSON.stringify(asset.extension)),
+        entityReferences: [...component.entityReferences],
+        assetReferences: [...component.assetReferences],
+      });
+      continue;
+    }
     if (component.type === "animation") {
       // v1 removed the Animation Component: what plays a clip is an
       // `animation/start` node. Opening a project converts any that are left,

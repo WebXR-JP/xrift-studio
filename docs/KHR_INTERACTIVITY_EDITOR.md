@@ -310,6 +310,15 @@ would have been less code and would have made that impossible.
 Like Scene, it is **client-local**: a graph runs inside each viewer's own
 runtime, so a teleport button moves whoever pressed it and nobody else.
 
+Both output modes run the graph. Runtime JSON used to refuse a Scene with a
+trigger - the manifest could carry the graph, and nothing on the runtime side
+read it, so a published world's buttons would have gone quiet. The manifest now
+inlines the graph on an `interaction-trigger` component and
+`XriftRuntimeInteractionTriggers` runs it through the same component Studio's
+Play uses, mounting the Scene and player bridges alongside. Scripts are still
+blocked in Runtime JSON, and for a different reason: a graph is data the
+interpreter walks, and a Script is source that has to be evaluated.
+
 Play and the published world reach the player through the same bridge
 (`player-runtime.ts` for the contract, `player-runtime-host.tsx` for the
 component that fills it in), and both fill it from `useTeleport()`. In a

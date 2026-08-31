@@ -84,7 +84,7 @@ export function runInteractionTriggerFixtureAssertions(): void {
   assertPublishedWorldRunsTheTrigger();
   assertPublishedWorldRunsAGraphNobodyPresses();
   assertPublishedWorldOmitsTheUnusedInteractionEmitter();
-  assertRuntimeJsonOutputIsBlocked();
+  assertRuntimeJsonOutputCarriesTheTrigger();
 }
 
 const GRAPH_ASSET_ID = "asset_interactivity_trigger";
@@ -855,18 +855,59 @@ function assertPublishedWorldOmitsTheUnusedInteractionEmitter(): void {
   );
 }
 
-function assertRuntimeJsonOutputIsBlocked(): void {
+/**
+ * Runtime JSON has to carry the graph, not refuse it.
+ *
+ * This assertion used to prove the opposite: a trigger blocked staging, because
+ * the manifest could carry the graph and nothing on the runtime side read it.
+ * Now that `XriftRuntimeInteractionTriggers` runs it, the same assertion is
+ * what proves the graph travels - inlined, with its Entity and Asset references
+ * intact, so a published world's button answers a press the way Play does.
+ */
+function assertRuntimeJsonOutputCarriesTheTrigger(): void {
   const result = compileVisualProject(buildDocuments(), {
     generatedAt: "2026-08-29T00:00:00.000Z",
     outputMode: "classic-runtime",
   });
   assert(
-    result.diagnostics.some(
-      (diagnostic) =>
-        diagnostic.code === "interaction-trigger-unsupported-runtime-output" &&
-        diagnostic.severity === "blocking",
+    result.canStage,
+    `Runtime JSON refused a trigger it can now run: ${result.diagnostics
+      .filter((diagnostic) => diagnostic.severity === "blocking")
+      .map((diagnostic) => diagnostic.code)
+      .join(" / ")}`,
+  );
+  const manifest = result.runtimeManifestFile?.content;
+  assert(Boolean(manifest), "Runtime JSON output emitted no manifest");
+  const parsed = JSON.parse(manifest!) as {
+    scenes: Record<
+      string,
+      {
+        entities: Record<
+          string,
+          { components: Array<{ type: string; graph?: unknown }> }
+        >;
+      }
+    >;
+  };
+  const triggers = Object.values(parsed.scenes).flatMap((scene) =>
+    Object.values(scene.entities).flatMap((entity) =>
+      entity.components.filter(
+        (component) => component.type === "interaction-trigger",
+      ),
     ),
-    "Runtime JSON output accepted a trigger it cannot run",
+  );
+  assert(
+    triggers.length > 0,
+    "the Runtime JSON manifest carries no Interaction Trigger",
+  );
+  assert(
+    triggers.every(
+      (trigger) =>
+        typeof trigger.graph === "object" &&
+        trigger.graph !== null &&
+        Array.isArray((trigger.graph as { graphs?: unknown }).graphs),
+    ),
+    "a Runtime JSON trigger carries no graph for the interpreter to walk",
   );
 }
 
