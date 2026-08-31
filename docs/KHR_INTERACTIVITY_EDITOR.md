@@ -347,6 +347,32 @@ The one place it does **not** work is a generated project's own `npm run dev`:
 `DevEnvironment` leaves `useTeleport()` at the package's `console.log`
 placeholder, so a teleport there logs and does nothing.
 
+### Who sees an action
+
+A trigger graph runs inside the runtime of whoever pressed the button. The
+interaction bus is a module in that person's page and nothing it does crosses
+the network, so **every action today reaches one viewer**. Two very different
+things were hiding under that one fact, and the registry now separates them:
+
+| Scope | Targets | What it means |
+| --- | --- | --- |
+| `viewer`「この端末だけ」 | Scene, Player | One viewer is the right answer and always will be |
+| `world`「押した人だけ」 | Entity, Transform, Animation, Material, Particle, Audio Source, Light, Text | World content everyone should be seeing, **not synchronised yet** |
+
+The first is a design: synchronising the picture would decide for the person on
+the slowest headset, and synchronising a teleport would move somebody who
+pressed nothing. The second is a gap. A door that opens for one person is a
+different feature from a door that opens, and an author cannot discover which
+one they built alone in the editor - it takes a second person in the room.
+
+So the scope is part of the sentence the Editor shows for every action, and the
+property picker carries the note under it. `getXriftInteractionScope` derives it
+from the target, and a fixture asserts every property lands in the half its
+target belongs to, so a new target cannot arrive without an answer.
+
+When instance-synchronised state exists, the `world` half is what becomes real
+rather than only honest.
+
 ### The Scene target is this viewer's, and only this viewer's
 
 Everything under `Scene` is **client-local**. A graph runs inside each viewer's

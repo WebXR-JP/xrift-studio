@@ -72,6 +72,9 @@ import {
 import {
   findInteractionTriggerTarget,
   findInteractionTriggerTargetComponent,
+  getXriftInteractionScope,
+  XRIFT_INTERACTION_SCOPE_LABELS,
+  XRIFT_INTERACTION_SCOPE_NOTES,
   type InteractionTriggerTargetEntity,
 } from "../../lib/visual-editor";
 import { EditorDialog } from "./EditorDialog";
@@ -1966,9 +1969,36 @@ function InteractivityGraphEditorBody({
                         </label>
                       ) : null}
                       {triggerDescriptor ? (
-                        <p className="text-[10px] leading-4 text-slate-400">
-                          {triggerDescriptor.description}
-                        </p>
+                        <>
+                          <p className="text-[10px] leading-4 text-slate-400">
+                            {triggerDescriptor.description}
+                          </p>
+                          {/* Who sees it, next to what it does. A door that
+                              opens for one person is a different feature from
+                              a door that opens, and an author has no way to
+                              find that out alone in the editor. */}
+                          {(() => {
+                            const scope = getXriftInteractionScope(
+                              triggerDescriptor.target,
+                            );
+                            return (
+                              <p
+                                className={`mt-1 rounded border px-1.5 py-1 text-[10px] leading-4 ${
+                                  scope === "viewer"
+                                    ? "border-slate-700 bg-slate-900 text-slate-400"
+                                    : "border-amber-500/40 bg-amber-500/10 text-amber-200"
+                                }`}
+                              >
+                                <span className="font-semibold">
+                                  {XRIFT_INTERACTION_SCOPE_LABELS[scope]}
+                                </span>
+                                <span className="ml-1">
+                                  {XRIFT_INTERACTION_SCOPE_NOTES[scope]}
+                                </span>
+                              </p>
+                            );
+                          })()}
+                        </>
                       ) : null}
                       {triggerDescriptor?.kind === "string" &&
                       !triggerToggleNode ? (

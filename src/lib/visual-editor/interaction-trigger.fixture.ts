@@ -22,12 +22,17 @@ import {
 } from "./compiler/script-emit";
 import {
   collectInteractionTriggerTargets,
+  describeInteractionTriggerAction,
   syncInteractionTriggerReferences,
 } from "./interaction-trigger-targets";
 import {
   collectInteractivityRuntimeDiagnostics,
   collectXriftInteractionActions,
   collectXriftInteractionIssues,
+  getXriftInteractionScope,
+  XRIFT_INTERACTION_PROPERTIES,
+  XRIFT_INTERACTION_SCOPE_LABELS,
+  XRIFT_INTERACTION_SCOPE_NOTES,
   collectXriftInteractionPrograms,
   configureInteractivityTriggerAction,
   createDefaultKhrInteractivityExtension,
@@ -82,6 +87,7 @@ export function runInteractionTriggerFixtureAssertions(): void {
   assertPublishedWorldCarriesTheCompositorForAGraph();
   assertPlayerTeleportReachesThePublishedWorld();
   assertWiredValueKeepsItsAction();
+  assertEveryActionSaysWhoSeesIt();
   assertPublishedWorldRunsTheTrigger();
   assertPublishedWorldRunsAGraphNobodyPresses();
   assertPublishedWorldOmitsTheUnusedInteractionEmitter();
@@ -466,6 +472,57 @@ function assertAssetValuedActionRecordsItsDependency(): void {
  * Otherwise「画質を上げる」publishes, validates, and does nothing — which is
  * worse than refusing to publish it.
  */
+/**
+ * Every action has to say who sees it.
+ *
+ * A trigger graph runs in the runtime of whoever pressed the button, so today
+ * every action reaches one viewer. For the Scene and the player that is the
+ * design; for a door, a colour or a clip it is a gap nothing on screen admitted
+ * to. An author cannot discover it alone in the editor - it takes a second
+ * person in the room - so the sentence the Editor shows carries it.
+ */
+function assertEveryActionSaysWhoSeesIt(): void {
+  for (const descriptor of XRIFT_INTERACTION_PROPERTIES) {
+    const scope = getXriftInteractionScope(descriptor.target);
+    assert(
+      scope === "viewer" || scope === "world",
+      `${descriptor.target}.${descriptor.name} has no scope`,
+    );
+    // The Scene and the player belong to one viewer by design; anything else
+    // is world content that simply is not synchronised yet. A new target that
+    // silently lands in the wrong half is the failure this catches.
+    const expected =
+      descriptor.target === "scene" || descriptor.target === "player"
+        ? "viewer"
+        : "world";
+    assert(
+      scope === expected,
+      `${descriptor.target}.${descriptor.name} claims the ${scope} scope, expected ${expected}`,
+    );
+  }
+  assert(
+    Boolean(XRIFT_INTERACTION_SCOPE_NOTES.viewer) &&
+      Boolean(XRIFT_INTERACTION_SCOPE_NOTES.world),
+    "a scope has no sentence to show the author",
+  );
+
+  // And the sentence the Editor renders has to carry it, or the registry knows
+  // something the author never sees.
+  const targets = collectInteractionTriggerTargets(buildScene());
+  const described = describeInteractionTriggerAction(targets, {
+    entityId: "entity_sign",
+    componentId: "",
+    targetKind: "transform",
+    property: "position",
+    mode: "set",
+    value: [0, 1, 0],
+  });
+  assert(
+    described.includes(XRIFT_INTERACTION_SCOPE_LABELS.world),
+    `a world-scoped action did not say who sees it: ${described}`,
+  );
+}
+
 /**
  * A value that comes from the graph must not erase the action that writes it.
  *

@@ -1,8 +1,10 @@
 import {
   getXriftInteractionProperties,
   getXriftInteractionProperty,
+  getXriftInteractionScope,
   XRIFT_INTERACTION_PLAYER_ENTITY_ID,
   XRIFT_INTERACTION_SCENE_ENTITY_ID,
+  XRIFT_INTERACTION_SCOPE_LABELS,
   XRIFT_INTERACTION_SELF_ENTITY_ID,
   XRIFT_INTERACTION_TARGET_LABELS,
   type XriftInteractionPropertyDescriptor,
@@ -360,19 +362,23 @@ export function describeInteractionTriggerAction(
   const componentLabelText =
     component?.label ?? XRIFT_INTERACTION_TARGET_LABELS[descriptor.target];
   const where = `${entity.name} / ${componentLabelText}`;
+  // Who sees it is part of what the action does, so it is part of the sentence
+  // rather than a note somewhere else. A door that opens for one person is a
+  // different feature from a door that opens.
+  const scope = ` · ${XRIFT_INTERACTION_SCOPE_LABELS[getXriftInteractionScope(descriptor.target)]}`;
   if (action.mode === "toggle") {
-    return `${where} の${descriptor.label}を切り替える`;
+    return `${where} の${descriptor.label}を切り替える${scope}`;
   }
   if (descriptor.kind === "asset") {
     return action.assetName
-      ? `${where} の${descriptor.label}を「${action.assetName}」にする`
-      : `${where} の${descriptor.label}を元に戻す`;
+      ? `${where} の${descriptor.label}を「${action.assetName}」にする${scope}`
+      : `${where} の${descriptor.label}を元に戻す${scope}`;
   }
   const value = formatTriggerValue(descriptor, action.value);
   const seconds = action.durationSeconds ?? 0;
   return seconds > 0
-    ? `${where} の${descriptor.label}を ${seconds}秒かけて ${value} にする`
-    : `${where} の${descriptor.label}を ${value} にする`;
+    ? `${where} の${descriptor.label}を ${seconds}秒かけて ${value} にする${scope}`
+    : `${where} の${descriptor.label}を ${value} にする${scope}`;
 }
 
 export function formatTriggerValue(

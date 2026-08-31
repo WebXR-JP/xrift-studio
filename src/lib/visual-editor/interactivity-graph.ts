@@ -1028,8 +1028,11 @@ export {
   XRIFT_INTERACTION_EXTENSION_NAME,
   XRIFT_INTERACTION_OPERATIONS,
   XRIFT_INTERACTION_PROPERTIES,
+  getXriftInteractionScope,
   XRIFT_INTERACTION_PLAYER_ENTITY_ID,
   XRIFT_INTERACTION_SCENE_ENTITY_ID,
+  XRIFT_INTERACTION_SCOPE_LABELS,
+  XRIFT_INTERACTION_SCOPE_NOTES,
   XRIFT_INTERACTION_SELF_ENTITY_ID,
   XRIFT_INTERACTION_TARGET_KINDS,
   XRIFT_INTERACTION_TARGET_LABELS,
@@ -1039,6 +1042,7 @@ export type {
   XriftInteractionProgram,
   XriftInteractionPropertyDescriptor,
   XriftInteractionPropertyKind,
+  XriftInteractionScope,
   XriftInteractionTargetKind,
 } from "../../../packages/xrift-studio-runtime/src/script/interaction-trigger";
 

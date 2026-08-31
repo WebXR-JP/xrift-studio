@@ -112,6 +112,47 @@ export const XRIFT_INTERACTION_TARGET_KINDS: readonly XriftInteractionTargetKind
   "scene",
 ];
 
+/**
+ * Targets that belong to one viewer by design, rather than by omission.
+ *
+ * The Scene target is the picture: post effects, fog, exposure, the sky, the
+ * field of view, the screen fade. The player target is where this person is
+ * standing. Synchronising either would decide for somebody else - the person on
+ * the slowest headset, or a player who pressed nothing and is suddenly
+ * somewhere new.
+ *
+ * Everything else is world content, and reaches one viewer only because
+ * nothing synchronises it yet.
+ */
+const VIEWER_SCOPED_TARGETS: ReadonlySet<string> = new Set<XriftInteractionTargetKind>([
+  "scene",
+  "player",
+]);
+
+export function getXriftInteractionScope(
+  target: string,
+): XriftInteractionScope {
+  return VIEWER_SCOPED_TARGETS.has(target) ? "viewer" : "world";
+}
+
+/** Short label for the scope, for a badge beside a property. */
+export const XRIFT_INTERACTION_SCOPE_LABELS: Readonly<
+  Record<XriftInteractionScope, string>
+> = {
+  viewer: "この端末だけ",
+  world: "押した人だけ",
+};
+
+/** The sentence under the picker, which is where the surprise gets removed. */
+export const XRIFT_INTERACTION_SCOPE_NOTES: Readonly<
+  Record<XriftInteractionScope, string>
+> = {
+  viewer:
+    "押した人の画面だけが変わります。ほかの人には同期されず、これは仕様です。",
+  world:
+    "いまは押した人にだけ見えます。グラフは押した人の端末で動き、変更はまだ同期されません。同じ部屋の別の人には元のままに見えます。",
+};
+
 export const XRIFT_INTERACTION_TARGET_LABELS: Readonly<
   Record<XriftInteractionTargetKind, string>
 > = {
@@ -178,6 +219,28 @@ export type XriftInteractionPropertyOption = {
   value: string;
   label: string;
 };
+
+/**
+ * Who sees what an action changes.
+ *
+ * A trigger graph runs inside the runtime of whoever pressed the button - the
+ * interaction bus is a module in that person's page, and nothing it does
+ * crosses the network. So **every action today reaches one viewer**, and that
+ * is invisible unless the Editor says it.
+ *
+ * The two values separate the cases that need separating:
+ *
+ *   * `viewer` - one viewer is the right answer and always will be. The
+ *     picture, the camera, and where this player is standing belong to the
+ *     person looking at them; synchronising them would decide for the person on
+ *     the slowest headset, or move somebody who did not press anything.
+ *   * `world` - world content everyone in the room should be seeing. A door, a
+ *     colour, a clip. These are **not synchronised yet**, so pressing one opens
+ *     the door for the presser and nobody else. That is a gap, not a design,
+ *     and it is worth saying out loud on the node rather than leaving an author
+ *     to discover it with a second person in the room.
+ */
+export type XriftInteractionScope = "viewer" | "world";
 
 /** One property a trigger action can write, and how the Editor should edit it. */
 export type XriftInteractionPropertyDescriptor = {
