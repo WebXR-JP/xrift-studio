@@ -1,4 +1,5 @@
 import {
+  memo,
   useEffect,
   useMemo,
   useRef,
@@ -6,6 +7,8 @@ import {
   type DragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
+  type MutableRefObject,
+  type RefObject,
 } from "react";
 import {
   BUILTIN_PRIMITIVE_CREATION_CATALOG,
@@ -387,6 +390,387 @@ function reparentBlockedMessage(
       return "移動先のEntityが見つかりません";
   }
 }
+
+/**
+ * Everything a row calls, held in one ref the panel refreshes each render.
+ *
+ * These are all plain closures over the panel's state, so they are new on every
+ * render and would defeat `memo` if the row took them as props. A row only ever
+ * reaches for them from an event handler — after the commit, never during the
+ * render — so reading the newest set through a ref is both correct and what
+ * keeps 1,600 unchanged rows out of the render.
+ */
+type HierarchyRowHandlers = {
+  dragEntityId: string | null;
+  selectEntity: (entityId: string, event?: MouseEvent<HTMLElement>) => void;
+  openContextMenu: (event: MouseEvent<HTMLElement>, entityId: string | null) => void;
+  toggleEntityCollapsed: (entityId: string) => void;
+  describeDropTarget: (
+    sourceEntityId: string,
+    targetEntityId: string,
+    placement: HierarchyDropPlacement,
+  ) => HierarchyDropTarget;
+  entityDropPlacement: (event: DragEvent<HTMLElement>) => HierarchyDropPlacement;
+  replaceDropTarget: (target: HierarchyDropTarget | null) => void;
+  replaceAssetDropTarget: (target: {
+    kind: "entity";
+    entityId: string;
+    message: string;
+  }) => void;
+  clearDropTargetForEntity: (entityId: string) => void;
+  setDropTarget: (target: HierarchyDropTarget | null) => void;
+  setDragEntityId: (entityId: string | null) => void;
+  hasPlaceableDrop: (event: DragEvent<HTMLElement>) => boolean;
+  handleMaterialDrop: (event: DragEvent<HTMLElement>, entityId: string) => void;
+  finishPlaceableDrop: (event: DragEvent<HTMLElement>, entityId: string) => void;
+  finishEntityDrop: (
+    event: DragEvent<HTMLElement>,
+    entityId: string,
+    placement: HierarchyDropPlacement,
+  ) => void;
+  onEntityEnabledChange: (entityId: string, enabled: boolean) => void;
+  onCommand: (commandId: EditorCommandId, payload?: { entityId: string }) => void;
+  onRename: (entityId: string, name: string) => void;
+  setRenameDraft: (name: string) => void;
+};
+
+/**
+ * One row of the Entity tree.
+ *
+ * Split out of the panel purely so `memo` has something to hold onto: the tree
+ * is not virtualised, so a Scene with 1,600 Entities put ~46,000 fibers through
+ * every render of the panel, and the panel re-renders on every edit. Each prop
+ * below is a primitive, a ref, or an object the document keeps stable, so a row
+ * whose own line did not change now costs nothing.
+ */
+const HierarchyEntityRow = memo(function HierarchyEntityRow({
+  entity,
+  depth,
+  effectiveEnabled,
+  childCount,
+  collapsed,
+  canCollapse,
+  matchesFilter,
+  highlightMatches,
+  selected,
+  readOnly,
+  renaming,
+  renameDraft,
+  renameInputRef,
+  activeEntityDrop,
+  assetDropActive,
+  entityButtonRefs,
+  handlersRef,
+}: {
+  entity: SceneEntity;
+  depth: number;
+  effectiveEnabled: boolean;
+  childCount: number;
+  collapsed: boolean;
+  canCollapse: boolean;
+  matchesFilter: boolean;
+  /** Whether a filter is active, so a match is worth emphasising. */
+  highlightMatches: boolean;
+  selected: boolean;
+  readOnly: boolean;
+  renaming: boolean;
+  /** Null unless this row is the one being renamed, so typing wakes one row. */
+  renameDraft: string | null;
+  renameInputRef: RefObject<HTMLInputElement | null>;
+  activeEntityDrop: Extract<HierarchyDropTarget, { kind: "entity" }> | null;
+  assetDropActive: boolean;
+  entityButtonRefs: MutableRefObject<Map<string, HTMLButtonElement>>;
+  handlersRef: MutableRefObject<HierarchyRowHandlers>;
+}) {
+  const EntityIcon = getEntityIcon(entity);
+
+  if (renaming) {
+    return (
+      <div
+        role="treeitem"
+        aria-level={depth + 1}
+        aria-selected={selected}
+        aria-expanded={childCount > 0 ? !collapsed : undefined}
+        className="flex w-full items-center gap-1.5 border-l-2 border-violet-700 bg-violet-100 py-1 pr-1.5 shadow-[inset_0_0_0_1px_#c4b5fd]"
+        style={{ paddingLeft: `${4 + depth * 11}px` }}
+      >
+        {canCollapse ? (
+          <button
+            type="button"
+            aria-label={`${entity.name}を${collapsed ? "展開" : "折り畳む"}`}
+            aria-expanded={!collapsed}
+            title={`${entity.name}の子Entity ${childCount}件を${collapsed ? "展開" : "折り畳む"}`}
+            onClick={() => handlersRef.current.toggleEntityCollapsed(entity.id)}
+            className="flex h-5 w-4 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+          >
+            {collapsed ? (
+              <EDITOR_ICONS.collapsed size={14} aria-hidden="true" />
+            ) : (
+              <EDITOR_ICONS.expanded size={14} aria-hidden="true" />
+            )}
+          </button>
+        ) : childCount > 0 ? (
+          <span
+            className="flex h-5 w-4 shrink-0 items-center justify-center text-slate-400"
+            title="検索中は一致する階層を自動展開します"
+          >
+            <EDITOR_ICONS.expanded size={14} aria-hidden="true" />
+          </span>
+        ) : (
+          <span className="h-5 w-4 shrink-0" aria-hidden="true" />
+        )}
+        <EntityIcon size={14} className="text-violet-700" aria-hidden="true" />
+        <input
+          ref={renameInputRef}
+          value={renameDraft ?? entity.name}
+          onChange={(event) =>
+            handlersRef.current.setRenameDraft(event.currentTarget.value)
+          }
+          onBlur={() =>
+            handlersRef.current.onRename(entity.id, renameDraft ?? entity.name)
+          }
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+            if (event.key === "Escape") {
+              event.preventDefault();
+              handlersRef.current.onRename(entity.id, entity.name);
+            }
+          }}
+          className="h-7 min-w-0 flex-1 rounded border border-violet-400 bg-white px-1.5 text-xs outline-none ring-2 ring-violet-100"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      role="treeitem"
+      aria-level={depth + 1}
+      aria-selected={selected}
+      aria-expanded={childCount > 0 ? !collapsed : undefined}
+      data-hierarchy-entity-id={entity.id}
+      onContextMenu={(event) => {
+        event.stopPropagation();
+        const handlers = handlersRef.current;
+        if (!readOnly && !selected) handlers.selectEntity(entity.id);
+        handlers.openContextMenu(event, entity.id);
+      }}
+      onDragOverCapture={(event) => {
+        if (readOnly) return;
+        const handlers = handlersRef.current;
+        if (hasEditorDragData(event.dataTransfer, MATERIAL_DRAG_MIME)) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = entity.components.some(
+            (component) => component.type === "mesh",
+          ) || Boolean(entity.modelNode?.sourceMaterialIndices.length)
+            ? "copy"
+            : "none";
+          return;
+        }
+        if (handlers.hasPlaceableDrop(event)) {
+          event.preventDefault();
+          event.stopPropagation();
+          event.dataTransfer.dropEffect = "copy";
+          handlers.replaceAssetDropTarget({
+            kind: "entity",
+            entityId: entity.id,
+            message: `Asset / XRift Prefabを「${entity.name}」の子へ配置`,
+          });
+          return;
+        }
+        if (!hasEditorDragData(event.dataTransfer, ENTITY_DRAG_MIME)) return;
+        const sourceEntityId =
+          handlers.dragEntityId ??
+          readEditorDragData(event.dataTransfer, ENTITY_DRAG_MIME).trim();
+        if (!sourceEntityId) return;
+        const target = handlers.describeDropTarget(
+          sourceEntityId,
+          entity.id,
+          handlers.entityDropPlacement(event),
+        );
+        handlers.replaceDropTarget(target);
+        if (!target.allowed) {
+          event.dataTransfer.dropEffect = "none";
+          return;
+        }
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+      }}
+      onDragLeave={(event) => {
+        const nextTarget = event.relatedTarget;
+        if (
+          nextTarget instanceof Node &&
+          event.currentTarget.contains(nextTarget)
+        ) {
+          return;
+        }
+        handlersRef.current.clearDropTargetForEntity(entity.id);
+      }}
+      onDropCapture={(event) => {
+        const handlers = handlersRef.current;
+        if (hasEditorDragData(event.dataTransfer, MATERIAL_DRAG_MIME)) {
+          handlers.handleMaterialDrop(event, entity.id);
+          return;
+        }
+        if (handlers.hasPlaceableDrop(event)) {
+          handlers.finishPlaceableDrop(event, entity.id);
+          return;
+        }
+        handlers.finishEntityDrop(
+          event,
+          entity.id,
+          handlers.entityDropPlacement(event),
+        );
+      }}
+      className={`group flex w-full items-stretch border-l-2 text-left text-xs transition-[background-color,border-color,box-shadow,opacity] ${
+        assetDropActive
+          ? "border-sky-600 bg-sky-100 text-sky-900 ring-1 ring-inset ring-sky-400"
+          : activeEntityDrop
+          ? activeEntityDrop.allowed
+            ? activeEntityDrop.placement === "before"
+              ? "border-violet-400 bg-violet-50 text-violet-900 shadow-[inset_0_2px_0_#7c3aed]"
+              : activeEntityDrop.placement === "after"
+                ? "border-violet-400 bg-violet-50 text-violet-900 shadow-[inset_0_-2px_0_#7c3aed]"
+                : "border-violet-600 bg-violet-100 text-violet-900 ring-1 ring-inset ring-violet-400"
+            : "border-rose-500 bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-300"
+          : selected
+            ? "border-violet-700 bg-violet-100 text-violet-950 shadow-[inset_0_0_0_1px_#c4b5fd]"
+            : "border-transparent text-slate-700 hover:bg-white hover:text-slate-900"
+      } ${effectiveEnabled || selected ? "opacity-100" : "opacity-50"}`}
+      style={{ paddingLeft: `${3 + depth * 11}px` }}
+    >
+      {canCollapse ? (
+        <button
+          type="button"
+          data-no-entity-drag="true"
+          aria-label={`${entity.name}を${collapsed ? "展開" : "折り畳む"}`}
+          aria-expanded={!collapsed}
+          title={`${entity.name}の子Entity ${childCount}件を${collapsed ? "展開" : "折り畳む"}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            handlersRef.current.toggleEntityCollapsed(entity.id);
+          }}
+          className="flex w-4 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+        >
+          {collapsed ? (
+            <EDITOR_ICONS.collapsed size={14} aria-hidden="true" />
+          ) : (
+            <EDITOR_ICONS.expanded size={14} aria-hidden="true" />
+          )}
+        </button>
+      ) : childCount > 0 ? (
+        <span
+          className="flex w-4 shrink-0 items-center justify-center text-slate-400"
+          title="検索中は一致する階層を自動展開します"
+        >
+          <EDITOR_ICONS.expanded size={14} aria-hidden="true" />
+        </span>
+      ) : (
+        <span className="w-4 shrink-0" aria-hidden="true" />
+      )}
+      <button
+        type="button"
+        draggable={!readOnly}
+        data-editor-drag-source="hierarchy-entity"
+        data-hierarchy-entity-select="true"
+        ref={(element) => {
+          if (element) entityButtonRefs.current.set(entity.id, element);
+          else entityButtonRefs.current.delete(entity.id);
+        }}
+        aria-pressed={selected}
+        aria-label={`${entity.name}、${getEntityTypeLabel(entity)}`}
+        title={commandTitle(`${entity.name}を選択`, "SelectEntity")}
+        onClick={(event) => handlersRef.current.selectEntity(entity.id, event)}
+        onDragStart={(event) => {
+          const handlers = handlersRef.current;
+          writeEditorDragData(event.dataTransfer, {
+            [ENTITY_DRAG_MIME]: entity.id,
+          });
+          // Hierarchy drop reparents (move); Assets drop creates a Prefab
+          // (copy). One drag source advertises both editor intents.
+          event.dataTransfer.effectAllowed = "copyMove";
+          handlers.setDragEntityId(entity.id);
+          handlers.setDropTarget(null);
+          handlers.selectEntity(entity.id);
+        }}
+        onDragEnd={() => {
+          const handlers = handlersRef.current;
+          clearEditorDragData();
+          handlers.setDragEntityId(null);
+          handlers.setDropTarget(null);
+        }}
+        className="flex min-w-0 flex-1 cursor-grab select-none items-center gap-1.5 py-1 pr-1 text-left active:cursor-grabbing disabled:cursor-default"
+      >
+        <span
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${
+            selected ? "bg-violet-700 text-white" : "text-slate-500"
+          }`}
+          title={getEntityTypeLabel(entity)}
+        >
+          <EntityIcon size={13} aria-hidden="true" />
+        </span>
+        <span
+          className={`min-w-0 flex-1 truncate ${
+            highlightMatches && matchesFilter
+              ? "font-semibold text-violet-800"
+              : ""
+          }`}
+        >
+          {entity.name}
+        </span>
+      </button>
+      <button
+        type="button"
+        data-no-entity-drag="true"
+        disabled={readOnly}
+        aria-pressed={entity.enabled}
+        aria-label={`${entity.name}を${entity.enabled ? "無効" : "有効"}にする`}
+        title={
+          readOnly
+            ? "Playを停止するとEnabledを変更できます"
+            : entity.enabled && !effectiveEnabled
+              ? `親Entityが無効です。「${entity.name}」自身を無効にする`
+              : `${entity.name}を${entity.enabled ? "無効" : "有効"}にする`
+        }
+        onClick={(event) => {
+          event.stopPropagation();
+          handlersRef.current.onEntityEnabledChange(entity.id, !entity.enabled);
+        }}
+        className="my-0.5 flex w-6 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 disabled:cursor-not-allowed disabled:opacity-30"
+      >
+        {entity.enabled ? (
+          <EDITOR_ICONS.visible size={14} aria-hidden="true" />
+        ) : (
+          <EDITOR_ICONS.hidden size={14} aria-hidden="true" />
+        )}
+      </button>
+      <button
+        type="button"
+        data-no-entity-drag="true"
+        disabled={readOnly}
+        onClick={(event) => {
+          event.stopPropagation();
+          handlersRef.current.onCommand(
+            "edit.delete",
+            selected ? undefined : { entityId: entity.id },
+          );
+        }}
+        aria-label={`${entity.name}を削除`}
+        title={
+          readOnly
+            ? "Playを停止するとEntityを削除できます"
+            : commandTitle(`${entity.name}を削除`, "edit.delete")
+        }
+        className={`my-0.5 flex w-6 shrink-0 items-center justify-center rounded text-slate-500 transition-opacity hover:bg-rose-100 hover:text-rose-700 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-30 ${
+          selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        }`}
+      >
+        <EDITOR_ICONS.delete size={13} aria-hidden="true" />
+        <span className="sr-only">削除</span>
+      </button>
+    </div>
+  );
+});
 
 export function HierarchyPanel({
   scene,
@@ -1050,6 +1434,36 @@ export function HierarchyPanel({
     if (assetId) onDropSceneAsset(assetId, parentEntityId);
   };
 
+  // Refreshed on every render, read only from a row's event handlers. Rows can
+  // stay memoised on their own data and still call the current closures.
+  const rowHandlersRef = useRef<HierarchyRowHandlers>(null!);
+  rowHandlersRef.current = {
+    dragEntityId,
+    selectEntity,
+    openContextMenu,
+    toggleEntityCollapsed,
+    describeDropTarget,
+    entityDropPlacement,
+    replaceDropTarget,
+    replaceAssetDropTarget,
+    clearDropTargetForEntity: (entityId) =>
+      setDropTarget((current) =>
+        current?.kind === "entity" && current.entityId === entityId
+          ? null
+          : current,
+      ),
+    setDropTarget,
+    setDragEntityId,
+    hasPlaceableDrop,
+    handleMaterialDrop,
+    finishPlaceableDrop,
+    finishEntityDrop,
+    onEntityEnabledChange,
+    onCommand,
+    onRename,
+    setRenameDraft,
+  };
+
   return (
     <aside
       ref={panelRef}
@@ -1274,314 +1688,38 @@ export function HierarchyPanel({
             </button>
           </div>
         ) : null}
-        {rows.map(
-          ({
-            entity,
-            depth,
-            effectiveEnabled,
-            childCount,
-            collapsed,
-            canCollapse,
-            matchesFilter,
-          }) => {
-          const selected = selectedEntityIdSet.has(entity.id);
-          const EntityIcon = getEntityIcon(entity);
-          const renaming = renameRequest?.id === entity.id;
-          const activeEntityDrop =
-            dropTarget?.kind === "entity" &&
-            dropTarget.entityId === entity.id
-              ? dropTarget
-              : null;
-          if (renaming) {
-            return (
-              <div
-                key={entity.id}
-                role="treeitem"
-                aria-level={depth + 1}
-                aria-selected={selected}
-                aria-expanded={childCount > 0 ? !collapsed : undefined}
-                className="flex w-full items-center gap-1.5 border-l-2 border-violet-700 bg-violet-100 py-1 pr-1.5 shadow-[inset_0_0_0_1px_#c4b5fd]"
-                style={{ paddingLeft: `${4 + depth * 11}px` }}
-              >
-                {canCollapse ? (
-                  <button
-                    type="button"
-                    aria-label={`${entity.name}を${collapsed ? "展開" : "折り畳む"}`}
-                    aria-expanded={!collapsed}
-                    title={`${entity.name}の子Entity ${childCount}件を${collapsed ? "展開" : "折り畳む"}`}
-                    onClick={() => toggleEntityCollapsed(entity.id)}
-                    className="flex h-5 w-4 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
-                  >
-                    {collapsed ? (
-                      <EDITOR_ICONS.collapsed size={14} aria-hidden="true" />
-                    ) : (
-                      <EDITOR_ICONS.expanded size={14} aria-hidden="true" />
-                    )}
-                  </button>
-                ) : childCount > 0 ? (
-                  <span
-                    className="flex h-5 w-4 shrink-0 items-center justify-center text-slate-400"
-                    title="検索中は一致する階層を自動展開します"
-                  >
-                    <EDITOR_ICONS.expanded size={14} aria-hidden="true" />
-                  </span>
-                ) : (
-                  <span className="h-5 w-4 shrink-0" aria-hidden="true" />
-                )}
-                <EntityIcon size={14} className="text-violet-700" aria-hidden="true" />
-                <input
-                  ref={renameInputRef}
-                  value={renameDraft}
-                  onChange={(event) => setRenameDraft(event.currentTarget.value)}
-                  onBlur={() => onRename(entity.id, renameDraft)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") event.currentTarget.blur();
-                    if (event.key === "Escape") {
-                      event.preventDefault();
-                      onRename(entity.id, entity.name);
-                    }
-                  }}
-                  className="h-7 min-w-0 flex-1 rounded border border-violet-400 bg-white px-1.5 text-xs outline-none ring-2 ring-violet-100"
-                />
-              </div>
-            );
-          }
-          return (
-            <div
-              key={entity.id}
-              role="treeitem"
-              aria-level={depth + 1}
-              aria-selected={selected}
-              aria-expanded={childCount > 0 ? !collapsed : undefined}
-              data-hierarchy-entity-id={entity.id}
-              onContextMenu={(event) => {
-                event.stopPropagation();
-                if (!readOnly && !selected) selectEntity(entity.id);
-                openContextMenu(event, entity.id);
-              }}
-              onDragOverCapture={(event) => {
-                if (readOnly) return;
-                if (hasEditorDragData(event.dataTransfer, MATERIAL_DRAG_MIME)) {
-                  event.preventDefault();
-                  event.dataTransfer.dropEffect = entity.components.some(
-                    (component) => component.type === "mesh",
-                  ) || Boolean(entity.modelNode?.sourceMaterialIndices.length)
-                    ? "copy"
-                    : "none";
-                  return;
-                }
-                if (hasPlaceableDrop(event)) {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  event.dataTransfer.dropEffect = "copy";
-                  replaceAssetDropTarget({
-                    kind: "entity",
-                    entityId: entity.id,
-                    message: `Asset / XRift Prefabを「${entity.name}」の子へ配置`,
-                  });
-                  return;
-                }
-                if (!hasEditorDragData(event.dataTransfer, ENTITY_DRAG_MIME)) return;
-                const sourceEntityId =
-                  dragEntityId ??
-                  readEditorDragData(event.dataTransfer, ENTITY_DRAG_MIME).trim();
-                if (!sourceEntityId) return;
-                const target = describeDropTarget(
-                  sourceEntityId,
-                  entity.id,
-                  entityDropPlacement(event),
-                );
-                replaceDropTarget(target);
-                if (!target.allowed) {
-                  event.dataTransfer.dropEffect = "none";
-                  return;
-                }
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-              }}
-              onDragLeave={(event) => {
-                const nextTarget = event.relatedTarget;
-                if (
-                  nextTarget instanceof Node &&
-                  event.currentTarget.contains(nextTarget)
-                ) {
-                  return;
-                }
-                setDropTarget((current) =>
-                  current?.kind === "entity" &&
-                  current.entityId === entity.id
-                    ? null
-                    : current,
-                );
-              }}
-              onDropCapture={(event) => {
-                if (hasEditorDragData(event.dataTransfer, MATERIAL_DRAG_MIME)) {
-                  handleMaterialDrop(event, entity.id);
-                  return;
-                }
-                if (hasPlaceableDrop(event)) {
-                  finishPlaceableDrop(event, entity.id);
-                  return;
-                }
-                finishEntityDrop(
-                  event,
-                  entity.id,
-                  entityDropPlacement(event),
-                );
-              }}
-              className={`group flex w-full items-stretch border-l-2 text-left text-xs transition-[background-color,border-color,box-shadow,opacity] ${
-                assetDropTarget?.kind === "entity" &&
-                assetDropTarget.entityId === entity.id
-                  ? "border-sky-600 bg-sky-100 text-sky-900 ring-1 ring-inset ring-sky-400"
-                  : activeEntityDrop
-                  ? activeEntityDrop.allowed
-                    ? activeEntityDrop.placement === "before"
-                      ? "border-violet-400 bg-violet-50 text-violet-900 shadow-[inset_0_2px_0_#7c3aed]"
-                      : activeEntityDrop.placement === "after"
-                        ? "border-violet-400 bg-violet-50 text-violet-900 shadow-[inset_0_-2px_0_#7c3aed]"
-                        : "border-violet-600 bg-violet-100 text-violet-900 ring-1 ring-inset ring-violet-400"
-                    : "border-rose-500 bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-300"
-                  : selected
-                    ? "border-violet-700 bg-violet-100 text-violet-950 shadow-[inset_0_0_0_1px_#c4b5fd]"
-                    : "border-transparent text-slate-700 hover:bg-white hover:text-slate-900"
-              } ${effectiveEnabled || selected ? "opacity-100" : "opacity-50"}`}
-              style={{ paddingLeft: `${3 + depth * 11}px` }}
-            >
-              {canCollapse ? (
-                <button
-                  type="button"
-                  data-no-entity-drag="true"
-                  aria-label={`${entity.name}を${collapsed ? "展開" : "折り畳む"}`}
-                  aria-expanded={!collapsed}
-                  title={`${entity.name}の子Entity ${childCount}件を${collapsed ? "展開" : "折り畳む"}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    toggleEntityCollapsed(entity.id);
-                  }}
-                  className="flex w-4 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
-                >
-                  {collapsed ? (
-                    <EDITOR_ICONS.collapsed size={14} aria-hidden="true" />
-                  ) : (
-                    <EDITOR_ICONS.expanded size={14} aria-hidden="true" />
-                  )}
-                </button>
-              ) : childCount > 0 ? (
-                <span
-                  className="flex w-4 shrink-0 items-center justify-center text-slate-400"
-                  title="検索中は一致する階層を自動展開します"
-                >
-                  <EDITOR_ICONS.expanded size={14} aria-hidden="true" />
-                </span>
-              ) : (
-                <span className="w-4 shrink-0" aria-hidden="true" />
-              )}
-              <button
-                type="button"
-                draggable={!readOnly}
-                data-editor-drag-source="hierarchy-entity"
-                data-hierarchy-entity-select="true"
-                ref={(element) => {
-                  if (element) entityButtonRefs.current.set(entity.id, element);
-                  else entityButtonRefs.current.delete(entity.id);
-                }}
-                aria-pressed={selected}
-                aria-label={`${entity.name}、${getEntityTypeLabel(entity)}`}
-                title={commandTitle(`${entity.name}を選択`, "SelectEntity")}
-                onClick={(event) => selectEntity(entity.id, event)}
-                onDragStart={(event) => {
-                  writeEditorDragData(event.dataTransfer, {
-                    [ENTITY_DRAG_MIME]: entity.id,
-                  });
-                  // Hierarchy drop reparents (move); Assets drop creates a Prefab
-                  // (copy). One drag source advertises both editor intents.
-                  event.dataTransfer.effectAllowed = "copyMove";
-                  setDragEntityId(entity.id);
-                  setDropTarget(null);
-                  selectEntity(entity.id);
-                }}
-                onDragEnd={() => {
-                  clearEditorDragData();
-                  setDragEntityId(null);
-                  setDropTarget(null);
-                }}
-                className="flex min-w-0 flex-1 cursor-grab select-none items-center gap-1.5 py-1 pr-1 text-left active:cursor-grabbing disabled:cursor-default"
-              >
-                <span
-                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${
-                    selected
-                      ? "bg-violet-700 text-white"
-                      : "text-slate-500"
-                  }`}
-                  title={getEntityTypeLabel(entity)}
-                >
-                  <EntityIcon size={13} aria-hidden="true" />
-                </span>
-                <span
-                  className={`min-w-0 flex-1 truncate ${
-                    filterResult && matchesFilter
-                      ? "font-semibold text-violet-800"
-                      : ""
-                  }`}
-                >
-                  {entity.name}
-                </span>
-              </button>
-              <button
-                type="button"
-                data-no-entity-drag="true"
-                disabled={readOnly}
-                aria-pressed={entity.enabled}
-                aria-label={`${entity.name}を${entity.enabled ? "無効" : "有効"}にする`}
-                title={
-                  readOnly
-                    ? "Playを停止するとEnabledを変更できます"
-                    : entity.enabled && !effectiveEnabled
-                      ? `親Entityが無効です。「${entity.name}」自身を無効にする`
-                      : `${entity.name}を${entity.enabled ? "無効" : "有効"}にする`
-                }
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onEntityEnabledChange(entity.id, !entity.enabled);
-                }}
-                className="my-0.5 flex w-6 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                {entity.enabled ? (
-                  <EDITOR_ICONS.visible size={14} aria-hidden="true" />
-                ) : (
-                  <EDITOR_ICONS.hidden size={14} aria-hidden="true" />
-                )}
-              </button>
-              <button
-                type="button"
-                data-no-entity-drag="true"
-                disabled={readOnly}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onCommand(
-                    "edit.delete",
-                    selected ? undefined : { entityId: entity.id },
-                  );
-                }}
-                aria-label={`${entity.name}を削除`}
-                title={
-                  readOnly
-                    ? "Playを停止するとEntityを削除できます"
-                    : commandTitle(`${entity.name}を削除`, "edit.delete")
-                }
-                className={`my-0.5 flex w-6 shrink-0 items-center justify-center rounded text-slate-500 transition-opacity hover:bg-rose-100 hover:text-rose-700 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-30 ${
-                  selected
-                    ? "opacity-100"
-                    : "opacity-0 group-hover:opacity-100"
-                }`}
-              >
-                <EDITOR_ICONS.delete size={13} aria-hidden="true" />
-                <span className="sr-only">削除</span>
-              </button>
-            </div>
-          );
-        },
-        )}
+        {rows.map((row) => (
+          <HierarchyEntityRow
+            key={row.entity.id}
+            entity={row.entity}
+            depth={row.depth}
+            effectiveEnabled={row.effectiveEnabled}
+            childCount={row.childCount}
+            collapsed={row.collapsed}
+            canCollapse={row.canCollapse}
+            matchesFilter={row.matchesFilter}
+            highlightMatches={Boolean(filterResult)}
+            selected={selectedEntityIdSet.has(row.entity.id)}
+            readOnly={readOnly}
+            renaming={renameRequest?.id === row.entity.id}
+            renameDraft={
+              renameRequest?.id === row.entity.id ? renameDraft : null
+            }
+            renameInputRef={renameInputRef}
+            activeEntityDrop={
+              dropTarget?.kind === "entity" &&
+              dropTarget.entityId === row.entity.id
+                ? dropTarget
+                : null
+            }
+            assetDropActive={
+              assetDropTarget?.kind === "entity" &&
+              assetDropTarget.entityId === row.entity.id
+            }
+            entityButtonRefs={entityButtonRefs}
+            handlersRef={rowHandlersRef}
+          />
+        ))}
       </div>
       {contextMenu ? (
         <div

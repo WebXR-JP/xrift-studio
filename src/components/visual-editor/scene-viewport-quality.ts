@@ -28,12 +28,20 @@ export const SCENE_VIEWPORT_QUALITY_OPTIONS: readonly {
   },
   {
     value: "low",
-    label: "軽量",
+    label: "軽量 (描画75%)",
     description:
-      "影とポストエフェクトを外し、描画解像度を下げる。Modelが多いSceneの編集用で、Play中と公開物には影響しない",
+      "影とポストエフェクトを外し、CSS表示サイズの75%で描画する。Modelが多いSceneの編集用で、Play中と公開物には影響しない",
   },
-  { value: "half", label: "描画50%", description: "CSS表示サイズの50%の解像度。影・ポストエフェクトなし。編集時のみ" },
-  { value: "quarter", label: "描画25%", description: "CSS表示サイズの25%の解像度。影・ポストエフェクトなし。編集時のみ" },
+  {
+    value: "half",
+    label: "描画50%",
+    description: "CSS表示サイズの50%の解像度。影・ポストエフェクトなし。編集時のみ",
+  },
+  {
+    value: "quarter",
+    label: "描画25%",
+    description: "CSS表示サイズの25%の解像度。影・ポストエフェクトなし。編集時のみ",
+  },
 ] as const;
 
 export function getSceneViewportQualityProfile(
@@ -45,12 +53,33 @@ export function getSceneViewportQualityProfile(
     case "quarter":
       return { dpr: [0.25, 0.25], shadows: false, postprocessing: false };
     case "high":
+      // The only mode that follows the display: a HiDPI screen gets its own
+      // sharpness up to 1.5x, a 1x screen gets exactly its CSS pixels.
       return { dpr: [1, 1.5], shadows: true, postprocessing: true };
     case "low":
-      // Half resolution reads as blurry on a HiDPI display, so the floor stays
-      // at 0.75: enough to drop the pixel count without making text unreadable.
-      return { dpr: [0.75, 1], shadows: false, postprocessing: false };
+      // A single number, not a range. React Three Fiber clamps the display's
+      // own devicePixelRatio into whatever range it is given, so the previous
+      // [0.75, 1] came back as 1 on an ordinary 1x display: the label promised
+      // a cheaper view and the renderer drew every pixel it had before. Pinning
+      // both ends makes 75% mean 75% on every display, which is the whole
+      // reason to reach for this mode.
+      return { dpr: [0.75, 0.75], shadows: false, postprocessing: false };
   }
+}
+
+/**
+ * Fraction of the CSS size the Scene View actually draws, for a given display.
+ *
+ * The toolbar states this, and the end-to-end test asserts against it, so the
+ * number a mode advertises and the number the canvas ends up with cannot drift
+ * apart unnoticed.
+ */
+export function getSceneViewportRenderScale(
+  mode: SceneViewportQualityMode,
+  devicePixelRatio: number,
+): number {
+  const [min, max] = getSceneViewportQualityProfile(mode).dpr;
+  return Math.min(Math.max(min, devicePixelRatio), max);
 }
 
 export const SCENE_VIEWPORT_QUALITY_STORAGE_KEY =

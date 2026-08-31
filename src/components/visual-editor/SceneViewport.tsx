@@ -1,5 +1,10 @@
-import { SceneVramMetrics } from "./SceneDebugCapture";
 import { TerrainBrushCursor } from "./TerrainBrushCursor";
+import { SceneVramMetrics } from "./SceneDebugCapture";
+import {
+  SceneEntityTreeProvider,
+  useSceneEntityNode,
+  useSceneEntityTreeShared,
+} from "./scene-entity-tree-context";
 import {
   Canvas,
   useFrame,
@@ -44,6 +49,7 @@ import {
 import {
   createContext,
   Fragment,
+  memo,
   useCallback,
   useContext,
   useEffect,
@@ -230,6 +236,7 @@ import {
 import {
   SCENE_VIEWPORT_QUALITY_OPTIONS,
   getSceneViewportQualityProfile,
+  getSceneViewportRenderScale,
   loadSceneViewportQualityMode,
   saveSceneViewportQualityMode,
   type SceneViewportQualityMode,
@@ -1823,7 +1830,7 @@ function EntityObject({
   onDraggingChange,
   transformDraggingRef,
   materialDragActive,
-  materialDropTarget,
+  materialDropComponentId,
   displayMode,
   displayProfile,
   renderThumbnail,
@@ -1851,7 +1858,8 @@ function EntityObject({
   onDraggingChange: (dragging: boolean) => void;
   transformDraggingRef: { current: boolean };
   materialDragActive: boolean;
-  materialDropTarget: MaterialDropReadyTarget | null;
+  /** Mesh Component on this Entity a dragged Material would land on, if any. */
+  materialDropComponentId: string | null;
   displayMode: SceneViewportDisplayMode;
   displayProfile: SceneViewportDisplayProfile;
   renderThumbnail: boolean;
@@ -1959,10 +1967,7 @@ function EntityObject({
             assets={assets}
             selected={selected}
             materialDragActive={materialDragActive}
-            materialDropHighlighted={
-              materialDropTarget?.entityId === authoringEntityId &&
-              materialDropTarget.meshComponentId === component.id
-            }
+            materialDropHighlighted={materialDropComponentId === component.id}
             viewportMaterialStyle={viewportMaterialStyle}
             showHelpers={displayProfile.showHelpers}
             renderThumbnail={renderThumbnail}
@@ -2487,65 +2492,30 @@ function SceneDropProjectionBridge({
   return null;
 }
 
-function SceneEntityHierarchy({
+/** Thumbnail capture hides selection; one shared empty set keeps the identity. */
+const EMPTY_SELECTION: ReadonlySet<string> = new Set<string>();
+
+/**
+ * One Entity of the Scene View tree, subscribed to its own slice of the Scene.
+ *
+ * Only three props, and all three come from the parent Entity rather than from
+ * the Scene: everything else arrives through the store (per Entity) or the
+ * shared context (identical for every node). That is what lets `memo` do its
+ * job — editing one Entity re-renders that Entity, not the whole Scene.
+ */
+const SceneEntityHierarchy = memo(function SceneEntityHierarchy({
   entityId,
-  scene,
-  authoringEntityIdByEntityId,
-  assets,
-  selectedEntityIds,
-  primaryEntityId,
-  editable,
-  playing,
-  physicsEnabled,
-  runtimeEntityRevisions,
-  transformMode,
-  transformSpace,
-  gizmo,
-  projectPath,
-  onTransformCommit,
-  onDraggingChange,
-  transformDraggingRef,
-  materialDragActive,
-  materialDropTarget,
-  displayMode,
-  displayProfile,
-  renderThumbnail,
   inheritedRigidBody,
-  ancestors = new Set<string>(),
   ancestorEnabled = true,
 }: {
   entityId: string;
-  scene: SceneDocument;
-  authoringEntityIdByEntityId: Readonly<Record<string, string>>;
-  assets: AssetManifest;
-  selectedEntityIds: ReadonlySet<string>;
-  primaryEntityId: string | null;
-  editable: boolean;
-  playing: boolean;
-  physicsEnabled: boolean;
-  runtimeEntityRevisions?: Readonly<Record<string, number>>;
-  transformMode: TransformMode;
-  transformSpace: TransformSpace;
-  gizmo: SceneSettings["editor"]["gizmo"];
-  projectPath?: string;
-  onTransformCommit: (entityId: string, patch: TransformPatch) => void;
-  onDraggingChange: (dragging: boolean) => void;
-  transformDraggingRef: { current: boolean };
-  materialDragActive: boolean;
-  materialDropTarget: MaterialDropReadyTarget | null;
-  displayMode: SceneViewportDisplayMode;
-  displayProfile: SceneViewportDisplayProfile;
-  renderThumbnail: boolean;
   inheritedRigidBody?: RigidBodyComponent;
-  ancestors?: ReadonlySet<string>;
   ancestorEnabled?: boolean;
 }) {
-  const entity = scene.entities[entityId];
-  if (!entity || ancestors.has(entityId)) return null;
-  const authoringEntityId =
-    authoringEntityIdByEntityId[entityId] ?? entityId;
-  const nextAncestors = new Set(ancestors);
-  nextAncestors.add(entityId);
+  const node = useSceneEntityNode(entityId);
+  const shared = useSceneEntityTreeShared();
+  const entity = node.entity;
+  if (!entity) return null;
   const ownRigidBody = entity.components.find(
     (component): component is RigidBodyComponent =>
       component.type === "rigid-body" && component.enabled,
@@ -2556,63 +2526,41 @@ function SceneEntityHierarchy({
   return (
     <EntityObject
       entity={entity}
-      authoringEntityId={authoringEntityId}
-      assets={assets}
-      projectPath={projectPath}
-      selected={selectedEntityIds.has(authoringEntityId)}
-      primary={primaryEntityId === authoringEntityId}
-      editable={editable}
-      playing={playing}
-      physicsEnabled={physicsEnabled && effectivelyEnabled}
+      authoringEntityId={node.authoringEntityId}
+      assets={shared.assets}
+      projectPath={shared.projectPath}
+      selected={node.selected}
+      primary={node.primary}
+      editable={shared.editable}
+      playing={shared.playing}
+      physicsEnabled={shared.physicsEnabled && effectivelyEnabled}
       ownRigidBody={ownRigidBody}
       rigidBodyOwner={rigidBodyOwner}
       effectivelyEnabled={effectivelyEnabled}
-      runtimeRevision={runtimeEntityRevisions?.[authoringEntityId] ?? 0}
-      transformMode={transformMode}
-      transformSpace={transformSpace}
-      gizmo={gizmo}
-      onTransformCommit={onTransformCommit}
-      onDraggingChange={onDraggingChange}
-      transformDraggingRef={transformDraggingRef}
-      materialDragActive={materialDragActive}
-      materialDropTarget={materialDropTarget}
-      displayMode={displayMode}
-      displayProfile={displayProfile}
-      renderThumbnail={renderThumbnail}
+      runtimeRevision={node.runtimeRevision}
+      transformMode={shared.transformMode}
+      transformSpace={shared.transformSpace}
+      gizmo={shared.gizmo}
+      onTransformCommit={shared.onTransformCommit}
+      onDraggingChange={shared.onDraggingChange}
+      transformDraggingRef={shared.transformDraggingRef}
+      materialDragActive={shared.materialDragActive}
+      materialDropComponentId={node.materialDropComponentId}
+      displayMode={shared.displayMode}
+      displayProfile={shared.displayProfile}
+      renderThumbnail={shared.renderThumbnail}
     >
-      {entity.children.map((childId) => (
+      {node.childIds.map((childId) => (
         <SceneEntityHierarchy
           key={childId}
           entityId={childId}
-          scene={scene}
-          authoringEntityIdByEntityId={authoringEntityIdByEntityId}
-          assets={assets}
-          selectedEntityIds={selectedEntityIds}
-          primaryEntityId={primaryEntityId}
-          editable={editable}
-          playing={playing}
-          physicsEnabled={physicsEnabled}
-          runtimeEntityRevisions={runtimeEntityRevisions}
-          transformMode={transformMode}
-          transformSpace={transformSpace}
-          gizmo={gizmo}
-          projectPath={projectPath}
-          onTransformCommit={onTransformCommit}
-          onDraggingChange={onDraggingChange}
-          transformDraggingRef={transformDraggingRef}
-          materialDragActive={materialDragActive}
-          materialDropTarget={materialDropTarget}
-          displayMode={displayMode}
-          displayProfile={displayProfile}
-          renderThumbnail={renderThumbnail}
           inheritedRigidBody={rigidBodyOwner}
-          ancestors={nextAncestors}
           ancestorEnabled={effectivelyEnabled}
         />
       ))}
     </EntityObject>
   );
-}
+});
 
 function findSceneEntityObject(
   scene: Object3D,
@@ -4286,6 +4234,14 @@ export function SceneViewport({
       ),
     [editorMode, qualityMode, thumbnailCaptureActive],
   );
+  const activeRenderScale = useMemo(
+    () =>
+      getSceneViewportRenderScale(
+        qualityMode,
+        typeof window === "undefined" ? 1 : window.devicePixelRatio,
+      ),
+    [qualityMode],
+  );
   const colliderOnlyEdit = effectiveDisplayMode === "colliders";
   const renderDisplayMode = thumbnailCaptureActive ? "scene" : effectiveDisplayMode;
   const displayProfile = useMemo(
@@ -5065,6 +5021,76 @@ export function SceneViewport({
       : "ドラッグでアイテムをOrbit確認";
   const readyMaterialDropTarget =
     materialDropTarget?.status === "ready" ? materialDropTarget : null;
+
+  // The Entity tree reads these two objects instead of taking twenty props per
+  // node. Both are memoised so a render that changed neither leaves every
+  // Entity alone: `input` is diffed per Entity by the store, and `shared` is a
+  // context whose consumers only wake when it actually changes identity.
+  const handleTransformDraggingChange = useCallback((dragging: boolean) => {
+    transformDraggingRef.current = dragging;
+    setTransformDragging(dragging);
+  }, []);
+  const entityTreeInput = useMemo(
+    () => ({
+      scene: preview.scene,
+      authoringEntityIdByEntityId: preview.authoringEntityIdByEntityId,
+      selectedEntityIds: thumbnailCaptureActive
+        ? EMPTY_SELECTION
+        : selectedEntityIdSet,
+      primaryEntityId: thumbnailCaptureActive ? null : selectedEntityId,
+      runtimeEntityRevisions,
+      materialDropTarget: readyMaterialDropTarget,
+    }),
+    [
+      preview.authoringEntityIdByEntityId,
+      preview.scene,
+      readyMaterialDropTarget,
+      runtimeEntityRevisions,
+      selectedEntityId,
+      selectedEntityIdSet,
+      thumbnailCaptureActive,
+    ],
+  );
+  const entityTreeShared = useMemo(
+    () => ({
+      assets,
+      projectPath,
+      editable:
+        editorMode === "edit" &&
+        !thumbnailCaptureActive &&
+        // A brush is a gesture over the ground; leaving gizmos live lets a
+        // stroke grab and drag an object instead of painting.
+        !terrainEditing,
+      playing: editorMode === "play",
+      physicsEnabled: editorMode === "play" && projectKind === "world",
+      transformMode,
+      transformSpace,
+      gizmo: activeGizmo,
+      onTransformCommit,
+      onDraggingChange: handleTransformDraggingChange,
+      transformDraggingRef,
+      materialDragActive: dragOverKind === "material",
+      displayMode: renderDisplayMode,
+      displayProfile,
+      renderThumbnail: thumbnailCaptureActive,
+    }),
+    [
+      activeGizmo,
+      assets,
+      displayProfile,
+      dragOverKind,
+      editorMode,
+      handleTransformDraggingChange,
+      onTransformCommit,
+      projectKind,
+      projectPath,
+      renderDisplayMode,
+      terrainEditing,
+      thumbnailCaptureActive,
+      transformMode,
+      transformSpace,
+    ],
+  );
   const PlayIcon = editorMode === "play" ? EDITOR_ICONS.stop : EDITOR_ICONS.play;
   const dropMessage =
     editorMode === "play"
@@ -5434,9 +5460,16 @@ export function SceneViewport({
                   title={
                     editorMode === "play"
                       ? "Play中は高品質で描画します"
-                      : SCENE_VIEWPORT_QUALITY_OPTIONS.find(
-                          (option) => option.value === qualityMode,
-                        )?.description
+                      : // The resolved number, not just the mode's description:
+                        // "高品質" follows the display, so what a mode costs is
+                        // only answerable on the screen it is running on.
+                        `${
+                          SCENE_VIEWPORT_QUALITY_OPTIONS.find(
+                            (option) => option.value === qualityMode,
+                          )?.description ?? ""
+                        }\nこのディスプレイでの実描画: 表示サイズの${Math.round(
+                          activeRenderScale * 100,
+                        )}%`
                   }
                   className={`h-7 shrink-0 rounded border px-1.5 text-[11px] font-semibold outline-none focus:border-violet-400 disabled:cursor-not-allowed disabled:opacity-50 ${
                     editorMode === "play"
@@ -5633,48 +5666,14 @@ export function SceneViewport({
             <ScriptViewportProvider value={scriptRuntime ?? null}>
             <XriftScriptRoot pressedKeys={pressedKeysRef.current}>
             <Fragment key={editorMode}>
-              {preview.scene.rootEntityIds.map((entityId) => (
-                <SceneEntityHierarchy
-                  key={entityId}
-                  entityId={entityId}
-                  scene={preview.scene}
-                  authoringEntityIdByEntityId={
-                    preview.authoringEntityIdByEntityId
-                  }
-                  assets={assets}
-                  projectPath={projectPath}
-                  selectedEntityIds={
-                    thumbnailCaptureActive ? new Set<string>() : selectedEntityIdSet
-                  }
-                  primaryEntityId={thumbnailCaptureActive ? null : selectedEntityId}
-                  editable={
-                    editorMode === "edit" &&
-                    !thumbnailCaptureActive &&
-                    // A brush is a gesture over the ground; leaving gizmos live
-                    // lets a stroke grab and drag an object instead of painting.
-                    !terrainEditing
-                  }
-                  playing={editorMode === "play"}
-                  physicsEnabled={
-                    editorMode === "play" && projectKind === "world"
-                  }
-                  runtimeEntityRevisions={runtimeEntityRevisions}
-                  transformMode={transformMode}
-                  transformSpace={transformSpace}
-                  gizmo={activeGizmo}
-                  onTransformCommit={onTransformCommit}
-                  onDraggingChange={(dragging) => {
-                    transformDraggingRef.current = dragging;
-                    setTransformDragging(dragging);
-                  }}
-                  transformDraggingRef={transformDraggingRef}
-                  materialDragActive={dragOverKind === "material"}
-                  materialDropTarget={readyMaterialDropTarget}
-                  displayMode={renderDisplayMode}
-                  displayProfile={displayProfile}
-                  renderThumbnail={thumbnailCaptureActive}
-                />
-              ))}
+              <SceneEntityTreeProvider
+                input={entityTreeInput}
+                shared={entityTreeShared}
+              >
+                {preview.scene.rootEntityIds.map((entityId) => (
+                  <SceneEntityHierarchy key={entityId} entityId={entityId} />
+                ))}
+              </SceneEntityTreeProvider>
               {terrainEditing && terrainBrushTarget ? (
                 <TerrainBrushCursorBinding
                   terrain={terrainBrushTarget.terrain}

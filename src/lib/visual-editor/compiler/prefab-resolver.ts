@@ -32,6 +32,8 @@ type ResolverState = {
   assets: AssetManifest;
   prefabs: Readonly<Record<string, PrefabDocument>>;
   entities: Record<string, SceneEntity>;
+  /** Whether expansion replaced any Entity, so an untouched Scene can pass through. */
+  expanded: boolean;
   diagnostics: CompilerDiagnostic[];
   diagnosticKeys: Set<string>;
   referencedPrefabAssetIds: Set<string>;
@@ -57,17 +59,22 @@ export function resolvePrefabInstances(
   assets: AssetManifest,
   prefabs: Readonly<Record<string, PrefabDocument>> = {},
 ): PrefabResolutionResult {
-  const entities = Object.fromEntries(
-    Object.entries(scene.entities).map(([entityId, entity]) => [
-      entityId,
-      cloneExpansionEntity(entity),
-    ]),
-  );
+  // Entities carry over by reference, not by copy.
+  //
+  // Expansion only ever replaces a whole Entity (`state.entities[id] = {...}`)
+  // and never writes through one, so a defensive clone of all of them bought
+  // nothing and cost the Scene View its ability to skip work: the editor keeps
+  // untouched Entities identical across an edit, and cloning every one here
+  // broke that just before the Entity tree renders, forcing every Entity to
+  // re-render for a change to one. A Scene without Prefabs now comes back with
+  // the identical Entity objects it went in with.
+  const entities: Record<string, SceneEntity> = { ...scene.entities };
   const state: ResolverState = {
     sceneId: scene.sceneId,
     assets,
     prefabs,
     entities,
+    expanded: false,
     diagnostics: [],
     diagnosticKeys: new Set(),
     referencedPrefabAssetIds: new Set(),
@@ -85,7 +92,10 @@ export function resolvePrefabInstances(
   }
 
   return {
-    scene: { ...scene, entities: state.entities },
+    // A Scene with no reachable Prefab instance is already its own expansion.
+    // Handing back the same document lets everything downstream that memoises
+    // on the Scene keep its result instead of rebuilding an identical one.
+    scene: state.expanded ? { ...scene, entities: state.entities } : scene,
     diagnostics: state.diagnostics,
     referencedPrefabAssetIds: [...state.referencedPrefabAssetIds].sort(),
   };
@@ -135,6 +145,7 @@ function expandEntity(
       component.type === "prefab-instance",
   );
   if (instances.length > 0) {
+    state.expanded = true;
     state.entities[entityId] = {
       ...entity,
       // Prefab Instance is an authoring instruction. Runtime source receives
@@ -317,6 +328,7 @@ function instantiatePrefab(
         state,
       ),
     );
+    state.expanded = true;
     state.entities[generatedId] = {
       ...source,
       id: generatedId,
@@ -336,6 +348,7 @@ function instantiatePrefab(
 
   const generatedRootId = entityIdMap.get(instance.sourceEntityId)!;
   const host = state.entities[hostEntityId];
+  state.expanded = true;
   state.entities[hostEntityId] = {
     ...host,
     children: [...host.children, generatedRootId],
@@ -618,13 +631,6 @@ function remapScriptPropertyEntityReferences(
   return value;
 }
 
-function cloneExpansionEntity(entity: SceneEntity): SceneEntity {
-  return {
-    ...entity,
-    children: [...entity.children],
-    components: [...entity.components],
-  };
-}
 
 function generatedEntityId(namespace: string, sourceEntityId: string): string {
   return `__xrift_prefab_entity_${namespace}_${sha256Utf8(sourceEntityId).slice(0, 16)}`;
