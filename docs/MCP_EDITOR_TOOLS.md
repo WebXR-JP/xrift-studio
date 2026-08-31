@@ -178,13 +178,19 @@ Ctrl+C / Ctrl+V と同じく別のグラフへも置ける。同じグラフの�
 **Component コードの取り込み**
 `analyze_component_code`, `apply_component_code_import_plan`
 
-## local-asset (13)
+## local-asset (14)
 
-`import_audio_asset`, `import_texture_asset`, `import_model_asset`,
+`import_audio_asset`, `import_font_asset`, `import_texture_asset`, `import_model_asset`,
 `import_skybox_asset`, `import_shader_asset`, `reimport_model_asset`,
 `process_texture_asset`, `optimize_model_asset`, `revert_asset_optimization`,
 `apply_scene_recipe`, `get_shader_asset`, `update_shader_asset`,
 `set_project_thumbnail`
+
+`import_font_asset` が受け付けるのは TTF、OTF、WOFF だけ。WOFF2 は text
+renderer が解釈できず、組版が終わらないまま Text が空のままになるため、
+取り込みの時点で理由を添えて断る。取り込んだ Font Asset は
+`update_component` の `patch.fontAssetId` で Text から参照する。空文字を渡すと
+同梱の書体へ戻る。
 
 `apply_scene_recipe` が document ではなく shell にあるのは、セットの部品の
 Model を project へ書き出すため。Particle Asset と subtree は一件の history

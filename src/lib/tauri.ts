@@ -135,6 +135,13 @@ export type LocalAudioImportSource = {
   dataUrl: string;
 };
 
+export type LocalFontImportSource = {
+  fileName: string;
+  mimeType: string;
+  byteLength: number;
+  dataUrl: string;
+};
+
 export type LocalModelImportSource = {
   fileName: string;
   mimeType: string;
@@ -449,6 +456,10 @@ export const tauri = {
     }),
   readLocalAudioImportSource: (sourcePath: string) =>
     invoke<LocalAudioImportSource>("read_local_audio_import_source", {
+      sourcePath,
+    }),
+  readLocalFontImportSource: (sourcePath: string) =>
+    invoke<LocalFontImportSource>("read_local_font_import_source", {
       sourcePath,
     }),
   readLocalModelImportSource: (sourcePath: string) =>

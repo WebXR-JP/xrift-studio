@@ -9,6 +9,7 @@ import {
   SHADER_ASSET_CONTRACT_VERSION,
   SHADER_ASSET_STAGES,
   AUDIO_MIME_BY_FORMAT,
+  FONT_MIME_BY_FORMAT,
   type AssetManifest,
   type ScriptAssetLanguage,
   type SkyboxAsset,
@@ -266,6 +267,7 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
     "particle",
     "interactivity",
     "audio",
+    "font",
     "script",
     "shader",
     "template",
@@ -421,6 +423,39 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
             `${path}.source`,
             "audio-source",
             "Audio Asset source must be project-relative",
+          ),
+        );
+      }
+    }
+    /** A stored Font Asset must name a container Text can actually render. */
+    const isFontFormatPair = (format: unknown, mimeType: unknown): boolean =>
+      typeof format === "string" &&
+      format in FONT_MIME_BY_FORMAT &&
+      FONT_MIME_BY_FORMAT[format as keyof typeof FONT_MIME_BY_FORMAT] === mimeType;
+    if (candidate.kind === "font") {
+      if (
+        !isRecord(candidate.importMetadata) ||
+        !isFontFormatPair(
+          candidate.importMetadata.sourceFormat,
+          candidate.importMetadata.mimeType,
+        ) ||
+        !Number.isInteger(candidate.importMetadata.byteLength) ||
+        Number(candidate.importMetadata.byteLength) <= 0
+      ) {
+        issues.push(
+          issue(
+            `${path}.importMetadata`,
+            "font-metadata",
+            "Font Asset metadata must describe a non-empty TTF, OTF or WOFF source",
+          ),
+        );
+      }
+      if (!isRecord(candidate.source) || candidate.source.kind !== "project") {
+        issues.push(
+          issue(
+            `${path}.source`,
+            "font-source",
+            "Font Asset source must be project-relative",
           ),
         );
       }

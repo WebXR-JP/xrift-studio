@@ -3,7 +3,7 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 116] = [
+pub const MCP_TOOL_NAMES: [&str; 117] = [
     "get_editor_context",
     "get_scripting_capabilities",
     "analyze_component_code",
@@ -96,6 +96,7 @@ pub const MCP_TOOL_NAMES: [&str; 116] = [
     "list_interaction_trigger_targets",
     "configure_interactivity_trigger_action",
     "import_audio_asset",
+    "import_font_asset",
     "import_texture_asset",
     "import_model_asset",
     "import_skybox_asset",

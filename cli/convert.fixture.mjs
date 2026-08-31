@@ -47,6 +47,7 @@ import { runInteractivityAnimationPlanFixtureAssertions } from "../packages/xrif
 import { runInteractivityGraphListFixtureAssertions } from "../src/lib/visual-editor/interactivity-recipes.fixture.ts";
 import { runShaderTimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/shader-time.fixture.ts";
 import { runTextPanelFixtureAssertions } from "../packages/xrift-studio-runtime/src/text-panel.fixture.ts";
+import { runFontImportFixtureAssertions } from "../src/lib/visual-editor/font-import.fixture.ts";
 import { runTextComponentFixtureAssertions } from "../src/lib/visual-editor/text-component.fixture.ts";
 import { runScriptAudioSourceHostFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source-host.fixture.ts";
 import { runLightRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/light.fixture.ts";
@@ -295,6 +296,7 @@ try {
     ["interactivity graph list", runInteractivityGraphListFixtureAssertions],
     ["shader time", runShaderTimeFixtureAssertions],
     ["text panel", runTextPanelFixtureAssertions],
+    ["font import", runFontImportFixtureAssertions],
     ["text component", runTextComponentFixtureAssertions],
     ["mcp editor tools", runXriftMcpEditorToolFixtures],
     ["play session", runPlaySessionFixtureAssertions],

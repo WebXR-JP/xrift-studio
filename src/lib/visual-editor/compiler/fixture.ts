@@ -2,6 +2,7 @@ import {
   normalizeTextureImportSettings,
   updateMaterialAsset,
   type AudioAsset,
+  type FontAsset,
   type AssetManifest,
   type MaterialAsset,
   type ModelAsset,
@@ -2124,6 +2125,142 @@ export function runVisualCompilerFixtureAssertions(
   assert(
     fontlessRuntimeManifest.textFontBaseUrl === undefined,
     "A world with no Text must not declare a font base it does not ship",
+  );
+
+  // An imported font is carried by the world like any other Asset, and the Text
+  // is handed that file rather than a catalog id.
+  const projectFont: FontAsset = {
+    id: "font-fixture-project",
+    name: "Fixture Display",
+    kind: "font",
+    status: "ready",
+    source: {
+      kind: "project",
+      relativePath: "assets/imported/fonts/abc/fixture-display.ttf",
+    },
+    sourceHash: "f".repeat(64),
+    importMetadata: {
+      sourceFormat: "ttf",
+      mimeType: "font/ttf",
+      byteLength: 4096,
+      familyName: "Fixture Display",
+    },
+  };
+  const projectFontText = createTextComponent("component-text-project-font", {
+    text: "取り込んだ書体",
+    fontAssetId: projectFont.id,
+  });
+  assert(
+    projectFontText !== null,
+    "Project font Text fixture component could not be created",
+  );
+  const projectFontProject: VisualCompilerDocuments = {
+    ...modelProject,
+    assets: {
+      ...modelProject.assets,
+      assets: { ...modelProject.assets.assets, [projectFont.id]: projectFont },
+    },
+    scenes: {
+      [textScene.sceneId]: {
+        ...textScene,
+        entities: {
+          ...textScene.entities,
+          [modelEntity.id]: {
+            ...textScene.entities[modelEntity.id],
+            components: [
+              ...modelScene.entities[modelEntity.id].components,
+              projectFontText,
+            ],
+          },
+        },
+      },
+    },
+  };
+  const projectFontResult = compileVisualProject(projectFontProject, {
+    generatedAt: fixedTime,
+  });
+  const projectFontSource =
+    projectFontResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(
+    projectFontResult.canStage,
+    "A Text using an imported font should be stageable",
+  );
+  assert(
+    projectFontSource.includes(
+      "const textPanelFontUrl = useCompiledAssetUrl(",
+    ) && projectFontSource.includes("fontUrl={textPanelFontUrl}"),
+    "Classic JSX must hand the Text the world's own copy of the imported font",
+  );
+  assert(
+    projectFontResult.stagingPlan.assetCopyPlan.some(
+      (entry) => entry.assetId === projectFont.id && entry.purpose === "font",
+    ),
+    "The imported font file must be copied into the staged world",
+  );
+  const projectFontRuntime = compileVisualProject(projectFontProject, {
+    generatedAt: fixedTime,
+    outputMode: "classic-runtime",
+  });
+  const projectFontManifest = JSON.parse(
+    projectFontRuntime.overlayFiles.find(
+      (file) => file.relativePath === "public/xrift/runtime.json",
+    )?.content ?? "{}",
+  ) as {
+    assets?: Record<string, { kind?: string; url?: string }>;
+    scenes?: Record<string, unknown>;
+  };
+  assert(
+    projectFontManifest.assets?.[projectFont.id]?.kind === "font" &&
+      typeof projectFontManifest.assets[projectFont.id].url === "string",
+    "Runtime JSON must publish the imported font as an Asset with a URL",
+  );
+  assert(
+    JSON.stringify(projectFontManifest.scenes).includes(
+      `"fontAssetId":"${projectFont.id}"`,
+    ),
+    "Runtime JSON must keep the Text's reference to the imported font",
+  );
+  // A reference the world cannot carry is dropped rather than published as an
+  // id the runtime would look up and miss.
+  const danglingFontText = createTextComponent("component-text-dangling-font", {
+    text: "参照切れ",
+    fontAssetId: "font-not-in-manifest",
+  });
+  assert(
+    danglingFontText !== null,
+    "Dangling font Text fixture component could not be created",
+  );
+  const danglingFontResult = compileVisualProject(
+    {
+      ...modelProject,
+      scenes: {
+        [textScene.sceneId]: {
+          ...textScene,
+          entities: {
+            ...textScene.entities,
+            [modelEntity.id]: {
+              ...textScene.entities[modelEntity.id],
+              components: [
+                ...modelScene.entities[modelEntity.id].components,
+                danglingFontText,
+              ],
+            },
+          },
+        },
+      },
+    },
+    { generatedAt: fixedTime, outputMode: "classic-runtime" },
+  );
+  assert(
+    danglingFontResult.canStage &&
+      !JSON.stringify(
+        danglingFontResult.overlayFiles.find(
+          (file) => file.relativePath === "public/xrift/runtime.json",
+        )?.content ?? "",
+      ).includes("font-not-in-manifest"),
+    "A font reference the world cannot carry must not reach the manifest",
   );
 
   // The automatic face is troika's CDN resolver. A published world cannot reach
