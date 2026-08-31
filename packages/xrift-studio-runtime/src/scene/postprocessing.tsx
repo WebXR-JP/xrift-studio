@@ -1,5 +1,5 @@
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   ACESFilmicToneMapping,
   HalfFloatType,
@@ -14,6 +14,11 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { SSAOPass } from "three/examples/jsm/postprocessing/SSAOPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import {
+  findXriftSceneRuntimeBridge,
+  publishXriftScenePostprocessingBaseline,
+  type XriftSceneRuntimeState,
+} from "../script/scene-runtime.js";
 
 /**
  * The scene compositor: tone mapping, SSAO, Bloom, and colour grading.
@@ -117,6 +122,47 @@ void main() {
 }`,
 };
 
+/**
+ * The compositor settings after this viewer's own graph writes.
+ *
+ * A behavior graph can turn the passes on and off for whoever pressed the
+ * button — that is the point of「画質を上げる」— so the authored settings are a
+ * starting point rather than the answer. `null` in the bridge means the viewer
+ * never touched that field, which is why this merges instead of replacing.
+ */
+function mergeSceneOverrides(
+  settings: XriftScenePostprocessingSettings,
+  state: XriftSceneRuntimeState | null,
+): XriftScenePostprocessingSettings {
+  if (!state) return settings;
+  if (
+    state.postprocessing === null &&
+    state.bloom === null &&
+    state.bloomStrength === null &&
+    state.bloomRadius === null &&
+    state.bloomThreshold === null &&
+    state.ao === null &&
+    state.grading === null
+  ) {
+    return settings;
+  }
+  return {
+    ...settings,
+    enabled: state.postprocessing ?? settings.enabled,
+    bloom: {
+      enabled: state.bloom ?? settings.bloom.enabled,
+      strength: state.bloomStrength ?? settings.bloom.strength,
+      radius: state.bloomRadius ?? settings.bloom.radius,
+      threshold: state.bloomThreshold ?? settings.bloom.threshold,
+    },
+    ao: { ...settings.ao, enabled: state.ao ?? settings.ao.enabled },
+    grading: {
+      ...settings.grading,
+      enabled: state.grading ?? settings.grading.enabled,
+    },
+  };
+}
+
 export function ScenePostprocessing({
   settings,
 }: {
@@ -124,7 +170,17 @@ export function ScenePostprocessing({
 }) {
   const { camera, gl, scene, size } = useThree();
   const hdrEnabled = settings.hdr.enabled;
-  const pipeline = useMemo(() => {
+  /**
+   * The composer, built the first frame anything actually needs it.
+   *
+   * A world whose Scene has post effects off still mounts this component, so a
+   * Script or a behavior graph can turn them on for one viewer. Building the
+   * HDR target and the SSAO buffer up front would make every such world pay for
+   * passes nobody asked for — on exactly the devices this feature exists to
+   * protect.
+   */
+  const buildPipeline = useMemo(() => {
+    return () => {
     const renderTarget = hdrEnabled
       ? new WebGLRenderTarget(size.width, size.height, {
           type: HalfFloatType,
@@ -159,12 +215,53 @@ export function ScenePostprocessing({
     // Last: grading judges the finished frame, including the bloom it picked up.
     composer.addPass(gradingPass);
     return { composer, aoPass, bloomPass, gradingPass };
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [camera, gl, hdrEnabled, scene]);
+  const pipelineRef = useRef<ReturnType<typeof buildPipeline> | null>(null);
+
+  /**
+   * The settings currently written into the passes.
+   *
+   * `mergeSceneOverrides` returns the authored object unchanged while no graph
+   * has written anything, so identity is enough to skip the reconfigure in the
+   * common case — which is every frame of a world nobody has changed.
+   */
+  const appliedRef = useRef<XriftScenePostprocessingSettings | null>(null);
+
+  // A rebuilt factory means the renderer, camera, scene or HDR target changed,
+  // so whatever was built for the old one no longer belongs to this Canvas.
+  useEffect(() => {
+    const previous = pipelineRef.current;
+    pipelineRef.current = null;
+    appliedRef.current = null;
+    previous?.composer.dispose();
+  }, [buildPipeline]);
 
   useEffect(() => {
-    pipeline.composer.setSize(size.width, size.height);
-  }, [pipeline, size.height, size.width]);
+    pipelineRef.current?.composer.setSize(size.width, size.height);
+  }, [size.height, size.width]);
+
+  // Edited Scene settings are a new object the frame comparison would
+  // otherwise accept as already applied.
+  useEffect(() => {
+    appliedRef.current = null;
+  }, [settings]);
+
+  // What a graph's toggle flips away from. Only the compositor knows it.
+  useEffect(
+    () =>
+      publishXriftScenePostprocessingBaseline(scene, {
+        enabled: settings.enabled,
+        bloom: settings.bloom.enabled,
+        bloomStrength: settings.bloom.strength,
+        bloomRadius: settings.bloom.radius,
+        bloomThreshold: settings.bloom.threshold,
+        ao: settings.ao.enabled,
+        grading: settings.grading.enabled,
+      }),
+    [scene, settings],
+  );
 
   useEffect(() => {
     const previousToneMapping = gl.toneMapping;
@@ -183,20 +280,27 @@ export function ScenePostprocessing({
     };
   }, [gl, settings.exposure, settings.hdr.toneMapping]);
 
-  useEffect(() => {
-    pipeline.bloomPass.enabled = settings.enabled && settings.bloom.enabled;
-    pipeline.bloomPass.threshold = settings.bloom.threshold;
-    pipeline.bloomPass.strength = settings.bloom.strength;
-    pipeline.bloomPass.radius = settings.bloom.radius;
-    pipeline.aoPass.enabled = settings.enabled && settings.ao.enabled;
-    pipeline.aoPass.kernelRadius = settings.ao.radius;
-    pipeline.aoPass.minDistance = settings.ao.minDistance;
+  /**
+   * The passes are configured per frame rather than in an effect, because a
+   * graph can change them at any moment and the bridge is not React state. The
+   * work is a handful of assignments; building the pipeline stays in `useMemo`.
+   */
+  const configure = (
+    pipeline: NonNullable<typeof pipelineRef.current>,
+    active: XriftScenePostprocessingSettings,
+  ): void => {
+    pipeline.bloomPass.enabled = active.enabled && active.bloom.enabled;
+    pipeline.bloomPass.threshold = active.bloom.threshold;
+    pipeline.bloomPass.strength = active.bloom.strength;
+    pipeline.bloomPass.radius = active.bloom.radius;
+    pipeline.aoPass.enabled = active.enabled && active.ao.enabled;
+    pipeline.aoPass.kernelRadius = active.ao.radius;
+    pipeline.aoPass.minDistance = active.ao.minDistance;
     pipeline.aoPass.maxDistance = Math.max(
-      settings.ao.maxDistance,
-      settings.ao.minDistance + 0.001,
+      active.ao.maxDistance,
+      active.ao.minDistance + 0.001,
     );
-    pipeline.gradingPass.enabled =
-      settings.enabled && settings.grading.enabled;
+    pipeline.gradingPass.enabled = active.enabled && active.grading.enabled;
     const uniforms = pipeline.gradingPass.uniforms as Record<
       string,
       { value: number } | undefined
@@ -205,21 +309,36 @@ export function ScenePostprocessing({
       const uniform = uniforms[name];
       if (uniform) uniform.value = value;
     };
-    setGrading("uContrast", settings.grading.contrast);
-    setGrading("uSaturation", settings.grading.saturation);
-    setGrading("uTemperature", settings.grading.temperature);
-    setGrading("uTint", settings.grading.tint);
-  }, [pipeline, settings]);
+    setGrading("uContrast", active.grading.contrast);
+    setGrading("uSaturation", active.grading.saturation);
+    setGrading("uTemperature", active.grading.temperature);
+    setGrading("uTint", active.grading.tint);
+  };
 
   useEffect(
     () => () => {
-      pipeline.composer.dispose();
+      pipelineRef.current?.composer.dispose();
+      pipelineRef.current = null;
     },
-    [pipeline],
+    [],
   );
 
   useFrame(() => {
-    if (settings.enabled) {
+    // Re-read every frame: a graph writes into the bridge, not into React
+    // state, so nothing re-renders when a viewer turns the passes on.
+    const bridge = findXriftSceneRuntimeBridge(scene);
+    const active = mergeSceneOverrides(settings, bridge?.read() ?? null);
+    if (active.enabled && !pipelineRef.current) {
+      pipelineRef.current = buildPipeline();
+      pipelineRef.current.composer.setSize(size.width, size.height);
+      appliedRef.current = null;
+    }
+    const pipeline = pipelineRef.current;
+    if (pipeline && appliedRef.current !== active) {
+      appliedRef.current = active;
+      configure(pipeline, active);
+    }
+    if (active.enabled && pipeline) {
       pipeline.composer.render();
     } else {
       // A positive-priority frame callback takes over R3F's default render

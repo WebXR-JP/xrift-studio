@@ -906,6 +906,29 @@ export class InteractivityEngine {
           this.report(nodeIndex, node.op, "invalid-input", "target");
           return this.follow(node, "err");
         }
+        if (target.text !== undefined) {
+          // Text-valued: nothing in a socket, and no midpoint to ramp through.
+          if (!this.host.writeString) {
+            this.report(nodeIndex, node.op, "unsupported-by-host", "writeString");
+            return this.follow(node, "err");
+          }
+          if (!this.host.writeString(target, target.text)) {
+            return this.follow(node, "err");
+          }
+          return [...this.follow(node, "out"), ...this.follow(node, "done")];
+        }
+        if (target.assetId !== undefined) {
+          // An Asset-valued property: no socket to read, and no midpoint to
+          // interpolate through, so a duration on it is simply not honoured.
+          if (!this.host.writeAsset) {
+            this.report(nodeIndex, node.op, "unsupported-by-host", "writeAsset");
+            return this.follow(node, "err");
+          }
+          if (!this.host.writeAsset(target, target.assetId)) {
+            return this.follow(node, "err");
+          }
+          return [...this.follow(node, "out"), ...this.follow(node, "done")];
+        }
         if (!this.host.writeProperty) {
           this.report(nodeIndex, node.op, "unsupported-by-host", "writeProperty");
           return this.follow(node, "err");
@@ -1531,6 +1554,14 @@ export class InteractivityEngine {
       componentId: targetKind === "entity" ? null : componentId,
       targetKind,
       property,
+      // Present-but-empty is meaningful — it names no Asset on purpose — so the
+      // key's presence, not its value, is what marks an Asset-valued action.
+      ...(node.configuration.has("asset")
+        ? { assetId: this.configurationString(node, "asset") }
+        : {}),
+      ...(node.configuration.has("text")
+        ? { text: this.configurationString(node, "text") ?? "" }
+        : {}),
     };
   }
 

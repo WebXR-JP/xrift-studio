@@ -109,6 +109,7 @@ Script Asset の `language: "tsx"` と `.tsx` path を持つ。組み込み `mod
 | `materials` | この Entity が所有する Mesh の Material を Play 中だけ変更する |
 | `lights` | この Entity が所有する Light の点灯、色、強度、距離を Play 中だけ変更する |
 | `particles` | この Entity が所有する Particle Emitter を Play 中だけ再生・調整する |
+| `viewer` | この Script を実行しているビューアーの見え方だけを Play 中だけ変える。他のビューアーへは同期しない |
 | `getAssetUrl(ref)` | `assets.url(ref)` の非推奨 alias |
 | `on` / `emit` | Script 間のイベント |
 | `log` | Script Console へ出力する |
@@ -371,11 +372,42 @@ burst の合計が残り容量を越えた場合は、後ろの burst から上�
 指定した continuous rate を使い、authored burst は発生しない。burst へ戻すには `ctx.particles.reset()` を呼ぶか
 Script を再起動する。
 
+### ビューアーごとの見え方
+
+`ctx.viewer` は、シーン設定のうち「そのビューアーの画面に見えるもの」を実行時に上書きする。
+シーン設定は全ビューアー共通なので、ポストエフェクトを有効にすると重い端末のユーザーが自分で切れない。
+`ctx.viewer` の書き込みは、その Script を実行しているクライアントの描画にだけ効き、他のビューアーへ同期しない。
+ワールド作者は「画質を上げる」を用意し、選択を各自に委ねられる。
+
+| API | 操作 |
+| --- | --- |
+| `setPostprocessing(enabled)` | ポストエフェクト全体を切り替える |
+| `setBloom({ enabled?, strength?, radius?, threshold? })` | 発光を切り替え、強さ・広がり・しきい値を変える |
+| `setAmbientOcclusion(enabled)` | 接地部分の陰影を切り替える |
+| `setColorGrading(enabled)` | 色味の調整を切り替える |
+| `setExposure(value)` | 露出を設定する。1 が既定 |
+| `setFog({ enabled?, color?, near?, far? })` | 距離フォグを切り替え、色と距離を変える |
+| `setAmbient({ enabled?, color?, intensity? })` | 環境光を切り替え、色と強さを変える |
+| `setSkybox({ enabled?, ibl?, exposure?, rotationDegrees? })` | 背景の表示、IBL、明るさ、水平回転を変える |
+| `setCameraFov(degrees)` | 視野角を度で設定する |
+| `reset()` | この Script の viewer override を外す |
+
+Script の再起動、runtime failure、Stop では、その Script の override だけを外す。
+再入室したビューアーはシーン設定の値を見る。値の合成は他の bridge と同じく Component 実行順で、
+同じ field を後の Script が上書きする。Interactivity Graph の `xrift/setProperty` が
+書く Scene プロパティとも同じ bridge を共有するため、Script とグラフが競合せず合成される。
+
+環境光がシーンに無い場合、`setAmbient` は runtime が所有する AmbientLight を追加する。
+これを持たないと、環境光を切っているシーンでだけ「明るくする」が効かないことになる。
+Skybox 画像そのものの差し替えは Script API には無く、Interactivity Graph の
+`skyboxImage` プロパティで行う。Asset の解決先はサーフェスが持っており、Script から
+任意 Asset を空へ差し込む API は提供しない。
+
 ### 実行時変更と永続編集
 
 | 変更経路 | 保存 | Play 中の反映 | Stop / 再起動 |
 | --- | --- | --- | --- |
-| `ctx.audioSources`、`ctx.lights`、`ctx.materials`、`ctx.particles`、`setTextureTransform` | runtime-only。document revision は変えない | setter を呼んだ時点から対象 Entity の所有 player / Light / clone に反映 | その Script の再生要求、clone、overrideを外し、元の Component / Asset 値へ戻る |
+| `ctx.audioSources`、`ctx.lights`、`ctx.materials`、`ctx.particles`、`ctx.viewer`、`setTextureTransform` | runtime-only。document revision は変えない | setter を呼んだ時点から対象 Entity の所有 player / Light / clone に反映 | その Script の再生要求、clone、overrideを外し、元の Component / Asset 値へ戻る |
 | Script Component の宣言済み property | Scene document | 同じ Script instance の `ctx.props` へ次の frame から反映 | 保存値として残る |
 | Script source、Script / Asset / Entity 参照、Component 構成 | source / Scene document | 承認済みの正確な内容だけをcompileし、成功後に影響する Entity だけを再起動。未承認または失敗時は last-good module を継続 | 保存値として残る |
 | 既存 Material / Particle Asset の property | AssetManifest | Inspector または MCP から保存し、その Asset を参照する Entity / Emitter だけを再反映 | 保存値として残る |

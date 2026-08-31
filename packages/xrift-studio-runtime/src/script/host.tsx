@@ -14,6 +14,7 @@ import {
 import { useFrame, useThree } from "@react-three/fiber";
 import {
   ClampToEdgeWrapping,
+  Color,
   LinearFilter,
   LinearMipmapLinearFilter,
   LinearMipmapNearestFilter,
@@ -53,6 +54,7 @@ import {
   type ScriptMaterialTextureTransform,
   type ScriptLights,
   type ScriptParticles,
+  type ScriptViewer,
   type ScriptPropDefinition,
   type ScriptPropsDeclaration,
   type ScriptRenderProps,
@@ -67,6 +69,11 @@ import {
 } from "./audio-source.js";
 import { createXriftLightRuntimeResources } from "./light.js";
 import { createScriptLifecycle } from "./lifecycle.js";
+import {
+  findXriftSceneRuntimeBridge,
+  type XriftSceneRuntimeBridge,
+  type XriftSceneRuntimeOverrides,
+} from "./scene-runtime.js";
 import {
   XRIFT_PARTICLE_RUNTIME_USER_DATA_KEY,
   type XriftParticleRuntimeBridge,
@@ -467,6 +474,7 @@ export function XriftScriptHost<
       materials: resources.materials,
       lights: resources.lights,
       particles: resources.particles,
+      viewer: resources.viewer,
       find: (targetId) =>
         (active && allowedEntityIds.has(targetId)
           ? resolveEntityRef.current?.(targetId) ??
@@ -670,12 +678,24 @@ export function invokeScriptEventHandler(
   }
 }
 
+/**
+ * A Script's colour, as the linear RGB every runtime bridge stores.
+ *
+ * Scripts write colours the way CSS and three.js accept them, and the bridges
+ * hold linear light, so one conversion lives here rather than at each setter.
+ */
+function linearRgb(value: string | number): [number, number, number] {
+  const color = new Color(value as never);
+  return [color.r, color.g, color.b];
+}
+
 export type ScriptResources = {
   assets: ScriptAssets;
   audioSources: ScriptAudioSources;
   materials: ScriptMaterials;
   lights: ScriptLights;
   particles: ScriptParticles;
+  viewer: ScriptViewer;
   /** Detects Meshes that arrive after start, such as asynchronously loaded Models. */
   update(): void;
   dispose(): void;
@@ -813,6 +833,7 @@ export function createScriptResources({
   const audioSourceOwnerToken = {};
   const materialOwnerToken = {};
   const particleOwnerToken = {};
+  const viewerOwnerToken = {};
   const ownedAudioSourceBridges = new Set<XriftAudioSourceRuntimeBridge>();
   const audioSourceAppliedStates = new Map<
     XriftAudioSourceRuntimeBridge,
@@ -1513,12 +1534,84 @@ export function createScriptResources({
     reset: resetParticles,
   };
 
+  /**
+   * This viewer's own picture.
+   *
+   * The bridge is looked up on each call rather than held, because it is
+   * mounted on the Scene root by whichever surface is running — Play mounts it
+   * with Play, a published world mounts it with the graph runtime — and a
+   * Script can start before it. A call with no bridge present is a no-op
+   * rather than a throw: it means the Scene simply has nothing to composite.
+   */
+  const sceneBridge = (): XriftSceneRuntimeBridge | null => {
+    let root: Object3D = object3d;
+    while (root.parent) root = root.parent;
+    return findXriftSceneRuntimeBridge(root);
+  };
+  const writeViewer = (overrides: XriftSceneRuntimeOverrides): void => {
+    if (disposed) return;
+    sceneBridge()?.setOwner(viewerOwnerToken, order, componentId, overrides);
+  };
+  const resetViewer = (): void => {
+    sceneBridge()?.removeOwner(viewerOwnerToken);
+  };
+  const viewer: ScriptViewer = {
+    setPostprocessing: (enabled) => writeViewer({ postprocessing: enabled }),
+    setBloom: (options) =>
+      writeViewer({
+        ...(options.enabled === undefined ? {} : { bloom: options.enabled }),
+        ...(options.strength === undefined
+          ? {}
+          : { bloomStrength: options.strength }),
+        ...(options.radius === undefined ? {} : { bloomRadius: options.radius }),
+        ...(options.threshold === undefined
+          ? {}
+          : { bloomThreshold: options.threshold }),
+      }),
+    setAmbientOcclusion: (enabled) => writeViewer({ ao: enabled }),
+    setColorGrading: (enabled) => writeViewer({ grading: enabled }),
+    setExposure: (value) => writeViewer({ exposure: value }),
+    setFog: (options) =>
+      writeViewer({
+        ...(options.enabled === undefined ? {} : { fog: options.enabled }),
+        ...(options.color === undefined
+          ? {}
+          : { fogColor: linearRgb(options.color) }),
+        ...(options.near === undefined ? {} : { fogNear: options.near }),
+        ...(options.far === undefined ? {} : { fogFar: options.far }),
+      }),
+    setAmbient: (options) =>
+      writeViewer({
+        ...(options.enabled === undefined ? {} : { ambient: options.enabled }),
+        ...(options.color === undefined
+          ? {}
+          : { ambientColor: linearRgb(options.color) }),
+        ...(options.intensity === undefined
+          ? {}
+          : { ambientIntensity: options.intensity }),
+      }),
+    setSkybox: (options) =>
+      writeViewer({
+        ...(options.enabled === undefined ? {} : { skybox: options.enabled }),
+        ...(options.ibl === undefined ? {} : { skyboxIbl: options.ibl }),
+        ...(options.exposure === undefined
+          ? {}
+          : { skyboxExposure: options.exposure }),
+        ...(options.rotationDegrees === undefined
+          ? {}
+          : { skyboxRotation: options.rotationDegrees }),
+      }),
+    setCameraFov: (degrees) => writeViewer({ cameraFov: degrees }),
+    reset: resetViewer,
+  };
+
   return {
     assets,
     audioSources,
     materials,
     lights: lightResources.lights,
     particles,
+    viewer,
     update() {
       synchronizeAudioSources(false);
       synchronizeMaterials(false);
@@ -1531,6 +1624,7 @@ export function createScriptResources({
       resetMaterials();
       lightResources.dispose();
       resetParticles();
+      resetViewer();
       disposed = true;
       for (const texture of textures) texture.dispose();
       textures.clear();

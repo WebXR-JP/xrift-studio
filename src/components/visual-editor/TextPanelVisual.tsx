@@ -85,7 +85,9 @@ export function TextPanelVisual({
     [component, fontUrl],
   );
 
-  return <XriftTextPanel config={config} map={map} />;
+  return (
+    <XriftTextPanel config={config} map={map} componentId={component.id} />
+  );
 }
 
 /**

@@ -503,6 +503,15 @@ export type InteractionTriggerComponent = ComponentBase & {
   interactivityAssetId: string;
   /** Entity IDs the graph's actions write to. Never code. */
   entityReferences: string[];
+  /**
+   * Asset IDs the graph's actions can point a property at — a sky image a
+   * viewer's「風景を変える」button switches to, say.
+   *
+   * Derived from the graph exactly like `entityReferences`, and for the same
+   * reason: it is what tells the compiler to publish an Asset nothing in the
+   * Scene document mentions.
+   */
+  assetReferences: string[];
 };
 
 /** Typed boundary for XRift-specific component schemas registered later. */
@@ -894,6 +903,7 @@ export function createInteractionTriggerComponent(
     enabled: true,
     interactivityAssetId: normalizedAssetId,
     entityReferences: [],
+    assetReferences: [],
   };
 }
 
@@ -3141,6 +3151,7 @@ function cloneSceneComponent(
       entityReferences: component.entityReferences.map(
         (entityId) => entityIdMap[entityId] ?? entityId,
       ),
+      assetReferences: [...(component.assetReferences ?? [])],
     };
   }
   return { ...component, id };

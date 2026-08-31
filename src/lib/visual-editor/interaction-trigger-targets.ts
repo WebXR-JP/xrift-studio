@@ -8,7 +8,7 @@ import {
   type XriftInteractionTargetKind,
 } from "../../../packages/xrift-studio-runtime/src/script/interaction-trigger";
 import type { AssetManifest } from "./asset-manifest";
-import { collectXriftInteractionPrograms } from "./interactivity-graph";
+import { collectXriftInteractionActions } from "./interactivity-graph";
 import type { SceneDocument, SceneEntity } from "./scene-document";
 
 /**
@@ -49,6 +49,7 @@ function componentLabel(
   const siblings = entity.components.filter(
     (candidate) =>
       (targetKind === "audio-source" && candidate.type === "audio-source") ||
+      (targetKind === "text" && candidate.type === "text") ||
       (targetKind === "light" && candidate.type === "light"),
   );
   return siblings.length > 1 ? `${base} ${index + 1}` : base;
@@ -98,7 +99,7 @@ export function collectInteractionTriggerTargets(
           label: XRIFT_INTERACTION_TARGET_LABELS.material,
           properties: getXriftInteractionProperties("material"),
         },
-        ...(["animation", "audio-source", "light", "particle"] as const).map(
+        ...(["animation", "audio-source", "light", "particle", "text"] as const).map(
           (targetKind) => ({
             componentId: "",
             targetKind,
@@ -153,6 +154,7 @@ export function collectInteractionTriggerTargets(
     ];
     let audioIndex = 0;
     let lightIndex = 0;
+    let textIndex = 0;
     for (const component of entity.components) {
       if (component.type === "audio-source") {
         components.push({
@@ -189,6 +191,14 @@ export function collectInteractionTriggerTargets(
           properties: getXriftInteractionProperties("light"),
         });
         lightIndex += 1;
+      } else if (component.type === "text") {
+        components.push({
+          componentId: component.id,
+          targetKind: "text",
+          label: componentLabel(entity, "text", textIndex),
+          properties: getXriftInteractionProperties("text"),
+        });
+        textIndex += 1;
       }
     }
     targets.push({
@@ -204,14 +214,20 @@ export function collectInteractionTriggerTargets(
 }
 
 /**
- * Rewrites each trigger's `entityReferences` from its graph.
+ * Rewrites each trigger's `entityReferences` and `assetReferences` from its
+ * graph.
  *
- * The Component records the Entities its graph writes to, the way a Script
- * Component records the ones it can reach. The list is derived rather than
- * authored, so it cannot drift from the graph, and it is what lets the Editor
+ * The Component records what its graph reaches — the Entities it writes to and
+ * the Assets it can point a property at — the way a Script Component records
+ * the ones it can reach. Both lists are derived rather than authored, so they
+ * cannot drift from the graph, and they are what lets the Editor, the compiler
  * and future Prefab work see the dependency without parsing every Asset.
+ *
+ * It reads every action node rather than walking forward from
+ * `xrift/onInteract`: a graph that starts itself, or one behind
+ * `event/receive`, still needs the Assets it names to be published.
  */
-export function syncInteractionTriggerEntityReferences(
+export function syncInteractionTriggerReferences(
   scene: SceneDocument,
   assets: AssetManifest,
 ): SceneDocument {
@@ -222,33 +238,38 @@ export function syncInteractionTriggerEntityReferences(
       const components = entity.components.map((component) => {
         if (component.type !== "interaction-trigger") return component;
         const asset = assets.assets[component.interactivityAssetId];
-        const references =
+        const actions =
           asset?.kind === "interactivity"
-            ? [
-                ...new Set(
-                  collectXriftInteractionPrograms(asset.extension)
-                    .flatMap((program) =>
-                      program.actions.map((action) => action.entityId),
-                    )
-                    // The Scene stand-in is not an Entity, so it is not a
-                    // dependency the compiler has to keep emitting.
-                    .filter(
-                      (entityId) =>
-                        entityId !== XRIFT_INTERACTION_SCENE_ENTITY_ID,
-                    ),
-                ),
-              ].sort()
+            ? collectXriftInteractionActions(asset.extension)
             : [];
+        const entityReferences = [
+          ...new Set(
+            actions
+              .map((action) => action.entityId)
+              // The Scene stand-in is not an Entity, so it is not a dependency
+              // the compiler has to keep emitting.
+              .filter(
+                (candidate) => candidate !== XRIFT_INTERACTION_SCENE_ENTITY_ID,
+              ),
+          ),
+        ].sort();
+        const assetReferences = [
+          ...new Set(
+            actions.flatMap((action) =>
+              action.value?.kind === "asset" && action.value.value
+                ? [action.value.value]
+                : [],
+            ),
+          ),
+        ].sort();
         if (
-          references.length === component.entityReferences.length &&
-          references.every(
-            (value, index) => component.entityReferences[index] === value,
-          )
+          sameStrings(entityReferences, component.entityReferences) &&
+          sameStrings(assetReferences, component.assetReferences)
         ) {
           return component;
         }
         entityChanged = true;
-        return { ...component, entityReferences: references };
+        return { ...component, entityReferences, assetReferences };
       });
       if (!entityChanged) return [entityId, entity];
       changed = true;
@@ -256,6 +277,17 @@ export function syncInteractionTriggerEntityReferences(
     }),
   );
   return changed ? { ...scene, entities } : scene;
+}
+
+function sameStrings(
+  left: readonly string[],
+  right: readonly string[] | undefined,
+): boolean {
+  return (
+    right !== undefined &&
+    left.length === right.length &&
+    left.every((value, index) => right[index] === value)
+  );
 }
 
 export function findInteractionTriggerTarget(
@@ -293,6 +325,14 @@ export function describeInteractionTriggerAction(
     value: readonly unknown[] | null;
     /** Seconds the change is spread over. 0 or absent is an immediate write. */
     durationSeconds?: number;
+    /**
+     * Name of the Asset an `asset` property points at, already resolved.
+     *
+     * The card shows a name rather than an id, and this module has no Asset
+     * manifest, so the caller that does resolves it. Absent means「未設定」,
+     * which for an Asset property is a real instruction: clear the override.
+     */
+    assetName?: string | null;
   },
 ): string {
   const entity = findInteractionTriggerTarget(targets, action.entityId);
@@ -306,6 +346,11 @@ export function describeInteractionTriggerAction(
   const where = `${entity.name} / ${componentLabelText}`;
   if (action.mode === "toggle") {
     return `${where} の${descriptor.label}を切り替える`;
+  }
+  if (descriptor.kind === "asset") {
+    return action.assetName
+      ? `${where} の${descriptor.label}を「${action.assetName}」にする`
+      : `${where} の${descriptor.label}を元に戻す`;
   }
   const value = formatTriggerValue(descriptor, action.value);
   const seconds = action.durationSeconds ?? 0;
@@ -341,6 +386,12 @@ export function formatTriggerValue(
         typeof first === "number" ? options[first] : options.find((entry) => entry.value === first);
       return option?.label ?? "既定値";
     }
+    case "asset":
+      // The id lives in configuration, not the value socket, so there is
+      // nothing here to format; callers describe it from the Asset's name.
+      return "選んだAsset";
+    case "string":
+      return typeof first === "string" && first.length > 0 ? `「${first}」` : "空の文字";
   }
 }
 
