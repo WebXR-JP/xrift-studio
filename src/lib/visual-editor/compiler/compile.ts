@@ -27,6 +27,7 @@ import {
 import { getBuiltinPrimitiveCreation } from "../creation-catalog";
 import {
   collectInteractivityRuntimeDiagnostics,
+  collectXriftInteractionActions,
   collectXriftInteractionPrograms,
   getKhrInteractivityOnStartAnimationCues,
   planInteractivityAnimationCues,
@@ -714,6 +715,28 @@ function sceneUsesInteractionTriggerRuntime(
       return (
         asset?.kind === "interactivity" &&
         hasXriftInteractionRuntimeWork(asset.extension)
+      );
+    }),
+  );
+}
+
+/**
+ * Whether any graph in the Scene moves the player.
+ *
+ * The player bridge is emitted only where something can use it, the same way
+ * the Scene bridge is: a world with no teleport carries neither the overlay
+ * nor the component.
+ */
+function sceneMovesPlayer(scene: SceneDocument, assets: AssetManifest): boolean {
+  return Object.values(scene.entities).some((entity) =>
+    entity.components.some((component) => {
+      if (component.type !== "interaction-trigger" || !component.enabled) {
+        return false;
+      }
+      const asset = assets.assets[component.interactivityAssetId];
+      if (asset?.kind !== "interactivity") return false;
+      return collectXriftInteractionActions(asset.extension).some(
+        (action) => action.target === "player",
       );
     }),
   );
@@ -1924,6 +1947,15 @@ function renderSceneEnvironment(
       'import { XriftSceneRuntime } from "./xrift-studio/scene-runtime";',
     );
     content.push(registerSceneGraphRuntime(context));
+  }
+  // The player bridge, for graphs that move whoever pressed the button. Play
+  // mounts the same component against the same `useTeleport()`, so a teleport
+  // that works in the editor works after upload.
+  if (sceneMovesPlayer(context.scene, context.assets)) {
+    context.extraImports.add(
+      'import { XriftPlayerRuntime } from "./xrift-studio/player-runtime-host";',
+    );
+    content.push("<XriftPlayerRuntime />");
   }
   registerVegetationWindSupport(settings.vegetation, context);
   const hasVegetationWind = Object.values(context.scene.entities).some((entity) =>

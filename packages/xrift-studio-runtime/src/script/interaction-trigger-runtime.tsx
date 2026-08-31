@@ -45,6 +45,7 @@ import {
   readXriftScenePostprocessingBaseline,
   XRIFT_SCENE_SKYBOX_USER_DATA_KEY,
 } from "./scene-runtime.js";
+import { findXriftPlayerRuntimeBridge } from "./player-runtime.js";
 import {
   getXriftInteractionProperty,
   resolveXriftInteractionEntityId,
@@ -729,6 +730,26 @@ export function createXriftInteractionApplier({
     return found.value;
   };
 
+  /**
+   * Moves the person playing.
+   *
+   * Unlike every other action there is nothing to restore on Stop: a player
+   * who walked somewhere is not an override on authored data, and putting them
+   * back where the graph found them would be a second teleport nobody asked
+   * for. Play discards the player with the rest of the run.
+   */
+  const applyPlayer = (action: XriftInteractionAction) => {
+    if (action.property !== "teleport") return;
+    const value = action.value;
+    if (value?.kind !== "vector3") return;
+    const bridge = findXriftPlayerRuntimeBridge(root);
+    // No bridge means no player to move - an Item preview, or a Scene View
+    // that is not running. Silently doing nothing is right; there is nobody
+    // standing anywhere to move.
+    if (!bridge) return;
+    bridge.teleport({ position: [...value.value] });
+  };
+
   const applyScene = (action: XriftInteractionAction) => {
     const bridge = findXriftSceneRuntimeBridge(root);
     if (!bridge) return;
@@ -1170,6 +1191,10 @@ export function createXriftInteractionApplier({
     apply(action) {
       if (action.target === "scene") {
         applyScene(action);
+        return;
+      }
+      if (action.target === "player") {
+        applyPlayer(action);
         return;
       }
       const target = findEntityObject(root, ownEntityId(action.entityId));

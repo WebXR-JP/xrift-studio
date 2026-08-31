@@ -278,11 +278,36 @@ it through the same runtime bridge:
 | Light | `enabled`, `intensity`, `color` |
 | Text | `enabled`, `text`, `color`, `fontSize`, `fontWeight`, `fontId`, `textAlign`, `lineHeight`, `letterSpacing`, `maxWidth`, `outlineWidth`, `outlineColor` |
 | Scene | `exposure`, `fade`, `fadeColor`, `postprocessing`, `bloom` (+`bloomStrength`, `bloomRadius`, `bloomThreshold`), `ao`, `grading`, `fog` (+`fogColor`, `fogNear`, `fogFar`), `ambient` (+`ambientColor`, `ambientIntensity`), `skybox`, `skyboxIbl`, `skyboxExposure`, `skyboxRotation`, `skyboxImage`, `cameraFov` |
+| Player | `teleport` |
 
-Entity, Transform, Material and Scene belong to the Entity rather than to a
-Component that can appear twice, so they carry no Component id. Scene is
-addressed through a reserved Entity id, because it belongs to no Entity at all
-and an action still needs something in that slot.
+Entity, Transform, Material, Scene and Player belong to the Entity rather than
+to a Component that can appear twice, so they carry no Component id. Scene and
+Player are addressed through reserved Entity ids, because they belong to no
+Entity at all and an action still needs something in that slot.
+
+### The Player target moves whoever pressed the button
+
+`teleport` takes the position the player's feet land on, exactly as a
+SpawnPoint does, and is applied instantly — there is no duration on a trigger
+action, so「ゆっくり移動する」is not what this is.
+
+**It moves the player and leaves the SpawnPoint alone.** Falling out of the
+world still returns to the Scene's SpawnPoint rather than to wherever the last
+teleport put someone: a teleport into a pit has to be recoverable, not a loop.
+Routing teleport through `setSpawnPoint` — which the player already watches —
+would have been less code and would have made that impossible.
+
+Like Scene, it is **client-local**: a graph runs inside each viewer's own
+runtime, so a teleport button moves whoever pressed it and nobody else.
+
+Play and the published world reach the player through the same bridge
+(`player-runtime.ts` for the contract, `player-runtime-host.tsx` for the
+component that fills it in), and both fill it from `useTeleport()`. In a
+published world that is xrift-frontend's implementation; in Play it is the
+Studio player's, which moves the official `PhysicsPlayer`'s capsule directly.
+The one place it does **not** work is a generated project's own `npm run dev`:
+`DevEnvironment` leaves `useTeleport()` at the package's `console.log`
+placeholder, so a teleport there logs and does nothing.
 
 ### The Scene target is this viewer's, and only this viewer's
 

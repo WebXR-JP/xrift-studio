@@ -42,7 +42,8 @@ export type XriftInteractionTargetKind =
   | "particle"
   | "material"
   | "text"
-  | "scene";
+  | "scene"
+  | "player";
 
 /**
  * Stand-in Entity id for Scene-wide targets.
@@ -73,6 +74,21 @@ export const XRIFT_INTERACTION_SCENE_ENTITY_ID = "__xrift_scene__" as const;
  */
 export const XRIFT_INTERACTION_SELF_ENTITY_ID = "__xrift_self__" as const;
 
+/**
+ * Stand-in Entity id for the person playing.
+ *
+ * Like the Scene id, and for the same reason: the player belongs to no Entity
+ * but an action still needs something in the `entity` slot. Also **client-local
+ * in the same way** - a graph runs inside each viewer's own runtime, so
+ *「押したら移動する」moves whoever pressed it and nobody else.
+ *
+ * The runtime reaches the player through the teleport implementation the host
+ * provides, which is xrift-frontend's after upload and Studio's own player in
+ * Play. Both go through `useTeleport()`, so a graph that moves the player here
+ * moves them there.
+ */
+export const XRIFT_INTERACTION_PLAYER_ENTITY_ID = "__xrift_player__" as const;
+
 /** The Entity an action names, with the owner substituted for the sentinel. */
 export function resolveXriftInteractionEntityId(
   entityId: string,
@@ -85,6 +101,7 @@ export function resolveXriftInteractionEntityId(
 
 export const XRIFT_INTERACTION_TARGET_KINDS: readonly XriftInteractionTargetKind[] = [
   "entity",
+  "player",
   "transform",
   "animation",
   "audio-source",
@@ -107,6 +124,7 @@ export const XRIFT_INTERACTION_TARGET_LABELS: Readonly<
   material: "Material",
   text: "Text",
   scene: "Scene（この端末だけ）",
+  player: "プレイヤー（この端末だけ）",
 };
 
 export type XriftInteractionPropertyKind =
@@ -149,6 +167,7 @@ export const XRIFT_INTERACTION_ENTITY_SCOPED_TARGETS: ReadonlySet<string> =
     "transform",
     "material",
     "scene",
+    "player",
   ]);
 
 export function isXriftInteractionEntityScoped(target: string): boolean {
@@ -778,6 +797,15 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     label: "縁取りの色",
     description: "縁取りの色です。値はリニア空間のRGBで保存されます。",
     kind: "color",
+    defaultValue: [0, 0, 0],
+  },
+  {
+    target: "player",
+    name: "teleport",
+    label: "テレポート",
+    description:
+      "押した人をこの座標へ移動させます。SpawnPointと同じで、足が着く位置を指定します。落ちたときに戻る場所は変わりません。",
+    kind: "vector3",
     defaultValue: [0, 0, 0],
   },
 ];

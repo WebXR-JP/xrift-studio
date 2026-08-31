@@ -33,6 +33,7 @@ import {
 } from "../../../packages/xrift-studio-runtime/src/script/audio-source";
 import { XriftScriptLight } from "../../../packages/xrift-studio-runtime/src/script/light";
 import { PlayInteractionHost } from "./PlayInteractionHost";
+import { XriftPlayerRuntime } from "../../../packages/xrift-studio-runtime/src/script/player-runtime-host";
 import {
   emitXriftInteraction,
   XriftInteractionTriggerRuntime,
@@ -6081,6 +6082,11 @@ export function SceneViewport({
               mode={worldPlayActive ? "crosshair" : "pointer"}
               onAimChange={setPlayAimHit}
             />
+            {/* Publishes the running player so an Interactivity Graph can move
+                them. Inside the provider because it reads the teleport
+                implementation from it, and the published world mounts the same
+                component for the same reason. */}
+            <XriftPlayerRuntime enabled={worldPlayActive} />
             <ScriptViewportProvider value={scriptRuntime ?? null}>
             <XriftScriptRoot pressedKeys={pressedKeysRef.current}>
             <Fragment key={editorMode}>

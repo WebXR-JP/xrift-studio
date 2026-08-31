@@ -9,6 +9,8 @@ import scriptParticleSource from "../../../../packages/xrift-studio-runtime/src/
 import scriptAnimationSource from "../../../../packages/xrift-studio-runtime/src/script/animation.ts?raw";
 import scriptAnimationMixerSource from "../../../../packages/xrift-studio-runtime/src/script/animation-mixer.ts?raw";
 import sceneRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/scene-runtime.tsx?raw";
+import playerRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/player-runtime.ts?raw";
+import playerRuntimeHostSource from "../../../../packages/xrift-studio-runtime/src/script/player-runtime-host.tsx?raw";
 import interactivityGraphSource from "../../../../packages/xrift-studio-runtime/src/interactivity/graph.ts?raw";
 import interactivityValueSource from "../../../../packages/xrift-studio-runtime/src/interactivity/value.ts?raw";
 import interactivityHostSource from "../../../../packages/xrift-studio-runtime/src/interactivity/host.ts?raw";
@@ -61,6 +63,8 @@ export const INTERACTION_TRIGGER_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/int
 export const ANIMATION_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/animation-runtime.ts`;
 export const ANIMATION_MIXER_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/animation-mixer-runtime.ts`;
 export const SCENE_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/scene-runtime.tsx`;
+export const PLAYER_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/player-runtime.ts`;
+export const PLAYER_RUNTIME_HOST_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/player-runtime-host.tsx`;
 export const INTERACTIVITY_GRAPH_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interactivity-graph.ts`;
 export const INTERACTIVITY_VALUE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interactivity-value.ts`;
 export const INTERACTIVITY_HOST_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interactivity-host.ts`;
@@ -374,6 +378,8 @@ const RUNTIME_SIBLING_OVERLAY_MODULES: Readonly<Record<string, string>> = {
   animation: "animation-runtime",
   "animation-mixer": "animation-mixer-runtime",
   "scene-runtime": "scene-runtime",
+  "player-runtime": "player-runtime",
+  "player-runtime-host": "player-runtime-host",
   "text-runtime": "text-runtime",
   host: "script-host",
 };
@@ -439,6 +445,8 @@ export function createInteractivityRuntimeOverlayFiles(): CompilerOverlayFile[] 
     [ANIMATION_RUNTIME_OVERLAY_PATH, scriptAnimationSource, "script"],
     [ANIMATION_MIXER_OVERLAY_PATH, scriptAnimationMixerSource, "script"],
     [SCENE_RUNTIME_OVERLAY_PATH, sceneRuntimeSource, "script"],
+    [PLAYER_RUNTIME_OVERLAY_PATH, playerRuntimeSource, "script"],
+    [PLAYER_RUNTIME_HOST_OVERLAY_PATH, playerRuntimeHostSource, "script"],
   ];
   return entries.map(([relativePath, content, scope]) => ({
     relativePath,

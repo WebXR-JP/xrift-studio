@@ -13,6 +13,8 @@ import {
   INTERACTIVITY_VALUE_OVERLAY_PATH,
   ANIMATION_RUNTIME_OVERLAY_PATH,
   ANIMATION_MIXER_OVERLAY_PATH,
+  PLAYER_RUNTIME_HOST_OVERLAY_PATH,
+  PLAYER_RUNTIME_OVERLAY_PATH,
   SCENE_RUNTIME_OVERLAY_PATH,
   SCRIPT_AUDIO_SOURCE_OVERLAY_PATH,
   SCRIPT_LIGHT_OVERLAY_PATH,
@@ -34,6 +36,7 @@ import {
   setInteractivityTriggerActionValue,
   validateKhrInteractivityExtension,
   XRIFT_INTERACTION_OPERATIONS,
+  XRIFT_INTERACTION_PLAYER_ENTITY_ID,
   XRIFT_INTERACTION_SCENE_ENTITY_ID,
   XRIFT_INTERACTION_SELF_ENTITY_ID,
   getXriftInteractionProperties,
@@ -77,6 +80,7 @@ export function runInteractionTriggerFixtureAssertions(): void {
   assertSceneTargetCoversTheSettingsPanel();
   assertAssetValuedActionRecordsItsDependency();
   assertPublishedWorldCarriesTheCompositorForAGraph();
+  assertPlayerTeleportReachesThePublishedWorld();
   assertPublishedWorldRunsTheTrigger();
   assertPublishedWorldRunsAGraphNobodyPresses();
   assertPublishedWorldOmitsTheUnusedInteractionEmitter();
@@ -461,6 +465,101 @@ function assertAssetValuedActionRecordsItsDependency(): void {
  * Otherwise「画質を上げる」publishes, validates, and does nothing — which is
  * worse than refusing to publish it.
  */
+/**
+ * A graph that moves the player has to move them after upload too.
+ *
+ * The player is reached through a bridge the host parks on the scene, so the
+ * published world needs both the bridge module and the component that fills it
+ * in - and it must not record the player stand-in as an Entity dependency,
+ * because there is no such Entity for the compiler to emit.
+ */
+function assertPlayerTeleportReachesThePublishedWorld(): void {
+  const documents = buildDocuments();
+  const graphAsset = documents.assets.assets[GRAPH_ASSET_ID];
+  if (graphAsset?.kind !== "interactivity") {
+    throw new Error("the fixture's Interactivity Asset is missing");
+  }
+  const extension = cloneKhrInteractivityExtension(graphAsset.extension);
+  const graph = graphOf(extension);
+  const move = appendInteractivityOperation(
+    graph,
+    XRIFT_INTERACTION_OPERATIONS.setProperty,
+    { x: 1000, y: 480 },
+  );
+  assert(
+    configureInteractivityTriggerAction(graph, move, {
+      entityId: XRIFT_INTERACTION_PLAYER_ENTITY_ID,
+      componentId: "",
+      targetKind: "player",
+      property: "teleport",
+    }),
+    "the teleport action could not be targeted at the player",
+  );
+  const parsed = collectXriftInteractionActions(extension).find(
+    (action) => action.target === "player",
+  );
+  assert(
+    parsed?.property === "teleport" && parsed.value?.kind === "vector3",
+    "the teleport action did not parse as a vector3 write on the player",
+  );
+
+  const assets = {
+    ...documents.assets,
+    assets: {
+      ...documents.assets.assets,
+      [GRAPH_ASSET_ID]: { ...graphAsset, extension },
+    },
+  };
+  const synced = syncInteractionTriggerReferences(
+    documents.scenes.scene_main,
+    assets,
+  );
+  for (const entity of Object.values(synced.entities)) {
+    for (const component of entity.components) {
+      if (component.type !== "interaction-trigger") continue;
+      assert(
+        !(component.entityReferences ?? []).includes(
+          XRIFT_INTERACTION_PLAYER_ENTITY_ID,
+        ),
+        "the player stand-in was recorded as an Entity dependency",
+      );
+    }
+  }
+
+  const result = compileVisualProject(
+    {
+      ...documents,
+      scenes: { ...documents.scenes, scene_main: synced },
+      assets,
+    },
+    { generatedAt: "2026-09-01T00:00:00.000Z" },
+  );
+  const world = result.overlayFiles.find(
+    (file) => file.relativePath === "src/World.tsx",
+  )?.content;
+  assert(Boolean(world), "World.tsx was not emitted");
+  assert(
+    world!.includes("<XriftPlayerRuntime />"),
+    "the player bridge was left out of a world whose graph teleports",
+  );
+  for (const path of [
+    PLAYER_RUNTIME_OVERLAY_PATH,
+    PLAYER_RUNTIME_HOST_OVERLAY_PATH,
+  ]) {
+    assert(
+      result.overlayFiles.some((file) => file.relativePath === path),
+      `the published world is missing ${path}`,
+    );
+  }
+  const host = result.overlayFiles.find(
+    (file) => file.relativePath === PLAYER_RUNTIME_HOST_OVERLAY_PATH,
+  )?.content;
+  assert(
+    (host ?? "").includes("useTeleportContext"),
+    "the emitted player bridge does not go through the platform's teleport",
+  );
+}
+
 function assertPublishedWorldCarriesTheCompositorForAGraph(): void {
   const documents = buildDocuments();
   const graphAsset = documents.assets.assets[GRAPH_ASSET_ID];

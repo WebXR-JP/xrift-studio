@@ -1,6 +1,7 @@
 import {
   getXriftInteractionProperties,
   getXriftInteractionProperty,
+  XRIFT_INTERACTION_PLAYER_ENTITY_ID,
   XRIFT_INTERACTION_SCENE_ENTITY_ID,
   XRIFT_INTERACTION_SELF_ENTITY_ID,
   XRIFT_INTERACTION_TARGET_LABELS,
@@ -119,6 +120,19 @@ export function collectInteractionTriggerTargets(
           targetKind: "scene",
           label: XRIFT_INTERACTION_TARGET_LABELS.scene,
           properties: getXriftInteractionProperties("scene"),
+        },
+      ],
+    },
+    {
+      entityId: XRIFT_INTERACTION_PLAYER_ENTITY_ID,
+      name: "プレイヤー",
+      path: "押した人",
+      components: [
+        {
+          componentId: "",
+          targetKind: "player",
+          label: XRIFT_INTERACTION_TARGET_LABELS.player,
+          properties: getXriftInteractionProperties("player"),
         },
       ],
     },
@@ -246,10 +260,12 @@ export function syncInteractionTriggerReferences(
           ...new Set(
             actions
               .map((action) => action.entityId)
-              // The Scene stand-in is not an Entity, so it is not a dependency
-              // the compiler has to keep emitting.
+              // The Scene and player stand-ins are not Entities, so they are
+              // not dependencies the compiler has to keep emitting.
               .filter(
-                (candidate) => candidate !== XRIFT_INTERACTION_SCENE_ENTITY_ID,
+                (candidate) =>
+                  candidate !== XRIFT_INTERACTION_SCENE_ENTITY_ID &&
+                  candidate !== XRIFT_INTERACTION_PLAYER_ENTITY_ID,
               ),
           ),
         ].sort();

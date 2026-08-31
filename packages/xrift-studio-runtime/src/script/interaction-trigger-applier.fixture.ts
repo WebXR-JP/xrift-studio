@@ -16,10 +16,16 @@ import {
   createXriftParticleRuntimeBridge,
 } from "./particle.js";
 import {
+  XRIFT_PLAYER_RUNTIME_USER_DATA_KEY,
+  type XriftPlayerRuntimeBridge,
+  type XriftPlayerTeleportDestination,
+} from "./player-runtime.js";
+import {
   XRIFT_SCENE_RUNTIME_USER_DATA_KEY,
   createXriftSceneRuntimeBridge,
 } from "./scene-runtime.js";
 import {
+  XRIFT_INTERACTION_PLAYER_ENTITY_ID,
   XRIFT_INTERACTION_SCENE_ENTITY_ID,
   XRIFT_INTERACTION_SELF_ENTITY_ID,
 } from "./interaction-trigger.js";
@@ -359,7 +365,38 @@ export async function runInteractionTriggerApplierFixtureAssertions(): Promise<v
   assert(fadedTo === 1, "a Scene fade did not reach the Scene bridge");
   assert(exposedTo === 4, "a Scene exposure did not reach the Scene bridge");
 
+  // The player is reached through its own bridge on the Scene root, for the
+  // same reason the Scene is: there is no Entity to find. Nothing is restored
+  // on disposal - a player who was moved is standing somewhere, not holding an
+  // override on authored data.
+  const teleported: XriftPlayerTeleportDestination[] = [];
+  (root.userData as Record<string, unknown>)[
+    XRIFT_PLAYER_RUNTIME_USER_DATA_KEY
+  ] = {
+    teleport: (destination: XriftPlayerTeleportDestination) => {
+      teleported.push(destination);
+    },
+  } satisfies XriftPlayerRuntimeBridge;
+  applier.apply(
+    action({
+      entityId: XRIFT_INTERACTION_PLAYER_ENTITY_ID,
+      componentId: null,
+      target: "player",
+      property: "teleport",
+      value: { kind: "vector3", value: [4, 0, -7] },
+    }),
+  );
+  assert(
+    teleported.length === 1 &&
+      teleported[0]?.position.join(",") === "4,0,-7",
+    "a player teleport did not reach the player bridge",
+  );
+
   applier.dispose();
+  assert(
+    teleported.length === 1,
+    "disposing the trigger moved the player a second time",
+  );
   assert(
     lampMesh.material === shared,
     "a Material write survived the trigger's disposal",
