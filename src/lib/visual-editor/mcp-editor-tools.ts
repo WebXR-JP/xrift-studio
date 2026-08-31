@@ -3885,6 +3885,22 @@ function updateComponent(
           }
         }
       }
+      const fontAssetId = patch.fontAssetId;
+      if (fontAssetId !== undefined) {
+        if (typeof fontAssetId !== "string") {
+          invalidArgument("patch.fontAssetId", "string");
+        }
+        const fontAsset = fontAssetId
+          ? context.bundle.assets.assets[fontAssetId]
+          : undefined;
+        if (fontAssetId && fontAsset?.kind !== "font") {
+          throw new XriftMcpEditorToolError(
+            fontAsset ? "ASSET_KIND_MISMATCH" : "ASSET_NOT_FOUND",
+            "patch.fontAssetIdには存在するFont Assetを指定してください。空文字で同梱書体へ戻せます",
+            { fontAssetId, actualKind: fontAsset?.kind },
+          );
+        }
+      }
       scene = updateTextComponent(
         context.bundle.scene,
         entityId,
@@ -7770,6 +7786,7 @@ const TEXT_PATCH_KEYS = patchKeysOf<TextPatch>()([
   "outlineColor",
   "fontId",
   "fontWeight",
+  "fontAssetId",
   "textAlign",
   "lineHeight",
   "letterSpacing",

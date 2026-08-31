@@ -124,6 +124,7 @@ export const XRIFT_MCP_TOOLS = [
   { name: "configure_interactivity_trigger_action", surface: "document" },
 
   { name: "import_audio_asset", surface: "local-asset" },
+  { name: "import_font_asset", surface: "local-asset" },
   { name: "import_texture_asset", surface: "local-asset" },
   { name: "import_model_asset", surface: "local-asset" },
   { name: "import_skybox_asset", surface: "local-asset" },

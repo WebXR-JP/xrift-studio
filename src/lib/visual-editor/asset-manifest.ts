@@ -660,6 +660,42 @@ export type AudioAsset = AssetBase<"audio"> & {
   importMetadata: AudioImportMetadata;
 };
 
+/** Font container troika can parse. WOFF2 is rejected at import. */
+export type FontSourceFormat = "ttf" | "otf" | "woff";
+
+export type FontMimeType = "font/ttf" | "font/otf" | "font/woff";
+
+/** The one mime type each format is stored as; alternates normalise to these. */
+export const FONT_MIME_BY_FORMAT = {
+  ttf: "font/ttf",
+  otf: "font/otf",
+  woff: "font/woff",
+} as const satisfies Record<FontSourceFormat, FontMimeType>;
+
+export type FontImportMetadata = {
+  sourceFormat: FontSourceFormat;
+  mimeType: FontMimeType;
+  byteLength: number;
+  /**
+   * Family name read from the file's `name` table, when it could be read.
+   *
+   * Only a label: the file itself is what a Text renders with, so a font whose
+   * name table cannot be parsed is still usable.
+   */
+  familyName?: string;
+};
+
+/**
+ * A font file the author imported, rendered by Text through its own file.
+ *
+ * Studio ships one catalog family; a project font covers everything else. It is
+ * copied into the published world like any other project Asset, so the world
+ * still reads its lettering from its own files rather than a CDN.
+ */
+export type FontAsset = AssetBase<"font"> & {
+  importMetadata: FontImportMetadata;
+};
+
 export type TemplateAsset = AssetBase<"template"> & {
   /** Project-relative scene-fragment document referenced by this template. */
   templatePath: string;
@@ -716,6 +752,7 @@ export type SceneAsset =
   | ParticleAsset
   | InteractivityAsset
   | AudioAsset
+  | FontAsset
   | ScriptAsset
   | ShaderAsset
   | TemplateAsset;
@@ -799,6 +836,14 @@ export function getAudioAsset(
 ): AudioAsset | undefined {
   const asset = manifest.assets[assetId];
   return asset?.kind === "audio" ? asset : undefined;
+}
+
+export function getFontAsset(
+  manifest: AssetManifest,
+  assetId: string,
+): FontAsset | undefined {
+  const asset = manifest.assets[assetId];
+  return asset?.kind === "font" ? asset : undefined;
 }
 
 export function getGeometryAsset(

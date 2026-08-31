@@ -373,6 +373,7 @@ const IMPORT_RESOURCE_KIND: Readonly<
   model: "model",
   skybox: "skybox",
   audio: "audio",
+  font: "font",
   shader: "shader",
 };
 // Inspectorの削除通知で使う表示名。Component種別のidをそのまま出さない。
@@ -3469,44 +3470,55 @@ export function VisualEditorPrototype({
         if (localAssetTool) {
           const args = request.arguments;
           const isAudioImport = request.tool === "import_audio_asset";
+          const isFontImport = request.tool === "import_font_asset";
           const isModelImport = request.tool === "import_model_asset";
           const isSkyboxImport = request.tool === "import_skybox_asset";
           const importedKind = isAudioImport
             ? "audio"
-            : isModelImport
-              ? "model"
-              : "texture";
+            : isFontImport
+              ? "font"
+              : isModelImport
+                ? "model"
+                : "texture";
           const expectedClassificationKind = isSkyboxImport
             ? "skybox"
             : importedKind;
           const assetLabel = isAudioImport
             ? "Audio"
-            : isModelImport
-              ? "Model"
-              : isSkyboxImport
-                ? "HDRI"
-                : "Texture";
+            : isFontImport
+              ? "Font"
+              : isModelImport
+                ? "Model"
+                : isSkyboxImport
+                  ? "HDRI"
+                  : "Texture";
           const sourceRejectedCode = isAudioImport
             ? "AUDIO_SOURCE_REJECTED"
-            : isModelImport
-              ? "MODEL_SOURCE_REJECTED"
-              : isSkyboxImport
-                ? "SKYBOX_SOURCE_REJECTED"
-                : "TEXTURE_SOURCE_REJECTED";
+            : isFontImport
+              ? "FONT_SOURCE_REJECTED"
+              : isModelImport
+                ? "MODEL_SOURCE_REJECTED"
+                : isSkyboxImport
+                  ? "SKYBOX_SOURCE_REJECTED"
+                  : "TEXTURE_SOURCE_REJECTED";
           const importRejectedCode = isAudioImport
             ? "AUDIO_IMPORT_REJECTED"
-            : isModelImport
-              ? "MODEL_IMPORT_REJECTED"
-              : isSkyboxImport
-                ? "SKYBOX_IMPORT_REJECTED"
-                : "TEXTURE_IMPORT_REJECTED";
+            : isFontImport
+              ? "FONT_IMPORT_REJECTED"
+              : isModelImport
+                ? "MODEL_IMPORT_REJECTED"
+                : isSkyboxImport
+                  ? "SKYBOX_IMPORT_REJECTED"
+                  : "TEXTURE_IMPORT_REJECTED";
           const importFailedCode = isAudioImport
             ? "AUDIO_IMPORT_FAILED"
-            : isModelImport
-              ? "MODEL_IMPORT_FAILED"
-              : isSkyboxImport
-                ? "SKYBOX_IMPORT_FAILED"
-                : "TEXTURE_IMPORT_FAILED";
+            : isFontImport
+              ? "FONT_IMPORT_FAILED"
+              : isModelImport
+                ? "MODEL_IMPORT_FAILED"
+                : isSkyboxImport
+                  ? "SKYBOX_IMPORT_FAILED"
+                  : "TEXTURE_IMPORT_FAILED";
           const sourceBundle = bundleRef.current;
           assertMcpExternalStoreWrite(args, {
             bundle: sourceBundle,
@@ -3546,7 +3558,8 @@ export function VisualEditorPrototype({
               { folderId },
             );
           }
-          const importSettings = isAudioImport || isModelImport || isSkyboxImport
+          const importSettings =
+            isAudioImport || isFontImport || isModelImport || isSkyboxImport
             ? undefined
             : mcpTextureImportSettingsPatch(
                 args.importSettings ?? {},
@@ -3567,9 +3580,11 @@ export function VisualEditorPrototype({
             try {
               source = isAudioImport
                 ? await tauri.readLocalAudioImportSource(sourcePath)
-                : isModelImport
-                  ? await tauri.readLocalModelImportSource(sourcePath)
-                  : await tauri.readLocalTextureImportSource(sourcePath);
+                : isFontImport
+                  ? await tauri.readLocalFontImportSource(sourcePath)
+                  : isModelImport
+                    ? await tauri.readLocalModelImportSource(sourcePath)
+                    : await tauri.readLocalTextureImportSource(sourcePath);
             } catch {
               throw new XriftMcpEditorToolError(
                 sourceRejectedCode,
@@ -3660,6 +3675,7 @@ export function VisualEditorPrototype({
             );
             if (
               duplicate?.kind === "audio" ||
+              duplicate?.kind === "font" ||
               duplicate?.kind === "model" ||
               duplicate?.kind === "texture"
             ) {
@@ -9526,7 +9542,7 @@ export function VisualEditorPrototype({
     if (unsupported.length > 0) {
       const names = unsupported.slice(0, 3).map((file) => file.name).join("、");
       setImportError(
-        `${names}${unsupported.length > 3 ? " ほか" : ""} は対象外です。Unity、Three.js Editor対応モデル、画像、HDR / EXR、MP3 / WAV、GLSL（.glsl / .vert / .frag）に対応します。`,
+        `${names}${unsupported.length > 3 ? " ほか" : ""} は対象外です。Unity、Three.js Editor対応モデル、画像、HDR / EXR、MP3 / WAV、フォント（.ttf / .otf / .woff）、GLSL（.glsl / .vert / .frag）に対応します。`,
       );
     } else {
       setImportError(null);

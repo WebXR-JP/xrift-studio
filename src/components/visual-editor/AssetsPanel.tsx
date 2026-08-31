@@ -100,6 +100,7 @@ const KIND_FOLDERS: BrowserFolder[] = [
   { id: "folder-materials", name: "Materials", icon: "material", kind: "material" },
   { id: "folder-textures", name: "Textures", icon: "texture", kind: "texture" },
   { id: "folder-audio", name: "Audio", icon: "audio", kind: "audio" },
+  { id: "folder-fonts", name: "Fonts", icon: "font", kind: "font" },
   { id: "folder-particles", name: "Particles", icon: "particle", kind: "particle" },
   { id: "folder-interactivity", name: "Interactivity", icon: "asset", kind: "interactivity" },
   { id: "folder-scripts", name: "Scripts", icon: "script", kind: "script" },
@@ -1003,6 +1004,8 @@ function ImportQueueEntry({
         ? EDITOR_ICONS.texture
           : entry.resourceKind === "audio"
             ? EDITOR_ICONS.audio
+          : entry.resourceKind === "font"
+            ? EDITOR_ICONS.font
           : entry.resourceKind === "unity-package"
             ? EDITOR_ICONS.prefab
           : entry.resourceKind === "shader"
@@ -1056,6 +1059,8 @@ function ImportQueueEntry({
               ? "HDRI Texture 1件・Skyboxへ設定済み"
               : entry.resourceKind === "audio"
                 ? "Audio Asset 1件"
+              : entry.resourceKind === "font"
+                ? "Font Asset 1件"
               : entry.resourceKind === "shader"
                 ? "GLSL Shader Asset 1件"
                 : `Material ${entry.result.materialCount}件・Texture ${entry.result.textureCount}件`}

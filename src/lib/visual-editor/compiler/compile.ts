@@ -5040,6 +5040,7 @@ function renderText(
     )};`,
   );
   const backgroundTexture = resolveTextBackgroundTexture(entity, text, context);
+  const projectFont = resolveTextProjectFont(entity, text, context);
   const componentName = generatedIdentifier(
     "CompiledTextPanel",
     `${entity.id}:${text.id}`,
@@ -5052,16 +5053,69 @@ function renderText(
   const props = [
     `config={${configName}}`,
     "fontBaseUrl={baseUrl}",
+    ...(projectFont ? ["fontUrl={textPanelFontUrl}"] : []),
     ...(backgroundTexture ? ["map={textPanelMap}"] : []),
   ].join(" ");
   context.supportDeclarations.set(
     `text-panel:${componentName}`,
     `const ${componentName}: FC = () => {
   const { baseUrl } = useXRift();
-${backgroundTexture?.lines ?? ""}  return <XriftTextPanel ${props} />;
+${projectFont?.lines ?? ""}${backgroundTexture?.lines ?? ""}  return <XriftTextPanel ${props} />;
 };`,
   );
   return `<${componentName} />`;
+}
+
+/**
+ * Resolves the imported font file a Text renders with.
+ *
+ * The file is copied into the world like any other project Asset, so the
+ * published world reads its lettering from its own files. A reference that
+ * cannot be published is reported and dropped: the Text then ships with the
+ * bundled catalog face rather than disappearing.
+ */
+function resolveTextProjectFont(
+  entity: SceneEntity,
+  text: TextComponent,
+  context: CompileContext,
+): { lines: string } | null {
+  const fontAssetId = text.fontAssetId?.trim();
+  if (!fontAssetId) return null;
+  const asset = context.assets.assets[fontAssetId];
+  if (asset?.kind !== "font") {
+    addDiagnostic(context, {
+      severity: "warning",
+      code: "text-font-asset-missing",
+      message:
+        "Textが参照するFont Assetが見つからないため、同梱の書体で出力します",
+      sceneId: context.scene.sceneId,
+      entityId: entity.id,
+      componentId: text.id,
+      assetId: fontAssetId,
+      fieldPath: "fontAssetId",
+    });
+    return null;
+  }
+  context.referencedAssetIds.add(asset.id);
+  const runtimeUrl = context.assetRuntimeUrls.get(asset.id);
+  if (!runtimeUrl) {
+    addDiagnostic(context, {
+      severity: "warning",
+      code: "text-font-asset-unsupported",
+      message:
+        "Font Assetを公開用にコピーできないため、同梱の書体で出力します",
+      sceneId: context.scene.sceneId,
+      entityId: entity.id,
+      componentId: text.id,
+      assetId: asset.id,
+      fieldPath: "fontAssetId",
+    });
+    return null;
+  }
+  const assetPath = registerAssetUrl(asset, runtimeUrl, context);
+  return {
+    lines: `  const textPanelFontUrl = useCompiledAssetUrl(${assetPath});\n`,
+  };
 }
 
 /**
@@ -5428,7 +5482,7 @@ function diagnoseUnsupportedAssets(
     if (diagnosed.has(asset.id)) continue;
     if (
       (asset.kind === "template" && !isPrefabAsset(asset)) ||
-      ((asset.kind === "texture" || asset.kind === "skybox" || asset.kind === "model" || asset.kind === "audio") &&
+      ((asset.kind === "texture" || asset.kind === "skybox" || asset.kind === "model" || asset.kind === "audio" || asset.kind === "font") &&
         !isAssetSupportedByCompiler(asset))
     ) {
       diagnostics.push(
@@ -5756,6 +5810,8 @@ function isAllowedStaticAssetSource(asset: SceneAsset): boolean {
   if (asset.kind === "skybox") return ["hdr", "exr", "png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"].includes(extension);
   if (asset.kind === "audio")
     return ["mp3", "wav", "ogg", "flac", "m4a", "webm"].includes(extension);
+  // troika parses these three and rejects WOFF2, which import already refuses.
+  if (asset.kind === "font") return ["ttf", "otf", "woff"].includes(extension);
   return false;
 }
 
@@ -5770,6 +5826,7 @@ function isAssetSupportedByCompiler(asset: SceneAsset): boolean {
   }
   if (asset.kind === "model") return true;
   if (asset.kind === "audio") return true;
+  if (asset.kind === "font") return true;
   if (asset.kind === "skybox") return ["hdr", "exr", "png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"].includes(fileExtension(asset.source.relativePath));
   // Textureの最大解像度・圧縮設定は、原本を書き換えなくても公開時に適用できる。
   // 未反映であることは公開を止める理由にならない。適用できない形式（SVG / KTX2 /
@@ -5795,6 +5852,7 @@ function assetPurpose(asset: SceneAsset): AssetCopyPlanEntry["purpose"] {
     asset.kind === "skybox" ||
     asset.kind === "model" ||
     asset.kind === "audio" ||
+    asset.kind === "font" ||
     asset.kind === "particle"
   ) return asset.kind;
   if (asset.kind === "template") return "prefab";
