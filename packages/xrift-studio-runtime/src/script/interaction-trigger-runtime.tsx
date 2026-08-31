@@ -47,6 +47,11 @@ import {
 } from "./scene-runtime.js";
 import { findXriftPlayerRuntimeBridge } from "./player-runtime.js";
 import {
+  findXriftInstanceStateRuntimeBridge,
+  xriftSharedActionStateId,
+} from "./instance-state-runtime.js";
+import { collectXriftInteractionActions } from "./interaction-trigger.js";
+import {
   getXriftInteractionProperty,
   resolveXriftInteractionEntityId,
   XRIFT_INTERACTION_SELF_ENTITY_ID,
@@ -282,6 +287,15 @@ export type XriftInteractionApplier = {
     targetKind: XriftInteractionTargetKind;
     property: string;
   }): XriftInteractionValue | null;
+  /**
+   * Broadcasts what an action changed to everyone else in the instance.
+   *
+   * Separate from `apply` because the two answer different questions: `apply`
+   * is what this viewer sees, `share` is what the room agrees on. An action
+   * that is not shared never reaches this, and a runtime with no instance
+   * bridge - an Item preview, a Scene View - drops it rather than failing.
+   */
+  share(action: XriftInteractionAction): void;
   /** Releases every override this trigger owns, as Play Stop and unmount do. */
   dispose(): void;
 };
@@ -1233,6 +1247,24 @@ export function createXriftInteractionApplier({
       }
       applyAudioSource(target, action);
     },
+    share(action) {
+      const bridge = findXriftInstanceStateRuntimeBridge(root);
+      // No bridge means no room to tell: an Item preview, or a Scene View that
+      // is not running. The local write already happened, so nothing is lost.
+      if (!bridge) return;
+      if (!action.value || action.value.kind === "linked") return;
+      bridge.send(
+        xriftSharedActionStateId({
+          // Resolved, not the sentinel: `__xrift_self__` names a different
+          // Entity in every graph that uses it, and one id must mean one thing.
+          entityId: ownEntityId(action.entityId),
+          componentId: action.componentId,
+          targetKind: action.target,
+          property: action.property,
+        }),
+        { value: action.value },
+      );
+    },
     dispose() {
       // Overrides are runtime-only, exactly like a Script's: leaving them
       // applied after Stop would show values the document never had.
@@ -1421,6 +1453,7 @@ export function createXriftInteractionHost(
         target: descriptor.target,
         property: target.property,
         value: { kind: "asset", value: assetId },
+        shared: target.shared === true,
       });
       return true;
     },
@@ -1435,6 +1468,7 @@ export function createXriftInteractionHost(
         target: descriptor.target,
         property: target.property,
         value: { kind: "string", value: text },
+        shared: target.shared === true,
       });
       return true;
     },
@@ -1443,15 +1477,21 @@ export function createXriftInteractionHost(
       if (!descriptor) return false;
       const next = toInteractionValue(descriptor, value);
       if (!next) return false;
-      applier.apply({
+      const action = {
         nodeIndex: -1,
-        mode: "set",
+        mode: "set" as const,
         entityId: target.entityId,
         componentId: target.componentId,
         target: descriptor.target,
         property: target.property,
         value: next,
-      });
+        shared: target.shared === true,
+      };
+      // Applied here as well as broadcast: the person who pressed should not
+      // wait for a round trip to see their own button work, and the value they
+      // send is the one everyone converges on anyway.
+      applier.apply(action);
+      if (target.shared) applier.share(action);
       return true;
     },
   };
@@ -1558,6 +1598,55 @@ export function XriftInteractionTriggerRuntime({
       for (const entry of engines) entry.engine.interact();
     });
   }, [engines, entityId]);
+
+  /*
+   * What the room already agrees on, and what it agrees on next.
+   *
+   * A shared action is applied here rather than by re-running the graph: the
+   * flow belongs to the person who pressed, and replaying it on every viewer
+   * would fire everything else that flow does - a sound, a second write, a
+   * delay - once per person in the room.
+   *
+   * The same path serves a late joiner, which is the whole reason the value
+   * travels as state rather than as an event: a door opened before someone
+   * arrived is still open when they walk in.
+   */
+  const sharedActions = useMemo(() => {
+    const byStateId = new Map<string, XriftInteractionAction>();
+    for (const action of collectXriftInteractionActions(graph)) {
+      if (!action.shared) continue;
+      byStateId.set(
+        xriftSharedActionStateId({
+          entityId: resolveXriftInteractionEntityId(action.entityId, entityId),
+          componentId: action.componentId,
+          targetKind: action.target,
+          property: action.property,
+        }),
+        action,
+      );
+    }
+    return byStateId;
+  }, [entityId, graph]);
+
+  useEffect(() => {
+    if (!playing || sharedActions.size === 0) return;
+    const bridge = findXriftInstanceStateRuntimeBridge(scene);
+    if (!bridge) return;
+    const applyShared = (stateId: string, payload: { value: unknown }) => {
+      const action = sharedActions.get(stateId);
+      if (!action) return;
+      const value = payload.value as XriftInteractionAction["value"];
+      if (!value || value.kind === "linked") return;
+      // The arriving value, not the authored one: a toggle that flipped to
+      // `true` has to land as `true` everywhere, or each viewer flips its own
+      // copy and the room ends up in two states.
+      applier.apply({ ...action, mode: "set", value });
+    };
+    for (const [stateId, payload] of bridge.entries()) {
+      applyShared(stateId, payload);
+    }
+    return bridge.subscribe(applyShared);
+  }, [applier, playing, scene, sharedActions]);
 
   return null;
 }

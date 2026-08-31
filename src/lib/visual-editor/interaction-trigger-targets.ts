@@ -343,6 +343,8 @@ export function describeInteractionTriggerAction(
     value: readonly unknown[] | null;
     /** Seconds the change is spread over. 0 or absent is an immediate write. */
     durationSeconds?: number;
+    /** Marked as the room's change rather than the presser's. */
+    shared?: boolean;
     /**
      * Name of the Asset an `asset` property points at, already resolved.
      *
@@ -365,7 +367,9 @@ export function describeInteractionTriggerAction(
   // Who sees it is part of what the action does, so it is part of the sentence
   // rather than a note somewhere else. A door that opens for one person is a
   // different feature from a door that opens.
-  const scope = ` · ${XRIFT_INTERACTION_SCOPE_LABELS[getXriftInteractionScope(descriptor.target)]}`;
+  const scope = action.shared
+    ? " · みんなに見せる"
+    : ` · ${XRIFT_INTERACTION_SCOPE_LABELS[getXriftInteractionScope(descriptor.target)]}`;
   if (action.mode === "toggle") {
     return `${where} の${descriptor.label}を切り替える${scope}`;
   }

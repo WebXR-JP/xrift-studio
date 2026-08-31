@@ -735,6 +735,22 @@ function sceneMovesPlayer(scene: SceneDocument, assets: AssetManifest): boolean 
   );
 }
 
+/** Whether any graph in the Scene shares what an action changed. */
+function sceneSharesActions(scene: SceneDocument, assets: AssetManifest): boolean {
+  return Object.values(scene.entities).some((entity) =>
+    entity.components.some((component) => {
+      if (component.type !== "interaction-trigger" || !component.enabled) {
+        return false;
+      }
+      const asset = assets.assets[component.interactivityAssetId];
+      if (asset?.kind !== "interactivity") return false;
+      return collectXriftInteractionActions(asset.extension).some(
+        (action) => action.shared === true,
+      );
+    }),
+  );
+}
+
 function sceneUsesLightRuntime(scene: SceneDocument): boolean {
   return Object.values(scene.entities).some((entity) =>
     entity.components.some((component) => component.type === "light"),
@@ -1949,6 +1965,16 @@ function renderSceneEnvironment(
       'import { XriftPlayerRuntime } from "./xrift-studio/player-runtime-host";',
     );
     content.push("<XriftPlayerRuntime />");
+  }
+  // XRift's instance state, for the actions an author marked as the room's
+  // rather than the presser's. Emitted only where a graph shares something, so
+  // a world with no shared action carries neither the overlay nor a
+  // subscription.
+  if (sceneSharesActions(context.scene, context.assets)) {
+    context.extraImports.add(
+      'import { XriftInstanceStateRuntime } from "./xrift-studio/instance-state-runtime-host";',
+    );
+    content.push("<XriftInstanceStateRuntime />");
   }
   registerVegetationWindSupport(settings.vegetation, context);
   const hasVegetationWind = Object.values(context.scene.entities).some((entity) =>

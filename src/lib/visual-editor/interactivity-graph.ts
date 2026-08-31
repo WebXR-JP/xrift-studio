@@ -9,6 +9,7 @@ import {
 import {
   collectXriftInteractionIssues,
   getXriftInteractionProperty,
+  getXriftInteractionScope,
   xriftInteractionEnumIndex,
   XRIFT_INTERACTION_EXTENSION_NAME,
   XRIFT_INTERACTION_OPERATIONS,
@@ -1324,6 +1325,44 @@ export function setInteractivityTriggerActionValue(
  * seconds" is one thought, and splitting it into a write plus an interpolator
  * is what makes a simple sequence read like a circuit diagram.
  */
+/**
+ * Marks whether an action's change belongs to the room or to the presser.
+ *
+ * Written into `configuration` beside the target rather than into a socket:
+ * 「みんなに見せる」is authoring intent, not a quantity, and nothing interpolates
+ * it. Refused on a `viewer`-scoped property, because synchronising the picture
+ * or a teleport would decide for somebody who pressed nothing.
+ */
+/** Whether this action is marked as the room's rather than the presser's. */
+export function readInteractivityTriggerActionShared(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+): boolean {
+  const entry = graph.nodes?.[nodeIndex]?.configuration?.shared;
+  const first = Array.isArray(entry?.value) ? entry.value[0] : undefined;
+  return first === "true";
+}
+
+export function setInteractivityTriggerActionShared(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+  shared: boolean,
+): boolean {
+  const node = graph.nodes?.[nodeIndex];
+  if (!node) return false;
+  const entry = node.configuration?.targetKind;
+  const first = Array.isArray(entry?.value) ? entry.value[0] : undefined;
+  const targetKind = typeof first === "string" ? first : "";
+  if (!targetKind || getXriftInteractionScope(targetKind) !== "world") {
+    return false;
+  }
+  node.configuration = {
+    ...(node.configuration ?? {}),
+    shared: { value: [shared ? "true" : "false"] },
+  };
+  return true;
+}
+
 export function setInteractivityTriggerActionDuration(
   graph: KhrInteractivityGraph,
   nodeIndex: number,

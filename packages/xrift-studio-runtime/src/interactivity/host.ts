@@ -20,6 +20,15 @@ export type InteractivityActionTarget = {
   readonly targetKind: string;
   readonly property: string;
   /**
+   * Whether what this action changes belongs to the room rather than to the
+   * person who pressed it.
+   *
+   * The engine only carries it; the host decides what to do with it, because
+   * synchronisation is a platform capability and the interpreter has no idea
+   * whether one exists.
+   */
+  readonly shared?: boolean;
+  /**
    * Asset the property should point at, for a property whose value is a
    * project Asset rather than a number.
    *

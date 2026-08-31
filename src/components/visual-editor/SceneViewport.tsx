@@ -34,6 +34,7 @@ import {
 import { XriftScriptLight } from "../../../packages/xrift-studio-runtime/src/script/light";
 import { PlayInteractionHost } from "./PlayInteractionHost";
 import { XriftPlayerRuntime } from "../../../packages/xrift-studio-runtime/src/script/player-runtime-host";
+import { XriftInstanceStateRuntime } from "../../../packages/xrift-studio-runtime/src/script/instance-state-runtime-host";
 import {
   emitXriftInteraction,
   XriftInteractionTriggerRuntime,
@@ -6087,6 +6088,11 @@ export function SceneViewport({
                 implementation from it, and the published world mounts the same
                 component for the same reason. */}
             <XriftPlayerRuntime enabled={worldPlayActive} />
+            {/* XRift's own instance state, so an action marked「みんなに見せる」
+                goes through the platform's synchronisation rather than a
+                Studio-only shortcut. One viewer in Play means the room is a
+                room of one - the same send and receive still run. */}
+            <XriftInstanceStateRuntime enabled={editorMode === "play"} />
             <ScriptViewportProvider value={scriptRuntime ?? null}>
             <XriftScriptRoot pressedKeys={pressedKeysRef.current}>
             <Fragment key={editorMode}>

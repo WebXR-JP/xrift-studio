@@ -370,8 +370,49 @@ property picker carries the note under it. `getXriftInteractionScope` derives it
 from the target, and a fixture asserts every property lands in the half its
 target belongs to, so a new target cannot arrive without an answer.
 
-When instance-synchronised state exists, the `world` half is what becomes real
-rather than only honest.
+A `world`-scoped action can be marked「みんなに見せる」, which is what makes that
+half real rather than only honest. See below.
+
+### Sharing an action with the room
+
+XRift already synchronises state: `useInstanceState(stateId, initial)` is a
+`useState` the platform keeps in step across the instance over its own socket,
+and its `states` map holds what the room currently agrees on. Nothing here
+invents a protocol on top of that.
+
+A `world`-scoped action carries `configuration.shared`. When it is set:
+
+* the action is applied locally **and** broadcast, so the person who pressed
+  does not wait for a round trip to see their own button work;
+* every runtime in the room applies what arrives, through the applier rather
+  than by re-running the graph - replaying the flow would fire everything else
+  it does, a sound and a delay and a second write, once per person;
+* a runtime that joins later applies everything already in `states`, which is
+  why the value travels as state and not as an event. A door opened before
+  somebody arrived is still open when they walk in.
+
+Three answers fall out of using the platform's own mechanism rather than
+designing one:
+
+| Question | Answer |
+| --- | --- |
+| Who wins | The last press. `sendState` overwrites the id |
+| What about the delay | The presser applies immediately; the broadcast is what everyone converges on |
+| What does a late joiner see | The current value, applied on mount from `states` |
+
+The id is derived from what the action is - the resolved Entity, the Component,
+the target and the property - so every viewer computes the same one without
+agreeing on anything first. Two actions writing the same property of the same
+Component deliberately collide: they are the same shared fact, and the last
+press wins for everyone.
+
+The flag is refused on a `viewer`-scoped property. Synchronising the picture
+would decide for the person on the slowest headset, and synchronising a teleport
+would move somebody who pressed nothing.
+
+In Studio there is one viewer and the package's default implementation is a
+local Map, so a shared action behaves like a local one. The same send and the
+same receive run - the room is simply a room of one.
 
 ### The Scene target is this viewer's, and only this viewer's
 

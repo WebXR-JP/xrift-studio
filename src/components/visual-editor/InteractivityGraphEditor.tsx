@@ -73,6 +73,8 @@ import {
   findInteractionTriggerTarget,
   findInteractionTriggerTargetComponent,
   getXriftInteractionScope,
+  readInteractivityTriggerActionShared,
+  setInteractivityTriggerActionShared,
   XRIFT_INTERACTION_SCOPE_LABELS,
   XRIFT_INTERACTION_SCOPE_NOTES,
   type InteractionTriggerTargetEntity,
@@ -590,6 +592,10 @@ function InteractivityGraphEditorBody({
     triggerActionNode && selectedNodeIndex !== null
       ? readInteractivityTriggerActionText(graph, selectedNodeIndex)
       : "";
+  const triggerActionShared =
+    triggerActionNode && selectedNodeIndex !== null
+      ? readInteractivityTriggerActionShared(graph, selectedNodeIndex)
+      : false;
 
 
   // `material` is authored through the picker above, and a socket fed by a wire
@@ -1981,21 +1987,56 @@ function InteractivityGraphEditorBody({
                             const scope = getXriftInteractionScope(
                               triggerDescriptor.target,
                             );
+                            if (scope === "viewer") {
+                              return (
+                                <p className="mt-1 rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[10px] leading-4 text-slate-400">
+                                  <span className="font-semibold">
+                                    {XRIFT_INTERACTION_SCOPE_LABELS.viewer}
+                                  </span>
+                                  <span className="ml-1">
+                                    {XRIFT_INTERACTION_SCOPE_NOTES.viewer}
+                                  </span>
+                                </p>
+                              );
+                            }
+                            // World content: the author chooses. Everything
+                            // here reached one viewer because nothing
+                            // synchronised it, so the choice is the fix.
                             return (
-                              <p
-                                className={`mt-1 rounded border px-1.5 py-1 text-[10px] leading-4 ${
-                                  scope === "viewer"
-                                    ? "border-slate-700 bg-slate-900 text-slate-400"
+                              <label
+                                className={`mt-1 flex cursor-pointer items-start gap-2 rounded border px-1.5 py-1 text-[10px] leading-4 ${
+                                  triggerActionShared
+                                    ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-100"
                                     : "border-amber-500/40 bg-amber-500/10 text-amber-200"
                                 }`}
                               >
-                                <span className="font-semibold">
-                                  {XRIFT_INTERACTION_SCOPE_LABELS[scope]}
+                                <input
+                                  type="checkbox"
+                                  className="mt-0.5"
+                                  checked={triggerActionShared}
+                                  disabled={readOnly}
+                                  onChange={(event) => {
+                                    const shared = event.target.checked;
+                                    updateGraph((nextGraph) => {
+                                      setInteractivityTriggerActionShared(
+                                        nextGraph,
+                                        selectedNodeIndex!,
+                                        shared,
+                                      );
+                                    });
+                                  }}
+                                />
+                                <span>
+                                  <span className="font-semibold">
+                                    みんなに見せる
+                                  </span>
+                                  <span className="ml-1">
+                                    {triggerActionShared
+                                      ? "同じ部屋の全員に反映し、あとから入った人にも同じ状態で見えます。最後に押した人の値が残ります。"
+                                      : XRIFT_INTERACTION_SCOPE_NOTES.world}
+                                  </span>
                                 </span>
-                                <span className="ml-1">
-                                  {XRIFT_INTERACTION_SCOPE_NOTES[scope]}
-                                </span>
-                              </p>
+                              </label>
                             );
                           })()}
                         </>

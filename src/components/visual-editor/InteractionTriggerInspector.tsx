@@ -145,6 +145,7 @@ export function InteractionTriggerInspector({
                   targetKind: action.target,
                   property: action.property,
                   mode: action.mode,
+                  shared: action.shared === true,
                   // A linked value is decided by the graph while it runs, so
                   // the Inspector has no number to show - only the target,
                   // which is what this list is for.

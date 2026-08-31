@@ -929,6 +929,17 @@ export type XriftInteractionAction = {
   property: string;
   /** Absent for `toggle`, which reads the live value instead. */
   value: XriftInteractionValue | null;
+  /**
+   * Whether what this action changes belongs to the room.
+   *
+   * Only meaningful on a `world`-scoped property: the picture and where a
+   * player is standing belong to one viewer, and synchronising them would
+   * decide for somebody who pressed nothing.
+   *
+   * Absent is not shared, so an action authored before this existed keeps the
+   * behaviour it was written with.
+   */
+  shared?: boolean;
 };
 
 /** One `xrift/onInteract` entry point and the actions its flow reaches. */
@@ -1138,6 +1149,11 @@ function readAction(
     return null;
   }
   const mode = op === XRIFT_INTERACTION_OPERATIONS.toggleProperty ? "toggle" : "set";
+  // Authoring intent, so it lives beside the target rather than in a socket:
+  // "everyone sees this" is not a quantity and nothing interpolates it.
+  const shared =
+    configurationString(node, "shared") === "true" &&
+    getXriftInteractionScope(descriptor.target) === "world";
   if (mode === "toggle") {
     if (descriptor.kind !== "bool") return null;
     return {
@@ -1150,6 +1166,7 @@ function readAction(
       target: descriptor.target,
       property: descriptor.name,
       value: null,
+      shared,
     };
   }
   // An Asset id and a sentence are configuration, not socket values: neither is
@@ -1177,6 +1194,7 @@ function readAction(
     target: descriptor.target,
     property: descriptor.name,
     value,
+    shared,
   };
 }
 

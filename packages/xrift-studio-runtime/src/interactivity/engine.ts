@@ -1554,6 +1554,9 @@ export class InteractivityEngine {
       componentId: targetKind === "entity" ? null : componentId,
       targetKind,
       property,
+      ...(this.configurationString(node, "shared") === "true"
+        ? { shared: true }
+        : {}),
       // Present-but-empty is meaningful — it names no Asset on purpose — so the
       // key's presence, not its value, is what marks an Asset-valued action.
       ...(node.configuration.has("asset")

@@ -102,6 +102,7 @@ import {
 } from "../script/interaction-trigger-runtime.js";
 import { XriftSceneRuntime } from "../script/scene-runtime.js";
 import { XriftPlayerRuntime } from "../script/player-runtime-host.js";
+import { XriftInstanceStateRuntime } from "../script/instance-state-runtime-host.js";
 import { planInteractivityAnimationCues } from "../interactivity-adapter.js";
 import {
   XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY,
@@ -1011,6 +1012,7 @@ function XriftRuntimeInteractionTriggers({ result }: { result: XriftLoadResult }
     <>
       <XriftSceneRuntime />
       <XriftPlayerRuntime />
+      <XriftInstanceStateRuntime />
       {triggers}
     </>
   );

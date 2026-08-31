@@ -13,6 +13,8 @@ import {
   INTERACTIVITY_VALUE_OVERLAY_PATH,
   ANIMATION_RUNTIME_OVERLAY_PATH,
   ANIMATION_MIXER_OVERLAY_PATH,
+  INSTANCE_STATE_RUNTIME_HOST_OVERLAY_PATH,
+  INSTANCE_STATE_RUNTIME_OVERLAY_PATH,
   PLAYER_RUNTIME_HOST_OVERLAY_PATH,
   PLAYER_RUNTIME_OVERLAY_PATH,
   SCENE_RUNTIME_OVERLAY_PATH,
@@ -25,11 +27,13 @@ import {
   describeInteractionTriggerAction,
   syncInteractionTriggerReferences,
 } from "./interaction-trigger-targets";
+import { xriftSharedActionStateId } from "../../../packages/xrift-studio-runtime/src/script/instance-state-runtime";
 import {
   collectInteractivityRuntimeDiagnostics,
   collectXriftInteractionActions,
   collectXriftInteractionIssues,
   getXriftInteractionScope,
+  setInteractivityTriggerActionShared,
   XRIFT_INTERACTION_PROPERTIES,
   XRIFT_INTERACTION_SCOPE_LABELS,
   XRIFT_INTERACTION_SCOPE_NOTES,
@@ -88,6 +92,7 @@ export function runInteractionTriggerFixtureAssertions(): void {
   assertPlayerTeleportReachesThePublishedWorld();
   assertWiredValueKeepsItsAction();
   assertEveryActionSaysWhoSeesIt();
+  assertSharedActionReachesTheRoom();
   assertPublishedWorldRunsTheTrigger();
   assertPublishedWorldRunsAGraphNobodyPresses();
   assertPublishedWorldOmitsTheUnusedInteractionEmitter();
@@ -472,6 +477,134 @@ function assertAssetValuedActionRecordsItsDependency(): void {
  * Otherwise「画質を上げる」publishes, validates, and does nothing — which is
  * worse than refusing to publish it.
  */
+/**
+ * An action marked as the room's has to travel, and only where it can.
+ *
+ * The share flag rides in `configuration` beside the target, because 「みんなに
+ * 見せる」is authoring intent rather than a quantity. It is refused on a
+ * `viewer`-scoped property: synchronising the picture would decide for the
+ * person on the slowest headset, and synchronising a teleport would move
+ * somebody who pressed nothing.
+ */
+function assertSharedActionReachesTheRoom(): void {
+  const documents = buildDocuments();
+  const graphAsset = documents.assets.assets[GRAPH_ASSET_ID];
+  if (graphAsset?.kind !== "interactivity") {
+    throw new Error("the fixture's Interactivity Asset is missing");
+  }
+  const extension = cloneKhrInteractivityExtension(graphAsset.extension);
+  const graph = graphOf(extension);
+
+  const open = appendInteractivityOperation(
+    graph,
+    XRIFT_INTERACTION_OPERATIONS.setProperty,
+    { x: 1000, y: 800 },
+  );
+  configureInteractivityTriggerAction(graph, open, {
+    entityId: "entity_sign",
+    componentId: "",
+    targetKind: "transform",
+    property: "position",
+  });
+  assert(
+    setInteractivityTriggerActionShared(graph, open, true),
+    "a world-scoped action refused to be shared",
+  );
+
+  // The picture belongs to whoever is looking at it, and always will.
+  const fade = appendInteractivityOperation(
+    graph,
+    XRIFT_INTERACTION_OPERATIONS.setProperty,
+    { x: 1000, y: 960 },
+  );
+  configureInteractivityTriggerAction(graph, fade, {
+    entityId: XRIFT_INTERACTION_SCENE_ENTITY_ID,
+    componentId: "",
+    targetKind: "scene",
+    property: "fade",
+  });
+  assert(
+    !setInteractivityTriggerActionShared(graph, fade, true),
+    "a viewer-scoped action was allowed to be shared",
+  );
+
+  const actions = collectXriftInteractionActions(extension);
+  assert(
+    actions.find((action) => action.nodeIndex === open)?.shared === true,
+    "the shared flag did not survive the walk",
+  );
+  assert(
+    actions.find((action) => action.nodeIndex === fade)?.shared !== true,
+    "a Scene action came back shared",
+  );
+
+  // Two viewers must compute the same id, or the room never agrees. The id is
+  // derived from what the action is, and the self sentinel has to be resolved
+  // first or one id would mean several doors.
+  const first = xriftSharedActionStateId({
+    entityId: "entity_sign",
+    componentId: null,
+    targetKind: "transform",
+    property: "position",
+  });
+  const second = xriftSharedActionStateId({
+    entityId: "entity_sign",
+    componentId: null,
+    targetKind: "transform",
+    property: "position",
+  });
+  assert(first === second, "the same action produced two different state ids");
+  assert(
+    first !==
+      xriftSharedActionStateId({
+        entityId: "entity_button",
+        componentId: null,
+        targetKind: "transform",
+        property: "position",
+      }),
+    "two different Entities share one state id",
+  );
+
+  // And the published world has to carry the bridge, or the flag is a promise
+  // nothing keeps.
+  const result = compileVisualProject(
+    {
+      ...documents,
+      assets: {
+        ...documents.assets,
+        assets: {
+          ...documents.assets.assets,
+          [GRAPH_ASSET_ID]: { ...graphAsset, extension },
+        },
+      },
+    },
+    { generatedAt: "2026-09-01T00:00:00.000Z" },
+  );
+  const world = result.overlayFiles.find(
+    (file) => file.relativePath === "src/World.tsx",
+  )?.content;
+  assert(
+    (world ?? "").includes("<XriftInstanceStateRuntime />"),
+    "a world with a shared action does not mount the instance bridge",
+  );
+  for (const path of [
+    INSTANCE_STATE_RUNTIME_OVERLAY_PATH,
+    INSTANCE_STATE_RUNTIME_HOST_OVERLAY_PATH,
+  ]) {
+    assert(
+      result.overlayFiles.some((file) => file.relativePath === path),
+      `the published world is missing ${path}`,
+    );
+  }
+  const host = result.overlayFiles.find(
+    (file) => file.relativePath === INSTANCE_STATE_RUNTIME_HOST_OVERLAY_PATH,
+  )?.content;
+  assert(
+    (host ?? "").includes("useInstanceStateContext"),
+    "the emitted bridge does not go through XRift's own instance state",
+  );
+}
+
 /**
  * Every action has to say who sees it.
  *
