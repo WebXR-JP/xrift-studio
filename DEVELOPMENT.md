@@ -54,6 +54,15 @@ pnpm tauri:dev
 
 主要導線のE2Eは日常の検証やPull Requestでは実行せず、手動のRelease workflowでOS別ビルドの前に1回だけ実行します。テスト範囲、アップロード禁止境界、失敗時の確認方法は [リリース前 E2E](./docs/RELEASE_E2E.md) を参照してください。
 
+## 紹介ページのダウンロード導線
+
+GitHub Pages の紹介ページは、最新リリースのインストーラーを直接ダウンロードできます。表示するリリースは 2 経路で決まります。
+
+- ビルド時: `pnpm release:snapshot` が公開済みの最新リリースを読み、`src/preview/generated/release-snapshot.ts` を書き換えます。生成物はコミットします。取得に失敗した場合は既存のスナップショットを保ったまま終了し、ビルドを止めません。
+- 表示後: ページが GitHub の公開 API へ問い合わせ、返ってきたリリースでスナップショットを置き換えます。1 ページの読み込みにつき 1 回だけ問い合わせます。
+
+`.github/workflows/pages.yml` はビルド前にスナップショットを更新し、リリースの公開時にも再デプロイします。リリースの作り方 (`.github/workflows/release.yml`) は変更していません。アセット名の規則 (`[name]_[version]_[platform]_[arch]_[mode][setup][ext]`) を変える場合は、`src/preview/lib/release-download.ts` の判定も合わせて更新してください。状態設計は [マイクロインタラクション Wiki](./docs/UX_INTERACTIONS.md) の F-41 にあります。
+
 ## 配布ビルド
 
 ```bash

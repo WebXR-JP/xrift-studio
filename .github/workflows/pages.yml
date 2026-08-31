@@ -3,6 +3,11 @@ name: Deploy web preview
 on:
   push:
     branches: [main]
+  # 紹介ページはダウンロード導線に最新リリースを埋め込んでいる。リリースが
+  # 公開された時点で再デプロイして、ページが持つスナップショットを更新する。
+  # リリースの作り方 (release.yml) は変えていない。
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -43,6 +48,14 @@ jobs:
       # ずれてJSとCSSが全て404になり、公開版が白紙になっていた。
       # build:preview には公開ページが自分のアセットを解決できるかの検査が
       # 含まれているので、同じ壊れ方が黙って再発することはない。
+      # 埋め込むのは最新リリースのタグ、ファイル名、サイズ、SHA-256 だけで、
+      # ページは表示後に GitHub API へ問い合わせて自分を更新する。取得に
+      # 失敗してもビルドは止めず、コミット済みのスナップショットを使う。
+      - name: Refresh release snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/fetch-release-snapshot.mjs
+
       - name: Build web preview
         run: |
           pnpm run build:preview

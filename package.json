@@ -15,6 +15,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "release:snapshot": "node scripts/fetch-release-snapshot.mjs",
     "build:preview": "vite build --config vite.preview.config.ts && node scripts/check-published-guide-assets.mjs",
     "preview:wiki": "vite --config vite.preview.config.ts",
     "build:wiki": "vite build --config vite.preview.config.ts",

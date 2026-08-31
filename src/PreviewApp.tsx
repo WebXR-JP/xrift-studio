@@ -19,6 +19,7 @@ import { AiCollaboration } from "./preview/sections/AiCollaboration";
 import { PublishCheck } from "./preview/sections/PublishCheck";
 import { TryDemo } from "./preview/sections/TryDemo";
 import { ClassicBridge } from "./preview/sections/ClassicBridge";
+import { DownloadSection } from "./preview/sections/DownloadSection";
 import { Faq } from "./preview/sections/Faq";
 import { WikiCallout } from "./preview/sections/WikiCallout";
 import { FinalCta } from "./preview/sections/FinalCta";
@@ -130,6 +131,7 @@ export default function PreviewApp() {
       <PublishCheck />
       <TryDemo onOpenDemo={openDemo} />
       <ClassicBridge />
+      <DownloadSection />
       <Faq />
       <WikiCallout />
       <FinalCta />
