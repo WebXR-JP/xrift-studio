@@ -56,6 +56,9 @@ import {
   type KhrInteractivityGraph,
   type KhrInteractivityJsonValue,
   type MaterialAsset,
+  INTERACTIVITY_RECIPE_COLOR,
+  RUNNABLE_INTERACTIVITY_RECIPES,
+  type InteractivityRecipe,
 } from "../../lib/visual-editor";
 import {
   configureInteractivityTriggerAction,
@@ -453,6 +456,33 @@ function InteractivityGraphEditorBody({
    * errors still asks, because that is the one case where work can be lost.
    */
   const savable = dirty && !readOnly && errors.length === 0;
+  /** What autosave last wrote, so a change from elsewhere can be told apart. */
+  const lastSavedJsonRef = useRef<string | null>(null);
+
+  /*
+   * Adopts a change that came from outside this editor.
+   *
+   * Undo, Redo and an MCP write all change the Asset while the panel is open,
+   * and the draft would not follow: autosave would then write the stale draft
+   * straight back, so pressing Undo on a graph edit looked like Undo was
+   * broken. Only a change this editor did not make rebuilds the draft, or every
+   * autosave would clear the author's own undo history and selection.
+   */
+  const assetJson = useMemo(
+    () => JSON.stringify(asset.extension),
+    [asset.extension],
+  );
+  const adoptedJsonRef = useRef(assetJson);
+  useEffect(() => {
+    if (assetJson === adoptedJsonRef.current) return;
+    adoptedJsonRef.current = assetJson;
+    if (assetJson === lastSavedJsonRef.current) return;
+    setHistory({
+      entries: [cloneKhrInteractivityExtension(asset.extension)],
+      index: 0,
+    });
+    setSelectedNodeIndex(null);
+  }, [asset.extension, assetJson]);
 
   /** The Asset name, edited locally so a rename is one history entry. */
   const [assetNameDraft, setAssetNameDraft] = useState(asset.name);
@@ -486,10 +516,10 @@ function InteractivityGraphEditorBody({
     if (!savable) return;
     // Long enough that dragging a node is one write rather than sixty, short
     // enough that reaching for Play is already past it.
-    const timer = window.setTimeout(
-      () => onSaveRef.current(asset.id, draft, { auto: true }),
-      400,
-    );
+    const timer = window.setTimeout(() => {
+      lastSavedJsonRef.current = JSON.stringify(draft);
+      onSaveRef.current(asset.id, draft, { auto: true });
+    }, 400);
     return () => window.clearTimeout(timer);
   }, [asset.id, draft, savable]);
   const selectedNode =
@@ -585,6 +615,26 @@ function InteractivityGraphEditorBody({
         })),
     [graph.types, selectedDeclaration?.op, selectedNode],
   );
+
+  /**
+   * Recipes offered here, filtered by the same search box as the operations.
+   *
+   * A recipe that writes a Material is hidden when the project has none: it
+   * would land pointing at material index 0, which does not exist, and the
+   * author would be debugging a graph the editor built. The list itself is
+   * already limited to what Play runs, so nothing here is a head start that
+   * turns out to do nothing.
+   */
+  const paletteRecipes = useMemo(() => {
+    const query = paletteQuery.trim().toLowerCase();
+    return RUNNABLE_INTERACTIVITY_RECIPES.filter(
+      (recipe) =>
+        (!recipe.needsMaterial || materials.length > 0) &&
+        (query === "" ||
+          recipe.label.toLowerCase().includes(query) ||
+          recipe.description.toLowerCase().includes(query)),
+    );
+  }, [materials.length, paletteQuery]);
 
   const paletteGroups = useMemo(() => {
     const query = paletteQuery.trim().toLowerCase();
@@ -730,7 +780,10 @@ function InteractivityGraphEditorBody({
       setCloseConfirmOpen(true);
       return;
     }
-    if (savable) onSaveRef.current(asset.id, draft, { auto: true });
+    if (savable) {
+      lastSavedJsonRef.current = JSON.stringify(draft);
+      onSaveRef.current(asset.id, draft, { auto: true });
+    }
     onClose();
   }, [asset.id, dirty, draft, errors.length, onClose, readOnly, savable]);
 
@@ -1044,6 +1097,27 @@ function InteractivityGraphEditorBody({
     requestClose,
     undo,
   ]);
+
+  /**
+   * Drops a whole working chain, not one node.
+   *
+   * The palette answers「このグラフは何ができるのか」but not「押したら移動する、は
+   * どう作るのか」, which is the question people arrive with. A recipe lands
+   * connected, with the target already pointed at the Entity or the player, so
+   * the next step is editing a number instead of guessing which sockets belong
+   * together. The catalog existed for a long time with nothing offering it.
+   */
+  const handleAddRecipe = (recipe: InteractivityRecipe) => {
+    if (readOnly) return;
+    const created = graph.nodes?.length ?? 0;
+    const position = nextNodePosition(created);
+    updateGraph((nextGraph) => {
+      recipe.build(nextGraph, position, 0);
+    });
+    setSelectedNodeIndex(created + recipe.focusOffset);
+    setPaletteOpen(false);
+    setPaletteDropAt(null);
+  };
 
   const handleAddOperation = (op: string) => {
     if (readOnly) return;
@@ -1548,6 +1622,39 @@ function InteractivityGraphEditorBody({
                 ) : null}
               </div>
               <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-2.5">
+                {paletteRecipes.length > 0 ? (
+                  <section className="mb-3">
+                    <p className="sticky top-0 z-10 mb-1.5 bg-slate-950/95 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                      よく作るもの
+                    </p>
+                    <div className="space-y-1">
+                      {paletteRecipes.map((recipe) => (
+                        <button
+                          key={recipe.id}
+                          type="button"
+                          disabled={readOnly}
+                          onClick={() => handleAddRecipe(recipe)}
+                          title={recipe.description}
+                          className="flex w-full items-start gap-2 rounded border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-left hover:border-violet-500 hover:bg-slate-800 disabled:opacity-45"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
+                            style={{ background: INTERACTIVITY_RECIPE_COLOR }}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-medium">
+                              {recipe.label}
+                            </span>
+                            <span className="block text-[9px] leading-3 text-slate-500">
+                              {recipe.description}
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
                 {paletteGroups.map((group) => (
                   <section key={group.category} className="mb-3 last:mb-0">
                     <p className="sticky top-0 z-10 mb-1.5 bg-slate-950/95 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">

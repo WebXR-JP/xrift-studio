@@ -28,6 +28,7 @@ import {
   getInteractivityRecipeRuntimeSupport,
   INTERACTIVITY_RECIPE_COLOR,
   INTERACTIVITY_RECIPES,
+  RUNNABLE_INTERACTIVITY_RECIPES,
   setInteractivityLiteralValue,
 } from "./interactivity-recipes";
 import { removeNodesAndReindex } from "../../components/visual-editor/interactivity-graph-flow";
@@ -491,6 +492,39 @@ export function runInteractivityRuntimeAdapterFixtureAssertions(): void {
     assert(recipe !== undefined, `The ${id} recipe is gone, so its coverage is gone too`);
     return recipe;
   };
+  // The add panel offers this list, so everything on it has to run. The
+  // catalogue was pulled from the panel once already because most of it was
+  // `pointer/*` shapes Play ignores; a curated list would drift back into that.
+  assert(
+    RUNNABLE_INTERACTIVITY_RECIPES.length > 0,
+    "No recipe is runnable, so the add panel would offer an empty section",
+  );
+  for (const recipe of RUNNABLE_INTERACTIVITY_RECIPES) {
+    assert(
+      getInteractivityRecipeRuntimeSupport(recipe) === "executed",
+      `The add panel offers ${recipe.id}, which Play does not run`,
+    );
+  }
+  for (const id of ["interact-teleport", "interact-toggle-visibility", "interact-move-self"]) {
+    assert(
+      RUNNABLE_INTERACTIVITY_RECIPES.some((recipe) => recipe.id === id),
+      `The ${id} recipe is no longer offered in the add panel`,
+    );
+  }
+
+  // The interaction recipes are the answer to「押したら何かする、はどう作るのか」,
+  // so a recipe that lands as a graph Play quietly ignores would be worse than
+  // not offering it: the author would have a tidy chain that does nothing.
+  for (const id of [
+    "interact-teleport",
+    "interact-toggle-visibility",
+    "interact-move-self",
+  ]) {
+    assert(
+      getInteractivityRecipeRuntimeSupport(recipeById(id)) === "executed",
+      `The ${id} recipe is no longer runnable in Play`,
+    );
+  }
   assert(
     getInteractivityRecipeRuntimeSupport(recipeById("start-animation")) === "executed",
     "The plain animation recipe stopped being runnable in Play",

@@ -5,8 +5,11 @@ import {
   createDefaultKhrInteractivityExtension,
   estimateInteractivityNodeHeight,
   getInteractivityOperationTemplate,
+  configureInteractivityTriggerAction,
   writeInteractivityNodePosition,
   XRIFT_INTERACTION_OPERATIONS,
+  XRIFT_INTERACTION_PLAYER_ENTITY_ID,
+  XRIFT_INTERACTION_SELF_ENTITY_ID,
   type KhrInteractivityExtension,
   type KhrInteractivityGraph,
   type KhrInteractivityJsonValue,
@@ -153,7 +156,94 @@ function recipeColorValue(alpha: number | null): KhrInteractivityJsonValue[] {
   return alpha === null ? [red, green, blue] : [red, green, blue, alpha];
 }
 
+/**
+ * The interaction recipes.
+ *
+ * Every one of these targets something Entity-scoped - the Entity itself, its
+ * Transform, the player - because a recipe is built without a Scene in front of
+ * it and cannot know which of an Entity's two Audio Sources the author meant.
+ * `__xrift_self__` covers the Entity, so the same recipe works on every door
+ * without being re-pointed.
+ */
 export const INTERACTIVITY_RECIPES: readonly InteractivityRecipe[] = [
+  {
+    id: "interact-teleport",
+    label: "押したらテレポートする",
+    description:
+      "押した人を、指定した座標へ移動させます。押した人だけが動きます",
+    focusOffset: 1,
+    build: (graph, origin) => {
+      const interact = appendInteractivityOperation(
+        graph,
+        XRIFT_INTERACTION_OPERATIONS.onInteract,
+        origin,
+      );
+      const move = appendInteractivityOperation(
+        graph,
+        XRIFT_INTERACTION_OPERATIONS.setProperty,
+        { x: origin.x + 320, y: origin.y },
+      );
+      configureInteractivityTriggerAction(graph, move, {
+        entityId: XRIFT_INTERACTION_PLAYER_ENTITY_ID,
+        componentId: "",
+        targetKind: "player",
+        property: "teleport",
+      });
+      connectInteractivityFlow(graph, interact, "out", move);
+    },
+  },
+  {
+    id: "interact-toggle-visibility",
+    label: "押したら表示を切り替える",
+    description:
+      "押すたびに、このEntityの表示と非表示を入れ替えます。スイッチや隠し扉に",
+    focusOffset: 1,
+    build: (graph, origin) => {
+      const interact = appendInteractivityOperation(
+        graph,
+        XRIFT_INTERACTION_OPERATIONS.onInteract,
+        origin,
+      );
+      const toggle = appendInteractivityOperation(
+        graph,
+        XRIFT_INTERACTION_OPERATIONS.toggleProperty,
+        { x: origin.x + 320, y: origin.y },
+      );
+      configureInteractivityTriggerAction(graph, toggle, {
+        entityId: XRIFT_INTERACTION_SELF_ENTITY_ID,
+        componentId: "",
+        targetKind: "entity",
+        property: "enabled",
+      });
+      connectInteractivityFlow(graph, interact, "out", toggle);
+    },
+  },
+  {
+    id: "interact-move-self",
+    label: "押したら動かす",
+    description:
+      "押したEntity自身を、指定した位置へ動かします。扉やリフトに",
+    focusOffset: 1,
+    build: (graph, origin) => {
+      const interact = appendInteractivityOperation(
+        graph,
+        XRIFT_INTERACTION_OPERATIONS.onInteract,
+        origin,
+      );
+      const move = appendInteractivityOperation(
+        graph,
+        XRIFT_INTERACTION_OPERATIONS.setProperty,
+        { x: origin.x + 320, y: origin.y },
+      );
+      configureInteractivityTriggerAction(graph, move, {
+        entityId: XRIFT_INTERACTION_SELF_ENTITY_ID,
+        componentId: "",
+        targetKind: "transform",
+        property: "position",
+      });
+      connectInteractivityFlow(graph, interact, "out", move);
+    },
+  },
   {
     id: "start-set-color",
     label: "開始時に色を変える",
@@ -264,6 +354,22 @@ export function getInteractivityRecipeRuntimeSupport(
     ? "executed"
     : "ignored";
 }
+
+/**
+ * The recipes the add panel offers.
+ *
+ * Only the ones Play and the published world actually run. The catalogue was
+ * taken out of the panel once before for exactly this reason: most of it was
+ * `pointer/*` shapes the runtime ignores, so it read as a head start and then
+ * did nothing when the world ran. Deriving the list from the runtime rather
+ * than curating it by hand means an operation that becomes runnable brings its
+ * recipe back on its own, and one that stops being runnable takes its recipe
+ * out before an author can pick it.
+ */
+export const RUNNABLE_INTERACTIVITY_RECIPES: readonly InteractivityRecipe[] =
+  INTERACTIVITY_RECIPES.filter(
+    (recipe) => getInteractivityRecipeRuntimeSupport(recipe) === "executed",
+  );
 
 /** How many clips one `flow/sequence` fans out to before a new column starts. */
 const MODEL_ANIMATION_GROUP_SIZE = 8;

@@ -163,10 +163,20 @@ what a graph is wired to do; only running it says whether the delay lands where
 its author meant, whether a loop terminates inside the horizon, and which branch
 is dead. Nothing is written, so it needs no revision.
 
-There is no recipe catalogue. Ready-made sequences were offered in the add
-panel and over MCP, and nearly all of them were `pointer/*` shapes the runtime
-does not execute — a menu of things that look like a head start and then do
-nothing at Play. The nodes they were made of are all in the palette.
+The recipe catalogue is back in the add panel, under「よく作るもの」, and it is
+derived rather than curated: `RUNNABLE_INTERACTIVITY_RECIPES` is
+`INTERACTIVITY_RECIPES` filtered by whether the runtime actually executes the
+graph the recipe builds. That is the fix for why it was pulled the first time —
+nearly all of it was `pointer/*` shapes Play ignores, so it read as a head start
+and then did nothing when the world ran. An operation that becomes runnable
+brings its recipe back on its own; one that stops being runnable takes its
+recipe out before an author can pick it.
+
+The interaction recipes —「押したらテレポートする」「押したら表示を切り替える」
+「押したら動かす」— all target something Entity-scoped, because a recipe is built
+without a Scene in front of it and cannot know which of an Entity's two Audio
+Sources the author meant. `__xrift_self__` covers the Entity, so the same recipe
+works on every door without being re-pointed.
 
 ### Animation belongs to the graph
 
