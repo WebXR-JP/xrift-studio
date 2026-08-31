@@ -158,6 +158,7 @@ import {
   type InteractivityAnimationCue,
 } from "../../lib/visual-editor";
 import { tauri } from "../../lib/tauri";
+import { resolveSceneClickSelection } from "../../lib/visual-editor/scene-click-selection";
 import { isEditableShortcutTarget } from "../../lib/visual-editor/shortcuts";
 import {
   EDITOR_HELPER_USER_DATA,
@@ -2144,6 +2145,10 @@ type SceneDropHit = {
   authoringEntityId: string | null;
   renderedEntityId: string | null;
   meshComponentId: string | null;
+  /** Authoring Entity ids of every surface on the ray, front to back. */
+  rayEntityIds: string[];
+  /** Authoring Entity ids with an origin near the pointer, nearest first. */
+  originEntityIds: string[];
 };
 
 const XRIFT_TERRAIN_INVERSE: Partial<
@@ -2387,6 +2392,8 @@ function SceneDropProjectionBridge({
           authoringEntityId: null,
           renderedEntityId: null,
           meshComponentId: null,
+          rayEntityIds: [],
+          originEntityIds: [],
         };
       }
       pointer.set(
@@ -2399,6 +2406,8 @@ function SceneDropProjectionBridge({
       let renderedEntityId: string | null = null;
       let meshComponentId: string | null = null;
       let localPosition: Vec3 | null = null;
+      const rayEntityIds: string[] = [];
+      const seenRayEntityIds = new Set<string>();
       for (const intersection of raycaster.intersectObjects(scene.children, true)) {
         if (!isObjectVisibleInHierarchy(intersection.object)) continue;
         const metadata = entityPointerMetadata(intersection.object);
@@ -2408,20 +2417,29 @@ function SceneDropProjectionBridge({
         ) {
           continue;
         }
+        if (!seenRayEntityIds.has(metadata.authoringEntityId)) {
+          seenRayEntityIds.add(metadata.authoringEntityId);
+          rayEntityIds.push(metadata.authoringEntityId);
+        }
+        if (authoringEntityId !== null) continue;
         authoringEntityId = metadata.authoringEntityId;
         renderedEntityId = metadata.renderedEntityId;
         meshComponentId = metadata.meshComponentId;
         localHitPosition.copy(intersection.point);
         intersection.object.worldToLocal(localHitPosition);
         localPosition = [localHitPosition.x, localHitPosition.y, localHitPosition.z];
-        break;
       }
-      if (!authoringEntityId && options?.includeEntityOriginFallback) {
+      const originEntityIds: string[] = [];
+      if (options?.includeEntityOriginFallback) {
         const maximumDistanceSquared =
           SCENE_VIEW_ENTITY_ORIGIN_HIT_RADIUS_PX *
           SCENE_VIEW_ENTITY_ORIGIN_HIT_RADIUS_PX;
-        let bestDistanceSquared = maximumDistanceSquared;
-        let bestDepth = Number.POSITIVE_INFINITY;
+        const originCandidates: Array<{
+          authoringEntityId: string;
+          renderedEntityId: string;
+          distanceSquared: number;
+          depth: number;
+        }> = [];
         scene.traverse((object) => {
           const candidateAuthoringEntityId = object.userData.authoringEntityId;
           const candidateRenderedEntityId = object.userData.renderedEntityId;
@@ -2449,18 +2467,27 @@ function SceneDropProjectionBridge({
           const deltaX = clientX - candidateX;
           const deltaY = clientY - candidateY;
           const distanceSquared = deltaX * deltaX + deltaY * deltaY;
-          if (
-            distanceSquared > bestDistanceSquared ||
-            (distanceSquared === bestDistanceSquared &&
-              entityNdcPosition.z >= bestDepth)
-          ) {
-            return;
-          }
-          bestDistanceSquared = distanceSquared;
-          bestDepth = entityNdcPosition.z;
-          authoringEntityId = candidateAuthoringEntityId;
-          renderedEntityId = candidateRenderedEntityId;
+          if (distanceSquared > maximumDistanceSquared) return;
+          originCandidates.push({
+            authoringEntityId: candidateAuthoringEntityId,
+            renderedEntityId: candidateRenderedEntityId,
+            distanceSquared,
+            depth: entityNdcPosition.z,
+          });
         });
+        originCandidates.sort(
+          (a, b) => a.distanceSquared - b.distanceSquared || a.depth - b.depth,
+        );
+        const seenOriginEntityIds = new Set<string>();
+        for (const candidate of originCandidates) {
+          if (seenOriginEntityIds.has(candidate.authoringEntityId)) continue;
+          seenOriginEntityIds.add(candidate.authoringEntityId);
+          originEntityIds.push(candidate.authoringEntityId);
+        }
+        if (!authoringEntityId && originCandidates.length > 0) {
+          authoringEntityId = originCandidates[0].authoringEntityId;
+          renderedEntityId = originCandidates[0].renderedEntityId;
+        }
       }
       const position = raycaster.ray.intersectPlane(groundPlane, groundHit);
       return {
@@ -2471,6 +2498,8 @@ function SceneDropProjectionBridge({
         authoringEntityId,
         renderedEntityId,
         meshComponentId,
+        rayEntityIds,
+        originEntityIds,
       };
     };
     return () => {
@@ -4849,11 +4878,21 @@ export function SceneViewport({
         leftGesture.moved = true;
       }
       if (!leftGesture.moved && !transformDraggingRef.current && !terrainEditing) {
-        const releasedEntityId =
-          dropResolverRef.current?.(event.clientX, event.clientY, {
-            includeEntityOriginFallback: true,
-          }).authoringEntityId ?? null;
-        const entityId = releasedEntityId ?? leftGesture.pressedEntityId;
+        const pick = dropResolverRef.current?.(event.clientX, event.clientY, {
+          includeEntityOriginFallback: true,
+        });
+        const fallbackEntityId =
+          pick?.authoringEntityId ?? leftGesture.pressedEntityId;
+        // Clicking the selected Entity again drills into its subtree, so
+        // content buried inside a large mesh stays reachable by clicks alone.
+        const entityId =
+          editorMode === "edit" && !leftGesture.additive
+            ? resolveSceneClickSelection(scene, selectedEntityId, {
+                rayEntityIds: pick?.rayEntityIds ?? [],
+                originEntityIds: pick?.originEntityIds ?? [],
+                fallbackEntityId,
+              })
+            : fallbackEntityId;
         if (entityId) {
           onSelect(
             { kind: "entity", id: entityId },

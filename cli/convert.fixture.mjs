@@ -87,6 +87,7 @@ import { runMaterialExtensionFixtureAssertions } from "../src/lib/visual-editor/
 import { runXriftComponentRegistryFixtureAssertions } from "../src/lib/visual-editor/compiler/xrift-component-registry.fixture.ts";
 import { runDocumentAssetCreationFixtureAssertions } from "../src/lib/visual-editor/document-asset-creation.fixture.ts";
 import { runEditorSessionHierarchyFixtureAssertions } from "../src/lib/visual-editor/editor-session.fixture.ts";
+import { runSceneClickSelectionFixtureAssertions } from "../src/lib/visual-editor/scene-click-selection.fixture.ts";
 import { runEntityBoundsFixtureAssertions } from "../src/lib/visual-editor/entity-bounds.fixture.ts";
 import { runGltfDerivedAssetFixtureAssertions } from "../src/lib/visual-editor/gltf-derived-assets.fixture.ts";
 import { runModelCompanionBatchFixtureAssertions } from "../src/lib/visual-editor/model-companion-batch.fixture.ts";
@@ -325,6 +326,7 @@ try {
     ["builtin prefab catalog", runBuiltinPrefabCatalogFixtureAssertions],
     ["document asset creation", runDocumentAssetCreationFixtureAssertions],
     ["editor session hierarchy", runEditorSessionHierarchyFixtureAssertions],
+    ["scene click selection", runSceneClickSelectionFixtureAssertions],
     ["editor layout", runEditorLayoutFixtureAssertions],
     ["scene viewport quality", runSceneViewportQualityFixtureAssertions],
     ["scene VRAM estimate", runSceneVramEstimateFixtureAssertions],
