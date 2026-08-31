@@ -204,11 +204,17 @@ function findPrefabSourceContext(
     )[0];
 }
 
+// Inspectorに専用UIが無いComponentの表示名。種別idをそのまま見せない。
+const UNSUPPORTED_COMPONENT_LABELS: Readonly<Record<string, string>> = {
+  animation: "Animation（廃止）",
+};
+
 function ComponentCard({
   title,
   subtitle,
   enabled,
   actions,
+  remove,
   children,
 }: {
   title: string;
@@ -220,6 +226,12 @@ function ComponentCard({
     onChange: (checked: boolean) => void;
   };
   actions?: ReactNode;
+  // Componentごとに削除ボタンを書き分けず、カード共通の位置と見た目にそろえる。
+  remove?: {
+    label: string;
+    disabled: boolean;
+    onRemove: () => void;
+  };
   children: ReactNode;
 }) {
   return (
@@ -242,6 +254,18 @@ function ComponentCard({
         <span className="flex items-center gap-1.5">
           {subtitle ? <span className="text-xs text-slate-400">{subtitle}</span> : null}
           {actions}
+          {remove ? (
+            <button
+              type="button"
+              disabled={remove.disabled}
+              onClick={remove.onRemove}
+              aria-label={remove.label}
+              title={remove.label}
+              className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <EDITOR_ICONS.delete size={13} aria-hidden="true" />
+            </button>
+          ) : null}
         </span>
       </div>
       <div className="space-y-2 p-2.5">{children}</div>
@@ -776,6 +800,7 @@ function MeshInspector({
   onApplyTerrainSurface,
   showModelPose = true,
   materialBindingSourceNodeIndex,
+  onRemove,
 }: {
   component: MeshComponent;
   assets: AssetManifest;
@@ -783,6 +808,7 @@ function MeshInspector({
   readOnly: boolean;
   onChange: (patch: MeshInspectorPatch) => void;
   onOpenMaterial: (assetId: string) => void;
+  onRemove?: () => void;
   onTerrainBrush?: (operation: TerrainSceneBrushOperation) => void;
   onGrassLayersChange?: (grass: TerrainGrassLayer[], notice: string) => void;
   onTerrainSettings?: (
@@ -840,6 +866,15 @@ function MeshInspector({
     <div className="space-y-3">
       <ComponentCard
       title="Mesh Renderer"
+      remove={
+        onRemove
+          ? {
+              label: "Mesh Rendererを削除",
+              disabled: readOnly,
+              onRemove,
+            }
+          : undefined
+      }
       enabled={{
         checked: component.enabled,
         disabled: readOnly,
@@ -3326,15 +3361,25 @@ function LightInspector({
   component,
   readOnly,
   onChange,
+  onRemove,
 }: {
   component: LightComponent;
   readOnly: boolean;
   onChange: (patch: LightPatch) => void;
+  onRemove?: () => void;
 }) {
   const supportsShadow = ["directional", "point", "spot"].includes(component.lightType);
 
   return (
-    <ComponentCard title={LIGHT_LABELS[component.lightType]} subtitle="Three.js">
+    <ComponentCard
+      title={LIGHT_LABELS[component.lightType]}
+      subtitle="Three.js"
+      remove={
+        onRemove
+          ? { label: "Lightを削除", disabled: readOnly, onRemove }
+          : undefined
+      }
+    >
       <ToggleRow
         label="Enabled"
         checked={component.enabled}
@@ -3484,12 +3529,14 @@ function TextInspector({
   readOnly,
   onChange,
   onOpenAsset,
+  onRemove,
 }: {
   component: TextComponent;
   assets: AssetManifest;
   readOnly: boolean;
   onChange: (patch: TextPatch) => void;
   onOpenAsset: (assetId: string) => void;
+  onRemove?: () => void;
 }) {
   const background = component.background ?? DEFAULT_TEXT_BACKGROUND;
   const patchBackground = (patch: TextBackgroundPatch) =>
@@ -3508,7 +3555,15 @@ function TextInspector({
     : undefined;
 
   return (
-    <ComponentCard title="Text" subtitle="SDF">
+    <ComponentCard
+      title="Text"
+      subtitle="SDF"
+      remove={
+        onRemove
+          ? { label: "Textを削除", disabled: readOnly, onRemove }
+          : undefined
+      }
+    >
       <ToggleRow
         label="Enabled"
         checked={component.enabled}
@@ -3885,12 +3940,14 @@ function AudioSourceInspector({
   readOnly,
   onChange,
   onOpenAsset,
+  onRemove,
 }: {
   component: AudioSourceComponent;
   assets: AssetManifest;
   readOnly: boolean;
   onChange: (patch: AudioSourcePatch) => void;
   onOpenAsset: (assetId: string) => void;
+  onRemove?: () => void;
 }) {
   const audioAssets = Object.values(assets.assets)
     .filter((asset) => asset.kind === "audio")
@@ -3899,7 +3956,15 @@ function AudioSourceInspector({
     ? assets.assets[component.audioAssetId]
     : undefined;
   return (
-    <ComponentCard title="Audio Source" subtitle="Three.js">
+    <ComponentCard
+      title="Audio Source"
+      subtitle="Three.js"
+      remove={
+        onRemove
+          ? { label: "Audio Sourceを削除", disabled: readOnly, onRemove }
+          : undefined
+      }
+    >
       <ToggleRow
         label="Enabled"
         checked={component.enabled}
@@ -4012,13 +4077,23 @@ function VegetationWindInspector({
   component,
   readOnly,
   onChange,
+  onRemove,
 }: {
   component: VegetationWindComponent;
   readOnly: boolean;
   onChange: (patch: VegetationWindPatch) => void;
+  onRemove?: () => void;
 }) {
   return (
-    <ComponentCard title="Wind" subtitle="Entity Component">
+    <ComponentCard
+      title="Wind"
+      subtitle="Entity Component"
+      remove={
+        onRemove
+          ? { label: "Windを削除", disabled: readOnly, onRemove }
+          : undefined
+      }
+    >
       <p className="text-xs leading-4 text-slate-600">
         このEntityと子Meshを風の対象にします。風の強さ・速度・突風はScene Settingsのグローバル設定を使います。Mesh名からは判定しません。
       </p>
@@ -4199,6 +4274,7 @@ function EntityInspector({
   onAutoFitCollider,
   onRemoveCollider,
   onRemoveRigidBody,
+  onRemoveComponent,
   onLightChange,
   onTextChange,
   onVegetationWindChange,
@@ -4265,6 +4341,7 @@ function EntityInspector({
   onAutoFitCollider: (componentId: string) => void;
   onRemoveCollider: (componentId: string) => void;
   onRemoveRigidBody: (componentId: string) => void;
+  onRemoveComponent: (componentId: string) => void;
   onLightChange: (componentId: string, patch: LightPatch) => void;
   onTextChange: (componentId: string, patch: TextPatch) => void;
   onVegetationWindChange: (
@@ -4525,6 +4602,7 @@ function EntityInspector({
                 onApplyTerrainSurface(component.id, entry, values)
               }
               onOpenMaterial={onOpenMaterial}
+              onRemove={() => onRemoveComponent(component.id)}
             />
           );
         }
@@ -4562,6 +4640,7 @@ function EntityInspector({
               component={component}
               readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) => onLightChange(component.id, patch)}
+              onRemove={() => onRemoveComponent(component.id)}
             />
           );
         }
@@ -4574,6 +4653,7 @@ function EntityInspector({
               readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) => onTextChange(component.id, patch)}
               onOpenAsset={onOpenMaterial}
+              onRemove={() => onRemoveComponent(component.id)}
             />
           );
         }
@@ -4586,6 +4666,7 @@ function EntityInspector({
               readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) => onAudioSourceChange(component.id, patch)}
               onOpenAsset={onOpenMaterial}
+              onRemove={() => onRemoveComponent(component.id)}
             />
           );
         }
@@ -4596,6 +4677,7 @@ function EntityInspector({
               component={component}
               readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) => onVegetationWindChange(component.id, patch)}
+              onRemove={() => onRemoveComponent(component.id)}
             />
           );
         }
@@ -4616,7 +4698,16 @@ function EntityInspector({
         }
         if (component.type === "spawn-point") {
           return (
-            <ComponentCard key={component.id} title="Spawn Point" subtitle={component.target}>
+            <ComponentCard
+              key={component.id}
+              title="Spawn Point"
+              subtitle={component.target}
+              remove={{
+                label: "Spawn Pointを削除",
+                disabled: readOnly && !liveRuntimeTuning,
+                onRemove: () => onRemoveComponent(component.id),
+              }}
+            >
               <p className="text-xs leading-4 text-slate-600">
                 Play開始位置の基準点です。Play中の移動結果はシーンに保存されません。
               </p>
@@ -4630,6 +4721,11 @@ function EntityInspector({
               key={component.id}
               title="Interaction Trigger"
               subtitle={graphAsset?.name ?? "未設定"}
+              remove={{
+                label: "Interaction Triggerを削除",
+                disabled: readOnly && !liveRuntimeTuning,
+                onRemove: () => onRemoveComponent(component.id),
+              }}
             >
               <InteractionTriggerInspector
                 component={component}
@@ -4655,6 +4751,11 @@ function EntityInspector({
               key={component.id}
               title="Script"
               subtitle={scriptAsset?.name ?? "未設定"}
+              remove={{
+                label: "Scriptを削除",
+                disabled: readOnly && !liveRuntimeTuning,
+                onRemove: () => onRemoveComponent(component.id),
+              }}
             >
               <ScriptComponentInspector
                 component={component}
@@ -4671,7 +4772,36 @@ function EntityInspector({
             </ComponentCard>
           );
         }
-        return null;
+        // Inspectorに編集UIを持たないComponentも、カードだけは出して外せる
+        // ようにする。廃止されたAnimation Componentのように、表示されないまま
+        // Entityに残り続けるものを作らない。prefab-instanceとxrift-componentは
+        // 後続のブロックが描くので、ここでは触らない。
+        if (
+          component.type === "prefab-instance" ||
+          component.type === "xrift-component"
+        ) {
+          return null;
+        }
+        return (
+          <ComponentCard
+            key={component.id}
+            title={UNSUPPORTED_COMPONENT_LABELS[component.type] ?? component.type}
+            subtitle="Inspector未対応"
+            remove={{
+              label: `${
+                UNSUPPORTED_COMPONENT_LABELS[component.type] ?? component.type
+              }を削除`,
+              disabled: readOnly && !liveRuntimeTuning,
+              onRemove: () => onRemoveComponent(component.id),
+            }}
+          >
+            <p className="text-xs leading-4 text-slate-600">
+              {component.type === "animation"
+                ? "Animation Componentは廃止されました。clipの再生はInteractivity Graphのanimation/startノードで行います。プロジェクトを開き直すと自動で変換されますが、ここから削除もできます。"
+                : "このComponentはInspectorで編集できません。不要であれば削除できます。"}
+            </p>
+          </ComponentCard>
+        );
       })}
 
       {registeredComponents
@@ -4683,6 +4813,11 @@ function EntityInspector({
             key={component.id}
             title="Prefab Instance"
             subtitle={component.type}
+            remove={{
+              label: "Prefab Instanceを削除",
+              disabled: readOnly && !liveRuntimeTuning,
+              onRemove: () => onRemoveComponent(component.id),
+            }}
           >
             <p className="text-xs leading-4 text-slate-600">
               コンポーネント設定はシーンと一緒に保存されます。
@@ -4908,6 +5043,7 @@ export function InspectorPanel({
   onAutoFitCollider,
   onRemoveCollider,
   onRemoveRigidBody,
+  onRemoveComponent,
   onLightChange,
   onTextChange,
   onVegetationWindChange,
@@ -5010,6 +5146,7 @@ export function InspectorPanel({
   onAutoFitCollider: (entityId: string, componentId: string) => void;
   onRemoveCollider: (entityId: string, componentId: string) => void;
   onRemoveRigidBody: (entityId: string, componentId: string) => void;
+  onRemoveComponent: (entityId: string, componentId: string) => void;
   onLightChange: (entityId: string, componentId: string, patch: LightPatch) => void;
   onTextChange: (entityId: string, componentId: string, patch: TextPatch) => void;
   onVegetationWindChange: (
@@ -5308,6 +5445,9 @@ export function InspectorPanel({
             }
             onRemoveRigidBody={(componentId) =>
               onRemoveRigidBody(entity.id, componentId)
+            }
+            onRemoveComponent={(componentId) =>
+              onRemoveComponent(entity.id, componentId)
             }
             onLightChange={(componentId, patch) =>
               onLightChange(entity.id, componentId, patch)

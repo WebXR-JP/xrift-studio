@@ -72,6 +72,7 @@ pnpm build:preview       # GitHub Pages 用プレビューのビルド
 - 新しい画面は、まずブラウザで動く React の状態・表示を作り、Tauri 固有処理を小さな IPC ラッパーへ分離する。
 - XRift のワールド内 Component、公式 Component、3D Asset の見た目を、SVG、CSS 図形、DOM の疑似サムネイルで代替しない。Edit、Play、カタログのいずれも `@xrift/world-components` 本体または同じ Three.js / React Three Fiber の実レンダリング経路を使う。公式 Component が Context を必要とする場合は Studio 用 Provider bridge を用意し、独自の旧デザインを再実装しない。Component 自体が子要素だけを包む wrapper の場合は、公式 sample の実 WebGL 子要素を表示する。実レンダリングできない対象は架空の見た目を作らず、未対応理由を明示する。
 - ネイティブ API が使えないブラウザプレビューでは、成功したように見せるモックを実機能と混同させない。画面上でサンプル・デモであることを明示する。
+- 新しい Component を Add Component メニューへ足すときは、同じ作業単位で Inspector の削除導線も用意する。`ComponentCard` の `remove` を使い、削除ハンドラは `VisualEditorPrototype` の `handleRemoveComponent` に通す。Transform のように削除できない Component は、押した理由が分かる通知を返す。Inspector に専用 UI を持たない種別も、共通カードを出して見えない Component を作らない。追加できて外せない Component を残すと、ユーザーは Entity ごと作り直すしかなくなる。
 - Editor に新しい操作を足したら、同じ作業単位で MCP tool も足す。Inspector やツールバーからしか触れない操作は、AI から見ると存在しない機能になる。手順と surface ごとの権限は `docs/MCP_EDITOR_TOOLS.md` にある。公開しない判断をした場合は、その理由を同じ文書の「意図的に公開していない操作」へ記録する。
 - Rust コマンドへ外部入力を渡すときは、既存のパス検証と権限制御を維持し、任意のパス実行や削除を追加しない。
 - 検証は「高速フィードバックループ」の 3 段階に従う。`pnpm typecheck`、`cargo check`、Vite の開発サーバーによるブラウザプレビュー、検証目的の `pnpm tauri:dev` 起動と MCP での読み取りは許可なしで行う。本番ビルドとインストーラ生成は通常の開発確認では実行せず、明示依頼、リリース成果物を作る直前、署名、バンドル、インストーラ設定の変更時だけ候補にする。実行前に目的と副作用を示してユーザーの許可を得る。実機での書き込みを伴う UI 操作も事前に許可を得る。許可なくビルド成果物、アプリデータ、公開先を変更しない。

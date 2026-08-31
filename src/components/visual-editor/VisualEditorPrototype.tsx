@@ -375,6 +375,23 @@ const IMPORT_RESOURCE_KIND: Readonly<
   audio: "audio",
   shader: "shader",
 };
+// Inspectorの削除通知で使う表示名。Component種別のidをそのまま出さない。
+const COMPONENT_REMOVAL_LABELS: Readonly<Record<string, string>> = {
+  mesh: "Mesh Renderer",
+  light: "Light",
+  text: "Text",
+  "audio-source": "Audio Source",
+  "vegetation-wind": "Wind",
+  "particle-emitter": "Particle Emitter",
+  collider: "Collider",
+  "rigid-body": "Rigid Body",
+  "spawn-point": "Spawn Point",
+  "interaction-trigger": "Interaction Trigger",
+  script: "Script",
+  animation: "Animation（廃止）",
+  "prefab-instance": "Prefab Instance",
+};
+
 const AUTOSAVE_DELAY_MS = 800;
 const AUTOSAVE_MAX_ATTEMPTS = 4;
 const AUTOSAVE_RETRY_DELAYS_MS = [300, 900, 1_800] as const;
@@ -8795,6 +8812,48 @@ export function VisualEditorPrototype({
     [editorMode, playSession, updateScene],
   );
 
+  // Transform以外のComponentは、種類ごとの専用ボタンを増やさずここでまとめて外す。
+  const handleRemoveComponent = useCallback(
+    (entityId: string, componentId: string) => {
+      if (editorMode !== "edit" && !playSession) return;
+      const entity = bundleRef.current.scene.entities[entityId];
+      const target = entity?.components.find(
+        (component) => component.id === componentId,
+      );
+      if (!target) return;
+      if (target.type === "transform") {
+        setNotice("TransformはEntityに必須のため削除できません");
+        return;
+      }
+      if (target.type === "xrift-component") {
+        handleRemoveXriftComponent(entityId, componentId);
+        return;
+      }
+      updateScene((scene) => {
+        const current = scene.entities[entityId];
+        if (!current) return scene;
+        const components = current.components.filter(
+          (component) => component.id !== componentId,
+        );
+        if (components.length === current.components.length) return scene;
+        return {
+          ...scene,
+          entities: {
+            ...scene.entities,
+            [entityId]: { ...current, components },
+          },
+        };
+      });
+      const label = COMPONENT_REMOVAL_LABELS[target.type] ?? "Component";
+      setNotice(
+        editorMode === "play"
+          ? `${label}を削除し、このEntityのPlayを先頭から再実行しました`
+          : `${label}を削除しました。取り消すにはUndoを使います`,
+      );
+    },
+    [editorMode, handleRemoveXriftComponent, playSession, updateScene],
+  );
+
   const handleSelectAsset = useCallback((assetId: string) => {
     setSceneSettingsOpen(false);
     setAssetSelection(assetId);
@@ -10818,6 +10877,7 @@ export function VisualEditorPrototype({
             onAutoFitCollider={handleAutoFitCollider}
             onRemoveCollider={handleRemoveCollider}
             onRemoveRigidBody={handleRemoveRigidBody}
+            onRemoveComponent={handleRemoveComponent}
             onLightChange={handleLightChange}
             onTextChange={handleTextChange}
             onVegetationWindChange={handleVegetationWindChange}
