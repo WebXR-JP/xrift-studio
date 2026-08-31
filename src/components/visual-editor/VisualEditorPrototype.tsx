@@ -331,10 +331,14 @@ import {
   type VisualEditorLayout,
 } from "./editor-layout";
 import {
+  DEFAULT_TEXTURE_IMPORT_COMPRESSION,
   DEFAULT_TEXTURE_IMPORT_MAX_SIZE,
+  loadTextureImportCompression,
   loadTextureImportMaxSize,
+  saveTextureImportCompression,
   saveTextureImportMaxSize,
-  textureImportMaxSizePatch,
+  textureImportSettingsPatch,
+  type TextureImportCompression,
   type TextureImportMaxSize,
 } from "./texture-import-defaults";
 import {
@@ -1497,11 +1501,16 @@ export function VisualEditorPrototype({
   const [layout, setLayout] = useState<VisualEditorLayout>({
     ...loadEditorLayout(initialLayout),
   });
-  // 取り込むTextureに入れておく最大解像度。原本は変換せず、公開時に反映される。
+  // 取り込むTextureに入れておく最大解像度と圧縮方式。取り込み時に編集用画像へ
+  // 適用され、シーンと公開の両方がその画像を使う。元画像は保持する。
   const [textureImportMaxSize, setTextureImportMaxSize] =
     useState<TextureImportMaxSize>(DEFAULT_TEXTURE_IMPORT_MAX_SIZE);
   const textureImportMaxSizeRef = useRef(textureImportMaxSize);
   textureImportMaxSizeRef.current = textureImportMaxSize;
+  const [textureImportCompression, setTextureImportCompression] =
+    useState<TextureImportCompression>(DEFAULT_TEXTURE_IMPORT_COMPRESSION);
+  const textureImportCompressionRef = useRef(textureImportCompression);
+  textureImportCompressionRef.current = textureImportCompression;
   const [transformMode, setTransformMode] = useState<TransformMode>("translate");
   const [transformSpace, setTransformSpace] = useState<TransformSpace>("world");
   const [editorMode, setEditorMode] = useState<EditorMode>("edit");
@@ -2139,6 +2148,7 @@ export function VisualEditorPrototype({
 
   useEffect(() => {
     setTextureImportMaxSize(loadTextureImportMaxSize());
+    setTextureImportCompression(loadTextureImportCompression());
   }, []);
 
   useEffect(() => {
@@ -2732,7 +2742,10 @@ export function VisualEditorPrototype({
                     assetId: modelAssetId,
                     state: modelReimportStateFromProgress(progress),
                   }),
-                textureImportMaxSizePatch(textureImportMaxSizeRef.current),
+                textureImportSettingsPatch(
+                  textureImportMaxSizeRef.current,
+                  textureImportCompressionRef.current,
+                ),
               );
               if (!result.ok) {
                 setModelReimportFeedback({
@@ -7430,7 +7443,10 @@ export function VisualEditorPrototype({
               state: modelReimportStateFromProgress(progress),
             });
           },
-          textureImportMaxSizePatch(textureImportMaxSizeRef.current),
+          textureImportSettingsPatch(
+            textureImportMaxSizeRef.current,
+            textureImportCompressionRef.current,
+          ),
         );
 
       if (!result.ok) {
@@ -9265,10 +9281,12 @@ export function VisualEditorPrototype({
                 ...(companion.type ? { mimeType: companion.type } : {}),
               })),
             );
-            // 取り込み時の最大解像度は、単体のTextureにもモデル内蔵のTextureにも
-            // 同じように入れる。原本は変換せず、公開時にこの解像度へ変換される。
-            const textureImportSettings = textureImportMaxSizePatch(
+            // 取り込み時の最大解像度・圧縮方式は、単体のTextureにもモデル内蔵の
+            // Textureにも同じように入れる。取り込み後に編集用画像へ適用され、
+            // シーンと公開の両方がその画像を使う。元画像は保持する。
+            const textureImportSettings = textureImportSettingsPatch(
               textureImportMaxSizeRef.current,
+              textureImportCompressionRef.current,
             );
             const plan = await createAssetImportPlan({
               fileName: sourceFile.name,
@@ -10557,6 +10575,11 @@ export function VisualEditorPrototype({
               onTextureMaxSizeChange={(value) => {
                 setTextureImportMaxSize(value);
                 saveTextureImportMaxSize(value);
+              }}
+              textureCompression={textureImportCompression}
+              onTextureCompressionChange={(value) => {
+                setTextureImportCompression(value);
+                saveTextureImportCompression(value);
               }}
               onImportModel={() => globalModelImportInputRef.current?.click()}
               onImportR3f={() => setComponentImportOpen(true)}
