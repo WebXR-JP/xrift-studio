@@ -98,13 +98,27 @@ export function runInteractivityRecipeFixtureAssertions(): void {
 
     // A recipe that writes a material property must say so, or the palette
     // offers it in a project with no Material and it silently targets nothing.
-    const writesMaterial = nodes.some(
+    // Recipes that go through `xrift/setProperty` address the Entity's own
+    // Material, so they carry no index and need no flag.
+    const writesMaterialPointer = nodes.some(
       (node) => node.values?.material !== undefined,
     );
     assert(
-      writesMaterial === (recipe.needsMaterial === true),
+      writesMaterialPointer === (recipe.needsMaterial === true),
       `Recipe ${recipe.id} disagrees with its needsMaterial flag`,
     );
+
+    // No recipe may be built on the pointer operations. They have no glTF
+    // Object Model resolution behind them, so the chain lands looking right and
+    // does nothing when the world runs - which is why the catalogue was pulled
+    // from the add panel the first time.
+    for (const node of nodes) {
+      const op = graph.declarations?.[node.declaration]?.op ?? "";
+      assert(
+        !op.startsWith("pointer/"),
+        `Recipe ${recipe.id} uses ${op}, which Play does not run`,
+      );
+    }
   }
 
   // Colour recipes have to write the colour they advertise, in the linear light
@@ -118,8 +132,13 @@ export function runInteractivityRecipeFixtureAssertions(): void {
   colorRecipe.build(colorGraph, { x: 0, y: 0 }, 0);
   const written = colorGraph.nodes?.[1]?.values?.value?.value ?? [];
   const [red, green, blue] = tintToLinearRgb(INTERACTIVITY_RECIPE_COLOR);
+  // Three channels, not four: a trigger's colour value is linear RGB, and
+  // opacity is its own property rather than a fourth slot on the colour.
   assert(
-    written[0] === red && written[1] === green && written[2] === blue && written[3] === 1,
+    written.length === 3 &&
+      written[0] === red &&
+      written[1] === green &&
+      written[2] === blue,
     "The colour recipe wrote a different colour than the catalog derives",
   );
   assert(
@@ -533,9 +552,26 @@ export function runInteractivityRuntimeAdapterFixtureAssertions(): void {
     getInteractivityRecipeRuntimeSupport(recipeById("delayed-animation")) === "executed",
     "The delayed animation recipe is no longer runnable in Play",
   );
+  // The colour recipes used to be `pointer/set`, which no host resolves, and
+  // this assertion pinned them as unrunnable. They now write the Entity's own
+  // Material through `xrift/setProperty`, so the same assertion is what proves
+  // they stopped being a chain that does nothing.
+  for (const id of ["start-hide", "start-set-color", "start-fade-color", "start-emissive"]) {
+    assert(
+      getInteractivityRecipeRuntimeSupport(recipeById(id)) === "executed",
+      `The ${id} recipe is not runnable in Play`,
+    );
+  }
+
+  // A duration turns an immediate write into a ramp the engine interpolates, so
+  // 「ゆっくり」has to actually carry one.
+  const fade = emptyExtension();
+  const fadeGraph = fade.graphs[0] as KhrInteractivityGraph;
+  recipeById("start-fade-color").build(fadeGraph, { x: 0, y: 0 }, 0);
+  const fadeSeconds = fadeGraph.nodes?.[1]?.values?.duration?.value?.[0];
   assert(
-    getInteractivityRecipeRuntimeSupport(recipeById("start-set-color")) === "ignored",
-    "A pointer/set recipe claimed Play support no host provides",
+    typeof fadeSeconds === "number" && fadeSeconds > 0,
+    "The slow colour recipe writes instantly, so it is the same as the plain one",
   );
 }
 

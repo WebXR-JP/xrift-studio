@@ -2955,6 +2955,62 @@ export function runXriftMcpEditorToolFixtures(): void {
   );
   const triggerComponentId = triggerComponent?.id as string;
 
+  // A recipe applied over MCP has to land runnable. The editor's palette drops
+  // one into an open graph and the setup panel says what is still missing;
+  // there is no panel here, so the tool has to finish the wiring itself or the
+  // client is left with the same「テンプレートから作っても動かない」.
+  const recipeList = executeXriftMcpEditorTool(current, {
+    id: "fixture-recipe-list",
+    tool: "list_interactivity_recipes",
+    arguments: {},
+  });
+  const recipes = recipeList.result.recipes as Array<{
+    id: string;
+    usesInteract: boolean;
+  }>;
+  assert(
+    recipes.some((recipe) => recipe.id === "interact-teleport" && recipe.usesInteract),
+    "list_interactivity_recipes should offer the teleport recipe as press-driven",
+  );
+  const recipeApplied = executeXriftMcpEditorTool(current, {
+    id: "fixture-recipe-apply",
+    tool: "apply_interactivity_recipe",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      recipeId: "interact-teleport",
+      entityId: primitiveId,
+    },
+  });
+  current = {
+    ...current,
+    bundle: recipeApplied.bundle,
+    revision: current.revision + 1,
+  };
+  assert(
+    recipeApplied.result.attached === true &&
+      recipeApplied.result.readyToRun === true,
+    "apply_interactivity_recipe should attach the graph it created",
+  );
+  const recipeEntity = current.bundle.scene.entities[primitiveId as string];
+  assert(
+    (recipeEntity?.components ?? []).some(
+      (component) =>
+        component.type === "interaction-trigger" &&
+        component.interactivityAssetId === recipeApplied.result.assetId,
+    ),
+    "the recipe's graph was not attached through an Interaction Trigger",
+  );
+  assert(
+    (recipeEntity?.components ?? []).some(
+      (component) =>
+        component.type === "xrift-component" &&
+        component.schemaId === "xrift.interactable",
+    ),
+    "a press-driven recipe left the Entity with nothing to press",
+  );
+
   const triggerTargets = executeXriftMcpEditorTool(current, {
     id: "fixture-trigger-targets",
     tool: "list_interaction_trigger_targets",

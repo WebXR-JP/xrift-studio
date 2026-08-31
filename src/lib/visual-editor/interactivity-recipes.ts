@@ -1,11 +1,13 @@
 import {
   cloneKhrInteractivityExtension,
   collectInteractivityRuntimeDiagnostics,
-  configureInteractivityMaterialPointer,
   createDefaultKhrInteractivityExtension,
   estimateInteractivityNodeHeight,
   getInteractivityOperationTemplate,
   configureInteractivityTriggerAction,
+  getXriftInteractionProperty,
+  setInteractivityTriggerActionDuration,
+  setInteractivityTriggerActionValue,
   writeInteractivityNodePosition,
   XRIFT_INTERACTION_OPERATIONS,
   XRIFT_INTERACTION_PLAYER_ENTITY_ID,
@@ -14,6 +16,8 @@ import {
   type KhrInteractivityGraph,
   type KhrInteractivityJsonValue,
   type KhrInteractivityNode,
+  type XriftInteractionPropertyDescriptor,
+  type XriftInteractionTargetKind,
 } from "./interactivity-graph";
 import { tintToLinearRgb } from "./glow-material-catalog";
 
@@ -157,6 +161,30 @@ function recipeColorValue(alpha: number | null): KhrInteractivityJsonValue[] {
 }
 
 /**
+ * Points one action node at the Entity this graph is attached to.
+ *
+ * Every recipe writes through `xrift/setProperty` rather than `pointer/*`,
+ * because that is the pair Play and the published world both run: the pointer
+ * operations have no glTF Object Model resolution behind them, and a recipe
+ * built on one lands as a tidy chain that does nothing. Returns the descriptor
+ * so the caller can seed a value the property actually accepts.
+ */
+function configureSelfAction(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+  targetKind: XriftInteractionTargetKind,
+  property: string,
+): XriftInteractionPropertyDescriptor | null {
+  const ok = configureInteractivityTriggerAction(graph, nodeIndex, {
+    entityId: XRIFT_INTERACTION_SELF_ENTITY_ID,
+    componentId: "",
+    targetKind,
+    property,
+  });
+  return ok ? getXriftInteractionProperty(targetKind, property) ?? null : null;
+}
+
+/**
  * The interaction recipes.
  *
  * Every one of these targets something Entity-scoped - the Entity itself, its
@@ -170,7 +198,7 @@ export const INTERACTIVITY_RECIPES: readonly InteractivityRecipe[] = [
     id: "interact-teleport",
     label: "押したらテレポートする",
     description:
-      "押した人を、指定した座標へ移動させます。押した人だけが動きます",
+      "押した人を、指定した座標へ移動させます。既定はワールド原点で、押した人だけが動きます",
     focusOffset: 1,
     build: (graph, origin) => {
       const interact = appendInteractivityOperation(
@@ -209,12 +237,7 @@ export const INTERACTIVITY_RECIPES: readonly InteractivityRecipe[] = [
         XRIFT_INTERACTION_OPERATIONS.toggleProperty,
         { x: origin.x + 320, y: origin.y },
       );
-      configureInteractivityTriggerAction(graph, toggle, {
-        entityId: XRIFT_INTERACTION_SELF_ENTITY_ID,
-        componentId: "",
-        targetKind: "entity",
-        property: "enabled",
-      });
+      configureSelfAction(graph, toggle, "entity", "enabled");
       connectInteractivityFlow(graph, interact, "out", toggle);
     },
   },
@@ -222,7 +245,7 @@ export const INTERACTIVITY_RECIPES: readonly InteractivityRecipe[] = [
     id: "interact-move-self",
     label: "押したら動かす",
     description:
-      "押したEntity自身を、指定した位置へ動かします。扉やリフトに",
+      "押したEntity自身を、2m上へ1秒かけて動かします。扉やリフトに",
     focusOffset: 1,
     build: (graph, origin) => {
       const interact = appendInteractivityOperation(
@@ -235,63 +258,93 @@ export const INTERACTIVITY_RECIPES: readonly InteractivityRecipe[] = [
         XRIFT_INTERACTION_OPERATIONS.setProperty,
         { x: origin.x + 320, y: origin.y },
       );
-      configureInteractivityTriggerAction(graph, move, {
-        entityId: XRIFT_INTERACTION_SELF_ENTITY_ID,
-        componentId: "",
-        targetKind: "transform",
-        property: "position",
-      });
+      const descriptor = configureSelfAction(graph, move, "transform", "position");
+      if (descriptor) {
+        // Not [0, 0, 0]: a Transform action whose destination is the Entity's
+        // own origin moves nothing, and a template that visibly does nothing
+        // the first time it is pressed reads as broken rather than as a start.
+        setInteractivityTriggerActionValue(graph, move, descriptor, [0, 2, 0]);
+      }
+      setInteractivityTriggerActionDuration(graph, move, 1);
       connectInteractivityFlow(graph, interact, "out", move);
+    },
+  },
+  {
+    id: "start-hide",
+    label: "開始時に隠しておく",
+    description:
+      "開始と同時にこのEntityを消します。押したら現れる仕掛けの、片側になります",
+    focusOffset: 1,
+    build: (graph, origin) => {
+      const start = appendInteractivityOperation(graph, "event/onStart", origin);
+      const hide = appendInteractivityOperation(
+        graph,
+        XRIFT_INTERACTION_OPERATIONS.setProperty,
+        { x: origin.x + 320, y: origin.y },
+      );
+      const descriptor = configureSelfAction(graph, hide, "entity", "enabled");
+      if (descriptor) {
+        setInteractivityTriggerActionValue(graph, hide, descriptor, [false]);
+      }
+      connectInteractivityFlow(graph, start, "out", hide);
     },
   },
   {
     id: "start-set-color",
     label: "開始時に色を変える",
-    description: "開始と同時にMaterialのBase Colorを書き換えます",
-    needsMaterial: true,
+    description: "開始と同時に、このEntityのMaterialのBase Colorを変えます",
     focusOffset: 1,
-    build: (graph, origin, materialIndex) => {
+    build: (graph, origin) => {
       const start = appendInteractivityOperation(graph, "event/onStart", origin);
-      const set = appendInteractivityOperation(graph, "pointer/set", {
-        x: origin.x + 320,
-        y: origin.y,
-      });
-      configureInteractivityMaterialPointer(graph, set, "base-color", materialIndex);
-      setInteractivityLiteralValue(graph, set, "value", recipeColorValue(1));
+      const set = appendInteractivityOperation(
+        graph,
+        XRIFT_INTERACTION_OPERATIONS.setProperty,
+        { x: origin.x + 320, y: origin.y },
+      );
+      const descriptor = configureSelfAction(graph, set, "material", "baseColor");
+      if (descriptor) {
+        setInteractivityTriggerActionValue(graph, set, descriptor, recipeColorValue(null));
+      }
       connectInteractivityFlow(graph, start, "out", set);
     },
   },
   {
     id: "start-fade-color",
     label: "開始時に色をゆっくり変える",
-    description: "開始からBase Colorを1秒かけて補間します",
-    needsMaterial: true,
+    description: "開始からBase Colorを1秒かけて変えます。「かける時間」で速さを変えられます",
     focusOffset: 1,
-    build: (graph, origin, materialIndex) => {
+    build: (graph, origin) => {
       const start = appendInteractivityOperation(graph, "event/onStart", origin);
-      const interpolate = appendInteractivityOperation(graph, "pointer/interpolate", {
-        x: origin.x + 320,
-        y: origin.y,
-      });
-      configureInteractivityMaterialPointer(graph, interpolate, "base-color", materialIndex);
-      setInteractivityLiteralValue(graph, interpolate, "value", recipeColorValue(1));
-      connectInteractivityFlow(graph, start, "out", interpolate);
+      const set = appendInteractivityOperation(
+        graph,
+        XRIFT_INTERACTION_OPERATIONS.setProperty,
+        { x: origin.x + 320, y: origin.y },
+      );
+      const descriptor = configureSelfAction(graph, set, "material", "baseColor");
+      if (descriptor) {
+        setInteractivityTriggerActionValue(graph, set, descriptor, recipeColorValue(null));
+      }
+      setInteractivityTriggerActionDuration(graph, set, 1);
+      connectInteractivityFlow(graph, start, "out", set);
     },
   },
   {
     id: "start-emissive",
     label: "開始時に発光させる",
-    description: "開始と同時にEmissiveを立ち上げます。Bloomと合わせて光らせるとき用",
-    needsMaterial: true,
+    description:
+      "開始と同時にEmissiveを立ち上げます。SceneのBloomと合わせると光って見えます",
     focusOffset: 1,
-    build: (graph, origin, materialIndex) => {
+    build: (graph, origin) => {
       const start = appendInteractivityOperation(graph, "event/onStart", origin);
-      const set = appendInteractivityOperation(graph, "pointer/set", {
-        x: origin.x + 320,
-        y: origin.y,
-      });
-      configureInteractivityMaterialPointer(graph, set, "emissive", materialIndex);
-      setInteractivityLiteralValue(graph, set, "value", recipeColorValue(null));
+      const set = appendInteractivityOperation(
+        graph,
+        XRIFT_INTERACTION_OPERATIONS.setProperty,
+        { x: origin.x + 320, y: origin.y },
+      );
+      const descriptor = configureSelfAction(graph, set, "material", "emissive");
+      if (descriptor) {
+        setInteractivityTriggerActionValue(graph, set, descriptor, recipeColorValue(null));
+      }
       connectInteractivityFlow(graph, start, "out", set);
     },
   },

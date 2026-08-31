@@ -101,6 +101,8 @@ export const XRIFT_MCP_TOOLS = [
   { name: "delete_entity", surface: "document" },
   { name: "create_empty_entity", surface: "document" },
   { name: "list_interactivity_operations", surface: "document" },
+  { name: "list_interactivity_recipes", surface: "document" },
+  { name: "apply_interactivity_recipe", surface: "document" },
   { name: "get_interactivity_asset", surface: "document" },
   { name: "create_interactivity_asset", surface: "document" },
   { name: "create_model_animation_graph", surface: "document" },

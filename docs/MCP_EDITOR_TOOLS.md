@@ -27,7 +27,7 @@ document 以外は React shell か Tauri 側が持つ副作用を伴う。
 書き込み tool は `projectId`、`sceneId`、`expectedRevision` を要求する。古い
 snapshot への適用を弾くためで、複数 client が同時に触っても編集は直列化される。
 
-## document (91)
+## document (93)
 
 **Editor context / Project**
 `get_editor_context`, `get_scripting_capabilities`, `update_project_metadata`
@@ -143,7 +143,8 @@ world 座標、傾斜、穴、草の層ごとの被覆を返す。document は�
 （詳細は [Terrain エディター 仕様](./TERRAIN_EDITOR_SPEC.md) の「MCP から草を扱う」）
 
 **Interactivity graph / Interaction Trigger**
-`list_interactivity_operations`,
+`list_interactivity_operations`, `list_interactivity_recipes`,
+`apply_interactivity_recipe`,
 `list_interaction_trigger_targets`, `get_interactivity_asset`,
 `validate_interactivity_asset`, `simulate_interactivity_asset`,
 `create_interactivity_asset`, `create_model_animation_graph`,
@@ -157,6 +158,14 @@ world 座標、傾斜、穴、草の層ごとの被覆を返す。document は�
 `configure_interactivity_trigger_action`,
 `move_interactivity_node`, `layout_interactivity_graph`
 （詳細は [KHR_interactivity Editor / MCP design](./KHR_INTERACTIVITY_EDITOR.md)）
+
+`apply_interactivity_recipe` は、Editor の「追加」パネルの「よく作るもの」と
+同じレシピから Graph Asset を作る。`entityId` を渡すと Interaction Trigger で
+その Entity へ付け、押して動くレシピなら公式 Interactable も足す — ここまでを
+1 revision で行う。Editor には「まだ動きません」と言う setup パネルがあるが
+MCP には無いので、Asset を作るだけの tool では「テンプレートから作ったのに
+動かない」が MCP 側に残る。`list_interactivity_recipes` が id を返し、並ぶのは
+Play と公開先が実際に実行するレシピだけ。
 
 `create_model_animation_graph` は Model Asset の animation clip
 すべてを `event/onStart` から同時にループ再生するグラフを作る。Model Inspector

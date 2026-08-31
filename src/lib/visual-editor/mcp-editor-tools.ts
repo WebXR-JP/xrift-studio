@@ -212,6 +212,7 @@ import {
   setInteractivityTriggerActionAsset,
   setInteractivityTriggerActionText,
   setInteractivityTriggerActionValue,
+  createDefaultKhrInteractivityExtension,
   validateKhrInteractivityExtension,
   writeInteractivityNodePosition,
   xriftInteractionEnumIndex,
@@ -222,7 +223,11 @@ import {
   type XriftInteractionPropertyDescriptor,
   type XriftInteractionTargetKind,
 } from "./interactivity-graph";
-import { createModelAnimationGraphExtension } from "./interactivity-recipes";
+import {
+  createModelAnimationGraphExtension,
+  RUNNABLE_INTERACTIVITY_RECIPES,
+  type InteractivityRecipe,
+} from "./interactivity-recipes";
 import {
   addAssetFolder,
   getAudioAsset,
@@ -258,6 +263,7 @@ import { isSkyShaderMaterialAsset } from "./sky-shader";
 import {
   removeXriftComponent,
   updateXriftComponent,
+  XRIFT_COMPONENT_SCHEMA_IDS,
   type UpdateXriftComponentPatch,
 } from "./component-registry";
 import { addDefaultDocumentAsset } from "./document-asset-creation";
@@ -428,6 +434,8 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   delete_entity: deleteEntity,
   create_empty_entity: createEmptyEntity,
   list_interactivity_operations: listInteractivityOperations,
+  list_interactivity_recipes: listInteractivityRecipes,
+  apply_interactivity_recipe: applyInteractivityRecipe,
   get_interactivity_asset: getInteractivityAsset,
   create_interactivity_asset: createInteractivityAsset,
   create_model_animation_graph: createModelAnimationGraph,
@@ -5473,6 +5481,182 @@ function listInteractivityOperations(
     },
     "KHR_interactivity operation一覧を取得しました",
   );
+}
+
+/**
+ * Whether a recipe's graph reacts to being pressed.
+ *
+ * Decides what `apply_interactivity_recipe` has to put on the Entity: an
+ * `xrift/onInteract` graph is inert until the Entity also carries the official
+ * Interactable, and that is the step an author most often misses.
+ */
+function recipeUsesInteract(recipe: InteractivityRecipe): boolean {
+  const extension = createDefaultKhrInteractivityExtension();
+  const graph = extension.graphs[0] as KhrInteractivityGraph;
+  graph.nodes = [];
+  graph.declarations = [];
+  graph.types = [];
+  recipe.build(graph, { x: 0, y: 0 }, 0);
+  return (graph.nodes ?? []).some(
+    (node) =>
+      graph.declarations?.[node.declaration]?.op ===
+      XRIFT_INTERACTION_OPERATIONS.onInteract,
+  );
+}
+
+function listInteractivityRecipes(
+  context: XriftMcpEditorContext,
+): XriftMcpEditorToolOutcome {
+  return unchanged(
+    context,
+    {
+      recipes: RUNNABLE_INTERACTIVITY_RECIPES.map((recipe) => ({
+        id: recipe.id,
+        label: recipe.label,
+        description: recipe.description,
+        // Only recipes Play and the published world actually run are listed,
+        // so a client cannot pick a chain that lands looking right and then
+        // does nothing.
+        usesInteract: recipeUsesInteract(recipe),
+        needsMaterial: recipe.needsMaterial === true,
+      })),
+    },
+    "Interactivity Graphのレシピ一覧を取得しました",
+  );
+}
+
+/**
+ * Creates a graph from a recipe and, given an Entity, finishes wiring it.
+ *
+ * The editor's palette drops a recipe into a graph that is already open, and
+ * the setup panel then says what is still missing. Over MCP there is no panel,
+ * so a client that only created the Asset was left with a graph nothing runs -
+ * which is the same「テンプレートから作っても動かない」in a different surface.
+ * One call therefore does all three steps, in one revision.
+ */
+function applyInteractivityRecipe(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const recipeId = requiredString(argumentsValue.recipeId, "recipeId");
+  const recipe = RUNNABLE_INTERACTIVITY_RECIPES.find(
+    (candidate) => candidate.id === recipeId,
+  );
+  if (!recipe) {
+    throw new XriftMcpEditorToolError(
+      "RECIPE_NOT_FOUND",
+      "指定されたレシピが見つかりません。list_interactivity_recipes で確認してください",
+      { recipeId },
+    );
+  }
+  const entityId = optionalNullableString(argumentsValue.entityId, "entityId");
+  if (entityId && !context.bundle.scene.entities[entityId]) {
+    throw new XriftMcpEditorToolError("ENTITY_NOT_FOUND", "指定されたEntityが見つかりません", {
+      entityId,
+    });
+  }
+  const folderId = optionalNullableString(argumentsValue.folderId, "folderId");
+  if (folderId && !context.bundle.assets.folders?.[folderId]) {
+    throw new XriftMcpEditorToolError("FOLDER_NOT_FOUND", "指定されたAsset Folderが見つかりません", {
+      folderId,
+    });
+  }
+  const name = optionalString(argumentsValue.name) ?? recipe.label;
+
+  const extension = createDefaultKhrInteractivityExtension();
+  const graph = extension.graphs[0] as KhrInteractivityGraph;
+  graph.name = recipe.label;
+  graph.nodes = [];
+  graph.declarations = [];
+  graph.types = [];
+  recipe.build(graph, { x: 80, y: 160 }, 0);
+
+  const assetId = createDocumentId("interactivity");
+  const added = addDefaultInteractivityAsset(context.bundle.assets, {
+    id: assetId,
+    name,
+    folderId,
+    extension,
+  });
+  if (!added.added) {
+    throw new XriftMcpEditorToolError("ASSET_NOT_CREATED", "Interactivity Assetを作成できませんでした");
+  }
+
+  let scene = context.bundle.scene;
+  const usesInteract = recipeUsesInteract(recipe);
+  let attached = false;
+  let interactableAdded = false;
+  if (entityId) {
+    const trigger = addEditorComponent(
+      scene,
+      added.manifest,
+      entityId,
+      "interaction.trigger",
+      context.bundle.project.projectKind,
+      assetId,
+    );
+    attached = trigger.added;
+    scene = trigger.scene;
+    if (usesInteract) {
+      const entity = scene.entities[entityId];
+      const hasInteractable = (entity?.components ?? []).some(
+        (component) =>
+          component.type === "xrift-component" &&
+          component.schemaId === XRIFT_COMPONENT_SCHEMA_IDS.interactable,
+      );
+      if (!hasInteractable) {
+        const interactable = addEditorComponent(
+          scene,
+          added.manifest,
+          entityId,
+          XRIFT_COMPONENT_SCHEMA_IDS.interactable,
+          context.bundle.project.projectKind,
+        );
+        interactableAdded = interactable.added;
+        scene = interactable.scene;
+      }
+    }
+    scene = syncInteractionTriggerReferences(scene, added.manifest);
+  }
+
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    scene,
+    assets: added.manifest,
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: entityId
+      ? { kind: "entity", id: entityId }
+      : context.sceneSelection,
+    assetSelection: assetId,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      assetId,
+      name,
+      recipeId,
+      entityId: entityId ?? null,
+      attached,
+      interactableAdded,
+      usesInteract,
+      // What is still missing, in the words the editor's own setup panel uses.
+      readyToRun: entityId ? attached : false,
+      nextStep: entityId
+        ? attached
+          ? "Playで確認できます"
+          : "Entityへ付けられませんでした。add_componentでinteraction.triggerを付けてください"
+        : "entityIdを指定するか、add_componentでinteraction.triggerを付けてください",
+      extension,
+    },
+    activity: entityId
+      ? `AIがレシピ「${recipe.label}」を作り、Entityへ付けました`
+      : `AIがレシピ「${recipe.label}」からInteractivity Graphを作りました`,
+  };
 }
 
 function getInteractivityAsset(

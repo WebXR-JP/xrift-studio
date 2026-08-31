@@ -4092,6 +4092,29 @@ fn tool_definitions() -> Value {
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         },
         {
+            "name": "list_interactivity_recipes",
+            "description": "List the ready-made Interactivity Graph recipes the editor offers. Only recipes Play and the published world actually run are listed; each says whether its graph reacts to being pressed.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "apply_interactivity_recipe",
+            "description": "Create an Interactivity Graph Asset from a recipe and, when entityId is given, attach it through an Interaction Trigger and add the official Interactable if the recipe reacts to being pressed. One editor revision. Use list_interactivity_recipes for the ids.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "recipeId": { "type": "string" },
+                    "entityId": { "type": "string" },
+                    "name": { "type": "string" },
+                    "folderId": { "type": ["string", "null"] },
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "number" }
+                },
+                "required": ["recipeId"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "get_interactivity_asset",
             "description": "Read a reusable Interactivity Asset as canonical KHR_interactivity JSON, including validation diagnostics.",
             "inputSchema": {
