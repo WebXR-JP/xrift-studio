@@ -98,6 +98,15 @@ export type ModelImportSettings = {
   generateColliders: boolean;
   optimizeMeshes: boolean;
   importAnimations: boolean;
+  /**
+   * 公開したWorldで、動かないMeshをMaterialごとに1つへまとめる。
+   *
+   * 原本は書き換えず、読み込んだ後の three のSceneでまとめる。Editorは
+   * Nodeごとの選択・表示・Collider・Materialをそのまま扱えて、公開物だけが
+   * draw callを減らす。動くNode、Skin、Nodeごとの上書きがあるNodeは外す。
+   * 省略はfalse。
+   */
+  mergeStaticMeshes?: boolean;
 };
 
 export type ModelImportSettingsPatch = Partial<ModelImportSettings>;
@@ -905,6 +914,12 @@ export function normalizeModelImportSettings(
         : typeof fallback.importAnimations === "boolean"
           ? fallback.importAnimations
           : DEFAULT_MODEL_IMPORT_SETTINGS.importAnimations,
+    // 既定は書かない。省略が「まとめない」なので、古いdocumentがそのまま通る。
+    ...(typeof patch.mergeStaticMeshes === "boolean"
+      ? { mergeStaticMeshes: patch.mergeStaticMeshes }
+      : typeof fallback.mergeStaticMeshes === "boolean"
+        ? { mergeStaticMeshes: fallback.mergeStaticMeshes }
+        : {}),
   };
 }
 

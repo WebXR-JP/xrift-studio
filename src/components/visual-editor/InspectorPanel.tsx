@@ -73,6 +73,7 @@ import {
   type ModelAsset,
   type ModelAssetPatch,
   type ModelOptimizationOptions,
+  describeModelOptimization,
   planModelOptimization,
   MODEL_SIMPLIFY_RATIOS,
   type TextureAsset,
@@ -2432,6 +2433,7 @@ function ModelNodeInspector({
   onOpenMaterial,
   optimizationState,
   onApplyModelOptimization,
+  onRevertModelOptimization,
 }: {
   entity: SceneEntity;
   scene: SceneDocument;
@@ -2449,6 +2451,7 @@ function ModelNodeInspector({
     assetId: string,
     options: ModelOptimizationOptions,
   ) => void;
+  onRevertModelOptimization?: (assetId: string) => void;
 }) {
   const node = entity.modelNode;
   if (!node) return null;
@@ -2531,6 +2534,7 @@ function ModelNodeInspector({
           readOnly={readOnly}
           state={optimizationState}
           onApply={onApplyModelOptimization}
+          onRevert={onRevertModelOptimization}
         />
       ) : null}
       {nodeMesh && node.sourceMaterialIndices.length > 0 ? (
@@ -2581,6 +2585,7 @@ function ModelNodeDecimatePanel({
   readOnly,
   state,
   onApply,
+  onRevert,
 }: {
   model: ModelAsset;
   sourceNodeIndex: number;
@@ -2588,11 +2593,15 @@ function ModelNodeDecimatePanel({
   readOnly: boolean;
   state?: ModelOptimizationState;
   onApply?: (assetId: string, options: ModelOptimizationOptions) => void;
+  onRevert?: (assetId: string) => void;
 }) {
   const busy =
     state?.phase === "reading" ||
     state?.phase === "encoding" ||
     state?.phase === "saving";
+  // 押した瞬間に原本が書き換わるのは行き過ぎる。割合を選ぶことと実行することを
+  // 分けて、何をどれだけ削るのかを読んでから確定できるようにする。
+  const [pendingRatio, setPendingRatio] = useState<number | null>(null);
   const plan = planModelOptimization(model, {
     optimizeMeshes: false,
     compressWithDraco: false,
@@ -2611,22 +2620,77 @@ function ModelNodeDecimatePanel({
                 key={ratio}
                 type="button"
                 disabled={busy || readOnly || !onApply}
+                aria-pressed={pendingRatio === ratio}
                 onClick={() =>
-                  onApply?.(model.id, {
-                    optimizeMeshes: false,
-                    compressWithDraco: false,
-                    simplify: { ratio, target: { kind: "node", sourceNodeIndex } },
-                  })
+                  setPendingRatio((current) => (current === ratio ? null : ratio))
                 }
-                className="h-8 flex-1 rounded-md border border-violet-300 bg-violet-50 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
+                className={`h-8 flex-1 rounded-md border text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45 ${
+                  pendingRatio === ratio
+                    ? "border-violet-500 bg-violet-600 text-white"
+                    : "border-violet-300 bg-violet-50 text-violet-800 hover:bg-violet-100"
+                }`}
               >
                 {Math.round(ratio * 100)}%
               </button>
             ))}
           </div>
+          {pendingRatio !== null ? (
+            <div className="space-y-1.5 rounded border border-violet-200 bg-violet-50 p-2">
+              <p className="text-xs leading-5 text-violet-900">
+                「{nodeName}」のポリゴンを{Math.round(pendingRatio * 100)}
+                %まで減らします。この Model を使っている配置すべてに反映されます。
+              </p>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  disabled={busy || readOnly || !onApply}
+                  onClick={() => {
+                    onApply?.(model.id, {
+                      optimizeMeshes: false,
+                      compressWithDraco: false,
+                      simplify: {
+                        ratio: pendingRatio,
+                        target: { kind: "node", sourceNodeIndex },
+                      },
+                    });
+                    setPendingRatio(null);
+                  }}
+                  className="h-8 flex-1 rounded-md border border-violet-500 bg-violet-600 px-3 text-xs font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {busy ? "実行中" : "軽量化する"}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setPendingRatio(null)}
+                  className="h-8 rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  やめる
+                </button>
+              </div>
+            </div>
+          ) : null}
           <p className="text-[11px] leading-4 text-slate-500">
-            Node構造とMaterialの割当は変わりません。継ぎ目の法線とUVは統合されるので、元に戻すときはModel Assetの「原本のGLBに戻す」を使ってください。
+            Node構造とMaterialの割当は変わりません。継ぎ目の法線とUVは統合されます。
           </p>
+          {/*
+           * 間違えた直後に戻せる場所へ置く。原本は書き換えていないので、
+           * 何度間引いても最初のGLBへ一度で戻る。Model Asset側の同じ操作と
+           * 実体は一つで、ここは近道でしかない。
+           */}
+          {describeModelOptimization(model).optimized ? (
+            <button
+              type="button"
+              disabled={busy || readOnly || !onRevert}
+              onClick={() => {
+                setPendingRatio(null);
+                onRevert?.(model.id);
+              }}
+              className="h-8 w-full rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              オリジナル（100%）に戻す
+            </button>
+          ) : null}
           {state && state.phase !== "idle" ? (
             <p
               role="status"

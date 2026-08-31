@@ -68,6 +68,7 @@ import { runTextureImportDefaultsFixtureAssertions } from "../src/components/vis
 import { runAssetImportTransactionFixtureAssertions } from "../src/lib/visual-editor/asset-import-transaction.fixture.ts";
 import { runModelOptimizationFixtureAssertions } from "../src/lib/visual-editor/model-optimization.fixture.ts";
 import { runModelDecimationFixtureAssertions } from "../src/lib/visual-editor/model-decimation.fixture.ts";
+import { runModelStaticMergeFixtureAssertions } from "../src/lib/visual-editor/model-static-merge.fixture.ts";
 import { runModelAnimationGroupFixtureAssertions } from "../src/lib/visual-editor/model-animation-groups.fixture.ts";
 import { runAssetOperationLockFixtureAssertions } from "../src/components/visual-editor/asset-operation-lock.fixture.ts";
 import { runAutosaveCoordinatorFixtureAssertions } from "../src/components/visual-editor/autosave-coordinator.fixture.ts";
@@ -356,6 +357,7 @@ try {
     ["asset import transaction", runAssetImportTransactionFixtureAssertions],
     ["model optimization", runModelOptimizationFixtureAssertions],
     ["model decimation", runModelDecimationFixtureAssertions],
+    ["model static merge", runModelStaticMergeFixtureAssertions],
     ["model animation groups", runModelAnimationGroupFixtureAssertions],
     ["asset operation lock", runAssetOperationLockFixtureAssertions],
     ["audio import", runAudioImportFixtureAssertions],

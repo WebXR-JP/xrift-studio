@@ -141,6 +141,10 @@ import {
   resolvePrefabInstances,
 } from "./prefab-resolver";
 import {
+  collectStaticMergeExclusions,
+  modelStaticMergeRuntimeSource,
+} from "../model-static-merge";
+import {
   VISUAL_COMPILER_VERSION,
   type AssetCopyPlanEntry,
   type CompilerBundledAssetCopy,
@@ -3287,8 +3291,30 @@ function renderModelMesh(
     mesh.geometry?.kind === "asset"
       ? mesh.geometry.sourceNodeName
       : undefined;
+  /*
+   * 動かないMeshをMaterialごとにまとめる。
+   *
+   * 草414・葉315・海藻254のNodeが合わせて6,000三角形しか無いのに、1本ずつ
+   * draw callを取る。Nodeを残したまま描画だけ束ねたいので、原本ではなく
+   * 読み込んだSceneの側でまとめる。動くNodeとSkinは生成コードが実行時に外す。
+   */
+  const staticMerge =
+    model.importSettings.mergeStaticMeshes === true &&
+    sourceNodeIndex === undefined &&
+    sourceNodeName === undefined &&
+    !isObj
+      ? {
+          excludedNodeIndices: collectStaticMergeExclusions(
+            context.scene,
+            entity.id,
+            mesh,
+          ),
+        }
+      : undefined;
   const needsParser =
     sourceNodeIndex !== undefined ||
+    // 結合はNodeの目印と、animationが触るNodeを知るためにparserを使う。
+    Boolean(staticMerge) ||
     Boolean(mesh.modelPose?.nodes && Object.keys(mesh.modelPose.nodes).length) ||
     mesh.materialBindings.some(
       (binding) => binding.sourceNodeIndex !== undefined,
@@ -3299,7 +3325,21 @@ function renderModelMesh(
     Number.isFinite(model.importSettings.scale)
       ? model.importSettings.scale
       : 1;
-  const poseSource = renderCompiledModelPose(mesh, context);
+  if (staticMerge) {
+    context.threeValueImports.add("Matrix4");
+    context.threeValueImports.add("Mesh");
+    context.threeTypeImports.add("BufferGeometry");
+    context.threeTypeImports.add("Material");
+    context.threeTypeImports.add("Object3D");
+    context.extraImports.add(
+      'import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";',
+    );
+    context.supportDeclarations.set(
+      "model-static-merge:runtime",
+      modelStaticMergeRuntimeSource({ typed: true }),
+    );
+  }
+  const poseSource = renderCompiledModelPose(mesh, context, staticMerge);
   const vrm0Rotation =
     model.importMetadata?.sourceFormat === "vrm" &&
     model.importMetadata.vrmVersion === "0"
@@ -3476,6 +3516,7 @@ ${brushTimeSource}${animationSource}
 function renderCompiledModelPose(
   mesh: MeshComponent,
   context: CompileContext,
+  staticMerge?: { excludedNodeIndices: readonly number[] },
 ): { declaration: string; objectName: string } {
   const pose = mesh.modelPose;
   const sourceNodeIndex =
@@ -3486,8 +3527,10 @@ function renderCompiledModelPose(
     mesh.geometry?.kind === "asset"
       ? mesh.geometry.sourceNodeName
       : undefined;
+  // 結合はNodeごとの除外を見るので、source node indexの目印が要る。
   const needsSourceNodeTags =
     sourceNodeIndex !== undefined ||
+    Boolean(staticMerge) ||
     Boolean(pose?.nodes && Object.keys(pose.nodes).length) ||
     mesh.materialBindings.some(
       (binding) => binding.sourceNodeIndex !== undefined,
@@ -3605,7 +3648,14 @@ ${tagSourceNodes}${selectSourceNode}    const output = ${sourceNodeIndex === und
       });
     });
     output.updateMatrixWorld(true);
-    return output;
+${
+  staticMerge
+    ? `    xriftMergeStaticModelMeshes(output, parser.json, ${JSON.stringify(
+        staticMerge.excludedNodeIndices,
+      )});
+`
+    : ""
+}    return output;
   }, [scene${needsSourceNodeTags ? ", parser" : ""}]);`,
   };
 }

@@ -580,6 +580,16 @@ function ModelOptimizationPanel({
         onChange={(next) => onChange({ importSettings: { optimizeMeshes: next } })}
       />
       <RecipeToggle
+        label="公開時に静的Meshをまとめる"
+        description="動かないMeshをMaterialごとに1つへ束ね、公開したWorldのdraw callを減らします。原本もEditorの表示も変わりません"
+        checked={asset.importSettings.mergeStaticMeshes === true}
+        disabled={readOnly || busy}
+        status="実験的"
+        onChange={(next) =>
+          onChange({ importSettings: { mergeStaticMeshes: next } })
+        }
+      />
+      <RecipeToggle
         label="Draco圧縮をかける"
         description="配信サイズを下げます。描画時は頂点へ展開されるためVRAMは大きく減りません"
         checked={compressWithDraco}
