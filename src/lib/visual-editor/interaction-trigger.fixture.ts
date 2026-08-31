@@ -81,6 +81,7 @@ export function runInteractionTriggerFixtureAssertions(): void {
   assertAssetValuedActionRecordsItsDependency();
   assertPublishedWorldCarriesTheCompositorForAGraph();
   assertPlayerTeleportReachesThePublishedWorld();
+  assertWiredValueKeepsItsAction();
   assertPublishedWorldRunsTheTrigger();
   assertPublishedWorldRunsAGraphNobodyPresses();
   assertPublishedWorldOmitsTheUnusedInteractionEmitter();
@@ -465,6 +466,102 @@ function assertAssetValuedActionRecordsItsDependency(): void {
  * Otherwise「画質を上げる」publishes, validates, and does nothing — which is
  * worse than refusing to publish it.
  */
+/**
+ * A value that comes from the graph must not erase the action that writes it.
+ *
+ * The static walk has no evaluator, so it used to drop any action whose value
+ * socket was wired. The action was still perfectly well configured - it named
+ * an Entity, a Component and a property - and the interpreter ran it, but the
+ * Editor called the node unfinished and the compiler never learned the Entity
+ * was a dependency. Recording it as `linked` says the one true thing the walk
+ * knows: what the action writes to, and that only the interpreter can say with
+ * what.
+ */
+function assertWiredValueKeepsItsAction(): void {
+  const documents = buildDocuments();
+  const graphAsset = documents.assets.assets[GRAPH_ASSET_ID];
+  if (graphAsset?.kind !== "interactivity") {
+    throw new Error("the fixture's Interactivity Asset is missing");
+  }
+  const extension = cloneKhrInteractivityExtension(graphAsset.extension);
+  const graph = graphOf(extension);
+  const move = appendInteractivityOperation(
+    graph,
+    XRIFT_INTERACTION_OPERATIONS.setProperty,
+    { x: 1000, y: 640 },
+  );
+  assert(
+    configureInteractivityTriggerAction(graph, move, {
+      entityId: "entity_sign",
+      componentId: "",
+      targetKind: "transform",
+      property: "position",
+    }),
+    "the transform action could not be targeted",
+  );
+  const literal = collectXriftInteractionActions(extension).find(
+    (action) => action.nodeIndex === move,
+  );
+  assert(
+    literal?.value?.kind === "vector3",
+    "a literal transform action did not parse",
+  );
+
+  // Replace the literal with a wire, the way an author does when the value
+  // should be computed.
+  const source = appendInteractivityOperation(graph, "math/add", {
+    x: 760,
+    y: 640,
+  });
+  const node = graph.nodes?.[move];
+  if (!node) throw new Error("the action node vanished");
+  node.values = { ...(node.values ?? {}), value: { node: source, socket: "value" } };
+
+  const wired = collectXriftInteractionActions(extension).find(
+    (action) => action.nodeIndex === move,
+  );
+  assert(
+    wired !== undefined,
+    "an action whose value comes from the graph vanished from the walk",
+  );
+  assert(
+    wired?.value?.kind === "linked" &&
+      wired.entityId === "entity_sign" &&
+      wired.property === "position",
+    "a linked action lost the target it plainly names",
+  );
+
+  // And the Editor must stop calling a finished node unfinished.
+  assert(
+    !collectInteractivityRuntimeDiagnostics(extension).some((diagnostic) =>
+      diagnostic.message.includes("まだ決まっていない"),
+    ),
+    "a wired value is still reported as an unconfigured action",
+  );
+
+  // The dependency it names has to survive into the Component, or the compiler
+  // publishes a world whose trigger writes to an Entity it never emitted.
+  const assets = {
+    ...documents.assets,
+    assets: {
+      ...documents.assets.assets,
+      [GRAPH_ASSET_ID]: { ...graphAsset, extension },
+    },
+  };
+  const synced = syncInteractionTriggerReferences(
+    documents.scenes.scene_main,
+    assets,
+  );
+  const trigger = synced.entities.entity_button?.components.find(
+    (component) => component.type === "interaction-trigger",
+  );
+  assert(
+    trigger?.type === "interaction-trigger" &&
+      trigger.entityReferences.includes("entity_sign"),
+    "a linked action's Entity dependency was dropped",
+  );
+}
+
 /**
  * A graph that moves the player has to move them after upload too.
  *

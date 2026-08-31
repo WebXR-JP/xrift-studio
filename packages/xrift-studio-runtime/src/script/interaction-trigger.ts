@@ -839,7 +839,21 @@ export type XriftInteractionValue =
   /** Asset id the property should point at. `null` clears it. */
   | { kind: "asset"; value: string | null }
   /** Free text the property should show. */
-  | { kind: "string"; value: string };
+  | { kind: "string"; value: string }
+  /**
+   * The socket is wired: the value comes from the graph, not from the node.
+   *
+   * The static walk has no expression evaluator, so it cannot say what the
+   * value will be - but it can say that the action is finished, and what it
+   * writes to. That distinction is the whole point: an action whose value comes
+   * from a wire used to disappear from this walk entirely, which told the
+   * Editor the node was unconfigured and left the compiler without the Entity
+   * and Asset dependencies the action plainly names.
+   *
+   * The interpreter evaluates the socket itself and hands the applier a
+   * concrete value, so nothing downstream of the engine ever sees this kind.
+   */
+  | { kind: "linked" };
 
 export type XriftInteractionAction = {
   nodeIndex: number;
@@ -890,15 +904,18 @@ function configurationString(
   return typeof first === "string" ? first : null;
 }
 
+/** A socket fed by another node, which only the interpreter can evaluate. */
+const LINKED_SOCKET = Symbol("linked-socket");
+
 function inlineSocketValues(
   node: Record<string, unknown> | undefined,
   socket: string,
-): unknown[] | null {
+): unknown[] | null | typeof LINKED_SOCKET {
   const entry = asRecord(asRecord(node?.values)?.[socket]);
-  // A socket fed by another node is unevaluable here for the same reason the
-  // animation adapter refuses it: there is no expression evaluator, and reading
-  // the literal the author replaced with a wire would run the wrong value.
-  if (!entry || entry.node !== undefined) return null;
+  if (!entry) return null;
+  // Reading the literal an author replaced with a wire would run the wrong
+  // value, so it is reported as linked rather than read.
+  if (entry.node !== undefined) return LINKED_SOCKET;
   return Array.isArray(entry.value) ? entry.value : [];
 }
 
@@ -914,6 +931,7 @@ function readActionValue(
 ): XriftInteractionValue | null {
   const values = inlineSocketValues(node, "value");
   if (values === null) return null;
+  if (values === LINKED_SOCKET) return { kind: "linked" };
   const first = values[0];
   switch (descriptor.kind) {
     case "bool":

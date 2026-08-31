@@ -1189,6 +1189,10 @@ export function createXriftInteractionApplier({
       return readAudioSource(object, target);
     },
     apply(action) {
+      // The interpreter evaluates a wired socket and hands this a concrete
+      // value, so a linked action only ever arrives from the static walk -
+      // where it exists to record what the action writes to, not to be run.
+      if (action.value?.kind === "linked") return;
       if (action.target === "scene") {
         applyScene(action);
         return;

@@ -295,6 +295,25 @@ to a Component that can appear twice, so they carry no Component id. Scene and
 Player are addressed through reserved Entity ids, because they belong to no
 Entity at all and an action still needs something in that slot.
 
+### A value can come from the graph
+
+An action's `value` socket takes a literal, or a wire. The static walk that
+derives dependencies and drives the Editor's diagnostics has no expression
+evaluator, so it cannot say what a wired socket will produce - but the
+interpreter can, and does: it evaluates the socket and hands the applier a
+concrete value.
+
+The walk therefore records a wired socket as `{ kind: "linked" }` rather than
+dropping the action. Dropping it was the old behaviour, and it cost two things
+that have nothing to do with the value: the Editor called a fully configured
+node unfinished, and the Component lost the `entityReferences` and
+`assetReferences` the action plainly names - so a compiler could publish a world
+whose trigger writes to an Entity it never emitted.
+
+This is what makes a computed value usable at all: `variable/get`, `math/add`
+and the rest run in the interpreter, and a wire from one of them into an action
+is now a finished graph rather than a broken one.
+
 ### The Player target moves whoever pressed the button
 
 `teleport` takes the position the player's feet land on, exactly as a
