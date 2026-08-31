@@ -158,7 +158,10 @@ import {
   type InteractivityAnimationCue,
 } from "../../lib/visual-editor";
 import { tauri } from "../../lib/tauri";
-import { resolveSceneClickSelection } from "../../lib/visual-editor/scene-click-selection";
+import {
+  resolveSceneClickSelection,
+  resolveSceneContextMenuTarget,
+} from "../../lib/visual-editor/scene-click-selection";
 import { isEditableShortcutTarget } from "../../lib/visual-editor/shortcuts";
 import {
   EDITOR_HELPER_USER_DATA,
@@ -5031,11 +5034,24 @@ export function SceneViewport({
     const bounds = event.currentTarget.getBoundingClientRect();
     // Right-clicking an object acts on that object, the way the Hierarchy's own
     // context menu does: the Entity under the pointer is selected first, so the
-    // menu's delete and the gizmo never disagree about the target.
-    const pointedEntityId =
-      dropResolverRef.current?.(event.clientX, event.clientY, {
-        includeEntityOriginFallback: true,
-      }).authoringEntityId ?? null;
+    // menu's delete and the gizmo never disagree about the target. A selection
+    // drilled into a large mesh keeps the menu on the drilled Entity instead of
+    // the ancestor that still owns the frontmost surface, so delete never takes
+    // the whole subtree the click just stepped inside.
+    const pointerPick = dropResolverRef.current?.(
+      event.clientX,
+      event.clientY,
+      { includeEntityOriginFallback: true },
+    );
+    const pointedEntityId = resolveSceneContextMenuTarget(
+      scene,
+      selectedEntityId,
+      {
+        rayEntityIds: pointerPick?.rayEntityIds ?? [],
+        originEntityIds: pointerPick?.originEntityIds ?? [],
+        fallbackEntityId: pointerPick?.authoringEntityId ?? null,
+      },
+    );
     if (
       pointedEntityId &&
       !(selection?.kind === "entity" && selection.id === pointedEntityId)
