@@ -16,6 +16,7 @@ import {
   readInteractivityNodeNote,
   readInteractivityNodePosition,
   readInteractivityTriggerAction,
+  readInteractivityTriggerActionAsset,
   readInteractivityTriggerActionDuration,
   XRIFT_INTERACTION_OPERATIONS,
   type KhrInteractivityGraph,
@@ -37,13 +38,17 @@ export function triggerActionSummary(
   index: number,
   op: string,
   targets: readonly InteractionTriggerTargetEntity[],
+  /** Asset names by id, so a card names the sky it switches to. */
+  assetNames?: ReadonlyMap<string, string>,
 ): string | undefined {
   const action = readInteractivityTriggerAction(graph, index);
   if (!action) return undefined;
+  const assetId = readInteractivityTriggerActionAsset(graph, index);
   return describeInteractionTriggerAction(targets, {
     ...action,
     mode: op === XRIFT_INTERACTION_OPERATIONS.toggleProperty ? "toggle" : "set",
     durationSeconds: readInteractivityTriggerActionDuration(graph, index),
+    assetName: assetId ? (assetNames?.get(assetId) ?? assetId) : null,
   });
 }
 
@@ -53,6 +58,7 @@ export function operationData(
   index: number,
   targets: readonly InteractionTriggerTargetEntity[],
   visited: ReadonlyMap<number, number> | null,
+  assetNames?: ReadonlyMap<string, string>,
 ): GraphNodeData {
   const declaration = graph.declarations?.[node.declaration];
   const op = declaration?.op ?? `missing/declaration-${node.declaration}`;
@@ -81,7 +87,7 @@ export function operationData(
       ? {}
       : { reachedSeconds: visited.get(index) ?? null }),
     ...(isInteractivityTriggerActionOp(op)
-      ? { summary: triggerActionSummary(graph, index, op, targets) }
+      ? { summary: triggerActionSummary(graph, index, op, targets, assetNames) }
       : {}),
     ...(op.startsWith("animation/")
       ? { summary: readInteractivityClipName(graph, index) }
@@ -96,12 +102,13 @@ export function toFlowNodes(
   graph: KhrInteractivityGraph,
   targets: readonly InteractionTriggerTargetEntity[],
   visited: ReadonlyMap<number, number> | null,
+  assetNames?: ReadonlyMap<string, string>,
 ): GraphFlowNode[] {
   return (graph.nodes ?? []).map((node, index) => ({
     id: String(index),
     type: "interactivity",
     position: readInteractivityNodePosition(node, index),
-    data: operationData(graph, node, index, targets, visited),
+    data: operationData(graph, node, index, targets, visited, assetNames),
   }));
 }
 

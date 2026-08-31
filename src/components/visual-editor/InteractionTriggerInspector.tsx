@@ -146,13 +146,18 @@ export function InteractionTriggerInspector({
                   property: action.property,
                   mode: action.mode,
                   value:
-                    action.value === null
+                    action.value === null || action.value.kind === "asset"
                       ? null
                       : action.value.kind === "color"
                         ? action.value.value
                         : action.value.kind === "enum"
                           ? [action.value.value]
                           : [action.value.value],
+                  assetName:
+                    action.value?.kind === "asset" && action.value.value
+                      ? (assets.assets[action.value.value]?.name ??
+                        action.value.value)
+                      : null,
                 })}
               </li>
             ))}

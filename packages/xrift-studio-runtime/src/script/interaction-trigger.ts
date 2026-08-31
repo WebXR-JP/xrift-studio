@@ -46,10 +46,18 @@ export type XriftInteractionTargetKind =
 /**
  * Stand-in Entity id for Scene-wide targets.
  *
- * Exposure and the screen fade belong to no Entity, but an action still needs
- * something in the `entity` slot: it is what the Editor's picker selects and
- * what the trigger records as a dependency. A reserved id keeps the shape of
- * every other action instead of making Scene actions a second format.
+ * The screen fade, the compositor, fog, ambient light, the sky and the camera
+ * belong to no Entity, but an action still needs something in the `entity`
+ * slot: it is what the Editor's picker selects and what the trigger records as
+ * a dependency. A reserved id keeps the shape of every other action instead of
+ * making Scene actions a second format.
+ *
+ * Every `scene` property is **client-local**. A graph runs inside each
+ * viewer's own runtime and these writes land on that viewer's renderer, so
+ *「画質を上げる」changes the picture for whoever pressed it and nobody else.
+ * That is what lets an author offer bloom without deciding for the person on
+ * the slowest headset. Nothing here is synchronised, and Stop or re-entry puts
+ * the Scene settings back.
  */
 export const XRIFT_INTERACTION_SCENE_ENTITY_ID = "__xrift_scene__" as const;
 
@@ -95,7 +103,7 @@ export const XRIFT_INTERACTION_TARGET_LABELS: Readonly<
   light: "Light",
   particle: "Particle",
   material: "Material",
-  scene: "Scene",
+  scene: "Scene（この端末だけ）",
 };
 
 export type XriftInteractionPropertyKind =
@@ -103,7 +111,17 @@ export type XriftInteractionPropertyKind =
   | "float"
   | "color"
   | "vector3"
-  | "enum";
+  | "enum"
+  /**
+   * A project Asset, named by id.
+   *
+   * It is the one property kind whose value is structural rather than
+   * numeric: KHR_interactivity has no string type, and an Asset id is not a
+   * quantity that can be interpolated or arrived at by arithmetic. So it is
+   * stored in `configuration` beside the target, exactly like the Entity and
+   * Component ids, and the value socket stays unused.
+   */
+  | "asset";
 
 /**
  * Targets that belong to the Entity rather than to one of its Components.
@@ -143,6 +161,11 @@ export type XriftInteractionPropertyDescriptor = {
   max?: number;
   step?: number;
   options?: readonly XriftInteractionPropertyOption[];
+  /**
+   * Asset kinds an `asset` property accepts, for the Editor's picker and for
+   * `list_interaction_trigger_targets`. Empty for every other kind.
+   */
+  assetKinds?: readonly string[];
 };
 
 /**
@@ -364,6 +387,204 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     defaultValue: [1, 1, 1],
   },
   {
+    target: "scene",
+    name: "postprocessing",
+    label: "ポストエフェクト",
+    description:
+      "ポストエフェクト全体をONとOFFで切り替えます。押した人の画面にだけ効くので、重い端末のユーザーは切ったまま遊べます。",
+    kind: "bool",
+    defaultValue: true,
+  },
+  {
+    target: "scene",
+    name: "bloom",
+    label: "発光（Bloom）",
+    description:
+      "明るい部分のにじみを切り替えます。ポストエフェクトが有効なときに効きます。",
+    kind: "bool",
+    defaultValue: true,
+  },
+  {
+    target: "scene",
+    name: "bloomStrength",
+    label: "発光の強さ",
+    description: "にじみの強さです。0で消え、大きいほど広がります。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0,
+    max: 5,
+    step: 0.05,
+  },
+  {
+    target: "scene",
+    name: "bloomRadius",
+    label: "発光の広がり",
+    description: "にじみの広がりです。0で鋭く、1で最も柔らかくなります。",
+    kind: "float",
+    defaultValue: 0.4,
+    min: 0,
+    max: 1,
+    step: 0.01,
+  },
+  {
+    target: "scene",
+    name: "bloomThreshold",
+    label: "発光のしきい値",
+    description: "この明るさを超えた部分だけがにじみます。下げるほど広く光ります。",
+    kind: "float",
+    defaultValue: 0.8,
+    min: 0,
+    max: 1,
+    step: 0.01,
+  },
+  {
+    target: "scene",
+    name: "ao",
+    label: "陰影（AO）",
+    description:
+      "物の接地部分に落ちる陰影を切り替えます。重い処理なので、低スペック端末では切れるようにしておきます。",
+    kind: "bool",
+    defaultValue: true,
+  },
+  {
+    target: "scene",
+    name: "grading",
+    label: "色味の調整",
+    description:
+      "コントラスト・彩度・色温度の調整を切り替えます。ポストエフェクトが有効なときに効きます。",
+    kind: "bool",
+    defaultValue: true,
+  },
+  {
+    target: "scene",
+    name: "fog",
+    label: "フォグ",
+    description:
+      "距離フォグを切り替えます。OFFにすると遠景がそのまま見えるので、描画負荷ではなく見え方が変わります。",
+    kind: "bool",
+    defaultValue: true,
+  },
+  {
+    target: "scene",
+    name: "fogColor",
+    label: "フォグの色",
+    description: "フォグの色です。値はリニア空間のRGBで保存されます。",
+    kind: "color",
+    defaultValue: [1, 1, 1],
+  },
+  {
+    target: "scene",
+    name: "fogNear",
+    label: "フォグの開始距離",
+    description: "カメラからこの距離を超えたところからフォグが濃くなります。",
+    kind: "float",
+    defaultValue: 10,
+    min: 0,
+    max: 10000,
+    step: 0.5,
+  },
+  {
+    target: "scene",
+    name: "fogFar",
+    label: "フォグの終了距離",
+    description: "この距離でフォグが最も濃くなります。開始距離より手前にはできません。",
+    kind: "float",
+    defaultValue: 100,
+    min: 0,
+    max: 10000,
+    step: 0.5,
+  },
+  {
+    target: "scene",
+    name: "ambient",
+    label: "環境光",
+    description:
+      "全体を一律に持ち上げるアンビエントライトを切り替えます。OFFにするとライトの当たらない面は黒くなります。",
+    kind: "bool",
+    defaultValue: true,
+  },
+  {
+    target: "scene",
+    name: "ambientColor",
+    label: "環境光の色",
+    description: "環境光の色です。値はリニア空間のRGBで保存されます。",
+    kind: "color",
+    defaultValue: [1, 1, 1],
+  },
+  {
+    target: "scene",
+    name: "ambientIntensity",
+    label: "環境光の強さ",
+    description: "環境光の強度です。0で環境光なしと同じになります。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0,
+    max: 10,
+    step: 0.05,
+  },
+  {
+    target: "scene",
+    name: "skybox",
+    label: "背景のSkybox",
+    description:
+      "Skyboxを背景として表示するかどうかを切り替えます。OFFのあいだは背景が消え、シーンの素の背景色になります。",
+    kind: "bool",
+    defaultValue: true,
+  },
+  {
+    target: "scene",
+    name: "skyboxIbl",
+    label: "SkyboxのIBL",
+    description:
+      "Skybox画像を反射と照明に使うかどうかを切り替えます。切ると反射の計算が減ります。",
+    kind: "bool",
+    defaultValue: true,
+  },
+  {
+    target: "scene",
+    name: "skyboxExposure",
+    label: "Skyboxの明るさ",
+    description: "背景とIBLの強度です。1が既定です。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0,
+    max: 8,
+    step: 0.05,
+  },
+  {
+    target: "scene",
+    name: "skyboxRotation",
+    label: "Skyboxの水平回転",
+    description: "Skybox画像を水平方向に回します。度で指定します。",
+    kind: "float",
+    defaultValue: 0,
+    min: -360,
+    max: 360,
+    step: 1,
+  },
+  {
+    target: "scene",
+    name: "skyboxImage",
+    label: "Skybox画像",
+    description:
+      "背景とIBLに使う等距円筒（equirectangular）画像のAssetを差し替えます。Assetを選ばないと元の画像へ戻ります。時間をかけた変化はできません。",
+    kind: "asset",
+    defaultValue: "",
+    assetKinds: ["skybox", "texture"],
+  },
+  {
+    target: "scene",
+    name: "cameraFov",
+    label: "視野角",
+    description:
+      "カメラの視野角を度で設定します。狭めると望遠、広げると広角になります。",
+    kind: "float",
+    defaultValue: 60,
+    min: 1,
+    max: 179,
+    step: 1,
+  },
+  {
     target: "audio-source",
     name: "playback",
     label: "再生",
@@ -450,7 +671,9 @@ export type XriftInteractionValue =
   | { kind: "color"; value: [number, number, number] }
   /** Position, rotation in degrees, or scale. */
   | { kind: "vector3"; value: [number, number, number] }
-  | { kind: "enum"; value: string };
+  | { kind: "enum"; value: string }
+  /** Asset id the property should point at. `null` clears it. */
+  | { kind: "asset"; value: string | null };
 
 export type XriftInteractionAction = {
   nodeIndex: number;
@@ -567,6 +790,9 @@ function readActionValue(
       const [x, y, z] = components as [number, number, number];
       return { kind: "vector3", value: [x, y, z] };
     }
+    case "asset":
+      // Handled before this function is reached; the socket carries nothing.
+      return null;
     case "enum": {
       const options = descriptor.options ?? [];
       if (first === undefined) {
@@ -678,7 +904,15 @@ function readAction(
       value: null,
     };
   }
-  const value = readActionValue(node, descriptor);
+  // An Asset id is configuration, not a socket value: it names a project
+  // resource rather than a quantity, so it is read from beside the target.
+  const value =
+    descriptor.kind === "asset"
+      ? ({
+          kind: "asset",
+          value: configurationString(node, "asset") || null,
+        } as const)
+      : readActionValue(node, descriptor);
   if (!value) return null;
   return {
     nodeIndex,
@@ -758,6 +992,74 @@ function collectGraphPrograms(parsed: ParsedGraph): XriftInteractionProgram[] {
 
   return programs;
 }
+
+/**
+ * Every action node in the Asset, whether or not a flow reaches it.
+ *
+ * `collectXriftInteractionPrograms` walks forward from `xrift/onInteract`,
+ * which is the right question for「押したら何が起きるか」and the wrong one for
+ * dependencies: a timeline that starts itself, or a chain behind
+ * `event/receive`, writes to Entities and Assets the walk never visits. What
+ * the world has to ship is decided by what the graph *can* write, so this
+ * reads every node instead.
+ */
+export function collectXriftInteractionActions(
+  value: unknown,
+): XriftInteractionAction[] {
+  return parseAllGraphs(value).flatMap((parsed) =>
+    parsed.nodes.flatMap((candidate, nodeIndex) => {
+      const node = asRecord(candidate);
+      const op = parsed.operationFor(node);
+      if (
+        !node ||
+        (op !== XRIFT_INTERACTION_OPERATIONS.setProperty &&
+          op !== XRIFT_INTERACTION_OPERATIONS.toggleProperty)
+      ) {
+        return [];
+      }
+      const action = readAction(node, nodeIndex, op);
+      return action ? [action] : [];
+    }),
+  );
+}
+
+/** Asset ids the graph's actions can point a property at. */
+export function collectXriftInteractionAssetIds(value: unknown): string[] {
+  return [
+    ...new Set(
+      collectXriftInteractionActions(value).flatMap((action) =>
+        action.value?.kind === "asset" && action.value.value
+          ? [action.value.value]
+          : [],
+      ),
+    ),
+  ].sort();
+}
+
+/**
+ * True when a graph can turn the compositor on for the viewer running it.
+ *
+ * A world whose Scene settings have post effects off still has to carry the
+ * compositor when a graph offers「画質を上げる」, or the button would validate,
+ * publish, and then do nothing. Nothing else makes a world pay for it.
+ */
+export function xriftInteractionWritesPostprocessing(value: unknown): boolean {
+  return collectXriftInteractionActions(value).some(
+    (action) =>
+      action.target === "scene" &&
+      XRIFT_INTERACTION_POSTPROCESSING_PROPERTIES.has(action.property),
+  );
+}
+
+const XRIFT_INTERACTION_POSTPROCESSING_PROPERTIES: ReadonlySet<string> = new Set([
+  "postprocessing",
+  "bloom",
+  "bloomStrength",
+  "bloomRadius",
+  "bloomThreshold",
+  "ao",
+  "grading",
+]);
 
 /** True when the graph has at least one interact entry point. */
 export function hasXriftInteractionTrigger(value: unknown): boolean {

@@ -20,7 +20,7 @@ import {
 } from "./compiler/script-emit";
 import {
   collectInteractionTriggerTargets,
-  syncInteractionTriggerEntityReferences,
+  syncInteractionTriggerReferences,
 } from "./interaction-trigger-targets";
 import {
   collectInteractivityRuntimeDiagnostics,
@@ -295,7 +295,7 @@ function assertSceneTargetsListWritableComponentsOnly(): void {
 
 function assertEntityReferencesFollowTheGraph(): void {
   const documents = buildDocuments();
-  const synced = syncInteractionTriggerEntityReferences(
+  const synced = syncInteractionTriggerReferences(
     documents.scenes.scene_main,
     documents.assets,
   );
@@ -601,6 +601,7 @@ function buildScene(): SceneDocument {
             enabled: true,
             interactivityAssetId: GRAPH_ASSET_ID,
             entityReferences: ["entity_speaker"],
+            assetReferences: [],
           },
           {
             id: "component_button_mesh",

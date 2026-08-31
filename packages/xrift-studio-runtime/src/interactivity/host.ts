@@ -19,6 +19,19 @@ export type InteractivityActionTarget = {
   readonly componentId: string | null;
   readonly targetKind: string;
   readonly property: string;
+  /**
+   * Asset the property should point at, for a property whose value is a
+   * project Asset rather than a number.
+   *
+   * `undefined` means this is not one of those — the value comes from the
+   * `value` socket as usual. `null` means the action names no Asset, which is
+   * a complete instruction: put the authored one back.
+   *
+   * It rides on the target rather than the value because an Asset id is
+   * structural, like the Entity and Component ids beside it: KHR_interactivity
+   * has no string type, and an Asset is not a quantity to interpolate toward.
+   */
+  readonly assetId?: string | null;
 };
 
 export type InteractivityAnimationRequest = {
@@ -67,6 +80,15 @@ export type InteractivityHost = {
     target: InteractivityActionTarget,
     value: InteractivityValue,
   ): boolean;
+  /**
+   * Points an Asset-valued property at `target.assetId`, or back at the
+   * authored Asset when that is `null`.
+   *
+   * Separate from `writeProperty` because there is no `InteractivityValue`
+   * that can carry an Asset id, and because the change has no midpoint: a
+   * duration on one of these would promise a cross-fade nothing performs.
+   */
+  writeAsset?(target: InteractivityActionTarget, assetId: string | null): boolean;
   readPointer?(pointer: string): InteractivityValue | null;
   writePointer?(pointer: string, value: InteractivityValue): boolean;
   startAnimation?(request: InteractivityAnimationRequest): void;

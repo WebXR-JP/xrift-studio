@@ -387,7 +387,7 @@ const INTERACTIVITY_OVERLAY_MODULES: Readonly<Record<string, string>> = {
  * beside the interpreter. Guessing from the name alone silently emitted the
  * wrong module.
  */
-function rewriteRuntimeLocalImports(
+export function rewriteRuntimeLocalImports(
   source: string,
   scope: "script" | "interactivity" = "script",
 ): string {
@@ -396,18 +396,23 @@ function rewriteRuntimeLocalImports(
       ? INTERACTIVITY_OVERLAY_MODULES
       : RUNTIME_SIBLING_OVERLAY_MODULES;
   return source.replace(
-    /(\bfrom\s*)(["'])(\.{1,2}\/)(interactivity\/)?([a-z-]+)\.js\2/g,
+    /(\bfrom\s*)(["'])(\.{1,2}\/)((?:interactivity|script)\/)?([a-z-]+)\.js\2/g,
     (
       whole,
       prefix: string,
       quote: string,
       _relative: string,
-      interactivity: string | undefined,
+      directory: string | undefined,
       moduleName: string,
     ) => {
-      const overlay = interactivity
-        ? INTERACTIVITY_OVERLAY_MODULES[moduleName]
-        : siblings[moduleName];
+      // A named directory answers for itself; only a bare sibling depends on
+      // where the file being rewritten came from.
+      const overlay =
+        directory === "interactivity/"
+          ? INTERACTIVITY_OVERLAY_MODULES[moduleName]
+          : directory === "script/"
+            ? RUNTIME_SIBLING_OVERLAY_MODULES[moduleName]
+            : siblings[moduleName];
       return overlay ? `${prefix}${quote}./${overlay}${quote}` : whole;
     },
   );

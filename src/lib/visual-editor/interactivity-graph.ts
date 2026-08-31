@@ -1015,6 +1015,8 @@ export type {
   InteractivityScheduleEntry,
 } from "../../../packages/xrift-studio-runtime/src/interactivity-adapter";
 export {
+  collectXriftInteractionActions,
+  collectXriftInteractionAssetIds,
   collectXriftInteractionIssues,
   collectXriftInteractionPrograms,
   getXriftInteractionProperties,
@@ -1172,6 +1174,15 @@ export function configureInteractivityTriggerAction(
     targetKind: { value: [target.targetKind] },
     property: { value: [target.property] },
   };
+  if (descriptor.kind === "asset") {
+    // An Asset id is configuration, not a socket value, and the key's presence
+    // is what tells the runtime this is an Asset write at all. So it is always
+    // written — empty until the author picks one, which reads as「元に戻す」.
+    node.configuration.asset = { value: [""] };
+    if (node.values) delete node.values.value;
+    return true;
+  }
+  delete node.configuration.asset;
   if (op === XRIFT_INTERACTION_OPERATIONS.setProperty) {
     // The socket's type follows the property, so switching from a number to a
     // colour cannot leave a value the runtime would read as the wrong shape.
@@ -1203,7 +1214,41 @@ export function defaultTriggerActionValue(
     }
     case "enum":
       return [xriftInteractionEnumIndex(descriptor, String(descriptor.defaultValue))];
+    case "asset":
+      // An Asset id is configuration, not a socket value. A node placed with
+      // no Asset chosen clears the override, which is a complete instruction
+      // rather than an unfinished one.
+      return [];
   }
+}
+
+/**
+ * Points an Asset-valued action at an Asset, or at none.
+ *
+ * An empty id is a complete instruction rather than an unfinished action: it
+ * puts the authored Asset back, which is the other half of「差し替える」.
+ */
+export function setInteractivityTriggerActionAsset(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+  assetId: string,
+): boolean {
+  const node = graph.nodes?.[nodeIndex];
+  if (!node) return false;
+  node.configuration = {
+    ...(node.configuration ?? {}),
+    asset: { value: [assetId] },
+  };
+  return true;
+}
+
+/** The Asset an action points at, for the Editor's picker. */
+export function readInteractivityTriggerActionAsset(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+): string {
+  const entry = graph.nodes?.[nodeIndex]?.configuration?.asset?.value?.[0];
+  return typeof entry === "string" ? entry : "";
 }
 
 /** Writes the action's value socket with the type its property requires. */

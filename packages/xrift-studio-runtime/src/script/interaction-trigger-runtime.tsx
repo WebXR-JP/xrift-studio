@@ -2,12 +2,15 @@ import { useEffect, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
   Color,
+  Fog,
   LinearSRGBColorSpace,
   MathUtils,
   SRGBColorSpace,
+  type Light,
   type Material,
   type Mesh,
   type Object3D,
+  type Scene,
 } from "three";
 import {
   XRIFT_AUDIO_SOURCE_RUNTIME_USER_DATA_KEY,
@@ -33,6 +36,8 @@ import {
   emitXriftSceneEvent,
   findXriftSceneRuntimeBridge,
   type XriftSceneRuntimeBridge,
+  readXriftScenePostprocessingBaseline,
+  XRIFT_SCENE_SKYBOX_USER_DATA_KEY,
 } from "./scene-runtime.js";
 import {
   getXriftInteractionProperty,
@@ -564,42 +569,201 @@ export function createXriftInteractionApplier({
     return found.value;
   };
 
+  /**
+   * Scene properties whose runtime value is simply the property's own name.
+   *
+   * The bridge's override keys are the property names, so a table is enough:
+   * one entry per Scene setting a graph can change, and the write itself is
+   * the same three lines for all of them. Only the kind has to match, which is
+   * what keeps a colour from being written where a float belongs.
+   */
+  const SCENE_BOOL_PROPERTIES = [
+    "postprocessing",
+    "bloom",
+    "ao",
+    "grading",
+    "fog",
+    "ambient",
+    "skybox",
+    "skyboxIbl",
+  ] as const;
+  const SCENE_FLOAT_PROPERTIES = [
+    "exposure",
+    "fade",
+    "bloomStrength",
+    "bloomRadius",
+    "bloomThreshold",
+    "fogNear",
+    "fogFar",
+    "ambientIntensity",
+    "skyboxExposure",
+    "skyboxRotation",
+    "cameraFov",
+  ] as const;
+  const SCENE_COLOR_PROPERTIES = [
+    "fadeColor",
+    "fogColor",
+    "ambientColor",
+  ] as const;
+
   const applyScene = (action: XriftInteractionAction) => {
     const bridge = findXriftSceneRuntimeBridge(root);
     if (!bridge) return;
     sceneOwners.add(bridge);
-    if (action.property === "exposure" && action.value?.kind === "float") {
-      bridge.setOwner(owner, order, componentId, {
-        exposure: action.value.value,
-      });
+    const property = action.property;
+    const value = action.value;
+    if (
+      value?.kind === "bool" &&
+      (SCENE_BOOL_PROPERTIES as readonly string[]).includes(property)
+    ) {
+      bridge.setOwner(owner, order, componentId, { [property]: value.value });
       return;
     }
-    if (action.property === "fade" && action.value?.kind === "float") {
-      bridge.setOwner(owner, order, componentId, { fade: action.value.value });
+    if (
+      value?.kind === "float" &&
+      (SCENE_FLOAT_PROPERTIES as readonly string[]).includes(property)
+    ) {
+      bridge.setOwner(owner, order, componentId, { [property]: value.value });
       return;
     }
-    if (action.property === "fadeColor" && action.value?.kind === "color") {
-      bridge.setOwner(owner, order, componentId, {
-        fadeColor: action.value.value,
-      });
+    if (
+      value?.kind === "color" &&
+      (SCENE_COLOR_PROPERTIES as readonly string[]).includes(property)
+    ) {
+      bridge.setOwner(owner, order, componentId, { [property]: value.value });
+      return;
+    }
+    if (value?.kind === "asset" && property === "skyboxImage") {
+      bridge.setOwner(owner, order, componentId, { skyboxImage: value.value });
     }
   };
 
+  /**
+   * The Scene value a toggle flips away from, or a timed change starts at.
+   *
+   * The override is the answer whenever there is one. When there is not, the
+   * authored value has to come from somewhere real: fog, ambient light, the sky
+   * and the camera are read straight off the live scene, and the compositor
+   * publishes its own settings because nothing in the scene graph carries them.
+   * Guessing「たぶんON」instead would make the first press of a「画質を上げる」
+   * button do nothing on exactly the worlds that need it.
+   */
   const readScene = (property: string): XriftInteractionValue | null => {
     const bridge = findXriftSceneRuntimeBridge(root);
     if (!bridge) return null;
     const state = bridge.read();
-    if (property === "exposure") {
-      return { kind: "float", value: state.exposure ?? 1 };
+    const post = readXriftScenePostprocessingBaseline(root);
+    const bool = (
+      override: boolean | null,
+      authored: boolean | undefined,
+    ): XriftInteractionValue | null =>
+      override === null && authored === undefined
+        ? null
+        : { kind: "bool", value: override ?? authored ?? false };
+    const float = (
+      override: number | null,
+      authored: number | undefined,
+    ): XriftInteractionValue | null =>
+      override === null && authored === undefined
+        ? null
+        : { kind: "float", value: override ?? authored ?? 0 };
+    const color = (
+      value: readonly [number, number, number],
+    ): XriftInteractionValue => ({
+      kind: "color",
+      value: [value[0], value[1], value[2]],
+    });
+
+    const scene = root as Scene;
+    let ambientVisible: boolean | undefined;
+    let ambientIntensity: number | undefined;
+    let ambientColor: Color | undefined;
+    let skyVisible: boolean | undefined;
+    if (property.startsWith("ambient") || property === "skybox") {
+      root.traverse((object) => {
+        const light = object as Light & { isAmbientLight?: boolean };
+        if (light.isAmbientLight === true && ambientVisible === undefined) {
+          ambientVisible = light.visible;
+          ambientIntensity = light.intensity;
+          ambientColor = light.color;
+        }
+        if (
+          (object.userData as Record<string, unknown>)[
+            XRIFT_SCENE_SKYBOX_USER_DATA_KEY
+          ] === true &&
+          skyVisible === undefined
+        ) {
+          skyVisible = object.visible;
+        }
+      });
     }
-    if (property === "fade") return { kind: "float", value: state.fade };
-    if (property === "fadeColor") {
-      return {
-        kind: "color",
-        value: [state.fadeColor[0], state.fadeColor[1], state.fadeColor[2]],
-      };
+
+    switch (property) {
+      case "exposure":
+        return { kind: "float", value: state.exposure ?? 1 };
+      case "fade":
+        return { kind: "float", value: state.fade };
+      case "fadeColor":
+        return color(state.fadeColor);
+      case "postprocessing":
+        return bool(state.postprocessing, post?.enabled);
+      case "bloom":
+        return bool(state.bloom, post?.bloom);
+      case "bloomStrength":
+        return float(state.bloomStrength, post?.bloomStrength);
+      case "bloomRadius":
+        return float(state.bloomRadius, post?.bloomRadius);
+      case "bloomThreshold":
+        return float(state.bloomThreshold, post?.bloomThreshold);
+      case "ao":
+        return bool(state.ao, post?.ao);
+      case "grading":
+        return bool(state.grading, post?.grading);
+      case "fog":
+        return bool(state.fog, scene.fog != null);
+      case "fogColor":
+        return state.fogColor
+          ? color(state.fogColor)
+          : scene.fog instanceof Fog
+            ? color([scene.fog.color.r, scene.fog.color.g, scene.fog.color.b])
+            : null;
+      case "fogNear":
+        return float(
+          state.fogNear,
+          scene.fog instanceof Fog ? scene.fog.near : undefined,
+        );
+      case "fogFar":
+        return float(
+          state.fogFar,
+          scene.fog instanceof Fog ? scene.fog.far : undefined,
+        );
+      case "ambient":
+        return bool(state.ambient, ambientVisible);
+      case "ambientColor":
+        return state.ambientColor
+          ? color(state.ambientColor)
+          : ambientColor
+            ? color([ambientColor.r, ambientColor.g, ambientColor.b])
+            : null;
+      case "ambientIntensity":
+        return float(state.ambientIntensity, ambientIntensity);
+      case "skybox":
+        return bool(
+          state.skybox,
+          skyVisible ?? (scene.background != null || undefined),
+        );
+      case "skyboxIbl":
+        return bool(state.skyboxIbl, scene.environment != null);
+      case "skyboxExposure":
+        return float(state.skyboxExposure, scene.environmentIntensity);
+      case "skyboxRotation":
+        return float(
+          state.skyboxRotation,
+          (scene.environmentRotation.y * 180) / Math.PI,
+        );
+      default:
+        return null;
     }
-    return null;
   };
 
   const applyAnimation = (target: Object3D, action: XriftInteractionAction) => {
@@ -1080,6 +1244,26 @@ export function createXriftInteractionHost(
       const values = new Map<string, readonly (number | boolean)[]>();
       for (const [key, entry] of payload) values.set(key, entry.data);
       emitXriftSceneEvent(name, values);
+    },
+    /**
+     * Points an Asset-valued property at another Asset for this viewer only.
+     *
+     * The applier still owns the write, so it composes with everything else a
+     * graph or a Script has changed and comes off on Stop like the rest.
+     */
+    writeAsset(target, assetId) {
+      const descriptor = descriptorFor(target);
+      if (!descriptor || descriptor.kind !== "asset") return false;
+      applier.apply({
+        nodeIndex: -1,
+        mode: "set",
+        entityId: target.entityId,
+        componentId: target.componentId,
+        target: descriptor.target,
+        property: target.property,
+        value: { kind: "asset", value: assetId },
+      });
+      return true;
     },
     writeProperty(target, value) {
       const descriptor = descriptorFor(target);

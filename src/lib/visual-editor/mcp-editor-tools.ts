@@ -156,7 +156,7 @@ import {
 } from "./terrain-grass";
 import {
   collectInteractionTriggerTargets,
-  syncInteractionTriggerEntityReferences,
+  syncInteractionTriggerReferences,
 } from "./interaction-trigger-targets";
 import {
   resolveSceneSettings,
@@ -4279,7 +4279,7 @@ function updateComponent(
         );
       }
       if (interactivityAssetId !== undefined) {
-        scene = syncInteractionTriggerEntityReferences(
+        scene = syncInteractionTriggerReferences(
           updateInteractionTriggerComponent(scene, entityId, componentId, {
             interactivityAssetId: interactivityAssetId as string,
           }),
@@ -6468,6 +6468,10 @@ function triggerActionValueFromArgument(
       }
       return [xriftInteractionEnumIndex(descriptor, single)];
     }
+    case "asset":
+      // Handled before this point: an Asset property takes `assetId`, not
+      // `value`, because the id is configuration rather than a socket value.
+      invalidArgument("value", "assetId（このpropertyはAssetを指定します）");
   }
 }
 
@@ -6688,7 +6692,7 @@ function commitInteractivityMutation(
   // edit; a graph built over MCP has to go through the same step, or the
   // compiler sees a trigger with no dependencies and drops the Entities the
   // agent just wired up.
-  const scene = syncInteractionTriggerEntityReferences(
+  const scene = syncInteractionTriggerReferences(
     context.bundle.scene,
     assets,
   );

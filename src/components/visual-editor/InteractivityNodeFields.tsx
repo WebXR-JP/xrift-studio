@@ -144,6 +144,59 @@ export function LiteralValueField({
  * the option labels and whether the three floats are a colour, so the author
  * edits "音量 0.4" instead of "float[0] = 0.4".
  */
+/**
+ * Picks the Asset an action points a property at.
+ *
+ * Separate from `TriggerValueField` because there is no value to edit: the id
+ * is configuration, and「選ばない」is a real choice — it puts the Scene's own
+ * Asset back rather than leaving the action unfinished.
+ */
+export function TriggerAssetField({
+  descriptor,
+  assetId,
+  choices,
+  disabled,
+  onChange,
+}: {
+  descriptor: XriftInteractionPropertyDescriptor;
+  assetId: string;
+  choices: readonly { id: string; name: string; kind: string }[];
+  disabled: boolean;
+  onChange: (assetId: string) => void;
+}) {
+  const kinds = descriptor.assetKinds ?? [];
+  const offered = choices
+    .filter((choice) => kinds.includes(choice.kind))
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const missing = assetId !== "" && !offered.some((choice) => choice.id === assetId);
+  return (
+    <label className="block text-[10px] text-slate-300">
+      {descriptor.label}
+      <select
+        value={assetId}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs"
+      >
+        <option value="">Sceneの設定に戻す</option>
+        {missing ? (
+          <option value={assetId}>見つからないAsset</option>
+        ) : null}
+        {offered.map((choice) => (
+          <option key={choice.id} value={choice.id}>
+            {choice.name}
+          </option>
+        ))}
+      </select>
+      {offered.length === 0 ? (
+        <span className="mt-1 block text-[10px] leading-4 text-amber-200">
+          差し替えられるAssetがProjectにありません。先にAssetsへ追加してください。
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
 export function TriggerValueField({
   descriptor,
   value,
