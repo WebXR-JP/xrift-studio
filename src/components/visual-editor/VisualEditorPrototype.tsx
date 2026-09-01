@@ -213,6 +213,10 @@ import {
 } from "../../lib/tauri";
 import { setProjectThumbnailFromAsset } from "../../lib/project-thumbnail";
 import { AssetsPanel } from "./AssetsPanel";
+import {
+  ValueScrubContext,
+  type ValueScrubTransaction,
+} from "./value-scrub-transaction";
 import { EnvironmentTextureThumbnailGenerationQueue } from "./EnvironmentTextureThumbnailGenerationQueue";
 import { MaterialThumbnailGenerationQueue } from "./MaterialThumbnailGenerationQueue";
 import { ModelThumbnailGenerationQueue } from "./ModelThumbnailGenerationQueue";
@@ -896,6 +900,16 @@ export function VisualEditorPrototype({
   const bundle = history.present.bundle;
   const bundleRef = useRef(bundle);
   bundleRef.current = bundle;
+  const historyRef = useRef(history);
+  historyRef.current = history;
+  /**
+   * 数値をドラッグで動かしている間に立つ。ドラッグ中の変更は present を
+   * 置き換えるだけにし、ポインタを離した時に Undo 一件へまとめる。
+   */
+  const valueScrubRef = useRef<{
+    before: (typeof history)["present"];
+    saveStatus: SaveStatus;
+  } | null>(null);
   const [debugCaptureRequest, setDebugCaptureRequest] =
     useState<SceneDebugCaptureRequest | null>(null);
   const debugCaptureRequestIdRef = useRef(0);
@@ -1864,12 +1878,56 @@ export function VisualEditorPrototype({
             : action;
         if (nextBundle === current.present.bundle) return current;
         setSaveStatus("dirty");
-        return commitEditorHistory(current, {
-          ...current.present,
-          bundle: nextBundle,
-        });
+        const next = { ...current.present, bundle: nextBundle };
+        // ドラッグ中は履歴を増やさず、確定時に一件だけ積む。
+        return valueScrubRef.current
+          ? replaceEditorHistoryPresent(current, next)
+          : commitEditorHistory(current, next);
       });
     },
+    [],
+  );
+
+  /**
+   * 数値入力の左右ドラッグを一つの操作として扱う。ドラッグ中の中間値は
+   * 履歴へ積まず、離した時に変化があれば Undo 一件、Escape では開始前へ戻す。
+   */
+  const valueScrubTransaction = useMemo<ValueScrubTransaction>(
+    () => ({
+      begin: () => {
+        if (valueScrubRef.current) return;
+        valueScrubRef.current = {
+          before: historyRef.current.present,
+          saveStatus: saveStatusRef.current,
+        };
+      },
+      end: () => {
+        const transaction = valueScrubRef.current;
+        if (!transaction) return;
+        valueScrubRef.current = null;
+        setHistory((current) => {
+          if (current.present === transaction.before) {
+            setSaveStatus(transaction.saveStatus);
+            return current;
+          }
+          return commitEditorHistory(
+            replaceEditorHistoryPresent(current, transaction.before),
+            current.present,
+          );
+        });
+      },
+      cancel: () => {
+        const transaction = valueScrubRef.current;
+        if (!transaction) return;
+        valueScrubRef.current = null;
+        setHistory((current) => {
+          if (current.present === transaction.before) return current;
+          bundleRef.current = transaction.before.bundle;
+          setSaveStatus(transaction.saveStatus);
+          return replaceEditorHistoryPresent(current, transaction.before);
+        });
+      },
+    }),
     [],
   );
 
@@ -10802,6 +10860,7 @@ export function VisualEditorPrototype({
       : "contents";
 
   return (
+    <ValueScrubContext.Provider value={valueScrubTransaction}>
     <div className="h-screen overflow-hidden bg-editor-canvas">
       <div className="flex h-full min-h-0 min-w-0 flex-col bg-editor-canvas text-editor-text">
         <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-editor-border bg-editor-surface px-3">
@@ -11657,5 +11716,6 @@ export function VisualEditorPrototype({
         </main>
       </div>
     </div>
+    </ValueScrubContext.Provider>
   );
 }
