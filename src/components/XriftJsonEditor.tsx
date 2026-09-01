@@ -338,7 +338,7 @@ export function XriftJsonEditor({
                   <Field label="重力 (gravity)" hint="地球: 9.81 / 月: 1.62">
                     <ScrubNumberInput
                       step={0.01}
-                      scrubStep={0.02}
+                      scrubStep={0.01}
                       value={form.gravity}
                       ariaLabel="重力"
                       scrubLabel="重力"
@@ -370,7 +370,6 @@ export function XriftJsonEditor({
                   <Field label="near" hint="これより近いオブジェクトは描画されない">
                     <ScrubNumberInput
                       step={0.01}
-                      scrubStep={0.01}
                       value={form.cameraNear}
                       ariaLabel="near"
                       scrubLabel="near"

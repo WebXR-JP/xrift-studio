@@ -360,7 +360,7 @@ function RangeField({ label, value, min, max, preserveOrder = false, disabled, o
         {(["min", "max"] as const).map((key) => (
           <label key={key} className="block">
             <span className="mb-0.5 block text-center text-[9px] font-semibold uppercase leading-3 text-slate-400">{key}</span>
-            <ScrubNumberInput value={value[key]} min={min} max={max} scrubStep={0.01} disabled={disabled} ariaLabel={`${label} ${key}`} scrubLabel={`${label} ${key}`} onChange={(next) => update(key, next)} className="px-1" />
+            <ScrubNumberInput value={value[key]} min={min} max={max} disabled={disabled} ariaLabel={`${label} ${key}`} scrubLabel={`${label} ${key}`} onChange={(next) => update(key, next)} className="px-1" />
           </label>
         ))}
       </div>
@@ -408,7 +408,7 @@ function VectorField({ label, value, disabled, onChange }: { label: string; valu
         {value.map((entry, index) => (
           <label key={index} className="block">
             <span className="mb-0.5 block text-center text-[9px] font-semibold uppercase leading-3 text-slate-400">{"xyz"[index]}</span>
-            <ScrubNumberInput value={entry} scrubStep={0.01} disabled={disabled} ariaLabel={`${label} ${"XYZ"[index]}`} scrubLabel={`${label} ${"XYZ"[index]}`} onChange={(next) => { const nextValue = [...value] as Vec3Like; nextValue[index] = next; onChange(nextValue); }} className="px-1" />
+            <ScrubNumberInput value={entry} disabled={disabled} ariaLabel={`${label} ${"XYZ"[index]}`} scrubLabel={`${label} ${"XYZ"[index]}`} onChange={(next) => { const nextValue = [...value] as Vec3Like; nextValue[index] = next; onChange(nextValue); }} className="px-1" />
           </label>
         ))}
       </div>
@@ -448,7 +448,7 @@ function ColorField({ label, value, disabled, onChange }: { label: string; value
               min={0}
               max={1}
               step={0.01}
-              scrubStep={0.005}
+              scrubStep={0.002}
               disabled={disabled}
               prefix={channel}
               ariaLabel={`${label} ${channel}`}

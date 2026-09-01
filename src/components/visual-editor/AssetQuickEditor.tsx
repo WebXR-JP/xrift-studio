@@ -972,7 +972,7 @@ function Color3Control({
             min={0}
             max={max}
             step={0.01}
-            scrubStep={0.005}
+            scrubStep={0.002}
             value={Number(value[index].toFixed(3))}
             disabled={disabled}
             size="sm"
@@ -1071,7 +1071,7 @@ function TextureVectorControl({
           <ScrubNumberInput
             key={axis}
             step={0.01}
-            scrubStep={0.01}
+            scrubStep={0.005}
             value={value[index]}
             disabled={disabled}
             size="sm"
@@ -1349,7 +1349,6 @@ function TextureSlot({
                 Rotation (°)
                 <ScrubNumberInput
                   step={1}
-                  scrubStep={0.5}
                   value={Number(((transform.rotation * 180) / Math.PI).toFixed(2))}
                   disabled={disabled}
                   size="sm"
@@ -1970,7 +1969,7 @@ function CustomShaderQuickEditor({
                         <ScrubNumberInput
                           value={uniform.value}
                           disabled={readOnly}
-                          scrubStep={0.01}
+                          scrubStep={0.005}
                           size="sm"
                           ariaLabel={meta.label}
                           scrubLabel={meta.label}

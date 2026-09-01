@@ -94,7 +94,6 @@ export function LiteralValueField({
                 min={0}
                 max={1}
                 step={0.05}
-                scrubStep={0.005}
                 value={alpha}
                 disabled={disabled}
                 tone="dark"
@@ -116,7 +115,6 @@ export function LiteralValueField({
             <ScrubNumberInput
               key={index}
               step={signature === "int" ? 1 : 0.1}
-              scrubStep={signature === "int" ? 0.25 : 0.01}
               precision={signature === "int" ? 0 : undefined}
               value={entry}
               disabled={disabled}
@@ -339,7 +337,6 @@ export function TriggerValueField({
               <span className="text-[9px] text-slate-500">{axis}</span>
               <ScrubNumberInput
                 step={descriptor.step ?? 0.1}
-                scrubStep={0.01}
                 value={components[index] ?? 0}
                 disabled={disabled}
                 tone="dark"
@@ -365,7 +362,6 @@ export function TriggerValueField({
         min={descriptor.min}
         max={descriptor.max}
         step={descriptor.step ?? 0.1}
-        scrubStep={0.01}
         disabled={disabled}
         tone="dark"
         ariaLabel={descriptor.label}
@@ -456,7 +452,6 @@ export function TriggerTimingField({
           min={0}
           max={600}
           step={0.1}
-          scrubStep={0.02}
           value={seconds}
           disabled={disabled}
           tone="dark"

@@ -316,7 +316,6 @@ function renderFieldControl(
         ) : (
           <ScrubNumberInput
             value={typeof value === "number" ? value : 1}
-            scrubStep={0.01}
             disabled={readOnly}
             ariaLabel={field.label}
             scrubLabel={field.label}
@@ -337,7 +336,6 @@ function renderFieldControl(
           Scale
           <ScrubNumberInput
             value={transform.scale}
-            scrubStep={0.01}
             disabled={readOnly}
             ariaLabel="Scale"
             scrubLabel="Scale"
@@ -449,7 +447,6 @@ function VectorInput({
         <ScrubNumberInput
           key={index}
           value={entry}
-          scrubStep={0.01}
           disabled={disabled}
           prefix={"XYZ"[index]}
           ariaLabel={`${"XYZ"[index]}軸`}

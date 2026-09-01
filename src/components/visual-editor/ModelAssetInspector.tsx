@@ -202,7 +202,6 @@ export function ModelAssetInspector({
             min={0.0001}
             max={10000}
             step={0.1}
-            scrubStep={0.01}
             value={asset.importSettings.scale}
             disabled={readOnly}
             ariaLabel="Import Scale"

@@ -4232,7 +4232,6 @@ function SnapStepField({
               value={value}
               min={minimum}
               step={minimum}
-              scrubStep={minimum}
               size="xs"
               compact
               wrapperClassName="w-20"
