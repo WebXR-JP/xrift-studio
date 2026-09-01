@@ -3075,7 +3075,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "update_scene_settings",
-            "description": "Update persisted Skybox, Sky Shader, Fog, ambient light, camera, post effects, and editor viewport settings through XRift Studio history and autosave. skybox.materialAssetId assigns a Custom Shader Material as the procedural sky; it draws the background instead of the image and the gradient. This is supported during Edit and Play; Play reflects the shared Scene settings immediately.",
+            "description": "Update persisted Skybox, Sky Shader, Fog, ambient light, camera, post effects, and editor viewport settings through XRift Studio history and autosave. postprocessing.order sets which post effect layer is applied first, which changes the look of the same settings; postprocessing.ao/bloom/grading each switch one layer on or off. skybox.materialAssetId assigns a Custom Shader Material as the procedural sky; it draws the background instead of the image and the gradient. This is supported during Edit and Play; Play reflects the shared Scene settings immediately.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3159,7 +3159,24 @@ fn tool_definitions() -> Value {
                         "type": "object",
                         "properties": {
                             "enabled": { "type": "boolean" },
+                            "order": {
+                                "description": "Application order of the reorderable layers, first applied first. Every id has to appear exactly once. AO is not orderable: it re-renders the scene, so it always runs first.",
+                                "type": "array",
+                                "items": { "type": "string", "enum": ["bloom", "grading"] },
+                                "minItems": 2,
+                                "maxItems": 2,
+                                "uniqueItems": true
+                            },
                             "exposure": { "type": "number", "minimum": 0 },
+                            "hdr": {
+                                "type": "object",
+                                "properties": {
+                                    "enabled": { "type": "boolean" },
+                                    "toneMapping": { "type": "string", "enum": ["aces", "none"] }
+                                },
+                                "minProperties": 1,
+                                "additionalProperties": false
+                            },
                             "bloom": {
                                 "type": "object",
                                 "properties": {
@@ -3167,6 +3184,29 @@ fn tool_definitions() -> Value {
                                     "threshold": { "type": "number", "minimum": 0 },
                                     "strength": { "type": "number", "minimum": 0 },
                                     "radius": { "type": "number", "minimum": 0 }
+                                },
+                                "minProperties": 1,
+                                "additionalProperties": false
+                            },
+                            "ao": {
+                                "type": "object",
+                                "properties": {
+                                    "enabled": { "type": "boolean" },
+                                    "radius": { "type": "number", "minimum": 0.1 },
+                                    "minDistance": { "type": "number", "minimum": 0 },
+                                    "maxDistance": { "type": "number", "minimum": 0.001 }
+                                },
+                                "minProperties": 1,
+                                "additionalProperties": false
+                            },
+                            "grading": {
+                                "type": "object",
+                                "properties": {
+                                    "enabled": { "type": "boolean" },
+                                    "contrast": { "type": "number", "minimum": 0 },
+                                    "saturation": { "type": "number", "minimum": 0 },
+                                    "temperature": { "type": "number", "minimum": -1, "maximum": 1 },
+                                    "tint": { "type": "number", "minimum": -1, "maximum": 1 }
                                 },
                                 "minProperties": 1,
                                 "additionalProperties": false
@@ -4593,6 +4633,24 @@ mod tests {
                 .map(Vec::len),
             Some(7)
         );
+        // The order changes the picture, so an author driving Studio through
+        // MCP has to be able to set it rather than only the values it orders.
+        assert!(
+            update_scene_settings
+                .pointer("/inputSchema/properties/postprocessing/properties/order")
+                .is_some(),
+            "update_scene_settings should expose the post effect layer order"
+        );
+        for layer in ["ao", "bloom", "grading"] {
+            assert!(
+                update_scene_settings
+                    .pointer(&format!(
+                        "/inputSchema/properties/postprocessing/properties/{layer}/properties/enabled"
+                    ))
+                    .is_some(),
+                "update_scene_settings should switch the {layer} post effect layer"
+            );
+        }
         // Wind drives both the transform-based Wind component and every
         // wind-aware Shader Material, so MCP has to be able to set it.
         assert!(

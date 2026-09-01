@@ -35,7 +35,10 @@ import {
   PREFAB_DOCUMENT_SCHEMA_VERSION,
   type PrefabDocument,
 } from "./prefab-document";
-import { DEFAULT_SCENE_SETTINGS } from "./scene-settings";
+import {
+  DEFAULT_SCENE_SETTINGS,
+  SCENE_POST_EFFECT_ORDER_IDS,
+} from "./scene-settings";
 import {
   VISUAL_PROJECT_SCHEMA_VERSION,
   type VisualProjectDocument,
@@ -150,6 +153,7 @@ function migrateLegacyScenePostprocessing(value: unknown): unknown {
       ...value.settings,
       postprocessing: {
         ...DEFAULT_SCENE_SETTINGS.postprocessing,
+        order: [...DEFAULT_SCENE_SETTINGS.postprocessing.order],
         bloom: { ...DEFAULT_SCENE_SETTINGS.postprocessing.bloom },
         enabled:
           typeof raw === "boolean"
@@ -1198,12 +1202,13 @@ function validateSceneSettings(
   );
   validateSceneSettingsObject(
     value.postprocessing,
-    ["enabled", "hdr", "bloom", "ao", "grading", "exposure"],
+    ["enabled", "order", "hdr", "bloom", "ao", "grading", "exposure"],
     `${path}.postprocessing`,
     issues,
     (entry) => {
       validateBoolean(entry, "enabled", `${path}.postprocessing`, issues);
       validateFinite(entry, "exposure", `${path}.postprocessing`, issues, 0);
+      validatePostEffectOrder(entry, `${path}.postprocessing`, issues);
       validateSceneSettingsObject(
         entry.hdr,
         ["enabled", "toneMapping"],
@@ -1432,6 +1437,47 @@ function validateSceneSettings(
  * project saved before that section existed stops opening after an update.
  * Only a section that is present but not an object is a real defect.
  */
+/**
+ * The author's layer order. Absent is valid — resolveSceneSettings supplies the
+ * default — and so is a shorter list, because a project saved before a layer
+ * existed cannot name it. Only an entry that is present and unknown, or one
+ * repeated, is reported.
+ */
+function validatePostEffectOrder(
+  value: Record<string, unknown>,
+  path: string,
+  issues: DocumentValidationIssue[],
+): void {
+  const order = value.order;
+  if (order === undefined) return;
+  if (!Array.isArray(order)) {
+    issues.push(issue(`${path}.order`, "type", "order must be an array"));
+    return;
+  }
+  const seen = new Set<string>();
+  for (const entry of order) {
+    if (
+      typeof entry !== "string" ||
+      !(SCENE_POST_EFFECT_ORDER_IDS as readonly string[]).includes(entry)
+    ) {
+      issues.push(
+        issue(
+          `${path}.order`,
+          "enum",
+          `order entries must be one of ${SCENE_POST_EFFECT_ORDER_IDS.join(", ")}`,
+        ),
+      );
+      continue;
+    }
+    if (seen.has(entry)) {
+      issues.push(
+        issue(`${path}.order`, "duplicate", `order lists ${entry} more than once`),
+      );
+    }
+    seen.add(entry);
+  }
+}
+
 function validateSceneSettingsObject(
   value: unknown,
   keys: readonly string[],

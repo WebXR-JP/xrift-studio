@@ -160,6 +160,8 @@ import {
 } from "./interaction-trigger-targets";
 import {
   resolveSceneSettings,
+  SCENE_POST_EFFECT_ORDER_IDS,
+  type ScenePostEffectOrderId,
   type SceneAmbientSettings,
   type SceneCameraSettings,
   type ScenePhysicsSettings,
@@ -1553,9 +1555,11 @@ function updateSceneSettings(
             currentSettings.postprocessing,
             sceneSettingsPatch(argumentsValue.postprocessing, "postprocessing", [
               "enabled",
+              "order",
               "hdr",
               "bloom",
               "ao",
+              "grading",
               "exposure",
             ]),
           ),
@@ -7361,12 +7365,15 @@ function applyPostprocessingPatch(
 ): ScenePostprocessingSettings {
   const next: ScenePostprocessingSettings = {
     ...current,
+    order: [...current.order],
     hdr: { ...current.hdr },
     bloom: { ...current.bloom },
     ao: { ...current.ao },
+    grading: { ...current.grading },
   };
   const enabled = optionalBoolean(patch.enabled, "postprocessing.enabled");
   if (enabled !== undefined) next.enabled = enabled;
+  if (patch.order !== undefined) next.order = postEffectOrder(patch.order);
   if (patch.hdr !== undefined) {
     const hdrPatch = sceneSettingsPatch(patch.hdr, "postprocessing.hdr", [
       "enabled",
@@ -7449,7 +7456,62 @@ function applyPostprocessingPatch(
       );
     }
   }
+  if (patch.grading !== undefined) {
+    const gradingPatch = sceneSettingsPatch(
+      patch.grading,
+      "postprocessing.grading",
+      ["enabled", "contrast", "saturation", "temperature", "tint"],
+    );
+    const gradingEnabled = optionalBoolean(
+      gradingPatch.enabled,
+      "postprocessing.grading.enabled",
+    );
+    if (gradingEnabled !== undefined) next.grading.enabled = gradingEnabled;
+    for (const field of ["contrast", "saturation"] as const) {
+      if (gradingPatch[field] !== undefined) {
+        next.grading[field] = sceneNumber(
+          gradingPatch[field],
+          `postprocessing.grading.${field}`,
+          0,
+        );
+      }
+    }
+    for (const field of ["temperature", "tint"] as const) {
+      if (gradingPatch[field] !== undefined) {
+        next.grading[field] = sceneNumber(
+          gradingPatch[field],
+          `postprocessing.grading.${field}`,
+          -1,
+          1,
+        );
+      }
+    }
+  }
   return next;
+}
+
+/**
+ * The layer order, taken whole rather than as a patch.
+ *
+ * Every reorderable layer has to be named exactly once: a partial order would
+ * leave the missing layer's position to be guessed, and guessing it silently
+ * changes a look the author already tuned. AO is rejected by the same rule —
+ * it re-renders the scene, so it always runs first and cannot be placed.
+ */
+function postEffectOrder(value: unknown): ScenePostEffectOrderId[] {
+  const expected = SCENE_POST_EFFECT_ORDER_IDS.join("、");
+  if (
+    !Array.isArray(value) ||
+    value.length !== SCENE_POST_EFFECT_ORDER_IDS.length ||
+    !SCENE_POST_EFFECT_ORDER_IDS.every((id) => value.includes(id))
+  ) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      `postprocessing.orderには${expected}をそれぞれ1つずつ、適用したい順に並べてください（AOはシーンを描き直すため常に最初で、並べ替えできません）`,
+      { supportedOrderIds: [...SCENE_POST_EFFECT_ORDER_IDS] },
+    );
+  }
+  return value as ScenePostEffectOrderId[];
 }
 
 function applyVegetationPatch(
@@ -7680,7 +7742,11 @@ function hasCanonicalSceneQualitySettings(value: unknown): boolean {
     post.ao !== undefined &&
     typeof post.ao === "object" &&
     post.ao !== null &&
-    !Array.isArray(post.ao)
+    !Array.isArray(post.ao) &&
+    // The layer order is the newest of these. Without it here, writing the
+    // default order to a project saved before it existed would report success
+    // and persist nothing, leaving the file with no order forever.
+    Array.isArray(post.order)
   );
 }
 

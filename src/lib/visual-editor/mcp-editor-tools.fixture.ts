@@ -215,6 +215,8 @@ export function runXriftMcpEditorToolFixtures(): void {
           hdr: { enabled: true, toneMapping: "aces" },
           bloom: { enabled: true, threshold: 2.4, strength: 0.18, radius: 0.24 },
           ao: { enabled: true, radius: 8, minDistance: 0.005, maxDistance: 0.12 },
+          grading: { enabled: true, contrast: 1.1, saturation: 0.9, temperature: 0.2, tint: -0.1 },
+          order: ["grading", "bloom"],
           exposure: 0.78,
         },
         vegetation: { enabled: true, windStrength: 0.1, windSpeed: 0.9, gustStrength: 0.4 },
@@ -659,6 +661,37 @@ export function runXriftMcpEditorToolFixtures(): void {
       sceneSettingsResult.bundle.scene.settings.editor.backgroundColor ===
         "#111827",
     "Scene settings edit should persist Skybox, Fog, Ambient, Camera, and Editor values",
+  );
+  // The order is what a look is made of as much as the values are, so MCP has
+  // to reach it — and grading, which was previously Inspector-only.
+  assert(
+    sceneSettingsResult.bundle.scene.settings?.postprocessing.order.join(",") ===
+      "grading,bloom" &&
+      sceneSettingsResult.bundle.scene.settings.postprocessing.grading.enabled &&
+      sceneSettingsResult.bundle.scene.settings.postprocessing.grading.temperature === 0.2,
+    "Scene settings edit should persist the post effect layer order and grading",
+  );
+  let invalidPostEffectOrderCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(context, {
+      id: "fixture-invalid-post-effect-order",
+      tool: "update_scene_settings",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: context.revision,
+        // AO re-renders the scene, so it cannot be placed among the layers,
+        // and a partial order would leave the missing layer's slot to a guess.
+        postprocessing: { order: ["ao", "bloom"] },
+      },
+    });
+  } catch (error) {
+    invalidPostEffectOrderCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    invalidPostEffectOrderCode === "INVALID_ARGUMENT",
+    "Post effect order should reject a list that is not every orderable layer once",
   );
   assert(
     context.bundle.scene.settings?.skybox.imageAssetId === undefined &&

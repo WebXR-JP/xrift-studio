@@ -478,9 +478,13 @@ Script runtime の再生要求、option、transform は Stop で消え、MCP aut
 start delay / lifetime / speed / size / rotation、gravity、emission、shape、color / size / velocity over lifetime、
 renderer を受ける。renderer の `materialAssetId` / `textureAssetId` は存在する正しい kind の Asset だけを受け付ける。
 
-`update_scene_settings` は `skybox`、`fog`、`ambient`、`camera`、`editor` を任意に組み合わせた
-non-empty patchとして受ける。Skyboxは表示、IBL、projection、既存Texture参照、gradient、回転、反転、露出、
+`update_scene_settings` は `skybox`、`fog`、`ambient`、`camera`、`postprocessing`、`vegetation`、`physics`、
+`editor` を任意に組み合わせたnon-empty patchとして受ける。Skyboxは表示、IBL、projection、既存Texture参照、gradient、回転、反転、露出、
 有限mesh transformを、Editor sectionは背景、grid、gizmo size、snapを更新できる。
+`postprocessing` sectionは合成全体の有効・無効、`ao` / `bloom` / `grading` 各layerの有効・無効と値、
+HDR、露出、そして `order` を更新できる。`order` はlayerを適用順に並べた配列で、並べ替え可能なlayerを
+それぞれ1つずつ含む完全な配列だけを受ける。部分的な配列は残りの位置を推測することになり、
+作者が決めた見た目を黙って変えるためである。AOはsceneを描き直すpassで常に最初に適用されるため `order` に含めない。
 `skybox.imageAssetId` はAssetManifestに存在し、project sourceを持つTexture（または移行前のSkybox）だけを受け付け、
 `null`で参照とIBLを解除する。色、有限値、範囲、Fog / Cameraのnear-far関係は確定前に検証する。
 

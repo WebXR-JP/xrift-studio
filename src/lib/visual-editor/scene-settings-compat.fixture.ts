@@ -1,4 +1,9 @@
-import { DEFAULT_SCENE_SETTINGS, resolveSceneSettings } from "./scene-settings";
+import {
+  DEFAULT_SCENE_SETTINGS,
+  resolveSceneSettings,
+  resolveScenePostEffectOrder,
+  SCENE_POST_EFFECT_ORDER_IDS,
+} from "./scene-settings";
 import { SCENE_DOCUMENT_SCHEMA_VERSION } from "./scene-document";
 import { sceneDocumentCodec, validateSceneDocument } from "./serialization";
 
@@ -11,6 +16,7 @@ import { sceneDocumentCodec, validateSceneDocument } from "./serialization";
  */
 export function runSceneSettingsCompatFixtureAssertions(): void {
   assertProjectSavedBeforePhysicsOpens();
+  assertPostEffectOrderIsRepaired();
   assertEverySectionIsOptional();
   assertEveryFieldIsOptional();
   assertPresentButWrongValuesStillFail();
@@ -96,6 +102,36 @@ function assertProjectSavedBeforePhysicsOpens(): void {
 }
 
 /**
+ * The stored order decides what the frame looks like, so a project that names
+ * a layer this build does not have, names one twice, or predates the order
+ * entirely still has to resolve to a complete order rather than losing a pass.
+ */
+function assertPostEffectOrderIsRepaired(): void {
+  const cases: Array<[string, unknown]> = [
+    ["absent", undefined],
+    ["stored as text", "bloom"],
+    ["repeated", ["bloom", "bloom"]],
+    ["carrying an unknown layer", ["grading", "toon"]],
+  ];
+  for (const [label, order] of cases) {
+    const resolved = resolveScenePostEffectOrder(order);
+    assert(
+      resolved.length === SCENE_POST_EFFECT_ORDER_IDS.length &&
+        SCENE_POST_EFFECT_ORDER_IDS.every((id) => resolved.includes(id)),
+      `A post effect order ${label} must resolve to every layer exactly once`,
+    );
+  }
+  assert(
+    resolveScenePostEffectOrder(["grading", "bloom"]).join(",") === "grading,bloom",
+    "A complete post effect order must be kept as the author saved it",
+  );
+  assert(
+    resolveScenePostEffectOrder(["grading"])[0] === "grading",
+    "Repairing a partial order must keep the layers the project did save first",
+  );
+}
+
+/**
  * No section may be required. A section added tomorrow has to behave like the
  * ones added already, otherwise this regression returns under a new name.
  */
@@ -143,6 +179,10 @@ function assertEveryFieldIsOptional(): void {
     ["postprocessing hdr", { postprocessing: { hdr: {} } }],
     ["postprocessing ao", { postprocessing: { ao: {} } }],
     ["postprocessing bloom", { postprocessing: { bloom: {} } }],
+    ["postprocessing grading", { postprocessing: { grading: {} } }],
+    // A project saved before a layer existed cannot name it, so a short order
+    // is valid and resolveScenePostEffectOrder appends what is missing.
+    ["postprocessing order", { postprocessing: { order: ["grading"] } }],
   ];
   for (const [label, settings] of cases) {
     const issues = settingsIssues(settings);
@@ -178,6 +218,9 @@ function assertPresentButWrongValuesStillFail(): void {
       { postprocessing: { ao: { minDistance: 5, maxDistance: 1 } } },
     ],
     ["a two element meshScale", { skybox: { meshScale: [1, 1] } }],
+    ["an unknown post effect layer", { postprocessing: { order: ["bloom", "toon"] } }],
+    ["a repeated post effect layer", { postprocessing: { order: ["bloom", "bloom"] } }],
+    ["a post effect order stored as text", { postprocessing: { order: "bloom" } }],
     ["settings stored as text", "nope"],
   ];
   for (const [label, settings] of cases) {
