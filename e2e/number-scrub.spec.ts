@@ -24,13 +24,14 @@ async function dragHorizontally(
   page: Page,
   field: Locator,
   deltaX: number,
-  options: { escape?: boolean } = {},
+  options: { escape?: boolean; modifier?: "Alt" | "Shift" } = {},
 ): Promise<void> {
   const box = await field.boundingBox();
   if (!box) throw new Error("入力欄が画面にない");
   const startX = box.x + box.width / 2;
   const y = box.y + box.height / 2;
   await page.mouse.move(startX, y);
+  if (options.modifier) await page.keyboard.down(options.modifier);
   await page.mouse.down();
   await page.mouse.move(startX + deltaX / 2, y, { steps: 5 });
   await page.mouse.move(startX + deltaX, y, { steps: 5 });
@@ -38,6 +39,7 @@ async function dragHorizontally(
     await page.keyboard.press("Escape");
   }
   await page.mouse.up();
+  if (options.modifier) await page.keyboard.up(options.modifier);
 }
 
 test("Transformの数値は横へ引いて動かし、Escapeで戻せる", async ({ page }) => {
@@ -49,19 +51,29 @@ test("Transformの数値は横へ引いて動かし、Escapeで戻せる", async
   const positionX = page.getByRole("spinbutton", { name: "Position X" });
   await expect(positionX).toHaveValue("0");
 
-  // Position は 1px あたり 0.01。100px 引けば 1.0 動く。
-  await dragHorizontally(page, positionX, 100);
+  // 修飾キーなしのドラッグは微調整。Position は 1px あたり 0.005 なので、
+  // 200px 引いて 1.0 動く。
+  await dragHorizontally(page, positionX, 200);
   expect(Number(await positionX.inputValue())).toBeCloseTo(1, 2);
 
-  await dragHorizontally(page, positionX, 100, { escape: true });
+  await dragHorizontally(page, positionX, 200, { escape: true });
   expect(
     Number(await positionX.inputValue()),
     "Escapeで引き始める前の値へ戻す",
   ).toBeCloseTo(1, 2);
 
+  // Ctrl / Alt を押している間は 10 倍で動く。大きく動かす時だけ修飾キーを使う。
+  await dragHorizontally(page, positionX, 20, { modifier: "Alt" });
+  expect(Number(await positionX.inputValue())).toBeCloseTo(2, 2);
+
   // ドラッグ一回が Undo 一件。数値入力の中では Editor の shortcut を
   // 抑止しているので、入力欄から出てから Undo する。
   await tree.getByText("床", { exact: true }).click();
+  await page.keyboard.press("Control+z");
+  expect(
+    Number(await positionX.inputValue()),
+    "Altドラッグの一回だけが戻る",
+  ).toBeCloseTo(1, 2);
   await page.keyboard.press("Control+z");
   expect(Number(await positionX.inputValue())).toBeCloseTo(0, 2);
 });

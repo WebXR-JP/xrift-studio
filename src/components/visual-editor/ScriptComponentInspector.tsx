@@ -349,7 +349,6 @@ function VectorField({
         <ScrubNumberInput
           key={index}
           value={entry}
-          scrubStep={0.01}
           disabled={disabled}
           size="sm"
           compact

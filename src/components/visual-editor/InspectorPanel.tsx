@@ -402,8 +402,12 @@ function updateVectorAxis(
 
 const AXIS_DRAG_THRESHOLD_PX = 3;
 
+/**
+ * 1px あたりの変化量。修飾キーなしのドラッグは微調整にする。狙った位置を
+ * 通り過ぎるより、大きく動かす時に Ctrl / Alt を押す方が扱いやすい。
+ */
 function axisScrubSensitivity(valueKind: TransformValueKind): number {
-  return valueKind === "rotation" ? Math.PI / 180 : 0.01;
+  return valueKind === "rotation" ? Math.PI / 360 : 0.005;
 }
 
 function formatTransformAxis(valueKind: TransformValueKind, value: number): string {
@@ -476,6 +480,19 @@ function VectorEditor({
     if (active.active) emitScrubCancel();
   };
 
+  // 引いている間はフォーカスを移さないので、Escape は window で受ける。
+  useEffect(() => {
+    if (!scrub?.active) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      cancelScrub();
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  });
+
   const focusAxisInput = (axisIndex: number) => {
     inputRefs.current[axisIndex]?.focus({ preventScroll: true });
   };
@@ -487,10 +504,9 @@ function VectorEditor({
     immediate: boolean,
   ) => {
     if (!scrubEnabled || disabled || event.button !== 0 || scrubRef.current) return;
-    // 入力欄が編集中なら、カーソル移動と範囲選択を優先する。
-    if (!immediate && document.activeElement === event.currentTarget) return;
+    // 編集中でも引ける。数値欄はクリックで全選択して打ち直す前提なので、
+    // 欄の中で文字を範囲選択できるより、いつでも引けることを優先する。
     event.preventDefault();
-    if (immediate) focusAxisInput(axisIndex);
     event.currentTarget.setPointerCapture(event.pointerId);
     const startValue: Vec3 = [value[0], value[1], value[2]];
     const nextScrub: AxisScrubState = {
@@ -515,6 +531,8 @@ function VectorEditor({
     event.preventDefault();
     if (!active.active) {
       if (Math.abs(event.clientX - active.clientX) < AXIS_DRAG_THRESHOLD_PX) return;
+      // 押した位置を原点のままにして、しきい値までの分も値へ入れる。移動量と
+      // 値の対応が「引いた px × 1px あたりの変化量」で一定になる。
       active = { ...active, active: true };
       scrubRef.current = active;
       setScrub(active);
@@ -561,7 +579,7 @@ function VectorEditor({
       inputRefs.current[active.axisIndex]?.select();
       return;
     }
-    focusAxisInput(active.axisIndex);
+    // 引いた後はフォーカスを移さない。移すと続けて引けなくなる。
     emitScrubEnd();
   };
 
@@ -1114,7 +1132,6 @@ function MeshInspector({
               min={0.1}
               max={1_000_000}
               step={1}
-              scrubStep={0.5}
               value={component.maxDistance ?? Number.NaN}
               placeholder="Scene Farを使用"
               disabled={readOnly}
@@ -3008,8 +3025,8 @@ function MultiSelectionInspector({
             <span className="mt-1 flex items-center gap-2"><input type="color" disabled={readOnly} value={materialColor ?? "#ffffff"} onChange={(event) => onApplyMaterialPatch({ color: event.currentTarget.value })} className="h-8 w-12 rounded border border-slate-300 bg-white p-0.5 disabled:opacity-45" /><span className="font-normal text-slate-500">{materialColor ?? "一部異なる"}</span></span>
           </label>
           <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs font-semibold text-slate-600">Metalness<ScrubNumberInput min={0} max={1} step={0.01} scrubStep={0.005} disabled={readOnly} value={materialMetalness ?? Number.NaN} placeholder="一部異なる" ariaLabel="Metalness" scrubLabel="Metalness" onChange={(value) => onApplyMaterialPatch({ metalness: value })} wrapperClassName="mt-1" /></label>
-            <label className="text-xs font-semibold text-slate-600">Roughness<ScrubNumberInput min={0} max={1} step={0.01} scrubStep={0.005} disabled={readOnly} value={materialRoughness ?? Number.NaN} placeholder="一部異なる" ariaLabel="Roughness" scrubLabel="Roughness" onChange={(value) => onApplyMaterialPatch({ roughness: value })} wrapperClassName="mt-1" /></label>
+            <label className="text-xs font-semibold text-slate-600">Metalness<ScrubNumberInput min={0} max={1} step={0.01} scrubStep={0.002} disabled={readOnly} value={materialMetalness ?? Number.NaN} placeholder="一部異なる" ariaLabel="Metalness" scrubLabel="Metalness" onChange={(value) => onApplyMaterialPatch({ metalness: value })} wrapperClassName="mt-1" /></label>
+            <label className="text-xs font-semibold text-slate-600">Roughness<ScrubNumberInput min={0} max={1} step={0.01} scrubStep={0.002} disabled={readOnly} value={materialRoughness ?? Number.NaN} placeholder="一部異なる" ariaLabel="Roughness" scrubLabel="Roughness" onChange={(value) => onApplyMaterialPatch({ roughness: value })} wrapperClassName="mt-1" /></label>
           </div>
         </ComponentCard>
       </div>

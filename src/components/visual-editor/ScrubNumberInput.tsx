@@ -10,7 +10,23 @@ import { roundTo } from "./editor-utils";
 import { useValueScrubTransaction } from "./value-scrub-transaction";
 
 const DRAG_THRESHOLD_PX = 3;
-const SCRUB_DECIMALS = 4;
+const DISPLAY_DECIMALS = 4;
+
+/**
+ * 修飾キーなしのドラッグは微調整にする。値を大まかに動かしたい時は Ctrl / Alt
+ * を押す。1px で step まるごと動かすと、狙った値を通り過ぎてしまう。
+ */
+const SCRUB_STEP_DIVISOR = 10;
+const DEFAULT_STEP = 0.1;
+
+/**
+ * 1px あたりの変化量から、値を丸める桁を決める。細かいドラッグでは丸めで
+ * 動きが消えてしまうので、変化量に合わせて桁を増やす。
+ */
+function scrubDecimals(perPixel: number): number {
+  if (!Number.isFinite(perPixel) || perPixel <= 0) return DISPLAY_DECIMALS;
+  return Math.min(6, Math.max(3, Math.ceil(-Math.log10(perPixel)) + 1));
+}
 
 export type ScrubNumberInputProps = {
   value: number;
@@ -27,7 +43,7 @@ export type ScrubNumberInputProps = {
   max?: number;
   /** キーボードの上下キーと native step。 */
   step?: number;
-  /** 1px あたりの変化量。既定は step。 */
+  /** 1px あたりの変化量。既定は step の 1/10。 */
   scrubStep?: number;
   /** 表示の小数桁。省略時は値をそのまま丸めて表示する。 */
   precision?: number;
@@ -71,6 +87,8 @@ type ScrubState = {
   clientX: number;
   clientY: number;
   startValue: number;
+  /** 丸める前の値。細かいドラッグの積み重ねを失わないために持つ。 */
+  rawValue: number;
   currentValue: number;
   active: boolean;
 };
@@ -100,7 +118,7 @@ function clampValue(value: number, min?: number, max?: number): number {
 function defaultFormat(value: number, precision?: number): string {
   if (!Number.isFinite(value)) return "";
   if (precision !== undefined) return value.toFixed(precision);
-  return String(roundTo(value, SCRUB_DECIMALS));
+  return String(roundTo(value, DISPLAY_DECIMALS));
 }
 
 /**
@@ -145,7 +163,8 @@ export function ScrubNumberInput({
   const [scrub, setScrub] = useState<ScrubState | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
   const interactive = !disabled && !readOnly;
-  const perPixel = scrubStep ?? step ?? 0.1;
+  const perPixel = scrubStep ?? (step ?? DEFAULT_STEP) / SCRUB_STEP_DIVISOR;
+  const decimals = scrubDecimals(perPixel);
   const format = formatDisplay ?? ((entry: number) => defaultFormat(entry, precision));
 
   const emitScrubValue = (next: number) => {
@@ -183,8 +202,8 @@ export function ScrubNumberInput({
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLInputElement>) => {
     if (!interactive || event.button !== 0 || scrubRef.current) return;
-    // すでに編集中なら、カーソル移動と範囲選択を優先する。
-    if (document.activeElement === event.currentTarget) return;
+    // 編集中でも引ける。数値欄はクリックで全選択して打ち直す前提なので、
+    // 欄の中で文字を範囲選択できるより、いつでも引けることを優先する。
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     const startValue = Number.isFinite(value) ? value : 0;
@@ -193,6 +212,7 @@ export function ScrubNumberInput({
       clientX: event.clientX,
       clientY: event.clientY,
       startValue,
+      rawValue: startValue,
       currentValue: startValue,
       active: false,
     };
@@ -201,35 +221,38 @@ export function ScrubNumberInput({
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLInputElement>) => {
-    const active = scrubRef.current;
-    if (!active || active.pointerId !== event.pointerId) return;
-    const horizontalDelta = event.clientX - active.clientX;
+    const pending = scrubRef.current;
+    if (!pending || pending.pointerId !== event.pointerId) return;
+    let active = pending;
     if (!active.active) {
       if (Math.abs(event.clientX - active.clientX) < DRAG_THRESHOLD_PX) return;
-      const started = { ...active, active: true };
-      scrubRef.current = started;
-      setScrub(started);
+      // 押した位置を原点のままにして、しきい値までの分も値へ入れる。移動量と
+      // 値の対応が「引いた px × 1px あたりの変化量」で一定になる。
+      active = { ...active, active: true };
+      scrubRef.current = active;
+      setScrub(active);
       setDraft(null);
       if (onScrubStart) onScrubStart();
       else transaction?.begin();
     }
-    const current = scrubRef.current;
-    if (!current) return;
+    const horizontalDelta = event.clientX - active.clientX;
     const modifier = event.shiftKey ? 0.1 : event.ctrlKey || event.altKey ? 10 : 1;
-    const nextValue = clampValue(
-      roundTo(current.currentValue + horizontalDelta * perPixel * modifier, SCRUB_DECIMALS),
+    const rawValue = clampValue(
+      active.rawValue + horizontalDelta * perPixel * modifier,
       min,
       max,
     );
+    const nextValue = roundTo(rawValue, decimals);
     const moved: ScrubState = {
-      ...current,
+      ...active,
       clientX: event.clientX,
       clientY: event.clientY,
+      rawValue,
       currentValue: nextValue,
     };
     scrubRef.current = moved;
     setScrub(moved);
-    if (nextValue !== current.currentValue) emitScrubValue(nextValue);
+    if (nextValue !== active.currentValue) emitScrubValue(nextValue);
   };
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLInputElement>) => {
