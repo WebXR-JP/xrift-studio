@@ -58,6 +58,11 @@ export type ScrubNumberInputProps = {
   wrapperClassName?: string;
   /** 入力欄へ足すクラス。サイズや寄せは専用プロパティを使う。 */
   className?: string;
+  /**
+   * 既定の見た目を外し、`className` の指定だけを使う。Editor 以外の画面が
+   * その画面の配色を保ったままドラッグ調整を使うための入口。
+   */
+  unstyled?: boolean;
   tone?: "light" | "dark";
 };
 
@@ -131,6 +136,7 @@ export function ScrubNumberInput({
   compact = false,
   wrapperClassName,
   className,
+  unstyled = false,
   tone = "light",
 }: ScrubNumberInputProps) {
   const transaction = useValueScrubTransaction();
@@ -295,18 +301,24 @@ export function ScrubNumberInput({
             event.currentTarget.blur();
           }
         }}
-        className={`w-full min-w-0 touch-none rounded border outline-none ${
-          size === "xs" ? "h-6" : size === "sm" ? "h-7" : "h-8"
-        } ${compact ? "text-[11px]" : "text-xs"} ${
-          align === "left" ? "text-left" : "text-right tabular-nums"
-        } ${
-          prefix !== undefined && prefix !== null
-            ? "pl-5 pr-1"
-            : compact
-              ? "px-1.5"
-              : "px-2"
-        } ${suffix !== undefined && suffix !== null ? "pr-10" : ""} ${NO_NUMBER_SPINNER_CLASS} ${TONE_CLASS[tone]} ${
+        className={`min-w-0 touch-none ${NO_NUMBER_SPINNER_CLASS} ${
           interactive ? "cursor-ew-resize focus:cursor-text" : ""
+        } ${
+          unstyled
+            ? ""
+            : `w-full rounded border outline-none ${
+                size === "xs" ? "h-6" : size === "sm" ? "h-7" : "h-8"
+              } ${compact ? "text-[11px]" : "text-xs"} ${
+                align === "left" ? "text-left" : "text-right tabular-nums"
+              } ${
+                prefix !== undefined && prefix !== null
+                  ? "pl-5 pr-1"
+                  : compact
+                    ? "px-1.5"
+                    : "px-2"
+              } ${suffix !== undefined && suffix !== null ? "pr-10" : ""} ${
+                TONE_CLASS[tone]
+              }`
         } ${className ?? ""}`}
       />
       {suffix !== undefined && suffix !== null ? (
