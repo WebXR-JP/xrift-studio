@@ -30,8 +30,45 @@ import {
  * the compiler, say — is how the editor and the published world come to grade
  * colour differently, and nothing fails to warn you.
  */
+export type XriftScenePostEffectOrderId = "bloom" | "grading";
+
+const XRIFT_POST_EFFECT_ORDER_IDS: readonly XriftScenePostEffectOrderId[] = [
+  "bloom",
+  "grading",
+];
+
+/**
+ * The author's layer order, repaired.
+ *
+ * A world published before the order existed carries none, and a world
+ * published by a newer build can name a layer this runtime does not have, so
+ * unknown and duplicated entries are dropped and missing layers appended.
+ */
+function resolvePostEffectOrder(
+  value: readonly string[] | undefined,
+): XriftScenePostEffectOrderId[] {
+  const order: XriftScenePostEffectOrderId[] = [];
+  for (const entry of value ?? []) {
+    const id = entry as XriftScenePostEffectOrderId;
+    if (!XRIFT_POST_EFFECT_ORDER_IDS.includes(id) || order.includes(id)) continue;
+    order.push(id);
+  }
+  for (const id of XRIFT_POST_EFFECT_ORDER_IDS) {
+    if (!order.includes(id)) order.push(id);
+  }
+  return order;
+}
+
 export type XriftScenePostprocessingSettings = {
   enabled: boolean;
+  /**
+   * Application order of Bloom and grading.
+   *
+   * AO is not in it: `SSAOPass` re-renders the scene rather than reading the
+   * previous pass, so it always runs first and anything placed before it would
+   * be discarded.
+   */
+  order?: readonly XriftScenePostEffectOrderId[];
   hdr: {
     enabled: boolean;
     toneMapping: "aces" | "none";
@@ -170,6 +207,9 @@ export function ScenePostprocessing({
 }) {
   const { camera, gl, scene, size } = useThree();
   const hdrEnabled = settings.hdr.enabled;
+  // A string, so the pipeline is rebuilt when the author reorders the layers
+  // but not when a new settings object carries the same order.
+  const orderKey = resolvePostEffectOrder(settings.order).join(",");
   /**
    * The composer, built the first frame anything actually needs it.
    *
@@ -210,14 +250,18 @@ export function ScenePostprocessing({
       fragmentShader: XRIFT_COLOR_GRADING_SHADER.fragmentShader,
     });
     composer.addPass(renderPass);
+    // AO first, always: it re-renders the scene into its own buffer instead of
+    // reading the previous pass, so a pass placed before it never reaches the
+    // frame. Bloom and grading run in the order the author chose — grading
+    // last blooms then grades, grading first grades the colours bloom picks up.
     composer.addPass(aoPass);
-    composer.addPass(bloomPass);
-    // Last: grading judges the finished frame, including the bloom it picked up.
-    composer.addPass(gradingPass);
+    for (const id of orderKey.split(",")) {
+      composer.addPass(id === "grading" ? gradingPass : bloomPass);
+    }
     return { composer, aoPass, bloomPass, gradingPass };
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camera, gl, hdrEnabled, scene]);
+  }, [camera, gl, hdrEnabled, orderKey, scene]);
   const pipelineRef = useRef<ReturnType<typeof buildPipeline> | null>(null);
 
   /**

@@ -58,9 +58,59 @@ export type SceneCameraSettings = {
   fov: number;
 };
 
+/**
+ * Post effect layers whose order the author decides, in application order.
+ *
+ * Bloom and grading are full-screen passes over whatever the previous pass
+ * produced, so their order changes the picture: grading first means bloom
+ * blooms the graded colours, bloom first means grading judges a frame that
+ * already carries the halo.
+ *
+ * AO is deliberately absent. `SSAOPass` re-renders the scene into its own
+ * buffer instead of reading the previous pass, so anything placed before it is
+ * discarded. It is always the first layer, and the Inspector says so rather
+ * than offering a move that would silently throw the frame away.
+ */
+export const SCENE_POST_EFFECT_ORDER_IDS = ["bloom", "grading"] as const;
+
+export type ScenePostEffectOrderId = (typeof SCENE_POST_EFFECT_ORDER_IDS)[number];
+
+/**
+ * A stored order, repaired.
+ *
+ * Unknown and duplicated ids are dropped and missing layers are appended in
+ * their default position, so a project saved before a layer existed — or by a
+ * newer build that has one more — still resolves to a complete order.
+ */
+export function resolveScenePostEffectOrder(
+  value: unknown,
+): ScenePostEffectOrderId[] {
+  const known = new Set<string>(SCENE_POST_EFFECT_ORDER_IDS);
+  const seen = new Set<ScenePostEffectOrderId>();
+  const order: ScenePostEffectOrderId[] = [];
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (typeof entry !== "string" || !known.has(entry)) continue;
+      const id = entry as ScenePostEffectOrderId;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      order.push(id);
+    }
+  }
+  for (const id of SCENE_POST_EFFECT_ORDER_IDS) {
+    if (!seen.has(id)) order.push(id);
+  }
+  return order;
+}
+
 /** Scene-wide post effects shared by the editor and published output. */
 export type ScenePostprocessingSettings = {
   enabled: boolean;
+  /**
+   * Application order of the reorderable layers. AO always runs first; see
+   * `SCENE_POST_EFFECT_ORDER_IDS`.
+   */
+  order: ScenePostEffectOrderId[];
   /** Use a half-float compositor target and ACES tone mapping for HDR values. */
   hdr: {
     enabled: boolean;
@@ -232,6 +282,9 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
     // keep their tuned values, so switching this on is one toggle rather than
     // a setup task.
     enabled: false,
+    // Bloom before grading: the frame is graded once, last, including the halo
+    // bloom added. Authors who want the opposite reorder these two.
+    order: ["bloom", "grading"],
     hdr: {
       enabled: true,
       toneMapping: "aces",
@@ -480,6 +533,7 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
         postprocessing.enabled,
         DEFAULT_SCENE_SETTINGS.postprocessing.enabled,
       ),
+      order: resolveScenePostEffectOrder(postprocessing.order),
       hdr: {
         enabled: booleanOr(
           hdr.enabled,

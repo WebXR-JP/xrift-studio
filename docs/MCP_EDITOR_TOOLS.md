@@ -73,6 +73,13 @@ Material と Entity を一件にまとめるので、Undo でカードだけ消�
 `duplicate_entity`, `reparent_entity`, `delete_entity`, `set_entity_enabled`,
 `update_transform`
 
+`update_scene_settings` の `postprocessing` は、合成全体の有効・無効に加えて
+`ao` / `bloom` / `grading` それぞれの有効・無効と値、そして `order`（適用順）を
+書ける。同じ値でも順番で仕上がりが変わるので、順番を Inspector からしか触れない
+ままにすると、AI から見ると「効果は選べるが見た目は決められない」状態になる。
+`order` は並べ替えできる layer を 1 つずつ含む完全な配列だけを受ける。AO は
+scene を描き直す pass で常に最初なので `order` には含めない。
+
 共有ソースの Model ノード（`list_entities` が `modelNode` を返す Entity。Skin /
 Animation を持つ GLB / VRM の展開ノード）は、ジオメトリを親 Model の共有 Mesh が
 描くため Entity 単体では消せない。`delete_entity` は削除せず非表示（親 Mesh の

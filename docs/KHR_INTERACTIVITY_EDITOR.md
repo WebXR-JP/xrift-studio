@@ -465,6 +465,17 @@ three surfaces that build a sky all set it.
 `ambient` turns on an ambient light the runtime owns when the Scene has none,
 so「明るくする」does not quietly fail on exactly the Scenes whose 環境光 is off.
 
+The post effect **layer order** (`postprocessing.order`) is the one visible
+Scene row with no viewer override, and deliberately. Every other row here
+answers「この端末でどこまで描くか」, which is each viewer's own question; the
+order answers「どんな絵にするか」, which is the author's, and a viewer who
+reorders the passes does not get a lighter frame, only a different look than
+the world was tuned for. It is also not a quantity: `KHR_interactivity` has no
+string type, so an order would have to travel as `configuration` the way an
+Asset id does, with no duration to interpolate over. Turning a layer off stays
+available — that is `bloom`, `ao` and `grading` — so「画質を上げる」still costs
+what it should on the device that asked for it.
+
 ### A value that is not a number
 
 `asset` and `string` properties store their value in `configuration`, beside

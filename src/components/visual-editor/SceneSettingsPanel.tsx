@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type DragEvent, type ReactNode } from "react";
-import { CheckCircle2, ImagePlus, X } from "lucide-react";
+import { ChevronDown, ChevronUp, CheckCircle2, ImagePlus, X } from "lucide-react";
 import { ThumbnailEditor } from "../ThumbnailEditor";
 import { tauri } from "../../lib/tauri";
 import { PROJECT_THUMBNAIL_CHANGED_EVENT } from "../../lib/project-thumbnail";
@@ -9,6 +9,8 @@ import {
   resolveSceneSettings,
   resolveSkyShaderMaterial,
   type AssetManifest,
+  type ScenePostEffectOrderId,
+  type ScenePostprocessingSettings,
   type SceneDocument,
   type SceneSettings,
   type VisualProjectKind,
@@ -90,6 +92,92 @@ function Toggle({
         className="mt-0.5 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 disabled:cursor-not-allowed"
       />
     </label>
+  );
+}
+
+/**
+ * One post effect in the pipeline list.
+ *
+ * The order is the point: bloom and grading each work on what the pass before
+ * them produced, so a row carries its position, its own switch, and the moves
+ * that change that position — rather than sitting in a flat list of toggles
+ * that hides which one runs first.
+ */
+function PostEffectLayer({
+  position,
+  label,
+  description,
+  enabled,
+  disabled,
+  onToggle,
+  onMoveUp,
+  onMoveDown,
+  fixedNote,
+  children,
+}: {
+  position: number;
+  label: string;
+  description: string;
+  enabled: boolean;
+  /** Post effects are off entirely, or the Scene is read-only. */
+  disabled: boolean;
+  onToggle: (enabled: boolean) => void;
+  /** Absent when this layer cannot move, which the note explains. */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  fixedNote?: string;
+  children?: ReactNode;
+}) {
+  const moveButton = (
+    direction: "up" | "down",
+    onMove: (() => void) | undefined,
+  ) => {
+    const Icon = direction === "up" ? ChevronUp : ChevronDown;
+    const title = direction === "up" ? `${label}を1つ前へ` : `${label}を1つ後ろへ`;
+    return (
+      <button
+        type="button"
+        title={title}
+        aria-label={title}
+        disabled={disabled || !onMove}
+        onClick={() => onMove?.()}
+        className="rounded border border-slate-200 p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300 disabled:hover:bg-transparent"
+      >
+        <Icon size={13} aria-hidden="true" />
+      </button>
+    );
+  };
+  return (
+    <li className="rounded-md border border-slate-200 bg-white">
+      <div className="flex items-start gap-2 px-2.5 py-2">
+        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-100 text-[11px] font-semibold text-slate-600">
+          {position}
+        </span>
+        <label className="flex flex-1 cursor-pointer items-start gap-2">
+          <input
+            type="checkbox"
+            checked={enabled}
+            disabled={disabled}
+            onChange={(event) => onToggle(event.currentTarget.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 disabled:cursor-not-allowed"
+          />
+          <span>
+            <span className="block text-xs font-medium text-slate-700">{label}</span>
+            <span className="block text-[11px] leading-4 text-slate-500">{description}</span>
+            {fixedNote ? (
+              <span className="mt-0.5 block text-[11px] leading-4 text-slate-400">{fixedNote}</span>
+            ) : null}
+          </span>
+        </label>
+        <span className="flex shrink-0 gap-1">
+          {moveButton("up", onMoveUp)}
+          {moveButton("down", onMoveDown)}
+        </span>
+      </div>
+      {children ? (
+        <div className="space-y-2.5 border-t border-slate-100 px-2.5 py-2">{children}</div>
+      ) : null}
+    </li>
   );
 }
 
@@ -563,6 +651,30 @@ export function SceneSettingsInspector({
   const [thumbnailError, setThumbnailError] = useState<string | null>(null);
   const settings = resolveSceneSettings(scene.settings);
   const update = (next: SceneSettings) => onChange(next);
+  const post = settings.postprocessing;
+  const updatePostprocessing = (patch: Partial<ScenePostprocessingSettings>) =>
+    update({ ...settings, postprocessing: { ...post, ...patch } });
+  /** The quick switch: every layer at once, without the master compositor. */
+  const setPostEffectLayersEnabled = (enabled: boolean) =>
+    updatePostprocessing({
+      ao: { ...post.ao, enabled },
+      bloom: { ...post.bloom, enabled },
+      grading: { ...post.grading, enabled },
+    });
+  const movePostEffectLayer = (id: ScenePostEffectOrderId, offset: -1 | 1) => {
+    const order = [...post.order];
+    const index = order.indexOf(id);
+    const target = index + offset;
+    if (index < 0 || target < 0 || target >= order.length) return;
+    order[index] = order[target];
+    order[target] = id;
+    updatePostprocessing({ order });
+  };
+  const postLayersDisabled = readOnly || !post.enabled;
+  const everyPostLayerEnabled =
+    post.ao.enabled && post.bloom.enabled && post.grading.enabled;
+  const everyPostLayerDisabled =
+    !post.ao.enabled && !post.bloom.enabled && !post.grading.enabled;
   const disabledHint = readOnly
     ? "Play中は停止してから設定を変更できます"
     : undefined;
@@ -844,236 +956,223 @@ export function SceneSettingsInspector({
         </Section>
 
         <Section
-          title="色味"
-          description="仕上がった絵の色を整えます。露出は光の量、こちらは光が届いたあとの見え方です。ポストエフェクトが有効なときに効きます。"
-        >
-          <Toggle
-            label="色味の調整を有効にする"
-            checked={settings.postprocessing.grading.enabled}
-            disabled={readOnly || !settings.postprocessing.enabled}
-            onChange={(enabled) =>
-              update({
-                ...settings,
-                postprocessing: {
-                  ...settings.postprocessing,
-                  grading: { ...settings.postprocessing.grading, enabled },
-                },
-              })
-            }
-          />
-          <NumberField
-            label="コントラスト"
-            value={settings.postprocessing.grading.contrast}
-            min={0}
-            max={3}
-            step={0.05}
-            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.grading.enabled}
-            onChange={(contrast) =>
-              update({
-                ...settings,
-                postprocessing: {
-                  ...settings.postprocessing,
-                  grading: { ...settings.postprocessing.grading, contrast },
-                },
-              })
-            }
-          />
-          <NumberField
-            label="彩度"
-            value={settings.postprocessing.grading.saturation}
-            min={0}
-            max={3}
-            step={0.05}
-            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.grading.enabled}
-            onChange={(saturation) =>
-              update({
-                ...settings,
-                postprocessing: {
-                  ...settings.postprocessing,
-                  grading: { ...settings.postprocessing.grading, saturation },
-                },
-              })
-            }
-          />
-          <NumberField
-            label="色温度"
-            value={settings.postprocessing.grading.temperature}
-            min={-1}
-            max={1}
-            step={0.05}
-            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.grading.enabled}
-            onChange={(temperature) =>
-              update({
-                ...settings,
-                postprocessing: {
-                  ...settings.postprocessing,
-                  grading: { ...settings.postprocessing.grading, temperature },
-                },
-              })
-            }
-          />
-          <NumberField
-            label="色かぶり"
-            value={settings.postprocessing.grading.tint}
-            min={-1}
-            max={1}
-            step={0.05}
-            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.grading.enabled}
-            onChange={(tint) =>
-              update({
-                ...settings,
-                postprocessing: {
-                  ...settings.postprocessing,
-                  grading: { ...settings.postprocessing.grading, tint },
-                },
-              })
-            }
-          />
-        </Section>
-        <Section
           title="ポストエフェクト"
-          description="HDR、AO、発光、露出をScene View、Play、公開Worldで共有します。"
+          description="Scene View、Play、公開Worldで共有します。レイヤーは上から順に適用され、同じ設定でも順番で仕上がりが変わります。"
         >
           <Toggle
             label="ポストエフェクトを有効にする"
-            checked={settings.postprocessing.enabled}
+            description="オフにすると各レイヤーの設定を残したまま合成そのものを止めます。"
+            checked={post.enabled}
             disabled={readOnly}
-            onChange={(enabled) =>
-              update({
-                ...settings,
-                postprocessing: { ...settings.postprocessing, enabled },
-              })
-            }
+            onChange={(enabled) => updatePostprocessing({ enabled })}
           />
+          <div className="flex items-center justify-between gap-2 pt-0.5">
+            <span className="text-[11px] font-medium text-slate-500">
+              レイヤー（上から順に適用）
+            </span>
+            <span className="flex gap-1">
+              <button
+                type="button"
+                title="すべてのレイヤーを有効にする"
+                disabled={postLayersDisabled || everyPostLayerEnabled}
+                onClick={() => setPostEffectLayersEnabled(true)}
+                className="rounded border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300 disabled:hover:bg-transparent"
+              >
+                すべて有効
+              </button>
+              <button
+                type="button"
+                title="すべてのレイヤーを無効にする"
+                disabled={postLayersDisabled || everyPostLayerDisabled}
+                onClick={() => setPostEffectLayersEnabled(false)}
+                className="rounded border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300 disabled:hover:bg-transparent"
+              >
+                すべて無効
+              </button>
+            </span>
+          </div>
+          <ul className="space-y-2">
+            <PostEffectLayer
+              position={1}
+              label="スクリーンスペースAO"
+              description="深度と法線から接地影を生成します。"
+              fixedNote="シーンを描き直すため、常に最初に適用します。"
+              enabled={settings.postprocessing.ao.enabled}
+              disabled={postLayersDisabled}
+              onToggle={(enabled) =>
+                updatePostprocessing({ ao: { ...post.ao, enabled } })
+              }
+            >
+              <NumberField
+                label="AO半径"
+                value={settings.postprocessing.ao.radius}
+                min={0.1}
+                step={0.5}
+                disabled={postLayersDisabled || !post.ao.enabled}
+                onChange={(radius) =>
+                  updatePostprocessing({ ao: { ...post.ao, radius } })
+                }
+              />
+              <NumberField
+                label="AO最大距離"
+                value={settings.postprocessing.ao.maxDistance}
+                min={settings.postprocessing.ao.minDistance + 0.001}
+                step={0.01}
+                disabled={postLayersDisabled || !post.ao.enabled}
+                onChange={(maxDistance) =>
+                  updatePostprocessing({
+                    ao: {
+                      ...post.ao,
+                      maxDistance: Math.max(
+                        maxDistance,
+                        post.ao.minDistance + 0.001,
+                      ),
+                    },
+                  })
+                }
+              />
+            </PostEffectLayer>
+            {settings.postprocessing.order.map((id, index) => {
+              // AO holds the first slot, so the movable layers start at two.
+              const position = index + 2;
+              const onMoveUp =
+                index === 0 ? undefined : () => movePostEffectLayer(id, -1);
+              const onMoveDown =
+                index === post.order.length - 1
+                  ? undefined
+                  : () => movePostEffectLayer(id, 1);
+              if (id === "bloom") {
+                return (
+                  <PostEffectLayer
+                    key={id}
+                    position={position}
+                    label="Bloom"
+                    description="しきい値を超えた明るさをにじませます。"
+                    enabled={settings.postprocessing.bloom.enabled}
+                    disabled={postLayersDisabled}
+                    onToggle={(enabled) =>
+                      updatePostprocessing({ bloom: { ...post.bloom, enabled } })
+                    }
+                    onMoveUp={onMoveUp}
+                    onMoveDown={onMoveDown}
+                  >
+                    <NumberField
+                      label="Bloomしきい値"
+                      value={settings.postprocessing.bloom.threshold}
+                      min={0}
+                      step={0.01}
+                      disabled={postLayersDisabled || !post.bloom.enabled}
+                      onChange={(threshold) =>
+                        updatePostprocessing({
+                          bloom: { ...post.bloom, threshold },
+                        })
+                      }
+                    />
+                    <NumberField
+                      label="Bloom強度"
+                      value={settings.postprocessing.bloom.strength}
+                      min={0}
+                      step={0.05}
+                      disabled={postLayersDisabled || !post.bloom.enabled}
+                      onChange={(strength) =>
+                        updatePostprocessing({
+                          bloom: { ...post.bloom, strength },
+                        })
+                      }
+                    />
+                    <NumberField
+                      label="Bloom半径"
+                      value={settings.postprocessing.bloom.radius}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      disabled={postLayersDisabled || !post.bloom.enabled}
+                      onChange={(radius) =>
+                        updatePostprocessing({
+                          bloom: { ...post.bloom, radius },
+                        })
+                      }
+                    />
+                  </PostEffectLayer>
+                );
+              }
+              return (
+                <PostEffectLayer
+                  key={id}
+                  position={position}
+                  label="色味"
+                  description="仕上がった絵の色を整えます。露出は光の量、こちらは光が届いたあとの見え方です。"
+                  enabled={settings.postprocessing.grading.enabled}
+                  disabled={postLayersDisabled}
+                  onToggle={(enabled) =>
+                    updatePostprocessing({
+                      grading: { ...post.grading, enabled },
+                    })
+                  }
+                  onMoveUp={onMoveUp}
+                  onMoveDown={onMoveDown}
+                >
+                  <NumberField
+                    label="コントラスト"
+                    value={settings.postprocessing.grading.contrast}
+                    min={0}
+                    max={3}
+                    step={0.05}
+                    disabled={postLayersDisabled || !post.grading.enabled}
+                    onChange={(contrast) =>
+                      updatePostprocessing({
+                        grading: { ...post.grading, contrast },
+                      })
+                    }
+                  />
+                  <NumberField
+                    label="彩度"
+                    value={settings.postprocessing.grading.saturation}
+                    min={0}
+                    max={3}
+                    step={0.05}
+                    disabled={postLayersDisabled || !post.grading.enabled}
+                    onChange={(saturation) =>
+                      updatePostprocessing({
+                        grading: { ...post.grading, saturation },
+                      })
+                    }
+                  />
+                  <NumberField
+                    label="色温度"
+                    value={settings.postprocessing.grading.temperature}
+                    min={-1}
+                    max={1}
+                    step={0.05}
+                    disabled={postLayersDisabled || !post.grading.enabled}
+                    onChange={(temperature) =>
+                      updatePostprocessing({
+                        grading: { ...post.grading, temperature },
+                      })
+                    }
+                  />
+                  <NumberField
+                    label="色かぶり"
+                    value={settings.postprocessing.grading.tint}
+                    min={-1}
+                    max={1}
+                    step={0.05}
+                    disabled={postLayersDisabled || !post.grading.enabled}
+                    onChange={(tint) =>
+                      updatePostprocessing({ grading: { ...post.grading, tint } })
+                    }
+                  />
+                </PostEffectLayer>
+              );
+            })}
+          </ul>
           <Toggle
             label="HDRレンダリング"
             title="Half FloatのHDRバッファとACESトーンマッピングを使用します"
             checked={settings.postprocessing.hdr.enabled}
-            disabled={readOnly || !settings.postprocessing.enabled}
+            disabled={postLayersDisabled}
             onChange={(enabled) =>
-              update({
-                ...settings,
-                postprocessing: {
-                  ...settings.postprocessing,
-                  hdr: { ...settings.postprocessing.hdr, enabled },
-                },
-              })
-            }
-          />
-          <Toggle
-            label="スクリーンスペースAO"
-            title="深度と法線から接地影を生成します"
-            checked={settings.postprocessing.ao.enabled}
-            disabled={readOnly || !settings.postprocessing.enabled}
-            onChange={(enabled) =>
-              update({
-                ...settings,
-                postprocessing: {
-                  ...settings.postprocessing,
-                  ao: { ...settings.postprocessing.ao, enabled },
-                },
-              })
-            }
-          />
-          <NumberField
-            label="AO半径"
-            value={settings.postprocessing.ao.radius}
-            min={0.1}
-            step={0.5}
-            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.ao.enabled}
-            onChange={(radius) =>
-              update({
-                ...settings,
-                postprocessing: {
-                  ...settings.postprocessing,
-                  ao: { ...settings.postprocessing.ao, radius },
-                },
-              })
-            }
-          />
-          <NumberField
-            label="AO最大距離"
-            value={settings.postprocessing.ao.maxDistance}
-            min={settings.postprocessing.ao.minDistance + 0.001}
-            step={0.01}
-            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.ao.enabled}
-            onChange={(maxDistance) =>
-              update({
-                ...settings,
-                postprocessing: {
-                  ...settings.postprocessing,
-                  ao: {
-                    ...settings.postprocessing.ao,
-                    maxDistance: Math.max(
-                      maxDistance,
-                      settings.postprocessing.ao.minDistance + 0.001,
-                    ),
-                  },
-                },
-              })
-            }
-          />
-          <Toggle
-            label="Bloomを有効にする"
-            checked={settings.postprocessing.bloom.enabled}
-            disabled={readOnly || !settings.postprocessing.enabled}
-            onChange={(enabled) =>
-              update({
-                ...settings,
-                postprocessing: {
-                  ...settings.postprocessing,
-                  bloom: { ...settings.postprocessing.bloom, enabled },
-                },
-              })
-            }
-          />
-          <NumberField
-            label="Bloomしきい値"
-            value={settings.postprocessing.bloom.threshold}
-            min={0}
-            step={0.01}
-            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.bloom.enabled}
-            onChange={(threshold) =>
-              update({
-                ...settings,
-                postprocessing: {
-                  ...settings.postprocessing,
-                  bloom: { ...settings.postprocessing.bloom, threshold },
-                },
-              })
-            }
-          />
-          <NumberField
-            label="Bloom強度"
-            value={settings.postprocessing.bloom.strength}
-            min={0}
-            step={0.05}
-            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.bloom.enabled}
-            onChange={(strength) =>
-              update({
-                ...settings,
-                postprocessing: {
-                  ...settings.postprocessing,
-                  bloom: { ...settings.postprocessing.bloom, strength },
-                },
-              })
-            }
-          />
-          <NumberField
-            label="Bloom半径"
-            value={settings.postprocessing.bloom.radius}
-            min={0}
-            max={1}
-            step={0.01}
-            disabled={readOnly || !settings.postprocessing.enabled || !settings.postprocessing.bloom.enabled}
-            onChange={(radius) =>
-              update({
-                ...settings,
-                postprocessing: {
-                  ...settings.postprocessing,
-                  bloom: { ...settings.postprocessing.bloom, radius },
-                },
-              })
+              updatePostprocessing({ hdr: { ...post.hdr, enabled } })
             }
           />
           <NumberField
@@ -1081,13 +1180,8 @@ export function SceneSettingsInspector({
             value={settings.postprocessing.exposure}
             min={0}
             step={0.05}
-            disabled={readOnly || !settings.postprocessing.enabled}
-            onChange={(exposure) =>
-              update({
-                ...settings,
-                postprocessing: { ...settings.postprocessing, exposure },
-              })
-            }
+            disabled={postLayersDisabled}
+            onChange={(exposure) => updatePostprocessing({ exposure })}
           />
         </Section>
 
