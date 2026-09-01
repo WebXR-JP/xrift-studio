@@ -21,8 +21,8 @@ export type ScrubNumberInputProps = {
   onScrubChange?: (value: number) => void;
   /** ポインタを離してスクラブを確定した。 */
   onScrubEnd?: () => void;
-  /** Escape などでスクラブを取り消した。 */
-  onScrubCancel?: () => void;
+  /** Escape などでスクラブを取り消した。開始時の値を受け取る。 */
+  onScrubCancel?: (startValue: number) => void;
   min?: number;
   max?: number;
   /** キーボードの上下キーと native step。 */
@@ -46,8 +46,10 @@ export type ScrubNumberInputProps = {
   scrubLabel?: string;
   /** 入力欄の左に重ねる軸名などの短い表示。 */
   prefix?: ReactNode;
-  /** 高さ。sm は h-7、md は h-8。 */
-  size?: "sm" | "md";
+  /** 入力欄の右に重ねる単位表示。 */
+  suffix?: ReactNode;
+  /** 高さ。xs は h-6、sm は h-7、md は h-8。 */
+  size?: "xs" | "sm" | "md";
   /** 数値の寄せ方。既定は右寄せ。 */
   align?: "right" | "left";
   /** 密度の高い一覧で使う小さい文字と余白。 */
@@ -123,6 +125,7 @@ export function ScrubNumberInput({
   ariaLabel,
   scrubLabel,
   prefix,
+  suffix,
   size = "md",
   align = "right",
   compact = false,
@@ -151,7 +154,7 @@ export function ScrubNumberInput({
     setScrub(null);
     if (!active.active) return;
     if (mode === "cancel") {
-      if (onScrubCancel) onScrubCancel();
+      if (onScrubCancel) onScrubCancel(active.startValue);
       else if (transaction) transaction.cancel();
       else emitScrubValue(active.startValue);
       return;
@@ -293,7 +296,7 @@ export function ScrubNumberInput({
           }
         }}
         className={`w-full min-w-0 touch-none rounded border outline-none ${
-          size === "sm" ? "h-7" : "h-8"
+          size === "xs" ? "h-6" : size === "sm" ? "h-7" : "h-8"
         } ${compact ? "text-[11px]" : "text-xs"} ${
           align === "left" ? "text-left" : "text-right tabular-nums"
         } ${
@@ -302,10 +305,15 @@ export function ScrubNumberInput({
             : compact
               ? "px-1.5"
               : "px-2"
-        } ${NO_NUMBER_SPINNER_CLASS} ${TONE_CLASS[tone]} ${
+        } ${suffix !== undefined && suffix !== null ? "pr-10" : ""} ${NO_NUMBER_SPINNER_CLASS} ${TONE_CLASS[tone]} ${
           interactive ? "cursor-ew-resize focus:cursor-text" : ""
         } ${className ?? ""}`}
       />
+      {suffix !== undefined && suffix !== null ? (
+        <span className="pointer-events-none absolute right-2 top-1/2 z-10 -translate-y-1/2 text-xs text-slate-400">
+          {suffix}
+        </span>
+      ) : null}
       {scrub?.active ? (
         <span
           className={`pointer-events-none fixed z-50 whitespace-nowrap rounded border px-2 py-1 text-[11px] font-medium tabular-nums shadow-md ${READOUT_CLASS[tone]}`}
